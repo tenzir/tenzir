@@ -174,8 +174,9 @@ result<event> bgpdump_state::extract() {
   return {};
 }
 
-behavior bgpdump(stateful_actor<bgpdump_state>* self, std::streambuf* sb) {
-  return line_based(self, sb);
+behavior bgpdump(stateful_actor<bgpdump_state>* self,
+                 std::unique_ptr<std::istream> in) {
+  return line_based(self, std::move(in));
 }
 
 } // namespace source

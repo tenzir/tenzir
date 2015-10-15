@@ -80,20 +80,20 @@ trial<actor> spawn(message const& params) {
   } else if (format == "bro") {
     snk = caf::spawn(bro, output);
   } else if (format == "csv") {
-    snk = caf::spawn(csv, out.release());
+    snk = caf::spawn(csv, std::move(out));
   } else if (format == "ascii") {
-    snk = caf::spawn(ascii, out.release());
+    snk = caf::spawn(ascii, std::move(out));
   } else if (format == "json") {
     r = r.remainder.extract_opts({
       {"flatten,f", "flatten records"}
     });
-    snk = caf::spawn(sink::json, out.release(), r.opts.count("flatten") > 0);
+    snk = caf::spawn(sink::json, std::move(out), r.opts.count("flatten") > 0);
   // FIXME: currently the "vast export" command cannot take sink parameters,
   // which is why we add a hacky convenience sink called "flat-json". We should
   // have a command line format akin to "vast export json -f query ...",
   // which would allow passing both sink and exporter arguments.
   } else if (format == "flat-json") {
-    snk = caf::spawn(sink::json, out.release(), true);
+    snk = caf::spawn(sink::json, std::move(out), true);
   } else {
     return error{"invalid export format: ", format};
   }

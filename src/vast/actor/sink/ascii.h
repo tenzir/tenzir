@@ -22,7 +22,8 @@ struct ascii_state : state {
 /// A sink dumping events in plain ASCII.
 /// @param self The actor handle.
 /// @param out The stream to print received events into.
-behavior ascii(stateful_actor<ascii_state>* self, std::ostream* out);
+behavior ascii(stateful_actor<ascii_state>* self,
+               std::unique_ptr<std::ostream> out);
 
 } // namespace sink
 } // namespace vast

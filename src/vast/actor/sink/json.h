@@ -26,8 +26,8 @@ struct json_state : state {
 /// @param self The actor handle.
 /// @param out The stream to print received events into.
 /// @param flatten Flag indicating whether to flatten records.
-behavior json(stateful_actor<json_state>* self, std::ostream* out,
-              bool flatten);
+behavior json(stateful_actor<json_state>* self,
+              std::unique_ptr<std::ostream> out, bool flatten);
 
 } // namespace sink
 } // namespace vast

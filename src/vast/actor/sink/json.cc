@@ -36,12 +36,12 @@ void json_state::flush() {
   out->flush();
 }
 
-behavior json(stateful_actor<json_state>* self, std::ostream* out,
-              bool flatten) {
+behavior json(stateful_actor<json_state>* self,
+              std::unique_ptr<std::ostream> out, bool flatten) {
   VAST_ASSERT(out != nullptr);
-  self->state.out = std::unique_ptr<std::ostream>{out};
+  self->state.out = std::move(out);
   self->state.flatten = flatten;
-  *out << "[\n";
+  *self->state.out << "[\n";
   return make(self);
 }
 

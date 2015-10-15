@@ -136,9 +136,10 @@ void csv_state::flush() {
   out->flush();
 }
 
-behavior csv(stateful_actor<csv_state>* self, std::ostream* out) {
+behavior csv(stateful_actor<csv_state>* self,
+             std::unique_ptr<std::ostream> out) {
   VAST_ASSERT(out != nullptr);
-  self->state.out = std::unique_ptr<std::ostream>{out};
+  self->state.out = std::move(out);
   return make(self);
 }
 

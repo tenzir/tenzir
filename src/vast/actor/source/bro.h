@@ -33,8 +33,9 @@ struct bro_state : line_based_state {
 
 // A source parsing Bro logs files.
 // @param self The actor handle.
-// @param sb The streambuffer to read log lines from.
-behavior bro(stateful_actor<bro_state>* self, std::streambuf* sb);
+// @param in The input stream to read log lines from.
+behavior bro(stateful_actor<bro_state>* self,
+             std::unique_ptr<std::istream> in);
 
 } // namespace source
 } // namespace vast

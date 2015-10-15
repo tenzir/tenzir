@@ -24,7 +24,8 @@ struct csv_state : state {
 /// A sink dumping events as CSV.
 /// @param self The actor handle.
 /// @param out The stream to print received events into.
-behavior csv(stateful_actor<csv_state>* self, std::ostream* out);
+behavior csv(stateful_actor<csv_state>* self,
+             std::unique_ptr<std::ostream> out);
 
 } // namespace sink
 } // namespace vast

@@ -316,8 +316,9 @@ trial<void> bro_state::parse_header() {
   return nothing;
 }
 
-behavior bro(stateful_actor<bro_state>* self, std::streambuf* sb) {
-  return line_based(self, sb);
+behavior bro(stateful_actor<bro_state>* self,
+             std::unique_ptr<std::istream> in) {
+  return line_based(self, std::move(in));
 }
 
 } // namespace source

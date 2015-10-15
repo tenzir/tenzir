@@ -17,13 +17,13 @@ struct line_based_state : state {
   }
 
   bool next_line() {
-    VAST_ASSERT(input);
+    VAST_ASSERT(input && *input);
     if (done_)
       return false;
     line.clear();
     // Get the next non-empty line.
     while (line.empty())
-      if (std::getline(input, line)) {
+      if (std::getline(*input, line)) {
         ++line_no;
       } else {
         done_ = true;
@@ -32,7 +32,7 @@ struct line_based_state : state {
     return true;
   }
 
-  std::istream input;
+  std::unique_ptr<std::istream> input;
   uint64_t line_no = 0;
   std::string line;
 };
@@ -41,12 +41,9 @@ struct line_based_state : state {
 /// @param self The actor handle.
 /// @param sb A streambuffer to read from.
 template <typename State>
-behavior line_based(stateful_actor<State>* self, std::streambuf* sb) {
-  // FIXME: The naked owning pointer is not exception safe. But because CAF's
-  // factory function constructing stateful actors currently shoves all
-  // arguments into a message, we cannot have non-copyable types as arguments.
-  // Once this changes we should switch back to a unique_ptr<std::streambuf>.
-  self->state.input.rdbuf(sb);
+behavior line_based(stateful_actor<State>* self,
+                    std::unique_ptr<std::istream> in) {
+  self->state.input = std::move(in);
   return make(self);
 };
 

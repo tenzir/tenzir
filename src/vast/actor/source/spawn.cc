@@ -38,7 +38,7 @@ trial<actor> spawn(message const& params) {
   // The "pcap" and "test" sources manually verify the presence of
   // input. All other sources are file-based and we setup their input
   // streambuf here.
-  std::unique_ptr<std::streambuf> sb;
+  std::unique_ptr<std::istream> in;
   if (!(format == "pcap" || format == "test")) {
     if (r.opts.count("uds") > 0) {
       if (input == "-")
@@ -47,13 +47,15 @@ trial<actor> spawn(message const& params) {
       if (!uds)
         return error{"failed to connect to UNIX domain socket at ", input};
       auto remote_fd = uds.recv_fd(); // Blocks!
-      sb = std::make_unique<util::fdinbuf>(remote_fd);
+      auto sb = std::make_unique<util::fdinbuf>(remote_fd);
+      in = std::make_unique<std::istream>(sb.release());
     } else if (input == "-") {
-      sb = std::make_unique<util::fdinbuf>(0);
+      auto sb = std::make_unique<util::fdinbuf>(0);
+      in = std::make_unique<std::istream>(sb.release());
     } else {
       auto fb = std::make_unique<std::filebuf>();
       fb->open(input, std::ios_base::binary | std::ios_base::in);
-      sb = std::move(fb);
+      in = std::make_unique<std::istream>(fb.release());
     }
   }
   // Facilitate shutdown when returning with error.
@@ -100,11 +102,11 @@ trial<actor> spawn(message const& params) {
     // Therefore we can use the input channel for the schema.
     schema_file = input;
   } else if (format == "bro") {
-    VAST_ASSERT(sb);
-    src = caf::spawn<priority_aware + detached>(bro, sb.release());
+    VAST_ASSERT(in);
+    src = caf::spawn<priority_aware + detached>(bro, std::move(in));
   } else if (format == "bgpdump") {
-    VAST_ASSERT(sb);
-    src = caf::spawn<priority_aware + detached>(bgpdump, sb.release());
+    VAST_ASSERT(in);
+    src = caf::spawn<priority_aware + detached>(bgpdump, std::move(in));
   } else {
     return error{"invalid import format: ", format};
   }

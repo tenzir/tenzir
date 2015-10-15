@@ -20,9 +20,10 @@ void ascii_state::flush() {
   out->flush();
 }
 
-behavior ascii(stateful_actor<ascii_state>* self, std::ostream* out) {
+behavior ascii(stateful_actor<ascii_state>* self,
+               std::unique_ptr<std::ostream> out) {
   VAST_ASSERT(out != nullptr);
-  self->state.out = std::unique_ptr<std::ostream>{out};
+  self->state.out = move(out);
   return make(self);
 }
 
