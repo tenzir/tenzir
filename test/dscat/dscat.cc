@@ -42,12 +42,12 @@ int main(int argc, char** argv) {
     return 1;
   }
   if (r.opts.count("listen") > 0) {
-    cerr << "listening on " << uds_name << " (";
+    cerr << "listening on " << uds_name << " to serve " << filename << " (";
     if (reading)
       cerr << 'R';
     if (writing)
       cerr << 'W';
-    cerr << ") to serve " << filename << endl;
+    cerr << ")" << endl;
     auto uds = util::unix_domain_socket::accept(uds_name);
     if (!uds) {
       cerr << "failed to accept connection" << endl;
