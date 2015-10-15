@@ -365,44 +365,4 @@ TEST(json conversion) {
   }
 })__";
   CHECK(to_string(to_json(r)) == expected);
-  json j;
-  auto flatten = true;
-  CHECK(convert(r, j, flatten));
-  expected = R"__({
-  "attributes": [],
-  "kind": "record",
-  "name": "foo",
-  "structure": {
-    "x": {
-      "attributes": [
-        "skip"
-      ],
-      "kind": "address",
-      "name": "",
-      "structure": null
-    },
-    "y": {
-      "attributes": [
-        [
-          "default",
-          "F"
-        ]
-      ],
-      "kind": "boolean",
-      "name": "",
-      "structure": null
-    },
-    "z.inner": {
-      "attributes": [],
-      "kind": "enumeration",
-      "name": "e",
-      "structure": [
-        "foo",
-        "bar",
-        "baz"
-      ]
-    }
-  }
-})__";
-  CHECK(to_string(j), expected);
 }

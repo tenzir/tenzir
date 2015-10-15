@@ -5,7 +5,7 @@ namespace vast {
 
 class type;
 
-bool convert(type const& t, json& j, bool flatten = false);
+bool convert(type const& t, json& j);
 bool convert(type::attribute const& a, json& j);
 
 } // namespace vast

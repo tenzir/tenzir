@@ -11,10 +11,7 @@ namespace vast {
 namespace {
 
 struct jsonizer {
-  jsonizer(json& j, bool flatten = false)
-    : json_{j},
-      flatten_{flatten} {
-  }
+  jsonizer(json& j) : json_{j} { }
 
   template <typename T>
   bool operator()(T const&) {
@@ -34,7 +31,7 @@ struct jsonizer {
 
   bool operator()(type::vector const& v) {
     json::object o;
-    if (!convert(v.elem(), o["elem"], flatten_))
+    if (!convert(v.elem(), o["elem"]))
       return false;
     json_ = std::move(o);
     return true;
@@ -42,7 +39,7 @@ struct jsonizer {
 
   bool operator()(type::set const& s) {
     json::object o;
-    if (!convert(s.elem(), o["elem"], flatten_))
+    if (!convert(s.elem(), o["elem"]))
       return false;
     json_ = std::move(o);
     return true;
@@ -50,9 +47,9 @@ struct jsonizer {
 
   bool operator()(type::table const& t) {
     json::object o;
-    if (!convert(t.value(), o["key"], flatten_))
+    if (!convert(t.value(), o["key"]))
       return false;
-    if (!convert(t.value(), o["value"], flatten_))
+    if (!convert(t.value(), o["value"]))
       return false;
     json_ = std::move(o);
     return true;
@@ -60,34 +57,27 @@ struct jsonizer {
 
   bool operator()(type::record const& r) {
     json::object o;
-    if (flatten_) {
-      for (auto& e : type::record::each{r})
-        if (!convert(e.trace.back()->type, o[to_string(e.key())], flatten_))
-          return false;
-    } else {
-      for (auto& field : r.fields())
-        if (!convert(field.type, o[to_string(field.name)], flatten_))
-          return false;
-    }
+    for (auto& field : r.fields())
+      if (!convert(field.type, o[to_string(field.name)]))
+        return false;
     json_ = std::move(o);
     return true;
   }
 
   bool operator()(type::alias const& a) {
-    return convert(a.type(), json_, flatten_);
+    return convert(a.type(), json_);
   }
 
   json& json_;
-  bool flatten_;
 };
 
 } // namespace <anonymous>
 
-bool convert(type const& t, json& j, bool flatten) {
+bool convert(type const& t, json& j) {
   json::object o;
   o["name"] = t.name();
   o["kind"] = to_string(which(t));
-  if (!visit(jsonizer{o["structure"], flatten}, t))
+  if (!visit(jsonizer{o["structure"]}, t))
     return false;
   json::array a;
   std::transform(t.attributes().begin(),
