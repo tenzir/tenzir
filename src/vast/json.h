@@ -206,10 +206,10 @@ bool convert(std::map<K, V> const& m, json& j) {
   return true;
 }
 
-template <typename T>
-json to_json(T const& x) {
+template <typename T, typename... Opts>
+json to_json(T const& x, Opts&&... opts) {
   json j;
-  if (convert(x, j))
+  if (convert(x, j, std::forward<Opts>(opts)...))
     return j;
   return {};
 }

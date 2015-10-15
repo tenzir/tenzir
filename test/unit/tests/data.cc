@@ -1,11 +1,15 @@
 #include "vast/data.h"
+#include "vast/json.h"
+#include "vast/concept/convertible/vast/data.h"
 #include "vast/concept/convertible/vast/time.h"
 #include "vast/concept/convertible/to.h"
 #include "vast/concept/parseable/to.h"
 #include "vast/concept/parseable/vast/address.h"
 #include "vast/concept/parseable/vast/subnet.h"
+#include "vast/concept/printable/stream.h"
 #include "vast/concept/printable/to_string.h"
 #include "vast/concept/printable/vast/data.h"
+#include "vast/concept/printable/vast/json.h"
 #include "vast/concept/serializable/io.h"
 #include "vast/concept/serializable/vast/data.h"
 
@@ -25,9 +29,8 @@ TEST(time::point) {
   CHECK(t.delta(123587).time_since_epoch() == time::seconds(1344939291));
   CHECK(t.delta(0, 0, 28).time_since_epoch() == time::seconds(1344916504));
 
-  time::point u;
-
   // Positive offsets
+  time::point u;
   u = time::point::utc(2012, 9, 11, 23, 55, 4);
   CHECK(t.delta(0, 0, 0, 30) == u);
   u = time::point::utc(2012, 10, 11, 23, 55, 4);
@@ -48,7 +51,6 @@ TEST(time::point) {
   CHECK(t.delta(0, 0, 0, 0, 67) == u);
   u = time::point::utc(2024, 8, 12, 23, 55, 4);
   CHECK(t.delta(0, 0, 0, 0, 0, 12) == u);
-
   // Negative offsets
   u = time::point::utc(2012, 8, 12, 23, 55);
   CHECK(t.delta(-4) == u);
@@ -90,14 +92,11 @@ TEST(time::point) {
   CHECK(t.delta(0, 0, 0, 0, -13) == u);
   u = time::point::utc(2010, 12, 12, 23, 55, 4);
   CHECK(t.delta(0, 0, 0, 0, -20) == u);
-
-  auto str = to<std::string>(u, "%Y-%m");
-  REQUIRE(str);
-  CHECK(*str == "2010-12");
-
-  str = to<std::string>(u, "%H:%M:%S");
-  REQUIRE(str);
-  CHECK(*str == "23:55:04");
+  // Formatting
+  auto str = to_string(u, "%Y-%m");
+  CHECK(str == "2010-12");
+  str = to_string(u, "%H:%M:%S");
+  CHECK(str == "23:55:04");
 }
 
 TEST(patterns) {
@@ -425,4 +424,46 @@ TEST(serialization) {
   load(buf, d1);
   CHECK(d0 == d1);
   CHECK(to_string(d1) == "{8/icmp, 53/udp, 80/tcp}");
+}
+
+TEST(json) {
+  data r = record{"foo", record{-42, record{1001u}}, "x", port{443, port::tcp}};
+  MESSAGE("plain");
+  auto expected = R"__([
+  "foo",
+  [
+    -42,
+    [
+      1001
+    ]
+  ],
+  "x",
+  "443/tcp"
+])__";
+  CHECK(to_json(r), expected);
+  MESSAGE("zipped");
+  type t = type::record{
+    {"x", type::string{}},
+    {"r", type::record{
+      {"i", type::integer{}},
+      {"r", type::record{
+        {"u", type::count{}}
+      }},
+    }},
+    {"str", type::string{}},
+    {"port", type::port{}}
+  };
+  REQUIRE(t.check(r));
+  expected = R"__({
+  "port": "443/tcp",
+  "r": {
+    "i": -42,
+    "r": {
+      "u": 1001
+    }
+  },
+  "str": "x",
+  "x": "foo"
+})__";
+  CHECK(to_string(to_json(r, t)) == expected);
 }

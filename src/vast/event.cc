@@ -38,4 +38,11 @@ time::point event::timestamp() const {
   return timestamp_;
 }
 
+event flatten(event const& e) {
+  event result = flatten(static_cast<value const&>(e));
+  result.id(e.id());
+  result.timestamp(e.timestamp());
+  return result;
+}
+
 } // namespace vast
