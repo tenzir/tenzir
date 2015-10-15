@@ -32,8 +32,6 @@ trial<actor> spawn(message const& params) {
     {"write,w", "path to write events to", output},
     {"uds,u", "treat -w as UNIX domain socket to connect to"}
   });
-  if (!r.error.empty())
-    return error{std::move(r.error)};
   // Setup a custom schema.
   schema sch;
   if (!schema_file.empty()) {
@@ -86,7 +84,16 @@ trial<actor> spawn(message const& params) {
   } else if (format == "ascii") {
     snk = caf::spawn(ascii, out.release());
   } else if (format == "json") {
-    snk = caf::spawn(sink::json, out.release());
+    r = r.remainder.extract_opts({
+      {"flatten,f", "flatten records"}
+    });
+    snk = caf::spawn(sink::json, out.release(), r.opts.count("flatten") > 0);
+  // FIXME: currently the "vast export" command cannot take sink parameters,
+  // which is why we add a hacky convenience sink called "flat-json". We should
+  // have a command line format akin to "vast export json -f query ...",
+  // which would allow passing both sink and exporter arguments.
+  } else if (format == "flat-json") {
+    snk = caf::spawn(sink::json, out.release(), true);
   } else {
     return error{"invalid export format: ", format};
   }

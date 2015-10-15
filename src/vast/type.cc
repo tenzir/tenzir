@@ -583,51 +583,6 @@ type::record::find_suffix(key const& k) const {
   return finder{k, finder::suffix, name()}(*this);
 }
 
-type::record type::record::flatten() const {
-  record result;
-  for (auto& outer : fields_)
-    if (auto r = get<record>(outer.type))
-      for (auto& inner : r->flatten().fields_)
-        result.fields_.emplace_back(outer.name + "." + inner.name, inner.type);
-    else
-      result.fields_.push_back(outer);
-  result.initialize();
-  return result;
-}
-
-type::record type::record::unflatten() const {
-  record result;
-  for (auto& f : fields_) {
-    auto names = util::to_strings(util::split(f.name, "."));
-    VAST_ASSERT(!names.empty());
-    record* r = &result;
-    for (size_t i = 0; i < names.size() - 1; ++i) {
-      if (r->fields_.empty() || r->fields_.back().name != names[i])
-        r->fields_.emplace_back(std::move(names[i]), type{record{}});
-      r = get<record>(r->fields_.back().type);
-    }
-    r->fields_.emplace_back(std::move(names.back()), f.type);
-  }
-  std::vector<std::vector<record*>> rs(1);
-  rs.back().push_back(&result);
-  auto more = true;
-  while (more) {
-    std::vector<record*> next;
-    for (auto& current : rs.back())
-      for (auto& f : current->fields_)
-        if (auto r = get<record>(f.type))
-          next.push_back(r);
-    if (next.empty())
-      more = false;
-    else
-      rs.push_back(std::move(next));
-  }
-  for (auto r = rs.rbegin(); r != rs.rend(); ++r)
-    for (auto i : *r)
-      i->initialize();
-  return result;
-}
-
 type const* type::record::at(key const& k) const {
   auto r = this;
   for (size_t i = 0; i < k.size(); ++i) {
@@ -681,6 +636,63 @@ type::alias::alias(vast::type t, std::vector<attribute> a)
   update_digest(desc, sizeof(desc));
   auto digest = type_.digest();
   update_digest(&digest, sizeof(digest));
+}
+
+type::record flatten(type::record const& rec) {
+  type::record result;
+  for (auto& outer : rec.fields_)
+    if (auto r = get<type::record>(outer.type)) {
+      auto flat = flatten(*r);
+      for (auto& inner : flat.fields())
+        result.fields_.emplace_back(outer.name + "." + inner.name, inner.type);
+    } else {
+      result.fields_.push_back(outer);
+    }
+  result.initialize();
+  return result;
+}
+
+type flatten(type const& t) {
+  auto r = get<type::record>(t);
+  return r ? flatten(*r) : t;
+}
+
+type::record unflatten(type::record const& rec) {
+  type::record result;
+  for (auto& f : rec.fields_) {
+    auto names = util::to_strings(util::split(f.name, "."));
+    VAST_ASSERT(!names.empty());
+    type::record* r = &result;
+    for (size_t i = 0; i < names.size() - 1; ++i) {
+      if (r->fields_.empty() || r->fields_.back().name != names[i])
+        r->fields_.emplace_back(std::move(names[i]), type::record{});
+      r = get<type::record>(r->fields_.back().type);
+    }
+    r->fields_.emplace_back(std::move(names.back()), f.type);
+  }
+  std::vector<std::vector<type::record*>> rs(1);
+  rs.back().push_back(&result);
+  auto more = true;
+  while (more) {
+    std::vector<type::record*> next;
+    for (auto& current : rs.back())
+      for (auto& f : current->fields_)
+        if (auto r = get<type::record>(f.type))
+          next.push_back(r);
+    if (next.empty())
+      more = false;
+    else
+      rs.push_back(std::move(next));
+  }
+  for (auto r = rs.rbegin(); r != rs.rend(); ++r)
+    for (auto i : *r)
+      i->initialize();
+  return result;
+}
+
+type unflatten(type const& t) {
+  auto r = get<type::record>(t);
+  return r ? unflatten(*r) : t;
 }
 
 vast::type const& type::alias::type() const {

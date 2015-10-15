@@ -63,6 +63,11 @@ private:
   time::point timestamp_;
 };
 
+/// Flattens an event.
+/// @param e The event to flatten.
+/// @returns The flattened event.
+event flatten(event const& e);
+
 } // namespace vast
 
 #endif

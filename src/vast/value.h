@@ -91,6 +91,11 @@ private:
   vast::type type_;
 };
 
+/// Flattens a value if it is a record.
+/// @param v The value to to flatten.
+/// @returns The flattened value or *v* if not a record.
+value flatten(value const& v);
+
 } // namespace vast
 
 #endif

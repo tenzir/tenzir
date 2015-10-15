@@ -223,9 +223,9 @@ void test_state::schema(vast::schema const& sch) {
       return;
     }
     if (auto r = get<type::record>(t)) {
-      auto u = bp.data.unflatten(*r);
+      auto u = unflatten(bp.data, *r);
       if (!u) {
-        VAST_ERROR(this, "failed to unflatten record:", u.error());
+        VAST_ERROR(this, "failed to unflatten record");
         self->quit(exit::error);
         return;
       }

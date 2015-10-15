@@ -16,21 +16,32 @@ json_state::json_state(local_actor* self)
   : state{self, "json-sink"} {
 }
 
+json_state::~json_state() {
+  *out << "\n]\n";
+}
+
 bool json_state::process(event const& e) {
-  auto j = to<vast::json>(e);
-  if (!j)
+  vast::json j;
+  if (!convert(flatten ? vast::flatten(e) : e, j))
     return false;
   auto i = std::ostreambuf_iterator<char>{*out};
-  return print(i, *j) && print(i, '\n');
+  if (first)
+    first = false;
+  else if (!print(i, ",\n"))
+    return false;
+  return json_printer<policy::tree, 2, 2>{}.print(i, j);
 }
 
 void json_state::flush() {
   out->flush();
 }
 
-behavior json(stateful_actor<json_state>* self, std::ostream* out) {
+behavior json(stateful_actor<json_state>* self, std::ostream* out,
+              bool flatten) {
   VAST_ASSERT(out != nullptr);
   self->state.out = std::unique_ptr<std::ostream>{out};
+  self->state.flatten = flatten;
+  *out << "[\n";
   return make(self);
 }
 

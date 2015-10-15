@@ -57,33 +57,59 @@ data const* record::at(offset const& o) const {
   return nullptr;
 }
 
-trial<record> record::unflatten(type::record const& t) const {
-  auto i = begin();
+record flatten(record const& r) {
+  record result;
+  result.reserve(r.size());
+  for (auto& field : r)
+    if (auto rec = get<record>(field)) {
+      auto flat = flatten(*rec);
+      result.insert(result.end(),
+                    std::make_move_iterator(flat.begin()),
+                    std::make_move_iterator(flat.end()));
+    } else {
+      result.push_back(field);
+    }
+  return result;
+}
+
+data flatten(data const& d) {
+  auto r = get<record>(d);
+  return r ? flatten(*r) : d;
+}
+
+optional<record> unflatten(record const& r, type::record const& t) {
+  auto i = r.begin();
   size_t depth = 1;
   record result;
-  record* r = &result;
+  record* rec = &result;
   for (auto& e : type::record::each{t}) {
-    if (i == end())
-      return error{"not enough data"};
+    if (i == r.end())
+      return {};
     if (e.depth() > depth) {
       for (size_t j = 0; j < e.depth() - depth; ++j) {
         ++depth;
-        r->push_back(record{});
-        r = get<record>(r->back());
+        rec->push_back(record{});
+        rec = get<record>(rec->back());
       }
     } else if (e.depth() < depth) {
-      r = &result;
+      rec = &result;
       depth = e.depth();
       for (size_t j = 0; j < depth - 1; ++j)
-        r = get<record>(r->back());
+        rec = get<record>(rec->back());
     }
     auto& field_type = e.trace.back()->type;
     if (is<none>(*i) || field_type.check(*i))
-      r->push_back(*i++);
+      rec->push_back(*i++);
     else
-      return error{"data/type mismatch: ", *i, '/', field_type};
+      return {};
   }
-  return std::move(result);
+  return result;
+}
+
+optional<record> unflatten(data const& d, type const& t) {
+  auto r = get<record>(d);
+  auto rt = get<type::record>(t);
+  return r && rt ? unflatten(*r, *rt) : optional<record>{};
 }
 
 namespace {

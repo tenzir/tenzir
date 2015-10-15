@@ -10,9 +10,8 @@ namespace vast {
 
 namespace {
 
-struct json_converter {
-  json_converter(json& j) : j_{j} {
-  }
+struct jsonizer {
+  jsonizer(json& j) : j_{j} { }
 
   bool operator()(none) const {
     return true;
@@ -36,7 +35,7 @@ struct json_converter {
 bool convert(vector const& v, json& j) {
   json::array a(v.size());
   for (auto i = 0u; i < v.size(); ++i)
-    if (!visit(json_converter{a[i]}, v[i]))
+    if (!visit(jsonizer{a[i]}, v[i]))
       return false;
   j = std::move(a);
   return true;
@@ -45,7 +44,7 @@ bool convert(vector const& v, json& j) {
 bool convert(set const& s, json& j) {
   json::array a(s.size());
   for (auto i = 0u; i < s.size(); ++i)
-    if (!visit(json_converter{a[i]}, s[i]))
+    if (!visit(jsonizer{a[i]}, s[i]))
       return false;
   j = std::move(a);
   return true;
@@ -56,10 +55,10 @@ bool convert(table const& t, json& j) {
   for (auto& p : t) {
     json::array a;
     json j;
-    if (!visit(json_converter{j}, p.first))
+    if (!visit(jsonizer{j}, p.first))
       return false;
     a.push_back(std::move(j));
-    if (!visit(json_converter{j}, p.second))
+    if (!visit(jsonizer{j}, p.second))
       return false;
     a.push_back(std::move(j));
     values.emplace_back(std::move(a));
@@ -71,14 +70,32 @@ bool convert(table const& t, json& j) {
 bool convert(record const& r, json& j) {
   json::array a(r.size());
   for (auto i = 0u; i < r.size(); ++i)
-    if (!visit(json_converter{a[i]}, r[i]))
+    if (!visit(jsonizer{a[i]}, r[i]))
       return false;
   j = std::move(a);
   return true;
 }
 
 bool convert(data const& d, json& j) {
-  return visit(json_converter{j}, d);
+  return visit(jsonizer{j}, d);
+}
+
+bool convert(data const& d, json& j, type const& t) {
+  auto r = get<record>(d);
+  auto tr = get<type::record>(t);
+  if (r && tr) {
+    if (r->size() != tr->fields().size())
+      return false;
+    json::object o;
+    for (auto i = 0u; i < r->size(); ++i) {
+      auto& f = tr->fields()[i];
+      if (! convert((*r)[i], o[f.name], f.type))
+        return false;
+    }
+    j = std::move(o);
+    return true;
+  }
+  return convert(d, j);
 }
 
 } // namespace vast

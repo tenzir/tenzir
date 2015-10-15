@@ -126,13 +126,37 @@ TEST(JSON)
   auto v = value{*to<data>("(53/udp,-42,4.2)"), tr};
   auto j = to<json>(v);
   REQUIRE(j);
-  auto str = R"json({
+  auto str = R"__({
   "data": {
     "bar": -42,
     "baz": 4.2,
     "foo": "53/udp"
   },
-  "type": "record {foo: port, bar: int, baz: real}"
-})json";
+  "type": {
+    "attributes": [],
+    "kind": "record",
+    "name": "",
+    "structure": {
+      "bar": {
+        "attributes": [],
+        "kind": "integer",
+        "name": "",
+        "structure": null
+      },
+      "baz": {
+        "attributes": [],
+        "kind": "real",
+        "name": "",
+        "structure": null
+      },
+      "foo": {
+        "attributes": [],
+        "kind": "port",
+        "name": "",
+        "structure": null
+      }
+    }
+  }
+})__";
   CHECK(to_string(*j) == str);
 }

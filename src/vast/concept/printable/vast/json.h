@@ -40,15 +40,17 @@ struct oneline {};
 
 } // namespace policy
 
-template <typename TreePolicy, int Indent = 2>
-struct json_printer : printer<json_printer<TreePolicy, Indent>> {
+template <typename TreePolicy, int Indent = 2, int Padding = 0>
+struct json_printer : printer<json_printer<TreePolicy, Indent, Padding>> {
   using attribute = json;
+
   static constexpr auto tree = std::is_same<TreePolicy, policy::tree>{};
+
+  static_assert(Padding >= 0, "padding must not be negative");
 
   template <typename Iterator>
   struct print_visitor {
-    print_visitor(Iterator& out) : out_{out} {
-    }
+    print_visitor(Iterator& out) : out_{out} {}
 
     bool operator()(none const&) {
       return printers::str.print(out_, "null");
@@ -74,6 +76,8 @@ struct json_printer : printer<json_printer<TreePolicy, Indent>> {
 
     bool operator()(json::array const& a) {
       using namespace printers;
+      if (depth_ == 0 && !pad())
+        return false;
       if (!any.print(out_, '['))
         return false;
       if (!a.empty() && tree) {
@@ -83,7 +87,8 @@ struct json_printer : printer<json_printer<TreePolicy, Indent>> {
       auto begin = a.begin();
       auto end = a.end();
       while (begin != end) {
-        indent();
+        if (!indent())
+          return false;
         if (!visit(*this, *begin))
           return false;
         ;
@@ -95,13 +100,16 @@ struct json_printer : printer<json_printer<TreePolicy, Indent>> {
       if (!a.empty() && tree) {
         --depth_;
         any.print(out_, '\n');
-        indent();
+        if (!indent())
+          return false;
       }
       return any.print(out_, ']');
     }
 
     bool operator()(json::object const& o) {
       using namespace printers;
+      if (depth_ == 0 && !pad())
+        return false;
       if (!any.print(out_, '{'))
         return false;
       if (!o.empty() && tree) {
@@ -112,7 +120,8 @@ struct json_printer : printer<json_printer<TreePolicy, Indent>> {
       auto begin = o.begin();
       auto end = o.end();
       while (begin != end) {
-        indent();
+        if (!indent())
+          return false;
         if (!(*this)(begin->first))
           return false;
         if (!str.print(out_, ": "))
@@ -128,15 +137,29 @@ struct json_printer : printer<json_printer<TreePolicy, Indent>> {
         --depth_;
         if (!any.print(out_, '\n'))
           return false;
-        indent();
+        if (!indent())
+          return false;
       }
       return any.print(out_, '}');
     }
 
-    void indent() {
-      if (tree)
-        for (auto i = 0; i < depth_ * Indent; ++i)
-          printers::any.print(out_, ' '); // FIXME: add boolean return value.
+    bool pad() {
+      if (Padding > 0)
+        for (auto i = 0; i < Padding; ++i)
+          if (!printers::any.print(out_, ' '))
+            return false;
+      return true;
+    }
+
+    bool indent() {
+      if (!pad())
+        return false;
+      if (!tree)
+        return true;
+      for (auto i = 0; i < depth_ * Indent; ++i)
+        if (!printers::any.print(out_, ' '))
+          return false;
+      return true;
     }
 
     Iterator& out_;
