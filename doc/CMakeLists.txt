@@ -1,4 +1,4 @@
-# API documentation
+# C++ API
 if (DOXYGEN_FOUND)
   set(doxyfile ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile)
   set(api_site "www.icir.org:vast/api")

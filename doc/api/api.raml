@@ -1,0 +1,231 @@
+#%RAML 1.0
+title: VAST API
+version: v1
+
+types:
+  UUID:
+    type: string
+    example: "50e06e4a-22b7-4037-a53f-8efcf3fc94fd"
+  # Data
+  None: string
+  Boolean: boolean
+  Integer: integer
+  Count:
+    type: integer
+    minimum: 0
+  Real: number
+  TimePoint: Count
+  TimeDuration: Count
+  String: string
+  Pattern: string
+  Address: string
+  Subnet: string
+  Port: string
+  Enum: string
+  Vector: Data[]
+  Set: Data[]
+  Table:
+    type: object
+    properties:
+      []:
+        type: Data
+  Record: Data[]
+  ArithmeticData: Boolean | Integer | Count | Real
+  TimeData: TimePoint | TimeDuration
+  NetworkData: Address | Subnet | Port
+  BasicData: None | ArithmeticData | TimeData | String | Pattern | NetworkData
+  ContainerData: Vector | Set | Table
+  RecursiveData: ContainerData | Record
+  Data:
+    description: Representation of information
+    type: BasicData | Enum | RecursiveData
+  # Types
+  Type:
+    description: A type that describes the representation of *data*
+    type: string # TODO
+  # Value = Type + Data
+  Value:
+    description: A value consists of *data* with a compatible *type*
+    type: object
+    properties:
+      type: Type
+      data: Data
+  # Event = Value + Meta data
+  Event:
+    description: An event is a *value* with additional meta data
+    type: Value
+    properties:
+      id: Count
+      timestamp: TimePoint
+      value: Value
+  # Query structures
+  Query:
+    description: A query context
+    type: object
+    properties:
+      id:
+        description: The query UUID
+        type: UUID
+      type:
+        description: The query type: historical, continuous, or both
+        type: string
+        enum: [ historical, continuous, unified ]
+      expression:
+        description: The query expression
+        type: string
+      limit:
+        description: The upper bound on number of results to send
+        type: Count
+      created:
+        description: The timestamp when the query was issued
+        type: TimePoint
+      state:
+        description: The current state of the query
+        type: string
+      hits:
+        description: The number of hits received from the index
+        type: Count
+      candidates:
+        description: >
+          The number of events received from archive and examined if they
+          qualify as result
+        type: Count
+      results:
+        description: >
+          The number of candidates which have passed the check and were relayed
+          to the sink
+        type: Count
+  Result:
+    description: A query result is a list of *events*
+    type: Event[]
+
+traits:
+  - indexable:
+      queryParameters:
+        offset:
+          description: The index into the result set.
+          type: integer
+          minimum: 0
+          default: 0
+          required: false
+          example: 100
+        n:
+          description: Number of results to extract relative to the offset
+          type: integer
+          minimum: 0
+          required: false
+          example: 50
+  - orderable:
+      queryParameters:
+        orderBy:
+          description: |
+            Order by field: <<fields>>
+          type: string
+          required: false
+        order:
+          description: Order
+          enum: [desc, asc]
+          default: desc
+          required: false
+
+resourceTypes:
+  - query:
+      description: A query context.
+      get:
+        description: Get meta data about a specific query.
+        responses:
+          200:
+            body:
+              application/json:
+                type: Query
+          404:
+            body:
+              application/json:
+                example: |
+                  {"message": "query <<id>> not found" }
+/queries:
+  get:
+    description: Get the list of queries.
+    responses:
+      200:
+        body:
+          application/json:
+            type: Query[]
+            example:
+              !include examples/queries-GET.json
+  post:
+    description: Issue a query.
+    queryParameters:
+      expression:
+        description: Query expression
+        type: string
+        required: true
+        example: "&time < now"
+      type:
+        description: The query type
+        type: string
+        enum: [ historical, continuous, unified ]
+      limit:
+        description: Maximum number of events to extract (0 = unlimited)
+        type: integer
+        minimum: 0
+        example: 1000
+        required: false
+    responses:
+      200:
+        body:
+          application/json:
+            example:
+              !include examples/queries-POST.json
+  /{id}:
+    description: A specific instance of a query
+    head:
+      description: Get status information about the query
+      type:
+        query:
+          id: <<id>>
+          responses:
+            200:
+              body:
+                application/json:
+                  example:
+                    !include examples/queries-id-GET.json
+    get:
+      description: Retrieves results of a query
+      queryParameters:
+        n:
+          description: The number of results to extract
+          type: number
+          minimum: 1
+          required: false
+          example: 10
+        id:
+          description: Extracts events with a known ID
+          type: string
+          required: false
+          example: "42,1337,4711"
+      responses:
+        200:
+          body:
+            application/json:
+              type: Result
+              example:
+                !include examples/queries-id-results.json
+/types:
+  get:
+    description: Retrieves all known types.
+    responses:
+      200:
+        body:
+          application/json:
+            example:
+              !include examples/types.json
+  /{type}:
+    get:
+      description: Retrieve a specific type by name.
+      responses:
+        200:
+          body:
+            application/json:
+              example:
+                !include examples/types-type.json

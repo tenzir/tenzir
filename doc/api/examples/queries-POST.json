@@ -1,0 +1,11 @@
+{
+  "id": "7f933353-5b7e-4aa3-a87a-812b6771fd40",
+  "type": "historical",
+  "expression": "10.0.0.1 in :addr",
+  "limit": 0,
+  "created": 1448225571000000,
+  "state": "created",
+  "hits": 0,
+  "candidates": 0,
+  "results": 0
+}
