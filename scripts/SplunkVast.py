@@ -1,8 +1,8 @@
 #!/usr/bin/env python
-import subprocess,sys,csv,optparse,string#,splunk.Intersplunk,optparse
+import subprocess,sys,csv,optparse,string,shelve,tempfile,os,glob
 from cStringIO import StringIO
 
-usage = "usage: %prog [-rs] [-t timefield] <query>"
+usage = "usage: %prog [-r] [-s | -d] [-e limit] [-t timefield] <query>"
 version="%prog version 0.0"
 epilog="""
 Splunk external search command script
@@ -33,7 +33,7 @@ Example queries:
 ---------------
 -       | vast ":addr==10.0.0.53" -r
 -       | vast "&type == 'bro::intel'" -sr
--       | vast "'Evil' in :string"
+-       | vast2 "'Evil' in :string"
 
 Note: Splunk "eats" double quotes when parsing input, so the VAST query
 requires replacing double with single quotes and vice versa.
@@ -43,9 +43,11 @@ CAVEATS:
 - Use stream mode only when results have a single type.
   In stream mode, multiple headers will produce events with bad field names in Splunk.
   Also, stream mode will not split multivalue fields in Splunk.
-- Non stream mode may consume all available memory when queries
+- Normal mode (non stream/non disk) may consume all available memory when queries
   return very large result sets. (the results heave to be processed in
   memory before being transfered to Splunk).
+- Limits in the Splunk GUI may limit the number of displayed rows. Use the stats
+  mode (by using the vast2 command) to avoid these limits.
 
 """
 
@@ -54,15 +56,22 @@ optparse.OptionParser.format_epilog = lambda self, formatter: self.epilog
 parser = optparse.OptionParser(usage=usage,version=version,epilog=epilog)
 parser.add_option("-r", "--raw",
                   action="store_true",dest="raw", default=False,
-                  help="include _raw field in results")
+                  help="include _raw field in results.")
 parser.add_option("-s", "--stream",
                   action="store_true",dest="stream", default=False,
                   help="stream input/output line-by-line.\n"+
                        "works only if results are from single source type.\n"+
-                       "multivalues are not processed")
+                       "multivalues are not processed.")
+parser.add_option("-d", "--disk",
+                  action="store_true",dest="disk", default=False,
+                  help="use disk to store intermidiate results.\n"+
+                       "safest mode but 2.5x slower than normal mode.")
 parser.add_option("-t", "--timefield",
                   action="store",dest="tfield", default="ts",metavar="FIELD",
-                  help="override timestamp field in Vast results. (default=%default)")
+                  help="override timestamp field in Vast results. (default=%default).")
+parser.add_option("-e", "--limit",
+                  action="store",dest="limit", default=0,metavar="LIMIT",
+                  help="limit number of results returned. (default=no limit).")
 
 '''
 Interplunk format for multivalues: values are wrapped in '$' 
@@ -92,14 +101,25 @@ def outputResults(results, fields = None, mvdelim = '\n', outputfile = sys.stdou
     the multivalued key to the proper encoding. Replace the list with a
     newline separated string of the values
     '''
-    for i in range(len(results)):
-        for key in results[i].keys():
-            if(isinstance(results[i][key], list)):
-                results[i]['__mv_' + key] = getEncodedMV(results[i][key])
-                results[i][key] = string.join(results[i][key], mvdelim)
-                if not fields.count('__mv_' + key):
-                  fields.append('__mv_' + key)
-        s.update(results[i].keys())
+    if type(results)==list:
+      for i in range(len(results)):
+	  for key in results[i].keys():
+	      if(isinstance(results[i][key], list)):
+		  results[i]['__mv_' + key] = getEncodedMV(results[i][key])
+		  results[i][key] = string.join(results[i][key], mvdelim)
+		  if not fields.count('__mv_' + key):
+		    fields.append('__mv_' + key)
+	  s.update(results[i].keys())
+    else:
+      #results in shelve
+      for i in range(1,len(results)+1):
+          for key in results[str(i)].keys():
+              if(isinstance(results[str(i)][key], list)):
+                  results[str(i)]['__mv_' + key] = getEncodedMV(results[str(i)][key])
+                  results[str(i)][key] = string.join(results[str(i)][key], mvdelim)
+                  if not fields.count('__mv_' + key):
+                    fields.append('__mv_' + key)
+          s.update(results[str(i)].keys())
 
     if fields is None:
         h = list(s)
@@ -109,15 +129,21 @@ def outputResults(results, fields = None, mvdelim = '\n', outputfile = sys.stdou
     dw = csv.DictWriter(outputfile, h)
 
     dw.writerow(dict(zip(h, h)))
-    dw.writerows(results)
+    if type(results)==list:
+      dw.writerows(results)
+    else:
+      for i in range(1,len(results)+1):
+        dw.writerow(results[str(i)])
 
 
 opt, remainder = parser.parse_args()
+if opt.stream and opt.disk:
+  parser.error("options -s and -2 are mutually exclusive")
 if len(remainder) == 1:
   # Splunk eats double quotes when parsing input, so the VAST query requires
   # preprocessing: replace double with single quotes and vice versa.
   query = remainder[0].replace("'",'"')
-  full_cmd = ['/usr/local/bin/vast', 'export', 'csv', '-h', query]
+  full_cmd = ['/usr/local/bin/vast', 'export', 'csv', '-h', '-e', str(opt.limit), query]
 else:
   parser.print_help(sys.stderr)
   sys.exit(2)
@@ -132,6 +158,15 @@ fullheader =[]
 currentheader = []
 eventlist = []
 results = []
+
+if opt.disk:
+  fd,dfname = tempfile.mkstemp(suffix='.SplunkVastShelve')
+  os.close(fd)
+  os.remove(dfname)
+  d = shelve.open(dfname,flag='n',writeback=True)
+  di = 1
+  modcounter = 1
+  d.clear()
 
 while True:
   out = p.stdout.readline()
@@ -162,7 +197,14 @@ while True:
 	  if " | " in dictionary[key]:
             dictionary[key] = (dictionary[key]).split(" | ")
             dictionary[key] += dictionary[key]
-	results.append(dictionary)
+        if opt.disk:
+          d[str(di)]=dictionary
+          di += 1
+          modcounter += 1
+          if modcounter == 50000 : #don't want to use modulus
+            d.sync()
+        else:	
+	  results.append(dictionary)
     else:
       # new header
       if opt.stream:
@@ -176,4 +218,14 @@ while True:
 if not opt.stream:
   if opt.raw:
     fullheader.append("_raw")
-  outputResults(results,fields = fullheader)
+  if opt.disk:
+    outputResults(d,fields = fullheader)
+    #d.clear()
+    #d.close()
+    for filename in glob.glob(tempfile.gettempdir()+"/*SplunkVastShelve*") :
+      try:
+        os.remove( filename )
+      except:
+        pass
+  else:
+    outputResults(results,fields = fullheader)
