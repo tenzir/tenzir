@@ -7,7 +7,6 @@ namespace vast {
 
 trial<schema> schema::merge(schema const& s1, schema const& s2) {
   schema merged = s1;
-
   for (auto& t2 : s2.types_) {
     auto t1 = s1.find_type(t2.name());
     if (!t1)
@@ -15,17 +14,14 @@ trial<schema> schema::merge(schema const& s1, schema const& s2) {
     else if (*t1 != t2)
       return error{"type clash: ", *t1, " <--> ", t2};
   }
-
   return std::move(merged);
 }
 
 trial<void> schema::add(type t) {
   if (is<none>(t))
     return error{"instance of invalid_type"};
-
   if (t.name().empty())
     return error{"cannot add unnamed typed: ", t};
-
   if (auto existing = find_type(t.name())) {
     if (*existing == t)
       return nothing;
@@ -33,9 +29,7 @@ trial<void> schema::add(type t) {
       return error{"clash in types with same name (existing <--> added): ",
                    *existing, " <--> ", t};
   }
-
   types_.push_back(std::move(t));
-
   return nothing;
 }
 
@@ -43,7 +37,6 @@ type const* schema::find_type(std::string const& name) const {
   for (auto& t : types_)
     if (t.name() == name)
       return &t;
-
   return {};
 }
 
@@ -52,7 +45,6 @@ std::vector<type> schema::find_types(type const& t) const {
   for (auto& ty : types_)
     if (ty == t)
       types.push_back(t);
-
   return types;
 }
 

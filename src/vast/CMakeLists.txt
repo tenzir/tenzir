@@ -55,6 +55,7 @@ set(libvast_sources
   concept/convertible/vast/event.cc
   concept/convertible/vast/pattern.cc
   concept/convertible/vast/port.cc
+  concept/convertible/vast/schema.cc
   concept/convertible/vast/subnet.cc
   concept/convertible/vast/time.cc
   concept/convertible/vast/type.cc

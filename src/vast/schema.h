@@ -10,7 +10,7 @@
 
 namespace vast {
 
-/// An ordered sequence of of named types.
+/// A collection of types.
 class schema : util::equality_comparable<schema> {
   friend access;
 
@@ -20,11 +20,10 @@ public:
 
   friend bool operator==(schema const& x, schema const& y);
 
-  /// Merges two schemata by appending all types of the second schema to the
-  /// first.
+  /// Merges two schemata.
   /// @param s1 The first schema.
   /// @param s2 The second schema.
-  /// @returns The merged schema.
+  /// @returns The union of *s1* and *s2* schema.
   static trial<schema> merge(schema const& s1, schema const& s2);
 
   /// Adds a new type to the schema.

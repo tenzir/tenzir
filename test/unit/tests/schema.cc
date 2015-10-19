@@ -1,10 +1,13 @@
+#include "vast/json.h"
 #include "vast/schema.h"
+#include "vast/concept/convertible/vast/schema.h"
 #include "vast/concept/serializable/io.h"
 #include "vast/concept/serializable/vast/schema.h"
 #include "vast/concept/parseable/to.h"
 #include "vast/concept/parseable/vast/schema.h"
 #include "vast/concept/printable/stream.h"
 #include "vast/concept/printable/vast/error.h"
+#include "vast/concept/printable/vast/json.h"
 #include "vast/concept/printable/vast/schema.h"
 
 #define SUITE schema
@@ -79,4 +82,31 @@ TEST(serialization) {
   auto u = sch2.find_type("foo");
   REQUIRE(u);
   CHECK(t == *u);
+}
+
+TEST(json) {
+  schema s;
+  auto t0 = type::count{};
+  t0.name("foo");
+  CHECK(s.add(t0));
+  auto t1 = type::string{};
+  t1.name("bar");
+  CHECK(s.add(t1));
+  auto expected = R"__({
+  "types": [
+    {
+      "attributes": [],
+      "kind": "count",
+      "name": "foo",
+      "structure": null
+    },
+    {
+      "attributes": [],
+      "kind": "string",
+      "name": "bar",
+      "structure": null
+    }
+  ]
+})__";
+  CHECK(to_string(to_json(s)) == expected);
 }
