@@ -2,7 +2,7 @@
 import subprocess,sys,csv,optparse,string,shelve,tempfile,os,glob
 from cStringIO import StringIO
 
-usage = "usage: %prog [-r] [-s | -d] [-e limit] [-t timefield] <query>"
+usage = "usage: %prog [-r] [-s | -d] [-n node] [-e limit] [-t timefield] <query>"
 version="%prog version 0.0"
 epilog="""
 Splunk external search command script
@@ -34,6 +34,7 @@ Example queries:
 -       | vast ":addr==10.0.0.53" -r
 -       | vast "&type == 'bro::intel'" -sr
 -       | vast2 "'Evil' in :string"
+-       | vast2 "&time < now" -d -e 5000 -n 127.0.0.1:42000
 
 Note: Splunk "eats" double quotes when parsing input, so the VAST query
 requires replacing double with single quotes and vice versa.
@@ -72,6 +73,9 @@ parser.add_option("-t", "--timefield",
 parser.add_option("-e", "--limit",
                   action="store",dest="limit", default=0,metavar="LIMIT",
                   help="limit number of results returned. (default=no limit).")
+parser.add_option("-n", "--node",
+                  action="store",dest="node", default='',metavar="IP:PORT",
+                  help="node to query. (default=local).")
 
 '''
 Interplunk format for multivalues: values are wrapped in '$' 
@@ -143,7 +147,10 @@ if len(remainder) == 1:
   # Splunk eats double quotes when parsing input, so the VAST query requires
   # preprocessing: replace double with single quotes and vice versa.
   query = remainder[0].replace("'",'"')
-  full_cmd = ['/usr/local/bin/vast', 'export', 'csv', '-h', '-e', str(opt.limit), query]
+  if opt.node == '':
+    full_cmd = ['/usr/local/bin/vast', 'export', 'csv', '-h', '-e', str(opt.limit), query]
+  else:
+    full_cmd = ['/usr/local/bin/vast', '-e', str(opt.node), 'export', 'csv', '-h', '-e', str(opt.limit), query]
 else:
   parser.print_help(sys.stderr)
   sys.exit(2)
