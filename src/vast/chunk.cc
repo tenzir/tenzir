@@ -44,7 +44,6 @@ bool chunk::writer::write(event const& e) {
   // Write type.
   auto t = type_cache_.find(e.type());
   if (t == type_cache_.end()) {
-    VAST_ASSERT(!meta_->schema.find_type(e.type().name()));
     if (!meta_->schema.add(e.type()))
       return false;
     auto type_id = static_cast<uint32_t>(type_cache_.size());
@@ -112,7 +111,7 @@ result<event> chunk::reader::materialize(bool discard) {
     std::string type_name;
     if (!block_reader_->read(type_name, 0))
       return error{"failed to read type name from block"};
-    auto st = chunk_->meta().schema.find_type(type_name);
+    auto st = chunk_->meta().schema.find(type_name);
     if (!st)
       return error{"schema inconsistency, missing type: ", type_name};
     t = type_cache_.emplace(type_id, *st).first;

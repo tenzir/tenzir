@@ -60,8 +60,8 @@ TEST(event evaluation) {
   )__";
   auto sch = to<schema>(str);
   REQUIRE(sch);
-  auto foo = sch->find_type("foo");
-  auto bar = sch->find_type("bar");
+  auto foo = sch->find("foo");
+  auto bar = sch->find("bar");
   REQUIRE(foo);
   REQUIRE(bar);
   auto e0 = event::make(record{"babba", 1.337, 42u, 100, "bar", -4.8}, *foo);

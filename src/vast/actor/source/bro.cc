@@ -281,7 +281,7 @@ trial<void> bro_state::parse_header() {
     VAST_VERBOSE_AT(self, "     ", i << ')', flat.fields()[i]);
   // If a congruent type exists in the schema, we give the schema type
   // precedence because it may have user-annotated extra information.
-  if (auto t = schema_.find_type(event_name))
+  if (auto t = schema_.find(event_name))
     if (t->name() == event_name) {
       if (congruent(type_, *t)) {
         VAST_VERBOSE_AT(self, "prefers type in schema over type in header");

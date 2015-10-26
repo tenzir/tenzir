@@ -62,7 +62,7 @@ schema bgpdump_state::schema() {
 }
 
 void bgpdump_state::schema(vast::schema const& sch) {
-  if (auto t = sch.find_type(announce_type_.name())) {
+  if (auto t = sch.find(announce_type_.name())) {
     if (congruent(*t, announce_type_)) {
       VAST_VERBOSE("prefers type in schema over default type:", *t);
       announce_type_ = *t;
@@ -70,7 +70,7 @@ void bgpdump_state::schema(vast::schema const& sch) {
       VAST_WARN("ignores incongruent schema type:", t->name());
     }
   }
-  if (auto t = sch.find_type(route_type_.name())) {
+  if (auto t = sch.find(route_type_.name())) {
     if (congruent(*t, route_type_)) {
       VAST_VERBOSE("prefers type in schema over default type:", *t);
       route_type_ = *t;
@@ -78,7 +78,7 @@ void bgpdump_state::schema(vast::schema const& sch) {
       VAST_WARN("ignores incongruent schema type:", t->name());
     }
   }
-  if (auto t = sch.find_type(withdraw_type_.name())) {
+  if (auto t = sch.find(withdraw_type_.name())) {
     if (congruent(*t, withdraw_type_)) {
       VAST_VERBOSE("prefers type in schema over default type:", *t);
       withdraw_type_ = *t;
@@ -86,7 +86,7 @@ void bgpdump_state::schema(vast::schema const& sch) {
       VAST_WARN("ignores incongruent schema type:", t->name());
     }
   }
-  if (auto t = sch.find_type(state_change_type_.name())) {
+  if (auto t = sch.find(state_change_type_.name())) {
     if (congruent(*t, state_change_type_)) {
       VAST_VERBOSE("prefers type in schema over default type:", *t);
       state_change_type_ = *t;

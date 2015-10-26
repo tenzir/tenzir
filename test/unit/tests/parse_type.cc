@@ -83,9 +83,9 @@ TEST(schema: simple sequential) {
   auto str = "type a = int type b = string type c = a"s;
   schema sch;
   CHECK(parsers::schema(str, sch));
-  CHECK(sch.find_type("a"));
-  CHECK(sch.find_type("b"));
-  CHECK(sch.find_type("c"));
+  CHECK(sch.find("a"));
+  CHECK(sch.find("b"));
+  CHECK(sch.find("c"));
 }
 
 TEST(schema: bro-style) {
@@ -109,7 +109,7 @@ TEST(schema: bro-style) {
   )__";
   schema sch;
   CHECK(parsers::schema(str, sch));
-  auto ssl = sch.find_type("bro::ssl");
+  auto ssl = sch.find("bro::ssl");
   REQUIRE(ssl);
   auto r = get<type::record>(*ssl);
   REQUIRE(r);
@@ -127,12 +127,12 @@ TEST(schema: aliases) {
              )__";
   schema sch;
   CHECK(parsers::schema(std::string{str}, sch));
-  auto foo = sch.find_type("foo");
+  auto foo = sch.find("foo");
   REQUIRE(foo);
   CHECK(is<type::address>(*foo));
-  CHECK(sch.find_type("bar"));
-  CHECK(sch.find_type("baz"));
-  CHECK(sch.find_type("x"));
+  CHECK(sch.find("bar"));
+  CHECK(sch.find("baz"));
+  CHECK(sch.find("x"));
 }
 
 TEST(schema: basic types global) {
@@ -164,9 +164,9 @@ TEST(schema: basic types global) {
   )__";
   schema sch;
   CHECK(parsers::schema(std::string{str}, sch));
-  CHECK(sch.find_type("t1"));
-  CHECK(sch.find_type("t11"));
-  auto foo = sch.find_type("foo");
+  CHECK(sch.find("t1"));
+  CHECK(sch.find("t11"));
+  auto foo = sch.find("foo");
   REQUIRE(foo);
   auto r = get<type::record>(*foo);
   REQUIRE(r);
@@ -193,7 +193,7 @@ TEST(schema: basic types local) {
   )__";
   schema sch;
   CHECK(parsers::schema(std::string{str}, sch));
-  auto foo = sch.find_type("foo");
+  auto foo = sch.find("foo");
   REQUIRE(foo);
   auto r = get<type::record>(*foo);
   REQUIRE(r);
@@ -217,12 +217,12 @@ TEST(schema: complex types global) {
   )__";
   schema sch;
   CHECK(parsers::schema(std::string{str}, sch));
-  auto enum_t = sch.find_type("enum_t");
+  auto enum_t = sch.find("enum_t");
   REQUIRE(enum_t);
-  CHECK(sch.find_type("vector_t"));
-  CHECK(sch.find_type("set_t"));
-  CHECK(sch.find_type("table_t"));
-  auto foo = sch.find_type("foo");
+  CHECK(sch.find("vector_t"));
+  CHECK(sch.find("set_t"));
+  CHECK(sch.find("table_t"));
+  auto foo = sch.find("foo");
   REQUIRE(foo);
   auto r = get<type::record>(*foo);
   REQUIRE(r);

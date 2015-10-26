@@ -5,7 +5,7 @@
 #include <string>
 
 #include "vast/type.h"
-#include "vast/trial.h"
+#include "vast/optional.h"
 #include "vast/util/operators.h"
 
 namespace vast {
@@ -24,25 +24,25 @@ public:
   /// @param s1 The first schema.
   /// @param s2 The second schema.
   /// @returns The union of *s1* and *s2* schema.
-  static trial<schema> merge(schema const& s1, schema const& s2);
+  static optional<schema> merge(schema const& s1, schema const& s2);
 
   /// Adds a new type to the schema.
   /// @param t The type to add.
-  /// @returns `nothing` on success.
-  trial<void> add(type t);
+  /// @returns `true` on success.
+  bool add(type t);
 
-  /// Retrieves the type for a given type name.
+  /// Adds another schema to this schema.
+  /// @param sch The schema to add to this one.
+  /// @returns `true` on success.
+  /// @see merge
+  bool add(schema const& other);
+
+  /// Retrieves the type for a given name.
   /// @param name The name of the type to lookup.
-  /// @returns The type registered as *name* or an empty pointer if *name* does
-  /// not exist.
-  type const* find_type(std::string const& name) const;
+  /// @returns The type with name *name* or `nullptr if no such type exists.
+  type const* find(std::string const& name) const;
 
-  /// Retrieves the type(s) matching a given type.
-  /// @param t The ype to look for.
-  /// @returns The type(s) having type *t*.
-  std::vector<type> find_types(type const& t) const;
-
-  // Container API.
+  // Container API
   const_iterator begin() const;
   const_iterator end() const;
   size_t size() const;

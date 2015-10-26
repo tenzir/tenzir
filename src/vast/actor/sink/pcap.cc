@@ -40,7 +40,7 @@ bool pcap_state::process(event const& e) {
       self->quit(exit::error);
       return false;
     }
-    if (auto t = schema.find_type("vast::packet")) {
+    if (auto t = schema.find("vast::packet")) {
       if (congruent(packet_type, *t)) {
         VAST_VERBOSE_AT(self, "prefers type in schema over default type");
         packet_type = *t;

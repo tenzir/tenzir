@@ -160,7 +160,7 @@ behavior partition::make(stateful_actor<state>* self, path dir, actor sink) {
           // Load the INDEXERs for each type in the batch.
           for (auto& type_dir : directory{batch_dir}) {
             VAST_DEBUG_AT(self, "loads", interval / type_dir.basename());
-            auto t = self->state.schema.find_type(type_dir.basename().str());
+            auto t = self->state.schema.find(type_dir.basename().str());
             VAST_ASSERT(t != nullptr);
             auto a = self->spawn<monitored>(
               event_indexer<bitstream_type>::make, type_dir, *t);

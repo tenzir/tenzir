@@ -30,7 +30,7 @@ schema pcap_state::schema() {
 }
 
 void pcap_state::schema(vast::schema const& sch) {
-  auto t = sch.find_type("vast::packet");
+  auto t = sch.find("vast::packet");
   if (!t) {
     VAST_ERROR_AT(self, "did not find type vast::packet in given schema");
     return;

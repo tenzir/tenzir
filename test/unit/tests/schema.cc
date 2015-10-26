@@ -26,7 +26,7 @@ TEST(offset finding) {
   auto sch = to<schema>(str);
   REQUIRE(sch);
   // Type lookup
-  auto foo = sch->find_type("foo");
+  auto foo = sch->find("foo");
   REQUIRE(foo);
   auto r = get<type::record>(*foo);
   // Verify type integrity
@@ -57,9 +57,9 @@ TEST(merging) {
   REQUIRE(s2);
   auto merged = schema::merge(*s1, *s2);
   REQUIRE(merged);
-  CHECK(merged->find_type("a"));
-  CHECK(merged->find_type("b"));
-  CHECK(merged->find_type("inner"));
+  CHECK(merged->find("a"));
+  CHECK(merged->find("b"));
+  CHECK(merged->find("inner"));
 }
 
 TEST(serialization) {
@@ -79,7 +79,7 @@ TEST(serialization) {
   schema sch2;
   CHECK(load(buf, sch2));
   // Check integrity
-  auto u = sch2.find_type("foo");
+  auto u = sch2.find("foo");
   REQUIRE(u);
   CHECK(t == *u);
 }

@@ -5,47 +5,38 @@
 
 namespace vast {
 
-trial<schema> schema::merge(schema const& s1, schema const& s2) {
-  schema merged = s1;
-  for (auto& t2 : s2.types_) {
-    auto t1 = s1.find_type(t2.name());
-    if (!t1)
-      merged.types_.push_back(t2);
-    else if (*t1 != t2)
-      return error{"type clash: ", *t1, " <--> ", t2};
-  }
-  return std::move(merged);
+optional<schema> schema::merge(schema const& s1, schema const& s2) {
+  auto result = s1;
+  if (! result.add(s2))
+    return {};
+  return result;
 }
 
-trial<void> schema::add(type t) {
-  if (is<none>(t))
-    return error{"instance of invalid_type"};
-  if (t.name().empty())
-    return error{"cannot add unnamed typed: ", t};
-  if (auto existing = find_type(t.name())) {
-    if (*existing == t)
-      return nothing;
-    else
-      return error{"clash in types with same name (existing <--> added): ",
-                   *existing, " <--> ", t};
-  }
+bool schema::add(type t) {
+  if (is<none>(t) || t.name().empty() || find(t.name()))
+    return false;
   types_.push_back(std::move(t));
-  return nothing;
+  return true;
 }
 
-type const* schema::find_type(std::string const& name) const {
+bool schema::add(schema const& sch) {
+  for (auto& t : sch) {
+    if (auto u = find(t.name())) {
+      if (t != *u && t.name() == u->name())
+        // Type clash: cannot accomodate two types with same name.
+        return false;
+    } else {
+      types_.push_back(t);
+    }
+  }
+  return true;
+}
+
+type const* schema::find(std::string const& name) const {
   for (auto& t : types_)
     if (t.name() == name)
       return &t;
-  return {};
-}
-
-std::vector<type> schema::find_types(type const& t) const {
-  std::vector<type> types;
-  for (auto& ty : types_)
-    if (ty == t)
-      types.push_back(t);
-  return types;
+  return nullptr;
 }
 
 schema::const_iterator schema::begin() const {
