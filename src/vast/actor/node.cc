@@ -10,6 +10,7 @@
 #include <caf/io/all.hpp>
 
 #include "vast/config.h"
+#include "vast/json.h"
 #include "vast/logger.h"
 #include "vast/time.h"
 #include "vast/expression.h"
@@ -26,8 +27,10 @@
 #include "vast/concept/parseable/vast/endpoint.h"
 #include "vast/concept/parseable/vast/expression.h"
 #include "vast/concept/parseable/vast/key.h"
+#include "vast/concept/printable/to_string.h"
 #include "vast/concept/printable/vast/expression.h"
 #include "vast/concept/printable/vast/error.h"
+#include "vast/concept/printable/vast/json.h"
 #include "vast/concept/printable/vast/filesystem.h"
 #include "vast/expr/normalize.h"
 #include "vast/io/compression.h"
@@ -671,32 +674,63 @@ behavior show(event_based_actor* self,
     auto r = self->current_message().extract_opts({
       {"verbose,v", "show values in addition to keys"},
     });
-    auto& arg = r.remainder.take_right(1).get_as_mutable<std::string>(0);
-    std::string result;
-    if (arg == "nodes") {
-      arg = key::str("nodes");
-    } else if (arg == "peers") {
-      arg = key::str("peers");
-    } else if (arg == "actors") {
-      arg = key::str("actors");
-    } else if (arg == "topology") {
-      arg = key::str("topology");
-    } else {
+    auto arg_msg = r.remainder.take_right(1);
+    auto& arg = arg_msg.get_as<std::string>(0);
+    auto is_valid_arg = arg == "nodes"
+                        || arg== "peers"
+                        || arg == "actors"
+                        || arg == "topology";
+    if (arg == "schema") {
+      self->send(node->state.store, list_atom::value, key::str("actors"));
+      self->become(
+        [=](std::map<std::string, message>& m) {
+          auto result = std::make_shared<json::object>();
+          auto indexes = std::make_shared<std::map<actor_addr, std::string>>();
+          for (auto& p : m)
+            p.second.apply({
+              [&](actor const& a, std::string const& type) {
+                if (type == "index") {
+                  indexes->emplace(a->address(), p.first);
+                  self->send(a, schema_atom::value);
+                }
+              }
+            });
+          if (indexes->empty()) {
+            *result = {{"message", "no index(es) running"}};
+            rp.deliver(make_message(to_string(json{std::move(*result)})));
+            self->quit();
+          } else {
+            self->become(
+              [=](json& j) {
+                auto& key = (*indexes)[self->current_sender()];
+                VAST_ASSERT(!key.empty());
+                result->emplace(key, std::move(j));
+                indexes->erase(self->current_sender());
+                if (indexes->empty()) {
+                  rp.deliver(make_message(to_string(json{std::move(*result)})));
+                  self->quit();
+                }
+              }
+            );
+          }
+        }
+      );
+    } else if (!is_valid_arg) {
       rp.deliver(make_message(error{"show: invalid argument \"", arg, '"'}));
       self->quit();
-      return;
+    } else {
+      auto pred = [verbose=r.opts.count("verbose")](auto& p) -> std::string {
+        return p.first + (verbose ? " -> " + to_string(p.second) : "");
+      };
+      self->send(node->state.store, list_atom::value, key::str(arg));
+      self->become(
+        [=](std::map<std::string, message> const& values) {
+          auto str = util::join(values.begin(), values.end(), "\n", pred);
+          rp.deliver(make_message(std::move(str)));
+          self->quit();
+        }
+      );
     }
-    auto pred = [verbose=r.opts.count("verbose")](auto& p) -> std::string {
-      return p.first + (verbose ? " -> " + to_string(p.second) : "");
-    };
-    self->send(node->state.store, list_atom::value, std::move(arg));
-    self->become(
-      [=](std::map<std::string, message> const& values) {
-        auto str = util::join(values.begin(), values.end(), "\n", pred);
-        rp.deliver(make_message(std::move(str)));
-        self->quit();
-      }
-    );
   };
 }
 

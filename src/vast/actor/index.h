@@ -9,6 +9,7 @@
 #include "vast/expression.h"
 #include "vast/filesystem.h"
 #include "vast/uuid.h"
+#include "vast/schema.h"
 #include "vast/time.h"
 #include "vast/actor/basic_state.h"
 #include "vast/actor/accountant.h"
@@ -47,8 +48,9 @@ struct index {
   };
 
   struct partition_state {
-    uint64_t events = 0;
     time::point last_modified;
+    vast::schema schema;
+    uint64_t events = 0;
     time::point from = time::duration{};
     time::point to = time::duration{};
   };

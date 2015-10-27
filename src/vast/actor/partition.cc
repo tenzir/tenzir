@@ -273,44 +273,37 @@ behavior partition::make(stateful_actor<state>* self, path dir, actor sink) {
       VAST_DEBUG_AT(self, "registers accountant#" << accountant->id());
       self->state.accountant = accountant;
     },
-    [=](std::vector<event> const& events, actor const& task) {
+    [=](std::vector<event> const& events, schema const& sch,
+        actor const& task) {
+      VAST_ASSERT(!events.empty());
       VAST_DEBUG_AT(self, "got", events.size(),
-                 "events [" << events.front().id() << ','
-                            << (events.back().id() + 1) << ')');
-      // Extract all unique types.
-      util::flat_set<type> types;
-      for (auto& e : events)
-        types.insert(e.type());
-      // Create one INDEXER per type.
+                   "events [" << events.front().id() << ','
+                              << (events.back().id() + 1) << ')');
+      self->send(task, supervisor_atom::value, self);
+      // Merge new schema into the existing one.
+      auto success = self->state.schema.add(sch);
+      VAST_ASSERT(success);
+      // Create one INDEXER per type and relay events to them.
       auto base = events.front().id();
       auto interval = to_string(base) + "-" + to_string(base + events.size());
       std::vector<actor> indexers;
-      indexers.reserve(types.size());
-      for (auto& t : types)
-        if (!t.find_attribute(type::attribute::skip)) {
-          if (!self->state.schema.add(t)) {
-            VAST_ERROR_AT(self, "failed to incorporate types from new schema");
-            self->quit(exit::error);
-            return;
-          }
-          auto indexer = self->spawn<monitored>(
-            event_indexer<bitstream_type>::make, dir / interval / t.name(), t);
-          indexers.push_back(indexer);
-          self->state.indexers.emplace(base, std::move(indexer));
-        }
-      if (indexers.empty()) {
-        VAST_WARN_AT(self, "didn't find any types to index");
-        self->send_exit(task, exit::done);
-        return;
+      indexers.reserve(sch.size());
+      auto msg = self->current_message();
+      msg = msg.take(1) + msg.take_right(1);
+      for (auto& t : sch) {
+        auto indexer_dir = dir / interval / t.name();
+        auto indexer = self->spawn<monitored>(
+          event_indexer<bitstream_type>::make, indexer_dir, t);
+        self->send(task, indexer);
+        self->send(indexer, msg);
+        indexers.push_back(indexer);
+        self->state.indexers.emplace(base, std::move(indexer));
       }
-      for (auto& i : indexers) {
-        self->send(task, i);
-        self->send(i, self->current_message());
-      }
+      // Relay INDEXERs to continuous query proxy.
       if (self->state.proxy != invalid_actor)
         self->send(self->state.proxy, std::move(indexers));
+      // Update per-partition statistics.
       self->state.pending_events += events.size();
-      self->send(task, supervisor_atom::value, self);
       VAST_DEBUG_AT(self, "indexes", self->state.pending_events,
                  "events in parallel");
     },

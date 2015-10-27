@@ -22,11 +22,11 @@ TEST(partition) {
   auto p = self->spawn<monitored + priority_aware>(partition::make, dir, self);
   auto t = self->spawn<monitored>(task::make<time::moment, uint64_t>,
                                   time::snapshot(), events0.size());
-  self->send(p, events0, t);
+  self->send(p, events0, sch, t);
   self->receive([&](down_msg const& msg) { CHECK(msg.source == t); });
   t = self->spawn<monitored>(task::make<time::moment, uint64_t>,
                              time::snapshot(), events1.size());
-  self->send(p, events1, t);
+  self->send(p, events1, sch, t);
   self->receive([&](down_msg const& msg) { CHECK(msg.source == t); });
 
   MESSAGE("flushing partition through termination");
@@ -60,7 +60,7 @@ TEST(partition) {
   MESSAGE("sending another event");
   t = self->spawn<monitored>(task::make<time::moment, uint64_t>,
                              time::snapshot(), events.size());
-  self->send(p, events, t);
+  self->send(p, events, sch, t);
   self->receive([&](down_msg const& msg) { CHECK(msg.source == t); });
 
   MESSAGE("getting continuous hits");
@@ -81,7 +81,7 @@ TEST(partition) {
   e.id(4711);
   t = self->spawn<monitored>(task::make<time::moment, uint64_t>,
                              time::snapshot(), 1);
-  self->send(p, std::vector<event>{std::move(e)}, t);
+  self->send(p, std::vector<event>{std::move(e)}, sch, t);
   self->receive([&](down_msg const& msg) { CHECK(msg.source == t); });
   // Make sure that we didn't get any new hits.
   CHECK(self->mailbox().count() == 0);

@@ -2,11 +2,13 @@
 
 #include "vast/bitmap_index.h"
 #include "vast/event.h"
+#include "vast/json.h"
 #include "vast/query_options.h"
 #include "vast/actor/index.h"
 #include "vast/actor/partition.h"
 #include "vast/actor/task.h"
 #include "vast/expr/restrictor.h"
+#include "vast/concept/convertible/vast/type.h"
 #include "vast/concept/printable/to_string.h"
 #include "vast/concept/printable/vast/expression.h"
 #include "vast/concept/printable/vast/error.h"
@@ -16,6 +18,7 @@
 #include "vast/concept/serializable/std/array.h"
 #include "vast/concept/serializable/std/chrono.h"
 #include "vast/concept/serializable/std/unordered_map.h"
+#include "vast/concept/serializable/vast/schema.h"
 #include "vast/concept/state/uuid.h"
 #include "vast/concept/state/time.h"
 #include "vast/util/assert.h"
@@ -24,12 +27,12 @@ namespace vast {
 
 template <typename Serializer>
 void serialize(Serializer& sink, index::partition_state const& ps) {
-  sink << ps.events << ps.from << ps.to << ps.last_modified;
+  sink << ps.last_modified << ps.schema << ps.events << ps.from << ps.to;
 }
 
 template <typename Deserializer>
 void deserialize(Deserializer& source, index::partition_state& ps) {
-  source >> ps.events >> ps.from >> ps.to >> ps.last_modified;
+  source >> ps.last_modified >> ps.schema >> ps.events >> ps.from >> ps.to;
 }
 
 namespace {
@@ -50,7 +53,7 @@ optional<actor> dispatch(stateful_actor<index::state>* self,
     VAST_DEBUG_AT(self, "adds expression to", part << ":", expr);
     i->queries.insert(expr);
   }
-  // If the partition is in memory, we self->send it the expression directly.
+  // If the partition is in memory, we send it the expression directly.
   for (auto& a : self->state.active)
     if (a.first == part)
       return a.second;
@@ -165,7 +168,7 @@ behavior index::make(stateful_actor<state>*self, path const& dir,
   VAST_VERBOSE_AT(self, "caps partitions at", max_events, "events");
   VAST_VERBOSE_AT(self, "uses at most", passive_parts, "passive partitions");
   VAST_VERBOSE_AT(self, "uses", active_parts, "active partitions");
-  // Load meta data about each partition.
+  // Load partition meta data.
   if (exists(self->state.dir / "meta")) {
     auto t = load(self->state.dir / "meta", self->state.partitions);
     if (!t) {
@@ -276,48 +279,139 @@ behavior index::make(stateful_actor<state>*self, path const& dir,
       self->send(t, done_atom::value);
       return t;
     },
+    [=](schema_atom) {
+      std::map<std::string, json::array> history;
+      // Sort partition meta data in chronological order.
+      std::vector<partition_state const*> parts;
+      parts.reserve(self->state.partitions.size());
+      for (auto& pair : self->state.partitions)
+        parts.push_back(&pair.second);
+      std::sort(parts.begin(), parts.end(), [](auto& x, auto& y) {
+        return x->last_modified < y->last_modified;
+      });
+      // Go through each type and accumulate meta data. Upon finding a
+      // type clash, we make a snapshot of the current meta data, and start
+      // over. The result is a list of types, each of which expressed as a
+      // sequence of versions to track the evolution history.
+      struct type_state {
+        vast::type type;
+        time::point last_modified = time::duration::zero();
+        time::point from = time::duration::zero();
+        time::point to = time::duration::zero();
+      };
+      std::unordered_map<std::string, type_state> type_states;
+      auto snapshot = [&](type_state const& ts) {
+        json::object o{
+          {"oldest", ts.from.time_since_epoch().count()},
+          {"youngest", ts.to.time_since_epoch().count()},
+          {"last_modified", ts.last_modified.time_since_epoch().count()},
+          {"type", to_json(ts.type)}
+        };
+        history[ts.type.name()].push_back(std::move(o));
+      };
+      for (auto& part : parts) {
+        for (auto& t : part->schema) {
+          auto& s = type_states[t.name()];
+          if (s.type == t) { // Accumulate
+            s.last_modified = part->last_modified;
+            if (part->from < s.from)
+              s.from = part->from;
+            if (part->to > s.to)
+              s.to = part->to;
+          } else {
+            if (!is<none>(s.type)) // Type clash
+              snapshot(s);
+            s.type = t;
+            s.last_modified = part->last_modified;
+            s.from = part->from;
+            s.to = part->to;
+          }
+        }
+      }
+      for (auto& pair : type_states)
+        snapshot(pair.second);
+      // Return result as JSON object.
+      json::object result;
+      for (auto& pair : history)
+        result[pair.first] = std::move(pair.second);
+      return json{std::move(result)};
+    },
     [=](std::vector<event> const& events) {
+      if (events.empty()) {
+        VAST_WARN(self, "got batch of empty events");
+        return;
+      }
+      // Figure out which active partition to use.
       auto idx = self->state.next_active++ % self->state.active.size();
       auto& a = self->state.active[idx];
-      auto i = self->state.partitions.find(a.first);
-      VAST_ASSERT(i != self->state.partitions.end());
       VAST_ASSERT(a.second != invalid_actor);
+      auto part = &self->state.partitions[a.first];
       // Replace partition with a new one on overflow. If the max is too small
       // that even the first batch doesn't fit, then we just accept this and
       // have a partition with a single batch.
-      if (i->second.events > 0
-          && i->second.events + events.size() > max_events) {
+      if (part->events > 0 && part->events + events.size() > max_events) {
         VAST_VERBOSE_AT(self, "replaces partition (" << a.first << ')');
         self->send_exit(a.second, exit::stop);
         // Create a new partition.
         a.first = uuid::random();
-        a.second = self->spawn<monitored>(partition::make,
-                                          self->state.dir / to_string(a.first),
-                                          self);
+        auto part_dir = self->state.dir / to_string(a.first);
+        a.second = self->spawn<monitored>(partition::make, part_dir, self);
         if (self->state.accountant)
           self->send(a.second, self->state.accountant);
-        i = self->state.partitions.emplace(a.first, partition_state()).first;
+        auto i = self->state.partitions.emplace(a.first, partition_state());
+        part = &i.first->second;
         // Register continuous queries.
         for (auto& q : self->state.queries)
           if (q.second.cont)
             self->send(a.second, q.first, continuous_atom::value);
       }
+      // Extract schema.
+      util::flat_set<type> types;
+      auto youngest = events.front().timestamp();
+      auto oldest = events.front().timestamp();
+      for (auto& e : events) {
+        if (!e.type().find_attribute(type::attribute::skip))
+          types.insert(e.type());
+        if (e.timestamp() < youngest)
+          youngest = e.timestamp();
+        if (e.timestamp() > oldest)
+          oldest = e.timestamp();
+      }
+      if (types.empty()) {
+        VAST_WARN_AT(self, "received non-indexable events");
+        return;
+      }
+      schema sch;
+      for (auto& t : types)
+        if (! sch.add(t)) {
+          VAST_ERROR_AT(self, "failed to derive valid schema from event data");
+          self->quit(exit::error);
+          return;
+        }
       // Update partition meta data.
-      auto& p = i->second;
-      p.events += events.size();
-      p.last_modified = time::now();
-      if (p.from == time::duration{} || events.front().timestamp() < p.from)
-        p.from = events.front().timestamp();
-      if (p.to == time::duration{} || events.back().timestamp() > p.to)
-        p.to = events.back().timestamp();
+      part->last_modified = time::now();
+      if (! part->schema.add(sch)) {
+        // TODO: Instead of failing, seal the active partition, replace it with
+        // a new one, and send the events there. This will ensure that a
+        // parition uniquely represents an event.
+        VAST_ERROR_AT(self, "failed to merge schemata");
+        self->quit(exit::error);
+        return;
+      }
+      part->events += events.size();
+      if (part->from == time::duration{} || youngest < part->from)
+        part->from = youngest;
+      if (part->to == time::duration{} || oldest > part->to)
+        part->to = oldest;
       // Relay events.
       VAST_DEBUG_AT(self, "forwards", events.size(), "events [" <<
                     events.front().id() << ',' << (events.back().id() + 1)
                       << ')', "to", a.second, '(' << a.first << ')');
       auto t = self->spawn(task::make<time::moment, uint64_t>,
-                     time::snapshot(), events.size());
-      self->send(a.second,
-                 self->current_message() + make_message(std::move(t)));
+                           time::snapshot(), events.size());
+      self->send(a.second, self->current_message()
+                             + make_message(std::move(sch))
+                             + make_message(std::move(t)));
     },
     [=](expression const& expr, query_options opts, actor const& subscriber) {
       VAST_VERBOSE_AT(self, "got query:", expr);
