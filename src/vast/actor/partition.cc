@@ -330,9 +330,11 @@ behavior partition::make(stateful_actor<state>* self, path dir, actor sink) {
         // that have arrived in the meantime.
         VAST_DEBUG_AT(self, "spawns new query task");
         q->second.task = self->spawn(task::make<time::moment, expression>,
-                               time::snapshot(), q->first);
+                                     time::snapshot(), q->first);
         self->send(q->second.task, supervisor_atom::value, self);
         self->send(q->second.task, self);
+        // Split up the query into predicates and handle each separately.
+        bitstream_type cached_hits;
         for (auto& pred : visit(expr::predicatizer{}, expr)) {
           VAST_DEBUG_AT(self, "dispatches predicate", pred);
           auto p =
@@ -341,18 +343,23 @@ behavior partition::make(stateful_actor<state>* self, path dir, actor sink) {
           p->second.queries.insert(&q->first);
           auto i = self->state.indexers.begin();
           while (i != self->state.indexers.end()) {
-            // We forward the predicate to the subset of indexers which we
-            // haven't asked yet. If an indexer has already looked up this
-            // predicate in the past, it must have sent the hits back to this
-            // partition, or is in the process of doing so.
             auto base = i->first;
             if (p->second.cache.contains(base)) {
+              // If an indexer has already looked up this predicate in the
+              // past, it must have sent the hits back to this partition, or is
+              // in the process of doing so.
               VAST_DEBUG_AT(self, "skips indexers for base", base);
-              while (base == i->first && i != self->state.indexers.end())
+              while (i->first == base && i != self->state.indexers.end())
                 ++i;
+              // If hits for this predicate exist already, we must send them
+              // back to INDEX. Otherwise INDEX will produce false negatives.
+              if (!p->second.hits.empty() && !p->second.hits.all_zeros())
+                cached_hits |= p->second.hits;
             } else {
+              // Forward the predicate to the subset of indexers which we
+              // haven't asked yet.
               VAST_DEBUG_AT(self, "relays predicate for base", base);
-              while (base == i->first && i != self->state.indexers.end()) {
+              while (i->first == base && i != self->state.indexers.end()) {
                 VAST_DEBUG_AT(self, " - forwards predicate to", i->second);
                 p->second.cache.insert(i->first);
                 if (!p->second.task) {
@@ -369,6 +376,9 @@ behavior partition::make(stateful_actor<state>* self, path dir, actor sink) {
             }
           }
         }
+        if (!cached_hits.empty() && !cached_hits.all_zeros())
+          self->send(sink, expr, std::move(cached_hits),
+                     historical_atom::value);
         self->send(q->second.task, done_atom::value);
       }
       if (!q->second.hits.empty() && !q->second.hits.all_zeros())
@@ -392,8 +402,8 @@ behavior partition::make(stateful_actor<state>* self, path dir, actor sink) {
       // we evaluate all queries in which the predicate participates.
       auto& ps = self->state.predicates[pred];
       VAST_DEBUG_AT(self, "took", time::snapshot() - start,
-                 "to complete predicate for", ps.cache.size(), "indexers:",
-                 pred);
+                    "to complete predicate for", ps.cache.size(), "indexers:",
+                    pred);
       for (auto& q : ps.queries) {
         VAST_ASSERT(q != nullptr);
         VAST_DEBUG_AT(self, "evaluates", *q);
