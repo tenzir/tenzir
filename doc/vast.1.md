@@ -3,7 +3,7 @@
 NAME
 ----
 
-`vast` -- interface to manage a VAST ecosystem
+`vast` -- manage a VAST topology
 
 SYNOPSIS
 --------
@@ -13,16 +13,18 @@ SYNOPSIS
 OVERVIEW
 --------
 
-VAST is a distributed platform for large-scale network forensics. Its modular
-system architecture is exclusively implemented in terms of the actor model. In
-this model, concurrent entities (actors) execute in parallel and
-communicate asynchronously solely via message passing. Users spawn system
-components as actors and connect them together to create a custom ecosystem.
+VAST is a platform for network forensics. Similar to a datawarehouse, the
+system archives large amounts of data and features a type-safe query engine.
+Internally, VAST exhibits a modular architecture implemented entirely in terms
+of the actor model. In this model, concurrent entities (actors) execute in
+parallel and communicate asynchronously solely via message passing. Users spawn
+system components as actors on one or more nodes and connect them together to
+create a custom topology.
 
 DESCRIPTION
 -----------
 
-The `vast` executable enables users to manage a VAST ecosystem: one or more
+The `vast` executable enables users to manage a VAST topology: one or more
 **node**s run various components, such as event sources and sinks for data
 import/export, issuing queries, or retrieving statistics about system
 components. The following key actors exist:
@@ -60,7 +62,7 @@ actors. Typically, each physical machine in a VAST deployment runs a single
 process, whereas cluster deployments consist of multiple nodes with actors
 spread across them.
 
-Nodes can enter a peering relationship to form an ecosystem. All peers have
+Nodes can enter a peering relationship and build a topology. All peers have
 the same authority: if one fails, others can take over. By default, each
 node includes all core actors: **archive**, **index**, **importer**. For
 more fine-grained control about the components running on a node, one can spawn
@@ -136,7 +138,7 @@ commands exist:
     *start*         starts a node
     *stop*          stops a node
     *peer*          peers with another node
-    *show*          shows various properties of an ecosystem
+    *show*          shows various properties of a topology
     *spawn*         creates a new actor
     *quit*          terminates an actor
     *send*          send a message to an actor
@@ -175,7 +177,7 @@ Available *arguments*:
 
 `-n` *name* [*hostname*]
   Overrides the node *name*, which defaults to the system hostname. Each node
-  in an topology must have a unique name, otherwise peering fails.
+  in a topology must have a unique name, otherwise peering fails.
 
 ### stop
 
@@ -191,7 +193,7 @@ Synopsis:
 
   *peer* *endpoint*
 
-Joins an ecosystem through a node identified by *endpoint*.
+Joins a topology through a node identified by *endpoint*.
 See **OPTIONS** for a description of the *endpoint* syntax.
 
 ### show
@@ -200,11 +202,11 @@ Synopsis:
 
   *show* *argument*
 
-Shows various properties of an ecosystem. *argument* can have the
+Shows various properties of a topology. *argument* can have the
 following values:
 
 *nodes*
-  Displays all existing nodes in the ecosystem.
+  Displays all existing nodes in the topology.
 
 *peers*
   Displays the nodes connected to this node.

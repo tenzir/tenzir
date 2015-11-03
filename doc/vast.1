@@ -1,20 +1,22 @@
-.TH VAST 1 "September 18, 2015" 0.1 "Visibility Across Space and Time"
+.TH VAST 1 "November 03, 2015" 0.1 "Visibility Across Space and Time"
 .SH NAME
 .PP
-\fB\fCvast\fR \-\- interface to manage a VAST ecosystem
+\fB\fCvast\fR \-\- manage a VAST topology
 .SH SYNOPSIS
 .PP
 \fB\fCvast\fR [\fIoptions\fP] \fIcommand\fP [\fIarguments\fP]
 .SH OVERVIEW
 .PP
-VAST is a distributed platform for large\-scale network forensics. Its modular
-system architecture is exclusively implemented in terms of the actor model. In
-this model, concurrent entities (actors) execute in parallel and
-communicate asynchronously solely via message passing. Users spawn system
-components as actors and connect them together to create a custom ecosystem.
+VAST is a platform for network forensics. Similar to a datawarehouse, the
+system archives large amounts of data and features a type\-safe query engine.
+Internally, VAST exhibits a modular architecture implemented entirely in terms
+of the actor model. In this model, concurrent entities (actors) execute in
+parallel and communicate asynchronously solely via message passing. Users spawn
+system components as actors on one or more nodes and connect them together to
+create a custom topology.
 .SH DESCRIPTION
 .PP
-The \fB\fCvast\fR executable enables users to manage a VAST ecosystem: one or more
+The \fB\fCvast\fR executable enables users to manage a VAST topology: one or more
 \fBnode\fPs run various components, such as event sources and sinks for data
 import/export, issuing queries, or retrieving statistics about system
 components. The following key actors exist:
@@ -52,7 +54,7 @@ actors. Typically, each physical machine in a VAST deployment runs a single
 process, whereas cluster deployments consist of multiple nodes with actors
 spread across them.
 .PP
-Nodes can enter a peering relationship to form an ecosystem. All peers have
+Nodes can enter a peering relationship and build a topology. All peers have
 the same authority: if one fails, others can take over. By default, each
 node includes all core actors: \fBarchive\fP, \fBindex\fP, \fBimporter\fP\&. For
 more fine\-grained control about the components running on a node, one can spawn
@@ -80,6 +82,10 @@ The logging verbosity. (See below)
 The CAF worker throughput expressed in the maximum number of messages to
 process when a worker gets scheduled. The default value of \fI\-1\fP means an
 unlimited number of messages.
+.TP
+\fB\fC\-n\fR
+Do not attempt to connect to a remote \fBnode\fP but start a local instance
+instead.
 .TP
 \fB\fC\-p\fR \fIlogfile\fP
 Enable CAF profiling of worker threads and actors and write the per\-second
@@ -118,7 +124,7 @@ commands exist:
     \fIstart\fP         starts a node
     \fIstop\fP          stops a node
     \fIpeer\fP          peers with another node
-    \fIshow\fP          shows various properties of an ecosystem
+    \fIshow\fP          shows various properties of a topology
     \fIspawn\fP         creates a new actor
     \fIquit\fP          terminates an actor
     \fIsend\fP          send a message to an actor
@@ -161,7 +167,7 @@ run in background. Unless specified, VAST will call
 .TP
 \fB\fC\-n\fR \fIname\fP [\fIhostname\fP]
 Overrides the node \fIname\fP, which defaults to the system hostname. Each node
-in an topology must have a unique name, otherwise peering fails.
+in a topology must have a unique name, otherwise peering fails.
 .SS stop
 .PP
 Synopsis:
@@ -175,7 +181,7 @@ Synopsis:
 .IP
 \fIpeer\fP \fIendpoint\fP
 .PP
-Joins an ecosystem through a node identified by \fIendpoint\fP\&.
+Joins a topology through a node identified by \fIendpoint\fP\&.
 See \fBOPTIONS\fP for a description of the \fIendpoint\fP syntax.
 .SS show
 .PP
@@ -183,11 +189,11 @@ Synopsis:
 .IP
 \fIshow\fP \fIargument\fP
 .PP
-Shows various properties of an ecosystem. \fIargument\fP can have the
+Shows various properties of a topology. \fIargument\fP can have the
 following values:
 .TP
 \fInodes\fP
-Displays all existing nodes in the ecosystem.
+Displays all existing nodes in the topology.
 .TP
 \fIpeers\fP
 Displays the nodes connected to this node.
@@ -321,6 +327,8 @@ connects IMPORTER with them.
     Treats \fB\fC\-w\fR as a listening UNIX domain socket instead of a regular file.
 .PP
 \fIsink\fP \fIbro\fP
+.PP
+\fIsink\fP \fIcsv\fP
 .PP
 \fIsink\fP \fIjson\fP
   \fB\fC\-u\fR \fIuds\fP
