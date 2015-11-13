@@ -15,7 +15,7 @@
 #include "vast/port.h"
 #include "vast/none.h"
 #include "vast/offset.h"
-#include "vast/optional.h"
+#include "vast/maybe.h"
 #include "vast/time.h"
 #include "vast/type.h"
 #include "vast/util/flat_set.h"
@@ -124,9 +124,9 @@ data flatten(data const& d);
 /// @param r The record to flatten.
 /// @param t The record type according to which *r* gets flattened.
 /// @returns The unflattened record.
-optional<record> unflatten(record const& r, type::record const& t);
+maybe<record> unflatten(record const& r, type::record const& t);
 
-optional<record> unflatten(data const& d, type const& t);
+maybe<record> unflatten(data const& d, type const& t);
 
 class data : util::totally_ordered<data> {
   friend access;
@@ -264,7 +264,7 @@ public:
 
   /// Constructs optional data.
   template <typename T>
-  data(optional<T>&& o)
+  data(maybe<T>&& o)
     : data{o ? std::move(*o) : data{nil}} {
   }
 

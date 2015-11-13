@@ -15,11 +15,11 @@ struct json_parser : parser<json_parser> {
 
   template <typename Iterator>
   static auto make() {
-    auto to_array = [](optional<std::vector<json>> v) {
+    auto to_array = [](maybe<std::vector<json>> v) {
       return v ? json::array(std::move(*v)) : json::array{};
     };
     using key_value_pair = std::tuple<std::string, json>;
-    auto to_object = [](optional<std::vector<key_value_pair>> m) {
+    auto to_object = [](maybe<std::vector<key_value_pair>> m) {
       json::object o;
       if (!m)
         return o;

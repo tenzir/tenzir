@@ -1,7 +1,7 @@
 #ifndef VAST_CONCEPT_PARSEABLE_CORE_OPTIONAL_H
 #define VAST_CONCEPT_PARSEABLE_CORE_OPTIONAL_H
 
-#include "vast/optional.h"
+#include "vast/maybe.h"
 #include "vast/concept/parseable/core/parser.h"
 #include "vast/concept/parseable/detail/attr_fold.h"
 
@@ -16,7 +16,7 @@ public:
     std::conditional_t<
       std::is_same<inner_attribute, unused_type>{},
       unused_type,
-      optional<inner_attribute>
+      maybe<inner_attribute>
     >;
 
   explicit optional_parser(Parser p)

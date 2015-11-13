@@ -19,9 +19,9 @@ public:
   using rhs_attribute = typename Rhs::attribute;
 
   // LHS = unused && RHS = unused  =>  unused
-  // LHS = T && RHS = unused       =>  optional<LHS>
-  // LHS = unused && RHS = T       =>  optional<RHS>
-  // LHS = T && RHS = U            =>  std:tuple<optional<LHS>, optional<RHS>>
+  // LHS = T && RHS = unused       =>  maybe<LHS>
+  // LHS = unused && RHS = T       =>  maybe<RHS>
+  // LHS = T && RHS = U            =>  std:tuple<maybe<LHS>, maybe<RHS>>
   using attribute =
     std::conditional_t<
       std::is_same<lhs_attribute, unused_type>{}
@@ -29,11 +29,11 @@ public:
       unused_type,
       std::conditional_t<
         std::is_same<rhs_attribute, unused_type>{},
-        optional<lhs_attribute>,
+        maybe<lhs_attribute>,
         std::conditional_t<
           std::is_same<lhs_attribute, unused_type>{},
-          optional<rhs_attribute>,
-          std::tuple<optional<lhs_attribute>, optional<rhs_attribute>>
+          maybe<rhs_attribute>,
+          std::tuple<maybe<lhs_attribute>, maybe<rhs_attribute>>
         >
       >
     >;
@@ -44,7 +44,7 @@ public:
 
   template <typename Iterator, typename Attribute>
   bool parse(Iterator& f, Iterator const& l, Attribute& a) const {
-    optional<rhs_attribute> rhs_attr;
+    maybe<rhs_attribute> rhs_attr;
     if (lhs_.parse(f, l, left_attr(a)) && rhs_opt_.parse(f, l, rhs_attr)) {
       right_attr(a) = std::move(rhs_attr);
       return true;
@@ -71,7 +71,7 @@ private:
   static auto left_attr(Attribute& a)
     -> std::enable_if_t<
          ! std::is_same<L, unused_type>{} && std::is_same<R, unused_type>{},
-         optional<L>&
+         maybe<L>&
        > {
     return a;
   }
@@ -84,7 +84,7 @@ private:
   static auto left_attr(std::tuple<Ts...>& t)
     -> std::enable_if_t<
          ! std::is_same<L, unused_type>{} && ! std::is_same<R, unused_type>{},
-         optional<L>&
+         maybe<L>&
        > {
     return std::get<0>(t);
   }
@@ -107,7 +107,7 @@ private:
   static auto right_attr(Attribute& a)
     -> std::enable_if_t<
          std::is_same<L, unused_type>{} && ! std::is_same<R, unused_type>{},
-         optional<R>&
+         maybe<R>&
        > {
     return a;
   }
@@ -120,7 +120,7 @@ private:
   static auto right_attr(std::tuple<Ts...>& t)
     -> std::enable_if_t<
          ! std::is_same<L, unused_type>{} && ! std::is_same<R, unused_type>{},
-         optional<R>&
+         maybe<R>&
        > {
     return std::get<1>(t);
   }

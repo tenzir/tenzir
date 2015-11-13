@@ -77,7 +77,7 @@ data flatten(data const& d) {
   return r ? flatten(*r) : d;
 }
 
-optional<record> unflatten(record const& r, type::record const& t) {
+maybe<record> unflatten(record const& r, type::record const& t) {
   auto i = r.begin();
   size_t depth = 1;
   record result;
@@ -106,10 +106,10 @@ optional<record> unflatten(record const& r, type::record const& t) {
   return result;
 }
 
-optional<record> unflatten(data const& d, type const& t) {
+maybe<record> unflatten(data const& d, type const& t) {
   auto r = get<record>(d);
   auto rt = get<type::record>(t);
-  return r && rt ? unflatten(*r, *rt) : optional<record>{};
+  return r && rt ? unflatten(*r, *rt) : maybe<record>{};
 }
 
 namespace {

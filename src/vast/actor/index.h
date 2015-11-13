@@ -67,8 +67,8 @@ struct index {
   };
 
   struct query_state {
-    optional<continuous_query_state> cont;
-    optional<historical_query_state> hist;
+    maybe<continuous_query_state> cont;
+    maybe<historical_query_state> hist;
     util::flat_set<actor> subscribers;
   };
 

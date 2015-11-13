@@ -125,14 +125,14 @@ result<event> bgpdump_state::extract() {
                        >> -str >> '|' >> -str >> '|' >> -str;
     subnet sn;
     std::vector<data> as_path;
-    optional<count> origin_as;
+    maybe<count> origin_as;
     std::string origin;
     vast::address nexthop;
     count local_pref;
     count med;
-    optional<std::string> community;
-    optional<std::string> atomic_aggregate;
-    optional<std::string> aggregator;
+    maybe<std::string> community;
+    maybe<std::string> atomic_aggregate;
+    maybe<std::string> aggregator;
     auto t = std::tie(sn, as_path, origin_as, origin, nexthop, local_pref, med,
                       community, atomic_aggregate, aggregator);
     if (!tail.parse(f, l, t))
@@ -160,8 +160,8 @@ result<event> bgpdump_state::extract() {
     return e;
   } else if (update == "STATE") {
     static auto tail = -str >> '|' >> -str;
-    optional<std::string> old_state;
-    optional<std::string> new_state;
+    maybe<std::string> old_state;
+    maybe<std::string> new_state;
     auto t = std::tie(old_state, new_state);
     if (!tail.parse(f, l, t))
       return {};

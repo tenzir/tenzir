@@ -3,7 +3,7 @@
 
 #include "vast/bitmap.h"
 #include "vast/operator.h"
-#include "vast/optional.h"
+#include "vast/maybe.h"
 #include "vast/trial.h"
 #include "vast/value.h"
 #include "vast/concept/printable/vast/data.h"

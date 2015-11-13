@@ -4,15 +4,15 @@
 #include <iterator>
 #include <type_traits>
 
-#include "vast/optional.h"
+#include "vast/maybe.h"
 #include "vast/concept/parseable/parse.h"
 
 namespace vast {
 
 template <typename To, typename Iterator>
 auto to(Iterator& f, Iterator const& l)
-  -> std::enable_if_t<is_parseable<Iterator, To>{}, optional<To>> {
-  optional<To> t{To{}};
+  -> std::enable_if_t<is_parseable<Iterator, To>{}, maybe<To>> {
+  maybe<To> t{To{}};
   if (!parse(f, l, *t))
     return nil;
   return t;
@@ -21,7 +21,7 @@ auto to(Iterator& f, Iterator const& l)
 template <typename To, typename Range>
 auto to(Range&& rng)
   -> std::enable_if_t<
-       is_parseable<decltype(std::begin(rng)), To>{}, optional<To>
+       is_parseable<decltype(std::begin(rng)), To>{}, maybe<To>
      > {
   using std::begin;
   using std::end;

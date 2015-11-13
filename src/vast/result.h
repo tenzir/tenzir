@@ -1,22 +1,22 @@
 #ifndef VAST_UTIL_RESULT_H
 #define VAST_UTIL_RESULT_H
 
-#include "vast/optional.h"
+#include "vast/maybe.h"
 #include "vast/trial.h"
 #include "vast/util/assert.h"
 
 namespace vast {
 
 /// A trial that may have an empty (yet valid) result. A result of type `T` is
-/// effectively a `trial<optional<T>>` with a more idiomatic interface.
+/// effectively a `trial<maybe<T>>` with a more idiomatic interface.
 template <typename T>
-class result : trial<optional<T>> {
+class result : trial<maybe<T>> {
 public:
-  using trial<optional<T>>::trial;
-  using trial<optional<T>>::error;
+  using trial<maybe<T>>::trial;
+  using trial<maybe<T>>::error;
 
   /// Default-constructs an empty-yet-valid result.
-  result() : trial<optional<T>>{optional<T>{}} {
+  result() : trial<maybe<T>>{maybe<T>{}} {
   }
 
   result(result const&) = default;
@@ -24,7 +24,7 @@ public:
 
   /// Constructs a result from an instance of type `T`.
   /// @param x The instance to move.
-  result(T x) : trial<optional<T>>{std::move(x)} {
+  result(T x) : trial<maybe<T>>{std::move(x)} {
   }
 
   result& operator=(T x) {
@@ -79,14 +79,14 @@ public:
 
   /// Checks whether the result is engaged, i.e., if it contains a usable
   /// instance of type `T`.
-  /// @returns `true` if the contained `optional<T>` is engaged.
+  /// @returns `true` if the contained `maybe<T>` is engaged.
   bool engaged() const {
     return super() && *super();
   }
 
   /// Checks whether the result is empty, i.e., has not engaged instance of `T`
   /// but has no error either.
-  /// @returns `true` if the contained `optional<T>` is active but disenaged.
+  /// @returns `true` if the contained `maybe<T>` is active but disenaged.
   bool empty() const {
     return super() && !*super();
   }
@@ -98,12 +98,12 @@ public:
   }
 
 private:
-  trial<optional<T>>& super() {
-    return static_cast<trial<optional<T>>&>(*this);
+  trial<maybe<T>>& super() {
+    return static_cast<trial<maybe<T>>&>(*this);
   }
 
-  trial<optional<T>> const& super() const {
-    return static_cast<trial<optional<T>> const&>(*this);
+  trial<maybe<T>> const& super() const {
+    return static_cast<trial<maybe<T>> const&>(*this);
   }
 };
 

@@ -5,7 +5,7 @@
 
 namespace vast {
 
-optional<schema> schema::merge(schema const& s1, schema const& s2) {
+maybe<schema> schema::merge(schema const& s1, schema const& s2) {
   auto result = s1;
   if (! result.add(s2))
     return {};

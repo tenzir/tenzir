@@ -37,7 +37,7 @@ void deserialize(Deserializer& source, index::partition_state& ps) {
 
 namespace {
 
-optional<actor> dispatch(stateful_actor<index::state>* self,
+maybe<actor> dispatch(stateful_actor<index::state>* self,
                          uuid const& part, expression const& expr) {
   if (self->state.partitions[part].events == 0)
     return {};
@@ -231,7 +231,7 @@ behavior index::make(stateful_actor<state>*self, path const& dir,
             VAST_VERBOSE_AT(self, "removes query subscriber", msg.source);
             if (q->second.cont) {
               VAST_VERBOSE_AT(self, "disables continuous query:", q->first);
-              q->second.cont = {};
+              q->second.cont = nil;
               for (auto& a : self->state.active)
                 self->send(a.second, q->first, continuous_atom::value,
                      disable_atom::value);

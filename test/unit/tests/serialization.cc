@@ -1,11 +1,11 @@
 #include "vast/announce.h"
-#include "vast/optional.h"
+#include "vast/maybe.h"
 #include "vast/concept/serializable/hierarchy.h"
 #include "vast/concept/serializable/io.h"
 #include "vast/concept/serializable/state.h"
 #include "vast/concept/serializable/std/unordered_map.h"
 #include "vast/concept/serializable/std/vector.h"
-#include "vast/concept/serializable/vast/optional.h"
+#include "vast/concept/serializable/vast/maybe.h"
 #include "vast/concept/serializable/vast/vector_event.h"
 #include "vast/concept/serializable/std/list.h"
 #include "vast/util/byte_swap.h"
@@ -77,8 +77,8 @@ TEST(containers) {
   CHECK(u0 == u1);
 }
 
-TEST(optional<T>) {
-  optional<std::string> o1 = std::string{"foo"};
+TEST(maybe<T>) {
+  maybe<std::string> o1 = std::string{"foo"};
   decltype(o1) o2;
   std::vector<uint8_t> buf;
   save(buf, o1);

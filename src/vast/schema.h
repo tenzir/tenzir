@@ -5,7 +5,7 @@
 #include <string>
 
 #include "vast/type.h"
-#include "vast/optional.h"
+#include "vast/maybe.h"
 #include "vast/util/operators.h"
 
 namespace vast {
@@ -24,7 +24,7 @@ public:
   /// @param s1 The first schema.
   /// @param s2 The second schema.
   /// @returns The union of *s1* and *s2* schema.
-  static optional<schema> merge(schema const& s1, schema const& s2);
+  static maybe<schema> merge(schema const& s1, schema const& s2);
 
   /// Adds a new type to the schema.
   /// @param t The type to add.

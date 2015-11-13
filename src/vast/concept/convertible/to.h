@@ -3,7 +3,7 @@
 
 #include <type_traits>
 
-#include "vast/optional.h"
+#include "vast/maybe.h"
 #include "vast/concept/convertible/is_convertible.h"
 
 namespace vast {
@@ -17,9 +17,9 @@ template <typename To, typename From, typename... Opts>
 auto to(From&& from, Opts&&... opts)
   -> std::enable_if_t<
        is_convertible<std::decay_t<From>, To>{},
-       optional<To>
+       maybe<To>
      > {
-  optional<To> x{To()};
+  maybe<To> x{To()};
   if (convert(from, *x, std::forward<Opts>(opts)...))
     return x;
   return nil;
