@@ -22,7 +22,7 @@ void deserialize(Deserializer& source, maybe<T>& opt) {
     return;
   T x;
   source >> x;
-  opt = {std::move(x)};
+  opt = std::move(x);
 }
 
 } // namespace vast
