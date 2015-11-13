@@ -33,7 +33,7 @@ Send [Bro](http://www.bro.org) logs to the remote node:
 - [Issue board](https://waffle.io/mavam/vast)
 - [Chat](https://gitter.im/mavam/vast)
 - [Contribution guidelines](CONTRIBUTING.md)
-- [Project page](http://vast.tools)
+- [Project page](http://vast.io)
 - Mailing lists:
     - [vast@icir.org][mailing-list]: general help and discussion
     - [vast-commits@icir.org][mailing-list-commits]: full diffs of git commits

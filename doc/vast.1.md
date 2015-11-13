@@ -483,4 +483,4 @@ issue at http://vast.fail.
 SEE ALSO
 --------
 
-Visit https://github.com/mavam/vast for more information about VAST.
+Visit http://vast.io for more information about VAST.
