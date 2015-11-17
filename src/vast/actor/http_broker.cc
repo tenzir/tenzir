@@ -42,7 +42,38 @@ std::string make_response_header() {
 // Handles a HTTP request.
 void dispatch(http::request& request, broker* self,
               connection_handle const& conn, actor const& node) {
-  if (request.method == "GET") {
+  if (request.uri.path[0] != "api") {
+    VAST_WARN_AT(self, "got invalid API call", request.uri);
+    self->quit(exit::done);
+    return;
+  }
+  if (request.uri.path[1] != "v1") {
+    VAST_WARN_AT(self, "got invalid API version", request.uri.path[1]);
+    self->quit(exit::done);
+    return;
+  }
+  if (request.uri.path[2] == "types") {
+    if (request.method == "GET") {
+      VAST_DEBUG_AT(self, "got request for types");
+      message_builder mb;
+      mb.append("show");
+      mb.append("schema");
+      self->send(node, mb.to_message());
+      self->become(
+        keep_behavior,
+        [=](std::string const& schema) {
+          VAST_DEBUG_AT(self, "got schema from NODE");
+          auto response = make_response_header() + schema;
+          self->write(conn, response.size(), response.c_str());
+          self->flush(conn);
+          self->quit(exit::done);
+          return;
+        },
+        quit_on_others(self)
+      );
+    }
+  }
+  else if (request.method == "GET") {
     VAST_DEBUG_AT(self, "got GET request for", request.uri);
     // Construct message to spawn an EXPORTER via NODE.
     message_builder mb;
