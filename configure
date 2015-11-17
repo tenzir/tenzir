@@ -203,7 +203,7 @@ if [ -f "$makefile" ]; then
   fi
 else
   printf "DIRS= \"%s\" \n\n" "$builddir" > "$makefile"
-  if [ "$(uname -m)" = "FreeBSD" ]; then
+  if [ "$(uname -s)" = "FreeBSD" ]; then
     printf ".include \"Makefile.BSD\"" >> "$makefile"
   else
     printf "include Makefile.GNU" >> "$makefile"
