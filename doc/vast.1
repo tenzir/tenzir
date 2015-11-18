@@ -1,4 +1,4 @@
-.TH VAST 1 "November 13, 2015" 0.1 "Visibility Across Space and Time"
+.TH VAST 1 "November 18, 2015" 0.1 "Visibility Across Space and Time"
 .SH NAME
 .PP
 \fB\fCvast\fR \-\- manage a VAST topology
@@ -399,14 +399,15 @@ actor labels.
 .PP
 Synopsis:
 .IP
-\fIimport\fP \fIformat\fP [\fIspawn\-arguments\fP]
+\fIimport\fP \fIformat\fP [\fIarguments\fP]
 .PP
-Imports data on standard input and send it to locally running node. This
-command is a shorthand for spawning a source, connecting it with an importer,
-and associating standard input of the process invoking \fIimport\fP with the input
-stream of the spawned source.
+Imports data in a specific \fIformat\fP on standard input and send it to a node.
+This command is a shorthand for spawning a source locally and connecting it
+with an importer from a node.
+All \fIarguments\fP get passed to \fIspawn source\fP\&.
 .PP
-Because \fIimport\fP always reads from standard input, \fI\-r file\fP has no effect.
+Note that \fIimport\fP implicitly specifies \fI\-a\fP, and \fI\-r file\fP has no effect
+because it the process always reads from standard input.
 .SS export
 .PP
 Synopsis:
@@ -414,9 +415,9 @@ Synopsis:
 \fIexport\fP [\fIarguments\fP] \fIexpression\fP
 .PP
 Issues a query and exports results to standard output. This command is a
-shorthand for spawning a exporter and sink, linking the two, and relaying the
-resulting event stream arriving at the sink to standard output of the process
-invoking \fIexport\fP\&.
+shorthand for spawning a exporter and local sink, linking the two, and relaying
+the resulting event stream arriving at the sink to standard output.
+All \fIarguments\fP get passed to \fIspawn sink\fP\&.
 .PP
 Because \fIexport\fP always writes to standard output, \fI\-w file\fP has no effect.
 .SH EXAMPLES

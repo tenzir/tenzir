@@ -418,14 +418,15 @@ actor labels.
 
 Synopsis:
 
-  *import* *format* [*spawn-arguments*]
+  *import* *format* [*arguments*]
 
-Imports data on standard input and send it to locally running node. This
-command is a shorthand for spawning a source, connecting it with an importer,
-and associating standard input of the process invoking *import* with the input
-stream of the spawned source.
+Imports data in a specific *format* on standard input and send it to a node.
+This command is a shorthand for spawning a source locally and connecting it
+with an importer from a node.
+All *arguments* get passed to *spawn source*.
 
-Because *import* always reads from standard input, *-r file* has no effect.
+Note that *import* implicitly specifies *-a*, and *-r file* has no effect
+because it the process always reads from standard input.
 
 ### export
 
@@ -434,9 +435,9 @@ Synopsis:
   *export* [*arguments*] *expression*
 
 Issues a query and exports results to standard output. This command is a
-shorthand for spawning a exporter and sink, linking the two, and relaying the
-resulting event stream arriving at the sink to standard output of the process
-invoking *export*.
+shorthand for spawning a exporter and local sink, linking the two, and relaying
+the resulting event stream arriving at the sink to standard output.
+All *arguments* get passed to *spawn sink*.
 
 Because *export* always writes to standard output, *-w file* has no effect.
 
