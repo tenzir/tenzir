@@ -35,8 +35,12 @@ fdinbuf::int_type fdinbuf::underflow() {
     return traits_type::eof();
   if (n < 0) {
     // Only a return value of 0 indicates EOF for read(2). Any value < 0
-    // represents an error. The standard says that the function should ensure
-    // gptr() == nullptr or gptr() == egptr() on failure. We do the latter.
+    // represents an error. In §27.6.3.4.3/12, the standard says:
+    //
+    //     If the pending sequence is empty, either gptr() is null or gptr()
+    //     and egptr() are set to the same non-null pointer value.
+    //
+    // We do the latter.
     setg(buffer_.data() + (putback_area_size - num_putback),
          buffer_.data() + putback_area_size,
          buffer_.data() + putback_area_size);
