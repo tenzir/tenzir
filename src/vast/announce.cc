@@ -7,6 +7,7 @@
 #include "vast/expression.h"
 #include "vast/event.h"
 #include "vast/filesystem.h"
+#include "vast/json.h"
 #include "vast/key.h"
 #include "vast/offset.h"
 #include "vast/operator.h"
@@ -43,6 +44,7 @@
 #include "vast/concept/state/chunk.h"
 #include "vast/concept/state/error.h"
 #include "vast/concept/state/event.h"
+#include "vast/concept/state/json.h"
 #include "vast/concept/state/filesystem.h"
 #include "vast/concept/state/none.h"
 #include "vast/concept/state/pattern.h"
@@ -153,6 +155,7 @@ void announce_bmi_hierarchy(std::string const& bs_name) {
 } // namespace <anonymous>
 
 void announce_types() {
+  announce<json>("vast::json");
   announce<path>("vast::path");
   announce<uuid>("vast::uuid");
   announce<arithmetic_operator>("vast::arithmetic_operator");

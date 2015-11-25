@@ -717,7 +717,7 @@ behavior show(event_based_actor* self,
             });
           if (indexes->empty()) {
             *result = {{"message", "no index(es) running"}};
-            rp.deliver(make_message(to_string(json{std::move(*result)})));
+            rp.deliver(make_message(json{std::move(*result)}));
             self->quit();
           } else {
             self->become(
@@ -727,7 +727,7 @@ behavior show(event_based_actor* self,
                 result->emplace(key, std::move(j));
                 indexes->erase(self->current_sender());
                 if (indexes->empty()) {
-                  rp.deliver(make_message(to_string(json{std::move(*result)})));
+                  rp.deliver(make_message(json{std::move(*result)}));
                   self->quit();
                 }
               }

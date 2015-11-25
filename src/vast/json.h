@@ -12,8 +12,12 @@
 
 namespace vast {
 
+struct access;
+
 /// A JSON data type.
 class json : util::totally_ordered<json> {
+  friend access;
+
 public:
   enum class type : uint8_t {
     null = 0,

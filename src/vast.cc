@@ -21,6 +21,7 @@
 #include "vast/announce.h"
 #include "vast/banner.h"
 #include "vast/caf.h"
+#include "vast/json.h"
 #include "vast/filesystem.h"
 #include "vast/key.h"
 #include "vast/logger.h"
@@ -35,6 +36,7 @@
 #include "vast/concept/parseable/vast/endpoint.h"
 #include "vast/concept/printable/to_string.h"
 #include "vast/concept/printable/vast/error.h"
+#include "vast/concept/printable/vast/json.h"
 #include "vast/concept/printable/vast/time.h"
 #include "vast/concept/printable/vast/uuid.h"
 #include "vast/detail/adjust_resource_consumption.h"
@@ -365,6 +367,10 @@ int run_remote(actor const& node, message args) {
     [&](std::string const& str) {
       // Status messages or query results.
       std::cout << str << std::endl;
+    },
+    [&](json const& j) {
+      // Structured data.
+      std::cout << to_string(j) << std::endl;
     },
     [&](error const& e) {
       VAST_ERROR(e);
