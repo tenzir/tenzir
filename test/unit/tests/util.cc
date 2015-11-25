@@ -1,6 +1,7 @@
 #include "vast/error.h"
 #include "vast/trial.h"
 #include "vast/result.h"
+#include "vast/util/flat_serial_set.h"
 
 #define SUITE util
 #include "test.h"
@@ -54,4 +55,17 @@ TEST(result) {
   REQUIRE(t.failed());
 
   CHECK(t.error().msg() == "whoops");
+}
+
+TEST(flat_serial_set) {
+  util::flat_serial_set<int> set;
+  // Insert elements.
+  CHECK(set.push_back(1));
+  CHECK(set.push_back(2));
+  CHECK(set.push_back(3));
+  // Ensure no duplicates.
+  CHECK(!set.push_back(2));
+  // Test membership.
+  CHECK(set[0] == 1);
+  CHECK(set[2] == 3);
 }
