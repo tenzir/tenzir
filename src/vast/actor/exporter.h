@@ -29,7 +29,6 @@ struct exporter {
     util::flat_set<actor> indexes;
     util::flat_set<actor> sinks;
     accountant::type accountant;
-    bool draining = false;
     bool inflight = false;
     double progress = 0.0;
     uint64_t requested = 0;
@@ -44,14 +43,14 @@ struct exporter {
     std::unordered_map<type, expression> checkers;
     std::unique_ptr<chunk::reader> reader;
     chunk current_chunk;
-    uuid const id;
+    uuid id;
     time::moment start_time;
   };
 
   /// Spawns an EXPORTER.
   /// @param self The actor handle.
-  /// @param ast The AST of query.
-  /// @param qos The query options.
+  /// @param expr The AST of query.
+  /// @param opts The query options.
   static behavior make(stateful_actor<state>* self, expression expr,
                        query_options opts);
 };

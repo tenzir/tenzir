@@ -66,8 +66,7 @@ Stream& operator<<(Stream& out, abstract_actor const* a) {
 
 namespace vast {
 
-// Hoist various CAF types that we consider family in VAST. <3
-
+// Hoist those CAF functions/types that we deem family in VAST. <3
 using caf::abstract_uniform_type_info;
 using caf::actor;
 using caf::actor_addr;
@@ -104,7 +103,9 @@ using caf::response_promise;
 using caf::scoped_actor;
 using caf::set_scheduler;
 using caf::skip_message;
+using caf::skip_message_t;
 using caf::spawn;
+using caf::stateful_actor;
 using caf::to_string;
 using caf::typed_actor;
 using caf::typed_response_promise;
@@ -114,7 +115,6 @@ using caf::val;
 
 using caf::detail::make_scope_guard;
 
-using caf::stateful_actor;
 using caf::experimental::whereis;
 
 namespace exit_reason = caf::exit_reason;
@@ -122,10 +122,11 @@ namespace scheduler = caf::scheduler;
 
 namespace exit {
 
-constexpr auto done  = exit_reason::user_defined;
-constexpr auto stop  = exit_reason::user_defined + 1;
-constexpr auto error = exit_reason::user_defined + 2;
-constexpr auto kill  = exit_reason::user_defined + 3;
+constexpr auto done    = exit_reason::user_defined;
+constexpr auto stop    = exit_reason::user_defined + 1;
+constexpr auto timeout = exit_reason::user_defined + 2;
+constexpr auto error   = exit_reason::user_defined + 3;
+constexpr auto kill    = exit_reason::user_defined + 4;
 
 } // namespace exit
 
@@ -137,6 +138,8 @@ inline char const* render_exit_reason(uint32_t reason) {
       return "done";
     case exit::stop:
       return "stop";
+    case exit::timeout:
+      return "timeout";
     case exit::error:
       return "error";
     case exit::kill:
@@ -179,7 +182,7 @@ auto quit_on_others = [](auto self) {
 
 /// Delays processing of an EXIT message. If an actor is spawned with the
 /// `priority_aware` flag, it will process CAF high-priority message before
-/// those with normal priority. Since CAF sends exit messages with high
+/// those with normal priority. Since CAF sends EXIT messages with high
 /// priority, a priority-aware actor will terminate even if it still has
 /// received other messages earlier. This conflicts when actor termination
 /// semantics should be that all messages are processed up to the point of
@@ -187,6 +190,7 @@ auto quit_on_others = [](auto self) {
 /// priority of the EXIT signal by re-inserting it with normal priority at the
 /// end of the mailbox.
 /// @param self The actor context.
+/// @note This match case has only an effect if `trap_exit() == true`.
 auto downgrade_exit_msg = [](auto self) {
   return [=](exit_msg const& msg) {
     if (self->current_mailbox_element()->mid.is_high_priority()) {

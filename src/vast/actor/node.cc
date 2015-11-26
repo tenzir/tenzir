@@ -276,9 +276,7 @@ behavior spawn_actor(event_based_actor* self,
         }
       },
       on("exporter", any_vals) >> [=] {
-        auto events = uint64_t{0};
         auto r = self->current_message().drop(1).extract_opts({
-          {"events,e", "the number of events to extract", events},
           {"continuous,c", "marks a query as continuous"},
           {"historical,h", "marks a query as historical"},
           {"unified,u", "marks a query as unified"},
@@ -322,7 +320,6 @@ behavior spawn_actor(event_based_actor* self,
         VAST_VERBOSE_AT(node, "normalized query to", *expr);
         auto exp = self->spawn(exporter::make, *expr, query_opts);
         self->send(exp, node->state.accountant);
-        self->send(exp, extract_atom::value, events);
         if (r.opts.count("auto-connect") > 0) {
           self->send(node->state.store, list_atom::value,
                      key::str("actors", node->state.desc));

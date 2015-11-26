@@ -275,10 +275,11 @@ int run_export(actor const& node, message sink_args, message export_args) {
     [&](actor const& exporter) {
       exporters.insert(exporter);
       self->monitor(exporter);
-      self->send(exporter, put_atom::value, sink_atom::value, *snk);
       VAST_DEBUG("running exporter");
+      self->send(exporter, put_atom::value, sink_atom::value, *snk);
+      // FIXME: consider limit given on command line.
+      self->send(exporter, extract_atom::value, uint64_t{0});
       self->send(exporter, run_atom::value);
-      self->send(exporter, stop_atom::value); // enter draining mode
     },
     [&](down_msg const& msg) {
       ++early_finishers;

@@ -8,6 +8,7 @@
 #include "vast/concept/printable/vast/error.h"
 #include "vast/concept/printable/vast/expression.h"
 #include "vast/concept/printable/vast/time.h"
+#include "vast/concept/printable/vast/uuid.h"
 #include "vast/expr/evaluator.h"
 #include "vast/expr/resolver.h"
 #include "vast/util/assert.h"
@@ -98,26 +99,6 @@ behavior exporter::make(stateful_actor<state>* self, expression expr,
     if (self->state.sinks.erase(actor_cast<actor>(msg.source)) > 0)
       return;
   };
-  // Finish query execution.
-  auto complete = [=] {
-    auto now = time::snapshot();
-    auto runtime = now - self->state.start_time;
-    for (auto& s : self->state.sinks)
-      self->send(s, self->state.id, done_atom::value, runtime);
-    VAST_VERBOSE_AT(self, "took", runtime, "for:", expr);
-    if (self->state.accountant) {
-      self->send(self->state.accountant, "exporter", "end", now);
-      self->send(self->state.accountant, "exporter", "hits",
-                 self->state.total_hits);
-      self->send(self->state.accountant, "exporter", "results",
-                 self->state.total_results);
-      self->send(self->state.accountant, "exporter", "chunks",
-                 self->state.total_chunks);
-      self->send(self->state.accountant, "exporter", "selectivity",
-                 double(self->state.total_results) / self->state.total_hits);
-    }
-    self->quit(exit::done);
-  };
   auto extracting = std::make_shared<behavior>(); // break cyclic dependency
   // In "waiting" state, EXPORTER has submitted requests for specific IDs to
   // ARCHIVE and waits for the corresponding chunks to return. As EXPORTER
@@ -142,6 +123,12 @@ behavior exporter::make(stateful_actor<state>* self, expression expr,
       prefetch();
     }
   };
+  // In "done" state, the EXPORTER has completed execution and only lingers
+  // around for introspection and termination.
+  behavior done = {
+    handle_down
+    // TODO
+  };
   // In "idle" state, EXPORTER has received the task from INDEX and hangs
   // around waiting for hits. If EXPORTER receives new hits, it asks ARCHIVE
   // for the corresponding chunks and enters "waiting" state. If INDEX returns
@@ -156,8 +143,9 @@ behavior exporter::make(stateful_actor<state>* self, expression expr,
         self->become(waiting);
       }
     },
-    [=](done_atom, time::moment end, time::extent runtime, expression const&) {
-      VAST_VERBOSE_AT(self, "completed index interaction in", runtime);
+    [=](done_atom, time::moment end, time::extent index_runtime,
+        expression const&) {
+      VAST_VERBOSE_AT(self, "completed index interaction in", index_runtime);
       if (self->state.accountant)
         self->send(self->state.accountant, "exporter", "hits.done", end);
       // If EXPORTER never leaves "idle" state, it hasn't received any hits,
@@ -169,7 +157,23 @@ behavior exporter::make(stateful_actor<state>* self, expression expr,
       // "idle" ipmlies that there exist no more in-flight chunks.
       // Consequently, there exist no more unprocessed hits and EXPORTER can
       // terminate.
-      complete();
+      auto now = time::snapshot();
+      auto runtime = now - self->state.start_time;
+      for (auto& s : self->state.sinks)
+        self->send(s, self->state.id, done_atom::value, runtime);
+      VAST_VERBOSE_AT(self, "took", runtime, "for:", expr);
+      if (self->state.accountant) {
+        self->send(self->state.accountant, "exporter", "end", now);
+        self->send(self->state.accountant, "exporter", "hits",
+                   self->state.total_hits);
+        self->send(self->state.accountant, "exporter", "results",
+                   self->state.total_results);
+        self->send(self->state.accountant, "exporter", "chunks",
+                   self->state.total_chunks);
+        self->send(self->state.accountant, "exporter", "selectivity",
+                   double(self->state.total_results) / self->state.total_hits);
+      }
+      self->become(done);
     }
   };
   // In "extracting" state, EXPORTER has received at least one chunk from
@@ -179,10 +183,6 @@ behavior exporter::make(stateful_actor<state>* self, expression expr,
     handle_down,
     handle_progress,
     incorporate_hits,
-    [=](stop_atom) {
-      VAST_DEBUG_AT(self, "got request to drain and terminate");
-      self->state.draining = true;
-    },
     [=](extract_atom, uint64_t requested) {
       if (requested == 0)
         requested = max_events;
@@ -309,10 +309,6 @@ behavior exporter::make(stateful_actor<state>* self, expression expr,
         self->state.chunk_candidates = 0;
         self->state.chunk_results = 0;
       }
-      if (self->state.requested == 0 && self->state.draining) {
-        VAST_DEBUG_AT(self, "stops after having drained all requested events");
-        complete();
-      }
     }
   };
   return {
@@ -335,6 +331,13 @@ behavior exporter::make(stateful_actor<state>* self, expression expr,
     [=](accountant::type const& accountant) {
       VAST_DEBUG_AT(self, "registers accountant#" << accountant->id());
       self->state.accountant = accountant;
+    },
+    [=](id_atom) {
+      return self->state.id;
+    },
+    [=](id_atom, uuid const& id) {
+      VAST_DEBUG_AT(self, "sets its ID to", id);
+      self->state.id = id;
     },
     [=](run_atom) {
       auto now = time::snapshot();

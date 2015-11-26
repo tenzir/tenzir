@@ -41,11 +41,14 @@ namespace vast {
 /// >        / \ /                        \
 /// >        urn:example:animal:ferret:nose
 struct uri {
+  using path_type = std::vector<std::string>;
+  using query_type = std::map<std::string, std::string>;
+
   std::string scheme;
   std::string host;
   uint16_t port = 0;
   std::vector<std::string> path;
-  std::map<std::string, std::string> query;
+  query_type query;
   std::string fragment;
 };
 

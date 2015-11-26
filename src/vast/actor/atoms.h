@@ -44,6 +44,7 @@ using peer_atom = atom_constant<atom("peer")>;
 using persist_atom = atom_constant<atom("persist")>;
 using ping_atom = atom_constant<atom("ping")>;
 using pong_atom = atom_constant<atom("pong")>;
+using post_atom = atom_constant<atom("post")>;
 using progress_atom = atom_constant<atom("progress")>;
 using prompt_atom = atom_constant<atom("prompt")>;
 using publish_atom = atom_constant<atom("publish")>;
