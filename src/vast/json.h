@@ -218,6 +218,14 @@ json to_json(T const& x, Opts&&... opts) {
   return {};
 }
 
+template <typename T, typename... Opts>
+json to_json(std::vector<T> const& v, Opts&&... opts) {
+  json j;
+  if (convert(v, j, std::forward<Opts>(opts)...))
+    return j;
+  return {};
+}
+
 } // namespace vast
 
 #endif
