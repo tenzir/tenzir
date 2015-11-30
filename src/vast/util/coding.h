@@ -1,8 +1,12 @@
 #ifndef VAST_UTIL_CODING_H
 #define VAST_UTIL_CODING_H
 
+#include <iomanip>
 #include <limits>
+#include <sstream>
 #include <type_traits>
+
+#include "vast/maybe.h"
 
 namespace vast {
 namespace util {
@@ -62,6 +66,43 @@ char hex_to_byte(T hi, T lo) {
   auto byte = hex_to_byte(hi) << 4;
   byte |= hex_to_byte(lo);
   return byte;
+}
+
+/// Converts a decimal value to a hex string.
+/// @param x The value to convert.
+/// @returns The hex representation of *x*.
+template <typename T>
+auto to_hex(T x)
+  -> std::enable_if_t<std::is_integral<T>::value, std::string> {
+  std::stringstream ss;
+  ss << std::hex << std::setfill('0') << x;
+  return ss.str();
+}
+
+/// Converts a hex string to a signed decimal value.
+/// @param x The hex string to convert.
+/// @returns The decimal value of *x*.
+template <typename T>
+auto from_hex(std::string const& str)
+  -> std::enable_if_t<std::is_signed<T>::value, maybe<T>> {
+  try {
+    return std::stoll(str, nullptr, 16);
+  } catch (...) {
+    return nil;
+  }
+}
+
+/// Converts a hex string to an unsigned decimal value.
+/// @param x The hex string to convert.
+/// @returns The decimal value of *x*.
+template <typename T>
+auto from_hex(std::string const& str)
+  -> std::enable_if_t<std::is_unsigned<T>::value, maybe<T>> {
+  try {
+    return std::stoull(str, nullptr, 16);
+  } catch (...) {
+    return nil;
+  }
 }
 
 namespace varbyte {

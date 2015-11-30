@@ -1,6 +1,7 @@
 #include "vast/error.h"
 #include "vast/trial.h"
 #include "vast/result.h"
+#include "vast/util/coding.h"
 #include "vast/util/flat_serial_set.h"
 
 #define SUITE util
@@ -55,6 +56,20 @@ TEST(result) {
   REQUIRE(t.failed());
 
   CHECK(t.error().msg() == "whoops");
+}
+
+TEST(to_hex) {
+  auto x = util::to_hex(42);
+  CHECK(x == "2a");
+  x = util::to_hex(100000);
+  CHECK(x == "186a0");
+}
+
+TEST(from_hex) {
+  auto x = util::from_hex<long long>("2a");
+  CHECK(x == 42);
+  x = util::from_hex<long long>("186a0");
+  CHECK(x == 100000);
 }
 
 TEST(flat_serial_set) {
