@@ -1,4 +1,5 @@
-#!/usr/bin/python
+#!/usr/bin/env python
+
 import socket, sys, os, optparse, shutil, io
 from _multiprocessing import sendfd, recvfd
 
