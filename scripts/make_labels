@@ -1,6 +1,0 @@
-#!/bin/sh
-#
-# Takes a VAST log file in debug level on standard input and prints to standard
-# output labels for caf-prof, CAF's R script visualizing actor profiles.
-
-awk '/spawned/ { split($4, s, /#/); print s[2] "\t" s[1] }'

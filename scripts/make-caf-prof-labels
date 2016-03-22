@@ -1,0 +1,10 @@
+#!/usr/bin/env awk -f
+#
+# Takes a VAST log file in debug level on standard input and prints to standard
+# output labels for caf-prof, CAF's R script for visualizing actor profiles.
+
+/spawned/ { 
+  split($4, s, /#/) 
+  if (x[2] != "")
+    print s[2] "\t" s[1] 
+}
