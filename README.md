@@ -100,6 +100,23 @@ Mac OS Yosemite also ships with a working C++14 compiler.
     brew install cmake google-perftools
     brew install caf --HEAD
 
+## Scientific Use
+
+When referring to VAST in a scientific context, please use the following
+citation:
+
+    @InProceedings{nsdi16:vast,
+      author    = {Matthias Vallentin and Vern Paxson and Robin Sommer},
+      title     = {{VAST: A Unified Platform for Interactive Network Forensics}},
+      booktitle = {Proceedings of the USENIX Symposium on Networked Systems
+                   Design and Implementation (NSDI)},
+      month     = {March},
+      year      = {2016}
+    }
+
+You can [download the paper][vast-paper] as part of the [NSDI '16
+proceedings][nsdi-proceedings].
+
 ## License
 
 VAST comes with a [3-clause BSD
@@ -113,3 +130,5 @@ licence](https://raw.github.com/mavam/vast/master/COPYING).
 [docker-url]: https://quay.io/repository/mavam/vast
 [docker-badge]: https://quay.io/repository/mavam/vast/status
 [caf-obs]: https://build.opensuse.org/package/show/devel:libraries:caf/caf
+[vast-paper]: https://www.usenix.org/system/files/conference/nsdi16/nsdi16-paper-vallentin.pdf
+[nsdi-proceedings]: https://www.usenix.org/conference/nsdi16/technical-sessions
