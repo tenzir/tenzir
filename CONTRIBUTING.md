@@ -20,11 +20,11 @@ style guidelines, see https://github.com/agis-/git-style-guide.)
   completing work in a topic branch, check the following steps to prepare
   for a merge back into `master`:
 
-  + Squash your commits into a single one if necessary
+  + Squash your commits such that each commit reflects a self-contained change
   + Create a pull request to `master` on github
   + Wait for the results of continuous integration tools and fix any reported
     issues
-  + Ask a maintainer to review your work after Jenkins greelights your changes
+  + Ask a maintainer to review your work when your changes merge cleanly
   + Address the feedback articulated during the review
   + A maintainer will merge the topic branch into `master` after it passes the
     code review
@@ -32,7 +32,7 @@ style guidelines, see https://github.com/agis-/git-style-guide.)
 Commit Messages
 ---------------
 
-- The first line succintly summarizes the changes in no more than 50
+- The first line succinctly summarizes the changes in no more than 50
   characters. It is capitalized and written in and imperative present tense:
   e.g., "Fix bug" as opposed to "Fixes bug" or "Fixed bug".
 
@@ -58,7 +58,7 @@ General
 
 - 80 characters max per line.
 
-- Minimize veritcal whitespace within functions. Use comments to separate
+- Minimize vertical whitespace within functions. Use comments to separate
   logical code blocks.
 
 - Namespaces and access modifiers (e.g., `public`) do not increase the
@@ -209,7 +209,7 @@ Breaking Statements
   }
   ```
 
-- Break before binary and tenary operators:
+- Break before binary and ternary operators:
 
   ```cpp
   if (today_is_a_sunny_day()
@@ -220,6 +220,16 @@ Breaking Statements
 
 Template Metaprogramming
 ------------------------
+
+- Use the `typename` keyword only to access dependent types. For general
+  template parameters, use `class` instead:
+
+  ```cpp
+  template <class T>
+  struct foo {
+    using type = typename T::type;
+  };
+  ```
 
 - Use `T` for generic, unconstrained template parameters and `x` for generic
   function arguments. Suffix both with `s` for template parameter packs:
