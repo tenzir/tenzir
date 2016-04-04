@@ -3,6 +3,8 @@
 #include <sys/types.h>
 #include <sys/un.h>
 
+#include <cstring>
+
 #include "vast/config.h"
 #include "vast/util/detail/posix.h"
 

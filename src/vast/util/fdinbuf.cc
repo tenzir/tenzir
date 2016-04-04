@@ -1,6 +1,7 @@
 #include <unistd.h>
 
 #include <cstdio>
+#include <cstring>
 
 #include "vast/util/assert.h"
 #include "vast/util/fdinbuf.h"

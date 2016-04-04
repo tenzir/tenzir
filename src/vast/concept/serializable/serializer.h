@@ -2,6 +2,7 @@
 #define VAST_CONCEPT_SERIALIZABLE_SERIALIZER_H
 
 #include <cstdint>
+#include <cstddef>
 #include <type_traits>
 
 namespace vast {

@@ -24,10 +24,11 @@ Usage: $0 [OPTION]... [VAR=VALUE]...
     --prefix=PREFIX         installation directory [/usr/local]
 
   Build options:
+    --generator=GENERATOR   CMake generator to use (see cmake --help)
     --build-type=DIR        CMake build type [RelWithDebInfo]
     --build-dir=DIR         directory where to perform build [build]
     --show-time-report      show where the compiler spends its time
-    --generator=GENERATOR   CMake generator to use (see cmake --help)
+    --no-auto-libc++        do not automatically use libc++ with Clang
 
   Debugging:
     --enable-assertions     turn on assertions
@@ -112,6 +113,9 @@ while [ $# -ne 0 ]; do
       append_cache_entry VAST_PREFIX PATH "$optarg"
       append_cache_entry CMAKE_INSTALL_PREFIX PATH "$optarg"
       ;;
+    --generator=*)
+      CMakeGenerator="$optarg"
+      ;;
     --build-dir=*)
       builddir="$optarg"
       ;;
@@ -121,8 +125,8 @@ while [ $# -ne 0 ]; do
     --show-time-report)
       append_cache_entry SHOW_TIME_REPORT BOOL true
       ;;
-    --generator=*)
-      CMakeGenerator="$optarg"
+    --no-auto-libc++)
+      append_cache_entry NO_AUTO_LIBCPP BOOL yes
       ;;
     --enable-assertions)
       append_cache_entry VAST_ENABLE_ASSERTIONS BOOL true

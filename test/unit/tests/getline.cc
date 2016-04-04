@@ -1,3 +1,5 @@
+#include <cstring>
+
 #include "vast/io/array_stream.h"
 #include "vast/io/getline.h"
 

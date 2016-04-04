@@ -1,6 +1,7 @@
 #ifndef VAST_LOGGER_H
 #define VAST_LOGGER_H
 
+#include <memory>
 #include <sstream>
 
 #include "vast/config.h"

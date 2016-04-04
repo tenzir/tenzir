@@ -1,3 +1,4 @@
+#include <atomic>
 #include <mutex>
 #include <sstream>
 #include <iomanip>
