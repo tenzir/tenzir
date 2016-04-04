@@ -55,10 +55,11 @@ try_run(program_result
 if (NOT compilation_succeeded OR NOT program_result EQUAL 0)
   message(FATAL_ERROR "Cannot determine compiler version")
 elseif ("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
-  if (compiler_version VERSION_GREATER 4.8)
+  if (compiler_version VERSION_GREATER 5.0
+      OR compiler_version VERSION_EQUAL 5.0)
     message(STATUS "Found GCC ${compiler_version}")
   else ()
-    message(FATAL_ERROR "GCC >= 4.9 required, found ${compiler_version}")
+    message(FATAL_ERROR "GCC >= 5.0 required, found ${compiler_version}")
   endif ()
   if (${CMAKE_SYSTEM_NAME} MATCHES "FreeBSD")
     # Works around issues with libstdc++ and C++11. For details, see:
@@ -69,14 +70,31 @@ elseif ("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
     set(EXTRA_FLAGS "${EXTRA_FLAGS} -D_GLIBCXX_USE_C99_MATH_TR1")
   endif ()
 elseif ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
-  if (compiler_version VERSION_GREATER 3.3)
+  if (compiler_version VERSION_GREATER 3.4
+      OR compiler_version VERSION_EQUAL 3.4)
     message(STATUS "Found Clang ${compiler_version}")
   else ()
     message(FATAL_ERROR "Clang >= 3.4 required, found ${compiler_version}")
   endif ()
-  set(EXTRA_FLAGS "${EXTRA_FLAGS} -stdlib=libc++")
+  if (NOT NO_AUTO_LIBCPP)
+    # Standard library selection: check if libc++ is available, and if so, use
+    # it. Otherwise fall back to libstdc++.
+    set(CXXFLAGS_BACKUP "${CMAKE_CXX_FLAGS}")
+    set(CMAKE_CXX_FLAGS "-std=c++1y -stdlib=libc++")
+    try_run(program_result
+            compilation_succeeded
+            "${CMAKE_BINARY_DIR}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/cmake/get_compiler_version.cpp")
+    set(CMAKE_CXX_FLAGS "${CXXFLAGS_BACKUP}")
+    if(NOT compilation_succeeded)
+      message(STATUS "Using libstdc++ as standard library")
+    else()
+      message(STATUS "Automatically adding -stdlib=libc++ flag")
+      set(EXTRA_FLAGS "${EXTRA_FLAGS} -stdlib=libc++")
+    endif()
+  endif()
 else ()
-  message(FATAL_ERROR "unsupported compiler: ${CMAKE_CXX_COMPILER_ID}")
+  message(FATAL_ERROR "Unsupported compiler: ${CMAKE_CXX_COMPILER_ID}")
 endif ()
 
 if (ENABLE_ADDRESS_SANITIZER)
@@ -86,6 +104,7 @@ if (ENABLE_ADDRESS_SANITIZER)
           compilation_succeeded
           "${CMAKE_BINARY_DIR}"
           "${CMAKE_CURRENT_SOURCE_DIR}/cmake/get_compiler_version.cpp")
+  set(CMAKE_CXX_FLAGS "${CXXFLAGS_BACKUP}")
   if(NOT compilation_succeeded)
     message(STATUS "Address Sanitizer not available on selected compiler")
   else()
@@ -93,7 +112,6 @@ if (ENABLE_ADDRESS_SANITIZER)
     set(EXTRA_FLAGS "${EXTRA_FLAGS} -fsanitize=address -fno-omit-frame-pointer")
     set(ASAN_FOUND true)
   endif()
-  set(CMAKE_CXX_FLAGS "${CXXFLAGS_BACKUP}")
 endif(ENABLE_ADDRESS_SANITIZER)
 
 if (SHOW_TIME_REPORT)
