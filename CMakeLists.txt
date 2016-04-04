@@ -97,6 +97,12 @@ else ()
   message(FATAL_ERROR "Unsupported compiler: ${CMAKE_CXX_COMPILER_ID}")
 endif ()
 
+# Increase maximum number of instantiations.
+set(EXTRA_FLAGS "${EXTRA_FLAGS} -ftemplate-depth=512")
+
+# Reduce the number of template instantiations shown in backtrace.
+set(EXTRA_FLAGS "${EXTRA_FLAGS} -ftemplate-backtrace-limit=3")
+
 if (ENABLE_ADDRESS_SANITIZER)
   set(CXXFLAGS_BACKUP "${CMAKE_CXX_FLAGS}")
   set(CMAKE_CXX_FLAGS "-fsanitize=address -fno-omit-frame-pointer")
