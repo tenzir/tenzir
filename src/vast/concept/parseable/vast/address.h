@@ -1,6 +1,8 @@
 #ifndef VAST_CONCEPT_PARSEABLE_VAST_ADDRESS_H
 #define VAST_CONCEPT_PARSEABLE_VAST_ADDRESS_H
 
+#include <cstring>
+
 #include <arpa/inet.h>  // inet_pton
 #include <sys/socket.h> // AF_INET*
 

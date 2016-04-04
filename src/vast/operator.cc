@@ -1,3 +1,5 @@
+#include <stdexcept>
+
 #include "vast/operator.h"
 
 namespace vast {

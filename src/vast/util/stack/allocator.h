@@ -116,14 +116,11 @@ public:
   using propagate_on_container_move_assignment = std::true_type;
   using propagate_on_container_swap = std::true_type;
 
-// This should be provided by std::allocator_traits, but buggy GCC 4.9
-// complains.
-#ifdef VAST_GCC
+  // Shouldn't this be provided by std::allocator_traits? Not in libstdc++.
   template <typename U>
   struct rebind {
     using other = allocator<U, N>;
   };
-#endif
 
   explicit allocator(arena_type* a) noexcept : arena_{a} {
   }

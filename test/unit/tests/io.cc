@@ -1,3 +1,5 @@
+#include <cstring>
+
 #include "vast/io/algorithm.h"
 #include "vast/io/buffered_stream.h"
 #include "vast/io/iterator.h"

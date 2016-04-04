@@ -1,3 +1,5 @@
+#include <tuple>
+
 #include "vast/subnet.h"
 
 namespace vast {
