@@ -1,0 +1,11 @@
+#separator \x09
+#set_separator	,
+#empty_field	(empty)
+#unset_field	-
+#path	ftp
+#open	2014-05-23-18-02-22
+#fields	ts	uid	id.orig_h	id.orig_p	id.resp_h	id.resp_p	user	password	command	arg	mime_type	mime_desc	file_size	reply_code	reply_msg	tags	extraction_file
+#types	time	string	addr	port	addr	port	string	string	string	string	string	string	count	count	string	table[string]	file
+1258594163.566694	VFU8tqz6is3	192.168.1.105	49329	143.166.11.10	21	anonymous	IEUser@	RETR	ftp://143.166.11.10/video/R79733.EXE	application/x-dosexec	MS-DOS executable, MZ for MS-DOS	-	226	Transfer complete.	-	-
+1258594082.148042	y2mGb7Jy2c8	192.168.1.105	49306	143.166.11.10	21	anonymous	IEUser@	RETR	ftp://143.166.11.10/video/R79733.EXE	application/x-dosexec	MS-DOS executable, MZ for MS-DOS	-	226	Transfer complete.	-	-
+#close	2014-05-23-18-02-35

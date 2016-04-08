@@ -232,8 +232,9 @@ set (LIBRARY_OUTPUT_PATH ${CMAKE_CURRENT_BINARY_DIR}/lib CACHE
 
 add_subdirectory(aux)
 add_subdirectory(doc)
-add_subdirectory(src)
-add_subdirectory(test)
+add_subdirectory(libvast)
+add_subdirectory(tools)
+add_subdirectory(vast)
 
 #------------------------------------------------------------------------------
 #                                Build Summary

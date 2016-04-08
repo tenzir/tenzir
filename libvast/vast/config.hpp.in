@@ -1,0 +1,49 @@
+#ifndef VAST_CONFIG_HPP
+#define VAST_CONFIG_HPP
+
+#cmakedefine VAST_ENABLE_ASSERTIONS
+#cmakedefine VAST_HAVE_GPERFTOOLS
+#cmakedefine VAST_HAVE_PCAP
+#cmakedefine VAST_HAVE_BROCCOLI
+#cmakedefine VAST_HAVE_SNAPPY
+#cmakedefine VAST_USE_TCMALLOC
+
+#include <caf/config.hpp>
+
+#define VAST_VERSION @VERSION_MAJ_MIN@
+#define VAST_LOG_LEVEL @VAST_LOG_LEVEL@
+
+#if defined(CAF_CLANG)
+#  define VAST_CLANG
+#  define VAST_DIAGNOSTIC_PUSH  _Pragma("clang diagnostic push")
+#  define VAST_DIAGNOSTIC_POP   _Pragma("clang diagnostic pop")
+#  define VAST_DIAGNOSTIC_IGNORE_DEPRECATED                                 \
+     _Pragma("clang diagnostic ignored \"-Wdeprecated\"")
+#  define VAST_DIAGNOSTIC_IGNORE_VLA_EXTENSION                              \
+     _Pragma("clang diagnostic ignored \"-Wvla-extension\"")
+#elif defined(CAF_GCC)
+#  define VAST_GCC
+#  define VAST_DIAGNOSTIC_PUSH  _Pragma("GCC diagnostic push")
+#  define VAST_DIAGNOSTIC_POP   _Pragma("GCC diagnostic pop")
+#  define VAST_DIAGNOSTIC_IGNORE_DEPRECATED                                 \
+     _Pragma("GCC diagnostic ignored \"-Wdeprecated\"")
+#  define VAST_DIAGNOSTIC_IGNORE_VLA_EXTENSION                              \
+     _Pragma("GCC diagnostic ignored \"-Wvla-extension\"")
+#endif
+
+#if defined(CAF_MACOS)
+#  define VAST_MACOS
+#elif defined(CAF_LINUX)
+#  define VAST_LINUX
+#elif defined(CAF_BSD)
+#  define VAST_BSD
+#elif defined(CAF_WINDOWS)
+#  define VAST_WINDOWS
+#else
+#  error platform not supported
+#endif
+#ifdef CAF_POSIX
+#  define VAST_POSIX
+#endif
+
+#endif

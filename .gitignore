@@ -2,5 +2,3 @@
 .*sw?
 build*
 Makefile
-test/unit/bro/logs/**/*.log
-test/unit/traces/*.pcap
