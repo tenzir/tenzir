@@ -197,8 +197,7 @@ public:
         || std::is_same<T, table>::value
     >;
 
-  enum class tag : uint8_t
-  {
+  enum class tag : uint8_t {
     none,
     boolean,
     integer,

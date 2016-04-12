@@ -15,7 +15,7 @@ struct bitmap_index_concept {
 
   virtual bool push_back(data const& d, uint64_t offset) = 0;
   virtual bool stretch(size_t n) = 0;
-  virtual trial<Bitstream> lookup(relational_operator op,
+  virtual maybe<Bitstream> lookup(relational_operator op,
                                   data const& d) const = 0;
   virtual uint64_t size() const = 0;
   virtual std::unique_ptr<bitmap_index_concept> copy() const = 0;
@@ -43,7 +43,7 @@ struct bitmap_index_model
     return bmi_.stretch(n);
   }
 
-  virtual trial<bitstream_type> lookup(relational_operator op,
+  virtual maybe<bitstream_type> lookup(relational_operator op,
                                        data const& d) const final {
     return bmi_.lookup(op, d);
   }
@@ -130,7 +130,7 @@ public:
     return concept_->stretch(n);
   }
 
-  trial<Bitstream> lookup(relational_operator op, data const& d) const {
+  maybe<Bitstream> lookup(relational_operator op, data const& d) const {
     VAST_ASSERT(concept_);
     return concept_->lookup(op, d);
   }
@@ -227,13 +227,13 @@ private:
     return size_.stretch(n);
   }
 
-  trial<Bitstream> lookup_impl(relational_operator op, data const& d) const {
+  maybe<Bitstream> lookup_impl(relational_operator op, data const& d) const {
     if (op == ni)
       op = in;
     else if (op == not_ni)
       op = not_in;
     if (!(op == in || op == not_in))
-      return error{"unsupported relational operator: ", op};
+      return fail<ec::unsupported_operator>(op);
     if (this->empty())
       return Bitstream{};
     Bitstream r;

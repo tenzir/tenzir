@@ -25,8 +25,10 @@ struct real_parser : parser<real_parser<T, Policies...>> {
     util::type_list<policy::require_dot>
   >;
   static constexpr bool require_dot =
-    util::tl_find<policies, policy::require_dot>::value != -1
-      || util::tl_find<policies, policy::optional_dot>::value == -1;
+    util::tl_exists<
+      policies,
+      util::tbind<std::is_same, policy::require_dot>::template type
+    >::value;
 
   template <typename Iterator>
   static bool parse_dot(Iterator& f, Iterator const& l) {

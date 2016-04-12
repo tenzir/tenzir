@@ -109,7 +109,7 @@ template <>
 struct access::state<type> {
   template <typename T, typename F>
   static void call(T&& x, F f) {
-    f(x.info_);
+    f(expose(*x.info_));
   }
 };
 

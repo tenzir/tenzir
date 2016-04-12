@@ -1,10 +1,9 @@
 #include "vast/caf.hpp"
 #include "vast/chunk.hpp"
+#include "vast/error.hpp"
 #include "vast/event.hpp"
 #include "vast/concept/serializable/state.hpp"
 #include "vast/concept/serializable/std/chrono.hpp"
-#include "vast/concept/serializable/std/array.hpp"
-#include "vast/concept/serializable/std/string.hpp"
 #include "vast/concept/serializable/vast/data.hpp"
 #include "vast/concept/serializable/vast/type.hpp"
 #include "vast/concept/state/event.hpp"
@@ -12,86 +11,73 @@
 
 namespace vast {
 
-bool operator==(chunk::meta_data const& x, chunk::meta_data const& y) {
-  return x.first == y.first && x.last == y.last && x.ids == y.ids
-         && x.schema == y.schema;
-}
+static_assert(!caf::detail::has_serialize<port::port_type>::value,
+              "shouldn't have serialize!");
 
 chunk::writer::writer(chunk& chk)
-  : meta_{&chk.get_meta()},
-    block_writer_{std::make_unique<block::writer>(chk.block())} {
-}
-
-chunk::writer::~writer() {
-  flush();
+  : chunk_{chk},
+    vectorbuf_{chunk_.buffer_},
+    compressedbuf_{vectorbuf_, chunk_.compression_method_},
+    serializer_{compressedbuf_} {
 }
 
 bool chunk::writer::write(event const& e) {
-  if (!block_writer_)
-    return false;
   // Write meta data.
-  if (meta_->first == time::duration{} || e.timestamp() < meta_->first)
-    meta_->first = e.timestamp();
-  if (meta_->last == time::duration{} || e.timestamp() > meta_->last)
-    meta_->last = e.timestamp();
-  if (e.id() != invalid_event_id || !meta_->ids.empty()) {
-    if (e.id() < meta_->ids.size() || e.id() == invalid_event_id)
+  if (chunk_.first_ == time::duration{} || e.timestamp() < chunk_.first_)
+    chunk_.first_ = e.timestamp();
+  if (chunk_.last_ == time::duration{} || e.timestamp() > chunk_.last_)
+    chunk_.last_ = e.timestamp();
+  if (e.id() != invalid_event_id || !chunk_.ids_.empty()) {
+    if (e.id() < chunk_.ids_.size() || e.id() == invalid_event_id)
       return false;
-    auto delta = e.id() - meta_->ids.size();
-    meta_->ids.append(delta, false);
-    meta_->ids.push_back(true);
+    auto delta = e.id() - chunk_.ids_.size();
+    chunk_.ids_.append(delta, false);
+    chunk_.ids_.push_back(true);
   }
   // Write type.
   auto t = type_cache_.find(e.type());
   if (t == type_cache_.end()) {
-    if (!meta_->schema.add(e.type()))
+    if (!chunk_.schema_.add(e.type()))
       return false;
     auto type_id = static_cast<uint32_t>(type_cache_.size());
-    if (!block_writer_->write(type_id, 0))
-      return false;
     t = type_cache_.emplace(e.type(), type_id).first;
-    if (!block_writer_->write(e.type().name(), 0))
-      return false;
-  } else if (!block_writer_->write(t->second, 0)) {
-    return false;
+    serializer_ << type_id << e.type().name();
+  } else {
+    serializer_ << t->second;
   }
-  // Write timestamp and data.
-  return block_writer_->write(e.timestamp(), 0)
-         && block_writer_->write(e.data());
-}
-
-void chunk::writer::flush() {
-  block_writer_.reset();
+  serializer_ << e.timestamp() << e.data();
+  ++chunk_.events_;
+  return true;
 }
 
 chunk::reader::reader(chunk const& chk)
-  : chunk_{&chk},
-    block_reader_{std::make_unique<block::reader>(chunk_->block())},
-    ids_begin_{chunk_->meta().ids.begin()},
-    ids_end_{chunk_->meta().ids.end()} {
+  : chunk_{chk},
+    charbuf_{const_cast<char*>(chunk_.buffer_.data()), chunk_.buffer_.size()},
+    compressedbuf_{charbuf_},
+    deserializer_{compressedbuf_},
+    available_{chunk_.events_},
+    ids_begin_{chunk_.ids_.begin()},
+    ids_end_{chunk_.ids_.end()} {
   if (ids_begin_ != ids_end_)
     first_ = *ids_begin_;
 }
 
-result<event> chunk::reader::read(event_id id) {
+maybe<event> chunk::reader::read(event_id id) {
   if (id != invalid_event_id) {
     if (first_ == invalid_event_id)
-      return error{"chunk has no associated ids, cannot read event ", id};
+      return fail("chunk has no associated ids, cannot read event ", id);
     if (id < first_)
-      return error{"chunk begins at id ", first_};
-    if (ids_begin_ == ids_end_ || id < *ids_begin_) {
-      block_reader_ = std::make_unique<block::reader>(chunk_->block());
-      ids_begin_ = chunk_->meta().ids.begin();
-      type_cache_.clear();
-    }
+      return fail("chunk begins at id ", first_);
+    if (ids_begin_ == ids_end_ || id < *ids_begin_)
+      return fail("cannot seek back to earlier event");
     while (ids_begin_ != ids_end_ && *ids_begin_ < id) {
       auto e = materialize(true);
-      if (e.failed())
-        return e.error();
+      if (!e)
+        return e;
       ++ids_begin_;
     }
     if (ids_begin_ == ids_end_ || *ids_begin_ != id)
-      return error{"no event with id ", id};
+      return fail("no event with id ", id);
   }
   auto e = materialize(false);
   if (e && ids_begin_ != ids_end_)
@@ -99,30 +85,25 @@ result<event> chunk::reader::read(event_id id) {
   return e;
 }
 
-result<event> chunk::reader::materialize(bool discard) {
-  if (block_reader_->available() == 0)
+maybe<event> chunk::reader::materialize(bool discard) {
+  if (available_ == 0)
     return {};
   // Read type.
   uint32_t type_id;
-  if (!block_reader_->read(type_id, 0))
-    return error{"failed to read type id from block"};
+  deserializer_ >> type_id;
   auto t = type_cache_.find(type_id);
   if (t == type_cache_.end()) {
     std::string type_name;
-    if (!block_reader_->read(type_name, 0))
-      return error{"failed to read type name from block"};
-    auto st = chunk_->meta().schema.find(type_name);
+    deserializer_ >> type_name;
+    auto st = chunk_.schema_.find(type_name);
     if (!st)
-      return error{"schema inconsistency, missing type: ", type_name};
+      return fail("schema inconsistency, missing type: ", type_name);
     t = type_cache_.emplace(type_id, *st).first;
   }
   // Read timstamp and data
   time::point ts;
-  if (!block_reader_->read(ts, 0))
-    return error{"failed to read event timestamp from block"};
   data d;
-  if (!block_reader_->read(d))
-    return error{"failed to read event data from block"};
+  deserializer_ >> ts >> d;
   // Bail out early if requested.
   if (discard)
     return {};
@@ -131,34 +112,41 @@ result<event> chunk::reader::materialize(bool discard) {
   return std::move(e);
 }
 
-chunk::chunk(io::compression method)
-  : msg_{make_message(meta_data{}, vast::block{method})} {
+chunk::chunk(compression method)
+  : compression_method_{method} {
 }
 
-chunk::chunk(std::vector<event> const& es, io::compression method) {
-  compress(es, method);
+bool operator==(chunk const& x, chunk const& y) {
+  return x.events_ == y.events_
+      && x.first_ == y.first_
+      && x.last_ == y.last_
+      && x.ids_ == y.ids_
+      && x.schema_ == y.schema_
+      && x.compression_method_ == y.compression_method_
+      && x.buffer_ == y.buffer_;
 }
 
 bool chunk::ids(default_bitstream ids) {
-  if (ids.count() != events())
+  if (ids_.count() != events_)
     return false;
-  get_meta().ids = std::move(ids);
+  ids_ = std::move(ids);
   return true;
 }
 
-bool chunk::compress(std::vector<event> const& events, io::compression method) {
-  msg_ = make_message(meta_data{}, vast::block{method});
+maybe<void> chunk::compress(std::vector<event> const& events) {
   writer w{*this};
-  for (auto& e : events)
-    if (!w.write(e))
-      return false;
-  return true;
+  for (auto& e : events) {
+    auto m = w.write(e);
+    if (!m)
+      return fail();
+  }
+  return {};
 }
 
 std::vector<event> chunk::uncompress() const {
-  std::vector<event> result(events());
+  std::vector<event> result(events_);
   reader r{*this};
-  for (uint64_t i = 0; i < events(); ++i) {
+  for (uint64_t i = 0; i < events_; ++i) {
     auto e = r.read();
     VAST_ASSERT(e);
     result[i] = std::move(*e);
@@ -166,37 +154,13 @@ std::vector<event> chunk::uncompress() const {
   return result;
 }
 
-chunk::meta_data const& chunk::meta() const {
-  return msg_.get_as<meta_data>(0);
-}
-
-uint64_t chunk::bytes() const {
-  return block().compressed_bytes();
-}
-
 uint64_t chunk::events() const {
-  return block().elements();
+  return events_;
 }
 
 event_id chunk::base() const {
-  auto i = meta().ids.find_first();
+  auto i = ids_.find_first();
   return i == default_bitstream::npos ? invalid_event_id : i;
-}
-
-chunk::meta_data& chunk::get_meta() {
-  return msg_.get_as_mutable<meta_data>(0);
-}
-
-block& chunk::block() {
-  return msg_.get_as_mutable<vast::block>(1);
-}
-
-block const& chunk::block() const {
-  return msg_.get_as<vast::block>(1);
-}
-
-bool operator==(chunk const& x, chunk const& y) {
-  return x.meta() == y.meta() && x.block() == y.block();
 }
 
 } // namespace vast

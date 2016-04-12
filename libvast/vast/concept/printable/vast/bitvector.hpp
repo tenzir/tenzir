@@ -3,6 +3,7 @@
 
 #include "vast/bitvector.hpp"
 #include "vast/concept/printable/core/printer.hpp"
+#include "vast/concept/printable/string/any.hpp"
 #include "vast/concept/printable/string/char.hpp"
 
 namespace vast {

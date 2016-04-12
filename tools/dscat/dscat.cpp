@@ -1,17 +1,18 @@
+#include <cstdio>
+
 #include <iostream>
 
 #include <caf/message_builder.hpp>
 
 #include "vast/filesystem.hpp"
-#include "vast/io/algorithm.hpp"
-#include "vast/io/file_stream.hpp"
 #include "vast/util/posix.hpp"
+#include "vast/util/fdinbuf.hpp"
+#include "vast/util/fdoutbuf.hpp"
 
 using namespace caf;
 using namespace std;
 using namespace std::string_literals;
 using namespace vast;
-using namespace vast::io;
 
 int main(int argc, char** argv) {
   auto usage = "usage: dscat [-lrw] <uds> [file]";
@@ -84,9 +85,10 @@ int main(int argc, char** argv) {
       return 1;
     }
     cerr << "dumping contents\n" << endl;
-    file_input_stream is{fd, close_on_destruction};
-    file_output_stream os{"-"};
-    copy(is, os);
+    util::fdinbuf in{fd};
+    util::fdoutbuf out{::fileno(stdout)};
+    std::ostream os{&out};
+    os << &in; // TODO: perfrom more efficient block-level copying.
   }
   return 0;
 }

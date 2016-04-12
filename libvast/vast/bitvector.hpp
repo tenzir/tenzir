@@ -5,7 +5,6 @@
 #include <string>
 #include <vector>
 
-#include "vast/trial.hpp"
 #include "vast/util/assert.hpp"
 #include "vast/util/operators.hpp"
 #include "vast/util/iterator.hpp"

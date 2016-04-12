@@ -2,9 +2,9 @@
 #define VAST_BITMAP_INDEX_HPP
 
 #include "vast/bitmap.hpp"
-#include "vast/operator.hpp"
+#include "vast/error.hpp"
 #include "vast/maybe.hpp"
-#include "vast/trial.hpp"
+#include "vast/operator.hpp"
 #include "vast/value.hpp"
 #include "vast/concept/printable/vast/data.hpp"
 #include "vast/concept/printable/vast/operator.hpp"
@@ -65,20 +65,20 @@ public:
   /// @param op The relation operator.
   /// @param x The value to lookup.
   template <typename T>
-  trial<Bitstream> lookup(relational_operator op, T const& x) const {
+  maybe<Bitstream> lookup(relational_operator op, T const& x) const {
     auto r = derived()->lookup_impl(op, x);
     if (r)
       *r &= mask_;
     return r;
   }
 
-  trial<Bitstream> lookup(relational_operator op, none) const {
+  maybe<Bitstream> lookup(relational_operator op, none) const {
     if (!(op == equal || op == not_equal))
-      return error{"invalid relational operator for nil data: ", op};
+      return fail<ec::unsupported_operator>(op);
     return op == equal ? nil_ & mask_ : ~nil_ & mask_;
   }
 
-  trial<Bitstream> lookup(relational_operator op, data const& d) const {
+  maybe<Bitstream> lookup(relational_operator op, data const& d) const {
     if (is<none>(d))
       return lookup(op, nil);
     auto r = derived()->lookup_impl(op, d);
@@ -225,19 +225,19 @@ private:
     }
 
     template <typename U>
-    trial<Bitstream> operator()(U const& x) const {
-      return error{"invalid type: ", x};
+    maybe<Bitstream> operator()(U const& x) const {
+      return fail<ec::type_clash>(bitmap_value_type{}, x);
     }
 
-    trial<Bitstream> operator()(bitmap_value_type x) const {
+    maybe<Bitstream> operator()(bitmap_value_type x) const {
       return bm_.lookup(op_, x);
     }
 
-    trial<Bitstream> operator()(time::point x) const {
+    maybe<Bitstream> operator()(time::point x) const {
       return (*this)(x.time_since_epoch().count());
     }
 
-    trial<Bitstream> operator()(time::duration x) const {
+    maybe<Bitstream> operator()(time::duration x) const {
       return (*this)(x.count());
     }
 
@@ -257,15 +257,15 @@ private:
     return bitmap_.stretch(n);
   }
 
-  trial<Bitstream> lookup_impl(relational_operator op, data const& d) const {
+  maybe<Bitstream> lookup_impl(relational_operator op, data const& d) const {
     if (op == in || op == not_in)
-      return error{"unsupported relational operator: ", op};
+      return fail<ec::unsupported_operator>(op);
     return visit(looker{bitmap_, op}, d);
   };
 
-  trial<Bitstream> lookup_impl(relational_operator op, T x) const {
+  maybe<Bitstream> lookup_impl(relational_operator op, T x) const {
     if (op == in || op == not_in)
-      return error{"unsupported relational operator: ", op};
+      return fail<ec::unsupported_operator>(op);
     return looker{bitmap_, op}(x);
   };
 
@@ -339,13 +339,13 @@ private:
   }
 
   template <typename Iterator>
-  trial<Bitstream> lookup_string(relational_operator op, Iterator begin,
+  maybe<Bitstream> lookup_string(relational_operator op, Iterator begin,
                                  Iterator end) const {
     auto length = static_cast<size_t>(end - begin);
     VAST_ASSERT(length < max_string_length);
     switch (op) {
       default:
-        return error{"unsupported relational operator: ", op};
+        return fail<ec::unsupported_operator>(op);
       case equal:
       case not_equal: {
         if (length == 0) {
@@ -393,20 +393,20 @@ private:
     }
   }
 
-  trial<Bitstream> lookup_impl(relational_operator op, data const& d) const {
+  maybe<Bitstream> lookup_impl(relational_operator op, data const& d) const {
     auto s = get<std::string>(d);
     if (s)
       return lookup_impl(op, *s);
-    return error{"not string data: ", d};
+    return fail<ec::type_clash>(type::string{}, d);
   }
 
-  trial<Bitstream> lookup_impl(relational_operator op,
+  maybe<Bitstream> lookup_impl(relational_operator op,
                                std::string const& str) const {
     return lookup_string(op, str.begin(), str.end());
   }
 
   template <size_t N>
-  trial<Bitstream> lookup_impl(relational_operator op,
+  maybe<Bitstream> lookup_impl(relational_operator op,
                                char const(&str)[N]) const {
     return lookup_string(op, str, str + N - 1);
   }
@@ -471,14 +471,14 @@ private:
     return v4_.append(n, false);
   }
 
-  trial<Bitstream> lookup_impl(relational_operator op, data const& d) const {
+  maybe<Bitstream> lookup_impl(relational_operator op, data const& d) const {
     if (!(op == equal || op == not_equal || op == in || op == not_in))
-      return error{"unsupported relational operator: ", op};
+      return fail<ec::unsupported_operator>(op);
     if (v4_.empty())
       return Bitstream{};
     switch (which(d)) {
       default:
-        return error{"invalid value"};
+        return fail<ec::type_clash>(type::address{}, d);
       case data::tag::address:
         return lookup_impl(op, *get<address>(d));
       case data::tag::subnet:
@@ -486,9 +486,9 @@ private:
     }
   }
 
-  trial<Bitstream> lookup_impl(relational_operator op, address const& a) const {
+  maybe<Bitstream> lookup_impl(relational_operator op, address const& a) const {
     if (!(op == equal || op == not_equal))
-      return error{"unsupported relational operator: ", op};
+      return fail<ec::unsupported_operator>(op);
     auto& bytes = a.data();
     auto is_v4 = a.is_v4();
     auto result = is_v4 ? v4_ : Bitstream{this->size(), true};
@@ -502,12 +502,12 @@ private:
     return std::move(op == equal ? result : result.flip());
   }
 
-  trial<Bitstream> lookup_impl(relational_operator op, subnet const& s) const {
+  maybe<Bitstream> lookup_impl(relational_operator op, subnet const& s) const {
     if (!(op == in || op == not_in))
-      return error{"unsupported relational operator: ", op};
+      return fail<ec::unsupported_operator>(op);
     auto topk = s.length();
     if (topk == 0)
-      return error{"invalid IP subnet length: ", topk};
+      return fail("invalid IP subnet length: ", topk);
     auto net = s.network();
     auto is_v4 = net.is_v4();
     if ((is_v4 ? topk + 96 : topk) == 128)
@@ -576,9 +576,9 @@ private:
     return network_.stretch(n) && length_.stretch(n);
   }
 
-  trial<Bitstream> lookup_impl(relational_operator op, subnet const& s) const {
+  maybe<Bitstream> lookup_impl(relational_operator op, subnet const& s) const {
     if (!(op == equal || op == not_equal))
-      return error{"unsupported relational operator: ", op};
+      return fail<ec::unsupported_operator>(op);
     auto bs = network_.lookup(equal, s.network());
     if (!bs)
       return bs;
@@ -587,11 +587,11 @@ private:
     return std::move(op == equal ? r : r.flip());
   }
 
-  trial<Bitstream> lookup_impl(relational_operator op, data const& d) const {
+  maybe<Bitstream> lookup_impl(relational_operator op, data const& d) const {
     auto s = get<subnet>(d);
     if (s)
       return lookup_impl(op, *s);
-    return error{"not subnet data: ", d};
+    return fail<ec::type_clash>(type::subnet{}, d);
   }
 
   uint64_t size_impl() const {
@@ -639,9 +639,9 @@ private:
     return num_.stretch(n) && proto_.stretch(n);
   }
 
-  trial<Bitstream> lookup_impl(relational_operator op, port const& p) const {
+  maybe<Bitstream> lookup_impl(relational_operator op, port const& p) const {
     if (op == in || op == not_in)
-      return error{"unsupported relational operator: ", op};
+      return fail<ec::unsupported_operator>(op);
     if (num_.empty())
       return Bitstream{};
     auto n = num_.lookup(op, p.number());
@@ -652,11 +652,11 @@ private:
     return std::move(n);
   }
 
-  trial<Bitstream> lookup_impl(relational_operator op, data const& d) const {
+  maybe<Bitstream> lookup_impl(relational_operator op, data const& d) const {
     auto p = get<port>(d);
     if (p)
       return lookup_impl(op, *p);
-    return error{"not port data: ", d};
+    return fail<ec::type_clash>(type::port{}, d);
   }
 
   uint64_t size_impl() const {

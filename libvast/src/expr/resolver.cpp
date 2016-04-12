@@ -1,5 +1,7 @@
+#include "vast/error.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/type.hpp"
+#include "vast/concept/serializable/vast/type.hpp"
 #include "vast/expr/resolver.hpp"
 
 namespace vast {
@@ -8,11 +10,11 @@ namespace expr {
 schema_resolver::schema_resolver(type const& t) : type_{t} {
 }
 
-trial<expression> schema_resolver::operator()(none) {
+maybe<expression> schema_resolver::operator()(none) {
   return expression{};
 }
 
-trial<expression> schema_resolver::operator()(conjunction const& c) {
+maybe<expression> schema_resolver::operator()(conjunction const& c) {
   conjunction copy;
   for (auto& op : c) {
     auto r = visit(*this, op);
@@ -32,7 +34,7 @@ trial<expression> schema_resolver::operator()(conjunction const& c) {
     return {std::move(copy)};
 }
 
-trial<expression> schema_resolver::operator()(disjunction const& d) {
+maybe<expression> schema_resolver::operator()(disjunction const& d) {
   disjunction copy;
   for (auto& op : d) {
     auto r = visit(*this, op);
@@ -41,7 +43,6 @@ trial<expression> schema_resolver::operator()(disjunction const& d) {
     else if (!is<none>(*r))
       copy.push_back(std::move(*r));
   }
-
   if (copy.empty())
     return expression{};
   if (copy.size() == 1)
@@ -50,7 +51,7 @@ trial<expression> schema_resolver::operator()(disjunction const& d) {
     return {std::move(copy)};
 }
 
-trial<expression> schema_resolver::operator()(negation const& n) {
+maybe<expression> schema_resolver::operator()(negation const& n) {
   auto r = visit(*this, n.expression());
   if (!r)
     return r;
@@ -60,12 +61,12 @@ trial<expression> schema_resolver::operator()(negation const& n) {
     return expression{};
 }
 
-trial<expression> schema_resolver::operator()(predicate const& p) {
+maybe<expression> schema_resolver::operator()(predicate const& p) {
   op_ = p.op;
   return visit(*this, p.lhs, p.rhs);
 }
 
-trial<expression> schema_resolver::operator()(schema_extractor const& e,
+maybe<expression> schema_resolver::operator()(schema_extractor const& e,
                                               data const& d) {
   disjunction dis;
   auto r = get<type::record>(type_);
@@ -82,10 +83,7 @@ trial<expression> schema_resolver::operator()(schema_extractor const& e,
       for (auto& p : trace)
         if (!p.first.empty())
           if (!congruent(*r->at(p.first), *first_type))
-            return error{"type clash: ", type_,
-                         " : ",          to_string(type_),
-                         " <--> ",       *r->at(p.first),
-                         " : ",          to_string(*r->at(p.first))};
+            return fail<ec::type_clash>(type_, *r->at(p.first));
     }
 
     // Add all offsets from the trace to the disjunction, which will
@@ -103,7 +101,7 @@ trial<expression> schema_resolver::operator()(schema_extractor const& e,
     return {std::move(dis)};
 }
 
-trial<expression> schema_resolver::operator()(data const& d,
+maybe<expression> schema_resolver::operator()(data const& d,
                                               schema_extractor const& e) {
   return (*this)(e, d);
 }

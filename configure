@@ -42,8 +42,9 @@ Usage: $0 [OPTION]... [VAR=VALUE]...
     --with-caf=PATH         path to CAF install root or build directory
 
   Optional packages in non-standard locations:
-    --with-perftools=PATH   path to gperftools install root
+    --with-snappy=PATH      path to Snappy install root
     --with-pcap=PATH        path to libpcap install root
+    --with-perftools=PATH   path to gperftools install root
     --with-doxygen=PATH     path to Doxygen install root
 "
 
@@ -142,6 +143,9 @@ while [ $# -ne 0 ]; do
       ;;
     --with-caf=*)
       append_cache_entry CAF_ROOT_DIR PATH "$optarg"
+      ;;
+    --with-snappy=*)
+      append_cache_entry SNAPPY_ROOT_DIR PATH "$optarg"
       ;;
     --with-pcap=*)
       append_cache_entry PCAP_ROOT_DIR PATH "$optarg"

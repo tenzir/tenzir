@@ -3,75 +3,56 @@
 
 #include <type_traits>
 
+#include "vast/detail/variadic_serialization.hpp"
+
 #include "vast/access.hpp"
 
-namespace vast {
+// Generic implementation of CAF's free serialization functions for all types
+// which model VAST's State concept. Because the Serializable concept operates
+// via ADL, these functions must reside in the namespace of their arguments.
+// Because we want to support types across multiple namespaces, but cannot
+// inject free functions into their respective namespaces, our only option is
+// to place these functions of the first argument, i.e., namespace caf.
+
+namespace caf {
 namespace detail {
 
-// Faciliates expression SFINAE below.
+// Dummy function that faciliates expression SFINAE below.
 struct dummy {
-  template <typename...>
+  template <class...>
   void operator()(...);
 };
 
 } // namespace detail
 
-//
-// Versionized
-//
-
-template <typename Serializer, typename T>
-auto serialize(Serializer& sink, T const& x, uint32_t version)
-  -> decltype(access::state<T>::call(x, std::declval<detail::dummy>(), 0)) {
-  access::state<T>::call(x, [&](auto&... xs) { sink.put(xs...); }, version);
+template <class T>
+auto serialize(caf::serializer& sink, T const& x)
+-> decltype(vast::access::state<T>::call(x, std::declval<detail::dummy>())) {
+  auto f = [&](auto&... xs) { vast::detail::write(sink, xs...); };
+  vast::access::state<T>::call(x, f);
 }
 
-template <typename Serializer, typename T>
-auto serialize(Serializer& sink, T const& x, uint32_t version)
-  -> decltype(access::state<T>::read(x, std::declval<detail::dummy>(), 0)) {
-  access::state<T>::read(x, [&](auto&... xs) { sink.put(xs...); }, version);
+template <class T>
+auto serialize(caf::deserializer& source, T& x)
+-> decltype(vast::access::state<T>::call(x, std::declval<detail::dummy>())) {
+  auto f = [&](auto&... xs) { vast::detail::read(source, xs...); };
+  vast::access::state<T>::call(x, f);
 }
 
-template <typename Deserializer, typename T>
-auto deserialize(Deserializer& source, T& x, uint32_t version)
-  -> decltype(access::state<T>::call(x, std::declval<detail::dummy>(), 0)) {
-  access::state<T>::call(x, [&](auto&... xs) { source.get(xs...); }, version);
+template <class T>
+auto serialize(caf::serializer& sink, T const& x)
+-> decltype(vast::access::state<T>::read(x, std::declval<detail::dummy>())) {
+  auto f = [&](auto&... xs) { vast::detail::write(sink, xs...); };
+  vast::access::state<T>::read(x, f);
 }
 
-template <typename Deserializer, typename T>
-auto deserialize(Deserializer& source, T& x, uint32_t version)
-  -> decltype(access::state<T>::write(x, std::declval<detail::dummy>(), 0)) {
-  access::state<T>::write(x, [&](auto&... xs) { source.get(xs...); }, version);
+template <class T>
+auto serialize(caf::deserializer& source, T& x)
+-> decltype(vast::access::state<T>::read(x, std::declval<detail::dummy>())) {
+  auto f = [&](auto&... xs) { vast::detail::read(source, xs...); };
+  vast::access::state<T>::write(x, f);
 }
 
-//
-// Un-versionized
-//
-
-template <typename Serializer, typename T>
-auto serialize(Serializer& sink, T const& x)
-  -> decltype(access::state<T>::call(x, std::declval<detail::dummy>())) {
-  access::state<T>::call(x, [&](auto&... xs) { sink.put(xs...); });
-}
-
-template <typename Serializer, typename T>
-auto serialize(Serializer& sink, T const& x)
-  -> decltype(access::state<T>::read(x, std::declval<detail::dummy>())) {
-  access::state<T>::read(x, [&](auto&... xs) { sink.put(xs...); });
-}
-
-template <typename Deserializer, typename T>
-auto deserialize(Deserializer& source, T& x)
-  -> decltype(access::state<T>::call(x, std::declval<detail::dummy>())) {
-  access::state<T>::call(x, [&](auto&... xs) { source.get(xs...); });
-}
-
-template <typename Deserializer, typename T>
-auto deserialize(Deserializer& source, T& x)
-  -> decltype(access::state<T>::write(x, std::declval<detail::dummy>())) {
-  access::state<T>::write(x, [&](auto&... xs) { source.get(xs...); });
-}
-
-} // namespace vast
+} // namespace caf
 
 #endif

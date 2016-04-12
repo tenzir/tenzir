@@ -156,6 +156,15 @@ else ()
   message(FATAL_ERROR "Could not find CAF")
 endif ()
 
+if (NOT SNAPPY_ROOT_DIR AND VAST_PREFIX)
+  set(SNAPPY_ROOT_DIR ${VAST_PREFIX})
+endif ()
+find_package(SNAPPY QUIET)
+if (SNAPPY_FOUND)
+  set(VAST_HAVE_SNAPPY true)
+  include_directories(${SNAPPY_INCLUDE_DIR})
+endif ()
+
 if (NOT PCAP_ROOT_DIR AND VAST_PREFIX)
   set(PCAP_ROOT_DIR ${VAST_PREFIX})
 endif ()
@@ -234,7 +243,8 @@ add_subdirectory(aux)
 add_subdirectory(doc)
 add_subdirectory(libvast)
 add_subdirectory(tools)
-add_subdirectory(vast)
+# FIXME: Bring back after having repaired CAF code.
+#add_subdirectory(vast)
 
 #------------------------------------------------------------------------------
 #                                Build Summary
@@ -277,8 +287,9 @@ else ()
 endif ()
 
 display(CAF_FOUND ${caf_dir} caf_summary)
-display(PCAP_FOUND ${PCAP_INCLUDE_DIR} pcap_summary)
-display(GPERFTOOLS_FOUND ${GPERFTOOLS_INCLUDE_DIR} perftools_summary)
+display(SNAPPY_FOUND "${SNAPPY_INCLUDE_DIR}" snappy_summary)
+display(PCAP_FOUND "${PCAP_INCLUDE_DIR}" pcap_summary)
+display(GPERFTOOLS_FOUND "${GPERFTOOLS_INCLUDE_DIR}" perftools_summary)
 display(DOXYGEN_FOUND yes doxygen_summary)
 display(MD2MAN_FOUND yes md2man_summary)
 display(VAST_USE_TCMALLOC yes tcmalloc_summary)
@@ -304,6 +315,7 @@ set(build_summary
     "\nCXXFLAGS:             ${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_${build_type}}"
     "\n"
     "\nCAF:                  ${caf_summary}"
+    "\nSnappy                ${snappy_summary}"
     "\nPCAP:                 ${pcap_summary}"
     "\nGperftools:           ${perftools_summary}"
     "\nDoxygen:              ${doxygen_summary}"

@@ -2,65 +2,69 @@
 #include "vast/concept/printable/vast/data.hpp"
 #include "vast/concept/printable/vast/operator.hpp"
 #include "vast/concept/printable/vast/type.hpp"
+#include "vast/concept/serializable/vast/data.hpp"
+#include "vast/concept/serializable/vast/type.hpp"
 #include "vast/expr/validator.hpp"
 
 namespace vast {
 namespace expr {
 
-trial<void> validator::operator()(none) const {
-  return error{"nil expression"};
+maybe<void> validator::operator()(none) const {
+  return fail("nil expression");
 }
 
-trial<void> validator::operator()(conjunction const& c) const {
+maybe<void> validator::operator()(conjunction const& c) const {
   for (auto& op : c) {
-    auto t = visit(*this, op);
-    if (!t)
-      return t;
+    auto m = visit(*this, op);
+    if (!m)
+      return m;
   }
-  return nothing;
+  return {};
 }
 
-trial<void> validator::operator()(disjunction const& d) const {
+maybe<void> validator::operator()(disjunction const& d) const {
   for (auto& op : d) {
-    auto t = visit(*this, op);
-    if (!t)
-      return t;
+    auto m = visit(*this, op);
+    if (!m)
+      return m;
   }
-  return nothing;
+  return {};
 }
 
-trial<void> validator::operator()(negation const& n) const {
+maybe<void> validator::operator()(negation const& n) const {
   return visit(*this, n.expression());
 }
 
-trial<void> validator::operator()(predicate const& p) const {
+maybe<void> validator::operator()(predicate const& p) const {
   auto valid = [&](predicate::operand const& lhs,
-                   predicate::operand const& rhs) -> trial<void> {
+                   predicate::operand const& rhs) -> maybe<void> {
     auto rhs_data = get<data>(rhs);
     if (is<event_extractor>(lhs) && rhs_data) {
       if (!compatible(type::string{}, p.op, type::derive(*rhs_data)))
-        return error{"invalid event extractor: ", *rhs_data, " under ", p.op};
+        return fail<ec::type_clash>("invalid event extractor: ", *rhs_data,
+                                    " under ", p.op);
     } else if (is<time_extractor>(lhs) && rhs_data) {
       if (!compatible(type::time_point{}, p.op, type::derive(*rhs_data)))
-        return error{"invalid time extractor: ", *rhs_data, " under ", p.op};
+        return fail<ec::type_clash>("invalid time extractor: ", *rhs_data, 
+                                    " under ", p.op);
     } else {
       auto t = get<type_extractor>(lhs);
       if (t && rhs_data) {
         if (!compatible(t->type, p.op, type::derive(*rhs_data)))
-          return error{
-            "invalid type extractor: ", t->type, ' ', p.op, ' ', *rhs_data};
+          return fail<ec::type_clash>("invalid type extractor: ",
+                                      t->type, ' ', p.op, ' ', *rhs_data);
       } else if (is<schema_extractor>(lhs) && rhs_data) {
-        return nothing;
+        return {};
       } else {
-        return error{"invalid extractor"};
+        return fail<ec::invalid_query>("invalid extractor");
       }
     }
-    return nothing;
+    return {};
   };
   auto tl = valid(p.lhs, p.rhs);
   auto tr = valid(p.rhs, p.lhs);
   if (tl || tr)
-    return nothing;
+    return {};
   else if (tl)
     return tr;
   else

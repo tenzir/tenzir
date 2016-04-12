@@ -6,7 +6,7 @@
 #include <cstdlib>
 
 #include "vast/address.hpp"
-#include "vast/util/byte_swap.hpp"
+#include "vast/detail/byte_swap.hpp"
 
 std::array<uint8_t, 12> const vast::address::v4_mapped_prefix = {
   {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff}
@@ -23,13 +23,13 @@ address::address(uint32_t const* bytes, family fam, byte_order order) {
     std::copy(v4_mapped_prefix.begin(), v4_mapped_prefix.end(), bytes_.begin());
     auto p = reinterpret_cast<uint32_t*>(&bytes_[12]);
     if (order == host)
-      *p = util::byte_swap<host_endian, network_endian>(*bytes);
+      *p = detail::to_network_order(*bytes);
     else
       *p = *bytes;
   } else if (order == host) {
     for (auto i = 0u; i < 4u; ++i) {
       auto p = reinterpret_cast<uint32_t*>(&bytes_[i * 4]);
-      *p = util::byte_swap<host_endian, network_endian>(*(bytes + i));
+      *p = detail::to_network_order(*(bytes + i));
     }
   } else {
     std::copy(bytes, bytes + 4, reinterpret_cast<uint32_t*>(bytes_.data()));
@@ -78,8 +78,7 @@ bool address::mask(unsigned top_bits_to_keep) {
   uint32_t m[4] = {0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff};
   auto r = std::ldiv(top_bits_to_keep, 32);
   if (r.quot < 4)
-    m[r.quot] = util::byte_swap<host_endian, network_endian>(
-      m[r.quot] & ~bitmask32(32 - r.rem));
+    m[r.quot] = detail::to_network_order(m[r.quot] & ~bitmask32(32 - r.rem));
   for (size_t i = r.quot + 1; i < 4; ++i)
     m[i] = 0;
   auto p = reinterpret_cast<uint32_t*>(&bytes_[0]);

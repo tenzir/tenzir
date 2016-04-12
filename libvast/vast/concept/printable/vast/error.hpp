@@ -12,7 +12,8 @@ struct error_printer : printer<error_printer> {
 
   template <typename Iterator>
   bool print(Iterator& out, error const& e) const {
-    return printers::str.print(out, e.msg());
+    auto msg = to_string(e);
+    return printers::str.print(out, msg);
   }
 };
 

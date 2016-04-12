@@ -322,12 +322,6 @@ private:
   bitvector const& bits_impl() const;
 
   std::unique_ptr<detail::bitstream_concept> concept_;
-
-private:
-  template <typename Iterator>
-  friend trial<void> print(bitstream const& bs, Iterator&& out) {
-    return print(bs.bits(), out, false, false, 0);
-  }
 };
 
 } // namespace vast

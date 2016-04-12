@@ -207,7 +207,6 @@ public:
     while (first != last)
       if (!insert(*first++).second)
         all = false;
-
     return all;
   }
 

@@ -9,11 +9,11 @@
 #include "vast/aliases.hpp"
 #include "vast/config.hpp"
 #include "vast/key.hpp"
+#include "vast/maybe.hpp"
 #include "vast/none.hpp"
 #include "vast/offset.hpp"
 #include "vast/operator.hpp"
 #include "vast/time.hpp"
-#include "vast/trial.hpp"
 #include "vast/util/intrusive.hpp"
 #include "vast/util/operators.hpp"
 #include "vast/util/range.hpp"
@@ -581,12 +581,12 @@ public:
   /// Attemps to resolve a ::key to an ::offset.
   /// @param k The key to resolve.
   /// @returns The ::offset corresponding to *k*.
-  trial<offset> resolve(key const& k) const;
+  maybe<offset> resolve(key const& k) const;
 
   /// Attemps to resolve an ::offset to a ::key.
   /// @param o The offset to resolve.
   /// @returns The ::key corresponding to *o*.
-  trial<key> resolve(offset const& o) const;
+  maybe<key> resolve(offset const& o) const;
 
   /// Finds all offset-key pairs for an *exact* key in this and nested records.
   /// @param k The key to resolve.

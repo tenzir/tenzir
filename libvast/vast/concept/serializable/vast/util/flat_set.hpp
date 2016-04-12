@@ -1,29 +1,17 @@
-#ifndef VAST_CONCEPT_SERIALIZABLE_VAST_UTIL_FLAT_SET_HPP
-#define VAST_CONCEPT_SERIALIZABLE_VAST_UTIL_FLAT_SET_HPP
+#ifndef VAST_CONCEPT_SERIALIZABLE_VAST_UTIL_FLAT_SET
+#define VAST_CONCEPT_SERIALIZABLE_VAST_UTIL_FLAT_SET
 
 #include "vast/util/flat_set.hpp"
 
 namespace vast {
+namespace util {
 
-template <typename Serializer, typename T, typename C, typename A>
-void serialize(Serializer& sink, util::flat_set<T, C, A> const& s) {
-  sink.begin_sequence(s.size());
-  for (auto& x : s)
-    sink << x;
-  sink.end_sequence();
-}
-
-template <typename Deserializer, typename T, typename C, typename A>
-void deserialize(Deserializer& source, util::flat_set<T, C, A>& s) {
-  auto size = source.begin_sequence();
-  for (uint64_t i = 0; i < size; ++i) {
-    T x;
-    source >> x;
-    s.insert(std::move(x));
-  }
-  source.end_sequence();
+template <class Processor, class T, class Compare, class Alloc>
+void serialize(Processor& proc, flat_set<T, Compare, Alloc>& fs) {
+  proc & fs.as_vector();
 }
 
 } // namespace vast
+} // namespace util
 
 #endif

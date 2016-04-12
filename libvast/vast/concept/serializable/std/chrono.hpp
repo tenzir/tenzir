@@ -3,35 +3,25 @@
 
 #include <chrono>
 
-#include "vast/concept/serializable/builtin.hpp"
+#include <caf/deserializer.hpp>
+#include <caf/serializer.hpp>
 
-namespace vast {
+// Put 'em in namespace caf so that ADL finds them.
+namespace caf {
 
-template <typename Serializer, typename Rep, typename Period>
-void serialize(Serializer& sink, std::chrono::duration<Rep, Period> d) {
-  serialize(sink, d.count());
+template <class Clock, class Duration>
+void serialize(serializer& sink, std::chrono::time_point<Clock, Duration> t) {
+  sink << t.time_since_epoch();
 }
 
-template <typename Deserializer, typename Rep, typename Period>
-void deserialize(Deserializer& source, std::chrono::duration<Rep, Period>& d) {
-  Rep x;
-  deserialize(source, x);
-  d = std::chrono::duration<Rep, Period>(x);
-}
-
-template <typename Serializer, typename Clock, typename Duration>
-void serialize(Serializer& sink, std::chrono::time_point<Clock, Duration> t) {
-  serialize(sink, t.time_since_epoch());
-}
-
-template <typename Deserializer, typename Clock, typename Duration>
-void deserialize(Deserializer& source,
+template <class Clock, class Duration>
+void serialize(deserializer& source,
                  std::chrono::time_point<Clock, Duration>& t) {
   Duration since_epoch;
-  deserialize(source, since_epoch);
+  source >> since_epoch;
   t = std::chrono::time_point<Clock, Duration>(since_epoch);
 }
 
-} // namespace vast
+} // namespace caf
 
 #endif

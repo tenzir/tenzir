@@ -2,10 +2,7 @@
 #define VAST_CONCEPT_SERIALIZATION_VAST_CHUNK_HPP
 
 #include "vast/concept/serializable/state.hpp"
-#include "vast/concept/serializable/builtin.hpp"
-#include "vast/concept/serializable/std/array.hpp"
 #include "vast/concept/serializable/std/chrono.hpp"
-#include "vast/concept/serializable/std/vector.hpp"
 #include "vast/concept/serializable/vast/schema.hpp"
 #include "vast/concept/serializable/vast/util/flat_set.hpp"
 #include "vast/concept/serializable/vast/util/range_map.hpp"

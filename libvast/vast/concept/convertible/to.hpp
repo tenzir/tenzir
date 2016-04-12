@@ -22,7 +22,7 @@ auto to(From&& from, Opts&&... opts)
   maybe<To> x{To()};
   if (convert(from, *x, std::forward<Opts>(opts)...))
     return x;
-  return nil;
+  return {};
 }
 
 template <typename To, typename From, typename... Opts>
@@ -34,7 +34,7 @@ auto to_string(From&& from, Opts&&... opts)
   std::string str;
   if (convert(from, str, std::forward<Opts>(opts)...))
     return str;
-  return {};
+  return {}; // TODO: throw?
 }
 
 } // namespace vast

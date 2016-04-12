@@ -4,6 +4,7 @@
 #include <iterator>
 #include <type_traits>
 
+#include "vast/error.hpp"
 #include "vast/maybe.hpp"
 #include "vast/concept/parseable/parse.hpp"
 
@@ -14,7 +15,7 @@ auto to(Iterator& f, Iterator const& l)
   -> std::enable_if_t<is_parseable<Iterator, To>{}, maybe<To>> {
   maybe<To> t{To{}};
   if (!parse(f, l, *t))
-    return nil;
+    return fail<ec::parse_error>();
   return t;
 }
 

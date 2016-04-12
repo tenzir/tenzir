@@ -6,6 +6,8 @@
 namespace vast {
 namespace util {
 
+using caf::detail::tbind;
+
 using caf::detail::type_list;
 using caf::detail::empty_type_list;
 using caf::detail::is_type_list;
@@ -20,7 +22,6 @@ using caf::detail::tl_unzip;
 using caf::detail::tl_index_of;
 using caf::detail::tl_reverse;
 using caf::detail::tl_find;
-using caf::detail::tl_find_if;
 using caf::detail::tl_forall;
 using caf::detail::tl_exists;
 using caf::detail::tl_count;

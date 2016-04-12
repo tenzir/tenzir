@@ -1,10 +1,10 @@
 #ifndef VAST_CONCEPT_SERIALIZABLE_VAST_SCHEMA_HPP
 #define VAST_CONCEPT_SERIALIZABLE_VAST_SCHEMA_HPP
 
-#include <iostream>
+#include <caf/deserializer.hpp>
+#include <caf/serializer.hpp>
 
 #include "vast/schema.hpp"
-#include "vast/concept/serializable/std/string.hpp"
 #include "vast/concept/parseable/parse.hpp"
 #include "vast/concept/parseable/vast/schema.hpp"
 #include "vast/concept/printable/to_string.hpp"
@@ -16,13 +16,11 @@ namespace vast {
 // strings is not very efficient, although we currently have no other way to
 // keep the pointer relationships of the types intact.
 
-template <typename Serializer>
-void serialize(Serializer& sink, schema const& sch) {
+inline void serialize(caf::serializer& sink, schema const& sch) {
   sink << to_string(sch);
 }
 
-template <typename Deserializer>
-void deserialize(Deserializer& source, schema& sch) {
+inline void serialize(caf::deserializer& source, schema& sch) {
   std::string str;
   source >> str;
   if (str.empty())

@@ -7,7 +7,6 @@
 #include "vast/concept/state/port.hpp"
 #include "vast/concept/state/subnet.hpp"
 #include "vast/concept/state/time.hpp"
-#include "vast/concept/state/none.hpp"
 #include "vast/util/meta.hpp"
 
 namespace vast {

@@ -3,14 +3,19 @@
 
 #include <unordered_map>
 
+#include <caf/binary_deserializer.hpp>
+#include <caf/binary_serializer.hpp>
 #include <caf/message.hpp>
+#include <caf/streambuf.hpp>
 
 #include "vast/aliases.hpp"
 #include "vast/bitstream.hpp"
-#include "vast/block.hpp"
+#include "vast/compression.hpp"
 #include "vast/time.hpp"
-#include "vast/result.hpp"
+#include "vast/maybe.hpp"
 #include "vast/schema.hpp"
+#include "vast/streambuf.hpp"
+#include "vast/util/operators.hpp"
 
 namespace vast {
 
@@ -22,25 +27,13 @@ class chunk : util::equality_comparable<chunk> {
   friend access;
 
 public:
-  /// Chunk meta data.
-  struct meta_data : util::equality_comparable<meta_data> {
-    time::point first = time::duration{};
-    time::point last = time::duration{};
-    default_bitstream ids;
-    vast::schema schema;
-
-    friend bool operator==(meta_data const& x, meta_data const& y);
-  };
-
-  /// A proxy class to write events into the chunk.
+  /// A proxy class to write events into the chunk. Upon descruction, the
+  /// writer flushes its lingering state into the chunk.
   class writer {
   public:
     /// Constructs a writer from a chunk.
     /// @param chk The chunk to serialize into.
     writer(chunk& chk);
-
-    /// Destructs a chunk.
-    ~writer();
 
     writer(writer&&) = default;
     writer& operator=(writer&&) = default;
@@ -49,14 +42,13 @@ public:
     /// @param e The event to serialize.
     bool write(event const& e);
 
-    /// Flushes the current writer state to the underlying chunk. Can only
-    /// called once for each writer and will also be called by the destructor.
-    void flush();
-
   private:
-    meta_data* meta_;
+    chunk& chunk_;
     std::unordered_map<type, uint32_t> type_cache_;
-    std::unique_ptr<block::writer> block_writer_;
+    // TODO: consolidate to use single buffer.
+    caf::vectorbuf vectorbuf_;
+    compressedbuf compressedbuf_;
+    caf::stream_serializer<compressedbuf&> serializer_;
   };
 
   /// A proxy class to read events from the chunk.
@@ -68,16 +60,20 @@ public:
 
     /// Extracts an event from the chunk.
     /// @param id Specifies the ID of the event to extract.
-    /// @returns The extracted event, an empty result if there are no more
-    ///          events available, or an error on failure.
-    result<event> read(event_id id = invalid_event_id);
+    /// @returns The extracted event, nothing if no more
+    ///          events are available, or an error on failure.
+    maybe<event> read(event_id id = invalid_event_id);
 
   private:
-    result<event> materialize(bool discard);
+    maybe<event> materialize(bool discard);
 
-    chunk const* chunk_;
-    std::unique_ptr<block::reader> block_reader_;
+    chunk const& chunk_;
     std::unordered_map<uint32_t, type> type_cache_;
+    // TODO: consolidate to use single buffer.
+    caf::charbuf charbuf_;
+    compressedbuf compressedbuf_;
+    caf::stream_deserializer<compressedbuf&> deserializer_;
+    uint64_t available_ = 0;
     default_bitstream::const_iterator ids_begin_;
     default_bitstream::const_iterator ids_end_;
     event_id first_ = invalid_event_id;
@@ -85,12 +81,7 @@ public:
 
   /// Constructs a chunk.
   /// @param method The compression method to use.
-  chunk(io::compression method = io::lz4);
-
-  /// Constructs a chunk and directly calls ::compress afterwards.
-  /// @param es The events to write into the chunk.
-  /// @param method The compression method of the underlying block.
-  chunk(std::vector<event> const& es, io::compression method = io::lz4);
+  chunk(compression method = compression::null);
 
   friend bool operator==(chunk const& x, chunk const& y);
 
@@ -103,20 +94,11 @@ public:
   /// Destroys all previous contents.
   /// @param events The vector of events to write into this chunk.
   /// @returns `true` on success.
-  bool compress(std::vector<event> const& events,
-                io::compression method = io::lz4);
+  maybe<void> compress(std::vector<event> const& events);
 
   /// Uncompresses the chunk back into a vector of events.
   /// @returns The vector of events for this chunk.
   std::vector<event> uncompress() const;
-
-  /// Retrieves the chunk meta data.
-  /// @returns The meta data of the chunk.
-  meta_data const& meta() const;
-
-  /// Retrieves the size of the compressed chunk in bytes.
-  /// @returns The number of bytes the chunk takes up in memory.
-  uint64_t bytes() const;
 
   /// Retrieves the number of events in the chunk.
   /// @returns The number of events in the chunk.
@@ -127,11 +109,13 @@ public:
   event_id base() const;
 
 private:
-  meta_data& get_meta();
-  vast::block& block();
-  vast::block const& block() const;
-
-  caf::message msg_; // <meta_data, block>
+  uint64_t events_ = 0;
+  time::point first_ = time::duration{};
+  time::point last_ = time::duration{};
+  default_bitstream ids_;
+  vast::schema schema_;
+  compression compression_method_;
+  std::vector<char> buffer_;
 };
 
 } // namespace vast

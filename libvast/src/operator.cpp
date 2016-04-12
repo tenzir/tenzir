@@ -1,5 +1,4 @@
-#include <stdexcept>
-
+#include "vast/die.hpp"
 #include "vast/operator.hpp"
 
 namespace vast {
@@ -7,7 +6,7 @@ namespace vast {
 relational_operator negate(relational_operator op) {
   switch (op) {
     default:
-      throw std::logic_error("missing case for relational operator");
+      die("missing case for relational operator");
     case match:
       return not_match;
     case not_match:
@@ -38,7 +37,7 @@ relational_operator negate(relational_operator op) {
 relational_operator flip(relational_operator op) {
   switch (op) {
     default:
-      throw std::logic_error("missing case for relational operator");
+      die("missing case for relational operator");
     case match:
     case not_match:
     case equal:

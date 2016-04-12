@@ -4,7 +4,6 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/config.h.in
 set(libvast_sources
   ${aux_sources} 
   address.cc
-  announce.cc
   banner.cc
   bitvector.cc
   bitstream.cc
@@ -25,6 +24,7 @@ set(libvast_sources
   port.cc
   schema.cc
   subnet.cc
+  system.cc
   time.cc
   type.cc
   uuid.cc

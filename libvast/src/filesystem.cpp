@@ -1,15 +1,15 @@
 #include <fstream>
 #include <iterator>
 
+#include <caf/streambuf.hpp>
+
 #include "vast/filesystem.hpp"
-#include "vast/io/algorithm.hpp"
-#include "vast/io/file_stream.hpp"
-#include "vast/io/container_stream.hpp"
 #include "vast/util/assert.hpp"
 #include "vast/util/posix.hpp"
 #include "vast/util/string.hpp"
 #include "vast/concept/printable/vast/error.hpp"
 #include "vast/concept/printable/vast/filesystem.hpp"
+#include "vast/concept/serializable/vast/filesystem.hpp"
 
 #ifdef VAST_POSIX
 #  include <cerrno>
@@ -230,24 +230,25 @@ file::~file() {
     close();
 }
 
-trial<void> file::open(open_mode mode, bool append) {
+maybe<void> file::open(open_mode mode, bool append) {
   if (is_open_)
-    return error{"file already open"};
+    return fail<ec::filesystem_error>("file already open");
   if (mode == read_only && append)
-    return error{"cannot open file in read and append mode simultaneously"};
+    return fail<ec::filesystem_error>(
+      "cannot open file in read and append mode simultaneously");
 #ifdef VAST_POSIX
   // Support reading from STDIN and writing to STDOUT.
   if (path_ == "-") {
     if (mode == read_write)
-      return error{"cannot open - in read/write mode"};
+      return fail<ec::filesystem_error>("cannot open - in read/write mode");
     handle_ = ::fileno(mode == read_only ? stdin : stdout);
     is_open_ = true;
-    return nothing;
+    return {};
   }
   int flags = 0;
   switch (mode) {
     case invalid:
-      return error{"invalid open mode"};
+      return fail<ec::filesystem_error>("invalid open mode");
     case read_write:
       flags = O_CREAT | O_RDWR;
       break;
@@ -262,18 +263,19 @@ trial<void> file::open(open_mode mode, bool append) {
     flags |= O_APPEND;
   errno = 0;
   if (mode != read_only && !exists(path_.parent())) {
-    auto t = mkdir(path_.parent());
-    if (!t)
-      return error{"failed to create parent directory: ", t.error()};
+    auto m = mkdir(path_.parent());
+    if (!m)
+      return fail<ec::filesystem_error>("failed to create parent directory: ",
+                                        m.error());
   }
   handle_ = ::open(path_.str().data(), flags, 0644);
   if (handle_ != -1) {
     is_open_ = true;
-    return nothing;
+    return {};
   }
-  return error{std::strerror(errno)};
+  return fail<ec::filesystem_error>(std::strerror(errno));
 #else
-  return error{"not yet implemented"};
+  return fail<ec::filesystem_error>("not yet implemented");
 #endif // VAST_POSIX
 }
 
@@ -416,39 +418,40 @@ bool rm(const path& p) {
   return false;
 }
 
-trial<void> mkdir(path const& p) {
+maybe<void> mkdir(path const& p) {
   auto components = split(p);
   if (components.empty())
-    return error{"cannot mkdir empty path"};
+    return fail<ec::filesystem_error>("cannot mkdir empty path");
   path c;
   for (auto& comp : components) {
     c /= comp;
     if (exists(c)) {
       auto kind = c.kind();
       if (!(kind == path::directory || kind == path::symlink))
-        return error{"not a directory or symlink:", c};
+        return fail<ec::filesystem_error>("not a directory or symlink:", c);
     } else {
       if (!VAST_CREATE_DIRECTORY(c.str().data())) {
         // Because there exists a TOCTTOU issue here, we have to check again.
         if (errno == EEXIST) {
           auto kind = c.kind();
           if (!(kind == path::directory || kind == path::symlink))
-            return error{"not a directory or symlink:", c};
+            return fail<ec::filesystem_error>("not a directory or symlink:", c);
         } else {
-          return error{std::strerror(errno), c};
+          return fail<ec::filesystem_error>(std::strerror(errno), c);
         }
       }
     }
   }
-  return nothing;
+  return {};
 }
 
 // Loads file contents into a string.
-trial<std::string> load_contents(path const& p) {
+maybe<std::string> load_contents(path const& p) {
   std::string contents;
-  auto out = io::make_container_output_stream(contents);
-  io::file_input_stream in{p};
-  io::copy(in, out);
+  caf::containerbuf<std::string> obuf{contents};
+  std::ostream out{&obuf};
+  std::ifstream in{p.str()};
+  out << in.rdbuf();
   return std::move(contents);
 }
 
