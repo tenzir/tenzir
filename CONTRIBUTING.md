@@ -181,8 +181,8 @@ Naming
 
 - Put static non-const variables in an anonymous namespace.
 
-Breaking Statements
--------------------
+Breaking
+--------
 
 - Break constructor initializers after the comma, use two spaces for
   indentation, and place each initializer on its own line (unless you don't
@@ -190,11 +190,12 @@ Breaking Statements
 
   ```cpp
   my_class::my_class()
-      : my_base_class{some_function()},
-        greeting_{"Hello there! This is my_class!"},
-        some_bool_flag_{false} {
+    : my_base_class{some_function()},
+      greeting_{"Hello there! This is my_class!"},
+      some_bool_flag_{false} {
     // ok
   }
+
   other_class::other_class() : name_{"tommy"}, buddy_{"michael"} {
     // ok
   }
@@ -206,6 +207,37 @@ Breaking Statements
   a_rather_long_return_type f(std::string const& x,
                               std::string const& y) {
     // ...
+  }
+  ```
+
+  If that turns out intractable, break directly after the opening parenthesis:
+
+  ```cpp
+  template <typename T>
+  black_hole_space_time_warp f(
+    typename T::gravitational_field_manager const& manager,
+    typename T::antimatter_clustear const& cluster) {
+    // ...
+  }
+  ```
+
+- Break template parameters without indentation:
+
+  ```cpp
+  template <class T>
+  auto identity(T x) {
+    return x;
+  }
+  ```
+
+- Break trailining return types without indentation if they cannot fit on the
+  same line:
+
+  ```cpp
+  template <class T>
+  auto compute_upper_bound_on_compressed_data(T x)
+  -> std::enable_if_t<std::is_integral::value, T> {
+    return detail::bound(x);
   }
   ```
 
