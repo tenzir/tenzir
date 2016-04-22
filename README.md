@@ -28,11 +28,15 @@ Send [Bro](http://www.bro.org) logs to the remote node:
 
 ## Resources
 
+- [Project page](http://vast.io)
 - [Documentation](http://docs.vast.io)
 - [Issue board](http://vast.fail)
-- [Chat](https://chat.vast.io)
 - [Contribution guidelines](CONTRIBUTING.md)
-- [Project page](http://vast.io)
+
+### Contact
+
+- Chat: [Gitter](http://chat.vast.io)
+- Twitter: [@vast_io](https://twitter.com/vast_io)
 - Mailing lists:
     - [vast@icir.org][mailing-list]: general help and discussion
     - [vast-commits@icir.org][mailing-list-commits]: full diffs of git commits
@@ -51,8 +55,8 @@ Building VAST involves the following steps:
 Required dependencies:
 
 - A C++14 compiler:
-  - Clang >= 3.4
-  - GCC >= 5
+  - Clang 3.4
+  - GCC 5
 - [CMake](http://www.cmake.org)
 - [CAF](https://github.com/actor-framework/actor-framework) (develop branch)
 
@@ -84,7 +88,7 @@ CAF offers binary packages via [openSUSE's Build Service][caf-obs].
 
 #### Mac OS
 
-Mac OS Yosemite also ships with a working C++14 compiler.
+Mac OS Yosemite also ships with a C++14 compiler out of the box.
 [Homebrew](http://brew.sh) makes it easy to install the dependencies:
 
     brew install cmake google-perftools
@@ -104,7 +108,7 @@ citation:
       year      = {2016}
     }
 
-You can [download the paper][vast-paper] as part of the [NSDI '16
+You can [download the paper][vast-paper] from the [NSDI '16
 proceedings][nsdi-proceedings].
 
 ## License
