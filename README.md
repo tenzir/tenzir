@@ -2,7 +2,7 @@
 
 [![Build Status][jenkins-badge]][jenkins-url]
 [![Docker Container][docker-badge]][docker-url]
-[![Gitter][gitter-badge]](https://gitter.im/mavam/vast)
+[![Gitter][gitter-badge]](https://gitter.im/vast-io/vast)
 
 **Visibility Across Space and Time (VAST)** is a unified platform for network
 forensics and incident response.
@@ -29,9 +29,9 @@ Send [Bro](http://www.bro.org) logs to the remote node:
 
 ## Resources
 
-- [Documentation](https://github.com/mavam/vast/wiki)
-- [Issue board](https://waffle.io/mavam/vast)
-- [Chat](https://gitter.im/mavam/vast)
+- [Documentation](http://docs.vast.io)
+- [Issue board](http://vast.fail)
+- [Chat](https://chat.vast.io)
 - [Contribution guidelines](CONTRIBUTING.md)
 - [Project page](http://vast.io)
 - Mailing lists:
@@ -42,11 +42,11 @@ Send [Bro](http://www.bro.org) logs to the remote node:
 
 ### Docker
 
-The [VAST docker container](https://registry.hub.docker.com/u/mavam/vast/)
+The [VAST docker container](https://registry.hub.docker.com/u/vast-io/vast/)
 provides a quick way to get up and running:
 
-    docker pull mavam/vast
-    docker run --rm -ti mavam/vast
+    docker pull vast-io/vast
+    docker run --rm -ti vast-io/vast
     > vast -h
 
 ### Source Build
@@ -120,15 +120,15 @@ proceedings][nsdi-proceedings].
 ## License
 
 VAST comes with a [3-clause BSD
-licence](https://raw.github.com/mavam/vast/master/COPYING).
+licence](https://raw.github.com/vast-io/vast/master/COPYING).
 
 [mailing-list]: http://mailman.icsi.berkeley.edu/mailman/listinfo/vast
 [mailing-list-commits]: http://mailman.icsi.berkeley.edu/mailman/listinfo/vast-commits
 [jenkins-url]: https://jenkins.inet.haw-hamburg.de/view/VAST%20Build%20Status/
 [jenkins-badge]: https://jenkins.inet.haw-hamburg.de/buildStatus/icon?job=VAST/master%20branch
 [gitter-badge]: https://img.shields.io/badge/gitter-join%20chat%20%E2%86%92-green.svg
-[docker-url]: https://quay.io/repository/mavam/vast
-[docker-badge]: https://quay.io/repository/mavam/vast/status
+[docker-url]: https://quay.io/repository/vast-io/vast
+[docker-badge]: https://quay.io/repository/vast-io/vast/status
 [caf-obs]: https://build.opensuse.org/package/show/devel:libraries:caf/caf
 [vast-paper]: https://www.usenix.org/system/files/conference/nsdi16/nsdi16-paper-vallentin.pdf
 [nsdi-proceedings]: https://www.usenix.org/conference/nsdi16/technical-sessions
