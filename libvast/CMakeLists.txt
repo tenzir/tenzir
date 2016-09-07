@@ -14,6 +14,7 @@ set(libvast_sources
   src/chunk.cpp
   src/cleanup.cpp
   src/compression.cpp
+  src/configuration.cpp
   src/data.cpp
   src/die.cpp
   src/expression.cpp
@@ -29,7 +30,6 @@ set(libvast_sources
   src/schema.cpp
   src/streambuf.cpp
   src/subnet.cpp
-  src/system.cpp
   src/time.cpp
   src/type.cpp
   src/uuid.cpp

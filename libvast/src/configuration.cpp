@@ -1,11 +1,7 @@
-#include <caf/scheduler/profiled_coordinator.hpp>
+#include <caf/io/middleman.hpp>
 
-//#include "vast/address.hpp"
-//#include "vast/add_message_type.hpp"
-//#include "vast/bitmap_index_polymorphic.hpp"
-//#include "vast/bitstream.hpp"
-//#include "vast/caf.hpp"
 #include "vast/chunk.hpp"
+#include "vast/configuration.hpp"
 //#include "vast/expression.hpp"
 //#include "vast/event.hpp"
 #include "vast/filesystem.hpp"
@@ -46,11 +42,7 @@
 //#include "vast/concept/state/value.hpp"
 //#include "vast/io/compression.hpp"
 
-using namespace caf;
-
 namespace vast {
-
-namespace {
 
 //template <typename Bitstream>
 //void announce_bmi_hierarchy(std::string const& bs_name) {
@@ -113,16 +105,22 @@ namespace {
 //  );
 //}
 
-} // namespace <anonymous>
-
-void augment(actor_system_config& cfg) {
-  cfg.add_message_type<path>("vast::path")
-     .add_message_type<uuid>("vast::uuid")
-     .add_message_type<arithmetic_operator>("vast::arithmetic_operator")
-     .add_message_type<relational_operator>("vast::relational_operator")
-     .add_message_type<boolean_operator>("vast::boolean_operator")
-     .add_message_type<query_options>("vast::query_options")
-     .add_message_type<chunk>("vast::chunk")
+configuration::configuration() {
+  // Register VAST's custom types.
+  add_message_type<arithmetic_operator>("vast::arithmetic_operator");
+  add_message_type<boolean_operator>("vast::boolean_operator");
+  add_message_type<chunk>("vast::chunk");
+  add_message_type<path>("vast::path");
+  add_message_type<query_options>("vast::query_options");
+  add_message_type<relational_operator>("vast::relational_operator");
+  add_message_type<uuid>("vast::uuid");
+  // Register VAST's custom error type.
+  auto renderer = [](uint8_t x, caf::atom_value, const caf::message&) {
+    return "VAST error:" + caf::deep_to_string_as_tuple(static_cast<ec>(x));
+  };
+  add_error_category(caf::atom("vast"), renderer);
+  // Load modules.
+  load<caf::io::middleman>();
 //     .add_message_type<schema>("vast::schema")
   //add_message_type<time::point>("vast::time::point");
   //add_message_type<time::duration>("vast::time::duration");
@@ -177,19 +175,10 @@ void augment(actor_system_config& cfg) {
   //caf::add_message_type<accountant::type>("vast::accountant");
   //caf::add_message_type<archive::type>("vast::archive");
   //caf::add_message_type<identifier::type>("vast::identifier");
-    ;
 }
 
-actor_system_config make_config() {
-  actor_system_config cfg;
-  augment(cfg);
-  return cfg;
-}
-
-actor_system_config make_config(int argc, char** argv) {
-  actor_system_config cfg{argc, argv};
-  augment(cfg);
-  return cfg;
+configuration::configuration(int argc, char** argv) : configuration{} {
+  parse(argc, argv);
 }
 
 } // namespace vast
