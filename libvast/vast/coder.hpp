@@ -63,10 +63,6 @@ class singleton_coder : util::equality_comparable<singleton_coder<Bitstream>> {
 public:
   using bitstream_type = Bitstream;
 
-  friend bool operator==(singleton_coder const& x, singleton_coder const& y) {
-    return x.bitstream_ == y.bitstream_;
-  }
-
   uint64_t rows() const {
     return bitstream_.size();
   }
@@ -95,6 +91,15 @@ public:
 
   bool stretch(size_t n) {
     return bitstream_.append(n, false);
+  }
+
+  friend bool operator==(singleton_coder const& x, singleton_coder const& y) {
+    return x.bitstream_ == y.bitstream_;
+  }
+
+  template <class Inspector>
+  friend auto inspect(Inspector&f, singleton_coder& sc) {
+    return f(sc.bitstream_);
   }
 
 private:
@@ -169,6 +174,11 @@ public:
 
   void resize(size_t size) {
     bitstreams_.resize(size);
+  }
+
+  template <class Inspector>
+  friend auto inspect(Inspector&f, vector_coder& vc) {
+    return f( vc.rows_, vc.bitstreams_);
   }
 
 protected:
@@ -463,11 +473,6 @@ public:
   template <typename C>
   using coder_array = std::array<C, base_type::components>;
 
-  friend bool operator==(multi_level_coder const& x,
-                         multi_level_coder const& y) {
-    return x.coders_ == y.coders_;
-  }
-
   multi_level_coder() {
     initialize(coders_);
   }
@@ -502,6 +507,16 @@ public:
       if (!c.stretch(n))
         return false;
     return true;
+  }
+
+  friend bool operator==(multi_level_coder const& x,
+                         multi_level_coder const& y) {
+    return x.coders_ == y.coders_;
+  }
+
+  template <class Inspector>
+  friend auto inspect(Inspector&f, multi_level_coder& mlc) {
+    return f(mlc.coders_);
   }
 
 private:

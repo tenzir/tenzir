@@ -1,9 +1,6 @@
 #include "vast/load.hpp"
 #include "vast/maybe.hpp"
 #include "vast/save.hpp"
-#include "vast/concept/serializable/state.hpp"
-#include "vast/concept/serializable/vast/maybe.hpp"
-#include "vast/concept/serializable/vast/vector_event.hpp"
 
 #define SUITE serialization
 #include "test.hpp"

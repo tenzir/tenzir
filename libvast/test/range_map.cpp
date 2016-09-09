@@ -1,8 +1,11 @@
+#include "vast/load.hpp"
+#include "vast/save.hpp"
 #include "vast/util/range_map.hpp"
 
 #define SUITE util
 #include "test.hpp"
 
+using namespace vast;
 using namespace vast::util;
 
 TEST(range_map insertion) {
@@ -164,4 +167,18 @@ TEST(range_map erasure) {
   CHECK(!i);
   i = rm.lookup(56);
   CHECK(!i);
+}
+
+TEST(range_map serialization) {
+  range_map<size_t, char> x, y;
+  x.insert(50, 60, 'a');
+  x.insert(80, 90, 'b');
+  x.insert(20, 30, 'c');
+  std::vector<char> buf;
+  save(buf, x);
+  load(buf, y);
+  REQUIRE_EQUAL(y.size(), 3u);
+  auto i = y.lookup(50);
+  REQUIRE(i);
+  CHECK(*i == 'a');
 }

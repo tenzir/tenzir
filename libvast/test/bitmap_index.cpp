@@ -1,13 +1,13 @@
+#include "vast/bitmap_index.hpp"
+#include "vast/load.hpp"
+#include "vast/save.hpp"
+
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/address.hpp"
 #include "vast/concept/parseable/vast/subnet.hpp"
 #include "vast/concept/parseable/vast/time.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/bitstream.hpp"
-#include "vast/concept/serializable/vast/bitmap_index.hpp"
-
-#include "vast/load.hpp"
-#include "vast/save.hpp"
 
 #define SUITE bitmap_index
 #include "test.hpp"

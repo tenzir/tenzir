@@ -15,14 +15,6 @@ subnet::subnet(address addr, uint8_t length)
   }
 }
 
-bool operator==(subnet const& x, subnet const& y) {
-  return x.network_ == y.network_ && x.length_ == y.length_;
-}
-
-bool operator<(subnet const& x, subnet const& y) {
-  return std::tie(x.network_, x.length_) < std::tie(y.network_, y.length_);
-}
-
 bool subnet::contains(address const& addr) const {
   address p{addr};
   p.mask(length_);
@@ -47,6 +39,14 @@ bool subnet::initialize() {
   }
   network_.mask(length_);
   return true;
+}
+
+bool operator==(subnet const& x, subnet const& y) {
+  return x.network_ == y.network_ && x.length_ == y.length_;
+}
+
+bool operator<(subnet const& x, subnet const& y) {
+  return std::tie(x.network_, x.length_) < std::tie(y.network_, y.length_);
 }
 
 } // namespace vast

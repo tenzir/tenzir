@@ -116,6 +116,11 @@ public:
            && mask_.append(delta, false);
   }
 
+  template <class Inspector>
+  friend auto inspect(Inspector& f, bitmap_index_base& bmi) {
+    return f(bmi.mask_, bmi.nil_);
+  }
+
 private:
   Derived* derived() {
     return static_cast<Derived*>(this);
@@ -193,6 +198,11 @@ public:
   friend bool operator==(arithmetic_bitmap_index const& x,
                          arithmetic_bitmap_index const& y) {
     return x.bitmap_ == y.bitmap_;
+  }
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, arithmetic_bitmap_index& bmi) {
+    return f(static_cast<super&>(bmi), bmi.bitmap_);
   }
 
 private:
@@ -300,6 +310,11 @@ public:
   friend bool operator==(string_bitmap_index const& x,
                          string_bitmap_index const& y) {
     return x.bitmaps_ == y.bitmaps_;
+  }
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, string_bitmap_index& bmi) {
+    return f(static_cast<super&>(bmi), bmi.bitmaps_, bmi.length_);
   }
 
 private:
@@ -442,6 +457,11 @@ public:
     return x.bitmaps_ == y.bitmaps_;
   }
 
+  template <class Inspector>
+  friend auto inspect(Inspector& f, address_bitmap_index& bmi) {
+    return f(static_cast<super&>(bmi), bmi.bitmaps_, bmi.v4_);
+  }
+
 private:
   bool push_back_impl(address const& a) {
     auto& bytes = a.data();
@@ -562,6 +582,11 @@ public:
     return x.network_ == y.network_ && x.length_ == y.length_;
   }
 
+  template <class Inspector>
+  friend auto inspect(Inspector& f, subnet_bitmap_index& bmi) {
+    return f(static_cast<super&>(bmi), bmi.network_, bmi.length_);
+  }
+
 private:
   bool push_back_impl(subnet const& s) {
     return network_.push_back(s.network()) && length_.push_back(s.length());
@@ -623,6 +648,11 @@ public:
   friend bool operator==(port_bitmap_index const& x,
                          port_bitmap_index const& y) {
     return x.num_ == y.num_ && x.proto_ == y.proto_;
+  }
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, port_bitmap_index& bmi) {
+    return f(static_cast<super&>(bmi), bmi.num_, bmi.proto_);
   }
 
 private:

@@ -9,6 +9,7 @@ namespace vast {
 
 struct access;
 
+/// A universally unique identifier (UUID).
 class uuid : util::totally_ordered<uuid> {
   friend access;
 
@@ -25,6 +26,9 @@ public:
 
   uuid() = default;
 
+  reference operator[](size_t i);
+  const_reference operator[](size_t i) const;
+
   iterator begin();
   iterator end();
   const_iterator begin() const;
@@ -36,12 +40,19 @@ public:
   friend bool operator==(uuid const& x, uuid const& y);
   friend bool operator<(uuid const& x, uuid const& y);
 
+  template <class Inspector>
+  friend auto inspect(Inspector& f, uuid& u) {
+    return f(u.id_);
+  }
+
 private:
   std::array<value_type, 16> id_;
 };
 
 } // namespace vast
 
+// TODO: express in terms of hashable concept. This means simply hashing the
+// bytes of the entire std::array.
 namespace std {
 
 template <>

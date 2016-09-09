@@ -83,8 +83,6 @@ public:
   /// @param method The compression method to use.
   chunk(compression method = compression::null);
 
-  friend bool operator==(chunk const& x, chunk const& y);
-
   /// Sets the mask of event IDs.
   /// @param ids The mask representing the IDs for the events in this chunk.
   /// @returns `true` if *ids* is a valid mask.
@@ -107,6 +105,19 @@ public:
   /// Retrieves the ID of the first event.
   /// @returns The ID of the first event.
   event_id base() const;
+
+  friend bool operator==(chunk const& x, chunk const& y);
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, chunk& chk) {
+    return f(chk.events_,
+             chk.first_,
+             chk.last_,
+             chk.ids_,
+             chk.schema_,
+             chk.compression_method_,
+             chk.buffer_);
+  }
 
 private:
   uint64_t events_ = 0;

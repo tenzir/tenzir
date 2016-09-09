@@ -28,9 +28,6 @@ public:
   /// Default-constructs an empty pattern.
   pattern() = default;
 
-  friend bool operator==(pattern const& lhs, pattern const& rhs);
-  friend bool operator<(pattern const& lhs, pattern const& rhs);
-
   /// Constructs a pattern from a string.
   /// @param str The string containing the pattern.
   explicit pattern(std::string str);
@@ -44,6 +41,14 @@ public:
   /// @param str The string to search.
   /// @returns `true` if the pattern matches inside *str*.
   bool search(std::string const& str) const;
+
+  friend bool operator==(pattern const& lhs, pattern const& rhs);
+  friend bool operator<(pattern const& lhs, pattern const& rhs);
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, pattern& p) {
+    return f(p.str_);
+  }
 
 private:
   std::string str_;

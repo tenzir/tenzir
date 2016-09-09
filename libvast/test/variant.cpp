@@ -1,6 +1,5 @@
 #include "vast/load.hpp"
 #include "vast/save.hpp"
-#include "vast/concept/serializable/vast/util/variant.hpp"
 #include "vast/util/variant.hpp"
 
 #define SUITE variant

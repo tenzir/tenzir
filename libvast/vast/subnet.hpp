@@ -14,9 +14,6 @@ public:
   /// Constructs the empty prefix, i.e., `::/0`.
   subnet();
 
-  friend bool operator==(subnet const& x, subnet const& y);
-  friend bool operator<(subnet const& x, subnet const& y);
-
   /// Constructs a prefix from an address.
   /// @param addr The address.
   /// @param length The prefix length.
@@ -33,6 +30,14 @@ public:
   /// Retrieves the prefix length.
   /// @returns The prefix length.
   uint8_t length() const;
+
+  friend bool operator==(subnet const& x, subnet const& y);
+  friend bool operator<(subnet const& x, subnet const& y);
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, subnet& sn) {
+    return f(sn.network_, sn.length_);
+  }
 
 private:
   bool initialize();

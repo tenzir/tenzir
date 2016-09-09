@@ -104,6 +104,11 @@ public:
     return coder_;
   }
 
+  template <class Inspector>
+  friend auto inspect(Inspector& f, bitmap& bm) {
+    return f(bm.coder_);
+  }
+
 private:
   template <typename U, typename B>
   using is_shiftable =

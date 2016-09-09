@@ -13,7 +13,6 @@
 #include "vast/concept/parseable/vast/time.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/expression.hpp"
-#include "vast/concept/serializable/vast/expression.hpp"
 
 #define SUITE expression
 #include "test.hpp"

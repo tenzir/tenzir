@@ -27,9 +27,6 @@ public:
   /// @param type The port type.
   port(number_type number, port_type type = unknown);
 
-  friend bool operator==(port const& x, port const& y);
-  friend bool operator<(port const& x, port const& y);
-
   /// Retrieves the port number.
   /// @returns The port number.
   number_type number() const;
@@ -45,6 +42,14 @@ public:
   /// Sets the port type.
   /// @param t The new port type.
   void type(port_type t);
+
+  friend bool operator==(port const& x, port const& y);
+  friend bool operator<(port const& x, port const& y);
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, port& p) {
+    return f(p.number_, p.type_);
+  }
 
 private:
   number_type number_ = 0;

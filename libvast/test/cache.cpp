@@ -2,7 +2,6 @@
 
 #include <vast/load.hpp>
 #include <vast/save.hpp>
-#include <vast/concept/serializable/vast/util/cache.hpp>
 #include <vast/util/cache.hpp>
 
 #define SUITE util

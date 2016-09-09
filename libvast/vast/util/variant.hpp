@@ -32,6 +32,10 @@ do so, all subject to the following:
 
 #include <type_traits>
 
+#include <caf/meta/load_callback.hpp>
+#include <caf/meta/save_callback.hpp>
+#include <caf/none.hpp>
+
 #include "vast/config.hpp"
 
 #include "vast/util/assert.hpp"
@@ -512,6 +516,22 @@ private:
       return y.apply_visitor_internal(less_than{x});
     else
       return x.which_ < y.which_;
+  }
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, basic_variant& v) {
+    auto save = [&] {
+      auto t = v.which();
+      return visit([&](auto& x) { return f(t, x); }, v);
+    };
+    auto load = [&] {
+      Tag t;
+      f(t); // FIXME: monadically chain return values of inspector invocations.
+      v = make(t);
+      return visit([&](auto& x) { return f(x); }, v);
+    };
+    return f(caf::meta::save_callback(save),
+             caf::meta::load_callback(load));
   }
 };
 

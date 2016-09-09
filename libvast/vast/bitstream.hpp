@@ -320,8 +320,6 @@ class null_bitstream : public bitstream_base<null_bitstream>,
   friend class detail::bitstream_model;
   friend bitstream_base<null_bitstream>;
   friend access;
-  friend bool operator==(null_bitstream const& x, null_bitstream const& y);
-  friend bool operator<(null_bitstream const& x, null_bitstream const& y);
 
 public:
   using const_iterator = class iterator
@@ -367,6 +365,14 @@ public:
 
   null_bitstream() = default;
   null_bitstream(size_type n, bool bit);
+
+  friend bool operator==(null_bitstream const& x, null_bitstream const& y);
+  friend bool operator<(null_bitstream const& x, null_bitstream const& y);
+
+  template <class Inspector>
+  friend auto inspect(Inspector&f, null_bitstream& bs) {
+    return f(bs.bits_);
+  }
 
 private:
   bool equals(null_bitstream const& other) const;
@@ -417,8 +423,6 @@ class ewah_bitstream : public bitstream_base<ewah_bitstream>,
   friend class detail::bitstream_model;
   friend bitstream_base<ewah_bitstream>;
   friend access;
-  friend bool operator==(ewah_bitstream const& x, ewah_bitstream const& y);
-  friend bool operator<(ewah_bitstream const& x, ewah_bitstream const& y);
 
 public:
   using const_iterator = class iterator
@@ -482,6 +486,14 @@ public:
   ewah_bitstream(ewah_bitstream&&) = default;
   ewah_bitstream& operator=(ewah_bitstream const&) = default;
   ewah_bitstream& operator=(ewah_bitstream&&) = default;
+
+  friend bool operator==(ewah_bitstream const& x, ewah_bitstream const& y);
+  friend bool operator<(ewah_bitstream const& x, ewah_bitstream const& y);
+
+  template <class Inspector>
+  friend auto inspect(Inspector&f, ewah_bitstream& bs) {
+    return f(bs.num_bits_, bs.last_marker_, bs.bits_);
+  }
 
 private:
   bool equals(ewah_bitstream const& other) const;

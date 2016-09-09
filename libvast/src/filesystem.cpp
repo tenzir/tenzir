@@ -9,7 +9,6 @@
 #include "vast/util/string.hpp"
 #include "vast/concept/printable/vast/error.hpp"
 #include "vast/concept/printable/vast/filesystem.hpp"
-#include "vast/concept/serializable/vast/filesystem.hpp"
 
 #ifdef VAST_POSIX
 #  include <cerrno>

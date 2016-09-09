@@ -3,7 +3,6 @@
 #include "vast/save.hpp"
 #include "vast/schema.hpp"
 #include "vast/concept/convertible/vast/schema.hpp"
-#include "vast/concept/serializable/vast/schema.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/schema.hpp"
 #include "vast/concept/printable/stream.hpp"

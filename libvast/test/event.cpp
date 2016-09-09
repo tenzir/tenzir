@@ -4,11 +4,9 @@
 #include "vast/save.hpp"
 #include "vast/concept/convertible/vast/event.hpp"
 #include "vast/concept/convertible/to.hpp"
-#include "vast/concept/serializable/vast/value.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/event.hpp"
 #include "vast/concept/printable/vast/json.hpp"
-#include "vast/concept/state/event.hpp"
 
 #include "test.hpp"
 

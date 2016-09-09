@@ -27,15 +27,12 @@ public:
       byte = (r >> (i * 8)) & 0xff;
       ++i;
     }
-
-    // Set the variant to 0b10xxxxxx
-    *(u.begin() + 8) &= 0xbf;
-    *(u.begin() + 8) |= 0x80;
-
-    // Set the version to 0b0100xxxx
-    *(u.begin() + 6) &= 0x4f; // 0b01001111
-    *(u.begin() + 6) |= 0x40; // 0b01000000
-
+    // Set variant to 0b10xxxxxx.
+    u[8] &= 0xbf;
+    u[8] |= 0x80;
+    // Set version to 0b0100xxxx.
+    u[6] &= 0x4f; // 0b01001111
+    u[6] |= 0x40; // 0b01000000
     return u;
   }
 
@@ -47,13 +44,21 @@ private:
 } // namespace <anonymous>
 
 uuid uuid::random() {
-  return random_generator()();
+  return random_generator{}();
 }
 
 uuid uuid::nil() {
   uuid u;
   u.id_.fill(0);
   return u;
+}
+
+uuid::reference uuid::operator[](size_t i) {
+  return id_[i];
+}
+
+uuid::const_reference uuid::operator[](size_t i) const {
+  return id_[i];
 }
 
 uuid::iterator uuid::begin() {

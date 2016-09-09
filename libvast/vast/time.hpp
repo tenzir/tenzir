@@ -71,27 +71,6 @@ public:
     : duration_{std::chrono::duration_cast<duration_type>(dur).count()} {
   }
 
-  // Arithmetic operators.
-  duration operator+() const;
-  duration operator-() const;
-  duration& operator++();
-  duration operator++(int);
-  duration& operator--();
-  duration operator--(int);
-  duration& operator+=(duration const& r);
-  duration& operator-=(duration const& r);
-  duration& operator*=(rep const& r);
-  duration& operator/=(rep const& r);
-  friend duration operator+(duration const& x, duration const& y);
-  friend duration operator-(duration const& x, duration const& y);
-  friend point operator+(point const& x, duration const& y);
-  friend point operator-(point const& x, duration const& y);
-  friend point operator+(duration const& x, point const& y);
-
-  // Relational operators.
-  friend bool operator==(duration const& x, duration const& y);
-  friend bool operator<(duration const& x, duration const& y);
-
   /// Lifts `std::chrono::duration::count`.
   rep count() const;
 
@@ -118,6 +97,32 @@ public:
   // Convert this duration to nanoseconds resolution.
   // @returns This duration in nanoseconds.
   rep nanoseconds() const;
+
+  // Arithmetic operators.
+  duration operator+() const;
+  duration operator-() const;
+  duration& operator++();
+  duration operator++(int);
+  duration& operator--();
+  duration operator--(int);
+  duration& operator+=(duration const& r);
+  duration& operator-=(duration const& r);
+  duration& operator*=(rep const& r);
+  duration& operator/=(rep const& r);
+  friend duration operator+(duration const& x, duration const& y);
+  friend duration operator-(duration const& x, duration const& y);
+  friend point operator+(point const& x, duration const& y);
+  friend point operator-(point const& x, duration const& y);
+  friend point operator+(duration const& x, point const& y);
+
+  // Relational operators.
+  friend bool operator==(duration const& x, duration const& y);
+  friend bool operator<(duration const& x, duration const& y);
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, duration& d) {
+    return f(d.duration_);
+  }
 
 private:
   duration_type duration_{0};
@@ -162,18 +167,6 @@ public:
   /// @param d The duration.
   point(duration d);
 
-  // Arithmetic operators.
-  point& operator+=(duration const& r);
-  point& operator-=(duration const& r);
-  friend point operator+(point const& x, duration const& y);
-  friend point operator-(point const& x, duration const& y);
-  friend point operator+(duration const& x, point const& y);
-  friend duration operator-(point const& x, point const& y);
-
-  // Relational operators.
-  friend bool operator==(point const& x, point const& y);
-  friend bool operator<(point const& x, point const& y);
-
   /// Computes the relative time with respect to this time point. Underflows
   /// and overflows behave intuitively for seconds, minutes, hours, and days.
   /// For months, a delta of *x* months means the same day of the current month
@@ -192,6 +185,23 @@ public:
 
   /// Returns a duration representing the duration since the UNIX epoch.
   duration time_since_epoch() const;
+
+  // Arithmetic operators.
+  point& operator+=(duration const& r);
+  point& operator-=(duration const& r);
+  friend point operator+(point const& x, duration const& y);
+  friend point operator-(point const& x, duration const& y);
+  friend point operator+(duration const& x, point const& y);
+  friend duration operator-(point const& x, point const& y);
+
+  // Relational operators.
+  friend bool operator==(point const& x, point const& y);
+  friend bool operator<(point const& x, point const& y);
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, point& p) {
+    return f(p.time_point_);
+  }
 
 private:
   time_point_type time_point_;

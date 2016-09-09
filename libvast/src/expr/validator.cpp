@@ -2,8 +2,6 @@
 #include "vast/concept/printable/vast/data.hpp"
 #include "vast/concept/printable/vast/operator.hpp"
 #include "vast/concept/printable/vast/type.hpp"
-#include "vast/concept/serializable/vast/data.hpp"
-#include "vast/concept/serializable/vast/type.hpp"
 #include "vast/expr/validator.hpp"
 
 namespace vast {

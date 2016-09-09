@@ -12,7 +12,6 @@
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/data.hpp"
 #include "vast/concept/printable/vast/json.hpp"
-#include "vast/concept/serializable/vast/data.hpp"
 
 #define SUITE data
 #include "test.hpp"

@@ -1,4 +1,3 @@
-#include "vast/concept/serializable/state.hpp"
 #include "vast/save.hpp"
 #include "vast/load.hpp"
 
@@ -15,15 +14,13 @@ struct foo {
   int i = 0;
 };
 
-template <class Processor>
-void serialize(Processor& proc, foo& x) {
-  proc & x.i;
+template <class Inspector>
+auto inspect(Inspector& f, foo& x) {
+  return f(x);
 }
 
 // A type that models the State concept.
 class bar {
-  friend vast::access;
-
 public:
   void set(int i) {
     f_.i = i;
@@ -33,23 +30,16 @@ public:
     return f_.i;
   }
 
+  template <class Inspector>
+  friend auto inspect(Inspector& f, bar& b) {
+    return f(b.f_);
+  }
+
 private:
   foo f_;
 };
 
 } // namespace <anonymous>
-
-namespace vast {
-
-template <>
-struct access::state<bar> {
-  template <class T, class F>
-  static void call(T&& x, F f) {
-    f(x.f_);
-  }
-};
-
-} // namespace vast
 
 TEST(variadic) {
   std::string buf;

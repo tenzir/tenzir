@@ -153,6 +153,11 @@ class bitstream_model : public bitstream_concept,
     return x.bitstream_ == y.bitstream_;
   }
 
+  template <class Inspector>
+  friend auto inspect(Inspector& f, bitstream_model& bsm) {
+    return f(bsm.bitstream_);
+  }
+
 public:
   bitstream_model() = default;
 
@@ -292,6 +297,11 @@ public:
   bitstream& operator=(bitstream&& other);
 
   explicit operator bool() const;
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, bitstream& bs) {
+    return f(bs.concept_);
+  }
 
 private:
   friend bitstream_base<bitstream>;

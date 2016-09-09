@@ -24,6 +24,11 @@ struct event_extractor : util::totally_ordered<event_extractor> {
   friend bool operator<(event_extractor const&, event_extractor const&) {
     return false;
   }
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, event_extractor&) {
+    return f(); // nop
+  }
 };
 
 /// Extracts the event timestamp.
@@ -34,6 +39,11 @@ struct time_extractor : util::totally_ordered<time_extractor> {
 
   friend bool operator<(time_extractor const&, time_extractor const&) {
     return false;
+  }
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, time_extractor&) {
+    return f(); // nop
   }
 };
 
@@ -52,6 +62,11 @@ struct type_extractor : util::totally_ordered<type_extractor> {
 
   friend bool operator<(type_extractor const& lhs, type_extractor const& rhs) {
     return lhs.type < rhs.type;
+  }
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, type_extractor& ex) {
+    return f(ex.type);
   }
 };
 
@@ -73,6 +88,11 @@ struct schema_extractor : util::totally_ordered<schema_extractor> {
                         schema_extractor const& rhs) {
     return lhs.key < rhs.key;
   }
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, schema_extractor& ex) {
+    return f(ex.key);
+  }
 };
 
 /// Extracts a singular value, the "instantiation" of a ::schema_extractor.
@@ -92,6 +112,11 @@ struct data_extractor : util::totally_ordered<data_extractor> {
 
   friend bool operator<(data_extractor const& lhs, data_extractor const& rhs) {
     return std::tie(lhs.type, lhs.offset) < std::tie(rhs.type, rhs.offset);
+  }
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, data_extractor& ex) {
+    return f(ex.type, ex.offset);
   }
 };
 
@@ -123,6 +148,11 @@ struct predicate : util::totally_ordered<predicate> {
   friend bool operator<(predicate const& lhs, predicate const& rhs) {
     return std::tie(lhs.lhs, lhs.op, lhs.rhs)
            < std::tie(rhs.lhs, rhs.op, rhs.rhs);
+  }
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, predicate& p) {
+    return f(p.lhs, p.op, p.rhs);
   }
 };
 
@@ -180,6 +210,11 @@ public:
 
   friend bool operator==(expression const& lhs, expression const& rhs);
   friend bool operator<(expression const& lhs, expression const& rhs);
+
+  template <class Inspector>
+  friend auto inspect(Inspector&f, expression& e) {
+    return f(e.node_);
+  }
 
   friend node& expose(expression& d);
   friend node const& expose(expression const& d);

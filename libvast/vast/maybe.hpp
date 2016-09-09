@@ -8,6 +8,7 @@
 #include <type_traits>
 
 #include <caf/message.hpp>
+#include <caf/none.hpp>
 
 #include <caf/detail/safe_equal.hpp>
 
@@ -293,6 +294,45 @@ public:
     return error_category_;
   }
 
+  // FIXME: monadically chain return values of inspector invocations.
+  template <class Inspector>
+  friend auto inspect(Inspector& f, maybe& m) {
+    auto save = [&] {
+      uint8_t flag = m.empty() ? 0 : (m.valid() ? 1 : 2);
+      f(flag);
+      if (m.valid())
+        f(*m);
+      else if (m.invalid()) {
+        auto e = m.error();
+        f(e);
+      }
+      return caf::none;
+    };
+    auto load = [&] {
+      uint8_t flag;
+      f(flag);
+      switch (flag) {
+        case 1: {
+          T value;
+          f(value);
+          m = std::move(value);
+          break;
+        }
+        case 2: {
+          vast::error e;
+          f(e);
+          m = std::move(e);
+          break;
+        }
+        default:
+          m = nil;
+      }
+      return caf::none;
+    };
+    return f(caf::meta::save_callback(save),
+             caf::meta::load_callback(load));
+  }
+
 private:
   bool has_error_context() const {
     return (flag_ & error_context_mask) != 0;
@@ -496,6 +536,11 @@ public:
     return error_;
   }
 
+  template <class Inspector>
+  friend auto inspect(Inspector& f, maybe& m) {
+    return f(m.error_);
+  }
+
 private:
   error_type error_;
 };
@@ -631,44 +676,6 @@ template <class T>
 bool operator!=(none const&, maybe<T> const& x) {
   return ! x.empty();
 }
-
-///// @relates maybe
-//template <class Processor, class T>
-//typename std::enable_if<Processor::is_saving::value>::type
-//serialize(Processor& sink, maybe<T>& x, const unsigned int) {
-//  uint8_t flag = x.empty() ? 0 : (x.valid() ? 1 : 2);
-//  sink & flag;
-//  if (x.valid())
-//    sink & *x;
-//  if (x.invalid()) {
-//    auto err = x.error();
-//    sink & err;
-//  }
-//}
-//
-///// @relates maybe
-//template <class Processor, class T>
-//typename std::enable_if<Processor::is_loading::value>::type
-//serialize(Processor& source, maybe<T>& x, const unsigned int) {
-//  uint8_t flag;
-//  source & flag;
-//  switch (flag) {
-//    case 1: {
-//      T value;
-//      source & value;
-//      x = std::move(value);
-//      break;
-//    }
-//    case 2: {
-//      error err;
-//      source & err;
-//      x = std::move(err);
-//      break;
-//    }
-//    default:
-//      x = none;
-//  }
-//}
 
 } // namespace vast
 

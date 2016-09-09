@@ -8,7 +8,6 @@
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/json.hpp"
 #include "vast/concept/printable/vast/type.hpp"
-#include "vast/concept/serializable/vast/type.hpp"
 
 #define SUITE type
 #include "test.hpp"

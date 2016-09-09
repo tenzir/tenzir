@@ -2,7 +2,6 @@
 #include "vast/bitstream.hpp"
 #include "vast/save.hpp"
 #include "vast/load.hpp"
-#include "vast/concept/serializable/vast/bitmap.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/bitstream.hpp"
 

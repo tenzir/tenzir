@@ -18,12 +18,8 @@ vast::data const& value::data() const {
   return data_;
 }
 
-data::variant_type& expose(value& v) {
-  return expose(v.data_);
-}
-
-data::variant_type const& expose(value const& v) {
-  return expose(v.data_);
+value flatten(value const& v) {
+  return {flatten(v.data()), flatten(v.type())};
 }
 
 bool operator==(value const& lhs, value const& rhs) {
@@ -50,8 +46,12 @@ bool operator>(value const& lhs, value const& rhs) {
   return lhs.data_ > rhs.data_;
 }
 
-value flatten(value const& v) {
-  return {flatten(v.data()), flatten(v.type())};
+data::variant_type& expose(value& v) {
+  return expose(v.data_);
+}
+
+data::variant_type const& expose(value const& v) {
+  return expose(v.data_);
 }
 
 } // namespace vast

@@ -38,9 +38,6 @@ public:
   /// Constructs an event from a value.
   event(value v);
 
-  friend bool operator==(event const& x, event const& y);
-  friend bool operator<(event const& x, event const& y);
-
   /// Sets the event ID.
   /// @param i The new event ID.
   /// @returns `true` iff *i* is in *[1, 2^64-2]*.
@@ -57,6 +54,14 @@ public:
   /// Retrieves the event timestamp.
   /// @returns The event timestamp.
   time::point timestamp() const;
+
+  friend bool operator==(event const& x, event const& y);
+  friend bool operator<(event const& x, event const& y);
+
+  template <class Inspector>
+  friend auto inspect(Inspector&f, event& e) {
+    return f(e.id_, e.timestamp_);
+  }
 
 private:
   event_id id_ = invalid_event_id;

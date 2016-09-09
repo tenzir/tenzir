@@ -223,6 +223,11 @@ public:
     return map_.clear();
   }
 
+  template <class Inspector>
+  friend auto inspect(Inspector& f, range_map& m) {
+    return f(m.map_);
+  }
+
 private:
   template <typename Iterator>
   static auto& left(Iterator i) {

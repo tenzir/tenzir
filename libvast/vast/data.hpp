@@ -270,6 +270,11 @@ public:
   friend bool operator==(data const& lhs, data const& rhs);
   friend bool operator<(data const& lhs, data const& rhs);
 
+  template <class Inspector>
+  friend auto inspect(Inspector&f, data& d) {
+    return f(d.data_);
+  }
+
   friend variant_type& expose(data& d);
   friend variant_type const& expose(data const& d);
 

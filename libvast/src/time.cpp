@@ -35,6 +35,38 @@ duration duration::max() {
   return duration_type::max();
 }
 
+duration::rep duration::count() const {
+  return duration_.count();
+}
+
+duration::rep duration::minutes() const {
+  return std::chrono::duration_cast<std::chrono::minutes>(duration_).count();
+}
+
+duration::rep duration::seconds() const {
+  return std::chrono::duration_cast<std::chrono::seconds>(duration_).count();
+}
+
+double duration::double_seconds() const {
+  return std::chrono::duration_cast<std::chrono::duration<double>>(duration_)
+    .count();
+}
+
+duration::rep duration::milliseconds() const {
+  return std::chrono::duration_cast<std::chrono::milliseconds>(duration_)
+    .count();
+}
+
+duration::rep duration::microseconds() const {
+  return std::chrono::duration_cast<std::chrono::microseconds>(duration_)
+    .count();
+}
+
+duration::rep duration::nanoseconds() const {
+  return std::chrono::duration_cast<std::chrono::nanoseconds>(duration_)
+    .count();
+}
+
 duration duration::operator+() const {
   return *this;
 }
@@ -97,38 +129,6 @@ bool operator<(duration const& x, duration const& y) {
   return x.duration_ < y.duration_;
 }
 
-duration::rep duration::count() const {
-  return duration_.count();
-}
-
-duration::rep duration::minutes() const {
-  return std::chrono::duration_cast<std::chrono::minutes>(duration_).count();
-}
-
-duration::rep duration::seconds() const {
-  return std::chrono::duration_cast<std::chrono::seconds>(duration_).count();
-}
-
-double duration::double_seconds() const {
-  return std::chrono::duration_cast<std::chrono::duration<double>>(duration_)
-    .count();
-}
-
-duration::rep duration::milliseconds() const {
-  return std::chrono::duration_cast<std::chrono::milliseconds>(duration_)
-    .count();
-}
-
-duration::rep duration::microseconds() const {
-  return std::chrono::duration_cast<std::chrono::microseconds>(duration_)
-    .count();
-}
-
-duration::rep duration::nanoseconds() const {
-  return std::chrono::duration_cast<std::chrono::nanoseconds>(duration_)
-    .count();
-}
-
 point point::from_tm(std::tm const& tm) {
   // Because std::mktime by default uses localtime, we have to make sure to set
   // the timezone before the first call to it.
@@ -183,6 +183,33 @@ point point::utc(int year, int month, int day, int hour, int min, int sec) {
 point::point(duration d) : time_point_(d.duration_) {
 }
 
+point point::delta(int secs, int mins, int hours, int days, int months,
+                   int years) {
+  auto tm = to<std::tm>(*this);
+  if (!tm)
+    return {};
+  if (secs)
+    tm->tm_sec += secs;
+  if (mins)
+    tm->tm_min += mins;
+  if (hours)
+    tm->tm_hour += hours;
+  if (days)
+    tm->tm_mday += days;
+  // We assume that when someone says "three month from today," it means the
+  // same day just the month number advanced by three.
+  if (months)
+    tm->tm_mday += days_from(tm->tm_year, tm->tm_mon, months);
+  if (years)
+    tm->tm_mday += days_from(tm->tm_year, tm->tm_mon, years * 12);
+  propagate(*tm);
+  return from_tm(*tm);
+}
+
+duration point::time_since_epoch() const {
+  return duration{time_point_.time_since_epoch()};
+}
+
 point& point::operator+=(duration const& rhs) {
   time_point_ += rhs.duration_;
   return *this;
@@ -215,33 +242,6 @@ bool operator==(point const& x, point const& y) {
 
 bool operator<(point const& x, point const& y) {
   return x.time_point_ < y.time_point_;
-}
-
-point point::delta(int secs, int mins, int hours, int days, int months,
-                   int years) {
-  auto tm = to<std::tm>(*this);
-  if (!tm)
-    return {};
-  if (secs)
-    tm->tm_sec += secs;
-  if (mins)
-    tm->tm_min += mins;
-  if (hours)
-    tm->tm_hour += hours;
-  if (days)
-    tm->tm_mday += days;
-  // We assume that when someone says "three month from today," it means the
-  // same day just the month number advanced by three.
-  if (months)
-    tm->tm_mday += days_from(tm->tm_year, tm->tm_mon, months);
-  if (years)
-    tm->tm_mday += days_from(tm->tm_year, tm->tm_mon, years * 12);
-  propagate(*tm);
-  return from_tm(*tm);
-}
-
-duration point::time_since_epoch() const {
-  return duration{time_point_.time_since_epoch()};
 }
 
 namespace {

@@ -1,6 +1,7 @@
 #include "vast/error.hpp"
 #include "vast/type.hpp"
 #include "vast/value.hpp"
+
 #include "vast/util/assert.hpp"
 
 namespace vast {
@@ -44,7 +45,7 @@ type::attribute const* type::base::find_attribute(attribute::key_type k) const {
   return i == attributes_.end() ? nullptr : &*i;
 }
 
-type::hash_type::digest_type type::base::digest() const {
+type::hash_type::result_type type::base::digest() const {
   return digest_;
 }
 
@@ -54,6 +55,12 @@ type::base::base(std::vector<attribute> a)
     update_digest(&a.key, sizeof(a.key));
     update_digest(a.value.data(), a.value.size());
   }
+}
+
+void type::base::update_digest(void const* bytes, size_t length) {
+  hash_type h{digest_};
+  h(bytes, length);
+  digest_ = static_cast<hash_type::result_type>(h);
 }
 
 namespace {
@@ -143,8 +150,7 @@ struct name_getter {
 
 struct digester {
   auto operator()(none) const {
-    static auto const nil_digest = type::hash_type::digest(nil);
-    return nil_digest;
+    return type::hash_type::result_type{0};
   }
 
   template <typename T>
@@ -199,7 +205,7 @@ type::attribute const* type::find_attribute(attribute::key_type key) const {
   return visit(attribute_finder{key}, *info_);
 }
 
-type::hash_type::digest_type type::digest() const {
+type::hash_type::result_type type::digest() const {
   return visit(digester{}, *info_);
 }
 

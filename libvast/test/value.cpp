@@ -9,7 +9,6 @@
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/json.hpp"
 #include "vast/concept/printable/vast/value.hpp"
-#include "vast/concept/serializable/vast/value.hpp"
 
 #define SUITE value
 #include "test.hpp"

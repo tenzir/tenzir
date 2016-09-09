@@ -69,6 +69,11 @@ struct bitmap_index_model
     return x.bmi_ == y.bmi_;
   }
 
+  template <class Inspector>
+  friend auto inspect(Inspector& f, bitmap_index_model& model) {
+    return f(model.bmi_);
+  }
+
   virtual std::unique_ptr<bmi_concept> copy() const final {
     return std::make_unique<bitmap_index_model>(*this);
   }
@@ -156,6 +161,11 @@ public:
     return x.concept_->equals(*y.concept_);
   }
 
+  template <class Inspector>
+  friend auto inspect(Inspector& f, bitmap_index_concept& concept) {
+    return f(concept.concept_);
+  }
+
 private:
   std::unique_ptr<detail::bitmap_index_concept<Bitstream>> concept_;
 };
@@ -189,6 +199,11 @@ public:
                          sequence_bitmap_index const& y) {
     return x.elem_type_ == y.elem_type_ && x.bmis_ == y.bmis_
            && x.size_ == y.size_;
+  }
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, sequence_bitmap_index& bmi) {
+    return f(static_cast<super&>(bmi), bmi.elem_type_, bmi.bmis_, bmi.size_);
   }
 
 private:

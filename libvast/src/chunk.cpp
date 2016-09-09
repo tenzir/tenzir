@@ -2,11 +2,6 @@
 #include "vast/chunk.hpp"
 #include "vast/error.hpp"
 #include "vast/event.hpp"
-#include "vast/concept/serializable/state.hpp"
-#include "vast/concept/serializable/std/chrono.hpp"
-#include "vast/concept/serializable/vast/data.hpp"
-#include "vast/concept/serializable/vast/type.hpp"
-#include "vast/concept/state/event.hpp"
 #include "vast/util/assert.hpp"
 
 namespace vast {
@@ -116,16 +111,6 @@ chunk::chunk(compression method)
   : compression_method_{method} {
 }
 
-bool operator==(chunk const& x, chunk const& y) {
-  return x.events_ == y.events_
-      && x.first_ == y.first_
-      && x.last_ == y.last_
-      && x.ids_ == y.ids_
-      && x.schema_ == y.schema_
-      && x.compression_method_ == y.compression_method_
-      && x.buffer_ == y.buffer_;
-}
-
 bool chunk::ids(default_bitstream ids) {
   if (ids_.count() != events_)
     return false;
@@ -161,6 +146,16 @@ uint64_t chunk::events() const {
 event_id chunk::base() const {
   auto i = ids_.find_first();
   return i == default_bitstream::npos ? invalid_event_id : i;
+}
+
+bool operator==(chunk const& x, chunk const& y) {
+  return x.events_ == y.events_
+      && x.first_ == y.first_
+      && x.last_ == y.last_
+      && x.ids_ == y.ids_
+      && x.schema_ == y.schema_
+      && x.compression_method_ == y.compression_method_
+      && x.buffer_ == y.buffer_;
 }
 
 } // namespace vast

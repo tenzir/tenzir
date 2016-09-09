@@ -1,45 +1,58 @@
-#include "vast/util/hash/crc.hpp"
-#include "vast/util/hash/murmur.hpp"
-#include "vast/util/hash/xxhash.hpp"
+#include "vast/concept/hashable/uhash.hpp"
+#include "vast/detail/hash/crc.hpp"
+#include "vast/detail/hash/xxhash.hpp"
 
-#define SUITE util
+#define SUITE hash
 #include "test.hpp"
 
 using namespace vast;
-using namespace vast::util;
-
-TEST(murmur hash) {
-  CHECK(murmur3<32>::digest(42) == 3160117731);
-}
-
-TEST(xxhash) {
-  CHECK(xxhash64::digest("42", 42) == 7873697032674743835); // includes NUL
-  xxhash64 xxh64;
-  xxh64.add("foo", 3);
-  CHECK(xxh64.get() == 3728699739546630719ul);
-  xxh64.add("bar", 3);
-  CHECK(xxh64.get() == 11721187498075204345ul);
-  xxh64.add("baz", 3);
-  CHECK(xxh64.get() == 6505385152087097371ul);
-
-  CHECK(xxhash32::digest(42) == 1161967057);
-  xxhash32 xxh32;
-  xxh32.add(0);
-  xxh32.add(1);
-  xxh32.add(2);
-  CHECK(xxh32.get() == 964478135);
-}
+using namespace vast::detail;
 
 TEST(crc32) {
-  CHECK(crc32::digest('f') == 1993550816);
-  CHECK(crc32::digest('o') == 252678980);
-  CHECK(crc32::digest_bytes("foo", 3) == 2356372769);
-
+  // one-shot
+  CHECK(uhash<crc32>{}('f') == 1993550816);
+  CHECK(uhash<crc32>{}('o') == 252678980);
+  // incremental
   crc32 crc;
-  crc.add('f');
-  CHECK(crc.get() == 1993550816);
-  crc.add('o');
-  CHECK(crc.get() == 2943590935);
-  crc.add('o');
-  CHECK(crc.get() == 2356372769);
+  crc("foo", 3);
+  CHECK(static_cast<crc32::result_type>(crc) == 2356372769);
+  crc32 foo;
+  hash_append(foo, 'f');
+  CHECK(static_cast<crc32::result_type>(foo) == 1993550816);
+  hash_append(foo, 'o');
+  CHECK(static_cast<crc32::result_type>(foo) == 2943590935);
+  hash_append(foo, 'o');
+  CHECK(static_cast<crc32::result_type>(foo) == 2356372769);
+}
+
+TEST(xxhash32) {
+  // one-shot
+  CHECK(uhash<xxhash32>{}(42) == 1161967057);
+  // incremental
+  xxhash32 xxh32;
+  hash_append(xxh32, 0);
+  hash_append(xxh32, 1);
+  hash_append(xxh32, 2);
+  CHECK(static_cast<size_t>(xxh32) == 964478135);
+}
+
+TEST(xxhash64) {
+  // one-shot
+  CHECK(uhash<xxhash64>{42}("42") == 7873697032674743835); // includes NUL
+  // incremental
+  xxhash64 xxh64;
+  xxh64("foo", 3);
+  CHECK(static_cast<size_t>(xxh64) == 3728699739546630719ul);
+  xxh64("bar", 3);
+  CHECK(static_cast<size_t>(xxh64) == 11721187498075204345ul);
+  xxh64("baz", 3);
+  CHECK(static_cast<size_t>(xxh64) == 6505385152087097371ul);
+}
+
+TEST(xxhash zero bytes) {
+  // Should not segfault or trigger assertions.
+  xxhash32 xxh32;
+  xxh32(nullptr, 0);
+  xxhash64 xxh64;
+  xxh64(nullptr, 0);
 }

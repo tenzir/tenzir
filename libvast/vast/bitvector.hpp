@@ -303,26 +303,6 @@ public:
   bitvector& operator=(bitvector const&) = default;
   bitvector& operator=(bitvector&&) = default;
 
-  friend bool operator==(bitvector const& x, bitvector const& y);
-  friend bool operator<(bitvector const& x, bitvector const& y);
-
-  //
-  // Bitwise operations
-  //
-  bitvector operator~() const;
-  bitvector operator<<(size_type n) const;
-  bitvector operator>>(size_type n) const;
-  bitvector& operator<<=(size_type n);
-  bitvector& operator>>=(size_type n);
-  bitvector& operator&=(bitvector const& other);
-  bitvector& operator|=(bitvector const& other);
-  bitvector& operator^=(bitvector const& other);
-  bitvector& operator-=(bitvector const& other);
-  friend bitvector operator&(bitvector const& x, bitvector const& y);
-  friend bitvector operator|(bitvector const& x, bitvector const& y);
-  friend bitvector operator^(bitvector const& x, bitvector const& y);
-  friend bitvector operator-(bitvector const& x, bitvector const& y);
-
   //
   // Basic operations
   //
@@ -507,6 +487,35 @@ public:
   /// @returns The last block.
   /// @pre *! empty()*
   block_type& last_block();
+
+  //
+  // Relational operators
+  //
+
+  friend bool operator==(bitvector const& x, bitvector const& y);
+  friend bool operator<(bitvector const& x, bitvector const& y);
+
+  //
+  // Bitwise operations
+  //
+  bitvector operator~() const;
+  bitvector operator<<(size_type n) const;
+  bitvector operator>>(size_type n) const;
+  bitvector& operator<<=(size_type n);
+  bitvector& operator>>=(size_type n);
+  bitvector& operator&=(bitvector const& other);
+  bitvector& operator|=(bitvector const& other);
+  bitvector& operator^=(bitvector const& other);
+  bitvector& operator-=(bitvector const& other);
+  friend bitvector operator&(bitvector const& x, bitvector const& y);
+  friend bitvector operator|(bitvector const& x, bitvector const& y);
+  friend bitvector operator^(bitvector const& x, bitvector const& y);
+  friend bitvector operator-(bitvector const& x, bitvector const& y);
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, bitvector& b) {
+    return f(b.bits_, b.num_bits_);
+  }
 
 private:
   // If the number of bits in the vector are not not a multiple of

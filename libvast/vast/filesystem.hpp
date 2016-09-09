@@ -131,6 +131,11 @@ public:
   friend bool operator==(path const& x, path const& y);
   friend bool operator<(path const& x, path const& y);
 
+  template <class Inspector>
+  friend auto inspect(Inspector&f, path& p) {
+    return f(p.str_);
+  }
+
 private:
   std::string str_;
 };

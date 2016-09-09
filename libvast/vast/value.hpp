@@ -63,13 +63,6 @@ public:
   value(vast::data x) : data_{std::move(x)} {
   }
 
-  friend bool operator==(value const& lhs, value const& rhs);
-  friend bool operator!=(value const& lhs, value const& rhs);
-  friend bool operator<(value const& lhs, value const& rhs);
-  friend bool operator<=(value const& lhs, value const& rhs);
-  friend bool operator>=(value const& lhs, value const& rhs);
-  friend bool operator>(value const& lhs, value const& rhs);
-
   /// Sets the type of the value.
   /// @param t The new type of the value.
   /// @returns `true` if the value had no data or if the type check succeeded.
@@ -82,6 +75,18 @@ public:
   /// Retrieves the data of the value.
   /// @returns The value data.
   vast::data const& data() const;
+
+  friend bool operator==(value const& lhs, value const& rhs);
+  friend bool operator!=(value const& lhs, value const& rhs);
+  friend bool operator<(value const& lhs, value const& rhs);
+  friend bool operator<=(value const& lhs, value const& rhs);
+  friend bool operator>=(value const& lhs, value const& rhs);
+  friend bool operator>(value const& lhs, value const& rhs);
+
+  template <class Inspector>
+  friend auto inspect(Inspector&f, value& v) {
+    return f(v.data_, v.type_);
+  }
 
   friend vast::data::variant_type& expose(value& v);
   friend vast::data::variant_type const& expose(value const& v);

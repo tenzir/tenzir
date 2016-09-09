@@ -36,9 +36,6 @@ public:
   ///              is stored in.
   address(uint32_t const* bytes, family fam, byte_order order);
 
-  friend bool operator==(address const& x, address const& y);
-  friend bool operator<(address const& x, address const& y);
-
   /// Determines whether the address is IPv4.
   /// @returns @c true iff the address is an IPv4 address.
   bool is_v4() const;
@@ -91,6 +88,14 @@ public:
   /// Retrieves the underlying byte array.
   /// @returns A reference to an array of 16 bytes.
   std::array<uint8_t, 16> const& data() const;
+
+  friend bool operator==(address const& x, address const& y);
+  friend bool operator<(address const& x, address const& y);
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, address& a) {
+    return f(a.bytes_);
+  }
 
 private:
   std::array<uint8_t, 16> bytes_;

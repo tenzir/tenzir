@@ -145,6 +145,9 @@ Classes
 
 - Friends first: put friend declaration immediate after opening the class.
 
+- Put declarations (and/or definitions) of assignment operators right after the
+  contrstructors, and all other operators at the bottom of the public section.
+
 - Use structs for state-less classes or when the API is the struct's state.
 
 - Prefer types with value semantics over reference semantics.

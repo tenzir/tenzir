@@ -266,6 +266,11 @@ public:
     return r;
   }
 
+  template <class Inspector>
+  friend auto inspect(Inspector&f, flat_set& fs) {
+    return f(fs.v_);
+  }
+
 private:
   vector_type v_;
 };

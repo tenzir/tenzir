@@ -8,6 +8,11 @@
 #include "vast/maybe.hpp"
 #include "vast/util/operators.hpp"
 
+namespace caf {
+class serializer;
+class deserializer;
+} // namespace caf
+
 namespace vast {
 
 /// A collection of types.
@@ -52,6 +57,9 @@ public:
 private:
   std::vector<type> types_;
 };
+
+void serialize(caf::serializer& sink, schema const& sch);
+void serialize(caf::deserializer& source, schema& sch);
 
 } // namespace vast
 

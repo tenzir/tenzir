@@ -1,7 +1,6 @@
 #include "vast/util/assert.hpp"
 #include "vast/util/flat_set.hpp"
 
-#include "vast/concept/state/time.hpp"
 #include "vast/concept/serializable/vast/data.hpp"
 #include "vast/concept/serializable/vast/type.hpp"
 #include "vast/concept/serializable/vast/vector_event.hpp"

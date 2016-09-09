@@ -22,7 +22,6 @@ set(libvast_sources
   src/event.cpp
   src/filesystem.cpp
   src/http.cpp
-  src/individual.cpp
   src/logger.cpp
   src/operator.cpp
   src/pattern.cpp
@@ -65,9 +64,9 @@ set(libvast_sources
   src/concept/convertible/vast/time.cpp
   src/concept/convertible/vast/type.cpp
   src/concept/convertible/vast/value.cpp
-  src/concept/serializable/vast/expression.cpp
-  src/concept/serializable/vast/vector_event.cpp
   src/detail/adjust_resource_consumption.cpp
+  src/detail/hash/crc.cpp
+  src/detail/hash/xxhash.cpp
   src/expr/evaluator.cpp
   src/expr/normalize.cpp
   src/expr/predicatizer.cpp
@@ -83,8 +82,6 @@ set(libvast_sources
   src/util/system.cpp
   src/util/terminal.cpp
   src/util/detail/posix.cpp
-  src/util/hash/crc.cpp
-  src/util/hash/murmur.cpp
   src/util/hash/xxhash.cpp
 )
 

@@ -14,11 +14,13 @@
 #include "vast/offset.hpp"
 #include "vast/operator.hpp"
 #include "vast/time.hpp"
+
+#include "vast/detail/hash/xxhash.hpp"
+
 #include "vast/util/intrusive.hpp"
 #include "vast/util/operators.hpp"
 #include "vast/util/range.hpp"
 #include "vast/util/variant.hpp"
-#include "vast/util/hash/xxhash.hpp"
 #include "vast/util/stack/vector.hpp"
 
 namespace vast {
@@ -60,11 +62,16 @@ public:
 
     friend bool operator==(attribute const& lhs, attribute const& rhs);
 
+    template <class Inspector>
+    friend auto inspect(Inspector& f, attribute& a) {
+      return f(a);
+    }
+
     key_type key;
     std::string value;
   };
 
-  using hash_type = util::xxhash64;
+  using hash_type = detail::xxhash64;
 
   // The base class for type classes.
   class base : util::totally_ordered<base> {
@@ -83,20 +90,22 @@ public:
 
     attribute const* find_attribute(attribute::key_type k) const;
 
-    hash_type::digest_type digest() const;
+    hash_type::result_type digest() const;
+
+    template <class Inspector>
+    friend auto inspect(Inspector& f, base& b) {
+      return f(b.name_, b.attributes_, b.digest_);
+    }
 
   protected:
     base(std::vector<attribute> a = {});
 
-    template <typename... Ts>
-    void update_digest(void const* bytes, size_t length) {
-      digest_ = hash_type::digest_bytes(bytes, length, digest_);
-    }
+    void update_digest(void const* bytes, size_t length);
 
   private:
     std::string name_;
     std::vector<attribute> attributes_;
-    hash_type::digest_type digest_ = 0;
+    hash_type::result_type digest_ = 0;
   };
 
   class enumeration;
@@ -112,6 +121,11 @@ public:
     name(std::vector<attribute> a = {})                                        \
       : base(std::move(a)) {                                                   \
       update_digest(#name, sizeof(#name) - 1);                                 \
+    }                                                                          \
+                                                                               \
+    template <class Inspector>                                                 \
+    friend auto inspect(Inspector& f, name& n) {                               \
+      return f(static_cast<base&>(n));                                         \
     }                                                                          \
   };
 
@@ -333,6 +347,11 @@ public:
 
     std::vector<std::string> const& fields() const;
 
+    template <class Inspector>
+    friend auto inspect(Inspector& f, enumeration& e) {
+      return f(static_cast<base&>(e), e.fields_);
+    }
+
   private:
     enumeration() = default;
 
@@ -399,7 +418,7 @@ public:
 
   /// Retrieves the hash digest of this type.
   /// @returns The hash digest of this type.
-  hash_type::digest_type digest() const;
+  hash_type::result_type digest() const;
 
   /// Retrieves the type's attributes.
   std::vector<attribute> const& attributes() const;
@@ -466,6 +485,9 @@ public:
   /// @returns `true` iff the type is a recursive type.
   bool recursive() const;
 
+  template <class Inspector>
+  friend auto inspect(Inspector& f, type& t);
+
 private:
   friend info& expose(type& t);
   friend info const& expose(type const& t);
@@ -484,6 +506,11 @@ public:
 
   type const& elem() const;
 
+  template <class Inspector>
+  friend auto inspect(Inspector& f, vector& v) {
+    return f(static_cast<type::base&>(v), v.elem_);
+  }
+
 private:
   vector() = default;
 
@@ -500,6 +527,11 @@ public:
   set(type t, std::vector<attribute> a = {});
 
   type const& elem() const;
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, set& s) {
+    return f(static_cast<type::base&>(s), s.elem_);
+  }
 
 private:
   set() = default;
@@ -519,6 +551,11 @@ public:
   type const& key() const;
 
   type const& value() const;
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, table& t) {
+    return f(static_cast<type::base&>(t), t.key_, t.value_);
+  }
 
 private:
   table() = default;
@@ -540,6 +577,11 @@ public:
     field(std::string n = {}, type t = {});
 
     friend bool operator==(field const& lhs, field const& rhs);
+
+    template <class Inspector>
+    friend auto inspect(Inspector& f, field& fld) {
+      return f(fld.name, fld.type);
+    }
 
     std::string name;
     vast::type type;
@@ -613,6 +655,11 @@ public:
   /// @returns The type at offset *o* or `nullptr` if *o* doesn't resolve.
   type const* at(offset const& o) const;
 
+  template <class Inspector>
+  friend auto inspect(Inspector& f, record& r) {
+    return f(static_cast<type::base&>(r), r.fields_);
+  }
+
 private:
   record() = default;
 
@@ -646,6 +693,11 @@ public:
 
   vast::type const& type() const;
 
+  template <class Inspector>
+  friend auto inspect(Inspector& f, alias& a) {
+    return f(static_cast<type::base&>(a), a.type_);
+  }
+
 private:
   alias() = default;
 
@@ -669,6 +721,31 @@ struct type::intrusive_info : util::intrusive_base<intrusive_info>, type::info {
     return static_cast<type::info const&>(i);
   }
 };
+
+// FIXME: monadically chain return values of inspector invocations.
+template <class Inspector>
+auto inspect(Inspector& f, type& t) {
+  auto dispatch = [&] { visit([&](auto& x) { f(x); }); };
+  auto save = [&] {
+    auto tag = which(t);
+    f(tag);
+    if (tag != type::tag::none)
+      dispatch();
+    return caf::none;
+  };
+  auto load = [&] {
+    type::tag tag;
+    f(tag);
+    if (tag != type::tag::none) {
+      t = type{util::make_intrusive<type::intrusive_info>(
+               type::info::make(tag))};
+      dispatch();
+    }
+    return caf::none;
+  };
+  return f(caf::meta::save_callback(save),
+           caf::meta::load_callback(load));
+}
 
 /// Checks whether two types are *congruent* to each other, i.e., whether they
 /// are *representationally equal*.
