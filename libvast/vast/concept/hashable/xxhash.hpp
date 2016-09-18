@@ -1,5 +1,5 @@
-#ifndef VAST_DETAIL_HASH_XXHASH_HPP
-#define VAST_DETAIL_HASH_XXHASH_HPP
+#ifndef VAST_CONCEPT_HASHABLE_XXHASH_HPP
+#define VAST_CONCEPT_HASHABLE_XXHASH_HPP
 
 #include <cstddef>
 #include <type_traits>
@@ -7,13 +7,12 @@
 #include "vast/detail/endian.hpp"
 
 namespace vast {
-namespace detail {
 
 struct xxhash_base {
   using result_type = size_t;
 
   // If XXH_FORCE_NATIVE_FORMAT == 1 in xxhash.c, then use host_endian.
-  static constexpr endianness endian = little_endian;
+  static constexpr detail::endianness endian = detail::little_endian;
 };
 
 /// The 32-bit version of xxHash.
@@ -59,7 +58,6 @@ private:
 /// The [xxhash](https://github.com/Cyan4973/xxHash) algorithm.
 using xxhash = std::conditional_t<sizeof(void*) == 4, xxhash32, xxhash64>;
 
-} // namespace detail
 } // namespace vast
 
 #endif

@@ -1,10 +1,9 @@
 #include "crc/crc32.h"
 
+#include "vast/concept/hashable/crc.hpp"
 #include "vast/detail/assert.hpp"
-#include "vast/detail/hash/crc.hpp"
 
 namespace vast {
-namespace detail {
 
 crc32::crc32(uint32_t seed) : digest_{seed} { }
 
@@ -17,5 +16,4 @@ crc32::operator result_type() const {
   return digest_;
 }
 
-} // namespace detail
 } // namespace vast

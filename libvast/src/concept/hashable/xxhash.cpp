@@ -1,10 +1,9 @@
 #include "xxhash/xxhash.h"
 
+#include "vast/concept/hashable/xxhash.hpp"
 #include "vast/detail/assert.hpp"
-#include "vast/detail/hash/xxhash.hpp"
 
 namespace vast {
-namespace detail {
 
 xxhash32::xxhash32(result_type seed) noexcept {
   static_assert(sizeof(xxhash32::state_type) == sizeof(XXH32_state_t)
@@ -46,5 +45,4 @@ xxhash64::operator result_type() noexcept {
   return ::XXH64_digest(state);
 }
 
-} // namespace detail
 } // namespace vast

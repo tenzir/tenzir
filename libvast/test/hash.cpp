@@ -1,12 +1,11 @@
+#include "vast/concept/hashable/crc.hpp"
 #include "vast/concept/hashable/uhash.hpp"
-#include "vast/detail/hash/crc.hpp"
-#include "vast/detail/hash/xxhash.hpp"
+#include "vast/concept/hashable/xxhash.hpp"
 
 #define SUITE hash
 #include "test.hpp"
 
 using namespace vast;
-using namespace vast::detail;
 
 namespace {
 

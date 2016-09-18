@@ -6,12 +6,11 @@
 #include "vast/detail/endian.hpp"
 
 namespace vast {
-namespace detail {
 
 /// The [CRC32](http://en.wikipedia.org/wiki/Cyclic_redundancy_check) algorithm.
 class crc32 {
 public:
-  static constexpr endianness endian = host_endian;
+  static constexpr detail::endianness endian = detail::host_endian;
   using result_type = uint32_t;
 
   crc32(uint32_t seed = 0);
@@ -29,7 +28,6 @@ private:
   result_type digest_;
 };
 
-} // namespace detail
 } // namespace vast
 
 #endif
