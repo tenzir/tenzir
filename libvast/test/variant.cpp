@@ -1,11 +1,13 @@
 #include "vast/load.hpp"
 #include "vast/save.hpp"
-#include "vast/util/variant.hpp"
+
+#include "vast/detail/variant.hpp"
 
 #define SUITE variant
 #include "test.hpp"
 
 using namespace vast;
+using namespace vast::detail;
 
 struct stateful {
   template <typename T>
@@ -47,25 +49,22 @@ struct ternary {
   }
 };
 
-using triple = util::variant<int, double, std::string>;
+using triple = variant<int, double, std::string>;
 
 namespace {
 
-triple t0{42};
-triple t1{4.2};
-triple t2{"42"};
+struct fixture {
+  triple t0{42};
+  triple t1{4.2};
+  triple t2{"42"};
+};
 
 } // namespace <anonymous>
 
-TEST(factory construction) {
-  using pair = util::variant<double, int>;
-
-  CHECK(get<double>(pair::make(0)));
-  CHECK(get<int>(pair::make(1)));
-}
+FIXTURE_SCOPE(variant_tests, fixture)
 
 TEST(operator==) {
-  using pair = util::variant<double, int>;
+  using pair = variant<double, int>;
 
   pair p0{42};
   pair p1{42.0};
@@ -93,30 +92,30 @@ TEST(operator==) {
 }
 
 TEST(positional introspection) {
-  CHECK(t0.which() == 0);
-  CHECK(t1.which() == 1);
-  CHECK(t2.which() == 2);
+  CHECK(t0.index() == 0);
+  CHECK(t1.index() == 1);
+  CHECK(t2.index() == 2);
 }
 
 TEST(type - based access) {
-  REQUIRE(is<int>(t0));
-  CHECK(*get<int>(t0) == 42);
+  REQUIRE(get_if<int>(t0));
+  CHECK(get<int>(t0) == 42);
 
-  REQUIRE(is<double>(t1));
-  CHECK(*get<double>(t1) == 4.2);
+  REQUIRE(get_if<double>(t1));
+  CHECK(get<double>(t1) == 4.2);
 
-  REQUIRE(is<std::string>(t2));
-  CHECK(*get<std::string>(t2) == "42");
+  REQUIRE(get_if<std::string>(t2));
+  CHECK(get<std::string>(t2) == "42");
 }
 
 TEST(assignment) {
-  *get<int>(t0) = 1337;
-  *get<double>(t1) = 1.337;
+  get<int>(t0) = 1337;
+  get<double>(t1) = 1.337;
   std::string leet{"1337"};
-  *get<std::string>(t2) = std::move(leet);
-  CHECK(*get<int>(t0) == 1337);
-  CHECK(*get<double>(t1) == 1.337);
-  CHECK(*get<std::string>(t2) == "1337");
+  get<std::string>(t2) = std::move(leet);
+  CHECK(get<int>(t0) == 1337);
+  CHECK(get<double>(t1) == 1.337);
+  CHECK(get<std::string>(t2) == "1337");
 }
 
 TEST(unary visitation) {
@@ -124,7 +123,7 @@ TEST(unary visitation) {
   visit(v, t1);          // lvalue
   visit(stateful{}, t1); // rvalue
   visit(doppler{}, t1);
-  CHECK(*get<double>(t1) == 1.337 * 2);
+  CHECK_EQUAL(get<double>(t1), 8.4);
 }
 
 TEST(binary visitation) {
@@ -135,128 +134,38 @@ TEST(binary visitation) {
 }
 
 TEST(ternary visitation) {
-  using trio = util::variant<bool, double, int>;
+  using trio = variant<bool, double, int>;
   CHECK(visit(ternary{}, trio{true}, trio{4.2}, trio{42}) == 4.2);
   CHECK(visit(ternary{}, trio{false}, trio{4.2}, trio{1337}) == 1337.0);
 }
 
 TEST(generic lambda visitation) {
-  using pair = util::variant<double, int>;
+  using pair = variant<double, int>;
   auto fourty_two = pair{42};
   auto r = visit([](auto x) -> int { return x + 42; }, fourty_two);
-  CHECK(r == 84);
+  CHECK_EQUAL(r, 84);
 }
 
 TEST(delayed visitation) {
-  std::vector<util::variant<double, int>> doubles;
-
+  std::vector<variant<double, int>> doubles;
   doubles.emplace_back(1337);
   doubles.emplace_back(4.2);
   doubles.emplace_back(42);
-
   stateful s;
   std::for_each(doubles.begin(), doubles.end(), visit(s));
-  CHECK(s.state == 3);
-
+  CHECK_EQUAL(s.state, 3);
   std::for_each(doubles.begin(), doubles.end(), visit(doppler{}));
-  CHECK(*get<int>(doubles[2]) == 84);
-}
-
-namespace {
-
-struct reference_returner {
-  template <typename T>
-  double const& operator()(T const&) const {
-    static constexpr double nada = 0.0;
-    return nada;
-  }
-
-  double const& operator()(double const& d) const {
-    return d;
-  }
-};
-
-} // namespace <anonymous>
-
-TEST(visitor with reference as return value) {
-  util::variant<double, int> v = 4.2;
-  reference_returner r;
-  CHECK(std::is_same<decltype(r(42)), double const&>::value);
-  CHECK(!std::is_same<decltype(r(42)), double>::value);
-  CHECK_FAIL(std::is_same<decltype(visit(r, v)), double const&>::value);
-  CHECK_FAIL(!std::is_same<decltype(visit(r, v)), double>::value);
-}
-
-namespace {
-
-// Discriminator unions must begin at 0 and increment sequentially.
-enum class hell : int { devil = 0, diablo = 1 };
-
-} // namespace <anonymous>
-
-TEST(custom tag) {
-  using custom_variant = util::basic_variant<hell, int, std::string>;
-  custom_variant v(42);
-  CHECK(v.which() == hell::devil);
+  CHECK_EQUAL(get<int>(doubles[2]), 84);
 }
 
 TEST(variant serialization) {
   std::vector<char> buf;
-  util::variant<bool, int> v, u;
+  variant<bool, int> v, u;
   v = 42;
   save(buf, v);
   load(buf, u);
-  REQUIRE(is<int>(u));
-  CHECK_EQUAL(*get<int>(u), 42);
+  REQUIRE(get_if<int>(u));
+  CHECK_EQUAL(get<int>(u), 42);
 }
 
-namespace {
-
-// A type containing a variant and modeling the Variant concept.
-class concept {
-public:
-  concept() = default;
-
-  template <typename T>
-  concept(T&& x)
-    : value_(std::forward<T>(x)) {
-  }
-
-  using value = util::variant<int, bool>;
-
-protected:
-  value value_;
-
-  friend value const& expose(concept const& w) {
-    return w.value_;
-  }
-};
-
-} // namespace <anonymous>
-
-TEST(concept) {
-  concept c;
-
-  CHECK(which(c) == 0);
-  REQUIRE(is<int>(c));
-  CHECK(*get<int>(c) == 0);
-
-  auto r = visit([](auto x) -> bool { return !!x; }, c);
-  CHECK(!r);
-}
-
-static_assert(
-  std::is_same<
-    util::make_variant_over<util::type_list<char, int, float>>,
-    util::variant<char, int, float>
-  >{},
-  "make_variant_over()"
-);
-
-static_assert(
-  std::is_same<
-    util::make_basic_variant_over<int, util::type_list<char, float>>,
-    util::basic_variant<int, char, float>
-  >{},
-  "make_basic_variant_over()"
-);
+FIXTURE_SCOPE_END()
