@@ -11,6 +11,8 @@
 #include <vector>
 #include <type_traits>
 
+#include <caf/detail/type_traits.hpp>
+
 #include "vast/detail/endian.hpp"
 #include "vast/detail/type_traits.hpp"
 
@@ -282,6 +284,29 @@ void hash_append(Hasher& h, T0 const& x0, T1 const& x1,
                  Ts const& ...xs) noexcept {
   hash_append(h, x0);
   hash_append(h, x1, xs...);
+}
+
+// -- inspectable -------------------------------------------------------------
+
+namespace detail {
+
+template <class Hasher>
+auto make_hash_inspector(Hasher* h) {
+  return [=](auto&&... xs) { hash_append(*h, xs...); };
+}
+
+} // namespace detail
+
+template <class Hasher, class T>
+std::enable_if_t<
+  caf::detail::is_inspectable<
+    decltype(detail::make_hash_inspector(std::declval<Hasher*>())),
+    T
+  >::value
+>
+hash_append(Hasher& h, T const& x) noexcept {
+  auto f = detail::make_hash_inspector(&h);
+  inspect(f, const_cast<T&>(x));
 }
 
 } // namespace vast

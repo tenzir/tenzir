@@ -8,6 +8,35 @@
 using namespace vast;
 using namespace vast::detail;
 
+namespace {
+
+struct foo {
+  int a = 42;
+  int b = 1337;
+};
+
+template <class Inspector>
+auto inspect(Inspector& f, foo& x) {
+  return f(x.a, x.b);
+}
+
+} // namespace <anonymous>
+
+TEST(hashing an inspectable type) {
+  using hasher = xxhash32;
+  // Manual hashing two values...
+  auto a = 42;
+  auto b = 1337;
+  hasher h;
+  hash_append(h, a);
+  hash_append(h, b);
+  auto manual_digest = static_cast<hasher::result_type>(h);
+  // ...and hashing them through the inspection API...
+  auto digest = uhash<hasher>{}(foo{});
+  // ...must yield the same value.
+  CHECK_EQUAL(manual_digest, digest);
+}
+
 TEST(crc32) {
   // one-shot
   CHECK(uhash<crc32>{}('f') == 1993550816);
