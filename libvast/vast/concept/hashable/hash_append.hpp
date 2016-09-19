@@ -12,6 +12,8 @@
 #include <type_traits>
 
 #include <caf/detail/type_traits.hpp>
+#include <caf/meta/save_callback.hpp>
+#include <caf/meta/type_name.hpp>
 
 #include "vast/detail/endian.hpp"
 #include "vast/detail/type_traits.hpp"
@@ -211,7 +213,7 @@ template <class Hasher, class CharT, class Traits, class Alloc>
 std::enable_if_t<detail::is_contiguously_hashable<CharT, Hasher>{}>
 hash_append(Hasher& h,
             std::basic_string<CharT, Traits, Alloc> const& s) noexcept {
-  h(s.data(), s.size()*sizeof(CharT));
+  h(s.data(), s.size() * sizeof(CharT));
   hash_append(h, s.size());
 }
 
@@ -291,21 +293,58 @@ void hash_append(Hasher& h, T0 const& x0, T1 const& x1,
 namespace detail {
 
 template <class Hasher>
-auto make_hash_inspector(Hasher* h) {
-  return [=](auto&&... xs) { hash_append(*h, xs...); };
-}
+struct hash_inspector {
+  using result_type = void;
+
+  static constexpr bool reads_state = true;
+
+  hash_inspector(Hasher& h) : h_{h} {
+  }
+
+  result_type operator()() const noexcept {
+    // End of recursion.
+  }
+
+  template <class... Ts>
+  result_type operator()(caf::meta::type_name_t x, Ts&&... xs) const {
+    // Figure out the actual bytes to hash.
+    auto ptr = x.value;
+    while (*ptr != '\0')
+      ++ptr;
+    h_(x.value, ptr - x.value);
+    (*this)(std::forward<Ts>(xs)...);
+  }
+
+  template <class F, class... Ts>
+  result_type operator()(caf::meta::save_callback_t<F> x, Ts&&... xs) const {
+    x.fun();
+    (*this)(std::forward<Ts>(xs)...);
+  }
+
+  template <class T, class... Ts>
+  std::enable_if_t<caf::meta::is_annotation<T>::value, result_type>
+  operator()(T&&, Ts&&... xs) const noexcept {
+    (*this)(std::forward<Ts>(xs)...);
+  }
+
+  template <class T, class... Ts>
+  std::enable_if_t<!caf::meta::is_annotation<T>::value, result_type>
+  operator()(T&& x, Ts&&... xs) const noexcept {
+    hash_append(h_, x);
+    (*this)(std::forward<Ts>(xs)...);
+  }
+
+  Hasher& h_;
+};
 
 } // namespace detail
 
 template <class Hasher, class T>
 std::enable_if_t<
-  caf::detail::is_inspectable<
-    decltype(detail::make_hash_inspector(std::declval<Hasher*>())),
-    T
-  >::value
+  caf::detail::is_inspectable<detail::hash_inspector<Hasher>, T>::value
 >
 hash_append(Hasher& h, T const& x) noexcept {
-  auto f = detail::make_hash_inspector(&h);
+  detail::hash_inspector<Hasher> f{h};
   inspect(f, const_cast<T&>(x));
 }
 
