@@ -1,13 +1,14 @@
 #include "vast/load.hpp"
 #include "vast/save.hpp"
 
-#include "vast/detail/variant.hpp"
+#include "vast/variant.hpp"
 
 #define SUITE variant
 #include "test.hpp"
 
 using namespace vast;
-using namespace vast::detail;
+
+namespace {
 
 struct stateful {
   template <typename T>
@@ -23,6 +24,15 @@ struct doppler {
   void operator()(T& x) const {
     x += x;
   }
+};
+
+struct referencer {
+  template <typename T>
+  int& operator()(T) const {
+    return *i;
+  }
+
+  int* i;
 };
 
 struct binary {
@@ -50,8 +60,6 @@ struct ternary {
 };
 
 using triple = variant<int, double, std::string>;
-
-namespace {
 
 struct fixture {
   triple t0{42};
@@ -126,6 +134,14 @@ TEST(unary visitation) {
   CHECK_EQUAL(get<double>(t1), 8.4);
 }
 
+TEST(reference returning) {
+  int i = 42;
+  auto& j = visit(referencer{&i}, t0);
+  static_assert(std::is_same<decltype(referencer{nullptr}(42)), int&>::value,
+                "visitation is not able to return a reference");
+  CHECK_EQUAL(i, j); // pro forma
+}
+
 TEST(binary visitation) {
   CHECK(!visit(binary{}, t0, t1));
   CHECK(!visit(binary{}, t1, t0));
@@ -168,4 +184,39 @@ TEST(variant serialization) {
   CHECK_EQUAL(get<int>(u), 42);
 }
 
+namespace {
+
+class variant_ish {
+public:
+  template <class T>
+  variant_ish(T&& x) : impl_{std::forward<T>(x)} {
+  }
+
+  friend auto& expose(variant_ish& v) {
+    return v.impl_;
+  }
+
+private:
+  variant<int, double> impl_;
+};
+
+} // namespace <anonymous>
+
+TEST(variant concept - single dispatch) {
+  auto v = variant_ish{42};
+  auto str = visit([](auto x) { return std::to_string(x); }, v);
+}
+
+TEST(variant concept - double dispatch) {
+  const auto v = variant_ish{42};
+  auto u = variant_ish{-4.2};
+  auto positive = [](auto x, auto y) { return x > 0 && y > 0; };
+  CHECK(!visit(positive, v, u));
+  u = variant_ish{3.14};
+  CHECK(visit(positive, v, u));
+}
+
 FIXTURE_SCOPE_END()
+
+using type = typename make_variant_from<std::tuple<int, double, char>>::type;
+static_assert(std::is_same<type, variant<int, double, char>>{}, "failed");

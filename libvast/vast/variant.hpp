@@ -43,9 +43,8 @@
 #include <caf/detail/scope_guard.hpp>
 
 #include "vast/detail/assert.hpp"
+#include "vast/detail/operators.hpp"
 #include "vast/detail/type_traits.hpp"
-
-#include "vast/util/operators.hpp"
 
 namespace vast {
 namespace detail {
@@ -57,8 +56,8 @@ public:
   }
 
   template <class... Visitables>
-  auto operator()(Visitables&&... vs) {
-    return visit(visitor, std::forward<Visitables>(vs)...);
+  decltype(auto) operator()(Visitables&&... vs) {
+    return apply_visitor(visitor, std::forward<Visitables>(vs)...);
   }
 
 private:
@@ -72,8 +71,8 @@ public:
   }
 
   template <class... Visitables>
-  auto operator()(Visitables&&... vs) {
-    return visit(visitor, std::forward<Visitables>(vs)...);
+  decltype(auto) operator()(Visitables&&... vs) {
+    return apply_visitor(visitor, std::forward<Visitables>(vs)...);
   }
 
 private:
@@ -88,7 +87,7 @@ public:
   }
 
   template <class... Ts>
-  auto operator()(Ts&&... xs) {
+  decltype(auto) operator()(Ts&&... xs) {
     return visitable.template apply(visitor, std::forward<Ts>(xs)...);
   }
 
@@ -97,10 +96,12 @@ private:
   Visitable& visitable;
 };
 
+} // namespace detail
+
 /// A variant class modeled after C++17's variant.
 /// @tparam Ts the types the variant should assume.
 template <class... Ts>
-class variant : util::totally_ordered<variant<Ts...>> {
+class variant : detail::totally_ordered<variant<Ts...>> {
 public:
   using types = std::tuple<Ts...>;
   using first_type = std::tuple_element_t<0, types>;
@@ -116,7 +117,7 @@ public:
     destruct();
   }
 
-  template <class T, class = disable_if_same_or_derived_t<variant, T>>
+  template <class T, class = detail::disable_if_same_or_derived_t<variant, T>>
   variant(T&& x) {
     // A compile error here means that T is not unambiguously convertible to
     // any of the variant types.
@@ -151,13 +152,13 @@ public:
   }
 
   template <class Visitor, class... Args>
-  auto apply(Visitor&& visitor, Args&&... args) {
+  decltype(auto) apply(Visitor&& visitor, Args&&... args) {
     return visit_impl(index_, storage_, std::forward<Visitor>(visitor),
                       std::forward<Args>(args)...);
   }
 
   template <class Visitor, class... Args>
-  auto apply(Visitor&& visitor, Args&&... args) const {
+  decltype(auto) apply(Visitor&& visitor, Args&&... args) const {
     return visit_impl(index_, storage_, std::forward<Visitor>(visitor),
                       std::forward<Args>(args)...);
   }
@@ -309,14 +310,15 @@ private:
     >::type;
 
   template <class T, class Storage, class Visitor, class... Args>
-  static auto invoke(Storage&& storage, Visitor&& visitor, Args&&... args) {
+  static decltype(auto) invoke(Storage&& storage, Visitor&& visitor,
+                               Args&&... args) {
     auto x = reinterpret_cast<const_type<T, Storage>*>(&storage);
     return visitor(*x, args...);
   }
 
   template <class Storage, class Visitor, class... Args>
-  static auto visit_impl(size_t idx, Storage&& storage,
-                         Visitor&& visitor, Args&&... args) {
+  static decltype(auto) visit_impl(size_t idx, Storage&& storage,
+                                   Visitor&& visitor, Args&&... args) {
     using result_type = decltype(visitor(std::declval<first_type&>(), args...));
     using fn = result_type (*)(Storage&&, Visitor&&, Args&&...);
     static constexpr fn callers[sizeof...(Ts)]
@@ -385,48 +387,77 @@ private:
   }
 
   template <class Inspector>
-  friend auto inspect(Inspector& f, variant& v) {
-    auto save = [&] {
-      return visit([&](auto& x) { return f(v.index_, x); }, v);
-    };
-    auto load = [&] {
-      // FIXME: monadically chain return values of inspector invocations. See
-      // caf::optional<T> for inspiration.
-      f(v.index_);
-      auto dispatcher = [&](auto& dummy) {
-        using raw_type = std::decay_t<decltype(dummy)>;
-        raw_type x;
+  friend std::enable_if_t<
+    Inspector::reads_state,
+    typename Inspector::result_type
+  >
+  inspect(Inspector& f, variant& v) {
+    return apply_visitor([&](auto& x) { return f(v.index_, x); }, v);
+  }
+
+  struct variant_inspect_helper {
+    template <class Inspector>
+    friend auto inspect(Inspector& f, variant_inspect_helper& helper) {
+      auto dispatcher = [&](auto& x) {
+        std::decay_t<decltype(x)> value;
         auto guard = caf::detail::make_scope_guard(
-          [&] { v.construct(std::move(x)); }
+          [&] { helper.self.construct(std::move(value)); }
         );
-        return f(x);
+        return f(value);
       };
-      return visit(dispatcher, v);
-    };
-    return f(caf::meta::save_callback(save),
-             caf::meta::load_callback(load));
+      return apply_visitor(dispatcher, helper.self);
+    }
+
+    variant& self;
+  };
+
+  template <class Inspector>
+  friend std::enable_if_t<
+    Inspector::writes_state,
+    typename Inspector::result_type
+  >
+  inspect(Inspector& f, variant& v) {
+    auto& index = v.index_;
+    variant_inspect_helper helper{v};
+    return f(index, helper);
   }
 };
 
+// Facilitate construction from types that take variadic template parameters,
+// e.g., std::tuple.
+
+template <class T>
+struct make_variant_from;
+
+template <template <class...> class T, class... Ts>
+struct make_variant_from<T<Ts...>> {
+  using type = variant<Ts...>;
+};
+
+namespace detail {
+
 template <class Visitor>
-delayed_visitor<Visitor> visit(Visitor&& visitor) {
+delayed_visitor<Visitor> apply_visitor(Visitor&& visitor) {
   return delayed_visitor<Visitor>(std::move(visitor));
 }
 
 template <class Visitor>
-delayed_visitor_wrapper<Visitor> visit(Visitor& visitor) {
+delayed_visitor_wrapper<Visitor> apply_visitor(Visitor& visitor) {
   return delayed_visitor_wrapper<Visitor>(visitor);
 }
 
-template <class Visitor, class Visitable>
-auto visit(Visitor&& visitor, Visitable&& visitable) {
-  return visitable.template apply(std::forward<Visitor>(visitor));
+// Can we please simplify this insane SFINAE stuff?
+template <class Visitor, class Variant>
+decltype(auto) apply_visitor(Visitor&& visitor, Variant&& v) {
+  return v.template apply(std::forward<Visitor>(visitor));
 }
 
-template <class Visitor, class V, class... Vs>
-auto visit(Visitor&& visitor, V&& v, Vs&&... vs) {
-  return visit(binary_visitor<Visitor, V>(visitor, v), vs...);
+template <class Visitor, class Variant, class... Variants>
+decltype(auto) apply_visitor(Visitor&& visitor, Variant&& v, Variants&&... vs) {
+  return apply_visitor(binary_visitor<Visitor, Variant>(visitor, v), vs...);
 }
+
+} // namespace detail
 
 template <class T>
 struct getter {
@@ -440,6 +471,48 @@ struct getter {
   }
 };
 
+// -- variant concept -------------------------------------------------------
+//
+// The *variant* concept comes in handy for types which contain a (recursive)
+// variant but would like to be treated with variant interface externally.
+// Such types benefit from uniform access of the variant aspect, namely
+// visitation and selective type checking/extraction. To model the *variant*
+// concept, a type `V` must provide the following free function to be found via
+// ADL:
+//
+//    variant<Ts...>& expose(V& x)
+//
+// This function enables the following functions:
+//
+//    1) `decltype(auto) visit(Visitor, Vs&&... vs)`
+//    2) `auto get_if<T>(V&& x)`
+//    3) `auto get<T>(V&& x)`
+//    4) `bool is<T>(V&& x)`
+//
+// (1)-(3) have the same semantics as the corresponding function from C++17's
+// std::variant. (4) is an idiomatic shortcut for `get_if<T>(v) == nullptr`.
+// Note that `variant<Ts...>` trivially models the variant concept.
+
+template <class... Ts>
+variant<Ts...>& expose(variant<Ts...>& v) {
+  return v;
+}
+
+template <class T>
+auto& expose(T const& v) {
+  return expose(const_cast<T&>(v));
+}
+
+template <class Visitor, class... Vs>
+decltype(auto) visit(Visitor&& v, Vs&&... vs) {
+  return detail::apply_visitor(std::forward<Visitor>(v), expose(vs)...);
+}
+
+template <class T, class V>
+auto get_if(V&& v) {
+  return visit(getter<T>{}, v);
+}
+
 class bad_variant_access : public std::exception {
 public:
   bad_variant_access() = default;
@@ -449,37 +522,18 @@ public:
   }
 };
 
-template <class T, class... Ts>
-T* get_if(variant<Ts...>& v) {
-  return visit(getter<T>{}, v);
-}
-
-template <class T, class... Ts>
-const T* get_if(const variant<Ts...>& v) {
-  return visit(getter<const T>{}, v);
-}
-
-template <class T, class... Ts>
-T& get(variant<Ts...>& v) {
+template <class T, class V>
+auto& get(V&& v) {
   if (auto ptr = get_if<T>(v))
     return *ptr;
   throw bad_variant_access{};
 }
 
-template <class T, class... Ts>
-const T& get(const variant<Ts...>& v) {
-  if (auto ptr = get_if<const T>(v))
-    return *ptr;
-  throw bad_variant_access{};
+template <class T, class V>
+bool is(V&& v) {
+  return get_if<T>(v) != nullptr;
 }
 
-template <class T>
-struct is_variant : std::false_type {};
-
-template <class... Ts>
-struct is_variant<variant<Ts...>> : std::true_type {};
-
-} // namespace detail
 } // namespace vast
 
-#endif // VAST_DETAIL_VARIANT_HPP
+#endif // VAST_VARIANT_HPP
