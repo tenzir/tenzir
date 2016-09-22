@@ -12,7 +12,7 @@
 
 #include <caf/detail/safe_equal.hpp>
 
-#include "vast/util/assert.hpp"
+#include "vast/detail/assert.hpp"
 #include "vast/error.hpp"
 #include "vast/none.hpp"
 

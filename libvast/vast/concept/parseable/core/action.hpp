@@ -4,7 +4,7 @@
 #include <caf/detail/type_traits.hpp>
 
 #include "vast/concept/parseable/core/parser.hpp"
-#include "vast/util/type_list.hpp"
+#include "vast/detail/type_list.hpp"
 
 namespace vast {
 
@@ -21,7 +21,7 @@ public:
   using action_result_type = typename action_traits::result_type;
   using action_arg_type =
     std::remove_reference_t<
-      util::tl_head_t<typename action_traits::arg_types>
+      detail::tl_head_t<typename action_traits::arg_types>
     >;
   using attribute =
     std::conditional_t<

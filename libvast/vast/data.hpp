@@ -67,67 +67,6 @@ public:
   using super::map;
 };
 
-class record : public std::vector<data> {
-  using super = std::vector<vast::data>;
-
-public:
-  /// Enables recursive record iteration.
-  class each : public util::range_facade<each> {
-  public:
-    struct range_state {
-      vast::data const& data() const;
-      util::stack::vector<8, vast::data const*> trace;
-      vast::offset offset;
-    };
-
-    each(record const& r);
-
-  private:
-    friend util::range_facade<each>;
-
-    range_state const& state() const {
-      return state_;
-    }
-
-    bool next();
-
-    range_state state_;
-    util::stack::vector<8, record const*> records_;
-  };
-
-  using super::vector;
-
-  record() = default;
-
-  explicit record(super v) : super{std::move(v)} { }
-
-  using super::at;
-
-  /// Retrieves a data at a givene offset.
-  /// @param o The offset to look at.
-  /// @returns A pointer to the data at *o* or `nullptr` if *o* does not
-  ///          resolve.
-  vast::data const* at(offset const& o) const;
-};
-
-/// Flattens a record.
-/// @param r The record to flatten.
-/// @returns The flattened record.
-record flatten(record const& r);
-
-/// Flattens a record or returns the argument if the data is not record.
-/// @param d The record data to flatten.
-/// @returns The flattened record.
-data flatten(data const& d);
-
-/// Unflattens a data sequence according to a given record type.
-/// @param r The record to flatten.
-/// @param t The record type according to which *r* gets flattened.
-/// @returns The unflattened record.
-maybe<record> unflatten(record const& r, type::record const& t);
-
-maybe<record> unflatten(data const& d, type const& t);
-
 class data : util::totally_ordered<data> {
   friend access;
 
@@ -150,8 +89,8 @@ public:
               std::string,
               std::conditional_t<
                    std::is_same<T, none>::value
-                || std::is_same<T, time::point>::value
-                || std::is_same<T, time::duration>::value
+                || std::is_same<T, timestamp>::value
+                || std::is_same<T, interval>::value
                 || std::is_same<T, pattern>::value
                 || std::is_same<T, address>::value
                 || std::is_same<T, subnet>::value
@@ -159,8 +98,7 @@ public:
                 || std::is_same<T, enumeration>::value
                 || std::is_same<T, vector>::value
                 || std::is_same<T, set>::value
-                || std::is_same<T, table>::value
-                || std::is_same<T, record>::value,
+                || std::is_same<T, table>::value,
                 T,
                 std::false_type
               >
@@ -180,8 +118,8 @@ public:
         || std::is_same<T, integer>::value
         || std::is_same<T, count>::value
         || std::is_same<T, real>::value
-        || std::is_same<T, time::point>::value
-        || std::is_same<T, time::duration>::value
+        || std::is_same<T, timestamp>::value
+        || std::is_same<T, interval>::value
         || std::is_same<T, std::string>::value
         || std::is_same<T, pattern>::value
         || std::is_same<T, address>::value
@@ -203,8 +141,8 @@ public:
     integer,
     count,
     real,
-    time_point,
-    time_duration,
+    timestamp,
+    interval,
     string,
     pattern,
     address,
@@ -214,7 +152,6 @@ public:
     vector,
     set,
     table,
-    record
   };
 
   using variant_type = util::basic_variant<
@@ -224,8 +161,8 @@ public:
     integer,
     count,
     real,
-    time::point,
-    time::duration,
+    timestamp,
+    interval,
     std::string,
     pattern,
     address,

@@ -16,7 +16,7 @@ struct foo {
 
 template <class Inspector>
 auto inspect(Inspector& f, foo& x) {
-  return f(x);
+  return f(x.i);
 }
 
 // A type that models the State concept.

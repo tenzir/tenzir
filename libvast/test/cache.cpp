@@ -2,15 +2,16 @@
 
 #include <vast/load.hpp>
 #include <vast/save.hpp>
-#include <vast/util/cache.hpp>
+#include <vast/detail/cache.hpp>
 
-#define SUITE util
+#define SUITE detail
 #include "test.hpp"
 
 using namespace vast;
+using namespace detail;
 
 TEST(LRU cache) {
-  util::cache<std::string, int> c{2};
+  cache<std::string, int> c{2};
   c["x"] = 1;
   auto x = c.lookup("x");
   REQUIRE(x);
@@ -52,7 +53,7 @@ TEST(LRU cache) {
 }
 
 TEST(MRU cache) {
-  util::cache<std::string, int, util::mru> c{2};
+  cache<std::string, int, mru> c{2};
   c.on_evict([&](std::string const&, int v) { CHECK(v == 3); });
   CHECK(c.insert("fu", 2).second);
   CHECK(c.insert("foo", 3).second);

@@ -2,7 +2,7 @@
 #define VAST_CONCEPT_PARSEABLE_STRING_C_STRING_HPP
 
 #include "vast/concept/parseable/core/parser.hpp"
-#include "vast/util/assert.hpp"
+#include "vast/detail/assert.hpp"
 
 namespace vast {
 

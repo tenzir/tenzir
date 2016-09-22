@@ -5,14 +5,16 @@
 
 #include "vast/concept/printable/string.hpp"
 #include "vast/concept/printable/to_string.hpp"
-#include "vast/util/stack/vector.hpp"
+#include "vast/detail/stack/vector.hpp"
 
 namespace vast {
 
 /// A sequence of names identifying a resource.
-struct key : util::stack::vector<4, std::string> {
-  using super = util::stack::vector<4, std::string>;
+struct key : detail::stack::vector<4, std::string> {
+  using super = detail::stack::vector<4, std::string>;
   using super::vector;
+
+  static constexpr char delimiter = '.';
 
   /// Creates a key string reprentation of an arbitrary sequence.
   template <typename... Ts>
@@ -30,4 +32,4 @@ std::string vast::key::str(Ts&&... xs) {
   return to_string(key{to_string(xs)...});
 }
 
-#endif
+#endif // VAST_KEY_HPP

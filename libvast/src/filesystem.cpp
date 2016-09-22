@@ -4,9 +4,10 @@
 #include <caf/streambuf.hpp>
 
 #include "vast/filesystem.hpp"
-#include "vast/util/assert.hpp"
-#include "vast/util/posix.hpp"
-#include "vast/util/string.hpp"
+#include "vast/detail/assert.hpp"
+#include "vast/detail/posix.hpp"
+#include "vast/detail/string.hpp"
+
 #include "vast/concept/printable/vast/error.hpp"
 #include "vast/concept/printable/vast/filesystem.hpp"
 
@@ -57,11 +58,11 @@ path::path(std::string str) : str_{std::move(str)} {
 }
 
 path& path::operator/=(path const& p) {
-  if (p.empty() || (util::ends_with(str_, separator) && p == separator))
+  if (p.empty() || (detail::ends_with(str_, separator) && p == separator))
     return *this;
   if (str_.empty())
     str_ = p.str_;
-  else if (util::ends_with(str_, separator) || p == separator)
+  else if (detail::ends_with(str_, separator) || p == separator)
     str_ = str_ + p.str_;
   else
     str_ = str_ + separator + p.str_;
@@ -279,7 +280,7 @@ maybe<void> file::open(open_mode mode, bool append) {
 }
 
 bool file::close() {
-  if (!(is_open_ && util::close(handle_)))
+  if (!(is_open_ && detail::close(handle_)))
     return false;
   is_open_ = false;
   return true;
@@ -290,17 +291,17 @@ bool file::is_open() const {
 }
 
 bool file::read(void* sink, size_t bytes, size_t* got) {
-  return is_open_ && util::read(handle_, sink, bytes, got);
+  return is_open_ && detail::read(handle_, sink, bytes, got);
 }
 
 bool file::write(void const* source, size_t bytes, size_t* put) {
-  return is_open_ && util::write(handle_, source, bytes, put);
+  return is_open_ && detail::write(handle_, source, bytes, put);
 }
 
 bool file::seek(size_t bytes) {
   if (!is_open_ || seek_failed_)
     return false;
-  if (!util::seek(handle_, bytes)) {
+  if (!detail::seek(handle_, bytes)) {
     seek_failed_ = true;
     return false;
   }
@@ -374,8 +375,8 @@ path const& directory::path() const {
 std::vector<path> split(path const& p) {
   if (p.empty())
     return {};
-  auto components
-    = util::to_strings(util::split(p.str(), path::separator, "\\", -1, true));
+  auto components = detail::to_strings(
+    detail::split(p.str(), path::separator, "\\", -1, true));
   VAST_ASSERT(!components.empty());
   std::vector<path> result;
   size_t begin = 0;

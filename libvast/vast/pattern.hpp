@@ -3,14 +3,14 @@
 
 #include <string>
 
-#include "vast/util/operators.hpp"
+#include "vast/detail/operators.hpp"
 
 namespace vast {
 
 struct access;
 
 /// A regular expression.
-class pattern : util::totally_ordered<pattern> {
+class pattern : detail::totally_ordered<pattern> {
   friend access;
 
 public:

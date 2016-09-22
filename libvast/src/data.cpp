@@ -1,6 +1,7 @@
 #include "vast/data.hpp"
+
 #include "vast/concept/printable/vast/data.hpp"
-#include "vast/util/assert.hpp"
+#include "vast/detail/assert.hpp"
 
 namespace vast {
 

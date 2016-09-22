@@ -12,17 +12,18 @@
 #include <vector>
 
 #include "vast/maybe.hpp"
-#include "vast/util/iterator.hpp"
-#include "vast/util/operators.hpp"
+
+#include "vast/detail/iterator.hpp"
+#include "vast/detail/operators.hpp"
 
 namespace vast {
 
 struct access;
 
 /// A filesystem path abstraction.
-class path : util::totally_ordered<path>,
-             util::addable<path>,
-             util::dividable<path> {
+class path : detail::totally_ordered<path>,
+             detail::addable<path>,
+             detail::dividable<path> {
   friend access;
 
 public:
@@ -242,7 +243,7 @@ class directory {
 public:
   using const_iterator =
     class iterator
-      : public util::iterator_facade<
+      : public detail::iterator_facade<
           iterator,
           std::input_iterator_tag,
           path const&,

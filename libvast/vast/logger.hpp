@@ -6,7 +6,7 @@
 
 #include "vast/config.hpp"
 #include "vast/singleton.hpp"
-#include "vast/util/pp.hpp"
+#include "vast/detail/pp.hpp"
 
 // Defines vast::operator<<, which must be declared prior to the call site.
 #include "vast/concept/printable/stream.hpp"

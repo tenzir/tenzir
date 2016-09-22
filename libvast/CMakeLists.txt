@@ -6,33 +6,32 @@ include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
 set(libvast_sources
   ${aux_sources}
-  src/address.cpp
+  #src/address.cpp
   src/banner.cpp
-  src/bitvector.cpp
-  src/bitstream.cpp
-  src/bitstream_polymorphic.cpp
-  src/chunk.cpp
+  #src/bitvector.cpp
+  #src/bitstream.cpp
+  #src/bitstream_polymorphic.cpp
+  #src/chunk.cpp
   src/cleanup.cpp
   src/compression.cpp
-  src/configuration.cpp
-  src/data.cpp
+  #src/configuration.cpp
+  #src/data.cpp
   src/die.cpp
-  src/expression.cpp
-  src/error.cpp
-  src/event.cpp
+  #src/expression.cpp
+  #src/error.cpp
+  #src/event.cpp
   src/filesystem.cpp
   src/http.cpp
   src/logger.cpp
   src/operator.cpp
   src/pattern.cpp
-  src/port.cpp
-  src/schema.cpp
-  src/streambuf.cpp
-  src/subnet.cpp
+  #src/port.cpp
+  #src/schema.cpp
+  #src/subnet.cpp
   src/time.cpp
   src/type.cpp
   src/uuid.cpp
-  src/value.cpp
+  #src/value.cpp
   # FIXME: Bring back after having repaired CAF code.
   #src/actor/accountant.cpp
   #src/actor/archive.cpp
@@ -54,35 +53,33 @@ set(libvast_sources
   #src/actor/source/bgpdump.cpp
   #src/actor/source/spawn.cpp
   #src/actor/source/test.cpp
-  src/concept/convertible/vast/address.cpp
-  src/concept/convertible/vast/data.cpp
-  src/concept/convertible/vast/event.cpp
-  src/concept/convertible/vast/pattern.cpp
-  src/concept/convertible/vast/port.cpp
-  src/concept/convertible/vast/schema.cpp
-  src/concept/convertible/vast/subnet.cpp
-  src/concept/convertible/vast/time.cpp
-  src/concept/convertible/vast/type.cpp
-  src/concept/convertible/vast/value.cpp
+  #src/concept/convertible/vast/address.cpp
+  #src/concept/convertible/vast/data.cpp
+  #src/concept/convertible/vast/event.cpp
+  #src/concept/convertible/vast/pattern.cpp
+  #src/concept/convertible/vast/port.cpp
+  #src/concept/convertible/vast/schema.cpp
+  #src/concept/convertible/vast/subnet.cpp
+  #src/concept/convertible/vast/type.cpp
+  #src/concept/convertible/vast/value.cpp
+  src/concept/hashable/crc.cpp
+  src/concept/hashable/xxhash.cpp
   src/detail/adjust_resource_consumption.cpp
-  src/detail/hash/crc.cpp
-  src/detail/hash/xxhash.cpp
-  src/expr/evaluator.cpp
-  src/expr/normalize.cpp
-  src/expr/predicatizer.cpp
-  src/expr/restrictor.cpp
-  src/expr/resolver.cpp
-  src/expr/validator.cpp
-  src/util/fdistream.cpp
-  src/util/fdinbuf.cpp
-  src/util/fdostream.cpp
-  src/util/fdoutbuf.cpp
-  src/util/posix.cpp
-  src/util/string.cpp
-  src/util/system.cpp
-  src/util/terminal.cpp
-  src/util/detail/posix.cpp
-  src/util/hash/xxhash.cpp
+  src/detail/compressedbuf.cpp
+  src/detail/fdistream.cpp
+  src/detail/fdinbuf.cpp
+  src/detail/fdostream.cpp
+  src/detail/fdoutbuf.cpp
+  src/detail/posix.cpp
+  src/detail/string.cpp
+  src/detail/system.cpp
+  src/detail/terminal.cpp
+  #src/expr/evaluator.cpp
+  #src/expr/normalize.cpp
+  #src/expr/predicatizer.cpp
+  #src/expr/restrictor.cpp
+  #src/expr/resolver.cpp
+  #src/expr/validator.cpp
 )
 
 # FIXME: Bring back after having repaired CAF code.
@@ -198,46 +195,46 @@ set(tests
   #test/actor/partition.cpp
   #test/actor/source_bgpdump.cpp
   #test/actor/task.cpp
-  test/binner.cpp
-  test/bitmap.cpp
-  test/bitmap_index.cpp
-  test/bitstream.cpp
-  test/bitvector.cpp
+
+  #test/binner.cpp
+  #test/bitmap.cpp
+  #test/bitmap_index.cpp
+  #test/bitstream.cpp
+  #test/bitvector.cpp
   test/cache.cpp
-  test/chunk.cpp
-  test/data.cpp
-  test/event.cpp
-  test/expr.cpp
-  test/filesystem.cpp
+  test/compressedbuf.cpp
+  #test/chunk.cpp
+  #test/data.cpp
+  test/date.cpp
+  #test/event.cpp
+  #test/expr.cpp
+  #test/filesystem.cpp
   test/hash.cpp
-  test/intrusive.cpp
-  test/iterator.cpp
-  test/json.cpp
+  #test/iterator.cpp
+  #test/json.cpp
   test/logging.cpp
   test/main.cpp
   test/maybe.cpp
-  test/offset.cpp
-  test/parse_bro.cpp
-  test/parse_data.cpp
-  test/parse_expr.cpp
-  test/parse_type.cpp
-  test/parse_vast.cpp
+  #test/offset.cpp
+  #test/parse_bro.cpp
+  #test/parse_data.cpp
+  #test/parse_expr.cpp
+  #test/parse_type.cpp
+  #test/parse_vast.cpp
   test/parseable.cpp
-  test/print_vast.cpp
+  #test/print_vast.cpp
   test/printable.cpp
   test/range_map.cpp
   test/save_load.cpp
-  test/schema.cpp
-  test/search.cpp
-  test/serialization.cpp
+  #test/schema.cpp
   test/stack.cpp
-  test/streambuf.cpp
   test/string.cpp
-  test/type.cpp
+  test/time.cpp
+  #test/type.cpp
   test/uuid.cpp
-  test/value.cpp
+  #test/value.cpp
   test/variant.cpp
-  test/detail/flat_serial_set.cpp
+  #test/detail/flat_serial_set.cpp
 )
 
 # FIXME: Bring back after having repaired CAF code.

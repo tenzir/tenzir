@@ -5,7 +5,7 @@
 #include "vast/uuid.hpp"
 #include "vast/concept/printable/core/printer.hpp"
 #include "vast/concept/printable/string/any.hpp"
-#include "vast/util/coding.hpp"
+#include "vast/detail/coding.hpp"
 
 namespace vast {
 
@@ -18,8 +18,8 @@ struct access::printer<uuid> : vast::printer<access::printer<uuid>> {
     using namespace printers;
     for (size_t i = 0; i < 16; ++i) {
       auto& byte = u.id_[i];
-      if (!(any.print(out, util::byte_to_char((byte >> 4) & 0x0f))
-            && any.print(out, util::byte_to_char(byte & 0x0f))))
+      if (!(any.print(out, detail::byte_to_char((byte >> 4) & 0x0f))
+            && any.print(out, detail::byte_to_char(byte & 0x0f))))
         return false;
       if (i == 3 || i == 5 || i == 7 || i == 9)
         if (!any.print(out, '-'))

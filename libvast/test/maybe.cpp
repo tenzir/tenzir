@@ -1,7 +1,9 @@
+#include "vast/load.hpp"
+#include "vast/maybe.hpp"
+#include "vast/save.hpp"
+
 #define SUITE maybe
 #include "test.hpp"
-
-#include "vast/maybe.hpp"
 
 using namespace vast;
 
@@ -31,33 +33,33 @@ error make_error(test_errc x) {
 
 } // namespace <anonymous>
 
-CAF_TEST(empty) {
+TEST(empty) {
   maybe<int> i;
   maybe<int> j;
   CHECK(i == j);
   CHECK(!(i != j));
 }
 
-CAF_TEST(empty - distinct_types) {
+TEST(empty - distinct_types) {
   maybe<int> i;
   maybe<double> j;
   CHECK(i == j);
   CHECK(!(i != j));
 }
 
-CAF_TEST(unequal) {
+TEST(unequal) {
   maybe<int> i = 5;
   maybe<int> j = 6;
   CHECK(!(i == j));
   CHECK(i != j);
 }
 
-CAF_TEST(custom type - none) {
+TEST(custom type - none) {
   maybe<qwertz> i;
   CHECK(i == nil);
 }
 
-CAF_TEST(custom type - valid) {
+TEST(custom type - valid) {
   qwertz obj{1, 2};
   maybe<qwertz> j = obj;
   CHECK(j != nil);
@@ -67,7 +69,7 @@ CAF_TEST(custom type - valid) {
   CHECK(*j == obj);
 }
 
-CAF_TEST(error cases) {
+TEST(error cases) {
   auto f = []() -> maybe<int> { return test_errc::second_error; };
   auto val = f();
   REQUIRE(! val);
@@ -80,7 +82,7 @@ CAF_TEST(error cases) {
   CHECK(val.error() == test_errc::first_error);
 }
 
-CAF_TEST(void specialization) {
+TEST(void specialization) {
   // Default-constructed instances represent no failure.
   maybe<void> m;
   CHECK(m);
@@ -102,3 +104,14 @@ CAF_TEST(void specialization) {
   CHECK(val.error() == test_errc::second_error);
 }
 
+TEST(serialization) {
+  maybe<int> m1, m2;
+  m1 = 42;
+  std::vector<char> buf;
+  save(buf, m1);
+  load(buf, m2);
+  REQUIRE(m1);
+  REQUIRE(m2);
+  CHECK(*m2 == 42);
+  CHECK(*m1 == *m2);
+}

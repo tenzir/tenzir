@@ -7,11 +7,11 @@
 #include "vast/filesystem.hpp"
 #include "vast/logger.hpp"
 #include "vast/time.hpp"
-#include "vast/util/assert.hpp"
-#include "vast/util/color.hpp"
-#include "vast/util/queue.hpp"
-#include "vast/util/string.hpp"
-#include "vast/util/system.hpp"
+#include "vast/detail/assert.hpp"
+#include "vast/detail/color.hpp"
+#include "vast/detail/queue.hpp"
+#include "vast/detail/string.hpp"
+#include "vast/detail/system.hpp"
 
 namespace vast {
 namespace {
@@ -135,7 +135,7 @@ struct logger::impl {
       // If the message contains newlines, split it up into multiple ones to
       // preserve the correct indentation.
       auto msg = m.msg();
-      for (auto& split : util::split(msg.begin(), msg.end(), "\n")) {
+      for (auto& split : detail::split(msg.begin(), msg.end(), "\n")) {
         auto line = std::string{split.first, split.second};
         if (log_file_ && m.lvl() <= file_level_) {
           log_file_ << std::setprecision(15) << std::setw(16) << std::left
@@ -152,29 +152,29 @@ struct logger::impl {
               default:
                 break;
               case error:
-                std::cerr << util::color::bold_red;
+                std::cerr << detail::color::bold_red;
                 break;
               case warn:
-                std::cerr << util::color::bold_yellow;
+                std::cerr << detail::color::bold_yellow;
                 break;
               case info:
-                std::cerr << util::color::bold_green;
+                std::cerr << detail::color::bold_green;
                 break;
               case verbose:
-                std::cerr << util::color::bold_cyan;
+                std::cerr << detail::color::bold_cyan;
                 break;
               case debug:
               case trace:
-                std::cerr << util::color::bold_blue;
+                std::cerr << detail::color::bold_blue;
                 break;
             }
           }
           std::cerr << "::";
           if (colorized_) {
-            std::cerr << util::color::reset;
+            std::cerr << detail::color::reset;
             if (! m.context().empty()) {
-              std::cerr << ' ' << util::color::cyan << m.context();
-              std::cerr << util::color::reset;
+              std::cerr << ' ' << detail::color::cyan << m.context();
+              std::cerr << detail::color::reset;
             }
           }
           std::cerr << ' ' << line << std::endl;
@@ -197,7 +197,7 @@ struct logger::impl {
   bool console_ = false;
   bool colorized_ = false;
   std::thread log_thread_;
-  util::queue<message> messages_;
+  detail::queue<message> messages_;
 };
 
 logger::message::message(level lvl) : lvl_{lvl} {
@@ -216,7 +216,8 @@ logger::message::message(message const& other)
 }
 
 void logger::message::coin() {
-  timestamp_ = time::now().time_since_epoch().double_seconds();
+  auto now = clock::now().time_since_epoch();
+  timestamp_ = std::chrono::duration_cast<double_seconds>(now).count();
 }
 
 void logger::message::function(char const* f) {

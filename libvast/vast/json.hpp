@@ -1,45 +1,25 @@
-#ifndef VAST_JSON
-#define VAST_JSON
+#ifndef VAST_JSON_HPP
+#define VAST_JSON_HPP
 
 #include <map>
 #include <string>
 #include <vector>
 
-#include "vast/none.hpp"
 #include "vast/concept/printable/to.hpp"
-#include "vast/util/operators.hpp"
-#include "vast/util/variant.hpp"
+#include "vast/detail/operators.hpp"
+#include "vast/none.hpp"
+#include "vast/variant.hpp"
 
 namespace vast {
 
 /// A JSON data type.
-class json : util::totally_ordered<json> {
+class json : detail::totally_ordered<json> {
 public:
-  enum class type : uint8_t {
-    null = 0,
-    boolean = 1,
-    number = 2,
-    string = 3,
-    array = 4,
-    object = 5
-  };
-
   struct array;
   struct object;
 
   /// A JSON number value.
   using number = long double;
-
-  /// A JSON value.
-  using value = util::basic_variant<
-    type,
-    none,
-    bool,
-    number,
-    std::string,
-    array,
-    object
-  >;
 
   /// Meta-function that converts a type into a JSON value.
   /// If conversion is impossible it returns `std::false_type`.
@@ -79,8 +59,10 @@ public:
     using super::vector;
 
     array() = default;
+
     array(super const& s) : super(s) {
     }
+
     array(super&& s) : super(std::move(s)) {
     }
   };
@@ -91,8 +73,10 @@ public:
     using super::map;
 
     object() = default;
+
     object(super const& s) : super(s) {
     }
+
     object(super&& s) : super(std::move(s)) {
     }
   };
@@ -112,8 +96,21 @@ public:
     : value_(jsonize<T>(std::forward<T>(x))) {
   }
 
+  friend auto& expose(json& j) {
+    return j.value_;
+  }
+
 private:
-  value value_;
+  using variant_type = variant<
+    none,
+    bool,
+    number,
+    std::string,
+    array,
+    object
+  >;
+
+  variant_type value_;
 
 private:
   struct less_than {
@@ -141,22 +138,14 @@ private:
   };
 
   friend bool operator<(json const& x, json const& y) {
-    if (which(x) == which(y))
-      return visit(less_than{}, x, y);
+    if (x.value_.index() == y.value_.index())
+      return visit(less_than{}, x.value_, y.value_);
     else
-      return which(x) < which(y);
+      return x.value_.index() < y.value_.index();
   }
 
   friend bool operator==(json const& x, json const& y) {
-    return visit(equals{}, x, y);
-  }
-
-  friend json::value& expose(json& j) {
-    return j.value_;
-  }
-
-  friend json::value const& expose(json const& j) {
-    return j.value_;
+    return visit(equals{}, x.value_, y.value_);
   }
 };
 
@@ -216,4 +205,4 @@ json to_json(T const& x, Opts&&... opts) {
 
 } // namespace vast
 
-#endif
+#endif // VAST_JSON_HPP

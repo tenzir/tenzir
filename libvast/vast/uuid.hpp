@@ -3,14 +3,14 @@
 
 #include <array>
 
-#include "vast/util/operators.hpp"
+#include "vast/detail/operators.hpp"
 
 namespace vast {
 
 struct access;
 
 /// A universally unique identifier (UUID).
-class uuid : util::totally_ordered<uuid> {
+class uuid : detail::totally_ordered<uuid> {
   friend access;
 
 public:

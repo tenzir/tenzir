@@ -6,7 +6,7 @@
 #include <type_traits>
 
 #include "vast/concept/parseable/numeric/integral.hpp"
-#include "vast/util/type_list.hpp"
+#include "vast/detail/type_list.hpp"
 
 namespace vast {
 namespace policy {
@@ -21,13 +21,13 @@ struct real_parser : parser<real_parser<T, Policies...>> {
   using attribute = T;
   using policies =
     std::conditional_t<(sizeof...(Policies) > 0),
-    util::type_list<Policies...>,
-    util::type_list<policy::require_dot>
+    detail::type_list<Policies...>,
+    detail::type_list<policy::require_dot>
   >;
   static constexpr bool require_dot =
-    util::tl_exists<
+    detail::tl_exists<
       policies,
-      util::tbind<std::is_same, policy::require_dot>::template type
+      detail::tbind<std::is_same, policy::require_dot>::template type
     >::value;
 
   template <typename Iterator>

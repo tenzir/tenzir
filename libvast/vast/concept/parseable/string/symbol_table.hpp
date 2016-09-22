@@ -1,7 +1,7 @@
 #ifndef VAST_CONCEPT_PARSEABLE_STRING_SYMBOL_TABLE_HPP
 #define VAST_CONCEPT_PARSEABLE_STRING_SYMBOL_TABLE_HPP
 
-#include "vast/util/radix_tree.hpp"
+#include "vast/detail/radix_tree.hpp"
 
 #include "vast/concept/parseable/core/parser.hpp"
 
@@ -35,7 +35,7 @@ struct symbol_table : parser<symbol_table<T>> {
     return true;
   }
 
-  util::radix_tree<T> symbols;
+  detail::radix_tree<T> symbols;
 };
 
 } // namespace vast

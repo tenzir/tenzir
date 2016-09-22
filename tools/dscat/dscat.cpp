@@ -5,9 +5,9 @@
 #include <caf/message_builder.hpp>
 
 #include "vast/filesystem.hpp"
-#include "vast/util/posix.hpp"
-#include "vast/util/fdinbuf.hpp"
-#include "vast/util/fdoutbuf.hpp"
+#include "vast/detail/posix.hpp"
+#include "vast/detail/fdinbuf.hpp"
+#include "vast/detail/fdoutbuf.hpp"
 
 using namespace caf;
 using namespace std;
@@ -49,7 +49,7 @@ int main(int argc, char** argv) {
     if (writing)
       cerr << 'W';
     cerr << ")" << endl;
-    auto uds = util::unix_domain_socket::accept(uds_name);
+    auto uds = vast::detail::unix_domain_socket::accept(uds_name);
     if (!uds) {
       cerr << "failed to accept connection" << endl;
       return -1;
@@ -73,7 +73,7 @@ int main(int argc, char** argv) {
     }
   } else {
     cerr << "connecting to " << uds_name << endl;
-    auto uds = util::unix_domain_socket::connect(uds_name);
+    auto uds = vast::detail::unix_domain_socket::connect(uds_name);
     if (!uds) {
       cerr << "failed to connect" << endl;
       return 1;
@@ -85,8 +85,8 @@ int main(int argc, char** argv) {
       return 1;
     }
     cerr << "dumping contents\n" << endl;
-    util::fdinbuf in{fd};
-    util::fdoutbuf out{::fileno(stdout)};
+    vast::detail::fdinbuf in{fd};
+    vast::detail::fdoutbuf out{::fileno(stdout)};
     std::ostream os{&out};
     os << &in; // TODO: perfrom more efficient block-level copying.
   }

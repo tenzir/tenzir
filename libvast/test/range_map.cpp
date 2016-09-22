@@ -1,12 +1,12 @@
+#include "vast/detail/range_map.hpp"
 #include "vast/load.hpp"
 #include "vast/save.hpp"
-#include "vast/util/range_map.hpp"
 
-#define SUITE util
+#define SUITE detail
 #include "test.hpp"
 
 using namespace vast;
-using namespace vast::util;
+using namespace vast::detail;
 
 TEST(range_map insertion) {
   range_map<int, std::string> rm;

@@ -8,13 +8,12 @@
 #include <caf/stream_serializer.hpp>
 #include <caf/stream_deserializer.hpp>
 
+#include "vast/compression.hpp"
+#include "vast/detail/compressedbuf.hpp"
 #include "vast/detail/type_traits.hpp"
 #include "vast/detail/variadic_serialization.hpp"
-
-#include "vast/compression.hpp"
 #include "vast/maybe.hpp"
 #include "vast/filesystem.hpp"
-#include "vast/streambuf.hpp"
 
 namespace vast {
 
@@ -33,8 +32,8 @@ auto save(Streambuf& streambuf, T&& x, Ts&&... xs)
     caf::stream_serializer<Streambuf&> s{streambuf};
     detail::write(s, std::forward<T>(x), std::forward<Ts>(xs)...);
   } else {
-    compressedbuf compressed{streambuf, Method};
-    caf::stream_serializer<compressedbuf&> s{compressed};
+    detail::compressedbuf compressed{streambuf, Method};
+    caf::stream_serializer<detail::compressedbuf&> s{compressed};
     detail::write(s, std::forward<T>(x), std::forward<Ts>(xs)...);
   }
   return {};
