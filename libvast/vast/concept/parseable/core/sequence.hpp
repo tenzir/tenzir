@@ -5,21 +5,13 @@
 #include <type_traits>
 
 #include "vast/concept/parseable/core/parser.hpp"
-#include "vast/concept/parseable/detail/attr_fold.hpp"
+#include "vast/concept/support/detail/attr_fold.hpp"
+#include "vast/detail/type_traits.hpp"
 
 namespace vast {
 
 template <typename Lhs, typename Rhs>
 class sequence_parser;
-
-template <typename>
-struct is_tuple : std::false_type {};
-
-template <typename... Ts>
-struct is_tuple<std::tuple<Ts...>> : std::true_type {};
-
-template <typename T>
-using tuple_wrap = std::conditional_t<is_tuple<T>::value, T, std::tuple<T>>;
 
 template <typename>
 struct is_sequence_parser : std::false_type {};
@@ -51,8 +43,8 @@ public:
           std::is_same<rhs_attribute, unused_type>{},
           lhs_attribute,
           typename detail::attr_fold<
-            decltype(std::tuple_cat(tuple_wrap<lhs_attribute>{},
-                                    tuple_wrap<rhs_attribute>{}))
+            decltype(std::tuple_cat(detail::tuple_wrap<lhs_attribute>{},
+                                    detail::tuple_wrap<rhs_attribute>{}))
           >::type
         >
       >

@@ -9,6 +9,11 @@ namespace vast {
 struct string_printer : printer<string_printer> {
   using attribute = std::string;
 
+  template <typename Iterator>
+  static bool print_string(Iterator& out, char c) {
+    return printers::any.print(out, c);
+  }
+
   template <typename Iterator, typename StringIterator>
   static bool print_string(Iterator& out, StringIterator f, StringIterator l) {
     while (f != l)

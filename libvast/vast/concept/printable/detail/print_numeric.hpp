@@ -5,7 +5,7 @@
 #include <limits>
 #include <type_traits>
 
-#include "vast/util/coding.hpp"
+#include "vast/detail/coding.hpp"
 
 namespace vast {
 namespace detail {
@@ -20,7 +20,7 @@ bool print_numeric(Iterator& out, T x) {
   char buf[std::numeric_limits<T>::digits10 + 1];
   auto p = buf;
   while (x > 0) {
-    *p++ = util::byte_to_char(x % 10);
+    *p++ = byte_to_char(x % 10);
     x /= 10;
   }
   out = std::reverse_copy(buf, p, out);

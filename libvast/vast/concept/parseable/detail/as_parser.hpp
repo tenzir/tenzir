@@ -11,9 +11,7 @@
 namespace vast {
 namespace detail {
 
-//
-// Unary
-//
+// -- unary -------------------------------------------------------------------
 
 inline auto as_parser(char c) {
   return ignore(char_parser{c});
@@ -42,9 +40,7 @@ auto as_parser(T x) -> std::enable_if_t<is_parser<T>{}, T> {
   return x; // A good compiler will elide the copy.
 }
 
-//
-// Unary
-//
+// -- binary ------------------------------------------------------------------
 
 template <typename T>
 using is_convertible_to_unary_parser =

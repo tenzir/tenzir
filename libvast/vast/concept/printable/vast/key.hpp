@@ -14,7 +14,7 @@ struct key_printer : printer<key_printer> {
 
   template <typename Iterator>
   bool print(Iterator& out, key const& k) const {
-    return detail::print_delimited(k.begin(), k.end(), out, '.');
+    return detail::print_delimited(k.begin(), k.end(), out, key::delimiter);
   }
 };
 

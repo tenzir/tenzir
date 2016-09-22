@@ -1,5 +1,6 @@
 #include <sstream>
 
+#include "vast/concept/printable/core.hpp"
 #include "vast/concept/printable/numeric.hpp"
 #include "vast/concept/printable/print.hpp"
 #include "vast/concept/printable/string.hpp"
@@ -87,11 +88,72 @@ TEST(floating point) {
 TEST(string) {
   std::string str;
   CHECK(printers::str(str, "foo"));
-  CHECK(str == "foo");
-
+  CHECK_EQUAL(str, "foo");
   str.clear();
   CHECK(printers::str(str, "foo"s));
-  CHECK(str == "foo");
+  CHECK_EQUAL(str, "foo");
+}
+
+TEST(literals) {
+  std::string str;
+  auto p = 42_P << " "_P << 3.14_P;
+  CHECK(p(str, unused));
+  CHECK_EQUAL(str, "42 3.14");
+}
+
+TEST(sequence tuple) {
+  auto f = 'f';
+  auto oo = "oo";
+  auto bar = "bar"s;
+  std::string str;
+  auto p = printers::any << printers::str << printers::str;
+  CHECK(p(str, std::tie(f, oo, bar)));
+  CHECK_EQUAL(str, "foobar");
+}
+
+TEST(sequence pair) {
+  auto f = 'f';
+  auto oo = "oo";
+  std::string str;
+  auto p = printers::any << printers::str;
+  CHECK(p(str, std::make_pair(f, oo)));
+  CHECK_EQUAL(str, "foo");
+}
+
+TEST(kleene) {
+  auto xs = std::vector<char>{'f', 'o', 'o'};
+  std::string str;
+  auto p = *printers::any;
+  CHECK(p(str, xs));
+  CHECK_EQUAL(str, "foo");
+  xs.clear();
+  str.clear();
+  CHECK(p(str, xs)); // 0 elements are allowed.
+}
+
+TEST(plus) {
+  auto xs = std::vector<char>{'b', 'a', 'r'};
+  std::string str;
+  auto p = +printers::any;
+  CHECK(p(str, xs));
+  CHECK_EQUAL(str, "bar");
+  xs.clear();
+  str.clear();
+  CHECK(!p(str, xs)); // 0 elements are *not* allowed!
+}
+
+TEST(list) {
+  auto xs = std::vector<int>{1, 2, 4, 8};
+  auto p = printers::integral<int> % ' ';
+  std::string str;
+  CHECK(p(str, xs));
+  CHECK_EQUAL(str, "+1 +2 +4 +8");
+  xs.resize(1);
+  str.clear();
+  CHECK(p(str, xs));
+  CHECK_EQUAL(str, "+1");
+  xs.clear();
+  CHECK(!p(str, xs)); // need at least one element
 }
 
 namespace ns {

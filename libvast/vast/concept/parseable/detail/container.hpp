@@ -4,7 +4,7 @@
 #include <vector>
 #include <type_traits>
 
-#include "vast/concept/parseable/detail/attr_fold.hpp"
+#include "vast/concept/support/detail/attr_fold.hpp"
 
 namespace vast {
 namespace detail {

@@ -1,37 +1,38 @@
 #ifndef VAST_CONCEPT_PRINTABLE_VAST_JSON_HPP
 #define VAST_CONCEPT_PRINTABLE_VAST_JSON_HPP
 
-#include "vast/json.hpp"
-#include "vast/util/string.hpp"
 #include "vast/concept/printable/print.hpp"
 #include "vast/concept/printable/string.hpp"
 #include "vast/concept/printable/core/printer.hpp"
+#include "vast/detail/string.hpp"
+#include "vast/json.hpp"
 
 namespace vast {
 
-struct json_type_printer : printer<json_type_printer> {
-  using attribute = json::type;
-  template <typename Iterator>
-  bool print(Iterator& out, json::type const& t) {
-    using namespace printers;
-    switch (t) {
-      default:
-        return str.print(out, "<invalid>");
-      case json::type::null:
-        return str.print(out, "null");
-      case json::type::boolean:
-        return str.print(out, "bool");
-      case json::type::number:
-        return str.print(out, "number");
-      case json::type::string:
-        return str.print(out, "string");
-      case json::type::array:
-        return str.print(out, "array");
-      case json::type::object:
-        return str.print(out, "object");
-    }
-  }
-};
+//struct json_type_printer : printer<json_type_printer> {
+//  using attribute = json::type;
+//
+//  template <typename Iterator>
+//  bool print(Iterator& out, json::type const& t) {
+//    using namespace printers;
+//    switch (t) {
+//      default:
+//        return str.print(out, "<invalid>");
+//      case json::type::null:
+//        return str.print(out, "null");
+//      case json::type::boolean:
+//        return str.print(out, "bool");
+//      case json::type::number:
+//        return str.print(out, "number");
+//      case json::type::string:
+//        return str.print(out, "string");
+//      case json::type::array:
+//        return str.print(out, "array");
+//      case json::type::object:
+//        return str.print(out, "object");
+//    }
+//  }
+//};
 
 namespace policy {
 
@@ -71,7 +72,7 @@ struct json_printer : printer<json_printer<TreePolicy, Indent, Padding>> {
     }
 
     bool operator()(std::string const& str) {
-      return printers::str.print(out_, util::json_escape(str));
+      return printers::str.print(out_, detail::json_escape(str));
     }
 
     bool operator()(json::array const& a) {
@@ -179,10 +180,10 @@ struct json_printer : printer<json_printer<TreePolicy, Indent, Padding>> {
   }
 };
 
-template <>
-struct printer_registry<json::type> {
-  using type = json_type_printer;
-};
+//template <>
+//struct printer_registry<json::type> {
+//  using type = json_type_printer;
+//};
 
 template <>
 struct printer_registry<json::array> {

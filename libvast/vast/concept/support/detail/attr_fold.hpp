@@ -1,5 +1,5 @@
-#ifndef VAST_CONCEPT_PARSEABLE_DETAIL_ATTR_FOLD_HPP
-#define VAST_CONCEPT_PARSEABLE_DETAIL_ATTR_FOLD_HPP
+#ifndef VAST_CONCEPT_SUPPORT_DETAIL_ATTR_FOLD_HPP
+#define VAST_CONCEPT_SUPPORT_DETAIL_ATTR_FOLD_HPP
 
 #include <string>
 #include <vector>
@@ -36,3 +36,4 @@ struct attr_fold<std::tuple<std::string, char>> : std::decay<std::string> {};
 } // namespace vast
 
 #endif
+

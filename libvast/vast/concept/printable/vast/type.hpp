@@ -11,109 +11,38 @@
 
 namespace vast {
 
-struct type_tag_printer : printer<type_tag_printer> {
-  using attribute = type::tag;
-
-  template <typename Iterator>
-  bool print(Iterator out, type::tag t) const {
-    using namespace printers;
-    switch (t) {
-      case type::tag::none:
-        str.print(out, "none");
-        break;
-      case type::tag::boolean:
-        str.print(out, "boolean");
-        break;
-      case type::tag::integer:
-        str.print(out, "integer");
-        break;
-      case type::tag::count:
-        str.print(out, "count");
-        break;
-      case type::tag::real:
-        str.print(out, "real");
-        break;
-      case type::tag::time_point:
-        str.print(out, "time_point");
-        break;
-      case type::tag::time_duration:
-        str.print(out, "time_duration");
-        break;
-      case type::tag::string:
-        str.print(out, "string");
-        break;
-      case type::tag::pattern:
-        str.print(out, "pattern");
-        break;
-      case type::tag::address:
-        str.print(out, "address");
-        break;
-      case type::tag::subnet:
-        str.print(out, "subnet");
-        break;
-      case type::tag::port:
-        str.print(out, "port");
-        break;
-      case type::tag::enumeration:
-        str.print(out, "enumeration");
-        break;
-      case type::tag::vector:
-        str.print(out, "vector");
-        break;
-      case type::tag::set:
-        str.print(out, "set");
-        break;
-      case type::tag::table:
-        str.print(out, "table");
-        break;
-      case type::tag::record:
-        str.print(out, "record");
-        break;
-      case type::tag::alias:
-        str.print(out, "alias");
-        break;
-    }
-    return true;
-  }
-};
-
 namespace detail {
 
 template <typename Iterator>
 bool print_attributes(Iterator& out, type const& t) {
-  return t.attributes().empty()
+  return t.attributes.empty()
          || ((printers::any.print(out, ' ')
-              && detail::print_delimited(t.attributes().begin(),
-                                         t.attributes().end(), out, ' ')));
+              && detail::print_delimited(t.attributes.begin(),
+                                         t.attributes.end(), out, ' ')));
 }
 
 } // namespace detail
 
-struct type_attribute_printer : printer<type_attribute_printer> {
-  using type = type::attribute;
+struct attribute_printer : printer<attribute_printer> {
+  using type = attribute;
 
   template <typename Iterator>
-  bool print(Iterator& out, type::attribute const& attr) const {
+  bool print(Iterator& out, attribute const& attr) const {
     using namespace printers;
     if (!any.print(out, '&'))
       return false;
-    switch (attr.key) {
-      default:
-        return str.print(out, "invalid");
-      case type::attribute::skip:
-        return str.print(out, "skip");
-      case type::attribute::default_:
-        return str.print(out, "default=\"") && str.print(out, attr.value)
-               && any.print(out, '"');
+    if (!str.print(out, attr.key))
+      return false;
+    return !attr.value || str.print(out, *attr.value);
     }
   }
 };
 
 struct type_enumeration_printer : printer<type_enumeration_printer> {
-  using type = type::enumeration;
+  using type = enumeration_type;
 
   template <typename Iterator>
-  bool print(Iterator& out, type::enumeration const& e) {
+  bool print(Iterator& out, enumeration_type const& e) {
     using vast::print;
     auto f = e.fields().begin();
     auto l = e.fields().end();
@@ -124,10 +53,10 @@ struct type_enumeration_printer : printer<type_enumeration_printer> {
 
 #define VAST_DEFINE_BASIC_TYPE_PRINTER(id, desc)                               \
   struct basic_type_printer##id : printer<basic_type_printer##id> {            \
-    using attribute = type::id;                                                \
+    using attribute = id_type;                                                 \
                                                                                \
     template <typename Iterator>                                               \
-    bool print(Iterator& out, type::id const& n) const {                       \
+    bool print(Iterator& out, id_type const& n) const {                        \
       using namespace printers;                                                \
       using vast::print;                                                       \
       return str.print(out, desc) && detail::print_attributes(out, n);         \
@@ -135,7 +64,7 @@ struct type_enumeration_printer : printer<type_enumeration_printer> {
   };                                                                           \
                                                                                \
   template <>                                                                  \
-  struct printer_registry<type::id> {                                          \
+  struct printer_registry<id_type> {                                           \
     using type = basic_type_printer##id;                                       \
   };
 
@@ -155,10 +84,10 @@ VAST_DEFINE_BASIC_TYPE_PRINTER(port, "port")
 #undef VAST_DEFINE_BASIC_TYPE_PRINTER
 
 struct type_vector_printer : printer<type_vector_printer> {
-  using attribute = type::vector;
+  using attribute = vector_type;
 
   template <typename Iterator>
-  bool print(Iterator& out, type::vector const& v) const {
+  bool print(Iterator& out, vector_type const& v) const {
     using vast::print;
     return print(out, "vector<") && print(out, v.elem()) && print(out, '>')
            && detail::print_attributes(out, v);
@@ -166,10 +95,10 @@ struct type_vector_printer : printer<type_vector_printer> {
 };
 
 struct type_set_printer : printer<type_set_printer> {
-  using attribute = type::set;
+  using attribute = set_type;
 
   template <typename Iterator>
-  bool print(Iterator& out, type::set const& s) const {
+  bool print(Iterator& out, set_type const& s) const {
     using vast::print;
     return print(out, "set<") && print(out, s.elem()) && print(out, '>')
            && detail::print_attributes(out, s);
@@ -177,10 +106,10 @@ struct type_set_printer : printer<type_set_printer> {
 };
 
 struct type_table_printer : printer<type_table_printer> {
-  using attribute = type::table;
+  using attribute = table_type;
 
   template <typename Iterator>
-  bool print(Iterator& out, type::table const& t) const {
+  bool print(Iterator& out, table_type const& t) const {
     using vast::print;
     return print(out, "table<") && print(out, t.key()) && print(out, ", ")
            && print(out, t.value()) && print(out, '>')
@@ -188,34 +117,34 @@ struct type_table_printer : printer<type_table_printer> {
   }
 };
 
-struct type_record_field_printer : printer<type_record_field_printer> {
-  using attribute = type::record::field;
+struct record_field_printer : printer<record_field_printer> {
+  using attribute = record_field;
 
   template <typename Iterator>
-  bool print(Iterator& out, type::record::field const& f) const {
+  bool print(Iterator& out, record_field const& f) const {
     using vast::print;
     return print(out, f.name) && print(out, ": ") && print(out, f.type);
   }
 };
 
 struct type_record_printer : printer<type_record_printer> {
-  using attribute = type::record;
+  using attribute = record_type;
 
   template <typename Iterator>
-  bool print(Iterator& out, type::record const& r) const {
+  bool print(Iterator& out, record_type const& r) const {
     using vast::print;
-    auto f = r.fields().begin();
-    auto l = r.fields().end();
+    auto f = r.fields.begin();
+    auto l = r.fields.end();
     return print(out, "record {") && detail::print_delimited(f, l, out, ", ")
            && print(out, '}') && detail::print_attributes(out, r);
   }
 };
 
 struct type_alias_printer : printer<type_alias_printer> {
-  using attribute = type::alias;
+  using attribute = alias_type;
 
   template <typename Iterator>
-  bool print(Iterator& out, type::alias const& a) const {
+  bool print(Iterator& out, alias_type const& a) const {
     using vast::print;
     return print(out, a.type()) && detail::print_attributes(out, a);
   }
@@ -283,47 +212,47 @@ template <typename Policy>
 constexpr bool type_printer<Policy>::show_type;
 
 template <>
-struct printer_registry<type::attribute> {
-  using type = type_attribute_printer;
+struct printer_registry<attribute> {
+  using type = attribute_printer;
 };
 
 template <>
-struct printer_registry<type::enumeration> {
+struct printer_registry<enumeration_type> {
   using type = type_enumeration_printer;
 };
 
 template <>
-struct printer_registry<type::vector> {
+struct printer_registry<vector_type> {
   using type = type_vector_printer;
 };
 
 template <>
-struct printer_registry<type::set> {
+struct printer_registry<set_type> {
   using type = type_set_printer;
 };
 
 template <>
-struct printer_registry<type::table> {
+struct printer_registry<table_type> {
   using type = type_table_printer;
 };
 
 template <>
-struct printer_registry<type::record::field> {
-  using type = type_record_field_printer;
+struct printer_registry<record_field> {
+  using type = record_field_printer;
 };
 
 template <>
-struct printer_registry<type::record> {
+struct printer_registry<record_type> {
   using type = type_record_printer;
 };
 
 template <>
-struct printer_registry<type::alias> {
+struct printer_registry<alias_type> {
   using type = type_alias_printer;
 };
 
 template <>
-struct printer_registry<type::tag> {
+struct printer_registry<tag_type> {
   using type = type_tag_printer;
 };
 

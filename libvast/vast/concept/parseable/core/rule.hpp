@@ -5,8 +5,8 @@
 #include <utility>
 
 #include "vast/concept/parseable/core/parser.hpp"
-#include "vast/util/assert.hpp"
-#include "vast/util/meta.hpp"
+#include "vast/detail/assert.hpp"
+#include "vast/detail/type_traits.hpp"
 
 namespace vast {
 namespace detail {
@@ -62,7 +62,7 @@ public:
   template <
     typename RHS,
     typename = std::enable_if_t<
-      is_parser<std::decay_t<RHS>>{} && ! util::is_same_or_derived<rule, RHS>::value
+      is_parser<std::decay_t<RHS>>{} && ! detail::is_same_or_derived<rule, RHS>::value
     >
   >
   rule(RHS&& rhs)
@@ -73,7 +73,7 @@ public:
   template <typename RHS>
   auto operator=(RHS&& rhs)
     -> std::enable_if_t<is_parser<std::decay_t<RHS>>{}
-                        && !util::is_same_or_derived<rule, RHS>::value> {
+                        && !detail::is_same_or_derived<rule, RHS>::value> {
     make_parser<RHS>(std::forward<RHS>(rhs));
   }
 

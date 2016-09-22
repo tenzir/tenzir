@@ -4,7 +4,8 @@
 #include <type_traits>
 
 #include "vast/concept/parseable/core/parser.hpp"
-#include "vast/util/variant.hpp"
+#include "vast/detail/type_list.hpp"
+#include "vast/variant.hpp"
 
 namespace vast {
 
@@ -21,32 +22,38 @@ struct is_choice_parser<choice_parser<Lhs, Rhs>> : std::true_type {};
 template <typename Lhs, typename Rhs>
 class choice_parser : public parser<choice_parser<Lhs, Rhs>> {
   template <typename T, typename U>
-  struct lazy_concat {
-    using type = util::tl_concat_t<typename T::types, typename U::types>;
+  struct lazy_variant_concat {
+    using type = detail::tl_concat_t<
+      detail::tl_make_t<typename T::types>,
+      detail::tl_make_t<typename U::types>
+    >;
   };
 
   template <typename T, typename U>
-  struct lazy_push_back {
-    using type = util::tl_push_back_t<typename T::types, U>;
+  struct lazy_variant_push_back {
+    using type = detail::tl_push_back_t<
+      detail::tl_make_t<typename T::types>,
+      U
+    >;
   };
 
   template <typename... Ts>
   struct lazy_type_list {
-    using type = util::type_list<Ts...>;
+    using type = detail::type_list<Ts...>;
   };
 
   template <typename T, typename U>
   using variant_type_list =
-    util::tl_distinct_t<
+    detail::tl_distinct_t<
       typename std::conditional_t<
-        util::is_variant<T>{} && util::is_variant<U>{},
-        lazy_concat<T, U>,
+        detail::is_variant<T>{} && detail::is_variant<U>{},
+        lazy_variant_concat<T, U>,
         std::conditional_t<
-          util::is_variant<T>{},
-          lazy_push_back<T, U>,
+          detail::is_variant<T>{},
+          lazy_variant_push_back<T, U>,
           std::conditional_t<
-            util::is_variant<U>{},
-            lazy_push_back<U, T>,
+            detail::is_variant<U>{},
+            lazy_variant_push_back<U, T>,
             lazy_type_list<T, U>
           >
         >
@@ -54,7 +61,7 @@ class choice_parser : public parser<choice_parser<Lhs, Rhs>> {
     >;
 
   template <typename T, typename U>
-  using make_flat_variant = util::make_variant_over<variant_type_list<T, U>>;
+  using make_flat_variant = make_variant_from<variant_type_list<T, U>>;
 
 public:
   using lhs_attribute = typename Lhs::attribute;

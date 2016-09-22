@@ -1,12 +1,12 @@
 #ifndef VAST_CONCEPT_SUPPORT_UNUSED_TYPE_HPP
 #define VAST_CONCEPT_SUPPORT_UNUSED_TYPE_HPP
 
-#include "vast/util/operators.hpp"
+#include "vast/detail/operators.hpp"
 
 namespace vast {
 
-struct unused_type : util::equality_comparable<unused_type>,
-                     util::integer_arithmetic<unused_type> {
+struct unused_type : detail::equality_comparable<unused_type>,
+                     detail::integer_arithmetic<unused_type> {
   unused_type() = default;
 
   template <typename T>
