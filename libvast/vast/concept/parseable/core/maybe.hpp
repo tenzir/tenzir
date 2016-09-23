@@ -5,7 +5,7 @@
 
 namespace vast {
 
-/// Like ::optional_parser, but exposes `T` instead of `maybe<T>` as
+/// Like ::optional_parser, but exposes `T` instead of `optional<T>` as
 /// attribute.
 template <typename Parser>
 class maybe_parser : public parser<maybe_parser<Parser>> {

@@ -42,7 +42,7 @@ auto operator*(T&& x)
      is_printer<std::decay_t<T>>{},
      kleene_printer<std::decay_t<T>>
    > {
-return kleene_printer<std::decay_t<T>>{std::forward<T>(x)};
+  return kleene_printer<std::decay_t<T>>{std::forward<T>(x)};
 }
 
 template <typename T>
@@ -51,7 +51,7 @@ auto operator+(T&& x)
      is_printer<std::decay_t<T>>{},
      plus_printer<std::decay_t<T>>
    > {
-return plus_printer<std::decay_t<T>>{std::forward<T>(x)};
+  return plus_printer<std::decay_t<T>>{std::forward<T>(x)};
 }
 
 // -- binary -----------------------------------------------------------------

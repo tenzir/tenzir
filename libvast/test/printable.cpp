@@ -156,6 +156,17 @@ TEST(list) {
   CHECK(!p(str, xs)); // need at least one element
 }
 
+TEST(optional) {
+  optional<int> x;
+  auto p = -printers::integral<int>;
+  std::string str;
+  CHECK(p(str, x));
+  CHECK(str.empty()); // nothing to see here, move along
+  x = 42;
+  CHECK(p(str, x));
+  CHECK_EQUAL(str, "+42");
+}
+
 namespace ns {
 
 struct foo {

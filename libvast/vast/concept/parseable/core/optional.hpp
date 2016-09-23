@@ -1,9 +1,9 @@
 #ifndef VAST_CONCEPT_PARSEABLE_CORE_OPTIONAL_HPP
 #define VAST_CONCEPT_PARSEABLE_CORE_OPTIONAL_HPP
 
-#include "vast/maybe.hpp"
 #include "vast/concept/parseable/core/parser.hpp"
 #include "vast/concept/support/detail/attr_fold.hpp"
+#include "vast/optional.hpp"
 
 namespace vast {
 
@@ -17,7 +17,7 @@ public:
     std::conditional_t<
       std::is_same<inner_attribute, unused_type>{},
       unused_type,
-      maybe<inner_attribute>
+      optional<inner_attribute>
     >;
 
   explicit optional_parser(Parser p)
