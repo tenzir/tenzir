@@ -13,6 +13,8 @@
 using namespace vast;
 using namespace std::string_literals;
 
+// -- core --------------------------------------------------------------------
+
 TEST(maybe) {
   using namespace parsers;
   auto maybe_x = ~chr{'x'};
@@ -37,6 +39,8 @@ TEST(container attribute folding) {
   static_assert(std::is_same<decltype(spaces)::attribute, unused_type>::value,
                 "container attribute folding failed");
 }
+
+// -- string ------------------------------------------------------------------
 
 TEST(char) {
   using namespace parsers;
@@ -238,6 +242,28 @@ TEST(attribute compatibility with string sequences) {
   CHECK(str == "xyz");
 }
 
+TEST(recursive rule) {
+  using namespace parsers;
+  rule<std::string::iterator, char> r;
+  r = alpha | '[' >> r >> ']';
+  auto str = "[[[x]]]"s;
+  auto f = str.begin();
+  auto l = str.end();
+
+  MESSAGE("unused type");
+  CHECK(r.parse(f, l, unused));
+  CHECK(f == l);
+
+  MESSAGE("attribute");
+  char c;
+  f = str.begin();
+  CHECK(r.parse(f, l, c));
+  CHECK(f == l);
+  CHECK(c == 'x');
+}
+
+// -- numeric -----------------------------------------------------------------
+
 TEST(bool) {
   auto p0 = single_char_bool_parser{};
   auto p1 = zero_one_bool_parser{};
@@ -434,25 +460,7 @@ TEST(byte) {
   CHECK(f == l);
 }
 
-TEST(recursive rule) {
-  using namespace parsers;
-  rule<std::string::iterator, char> r;
-  r = alpha | '[' >> r >> ']';
-  auto str = "[[[x]]]"s;
-  auto f = str.begin();
-  auto l = str.end();
-
-  MESSAGE("unused type");
-  CHECK(r.parse(f, l, unused));
-  CHECK(f == l);
-
-  MESSAGE("attribute");
-  char c;
-  f = str.begin();
-  CHECK(r.parse(f, l, c));
-  CHECK(f == l);
-  CHECK(c == 'x');
-}
+// -- API ---------------------------------------------------------------------
 
 TEST(stream) {
   std::istringstream ss{"a.b.c"};

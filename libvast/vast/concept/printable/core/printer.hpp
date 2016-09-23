@@ -8,8 +8,21 @@
 
 namespace vast {
 
+template <typename, typename>
+class action_printer;
+
 template <typename Derived>
 struct printer {
+  template <typename Action>
+  auto before(Action fun) const {
+    return action_printer<Derived, Action>{derived(), fun};
+  }
+
+  template <typename Action>
+  auto operator->*(Action fun) const {
+    return before(fun);
+  }
+
   template <typename Range, typename Attribute = unused_type>
   auto operator()(Range&& r, Attribute const& a = unused) const
     -> decltype(std::back_inserter(r), bool()) {

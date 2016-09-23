@@ -1,16 +1,16 @@
-#ifndef VAST_CONCEPT_PARSEABLE_CORE_ACTION_HPP
-#define VAST_CONCEPT_PARSEABLE_CORE_ACTION_HPP
+#ifndef VAST_CONCEPT_PRINTABLE_CORE_ACTION_HPP
+#define VAST_CONCEPT_PRINTABLE_CORE_ACTION_HPP
 
-#include "vast/concept/parseable/core/parser.hpp"
+#include "vast/concept/printable/core/printer.hpp"
 #include "vast/concept/support/detail/action_traits.hpp"
 
 namespace vast {
 
 /// Executes a function after successfully parsing the inner attribute.
-template <typename Parser, typename Action>
-class action_parser : public parser<action_parser<Parser, Action>> {
+template <typename Printer, typename Action>
+class action_printer : public printer<action_printer<Printer, Action>> {
 public:
-  using inner_attribute = typename Parser::attribute;
+  using inner_attribute = typename Printer::attribute;
   using action_traits = detail::action_traits<Action>;
   using action_arg_type = typename action_traits::first_arg_type;
 
@@ -21,59 +21,47 @@ public:
       typename action_traits::result_type
     >;
 
-  action_parser(Parser p, Action fun) : parser_{std::move(p)}, action_(fun) {
+  action_printer(Printer p, Action fun) : printer_{std::move(p)}, action_(fun) {
   }
 
   // No argument, void return type.
   template <typename Iterator, typename Attribute, typename A = Action>
-  auto parse(Iterator& f, Iterator const& l, Attribute&) const
+  auto print(Iterator& out, Attribute const& attr) const
   -> std::enable_if_t<detail::action_traits<A>::no_args_returns_void, bool> {
-    inner_attribute x;
-    if (!parser_.parse(f, l, x))
-      return false;
     action_();
-    return true;
+    return printer_.print(out, attr);
   }
 
   // One argument, void return type.
   template <typename Iterator, typename Attribute, typename A = Action>
-  auto parse(Iterator& f, Iterator const& l, Attribute&) const
+  auto print(Iterator& out, Attribute const& attr) const
   -> std::enable_if_t<detail::action_traits<A>::one_arg_returns_void, bool> {
-    action_arg_type x;
-    if (!parser_.parse(f, l, x))
-      return false;
-    action_(std::move(x));
-    return true;
+    action_(attr);
+    return printer_.print(out, attr);
   }
 
   // No argument, non-void return type.
   template <typename Iterator, typename Attribute, typename A = Action>
-  auto parse(Iterator& f, Iterator const& l, Attribute& a) const
+  auto print(Iterator& out, Attribute const&) const
   -> std::enable_if_t<
     detail::action_traits<A>::no_args_returns_non_void, bool
   > {
-    inner_attribute x;
-    if (!parser_.parse(f, l, x))
-      return false;
-    a = action_();
-    return true;
+    auto x = action_();
+    return printer_.print(out, x);
   }
 
   // One argument, non-void return type.
   template <typename Iterator, typename Attribute, typename A = Action>
-  auto parse(Iterator& f, Iterator const& l, Attribute& a) const
+  auto print(Iterator& out, Attribute const& attr) const
   -> std::enable_if_t<
     detail::action_traits<A>::one_arg_returns_non_void, bool
   > {
-    action_arg_type x;
-    if (!parser_.parse(f, l, x))
-      return false;
-    a = action_(std::move(x));
-    return true;
+    auto x = action_(attr);
+    return printer_.print(out, x);
   }
 
 private:
-  Parser parser_;
+  Printer printer_;
   Action action_;
 };
 

@@ -14,6 +14,8 @@
 using namespace vast;
 using namespace std::string_literals;
 
+// -- numeric -----------------------------------------------------------------
+
 TEST(signed integers) {
   auto i = 42;
   std::string str;
@@ -85,6 +87,8 @@ TEST(floating point) {
   CHECK(str == "123456.001230");
 }
 
+// -- string ------------------------------------------------------------------
+
 TEST(string) {
   std::string str;
   CHECK(printers::str(str, "foo"));
@@ -93,6 +97,8 @@ TEST(string) {
   CHECK(printers::str(str, "foo"s));
   CHECK_EQUAL(str, "foo");
 }
+
+// -- core --------------------------------------------------------------------
 
 TEST(literals) {
   std::string str;
@@ -167,6 +173,31 @@ TEST(optional) {
   CHECK_EQUAL(str, "+42");
 }
 
+TEST(action) {
+  auto flag = false;
+  // no args, void result type
+  auto p0 = printers::integral<int> ->* [&] { flag = true; };
+  std::string str;
+  CHECK(p0(str, 42));
+  CHECK(flag);
+  CHECK_EQUAL(str, "+42");
+  // one arg, void result type
+  auto p1 = printers::integral<int> ->* [&](int i) { flag = i % 2 == 0; };
+  str.clear();
+  CHECK(p1(str, 8));
+  CHECK_EQUAL(str, "+8");
+  // no args, non-void result type
+  auto p2 = printers::integral<int> ->* [] { return 42; };
+  str.clear();
+  CHECK(p2(str, 7));
+  CHECK_EQUAL(str, "+42");
+  // one arg, non-void result type
+  auto p3 = printers::integral<int> ->* [](int i) { return ++i; };
+  str.clear();
+  CHECK(p3(str, 41));
+  CHECK_EQUAL(str, "+42");
+}
+
 namespace ns {
 
 struct foo {
@@ -189,6 +220,8 @@ TEST(custom type) {
   CHECK(print(std::back_inserter(str), ns::foo{}));
   CHECK(str == "+42");
 }
+
+// -- API ---------------------------------------------------------------------
 
 TEST(stream) {
   std::ostringstream ss;
