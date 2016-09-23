@@ -36,6 +36,13 @@ public:
   literal_printer(char c) : str_{c} {
   }
 
+  template <size_t N>
+  literal_printer(char const(&str)[N]) : str_{str} {
+  }
+
+  literal_printer(char const* str) : str_{str} {
+  }
+
   literal_printer(std::string str) : str_(std::move(str)) {
   }
 
