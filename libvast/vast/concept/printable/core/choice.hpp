@@ -1,26 +1,26 @@
-#ifndef VAST_CONCEPT_PARSEABLE_CORE_CHOICE_HPP
-#define VAST_CONCEPT_PARSEABLE_CORE_CHOICE_HPP
+#ifndef VAST_CONCEPT_PRINTABLE_CORE_CHOICE_HPP
+#define VAST_CONCEPT_PRINTABLE_CORE_CHOICE_HPP
 
 #include <type_traits>
 
-#include "vast/concept/parseable/core/parser.hpp"
+#include "vast/concept/printable/core/printer.hpp"
 #include "vast/concept/support/detail/variant.hpp"
 #include "vast/variant.hpp"
 
 namespace vast {
 
 template <typename Lhs, typename Rhs>
-class choice_parser;
+class choice_printer;
 
 template <typename>
-struct is_choice_parser : std::false_type {};
+struct is_choice_printer : std::false_type {};
 
 template <typename Lhs, typename Rhs>
-struct is_choice_parser<choice_parser<Lhs, Rhs>> : std::true_type {};
+struct is_choice_printer<choice_printer<Lhs, Rhs>> : std::true_type {};
 
-/// Attempts to parse either LHS or RHS.
+/// Attempts to print either LHS or RHS.
 template <typename Lhs, typename Rhs>
-class choice_parser : public parser<choice_parser<Lhs, Rhs>> {
+class choice_printer : public printer<choice_printer<Lhs, Rhs>> {
 public:
   using lhs_attribute = typename Lhs::attribute;
   using rhs_attribute = typename Rhs::attribute;
@@ -50,57 +50,44 @@ public:
       >
     >;
 
-  choice_parser(Lhs lhs, Rhs rhs)
+  choice_printer(Lhs lhs, Rhs rhs)
     : lhs_{std::move(lhs)}, rhs_{std::move(rhs)} {
   }
 
   template <typename Iterator, typename Attribute>
-  bool parse(Iterator& f, Iterator const& l, Attribute& a) const {
-    auto save = f;
-    if (parse_left<Lhs>(f, l, a))
-      return true;
-    f = save;
-    if (parse_right(f, l, a))
-      return true;
-    f = save;
-    return false;
+  bool print(Iterator& out, Attribute const& a) const {
+    return print_left<Lhs>(out, a) || print_right(out, a);
   }
 
 private:
   template <typename Left, typename Iterator, typename Attribute>
-  auto parse_left(Iterator& f, Iterator const& l, Attribute& a) const
-  -> std::enable_if_t<is_choice_parser<Left>{}, bool> {
-    return lhs_.parse(f, l, a); // recurse
+  auto print_left(Iterator& out, Attribute const& a) const
+  -> std::enable_if_t<is_choice_printer<Left>{}, bool> {
+    return lhs_.print(out, a); // recurse
   }
 
   template <typename Left, typename Iterator>
-  auto parse_left(Iterator& f, Iterator const& l, unused_type) const
-  -> std::enable_if_t<!is_choice_parser<Left>::value, bool> {
-    return lhs_.parse(f, l, unused);
+  auto print_left(Iterator& out, unused_type) const
+  -> std::enable_if_t<!is_choice_printer<Left>::value, bool> {
+    return lhs_.print(out, unused);
   }
 
   template <typename Left, typename Iterator, typename Attribute>
-  auto parse_left(Iterator& f, Iterator const& l, Attribute& a) const
-  -> std::enable_if_t<!is_choice_parser<Left>::value, bool> {
-    lhs_attribute al;
-    if (!lhs_.parse(f, l, al))
-      return false;
-    a = std::move(al);
-    return true;
+  auto print_left(Iterator& out, Attribute const& a) const
+  -> std::enable_if_t<!is_choice_printer<Left>::value, bool> {
+    auto x = get_if<lhs_attribute>(a);
+    return x && lhs_.print(out, *x);
   }
 
   template <typename Iterator>
-  bool parse_right(Iterator& f, Iterator const& l, unused_type) const {
-    return rhs_.parse(f, l, unused);
+  bool print_right(Iterator& out, unused_type) const {
+    return rhs_.print(out, unused);
   }
 
   template <typename Iterator, typename Attribute>
-  auto parse_right(Iterator& f, Iterator const& l, Attribute& a) const {
-    rhs_attribute ar;
-    if (!rhs_.parse(f, l, ar))
-      return false;
-    a = std::move(ar);
-    return true;
+  auto print_right(Iterator& out, Attribute const& a) const {
+    auto x = get_if<rhs_attribute>(a);
+    return x && rhs_.print(out, *x);
   }
 
   Lhs lhs_;
@@ -110,3 +97,4 @@ private:
 } // namespace vast
 
 #endif
+

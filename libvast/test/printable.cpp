@@ -126,6 +126,23 @@ TEST(sequence pair) {
   CHECK_EQUAL(str, "foo");
 }
 
+TEST(choice) {
+  using namespace printers;
+  auto x = variant<char, bool, int64_t>{true};
+  auto p = any | tf | i64;
+  std::string str;
+  CHECK(p(str, x));
+  CHECK_EQUAL(str, "T");
+  str.clear();
+  x = 'c';
+  CHECK(p(str, x));
+  CHECK_EQUAL(str, "c");
+  str.clear();
+  x = 64ll;
+  CHECK(p(str, x));
+  CHECK_EQUAL(str, "+64");
+}
+
 TEST(kleene) {
   auto xs = std::vector<char>{'f', 'o', 'o'};
   std::string str;

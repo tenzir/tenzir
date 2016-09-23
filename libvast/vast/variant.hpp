@@ -26,8 +26,8 @@
 //   ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 //   DEALINGS IN THE SOFTWARE.
 
-#ifndef VAST_DETAIL_VARIANT_HPP
-#define VAST_DETAIL_VARIANT_HPP
+#ifndef VAST_VARIANT_HPP
+#define VAST_VARIANT_HPP
 
 #include <functional>
 #include <map>
@@ -37,10 +37,9 @@
 #include <tuple>
 #include <type_traits>
 
+#include <caf/detail/scope_guard.hpp>
 #include <caf/meta/load_callback.hpp>
 #include <caf/meta/save_callback.hpp>
-
-#include <caf/detail/scope_guard.hpp>
 
 #include "vast/detail/assert.hpp"
 #include "vast/detail/operators.hpp"
