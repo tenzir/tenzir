@@ -1,443 +1,193 @@
-#include "vast/error.hpp"
-#include "vast/type.hpp"
-#include "vast/value.hpp"
+#include <tuple>
 
-#include "vast/util/assert.hpp"
+#include "vast/json.hpp"
+#include "vast/pattern.hpp"
+#include "vast/type.hpp"
+
+#include "vast/concept/printable/to_string.hpp"
+#include "vast/concept/printable/vast/type.hpp"
+
+#include "vast/detail/assert.hpp"
+#include "vast/detail/string.hpp"
+
 
 namespace vast {
 
-type::attribute::attribute(key_type k, std::string v)
-  : key{k},
-    value{std::move(v)} {
+type::type() : ptr_{new impl} {
 }
 
-bool operator==(type::attribute const& lhs, type::attribute const& rhs) {
-  return lhs.key == rhs.key && lhs.value == rhs.value;
-}
-
-bool operator==(type::base const& lhs, type::base const& rhs) {
-  return lhs.digest() == rhs.digest();
-}
-
-bool operator<(type::base const& lhs, type::base const& rhs) {
-  return lhs.digest() < rhs.digest();
-}
-
-std::string const& type::base::name() const {
-  return name_;
-}
-
-bool type::base::name(std::string name) {
-  if (!name_.empty())
-    return false;
-  name_ = std::move(name);
-  update_digest(name_.data(), name_.size());
-  return true;
-}
-
-std::vector<type::attribute> const& type::base::attributes() const {
-  return attributes_;
-}
-
-type::attribute const* type::base::find_attribute(attribute::key_type k) const {
-  auto i = std::find_if(attributes_.begin(), attributes_.end(),
-                        [&](attribute const& a) { return a.key == k; });
-  return i == attributes_.end() ? nullptr : &*i;
-}
-
-type::hash_type::result_type type::base::digest() const {
-  return digest_;
-}
-
-type::base::base(std::vector<attribute> a)
-  : attributes_(std::move(a)) {
-  for (auto& a : attributes_) {
-    update_digest(&a.key, sizeof(a.key));
-    update_digest(a.value.data(), a.value.size());
-  }
-}
-
-void type::base::update_digest(void const* bytes, size_t length) {
-  hash_type h{digest_};
-  h(bytes, length);
-  digest_ = static_cast<hash_type::result_type>(h);
-}
-
-namespace {
-
-struct deriver {
-  type operator()(none const&) const {
-    return type{};
-  }
-
-  template <typename T>
-  type operator()(T const&) const {
-    static_assert(type::is_basic<type::from_data<T>>::value,
-                  "only basic types allowed");
-    return type::from_data<T>{};
-  }
-
-  type operator()(enumeration const&) const {
-    // We can't derive the available fields from a single data instance.
-    return type{};
-  }
-
-  type operator()(vector const& v) const {
-    return type::vector{v.empty() ? type{} : type::derive(v[0])};
-  }
-
-  type operator()(set const& s) const {
-    return type::set{s.empty() ? type{} : type::derive(*s.begin())};
-  }
-
-  type operator()(table const& x) const {
-    if (x.empty())
-      return type::table{type{}, type{}};
-    auto front = x.begin();
-    return type::table{type::derive(front->first), type::derive(front->second)};
-  }
-
-  type operator()(record const& r) const {
-    std::vector<type::record::field> fs;
-    for (size_t i = 0; i < r.size(); ++i)
-      fs.emplace_back("", type::derive(r[i]));
-    return type::record{std::move(fs)};
-  }
-};
-
-} // namespace <anonymous>
-
-type type::derive(data const& d) {
-  return visit(deriver{}, d);
-}
-
-type::type() {
-  static auto const default_info = util::make_intrusive<intrusive_info>();
-  info_ = default_info;
-}
-
-namespace {
-
-struct name_setter {
-  name_setter(std::string& name) : name_{name} { }
-
-  bool operator()(none&) {
-    return false;
-  }
-
-  template <typename T>
-  bool operator()(T& x) {
-    return x.name(std::move(name_));
-  }
-
-  std::string& name_;
-};
-
-struct name_getter {
-  // FIXME: there exists a bug (#50) with the variant ipmlementation preventing
-  // references as return types of visitors, so we work around this using
-  // poitners.
-  std::string const* operator()(none) const {
-    static std::string const no_name;
-    return &no_name;
-  }
-
-  template <typename T>
-  std::string const* operator()(T const& x) const {
-    return &x.name();
-  }
-};
-
-struct digester {
-  auto operator()(none) const {
-    return type::hash_type::result_type{0};
-  }
-
-  template <typename T>
-  auto operator()(T const& x) const {
-    return x.digest();
-  }
-};
-
-struct attribute_getter {
-  auto operator()(none) const {
-    static auto const empty = std::vector<type::attribute>{};
-    return &empty;
-  }
-
-  template <typename T>
-  auto operator()(T const& x) const {
-    return &x.attributes();
-  }
-};
-
-struct attribute_finder {
-  attribute_finder(type::attribute::key_type k) : key_{k} {
-  }
-
-  type::attribute const* operator()(none) const {
-    return nullptr;
-  }
-
-  template <typename T>
-  type::attribute const* operator()(T const& x) const {
-    return x.find_attribute(key_);
-  }
-
-  type::attribute::key_type key_;
-};
-
-} // namespace <anonymous>
-
-bool type::name(std::string name) {
-  return visit(name_setter{name}, *info_);
+std::string& type::name() {
+  return *visit([](auto& x) { return &x.name(); }, *this);
 }
 
 std::string const& type::name() const {
-  return *visit(name_getter{}, *info_);
+  return *visit([](auto& x) { return &x.name(); }, *this);
 }
 
-std::vector<type::attribute> const& type::attributes() const {
-  return *visit(attribute_getter{}, *info_);
+std::vector<attribute>& type::attributes() {
+  return *visit([](auto& x) { return &x.attributes(); }, *this);
 }
 
-type::attribute const* type::find_attribute(attribute::key_type key) const {
-  return visit(attribute_finder{key}, *info_);
+std::vector<attribute> const& type::attributes() const {
+  return *visit([](auto& x) { return &x.attributes(); }, *this);
 }
 
-type::hash_type::result_type type::digest() const {
-  return visit(digester{}, *info_);
+type& type::attributes(std::initializer_list<attribute> list) {
+  attributes() = std::move(list);
+  return *this;
 }
 
 namespace {
 
-struct data_checker {
-  data_checker(type const& t) : type_{t} { }
-
-  bool operator()(none const&) const {
+struct equal_to {
+  template <class T, class U>
+  bool operator()(T const&, U const&) const noexcept {
     return false;
   }
 
-  template <typename T>
-  bool operator()(T const&) const {
-    static_assert(type::is_basic<type::from_data<T>>::value,
-                  "only basic types allowed");
-    return is<type::from_data<T>>(type_);
-  }
-
-  bool operator()(enumeration const& e) const {
-    auto t = get<type::enumeration>(type_);
-    return t && e < t->fields().size();
-  }
-
-  bool operator()(vector const& v) const {
-    if (v.empty())
-      return true;
-    auto t = get<type::vector>(type_);
-    return t && t->elem().check(*v.begin());
-  }
-
-  bool operator()(set const& s) const {
-    if (s.empty())
-      return true;
-    auto t = get<type::set>(type_);
-    return t && t->elem().check(*s.begin());
-  }
-
-  bool operator()(table const& x) const {
-    if (x.empty())
-      return true;
-    auto t = get<type::table>(type_);
-    if (!t)
-      return false;
-    auto front = x.begin();
-    return t->key().check(front->first) && t->value().check(front->second);
-  }
-
-  bool operator()(record const& r) const {
-    auto t = get<type::record>(type_);
-    if (!t || t->fields().size() != r.size())
-      return false;
-    for (size_t i = 0; i < r.size(); ++i)
-      if (!t->fields()[i].type.check(r[i]))
-        return false;
-    return true;
-  }
-
-  type const& type_;
-};
-
-struct data_maker {
-  data operator()(none) const {
-    return nil;
-  }
-
-  template <typename T>
-  data operator()(T const&) const {
-    return type::to_data<T>{};
-  }
-
-  data operator()(type::alias const& a) const {
-    return a.type().make();
+  template <class T>
+  bool operator()(T const& x, T const& y) const noexcept {
+    return x == y;
   }
 };
 
-} // namespace <anonymous>
+struct less_than {
+  template <class T, class U>
+  bool operator()(T const&, U const&) const noexcept {
+    return false;
+  }
 
-bool type::check(data const& d) const {
-  return which(d) == data::tag::none || which(*info_) == type::tag::none
-         || visit(data_checker{*this}, d);
+  template <class T>
+  bool operator()(T const& x, T const& y) const noexcept {
+    return x < y;
+  }
+};
+
+} // namespace
+
+bool operator==(const type& x, const type& y) {
+  //return uhash<type::hasher>{}(x) == uhash<type::hasher>{}(y);
+  return visit(equal_to{}, x, y);
 }
 
-data type::make() const {
-  return visit(data_maker{}, *this);
+bool operator<(const type& x, const type& y) {
+  //return uhash<type::hasher>{}(x) < uhash<type::hasher>{}(y);
+  return visit(less_than{}, x, y);
 }
 
-bool type::basic() const {
-  auto t = which(*info_);
-  return t == tag::boolean
-      || t == tag::integer
-      || t == tag::count
-      || t == tag::real
-      || t == tag::time_point
-//      || t == tag::time_interval
-      || t == tag::time_duration
-//      || t == tag::time_period
-      || t == tag::string
-      || t == tag::pattern
-      || t == tag::address
-      || t == tag::subnet
-      || t == tag::port;
+enumeration_type::enumeration_type(std::vector<std::string> fields)
+  : fields{std::move(fields)} {
 }
 
-bool type::container() const
-{
-  auto t = which(*info_);
-  return t == tag::set || t == tag::vector || t == tag::table;
+bool operator==(const enumeration_type& x, const enumeration_type& y) {
+  return static_cast<const enumeration_type::base_type&>(x) ==
+         static_cast<const enumeration_type::base_type&>(y) &&
+           x.fields == y.fields;
 }
 
-bool type::recursive() const {
-  auto t = which(*info_);
-  return t == tag::set || t == tag::vector || t == tag::table;
+bool operator<(const enumeration_type& x, const enumeration_type& y) {
+  return x.fields < y.fields;
 }
 
-type::info& expose(type& t) {
-  return *t.info_;
+vector_type::vector_type(type t) : value_type{std::move(t)} {
 }
 
-type::info const& expose(type const& t) {
-  return *t.info_;
+bool operator==(const vector_type& x, const vector_type& y) {
+  return static_cast<const vector_type::base_type&>(x) ==
+         static_cast<const vector_type::base_type&>(y) &&
+    x.value_type == y.value_type;
 }
 
-bool operator==(type const& lhs, type const& rhs) {
-  return lhs.digest() == rhs.digest();
+bool operator<(const vector_type& x, const vector_type& y) {
+  return x.value_type < y.value_type;
 }
 
-bool operator<(type const& lhs, type const& rhs) {
-  return lhs.digest() < rhs.digest();
+set_type::set_type(type t) : value_type{std::move(t)} {
 }
 
-type::enumeration::enumeration(std::vector<std::string> fields,
-                               std::vector<attribute> a)
-  : base{std::move(a)}, fields_{std::move(fields)} {
-  static constexpr auto desc = "enumeration";
-  update_digest(desc, sizeof(desc));
-  for (auto& f : fields_)
-    update_digest(f.data(), f.size());
+bool operator==(const set_type& x, const set_type& y) {
+  return static_cast<const set_type::base_type&>(x) ==
+    static_cast<const set_type::base_type&>(y) &&
+    x.value_type == y.value_type;
 }
 
-std::vector<std::string> const& type::enumeration::fields() const {
-  return fields_;
+bool operator<(const set_type& x, const set_type& y) {
+  return x.value_type < y.value_type;
 }
 
-type::vector::vector(type t, std::vector<attribute> a)
-  : base{std::move(a)}, elem_{std::move(t)} {
-  static constexpr auto desc = "vector";
-  update_digest(desc, sizeof(desc));
-  auto digest = elem_.digest();
-  update_digest(&digest, sizeof(digest));
+table_type::table_type(type key, type value)
+  : key_type{std::move(key)},
+    value_type{std::move(value)} {
 }
 
-type const& type::vector::elem() const {
-  return elem_;
+bool operator==(const table_type& x, const table_type& y) {
+  return static_cast<const table_type::base_type&>(x) ==
+         static_cast<const table_type::base_type&>(y) &&
+    x.key_type == y.key_type && x.value_type == y.value_type;
 }
 
-type::set::set(type t, std::vector<attribute> a)
-  : base{std::move(a)}, elem_{std::move(t)} {
-  static constexpr auto desc = "set";
-  update_digest(desc, sizeof(desc));
-  auto digest = elem_.digest();
-  update_digest(&digest, sizeof(digest));
+bool operator<(const table_type& x, const table_type& y) {
+  return std::tie(x.key_type, x.value_type) <
+    std::tie(y.key_type, y.value_type);
 }
 
-type const& type::set::elem() const {
-  return elem_;
+record_field::record_field(std::string name, vast::type type)
+  : name{std::move(name)},
+    type{std::move(type)} {
 }
 
-type::table::table(type k, type v, std::vector<attribute> a)
-  : base{std::move(a)}, key_{std::move(k)}, value_{std::move(v)} {
-  static constexpr auto desc = "table";
-  update_digest(desc, sizeof(desc));
-  auto key_digest = key_.digest();
-  update_digest(&key_digest, sizeof(key_digest));
-  auto value_digest = value_.digest();
-  update_digest(&value_digest, sizeof(value_digest));
+bool operator==(const record_field& x, const record_field& y) {
+  return x.name == y.name && x.type == y.type;
 }
 
-type const& type::table::key() const {
-  return key_;
+bool operator<(const record_field& x, const record_field& y) {
+  return std::tie(x.name, x.type) < std::tie(y.name, y.type);
 }
 
-type const& type::table::value() const {
-  return value_;
+record_type::record_type(std::vector<record_field> fields)
+  : fields{std::move(fields)} {
 }
 
-type::record::field::field(std::string n, vast::type t)
-      : name{std::move(n)},
-        type{std::move(t)} {
-    }
-
-bool
-operator==(type::record::field const& lhs, type::record::field const& rhs) {
-  return lhs.name == rhs.name && lhs.type == rhs.type;
+record_type::record_type(std::initializer_list<record_field> list)
+  : fields{std::move(list)} {
 }
 
-key type::record::each::range_state::key() const {
+key record_type::each::range_state::key() const {
   vast::key k(trace.size());
   for (size_t i = 0; i < trace.size(); ++i)
     k[i] = trace[i]->name;
   return k;
 }
 
-size_t type::record::each::range_state::depth() const {
+size_t record_type::each::range_state::depth() const {
   return trace.size();
 }
 
-type::record::each::each(record const& r) {
-  if (r.fields_.empty())
+record_type::each::each(record_type const& r) {
+  if (r.fields.empty())
     return;
   auto rec = &r;
   do {
     records_.push_back(rec);
-    state_.trace.push_back(&rec->fields_[0]);
+    state_.trace.push_back(&rec->fields[0]);
     state_.offset.push_back(0);
-  } while ((rec = get<type::record>(state_.trace.back()->type)));
+  } while ((rec = get_if<record_type>(state_.trace.back()->type)));
 }
 
-bool type::record::each::next() {
+bool record_type::each::next() {
   if (records_.empty())
     return false;
-  while (++state_.offset.back() == records_.back()->fields_.size()) {
+  while (++state_.offset.back() == records_.back()->fields.size()) {
     records_.pop_back();
     state_.trace.pop_back();
     state_.offset.pop_back();
     if (records_.empty())
       return false;
   }
-  auto f = &records_.back()->fields_[state_.offset.back()];
+  auto f = &records_.back()->fields[state_.offset.back()];
   state_.trace.back() = f;
-  while (auto r = get<type::record>(f->type)) {
-    f = &r->fields_[0];
+  while (auto r = get_if<record_type>(f->type)) {
+    f = &r->fields[0];
     records_.emplace_back(r);
     state_.trace.push_back(f);
     state_.offset.push_back(0);
@@ -445,24 +195,7 @@ bool type::record::each::next() {
   return true;
 }
 
-type::record::record(std::initializer_list<field> fields,
-                     std::vector<attribute> a)
-  : base{std::move(a)},
-    fields_(fields.begin(), fields.end()) {
-  initialize();
-}
-
-type::record::record(std::vector<field> fields, std::vector<attribute> a)
-  : base{std::move(a)},
-    fields_(std::move(fields)) {
-  initialize();
-}
-
-std::vector<type::record::field> const& type::record::fields() const {
-  return fields_;
-}
-
-maybe<offset> type::record::resolve(key const& k) const {
+maybe<offset> record_type::resolve(key const& k) const {
   if (k.empty())
     return fail("empty symbol sequence");
   offset off;
@@ -470,11 +203,11 @@ maybe<offset> type::record::resolve(key const& k) const {
   auto rec = this;
   for (auto id = k.begin(); id != k.end() && found; ++id) {
     found = false;
-    for (size_t i = 0; i < rec->fields_.size(); ++i) {
-      if (rec->fields_[i].name == *id) {
+    for (size_t i = 0; i < rec->fields.size(); ++i) {
+      if (rec->fields[i].name == *id) {
         // If the name matches, we have to check whether we're continuing with
         // an intermediate record or have reached the last symbol.
-        rec = get<record>(rec->fields_[i].type);
+        rec = get_if<record_type>(rec->fields[i].type);
         if (!(rec || id + 1 == k.end()))
           return fail("intermediate fields must be records");
         off.push_back(i);
@@ -488,17 +221,17 @@ maybe<offset> type::record::resolve(key const& k) const {
   return std::move(off);
 }
 
-maybe<key> type::record::resolve(offset const& o) const {
+maybe<key> record_type::resolve(offset const& o) const {
   if (o.empty())
     return fail("empty offset sequence");
   key k;
   auto r = this;
   for (size_t i = 0; i < o.size(); ++i) {
-    if (o[i] >= r->fields_.size())
+    if (o[i] >= r->fields.size())
       return fail("offset index ", i, " out of bounds");
-    k.push_back(r->fields_[o[i]].name);
+    k.push_back(r->fields[o[i]].name);
     if (i != o.size() - 1) {
-      r = get<record>(r->fields_[o[i]].type);
+      r = get_if<record_type>(r->fields[o[i]].type);
       if (!r)
         return fail("intermediate fields must be records");
     }
@@ -550,10 +283,10 @@ struct finder {
     return r;
   }
 
-  std::vector<std::pair<offset, key>> operator()(type::record const& r) {
+  std::vector<std::pair<offset, key>> operator()(record_type const& r) {
     std::vector<std::pair<offset, key>> result;
     off_.push_back(0);
-    for (auto& f : r.fields()) {
+    for (auto& f : r.fields) {
       trace_.push_back(f.name);
       for (auto& p : visit(*this, f.type))
         result.push_back(std::move(p));
@@ -576,26 +309,26 @@ struct finder {
 
 } // namespace <anonymous>
 
-std::vector<std::pair<offset, key>> type::record::find(key const& k) const {
+std::vector<std::pair<offset, key>> record_type::find(key const& k) const {
   return finder{k, finder::exact, name()}(*this);
 }
 
 std::vector<std::pair<offset, key>>
-type::record::find_prefix(key const& k) const {
+record_type::find_prefix(key const& k) const {
   return finder{k, finder::prefix, name()}(*this);
 }
 
 std::vector<std::pair<offset, key>>
-type::record::find_suffix(key const& k) const {
+record_type::find_suffix(key const& k) const {
   return finder{k, finder::suffix, name()}(*this);
 }
 
-type const* type::record::at(key const& k) const {
+type const* record_type::at(key const& k) const {
   auto r = this;
   for (size_t i = 0; i < k.size(); ++i) {
     auto& id = k[i];
-    field const* f = nullptr;
-    for (auto& a : r->fields_)
+    record_field const* f = nullptr;
+    for (auto& a : r->fields)
       if (a.name == id) {
         f = &a;
         break;
@@ -604,106 +337,112 @@ type const* type::record::at(key const& k) const {
       return nullptr;
     if (i + 1 == k.size())
       return &f->type;
-    r = get<type::record>(f->type);
+    r = get_if<record_type>(f->type);
     if (!r)
       return nullptr;
   }
   return nullptr;
 }
 
-type const* type::record::at(offset const& o) const {
+type const* record_type::at(offset const& o) const {
   auto r = this;
   for (size_t i = 0; i < o.size(); ++i) {
     auto& idx = o[i];
-    if (idx >= r->fields_.size())
+    if (idx >= r->fields.size())
       return nullptr;
-    auto t = &r->fields_[idx].type;
+    auto t = &r->fields[idx].type;
     if (i + 1 == o.size())
       return t;
-    r = get<type::record>(*t);
+    r = get_if<record_type>(*t);
     if (!r)
       return nullptr;
   }
   return nullptr;
 }
 
-void type::record::initialize() {
-  static constexpr auto desc = "record";
-  update_digest(desc, sizeof(desc));
-  for (auto f : fields_) {
-    update_digest(f.name.data(), f.name.size());
-    auto digest = f.type.digest();
-    update_digest(&digest, sizeof(digest));
-  }
-}
-
-type::alias::alias(vast::type t, std::vector<attribute> a)
-  : base{std::move(a)}, type_{std::move(t)} {
-  static constexpr auto desc = "alias";
-  update_digest(desc, sizeof(desc));
-  auto digest = type_.digest();
-  update_digest(&digest, sizeof(digest));
-}
-
-type::record flatten(type::record const& rec) {
-  type::record result;
-  for (auto& outer : rec.fields_)
-    if (auto r = get<type::record>(outer.type)) {
+record_type flatten(record_type const& rec) {
+  record_type result;
+  for (auto& outer : rec.fields)
+    if (auto r = get_if<record_type>(outer.type)) {
       auto flat = flatten(*r);
-      for (auto& inner : flat.fields())
-        result.fields_.emplace_back(outer.name + "." + inner.name, inner.type);
+      for (auto& inner : flat.fields)
+        result.fields.emplace_back(outer.name + "." + inner.name, inner.type);
     } else {
-      result.fields_.push_back(outer);
+      result.fields.push_back(outer);
     }
-  result.initialize();
   return result;
 }
 
 type flatten(type const& t) {
-  auto r = get<type::record>(t);
+  auto r = get_if<record_type>(t);
   return r ? flatten(*r) : t;
 }
 
-type::record unflatten(type::record const& rec) {
-  type::record result;
-  for (auto& f : rec.fields_) {
-    auto names = util::to_strings(util::split(f.name, "."));
+record_type unflatten(record_type const& rec) {
+  record_type result;
+  for (auto& f : rec.fields) {
+    auto names = detail::to_strings(detail::split(f.name, "."));
     VAST_ASSERT(!names.empty());
-    type::record* r = &result;
+    record_type* r = &result;
     for (size_t i = 0; i < names.size() - 1; ++i) {
-      if (r->fields_.empty() || r->fields_.back().name != names[i])
-        r->fields_.emplace_back(std::move(names[i]), type::record{});
-      r = get<type::record>(r->fields_.back().type);
+      if (r->fields.empty() || r->fields.back().name != names[i])
+        r->fields.emplace_back(std::move(names[i]), record_type{});
+      r = get_if<record_type>(r->fields.back().type);
     }
-    r->fields_.emplace_back(std::move(names.back()), f.type);
+    r->fields.emplace_back(std::move(names.back()), f.type);
   }
-  std::vector<std::vector<type::record*>> rs(1);
+  std::vector<std::vector<record_type*>> rs(1);
   rs.back().push_back(&result);
   auto more = true;
   while (more) {
-    std::vector<type::record*> next;
+    std::vector<record_type*> next;
     for (auto& current : rs.back())
-      for (auto& f : current->fields_)
-        if (auto r = get<type::record>(f.type))
+      for (auto& f : current->fields)
+        if (auto r = get_if<record_type>(f.type))
           next.push_back(r);
     if (next.empty())
       more = false;
     else
       rs.push_back(std::move(next));
   }
-  for (auto r = rs.rbegin(); r != rs.rend(); ++r)
-    for (auto i : *r)
-      i->initialize();
   return result;
 }
 
 type unflatten(type const& t) {
-  auto r = get<type::record>(t);
+  auto r = get_if<record_type>(t);
   return r ? unflatten(*r) : t;
 }
 
-vast::type const& type::alias::type() const {
-  return type_;
+bool operator==(const record_type& x, const record_type& y) {
+  return static_cast<const record_type::base_type&>(x) ==
+         static_cast<const record_type::base_type&>(y) &&
+    x.fields == y.fields;
+}
+
+bool operator<(const record_type& x, const record_type& y) {
+  return x.fields < y.fields;
+}
+
+alias_type::alias_type(type t) : value_type{std::move(t)} {
+}
+
+bool operator==(const alias_type& x, const alias_type& y) {
+  return static_cast<const alias_type::base_type&>(x) ==
+         static_cast<const alias_type::base_type&>(y) &&
+    x.value_type == y.value_type;
+}
+
+bool operator<(const alias_type& x, const alias_type& y) {
+  return x.value_type < y.value_type;
+}
+
+bool is_recursive(const type& t) {
+  return expose(t).index() >= 13;
+}
+
+bool is_container(const type& t) {
+  auto i = expose(t).index();
+  return i >= 13 && i <= 16;
 }
 
 namespace {
@@ -720,42 +459,42 @@ struct congruence_checker {
   }
 
   template <typename T>
-  bool operator()(T const& x, type::alias const& a) const {
+  bool operator()(T const& x, alias_type const& a) const {
     using namespace std::placeholders;
-    return visit(std::bind(std::cref(*this), std::cref(x), _1), a.type());
+    return visit(std::bind(std::cref(*this), std::cref(x), _1), a.value_type);
   }
 
   template <typename T>
-  bool operator()(type::alias const& a, T const& x) const {
+  bool operator()(alias_type const& a, T const& x) const {
     return (*this)(x, a);
   }
 
-  bool operator()(type::alias const& x, type::alias const& y) const {
-    return visit(*this, x.type(), y.type());
+  bool operator()(alias_type const& x, alias_type const& y) const {
+    return visit(*this, x.value_type, y.value_type);
   }
 
-  bool operator()(type::enumeration const& x,
-                  type::enumeration const& y) const {
-    return x.fields().size() == y.fields().size();
+  bool operator()(enumeration_type const& x, enumeration_type const& y) const {
+    return x.fields.size() == y.fields.size();
   }
 
-  bool operator()(type::vector const& x, type::vector const& y) const {
-    return visit(*this, x.elem(), y.elem());
+  bool operator()(vector_type const& x, vector_type const& y) const {
+    return visit(*this, x.value_type, y.value_type);
   }
 
-  bool operator()(type::set const& x, type::set const& y) const {
-    return visit(*this, x.elem(), y.elem());
+  bool operator()(set_type const& x, set_type const& y) const {
+    return visit(*this, x.value_type, y.value_type);
   }
 
-  bool operator()(type::table const& x, type::table const& y) const {
-    return visit(*this, x.key(), y.key()) && visit(*this, x.value(), y.value());
+  bool operator()(table_type const& x, table_type const& y) const {
+    return visit(*this, x.key_type, y.key_type) &&
+        visit(*this, x.value_type, y.value_type);
   }
 
-  bool operator()(type::record const& x, type::record const& y) const {
-    if (x.fields().size() != y.fields().size())
+  bool operator()(record_type const& x, record_type const& y) const {
+    if (x.fields.size() != y.fields.size())
       return false;
-    for (size_t i = 0; i < x.fields().size(); ++i)
-      if (!visit(*this, x.fields()[i].type, y.fields()[i].type))
+    for (size_t i = 0; i < x.fields.size(); ++i)
+      if (!visit(*this, x.fields[i].type, y.fields[i].type))
         return false;
     return true;
   }
@@ -773,7 +512,7 @@ bool compatible(type const& lhs, relational_operator op, type const& rhs) {
       return false;
     case match:
     case not_match:
-      return is<type::string>(lhs) && is<type::pattern>(rhs);
+      return is<string_type>(lhs) && is<pattern_type>(rhs);
     case equal:
     case not_equal:
       return is<none>(lhs) || is<none>(rhs) || congruent(lhs, rhs);
@@ -784,19 +523,258 @@ bool compatible(type const& lhs, relational_operator op, type const& rhs) {
       return congruent(lhs, rhs);
     case in:
     case not_in:
-      switch (which(lhs)) {
-        default:
-          return rhs.container();
-        case type::tag::string:
-          return is<type::string>(rhs) || rhs.container();
-        case type::tag::address:
-          return is<type::subnet>(rhs) || rhs.container();
-      }
+      if (is<string_type>(lhs))
+        return is<string_type>(rhs) || is_container(rhs);
+      else if (is<address_type>(lhs))
+        return is<subnet_type>(rhs) || is_container(rhs);
+      else
+        return is_container(rhs);
     case ni:
       return compatible(rhs, in, lhs);
     case not_ni:
       return compatible(rhs, not_in, lhs);
   }
+}
+
+// TODO
+//namespace {
+//
+//struct data_checker {
+//  data_checker(type const& t) : type_{t} { }
+//
+//  bool operator()(none const&) const {
+//    return false;
+//  }
+//
+//  template <typename T>
+//  bool operator()(T const&) const {
+//    static_assert(type::is_basic<type::from_data<T>>::value,
+//                  "only basic types allowed");
+//    return is<type::from_data<T>>(type_);
+//  }
+//
+//  bool operator()(enumeration const& e) const {
+//    auto t = get_if<type::enumeration>(type_);
+//    return t && e < t->fields.size();
+//  }
+//
+//  bool operator()(vector const& v) const {
+//    if (v.empty())
+//      return true;
+//    auto t = get_if<type::vector>(type_);
+//    return t && t->elem().check(*v.begin());
+//  }
+//
+//  bool operator()(set const& s) const {
+//    if (s.empty())
+//      return true;
+//    auto t = get_if<type::set>(type_);
+//    return t && t->elem().check(*s.begin());
+//  }
+//
+//  bool operator()(table const& x) const {
+//    if (x.empty())
+//      return true;
+//    auto t = get_if<type::table>(type_);
+//    if (!t)
+//      return false;
+//    auto front = x.begin();
+//    return t->key().check(front->first) && t->value().check(front->second);
+//  }
+//
+//  bool operator()(record const& r) const {
+//    auto t = get_if<record_type>(type_);
+//    if (!t || t->fields.size() != r.size())
+//      return false;
+//    for (size_t i = 0; i < r.size(); ++i)
+//      if (!t->fields[i].type.check(r[i]))
+//        return false;
+//    return true;
+//  }
+//
+//  type const& type_;
+//};
+//
+//struct data_maker {
+//  data operator()(none) const {
+//    return nil;
+//  }
+//
+//  template <typename T>
+//  data operator()(T const&) const {
+//    return type::to_data<T>{};
+//  }
+//
+//  data operator()(type::alias const& a) const {
+//    return a.type().make();
+//  }
+//};
+//
+//} // namespace <anonymous>
+//
+//bool type::check(data const& d) const {
+//  return which(d) == data::tag::none || which(*info_) == type::tag::none
+//         || visit(data_checker{*this}, d);
+//}
+//
+//data type::make() const {
+//  return visit(data_maker{}, *this);
+//}
+
+namespace {
+
+struct kind_printer {
+  using result_type = std::string;
+
+  result_type operator()(none_type const&) const {
+    return "none";
+  }
+
+  result_type operator()(boolean_type const&) const {
+    return "bool";
+  }
+
+  result_type operator()(integer_type const&) const {
+    return "integer";
+  }
+
+  result_type operator()(count_type const&) const {
+    return "count";
+  }
+
+  result_type operator()(real_type const&) const {
+    return "real";
+  }
+
+  result_type operator()(interval_type const&) const {
+    return "interval";
+  }
+
+  result_type operator()(timestamp_type const&) const {
+    return "timestamp";
+  }
+
+  result_type operator()(string_type const&) const {
+    return "string";
+  }
+
+  result_type operator()(pattern_type const&) const {
+    return "pattern";
+  }
+
+  result_type operator()(address_type const&) const {
+    return "address";
+  }
+
+  result_type operator()(subnet_type const&) const {
+    return "subnet";
+  }
+
+  result_type operator()(port_type const&) const {
+    return "port";
+  }
+
+  result_type operator()(enumeration_type const&) const {
+    return "enumeration";
+  }
+
+  result_type operator()(vector_type const&) const {
+    return "vector";
+  }
+
+  result_type operator()(set_type const&) const {
+    return "set";
+  }
+
+  result_type operator()(table_type const&) const {
+    return "table";
+  }
+
+  result_type operator()(record_type const&) const {
+    return "record";
+  }
+
+  result_type operator()(alias_type const&) const {
+    return "alias";
+  }
+};
+
+
+struct jsonizer {
+  jsonizer(json& j) : json_{j} { }
+
+  template <typename T>
+  bool operator()(T const&) {
+    json_ = {};
+    return true;
+  }
+
+  bool operator()(enumeration_type const& e) {
+    json::array a;
+    std::transform(e.fields.begin(),
+                   e.fields.end(),
+                   std::back_inserter(a),
+                   [](auto& x) { return json{x}; });
+    json_ = std::move(a);
+    return true;
+  }
+
+  bool operator()(vector_type const& v) {
+    json::object o;
+    if (!convert(v.value_type, o["value_type"]))
+      return false;
+    json_ = std::move(o);
+    return true;
+  }
+
+  bool operator()(set_type const& s) {
+    json::object o;
+    if (!convert(s.value_type, o["value_type"]))
+      return false;
+    json_ = std::move(o);
+    return true;
+  }
+
+  bool operator()(table_type const& t) {
+    json::object o;
+    if (!convert(t.key_type, o["key"]))
+      return false;
+    if (!convert(t.value_type, o["value"]))
+      return false;
+    json_ = std::move(o);
+    return true;
+  }
+
+  bool operator()(record_type const& r) {
+    json::object o;
+    for (auto& field : r.fields)
+      if (!convert(field.type, o[to_string(field.name)]))
+        return false;
+    json_ = std::move(o);
+    return true;
+  }
+
+  bool operator()(alias_type const& a) {
+    return convert(a.value_type, json_);
+  }
+
+  json& json_;
+};
+
+} // namespace <anonymous>
+
+bool convert(type const& t, json& j) {
+  json::object o;
+  o["name"] = t.name();
+  o["kind"] = visit(kind_printer{}, t);
+  if (!visit(jsonizer{o["structure"]}, t))
+    return false;
+  json::object attrs;
+  for (auto& a : t.attributes())
+    attrs.emplace(a.key, a.value ? json{*a.value} : json{});
+  o["attributes"] = std::move(attrs);
+  j = std::move(o);
+  return true;
 }
 
 } // namespace vast

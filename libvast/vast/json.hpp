@@ -15,27 +15,39 @@ namespace vast {
 /// A JSON data type.
 class json : detail::totally_ordered<json> {
 public:
-  struct array;
-  struct object;
+  /// A JSON null type.
+  using null = none;
+
+  /// A JSON bool.
+  using boolean = bool;
 
   /// A JSON number value.
   using number = long double;
+
+  /// A JSON string.
+  using string = std::string;
+
+  /// A JSON array.
+  struct array;
+
+  /// A JSON object.
+  struct object;
 
   /// Meta-function that converts a type into a JSON value.
   /// If conversion is impossible it returns `std::false_type`.
   template <typename T>
   using json_value = std::conditional_t<
     std::is_same<T, none>::value,
-    none,
+    null,
     std::conditional_t<
       std::is_same<T, bool>::value,
-      bool,
+      boolean,
       std::conditional_t<
         std::is_convertible<T, number>::value,
         number,
         std::conditional_t<
           std::is_convertible<T, std::string>::value,
-          std::string,
+          string,
           std::conditional_t<
             std::is_same<T, array>::value,
             array,
@@ -50,6 +62,7 @@ public:
     >
   >;
 
+  /// Maps an arbitrary type to a json type.
   template <typename T>
   using jsonize = json_value<std::decay_t<T>>;
 
@@ -68,8 +81,8 @@ public:
   };
 
   /// An associative data structure exposing key-value pairs with unique keys.
-  struct object : std::map<std::string, json> {
-    using super = std::map<std::string, json>;
+  struct object : std::map<string, json> {
+    using super = std::map<string, json>;
     using super::map;
 
     object() = default;
@@ -90,7 +103,7 @@ public:
   template <
     typename T,
     typename =
-      std::enable_if_t<! std::is_same<std::false_type, jsonize<T>>::value>
+      std::enable_if_t<!std::is_same<std::false_type, jsonize<T>>::value>
   >
   json(T&& x)
     : value_(jsonize<T>(std::forward<T>(x))) {
@@ -102,10 +115,10 @@ public:
 
 private:
   using variant_type = variant<
-    none,
-    bool,
+    null,
+    boolean,
     number,
-    std::string,
+    string,
     array,
     object
   >;
@@ -156,14 +169,14 @@ inline bool convert(bool b, json& j) {
 
 template <typename T>
 auto convert(T x, json& j)
-  -> std::enable_if_t<std::is_arithmetic<T>::value, bool> {
+-> std::enable_if_t<std::is_arithmetic<T>::value, bool> {
   j = json::number(x);
   return true;
 }
 
 template <typename T>
 auto convert(T&& x, json& j)
-  -> std::enable_if_t<std::is_convertible<T, std::string>{}, bool> {
+-> std::enable_if_t<std::is_convertible<T, std::string>{}, bool> {
   j = std::string(std::forward<T>(x));
   return true;
 }

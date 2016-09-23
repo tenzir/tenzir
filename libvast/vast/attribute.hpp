@@ -11,7 +11,7 @@ namespace vast {
 /// A qualifier.
 struct attribute : detail::totally_ordered<attribute> {
   attribute(std::string key = {});
-  attribute(std::string key, std::string value);
+  attribute(std::string key, optional<std::string> value);
 
   std::string key;
   optional<std::string> value;
@@ -24,6 +24,7 @@ struct attribute : detail::totally_ordered<attribute> {
     return f(a.key, a.value);
   }
 };
+
 
 } // namespace vast
 

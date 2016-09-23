@@ -15,7 +15,7 @@ struct action_traits {
   using traits = caf::detail::get_callable_trait<Action>;
 
   using first_arg_type =
-    std::remove_reference_t<detail::tl_head_t<typename traits::arg_types>>;
+    std::remove_reference_t<tl_head_t<typename traits::arg_types>>;
 
   using result_type = typename traits::result_type;
 

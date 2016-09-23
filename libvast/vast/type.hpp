@@ -1,607 +1,310 @@
 #ifndef VAST_TYPE_HPP
 #define VAST_TYPE_HPP
 
-#include <string>
-#include <vector>
-#include <map>
 #include <memory>
+#include <string>
+#include <type_traits>
+#include <vector>
+
+#include <caf/intrusive_ptr.hpp>
+#include <caf/ref_counted.hpp>
 
 #include "vast/aliases.hpp"
-#include "vast/config.hpp"
+#include "vast/attribute.hpp"
 #include "vast/key.hpp"
 #include "vast/maybe.hpp"
 #include "vast/none.hpp"
 #include "vast/offset.hpp"
 #include "vast/operator.hpp"
+#include "vast/optional.hpp"
 #include "vast/time.hpp"
+#include "vast/variant.hpp"
 
-#include "vast/detail/hash/xxhash.hpp"
-
-#include "vast/util/intrusive.hpp"
-#include "vast/util/operators.hpp"
-#include "vast/util/range.hpp"
-#include "vast/util/variant.hpp"
-#include "vast/util/stack/vector.hpp"
+#include "vast/concept/hashable/uhash.hpp"
+#include "vast/concept/hashable/xxhash.hpp"
+#include "vast/detail/operators.hpp"
+#include "vast/detail/range.hpp"
 
 namespace vast {
 
 class address;
-class subnet;
-class port;
+class json;
 class pattern;
-class vector;
+class port;
 class set;
+class subnet;
 class table;
-class record;
-class data;
+class vector;
 
-namespace detail {
-struct type_reader;
-struct type_writer;
-} // namespace detail
-
-/// A type for a data. The type *signature* consists of (i) type name and (ii)
-/// all subtypes. Two types are equal if they have the same signature. Each
-/// type has a unique hash digest over which defines a total ordering, albeit
-/// not consistent with lexicographical string representation.
-class type : util::totally_ordered<type> {
-  friend access;
-
+/// An abstract type for ::data.
+class type : detail::totally_ordered<type> {
 public:
-  struct intrusive_info;
-
-  /// Additional type property in the form of a key and optional value.
-  struct attribute : util::equality_comparable<attribute> {
-    enum key_type : uint16_t {
-      invalid,
-      skip,
-      default_
-    };
-
-    attribute(key_type k = invalid, std::string v = {});
-
-    friend bool operator==(attribute const& lhs, attribute const& rhs);
-
-    template <class Inspector>
-    friend auto inspect(Inspector& f, attribute& a) {
-      return f(a);
-    }
-
-    key_type key;
-    std::string value;
-  };
-
-  using hash_type = detail::xxhash64;
-
-  // The base class for type classes.
-  class base : util::totally_ordered<base> {
-    friend access;
-
-  public:
-    friend bool operator==(base const& lhs, base const& rhs);
-
-    friend bool operator<(base const& lhs, base const& rhs);
-
-    std::string const& name() const;
-
-    bool name(std::string name);
-
-    std::vector<attribute> const& attributes() const;
-
-    attribute const* find_attribute(attribute::key_type k) const;
-
-    hash_type::result_type digest() const;
-
-    template <class Inspector>
-    friend auto inspect(Inspector& f, base& b) {
-      return f(b.name_, b.attributes_, b.digest_);
-    }
-
-  protected:
-    base(std::vector<attribute> a = {});
-
-    void update_digest(void const* bytes, size_t length);
-
-  private:
-    std::string name_;
-    std::vector<attribute> attributes_;
-    hash_type::result_type digest_ = 0;
-  };
-
-  class enumeration;
-  class vector;
-  class set;
-  class table;
-  class record;
-  class alias;
-
-#define VAST_DEFINE_BASIC_TYPE(name, desc)                                     \
-  class name : public base {                                                   \
-  public:                                                                      \
-    name(std::vector<attribute> a = {})                                        \
-      : base(std::move(a)) {                                                   \
-      update_digest(#name, sizeof(#name) - 1);                                 \
-    }                                                                          \
-                                                                               \
-    template <class Inspector>                                                 \
-    friend auto inspect(Inspector& f, name& n) {                               \
-      return f(static_cast<base&>(n));                                         \
-    }                                                                          \
-  };
-
-  VAST_DEFINE_BASIC_TYPE(boolean, "bool")
-  VAST_DEFINE_BASIC_TYPE(integer, "int")
-  VAST_DEFINE_BASIC_TYPE(count, "count")
-  VAST_DEFINE_BASIC_TYPE(real, "real")
-  VAST_DEFINE_BASIC_TYPE(time_point, "time")
-  VAST_DEFINE_BASIC_TYPE(time_interval, "interval")
-  VAST_DEFINE_BASIC_TYPE(time_duration, "duration")
-  VAST_DEFINE_BASIC_TYPE(time_period, "period")
-  VAST_DEFINE_BASIC_TYPE(string, "string")
-  VAST_DEFINE_BASIC_TYPE(pattern, "pattern")
-  VAST_DEFINE_BASIC_TYPE(address, "addr")
-  VAST_DEFINE_BASIC_TYPE(subnet, "subnet")
-  VAST_DEFINE_BASIC_TYPE(port, "port")
-#undef VAST_DEFINE_BASIC_TYPE
-
-  /// Maps a type to its corresponding data.
-  template <typename T>
-  using to_data = std::conditional_t<
-      std::is_same<T, boolean>::value,
-      vast::boolean,
-      std::conditional_t<
-        std::is_same<T, integer>::value,
-        vast::integer,
-        std::conditional_t<
-          std::is_same<T, count>::value,
-          vast::count,
-          std::conditional_t<
-            std::is_same<T, real>::value,
-            vast::real,
-            std::conditional_t<
-              std::is_same<T, time_point>::value,
-              vast::time::point,
-              std::conditional_t<
-                std::is_same<T, time_interval>::value,
-                std::false_type,
-                std::conditional_t<
-                  std::is_same<T, time_duration>::value,
-                  vast::time::duration,
-                  std::conditional_t<
-                    std::is_same<T, time_period>::value,
-                    std::false_type,
-                    std::conditional_t<
-                      std::is_same<T, string>::value,
-                      std::string,
-                      std::conditional_t<
-                        std::is_same<T, pattern>::value,
-                        vast::pattern,
-                        std::conditional_t<
-                          std::is_same<T, address>::value,
-                          vast::address,
-                          std::conditional_t<
-                            std::is_same<T, subnet>::value,
-                            vast::subnet,
-                            std::conditional_t<
-                              std::is_same<T, port>::value,
-                              vast::port,
-                              std::conditional_t<
-                                std::is_same<T, enumeration>::value,
-                                vast::enumeration,
-                                std::conditional_t<
-                                  std::is_same<T, vector>::value,
-                                  vast::vector,
-                                  std::conditional_t<
-                                    std::is_same<T, set>::value,
-                                    vast::set,
-                                    std::conditional_t<
-                                      std::is_same<T, table>::value,
-                                      vast::table,
-                                      std::conditional_t<
-                                        std::is_same<T, record>::value,
-                                        vast::record,
-                                        std::false_type
-                                      >
-                                    >
-                                  >
-                                >
-                              >
-                            >
-                          >
-                        >
-                      >
-                    >
-                  >
-                >
-              >
-            >
-          >
-        >
-      >
-    >;
-
-  /// Maps a value to its corresponding type.
-  template <typename T>
-  using from_data = std::conditional_t<
-      std::is_same<T, vast::boolean>::value,
-      boolean,
-      std::conditional_t<
-        std::is_same<T, vast::integer>::value,
-        integer,
-        std::conditional_t<
-          std::is_same<T, vast::count>::value,
-          count,
-          std::conditional_t<
-            std::is_same<T, vast::real>::value,
-            real,
-            std::conditional_t<
-              std::is_same<T, vast::time::point>::value,
-              time_point,
-              std::conditional_t<
-                std::is_same<T, vast::time::duration>::value,
-                time_duration,
-                std::conditional_t<
-                  std::is_same<T, std::string>::value,
-                  string,
-                  std::conditional_t<
-                    std::is_same<T, vast::pattern>::value,
-                    pattern,
-                    std::conditional_t<
-                      std::is_same<T, vast::address>::value,
-                      address,
-                      std::conditional_t<
-                        std::is_same<T, vast::subnet>::value,
-                        subnet,
-                        std::conditional_t<
-                          std::is_same<T, vast::port>::value,
-                          port,
-                          std::conditional_t<
-                            std::is_same<T, vast::enumeration>::value,
-                            enumeration,
-                            std::conditional_t<
-                              std::is_same<T, vast::vector>::value,
-                              vector,
-                              std::conditional_t<
-                                std::is_same<T, vast::set>::value,
-                                set,
-                                std::conditional_t<
-                                  std::is_same<T, vast::table>::value,
-                                  table,
-                                  std::conditional_t<
-                                    std::is_same<T, vast::record>::value,
-                                    record,
-                                    std::false_type
-                                  >
-                                >
-                              >
-                            >
-                          >
-                        >
-                      >
-                    >
-                  >
-                >
-              >
-            >
-          >
-        >
-      >
-    >;
-
-  enum class tag : uint8_t {
-    none,
-    boolean,
-    integer,
-    count,
-    real,
-    time_point,
-    //time_interval,
-    time_duration,
-    //time_period,
-    string,
-    pattern,
-    address,
-    subnet,
-    port,
-    enumeration,
-    vector,
-    set,
-    table,
-    record,
-    alias
-  };
-
-  using info = util::basic_variant<
-    tag,
-    none,
-    boolean,
-    integer,
-    count,
-    real,
-    time_point,
-    //time_interval,
-    time_duration,
-    //time_period,
-    string,
-    pattern,
-    address,
-    subnet,
-    port,
-    enumeration,
-    vector,
-    set,
-    table,
-    record,
-    alias
-  >;
-
-  /// An enum type.
-  class enumeration : public base {
-    friend access;
-    friend info;
-    friend detail::type_reader;
-    friend detail::type_writer;
-
-  public:
-    enumeration(std::vector<std::string> fields, std::vector<attribute> a = {});
-
-    std::vector<std::string> const& fields() const;
-
-    template <class Inspector>
-    friend auto inspect(Inspector& f, enumeration& e) {
-      return f(static_cast<base&>(e), e.fields_);
-    }
-
-  private:
-    enumeration() = default;
-
-    std::vector<std::string> fields_;
-  };
-
-  /// Derives a type from data.
-  /// @param d The data to derive a type from.
-  /// @returns The type corresponding to *d*.
-  static type derive(data const& d);
+  using hasher = xxhash32;
 
   /// Default-constructs an invalid type.
   type();
 
-  /// Construct a given type.
-  /// @tparam T the type to construct.
-  /// @param x An instance of `T`.
-  template <
-    typename T,
-    typename = std::enable_if_t<
-      ! util::is_same_or_derived<type, T>::value
-#ifdef VAST_GCC
-      && (std::is_convertible<T, none>::value
-          || std::is_convertible<T, boolean>::value
-          || std::is_convertible<T, integer>::value
-          || std::is_convertible<T, count>::value
-          || std::is_convertible<T, real>::value
-          || std::is_convertible<T, time_point>::value
-          || std::is_convertible<T, time_duration>::value
-          || std::is_convertible<T, string>::value
-          || std::is_convertible<T, pattern>::value
-          || std::is_convertible<T, address>::value
-          || std::is_convertible<T, subnet>::value
-          || std::is_convertible<T, port>::value
-          || std::is_convertible<T, enumeration>::value
-          || std::is_convertible<T, vector>::value
-          || std::is_convertible<T, set>::value
-          || std::is_convertible<T, table>::value
-          || std::is_convertible<T, record>::value
-          || std::is_convertible<T, alias>::value)
-#endif
-    >
-  >
-  type(T&& x)
-    : info_{util::make_intrusive<intrusive_info>(std::forward<T>(x))} {
-  }
-
-  explicit type(util::intrusive_ptr<intrusive_info> ii)
-    : info_{std::move(ii)} {
-  }
-
-  friend bool operator==(type const& lhs, type const& rhs);
-  friend bool operator<(type const& lhs, type const& rhs);
-
-  /// Assigns a name to the type. This can happen at most once because a name
-  /// change modifies the type hash digest.
-  /// @param name The new name of the type.
-  /// @returns `true` on success.
-  bool name(std::string name);
+  /// Constructs a type from a concrete type.
+  /// @param x The concrete type.
+  template <class T, class>
+  type(T&& x);
 
   /// Retrieves the name of the type.
-  /// @returns The name of the type.
+  std::string& name();
   std::string const& name() const;
 
-  /// Retrieves the hash digest of this type.
-  /// @returns The hash digest of this type.
-  hash_type::result_type digest() const;
-
-  /// Retrieves the type's attributes.
+  /// Retrieves the type attributes.
+  std::vector<attribute>& attributes();
   std::vector<attribute> const& attributes() const;
+  type& attributes(std::initializer_list<attribute> list);
 
-  /// Looks for a specific attribute.
-  /// @param key The attribute key.
-  /// @returns A pointer to the attribute if it exists or `nullptr` otherwise.
-  attribute const* find_attribute(attribute::key_type key) const;
+  /// Checks whether the hash digest of two types is equal.
+  friend bool operator==(const type& x, const type& y);
 
-  /// Checks whether data complies with this type.
-  /// @param d The data to check.
-  /// @returns `true` if data complies to `*this`.
-  bool check(data const& d) const;
-
-  /// Default-constructs data for this given type.
-  /// @returns ::data according to this type.
-  data make() const;
-
-  //
-  // Introspection
-  //
-
-  template <typename T>
-  using is_arithmetic = std::integral_constant<
-      bool,
-      std::is_same<T, boolean>::value
-        || std::is_same<T, integer>::value
-        || std::is_same<T, count>::value
-        || std::is_same<T, real>::value
-        || std::is_same<T, time_point>::value
-        || std::is_same<T, time_interval>::value
-        || std::is_same<T, time_duration>::value
-        || std::is_same<T, time_period>::value
-    >;
-
-  template <typename T>
-  using is_basic = std::integral_constant<
-      bool,
-      is_arithmetic<T>{}
-        || std::is_same<T, string>::value
-        || std::is_same<T, pattern>::value
-        || std::is_same<T, address>::value
-        || std::is_same<T, subnet>::value
-        || std::is_same<T, port>::value
-    >;
-
-  template <typename T>
-  using is_container = std::integral_constant<
-      bool,
-      std::is_same<T, vector>::value
-        || std::is_same<T, set>::value
-        || std::is_same<T, table>::value
-    >;
-
-  /// Checks whether the type is a basic type.
-  /// @returns `true` iff the type is a basic type.
-  bool basic() const;
-
-  /// Checks whether the type is a container type.
-  /// @returns `true` iff the type is a container type.
-  bool container() const;
-
-  /// Checks whether the type is a recursive type.
-  /// @returns `true` iff the type is a recursive type.
-  bool recursive() const;
+  /// Checks whether the hash digest of one type is less than or equal to
+  /// another.
+  friend bool operator<(const type& x, const type& y);
 
   template <class Inspector>
-  friend auto inspect(Inspector& f, type& t);
+  friend auto inspect(Inspector& f, type& t) {
+    return f(*t.ptr_);
+  }
+
+  friend auto& expose(type& t);
+
+  friend bool convert(type const& t, json& j);
 
 private:
-  friend info& expose(type& t);
-  friend info const& expose(type const& t);
-
-  util::intrusive_ptr<intrusive_info> info_;
-};
-
-class type::vector : public type::base {
-  friend access;
-  friend type::info;
-  friend detail::type_reader;
-  friend detail::type_writer;
-
-public:
-  vector(type t, std::vector<attribute> a = {});
-
-  type const& elem() const;
+  struct impl;
 
   template <class Inspector>
-  friend auto inspect(Inspector& f, vector& v) {
-    return f(static_cast<type::base&>(v), v.elem_);
+  friend auto inspect(Inspector&, impl&);
+
+  caf::intrusive_ptr<impl> ptr_;
+};
+
+// -- concrete types ---------------------------------------------------------
+
+/// The base class for all concrete types.
+template <class Derived>
+class concrete_type 
+  : detail::totally_ordered<concrete_type<Derived>>,
+    detail::totally_ordered<Derived> {
+public:
+  using base_type = concrete_type<Derived>;
+
+  friend bool operator==(const concrete_type& x, const concrete_type& y) {
+    return x.name_ == y.name_ && x.attributes_ == y.attributes_;
+  }
+
+  friend bool operator<(const concrete_type& x, const concrete_type& y) {
+    return std::tie(x.name_, x.attributes_) < std::tie(y.name_, y.attributes_);
+  }
+
+  // To be implemented by derived types.
+  friend bool operator==(const Derived& x, const Derived& y);
+  friend bool operator<(const Derived& x, const Derived& y);
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, concrete_type& t) {
+    return f(t.name_, t.attributes_);
+  }
+
+  std::string& name() {
+    return name_;
+  }
+
+  std::string const& name() const {
+    return name_;
+  }
+
+  std::vector<attribute>& attributes() {
+    return attributes_;
+  }
+
+  std::vector<attribute> const& attributes() const {
+    return attributes_;
+  }
+
+  Derived& attributes(std::initializer_list<attribute> list) {
+    attributes_ = std::move(list);
+    return *static_cast<Derived*>(this);
   }
 
 private:
-  vector() = default;
-
-  type elem_;
+  std::string name_;
+  std::vector<attribute> attributes_;
 };
 
-class type::set : public base {
-  friend access;
-  friend type::info;
-  friend detail::type_reader;
-  friend detail::type_writer;
+/// A type that is fully determined at compile time.
+template <class Derived>
+struct basic_type : concrete_type<Derived> {
+};
 
-public:
-  set(type t, std::vector<attribute> a = {});
+#define VAST_DEFINE_DATA_TYPE(T, U)                                           \
+struct T : basic_type<T> {                                                    \
+  friend bool operator==(T const& x, T const& y) {                            \
+    return static_cast<const base_type&>(x) ==                                \
+           static_cast<const base_type&>(y);                                  \
+  }                                                                           \
+                                                                              \
+  friend bool operator<(T const& x, T const& y) {                             \
+    return static_cast<const base_type&>(x) <                                 \
+           static_cast<const base_type&>(y);                                  \
+  }                                                                           \
+                                                                              \
+  template <class Inspector>                                                  \
+  friend auto inspect(Inspector& f, T& x) {                                   \
+    return f(static_cast<base_type&>(x), caf::meta::type_name(#T));           \
+  }                                                                           \
+                                                                              \
+  using data_type = U;                                                        \
+};
 
-  type const& elem() const;
+/// The invalid type that doesn't represent a valid type.
+VAST_DEFINE_DATA_TYPE(none_type, none)
+
+/// A type for true/false data.
+VAST_DEFINE_DATA_TYPE(boolean_type, boolean)
+
+/// A type for positive and negative integers.
+VAST_DEFINE_DATA_TYPE(integer_type, integer)
+
+/// A type for positive integers.
+VAST_DEFINE_DATA_TYPE(count_type, count)
+
+/// A type for floating point numbers.
+VAST_DEFINE_DATA_TYPE(real_type, real)
+
+/// A type for time durations.
+VAST_DEFINE_DATA_TYPE(interval_type, interval)
+
+/// A type for absolute points in time.
+VAST_DEFINE_DATA_TYPE(timestamp_type, timestamp)
+
+/// A string type for sequence of characters.
+VAST_DEFINE_DATA_TYPE(string_type, std::string)
+
+/// A type for regular expressions.
+VAST_DEFINE_DATA_TYPE(pattern_type, pattern)
+
+/// A type for IP addresses, both v4 and v6.
+VAST_DEFINE_DATA_TYPE(address_type, address)
+
+/// A type for IP prefixes.
+VAST_DEFINE_DATA_TYPE(subnet_type, subnet)
+
+/// A type for transport-layer ports.
+VAST_DEFINE_DATA_TYPE(port_type, port)
+
+/// The base type for types that depend on runtime information.
+template <class Derived>
+struct complex_type : concrete_type<Derived> {};
+
+/// The base type for recursive type.
+template <class Derived>
+struct recursive_type : complex_type<Derived> {};
+
+/// The enumeration type consisting of a fixed number of strings.
+struct enumeration_type : complex_type<enumeration_type> {
+  using data_type = enumeration;
+
+  enumeration_type(std::vector<std::string> fields = {});
 
   template <class Inspector>
-  friend auto inspect(Inspector& f, set& s) {
-    return f(static_cast<type::base&>(s), s.elem_);
+  friend auto inspect(Inspector& f, enumeration_type& e) {
+    return f(static_cast<base_type&>(e),
+             caf::meta::type_name("enumeration_type"),
+             e.fields);
   }
 
-private:
-  set() = default;
-
-  type elem_;
+  std::vector<std::string> fields;
 };
 
-class type::table : public type::base {
-  friend access;
-  friend type::info;
-  friend detail::type_reader;
-  friend detail::type_writer;
+/// A type representing a sequence of elements.
+struct vector_type : recursive_type<vector_type> {
+  using data_type = vector;
 
-public:
-  table(type k, type v, std::vector<attribute> a = {});
-
-  type const& key() const;
-
-  type const& value() const;
+  vector_type(type t = {});
 
   template <class Inspector>
-  friend auto inspect(Inspector& f, table& t) {
-    return f(static_cast<type::base&>(t), t.key_, t.value_);
+  friend auto inspect(Inspector& f, vector_type& t) {
+    return f(static_cast<base_type&>(t),
+             caf::meta::type_name("vector_type"),
+             t.value_type);
   }
 
-private:
-  table() = default;
-
-  type key_;
-  type value_;
+  type value_type;
 };
 
-class type::record : public type::base {
-  friend access;
-  friend type::info;
-  friend detail::type_reader;
-  friend detail::type_writer;
-  friend type::record flatten(type::record const& rec);
-  friend type::record unflatten(type::record const& rec);
+/// A type representing a mathematical set.
+struct set_type : recursive_type<set_type> {
+  using data_type = set;
 
-public:
-  struct field : util::equality_comparable<field> {
-    field(std::string n = {}, type t = {});
+  set_type(type t = {});
 
-    friend bool operator==(field const& lhs, field const& rhs);
+  template <class Inspector>
+  friend auto inspect(Inspector& f, set_type& t) {
+    return f(static_cast<base_type&>(t),
+             caf::meta::type_name("set_type"),
+             t.value_type);
+  }
 
-    template <class Inspector>
-    friend auto inspect(Inspector& f, field& fld) {
-      return f(fld.name, fld.type);
-    }
+  type value_type;
+};
 
-    std::string name;
-    vast::type type;
-  };
+/// A type representinng an associative array.
+struct table_type : recursive_type<table_type> {
+  using data_type = table;
+
+  table_type(type key = {}, type value = {});
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, table_type& t) {
+    return f(static_cast<base_type&>(t),
+             caf::meta::type_name("table_type"),
+             t.key_type, t.value_type);
+  }
+
+  type key_type;
+  type value_type;
+};
+
+/// A field of a record.
+struct record_field : detail::totally_ordered<record_field> {
+  record_field(std::string name = {}, vast::type type = {});
+
+  friend bool operator==(const record_field& x, const record_field& y);
+  friend bool operator<(const record_field& x, const record_field& y);
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, record_field& rf) {
+    return f(rf.name, rf.type);
+  }
+
+  std::string name;
+  vast::type type;
+};
+
+/// A sequence of fields, where each fields has a name and a type.
+struct record_type : recursive_type<record_type> {
+  using data_type = vector;
 
   /// Enables recursive record iteration.
-  class each : public util::range_facade<each> {
+  class each : public detail::range_facade<each> {
   public:
     struct range_state {
       vast::key key() const;
       size_t depth() const;
 
-      util::stack::vector<8, field const*> trace;
+      detail::stack::vector<8, record_field const*> trace;
       vast::offset offset;
     };
 
-    each(record const& r);
+    each(record_type const& r);
 
   private:
-    friend util::range_facade<each>;
+    friend detail::range_facade<each>;
 
     range_state const& state() const {
       return state_;
@@ -610,15 +313,14 @@ public:
     bool next();
 
     range_state state_;
-    util::stack::vector<8, record const*> records_;
+    detail::stack::vector<8, record_type const*> records_;
   };
 
-  record(std::initializer_list<field> fields, std::vector<attribute> a = {});
-  record(std::vector<field> fields, std::vector<attribute> a = {});
+  /// Constructs a record type from a list of fields.
+  record_type(std::vector<record_field> fields = {});
 
-  /// Retrieves the fields of the record.
-  /// @returns The field of the records.
-  std::vector<field> const& fields() const;
+  /// Constructs a record type from a list of fields.
+  record_type(std::initializer_list<record_field> list);
 
   /// Attemps to resolve a ::key to an ::offset.
   /// @param k The key to resolve.
@@ -656,96 +358,60 @@ public:
   type const* at(offset const& o) const;
 
   template <class Inspector>
-  friend auto inspect(Inspector& f, record& r) {
-    return f(static_cast<type::base&>(r), r.fields_);
+  friend auto inspect(Inspector& f, record_type& t) {
+    return f(static_cast<base_type&>(t),
+             caf::meta::type_name("record_type"),
+             t.fields);
   }
 
-private:
-  record() = default;
-
-  void initialize();
-
-  std::vector<field> fields_;
+  std::vector<record_field> fields;
 };
 
 /// Recursively flattens the arguments of a record type.
 /// @param rec the record to flatten.
 /// @returns The flattened record type.
-type::record flatten(type::record const& rec);
+record_type flatten(record_type const& rec);
 
 type flatten(type const& t);
 
 /// Unflattens a flattened record type.
 /// @param rec the record to unflatten.
 /// @returns The unflattened record type.
-type::record unflatten(type::record const& rec);
+record_type unflatten(record_type const& rec);
 
 type unflatten(type const& t);
 
-class type::alias : public type::base {
-  friend access;
-  friend type::info;
-  friend detail::type_reader;
-  friend detail::type_writer;
+/// An alias of another type.
+struct alias_type : recursive_type<alias_type> {
+  using data_type = std::false_type;
 
-public:
-  alias(vast::type t, std::vector<attribute> a = {});
-
-  vast::type const& type() const;
+  alias_type(type t = {});
 
   template <class Inspector>
-  friend auto inspect(Inspector& f, alias& a) {
-    return f(static_cast<type::base&>(a), a.type_);
+  friend auto inspect(Inspector& f, alias_type& t) {
+    return f(static_cast<base_type&>(t),
+             caf::meta::type_name("alias_type"),
+             t.value_type);
   }
 
-private:
-  alias() = default;
-
-  vast::type type_;
+  type value_type;
 };
 
-struct type::intrusive_info : util::intrusive_base<intrusive_info>, type::info {
-  intrusive_info() = default;
+// -- helpers ----------------------------------------------------------------
 
-  template <typename T,
-            typename = util::disable_if_same_or_derived_t<intrusive_info, T>>
-  intrusive_info(T&& x)
-    : type::info{std::forward<T>(x)} {
-  }
+/// Given a concrete type, retrieves the corresponding data type.
+template <class T>
+using type_to_data = typename T::data_type;
 
-  friend type::info& expose(intrusive_info& i) {
-    return static_cast<type::info&>(i);
-  }
+/// Checks whether a type is recursive.
+/// @param t The type to check.
+/// @returns `true` iff *t* contains one or more nested types.
+bool is_recursive(const type& t);
 
-  friend type::info const& expose(intrusive_info const& i) {
-    return static_cast<type::info const&>(i);
-  }
-};
-
-// FIXME: monadically chain return values of inspector invocations.
-template <class Inspector>
-auto inspect(Inspector& f, type& t) {
-  auto dispatch = [&] { visit([&](auto& x) { f(x); }); };
-  auto save = [&] {
-    auto tag = which(t);
-    f(tag);
-    if (tag != type::tag::none)
-      dispatch();
-    return caf::none;
-  };
-  auto load = [&] {
-    type::tag tag;
-    f(tag);
-    if (tag != type::tag::none) {
-      t = type{util::make_intrusive<type::intrusive_info>(
-               type::info::make(tag))};
-      dispatch();
-    }
-    return caf::none;
-  };
-  return f(caf::meta::save_callback(save),
-           caf::meta::load_callback(load));
-}
+/// Checks whether a type is a container type.
+/// @param t The type to check.
+/// @returns `true` iff *t* is a container type.
+bool is_container(const type& t);
 
 /// Checks whether two types are *congruent* to each other, i.e., whether they
 /// are *representationally equal*.
@@ -765,6 +431,57 @@ bool congruent(type const& x, type const& y);
 /// @returns `true` if *lhs* and *rhs* are compatible to each other under *op*.
 bool compatible(type const& lhs, relational_operator op, type const& rhs);
 
+// -- implementation details -------------------------------------------------
+
+namespace detail {
+
+using type_variant = variant<
+  none_type,
+  boolean_type,
+  integer_type,
+  count_type,
+  real_type,
+  interval_type,
+  timestamp_type,
+  string_type,
+  pattern_type,
+  address_type,
+  subnet_type,
+  port_type,
+  enumeration_type,
+  vector_type,
+  set_type,
+  table_type,
+  record_type,
+  alias_type
+>;
+
+using type_types = typename type_variant::types;
+
+} // namespace detail
+
+struct type::impl : caf::ref_counted, detail::type_variant {
+  using detail::type_variant::type_variant;
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, impl& i) {
+    return f(static_cast<detail::type_variant&>(i));
+  }
+};
+
+auto& expose(type& t) {
+  return static_cast<detail::type_variant&>(*t.ptr_);
+}
+
+template <
+  class T,
+  class = std::enable_if_t<
+    detail::contains<std::decay_t<T>, detail::type_types>{}
+  >
+>
+type::type(T&& x) : ptr_{new impl{std::forward<T>(x)}} {
+}
+
 } // namespace vast
 
 namespace std {
@@ -772,7 +489,7 @@ namespace std {
 template <>
 struct hash<vast::type> {
   size_t operator()(vast::type const& t) const {
-    return t.digest();
+    return vast::uhash<vast::type::hasher>{}(t);
   }
 };
 

@@ -1,6 +1,5 @@
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/schema.hpp"
-#include "vast/concept/parseable/vast/type.hpp"
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/vast/schema.hpp"
 #include "vast/concept/printable/vast/type.hpp"
@@ -10,74 +9,6 @@
 
 using namespace vast;
 using namespace std::string_literals;
-
-TEST(type) {
-  type t;
-  MESSAGE("basic");
-  CHECK(parsers::type("bool", t));
-  CHECK(t == type::boolean{});
-  CHECK(parsers::type("string", t));
-  CHECK(t == type::string{});
-  CHECK(parsers::type("addr", t));
-  CHECK(t == type::address{});
-  MESSAGE("enum");
-  CHECK(parsers::type("enum{foo, bar, baz}", t));
-  CHECK(t == type::enumeration{{"foo", "bar", "baz"}});
-  MESSAGE("container");
-  CHECK(parsers::type("vector<real>", t));
-  CHECK(t == type::vector{type::real{}});
-  CHECK(parsers::type("set<port>", t));
-  CHECK(t == type::set{type::port{}});
-  CHECK(parsers::type("table<count, bool>", t));
-  CHECK(t == type::table{type::count{}, type::boolean{}});
-  MESSAGE("compound");
-  auto str = "record{r: record{a: addr, i: record{b: bool}}}"s;
-  CHECK(parsers::type(str, t));
-  auto r = type::record{
-    {"r", type::record{
-      {"a", type::address{}},
-      {"i", type::record{{"b", type::boolean{}}}}
-    }}
-  };
-  CHECK(t == r);
-  MESSAGE("symbol table");
-  auto foo = type::boolean{};
-  foo.name("foo");
-  auto symbols = type_table{{"foo", foo}};
-  auto p = type_parser{std::addressof(symbols)}; // overloaded operator&
-  CHECK(p("foo", t));
-  CHECK(t == foo);
-  CHECK(p("vector<foo>", t));
-  CHECK(t == type::vector{foo});
-  CHECK(p("set<foo>", t));
-  CHECK(t == type::set{foo});
-  CHECK(p("table<foo, foo>", t));
-  CHECK(t == type::table{foo, foo});
-  MESSAGE("record");
-  CHECK(p("record{x: int, y: string, z: foo}", t));
-  r = type::record{
-    {"x", type::integer{}},
-    {"y", type::string{}},
-    {"z", foo}
-  };
-  CHECK(t == r);
-  MESSAGE("attributes");
-  // Single attribute.
-  CHECK(p("string &skip", t));
-  CHECK(t == type::string{{type::attribute::skip}});
-  // Two attributes, even though these ones don't make sense together.
-  CHECK(p("real &skip &default=\"x \\\" x\"", t));
-  CHECK(t == type::real{{type::attribute::skip,
-                         {type::attribute::default_, "x \" x"}}});
-  // Attributes in types of record fields.
-  CHECK(p("record{x: int &skip, y: string &default=\"Y\", z: foo}", t));
-  r = type::record{
-    {"x", type::integer{{type::attribute::skip}}},
-    {"y", type::string{{{type::attribute::default_, "Y"}}}},
-    {"z", foo}
-  };
-  CHECK(t == r);
-}
 
 TEST(schema: simple sequential) {
   auto str = "type a = int type b = string type c = a"s;

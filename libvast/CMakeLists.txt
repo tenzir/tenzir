@@ -61,7 +61,6 @@ set(libvast_sources
   #src/concept/convertible/vast/port.cpp
   #src/concept/convertible/vast/schema.cpp
   #src/concept/convertible/vast/subnet.cpp
-  #src/concept/convertible/vast/type.cpp
   #src/concept/convertible/vast/value.cpp
   src/concept/hashable/crc.cpp
   src/concept/hashable/xxhash.cpp
@@ -212,7 +211,7 @@ set(tests
   #test/filesystem.cpp
   test/hash.cpp
   #test/iterator.cpp
-  #test/json.cpp
+  test/json.cpp
   test/logging.cpp
   test/main.cpp
   test/maybe.cpp
@@ -231,7 +230,7 @@ set(tests
   test/stack.cpp
   test/string.cpp
   test/time.cpp
-  #test/type.cpp
+  test/type.cpp
   test/uuid.cpp
   #test/value.cpp
   test/variant.cpp

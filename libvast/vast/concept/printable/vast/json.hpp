@@ -65,8 +65,10 @@ struct json_printer : printer<json_printer<TreePolicy, Indent, Padding>> {
       auto str = std::to_string(n);
       json::number i;
       if (std::modf(n, &i) == 0.0)
+        // Do not show 0 as 0.0.
         str.erase(str.find('.'), std::string::npos);
       else
+        // Avoid no trailing zeros.
         str.erase(str.find_last_not_of('0') + 1, std::string::npos);
       return printers::str.print(out_, str);
     }
@@ -169,8 +171,8 @@ struct json_printer : printer<json_printer<TreePolicy, Indent, Padding>> {
 
   template <typename Iterator, typename T>
   auto print(Iterator& out, T const& x) const
-    -> std::enable_if_t<!std::is_same<json::jsonize<T>,
-                                      std::false_type>::value> {
+  -> std::enable_if_t<!std::is_same<json::jsonize<T>,
+                                    std::false_type>::value> {
     return print_visitor<Iterator>{out}(x);
   }
 
