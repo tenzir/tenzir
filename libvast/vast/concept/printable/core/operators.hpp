@@ -8,6 +8,12 @@
 namespace vast {
 
 template <typename>
+class and_printer;
+
+template <typename>
+class not_printer;
+
+template <typename>
 class optional_printer;
 
 template <typename>
@@ -15,6 +21,9 @@ class kleene_printer;
 
 template <typename>
 class plus_printer;
+
+template <typename>
+class maybe_printer;
 
 template <typename, typename>
 class list_printer;
@@ -26,6 +35,24 @@ template <typename, typename>
 class choice_printer;
 
 // -- unary ------------------------------------------------------------------
+
+template <typename T>
+auto operator&(T&& x)
+-> std::enable_if_t<
+     is_printer<std::decay_t<T>>{},
+     and_printer<std::decay_t<T>>
+   > {
+  return and_printer<std::decay_t<T>>{std::forward<T>(x)};
+}
+
+template <typename T>
+auto operator!(T&& x)
+-> std::enable_if_t<
+     is_printer<std::decay_t<T>>{},
+     not_printer<std::decay_t<T>>
+   > {
+  return not_printer<std::decay_t<T>>{std::forward<T>(x)};
+}
 
 template <typename T>
 auto operator-(T&& x)
@@ -52,6 +79,15 @@ auto operator+(T&& x)
      plus_printer<std::decay_t<T>>
    > {
   return plus_printer<std::decay_t<T>>{std::forward<T>(x)};
+}
+
+template <typename T>
+auto operator~(T&& x)
+-> std::enable_if_t<
+     is_printer<std::decay_t<T>>{},
+     maybe_printer<std::decay_t<T>>
+   > {
+  return maybe_printer<std::decay_t<T>>{std::forward<T>(x)};
 }
 
 // -- binary -----------------------------------------------------------------

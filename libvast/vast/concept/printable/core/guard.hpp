@@ -20,7 +20,7 @@ public:
 
   template <typename Iterator>
   bool print(Iterator& out, unused_type) const {
-    return printer_.print(out, unused);
+    return guard_() && printer_.print(out, unused);
   }
 
   template <typename Iterator, typename Attribute, typename G = Guard>

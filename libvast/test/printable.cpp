@@ -232,6 +232,29 @@ TEST(guard) {
   CHECK_EQUAL(str, "+42");
 }
 
+TEST(and) {
+  std::string str;
+  auto flag = true;
+  auto p = &printers::eps.with([&] { return flag; }) << printers::str;
+  CHECK(p(str, "yoda"));
+  CHECK_EQUAL(str, "yoda");
+  flag = false;
+  str.clear();
+  CHECK(!p(str, "chewie"));
+  CHECK(str.empty());
+}
+
+TEST(not) {
+  std::string str;
+  auto flag = true;
+  auto p = !printers::eps.with([&] { return flag; }) << printers::str;
+  CHECK(!p(str, "yoda"));
+  CHECK(str.empty());
+  flag = false;
+  CHECK(p(str, "chewie"));
+  CHECK_EQUAL(str, "chewie");
+}
+
 namespace ns {
 
 struct foo {
