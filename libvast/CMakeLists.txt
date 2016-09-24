@@ -7,6 +7,7 @@ include_directories(${CMAKE_CURRENT_BINARY_DIR})
 set(libvast_sources
   ${aux_sources}
   #src/address.cpp
+  src/attribute.cpp
   src/banner.cpp
   #src/bitvector.cpp
   #src/bitstream.cpp
