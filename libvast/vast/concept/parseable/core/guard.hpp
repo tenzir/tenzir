@@ -5,16 +5,14 @@
 
 namespace vast {
 
-/// Attaches a guard expression to a parser that must succeed in adition to the
-/// parser itself.
+/// Attaches a guard expression to a parser that must succeed after the parser
+/// executes.
 /// @tparam Parser The parser to augment with a guard expression.
-/// @tparam Guard The guard function which simply take the synthesized
-///               attribute by const-reference and returns `bool`.
+/// @tparam Guard A function that takes the synthesized attribute by
+///               const-reference and returns `bool`.
 template <typename Parser, typename Guard>
 class guard_parser : public parser<guard_parser<Parser, Guard>> {
 public:
-  // We keep the semantic action transparent and just haul through the parser's
-  // attribute.
   using attribute = typename Parser::attribute;
 
   guard_parser(Parser p, Guard fun) : parser_{std::move(p)}, guard_(fun) {

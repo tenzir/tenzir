@@ -11,6 +11,9 @@ namespace vast {
 template <typename, typename>
 class action_printer;
 
+template <typename, typename>
+class guard_printer;
+
 template <typename Derived>
 struct printer {
   template <typename Action>
@@ -21,6 +24,11 @@ struct printer {
   template <typename Action>
   auto operator->*(Action fun) const {
     return before(fun);
+  }
+
+  template <typename Guard>
+  auto with(Guard fun) const {
+    return guard_printer<Derived, Guard>{derived(), fun};
   }
 
   template <typename Range, typename Attribute = unused_type>

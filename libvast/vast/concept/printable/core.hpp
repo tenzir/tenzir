@@ -3,6 +3,8 @@
 
 #include "vast/concept/printable/core/action.hpp"
 #include "vast/concept/printable/core/choice.hpp"
+#include "vast/concept/printable/core/epsilon.hpp"
+#include "vast/concept/printable/core/guard.hpp"
 #include "vast/concept/printable/core/kleene.hpp"
 #include "vast/concept/printable/core/literal.hpp"
 #include "vast/concept/printable/core/list.hpp"

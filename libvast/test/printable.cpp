@@ -215,6 +215,23 @@ TEST(action) {
   CHECK_EQUAL(str, "+42");
 }
 
+TEST(epsilon) {
+  std::string str;
+  CHECK(printers::eps(str, "whatever"));
+}
+
+TEST(guard) {
+  std::string str;
+  auto always_false = printers::eps.with([] { return false; });
+  CHECK(!always_false(str, 0));
+  auto even = printers::integral<int>.with([](int i) { return i % 2 == 0; });
+  CHECK(str.empty());
+  CHECK(!even(str, 41));
+  CHECK(str.empty());
+  CHECK(even(str, 42));
+  CHECK_EQUAL(str, "+42");
+}
+
 namespace ns {
 
 struct foo {
