@@ -1,11 +1,9 @@
 #ifndef VAST_CONCEPT_PARSEABLE_VAST_PORT_HPP
 #define VAST_CONCEPT_PARSEABLE_VAST_PORT_HPP
 
-#include "vast/port.hpp"
-
-#include "vast/concept/parseable/core/parser.hpp"
+#include "vast/concept/parseable/core.hpp"
 #include "vast/concept/parseable/numeric/integral.hpp"
-#include "vast/concept/parseable/vast/address.hpp"
+#include "vast/port.hpp"
 
 namespace vast {
 

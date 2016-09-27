@@ -4,14 +4,15 @@
 #include <array>
 #include <string>
 
-#include "vast/util/operators.hpp"
+#include "vast/detail/operators.hpp"
 
 namespace vast {
 
 struct access;
+class json;
 
 /// An IP address.
-class address : util::totally_ordered<address>, util::bitwise<address> {
+class address : detail::totally_ordered<address>, detail::bitwise<address> {
   friend access;
 
   /// Top 96 bits of v4-mapped-addr.
@@ -96,6 +97,8 @@ public:
   friend auto inspect(Inspector& f, address& a) {
     return f(a.bytes_);
   }
+
+  friend bool convert(address const& a, json& j);
 
 private:
   std::array<uint8_t, 16> bytes_;

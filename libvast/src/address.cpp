@@ -6,7 +6,10 @@
 #include <cstdlib>
 
 #include "vast/address.hpp"
+#include "vast/concept/printable/to_string.hpp"
+#include "vast/concept/printable/vast/address.hpp"
 #include "vast/detail/byte_swap.hpp"
+#include "vast/json.hpp"
 
 std::array<uint8_t, 12> const vast::address::v4_mapped_prefix = {
   {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff}
@@ -119,6 +122,11 @@ bool operator==(address const& x, address const& y) {
 
 bool operator<(address const& x, address const& y) {
   return x.bytes_ < y.bytes_;
+}
+
+bool convert(address const& a, json& j) {
+  j = to_string(a);
+  return true;
 }
 
 } // namespace vast

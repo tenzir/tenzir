@@ -3,7 +3,7 @@
 
 #include "vast/access.hpp"
 #include "vast/pattern.hpp"
-#include "vast/concept/printable/core/printer.hpp"
+#include "vast/concept/printable/core.hpp"
 #include "vast/concept/printable/string/any.hpp"
 #include "vast/concept/printable/string/string.hpp"
 
@@ -15,9 +15,9 @@ struct access::printer<vast::pattern>
   using attribute = pattern;
 
   template <typename Iterator>
-  bool print(Iterator& out, pattern const& p) const {
-    using namespace printers;
-    return any.print(out, '/') && str.print(out, p.str_) && any.print(out, '/');
+  bool print(Iterator& out, pattern const& pat) const {
+    auto p = '/' << printers::str << '/';
+    return p.print(out, pat.str_);
   }
 };
 

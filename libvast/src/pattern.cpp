@@ -1,5 +1,8 @@
 #include <regex>
 
+#include "vast/concept/printable/to_string.hpp"
+#include "vast/concept/printable/vast/pattern.hpp"
+#include "vast/json.hpp"
 #include "vast/pattern.hpp"
 
 namespace vast {
@@ -27,6 +30,11 @@ bool operator==(pattern const& lhs, pattern const& rhs) {
 
 bool operator<(pattern const& lhs, pattern const& rhs) {
   return lhs.str_ < rhs.str_;
+}
+
+bool convert(pattern const& p, json& j) {
+  j = to_string(p);
+  return true;
 }
 
 } // namespace vast

@@ -100,7 +100,6 @@ TEST(void specialization) {
   auto f = []() -> maybe<void> { return test_errc::second_error; };
   auto val = f();
   REQUIRE(! val);
-  std::cout << to_string(val.error()) << std::endl;
   CHECK(val.error() == test_errc::second_error);
 }
 

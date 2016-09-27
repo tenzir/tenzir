@@ -8,6 +8,7 @@
 namespace vast {
 
 struct access;
+class json;
 
 /// A regular expression.
 class pattern : detail::totally_ordered<pattern> {
@@ -49,6 +50,8 @@ public:
   friend auto inspect(Inspector& f, pattern& p) {
     return f(p.str_);
   }
+
+  friend bool convert(pattern const& p, json& j);
 
 private:
   std::string str_;

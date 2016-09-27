@@ -9,7 +9,7 @@
 #include "vast/concept/parseable/string.hpp"
 #include "vast/concept/parseable/numeric/real.hpp"
 #include "vast/uri.hpp"
-#include "vast/util/string.hpp"
+#include "vast/detail/string.hpp"
 
 namespace vast {
 
@@ -21,10 +21,10 @@ struct uri_parser : parser<uri_parser> {
     using namespace parsers;
     auto query_unescape = [](std::string str) {
       std::replace(str.begin(), str.end(), '+', ' ');
-      return util::percent_unescape(str);
+      return detail::percent_unescape(str);
     };
     auto percent_unescape = [](std::string str) {
-      return util::percent_unescape(str);
+      return detail::percent_unescape(str);
     };
     auto scheme_ignore_char = ':'_p | '/';
     auto scheme = *(printable - scheme_ignore_char);

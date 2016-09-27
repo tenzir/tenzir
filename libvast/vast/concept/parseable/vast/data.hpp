@@ -21,7 +21,6 @@ struct access::parser<data> : vast::parser<access::parser<data>> {
 
   template <typename Iterator>
   static auto make() {
-    auto to_record = [](std::vector<data>&& v) { return record{std::move(v)}; };
     auto to_vector = [](std::vector<data>&& v) { return vector{std::move(v)}; };
     auto to_set = [](std::vector<data>&& v) { return set{v}; };
     auto to_table = [](std::vector<std::tuple<data, data>>&& v) -> table {
@@ -31,8 +30,8 @@ struct access::parser<data> : vast::parser<access::parser<data>> {
       return t;
     };
     rule<Iterator, data> p;
-    p = parsers::time_point
-      | parsers::time_duration
+    p = parsers::interval
+      | parsers::timestamp
       | parsers::net
       | parsers::port
       | parsers::addr
@@ -42,7 +41,6 @@ struct access::parser<data> : vast::parser<access::parser<data>> {
       | parsers::tf
       | parsers::qq_str
       | parsers::pattern
-      | '(' >> (p % ',') ->* to_record >> ')'
       | '[' >> (p % ',') ->* to_vector >> ']'
       | '{' >> (p % ',') ->* to_set >> '}'
       | '{' >> ((p >> "->" >> p) % ',') ->* to_table >> '}'

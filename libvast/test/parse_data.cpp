@@ -72,12 +72,12 @@ TEST(data) {
   CHECK(d == port{22, port::tcp});
 
   MESSAGE("vector");
-  str = "[-42]"s;
+  str = "[42,4.2,nil]"s;
   f = str.begin();
   l = str.end();
   CHECK(p.parse(f, l, d));
   CHECK(f == l);
-  CHECK(d == vector{-42});
+  CHECK(d == vector{42u, 4.2, nil});
 
   MESSAGE("set");
   str = "{-42,+42,-1}"s;
@@ -94,12 +94,4 @@ TEST(data) {
   CHECK(p.parse(f, l, d));
   CHECK(f == l);
   CHECK(d == table{{true, 1u}, {false, 0u}});
-
-  MESSAGE("record");
-  str = "(42,4.2,nil)"s;
-  f = str.begin();
-  l = str.end();
-  CHECK(p.parse(f, l, d));
-  CHECK(f == l);
-  CHECK(d == record{42u, 4.2, nil});
 }

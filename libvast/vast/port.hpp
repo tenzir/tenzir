@@ -3,14 +3,15 @@
 
 #include <cstdint>
 
-#include "vast/util/operators.hpp"
+#include "vast/detail/operators.hpp"
 
 namespace vast {
 
 struct access;
+class json;
 
 /// A transport-layer port.
-class port : util::totally_ordered<port> {
+class port : detail::totally_ordered<port> {
   friend access;
 
 public:
@@ -55,6 +56,8 @@ private:
   number_type number_ = 0;
   port_type type_ = unknown;
 };
+
+bool convert(port const& p, json& j);
 
 } // namespace vast
 

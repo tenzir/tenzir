@@ -1,15 +1,13 @@
 #include <tuple>
 
+#include "vast/concept/printable/to_string.hpp"
+#include "vast/concept/printable/vast/type.hpp"
+#include "vast/detail/assert.hpp"
+#include "vast/detail/string.hpp"
+#include "vast/data.hpp"
 #include "vast/json.hpp"
 #include "vast/pattern.hpp"
 #include "vast/type.hpp"
-
-#include "vast/concept/printable/to_string.hpp"
-#include "vast/concept/printable/vast/type.hpp"
-
-#include "vast/detail/assert.hpp"
-#include "vast/detail/string.hpp"
-
 
 namespace vast {
 
@@ -536,64 +534,88 @@ bool compatible(type const& lhs, relational_operator op, type const& rhs) {
   }
 }
 
-// TODO
+namespace {
+
+template <class T>
+struct data_to_type;
+
+#define VAST_SPECIALIZE_DATA_TO_TYPE(DATA, TYPE)                               \
+  template <>                                                                  \
+  struct data_to_type<DATA> {                                                  \
+    using type = TYPE;                                                         \
+  };
+
+VAST_SPECIALIZE_DATA_TO_TYPE(none, none_type)
+VAST_SPECIALIZE_DATA_TO_TYPE(boolean, boolean_type)
+VAST_SPECIALIZE_DATA_TO_TYPE(integer, integer_type)
+VAST_SPECIALIZE_DATA_TO_TYPE(count, count_type)
+VAST_SPECIALIZE_DATA_TO_TYPE(real, real_type)
+VAST_SPECIALIZE_DATA_TO_TYPE(interval, interval_type)
+VAST_SPECIALIZE_DATA_TO_TYPE(timestamp, timestamp_type)
+VAST_SPECIALIZE_DATA_TO_TYPE(std::string, string_type)
+VAST_SPECIALIZE_DATA_TO_TYPE(pattern, pattern_type)
+VAST_SPECIALIZE_DATA_TO_TYPE(address, address_type)
+VAST_SPECIALIZE_DATA_TO_TYPE(subnet, subnet_type)
+VAST_SPECIALIZE_DATA_TO_TYPE(port, port_type)
+
+#undef VAST_SPECIALIZE_DATA_TO_TYPE
+
+struct data_checker {
+  data_checker(type const& t) : type_{t} { }
+
+  template <typename T>
+  bool operator()(T const&) const {
+    return is<typename data_to_type<T>::type>(type_);
+  }
+
+  bool operator()(enumeration const& e) const {
+    auto t = get_if<enumeration_type>(type_);
+    return t && e < t->fields.size();
+  }
+
+  bool operator()(vector const& v) const {
+    auto r = get_if<record_type>(type_);
+    if (r) {
+      if (r->fields.size() != v.size())
+        return false;
+      for (size_t i = 0; i < r->fields.size(); ++i)
+        if (!type_check(r->fields[i].type, v[i]))
+          return false;
+      return true;
+    }
+    if (v.empty())
+      return true;
+    auto t = get_if<vector_type>(type_);
+    return t && type_check(t->value_type, v[0]);
+  }
+
+  bool operator()(set const& s) const {
+    if (s.empty())
+      return true;
+    auto t = get_if<set_type>(type_);
+    return t && type_check(t->value_type, *s.begin());
+  }
+
+  bool operator()(table const& x) const {
+    if (x.empty())
+      return true;
+    auto t = get_if<table_type>(type_);
+    if (!t)
+      return false;
+    return type_check(t->key_type, x.begin()->first) && 
+      type_check(t->value_type, x.begin()->second);
+  }
+
+  type const& type_;
+};
+
+} // namespace <anonymous>
+
+bool type_check(type const& t, data const& d) {
+  return is<none>(d) || visit(data_checker{t}, d);
+}
+
 //namespace {
-//
-//struct data_checker {
-//  data_checker(type const& t) : type_{t} { }
-//
-//  bool operator()(none const&) const {
-//    return false;
-//  }
-//
-//  template <typename T>
-//  bool operator()(T const&) const {
-//    static_assert(type::is_basic<type::from_data<T>>::value,
-//                  "only basic types allowed");
-//    return is<type::from_data<T>>(type_);
-//  }
-//
-//  bool operator()(enumeration const& e) const {
-//    auto t = get_if<type::enumeration>(type_);
-//    return t && e < t->fields.size();
-//  }
-//
-//  bool operator()(vector const& v) const {
-//    if (v.empty())
-//      return true;
-//    auto t = get_if<type::vector>(type_);
-//    return t && t->elem().check(*v.begin());
-//  }
-//
-//  bool operator()(set const& s) const {
-//    if (s.empty())
-//      return true;
-//    auto t = get_if<type::set>(type_);
-//    return t && t->elem().check(*s.begin());
-//  }
-//
-//  bool operator()(table const& x) const {
-//    if (x.empty())
-//      return true;
-//    auto t = get_if<type::table>(type_);
-//    if (!t)
-//      return false;
-//    auto front = x.begin();
-//    return t->key().check(front->first) && t->value().check(front->second);
-//  }
-//
-//  bool operator()(record const& r) const {
-//    auto t = get_if<record_type>(type_);
-//    if (!t || t->fields.size() != r.size())
-//      return false;
-//    for (size_t i = 0; i < r.size(); ++i)
-//      if (!t->fields[i].type.check(r[i]))
-//        return false;
-//    return true;
-//  }
-//
-//  type const& type_;
-//};
 //
 //struct data_maker {
 //  data operator()(none) const {
@@ -611,11 +633,6 @@ bool compatible(type const& lhs, relational_operator op, type const& rhs) {
 //};
 //
 //} // namespace <anonymous>
-//
-//bool type::check(data const& d) const {
-//  return which(d) == data::tag::none || which(*info_) == type::tag::none
-//         || visit(data_checker{*this}, d);
-//}
 //
 //data type::make() const {
 //  return visit(data_maker{}, *this);

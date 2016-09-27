@@ -1,116 +1,95 @@
 #include "vast/data.hpp"
+#include "vast/json.hpp"
 
 #include "vast/concept/printable/vast/data.hpp"
 #include "vast/detail/assert.hpp"
 
 namespace vast {
 
-data const& record::each::range_state::data() const {
-  VAST_ASSERT(!trace.empty());
-  return *trace.back();
+data::data(none) {
 }
 
-record::each::each(record const& r) {
-  if (r.empty())
-    return;
-  auto rec = &r;
-  do {
-    records_.push_back(rec);
-    state_.trace.push_back(&(*rec)[0]);
-    state_.offset.push_back(0);
-  } while ((rec = get<record>(*state_.trace.back())));
-}
-
-bool record::each::next() {
-  if (records_.empty())
-    return false;
-  while (++state_.offset.back() == records_.back()->size()) {
-    records_.pop_back();
-    state_.trace.pop_back();
-    state_.offset.pop_back();
-    if (records_.empty())
-      return false;
-  }
-  auto f = &(*records_.back())[state_.offset.back()];
-  state_.trace.back() = f;
-  while (auto r = get<record>(*f)) {
-    f = &(*r)[0];
-    records_.push_back(r);
-    state_.trace.push_back(f);
-    state_.offset.push_back(0);
-  }
-  return true;
-}
-
-data const* record::at(offset const& o) const {
-  record const* r = this;
+data const* at(offset const& o, vector const& v) {
+  vector const* x = &v;
   for (size_t i = 0; i < o.size(); ++i) {
     auto& idx = o[i];
-    if (idx >= r->size())
+    if (idx >= x->size())
       return nullptr;
-    auto v = &(*r)[idx];
+    auto d = &(*x)[idx];
     if (i + 1 == o.size())
-      return v;
-    r = get<record>(*v);
-    if (!r)
+      return d;
+    x = get_if<vector>(*d);
+    if (!x)
       return nullptr;
   }
   return nullptr;
 }
 
-record flatten(record const& r) {
-  record result;
-  result.reserve(r.size());
-  for (auto& field : r)
-    if (auto rec = get<record>(field)) {
+vector flatten(vector const& v) {
+  vector result;
+  result.reserve(v.size());
+  for (auto& x : v)
+    if (auto rec = get_if<vector>(x)) {
       auto flat = flatten(*rec);
       result.insert(result.end(),
                     std::make_move_iterator(flat.begin()),
                     std::make_move_iterator(flat.end()));
     } else {
-      result.push_back(field);
+      result.push_back(x);
     }
   return result;
 }
 
 data flatten(data const& d) {
-  auto r = get<record>(d);
-  return r ? flatten(*r) : d;
+  auto v = get_if<vector>(d);
+  return v ? flatten(*v) : d;
 }
 
-maybe<record> unflatten(record const& r, type::record const& t) {
-  auto i = r.begin();
+optional<vector> unflatten(vector const& v, record_type const& t) {
+  auto i = v.begin();
   size_t depth = 1;
-  record result;
-  record* rec = &result;
-  for (auto& e : type::record::each{t}) {
-    if (i == r.end())
+  vector result;
+  vector* x = &result;
+  for (auto& e : record_type::each{t}) {
+    if (i == v.end())
       return {};
     if (e.depth() > depth) {
       for (size_t j = 0; j < e.depth() - depth; ++j) {
         ++depth;
-        rec->push_back(record{});
-        rec = get<record>(rec->back());
+        x->push_back(vector{});
+        x = get_if<vector>(x->back());
       }
     } else if (e.depth() < depth) {
-      rec = &result;
+      x = &result;
       depth = e.depth();
       for (size_t j = 0; j < depth - 1; ++j)
-        rec = get<record>(rec->back());
+        x = get_if<vector>(x->back());
     }
     auto& field_type = e.trace.back()->type;
-    if (is<none>(*i) || field_type.check(*i))
-      rec->push_back(*i++);
+    if (is<none>(*i) || type_check(field_type, *i))
+      x->push_back(*i++);
     else
       return {};
   }
   return result;
 }
 
-maybe<record> unflatten(data const& d, type const& t) {
-  auto r = get<record>(d);
-  auto rt = get<type::record>(t);
-  return r && rt ? unflatten(*r, *rt) : maybe<record>{};
+optional<vector> unflatten(data const& d, type const& t) {
+  auto v = get_if<vector>(d);
+  auto rt = get_if<record_type>(t);
+  return v && rt ? unflatten(*v, *rt) : optional<vector>{};
+}
+
+detail::data_variant& expose(data& d) {
+  return d.data_;
+}
+
+bool operator==(data const& lhs, data const& rhs) {
+  return lhs.data_ == rhs.data_;
+}
+
+bool operator<(data const& lhs, data const& rhs) {
+  return lhs.data_ < rhs.data_;
 }
 
 namespace {
@@ -157,7 +136,7 @@ struct in_visitor {
 
 } // namespace <anonymous>
 
-bool data::evaluate(data const& lhs, relational_operator op, data const& rhs) {
+bool evaluate(data const& lhs, relational_operator op, data const& rhs) {
   switch (op) {
     default:
       VAST_ASSERT(!"missing case");
@@ -189,20 +168,85 @@ bool data::evaluate(data const& lhs, relational_operator op, data const& rhs) {
   }
 }
 
-data::variant_type& expose(data& d) {
-  return d.data_;
+namespace {
+
+struct jsonizer {
+  jsonizer(json& j) : j_{j} { }
+
+  bool operator()(none) const {
+    return true;
+  }
+
+  bool operator()(std::string const& str) const {
+    j_ = str;
+    return true;
+  }
+
+  template <typename T>
+  bool operator()(T const& x) const {
+    return convert(x, j_);
+  }
+
+  json& j_;
+};
+
+} // namespace <anonymous>
+
+bool convert(vector const& v, json& j) {
+  json::array a(v.size());
+  for (auto i = 0u; i < v.size(); ++i)
+    if (!visit(jsonizer{a[i]}, v[i]))
+      return false;
+  j = std::move(a);
+  return true;
 }
 
-data::variant_type const& expose(data const& d) {
-  return d.data_;
+bool convert(set const& s, json& j) {
+  json::array a(s.size());
+  for (auto i = 0u; i < s.size(); ++i)
+    if (!visit(jsonizer{a[i]}, s[i]))
+      return false;
+  j = std::move(a);
+  return true;
 }
 
-bool operator==(data const& lhs, data const& rhs) {
-  return lhs.data_ == rhs.data_;
+bool convert(table const& t, json& j) {
+  json::array values;
+  for (auto& p : t) {
+    json::array a;
+    json j;
+    if (!visit(jsonizer{j}, p.first))
+      return false;
+    a.push_back(std::move(j));
+    if (!visit(jsonizer{j}, p.second))
+      return false;
+    a.push_back(std::move(j));
+    values.emplace_back(std::move(a));
+  };
+  j = std::move(values);
+  return true;
 }
 
-bool operator<(data const& lhs, data const& rhs) {
-  return lhs.data_ < rhs.data_;
+bool convert(data const& d, json& j) {
+  return visit(jsonizer{j}, d);
+}
+
+bool convert(data const& d, json& j, type const& t) {
+  auto v = get_if<vector>(d);
+  auto rt = get_if<record_type>(t);
+  if (v && rt) {
+    if (v->size() != rt->fields.size())
+      return false;
+    json::object o;
+    for (auto i = 0u; i < v->size(); ++i) {
+      auto& f = rt->fields[i];
+      if (! convert((*v)[i], o[f.name], f.type))
+        return false;
+    }
+    j = std::move(o);
+    return true;
+  }
+  return convert(d, j);
 }
 
 } // namespace vast

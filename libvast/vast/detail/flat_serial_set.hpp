@@ -5,7 +5,7 @@
 #include <functional>
 #include <vector>
 
-#include "vast/util/operators.hpp"
+#include "vast/detail/operators.hpp"
 
 namespace vast {
 namespace detail {
@@ -17,7 +17,7 @@ template <
   typename Allocator = std::allocator<T>
 >
 class flat_serial_set
-  : util::totally_ordered<flat_serial_set<T, Compare, Allocator>> {
+  : detail::totally_ordered<flat_serial_set<T, Compare, Allocator>> {
 public:
   //
   // Types

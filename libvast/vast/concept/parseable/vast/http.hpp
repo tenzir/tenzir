@@ -11,7 +11,6 @@
 #include "vast/concept/parseable/vast/uri.hpp"
 #include "vast/http.hpp"
 #include "vast/uri.hpp"
-#include "vast/util/string.hpp"
 
 namespace vast {
 

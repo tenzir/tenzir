@@ -1,5 +1,8 @@
 #include <tuple>
 
+#include "vast/concept/printable/to_string.hpp"
+#include "vast/concept/printable/vast/subnet.hpp"
+#include "vast/json.hpp"
 #include "vast/subnet.hpp"
 
 namespace vast {
@@ -47,6 +50,11 @@ bool operator==(subnet const& x, subnet const& y) {
 
 bool operator<(subnet const& x, subnet const& y) {
   return std::tie(x.network_, x.length_) < std::tie(y.network_, y.length_);
+}
+
+bool convert(subnet const& sn, json& j) {
+  j = to_string(sn);
+  return true;
 }
 
 } // namespace vast

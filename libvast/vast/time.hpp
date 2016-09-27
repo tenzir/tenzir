@@ -8,8 +8,8 @@ namespace vast {
 
 class json;
 
-/// The clock with the highest resolution possible.
-using clock = std::chrono::high_resolution_clock;
+/// The clock that correctly represents calendar time.
+using clock = std::chrono::system_clock;
 
 /// A duration in time with nanosecond resolution.
 using interval = std::chrono::duration<int64_t, std::nano>;

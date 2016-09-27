@@ -9,7 +9,7 @@
 #include "vast/concept/printable/string/string.hpp"
 #include "vast/concept/printable/detail/print_delimited.hpp"
 #include "vast/uri.hpp"
-#include "vast/util/string.hpp"
+#include "vast/detail/string.hpp"
 
 namespace vast {
 
@@ -19,9 +19,9 @@ struct key_value_printer : printer<key_value_printer> {
   template <typename Iterator>
   bool print(Iterator& out, std::pair<std::string,std::string> const& kv) const {
     using namespace printers;
-    return str.print(out, util::percent_escape(kv.first)) 
+    return str.print(out, detail::percent_escape(kv.first)) 
         && str.print(out, "=") 
-        && str.print(out, util::percent_escape(kv.second));
+        && str.print(out, detail::percent_escape(kv.second));
   }
 };
 
@@ -42,7 +42,7 @@ struct uri_printer : printer<uri_printer> {
         return false;
     }
     if (u.host != "") {
-      if (!(str.print(out, "//") && str.print(out, util::percent_escape(u.host))))
+      if (!(str.print(out, "//") && str.print(out, detail::percent_escape(u.host))))
         return false;
     }
     if (u.port != 0) {
@@ -72,7 +72,7 @@ struct uri_printer : printer<uri_printer> {
         return false;*/
     }
     if (u.fragment != "") {
-      if (!(any.print(out, '#') && str.print(out, util::percent_escape(u.fragment))))
+      if (!(any.print(out, '#') && str.print(out, detail::percent_escape(u.fragment))))
         return false;
     }
     return true;

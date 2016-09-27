@@ -1,5 +1,8 @@
 #include <tuple>
 
+#include "vast/concept/printable/to_string.hpp"
+#include "vast/concept/printable/vast/port.hpp"
+#include "vast/json.hpp"
 #include "vast/port.hpp"
 
 namespace vast {
@@ -31,6 +34,11 @@ bool operator==(port const& x, port const& y) {
 
 bool operator<(port const& x, port const& y) {
   return std::tie(x.number_, x.type_) < std::tie(y.number_, y.type_);
+}
+
+bool convert(port const& p, json& j) {
+  j = to_string(p);
+  return true;
 }
 
 } // namespace vast

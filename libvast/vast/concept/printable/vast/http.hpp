@@ -3,12 +3,11 @@
 
 #include <string>
 
-#include "vast/concept/printable/core/printer.hpp"
+#include "vast/concept/printable/core.hpp"
 #include "vast/concept/printable/numeric/integral.hpp"
 #include "vast/concept/printable/numeric/real.hpp"
 #include "vast/concept/printable/string/any.hpp"
 #include "vast/concept/printable/string/string.hpp"
-#include "vast/concept/printable/detail/print_delimited.hpp"
 #include "vast/http.hpp"
 
 namespace vast {
@@ -19,9 +18,8 @@ struct http_header_printer : printer<http_header_printer> {
   template <typename Iterator>
   bool print(Iterator& out, http::header const& hdr) const {
     using namespace printers;
-    return str.print(out, hdr.name) 
-        && str.print(out, ": ") 
-        && str.print(out, hdr.value);
+    auto p = str << ": " << str;
+    return p.print(out, std::tie(hdr.name, hdr.value));
   }
 };
 
@@ -37,14 +35,22 @@ struct http_response_printer : printer<http::response> {
   bool print(Iterator& out, http::response const& res) const {
     using namespace printers;
     auto version = real_printer<double, 1>{};
-    return str.print(out, res.protocol) && any.print(out, '/')
-           && version.print(out, res.version) && any.print(out, ' ')
-           && u32.print(out, res.status_code) && any.print(out, ' ')
-           && str.print(out, res.status_text) && str.print(out, "\r\n")
-           && detail::print_delimited(res.headers.begin(), res.headers.end(),
-                                      out, "\r\n")
-           && str.print(out, "\r\n") && str.print(out, "\r\n")  
-           && str.print(out, res.body);
+    auto p 
+      =   str     // proto
+      << '/' 
+      << version 
+      << ' ' 
+      << u32      // status code
+      << ' ' 
+      << str      // status text
+      << "\r\n"
+      << ~(http_header_printer{} % "\r\n")
+      << "\r\n\r\n"
+      << str      // body
+      ;
+    auto t = std::tie(res.protocol, res.version, res.status_code,
+                      res.status_text, res.headers, res.body);
+    return p.print(out, t);
   }
 };
 

@@ -3,6 +3,7 @@
 #include "vast/concept/printable/core.hpp"
 #include "vast/concept/printable/numeric.hpp"
 #include "vast/concept/printable/print.hpp"
+#include "vast/concept/printable/std/chrono.hpp"
 #include "vast/concept/printable/string.hpp"
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/to.hpp"
@@ -255,6 +256,8 @@ TEST(not) {
   CHECK_EQUAL(str, "chewie");
 }
 
+// -- custom type -------------------------------------------------------------
+
 namespace ns {
 
 struct foo {
@@ -276,6 +279,18 @@ TEST(custom type) {
   std::string str;
   CHECK(print(std::back_inserter(str), ns::foo{}));
   CHECK(str == "+42");
+}
+
+// -- std::chrono -------------------------------------------------------------
+
+TEST(std::chrono) {
+  using namespace std::chrono;
+  auto ns = nanoseconds(15);
+  CHECK_EQUAL(to_string(ns), "+15ns");
+  auto us = microseconds(42);
+  CHECK_EQUAL(to_string(us), "+42us");
+  auto ms = milliseconds(-7);
+  CHECK_EQUAL(to_string(ms), "-7ms");
 }
 
 // -- API ---------------------------------------------------------------------

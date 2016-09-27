@@ -1,10 +1,11 @@
 #ifndef VAST_CONCEPT_PARSEABLE_FROM_STRING_HPP
 #define VAST_CONCEPT_PARSEABLE_FROM_STRING_HPP
 
+#include <string>
 #include <type_traits>
 
-#include "vast/trial.hpp"
-#include "vast/concept/parseable/core/parse.hpp"
+#include "vast/optional.hpp"
+#include "vast/concept/parseable/parse.hpp"
 
 namespace vast {
 
@@ -15,11 +16,11 @@ template <
   typename... Args
 >
 auto from_string(Iterator begin, Iterator end, Args&&... args)
-  -> std::enable_if_t<is_parseable<Iterator, To>::value, trial<To>> {
-  trial<To> t{To{}};
+  -> std::enable_if_t<is_parseable<Iterator, To>::value, optional<To>> {
+  optional<To> t{To{}};
   if (Parser{std::forward<Args>(args)...}.parse(begin, end, *t))
     return t;
-  return error{"parsing failed"};
+  return {};
 }
 
 template <

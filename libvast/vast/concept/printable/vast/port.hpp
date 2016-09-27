@@ -1,22 +1,21 @@
 #ifndef VAST_CONCEPT_PRINTABLE_VAST_PORT_HPP
 #define VAST_CONCEPT_PRINTABLE_VAST_PORT_HPP
 
-#include "vast/port.hpp"
 #include "vast/concept/printable/core/printer.hpp"
 #include "vast/concept/printable/numeric/integral.hpp"
 #include "vast/concept/printable/string/string.hpp"
 #include "vast/concept/printable/string/any.hpp"
+#include "vast/port.hpp"
 
 namespace vast {
 
-template <>
-struct access::printer<port> : vast::printer<access::printer<port>> {
+struct port_printer : vast::printer<port_printer> {
   using attribute = port;
 
   template <typename Iterator>
   bool print(Iterator& out, port const& p) const {
     using namespace printers;
-    if (!(u16.print(out, p.number_) && any.print(out, '/')))
+    if (!(u16.print(out, p.number()) && any.print(out, '/')))
       return false;
     switch (p.type()) {
       default:
@@ -33,7 +32,7 @@ struct access::printer<port> : vast::printer<access::printer<port>> {
 
 template <>
 struct printer_registry<port> {
-  using type = access::printer<port>;
+  using type = port_printer;
 };
 
 } // namespace vast

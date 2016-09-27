@@ -28,6 +28,7 @@
 namespace vast {
 
 class address;
+class data;
 class json;
 class pattern;
 class port;
@@ -431,6 +432,12 @@ bool congruent(type const& x, type const& y);
 /// @returns `true` if *lhs* and *rhs* are compatible to each other under *op*.
 bool compatible(type const& lhs, relational_operator op, type const& rhs);
 
+/// Checks whether data and type fit together (and can form a ::value).
+/// @param t The type that describes *d*.
+/// @param d The raw data to be checked against *t*.
+/// @returns `true` if *t* is a valid type for *d*.
+bool type_check(type const& t, data const& d);
+
 // -- implementation details -------------------------------------------------
 
 namespace detail {
@@ -469,7 +476,7 @@ struct type::impl : caf::ref_counted, detail::type_variant {
   }
 };
 
-auto& expose(type& t) {
+inline auto& expose(type& t) {
   return static_cast<detail::type_variant&>(*t.ptr_);
 }
 

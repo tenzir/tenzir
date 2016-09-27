@@ -8,7 +8,7 @@
 
 #include "vast/access.hpp"
 #include "vast/address.hpp"
-#include "vast/util/assert.hpp"
+#include "vast/detail/assert.hpp"
 
 #include "vast/concept/parseable/core.hpp"
 #include "vast/concept/parseable/numeric/integral.hpp"

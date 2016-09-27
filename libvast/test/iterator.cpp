@@ -1,6 +1,6 @@
-#include "vast/util/iterator.hpp"
+#include "vast/detail/iterator.hpp"
 
-#define SUITE util
+#define SUITE detail
 #include "test.hpp"
 
 using namespace vast;
@@ -8,7 +8,7 @@ using namespace vast;
 // A simple iterator over an array.
 template <typename T, size_t N>
 struct iterator
-  : util::iterator_facade<iterator<T, N>, T, std::random_access_iterator_tag> {
+  : detail::iterator_facade<iterator<T, N>, T, std::random_access_iterator_tag> {
 public:
   iterator() = default;
 
@@ -16,7 +16,7 @@ public:
   }
 
 private:
-  friend util::iterator_access;
+  friend detail::iterator_access;
 
   void increment() {
     ++i_;

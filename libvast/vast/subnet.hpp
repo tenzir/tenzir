@@ -2,12 +2,14 @@
 #define VAST_SUBNET_HPP
 
 #include "vast/address.hpp"
-#include "vast/util/operators.hpp"
+#include "vast/detail/operators.hpp"
 
 namespace vast {
 
+class json;
+
 /// Stores IPv4 and IPv6 prefixes, e.g., `192.168.1.1/16` and `FD00::/8`.
-class subnet : util::totally_ordered<subnet> {
+class subnet : detail::totally_ordered<subnet> {
   friend access;
 
 public:
@@ -38,6 +40,8 @@ public:
   friend auto inspect(Inspector& f, subnet& sn) {
     return f(sn.network_, sn.length_);
   }
+
+  friend bool convert(subnet const& sn, json& j);
 
 private:
   bool initialize();
