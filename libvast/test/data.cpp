@@ -48,10 +48,11 @@ TEST(records) {
   vector w{100, "bar", v};
   CHECK(v.size() == 5);
   MESSAGE("access via offset");
-  CHECK(*at(offset{0}, w) == 100);
-  CHECK(*at(offset{1}, w) == "bar");
-  CHECK(*at(offset{2}, w) == v);
-  CHECK(*at(offset{2, 3}, w) == data{"x"});
+  CHECK(*get(w, offset{0}) == 100);
+  CHECK(*get(w, offset{1}) == "bar");
+  CHECK(*get(w, offset{2}) == v);
+  CHECK(*get(w, offset{2, 3}) == data{"x"});
+  CHECK(*get(data{w}, offset{2, 2}) == data{1001u});
   MESSAGE("flatten");
   auto structured =
     vector{"foo", vector{-42, vector{1001u}}, "x", port{443, port::tcp}};

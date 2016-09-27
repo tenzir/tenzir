@@ -29,28 +29,6 @@ namespace vast {
 class data;
 class json;
 
-/// Retrieves a data at a givene offset.
-/// @param o The offset to look at.
-/// @param v The vector to lookup.
-/// @returns A pointer to the data at *o* or `nullptr` if *o* does not
-///          resolve.
-data const* at(offset const& o, vector const& v);
-
-/// Flattens a vector.
-/// @param v The vector to flatten.
-/// @returns The flattened vector.
-/// @see unflatten
-vector flatten(vector const& v);
-data flatten(data const& d);
-
-/// Unflattens a vector according to a record type.
-/// @param v The vector to unflatten according to *t*.
-/// @param t The type that defines the vector structure.
-/// @returns The unflattened vector of *v* according to *t*.
-/// @see flatten
-optional<vector> unflatten(vector const& v, record_type const& t);
-optional<vector> unflatten(data const& d, type const& t);
-
 namespace detail {
 
 template <typename T>
@@ -174,11 +152,38 @@ private:
 //      || std::is_same<T, table>::value
 //  >;
 
+// -- helpers -----------------------------------------------------------------
+
+/// Retrieves data at a given offset.
+/// @param v The vector to lookup.
+/// @param o The offset to access.
+/// @returns A pointer to the data at *o* or `nullptr` if *o* does not
+///          describe a valid offset.
+data const* get(vector const& v, offset const& o);
+data const* get(data const& d, offset const& o);
+
+/// Flattens a vector.
+/// @param v The vector to flatten.
+/// @returns The flattened vector.
+/// @see unflatten
+vector flatten(vector const& v);
+data flatten(data const& d);
+
+/// Unflattens a vector according to a record type.
+/// @param v The vector to unflatten according to *t*.
+/// @param t The type that defines the vector structure.
+/// @returns The unflattened vector of *v* according to *t*.
+/// @see flatten
+optional<vector> unflatten(vector const& v, record_type const& t);
+optional<vector> unflatten(data const& d, type const& t);
+
 /// Evaluates a data predicate.
 /// @param lhs The LHS of the predicate.
 /// @param op The relational operator.
 /// @param rhs The RHS of the predicate.
 bool evaluate(data const& lhs, relational_operator op, data const& rhs);
+
+// -- convertible -------------------------------------------------------------
 
 bool convert(vector const& v, json& j);
 bool convert(set const& v, json& j);

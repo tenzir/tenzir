@@ -9,77 +9,6 @@ namespace vast {
 data::data(none) {
 }
 
-data const* at(offset const& o, vector const& v) {
-  vector const* x = &v;
-  for (size_t i = 0; i < o.size(); ++i) {
-    auto& idx = o[i];
-    if (idx >= x->size())
-      return nullptr;
-    auto d = &(*x)[idx];
-    if (i + 1 == o.size())
-      return d;
-    x = get_if<vector>(*d);
-    if (!x)
-      return nullptr;
-  }
-  return nullptr;
-}
-
-vector flatten(vector const& v) {
-  vector result;
-  result.reserve(v.size());
-  for (auto& x : v)
-    if (auto rec = get_if<vector>(x)) {
-      auto flat = flatten(*rec);
-      result.insert(result.end(),
-                    std::make_move_iterator(flat.begin()),
-                    std::make_move_iterator(flat.end()));
-    } else {
-      result.push_back(x);
-    }
-  return result;
-}
-
-data flatten(data const& d) {
-  auto v = get_if<vector>(d);
-  return v ? flatten(*v) : d;
-}
-
-optional<vector> unflatten(vector const& v, record_type const& t) {
-  auto i = v.begin();
-  size_t depth = 1;
-  vector result;
-  vector* x = &result;
-  for (auto& e : record_type::each{t}) {
-    if (i == v.end())
-      return {};
-    if (e.depth() > depth) {
-      for (size_t j = 0; j < e.depth() - depth; ++j) {
-        ++depth;
-        x->push_back(vector{});
-        x = get_if<vector>(x->back());
-      }
-    } else if (e.depth() < depth) {
-      x = &result;
-      depth = e.depth();
-      for (size_t j = 0; j < depth - 1; ++j)
-        x = get_if<vector>(x->back());
-    }
-    auto& field_type = e.trace.back()->type;
-    if (is<none>(*i) || type_check(field_type, *i))
-      x->push_back(*i++);
-    else
-      return {};
-  }
-  return result;
-}
-
-optional<vector> unflatten(data const& d, type const& t) {
-  auto v = get_if<vector>(d);
-  auto rt = get_if<record_type>(t);
-  return v && rt ? unflatten(*v, *rt) : optional<vector>{};
-}
-
 detail::data_variant& expose(data& d) {
   return d.data_;
 }
@@ -166,6 +95,83 @@ bool evaluate(data const& lhs, relational_operator op, data const& rhs) {
     case greater_equal:
       return lhs >= rhs;
   }
+}
+
+data const* get(vector const& v, offset const& o) {
+  vector const* x = &v;
+  for (size_t i = 0; i < o.size(); ++i) {
+    auto& idx = o[i];
+    if (idx >= x->size())
+      return nullptr;
+    auto d = &(*x)[idx];
+    if (i + 1 == o.size())
+      return d;
+    x = get_if<vector>(*d);
+    if (!x)
+      return nullptr;
+  }
+  return nullptr;
+}
+
+data const* get(data const& d, offset const& o) {
+  if (auto v = get_if<vector>(d))
+    return get(*v, o);
+  return nullptr;
+}
+
+vector flatten(vector const& v) {
+  vector result;
+  result.reserve(v.size());
+  for (auto& x : v)
+    if (auto rec = get_if<vector>(x)) {
+      auto flat = flatten(*rec);
+      result.insert(result.end(),
+                    std::make_move_iterator(flat.begin()),
+                    std::make_move_iterator(flat.end()));
+    } else {
+      result.push_back(x);
+    }
+  return result;
+}
+
+data flatten(data const& d) {
+  auto v = get_if<vector>(d);
+  return v ? flatten(*v) : d;
+}
+
+optional<vector> unflatten(vector const& v, record_type const& t) {
+  auto i = v.begin();
+  size_t depth = 1;
+  vector result;
+  vector* x = &result;
+  for (auto& e : record_type::each{t}) {
+    if (i == v.end())
+      return {};
+    if (e.depth() > depth) {
+      for (size_t j = 0; j < e.depth() - depth; ++j) {
+        ++depth;
+        x->push_back(vector{});
+        x = get_if<vector>(x->back());
+      }
+    } else if (e.depth() < depth) {
+      x = &result;
+      depth = e.depth();
+      for (size_t j = 0; j < depth - 1; ++j)
+        x = get_if<vector>(x->back());
+    }
+    auto& field_type = e.trace.back()->type;
+    if (is<none>(*i) || type_check(field_type, *i))
+      x->push_back(*i++);
+    else
+      return {};
+  }
+  return result;
+}
+
+optional<vector> unflatten(data const& d, type const& t) {
+  auto v = get_if<vector>(d);
+  auto rt = get_if<record_type>(t);
+  return v && rt ? unflatten(*v, *rt) : optional<vector>{};
 }
 
 namespace {
