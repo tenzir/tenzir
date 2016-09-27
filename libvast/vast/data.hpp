@@ -29,19 +29,6 @@ namespace vast {
 class data;
 class json;
 
-/// A random-access sequence of data.
-class vector : public std::vector<data> {
-  using super = std::vector<vast::data>;
-
-public:
-  using super::vector;
-
-  vector() = default;
-
-  explicit vector(super v) : super{std::move(v)} {
-  }
-};
-
 /// Retrieves a data at a givene offset.
 /// @param o The offset to look at.
 /// @param v The vector to lookup.
@@ -63,36 +50,6 @@ data flatten(data const& d);
 /// @see flatten
 optional<vector> unflatten(vector const& v, record_type const& t);
 optional<vector> unflatten(data const& d, type const& t);
-
-/// A mathematical set where each element is ::data.
-class set : public detail::flat_set<data> {
-  using super = detail::flat_set<vast::data>;
-
-public:
-  using super::flat_set;
-
-  set() = default;
-
-  explicit set(super s) : super(std::move(s)) {
-  }
-
-  explicit set(std::vector<vast::data>& v)
-    : super(std::make_move_iterator(v.begin()),
-            std::make_move_iterator(v.end())) {
-  }
-
-  explicit set(std::vector<vast::data> const& v)
-    : super(v.begin(), v.end()) {
-  }
-};
-
-/// An associative array with ::data as both key and value.
-class table : public std::map<data, data> {
-  using super = std::map<vast::data, vast::data>;
-
-public:
-  using super::map;
-};
 
 namespace detail {
 

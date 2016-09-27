@@ -3,15 +3,32 @@
 
 #include <cstdint>
 #include <limits>
+#include <map>
 #include <memory>
+#include <set>
+#include <vector>
 
 namespace vast {
 
-// Values
+// -- data -------------------------------------------------------------------
+
+class data;
+
 using boolean = bool;
 using integer = int64_t;
 using count = uint64_t;
 using real = double;
+
+/// A random-access sequence of data.
+using vector = std::vector<data>;
+
+/// A mathematical set where each element is ::data.
+using set = std::set<data>;
+
+/// An associative array with ::data as both key and value.
+using table = std::map<data, data>;
+
+// ---------------------------------------------------------------------------
 
 class ewah_bitstream;
 using default_bitstream = ewah_bitstream;

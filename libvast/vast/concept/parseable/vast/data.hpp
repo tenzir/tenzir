@@ -22,7 +22,12 @@ struct access::parser<data> : vast::parser<access::parser<data>> {
   template <typename Iterator>
   static auto make() {
     auto to_vector = [](std::vector<data>&& v) { return vector{std::move(v)}; };
-    auto to_set = [](std::vector<data>&& v) { return set{v}; };
+    auto to_set = [](std::vector<data>&& v) {
+      set s;
+      for (auto& x : v)
+        s.insert(std::move(x));
+      return s;
+    };
     auto to_table = [](std::vector<std::tuple<data, data>>&& v) -> table {
       table t;
       for (auto& x : v)

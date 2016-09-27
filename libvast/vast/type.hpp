@@ -32,10 +32,7 @@ class data;
 class json;
 class pattern;
 class port;
-class set;
 class subnet;
-class table;
-class vector;
 
 /// An abstract type for ::data.
 class type : detail::totally_ordered<type> {

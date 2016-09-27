@@ -23,12 +23,10 @@ TEST(vector) {
 }
 
 TEST(set) {
-  auto v = std::vector<data>{1, 2, 3};
-  auto fs = detail::flat_set<data>{"a", "b", "c"};
-  auto s = set{v};
-  CHECK(s[0] == 1);
-  s = set{fs};
-  CHECK(s[1] == "b");
+  auto s = std::set<data>{1, 2, 3};
+  REQUIRE_EQUAL(s.size(), 3u);
+  CHECK_EQUAL(*s.begin(), 1);
+  CHECK_EQUAL(*s.rbegin(), 3);
 }
 
 TEST(tables) {
@@ -250,7 +248,7 @@ TEST(parseable) {
   l = str.end();
   CHECK(p.parse(f, l, d));
   CHECK(f == l);
-  CHECK(d == set{-42, 42, -1});
+  CHECK(d == set{-42, -1, 42});
 
   MESSAGE("table");
   str = "{T->1,F->0}"s;

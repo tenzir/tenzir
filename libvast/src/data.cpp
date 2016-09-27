@@ -203,8 +203,9 @@ bool convert(vector const& v, json& j) {
 
 bool convert(set const& s, json& j) {
   json::array a(s.size());
-  for (auto i = 0u; i < s.size(); ++i)
-    if (!visit(jsonizer{a[i]}, s[i]))
+  auto i = 0u;
+  for (auto& x : s)
+    if (!visit(jsonizer{a[i++]}, x))
       return false;
   j = std::move(a);
   return true;
