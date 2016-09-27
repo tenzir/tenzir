@@ -4,9 +4,8 @@
 #include <type_traits>
 
 #include "vast/data.hpp"
-#include "vast/none.hpp"
 #include "vast/type.hpp"
-#include "vast/util/meta.hpp"
+#include "vast/detail/type_traits.hpp"
 
 namespace vast {
 
@@ -21,7 +20,7 @@ public:
   /// @param t The type *d* shall have.
   /// @returns If `t.check(d)` then a value containing *d* and `nil` otherwise.
   static value make(vast::data d, vast::type t) {
-    return t.check(d) ? value{std::move(d), std::move(t)} : nil;
+    return type_check(t, d) ? value{std::move(d), std::move(t)} : nil;
   }
 
   /// Constructs an invalid value.
@@ -29,13 +28,13 @@ public:
   value(none = nil) {
   }
 
-  /// Constructs an untyped value.
+  /// Constructs an untyped value from data.
   /// @param x The data for the value.
   template <
     typename T,
-    typename = util::disable_if_t<
-      util::is_same_or_derived<value, T>::value
-      || std::is_same<vast::data::type<T>, std::false_type>::value
+    typename = detail::disable_if_t<
+      detail::is_same_or_derived<value, T>::value
+      || std::is_same<data_type<T>, std::false_type>::value
     >
   >
   value(T&& x)
@@ -88,8 +87,7 @@ public:
     return f(v.data_, v.type_);
   }
 
-  friend vast::data::variant_type& expose(value& v);
-  friend vast::data::variant_type const& expose(value const& v);
+  friend detail::data_variant& expose(value& v);
 
 private:
   vast::data data_;
@@ -100,6 +98,8 @@ private:
 /// @param v The value to to flatten.
 /// @returns The flattened value or *v* if not a record.
 value flatten(value const& v);
+
+bool convert(value const& v, json& j);
 
 } // namespace vast
 

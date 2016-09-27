@@ -1,10 +1,10 @@
+#include "vast/json.hpp"
 #include "vast/value.hpp"
-#include "vast/util/assert.hpp"
 
 namespace vast {
 
 bool value::type(vast::type const& t) {
-  if (!t.check(data_))
+  if (!type_check(t, data_))
     return false;
   type_ = t;
   return true;
@@ -46,12 +46,17 @@ bool operator>(value const& lhs, value const& rhs) {
   return lhs.data_ > rhs.data_;
 }
 
-data::variant_type& expose(value& v) {
+detail::data_variant& expose(value& v) {
   return expose(v.data_);
 }
 
-data::variant_type const& expose(value const& v) {
-  return expose(v.data_);
+bool convert(value const& v, json& j) {
+  json::object o;
+  if (!convert(v.type(), o["type"]))
+    return false;
+  if (!convert(v.data(), o["data"], v.type()))
+    return false;
+  j = std::move(o);
+  return true;
 }
-
 } // namespace vast

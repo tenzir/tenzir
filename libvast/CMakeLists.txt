@@ -32,7 +32,7 @@ set(libvast_sources
   src/time.cpp
   src/type.cpp
   src/uuid.cpp
-  #src/value.cpp
+  src/value.cpp
   # FIXME: Bring back after having repaired CAF code.
   #src/actor/accountant.cpp
   #src/actor/archive.cpp
@@ -56,7 +56,6 @@ set(libvast_sources
   #src/actor/source/test.cpp
   #src/concept/convertible/vast/event.cpp
   #src/concept/convertible/vast/schema.cpp
-  #src/concept/convertible/vast/value.cpp
   src/concept/hashable/crc.cpp
   src/concept/hashable/xxhash.cpp
   src/detail/adjust_resource_consumption.cpp
@@ -232,7 +231,7 @@ set(tests
   test/time.cpp
   test/type.cpp
   test/uuid.cpp
-  #test/value.cpp
+  test/value.cpp
   test/variant.cpp
 )
 

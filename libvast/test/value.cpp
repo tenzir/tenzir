@@ -2,7 +2,6 @@
 #include "vast/json.hpp"
 #include "vast/save.hpp"
 #include "vast/value.hpp"
-#include "vast/concept/convertible/vast/value.hpp"
 #include "vast/concept/convertible/to.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/data.hpp"
@@ -17,49 +16,49 @@ using namespace vast;
 
 // An *invalid* value has neither a type nor data.
 // This is the default-constructed state.
-TEST(invalid / nil) {
+TEST(invalid) {
   value v;
   CHECK(is<none>(v));
-  CHECK(is<none>(v.type()));
+  CHECK(is<none_type>(v.type()));
 }
 
 // A *data* value contains only data but lacks a type.
 TEST(data value) {
   value v{42};
-  CHECK(v.type().check(nil));
+  CHECK(type_check(v.type(), nil));
   CHECK(is<integer>(v));
-  CHECK(is<none>(v.type()));
+  CHECK(is<none_type>(v.type()));
 }
 
 TEST(typed value(empty)) {
-  type t = type::count{};
+  type t = count_type{};
   value v{nil, t};
-  CHECK(t.check(nil));
+  CHECK(type_check(t, nil));
   CHECK(v.type() == t);
   CHECK(is<none>(v));
-  CHECK(is<type::count>(v.type()));
+  CHECK(is<count_type>(v.type()));
 }
 
 TEST(typed value(data)) {
-  type t = type::real{};
+  type t = real_type{};
   value v{4.2, t};
-  CHECK(t.check(4.2));
+  CHECK(type_check(t, 4.2));
   CHECK(v.type() == t);
   CHECK(is<real>(v));
-  CHECK(is<type::real>(v.type()));
+  CHECK(is<real_type>(v.type()));
 }
 
 TEST(data and type mismatch) {
   // This value has a data and type mismatch. For performance reasons, the
   // constructor will *not* perform a type check.
-  value v{42, type::real{}};
+  value v{42, real_type{}};
   CHECK(v.data() == 42);
-  CHECK(v.type() == type::real{});
+  CHECK(v.type() == real_type{});
   // If we do require type safety and cannot guarantee that data and type
   // match, we can use the type-safe factory function.
-  auto fail = value::make(42, type::real{});
+  auto fail = value::make(42, real_type{});
   CHECK(is<none>(fail));
-  CHECK(is<none>(fail.type()));
+  CHECK(is<none_type>(fail.type()));
 }
 
 TEST(relational operators) {
@@ -68,12 +67,12 @@ TEST(relational operators) {
 
   MESSAGE("comparison of nil values");
   CHECK(v1 == v2);
-  type t = type::real{};
+  type t = real_type{};
 
   MESSAGE("typed value with equal data");
   v1 = {4.2, t};
   v2 = {4.2, t};
-  CHECK(t.check(4.2));
+  CHECK(type_check(t, 4.2));
   CHECK(v1 == v2);
   CHECK(!(v1 != v2));
   CHECK(!(v1 < v2));
@@ -100,12 +99,12 @@ TEST(relational operators) {
 }
 
 TEST(serialization) {
-  type t = type::set{type::port{}};
+  type t = set_type{port_type{}};
   set s;
   s.emplace(port{80, port::tcp});
   s.emplace(port{53, port::udp});
   s.emplace(port{8, port::icmp});
-  CHECK(t.check(s));
+  CHECK(type_check(t, s));
   value v{s, t};
   value w;
   std::vector<char> buf;
@@ -115,15 +114,17 @@ TEST(serialization) {
   CHECK(to_string(w) == "{8/icmp, 53/udp, 80/tcp}");
 }
 
-TEST(JSON)
+TEST(json)
 {
-  auto tr =
-    type::record{
-      {"foo", type::port{}},
-      {"bar", type::integer{}},
-      {"baz", type::real{}}
+  auto t =
+    record_type{
+      {"foo", port_type{}},
+      {"bar", integer_type{}},
+      {"baz", real_type{}}
     };
-  auto v = value{*to<data>("(53/udp,-42,4.2)"), tr};
+  auto d = to<data>("[53/udp,-42,4.2]");
+  REQUIRE(d);
+  auto v = value{*d, t};
   auto j = to<json>(v);
   REQUIRE(j);
   auto str = R"__({
@@ -133,24 +134,24 @@ TEST(JSON)
     "foo": "53/udp"
   },
   "type": {
-    "attributes": [],
+    "attributes": {},
     "kind": "record",
     "name": "",
     "structure": {
       "bar": {
-        "attributes": [],
+        "attributes": {},
         "kind": "integer",
         "name": "",
         "structure": null
       },
       "baz": {
-        "attributes": [],
+        "attributes": {},
         "kind": "real",
         "name": "",
         "structure": null
       },
       "foo": {
-        "attributes": [],
+        "attributes": {},
         "kind": "port",
         "name": "",
         "structure": null
@@ -158,5 +159,5 @@ TEST(JSON)
     }
   }
 })__";
-  CHECK(to_string(*j) == str);
+  CHECK_EQUAL(to_string(*j), str);
 }
