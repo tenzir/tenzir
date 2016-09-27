@@ -1,12 +1,12 @@
 #ifndef VAST_SCHEMA_HPP
 #define VAST_SCHEMA_HPP
 
-#include <vector>
 #include <string>
+#include <vector>
 
+#include "vast/detail/operators.hpp"
+#include "vast/optional.hpp"
 #include "vast/type.hpp"
-#include "vast/maybe.hpp"
-#include "vast/util/operators.hpp"
 
 namespace caf {
 class serializer;
@@ -15,8 +15,10 @@ class deserializer;
 
 namespace vast {
 
-/// A collection of types.
-class schema : util::equality_comparable<schema> {
+class json;
+
+/// A sequence of types.
+class schema : detail::equality_comparable<schema> {
   friend access;
 
 public:
@@ -28,38 +30,35 @@ public:
   /// Merges two schemata.
   /// @param s1 The first schema.
   /// @param s2 The second schema.
-  /// @returns The union of *s1* and *s2* schema.
-  static maybe<schema> merge(schema const& s1, schema const& s2);
+  /// @returns The union of *s1* and *s2* schema if the .
+  static optional<schema> merge(schema const& s1, schema const& s2);
 
   /// Adds a new type to the schema.
   /// @param t The type to add.
   /// @returns `true` on success.
-  bool add(type t);
-
-  /// Adds another schema to this schema.
-  /// @param sch The schema to add to this one.
-  /// @returns `true` on success.
-  /// @see merge
-  bool add(schema const& other);
+  bool add(type const& t);
 
   /// Retrieves the type for a given name.
   /// @param name The name of the type to lookup.
   /// @returns The type with name *name* or `nullptr if no such type exists.
   type const* find(std::string const& name) const;
 
-  // Container API
+  // -- container API ----------------------------------------------------------
+
   const_iterator begin() const;
   const_iterator end() const;
   size_t size() const;
   bool empty() const;
   void clear();
 
+  friend void serialize(caf::serializer& sink, schema const& sch);
+  friend void serialize(caf::deserializer& source, schema& sch);
+
 private:
   std::vector<type> types_;
 };
 
-void serialize(caf::serializer& sink, schema const& sch);
-void serialize(caf::deserializer& source, schema& sch);
+bool convert(schema const& s, json& j);
 
 } // namespace vast
 

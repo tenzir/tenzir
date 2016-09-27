@@ -32,10 +32,13 @@ class data;
 class json;
 class pattern;
 class port;
+class schema;
 class subnet;
 
 /// An abstract type for ::data.
 class type : detail::totally_ordered<type> {
+  friend schema; // pointer tracking
+
 public:
   using hasher = xxhash32;
 

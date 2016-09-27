@@ -1,13 +1,12 @@
 #ifndef VAST_CONCEPT_PARSEABLE_VAST_SCHEMA_HPP
 #define VAST_CONCEPT_PARSEABLE_VAST_SCHEMA_HPP
 
-#include "vast/type.hpp"
-#include "vast/schema.hpp"
-
 #include "vast/concept/parseable/core/parser.hpp"
 #include "vast/concept/parseable/core/operators.hpp"
 #include "vast/concept/parseable/vast/identifier.hpp"
 #include "vast/concept/parseable/vast/type.hpp"
+#include "vast/type.hpp"
+#include "vast/schema.hpp"
 
 namespace vast {
 
@@ -23,8 +22,8 @@ struct schema_parser : parser<schema_parser> {
       // If the type has already a name, we're dealing with a symbol and have
       // to create an alias.
       if (!ty.name().empty())
-        ty = type::alias{ty}; // TODO: attributes
-      ty.name(name);
+        ty = alias_type{ty}; // TODO: attributes
+      ty.name() = name;
       symbols.add(name, ty);
       return ty;
     };

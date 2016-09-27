@@ -105,6 +105,13 @@ public:
   using types = std::tuple<Ts...>;
   using first_type = std::tuple_element_t<0, types>;
 
+  /// Constructs a variant from a type index.
+  /// @param index The index of the type to default-construct.
+  /// @pre `index < sizeof...(Ts)`
+  static variant make(size_t index) {
+    return variant{factory{}, index};
+  }
+
   /// Default-construct a variant with the first type.
   variant() noexcept(std::is_nothrow_default_constructible<first_type>::value) {
     construct(first_type{});
@@ -163,6 +170,12 @@ public:
   }
 
 private:
+  struct factory {};
+  variant(factory, size_t index) : index_{index} {
+    VAST_ASSERT(index_ < sizeof...(Ts));
+    apply(default_constructor{*this});
+  }
+
   std::aligned_union_t<0, Ts...> storage_;
   size_t index_;
 

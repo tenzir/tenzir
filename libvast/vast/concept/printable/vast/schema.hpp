@@ -2,7 +2,7 @@
 #define VAST_CONCEPT_PRINTABLE_VAST_SCHEMA_HPP
 
 #include "vast/schema.hpp"
-#include "vast/concept/printable/core/printer.hpp"
+#include "vast/concept/printable/core.hpp"
 #include "vast/concept/printable/string/char.hpp"
 #include "vast/concept/printable/string/string.hpp"
 #include "vast/concept/printable/vast/type.hpp"
@@ -14,14 +14,14 @@ struct schema_printer : printer<schema_printer> {
 
   template <typename Iterator>
   bool print(Iterator& out, schema const& s) const {
-    using namespace printers;
+    auto p = "type "
+          << printers::str
+          << " = "
+          << printers::type<policy::type_only>
+          << '\n';
     for (auto& t : s)
-      if (!t.name().empty())
-        if (!(str.print(out, "type ") && str.print(out, t.name())
-              && str.print(out, " = ")
-              && printers::type<policy::type_only>.print(out, t)
-              && any.print(out, '\n')))
-          return false;
+      if (!p.print(out, std::tie(t.name(), t)))
+        return false;
     return true;
   }
 };

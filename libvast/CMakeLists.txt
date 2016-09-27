@@ -27,7 +27,7 @@ set(libvast_sources
   src/operator.cpp
   src/pattern.cpp
   src/port.cpp
-  #src/schema.cpp
+  src/schema.cpp
   src/subnet.cpp
   src/time.cpp
   src/type.cpp
@@ -55,7 +55,6 @@ set(libvast_sources
   #src/actor/source/spawn.cpp
   #src/actor/source/test.cpp
   #src/concept/convertible/vast/event.cpp
-  #src/concept/convertible/vast/schema.cpp
   src/concept/hashable/crc.cpp
   src/concept/hashable/xxhash.cpp
   src/detail/adjust_resource_consumption.cpp
@@ -217,14 +216,13 @@ set(tests
   test/offset.cpp
   #test/parse_bro.cpp
   #test/parse_expr.cpp
-  #test/parse_type.cpp
   test/parseable.cpp
   test/pattern.cpp
   test/port.cpp
   test/printable.cpp
   test/range_map.cpp
   test/save_load.cpp
-  #test/schema.cpp
+  test/schema.cpp
   test/stack.cpp
   test/string.cpp
   test/subnet.cpp
