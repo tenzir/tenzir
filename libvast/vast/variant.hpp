@@ -130,12 +130,16 @@ public:
     initializer<0, Ts...>::initialize(*this, std::forward<T>(x));
   }
 
-  variant(const variant& other) {
+  variant(const variant& other)
+  noexcept(detail::conjunction<std::is_nothrow_constructible<Ts>{}...>::value) {
     other.apply(copy_constructor{*this});
     index_ = other.index_;
   }
 
-  variant(variant&& other) noexcept {
+  variant(variant&& other)
+  noexcept(detail::conjunction<
+             std::is_nothrow_move_constructible<Ts>{}...
+           >::value) {
     other.apply(move_constructor{*this});
     index_ = other.index_;
   }
@@ -146,7 +150,10 @@ public:
     return *this;
   }
 
-  variant& operator=(variant&& rhs) noexcept {
+  variant& operator=(variant&& rhs)
+  noexcept(detail::conjunction<
+             std::is_nothrow_move_assignable<Ts>{}...
+           >::value) {
     rhs.apply(move_assigner{*this, rhs.index_});
     index_ = rhs.index_;
     return *this;
@@ -184,7 +191,8 @@ private:
     }
 
     template <typename T>
-    void operator()(T const&) const {
+    void operator()(T const&) const
+    noexcept(std::is_nothrow_default_constructible<T>{}) {
       self_.construct(T());
     }
 
@@ -197,7 +205,8 @@ private:
     }
 
     template <class T>
-    void operator()(const T& x) const {
+    void operator()(const T& x) const
+    noexcept(std::is_nothrow_copy_constructible<T>{}) {
       self.construct(x);
     }
 
@@ -209,9 +218,8 @@ private:
     }
 
     template <class T>
-    void operator()(T& rhs) const noexcept {
-      static_assert(std::is_nothrow_move_constructible<T>{},
-                    "T must not throw in move constructor");
+    void operator()(T& rhs) const
+    noexcept(std::is_nothrow_move_constructible<T>{}) {
       self.construct(std::move(rhs));
     }
 
@@ -220,11 +228,10 @@ private:
 
   struct assigner {
     template <class Rhs>
-    void operator()(const Rhs& rhs) const {
-      static_assert(std::is_nothrow_destructible<Rhs>{},
-                    "T must not throw in destructor");
-      static_assert(std::is_nothrow_move_constructible<Rhs>{},
-                    "T must not throw in move constructor");
+    void operator()(const Rhs& rhs) const
+    noexcept(std::is_nothrow_copy_assignable<Rhs>{} &&
+             std::is_nothrow_destructible<Rhs>{} &&
+             std::is_nothrow_move_constructible<Rhs>{}) {
       if (self.index_ == rhs_index) {
         *reinterpret_cast<Rhs*>(&self.storage_) = rhs;
       } else {
@@ -264,21 +271,10 @@ private:
     }
 
     template <class Rhs>
-    void operator()(Rhs& rhs) const noexcept {
+    void operator()(Rhs& rhs) const
+    noexcept(std::is_nothrow_destructible<Rhs>{} &&
+             std::is_nothrow_move_constructible<Rhs>{}) {
       using rhs_type = typename std::remove_const<Rhs>::type;
-      static_assert(std::is_nothrow_destructible<rhs_type>{},
-                    "T must not throw in destructor");
-      static_assert(std::is_nothrow_move_assignable<rhs_type>{} ||
-                      // TODO: should be true that these containers only
-                      // throw if allocators differ when move assigning?
-                      // So for completeness, the static assert should
-                      // really be comparing allocator type of this
-                      // versus rhs.
-                      container_uses_default_allocator<rhs_type>::value,
-                    "T must not throw in move assignment");
-      static_assert(std::is_nothrow_move_constructible<rhs_type>{},
-                    "T must not throw in move constructor");
-
       if (self.index_ == rhs_index) {
         *reinterpret_cast<rhs_type*>(&self.storage_) = std::move(rhs);
       } else {
@@ -342,11 +338,8 @@ private:
   }
 
   template <class T>
-  void construct(T&& x) noexcept(std::is_rvalue_reference<decltype(x)>{}) {
+  void construct(T&& x) {
     using type = std::remove_reference_t<T>;
-    static_assert(std::is_nothrow_move_constructible<type>{}
-                    || !std::is_rvalue_reference<decltype(x)>{},
-                  "move constructor of T must not throw");
     new (&storage_) type(std::forward<T>(x));
   }
 
