@@ -1,4 +1,7 @@
+#include <tuple>
+
 #include "vast/event.hpp"
+#include "vast/json.hpp"
 
 namespace vast {
 
@@ -16,15 +19,15 @@ bool event::id(event_id i) {
   return false;
 }
 
-void event::timestamp(time::point time) {
-  timestamp_ = time;
-}
-
 event_id event::id() const {
   return id_;
 }
 
-time::point event::timestamp() const {
+void event::timestamp(vast::timestamp ts) {
+  timestamp_ = ts;
+}
+
+vast::timestamp event::timestamp() const {
   return timestamp_;
 }
 
@@ -36,13 +39,23 @@ event flatten(event const& e) {
 }
 
 bool operator==(event const& x, event const& y) {
-  return x.id() == y.id() && x.timestamp() == y.timestamp()
-         && static_cast<value const&>(x) == static_cast<value const&>(y);
+  return x.id() == y.id() &&
+    x.timestamp() == y.timestamp() &&
+    static_cast<value const&>(x) == static_cast<value const&>(y);
 }
 
 bool operator<(event const& x, event const& y) {
-  return std::tie(x.id_, x.timestamp_, static_cast<value const&>(x))
-         < std::tie(y.id_, y.timestamp_, static_cast<value const&>(y));
+  return std::tie(x.id_, x.timestamp_, static_cast<value const&>(x)) <
+    std::tie(y.id_, y.timestamp_, static_cast<value const&>(y));
 }
 
+bool convert(event const& e, json& j) {
+  json::object o;
+  o["id"] = e.id();
+  o["timestamp"] = e.timestamp().time_since_epoch().count();
+  if (!convert(static_cast<value const&>(e), o["value"]))
+    return false;
+  j = std::move(o);
+  return true;
+}
 } // namespace vast

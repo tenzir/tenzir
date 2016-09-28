@@ -20,7 +20,7 @@ set(libvast_sources
   src/die.cpp
   #src/expression.cpp
   src/error.cpp
-  #src/event.cpp
+  src/event.cpp
   src/filesystem.cpp
   src/http.cpp
   src/logger.cpp
@@ -54,7 +54,6 @@ set(libvast_sources
   #src/actor/source/bgpdump.cpp
   #src/actor/source/spawn.cpp
   #src/actor/source/test.cpp
-  #src/concept/convertible/vast/event.cpp
   src/concept/hashable/crc.cpp
   src/concept/hashable/xxhash.cpp
   src/detail/adjust_resource_consumption.cpp
@@ -201,7 +200,7 @@ set(tests
   test/data.cpp
   test/date.cpp
   test/endpoint.cpp
-  #test/event.cpp
+  test/event.cpp
   #test/expr.cpp
   test/filesystem.cpp
   test/flat_serial_set.cpp

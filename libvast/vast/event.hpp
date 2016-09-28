@@ -4,14 +4,15 @@
 #include "vast/aliases.hpp"
 #include "vast/type.hpp"
 #include "vast/value.hpp"
-#include "vast/util/operators.hpp"
+#include "vast/detail/operators.hpp"
 
 namespace vast {
 
 struct access;
+class json;
 
 /// A value with a named type plus additional meta data.
-class event : public value, util::totally_ordered<event> {
+class event : public value, detail::totally_ordered<event> {
   friend access;
 
 public:
@@ -29,7 +30,7 @@ public:
   /// @param v The value to check and convert into an event.
   /// @returns A valid event according *v* if `v.type().check(v.data())`.
   static event make(value v) {
-    return v.type().check(v.data()) ? event{std::move(v)} : nil;
+    return type_check(v.type(), v.data()) ? event{std::move(v)} : nil;
   }
 
   /// Constructs an invalid event.
@@ -43,30 +44,32 @@ public:
   /// @returns `true` iff *i* is in *[1, 2^64-2]*.
   bool id(event_id i);
 
-  /// Sets the event timestamp.
-  /// @param time The event timestamp.
-  void timestamp(time::point time);
-
   /// Retrieves the event ID.
   /// @returns The name of the event.
   event_id id() const;
 
+  /// Sets the event timestamp.
+  /// @param ts The event timestamp.
+  void timestamp(vast::timestamp ts);
+
   /// Retrieves the event timestamp.
   /// @returns The event timestamp.
-  time::point timestamp() const;
+  vast::timestamp timestamp() const;
 
   friend bool operator==(event const& x, event const& y);
   friend bool operator<(event const& x, event const& y);
 
   template <class Inspector>
   friend auto inspect(Inspector&f, event& e) {
-    return f(e.id_, e.timestamp_);
+    return f(static_cast<value&>(e), e.id_, e.timestamp_);
   }
 
 private:
   event_id id_ = invalid_event_id;
-  time::point timestamp_;
+  vast::timestamp timestamp_;
 };
+
+bool convert(event const& e, json& j);
 
 /// Flattens an event.
 /// @param e The event to flatten.

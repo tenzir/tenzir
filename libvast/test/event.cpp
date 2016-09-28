@@ -2,55 +2,76 @@
 #include "vast/json.hpp"
 #include "vast/load.hpp"
 #include "vast/save.hpp"
-#include "vast/concept/convertible/vast/event.hpp"
 #include "vast/concept/convertible/to.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/event.hpp"
 #include "vast/concept/printable/vast/json.hpp"
 
+#define SUITE event
 #include "test.hpp"
 
 using namespace vast;
 
-TEST(event) {
-  MESSAGE("construction");
-  // Type
-  auto tr = type::record{
-    {"x", type::boolean{}},
-    {"y", type::count{}},
-    {"z", type::integer{}}};
-  REQUIRE(tr.name("foo"));
-  // Data
-  record r;
-  r.emplace_back(true);
-  r.emplace_back(42u);
-  r.emplace_back(-234987);
+namespace {
+
+struct fixture {
+  fixture() {
+    // Type
+    t = record_type{
+      {"x", boolean_type{}},
+      {"y", count_type{}},
+      {"z", integer_type{}}};
+    t.name() = "foo";
+    // Data
+    r.emplace_back(true);
+    r.emplace_back(42u);
+    r.emplace_back(-234987);
+    // Type-safe creation through factory.
+    e = event::make(r, t);
+    e.id(123456789);
+  }
+
+  type t;
+  vector r;
   event e;
-  CHECK(e.type().name() == "");
-  CHECK(e.timestamp() == time::point{});
-  // Type-safe creation through factory.
-  e = event::make(r, tr);
-  REQUIRE(is<record>(e));
-  REQUIRE(is<type::record>(e.type()));
+};
+
+} // namespace <anonymous>
+
+FIXTURE_SCOPE(event_tests, fixture)
+
+TEST(basics) {
+  CHECK_EQUAL(e.type().name(), "foo");
+  REQUIRE(is<vector>(e.data()));
+  REQUIRE(is<record_type>(e.type()));
   MESSAGE("meta data");
-  e.id(123456789);
-  CHECK(e.id() == 123456789);
-  auto now = time::now();
+  CHECK_EQUAL(e.id(), 123456789ull);
+  auto now = clock::now();
   e.timestamp(now);
-  CHECK(e.timestamp() == now);
-  e.timestamp(time::point{});
-  MESSAGE("flattening");
+  CHECK_EQUAL(e.timestamp(), now);
+  e.timestamp(timestamp{});
+}
+
+TEST(flattening) {
   auto flat = flatten(e);
-  CHECK(flat == e); // no recursive records
-  MESSAGE("string representation");
-  CHECK(to_string(e) == "foo [123456789|1970-01-01+00:00:00] (T, 42, -234987)");
-  MESSAGE("seralization");
+  CHECK_EQUAL(flat, e); // no recursive records
+}
+
+TEST(printable) {
+  // TODO: use a saner output format for events
+  auto str = "foo [123456789|+0ns] [T, 42, -234987]";
+  CHECK_EQUAL(to_string(e), str);
+}
+
+TEST(serialization) {
   std::vector<char> buf;
   save(buf, e);
-  decltype(e) e2;
+  event e2;
   load(buf, e2);
-  CHECK(e == e2);
-  MESSAGE("json");
+  CHECK_EQUAL(e, e2);
+}
+
+TEST(json) {
   auto expected = R"json({
   "id": 123456789,
   "timestamp": 0,
@@ -61,24 +82,24 @@ TEST(event) {
       "z": -234987
     },
     "type": {
-      "attributes": [],
+      "attributes": {},
       "kind": "record",
       "name": "foo",
       "structure": {
         "x": {
-          "attributes": [],
-          "kind": "boolean",
+          "attributes": {},
+          "kind": "bool",
           "name": "",
           "structure": null
         },
         "y": {
-          "attributes": [],
+          "attributes": {},
           "kind": "count",
           "name": "",
           "structure": null
         },
         "z": {
-          "attributes": [],
+          "attributes": {},
           "kind": "integer",
           "name": "",
           "structure": null
@@ -87,5 +108,7 @@ TEST(event) {
     }
   }
 })json";
-  CHECK(to_string(to_json(e)) == expected);
+  CHECK_EQUAL(to_string(to_json(e)), expected);
 }
+
+FIXTURE_SCOPE_END()
