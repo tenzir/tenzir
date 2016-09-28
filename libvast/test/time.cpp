@@ -8,9 +8,18 @@
 #include "test.hpp"
 
 using namespace vast;
+using namespace std::chrono;
+
+TEST(printable) {
+  CHECK_EQUAL(to_string(nanoseconds(42)), "+42ns");
+  CHECK_EQUAL(to_string(microseconds(42)), "+42us");
+  CHECK_EQUAL(to_string(milliseconds(42)), "+42ms");
+  CHECK_EQUAL(to_string(seconds(42)), "+42s");
+  CHECK_EQUAL(to_string(minutes(42)), "+42min");
+  CHECK_EQUAL(to_string(hours(42)), "+42h");
+}
 
 TEST(parseable) {
-  using namespace std::chrono;
   interval i;
   MESSAGE("nanoseconds");
   CHECK(parsers::interval("42 nsecs", i));

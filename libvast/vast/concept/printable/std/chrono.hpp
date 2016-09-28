@@ -4,6 +4,7 @@
 #include "vast/concept/printable/core.hpp"
 #include "vast/concept/printable/string/any.hpp"
 #include "vast/concept/printable/string/string.hpp"
+#include "vast/concept/printable/numeric/integral.hpp"
 #include "vast/concept/printable/numeric/real.hpp"
 #include "vast/detail/chrono_io.hpp"
 #include "vast/time.hpp"
