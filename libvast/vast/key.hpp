@@ -5,14 +5,14 @@
 
 #include "vast/concept/printable/string.hpp"
 #include "vast/concept/printable/to_string.hpp"
-#include "vast/detail/stack/vector.hpp"
+#include "vast/detail/stack_vector.hpp"
 
 namespace vast {
 
 /// A sequence of names identifying a resource.
-struct key : detail::stack::vector<4, std::string> {
-  using super = detail::stack::vector<4, std::string>;
-  using super::vector;
+struct key : detail::stack_vector<std::string, 128> {
+  using super = detail::stack_vector<std::string, 128>;
+  using super::super;
 
   static constexpr char delimiter = '.';
 

@@ -1,15 +1,14 @@
-#include "vast/detail/stack/vector.hpp"
+#include "vast/detail/stack_vector.hpp"
 
 using namespace vast;
-using namespace vast::detail;
 
 #define SUITE stack
 #include "test.hpp"
 
+using stack_vector = detail::stack_vector<int, 16>;
+
 TEST(default construction) {
-  stack::vector<4, int> v;
-  CHECK(v.arena.size() == 4 * sizeof(int));
-  CHECK(v.arena.used() == 0);
+  stack_vector v;
   v.push_back(42);
   v.push_back(1337);
   v.push_back(4711);
@@ -19,35 +18,31 @@ TEST(default construction) {
 }
 
 TEST(construction from initializer list) {
-  stack::vector<4, int> v{1, 2, 3};
+  stack_vector v{1, 2, 3};
   REQUIRE(v.size() == 3);
   CHECK(v[0] == 1);
   CHECK(v[1] == 2);
   CHECK(v[2] == 3);
-  CHECK(v.arena.used() == 3 * sizeof(int));
 }
 
-
 TEST(copy construction) {
-  stack::vector<4, int> v{1, 2, 3};
-  stack::vector<4, int> copy{v};
+  stack_vector v{1, 2, 3};
+  stack_vector copy{v};
   REQUIRE(copy.size() == 3);
   CHECK(copy[0] == 1);
   CHECK(copy[1] == 2);
-  CHECK(copy.arena.used() == 3 * sizeof(int));
 }
 
 TEST(move construction) {
-  stack::vector<4, int> v{1, 2, 3};
-  stack::vector<4, int> move{v};
+  stack_vector v{1, 2, 3};
+  stack_vector move{v};
   REQUIRE(move.size() == 3);
   CHECK(move[0] == 1);
   CHECK(move[1] == 2);
-  CHECK(move.arena.used() == 3 * sizeof(int));
 }
 
 TEST(copy assignment) {
-  stack::vector<4, int> v{1, 2, 3};
+  stack_vector v{1, 2, 3};
   auto copy = v;
   CHECK(copy.size() == 3);
   CHECK(copy[0] == 1);
@@ -55,16 +50,17 @@ TEST(copy assignment) {
 }
 
 TEST(move assignment) {
-  stack::vector<4, int> v;
-  REQUIRE(v.empty());
-  v = {4, 5, 6, 7, 8, 9};
-  REQUIRE(v.size() == 6);
-  CHECK(v[0] == 4);
-  CHECK(v[5] == 9);
+  stack_vector v{1, 2};
+  stack_vector w{3, 4, 5, 6, 7};
+  v = std::move(w);
+  REQUIRE_EQUAL(v.size(), 5u);
+  CHECK_EQUAL(v[0], 3);
+  CHECK_EQUAL(v[4], 7);
+  CHECK_EQUAL(w.size(), 5u);
 }
 
 TEST(insertion at end) {
-  stack::vector<4, int> v;
+  stack_vector v;
   v.insert(v.end(), 42);
   REQUIRE(v.size() == 1);
   CHECK(v.front() == 42);

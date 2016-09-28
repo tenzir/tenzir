@@ -24,6 +24,7 @@
 #include "vast/concept/hashable/xxhash.hpp"
 #include "vast/detail/operators.hpp"
 #include "vast/detail/range.hpp"
+#include "vast/detail/stack_vector.hpp"
 
 namespace vast {
 
@@ -88,7 +89,7 @@ private:
 
 /// The base class for all concrete types.
 template <class Derived>
-class concrete_type 
+class concrete_type
   : detail::totally_ordered<concrete_type<Derived>>,
     detail::totally_ordered<Derived> {
 public:
@@ -298,7 +299,7 @@ struct record_type : recursive_type<record_type> {
       vast::key key() const;
       size_t depth() const;
 
-      detail::stack::vector<8, record_field const*> trace;
+      detail::stack_vector<record_field const*, 64> trace;
       vast::offset offset;
     };
 
@@ -314,7 +315,7 @@ struct record_type : recursive_type<record_type> {
     bool next();
 
     range_state state_;
-    detail::stack::vector<8, record_type const*> records_;
+    detail::stack_vector<record_type const*, 64> records_;
   };
 
   /// Constructs a record type from a list of fields.
