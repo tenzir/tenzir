@@ -96,10 +96,6 @@ if (PCAP_FOUND)
   set(libvast_libs ${libvast_libs} ${PCAP_LIBRARIES})
 endif ()
 
-if (BROCCOLI_FOUND)
-  set(libvast_libs ${libvast_libs} ${BROCCOLI_LIBRARIES})
-endif ()
-
 # Always link with -lprofile if we have Gperftools.
 if (GPERFTOOLS_FOUND)
   set(libvast_libs ${libvast_libs} ${GPERFTOOLS_PROFILER})
