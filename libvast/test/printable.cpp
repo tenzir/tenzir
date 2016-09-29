@@ -21,71 +21,71 @@ TEST(signed integers) {
   auto i = 42;
   std::string str;
   CHECK(printers::integral<int>(str, i));
-  CHECK(str == "+42");
+  CHECK_EQUAL(str, "+42");
 
   int8_t j = -42;
   str.clear();
   CHECK(printers::i8(str, j));
-  CHECK(str == "-42");
+  CHECK_EQUAL(str, "-42");
 }
 
 TEST(unsigned integers) {
   auto i = 42u;
   std::string str;
   CHECK(printers::integral<unsigned>(str, i));
-  CHECK(str == "42");
+  CHECK_EQUAL(str, "42");
 }
 
 TEST(floating point) {
   std::string str;
   auto d = double{0.0};
   CHECK(printers::real(str, d));
-  CHECK(str == "0.0000000000");
+  CHECK_EQUAL(str, "0.0");
 
-  str.clear();
   d = 1.0;
-  CHECK(printers::real(str, d));
-  CHECK(str == "1.0000000000");
-
   str.clear();
+  CHECK(printers::real(str, d));
+  CHECK_EQUAL(str, "1.0");
+
   d = 0.005;
-  CHECK(printers::real(str, d));
-  CHECK(str == "0.0050000000");
-
   str.clear();
+  CHECK(printers::real(str, d));
+  CHECK_EQUAL(str, "0.005");
+
   d = 123.456;
-  CHECK(printers::real(str, d));
-  CHECK(str == "123.4560000000");
-
   str.clear();
+  CHECK(printers::real(str, d));
+  CHECK_EQUAL(str, "123.456");
+
   d = -123.456;
-  CHECK(printers::real(str, d));
-  CHECK(str == "-123.4560000000");
-
   str.clear();
-  d = 123456.1234567890123;
   CHECK(printers::real(str, d));
-  CHECK(str == "123456.1234567890");
+  CHECK_EQUAL(str, "-123.456");
 
-  str.clear();
   d = 123456.1234567890123;
+  str.clear();
+  CHECK(printers::real(str, d));
+  CHECK_EQUAL(str, "123456.123456789");
+
+  d = 123456.1234567890123;
+  str.clear();
   CHECK(real_printer<double, 6>{}(str, d));
-  CHECK(str == "123456.123457");
+  CHECK_EQUAL(str, "123456.123457");
 
-  str.clear();
   d = 123456.8888;
+  str.clear();
   CHECK(real_printer<double, 0>{}(str, d));
-  CHECK(str == "123457");
+  CHECK_EQUAL(str, "123457");
 
-  str.clear();
   d = 123456.1234567890123;
-  CHECK(real_printer<double, 1>{}(str, d));
-  CHECK(str == "123456.1");
-
   str.clear();
+  CHECK(real_printer<double, 1>{}(str, d));
+  CHECK_EQUAL(str, "123456.1");
+
   d = 123456.00123;
+  str.clear();
   CHECK(real_printer<double, 6>{}(str, d));
-  CHECK(str == "123456.001230");
+  CHECK_EQUAL(str, "123456.00123");
 }
 
 // -- string ------------------------------------------------------------------
@@ -278,7 +278,7 @@ struct access::printer<ns::foo> : vast::printer<access::printer<ns::foo>> {
 TEST(custom type) {
   std::string str;
   CHECK(print(std::back_inserter(str), ns::foo{}));
-  CHECK(str == "+42");
+  CHECK_EQUAL(str, "+42");
 }
 
 // -- std::chrono -------------------------------------------------------------
@@ -310,5 +310,5 @@ TEST(to) {
 
 TEST(to_string) {
   auto str = to_string(true);
-  CHECK(str == "T");
+  CHECK_EQUAL(str, "T");
 }

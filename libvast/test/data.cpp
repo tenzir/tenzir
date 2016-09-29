@@ -171,6 +171,14 @@ TEST(serialization) {
   CHECK(to_string(d1) == "{8/icmp, 53/udp, 80/tcp}");
 }
 
+TEST(printable) {
+  // Ensure that we don't produce trailing zeros for floating point data.
+  auto x = data{-4.2};
+  CHECK_EQUAL(to_string(x), "-4.2");
+  x = 3.14;
+  CHECK_EQUAL(to_string(x), "3.14");
+}
+
 TEST(parseable) {
   auto p = make_parser<data>();
   data d;
