@@ -34,7 +34,9 @@ struct access::parser<data> : vast::parser<access::parser<data>> {
         t.emplace(std::move(get<0>(x)), std::move(get<1>(x)));
       return t;
     };
+    static auto ws = ignore(*parsers::space);
     rule<Iterator, data> p;
+    auto wsp = ws >> p >> ws;
     p = parsers::interval
       | parsers::timestamp
       | parsers::net
@@ -46,9 +48,9 @@ struct access::parser<data> : vast::parser<access::parser<data>> {
       | parsers::tf
       | parsers::qq_str
       | parsers::pattern
-      | '[' >> (p % ',') ->* to_vector >> ']'
-      | '{' >> (p % ',') ->* to_set >> '}'
-      | '{' >> ((p >> "->" >> p) % ',') ->* to_table >> '}'
+      | '[' >> (wsp % ',') ->* to_vector >> ']'
+      | '{' >> (wsp % ',') ->* to_set >> '}'
+      | '{' >> ((wsp >> "->" >> wsp) % ',') ->* to_table >> '}'
       | "nil"_p ->* [] { return nil; }
       ;
     return p;
