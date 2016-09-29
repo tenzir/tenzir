@@ -211,8 +211,8 @@ set(tests
   test/main.cpp
   test/maybe.cpp
   test/offset.cpp
-  #test/parse_bro.cpp
   test/parseable.cpp
+  test/parseable_bro.cpp
   test/pattern.cpp
   test/port.cpp
   test/printable.cpp

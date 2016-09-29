@@ -8,95 +8,84 @@
 #include "vast/concept/parseable/string/any.hpp"
 #include "vast/concept/parseable/vast/address.hpp"
 #include "vast/concept/parseable/vast/subnet.hpp"
-#include "vast/util/assert.hpp"
-#include "vast/util/string.hpp"
+#include "vast/detail/assert.hpp"
+#include "vast/detail/string.hpp"
 
 namespace vast {
 namespace detail {
 
 /// Parses non-container types.
 template <typename Iterator, typename Attribute>
-struct bro_parser
-{
+struct bro_parser {
   bro_parser(Iterator& f, Iterator const& l, Attribute& attr)
     : f_{f},
       l_{l},
-      attr_{attr}
-  {
+      attr_{attr} {
   }
 
   template <typename Parser>
-  bool parse(Parser const& p) const
-  {
+  bool parse(Parser const& p) const {
     return p.parse(f_, l_, attr_);
   }
 
   template <typename T>
-  bool operator()(T const&) const
-  {
+  bool operator()(T const&) const {
     VAST_ASSERT("invalid type");
     return false;
   }
 
-  bool operator()(type::boolean const&) const
-  {
+  bool operator()(boolean_type const&) const {
     return parse(parsers::tf);
   }
 
-  bool operator()(type::integer const&) const
-  {
+  bool operator()(integer_type const&) const {
     static auto p = parsers::i64 ->* [](integer x) { return x; };
     return parse(p);
   }
 
-  bool operator()(type::count const&) const
-  {
+  bool operator()(count_type const&) const {
     static auto p = parsers::u64 ->* [](count x) { return x; };
     return parse(p);
   }
 
-  bool operator()(type::time_point const&) const
-  {
-    static auto p = parsers::real
-      ->* [](real x) { return time::point{time::fractional(x)}; };
+  bool operator()(timestamp_type const&) const {
+    static auto p = parsers::real ->* [](real x) {
+      auto i = std::chrono::duration_cast<interval>(double_seconds(x));
+      return timestamp{i};
+    };
     return parse(p);
   }
 
-  bool operator()(type::time_duration const&) const
-  {
-    static auto p = parsers::real
-      ->* [](real x) { return time::duration{time::fractional(x)}; };
+  bool operator()(interval_type const&) const {
+    static auto p = parsers::real ->* [](real x) {
+      return std::chrono::duration_cast<interval>(double_seconds(x));
+    };
     return parse(p);
   }
 
-  bool operator()(type::string const&) const
-  {
+  bool operator()(string_type const&) const {
     static auto p = +parsers::any
-      ->* [](std::string x) { return util::byte_unescape(x); };
+      ->* [](std::string x) { return detail::byte_unescape(x); };
     return parse(p);
   }
 
-  bool operator()(type::pattern const&) const
-  {
+  bool operator()(pattern_type const&) const {
     static auto p = +parsers::any
-      ->* [](std::string x) { return util::byte_unescape(x); };
+      ->* [](std::string x) { return detail::byte_unescape(x); };
     return parse(p);
   }
 
-  bool operator()(type::address const&) const
-  {
+  bool operator()(address_type const&) const {
     static auto p = parsers::addr ->* [](address x) { return x; };
     return parse(p);
   }
 
-  bool operator()(type::subnet const&) const
-  {
+  bool operator()(subnet_type const&) const {
     static auto p = parsers::net ->* [](subnet x) { return x; };
     return parse(p);
   }
 
-  bool operator()(type::port const&) const
-  {
+  bool operator()(port_type const&) const {
     static auto p = parsers::u16
       ->* [](uint16_t x) { return port{x, port::unknown}; };
     return parse(p);
@@ -122,65 +111,73 @@ struct bro_parser_factory {
     return {};
   }
 
-  result_type operator()(type::boolean const&) const {
+  result_type operator()(boolean_type const&) const {
     return parsers::tf;
   }
 
-  result_type operator()(type::integer const&) const {
+  result_type operator()(integer_type const&) const {
     return parsers::i64 ->* [](integer x) { return x; };
   }
 
-  result_type operator()(type::count const&) const {
+  result_type operator()(count_type const&) const {
     return parsers::u64 ->* [](count x) { return x; };
   }
 
-  result_type operator()(type::time_point const&) const {
-    return parsers::real
-      ->* [](real x) { return time::point{time::fractional(x)}; };
+  result_type operator()(timestamp_type const&) const {
+    return parsers::real ->* [](real x) {
+      auto i = std::chrono::duration_cast<interval>(double_seconds(x));
+      return timestamp{i};
+    };
   }
 
-  result_type operator()(type::time_duration const&) const {
-    return parsers::real
-      ->* [](real x) { return time::duration{time::fractional(x)}; };
+  result_type operator()(interval_type const&) const {
+    return parsers::real ->* [](real x) {
+      return std::chrono::duration_cast<interval>(double_seconds(x));
+    };
   }
 
-  result_type operator()(type::string const&) const {
+  result_type operator()(string_type const&) const {
     if (set_separator_.empty())
       return +parsers::any
-        ->* [](std::string x) { return util::byte_unescape(x); };
+        ->* [](std::string x) { return detail::byte_unescape(x); };
     else
       return +(parsers::any - set_separator_)
-               ->*[](std::string x) { return util::byte_unescape(x); };
+               ->*[](std::string x) { return detail::byte_unescape(x); };
   }
 
-  result_type operator()(type::pattern const&) const {
+  result_type operator()(pattern_type const&) const {
     if (set_separator_.empty())
       return +parsers::any
-        ->* [](std::string x) { return util::byte_unescape(x); };
+        ->* [](std::string x) { return detail::byte_unescape(x); };
     else
       return +(parsers::any - set_separator_)
-        ->* [](std::string x) { return util::byte_unescape(x); };
+        ->* [](std::string x) { return detail::byte_unescape(x); };
   }
 
-  result_type operator()(type::address const&) const {
+  result_type operator()(address_type const&) const {
     return parsers::addr ->* [](address x) { return x; };
   }
 
-  result_type operator()(type::subnet const&) const {
+  result_type operator()(subnet_type const&) const {
     return parsers::net ->* [](subnet x) { return x; };
   }
 
-  result_type operator()(type::port const&) const {
+  result_type operator()(port_type const&) const {
     return parsers::u16 ->* [](uint16_t x) { return port{x, port::unknown}; };
   }
 
-  result_type operator()(type::set const& t) const {
-    return (visit(*this, t.elem()) % set_separator_)
-      ->* [](std::vector<Attribute> x) { return set(std::move(x)); };
+  result_type operator()(set_type const& t) const {
+    auto set_insert = [](std::vector<Attribute> v) {
+      set s;
+      for (auto& x : v)
+        s.insert(std::move(x));
+      return s;
+    };
+    return (visit(*this, t.value_type) % set_separator_) ->* set_insert;
   }
 
-  result_type operator()(type::vector const& t) const {
-    return (visit(*this, t.elem()) % set_separator_)
+  result_type operator()(vector_type const& t) const {
+    return (visit(*this, t.value_type) % set_separator_)
       ->* [](std::vector<Attribute> x) { return vector(std::move(x)); };
   }
 
@@ -192,7 +189,7 @@ template <typename Iterator, typename Attribute = data>
 rule<Iterator, Attribute>
 make_bro_parser(type const& t, std::string const& set_separator = ",") {
   rule<Iterator, Attribute> r;
-  auto sep = t.container() ? set_separator : "";
+  auto sep = is_container(t) ? set_separator : "";
   return visit(bro_parser_factory<Iterator, Attribute>{sep}, t);
 }
 
