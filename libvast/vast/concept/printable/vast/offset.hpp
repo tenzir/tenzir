@@ -24,6 +24,10 @@ struct printer_registry<offset> {
   using type = offset_printer;
 };
 
+namespace printers {
+  auto const offset = offset_printer{};
+} // namespace printers
+
 } // namespace vast
 
 #endif

@@ -1,13 +1,12 @@
 #ifndef VAST_CONCEPT_PARSEABLE_VAST_EXPRESSION_HPP
 #define VAST_CONCEPT_PARSEABLE_VAST_EXPRESSION_HPP
 
-#include "vast/expression.hpp"
-#include "vast/util/assert.hpp"
-
 #include "vast/concept/parseable/core.hpp"
 #include "vast/concept/parseable/string/char_class.hpp"
 #include "vast/concept/parseable/vast/data.hpp"
 #include "vast/concept/parseable/vast/key.hpp"
+#include "vast/detail/assert.hpp"
+#include "vast/expression.hpp"
 
 namespace vast {
 
@@ -15,32 +14,17 @@ struct predicate_parser : parser<predicate_parser> {
   using attribute = predicate;
 
   static auto make() {
-    // TODO: add full-fledged type parser
-    auto type
-      = "bool"_p     ->* []() -> vast::type { return type::boolean{}; }
-      | "int"_p      ->* []() -> vast::type { return type::integer{}; }
-      | "count"_p    ->* []() -> vast::type { return type::count{}; }
-      | "real"_p     ->* []() -> vast::type { return type::real{}; }
-      | "time"_p     ->* []() -> vast::type { return type::time_point{}; }
-      | "duration"_p ->* []() -> vast::type { return type::time_duration{}; }
-      | "string"_p   ->* []() -> vast::type { return type::string{}; }
-      | "pattern"_p  ->* []() -> vast::type { return type::pattern{}; }
-      | "addr"_p     ->* []() -> vast::type { return type::address{}; }
-      | "subnet"_p   ->* []() -> vast::type { return type::subnet{}; }
-      | "port"_p     ->* []() -> vast::type { return type::port{}; }
-      ;
-    auto to_type_extractor_operand = [](vast::type t) -> predicate::operand {
-      return type_extractor{t};
+    auto to_attr_extractor = [](std::string str) -> predicate::operand {
+      return attribute_extractor{str};
     };
-    auto to_schema_extractor_operand = [](key k) -> predicate::operand {
-      return schema_extractor{k};
+    auto to_key_extractor = [](key k) -> predicate::operand {
+      return key_extractor{k};
     };
+    auto id = +(parsers::alnum | parsers::chr{'_'} | parsers::chr{'-'});
     auto operand
       = parsers::data ->* [](data d) -> predicate::operand { return d; }
-      | "&time"_p   ->* []() -> predicate::operand { return time_extractor{}; }
-      | "&type"_p   ->* []() -> predicate::operand { return event_extractor{}; }
-      | ':' >> type ->* to_type_extractor_operand
-      | parsers::key ->* to_schema_extractor_operand
+      | '&' >> id     ->* to_attr_extractor
+      | parsers::key  ->* to_key_extractor
       ;
     auto pred_op
       = "~"_p   ->* [] { return match; }

@@ -31,8 +31,8 @@ struct data_printer : printer<data_printer> {
     }
 
     bool operator()(std::string const& str) const {
-      // TODO: create a printer that escapes the output directly, as opposed to
-      // going through an extra copy.
+      // TODO: create a printer that escapes the output on the fly, as opposed
+      // to going through an extra copy.
       auto escaped = printers::str ->* [](std::string const& x) {
         return detail::byte_escape(x, "\"");
       };
@@ -53,6 +53,10 @@ template <>
 struct printer_registry<data> {
   using type = data_printer;
 };
+
+namespace printers {
+  auto const data = data_printer{};
+} // namespace printers
 
 struct vector_printer : printer<vector_printer> {
   using attribute = vector;

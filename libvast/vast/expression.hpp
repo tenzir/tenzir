@@ -1,118 +1,67 @@
 #ifndef VAST_EXPRESSION_HPP
 #define VAST_EXPRESSION_HPP
 
+#include <memory>
+#include <string>
+#include <type_traits>
+#include <vector>
+
 #include "vast/data.hpp"
 #include "vast/key.hpp"
 #include "vast/offset.hpp"
 #include "vast/operator.hpp"
 #include "vast/type.hpp"
-#include "vast/expr/normalize.hpp"
-#include "vast/expr/validator.hpp"
-#include "vast/util/assert.hpp"
-#include "vast/util/variant.hpp"
+#include "vast/variant.hpp"
 
 namespace vast {
 
 class expression;
 
-/// Extracts the event type.
-struct event_extractor : util::totally_ordered<event_extractor> {
-  friend bool operator==(event_extractor const&, event_extractor const&) {
-    return true;
-  }
+/// Extracts a specific attributes from an event.
+struct attribute_extractor : detail::totally_ordered<attribute_extractor> {
+  attribute_extractor(std::string str = {});
 
-  friend bool operator<(event_extractor const&, event_extractor const&) {
-    return false;
-  }
+  std::string attr;
+
+  friend bool operator==(attribute_extractor const&,
+                         attribute_extractor const&);
+  friend bool operator<(attribute_extractor const&,
+                        attribute_extractor const&);
 
   template <class Inspector>
-  friend auto inspect(Inspector& f, event_extractor&) {
-    return f(); // nop
+  friend auto inspect(Inspector& f, attribute_extractor& ex) {
+    return f(ex.attr);
   }
 };
 
-/// Extracts the event timestamp.
-struct time_extractor : util::totally_ordered<time_extractor> {
-  friend bool operator==(time_extractor const&, time_extractor const&) {
-    return true;
-  }
-
-  friend bool operator<(time_extractor const&, time_extractor const&) {
-    return false;
-  }
-
-  template <class Inspector>
-  friend auto inspect(Inspector& f, time_extractor&) {
-    return f(); // nop
-  }
-};
-
-/// Extracts a specific event type.
-struct type_extractor : util::totally_ordered<type_extractor> {
-  type_extractor() = default;
-
-  explicit type_extractor(vast::type t) : type{std::move(t)} {
-  }
-
-  vast::type type;
-
-  friend bool operator==(type_extractor const& lhs, type_extractor const& rhs) {
-    return lhs.type == rhs.type;
-  }
-
-  friend bool operator<(type_extractor const& lhs, type_extractor const& rhs) {
-    return lhs.type < rhs.type;
-  }
-
-  template <class Inspector>
-  friend auto inspect(Inspector& f, type_extractor& ex) {
-    return f(ex.type);
-  }
-};
-
-/// Extracts one or more values.
-struct schema_extractor : util::totally_ordered<schema_extractor> {
-  schema_extractor() = default;
-
-  explicit schema_extractor(vast::key k) : key{std::move(k)} {
-  }
+/// Extracts one or more values according to a given key.
+struct key_extractor : detail::totally_ordered<key_extractor> {
+  key_extractor(vast::key k = {});
 
   vast::key key;
 
-  friend bool operator==(schema_extractor const& lhs,
-                         schema_extractor const& rhs) {
-    return lhs.key == rhs.key;
-  }
-
-  friend bool operator<(schema_extractor const& lhs,
-                        schema_extractor const& rhs) {
-    return lhs.key < rhs.key;
-  }
+  friend bool operator==(key_extractor const& lhs, key_extractor const& rhs);
+  friend bool operator<(key_extractor const& lhs, key_extractor const& rhs);
 
   template <class Inspector>
-  friend auto inspect(Inspector& f, schema_extractor& ex) {
+  friend auto inspect(Inspector& f, key_extractor& ex) {
     return f(ex.key);
   }
 };
 
-/// Extracts a singular value, the "instantiation" of a ::schema_extractor.
-struct data_extractor : util::totally_ordered<data_extractor> {
+/// Extracts a specific data value from a type according to an offset. During
+/// AST resolution, the ::key_extractor generates multiple instantiations of
+/// this extractor according to a given ::schema.
+struct data_extractor : detail::totally_ordered<data_extractor> {
   data_extractor() = default;
 
-  explicit data_extractor(vast::type t, vast::offset o)
-    : type{std::move(t)}, offset{std::move(o)} {
-  }
+  data_extractor(vast::type t, vast::offset o);
 
   vast::type type;
   vast::offset offset;
 
-  friend bool operator==(data_extractor const& lhs, data_extractor const& rhs) {
-    return lhs.type == rhs.type && lhs.offset == rhs.offset;
-  }
-
-  friend bool operator<(data_extractor const& lhs, data_extractor const& rhs) {
-    return std::tie(lhs.type, lhs.offset) < std::tie(rhs.type, rhs.offset);
-  }
+  friend bool operator==(data_extractor const& lhs, data_extractor const& rhs);
+  friend bool operator<(data_extractor const& lhs, data_extractor const& rhs);
 
   template <class Inspector>
   friend auto inspect(Inspector& f, data_extractor& ex) {
@@ -120,35 +69,25 @@ struct data_extractor : util::totally_ordered<data_extractor> {
   }
 };
 
-/// A predicate.
-struct predicate : util::totally_ordered<predicate> {
+/// A predicate with two operands evaluated under a relational operator.
+struct predicate : detail::totally_ordered<predicate> {
   predicate() = default;
 
-  using operand = util::variant<
-      event_extractor,
-      time_extractor,
-      type_extractor,
-      schema_extractor,
+  using operand = variant<
+      attribute_extractor,
+      key_extractor,
       data_extractor,
       data
     >;
 
-  predicate(operand l, relational_operator o, operand r)
-    : lhs{std::move(l)}, op{o}, rhs{std::move(r)} {
-  }
+  predicate(operand l, relational_operator o, operand r);
 
   operand lhs;
   relational_operator op;
   operand rhs;
 
-  friend bool operator==(predicate const& lhs, predicate const& rhs) {
-    return lhs.lhs == rhs.lhs && lhs.op == rhs.op && lhs.rhs == rhs.rhs;
-  }
-
-  friend bool operator<(predicate const& lhs, predicate const& rhs) {
-    return std::tie(lhs.lhs, lhs.op, lhs.rhs)
-           < std::tie(rhs.lhs, rhs.op, rhs.rhs);
-  }
+  friend bool operator==(predicate const& lhs, predicate const& rhs);
+  friend bool operator<(predicate const& lhs, predicate const& rhs);
 
   template <class Inspector>
   friend auto inspect(Inspector& f, predicate& p) {
@@ -167,19 +106,38 @@ struct disjunction : std::vector<expression> {
 };
 
 /// A NOT expression.
-struct negation : std::vector<vast::expression> {
-  using std::vector<vast::expression>::vector;
+struct negation : detail::totally_ordered<negation> {
+  negation();
+  negation(expression expr);
 
-  vast::expression const& expression() const;
-  vast::expression& expression();
+  negation(negation const& other);
+  negation(negation&& other) noexcept;
+
+  negation& operator=(negation const& other);
+  negation& operator=(negation&& other) noexcept;
+
+  // Access the contained expression.
+  expression const& expr() const;
+  expression& expr();
+
+  friend bool operator==(negation const& lhs, negation const& rhs);
+  friend bool operator<(negation const& lhs, negation const& rhs);
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, negation& n) {
+    return f(*n.expr_);
+  }
+
+private:
+  std::unique_ptr<expression> expr_;
 };
 
 /// A query expression.
-class expression : util::totally_ordered<expression> {
+class expression : detail::totally_ordered<expression> {
   friend access;
 
 public:
-  using node = util::variant<
+  using node = variant<
     none,
     conjunction,
     disjunction,
@@ -194,18 +152,10 @@ public:
   /// Constructs an expression.
   /// @param x The node to construct an expression from.
   template <
-    typename T,
-    typename U = std::decay_t<T>,
-    typename = std::enable_if_t<
-         std::is_same<U, none>::value
-      || std::is_same<U, conjunction>::value
-      || std::is_same<U, disjunction>::value
-      || std::is_same<U, negation>::value
-      || std::is_same<U, predicate>::value
-    >
+    class T,
+    class = std::enable_if_t<detail::contains<std::decay_t<T>, node::types>{}>
   >
-  expression(T&& x)
-    : node_{std::forward<T>(x)} {
+  expression(T&& x) : node_{std::forward<T>(x)} {
   }
 
   friend bool operator==(expression const& lhs, expression const& rhs);
@@ -217,11 +167,20 @@ public:
   }
 
   friend node& expose(expression& d);
-  friend node const& expose(expression const& d);
 
 private:
   node node_;
 };
+
+/// Normalizes an expression such that:
+///
+/// 1. Single-element conjunctions/disjunctions don't exist.
+/// 2. Extractors end up always on the LHS of a predicate.
+/// 3. Negations are pushed down to the predicate level.
+///
+/// @param expr The expression to normalize.
+/// @returns The normalized expression.
+expression normalize(expression const& expr);
 
 } // namespace vast
 

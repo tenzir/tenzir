@@ -2,16 +2,15 @@
 #define VAST_CONCEPT_PRINTABLE_VAST_EXPRESSION_HPP
 
 #include "vast/data.hpp"
-#include "vast/util/string.hpp"
 #include "vast/concept/printable/numeric.hpp"
 #include "vast/concept/printable/string.hpp"
-#include "vast/concept/printable/print.hpp"
-#include "vast/concept/printable/core/printer.hpp"
+#include "vast/concept/printable/core.hpp"
 #include "vast/concept/printable/vast/data.hpp"
 #include "vast/concept/printable/vast/key.hpp"
 #include "vast/concept/printable/vast/none.hpp"
 #include "vast/concept/printable/vast/offset.hpp"
 #include "vast/concept/printable/vast/operator.hpp"
+#include "vast/concept/printable/vast/type.hpp"
 
 namespace vast {
 
@@ -29,60 +28,41 @@ struct expression_printer : printer<expression_printer> {
     }
 
     bool operator()(conjunction const& c) const {
-      using vast::print;
-      return print(out_, '{')
-             && detail::print_delimited(c.begin(), c.end(), out_, " && ")
-             && print(out_, '}');
+      auto p = '{' << (expression_printer{} % " && ") << '}';
+      return p.print(out_, c);
     }
 
     bool operator()(disjunction const& d) const {
-      using vast::print;
-      return print(out_, '(')
-             && detail::print_delimited(d.begin(), d.end(), out_, " || ")
-             && print(out_, ')');
+      auto p = '(' << (expression_printer{} % " || ") << ')';
+      return p.print(out_, d);
     }
 
     bool operator()(negation const& n) const {
-      using vast::print;
-      return print(out_, "! ") && print(out_, n.expression());
+      auto p = "! " << expression_printer{};
+      return p.print(out_, n.expr());
     }
 
     bool operator()(predicate const& p) const {
-      using vast::print;
-      return visit(*this, p.lhs) && print(out_, ' ') && print(out_, p.op)
-             && print(out_, ' ') && visit(*this, p.rhs);
+      auto op = ' ' << make_printer<relational_operator>{} << ' ';
+      return visit(*this, p.lhs) && op.print(out_, p.op) && visit(*this, p.rhs);
     }
 
-    bool operator()(event_extractor const&) const {
-      using vast::print;
-      return print(out_, "&type");
+    bool operator()(attribute_extractor const& e) const {
+      auto p = '&' << printers::str;
+      return p.print(out_, e.attr);
     }
 
-    bool operator()(time_extractor const&) const {
-      using vast::print;
-      return print(out_, "&time");
-    }
-
-    bool operator()(type_extractor const& e) const {
-      using vast::print;
-      return print(out_, e.type);
-    }
-
-    bool operator()(schema_extractor const& e) const {
-      using vast::print;
-      return print(out_, e.key);
+    bool operator()(key_extractor const& e) const {
+      return printers::key.print(out_, e.key);
     }
 
     bool operator()(data_extractor const& e) const {
-      using vast::print;
-      if (!print(out_, e.type))
-        return false;
-      return e.offset.empty() || (print(out_, '@') && print(out_, e.offset));
+      auto p = printers::type<policy::name_only> << ~('@' << printers::offset);
+      return p.print(out_, std::tie(e.type, e.offset));
     }
 
     bool operator()(data const& d) const {
-      using vast::print;
-      return print(out_, d);
+      return printers::data.print(out_, d);
     }
 
     Iterator& out_;
@@ -91,10 +71,8 @@ struct expression_printer : printer<expression_printer> {
   template <typename Iterator, typename T>
   auto print(Iterator& out, T const& x) const
     -> std::enable_if_t<
-         std::is_same<T, event_extractor>::value
-         || std::is_same<T, time_extractor>::value
-         || std::is_same<T, type_extractor>::value
-         || std::is_same<T, schema_extractor>::value
+         std::is_same<T, attribute_extractor>::value
+         || std::is_same<T, key_extractor>::value
          || std::is_same<T, data_extractor>::value
          || std::is_same<T, predicate>::value
          || std::is_same<T, conjunction>::value
@@ -117,10 +95,8 @@ template <typename T>
 struct printer_registry<
   T,
   std::enable_if_t<
-    std::is_same<T, event_extractor>::value
-    || std::is_same<T, time_extractor>::value
-    || std::is_same<T, type_extractor>::value
-    || std::is_same<T, schema_extractor>::value
+    std::is_same<T, attribute_extractor>::value
+    || std::is_same<T, key_extractor>::value
     || std::is_same<T, data_extractor>::value
     || std::is_same<T, predicate>::value
     || std::is_same<T, conjunction>::value

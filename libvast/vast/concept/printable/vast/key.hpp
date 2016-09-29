@@ -23,6 +23,10 @@ struct printer_registry<key> {
   using type = key_printer;
 };
 
+namespace printers {
+  auto const key = key_printer{};
+} // namespace printers
+
 } // namespace vast
 
 #endif

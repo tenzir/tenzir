@@ -18,10 +18,12 @@ set(libvast_sources
   #src/configuration.cpp
   src/data.cpp
   src/die.cpp
-  #src/expression.cpp
+  src/expression.cpp
+  src/expression_visitors.cpp
   src/error.cpp
   src/event.cpp
   src/filesystem.cpp
+  src/key.cpp
   src/http.cpp
   src/logger.cpp
   src/operator.cpp
@@ -66,12 +68,6 @@ set(libvast_sources
   src/detail/string.cpp
   src/detail/system.cpp
   src/detail/terminal.cpp
-  #src/expr/evaluator.cpp
-  #src/expr/normalize.cpp
-  #src/expr/predicatizer.cpp
-  #src/expr/restrictor.cpp
-  #src/expr/resolver.cpp
-  #src/expr/validator.cpp
 )
 
 # FIXME: Bring back after having repaired CAF code.
@@ -201,7 +197,9 @@ set(tests
   test/date.cpp
   test/endpoint.cpp
   test/event.cpp
-  #test/expr.cpp
+  test/expression.cpp
+  test/expression_evaluation.cpp
+  test/expression_parseable.cpp
   test/filesystem.cpp
   test/flat_serial_set.cpp
   test/hash.cpp
@@ -214,7 +212,6 @@ set(tests
   test/maybe.cpp
   test/offset.cpp
   #test/parse_bro.cpp
-  #test/parse_expr.cpp
   test/parseable.cpp
   test/pattern.cpp
   test/port.cpp
