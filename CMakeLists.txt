@@ -46,6 +46,9 @@ if (NOT CMAKE_CXX_FLAGS)
   set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O2 -g")
 endif()
 
+# Performance.
+set(EXTRA_FLAGS "${EXTRA_FLAGS} -march=native -mpopcnt")
+
 # Requirement checks
 try_run(program_result
         compilation_succeeded
