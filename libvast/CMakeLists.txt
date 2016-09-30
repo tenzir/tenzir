@@ -181,6 +181,7 @@ set(tests
   #test/actor/task.cpp
 
   test/address.cpp
+  test/bits.cpp
   #test/binner.cpp
   #test/bitmap.cpp
   #test/bitmap_index.cpp
