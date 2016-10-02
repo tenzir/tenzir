@@ -1,6 +1,7 @@
 #ifndef VAST_BITS_HPP
 #define VAST_BITS_HPP
 
+#include <cstddef>
 #include <limits>
 
 #include "vast/detail/assert.hpp"
@@ -13,33 +14,39 @@ struct bits {
   static_assert(std::is_unsigned<T>::value && std::is_integral<T>::value,
                 "bitwise operations require unsigned integral, types");
 
-  // -- types -----------------------------------------------------------------
+  // -- general ---------------------------------------------------------------
 
   /// The underlying block type.
-  using block = T;
+  using value_type = T;
 
-  // -- special values --------------------------------------------------------
+  /// The type to represent sizes.
+  using size_type = size_t;
 
-  /// The number of bits per block.
-  static constexpr auto width = std::numeric_limits<block>::digits;
+  /// The number of bits per block (aka. word size).
+  static constexpr size_type width = std::numeric_limits<value_type>::digits;
+
+  /// A value that represents an invalid or "not found" position.
+  static constexpr size_type npos = ~size_type{0};
+
+  // -- special block values --------------------------------------------------
 
   /// A block with all 0s.
-  static constexpr block none = block{0};
+  static constexpr value_type none = value_type{0};
 
   /// A block with all 1s.
-  static constexpr block all = ~none;
+  static constexpr value_type all = ~none;
 
   /// A block with only an MSB of 0.
-  static constexpr block msb0 = all >> 1;
+  static constexpr value_type msb0 = all >> 1;
 
   /// A block with only an MSB of 1.
-  static constexpr block msb1 = ~msb0;
+  static constexpr value_type msb1 = ~msb0;
 
   /// A block with only an LSB of 1.
-  static constexpr block lsb1 = block{1};
+  static constexpr value_type lsb1 = value_type{1};
 
   /// A block with only an LSB of 0.
-  static constexpr block lsb0 = ~lsb1;
+  static constexpr value_type lsb0 = ~lsb1;
 
   // -- manipulation ----------------------------------------------------------
 
@@ -47,7 +54,7 @@ struct bits {
   /// @param i The position where the 1-bit should be.
   /// @return `1 << i`
   /// @pre `i < width`
-  static constexpr block mask(block i) {
+  static constexpr value_type mask(size_type i) {
     return lsb1 << i;
   }
 
@@ -56,7 +63,7 @@ struct bits {
   /// @param i The position to flip.
   /// @returns `x ^ (1 << i)`
   /// @pre `i < width`
-  static constexpr block flip(block x, block i) {
+  static constexpr value_type flip(value_type x, size_type i) {
     return x ^ mask(i);
   }
 
@@ -64,7 +71,7 @@ struct bits {
   /// @param x The block to set the bit in.
   /// @param i The position to set.
   /// @pre `i < width`
-  static constexpr block set(block x, block i, bool b) {
+  static constexpr value_type set(value_type x, size_type i, bool b) {
     return b ? x | mask(i) : x & ~mask(i);
   }
 
@@ -80,13 +87,13 @@ struct bits {
   /// @param x The block value.
   /// @returns The number trailing zeros in *x*.
   /// @pre `x > 0`
-  template <class B = block>
-  static constexpr auto count_trailing_zeros(block x) -> enable_if_32<B> {
+  template <class B = value_type>
+  static constexpr auto count_trailing_zeros(value_type x) -> enable_if_32<B> {
     return __builtin_ctz(x);
   }
 
-  template <class B = block>
-  static constexpr auto count_trailing_zeros(block x) -> enable_if_64<B> {
+  template <class B = value_type>
+  static constexpr auto count_trailing_zeros(value_type x) -> enable_if_64<B> {
     return __builtin_ctzll(x);
   }
 
@@ -94,7 +101,7 @@ struct bits {
   /// @param x The block value.
   /// @returns The number trailing ones in *x*.
   /// @pre `x > 0`
-  static constexpr block count_trailing_ones(block x) {
+  static constexpr value_type count_trailing_ones(value_type x) {
     return count_trailing_zeros(~x);
   }
 
@@ -102,15 +109,15 @@ struct bits {
   /// @param x The block value.
   /// @returns The number leading zeros in *x*.
   /// @pre `x > 0`
-  template <class B = block>
-  static constexpr auto count_leading_zeros(block x) -> enable_if_32<B> {
+  template <class B = value_type>
+  static constexpr auto count_leading_zeros(value_type x) -> enable_if_32<B> {
     // The compiler builtin always assumes a width of 32 bits. We have to adapt
     // the return value according to the actual block width.
     return __builtin_clz(x) - (32 - width);
   }
 
-  template <class B = block>
-  static constexpr auto count_leading_zeros(block x) -> enable_if_64<B> {
+  template <class B = value_type>
+  static constexpr auto count_leading_zeros(value_type x) -> enable_if_64<B> {
     return __builtin_clzll(x);
   }
 
@@ -118,7 +125,7 @@ struct bits {
   /// @param x The block value.
   /// @returns The number leading ones in *x*.
   /// @pre `x > 0`
-  static constexpr block count_leading_ones(block x) {
+  static constexpr value_type count_leading_ones(value_type x) {
     return count_leading_zeros(~x);
   }
 
@@ -126,13 +133,13 @@ struct bits {
   /// @param x The block value.
   /// @returns The number leading ones in *x*.
   /// @pre `x > 0`
-  template <class B = block>
-  static constexpr auto popcount(block x) -> enable_if_32<B> {
+  template <class B = value_type>
+  static constexpr auto popcount(value_type x) -> enable_if_32<B> {
     return __builtin_popcount(x);
   }
 
-  template <class B = block>
-  static constexpr auto popcount(block x) -> enable_if_64<B> {
+  template <class B = value_type>
+  static constexpr auto popcount(value_type x) -> enable_if_64<B> {
     return __builtin_popcountll(x);
   }
 
@@ -140,14 +147,37 @@ struct bits {
   /// @param x The block value.
   /// @returns The parity of *x*.
   /// @pre `x > 0`
-  template <class B = block>
-  static constexpr auto parity(block x) -> enable_if_32<B> {
+  template <class B = value_type>
+  static constexpr auto parity(value_type x) -> enable_if_32<B> {
     return __builtin_parity(x);
   }
 
-  template <class B = block>
-  static constexpr auto parity(block x) -> enable_if_64<B> {
+  template <class B = value_type>
+  static constexpr auto parity(value_type x) -> enable_if_64<B> {
     return __builtin_parityll(x);
+  }
+
+  // -- search ----------------------------------------------------------------
+
+  /// Find the next 1-bit starting at position relative to the LSB.
+  /// @param x The block to search.
+  /// @param i The position relative to the LSB to start searching.
+  static constexpr size_type next(value_type x, size_type i) {
+    if (i == width - 1)
+      return npos;
+    auto top = x & (all << (i + 1));
+    return top == 0 ? npos : count_trailing_zeros(top);
+  }
+
+  /// Find the previous 1-bit starting at position relative to the LSB.
+  /// @param x The block to search.
+  /// @param i The position relative to the LSB to start searching.
+  /// @pre `i < width`
+  static constexpr size_type prev(value_type x, size_type i) {
+    if (i == 0)
+      return npos;
+    auto bottom = x & ~(all << i);
+    return bottom == 0 ? npos : width - count_leading_zeros(bottom) - 1;
   }
 
   // -- math ------------------------------------------------------------------
@@ -156,28 +186,31 @@ struct bits {
   /// @param x The block value.
   /// @returns `log2(x)`
   /// @pre `x > 0`
-  static constexpr block log2(block x) {
+  static constexpr value_type log2(value_type x) {
     return width - count_leading_zeros(x) - 1;
   }
 };
 
 template <class T>
-constexpr typename bits<T>::block bits<T>::none;
+constexpr typename bits<T>::size_type bits<T>::npos;
 
 template <class T>
-constexpr typename bits<T>::block bits<T>::all;
+constexpr typename bits<T>::value_type bits<T>::none;
 
 template <class T>
-constexpr typename bits<T>::block bits<T>::msb0;
+constexpr typename bits<T>::value_type bits<T>::all;
 
 template <class T>
-constexpr typename bits<T>::block bits<T>::msb1;
+constexpr typename bits<T>::value_type bits<T>::msb0;
 
 template <class T>
-constexpr typename bits<T>::block bits<T>::lsb0;
+constexpr typename bits<T>::value_type bits<T>::msb1;
 
 template <class T>
-constexpr typename bits<T>::block bits<T>::lsb1;
+constexpr typename bits<T>::value_type bits<T>::lsb0;
+
+template <class T>
+constexpr typename bits<T>::value_type bits<T>::lsb1;
 
 } // namespace vast
 
