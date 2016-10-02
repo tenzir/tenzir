@@ -1,543 +1,700 @@
 #ifndef VAST_BITVECTOR_HPP
 #define VAST_BITVECTOR_HPP
 
+#include <cstdint>
 #include <limits>
 #include <string>
 #include <vector>
+#include <type_traits>
 
-#include "vast/util/assert.hpp"
-#include "vast/util/operators.hpp"
-#include "vast/util/iterator.hpp"
+#include "vast/bits.hpp"
+#include "vast/detail/assert.hpp"
+#include "vast/detail/operators.hpp"
+#include "vast/detail/iterator.hpp"
 
 namespace vast {
+namespace detail {
 
-struct access;
+template <typename Bitvector>
+class bitvector_iterator;
 
-/// A vector of bits having similar semantics as a `std::vector<bool>`.
-class bitvector : util::totally_ordered<bitvector> {
-  friend access;
+} // namespace detail
 
-public:
-  // TODO: make configurable
-  using block_type = uint64_t;
-  using size_type = uint64_t;
-
-  /// Bits per block.
-  static constexpr block_type block_width
-    = std::numeric_limits<block_type>::digits;
-
-  /// One past the last addressable bit index; analogue to an `end` iterator.
-  static constexpr size_type npos = ~size_type{0};
-
-  /// A block with all 0s.
-  static constexpr block_type all_zero = block_type{0};
-
-  /// A block with all 1s.
-  static constexpr block_type all_one = ~all_zero;
-
-  /// A block with only its MSB set to 1.
-  static constexpr block_type msb_one = ~(all_one >> 1);
+/// A vector of bits as in `std::vector<bool>`, except that the underlying
+/// block/word type is configurable. This implementation describes a super set
+/// of the interface defined in §23.3.12.
+template <class Block = size_t, class Allocator = std::allocator<Block>>
+class bitvector : detail::equality_comparable<bitvector<Block, Allocator>> {
+  static_assert(std::is_unsigned<Block>::value,
+                "Block must be unsigned for well-defined bit operations");
+  static_assert(!std::is_same<Block, bool>::value,
+                "Block cannot be bool; you may want std::vector<bool> instead");
 
 public:
-  /// An lvalue proxy for single bits.
-  class reference {
-    friend class bitvector;
-    void operator&() = delete;
-
-    /// Constructs a bit from a block.
-    /// @param block The block to look at.
-    /// @param i The bit position within *block*.
-    reference(block_type& block, block_type i);
-
-  public:
-    reference& flip();
-    operator bool() const;
-    bool operator~() const;
-    reference& operator=(bool x);
-    reference& operator=(reference const& other);
-    reference& operator|=(bool x);
-    reference& operator&=(bool x);
-    reference& operator^=(bool x);
-    reference& operator-=(bool x);
-
-  private:
-    block_type& block_;
-    block_type const mask_;
-  };
-
-  /// Unlike the reference type, a const_reference does not need lvalue
-  /// semantics and can thus represent simply a boolean (bit) value.
+  using value_type = bool;
+  using allocator_type = Allocator;
+  using size_type = size_t;
+  class reference;
   using const_reference = bool;
+  using pointer = reference*;
+  using const_pointer = bool const*;
+  using iterator = detail::bitvector_iterator<bitvector>;
+  using const_iterator = detail::bitvector_iterator<bitvector const>;
+  using reverse_iterator = std::reverse_iterator<iterator>;
+  using const_reverse_iterator = std::reverse_iterator<const_iterator>;
 
-  /// The base class for iterators which inspect every single bit.
-  template <typename Bitvector>
-  class bit_iterator_base
-    : public util::iterator_facade<
-        bit_iterator_base<Bitvector>,
-        bool,
-        std::random_access_iterator_tag,
-        std::conditional_t<
-          std::is_const<Bitvector>::value, const_reference, reference
-        >,
-        size_type
-      > {
-  public:
-    using reverse_iterator = std::reverse_iterator<bit_iterator_base>;
+  // -- construct/destruct/assign ---------------------------------------------
 
-    bit_iterator_base() = default;
-
-    static bit_iterator_base begin(Bitvector& bits) {
-      return bit_iterator_base{bits};
-    }
-
-    static bit_iterator_base end(Bitvector& bits) {
-      return bit_iterator_base{bits, bits.size()};
-    }
-
-    static reverse_iterator rbegin(Bitvector& bits) {
-      return reverse_iterator{end(bits)};
-    }
-
-    static reverse_iterator rend(Bitvector& bits) {
-      return reverse_iterator{begin(bits)};
-    }
-
-  private:
-    friend util::iterator_access;
-
-    bit_iterator_base(Bitvector& bits, size_type off = 0)
-      : bits_{&bits}, i_{off} {
-      VAST_ASSERT(bits_);
-      VAST_ASSERT(!bits_->empty());
-    }
-
-    bool equals(bit_iterator_base const& other) const {
-      return i_ == other.i_;
-    }
-
-    void increment() {
-      VAST_ASSERT(i_ != npos);
-      ++i_;
-    }
-
-    void decrement() {
-      VAST_ASSERT(i_ != npos);
-      --i_;
-    }
-
-    void advance(size_type n) {
-      i_ += n;
-    }
-
-    auto dereference() const
-      -> std::conditional_t<
-           std::is_const<Bitvector>::value, const_reference, reference
-         > {
-      VAST_ASSERT(bits_);
-      VAST_ASSERT(i_ != npos);
-      return const_cast<Bitvector&>(*bits_)[i_];
-    }
-
-    Bitvector* bits_ = nullptr;
-    size_type i_ = npos;
-  };
-
-  using bit_iterator = bit_iterator_base<bitvector>;
-  using const_bit_iterator = bit_iterator_base<bitvector const>;
-
-  /// The base class for iterators which inspect 1 bits only.
-  template <typename Bitvector>
-  class ones_iterator_base
-    : public util::iterator_facade<
-        ones_iterator_base<Bitvector>,
-        bool,
-        std::bidirectional_iterator_tag,
-        std::conditional_t<
-          std::is_const<Bitvector>::value, const_reference, reference
-        >,
-        size_type
-      > {
-  public:
-    using reverse_iterator = std::reverse_iterator<ones_iterator_base>;
-
-    ones_iterator_base() = default;
-
-    static ones_iterator_base begin(Bitvector& bits) {
-      return ones_iterator_base{bits, true};
-    }
-
-    static ones_iterator_base end(Bitvector&) {
-      return ones_iterator_base{};
-    }
-
-    static reverse_iterator rbegin(Bitvector& bits) {
-      return reverse_iterator{ones_iterator_base{bits, false}};
-    }
-
-    static reverse_iterator rend(Bitvector& bits) {
-      return reverse_iterator{begin(bits)};
-    }
-
-    size_type position() const {
-      return i_;
-    }
-
-  private:
-    friend util::iterator_access;
-
-    ones_iterator_base(Bitvector& bits, bool forward) : bits_{&bits} {
-      VAST_ASSERT(bits_);
-      VAST_ASSERT(!bits_->empty());
-      i_ = forward ? bits_->find_first() : bits_->find_last();
-    }
-
-    bool equals(ones_iterator_base const& other) const {
-      return i_ == other.i_;
-    }
-
-    void increment() {
-      VAST_ASSERT(bits_);
-      i_ = bits_->find_next(i_);
-    }
-
-    void decrement() {
-      VAST_ASSERT(bits_);
-      VAST_ASSERT(i_ != npos);
-      i_ = bits_->find_prev(i_);
-    }
-
-    auto dereference() const
-      -> std::conditional_t<
-           std::is_const<Bitvector>::value, const_reference, reference
-         > {
-      VAST_ASSERT(bits_);
-      VAST_ASSERT(i_ != npos);
-      return const_cast<Bitvector&>(*bits_)[i_];
-    }
-
-    Bitvector* bits_ = nullptr;
-    size_type i_ = npos;
-  };
-
-  using ones_iterator = ones_iterator_base<bitvector>;
-  using const_ones_iterator = ones_iterator_base<bitvector const>;
-
-  /// Computes the block index for a given bit position.
-  static constexpr size_type block_index(size_type i) {
-    return i / block_width;
-  }
-
-  /// Computes the bit index within a given block for a given bit position.
-  static constexpr block_type bit_index(size_type i) {
-    return i % block_width;
-  }
-
-  /// Computes the bitmask block to extract a bit a given bit position.
-  static constexpr block_type bit_mask(size_type i) {
-    return block_type(1) << bit_index(i);
-  }
-
-  /// Computes the number of blocks needed to represent a given number of
-  /// bits.
-  /// @param bits the number of bits.
-  /// @returns The number of blocks to represent *bits* number of bits.
-  static constexpr size_type bits_to_blocks(size_type bits) {
-    return bits / block_width + static_cast<size_type>(bits % block_width != 0);
-  }
-
-  /// Flips the bits of a block beginning at a given position
-  /// @param block The block to flip.
-  /// @param start The position within the block where to start the flipping.
-  /// @returns The complement of *block*, flipped beginning at *start*.
-  /// @pre `start < block_width`
-  static size_type flip(block_type block, size_type start);
-
-  /// Computes the number of 1-bits in a given block (aka. *population count*).
-  /// @param block The block to inspect.
-  /// @returns The number of 1-bits in *block*.
-  static size_type count(block_type block);
-
-  /// Computes the bit position first 1-bit in a given block.
-  /// @param block The block to inspect.
-  /// @returns The bit position where *block* has its first bit set to 1.
-  /// @pre At least one bit in *block* must be 1.
-  static size_type lowest_bit(block_type block);
-
-  /// Computes the bit position last 1-bit in a given block.
-  /// @param block The block to inspect.
-  /// @returns The bit position where *block* has its last bit set to 1.
-  /// @pre At least one bit in *block* must be 1.
-  static size_type highest_bit(block_type block);
-
-  /// Finds the next bit in a block starting from a given offset.
-  /// @param block The block to inspect.
-  /// @param i The offset from the LSB where to begin searching.
-  /// @returns The index in the block where the next 1-bit after *i* occurs or
-  ///          `npos` if no such bit exists.
-  static size_type next_bit(block_type block, size_type i);
-
-  /// Finds the previous bit in a block starting from a given offset.
-  /// @param block The block to inspect.
-  /// @param i The offset from the LSB where to begin searching.
-  /// @returns The index in the block where the 1-bit before *i* occurs or
-  ///          `npos` if no such bit exists.
-  static size_type prev_bit(block_type block, size_type i);
-
-  /// Constructs an empty bit vector.
   bitvector();
+  explicit bitvector(const Allocator& alloc);
+  explicit bitvector(size_type n, const Allocator& alloc = Allocator{});
+  bitvector(size_type n, const bool& value, const Allocator& = Allocator());
 
-  /// Constructs a bit vector of a given size.
-  /// @param size The number of bits.
-  /// @param value The value for each bit.
-  explicit bitvector(size_type size, bool value = false);
+  template <class InputIterator>
+  bitvector(InputIterator first, InputIterator last,
+            const Allocator& = Allocator());
 
-  /// Constructs a bit vector from a sequence of blocks.
-  template <typename InputIterator>
-  bitvector(InputIterator first, InputIterator last) {
-    bits_.insert(bits_.end(), first, last);
-    num_bits_ = bits_.size() * block_width;
-  }
+  bitvector(const bitvector& x) = default;
+  bitvector(bitvector&& x) = default;
 
-  bitvector(bitvector const&) = default;
-  bitvector(bitvector&&) = default;
+  bitvector(const bitvector&, const Allocator&);
+  bitvector(bitvector&&, const Allocator&);
+
+  bitvector(std::initializer_list<value_type>, const Allocator& = Allocator());
+
+  ~bitvector() = default;
+
   bitvector& operator=(bitvector const&) = default;
   bitvector& operator=(bitvector&&) = default;
+  bitvector& operator=(std::initializer_list<value_type>);
 
-  //
-  // Basic operations
-  //
+  template <class InputIterator>
+  void assign(InputIterator first, InputIterator last);
+  void assign(size_type n, const value_type& t);
+  void assign(std::initializer_list<value_type>);
 
-  /// Appends the bits in a given block.
-  /// @param block The block containing bits to append.
-  /// @param bits The number of bits to append (starting from the LSB).
-  /// @pre `bits <= block_width`
-  void append(block_type block, size_type bits = block_width);
+  allocator_type get_allocator() const noexcept;
 
-  /// Appends a bit vector to this instance.
-  /// @param other The other bit vector to append.
-  void append(bitvector const& other);
+  // -- iterators -------------------------------------------------------------
 
-  /// Appends a single bit to the end of the bit vector.
-  /// @param bit The value of the bit.
-  void push_back(bool bit);
+  iterator begin() noexcept;
+  const_iterator begin() const noexcept;
+  iterator end() noexcept;
+  const_iterator end() const noexcept;
+  reverse_iterator rbegin() noexcept;
+  const_reverse_iterator rbegin() const noexcept;
+  reverse_iterator rend() noexcept;
+  const_reverse_iterator rend() const noexcept;
 
-  /// Clears all bits in the bitvector.
+  const_iterator cbegin() const noexcept;
+  const_iterator cend() const noexcept;
+  const_reverse_iterator crbegin() const noexcept;
+  const_reverse_iterator crend() const noexcept;
+
+  // -- capacity --------------------------------------------------------------
+
+  bool empty() const noexcept;
+  size_type size() const noexcept;
+  size_type max_size() const noexcept;
+  size_type capacity() const noexcept;
+  void resize(size_type n, value_type value = false);
+  void reserve(size_type n);
+  void shrink_to_fit();
+
+  // -- element access --------------------------------------------------------
+
+  reference operator[](size_type i);
+  const_reference operator[](size_type i) const;
+  const_reference at(size_type n) const;
+  reference at(size_type n);
+  reference front();
+  const_reference front() const;
+  reference back();
+  const_reference back() const;
+
+  // -- modifiers -------------------------------------------------------------
+
+  template <class... Ts>
+  void emplace_back(Ts&&... xs);
+
+  void push_back(const value_type& x);
+
+  void pop_back();
+
+  // TODO: provide implementation as needed
+  //template <class... Ts>
+  //iterator emplace(const_iterator i, Ts&&... xs);
+  //iterator insert(const_iterator i, const value_type& x);
+  //iterator insert(const_iterator i, size_type n, const value_type& x);
+  //template <class InputIterator>
+  //iterator insert(const_iterator i, InputIterator first, InputIterator last);
+  //iterator insert(const_iterator i, std::initializer_list<value_type> list);
+  //iterator erase(const_iterator i);
+  //iterator erase(const_iterator first, const_iterator last);
+
+  void swap(bitvector& other);
+
+  void flip() noexcept;
+
   void clear() noexcept;
 
-  /// Resizes the bit vector to a new number of bits.
-  /// @param n The new number of bits of the bit vector.
-  /// @param value The bit value of new values, if the vector expands.
-  void resize(size_type n, bool value = false);
+  // -- relational operators --------------------------------------------------
 
-  /// Sets a bit at a specific position to a given value.
-  /// @param i The bit position.
-  /// @param bit The value assigned to position *i*.
-  /// @returns A reference to the bit vector instance.
-  bitvector& set(size_type i, bool bit = true);
+  template <class B, class A>
+  friend bool operator==(bitvector<B, A> const& x, bitvector<B, A> const& y);
 
-  /// Sets all bits to 1.
-  /// @returns A reference to the bit vector instance.
-  bitvector& set();
+  template <class B, class A>
+  friend bool operator<(bitvector<B, A> const& x, bitvector<B, A> const& y);
 
-  /// Resets a bit at a specific position, i.e., sets it to 0.
-  /// @param i The bit position.
-  /// @returns A reference to the bit vector instance.
-  bitvector& reset(size_type i);
+  // -------------------------------------------------------------------------
+  // -- non-standard extensions ----------------------------------------------
+  // -------------------------------------------------------------------------
 
-  /// Sets all bits to 0.
-  /// @returns A reference to the bit vector instance.
-  bitvector& reset();
+  // The functionality below enhances the stock version of std::vector<bool>.
 
-  /// Toggles/flips a bit at a specific position.
-  /// @param i The bit position.
-  /// @returns A reference to the bit vector instance.
-  bitvector& toggle(size_type i);
-
-  /// Generates the complement bitvector start at a given position.
-  /// @param start The bit position where to start flipping.
-  /// @returns A reference to the bit vector instance.
-  /// @pre `start < size()`
-  bitvector& flip(size_type start = 0);
-
-  /// Retrieves a single bit.
-  /// @param i The bit position.
-  /// @returns A mutable reference to the bit at position *i*.
-  reference operator[](size_type i);
-
-  /// Retrieves a single bit.
-  /// @param i The bit position.
-  /// @returns A const-reference to the bit at position *i*.
-  const_reference operator[](size_type i) const;
-
-  /// Appends blocks from an iterator range.
-  /// @tparam Iterator A forward iterator.
-  /// @param first Points to the first block of the range.
-  /// @param last Points to the one past the last block of the range.
-  template <typename Iterator>
-  void block_append(Iterator first, Iterator last) {
-    if (first == last)
-      return;
-    auto delta = last - first;
-    num_bits_ += block_width * delta;
-    bits_.reserve(blocks() + delta);
-    auto extra = extra_bits();
-    if (extra == 0) {
-      bits_.insert(bits_.end(), first, last);
-      return;
-    }
-    bits_.back() |= (*first << extra);
-    do {
-      auto blk = *first++ >> (block_width - extra);
-      bits_.push_back(blk | (first == last ? 0 : *first << extra));
-    } while (first != last);
-  }
+  using block = Block;
+  using word = bits<Block>;
+  static constexpr auto npos = word::npos;
 
   /// Counts the number of 1-bits in the bit vector.
   /// Also known as *population count* or *Hamming weight*.
   /// @returns The number of bits set to 1.
-  size_type count() const;
+  size_type count() const noexcept;
 
-  /// Retrieves the number of bits the bitvector consist of.
-  /// @returns The length of the bit vector in bits.
-  size_type size() const;
+  /// Appends a single block or a prefix of a block.
+  /// @param x The block value.
+  /// @param n The number of bits of *x* to append, counting from the LSB.
+  /// @pre `bits > 0 && bits <= word::width`
+  void append_block(block x, size_type bits = word::width);
 
-  /// Checks whether the bit vector is empty.
-  /// @returns `true` iff the bitvector has zero length.
-  bool empty() const;
+  /// Appends a sequence of blocks.
+  /// @param first An iterator to the first complete block to append.
+  /// @param last An iterator one past the end of the last block.
+  template <class InputIterator>
+  void append_blocks(InputIterator first, InputIterator last);
 
-  /// Retrieves the number of active bits in the last block.
-  /// @returns The number of active bits the last block.
-  block_type extra_bits() const;
+  /// Appends a given number of bits having a fixed value.
+  /// @param n The number of bits to append.
+  /// @param x The bit value.
+  void append_bits(size_type n, value_type x);
 
-  /// Finds the bit position of of the first 1-bit.
-  ///
-  /// @returns The position of the first bit that equals to one or `npos` if no
-  /// such bit exists.
-  size_type find_first() const;
-
-  /// Finds the next 1-bit from a given starting position.
-  /// @param i The index where to start looking forward.
-  /// @returns The position of the first bit that equals to 1 after position
-  ///          *i*  or `npos` if no such bit exists.
-  size_type find_next(size_type i) const;
-
-  /// Finds the bit position of of the last 1-bit.
-  /// @returns The position of the last bit that equals to one or `npos` if no
-  ///          such bit exists.
-  size_type find_last() const;
-
-  /// Finds the previous 1-bit from a given starting position.
-  /// @param i The index where to start looking backward.
-  /// @returns The position of the first bit that equals to 1 before position
-  ///          *i* or `npos` if no such bit exists.
-  size_type find_prev(size_type i) const;
-
-  /// Reserves space in the underlying block vector.
-  /// @param n The number of bits to reserve space for.
-  void reserve(size_type n);
-
-  //
-  // Block-based API
-  //
-
-  /// Retrieves the number of blocks of the underlying storage.
-  /// @param The number of blocks that represent `size()` bits.
-  size_type blocks() const;
-
-  /// Retrieves an entire block at a given block index.
-  /// @param *b* The block index.
-  /// @returns The *b*th block.
-  /// @pre *b < blocks()*.
-  block_type block(size_type b) const;
-
-  /// Retrieves an entire block at a given block index.
-  /// @param *b* The block index.
-  /// @returns The *b*th block.
-  /// @pre *b < blocks()*.
-  block_type& block(size_type b);
-
-  /// Retrieves an entire block at a given bit position.
-  /// @param *i* The bit position.
-  /// @returns The entire block corresponding to bit position *i*.
-  /// @pre *i < bits()*
-  block_type block_at_bit(size_type i) const;
-
-  /// Retrieves an entire block at a given bit position.
-  /// @param *i* The bit position.
-  /// @returns The entire block corresponding to bit position *i*.
-  /// @pre *i < bits()*
-  block_type& block_at_bit(size_type i);
-
-  /// Retrieves the first block of the bitvector.
-  /// @returns The first block.
-  /// @pre *! empty()*
-  block_type first_block() const;
-
-  /// Retrieves the first block of the bitvector.
-  /// @returns The first block.
-  /// @pre *! empty()*
-  block_type& first_block();
-
-  /// Retrieves the last block of the bitvector.
-  /// @returns The last block.
-  /// @pre *! empty()*
-  block_type last_block() const;
-
-  /// Retrieves the last block of the bitvector.
-  /// @returns The last block.
-  /// @pre *! empty()*
-  block_type& last_block();
-
-  //
-  // Relational operators
-  //
-
-  friend bool operator==(bitvector const& x, bitvector const& y);
-  friend bool operator<(bitvector const& x, bitvector const& y);
-
-  //
-  // Bitwise operations
-  //
-  bitvector operator~() const;
-  bitvector operator<<(size_type n) const;
-  bitvector operator>>(size_type n) const;
-  bitvector& operator<<=(size_type n);
-  bitvector& operator>>=(size_type n);
-  bitvector& operator&=(bitvector const& other);
-  bitvector& operator|=(bitvector const& other);
-  bitvector& operator^=(bitvector const& other);
-  bitvector& operator-=(bitvector const& other);
-  friend bitvector operator&(bitvector const& x, bitvector const& y);
-  friend bitvector operator|(bitvector const& x, bitvector const& y);
-  friend bitvector operator^(bitvector const& x, bitvector const& y);
-  friend bitvector operator-(bitvector const& x, bitvector const& y);
+  // -- concepts --------------------------------------------------------------
 
   template <class Inspector>
   friend auto inspect(Inspector& f, bitvector& b) {
-    return f(b.bits_, b.num_bits_);
+    return f(b.blocks_, b.size_);
   }
 
 private:
-  // If the number of bits in the vector are not not a multiple of
-  // bitvector::block_width, then the last block exhibits unused bits which
-  // this function resets.
-  void zero_unused_bits();
+  static size_type bits_to_blocks(size_type n) {
+    return 1 + ((n - 1) / word::width);
+  }
 
-  /// Looks forward for the first 1-bit starting at a given position.
-  /// @param i The block index to start looking.
-  /// @returns The block index of the first 1-bit starting from *i* or
-  ///          `bitvector::npos` if no 1-bit exists.
-  size_type find_forward(size_type i) const;
+  block& block_at_bit(size_type i) {
+    return blocks_[i / word::width];
+  }
 
-  /// Looks backward for the first 1-bit starting at a given position.
-  /// @param i The block index to start looking backward.
-  /// @returns The block index of the first 1-bit going backward from *i* or
-  ///          `bitvector::npos` if no 1-bit exists.
-  size_type find_backward(size_type i) const;
+  const block& block_at_bit(size_type i) const {
+    return blocks_[i / word::width];
+  }
 
-  std::vector<block_type> bits_;
-  size_type num_bits_;
+  size_type partial_bits() const {
+    return size_ % word::width;
+  }
+
+  std::vector<block> blocks_;
+  size_type size_;
 };
+
+template <class Block, class Allocator>
+class bitvector<Block, Allocator>::reference {
+  friend class bitvector<Block, Allocator>;
+
+public:
+  operator bool() const noexcept {
+    return (*block_ & mask_) != 0;
+  }
+
+  bool operator~() const noexcept {
+    return (*block_ & mask_) == 0;
+  }
+
+  reference& operator=(bool x) noexcept {
+    x ? *block_ |= mask_ : *block_ &= ~mask_;
+    return *this;
+  }
+
+  reference& operator=(reference const& other) noexcept {
+    other ? *block_ |= mask_ : *block_ &= ~mask_;
+  }
+
+  void flip() noexcept {
+    *block_ ^= mask_;
+  }
+
+  friend void swap(reference x, reference y) noexcept {
+    bool b = x;
+    x = y;
+    y = b;
+  }
+
+private:
+  // The standard defines it, but why do we need it?
+  //reference() noexcept;
+
+  reference(block* x, block mask) : block_{x}, mask_{mask} {
+  }
+
+  typename bitvector<Block, Allocator>::block* block_;
+  typename bitvector<Block, Allocator>::block const mask_;
+};
+
+// -- construct/move/assign --------------------------------------------------
+
+template <class Block, class Allocator>
+bitvector<Block, Allocator>::bitvector() : bitvector{Allocator{}} {
+  // nop
+}
+
+template <class Block, class Allocator>
+bitvector<Block, Allocator>::bitvector(const Allocator& alloc)
+  : blocks_{alloc},
+    size_{0} {
+  // nop
+}
+
+template <class Block, class Allocator>
+bitvector<Block, Allocator>::bitvector(size_type n, const Allocator& alloc)
+  : blocks_(bits_to_blocks(n), 0, alloc),
+    size_{n} {
+  // nop
+}
+
+template <class Block, class Allocator>
+bitvector<Block, Allocator>::bitvector(size_type n, const value_type& value,
+                                       const Allocator& alloc)
+  : blocks_(bits_to_blocks(n), value ? word::all : word::none, alloc),
+    size_{n} {
+}
+
+template <class Block, class Allocator>
+template <class InputIterator>
+bitvector<Block, Allocator>::bitvector(InputIterator first, InputIterator last,
+                                       const Allocator& alloc)
+  : bitvector{alloc},
+    size_{0} {
+  assign(first, last);
+}
+
+template <class Block, class Allocator>
+bitvector<Block, Allocator>::bitvector(const bitvector& other,
+                                       const Allocator& alloc)
+  : blocks_{other.blocks_, alloc},
+    size_{other.size_} {
+  // nop
+}
+
+template <class Block, class Allocator>
+bitvector<Block, Allocator>::bitvector(bitvector&& other,
+                                       const Allocator& alloc)
+  : blocks_{std::move(other.blocks_), alloc},
+    size_{std::move(other.size_)} {
+  // nop
+}
+
+template <class Block, class Allocator>
+bitvector<Block, Allocator>::bitvector(std::initializer_list<value_type> list,
+                                       const Allocator& alloc)
+  : blocks_{alloc},
+    size_{0} {
+  assign(list.begin(), list.end());
+}
+
+template <class Block, class Allocator>
+template <class InputIterator>
+void bitvector<Block, Allocator>::assign(InputIterator first,
+                                         InputIterator last) {
+  blocks_.clear();
+  while (first != last)
+    push_back(*first++);
+}
+
+namespace detail {
+
+template <typename Bitvector>
+class bitvector_iterator
+  : public detail::iterator_facade<
+      bitvector_iterator<Bitvector>,
+      typename Bitvector::value_type,
+      std::random_access_iterator_tag,
+      std::conditional_t<
+        std::is_const<Bitvector>::value,
+        typename Bitvector::const_reference,
+        typename Bitvector::reference
+      >,
+      typename Bitvector::size_type
+    > {
+  friend Bitvector;
+public:
+  bitvector_iterator() = default;
+
+private:
+  friend detail::iterator_access;
+
+  bitvector_iterator(Bitvector& bv, typename Bitvector::size_type off = 0)
+    : bitvector_{&bv}, i_{off} {
+  }
+
+  bool equals(bitvector_iterator const& other) const {
+    return i_ == other.i_;
+  }
+
+  void increment() {
+    VAST_ASSERT(i_ != Bitvector::npos);
+    ++i_;
+  }
+
+  void decrement() {
+    VAST_ASSERT(i_ != Bitvector::npos);
+    --i_;
+  }
+
+  void advance(typename Bitvector::size_type n) {
+    i_ += n;
+  }
+
+  auto dereference() const {
+    VAST_ASSERT(!bitvector_->empty());
+    VAST_ASSERT(i_ < bitvector_->size());
+    return (*bitvector_)[i_];
+  }
+
+  Bitvector* bitvector_ = nullptr;
+  typename Bitvector::size_type i_ = Bitvector::npos;
+};
+
+} // namespace detail
+
+// -- iterators -------------------------------------------------------------
+
+template <class Block, class Allocator>
+typename bitvector<Block, Allocator>::iterator
+bitvector<Block, Allocator>::begin() noexcept {
+  return {*this};
+}
+
+template <class Block, class Allocator>
+typename bitvector<Block, Allocator>::const_iterator
+bitvector<Block, Allocator>::begin() const noexcept {
+  return {*this};
+}
+
+template <class Block, class Allocator>
+typename bitvector<Block, Allocator>::iterator
+bitvector<Block, Allocator>::end() noexcept {
+  return {*this, size()};
+}
+
+template <class Block, class Allocator>
+typename bitvector<Block, Allocator>::const_iterator
+bitvector<Block, Allocator>::end() const noexcept {
+  return {*this, size()};
+}
+
+template <class Block, class Allocator>
+typename bitvector<Block, Allocator>::reverse_iterator
+bitvector<Block, Allocator>::rbegin() noexcept {
+  return typename bitvector<Block, Allocator>::reverse_iterator{end()};
+}
+
+template <class Block, class Allocator>
+typename bitvector<Block, Allocator>::const_reverse_iterator
+bitvector<Block, Allocator>::rbegin() const noexcept {
+  return typename bitvector<Block, Allocator>::const_reverse_iterator{end()};
+}
+
+template <class Block, class Allocator>
+typename bitvector<Block, Allocator>::reverse_iterator
+bitvector<Block, Allocator>::rend() noexcept {
+  return typename bitvector<Block, Allocator>::reverse_iterator{begin()};
+}
+
+template <class Block, class Allocator>
+typename bitvector<Block, Allocator>::const_reverse_iterator
+bitvector<Block, Allocator>::rend() const noexcept {
+  return typename bitvector<Block, Allocator>::const_reverse_iterator{begin()};
+}
+
+template <class Block, class Allocator>
+typename bitvector<Block, Allocator>::const_iterator
+bitvector<Block, Allocator>::cbegin() const noexcept {
+  return begin();
+}
+
+template <class Block, class Allocator>
+typename bitvector<Block, Allocator>::const_iterator
+bitvector<Block, Allocator>::cend() const noexcept {
+  return end();
+}
+
+template <class Block, class Allocator>
+typename bitvector<Block, Allocator>::const_reverse_iterator
+bitvector<Block, Allocator>::crbegin() const noexcept {
+  return rbegin();
+}
+
+template <class Block, class Allocator>
+typename bitvector<Block, Allocator>::const_reverse_iterator
+bitvector<Block, Allocator>::crend() const noexcept {
+  return rend();
+}
+
+// -- capacity --------------------------------------------------------------
+
+template <class Block, class Allocator>
+bool bitvector<Block, Allocator>::empty() const noexcept {
+  return size_ == 0;
+}
+
+template <class Block, class Allocator>
+typename bitvector<Block, Allocator>::size_type
+bitvector<Block, Allocator>::size() const noexcept {
+  return size_;
+}
+
+template <class Block, class Allocator>
+typename bitvector<Block, Allocator>::size_type
+bitvector<Block, Allocator>::max_size() const noexcept {
+  return blocks_.max_size() * word::width;
+}
+
+template <class Block, class Allocator>
+typename bitvector<Block, Allocator>::size_type
+bitvector<Block, Allocator>::capacity() const noexcept {
+  auto c = blocks_.capacity() * word::width;
+  auto p = partial_bits();
+  return p == 0 ? c : c + word::width - p;
+}
+
+template <class Block, class Allocator>
+void bitvector<Block, Allocator>::resize(size_type n, value_type value) {
+  if (size_ >= n) {
+    blocks_.resize(bits_to_blocks(n));
+    size_ = n;
+    return;
+  }
+  // Fill up last word first.
+  auto p = partial_bits();
+  if (p > 0) {
+    auto m = word::all << p;
+    value ? blocks_.back() |= m : blocks_.back() &= ~m;
+    // If everything fits in the last word, we're done.
+    if (n - size_ <= word::width - p) {
+      size_ = n;
+      return;
+    }
+  }
+  // Fill remaining words.
+  blocks_.resize(bits_to_blocks(n), value ? word::all : word::none);
+  size_ = n;
+}
+
+template <class Block, class Allocator>
+void bitvector<Block, Allocator>::reserve(size_type n) {
+  blocks_.reserve(bits_to_blocks(n));
+}
+
+template <class Block, class Allocator>
+void bitvector<Block, Allocator>::shrink_to_fit() {
+  blocks_.shrink_to_fit();
+}
+
+// -- element access ----------------------------------------------------------
+
+template <class Block, class Allocator>
+typename bitvector<Block, Allocator>::reference
+bitvector<Block, Allocator>::operator[](size_type i) {
+  VAST_ASSERT(i < size_);
+  return {&block_at_bit(i), word::mask(i % word::width)};
+}
+
+template <class Block, class Allocator>
+typename bitvector<Block, Allocator>::const_reference
+bitvector<Block, Allocator>::operator[](size_type i) const {
+  VAST_ASSERT(i < size_);
+  return (block_at_bit(i) & word::mask(i % word::width)) != 0;
+}
+
+template <class Block, class Allocator>
+typename bitvector<Block, Allocator>::reference
+bitvector<Block, Allocator>::at(size_type i) {
+  if (i >= size_)
+    throw std::out_of_range("bitvector");
+  return (*this)[i];
+}
+
+template <class Block, class Allocator>
+typename bitvector<Block, Allocator>::const_reference
+bitvector<Block, Allocator>::at(size_type i) const {
+  if (i >= size_)
+    throw std::out_of_range("bitvector");
+  return (*this)[i];
+}
+
+template <class Block, class Allocator>
+typename bitvector<Block, Allocator>::reference
+bitvector<Block, Allocator>::front() {
+  VAST_ASSERT(!empty());
+  return (*this)[0];
+}
+
+template <class Block, class Allocator>
+typename bitvector<Block, Allocator>::const_reference
+bitvector<Block, Allocator>::front() const {
+  VAST_ASSERT(!empty());
+  return (*this)[0];
+}
+
+template <class Block, class Allocator>
+typename bitvector<Block, Allocator>::reference
+bitvector<Block, Allocator>::back() {
+  VAST_ASSERT(!empty());
+  return (*this)[size_ - 1];
+}
+
+template <class Block, class Allocator>
+typename bitvector<Block, Allocator>::const_reference
+bitvector<Block, Allocator>::back() const {
+  VAST_ASSERT(!empty());
+  return (*this)[size_ - 1];
+}
+
+// -- modifiers ---------------------------------------------------------------
+
+template <class Block, class Allocator>
+template <class... Ts>
+void bitvector<Block, Allocator>::emplace_back(Ts&&... xs) {
+  return push_back(std::forward<Ts>(xs)...);
+}
+
+/// Appends a single bit to the end of the bit vector.
+/// @param bit The value of the bit.
+template <class Block, class Allocator>
+void bitvector<Block, Allocator>::push_back(const value_type& x) {
+  auto p = partial_bits();
+  if (p == 0)
+    blocks_.push_back(x ? word::all : word::none);
+  else if (x)
+    blocks_.back() |= word::all << p;
+  else
+    blocks_.back() &= ~(word::all << p);
+  ++size_;
+}
+
+template <class Block, class Allocator>
+void bitvector<Block, Allocator>::pop_back() {
+  VAST_ASSERT(!empty());
+  if (partial_bits() == 1)
+    blocks_.pop_back();
+  --size_;
+}
+
+template <class Block, class Allocator>
+void bitvector<Block, Allocator>::swap(bitvector& other) {
+  using std::swap;
+  swap(blocks_, other.blocks_);
+  swap(size_, other.size_);
+}
+
+template <class Block, class Allocator>
+void bitvector<Block, Allocator>::flip() noexcept {
+  for (auto& block : blocks_)
+    block = ~block;
+}
+
+template <class Block, class Allocator>
+void bitvector<Block, Allocator>::clear() noexcept {
+  blocks_.clear();
+  size_ = 0;
+}
+
+template <class Block, class Allocator>
+bool operator==(bitvector<Block, Allocator> const& x,
+                bitvector<Block, Allocator> const& y) {
+  if (x.size_ != y.size_)
+    return false;
+  // Compare all but last block.
+  auto xbegin = x.blocks_.begin();
+  auto xend = x.blocks_.end();
+  auto ybegin = y.blocks_.begin();
+  auto yend = y.blocks_.end();
+  if (xbegin == xend)
+    return true;
+  --xend;
+  --yend;
+  if (!std::equal(xbegin, xend, ybegin, yend))
+    return false;
+  // Compare last block.
+  using word = typename bitvector<Block, Allocator>::word;
+  auto xlast = *xend & ~(word::all << x.partial_bits());
+  auto ylast = *yend & ~(word::all << y.partial_bits());
+  return xlast == ylast;
+}
+
+template <class Block, class Allocator>
+typename bitvector<Block, Allocator>::size_type
+bitvector<Block, Allocator>::count() const noexcept {
+  auto n = size_;
+  auto p = blocks_.data();
+  auto cnt = size_type{0};
+  for (; n >= word::width; ++p, n -= word::width)
+    cnt += word::popcount(*p);
+  if (n > 0)
+    cnt += word::popcount(*p & ~(word::all << n));
+  return cnt;
+}
+
+template <class Block, class Allocator>
+void bitvector<Block, Allocator>::append_block(block x, size_type bits) {
+  VAST_ASSERT(bits > 0);
+  VAST_ASSERT(bits <= word::width);
+  auto p = partial_bits();
+  if (p == 0) {
+    blocks_.push_back(x);
+  } else {
+    auto& last = blocks_.back();
+    last = (last & ~(word::all << p)) | (x << p);
+    auto available = word::width - p;
+    if (bits > available)
+      blocks_.push_back(x >> available);
+  }
+  size_ += bits;
+}
+
+template <class Block, class Allocator>
+template <class InputIterator>
+void bitvector<Block, Allocator>::append_blocks(InputIterator first,
+                                                InputIterator last) {
+  auto p = partial_bits();
+  if (p == 0) {
+    blocks_.insert(blocks_.end(), first, last);
+    size_ = blocks_.size() * word::width;
+  } else {
+    while (first != last) {
+      auto x = *first;
+      auto& last = blocks_.back();
+      last = (last & ~(word::all << p)) | (x << p);
+      blocks_.push_back(x >> (word::width - p));
+      size_ += word::width;
+      ++first;
+    }
+  }
+}
+
+template <class Block, class Allocator>
+void bitvector<Block, Allocator>::append_bits(size_type n, value_type x) {
+  resize(size_ + n, x);
+}
 
 } // namespace vast
 
