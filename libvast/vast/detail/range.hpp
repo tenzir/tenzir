@@ -9,14 +9,6 @@ namespace detail {
 
 template <typename Derived>
 class range {
-  Derived& derived() {
-    return static_cast<Derived&>(*this);
-  }
-
-  Derived const& derived() const {
-    return static_cast<Derived const&>(*this);
-  }
-
 public:
   explicit operator bool() const {
     return !empty();
@@ -27,7 +19,8 @@ public:
   }
 
   bool empty() const {
-    return derived().begin() == derived().end();
+    auto d = static_cast<Derived const*>(this);
+    return d->begin() == d->end();
   }
 };
 
@@ -58,7 +51,7 @@ private:
       rng_ = nullptr;
   }
 
-  auto dereference() const -> decltype(std::declval<Range>().dereference()) {
+  decltype(auto) dereference() const {
     return rng_->dereference();
   }
 
@@ -86,19 +79,7 @@ private:
     return static_cast<Derived*>(this)->next();
   }
 
-#ifdef VAST_GCC
-// FIXME: The range_iterator uses the range (composition), but in the
-// definition of range_iterator, the call to
-// decltype(std::declval<Range>().dereference()) fails because the range has
-// not yet been befriended.
-//
-// As a workaround, we just make this method public. Clang doesn't complain.
-public:
-#endif
-  template <typename Hack = Derived>
-  auto dereference() const
-    -> decltype(std::declval<Hack>().state()) {
-    static_assert(std::is_same<Hack, Derived>::value, ":-P");
+  decltype(auto) dereference() const {
     return static_cast<Derived const*>(this)->state();
   }
 };
