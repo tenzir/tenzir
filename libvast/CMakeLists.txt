@@ -9,8 +9,7 @@ set(libvast_sources
   src/address.cpp
   src/attribute.cpp
   src/banner.cpp
-  #src/bitstream.cpp
-  #src/bitstream_polymorphic.cpp
+  #src/bitmap.cpp
   #src/chunk.cpp
   src/cleanup.cpp
   src/compression.cpp
@@ -180,11 +179,8 @@ set(tests
   #test/actor/task.cpp
 
   test/address.cpp
-  test/bits.cpp
   #test/binner.cpp
   #test/bitmap.cpp
-  #test/bitmap_index.cpp
-  #test/bitstream.cpp
   test/bitvector.cpp
   test/cache.cpp
   test/compressedbuf.cpp
@@ -222,7 +218,9 @@ set(tests
   test/type.cpp
   test/uuid.cpp
   test/value.cpp
+  #test/value_index.cpp
   test/variant.cpp
+  test/word.cpp
 )
 
 # FIXME: Bring back after having repaired CAF code.

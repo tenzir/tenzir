@@ -105,6 +105,11 @@ private:
   ForwardIterator end_;
 };
 
+template <class Iterator>
+auto make_iterator_range(Iterator begin, Iterator end) {
+  return iterator_range<Iterator>(begin, end);
+}
+
 } // namespace detail
 } // namespace vast
 

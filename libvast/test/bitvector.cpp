@@ -201,13 +201,55 @@ TEST(append_blocks) {
   CHECK_EQUAL(to_string(y), "100100000000100000000100000");
 }
 
-TEST(append bits) {
+TEST(append_bits) {
   // Effectively tests resize().
   bitvector<uint8_t> x;
   x.append_bits(10, true);
   x.append_bits(5, false);
   x.append_bits(5, true);
   CHECK_EQUAL(to_string(x), "11111111110000011111");
+}
+
+TEST(bits iteration) {
+  // To keep the implementation simple at this point, our algorithm does not
+  // operate in a greedy fashion: it will always treat the last word
+  // separately, even if it would fit in a previous homogeneous bit sequence.
+  // For example, with 8-bit words and 100 0-bits, we will always have two
+  // iterations: a 96-bit 0-run, and a 4-bit 0-run.
+  bitvector<uint8_t> x(100, true);
+  auto r = bit_range(x);
+  auto f = r.begin();
+  auto l = r.end();
+  REQUIRE(f != l);
+  auto b = *f;
+  CHECK_EQUAL(b.value, word<uint8_t>::all);
+  CHECK_EQUAL(b.size, 96u);
+  REQUIRE(f != l);
+  b = *++f;
+  CHECK_EQUAL(b.size, 4u);
+  CHECK_EQUAL(b.value & (word<uint8_t>::all >> 4), 0b00001111);
+  CHECK(f == l);
+  // Add more bits.
+  x.append_bits(3, false);
+  r = bit_range(x);
+  f = r.begin();
+  l = r.end();
+  b = *f;
+  CHECK_EQUAL(b.value, word<uint8_t>::all);
+  CHECK_EQUAL(b.size, 96u);
+  b = *++f;
+  CHECK_EQUAL(b.size, 4u + 3);
+  CHECK_EQUAL(b.value & word<uint8_t>::msb0, 0b00001111);
+  CHECK(f == l);
+  // One more.
+  x.push_back(true);
+  r = bit_range(x);
+  f = r.begin();
+  l = r.end();
+  b = *++f;
+  CHECK_EQUAL(b.size, word<uint8_t>::width);
+  CHECK_EQUAL(b.value, 0b10001111);
+  CHECK(f == l);
 }
 
 TEST(serializable) {

@@ -11,12 +11,17 @@
 #include "vast/detail/assert.hpp"
 #include "vast/detail/operators.hpp"
 #include "vast/detail/iterator.hpp"
+#include "vast/detail/range.hpp"
+#include "vast/word.hpp"
 
 namespace vast {
 namespace detail {
 
 template <typename Bitvector>
 class bitvector_iterator;
+
+template <class Block>
+class bitvector_range_iterator;
 
 } // namespace detail
 
@@ -150,11 +155,16 @@ public:
   // -- non-standard extensions ----------------------------------------------
   // -------------------------------------------------------------------------
 
+  template <class>
+  friend class detail::bitvector_range_iterator; // bit_range(..)
+
   // The functionality below enhances the stock version of std::vector<bool>.
 
   using block = Block;
-  using word = bits<Block>;
+  using word = word<Block>;
   static constexpr auto npos = word::npos;
+
+  class bits_iterator;
 
   /// Counts the number of 1-bits in the bit vector.
   /// Also known as *population count* or *Hamming weight*.
@@ -694,6 +704,88 @@ void bitvector<Block, Allocator>::append_blocks(InputIterator first,
 template <class Block, class Allocator>
 void bitvector<Block, Allocator>::append_bits(size_type n, value_type x) {
   resize(size_ + n, x);
+}
+
+namespace detail {
+
+template <class Block>
+class bitvector_range_iterator
+  : public iterator_facade<
+      bitvector_range_iterator<Block>,
+      bits<Block>,
+      std::forward_iterator_tag,
+      bits<Block> const&
+    > {
+public:
+  static bitvector_range_iterator begin(bitvector<Block> const& v) {
+    auto i = bitvector_range_iterator{v, begin_tag{}};
+    if (!v.empty())
+      i.scan();
+    return i;
+  }
+
+  static bitvector_range_iterator end(bitvector<Block> const& v) {
+    return {v, end_tag{}};
+  }
+
+private:
+  struct begin_tag {};
+  struct end_tag {};
+
+  bitvector_range_iterator(bitvector<Block> const& v, begin_tag)
+    : bitvector_{&v},
+      block_{v.blocks_.begin()} {
+  }
+
+  bitvector_range_iterator(bitvector<Block> const& v, end_tag)
+    : bitvector_{&v},
+      block_{v.blocks_.end()} {
+  }
+
+  friend iterator_access;
+
+  void scan() {
+    VAST_ASSERT(block_ != bitvector_->blocks_.end());
+    bits_.value = *block_;
+    auto last = bitvector_->blocks_.end() - 1;
+    // Do we start at the last block?
+    if (block_ == last) {
+      auto p = bitvector_->partial_bits();
+      bits_.size = p == 0 ? word<Block>::width : p;
+    } else {
+      // Scan for consecutive runs of 0s or 1s.
+      bits_.size = word<Block>::width;
+      if (bits_.value == word<Block>::all || bits_.value == word<Block>::none)
+        for (++block_; *block_ == bits_.value && block_ != last; ++block_)
+          bits_.size += word<Block>::width;
+    }
+  }
+
+  bool equals(bitvector_range_iterator const& other) const {
+    return block_ == other.block_;
+  }
+
+  void increment() {
+    scan();
+    ++block_;
+  }
+
+  bits<Block> const& dereference() const {
+    return bits_;
+  }
+
+  bitvector<Block> const* bitvector_;
+  typename std::vector<Block>::const_iterator block_;
+  bits<Block> bits_;
+};
+
+} // namespace detail
+
+template <class Block, class Allocator>
+auto bit_range(bitvector<Block, Allocator> const& v) {
+  return detail::make_iterator_range(
+    detail::bitvector_range_iterator<Block>::begin(v),
+    detail::bitvector_range_iterator<Block>::end(v));
 }
 
 } // namespace vast
