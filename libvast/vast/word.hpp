@@ -75,6 +75,24 @@ struct word {
     return ~(all >> i);
   }
 
+  // -- tests -----------------------------------------------------------------
+
+  /// Tests whether a block is either all 0 or all 1.
+  /// @param x The block to test
+  /// @returns `x == all || x == none`
+  static constexpr bool all_or_none(value_type x) {
+    return ((x + 1) & lsb0) <= 1;
+  }
+
+  /// Tests whether the *k* least signficant bits block are all 0 or all 1.
+  /// @param x The block to test
+  /// @param k The number of least significant bits to consider.
+  /// @returns `x & lsb_mask(k) == all || x & lsb_mask(k) == none`
+  /// @pre `k < width`
+  static constexpr bool all_or_none(value_type x, size_type k) {
+    return ((x + 1) & lsb_mask(k)) <= 1;
+  }
+
   // -- manipulation ----------------------------------------------------------
 
   /// Flips a bit in a block at a given position.

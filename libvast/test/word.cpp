@@ -33,6 +33,27 @@ TEST(masks) {
   CHECK_EQUAL(w8::msb_mask(0), w8::none);
 }
 
+TEST(tests) {
+  CHECK(w8::all_or_none(w8::all));
+  CHECK(w8::all_or_none(w8::none));
+  CHECK(!w8::all_or_none(w8::msb0));
+  CHECK(!w8::all_or_none(w8::msb1));
+  CHECK(!w8::all_or_none(w8::lsb0));
+  CHECK(!w8::all_or_none(w8::lsb1));
+  for (auto i = 0u; i < w8::width; ++i) {
+    CHECK(w8::all_or_none(w8::all, i));
+    CHECK(w8::all_or_none(w8::none, i));
+  }
+  for (auto i = 0u; i < w8::width / 2; ++i) {
+    CHECK(w8::all_or_none(0b11111000, i));
+    CHECK(w8::all_or_none(0b00000111, i));
+  }
+  for (auto i = w8::width / 2; i < w8::width; ++i) {
+    CHECK(!w8::all_or_none(0b11111000, i));
+    CHECK(!w8::all_or_none(0b00000111, i));
+  }
+}
+
 TEST(manipulation) {
   CHECK_EQUAL(w8::flip(w8::msb0, 7), w8::all);
   CHECK_EQUAL(w8::flip(w8::msb1, 7), w8::none);
