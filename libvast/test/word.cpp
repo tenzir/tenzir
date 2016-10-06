@@ -19,10 +19,21 @@ TEST(constants) {
   CHECK_EQUAL(w8::lsb1, 0b00000001);
 }
 
-TEST(manipulation) {
+TEST(masks) {
   CHECK_EQUAL(w8::mask(0), w8::lsb1);
   CHECK_EQUAL(w8::mask(1), 0b00000010);
   CHECK_EQUAL(w8::mask(7), w8::msb1);
+  CHECK_EQUAL(w8::lsb_mask(7), w8::msb0);
+  CHECK_EQUAL(w8::lsb_mask(3), 0b00000111);
+  CHECK_EQUAL(w8::lsb_mask(5), 0b00011111);
+  CHECK_EQUAL(w8::lsb_mask(0), w8::none);
+  CHECK_EQUAL(w8::msb_mask(7), w8::lsb0);
+  CHECK_EQUAL(w8::msb_mask(3), 0b11100000);
+  CHECK_EQUAL(w8::msb_mask(5), 0b11111000);
+  CHECK_EQUAL(w8::msb_mask(0), w8::none);
+}
+
+TEST(manipulation) {
   CHECK_EQUAL(w8::flip(w8::msb0, 7), w8::all);
   CHECK_EQUAL(w8::flip(w8::msb1, 7), w8::none);
   CHECK_EQUAL(w8::flip(w8::lsb0, 0), w8::all);

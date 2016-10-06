@@ -49,7 +49,7 @@ struct word {
   /// A block with only an LSB of 0.
   static constexpr value_type lsb0 = ~lsb1;
 
-  // -- manipulation ----------------------------------------------------------
+  // -- masks -----------------------------------------------------------------
 
   /// Computes a bitmask for a given position.
   /// @param i The position where the 1-bit should be.
@@ -58,6 +58,24 @@ struct word {
   static constexpr value_type mask(size_type i) {
     return lsb1 << i;
   }
+
+  /// Computes a bitmask with only the *i* least significant bits set to 1.
+  /// @param i The number least significant bits to set to 1.
+  /// @returns `~(all << i)`
+  /// @pre `i < width`
+  static constexpr value_type lsb_mask(size_type i) {
+    return ~(all << i);
+  }
+
+  /// Computes a bitmask with only the *i* most significant bits set to 1.
+  /// @param i The number most significant bits to set to 1.
+  /// @returns `~(all << i)`
+  /// @pre `i < width`
+  static constexpr value_type msb_mask(size_type i) {
+    return ~(all >> i);
+  }
+
+  // -- manipulation ----------------------------------------------------------
 
   /// Flips a bit in a block at a given position.
   /// @param x The block to flip a bit in.

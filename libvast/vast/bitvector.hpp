@@ -646,8 +646,8 @@ bool operator==(bitvector<Block, Allocator> const& x,
     return false;
   // Compare last block.
   using word = typename bitvector<Block, Allocator>::word;
-  auto xlast = *xend & ~(word::all << x.partial_bits());
-  auto ylast = *yend & ~(word::all << y.partial_bits());
+  auto xlast = *xend & word::lsb_mask(x.partial_bits());
+  auto ylast = *yend & word::lsb_mask(y.partial_bits());
   return xlast == ylast;
 }
 
@@ -660,7 +660,7 @@ bitvector<Block, Allocator>::count() const noexcept {
   for (; n >= word::width; ++p, n -= word::width)
     cnt += word::popcount(*p);
   if (n > 0)
-    cnt += word::popcount(*p & ~(word::all << n));
+    cnt += word::popcount(*p & word::lsb_mask(n));
   return cnt;
 }
 
@@ -673,7 +673,7 @@ void bitvector<Block, Allocator>::append_block(block x, size_type bits) {
     blocks_.push_back(x);
   } else {
     auto& last = blocks_.back();
-    last = (last & ~(word::all << p)) | (x << p);
+    last = (last & word::lsb_mask(p)) | (x << p);
     auto available = word::width - p;
     if (bits > available)
       blocks_.push_back(x >> available);
@@ -693,7 +693,7 @@ void bitvector<Block, Allocator>::append_blocks(InputIterator first,
     while (first != last) {
       auto x = *first;
       auto& last = blocks_.back();
-      last = (last & ~(word::all << p)) | (x << p);
+      last = (last & word::lsb_mask(p)) | (x << p);
       blocks_.push_back(x >> (word::width - p));
       size_ += word::width;
       ++first;
