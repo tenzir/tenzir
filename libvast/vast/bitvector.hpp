@@ -712,7 +712,7 @@ template <class Block>
 class bitvector_range_iterator
   : public iterator_facade<
       bitvector_range_iterator<Block>,
-      bits<Block>,
+      bits<Block> const,
       std::forward_iterator_tag,
       bits<Block> const&
     > {
@@ -746,7 +746,7 @@ private:
 
   void scan() {
     VAST_ASSERT(block_ != bitvector_->blocks_.end());
-    bits_.value = *block_;
+    bits_.data = *block_;
     auto last = bitvector_->blocks_.end() - 1;
     // Do we start at the last block?
     if (block_ == last) {
@@ -755,8 +755,8 @@ private:
     } else {
       // Scan for consecutive runs of 0s or 1s.
       bits_.size = word<Block>::width;
-      if (bits_.value == word<Block>::all || bits_.value == word<Block>::none)
-        for (++block_; *block_ == bits_.value && block_ != last; ++block_)
+      if (bits_.data == word<Block>::all || bits_.data == word<Block>::none)
+        for (++block_; *block_ == bits_.data && block_ != last; ++block_)
           bits_.size += word<Block>::width;
     }
   }

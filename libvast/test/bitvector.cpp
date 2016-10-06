@@ -222,12 +222,12 @@ TEST(bits iteration) {
   auto l = r.end();
   REQUIRE(f != l);
   auto b = *f;
-  CHECK_EQUAL(b.value, word<uint8_t>::all);
+  CHECK_EQUAL(b.data, word<uint8_t>::all);
   CHECK_EQUAL(b.size, 96u);
   REQUIRE(f != l);
   b = *++f;
   CHECK_EQUAL(b.size, 4u);
-  CHECK_EQUAL(b.value & (word<uint8_t>::all >> 4), 0b00001111);
+  CHECK_EQUAL(b.data & (word<uint8_t>::all >> 4), 0b00001111);
   CHECK(f == l);
   // Add more bits.
   x.append_bits(3, false);
@@ -235,11 +235,11 @@ TEST(bits iteration) {
   f = r.begin();
   l = r.end();
   b = *f;
-  CHECK_EQUAL(b.value, word<uint8_t>::all);
+  CHECK_EQUAL(b.data, word<uint8_t>::all);
   CHECK_EQUAL(b.size, 96u);
   b = *++f;
   CHECK_EQUAL(b.size, 4u + 3);
-  CHECK_EQUAL(b.value & word<uint8_t>::msb0, 0b00001111);
+  CHECK_EQUAL(b.data & word<uint8_t>::msb0, 0b00001111);
   CHECK(f == l);
   // One more.
   x.push_back(true);
@@ -248,7 +248,7 @@ TEST(bits iteration) {
   l = r.end();
   b = *++f;
   CHECK_EQUAL(b.size, word<uint8_t>::width);
-  CHECK_EQUAL(b.value, 0b10001111);
+  CHECK_EQUAL(b.data, 0b10001111);
   CHECK(f == l);
 }
 
