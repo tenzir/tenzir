@@ -183,11 +183,6 @@ public:
   template <class InputIterator>
   void append_blocks(InputIterator first, InputIterator last);
 
-  /// Appends a given number of bits having a fixed value.
-  /// @param n The number of bits to append.
-  /// @param x The bit value.
-  void append_bits(size_type n, value_type x);
-
   // -- concepts --------------------------------------------------------------
 
   template <class Inspector>
@@ -701,11 +696,6 @@ void bitvector<Block, Allocator>::append_blocks(InputIterator first,
   }
 }
 
-template <class Block, class Allocator>
-void bitvector<Block, Allocator>::append_bits(size_type n, value_type x) {
-  resize(size_ + n, x);
-}
-
 namespace detail {
 
 template <class Block>
@@ -744,20 +734,27 @@ private:
 
   friend iterator_access;
 
+  // Finds the next 1-bit.
   void scan() {
     VAST_ASSERT(block_ != bitvector_->blocks_.end());
-    bits_.data = *block_;
     auto last = bitvector_->blocks_.end() - 1;
-    // Do we start at the last block?
     if (block_ == last) {
+      // Process the last block.
       auto p = bitvector_->partial_bits();
-      bits_.size = p == 0 ? word<Block>::width : p;
+      bits_ = {*block_, p == 0 ? word<Block>::width : p};
+    } else if (!word<Block>::all_or_none(*block_)) {
+      // Process an inhomogeneous block.
+      bits_ = {*block_, word<Block>::width};
     } else {
-      // Scan for consecutive runs of 0s or 1s.
-      bits_.size = word<Block>::width;
-      if (bits_.data == word<Block>::all || bits_.data == word<Block>::none)
-        for (++block_; *block_ == bits_.data && block_ != last; ++block_)
-          bits_.size += word<Block>::width;
+      // Scan for consecutive runs of all-0 or all-1 blocks.
+      auto n = word<Block>::width;
+      auto data = *block_;
+      ++block_;
+      while (block_ != last && *block_ == data) {
+        n += word<Block>::width;
+        ++block_;
+      }
+      bits_ = {data, n};
     }
   }
 

@@ -201,15 +201,6 @@ TEST(append_blocks) {
   CHECK_EQUAL(to_string(y), "100100000000100000000100000");
 }
 
-TEST(append_bits) {
-  // Effectively tests resize().
-  bitvector<uint8_t> x;
-  x.append_bits(10, true);
-  x.append_bits(5, false);
-  x.append_bits(5, true);
-  CHECK_EQUAL(to_string(x), "11111111110000011111");
-}
-
 TEST(bits iteration) {
   // To keep the implementation simple at this point, our algorithm does not
   // operate in a greedy fashion: it will always treat the last word
@@ -222,24 +213,24 @@ TEST(bits iteration) {
   auto l = r.end();
   REQUIRE(f != l);
   auto b = *f;
-  CHECK_EQUAL(b.data, word<uint8_t>::all);
-  CHECK_EQUAL(b.size, 96u);
+  CHECK_EQUAL(b.data(), word<uint8_t>::all);
+  CHECK_EQUAL(b.size(), 96u);
   REQUIRE(f != l);
   b = *++f;
-  CHECK_EQUAL(b.size, 4u);
-  CHECK_EQUAL(b.data & (word<uint8_t>::all >> 4), 0b00001111);
+  CHECK_EQUAL(b.size(), 4u);
+  CHECK_EQUAL(b.data() & (word<uint8_t>::all >> 4), 0b00001111);
   CHECK(f == l);
   // Add more bits.
-  x.append_bits(3, false);
+  x.resize(x.size() + 3, false);
   r = bit_range(x);
   f = r.begin();
   l = r.end();
   b = *f;
-  CHECK_EQUAL(b.data, word<uint8_t>::all);
-  CHECK_EQUAL(b.size, 96u);
+  CHECK_EQUAL(b.data(), word<uint8_t>::all);
+  CHECK_EQUAL(b.size(), 96u);
   b = *++f;
-  CHECK_EQUAL(b.size, 4u + 3);
-  CHECK_EQUAL(b.data & word<uint8_t>::msb0, 0b00001111);
+  CHECK_EQUAL(b.size(), 4u + 3);
+  CHECK_EQUAL(b.data() & word<uint8_t>::msb0, 0b00001111);
   CHECK(f == l);
   // One more.
   x.push_back(true);
@@ -247,8 +238,8 @@ TEST(bits iteration) {
   f = r.begin();
   l = r.end();
   b = *++f;
-  CHECK_EQUAL(b.size, word<uint8_t>::width);
-  CHECK_EQUAL(b.data, 0b10001111);
+  CHECK_EQUAL(b.size(), word<uint8_t>::width);
+  CHECK_EQUAL(b.data(), 0b10001111);
   CHECK(f == l);
 }
 
