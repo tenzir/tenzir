@@ -31,6 +31,12 @@ TEST(masks) {
   CHECK_EQUAL(w8::msb_mask(3), 0b11100000);
   CHECK_EQUAL(w8::msb_mask(5), 0b11111000);
   CHECK_EQUAL(w8::msb_mask(0), w8::none);
+  CHECK_EQUAL(w8::lsb_fill(w8::width), w8::all);
+  CHECK_EQUAL(w8::lsb_fill(1), w8::lsb1);
+  CHECK_EQUAL(w8::lsb_fill(3), 0b00000111);
+  CHECK_EQUAL(w8::msb_fill(w8::width), w8::all);
+  CHECK_EQUAL(w8::msb_fill(1), w8::msb1);
+  CHECK_EQUAL(w8::msb_fill(3), 0b11100000);
 }
 
 TEST(tests) {

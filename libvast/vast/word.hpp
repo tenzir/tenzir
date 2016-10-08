@@ -67,12 +67,28 @@ struct word {
     return ~(all << i);
   }
 
+  /// Computes a bitmask with only the *i* least significant bits set to 1.
+  /// @param i The number least significant bits to set to 1.
+  /// @returns `all >> (width - i)`
+  /// @pre `i > 0 && i <= width`
+  static constexpr value_type lsb_fill(size_type i) {
+    return all >> (width - i);
+  }
+
   /// Computes a bitmask with only the *i* most significant bits set to 1.
   /// @param i The number most significant bits to set to 1.
   /// @returns `~(all << i)`
   /// @pre `i < width`
   static constexpr value_type msb_mask(size_type i) {
     return ~(all >> i);
+  }
+
+  /// Computes a bitmask with only the *i* most significant bits set to 1.
+  /// @param i The number most significant bits to set to 1.
+  /// @returns `all << (width - i)`
+  /// @pre `i > 0 && i <= width`
+  static constexpr value_type msb_fill(size_type i) {
+    return all << (width - i);
   }
 
   // -- tests -----------------------------------------------------------------
