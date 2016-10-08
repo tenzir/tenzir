@@ -52,6 +52,13 @@ TEST(tests) {
     CHECK(!w8::all_or_none(0b11111000, i));
     CHECK(!w8::all_or_none(0b00000111, i));
   }
+  CHECK(w8::test(w8::all, 0));
+  CHECK(w8::test(w8::all, 7));
+  CHECK(!w8::test(w8::none, 0));
+  CHECK(!w8::test(w8::none, 7));
+  CHECK(!w8::test(0b00100000, 4));
+  CHECK(w8::test(0b00100000, 5));
+  CHECK(!w8::test(0b00100000, 6));
 }
 
 TEST(manipulation) {
