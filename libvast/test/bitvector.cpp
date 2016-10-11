@@ -1,5 +1,6 @@
 #include "vast/bitvector.hpp"
 #include "vast/concept/printable/to_string.hpp"
+#include "vast/concept/printable/vast/bits.hpp"
 #include "vast/concept/printable/vast/bitvector.hpp"
 #include "vast/load.hpp"
 #include "vast/save.hpp"
@@ -214,12 +215,8 @@ TEST(bits iteration) {
   REQUIRE(f != l);
   auto b = *f;
   CHECK_EQUAL(b.data(), word<uint8_t>::all);
-  CHECK_EQUAL(b.size(), 96u);
-  REQUIRE(f != l);
-  b = *++f;
-  CHECK_EQUAL(b.size(), 4u);
-  CHECK_EQUAL(b.data() & (word<uint8_t>::all >> 4), 0b00001111);
-  CHECK(f == l);
+  CHECK_EQUAL(b.size(), 100u);
+  CHECK(++f == l);
   // Add more bits.
   x.resize(x.size() + 3, false);
   r = bit_range(x);
@@ -231,7 +228,7 @@ TEST(bits iteration) {
   b = *++f;
   CHECK_EQUAL(b.size(), 4u + 3);
   CHECK_EQUAL(b.data() & word<uint8_t>::msb0, 0b00001111);
-  CHECK(f == l);
+  CHECK(++f == l);
   // One more.
   x.push_back(true);
   r = bit_range(x);
@@ -240,7 +237,7 @@ TEST(bits iteration) {
   b = *++f;
   CHECK_EQUAL(b.size(), word<uint8_t>::width);
   CHECK_EQUAL(b.data(), 0b10001111);
-  CHECK(f == l);
+  CHECK(++f == l);
 }
 
 TEST(serializable) {
@@ -267,4 +264,14 @@ TEST(printable) {
   std::string str;
   CHECK(p(str, b));
   CHECK_EQUAL(str, "0000000100");
+  bitvector<uint64_t> d;
+  d.push_back(false);
+  d.push_back(true);
+  d.resize(d.size() + 421, false);
+  d.push_back(true);
+  d.push_back(true);
+  str.clear();
+  for (auto& bits : bit_range(d)) // an alternate form of printing
+    str += to_string(bits);
+  CHECK_EQUAL(to_string(d), str);
 }

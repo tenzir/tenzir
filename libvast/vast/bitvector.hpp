@@ -708,10 +708,7 @@ class bitvector_range_iterator
     > {
 public:
   static bitvector_range_iterator begin(bitvector<Block> const& v) {
-    auto i = bitvector_range_iterator{v, begin_tag{}};
-    if (!v.empty())
-      i.scan();
-    return i;
+    return {v, begin_tag{}};
   }
 
   static bitvector_range_iterator end(bitvector<Block> const& v) {
@@ -723,48 +720,65 @@ private:
   struct end_tag {};
 
   bitvector_range_iterator(bitvector<Block> const& v, begin_tag)
-    : bitvector_{&v},
+    : bitvector_{v.empty() ? nullptr : &v},
       block_{v.blocks_.begin()} {
+    if (bitvector_)
+      scan();
   }
 
   bitvector_range_iterator(bitvector<Block> const& v, end_tag)
-    : bitvector_{&v},
+    : bitvector_{nullptr},
       block_{v.blocks_.end()} {
   }
 
   friend iterator_access;
 
-  // Finds the next 1-bit.
   void scan() {
+    VAST_ASSERT(bitvector_ != nullptr);
     VAST_ASSERT(block_ != bitvector_->blocks_.end());
-    auto last = bitvector_->blocks_.end() - 1;
+    auto end = bitvector_->blocks_.end();
+    auto last = end - 1;
     if (block_ == last) {
       // Process the last block.
       auto p = bitvector_->partial_bits();
       bits_ = {*block_, p == 0 ? word<Block>::width : p};
+      ++block_;
     } else if (!word<Block>::all_or_none(*block_)) {
-      // Process an inhomogeneous block.
+      // Process an intermediate inhomogeneous block.
       bits_ = {*block_, word<Block>::width};
+      ++block_;
     } else {
       // Scan for consecutive runs of all-0 or all-1 blocks.
       auto n = word<Block>::width;
       auto data = *block_;
-      ++block_;
-      while (block_ != last && *block_ == data) {
+      while (++block_ != last && *block_ == data)
         n += word<Block>::width;
-        ++block_;
+      if (block_ == last) {
+        auto p = bitvector_->partial_bits();
+        if (p > 0) {
+          auto mask = word<Block>::mask(p);
+          if ((*block_ & mask) == (data & mask)) {
+            n += p;
+            ++block_;
+          }
+        } else if (*block_ == data) {
+          n += word<Block>::width;
+          ++block_;
+        }
       }
       bits_ = {data, n};
     }
   }
 
   bool equals(bitvector_range_iterator const& other) const {
-    return block_ == other.block_;
+    return bitvector_ == other.bitvector_;
   }
 
   void increment() {
-    scan();
-    ++block_;
+    if (block_ == bitvector_->blocks_.end())
+      bitvector_ = nullptr;
+    else
+      scan();
   }
 
   bits<Block> const& dereference() const {
