@@ -308,11 +308,9 @@ struct record_type : recursive_type<record_type> {
   private:
     friend detail::range_facade<each>;
 
-    range_state const& state() const {
-      return state_;
-    }
-
-    bool next();
+    void next();
+    bool done() const;
+    range_state const& get() const;
 
     range_state state_;
     detail::stack_vector<record_type const*, 64> records_;

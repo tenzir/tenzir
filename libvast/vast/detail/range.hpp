@@ -35,27 +35,29 @@ class range_iterator
   friend iterator_access;
 
 public:
-  range_iterator() = default;
+  range_iterator() : rng_{nullptr} {
+  }
 
 private:
   explicit range_iterator(Range& rng) : rng_{&rng} {
   }
 
-  bool equals(range_iterator const& other) const {
-    return rng_ == other.rng_;
+  bool equals(range_iterator const&) const {
+    return rng_->complete();
   }
 
   void increment() {
     VAST_ASSERT(rng_);
-    if (!rng_->increment())
-      rng_ = nullptr;
+    VAST_ASSERT(!rng_->complete());
+    rng_->increment();
   }
 
   decltype(auto) dereference() const {
+    VAST_ASSERT(rng_);
     return rng_->dereference();
   }
 
-  Range* rng_ = nullptr;
+  Range* rng_;
 };
 
 template <typename Derived>
@@ -75,12 +77,16 @@ public:
 private:
   friend iterator;
 
-  bool increment() {
-    return static_cast<Derived*>(this)->next();
+  bool complete() const {
+    return static_cast<Derived const*>(this)->done();
+  }
+
+  void increment() {
+    static_cast<Derived*>(this)->next();
   }
 
   decltype(auto) dereference() const {
-    return static_cast<Derived const*>(this)->state();
+    return static_cast<Derived const*>(this)->get();
   }
 };
 

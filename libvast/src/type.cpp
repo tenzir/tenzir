@@ -172,15 +172,13 @@ record_type::each::each(record_type const& r) {
   } while ((rec = get_if<record_type>(state_.trace.back()->type)));
 }
 
-bool record_type::each::next() {
-  if (records_.empty())
-    return false;
+void record_type::each::next() {
   while (++state_.offset.back() == records_.back()->fields.size()) {
     records_.pop_back();
     state_.trace.pop_back();
     state_.offset.pop_back();
     if (records_.empty())
-      return false;
+      return;
   }
   auto f = &records_.back()->fields[state_.offset.back()];
   state_.trace.back() = f;
@@ -190,7 +188,14 @@ bool record_type::each::next() {
     state_.trace.push_back(f);
     state_.offset.push_back(0);
   }
-  return true;
+}
+
+bool record_type::each::done() const {
+  return records_.empty();
+}
+
+record_type::each::range_state const& record_type::each::get() const {
+  return state_;
 }
 
 maybe<offset> record_type::resolve(key const& k) const {
