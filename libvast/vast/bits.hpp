@@ -13,7 +13,7 @@ class bits {
   public:
   using word = word<T>;
   using value_type = typename word::value_type;
-  using size_type = typename word::size_type;
+  using size_type = uint64_t;
 
   bits(value_type x = 0, size_type n = word::width) : data_{x}, size_{n} {
     VAST_ASSERT(n > 0);
@@ -44,10 +44,17 @@ class bits {
     return full ? word::all_or_none(data_) : word::all_or_none(data_, size_);
   }
 
+  /// Computes the number 1-bits.
+  /// @returns The population count of this bit sequence.
+  size_type count() const {
+    if (size_ <= word::width)
+      return word::popcount(data_ & word::lsb_fill(size_));
+    return data_ == word::all ? size_ : 0;
+  }
+
 private:
   value_type data_;
   size_type size_;
-
 };
 
 } // namespace vast

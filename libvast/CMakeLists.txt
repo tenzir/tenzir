@@ -9,7 +9,7 @@ set(libvast_sources
   src/address.cpp
   src/attribute.cpp
   src/banner.cpp
-  #src/bitmap.cpp
+  src/bitmap.cpp
   #src/chunk.cpp
   src/cleanup.cpp
   src/compression.cpp
@@ -20,10 +20,12 @@ set(libvast_sources
   src/expression_visitors.cpp
   src/error.cpp
   src/event.cpp
+  src/ewah_bitmap.cpp
   src/filesystem.cpp
   src/key.cpp
   src/http.cpp
   src/logger.cpp
+  src/null_bitmap.cpp
   src/operator.cpp
   src/pattern.cpp
   src/port.cpp
@@ -180,7 +182,7 @@ set(tests
 
   test/address.cpp
   #test/binner.cpp
-  #test/bitmap.cpp
+  test/bitmap.cpp
   test/bitvector.cpp
   test/cache.cpp
   test/compressedbuf.cpp

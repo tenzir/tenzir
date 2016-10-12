@@ -1,137 +1,93 @@
 #ifndef VAST_BITMAP_HPP
 #define VAST_BITMAP_HPP
 
-#include <type_traits>
-
-#include "vast/base.hpp"
-#include "vast/binner.hpp"
-#include "vast/coder.hpp"
-#include "vast/detail/order.hpp"
+#include "vast/bitmap_base.hpp"
+#include "vast/detail/type_traits.hpp"
+#include "vast/ewah_bitmap.hpp"
+#include "vast/null_bitmap.hpp"
+#include "vast/variant.hpp"
 
 namespace vast {
 
-struct access;
-class ewah_bitstream;
-
-/// An associative array which maps (arithmetic) values to [bitstreams](@ref
-/// bitstream).
-/// @tparam T The value type for append and lookup operation.
-/// @tparam Base The base determining the value decomposition
-/// @tparam Coder The encoding/decoding policy.
-/// @tparam Binner The pre-processing policy to perform on values.
-template <
-  typename T,
-  typename Coder =
-    multi_level_coder<
-      make_uniform_base<2, T>,
-      range_coder<ewah_bitstream>
-    >,
-  typename Binner = identity_binner
->
-class bitmap : util::equality_comparable<bitmap<T, Coder, Binner>> {
-  static_assert(! std::is_same<T, bool>{} || is_singleton_coder<Coder>{},
-                "boolean bitmap requires singleton coder");
-  friend access;
-
+/// A type-erased bitmap. This type wraps a concrete bitmap instance and models
+/// the Bitmap concept at the same time.
+class bitmap : public bitmap_base<bitmap>,
+               detail::equality_comparable<bitmap> {
 public:
-  using value_type = T;
-  using coder_type = Coder;
-  using binner_type = Binner;
-  using bitstream_type = typename coder_type::bitstream_type;
+  /// The concrete bitmap type to be used for default construction.
+  using default_bitmap = ewah_bitmap;
 
-  bitmap() = default;
+  /// Default-constructs a bitmap of type ::default_bitmap.
+  bitmap();
 
-  template <
-    typename... Ts,
-    typename = std::enable_if_t<std::is_constructible<coder_type, Ts...>{}>
-  >
-  explicit bitmap(Ts&&... xs)
-    : coder_(std::forward<Ts>(xs)...) {
-  }
+  /// Constructs a bitmap from a another bitmap.
+  /// @param bm The concrete bitmap instance.
+  template <class Bitmap, class>
+  bitmap(Bitmap&& bm);
 
-  friend bool operator==(bitmap const& x, bitmap const& y) {
-    return x.coder_ == y.coder_;
-  }
+  // -- inspectors -----------------------------------------------------------
 
-  /// Adds a value to the bitmap. For example, in the case of equality
-  /// coding, this means appending 1 to the single bitstream for the given
-  /// value and 0 to all other bitstreams.
-  /// @param x The value to append.
-  /// @param n The number of times to append *x*.
-  /// @returns `true` on success and `false` if the bitmap is full, i.e., has
-  ///          `std::numeric_limits<size_t>::max() - 1` elements.
-  bool push_back(value_type x, size_t n = 1) {
-    return coder_.encode(order(binner_type::bin(x)), n);
-  }
+  bool empty() const;
 
-  /// Aritifically increases the bitmap size, i.e., the number of rows.
-  /// @param n The number of rows to increase the bitmap by.
-  /// @returns `true` on success and `false` if there is not enough space.
-  bool stretch(size_t n) {
-    return coder_.stretch(n);
-  }
+  size_type size() const;
 
-  /// Appends the contents of another bitmap to this one.
-  /// @param other The other bitmap.
-  /// @returns `true` on success.
-  bool append(bitmap const& other) {
-    return coder_.append(other.coder_);
-  }
+  // -- modifiers ------------------------------------------------------------
 
-  /// Retrieves a bitstream of a given value with respect to a given operator.
-  /// @param op The relational operator to use for looking up *x*.
-  /// @param x The value to find the bitstream for.
-  /// @returns The bitstream for all values *v* where *op(v,x)* is `true`.
-  bitstream_type lookup(relational_operator op, value_type x) const {
-    return coder_.decode(op, order(binner_type::bin(x)));
-  }
+  bool append_bit(bool bit);
 
-  /// Retrieves the bitmap size.
-  /// @returns The number of elements/rows contained in the bitmap.
-  uint64_t size() const {
-    return coder_.rows();
-  }
+  bool append_bits(bool bit, size_type n);
 
-  /// Checks whether the bitmap is empty.
-  /// @returns `true` *iff* the bitmap has 0 entries.
-  bool empty() const {
-    return size() == 0;
-  }
+  bool append_block(block_type value, size_type n = word_type::width);
 
-  /// Accesses the underlying coder of the bitmap.
-  /// @returns The coder of this bitmap.
-  coder_type const& coder() const {
-    return coder_;
-  }
+  // -- concepts -------------------------------------------------------------
+
+  friend bool operator==(bitmap const& x, bitmap const& y);
 
   template <class Inspector>
-  friend auto inspect(Inspector& f, bitmap& bm) {
-    return f(bm.coder_);
+  friend auto inspect(Inspector&f, bitmap& bm) {
+    return f(bm.bitmap_);
+  }
+
+  friend auto& expose(bitmap& bm) {
+    return bm.bitmap_;
   }
 
 private:
-  template <typename U, typename B>
-  using is_shiftable =
-    std::integral_constant<
-      bool,
-      (detail::is_precision_binner<B>{} || detail::is_decimal_binner<B>{})
-        && std::is_floating_point<U>{}
-    >;
+  using bitmap_variant = variant<
+    ewah_bitmap,
+    null_bitmap
+  >;
 
-  template <typename U, typename B = binner_type>
-  static auto order(U x)
-    -> std::enable_if_t<is_shiftable<U, B>{}, detail::ordered_type<U>> {
-    return detail::order(x) >> (52 - B::digits2);
-  }
-
-  template <typename U, typename B = binner_type>
-  static auto order(U x)
-    -> std::enable_if_t<! is_shiftable<U, B>{}, detail::ordered_type<T>> {
-    return detail::order(x);
-  }
-
-  coder_type coder_;
+  bitmap_variant bitmap_;
 };
+
+template <
+  class Bitmap,
+  class = std::enable_if_t<
+    detail::contains<std::decay_t<Bitmap>, bitmap::bitmap_variant::types>{}
+  >
+>
+bitmap::bitmap(Bitmap&& bm) : bitmap_(std::forward<Bitmap>(bm)) {
+}
+
+class bitmap_bit_range
+  : public bit_range_base<bitmap_bit_range, bitmap::block_type> {
+public:
+  explicit bitmap_bit_range(bitmap const& bm);
+
+  void next();
+  bool done() const;
+
+private:
+  using range_variant = variant<
+    ewah_bitmap_range,
+    null_bitmap_range
+  >;
+
+  range_variant range_;
+};
+
+bitmap_bit_range bit_range(bitmap const& bm);
 
 } // namespace vast
 

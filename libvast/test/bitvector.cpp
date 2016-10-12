@@ -159,20 +159,6 @@ TEST(relational operators) {
   CHECK_EQUAL(x, y);
 }
 
-TEST(counting) {
-  bitvector<uint64_t> x(1024, true);
-  CHECK_EQUAL(x.count(), 1024u);
-  x.push_back(0);
-  x.push_back(0);
-  x.push_back(0);
-  x.push_back(0);
-  x.push_back(1);
-  CHECK_EQUAL(x.count(), 1025u);
-  x.resize(2048, false);
-  x.resize(4096, true);
-  CHECK_EQUAL(x.count(), 1025u + 2048);
-}
-
 TEST(append_block) {
   bitvector<uint8_t> x;
   x.append_block(0b01111011);
@@ -200,44 +186,6 @@ TEST(append_blocks) {
   y.push_back(false);
   y.append_blocks(blocks.begin(), blocks.end());
   CHECK_EQUAL(to_string(y), "100100000000100000000100000");
-}
-
-TEST(bits iteration) {
-  // To keep the implementation simple at this point, our algorithm does not
-  // operate in a greedy fashion: it will always treat the last word
-  // separately, even if it would fit in a previous homogeneous bit sequence.
-  // For example, with 8-bit words and 100 0-bits, we will always have two
-  // iterations: a 96-bit 0-run, and a 4-bit 0-run.
-  bitvector<uint8_t> x(100, true);
-  auto r = bit_range(x);
-  auto f = r.begin();
-  auto l = r.end();
-  REQUIRE(f != l);
-  auto b = *f;
-  CHECK_EQUAL(b.data(), word<uint8_t>::all);
-  CHECK_EQUAL(b.size(), 100u);
-  CHECK(++f == l);
-  // Add more bits.
-  x.resize(x.size() + 3, false);
-  r = bit_range(x);
-  f = r.begin();
-  l = r.end();
-  b = *f;
-  CHECK_EQUAL(b.data(), word<uint8_t>::all);
-  CHECK_EQUAL(b.size(), 96u);
-  b = *++f;
-  CHECK_EQUAL(b.size(), 4u + 3);
-  CHECK_EQUAL(b.data() & word<uint8_t>::msb0, 0b00001111);
-  CHECK(++f == l);
-  // One more.
-  x.push_back(true);
-  r = bit_range(x);
-  f = r.begin();
-  l = r.end();
-  b = *++f;
-  CHECK_EQUAL(b.size(), word<uint8_t>::width);
-  CHECK_EQUAL(b.data(), 0b10001111);
-  CHECK(++f == l);
 }
 
 TEST(serializable) {
@@ -271,7 +219,23 @@ TEST(printable) {
   d.push_back(true);
   d.push_back(true);
   str.clear();
-  for (auto& bits : bit_range(d)) // an alternate form of printing
-    str += to_string(bits);
-  CHECK_EQUAL(to_string(d), str);
+}
+
+TEST(rank) {
+  bitvector<uint64_t> x(1024, true);
+  CHECK_EQUAL(rank<0>(x), 0u);
+  CHECK_EQUAL(rank<1>(x), 1024u);
+  x.push_back(0);
+  x.push_back(0);
+  x.push_back(0);
+  x.push_back(0);
+  x.push_back(1);
+  CHECK_EQUAL(rank<0>(x), 4u);
+  CHECK_EQUAL(rank<1>(x), 1025u);
+  x.resize(2048, false);
+  CHECK_EQUAL(rank<0>(x), 1023u);
+  CHECK_EQUAL(rank<1>(x), 1025u);
+  x.resize(4096, true);
+  CHECK_EQUAL(rank<0>(x), 1023u);
+  CHECK_EQUAL(rank<1>(x), 1025u + 2048);
 }
