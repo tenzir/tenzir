@@ -24,8 +24,8 @@ public:
     using std::end;
     auto f = begin(a);
     auto l = end(a);
-    while (f != l)
-      if (!printer_.print(out, *f++))
+    for (; f != l; ++f)
+      if (!printer_.print(out, *f))
         return false;
     return true;
   }

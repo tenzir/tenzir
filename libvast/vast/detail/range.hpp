@@ -28,7 +28,7 @@ template <typename Range>
 class range_iterator
   : public iterator_facade<
       range_iterator<Range>,
-      decltype(std::declval<Range>().dereference()),
+      std::remove_reference_t<decltype(std::declval<Range>().dereference())>,
       std::forward_iterator_tag
     > {
   friend Range;

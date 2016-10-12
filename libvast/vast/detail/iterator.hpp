@@ -120,6 +120,27 @@ public:
       >
     >;
 
+  struct postfix_increment_proxy {
+    explicit postfix_increment_proxy(Derived const& x) : value(*x) {
+    }
+
+    value_type& operator*() const {
+      return value;
+    }
+
+    mutable value_type value;
+  };
+
+  using postfix_increment_result =
+    std::conditional_t<
+      std::is_convertible<
+        reference,
+        std::add_lvalue_reference_t<Value const>
+      >::value,
+      postfix_increment_proxy,
+      Derived
+    >;
+
   using pointer = typename arrow_dispatcher::result_type;
 
   // TODO: operator[]
@@ -137,8 +158,8 @@ public:
     return derived();
   }
 
-  Derived operator++(int) {
-    Derived tmp{derived()};
+  postfix_increment_result operator++(int) {
+    postfix_increment_result tmp{derived()};
     ++*this;
     return tmp;
   }
