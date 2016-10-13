@@ -181,7 +181,7 @@ set(tests
   #test/actor/task.cpp
 
   test/address.cpp
-  #test/binner.cpp
+  test/binner.cpp
   test/bitmap.cpp
   test/bitvector.cpp
   test/cache.cpp

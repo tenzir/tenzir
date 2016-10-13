@@ -1,6 +1,6 @@
 #include "vast/binner.hpp"
 
-#define SUITE bitmap
+#define SUITE bitmap_index
 #include "test.hpp"
 
 using namespace vast;
