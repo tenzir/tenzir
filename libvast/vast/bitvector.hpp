@@ -183,7 +183,7 @@ public:
 
 private:
   static size_type bits_to_blocks(size_type n) {
-    return 1 + ((n - 1) / word::width);
+    return n == 0 ? 0 : 1 + ((n - 1) / word::width);
   }
 
   block& block_at_bit(size_type i) {
@@ -474,7 +474,7 @@ bitvector<Block, Allocator>::capacity() const noexcept {
 
 template <class Block, class Allocator>
 void bitvector<Block, Allocator>::resize(size_type n, value_type value) {
-  if (size_ >= n) {
+  if (n <= size_) {
     blocks_.resize(bits_to_blocks(n));
     size_ = n;
     return;

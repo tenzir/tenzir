@@ -125,6 +125,9 @@ TEST(resize) {
   x.resize(256, true);
   str += std::string(128, '1');
   CHECK_EQUAL(to_string(x), str);
+  x.resize(0);
+  CHECK_EQUAL(x.size(), 0u);
+  CHECK_EQUAL(to_string(x), "");
 }
 
 TEST(flip) {
