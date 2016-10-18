@@ -35,6 +35,8 @@ public:
 
   bool append_block(block_type bits, size_type n = word_type::width);
 
+  void flip();
+
   // -- concepts -------------------------------------------------------------
 
   friend bool operator==(null_bitmap const& x, null_bitmap const& y);

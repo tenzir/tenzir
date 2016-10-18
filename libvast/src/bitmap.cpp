@@ -25,6 +25,10 @@ bool bitmap::append_block(block_type value, size_type n) {
   return visit([=](auto& bm) { return bm.append_block(value, n); }, bitmap_);
 }
 
+void bitmap::flip() {
+  return visit([](auto& bm) { bm.flip(); }, bitmap_);
+}
+
 bool operator==(bitmap const& x, bitmap const& y) {
   return x.bitmap_ == y.bitmap_;
 }

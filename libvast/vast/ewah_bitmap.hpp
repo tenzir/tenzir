@@ -44,6 +44,8 @@ public:
 
   bool append_block(block_type bits, size_type n = word_type::width);
 
+  void flip();
+
   // -- concepts -------------------------------------------------------------
 
   friend bool operator==(ewah_bitmap const& x, ewah_bitmap const& y);
@@ -52,10 +54,6 @@ public:
   friend auto inspect(Inspector&f, ewah_bitmap& bm) {
     return f(bm.blocks_, bm.last_marker_, bm.num_bits_);
   }
-
-  // -- bitwise operations ----------------------------------------------------
-
-  ewah_bitmap operator~() const;
 
 private:
   /// Incorporates the most recent (complete) dirty block.

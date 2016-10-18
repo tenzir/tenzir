@@ -27,7 +27,7 @@ namespace vast {
 /// @returns The result of a bitwise operation between *lhs* and *rhs*
 /// according to *op*.
 template <bool FillLHS, bool FillRHS, class Bitmap, class Operation>
-Bitmap bitwise_apply(Bitmap const& lhs, Bitmap const& rhs, Operation op) {
+Bitmap bitmap_apply(Bitmap const& lhs, Bitmap const& rhs, Operation op) {
   using word = typename Bitmap::word_type;
   Bitmap result;
   // Check corner cases.
@@ -122,33 +122,33 @@ Bitmap bitwise_apply(Bitmap const& lhs, Bitmap const& rhs, Operation op) {
 }
 
 template <class Bitmap>
-Bitmap bitwise_and(Bitmap const& lhs, Bitmap const& rhs) {
+Bitmap bitmap_and(Bitmap const& lhs, Bitmap const& rhs) {
   auto op = [](auto x, auto y) { return x & y; };
-  return bitwise_apply<false, false>(lhs, rhs, op);
+  return bitmap_apply<false, false>(lhs, rhs, op);
 }
 
 template <class Bitmap>
-Bitmap bitwise_or(Bitmap const& lhs, Bitmap const& rhs) {
+Bitmap bitmap_or(Bitmap const& lhs, Bitmap const& rhs) {
   auto op = [](auto x, auto y) { return x | y; };
-  return bitwise_apply<true, true>(lhs, rhs, op);
+  return bitmap_apply<true, true>(lhs, rhs, op);
 }
 
 template <class Bitmap>
-Bitmap bitwise_xor(Bitmap const& lhs, Bitmap const& rhs) {
+Bitmap bitmap_xor(Bitmap const& lhs, Bitmap const& rhs) {
   auto op = [](auto x, auto y) { return x ^ y; };
-  return bitwise_apply<true, true>(lhs, rhs, op);
+  return bitmap_apply<true, true>(lhs, rhs, op);
 }
 
 template <class Bitmap>
-Bitmap bitwise_nand(Bitmap const& lhs, Bitmap const& rhs) {
+Bitmap bitmap_nand(Bitmap const& lhs, Bitmap const& rhs) {
   auto op = [](auto x, auto y) { return x & ~y; };
-  return bitwise_apply<true, false>(lhs, rhs, op);
+  return bitmap_apply<true, false>(lhs, rhs, op);
 }
 
 template <class Bitmap>
-Bitmap bitwise_nor(Bitmap const& lhs, Bitmap const& rhs) {
+Bitmap bitmap_nor(Bitmap const& lhs, Bitmap const& rhs) {
   auto op = [](auto x, auto y) { return x | ~y; };
-  return bitwise_apply<true, true>(lhs, rhs, op);
+  return bitmap_apply<true, true>(lhs, rhs, op);
 }
 
 /// Computes the *rank* of a Bitmap, i.e., the number of occurrences of a bit

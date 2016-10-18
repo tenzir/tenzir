@@ -71,34 +71,6 @@ ewah_bitmap::block_vector const& ewah_bitmap::blocks() const {
   return blocks_;
 }
 
-ewah_bitmap ewah_bitmap::operator~() const {
-  ewah_bitmap complement;
-  complement.blocks_ = blocks_;
-  complement.last_marker_ = last_marker_;
-  complement.num_bits_ = num_bits_;
-  if (empty())
-    return complement;
-  VAST_ASSERT(blocks_.size() >= 2);
-  size_type next_marker = 0;
-  size_type i;
-  for (i = 0; i < blocks_.size() - 1; ++i) {
-    auto& block = blocks_[i];
-    if (i == next_marker) {
-      next_marker += ewah::marker_num_dirty(block) + 1;
-      if (ewah::marker_num_clean(block) > 0)
-        complement.blocks_[i] ^= ewah::word::msb1;
-    } else {
-      complement.blocks_[i] = ~block;
-    }
-  }
-  complement.blocks_.back() = ~blocks_.back();
-  auto partial = num_bits_ % ewah::word::width;
-  if (partial > 0)
-    // Only flip the active bits in the last block.
-    complement.blocks_.back() &= ewah::word::lsb_mask(partial);
-  return complement;
-}
-
 bool ewah_bitmap::append_bit(bool bit) {
   auto partial = num_bits_ % ewah::word::width;
   if (blocks_.empty()) {
@@ -216,6 +188,26 @@ bool ewah_bitmap::append_block(block_type value, size_type bits) {
     }
   }
   return true;
+}
+
+void ewah_bitmap::flip() {
+  if (blocks_.empty())
+    return;
+  VAST_ASSERT(blocks_.size() >= 2);
+  auto next_marker = size_type{0};
+  for (auto i = 0u; i < blocks_.size() - 1; ++i) {
+    auto& block = blocks_[i];
+    if (i == next_marker) {
+      if (ewah::marker_num_clean(block) > 0)
+        block ^= ewah::word::msb1;
+      next_marker += ewah::marker_num_dirty(block) + 1;
+    } else {
+      block = ~block;
+    }
+  }
+  // Only flip the active bits in the last block.
+  auto partial = num_bits_ % ewah::word::width;
+  blocks_.back() ^= ewah::word::lsb_mask(partial);
 }
 
 void ewah_bitmap::integrate_last_block() {

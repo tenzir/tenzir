@@ -25,6 +25,10 @@ bool null_bitmap::append_block(block_type value, size_type bits) {
   return true;
 }
 
+void null_bitmap::flip() {
+  bitvector_.flip();
+}
+
 bool operator==(null_bitmap const& x, null_bitmap const& y) {
   return x.bitvector_ == y.bitvector_;
 }

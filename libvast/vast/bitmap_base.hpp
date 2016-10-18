@@ -26,6 +26,7 @@ namespace vast {
 ///      bool append_bit(bool bit); // optional
 ///      bool append_bits(bool bit, size_type n);
 ///      bool append_block(block_type bits, size_type n);
+///      void flip();
 ///    };
 ///
 ///    // Provides a range instance with .begin() and .end() member functions
@@ -71,40 +72,39 @@ public:
 
   /// Computes the complement of this bitmap.
   Derived operator~() const {
-    Derived complement;
-    for (auto bits : bit_range(derived()))
-      complement.append(~bits.data(), bits.size());
-    return complement;
+    Derived result{derived()};
+    result.flip();
+    return result;
   }
 
   /// Computes the bitwise AND of two bitmaps.
   template <class Rhs = Derived>
   friend Derived operator&(Derived const& lhs, Rhs const& rhs) {
-    return bitwise_and(lhs, rhs);
+    return bitmap_and(lhs, rhs);
   }
 
   /// Computes the bitwise OR of two bitmaps.
   template <class Rhs = Derived>
   friend Derived operator|(Derived const& lhs, Rhs const& rhs) {
-    return bitwise_or(lhs, rhs);
+    return bitmap_or(lhs, rhs);
   }
 
   /// Computes the bitwise XOR of two bitmaps.
   template <class Rhs = Derived>
   friend Derived operator^(Derived const& lhs, Rhs const& rhs) {
-    return bitwise_xor(lhs, rhs);
+    return bitmap_xor(lhs, rhs);
   }
 
   /// Computes the bitwise NAND of two bitmaps.
   template <class Rhs = Derived>
   friend Derived operator-(Derived const& lhs, Rhs const& rhs) {
-    return bitwise_nand(lhs, rhs);
+    return bitmap_nand(lhs, rhs);
   }
 
   /// Computes the bitwise NOR of two bitmaps.
   template <class Rhs = Derived>
   friend Derived operator/(Derived const& lhs, Rhs const& rhs) {
-    return bitwise_nor(lhs, rhs);
+    return bitmap_nor(lhs, rhs);
   }
 
 private:
