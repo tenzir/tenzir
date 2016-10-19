@@ -21,6 +21,8 @@ public:
 
   null_bitmap() = default;
 
+  null_bitmap(size_type n, bool bit = false);
+
   // -- inspectors -----------------------------------------------------------
 
   bool empty() const;
@@ -29,11 +31,11 @@ public:
 
   // -- modifiers ------------------------------------------------------------
 
-  bool append_bit(bool bit);
+  void append_bit(bool bit);
 
-  bool append_bits(bool bit, size_type n);
+  void append_bits(bool bit, size_type n);
 
-  bool append_block(block_type bits, size_type n = word_type::width);
+  void append_block(block_type bits, size_type n = word_type::width);
 
   void flip();
 

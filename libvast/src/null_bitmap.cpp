@@ -2,6 +2,10 @@
 
 namespace vast {
 
+null_bitmap::null_bitmap(size_type n, bool bit) {
+  append_bits(bit, n);
+}
+
 bool null_bitmap::empty() const {
   return bitvector_.empty();
 }
@@ -10,19 +14,16 @@ null_bitmap::size_type null_bitmap::size() const {
   return bitvector_.size();
 }
 
-bool null_bitmap::append_bit(bool bit) {
+void null_bitmap::append_bit(bool bit) {
   bitvector_.push_back(bit);
-  return true;
 }
 
-bool null_bitmap::append_bits(bool bit, size_type n) {
+void null_bitmap::append_bits(bool bit, size_type n) {
   bitvector_.resize(bitvector_.size() + n, bit);
-  return true;
 }
 
-bool null_bitmap::append_block(block_type value, size_type bits) {
+void null_bitmap::append_block(block_type value, size_type bits) {
   bitvector_.append_block(value, bits);
-  return true;
 }
 
 void null_bitmap::flip() {

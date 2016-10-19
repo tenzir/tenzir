@@ -17,15 +17,16 @@ namespace vast {
 ///
 ///    struct bitmap {
 ///      bitmap();
+///      bitmap(size_type n, bool bit = false);
 ///
 ///      // Inspectors
 ///      bool empty() const;
 ///      size_type size() const;
 ///
 ///      // Modifiers
-///      bool append_bit(bool bit); // optional
-///      bool append_bits(bool bit, size_type n);
-///      bool append_block(block_type bits, size_type n);
+///      void append_bit(bool bit); // optional
+///      void append_bits(bool bit, size_type n);
+///      void append_block(block_type bits, size_type n);
 ///      void flip();
 ///    };
 ///
@@ -98,13 +99,13 @@ public:
   }
 
 private:
-  bool append(block_type data, size_type n) {
+   void append(block_type data, size_type n) {
     if (n > word_type::width)
-      return derived().append_bits(data, n);
+      derived().append_bits(data, n);
     else if (n == 1)
-      return derived().append_bit(data & word_type::lsb1);
+      derived().append_bit(data & word_type::lsb1);
     else
-      return derived().append_block(data, n);
+      derived().append_block(data, n);
   }
 
   Derived& derived() {

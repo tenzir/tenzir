@@ -20,6 +20,8 @@ public:
   /// Default-constructs a bitmap of type ::default_bitmap.
   bitmap();
 
+  bitmap(size_type n, bool bit = false);
+
   /// Constructs a bitmap from a another bitmap.
   /// @param bm The concrete bitmap instance.
   template <class Bitmap, class>
@@ -33,11 +35,11 @@ public:
 
   // -- modifiers ------------------------------------------------------------
 
-  bool append_bit(bool bit);
+  void append_bit(bool bit);
 
-  bool append_bits(bool bit, size_type n);
+  void append_bits(bool bit, size_type n);
 
-  bool append_block(block_type value, size_type n = word_type::width);
+  void append_block(block_type value, size_type n = word_type::width);
 
   void flip();
 

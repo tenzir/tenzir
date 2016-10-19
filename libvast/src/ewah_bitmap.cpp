@@ -59,6 +59,10 @@ using ewah = ewah_algorithm<ewah_bitmap::block_type>;
 
 } // namespace <anonymous>
 
+ewah_bitmap::ewah_bitmap(size_type n, bool bit) {
+  append_bits(bit, n);
+}
+
 bool ewah_bitmap::empty() const {
   return num_bits_ == 0;
 }
@@ -71,7 +75,7 @@ ewah_bitmap::block_vector const& ewah_bitmap::blocks() const {
   return blocks_;
 }
 
-bool ewah_bitmap::append_bit(bool bit) {
+void ewah_bitmap::append_bit(bool bit) {
   auto partial = num_bits_ % ewah::word::width;
   if (blocks_.empty()) {
     blocks_.push_back(0); // Always begin with an empty marker.
@@ -83,12 +87,12 @@ bool ewah_bitmap::append_bit(bool bit) {
   if (bit)
     blocks_.back() |= ewah::word::lsb1 << partial;
   ++num_bits_;
-  return true;
+  return;
 }
 
-bool ewah_bitmap::append_bits(bool bit, size_type n) {
+void ewah_bitmap::append_bits(bool bit, size_type n) {
   if (n == 0)
-    return true;
+    return;
   if (blocks_.empty()) {
     blocks_.push_back(0); // Always begin with an empty marker.
   } else {
@@ -101,7 +105,7 @@ bool ewah_bitmap::append_bits(bool bit, size_type n) {
       num_bits_ += fill;
       n -= fill;
       if (n == 0)
-        return true;
+        return;
     }
     // We've filled the last dirty block and are now at a block boundary. At
     // that point we check if we can consolidate the last block.
@@ -111,7 +115,7 @@ bool ewah_bitmap::append_bits(bool bit, size_type n) {
   if (n <= ewah::word::width) {
     blocks_.push_back(bit ? ewah::word::lsb_fill(n) : ewah::word::none);
     num_bits_ += n;
-    return true;
+    return;
   }
   // At this point, we have enough bits remaining to generate clean blocks.
   VAST_ASSERT(n >= ewah::word::width);
@@ -158,10 +162,9 @@ bool ewah_bitmap::append_bits(bool bit, size_type n) {
     auto block = bit ? ewah::word::lsb_fill(remaining_bits) : ewah::word::none;
     blocks_.push_back(block);
   }
-  return true;
 }
 
-bool ewah_bitmap::append_block(block_type value, size_type bits) {
+void ewah_bitmap::append_block(block_type value, size_type bits) {
   VAST_ASSERT(bits > 0);
   VAST_ASSERT(bits <= ewah::word::width);
   if (blocks_.empty())
@@ -187,7 +190,6 @@ bool ewah_bitmap::append_block(block_type value, size_type bits) {
       num_bits_ += remaining;
     }
   }
-  return true;
 }
 
 void ewah_bitmap::flip() {
