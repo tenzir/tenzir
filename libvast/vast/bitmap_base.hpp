@@ -41,16 +41,6 @@ public:
   using size_type = uint64_t;
   using word_type = word<block_type>;
 
-  /// Default-constructs an empty bitmap.
-  bitmap_base() = default;
-
-  /// Constructs a homogoneous bitmap of a certain size.
-  /// @param n The number of bits in the bitmap.
-  /// @param bit The bit value.
-  bitmap_base(size_type n, bool bit = false) {
-    derived().append_bits(bit, n);
-  }
-
   // -- element access --------------------------------------------------------
 
   /// Accesses the *i*-th bit of a bitmap.
@@ -80,31 +70,31 @@ public:
   /// Computes the bitwise AND of two bitmaps.
   template <class Rhs = Derived>
   friend Derived operator&(Derived const& lhs, Rhs const& rhs) {
-    return bitmap_and(lhs, rhs);
+    return binary_and(lhs, rhs);
   }
 
   /// Computes the bitwise OR of two bitmaps.
   template <class Rhs = Derived>
   friend Derived operator|(Derived const& lhs, Rhs const& rhs) {
-    return bitmap_or(lhs, rhs);
+    return binary_or(lhs, rhs);
   }
 
   /// Computes the bitwise XOR of two bitmaps.
   template <class Rhs = Derived>
   friend Derived operator^(Derived const& lhs, Rhs const& rhs) {
-    return bitmap_xor(lhs, rhs);
+    return binary_xor(lhs, rhs);
   }
 
   /// Computes the bitwise NAND of two bitmaps.
   template <class Rhs = Derived>
   friend Derived operator-(Derived const& lhs, Rhs const& rhs) {
-    return bitmap_nand(lhs, rhs);
+    return binary_nand(lhs, rhs);
   }
 
   /// Computes the bitwise NOR of two bitmaps.
   template <class Rhs = Derived>
   friend Derived operator/(Derived const& lhs, Rhs const& rhs) {
-    return bitmap_nor(lhs, rhs);
+    return binary_nor(lhs, rhs);
   }
 
 private:

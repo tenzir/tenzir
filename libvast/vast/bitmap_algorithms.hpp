@@ -3,8 +3,10 @@
 
 #include <algorithm>
 #include <iterator>
+#include <queue>
 
 #include "vast/bits.hpp"
+#include "vast/optional.hpp"
 #include "vast/detail/assert.hpp"
 
 namespace vast {
@@ -27,7 +29,7 @@ namespace vast {
 /// @returns The result of a bitwise operation between *lhs* and *rhs*
 /// according to *op*.
 template <bool FillLHS, bool FillRHS, class Bitmap, class Operation>
-Bitmap bitmap_apply(Bitmap const& lhs, Bitmap const& rhs, Operation op) {
+Bitmap binary_eval(Bitmap const& lhs, Bitmap const& rhs, Operation op) {
   using word = typename Bitmap::word_type;
   Bitmap result;
   // Check corner cases.
@@ -121,34 +123,98 @@ Bitmap bitmap_apply(Bitmap const& lhs, Bitmap const& rhs, Operation op) {
   return result;
 }
 
+/// Evaluates a binary operation over multiple bitmaps.
+/// @param begin The beginning of the bitmap range.
+/// @param end The end of the bitmap range.
+/// @param op A binary bitwise operation to execute over the given bitmaps.
+/// @returns The application of *op* over the bitmaps *[begin,end)*.
+/// @note This algorithm is "Option 3" described in setion 5 in Wu et al.'s
+///       2004 paper titled *On the Performance of Bitmap Indices for
+///       High-Cardinality Attributes*.
+template <class Iterator, class Operation>
+auto nary_eval(Iterator begin, Iterator end, Operation op) {
+  using bitmap_type = std::decay_t<decltype(*begin)>;
+  // Exposes a pointer to represent either a non-owned bitmap from the input
+  // sequence or an intermediary result.
+  struct element {
+    using bitmap_ptr = std::shared_ptr<bitmap_type>;
+    explicit element(bitmap_type* bm) : bitmap{bm} {
+    }
+    explicit element(bitmap_type&& bm)
+      : data{std::make_shared<bitmap_type>(std::move(bm))},
+        bitmap{data.get()} {
+    }
+    bitmap_ptr data;
+    bitmap_type* bitmap;
+  };
+  auto cmp = [](auto& lhs, auto& rhs) {
+    return lhs.bitmap->size() > rhs.bitmap->size();
+  };
+  std::priority_queue<element, std::vector<element>, decltype(cmp)> queue{cmp};
+  for (; begin != end; ++begin)
+    queue.emplace(&*begin);
+  // Evaluate bitmaps.
+  while (!queue.empty()) {
+    auto lhs = queue.top();
+    queue.pop();
+    if (queue.empty())
+      // When our input sequence consists of a single bitmap, we end up with an
+      // element that has no data. Otherwise we would have had a least one
+      // intermediary result, which would be stored as data.
+      return lhs.data ? std::move(*lhs.data) : *lhs.bitmap;
+    auto rhs = queue.top();
+    queue.pop();
+    queue.emplace(op(*lhs.bitmap, *rhs.bitmap));
+  }
+  return bitmap_type{};
+}
+
 template <class Bitmap>
-Bitmap bitmap_and(Bitmap const& lhs, Bitmap const& rhs) {
+Bitmap binary_and(Bitmap const& lhs, Bitmap const& rhs) {
   auto op = [](auto x, auto y) { return x & y; };
-  return bitmap_apply<false, false>(lhs, rhs, op);
+  return binary_eval<false, false>(lhs, rhs, op);
 }
 
 template <class Bitmap>
-Bitmap bitmap_or(Bitmap const& lhs, Bitmap const& rhs) {
+Bitmap binary_or(Bitmap const& lhs, Bitmap const& rhs) {
   auto op = [](auto x, auto y) { return x | y; };
-  return bitmap_apply<true, true>(lhs, rhs, op);
+  return binary_eval<true, true>(lhs, rhs, op);
 }
 
 template <class Bitmap>
-Bitmap bitmap_xor(Bitmap const& lhs, Bitmap const& rhs) {
+Bitmap binary_xor(Bitmap const& lhs, Bitmap const& rhs) {
   auto op = [](auto x, auto y) { return x ^ y; };
-  return bitmap_apply<true, true>(lhs, rhs, op);
+  return binary_eval<true, true>(lhs, rhs, op);
 }
 
 template <class Bitmap>
-Bitmap bitmap_nand(Bitmap const& lhs, Bitmap const& rhs) {
+Bitmap binary_nand(Bitmap const& lhs, Bitmap const& rhs) {
   auto op = [](auto x, auto y) { return x & ~y; };
-  return bitmap_apply<true, false>(lhs, rhs, op);
+  return binary_eval<true, false>(lhs, rhs, op);
 }
 
 template <class Bitmap>
-Bitmap bitmap_nor(Bitmap const& lhs, Bitmap const& rhs) {
+Bitmap binary_nor(Bitmap const& lhs, Bitmap const& rhs) {
   auto op = [](auto x, auto y) { return x | ~y; };
-  return bitmap_apply<true, true>(lhs, rhs, op);
+  return binary_eval<true, true>(lhs, rhs, op);
+}
+
+template <class Iterator>
+auto nary_and(Iterator begin, Iterator end) {
+  auto op = [](auto x, auto y) { return x & y; };
+  return nary_eval(begin, end, op);
+}
+
+template <class Iterator>
+auto nary_or(Iterator begin, Iterator end) {
+  auto op = [](auto x, auto y) { return x | y; };
+  return nary_eval(begin, end, op);
+}
+
+template <class Iterator>
+auto nary_xor(Iterator begin, Iterator end) {
+  auto op = [](auto x, auto y) { return x ^ y; };
+  return nary_eval(begin, end, op);
 }
 
 /// Computes the *rank* of a Bitmap, i.e., the number of occurrences of a bit

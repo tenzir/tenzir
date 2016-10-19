@@ -72,7 +72,7 @@ struct bitmap_test_harness {
     CHECK_EQUAL(to_string(b), s);
   }
 
-  void test_simple_bitwise_operations() {
+  void test_bitwise_simple() {
     MESSAGE("simple unary");
     CHECK_EQUAL(~~a, a);
     CHECK_EQUAL(~~b, b);
@@ -125,6 +125,20 @@ struct bitmap_test_harness {
     str.append(13, '0');
     str.append(36, '1');
     CHECK_EQUAL(to_string(bm1 - bm2), str);
+  }
+
+  void test_bitwise_nary() {
+    MESSAGE("nary AND");
+    Bitmap z0;
+    z0.append_bits(false, 30);
+    z0.append_bits(true, 30);
+    Bitmap z1;
+    z1.append_bits(false, 20);
+    z1.append_bits(true, 50);
+    auto bitmaps = std::vector<Bitmap>{x, y, z0, z1};
+    auto begin = bitmaps.begin();
+    auto end = bitmaps.end();
+    CHECK_EQUAL(nary_and(begin, end), x & y & z0 & z1);
   }
 
   void test_rank() {
@@ -190,10 +204,11 @@ struct bitmap_test_harness {
   void execute() {
     test_append();
     test_construction();
-    test_simple_bitwise_operations();
+    test_bitwise_simple();
     test_bitwise_and();
     test_bitwise_or();
     test_bitwise_nand();
+    test_bitwise_nary();
     test_rank();
     test_select();
     test_printable();
