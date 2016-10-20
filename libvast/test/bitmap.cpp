@@ -1,3 +1,5 @@
+#include "vast/bitmap.hpp"
+#include "vast/ewah_bitmap.hpp"
 #include "vast/null_bitmap.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/bitmap.hpp"
@@ -70,6 +72,11 @@ struct bitmap_test_harness {
     s += "0011001100110011001100110011001100110011000000000000000000000000";
     s += "01";
     CHECK_EQUAL(to_string(b), s);
+    auto xy = x;
+    xy.append(y);
+    s = "00001110111111111111111111111000111011111111111111111111"
+        "1111111111100000000000000000000000000000000001111111";
+    CHECK_EQUAL(to_string(xy), s);
   }
 
   void test_bitwise_simple() {

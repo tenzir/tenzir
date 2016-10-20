@@ -2,6 +2,7 @@
 #define VAST_BITMAP_BASE_HPP
 
 #include <cstdint>
+#include <limits>
 
 #include "vast/bitmap_algorithms.hpp"
 #include "vast/bits.hpp"
@@ -12,8 +13,8 @@
 
 namespace vast {
 
-/// The base class for bitmaps. The concrete derived class must model the
-/// *bitmap concept* looks:
+/// The base class for bitmaps. The concrete derived types must model the
+/// *bitmap concept* looks as follows:
 ///
 ///    struct bitmap {
 ///      bitmap();
@@ -34,6 +35,16 @@ namespace vast {
 ///    // to iterate over the bitmap in terms of sequences of bits.
 ///    auto bit_range(bitmap const& bm);
 ///
+/// If possible, derived types shall provide an optimized version of the
+/// following operators:
+///
+/// - operator&=
+/// - operator|=
+/// - operator^=
+/// - operator-=
+/// - operator/=
+///
+/// These can lead to significantly faster bitwise operations.
 template <class Derived>
 class bitmap_base {
 public:
@@ -41,6 +52,27 @@ public:
   using block_type = uint64_t;
   using size_type = uint64_t;
   using word_type = word<block_type>;
+
+  // We subtract 1 to let the last value represent an invalid bitmap position.
+  static constexpr auto max_size = std::numeric_limits<size_type>::max() - 1;
+
+  // -- modifiers -------------------------------------------------------------
+
+  /// Appends the contents of any other bitmap to this one.
+  /// @tparam The type of the other bitmap.
+  /// @param other The other bitmap.
+  /// @pre `size() + other.size()` <= max_size`
+  template <class Bitmap>
+  void append(Bitmap const& other) {
+    VAST_ASSERT(derived().size() + other.size() <= max_size);
+    for (auto bits : bit_range(other))
+      if (bits.size() > word_type::width)
+        derived().append_bits(bits.data(), bits.size());
+      else if (bits.size() == 1)
+        derived().append_bit(bits.data() & word_type::lsb1);
+      else
+        derived().append_block(bits.data(), bits.size());
+  }
 
   // -- element access --------------------------------------------------------
 
@@ -98,16 +130,36 @@ public:
     return binary_nor(lhs, rhs);
   }
 
-private:
-   void append(block_type data, size_type n) {
-    if (n > word_type::width)
-      derived().append_bits(data, n);
-    else if (n == 1)
-      derived().append_bit(data & word_type::lsb1);
-    else
-      derived().append_block(data, n);
+  // -- inplace bitwise operations---------------------------------------------
+  //
+  // Derived types should provide an optimized version where possible.
+
+  Derived& operator&=(Derived const rhs) {
+    derived() = derived() & rhs;
+    return derived();
   }
 
+  Derived& operator|=(Derived const rhs) {
+    derived() = derived() | rhs;
+    return derived();
+  }
+
+  Derived& operator^=(Derived const rhs) {
+    derived() = derived() ^ rhs;
+    return derived();
+  }
+
+  Derived& operator-=(Derived const rhs) {
+    derived() = derived() - rhs;
+    return derived();
+  }
+
+  Derived& operator/=(Derived const rhs) {
+    derived() = derived() / rhs;
+    return derived();
+  }
+
+private:
   Derived& derived() {
     return *static_cast<Derived*>(this);
   }
