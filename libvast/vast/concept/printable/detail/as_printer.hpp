@@ -89,8 +89,8 @@ auto as_printer(T&& x, U&& y)
        is_convertible_to_binary_printer<std::decay_t<T>, std::decay_t<U>>{},
        make_binary_printer<
          Binaryprinter,
-         decltype(detail::as_printer(std::forward<T>(x))),
-         decltype(detail::as_printer(std::forward<U>(y)))
+         decltype(as_printer(std::forward<T>(x))),
+         decltype(as_printer(std::forward<U>(y)))
        >
      > {
   return {as_printer(std::forward<T>(x)), as_printer(std::forward<U>(y))};

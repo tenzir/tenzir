@@ -31,8 +31,6 @@ namespace detail {
 template <int exp, typename T>
 constexpr T pow(T base);
 
-namespace detail {
-
 template <int exp, typename T>
 inline constexpr T pow_impl(T base, uint64_t result = 1) {
   return exp
@@ -68,8 +66,6 @@ constexpr int ilog_helper(T n, int x = 0) {
     : x;
 }
 
-} // namespace detail
-
 /// Computes the power function.
 /// @tparam exp The exponent to raise `base` to.
 /// @param base The value to raise to the power of *exp*.
@@ -78,7 +74,7 @@ template <int exp, typename T>
 constexpr T pow(T base) {
   static_assert(exp < 64, "pow exponents >= 64 can only overflow");
   return exp < 0
-    ? 1 / detail::pow_impl<-exp>(base) : detail::pow_impl<exp>(base);
+    ? 1 / pow_impl<-exp>(base) : pow_impl<exp>(base);
 }
 
 /// Computes the integer logarithm as `x > 0 ? floor(log(x, base)) : -1`.
@@ -90,7 +86,7 @@ constexpr int ilog(T x) {
   static_assert(! (base <= 0), "ilog is not useful for base <= 0");
   static_assert(base != 1, "ilog is not useful for base == 1");
   static_assert(std::is_integral<T>{}, "ilog only works on integral types");
-  return x > 0 ? detail::ilog_helper<base>(x) : -1;
+  return x > 0 ? ilog_helper<base>(x) : -1;
 }
 
 } // namespace detail
