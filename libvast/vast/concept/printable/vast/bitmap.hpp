@@ -1,7 +1,7 @@
 #ifndef VAST_CONCEPT_PRINTABLE_VAST_BITMAP_HPP
 #define VAST_CONCEPT_PRINTABLE_VAST_BITMAP_HPP
 
-#include "vast/bitmap.hpp"
+#include "vast/bitmap_base.hpp"
 #include "vast/concept/printable/core.hpp"
 #include "vast/concept/printable/vast/bits.hpp"
 
