@@ -1,97 +1,114 @@
 #ifndef VAST_BASE_HPP
 #define VAST_BASE_HPP
 
+#include <cmath>
 #include <cstdint>
-#include <array>
 #include <limits>
+#include <type_traits>
+#include <vector>
 
-#include "vast/util/math.hpp"
+#include "vast/detail/assert.hpp"
 
 namespace vast {
-namespace detail {
 
-template <size_t X>
-constexpr bool is_well_defined() {
-  return X >= 2;
-}
+/// A base for value (de)composition.
+class base {
+public:
+  using value_type = size_t;
+  using vector_type = std::vector<value_type>;
 
-template <size_t X0, size_t X1, size_t... Xs>
-constexpr bool is_well_defined() {
-  return is_well_defined<X0>() && is_well_defined<X1, Xs...>();
-}
+  /// Constructs a uniform base with a given value.
+  /// @param b The uniform value at all components.
+  /// @param n The number of components.
+  /// @returns A uniform base of value *b* with *n* components.
+  static base uniform(value_type b, size_t n = 0);
 
-template <size_t X>
-constexpr bool is_tractable() {
-  return X < (1ull << 30);
-}
+  /// Constructs a uniform base with a given value.
+  /// @param b The uniform value at all components.
+  /// @param n The number of components. If 0, determine the number of
+  ///          components automatically based on the cardinality of `T`'s
+  ///          domain.
+  /// @returns A uniform base of value *b* with *n* components.
+  template <int Bits>
+  static base uniform(size_t b) {
+    static_assert(Bits > 0 && Bits <= 64, "Bits must be in (0, 64]");
+    VAST_ASSERT(b > 0);
+    size_t n = std::ceil(Bits / std::log2(b));
+    return uniform(b, n);
+  }
 
-template <size_t X0, size_t X1, size_t... Xs>
-constexpr bool is_tractable() {
-  return is_tractable<X0>() && is_tractable<X1, Xs...>();
-}
+  base() = default;
 
-template <size_t>
-constexpr bool is_uniform() {
-  return true;
-}
+  explicit base(vector_type xs);
+  explicit base(std::initializer_list<value_type> xs);
 
-template <size_t X0, size_t X1, size_t... Xs>
-constexpr bool is_uniform() {
-  return X0 == X1 && is_uniform<X1, Xs...>();
-}
+  /// Checks whether the base has at least one value, and that all values
+  /// are >= 2.
+  /// @returns `true` iff this base is well-defined.
+  bool well_defined() const;
 
-} // namespace detail
+  /// Decomposes a value into a sequence of values.
+  /// @param x The value to decompose.
+  /// @pre *rng* must cover at least `size()` values.
+  template <class T, class Range>
+  void decompose(T x, Range& rng) const {
+    using std::begin;
+    using std::end;
+    VAST_ASSERT(end(rng) - begin(rng) >= static_cast<long>(size()));
+    auto i = begin(rng);
+    for (auto b : values_) {
+      *i++ = x % b;
+      x /= b;
+    }
+  }
 
-/// A generic base.
-/// @tparam Xs The base values.
-template <size_t... Xs>
-struct base {
-  static_assert(detail::is_well_defined<Xs...>(), "not a well-defined base");
-  static_assert(detail::is_tractable<Xs...>(), "base has untractable values");
-  static constexpr bool uniform = detail::is_uniform<Xs...>();
-  static constexpr size_t components = sizeof...(Xs);
-  static constexpr std::array<size_t, sizeof...(Xs)> values = {{Xs...}};
+  /// Composes a new value from a sequence of values.
+  /// @param rng A range with the values to compose.
+  /// @returns The composed value from *rng* according to this base.
+  /// @pre *rng* must cover at least `size()` values.
+  template <class T, class Range>
+  T compose(Range&& rng) const {
+    using std::begin;
+    using std::end;
+    VAST_ASSERT(end(rng) - begin(rng) >= static_cast<long>(size()));
+    auto result = T{0};
+    auto m = T{1};
+    auto i = begin(rng);
+    for (auto b : values_) {
+      result += *i++ * m;
+      m *= b;
+    }
+    return result;
+  }
+
+  // -- container -------------------------------------------------------------
+  
+  using iterator = typename vector_type::iterator;
+  using const_iterator = typename vector_type::const_iterator;
+
+  bool empty() const;
+
+  size_t size() const;
+
+  value_type& operator[](size_t i);
+  value_type operator[](size_t i) const;
+
+  iterator begin();
+  const_iterator begin() const;
+
+  iterator end();
+  const_iterator end() const;
+
+  // -- concepts --------------------------------------------------------------
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, base& b) {
+    return f(b.values_);
+  }
+
+private:
+  vector_type values_;
 };
-
-template <size_t... Xs>
-constexpr bool base<Xs...>::uniform;
-
-template <size_t... Xs>
-constexpr size_t base<Xs...>::components;
-
-template <size_t... Xs>
-constexpr std::array<size_t, sizeof...(Xs)> base<Xs...>::values;
-
-namespace detail {
-
-template <size_t N, size_t X, size_t... Xs>
-struct uniform_base_rec : uniform_base_rec<N - 1, X, X, Xs...> {};
-
-template <size_t X, size_t... Xs>
-struct uniform_base_rec<0, X, Xs...> {
-  using type = base<Xs...>;
-};
-
-} // namespace deatil
-
-/// A uniform base where each value is the same.
-/// @tparam X The base value.
-/// @tparam N The number of components.
-template <size_t X, size_t N>
-using uniform_base = typename detail::uniform_base_rec<N, X>::type;
-
-template <size_t B, typename T>
-using make_uniform_base = uniform_base<
-  B, util::ilog<static_cast<int>(B)>(~0ull >> (64 - (sizeof(T) * 8))) + 1
->;
-
-template <typename T>
-using make_singleton_base = base<(1ull << sizeof(T) * 8)>;
-
-template <typename Base>
-constexpr bool is_uniform2() {
-  return Base::uniform && Base::values[0] == 2;
-}
 
 } // namespace vast
 

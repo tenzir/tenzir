@@ -319,7 +319,7 @@ namespace detail {
 
 template <typename Bitvector>
 class bitvector_iterator
-  : public detail::iterator_facade<
+  : public iterator_facade<
       bitvector_iterator<Bitvector>,
       typename Bitvector::value_type,
       std::random_access_iterator_tag,
@@ -335,7 +335,7 @@ public:
   bitvector_iterator() = default;
 
 private:
-  friend detail::iterator_access;
+  friend iterator_access;
 
   bitvector_iterator(Bitvector& bv, typename Bitvector::size_type off = 0)
     : bitvector_{&bv}, i_{off} {

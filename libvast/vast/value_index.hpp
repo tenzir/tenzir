@@ -13,16 +13,10 @@
 
 namespace vast {
 
-struct access;
-namespace detail {
-template <typename>
-struct bitmap_index_model;
-}
-
 /// The base class for bitmap indexes.
 template <typename Derived, typename Bitstream>
-class bitmap_index_base
-  : util::equality_comparable<bitmap_index_base<Derived, Bitstream>> {
+class value_index_base
+  : util::equality_comparable<value_index_base<Derived, Bitstream>> {
   friend access;
 
 public:
@@ -117,7 +111,7 @@ public:
   }
 
   template <class Inspector>
-  friend auto inspect(Inspector& f, bitmap_index_base& bmi) {
+  friend auto inspect(Inspector& f, value_index_base& bmi) {
     return f(bmi.mask_, bmi.nil_);
   }
 
@@ -137,7 +131,7 @@ private:
 /// A bitmap index for arithmetic values.
 template <typename Bitstream, typename T, typename Binner = void>
 class arithmetic_bitmap_index
-  : public bitmap_index_base<
+  : public value_index_base<
              arithmetic_bitmap_index<Bitstream, T, Binner>,
              Bitstream
            >,
@@ -145,10 +139,8 @@ class arithmetic_bitmap_index
              arithmetic_bitmap_index<Bitstream, T, Binner>
            > {
   using super =
-    bitmap_index_base<arithmetic_bitmap_index<Bitstream, T, Binner>, Bitstream>;
+    value_index_base<arithmetic_bitmap_index<Bitstream, T, Binner>, Bitstream>;
   friend super;
-  friend access;
-  template <typename> friend struct detail::bitmap_index_model;
 
   using bitmap_value_type =
     std::conditional_t<
@@ -289,12 +281,9 @@ private:
 /// A bitmap index for strings.
 template <typename Bitstream>
 class string_bitmap_index
-  : public bitmap_index_base<string_bitmap_index<Bitstream>, Bitstream> {
-  using super = bitmap_index_base<string_bitmap_index<Bitstream>, Bitstream>;
+  : public value_index_base<string_bitmap_index<Bitstream>, Bitstream> {
+  using super = value_index_base<string_bitmap_index<Bitstream>, Bitstream>;
   friend super;
-  friend access;
-  template <typename>
-  friend struct detail::bitmap_index_model;
 
   static constexpr size_t max_string_length = 8192;
 
@@ -437,12 +426,9 @@ private:
 /// A bitmap index for IP addresses.
 template <typename Bitstream>
 class address_bitmap_index
-  : public bitmap_index_base<address_bitmap_index<Bitstream>, Bitstream> {
-  using super = bitmap_index_base<address_bitmap_index<Bitstream>, Bitstream>;
+  : public value_index_base<address_bitmap_index<Bitstream>, Bitstream> {
+  using super = value_index_base<address_bitmap_index<Bitstream>, Bitstream>;
   friend super;
-  friend access;
-  template <typename>
-  friend struct detail::bitmap_index_model;
 
 public:
   using bitstream_type = Bitstream;
@@ -562,12 +548,9 @@ private:
 /// A bitmap index for IP prefixes.
 template <typename Bitstream>
 class subnet_bitmap_index
-  : public bitmap_index_base<subnet_bitmap_index<Bitstream>, Bitstream> {
-  using super = bitmap_index_base<subnet_bitmap_index<Bitstream>, Bitstream>;
+  : public value_index_base<subnet_bitmap_index<Bitstream>, Bitstream> {
+  using super = value_index_base<subnet_bitmap_index<Bitstream>, Bitstream>;
   friend super;
-  friend access;
-  template <typename>
-  friend struct detail::bitmap_index_model;
 
 public:
   using bitstream_type = Bitstream;
@@ -630,12 +613,9 @@ private:
 /// A bitmap index for transport-layer ports.
 template <typename Bitstream>
 class port_bitmap_index
-  : public bitmap_index_base<port_bitmap_index<Bitstream>, Bitstream> {
-  using super = bitmap_index_base<port_bitmap_index<Bitstream>, Bitstream>;
+  : public value_index_base<port_bitmap_index<Bitstream>, Bitstream> {
+  using super = value_index_base<port_bitmap_index<Bitstream>, Bitstream>;
   friend super;
-  friend access;
-  template <typename>
-  friend struct detail::bitmap_index_model;
 
 public:
   using bitstream_type = Bitstream;
@@ -700,6 +680,7 @@ private:
       range_coder<Bitstream>
     >
   > num_;
+
   bitmap<
     std::underlying_type<port::port_type>::type,
     equality_coder<Bitstream>

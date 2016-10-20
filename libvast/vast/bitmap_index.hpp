@@ -10,107 +10,91 @@
 
 namespace vast {
 
-struct access;
-class ewah_bitstream;
+class bitmap;
 
-/// An associative array which maps (arithmetic) values to [bitstreams](@ref
-/// bitstream).
+/// An associative array which maps arithmetic values to [bitmaps](@ref bitmap).
 /// @tparam T The value type for append and lookup operation.
 /// @tparam Base The base determining the value decomposition
 /// @tparam Coder The encoding/decoding policy.
 /// @tparam Binner The pre-processing policy to perform on values.
 template <
-  typename T,
-  typename Coder =
-    multi_level_coder<
-      make_uniform_base<2, T>,
-      range_coder<ewah_bitstream>
-    >,
-  typename Binner = identity_binner
+  class T,
+  class Coder = multi_level_coder<range_coder<bitmap>>,
+  class Binner = identity_binner
 >
-class bitmap : util::equality_comparable<bitmap<T, Coder, Binner>> {
-  static_assert(! std::is_same<T, bool>{} || is_singleton_coder<Coder>{},
-                "boolean bitmap requires singleton coder");
-  friend access;
-
+class bitmap_index
+  : detail::equality_comparable<bitmap_index<T, Coder, Binner>> {
+  static_assert(!std::is_same<T, bool>{} || is_singleton_coder<Coder>{},
+                "boolean bitmap index requires singleton coder");
 public:
   using value_type = T;
   using coder_type = Coder;
   using binner_type = Binner;
-  using bitstream_type = typename coder_type::bitstream_type;
+  using bitmap_type = typename coder_type::bitmap_type;
+  using size_type = typename coder_type::size_type;
 
-  bitmap() = default;
+  bitmap_index() = default;
 
   template <
-    typename... Ts,
-    typename = std::enable_if_t<std::is_constructible<coder_type, Ts...>{}>
+    class... Ts,
+    class = std::enable_if_t<std::is_constructible<coder_type, Ts...>{}>
   >
-  explicit bitmap(Ts&&... xs)
+  explicit bitmap_index(Ts&&... xs)
     : coder_(std::forward<Ts>(xs)...) {
   }
 
-  friend bool operator==(bitmap const& x, bitmap const& y) {
-    return x.coder_ == y.coder_;
-  }
-
-  /// Adds a value to the bitmap. For example, in the case of equality
-  /// coding, this means appending 1 to the single bitstream for the given
-  /// value and 0 to all other bitstreams.
+  /// Adds a value to the bitmap index. For example, in the case of equality
+  /// coding, this means appending 1 to the single bitmap for the given
+  /// value and 0 to all other bitmaps.
   /// @param x The value to append.
   /// @param n The number of times to append *x*.
-  /// @returns `true` on success and `false` if the bitmap is full, i.e., has
-  ///          `std::numeric_limits<size_t>::max() - 1` elements.
-  bool push_back(value_type x, size_t n = 1) {
-    return coder_.encode(order(binner_type::bin(x)), n);
+  void append(value_type x, size_type n = 1, size_type skip = 0) {
+    return coder_.encode(transform(binner_type::bin(x)), n, skip);
   }
 
-  /// Aritifically increases the bitmap size, i.e., the number of rows.
-  /// @param n The number of rows to increase the bitmap by.
-  /// @returns `true` on success and `false` if there is not enough space.
-  bool stretch(size_t n) {
-    return coder_.stretch(n);
-  }
-
-  /// Appends the contents of another bitmap to this one.
-  /// @param other The other bitmap.
-  /// @returns `true` on success.
-  bool append(bitmap const& other) {
+  /// Appends the contents of another bitmap index to this one.
+  /// @param other The other bitmap index.
+  void append(bitmap_index const& other) {
     return coder_.append(other.coder_);
   }
 
-  /// Retrieves a bitstream of a given value with respect to a given operator.
+  /// Retrieves a bitmap of a given value with respect to a given operator.
   /// @param op The relational operator to use for looking up *x*.
-  /// @param x The value to find the bitstream for.
-  /// @returns The bitstream for all values *v* where *op(v,x)* is `true`.
-  bitstream_type lookup(relational_operator op, value_type x) const {
-    return coder_.decode(op, order(binner_type::bin(x)));
+  /// @param x The value to find the bitmap for.
+  /// @returns The bitmap for all values *v* where *op(v,x)* is `true`.
+  bitmap_type lookup(relational_operator op, value_type x) const {
+    return coder_.decode(op, transform(binner_type::bin(x)));
   }
 
-  /// Retrieves the bitmap size.
-  /// @returns The number of elements/rows contained in the bitmap.
-  uint64_t size() const {
-    return coder_.rows();
+  /// Retrieves the bitmap index size.
+  /// @returns The number of elements/rows contained in the bitmap index.
+  size_type size() const {
+    return coder_.size();
   }
 
-  /// Checks whether the bitmap is empty.
-  /// @returns `true` *iff* the bitmap has 0 entries.
+  /// Checks whether the bitmap index is empty.
+  /// @returns `true` *iff* the bitmap index has 0 entries.
   bool empty() const {
     return size() == 0;
   }
 
-  /// Accesses the underlying coder of the bitmap.
-  /// @returns The coder of this bitmap.
+  /// Accesses the underlying coder of the bitmap index.
+  /// @returns The coder of this bitmap index.
   coder_type const& coder() const {
     return coder_;
   }
 
+  friend bool operator==(bitmap_index const& x, bitmap_index const& y) {
+    return x.coder_ == y.coder_;
+  }
+
   template <class Inspector>
-  friend auto inspect(Inspector& f, bitmap& bm) {
-    return f(bm.coder_);
+  friend auto inspect(Inspector& f, bitmap_index& bmi) {
+    return f(bmi.coder_);
   }
 
 private:
-  template <typename U, typename B>
+  template <class U, class B>
   using is_shiftable =
     std::integral_constant<
       bool,
@@ -118,15 +102,15 @@ private:
         && std::is_floating_point<U>{}
     >;
 
-  template <typename U, typename B = binner_type>
-  static auto order(U x)
-    -> std::enable_if_t<is_shiftable<U, B>{}, detail::ordered_type<U>> {
+  template <class U, class B = binner_type>
+  static auto transform(U x)
+  -> std::enable_if_t<is_shiftable<U, B>{}, detail::ordered_type<U>> {
     return detail::order(x) >> (52 - B::digits2);
   }
 
-  template <typename U, typename B = binner_type>
-  static auto order(U x)
-    -> std::enable_if_t<! is_shiftable<U, B>{}, detail::ordered_type<T>> {
+  template <class U, class B = binner_type>
+  static auto transform(U x)
+  -> std::enable_if_t<!is_shiftable<U, B>{}, detail::ordered_type<T>> {
     return detail::order(x);
   }
 

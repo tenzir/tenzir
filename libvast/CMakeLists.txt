@@ -9,6 +9,7 @@ set(libvast_sources
   src/address.cpp
   src/attribute.cpp
   src/banner.cpp
+  src/base.cpp
   src/bitmap.cpp
   #src/chunk.cpp
   src/cleanup.cpp
@@ -183,8 +184,10 @@ set(tests
   test/address.cpp
   test/binner.cpp
   test/bitmap.cpp
+  test/bitmap_index.cpp
   test/bitvector.cpp
   test/cache.cpp
+  test/coder.cpp
   test/compressedbuf.cpp
   #test/chunk.cpp
   test/data.cpp

@@ -6,7 +6,8 @@
 #include <limits>
 #include <type_traits>
 
-#include "vast/util/assert.hpp"
+#include "vast/die.hpp"
+#include "vast/detail/assert.hpp"
 
 namespace vast {
 namespace detail {
@@ -15,8 +16,8 @@ namespace detail {
 // total ordering by re-coding the bits as offset binary.
 
 template <
-  typename T,
-  typename = std::enable_if_t<
+  class T,
+  class = std::enable_if_t<
     std::is_unsigned<T>::value && std::is_integral<T>::value
   >
 >
@@ -26,8 +27,8 @@ T order(T x) {
 }
 
 template <
-  typename T,
-  typename = std::enable_if_t<
+  class T,
+  class = std::enable_if_t<
     std::is_signed<T>::value && std::is_integral<T>::value
   >
 >
@@ -40,17 +41,17 @@ auto order(T x) -> std::make_unsigned_t<T> {
 }
 
 template <
-  typename T,
-  typename = std::enable_if_t<std::is_floating_point<T>::value>
+  class T,
+  class = std::enable_if_t<std::is_floating_point<T>::value>
 >
 uint64_t order(T x) {
   static_assert(std::numeric_limits<T>::is_iec559,
                 "can only order IEEE 754 double types");
-  VAST_ASSERT(! std::isnan(x));
+  VAST_ASSERT(!std::isnan(x));
   uint64_t result;
   switch (std::fpclassify(x)) {
     default:
-      throw std::invalid_argument("missing std::fpclassify() case");
+      die("missing std::fpclassify() case");
     case FP_ZERO:
       result = 0x7fffffffffffffff;
       break;
@@ -61,7 +62,7 @@ uint64_t order(T x) {
       result = x < 0.0 ? 0x7ffffffffffffffe : 0x8000000000000000;
       break;
     case FP_NAN:
-      throw std::invalid_argument("NaN cannot be ordered");
+      die("NaN cannot be ordered");
     case FP_NORMAL: {
       static constexpr auto exp_mask = (~0ull << 53) >> 1;
       static constexpr auto sig_mask = ~0ull >> 12;
@@ -91,7 +92,7 @@ uint64_t order(T x) {
   return result;
 }
 
-template <typename T>
+template <class T>
 using ordered_type = decltype(order(T{}));
 
 } // namespace detail
