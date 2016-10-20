@@ -38,8 +38,6 @@
 #include <type_traits>
 
 #include <caf/detail/scope_guard.hpp>
-#include <caf/meta/load_callback.hpp>
-#include <caf/meta/save_callback.hpp>
 
 #include "vast/detail/assert.hpp"
 #include "vast/detail/operators.hpp"
