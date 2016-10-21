@@ -102,31 +102,31 @@ public:
 
   /// Computes the bitwise AND of two bitmaps.
   template <class Rhs = Derived>
-  friend Derived operator&(Derived const& lhs, Rhs const& rhs) {
+  friend auto operator&(Derived const& lhs, Rhs const& rhs) {
     return binary_and(lhs, rhs);
   }
 
   /// Computes the bitwise OR of two bitmaps.
   template <class Rhs = Derived>
-  friend Derived operator|(Derived const& lhs, Rhs const& rhs) {
+  friend auto operator|(Derived const& lhs, Rhs const& rhs) {
     return binary_or(lhs, rhs);
   }
 
   /// Computes the bitwise XOR of two bitmaps.
   template <class Rhs = Derived>
-  friend Derived operator^(Derived const& lhs, Rhs const& rhs) {
+  friend auto operator^(Derived const& lhs, Rhs const& rhs) {
     return binary_xor(lhs, rhs);
   }
 
   /// Computes the bitwise NAND of two bitmaps.
   template <class Rhs = Derived>
-  friend Derived operator-(Derived const& lhs, Rhs const& rhs) {
+  friend auto operator-(Derived const& lhs, Rhs const& rhs) {
     return binary_nand(lhs, rhs);
   }
 
   /// Computes the bitwise NOR of two bitmaps.
   template <class Rhs = Derived>
-  friend Derived operator/(Derived const& lhs, Rhs const& rhs) {
+  friend auto operator/(Derived const& lhs, Rhs const& rhs) {
     return binary_nor(lhs, rhs);
   }
 

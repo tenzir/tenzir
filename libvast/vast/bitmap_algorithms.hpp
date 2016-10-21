@@ -4,15 +4,31 @@
 #include <algorithm>
 #include <iterator>
 #include <queue>
+#include <type_traits>
 
 #include "vast/bits.hpp"
 #include "vast/optional.hpp"
 #include "vast/detail/assert.hpp"
+#include "vast/detail/type_traits.hpp"
 
 namespace vast {
 
+class bitmap;
+
+namespace detail {
+
+template <class T, class U>
+struct eval_result_type {
+  using type = std::conditional_t<std::is_same<T, U>::value, T, bitmap>;
+};
+
+template <class T, class U>
+using eval_result_type_t = typename eval_result_type<T, U>::type;
+
+} // namespace detail
+
 /// Applies a bitwise operation on two immutable bitmaps, writing the result
-/// into a new Bitmap.
+/// into a new bitmap.
 /// @tparam FillLHS A boolean flag that controls the algorithm behavior after
 ///                 one sequence has reached its end. If `true`, the algorithm
 ///                 will append the remaining bits of *lhs* to the result iff
@@ -28,10 +44,19 @@ namespace vast {
 ///
 /// @returns The result of a bitwise operation between *lhs* and *rhs*
 /// according to *op*.
-template <bool FillLHS, bool FillRHS, class Bitmap, class Operation>
-Bitmap binary_eval(Bitmap const& lhs, Bitmap const& rhs, Operation op) {
-  using word = typename Bitmap::word_type;
-  Bitmap result;
+template <bool FillLHS, bool FillRHS, class LHS, class RHS, class Operation>
+detail::eval_result_type_t<LHS, RHS>
+binary_eval(LHS const& lhs, RHS const& rhs, Operation op) {
+  using result_type = detail::eval_result_type_t<LHS, RHS>;
+  static_assert(
+    detail::are_same<
+      typename LHS::word_type,
+      typename RHS::word_type,
+      typename result_type::word_type
+    >::value,
+    "LHS, RHS, and result type must exhibit same word type");
+  using word = typename result_type::word_type;
+  result_type result;
   // Check corner cases.
   if (lhs.empty() && rhs.empty())
     return result;
@@ -39,14 +64,15 @@ Bitmap binary_eval(Bitmap const& lhs, Bitmap const& rhs, Operation op) {
     return rhs;
   if (rhs.empty())
     return lhs;
-  // Iterate.
+  // Initialize LHS.
   auto lhs_range = bit_range(lhs);
-  auto rhs_range = bit_range(rhs);
   auto lhs_begin = lhs_range.begin();
   auto lhs_end = lhs_range.end();
+  auto lhs_bits = lhs_begin->size();
+  // Initialize RHS.
+  auto rhs_range = bit_range(rhs);
   auto rhs_begin = rhs_range.begin();
   auto rhs_end = rhs_range.end();
-  auto lhs_bits = lhs_begin->size();
   auto rhs_bits = rhs_begin->size();
   // TODO: figure out whether we still need the notion of a "fill," i.e., a
   // homogeneous sequence greater-than-or-equal to the word size, or whether
@@ -55,11 +81,12 @@ Bitmap binary_eval(Bitmap const& lhs, Bitmap const& rhs, Operation op) {
   auto is_fill = [](auto x) {
     return x->homogeneous() && x->size() >= word::width;
   };
-  while (lhs_begin != lhs_end && rhs_begin != lhs_end) {
+  // Iterate.
+  while (lhs_begin != lhs_end && rhs_begin != rhs_end) {
     if (is_fill(lhs_begin) && is_fill(rhs_begin)) {
       auto min_bits = std::min(lhs_bits, rhs_bits);
       auto block = op(lhs_begin->data(), rhs_begin->data());
-      VAST_ASSERT(Bitmap::word_type::all_or_none(block));
+      VAST_ASSERT(word::all_or_none(block));
       result.append_bits(block, min_bits);
       lhs_bits -= min_bits;
       rhs_bits -= min_bits;
@@ -168,32 +195,32 @@ auto nary_eval(Iterator begin, Iterator end, Operation op) {
   return bitmap_type{};
 }
 
-template <class Bitmap>
-Bitmap binary_and(Bitmap const& lhs, Bitmap const& rhs) {
+template <class LHS, class RHS>
+auto binary_and(LHS const& lhs, RHS const& rhs) {
   auto op = [](auto x, auto y) { return x & y; };
   return binary_eval<false, false>(lhs, rhs, op);
 }
 
-template <class Bitmap>
-Bitmap binary_or(Bitmap const& lhs, Bitmap const& rhs) {
+template <class LHS, class RHS>
+auto binary_or(LHS const& lhs, RHS const& rhs) {
   auto op = [](auto x, auto y) { return x | y; };
   return binary_eval<true, true>(lhs, rhs, op);
 }
 
-template <class Bitmap>
-Bitmap binary_xor(Bitmap const& lhs, Bitmap const& rhs) {
+template <class LHS, class RHS>
+auto binary_xor(LHS const& lhs, RHS const& rhs) {
   auto op = [](auto x, auto y) { return x ^ y; };
   return binary_eval<true, true>(lhs, rhs, op);
 }
 
-template <class Bitmap>
-Bitmap binary_nand(Bitmap const& lhs, Bitmap const& rhs) {
+template <class LHS, class RHS>
+auto binary_nand(LHS const& lhs, RHS const& rhs) {
   auto op = [](auto x, auto y) { return x & ~y; };
   return binary_eval<true, false>(lhs, rhs, op);
 }
 
-template <class Bitmap>
-Bitmap binary_nor(Bitmap const& lhs, Bitmap const& rhs) {
+template <class LHS, class RHS>
+auto binary_nor(LHS const& lhs, RHS const& rhs) {
   auto op = [](auto x, auto y) { return x | ~y; };
   return binary_eval<true, true>(lhs, rhs, op);
 }
