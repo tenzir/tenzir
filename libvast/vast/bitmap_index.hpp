@@ -1,5 +1,5 @@
-#ifndef VAST_BITMAP_HPP
-#define VAST_BITMAP_HPP
+#ifndef VAST_BITMAP_INDEX_HPP
+#define VAST_BITMAP_INDEX_HPP
 
 #include <type_traits>
 
@@ -49,13 +49,13 @@ public:
   /// @param x The value to append.
   /// @param n The number of times to append *x*.
   void append(value_type x, size_type n = 1, size_type skip = 0) {
-    return coder_.encode(transform(binner_type::bin(x)), n, skip);
+    coder_.encode(transform(binner_type::bin(x)), n, skip);
   }
 
   /// Appends the contents of another bitmap index to this one.
   /// @param other The other bitmap index.
   void append(bitmap_index const& other) {
-    return coder_.append(other.coder_);
+    coder_.append(other.coder_);
   }
 
   /// Retrieves a bitmap of a given value with respect to a given operator.
