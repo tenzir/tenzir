@@ -10,6 +10,7 @@
 #include <caf/meta/load_callback.hpp>
 #include <caf/meta/save_callback.hpp>
 
+#include "vast/base.hpp"
 #include "vast/operator.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/operators.hpp"
@@ -33,6 +34,7 @@ struct coder {
   /// @param n The number of time to add *x*.
   /// @param skip The number of entries to skip before encoding.
   /// @pre `Bitmap::max_size - size() >= n + skip`
+  /// @post Skipped entries show up as 0s during decoding.
   void encode(value_type x, size_type n = 1, size_type skip = 0);
 
   /// Decodes a value under a relational operator.
@@ -69,6 +71,7 @@ public:
   }
 
   Bitmap decode(relational_operator op, value_type x) const {
+    VAST_ASSERT(op == equal || op == not_equal);
     auto result = bitmap_;
     if ((x && op == equal) || (!x && op == not_equal))
       return result;

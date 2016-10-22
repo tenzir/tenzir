@@ -124,6 +124,8 @@ TEST(range-coder) {
   CHECK_EQUAL(to_string(c.decode(less, 4)), "00011111111");
   CHECK_EQUAL(to_string(c.decode(equal, 3)), "00011111100");
   CHECK_EQUAL(to_string(c.decode(greater_equal, 3)), "11111111100");
+  // Skipped entries come out as 0s, even though the underlying bitmaps consist
+  // of 1s. That's because the Range-Eval-Opt algorithm turns them into 0s.
   c.encode(7, 1, 3);
   CHECK_EQUAL(to_string(c.decode(greater_equal, 7)), "010000000000001");
 }
