@@ -5,9 +5,10 @@
 
 namespace vast {
 
-/// A sequence of bits represented by a single word. If the word is
-/// *homogeneous*, i.e., either all 0s or all 1s, then the sequence can have
-/// any size. Otherwise it must be less than or equal the word size.
+/// A sequence of bits represented by a single word. If the size is greater
+/// than or equal to the word size, then the data block must be all 0s or
+/// all 1s. Otherwise, only the N least-significant bits are active, and the
+/// remaining bits in the block are guaranteed to be 0.
 template <class T>
 class bits {
   public:
@@ -15,7 +16,13 @@ class bits {
   using value_type = typename word::value_type;
   using size_type = uint64_t;
 
-  bits(value_type x = 0, size_type n = word::width) : data_{x}, size_{n} {
+  static constexpr value_type mask(value_type x, size_type n) {
+    return n < word::width ? x & word::lsb_mask(n) : x;
+  }
+
+  bits(value_type x = 0, size_type n = word::width)
+    : data_{mask(x, n)},
+      size_{n} {
     VAST_ASSERT(n > 0);
     VAST_ASSERT(n <= word::width || word::all_or_none(x));
   }
@@ -47,8 +54,8 @@ class bits {
   /// Computes the number 1-bits.
   /// @returns The population count of this bit sequence.
   size_type count() const {
-    if (size_ <= word::width)
-      return word::popcount(data_ & word::lsb_fill(size_));
+    if (size_ <= word::width && data_ > 0)
+      return word::popcount(data_);
     return data_ == word::all ? size_ : 0;
   }
 
