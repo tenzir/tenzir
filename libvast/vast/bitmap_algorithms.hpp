@@ -83,9 +83,9 @@ binary_eval(LHS const& lhs, RHS const& rhs, Operation op) {
   };
   // Iterate.
   while (lhs_begin != lhs_end && rhs_begin != rhs_end) {
+    auto block = op(lhs_begin->data(), rhs_begin->data());
     if (is_fill(lhs_begin) && is_fill(rhs_begin)) {
       auto min_bits = std::min(lhs_bits, rhs_bits);
-      auto block = op(lhs_begin->data(), rhs_begin->data());
       VAST_ASSERT(word::all_or_none(block));
       result.append_bits(block, min_bits);
       lhs_bits -= min_bits;
@@ -93,22 +93,16 @@ binary_eval(LHS const& lhs, RHS const& rhs, Operation op) {
     } else if (is_fill(lhs_begin)) {
       VAST_ASSERT(rhs_bits > 0);
       VAST_ASSERT(rhs_bits <= word::width);
-      auto block = op(lhs_begin->data(),
-                      rhs_begin->data() & word::lsb_fill(rhs_bits));
       result.append_block(block);
       lhs_bits -= word::width;
       rhs_bits = 0;
     } else if (is_fill(rhs_begin)) {
       VAST_ASSERT(lhs_bits > 0);
       VAST_ASSERT(lhs_bits <= word::width);
-      auto block = op(lhs_begin->data() & word::lsb_fill(lhs_bits),
-                      rhs_begin->data());
       result.append_block(block);
       rhs_bits -= word::width;
       lhs_bits = 0;
     } else {
-      auto block = op(lhs_begin->data() & word::lsb_fill(lhs_bits),
-                      rhs_begin->data() & word::lsb_fill(rhs_bits));
       result.append_block(block, std::max(lhs_bits, rhs_bits));
       lhs_bits = rhs_bits = 0;
     }
