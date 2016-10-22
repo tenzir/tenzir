@@ -43,12 +43,20 @@ public:
     : coder_(std::forward<Ts>(xs)...) {
   }
 
-  /// Adds a value to the bitmap index. For example, in the case of equality
+  /// Appends a value to the bitmap index. For example, in the case of equality
   /// coding, this means appending 1 to the single bitmap for the given
   /// value and 0 to all other bitmaps.
   /// @param x The value to append.
+  /// @post Skipped entries show up as 0s during decoding.
+  void push_back(value_type x, size_type skip = 0) {
+    append(x, 1, skip);
+  }
+
+  /// Appends one or more instances of value to the bitmap index.
+  /// @param x The value to append.
   /// @param n The number of times to append *x*.
-  void append(value_type x, size_type n = 1, size_type skip = 0) {
+  /// @post Skipped entries show up as 0s during decoding.
+  void append(value_type x, size_type n, size_type skip = 0) {
     coder_.encode(transform(binner_type::bin(x)), n, skip);
   }
 

@@ -12,11 +12,11 @@ using namespace vast;
 
 TEST(boolean bitmap index) {
   bitmap_index<bool, singleton_coder<null_bitmap>> bmi;
-  bmi.append(true);
-  bmi.append(false);
-  bmi.append(false);
-  bmi.append(true);
-  bmi.append(false);
+  bmi.push_back(true);
+  bmi.push_back(false);
+  bmi.push_back(false);
+  bmi.push_back(true);
+  bmi.push_back(false);
   CHECK_EQUAL(to_string(bmi.lookup(equal,     true)) , "10010");
   CHECK_EQUAL(to_string(bmi.lookup(equal,     false)), "01101");
   CHECK_EQUAL(to_string(bmi.lookup(not_equal, false)), "10010");
@@ -36,11 +36,11 @@ TEST(appending multiple values) {
 TEST(multi-level range-coded bitmap index) {
   using coder_type = multi_level_coder<range_coder<null_bitmap>>;
   auto bmi = bitmap_index<int8_t, coder_type>{base::uniform<8>(2)};
-  bmi.append(42);
-  bmi.append(84);
-  bmi.append(42);
-  bmi.append(21);
-  bmi.append(30);
+  bmi.push_back(42);
+  bmi.push_back(84);
+  bmi.push_back(42);
+  bmi.push_back(21);
+  bmi.push_back(30);
   CHECK_EQUAL(to_string(bmi.lookup(not_equal, 13)), "11111");
   CHECK_EQUAL(to_string(bmi.lookup(not_equal, 42)), "01011");
   CHECK_EQUAL(to_string(bmi.lookup(equal, 21)), "00010");
@@ -67,13 +67,13 @@ TEST(multi-level range-coded bitmap index) {
 TEST(multi-level range-coded bitmap index 2) {
   using coder_type = multi_level_coder<range_coder<null_bitmap>>;
   auto bmi = bitmap_index<uint16_t, coder_type>{base::uniform(9, 7)};
-  bmi.append(80);
-  bmi.append(443);
-  bmi.append(53);
-  bmi.append(8);
-  bmi.append(31337);
-  bmi.append(80);
-  bmi.append(8080);
+  bmi.push_back(80);
+  bmi.push_back(443);
+  bmi.push_back(53);
+  bmi.push_back(8);
+  bmi.push_back(31337);
+  bmi.push_back(80);
+  bmi.push_back(8080);
   // Results
   null_bitmap all_zeros;
   all_zeros.append_bits(false, 7);
@@ -118,13 +118,13 @@ TEST(multi-level range-coded bitmap index 2) {
 
 TEST(bitslice-coded bitmap index) {
   bitmap_index<int16_t, bitslice_coder<null_bitmap>> bmi{8};
-  bmi.append(0);
-  bmi.append(1);
-  bmi.append(1);
-  bmi.append(2);
-  bmi.append(3);
-  bmi.append(2);
-  bmi.append(2);
+  bmi.push_back(0);
+  bmi.push_back(1);
+  bmi.push_back(1);
+  bmi.push_back(2);
+  bmi.push_back(3);
+  bmi.push_back(2);
+  bmi.push_back(2);
   CHECK_EQUAL(to_string(bmi.lookup(equal, 0)), "1000000");
   CHECK_EQUAL(to_string(bmi.lookup(equal, 1)), "0110000");
   CHECK_EQUAL(to_string(bmi.lookup(equal, 2)), "0001011");
@@ -147,15 +147,15 @@ auto append_test() {
   auto bmi1 = bitmap_index<uint16_t, coder_type>{b};
   auto bmi2 = bitmap_index<uint16_t, coder_type>{b};
   // Fist
-  bmi1.append(43);
-  bmi1.append(42);
-  bmi1.append(42);
-  bmi1.append(1337);
+  bmi1.push_back(43);
+  bmi1.push_back(42);
+  bmi1.push_back(42);
+  bmi1.push_back(1337);
   // Second
-  bmi2.append(4711);
-  bmi2.append(123);
-  bmi2.append(1337);
-  bmi2.append(456);
+  bmi2.push_back(4711);
+  bmi2.push_back(123);
+  bmi2.push_back(1337);
+  bmi2.push_back(456);
   CHECK(to_string(bmi1.lookup(equal, 42)) ==   "0110");
   CHECK(to_string(bmi1.lookup(equal, 1337)) == "0001");
   // bmi1 += bmi2
@@ -196,12 +196,12 @@ TEST(fractional precision-binner) {
   using binner = precision_binner<2, 3>;
   using coder_type = multi_level_coder<range_coder<null_bitmap>>;
   auto bmi = bitmap_index<double, coder_type, binner>{base::uniform<64>(2)};
-  bmi.append(42.001);
-  bmi.append(42.002);
-  bmi.append(43.0014);
-  bmi.append(43.0013);
-  bmi.append(43.0005);
-  bmi.append(43.0015);
+  bmi.push_back(42.001);
+  bmi.push_back(42.002);
+  bmi.push_back(43.0014);
+  bmi.push_back(43.0013);
+  bmi.push_back(43.0005);
+  bmi.push_back(43.0015);
   CHECK(to_string(bmi.lookup(equal, 42.001)) == "100000");
   CHECK(to_string(bmi.lookup(equal, 42.002)) == "010000");
   CHECK(to_string(bmi.lookup(equal, 43.001)) == "001110");
@@ -211,11 +211,11 @@ TEST(fractional precision-binner) {
 TEST(decimal binner with integers) {
   using binner = decimal_binner<2>;
   bitmap_index<uint16_t, equality_coder<null_bitmap>, binner> bmi{400};
-  bmi.append(183);
-  bmi.append(215);
-  bmi.append(350);
-  bmi.append(253);
-  bmi.append(101);
+  bmi.push_back(183);
+  bmi.push_back(215);
+  bmi.push_back(350);
+  bmi.push_back(253);
+  bmi.push_back(101);
   CHECK(to_string(bmi.lookup(equal, 100)) == "10001");
   CHECK(to_string(bmi.lookup(equal, 200)) == "01010");
   CHECK(to_string(bmi.lookup(equal, 300)) == "00100");
@@ -225,12 +225,12 @@ TEST(decimal binner with floating-point) {
   using binner = decimal_binner<1>;
   using coder_type = multi_level_coder<range_coder<null_bitmap>>;
   auto bmi = bitmap_index<double, coder_type, binner>{base::uniform<64>(2)};
-  bmi.append(42.123);
-  bmi.append(53.9);
-  bmi.append(41.02014);
-  bmi.append(44.91234543);
-  bmi.append(39.5);
-  bmi.append(49.5);
+  bmi.push_back(42.123);
+  bmi.push_back(53.9);
+  bmi.push_back(41.02014);
+  bmi.push_back(44.91234543);
+  bmi.push_back(39.5);
+  bmi.push_back(49.5);
   CHECK(to_string(bmi.lookup(equal, 40.0)) == "101110");
   CHECK(to_string(bmi.lookup(equal, 50.0)) == "010001");
 }
@@ -239,11 +239,11 @@ TEST(serialization) {
   using coder = multi_level_coder<equality_coder<null_bitmap>>;
   using bitmap_index_type = bitmap_index<int8_t, coder>;
   bitmap_index_type bmi1{base::uniform<8>(2)}, bmi2;
-  bmi1.append(52);
-  bmi1.append(84);
-  bmi1.append(100);
-  bmi1.append(-42);
-  bmi1.append(-100);
+  bmi1.push_back(52);
+  bmi1.push_back(84);
+  bmi1.push_back(100);
+  bmi1.push_back(-42);
+  bmi1.push_back(-100);
   CHECK_EQUAL(to_string(bmi1.lookup(not_equal, 100)), "11011");
   std::vector<char> buf;
   save(buf, bmi1);
