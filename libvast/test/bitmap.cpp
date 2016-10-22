@@ -193,6 +193,22 @@ struct bitmap_test_harness {
     CHECK_EQUAL(select<1>(b, rank<1>(b)), b.size() - 1); // last bit
   }
 
+  void test_all() {
+    MESSAGE("all");
+    CHECK(!all<0>(a));
+    CHECK(!all<0>(b));
+    CHECK(!all<1>(a));
+    CHECK(!all<1>(b));
+    CHECK(all<0>(Bitmap{10, false}));
+    CHECK(all<0>(Bitmap{1000, false}));
+    CHECK(!all<0>(Bitmap{10, true}));
+    CHECK(!all<0>(Bitmap{1000, true}));
+    CHECK(all<1>(Bitmap{10, true}));
+    CHECK(all<1>(Bitmap{1000, true}));
+    CHECK(!all<1>(Bitmap{10, false}));
+    CHECK(!all<1>(Bitmap{1000, false}));
+  }
+
   void test_printable() {
     std::string str;
     printers::bitmap<Bitmap, policy::rle>(str, a);
@@ -218,6 +234,7 @@ struct bitmap_test_harness {
     test_bitwise_nary();
     test_rank();
     test_select();
+    test_all();
     test_printable();
   }
 

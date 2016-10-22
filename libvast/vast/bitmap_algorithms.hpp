@@ -303,6 +303,27 @@ select(Bitmap const& bm, typename Bitmap::size_type i) {
   return Bitmap::word_type::npos;
 }
 
+/// Tests whether a bitmap consists of a homogeneous sequence of a particular
+/// bit value.
+/// @tparam Bit the bit value to test.
+/// @param bm The bitmap to test.
+/// @returns `true` iff all bits in *bm* have value *Bit*.
+template <bool Bit = true, class Bitmap>
+bool all(Bitmap const& bm) {
+  using word = typename Bitmap::word_type;
+  for (auto b : bit_range(bm)) {
+    auto data = b.data();
+    if (b.size() >= word::width) {
+      if (data != (Bit ? word::all : word::none))
+        return false;
+    } else {
+      if (data != (Bit ? word::lsb_mask(b.size()) : word::none))
+        return false;
+    }
+  }
+  return true;
+}
+
 } // namespace vast
 
 #endif
