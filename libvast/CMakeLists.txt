@@ -36,6 +36,7 @@ set(libvast_sources
   src/type.cpp
   src/uuid.cpp
   src/value.cpp
+  src/value_index.cpp
   # FIXME: Bring back after having repaired CAF code.
   #src/actor/accountant.cpp
   #src/actor/archive.cpp
@@ -223,7 +224,7 @@ set(tests
   test/type.cpp
   test/uuid.cpp
   test/value.cpp
-  #test/value_index.cpp
+  test/value_index.cpp
   test/variant.cpp
   test/word.cpp
 )

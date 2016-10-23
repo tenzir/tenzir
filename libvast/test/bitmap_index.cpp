@@ -238,7 +238,7 @@ TEST(decimal binner with floating-point) {
 TEST(serialization) {
   using coder = multi_level_coder<equality_coder<null_bitmap>>;
   using bitmap_index_type = bitmap_index<int8_t, coder>;
-  bitmap_index_type bmi1{base::uniform<8>(2)}, bmi2;
+  auto bmi1 = bitmap_index_type{base::uniform<8>(2)};
   bmi1.push_back(52);
   bmi1.push_back(84);
   bmi1.push_back(100);
@@ -247,6 +247,7 @@ TEST(serialization) {
   CHECK_EQUAL(to_string(bmi1.lookup(not_equal, 100)), "11011");
   std::vector<char> buf;
   save(buf, bmi1);
+  auto bmi2 = bitmap_index_type{};
   load(buf, bmi2);
   CHECK(bmi1 == bmi2);
   CHECK_EQUAL(to_string(bmi2.lookup(not_equal, 100)), "11011");

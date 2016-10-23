@@ -1,151 +1,83 @@
-#ifndef VAST_BITMAP_INDEX_HPP
-#define VAST_BITMAP_INDEX_HPP
+#ifndef VAST_VALUE_INDEX_HPP
+#define VAST_VALUE_INDEX_HPP
 
+#include <memory>
+#include <type_traits>
+
+#include "vast/ewah_bitmap.hpp"
 #include "vast/bitmap.hpp"
+#include "vast/bitmap_index.hpp"
+#include "vast/data.hpp"
+//#include "vast/concept/printable/vast/data.hpp"
+//#include "vast/concept/printable/vast/operator.hpp"
+#include "vast/detail/assert.hpp"
 #include "vast/error.hpp"
 #include "vast/maybe.hpp"
-#include "vast/operator.hpp"
-#include "vast/value.hpp"
-#include "vast/concept/printable/vast/data.hpp"
-#include "vast/concept/printable/vast/operator.hpp"
-#include "vast/util/assert.hpp"
-#include "vast/util/operators.hpp"
+#include "vast/type.hpp"
 
 namespace vast {
 
-/// The base class for bitmap indexes.
-template <typename Derived, typename Bitstream>
-class value_index_base
-  : util::equality_comparable<value_index_base<Derived, Bitstream>> {
-  friend access;
-
+/// The base class for value indexes.
+class value_index {
 public:
-  /// Appends a single value.
-  /// @param x The value to append to the index.
-  /// @param offset The position of *x* in the bitmap index.
+  using size_type = typename bitmap::size_type;
+
+  /// Constructs a value index from a given type. All
+  static std::unique_ptr<value_index> make(type const& t);
+
+  /// Appends a data value.
+  /// @param x The data to append to the index.
   /// @returns `true` if appending succeeded.
-  template <typename T>
-  bool push_back(T const& x, uint64_t offset = 0) {
-    return catch_up(offset) && derived()->push_back_impl(x)
-           && nil_.push_back(false) && mask_.push_back(true);
-  }
+  bool push_back(data const& x);
 
-  bool push_back(none, uint64_t offset = 0) {
-    return catch_up(offset) && stretch(1) && nil_.push_back(true)
-           && mask_.push_back(true);
-  }
+  /// Appends a data value.
+  /// @param x The data to append to the index.
+  /// @param id The positional identifier of *x*.
+  /// @returns `true` if appending succeeded.
+  bool push_back(data const& x, event_id id);
 
-  bool push_back(data const& d, uint64_t offset = 0) {
-    return catch_up(offset)
-           && (is<none>(d) ? stretch(1) : derived()->push_back_impl(d))
-           && nil_.push_back(is<none>(d)) && mask_.push_back(true);
-  }
-
-  /// Appends 0-bits to the index.
-  /// @param n The number of zeros to append.
-  /// @returns `true` on success.
-  bool stretch(size_t n) {
-    return derived()->stretch_impl(n);
-  }
-
-  /// Appends a bitmap index.
-  /// @param other The bitmap index to append.
-  /// @returns `true` on success.
-  bool append(Derived const& other) {
-    return derived()->append_impl(other);
-  }
-
-  /// Looks up a value given a relational operator.
+  /// Looks up data under a relational operator.
   /// @param op The relation operator.
   /// @param x The value to lookup.
-  template <typename T>
-  maybe<Bitstream> lookup(relational_operator op, T const& x) const {
-    auto r = derived()->lookup_impl(op, x);
-    if (r)
-      *r &= mask_;
-    return r;
-  }
+  /// @returns The result of the lookup or an error upon failure.
+  maybe<bitmap> lookup(relational_operator op, data const& x) const;
 
-  maybe<Bitstream> lookup(relational_operator op, none) const {
-    if (!(op == equal || op == not_equal))
-      return fail<ec::unsupported_operator>(op);
-    return op == equal ? nil_ & mask_ : ~nil_ & mask_;
-  }
-
-  maybe<Bitstream> lookup(relational_operator op, data const& d) const {
-    if (is<none>(d))
-      return lookup(op, nil);
-    auto r = derived()->lookup_impl(op, d);
-    if (r)
-      *r &= mask_;
-    return r;
-  }
-
-  /// Retrieves the number of elements in the bitmap index.
-  /// @returns The number of rows, i.e., values in the bitmap.
-  uint64_t size() const {
-    return derived()->size_impl();
-  }
-
-  /// Checks whether the bitmap is empty.
-  /// @returns `true` if `size() == 0`.
-  bool empty() const {
-    return size() == 0;
-  }
-
-  /// Appends invalid bits to bring the bitmap index up to a given size. Given
-  /// an ID of *n*, the function stretches the index up to size *n* with
-  /// invalid bits.
-  /// @param n The ID to catch up to.
+  /// Merges another value index with this one.
+  /// @param other The value index to merge.
   /// @returns `true` on success.
-  bool catch_up(uint64_t n) {
-    if (n == 0)
-      return true;
-    if (n < size())
-      return false;
-    auto delta = n - size();
-    if (delta == 0)
-      return true;
-    return stretch(delta) && nil_.append(delta, false)
-           && mask_.append(delta, false);
-  }
+  //bool merge(value_index const& other);
+
+  /// Retrieves the type according to which the index has been constructed.
+  /// @returns The type of this index.
+  vast::type const& type() const;
 
   template <class Inspector>
-  friend auto inspect(Inspector& f, value_index_base& bmi) {
-    return f(bmi.mask_, bmi.nil_);
+  friend auto inspect(Inspector& f, value_index& vi) {
+    return f(vi.type_, vi.mask_, vi.none_);
   }
 
+protected:
+  value_index(vast::type t = {});
+
+  vast::type type_;
 private:
-  Derived* derived() {
-    return static_cast<Derived*>(this);
-  }
+  virtual bool push_back_impl(data const& x, event_id id) = 0;
 
-  Derived const* derived() const {
-    return static_cast<Derived const*>(this);
-  }
+  virtual maybe<bitmap>
+  lookup_impl(relational_operator op, data const& x) const = 0;
 
-  Bitstream mask_;
-  Bitstream nil_;
+  ewah_bitmap mask_;
+  ewah_bitmap none_;
 };
 
-/// A bitmap index for arithmetic values.
-template <typename Bitstream, typename T, typename Binner = void>
-class arithmetic_bitmap_index
-  : public value_index_base<
-             arithmetic_bitmap_index<Bitstream, T, Binner>,
-             Bitstream
-           >,
-           util::equality_comparable<
-             arithmetic_bitmap_index<Bitstream, T, Binner>
-           > {
-  using super =
-    value_index_base<arithmetic_bitmap_index<Bitstream, T, Binner>, Bitstream>;
-  friend super;
-
-  using bitmap_value_type =
+/// An index for arithmetic values.
+template <class T, class Binner = void>
+class arithmetic_index : public value_index {
+public:
+  using value_type =
     std::conditional_t<
-      std::is_same<T, time::point>{} || std::is_same<T, time::duration>{},
-      time::duration::rep,
+      std::is_same<T, timestamp>{} || std::is_same<T, interval>{},
+      interval::rep,
       std::conditional_t<
         std::is_same<T, boolean>{}
           || std::is_same<T, integer>{}
@@ -156,19 +88,22 @@ class arithmetic_bitmap_index
       >
     >;
 
-  using bitmap_coder =
+  static_assert(!std::is_same<value_type, std::false_type>{},
+                "invalid type T for arithmetic_index");
+
+  using coder_type =
     std::conditional_t<
       std::is_same<T, boolean>{},
-      singleton_coder<Bitstream>,
-      multi_level_coder<uniform_base<10, 20>, range_coder<Bitstream>>
+      singleton_coder<bitmap>,
+      multi_level_coder<range_coder<bitmap>>
     >;
 
-  using bitmap_binner =
+  using binner_type =
     std::conditional_t<
-      std::is_same<Binner, void>{},
+      std::is_void<Binner>{},
+      // Choose a space-efficient binner if none specified.
       std::conditional_t<
-        std::is_same<T, time::point>{}
-          || std::is_same<T, time::duration>{},
+        std::is_same<T, timestamp>{} || std::is_same<T, interval>{},
         decimal_binner<9>, // nanoseconds -> seconds
         std::conditional_t<
           std::is_same<T, real>{},
@@ -179,512 +114,210 @@ class arithmetic_bitmap_index
       Binner
     >;
 
-  using bitmap_type =
-    bitmap<bitmap_value_type, bitmap_coder, bitmap_binner>;
+  using bitmap_index_type = bitmap_index<value_type, coder_type, binner_type>;
 
-public:
-  using bitstream_type = Bitstream;
-
-  arithmetic_bitmap_index() = default;
-
-  friend bool operator==(arithmetic_bitmap_index const& x,
-                         arithmetic_bitmap_index const& y) {
-    return x.bitmap_ == y.bitmap_;
+  template <
+    class... Ts,
+    class = std::enable_if_t<std::is_constructible<bitmap_index_type, Ts...>{}>
+  >
+  explicit arithmetic_index(Ts&&... xs) : bmi_{std::forward<Ts>(xs)...} {
   }
 
   template <class Inspector>
-  friend auto inspect(Inspector& f, arithmetic_bitmap_index& bmi) {
-    return f(static_cast<super&>(bmi), bmi.bitmap_);
+  friend auto inspect(Inspector& f, arithmetic_index& idx) {
+    return f(static_cast<value_index&>(idx), idx.bmi_);
   }
 
 private:
-  struct pusher {
-    pusher(bitmap_type& bm) : bm_{bm} {
+  struct appender {
+    appender(bitmap_index_type& idx, size_type skip) : bmi_{idx}, skip_{skip} {
     }
 
-    template <typename U>
-    bool operator()(U) const {
+    template <class U>
+    bool operator()(U const&) const {
       return false;
     }
 
-    bool operator()(bitmap_value_type x) const {
-      return bm_.push_back(x);
+    bool operator()(value_type x) const {
+      bmi_.push_back(x, skip_);
+      return true;
     }
 
-    bool operator()(time::point x) const {
+    bool operator()(timestamp x) const {
       return (*this)(x.time_since_epoch().count());
     }
 
-    bool operator()(time::duration x) const {
+    bool operator()(interval x) const {
       return (*this)(x.count());
     }
 
-    bitmap_type& bm_;
+    bitmap_index_type& bmi_;
+    size_type skip_;
   };
 
-  struct looker {
-    looker(bitmap_type const& bm, relational_operator op) : bm_{bm}, op_{op} {
+  struct searcher {
+    searcher(bitmap_index_type const& idx, relational_operator op)
+      : bmi_{idx}, op_{op} {
     }
 
-    template <typename U>
-    maybe<Bitstream> operator()(U const& x) const {
-      return fail<ec::type_clash>(bitmap_value_type{}, x);
+    template <class U>
+    auto operator()(U const& x) const
+    -> std::enable_if_t<!std::is_arithmetic<U>{}, maybe<bitmap>> {
+      return fail<ec::type_clash>(value_type{}, x);
     }
 
-    maybe<Bitstream> operator()(bitmap_value_type x) const {
-      return bm_.lookup(op_, x);
+    maybe<bitmap> operator()(boolean x) const {
+      // Boolean indexes support only equality
+      if (!(op_ == equal || op_ == not_equal))
+        return fail<ec::unsupported_operator>();
+      return bmi_.lookup(op_, x);
     }
 
-    maybe<Bitstream> operator()(time::point x) const {
+    template <class U>
+    auto operator()(U x) const
+    -> std::enable_if_t<std::is_arithmetic<U>{}, maybe<bitmap>> {
+      // No operator constraint on arithmetic type.
+      return bmi_.lookup(op_, x);
+    }
+
+    maybe<bitmap> operator()(timestamp x) const {
       return (*this)(x.time_since_epoch().count());
     }
 
-    maybe<Bitstream> operator()(time::duration x) const {
+    maybe<bitmap> operator()(interval x) const {
       return (*this)(x.count());
     }
 
-    bitmap_type const& bm_;
+    bitmap_index_type const& bmi_;
     relational_operator op_;
   };
 
-  bool push_back_impl(data const& d) {
-    return visit(pusher{bitmap_}, d);
+  bool push_back_impl(data const& x, size_type skip) override {
+    return visit(appender{bmi_, skip}, x);
   }
 
-  bool push_back_impl(T x) {
-    return pusher{bitmap_}(x);
-  }
-
-  bool stretch_impl(size_t n) {
-    return bitmap_.stretch(n);
-  }
-
-  maybe<Bitstream> lookup_impl(relational_operator op, data const& d) const {
-    if (op == in || op == not_in)
-      return fail<ec::unsupported_operator>(op);
-    return visit(looker{bitmap_, op}, d);
+  maybe<bitmap>
+  lookup_impl(relational_operator op, data const& x) const override {
+    return visit(searcher{bmi_, op}, x);
   };
 
-  maybe<Bitstream> lookup_impl(relational_operator op, T x) const {
-    if (op == in || op == not_in)
-      return fail<ec::unsupported_operator>(op);
-    return looker{bitmap_, op}(x);
-  };
-
-  uint64_t size_impl() const {
-    return bitmap_.size();
-  }
-
-  bitmap_type bitmap_;
+  bitmap_index_type bmi_;
 };
 
-/// A bitmap index for strings.
-template <typename Bitstream>
-class string_bitmap_index
-  : public value_index_base<string_bitmap_index<Bitstream>, Bitstream> {
-  using super = value_index_base<string_bitmap_index<Bitstream>, Bitstream>;
-  friend super;
-
-  static constexpr size_t max_string_length = 8192;
-
+/// An index for strings.
+class string_index : public value_index {
 public:
-  using bitstream_type = Bitstream;
-  using char_bitmap_type = bitmap<uint8_t, bitslice_coder<Bitstream>>;
-  using length_bitmap_type = bitmap<
-    uint32_t, multi_level_coder<uniform_base<10, 4>, range_coder<Bitstream>>
-  >;
-
-  string_bitmap_index() = default;
-
-  friend bool operator==(string_bitmap_index const& x,
-                         string_bitmap_index const& y) {
-    return x.bitmaps_ == y.bitmaps_;
-  }
+  /// Constructs a string index.
+  /// @param max_length The maximum string length to support. Longer strings
+  ///                   will be chopped to this size.
+  explicit string_index(size_t max_length = 1024);
 
   template <class Inspector>
-  friend auto inspect(Inspector& f, string_bitmap_index& bmi) {
-    return f(static_cast<super&>(bmi), bmi.bitmaps_, bmi.length_);
+  friend auto inspect(Inspector& f, string_index& idx) {
+    return f(static_cast<value_index&>(idx), idx.length_, idx.chars_);
   }
 
 private:
-  template <typename Iterator>
-  bool push_back_string(Iterator begin, Iterator end) {
-    auto length = static_cast<size_t>(end - begin);
-    VAST_ASSERT(length < max_string_length);
-    if (length > bitmaps_.size())
-      bitmaps_.resize(length, char_bitmap_type{8});
-    for (size_t i = 0; i < length; ++i) {
-      VAST_ASSERT(this->size() >= bitmaps_[i].size());
-      auto delta = this->size() - bitmaps_[i].size();
-      if (delta > 0 && !bitmaps_[i].stretch(delta))
-        return false;
-      if (!bitmaps_[i].push_back(static_cast<uint8_t>(begin[i])))
-        return false;
-    }
-    return length_.push_back(length);
-  }
+  /// The index which holds each character.
+  using char_bitmap_index = bitmap_index<uint8_t, bitslice_coder<ewah_bitmap>>;
 
-  bool push_back_impl(data const& d) {
-    auto str = get<std::string>(d);
-    return str && push_back_impl(*str);
-  }
+  /// The index which holds the string length.
+  using length_bitmap_index =
+    bitmap_index<uint32_t, multi_level_coder<range_coder<bitmap>>>;
 
-  bool push_back_impl(std::string const& str) {
-    return push_back_string(str.begin(), str.end());
-  }
+  void init();
 
-  template <size_t N>
-  bool push_back_impl(char const(&str)[N]) {
-    return push_back_string(str, str + N - 1);
-  }
+  bool push_back_impl(data const& x, size_type skip) override;
 
-  bool stretch_impl(size_t n) {
-    return length_.stretch(n);
-  }
+  maybe<bitmap>
+  lookup_impl(relational_operator op, data const& x) const override;
 
-  template <typename Iterator>
-  maybe<Bitstream> lookup_string(relational_operator op, Iterator begin,
-                                 Iterator end) const {
-    auto length = static_cast<size_t>(end - begin);
-    VAST_ASSERT(length < max_string_length);
-    switch (op) {
-      default:
-        return fail<ec::unsupported_operator>(op);
-      case equal:
-      case not_equal: {
-        if (length == 0) {
-          auto l = length_.lookup(equal, 0);
-          return std::move(op == equal ? l : l.flip());
-        }
-        if (length > bitmaps_.size())
-          return Bitstream{this->size(), op == not_equal};
-        auto r = length_.lookup(less_equal, length);
-        if (r.all_zeros())
-          return Bitstream{this->size(), op == not_equal};
-        for (size_t i = 0; i < length; ++i) {
-          auto b = bitmaps_[i].lookup(equal, static_cast<uint8_t>(begin[i]));
-          if (!b.all_zeros())
-            r &= b;
-          else
-            return Bitstream{this->size(), op == not_equal};
-        }
-        return std::move(op == equal ? r : r.flip());
-      }
-      case ni:
-      case not_ni: {
-        if (length == 0)
-          return Bitstream{this->size(), op == ni};
-        if (length > bitmaps_.size())
-          return Bitstream{this->size(), op == not_ni};
-        // TODO: Be more clever than iterating over all k-grams (#45).
-        Bitstream r{this->size(), 0};
-        for (size_t i = 0; i < bitmaps_.size() - length + 1; ++i) {
-          Bitstream substr{this->size(), 1};
-          auto skip = false;
-          for (size_t j = 0; j < length; ++j) {
-            auto bs = bitmaps_[i + j].lookup(equal, begin[j]);
-            if (bs.all_zeros()) {
-              skip = true;
-              break;
-            }
-            substr &= bs;
-          }
-          if (!skip)
-            r |= substr;
-        }
-        return std::move(op == ni ? r : r.flip());
-      }
-    }
-  }
-
-  maybe<Bitstream> lookup_impl(relational_operator op, data const& d) const {
-    auto s = get<std::string>(d);
-    if (s)
-      return lookup_impl(op, *s);
-    return fail<ec::type_clash>(type::string{}, d);
-  }
-
-  maybe<Bitstream> lookup_impl(relational_operator op,
-                               std::string const& str) const {
-    return lookup_string(op, str.begin(), str.end());
-  }
-
-  template <size_t N>
-  maybe<Bitstream> lookup_impl(relational_operator op,
-                               char const(&str)[N]) const {
-    return lookup_string(op, str, str + N - 1);
-  }
-
-  uint64_t size_impl() const {
-    return length_.size();
-  }
-
-  std::vector<char_bitmap_type> bitmaps_;
-  length_bitmap_type length_;
+  size_t max_length_;
+  length_bitmap_index length_;
+  std::vector<char_bitmap_index> chars_;
 };
 
-/// A bitmap index for IP addresses.
-template <typename Bitstream>
-class address_bitmap_index
-  : public value_index_base<address_bitmap_index<Bitstream>, Bitstream> {
-  using super = value_index_base<address_bitmap_index<Bitstream>, Bitstream>;
-  friend super;
-
+/// An index for IP addresses.
+class address_index : public value_index {
 public:
-  using bitstream_type = Bitstream;
-  using bitmap_type = bitmap<uint8_t, bitslice_coder<Bitstream>>;
+  using byte_index = bitmap_index<uint8_t, bitslice_coder<ewah_bitmap>>;
+  using type_index = bitmap_index<bool, singleton_coder<ewah_bitmap>>;
 
-  address_bitmap_index() {
-    bitmaps_.fill(bitmap_type{8});
-  }
-
-  friend bool operator==(address_bitmap_index const& x,
-                         address_bitmap_index const& y) {
-    return x.bitmaps_ == y.bitmaps_;
-  }
+  address_index() = default;
 
   template <class Inspector>
-  friend auto inspect(Inspector& f, address_bitmap_index& bmi) {
-    return f(static_cast<super&>(bmi), bmi.bitmaps_, bmi.v4_);
+  friend auto inspect(Inspector& f, address_index& idx) {
+    return f(static_cast<value_index&>(idx), idx.bytes_, idx.v4_);
   }
 
 private:
-  bool push_back_impl(address const& a) {
-    auto& bytes = a.data();
-    size_t start = a.is_v4() ? 12 : 0;
-    if (!v4_.push_back(start == 12))
-      return false;
-    for (size_t i = 0; i < 16; ++i)
-      // TODO: be lazy and push_back only where needed.
-      if (!bitmaps_[i].push_back(i < start ? 0x00 : bytes[i]))
-        return false;
-    return true;
-  }
+  void init();
 
-  bool push_back_impl(data const& d) {
-    if (auto a = get<address>(d))
-      return push_back_impl(*a);
-    else if (auto s = get<subnet>(d))
-      return push_back_impl(s->network());
-    else
-      return false;
-  }
+  bool push_back_impl(data const& x, size_type skip) override;
 
-  bool stretch_impl(size_t n) {
-    for (size_t i = 0; i < 16; ++i)
-      if (!bitmaps_[i].stretch(n))
-        return false;
-    return v4_.append(n, false);
-  }
+  maybe<bitmap>
+  lookup_impl(relational_operator op, data const& x) const override;
 
-  maybe<Bitstream> lookup_impl(relational_operator op, data const& d) const {
-    if (!(op == equal || op == not_equal || op == in || op == not_in))
-      return fail<ec::unsupported_operator>(op);
-    if (v4_.empty())
-      return Bitstream{};
-    switch (which(d)) {
-      default:
-        return fail<ec::type_clash>(type::address{}, d);
-      case data::tag::address:
-        return lookup_impl(op, *get<address>(d));
-      case data::tag::subnet:
-        return lookup_impl(op, *get<subnet>(d));
-    }
-  }
-
-  maybe<Bitstream> lookup_impl(relational_operator op, address const& a) const {
-    if (!(op == equal || op == not_equal))
-      return fail<ec::unsupported_operator>(op);
-    auto& bytes = a.data();
-    auto is_v4 = a.is_v4();
-    auto result = is_v4 ? v4_ : Bitstream{this->size(), true};
-    for (size_t i = is_v4 ? 12 : 0; i < 16; ++i) {
-      auto bs = bitmaps_[i].lookup(equal, bytes[i]);
-      if (!bs.all_zeros())
-        result &= bs;
-      else
-        return Bitstream{this->size(), op == not_equal};
-    }
-    return std::move(op == equal ? result : result.flip());
-  }
-
-  maybe<Bitstream> lookup_impl(relational_operator op, subnet const& s) const {
-    if (!(op == in || op == not_in))
-      return fail<ec::unsupported_operator>(op);
-    auto topk = s.length();
-    if (topk == 0)
-      return fail("invalid IP subnet length: ", topk);
-    auto net = s.network();
-    auto is_v4 = net.is_v4();
-    if ((is_v4 ? topk + 96 : topk) == 128)
-      // Asking for /32 or /128 membership is equivalent to equality.
-      return lookup_impl(op == in ? equal : not_equal, s.network());
-    auto result = is_v4 ? v4_ : Bitstream{this->size(), true};
-    auto& bytes = net.data();
-    size_t i = is_v4 ? 12 : 0;
-    while (i < 16 && topk >= 8) {
-      result &= bitmaps_[i].lookup(equal, bytes[i]);
-      ++i;
-      topk -= 8;
-    }
-    for (auto j = 0u; j < topk; ++j) {
-      auto bit = 7 - j;
-      auto& bs = bitmaps_[i].coder()[bit];
-      result &= (bytes[i] >> bit) & 1 ? ~bs : bs;
-    }
-    if (op == not_in)
-      result.flip();
-    return result;
-  }
-
-  uint64_t size_impl() const {
-    return v4_.size();
-  }
-
-  std::array<bitmap_type, 16> bitmaps_;
-  Bitstream v4_;
+  std::array<byte_index, 16> bytes_;
+  type_index v4_;
 };
 
-/// A bitmap index for IP prefixes.
-template <typename Bitstream>
-class subnet_bitmap_index
-  : public value_index_base<subnet_bitmap_index<Bitstream>, Bitstream> {
-  using super = value_index_base<subnet_bitmap_index<Bitstream>, Bitstream>;
-  friend super;
-
+/// An index for subnets.
+class subnet_index : public value_index {
 public:
-  using bitstream_type = Bitstream;
+  using prefix_index = bitmap_index<uint8_t, equality_coder<ewah_bitmap>>;
 
-  subnet_bitmap_index()
-    : length_{128 + 1} // Valid prefixes range from /0 to /128.
-  {
-  }
-
-  friend bool operator==(subnet_bitmap_index const& x,
-                         subnet_bitmap_index const& y) {
-    return x.network_ == y.network_ && x.length_ == y.length_;
-  }
+  subnet_index() = default;
 
   template <class Inspector>
-  friend auto inspect(Inspector& f, subnet_bitmap_index& bmi) {
-    return f(static_cast<super&>(bmi), bmi.network_, bmi.length_);
+  friend auto inspect(Inspector& f, subnet_index& idx) {
+    return f(static_cast<value_index&>(idx), idx.network_, idx.length_);
   }
 
 private:
-  bool push_back_impl(subnet const& s) {
-    return network_.push_back(s.network()) && length_.push_back(s.length());
-  }
+  void init();
 
-  bool push_back_impl(data const& d) {
-    auto s = get<subnet>(d);
-    return s ? push_back_impl(*s) : false;
-  }
+  bool push_back_impl(data const& x, size_type skip) override;
 
-  bool stretch_impl(size_t n) {
-    return network_.stretch(n) && length_.stretch(n);
-  }
+  maybe<bitmap>
+  lookup_impl(relational_operator op, data const& x) const override;
 
-  maybe<Bitstream> lookup_impl(relational_operator op, subnet const& s) const {
-    if (!(op == equal || op == not_equal))
-      return fail<ec::unsupported_operator>(op);
-    auto bs = network_.lookup(equal, s.network());
-    if (!bs)
-      return bs;
-    auto n = length_.lookup(equal, s.length());
-    auto r = Bitstream{*bs & n};
-    return std::move(op == equal ? r : r.flip());
-  }
-
-  maybe<Bitstream> lookup_impl(relational_operator op, data const& d) const {
-    auto s = get<subnet>(d);
-    if (s)
-      return lookup_impl(op, *s);
-    return fail<ec::type_clash>(type::subnet{}, d);
-  }
-
-  uint64_t size_impl() const {
-    return length_.size();
-  }
-
-  address_bitmap_index<Bitstream> network_;
-  bitmap<uint8_t, equality_coder<Bitstream>> length_;
+  address_index network_;
+  prefix_index length_;
 };
 
-/// A bitmap index for transport-layer ports.
-template <typename Bitstream>
-class port_bitmap_index
-  : public value_index_base<port_bitmap_index<Bitstream>, Bitstream> {
-  using super = value_index_base<port_bitmap_index<Bitstream>, Bitstream>;
-  friend super;
-
+/// An index for ports.
+class port_index : public value_index {
 public:
-  using bitstream_type = Bitstream;
+  using number_index =
+    bitmap_index<
+      port::number_type,
+      multi_level_coder<range_coder<ewah_bitmap>>
+    >;
 
-  port_bitmap_index()
-    : proto_{4} // unknown, tcp, udp, icmp
-  {
-  }
+  using protocol_index =
+    bitmap_index<
+      std::underlying_type<port::port_type>::type,
+      equality_coder<ewah_bitmap>
+    >;
 
-  friend bool operator==(port_bitmap_index const& x,
-                         port_bitmap_index const& y) {
-    return x.num_ == y.num_ && x.proto_ == y.proto_;
-  }
+  port_index() = default;
 
   template <class Inspector>
-  friend auto inspect(Inspector& f, port_bitmap_index& bmi) {
-    return f(static_cast<super&>(bmi), bmi.num_, bmi.proto_);
+  friend auto inspect(Inspector& f, port_index& idx) {
+    return f(static_cast<value_index&>(idx), idx.num_, idx.proto_);
   }
 
 private:
-  bool push_back_impl(port const& p) {
-    return num_.push_back(p.number()) && proto_.push_back(p.type());
-  }
+  void init();
 
-  bool push_back_impl(data const& d) {
-    auto p = get<port>(d);
-    return p ? push_back_impl(*p) : false;
-  }
+  bool push_back_impl(data const& x, size_type skip) override;
 
-  bool stretch_impl(size_t n) {
-    return num_.stretch(n) && proto_.stretch(n);
-  }
+  maybe<bitmap>
+  lookup_impl(relational_operator op, data const& x) const override;
 
-  maybe<Bitstream> lookup_impl(relational_operator op, port const& p) const {
-    if (op == in || op == not_in)
-      return fail<ec::unsupported_operator>(op);
-    if (num_.empty())
-      return Bitstream{};
-    auto n = num_.lookup(op, p.number());
-    if (n.all_zeros())
-      return Bitstream{this->size(), false};
-    if (p.type() != port::unknown)
-      n &= proto_.lookup(equal, p.type());
-    return std::move(n);
-  }
-
-  maybe<Bitstream> lookup_impl(relational_operator op, data const& d) const {
-    auto p = get<port>(d);
-    if (p)
-      return lookup_impl(op, *p);
-    return fail<ec::type_clash>(type::port{}, d);
-  }
-
-  uint64_t size_impl() const {
-    return proto_.size();
-  }
-
-  bitmap<
-    port::number_type,
-    multi_level_coder<
-      make_uniform_base<10, port::number_type>,
-      range_coder<Bitstream>
-    >
-  > num_;
-
-  bitmap<
-    std::underlying_type<port::port_type>::type,
-    equality_coder<Bitstream>
-  > proto_;
+  number_index num_;
+  protocol_index proto_;
 };
 
 } // namespace vast

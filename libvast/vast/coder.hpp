@@ -407,22 +407,17 @@ public:
   using size_type = typename coder_type::size_type;
   using value_type = typename coder_type::value_type;
 
-  // Default-constructs an unusable multi-level coder. This function exists
-  // only to make this type serializable.
   multi_level_coder() = default;
 
   /// Constructs a multi-level coder from a given base.
   /// @param b The base to initialize this coder with.
-  multi_level_coder(base b)
-    : base_{std::move(b)},
-      xs_(base_.size()),
-      coders_(base_.size()) {
-    VAST_ASSERT(base_.well_defined());
-    init(coders_); // dispatch on coder_type
-    VAST_ASSERT(coders_.size() == base_.size());
+  explicit multi_level_coder(base b) : base_{std::move(b)} {
+    init();
   }
 
   void encode(value_type x, size_type n = 1, size_type skip = 0) {
+    if (xs_.empty())
+      init();
     base_.decompose(x, xs_);
     for (auto i = 0u; i < base_.size(); ++i)
       coders_[i].encode(xs_[i], n, skip);
@@ -457,17 +452,25 @@ public:
   }
 
 private:
+  void init() {
+    VAST_ASSERT(base_.well_defined());
+    xs_.resize(base_.size()),
+    coders_.resize(base_.size());
+    init_coders(coders_); // dispatch on coder_type
+    VAST_ASSERT(coders_.size() == base_.size());
+  }
+
   // TODO
   // We could further optimze the number of bitmaps per coder: any base b
   // requires only b-1 bitmaps because one can obtain any bitmap through
   // conjunction/disjunction of the others. While this decreases space
   // requirements by a factor of 1/b, it increases query time by b-1.
 
-  void init(std::vector<singleton_coder<bitmap_type>>&) {
+  void init_coders(std::vector<singleton_coder<bitmap_type>>&) {
     // Nothing to for singleton coders.
   }
 
-  void init(std::vector<range_coder<bitmap_type>>& coders) {
+  void init_coders(std::vector<range_coder<bitmap_type>>& coders) {
     // For range coders it suffices to use b-1 bitmaps because the last
     // bitmap always consists of all 1s and is hence superfluous.
     for (auto i = 0u; i < base_.size(); ++i)
@@ -475,7 +478,7 @@ private:
   }
 
   template <class C>
-  void init(std::vector<C>& coders) {
+  void init_coders(std::vector<C>& coders) {
     // All other multi-bitmap coders use one bitmap per unique value.
     for (auto i = 0u; i < base_.size(); ++i)
       coders[i] = C{base_[i]};

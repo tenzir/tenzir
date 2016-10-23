@@ -1,4 +1,4 @@
-#include "vast/bitmap_index.hpp"
+#include "vast/value_index.hpp"
 #include "vast/load.hpp"
 #include "vast/save.hpp"
 
@@ -7,408 +7,362 @@
 #include "vast/concept/parseable/vast/subnet.hpp"
 #include "vast/concept/parseable/vast/time.hpp"
 #include "vast/concept/printable/to_string.hpp"
-#include "vast/concept/printable/vast/bitstream.hpp"
+#include "vast/concept/printable/vast/bitmap.hpp"
 
-#define SUITE bitmap_index
+#define SUITE value_index
 #include "test.hpp"
 
 using namespace vast;
-
-// FIXME
-//TEST(polymorphic) {
-//  bitmap_index<null_bitstream> bmi;
-//  REQUIRE(! bmi);
-//  bmi = string_bitmap_index<null_bitstream>{};
-//  REQUIRE(bmi);
-//  CHECK(bmi.push_back("foo"));
-//
-//  MESSAGE("serialization");
-//  std::vector<char> buf;
-//  save(buf, bmi);
-//  decltype(bmi) bmi2;
-//  load(buf, bmi2);
-//  CHECK(bmi == bmi2);
-//}
+using namespace std::string_literals;
 
 TEST(boolean) {
-  arithmetic_bitmap_index<null_bitstream, boolean> bmi;
-  CHECK(bmi.push_back(true));
-  CHECK(bmi.push_back(true));
-  CHECK(bmi.push_back(false));
-  CHECK(bmi.push_back(true));
-  CHECK(bmi.push_back(false));
-  CHECK(bmi.push_back(false));
-  CHECK(bmi.push_back(false));
-  CHECK(bmi.push_back(true));
-
-  auto f = bmi.lookup(equal, false);
+  arithmetic_index<boolean> idx;
+  MESSAGE("push_back");
+  REQUIRE(idx.push_back(true));
+  REQUIRE(idx.push_back(true));
+  REQUIRE(idx.push_back(false));
+  REQUIRE(idx.push_back(true));
+  REQUIRE(idx.push_back(false));
+  REQUIRE(idx.push_back(false));
+  REQUIRE(idx.push_back(false));
+  REQUIRE(idx.push_back(true));
+  MESSAGE("lookup");
+  auto f = idx.lookup(equal, false);
   REQUIRE(f);
-  CHECK(to_string(*f) == "00101110");
-  auto t = bmi.lookup(not_equal, false);
+  CHECK_EQUAL(to_string(*f), "00101110");
+  auto t = idx.lookup(not_equal, false);
   REQUIRE(t);
-  CHECK(to_string(*t) == "11010001");
-
+  CHECK_EQUAL(to_string(*t), "11010001");
+  auto e = idx.lookup(in, true);
+  REQUIRE(!e);
+  CHECK(e.error() == ec::unsupported_operator);
   MESSAGE("serialization");
-  std::vector<char> buf;
-  save(buf, bmi);
-  decltype(bmi) bmi2;
-  load(buf, bmi2);
-  CHECK(bmi == bmi2);
+  std::string buf;
+  save(buf, idx);
+  arithmetic_index<boolean> idx2;
+  load(buf, idx2);
+  t = idx2.lookup(equal, true);
+  REQUIRE(t);
+  CHECK_EQUAL(to_string(*t), "11010001");
 }
 
-TEST(integral) {
-  arithmetic_bitmap_index<null_bitstream, integer> bmi;
-  CHECK(bmi.push_back(-7));
-  CHECK(bmi.push_back(42));
-  CHECK(bmi.push_back(10000));
-  CHECK(bmi.push_back(4711));
-  CHECK(bmi.push_back(31337));
-  CHECK(bmi.push_back(42));
-  CHECK(bmi.push_back(42));
-
-  auto leet = bmi.lookup(equal, 31337);
+TEST(integer) {
+  arithmetic_index<integer> idx{base::uniform(10, 20)};
+  MESSAGE("push_back");
+  REQUIRE(idx.push_back(-7));
+  REQUIRE(idx.push_back(42));
+  REQUIRE(idx.push_back(10000));
+  REQUIRE(idx.push_back(4711));
+  REQUIRE(idx.push_back(31337));
+  REQUIRE(idx.push_back(42));
+  REQUIRE(idx.push_back(42));
+  MESSAGE("lookup");
+  auto leet = idx.lookup(equal, 31337);
   REQUIRE(leet);
   CHECK(to_string(*leet) == "0000100");
-  auto less_than_leet = bmi.lookup(less, 31337);
+  auto less_than_leet = idx.lookup(less, 31337);
   REQUIRE(less_than_leet);
   CHECK(to_string(*less_than_leet) == "1111011");
-  auto greater_zero = bmi.lookup(greater, 0);
+  auto greater_zero = idx.lookup(greater, 0);
   REQUIRE(greater_zero);
   CHECK(to_string(*greater_zero) == "0111111");
-
   MESSAGE("serialization");
   std::vector<char> buf;
-  save(buf, bmi);
-  decltype(bmi) bmi2;
-  load(buf, bmi2);
-  CHECK(bmi == bmi2);
+  save(buf, idx);
+  auto idx2 = arithmetic_index<integer>{};
+  load(buf, idx2);
+  less_than_leet = idx2.lookup(less, 31337);
+  REQUIRE(less_than_leet);
+  CHECK(to_string(*less_than_leet) == "1111011");
 }
 
 TEST(floating-point with custom binner) {
-  arithmetic_bitmap_index<null_bitstream, real, precision_binner<6, 2>> bmi;
-  CHECK(bmi.push_back(-7.8));
-  CHECK(bmi.push_back(42.123));
-  CHECK(bmi.push_back(10000.0));
-  CHECK(bmi.push_back(4711.13510));
-  CHECK(bmi.push_back(31337.3131313));
-  CHECK(bmi.push_back(42.12258));
-  CHECK(bmi.push_back(42.125799));
-
-  CHECK(to_string(*bmi.lookup(less, 100.0)) == "1100011");
-  CHECK(to_string(*bmi.lookup(less, 43.0)) == "1100011");
-  CHECK(to_string(*bmi.lookup(greater_equal, 42.0)) == "0111111");
-  CHECK(to_string(*bmi.lookup(not_equal, 4711.14)) == "1110111");
-
+  using index_type = arithmetic_index<real, precision_binner<6, 2>>;
+  auto idx = index_type{base::uniform<64>(10)};
+  MESSAGE("push_back");
+  REQUIRE(idx.push_back(-7.8));
+  REQUIRE(idx.push_back(42.123));
+  REQUIRE(idx.push_back(10000.0));
+  REQUIRE(idx.push_back(4711.13510));
+  REQUIRE(idx.push_back(31337.3131313));
+  REQUIRE(idx.push_back(42.12258));
+  REQUIRE(idx.push_back(42.125799));
+  MESSAGE("lookup");
+  CHECK(to_string(*idx.lookup(less, 100.0)) == "1100011");
+  CHECK(to_string(*idx.lookup(less, 43.0)) == "1100011");
+  CHECK(to_string(*idx.lookup(greater_equal, 42.0)) == "0111111");
+  CHECK(to_string(*idx.lookup(not_equal, 4711.14)) == "1110111");
   MESSAGE("serialization");
   std::vector<char> buf;
-  save(buf, bmi);
-  decltype(bmi) bmi2;
-  load(buf, bmi2);
-  CHECK(bmi == bmi2);
+  save(buf, idx);
+  auto idx2 = index_type{};
+  load(buf, idx2);
+  CHECK(to_string(*idx2.lookup(not_equal, 4711.14)) == "1110111");
 }
 
-TEST(time duration) {
+TEST(interval) {
+  using namespace std::chrono;
   // Default binning gives granularity of seconds.
-  arithmetic_bitmap_index<null_bitstream, time::duration> bmi;
-  CHECK(bmi.push_back(std::chrono::milliseconds(1000)));
-  CHECK(bmi.push_back(std::chrono::milliseconds(2000)));
-  CHECK(bmi.push_back(std::chrono::milliseconds(3000)));
-  CHECK(bmi.push_back(std::chrono::milliseconds(1011)));
-  CHECK(bmi.push_back(std::chrono::milliseconds(2222)));
-  CHECK(bmi.push_back(std::chrono::milliseconds(2322)));
-
-  auto hun = bmi.lookup(equal, std::chrono::milliseconds(1034));
+  arithmetic_index<interval> idx{base::uniform<64>(10)};
+  MESSAGE("push_back");
+  REQUIRE(idx.push_back(interval{milliseconds(1000)}));
+  REQUIRE(idx.push_back(interval{milliseconds(2000)}));
+  REQUIRE(idx.push_back(interval{milliseconds(3000)}));
+  REQUIRE(idx.push_back(interval{milliseconds(1011)}));
+  REQUIRE(idx.push_back(interval{milliseconds(2222)}));
+  REQUIRE(idx.push_back(interval{milliseconds(2322)}));
+  MESSAGE("lookup");
+  auto hun = idx.lookup(equal, interval{milliseconds(1034)});
   REQUIRE(hun);
   CHECK(to_string(*hun) == "100100");
-  auto twokay = bmi.lookup(less_equal, std::chrono::milliseconds(2000));
+  auto twokay = idx.lookup(less_equal, interval{milliseconds(2000)});
   REQUIRE(twokay);
   CHECK(to_string(*twokay) == "110111");
-  auto twelve = bmi.lookup(greater, std::chrono::milliseconds(1200));
+  auto twelve = idx.lookup(greater, interval{milliseconds(1200)});
   REQUIRE(twelve);
   CHECK(to_string(*twelve) == "011011");
-
-  MESSAGE("serialization");
-  std::vector<char> buf;
-  save(buf, bmi);
-  decltype(bmi) bmi2;
-  load(buf, bmi2);
-  CHECK(bmi == bmi2);
 }
 
-TEST(time point) {
-  arithmetic_bitmap_index<null_bitstream, time::point> bmi;
-
-  auto t = to<time::point>("2014-01-16+05:30:15");
+TEST(timestamp) {
+  arithmetic_index<timestamp> idx{base::uniform<64>(10)};
+  auto t = to<timestamp>("2014-01-16+05:30:15");
   REQUIRE(t);
-  CHECK(bmi.push_back(*t));
-  t = to<time::point>("2014-01-16+05:30:12");
+  MESSAGE("push_back");
+  REQUIRE(idx.push_back(*t));
+  t = to<timestamp>("2014-01-16+05:30:12");
   REQUIRE(t);
-  CHECK(bmi.push_back(*t));
-  t = to<time::point>("2014-01-16+05:30:15");
+  REQUIRE(idx.push_back(*t));
+  t = to<timestamp>("2014-01-16+05:30:15");
   REQUIRE(t);
-  CHECK(bmi.push_back(*t));
-  t = to<time::point>("2014-01-16+05:30:18");
+  REQUIRE(idx.push_back(*t));
+  t = to<timestamp>("2014-01-16+05:30:18");
   REQUIRE(t);
-  CHECK(bmi.push_back(*t));
-  t = to<time::point>("2014-01-16+05:30:15");
+  REQUIRE(idx.push_back(*t));
+  t = to<timestamp>("2014-01-16+05:30:15");
   REQUIRE(t);
-  CHECK(bmi.push_back(*t));
-  t = to<time::point>("2014-01-16+05:30:19");
+  REQUIRE(idx.push_back(*t));
+  t = to<timestamp>("2014-01-16+05:30:19");
   REQUIRE(t);
-  CHECK(bmi.push_back(*t));
-
-  t = to<time::point>("2014-01-16+05:30:15");
+  REQUIRE(idx.push_back(*t));
+  MESSAGE("lookup");
+  t = to<timestamp>("2014-01-16+05:30:15");
   REQUIRE(t);
-  auto fifteen = bmi.lookup(equal, *t);
+  auto fifteen = idx.lookup(equal, *t);
   CHECK(to_string(*fifteen) == "101010");
-
-  t = to<time::point>("2014-01-16+05:30:20");
+  t = to<timestamp>("2014-01-16+05:30:20");
   REQUIRE(t);
-  auto twenty = bmi.lookup(less, *t);
+  auto twenty = idx.lookup(less, *t);
   CHECK(to_string(*twenty) == "111111");
-
-  t = to<time::point>("2014-01-16+05:30:18");
+  t = to<timestamp>("2014-01-16+05:30:18");
   REQUIRE(t);
-  auto eighteen = bmi.lookup(greater_equal, *t);
+  auto eighteen = idx.lookup(greater_equal, *t);
   CHECK(to_string(*eighteen) == "000101");
-
   MESSAGE("serialization");
   std::vector<char> buf;
-  save(buf, bmi);
-  decltype(bmi) bmi2;
-  load(buf, bmi2);
-  CHECK(bmi == bmi2);
+  save(buf, idx);
+  auto idx2 = decltype(idx){};
+  load(buf, idx2);
+  eighteen = idx2.lookup(greater_equal, *t);
+  CHECK(to_string(*eighteen) == "000101");
 }
 
 TEST(string) {
-  string_bitmap_index<null_bitstream> bmi;
-  CHECK(bmi.push_back("foo"));
-  CHECK(bmi.push_back("bar"));
-  CHECK(bmi.push_back("baz"));
-  CHECK(bmi.push_back("foo"));
-  CHECK(bmi.push_back("foo"));
-  CHECK(bmi.push_back("bar"));
-  CHECK(bmi.push_back(""));
-  CHECK(bmi.push_back("qux"));
-  CHECK(bmi.push_back("corge"));
-  CHECK(bmi.push_back("bazz"));
-
-  CHECK(to_string(*bmi.lookup(equal, "foo")) ==   "1001100000");
-  CHECK(to_string(*bmi.lookup(equal, "bar")) ==   "0100010000");
-  CHECK(to_string(*bmi.lookup(equal, "baz")) ==   "0010000000");
-  CHECK(to_string(*bmi.lookup(equal, "")) ==      "0000001000");
-  CHECK(to_string(*bmi.lookup(equal, "qux")) ==   "0000000100");
-  CHECK(to_string(*bmi.lookup(equal, "corge")) == "0000000010");
-  CHECK(to_string(*bmi.lookup(equal, "bazz")) ==  "0000000001");
-
-  CHECK(to_string(*bmi.lookup(not_equal, "")) ==    "1111110111");
-  CHECK(to_string(*bmi.lookup(not_equal, "foo")) == "0110011111");
-
-  CHECK(to_string(*bmi.lookup(not_ni, "")) == "0000000000");
-  CHECK(to_string(*bmi.lookup(ni, "")) ==     "1111111111");
-  CHECK(to_string(*bmi.lookup(ni, "o")) ==    "1001100010");
-  CHECK(to_string(*bmi.lookup(ni, "oo")) ==   "1001100000");
-  CHECK(to_string(*bmi.lookup(ni, "z")) ==    "0010000001");
-  CHECK(to_string(*bmi.lookup(ni, "zz")) ==   "0000000001");
-  CHECK(to_string(*bmi.lookup(ni, "ar")) ==   "0100010000");
-  CHECK(to_string(*bmi.lookup(ni, "rge")) ==  "0000000010");
-
-  auto e = bmi.lookup(match, "foo");
-  CHECK(! e);
-
+  string_index idx{100};
+  MESSAGE("push_back");
+  REQUIRE(idx.push_back("foo"));
+  REQUIRE(idx.push_back("bar"));
+  REQUIRE(idx.push_back("baz"));
+  REQUIRE(idx.push_back("foo"));
+  REQUIRE(idx.push_back("foo"));
+  REQUIRE(idx.push_back("bar"));
+  REQUIRE(idx.push_back(""));
+  REQUIRE(idx.push_back("qux"));
+  REQUIRE(idx.push_back("corge"));
+  REQUIRE(idx.push_back("bazz"));
+  MESSAGE("lookup");
+  CHECK_EQUAL(to_string(*idx.lookup(equal, "foo")),   "1001100000");
+  CHECK_EQUAL(to_string(*idx.lookup(equal, "bar")),   "0100010000");
+  CHECK_EQUAL(to_string(*idx.lookup(equal, "baz")),   "0010000000");
+  CHECK_EQUAL(to_string(*idx.lookup(equal, "")),      "0000001000");
+  CHECK_EQUAL(to_string(*idx.lookup(equal, "qux")),   "0000000100");
+  CHECK_EQUAL(to_string(*idx.lookup(equal, "corge")), "0000000010");
+  CHECK_EQUAL(to_string(*idx.lookup(equal, "bazz")),  "0000000001");
+  CHECK_EQUAL(to_string(*idx.lookup(not_equal, "")),    "1111110111");
+  CHECK_EQUAL(to_string(*idx.lookup(not_equal, "foo")), "0110011111");
+  CHECK_EQUAL(to_string(*idx.lookup(not_ni, "")), "0000000000");
+  CHECK_EQUAL(to_string(*idx.lookup(ni, "")),     "1111111111");
+  CHECK_EQUAL(to_string(*idx.lookup(ni, "o")),    "1001100010");
+  CHECK_EQUAL(to_string(*idx.lookup(ni, "oo")),   "1001100000");
+  CHECK_EQUAL(to_string(*idx.lookup(ni, "z")),    "0010000001");
+  CHECK_EQUAL(to_string(*idx.lookup(ni, "zz")),   "0000000001");
+  CHECK_EQUAL(to_string(*idx.lookup(ni, "ar")),   "0100010000");
+  CHECK_EQUAL(to_string(*idx.lookup(ni, "rge")),  "0000000010");
+  auto e = idx.lookup(match, "foo");
+  CHECK(!e);
   MESSAGE("serialization");
   std::vector<char> buf;
-  save(buf, bmi);
-  decltype(bmi) bmi2;
-  load(buf, bmi2);
-  CHECK(bmi == bmi2);
-  CHECK(to_string(*bmi2.lookup(equal, "foo")) == "1001100000");
-  CHECK(to_string(*bmi2.lookup(equal, "bar")) == "0100010000");
+  save(buf, idx);
+  string_index idx2{};
+  load(buf, idx2);
+  CHECK_EQUAL(to_string(*idx2.lookup(equal, "foo")), "1001100000");
+  CHECK_EQUAL(to_string(*idx2.lookup(equal, "bar")), "0100010000");
 }
 
 TEST(address) {
-  address_bitmap_index<null_bitstream> bmi;
-  CHECK(bmi.push_back(*to<address>("192.168.0.1")));
-  CHECK(bmi.push_back(*to<address>("192.168.0.2")));
-  CHECK(bmi.push_back(*to<address>("192.168.0.3")));
-  CHECK(bmi.push_back(*to<address>("192.168.0.1")));
-  CHECK(bmi.push_back(*to<address>("192.168.0.1")));
-  CHECK(bmi.push_back(*to<address>("192.168.0.2")));
-
+  address_index idx;
+  MESSAGE("push_back");
+  REQUIRE(idx.push_back(*to<address>("192.168.0.1")));
+  REQUIRE(idx.push_back(*to<address>("192.168.0.2")));
+  REQUIRE(idx.push_back(*to<address>("192.168.0.3")));
+  REQUIRE(idx.push_back(*to<address>("192.168.0.1")));
+  REQUIRE(idx.push_back(*to<address>("192.168.0.1")));
+  REQUIRE(idx.push_back(*to<address>("192.168.0.2")));
   MESSAGE("address equality");
   auto addr = *to<address>("192.168.0.1");
-  auto bs = bmi.lookup(equal, addr);
-  REQUIRE(bs);
-  CHECK(to_string(*bs) == "100110");
-  bs = bmi.lookup(not_equal, addr);
-  CHECK(to_string(*bs) == "011001");
+  auto bm = idx.lookup(equal, addr);
+  REQUIRE(bm);
+  CHECK(to_string(*bm) == "100110");
+  bm = idx.lookup(not_equal, addr);
+  CHECK(to_string(*bm) == "011001");
   addr = *to<address>("192.168.0.5");
-  CHECK(to_string(*bmi.lookup(equal, addr)) == "000000");
-  CHECK(! bmi.lookup(match, *to<address>("::"))); // Invalid operator
-
-  bmi.push_back(*to<address>("192.168.0.128"));
-  bmi.push_back(*to<address>("192.168.0.130"));
-  bmi.push_back(*to<address>("192.168.0.240"));
-  bmi.push_back(*to<address>("192.168.0.127"));
-  bmi.push_back(*to<address>("192.168.0.33"));
-
+  CHECK(to_string(*idx.lookup(equal, addr)) == "000000");
+  CHECK(!idx.lookup(match, *to<address>("::"))); // Invalid operator
   MESSAGE("prefix membership");
+  CHECK(idx.push_back(*to<address>("192.168.0.128")));
+  CHECK(idx.push_back(*to<address>("192.168.0.130")));
+  CHECK(idx.push_back(*to<address>("192.168.0.240")));
+  CHECK(idx.push_back(*to<address>("192.168.0.127")));
+  CHECK(idx.push_back(*to<address>("192.168.0.33")));
   auto sub = subnet{*to<address>("192.168.0.128"), 25};
-  bs = bmi.lookup(in, sub);
-  REQUIRE(bs);
-  CHECK(to_string(*bs) == "00000011100");
-  bs = bmi.lookup(not_in, sub);
-  REQUIRE(bs);
-  CHECK(to_string(*bs) == "11111100011");
+  bm = idx.lookup(in, sub);
+  REQUIRE(bm);
+  CHECK(to_string(*bm) == "00000011100");
+  bm = idx.lookup(not_in, sub);
+  REQUIRE(bm);
+  CHECK(to_string(*bm) == "11111100011");
   sub = {*to<address>("192.168.0.0"), 24};
-  bs = bmi.lookup(in, sub);
-  REQUIRE(bs);
-  CHECK(to_string(*bs) == "11111111111");
+  bm = idx.lookup(in, sub);
+  REQUIRE(bm);
+  CHECK(to_string(*bm) == "11111111111");
   sub = {*to<address>("192.168.0.0"), 20};
-  bs = bmi.lookup(in, sub);
-  REQUIRE(bs);
-  CHECK(to_string(*bs) == "11111111111");
+  bm = idx.lookup(in, sub);
+  REQUIRE(bm);
+  CHECK(to_string(*bm) == "11111111111");
   sub = {*to<address>("192.168.0.64"), 26};
-  bs = bmi.lookup(not_in, sub);
-  REQUIRE(bs);
-  CHECK(to_string(*bs) == "11111111101");
-
+  bm = idx.lookup(not_in, sub);
+  REQUIRE(bm);
+  CHECK(to_string(*bm) == "11111111101");
+  MESSAGE("gaps");
+  CHECK(idx.push_back(*to<address>("192.168.0.2"), 42));
+  addr = *to<address>("192.168.0.2");
+  auto str = "01000100000"s + std::string('0', 42) + '1';
+  CHECK_EQUAL(idx.lookup(equal, addr), str);
   MESSAGE("serialization");
   std::vector<char> buf;
-  save(buf, bmi);
-  decltype(bmi) bmi2;
-  load(buf, bmi2);
-  CHECK(bmi == bmi2);
+  save(buf, idx);
+  address_index idx2{};
+  load(buf, idx2);
+  CHECK_EQUAL(idx2.lookup(equal, addr), str);
 }
 
 TEST(subnet) {
-  subnet_bitmap_index<null_bitstream> bmi;
+  subnet_index idx;
   auto s0 = to<subnet>("192.168.0.0/24");
   auto s1 = to<subnet>("192.168.1.0/24");
   auto s2 = to<subnet>("::/40");
   REQUIRE(s0);
   REQUIRE(s1);
   REQUIRE(s2);
-
-  CHECK(bmi.push_back(*s0));
-  CHECK(bmi.push_back(*s1));
-  CHECK(bmi.push_back(*s0));
-  CHECK(bmi.push_back(*s0));
-  CHECK(bmi.push_back(*s2));
-  CHECK(bmi.push_back(*s2));
-
-  auto bs = bmi.lookup(equal, *s0);
-  REQUIRE(bs);
-  CHECK(to_string(*bs) == "101100");
-
-  bs = bmi.lookup(not_equal, *s1);
-  REQUIRE(bs);
-  CHECK(to_string(*bs) == "101111");
-
+  MESSAGE("push_back");
+  REQUIRE(idx.push_back(*s0));
+  REQUIRE(idx.push_back(*s1));
+  REQUIRE(idx.push_back(*s0));
+  REQUIRE(idx.push_back(*s0));
+  REQUIRE(idx.push_back(*s2));
+  REQUIRE(idx.push_back(*s2));
+  auto bm = idx.lookup(equal, *s0);
+  REQUIRE(bm);
+  CHECK(to_string(*bm) == "101100");
+  bm = idx.lookup(not_equal, *s1);
+  REQUIRE(bm);
+  CHECK(to_string(*bm) == "101111");
   MESSAGE("serialization");
   std::vector<char> buf;
-  save(buf, bmi);
-  decltype(bmi) bmi2;
-  load(buf, bmi2);
-  CHECK(bmi == bmi2);
+  save(buf, idx);
+  subnet_index idx2{};
+  load(buf, idx2);
+  bm = idx2.lookup(not_equal, *s1);
+  REQUIRE(bm);
+  CHECK_EQUAL(to_string(*bm), "101111");
 }
 
 TEST(port) {
-  port_bitmap_index<null_bitstream> bmi;
-  bmi.push_back(port(80, port::tcp));
-  bmi.push_back(port(443, port::tcp));
-  bmi.push_back(port(53, port::udp));
-  bmi.push_back(port(8, port::icmp));
-  bmi.push_back(port(31337, port::unknown));
-  bmi.push_back(port(80, port::tcp));
-  bmi.push_back(port(8080, port::tcp));
-
+  port_index idx;
+  MESSAGE("push_back");
+  REQUIRE(idx.push_back(port(80, port::tcp)));
+  REQUIRE(idx.push_back(port(443, port::tcp)));
+  REQUIRE(idx.push_back(port(53, port::udp)));
+  REQUIRE(idx.push_back(port(8, port::icmp)));
+  REQUIRE(idx.push_back(port(31337, port::unknown)));
+  REQUIRE(idx.push_back(port(80, port::tcp)));
+  REQUIRE(idx.push_back(port(8080, port::tcp)));
+  MESSAGE("lookup");
   port http{80, port::tcp};
-  auto pbs = bmi.lookup(equal, http);
-  REQUIRE(pbs);
-  CHECK(to_string(*pbs) == "1000010");
-
+  auto bm = idx.lookup(equal, http);
+  REQUIRE(bm);
+  CHECK(to_string(*bm) == "1000010");
   port priv{1024, port::unknown};
-  pbs = bmi.lookup(less_equal, priv);
-  REQUIRE(pbs);
-  CHECK(to_string(*pbs) == "1111010");
-
-  pbs = bmi.lookup(greater, port{2, port::unknown});
-  REQUIRE(pbs);
-  CHECK(to_string(*pbs) == "1111111");
-
+  bm = idx.lookup(less_equal, priv);
+  REQUIRE(bm);
+  CHECK(to_string(*bm) == "1111010");
+  bm = idx.lookup(greater, port{2, port::unknown});
+  REQUIRE(bm);
+  CHECK(to_string(*bm) == "1111111");
   MESSAGE("serialization");
   std::vector<char> buf;
-  save(buf, bmi);
-  decltype(bmi) bmi2;
-  load(buf, bmi2);
-  CHECK(bmi == bmi2);
+  save(buf, idx);
+  port_index idx2;
+  load(buf, idx2);
+  bm = idx2.lookup(less_equal, priv);
+  REQUIRE(bm);
+  CHECK(to_string(*bm) == "1111010");
 }
 
-// FIXME
+// TODO: implement
 //TEST(container) {
-//  sequence_bitmap_index<null_bitstream> bmi{type::string{}};
+//  container_bitmap_index idx{type::string{}};
 //
 //  vector v{"foo", "bar"};
-//  CHECK(bmi.push_back(v));
+//  CHECK(idx.push_back(v));
 //
 //  v = {"qux", "foo", "baz", "corge"};
-//  CHECK(bmi.push_back(v));
+//  CHECK(idx.push_back(v));
 //
 //  v = {"bar"};
-//  CHECK(bmi.push_back(v));
-//  CHECK(bmi.push_back(v));
+//  CHECK(idx.push_back(v));
+//  CHECK(idx.push_back(v));
 //
 //  null_bitstream r;
 //  r.append(2, true);
 //  r.append(2, false);
-//  CHECK(*bmi.lookup(in, "foo") == r);
+//  CHECK(*idx.lookup(in, "foo") == r);
 //
 //  r.clear();
 //  r.push_back(true);
 //  r.push_back(false);
 //  r.append(2, true);
-//  CHECK(*bmi.lookup(in, "bar") == r);
+//  CHECK(*idx.lookup(in, "bar") == r);
 //
 //  r.clear();
 //  r.append(4, false);
-//  CHECK(*bmi.lookup(in, "not") == r);
+//  CHECK(*idx.lookup(in, "not") == r);
 //
 //  auto strings = vector{"you", "won't", "believe", "it"};
-//  CHECK(bmi.push_back(strings));
+//  CHECK(idx.push_back(strings));
 //
 //  MESSAGE("serialization");
 //  std::vector<char> buf;
-//  save(buf, bmi);
-//  decltype(bmi) bmi2;
-//  load(buf, bmi2);
-//  CHECK(bmi == bmi2);
+//  save(buf, idx);
+//  decltype(idx) idx2;
+//  load(buf, idx2);
 //}
-
-TEST(offset_push_back) {
-  string_bitmap_index<null_bitstream> bmi;
-  CHECK(bmi.push_back("foo", 2));
-  CHECK(bmi.push_back(data{"bar"}, 3));
-  CHECK(bmi.push_back(nil, 5));
-  CHECK(bmi.push_back("baz", 7));
-
-  auto r = bmi.lookup(equal, "foo");
-  REQUIRE(r);
-  CHECK(to_string(*r) == "00100000");
-
-  r = bmi.lookup(not_equal, "foo");
-  REQUIRE(r);
-  CHECK(to_string(*r) == "00010101");
-
-  r = bmi.lookup(ni, "a");
-  REQUIRE(r);
-  CHECK(to_string(*r) == "00010001");
-
-  r = bmi.lookup(equal, nil);
-  REQUIRE(r);
-  CHECK(to_string(*r) == "00000100");
-
-  r = bmi.lookup(not_equal, nil);
-  REQUIRE(r);
-  CHECK(to_string(*r) == "00110001");
-}

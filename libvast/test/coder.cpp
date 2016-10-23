@@ -244,7 +244,8 @@ TEST(multi-level equality coder) {
 }
 
 TEST(multi-level range coder) {
-  auto c = multi_level_coder<range_coder<null_bitmap>>{base::uniform(10, 3)};
+  using coder_type = multi_level_coder<range_coder<null_bitmap>>;
+  auto c = coder_type{base::uniform(10, 3)};
   c.encode(0);
   c.encode(6);
   c.encode(9);
@@ -299,7 +300,7 @@ TEST(multi-level range coder) {
   CHECK_EQUAL(to_string(c.decode(not_equal,     100)), "111111011");
   CHECK_EQUAL(to_string(c.decode(not_equal,     254)), "111111110");
   CHECK_EQUAL(to_string(c.decode(not_equal,     255)), "111111101");
-  c = {base::uniform(9, 3)};
+  c = coder_type{base::uniform(9, 3)};
   for (auto i = 0u; i < 256; ++i)
     c.encode(i);
   CHECK_EQUAL(c.size(), 256u);
@@ -339,7 +340,8 @@ TEST(serialization range coder) {
 }
 
 TEST(serialization multi-level coder) {
-  multi_level_coder<equality_coder<null_bitmap>> x{base{10, 10}}, y;
+  using coder_type = multi_level_coder<equality_coder<null_bitmap>>;
+  auto x = coder_type{base{10, 10}};
   x.encode(42);
   x.encode(84);
   x.encode(42);
@@ -347,6 +349,7 @@ TEST(serialization multi-level coder) {
   x.encode(30);
   std::string buf;
   save(buf, x);
+  auto y = coder_type{};
   load(buf, y);
   CHECK(x == y);
   CHECK_EQUAL(to_string(y.decode(equal,     21)), "00010");
