@@ -87,6 +87,8 @@ bool value_index::push_back(data const& x, event_id id) {
   auto size = none_.size();
   if (id < size)
     return false; // Can only append at the end.
+  if (id == size)
+    return push_back(x);
   auto skip = id - size;
   none_.append_bits(false, skip);
   mask_.append_bits(false, skip);
