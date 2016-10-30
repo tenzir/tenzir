@@ -328,41 +328,47 @@ TEST(port) {
   CHECK(to_string(*bm) == "1111010");
 }
 
-// TODO: implement
-//TEST(container) {
-//  container_bitmap_index idx{type::string{}};
-//
-//  vector v{"foo", "bar"};
-//  CHECK(idx.push_back(v));
-//
-//  v = {"qux", "foo", "baz", "corge"};
-//  CHECK(idx.push_back(v));
-//
-//  v = {"bar"};
-//  CHECK(idx.push_back(v));
-//  CHECK(idx.push_back(v));
-//
-//  null_bitstream r;
-//  r.append(2, true);
-//  r.append(2, false);
-//  CHECK(*idx.lookup(in, "foo") == r);
-//
-//  r.clear();
-//  r.push_back(true);
-//  r.push_back(false);
-//  r.append(2, true);
-//  CHECK(*idx.lookup(in, "bar") == r);
-//
-//  r.clear();
-//  r.append(4, false);
-//  CHECK(*idx.lookup(in, "not") == r);
-//
-//  auto strings = vector{"you", "won't", "believe", "it"};
-//  CHECK(idx.push_back(strings));
-//
-//  MESSAGE("serialization");
-//  std::vector<char> buf;
-//  save(buf, idx);
-//  decltype(idx) idx2;
-//  load(buf, idx2);
-//}
+TEST(container) {
+  sequence_index idx{string_type{}};
+  MESSAGE("push_back");
+  vector v{"foo", "bar"};
+  REQUIRE(idx.push_back(v));
+  v = {"qux", "foo", "baz", "corge"};
+  REQUIRE(idx.push_back(v));
+  v = {"bar"};
+  REQUIRE(idx.push_back(v));
+  REQUIRE(idx.push_back(v));
+  REQUIRE(idx.push_back(v, 7));
+  MESSAGE("lookup");
+  CHECK_EQUAL(to_string(*idx.lookup(in, "foo")), "11000000");
+  CHECK_EQUAL(to_string(*idx.lookup(in, "bar")), "10110001");
+  CHECK_EQUAL(to_string(*idx.lookup(not_in, "foo")), "00110001");
+  CHECK_EQUAL(to_string(*idx.lookup(in, "not")), "00000000");
+  MESSAGE("serialization");
+  std::vector<char> buf;
+  save(buf, idx);
+  sequence_index idx2;
+  load(buf, idx2);
+  CHECK_EQUAL(to_string(*idx2.lookup(in, "foo")), "11000000");
+  CHECK_EQUAL(to_string(*idx2.lookup(in, "bar")), "10110001");
+}
+
+TEST(polymorphic) {
+  auto t = set_type{integer_type{}};
+  auto idx = value_index::make(t);
+  REQUIRE(idx);
+  REQUIRE(idx->push_back(set{42, 43, 44}));
+  REQUIRE(idx->push_back(set{1, 2, 3}));
+  REQUIRE(idx->push_back(set{}));
+  REQUIRE(idx->push_back(set{42}));
+  CHECK_EQUAL(to_string(*idx->lookup(in, 42)), "1001");
+  MESSAGE("serialization");
+  std::vector<char> buf;
+  save(buf, detail::value_index_inspect_helper{t, idx});
+  std::unique_ptr<value_index> idx2;
+  detail::value_index_inspect_helper helper{t, idx2};
+  load(buf, helper);
+  REQUIRE(idx2);
+  CHECK_EQUAL(to_string(*idx2->lookup(in, 42)), "1001");
+}
+

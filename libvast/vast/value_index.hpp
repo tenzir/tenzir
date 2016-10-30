@@ -1,6 +1,7 @@
 #ifndef VAST_VALUE_INDEX_HPP
 #define VAST_VALUE_INDEX_HPP
 
+#include <algorithm>
 #include <memory>
 #include <type_traits>
 
@@ -8,9 +9,10 @@
 #include "vast/bitmap.hpp"
 #include "vast/bitmap_index.hpp"
 #include "vast/data.hpp"
-//#include "vast/concept/printable/vast/data.hpp"
-//#include "vast/concept/printable/vast/operator.hpp"
+#include "vast/concept/printable/vast/data.hpp"
+#include "vast/concept/printable/vast/operator.hpp"
 #include "vast/detail/assert.hpp"
+#include "vast/die.hpp"
 #include "vast/error.hpp"
 #include "vast/maybe.hpp"
 #include "vast/type.hpp"
@@ -47,19 +49,18 @@ public:
   /// @returns `true` on success.
   //bool merge(value_index const& other);
 
-  /// Retrieves the type according to which the index has been constructed.
-  /// @returns The type of this index.
-  vast::type const& type() const;
+  /// Retrieves the ID of the last ::push_back operation.
+  /// @returns The largest ID in the index.
+  size_type offset() const;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, value_index& vi) {
-    return f(vi.type_, vi.mask_, vi.none_);
+    return f(vi.mask_, vi.none_);
   }
 
 protected:
-  value_index(vast::type t = {});
+  value_index() = default;
 
-  vast::type type_;
 private:
   virtual bool push_back_impl(data const& x, event_id id) = 0;
 
@@ -169,7 +170,7 @@ private:
     maybe<bitmap> operator()(boolean x) const {
       // Boolean indexes support only equality
       if (!(op_ == equal || op_ == not_equal))
-        return fail<ec::unsupported_operator>();
+        return fail<ec::unsupported_operator>(op_);
       return bmi_.lookup(op_, x);
     }
 
@@ -320,6 +321,206 @@ private:
   protocol_index proto_;
 };
 
+/// An index for vectors and sets.
+class sequence_index : public value_index {
+public:
+  /// Constructs a sequence index of a given type.
+  /// @param t The element type of the sequence.
+  /// @param max_size The maximum number of elements permitted per sequence.
+  ///                 Longer sequences will be trimmed at the end.
+  sequence_index(vast::type t = {}, size_t max_size = 128);
+
+  /// The bitmap index holding the sequence size.
+  using size_bitmap_index =
+    bitmap_index<uint32_t, multi_level_coder<range_coder<bitmap>>>;
+
+  friend void serialize(caf::serializer& sink, sequence_index const& idx);
+  friend void serialize(caf::deserializer& source, sequence_index& idx);
+
+private:
+  void init();
+
+  template <class Container>
+  bool push_back_ctnr(Container& c, size_type skip) {
+    init();
+    auto seq_size = c.size();
+    if (seq_size > max_size_)
+      seq_size = max_size_;
+    if (seq_size > elements_.size()) {
+      auto old = elements_.size();
+      elements_.resize(seq_size);
+      for (auto i = old; i < elements_.size(); ++i) {
+        elements_[i] = value_index::make(value_type_);
+        VAST_ASSERT(elements_[i]);
+      }
+    }
+    auto id = offset() + skip;
+    auto x = c.begin();
+    for (auto i = 0u; i < seq_size; ++i) {
+      VAST_ASSERT(offset() >= elements_[i]->offset());
+      elements_[i]->push_back(*x++, id);
+    }
+    size_.push_back(seq_size, skip);
+    return true;
+  }
+
+  bool push_back_impl(data const& x, size_type skip) override;
+
+  maybe<bitmap>
+  lookup_impl(relational_operator op, data const& x) const override;
+
+  std::vector<std::unique_ptr<value_index>> elements_;
+  size_bitmap_index size_;
+  size_t max_size_;
+  vast::type value_type_;
+};
+
+namespace detail {
+
+struct value_index_inspect_helper {
+  const vast::type& type;
+  std::unique_ptr<value_index>& idx;
+
+  template <class Inspector>
+  struct down_cast {
+    using result_type = typename Inspector::result_type;
+
+    down_cast(value_index& idx, Inspector& f) : idx_{idx}, f_{f} {
+      // nop
+    }
+
+    template <class T>
+    result_type operator()(T const&) const {
+      die("invalid type");
+    }
+
+    result_type operator()(boolean_type const&) const {
+      return f_(static_cast<arithmetic_index<boolean>&>(idx_));
+    }
+
+    result_type operator()(integer_type const&) const {
+      return f_(static_cast<arithmetic_index<integer>&>(idx_));
+    }
+
+    result_type operator()(count_type const&) const {
+      return f_(static_cast<arithmetic_index<count>&>(idx_));
+    }
+
+    result_type operator()(real_type const&) const {
+      return f_(static_cast<arithmetic_index<real>&>(idx_));
+    }
+
+    result_type operator()(interval_type const&) const {
+      return f_(static_cast<arithmetic_index<interval>&>(idx_));
+    }
+
+    result_type operator()(timestamp_type const&) const {
+      return f_(static_cast<arithmetic_index<timestamp>&>(idx_));
+    }
+
+    result_type operator()(string_type const&) const {
+      return f_(static_cast<string_index&>(idx_));
+    }
+
+    result_type operator()(address_type const&) const {
+      return f_(static_cast<address_index&>(idx_));
+    }
+
+    result_type operator()(subnet_type const&) const {
+      return f_(static_cast<subnet_index&>(idx_));
+    }
+
+    result_type operator()(port_type const&) const {
+      return f_(static_cast<port_index&>(idx_));
+    }
+
+    result_type operator()(vector_type const&) const {
+      return f_(static_cast<sequence_index&>(idx_));
+    }
+
+    result_type operator()(set_type const&) const {
+      return f_(static_cast<sequence_index&>(idx_));
+    }
+
+    result_type operator()(alias_type const& t) const {
+      return visit(*this, t.value_type);
+    }
+
+    value_index& idx_;
+    Inspector& f_;
+  };
+
+  struct default_construct {
+    using result_type = std::unique_ptr<value_index>;
+
+    template <class T>
+    result_type operator()(T const&) const {
+      die("invalid type");
+    }
+
+    result_type operator()(boolean_type const&) const {
+      return std::make_unique<arithmetic_index<boolean>>();
+    }
+
+    result_type operator()(integer_type const&) const {
+      return std::make_unique<arithmetic_index<integer>>();
+    }
+
+    result_type operator()(count_type const&) const {
+      return std::make_unique<arithmetic_index<count>>();
+    }
+
+    result_type operator()(real_type const&) const {
+      return std::make_unique<arithmetic_index<real>>();
+    }
+
+    result_type operator()(interval_type const&) const {
+      return std::make_unique<arithmetic_index<interval>>();
+    }
+
+    result_type operator()(timestamp_type const&) const {
+      return std::make_unique<arithmetic_index<timestamp>>();
+    }
+
+    result_type operator()(string_type const&) const {
+      return std::make_unique<string_index>();
+    }
+
+    result_type operator()(address_type const&) const {
+      return std::make_unique<address_index>();
+    }
+
+    result_type operator()(subnet_type const&) const {
+      return std::make_unique<subnet_index>();
+    }
+
+    result_type operator()(port_type const&) const {
+      return std::make_unique<port_index>();
+    }
+
+    result_type operator()(vector_type const&) const {
+      return std::make_unique<sequence_index>();
+    }
+
+    result_type operator()(set_type const&) const {
+      return std::make_unique<sequence_index>();
+    }
+
+    result_type operator()(alias_type const& t) const {
+      return visit(*this, t.value_type);
+    }
+  };
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, value_index_inspect_helper& helper) {
+    if (Inspector::writes_state)
+      helper.idx = visit(default_construct{}, helper.type);
+    VAST_ASSERT(helper.idx);
+    return visit(down_cast<Inspector>{*helper.idx, f}, helper.type);
+  }
+};
+
+} // namespace detail
 } // namespace vast
 
 #endif
