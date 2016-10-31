@@ -354,7 +354,7 @@ TEST(container) {
 }
 
 TEST(polymorphic) {
-  auto t = set_type{integer_type{}};
+  type t = set_type{integer_type{}}.attributes({{"max_size", "2"}});
   auto idx = value_index::make(t);
   REQUIRE(idx);
   REQUIRE(idx->push_back(set{42, 43, 44}));
@@ -362,6 +362,7 @@ TEST(polymorphic) {
   REQUIRE(idx->push_back(set{}));
   REQUIRE(idx->push_back(set{42}));
   CHECK_EQUAL(to_string(*idx->lookup(in, 42)), "1001");
+  CHECK_EQUAL(to_string(*idx->lookup(in, 44)), "0000"); // chopped off
   MESSAGE("serialization");
   std::vector<char> buf;
   save(buf, detail::value_index_inspect_helper{t, idx});
@@ -370,5 +371,11 @@ TEST(polymorphic) {
   load(buf, helper);
   REQUIRE(idx2);
   CHECK_EQUAL(to_string(*idx2->lookup(in, 42)), "1001");
+  MESSAGE("attributes");
+  t = integer_type{}.attributes({{"base", "uniform(2, 4)"}});
+  idx = value_index::make(t);
+  REQUIRE(idx);
+  t = integer_type{}.attributes({{"base", "[2, 3,4]"}});
+  idx = value_index::make(t);
+  REQUIRE(idx);
 }
-

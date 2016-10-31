@@ -1,10 +1,32 @@
 #include <cmath>
 
+#include "vast/base.hpp"
+#include "vast/concept/parseable/numeric/integral.hpp"
+#include "vast/concept/parseable/to.hpp"
+#include "vast/concept/parseable/vast/base.hpp"
 #include "vast/value_index.hpp"
 
 namespace vast {
+namespace {
 
-// TODO: parse type attributes to figure base, binner, etc.
+optional<std::string> extract_attribute(type const& t, std::string const& key) {
+  for (auto& attr : t.attributes())
+    if (attr.key == key && attr.value)
+      return attr.value;
+  return {};
+}
+
+optional<base> parse_base(type const& t) {
+  if (auto a = extract_attribute(t, "base")) {
+    if (auto b = to<base>(*a))
+      return *b;
+    return {};
+  }
+  return base::uniform<64>(10);
+}
+
+} // namespace <anonymous>
+
 std::unique_ptr<value_index> value_index::make(type const& t) {
   struct factory {
     using result_type = std::unique_ptr<value_index>;
@@ -14,28 +36,44 @@ std::unique_ptr<value_index> value_index::make(type const& t) {
     result_type operator()(boolean_type const&) const {
       return std::make_unique<arithmetic_index<boolean>>();
     }
-    result_type operator()(integer_type const&) const {
-      auto b = base::uniform<64>(10);
-      return std::make_unique<arithmetic_index<integer>>(std::move(b));
+    result_type operator()(integer_type const& t) const {
+      auto b = parse_base(t);
+      if (!b)
+        return nullptr;
+      return std::make_unique<arithmetic_index<integer>>(std::move(*b));
     }
-    result_type operator()(count_type const&) const {
-      auto b = base::uniform<64>(10);
-      return std::make_unique<arithmetic_index<count>>(std::move(b));
+    result_type operator()(count_type const& t) const {
+      auto b = parse_base(t);
+      if (!b)
+        return nullptr;
+      return std::make_unique<arithmetic_index<count>>(std::move(*b));
     }
-    result_type operator()(real_type const&) const {
-      auto b = base::uniform<64>(10);
-      return std::make_unique<arithmetic_index<real>>(std::move(b));
+    result_type operator()(real_type const& t) const {
+      auto b = parse_base(t);
+      if (!b)
+        return nullptr;
+      return std::make_unique<arithmetic_index<real>>(std::move(*b));
     }
-    result_type operator()(interval_type const&) const {
-      auto b = base::uniform<64>(10);
-      return std::make_unique<arithmetic_index<interval>>(std::move(b));
+    result_type operator()(interval_type const& t) const {
+      auto b = parse_base(t);
+      if (!b)
+        return nullptr;
+      return std::make_unique<arithmetic_index<interval>>(std::move(*b));
     }
-    result_type operator()(timestamp_type const&) const {
-      auto b = base::uniform<64>(10);
-      return std::make_unique<arithmetic_index<timestamp>>(std::move(b));
+    result_type operator()(timestamp_type const& t) const {
+      auto b = parse_base(t);
+      if (!b)
+        return nullptr;
+      return std::make_unique<arithmetic_index<timestamp>>(std::move(*b));
     }
-    result_type operator()(string_type const&) const {
-      auto max_length = 1024;
+    result_type operator()(string_type const& t) const {
+      auto max_length = size_t{1024};
+      if (auto a = extract_attribute(t, "max_length")) {
+        if (auto x = to<size_t>(*a))
+          max_length = *x;
+        else
+          return nullptr;
+      }
       return std::make_unique<string_index>(max_length);
     }
     result_type operator()(pattern_type const&) const {
@@ -54,10 +92,24 @@ std::unique_ptr<value_index> value_index::make(type const& t) {
       return nullptr;
     }
     result_type operator()(vector_type const& t) const {
-      return std::make_unique<sequence_index>(t.value_type);
+      auto max_size = size_t{1024};
+      if (auto a = extract_attribute(t, "max_size")) {
+        if (auto x = to<size_t>(*a))
+          max_size = *x;
+        else
+          return nullptr;
+      }
+      return std::make_unique<sequence_index>(t.value_type, max_size);
     }
     result_type operator()(set_type const& t) const {
-      return std::make_unique<sequence_index>(t.value_type);
+      auto max_size = size_t{1024};
+      if (auto a = extract_attribute(t, "max_size")) {
+        if (auto x = to<size_t>(*a))
+          max_size = *x;
+        else
+          return nullptr;
+      }
+      return std::make_unique<sequence_index>(t.value_type, max_size);
     }
     result_type operator()(table_type const&) const {
       return nullptr;
