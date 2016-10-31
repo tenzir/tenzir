@@ -26,7 +26,7 @@ template <
   int MinDigits = 1,
   int Radix = 10
 >
-struct integral_parser 
+struct integral_parser
   : parser<integral_parser<T, MaxDigits, MinDigits, Radix>> {
   static_assert(Radix == 10, "unsupported radix");
   static_assert(MinDigits > 0, "need at least one minimum digit");
@@ -119,6 +119,14 @@ struct parser_registry<T, std::enable_if_t<std::is_integral<T>::value>> {
 };
 
 namespace parsers {
+
+template <
+  class T,
+  int MaxDigits = std::numeric_limits<T>::digits10 + 1,
+  int MinDigits = 1,
+  int Radix = 10
+>
+auto const integral = integral_parser<T, MaxDigits, MinDigits, Radix>{};
 
 auto const i8 = integral_parser<int8_t>{};
 auto const i16 = integral_parser<int16_t>{};
