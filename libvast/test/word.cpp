@@ -98,10 +98,27 @@ TEST(counting) {
   CHECK_EQUAL(w64::count_leading_zeros(y), 0u);
   CHECK_EQUAL(w64::count_leading_ones(x), 0u);
   CHECK_EQUAL(w64::count_leading_ones(y), 15u);
+  MESSAGE("popcount");
   CHECK_EQUAL(w64::popcount(x), 18u);
   CHECK_EQUAL(w64::popcount(y), 23u);
+  MESSAGE("parity");
   CHECK_EQUAL(w64::parity(x), 0u);
   CHECK_EQUAL(w64::parity(y), 1u);
+  MESSAGE("rank");
+  for (auto i = 0u; i < w8::width; ++i)
+    CHECK_EQUAL(w8::rank(w8::all, i), i + 1);
+  CHECK_EQUAL(w8::rank(0b01011000, 7), 3u);
+  CHECK_EQUAL(w8::rank(0b01011000, 3), 1u);
+  CHECK_EQUAL(w8::rank(0b01011000, 4), 2u);
+  CHECK_EQUAL(w8::rank(0b01011000, 5), 2u);
+  CHECK_EQUAL(w64::rank(x, 63), w64::popcount(x));
+  CHECK_EQUAL(w64::rank(y, 63), w64::popcount(y));
+  CHECK_EQUAL(w64::rank(x, 0), 0u);
+  CHECK_EQUAL(w64::rank(y, 0), 1u);
+  CHECK_EQUAL(w64::rank(x, 1), 0u);
+  CHECK_EQUAL(w64::rank(y, 1), 2u);
+  CHECK_EQUAL(w64::rank(x, 10), 1u);
+  CHECK_EQUAL(w64::rank(y, 10), 8u);
 }
 
 TEST(next) {
@@ -138,6 +155,20 @@ TEST(prev) {
   CHECK_EQUAL(w64::prev(x, last_zero), first_zero - 1);
   CHECK_EQUAL(w64::prev(x, last_zero + 1), first_zero - 1);
   CHECK_EQUAL(w64::prev(x, last_zero + 2), last_zero + 1);
+}
+
+TEST(select) {
+  CHECK_EQUAL(w8::select(w8::none, 1), w8::npos);
+  for (auto i = 0u; i < w8::width; ++i)
+    CHECK_EQUAL(w8::select(w8::all, i + 1), i);
+  CHECK_EQUAL(w8::select(w8::msb1, 1), 7u);
+  CHECK_EQUAL(w8::select(w8::msb1, 2), w8::npos);
+  CHECK_EQUAL(w8::select(w8::lsb1, 1), 0u);
+  CHECK_EQUAL(w8::select(w8::lsb1, 2), w8::npos);
+  CHECK_EQUAL(w8::select(0b01011000, 1), 3u);
+  CHECK_EQUAL(w8::select(0b01011000, 2), 4u);
+  CHECK_EQUAL(w8::select(0b01011000, 3), 6u);
+  CHECK_EQUAL(w8::select(0b01011000, 4), w8::npos);
 }
 
 TEST(math) {

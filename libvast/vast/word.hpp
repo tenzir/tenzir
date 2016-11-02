@@ -191,9 +191,9 @@ struct word {
     return count_leading_zeros(~x);
   }
 
-  /// Counts the number of leading ones.
+  /// Counts the number of set bits
   /// @param x The block value.
-  /// @returns The number leading ones in *x*.
+  /// @returns The number of set bits in *x*.
   /// @pre `x > 0`
   template <class B = value_type>
   static constexpr auto popcount(value_type x) -> enable_if_32<B> {
@@ -203,6 +203,17 @@ struct word {
   template <class B = value_type>
   static constexpr auto popcount(value_type x) -> enable_if_64<B> {
     return __builtin_popcountll(x);
+  }
+
+  /// Computes *rank_i* of a block, i.e., the number of 1-bits up to and
+  /// including position *i*, counted from the LSB.
+  /// @param x The block to compute the rank for.
+  /// @param i The position up to where to count.
+  /// @returns *rank_i(x)*.
+  /// @pre `i < width`
+  static constexpr size_type rank(value_type x, size_type i) {
+    auto masked = x & lsb_fill(i + 1);
+    return masked == 0 ? 0 : popcount(masked);
   }
 
   /// Computes the parity of a block, i.e., the number of 1-bits modulo 2.
@@ -240,6 +251,22 @@ struct word {
       return npos;
     auto bottom = x & ~(all << i);
     return bottom == 0 ? npos : width - count_leading_zeros(bottom) - 1;
+  }
+
+  /// Computes the position of the i-th occurrence of a 1-bit.
+  /// @param x The block to search.
+  /// @param i The position of the *i*-th occurrence of 1 in *b*.
+  /// @pre `i > 0 && i <= width`
+  static constexpr size_type select(value_type x, size_type i) {
+    // TODO: make this efficient and branch-free. There is one implementation
+    // that counts from the right for 64-bit here:
+    // http://graphics.stanford.edu/~seander/bithacks.html
+    auto cum = 0u;
+    for (auto j = 0u; j < width; ++j)
+      if (test(x, j))
+        if (++cum == i)
+          return j;
+    return npos;
   }
 
   // -- math ------------------------------------------------------------------
