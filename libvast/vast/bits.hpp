@@ -64,6 +64,44 @@ private:
   size_type size_;
 };
 
+// -- algorithms -------------------------------------------------------------
+
+/// Computes the number of occurrences of a bit value in *[0,i]*.
+/// @tparam Bit The bit value to count.
+/// @param b The bit sequence to count.
+/// @param i The offset where to end counting.
+/// @returns The population count of *b* up to and including position *i*.
+/// @pre `i < b.size()`
+template <bool Bit = true, class T>
+typename bits<T>::size_type
+rank(const bits<T>& b, typename bits<T>::size_type i) {
+  using word = typename bits<T>::word;
+  VAST_ASSERT(i < b.size());
+  auto data = Bit ? b.data() : ~b.data();
+  if (b.size() > word::width)
+    return data == word::none ? 0 : i + 1;
+  if (i == word::width - 1)
+    return data == word::none ? 0 : word::popcount(data);
+  return word::rank(data, i);
+}
+
+/// Computes the position of the i-th occurrence of a bit.
+/// @tparam Bit the bit value to locate.
+/// @param b The bit sequence to select from.
+/// @param i The position of the *i*-th occurrence of *Bit* in *b*.
+/// @pre `i > 0 && i <= b.size()`
+template <bool Bit = true, class T>
+typename bits<T>::size_type
+select(const bits<T>& b, typename bits<T>::size_type i) {
+  using word = typename bits<T>::word;
+  VAST_ASSERT(i > 0);
+  VAST_ASSERT(i <= b.size());
+  auto data = Bit ? b.data() : ~b.data();
+  if (b.size() > word::width)
+    return data == word::all ? i - 1 : word::npos;
+  return word::select(data, i);
+}
+
 } // namespace vast
 
 #endif

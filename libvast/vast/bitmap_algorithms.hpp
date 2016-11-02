@@ -255,15 +255,9 @@ rank(Bitmap const& bm, typename Bitmap::size_type i = 0) {
   auto result = typename Bitmap::size_type{0};
   auto n = typename Bitmap::size_type{0};
   for (auto b : bit_range(bm)) {
-    auto count = b.count();
-    result += Bit ? count : b.size() - count;
-    if (i >= n && i < n + b.size()) {
-      // Adjust for last sequence.
-      auto size = i - n + 1;
-      auto last = bits<typename Bitmap::block_type>{b.data(), size}.count();
-      result -= Bit ? count - last : b.size() - count - (size - last);
-      break;
-    }
+    if (i >= n && i < n + b.size())
+      return result + rank<Bit>(b, i - n);
+    result += Bit ? b.count() : b.size() - b.count();
     n += b.size();
   }
   return result;
@@ -282,15 +276,9 @@ select(Bitmap const& bm, typename Bitmap::size_type i) {
   auto n = typename Bitmap::size_type{0};
   for (auto b : bit_range(bm)) {
     auto count = Bit ? b.count() : b.size() - b.count();
-    if (cum + count >= i) {
+    if (cum + count >= i)
       // Last sequence.
-      if (b.size() > Bitmap::word_type::width)
-        return n + (i - cum - 1);
-      for (auto j = 0u; j < b.size(); ++j)
-        if (Bitmap::word_type::test(b.data(), j) == Bit)
-          if (++cum == i)
-            return n + j;
-    }
+      return n + select<Bit>(b, i - cum);
     cum += count;
     n += b.size();
   }
