@@ -36,38 +36,32 @@ bool operator==(null_bitmap const& x, null_bitmap const& y) {
 
 
 null_bitmap_range::null_bitmap_range(null_bitmap const& bm)
-  : bitvector_{bm.empty() ? nullptr : &bm.bitvector_},
-    block_{bm.bitvector_.blocks().begin()} {
-  if (bitvector_)
+  : bitvector_{&bm.bitvector_},
+    block_{bm.bitvector_.blocks().begin()},
+    end_{bm.bitvector_.blocks().end()} {
+  if (block_ != end_)
     scan();
 }
 
 void null_bitmap_range::next() {
-  if (block_ == bitvector_->blocks().end())
-    bitvector_ = nullptr;
-  else
+  if (++block_ != end_)
     scan();
 }
 
 bool null_bitmap_range::done() const {
-  return bitvector_ == nullptr;
+  return block_ == end_;
 }
 
 void null_bitmap_range::scan() {
-  VAST_ASSERT(bitvector_ != nullptr);
-  VAST_ASSERT(block_ != bitvector_->blocks().end());
   using word_type = null_bitmap::bitvector_type::word;
-  auto end = bitvector_->blocks().end();
-  auto last = end - 1;
+  auto last = end_ - 1;
   if (block_ == last) {
     // Process the last block.
     auto partial = bitvector_->size() % word_type::width;
     bits_ = {*block_, partial == 0 ? word_type::width : partial};
-    ++block_;
   } else if (!word_type::all_or_none(*block_)) {
     // Process an intermediate inhomogeneous block.
     bits_ = {*block_, word_type::width};
-    ++block_;
   } else {
     // Scan for consecutive runs of all-0 or all-1 blocks.
     auto n = word_type::width;
@@ -88,6 +82,7 @@ void null_bitmap_range::scan() {
       }
     }
     bits_ = {data, n};
+    --block_;
   }
 }
 
