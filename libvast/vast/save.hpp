@@ -35,6 +35,7 @@ auto save(Streambuf& streambuf, T&& x, Ts&&... xs)
     detail::compressedbuf compressed{streambuf, Method};
     caf::stream_serializer<detail::compressedbuf&> s{compressed};
     detail::write(s, std::forward<T>(x), std::forward<Ts>(xs)...);
+    compressed.pubsync();
   }
   return {};
 }

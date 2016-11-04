@@ -40,10 +40,6 @@ public:
                 compression method = compression::null,
                 size_t block_size = default_block_size);
 
-  /// Destroys the streambuffer after synchronizing it with the underlying
-  /// stream by calling sync().
-  ~compressedbuf();
-
 protected:
   // -- buffer management and positioning ------------------------------------
 

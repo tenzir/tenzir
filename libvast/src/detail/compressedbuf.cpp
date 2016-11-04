@@ -19,10 +19,6 @@ compressedbuf::compressedbuf(std::streambuf& sb, compression method,
   setp(uncompressed_.data(), uncompressed_.data() + uncompressed_.size());
 }
 
-compressedbuf::~compressedbuf() {
-  sync();
-}
-
 int compressedbuf::sync() {
   if (pbase() == nullptr)
     return -1;
