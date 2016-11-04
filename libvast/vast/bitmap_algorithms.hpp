@@ -6,9 +6,11 @@
 #include <queue>
 #include <type_traits>
 
+#include "vast/aliases.hpp"
 #include "vast/bits.hpp"
 #include "vast/optional.hpp"
 #include "vast/detail/assert.hpp"
+#include "vast/detail/range.hpp"
 #include "vast/detail/type_traits.hpp"
 
 namespace vast {
@@ -268,6 +270,7 @@ rank(Bitmap const& bm, typename Bitmap::size_type i = 0) {
 /// @param bm The bitmap to select from.
 /// @param i The position of the *i*-th occurrence of *Bit* in *bm*.
 /// @pre `i > 0`
+/// @relates select_range
 template <bool Bit = true, class Bitmap>
 typename Bitmap::size_type
 select(Bitmap const& bm, typename Bitmap::size_type i) {
@@ -283,6 +286,63 @@ select(Bitmap const& bm, typename Bitmap::size_type i) {
     n += b.size();
   }
   return Bitmap::word_type::npos;
+}
+
+/// A higher-order range that takes a bit-sequence range and transforms it into
+/// range of 1-bits. In ther words, this range provides an incremental
+/// interface to the one-shot algorithm that ::select computes.
+/// @relates select
+template <class BitRange>
+class select_range : public detail::range_facade<select_range<BitRange>> {
+public:
+  using bits_type = std::decay_t<decltype(std::declval<BitRange>().get())>;
+  using size_type = typename bits_type::size_type;
+  using word = typename bits_type::word;
+
+  select_range(BitRange rng) : rng_{rng} {
+    if (!rng_.done()) {
+      i_ = rng_.get().find_first();
+      skip();
+    }
+  }
+
+  size_type get() const {
+    VAST_ASSERT(i_ != word::npos);
+    return n_ + i_;
+  }
+
+  void next() {
+    i_ = rng_.get().find_next(i_);
+    skip();
+  }
+
+  bool done() const {
+    return rng_.done() && i_ == word::npos;
+  }
+
+protected:
+  void skip() {
+    while (i_ == word::npos) {
+      n_ += rng_.get().size();
+      rng_.next();
+      if (rng_.done())
+        return;
+      i_ = rng_.get().find_first();
+    }
+  }
+
+  BitRange rng_;
+  size_type n_ = 0;
+  size_type i_ = word::npos;
+};
+
+/// Lifts a bit range into a::select_range.
+/// @param rng The bit range from which to construct a select range.
+/// @returns The select frange for *rng*.
+/// @relates select_range
+template <class Bitmap>
+auto select(const Bitmap& bm) {
+  return select_range<decltype(bit_range(bm))>(bit_range(bm));
 }
 
 /// Tests whether a bitmap consists of a homogeneous sequence of a particular

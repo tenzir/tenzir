@@ -29,7 +29,8 @@ class range_iterator
   : public iterator_facade<
       range_iterator<Range>,
       std::remove_reference_t<decltype(std::declval<Range>().dereference())>,
-      std::forward_iterator_tag
+      std::forward_iterator_tag,
+      decltype(std::declval<Range>().dereference())
     > {
   friend Range;
   friend iterator_access;

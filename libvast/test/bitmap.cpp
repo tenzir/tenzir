@@ -180,7 +180,7 @@ struct bitmap_test_harness {
   }
 
   void test_select() {
-    MESSAGE("select");
+    MESSAGE("select - one-shot");
     CHECK_EQUAL(select<0>(b, 1), 222u);
     CHECK_EQUAL(select<0>(b, 2), 224u);
     CHECK_EQUAL(select<0>(b, 3), 225u);
@@ -190,7 +190,26 @@ struct bitmap_test_harness {
     CHECK_EQUAL(select<1>(b, 222), 221u);
     CHECK_EQUAL(select<1>(b, 223), 223u);
     CHECK_EQUAL(select<1>(b, 224), 227u);
-    CHECK_EQUAL(select<1>(b, rank<1>(b)), b.size() - 1); // last bit
+    auto r = rank<1>(b);
+    CHECK_EQUAL(select<1>(b, r), b.size() - 1); // last bit
+    MESSAGE("select - incremental");
+    auto n = size_t{0};
+    for (auto i : select(b)) {
+      ++n;
+      if (n == 1)
+        CHECK_EQUAL(i, 0u);
+      else if (n == 100)
+        CHECK_EQUAL(i, 99u);
+      else if (n == 222)
+        CHECK_EQUAL(i, 221u);
+      else if (n == 223)
+        CHECK_EQUAL(i, 223u);
+      else if (n == 224)
+        CHECK_EQUAL(i, 227u);
+      else if (n == r)
+        CHECK_EQUAL(i, b.size() - 1);
+    }
+    CHECK_EQUAL(r, n);
   }
 
   void test_all() {
