@@ -59,6 +59,33 @@ class bits {
     return data_ == word::all ? size_ : 0;
   }
 
+  /// Finds the next bit after at a particular offset.
+  /// @param i The offset after where to begin searching.
+  template <bool Bit = true>
+  size_type find_first() const {
+    auto data = Bit ? data_ : ~data_;
+    if (size_ > word::width)
+      return data == word::all ? 0 : word::npos;
+    if (data == word::none)
+      return word::npos;
+    return word::count_trailing_zeros(data);
+  }
+
+  /// Finds the next bit after at a particular offset.
+  /// @param i The offset after where to begin searching.
+  template <bool Bit = true>
+  size_type find_next(size_type i) const {
+    if (i >= size_ - 1)
+      return word::npos;
+    auto data = Bit ? data_ : ~data_;
+    if (size_ > word::width)
+      return data == word::all ? i + 1 : word::npos;
+    data &= ~word::lsb_mask(i + 1);
+    if (data == word::none)
+      return word::npos;
+    return word::count_trailing_zeros(data);
+  }
+
 private:
   value_type data_;
   size_type size_;
