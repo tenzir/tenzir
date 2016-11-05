@@ -10,11 +10,10 @@ set(libvast_sources
   src/attribute.cpp
   src/banner.cpp
   src/base.cpp
+  src/batch.cpp
   src/bitmap.cpp
-  #src/chunk.cpp
   src/cleanup.cpp
   src/compression.cpp
-  #src/configuration.cpp
   src/data.cpp
   src/die.cpp
   src/expression.cpp
@@ -38,26 +37,27 @@ set(libvast_sources
   src/value.cpp
   src/value_index.cpp
   # FIXME: Bring back after having repaired CAF code.
-  #src/actor/accountant.cpp
-  #src/actor/archive.cpp
+  #src/actors/accountant.cpp
+  #src/actors/archive.cpp
+  #src/actors/configuration.cpp
   #src/actor/exporter.cpp
   #src/actor/importer.cpp
-  #src/actor/identifier.cpp
-  #src/actor/index.cpp
-  #src/actor/key_value_store.cpp
-  #src/actor/node.cpp
-  #src/actor/partition.cpp
-  #src/actor/signal_monitor.cpp
-  #src/actor/task.cpp
-  #src/actor/sink/ascii.cpp
-  #src/actor/sink/bro.cpp
-  #src/actor/sink/csv.cpp
-  #src/actor/sink/json.cpp
-  #src/actor/sink/spawn.cpp
-  #src/actor/source/bro.cpp
-  #src/actor/source/bgpdump.cpp
-  #src/actor/source/spawn.cpp
-  #src/actor/source/test.cpp
+  #src/actors/identifier.cpp
+  #src/actors/index.cpp
+  #src/actors/key_value_store.cpp
+  #src/actors/node.cpp
+  #src/actors/partition.cpp
+  #src/actors/signal_monitor.cpp
+  #src/actors/task.cpp
+  #src/actors/sink/ascii.cpp
+  #src/actors/sink/bro.cpp
+  #src/actors/sink/csv.cpp
+  #src/actors/sink/json.cpp
+  #src/actors/sink/spawn.cpp
+  #src/actors/source/bro.cpp
+  #src/actors/source/bgpdump.cpp
+  #src/actors/source/spawn.cpp
+  #src/actors/source/test.cpp
   src/concept/hashable/crc.cpp
   src/concept/hashable/xxhash.cpp
   src/detail/adjust_resource_consumption.cpp
@@ -181,8 +181,8 @@ set(tests
   #test/actor/partition.cpp
   #test/actor/source_bgpdump.cpp
   #test/actor/task.cpp
-
   test/address.cpp
+  test/batch.cpp
   test/binner.cpp
   test/bitmap.cpp
   test/bitmap_index.cpp
@@ -190,7 +190,6 @@ set(tests
   test/cache.cpp
   test/coder.cpp
   test/compressedbuf.cpp
-  #test/chunk.cpp
   test/data.cpp
   test/date.cpp
   test/endpoint.cpp
