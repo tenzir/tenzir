@@ -36,28 +36,6 @@ set(libvast_sources
   src/uuid.cpp
   src/value.cpp
   src/value_index.cpp
-  # FIXME: Bring back after having repaired CAF code.
-  #src/actors/accountant.cpp
-  #src/actors/archive.cpp
-  #src/actors/configuration.cpp
-  #src/actor/exporter.cpp
-  #src/actor/importer.cpp
-  #src/actors/identifier.cpp
-  #src/actors/index.cpp
-  #src/actors/key_value_store.cpp
-  #src/actors/node.cpp
-  #src/actors/partition.cpp
-  #src/actors/signal_monitor.cpp
-  #src/actors/task.cpp
-  #src/actors/sink/ascii.cpp
-  #src/actors/sink/bro.cpp
-  #src/actors/sink/csv.cpp
-  #src/actors/sink/json.cpp
-  #src/actors/sink/spawn.cpp
-  #src/actors/source/bro.cpp
-  #src/actors/source/bgpdump.cpp
-  #src/actors/source/spawn.cpp
-  #src/actors/source/test.cpp
   src/concept/hashable/crc.cpp
   src/concept/hashable/xxhash.cpp
   src/detail/adjust_resource_consumption.cpp
@@ -70,6 +48,27 @@ set(libvast_sources
   src/detail/string.cpp
   src/detail/system.cpp
   src/detail/terminal.cpp
+  #src/system/accountant.cpp
+  #src/system/archive.cpp
+  src/system/configuration.cpp
+  #src/system/exporter.cpp
+  #src/system/importer.cpp
+  #src/system/identifier.cpp
+  #src/system/index.cpp
+  #src/system/key_value_store.cpp
+  #src/system/node.cpp
+  #src/system/partition.cpp
+  #src/system/signal_monitor.cpp
+  #src/system/task.cpp
+  #src/system/sink/ascii.cpp
+  #src/system/sink/bro.cpp
+  #src/system/sink/csv.cpp
+  #src/system/sink/json.cpp
+  #src/system/sink/spawn.cpp
+  #src/system/source/bro.cpp
+  #src/system/source/bgpdump.cpp
+  #src/system/source/spawn.cpp
+  #src/system/source/test.cpp
 )
 
 # FIXME: Bring back after having repaired CAF code.
