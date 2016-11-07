@@ -3,10 +3,15 @@
 
 #include <memory>
 #include <sstream>
+#include <type_traits>
+
+#include <caf/actor.hpp>
+#include <caf/stateful_actor.hpp>
 
 #include "vast/config.hpp"
 #include "vast/singleton.hpp"
 #include "vast/detail/pp.hpp"
+#include "vast/detail/type_traits.hpp"
 
 // Defines vast::operator<<, which must be declared prior to the call site.
 #include "vast/concept/printable/stream.hpp"
@@ -47,12 +52,6 @@ public:
     /// @param The value of `__PRETTY_FUNCTION__`.
     void function(char const* f);
 
-    template <typename T>
-    friend message& operator<<(message& m, T const& x) {
-      m.ss_ << x;
-      return m;
-    }
-
     void clear();
 
     bool empty();
@@ -69,6 +68,29 @@ public:
 
     std::string msg() const;
 
+    template <class T>
+    friend detail::disable_if_t<std::is_pointer<T>::value, message&>
+    operator<<(message& m, T const& x) {
+      m.ss_ << x;
+      return m;
+    }
+
+    friend message& operator<<(message& m, std::nullptr_t);
+
+    // -- overloads for actor types -------------------------------------------
+
+    template <class T>
+    friend message& operator<<(message& m, caf::stateful_actor<T> const* a) {
+      m.ss_ << a->name() << a->address();
+      return m;
+    }
+
+    friend message& operator<<(message& m, caf::actor const& a);
+
+    friend message& operator<<(message& m, caf::actor_addr const& addr);
+
+    friend message& operator<<(message& m, caf::strong_actor_ptr ptr);
+
   private:
     level lvl_ = quiet;
     double timestamp_ = 0.0;
@@ -76,8 +98,6 @@ public:
     std::string context_;
     std::string function_;
     std::stringstream ss_;
-
-    friend message& operator<<(message& msg, std::nullptr_t);
   };
 
   /// Facilitates RAII-style tracing.
@@ -88,7 +108,7 @@ public:
     tracer(message&& msg);
     ~tracer();
 
-    template <typename T>
+    template <class T>
     friend tracer& operator<<(tracer& t, T&& x) {
       t.msg_ << std::forward<T>(x);
       return t;

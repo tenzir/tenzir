@@ -125,11 +125,12 @@ struct logger::impl {
       // A quit message is the termination signal, as it would have already
       // been filtered out beforehand.
       if (m.lvl() == quiet) {
-        auto empty = log_file_.tellp() == 0;
-        if (log_file_.is_open())
+        if (log_file_.is_open()) {
+          auto empty = log_file_.tellp() == 0;
           log_file_.close();
-        if (empty)
-          rm(filename_);
+          if (empty)
+            rm(filename_);
+        }
         return;
       }
       // If the message contains newlines, split it up into multiple ones to
@@ -257,8 +258,23 @@ std::string logger::message::msg() const {
   return ss_.str();
 }
 
-logger::message& operator<<(logger::message& msg, std::nullptr_t) {
-  return msg;
+logger::message& operator<<(logger::message& m, std::nullptr_t) {
+  return m;
+}
+
+logger::message& operator<<(logger::message& m, caf::actor const& a) {
+  m << a->address();
+  return m;
+}
+
+logger::message& operator<<(logger::message& m, caf::actor_addr const& addr) {
+  m << '#' << addr.id();
+  return m;
+}
+
+logger::message& operator<<(logger::message& m, caf::strong_actor_ptr ptr) {
+  m << ptr->address();
+  return m;
 }
 
 std::ostream& operator<<(std::ostream& stream, logger::level lvl) {
