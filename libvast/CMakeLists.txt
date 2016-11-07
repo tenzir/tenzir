@@ -59,7 +59,7 @@ set(libvast_sources
   #src/system/node.cpp
   #src/system/partition.cpp
   #src/system/signal_monitor.cpp
-  #src/system/task.cpp
+  src/system/task.cpp
   #src/system/sink/ascii.cpp
   #src/system/sink/bro.cpp
   #src/system/sink/csv.cpp
@@ -169,17 +169,7 @@ include_directories(
   ${CMAKE_CURRENT_SOURCE_DIR}/test
   ${CMAKE_CURRENT_BINARY_DIR}/test)
 
-# FIXME: Bring back after having repaired CAF code.
 set(tests
-  #test/actor/export.cpp
-  #test/actor/import.cpp
-  #test/actor/index.cpp
-  #test/actor/indexer.cpp
-  #test/actor/io.cpp
-  #test/actor/key_value_store.cpp
-  #test/actor/partition.cpp
-  #test/actor/source_bgpdump.cpp
-  #test/actor/task.cpp
   test/address.cpp
   test/batch.cpp
   test/binner.cpp
@@ -225,6 +215,15 @@ set(tests
   test/value_index.cpp
   test/variant.cpp
   test/word.cpp
+  #test/system/export.cpp
+  #test/system/import.cpp
+  #test/system/index.cpp
+  #test/system/indexer.cpp
+  #test/system/io.cpp
+  #test/system/key_value_store.cpp
+  #test/system/partition.cpp
+  #test/system/source_bgpdump.cpp
+  test/system/task.cpp
 )
 
 # FIXME: Bring back after having repaired CAF code.

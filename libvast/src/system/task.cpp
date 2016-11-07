@@ -1,79 +1,86 @@
-#include "vast/actor/task.hpp"
+#include <caf/all.hpp>
+
+#include "vast/logger.hpp"
+
+#include "vast/system/task.hpp"
+
+using namespace caf;
 
 namespace vast {
+namespace system {
+namespace {
 
-task::state::state(local_actor* self)
-  : basic_state{self, "task"} {
-}
+template <class Actor>
+void notify(Actor self) {
+  for (auto& s : self->state.subscribers)
+    self->send(s, progress_atom::value, uint64_t{self->state.workers.size()},
+               self->state.total);
+  if (self->state.workers.empty()) {
+    for (auto& s : self->state.supervisors)
+      self->send(s, self->state.done_msg);
+    self->quit();
+  }
+};
 
-void task::state::complete(actor_addr const& addr) {
-  auto w = workers.find(addr);
-  if (w == workers.end()) {
-    VAST_ERROR_AT(self, "got completion signal from unknown actor:", addr);
-    self->quit(exit::error);
+template <class Actor>
+void complete(Actor self, actor_addr const& a) {
+  auto w = self->state.workers.find(a);
+  if (w == self->state.workers.end()) {
+    VAST_ERROR_AT(self, "got completion signal from unknown actor:", a);
+    self->quit(exit_reason::unknown); // FIXME: error exit reason?
   } else if (--w->second == 0) {
-    self->demonitor(addr);
-    workers.erase(w);
-    notify();
+    self->demonitor(a);
+    self->state.workers.erase(w);
+    notify(self);
   }
-}
+};
 
-void task::state::notify() {
-  for (auto& s : subscribers)
-    self->send(s, progress_atom::value, uint64_t{workers.size()}, total);
-  if (workers.empty()) {
-    for (auto& s : supervisors)
-      self->send(s, done_msg);
-    self->quit(exit_reason_);
-  }
-}
+} // namespace <anonymous>
 
-behavior task::impl(stateful_actor<state>* self, message done_msg) {
+namespace detail {
+
+behavior task(stateful_actor<task_state>* self, message done_msg) {
   self->state.done_msg = std::move(done_msg);
-  self->trap_exit(true);
-  return {
+  self->set_exit_handler(
     [=](exit_msg const& msg) {
       self->state.subscribers.clear();
-      self->state.notify();
+      notify(self);
       self->quit(msg.reason);
-    },
+    }
+  );
+  self->set_down_handler(
     [=](down_msg const& msg) {
       if (self->state.workers.erase(msg.source) == 1)
-        self->state.notify();
-    },
-    [=](uint32_t exit_reason) {
-      self->state.exit_reason_ = exit_reason;
-    },
+        notify(self);
+    }
+  );
+  return {
     [=](actor const& a) {
-      VAST_TRACE_AT(self, "registers actor", a);
+      VAST_DEBUG_AT(self, "registers actor", a);
       self->monitor(a);
       ++self->state.workers[a.address()];
       ++self->state.total;
     },
     [=](actor const& a, uint64_t n) {
-      VAST_TRACE_AT(self, "registers actor", a, "for", n, "sub-tasks");
+      VAST_DEBUG_AT(self, "registers actor", a, "for", n, "sub-tasks");
       self->monitor(a);
       self->state.workers[a.address()] += n;
       ++self->state.total;
     },
-    [=](done_atom, actor const& a) {
-      VAST_TRACE_AT(self, "manually completed actor", a);
-      self->state.complete(a->address());
-    },
     [=](done_atom, actor_addr const& addr) {
-      VAST_TRACE_AT(self, "manually completed actor with address", addr);
-      self->state.complete(addr);
+      VAST_DEBUG_AT(self, "manually completed actor with address", addr);
+      complete(self, addr);
     },
     [=](done_atom) {
-      VAST_TRACE_AT(self, "completed actor", self->current_sender());
-      self->state.complete(self->current_sender());
+      VAST_DEBUG_AT(self, "completed actor", to_string(self->current_sender()));
+      complete(self, actor_cast<actor_addr>(self->current_sender()));
     },
     [=](supervisor_atom, actor const& a) {
-      VAST_TRACE_AT(self, "notifies", a, "about task completion");
+      VAST_DEBUG_AT(self, "notifies", a, "about task completion");
       self->state.supervisors.insert(a);
     },
     [=](subscriber_atom, actor const& a) {
-      VAST_TRACE_AT(self, "notifies", a, "on task status change");
+      VAST_DEBUG_AT(self, "notifies", a, "on task status change");
       self->state.subscribers.insert(a);
     },
     [=](progress_atom) {
@@ -83,4 +90,7 @@ behavior task::impl(stateful_actor<state>* self, message done_msg) {
   };
 }
 
+} // namespace detail
+
+} // namespace system
 } // namespace vast
