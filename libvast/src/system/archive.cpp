@@ -1,15 +1,17 @@
-#include "vast/chunk.hpp"
+#include "vast/batch.hpp"
 #include "vast/event.hpp"
-#include "vast/actor/archive.hpp"
 #include "vast/concept/serializable/io.hpp"
-#include "vast/concept/serializable/vast/chunk.hpp"
+#include "vast/concept/serializable/vast/batch.hpp"
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/error.hpp"
 #include "vast/concept/printable/vast/uuid.hpp"
-#include "vast/util/assert.hpp"
+#include "vast/detail/assert.hpp"
+
+#include "vast/system/archive.hpp"
 
 namespace vast {
+namespace system {
 
 archive::state::state(local_actor* self)
   : basic_state{self, "archive"} {
@@ -27,7 +29,7 @@ trial<void> archive::state::flush() {
   auto filename = dir / to_string(id);
   if (!save(filename, current))
     return error{"failed to save segment to ", filename};
-  // Record each chunk of segment in registry.
+  // Record each batch of segment in registry.
   for (auto& chk : current) {
     auto first = chk.meta().ids.find_first();
     auto last = chk.meta().ids.find_last();
@@ -55,7 +57,7 @@ using flush_response_promise =
   typed_response_promise<either<ok_atom>::or_else<error>>;
 
 using lookup_response_promise =
-  typed_response_promise<either<chunk>::or_else<empty_atom, event_id>>;
+  typed_response_promise<either<batch>::or_else<empty_atom, event_id>>;
 
 archive::behavior archive::make(stateful_pointer self, path dir,
                                 size_t capacity, size_t max_segment_size,
@@ -93,7 +95,7 @@ archive::behavior archive::make(stateful_pointer self, path dir,
                     "events [" << events.front().id() << ','
                                << (events.back().id() + 1) << ')');
       auto start = time::snapshot();
-      chunk chk{events, self->state.compression};
+      batch chk{events, self->state.compression};
       if (self->state.accountant) {
         auto stop = time::snapshot();
         auto runtime = stop - start;
@@ -143,7 +145,7 @@ archive::behavior archive::make(stateful_pointer self, path dir,
       for (size_t i = 0; i < self->state.current.size(); ++i)
         if (eid < self->state.current[i].meta().ids.size()
             && self->state.current[i].meta().ids[eid]) {
-          VAST_DEBUG_AT(self, "delivers chunk from cache");
+          VAST_DEBUG_AT(self, "delivers batch from cache");
           rp.deliver(self->state.current[i]);
           return rp;
         }
@@ -165,7 +167,7 @@ archive::behavior archive::make(stateful_pointer self, path dir,
         }
         for (size_t i = 0; i < s->size(); ++i)
           if (eid < (*s)[i].meta().ids.size() && (*s)[i].meta().ids[eid]) {
-            VAST_DEBUG_AT(self, "delivers chunk",
+            VAST_DEBUG_AT(self, "delivers batch",
                           '[' << (*s)[i].meta().ids.find_first() << ','
                               << (*s)[i].meta().ids.find_last() + 1 << ')');
             rp.deliver((*s)[i]);
@@ -180,4 +182,5 @@ archive::behavior archive::make(stateful_pointer self, path dir,
   };
 }
 
+} // namespace system
 } // namespace vast

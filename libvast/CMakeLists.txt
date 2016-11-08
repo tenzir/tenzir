@@ -12,7 +12,6 @@ set(libvast_sources
   src/base.cpp
   src/batch.cpp
   src/bitmap.cpp
-  src/cleanup.cpp
   src/compression.cpp
   src/data.cpp
   src/die.cpp
@@ -24,7 +23,6 @@ set(libvast_sources
   src/filesystem.cpp
   src/key.cpp
   src/http.cpp
-  src/logger.cpp
   src/null_bitmap.cpp
   src/operator.cpp
   src/pattern.cpp
@@ -193,7 +191,6 @@ set(tests
   test/iterator.cpp
   test/json.cpp
   test/key.cpp
-  test/logging.cpp
   test/main.cpp
   test/maybe.cpp
   test/offset.cpp

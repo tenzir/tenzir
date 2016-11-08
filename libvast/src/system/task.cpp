@@ -1,6 +1,8 @@
+#include "vast/logger.hpp"
+
 #include <caf/all.hpp>
 
-#include "vast/logger.hpp"
+#include "vast/error.hpp"
 
 #include "vast/system/task.hpp"
 
@@ -26,8 +28,8 @@ template <class Actor>
 void complete(Actor self, actor_addr const& a) {
   auto w = self->state.workers.find(a);
   if (w == self->state.workers.end()) {
-    VAST_ERROR_AT(self, "got completion signal from unknown actor:", a);
-    self->quit(exit_reason::unknown); // FIXME: error exit reason?
+    VAST_ERROR(self, "got completion signal from unknown actor:", a);
+    self->quit(make_error(ec::unspecified, "got DONE from unknown actor"));
   } else if (--w->second == 0) {
     self->demonitor(a);
     self->state.workers.erase(w);
@@ -56,31 +58,31 @@ behavior task(stateful_actor<task_state>* self, message done_msg) {
   );
   return {
     [=](actor const& a) {
-      VAST_DEBUG_AT(self, "registers actor", a);
+      VAST_DEBUG(self, "registers actor", a);
       self->monitor(a);
       ++self->state.workers[a.address()];
       ++self->state.total;
     },
     [=](actor const& a, uint64_t n) {
-      VAST_DEBUG_AT(self, "registers actor", a, "for", n, "sub-tasks");
+      VAST_DEBUG(self, "registers actor", a, "for", n, "sub-tasks");
       self->monitor(a);
       self->state.workers[a.address()] += n;
       ++self->state.total;
     },
     [=](done_atom, actor_addr const& addr) {
-      VAST_DEBUG_AT(self, "manually completed actor with address", addr);
+      VAST_DEBUG(self, "manually completed actor with address", addr);
       complete(self, addr);
     },
     [=](done_atom) {
-      VAST_DEBUG_AT(self, "completed actor", to_string(self->current_sender()));
+      VAST_DEBUG(self, "completed actor", self->current_sender());
       complete(self, actor_cast<actor_addr>(self->current_sender()));
     },
     [=](supervisor_atom, actor const& a) {
-      VAST_DEBUG_AT(self, "notifies", a, "about task completion");
+      VAST_DEBUG(self, "notifies", a, "about task completion");
       self->state.supervisors.insert(a);
     },
     [=](subscriber_atom, actor const& a) {
-      VAST_DEBUG_AT(self, "notifies", a, "on task status change");
+      VAST_DEBUG(self, "notifies", a, "on task status change");
       self->state.subscribers.insert(a);
     },
     [=](progress_atom) {

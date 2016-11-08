@@ -1,7 +1,6 @@
 #include "vast/event.hpp"
 #include "vast/expression.hpp"
 #include "vast/load.hpp"
-#include "vast/logger.hpp"
 #include "vast/save.hpp"
 #include "vast/schema.hpp"
 #include "vast/concept/parseable/to.hpp"

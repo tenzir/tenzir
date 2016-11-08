@@ -5,14 +5,20 @@
 #include "test.hpp"
 
 struct actor_system_fixture {
-  actor_system_fixture() : system{config}, self{system} {
+  struct configuration : vast::system::configuration {
+    configuration() {
+      logger_filename = "vast-unit-test.log";
+    }
+  };
+
+  actor_system_fixture() : system{config}, self{system, true} {
   }
 
   auto error_handler() {
     return [=](caf::error const& e) { FAIL(system.render(e)); };
   }
 
-  vast::system::configuration config;
+  configuration config;
   caf::actor_system system;
   caf::scoped_actor self;
 };

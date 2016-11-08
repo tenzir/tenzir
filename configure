@@ -60,29 +60,26 @@ append_cache_entry() {
 levelize() {
   case "$1" in
     quiet)
-      echo 0
+      echo -1
       ;;
     error)
+      echo 0
+      ;;
+    warning)
       echo 1
       ;;
-    warn)
+    info)
       echo 2
       ;;
-    info)
+    debug)
       echo 3
       ;;
-    verbose)
-      echo 4
-      ;;
-    debug)
-      echo 5
-      ;;
     trace)
-      echo 6
+      echo 4
       ;;
     *)
       echo "invalid log level specification, use:"
-      echo "  quiet|error|warn|info|verbose|debug|trace"
+      echo "  quiet|error|warning|info|debug|trace"
       exit 1;
   esac
 }
