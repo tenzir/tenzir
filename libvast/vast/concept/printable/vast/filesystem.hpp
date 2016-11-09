@@ -3,6 +3,7 @@
 
 #include "vast/filesystem.hpp"
 #include "vast/concept/printable/core/printer.hpp"
+#include "vast/concept/printable/string/string.hpp"
 
 namespace vast {
 
