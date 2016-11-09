@@ -22,8 +22,8 @@ struct formatter {
     return *this;
   }
 
-  template <class T>
-  formatter& operator<<(caf::stateful_actor<T>* a) {
+  template <class T, class... Ts>
+  formatter& operator<<(caf::stateful_actor<T, Ts...>* a) {
     message << a->name() << '#' << a->id();
     return *this;
   }
