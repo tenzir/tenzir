@@ -58,7 +58,7 @@ public:
 
   template <class Inspector>
   friend auto inspect(Inspector& f, batch& b) {
-    return f(b.data_);
+    return f(b.method_, b.first_, b.last_, b.events_, b.ids_, b.data_);
   }
 
 private:
