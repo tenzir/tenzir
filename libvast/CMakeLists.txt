@@ -38,6 +38,7 @@ set(libvast_sources
   src/uuid.cpp
   src/value.cpp
   src/value_index.cpp
+  src/wah_bitmap.cpp
   src/concept/hashable/crc.cpp
   src/concept/hashable/xxhash.cpp
   src/detail/adjust_resource_consumption.cpp

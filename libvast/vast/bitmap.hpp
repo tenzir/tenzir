@@ -5,6 +5,7 @@
 #include "vast/detail/type_traits.hpp"
 #include "vast/ewah_bitmap.hpp"
 #include "vast/null_bitmap.hpp"
+#include "vast/wah_bitmap.hpp"
 #include "vast/variant.hpp"
 
 namespace vast {
@@ -59,7 +60,8 @@ public:
 private:
   using bitmap_variant = variant<
     ewah_bitmap,
-    null_bitmap
+    null_bitmap,
+    wah_bitmap
   >;
 
   bitmap_variant bitmap_;
@@ -85,7 +87,8 @@ public:
 private:
   using range_variant = variant<
     ewah_bitmap_range,
-    null_bitmap_range
+    null_bitmap_range,
+    wah_bitmap_range
   >;
 
   range_variant range_;

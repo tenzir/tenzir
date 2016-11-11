@@ -46,30 +46,35 @@ struct bitmap_test_harness {
     CHECK_EQUAL(s, "00001110111111111111111111111000111011111111111111111111");
     s = to_string(y);
     CHECK_EQUAL(s, "1111111111100000000000000000000000000000000001111111");
-    MESSAGE("longer sequence");
     a.append_bit(false);
     a.append_bit(true);
-    a.append_bits(false, 421);
-    a.append_bit(true);
-    a.append_bit(true);
-    CHECK_EQUAL(a.size(), 425u);
     s = "01";
+    CHECK_EQUAL(to_string(a), s);
+    MESSAGE("longer sequence");
+    a.append_bits(false, 421);
     s.append(421, '0');
+    CHECK_EQUAL(to_string(a), s);
+    a.append_bit(true);
+    a.append_bit(true);
     s += "11";
+    CHECK_EQUAL(to_string(a), s);
+    CHECK_EQUAL(a.size(), 425u);
     std::string str;
     CHECK_EQUAL(to_string(a), s);
-    b.append_bits(true, 222);
-    b.append_bit(false);
-    b.append_bit(true);
-    b.append_bit(false);
-    b.append_block(0x000000cccccccccc);
-    b.append_bit(false);
-    b.append_bit(true);
     s.clear();
+    b.append_bits(true, 222);
     s.append(222, '1');
+    CHECK_EQUAL(to_string(b), s);
+    b.append_bit(false);
+    b.append_bit(true);
+    b.append_bit(false);
     s += "010";
-    // 0xcccccccccc
+    CHECK_EQUAL(to_string(b), s);
+    b.append_block(0x000000cccccccccc);
     s += "0011001100110011001100110011001100110011000000000000000000000000";
+    CHECK_EQUAL(to_string(b), s);
+    b.append_bit(false);
+    b.append_bit(true);
     s += "01";
     CHECK_EQUAL(to_string(b), s);
     auto xy = x;
@@ -257,21 +262,6 @@ struct bitmap_test_harness {
     CHECK(!all<1>(Bitmap{1000, false}));
   }
 
-  void test_printable() {
-    std::string str;
-    printers::bitmap<Bitmap, policy::rle>(str, a);
-    // TODO: we could change the filter so that consecutive runs never occur,
-    // even at word boundaries.
-    //CHECK_EQUAL(str, "1F1T421F2T");
-    CHECK_EQUAL(str, "1F1T62F320F39F2T");
-    str.clear();
-    printers::bitmap<Bitmap, policy::rle>(str, x);
-    CHECK_EQUAL(str, "4F3T1F21T3F3T1F20T");
-    str.clear();
-    printers::bitmap<Bitmap, policy::rle>(str, y);
-    CHECK_EQUAL(str, "11T34F7T");
-  }
-
   void execute() {
     test_append();
     test_construction();
@@ -283,7 +273,6 @@ struct bitmap_test_harness {
     test_rank();
     test_select();
     test_all();
-    test_printable();
   }
 
   Bitmap a;
@@ -305,6 +294,14 @@ FIXTURE_SCOPE_END()
 FIXTURE_SCOPE(ewah_bitmap_tests, bitmap_test_harness<ewah_bitmap>)
 
 TEST(ewah_bitmap) {
+  execute();
+}
+
+FIXTURE_SCOPE_END()
+
+FIXTURE_SCOPE(wah_bitmap_tests, bitmap_test_harness<wah_bitmap>)
+
+TEST(wah_bitmap) {
   execute();
 }
 
@@ -703,4 +700,33 @@ TEST(EWAH block append) {
     "0000000000000000000000000000000000000011111111000000001111111111\n"
     "                                                      0000000000\n";
   CHECK_EQUAL(to_block_string(bm), str);
+}
+
+TEST(EWAH RLE print 1) {
+  ewah_bitmap bm;
+  bm.append_bit(false);
+  bm.append_block(0b0111000, 7);
+  bm.append_bits(true, 20);
+  bm.append_bit(true);
+  bm.append_block(0b0111000, 7);
+  bm.append_bits(true, 20);
+  std::string str;
+  printers::bitmap<ewah_bitmap, policy::rle>(str, bm);
+  CHECK_EQUAL(str, "4F3T1F21T3F3T1F20T");
+}
+
+
+TEST(EWAH RLE print 2) {
+  ewah_bitmap bm;
+  bm.append_bit(false);
+  bm.append_bit(true);
+  bm.append_bits(false, 421);
+  bm.append_bit(true);
+  bm.append_bit(true);
+  std::string str;
+  printers::bitmap<ewah_bitmap, policy::rle>(str, bm);
+  // TODO: we could change the filter so that consecutive runs never occur,
+  // even at word boundaries.
+  //CHECK_EQUAL(str, "1F1T421F2T");
+  CHECK_EQUAL(str, "1F1T62F320F39F2T");
 }
