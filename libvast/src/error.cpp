@@ -1,7 +1,7 @@
+#include "vast/detail/assert.hpp"
 #include "vast/error.hpp"
 
 namespace vast {
-
 namespace {
 
 const char* descriptions[] = {
@@ -12,14 +12,15 @@ const char* descriptions[] = {
   "parse_error",
   "print_error",
   "invalid_query",
+  "format_error",
+  "end_of_input"
 };
 
 } // namespace <anonymous>
 
 const char* to_string(ec x) {
-  auto index = static_cast<size_t>(x);
-  if (index > static_cast<size_t>(ec::invalid_query))
-    return "<unknown>";
+  auto index = static_cast<size_t>(x) - 1;
+  VAST_ASSERT(index < sizeof(descriptions));
   return descriptions[index];
 }
 

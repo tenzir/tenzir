@@ -72,14 +72,13 @@ set(libvast_sources
 # FIXME: Bring back after having repaired CAF code.
 #if (GPERFTOOLS_FOUND)
 #  set(libvast_sources ${libvast_sources}
-#    src/actor/profiler.cpp)
+#    src/system/profiler.cpp)
 #endif ()
-#
-#if (PCAP_FOUND)
-#  set(libvast_sources ${libvast_sources}
-#    src/actor/sink/pcap.cpp
-#    src/actor/source/pcap.cpp)
-#endif ()
+
+if (PCAP_FOUND)
+  set(libvast_sources ${libvast_sources}
+    src/format/pcap.cpp)
+endif ()
 
 set(libvast_libs ${CAF_LIBRARIES})
 
@@ -223,11 +222,10 @@ set(tests
   test/system/task.cpp
 )
 
-# FIXME: Bring back after having repaired CAF code.
-#if (PCAP_FOUND)
-#  set(tests ${tests}
-#    test/actor/source_pcap.cpp)
-#endif ()
+if (PCAP_FOUND)
+  set(tests ${tests}
+    test/format/pcap.cpp)
+endif ()
 
 add_executable(vast-test ${tests})
 target_link_libraries(vast-test libvast ${CMAKE_THREAD_LIBS_INIT})

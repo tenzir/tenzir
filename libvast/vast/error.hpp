@@ -24,6 +24,10 @@ enum class ec : uint8_t {
   print_error,
   /// Malformed query expression.
   invalid_query,
+  /// An error with an input/output format.
+  format_error,
+  /// Exhausted the input
+  end_of_input,
 };
 
 /// @relates ec
