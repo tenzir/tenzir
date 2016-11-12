@@ -95,7 +95,7 @@ expected<std::vector<event>> batch::reader::read(const bitmap& ids) {
   auto result = std::vector<event>{};
   if (id_range_.done())
     return result;
-  auto e = expected<event>{fail()};
+  auto e = expected<event>{make_error(ec::unspecified)};
   auto n = event_id{0};
   auto rng = bit_range(ids);
   auto begin = rng.begin();
@@ -117,7 +117,7 @@ expected<std::vector<event>> batch::reader::read(const bitmap& ids) {
       id = next(bits, e->id() - 1);
       if (id == e->id()) {
         result.push_back(std::move(*e));
-        e = fail();
+        e = make_error(ec::unspecified);
         id = next(bits, id);
       }
     }
@@ -136,7 +136,7 @@ expected<std::vector<event>> batch::reader::read(const bitmap& ids) {
       // If we have materialized the event we want, add it to the result.
       if (id == e->id()) {
         result.push_back(std::move(*e));
-        e = fail();
+        e = make_error(ec::unspecified);
         id = next(bits, id);
       }
     }
@@ -146,7 +146,7 @@ expected<std::vector<event>> batch::reader::read(const bitmap& ids) {
 
 expected<event> batch::reader::materialize() {
   if (available_ == 0)
-    return fail();
+    return make_error(ec::unspecified);
   --available_;
   // Read type.
   uint32_t type_id;

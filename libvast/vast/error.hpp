@@ -36,13 +36,6 @@ error make_error(ec x, Ts&&... xs) {
                caf::make_message(std::forward<Ts>(xs)...)};
 }
 
-/// Simplifies generation of structured errors.
-/// @relates ec
-template <ec ErrorCode = ec::unspecified, class... Ts>
-error fail(Ts&&... xs) {
-  return make_error(ErrorCode, std::forward<Ts>(xs)...);
-}
-
 } // namespace vast
 
 #endif

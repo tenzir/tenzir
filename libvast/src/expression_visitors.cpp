@@ -147,7 +147,7 @@ std::vector<predicate> predicatizer::operator()(predicate const& pred) const {
 
 
 maybe<void> validator::operator()(none) const {
-  return fail("nil expression");
+  return make_error(ec::unspecified, "nil expression");
 }
 
 maybe<void> validator::operator()(conjunction const& c) const {
@@ -188,8 +188,8 @@ maybe<void> validator::operator()(predicate const& p) const {
         // Try to parse the key type.
         if (auto t = to<type>(k->key[0]))
           if (!type_check(*t, *d))
-            return fail<ec::type_clash>("invalid predicate: ",
-                                        *t, ' ', p.op, ' ', *d);
+            return make_error(ec::type_clash, "invalid predicate: ",
+                              *t, ' ', p.op, ' ', *d);
       }
     }
     return {};
@@ -329,7 +329,7 @@ maybe<expression> key_resolver::operator()(key_extractor const& e,
       for (auto& p : trace)
         if (!p.first.empty())
           if (!congruent(*r->at(p.first), *first_type))
-            return fail<ec::type_clash>(type_, *r->at(p.first));
+            return make_error(ec::type_clash, type_, *r->at(p.first));
     }
     // Add all offsets from the trace to the disjunction, which will
     // eventually replace this node.

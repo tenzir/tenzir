@@ -15,7 +15,7 @@ auto to(Iterator& f, Iterator const& l)
   -> std::enable_if_t<is_parseable<Iterator, To>{}, maybe<To>> {
   maybe<To> t{To{}};
   if (!parse(f, l, *t))
-    return fail<ec::parse_error>();
+    return make_error(ec::parse_error);
   return t;
 }
 

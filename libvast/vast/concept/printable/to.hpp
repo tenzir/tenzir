@@ -18,7 +18,7 @@ auto to(From&& from, Opts&&... opts)
    > {
   std::string str;
   if (! print(std::back_inserter(str), from, std::forward<Opts>(opts)...))
-    return fail<ec::print_error>();
+    return make_error(ec::print_error);
   return maybe<std::string>{std::move(str)};
 }
 

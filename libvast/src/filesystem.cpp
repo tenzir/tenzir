@@ -232,15 +232,16 @@ file::~file() {
 
 maybe<void> file::open(open_mode mode, bool append) {
   if (is_open_)
-    return fail<ec::filesystem_error>("file already open");
+    return make_error(ec::filesystem_error, "file already open");
   if (mode == read_only && append)
-    return fail<ec::filesystem_error>(
+    return make_error(ec::filesystem_error, 
       "cannot open file in read and append mode simultaneously");
 #ifdef VAST_POSIX
   // Support reading from STDIN and writing to STDOUT.
   if (path_ == "-") {
     if (mode == read_write)
-      return fail<ec::filesystem_error>("cannot open - in read/write mode");
+      return make_error(ec::filesystem_error,
+                        "cannot open - in read/write mode");
     handle_ = ::fileno(mode == read_only ? stdin : stdout);
     is_open_ = true;
     return {};
@@ -248,7 +249,7 @@ maybe<void> file::open(open_mode mode, bool append) {
   int flags = 0;
   switch (mode) {
     case invalid:
-      return fail<ec::filesystem_error>("invalid open mode");
+      return make_error(ec::filesystem_error, "invalid open mode");
     case read_write:
       flags = O_CREAT | O_RDWR;
       break;
@@ -265,17 +266,17 @@ maybe<void> file::open(open_mode mode, bool append) {
   if (mode != read_only && !exists(path_.parent())) {
     auto m = mkdir(path_.parent());
     if (!m)
-      return fail<ec::filesystem_error>("failed to create parent directory: ",
-                                        m.error());
+      return make_error(ec::filesystem_error,
+                        "failed to create parent directory: ", m.error());
   }
   handle_ = ::open(path_.str().data(), flags, 0644);
   if (handle_ != -1) {
     is_open_ = true;
     return {};
   }
-  return fail<ec::filesystem_error>(std::strerror(errno));
+  return make_error(ec::filesystem_error, std::strerror(errno));
 #else
-  return fail<ec::filesystem_error>("not yet implemented");
+  return make_error(ec::filesystem_error, "not yet implemented");
 #endif // VAST_POSIX
 }
 
@@ -421,23 +422,25 @@ bool rm(const path& p) {
 maybe<void> mkdir(path const& p) {
   auto components = split(p);
   if (components.empty())
-    return fail<ec::filesystem_error>("cannot mkdir empty path");
+    return make_error(ec::filesystem_error, "cannot mkdir empty path");
   path c;
   for (auto& comp : components) {
     c /= comp;
     if (exists(c)) {
       auto kind = c.kind();
       if (!(kind == path::directory || kind == path::symlink))
-        return fail<ec::filesystem_error>("not a directory or symlink:", c);
+        return make_error(ec::filesystem_error,
+                          "not a directory or symlink:", c);
     } else {
       if (!VAST_CREATE_DIRECTORY(c.str().data())) {
         // Because there exists a TOCTTOU issue here, we have to check again.
         if (errno == EEXIST) {
           auto kind = c.kind();
           if (!(kind == path::directory || kind == path::symlink))
-            return fail<ec::filesystem_error>("not a directory or symlink:", c);
+            return make_error(ec::filesystem_error,
+                              "not a directory or symlink:", c);
         } else {
-          return fail<ec::filesystem_error>(std::strerror(errno), c);
+          return make_error(ec::filesystem_error, std::strerror(errno), c);
         }
       }
     }

@@ -155,7 +155,7 @@ bool value_index::push_back(data const& x, event_id id) {
 maybe<bitmap> value_index::lookup(relational_operator op, data const& x) const {
   if (is<none>(x)) {
     if (!(op == equal || op == not_equal))
-      return fail<ec::unsupported_operator>(op);
+      return make_error(ec::unsupported_operator, op);
     return op == equal ? none_ & mask_ : ~none_ & mask_;
   }
   auto result = lookup_impl(op, x);
@@ -204,14 +204,14 @@ maybe<bitmap>
 string_index::lookup_impl(relational_operator op, data const& x) const {
   auto str = get_if<std::string>(x);
   if (!str)
-    return fail<ec::type_clash>(x);
+    return make_error(ec::type_clash, x);
   auto str_size = str->size();
   if (str_size > max_length_)
     str_size = max_length_;
   auto off = offset();
   switch (op) {
     default:
-      return fail<ec::unsupported_operator>(op);
+      return make_error(ec::unsupported_operator, op);
     case equal:
     case not_equal: {
       if (str_size == 0) {
@@ -295,7 +295,7 @@ address_index::lookup_impl(relational_operator op, data const& x) const {
   auto off = offset();
   if (auto addr = get_if<address>(x)) {
     if (!(op == equal || op == not_equal))
-      return fail<ec::unsupported_operator>(op);
+      return make_error(ec::unsupported_operator, op);
     auto& bytes = addr->data();
     auto result = addr->is_v4() ? v4_.coder().storage() : bitmap{off, true};
     for (auto i = addr->is_v4() ? 12u : 0u; i < 16; ++i) {
@@ -309,10 +309,10 @@ address_index::lookup_impl(relational_operator op, data const& x) const {
     return result;
   } else if (auto sn = get_if<subnet>(x)) {
     if (!(op == in || op == not_in))
-      return fail<ec::unsupported_operator>(op);
+      return make_error(ec::unsupported_operator, op);
     auto topk = sn->length();
     if (topk == 0)
-      return fail("invalid IP subnet length: ", topk);
+      return make_error(ec::unspecified, "invalid IP subnet length: ", topk);
     auto& net = sn->network();
     auto is_v4 = net.is_v4();
     if ((is_v4 ? topk + 96 : topk) == 128)
@@ -332,7 +332,7 @@ address_index::lookup_impl(relational_operator op, data const& x) const {
       result.flip();
     return result;
   }
-  return fail<ec::type_clash>(x);
+  return make_error(ec::type_clash, x);
 }
 
 void subnet_index::init() {
@@ -353,10 +353,10 @@ bool subnet_index::push_back_impl(data const& x, size_type skip) {
 maybe<bitmap>
 subnet_index::lookup_impl(relational_operator op, data const& x) const {
   if (!(op == equal || op == not_equal))
-    return fail<ec::unsupported_operator>(op);
+    return make_error(ec::unsupported_operator, op);
   auto sn = get_if<subnet>(x);
   if (!sn)
-    return fail<ec::type_clash>(x);
+    return make_error(ec::type_clash, x);
   auto result = network_.lookup(equal, sn->network());
   if (!result)
     return result;
@@ -388,12 +388,12 @@ bool port_index::push_back_impl(data const& x, size_type skip) {
 maybe<bitmap>
 port_index::lookup_impl(relational_operator op, data const& x) const {
   if (op == in || op == not_in)
-    return fail<ec::unsupported_operator>(op);
+    return make_error(ec::unsupported_operator, op);
   if (offset() == 0)
     return bitmap{};
   auto p = get_if<port>(x);
   if (!p)
-    return fail<ec::type_clash>(x);
+    return make_error(ec::type_clash, x);
   auto n = num_.lookup(op, p->number());
   if (all<0>(n))
     return bitmap{offset(), false};
@@ -434,7 +434,7 @@ sequence_index::lookup_impl(relational_operator op, data const& x) const {
   else if (op == not_ni)
     op = not_in;
   if (!(op == in || op == not_in))
-    return fail<ec::unsupported_operator>(op);
+    return make_error(ec::unsupported_operator, op);
   if (elements_.empty())
     return bitmap{};
   auto result = elements_[0]->lookup(equal, x);

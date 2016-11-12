@@ -200,7 +200,7 @@ record_type::each::range_state const& record_type::each::get() const {
 
 maybe<offset> record_type::resolve(key const& k) const {
   if (k.empty())
-    return fail("empty symbol sequence");
+    return make_error(ec::unspecified, "empty symbol sequence");
   offset off;
   auto found = true;
   auto rec = this;
@@ -212,7 +212,8 @@ maybe<offset> record_type::resolve(key const& k) const {
         // an intermediate record or have reached the last symbol.
         rec = get_if<record_type>(rec->fields[i].type);
         if (!(rec || id + 1 == k.end()))
-          return fail("intermediate fields must be records");
+          return make_error(ec::unspecified,
+                            "intermediate fields must be records");
         off.push_back(i);
         found = true;
         break;
@@ -220,23 +221,24 @@ maybe<offset> record_type::resolve(key const& k) const {
     }
   }
   if (!found)
-    return fail("non-existant field name");
+    return make_error(ec::unspecified, "non-existant field name");
   return std::move(off);
 }
 
 maybe<key> record_type::resolve(offset const& o) const {
   if (o.empty())
-    return fail("empty offset sequence");
+    return make_error(ec::unspecified, "empty offset sequence");
   key k;
   auto r = this;
   for (size_t i = 0; i < o.size(); ++i) {
     if (o[i] >= r->fields.size())
-      return fail("offset index ", i, " out of bounds");
+      return make_error(ec::unspecified, "offset index ", i, " out of bounds");
     k.push_back(r->fields[o[i]].name);
     if (i != o.size() - 1) {
       r = get_if<record_type>(r->fields[o[i]].type);
       if (!r)
-        return fail("intermediate fields must be records");
+        return make_error(ec::unspecified,
+                          "intermediate fields must be records");
     }
   }
   return std::move(k);

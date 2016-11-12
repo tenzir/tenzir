@@ -164,13 +164,13 @@ private:
     template <class U>
     auto operator()(U const& x) const
     -> std::enable_if_t<!std::is_arithmetic<U>{}, maybe<bitmap>> {
-      return fail<ec::type_clash>(value_type{}, x);
+      return make_error(ec::type_clash, value_type{}, x);
     }
 
     maybe<bitmap> operator()(boolean x) const {
       // Boolean indexes support only equality
       if (!(op_ == equal || op_ == not_equal))
-        return fail<ec::unsupported_operator>(op_);
+        return make_error(ec::unsupported_operator, op_);
       return bmi_.lookup(op_, x);
     }
 
