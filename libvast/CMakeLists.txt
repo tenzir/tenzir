@@ -46,7 +46,7 @@ set(libvast_sources
   src/detail/string.cpp
   src/detail/system.cpp
   src/detail/terminal.cpp
-  #src/system/accountant.cpp
+  src/system/accountant.cpp
   #src/system/archive.cpp
   src/system/configuration.cpp
   #src/system/exporter.cpp

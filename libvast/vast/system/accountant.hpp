@@ -1,45 +1,48 @@
-#ifndef VAST_ACTOR_ACCOUNTANT_HPP
-#define VAST_ACTOR_ACCOUNTANT_HPP
+#ifndef VAST_SYSTEM_ACCOUNTANT_HPP
+#define VAST_SYSTEM_ACCOUNTANT_HPP
 
+#include <cstdint>
 #include <fstream>
-#include <unordered_map>
+#include <string>
+
+#include <caf/typed_actor.hpp>
 
 #include "vast/filesystem.hpp"
 #include "vast/time.hpp"
-#include "vast/actor/atoms.hpp"
-#include "vast/actor/basic_state.hpp"
+
+#include "vast/system/atoms.hpp"
 
 namespace vast {
+namespace system {
 
-struct accountant {
-  /// Writes out accounting data into a log file.
-  struct state : basic_state {
-    state(local_actor* self);
-
-    void init(path const& filename);
-
-    std::ofstream file_;
-  };
-
-  using type =
-    typed_actor<
-      reacts_to<flush_atom>,
-      reacts_to<std::string, std::string, std::string>,
-      reacts_to<std::string, std::string, time::extent>,
-      reacts_to<std::string, std::string, time::moment>,
-      reacts_to<std::string, std::string, int64_t>,
-      reacts_to<std::string, std::string, uint64_t>,
-      reacts_to<std::string, std::string, double>
-    >;
-  using behavior = type::behavior_type;
-  using stateful_pointer = type::stateful_pointer<state>;
-
-  /// Spawns an accountant.
-  /// @param self The actor handle.
-  /// @param filename The path of the file containing the accounting details.
-  static behavior make(stateful_pointer self, path const& filename);
+struct accountant_state {
+  using stopwatch = std::chrono::steady_clock;
+  std::ofstream file;
+  const char* name = "accountant";
 };
 
+
+using accountant_type =
+  caf::typed_actor<
+    caf::reacts_to<shutdown_atom>,
+    caf::reacts_to<flush_atom>,
+    caf::reacts_to<std::string, std::string>,
+    caf::reacts_to<std::string, interval>,
+    caf::reacts_to<std::string, timestamp>,
+    caf::reacts_to<std::string, int64_t>,
+    caf::reacts_to<std::string, uint64_t>,
+    caf::reacts_to<std::string, double>
+  >;
+
+/// Accumulates various performance metrics in a key-value format and writes
+/// them to a log file.
+/// @param self The actor handle.
+/// @param filename The path of the file containing the accounting details.
+accountant_type::behavior_type
+accountant(accountant_type::stateful_pointer<accountant_state> self,
+           path const& filename);
+
+} // namespace system
 } // namespace vast
 
 #endif
