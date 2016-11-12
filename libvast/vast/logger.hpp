@@ -17,7 +17,10 @@ namespace detail {
 struct formatter {
   template <class T>
   auto operator<<(T const& x)
-  -> std::enable_if_t<!std::is_pointer<T>::value, formatter&> {
+  -> std::enable_if_t<
+       !std::is_pointer<T>::value || std::is_convertible<T, std::string>::value,
+       formatter&
+     > {
     message << x;
     return *this;
   }
