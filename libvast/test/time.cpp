@@ -91,17 +91,17 @@ TEST(parseable) {
   CHECK(ts.time_since_epoch() == double_seconds{1398933902.686337});
   MESSAGE("now");
   CHECK(parsers::timestamp("now", ts));
-  CHECK(ts > clock::now() - minutes{1});
-  CHECK(ts < clock::now() + minutes{1});
+  CHECK(ts > timestamp::clock::now() - minutes{1});
+  CHECK(ts < timestamp::clock::now() + minutes{1});
   CHECK(parsers::timestamp("now - 1m", ts));
-  CHECK(ts < clock::now());
+  CHECK(ts < timestamp::clock::now());
   CHECK(parsers::timestamp("now + 1m", ts));
-  CHECK(ts > clock::now());
+  CHECK(ts > timestamp::clock::now());
   MESSAGE("ago");
   CHECK(parsers::timestamp("10 days ago", ts));
-  CHECK(ts < clock::now());
+  CHECK(ts < timestamp::clock::now());
   MESSAGE("in");
   CHECK(parsers::timestamp("in 1 year", ts));
-  CHECK(ts > clock::now());
+  CHECK(ts > timestamp::clock::now());
 }
 

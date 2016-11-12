@@ -10,15 +10,12 @@ namespace vast {
 
 class json;
 
-/// The clock that correctly represents calendar time.
-using clock = std::chrono::system_clock;
-
 /// A duration in time with nanosecond resolution.
 using interval = std::chrono::duration<int64_t, std::nano>;
 
 /// An absolute point in time with nanosecond resolution. It is capable to
 /// represent +/- 292 years around the UNIX epoch.
-using timestamp = std::chrono::time_point<clock, interval>;
+using timestamp = std::chrono::time_point<std::chrono::system_clock, interval>;
 
 /// A helper type to represent fractional time stamps in type `double`.
 using double_seconds = std::chrono::duration<double, std::ratio<1>>;

@@ -165,10 +165,10 @@ struct timestamp_parser : parser<timestamp_parser> {
   template <typename Iterator, typename Attribute>
   bool parse(Iterator& f, Iterator const& l, Attribute& a) const {
     static auto plus = [](interval i) {
-      return clock::now() + i;
+      return timestamp::clock::now() + i;
     };
     static auto minus = [](interval i) {
-      return clock::now() - i;
+      return timestamp::clock::now() - i;
     };
     static auto ws = ignore(*parsers::space);
     static auto p
@@ -176,7 +176,7 @@ struct timestamp_parser : parser<timestamp_parser> {
       | '@' >> parsers::epoch
       | "now" >> ws >> ( '+' >> ws >> parsers::interval ->* plus
                        | '-' >> ws >> parsers::interval ->* minus )
-      | "now"_p ->* []() { return clock::now(); }
+      | "now"_p ->* []() { return timestamp::clock::now(); }
       | "in" >> ws >> parsers::interval ->* plus
       | (parsers::interval ->* minus) >> ws >> "ago"
       ;
