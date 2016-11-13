@@ -38,6 +38,7 @@ set(libvast_sources
   src/concept/hashable/xxhash.cpp
   src/detail/adjust_resource_consumption.cpp
   src/detail/compressedbuf.cpp
+  src/detail/line_range.cpp
   src/detail/fdistream.cpp
   src/detail/fdinbuf.cpp
   src/detail/fdostream.cpp
@@ -59,14 +60,13 @@ set(libvast_sources
   #src/system/signal_monitor.cpp
   src/system/task.cpp
   #src/system/sink/ascii.cpp
-  #src/system/sink/bro.cpp
   #src/system/sink/csv.cpp
   #src/system/sink/json.cpp
   #src/system/sink/spawn.cpp
-  #src/system/source/bro.cpp
   #src/system/source/bgpdump.cpp
   #src/system/source/spawn.cpp
   #src/system/source/test.cpp
+  src/format/bro.cpp
 )
 
 # FIXME: Bring back after having repaired CAF code.
@@ -194,7 +194,6 @@ set(tests
   test/maybe.cpp
   test/offset.cpp
   test/parseable.cpp
-  test/parseable_bro.cpp
   test/pattern.cpp
   test/port.cpp
   test/printable.cpp
@@ -220,6 +219,7 @@ set(tests
   test/system/sink.cpp
   test/system/source.cpp
   test/system/task.cpp
+  test/format/bro.cpp
 )
 
 if (PCAP_FOUND)
