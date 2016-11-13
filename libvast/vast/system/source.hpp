@@ -26,9 +26,9 @@ struct Reader {
 
   maybe<result> read();
 
-  void schema(vast::schema&);
+  expected<void> schema(vast::schema&);
 
-  vast::schema schema() const;
+  expected<vast::schema> schema() const;
 
   char const* name() const;
 };
@@ -82,11 +82,17 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader&& reader) {
         self->state.events.reserve(batch_size);
       }
     },
-    [=](get_atom, schema_atom) {
-      return self->state.reader.schema();
+    [=](get_atom, schema_atom) -> caf::result<schema> {
+      auto sch = self->state.reader.schema();
+      if (sch)
+        return *sch;
+      return sch.error();
     },
-    [=](put_atom, schema const& sch) {
-      self->state.reader.schema(sch);
+    [=](put_atom, schema const& sch) -> caf::result<void> {
+      auto r = self->state.reader.schema(sch);
+      if (r)
+        return {};
+      return r.error();
     },
     [=](put_atom, sink_atom, caf::actor const& sink) {
       VAST_ASSERT(sink);
@@ -121,10 +127,14 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader&& reader) {
         } else if (e.empty()) {
           continue; // Try again.
         } else {
-          if (e == ec::end_of_input)
+          if (e == ec::parse_error) {
+            VAST_WARNING(self->system().render(e.error()));
+            continue; // Just skip bogous events.
+          } else if (e == ec::end_of_input) {
             VAST_INFO(self->system().render(e.error()));
-          else
+          } else {
             VAST_ERROR(self->system().render(e.error()));
+          }
           done = true;
           break;
         }

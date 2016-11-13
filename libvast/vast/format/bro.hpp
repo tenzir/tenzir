@@ -1,21 +1,33 @@
-#ifndef VAST_CONCEPT_PARSEABLE_VAST_DETAIL_BRO_PARSER_FACTORY_HPP
-#define VAST_CONCEPT_PARSEABLE_VAST_DETAIL_BRO_PARSER_FACTORY_HPP
+#ifndef VAST_FORMAT_BRO_HPP
+#define VAST_FORMAT_BRO_HPP
 
-#include "vast/data.hpp"
-#include "vast/type.hpp"
+#include <chrono>
+#include <iostream>
+#include <string>
+#include <unordered_map>
+#include <vector>
+
 #include "vast/concept/parseable/core.hpp"
 #include "vast/concept/parseable/numeric.hpp"
 #include "vast/concept/parseable/string/any.hpp"
 #include "vast/concept/parseable/vast/address.hpp"
 #include "vast/concept/parseable/vast/subnet.hpp"
-#include "vast/detail/assert.hpp"
-#include "vast/detail/string.hpp"
+#include "vast/data.hpp"
+#include "vast/detail/line_range.hpp"
+#include "vast/expected.hpp"
+#include "vast/filesystem.hpp"
+#include "vast/maybe.hpp"
+#include "vast/schema.hpp"
 
 namespace vast {
-namespace detail {
+
+class event;
+
+namespace format {
+namespace bro {
 
 /// Parses non-container types.
-template <typename Iterator, typename Attribute>
+template <class Iterator, class Attribute>
 struct bro_parser {
   bro_parser(Iterator& f, Iterator const& l, Attribute& attr)
     : f_{f},
@@ -23,14 +35,13 @@ struct bro_parser {
       attr_{attr} {
   }
 
-  template <typename Parser>
+  template <class Parser>
   bool parse(Parser const& p) const {
     return p.parse(f_, l_, attr_);
   }
 
-  template <typename T>
+  template <class T>
   bool operator()(T const&) const {
-    VAST_ASSERT("invalid type");
     return false;
   }
 
@@ -97,7 +108,7 @@ struct bro_parser {
 };
 
 /// Constructs a polymorphic Bro data parser.
-template <typename Iterator, typename Attribute>
+template <class Iterator, class Attribute>
 struct bro_parser_factory {
   using result_type = rule<Iterator, Attribute>;
 
@@ -105,9 +116,8 @@ struct bro_parser_factory {
     : set_separator_{set_separator} {
   }
 
-  template <typename T>
+  template <class T>
   result_type operator()(T const&) const {
-    VAST_ASSERT("invalid type");
     return {};
   }
 
@@ -185,7 +195,7 @@ struct bro_parser_factory {
 };
 
 /// Constructs a Bro data parser from a type and set separator.
-template <typename Iterator, typename Attribute = data>
+template <class Iterator, class Attribute = data>
 rule<Iterator, Attribute>
 make_bro_parser(type const& t, std::string const& set_separator = ",") {
   rule<Iterator, Attribute> r;
@@ -194,13 +204,68 @@ make_bro_parser(type const& t, std::string const& set_separator = ",") {
 }
 
 /// Parses non-container Bro data.
-template <typename Iterator, typename Attribute = data>
+template <class Iterator, class Attribute = data>
 bool bro_basic_parse(type const& t, Iterator& f, Iterator const& l,
                      Attribute& attr) {
   return visit(bro_parser<Iterator, Attribute>{f, l, attr}, t);
 }
 
-} // namespace detail
+/// A Bro reader.
+class reader {
+public:
+  reader() = default;
+
+  /// Constructs a Bro reader.
+  /// @param input The stream of logs to read.
+  explicit reader(std::unique_ptr<std::istream> input);
+
+  maybe<event> read();
+
+  expected<void> schema(vast::schema const& sch);
+
+  expected<vast::schema> schema() const;
+
+  const char* name() const;
+
+private:
+  expected<void> parse_header();
+
+  std::unique_ptr<std::istream> input_;
+  std::unique_ptr<detail::line_range> lines_;
+  std::string separator_ = " ";
+  std::string set_separator_;
+  std::string empty_field_;
+  std::string unset_field_;
+  int timestamp_field_ = -1;
+  vast::schema schema_;
+  type type_;
+  std::vector<rule<std::string::const_iterator, data>> parsers_;
+};
+
+/// A Bro writer.
+class writer {
+public:
+  writer() = default;
+
+  /// Constructs a Bro writer.
+  /// @param dir The path where to write the log file(s) to.
+  writer(path dir);
+
+  ~writer();
+
+  expected<void> write(event const& e);
+
+  expected<void> flush();
+
+  const char* name() const;
+
+private:
+  path dir_;
+  std::unordered_map<std::string, std::unique_ptr<std::ostream>> streams_;
+};
+
+} // namespace bro
+} // namespace format
 } // namespace vast
 
 #endif

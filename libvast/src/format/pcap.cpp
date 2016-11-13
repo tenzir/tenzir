@@ -273,7 +273,7 @@ expected<void> reader::schema(vast::schema const& sch) {
   return {};
 }
 
-schema reader::schema() const {
+expected<schema> reader::schema() const {
   vast::schema sch;
   sch.add(packet_type_);
   return sch;

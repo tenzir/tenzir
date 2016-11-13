@@ -437,6 +437,11 @@ bool compatible(type const& lhs, relational_operator op, type const& rhs);
 /// @returns `true` if *t* is a valid type for *d*.
 bool type_check(type const& t, data const& d);
 
+/// Default-construct a data instance for a given type.
+/// @param t The type to construct ::data from.
+/// @returns a default-constructed instance of type *t*.
+data construct(type const& t);
+
 // -- implementation details -------------------------------------------------
 
 namespace detail {

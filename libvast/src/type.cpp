@@ -622,28 +622,28 @@ bool type_check(type const& t, data const& d) {
   return is<none>(d) || visit(data_checker{t}, d);
 }
 
-//namespace {
-//
-//struct data_maker {
-//  data operator()(none) const {
-//    return nil;
-//  }
-//
-//  template <typename T>
-//  data operator()(T const&) const {
-//    return type::to_data<T>{};
-//  }
-//
-//  data operator()(type::alias const& a) const {
-//    return a.type().make();
-//  }
-//};
-//
-//} // namespace <anonymous>
-//
-//data type::make() const {
-//  return visit(data_maker{}, *this);
-//}
+namespace {
+
+struct default_constructor {
+  data operator()(none_type) const {
+    return nil;
+  }
+
+  template <typename T>
+  data operator()(T const&) const {
+    return type_to_data<T>{};
+  }
+
+  data operator()(alias_type const& a) const {
+    return construct(a.value_type);
+  }
+};
+
+} // namespace <anonymous>
+
+data construct(type const& t) {
+  return visit(default_constructor{}, t);
+}
 
 namespace {
 

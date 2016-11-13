@@ -89,7 +89,7 @@ public:
 
   expected<void> schema(vast::schema const& sch);
 
-  vast::schema schema() const;
+  expected<vast::schema> schema() const;
 
   const char* name() const;
 

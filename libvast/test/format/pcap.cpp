@@ -2,6 +2,8 @@
 
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/address.hpp"
+#include "vast/filesystem.hpp"
+
 #include "vast/format/pcap.hpp"
 
 #define SUITE format
@@ -33,7 +35,9 @@ TEST(PCAP read/write 1) {
   REQUIRE(src);
   CHECK_EQUAL(*src, *to<address>("192.168.1.1"));
   MESSAGE("write out read packets");
-  format::pcap::writer writer{"vast-unit-test-nmap-vsn.pcap"};
+  auto file = "vast-unit-test-nmap-vsn.pcap";
+  format::pcap::writer writer{file};
+  auto deleter = caf::detail::make_scope_guard([&] { rm(file); });
   for (auto& e : events)
     REQUIRE(writer.write(e));
 }
@@ -54,7 +58,10 @@ TEST(PCAP read/write 2) {
   CHECK_EQUAL(events.size(), 36u);
   CHECK_EQUAL(events[0].type().name(), "pcap::packet");
   MESSAGE("write out read packets");
-  format::pcap::writer writer{"vast-unit-test-workshop-2011-browse.pcap"};
+  auto file = "vast-unit-test-workshop-2011-browse.pcap";
+  format::pcap::writer writer{file};
+  auto deleter = caf::detail::make_scope_guard([&] { rm(file); });
   for (auto& e : events)
-    REQUIRE(writer.write(e));
+    if (!writer.write(e))
+      FAIL("failed to write event");
 }
