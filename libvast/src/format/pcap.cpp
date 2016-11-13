@@ -51,7 +51,7 @@ reader::~reader() {
     ::pcap_close(pcap_);
 }
 
-maybe<event> reader::extract() {
+maybe<event> reader::read() {
   char buf[PCAP_ERRBUF_SIZE]; // for errors.
   if (!pcap_) {
     // Determine interfaces.
@@ -280,7 +280,7 @@ writer::~writer() {
     ::pcap_close(pcap_);
 }
 
-expected<void> writer::process(event const& e) {
+expected<void> writer::write(event const& e) {
   if (!pcap_) {
 #ifdef PCAP_TSTAMP_PRECISION_NANO
     pcap_ = ::pcap_open_dead_with_tstamp_precision(DLT_RAW, 65535,
@@ -316,10 +316,20 @@ expected<void> writer::process(event const& e) {
   // Dump packet.
   ::pcap_dump(reinterpret_cast<uint8_t*>(dumper_), &header,
               reinterpret_cast<uint8_t const*>(payload->c_str()));
-  if (++total_packets_ % flush_interval_ == 0
-      && ::pcap_dump_flush(dumper_) == -1)
-    return make_error(ec::format_error, "failed to flush at packet",
-                      total_packets_);
+  if (++total_packets_ % flush_interval_ == 0) {
+    auto r = flush();
+    if (!r)
+      return r.error();
+  }
+  return {};
+}
+
+expected<void> writer::flush() {
+  if (!dumper_)
+    return make_error(ec::format_error, "pcap dumper not open");
+  VAST_DEBUG(name(), "flushes at packet", total_packets_);
+  if (::pcap_dump_flush(dumper_) == -1)
+    return make_error(ec::format_error, "failed to flush");
   return {};
 }
 

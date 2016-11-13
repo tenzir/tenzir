@@ -97,7 +97,7 @@ public:
 
   ~reader();
 
-  maybe<event> extract();
+  maybe<event> read();
 
   const char* name() const;
 
@@ -132,7 +132,9 @@ public:
 
   ~writer();
 
-  expected<void> process(event const& e);
+  expected<void> write(event const& e);
+
+  expected<void> flush();
 
   const char* name() const;
 

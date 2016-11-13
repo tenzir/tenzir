@@ -24,7 +24,7 @@ namespace system {
 struct Reader {
   Reader();
 
-  maybe<result> extract();
+  maybe<result> read();
 
   void schema(vast::schema&);
 
@@ -115,16 +115,16 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader&& reader) {
       auto start = steady_clock::now();
       auto done = false;
       while (self->state.events.size() < self->state.batch_size) {
-        auto e = self->state.reader.extract();
+        auto e = self->state.reader.read();
         if (e) {
           self->state.events.push_back(std::move(*e));
         } else if (e.empty()) {
           continue; // Try again.
         } else {
           if (e == ec::end_of_input)
-            VAST_INFO(self, self->system().render(e.error()));
+            VAST_INFO(self->system().render(e.error()));
           else
-            VAST_ERROR(self, self->system().render(e.error()));
+            VAST_ERROR(self->system().render(e.error()));
           done = true;
           break;
         }

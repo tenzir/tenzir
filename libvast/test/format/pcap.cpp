@@ -17,7 +17,7 @@ TEST(PCAP read/write 1) {
   maybe<event> e;
   std::vector<event> events;
   while (!e.error()) {
-    e = reader.extract();
+    e = reader.read();
     if (e)
       events.push_back(std::move(*e));
   }
@@ -35,7 +35,7 @@ TEST(PCAP read/write 1) {
   MESSAGE("write out read packets");
   format::pcap::writer writer{"vast-unit-test-nmap-vsn.pcap"};
   for (auto& e : events)
-    REQUIRE(writer.process(e));
+    REQUIRE(writer.write(e));
 }
 
 TEST(PCAP read/write 2) {
@@ -45,7 +45,7 @@ TEST(PCAP read/write 2) {
   maybe<event> e;
   std::vector<event> events;
   while (!e.error()) {
-    e = reader.extract();
+    e = reader.read();
     if (e)
       events.push_back(std::move(*e));
   }
@@ -56,5 +56,5 @@ TEST(PCAP read/write 2) {
   MESSAGE("write out read packets");
   format::pcap::writer writer{"vast-unit-test-workshop-2011-browse.pcap"};
   for (auto& e : events)
-    REQUIRE(writer.process(e));
+    REQUIRE(writer.write(e));
 }
