@@ -17,6 +17,19 @@
 namespace vast {
 namespace system {
 
+#if 0
+/// The *Writer* concept.
+struct Writer {
+  Writer();
+
+  expected<void> write(event const&);
+
+  expected<void> flush();
+
+  char const* name() const;
+};
+#endif
+
 // The base class for SINK actors.
 template <class Writer>
 struct sink_state {

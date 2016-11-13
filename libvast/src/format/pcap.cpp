@@ -4,7 +4,6 @@
 
 #include "vast/detail/assert.hpp"
 #include "vast/detail/byte_swap.hpp"
-#include "vast/detail/pcap_packet_type.hpp"
 #include "vast/event.hpp"
 #include "vast/filesystem.hpp"
 #include "vast/logger.hpp"
@@ -14,31 +13,31 @@
 namespace vast {
 namespace format {
 namespace pcap {
+namespace {
 
-expected<void> base::schema(vast::schema const& sch) {
-  auto t = sch.find("vast::packet");
-  if (!t)
-    return make_error(ec::format_error, "did not find packet type in schema");
-  if (!congruent(packet_type_, *t))
-    return make_error(ec::format_error, "incongruent schema provided");
-  packet_type_ = *t;
-  return {};
+inline type make_packet_type() {
+  auto packet = record_type{
+    {"meta", record_type{
+      {"src", address_type{}},
+      {"dst", address_type{}},
+      {"sport", port_type{}},
+      {"dport", port_type{}}}},
+    {"data", string_type{}.attributes({{"skip"}})}
+  };
+  packet.name() = "pcap::packet";
+  return packet;
 }
 
-schema base::schema() const {
-  vast::schema sch;
-  sch.add(packet_type_);
-  return sch;
-}
+static auto const pcap_packet_type = make_packet_type();
 
-base::base() : packet_type_{detail::pcap_packet_type} {
-  // nop
-}
+} // namespace <anonymous>
+
 
 reader::reader(std::string input, uint64_t cutoff, size_t max_flows,
                size_t max_age, size_t expire_interval,
                int64_t pseudo_realtime)
-  : cutoff_{cutoff},
+  : packet_type_{pcap_packet_type},
+    cutoff_{cutoff},
     max_flows_{max_flows},
     max_age_{max_age},
     expire_interval_{expire_interval},
@@ -264,6 +263,22 @@ maybe<event> reader::read() {
   return e;
 }
 
+expected<void> reader::schema(vast::schema const& sch) {
+  auto t = sch.find("vast::packet");
+  if (!t)
+    return make_error(ec::format_error, "did not find packet type in schema");
+  if (!congruent(packet_type_, *t))
+    return make_error(ec::format_error, "incongruent schema provided");
+  packet_type_ = *t;
+  return {};
+}
+
+schema reader::schema() const {
+  vast::schema sch;
+  sch.add(packet_type_);
+  return sch;
+}
+
 const char* reader::name() const {
   return "pcap-reader";
 }
@@ -293,9 +308,9 @@ expected<void> writer::write(event const& e) {
     dumper_ = ::pcap_dump_open(pcap_, trace_.c_str());
     if (!dumper_)
       return make_error(ec::format_error, "failed to open pcap dumper");
-    if (!congruent(packet_type_, detail::pcap_packet_type))
-      return make_error(ec::format_error, "invalid packet type");
   }
+  if (!congruent(e.type(), pcap_packet_type))
+    return make_error(ec::format_error, "invalid pcap packet type");
   auto v = get_if<vector>(e.data());
   VAST_ASSERT(v);
   VAST_ASSERT(v->size() == 2);

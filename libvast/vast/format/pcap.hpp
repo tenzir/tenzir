@@ -62,20 +62,8 @@ namespace vast {
 namespace format {
 namespace pcap {
 
-class base {
-public:
-  expected<void> schema(vast::schema const& sch);
-
-  vast::schema schema() const;
-
-protected:
-  base();
-
-  type packet_type_;
-};
-
 /// A PCAP reader.
-class reader : public base {
+class reader {
 public:
   reader() = default;
 
@@ -99,6 +87,10 @@ public:
 
   maybe<event> read();
 
+  expected<void> schema(vast::schema const& sch);
+
+  vast::schema schema() const;
+
   const char* name() const;
 
 private:
@@ -108,6 +100,7 @@ private:
   };
 
   pcap_t* pcap_ = nullptr;
+  type packet_type_;
   std::unordered_map<connection, connection_state> flows_;
   uint64_t cutoff_;
   size_t max_flows_;
@@ -121,7 +114,7 @@ private:
 };
 
 /// A PCAP writer.
-class writer : public base {
+class writer {
 public:
   writer() = default;
 
