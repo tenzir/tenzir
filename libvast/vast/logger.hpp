@@ -5,23 +5,48 @@
 #include <type_traits>
 
 #include "vast/config.hpp"
+#include "vast/concept/printable/print.hpp"
 #include "vast/detail/pp.hpp"
 
 #define CAF_LOG_COMPONENT "vast"
 #include <caf/logger.hpp>
 #include <caf/stateful_actor.hpp>
+#include <caf/typed_actor.hpp>
 
 namespace vast {
 namespace detail {
 
 struct formatter {
+  template <class Stream, class T>
+  struct is_streamable {
+    template <class S, class U>
+    static auto test(U const* x)
+    -> decltype(std::declval<S&>() << *x, std::true_type());
+
+    template <class, class>
+    static auto test(...) -> std::false_type;
+
+    using type = decltype(test<Stream, T>(0));
+    static constexpr auto value = type::value;
+  };
+
+  template <class T>
+  auto operator<<(T const& x)
+  -> std::enable_if_t<is_streamable<std::ostringstream, T>::value, formatter&> {
+    message << x;
+    return *this;
+  }
+
   template <class T>
   auto operator<<(T const& x)
   -> std::enable_if_t<
-       !std::is_pointer<T>::value || std::is_convertible<T, std::string>::value,
+       !is_streamable<std::ostringstream, T>::value
+          && vast::is_printable<std::ostreambuf_iterator<char>, T>::value,
        formatter&
      > {
-    message << x;
+    using vast::print;
+    if (!print(std::ostreambuf_iterator<char>{message}, x))
+      message.setstate(std::ios_base::failbit);
     return *this;
   }
 
@@ -31,9 +56,13 @@ struct formatter {
     return *this;
   }
 
+  template <class... Ts>
+  formatter& operator<<(caf::typed_actor<Ts...> const& a) {
+    return *this << a->address();
+  }
+
   formatter& operator<<(caf::actor const& a) {
-    message << "actor#" << a->id();
-    return *this;
+    return *this << a->address();
   }
 
   formatter& operator<<(caf::actor_addr const& a) {
