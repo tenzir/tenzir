@@ -13,28 +13,45 @@
 
 namespace vast {
 namespace format {
+namespace pcap {
 
-pcap::pcap() : packet_type_{detail::pcap_packet_type} {
+expected<void> base::schema(vast::schema const& sch) {
+  auto t = sch.find("vast::packet");
+  if (!t)
+    return make_error(ec::format_error, "did not find packet type in schema");
+  if (!congruent(packet_type_, *t))
+    return make_error(ec::format_error, "incongruent schema provided");
+  packet_type_ = *t;
+  return {};
+}
+
+schema base::schema() const {
+  vast::schema sch;
+  sch.add(packet_type_);
+  return sch;
+}
+
+base::base() : packet_type_{detail::pcap_packet_type} {
   // nop
 }
 
-pcap::~pcap() {
+reader::reader(std::string input, uint64_t cutoff, size_t max_flows,
+               size_t max_age, size_t expire_interval,
+               int64_t pseudo_realtime)
+  : cutoff_{cutoff},
+    max_flows_{max_flows},
+    max_age_{max_age},
+    expire_interval_{expire_interval},
+    pseudo_realtime_{pseudo_realtime},
+    input_{std::move(input)} {
+}
+
+reader::~reader() {
   if (pcap_)
     ::pcap_close(pcap_);
 }
 
-void pcap::init(std::string input, uint64_t cutoff, size_t max_flows,
-                size_t max_age, size_t expire_interval,
-                int64_t pseudo_realtime) {
-  input_ = std::move(input);
-  cutoff_ = cutoff;
-  max_flows_ = max_flows;
-  max_age_ = max_age;
-  expire_interval_ = expire_interval;
-  pseudo_realtime_ = pseudo_realtime;
-}
-
-maybe<event> pcap::extract() {
+maybe<event> reader::extract() {
   char buf[PCAP_ERRBUF_SIZE]; // for errors.
   if (!pcap_) {
     // Determine interfaces.
@@ -84,7 +101,8 @@ maybe<event> pcap::extract() {
     VAST_INFO(name(), "expires flow table every", expire_interval_ << "s");
   }
   uint8_t const* data;
-  auto r = ::pcap_next_ex(pcap_, &packet_header_, &data);
+  pcap_pkthdr* header;
+  auto r = ::pcap_next_ex(pcap_, &header, &data);
   if (r == 0)
     return {}; // Attempt to fetch next packet timed out.
   if (r == -2) {
@@ -98,7 +116,7 @@ maybe<event> pcap::extract() {
   }
   // Parse packet.
   connection conn;
-  auto packet_size = packet_header_->len - 14;
+  auto packet_size = header->len - 14;
   auto layer3 = data + 14;
   uint8_t const* layer4 = nullptr;
   uint8_t layer4_proto = 0;
@@ -108,7 +126,7 @@ maybe<event> pcap::extract() {
     default:
       return {}; // Skip all non-IP packets.
     case 0x0800: {
-      if (packet_header_->len < 14 + 20)
+      if (header->len < 14 + 20)
         return make_error(ec::format_error, "IPv4 header too short");
       size_t header_size = (*layer3 & 0x0f) * 4;
       if (header_size < 20)
@@ -123,7 +141,7 @@ maybe<event> pcap::extract() {
       payload_size -= header_size;
     } break;
     case 0x86dd: {
-      if (packet_header_->len < 14 + 40)
+      if (header->len < 14 + 40)
         return make_error(ec::format_error, "IPv6 header too short");
       auto orig_h = reinterpret_cast<uint32_t const*>(layer3 + 8);
       auto resp_h = reinterpret_cast<uint32_t const*>(layer3 + 24);
@@ -162,7 +180,7 @@ maybe<event> pcap::extract() {
     payload_size -= 8; // TODO: account for variable-size data.
   }
   // Parse packet timestamp
-  uint64_t packet_time = packet_header_->ts.tv_sec;
+  uint64_t packet_time = header->ts.tv_sec;
   if (last_expire_ == 0)
     last_expire_ = packet_time;
   auto i = flows_.find(conn);
@@ -222,12 +240,12 @@ maybe<event> pcap::extract() {
   auto str = reinterpret_cast<char const*>(data + 14);
   packet.emplace_back(std::string{str, packet_size});
   using namespace std::chrono;
-  auto secs = seconds(packet_header_->ts.tv_sec);
+  auto secs = seconds(header->ts.tv_sec);
   auto ts = timestamp{duration_cast<interval>(secs)};
 #ifdef PCAP_TSTAMP_PRECISION_NANO
-  ts += nanoseconds(packet_header_->ts.tv_usec);
+  ts += nanoseconds(header->ts.tv_usec);
 #else
-  ts += microseconds(packet_header_->ts.tv_usec);
+  ts += microseconds(header->ts.tv_usec);
 #endif
   if (pseudo_realtime_ > 0) {
     if (ts < last_timestamp_) {
@@ -246,29 +264,69 @@ maybe<event> pcap::extract() {
   return e;
 }
 
-void pcap::schema(vast::schema const& sch) {
-  auto t = sch.find("vast::packet");
-  if (!t) {
-    VAST_ERROR(name(), "did not find type vast::packet in given schema");
-    return;
+const char* reader::name() const {
+  return "pcap-reader";
+}
+
+writer::writer(std::string trace, size_t flush_interval)
+  : flush_interval_{flush_interval},
+    trace_{std::move(trace)} {
+}
+
+writer::~writer() {
+  if (dumper_)
+    ::pcap_dump_close(dumper_);
+  if (pcap_)
+    ::pcap_close(pcap_);
+}
+
+expected<void> writer::process(event const& e) {
+  if (!pcap_) {
+#ifdef PCAP_TSTAMP_PRECISION_NANO
+    pcap_ = ::pcap_open_dead_with_tstamp_precision(DLT_RAW, 65535,
+                                                   PCAP_TSTAMP_PRECISION_NANO);
+#else
+    pcap_ = ::pcap_open_dead(DLT_RAW, 65535);
+#endif
+    if (!pcap_)
+      return make_error(ec::format_error, "failed to open pcap handle");
+    dumper_ = ::pcap_dump_open(pcap_, trace_.c_str());
+    if (!dumper_)
+      return make_error(ec::format_error, "failed to open pcap dumper");
+    if (!congruent(packet_type_, detail::pcap_packet_type))
+      return make_error(ec::format_error, "invalid packet type");
   }
-  if (!congruent(packet_type_, *t)) {
-    VAST_WARNING(name(), "ignores incongruent schema type:", t->name());
-    return;
-  }
-  VAST_INFO(name(), "prefers type in schema over default type");
-  packet_type_ = *t;
+  auto v = get_if<vector>(e.data());
+  VAST_ASSERT(v);
+  VAST_ASSERT(v->size() == 2);
+  auto payload = get_if<std::string>((*v)[1]);
+  VAST_ASSERT(payload);
+  // Make PCAP header.
+  ::pcap_pkthdr header;
+  auto ns = e.timestamp().time_since_epoch().count();
+  header.ts.tv_sec = ns / 1000000000;
+#ifdef PCAP_TSTAMP_PRECISION_NANO
+  header.ts.tv_usec = ns % 1000000000;
+#else
+  ns /= 1000;
+  header.ts.tv_usec = ns % 1000000;
+#endif
+  header.caplen = payload->size();
+  header.len = payload->size();
+  // Dump packet.
+  ::pcap_dump(reinterpret_cast<uint8_t*>(dumper_), &header,
+              reinterpret_cast<uint8_t const*>(payload->c_str()));
+  if (++total_packets_ % flush_interval_ == 0
+      && ::pcap_dump_flush(dumper_) == -1)
+    return make_error(ec::format_error, "failed to flush at packet",
+                      total_packets_);
+  return {};
 }
 
-schema pcap::schema() const {
-  vast::schema sch;
-  sch.add(packet_type_);
-  return sch;
+const char* writer::name() const {
+  return "pcap-writer";
 }
 
-const char* pcap::name() const {
-  return "pcap";
-}
-
+} // namespace pcap
 } // namespace format
 } // namespace vast

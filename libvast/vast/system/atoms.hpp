@@ -53,6 +53,7 @@ using response_atom = caf::atom_constant<caf::atom("response")>;
 using run_atom = caf::atom_constant<caf::atom("run")>;
 using schema_atom = caf::atom_constant<caf::atom("schema")>;
 using set_atom = caf::atom_constant<caf::atom("set")>;
+using shutdown_atom = caf::atom_constant<caf::atom("shutdown")>;
 using signal_atom = caf::atom_constant<caf::atom("signal")>;
 using spawn_atom = caf::atom_constant<caf::atom("spawn")>;
 using start_atom = caf::atom_constant<caf::atom("start")>;

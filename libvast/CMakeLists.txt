@@ -215,10 +215,9 @@ set(tests
   #test/system/import.cpp
   #test/system/index.cpp
   #test/system/indexer.cpp
-  #test/system/io.cpp
   #test/system/key_value_store.cpp
   #test/system/partition.cpp
-  #test/system/source_bgpdump.cpp
+  test/system/source.cpp
   test/system/task.cpp
 )
 

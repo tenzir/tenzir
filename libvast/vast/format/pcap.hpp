@@ -11,6 +11,7 @@
 #include "vast/concept/hashable/hash_append.hpp"
 #include "vast/concept/hashable/xxhash.hpp"
 #include "vast/detail/operators.hpp"
+#include "vast/expected.hpp"
 #include "vast/maybe.hpp"
 #include "vast/port.hpp"
 #include "vast/schema.hpp"
@@ -21,6 +22,7 @@ namespace vast {
 class event;
 
 namespace format {
+namespace pcap {
 
 struct connection : detail::equality_comparable<connection> {
   address src;
@@ -41,14 +43,15 @@ void hash_append(Hasher& h, connection const& c) {
   hash_append(h, c.src, c.dst, c.sport.number(), c.dport.number());
 }
 
+} // namespace pcap
 } // namespace format
 } // namespace vast
 
 namespace std {
 
 template <>
-struct hash<vast::format::connection> {
-  size_t operator()(vast::format::connection const& c) const {
+struct hash<vast::format::pcap::connection> {
+  size_t operator()(vast::format::pcap::connection const& c) const {
     return vast::uhash<vast::xxhash>{}(c);
   }
 };
@@ -57,20 +60,26 @@ struct hash<vast::format::connection> {
 
 namespace vast {
 namespace format {
+namespace pcap {
 
-/// A format for PCAP traces.
-class pcap {
+class base {
 public:
-  struct connection_state {
-    uint64_t bytes;
-    uint64_t last;
-  };
+  expected<void> schema(vast::schema const& sch);
 
-  pcap();
+  vast::schema schema() const;
 
-  ~pcap();
+protected:
+  base();
 
-  /// Initializes the PCAP source.
+  type packet_type_;
+};
+
+/// A PCAP reader.
+class reader : public base {
+public:
+  reader() = default;
+
+  /// Constructs a PCAP reader.
   /// @param input The name of the interface or trace file.
   /// @param cutoff The number of bytes to keep per flow.
   /// @param max_flows The maximum number of flows to keep state for.
@@ -82,23 +91,23 @@ public:
   ///                        example, if 5, then for two packets spaced *t*
   ///                        seconds apart, the source will sleep for *t/5*
   ///                        seconds.
-  void init(std::string input, uint64_t cutoff = -1, size_t max_flows = 100000,
-            size_t max_age = 60, size_t expire_interval = 10,
-            int64_t pseudo_realtime = 0);
+  explicit reader(std::string input, uint64_t cutoff = -1,
+                  size_t max_flows = 100000, size_t max_age = 60,
+                  size_t expire_interval = 10, int64_t pseudo_realtime = 0);
+
+  ~reader();
 
   maybe<event> extract();
-
-  void schema(vast::schema const& sch);
-
-  vast::schema schema() const;
 
   const char* name() const;
 
 private:
-  std::string input_;
-  type packet_type_;
+  struct connection_state {
+    uint64_t bytes;
+    uint64_t last;
+  };
+
   pcap_t* pcap_ = nullptr;
-  pcap_pkthdr* packet_header_ = nullptr;
   std::unordered_map<connection, connection_state> flows_;
   uint64_t cutoff_;
   size_t max_flows_;
@@ -108,8 +117,35 @@ private:
   uint64_t last_expire_ = 0;
   timestamp last_timestamp_ = timestamp::min();
   int64_t pseudo_realtime_;
+  std::string input_;
 };
 
+/// A PCAP writer.
+class writer : public base {
+public:
+  writer() = default;
+
+  /// Constructs a PCAP writer.
+  /// @param trace The path where to write the trace file.
+  /// @param flush_interval The number of packets after which to flush to disk.
+  writer(std::string trace, size_t flush_interval = -1);
+
+  ~writer();
+
+  expected<void> process(event const& e);
+
+  const char* name() const;
+
+private:
+  vast::schema schema_;
+  size_t flush_interval_ = 0;
+  size_t total_packets_ = 0;
+  pcap_t* pcap_ = nullptr;
+  pcap_dumper_t* dumper_ = nullptr;
+  std::string trace_;
+};
+
+} // namespace pcap
 } // namespace format
 } // namespace vast
 

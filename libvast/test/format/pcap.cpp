@@ -10,24 +10,14 @@
 
 using namespace vast;
 
-namespace {
-
-struct fixture {
-  format::pcap pcap;
-  std::vector<event> events;
-};
-
-} // namespace <anonymous>
-
-FIXTURE_SCOPE(pcap_tests, fixture)
-
-TEST(PCAP source 1) {
+TEST(PCAP read/write 1) {
   // Initialize a PCAP source with no cutoff (-1), and at most 5 flow table
   // entries.
-  pcap.init(traces::nmap_vsn, -1, 5);
+  format::pcap::reader reader{traces::nmap_vsn, uint64_t(-1), 5};
   maybe<event> e;
+  std::vector<event> events;
   while (!e.error()) {
-    e = pcap.extract();
+    e = reader.extract();
     if (e)
       events.push_back(std::move(*e));
   }
@@ -42,15 +32,20 @@ TEST(PCAP source 1) {
   auto src = get_if<address>(conn_id->at(0));
   REQUIRE(src);
   CHECK_EQUAL(*src, *to<address>("192.168.1.1"));
+  MESSAGE("write out read packets");
+  format::pcap::writer writer{"vast-unit-test-nmap-vsn.pcap"};
+  for (auto& e : events)
+    REQUIRE(writer.process(e));
 }
 
-TEST(PCAP source 2) {
+TEST(PCAP read/write 2) {
   // Spawn a PCAP source with a 64-byte cutoff, at most 100 flow table entries,
   // with flows inactive for more than 5 seconds to be evicted every 2 seconds.
-  pcap.init(traces::workshop_2011_browse, 64, 100, 5, 2);
+  format::pcap::reader reader{traces::workshop_2011_browse, 64, 100, 5, 2};
   maybe<event> e;
+  std::vector<event> events;
   while (!e.error()) {
-    e = pcap.extract();
+    e = reader.extract();
     if (e)
       events.push_back(std::move(*e));
   }
@@ -58,6 +53,8 @@ TEST(PCAP source 2) {
   REQUIRE(!events.empty());
   CHECK_EQUAL(events.size(), 36u);
   CHECK_EQUAL(events[0].type().name(), "pcap::packet");
+  MESSAGE("write out read packets");
+  format::pcap::writer writer{"vast-unit-test-workshop-2011-browse.pcap"};
+  for (auto& e : events)
+    REQUIRE(writer.process(e));
 }
-
-FIXTURE_SCOPE_END()
