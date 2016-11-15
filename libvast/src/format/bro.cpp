@@ -511,7 +511,7 @@ expected<void> writer::write(event const& e) {
       auto filename = dir_ / (e.type().name() + ".log");
       auto fos = std::make_unique<std::ofstream>(filename.str());
       stream_header(e.type(), *fos);
-      auto i = streams_.emplace("", std::move(fos));
+      auto i = streams_.emplace(e.type().name(), std::move(fos));
       os = i.first->second.get();
     }
   }

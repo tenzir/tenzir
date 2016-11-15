@@ -1,23 +1,18 @@
-#include <fstream>
-
 #include "vast/concept/parseable/to.hpp"
-#include "vast/concept/printable/stream.hpp"
-#include "vast/concept/printable/vast/event.hpp"
 #include "vast/event.hpp"
-#include "vast/filesystem.hpp"
 
 #include "vast/format/bro.hpp"
 
 #define SUITE format
 #include "test.hpp"
-#include "data.hpp"
+#include "event_fixture.hpp"
 
 using namespace vast;
 using namespace std::string_literals;
 
 namespace {
 
-template <typename Attribute>
+template <class Attribute>
 bool bro_parse(type const& t, std::string const& s, Attribute& attr) {
   return format::bro::make_bro_parser<std::string::const_iterator>(t)(s, attr);
 }
@@ -52,30 +47,29 @@ TEST(bro data parsing) {
   CHECK(d == set{"49329", "42"});
 }
 
-TEST(bro reader/writer) {
-  auto input = std::make_unique<std::ifstream>(m57_day11_18::conn);
-  format::bro::reader reader{std::move(input)};
-  maybe<event> e;
-  std::vector<event> events;
-  while (!e.error()) {
-    e = reader.read();
-    if (e)
-      events.push_back(std::move(*e));
-  }
-  CHECK(e.error() == ec::end_of_input);
-  REQUIRE(!events.empty());
-  CHECK_EQUAL(events.size(), 8462u);
-  CHECK_EQUAL(events.front().type().name(), "bro::conn");
-  auto record = get_if<vector>(events.front().data());
+FIXTURE_SCOPE(bro_tests, event_fixture)
+
+TEST(bro writer) {
+  // Sanity check some Bro events.
+  CHECK_EQUAL(bro_conn_log.size(), 8462u);
+  CHECK_EQUAL(bro_conn_log.front().type().name(), "bro::conn");
+  auto record = get_if<vector>(bro_conn_log.front().data());
   REQUIRE(record);
   REQUIRE_EQUAL(record->size(), 17u); // 20 columns, but 4 for the conn record
   CHECK_EQUAL(record->at(3), data{"udp"}); // one after the conn record
   CHECK_EQUAL(record->back(), data{set{}}); // table[T] is actually a set
-  MESSAGE("write events back out");
-  auto dir = "vast-unit-test-bro";
+  // Perform the writing.
+  auto dir = path{"vast-unit-test-bro"};
+  auto guard = caf::detail::make_scope_guard([&] { rm(dir); });
   format::bro::writer writer{dir};
-  auto deleter = caf::detail::make_scope_guard([&] { rm(dir); });
-  for (auto& e : events)
+  for (auto& e : bro_conn_log)
     if (!writer.write(e))
       FAIL("failed to write event");
+  for (auto& e : bro_http_log)
+    if (!writer.write(e))
+      FAIL("failed to write event");
+  CHECK(exists(dir / bro_conn_log[0].type().name() + ".log"));
+  CHECK(exists(dir / bro_http_log[0].type().name() + ".log"));
 }
+
+FIXTURE_SCOPE_END()
