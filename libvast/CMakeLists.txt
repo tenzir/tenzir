@@ -59,7 +59,6 @@ set(libvast_sources
   #src/system/partition.cpp
   #src/system/signal_monitor.cpp
   src/system/task.cpp
-  #src/system/sink/json.cpp
   #src/system/source/test.cpp
   src/format/bgpdump.cpp
   src/format/bro.cpp
