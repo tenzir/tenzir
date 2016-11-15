@@ -19,6 +19,8 @@ auto first_csv_http_log_line = "type,id,timestamp,ts,uid,id.orig_h,id.orig_p,id.
 
 auto last_csv_http_log_line = R"__(bro::http,18446744073709551615,1258617362396400896,+1258617362396400896ns,"aRcY4DjxcQ5",192.168.1.103,1232/?,87.106.12.47,80/?,1,"POST","87.106.12.47","/rpc.html?e=bl",,"SCSDK-6.0.0",992,96,200,"OK",,,,"",,,,"application/octet-stream",,)__";
 
+auto first_bgpdump_txt_line = R"__(bgpdump::state_change [18446744073709551615|+1408579214000000000ns] [+1408579214000000000ns, 2a02:20c8:1f:1::4, 50304, "3", "2"])__";
+
 template <class Writer>
 std::vector<std::string> generate(std::vector<event> const& xs) {
   std::string str;
@@ -37,13 +39,16 @@ std::vector<std::string> generate(std::vector<event> const& xs) {
 
 } // namespace <anonymous>
 
-TEST(ascii writer) {
+TEST(writer) {
+  MESSAGE("Bro");
   auto lines = generate<format::ascii::writer>(bro_http_log);
   CHECK_EQUAL(lines.back(), last_bro_http_log_line);
-}
-
-TEST(csv writer) {
-  auto lines = generate<format::csv::writer>(bro_http_log);
+  MESSAGE("BGPdump");
+  lines = generate<format::ascii::writer>(bgpdump_txt);
+  CHECK_EQUAL(lines.size(), 11782u);
+  CHECK_EQUAL(lines.front(), first_bgpdump_txt_line);
+  MESSAGE("CSV");
+  lines = generate<format::csv::writer>(bro_http_log);
   CHECK_EQUAL(lines.front(), first_csv_http_log_line);
   CHECK_EQUAL(lines.back(), last_csv_http_log_line);
 }

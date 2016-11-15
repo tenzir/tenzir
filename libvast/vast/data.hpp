@@ -101,6 +101,12 @@ public:
   /// Default-constructs empty data.
   data(none = nil);
 
+  /// Constructs data from optional data.
+  /// @param x The optional data instance.
+  template <class T>
+  data(optional<T> x) : data{x ? std::move(*x) : data{}} {
+  }
+
   /// Constructs data.
   /// @param x The instance to construct data from.
   template <

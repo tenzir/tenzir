@@ -1,7 +1,11 @@
+#ifndef TEST_EVENT_FIXTURE
+#define TEST_EVENT_FIXTURE
+
 #include <caf/all.hpp>
 
 #include "vast/event.hpp"
 #include "vast/format/bro.hpp"
+#include "vast/format/bgpdump.hpp"
 
 #include "data.hpp"
 
@@ -12,11 +16,13 @@ struct event_fixture {
     bro_conn_log = inhale<format::bro::reader>(m57_day11_18::conn);
     bro_dns_log = inhale<format::bro::reader>(m57_day11_18::dns);
     bro_http_log = inhale<format::bro::reader>(m57_day11_18::http);
+    bgpdump_txt = inhale<format::bgpdump::reader>(bgpdump::updates20140821);
   }
 
   std::vector<event> bro_conn_log;
   std::vector<event> bro_dns_log;
   std::vector<event> bro_http_log;
+  std::vector<event> bgpdump_txt;
 
 private:
   template <class Reader>
@@ -35,3 +41,5 @@ private:
     return events;
   }
 };
+
+#endif
