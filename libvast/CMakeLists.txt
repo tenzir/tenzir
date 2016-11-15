@@ -219,8 +219,8 @@ set(tests
   test/system/sink.cpp
   test/system/source.cpp
   test/system/task.cpp
-  test/format/ascii.cpp
   test/format/bro.cpp
+  test/format/writer.cpp
 )
 
 if (PCAP_FOUND)
