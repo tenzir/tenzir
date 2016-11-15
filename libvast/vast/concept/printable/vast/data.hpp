@@ -63,7 +63,7 @@ struct vector_printer : printer<vector_printer> {
 
   template <typename Iterator>
   bool print(Iterator& out, vector const& v) const {
-    auto p = '[' << (data_printer{} % ", ") << ']';
+    auto p = '[' << ~(data_printer{} % ", ") << ']';
     return p.print(out, v);
   }
 };
@@ -78,7 +78,7 @@ struct set_printer : printer<set_printer> {
 
   template <typename Iterator>
   bool print(Iterator& out, set const& s) const {
-    auto p = '{' << (data_printer{} % ", ") << '}';
+    auto p = '{' << ~(data_printer{} % ", ") << '}';
     return p.print(out, s);
   }
 };
@@ -94,7 +94,7 @@ struct table_printer : printer<table_printer> {
   template <typename Iterator>
   bool print(Iterator& out, table const& t) const {
     auto pair = (data_printer{} << " -> " << data_printer{});
-    auto p = '{' << (pair % ", ") << '}';
+    auto p = '{' << ~(pair % ", ") << '}';
     return p.print(out, t);
   }
 };
