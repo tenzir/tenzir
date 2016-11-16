@@ -25,6 +25,8 @@ auto first_ascii_bgpdump_txt_line = R"__(bgpdump::state_change [1844674407370955
 
 auto first_json_bgpdump_txt_line = R"__({"id": 18446744073709551615, "timestamp": 1408579214000000000, "value": {"data": {"new_state": "2", "old_state": "3", "source_as": 50304, "source_ip": "2a02:20c8:1f:1::4", "timestamp": 1408579214000000000}, "type": {"attributes": {}, "kind": "record", "name": "bgpdump::state_change", "structure": {"new_state": {"attributes": {}, "kind": "string", "name": "", "structure": null}, "old_state": {"attributes": {}, "kind": "string", "name": "", "structure": null}, "source_as": {"attributes": {}, "kind": "count", "name": "", "structure": null}, "source_ip": {"attributes": {}, "kind": "address", "name": "", "structure": null}, "timestamp": {"attributes": {}, "kind": "timestamp", "name": "", "structure": null}}}}})__";
 
+auto first_ascii_random_data = R"__([nil, T, -41320, 0, -0.8615482563, "Q#v7DT,VGx1s.+\"Xb)Gxq_`N2\"Xb)=:MmS~#vweqS>OXbi'm]!Je13O*uJ%qT,P6WuIw$$$%Q#6zmSQcW5)G&?p&P6W5jUY", +2738741017ns, +139027088141ns, 230.117.119.145, ::/46, 1826/?])__";
+
 template <class Writer>
 std::vector<std::string> generate(std::vector<event> const& xs) {
   std::string str;
@@ -58,6 +60,10 @@ TEST(writer) {
   MESSAGE("JSON");
   lines = generate<format::json::writer>(bgpdump_txt);
   CHECK_EQUAL(lines.front(), first_json_bgpdump_txt_line);
+  MESSAGE("test");
+  lines = generate<format::ascii::writer>(random);
+  // Only check the suffix, since each event has a unique timestamp.
+  CHECK(detail::ends_with(lines.front(), first_ascii_random_data));
 }
 
 FIXTURE_SCOPE_END()

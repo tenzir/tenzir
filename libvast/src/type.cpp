@@ -634,6 +634,13 @@ struct default_constructor {
     return type_to_data<T>{};
   }
 
+  data operator()(record_type const& r) const {
+    vector v;
+    for (auto& f : r.fields)
+      v.push_back(visit(*this, f.type));
+    return v;
+  }
+
   data operator()(alias_type const& a) const {
     return construct(a.value_type);
   }

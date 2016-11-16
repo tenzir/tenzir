@@ -59,9 +59,9 @@ set(libvast_sources
   #src/system/partition.cpp
   #src/system/signal_monitor.cpp
   src/system/task.cpp
-  #src/system/source/test.cpp
   src/format/bgpdump.cpp
   src/format/bro.cpp
+  src/format/test.cpp
 )
 
 # FIXME: Bring back after having repaired CAF code.
