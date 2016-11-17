@@ -421,7 +421,7 @@ expected<void> reader::parse_header() {
   // Construct type.
   record_type flat{std::move(record_fields)};
   type_ = unflatten(flat);
-  type_.name() = "bro::" + path;
+  type_.name("bro::" + path);
   VAST_DEBUG(name(), "parsed bro header:");
   VAST_DEBUG(name(), "    #separator", separator_);
   VAST_DEBUG(name(), "    #set_separator", set_separator_);

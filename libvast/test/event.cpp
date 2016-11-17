@@ -21,7 +21,7 @@ struct fixture {
       {"x", boolean_type{}},
       {"y", count_type{}},
       {"z", integer_type{}}};
-    t.name() = "foo";
+    t.name("foo");
     // Data
     r.emplace_back(true);
     r.emplace_back(42u);

@@ -14,8 +14,9 @@ namespace vast {
 type::type() : ptr_{new impl} {
 }
 
-std::string& type::name() {
-  return *visit([](auto& x) { return &x.name(); }, *this);
+type& type::name(std::string str) {
+  visit([s=std::move(str)](auto& x) { x.name(std::move(s)); }, *this);
+  return *this;
 }
 
 std::string const& type::name() const {

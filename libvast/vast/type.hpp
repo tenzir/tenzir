@@ -51,8 +51,13 @@ public:
   template <class T, class>
   type(T&& x);
 
+  /// Sets the name of the type.
+  /// @param str The new name.
+  /// @returns A reference to `*this`.
+  type& name(std::string str);
+
   /// Retrieves the name of the type.
-  std::string& name();
+  /// @returns The name of the type.
   std::string const& name() const;
 
   /// Retrieves the type attributes.
@@ -112,8 +117,9 @@ public:
     return f(t.name_, t.attributes_);
   }
 
-  std::string& name() {
-    return name_;
+  Derived& name(std::string str) {
+    name_ = std::move(str);
+    return *static_cast<Derived*>(this);
   }
 
   std::string const& name() const {

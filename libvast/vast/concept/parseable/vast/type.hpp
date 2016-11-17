@@ -26,7 +26,7 @@ public:
   bool add(std::string const& name, type t) {
     if (name.empty() || name != t.name())
       return false;
-    t.name() = name;
+    t.name(name);
     symbols_.symbols.insert({name, t});
     return true;
   }

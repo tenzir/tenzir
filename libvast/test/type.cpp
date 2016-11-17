@@ -36,13 +36,13 @@ TEST(construction and assignment) {
 TEST(name) {
   auto v = vector_type{integer_type{}};
   auto h0 = uhash<type::hasher>{}(v);
-  v.name() = "foo";
+  v.name("foo");
   auto h1 = uhash<type::hasher>{}(v);
   CHECK_NOT_EQUAL(h0, h1);
-  v.name().clear();
+  v.name("");
   h1 = uhash<type::hasher>{}(v);
   CHECK_EQUAL(h0, h1);
-  v.name() = "bar";
+  v.name("bar");
   auto t = type{v};
   CHECK_EQUAL(t.name(), "bar");
 }
@@ -200,7 +200,7 @@ TEST(record symbol finding) {
     {"b", record_type{r}},
     {"c", count_type{}}
   };
-  r.name() = "foo";
+  r.name("foo");
   // Record access by key.
   auto first = r.at(key{"a"});
   REQUIRE(first);
@@ -250,11 +250,11 @@ TEST(congruence) {
   auto i = integer_type{};
   auto j = integer_type{};
   CHECK(i == j);
-  i.name() = "i";
-  j.name() = "j";
+  i.name("i");
+  j.name("j");
   CHECK(i != j);
   auto c = count_type{};
-  c.name() = "c";
+  c.name("c");
   CHECK(congruent(i, i));
   CHECK(congruent(i, j));
   CHECK(!congruent(i, c));
@@ -279,11 +279,11 @@ TEST(congruence) {
   CHECK(congruent(r0, r1));
   MESSAGE("aliases");
   auto a = alias_type{i};
-  a.name() = "a";
+  a.name("a");
   CHECK(type{a} != type{i});
   CHECK(congruent(a, i));
   a = alias_type{r0};
-  a.name() = "r0";
+  a.name("r0");
   CHECK(type{a} != type{r0});
   CHECK(congruent(a, r0));
 }
@@ -320,7 +320,7 @@ TEST(printable) {
   MESSAGE("alias");
   auto a = alias_type{real_type{}};
   CHECK_EQUAL(to_string(a), "real"); // haul through
-  a.name() = "foo";
+  a.name("foo");
   CHECK_EQUAL(to_string(a), "real");
   CHECK_EQUAL(to_string(type{a}), "foo");
   MESSAGE("type");
@@ -344,7 +344,7 @@ TEST(printable) {
   t = table_type{count_type{}, t};
   CHECK_EQUAL(to_string(t), "table<count, set<port> &skip>");
   MESSAGE("signature");
-  t.name() = "jells";
+  t.name("jells");
   std::string sig;
   CHECK(printers::type<policy::signature>(sig, t));
   CHECK_EQUAL(sig, "jells = table<count, set<port> &skip>");
@@ -381,7 +381,7 @@ TEST(parseable) {
   CHECK_EQUAL(t, r);
   MESSAGE("symbol table");
   auto foo = boolean_type{};
-  foo.name() = "foo";
+  foo.name("foo");
   auto symbols = type_table{{"foo", foo}};
   auto p = type_parser{std::addressof(symbols)}; // overloaded operator&
   CHECK(p("foo", t));
@@ -421,15 +421,15 @@ TEST(parseable) {
 
 TEST(json) {
   auto e = enumeration_type{{"foo", "bar", "baz"}};
-  e.name() = "e";
+  e.name("e");
   auto t = table_type{boolean_type{}, count_type{}};
-  t.name() = "bit_table";
+  t.name("bit_table");
   auto r = record_type{
     {"x", address_type{}.attributes({{"skip"}})},
     {"y", boolean_type{}.attributes({{"default", "F"}})},
     {"z", record_type{{"inner", e}}}
   };
-  r.name() = "foo";
+  r.name("foo");
   auto expected = R"__({
   "attributes": {},
   "kind": "record",

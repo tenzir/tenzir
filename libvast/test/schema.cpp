@@ -71,7 +71,7 @@ TEST(serialization) {
     {"s2", string_type{}},
     {"d2", real_type{}}
   };
-  t.name() = "foo";
+  t.name("foo");
   sch.add(t);
   // Save & load
   std::vector<char> buf;
@@ -239,10 +239,10 @@ TEST(parseable - complex types global) {
 TEST(json) {
   schema s;
   auto t0 = count_type{};
-  t0.name() = "foo";
+  t0.name("foo");
   CHECK(s.add(t0));
   auto t1 = string_type{};
-  t1.name() = "bar";
+  t1.name("bar");
   CHECK(s.add(t1));
   auto expected = R"__({
   "types": [

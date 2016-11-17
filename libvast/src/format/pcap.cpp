@@ -24,7 +24,7 @@ inline type make_packet_type() {
       {"dport", port_type{}}}},
     {"data", string_type{}.attributes({{"skip"}})}
   };
-  packet.name() = "pcap::packet";
+  packet.name("pcap::packet");
   return packet;
 }
 
