@@ -119,18 +119,14 @@ install(DIRECTORY vast/
 
 # Bro logs.
 set (test_data "#ifndef TEST_DATA\n#define TEST_DATA")
-file(GLOB log_dirs test/logs/bro/*)
-foreach (log_dir ${log_dirs})
-  get_filename_component(log_dir_basename ${log_dir} NAME_WE)
-  set(test_data "${test_data}\n\nnamespace ${log_dir_basename} {\n")
-  file(GLOB logs ${log_dir}/*.log)
-  foreach (log ${logs})
-      get_filename_component(log_basename ${log} NAME_WE)
-      set (this "constexpr auto ${log_basename} = \"${log}\";")
-      set (test_data "${test_data}\n${this}")
-  endforeach ()
-  set(test_data "${test_data}\n\n} // namespace ${log_dir_basename}")
+set(test_data "${test_data}\n\nnamespace bro {\n")
+file(GLOB logs test/logs/bro/*)
+foreach (log ${logs})
+  get_filename_component(log_basename ${log} NAME_WE)
+  set (this "constexpr auto ${log_basename} = \"${log}\";")
+  set (test_data "${test_data}\n${this}")
 endforeach ()
+set(test_data "${test_data}\n\n} // namespace bro")
 
 # Bgpdump logs.
 set(test_data "${test_data}\n\nnamespace bgpdump {\n")

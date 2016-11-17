@@ -14,9 +14,9 @@ using namespace vast;
 
 struct event_fixture {
   event_fixture() {
-    bro_conn_log = inhale<format::bro::reader>(m57_day11_18::conn);
-    bro_dns_log = inhale<format::bro::reader>(m57_day11_18::dns);
-    bro_http_log = inhale<format::bro::reader>(m57_day11_18::http);
+    bro_conn_log = inhale<format::bro::reader>(bro::conn);
+    bro_dns_log = inhale<format::bro::reader>(bro::dns);
+    bro_http_log = inhale<format::bro::reader>(bro::http);
     bgpdump_txt = inhale<format::bgpdump::reader>(bgpdump::updates20140821);
     random = extract(vast::format::test::reader{42, 1000});
   }
