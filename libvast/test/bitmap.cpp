@@ -191,7 +191,10 @@ struct bitmap_test_harness {
     CHECK_EQUAL(select<1>(b, 223), 223u);
     CHECK_EQUAL(select<1>(b, 224), 227u);
     auto r = rank<1>(b);
-    CHECK_EQUAL(select<1>(b, r), b.size() - 1); // last bit
+    auto last = select<1>(b, r);
+    CHECK_EQUAL(last, b.size() - 1);
+    MESSAGE("select - maximum");
+    CHECK_EQUAL(select<1>(b, -1), last);
     MESSAGE("select - incremental");
     auto n = size_t{0};
     for (auto i : select(b)) {

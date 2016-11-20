@@ -20,6 +20,10 @@ class bits {
     return n < word::width ? x & word::lsb_mask(n) : x;
   }
 
+  /// Constructs a bit sequence.
+  /// @param x The value of the sequence.
+  /// @param n The length of the sequence.
+  /// @pre `n > 0 && (n < w || all_or_none(x))` where *w* is the word width.
   bits(value_type x = 0, size_type n = word::width)
     : data_{mask(x, n)},
       size_{n} {
@@ -59,8 +63,10 @@ class bits {
     return data_ == word::all ? size_ : 0;
   }
 
-  /// Finds the next bit after at a particular offset.
-  /// @param i The offset after where to begin searching.
+  /// Finds the first bit of a particular value.
+  /// @tparam Bit The bit value to look for.
+  /// @returns The position of the first bit having value *Bit*, or `npos` if
+  ///          not such position exists..
   template <bool Bit = true>
   size_type find_first() const {
     auto data = Bit ? data_ : ~data_;
@@ -73,6 +79,8 @@ class bits {
 
   /// Finds the next bit after at a particular offset.
   /// @param i The offset after where to begin searching.
+  /// @returns The position *p*, where *p > i*, of the bit having value *Bit*,
+  ///          or `npos` if no such *p* exists.
   template <bool Bit = true>
   size_type find_next(size_type i) const {
     if (i >= size_ - 1)
@@ -84,6 +92,19 @@ class bits {
     if (data == word::none)
       return word::npos;
     return word::count_trailing_zeros(data);
+  }
+
+  /// Finds the last bit of a particular value.
+  /// @tparam Bit The bit value to look for.
+  /// @returns The position of the last bit having value *Bit*.
+  template <bool Bit = true>
+  size_type find_last() const {
+    auto data = Bit ? data_ : ~data_;
+    if (size_ > word::width)
+      return data == word::all ? size_ - 1 : word::npos;
+    if (data == word::none)
+      return word::npos;
+    return word::width - word::count_leading_zeros(data) - 1;
   }
 
 private:

@@ -170,6 +170,8 @@ auto nary_eval(Iterator begin, Iterator end, Operation op) {
     bitmap_type const* bitmap;
   };
   auto cmp = [](auto& lhs, auto& rhs) {
+    // TODO: instead of using the bitmap size, we should consider whether
+    // the rank yields better performance.
     return lhs.bitmap->size() > rhs.bitmap->size();
   };
   std::priority_queue<element, std::vector<element>, decltype(cmp)> queue{cmp};
@@ -269,20 +271,30 @@ rank(Bitmap const& bm, typename Bitmap::size_type i = 0) {
 /// @tparam Bit the bit value to locate.
 /// @param bm The bitmap to select from.
 /// @param i The position of the *i*-th occurrence of *Bit* in *bm*.
+///          If `i == -1`, then select the last occurrence of *Bit*.
 /// @pre `i > 0`
 /// @relates select_range
 template <bool Bit = true, class Bitmap>
 typename Bitmap::size_type
 select(Bitmap const& bm, typename Bitmap::size_type i) {
   VAST_ASSERT(i > 0);
-  auto cum = typename Bitmap::size_type{0};
+  auto rank = typename Bitmap::size_type{0};
   auto n = typename Bitmap::size_type{0};
+  if (i == Bitmap::word_type::npos) {
+    auto last = Bitmap::word_type::npos;
+    for (auto b : bit_range(bm)) {
+      auto l = b.find_last();
+      if (l != Bitmap::word_type::npos)
+        last = n + l;
+      n += b.size();
+    }
+    return last;
+  }
   for (auto b : bit_range(bm)) {
     auto count = Bit ? b.count() : b.size() - b.count();
-    if (cum + count >= i)
-      // Last sequence.
-      return n + select<Bit>(b, i - cum);
-    cum += count;
+    if (rank + count >= i)
+      return n + select<Bit>(b, i - rank); // Last sequence.
+    rank += count;
     n += b.size();
   }
   return Bitmap::word_type::npos;
@@ -336,7 +348,7 @@ protected:
   size_type i_ = word::npos;
 };
 
-/// Lifts a bit range into a::select_range.
+/// Lifts a bit range into a ::select_range.
 /// @param rng The bit range from which to construct a select range.
 /// @returns The select frange for *rng*.
 /// @relates select_range
