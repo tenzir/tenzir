@@ -195,7 +195,7 @@ struct bitmap_test_harness {
     CHECK_EQUAL(last, b.size() - 1);
     MESSAGE("select - maximum");
     CHECK_EQUAL(select<1>(b, -1), last);
-    MESSAGE("select - incremental");
+    MESSAGE("select_range - increment");
     auto n = size_t{0};
     for (auto i : select(b)) {
       ++n;
@@ -213,6 +213,20 @@ struct bitmap_test_harness {
         CHECK_EQUAL(i, b.size() - 1);
     }
     CHECK_EQUAL(r, n);
+    MESSAGE("select_range - forward");
+    auto rng = select(b);
+    CHECK_EQUAL(rng.get(), 0u);
+    rng.forward(100); // #101
+    REQUIRE(rng);
+    CHECK_EQUAL(rng.get(), 100u);
+    rng.forward(122); // #101 + #122 = #223
+    REQUIRE(rng);
+    CHECK_EQUAL(rng.get(), 223u);
+    rng.forward(r - 223); // last one
+    REQUIRE(rng);
+    CHECK_EQUAL(rng.get(), last);
+    rng.forward(42); // UB, but this range simply considers itself done.
+    CHECK(!rng);
   }
 
   void test_all() {

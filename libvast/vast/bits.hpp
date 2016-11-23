@@ -133,6 +133,15 @@ rank(const bits<T>& b, typename bits<T>::size_type i) {
   return word::rank(data, i);
 }
 
+/// Computes the number of occurrences of a bit value.
+/// @tparam Bit The bit value to count.
+/// @param b The bit sequence to count.
+/// @returns The population count of *b*.
+template <bool Bit = true, class T>
+auto rank(const bits<T>& b) {
+  return rank<Bit>(b, b.size() - 1);
+}
+
 /// Computes the position of the i-th occurrence of a bit.
 /// @tparam Bit the bit value to locate.
 /// @param b The bit sequence to select from.

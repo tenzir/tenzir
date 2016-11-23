@@ -247,15 +247,12 @@ auto nary_xor(Iterator begin, Iterator end) {
 /// @param bm The bitmap whose rank to compute.
 /// @param i The offset where to end counting.
 /// @returns The population count of *bm* up to and including position *i*.
-/// @pre `i < bm.size()`
+/// @pre `i > 0 && i < bm.size()`
 template <bool Bit = true, class Bitmap>
 typename Bitmap::size_type
-rank(Bitmap const& bm, typename Bitmap::size_type i = 0) {
+rank(Bitmap const& bm, typename Bitmap::size_type i) {
+  VAST_ASSERT(i > 0);
   VAST_ASSERT(i < bm.size());
-  if (bm.empty())
-    return 0;
-  if (i == 0)
-    i = bm.size() - 1;
   auto result = typename Bitmap::size_type{0};
   auto n = typename Bitmap::size_type{0};
   for (auto b : bit_range(bm)) {
@@ -265,6 +262,15 @@ rank(Bitmap const& bm, typename Bitmap::size_type i = 0) {
     n += b.size();
   }
   return result;
+}
+
+/// Computes the *rank* of a Bitmap, i.e., the number of occurrences of a bit.
+/// @tparam Bit The bit value to count.
+/// @param bm The bitmap whose rank to compute.
+/// @returns The population count of *bm*.
+template <bool Bit = true, class Bitmap>
+auto rank(Bitmap const& bm) {
+  return rank<Bit>(bm, bm.size() - 1);
 }
 
 /// Computes the position of the i-th occurrence of a bit.
@@ -326,6 +332,32 @@ public:
   void next() {
     i_ = rng_.get().find_next(i_);
     skip();
+  }
+
+  void forward(size_type n) {
+    auto& bits = rng_.get();
+    auto prev = rank(bits, i_);
+    auto remaining = rank(bits) - prev;
+    if (n <= remaining) {
+      i_ = select(bits, prev + n);
+      VAST_ASSERT(i_ != word::npos);
+    } else {
+      i_ = word::npos;
+      n -= remaining;
+      n_ += bits.size();
+      rng_.next();
+      while (!rng_.done()) {
+        if (n >= rng_.get().size()) {
+          n -= rank(rng_.get());
+        } else {
+          i_ = select(rng_.get(), n);
+          if (i_ != word::npos)
+            break;
+        }
+        n_ += rng_.get().size();
+        rng_.next();
+      }
+    }
   }
 
   bool done() const {
