@@ -26,12 +26,14 @@ private:
     --i_;
   }
 
-  void advance(size_t n) {
+  template <class Distance>
+  void advance(Distance n) {
     i_ += n;
   }
 
-  size_t distance_to(iterator const& other) const {
-    return other.i_ - i_;
+  auto distance_to(iterator const& other) const {
+    using distance = std::ptrdiff_t;
+    return static_cast<distance>(other.i_) - static_cast<distance>(i_);
   }
 
   T& dereference() const {

@@ -18,7 +18,7 @@ class iterator_access {
 
 public:
   template <typename Facade>
-  static typename Facade::reference dereference(Facade const& f) {
+  static decltype(auto) dereference(Facade const& f) {
     return f.dereference();
   }
 
@@ -32,8 +32,8 @@ public:
     f.decrement();
   }
 
-  template <typename Facade>
-  static void advance(Facade& f, typename Facade::difference_type n) {
+  template <typename Facade, typename Distance>
+  static void advance(Facade& f, Distance n) {
     f.advance(n);
   }
 
@@ -43,8 +43,7 @@ public:
   }
 
   template <typename Facade1, typename Facade2>
-  static auto distance_from(Facade1 const& f1, Facade2 const& f2) ->
-    typename Facade2::difference_type {
+  static auto distance_from(Facade1 const& f1, Facade2 const& f2) {
     return f2.distance_to(f1);
   }
 
@@ -210,8 +209,7 @@ public:
     return tmp += n;
   }
 
-  friend auto operator-(iterator_facade const& x, iterator_facade const& y)
-    -> decltype(iterator_access::distance_from(x, y)) {
+  friend auto operator-(iterator_facade const& x, iterator_facade const& y) {
     return iterator_access::distance_from(static_cast<Derived const&>(x),
                                           static_cast<Derived const&>(y));
   }
