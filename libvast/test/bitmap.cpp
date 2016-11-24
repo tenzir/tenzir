@@ -213,20 +213,29 @@ struct bitmap_test_harness {
         CHECK_EQUAL(i, b.size() - 1);
     }
     CHECK_EQUAL(r, n);
-    MESSAGE("select_range - forward");
+    MESSAGE("select_range - next(n)");
     auto rng = select(b);
     CHECK_EQUAL(rng.get(), 0u);
-    rng.forward(100); // #101
+    rng.next(100); // #101
     REQUIRE(rng);
     CHECK_EQUAL(rng.get(), 100u);
-    rng.forward(122); // #101 + #122 = #223
+    rng.next(122); // #101 + #122 = #223
     REQUIRE(rng);
     CHECK_EQUAL(rng.get(), 223u);
-    rng.forward(r - 223); // last one
+    rng.next(r - 223); // last one
     REQUIRE(rng);
     CHECK_EQUAL(rng.get(), last);
-    rng.forward(42); // UB, but this range simply considers itself done.
+    rng.next(42); // UB, but this range simply considers itself done.
     CHECK(!rng);
+    MESSAGE("select_range - skip(n)");
+    rng = select(b);
+    rng.skip(b.size() - 1); // start at 0, then go to last bit.
+    REQUIRE(rng);
+    CHECK_EQUAL(rng.get(), b.size() - 1);
+    rng = select(b);
+    rng.skip(225); // Position 225 has a 0-bit, then 1-bit is at 227.
+    REQUIRE(rng);
+    CHECK_EQUAL(rng.get(), 227u);
   }
 
   void test_all() {

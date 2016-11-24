@@ -320,7 +320,7 @@ public:
   select_range(BitRange rng) : rng_{rng} {
     if (!rng_.done()) {
       i_ = rng_.get().find_first();
-      skip();
+      scan();
     }
   }
 
@@ -331,10 +331,10 @@ public:
 
   void next() {
     i_ = rng_.get().find_next(i_);
-    skip();
+    scan();
   }
 
-  void forward(size_type n) {
+  void next(size_type n) {
     auto& bits = rng_.get();
     auto prev = rank(bits, i_);
     auto remaining = rank(bits) - prev;
@@ -342,12 +342,12 @@ public:
       i_ = select(bits, prev + n);
       VAST_ASSERT(i_ != word::npos);
     } else {
-      i_ = word::npos;
       n -= remaining;
+      i_ = word::npos;
       n_ += bits.size();
       rng_.next();
-      while (!rng_.done()) {
-        if (n >= rng_.get().size()) {
+      while (rng_) {
+        if (n > rng_.get().size()) {
           n -= rank(rng_.get());
         } else {
           i_ = select(rng_.get(), n);
@@ -360,12 +360,37 @@ public:
     }
   }
 
+  void skip(size_type n) {
+    VAST_ASSERT(n > 0);
+    VAST_ASSERT(i_ != word::npos);
+    auto remaining = rng_.get().size() - i_ - 1;
+    if (n <= remaining) {
+      i_ += n - 1;
+    } else {
+      n -= remaining;
+      i_ = word::npos;
+      n_ += rng_.get().size();
+      rng_.next();
+      while (rng_) {
+        if (n > rng_.get().size()) {
+          n -= rng_.get().size();
+        } else {
+          i_ = n - 2;
+          break;
+        }
+        n_ += rng_.get().size();
+        rng_.next();
+      }
+    }
+    next();
+  }
+
   bool done() const {
     return rng_.done() && i_ == word::npos;
   }
 
 protected:
-  void skip() {
+  void scan() {
     while (i_ == word::npos) {
       n_ += rng_.get().size();
       rng_.next();
