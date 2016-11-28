@@ -330,6 +330,7 @@ public:
   }
 
   void next() {
+    VAST_ASSERT(!done());
     i_ = rng_.get().find_next(i_);
     scan();
   }
@@ -366,6 +367,7 @@ public:
     auto remaining = rng_.get().size() - i_ - 1;
     if (n <= remaining) {
       i_ += n - 1;
+      next();
     } else {
       n -= remaining;
       i_ = word::npos;
@@ -376,13 +378,13 @@ public:
           n -= rng_.get().size();
         } else {
           i_ = n - 2;
+          next();
           break;
         }
         n_ += rng_.get().size();
         rng_.next();
       }
     }
-    next();
   }
 
   bool done() const {

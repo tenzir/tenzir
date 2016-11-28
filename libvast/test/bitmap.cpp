@@ -236,6 +236,9 @@ struct bitmap_test_harness {
     rng.skip(225); // Position 225 has a 0-bit, then 1-bit is at 227.
     REQUIRE(rng);
     CHECK_EQUAL(rng.get(), 227u);
+    rng = select(b);
+    rng.skip(1024); // out of range
+    CHECK(!rng);
   }
 
   void test_all() {
