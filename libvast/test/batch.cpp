@@ -12,8 +12,7 @@ using namespace vast;
 namespace {
 
 struct fixture {
-  fixture()
-    : event_type{integer_type{}} {
+  fixture() : event_type{integer_type{}} {
     event_type.name("foo");
     for (auto i = 0; i < 1000; ++i) {
       events.push_back(event::make(i, event_type));
@@ -31,7 +30,7 @@ FIXTURE_SCOPE(batch_tests, fixture)
 
 TEST(events with IDs) {
   MESSAGE("write a batch");
-  batch::writer writer{compression::null};
+  batch::writer writer{compression::lz4};
   for (auto& e : events)
     if (!writer.write(e))
       REQUIRE(!"failed to write event");
@@ -61,8 +60,7 @@ TEST(events with IDs) {
 }
 
 TEST(events without IDs) {
-  batch::writer writer{compression::null};
-  std::cout << event_type.name() << std::endl;
+  batch::writer writer{compression::lz4};
   for (auto i = 0; i < 42; ++i)
     if (!writer.write(event::make(i, event_type)))
       REQUIRE(!"failed to write event");

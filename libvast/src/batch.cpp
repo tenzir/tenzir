@@ -32,6 +32,11 @@ batch::size_type batch::events() const {
   return events_;
 }
 
+uint64_t bytes(batch const& b) {
+  return sizeof(b.method_) + sizeof(b.first_) + sizeof(b.last_) +
+    sizeof(b.events_) + sizeof(b.ids_) + sizeof(b.data_) + b.data_.size();
+}
+
 batch::writer::writer(compression method)
   : vectorbuf_{batch_.data_},
     compressedbuf_{vectorbuf_, method},
@@ -49,8 +54,8 @@ bool batch::writer::write(event const& e) {
   auto t = type_cache_.find(e.type());
   if (t == type_cache_.end()) {
     auto type_id = static_cast<uint32_t>(type_cache_.size());
-    t = type_cache_.emplace(e.type(), type_id).first;
-    serializer_ << t->second << e.type();
+    type_cache_.emplace(e.type(), type_id);
+    serializer_ << type_id << e.type();
   } else {
     serializer_ << t->second;
   }
@@ -75,7 +80,7 @@ batch::reader::reader(batch const& b)
     id_range_{bit_range(b.ids_)},
     available_{b.events()},
     charbuf_{const_cast<char*>(data_.data()), data_.size()},
-    compressedbuf_{charbuf_},
+    compressedbuf_{charbuf_, b.method_},
     deserializer_{compressedbuf_} {
 }
 
@@ -117,7 +122,6 @@ expected<std::vector<event>> batch::reader::read(const bitmap& ids) {
       id = next(bits, e->id() - 1);
       if (id == e->id()) {
         result.push_back(std::move(*e));
-        e = make_error(ec::unspecified);
         id = next(bits, id);
       }
     }
@@ -125,8 +129,10 @@ expected<std::vector<event>> batch::reader::read(const bitmap& ids) {
       // Materialize events until have the one we want.
       do {
         e = materialize();
-        if (!e)
-          return e.error();
+        if (!e) {
+          VAST_ASSERT(e.error() == ec::end_of_input); // No more events.
+          return result;
+        }
         VAST_ASSERT(e->id() != invalid_event_id);
       } while (id > e->id());
       // If the materialized event is ahead, see if the current bit sequence
@@ -136,7 +142,6 @@ expected<std::vector<event>> batch::reader::read(const bitmap& ids) {
       // If we have materialized the event we want, add it to the result.
       if (id == e->id()) {
         result.push_back(std::move(*e));
-        e = make_error(ec::unspecified);
         id = next(bits, id);
       }
     }
@@ -146,7 +151,7 @@ expected<std::vector<event>> batch::reader::read(const bitmap& ids) {
 
 expected<event> batch::reader::materialize() {
   if (available_ == 0)
-    return make_error(ec::unspecified);
+    return make_error(ec::end_of_input);
   --available_;
   // Read type.
   uint32_t type_id;
