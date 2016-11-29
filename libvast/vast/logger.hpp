@@ -52,7 +52,7 @@ struct formatter {
 
   template <class T, class... Ts>
   formatter& operator<<(caf::stateful_actor<T, Ts...>* a) {
-    message << a->name() << '#' << a->id();
+    message << a->name();
     return *this;
   }
 
