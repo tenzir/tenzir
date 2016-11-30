@@ -26,8 +26,10 @@ enum class ec : uint8_t {
   invalid_query,
   /// An error with an input/output format.
   format_error,
-  /// Exhausted the input
+  /// Exhausted the input.
   end_of_input,
+  /// Encountered two incompatible versions.
+  version_error,
 };
 
 /// @relates ec

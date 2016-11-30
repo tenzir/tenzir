@@ -13,7 +13,8 @@ const char* descriptions[] = {
   "print_error",
   "invalid_query",
   "format_error",
-  "end_of_input"
+  "end_of_input",
+  "version_error",
 };
 
 } // namespace <anonymous>
