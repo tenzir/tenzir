@@ -82,14 +82,16 @@ std::streamsize compressedbuf::xsputn(char_type const* s, std::streamsize n) {
 compressedbuf::int_type compressedbuf::underflow() {
   VAST_ASSERT(gptr() == nullptr || gptr() >= egptr());
   // Read header.
-  static auto read_varbyte = [](std::streambuf& source, char* sink) -> bool{
+  static auto read_varbyte = [](std::streambuf& source, char* sink) -> bool {
     auto p = sink;
-    char c;
+    int_type i;
+    char_type c;
     do {
-      c = source.sbumpc();
-      if (traits_type::eq_int_type(c, traits_type::eof()))
+      i = source.sbumpc();
+      if (traits_type::eq_int_type(i, traits_type::eof()))
          return false;
-      *p++ = traits_type::to_char_type(c);
+      c = traits_type::to_char_type(i);
+      *p++ = c;
     } while (c & 0x80);
     return true;
   };
