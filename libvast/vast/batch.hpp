@@ -61,6 +61,9 @@ public:
     return f(b.method_, b.first_, b.last_, b.events_, b.ids_, b.data_);
   }
 
+  // TODO: make this a generic concept that leverages the inspection API.
+  friend uint64_t bytes(batch const&);
+
 private:
   compression method_;
   timestamp first_ = timestamp::max();

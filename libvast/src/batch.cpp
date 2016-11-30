@@ -130,8 +130,10 @@ expected<std::vector<event>> batch::reader::read(const bitmap& ids) {
       do {
         e = materialize();
         if (!e) {
-          VAST_ASSERT(e.error() == ec::end_of_input); // No more events.
-          return result;
+          if (e.error() == ec::end_of_input) // No more events.
+            return result;
+          else
+            return e.error();
         }
         VAST_ASSERT(e->id() != invalid_event_id);
       } while (id > e->id());
@@ -153,27 +155,31 @@ expected<event> batch::reader::materialize() {
   if (available_ == 0)
     return make_error(ec::end_of_input);
   --available_;
-  // Read type.
-  uint32_t type_id;
-  deserializer_ >> type_id;
-  auto t = type_cache_.find(type_id);
-  if (t == type_cache_.end()) {
-    type new_type;
-    deserializer_ >> new_type;
-    t = type_cache_.emplace(type_id, std::move(new_type)).first;
+  try {
+    // Read type.
+    uint32_t type_id;
+    deserializer_ >> type_id;
+    auto t = type_cache_.find(type_id);
+    if (t == type_cache_.end()) {
+      type new_type;
+      deserializer_ >> new_type;
+      t = type_cache_.emplace(type_id, std::move(new_type)).first;
+    }
+    // Read event timestamp and data.
+    timestamp ts;
+    data d;
+    deserializer_ >> ts >> d;
+    event e{{std::move(d), t->second}};
+    // Assign an event ID.
+    if (!id_range_.done()) {
+      e.id(id_range_.get());
+      id_range_.next();
+    }
+    e.timestamp(ts);
+    return e;
+  } catch (std::runtime_error const& e) {
+    return make_error(ec::unspecified, e.what());
   }
-  // Read event timestamp and data.
-  timestamp ts;
-  data d;
-  deserializer_ >> ts >> d;
-  event e{{std::move(d), t->second}};
-  // Assign an event ID.
-  if (!id_range_.done()) {
-    e.id(id_range_.get());
-    id_range_.next();
-  }
-  e.timestamp(ts);
-  return e;
 }
 
 } // namespace vast

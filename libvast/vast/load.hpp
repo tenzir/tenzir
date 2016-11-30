@@ -2,6 +2,7 @@
 #define VAST_LOAD_HPP
 
 #include <fstream>
+#include <stdexcept>
 #include <streambuf>
 #include <type_traits>
 
@@ -12,7 +13,8 @@
 #include "vast/detail/compressedbuf.hpp"
 #include "vast/detail/type_traits.hpp"
 #include "vast/detail/variadic_serialization.hpp"
-#include "vast/maybe.hpp"
+#include "vast/error.hpp"
+#include "vast/expected.hpp"
 #include "vast/filesystem.hpp"
 
 namespace vast {
@@ -26,14 +28,18 @@ template <
   class... Ts
 >
 auto load(Streambuf& streambuf, T&& x, Ts&&... xs)
--> std::enable_if_t<detail::is_streambuf<Streambuf>::value, maybe<void>> {
-  if (Method == compression::null) {
-    caf::stream_deserializer<Streambuf&> s{streambuf};
-    detail::read(s, std::forward<T>(x), std::forward<Ts>(xs)...);
-  } else {
-    detail::compressedbuf compressed{streambuf, Method};
-    caf::stream_deserializer<detail::compressedbuf&> s{compressed};
-    detail::read(s, std::forward<T>(x), std::forward<Ts>(xs)...);
+-> std::enable_if_t<detail::is_streambuf<Streambuf>::value, expected<void>> {
+  try {
+    if (Method == compression::null) {
+      caf::stream_deserializer<Streambuf&> s{streambuf};
+      detail::read(s, std::forward<T>(x), std::forward<Ts>(xs)...);
+    } else {
+      detail::compressedbuf compressed{streambuf, Method};
+      caf::stream_deserializer<detail::compressedbuf&> s{compressed};
+      detail::read(s, std::forward<T>(x), std::forward<Ts>(xs)...);
+    }
+  } catch (std::runtime_error const& e) {
+    return make_error(ec::unspecified, e.what());
   }
   return {};
 }
@@ -49,7 +55,7 @@ template <
 auto load(Container const& container, T&& x, Ts&&... xs)
 -> std::enable_if_t<
   detail::is_contiguous_byte_container<Container>::value,
-  maybe<void>
+  expected<void>
 > {
   auto c = const_cast<Container*>(&container); // load() won't mess with it.
   caf::containerbuf<Container> sink{*c};
@@ -63,7 +69,7 @@ template <
   class T,
   class... Ts
 >
-maybe<void> load(path const& p, T&& x, Ts&&... xs) {
+expected<void> load(path const& p, T&& x, Ts&&... xs) {
   std::ifstream fs{p.str()};
   return load<Method>(*fs.rdbuf(), std::forward<T>(x), std::forward<Ts>(xs)...);
 }
