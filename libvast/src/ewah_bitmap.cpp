@@ -288,6 +288,7 @@ bool ewah_bitmap_range::done() const {
 }
 
 void ewah_bitmap_range::next() {
+  VAST_ASSERT(!done());
   if (++next_ != bm_->blocks().size())
     scan();
 }
