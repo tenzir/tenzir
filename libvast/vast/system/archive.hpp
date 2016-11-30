@@ -1,68 +1,85 @@
 #ifndef VAST_SYSTEM_ARCHIVE_HPP
 #define VAST_SYSTEM_ARCHIVE_HPP
 
-#include <unordered_map>
+#include <map>
+#include <vector>
+
+#include <caf/all.hpp>
 
 #include "vast/aliases.hpp"
 #include "vast/batch.hpp"
+#include "vast/detail/cache.hpp"
+#include "vast/detail/range_map.hpp"
+#include "vast/die.hpp"
+#include "vast/event.hpp"
 #include "vast/filesystem.hpp"
 #include "vast/uuid.hpp"
-#include "vast/actor/atoms.hpp"
-#include "vast/actor/basic_state.hpp"
-#include "vast/actor/accountant.hpp"
-#include "vast/io/compression.hpp"
-#include "vast/util/cache.hpp"
-#include "vast/util/flat_set.hpp"
-#include "vast/util/range_map.hpp"
+#include "vast/compression.hpp"
+
+#include "vast/system/atoms.hpp"
+#include "vast/system/accountant.hpp"
 
 namespace vast {
 namespace system {
 
-/// A key-value store for bulk events operating at the granularity of batches.
-struct archive {
-  struct batch_compare {
-    bool operator()(batch const& lhs, batch const& rhs) const {
-      return lhs.meta().ids.find_first() < rhs.meta().ids.find_first();
-    };
-  };
+/// A sequence of batches.
+class segment {
+public:
+  using magic_type = uint32_t;
+  using version_type = uint32_t;
 
-  using segment = util::flat_set<batch, batch_compare>;
+  static constexpr magic_type magic = 0x2a2a2a2a;
+  static constexpr version_type version = 1;
 
-  struct state : basic_state {
-    state(local_actor* self);
+  void add(batch&& b);
 
-    trial<void> flush();
+  expected<std::vector<event>> extract(bitmap const& bm) const;
 
-    path dir;
-    size_t max_segment_size;
-    io::compression compression;
-    util::range_map<event_id, uuid> segments;
-    util::cache<uuid, segment> cache;
-    segment current;
-    uint64_t current_size;
-    accountant::type accountant;
-  };
+  uuid const& id() const;
 
-  using type = typed_actor<
-    reacts_to<accountant::type>,
-    reacts_to<std::vector<event>>,
-    replies_to<flush_atom>::with_either<ok_atom>::or_else<error>,
-    replies_to<event_id>::with_either<batch>::or_else<empty_atom, event_id>
-  >;
+  template <class Inspector>
+  friend auto inspect(Inspector& f, segment& s) {
+    return f(s.batches_, s.bytes_, s.id_);
+  }
 
-  using behavior = type::behavior_type;
-  using stateful_pointer = type::stateful_pointer<state>;
+  friend uint64_t bytes(segment const& s);
 
-  /// Spawns the archive.
-  /// @param self The actor handle.
-  /// @param dir The root directory of the archive.
-  /// @param capacity The number of segments to hold in memory.
-  /// @param max_segment_size The maximum size in MB of a segment.
-  /// @param compression The compression method to use for batches.
-  /// @pre `max_segment_size > 0`
-  static behavior make(stateful_pointer self, path dir, size_t capacity,
-                       size_t max_segment_size, io::compression);
+private:
+  // TODO: use a vector & binary_search for O(1) append and O(log N) search.
+  std::map<event_id, batch> batches_;
+  uint64_t bytes_ = 0;
+  uuid id_ = uuid::random();
 };
+
+struct archive_state {
+  path dir;
+  uint64_t max_segment_size;
+  compression method;
+  detail::range_map<event_id, uuid> segments;
+  detail::cache<uuid, segment> cache;
+  segment active;
+  accountant_type accountant;
+  char const* name = "archive";
+};
+
+using archive_type = caf::typed_actor<
+  caf::reacts_to<shutdown_atom>,
+  caf::reacts_to<accountant_type>,
+  caf::reacts_to<std::vector<event>>,
+  caf::replies_to<flush_atom>::with<ok_atom>,
+  caf::replies_to<bitmap>::with<std::vector<event>>
+>;
+
+/// The *ARCHIVE* stores raw events in the form of compressed batches and
+/// answers queries for specific bitmaps.
+/// @param self The actor handle.
+/// @param dir The root directory of the archive.
+/// @param capacity The number of segments to cache in memory.
+/// @param max_segment_size The maximum size in MB of a segment.
+/// @pre `max_segment_size > 0`
+archive_type::behavior_type
+archive(archive_type::stateful_pointer<archive_state> self, path dir,
+        size_t capacity, size_t max_segment_size);
 
 } // namespace system
 } // namespace vast

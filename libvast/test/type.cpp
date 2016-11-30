@@ -88,6 +88,7 @@ TEST(serialization) {
     {"b", count_type{}},
     {"c", r}
   };
+  r.name("foo");
   std::vector<char> buf;
   auto t0 = type{r};
   save(buf, t0);

@@ -48,7 +48,7 @@ set(libvast_sources
   src/detail/system.cpp
   src/detail/terminal.cpp
   src/system/accountant.cpp
-  #src/system/archive.cpp
+  src/system/archive.cpp
   src/system/configuration.cpp
   #src/system/exporter.cpp
   #src/system/importer.cpp
@@ -201,6 +201,7 @@ set(tests
   test/value_index.cpp
   test/variant.cpp
   test/word.cpp
+  test/system/archive.cpp
   #test/system/export.cpp
   #test/system/import.cpp
   #test/system/index.cpp

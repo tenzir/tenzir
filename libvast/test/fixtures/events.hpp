@@ -1,54 +1,55 @@
 #ifndef FIXTURES_EVENTS_HPP
 #define FIXTURES_EVENTS_HPP
 
-#include <vector>
+#include <caf/all.hpp>
 
 #include "vast/event.hpp"
-#include "vast/schema.hpp"
+#include "vast/format/bro.hpp"
+#include "vast/format/bgpdump.hpp"
+#include "vast/format/test.hpp"
 
-using namespace vast;
+#include "data.hpp"
 
 namespace fixtures {
 
-struct simple_events
-{
-  simple_events()
-    : events0(512),
-      events1(2048),
-      events(1024) {
-    type0 = type::record{{"c", type::count{}}, {"s", type::string{}}};
-    type0.name("test_record_event");
-    type1 = type::record{{"r", type::real{}}, {"s", type::boolean{}}};
-    type1.name("test_record_event2");
-    // Create 1st batch of events.
-    for (auto i = 0u; i < events0.size(); ++i) {
-      events0[i] = event::make(record{i, std::to_string(i)}, type0);
-      events0[i].id(i);
-    }
-    // Create 2nd batch of events.
-    for (auto i = 0u; i < events1.size(); ++i) {
-      events1[i] = event::make(record{4.2 + i, i % 2 == 0}, type1);
-      events1[i].id(events0.size() + i);
-    }
-    // Create 3rd batch of events as mixture of 1st and 2nd.
-    for (auto i = 0u; i < events.size(); ++i) {
-      if (i % 2 == 0)
-        events[i] = event::make(record{i, std::to_string(i)}, type0);
-      else
-        events[i] = event::make(record{4.2 + i, true}, type1);
-      events[i].id(events0.size() + events1.size() + i);
-    }
-    // Construct schema.
-    sch.add(type0);
-    sch.add(type1);
+using namespace vast;
+
+struct events {
+  events() {
+    bro_conn_log = inhale<format::bro::reader>(bro::conn);
+    bro_dns_log = inhale<format::bro::reader>(bro::dns);
+    bro_http_log = inhale<format::bro::reader>(bro::http);
+    bgpdump_txt = inhale<format::bgpdump::reader>(bgpdump::updates20140821);
+    random = extract(vast::format::test::reader{42, 1000});
   }
 
-  type type0;
-  type type1;
-  schema sch;
-  std::vector<event> events0;
-  std::vector<event> events1;
-  std::vector<event> events;
+  std::vector<event> bro_conn_log;
+  std::vector<event> bro_dns_log;
+  std::vector<event> bro_http_log;
+  std::vector<event> bgpdump_txt;
+  std::vector<event> random;
+
+private:
+  template <class Reader>
+  static std::vector<event> inhale(char const* filename) {
+    auto input = std::make_unique<std::ifstream>(filename);
+    Reader reader{std::move(input)};
+    return extract(reader);
+  }
+
+  template <class Reader>
+  static std::vector<event> extract(Reader&& reader) {
+    maybe<event> e;
+    std::vector<event> events;
+    while (!e.error()) {
+      e = reader.read();
+      if (e)
+        events.push_back(std::move(*e));
+    }
+    CHECK(e.error() == ec::end_of_input);
+    REQUIRE(!events.empty());
+    return events;
+  }
 };
 
 } // namespace fixtures

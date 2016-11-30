@@ -26,10 +26,11 @@ configuration::configuration() {
   add_message_type<relational_operator>("vast::relational_operator");
   add_message_type<type>("vast::type");
   add_message_type<uuid>("vast::uuid");
+  // Containers
   add_message_type<std::vector<event>>("std::vector<vast::event>");
   // Register VAST's custom error type.
   auto renderer = [](uint8_t x, caf::atom_value, const caf::message&) {
-    return "VAST error:" + caf::deep_to_string_as_tuple(static_cast<ec>(x));
+    return "VAST error " + caf::deep_to_string_as_tuple(static_cast<ec>(x));
   };
   add_error_category(caf::atom("vast"), renderer);
   // Load modules.

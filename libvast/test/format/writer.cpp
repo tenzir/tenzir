@@ -6,12 +6,12 @@
 
 #define SUITE format
 #include "test.hpp"
-#include "event_fixture.hpp"
+#include "fixtures/events.hpp"
 
 using namespace vast;
 using namespace std::string_literals;
 
-FIXTURE_SCOPE(ascii_tests, event_fixture)
+FIXTURE_SCOPE(ascii_tests, fixtures::events)
 
 namespace {
 

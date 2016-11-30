@@ -22,20 +22,26 @@ class range_map {
   using map_const_iterator = typename map_type::const_iterator;
 
 public:
+  struct entry {
+    Point const& left;
+    Point const& right;
+    Value const& value;
+  };
+
   class const_iterator
     : public iterator_adaptor<
         const_iterator,
         map_const_iterator,
         std::tuple<Point, Point, Value>,
         std::bidirectional_iterator_tag,
-        std::tuple<Point const&, Point const&, Value const&>
+        entry
       > {
     using super = iterator_adaptor<
       const_iterator,
       map_const_iterator,
       std::tuple<Point, Point, Value>,
       std::bidirectional_iterator_tag,
-      std::tuple<Point const&, Point const&, Value const&>
+      entry
     >;
 
   public:
@@ -44,9 +50,9 @@ public:
   private:
     friend iterator_access;
 
-    std::tuple<Point const&, Point const&, Value const&> dereference() const {
-      return std::tie(this->base()->first, this->base()->second.first,
-                      this->base()->second.second);
+    entry dereference() const {
+      return {this->base()->first, this->base()->second.first,
+                      this->base()->second.second};
     }
   };
 

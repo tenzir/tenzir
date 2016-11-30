@@ -5,7 +5,7 @@
 
 #define SUITE format
 #include "test.hpp"
-#include "event_fixture.hpp"
+#include "fixtures/events.hpp"
 
 using namespace vast;
 using namespace std::string_literals;
@@ -47,7 +47,7 @@ TEST(bro data parsing) {
   CHECK(d == set{"49329", "42"});
 }
 
-FIXTURE_SCOPE(bro_tests, event_fixture)
+FIXTURE_SCOPE(bro_tests, fixtures::events)
 
 TEST(bro writer) {
   // Sanity check some Bro events.

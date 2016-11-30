@@ -3,14 +3,14 @@
 #include "vast/system/task.hpp"
 
 #define SUITE system
-#include "system/actor_system_fixture.hpp"
 #include "test.hpp"
+#include "fixtures/actor_system.hpp"
 
 using namespace caf;
 using namespace vast;
 using namespace vast::system;
 
-FIXTURE_SCOPE(task_tests, actor_system_fixture)
+FIXTURE_SCOPE(task_tests, fixtures::actor_system)
 
 namespace {
 

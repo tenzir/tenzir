@@ -4,12 +4,12 @@
 #define SUITE system
 #include "test.hpp"
 #include "data.hpp"
-#include "system/actor_system_fixture.hpp"
+#include "fixtures/actor_system.hpp"
 
 using namespace vast;
 using namespace vast::system;
 
-FIXTURE_SCOPE(source_tests, actor_system_fixture)
+FIXTURE_SCOPE(source_tests, fixtures::actor_system)
 
 TEST(PCAP source) {
   format::pcap::reader reader{traces::nmap_vsn};
