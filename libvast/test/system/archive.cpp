@@ -4,37 +4,12 @@
 
 #define SUITE archive
 #include "test.hpp"
-#include "fixtures/actor_system.hpp"
-#include "fixtures/events.hpp"
+#include "fixtures/actor_system_and_events.hpp"
 
 using namespace caf;
 using namespace vast;
 
-namespace {
-
-struct archive_fixture : fixtures::actor_system, fixtures::events {
-  archive_fixture() {
-    if (exists(directory))
-      rm(directory);
-    // Manually assign monotonic IDs to events.
-    auto id = event_id{0};
-    auto assign = [&](auto& xs) {
-      for (auto& x : xs)
-        x.id(id++);
-    };
-    assign(bro_conn_log);
-    assign(bro_dns_log);
-    id += 1000; // Cause an artificial gap in the ID sequence.
-    assign(bro_http_log);
-    assign(bgpdump_txt);
-  }
-
-  path directory = "vast-unit-test-archive";
-};
-
-} // namespace <anonymous>
-
-FIXTURE_SCOPE(archive_tests, archive_fixture)
+FIXTURE_SCOPE(archive_tests, fixtures::actor_system_and_events)
 
 TEST(archiving and querying) {
   auto a = self->spawn(system::archive, directory, 10, 1024 * 1024);
