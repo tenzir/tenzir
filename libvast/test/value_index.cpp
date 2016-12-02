@@ -378,4 +378,6 @@ TEST(polymorphic) {
   t = integer_type{}.attributes({{"base", "[2, 3,4]"}});
   idx = value_index::make(t);
   REQUIRE(idx);
+  MESSAGE("nil");
+  REQUIRE(idx->push_back(nil));
 }

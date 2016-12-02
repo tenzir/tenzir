@@ -124,35 +124,41 @@ std::unique_ptr<value_index> value_index::make(type const& t) {
   return visit(factory{}, t);
 }
 
-bool value_index::push_back(data const& x) {
-  if (!push_back_impl(x, 0))
-    return false;
+expected<void> value_index::push_back(data const& x) {
+  if (is<none>(x)) {
+    none_.append_bit(true);
+  } else {
+    if (!push_back_impl(x, 0))
+      return make_error(ec::unspecified, "push_back_impl");
+    none_.append_bit(false);
+  }
   mask_.append_bit(true);
-  none_.append_bit(is<none>(x));
-  return true;
+  return {};
 }
 
-bool value_index::push_back(data const& x, event_id id) {
+expected<void> value_index::push_back(data const& x, event_id id) {
   auto off = offset();
   if (id < off)
-    return false; // Can only append at the end.
+    // Can only append at the end.
+    return make_error(ec::unspecified, id, '<', off);
   if (id == off)
     return push_back(x);
   auto skip = id - off;
-  if (!push_back_impl(x, skip))
-    return false;
-  mask_.append_bits(false, skip);
-  mask_.append_bit(true);
   if (is<none>(x)) {
     none_.append_bits(false, skip);
     none_.append_bit(true);
   } else {
+    if (!push_back_impl(x, skip))
+      return make_error(ec::unspecified, "push_back_impl");
     none_.append_bits(false, skip + 1);
   }
-  return true;
+  mask_.append_bits(false, skip);
+  mask_.append_bit(true);
+  return {};
 }
 
-maybe<bitmap> value_index::lookup(relational_operator op, data const& x) const {
+expected<bitmap>
+value_index::lookup(relational_operator op, data const& x) const {
   if (is<none>(x)) {
     if (!(op == equal || op == not_equal))
       return make_error(ec::unsupported_operator, op);
@@ -200,7 +206,7 @@ bool string_index::push_back_impl(data const& x, size_type skip) {
   return true;
 }
 
-maybe<bitmap>
+expected<bitmap>
 string_index::lookup_impl(relational_operator op, data const& x) const {
   auto str = get_if<std::string>(x);
   if (!str)
@@ -290,7 +296,7 @@ bool address_index::push_back_impl(data const& x, size_type skip) {
   return true;
 }
 
-maybe<bitmap>
+expected<bitmap>
 address_index::lookup_impl(relational_operator op, data const& x) const {
   auto off = offset();
   if (auto addr = get_if<address>(x)) {
@@ -345,12 +351,12 @@ bool subnet_index::push_back_impl(data const& x, size_type skip) {
     init();
     auto id = offset() + skip;
     length_.push_back(sn->length(), skip);
-    return network_.push_back(sn->network(), id);
+    return !!network_.push_back(sn->network(), id);
   }
   return false;
 }
 
-maybe<bitmap>
+expected<bitmap>
 subnet_index::lookup_impl(relational_operator op, data const& x) const {
   if (!(op == equal || op == not_equal))
     return make_error(ec::unsupported_operator, op);
@@ -385,7 +391,7 @@ bool port_index::push_back_impl(data const& x, size_type skip) {
   return false;
 }
 
-maybe<bitmap>
+expected<bitmap>
 port_index::lookup_impl(relational_operator op, data const& x) const {
   if (op == in || op == not_in)
     return make_error(ec::unsupported_operator, op);
@@ -427,7 +433,7 @@ bool sequence_index::push_back_impl(data const& x, size_type skip) {
   return false;
 }
 
-maybe<bitmap>
+expected<bitmap>
 sequence_index::lookup_impl(relational_operator op, data const& x) const {
   if (op == ni)
     op = in;

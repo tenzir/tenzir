@@ -14,7 +14,7 @@
 #include "vast/detail/assert.hpp"
 #include "vast/die.hpp"
 #include "vast/error.hpp"
-#include "vast/maybe.hpp"
+#include "vast/expected.hpp"
 #include "vast/type.hpp"
 
 namespace vast {
@@ -24,25 +24,25 @@ class value_index {
 public:
   using size_type = typename bitmap::size_type;
 
-  /// Constructs a value index from a given type. All
+  /// Constructs a value index from a given type.
   static std::unique_ptr<value_index> make(type const& t);
 
   /// Appends a data value.
   /// @param x The data to append to the index.
   /// @returns `true` if appending succeeded.
-  bool push_back(data const& x);
+  expected<void> push_back(data const& x);
 
   /// Appends a data value.
   /// @param x The data to append to the index.
   /// @param id The positional identifier of *x*.
   /// @returns `true` if appending succeeded.
-  bool push_back(data const& x, event_id id);
+  expected<void> push_back(data const& x, event_id id);
 
   /// Looks up data under a relational operator.
   /// @param op The relation operator.
   /// @param x The value to lookup.
   /// @returns The result of the lookup or an error upon failure.
-  maybe<bitmap> lookup(relational_operator op, data const& x) const;
+  expected<bitmap> lookup(relational_operator op, data const& x) const;
 
   /// Merges another value index with this one.
   /// @param other The value index to merge.
@@ -64,7 +64,7 @@ protected:
 private:
   virtual bool push_back_impl(data const& x, event_id id) = 0;
 
-  virtual maybe<bitmap>
+  virtual expected<bitmap>
   lookup_impl(relational_operator op, data const& x) const = 0;
 
   ewah_bitmap mask_;
@@ -163,11 +163,11 @@ private:
 
     template <class U>
     auto operator()(U const& x) const
-    -> std::enable_if_t<!std::is_arithmetic<U>{}, maybe<bitmap>> {
+    -> std::enable_if_t<!std::is_arithmetic<U>{}, expected<bitmap>> {
       return make_error(ec::type_clash, value_type{}, x);
     }
 
-    maybe<bitmap> operator()(boolean x) const {
+    expected<bitmap> operator()(boolean x) const {
       // Boolean indexes support only equality
       if (!(op_ == equal || op_ == not_equal))
         return make_error(ec::unsupported_operator, op_);
@@ -176,16 +176,16 @@ private:
 
     template <class U>
     auto operator()(U x) const
-    -> std::enable_if_t<std::is_arithmetic<U>{}, maybe<bitmap>> {
+    -> std::enable_if_t<std::is_arithmetic<U>{}, expected<bitmap>> {
       // No operator constraint on arithmetic type.
       return bmi_.lookup(op_, x);
     }
 
-    maybe<bitmap> operator()(timestamp x) const {
+    expected<bitmap> operator()(timestamp x) const {
       return (*this)(x.time_since_epoch().count());
     }
 
-    maybe<bitmap> operator()(interval x) const {
+    expected<bitmap> operator()(interval x) const {
       return (*this)(x.count());
     }
 
@@ -197,7 +197,7 @@ private:
     return visit(appender{bmi_, skip}, x);
   }
 
-  maybe<bitmap>
+  expected<bitmap>
   lookup_impl(relational_operator op, data const& x) const override {
     return visit(searcher{bmi_, op}, x);
   };
@@ -230,7 +230,7 @@ private:
 
   bool push_back_impl(data const& x, size_type skip) override;
 
-  maybe<bitmap>
+  expected<bitmap>
   lookup_impl(relational_operator op, data const& x) const override;
 
   size_t max_length_;
@@ -256,7 +256,7 @@ private:
 
   bool push_back_impl(data const& x, size_type skip) override;
 
-  maybe<bitmap>
+  expected<bitmap>
   lookup_impl(relational_operator op, data const& x) const override;
 
   std::array<byte_index, 16> bytes_;
@@ -280,7 +280,7 @@ private:
 
   bool push_back_impl(data const& x, size_type skip) override;
 
-  maybe<bitmap>
+  expected<bitmap>
   lookup_impl(relational_operator op, data const& x) const override;
 
   address_index network_;
@@ -314,7 +314,7 @@ private:
 
   bool push_back_impl(data const& x, size_type skip) override;
 
-  maybe<bitmap>
+  expected<bitmap>
   lookup_impl(relational_operator op, data const& x) const override;
 
   number_index num_;
@@ -366,7 +366,7 @@ private:
 
   bool push_back_impl(data const& x, size_type skip) override;
 
-  maybe<bitmap>
+  expected<bitmap>
   lookup_impl(relational_operator op, data const& x) const override;
 
   std::vector<std::unique_ptr<value_index>> elements_;
