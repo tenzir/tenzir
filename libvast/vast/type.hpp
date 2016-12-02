@@ -426,6 +426,10 @@ bool is_container(const type& t);
 /// @returns `true` *iff* *x* and *y* are congruent.
 bool congruent(type const& x, type const& y);
 
+bool congruent(type const& x, data const& y);
+
+bool congruent(data const& x, type const& y);
+
 /// Checks whether the types of two nodes in a predicate are compatible with
 /// each other, i.e., whether operator evaluation for the given types is
 /// semantically correct.
@@ -436,6 +440,10 @@ bool congruent(type const& x, type const& y);
 /// @param rhs The RHS of *op*.
 /// @returns `true` if *lhs* and *rhs* are compatible to each other under *op*.
 bool compatible(type const& lhs, relational_operator op, type const& rhs);
+
+bool compatible(type const& lhs, relational_operator op, data const& rhs);
+
+bool compatible(data const& lhs, relational_operator op, type const& rhs);
 
 /// Checks whether data and type fit together (and can form a ::value).
 /// @param t The type that describes *d*.

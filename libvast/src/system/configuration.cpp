@@ -29,8 +29,20 @@ configuration::configuration() {
   // Containers
   add_message_type<std::vector<event>>("std::vector<vast::event>");
   // Register VAST's custom error type.
-  auto renderer = [](uint8_t x, caf::atom_value, const caf::message&) {
-    return "VAST error " + caf::deep_to_string_as_tuple(static_cast<ec>(x));
+  auto renderer = [](uint8_t x, caf::atom_value, const caf::message& msg) {
+    std::string result;
+    result += "got ";
+    switch (static_cast<ec>(x)) {
+      default:
+        result += caf::deep_to_string_as_tuple(static_cast<ec>(x));
+        break;
+      case ec::unspecified:
+        result += "unspecified error";
+        break;
+    };
+    result += ' ';
+    result += caf::deep_to_string(msg);
+    return result;
   };
   add_error_category(caf::atom("vast"), renderer);
   // Load modules.

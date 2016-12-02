@@ -5,7 +5,7 @@ namespace vast {
 namespace {
 
 const char* descriptions[] = {
-  "<unspecified>",
+  "unspecified",
   "filesystem_error",
   "type_clash",
   "unsupported_operator",

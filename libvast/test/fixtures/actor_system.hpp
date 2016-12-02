@@ -26,7 +26,7 @@ struct actor_system {
     return [&](caf::error const& e) { FAIL(system.render(e)); };
   }
 
-  vast::system::configuration config;
+  configuration config;
   caf::actor_system system;
   caf::scoped_actor self;
 };

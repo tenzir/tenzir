@@ -1,11 +1,5 @@
 #include <caf/all.hpp>
 
-#include "vast/event.hpp"
-#include "vast/actor/atoms.hpp"
-#include "vast/actor/indexer.hpp"
-#include "vast/actor/partition.hpp"
-#include "vast/actor/task.hpp"
-#include "vast/expr/predicatizer.hpp"
 #include "vast/concept/parseable/numeric/integral.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/printable/vast/error.hpp"
@@ -14,120 +8,120 @@
 #include "vast/concept/printable/vast/time.hpp"
 #include "vast/concept/serializable/io.hpp"
 #include "vast/concept/serializable/vast/schema.hpp"
-#include "vast/util/assert.hpp"
+#include "vast/detail/assert.hpp"
+#include "vast/event.hpp"
+#include "vast/expression_visitors.hpp"
+#include "vast/time.hpp"
+
+#include "vast/system/atoms.hpp"
+#include "vast/system/indexer.hpp"
+#include "vast/system/partition.hpp"
+#include "vast/system/task.hpp"
 
 namespace vast {
+namespace system {
 
-namespace {
+//namespace {
+//
+//struct accumulator_state {
+//    bitmap evaluate(expression const& expr) const {
+//      struct evaluator : expr::bitstream_evaluator<evaluator, bitmap> {
+//        evaluator(state const* s) : this_{s} { }
+//        bitmap const* lookup(predicate const& pred) const {
+//          auto i = this_->hits.find(pred);
+//          return i == this_->hits.end() ? nullptr : &i->second;
+//        }
+//        state const* this_;
+//      };
+//      return visit(evaluator{this}, expr);
+//    }
+//
+//    std::map<predicate, bitmap> hits;
+//  };
+//
+//// Receives hits from INDEXERs and evaluates a set of expression over them.
+//behavior accumulator(stateful_actor<accumulator_state>* self,
+//                     std::vector<expression> exprs, caf::actor const& sink) {
+//  return {
+//    [=](expression& pred, bitmap& hits) {
+//      auto p = get<predicate>(pred);
+//      VAST_ASSERT(p);
+//      self->state.hits.emplace(std::move(*p), std::move(hits));
+//    },
+//    [self, exprs=std::move(exprs), sink](done_atom) {
+//      for (auto& expr : exprs) {
+//        VAST_DEBUG_AT(self, "evalutes continuous query:", expr);
+//        self->send(sink, expr, self->state.evaluate(expr));
+//      }
+//      self->quit(exit::done);
+//      // TODO: relay the hits back to PARTITION if the query is also
+//      // historical. Caveat: we should not re-evaluate the historical query
+//      // with these hits to avoid that the sink receives duplicate hits.
+//    }
+//  };
+//};
+//
+//// Accumulates all hits from an event batch, evalutes a query, and sends the
+//// result of the evaluation back to PARTITION.
+//template <class bitmap>
+//struct cq_proxy {
+//  struct state : basic_state {
+//    state(local_actor* self) : basic_state{self, "cq-proxy"} { }
+//
+//    util::flat_set<expression> exprs;
+//    util::flat_set<predicate> preds;
+//  };
+//
+//  // Accumulates hits from indexers for a single event batch.
+//  static behavior make(stateful_actor<state>* self, actor const& sink) {
+//    return {
+//      [=](expression const& expr) {
+//        self->state.exprs.insert(expr);
+//        for (auto& p : visit(expr::predicatizer{}, expr))
+//          self->state.preds.insert(std::move(p));
+//      },
+//      [=](expression const& expr, disable_atom) {
+//        self->state.exprs.erase(expr);
+//        self->state.preds.clear();
+//        if (self->state.exprs.empty())
+//          self->quit(exit::done);
+//        else
+//          for (auto& ex : self->state.exprs)
+//            for (auto& p : visit(expr::predicatizer{}, ex))
+//              self->state.preds.insert(std::move(p));
+//      },
+//      [=](expression const&, bitmap const& hits) {
+//        VAST_DEBUG_AT(self, "relays", hits.count(), "hits");
+//        self->send(sink, self->current_message()
+//                           + make_message(continuous_atom::value));
+//      },
+//      [=](std::vector<actor> const& indexers) {
+//        VAST_DEBUG_AT(self, "got", indexers.size(), "indexers");
+//        if (self->state.exprs.empty()) {
+//          VAST_WARN_AT(self, "got indexers without having queries");
+//          return;
+//        }
+//        // FIXME: do not stupidly send every predicate to every indexer,
+//        // rather, pick the minimal subset intelligently.
+//        auto acc = self->spawn(accumulator,
+//                               self->state.exprs.as_vector(), self);
+//        auto t = self->spawn(task<>);
+//        self->send(t, supervisor_atom::value, acc);
+//        for (auto& indexer : indexers) {
+//          self->send(t, indexer, uint64_t{self->state.preds.size()});
+//          for (auto& p : self->state.preds)
+//            self->send(indexer, expression{p}, acc, t);
+//        }
+//      }
+//    };
+//  }
+//};
+//
+//} // namespace <anonymous>
 
-template <typename Bitstream>
-using hits_map = std::map<predicate, Bitstream>;
-
-// Receives hits from INDEXERs and evaluates a set of expression over them.
-template <typename Bitstream>
-struct accumulator {
-  struct state : basic_state {
-    state(local_actor *self) : basic_state{self, "accumulator"} { }
-
-    Bitstream evaluate(expression const& expr) const {
-      struct evaluator : expr::bitstream_evaluator<evaluator, Bitstream> {
-        evaluator(state const* s) : this_{s} { }
-        Bitstream const* lookup(predicate const& pred) const {
-          auto i = this_->hits.find(pred);
-          return i == this_->hits.end() ? nullptr : &i->second;
-        }
-        state const* this_;
-      };
-      return visit(evaluator{this}, expr);
-    }
-
-    hits_map<Bitstream> hits;
-  };
-
-  static behavior make(stateful_actor<state>* self,
-                       std::vector<expression> exprs, actor const& sink) {
-    return {
-      [=](expression& pred, Bitstream& hits) {
-        auto p = get<predicate>(pred);
-        VAST_ASSERT(p);
-        self->state.hits.emplace(std::move(*p), std::move(hits));
-      },
-      [self, exprs=std::move(exprs), sink](done_atom) {
-        for (auto& expr : exprs) {
-          VAST_DEBUG_AT(self, "evalutes continuous query:", expr);
-          self->send(sink, expr, self->state.evaluate(expr));
-        }
-        self->quit(exit::done);
-        // TODO: relay the hits back to PARTITION if the query is also
-        // historical. Caveat: we should not re-evaluate the historical query
-        // with these hits to avoid that the sink receives duplicate hits.
-      }
-    };
-  }
-};
-
-// Accumulates all hits from an event batch, evalutes a query, and sends the
-// result of the evaluation back to PARTITION.
-template <typename Bitstream>
-struct cq_proxy {
-  struct state : basic_state {
-    state(local_actor* self) : basic_state{self, "cq-proxy"} { }
-
-    util::flat_set<expression> exprs;
-    util::flat_set<predicate> preds;
-  };
-
-  // Accumulates hits from indexers for a single event batch.
-  static behavior make(stateful_actor<state>* self, actor const& sink) {
-    return {
-      [=](expression const& expr) {
-        self->state.exprs.insert(expr);
-        for (auto& p : visit(expr::predicatizer{}, expr))
-          self->state.preds.insert(std::move(p));
-      },
-      [=](expression const& expr, disable_atom) {
-        self->state.exprs.erase(expr);
-        self->state.preds.clear();
-        if (self->state.exprs.empty())
-          self->quit(exit::done);
-        else
-          for (auto& ex : self->state.exprs)
-            for (auto& p : visit(expr::predicatizer{}, ex))
-              self->state.preds.insert(std::move(p));
-      },
-      [=](expression const&, Bitstream const& hits) {
-        VAST_DEBUG_AT(self, "relays", hits.count(), "hits");
-        self->send(sink, self->current_message()
-                           + make_message(continuous_atom::value));
-      },
-      [=](std::vector<actor> const& indexers) {
-        VAST_DEBUG_AT(self, "got", indexers.size(), "indexers");
-        if (self->state.exprs.empty()) {
-          VAST_WARN_AT(self, "got indexers without having queries");
-          return;
-        }
-        // FIXME: do not stupidly send every predicate to every indexer,
-        // rather, pick the minimal subset intelligently.
-        auto acc = self->spawn(accumulator<Bitstream>::make,
-                               self->state.exprs.as_vector(), self);
-        auto t = self->spawn(task::make<>);
-        self->send(t, supervisor_atom::value, acc);
-        for (auto& indexer : indexers) {
-          self->send(t, indexer, uint64_t{self->state.preds.size()});
-          for (auto& p : self->state.preds)
-            self->send(indexer, expression{p}, acc, t);
-        }
-      }
-    };
-  }
-};
-
-} // namespace <anonymous>
-
-partition::state::state(local_actor* self) : basic_state{self, "partition"} { }
-
-behavior partition::make(stateful_actor<state>* self, path dir, actor sink) {
-  VAST_ASSERT(sink != invalid_actor);
+caf::behavior partition(caf::stateful_actor<partition_state>* self, path dir,
+                        caf::actor sink) {
+  VAST_ASSERT(sink);
   // If the directory exists already, we must have some state and are loading
   // all INDEXERs.
   // FIXME: it might be cheaper to load them on demand.
@@ -206,13 +200,12 @@ behavior partition::make(stateful_actor<state>* self, path dir, actor sink) {
         auto tp = t.time_since_epoch();
         return time::duration_cast<time::microseconds>(tp).count();
       };
-      self->send(self->state.accountant, "partition", "indexing.start",
+      self->send(self->state.accountant, "partition.indexing.start",
                  to_sec(start));
-      self->send(self->state.accountant, "partition", "indexing.stop",
+      self->send(self->state.accountant, "partition.indexing.stop",
                  to_sec(stop));
-      self->send(self->state.accountant, "partition", "indexing.events",
-                 events);
-      self->send(self->state.accountant, "partition", "indexing.rate", rate);
+      self->send(self->state.accountant, "partition.indexing.events", events);
+      self->send(self->state.accountant, "partition.indexing.rate", rate);
     }
     VAST_ASSERT(self->state.pending_events >= events);
     self->state.pending_events -= events;
@@ -269,7 +262,7 @@ behavior partition::make(stateful_actor<state>* self, path dir, actor sink) {
     },
     on_down,
     on_done,
-    [=](accountant::type const& accountant) {
+    [=](accountant_type const& accountant) {
       VAST_DEBUG_AT(self, "registers accountant#" << accountant->id());
       self->state.accountant = accountant;
     },
@@ -433,9 +426,9 @@ behavior partition::make(stateful_actor<state>* self, path dir, actor sink) {
         }
       flush();
       self->send(task, done_atom::value);
-    },
-    log_others(self)
+    }
   };
 }
 
+} // namespace system
 } // namespace vast

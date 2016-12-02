@@ -2,6 +2,7 @@
 #define VAST_CONCEPT_PRINTABLE_VAST_EXPRESSION_HPP
 
 #include "vast/data.hpp"
+#include "vast/expression.hpp"
 #include "vast/concept/printable/numeric.hpp"
 #include "vast/concept/printable/string.hpp"
 #include "vast/concept/printable/core.hpp"

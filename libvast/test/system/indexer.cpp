@@ -1,114 +1,98 @@
-#include "vast/actor/indexer.hpp"
+#include "vast/concept/parseable/to.hpp"
+#include "vast/concept/parseable/vast/expression.hpp"
+#include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/vast/error.hpp"
 #include "vast/concept/printable/vast/event.hpp"
 #include "vast/concept/printable/vast/expression.hpp"
-#include "vast/actor/task.hpp"
+#include "vast/bitmap.hpp"
 
-#define SUITE actors
+#include "vast/system/indexer.hpp"
+#include "vast/system/task.hpp"
+
+#define SUITE index
 #include "test.hpp"
+#include "fixtures/actor_system_and_events.hpp"
 
+using namespace caf;
 using namespace vast;
 
-TEST(indexer)
-{
-  using bitstream_type = ewah_bitstream;
+FIXTURE_SCOPE(indexer_tests, fixtures::actor_system_and_events)
 
-  MESSAGE("creating test events");
-  auto t0 = type::record{{"c", type::count{}}, {"s", type::string{}}};
-  t0.name("test-record-event");
-  auto t1 = type::real{};
-  t1.name("test-real-event");
-  size_t n = 1000;
-  std::vector<event> events(n);
-  for (size_t i = 0; i < n; ++i) {
-    if (i % 2 == 0)
-      events[i] = event::make(record{i, std::to_string(i)}, t0);
-    else
-      events[i] = event::make(4.2 + i, t1);
-    events[i].id(i);
-  }
-  REQUIRE(events[0].type() == t0);
-  REQUIRE(events[1].type() == t1);
-
-  MESSAGE("indexing the events");
-  scoped_actor self;
-  path dir0 = "vast-test-indexer-t0";
-  path dir1 = "vast-test-indexer-t1";
-  auto i0 = self->spawn(event_indexer<bitstream_type>::make, dir0, t0);
-  self->monitor(i0);
-  auto i1 = self->spawn(event_indexer<bitstream_type>::make, dir1, t1);
-  self->monitor(i1);
-  auto t = self->spawn<monitored>(task::make<>);
-  self->send(t, i0);
-  self->send(t, i1);
-  self->send(i0, events, t);
-  self->send(i1, events, t);
-  self->receive([&](down_msg const& msg) { CHECK(msg.source == t); });
-
-  MESSAGE("running a query against the first indexer");
-  predicate pred{type_extractor{type::count{}}, less, data{100u}};
-  t = self->spawn<monitored>(task::make<>);
-  self->send(t, i0);
-  self->send(i0, expression{pred}, self, t);
+TEST(indexer) {
+  const auto conn_log_type = bro_conn_log[0].type();
+  auto i = self->spawn(system::event_indexer, directory, conn_log_type);
+  auto t = self->spawn<monitored>(system::task<>);
+  MESSAGE("ingesting events");
+  self->send(t, i);
+  self->send(i, bro_conn_log, t);
   self->receive(
-    [&](expression const& expr, bitstream_type const& hit) {
-      CHECK(expr == expression{pred});
-      CHECK(hit.find_first() == 0);
-      CHECK(hit.count() == 100 / 2); // Every other event in [0,100).
-    });
-  self->receive([&](down_msg const& msg) { CHECK(msg.source == t); });
-
-  MESSAGE("running a query against the second indexer");
-  pred = {type_extractor{t1}, less_equal, data{42.0}};
-  t = self->spawn<monitored>(task::make<>);
-  self->send(t, i1);
-  self->send(i1, expression{pred}, self, t);
+    [&](down_msg const& msg) { CHECK(msg.source == t); },
+    error_handler()
+  );
+  // Event indexers operate with predicates, whereas partitions take entire
+  // expressions.
+  MESSAGE("querying");
+  auto pred = to<predicate>("id.resp_p == 995/?");
+  REQUIRE(pred);
+  t = self->spawn<monitored>(system::task<>);
+  self->send(t, i);
+  self->send(i, *pred, self, t);
+  bitmap result;
   self->receive(
-    [&](expression const& expr, bitstream_type const& hit) {
-      CHECK(expr == expression{pred});
-      CHECK(hit.find_first() == 1);
-      CHECK(hit.count() == 19);
-    });
-  self->receive([&](down_msg const& msg) { CHECK(msg.source == t); });
-
-  MESSAGE("writing first index to file system");
-  t = self->spawn<monitored>(task::make<>);
-  self->send(t, i0);
-  self->send(i0, flush_atom::value, t);
-  self->receive([&](down_msg const& msg) { CHECK(msg.source == t); });
-  REQUIRE(exists(dir0 / "meta"));
-  REQUIRE(exists(dir0 / "data"));
-  self->send_exit(i0, exit::done);
-  self->receive([&](down_msg const& msg) { CHECK(msg.source == i0); });
-  MESSAGE("writing second index to file system");
-  t = self->spawn<monitored>(task::make<>);
-  self->send(t, i1);
-  self->send(i1, flush_atom::value, t);
-  self->receive([&](down_msg const& msg) { CHECK(msg.source == t); });
-  REQUIRE(exists(dir1 / "meta"));
-  REQUIRE(exists(dir1 / "data"));
-  self->send_exit(i1, exit::done);
-  self->receive([&](down_msg const& msg) { CHECK(msg.source == i1); });
-
-  MESSAGE("loading index from file system and querying again");
-  i0 = self->spawn(event_indexer<bitstream_type>::make, dir0, t0);
-  self->monitor(i0);
-  pred = predicate{type_extractor{type::count{}}, equal, data{998u}};
-  t = self->spawn<monitored>(task::make<>);
-  self->send(t, i0);
-  self->send(i0, expression{pred}, self, t);
+    [&](predicate const& p, bitmap const& bm) {
+      CHECK(p == *pred);
+      result = bm;
+    },
+    error_handler()
+  );
   self->receive(
-    [&](expression const& expr, bitstream_type const& hit) {
-      CHECK(expr == expression{pred});
-      CHECK(hit.find_first() == 998u);
-      CHECK(hit.count() == 1);
-    });
-  self->receive([&](down_msg const& msg) { CHECK(msg.source == t); });
-  self->send_exit(i0, exit::done);
-  self->receive([&](down_msg const& msg) { CHECK(msg.source == i0); });
-
-  MESSAGE("cleaning up");
-  self->await_all_other_actors_done();
-  rm(dir0);
-  rm(dir1);
+    [&](down_msg const& msg) { CHECK(msg.source == t); },
+    error_handler()
+  );
+  CHECK_EQUAL(rank(result), 53u);
+  auto check_uid = [](event const& e, std::string const& uid) {
+    auto& v = get<vector>(e.data());
+    return v[1] == uid;
+  };
+  for (auto i : select(result))
+    if (i == 819)
+      CHECK(check_uid(bro_conn_log[819], "KKSlmtmkkxf")); // first
+    else if (i == 3594)
+      CHECK(check_uid(bro_conn_log[3594], "GDzpFiROJQi")); // intermediate
+    else if (i == 6338)
+      CHECK(check_uid(bro_conn_log[6338], "zwCckCCgXDb")); // last
+  MESSAGE("flushing to filesystem");
+  t = self->spawn<monitored>(system::task<>);
+  self->send(t, i);
+  self->send(i, flush_atom::value, t);
+  self->receive(
+    [&](down_msg const& msg) { CHECK(msg.source == t); },
+    error_handler()
+  );
+  CHECK(exists(directory));
+  CHECK(exists(directory / "data" / "id" / "orig_h"));
+  CHECK(exists(directory / "meta" / "time"));
+  MESSAGE("shutting down indexer");
+  self->monitor(i);
+  self->send(i, system::shutdown_atom::value);
+  self->receive(
+    [&](down_msg const& msg) { CHECK(msg.source == i); },
+    error_handler()
+  );
+  MESSAGE("respawning indexer from file system");
+  i = self->spawn(system::event_indexer, directory, conn_log_type);
+  // Same as above: create a task, submit the query, verify the result.
+  t = self->spawn<monitored>(system::task<>);
+  self->send(t, i);
+  self->send(i, *pred, self, t);
+  self->receive(
+    [&](predicate const& p, bitmap const& bm) {
+      CHECK(p == *pred);
+      result = bm;
+    },
+    error_handler()
+  );
+  CHECK_EQUAL(rank(result), 53u);
 }
+
+FIXTURE_SCOPE_END()

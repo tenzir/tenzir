@@ -451,9 +451,13 @@ bool is_container(const type& t) {
   return i >= 13 && i <= 16;
 }
 
+bool is_container(const data& x) {
+  return is<vector>(x) || is<set>(x) || is<table>(x);
+}
+
 namespace {
 
-struct congruence_checker {
+struct type_congruence_checker {
   template <typename T>
   bool operator()(T const&, T const&) const {
     return true;
@@ -506,10 +510,104 @@ struct congruence_checker {
   }
 };
 
+struct data_congruence_checker {
+  template <typename T, typename U>
+  bool operator()(T const&, U const&) const {
+    return false;
+  }
+
+  bool operator()(none_type const&, none) const {
+    return true;
+  }
+
+  bool operator()(boolean_type const&, boolean) const {
+    return true;
+  }
+
+  bool operator()(integer_type const&, integer) const {
+    return true;
+  }
+
+  bool operator()(count_type const&, count) const {
+    return true;
+  }
+
+  bool operator()(real_type const&, real) const {
+    return true;
+  }
+
+  bool operator()(interval_type const&, interval) const {
+    return true;
+  }
+
+  bool operator()(timestamp_type const&, timestamp) const {
+    return true;
+  }
+
+  bool operator()(string_type const&, std::string const&) const {
+    return true;
+  }
+
+  bool operator()(pattern_type const&, pattern const&) const {
+    return true;
+  }
+
+  bool operator()(address_type const&, address const&) const {
+    return true;
+  }
+
+  bool operator()(subnet_type const&, subnet const&) const {
+    return true;
+  }
+
+  bool operator()(port_type const&, port const&) const {
+    return true;
+  }
+
+  bool operator()(enumeration_type const& x, std::string const& y) const {
+    return std::find(x.fields.begin(), x.fields.end(), y) != x.fields.end();
+  }
+
+  bool operator()(vector_type const&, vector const&) const {
+    return true;
+  }
+
+  bool operator()(set_type const&, set const&) const {
+    return true;
+  }
+
+  bool operator()(table_type const&, table const&) const {
+    return true;
+  }
+
+  bool operator()(record_type const& x, vector const& y) const {
+    if (x.fields.size() != y.size())
+      return false;
+    for (size_t i = 0; i < x.fields.size(); ++i)
+      if (!visit(*this, x.fields[i].type, y[i]))
+        return false;
+    return true;
+  }
+
+  template <typename T>
+  bool operator()(alias_type const& t, T const& x) const {
+    using namespace std::placeholders;
+    return visit(std::bind(std::cref(*this), _1, std::cref(x)), t.value_type);
+  }
+};
+
 } // namespace <anonymous>
 
 bool congruent(type const& x, type const& y) {
-  return visit(congruence_checker{}, x, y);
+  return visit(type_congruence_checker{}, x, y);
+}
+
+bool congruent(type const& x, data const& y) {
+  return visit(data_congruence_checker{}, x, y);
+}
+
+bool congruent(data const& x, type const& y) {
+  return visit(data_congruence_checker{}, y, x);
 }
 
 bool compatible(type const& lhs, relational_operator op, type const& rhs) {
@@ -521,7 +619,7 @@ bool compatible(type const& lhs, relational_operator op, type const& rhs) {
       return is<string_type>(lhs) && is<pattern_type>(rhs);
     case equal:
     case not_equal:
-      return is<none>(lhs) || is<none>(rhs) || congruent(lhs, rhs);
+      return is<none_type>(lhs) || is<none_type>(rhs) || congruent(lhs, rhs);
     case less:
     case less_equal:
     case greater:
@@ -532,6 +630,66 @@ bool compatible(type const& lhs, relational_operator op, type const& rhs) {
       if (is<string_type>(lhs))
         return is<string_type>(rhs) || is_container(rhs);
       else if (is<address_type>(lhs))
+        return is<subnet_type>(rhs) || is_container(rhs);
+      else
+        return is_container(rhs);
+    case ni:
+      return compatible(rhs, in, lhs);
+    case not_ni:
+      return compatible(rhs, not_in, lhs);
+  }
+}
+
+bool compatible(type const& lhs, relational_operator op, data const& rhs) {
+  switch (op) {
+    default:
+      return false;
+    case match:
+    case not_match:
+      return is<string_type>(lhs) && is<pattern>(rhs);
+    case equal:
+    case not_equal:
+      return is<none_type>(lhs) || is<none>(rhs) || congruent(lhs, rhs);
+    case less:
+    case less_equal:
+    case greater:
+    case greater_equal:
+      return congruent(lhs, rhs);
+    case in:
+    case not_in:
+      if (is<string_type>(lhs))
+        return is<string_type>(rhs) || is_container(rhs);
+      else if (is<address_type>(lhs))
+        return is<subnet_type>(rhs) || is_container(rhs);
+      else
+        return is_container(rhs);
+    case ni:
+      return compatible(rhs, in, lhs);
+    case not_ni:
+      return compatible(rhs, not_in, lhs);
+  }
+}
+
+bool compatible(data const& lhs, relational_operator op, type const& rhs) {
+  switch (op) {
+    default:
+      return false;
+    case match:
+    case not_match:
+      return is<std::string>(lhs) && is<pattern_type>(rhs);
+    case equal:
+    case not_equal:
+      return is<none>(lhs) || is<none_type>(rhs) || congruent(lhs, rhs);
+    case less:
+    case less_equal:
+    case greater:
+    case greater_equal:
+      return congruent(lhs, rhs);
+    case in:
+    case not_in:
+      if (is<std::string>(lhs))
+        return is<string_type>(rhs) || is_container(rhs);
+      else if (is<address>(lhs))
         return is<subnet_type>(rhs) || is_container(rhs);
       else
         return is_container(rhs);
@@ -610,7 +768,7 @@ struct data_checker {
     auto t = get_if<table_type>(type_);
     if (!t)
       return false;
-    return type_check(t->key_type, x.begin()->first) && 
+    return type_check(t->key_type, x.begin()->first) &&
       type_check(t->value_type, x.begin()->second);
   }
 
@@ -730,7 +888,6 @@ struct kind_printer {
     return "alias";
   }
 };
-
 
 struct jsonizer {
   jsonizer(json& j) : json_{j} { }

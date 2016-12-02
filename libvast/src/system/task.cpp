@@ -60,8 +60,8 @@ behavior task(stateful_actor<task_state>* self, message done_msg) {
     [=](actor const& a) {
       VAST_DEBUG(self, "registers actor", a);
       self->monitor(a);
-      ++self->state.workers[a.address()];
-      ++self->state.total;
+      if (++self->state.workers[a.address()] == 1)
+        ++self->state.total;
     },
     [=](actor const& a, uint64_t n) {
       VAST_DEBUG(self, "registers actor", a, "for", n, "sub-tasks");

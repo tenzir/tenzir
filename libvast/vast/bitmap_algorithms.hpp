@@ -269,8 +269,8 @@ rank(Bitmap const& bm, typename Bitmap::size_type i) {
 /// @param bm The bitmap whose rank to compute.
 /// @returns The population count of *bm*.
 template <bool Bit = true, class Bitmap>
-auto rank(Bitmap const& bm) {
-  return rank<Bit>(bm, bm.size() - 1);
+typename Bitmap::size_type rank(Bitmap const& bm) {
+  return bm.empty() ? 0 : rank<Bit>(bm, bm.size() - 1);
 }
 
 /// Computes the position of the i-th occurrence of a bit.

@@ -4,14 +4,13 @@
 #include <sstream>
 #include <type_traits>
 
-#include "vast/config.hpp"
-#include "vast/concept/printable/print.hpp"
-#include "vast/detail/pp.hpp"
-
-#define CAF_LOG_COMPONENT "vast"
 #include <caf/logger.hpp>
 #include <caf/stateful_actor.hpp>
 #include <caf/typed_actor.hpp>
+
+#include "vast/config.hpp"
+#include "vast/concept/printable/print.hpp"
+#include "vast/detail/pp.hpp"
 
 namespace vast {
 namespace detail {
@@ -90,7 +89,7 @@ struct formatter {
     do {                                                                       \
       vast::detail::formatter __vast_fmt;                                      \
       __vast_fmt << msg;                                                       \
-      CAF_LOG_IMPL(lvl, __vast_fmt.message.str());                             \
+      CAF_LOG_IMPL("vast", lvl, __vast_fmt.message.str());                     \
     } while (false)
 
   #define VAST_LOG_2(lvl, m1) VAST_LOG_IMPL(lvl, m1)
