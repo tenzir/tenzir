@@ -71,6 +71,8 @@ template <
 >
 expected<void> load(path const& p, T&& x, Ts&&... xs) {
   std::ifstream fs{p.str()};
+  if (!fs)
+    return make_error(ec::filesystem_error, "failed to create filestream", p);
   return load<Method>(*fs.rdbuf(), std::forward<T>(x), std::forward<Ts>(xs)...);
 }
 
