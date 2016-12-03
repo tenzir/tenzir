@@ -58,18 +58,13 @@ set(libvast_sources
   #src/system/key_value_store.cpp
   #src/system/node.cpp
   #src/system/partition.cpp
+  src/system/profiler.cpp
   #src/system/signal_monitor.cpp
   src/system/task.cpp
   src/format/bgpdump.cpp
   src/format/bro.cpp
   src/format/test.cpp
 )
-
-# FIXME: Bring back after having repaired CAF code.
-#if (GPERFTOOLS_FOUND)
-#  set(libvast_sources ${libvast_sources}
-#    src/system/profiler.cpp)
-#endif ()
 
 if (PCAP_FOUND)
   set(libvast_sources ${libvast_sources}

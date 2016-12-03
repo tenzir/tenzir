@@ -1,28 +1,28 @@
-#ifndef VAST_ACTOR_PROFILER_HPP
-#define VAST_ACTOR_PROFILER_HPP
+#ifndef VAST_SYSTEM_PROFILER_HPP
+#define VAST_SYSTEM_PROFILER_HPP
 
 #include <chrono>
-#include <fstream>
 
-#include "vast/filesystem.hpp"
-#include "vast/actor/basic_state.hpp"
+#include <caf/stateful_actor.hpp>
 
 namespace vast {
 
-struct profiler {
-  struct state : basic_state {
-    state(local_actor* self);
-    ~state();
-  };
+class path;
 
-  /// Profiles CPU and heap via gperftools.
-  /// @param self The actor context.
-  /// @param log_dir The directory where to write profiler output to.
-  /// @param secs The number of seconds between subsequent measurements.
-  static behavior make(stateful_actor<state>* self,
-                       path log_dir, std::chrono::seconds secs);
+namespace system {
+
+struct profiler_state {
+  const char* name = "profiler";
 };
 
+/// Profiles CPU and heap usage via gperftools.
+/// @param self The actor handle.
+/// @param dir The directory where to write profiler output to.
+/// @param secs The number of seconds between subsequent measurements.
+caf::behavior profiler(caf::stateful_actor<profiler_state>* self, path dir,
+                       std::chrono::seconds secs);
+
+} // namespace system
 } // namespace vast
 
 #endif
