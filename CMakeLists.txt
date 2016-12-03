@@ -72,6 +72,12 @@ elseif ("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
     set(EXTRA_FLAGS "${EXTRA_FLAGS} -D_GLIBCXX_USE_C99_MATH")
     set(EXTRA_FLAGS "${EXTRA_FLAGS} -D_GLIBCXX_USE_C99_MATH_TR1")
   endif ()
+  if (VAST_USE_TCMALLOC)
+    # GCC makes some optimizations assuming it is using its own, built-in
+    # malloc; that assumption obviously isn't true with tcmalloc.
+    set (EXTRA_FLAGS "${EXTRA_FLAGS} -fno-builtin-malloc -fno-builtin-calloc")
+    set (EXTRA_FLAGS "${EXTRA_FLAGS} -fno-builtin-realloc -fno-builtin-free")
+  endif ()
 elseif ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
   if (compiler_version VERSION_GREATER 3.4
       OR compiler_version VERSION_EQUAL 3.4)
