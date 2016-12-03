@@ -5,12 +5,12 @@ namespace vast {
 
 using std::chrono::duration_cast;
 
-bool convert(interval dur, double& d) {
+bool convert(timespan dur, double& d) {
   d = duration_cast<double_seconds>(dur).count();
   return true;
 }
 
-bool convert(interval dur, json& j) {
+bool convert(timespan dur, json& j) {
   j = dur.count();
   return true;
 }

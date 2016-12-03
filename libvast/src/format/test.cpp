@@ -125,11 +125,11 @@ struct randomizer {
   }
 
   auto operator()(timestamp_type const&, timestamp& x) {
-    x += std::chrono::duration_cast<interval>(double_seconds(sample()));
+    x += std::chrono::duration_cast<timespan>(double_seconds(sample()));
   }
 
-  auto operator()(interval_type const&, interval& x) {
-    x += std::chrono::duration_cast<interval>(double_seconds(sample()));
+  auto operator()(timespan_type const&, timespan& x) {
+    x += std::chrono::duration_cast<timespan>(double_seconds(sample()));
   }
 
   void operator()(boolean_type const&, boolean& b) {

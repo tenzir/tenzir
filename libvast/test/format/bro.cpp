@@ -29,10 +29,10 @@ TEST(bro data parsing) {
   CHECK(bro_parse(count_type{}, "49329"s, d));
   CHECK(d == count{49329});
   CHECK(bro_parse(timestamp_type{}, "1258594163.566694", d));
-  auto i = duration_cast<interval>(double_seconds{1258594163.566694});
-  CHECK(d == timestamp{i});
-  CHECK(bro_parse(interval_type{}, "1258594163.566694", d));
-  CHECK(d == i);
+  auto ts = duration_cast<timespan>(double_seconds{1258594163.566694});
+  CHECK(d == timestamp{ts});
+  CHECK(bro_parse(timespan_type{}, "1258594163.566694", d));
+  CHECK(d == ts);
   CHECK(bro_parse(string_type{}, "\\x2afoo*"s, d));
   CHECK(d == "*foo*");
   CHECK(bro_parse(address_type{}, "192.168.1.103", d));

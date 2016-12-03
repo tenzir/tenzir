@@ -74,7 +74,7 @@ struct type_parser : parser<type_parser> {
       | "int" >> attr_list       ->* to_basic_type<integer_type>
       | "count" >> attr_list     ->* to_basic_type<count_type>
       | "real" >> attr_list      ->* to_basic_type<real_type>
-      | "duration" >> attr_list  ->* to_basic_type<interval_type>
+      | "duration" >> attr_list  ->* to_basic_type<timespan_type>
       | "time" >> attr_list      ->* to_basic_type<timestamp_type>
       | "string" >> attr_list    ->* to_basic_type<string_type>
       | "pattern" >> attr_list   ->* to_basic_type<pattern_type>

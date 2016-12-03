@@ -87,7 +87,7 @@ namespace parsers {
 template <class Rep, class Period>
 auto const duration = duration_parser<Rep, Period>{};
 
-auto const interval = duration<vast::interval::rep, vast::interval::period>;
+auto const timespan = duration<vast::timespan::rep, vast::timespan::period>;
 
 } // namespace parsers
 
@@ -154,7 +154,7 @@ auto const ymdhms = ymdhms_parser{};
 auto const epoch = real_opt_dot
   ->* [](double d) { 
     using std::chrono::duration_cast; 
-    return timestamp{duration_cast<vast::interval>(double_seconds{d})};
+    return timestamp{duration_cast<vast::timespan>(double_seconds{d})};
   };
 
 } // namespace parsers
@@ -164,21 +164,21 @@ struct timestamp_parser : parser<timestamp_parser> {
 
   template <typename Iterator, typename Attribute>
   bool parse(Iterator& f, Iterator const& l, Attribute& a) const {
-    static auto plus = [](interval i) {
-      return timestamp::clock::now() + i;
+    static auto plus = [](timespan span) {
+      return timestamp::clock::now() + span;
     };
-    static auto minus = [](interval i) {
-      return timestamp::clock::now() - i;
+    static auto minus = [](timespan span) {
+      return timestamp::clock::now() - span;
     };
     static auto ws = ignore(*parsers::space);
     static auto p
       = parsers::ymdhms
       | '@' >> parsers::epoch
-      | "now" >> ws >> ( '+' >> ws >> parsers::interval ->* plus
-                       | '-' >> ws >> parsers::interval ->* minus )
+      | "now" >> ws >> ( '+' >> ws >> parsers::timespan ->* plus
+                       | '-' >> ws >> parsers::timespan ->* minus )
       | "now"_p ->* []() { return timestamp::clock::now(); }
-      | "in" >> ws >> parsers::interval ->* plus
-      | (parsers::interval ->* minus) >> ws >> "ago"
+      | "in" >> ws >> parsers::timespan ->* plus
+      | (parsers::timespan ->* minus) >> ws >> "ago"
       ;
     return p.parse(f, l, a);
   }

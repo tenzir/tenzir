@@ -149,7 +149,7 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader&& reader) {
         VAST_INFO(self, "produced", events, "events in", runtime,
                   '(' << size_t(rate), "events/sec)");
         if (self->state.accountant) {
-          auto rt = duration_cast<interval>(runtime);
+          auto rt = duration_cast<timespan>(runtime);
           self->send(self->state.accountant, "source.batch.runtime", rt);
           self->send(self->state.accountant, "source.batch.events", events);
           self->send(self->state.accountant, "source.batch.rate", rate);

@@ -77,8 +77,8 @@ class arithmetic_index : public value_index {
 public:
   using value_type =
     std::conditional_t<
-      std::is_same<T, timestamp>{} || std::is_same<T, interval>{},
-      interval::rep,
+      std::is_same<T, timestamp>{} || std::is_same<T, timespan>{},
+      timespan::rep,
       std::conditional_t<
         std::is_same<T, boolean>{}
           || std::is_same<T, integer>{}
@@ -104,7 +104,7 @@ public:
       std::is_void<Binner>{},
       // Choose a space-efficient binner if none specified.
       std::conditional_t<
-        std::is_same<T, timestamp>{} || std::is_same<T, interval>{},
+        std::is_same<T, timestamp>{} || std::is_same<T, timespan>{},
         decimal_binner<9>, // nanoseconds -> seconds
         std::conditional_t<
           std::is_same<T, real>{},
@@ -148,7 +148,7 @@ private:
       return (*this)(x.time_since_epoch().count());
     }
 
-    bool operator()(interval x) const {
+    bool operator()(timespan x) const {
       return (*this)(x.count());
     }
 
@@ -185,7 +185,7 @@ private:
       return (*this)(x.time_since_epoch().count());
     }
 
-    expected<bitmap> operator()(interval x) const {
+    expected<bitmap> operator()(timespan x) const {
       return (*this)(x.count());
     }
 
@@ -410,8 +410,8 @@ struct value_index_inspect_helper {
       return f_(static_cast<arithmetic_index<real>&>(idx_));
     }
 
-    result_type operator()(interval_type const&) const {
-      return f_(static_cast<arithmetic_index<interval>&>(idx_));
+    result_type operator()(timespan_type const&) const {
+      return f_(static_cast<arithmetic_index<timespan>&>(idx_));
     }
 
     result_type operator()(timestamp_type const&) const {
@@ -474,8 +474,8 @@ struct value_index_inspect_helper {
       return std::make_unique<arithmetic_index<real>>();
     }
 
-    result_type operator()(interval_type const&) const {
-      return std::make_unique<arithmetic_index<interval>>();
+    result_type operator()(timespan_type const&) const {
+      return std::make_unique<arithmetic_index<timespan>>();
     }
 
     result_type operator()(timestamp_type const&) const {

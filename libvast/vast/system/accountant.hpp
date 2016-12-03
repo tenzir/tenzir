@@ -27,7 +27,7 @@ using accountant_type =
     caf::reacts_to<shutdown_atom>,
     caf::reacts_to<flush_atom>,
     caf::reacts_to<std::string, std::string>,
-    caf::reacts_to<std::string, interval>,
+    caf::reacts_to<std::string, timespan>,
     caf::reacts_to<std::string, timestamp>,
     caf::reacts_to<std::string, int64_t>,
     caf::reacts_to<std::string, uint64_t>,

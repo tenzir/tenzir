@@ -240,7 +240,7 @@ maybe<event> reader::read() {
   packet.emplace_back(std::string{str, packet_size});
   using namespace std::chrono;
   auto secs = seconds(header->ts.tv_sec);
-  auto ts = timestamp{duration_cast<interval>(secs)};
+  auto ts = timestamp{duration_cast<timespan>(secs)};
 #ifdef PCAP_TSTAMP_PRECISION_NANO
   ts += nanoseconds(header->ts.tv_usec);
 #else

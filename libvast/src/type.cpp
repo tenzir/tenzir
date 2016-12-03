@@ -536,7 +536,7 @@ struct data_congruence_checker {
     return true;
   }
 
-  bool operator()(interval_type const&, interval) const {
+  bool operator()(timespan_type const&, timespan) const {
     return true;
   }
 
@@ -716,7 +716,7 @@ VAST_SPECIALIZE_DATA_TO_TYPE(boolean, boolean_type)
 VAST_SPECIALIZE_DATA_TO_TYPE(integer, integer_type)
 VAST_SPECIALIZE_DATA_TO_TYPE(count, count_type)
 VAST_SPECIALIZE_DATA_TO_TYPE(real, real_type)
-VAST_SPECIALIZE_DATA_TO_TYPE(interval, interval_type)
+VAST_SPECIALIZE_DATA_TO_TYPE(timespan, timespan_type)
 VAST_SPECIALIZE_DATA_TO_TYPE(timestamp, timestamp_type)
 VAST_SPECIALIZE_DATA_TO_TYPE(std::string, string_type)
 VAST_SPECIALIZE_DATA_TO_TYPE(pattern, pattern_type)
@@ -836,8 +836,8 @@ struct kind_printer {
     return "real";
   }
 
-  result_type operator()(interval_type const&) const {
-    return "interval";
+  result_type operator()(timespan_type const&) const {
+    return "timespan";
   }
 
   result_type operator()(timestamp_type const&) const {

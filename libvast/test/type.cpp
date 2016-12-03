@@ -297,8 +297,8 @@ TEST(printable) {
   CHECK_EQUAL(to_string(integer_type{}), "int");
   CHECK_EQUAL(to_string(count_type{}), "count");
   CHECK_EQUAL(to_string(real_type{}), "real");
-  CHECK_EQUAL(to_string(interval_type{}), "duration");
-  CHECK_EQUAL(to_string(timestamp_type{}), "timestamp");
+  CHECK_EQUAL(to_string(timespan_type{}), "duration");
+  CHECK_EQUAL(to_string(timestamp_type{}), "time");
   CHECK_EQUAL(to_string(string_type{}), "string");
   CHECK_EQUAL(to_string(pattern_type{}), "pattern");
   CHECK_EQUAL(to_string(address_type{}), "addr");

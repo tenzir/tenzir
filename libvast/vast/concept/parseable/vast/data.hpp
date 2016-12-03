@@ -37,7 +37,7 @@ struct access::parser<data> : vast::parser<access::parser<data>> {
     static auto ws = ignore(*parsers::space);
     rule<Iterator, data> p;
     auto wsp = ws >> p >> ws;
-    p = parsers::interval
+    p = parsers::timespan
       | parsers::timestamp
       | parsers::net
       | parsers::port

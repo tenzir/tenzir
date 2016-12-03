@@ -100,10 +100,10 @@ TEST(floating-point with custom binner) {
   CHECK(to_string(*idx2.lookup(not_equal, 4711.14)) == "1110111");
 }
 
-TEST(interval) {
+TEST(timespan) {
   using namespace std::chrono;
   // Default binning gives granularity of seconds.
-  auto idx = arithmetic_index<interval>{base::uniform<64>(10)};
+  auto idx = arithmetic_index<timespan>{base::uniform<64>(10)};
   MESSAGE("push_back");
   REQUIRE(idx.push_back(milliseconds(1000)));
   REQUIRE(idx.push_back(milliseconds(2000)));

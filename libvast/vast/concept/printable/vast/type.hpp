@@ -57,8 +57,8 @@ VAST_DEFINE_BASIC_TYPE_PRINTER(boolean_type, "bool")
 VAST_DEFINE_BASIC_TYPE_PRINTER(integer_type, "int")
 VAST_DEFINE_BASIC_TYPE_PRINTER(count_type, "count")
 VAST_DEFINE_BASIC_TYPE_PRINTER(real_type, "real")
-VAST_DEFINE_BASIC_TYPE_PRINTER(interval_type, "duration")
-VAST_DEFINE_BASIC_TYPE_PRINTER(timestamp_type, "timestamp")
+VAST_DEFINE_BASIC_TYPE_PRINTER(timespan_type, "duration")
+VAST_DEFINE_BASIC_TYPE_PRINTER(timestamp_type, "time")
 VAST_DEFINE_BASIC_TYPE_PRINTER(string_type, "string")
 VAST_DEFINE_BASIC_TYPE_PRINTER(pattern_type, "pattern")
 VAST_DEFINE_BASIC_TYPE_PRINTER(address_type, "addr")
@@ -123,7 +123,7 @@ struct type_printer : printer<type_printer<Policy>> {
              | integer_type_printer{}
              | count_type_printer{}
              | real_type_printer{}
-             | interval_type_printer{}
+             | timespan_type_printer{}
              | timestamp_type_printer{}
              | string_type_printer{}
              | pattern_type_printer{}

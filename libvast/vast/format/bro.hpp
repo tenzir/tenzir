@@ -61,15 +61,15 @@ struct bro_parser {
 
   bool operator()(timestamp_type const&) const {
     static auto p = parsers::real ->* [](real x) {
-      auto i = std::chrono::duration_cast<interval>(double_seconds(x));
+      auto i = std::chrono::duration_cast<timespan>(double_seconds(x));
       return timestamp{i};
     };
     return parse(p);
   }
 
-  bool operator()(interval_type const&) const {
+  bool operator()(timespan_type const&) const {
     static auto p = parsers::real ->* [](real x) {
-      return std::chrono::duration_cast<interval>(double_seconds(x));
+      return std::chrono::duration_cast<timespan>(double_seconds(x));
     };
     return parse(p);
   }
@@ -135,14 +135,14 @@ struct bro_parser_factory {
 
   result_type operator()(timestamp_type const&) const {
     return parsers::real ->* [](real x) {
-      auto i = std::chrono::duration_cast<interval>(double_seconds(x));
+      auto i = std::chrono::duration_cast<timespan>(double_seconds(x));
       return timestamp{i};
     };
   }
 
-  result_type operator()(interval_type const&) const {
+  result_type operator()(timespan_type const&) const {
     return parsers::real ->* [](real x) {
-      return std::chrono::duration_cast<interval>(double_seconds(x));
+      return std::chrono::duration_cast<timespan>(double_seconds(x));
     };
   }
 

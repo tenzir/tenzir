@@ -82,7 +82,7 @@ accountant_type::behavior_type accountant(
       record(self, key, value);
     },
     // Helpers to avoid to_string(..) in sender context.
-    [=](std::string const& key, interval value) {
+    [=](std::string const& key, timespan value) {
       auto us = duration_cast<microseconds>(value).count();
       record(self, key, us);
     },

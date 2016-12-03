@@ -54,11 +54,11 @@ std::unique_ptr<value_index> value_index::make(type const& t) {
         return nullptr;
       return std::make_unique<arithmetic_index<real>>(std::move(*b));
     }
-    result_type operator()(interval_type const& t) const {
+    result_type operator()(timespan_type const& t) const {
       auto b = parse_base(t);
       if (!b)
         return nullptr;
-      return std::make_unique<arithmetic_index<interval>>(std::move(*b));
+      return std::make_unique<arithmetic_index<timespan>>(std::move(*b));
     }
     result_type operator()(timestamp_type const& t) const {
       auto b = parse_base(t);

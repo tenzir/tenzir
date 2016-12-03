@@ -185,7 +185,7 @@ VAST_DEFINE_DATA_TYPE(count_type, count)
 VAST_DEFINE_DATA_TYPE(real_type, real)
 
 /// A type for time durations.
-VAST_DEFINE_DATA_TYPE(interval_type, interval)
+VAST_DEFINE_DATA_TYPE(timespan_type, timespan)
 
 /// A type for absolute points in time.
 VAST_DEFINE_DATA_TYPE(timestamp_type, timestamp)
@@ -466,7 +466,7 @@ using type_variant = variant<
   integer_type,
   count_type,
   real_type,
-  interval_type,
+  timespan_type,
   timestamp_type,
   string_type,
   pattern_type,

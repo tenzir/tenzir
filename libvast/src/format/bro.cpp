@@ -34,7 +34,7 @@ expected<type> parse_type(std::string const& bro_type) {
   else if (bro_type == "time")
     t = timestamp_type{};
   else if (bro_type == "interval")
-    t = interval_type{};
+    t = timespan_type{};
   else if (bro_type == "pattern")
     t = pattern_type{};
   else if (bro_type == "addr")
@@ -84,7 +84,7 @@ struct bro_type_printer {
     return "time";
   }
 
-  std::string operator()(interval_type const&) {
+  std::string operator()(timespan_type const&) {
     return "interval";
   }
 
@@ -178,9 +178,9 @@ struct streamer {
     p.print(out, d);
   }
 
-  void operator()(interval_type const&, interval i) const {
+  void operator()(timespan_type const&, timespan span) const {
     double d;
-    convert(i, d);
+    convert(span, d);
     auto p = real_printer<real, 6>{};
     auto out = std::ostreambuf_iterator<char>(out_);
     p.print(out, d);

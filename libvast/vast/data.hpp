@@ -50,7 +50,7 @@ using make_data_type = std::conditional_t<
             std::string,
             std::conditional_t<
                  std::is_same<T, none>::value
-              || std::is_same<T, interval>::value
+              || std::is_same<T, timespan>::value
               || std::is_same<T, timestamp>::value
               || std::is_same<T, pattern>::value
               || std::is_same<T, address>::value
@@ -75,7 +75,7 @@ using data_variant = variant<
   integer,
   count,
   real,
-  interval,
+  timespan,
   timestamp,
   std::string,
   pattern,
@@ -111,7 +111,7 @@ public:
   /// Constructs data from a `std::chrono::duration`.
   /// @param x The duration to construct data from.
   template <class Rep, class Period>
-  data(std::chrono::duration<Rep, Period> x) : data_{interval{x}} {
+  data(std::chrono::duration<Rep, Period> x) : data_{timespan{x}} {
   }
 
   /// Constructs data.
@@ -148,7 +148,7 @@ private:
 //      || std::is_same<T, integer>::value
 //      || std::is_same<T, count>::value
 //      || std::is_same<T, real>::value
-//      || std::is_same<T, interval>::value
+//      || std::is_same<T, timespan>::value
 //      || std::is_same<T, timestamp>::value
 //      || std::is_same<T, std::string>::value
 //      || std::is_same<T, pattern>::value
