@@ -1,6 +1,7 @@
 #ifndef VAST_DATA_HPP
 #define VAST_DATA_HPP
 
+#include <chrono>
 #include <iterator>
 #include <regex>
 #include <string>
@@ -105,6 +106,12 @@ public:
   /// @param x The optional data instance.
   template <class T>
   data(optional<T> x) : data{x ? std::move(*x) : data{}} {
+  }
+
+  /// Constructs data from a `std::chrono::duration`.
+  /// @param x The duration to construct data from.
+  template <class Rep, class Period>
+  data(std::chrono::duration<Rep, Period> x) : data_{interval{x}} {
   }
 
   /// Constructs data.

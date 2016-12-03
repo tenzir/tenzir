@@ -4,11 +4,13 @@
 #include "vast/load.hpp"
 #include "vast/null_bitmap.hpp"
 #include "vast/save.hpp"
+#include "vast/time.hpp"
 
 #define SUITE bitmap_index
 #include "test.hpp"
 
 using namespace vast;
+using namespace std::chrono_literals;
 
 TEST(boolean bitmap index) {
   bitmap_index<bool, singleton_coder<null_bitmap>> bmi;
@@ -219,6 +221,26 @@ TEST(decimal binner with integers) {
   CHECK(to_string(bmi.lookup(equal, 100)) == "10001");
   CHECK(to_string(bmi.lookup(equal, 200)) == "01010");
   CHECK(to_string(bmi.lookup(equal, 300)) == "00100");
+}
+
+TEST(decimal binner with time) {
+  using namespace std::chrono;
+  using binner = decimal_binner<3>; // ns -> us
+  CHECK_EQUAL(binner::bucket_size, 1000u);
+  using coder = multi_level_coder<range_coder<null_bitmap>>;
+  auto bmi = bitmap_index<int64_t, coder, binner>{base::uniform<64>(10)};
+  bmi.push_back((10100ns).count());
+  bmi.push_back((10110ns).count());
+  bmi.push_back((10111ns).count());
+  bmi.push_back((10999ns).count());
+  bmi.push_back((11000ns).count());
+  bmi.push_back((100000ns).count());
+  CHECK_EQUAL(to_string(bmi.lookup(greater, (100000ns).count())), "000000");
+  CHECK_EQUAL(to_string(bmi.lookup(greater, (10998ns).count())), "000011");
+  CHECK_EQUAL(to_string(bmi.lookup(greater, (11000ns).count())), "000001");
+  CHECK_EQUAL(to_string(bmi.lookup(greater, (10000ns).count())), "000011");
+  CHECK_EQUAL(to_string(bmi.lookup(less, (10999ns).count())), "000000");
+  CHECK_EQUAL(to_string(bmi.lookup(less, (11000ns).count())), "111100");
 }
 
 TEST(decimal binner with floating-point) {

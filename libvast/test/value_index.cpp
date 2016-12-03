@@ -103,22 +103,22 @@ TEST(floating-point with custom binner) {
 TEST(interval) {
   using namespace std::chrono;
   // Default binning gives granularity of seconds.
-  arithmetic_index<interval> idx{base::uniform<64>(10)};
+  auto idx = arithmetic_index<interval>{base::uniform<64>(10)};
   MESSAGE("push_back");
-  REQUIRE(idx.push_back(interval{milliseconds(1000)}));
-  REQUIRE(idx.push_back(interval{milliseconds(2000)}));
-  REQUIRE(idx.push_back(interval{milliseconds(3000)}));
-  REQUIRE(idx.push_back(interval{milliseconds(1011)}));
-  REQUIRE(idx.push_back(interval{milliseconds(2222)}));
-  REQUIRE(idx.push_back(interval{milliseconds(2322)}));
+  REQUIRE(idx.push_back(milliseconds(1000)));
+  REQUIRE(idx.push_back(milliseconds(2000)));
+  REQUIRE(idx.push_back(milliseconds(3000)));
+  REQUIRE(idx.push_back(milliseconds(1011)));
+  REQUIRE(idx.push_back(milliseconds(2222)));
+  REQUIRE(idx.push_back(milliseconds(2322)));
   MESSAGE("lookup");
-  auto hun = idx.lookup(equal, interval{milliseconds(1034)});
+  auto hun = idx.lookup(equal, milliseconds(1034));
   REQUIRE(hun);
   CHECK(to_string(*hun) == "100100");
-  auto twokay = idx.lookup(less_equal, interval{milliseconds(2000)});
+  auto twokay = idx.lookup(less_equal, milliseconds(2000));
   REQUIRE(twokay);
   CHECK(to_string(*twokay) == "110111");
-  auto twelve = idx.lookup(greater, interval{milliseconds(1200)});
+  auto twelve = idx.lookup(greater, milliseconds(1200));
   REQUIRE(twelve);
   CHECK(to_string(*twelve) == "011011");
 }
