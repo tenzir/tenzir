@@ -6,6 +6,8 @@
 #include <caf/actor.hpp>
 
 #include "vast/aliases.hpp"
+#include "vast/bitmap.hpp"
+#include "vast/detail/flat_set.hpp"
 #include "vast/expression.hpp"
 #include "vast/filesystem.hpp"
 #include "vast/schema.hpp"
@@ -15,19 +17,19 @@
 namespace vast {
 namespace system {
 
+struct predicate_state {
+  caf::actor task;
+  bitmap hits;
+  detail::flat_set<event_id> cache;
+  detail::flat_set<expression const*> queries;
+};
+
+struct query_state {
+  caf::actor task;
+  bitmap hits;
+};
+
 struct partition_state {
-  struct predicate_state {
-    caf::actor task;
-    bitmap hits;
-    detail::flat_set<event_id> cache;
-    detail::flat_set<expression const*> queries;
-  };
-
-  struct query_state {
-    caf::actor task;
-    bitmap hits;
-  };
-
   caf::actor proxy;
   accountant_type accountant;
   vast::schema schema;

@@ -59,15 +59,15 @@ behavior value_indexer(stateful_actor<value_indexer_state>* self,
       self->quit(make_error(ec::unspecified, "failed to construct index"));
   }
   // Flush bitmap index to disk.
-  auto flush = [self]() -> expected<void> {
+  auto dir = self->state.filename.parent();
+  auto flush = [=]() -> expected<void> {
     auto& last = self->state.last_flush;
     auto offset = self->state.idx->offset();
     if (offset == last)
       return {};
     // Create parent directory if it doesn't exist.
-    auto parent = self->state.filename.parent();
-    if (!exists(parent)) {
-      auto result = mkdir(parent);
+    if (!exists(dir)) {
+      auto result = mkdir(dir);
       if (!result)
         return result.error();
     }

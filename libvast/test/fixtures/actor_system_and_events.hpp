@@ -8,8 +8,6 @@ namespace fixtures {
 
 struct actor_system_and_events : actor_system, events {
   actor_system_and_events() {
-    if (vast::exists(directory))
-      vast::rm(directory);
     // Manually assign monotonic IDs to events.
     auto id = event_id{0};
     auto assign = [&](auto& xs) {
@@ -22,8 +20,6 @@ struct actor_system_and_events : actor_system, events {
     assign(bro_http_log);
     assign(bgpdump_txt);
   }
-
-  vast::path directory = "vast-unit-test";
 };
 
 } // namespace fixtures

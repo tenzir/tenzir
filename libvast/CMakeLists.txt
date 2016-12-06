@@ -57,7 +57,7 @@ set(libvast_sources
   src/system/indexer.cpp
   #src/system/key_value_store.cpp
   #src/system/node.cpp
-  #src/system/partition.cpp
+  src/system/partition.cpp
   src/system/profiler.cpp
   #src/system/signal_monitor.cpp
   src/system/task.cpp
@@ -203,7 +203,7 @@ set(tests
   #test/system/index.cpp
   test/system/indexer.cpp
   #test/system/key_value_store.cpp
-  #test/system/partition.cpp
+  test/system/partition.cpp
   test/system/sink.cpp
   test/system/source.cpp
   test/system/task.cpp

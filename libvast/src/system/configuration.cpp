@@ -7,6 +7,7 @@
 #include "vast/expression.hpp"
 #include "vast/operator.hpp"
 #include "vast/query_options.hpp"
+#include "vast/schema.hpp"
 #include "vast/type.hpp"
 #include "vast/uuid.hpp"
 
@@ -24,6 +25,7 @@ configuration::configuration() {
   add_message_type<expression>("vast::expression");
   add_message_type<query_options>("vast::query_options");
   add_message_type<relational_operator>("vast::relational_operator");
+  add_message_type<schema>("vast::schema");
   add_message_type<type>("vast::type");
   add_message_type<uuid>("vast::uuid");
   // Containers
@@ -34,7 +36,7 @@ configuration::configuration() {
     result += "got ";
     switch (static_cast<ec>(x)) {
       default:
-        result += caf::deep_to_string_as_tuple(static_cast<ec>(x));
+        result += to_string(static_cast<ec>(x));
         break;
       case ec::unspecified:
         result += "unspecified error";
