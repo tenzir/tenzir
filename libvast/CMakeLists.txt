@@ -51,7 +51,7 @@ set(libvast_sources
   src/system/archive.cpp
   src/system/configuration.cpp
   #src/system/exporter.cpp
-  #src/system/importer.cpp
+  src/system/importer.cpp
   #src/system/identifier.cpp
   #src/system/index.cpp
   src/system/indexer.cpp
@@ -59,7 +59,7 @@ set(libvast_sources
   #src/system/node.cpp
   src/system/partition.cpp
   src/system/profiler.cpp
-  #src/system/signal_monitor.cpp
+  src/system/signal_monitor.cpp
   src/system/task.cpp
   src/format/bgpdump.cpp
   src/format/bro.cpp

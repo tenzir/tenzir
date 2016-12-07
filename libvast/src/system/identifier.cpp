@@ -4,14 +4,15 @@
 #include <caf/all.hpp>
 
 #include "vast/key.hpp"
-#include "vast/actor/atoms.hpp"
-#include "vast/actor/identifier.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/error.hpp"
 #include "vast/concept/printable/vast/filesystem.hpp"
-#include "vast/util/type_list.hpp"
+
+#include "vast/system/atoms.hpp"
+#include "vast/system/identifier.hpp"
 
 namespace vast {
+namespace system {
 
 identifier::state::state(local_actor* self)
   : basic_state{self, "identifier"} {
@@ -41,10 +42,10 @@ bool identifier::state::flush() {
 }
 
 identifier::behavior identifier::make(stateful_pointer self, caf::actor store,
-                                      path dir, event_id batch_size) {
+                                      path dir, event_id initial_batch_size) {
   self->state.store = std::move(store);
   self->state.dir = std::move(dir);
-  self->state.batch_size = batch_size;
+  self->state.batch_size = initial_batch_size;
   if (exists(self->state.dir)) {
     // Load current batch size.
     std::ifstream available{to_string(self->state.dir / "available")};
@@ -97,7 +98,7 @@ identifier::behavior identifier::make(stateful_pointer self, caf::actor store,
       self->state.id += n;
       self->state.available -= n;
       // Replenish if we're running low of IDs (or are already out of 'em).
-      if (self->state.available == 0 
+      if (self->state.available == 0
           || self->state.available < self->state.batch_size * 0.1) {
         // Avoid too frequent replenishing.
         if (time::snapshot() - self->state.last_replenish < time::seconds(10)) {
@@ -110,8 +111,9 @@ identifier::behavior identifier::make(stateful_pointer self, caf::actor store,
         VAST_DEBUG_AT(self, "replenishes local IDs:", self->state.available,
                       "available,", self->state.batch_size, "requested");
         VAST_ASSERT(max_event_id - self->state.id >= self->state.batch_size);
-        self->sync_send(self->state.store, add_atom::value, key::str("id"),
-                  self->state.batch_size).then(
+        self->request(self->state.store, timeout(),
+                      add_atom::value, key::str("id"),
+                      self->state.batch_size).then(
           [=](event_id old, event_id now) {
             self->state.id = old;
             self->state.available = now - old;
@@ -122,12 +124,6 @@ identifier::behavior identifier::make(stateful_pointer self, caf::actor store,
               VAST_ERROR_AT(self, "failed to save local ID state");
             }
           },
-          [=](error const& e) {
-            VAST_ERROR_AT(self, "got error:", e);
-            VAST_ERROR_AT(self, "failed to obtain", n, "new IDs:");
-            self->quit(exit::error);
-          },
-          quit_on_others(self)
         );
       }
       return rp;
@@ -135,4 +131,5 @@ identifier::behavior identifier::make(stateful_pointer self, caf::actor store,
   };
 }
 
+} // namespace system
 } // namespace vast

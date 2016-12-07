@@ -2,9 +2,16 @@
 #include <csignal>
 #include <cstdlib>
 
-#include "vast/actor/signal_monitor.hpp"
+#include <caf/all.hpp>
+
+#include "vast/logger.hpp"
+
+#include "vast/system/signal_monitor.hpp"
+
+using namespace caf;
 
 namespace vast {
+namespace system {
 namespace {
 
 // Keeps track of all signals 1--31 (0 unused).
@@ -20,15 +27,13 @@ extern "C" void signal_handler(int sig) {
 
 } // namespace <anonymous>
 
-signal_monitor::state::state(local_actor* self)
-  : basic_state{self, "signal-monitor"} {
-}
-
-signal_monitor::behavior signal_monitor::make(stateful_pointer self,
-                                              actor receiver) {
-  VAST_DEBUG_AT(self, "sends signals to", receiver);
+signal_monitor_type::behavior_type
+signal_monitor(signal_monitor_type::stateful_pointer<signal_monitor_state> self,
+               std::chrono::milliseconds monitoring_interval,
+               actor receiver) {
+  VAST_DEBUG(self, "sends signals to", receiver);
   for (auto s : {SIGHUP, SIGINT, SIGQUIT, SIGTERM, SIGUSR1, SIGUSR2}) {
-    VAST_DEBUG_AT(self, "registers signal handler for", ::strsignal(s));
+    VAST_DEBUG(self, "registers signal handler for", ::strsignal(s));
     std::signal(s, &signal_handler);
   }
   self->send(self, run_atom::value);
@@ -36,15 +41,15 @@ signal_monitor::behavior signal_monitor::make(stateful_pointer self,
     [=](run_atom) {
       for (int i = 0; i < 32; ++i) {
         if (signals[i]) {
-          VAST_DEBUG_AT(self, "caught signal", ::strsignal(i));
+          VAST_DEBUG(self, "caught signal", ::strsignal(i));
           signals[i] = false;
-          self->send(receiver, signal_atom::value, i);
+          self->anon_send(receiver, signal_atom::value, i);
         }
       }
-      self->delayed_send(self, std::chrono::milliseconds(100),
-                         self->current_message());
+      self->delayed_send(self, monitoring_interval, run_atom::value);
     }
   };
 }
 
+} // namespace system
 } // namespace vast

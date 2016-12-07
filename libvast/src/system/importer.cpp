@@ -1,63 +1,53 @@
-#include "vast/event.hpp"
-#include "vast/actor/atoms.hpp"
-#include "vast/actor/importer.hpp"
 #include "vast/concept/printable/vast/error.hpp"
+#include "vast/logger.hpp"
+
+#include "vast/system/atoms.hpp"
+#include "vast/system/importer.hpp"
+
+using namespace caf;
 
 namespace vast {
+namespace system {
 
-importer::state::state(event_based_actor* self)
-  : basic_state{self, "importer"} {
-}
-
-behavior importer::make(stateful_actor<state>* self) {
-  auto dependencies_alive = [=] {
-    if (self->state.identifier == invalid_actor) {
-      VAST_ERROR_AT(self, "has no identifier configured");
-      self->quit(exit::error);
-      return false;
-    }
-    if (!self->state.archive) {
-      VAST_ERROR_AT(self, "has no archive configured");
-      self->quit(exit::error);
-      return false;
-    }
-    if (self->state.index == invalid_actor) {
-      VAST_ERROR_AT(self, "has no index configured");
-      self->quit(exit::error);
-      return false;
-    }
-    return true;
-  };
-  self->trap_exit(true);
+behavior importer(stateful_actor<importer_state>* self) {
   return {
-    downgrade_exit_msg(self),
     [=](down_msg const& msg) {
       if (msg.source == self->state.identifier)
-        self->state.identifier = invalid_actor;
+        self->state.identifier = {};
       else if (msg.source == self->state.archive)
-        self->state.archive = {};
+        self->state.archive = archive_type{};
       else if (msg.source == self->state.index)
-        self->state.index = invalid_actor;
+        self->state.index = {};
     },
     [=](put_atom, identifier_atom, actor const& a) {
-      VAST_DEBUG_AT(self, "registers identifier", a);
+      VAST_DEBUG(self, "registers identifier");
       self->monitor(a);
       self->state.identifier = a;
     },
-    [=](archive::type const& a) {
-      VAST_DEBUG_AT(self, "registers archive#" << a->id());
+    [=](archive_type const& a) {
+      VAST_DEBUG(self, "registers archive");
       self->monitor(a);
       self->state.archive = a;
     },
     [=](put_atom, index_atom, actor const& a) {
-      VAST_DEBUG_AT(self, "registers index", a);
+      VAST_DEBUG(self, "registers index", a);
       self->monitor(a);
       self->state.index = a;
     },
     [=](std::vector<event>& events) {
-      VAST_DEBUG_AT(self, "got", events.size(), "events");
-      if (! dependencies_alive())
+      VAST_DEBUG(self, "got", events.size(), "events");
+      if (!self->state.identifier) {
+        self->quit(make_error(ec::unspecified, "no identifier configured"));
         return;
+      }
+      if (!self->state.archive) {
+        self->quit(make_error(ec::unspecified, "no archive configured"));
+        return;
+      }
+      if (!self->state.index) {
+        self->quit(make_error(ec::unspecified, "no index configured"));
+        return;
+      }
       event_id needed = events.size();
       self->state.batch = std::move(events);
       self->send(self->state.identifier, request_atom::value, needed);
@@ -66,7 +56,7 @@ behavior importer::make(stateful_actor<state>* self) {
         [=](id_atom, event_id from, event_id to)  {
           auto n = to - from;
           self->state.got += n;
-          VAST_DEBUG_AT(self, "got", n, "IDs [" << from << "," << to << ")");
+          VAST_DEBUG(self, "got", n, "IDs [" << from << "," << to << ")");
           for (auto i = 0u; i < n; ++i)
             self->state.batch[i].id(from++);
           if (self->state.got < needed) {
@@ -79,32 +69,30 @@ behavior importer::make(stateful_actor<state>* self) {
               self->state.batch.resize(n);
               auto msg = make_message(std::move(self->state.batch));
               // FIXME: how to make this type-safe?
-              self->send(actor_cast<actor>(self->state.archive), msg);
+              auto archive = actor_cast<actor>(self->state.archive);
+              self->send(archive, msg);
               self->send(self->state.index, msg);
               self->state.batch = std::move(remainder);
             }
-            VAST_VERBOSE_AT(self, "asks for more IDs: got", self->state.got,
-                            "so far, still need", needed - self->state.got);
+            VAST_DEBUG(self, "asks for more IDs: got", self->state.got,
+                       "so far, still need", needed - self->state.got);
             self->send(self->state.identifier, request_atom::value,
                        needed - self->state.got);
           } else {
             // Ship the batch directly if we got enough IDs.
             auto msg = make_message(std::move(self->state.batch));
             // FIXME: how to make this type-safe?
-            self->send(actor_cast<actor>(self->state.archive), msg);
+            auto archive = actor_cast<actor>(self->state.archive);
+            self->send(archive, msg);
             self->send(self->state.index, msg);
             self->state.got = 0;
             self->unbecome();
           }
-        },
-        [=](error const& e) {
-          VAST_ERROR_AT(self, e);
-          self->quit(exit::error);
         }
       );
-    },
-    log_others(self)
+    }
   };
 }
 
+} // namespace system
 } // namespace vast

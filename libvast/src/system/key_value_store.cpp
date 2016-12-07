@@ -4,18 +4,18 @@
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
 #include "vast/none.hpp"
-#include "vast/actor/atoms.hpp"
-#include "vast/actor/key_value_store.hpp"
 #include "vast/concept/printable/vast/error.hpp"
 #include "vast/concept/printable/vast/filesystem.hpp"
 #include "vast/concept/serializable/io.hpp"
 #include "vast/concept/serializable/caf/message.hpp"
 
-namespace vast {
+#include "vast/system/atoms.hpp"
+#include "vast/system/key_value_store.hpp"
 
-key_value_store::state::state(local_actor* self)
-  : basic_state{self, "key-value-store"} {
-}
+using namespace caf;
+
+namespace vast {
+namespace system {
 
 behavior key_value_store::make(stateful_actor<state>* self, path dir) {
   auto update = [=](std::string const& key, message const& value) {
@@ -325,10 +325,10 @@ behavior key_value_store::make(stateful_actor<state>* self, path dir) {
     [=](persist_atom, std::string const& key) {
       VAST_DEBUG_AT(self, "marks key as persistent:", key);
       self->state.persistent[key] = {};
-    },
-    log_others(self)
+    }
   };
   return following;
 }
 
+} // namespace system
 } // namespace vast
