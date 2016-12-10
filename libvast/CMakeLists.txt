@@ -50,12 +50,12 @@ set(libvast_sources
   src/system/accountant.cpp
   src/system/archive.cpp
   src/system/configuration.cpp
+  src/system/consensus.cpp
   #src/system/exporter.cpp
   src/system/importer.cpp
   #src/system/identifier.cpp
   #src/system/index.cpp
   src/system/indexer.cpp
-  #src/system/key_value_store.cpp
   #src/system/node.cpp
   src/system/partition.cpp
   src/system/profiler.cpp
@@ -198,12 +198,14 @@ set(tests
   test/variant.cpp
   test/word.cpp
   test/system/archive.cpp
+  test/system/consensus.cpp
   #test/system/export.cpp
   #test/system/import.cpp
   #test/system/index.cpp
   test/system/indexer.cpp
-  #test/system/key_value_store.cpp
+  test/system/key_value_store.cpp
   test/system/partition.cpp
+  test/system/replicated_store.cpp
   test/system/sink.cpp
   test/system/source.cpp
   test/system/task.cpp

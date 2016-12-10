@@ -5,6 +5,7 @@
 
 #include "vast/filesystem.hpp"
 
+#include "vast/system/atoms.hpp"
 #include "vast/system/configuration.hpp"
 #include "vast/system/profiler.hpp"
 

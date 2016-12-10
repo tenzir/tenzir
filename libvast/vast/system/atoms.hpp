@@ -31,6 +31,7 @@ using empty_atom = caf::atom_constant<caf::atom("empty")>;
 using enable_atom = caf::atom_constant<caf::atom("enable")>;
 using exists_atom = caf::atom_constant<caf::atom("exists")>;
 using extract_atom = caf::atom_constant<caf::atom("extract")>;
+using heartbeat_atom = caf::atom_constant<caf::atom("heartbeat")>;
 using heap_atom = caf::atom_constant<caf::atom("heap")>;
 using historical_atom = caf::atom_constant<caf::atom("historical")>;
 using id_atom = caf::atom_constant<caf::atom("id")>;
@@ -69,11 +70,8 @@ using value_atom = caf::atom_constant<caf::atom("value")>;
 using write_atom = caf::atom_constant<caf::atom("write")>;
 
 // Actor roles
-using actor_atom = caf::atom_constant<caf::atom("actor")>;
 using accountant_atom = caf::atom_constant<caf::atom("accountant")>;
 using candidate_atom = caf::atom_constant<caf::atom("candidate")>;
-using controller_atom = caf::atom_constant<caf::atom("controller")>;
-using deflector_atom = caf::atom_constant<caf::atom("deflector")>;
 using identifier_atom = caf::atom_constant<caf::atom("identifier")>;
 using index_atom = caf::atom_constant<caf::atom("index")>;
 using follower_atom = caf::atom_constant<caf::atom("follower")>;
@@ -85,9 +83,6 @@ using subscriber_atom = caf::atom_constant<caf::atom("subscriber")>;
 using supervisor_atom = caf::atom_constant<caf::atom("supervisor")>;
 using search_atom = caf::atom_constant<caf::atom("search")>;
 using tracker_atom = caf::atom_constant<caf::atom("tracker")>;
-using upstream_atom = caf::atom_constant<caf::atom("upstream")>;
-using worker_atom = caf::atom_constant<caf::atom("worker")>;
-using workers_atom = caf::atom_constant<caf::atom("workers")>;
 
 } // namespace system
 } // namespace vast
