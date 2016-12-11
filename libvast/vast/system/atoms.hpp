@@ -27,6 +27,7 @@ using data_atom = caf::atom_constant<caf::atom("data")>;
 using disable_atom = caf::atom_constant<caf::atom("disable")>;
 using disconnect_atom = caf::atom_constant<caf::atom("disconnect")>;
 using done_atom = caf::atom_constant<caf::atom("done")>;
+using election_atom = caf::atom_constant<caf::atom("election")>;
 using empty_atom = caf::atom_constant<caf::atom("empty")>;
 using enable_atom = caf::atom_constant<caf::atom("enable")>;
 using exists_atom = caf::atom_constant<caf::atom("exists")>;

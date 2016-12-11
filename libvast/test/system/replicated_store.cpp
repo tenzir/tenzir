@@ -14,8 +14,6 @@ using namespace vast::system;
 FIXTURE_SCOPE(consensus_tests, fixtures::consensus)
 
 TEST(replicated store) {
-  MESSAGE("performing election");
-  self->send(server1, leader_atom::value);
   MESSAGE("operating with a replicated store");
   auto store = self->spawn(replicated_store<int, int>, server1, timeout);
   self->request(store, timeout, put_atom::value, 42, 4711).receive(

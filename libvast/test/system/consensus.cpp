@@ -16,12 +16,13 @@ using namespace vast::system;
 FIXTURE_SCOPE(leader_tests, fixtures::actor_system)
 
 TEST(single leader) {
-  auto timeout = std::chrono::seconds(3);
   auto config = raft::configuration{{"id", "1"}};
   auto consensus = self->spawn(raft::consensus, config);
-  self->send(consensus, leader_atom::value); // manual election
   MESSAGE("send two logs to leader");
   auto cmd = make_message(put_atom::value, "foo", 42);
+  MESSAGE("sleeping until leader got elected");
+  std::this_thread::sleep_for(raft::election_timeout * 2);
+  auto timeout = std::chrono::seconds(3);
   self->request(consensus, timeout, replicate_atom::value, cmd).receive(
     [&](ok_atom, raft::index_type i) {
       CHECK_EQUAL(i, 1u);
@@ -43,8 +44,6 @@ FIXTURE_SCOPE_END()
 FIXTURE_SCOPE(consensus_tests, fixtures::consensus)
 
 TEST(basic operations) {
-  MESSAGE("performing election");
-  self->send(server1, leader_atom::value);
   MESSAGE("submitting command change through leader");
   auto cmd = make_message(put_atom::value, "foo", 42);
   self->request(server1, timeout, replicate_atom::value, cmd).receive(
@@ -53,7 +52,6 @@ TEST(basic operations) {
     },
     error_handler()
   );
-  std::this_thread::sleep_for(std::chrono::seconds(1));
   shutdown();
 }
 

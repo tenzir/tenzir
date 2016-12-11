@@ -4,6 +4,7 @@
 #include <chrono>
 #include <cstdint>
 #include <deque>
+#include <random>
 #include <vector>
 #include <unordered_map>
 
@@ -16,6 +17,9 @@ namespace system {
 
 /// The Raft consensus algorithm.
 namespace raft {
+
+/// The clock type for timeouts.
+using clock = std::chrono::steady_clock;
 
 /// The election timeout.
 constexpr auto election_timeout = std::chrono::milliseconds(500);
@@ -47,6 +51,64 @@ struct log_entry {
 template <class Inspector>
 auto inspect(Inspector& f, log_entry& e) {
   return f(e.term, e.index, e.data);
+};
+
+// TODO: move to namespace detail
+/// The interface to a Raft log, i.e., a sequence of log entries accessed
+/// through indexes as defined in Raft. In particular, the first entry has
+/// index 1. Index 0 is invalid.
+class log_type {
+public:
+  using container_type = std::deque<log_entry>;
+  using size_type = index_type;
+  using value_type = log_entry;
+
+  /// Retrieves the last index in the log.
+  /// @returns The last log index.
+  index_type last_index() const;
+
+  /// Truncate all entries *after* a given index.
+  /// @param index The index to truncate after.
+  /// @returns The number of entries truncated.
+  size_type truncate_after(size_type index);
+
+  // -- container API --
+
+  using iterator = container_type::iterator;
+  using const_iterator = container_type::iterator;
+
+  iterator begin();
+  iterator end();
+
+  /// Retrieves the number of entries in the log.
+  /// @returns The number of the log entries.
+  size_type size() const;
+
+  /// Checks whether the log has no entries.
+  /// @returns `true` iff the log has no entries.
+  bool empty() const;
+
+  /// Access the first entry.
+  /// @returns A reference to the first entry in the log.
+  /// @pre `!empty()`
+  log_entry& front();
+
+  /// Access the last entry.
+  /// @returns A reference to the first last in the log.
+  /// @pre `!empty()`
+  log_entry& back();
+
+  /// Accesses a log entry at a given index.
+  /// @param i The index of the entry.
+  /// @pre i > 0
+  log_entry& operator[](size_type i);
+
+  /// Appends an entry to the log.
+  /// @param x The entry to append to the log.
+  void push_back(const value_type& x);
+
+private:
+  container_type container_;
 };
 
 // -- RPC/message types -------------------------------------------------------
@@ -135,54 +197,6 @@ auto inspect(Inspector& f, install_snapshot::response& r) {
 
 // -- actor state -------------------------------------------------------------
 
-// TODO: move to namespace detail
-/// The interface to a Raft log, i.e., a sequence of log entries accessed
-/// through indexes as defined in Raft. In particular, the first entry has
-/// index 1. Index 0 is invalid.
-class log_type {
-public:
-  using container_type = std::deque<log_entry>;
-  using size_type = index_type;
-  using value_type = log_entry;
-
-  /// Retrieves the last index in the log.
-  /// @returns The last log index.
-  index_type last_index() const;
-
-  /// Truncate all entries *after* a given index.
-  /// @param index The index to truncate after.
-  /// @returns The number of entries truncated.
-  size_type truncate_after(size_type index);
-
-  // -- container API ---------------------------------------------------------
-
-  using iterator = container_type::iterator;
-  using const_iterator = container_type::iterator;
-
-  iterator begin();
-  iterator end();
-
-  /// Retrieves the number of entries in the log.
-  /// @returns The number of the log entries.
-  size_type size() const;
-
-  /// Checks whether the log has no entries.
-  /// @returns `true` iff the log has no entries.
-  bool empty() const;
-
-  /// Accesses a log entry at a given index.
-  /// @param i The index of the entry.
-  /// @pre i > 0
-  log_entry& operator[](size_type i);
-
-  /// Appends an entry to the log.
-  /// @param x The entry to append to the log.
-  void push_back(const value_type& x);
-
-private:
-  container_type container_;
-};
-
 /// The state a server maintains for each peer.
 struct peer_state {
   /// The peer ID.
@@ -197,6 +211,9 @@ struct peer_state {
 
   /// Index of the highest entry known to be replicated.
   index_type match_index = 0;
+
+  /// Flag that indicates whether we have a vote from this peer.
+  bool have_vote = false;
 };
 
 /// The state for the consensus module.
@@ -221,12 +238,13 @@ struct server_state {
   index_type commit_index = 0;
 
   /// Log index of last entry applied to state machine.
-  index_type last_applied = 0;
+  //index_type last_applied = 0;
 
   // -- volatile implementation details ---------------------------------------
 
-  // The different states of the state machine
+  // The different states of a server.
   caf::behavior following;
+  caf::behavior candidating;
   caf::behavior leading;
 
   // A handle to the leader, deduced from (accepted) AppendEntries messages.
@@ -237,6 +255,12 @@ struct server_state {
 
   // Flag that indicates whether we've kicked of the heartbeat loop.
   bool heartbeat_inflight = false;
+
+  // The point in time when a follower should hold an election.
+  clock::time_point election_time = clock::time_point::max();
+
+  // A PRNG to generate random election timeouts.
+  std::mt19937 prng;
 
   // Outstanding replication requests that have not yet been answered. Sorted
   // by log index and cleared as soon as commitIndex catches up.

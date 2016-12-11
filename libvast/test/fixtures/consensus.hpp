@@ -27,6 +27,8 @@ struct consensus : actor_system {
     self->send(server2, peer_atom::value, server3, raft::server_id{3});
     self->send(server3, peer_atom::value, server1, raft::server_id{2});
     self->send(server3, peer_atom::value, server2, raft::server_id{3});
+    MESSAGE("sleeping until leader got elected");
+    std::this_thread::sleep_for(raft::election_timeout * 2);
   }
 
   void shutdown() {
