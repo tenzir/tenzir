@@ -120,6 +120,8 @@ std::string role(Actor* self) {
   return result;
 }
 
+// Picks a election timeout uniformly at random from [T, T * 2], where T is the
+// configured election timeout.
 template <class Actor>
 auto random_timeout(Actor* self) {
   using timeout_type = decltype(election_timeout);
@@ -131,8 +133,6 @@ auto random_timeout(Actor* self) {
 
 template <class Actor>
 void reset_election_time(Actor* self) {
-  // Pick a election timeout uniformly at random from [T, T * 2], where T is
-  // the configured election timeout.
   auto timeout = random_timeout(self);
   VAST_DEBUG(role(self), "will start election in", timeout);
   self->state.election_time = clock::now() + timeout;
@@ -251,7 +251,7 @@ void advance_commit_index(Actor* self) {
   auto n = self->state.peers.size() + 1;
   std::vector<index_type> xs;
   xs.reserve(n);
-  xs.emplace_back(self->state.log.last_index()); // TODO: check
+  xs.emplace_back(self->state.log.last_index());
   for (auto& state : self->state.peers)
     xs.emplace_back(state.match_index);
   std::sort(xs.begin(), xs.end());

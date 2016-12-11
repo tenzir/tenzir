@@ -202,18 +202,17 @@ struct peer_state {
   /// The peer ID.
   server_id id = 0;
 
-  /// The peer handle. Activated if server is up and disabled when server is
-  /// down.
-  caf::actor peer;
-
   /// Index of the next entry to send.
   index_type next_index = 0;
 
   /// Index of the highest entry known to be replicated.
   index_type match_index = 0;
 
-  /// Flag that indicates whether we have a vote from this peer.
+  /// Indicates whether we have a vote from this peer.
   bool have_vote = false;
+
+  /// The actor handle ro the peer.
+  caf::actor peer;
 };
 
 /// The state for the consensus module.
