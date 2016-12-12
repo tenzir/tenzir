@@ -17,7 +17,7 @@ TEST(replicated store) {
   MESSAGE("operating with a replicated store");
   auto store = self->spawn(replicated_store<int, int>, server1, timeout);
   self->request(store, timeout, put_atom::value, 42, 4711).receive(
-    [&](ok_atom) { /* nop */ },
+    [](ok_atom) { /* nop */ },
     error_handler()
   );
   self->request(store, timeout, get_atom::value, 42).receive(
@@ -28,7 +28,9 @@ TEST(replicated store) {
     error_handler()
   );
   self->request(store, timeout, add_atom::value, 42, -511).receive(
-    [&](ok_atom) { /* nop */ },
+    [&](int old) {
+      CHECK_EQUAL(old, 4711);
+    },
     error_handler()
   );
   self->request(store, timeout, get_atom::value, 42).receive(
@@ -36,6 +38,10 @@ TEST(replicated store) {
       REQUIRE(i);
       CHECK_EQUAL(*i, 4200);
     },
+    error_handler()
+  );
+  self->request(store, timeout, delete_atom::value, 42).receive(
+    [](ok_atom) { /* nop */ },
     error_handler()
   );
   shutdown();

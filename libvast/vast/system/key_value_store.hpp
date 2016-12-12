@@ -20,8 +20,6 @@ template <class Key, class Value>
 using key_value_store_type = caf::typed_actor<
   // Updates the value of a specific key.
   typename caf::replies_to<put_atom, Key, Value>::template with<ok_atom>,
-  // Adds a value to a specific key.
-  typename caf::replies_to<add_atom, Key, Value>::template with<ok_atom>,
   // Adds a value to a specific key and returns old key.
   typename caf::replies_to<add_atom, Key, Value>::template with<Value>,
   // Deletes a key-value pair.
@@ -47,10 +45,6 @@ data_store(
   return {
     [=](put_atom, const Key& key, Value& value) {
       self->state.store[key] = std::move(value);
-      return ok_atom::value;
-    },
-    [=](add_atom, const Key& key, const Value& value) {
-      self->state.store[key] += value;
       return ok_atom::value;
     },
     [=](add_atom, const Key& key, const Value& value) -> caf::result<Value> {

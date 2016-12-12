@@ -53,17 +53,6 @@ replicated_store(
         }
       );
     },
-    [=](add_atom, const Key&, const Value&) {
-      return replicate(
-        self->template make_response_promise<ok_promise>(),
-        [=](raft::index_type, caf::message& msg) {
-          auto& key = msg.get_as<Key>(1);
-          auto& value = msg.get_as<Value>(2);
-          self->state.store[key] += value;
-          return ok_atom::value;
-        }
-      );
-    },
     [=](add_atom, const Key& key, const Value&) {
       auto old = self->state.store[key];
       return replicate(
