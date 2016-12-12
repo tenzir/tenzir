@@ -18,6 +18,14 @@ struct replicated_store_state {
 /// @param consensus The consensus module.
 /// @param store The actor handle.
 /// @param self The actor handle.
+// FIXME: The implementation currently does *not* guarantee linearizability.
+// Consider the case when the store crashes it has successfully submitted a log
+// entry to the consensus module but before returning to the client. The client
+// will then get an error and may try again, resulting in the same command
+// being applied twice.
+// The fix involves filtering out duplicate commands by associating unique
+// sequence numbers with client commands, turning at-least-once into
+// exactly-once semantics.
 template <class Key, class Value>
 typename key_value_store_type<Key, Value>::behavior_type
 replicated_store(
