@@ -43,6 +43,7 @@ set(libvast_sources
   src/detail/fdinbuf.cpp
   src/detail/fdostream.cpp
   src/detail/fdoutbuf.cpp
+  src/detail/mmapbuf.cpp
   src/detail/posix.cpp
   src/detail/string.cpp
   src/detail/system.cpp
