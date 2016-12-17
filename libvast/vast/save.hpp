@@ -7,7 +7,6 @@
 #include <type_traits>
 
 #include <caf/stream_serializer.hpp>
-#include <caf/stream_deserializer.hpp>
 
 #include "vast/compression.hpp"
 #include "vast/detail/compressedbuf.hpp"
@@ -43,6 +42,16 @@ auto save(Streambuf& streambuf, T&& x, Ts&&... xs)
     return make_error(ec::unspecified, e.what());
   }
   return {};
+}
+
+template <
+  compression Method = compression::null,
+  class T,
+  class... Ts
+>
+expected<void> save(std::ostream& os, T&& x, Ts&&... xs) {
+  auto sb = os.rdbuf();
+  return save<Method>(*sb, std::forward<T>(x), std::forward<Ts>(xs)...);
 }
 
 /// Serializes a sequence of objects into a container of bytes.

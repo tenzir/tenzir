@@ -6,8 +6,8 @@
 #include <streambuf>
 #include <type_traits>
 
-#include <caf/stream_serializer.hpp>
 #include <caf/stream_deserializer.hpp>
+#include <caf/streambuf.hpp>
 
 #include "vast/compression.hpp"
 #include "vast/detail/compressedbuf.hpp"
@@ -38,10 +38,20 @@ auto load(Streambuf& streambuf, T&& x, Ts&&... xs)
       caf::stream_deserializer<detail::compressedbuf&> s{compressed};
       detail::read(s, std::forward<T>(x), std::forward<Ts>(xs)...);
     }
-  } catch (std::runtime_error const& e) {
+  } catch (std::exception const& e) {
     return make_error(ec::unspecified, e.what());
   }
   return {};
+}
+
+template <
+  compression Method = compression::null,
+  class T,
+  class... Ts
+>
+expected<void> load(std::istream& is, T&& x, Ts&&... xs) {
+  auto sb = is.rdbuf();
+  return load<Method>(*sb, std::forward<T>(x), std::forward<Ts>(xs)...);
 }
 
 /// Deserializes a sequence of objects from a container of bytes.
