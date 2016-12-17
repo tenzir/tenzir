@@ -54,7 +54,7 @@ mmapbuf::int_type mmapbuf::underflow() {
 std::streamsize mmapbuf::xsgetn(char_type* s, std::streamsize n) {
   VAST_ASSERT(map_);
   n = std::min(n, egptr() - gptr());
-  std::memcpy(s, map_, n);
+  std::memcpy(s, gptr(), n);
   gbump(n);
   return n;
 }

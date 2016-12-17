@@ -180,6 +180,7 @@ set(tests
   test/key.cpp
   test/main.cpp
   test/maybe.cpp
+  test/mmapbuf.cpp
   test/offset.cpp
   test/parseable.cpp
   test/pattern.cpp
