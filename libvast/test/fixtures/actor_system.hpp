@@ -3,15 +3,15 @@
 
 #include <caf/all.hpp>
 
-#include "vast/filesystem.hpp"
-
 #include "vast/system/atoms.hpp"
 #include "vast/system/configuration.hpp"
 #include "vast/system/profiler.hpp"
 
+#include "fixtures/filesystem.hpp"
+
 namespace fixtures {
 
-struct actor_system {
+struct actor_system : filesystem {
   struct configuration : vast::system::configuration {
     configuration() {
       logger_filename = "vast-unit-test.log";
@@ -53,7 +53,6 @@ struct actor_system {
   caf::actor_system system;
   caf::scoped_actor self;
   caf::actor profiler;
-  vast::path directory = "vast-unit-test";
 };
 
 } // namespace fixtures

@@ -9,6 +9,7 @@ namespace system {
 
 template <class Key, class Value>
 struct replicated_store_state {
+  raft::index_type last_applied = 0;
   std::unordered_map<Key, Value> store;
   const char* name = "replicated-store";
 };
@@ -34,11 +35,13 @@ replicated_store(
   > self,
   caf::actor consensus,
   std::chrono::milliseconds timeout) {
-  // Wrapper function to interact with the consensus module.
+  // Send the current command/message to the consensus module, and once it has
+  // been replicated, we apply the command to the local state.
   auto replicate = [=](auto rp, auto apply) {
     auto msg = self->current_mailbox_element()->move_content_to_message();
     self->request(consensus, timeout, replicate_atom::value, msg).then(
       [=](ok_atom, raft::index_type index) mutable {
+        self->state.last_applied = index;
         rp.deliver(apply(index, msg));
       },
       [=](error& e) mutable {
