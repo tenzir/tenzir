@@ -16,46 +16,44 @@ CAF_ALLOW_UNSAFE_MESSAGE_TYPE(steady_clock::time_point)
 
 FIXTURE_SCOPE(partition_tests, fixtures::actor_system_and_events)
 
+namespace {
+
+auto issue_query = [](auto& self, auto& part) {
+  MESSAGE("sending query");
+  auto expr = to<expression>("string == \"SF\" && id.resp_p == 443/?");
+  REQUIRE(expr);
+  self->send(part, *expr, system::historical_atom::value);
+  bool done = false;
+  bitmap hits;
+  self->do_receive(
+    [&](expression const& e, bitmap const& bm, system::historical_atom) {
+      CHECK(*expr == e);
+      hits |= bm;
+    },
+    [&](system::done_atom, steady_clock::time_point, expression const& e) {
+      CHECK(*expr == e);
+      done = true;
+    }
+  ).until([&] { return done; });
+  CHECK_EQUAL(rank(hits), 38u);
+};
+
+} // namespace <anonymous>
+
 TEST(partition) {
   directory /= "partition";
   MESSAGE("ingesting conn.log");
   auto p = self->spawn<monitored>(system::partition, directory, self);
-  auto t = self->spawn<monitored>(
-    system::task<steady_clock::time_point, uint64_t>,
-    steady_clock::now(), bro_conn_log.size());
   schema sch;
   REQUIRE(sch.add(bro_conn_log[0].type()));
-  self->send(p, bro_conn_log, sch, t);
-  self->receive([&](down_msg const& msg) { CHECK(msg.source == t); });
+  self->send(p, bro_conn_log, sch);
   MESSAGE("ingesting http.log");
-  t = self->spawn<monitored>(system::task<steady_clock::time_point, uint64_t>,
-                             steady_clock::now(), bro_http_log.size());
   sch = {};
   REQUIRE(sch.add(bro_http_log[0].type()));
-  self->send(p, bro_http_log, sch, t);
-  self->receive([&](down_msg const& msg) { CHECK(msg.source == t); });
-  auto send_query = [&] {
-    MESSAGE("sending query");
-    auto expr = to<expression>("string == \"SF\" && id.resp_p == 443/?");
-    REQUIRE(expr);
-    self->send(p, *expr, system::historical_atom::value);
-    bool done = false;
-    bitmap hits;
-    self->do_receive(
-      [&](expression const& e, bitmap const& bm, system::historical_atom) {
-        CHECK(*expr == e);
-        hits |= bm;
-      },
-      [&](system::done_atom, steady_clock::time_point, expression const& e) {
-        CHECK(*expr == e);
-        done = true;
-      }
-    ).until([&] { return done; });
-    CHECK(rank(hits) == 38);
-  };
-  send_query();
+  self->send(p, bro_http_log, sch);
+  issue_query(self, p);
   MESSAGE("flushing to filesystem");
-  t = self->spawn<monitored>(system::task<>);
+  auto t = self->spawn<monitored>(system::task<>);
   self->send(t, p);
   self->send(p, flush_atom::value, t);
   self->receive(
@@ -63,10 +61,9 @@ TEST(partition) {
     error_handler()
   );
   REQUIRE(exists(directory));
-  REQUIRE(exists(directory / "0-8462" / "bro::conn" / "data" / "id" / "orig_h"));
+  REQUIRE(exists(directory / "0-8462" / "bro::conn" / "data" / "id" /"orig_h"));
   REQUIRE(exists(directory / "0-8462" / "bro::conn" / "meta" / "time"));
   MESSAGE("shutting down partition");
-  self->monitor(p);
   self->send(p, system::shutdown_atom::value);
   self->receive(
     [&](down_msg const& msg) { CHECK(msg.source == p); },
@@ -74,7 +71,12 @@ TEST(partition) {
   );
   MESSAGE("loading persistent state from file system");
   p = self->spawn<monitored>(system::partition, directory, self);
-  send_query();
+  issue_query(self, p);
+  self->send(p, system::shutdown_atom::value);
+  self->receive(
+    [&](down_msg const& msg) { CHECK(msg.source == p); },
+    error_handler()
+  );
   //MESSAGE("creating a continuous query");
   //expr = to<expression>("s ni \"7\"");
   //REQUIRE(expr);

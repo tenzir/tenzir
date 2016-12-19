@@ -1,6 +1,8 @@
 #ifndef VAST_QUERY_OPTIONS_HPP
 #define VAST_QUERY_OPTIONS_HPP
 
+#include <cstdint>
+
 namespace vast {
 
 /// Stores query options.

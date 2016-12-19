@@ -5,30 +5,77 @@
 #include <map>
 #include <unordered_map>
 
-#include "vast/bitstream.hpp"
+#include <caf/stateful_actor.hpp>
+
+#include "vast/bitmap.hpp"
 #include "vast/expression.hpp"
 #include "vast/filesystem.hpp"
 #include "vast/uuid.hpp"
 #include "vast/schema.hpp"
 #include "vast/time.hpp"
-#include "vast/actor/basic_state.hpp"
-#include "vast/actor/accountant.hpp"
-#include "vast/util/cache.hpp"
-#include "vast/util/flat_set.hpp"
+
+#include "vast/detail/cache.hpp"
+#include "vast/detail/flat_set.hpp"
+
+#include "vast/system/accountant.hpp"
 
 namespace vast {
+namespace system {
+
+struct schedule_state {
+  uuid part;
+  detail::flat_set<expression> queries;
+};
+
+struct continuous_query_state {
+  bitmap hits;
+  caf::actor task;
+};
+
+struct historical_query_state {
+  bitmap hits;
+  caf::actor task;
+  std::unordered_map<caf::actor_addr, uuid> parts;
+};
+
+struct index_query_state {
+  optional<continuous_query_state> cont;
+  optional<historical_query_state> hist;
+  detail::flat_set<caf::actor> subscribers;
+};
+
+struct index_partition_state {
+  timestamp last_modified;
+  vast::schema schema;
+  uint64_t events = 0;
+  // Our poor-man's version of a "meta index". To be factored into a separate
+  // actor in the future.
+  timestamp from = timestamp::max();
+  timestamp to = timestamp::min();
+};
+
+template <class Inspector>
+auto inspect(Inspector& f, index_partition_state& s) {
+  return f(s.last_modified, s.schema, s.events, s.from, s.to);
+}
+
+struct index_state {
+  std::list<schedule_state> schedule;
+  std::map<expression, index_query_state> queries;
+  std::unordered_map<uuid, index_partition_state> partitions;
+  caf::actor active;
+  uuid active_id;
+  detail::cache<uuid, caf::actor, detail::mru> passive;
+  accountant_type accountant;
+  path dir;
+  char const* name = "index";
+};
 
 /// Indexes chunks by scaling horizontally over multiple partitions.
 ///
 /// The index consists of multiple partitions. A partition loaded into memory is
 /// either *active* or *passive*. An active partition can still receive chunks
 /// whereas a passive partition is a sealed entity used only during querying.
-/// On startup, it will scan all existing partitions on the filesystem and load
-/// the k-most recent partitions into the active set, where k is configurable
-/// parameter.
-///
-/// Arriving chunks get load-balanced across the set of active partitions. If a
-/// partition becomes full, it will get evicted and replaced with a new one.
 ///
 /// A query expression always comes with a sink actor receiving the hits. The
 /// sink will receive messages in the following order:
@@ -39,63 +86,15 @@ namespace vast {
 ///
 /// After receiving the DONE atom the sink will not receive any further hits.
 /// This sequence applies both to continuous and historical queries.
-struct index {
-  using bitstream_type = default_bitstream;
+///
+/// @param dir The directory of the index.
+/// @param max_events The maximum number of events per partition.
+/// @param passive The maximum number of passive partitions in memory.
+/// @pre `max_events > 0 && passive > 0`
+caf::behavior index(caf::stateful_actor<index_state>* self, path const& dir,
+                    size_t max_events, size_t passive);
 
-  struct schedule_state {
-    uuid part;
-    util::flat_set<expression> queries;
-  };
-
-  struct partition_state {
-    time::point last_modified;
-    vast::schema schema;
-    uint64_t events = 0;
-    time::point from = time::duration{};
-    time::point to = time::duration{};
-  };
-
-  struct continuous_query_state {
-    bitstream_type hits;
-    actor task;
-  };
-
-  struct historical_query_state {
-    bitstream_type hits;
-    actor task;
-    std::map<actor_addr, uuid> parts;
-  };
-
-  struct query_state {
-    maybe<continuous_query_state> cont;
-    maybe<historical_query_state> hist;
-    util::flat_set<actor> subscribers;
-  };
-
-  struct state : basic_state {
-    state(local_actor* self);
-
-    path dir;
-    accountant::type accountant;
-    std::map<expression, query_state> queries;
-    std::unordered_map<uuid, partition_state> partitions;
-    std::list<schedule_state> schedule;
-    util::cache<uuid, actor, util::mru> passive;
-    std::vector<std::pair<uuid, actor>> active;
-    size_t next_active = 0;
-  };
-
-  /// Spawns the index.
-  /// @param dir The directory of the index.
-  /// @param max_events The maximum number of events per partition.
-  /// @param passive_parts The maximum number of passive partitions in memory.
-  /// @param active_parts The number of active partitions to hold in memory.
-  /// @pre `passive_parts > 0 && active_parts > 0`
-  static behavior make(stateful_actor<state>* self, path const& dir,
-                       size_t max_events, size_t passive_parts,
-                       size_t active_parts);
-};
-
+} // namespace system
 } // namespace vast
 
 #endif

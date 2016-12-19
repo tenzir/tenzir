@@ -58,31 +58,31 @@ behavior task(stateful_actor<task_state>* self, message done_msg) {
   );
   return {
     [=](actor const& a) {
-      VAST_DEBUG(self, "registers actor", a);
+      VAST_TRACE(self, "registers actor", a);
       self->monitor(a);
       if (++self->state.workers[a.address()] == 1)
         ++self->state.total;
     },
     [=](actor const& a, uint64_t n) {
-      VAST_DEBUG(self, "registers actor", a, "for", n, "sub-tasks");
+      VAST_TRACE(self, "registers actor", a, "for", n, "sub-tasks");
       self->monitor(a);
       self->state.workers[a.address()] += n;
       ++self->state.total;
     },
     [=](done_atom, actor_addr const& addr) {
-      VAST_DEBUG(self, "manually completed actor with address", addr);
+      VAST_TRACE(self, "manually completed actor with address", addr);
       complete(self, addr);
     },
     [=](done_atom) {
-      VAST_DEBUG(self, "completed actor", self->current_sender());
+      VAST_TRACE(self, "completed actor", self->current_sender());
       complete(self, actor_cast<actor_addr>(self->current_sender()));
     },
     [=](supervisor_atom, actor const& a) {
-      VAST_DEBUG(self, "notifies", a, "about task completion");
+      VAST_TRACE(self, "notifies actor", a, "about task completion");
       self->state.supervisors.insert(a);
     },
     [=](subscriber_atom, actor const& a) {
-      VAST_DEBUG(self, "notifies", a, "on task status change");
+      VAST_TRACE(self, "notifies actor", a, "on task status change");
       self->state.subscribers.insert(a);
     },
     [=](progress_atom) {

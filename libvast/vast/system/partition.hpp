@@ -24,7 +24,7 @@ struct predicate_state {
   detail::flat_set<expression const*> queries;
 };
 
-struct query_state {
+struct partition_query_state {
   caf::actor task;
   bitmap hits;
 };
@@ -35,7 +35,7 @@ struct partition_state {
   vast::schema schema;
   size_t pending_events = 0;
   std::multimap<event_id, caf::actor> indexers;
-  std::map<expression, query_state> queries;
+  std::map<expression, partition_query_state> queries;
   std::map<predicate, predicate_state> predicates;
   const char* name = "partition";
 };

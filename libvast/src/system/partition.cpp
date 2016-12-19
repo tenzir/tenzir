@@ -175,7 +175,7 @@ behavior partition(stateful_actor<partition_state>* self, path dir,
     }
     return save(dir / "schema", self->state.schema);
   };
-    // Handler executing after indexing a batch of events.
+  // Handler executing after indexing a batch of events.
   auto on_done = [=](done_atom, steady_clock::time_point start,
                      uint64_t events) {
     auto stop = steady_clock::now();
@@ -246,14 +246,16 @@ behavior partition(stateful_actor<partition_state>* self, path dir,
       VAST_DEBUG(self, "registers accountant#" << accountant->id());
       self->state.accountant = accountant;
     },
-    [=](std::vector<event> const& events, schema const& sch, actor task) {
+    [=](std::vector<event> const& events, schema const& sch) {
       VAST_ASSERT(!events.empty());
       auto first_id = events.front().id();
       auto last_id = events.back().id();
       auto n = events.size();
       VAST_DEBUG(self, "got", n,
                  "events [" << first_id << ',' << (last_id + 1) << ')');
-      self->send(task, supervisor_atom::value, self);
+      auto t = self->spawn(task<steady_clock::time_point, uint64_t>,
+                           steady_clock::now(), events.size());
+      self->send(t, supervisor_atom::value, self);
       // Merge new schema into the existing one.
       auto result = schema::merge(self->state.schema, sch);
       VAST_ASSERT(result);
@@ -269,11 +271,11 @@ behavior partition(stateful_actor<partition_state>* self, path dir,
         self->state.indexers.emplace(base, i);
         indexers.push_back(i);
       }
-      // Clip and forward current message to all indexers.
+      // Forward events to all indexers.
       auto msg = self->current_mailbox_element()->move_content_to_message();
-      msg = msg.take(1) + msg.take_right(1);
+      msg = msg.take(1) + make_message(t);
       for (auto indexer : indexers) {
-        self->send(task, indexer);
+        self->send(t, indexer);
         self->send(indexer, msg);
       }
       // Relay indexers to continuous query proxy.
@@ -300,7 +302,7 @@ behavior partition(stateful_actor<partition_state>* self, path dir,
     //},
     [=](expression const& expr, historical_atom) {
       VAST_DEBUG(self, "got historical query:", expr);
-      auto q = self->state.queries.emplace(expr, query_state{}).first;
+      auto q = self->state.queries.emplace(expr, partition_query_state{}).first;
       if (!q->second.task) {
         // Even if we still have evaluated this query in the past, we still
         // spin up a new task to ensure that we incorporate results from events
