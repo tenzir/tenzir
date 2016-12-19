@@ -19,6 +19,7 @@ using namespace vast;
 FIXTURE_SCOPE(indexer_tests, fixtures::actor_system_and_events)
 
 TEST(indexer) {
+  directory /= "indexer";
   const auto conn_log_type = bro_conn_log[0].type();
   auto i = self->spawn(system::event_indexer, directory, conn_log_type);
   auto t = self->spawn<monitored>(system::task<>);
