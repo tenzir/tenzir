@@ -559,7 +559,6 @@ make_install_snapshot(Actor* self, peer_state& peer) {
   auto got = peer.snapshot->sgetn(req.data.data(), req.data.size());
   if (got != static_cast<std::streamsize>(req.data.size()))
     return make_error(ec::filesystem_error, "incomplete chunk read");
-  req.data.resize(got);
   req.done = peer.snapshot->in_avail() == 0;
   return req;
 }
@@ -906,7 +905,7 @@ behavior consensus(stateful_actor<server_state>* self, path dir, server_id id) {
   };
   // -- follower --------------------------------------------------------------
   self->state.following = message_handler{
-    [=](append_entries::request& req) -> result<append_entries::response> {
+    [=](append_entries::request& req) {
       return handle_append_entries(self, req);
     },
     [=](request_vote::request& req) {
@@ -920,7 +919,7 @@ behavior consensus(stateful_actor<server_state>* self, path dir, server_id id) {
   }.or_else(common);
   // -- candidate -------------------------------------------------------------
   self->state.candidating = message_handler{
-    [=](append_entries::request& req) -> result<append_entries::response> {
+    [=](append_entries::request& req) {
       return handle_append_entries(self, req);
     },
     [=](request_vote::request& req) {
