@@ -203,6 +203,8 @@ archive(archive_type::stateful_pointer<archive_state> self,
       return rp;
     },
     [=](bitmap const& bm) -> lookup_promise {
+      VAST_DEBUG(self, "got query in range ["
+                 << select(bm, 1) << ',' << (select(bm, -1) + 1) << ')');
       auto rp = self->make_response_promise<lookup_promise>();
       // Collect candidate segments by seeking through the query bitmap and
       // probing each ID interval.
@@ -224,56 +226,59 @@ archive(archive_type::stateful_pointer<archive_state> self,
           ++i;
         }
       }
-      // If there are still bits left in the query bitmap, we look into the
-      // active segment as well.
-      std::vector<event> result;
-      if (ones) {
-        VAST_DEBUG(self, "looking into active segment");
-        auto xs = self->state.active.extract(bm);
-        if (!xs) {
-          rp.deliver(xs.error());
-          return rp;
-        }
-        result = std::move(*xs);
-      }
       // Process candidates *in reverse order* to get maximum LRU cache hits.
+      std::vector<event> result;
       VAST_DEBUG(self, "processing", candidates.size(), "candidates");
       for (auto c = candidates.rbegin(); c != candidates.rend(); ++c) {
-        auto s = self->state.cache.lookup(**c);
-        if (s) {
-          VAST_DEBUG(self, "got cache hit for segment", **c);
+        // If the segment turns out to be the active segment, we can
+        // can query it immediately.
+        if (*c == self->state.active.id()) {
+          VAST_DEBUG(self, "looking into active segment");
+          auto xs = self->state.active.extract(bm);
+          if (!xs) {
+            rp.deliver(xs.error());
+            return rp;
+          }
+          result = std::move(*xs);
         } else {
-          VAST_DEBUG(self, "got cache miss for segment", **c);
-          auto filename = self->state.dir / to_string(**c);
-          segment::magic_type m;
-          segment::version_type v;
-          segment seg;
-          auto result = load(filename, m, v, seg);
-          if (!result) {
-            rp.deliver(result.error());
+          // Otherwise we look into the cache.
+          auto s = self->state.cache.lookup(**c);
+          if (s) {
+            VAST_DEBUG(self, "got cache hit for segment", **c);
+          } else {
+            VAST_DEBUG(self, "got cache miss for segment", **c);
+            auto filename = self->state.dir / to_string(**c);
+            segment::magic_type m;
+            segment::version_type v;
+            segment seg;
+            auto result = load(filename, m, v, seg);
+            if (!result) {
+              rp.deliver(result.error());
+              return rp;
+            }
+            if (m != segment::magic) {
+              rp.deliver(make_error(ec::unspecified, "segment magic error"));
+              return rp;
+            }
+            if (v < segment::version) {
+              rp.deliver(make_error(ec::version_error, v, segment::version));
+              return rp;
+            }
+            self->state.cache.insert(**c, std::move(seg));
+            s = self->state.cache.lookup(**c);
+            VAST_ASSERT(s != nullptr);
+          }
+          // Perform lookup in segment and append extracted events to result.
+          auto xs = s->extract(bm);
+          if (!xs) {
+            rp.deliver(xs.error());
             return rp;
           }
-          if (m != segment::magic) {
-            rp.deliver(make_error(ec::unspecified, "segment magic error"));
-            return rp;
-          }
-          if (v < segment::version) {
-            rp.deliver(make_error(ec::version_error, v, segment::version));
-            return rp;
-          }
-          self->state.cache.insert(**c, std::move(seg));
-          s = self->state.cache.lookup(**c);
-          VAST_ASSERT(s != nullptr);
+          result.reserve(result.size() + xs->size());
+          std::move(xs->begin(), xs->end(), std::back_inserter(result));
         }
-        // Perform lookup in segment and append extracted events to result.
-        auto xs = s->extract(bm);
-        if (!xs) {
-          rp.deliver(xs.error());
-          return rp;
-        }
-        result.reserve(result.size() + xs->size());
-        std::move(xs->begin(), xs->end(), std::back_inserter(result));
       }
+      VAST_DEBUG(self, "delivers", result.size(), "events");
       rp.deliver(std::move(result));
       return rp;
     },
