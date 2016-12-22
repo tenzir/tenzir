@@ -230,19 +230,15 @@ archive(archive_type::stateful_pointer<archive_state> self,
       std::vector<event> result;
       VAST_DEBUG(self, "processing", candidates.size(), "candidates");
       for (auto c = candidates.rbegin(); c != candidates.rend(); ++c) {
+        segment* s;
         // If the segment turns out to be the active segment, we can
         // can query it immediately.
-        if (*c == self->state.active.id()) {
+        if (**c == self->state.active.id()) {
           VAST_DEBUG(self, "looking into active segment");
-          auto xs = self->state.active.extract(bm);
-          if (!xs) {
-            rp.deliver(xs.error());
-            return rp;
-          }
-          result = std::move(*xs);
+          s = &self->state.active;
         } else {
           // Otherwise we look into the cache.
-          auto s = self->state.cache.lookup(**c);
+          s = self->state.cache.lookup(**c);
           if (s) {
             VAST_DEBUG(self, "got cache hit for segment", **c);
           } else {
@@ -266,17 +262,18 @@ archive(archive_type::stateful_pointer<archive_state> self,
             }
             self->state.cache.insert(**c, std::move(seg));
             s = self->state.cache.lookup(**c);
-            VAST_ASSERT(s != nullptr);
           }
-          // Perform lookup in segment and append extracted events to result.
-          auto xs = s->extract(bm);
-          if (!xs) {
-            rp.deliver(xs.error());
-            return rp;
-          }
-          result.reserve(result.size() + xs->size());
-          std::move(xs->begin(), xs->end(), std::back_inserter(result));
         }
+        // Perform lookup in segment and append extracted events to result.
+        VAST_ASSERT(s != nullptr);
+        auto xs = s->extract(bm);
+        if (!xs) {
+          VAST_ERROR(self, self->system().render(xs.error()));
+          rp.deliver(xs.error());
+          return rp;
+        }
+        result.reserve(result.size() + xs->size());
+        std::move(xs->begin(), xs->end(), std::back_inserter(result));
       }
       VAST_DEBUG(self, "delivers", result.size(), "events");
       rp.deliver(std::move(result));
