@@ -52,7 +52,7 @@ set(libvast_sources
   src/system/archive.cpp
   src/system/configuration.cpp
   src/system/consensus.cpp
-  #src/system/exporter.cpp
+  src/system/exporter.cpp
   src/system/importer.cpp
   #src/system/identifier.cpp
   src/system/index.cpp
@@ -202,6 +202,7 @@ set(tests
   test/system/archive.cpp
   test/system/consensus.cpp
   #test/system/export.cpp
+  test/system/exporter.cpp
   #test/system/import.cpp
   test/system/index.cpp
   test/system/indexer.cpp
@@ -231,7 +232,7 @@ target_link_libraries(vast-test libvast ${CMAKE_THREAD_LIBS_INIT})
 macro(make_test suite)
   string(REPLACE " " "_" test_name ${suite})
   set(vast_test ${EXECUTABLE_OUTPUT_PATH}/vast-test)
-  add_test(${test_name} ${vast_test} -v 3 -s "${suite}" ${ARGN})
+  add_test(${test_name} ${vast_test} -v 3 -r 60 -s "^${suite}$" ${ARGN})
 endmacro()
 
 # Find all test suites.
