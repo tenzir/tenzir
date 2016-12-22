@@ -5,6 +5,7 @@
 
 #include "vast/expression.hpp"
 #include "vast/bitmap_algorithms.hpp"
+#include "vast/expected.hpp"
 #include "vast/maybe.hpp"
 #include "vast/none.hpp"
 #include "vast/operator.hpp"
@@ -88,16 +89,16 @@ struct time_restrictor {
 struct key_resolver {
   key_resolver(type const& t);
 
-  maybe<expression> operator()(none);
-  maybe<expression> operator()(conjunction const& c);
-  maybe<expression> operator()(disjunction const& d);
-  maybe<expression> operator()(negation const& n);
-  maybe<expression> operator()(predicate const& p);
-  maybe<expression> operator()(key_extractor const& e, data const& d);
-  maybe<expression> operator()(data const& d, key_extractor const& e);
+  expected<expression> operator()(none);
+  expected<expression> operator()(conjunction const& c);
+  expected<expression> operator()(disjunction const& d);
+  expected<expression> operator()(negation const& n);
+  expected<expression> operator()(predicate const& p);
+  expected<expression> operator()(key_extractor const& e, data const& d);
+  expected<expression> operator()(data const& d, key_extractor const& e);
 
   template <typename T, typename U>
-  maybe<expression> operator()(T const& lhs, U const& rhs) {
+  expected<expression> operator()(T const& lhs, U const& rhs) {
     return {predicate{lhs, op_, rhs}};
   }
 

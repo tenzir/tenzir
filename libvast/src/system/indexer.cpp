@@ -53,7 +53,6 @@ behavior value_indexer(stateful_actor<value_indexer_state>* self,
     }
   } else {
     // Construct a new index.
-    VAST_DEBUG(self, "constructs new index for type:", self->state.type);
     self->state.idx = value_index::make(self->state.type);
     if (!self->state.idx)
       self->quit(make_error(ec::unspecified, "failed to construct index"));
@@ -92,7 +91,7 @@ behavior value_indexer(stateful_actor<value_indexer_state>* self,
         self->quit(result.error());
     },
     [=](std::vector<event> const& events, actor const& task) {
-      VAST_DEBUG(self, "got", events.size(), "events");
+      VAST_TRACE(self, "got", events.size(), "events");
       for (auto& e : events) {
         VAST_ASSERT(e.id() != invalid_event_id);
         if (auto data = extract(e)) {
@@ -107,7 +106,7 @@ behavior value_indexer(stateful_actor<value_indexer_state>* self,
       self->send(task, done_atom::value);
     },
     [=](predicate const& pred, actor const& sink, actor const& task) {
-      VAST_DEBUG(self, "got predicate:", pred);
+      VAST_TRACE(self, "got predicate:", pred);
       auto result = self->state.idx->lookup(pred.op, get<data>(pred.rhs));
       if (result) {
         self->send(sink, pred, std::move(*result));
@@ -204,7 +203,9 @@ struct loader {
   result_type operator()(key_extractor const& ex, data const& x) {
     result_type result;
     VAST_ASSERT(!ex.key.empty());
-    // Interpret the key as a type.
+    // TODO: this branching logic is identical to the one used during index
+    // lookup in src/expression_visitors.cpp. We should factor it.
+    // First, try to interpret the key as a type.
     if (auto t = to<type>(ex.key[0])) {
       if (ex.key.size() == 1) {
         if (auto r = get_if<record_type>(self->state.event_type)) {
@@ -237,8 +238,8 @@ struct loader {
         // make sense, e.g., addr.count.vector<int>.
         VAST_WARNING(self, "got weird key:", ex.key);
       }
+    // Second, interpret the key as a suffix of a record field name.
     } else if (auto r = get_if<record_type>(self->state.event_type)) {
-      // Interpret the key as a suffix of a record field name.
       auto suffixes = r->find_suffix(ex.key);
       // All suffixes must pass the type check, otherwise the RHS of a
       // predicate would be ambiguous.
@@ -267,8 +268,8 @@ struct loader {
                                      *r->at(pair.first), pair.first);
         result.push_back(a);
       }
+    // Third, try to interpret the key as the name of a single type.
     } else if (ex.key[0] == self->state.event_type.name()) {
-      // Interpret the key as the name of a single type.
       if (!compatible(self->state.event_type, op, x)) {
           VAST_WARNING(self, "encountered type clash: ",
                        self->state.event_type, op, x);

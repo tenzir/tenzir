@@ -5,6 +5,7 @@
 #include "vast/concept/parseable/vast/type.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/data.hpp"
+#include "vast/concept/printable/vast/key.hpp"
 #include "vast/concept/printable/vast/type.hpp"
 #include "vast/data.hpp"
 #include "vast/detail/assert.hpp"
@@ -255,11 +256,11 @@ bool time_restrictor::operator()(predicate const& p) const {
 key_resolver::key_resolver(type const& t) : type_{t} {
 }
 
-maybe<expression> key_resolver::operator()(none) {
+expected<expression> key_resolver::operator()(none) {
   return expression{};
 }
 
-maybe<expression> key_resolver::operator()(conjunction const& c) {
+expected<expression> key_resolver::operator()(conjunction const& c) {
   conjunction result;
   for (auto& op : c) {
     auto r = visit(*this, op);
@@ -279,7 +280,7 @@ maybe<expression> key_resolver::operator()(conjunction const& c) {
     return {std::move(result)};
 }
 
-maybe<expression> key_resolver::operator()(disjunction const& d) {
+expected<expression> key_resolver::operator()(disjunction const& d) {
   disjunction result;
   for (auto& op : d) {
     auto r = visit(*this, op);
@@ -297,7 +298,7 @@ maybe<expression> key_resolver::operator()(disjunction const& d) {
 }
 
 
-maybe<expression> key_resolver::operator()(negation const& n) {
+expected<expression> key_resolver::operator()(negation const& n) {
   auto r = visit(*this, n.expr());
   if (!r)
     return r;
@@ -307,47 +308,70 @@ maybe<expression> key_resolver::operator()(negation const& n) {
     return expression{};
 }
 
-maybe<expression> key_resolver::operator()(predicate const& p) {
+expected<expression> key_resolver::operator()(predicate const& p) {
   op_ = p.op;
   return visit(*this, p.lhs, p.rhs);
 }
 
-maybe<expression> key_resolver::operator()(key_extractor const& e,
-                                           data const& d) {
+expected<expression> key_resolver::operator()(key_extractor const& ex,
+                                              data const& d) {
   disjunction dis;
-  auto r = get_if<record_type>(type_);
-  if (!r) {
-    // If we're not dealing with a record, the only possible match is a
-    // single-element key which represents the event name.
-    if (e.key.size() == 1 && type_.name() == e.key[0])
-      dis.emplace_back(predicate{data_extractor{type_, {}}, op_, d});
-  } else {
-    auto trace = r->find_suffix(e.key);
-    if (trace.size() > 1) {
-      // Make sure that all found keys resolve to arguments with the same type.
-      auto first_type = r->at(trace.front().first);
-      for (auto& p : trace)
-        if (!p.first.empty())
-          if (!congruent(*r->at(p.first), *first_type))
-            return make_error(ec::type_clash, type_, *r->at(p.first));
+  // TODO: this branching logic is identical to the one used during index
+  // lookup in src/system/indexer.cpp. We should factor it.
+  // First, try to interpret the key as a type.
+  if (auto t = to<type>(ex.key[0])) {
+    if (ex.key.size() == 1) {
+      if (auto r = get_if<record_type>(type_)) {
+        for (auto& f : record_type::each{*r}) {
+          auto& value_type = f.trace.back()->type;
+          if (congruent(value_type, *t)) {
+            auto x = data_extractor{type_, f.offset};
+            dis.emplace_back(predicate{std::move(x), op_, d});
+          }
+        }
+      } else if (congruent(type_, *t)) {
+        auto x = data_extractor{type_, offset{}};
+        dis.emplace_back(predicate{std::move(x), op_, d});
+      }
+    } else {
+      // Keys that look like types, but have more than one component don't
+      // make sense, e.g., addr.count.vector<int>.
+      return make_error(ec::unspecified, "weird key" + to_string(ex.key));
     }
-    // Add all offsets from the trace to the disjunction, which will
-    // eventually replace this node.
-    for (auto& p : trace)
-      dis.emplace_back(
-        predicate{data_extractor{type_, std::move(p.first)}, op_, d});
+  // Second, interpret the key as a suffix of a record field name.
+  } else if (auto r = get_if<record_type>(type_)) {
+    auto suffixes = r->find_suffix(ex.key);
+    // All suffixes must pass the type check, otherwise the RHS of a
+    // predicate would be ambiguous.
+    for (auto& pair : suffixes) {
+      auto t = r->at(pair.first);
+      VAST_ASSERT(t);
+      if (!compatible(*t, op_, d))
+        return make_error(ec::type_clash, *t, op_, d);
+    }
+    for (auto& pair : suffixes) {
+      auto x = data_extractor{type_, std::move(pair.first)};
+      dis.emplace_back(predicate{std::move(x), op_, d});
+    }
+  // Third, try to interpret the key as the name of a single type.
+  } else if (ex.key[0] == type_.name()) {
+    if (!compatible(type_, op_, d)) {
+      return make_error(ec::type_clash, type_, op_, d);
+    }
+    auto x = data_extractor{type_, {}};
+    dis.emplace_back(predicate{std::move(x), op_, d});
   }
   if (dis.empty())
-    return expression{};
+    return expression{}; // did not resolve
   else if (dis.size() == 1)
     return {std::move(dis[0])};
   else
     return {std::move(dis)};
 }
 
-maybe<expression> key_resolver::operator()(data const& d,
-                                           key_extractor const& e) {
-  return (*this)(e, d);
+expected<expression> key_resolver::operator()(data const& d,
+                                              key_extractor const& ex) {
+  return (*this)(ex, d);
 }
 
 

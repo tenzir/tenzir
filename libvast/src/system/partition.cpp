@@ -339,7 +339,7 @@ behavior partition(stateful_actor<partition_state>* self, path dir,
               // haven't asked yet.
               VAST_DEBUG(self, "relays predicate for base", base);
               while (i->first == base && i != self->state.indexers.end()) {
-                VAST_DEBUG(self, " - forwards predicate to", i->second);
+                VAST_DEBUG(self, " - forwards predicate to indexer", i->second);
                 p->second.cache.insert(i->first);
                 if (!p->second.task) {
                   p->second.task =
