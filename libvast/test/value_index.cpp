@@ -381,3 +381,43 @@ TEST(polymorphic) {
   MESSAGE("nil");
   REQUIRE(idx->push_back(nil));
 }
+
+// Attention
+// =========
+// !(x == 42) is no the same as x != 42 because nil values never participate in
+// a lookup. This may seem counter-intuitive first, but the rationale
+// comes from consistency. For x != 42 it may seem natural to include nil
+// values because they are not 42, but for <, <=, >=, > it becomes less clear:
+// should nil be less or great than any other value in the domain?
+TEST(polymorphic none values) {
+  auto idx = value_index::make(string_type{});
+  REQUIRE(idx->push_back(nil));
+  REQUIRE(idx->push_back("foo"));
+  REQUIRE(idx->push_back("foo"));
+  REQUIRE(idx->push_back(nil));
+  REQUIRE(idx->push_back(nil));
+  REQUIRE(idx->push_back(nil));
+  REQUIRE(idx->push_back("foo"));
+  REQUIRE(idx->push_back("bar"));
+  REQUIRE(idx->push_back("bar"));
+  REQUIRE(idx->push_back(nil));
+  REQUIRE(idx->push_back(nil));
+  REQUIRE(idx->push_back(nil));
+  REQUIRE(idx->push_back(nil));
+  REQUIRE(idx->push_back("foo"));
+  REQUIRE(idx->push_back("foo"));
+  REQUIRE(idx->push_back("foo"));
+  REQUIRE(idx->push_back("bar"));
+  REQUIRE(idx->push_back("bar"));
+  REQUIRE(idx->push_back("bar"));
+  REQUIRE(idx->push_back("foo"));
+  REQUIRE(idx->push_back("foo"));
+  REQUIRE(idx->push_back(nil));
+  REQUIRE(idx->push_back(nil));
+  auto bm = idx->lookup(equal, "foo");
+  REQUIRE(bm);
+  CHECK_EQUAL(to_string(*bm), "01100010000001110001100");
+  bm = idx->lookup(not_equal, "foo"); // NB: not same as !(x == 42)
+  REQUIRE(bm);
+  CHECK_EQUAL(to_string(*bm), "00000001100000001110000");
+}

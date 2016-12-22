@@ -19,12 +19,16 @@
 
 namespace vast {
 
-/// The base class for value indexes.
+/// An index for a ::value that supports appending and looking up values.
+/// @warning A lookup result does *not include* `nil` values, regardless of the
+/// relational operator. Include them requires performing an OR of the result
+/// and an explit query for nil, e.g., `x != 42 || x == nil`.
 class value_index {
 public:
   using size_type = typename bitmap::size_type;
 
   /// Constructs a value index from a given type.
+  /// @param t The type to construct a value index for.
   static std::unique_ptr<value_index> make(type const& t);
 
   /// Appends a data value.
@@ -38,7 +42,9 @@ public:
   /// @returns `true` if appending succeeded.
   expected<void> push_back(data const& x, event_id id);
 
-  /// Looks up data under a relational operator.
+  /// Looks up data under a relational operator. If the value to look up is
+  /// `nil`, only `==` and `!=` are valid operations. The concrete index
+  /// type determines validity of other values.
   /// @param op The relation operator.
   /// @param x The value to lookup.
   /// @returns The result of the lookup or an error upon failure.
@@ -62,11 +68,12 @@ protected:
   value_index() = default;
 
 private:
-  virtual bool push_back_impl(data const& x, event_id id) = 0;
+  virtual bool push_back_impl(data const& x, size_type skip) = 0;
 
   virtual expected<bitmap>
   lookup_impl(relational_operator op, data const& x) const = 0;
 
+  size_type nils_ = 0;
   ewah_bitmap mask_;
   ewah_bitmap none_;
 };
@@ -354,12 +361,10 @@ private:
         VAST_ASSERT(elements_[i]);
       }
     }
-    auto id = offset() + skip;
+    auto id = size_.size() + skip;
     auto x = c.begin();
-    for (auto i = 0u; i < seq_size; ++i) {
-      VAST_ASSERT(offset() >= elements_[i]->offset());
+    for (auto i = 0u; i < seq_size; ++i)
       elements_[i]->push_back(*x++, id);
-    }
     size_.push_back(seq_size, skip);
     return true;
   }

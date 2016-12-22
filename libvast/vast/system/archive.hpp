@@ -75,7 +75,7 @@ using archive_type = caf::typed_actor<
 /// @param self The actor handle.
 /// @param dir The root directory of the archive.
 /// @param capacity The number of segments to cache in memory.
-/// @param max_segment_size The maximum size in MB of a segment.
+/// @param max_segment_size The maximum segment size in bytes.
 /// @pre `max_segment_size > 0`
 archive_type::behavior_type
 archive(archive_type::stateful_pointer<archive_state> self, path dir,

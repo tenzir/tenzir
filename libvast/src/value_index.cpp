@@ -127,9 +127,11 @@ std::unique_ptr<value_index> value_index::make(type const& t) {
 expected<void> value_index::push_back(data const& x) {
   if (is<none>(x)) {
     none_.append_bit(true);
+    ++nils_;
   } else {
-    if (!push_back_impl(x, 0))
+    if (!push_back_impl(x, nils_))
       return make_error(ec::unspecified, "push_back_impl");
+    nils_ = 0;
     none_.append_bit(false);
   }
   mask_.append_bit(true);
@@ -147,9 +149,11 @@ expected<void> value_index::push_back(data const& x, event_id id) {
   if (is<none>(x)) {
     none_.append_bits(false, skip);
     none_.append_bit(true);
+    ++nils_;
   } else {
-    if (!push_back_impl(x, skip))
+    if (!push_back_impl(x, skip + nils_))
       return make_error(ec::unspecified, "push_back_impl");
+    nils_ = 0;
     none_.append_bits(false, skip + 1);
   }
   mask_.append_bits(false, skip);
@@ -167,7 +171,7 @@ value_index::lookup(relational_operator op, data const& x) const {
   auto result = lookup_impl(op, x);
   if (!result)
     return result;
-  return *result & mask_;
+  return (*result - none_) & mask_;
 }
 
 value_index::size_type value_index::offset() const {
@@ -198,8 +202,7 @@ bool string_index::push_back_impl(data const& x, size_type skip) {
   if (length > chars_.size())
     chars_.resize(length, char_bitmap_index{8});
   for (auto i = 0u; i < length; ++i) {
-    VAST_ASSERT(offset() >= chars_[i].size());
-    auto gap = offset() - chars_[i].size();
+    auto gap = length_.size() - chars_[i].size();
     chars_[i].push_back(static_cast<uint8_t>((*str)[i]), gap + skip);
   }
   length_.push_back(length, skip);
@@ -214,7 +217,6 @@ string_index::lookup_impl(relational_operator op, data const& x) const {
   auto str_size = str->size();
   if (str_size > max_length_)
     str_size = max_length_;
-  auto off = offset();
   switch (op) {
     default:
       return make_error(ec::unsupported_operator, op);
@@ -227,15 +229,15 @@ string_index::lookup_impl(relational_operator op, data const& x) const {
         return result;
       }
       if (str_size > chars_.size())
-        return bitmap{off, op == not_equal};
+        return bitmap{length_.size(), op == not_equal};
       auto result = length_.lookup(less_equal, str_size);
       if (all<0>(result))
-        return bitmap{off, op == not_equal};
+        return bitmap{length_.size(), op == not_equal};
       for (auto i = 0u; i < str_size; ++i) {
         auto b = chars_[i].lookup(equal, static_cast<uint8_t>((*str)[i]));
         result &= b;
         if (all<0>(result))
-          return bitmap{off, op == not_equal};
+          return bitmap{length_.size(), op == not_equal};
       }
       if (op == not_equal)
         result.flip();
@@ -244,13 +246,13 @@ string_index::lookup_impl(relational_operator op, data const& x) const {
     case ni:
     case not_ni: {
       if (str_size == 0)
-        return bitmap{off, op == ni};
+        return bitmap{length_.size(), op == ni};
       if (str_size > chars_.size())
-        return bitmap{off, op == not_ni};
+        return bitmap{length_.size(), op == not_ni};
       // TODO: Be more clever than iterating over all k-grams (#45).
-      bitmap result{off, false};
+      bitmap result{length_.size(), false};
       for (auto i = 0u; i < chars_.size() - str_size + 1; ++i) {
-        bitmap substr{off, 1};
+        bitmap substr{length_.size(), 1};
         auto skip = false;
         for (auto j = 0u; j < str_size; ++j) {
           auto bm = chars_[i + j].lookup(equal, (*str)[j]);
@@ -288,7 +290,7 @@ bool address_index::push_back_impl(data const& x, size_type skip) {
     v4_.push_back(true, skip);
   } else {
     for (auto i = 0; i < 16; ++i) {
-      auto gap = offset() - bytes_[i].size();
+      auto gap = v4_.size() - bytes_[i].size();
       bytes_[i].push_back(bytes[i], gap + skip);
     }
     v4_.push_back(false, skip);
@@ -298,17 +300,17 @@ bool address_index::push_back_impl(data const& x, size_type skip) {
 
 expected<bitmap>
 address_index::lookup_impl(relational_operator op, data const& x) const {
-  auto off = offset();
+  auto size = v4_.size();
   if (auto addr = get_if<address>(x)) {
     if (!(op == equal || op == not_equal))
       return make_error(ec::unsupported_operator, op);
     auto& bytes = addr->data();
-    auto result = addr->is_v4() ? v4_.coder().storage() : bitmap{off, true};
+    auto result = addr->is_v4() ? v4_.coder().storage() : bitmap{size, true};
     for (auto i = addr->is_v4() ? 12u : 0u; i < 16; ++i) {
       auto bm = bytes_[i].lookup(equal, bytes[i]);
       result &= bm;
       if (all<0>(result))
-        return bitmap{off, op == not_equal};
+        return bitmap{size, op == not_equal};
     }
     if (op == not_equal)
       result.flip();
@@ -324,7 +326,7 @@ address_index::lookup_impl(relational_operator op, data const& x) const {
     if ((is_v4 ? topk + 96 : topk) == 128)
       // Asking for /32 or /128 membership is equivalent to an equality lookup.
       return lookup_impl(op == in ? equal : not_equal, sn->network());
-    auto result = is_v4 ? v4_.coder().storage() : bitmap{off, true};
+    auto result = is_v4 ? v4_.coder().storage() : bitmap{size, true};
     auto& bytes = net.data();
     size_t i = is_v4 ? 12 : 0;
     for ( ; i < 16 && topk >= 8; ++i, topk -= 8)
@@ -349,7 +351,7 @@ void subnet_index::init() {
 bool subnet_index::push_back_impl(data const& x, size_type skip) {
   if (auto sn = get_if<subnet>(x)) {
     init();
-    auto id = offset() + skip;
+    auto id = length_.size() + skip;
     length_.push_back(sn->length(), skip);
     return !!network_.push_back(sn->network(), id);
   }
