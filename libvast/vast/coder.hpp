@@ -424,7 +424,7 @@ public:
   }
 
   auto decode(relational_operator op, value_type x) const {
-    return decode(coders_, op, x); // dispatch on coder_type
+    return coders_.empty() ? bitmap_type{} : decode(coders_, op, x);
   }
 
   void append(multi_level_coder const& other) {
@@ -434,7 +434,7 @@ public:
   }
 
   size_type size() const {
-    return coders_[0].size();
+    return coders_.empty() ? 0 : coders_[0].size();
   }
 
   auto& storage() const {
