@@ -15,6 +15,7 @@ const char* descriptions[] = {
   "format_error",
   "end_of_input",
   "version_error",
+  "syntax_error",
 };
 
 } // namespace <anonymous>

@@ -30,6 +30,8 @@ enum class ec : uint8_t {
   end_of_input,
   /// Encountered two incompatible versions.
   version_error,
+  /// A command does not adhere to the expected syntax.
+  syntax_error,
 };
 
 /// @relates ec
