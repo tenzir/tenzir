@@ -14,7 +14,8 @@ namespace vast {
 namespace system {
 namespace {
 
-// Keeps track of all signals 1--31 (0 unused).
+// Keeps track of all signals by their value from 1 to 31. The flag at index 0 
+// is used to tell whether a signal has been raised or not.
 bool signals[32];
 
 extern "C" void signal_handler(int sig) {
@@ -22,6 +23,7 @@ extern "C" void signal_handler(int sig) {
   // upon sending the signal a second time.
   if (sig == SIGINT || sig == SIGTERM)
     std::signal(sig, SIG_DFL);
+  signals[0] = true;
   signals[sig] = true;
 }
 
@@ -39,11 +41,14 @@ signal_monitor(signal_monitor_type::stateful_pointer<signal_monitor_state> self,
   self->send(self, run_atom::value);
   return {
     [=](run_atom) {
-      for (int i = 0; i < 32; ++i) {
-        if (signals[i]) {
-          VAST_DEBUG(self, "caught signal", ::strsignal(i));
-          signals[i] = false;
-          self->anon_send(receiver, signal_atom::value, i);
+      if (signals[0]) {
+        signals[0] = false;
+        for (int i = 1; i < 32; ++i) {
+          if (signals[i]) {
+            VAST_DEBUG(self, "caught signal", ::strsignal(i));
+            signals[i] = false;
+            self->anon_send(receiver, signal_atom::value, i);
+          }
         }
       }
       self->delayed_send(self, monitoring_interval, run_atom::value);
