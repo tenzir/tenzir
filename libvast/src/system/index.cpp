@@ -213,6 +213,42 @@ behavior index(stateful_actor<index_state>* self, path const& dir,
       }
     }
   );
+  self->set_exit_handler(
+    [=](const exit_msg& msg) {
+      auto n = std::make_shared<size_t>(0);
+      // Queries
+      for (auto& q : self->state.queries)
+        if (q.second.cont) {
+          self->monitor(q.second.cont->task);
+          self->send_exit(q.second.cont->task, msg.reason);
+          ++*n;
+        }
+        else if (q.second.hist) {
+          self->monitor(q.second.hist->task);
+          self->send_exit(q.second.hist->task, msg.reason);
+          ++*n;
+        }
+      // Partitions
+      if (self->state.active) {
+        self->send(self->state.active, shutdown_atom::value);
+        ++*n;
+      }
+      for (auto p : self->state.passive)
+        self->send(p.second, shutdown_atom::value);
+      *n += self->state.passive.size();
+      // Our own state.
+      flush(self);
+      if (*n == 0)
+        self->quit(msg.reason);
+      else
+        self->set_down_handler(
+          [=](const down_msg& down) {
+            if (--*n == 0)
+              self->quit(down.reason);
+          }
+        );
+    }
+  );
   return {
     [=](std::vector<event> const& events) {
       if (events.empty()) {
@@ -451,40 +487,6 @@ behavior index(stateful_actor<index_state>* self, path const& dir,
       if (self->state.active)
         self->send(self->state.active, acc);
     },
-    [=](shutdown_atom) {
-      auto n = std::make_shared<size_t>(0);
-      // Queries
-      for (auto& q : self->state.queries)
-        if (q.second.cont) {
-          self->monitor(q.second.cont->task);
-          self->send_exit(q.second.cont->task, exit_reason::user_shutdown);
-          ++*n;
-        }
-        else if (q.second.hist) {
-          self->monitor(q.second.hist->task);
-          self->send_exit(q.second.hist->task, exit_reason::user_shutdown);
-          ++*n;
-        }
-      // Partitions
-      if (self->state.active) {
-        self->send(self->state.active, shutdown_atom::value);
-        ++*n;
-      }
-      for (auto p : self->state.passive)
-        self->send(p.second, shutdown_atom::value);
-      *n += self->state.passive.size();
-      // Our own state.
-      flush(self);
-      if (*n == 0)
-        self->quit(exit_reason::user_shutdown);
-      else
-        self->set_down_handler(
-          [=](const down_msg&) {
-            if (--*n == 0)
-              self->quit(exit_reason::user_shutdown);
-          }
-        );
-    }
     //[=](schema_atom) {
     //  std::map<std::string, json::array> history;
     //  // Sort partition meta data in chronological order.

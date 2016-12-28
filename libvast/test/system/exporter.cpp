@@ -44,8 +44,8 @@ TEST(exporter) {
   CHECK_EQUAL(results.front().id(), 105u);
   CHECK_EQUAL(results.front().type().name(), "bro::conn");
   CHECK_EQUAL(results.back().id(), 8354u);
-  self->send(i, system::shutdown_atom::value);
-  self->send(a, system::shutdown_atom::value);
+  self->send_exit(i, exit_reason::user_shutdown);
+  self->send_exit(a, exit_reason::user_shutdown);
 }
 
 FIXTURE_SCOPE_END()

@@ -18,6 +18,7 @@
 using std::chrono::steady_clock;
 using std::chrono::duration_cast;
 using std::chrono::microseconds;
+using namespace caf;
 
 namespace vast {
 namespace system {
@@ -105,8 +106,8 @@ expected<void> flush_active_segment(Actor* self) {
   return {};
 }
 
-using flush_promise = caf::typed_response_promise<ok_atom>;
-using lookup_promise = caf::typed_response_promise<std::vector<event>>;
+using flush_promise = typed_response_promise<ok_atom>;
+using lookup_promise = typed_response_promise<std::vector<event>>;
 
 } // namespace <anonymous>
 
@@ -131,11 +132,13 @@ archive(archive_type::stateful_pointer<archive_state> self,
       self->quit(t.error());
     }
   }
-  return {
-    [=](shutdown_atom) {
+  self->set_exit_handler(
+    [=](const exit_msg& msg) {
       flush_active_segment(self);
-      self->quit(caf::exit_reason::user_shutdown);
-    },
+      self->quit(msg.reason);
+    }
+  );
+  return {
     [=](accountant_type const& acc) {
       VAST_DEBUG(self, "registers accountant#" << acc->id());
       self->state.accountant = acc;

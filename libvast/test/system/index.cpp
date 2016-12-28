@@ -59,7 +59,7 @@ TEST(index) {
   MESSAGE("issueing query against active partition");
   issue_query(self, idx, error_handler());
   MESSAGE("shutting down index");
-  self->send(idx, system::shutdown_atom::value);
+  self->send_exit(idx, exit_reason::user_shutdown);
   self->receive(
     [&](down_msg const& msg) { CHECK(msg.source == idx); },
     error_handler()
@@ -69,7 +69,7 @@ TEST(index) {
   MESSAGE("issueing query against passive partition");
   issue_query(self, idx, error_handler());
   MESSAGE("shutting down index");
-  self->send(idx, system::shutdown_atom::value);
+  self->send_exit(idx, exit_reason::user_shutdown);
   self->receive(
     [&](down_msg const& msg) { CHECK(msg.source == idx); },
     error_handler()

@@ -41,7 +41,7 @@ TEST(archiving and querying) {
   CHECK_EQUAL(result[50].id(), 10150u);
   CHECK_EQUAL(result[50].type().name(), "bro::dns");
   CHECK_EQUAL(result[result.size() - 1].id(), 10199u);
-  self->send(a, system::shutdown_atom::value);
+  self->send_exit(a, exit_reason::user_shutdown);
 }
 
 FIXTURE_SCOPE_END()
