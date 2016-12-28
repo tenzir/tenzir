@@ -5,15 +5,15 @@
 #include <type_traits>
 
 #include "vast/error.hpp"
-#include "vast/maybe.hpp"
+#include "vast/expected.hpp"
 #include "vast/concept/parseable/parse.hpp"
 
 namespace vast {
 
 template <typename To, typename Iterator>
 auto to(Iterator& f, Iterator const& l)
-  -> std::enable_if_t<is_parseable<Iterator, To>{}, maybe<To>> {
-  maybe<To> t{To{}};
+  -> std::enable_if_t<is_parseable<Iterator, To>{}, expected<To>> {
+  expected<To> t{To{}};
   if (!parse(f, l, *t))
     return make_error(ec::parse_error);
   return t;
@@ -22,7 +22,7 @@ auto to(Iterator& f, Iterator const& l)
 template <typename To, typename Range>
 auto to(Range&& rng)
   -> std::enable_if_t<
-       is_parseable<decltype(std::begin(rng)), To>{}, maybe<To>
+       is_parseable<decltype(std::begin(rng)), To>{}, expected<To>
      > {
   using std::begin;
   using std::end;
