@@ -123,6 +123,12 @@ namespace system {
 behavior partition(stateful_actor<partition_state>* self, path dir,
                    actor sink) {
   VAST_ASSERT(sink);
+  // Register the accountant, if available.
+  auto acc = self->system().registry().get(accountant_atom::value);
+  if (acc) {
+    VAST_DEBUG(self, "registers accountant", acc);
+    self->state.accountant = actor_cast<accountant_type>(acc);
+  }
   // If the directory exists already, we must have some state and are loading
   // all INDEXERs.
   // TODO: it's cheaper to load them on demand.
@@ -241,10 +247,6 @@ behavior partition(stateful_actor<partition_state>* self, path dir,
         );
       }
       flush();
-    },
-    [=](accountant_type const& accountant) {
-      VAST_DEBUG(self, "registers accountant#" << accountant->id());
-      self->state.accountant = accountant;
     },
     [=](std::vector<event> const& events, schema const& sch) {
       VAST_ASSERT(!events.empty());

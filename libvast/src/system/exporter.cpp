@@ -70,6 +70,12 @@ void complete(Actor* self) {
 
 behavior exporter(stateful_actor<exporter_state>* self, expression expr,
                   query_options opts) {
+  // Register the accountant, if available.
+  auto acc = self->system().registry().get(accountant_atom::value);
+  if (acc) {
+    VAST_DEBUG(self, "registers accountant", acc);
+    self->state.accountant = actor_cast<accountant_type>(acc);
+  }
   self->set_down_handler(
     [=](down_msg const& msg) {
       VAST_DEBUG("got DOWN from", msg.source);
@@ -177,10 +183,6 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
       VAST_ASSERT(self->state.sinks.count(sink) == 0);
       self->monitor(sink);
       self->state.sinks.insert(sink);
-    },
-    [=](accountant_type const& accountant) {
-      VAST_DEBUG(self, "registers accountant#" << accountant->id());
-      self->state.accountant = accountant;
     },
     [=](run_atom) {
       VAST_INFO(self, "executes query", expr);

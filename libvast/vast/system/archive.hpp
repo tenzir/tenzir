@@ -63,8 +63,6 @@ struct archive_state {
 };
 
 using archive_type = caf::typed_actor<
-  caf::reacts_to<shutdown_atom>,
-  caf::reacts_to<accountant_type>,
   caf::reacts_to<std::vector<event>>,
   caf::replies_to<flush_atom>::with<ok_atom>,
   caf::replies_to<bitmap>::with<std::vector<event>>

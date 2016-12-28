@@ -47,6 +47,12 @@ sink(caf::stateful_actor<sink_state<Writer>>* self, Writer&& writer) {
   using namespace std::chrono;
   self->state.writer = std::move(writer);
   self->state.last_flush = steady_clock::now();
+  // Register the accountant, if available.
+  auto acc = self->system().registry().get(accountant_atom::value);
+  if (acc) {
+    VAST_DEBUG(self, "registers accountant", acc);
+    self->state.accountant = actor_cast<accountant_type>(acc);
+  }
   return {
     [=](shutdown_atom) {
       self->quit(caf::exit_reason::user_shutdown);
@@ -58,10 +64,6 @@ sink(caf::stateful_actor<sink_state<Writer>>* self, Writer&& writer) {
       else
         VAST_WARNING(self, "ignores new limit of", max, "(already processed",
                      self->state.processed, " events)");
-    },
-    [=](accountant_type const& acc) {
-      VAST_DEBUG(self, "registers accountant", acc);
-      self->state.accountant = acc;
     },
     [=](std::vector<event> const& v) {
       for (auto& e : v) {

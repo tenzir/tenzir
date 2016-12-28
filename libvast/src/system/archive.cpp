@@ -138,11 +138,13 @@ archive(archive_type::stateful_pointer<archive_state> self,
       self->quit(msg.reason);
     }
   );
+  // Register the accountant, if available.
+  auto acc = self->system().registry().get(accountant_atom::value);
+  if (acc) {
+    VAST_DEBUG(self, "registers accountant", acc);
+    self->state.accountant = actor_cast<accountant_type>(acc);
+  }
   return {
-    [=](accountant_type const& acc) {
-      VAST_DEBUG(self, "registers accountant#" << acc->id());
-      self->state.accountant = acc;
-    },
     [=](std::vector<event> const& events) {
       VAST_ASSERT(!events.empty());
       // Ensure that all events have strictly monotonic IDs

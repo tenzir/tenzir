@@ -177,6 +177,12 @@ behavior index(stateful_actor<index_state>* self, path const& dir,
     auto p = self->spawn<monitored>(partition, part_dir, self);
     self->state.active = p;
   }
+  // Register the accountant, if available.
+  auto acc = self->system().registry().get(accountant_atom::value);
+  if (acc) {
+    VAST_DEBUG(self, "registers accountant", acc);
+    self->state.accountant = actor_cast<accountant_type>(acc);
+  }
   self->set_down_handler(
     [=](down_msg const& msg) {
       if (self->state.active == msg.source)
@@ -482,7 +488,6 @@ behavior index(stateful_actor<index_state>* self, path const& dir,
       return t;
     },
     [=](accountant_type const& acc) {
-      VAST_DEBUG(self, "registers accountant", acc);
       self->state.accountant = acc;
       if (self->state.active)
         self->send(self->state.active, acc);

@@ -62,6 +62,12 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader&& reader) {
       self->send(self->state.accountant, "source.end", now);
     }
   });
+  // Register the accountant, if available.
+  auto acc = self->system().registry().get(accountant_atom::value);
+  if (acc) {
+    VAST_DEBUG(self, "registers accountant", acc);
+    self->state.accountant = actor_cast<accountant_type>(acc);
+  }
   return {
     [=](shutdown_atom) {
       self->quit(caf::exit_reason::user_shutdown);
@@ -100,12 +106,7 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader&& reader) {
       self->monitor(sink);
       self->state.sink = sink;
     },
-    [=](accountant_type const& acc) {
-      VAST_DEBUG(self, "registers accountant", acc);
-      self->state.accountant = acc;
-    },
     [=](run_atom) {
-      // Tell the accountant
       if (self->state.accountant && self->current_sender() != self) {
         timestamp now = system_clock::now();
         self->send(self->state.accountant, "source.start", now);
