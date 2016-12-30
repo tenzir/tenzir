@@ -1,50 +1,35 @@
-#ifndef VAST_ACTOR_NODE_HPP
-#define VAST_ACTOR_NODE_HPP
+#ifndef VAST_SYSTEM_NODE_HPP
+#define VAST_SYSTEM_NODE_HPP
 
-#include <map>
 #include <string>
 
+#include "vast/data.hpp"
 #include "vast/filesystem.hpp"
-#include "vast/trial.hpp"
-#include "vast/actor/basic_state.hpp"
-#include "vast/actor/accountant.hpp"
-#include "vast/actor/key_value_store.hpp"
-#include "vast/util/system.hpp"
+
+#include "vast/system/key_value_store.hpp"
+#include "vast/system/tracker.hpp"
 
 namespace vast {
+namespace system {
 
-/// A container for all other actors of a VAST process.
-///
-/// Each node stores its meta data in a key-value store.
-///
-/// The key space has the following structure:
-///
-///   - /actors/<node>/<label>/{actor, type}
-///   - /peers/<node>/<node>
-///   - /topology/<source>/<sink>
-///
-struct node  {
-  struct state : basic_state {
-    state(local_actor* self);
+//using persistent_store = key_value_store_type<std::string, data>;
 
-    path dir;
-    std::string desc;
-    accountant::type accountant;
-    actor store;
-  };
-
-  /// Returns the path of the log directory relative to the base directory.
-  /// @returns The directory where to write log and status messages to.
-  static path const& log_path();
-
-  /// Spawns a node.
-  /// @param self The actor handle
-  /// @param name The name of the node.
-  /// @param dir The directory where to store persistent state.
-  static behavior make(stateful_actor<state>* self, std::string const& name,
-                       path const& dir);
+/// A container for VAST components.
+struct node_state {
+  path dir;
+  //persistent_store store;
+  tracker_type tracker;
+  std::string name = "node";
 };
 
+/// Spawns a node.
+/// @param self The actor handle
+/// @param name The name of the node.
+/// @param dir The directory where to store persistent state.
+caf::behavior node(caf::stateful_actor<node_state>* self, std::string name,
+                   path dir);
+
+} // namespace system
 } // namespace vast
 
 #endif

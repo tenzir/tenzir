@@ -57,11 +57,12 @@ set(libvast_sources
   #src/system/identifier.cpp
   src/system/index.cpp
   src/system/indexer.cpp
-  #src/system/node.cpp
+  src/system/node.cpp
   src/system/partition.cpp
   src/system/profiler.cpp
   src/system/signal_monitor.cpp
   src/system/task.cpp
+  src/system/tracker.cpp
   src/format/bgpdump.cpp
   src/format/bro.cpp
   src/format/test.cpp

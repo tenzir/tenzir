@@ -140,10 +140,8 @@ commands exist:
     *peer*          peers with another node
     *show*          shows various properties of a topology
     *spawn*         creates a new actor
-    *quit*          terminates an actor
+    *kill*          terminates an actor
     *send*          send a message to an actor
-    *connect*       connects two spawned actors
-    *disconnect*    disconnects two connected actors
     *import*        imports data from standard input
     *export*        exports query results to standard output
 
@@ -167,9 +165,6 @@ Available *arguments*:
       vast spawn importer
       vast spawn archive
       vast spawn index
-      vast connect importer identifier
-      vast connect importer archive
-      vast connect importer index
 
 `-f`
   Start in foreground, i.e., do not detach from controlling terminal and
@@ -242,7 +237,7 @@ Available *actor* values with corresponding *parameters*:
 
 *core*
   Spawns all *core* actors (i.e., ARCHIVE, INDEX, IDENTIFIER, IMPORTER) and
-  connects IMPORTER with them.
+  connects them.
 
 *archive* [*parameters*]
   `-c` *compression* [*lz4*]
@@ -265,8 +260,6 @@ Available *actor* values with corresponding *parameters*:
 *importer*
 
 *exporter* [*parameters*] *expression*
-  `-a`
-    Autoconnect to available archives and indexes on the node.
   `-c`
     Marks this exporter as *continuous*.
   `-h`
@@ -280,8 +273,6 @@ Available *actor* values with corresponding *parameters*:
 *source* **X** [*parameters*]
   **X** specifies the format of *source*. Each source format has its own set of
   parameters, but the following parameters apply to all formats:
-  `-a`
-    Autoconnect to available importers on the node.
   `-b` *batch-size* [*100,000*]
     Number of events to read in one batch.
 
@@ -362,11 +353,11 @@ Available *actor* values with corresponding *parameters*:
   `-r` *seconds* [*1*]
     The profiling resolution in seconds.
 
-### quit
+### kill
 
 Synopsis:
 
-  *quit* *name*
+  *kill* *name*
 
 Terminates an actor. The argument *name* refers to an actor label.
 
@@ -384,35 +375,10 @@ Available messages:
 *run*
   Tells an actor to start operating. Most actors do not need to be told to run
   explicitly. Only actors having a multi-stage setup phase (e.g., sources and
-  exporters) can be run explicitly: after spawning one connects them with other
-  actors before they run in a fully operating state.
+  exporters) can be run explicitly.
 
 *flush*
   Tells an actor to flush its state to the file system.
-
-### connect
-
-Synopsis:
-
-  *connect* *A* *B*
-
-Connects two actors named *A* and *B* by registering *A* as source for *B* and
-*B* as sink for *A*.
-
-Both *A* and *B* can consist of a comma-separated lists of actor labels. That
-is, if *A* consists of *n* list entries and *B* of *m*, then the number
-created connections equals to the cross product *n * m*.
-
-### disconnect
-
-Synopsis:
-
-  *disconnect* *A* *B*
-
-Removes a previously established connection between *A* and *B*.
-
-As in `connect`, Both *A* and *B* can consist of a comma-separated lists of
-actor labels.
 
 ### import
 
@@ -421,8 +387,8 @@ Synopsis:
   *import* *format* [*arguments*]
 
 Imports data in a specific *format* on standard input and send it to a node.
-This command is a shorthand for spawning a source locally and connecting it
-with an importer from a node.
+This command is a shorthand for spawning a source locally and connecting it to
+the given node's importer.
 All *arguments* get passed to *spawn source*.
 
 Note that *import* implicitly specifies *-a*, and *-r file* has no effect

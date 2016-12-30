@@ -252,8 +252,7 @@ add_subdirectory(aux)
 add_subdirectory(doc)
 add_subdirectory(libvast)
 add_subdirectory(tools)
-# FIXME: Bring back after having repaired CAF code.
-#add_subdirectory(vast)
+add_subdirectory(vast)
 
 #------------------------------------------------------------------------------
 #                                Build Summary
