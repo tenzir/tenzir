@@ -32,7 +32,7 @@ class json;
 
 namespace detail {
 
-template <typename T>
+template <class T>
 using make_data_type = std::conditional_t<
     std::is_floating_point<T>::value,
     real,
@@ -91,11 +91,12 @@ using data_variant = variant<
 } // namespace detail
 
 /// Converts a C++ type to the corresponding VAST data type.
-template <typename T>
+template <class T>
 using data_type = detail::make_data_type<std::decay_t<T>>;
 
 /// A type-erased represenation of various types of data.
-class data : detail::totally_ordered<data> {
+class data : detail::totally_ordered<data>,
+             detail::addable<data> {
   friend access;
 
 public:
@@ -117,8 +118,8 @@ public:
   /// Constructs data.
   /// @param x The instance to construct data from.
   template <
-    typename T,
-    typename = detail::disable_if_t<
+    class T,
+    class = detail::disable_if_t<
       detail::is_same_or_derived<data, T>::value
       || std::is_same<data_type<T>, std::false_type>::value
     >
@@ -126,6 +127,8 @@ public:
   data(T&& x)
     : data_(data_type<T>(std::forward<T>(x))) {
   }
+
+  data& operator+=(data const& rhs);
 
   friend bool operator==(data const& lhs, data const& rhs);
   friend bool operator<(data const& lhs, data const& rhs);
@@ -141,7 +144,7 @@ private:
   detail::data_variant data_;
 };
 
-//template <typename T>
+//template <class T>
 //using is_basic_data = std::integral_constant<
 //    bool,
 //    std::is_same<T, boolean>::value
@@ -157,7 +160,7 @@ private:
 //      || std::is_same<T, port>::value
 //  >;
 //
-//template <typename T>
+//template <class T>
 //using is_container_data = std::integral_constant<
 //    bool,
 //    std::is_same<T, vector>::value

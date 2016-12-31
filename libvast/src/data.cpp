@@ -5,30 +5,137 @@
 #include "vast/detail/assert.hpp"
 
 namespace vast {
-
-data::data(none) {
-}
-
-detail::data_variant& expose(data& d) {
-  return d.data_;
-}
-
-bool operator==(data const& lhs, data const& rhs) {
-  return lhs.data_ == rhs.data_;
-}
-
-bool operator<(data const& lhs, data const& rhs) {
-  return lhs.data_ < rhs.data_;
-}
-
 namespace {
+
+struct adder {
+  template <class T>
+  std::enable_if_t<
+    !(std::is_same<T, none>{}
+      || std::is_same<T, vector>{}
+      || std::is_same<T, set>{})
+  >
+  operator()(none, const T& x) const {
+    self = x;
+  }
+
+  void operator()(none, none) const {
+    // nop
+  }
+
+  template <class T>
+  std::enable_if_t<
+    !(std::is_same<T, vector>{} || std::is_same<T, set>{})
+      && (std::is_same<T, boolean>{}
+           || std::is_same<T, integer>{}
+           || std::is_same<T, count>{}
+           || std::is_same<T, real>{}
+           || std::is_same<T, timespan>{}
+           || std::is_same<T, std::string>{})
+  >
+  operator()(T& x, const T& y) const {
+    x += y;
+  }
+
+  template <class T, class U>
+  std::enable_if_t<
+    !(std::is_same<T, U>{} || std::is_same<T, vector>{}
+                           || std::is_same<T, set>{})
+      && (std::is_same<T, boolean>{}
+          || std::is_same<T, integer>{}
+          || std::is_same<T, count>{}
+          || std::is_same<T, real>{}
+          || std::is_same<T, timespan>{}
+          || std::is_same<T, std::string>{})
+  >
+  operator()(T&, const U&) const {
+    // impossible
+  }
+
+  void operator()(timestamp&, timestamp) const {
+    // impossible
+  }
+
+  void operator()(timestamp& ts, timespan x) const {
+    ts += x;
+  }
+
+  template <class T>
+  std::enable_if_t<
+    !(std::is_same<T, timestamp>{}
+      || std::is_same<T, timespan>{}
+      || std::is_same<T, vector>{}
+      || std::is_same<T, set>{})
+  >
+  operator()(timestamp&, const T&) const {
+    // impossible
+  }
+
+  template <class T, class U>
+  std::enable_if_t<
+    !(std::is_same<U, vector>{} || std::is_same<U, set>{})
+      && (std::is_same<T, pattern>{}
+          || std::is_same<T, address>{}
+          || std::is_same<T, subnet>{}
+          || std::is_same<T, port>{}
+          || std::is_same<T, enumeration>{}
+          || std::is_same<T, table>{})
+  >
+  operator()(T&, const U&) const {
+    // impossible
+  }
+
+  template <class T>
+  std::enable_if_t<
+    !(std::is_same<T, vector>{} || std::is_same<T, set>{})
+  >
+  operator()(vector& lhs, const T& rhs) const {
+    lhs.emplace_back(rhs);
+  }
+
+  void operator()(vector& lhs, const vector& rhs) const {
+    std::copy(rhs.begin(), rhs.end(), std::back_inserter(lhs));
+  }
+
+  template <class T>
+  std::enable_if_t<
+    !(std::is_same<T, vector>{} || std::is_same<T, set>{})
+  >
+  operator()(set& lhs, const T& rhs) const {
+    lhs.emplace(rhs);
+  }
+
+  void operator()(set& lhs, const set& rhs) const {
+    std::copy(rhs.begin(), rhs.end(), std::inserter(lhs, lhs.end()));
+  }
+
+  template <class T>
+  std::enable_if_t<!std::is_same<T, vector>{}>
+  operator()(T&, const vector& rhs) const {
+    vector v;
+    v.reserve(rhs.size() + 1);
+    v.push_back(std::move(self));
+    std::copy(rhs.begin(), rhs.end(), std::back_inserter(v));
+    self = std::move(v);
+  }
+
+  template <class T>
+  std::enable_if_t<!std::is_same<T, set>{}>
+  operator()(T&, const set& rhs) const {
+    set s;
+    s.insert(std::move(self));
+    std::copy(rhs.begin(), rhs.end(), std::inserter(s, s.end()));
+    self = std::move(s);
+  }
+
+  data& self;
+};
 
 struct match_visitor {
   bool operator()(std::string const& lhs, pattern const& rhs) const {
     return rhs.match(lhs);
   }
 
-  template <typename T, typename U>
+  template <class T, class U>
   bool operator()(T const&, U const&) const {
     return false;
   }
@@ -47,23 +154,43 @@ struct in_visitor {
     return rhs.contains(lhs);
   }
 
-  template <typename T>
+  template <class T>
   bool operator()(T const& lhs, set const& rhs) const {
     return std::find(rhs.begin(), rhs.end(), lhs) != rhs.end();
   }
 
-  template <typename T>
+  template <class T>
   bool operator()(T const& lhs, vector const& rhs) const {
     return std::find(rhs.begin(), rhs.end(), lhs) != rhs.end();
   }
 
-  template <typename T, typename U>
+  template <class T, class U>
   bool operator()(T const&, U const&) const {
     return false;
   }
 };
 
 } // namespace <anonymous>
+
+data::data(none) {
+}
+
+data& data::operator+=(data const& rhs) {
+  visit(adder{*this}, *this, rhs);
+  return *this;
+}
+
+detail::data_variant& expose(data& d) {
+  return d.data_;
+}
+
+bool operator==(data const& lhs, data const& rhs) {
+  return lhs.data_ == rhs.data_;
+}
+
+bool operator<(data const& lhs, data const& rhs) {
+  return lhs.data_ < rhs.data_;
+}
 
 bool evaluate(data const& lhs, relational_operator op, data const& rhs) {
   switch (op) {
@@ -188,7 +315,7 @@ struct jsonizer {
     return true;
   }
 
-  template <typename T>
+  template <class T>
   bool operator()(T const& x) const {
     return convert(x, j_);
   }
