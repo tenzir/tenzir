@@ -54,7 +54,6 @@ set(libvast_sources
   src/system/consensus.cpp
   src/system/exporter.cpp
   src/system/importer.cpp
-  #src/system/identifier.cpp
   src/system/index.cpp
   src/system/indexer.cpp
   src/system/node.cpp
@@ -204,7 +203,7 @@ set(tests
   test/system/consensus.cpp
   #test/system/export.cpp
   test/system/exporter.cpp
-  #test/system/import.cpp
+  test/system/importer.cpp
   test/system/index.cpp
   test/system/indexer.cpp
   test/system/key_value_store.cpp

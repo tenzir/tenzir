@@ -3,21 +3,16 @@
 
 #include <string>
 
-#include "vast/data.hpp"
 #include "vast/filesystem.hpp"
 
-#include "vast/system/key_value_store.hpp"
 #include "vast/system/tracker.hpp"
 
 namespace vast {
 namespace system {
 
-//using persistent_store = key_value_store_type<std::string, data>;
-
 /// A container for VAST components.
 struct node_state {
   path dir;
-  //persistent_store store;
   tracker_type tracker;
   std::string name = "node";
 };

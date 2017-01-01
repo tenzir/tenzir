@@ -1,5 +1,6 @@
 #include <csignal>
 
+#include <chrono>
 #include <sstream>
 
 #include <caf/all.hpp>
@@ -13,6 +14,7 @@
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/vast/expression.hpp"
 #include "vast/concept/printable/vast/json.hpp"
+#include "vast/data.hpp"
 #include "vast/expression.hpp"
 #include "vast/json.hpp"
 #include "vast/logger.hpp"
@@ -20,11 +22,15 @@
 
 #include "vast/system/accountant.hpp"
 #include "vast/system/archive.hpp"
+#include "vast/system/consensus.hpp"
+#include "vast/system/importer.hpp"
 #include "vast/system/index.hpp"
 #include "vast/system/exporter.hpp"
 #include "vast/system/node.hpp"
 #include "vast/system/profiler.hpp"
+#include "vast/system/replicated_store.hpp"
 
+using namespace std::chrono_literals;
 using namespace std::string_literals;
 using namespace caf;
 
@@ -32,81 +38,6 @@ namespace vast {
 namespace system {
 
 namespace {
-
-//behavior spawn_actor() {
-//      on("importer", any_vals) >> [=] {
-//        auto r = self->current_message().extract_opts({
-//          {"auto-connect,a",
-//           "connect to available identifier, archives, indexes"}
-//        });
-//        auto imp = spawn<priority_aware>(importer::make);
-//        if (r.opts.count("auto-connect") > 0) {
-//          self->send(node->state.store, list_atom::value,
-//                     key::str("actors", node->state.desc));
-//          self->become(
-//            [=](std::map<std::string, message>& m) {
-//              for (auto& p : m)
-//                p.second.apply({
-//                  [&](actor const& a, std::string const& type) {
-//                    VAST_ASSERT(a != invalid_actor);
-//                    if (type == "archive")
-//                      self->send(imp, actor_cast<archive::type>(a));
-//                    else if (type == "index")
-//                      self->send(imp, put_atom::value, index_atom::value, a);
-//                    else if (type == "identifier")
-//                      self->send(imp, put_atom::value, identifier_atom::value,
-//                                 a);
-//                  }
-//               });
-//              save_actor(imp, "importer");
-//            }
-//          );
-//        } else {
-//          save_actor(imp, "importer");
-//        }
-//      },
-//      on("source", any_vals) >> [=] {
-//        auto r = self->current_message().extract_opts({
-//          {"auto-connect,a", "connect to available archives & indexes"}
-//        });
-//        auto src = source::spawn(self->current_message().drop(1));
-//        if (!src) {
-//          rp.deliver(make_message(std::move(src.error())));
-//          self->quit(exit::error);
-//          return;
-//        }
-//        self->send(*src, node->state.accountant);
-//        if (r.opts.count("auto-connect") > 0) {
-//          self->send(node->state.store, list_atom::value,
-//                     key::str("actors", node->state.desc));
-//          self->become(
-//            [=](std::map<std::string, message>& m) {
-//              for (auto& p : m)
-//                p.second.apply({
-//                  [&](actor const& a, std::string const& type) {
-//                    VAST_ASSERT(a != invalid_actor);
-//                    if (type == "importer")
-//                      self->send(*src, put_atom::value, sink_atom::value, a);
-//                   }
-//                });
-//              save_actor(*src, "source");
-//            }
-//          );
-//        } else {
-//          save_actor(*src, "source");
-//        }
-//      },
-//      on("sink", any_vals) >> [=] {
-//        auto snk = sink::spawn(self->current_message().drop(1));
-//        if (!snk) {
-//          rp.deliver(make_message(std::move(snk.error())));
-//          self->quit(exit::error);
-//          return;
-//        }
-//        self->send(*snk, node->state.accountant);
-//        save_actor(*snk, "sink");
-//      },
-//}
 
 //behavior send_run(event_based_actor* self,
 //                  stateful_actor<node::state>* node) {
@@ -252,6 +183,25 @@ void show(stateful_actor<node_state>* self, message& /* args */) {
   );
 }
 
+expected<actor> spawn_metastore(stateful_actor<node_state>* self, message& xs) {
+  auto server_id = raft::server_id{0};
+  auto r = xs.extract_opts({
+    {"id,i", "the static ID of the consensus module", server_id}
+  });
+  if (server_id == 0)
+    return make_error(ec::unspecified, "invalid server ID: 0");
+  if (!r.remainder.empty()) {
+    auto invalid = r.remainder.get_as<std::string>(0);
+    return make_error(ec::syntax_error, "invalid syntax", invalid);
+  }
+  if (!r.error.empty())
+    return make_error(ec::syntax_error, r.error);
+  auto metastore_dir = self->state.dir / "meta";
+  auto consensus = self->spawn(raft::consensus, metastore_dir, server_id);
+  auto s = self->spawn(replicated_store<std::string, data>, consensus, 10000ms);
+  return actor_cast<actor>(s);
+}
+
 expected<actor> spawn_archive(stateful_actor<node_state>* self, message& xs) {
   auto mss = size_t{128};
   auto segments = size_t{10};
@@ -283,6 +233,20 @@ expected<actor> spawn_index(stateful_actor<node_state>* self, message& xs) {
   if (!r.error.empty())
     return make_error(ec::syntax_error, r.error);
   return self->spawn(index, self->state.dir / "index", max_events, passive);
+}
+
+expected<actor> spawn_importer(stateful_actor<node_state>* self, message& xs) {
+  auto ids = size_t{128};
+  auto r = xs.extract_opts({
+    {"ids,n", "number of initial IDs to request", ids},
+  });
+  if (!r.remainder.empty()) {
+    auto invalid = r.remainder.get_as<std::string>(0);
+    return make_error(ec::syntax_error, "invalid syntax", invalid);
+  }
+  if (!r.error.empty())
+    return make_error(ec::syntax_error, r.error);
+  return self->spawn(importer, self->state.dir / "importer", ids);
 }
 
 expected<actor> spawn_exporter(stateful_actor<node_state>* self, message& xs) {
@@ -352,13 +316,16 @@ void spawn(stateful_actor<node_state>* self, message& args) {
     rp.deliver(make_error(ec::syntax_error, "missing arguments"));
     return;
   }
-  // Locate sub-command.
   using factory_function = std::function<expected<actor>(message&)>;
   auto bind = [=](auto f) { return [=](message& xs) { return f(self, xs); }; };
   static auto factory = std::unordered_map<std::string, factory_function>{
+    {"metastore", bind(spawn_metastore)},
     {"archive", bind(spawn_archive)},
     {"index", bind(spawn_index)},
+    {"importer", bind(spawn_importer)},
     {"exporter", bind(spawn_exporter)},
+    //{"source", bind(spawn_source)},
+    //{"sink", bind(spawn_sink)},
     {"profiler", bind(spawn_profiler)}
   };
   // Split arguments into two halves at the command.

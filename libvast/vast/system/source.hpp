@@ -66,7 +66,7 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader&& reader) {
   auto acc = self->system().registry().get(accountant_atom::value);
   if (acc) {
     VAST_DEBUG(self, "registers accountant", acc);
-    self->state.accountant = actor_cast<accountant_type>(acc);
+    self->state.accountant = caf::actor_cast<accountant_type>(acc);
   }
   return {
     [=](shutdown_atom) {

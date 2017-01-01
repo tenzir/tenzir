@@ -51,7 +51,7 @@ sink(caf::stateful_actor<sink_state<Writer>>* self, Writer&& writer) {
   auto acc = self->system().registry().get(accountant_atom::value);
   if (acc) {
     VAST_DEBUG(self, "registers accountant", acc);
-    self->state.accountant = actor_cast<accountant_type>(acc);
+    self->state.accountant = caf::actor_cast<accountant_type>(acc);
   }
   return {
     [=](shutdown_atom) {
