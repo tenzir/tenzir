@@ -36,7 +36,7 @@ replicated_store(
   caf::actor consensus,
   std::chrono::milliseconds timeout) {
   // Send the current command/message to the consensus module, and once it has
-  // been replicated, we apply the command to the local state.
+  // been replicated, apply the command to the local state.
   auto replicate = [=](auto rp, auto apply) {
     auto msg = self->current_mailbox_element()->move_content_to_message();
     self->request(consensus, timeout, replicate_atom::value, msg).then(
@@ -50,12 +50,10 @@ replicated_store(
     );
     return rp;
   };
-  using ok_promise = caf::typed_response_promise<ok_atom>;
-  using add_promise = caf::typed_response_promise<Value>;
   return {
     [=](put_atom, const Key&, Value&) {
       return replicate(
-        self->template make_response_promise<ok_promise>(),
+        self->template make_response_promise<ok_atom>(),
         [=](raft::index_type, caf::message& msg) {
           auto& key = msg.get_as<Key>(1);
           auto& value = msg.get_as<Value>(2);
@@ -65,20 +63,20 @@ replicated_store(
       );
     },
     [=](add_atom, const Key& key, const Value&) {
-      auto old = self->state.store[key];
+      auto& old = self->state.store[key];
       return replicate(
-        self->template make_response_promise<add_promise>(),
-        [self, x=std::move(old)](raft::index_type, caf::message& msg) {
+        self->template make_response_promise<Value>(),
+        [=](raft::index_type, caf::message& msg) {
           auto& key = msg.get_as<Key>(1);
           auto& value = msg.get_as<Value>(2);
           self->state.store[key] += value;
-          return x;
+          return old;
         }
       );
     },
     [=](delete_atom, const Key&) {
       return replicate(
-        self->template make_response_promise<ok_promise>(),
+        self->template make_response_promise<ok_atom>(),
         [=](raft::index_type, caf::message& msg) {
           auto& key = msg.get_as<Key>(1);
           self->state.store.erase(key);
