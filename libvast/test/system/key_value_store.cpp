@@ -1,7 +1,7 @@
 #include <caf/all.hpp>
 
 #include "vast/system/atoms.hpp"
-#include "vast/system/key_value_store.hpp"
+#include "vast/system/data_store.hpp"
 
 #define SUITE system
 #include "test.hpp"
