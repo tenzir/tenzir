@@ -45,6 +45,7 @@ struct source_state {
   accountant_type accountant;
   caf::actor sink;
   Reader reader;
+  char const* name;
 };
 
 /// An event producer.
@@ -56,6 +57,7 @@ caf::behavior
 source(caf::stateful_actor<source_state<Reader>>* self, Reader&& reader) {
   using namespace std::chrono;
   self->state.reader = std::move(reader);
+  self->state.name = self->state.reader.name();
   self->attach_functor([=](error const&) {
     if (self->state.accountant) {
       timestamp now = system_clock::now();

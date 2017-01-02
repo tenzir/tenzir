@@ -59,6 +59,8 @@ public:
 
   expected<vast::schema> schema() const;
 
+  const char* name() const;
+
 private:
   vast::schema schema_;
   std::mt19937_64 generator_;

@@ -258,6 +258,10 @@ expected<schema> reader::schema() const {
   return schema_;
 }
 
+const char* reader::name() const {
+  return "test-reader";
+}
+
 } // namespace test
 } // namespace format
 } // namespace vast
