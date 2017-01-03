@@ -39,6 +39,7 @@ struct sink_state {
   uint64_t processed = 0;
   uint64_t limit = 0;
   Writer writer;
+  const char* name;
 };
 
 template <class Writer>
@@ -46,6 +47,7 @@ caf::behavior
 sink(caf::stateful_actor<sink_state<Writer>>* self, Writer&& writer) {
   using namespace std::chrono;
   self->state.writer = std::move(writer);
+  self->state.name = self->state.writer.name();
   self->state.last_flush = steady_clock::now();
   // Register the accountant, if available.
   auto acc = self->system().registry().get(accountant_atom::value);
