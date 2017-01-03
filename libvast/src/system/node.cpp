@@ -1,6 +1,7 @@
 #include <csignal>
 
 #include <chrono>
+#include <fstream>
 #include <sstream>
 
 #include <caf/all.hpp>
@@ -11,14 +12,26 @@
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/endpoint.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
+#include "vast/concept/parseable/vast/schema.hpp"
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/vast/expression.hpp"
 #include "vast/concept/printable/vast/json.hpp"
 #include "vast/data.hpp"
 #include "vast/expression.hpp"
+#include "vast/format/ascii.hpp"
+#include "vast/format/bgpdump.hpp"
+#include "vast/format/bro.hpp"
+#include "vast/format/csv.hpp"
+#include "vast/format/json.hpp"
+#include "vast/format/pcap.hpp"
+#include "vast/format/test.hpp"
 #include "vast/json.hpp"
 #include "vast/logger.hpp"
 #include "vast/query_options.hpp"
+
+#include "vast/detail/posix.hpp"
+#include "vast/detail/fdinbuf.hpp"
+#include "vast/detail/fdostream.hpp"
 
 #include "vast/system/accountant.hpp"
 #include "vast/system/archive.hpp"
@@ -29,6 +42,8 @@
 #include "vast/system/node.hpp"
 #include "vast/system/profiler.hpp"
 #include "vast/system/replicated_store.hpp"
+#include "vast/system/sink.hpp"
+#include "vast/system/source.hpp"
 
 using namespace std::chrono_literals;
 using namespace std::string_literals;
@@ -38,100 +53,6 @@ namespace vast {
 namespace system {
 
 namespace {
-
-//behavior send_run(event_based_actor* self,
-//                  stateful_actor<node::state>* node) {
-//  return on("send", val<std::string>, "run") >> [=](std::string const& arg,
-//                                                    std::string const&) {
-//    auto rp = self->make_response_promise();
-//    self->send(node->state.store, get_atom::value,
-//               make_actor_key(arg, node->state.desc));
-//    self->become(
-//      [=](actor const& a, std::string const&) {
-//        self->send(a, run_atom::value);
-//        rp.deliver(make_message(ok_atom::value));
-//        self->quit();
-//      },
-//      [=](none) {
-//        rp.deliver(make_message(error{"no such actor: ", arg}));
-//        self->quit(exit::error);
-//      }
-//    );
-//  };
-//}
-//
-//behavior send_flush(event_based_actor* self,
-//                    stateful_actor<node::state>* node) {
-//  return on("send", val<std::string>, "flush") >> [=](std::string const& arg,
-//                                                      std::string const&) {
-//    auto rp = self->make_response_promise();
-//    self->send(node->state.store, get_atom::value,
-//               make_actor_key(arg, node->state.desc));
-//    self->become(
-//      [=](actor const& a, std::string const& type) {
-//        if (!(type == "index" || type == "archive")) {
-//          rp.deliver(make_message(error{type, " does not support flushing"}));
-//          self->quit(exit::error);
-//          return;
-//        }
-//        self->send(a, flush_atom::value);
-//        self->become(
-//          [=](actor const& task) {
-//            self->monitor(task);
-//            self->become(
-//              [=](down_msg const& msg) {
-//                VAST_ASSERT(msg.source == task);
-//                rp.deliver(make_message(ok_atom::value));
-//                self->quit(exit::done);
-//              }
-//            );
-//          },
-//          [=](ok_atom) {
-//            rp.deliver(self->current_message());
-//            self->quit(exit::done);
-//          },
-//          [=](error const&) {
-//            rp.deliver(self->current_message());
-//            self->quit(exit::error);
-//          },
-//          others >> [=] {
-//            rp.deliver(make_message(error{"unexpected response to FLUSH"}));
-//            self->quit(exit::error);
-//          },
-//          after(time::seconds(10)) >> [=] {
-//            rp.deliver(make_message(error{"FLUSH timed out"}));
-//            self->quit(exit::error);
-//          }
-//        );
-//      },
-//      [=](none) {
-//        rp.deliver(make_message(error{"no such actor: ", arg}));
-//        self->quit(exit::error);
-//      }
-//    );
-//  };
-//}
-//
-//behavior quit_actor(event_based_actor* self,
-//                    stateful_actor<node::state>* node) {
-//  return on("quit", arg_match) >> [=](std::string const& arg) {
-//    auto rp = self->make_response_promise();
-//    self->send(node->state.store, get_atom::value,
-//               make_actor_key(arg, node->state.desc));
-//    self->become(
-//      [=](actor const& a, std::string const&) {
-//        self->send_exit(a, exit::stop);
-//        rp.deliver(make_message(ok_atom::value));
-//        self->quit();
-//      },
-//      [=](none) {
-//        rp.deliver(make_message(error{"no such actor: ", arg}));
-//        self->quit(exit::error);
-//      }
-//    );
-//  };
-//}
-//
 
 void stop(stateful_actor<node_state>* self) {
   self->send_exit(self, exit_reason::user_shutdown);
@@ -282,6 +203,180 @@ expected<actor> spawn_exporter(stateful_actor<node_state>* self, message& xs) {
   return self->spawn(exporter, std::move(*expr), query_opts);
 }
 
+
+expected<std::unique_ptr<std::istream>>
+make_input_stream(const std::string& input, bool is_uds) {
+  if (is_uds) {
+    if (input == "-")
+      return make_error(ec::filesystem_error,
+                        "cannot use stdin as UNIX domain socket");
+    auto uds = detail::unix_domain_socket::connect(input);
+    if (!uds)
+      return make_error(ec::filesystem_error,
+                        "failed to connect to UNIX domain socket at", input);
+    auto remote_fd = uds.recv_fd(); // Blocks!
+    auto sb = std::make_unique<detail::fdinbuf>(remote_fd);
+    return std::make_unique<std::istream>(sb.release());
+  }
+  if (input == "-") {
+    auto sb = std::make_unique<detail::fdinbuf>(0); // stdin
+    return std::make_unique<std::istream>(sb.release());
+  }
+  auto fb = std::make_unique<std::filebuf>();
+  fb->open(input, std::ios_base::binary | std::ios_base::in);
+  return std::make_unique<std::istream>(fb.release());
+}
+
+expected<std::unique_ptr<std::ostream>>
+make_output_stream(const std::string& output, bool is_uds) {
+  if (is_uds) {
+      return make_error(ec::filesystem_error,
+                        "cannot use stdout as UNIX domain socket");
+    auto uds = detail::unix_domain_socket::connect(output);
+    if (!uds)
+      return make_error(ec::filesystem_error,
+                        "failed to connect to UNIX domain socket at", output);
+    auto remote_fd = uds.recv_fd(); // Blocks!
+    return std::make_unique<detail::fdostream>(remote_fd);
+  }
+  if (output == "-")
+    return std::make_unique<detail::fdostream>(1); // stdout
+  return std::make_unique<std::ofstream>(output);
+}
+
+expected<actor> spawn_source(stateful_actor<node_state>* self, message& xs) {
+  if (xs.empty())
+    return make_error(ec::syntax_error, "missing format");
+  auto& format = xs.get_as<std::string>(0);
+  auto source_args = xs.drop(1);
+  // Parse common parameters first.
+  auto input = "-"s;
+  std::string schema_file;
+  auto r = source_args.extract_opts({
+    {"read,r", "path to input where to read events from", input},
+    {"schema,s", "path to alternate schema", schema_file},
+    {"uds,u", "treat -r as listening UNIX domain socket"}
+  });
+  actor src;
+  // Parse source-specific parameters, if any.
+  if (format == "pcap") {
+#ifndef VAST_HAVE_PCAP
+    return make_error(ec::unspecified, "not compiled with pcap support");
+#else
+    auto flow_max = uint64_t{1} << 20;
+    auto flow_age = 60u;
+    auto flow_expiry = 10u;
+    auto cutoff = std::numeric_limits<size_t>::max();
+    auto pseudo_realtime = int64_t{0};
+    r = r.remainder.extract_opts({
+      {"cutoff,c", "skip flow packets after this many bytes", cutoff},
+      {"flow-max,m", "number of concurrent flows to track", flow_max},
+      {"flow-age,a", "max flow lifetime before eviction", flow_age},
+      {"flow-expiry,e", "flow table expiration interval", flow_expiry},
+      {"pseudo-realtime,p", "factor c delaying trace packets by 1/c",
+       pseudo_realtime}
+    });
+    if (!r.error.empty())
+      return make_error(ec::syntax_error, r.error);
+    format::pcap::reader reader{input, cutoff, flow_max, flow_age, flow_expiry,
+                                pseudo_realtime};
+    src = self->spawn(source<format::pcap::reader>, std::move(reader));
+#endif
+  } else if (format == "bro" || format == "bgpdump") {
+    auto in = make_input_stream(input, r.opts.count("uds") > 0);
+    if (!in)
+      return in.error();
+    if (format == "bro") {
+      format::bro::reader reader{std::move(*in)};
+      src = self->spawn(source<format::bro::reader>, std::move(reader));
+    } else /* if (format == "bgpdump") */ {
+      format::bgpdump::reader reader{std::move(*in)};
+      src = self->spawn(source<format::bgpdump::reader>, std::move(reader));
+    }
+  } else if (format == "test") {
+    auto seed = size_t{0};
+    auto id = event_id{0};
+    auto n = uint64_t{100};
+    r = r.remainder.extract_opts({
+      {"seed,s", "the PRNG seed", seed},
+      {"events,n", "number of events to generate", n},
+      {"id,i", "the base event ID", id}
+    });
+    if (!r.error.empty())
+      return make_error(ec::syntax_error, r.error);
+    format::test::reader reader{seed, n, id};
+    src = self->spawn(source<format::test::reader>, std::move(reader));
+    // Since the test source doesn't consume any data and only generates
+    // events out of thin air, we use the input channel to specify the schema.
+    schema_file = input;
+  } else {
+    return make_error(ec::syntax_error, "invalid format:", format);
+  }
+  // Supply an alternate schema, if requested.
+  if (!schema_file.empty()) {
+    auto str = load_contents(schema_file);
+    if (!str)
+      return str.error();
+    auto sch = to<schema>(*str);
+    if (!sch)
+      return sch.error();
+    // Send anonymously, since we can't process the reply here.
+    self->anon_send(src, put_atom::value, std::move(*sch));
+  }
+  return src;
+}
+
+expected<actor> spawn_sink(stateful_actor<node_state>* self, message& xs) {
+  if (xs.empty())
+    return make_error(ec::syntax_error, "missing format");
+  auto& format = xs.get_as<std::string>(0);
+  auto sink_args = xs.drop(1);
+  // Parse common parameters first.
+  auto output = "-"s;
+  auto schema_file = ""s;
+  auto r = sink_args.extract_opts({
+    {"write,w", "path to write events to", output},
+    //{"schema,s", "alternate schema file", schema_file},
+    {"uds,u", "treat -w as UNIX domain socket to connect to"}
+  });
+  actor snk;
+  // Parse sink-specific parameters, if any.
+  if (format == "pcap") {
+#ifndef VAST_HAVE_PCAP
+    return make_error(ec::unspecified, "not compiled with pcap support");
+#else
+    auto flush = 10000u;
+    r = r.remainder.extract_opts({
+      {"flush,f", "flush to disk after this many packets", flush}
+    });
+    if (!r.error.empty())
+      return make_error(ec::syntax_error, r.error);
+    format::pcap::writer writer{output, flush};
+    snk = self->spawn(sink<format::pcap::writer>, std::move(writer));
+#endif
+  } else if (format == "bro") {
+    format::bro::writer writer{output};
+    snk = self->spawn(sink<format::bro::writer>, std::move(writer));
+  } else {
+    auto out = make_output_stream(output, r.opts.count("uds") > 0);
+    if (!out)
+      return out.error();
+    if (format == "csv") {
+      format::csv::writer writer{std::move(*out)};
+      snk = self->spawn(sink<format::csv::writer>, std::move(writer));
+    } else if (format == "ascii") {
+      format::ascii::writer writer{std::move(*out)};
+      snk = self->spawn(sink<format::ascii::writer>, std::move(writer));
+    } else if (format == "json") {
+      format::json::writer writer{std::move(*out)};
+      snk = self->spawn(sink<format::json::writer>, std::move(writer));
+    } else {
+      return make_error(ec::syntax_error, "invalid format:", format);
+    }
+  }
+  return snk;
+}
+
 #ifdef VAST_HAVE_GPERFTOOLS
 expected<actor> spawn_profiler(stateful_actor<node_state>* self, message& xs) {
   auto resolution = 1u;
@@ -324,8 +419,8 @@ void spawn(stateful_actor<node_state>* self, message& args) {
     {"index", bind(spawn_index)},
     {"importer", bind(spawn_importer)},
     {"exporter", bind(spawn_exporter)},
-    //{"source", bind(spawn_source)},
-    //{"sink", bind(spawn_sink)},
+    {"source", bind(spawn_source)},
+    {"sink", bind(spawn_sink)},
     {"profiler", bind(spawn_profiler)}
   };
   // Split arguments into two halves at the command.
@@ -346,6 +441,18 @@ void spawn(stateful_actor<node_state>* self, message& args) {
   }
   // Parse spawn args.
   auto spawn_args = args.take(i);
+  std::string node;
+  std::string label;
+  auto r = spawn_args.extract_opts({
+    {"node,n", "the node where to spawn the component", node},
+    {"label,l", "a unique label for the component", label}
+  });
+  if (!r.remainder.empty()) {
+    auto invalid = r.remainder.get_as<std::string>(0);
+    rp.deliver(make_error(ec::syntax_error, "invalid syntax", invalid));
+  }
+  if (!r.error.empty())
+    rp.deliver(make_error(ec::syntax_error, std::move(r.error)));
   // Dispatch command.
   auto cmd_args = args.take_right(args.size() - i - 1);
   auto a = fun(cmd_args);

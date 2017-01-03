@@ -246,6 +246,8 @@ private:
 class writer {
 public:
   writer() = default;
+  writer(writer&&) = default;
+  writer& operator=(writer&&) = default;
 
   /// Constructs a Bro writer.
   /// @param dir The path where to write the log file(s) to.
