@@ -201,7 +201,6 @@ set(tests
   test/word.cpp
   test/system/archive.cpp
   test/system/consensus.cpp
-  #test/system/export.cpp
   test/system/exporter.cpp
   test/system/importer.cpp
   test/system/index.cpp

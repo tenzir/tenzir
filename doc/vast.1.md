@@ -13,25 +13,28 @@ SYNOPSIS
 OVERVIEW
 --------
 
-VAST is a platform for network forensics. Similar to a datawarehouse, the
-system archives large amounts of data and features a type-safe query engine.
-Internally, VAST exhibits a modular architecture implemented entirely in terms
-of the actor model. In this model, concurrent entities (actors) execute in
-parallel and communicate asynchronously solely via message passing. Users spawn
-system components as actors on one or more nodes and connect them together to
-create a custom topology.
+VAST is a platform for explorative data analysis. It ingests various types of
+data formats (e.g., logs, network packet traces) and provides type-safe search
+in a rich data model.
 
 DESCRIPTION
 -----------
 
-The `vast` executable enables users to manage a VAST topology: one or more
-**node**s run various components, such as event sources and sinks for data
-import/export, issuing queries, or retrieving statistics about system
-components. The following key actors exist:
+The `vast` executable enables management of a VAST topology by interacting with
+a **node**, which acts as a container for the system components. Typically,
+each physical machine in a VAST deployment corresponds to one node. For
+single-machine deployments all components run inside a single process, whereas
+cluster deployments consist of multiple nodes with components spread across
+them.
 
-**node**
-  The main VAST actor which accommodates all other actors and manages global
-  state.
+Nodes can enter a peering relationship and build a topology. All peers have
+the same authority: if one fails, others can take over. By default, each
+node includes all core components: **archive**, **index**, **importer**. For
+more fine-grained control about the components running on a node, one can spawn
+the node in "bare" mode to get an empty container. This allows for more
+flexible arrangement of components to best match the available system hardware.
+
+The following key components exist:
 
 **source**
   Generates events from a data source, such as packets from a network interface
@@ -56,19 +59,6 @@ components. The following key actors exist:
   Accepts query expressions from users, asks **index** for hits, takes them to
   **archive** to extract candidates, and relays matching events to **sink**s.
 
-The `vast` executable spawns **node**, which acts as a container for other
-actors. Typically, each physical machine in a VAST deployment runs a single
-`vast` process. For single-machine deployments all actors run inside this
-process, whereas cluster deployments consist of multiple nodes with actors
-spread across them.
-
-Nodes can enter a peering relationship and build a topology. All peers have
-the same authority: if one fails, others can take over. By default, each
-node includes all core actors: **archive**, **index**, **importer**. For
-more fine-grained control about the components running on a node, one can spawn
-the node in "bare" mode to get an empty container. This allows for more
-flexible arrangement of components to best match the available system hardware.
-
 OPTIONS
 -------
 
@@ -77,7 +67,7 @@ The *options* in front of *command* control how to to connect to a node.
 The following *options* are available:
 
 `-d` *dir* [*.*]
-  The directory for logs and state.
+  The VAST directory for logs and state.
 
 `-e` *endpoint* [*127.0.0.1:42000*]
   The endpoint of the node to connect to or launch. (See below)
@@ -85,30 +75,15 @@ The following *options* are available:
 `-h`
   Display a help message and exit.
 
-`-l` *verbosity* [*3*]
-  The logging verbosity. (See below)
-
-`-m` *messages* [*-1*]
-  The CAF worker throughput expressed in the maximum number of messages to
-  process when a worker gets scheduled. The default value of *-1* means an
-  unlimited number of messages.
-
 `-n`
   Do not attempt to connect to a remote **node** but start a local instance
   instead.
-
-`-p` *logfile*
-  Enable CAF profiling of worker threads and actors and write the per-second
-  sampled data to *logfile*.
-
-`-t` *threads* [*std::thread::hardware_concurrency()*]
-  The number of worker threads to use for CAF's scheduler.
 
 `-v`
   Print VAST version and exit.
 
 When specifying an endpoint via `-e`, `vast` connects to that endpoint to
-obtain a **node** reference. An exception is the command `vast start`,
+obtain a **node** handle. An exception is the command `vast start`,
 which uses the endpoint specification to spawn a **node**.
 
 ### endpoint
@@ -117,18 +92,6 @@ An endpoint has the format *host:port* where *host* is a hostname or IP address
 and *port* the transport-layer port of the listening daemon. Either can be
 omitted: *host* or *:port* are also valid endpoints. IPv6 addresses must be
 enclosed in brackets in conjunction with a *port*, e.g., *[::1]:42001*.
-
-### verbosity
-
-The verbosity controls the amount of status messages displayed on console and
-in log files. It can take on the following values:
-    *0* *(quiet)*: do not produce any output
-    *1* *(error)*: report failures which constitute a program error
-    *2* *(warn)*: notable issues that do not affect correctness
-    *3* *(info)*: status messages representing system activity
-    *4* *(verbose)*: more fine-grained activity reports
-    *5* *(debug)*: copious low-level implementation details
-    *6* *(trace)*: log function entry and exit
 
 COMMANDS
 --------
@@ -139,9 +102,9 @@ commands exist:
     *stop*          stops a node
     *peer*          peers with another node
     *show*          shows various properties of a topology
-    *spawn*         creates a new actor
-    *kill*          terminates an actor
-    *send*          send a message to an actor
+    *spawn*         creates a new component
+    *kill*          terminates an component
+    *send*          send a message to an component
     *import*        imports data from standard input
     *export*        exports query results to standard output
 
@@ -156,19 +119,19 @@ Start a node at the specified endpoint.
 Available *arguments*:
 
 `-b`
-  Run in *bare* mode, i.e., do not spawn any actors. Use *bare* mode when you
-  want to create a custom topology. When not specifying this option, `vast`
-  automatically spawns all core actors by executing the following commands
+  Run in *bare* mode, i.e., do not spawn any components. Use *bare* mode when
+  you want to create a custom topology. When not specifying this option, `vast`
+  automatically spawns all core components by executing the following commands
   upon spawning the node:
 
-      vast spawn identifier
+      vast spawn metastore
       vast spawn importer
       vast spawn archive
       vast spawn index
 
 `-f`
   Start in foreground, i.e., do not detach from controlling terminal and
-  run in background. Unless specified, VAST will call daemon(3).
+  run in background. If not specified, `vast` calls daemon(3).
 
 `-n` *name* [*hostname*]
   Overrides the node *name*, which defaults to the system hostname. Each node
@@ -180,7 +143,7 @@ Synopsis:
 
   *stop*
 
-Stops the node and terminates all contained actors.
+Stops the node and terminates all contained components.
 
 ### peer
 
@@ -195,61 +158,35 @@ See **OPTIONS** for a description of the *endpoint* syntax.
 
 Synopsis:
 
-  *show* *argument*
+  *show* 
 
-Shows various properties of a topology. *argument* can have the
-following values:
-
-*nodes*
-  Displays all existing nodes in the topology.
-
-*peers*
-  Displays the nodes connected to this node.
-
-*actors*
-  Displays the existing components per node.
-
-*topology*
-  Displays the connections between nodes.
+Displays various properties of a topology.
 
 ### spawn
 
 Synopsis:
 
-  *spawn* [*arguments*] *actor* [*parameters*]
+  *spawn* [*arguments*] *component* [*parameters*]
 
-Creates a new actor of kind *actor*. Some actor types can have at most one
-instance while others can have multiple instances.
+Creates a new component of kind *component*. Some components can have at most
+one instance while others can have multiple instances.
 
 Available *arguments*:
 
-`-n` *name*
-  Controls the spawn location. If `-n` *name* is given, the actor will be
-  spawned on the node identified by *name*. Otherwise the actor will be
-  spawned on the connected node.
-
 `-l` *label*
-   A unique identifier for *actor* within a node. The default label
-   has the form *actorN* where *N* is a running counter increased for each
-   spawned instance of *actor*.
+   A unique identifier for *component* within a node. The default label
+   has the form *component* where *N* is a running counter increased for each
+   spawned instance of *component*.
 
-Available *actor* values with corresponding *parameters*:
-
-*core*
-  Spawns all *core* actors (i.e., ARCHIVE, INDEX, IDENTIFIER, IMPORTER) and
-  connects them.
+Available *component* values with corresponding *parameters*:
 
 *archive* [*parameters*]
-  `-c` *compression* [*lz4*]
-    Compression algorithm for chunks
   `-s` *segments* [*10*]
     Number of cached segments
   `-m` *size* [*128*]
     Maximum segment size in MB
 
 *index* [*parameters*]
-  `-a` *partitions* [*5*]
-    Number of active partitions to load-balance events over.
   `-p` *partitions* [*10*]
     Number of passive partitions.
   `-e` *events* [*1,048,576*]
@@ -345,7 +282,7 @@ Synopsis:
 
   *kill* *name*
 
-Terminates an actor. The argument *name* refers to an actor label.
+Terminates a component. The argument *name* refers to a component label.
 
 ### send
 
@@ -353,18 +290,18 @@ Synopsis:
 
   *send* *name* *message*
 
-Sends a message to an actor. The argument *name* refers to the actor to run.
-The argument *message* represents the data to send to the actor.
+Sends a message to a component. The argument *name* refers to the component to
+run. The argument *message* represents the data to send to the component.
 
 Available messages:
 
 *run*
-  Tells an actor to start operating. Most actors do not need to be told to run
-  explicitly. Only actors having a multi-stage setup phase (e.g., sources and
-  exporters) can be run explicitly.
+  Tells a component to start operating. Most components do not need to be told
+  to run explicitly. Only components having a multi-stage setup phase (e.g.,
+  sources and exporters) can be run explicitly.
 
 *flush*
-  Tells an actor to flush its state to the file system.
+  Tells a component to flush its state to the file system.
 
 ### import
 
@@ -396,9 +333,9 @@ Because *export* always writes to standard output, *-w file* has no effect.
 EXAMPLES
 --------
 
-Start a node at 10.0.0.1 on port 42000 with debug log verbosity in the foreground:
+Start a node at 10.0.0.1 on port 42000 in the foreground:
 
-    vast -e 10.0.0.1:42000 -l 5 start -f
+    vast -e 10.0.0.1:42000 start -f
 
 Send [Bro](http://www.bro.org) logs to the remote node:
 
@@ -418,10 +355,9 @@ Make the node at 10.0.0.1 peer with 10.0.0.2:
 
     vast -e 10.0.0.1 peer 10.0.0.2
 
-Connect to a node running at 1.2.3.4 on port 31337 and show the
-topology:
+Connect to a node running at 1.2.3.4 on port 31337 and display topology details:
 
-    vast -e 1.2.3.4:31337 show topology
+    vast -e 1.2.3.4:31337 show
 
 Run a historical query, printed in ASCII, limited to at most 10 results:
 

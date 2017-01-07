@@ -30,7 +30,7 @@ TEST(PCAP sink) {
   MESSAGE("sending events");
   self->send(snk, std::move(events));
   MESSAGE("shutting down");
-  self->send(snk, shutdown_atom::value);
+  self->send_exit(snk, caf::exit_reason::user_shutdown);
   self->receive([&](caf::down_msg const& msg) {
     CHECK(msg.reason == caf::exit_reason::user_shutdown);
   });

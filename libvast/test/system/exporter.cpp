@@ -28,8 +28,8 @@ TEST(exporter) {
   MESSAGE("issueing query");
   auto e = self->spawn(system::exporter, *expr, historical);
   self->send(e, a);
-  self->send(e, system::put_atom::value, system::index_atom::value, i);
-  self->send(e, system::put_atom::value, system::sink_atom::value, self);
+  self->send(e, system::index_atom::value, i);
+  self->send(e, system::sink_atom::value, self);
   self->send(e, system::run_atom::value);
   self->send(e, system::extract_atom::value);
   MESSAGE("waiting for results");

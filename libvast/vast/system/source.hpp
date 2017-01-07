@@ -3,6 +3,7 @@
 
 #include "vast/logger.hpp"
 
+#include <caf/actor_pool.hpp>
 #include <caf/stateful_actor.hpp>
 
 #include "vast/concept/printable/stream.hpp"
@@ -55,72 +56,37 @@ struct source_state {
 template <class Reader>
 caf::behavior
 source(caf::stateful_actor<source_state<Reader>>* self, Reader&& reader) {
+  using namespace caf;
   using namespace std::chrono;
   self->state.reader = std::move(reader);
   self->state.name = self->state.reader.name();
-  self->attach_functor([=](error const&) {
-    if (self->state.accountant) {
-      timestamp now = system_clock::now();
-      self->send(self->state.accountant, "source.end", now);
-    }
-  });
+  auto eu = self->system().dummy_execution_unit();
+  self->state.sink = actor_pool::make(eu, actor_pool::round_robin());
   // Register the accountant, if available.
   auto acc = self->system().registry().get(accountant_atom::value);
   if (acc) {
     VAST_DEBUG(self, "registers accountant", acc);
-    self->state.accountant = caf::actor_cast<accountant_type>(acc);
+    self->state.accountant = actor_cast<accountant_type>(acc);
   }
-  return {
-    [=](shutdown_atom) {
-      self->quit(caf::exit_reason::user_shutdown);
-    },
-    [=](caf::down_msg const& msg) {
-      VAST_ASSERT(msg.source == self->state.sink);
-      VAST_DEBUG(self, "got DOWN from sink", self->state.sink);
-      self->quit(make_error(ec::unspecified, "no more sinks"));
-    },
-    [=](batch_atom, uint64_t batch_size) {
-      if (batch_size > source_state<Reader>::max_batch_size) {
-        VAST_ERROR(self, "got too large batch size:", batch_size);
-        auto e = make_error(ec::unspecified, "batch size too large");
-        self->quit(e);
-      } else {
-        VAST_DEBUG(self, "sets batch size to", batch_size);
-        self->state.batch_size = batch_size;
-        self->state.events.reserve(batch_size);
+  self->set_exit_handler(
+    [=](const exit_msg& msg) {
+      if (self->state.accountant) {
+        timestamp now = system_clock::now();
+        self->send(self->state.accountant, "source.end", now);
       }
-    },
-    [=](get_atom, schema_atom) -> caf::result<schema> {
-      auto sch = self->state.reader.schema();
-      if (sch)
-        return *sch;
-      return sch.error();
-    },
-    [=](put_atom, schema const& sch) -> caf::result<void> {
-      auto r = self->state.reader.schema(sch);
-      if (r)
-        return {};
-      return r.error();
-    },
-    [=](put_atom, sink_atom, caf::actor const& sink) {
-      VAST_ASSERT(sink);
-      VAST_DEBUG(self, "adds sink", sink);
-      self->monitor(sink);
-      self->state.sink = sink;
-    },
+      self->send(self->state.sink, sys_atom::value, delete_atom::value);
+      self->send(self->state.sink, msg);
+      self->quit(msg.reason);
+    }
+  );
+  return {
     [=](run_atom) {
       if (self->state.accountant && self->current_sender() != self) {
         timestamp now = system_clock::now();
         self->send(self->state.accountant, "source.start", now);
       }
-      if (!self->state.sink) {
-        VAST_ERROR(self, "cannot run without sink");
-        self->quit(make_error(ec::unspecified, "no sink"));
-        return;
-      }
       // Extract events until the source has exhausted its input or until we
       // have completed a batch.
-      //
       auto start = steady_clock::now();
       auto done = false;
       while (self->state.events.size() < self->state.batch_size) {
@@ -171,9 +137,35 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader&& reader) {
         std::this_thread::yield();
       }
       if (done)
-        self->quit();
+        self->send_exit(self, exit_reason::normal);
       else
         self->send(self, run_atom::value);
+    },
+    [=](batch_atom, uint64_t batch_size) {
+      if (batch_size > source_state<Reader>::max_batch_size) {
+        VAST_WARNING(self, "ignores too large batch size:", batch_size);
+        return;
+      }
+      VAST_DEBUG(self, "sets batch size to", batch_size);
+      self->state.batch_size = batch_size;
+      self->state.events.reserve(batch_size);
+    },
+    [=](get_atom, schema_atom) -> result<schema> {
+      auto sch = self->state.reader.schema();
+      if (sch)
+        return *sch;
+      return sch.error();
+    },
+    [=](put_atom, schema const& sch) -> result<void> {
+      auto r = self->state.reader.schema(sch);
+      if (r)
+        return {};
+      return r.error();
+    },
+    [=](sink_atom, actor const& sink) {
+      VAST_ASSERT(sink);
+      VAST_DEBUG(self, "registers sink", sink);
+      self->send(self->state.sink, sys_atom::value, put_atom::value, sink);
     },
   };
 }

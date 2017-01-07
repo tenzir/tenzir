@@ -15,7 +15,7 @@ TEST(PCAP source) {
   format::pcap::reader reader{traces::nmap_vsn};
   auto src = self->spawn(source<format::pcap::reader>, std::move(reader));
   self->monitor(src);
-  self->send(src, put_atom::value, sink_atom::value, self);
+  self->send(src, sink_atom::value, self);
   self->send(src, run_atom::value);
   self->receive([&](std::vector<event> const& events) {
    REQUIRE(events.size() == 44);

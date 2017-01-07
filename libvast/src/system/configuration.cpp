@@ -35,8 +35,8 @@ configuration::configuration() {
   // Containers
   add_message_type<std::vector<event>>("std::vector<vast::event>");
   // Actor-specific messages
-  add_message_type<component_map>("vast::system::component_map");
-  add_message_type<component_map_entry>("vast::system::component_map_entry");
+  add_message_type<registry>("vast::system::registry");
+  add_message_type<registry_entry>("vast::system::registry_entry");
   // Register VAST's custom error type.
   auto renderer = [](uint8_t x, atom_value, const message& msg) {
     std::string result;

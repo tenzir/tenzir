@@ -14,8 +14,10 @@
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/concept/parseable/vast/schema.hpp"
 #include "vast/concept/printable/stream.hpp"
+#include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/expression.hpp"
 #include "vast/concept/printable/vast/json.hpp"
+#include "vast/concept/printable/vast/uuid.hpp"
 #include "vast/data.hpp"
 #include "vast/expression.hpp"
 #include "vast/format/ascii.hpp"
@@ -54,11 +56,18 @@ namespace system {
 
 namespace {
 
-void stop(stateful_actor<node_state>* self) {
+using node_ptr = stateful_actor<node_state>*;
+
+struct component_options {
+  std::string label;
+  message params;
+};
+
+void stop(node_ptr self) {
   self->send_exit(self, exit_reason::user_shutdown);
 }
 
-void peer(stateful_actor<node_state>* self, message& args) {
+void peer(node_ptr self, message args) {
   auto rp = self->make_response_promise();
   if (args.empty()) {
     rp.deliver(make_error(ec::syntax_error, "no endpoint given"));
@@ -88,15 +97,15 @@ void peer(stateful_actor<node_state>* self, message& args) {
   rp.delegate(*peer, peer_atom::value, t, self->state.name);
 }
 
-void show(stateful_actor<node_state>* self, message& /* args */) {
+void show(node_ptr self, message /* args */) {
   auto rp = self->make_response_promise();
   self->request(self->state.tracker, infinite, get_atom::value).then(
-    [=](const component_map& components) mutable {
+    [=](const registry& reg) mutable {
       json::object result;
-      for (auto& peer : components) {
+      for (auto& peer : reg) {
         json::array xs;
         for (auto& pair : peer.second)
-          xs.push_back(pair.first + '#' + to_string(pair.second->id()));
+          xs.push_back(pair.second.label);
         result.emplace(peer.first, std::move(xs));
       }
       rp.deliver(to_string(json{std::move(result)}));
@@ -104,12 +113,12 @@ void show(stateful_actor<node_state>* self, message& /* args */) {
   );
 }
 
-expected<actor> spawn_metastore(stateful_actor<node_state>* self, message& xs) {
-  auto server_id = raft::server_id{0};
-  auto r = xs.extract_opts({
-    {"id,i", "the static ID of the consensus module", server_id}
+expected<actor> spawn_metastore(node_ptr self, component_options opts) {
+  auto id = raft::server_id{0};
+  auto r = opts.params.extract_opts({
+    {"id,i", "the static ID of the consensus module", id}
   });
-  if (server_id == 0)
+  if (id == 0)
     return make_error(ec::unspecified, "invalid server ID: 0");
   if (!r.remainder.empty()) {
     auto invalid = r.remainder.get_as<std::string>(0);
@@ -117,16 +126,16 @@ expected<actor> spawn_metastore(stateful_actor<node_state>* self, message& xs) {
   }
   if (!r.error.empty())
     return make_error(ec::syntax_error, r.error);
-  auto metastore_dir = self->state.dir / "meta";
-  auto consensus = self->spawn(raft::consensus, metastore_dir, server_id);
+  auto consensus = self->spawn(raft::consensus, self->state.dir / opts.label,
+                               id);
   auto s = self->spawn(replicated_store<std::string, data>, consensus, 10000ms);
   return actor_cast<actor>(s);
 }
 
-expected<actor> spawn_archive(stateful_actor<node_state>* self, message& xs) {
+expected<actor> spawn_archive(node_ptr self, component_options opts) {
   auto mss = size_t{128};
   auto segments = size_t{10};
-  auto r = xs.extract_opts({
+  auto r = opts.params.extract_opts({
     {"segments,s", "number of cached segments", segments},
     {"max-segment-size,m", "maximum segment size in MB", mss}
   });
@@ -136,14 +145,14 @@ expected<actor> spawn_archive(stateful_actor<node_state>* self, message& xs) {
   }
   if (!r.error.empty())
     return make_error(ec::syntax_error, r.error);
-  auto a = self->spawn(archive, self->state.dir / "archive", segments, mss);
+  auto a = self->spawn(archive, self->state.dir / opts.label, segments, mss);
   return actor_cast<actor>(a);
 }
 
-expected<actor> spawn_index(stateful_actor<node_state>* self, message& xs) {
+expected<actor> spawn_index(node_ptr self, component_options opts) {
   uint64_t max_events = 1 << 20;
   uint64_t passive = 10;
-  auto r = xs.extract_opts({
+  auto r = opts.params.extract_opts({
     {"events,e", "maximum events per partition", max_events},
     {"passive,p", "maximum number of passive partitions", passive}
   });
@@ -153,12 +162,12 @@ expected<actor> spawn_index(stateful_actor<node_state>* self, message& xs) {
   }
   if (!r.error.empty())
     return make_error(ec::syntax_error, r.error);
-  return self->spawn(index, self->state.dir / "index", max_events, passive);
+  return self->spawn(index, self->state.dir / opts.label, max_events, passive);
 }
 
-expected<actor> spawn_importer(stateful_actor<node_state>* self, message& xs) {
+expected<actor> spawn_importer(node_ptr self, component_options opts) {
   auto ids = size_t{128};
-  auto r = xs.extract_opts({
+  auto r = opts.params.extract_opts({
     {"ids,n", "number of initial IDs to request", ids},
   });
   if (!r.remainder.empty()) {
@@ -167,12 +176,12 @@ expected<actor> spawn_importer(stateful_actor<node_state>* self, message& xs) {
   }
   if (!r.error.empty())
     return make_error(ec::syntax_error, r.error);
-  return self->spawn(importer, self->state.dir / "importer", ids);
+  return self->spawn(importer, self->state.dir / opts.label, ids);
 }
 
-expected<actor> spawn_exporter(stateful_actor<node_state>* self, message& xs) {
+expected<actor> spawn_exporter(node_ptr self, component_options opts) {
   std::string expr_str;
-  auto r = xs.extract_opts({
+  auto r = opts.params.extract_opts({
     {"expression,e", "the query expression", expr_str},
     {"continuous,c", "marks a query as continuous"},
     {"historical,h", "marks a query as historical"},
@@ -244,11 +253,11 @@ make_output_stream(const std::string& output, bool is_uds) {
   return std::make_unique<std::ofstream>(output);
 }
 
-expected<actor> spawn_source(stateful_actor<node_state>* self, message& xs) {
-  if (xs.empty())
+expected<actor> spawn_source(node_ptr self, component_options opts) {
+  if (opts.params.empty())
     return make_error(ec::syntax_error, "missing format");
-  auto& format = xs.get_as<std::string>(0);
-  auto source_args = xs.drop(1);
+  auto& format = opts.params.get_as<std::string>(0);
+  auto source_args = opts.params.drop(1);
   // Parse common parameters first.
   auto input = "-"s;
   std::string schema_file;
@@ -326,11 +335,11 @@ expected<actor> spawn_source(stateful_actor<node_state>* self, message& xs) {
   return src;
 }
 
-expected<actor> spawn_sink(stateful_actor<node_state>* self, message& xs) {
-  if (xs.empty())
+expected<actor> spawn_sink(node_ptr self, component_options opts) {
+  if (opts.params.empty())
     return make_error(ec::syntax_error, "missing format");
-  auto& format = xs.get_as<std::string>(0);
-  auto sink_args = xs.drop(1);
+  auto& format = opts.params.get_as<std::string>(0);
+  auto sink_args = opts.params.drop(1);
   // Parse common parameters first.
   auto output = "-"s;
   auto schema_file = ""s;
@@ -378,9 +387,9 @@ expected<actor> spawn_sink(stateful_actor<node_state>* self, message& xs) {
 }
 
 #ifdef VAST_HAVE_GPERFTOOLS
-expected<actor> spawn_profiler(stateful_actor<node_state>* self, message& xs) {
+expected<actor> spawn_profiler(node_ptr self, component_options opts) {
   auto resolution = 1u;
-  auto r = xs.extract_opts({
+  auto r = opts.params.extract_opts({
     {"cpu,c", "start the CPU profiler"},
     {"heap,h", "start the heap profiler"},
     {"resolution,r", "seconds between measurements", resolution}
@@ -392,7 +401,7 @@ expected<actor> spawn_profiler(stateful_actor<node_state>* self, message& xs) {
   if (!r.error.empty())
     return make_error(ec::syntax_error, r.error);
   auto secs = std::chrono::seconds(resolution);
-  auto prof = self->spawn(profiler, self->state.dir, secs);
+  auto prof = self->spawn(profiler, self->state.dir / opts.label, secs);
   if (r.opts.count("cpu") > 0)
     self->send(prof, start_atom::value, cpu_atom::value);
   if (r.opts.count("heap") > 0)
@@ -400,19 +409,23 @@ expected<actor> spawn_profiler(stateful_actor<node_state>* self, message& xs) {
   return prof;
 }
 #else
-expected<actor> spawn_profiler(stateful_actor<node_state>*, message&) {
+expected<actor> spawn_profiler(node_ptr, component_options) {
   return make_error(ec::unspecified, "not compiled with gperftools");
 }
 #endif
 
-void spawn(stateful_actor<node_state>* self, message& args) {
+void spawn(node_ptr self, message args) {
   auto rp = self->make_response_promise();
   if (args.empty()) {
     rp.deliver(make_error(ec::syntax_error, "missing arguments"));
     return;
   }
-  using factory_function = std::function<expected<actor>(message&)>;
-  auto bind = [=](auto f) { return [=](message& xs) { return f(self, xs); }; };
+  using factory_function = std::function<expected<actor>(component_options)>;
+  auto bind = [=](auto f) {
+    return [=](component_options opts) {
+      return f(self, std::move(opts));
+    };
+  };
   static auto factory = std::unordered_map<std::string, factory_function>{
     {"metastore", bind(spawn_metastore)},
     {"archive", bind(spawn_archive)},
@@ -425,12 +438,12 @@ void spawn(stateful_actor<node_state>* self, message& args) {
   };
   // Split arguments into two halves at the command.
   factory_function fun;
-  const std::string* cmd = nullptr;
+  std::string component;
   size_t i;
   for (i = 0; i < args.size(); ++i) {
     auto j = factory.find(args.get_as<std::string>(i));
     if (j != factory.end()) {
-      cmd = &j->first;
+      component = j->first;
       fun = j->second;
       break;
     }
@@ -439,12 +452,11 @@ void spawn(stateful_actor<node_state>* self, message& args) {
     rp.deliver(make_error(ec::unspecified, "invalid spawn component"));
     return;
   }
-  // Parse spawn args.
+  // Parse arguments.
+  auto component_args = args.take_right(args.size() - i - 1);
   auto spawn_args = args.take(i);
-  std::string node;
   std::string label;
   auto r = spawn_args.extract_opts({
-    {"node,n", "the node where to spawn the component", node},
     {"label,l", "a unique label for the component", label}
   });
   if (!r.remainder.empty()) {
@@ -453,32 +465,105 @@ void spawn(stateful_actor<node_state>* self, message& args) {
   }
   if (!r.error.empty())
     rp.deliver(make_error(ec::syntax_error, std::move(r.error)));
-  // Dispatch command.
-  auto cmd_args = args.take_right(args.size() - i - 1);
-  auto a = fun(cmd_args);
-  if (!a)
-    rp.deliver(a.error());
-  else
-    rp.delegate(self->state.tracker, put_atom::value, *cmd, *a);
+  // Check if we can spawn more than one instance of the given component.
+  self->request(self->state.tracker, infinite, get_atom::value).then(
+    [=](registry& reg) mutable {
+      VAST_ASSERT(reg.count(self->state.name) > 0);
+      auto& local = reg[self->state.name];
+      for (auto c : {"metastore", "archive", "index", "profiler"})
+        if (c == component && local.count(component) > 0) {
+          rp.deliver(make_error(ec::unspecified, "component already exists"));
+          return;
+        }
+      // Auto-generate a label if none given.
+      if (label.empty()) {
+        label = component;
+        auto multi_instance = component == "importer"
+                           || component == "exporter"
+                           || component == "source"
+                           || component == "sink";
+        if (multi_instance) {
+          label += '-';
+          label += std::to_string(++self->state.labels[component]);
+          VAST_DEBUG(self, "auto-generated new label:", label);
+        }
+      }
+      // Dispatch spawn command.
+      auto a = fun({label, component_args});
+      if (!a)
+        rp.deliver(a.error());
+      else
+        rp.delegate(self->state.tracker, put_atom::value, component, *a, label);
+    },
+    [=](error& e) mutable {
+      rp.deliver(std::move(e));
+    }
+  );
 }
 
-void kill(stateful_actor<node_state>* self, message& /* args */) {
+void kill(node_ptr self, message args) {
   auto rp = self->make_response_promise();
-  rp.deliver(make_error(ec::unspecified, "not yet implemented"));
+  if (args.empty()) {
+    rp.deliver(make_error(ec::syntax_error, "missing component"));
+    return;
+  }
+  if (args.size() > 1) {
+    rp.deliver(make_error(ec::syntax_error, "too many arguments"));
+    return;
+  }
+  self->request(self->state.tracker, infinite, get_atom::value).then(
+    [=](registry& reg) mutable {
+      auto& label = args.get_as<std::string>(0);
+      auto& local = reg[self->state.name];
+      auto i = std::find_if(local.begin(), local.end(),
+                            [&](auto& p) { return p.second.label == label; });
+      if (i == local.end()) {
+        rp.deliver(make_error(ec::unspecified, "no such component: " + label));
+        return;
+      }
+      self->send_exit(i->second.actor, exit_reason::user_shutdown);
+      rp.deliver(ok_atom::value);
+    },
+    [=](error& e) mutable {
+      rp.deliver(std::move(e));
+    }
+  );
 }
 
-void send(stateful_actor<node_state>* self, message& /* args */) {
+void send(node_ptr self, message args) {
   auto rp = self->make_response_promise();
-  rp.deliver(make_error(ec::unspecified, "not yet implemented"));
+  if (args.empty()) {
+    rp.deliver(make_error(ec::syntax_error, "missing component"));
+    return;
+  } else if (args.size() == 1) {
+    rp.deliver(make_error(ec::syntax_error, "missing command"));
+    return;
+  }
+  self->request(self->state.tracker, infinite, get_atom::value).then(
+    [=](registry& reg) mutable {
+      auto& label = args.get_as<std::string>(0);
+      auto& local = reg[self->state.name];
+      auto i = std::find_if(local.begin(), local.end(),
+                            [&](auto& p) { return p.second.label == label; });
+      if (i == local.end()) {
+        rp.deliver(make_error(ec::unspecified, "no such component: " + label));
+        return;
+      }
+      auto cmd = atom_from_string(args.get_as<std::string>(1));
+      self->send(i->second.actor, cmd);
+      rp.deliver(ok_atom::value);
+    },
+    [=](error& e) mutable {
+      rp.deliver(std::move(e));
+    }
+  );
 }
 
 } // namespace <anonymous>
 
-caf::behavior node(stateful_actor<node_state>* self, std::string name,
-                   path dir) {
+caf::behavior node(node_ptr self, std::string name, path dir) {
   self->state.dir = std::move(dir);
   self->state.name = std::move(name);
-  // Bring up the topology tracker.
   self->state.tracker = self->spawn<linked>(tracker, self->state.name);
   // Bring up the accountant and put it in the actor registry. All
   // accounting-aware actors look for the accountant in the registry.

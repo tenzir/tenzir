@@ -17,33 +17,41 @@
 namespace vast {
 namespace system {
 
-using registry = std::unordered_multimap<std::string, caf::actor>;
-using component_map = std::unordered_map<std::string, registry>;
-using component_map_entry = component_map::value_type;
+struct component_state {
+  caf::actor actor;
+  std::string label;
+};
+
+template <class Inspector>
+auto inspect(Inspector& f, component_state& cs) {
+  return f(cs.actor, cs.label);
+}
+
+using component_map = std::unordered_multimap<std::string, component_state>;
+using registry = std::unordered_map<std::string, component_map>;
+using registry_entry = registry::value_type;
 
 struct tracker_state {
-  component_map components;
+  registry components;
   const char* name = "tracker";
 };
 
-// TODO: once all major components have been converted to typed actors, we
-// can get rid of the string-discriminator in put(type,actor) and use
-// type-specific overloads instead put(actor_type).
 using tracker_type = caf::typed_actor<
   // Add a component.
-  caf::replies_to<put_atom, std::string, caf::actor>::with<ok_atom>,
+  caf::replies_to<put_atom, std::string, caf::actor, std::string>
+    ::with<ok_atom>,
   // Retrieves the component
-  caf::replies_to<get_atom>::with<component_map>,
+  caf::replies_to<get_atom>::with<registry>,
   // Connects two components identified by their name.
   //caf::replies_to<connect_atom, std::string, std::string>::with<ok_atom>,
   // Disconnects two connected components.
   //caf::replies_to<disconnect_atom, std::string, std::string>::with<ok_atom>,
   // Peering and state propagation.
-  caf::replies_to<peer_atom, caf::actor, std::string>::with<state_atom,
-                                                            component_map>,
-  caf::replies_to<state_atom, component_map>::with<ok_atom>,
-  caf::reacts_to<state_atom, component_map_entry>,
-  caf::reacts_to<state_atom, std::string, std::string, caf::actor>
+  caf::replies_to<peer_atom, caf::actor, std::string>
+    ::with<state_atom, registry>,
+  caf::replies_to<state_atom, registry>::with<ok_atom>,
+  caf::reacts_to<state_atom, registry_entry>,
+  caf::reacts_to<state_atom, std::string, std::string, caf::actor, std::string>
 >;
 
 /// Keeps track of the topology in a VAST deployment.

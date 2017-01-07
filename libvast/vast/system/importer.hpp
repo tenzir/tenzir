@@ -20,8 +20,8 @@ namespace system {
 /// Receives chunks from SOURCEs, imbues them with an ID, and relays them to
 /// ARCHIVE and INDEX.
 struct importer_state {
-  meta_store_type metastore;
-  archive_type archive;
+  meta_store_type meta_store;
+  caf::actor archive;
   caf::actor index;
   event_id next = 0;
   event_id available = 0;

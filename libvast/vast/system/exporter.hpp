@@ -12,8 +12,6 @@
 #include "vast/query_options.hpp"
 #include "vast/uuid.hpp"
 
-#include "vast/detail/flat_set.hpp"
-
 #include "vast/system/accountant.hpp"
 #include "vast/system/archive.hpp"
 
@@ -23,7 +21,7 @@ namespace system {
 struct exporter_state {
   archive_type archive;
   caf::actor index;
-  detail::flat_set<caf::actor> sinks;
+  caf::actor sink;
   accountant_type accountant;
   double progress = 0.0;
   uint64_t processed = 0;
@@ -36,6 +34,7 @@ struct exporter_state {
   std::vector<event> results;
   std::chrono::steady_clock::time_point start;
   uuid id;
+  bool index_lookup_complete = false;
   char const* name = "exporter";
 };
 

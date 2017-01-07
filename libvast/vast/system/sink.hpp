@@ -56,17 +56,6 @@ sink(caf::stateful_actor<sink_state<Writer>>* self, Writer&& writer) {
     self->state.accountant = caf::actor_cast<accountant_type>(acc);
   }
   return {
-    [=](shutdown_atom) {
-      self->quit(caf::exit_reason::user_shutdown);
-    },
-    [=](limit_atom, uint64_t max) {
-      VAST_DEBUG(self, "caps event export at", max, "events");
-      if (self->state.processed < max)
-        self->state.limit = max;
-      else
-        VAST_WARNING(self, "ignores new limit of", max, "(already processed",
-                     self->state.processed, " events)");
-    },
     [=](std::vector<event> const& v) {
       for (auto& e : v) {
         auto r = self->state.writer.write(e);
@@ -86,7 +75,15 @@ sink(caf::stateful_actor<sink_state<Writer>>* self, Writer&& writer) {
           self->state.last_flush = now;
         }
       }
-    }
+    },
+    [=](limit_atom, uint64_t max) {
+      VAST_DEBUG(self, "caps event export at", max, "events");
+      if (self->state.processed < max)
+        self->state.limit = max;
+      else
+        VAST_WARNING(self, "ignores new limit of", max, "(already processed",
+                     self->state.processed, " events)");
+    },
   };
 }
 

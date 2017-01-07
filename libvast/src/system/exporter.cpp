@@ -1,3 +1,5 @@
+#include <caf/all.hpp>
+
 #include "vast/event.hpp"
 #include "vast/logger.hpp"
 #include "vast/concept/printable/std/chrono.hpp"
@@ -6,6 +8,7 @@
 #include "vast/detail/assert.hpp"
 #include "vast/expression_visitors.hpp"
 
+#include "vast/system/archive.hpp"
 #include "vast/system/atoms.hpp"
 #include "vast/system/exporter.hpp"
 
@@ -40,16 +43,16 @@ void ship_results(Actor* self) {
     self->state.shipped += self->state.requested;
     self->state.requested = 0;
   }
-  for (auto& s : self->state.sinks)
-    self->send(s, msg);
+  self->send(self->state.sink, msg);
 }
 
 template <class Actor>
-void complete(Actor* self) {
+void shutdown(Actor* self) {
+  if (rank(self->state.unprocessed) > 0 || !self->state.results.empty())
+    return;
   timespan runtime = steady_clock::now() - self->state.start;
-  for (auto& s : self->state.sinks)
-    self->send(s, self->state.id, done_atom::value, runtime);
   VAST_DEBUG(self, "completed in", runtime);
+  self->send(self->state.sink, self->state.id, done_atom::value, runtime);
   if (self->state.accountant) {
     auto hits = rank(self->state.hits);
     auto processed = self->state.processed;
@@ -63,28 +66,26 @@ void complete(Actor* self) {
     self->send(self->state.accountant, "exporter.selectivity", selectivity);
     self->send(self->state.accountant, "exporter.runtime", runtime);
   }
-  self->quit();
+  self->send_exit(self, exit_reason::normal);
 }
 
 } // namespace <anonymous>
 
 behavior exporter(stateful_actor<exporter_state>* self, expression expr,
                   query_options opts) {
+  auto eu = self->system().dummy_execution_unit();
+  self->state.sink = actor_pool::make(eu, actor_pool::broadcast());
   // Register the accountant, if available.
   auto acc = self->system().registry().get(accountant_atom::value);
   if (acc) {
     VAST_DEBUG(self, "registers accountant", acc);
     self->state.accountant = actor_cast<accountant_type>(acc);
   }
-  self->set_down_handler(
-    [=](down_msg const& msg) {
-      VAST_DEBUG("got DOWN from", msg.source);
-      if (self->state.archive == msg.source)
-        self->state.archive = archive_type{};
-      if (self->state.index == msg.source)
-        self->state.index = {};
-      if (self->state.sinks.erase(actor_cast<actor>(msg.source)) > 0)
-        return;
+  self->set_exit_handler(
+    [=](exit_msg const& msg) {
+      self->send(self->state.sink, sys_atom::value, delete_atom::value);
+      self->send(self->state.sink, msg);
+      self->quit(msg.reason);
     }
   );
   auto operating = behavior{
@@ -131,6 +132,8 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
       self->state.processed += candidates.size();
       self->state.unprocessed -= mask;
       ship_results(self);
+      if (self->state.index_lookup_complete)
+        shutdown(self);
     },
     [=](extract_atom) {
       if (self->state.requested == max_events) {
@@ -153,45 +156,33 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
     },
     [=](progress_atom, uint64_t remaining, uint64_t total) {
       self->state.progress = (total - double(remaining)) / total;
-      for (auto& s : self->state.sinks)
-        self->send(s, self->state.id, progress_atom::value,
-                   self->state.progress, total);
+      self->send(self->state.sink, self->state.id, progress_atom::value,
+                 self->state.progress, total);
     },
     [=](done_atom, timespan runtime, expression const&) {
       VAST_DEBUG(self, "completed index interaction in", runtime);
+      self->state.index_lookup_complete = true;
       if (self->state.accountant)
         self->send(self->state.accountant, "exporter.hits.runtime", runtime);
-      if (rank(self->state.unprocessed) == 0 && self->state.results.empty())
-        complete(self);
+      shutdown(self);
     },
   };
   return {
     [=](archive_type const& archive) {
       VAST_DEBUG(self, "registers archive", archive);
-      VAST_ASSERT(!self->state.archive);
-      self->monitor(archive);
       self->state.archive = archive;
     },
-    [=](put_atom, index_atom, actor const& index) {
+    [=](index_atom, actor const& index) {
       VAST_DEBUG(self, "registers index", index);
-      VAST_ASSERT(!self->state.index);
-      self->monitor(index);
       self->state.index = index;
     },
-    [=](put_atom, sink_atom, actor const& sink) {
-      VAST_DEBUG(self, "registers sink", sink);
-      VAST_ASSERT(self->state.sinks.count(sink) == 0);
-      self->monitor(sink);
-      self->state.sinks.insert(sink);
+    [=](sink_atom, actor const& sink) {
+      VAST_DEBUG(self, "registers index", sink);
+      self->send(self->state.sink, sys_atom::value, put_atom::value, sink);
     },
     [=](run_atom) {
       VAST_INFO(self, "executes query", expr);
       self->state.start = steady_clock::now();
-      if (!self->state.archive || !self->state.index) {
-        VAST_ERROR(self, "needs archive and index to perform query");
-        self->quit(make_error(ec::unspecified, "archive/index not provided"));
-        return;
-      }
       self->send(self->state.index, expr, opts, self);
       self->set_default_handler(skip);
       self->become(

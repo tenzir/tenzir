@@ -16,7 +16,7 @@ namespace vast {
 namespace system {
 
 template <class Actor>
-expected<void> load_state(Actor* self) {
+expected<void> read_state(Actor* self) {
   if (!exists(self->state.dir))
     return {};
   // Load current batch size.
@@ -32,7 +32,7 @@ expected<void> load_state(Actor* self) {
 }
 
 template <class Actor>
-expected<void> save_state(Actor* self) {
+expected<void> write_state(Actor* self) {
   if (self->state.next == 0 && self->state.available == 0)
     return {};
   if (!exists(self->state.dir)) {
@@ -81,7 +81,7 @@ void replenish(Actor* self) {
   VAST_DEBUG(self, "replenishes", self->state.batch_size, "IDs");
   VAST_ASSERT(max_event_id - self->state.next >= self->state.batch_size);
   auto n = self->state.batch_size;
-  self->send(self->state.metastore, add_atom::value, "id", data{n});
+  self->send(self->state.meta_store, add_atom::value, "id", data{n});
   self->become(
     keep_behavior,
     [=](const data& old) {
@@ -91,7 +91,7 @@ void replenish(Actor* self) {
       self->state.next = x;
       if (!self->state.remainder.empty())
         ship(self, std::move(self->state.remainder));
-      auto result = save_state(self);
+      auto result = write_state(self);
       if (!result) {
         VAST_ERROR(self, "failed to save state:",
                    self->system().render(result.error()));
@@ -107,59 +107,54 @@ behavior importer(stateful_actor<importer_state>* self, path dir,
   self->state.dir = dir;
   self->state.batch_size = batch_size;
   self->state.last_replenish = std::chrono::steady_clock::now();
-  auto result = load_state(self);
+  auto result = read_state(self);
   if (!result) {
     VAST_ERROR(self, "failed to load state:",
                self->system().render(result.error()));
     self->quit(result.error());
     return {};
   }
+  auto eu = self->system().dummy_execution_unit();
+  self->state.archive = actor_pool::make(eu, actor_pool::round_robin());
+  self->state.index = actor_pool::make(eu, actor_pool::round_robin());
   self->set_default_handler(skip);
   self->set_down_handler(
     [=](down_msg const& msg) {
-      if (msg.source == self->state.metastore)
-        self->state.metastore = meta_store_type{};
-      else if (msg.source == self->state.archive)
-        self->state.archive = archive_type{};
-      else if (msg.source == self->state.index)
-        self->state.index = {};
+      if (msg.source == self->state.meta_store)
+        self->state.meta_store = meta_store_type{};
     }
   );
   self->set_exit_handler(
     [=](exit_msg const& msg) {
-      save_state(self);
+      write_state(self);
+      self->anon_send(self->state.archive, sys_atom::value, delete_atom::value);
+      self->anon_send(self->state.index, sys_atom::value, delete_atom::value);
+      self->anon_send(self->state.archive, msg);
+      self->anon_send(self->state.index, msg);
       self->quit(msg.reason);
     }
   );
   return {
     [=](meta_store_type const& ms) {
-      VAST_DEBUG(self, "registers metastore");
+      VAST_DEBUG(self, "registers meta store");
+      VAST_ASSERT(ms != self->state.meta_store);
       self->monitor(ms);
-      self->state.metastore = ms;
+      self->state.meta_store = ms;
     },
-    [=](archive_type const& a) {
-      VAST_DEBUG(self, "registers archive");
-      self->monitor(a);
-      self->state.archive = a;
+    [=](archive_type const& archive) {
+      VAST_DEBUG(self, "registers archive", archive);
+      self->send(self->state.archive, sys_atom::value, put_atom::value,
+                 actor_cast<actor>(archive));
     },
-    [=](index_atom, actor const& a) {
-      VAST_DEBUG(self, "registers index", a);
-      self->monitor(a);
-      self->state.index = a;
+    [=](index_atom, actor const& index) {
+      VAST_DEBUG(self, "registers index", index);
+      self->send(self->state.index, sys_atom::value, put_atom::value, index);
     },
     [=](std::vector<event>& events) {
       VAST_ASSERT(!events.empty());
       VAST_DEBUG(self, "got", events.size(), "events");
-      if (!self->state.metastore) {
-        self->quit(make_error(ec::unspecified, "no metastore configured"));
-        return;
-      }
-      if (!self->state.archive) {
-        self->quit(make_error(ec::unspecified, "no archive configured"));
-        return;
-      }
-      if (!self->state.index) {
-        self->quit(make_error(ec::unspecified, "no index configured"));
+      if (!self->state.meta_store) {
+        self->quit(make_error(ec::unspecified, "no meta store configured"));
         return;
       }
       // Attempt to ship the incoming events.

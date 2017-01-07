@@ -14,6 +14,7 @@ namespace system {
 struct node_state {
   path dir;
   tracker_type tracker;
+  std::unordered_map<std::string, int> labels;
   std::string name = "node";
 };
 
