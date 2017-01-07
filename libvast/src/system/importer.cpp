@@ -57,6 +57,7 @@ void ship(Actor* self, std::vector<event>&& batch) {
   for (auto& e : batch)
     e.id(self->state.next++);
   self->state.available -= batch.size();
+  VAST_DEBUG(self, "ships", batch.size(), "events");
   // FIXME: How to retain type safety without copying?
   auto msg = make_message(std::move(batch));
   self->send(actor_cast<actor>(self->state.archive), msg);

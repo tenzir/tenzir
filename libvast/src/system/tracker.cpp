@@ -42,15 +42,17 @@ tracker(tracker_type::stateful_pointer<tracker_state> self, std::string node) {
   self->set_exit_handler(
     [=](const exit_msg& msg) {
       for (auto& pair : self->state.components[node])
-        if (pair.first != "tracker")
+        if (pair.first != "tracker") {
+          VAST_DEBUG(self, "sends EXIT to", pair.second.label);
           self->send_exit(pair.second.actor, msg.reason);
+        }
       self->quit(msg.reason);
     }
   );
   return {
     [=](put_atom, const std::string& type, const actor& component,
         std::string& label) -> result<ok_atom> {
-      VAST_DEBUG(self, "tracking new", type, '(' << label << ')');
+      VAST_DEBUG(self, "got new", type, '(' << label << ')');
       // Save new component.
       self->monitor(component);
       auto& local = self->state.components[node];
