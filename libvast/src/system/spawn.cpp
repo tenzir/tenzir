@@ -24,7 +24,6 @@
 
 #include "vast/system/atoms.hpp"
 #include "vast/system/archive.hpp"
-#include "vast/system/consensus.hpp"
 #include "vast/system/importer.hpp"
 #include "vast/system/index.hpp"
 #include "vast/system/exporter.hpp"
@@ -117,21 +116,11 @@ expected<actor> spawn_index(local_actor* self, options opts) {
   return self->spawn(index, opts.dir / opts.label, max_events, passive);
 }
 
-expected<actor> spawn_metastore(local_actor* self, options opts) {
-  auto id = raft::server_id{0};
-  auto r = opts.params.extract_opts({
-    {"id,i", "the static ID of the consensus module", id}
-  });
-  if (id == 0)
-    return make_error(ec::unspecified, "invalid server ID: 0");
-  if (!r.remainder.empty()) {
-    auto invalid = r.remainder.get_as<std::string>(0);
-    return make_error(ec::syntax_error, "invalid syntax", invalid);
-  }
-  if (!r.error.empty())
-    return make_error(ec::syntax_error, r.error);
-  auto consensus = self->spawn(raft::consensus, opts.dir / opts.label, id);
-  anon_send(consensus, run_atom::value);
+expected<actor> spawn_metastore(local_actor* self, options) {
+  auto ptr = self->system().registry().get(consensus_atom::value);
+  if (!ptr)
+    return make_error(ec::unspecified, "no consensus module in registry");
+  auto consensus = actor_cast<actor>(ptr);
   auto s = self->spawn(replicated_store<std::string, data>, consensus, 10000ms);
   return actor_cast<actor>(s);
 }

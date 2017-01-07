@@ -147,19 +147,19 @@ namespace {
 
 template <class Actor>
 bool is_follower(Actor* self) {
-  return self->current_behavior().as_behavior_impl()
+  return self->has_behavior() && self->current_behavior().as_behavior_impl()
     == self->state.following.as_behavior_impl();
 }
 
 template <class Actor>
 bool is_candidate(Actor* self) {
-  return self->current_behavior().as_behavior_impl()
+  return self->has_behavior() && self->current_behavior().as_behavior_impl()
     == self->state.candidating.as_behavior_impl();
 }
 
 template <class Actor>
 bool is_leader(Actor* self) {
-  return self->current_behavior().as_behavior_impl()
+  return self->has_behavior() && self->current_behavior().as_behavior_impl()
     == self->state.leading.as_behavior_impl();
 }
 
@@ -181,7 +181,7 @@ std::string role(Actor* self) {
   else if (is_leader(self))
     result = "leader";
   else
-    result = "server"; // starting up
+    result = "server";
   result += '#';
   result += std::to_string(self->state.id);
   return result;
@@ -201,11 +201,8 @@ expected<void> save_state(Actor* self) {
 
 template <class Actor>
 expected<void> load_state(Actor* self) {
-  auto filename = self->state.dir / "state";
-  if (!exists(filename))
-    return {};
-  auto res = load(filename, self->state.id, self->state.current_term,
-                  self->state.voted_for);
+  auto res = load(self->state.dir / "state", self->state.id,
+                  self->state.current_term, self->state.voted_for);
   if (res)
     VAST_DEBUG(role(self), "loaded persistent state: id =",
                self->state.id << ", current term",
@@ -829,14 +826,24 @@ handle_append_entries(Actor* self, append_entries::request& req) {
 
 } // namespace <anonymous>
 
-behavior consensus(stateful_actor<server_state>* self, path dir, server_id id) {
-  if (id == 0) {
-    VAST_ERROR("server cannot have ID 0");
-    return {};
-  }
+behavior consensus(stateful_actor<server_state>* self, path dir) {
   self->state.dir = std::move(dir);
-  self->state.id = id;
   self->state.prng.seed(std::random_device{}());
+  if (exists(self->state.dir)) {
+    auto res = load_state(self);
+    if (!res) {
+      VAST_ERROR(role(self), "failed to load state:",
+                 self->system().render(res.error()));
+      self->quit(res.error());
+      return {};
+    }
+  } else {
+    // Generate unique server ID; can be overriden in startup phase.
+    std::uniform_int_distribution<server_id> unif{1};
+    auto id = unif(self->state.prng);
+    VAST_DEBUG(role(self), "generated random server ID", id);
+    self->state.id = id;
+  }
   // We monitor all other servers; when one goes down, we disable it until
   // comes back.
   self->set_down_handler(
@@ -848,6 +855,18 @@ behavior consensus(stateful_actor<server_state>* self, path dir, server_id id) {
       VAST_ASSERT(i != self->state.peers.end());
       VAST_DEBUG(role(self), "got DOWN from peer#" << i->id);
       i->peer = {};
+    }
+  );
+  self->set_exit_handler(
+    [=](const exit_msg& msg) {
+      VAST_DEBUG(role(self), "got request to terminate");
+      auto res = save_state(self);
+      if (!res) {
+        VAST_ERROR(role(self), "failed to persist state:",
+                   self->system().render(res.error()));
+        self->quit(res.error());
+      }
+      self->quit(msg.reason);
     }
   );
   // -- common behavior ------------------------------------------------------
@@ -880,16 +899,6 @@ behavior consensus(stateful_actor<server_state>* self, path dir, server_id id) {
         self->send(self, heartbeat_atom::value);
         self->state.heartbeat_inflight = true;
       }
-    },
-    [=](shutdown_atom) {
-      VAST_DEBUG(role(self), "got request to terminate");
-      auto res = save_state(self);
-      if (!res) {
-        VAST_ERROR(role(self), "failed to persist state:",
-                   self->system().render(res.error()));
-        self->quit(res.error());
-      }
-      self->quit(exit_reason::user_shutdown);
     }
   };
   // Non-leaders forward replication requests to the leader when possible.
@@ -978,12 +987,20 @@ behavior consensus(stateful_actor<server_state>* self, path dir, server_id id) {
   }.or_else(common);
   // -- startup --------------------------------------------------------------
   return {
+    [=](id_atom, server_id id) {
+      VAST_DEBUG(role(self), "sets server ID to", id);
+      self->state.id = id;
+    },
     [=](seed_atom, uint64_t value) {
       self->state.prng.seed(value);
     },
     [=](peer_atom, actor const& peer, server_id peer_id) {
       VAST_ASSERT(peer_id != 0);
       VAST_DEBUG(role(self), "adds new peer", peer_id);
+      if (peer_id == self->state.id) {
+        VAST_ERROR(role(self), "peer cannot have same server ID");
+        return;
+      }
       auto pred = [&](auto& x) { return x.peer == peer || x.id == peer_id; };
       auto i = std::find_if(self->state.peers.begin(), self->state.peers.end(),
                             pred);
@@ -996,25 +1013,15 @@ behavior consensus(stateful_actor<server_state>* self, path dir, server_id id) {
     },
     [=](run_atom) {
       self->become(self->state.following);
+      VAST_DEBUG(role(self), "starts in term", self->state.current_term);
+      if (self->state.voted_for != 0)
+        VAST_DEBUG(role(self), "voted previously for server",
+                   self->state.voted_for);
       // Load the persistent log into memory.
       self->state.log = std::make_unique<log>(self->state.dir / "log");
       VAST_DEBUG(role(self), "initialized log in range ["
                  << self->state.log->first_index() << ','
                  << self->state.log->last_index() << ']');
-      // Load persistent server state.
-      if (exists(self->state.dir / "state")) {
-        auto res = load_state(self);
-        if (!res) {
-          VAST_ERROR(role(self), "failed to load state:",
-                     self->system().render(res.error()));
-          self->quit(res.error());
-          return;
-        }
-        VAST_DEBUG(role(self), "starts in term", self->state.current_term);
-        if (self->state.voted_for != 0)
-          VAST_DEBUG(role(self), "voted previously for server",
-                     self->state.voted_for);
-      }
       // Read a snapshot from disk, if it exists.
       if (exists(self->state.dir / "snapshot")) {
         auto res = load_snapshot(self);

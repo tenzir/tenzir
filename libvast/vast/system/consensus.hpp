@@ -305,9 +305,7 @@ struct server_state {
 /// Spawns a consensus module.
 /// @param self The actor handle.
 /// @param dir The directory where to store persistent state.
-/// @param id The ID of the server.
-caf::behavior consensus(caf::stateful_actor<server_state>* self, path dir,
-                        server_id id);
+caf::behavior consensus(caf::stateful_actor<server_state>* self, path dir);
 
 } // namespace raft
 } // namespace system

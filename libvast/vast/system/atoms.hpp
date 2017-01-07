@@ -8,6 +8,7 @@ namespace system {
 
 // Inherited from CAF
 using caf::add_atom;
+using caf::connect_atom;
 using caf::delete_atom;
 using caf::flush_atom;
 using caf::get_atom;
@@ -15,12 +16,13 @@ using caf::ok_atom;
 using caf::put_atom;
 using caf::join_atom;
 using caf::leave_atom;
+using caf::spawn_atom;
+using caf::subscribe_atom;
 
 // Generic
 using accept_atom = caf::atom_constant<caf::atom("accept")>;
 using announce_atom = caf::atom_constant<caf::atom("announce")>;
 using batch_atom = caf::atom_constant<caf::atom("batch")>;
-using connect_atom = caf::atom_constant<caf::atom("connect")>;
 using continuous_atom = caf::atom_constant<caf::atom("continuous")>;
 using cpu_atom = caf::atom_constant<caf::atom("cpu")>;
 using data_atom = caf::atom_constant<caf::atom("data")>;
@@ -61,13 +63,11 @@ using set_atom = caf::atom_constant<caf::atom("set")>;
 using shutdown_atom = caf::atom_constant<caf::atom("shutdown")>;
 using signal_atom = caf::atom_constant<caf::atom("signal")>;
 using snapshot_atom = caf::atom_constant<caf::atom("snapshot")>;
-using spawn_atom = caf::atom_constant<caf::atom("spawn")>;
 using start_atom = caf::atom_constant<caf::atom("start")>;
 using state_atom = caf::atom_constant<caf::atom("state")>;
 using stop_atom = caf::atom_constant<caf::atom("stop")>;
 using store_atom = caf::atom_constant<caf::atom("store")>;
 using submit_atom = caf::atom_constant<caf::atom("submit")>;
-using subscribe_atom = caf::atom_constant<caf::atom("subscribe")>;
 using underload_atom = caf::atom_constant<caf::atom("underload")>;
 using value_atom = caf::atom_constant<caf::atom("value")>;
 using write_atom = caf::atom_constant<caf::atom("write")>;
@@ -75,6 +75,7 @@ using write_atom = caf::atom_constant<caf::atom("write")>;
 // Actor roles
 using accountant_atom = caf::atom_constant<caf::atom("accountant")>;
 using candidate_atom = caf::atom_constant<caf::atom("candidate")>;
+using consensus_atom = caf::atom_constant<caf::atom("consensus")>;
 using identifier_atom = caf::atom_constant<caf::atom("identifier")>;
 using index_atom = caf::atom_constant<caf::atom("index")>;
 using follower_atom = caf::atom_constant<caf::atom("follower")>;

@@ -15,9 +15,12 @@ struct consensus : actor_system {
 
   void launch() {
     using namespace vast::system;
-    server1 = self->spawn(raft::consensus, directory / "server1", 1);
-    server2 = self->spawn(raft::consensus, directory / "server2", 2);
-    server3 = self->spawn(raft::consensus, directory / "server3", 3);
+    server1 = self->spawn(raft::consensus, directory / "server1");
+    server2 = self->spawn(raft::consensus, directory / "server2");
+    server3 = self->spawn(raft::consensus, directory / "server3");
+    self->send(server1, id_atom::value, raft::server_id{1});
+    self->send(server2, id_atom::value, raft::server_id{2});
+    self->send(server3, id_atom::value, raft::server_id{3});
     // Make it deterministic.
     self->send(server1, seed_atom::value, uint64_t{42});
     self->send(server2, seed_atom::value, uint64_t{43});
@@ -37,23 +40,24 @@ struct consensus : actor_system {
   }
 
   void shutdown() {
+    using namespace caf;
     using namespace vast::system;
     self->monitor(server1);
-    self->send(server1, shutdown_atom::value);
+    self->send_exit(server1, exit_reason::user_shutdown);
     self->receive(
-      [](const caf::down_msg&) { /* nop */ },
+      [](const down_msg&) { /* nop */ },
       error_handler()
     );
     self->monitor(server2);
-    self->send(server2, shutdown_atom::value);
+    self->send_exit(server2, exit_reason::user_shutdown);
     self->receive(
-      [](const caf::down_msg&) { /* nop */ },
+      [](const down_msg&) { /* nop */ },
       error_handler()
     );
     self->monitor(server3);
-    self->send(server3, shutdown_atom::value);
+    self->send_exit(server3, exit_reason::user_shutdown);
     self->receive(
-      [](const caf::down_msg&) { /* nop */ },
+      [](const down_msg&) { /* nop */ },
       error_handler()
     );
   }

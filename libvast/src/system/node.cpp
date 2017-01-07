@@ -157,7 +157,7 @@ void spawn(node_ptr self, message args) {
         }
       }
       // Dispatch spawn command.
-      auto a = fun({self->state.dir, label, component_args});
+      auto a = fun({component_args, self->state.dir, label});
       if (!a)
         rp.deliver(a.error());
       else
@@ -229,16 +229,26 @@ void send(node_ptr self, message args) {
 
 } // namespace <anonymous>
 
-caf::behavior node(node_ptr self, std::string name, path dir) {
+caf::behavior node(node_ptr self, std::string name, path dir,
+                   raft::server_id id) {
   self->state.dir = std::move(dir);
   self->state.name = std::move(name);
   self->state.tracker = self->spawn<linked>(tracker, self->state.name);
-  // Bring up the accountant and put it in the actor registry. All
-  // accounting-aware actors look for the accountant in the registry.
-  auto accounting_log = self->state.dir / "log" / "current" / "accounting.log";
-  auto acc = self->spawn<linked>(accountant, accounting_log);
+  // Bring up the accountant. All accounting-aware actors look for the
+  // accountant in the registry.
+  auto acc_log = self->state.dir / "log" / "current" / "accounting.log";
+  auto acc = self->spawn<linked>(accountant, std::move(acc_log));
   auto ptr = actor_cast<strong_actor_ptr>(acc);
   self->system().registry().put(accountant_atom::value, ptr);
+  // Bring up the consensus module.
+  auto consensus = self->spawn<linked>(raft::consensus,
+                                       self->state.dir / "consensus");
+  if (id != 0)
+    self->send(consensus, id_atom::value, id);
+  ptr = actor_cast<strong_actor_ptr>(consensus);
+  self->system().registry().put(consensus_atom::value, ptr);
+  self->send(consensus, run_atom::value);
+  // Make sure to bring down dependencies.
   self->set_exit_handler(
     [=](const exit_msg& msg) {
       self->send_exit(self->state.tracker, msg.reason);
@@ -269,6 +279,17 @@ caf::behavior node(node_ptr self, std::string name, path dir) {
     [=](peer_atom, actor& tracker, std::string& peer_name) {
       self->delegate(self->state.tracker, peer_atom::value,
                      std::move(tracker), std::move(peer_name));
+    },
+    [=](get_atom) {
+      auto rp = self->make_response_promise();
+      self->request(self->state.tracker, infinite, get_atom::value).then(
+        [=](registry& reg) mutable {
+          rp.deliver(self->state.name, std::move(reg));
+        },
+        [=](error& e) mutable {
+          rp.deliver(std::move(e));
+        }
+      );
     },
     [=](signal_atom, int signal) {
       VAST_INFO(self, "got signal", ::strsignal(signal));

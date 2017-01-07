@@ -16,7 +16,9 @@ using namespace vast::system;
 FIXTURE_SCOPE(leader_tests, fixtures::actor_system)
 
 TEST(single leader) {
-  auto server = self->spawn(raft::consensus, directory, 1);
+  directory /= "server";
+  auto server = self->spawn(raft::consensus, directory);
+  self->send(server, id_atom::value, raft::server_id{1});
   self->send(server, run_atom::value);
   MESSAGE("send two logs to leader");
   auto cmd = make_message(put_atom::value, "foo", 42);
@@ -46,13 +48,13 @@ TEST(single leader) {
   );
   MESSAGE("shutting down server");
   self->monitor(server);
-  self->send(server, shutdown_atom::value);
+  self->send_exit(server, exit_reason::user_shutdown);
   self->receive(
     [](const down_msg&) { /* nop */},
     error_handler()
   );
   MESSAGE("sending another command");
-  server = self->spawn(raft::consensus, directory, 1);
+  server = self->spawn(raft::consensus, directory);
   self->send(server, run_atom::value);
   cmd = make_message(put_atom::value, "baz", 49);
   self->request(server, timeout, replicate_atom::value, cmd).receive(
@@ -62,7 +64,7 @@ TEST(single leader) {
     error_handler()
   );
   MESSAGE("terminating");
-  self->send(server, shutdown_atom::value);
+  self->send_exit(server, exit_reason::user_shutdown);
 }
 
 FIXTURE_SCOPE_END()

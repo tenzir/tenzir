@@ -5,6 +5,7 @@
 
 #include "vast/filesystem.hpp"
 
+#include "vast/system/consensus.hpp"
 #include "vast/system/tracker.hpp"
 
 namespace vast {
@@ -22,8 +23,9 @@ struct node_state {
 /// @param self The actor handle
 /// @param name The name of the node.
 /// @param dir The directory where to store persistent state.
+/// @param id The server ID of the consensus module.
 caf::behavior node(caf::stateful_actor<node_state>* self, std::string name,
-                   path dir);
+                   path dir, raft::server_id id);
 
 } // namespace system
 } // namespace vast

@@ -6,16 +6,15 @@
 #include <caf/local_actor.hpp>
 
 #include "vast/expected.hpp"
-
-#include "vast/system/tracker.hpp"
+#include "vast/filesystem.hpp"
 
 namespace vast {
 namespace system {
 
 struct options {
+  caf::message params;
   path dir;
   std::string label;
-  caf::message params;
 };
 
 expected<caf::actor> spawn_archive(caf::local_actor* self, options opts);
