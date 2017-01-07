@@ -1,8 +1,12 @@
 #ifndef VAST_SYSTEM_REPLICATED_STORE_HPP
 #define VAST_SYSTEM_REPLICATED_STORE_HPP
 
+#include "vast/logger.hpp"
+
 #include "vast/system/consensus.hpp"
 #include "vast/system/key_value_store.hpp"
+
+#include "vast/detail/assert.hpp"
 
 namespace vast {
 namespace system {
@@ -35,12 +39,14 @@ replicated_store(
   > self,
   caf::actor consensus,
   std::chrono::milliseconds timeout) {
+  self->monitor(consensus);
   // Send the current command/message to the consensus module, and once it has
   // been replicated, apply the command to the local state.
   auto replicate = [=](auto rp, auto apply) {
     auto msg = self->current_mailbox_element()->move_content_to_message();
     self->request(consensus, timeout, replicate_atom::value, msg).then(
       [=](ok_atom, raft::index_type index) mutable {
+        VAST_DEBUG(self, "applies entry", index);
         self->state.last_applied = index;
         rp.deliver(apply(index, msg));
       },
@@ -50,6 +56,12 @@ replicated_store(
     );
     return rp;
   };
+  self->set_down_handler(
+    [=](const caf::down_msg& msg) {
+      VAST_ASSERT(msg.source == consensus);
+      self->quit(msg.reason);
+    }
+  );
   return {
     [=](put_atom, const Key&, Value&) {
       return replicate(
