@@ -130,10 +130,6 @@ struct value_printer : printer<value_printer> {
   mutable type event_type;
 };
 
-constexpr char value_printer::separator[];
-constexpr char value_printer::set_separator[];
-constexpr char value_printer::empty[];
-
 class writer : public format::writer<value_printer>{
 public:
   using format::writer<value_printer>::writer;
@@ -148,5 +144,3 @@ public:
 } // namespace vast
 
 #endif
-
-

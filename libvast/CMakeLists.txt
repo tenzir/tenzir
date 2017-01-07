@@ -1,3 +1,7 @@
+# ----------------------------------------------------------------------------
+#                                   libvast
+# ----------------------------------------------------------------------------
+
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/vast/config.hpp.in
                ${CMAKE_CURRENT_BINARY_DIR}/vast/config.hpp)
 
@@ -43,6 +47,7 @@ set(libvast_sources
   src/detail/fdinbuf.cpp
   src/detail/fdostream.cpp
   src/detail/fdoutbuf.cpp
+  src/detail/make_io_stream.cpp
   src/detail/mmapbuf.cpp
   src/detail/posix.cpp
   src/detail/string.cpp
@@ -60,10 +65,14 @@ set(libvast_sources
   src/system/partition.cpp
   src/system/profiler.cpp
   src/system/signal_monitor.cpp
+  src/system/spawn.cpp
+  src/system/spawn_sink.cpp
+  src/system/spawn_source.cpp
   src/system/task.cpp
   src/system/tracker.cpp
   src/format/bgpdump.cpp
   src/format/bro.cpp
+  src/format/csv.cpp
   src/format/test.cpp
 )
 
@@ -111,7 +120,7 @@ install(DIRECTORY vast/
         DESTINATION include/vast FILES_MATCHING PATTERN "*.hpp")
 
 # ----------------------------------------------------------------------------
-#                                 Unit Tests
+#                                 unit tests
 # ----------------------------------------------------------------------------
 
 # Bro logs.

@@ -11,43 +11,17 @@
 
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/endpoint.hpp"
-#include "vast/concept/parseable/vast/expression.hpp"
-#include "vast/concept/parseable/vast/schema.hpp"
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/to_string.hpp"
-#include "vast/concept/printable/vast/expression.hpp"
 #include "vast/concept/printable/vast/json.hpp"
-#include "vast/concept/printable/vast/uuid.hpp"
-#include "vast/data.hpp"
 #include "vast/expression.hpp"
-#include "vast/format/ascii.hpp"
-#include "vast/format/bgpdump.hpp"
-#include "vast/format/bro.hpp"
-#include "vast/format/csv.hpp"
-#include "vast/format/json.hpp"
-#include "vast/format/pcap.hpp"
-#include "vast/format/test.hpp"
 #include "vast/json.hpp"
 #include "vast/logger.hpp"
-#include "vast/query_options.hpp"
-
-#include "vast/detail/posix.hpp"
-#include "vast/detail/fdinbuf.hpp"
-#include "vast/detail/fdostream.hpp"
 
 #include "vast/system/accountant.hpp"
-#include "vast/system/archive.hpp"
-#include "vast/system/consensus.hpp"
-#include "vast/system/importer.hpp"
-#include "vast/system/index.hpp"
-#include "vast/system/exporter.hpp"
 #include "vast/system/node.hpp"
-#include "vast/system/profiler.hpp"
-#include "vast/system/replicated_store.hpp"
-#include "vast/system/sink.hpp"
-#include "vast/system/source.hpp"
+#include "vast/system/spawn.hpp"
 
-using namespace std::chrono_literals;
 using namespace std::string_literals;
 using namespace caf;
 
@@ -57,11 +31,6 @@ namespace system {
 namespace {
 
 using node_ptr = stateful_actor<node_state>*;
-
-struct component_options {
-  std::string label;
-  message params;
-};
 
 void stop(node_ptr self) {
   self->send_exit(self, exit_reason::user_shutdown);
@@ -113,316 +82,15 @@ void show(node_ptr self, message /* args */) {
   );
 }
 
-expected<actor> spawn_metastore(node_ptr self, component_options opts) {
-  auto id = raft::server_id{0};
-  auto r = opts.params.extract_opts({
-    {"id,i", "the static ID of the consensus module", id}
-  });
-  if (id == 0)
-    return make_error(ec::unspecified, "invalid server ID: 0");
-  if (!r.remainder.empty()) {
-    auto invalid = r.remainder.get_as<std::string>(0);
-    return make_error(ec::syntax_error, "invalid syntax", invalid);
-  }
-  if (!r.error.empty())
-    return make_error(ec::syntax_error, r.error);
-  auto consensus = self->spawn(raft::consensus, self->state.dir / opts.label,
-                               id);
-  auto s = self->spawn(replicated_store<std::string, data>, consensus, 10000ms);
-  return actor_cast<actor>(s);
-}
-
-expected<actor> spawn_archive(node_ptr self, component_options opts) {
-  auto mss = size_t{128};
-  auto segments = size_t{10};
-  auto r = opts.params.extract_opts({
-    {"segments,s", "number of cached segments", segments},
-    {"max-segment-size,m", "maximum segment size in MB", mss}
-  });
-  if (!r.remainder.empty()) {
-    auto invalid = r.remainder.get_as<std::string>(0);
-    return make_error(ec::syntax_error, "invalid syntax", invalid);
-  }
-  if (!r.error.empty())
-    return make_error(ec::syntax_error, r.error);
-  auto a = self->spawn(archive, self->state.dir / opts.label, segments, mss);
-  return actor_cast<actor>(a);
-}
-
-expected<actor> spawn_index(node_ptr self, component_options opts) {
-  uint64_t max_events = 1 << 20;
-  uint64_t passive = 10;
-  auto r = opts.params.extract_opts({
-    {"events,e", "maximum events per partition", max_events},
-    {"passive,p", "maximum number of passive partitions", passive}
-  });
-  if (!r.remainder.empty()) {
-    auto invalid = r.remainder.get_as<std::string>(0);
-    return make_error(ec::syntax_error, "invalid syntax", invalid);
-  }
-  if (!r.error.empty())
-    return make_error(ec::syntax_error, r.error);
-  return self->spawn(index, self->state.dir / opts.label, max_events, passive);
-}
-
-expected<actor> spawn_importer(node_ptr self, component_options opts) {
-  auto ids = size_t{128};
-  auto r = opts.params.extract_opts({
-    {"ids,n", "number of initial IDs to request", ids},
-  });
-  if (!r.remainder.empty()) {
-    auto invalid = r.remainder.get_as<std::string>(0);
-    return make_error(ec::syntax_error, "invalid syntax", invalid);
-  }
-  if (!r.error.empty())
-    return make_error(ec::syntax_error, r.error);
-  return self->spawn(importer, self->state.dir / opts.label, ids);
-}
-
-expected<actor> spawn_exporter(node_ptr self, component_options opts) {
-  std::string expr_str;
-  auto r = opts.params.extract_opts({
-    {"expression,e", "the query expression", expr_str},
-    {"continuous,c", "marks a query as continuous"},
-    {"historical,h", "marks a query as historical"},
-    {"unified,u", "marks a query as unified"},
-  });
-  if (!r.remainder.empty()) {
-    auto invalid = r.remainder.get_as<std::string>(0);
-    return make_error(ec::syntax_error, "invalid syntax", invalid);
-  }
-  if (!r.error.empty())
-    return make_error(ec::syntax_error, r.error);
-  // Parse expression.
-  auto expr = to<expression>(expr_str);
-  if (!expr)
-    return expr.error();
-  *expr = normalize(*expr);
-  VAST_DEBUG(self, "normalized query expression to:", *expr);
-  // Parse query options.
-  auto query_opts = no_query_options;
-  if (r.opts.count("continuous") > 0)
-    query_opts = query_opts + continuous;
-  if (r.opts.count("historical") > 0)
-    query_opts = query_opts + historical;
-  if (r.opts.count("unified") > 0)
-    query_opts = unified;
-  if (query_opts == no_query_options)
-    return make_error(ec::syntax_error, "got query w/o options (-h, -c, -u)");
-  return self->spawn(exporter, std::move(*expr), query_opts);
-}
-
-
-expected<std::unique_ptr<std::istream>>
-make_input_stream(const std::string& input, bool is_uds) {
-  if (is_uds) {
-    if (input == "-")
-      return make_error(ec::filesystem_error,
-                        "cannot use stdin as UNIX domain socket");
-    auto uds = detail::unix_domain_socket::connect(input);
-    if (!uds)
-      return make_error(ec::filesystem_error,
-                        "failed to connect to UNIX domain socket at", input);
-    auto remote_fd = uds.recv_fd(); // Blocks!
-    auto sb = std::make_unique<detail::fdinbuf>(remote_fd);
-    return std::make_unique<std::istream>(sb.release());
-  }
-  if (input == "-") {
-    auto sb = std::make_unique<detail::fdinbuf>(0); // stdin
-    return std::make_unique<std::istream>(sb.release());
-  }
-  auto fb = std::make_unique<std::filebuf>();
-  fb->open(input, std::ios_base::binary | std::ios_base::in);
-  return std::make_unique<std::istream>(fb.release());
-}
-
-expected<std::unique_ptr<std::ostream>>
-make_output_stream(const std::string& output, bool is_uds) {
-  if (is_uds) {
-      return make_error(ec::filesystem_error,
-                        "cannot use stdout as UNIX domain socket");
-    auto uds = detail::unix_domain_socket::connect(output);
-    if (!uds)
-      return make_error(ec::filesystem_error,
-                        "failed to connect to UNIX domain socket at", output);
-    auto remote_fd = uds.recv_fd(); // Blocks!
-    return std::make_unique<detail::fdostream>(remote_fd);
-  }
-  if (output == "-")
-    return std::make_unique<detail::fdostream>(1); // stdout
-  return std::make_unique<std::ofstream>(output);
-}
-
-expected<actor> spawn_source(node_ptr self, component_options opts) {
-  if (opts.params.empty())
-    return make_error(ec::syntax_error, "missing format");
-  auto& format = opts.params.get_as<std::string>(0);
-  auto source_args = opts.params.drop(1);
-  // Parse common parameters first.
-  auto input = "-"s;
-  std::string schema_file;
-  auto r = source_args.extract_opts({
-    {"read,r", "path to input where to read events from", input},
-    {"schema,s", "path to alternate schema", schema_file},
-    {"uds,u", "treat -r as listening UNIX domain socket"}
-  });
-  actor src;
-  // Parse source-specific parameters, if any.
-  if (format == "pcap") {
-#ifndef VAST_HAVE_PCAP
-    return make_error(ec::unspecified, "not compiled with pcap support");
-#else
-    auto flow_max = uint64_t{1} << 20;
-    auto flow_age = 60u;
-    auto flow_expiry = 10u;
-    auto cutoff = std::numeric_limits<size_t>::max();
-    auto pseudo_realtime = int64_t{0};
-    r = r.remainder.extract_opts({
-      {"cutoff,c", "skip flow packets after this many bytes", cutoff},
-      {"flow-max,m", "number of concurrent flows to track", flow_max},
-      {"flow-age,a", "max flow lifetime before eviction", flow_age},
-      {"flow-expiry,e", "flow table expiration interval", flow_expiry},
-      {"pseudo-realtime,p", "factor c delaying trace packets by 1/c",
-       pseudo_realtime}
-    });
-    if (!r.error.empty())
-      return make_error(ec::syntax_error, r.error);
-    format::pcap::reader reader{input, cutoff, flow_max, flow_age, flow_expiry,
-                                pseudo_realtime};
-    src = self->spawn(source<format::pcap::reader>, std::move(reader));
-#endif
-  } else if (format == "bro" || format == "bgpdump") {
-    auto in = make_input_stream(input, r.opts.count("uds") > 0);
-    if (!in)
-      return in.error();
-    if (format == "bro") {
-      format::bro::reader reader{std::move(*in)};
-      src = self->spawn(source<format::bro::reader>, std::move(reader));
-    } else /* if (format == "bgpdump") */ {
-      format::bgpdump::reader reader{std::move(*in)};
-      src = self->spawn(source<format::bgpdump::reader>, std::move(reader));
-    }
-  } else if (format == "test") {
-    auto seed = size_t{0};
-    auto id = event_id{0};
-    auto n = uint64_t{100};
-    r = r.remainder.extract_opts({
-      {"seed,s", "the PRNG seed", seed},
-      {"events,n", "number of events to generate", n},
-      {"id,i", "the base event ID", id}
-    });
-    if (!r.error.empty())
-      return make_error(ec::syntax_error, r.error);
-    format::test::reader reader{seed, n, id};
-    src = self->spawn(source<format::test::reader>, std::move(reader));
-    // Since the test source doesn't consume any data and only generates
-    // events out of thin air, we use the input channel to specify the schema.
-    schema_file = input;
-  } else {
-    return make_error(ec::syntax_error, "invalid format:", format);
-  }
-  // Supply an alternate schema, if requested.
-  if (!schema_file.empty()) {
-    auto str = load_contents(schema_file);
-    if (!str)
-      return str.error();
-    auto sch = to<schema>(*str);
-    if (!sch)
-      return sch.error();
-    // Send anonymously, since we can't process the reply here.
-    self->anon_send(src, put_atom::value, std::move(*sch));
-  }
-  return src;
-}
-
-expected<actor> spawn_sink(node_ptr self, component_options opts) {
-  if (opts.params.empty())
-    return make_error(ec::syntax_error, "missing format");
-  auto& format = opts.params.get_as<std::string>(0);
-  auto sink_args = opts.params.drop(1);
-  // Parse common parameters first.
-  auto output = "-"s;
-  auto schema_file = ""s;
-  auto r = sink_args.extract_opts({
-    {"write,w", "path to write events to", output},
-    //{"schema,s", "alternate schema file", schema_file},
-    {"uds,u", "treat -w as UNIX domain socket to connect to"}
-  });
-  actor snk;
-  // Parse sink-specific parameters, if any.
-  if (format == "pcap") {
-#ifndef VAST_HAVE_PCAP
-    return make_error(ec::unspecified, "not compiled with pcap support");
-#else
-    auto flush = 10000u;
-    r = r.remainder.extract_opts({
-      {"flush,f", "flush to disk after this many packets", flush}
-    });
-    if (!r.error.empty())
-      return make_error(ec::syntax_error, r.error);
-    format::pcap::writer writer{output, flush};
-    snk = self->spawn(sink<format::pcap::writer>, std::move(writer));
-#endif
-  } else if (format == "bro") {
-    format::bro::writer writer{output};
-    snk = self->spawn(sink<format::bro::writer>, std::move(writer));
-  } else {
-    auto out = make_output_stream(output, r.opts.count("uds") > 0);
-    if (!out)
-      return out.error();
-    if (format == "csv") {
-      format::csv::writer writer{std::move(*out)};
-      snk = self->spawn(sink<format::csv::writer>, std::move(writer));
-    } else if (format == "ascii") {
-      format::ascii::writer writer{std::move(*out)};
-      snk = self->spawn(sink<format::ascii::writer>, std::move(writer));
-    } else if (format == "json") {
-      format::json::writer writer{std::move(*out)};
-      snk = self->spawn(sink<format::json::writer>, std::move(writer));
-    } else {
-      return make_error(ec::syntax_error, "invalid format:", format);
-    }
-  }
-  return snk;
-}
-
-#ifdef VAST_HAVE_GPERFTOOLS
-expected<actor> spawn_profiler(node_ptr self, component_options opts) {
-  auto resolution = 1u;
-  auto r = opts.params.extract_opts({
-    {"cpu,c", "start the CPU profiler"},
-    {"heap,h", "start the heap profiler"},
-    {"resolution,r", "seconds between measurements", resolution}
-  });
-  if (!r.remainder.empty()) {
-    auto invalid = r.remainder.get_as<std::string>(0);
-    return make_error(ec::syntax_error, "invalid syntax", invalid);
-  }
-  if (!r.error.empty())
-    return make_error(ec::syntax_error, r.error);
-  auto secs = std::chrono::seconds(resolution);
-  auto prof = self->spawn(profiler, self->state.dir / opts.label, secs);
-  if (r.opts.count("cpu") > 0)
-    self->send(prof, start_atom::value, cpu_atom::value);
-  if (r.opts.count("heap") > 0)
-    self->send(prof, start_atom::value, heap_atom::value);
-  return prof;
-}
-#else
-expected<actor> spawn_profiler(node_ptr, component_options) {
-  return make_error(ec::unspecified, "not compiled with gperftools");
-}
-#endif
-
 void spawn(node_ptr self, message args) {
   auto rp = self->make_response_promise();
   if (args.empty()) {
     rp.deliver(make_error(ec::syntax_error, "missing arguments"));
     return;
   }
-  using factory_function = std::function<expected<actor>(component_options)>;
+  using factory_function = std::function<expected<actor>(options)>;
   auto bind = [=](auto f) {
-    return [=](component_options opts) {
+    return [=](options opts) {
       return f(self, std::move(opts));
     };
   };
@@ -489,7 +157,7 @@ void spawn(node_ptr self, message args) {
         }
       }
       // Dispatch spawn command.
-      auto a = fun({label, component_args});
+      auto a = fun({self->state.dir, label, component_args});
       if (!a)
         rp.deliver(a.error());
       else
