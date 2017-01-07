@@ -302,34 +302,35 @@ display(VAST_USE_TCMALLOC yes tcmalloc_summary)
 display(VAST_ENABLE_ASSERTIONS yes assertions_summary)
 display(ASAN_FOUND yes asan_summary)
 
-set(build_summary
-    "\n====================|  Build Summary  |===================="
+set(summary
+    "====================|  Build Summary  |===================="
     "\n"
-    "\nVersion:              ${VERSION_MAJ_MIN}"
+    "\nVersion:          ${VERSION_MAJ_MIN}"
     "\n"
-    "\nSource directory:     ${CMAKE_SOURCE_DIR}"
-    "\nBuild directory:      ${CMAKE_BINARY_DIR}"
-    "\nInstall prefix:       ${CMAKE_INSTALL_PREFIX}"
+    "\nSource directory: ${CMAKE_SOURCE_DIR}"
+    "\nBuild directory:  ${CMAKE_BINARY_DIR}"
+    "\nInstall prefix:   ${CMAKE_INSTALL_PREFIX}"
     "\n"
-    "\nBuild type:           ${CMAKE_BUILD_TYPE}"
-    "\nShow time report:     ${time_report_summary}"
-    "\nAssertions:           ${assertions_summary}"
-    "\nLog level:            ${log_level_summary}"
+    "\nBuild type:       ${CMAKE_BUILD_TYPE}"
+    "\nShow time report: ${time_report_summary}"
+    "\nAssertions:       ${assertions_summary}"
+    "\nLog level:        ${log_level_summary}"
     "\n"
-    "\nCC:                   ${CMAKE_C_COMPILER}"
-    "\nCXX:                  ${CMAKE_CXX_COMPILER}"
-    "\nCXXFLAGS:             ${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_${build_type}}"
+    "\nCC:               ${CMAKE_C_COMPILER}"
+    "\nCXX:              ${CMAKE_CXX_COMPILER}"
+    "\nCXXFLAGS:         ${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_${build_type}}"
     "\n"
-    "\nCAF:                  ${caf_summary}"
-    "\nSnappy                ${snappy_summary}"
-    "\nPCAP:                 ${pcap_summary}"
-    "\nGperftools:           ${perftools_summary}"
-    "\nDoxygen:              ${doxygen_summary}"
-    "\nmd2man:               ${md2man_summary}"
+    "\nCAF:              ${caf_summary}"
+    "\nSnappy            ${snappy_summary}"
+    "\nPCAP:             ${pcap_summary}"
+    "\nGperftools:       ${perftools_summary}"
+    "\nDoxygen:          ${doxygen_summary}"
+    "\nmd2man:           ${md2man_summary}"
     "\n"
-    "\nUse tcmalloc:         ${tcmalloc_summary}"
-    "\nUse AddressSanitizer: ${asan_summary}"
+    "\ntcmalloc:         ${tcmalloc_summary}"
+    "\nAddressSanitizer: ${asan_summary}"
     "\n"
-    "\n===========================================================\n")
+    "\n===========================================================")
 
-message(${build_summary})
+message("\n" ${summary} "\n")
+file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/config.summary ${summary})
