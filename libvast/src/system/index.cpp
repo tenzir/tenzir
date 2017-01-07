@@ -54,8 +54,6 @@ actor dispatch(stateful_actor<index_state>* self, uuid const& part,
     VAST_DEBUG(self, "spawns passive partition", part);
     auto p = self->spawn<monitored>(partition,
                                     self->state.dir / to_string(part), self);
-    if (self->state.accountant)
-      self->send(p, self->state.accountant);
     self->state.passive.insert(part, p);
     return p;
   }
@@ -104,8 +102,6 @@ void consolidate(stateful_actor<index_state>* self, uuid const& part,
       auto p = self->spawn<monitored>(partition,
                                       self->state.dir / to_string(entry.part),
                                       self);
-      if (self->state.accountant)
-        self->send(p, self->state.accountant);
       self->state.passive.insert(entry.part, p); // automatically evicts 'part'.
       for (auto& next_expr : entry.queries) {
         auto q = self->state.queries.find(next_expr);
@@ -267,9 +263,6 @@ behavior index(stateful_actor<index_state>* self, path const& dir,
         auto part_dir = self->state.dir / to_string(self->state.active_id);
         self->state.active = self->spawn<monitored>(partition, part_dir, self);
         auto* active = &self->state.partitions[self->state.active_id];
-        // Register accountant.
-        if (self->state.accountant)
-          self->send(self->state.active, self->state.accountant);
         // Register continuous queries.
         for (auto& q : self->state.queries)
           if (q.second.cont)
@@ -486,11 +479,6 @@ behavior index(stateful_actor<index_state>* self, path const& dir,
       flush(self);
       self->send(t, done_atom::value);
       return t;
-    },
-    [=](accountant_type const& acc) {
-      self->state.accountant = acc;
-      if (self->state.active)
-        self->send(self->state.active, acc);
     },
     //[=](schema_atom) {
     //  std::map<std::string, json::array> history;
