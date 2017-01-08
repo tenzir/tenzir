@@ -19,9 +19,8 @@ namespace {
 auto issue_query = [](auto& self, auto& idx, auto error_handler) {
   auto expr = to<expression>("string == \"SF\" && id.resp_p == 443/?");
   REQUIRE(expr);
-  self->send(idx, *expr, historical, self);
   actor task;
-  self->receive(
+  self->request(idx, infinite, *expr, historical, self).receive(
     [&](actor const& t) {
       REQUIRE(t);
       self->monitor(t);

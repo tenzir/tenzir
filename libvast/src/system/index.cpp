@@ -337,11 +337,12 @@ behavior index(stateful_actor<index_state>* self, path const& dir,
       auto msg = self->current_mailbox_element()->move_content_to_message();
       self->send(self->state.active, msg + make_message(std::move(sch)));
     },
-    [=](expression const& expr, query_options opts, actor const& subscriber) {
+    [=](expression const& expr, query_options opts, actor const& subscriber)
+    -> result<actor> {
       VAST_DEBUG(self, "got query:", expr);
       if (opts == no_query_options) {
-        VAST_WARNING(self, "ignores query with no options:", expr);
-        return;
+        VAST_WARNING(self, "ignores query with no options");
+        return make_error(ec::syntax_error, "no query options given");
       }
       self->monitor(subscriber);
       auto& qs = self->state.queries[expr];
@@ -373,31 +374,33 @@ behavior index(stateful_actor<index_state>* self, path const& dir,
             qs.hist->task = {};
           }
         }
-        self->send(subscriber, qs.hist->task);
         if (!qs.hist->hits.empty() && !all<0>(qs.hist->hits)) {
           VAST_DEBUG(self, "relays", rank(qs.hist->hits), "cached hits");
           self->send(subscriber, qs.hist->hits);
         }
+        return qs.hist->task;
       }
-      if (has_continuous_option(opts)) {
-        if (!qs.cont) {
-          VAST_DEBUG(self, "instantiates continuous query");
-          qs.cont = continuous_query_state();
-        }
-        if (!qs.cont->task) {
-          VAST_DEBUG(self, "enables continuous query");
-          qs.cont->task =
-            self->spawn(task<steady_clock::time_point>, steady_clock::now());
-          self->send(qs.cont->task, self);
-          // Relay the continuous query to all active partitions, as these may
-          // still receive events.
-          if (self->state.active)
-            self->send(self->state.active, expr, continuous_atom::value);
-        }
-        self->send(subscriber, qs.cont->task);
-        if (!qs.cont->hits.empty() && !all<0>(qs.cont->hits))
-          self->send(subscriber, qs.cont->hits);
-      }
+      return make_error(ec::unspecified, "continuous queries not implemented");
+      // TODO
+      //if (has_continuous_option(opts)) {
+      //  if (!qs.cont) {
+      //    VAST_DEBUG(self, "instantiates continuous query");
+      //    qs.cont = continuous_query_state();
+      //  }
+      //  if (!qs.cont->task) {
+      //    VAST_DEBUG(self, "enables continuous query");
+      //    qs.cont->task =
+      //      self->spawn(task<steady_clock::time_point>, steady_clock::now());
+      //    self->send(qs.cont->task, self);
+      //    // Relay the continuous query to all active partitions, as these may
+      //    // still receive events.
+      //    if (self->state.active)
+      //      self->send(self->state.active, expr, continuous_atom::value);
+      //  }
+      //  self->send(subscriber, qs.cont->task);
+      //  if (!qs.cont->hits.empty() && !all<0>(qs.cont->hits))
+      //    self->send(subscriber, qs.cont->hits);
+      //}
     },
     [=](expression const& expr, continuous_atom, disable_atom) {
       VAST_DEBUG(self, "got request to disable continuous query:", expr);

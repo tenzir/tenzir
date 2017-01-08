@@ -88,7 +88,7 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
       self->quit(msg.reason);
     }
   );
-  auto operating = behavior{
+  return {
     [=](bitmap& hits) {
       timespan runtime = steady_clock::now() - self->state.start;
       auto count = rank(hits);
@@ -135,6 +135,18 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
       if (self->state.index_lookup_complete)
         shutdown(self);
     },
+    [=](progress_atom, uint64_t remaining, uint64_t total) {
+      self->state.progress = (total - double(remaining)) / total;
+      self->send(self->state.sink, self->state.id, progress_atom::value,
+                 self->state.progress, total);
+    },
+    [=](done_atom, timespan runtime, expression const&) {
+      VAST_DEBUG(self, "completed index interaction in", runtime);
+      self->state.index_lookup_complete = true;
+      if (self->state.accountant)
+        self->send(self->state.accountant, "exporter.hits.runtime", runtime);
+      shutdown(self);
+    },
     [=](extract_atom) {
       if (self->state.requested == max_events) {
         VAST_WARNING(self, "ignores extract request, already getting all");
@@ -154,20 +166,6 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
                  self->state.requested, "pending results");
       ship_results(self);
     },
-    [=](progress_atom, uint64_t remaining, uint64_t total) {
-      self->state.progress = (total - double(remaining)) / total;
-      self->send(self->state.sink, self->state.id, progress_atom::value,
-                 self->state.progress, total);
-    },
-    [=](done_atom, timespan runtime, expression const&) {
-      VAST_DEBUG(self, "completed index interaction in", runtime);
-      self->state.index_lookup_complete = true;
-      if (self->state.accountant)
-        self->send(self->state.accountant, "exporter.hits.runtime", runtime);
-      shutdown(self);
-    },
-  };
-  return {
     [=](archive_type const& archive) {
       VAST_DEBUG(self, "registers archive", archive);
       self->state.archive = archive;
@@ -183,13 +181,14 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
     [=](run_atom) {
       VAST_INFO(self, "executes query", expr);
       self->state.start = steady_clock::now();
-      self->send(self->state.index, expr, opts, self);
-      self->set_default_handler(skip);
-      self->become(
+      self->request(self->state.index, infinite, expr, opts, self).then(
         [=](actor const& task) {
           VAST_DEBUG(self, "received task from index");
           self->send(task, subscriber_atom::value, self);
-          self->become(operating);
+        },
+        [=](const error& e) {
+          VAST_DEBUG(self, "failed to send query to index:",
+                     self->system().render(e));
         }
       );
     }
