@@ -1,5 +1,7 @@
 #include <caf/all.hpp>
 
+#include <caf/detail/scope_guard.hpp>
+
 #include "vast/config.hpp"
 
 #include "vast/concept/parseable/to.hpp"
@@ -24,7 +26,7 @@ using namespace caf;
 namespace vast {
 namespace system {
 
-expected<actor> spawn_source(local_actor* self, options opts) {
+expected<actor> spawn_source(local_actor* self, options& opts) {
   if (opts.params.empty())
     return make_error(ec::syntax_error, "missing format");
   auto& format = opts.params.get_as<std::string>(0);
@@ -37,6 +39,7 @@ expected<actor> spawn_source(local_actor* self, options opts) {
     {"schema,s", "path to alternate schema", schema_file},
     {"uds,u", "treat -r as listening UNIX domain socket"}
   });
+  auto grd = caf::detail::make_scope_guard([&] { opts.params = r.remainder; });
   actor src;
   // Parse source-specific parameters, if any.
   if (format == "pcap") {

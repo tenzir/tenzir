@@ -88,10 +88,10 @@ void spawn(node_ptr self, message args) {
     rp.deliver(make_error(ec::syntax_error, "missing arguments"));
     return;
   }
-  using factory_function = std::function<expected<actor>(options)>;
+  using factory_function = std::function<expected<actor>(options&)>;
   auto bind = [=](auto f) {
-    return [=](options opts) {
-      return f(self, std::move(opts));
+    return [=](options& opts) {
+      return f(self, opts);
     };
   };
   static auto factory = std::unordered_map<std::string, factory_function>{
@@ -157,7 +157,8 @@ void spawn(node_ptr self, message args) {
         }
       }
       // Dispatch spawn command.
-      auto a = fun({component_args, self->state.dir, label});
+      auto opts = options{component_args, self->state.dir, label};
+      auto a = fun(opts);
       if (!a)
         rp.deliver(a.error());
       else
@@ -233,9 +234,7 @@ caf::behavior node(node_ptr self, std::string name, path dir,
                    raft::server_id id) {
   self->state.dir = std::move(dir);
   self->state.name = std::move(name);
-  self->state.tracker = self->spawn<linked>(tracker, self->state.name);
-  // Bring up the accountant. All accounting-aware actors look for the
-  // accountant in the registry.
+  // Bring up the accountant.
   auto acc_log = self->state.dir / "log" / "current" / "accounting.log";
   auto acc = self->spawn<linked>(accountant, std::move(acc_log));
   auto ptr = actor_cast<strong_actor_ptr>(acc);
@@ -245,10 +244,11 @@ caf::behavior node(node_ptr self, std::string name, path dir,
                                        self->state.dir / "consensus");
   if (id != 0)
     self->send(consensus, id_atom::value, id);
+  self->send(consensus, run_atom::value);
   ptr = actor_cast<strong_actor_ptr>(consensus);
   self->system().registry().put(consensus_atom::value, ptr);
-  self->send(consensus, run_atom::value);
-  // Make sure to bring down dependencies.
+  // Bring up the tracker.
+  self->state.tracker = self->spawn<linked>(tracker, self->state.name);
   self->set_exit_handler(
     [=](const exit_msg& msg) {
       self->send_exit(self->state.tracker, msg.reason);

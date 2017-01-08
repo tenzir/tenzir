@@ -37,39 +37,37 @@ using namespace caf;
 namespace vast {
 namespace system {
 
-expected<actor> spawn_archive(local_actor* self, options opts) {
+expected<actor> spawn_archive(local_actor* self, options& opts) {
   auto mss = size_t{128};
   auto segments = size_t{10};
   auto r = opts.params.extract_opts({
     {"segments,s", "number of cached segments", segments},
     {"max-segment-size,m", "maximum segment size in MB", mss}
   });
-  if (!r.remainder.empty()) {
-    auto invalid = r.remainder.get_as<std::string>(0);
-    return make_error(ec::syntax_error, "invalid syntax", invalid);
-  }
+  opts.params = r.remainder;
   if (!r.error.empty())
     return make_error(ec::syntax_error, r.error);
   auto a = self->spawn(archive, opts.dir / opts.label, segments, mss);
   return actor_cast<actor>(a);
 }
 
-expected<actor> spawn_exporter(local_actor* self, options opts) {
-  std::string expr_str;
+expected<actor> spawn_exporter(local_actor* self, options& opts) {
+  auto limit = uint64_t{0};
   auto r = opts.params.extract_opts({
-    {"expression,e", "the query expression", expr_str},
     {"continuous,c", "marks a query as continuous"},
     {"historical,h", "marks a query as historical"},
     {"unified,u", "marks a query as unified"},
-  });
-  if (!r.remainder.empty()) {
-    auto invalid = r.remainder.get_as<std::string>(0);
-    return make_error(ec::syntax_error, "invalid syntax", invalid);
-  }
+    {"limit,l", "limit the number of results", limit},
+  }, nullptr, true);
   if (!r.error.empty())
     return make_error(ec::syntax_error, r.error);
+  if (r.remainder.empty())
+    return make_error(ec::syntax_error, "no query expression given");
+  auto str = r.remainder.get_as<std::string>(0);
+  for (auto i = 1u; i < r.remainder.size(); ++i)
+    str += ' ' + r.remainder.get_as<std::string>(i);
   // Parse expression.
-  auto expr = to<expression>(expr_str);
+  auto expr = to<expression>(str);
   if (!expr)
     return expr.error();
   *expr = normalize(*expr);
@@ -82,41 +80,40 @@ expected<actor> spawn_exporter(local_actor* self, options opts) {
   if (r.opts.count("unified") > 0)
     query_opts = unified;
   if (query_opts == no_query_options)
-    return make_error(ec::syntax_error, "got query w/o options (-h, -c, -u)");
-  return self->spawn(exporter, std::move(*expr), query_opts);
+    return make_error(ec::syntax_error, "missing query options (-h, -c, -u)");
+  auto exp = self->spawn(exporter, std::move(*expr), query_opts);
+  if (limit > 0)
+    anon_send(exp, extract_atom::value, limit);
+  else
+    anon_send(exp, extract_atom::value);
+  return exp;
 }
 
-expected<actor> spawn_importer(local_actor* self, options opts) {
+expected<actor> spawn_importer(local_actor* self, options& opts) {
   auto ids = size_t{128};
   auto r = opts.params.extract_opts({
     {"ids,n", "number of initial IDs to request", ids},
   });
-  if (!r.remainder.empty()) {
-    auto invalid = r.remainder.get_as<std::string>(0);
-    return make_error(ec::syntax_error, "invalid syntax", invalid);
-  }
+  opts.params = r.remainder;
   if (!r.error.empty())
     return make_error(ec::syntax_error, r.error);
   return self->spawn(importer, opts.dir / opts.label, ids);
 }
 
-expected<actor> spawn_index(local_actor* self, options opts) {
+expected<actor> spawn_index(local_actor* self, options& opts) {
   uint64_t max_events = 1 << 20;
   uint64_t passive = 10;
   auto r = opts.params.extract_opts({
     {"events,e", "maximum events per partition", max_events},
     {"passive,p", "maximum number of passive partitions", passive}
   });
-  if (!r.remainder.empty()) {
-    auto invalid = r.remainder.get_as<std::string>(0);
-    return make_error(ec::syntax_error, "invalid syntax", invalid);
-  }
+  opts.params = r.remainder;
   if (!r.error.empty())
     return make_error(ec::syntax_error, r.error);
   return self->spawn(index, opts.dir / opts.label, max_events, passive);
 }
 
-expected<actor> spawn_metastore(local_actor* self, options) {
+expected<actor> spawn_metastore(local_actor* self, options&) {
   auto ptr = self->system().registry().get(consensus_atom::value);
   if (!ptr)
     return make_error(ec::unspecified, "no consensus module in registry");
@@ -126,17 +123,14 @@ expected<actor> spawn_metastore(local_actor* self, options) {
 }
 
 #ifdef VAST_HAVE_GPERFTOOLS
-expected<actor> spawn_profiler(local_actor* self, options opts) {
+expected<actor> spawn_profiler(local_actor* self, options& opts) {
   auto resolution = 1u;
   auto r = opts.params.extract_opts({
     {"cpu,c", "start the CPU profiler"},
     {"heap,h", "start the heap profiler"},
     {"resolution,r", "seconds between measurements", resolution}
   });
-  if (!r.remainder.empty()) {
-    auto invalid = r.remainder.get_as<std::string>(0);
-    return make_error(ec::syntax_error, "invalid syntax", invalid);
-  }
+  opts.params = r.remainder;
   if (!r.error.empty())
     return make_error(ec::syntax_error, r.error);
   auto secs = std::chrono::seconds(resolution);
@@ -148,7 +142,7 @@ expected<actor> spawn_profiler(local_actor* self, options opts) {
   return prof;
 }
 #else
-expected<actor> spawn_profiler(local_actor*, options) {
+expected<actor> spawn_profiler(local_actor*, options&) {
   return make_error(ec::unspecified, "not compiled with gperftools");
 }
 #endif

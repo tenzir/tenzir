@@ -1,5 +1,7 @@
 #include <caf/all.hpp>
 
+#include <caf/detail/scope_guard.hpp>
+
 #include "vast/config.hpp"
 
 #include "vast/format/ascii.hpp"
@@ -19,7 +21,7 @@ using namespace caf;
 namespace vast {
 namespace system {
 
-expected<actor> spawn_sink(local_actor* self, options opts) {
+expected<actor> spawn_sink(local_actor* self, options& opts) {
   if (opts.params.empty())
     return make_error(ec::syntax_error, "missing format");
   auto& format = opts.params.get_as<std::string>(0);
@@ -31,7 +33,8 @@ expected<actor> spawn_sink(local_actor* self, options opts) {
     {"write,w", "path to write events to", output},
     //{"schema,s", "alternate schema file", schema_file},
     {"uds,u", "treat -w as UNIX domain socket to connect to"}
-  });
+  }, nullptr, true);
+  auto grd = caf::detail::make_scope_guard([&] { opts.params = r.remainder; });
   actor snk;
   // Parse sink-specific parameters, if any.
   if (format == "pcap") {
