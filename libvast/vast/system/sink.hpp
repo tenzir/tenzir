@@ -9,6 +9,8 @@
 
 #include <caf/stateful_actor.hpp>
 
+#include "vast/concept/printable/stream.hpp"
+#include "vast/concept/printable/vast/uuid.hpp"
 #include "vast/event.hpp"
 
 #include "vast/system/atoms.hpp"
@@ -56,8 +58,8 @@ sink(caf::stateful_actor<sink_state<Writer>>* self, Writer&& writer) {
     self->state.accountant = caf::actor_cast<accountant_type>(acc);
   }
   return {
-    [=](std::vector<event> const& v) {
-      for (auto& e : v) {
+    [=](const std::vector<event>& es) {
+      for (auto& e : es) {
         auto r = self->state.writer.write(e);
         if (!r) {
           VAST_ERROR(self->system().render(r.error()));
@@ -75,6 +77,9 @@ sink(caf::stateful_actor<sink_state<Writer>>* self, Writer&& writer) {
           self->state.last_flush = now;
         }
       }
+    },
+    [=](const uuid& id, progress_atom, double progress, uint64_t total) {
+      VAST_DEBUG(self, "got progress from", id << ':', progress, "of", total);
     },
     [=](limit_atom, uint64_t max) {
       VAST_DEBUG(self, "caps event export at", max, "events");
