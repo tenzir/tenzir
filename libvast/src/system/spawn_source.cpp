@@ -37,7 +37,7 @@ expected<actor> spawn_source(local_actor* self, options& opts) {
   auto r = source_args.extract_opts({
     {"read,r", "path to input where to read events from", input},
     {"schema,s", "path to alternate schema", schema_file},
-    {"uds,u", "treat -r as listening UNIX domain socket"}
+    {"uds,d", "treat -r as listening UNIX domain socket"}
   });
   auto grd = caf::detail::make_scope_guard([&] { opts.params = r.remainder; });
   actor src;

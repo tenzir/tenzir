@@ -72,12 +72,20 @@ The following *options* are available:
 `-e` *endpoint* [*127.0.0.1:42000*]
   The endpoint of the node to connect to or launch. (See below)
 
+`-i` *id* [*random*]
+  Choose an explicit server ID for the consensus module. The default value is
+  chosen uniformly at random from the set of valid IDs.
+
 `-h`
   Display a help message and exit.
 
-`-n`
+`-l`
   Do not attempt to connect to a remote **node** but start a local instance
   instead.
+
+`-n` *name* [*hostname*]
+  Overrides the node *name*, which defaults to the system hostname. Each node
+  in a topology must have a unique name, otherwise peering fails.
 
 `-v`
   Print VAST version and exit.
@@ -133,10 +141,6 @@ Available *arguments*:
   Start in foreground, i.e., do not detach from controlling terminal and
   run in background. If not specified, `vast` calls daemon(3).
 
-`-n` *name* [*hostname*]
-  Overrides the node *name*, which defaults to the system hostname. Each node
-  in a topology must have a unique name, otherwise peering fails.
-
 ### stop
 
 Synopsis:
@@ -158,7 +162,7 @@ See **OPTIONS** for a description of the *endpoint* syntax.
 
 Synopsis:
 
-  *show* 
+  *show*
 
 Displays various properties of a topology.
 
@@ -204,8 +208,8 @@ Available *component* values with corresponding *parameters*:
   `-u`
     Marks this exporter as *unified*, which is equivalent to both
     `-c` and `-h`.
-  `-e` *n* [*0*]
-    The maximum number of events to extract; *n = 0* means unlimited.
+  `-l` *n* [*0*]
+    Limit the number of events to extract; *n = 0* means unlimited.
 
 *source* **X** [*parameters*]
   **X** specifies the format of *source*. Each source format has its own set of
@@ -214,7 +218,7 @@ Available *component* values with corresponding *parameters*:
     Filesystem path or type-specific name that identifies event *input*.
   `-s` *schema*
     Path to an alterative *schema* file that overrides the default attributes.
-  `-u` *uds*
+  `-d`
     Treats `-r` as a listening UNIX domain socket instead of a regular file.
 
 *source* *bro*
@@ -249,18 +253,16 @@ Available *component* values with corresponding *parameters*:
   parameters, but the following parameters apply to all formats:
   `-w` *path*
     Name of the filesystem *path* (file or directory) to write events to.
+  `-d`
+    Treats `-w` as a listening UNIX domain socket instead of a regular file.
 
 *sink* *ascii*
-  `-u` *uds*
-    Treats `-w` as a listening UNIX domain socket instead of a regular file.
 
 *sink* *bro*
 
 *sink* *csv*
 
 *sink* *json*
-  `-u` *uds*
-    Treats `-w` as a listening UNIX domain socket instead of a regular file.
 
 *sink* *pcap* [*parameters*]
   `-f` *flush* [*1000*]

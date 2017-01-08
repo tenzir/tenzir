@@ -5,24 +5,26 @@
 **Visibility Across Space and Time (VAST)** is a unified platform for network
 forensics and incident response.
 
-Attention: **VAST currently undergoes a substantial rewrite and will not work
-until the heavy lifting has completed. Please stay tuned.**
+## !! Attention !!
+
+VAST currently undergoes a substantial rewrite and will not work until the
+heavy lifting has completed. Please stay tuned.
 
 ## Synopsis
 
 Import a PCAP trace into a local VAST node in one shot:
 
-    vast -n import pcap < trace.pcap
+    vast -l import pcap < trace.pcap
 
 Query a local node and get the result back as PCAP trace:
 
-    vast -n export pcap -h "sport > 60000/tcp && src !in 10.0.0.0/8" \
+    vast -l export pcap -h "sport > 60000/tcp && src !in 10.0.0.0/8" \
       | ipsumdump --collate -w - \
       | tcpdump -r - -nl
 
-Start a node with debug log verbosity in the foreground:
+Start a node listening at 10.0.0.1 in the foreground:
 
-    vast -e 10.0.0.1 -l 5 start -f
+    vast -e 10.0.0.1 start -f
 
 Send [Bro](http://www.bro.org) logs to the remote node:
 
@@ -71,8 +73,8 @@ Optional:
 
 #### FreeBSD
 
-FreeBSD ships with a C++14 compiler. One can install as the dependencies as
-follows:
+FreeBSD ships with a C++14 compiler.
+One can install as the dependencies as follows:
 
     pkg install cmake google-perftools
 
@@ -90,7 +92,7 @@ CAF offers binary packages via [openSUSE's Build Service][caf-obs].
 
 #### Mac OS
 
-Mac OS Yosemite also ships with a C++14 compiler out of the box.
+Mac OS also ships with a C++14 compiler out of the box.
 [Homebrew](http://brew.sh) makes it easy to install the dependencies:
 
     brew install cmake google-perftools

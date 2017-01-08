@@ -32,7 +32,7 @@ expected<actor> spawn_sink(local_actor* self, options& opts) {
   auto r = sink_args.extract_opts({
     {"write,w", "path to write events to", output},
     //{"schema,s", "alternate schema file", schema_file},
-    {"uds,u", "treat -w as UNIX domain socket to connect to"}
+    {"uds,d", "treat -w as UNIX domain socket to connect to"}
   }, nullptr, true);
   auto grd = caf::detail::make_scope_guard([&] { opts.params = r.remainder; });
   actor snk;

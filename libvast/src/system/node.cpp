@@ -159,10 +159,19 @@ void spawn(node_ptr self, message args) {
       // Dispatch spawn command.
       auto opts = options{component_args, self->state.dir, label};
       auto a = fun(opts);
-      if (!a)
+      if (!a) {
         rp.deliver(a.error());
-      else
-        rp.delegate(self->state.tracker, put_atom::value, component, *a, label);
+        return;
+      }
+      self->request(self->state.tracker, infinite, put_atom::value, component,
+                    *a, label).then(
+        [=](ok_atom) mutable {
+          rp.deliver(*a);
+        },
+        [=](error& e) mutable {
+          rp.deliver(std::move(e));
+        }
+      );
     },
     [=](error& e) mutable {
       rp.deliver(std::move(e));

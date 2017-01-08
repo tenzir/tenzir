@@ -9,6 +9,7 @@
 #include "vast/operator.hpp"
 #include "vast/query_options.hpp"
 #include "vast/schema.hpp"
+#include "vast/time.hpp"
 #include "vast/type.hpp"
 #include "vast/uuid.hpp"
 
@@ -31,6 +32,7 @@ configuration::configuration() {
   add_message_type<relational_operator>("vast::relational_operator");
   add_message_type<schema>("vast::schema");
   add_message_type<type>("vast::type");
+  add_message_type<timespan>("vast::timespan");
   add_message_type<uuid>("vast::uuid");
   // Containers
   add_message_type<std::vector<event>>("std::vector<vast::event>");
