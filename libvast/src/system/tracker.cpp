@@ -42,31 +42,35 @@ tracker(tracker_type::stateful_pointer<tracker_state> self, std::string node) {
   self->set_exit_handler(
     [=](const exit_msg& msg) {
       // We shut down the components in the order in which data flows so that
-      // downstream components can still process in-flight data.
+      // downstream components can still process in-flight data. This is much
+      // easier to express with a blocking actor than asynchronously with
+      // nesting.
       auto& local = self->state.components[node];
-      auto shutdown = [&](auto key) {
-        scoped_actor s{self->system()};
-        auto er = local.equal_range(key);
-        for (auto i = er.first; i != er.second; ++i) {
-          VAST_DEBUG(self, "sends EXIT to", i->second.label);
-          s->monitor(i->second.actor);
-          s->send_exit(i->second.actor, msg.reason);
-          s->receive([](const down_msg&) { });
-        }
-        local.erase(er.first, er.second);
-      };
-      shutdown("source");
-      shutdown("importer");
-      shutdown("archive");
-      shutdown("index");
-      shutdown("exporter");
-      // For the remaining components, the shutdown order doesn't matter.
-      for (auto& pair : local)
-        if (pair.first != "tracker") {
-          VAST_DEBUG(self, "sends EXIT to", pair.second.label);
-          self->send_exit(pair.second.actor, msg.reason);
-        }
-      self->quit(msg.reason);
+      self->spawn([=](blocking_actor* terminator) mutable {
+        auto shutdown = [&](auto key) {
+          auto er = local.equal_range(key);
+          for (auto i = er.first; i != er.second; ++i) {
+            VAST_DEBUG("sending EXIT to", i->second.label);
+            terminator->send_exit(i->second.actor, msg.reason);
+            terminator->wait_for(i->second.actor);
+          }
+          local.erase(er.first, er.second);
+        };
+        shutdown("source");
+        shutdown("importer");
+        shutdown("archive");
+        shutdown("index");
+        shutdown("exporter");
+        // For the remaining components, the shutdown order doesn't matter.
+        for (auto& pair : local)
+          if (pair.first != "tracker") {
+            VAST_DEBUG("sending EXIT to", pair.second.label);
+            terminator->send_exit(pair.second.actor, msg.reason);
+          }
+        // We're done, tell the tracker to shut down, this time for real.
+        terminator->send_exit(self, msg.reason);
+      });
+      self->set_exit_handler({});
     }
   );
   return {
