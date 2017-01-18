@@ -78,15 +78,7 @@ public:
 
   /// Creates an instance representing an error
   /// from a type offering the free function `make_error`.
-  template <
-    class E,
-    class = std::enable_if_t<
-      std::is_same<
-        decltype(make_error(std::declval<E const&>())),
-        error_type
-      >::value
-    >
-  >
+  template <class E, class = caf::enable_if_has_make_error_t<E>>
   maybe(E error_enum) : maybe(make_error(error_enum)) {
     // nop
   }
@@ -168,15 +160,7 @@ public:
     return *this;
   }
 
-  template <
-    class E,
-    class = std::enable_if_t<
-      std::is_same<
-        decltype(make_error(std::declval<E const&>())),
-        error_type
-      >::value
-    >
-  >
+  template <class E, class = caf::enable_if_has_make_error_t<E>>
   maybe& operator=(E error_enum) {
     return *this = make_error(error_enum);
   }
@@ -454,15 +438,7 @@ public:
     // nop
   }
 
-  template <
-    class E,
-    class = std::enable_if_t<
-      std::is_same<
-        decltype(make_error(std::declval<E const&>())),
-        error_type
-      >::value
-    >
-  >
+  template <class E, class = caf::enable_if_has_make_error_t<E>>
   maybe(E error_code) : error_(make_error(error_code)) {
     // nop
   }
@@ -477,15 +453,7 @@ public:
     return *this;
   }
 
-  template <
-    class E,
-    class = std::enable_if_t<
-      std::is_same<
-        decltype(make_error(std::declval<E const&>())),
-        error_type
-      >::value
-    >
-  >
+  template <class E, class = caf::enable_if_has_make_error_t<E>>
   maybe& operator=(E error_code) {
     return *this = make_error(error_code);
   }
@@ -565,8 +533,6 @@ maybe<typename std::tuple_element<X, T>::type const&> get(maybe<T> const& xs) {
 
 // -- comparison with other maybe instance -----------------------------------
 
-/// Returns `true` if both objects represent either the same
-/// value or the same error, `false` otherwise.
 /// @relates maybe
 template <class T, class U>
 bool operator==(maybe<T> const& x, maybe<U> const& y) {
@@ -574,14 +540,12 @@ bool operator==(maybe<T> const& x, maybe<U> const& y) {
     return (y) ? caf::detail::safe_equal(*x, *y) : false;
   if (x.empty() && y.empty())
     return true;
-  if (! y)
+  if (!y)
     return x.error_code() == y.error_code()
            && x.error_category() == y.error_category();
   return false;
 }
 
-/// Returns `true` if the objects represent different
-/// values or errors, `false` otherwise.
 /// @relates maybe
 template <class T, class U>
 bool operator!=(maybe<T> const& x, maybe<U> const& y) {
@@ -590,61 +554,82 @@ bool operator!=(maybe<T> const& x, maybe<U> const& y) {
 
 // -- comparison with values -------------------------------------------------
 
-/// Returns `true` if `lhs` is available and its value is equal to `rhs`.
-template <class T, class U>
-bool operator==(maybe<T> const& x, U const& y) {
-  return (x) ? *x == y : false;
-}
-
-/// Returns `true` if `rhs` is available and its value is equal to `lhs`.
 /// @relates maybe
 template <class T, class U>
-bool operator==(const T& x, maybe<U> const& y) {
+std::enable_if_t<!caf::has_make_error<U>::value, bool>
+operator==(maybe<T> const& x, U const& y) {
+  return x ? *x == y : false;
+}
+
+/// @relates maybe
+template <class T, class U>
+std::enable_if_t<!caf::has_make_error<U>::value, bool>
+operator==(const T& x, maybe<U> const& y) {
   return y == x;
 }
 
-/// Returns `true` if `lhs` is not available or its value is not equal to `rhs`.
 /// @relates maybe
 template <class T, class U>
-bool operator!=(maybe<T> const& x, U const& y) {
+std::enable_if_t<!caf::has_make_error<U>::value, bool>
+operator!=(maybe<T> const& x, U const& y) {
   return !(x == y);
 }
 
-/// Returns `true` if `rhs` is not available or its value is not equal to `lhs`.
 /// @relates maybe
 template <class T, class U>
-bool operator!=(T const& x, maybe<U> const& y) {
+std::enable_if_t<!caf::has_make_error<U>::value, bool>
+operator!=(T const& x, maybe<U> const& y) {
   return !(x == y);
 }
 
 // -- comparison with errors -------------------------------------------------
 
-/// Returns `! val.available() && val.error() == err`.
 /// @relates maybe
 template <class T>
 bool operator==(maybe<T> const& x, error const& y) {
   return x.invalid() && y.compare(x.error_code(), x.error_category()) == 0;
 }
 
-/// Returns `! val.available() && val.error() == err`.
 /// @relates maybe
 template <class T>
 bool operator==(error const& x, maybe<T> const& y) {
   return y == x;
 }
 
-/// Returns `val.available() || val.error() != err`.
+/// @relates maybe
+template <class T, class E>
+caf::enable_if_has_make_error_t<E, bool> operator==(const maybe<T>& x, E y) {
+  return x == make_error(y);
+}
+
+/// @relates maybe
+template <class T, class E>
+caf::enable_if_has_make_error_t<E, bool> operator==(E x, const maybe<T>& y) {
+  return y == make_error(x);
+}
+
 /// @relates maybe
 template <class T>
 bool operator!=(maybe<T> const& x, error const& y) {
-  return ! (x == y);
+  return !(x == y);
 }
 
-/// Returns `val.available() || val.error() != err`.
 /// @relates maybe
 template <class T>
 bool operator!=(error const& x, maybe<T> const& y) {
-  return ! (y == x);
+  return !(y == x);
+}
+
+/// @relates maybe
+template <class T, class E>
+caf::enable_if_has_make_error_t<E, bool> operator!=(const maybe<T>& x, E y) {
+  return !(x == y);
+}
+
+/// @relates maybe
+template <class T, class E>
+caf::enable_if_has_make_error_t<E, bool> operator!=(E x, const maybe<T>& y) {
+  return !(x == y);
 }
 
 // -- comparison with none_t -------------------------------------------------
