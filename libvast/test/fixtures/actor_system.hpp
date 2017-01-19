@@ -7,7 +7,10 @@
 #include "vast/system/configuration.hpp"
 #include "vast/system/profiler.hpp"
 
+#include "vast/detail/assert.hpp"
+
 #include "fixtures/filesystem.hpp"
+
 
 namespace fixtures {
 
@@ -27,13 +30,6 @@ struct actor_system : filesystem {
     if (vast::exists(directory))
       vast::rm(directory);
     // Start profiler.
-    using vast::system::start_atom;
-    using vast::system::heap_atom;
-    using vast::system::cpu_atom;
-    profiler = self->spawn(vast::system::profiler, directory / "profiler",
-                           std::chrono::seconds(1));
-    self->send(profiler, start_atom::value, cpu_atom::value);
-    self->send(profiler, start_atom::value, heap_atom::value);
   }
 
   ~actor_system() {
@@ -41,8 +37,21 @@ struct actor_system : filesystem {
     using vast::system::stop_atom;
     using vast::system::heap_atom;
     using vast::system::cpu_atom;
-    self->send(profiler, stop_atom::value, cpu_atom::value);
-    self->send(profiler, stop_atom::value, heap_atom::value);
+    if (profiler) {
+      self->send(profiler, stop_atom::value, cpu_atom::value);
+      self->send(profiler, stop_atom::value, heap_atom::value);
+    }
+  }
+
+  void enable_profiler() {
+    VAST_ASSERT(!profiler);
+    using vast::system::start_atom;
+    using vast::system::heap_atom;
+    using vast::system::cpu_atom;
+    profiler = self->spawn(vast::system::profiler, directory / "profiler",
+                           std::chrono::seconds(1));
+    self->send(profiler, start_atom::value, cpu_atom::value);
+    self->send(profiler, start_atom::value, heap_atom::value);
   }
 
   auto error_handler() {
