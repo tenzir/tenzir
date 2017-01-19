@@ -47,12 +47,8 @@ TEST(single leader) {
     error_handler()
   );
   MESSAGE("shutting down server");
-  self->monitor(server);
   self->send_exit(server, exit_reason::user_shutdown);
-  self->receive(
-    [](const down_msg&) { /* nop */},
-    error_handler()
-  );
+  self->wait_for(server);
   MESSAGE("sending another command");
   server = self->spawn(raft::consensus, directory);
   self->send(server, run_atom::value);

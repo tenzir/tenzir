@@ -67,7 +67,7 @@ TEST(hierarchical task) {
   self->send(t, leaf1a);
   self->send(t, leaf1b);
   MESSAGE("spawning intermediate workers");
-  auto i = self->spawn<monitored>(task<>);
+  auto i = self->spawn(task<>);
   self->send(t, i);
   auto leaf2a = self->spawn(worker, i);
   auto leaf2b = self->spawn(worker, i);
@@ -95,7 +95,7 @@ TEST(hierarchical task) {
   self->send(leaf2a, "Go");
   self->send(leaf2b, "make");
   self->send(leaf2c, "money!");
-  self->receive([&](down_msg const& msg) { CHECK(msg.source == i); });
+  self->wait_for(i);
   self->receive(
     [&](progress_atom, uint64_t remaining, uint64_t total) {
       CHECK(remaining == 2);

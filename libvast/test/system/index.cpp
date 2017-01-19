@@ -23,7 +23,6 @@ auto issue_query = [](auto& self, auto& idx, auto error_handler) {
   self->request(idx, infinite, *expr, historical, self).receive(
     [&](actor const& t) {
       REQUIRE(t);
-      self->monitor(t);
       task = t;
     },
     error_handler
@@ -41,10 +40,7 @@ auto issue_query = [](auto& self, auto& idx, auto error_handler) {
     }
   ).until([&] { return done; });
   CHECK_EQUAL(rank(hits), 38u);
-  self->receive(
-    [&](down_msg const& msg) { CHECK(msg.source == task); },
-    error_handler
-  );
+  self->wait_for(task);
 };
 
 } // namespace <anonymous>
@@ -52,27 +48,21 @@ auto issue_query = [](auto& self, auto& idx, auto error_handler) {
 TEST(index) {
   directory /= "index";
   MESSAGE("ingesting conn.log");
-  auto idx = self->spawn<monitored>(system::index, directory, 1000, 2);
+  auto idx = self->spawn(system::index, directory, 1000, 2);
   self->send(idx, bro_conn_log);
   self->send(idx, bro_http_log);
   MESSAGE("issueing query against active partition");
   issue_query(self, idx, error_handler());
   MESSAGE("shutting down index");
   self->send_exit(idx, exit_reason::user_shutdown);
-  self->receive(
-    [&](down_msg const& msg) { CHECK(msg.source == idx); },
-    error_handler()
-  );
+  self->wait_for(idx);
   MESSAGE("reloading index");
-  idx = self->spawn<monitored>(system::index, directory, 1000, 2);
+  idx = self->spawn(system::index, directory, 1000, 2);
   MESSAGE("issueing query against passive partition");
   issue_query(self, idx, error_handler());
   MESSAGE("shutting down index");
   self->send_exit(idx, exit_reason::user_shutdown);
-  self->receive(
-    [&](down_msg const& msg) { CHECK(msg.source == idx); },
-    error_handler()
-  );
+  self->wait_for(idx);
   //MESSAGE("creating a continuous query");
   //// The expression must have already been normalized as it hits the index.
   //expr = to<expression>("s ni \"7\"");

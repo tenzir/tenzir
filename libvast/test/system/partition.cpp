@@ -43,7 +43,7 @@ auto issue_query = [](auto& self, auto& part) {
 TEST(partition) {
   directory /= "partition";
   MESSAGE("ingesting conn.log");
-  auto p = self->spawn<monitored>(system::partition, directory, self);
+  auto p = self->spawn(system::partition, directory, self);
   schema sch;
   REQUIRE(sch.add(bro_conn_log[0].type()));
   self->send(p, bro_conn_log, sch);
@@ -53,30 +53,21 @@ TEST(partition) {
   self->send(p, bro_http_log, sch);
   issue_query(self, p);
   MESSAGE("flushing to filesystem");
-  auto t = self->spawn<monitored>(system::task<>);
+  auto t = self->spawn(system::task<>);
   self->send(t, p);
   self->send(p, flush_atom::value, t);
-  self->receive(
-    [&](down_msg const& msg) { CHECK(msg.source == t); },
-    error_handler()
-  );
+  self->wait_for(t);
   REQUIRE(exists(directory));
   REQUIRE(exists(directory / "0-8462" / "bro::conn" / "data" / "id" /"orig_h"));
   REQUIRE(exists(directory / "0-8462" / "bro::conn" / "meta" / "time"));
   MESSAGE("shutting down partition");
   self->send(p, system::shutdown_atom::value);
-  self->receive(
-    [&](down_msg const& msg) { CHECK(msg.source == p); },
-    error_handler()
-  );
+  self->wait_for(p);
   MESSAGE("loading persistent state from file system");
-  p = self->spawn<monitored>(system::partition, directory, self);
+  p = self->spawn(system::partition, directory, self);
   issue_query(self, p);
   self->send(p, system::shutdown_atom::value);
-  self->receive(
-    [&](down_msg const& msg) { CHECK(msg.source == p); },
-    error_handler()
-  );
+  self->wait_for(p);
   //MESSAGE("creating a continuous query");
   //expr = to<expression>("s ni \"7\"");
   //REQUIRE(expr);

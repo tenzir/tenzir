@@ -26,14 +26,11 @@ TEST(PCAP sink) {
   MESSAGE("constructing a sink");
   format::pcap::writer writer{"/dev/null"};
   auto snk = self->spawn(sink<format::pcap::writer>, std::move(writer));
-  self->monitor(snk);
   MESSAGE("sending events");
   self->send(snk, std::move(events));
   MESSAGE("shutting down");
   self->send_exit(snk, caf::exit_reason::user_shutdown);
-  self->receive([&](caf::down_msg const& msg) {
-    CHECK(msg.reason == caf::exit_reason::user_shutdown);
-  });
+  self->wait_for(snk);
 }
 
 FIXTURE_SCOPE_END()
