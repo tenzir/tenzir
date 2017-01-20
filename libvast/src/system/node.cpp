@@ -260,8 +260,12 @@ caf::behavior node(node_ptr self, std::string name, path dir,
   self->state.tracker = self->spawn<linked>(tracker, self->state.name);
   self->set_exit_handler(
     [=](const exit_msg& msg) {
-      self->send_exit(self->state.tracker, msg.reason);
-      self->quit(msg.reason);
+      self->set_exit_handler({});
+      self->spawn([=](blocking_actor* terminator) {
+        terminator->send_exit(self->state.tracker, msg.reason);
+        terminator->wait_for(self->state.tracker);
+        terminator->send_exit(self, msg.reason);
+      });
     }
   );
   return {
