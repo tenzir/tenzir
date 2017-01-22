@@ -40,7 +40,7 @@ configuration::configuration() {
   add_message_type<registry>("vast::system::registry");
   add_message_type<registry_entry>("vast::system::registry_entry");
   // Register VAST's custom error type.
-  auto renderer = [](uint8_t x, atom_value, const message& msg) {
+  auto vast_renderer = [](uint8_t x, atom_value, const message& msg) {
     std::string result;
     result += "got ";
     switch (static_cast<ec>(x)) {
@@ -51,11 +51,24 @@ configuration::configuration() {
         result += "unspecified error";
         break;
     };
-    result += ' ';
-    result += deep_to_string(msg);
+    if (!msg.empty()) {
+      result += ": ";
+      result += deep_to_string(msg);
+    }
     return result;
   };
-  add_error_category(atom("vast"), renderer);
+  auto caf_renderer = [](uint8_t x, atom_value, const message& msg) {
+    std::string result;
+    result += "got caf::";
+    result += to_string(static_cast<sec>(x));
+    if (!msg.empty()) {
+      result += ": ";
+      result += deep_to_string(msg);
+    }
+    return result;
+  };
+  add_error_category(atom("vast"), vast_renderer);
+  add_error_category(atom("system"), caf_renderer);
   // Load modules.
   load<io::middleman>();
 }
