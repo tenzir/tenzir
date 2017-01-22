@@ -139,7 +139,7 @@ TEST(choice) {
   CHECK(p(str, x));
   CHECK_EQUAL(str, "c");
   str.clear();
-  x = 64ll;
+  x = int64_t{64};
   CHECK(p(str, x));
   CHECK_EQUAL(str, "+64");
 }

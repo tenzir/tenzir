@@ -6,6 +6,12 @@
 namespace fixtures {
 
 struct filesystem {
+  filesystem() {
+    // Fresh afresh.
+    rm(directory);
+    mkdir(directory);
+  }
+
   vast::path directory = "vast-unit-test";
 };
 

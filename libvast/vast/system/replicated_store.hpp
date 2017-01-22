@@ -206,7 +206,7 @@ replicated_store(
       self->state.last_stats_update = now;
       self->request(consensus, consensus_timeout, statistics_atom::value).then(
         [=](const raft::statistics& stats) {
-          auto low = 64ull << 20;
+          auto low = uint64_t{64} << 20;
           auto high = self->state.last_snapshot_size * 4;
           if (stats.log_bytes > std::max(low, high))
             self->anon_send(self, snapshot_atom::value);
