@@ -1,10 +1,16 @@
 #ifndef VAST_SYSTEM_REPLICATED_STORE_HPP
 #define VAST_SYSTEM_REPLICATED_STORE_HPP
 
+#include <vector>
+
+#include <caf/binary_deserializer.hpp>
+#include <caf/binary_serializer.hpp>
+
 #include "vast/logger.hpp"
 
 #include "vast/system/consensus.hpp"
 #include "vast/system/key_value_store.hpp"
+#include "vast/system/timeouts.hpp"
 
 #include "vast/detail/assert.hpp"
 
@@ -13,16 +19,109 @@ namespace system {
 
 template <class Key, class Value>
 struct replicated_store_state {
-  raft::index_type last_applied = 0;
+  // -- persistent state ----------------------
   std::unordered_map<Key, Value> store;
+  raft::index_type last_applied = 0;
+  raft::index_type last_snapshot_index = 0;
+  uint64_t last_snapshot_size = 0;
+  // -- volatile state ------------------------
+  uint64_t request_id = 0;
+  std::unordered_map<uint64_t, caf::response_promise> requests;
   const char* name = "replicated-store";
 };
+
+template <class Inspector, class Key, class Value>
+auto inspect(Inspector& f, replicated_store_state<Key, Value>& state) {
+  return f(state.store, state.last_applied, state.last_snapshot_index,
+           state.last_snapshot_size);
+}
+
+template <class Key, class Value>
+using replicated_store_type =
+  typename key_value_store_type<Key, Value>::template extend<
+    caf::replies_to<snapshot_atom>::template with<ok_atom>,
+    caf::reacts_to<raft::index_type, caf::message>
+  >;
+
+namespace detail {
+
+template <class Actor>
+auto apply(Actor* self, caf::message& operation) {
+  using key_type = typename decltype(self->state.store)::key_type;
+  using value_type = typename decltype(self->state.store)::mapped_type;
+  return *operation.apply({
+    [=](put_atom, const key_type& key, value_type& value) {
+      VAST_DEBUG(self, "applies PUT");
+      self->state.store[key] = std::move(value);
+      return ok_atom::value;
+    },
+    [=](add_atom, const key_type& key, const value_type& value) {
+      VAST_DEBUG(self, "applies ADD");
+      auto old = self->state.store[key];
+      self->state.store[key] += value;
+      return old;
+    },
+    [=](delete_atom, const key_type& key) {
+      VAST_DEBUG(self, "applies DELETE");
+      self->state.store.erase(key);
+      return ok_atom::value;
+    },
+  });
+}
+
+// Applies a mutable operation coming from the consensus module.
+template <class Actor>
+void update(Actor* self, caf::message& command) {
+  command.apply({
+    [=](caf::actor_addr addr, uint64_t id, caf::message operation) {
+      if (addr != self) {
+        VAST_DEBUG(self, "got remote operation", id);
+        apply(self, operation);
+      } else {
+        VAST_DEBUG(self, "got local operation", id);
+        auto id = command.get_as<uint64_t>(1);
+        auto i = self->state.requests.find(id);
+        if (i != self->state.requests.end()) {
+          i->second.deliver(apply(self, operation));
+          self->state.requests.erase(i);
+        }
+      }
+    },
+    [=](snapshot_atom, raft::index_type index, const std::vector<char>& data) {
+      VAST_DEBUG(self, "applies snapshot");
+      caf::binary_deserializer bd{self->system(), data};
+      bd >> self->state;
+      self->state.last_snapshot_index = index;
+      self->state.last_snapshot_size = data.size();
+      return ok_atom::value;
+    }
+  });
+}
+
+// Replicates the current message through the consensus module.
+template <class Actor>
+void replicate(Actor* self, const caf::actor& consensus,
+               caf::response_promise rp) {
+  auto operation = self->current_mailbox_element()->move_content_to_message();
+  auto id = ++self->state.request_id;
+  self->state.requests.emplace(id, rp);
+  auto msg = make_message(self->address(), id, operation);
+  self->request(consensus, consensus_timeout, replicate_atom::value, msg).then(
+    [=](ok_atom) {
+      VAST_DEBUG(self, "submitted operation", id);
+    },
+    [=](error& e) mutable {
+      rp.deliver(std::move(e));
+      self->state.requests.erase(id);
+    }
+  );
+}
+
+} // namespace detail
 
 /// A replicated key-value store that sits on top of a consensus module.
 /// @param self The actor handle.
 /// @param consensus The consensus module.
-/// @param store The actor handle.
-/// @param self The actor handle.
 // FIXME: The implementation currently does *not* guarantee linearizability.
 // Consider the case when the store crashes it has successfully submitted a log
 // entry to the consensus module but before returning to the client. The client
@@ -32,75 +131,95 @@ struct replicated_store_state {
 // sequence numbers with client commands, turning at-least-once into
 // exactly-once semantics.
 template <class Key, class Value>
-typename key_value_store_type<Key, Value>::behavior_type
+typename replicated_store_type<Key, Value>::behavior_type
 replicated_store(
-  typename key_value_store_type<Key, Value>::template stateful_pointer<
+  typename replicated_store_type<Key, Value>::template stateful_pointer<
     replicated_store_state<Key, Value>
   > self,
-  caf::actor consensus,
-  std::chrono::milliseconds timeout) {
+  caf::actor consensus) {
+  using namespace caf;
   self->monitor(consensus);
-  // Send the current command/message to the consensus module, and once it has
-  // been replicated, apply the command to the local state.
-  auto replicate = [=](auto rp, auto apply) {
-    auto msg = self->current_mailbox_element()->move_content_to_message();
-    self->request(consensus, timeout, replicate_atom::value, msg).then(
-      [=](ok_atom, raft::index_type index) mutable {
-        VAST_DEBUG(self, "applies entry", index);
-        self->state.last_applied = index;
-        rp.deliver(apply(index, msg));
-      },
-      [=](error& e) mutable {
-        rp.deliver(std::move(e));
-      }
-    );
-    return rp;
+  self->anon_send(consensus, subscribe_atom::value, actor_cast<actor>(self));
+  // Takes a snapshot at the currently applied index.
+  auto make_snapshot = [=] {
+    VAST_ASSERT(self->state.last_applied > 0);
+    std::vector<char> state;
+    binary_serializer bs{self->system(), state};
+    bs << self->state;
+    VAST_DEBUG(self, "serialized", state.size(), "bytes");
+    return state;
   };
   self->set_down_handler(
-    [=](const caf::down_msg& msg) {
+    [=](const down_msg& msg) {
       VAST_ASSERT(msg.source == consensus);
+      VAST_DEBUG(self, "got DOWN from consensus module");
+      // Abort outstdanding requests.
+      for (auto& rp : self->state.requests)
+        rp.second.deliver(make_error(ec::unspecified, "consensus module down"));
+      self->quit(msg.reason);
+    }
+  );
+  self->set_exit_handler(
+    [=](const exit_msg& msg) {
+      // Abort outstdanding requests.
+      for (auto& rp : self->state.requests)
+        rp.second.deliver(msg.reason);
       self->quit(msg.reason);
     }
   );
   return {
-    [=](put_atom, const Key&, Value&) {
-      return replicate(
-        self->template make_response_promise<ok_atom>(),
-        [=](raft::index_type, caf::message& msg) {
-          auto& key = msg.get_as<Key>(1);
-          auto& value = msg.get_as<Value>(2);
-          self->state.store[key] = value;
-          return ok_atom::value;
-        }
-      );
+    // Linearizability: all writes go through the consensus module.
+    [=](put_atom, const Key&, const Value&) {
+      VAST_DEBUG(self, "replicates PUT");
+      auto rp = self->template make_response_promise<ok_atom>();
+      detail::replicate(self, consensus, rp);
+      return rp;
     },
-    [=](add_atom, const Key& key, const Value&) {
-      auto& old = self->state.store[key];
-      return replicate(
-        self->template make_response_promise<Value>(),
-        [=](raft::index_type, caf::message& msg) {
-          auto& key = msg.get_as<Key>(1);
-          auto& value = msg.get_as<Value>(2);
-          self->state.store[key] += value;
-          return old;
-        }
-      );
+    [=](add_atom, const Key&, const Value&) {
+      VAST_DEBUG(self, "replicates ADD");
+      auto rp = self->template make_response_promise<Value>();
+      detail::replicate(self, consensus, rp);
+      return rp;
     },
     [=](delete_atom, const Key&) {
-      return replicate(
-        self->template make_response_promise<ok_atom>(),
-        [=](raft::index_type, caf::message& msg) {
-          auto& key = msg.get_as<Key>(1);
-          self->state.store.erase(key);
-          return ok_atom::value;
-        }
-      );
+      VAST_DEBUG(self, "replicates DELETE");
+      auto rp = self->template make_response_promise<ok_atom>();
+      detail::replicate(self, consensus, rp);
+      return rp;
     },
-    [=](get_atom, const Key& key) -> caf::result<optional<Value>> {
+    // Sequential consistency: all reads may be stale since we're not going
+    // through the consensus module. (For linearizability, we would have to go
+    // through the leader.)
+    [=](get_atom, const Key& key) -> result<optional<Value>> {
       auto i = self->state.store.find(key);
       if (i == self->state.store.end())
         return nil;
       return i->second;
+    },
+    [=](raft::index_type index, message& operation) {
+      VAST_DEBUG(self, "applies entry", index, "(consensus update)");
+      detail::update(self, operation);
+      self->state.last_applied = index;
+    },
+    [=](snapshot_atom) {
+      VAST_DEBUG(self, "takes snapshot at index", self->state.last_applied);
+      auto rp = self->template make_response_promise<ok_atom>();
+      auto snapshot = make_snapshot();
+      auto snapshot_size = snapshot.size();
+      self->request(consensus, consensus_timeout, snapshot_atom::value,
+                    self->state.last_applied, std::move(snapshot)).then(
+        [=](raft::index_type index) mutable {
+          VAST_DEBUG(self, "successfully snapshotted state");
+          self->state.last_snapshot_index = index;
+          self->state.last_snapshot_size = snapshot_size;
+          rp.deliver(ok_atom::value);
+        },
+        [=](error& e) mutable {
+          VAST_ERROR(self, "failed to snapshot:", self->system().render(e));
+          rp.deliver(std::move(e));
+        }
+      );
+      return rp;
     }
   };
 }

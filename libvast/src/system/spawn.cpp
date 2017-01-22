@@ -118,7 +118,7 @@ expected<actor> spawn_metastore(local_actor* self, options&) {
   if (!ptr)
     return make_error(ec::unspecified, "no consensus module in registry");
   auto consensus = actor_cast<actor>(ptr);
-  auto s = self->spawn(replicated_store<std::string, data>, consensus, 10000ms);
+  auto s = self->spawn(replicated_store<std::string, data>, consensus);
   return actor_cast<actor>(s);
 }
 

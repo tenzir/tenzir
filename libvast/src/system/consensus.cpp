@@ -2,8 +2,6 @@
 
 #include "vast/concept/parseable/numeric/integral.hpp"
 #include "vast/concept/printable/std/chrono.hpp"
-#include "vast/detail/assert.hpp"
-#include "vast/detail/string.hpp"
 #include "vast/die.hpp"
 #include "vast/error.hpp"
 #include "vast/load.hpp"
@@ -12,6 +10,9 @@
 
 #include "vast/system/atoms.hpp"
 #include "vast/system/consensus.hpp"
+
+#include "vast/detail/assert.hpp"
+#include "vast/detail/string.hpp"
 
 using namespace caf;
 
@@ -243,6 +244,21 @@ void reset_election_time(Actor* self) {
 }
 
 template <class Actor>
+void deliver(Actor* self, index_type index) {
+  VAST_ASSERT(self->state.state_machine);
+  auto& entry = self->state.log->at(index);
+  if (entry.data.empty()) {
+    VAST_DEBUG(role(self), "skips delivery of no-op entry");
+    return;
+  }
+  caf::binary_deserializer bd{self->system(), entry.data};
+  caf::message msg;
+  bd >> msg;
+  VAST_DEBUG(role(self), "delivers entry", entry.index);
+  self->send(self->state.state_machine, entry.index, msg);
+}
+
+template <class Actor>
 void advance_commit_index(Actor* self) {
   VAST_ASSERT(is_leader(self));
   // Nothing to do if we don't have peers; commit index already advanced.
@@ -260,27 +276,22 @@ void advance_commit_index(Actor* self) {
   auto index = xs[(n - 1) / 2];
   // Check whether the new index makes sense to accept.
   if (index <= self->state.commit_index) {
-    VAST_DEBUG(role(self), "didn't advance commit index",
+    VAST_DEBUG(role(self), "didn't advance commitIndex",
                self->state.commit_index << ", quorum min =", index);
     return;
   }
   VAST_ASSERT(index >= self->state.log->first_index());
   if (self->state.log->at(index).term != self->state.current_term)
     return;
-  VAST_DEBUG(role(self), "advances commit index to", index);
-  self->state.commit_index = index;
+  VAST_DEBUG(role(self), "advances commitIndex", self->state.commit_index,
+             "->", index);
   VAST_ASSERT(index <= self->state.log->last_index());
-  // Answer pending requests.
-  auto r = size_t{0};
-  while (!self->state.pending.empty()) {
-    auto& pair = self->state.pending.front();
-    if (pair.first > index)
-      break;
-    pair.second.deliver(ok_atom::value, pair.first);
-    self->state.pending.pop_front();
-    ++r;
+  if (!self->state.state_machine) {
+    self->state.commit_index = index;
+    return;
   }
-  VAST_DEBUG(role(self), "delivered", r, "pending responses");
+  while (self->state.commit_index != index)
+    deliver(self, ++self->state.commit_index);
 }
 
 template <class Actor>
@@ -315,15 +326,16 @@ void become_leader(Actor* self) {
     peer.last_snapshot_index = 0;
   }
   // Add no-op entry to ensure linearizability.
-  //log_entry entry;
-  //entry.term = self->state.current_term;
-  //auto res = self->state.log->append(entry);
-  //if (!res) {
-  //  VAST_ERROR(role(self), "failed to append no-op entry:",
-  //             self->system().render(res.error()));
-  //  self->quit(res.error());
-  //  return;
-  //}
+  // (A no-op entry has an index of 0 and no data in our implementation.)
+  log_entry entry;
+  entry.term = self->state.current_term;
+  auto res = self->state.log->append({std::move(entry)});
+  if (!res) {
+    VAST_ERROR(role(self), "failed to append no-op entry:",
+               self->system().render(res.error()));
+    self->quit(res.error());
+    return;
+  }
   advance_commit_index(self);
   // Kick off leader heartbeat loop.
   if (!self->state.peers.empty() && !self->state.heartbeat_inflight) {
@@ -411,8 +423,8 @@ template <class Actor>
 auto handle_request_vote(Actor* self, request_vote::request& req) {
   VAST_DEBUG(role(self), "got RequestVote request: term =",
              req.term << ", candidate =",
-             req.candidate_id << ", last log index = ",
-             req.last_log_index << ", last log term = ", req.last_log_term);
+             req.candidate_id << ", last log index =",
+             req.last_log_index << ", last log term =", req.last_log_term);
   request_vote::response resp;
   // From §5.1 in the Raft paper: "If a server receives a request with a stale
   // term number, it rejects it."
@@ -454,10 +466,11 @@ auto handle_request_vote(Actor* self, request_vote::request& req) {
   return resp;
 }
 
-// Saves a snapshot to the filesystem up to a given index.
-// Returns the index of the last included log entry.
+// Saves a state machine snapshot that represents all the applied state up to a
+// given index.
 template <class Actor>
-expected<index_type> save_snapshot(Actor* self, index_type index) {
+result<index_type> save_snapshot(Actor* self, index_type index,
+                                 const std::vector<char>& snapshot) {
   VAST_DEBUG(role(self), "creates snapshot of indices [1,", index << ']');
   VAST_ASSERT(index > 0);
   if (index == self->state.last_snapshot_index)
@@ -486,7 +499,7 @@ expected<index_type> save_snapshot(Actor* self, index_type index) {
   snapshot_header hdr;
   hdr.last_included_index = index;
   hdr.last_included_term = self->state.log->at(index).term;
-  auto result = save(self->state.dir / "snapshot", hdr);
+  auto result = save(self->state.dir / "snapshot", hdr, snapshot);
   if (!result)
     return result.error();
   VAST_DEBUG(role(self), "completed snapshotting, last included term =",
@@ -501,9 +514,10 @@ expected<index_type> save_snapshot(Actor* self, index_type index) {
   return index;
 }
 
-// Loads a snapshot into memory.
+// Loads a snapshot header into memory and adapts the server state accordingly.
 template <class Actor>
-expected<void> load_snapshot(Actor* self) {
+expected<void> load_snapshot_header(Actor* self) {
+  VAST_DEBUG(role(self), "loads snapshot header");
   snapshot_header hdr;
   // Read snapshot header from filesystem.
   auto result = load(self->state.dir / "snapshot", hdr);
@@ -518,6 +532,7 @@ expected<void> load_snapshot(Actor* self) {
   self->state.last_snapshot_term = hdr.last_included_term;
   self->state.commit_index = std::max(self->state.last_snapshot_index,
                                       self->state.commit_index);
+  VAST_DEBUG(role(self), "sets commitIndex to", self->state.commit_index);
   // Discard the existing log entirely if (1) the log is fully covered by the
   // last snapshot, or (2) the last snapshot entry comes after the first log
   // entry and both entries have different terms.
@@ -525,11 +540,24 @@ expected<void> load_snapshot(Actor* self) {
       || (self->state.log->first_index() <= self->state.last_snapshot_index
           && self->state.log->at(self->state.last_snapshot_index).term
              != self->state.last_snapshot_term)) {
-    VAST_DEBUG("discarding entire log");
+    VAST_DEBUG(role(self), "discards entire log");
     self->state.log->truncate_before(self->state.last_snapshot_index + 1);
     self->state.log->truncate_after(self->state.last_snapshot_index);
   }
   return {};
+}
+
+template <class Actor>
+expected<std::vector<char>> load_snapshot_data(Actor* self) {
+  VAST_DEBUG(role(self), "loads snapshot data");
+  snapshot_header hdr;
+  std::vector<char> data;
+  auto result = load(self->state.dir / "snapshot", hdr, data);
+  if (!result)
+    return result.error();
+  if (hdr.version != 1)
+    return make_error(ec::version_error, "needed version 1, got", hdr.version);
+  return data;
 }
 
 // Constructs an InstallSnapshot message.
@@ -621,8 +649,8 @@ auto handle_install_snapshot(Actor* self, install_snapshot::request& req) {
   become_follower(self, req.term);
   if (self->state.leader != self->current_sender())
     self->state.leader = actor_cast<actor>(self->current_sender());
-  // Prepare for writing a snapshot if we're not already in the middle of
-  // receiving chunks.
+  // Prepare for writing a snapshot unless we're already in the middle of
+  // receiving snapshot chunks.
   if (!self->state.snapshot.is_open()) {
     auto filename = self->state.dir / "snapshot";
     self->state.snapshot.open(filename.str());
@@ -656,7 +684,7 @@ auto handle_install_snapshot(Actor* self, install_snapshot::request& req) {
   // If this was the last chunk, load the snapshot.
   if (req.done) {
     self->state.snapshot.close();
-    auto res = load_snapshot(self);
+    auto res = load_snapshot_header(self);
     if (!res) {
       VAST_ERROR(role(self), "failed to apply remote snapshot:",
                  self->system().render(res.error()));
@@ -666,6 +694,21 @@ auto handle_install_snapshot(Actor* self, install_snapshot::request& req) {
     VAST_DEBUG(role(self), "completed loading of remote snapshot with index",
                self->state.last_snapshot_index, "and term",
                self->state.last_snapshot_term);
+    if (self->state.state_machine) {
+      auto snapshot = load_snapshot_data(self);
+      if (!snapshot) {
+        VAST_ERROR(role(self), "failed to load snapshot:",
+                   self->system().render(snapshot.error()));
+        self->quit(snapshot.error());
+        return resp;
+      }
+      VAST_DEBUG(role(self), "delivers snapshot");
+      self->send(self->state.state_machine,
+                 self->state.last_snapshot_index,
+                 make_message(snapshot_atom::value,
+                              self->state.last_snapshot_index,
+                              std::move(*snapshot)));
+    }
   }
   return resp;
 }
@@ -807,6 +850,7 @@ handle_append_entries(Actor* self, append_entries::request& req) {
     xs.push_back(std::move(entry));
   }
   if (!xs.empty()) {
+    // Append new entries to log.
     auto n = xs.size();
     auto res = self->state.log->append(std::move(xs));
     if (!res) {
@@ -817,6 +861,10 @@ handle_append_entries(Actor* self, append_entries::request& req) {
   }
   resp.last_log_index = self->state.log->last_index();
   if (self->state.commit_index < req.commit_index) {
+    // Deliver new entries to state machine.
+    if (self->state.state_machine)
+      for (auto i = self->state.commit_index + 1; i <= req.commit_index; ++i)
+        deliver(self, i);
     VAST_DEBUG(role(self), "adjusts commitIndex", self->state.commit_index,
                "->", req.commit_index);
     self->state.commit_index = req.commit_index;
@@ -875,15 +923,12 @@ behavior consensus(stateful_actor<server_state>* self, path dir) {
       if (clock::now() >= self->state.election_time)
         become_candidate(self);
     },
-    [=](snapshot_atom) -> result<index_type> {
+    [=](snapshot_atom, index_type index, const std::vector<char>& snapshot) {
       // We keep at least one entry in the log.
       // if (self->state.commit_index <= 1)
       //   return make_error(ec::unspecified,
       //                     "not enough commited entries to snapshot");
-      auto res = save_snapshot(self, self->state.commit_index);
-      if (!res)
-        return res.error();
-      return *res;
+      return save_snapshot(self, index, snapshot);
     },
     [=](peer_atom, actor const& peer, server_id peer_id) {
       VAST_DEBUG(role(self), "re-activates peer", peer_id);
@@ -899,46 +944,58 @@ behavior consensus(stateful_actor<server_state>* self, path dir) {
         self->send(self, heartbeat_atom::value);
         self->state.heartbeat_inflight = true;
       }
+    },
+    // When the state machine initializes, it will obtain the latest state
+    // through this handler.
+    [=](subscribe_atom, const actor& state_machine) {
+      self->state.state_machine = state_machine;
+      // Send the last snapshot...
+      if (self->state.last_snapshot_index > 0) {
+        auto snapshot = load_snapshot_data(self);
+        if (!snapshot) {
+          VAST_ERROR(role(self), "failed to load snapshot data",
+                     self->system().render(snapshot.error()));
+          self->quit(snapshot.error());
+          return;
+        }
+        VAST_DEBUG(role(self), "delivers snapshot at index",
+                   self->state.last_snapshot_index);
+        auto msg = make_message(snapshot_atom::value,
+                                self->state.last_snapshot_index,
+                                std::move(*snapshot));
+        self->send(state_machine, self->state.last_snapshot_index, msg);
+      }
+      // ...plus all subsequent log entries.
+      if (self->state.log->empty())
+        return;
+      auto begin = self->state.last_snapshot_index + 1;
+      auto end = self->state.commit_index;
+      while (begin <= end)
+        deliver(self, begin++);
+    },
+  };
+  // -- follower & candidate --------------------------------------------------
+  self->state.following = self->state.candidating = message_handler{
+    [=](append_entries::request& req) {
+      return handle_append_entries(self, req);
+    },
+    [=](request_vote::request& req) {
+      return handle_request_vote(self, req);
+    },
+    [=](install_snapshot::request& req) {
+      return handle_install_snapshot(self, req);
+    },
+    // Non-leaders forward replication requests to the leader when possible.
+    // TODO: instead of delegating the request, we could return with an error
+    // and the actual leader to the user in order to avoid permanent routing of
+    // messages through this instance (which may cause performance issues).
+    [=](replicate_atom, const message& command) {
+      auto rp = self->make_response_promise();
+      if (!self->state.leader)
+        rp.deliver(make_error(ec::unspecified, "no leader available"));
+      else
+        rp.delegate(self->state.leader, replicate_atom::value, command);
     }
-  };
-  // Non-leaders forward replication requests to the leader when possible.
-  // TODO: instead of delegating the request, we should return with an error
-  // and the actual leader to the user in order to avoid permanent routing of
-  // messages through this instance.
-  auto replicate_through_leader = [=](replicate_atom, const message& msg) {
-    auto rp = self->make_response_promise();
-    if (!self->state.leader)
-      rp.deliver(make_error(ec::unspecified, "no leader available"));
-    else
-      rp.delegate(self->state.leader, replicate_atom::value, msg);
-  };
-  // -- follower --------------------------------------------------------------
-  self->state.following = message_handler{
-    [=](append_entries::request& req) {
-      return handle_append_entries(self, req);
-    },
-    [=](request_vote::request& req) {
-      return handle_request_vote(self, req);
-    },
-    [=](install_snapshot::request& req) {
-      return handle_install_snapshot(self, req);
-    },
-    // All operations go through the leader.
-    replicate_through_leader
-  }.or_else(common);
-  // -- candidate -------------------------------------------------------------
-  self->state.candidating = message_handler{
-    [=](append_entries::request& req) {
-      return handle_append_entries(self, req);
-    },
-    [=](request_vote::request& req) {
-      return handle_request_vote(self, req);
-    },
-    [=](install_snapshot::request& req) {
-      return handle_install_snapshot(self, req);
-    },
-    // All operations go through the leader.
-    replicate_through_leader
   }.or_else(common);
   // -- leader ---------------------------------------------------------------
   self->state.leading = message_handler{
@@ -948,41 +1005,40 @@ behavior consensus(stateful_actor<server_state>* self, path dir) {
         VAST_DEBUG(role(self), "cancels heartbeat loop (no peers)");
         return;
       }
-      for (auto& peer : self->state.peers) {
-        if (peer.peer) {
+      for (auto& peer : self->state.peers)
+        if (peer.peer)
           send_append_entries(self, peer);
-        }
-      }
       self->delayed_send(self, heartbeat_period, heartbeat_atom::value);
       self->state.heartbeat_inflight = true;
     },
-    [=](replicate_atom, const message& msg) {
+    [=](replicate_atom, const message& command) -> result<ok_atom> {
       auto log_index = self->state.log->last_index() + 1;
       VAST_DEBUG(role(self), "replicates new entry with index", log_index);
       VAST_ASSERT(log_index > self->state.commit_index);
-      auto rp = self->make_response_promise();
       // Create new log entry.
       std::vector<log_entry> entry(1);
       entry[0].term = self->state.current_term;
+      entry[0].index = log_index;
       caf::binary_serializer bs{self->system(), entry[0].data};
-      bs << msg;
+      bs << command;
       // Append to log and wait for commit.
       auto res = self->state.log->append(std::move(entry));
       if (!res) {
         VAST_ERROR(role(self), "failed to append new entry:",
                    self->system().render(res.error()));
-        rp.deliver(res.error());
-        return;
+        return res.error();
       }
-      if (self->state.peers.empty()) {
-        VAST_DEBUG(role(self), "immediately commits entry", log_index);
-        ++self->state.commit_index;
-        VAST_ASSERT(log_index == self->state.commit_index);
-        rp.deliver(ok_atom::value, log_index);
-      } else {
+      if (!self->state.peers.empty()) {
         VAST_DEBUG(role(self), "asks followers to confirm entry", log_index);
-        self->state.pending.emplace_back(log_index, rp);
+        return ok_atom::value;
       }
+      // Without peers, we can commit the entry immediately.
+      VAST_DEBUG(role(self), "commits entry immediately", log_index);
+      self->state.commit_index = log_index;
+      VAST_ASSERT(log_index == self->state.commit_index);
+      if (self->state.state_machine)
+        self->send(self->state.state_machine, log_index, command);
+      return ok_atom::value;
     }
   }.or_else(common);
   // -- startup --------------------------------------------------------------
@@ -1015,16 +1071,16 @@ behavior consensus(stateful_actor<server_state>* self, path dir) {
       self->become(self->state.following);
       VAST_DEBUG(role(self), "starts in term", self->state.current_term);
       if (self->state.voted_for != 0)
-        VAST_DEBUG(role(self), "voted previously for server",
+        VAST_DEBUG(role(self), "previously voted for server",
                    self->state.voted_for);
       // Load the persistent log into memory.
       self->state.log = std::make_unique<log>(self->state.dir / "log");
       VAST_DEBUG(role(self), "initialized log in range ["
                  << self->state.log->first_index() << ','
                  << self->state.log->last_index() << ']');
-      // Read a snapshot from disk, if it exists.
+      // Read a snapshot from disk.
       if (exists(self->state.dir / "snapshot")) {
-        auto res = load_snapshot(self);
+        auto res = load_snapshot_header(self);
         if (!res) {
           self->quit(res.error());
           return;

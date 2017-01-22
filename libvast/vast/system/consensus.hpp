@@ -11,10 +11,11 @@
 
 #include <caf/stateful_actor.hpp>
 
-#include "vast/detail/mmapbuf.hpp"
 #include "vast/expected.hpp"
 #include "vast/filesystem.hpp"
 #include "vast/optional.hpp"
+
+#include "vast/detail/mmapbuf.hpp"
 
 namespace vast {
 namespace system {
@@ -67,7 +68,7 @@ auto inspect(Inspector& f, log_entry& e) {
 /// operations do not return before they have been made persistent.
 class log {
 public:
-  /// Constructs a log an attempts to read persistent state from the
+  /// Constructs a log and attempts to read persistent state from the
   /// filesystem.
   /// @param dir The directory where the log stores persistent state.
   log(path dir);
@@ -92,12 +93,13 @@ public:
   /// Truncates all entries *after* a given index.
   index_type truncate_after(index_type index);
 
-  // Accesses a log entry at a given index.
+  /// Accesses a log entry at a given index.
   log_entry& at(index_type i);
 
-  // Appends entries to the log.
+  /// Appends entries to the log.
   expected<void> append(std::vector<log_entry> xs);
 
+  /// Checks whether the log is empty.
   bool empty() const;
 
   /// Returns the number of bytes the serialized entries in the log occupy.
@@ -279,6 +281,10 @@ struct server_state {
   // A handle to the leader, deduced from (accepted) AppendEntries messages.
   caf::actor leader;
 
+  // A handle to the state machine such that it can asynchronously receive
+  // entries from peers.
+  caf::actor state_machine;
+
   // All known peers.
   std::vector<peer_state> peers;
 
@@ -290,10 +296,6 @@ struct server_state {
 
   // A PRNG to generate random election timeouts.
   std::mt19937 prng;
-
-  // Outstanding replication requests that have not yet been answered. Sorted
-  // by log index and cleared as soon as commitIndex catches up.
-  std::deque<std::pair<index_type, caf::response_promise>> pending;
 
   /// The directory where to keep persistent state.
   path dir;

@@ -13,6 +13,10 @@ struct consensus : actor_system {
     launch();
   }
 
+  ~consensus() {
+    shutdown();
+  }
+
   void launch() {
     using namespace vast::system;
     server1 = self->spawn(raft::consensus, directory / "server1");
@@ -35,6 +39,9 @@ struct consensus : actor_system {
     self->send(server1, run_atom::value);
     self->send(server2, run_atom::value);
     self->send(server3, run_atom::value);
+    self->send(server1, subscribe_atom::value, self);
+    self->send(server2, subscribe_atom::value, self);
+    self->send(server3, subscribe_atom::value, self);
     MESSAGE("sleeping until leader got elected");
     std::this_thread::sleep_for(raft::election_timeout * 2);
   }
@@ -42,31 +49,43 @@ struct consensus : actor_system {
   void shutdown() {
     using namespace caf;
     using namespace vast::system;
-    self->monitor(server1);
     self->send_exit(server1, exit_reason::user_shutdown);
-    self->receive(
-      [](const down_msg&) { /* nop */ },
-      error_handler()
-    );
-    self->monitor(server2);
+    self->wait_for(server1);
     self->send_exit(server2, exit_reason::user_shutdown);
-    self->receive(
-      [](const down_msg&) { /* nop */ },
-      error_handler()
-    );
-    self->monitor(server3);
+    self->wait_for(server2);
     self->send_exit(server3, exit_reason::user_shutdown);
-    self->receive(
-      [](const down_msg&) { /* nop */ },
+    self->wait_for(server3);
+  }
+
+  template <class... Ts>
+  auto replicate(const caf::actor& server, Ts&&... xs) {
+    using namespace caf;
+    using namespace vast::system;
+    auto command = make_message(std::forward<Ts>(xs)...);
+    self->request(server, consensus_timeout, replicate_atom::value,
+                  command).receive(
+      [](ok_atom) { /* nop */ },
       error_handler()
     );
+  }
+
+  template <class... Ts>
+  caf::message await(vast::system::raft::index_type index) {
+    caf::message result;
+    auto n = 0;
+    self->receive_for(n, 3) (
+      [&](vast::system::raft::index_type i, const caf::message& msg) {
+        REQUIRE_EQUAL(i, index);
+        result = msg;
+      },
+      error_handler()
+    );
+    return result;
   }
 
   caf::actor server1;
   caf::actor server2;
   caf::actor server3;
-  // Timeout for requests against the consensus module.
-  std::chrono::seconds timeout = std::chrono::seconds(3);
 };
 
 } // namespace fixtures
