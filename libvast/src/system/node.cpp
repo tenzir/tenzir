@@ -245,27 +245,40 @@ caf::behavior node(node_ptr self, std::string name, path dir,
   self->state.name = std::move(name);
   // Bring up the accountant.
   auto acc_log = self->state.dir / "log" / "current" / "accounting.log";
-  auto acc = self->spawn<linked>(accountant, std::move(acc_log));
+  auto acc = self->spawn<monitored>(accountant, std::move(acc_log));
   auto ptr = actor_cast<strong_actor_ptr>(acc);
   self->system().registry().put(accountant_atom::value, ptr);
   // Bring up the consensus module.
-  auto consensus = self->spawn<linked>(raft::consensus,
-                                       self->state.dir / "consensus");
+  auto consensus = self->spawn(raft::consensus, self->state.dir / "consensus");
+  self->monitor(consensus);
   if (id != 0)
     self->send(consensus, id_atom::value, id);
   self->send(consensus, run_atom::value);
   ptr = actor_cast<strong_actor_ptr>(consensus);
   self->system().registry().put(consensus_atom::value, ptr);
   // Bring up the tracker.
-  self->state.tracker = self->spawn<linked>(tracker, self->state.name);
+  self->state.tracker = self->spawn<monitored>(tracker, self->state.name);
+  self->set_down_handler(
+    [=](const down_msg& msg) {
+      VAST_DEBUG(self, "got DOWN from", msg.source);
+      self->send_exit(self, exit_reason::user_shutdown);
+    }
+  );
   self->set_exit_handler(
     [=](const exit_msg& msg) {
       self->set_exit_handler({});
-      self->spawn([=](blocking_actor* terminator) {
-        terminator->send_exit(self->state.tracker, msg.reason);
-        terminator->wait_for(self->state.tracker);
-        terminator->send_exit(self, msg.reason);
-      });
+      self->spawn(
+        [=, parent=actor_cast<actor>(self), tracker=self->state.tracker]
+        (blocking_actor* terminator) {
+          terminator->send_exit(tracker, msg.reason);
+          terminator->wait_for(tracker);
+          terminator->send_exit(consensus, msg.reason);
+          terminator->wait_for(consensus);
+          terminator->send_exit(acc, msg.reason);
+          terminator->wait_for(acc);
+          terminator->send_exit(parent, msg.reason);
+        }
+      );
     }
   );
   return {
