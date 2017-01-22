@@ -130,6 +130,17 @@ auto inspect(Inspector& f, snapshot_header& ss) {
   return f(ss.version, ss.last_included_index, ss.last_included_term);
 };
 
+/// Statistics clients can request.
+struct statistics {
+  uint64_t log_entries;
+  uint64_t log_bytes;
+};
+
+template <class Inspector>
+auto inspect(Inspector& f, statistics& stats) {
+  return f(stats.log_bytes, stats.log_entries);
+};
+
 // -- RPC/message types -------------------------------------------------------
 
 /// The **RequestVote** RPC. Sent by candidates to gather votes.

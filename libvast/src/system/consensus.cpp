@@ -923,6 +923,13 @@ behavior consensus(stateful_actor<server_state>* self, path dir) {
       if (clock::now() >= self->state.election_time)
         become_candidate(self);
     },
+    [=](statistics_atom) -> result<statistics> {
+      statistics stats;
+      auto& l = *self->state.log;
+      stats.log_entries = l.empty() ? 0 : l.last_index() - l.first_index();
+      stats.log_bytes = bytes(l);
+      return stats;
+    },
     [=](snapshot_atom, index_type index, const std::vector<char>& snapshot) {
       // We keep at least one entry in the log.
       // if (self->state.commit_index <= 1)

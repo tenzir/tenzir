@@ -22,18 +22,17 @@ struct replicated_store_state {
   // -- persistent state ----------------------
   std::unordered_map<Key, Value> store;
   raft::index_type last_applied = 0;
-  raft::index_type last_snapshot_index = 0;
   uint64_t last_snapshot_size = 0;
   // -- volatile state ------------------------
   uint64_t request_id = 0;
   std::unordered_map<uint64_t, caf::response_promise> requests;
+  std::chrono::steady_clock::time_point last_stats_update;
   const char* name = "replicated-store";
 };
 
 template <class Inspector, class Key, class Value>
 auto inspect(Inspector& f, replicated_store_state<Key, Value>& state) {
-  return f(state.store, state.last_applied, state.last_snapshot_index,
-           state.last_snapshot_size);
+  return f(state.store, state.last_applied, state.last_snapshot_size);
 }
 
 template <class Key, class Value>
@@ -87,11 +86,10 @@ void update(Actor* self, caf::message& command) {
         }
       }
     },
-    [=](snapshot_atom, raft::index_type index, const std::vector<char>& data) {
+    [=](snapshot_atom, raft::index_type, const std::vector<char>& data) {
       VAST_DEBUG(self, "applies snapshot");
       caf::binary_deserializer bd{self->system(), data};
       bd >> self->state;
-      self->state.last_snapshot_index = index;
       self->state.last_snapshot_size = data.size();
       return ok_atom::value;
     }
@@ -197,9 +195,23 @@ replicated_store(
       return i->second;
     },
     [=](raft::index_type index, message& operation) {
+      using namespace std::chrono_literals;
       VAST_DEBUG(self, "applies entry", index, "(consensus update)");
       detail::update(self, operation);
       self->state.last_applied = index;
+      auto now = std::chrono::steady_clock::now();
+      if (now - self->state.last_stats_update < 10s)
+        return;
+      VAST_DEBUG(self, "gathers statistics");
+      self->state.last_stats_update = now;
+      self->request(consensus, consensus_timeout, statistics_atom::value).then(
+        [=](const raft::statistics& stats) {
+          auto low = 64ull << 20;
+          auto high = self->state.last_snapshot_size * 4;
+          if (stats.log_bytes > std::max(low, high))
+            self->anon_send(self, snapshot_atom::value);
+        }
+      );
     },
     [=](snapshot_atom) {
       VAST_DEBUG(self, "takes snapshot at index", self->state.last_applied);
@@ -208,9 +220,8 @@ replicated_store(
       auto snapshot_size = snapshot.size();
       self->request(consensus, consensus_timeout, snapshot_atom::value,
                     self->state.last_applied, std::move(snapshot)).then(
-        [=](raft::index_type index) mutable {
+        [=](raft::index_type) mutable {
           VAST_DEBUG(self, "successfully snapshotted state");
-          self->state.last_snapshot_index = index;
           self->state.last_snapshot_size = snapshot_size;
           rp.deliver(ok_atom::value);
         },
