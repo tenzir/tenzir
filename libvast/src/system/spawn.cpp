@@ -113,12 +113,27 @@ expected<actor> spawn_index(local_actor* self, options& opts) {
   return self->spawn(index, opts.dir / opts.label, max_events, passive);
 }
 
-expected<actor> spawn_metastore(local_actor* self, options&) {
-  auto ptr = self->system().registry().get(consensus_atom::value);
-  if (!ptr)
-    return make_error(ec::unspecified, "no consensus module in registry");
-  auto consensus = actor_cast<actor>(ptr);
+expected<actor> spawn_metastore(local_actor* self, options& opts) {
+  auto id = raft::server_id{0};
+  auto r = opts.params.extract_opts({
+    {"id,i", "the server ID of the consensus module", id},
+  });
+  opts.params = r.remainder;
+  if (!r.error.empty())
+    return make_error(ec::syntax_error, r.error);
+  // Bring up the consensus module.
+  auto consensus = self->spawn(raft::consensus, opts.dir / "consensus");
+  self->monitor(consensus);
+  if (id != 0)
+    anon_send(consensus, id_atom::value, id);
+  anon_send(consensus, run_atom::value);
+  // Spawn the store on top.
   auto s = self->spawn(replicated_store<std::string, data>, consensus);
+  s->attach_functor(
+    [=](const error&) {
+      anon_send_exit(consensus, exit_reason::user_shutdown);
+    }
+  );
   return actor_cast<actor>(s);
 }
 

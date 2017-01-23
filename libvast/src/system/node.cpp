@@ -19,6 +19,7 @@
 #include "vast/logger.hpp"
 
 #include "vast/system/accountant.hpp"
+#include "vast/system/consensus.hpp"
 #include "vast/system/node.hpp"
 #include "vast/system/spawn.hpp"
 
@@ -239,8 +240,7 @@ void send(node_ptr self, message args) {
 
 } // namespace <anonymous>
 
-caf::behavior node(node_ptr self, std::string name, path dir,
-                   raft::server_id id) {
+caf::behavior node(node_ptr self, std::string name, path dir) {
   self->state.dir = std::move(dir);
   self->state.name = std::move(name);
   // Bring up the accountant.
@@ -248,14 +248,6 @@ caf::behavior node(node_ptr self, std::string name, path dir,
   auto acc = self->spawn<monitored>(accountant, std::move(acc_log));
   auto ptr = actor_cast<strong_actor_ptr>(acc);
   self->system().registry().put(accountant_atom::value, ptr);
-  // Bring up the consensus module.
-  auto consensus = self->spawn(raft::consensus, self->state.dir / "consensus");
-  self->monitor(consensus);
-  if (id != 0)
-    self->send(consensus, id_atom::value, id);
-  self->send(consensus, run_atom::value);
-  ptr = actor_cast<strong_actor_ptr>(consensus);
-  self->system().registry().put(consensus_atom::value, ptr);
   // Bring up the tracker.
   self->state.tracker = self->spawn<monitored>(tracker, self->state.name);
   self->set_down_handler(
@@ -272,8 +264,6 @@ caf::behavior node(node_ptr self, std::string name, path dir,
         (blocking_actor* terminator) {
           terminator->send_exit(tracker, msg.reason);
           terminator->wait_for(tracker);
-          terminator->send_exit(consensus, msg.reason);
-          terminator->wait_for(consensus);
           terminator->send_exit(acc, msg.reason);
           terminator->wait_for(acc);
           terminator->send_exit(parent, msg.reason);

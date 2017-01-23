@@ -1,4 +1,4 @@
-.TH VAST 1 "January 08, 2017" 0.1 "Visibility Across Space and Time"
+.TH VAST 1 "January 23, 2017" 0.1 "Visibility Across Space and Time"
 .SH NAME
 .PP
 \fB\fCvast\fR \-\- manage a VAST topology
@@ -61,10 +61,6 @@ The VAST directory for logs and state.
 .TP
 \fB\fC\-e\fR \fIendpoint\fP [\fI127.0.0.1:42000\fP]
 The endpoint of the node to connect to or launch. (See below)
-.TP
-\fB\fC\-i\fR \fIid\fP [\fIrandom\fP]
-Choose an explicit server ID for the consensus module. The default value is
-chosen uniformly at random from the set of valid IDs.
 .TP
 \fB\fC\-h\fR
 Display a help message and exit.
@@ -170,6 +166,11 @@ Available \fIarguments\fP:
    spawned instance of \fIcomponent\fP\&.
 .PP
 Available \fIcomponent\fP values with corresponding \fIparameters\fP:
+.PP
+\fImetastore\fP [\fIparameters\fP]
+\fB\fC\-i\fR \fIid\fP [\fIrandom\fP]
+  Choose an explicit server ID for the consensus module. The default value is
+  chosen uniformly at random from the set of valid IDs.
 .PP
 \fIarchive\fP [\fIparameters\fP]
   \fB\fC\-s\fR \fIsegments\fP [\fI10\fP]

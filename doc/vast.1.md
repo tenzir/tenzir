@@ -72,10 +72,6 @@ The following *options* are available:
 `-e` *endpoint* [*127.0.0.1:42000*]
   The endpoint of the node to connect to or launch. (See below)
 
-`-i` *id* [*random*]
-  Choose an explicit server ID for the consensus module. The default value is
-  chosen uniformly at random from the set of valid IDs.
-
 `-h`
   Display a help message and exit.
 
@@ -183,6 +179,11 @@ Available *arguments*:
    spawned instance of *component*.
 
 Available *component* values with corresponding *parameters*:
+
+*metastore* [*parameters*]
+`-i` *id* [*random*]
+  Choose an explicit server ID for the consensus module. The default value is
+  chosen uniformly at random from the set of valid IDs.
 
 *archive* [*parameters*]
   `-s` *segments* [*10*]

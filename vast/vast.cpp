@@ -255,12 +255,10 @@ int main(int argc, char* argv[]) {
   auto dir = "vast"s;
   auto node_endpoint_str = ""s;
   auto node_endpoint = endpoint{"", 42000};
-  auto id = system::raft::server_id{0};
   auto name = vast::detail::split_to_str(vast::detail::hostname(), ".")[0];
   auto conf = message_builder(cmd_line.begin(), cmd).extract_opts({
     {"dir,d", "directory for persistent state", dir},
     {"endpoint,e", "node endpoint", node_endpoint_str},
-    {"id,i", "the consensus module ID of this node", id},
     {"local,l", "apply command to a locally spawned node"},
     {"name,n", "the name of this node", name},
     {"version,v", "print version and exit"},
@@ -372,7 +370,7 @@ int main(int argc, char* argv[]) {
   actor node;
   if (spawn_node) {
     VAST_INFO("spawning local node:", name);
-    node = self->spawn(system::node, name, abs_dir, id);
+    node = self->spawn(system::node, name, abs_dir);
     if (start.opts.count("bare") == 0) {
       // If we're not in bare mode, we spawn all core actors.
       auto spawn_component = [&](auto&&... xs) {
