@@ -1082,9 +1082,12 @@ behavior consensus(stateful_actor<server_state>* self, path dir) {
                    self->state.voted_for);
       // Load the persistent log into memory.
       self->state.log = std::make_unique<log>(self->state.dir / "log");
-      VAST_DEBUG(role(self), "initialized log in range ["
-                 << self->state.log->first_index() << ','
-                 << self->state.log->last_index() << ']');
+      if (self->state.log->empty())
+        VAST_DEBUG(role(self), "initialized new log");
+      else
+        VAST_DEBUG(role(self), "initialized log in range ["
+                   << self->state.log->first_index() << ','
+                   << self->state.log->last_index() << ']');
       // Read a snapshot from disk.
       if (exists(self->state.dir / "snapshot")) {
         auto res = load_snapshot_header(self);
