@@ -172,6 +172,7 @@ behavior index(stateful_actor<index_state>* self, path const& dir,
     auto part_dir = self->state.dir / to_string(fillable->first);
     auto p = self->spawn<monitored>(partition, part_dir, self);
     self->state.active = p;
+    self->state.active_id = fillable->first;
   }
   // Register the accountant, if available.
   auto acc = self->system().registry().get(accountant_atom::value);
