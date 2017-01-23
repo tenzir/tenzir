@@ -1,6 +1,7 @@
 #ifndef VAST_SYSTEM_REPLICATED_STORE_HPP
 #define VAST_SYSTEM_REPLICATED_STORE_HPP
 
+#include <cstdint>
 #include <vector>
 
 #include <caf/binary_deserializer.hpp>
@@ -13,6 +14,7 @@
 #include "vast/system/timeouts.hpp"
 
 #include "vast/detail/assert.hpp"
+#include "vast/detail/operators.hpp"
 
 namespace vast {
 namespace system {
@@ -41,6 +43,45 @@ using replicated_store_type =
     caf::replies_to<snapshot_atom>::template with<ok_atom>,
     caf::reacts_to<raft::index_type, caf::message>
   >;
+
+// FIXME: Make it possible to deserialize caf::actor_addr. This semantically
+// equivalent structure is a workaround for the lack of persistence of
+// caf::actor_addr, which currently cannot be deserialized. But since we embed
+// the actor identity in every (persistent) operation, we need this auxiliary
+// type.
+class actor_identity
+  : detail::equality_comparable<actor_identity>,
+    detail::equality_comparable<actor_identity, caf::actor_addr>,
+    detail::equality_comparable<caf::actor_addr, actor_identity> {
+public:
+  actor_identity() = default;
+
+  explicit actor_identity(const caf::actor_addr& addr)
+    : node_{addr.node()},
+      id_{addr.id()} {
+  }
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, actor_identity& ai) {
+    return f(ai.node_, ai.id_);
+  }
+
+  friend bool operator==(const actor_identity& x, const actor_identity& y) {
+    return x.node_ == y.node_ && x.id_ == y.id_;
+  }
+
+  friend bool operator==(const actor_identity& x, const caf::actor_addr& y) {
+    return x.node_ == y.node() && x.id_ == y.id();
+  }
+
+  friend bool operator==(const caf::actor_addr& x, const actor_identity& y) {
+    return y == x;
+  }
+
+private:
+  caf::node_id node_;
+  caf::actor_id id_;
+};
 
 namespace detail {
 
@@ -72,8 +113,8 @@ auto apply(Actor* self, caf::message& operation) {
 template <class Actor>
 void update(Actor* self, caf::message& command) {
   command.apply({
-    [=](caf::actor_addr addr, uint64_t id, caf::message operation) {
-      if (addr != self) {
+    [=](const actor_identity& identity, uint64_t id, caf::message operation) {
+      if (identity != self->address()) {
         VAST_DEBUG(self, "got remote operation", id);
         apply(self, operation);
       } else {
@@ -103,7 +144,7 @@ void replicate(Actor* self, const caf::actor& consensus,
   auto operation = self->current_mailbox_element()->move_content_to_message();
   auto id = ++self->state.request_id;
   self->state.requests.emplace(id, rp);
-  auto msg = make_message(self->address(), id, operation);
+  auto msg = make_message(actor_identity{self->address()}, id, operation);
   self->request(consensus, consensus_timeout, replicate_atom::value, msg).then(
     [=](ok_atom) {
       VAST_DEBUG(self, "submitted operation", id);
