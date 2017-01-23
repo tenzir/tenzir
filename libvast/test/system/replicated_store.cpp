@@ -19,7 +19,7 @@ constexpr auto timeout = std::chrono::seconds(5);
 
 FIXTURE_SCOPE(consensus_tests, fixtures::consensus)
 
-TEST(replicated store) {
+TEST(single replicated store) {
   MESSAGE("operating with a replicated store");
   auto store = self->spawn(replicated_store<int, int>, server1);
   self->request(store, timeout, put_atom::value, 42, 4711).receive(
@@ -82,6 +82,38 @@ TEST(replicated store) {
   );
   self->send_exit(store, exit_reason::user_shutdown);
   self->wait_for(store);
+}
+
+TEST(multiple replicated stores) {
+  auto store1 = self->spawn(replicated_store<int, int>, server1);
+  auto store2 = self->spawn(replicated_store<int, int>, server2);
+  auto store3 = self->spawn(replicated_store<int, int>, server3);
+  self->request(store1, timeout, put_atom::value, 42, 4700).receive(
+    [](ok_atom) { /* nop */ },
+    error_handler()
+  );
+  self->request(store2, timeout, add_atom::value, 42, 10).receive(
+    [](int) { /* nop */ },
+    error_handler()
+  );
+  self->request(store3, timeout, add_atom::value, 42, 1).receive(
+    [](int) { /* nop */ },
+    error_handler()
+  );
+  for (auto store : {store1, store2, store3})
+    self->request(store, timeout, get_atom::value, 42).receive(
+      [&](optional<int> i) {
+        REQUIRE(i);
+        CHECK_EQUAL(*i, 4711);
+      },
+      error_handler()
+    );
+  self->send_exit(store1, exit_reason::user_shutdown);
+  self->send_exit(store2, exit_reason::user_shutdown);
+  self->send_exit(store3, exit_reason::user_shutdown);
+  self->wait_for(store1);
+  self->wait_for(store2);
+  self->wait_for(store3);
 }
 
 FIXTURE_SCOPE_END()
