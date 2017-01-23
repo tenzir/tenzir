@@ -243,21 +243,140 @@ void reset_election_time(Actor* self) {
   self->delayed_send(self, timeout, election_atom::value);
 }
 
+// Saves a state machine snapshot that represents all the applied state up to a
+// given index.
 template <class Actor>
-void deliver(Actor* self, index_type index) {
-  VAST_ASSERT(self->state.state_machine);
-  auto& entry = self->state.log->at(index);
-  if (entry.data.empty()) {
-    VAST_DEBUG(role(self), "skips delivery of no-op entry", index);
-    return;
-  }
-  caf::binary_deserializer bd{self->system(), entry.data};
-  caf::message msg;
-  bd >> msg;
-  VAST_DEBUG(role(self), "delivers entry", index, deep_to_string(msg));
-  self->send(self->state.state_machine, index, msg);
+result<index_type> save_snapshot(Actor* self, index_type index,
+                                 const std::vector<char>& snapshot) {
+  VAST_DEBUG(role(self), "creates snapshot of indices [1,", index << ']');
+  VAST_ASSERT(index > 0);
+  if (index == self->state.last_snapshot_index)
+    return make_error(ec::unspecified, "ignores request to take redundant "
+                      "snapshot at index", index);
+  if (index < self->state.log->first_index())
+    return make_error(ec::unspecified, "ignores request to take snapshot at "
+                      "index", index, "that is included in prior snapshot "
+                      "at index", self->state.log->first_index());
+  if (index > self->state.log->last_index())
+    return make_error(ec::unspecified, "cannot take snapshot at index", index,
+                      "that is larger than largest index",
+                      self->state.log->last_index());
+  if (index > self->state.commit_index)
+    return make_error(ec::unspecified, "cannot take snapshot of uncommitted "
+                      "index", index);
+  // Request to snapshot is now guaranteed to fall within the window of our log.
+  VAST_ASSERT(index >= self->state.log->first_index()
+              && index <= self->state.log->last_index());
+  // If we have the snapshot stream open, then it must have been opened while
+  // we were receiving InstallSnapshot messages. We don't support both
+  // operations at the same time.
+  if (self->state.snapshot.is_open())
+    return make_error(ec::unspecified, "snapshot delivery in progress");
+  // Write snapshot to file.
+  snapshot_header hdr;
+  hdr.last_included_index = index;
+  hdr.last_included_term = self->state.log->at(index).term;
+  auto result = save(self->state.dir / "snapshot", hdr, snapshot);
+  if (!result)
+    return result.error();
+  VAST_DEBUG(role(self), "completed snapshotting, last included term =",
+             hdr.last_included_term << ", index =", hdr.last_included_index);
+  VAST_ASSERT(self->state.log->first_index() <= hdr.last_included_index);
+  // Update (volatile) server state.
+  self->state.last_snapshot_index = hdr.last_included_index;
+  self->state.last_snapshot_term = hdr.last_included_term;
+  // Truncate now no longer needed entries.
+  auto n = self->state.log->truncate_before(index + 1);
+  VAST_DEBUG(role(self), "truncated", n, "log entries");
+  return index;
 }
 
+// Loads a snapshot header into memory and adapts the server state accordingly.
+template <class Actor>
+expected<void> load_snapshot_header(Actor* self) {
+  VAST_DEBUG(role(self), "loads snapshot header");
+  snapshot_header hdr;
+  // Read snapshot header from filesystem.
+  auto result = load(self->state.dir / "snapshot", hdr);
+  if (!result)
+    return result.error();
+  if (hdr.version != 1)
+    return make_error(ec::version_error, "needed version 1, got", hdr.version);
+  if (hdr.last_included_index < self->state.last_snapshot_index)
+    return make_error(ec::unspecified, "stale snapshot");
+  // Update actor state.
+  self->state.last_snapshot_index = hdr.last_included_index;
+  self->state.last_snapshot_term = hdr.last_included_term;
+  self->state.commit_index = std::max(self->state.last_snapshot_index,
+                                      self->state.commit_index);
+  VAST_DEBUG(role(self), "sets commitIndex to", self->state.commit_index);
+  // Discard the existing log entirely if (1) the log is fully covered by the
+  // last snapshot, or (2) the last snapshot entry comes after the first log
+  // entry and both entries have different terms.
+  if (self->state.log->last_index() < self->state.last_snapshot_index
+      || (self->state.log->first_index() <= self->state.last_snapshot_index
+          && self->state.log->at(self->state.last_snapshot_index).term
+             != self->state.last_snapshot_term)) {
+    VAST_DEBUG(role(self), "discards entire log");
+    self->state.log->truncate_before(self->state.last_snapshot_index + 1);
+    self->state.log->truncate_after(self->state.last_snapshot_index);
+  }
+  return {};
+}
+
+// Loads snapshot contents.
+template <class Actor>
+expected<std::vector<char>> load_snapshot_data(Actor* self) {
+  VAST_DEBUG(role(self), "loads snapshot data");
+  snapshot_header hdr;
+  std::vector<char> data;
+  auto result = load(self->state.dir / "snapshot", hdr, data);
+  if (!result)
+    return result.error();
+  if (hdr.version != 1)
+    return make_error(ec::version_error, "needed version 1, got", hdr.version);
+  return data;
+}
+
+// Sends a range of entries to the state machine.
+template <class Actor>
+void deliver(Actor* self, index_type from, index_type to) {
+  VAST_ASSERT(from != 0 && to != 0);
+  if (!self->state.state_machine)
+    return;
+  if (from < self->state.log->first_index()) {
+    VAST_ASSERT(self->state.last_snapshot_index > 0);
+    auto snapshot = load_snapshot_data(self);
+    if (!snapshot) {
+      VAST_ERROR(role(self), "failed to load snapshot data",
+                 self->system().render(snapshot.error()));
+      self->quit(snapshot.error());
+      return;
+    }
+    VAST_DEBUG(role(self), "delivers snapshot at index",
+               self->state.last_snapshot_index);
+    auto msg = make_message(snapshot_atom::value,
+                            self->state.last_snapshot_index,
+                            std::move(*snapshot));
+    self->send(self->state.state_machine, self->state.last_snapshot_index, msg);
+    from = self->state.last_snapshot_index + 1;
+  }
+  VAST_DEBUG(role(self), "sends entries", from, "to", to);
+  for (auto i = from; i <= to; ++i) {
+    auto& entry = self->state.log->at(i);
+    if (entry.data.empty()) {
+      VAST_DEBUG(role(self), "skips delivery of no-op entry", i);
+    } else {
+      caf::binary_deserializer bd{self->system(), entry.data};
+      caf::message msg;
+      bd >> msg;
+      VAST_DEBUG(role(self), "delivers entry", i, deep_to_string(msg));
+      self->send(self->state.state_machine, i, msg);
+    }
+  }
+}
+
+// Adjusts the leader's commit index.
 template <class Actor>
 void advance_commit_index(Actor* self) {
   VAST_ASSERT(is_leader(self));
@@ -266,9 +385,7 @@ void advance_commit_index(Actor* self) {
   if (self->state.peers.empty()) {
     VAST_DEBUG(role(self), "advances commitIndex", self->state.commit_index,
                "->", last_index);
-    if (self->state.state_machine)
-      for (auto i = self->state.commit_index + 1; i <= last_index; ++i)
-        deliver(self, i);
+    deliver(self, self->state.commit_index + 1, last_index);
     self->state.commit_index = last_index;
     return;
   }
@@ -294,9 +411,7 @@ void advance_commit_index(Actor* self) {
   VAST_DEBUG(role(self), "advances commitIndex", self->state.commit_index,
              "->", index);
   VAST_ASSERT(index <= last_index);
-  if (self->state.state_machine)
-    for (auto i = self->state.commit_index + 1; i <= index; ++i)
-      deliver(self, i);
+  deliver(self, self->state.commit_index + 1, index);
   self->state.commit_index = index;
 }
 
@@ -469,100 +584,6 @@ auto handle_request_vote(Actor* self, request_vote::request& req) {
   resp.term = self->state.current_term;
   resp.vote_granted = self->state.voted_for == req.candidate_id;
   return resp;
-}
-
-// Saves a state machine snapshot that represents all the applied state up to a
-// given index.
-template <class Actor>
-result<index_type> save_snapshot(Actor* self, index_type index,
-                                 const std::vector<char>& snapshot) {
-  VAST_DEBUG(role(self), "creates snapshot of indices [1,", index << ']');
-  VAST_ASSERT(index > 0);
-  if (index == self->state.last_snapshot_index)
-    return make_error(ec::unspecified, "ignores request to take redundant "
-                      "snapshot at index", index);
-  if (index < self->state.log->first_index())
-    return make_error(ec::unspecified, "ignores request to take snapshot at "
-                      "index", index, "that is included in prior snapshot "
-                      "at index", self->state.log->first_index());
-  if (index > self->state.log->last_index())
-    return make_error(ec::unspecified, "cannot take snapshot at index", index,
-                      "that is larger than largest index",
-                      self->state.log->last_index());
-  if (index > self->state.commit_index)
-    return make_error(ec::unspecified, "cannot take snapshot of uncommitted "
-                      "index", index);
-  // Request to snapshot is now guaranteed to fall within the window of our log.
-  VAST_ASSERT(index >= self->state.log->first_index()
-              && index <= self->state.log->last_index());
-  // If we have the snapshot stream open, then it must have been opened while
-  // we were receiving InstallSnapshot messages. We don't support both
-  // operations at the same time.
-  if (self->state.snapshot.is_open())
-    return make_error(ec::unspecified, "snapshot delivery in progress");
-  // Write snapshot to file.
-  snapshot_header hdr;
-  hdr.last_included_index = index;
-  hdr.last_included_term = self->state.log->at(index).term;
-  auto result = save(self->state.dir / "snapshot", hdr, snapshot);
-  if (!result)
-    return result.error();
-  VAST_DEBUG(role(self), "completed snapshotting, last included term =",
-             hdr.last_included_term << ", index =", hdr.last_included_index);
-  VAST_ASSERT(self->state.log->first_index() <= hdr.last_included_index);
-  // Update (volatile) server state.
-  self->state.last_snapshot_index = hdr.last_included_index;
-  self->state.last_snapshot_term = hdr.last_included_term;
-  // Truncate now no longer needed entries.
-  auto n = self->state.log->truncate_before(index + 1);
-  VAST_DEBUG(role(self), "truncated", n, "log entries");
-  return index;
-}
-
-// Loads a snapshot header into memory and adapts the server state accordingly.
-template <class Actor>
-expected<void> load_snapshot_header(Actor* self) {
-  VAST_DEBUG(role(self), "loads snapshot header");
-  snapshot_header hdr;
-  // Read snapshot header from filesystem.
-  auto result = load(self->state.dir / "snapshot", hdr);
-  if (!result)
-    return result.error();
-  if (hdr.version != 1)
-    return make_error(ec::version_error, "needed version 1, got", hdr.version);
-  if (hdr.last_included_index < self->state.last_snapshot_index)
-    return make_error(ec::unspecified, "stale snapshot");
-  // Update actor state.
-  self->state.last_snapshot_index = hdr.last_included_index;
-  self->state.last_snapshot_term = hdr.last_included_term;
-  self->state.commit_index = std::max(self->state.last_snapshot_index,
-                                      self->state.commit_index);
-  VAST_DEBUG(role(self), "sets commitIndex to", self->state.commit_index);
-  // Discard the existing log entirely if (1) the log is fully covered by the
-  // last snapshot, or (2) the last snapshot entry comes after the first log
-  // entry and both entries have different terms.
-  if (self->state.log->last_index() < self->state.last_snapshot_index
-      || (self->state.log->first_index() <= self->state.last_snapshot_index
-          && self->state.log->at(self->state.last_snapshot_index).term
-             != self->state.last_snapshot_term)) {
-    VAST_DEBUG(role(self), "discards entire log");
-    self->state.log->truncate_before(self->state.last_snapshot_index + 1);
-    self->state.log->truncate_after(self->state.last_snapshot_index);
-  }
-  return {};
-}
-
-template <class Actor>
-expected<std::vector<char>> load_snapshot_data(Actor* self) {
-  VAST_DEBUG(role(self), "loads snapshot data");
-  snapshot_header hdr;
-  std::vector<char> data;
-  auto result = load(self->state.dir / "snapshot", hdr, data);
-  if (!result)
-    return result.error();
-  if (hdr.version != 1)
-    return make_error(ec::version_error, "needed version 1, got", hdr.version);
-  return data;
 }
 
 // Constructs an InstallSnapshot message.
@@ -866,10 +887,7 @@ handle_append_entries(Actor* self, append_entries::request& req) {
   }
   resp.last_log_index = self->state.log->last_index();
   if (self->state.commit_index < req.commit_index) {
-    // Deliver new entries to state machine.
-    if (self->state.state_machine)
-      for (auto i = self->state.commit_index + 1; i <= req.commit_index; ++i)
-        deliver(self, i);
+    deliver(self, self->state.commit_index + 1, req.commit_index);
     VAST_DEBUG(role(self), "adjusts commitIndex", self->state.commit_index,
                "->", req.commit_index);
     self->state.commit_index = req.commit_index;
@@ -962,29 +980,8 @@ behavior consensus(stateful_actor<server_state>* self, path dir) {
     [=](subscribe_atom, const actor& state_machine) {
       VAST_DEBUG(role(self), "got subscribe request from", state_machine);
       self->state.state_machine = state_machine;
-      // Send the last snapshot...
-      if (self->state.last_snapshot_index > 0) {
-        auto snapshot = load_snapshot_data(self);
-        if (!snapshot) {
-          VAST_ERROR(role(self), "failed to load snapshot data",
-                     self->system().render(snapshot.error()));
-          self->quit(snapshot.error());
-          return;
-        }
-        VAST_DEBUG(role(self), "delivers snapshot at index",
-                   self->state.last_snapshot_index);
-        auto msg = make_message(snapshot_atom::value,
-                                self->state.last_snapshot_index,
-                                std::move(*snapshot));
-        self->send(state_machine, self->state.last_snapshot_index, msg);
-      }
-      // ...plus all subsequent log entries.
-      if (self->state.log->empty())
-        return;
-      auto begin = self->state.last_snapshot_index + 1;
-      auto end = self->state.commit_index;
-      while (begin <= end)
-        deliver(self, begin++);
+      if (self->state.commit_index > 0)
+        deliver(self, 1, self->state.commit_index);
     },
   };
   // -- follower & candidate --------------------------------------------------
