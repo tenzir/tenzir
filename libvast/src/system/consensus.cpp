@@ -248,27 +248,35 @@ void deliver(Actor* self, index_type index) {
   VAST_ASSERT(self->state.state_machine);
   auto& entry = self->state.log->at(index);
   if (entry.data.empty()) {
-    VAST_DEBUG(role(self), "skips delivery of no-op entry");
+    VAST_DEBUG(role(self), "skips delivery of no-op entry", index);
     return;
   }
   caf::binary_deserializer bd{self->system(), entry.data};
   caf::message msg;
   bd >> msg;
-  VAST_DEBUG(role(self), "delivers entry", entry.index);
-  self->send(self->state.state_machine, entry.index, msg);
+  VAST_DEBUG(role(self), "delivers entry", index, deep_to_string(msg));
+  self->send(self->state.state_machine, index, msg);
 }
 
 template <class Actor>
 void advance_commit_index(Actor* self) {
   VAST_ASSERT(is_leader(self));
-  // Nothing to do if we don't have peers; commit index already advanced.
-  if (self->state.peers.empty())
+  auto last_index = self->state.log->last_index();
+  // Without peers, we can adjust the commit index directly.
+  if (self->state.peers.empty()) {
+    VAST_DEBUG(role(self), "advances commitIndex", self->state.commit_index,
+               "->", last_index);
+    if (self->state.state_machine)
+      for (auto i = self->state.commit_index + 1; i <= last_index; ++i)
+        deliver(self, i);
+    self->state.commit_index = last_index;
     return;
+  }
   // Compute the new commit index based through a majority vote.
   auto n = self->state.peers.size() + 1;
   std::vector<index_type> xs;
   xs.reserve(n);
-  xs.emplace_back(self->state.log->last_index());
+  xs.emplace_back(last_index);
   for (auto& state : self->state.peers)
     xs.emplace_back(state.match_index);
   std::sort(xs.begin(), xs.end());
@@ -285,13 +293,11 @@ void advance_commit_index(Actor* self) {
     return;
   VAST_DEBUG(role(self), "advances commitIndex", self->state.commit_index,
              "->", index);
-  VAST_ASSERT(index <= self->state.log->last_index());
-  if (!self->state.state_machine) {
-    self->state.commit_index = index;
-    return;
-  }
-  while (self->state.commit_index != index)
-    deliver(self, ++self->state.commit_index);
+  VAST_ASSERT(index <= last_index);
+  if (self->state.state_machine)
+    for (auto i = self->state.commit_index + 1; i <= index; ++i)
+      deliver(self, i);
+  self->state.commit_index = index;
 }
 
 template <class Actor>
@@ -325,7 +331,6 @@ void become_leader(Actor* self) {
     peer.match_index = 0;
     peer.last_snapshot_index = 0;
   }
-  // Add no-op entry to ensure linearizability.
   // (A no-op entry has an index of 0 and no data in our implementation.)
   log_entry entry;
   entry.term = self->state.current_term;
@@ -955,6 +960,7 @@ behavior consensus(stateful_actor<server_state>* self, path dir) {
     // When the state machine initializes, it will obtain the latest state
     // through this handler.
     [=](subscribe_atom, const actor& state_machine) {
+      VAST_DEBUG(role(self), "got subscribe request from", state_machine);
       self->state.state_machine = state_machine;
       // Send the last snapshot...
       if (self->state.last_snapshot_index > 0) {
@@ -1028,23 +1034,16 @@ behavior consensus(stateful_actor<server_state>* self, path dir) {
       entry[0].index = log_index;
       caf::binary_serializer bs{self->system(), entry[0].data};
       bs << command;
-      // Append to log and wait for commit.
+      // Append to log and wait for commit via AppendEntries.
       auto res = self->state.log->append(std::move(entry));
       if (!res) {
         VAST_ERROR(role(self), "failed to append new entry:",
                    self->system().render(res.error()));
         return res.error();
       }
-      if (!self->state.peers.empty()) {
-        VAST_DEBUG(role(self), "asks followers to confirm entry", log_index);
-        return ok_atom::value;
-      }
       // Without peers, we can commit the entry immediately.
-      VAST_DEBUG(role(self), "commits entry immediately", log_index);
-      self->state.commit_index = log_index;
-      VAST_ASSERT(log_index == self->state.commit_index);
-      if (self->state.state_machine)
-        self->send(self->state.state_machine, log_index, command);
+      if (self->state.peers.empty())
+        advance_commit_index(self);
       return ok_atom::value;
     }
   }.or_else(common);
