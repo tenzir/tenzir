@@ -1,0 +1,46 @@
+#!/bin/sh
+#
+# Environemnt variables defined by the Jenkins build matrix:
+#
+# - build     ("Release" or "Debug" or "ASAN")
+# - compiler  (either "clang" or "gcc")
+# - OS        (label expression as in Jenkins node listing)
+#
+
+set -e # Abort on error.
+set -x # Show every command.
+
+# Prepare environment
+os=$(uname)
+if [ "$os" = "FreeBSD" ]; then
+  alias make=gmake
+fi
+if [ "$os" = "Darwin" ] ; then
+  export DYLD_LIBRARY_PATH="$PWD/build/lib"
+else
+  export LD_LIBRARY_PATH="$PWD/build/lib"
+fi
+PATH="$(pwd)/build/bin:$PATH"
+
+# Setup configure.
+configure="./configure"
+if [ "$build" = "Release" ]; then
+  configure="$configure --build-type=Release"
+elif [ "$build" = "Debug" ]; then
+  configure="$configure --build-type=Debug --enable-assertions"
+elif [ "$build" = "ASAN" ]; then
+  configure="$configure --build-type=RelWithDebInfo --enable-assertions"
+  configure="$configure --enable-asan"
+fi
+caf="../../../../../../../../CAF/develop branch $compiler/label_exp"
+label=$(ls "$caf" | grep "$OS")
+caf="$caf/$label/build"
+configure="$configure --with-caf='$caf'"
+
+# Build.
+eval $configure
+cd build
+make
+
+# Run unit tests.
+vast-test -v 3 -n -r 600
