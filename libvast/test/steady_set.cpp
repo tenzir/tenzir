@@ -1,12 +1,12 @@
-#include "vast/detail/flat_serial_set.hpp"
+#include "vast/detail/steady_set.hpp"
 
 #define SUITE detail
 #include "test.hpp"
 
 using namespace vast;
 
-TEST(flat_serial_set) {
-  detail::flat_serial_set<int> set;
+TEST(steady_set) {
+  detail::steady_set<int> set;
   MESSAGE("insert elements");
   CHECK(set.push_back(1));
   CHECK(set.push_back(2));

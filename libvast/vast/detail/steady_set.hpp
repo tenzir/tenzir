@@ -1,5 +1,5 @@
-#ifndef VAST_DETAIL_FLAT_SERIAL_SET_HPP
-#define VAST_DETAIL_FLAT_SERIAL_SET_HPP
+#ifndef VAST_DETAIL_STEADY_SET_HPP
+#define VAST_DETAIL_STEADY_SET_HPP
 
 #include <algorithm>
 #include <functional>
@@ -16,8 +16,8 @@ template <
   typename Compare = std::equal_to<T>,
   typename Allocator = std::allocator<T>
 >
-class flat_serial_set
-  : detail::totally_ordered<flat_serial_set<T, Compare, Allocator>> {
+class steady_set
+  : detail::totally_ordered<steady_set<T, Compare, Allocator>> {
 public:
   //
   // Types
@@ -43,16 +43,16 @@ public:
   // Construction
   //
 
-  flat_serial_set() = default;
+  steady_set() = default;
 
-  flat_serial_set(std::initializer_list<T> l) {
+  steady_set(std::initializer_list<T> l) {
     reserve(l.size());
     for (auto& x : l)
       insert(x);
   }
 
   template <typename InputIterator>
-  flat_serial_set(InputIterator first, InputIterator last) {
+  steady_set(InputIterator first, InputIterator last) {
     insert(first, last);
   }
 
@@ -60,11 +60,11 @@ public:
   // Relational Operators
   //
 
-  friend bool operator<(flat_serial_set const& x, flat_serial_set const& y) {
+  friend bool operator<(steady_set const& x, steady_set const& y) {
     return x.v_ < y.v_;
   }
 
-  friend bool operator==(flat_serial_set const& x, flat_serial_set const& y) {
+  friend bool operator==(steady_set const& x, steady_set const& y) {
     //return std::is_permutation(x.v_.begin(), x.v_.end(),
     //                           y.v_.begin(), y.v_.end());
     return x.v_ == y.v_;
@@ -259,7 +259,7 @@ public:
     return true;
   }
 
-  void swap(flat_serial_set& other) {
+  void swap(steady_set& other) {
     v_.swap(other);
   }
 

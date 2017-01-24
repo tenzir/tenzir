@@ -182,7 +182,6 @@ set(tests
   test/expression_evaluation.cpp
   test/expression_parseable.cpp
   test/filesystem.cpp
-  test/flat_serial_set.cpp
   test/hash.cpp
   test/http.cpp
   test/iterator.cpp
@@ -200,6 +199,7 @@ set(tests
   test/save_load.cpp
   test/schema.cpp
   test/stack.cpp
+  test/steady_set.cpp
   test/string.cpp
   test/subnet.cpp
   test/time.cpp
