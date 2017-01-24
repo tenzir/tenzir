@@ -74,6 +74,36 @@ public:
         derived().append_block(bits.data(), bits.size());
   }
 
+  /// Appends a single bit.
+  /// @tparam Bit the bit value to append.
+  template <bool Bit>
+  void append() {
+    derived().append_bit(Bit);
+  }
+
+  /// Appends multiple bits of a single value.
+  /// @tparam Bit the bit value to append.
+  /// @param bits The number of bits with value *Bit* to append.
+  template <bool Bit>
+  void append(size_t bits) {
+    derived().append_bits(Bit, bits);
+  }
+
+  /// Appends multiple bits of a single value.
+  /// @param bit the bit value to append.
+  /// @param bits The number of bits with value *bit* to append.
+  void append(bool bit, size_t bits) {
+    derived().append_bits(bit, bits);
+  }
+
+  /// Appends a certain number of bits from a given block.
+  /// @param block The block of data to append.
+  /// @param bits The number of bits from *block* to append.
+  template <class Block, class T>
+  void append(T block, size_t bits) {
+    derived().append_block(Block{block}, bits);
+  }
+
   // -- element access --------------------------------------------------------
 
   /// Accesses the *i*-th bit of a bitmap.
