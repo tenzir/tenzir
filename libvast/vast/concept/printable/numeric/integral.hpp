@@ -46,7 +46,7 @@ struct printer_registry<T, std::enable_if_t<std::is_integral<T>::value>> {
 namespace printers {
 
 template <typename T>
-integral_printer<T> integral;
+auto const integral = integral_printer<T>{};
 
 auto const i8 = integral_printer<int8_t>{};
 auto const i16 = integral_printer<int16_t>{};

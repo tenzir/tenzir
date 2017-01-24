@@ -30,7 +30,7 @@ constexpr std::array<char, sizeof...(Chars)> char_printer<Chars...>::chars;
 namespace printers {
 
 template <char... Char>
-char_printer<Char...> chr;
+auto chr = char_printer<Char...>{};
 
 } // namespace printers
 } // namespace vast

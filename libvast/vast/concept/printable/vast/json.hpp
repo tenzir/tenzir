@@ -45,7 +45,7 @@ template <typename TreePolicy, int Indent = 2, int Padding = 0>
 struct json_printer : printer<json_printer<TreePolicy, Indent, Padding>> {
   using attribute = json;
 
-  static constexpr auto tree = std::is_same<TreePolicy, policy::tree>{};
+  static constexpr bool tree = std::is_same<TreePolicy, policy::tree>{};
 
   static_assert(Padding >= 0, "padding must not be negative");
 
@@ -184,10 +184,8 @@ struct json_printer : printer<json_printer<TreePolicy, Indent, Padding>> {
   }
 };
 
-//template <>
-//struct printer_registry<json::type> {
-//  using type = json_type_printer;
-//};
+template <typename TreePolicy, int Indent, int Padding>
+constexpr bool json_printer<TreePolicy, Indent, Padding>::tree;
 
 template <>
 struct printer_registry<json::array> {
@@ -207,7 +205,7 @@ struct printer_registry<json> {
 namespace printers {
 
 template <typename Policy>
-json_printer<Policy> json;
+auto json = json_printer<Policy>{};
 
 } // namespace printers
 } // namespace vast
