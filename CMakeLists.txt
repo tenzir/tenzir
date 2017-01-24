@@ -138,6 +138,12 @@ if (NOT CMAKE_CXX_FLAGS)
   set(CMAKE_CXX_FLAGS ${EXTRA_FLAGS})
 endif ()
 
+# Pick up 3rd-party packages and ports.
+if (${CMAKE_SYSTEM_NAME} MATCHES "FreeBSD")
+  include_directories(/usr/local/include)
+  link_directories(/usr/local/lib)
+endif ()
+
 #------------------------------------------------------------------------------
 #                          Dependency Configuration
 #------------------------------------------------------------------------------
