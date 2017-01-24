@@ -1,8 +1,9 @@
-#ifndef VAST_DETAIL_STEADY_SET_HPP
-#define VAST_DETAIL_STEADY_SET_HPP
+#ifndef VAST_DETAIL_STEADY_MAP_HPP
+#define VAST_DETAIL_STEADY_MAP_HPP
 
 #include <algorithm>
 #include <functional>
+#include <stdexcept>
 #include <vector>
 
 #include "vast/detail/operators.hpp"
@@ -10,14 +11,20 @@
 namespace vast {
 namespace detail {
 
-/// A set abstraction over an unsorted `std::vector`.
-template <class T, class Allocator = std::allocator<T>>
-class steady_set : totally_ordered<steady_set<T, Allocator>> {
+/// A map abstraction over an unsorted `std::vector`.
+template <
+  class Key,
+  class T,
+  class Allocator = std::allocator<std::pair<Key, T>>
+>
+class steady_map : totally_ordered<steady_map<Key, T, Allocator>> {
 public:
   // -- types ----------------------------------------------------------------
 
-  using value_type = T;
-  using vector_type = std::vector<T, Allocator>;
+  using key_type = Key;
+  using mapped_type = T;
+  using value_type = std::pair<Key, T>;
+  using vector_type = std::vector<value_type, Allocator>;
   using allocator_type = typename vector_type::allocator_type;
   using size_type = typename vector_type::size_type;
   using difference_type = typename vector_type::difference_type;
@@ -32,16 +39,16 @@ public:
 
   // -- construction ---------------------------------------------------------
 
-  steady_set() = default;
+  steady_map() = default;
 
-  steady_set(std::initializer_list<T> l) {
+  steady_map(std::initializer_list<value_type> l) {
     reserve(l.size());
     for (auto& x : l)
       insert(x);
   }
 
   template <class InputIterator>
-  steady_set(InputIterator first, InputIterator last) {
+  steady_map(InputIterator first, InputIterator last) {
     insert(first, last);
   }
 
@@ -104,7 +111,7 @@ public:
   }
 
   std::pair<iterator, bool> insert(value_type x) {
-    auto i = find(x);
+    auto i = find(x.first);
     if (i == end())
       return {xs_.insert(i, std::move(x)), true};
     else
@@ -135,39 +142,61 @@ public:
     return xs_.erase(first, last);
   }
 
-  size_type erase(const value_type& x) {
-    auto i = std::remove(begin(), end(), x);
+  size_type erase(const key_type& x) {
+    auto pred = [&](auto& p) { return p.first == x; };
+    auto i = std::remove_if(begin(), end(), pred);
     if (i == end())
       return 0;
     erase(i);
     return 1;
   }
 
-  void swap(steady_set& other) {
+  void swap(steady_map& other) {
     xs_.swap(other);
   }
 
   // -- lookup ---------------------------------------------------------------
 
-  size_type count(const value_type& x) const {
+  mapped_type& at(const key_type& key) {
+    auto i = find(key);
+    if (i == end())
+      throw std::out_of_range{"vast::detail::steady_map::at"};
+    return i->second;
+  }
+
+  const mapped_type& at(const key_type& key) const {
+    auto i = find(key);
+    if (i == end())
+      throw std::out_of_range{"vast::detail::steady_map::at"};
+    return i->second;
+  }
+
+  mapped_type& operator[](const key_type& key) {
+    auto i = find(key);
+    if (i != end())
+      return i->second;
+    return xs_.insert(i, value_type{key, mapped_type{}})->second;
+  }
+
+  iterator find(const key_type& x) {
+    return std::find_if(begin(), end(), [&](auto& p) { return p.first == x; });
+  }
+
+  const_iterator find(const key_type& x) const {
+    return std::find_if(begin(), end(), [&](auto& p) { return p.first == x; });
+  }
+
+  size_type count(const key_type& x) const {
     return find(x) == end() ? 0 : 1;
-  }
-
-  iterator find(const value_type& x) {
-    return std::find(begin(), end(), x);
-  }
-
-  const_iterator find(const value_type& x) const {
-    return std::find(begin(), end(), x);
   }
 
   // -- operators ------------------------------------------------------------
 
-  friend bool operator<(const steady_set& x, const steady_set& y) {
+  friend bool operator<(const steady_map& x, const steady_map& y) {
     return x.xs_ < y.xs_;
   }
 
-  friend bool operator==(const steady_set& x, const steady_set& y) {
+  friend bool operator==(const steady_map& x, const steady_map& y) {
     return x.xs_ == y.xs_;
   }
 
@@ -183,4 +212,3 @@ private:
 } // namespace vast
 
 #endif
-

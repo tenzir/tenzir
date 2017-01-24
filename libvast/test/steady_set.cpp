@@ -5,15 +5,56 @@
 
 using namespace vast;
 
-TEST(steady_set) {
-  detail::steady_set<int> set;
-  MESSAGE("insert elements");
-  CHECK(set.push_back(1));
-  CHECK(set.push_back(2));
-  CHECK(set.push_back(3));
-  MESSAGE("ensure no duplicates");
-  CHECK(!set.push_back(2));
-  MESSAGE("test membership");
-  CHECK_EQUAL(set[0], 1);
-  CHECK_EQUAL(set[2], 3);
+namespace {
+
+using set = detail::steady_set<int>;
+
+struct fixture {
+  fixture() {
+    xs.insert(1);
+    xs.emplace(3);
+    xs.insert(2);
+  }
+
+  set xs;
+};
+
+} // namespace <anonymous>
+
+FIXTURE_SCOPE(steady_set_tests, fixture)
+
+TEST(steady_set membership) {
+  CHECK(xs.find(0) == xs.end());
+  CHECK(xs.find(1) != xs.end());
+  CHECK_EQUAL(xs.count(2), 1u);
 }
+
+TEST(steady_set insert) {
+  auto i = xs.insert(0);
+  CHECK(i.second);
+  CHECK_EQUAL(*i.first, 0);
+  CHECK_EQUAL(xs.size(), 4u);
+}
+
+TEST(steady_set erase) {
+  CHECK_EQUAL(xs.erase(0), 0u);
+  CHECK_EQUAL(xs.erase(1), 1u);
+  auto next = xs.erase(xs.begin());
+  REQUIRE(next < xs.end());
+  CHECK_EQUAL(*next, 2);
+  CHECK_EQUAL(xs.size(), 1u);
+}
+
+TEST(steady_set duplicates) {
+  auto i = xs.insert(3);
+  CHECK(!i.second);
+  CHECK_EQUAL(*i.first, 3);
+  CHECK_EQUAL(xs.size(), 3u);
+}
+
+TEST(steady_set comparison) {
+  CHECK(xs == set{1, 3, 2});
+  CHECK(xs != set{1, 2, 3});
+}
+
+FIXTURE_SCOPE_END()

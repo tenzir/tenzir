@@ -199,6 +199,7 @@ set(tests
   test/save_load.cpp
   test/schema.cpp
   test/stack.cpp
+  test/steady_map.cpp
   test/steady_set.cpp
   test/string.cpp
   test/subnet.cpp
