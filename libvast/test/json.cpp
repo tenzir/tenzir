@@ -143,7 +143,7 @@ TEST(printable) {
   o["bar"] = nil;
   line.clear();
   CHECK(printers::json<policy::oneline>(line, json{o}));
-  CHECK_EQUAL(line, "{\"bar\": null, \"foo\": 42}");
+  CHECK_EQUAL(line, "{\"foo\": 42, \"bar\": null}");
   o = {{"baz", 4.2}};
   line.clear();
   CHECK(printers::json<policy::oneline>(line, json{o}));
@@ -152,28 +152,28 @@ TEST(printable) {
   o = {
     {"baz", 4.2},
     {"x", a},
-    {"inner", json::object{{"a", false}, {"b", 42}, {"c", a}}}
+    {"inner", json::object{{"a", false}, {"c", a}, {"b", 42}}}
   };
   auto json_tree = R"json({
   "baz": 4.2,
-  "inner": {
-    "a": false,
-    "b": 42,
-    "c": [
-      42,
-      -1337,
-      "foo",
-      null,
-      true
-    ]
-  },
   "x": [
     42,
     -1337,
     "foo",
     null,
     true
-  ]
+  ],
+  "inner": {
+    "a": false,
+    "c": [
+      42,
+      -1337,
+      "foo",
+      null,
+      true
+    ],
+    "b": 42
+  }
 })json";
   std::string str;
   CHECK(printers::json<policy::tree>(str, json{o}));

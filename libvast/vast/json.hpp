@@ -1,12 +1,12 @@
 #ifndef VAST_JSON_HPP
 #define VAST_JSON_HPP
 
-#include <map>
 #include <string>
 #include <vector>
 
 #include "vast/concept/printable/to.hpp"
 #include "vast/detail/operators.hpp"
+#include "vast/detail/steady_map.hpp"
 #include "vast/none.hpp"
 #include "vast/variant.hpp"
 
@@ -81,9 +81,9 @@ public:
   };
 
   /// An associative data structure exposing key-value pairs with unique keys.
-  struct object : std::map<string, json> {
-    using super = std::map<string, json>;
-    using super::map;
+  struct object : detail::steady_map<string, json> {
+    using super = detail::steady_map<string, json>;
+    using super::steady_map;
 
     object() = default;
 

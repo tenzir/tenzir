@@ -76,35 +76,35 @@ TEST(json) {
   "id": 123456789,
   "timestamp": 0,
   "value": {
+    "type": {
+      "name": "foo",
+      "kind": "record",
+      "structure": {
+        "x": {
+          "name": "",
+          "kind": "bool",
+          "structure": null,
+          "attributes": {}
+        },
+        "y": {
+          "name": "",
+          "kind": "count",
+          "structure": null,
+          "attributes": {}
+        },
+        "z": {
+          "name": "",
+          "kind": "integer",
+          "structure": null,
+          "attributes": {}
+        }
+      },
+      "attributes": {}
+    },
     "data": {
       "x": true,
       "y": 42,
       "z": -234987
-    },
-    "type": {
-      "attributes": {},
-      "kind": "record",
-      "name": "foo",
-      "structure": {
-        "x": {
-          "attributes": {},
-          "kind": "bool",
-          "name": "",
-          "structure": null
-        },
-        "y": {
-          "attributes": {},
-          "kind": "count",
-          "name": "",
-          "structure": null
-        },
-        "z": {
-          "attributes": {},
-          "kind": "integer",
-          "name": "",
-          "structure": null
-        }
-      }
     }
   }
 })json";

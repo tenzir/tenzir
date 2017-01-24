@@ -247,16 +247,16 @@ TEST(json) {
   auto expected = R"__({
   "types": [
     {
-      "attributes": {},
-      "kind": "count",
       "name": "foo",
-      "structure": null
+      "kind": "count",
+      "structure": null,
+      "attributes": {}
     },
     {
-      "attributes": {},
-      "kind": "string",
       "name": "bar",
-      "structure": null
+      "kind": "string",
+      "structure": null,
+      "attributes": {}
     }
   ]
 })__";

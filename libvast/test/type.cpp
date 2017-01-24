@@ -432,44 +432,44 @@ TEST(json) {
   };
   r.name("foo");
   auto expected = R"__({
-  "attributes": {},
-  "kind": "record",
   "name": "foo",
+  "kind": "record",
   "structure": {
     "x": {
+      "name": "",
+      "kind": "address",
+      "structure": null,
       "attributes": {
         "skip": null
-      },
-      "kind": "address",
-      "name": "",
-      "structure": null
+      }
     },
     "y": {
+      "name": "",
+      "kind": "bool",
+      "structure": null,
       "attributes": {
         "default": "F"
-      },
-      "kind": "bool",
-      "name": "",
-      "structure": null
+      }
     },
     "z": {
-      "attributes": {},
-      "kind": "record",
       "name": "",
+      "kind": "record",
       "structure": {
         "inner": {
-          "attributes": {},
-          "kind": "enumeration",
           "name": "e",
+          "kind": "enumeration",
           "structure": [
             "foo",
             "bar",
             "baz"
-          ]
+          ],
+          "attributes": {}
         }
-      }
+      },
+      "attributes": {}
     }
-  }
+  },
+  "attributes": {}
 })__";
   CHECK_EQUAL(to_string(to_json(type{r})), expected);
 }

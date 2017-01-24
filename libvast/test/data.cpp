@@ -308,7 +308,7 @@ TEST(json) {
   };
   CHECK(type_check(t, r));
   expected = R"__({
-  "port": "443/tcp",
+  "x": "foo",
   "r": {
     "i": -42,
     "r": {
@@ -316,7 +316,7 @@ TEST(json) {
     }
   },
   "str": "x",
-  "x": "foo"
+  "port": "443/tcp"
 })__";
   CHECK(to_string(to_json(r, t)) == expected);
 }

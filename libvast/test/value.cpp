@@ -128,35 +128,35 @@ TEST(json)
   auto j = to<json>(v);
   REQUIRE(j);
   auto str = R"__({
-  "data": {
-    "bar": -42,
-    "baz": 4.2,
-    "foo": "53/udp"
-  },
   "type": {
-    "attributes": {},
-    "kind": "record",
     "name": "",
+    "kind": "record",
     "structure": {
-      "bar": {
-        "attributes": {},
-        "kind": "integer",
+      "foo": {
         "name": "",
-        "structure": null
+        "kind": "port",
+        "structure": null,
+        "attributes": {}
+      },
+      "bar": {
+        "name": "",
+        "kind": "integer",
+        "structure": null,
+        "attributes": {}
       },
       "baz": {
-        "attributes": {},
+        "name": "",
         "kind": "real",
-        "name": "",
-        "structure": null
-      },
-      "foo": {
-        "attributes": {},
-        "kind": "port",
-        "name": "",
-        "structure": null
+        "structure": null,
+        "attributes": {}
       }
-    }
+    },
+    "attributes": {}
+  },
+  "data": {
+    "foo": "53/udp",
+    "bar": -42,
+    "baz": 4.2
   }
 })__";
   CHECK_EQUAL(to_string(*j), str);
