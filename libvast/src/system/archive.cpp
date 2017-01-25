@@ -96,7 +96,7 @@ expected<void> flush_active_segment(Actor* self) {
     self->send(self->state.accountant, "archive.flush.rate", rate);
   }
   VAST_DEBUG(self, "wrote active segment to", filename);
-  self->state.cache.insert(id, std::move(self->state.active));
+  self->state.cache.emplace(id, std::move(self->state.active));
   self->state.active = {};
   // Update meta data on filessytem.
   auto t = save(self->state.dir / "meta", self->state.segments);
@@ -119,7 +119,7 @@ archive(archive_type::stateful_pointer<archive_state> self,
   self->state.max_segment_size = max_segment_size;
   self->state.cache.capacity(capacity);
   self->state.cache.on_evict(
-    [=](uuid const& id, segment&) {
+    [=](uuid& id, segment&) {
       VAST_DEBUG(self, "evicts cache entry: segment", id);
     }
   );
@@ -235,7 +235,7 @@ archive(archive_type::stateful_pointer<archive_state> self,
       std::vector<event> result;
       VAST_DEBUG(self, "processing", candidates.size(), "candidates");
       for (auto c = candidates.rbegin(); c != candidates.rend(); ++c) {
-        segment* s;
+        segment* s = nullptr;
         // If the segment turns out to be the active segment, we can
         // can query it immediately.
         if (**c == self->state.active.id()) {
@@ -243,9 +243,10 @@ archive(archive_type::stateful_pointer<archive_state> self,
           s = &self->state.active;
         } else {
           // Otherwise we look into the cache.
-          s = self->state.cache.lookup(**c);
-          if (s) {
+          auto i = self->state.cache.find(**c);
+          if (i != self->state.cache.end()) {
             VAST_DEBUG(self, "got cache hit for segment", **c);
+            s = &i->second;
           } else {
             VAST_DEBUG(self, "got cache miss for segment", **c);
             auto filename = self->state.dir / to_string(**c);
@@ -265,8 +266,8 @@ archive(archive_type::stateful_pointer<archive_state> self,
               rp.deliver(make_error(ec::version_error, v, segment::version));
               return rp;
             }
-            self->state.cache.insert(**c, std::move(seg));
-            s = self->state.cache.lookup(**c);
+            i = self->state.cache.emplace(**c, std::move(seg)).first;
+            s = &i->second;
           }
         }
         // Perform lookup in segment and append extracted events to result.

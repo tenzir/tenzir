@@ -46,16 +46,17 @@ actor dispatch(stateful_actor<index_state>* self, uuid const& part,
   // If the partition is in memory, we send it the expression directly.
   if (part == self->state.active_id)
     return self->state.active;
-  if (auto p = self->state.passive.lookup(part))
-    return *p;
+  auto p = self->state.passive.find(part);
+  if (p != self->state.passive.end())
+    return p->second;
   // If we have not fully maxed out our available passive partitions, we can
   // spawn the partition directly.
   if (self->state.passive.size() < self->state.passive.capacity()) {
     VAST_DEBUG(self, "spawns passive partition", part);
-    auto p = self->spawn<monitored>(partition,
+    auto a = self->spawn<monitored>(partition,
                                     self->state.dir / to_string(part), self);
-    self->state.passive.insert(part, p);
-    return p;
+    self->state.passive.emplace(part, a);
+    return a;
   }
   return {};
 }
@@ -90,19 +91,19 @@ void consolidate(stateful_actor<index_state>* self, uuid const& part,
   // and that got replaced with a new one. In the latter case the replaced
   // partition is neither in the active nor passive set and has already being
   // taken care of, so we can safely ignore this consolidation request.
-  if (self->state.passive.lookup(part) == nullptr)
+  if (self->state.passive.count(part) == 0)
     return;
   // For each consolidated passive partition, we load another new one. Because
   // partitions can complete in any order, we have to walk through the schedule
   // from the beginning again to find the next passive partition to load.
   for (auto& entry : self->state.schedule) {
     if (entry.part != self->state.active_id
-        && !self->state.passive.contains(entry.part)) {
+        && self->state.passive.count(entry.part) == 0) {
       VAST_DEBUG(self, "schedules next passive partition", entry.part);
       auto p = self->spawn<monitored>(partition,
                                       self->state.dir / to_string(entry.part),
                                       self);
-      self->state.passive.insert(entry.part, p); // automatically evicts 'part'.
+      self->state.passive.emplace(entry.part, p); // automatically evicts 'part'
       for (auto& next_expr : entry.queries) {
         auto q = self->state.queries.find(next_expr);
         VAST_ASSERT(q != self->state.queries.end());
@@ -146,7 +147,7 @@ behavior index(stateful_actor<index_state>* self, path const& dir,
   VAST_ASSERT(passive > 0);
   // Setup cache for passive partitions
   self->state.passive.capacity(passive);
-  self->state.passive.on_evict([=](uuid id, actor& p) {
+  self->state.passive.on_evict([=](uuid& id, actor& p) {
     VAST_DEBUG(self, "evicts partition", id);
     self->send(p, shutdown_atom::value);
   });
@@ -280,7 +281,7 @@ behavior index(stateful_actor<index_state>* self, path const& dir,
       // a single batch.
       if (active->events > 0 && active->events + events.size() > max_events) {
         VAST_DEBUG(self, "replaces active partition ", self->state.active_id);
-        self->state.passive.insert(self->state.active_id, self->state.active);
+        self->state.passive.emplace(self->state.active_id, self->state.active);
         active = make_partition();
       }
       // Now we're ready to forward the events to the active partition. But
