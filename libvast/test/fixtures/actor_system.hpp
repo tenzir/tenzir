@@ -9,8 +9,8 @@
 
 #include "vast/detail/assert.hpp"
 
+#include "test.hpp"
 #include "fixtures/filesystem.hpp"
-
 
 namespace fixtures {
 
@@ -30,6 +30,8 @@ struct actor_system : filesystem {
     if (vast::exists(directory))
       vast::rm(directory);
     // Start profiler.
+    if (vast::test::config.count("gperftools") > 0)
+      enable_profiler();
   }
 
   ~actor_system() {

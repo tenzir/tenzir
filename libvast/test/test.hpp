@@ -5,6 +5,9 @@
 #define CAF_SUITE SUITE
 #endif
 
+#include <set>
+#include <string>
+
 #include <caf/test/unit_test.hpp>
 
 // Logging
@@ -35,5 +38,15 @@
 #define CHECK_GREATER_EQUAL CAF_CHECK_GREATER_EQUAL
 #define CHECK_FAIL CAF_CHECK_FAIL
 #define FAIL CAF_FAIL
+
+namespace vast {
+namespace test {
+
+// Holds global configuration options passed on the command line after the
+// special -- delimiter.
+extern std::set<std::string> config;
+
+} // namespace test
+} // namespace vast
 
 #endif
