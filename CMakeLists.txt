@@ -127,9 +127,12 @@ if (ENABLE_ADDRESS_SANITIZER)
   else()
     message(STATUS "Enabling Address Sanitizer")
     set(EXTRA_FLAGS "${EXTRA_FLAGS} -fsanitize=address -fno-omit-frame-pointer")
-    set(ASAN_FOUND true)
   endif()
-endif(ENABLE_ADDRESS_SANITIZER)
+endif ()
+
+if (ENABLE_GCOV)
+  set(EXTRA_FLAGS "${EXTRA_FLAGS} -fprofile-arcs -ftest-coverage")
+endif ()
 
 if (SHOW_TIME_REPORT)
   set(EXTRA_FLAGS "${EXTRA_FLAGS} -ftime-report")
@@ -289,7 +292,9 @@ endmacro()
 
 display(SHOW_TIME_REPORT yes time_report_summary)
 display(VAST_ENABLE_ASSERTIONS yes assertions_summary)
+display(ENABLE_ADDRESS_SANITIZER yes asan_summary)
 display(ASAN_FOUND yes asan_summary)
+display(ENABLE_GCOV yes gcov_summary)
 
 if (VAST_LOG_LEVEL EQUAL -1)
   set(log_level_summary quiet)
@@ -338,6 +343,7 @@ set(summary
     "\nShow time report: ${time_report_summary}"
     "\nAssertions:       ${assertions_summary}"
     "\nAddressSanitizer: ${asan_summary}"
+    "\ngcov:             ${gcov_summary}"
     "\n"
     "\nCC:               ${CMAKE_C_COMPILER}"
     "\nCXX:              ${CMAKE_CXX_COMPILER}"
