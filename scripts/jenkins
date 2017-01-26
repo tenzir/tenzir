@@ -1,41 +1,60 @@
 #!/bin/sh
 #
-# Environemnt variables defined by the Jenkins build matrix:
-#
-# - build     ("Release" or "Debug" or "ASAN")
-# - compiler  (either "clang" or "gcc")
-# - OS        (label expression as in Jenkins node listing)
+# Jenkins script to configure, build, and unit-test VAST on multiple platforms.
 #
 
 set -e # Abort on error.
-set -x # Show every command.
 
-# Prepare environment
+usage() {
+  printf "usage: %s <caf>\n" $(basename $0)
+  echo
+  echo 'arguments:'
+  echo '    <caf>     path to CAF build directory'
+  echo
+  echo 'environment variables:'
+  echo '    BUILD     build type [Relase|Debug|ASAN]'
+  echo '    COMPILER  compiler type [clang|gcc]'
+  echo '    PLATFORM  Jenkins label expression of executing node'
+  echo
+}
+
+# Infer location of CAF build if not given.
+caf="$1"
+if [ -z "$caf" ]; then
+  caf="../../../../../../../../CAF/develop branch $COMPILER/label_exp"
+  label=$(ls "$caf" | grep "$PLATFORM")
+  caf="$caf/$label/build"
+fi
+if [ ! -d "$caf" ]; then
+  printf "no such directory: %s\n\n" "$caf"
+  usage
+  exit 1
+fi
+
+# Adjust build environment.
 os=$(uname)
 if [ "$os" = "FreeBSD" ]; then
+  # BSD make in combintation with CMake has trouble with paths that contain
+  # white space, so fall back to GNU make...alas.
   alias make=gmake
 fi
-if [ "$os" = "Darwin" ] ; then
+if [ "$os" = "Darwin" ]; then
   export DYLD_LIBRARY_PATH="$PWD/build/lib"
 else
   export LD_LIBRARY_PATH="$PWD/build/lib"
 fi
 PATH="$(pwd)/build/bin:$PATH"
 
-# Setup configure.
-configure="./configure"
-if [ "$build" = "Release" ]; then
+# Setup configure script arguments according to build matrix.
+configure="./configure --with-caf='$caf'"
+if [ "$BUILD" = "Release" ]; then
   configure="$configure --build-type=Release"
-elif [ "$build" = "Debug" ]; then
+elif [ "$BUILD" = "Debug" ]; then
   configure="$configure --build-type=Debug --enable-assertions"
-elif [ "$build" = "ASAN" ]; then
+elif [ "$BUILD" = "ASAN" ]; then
   configure="$configure --build-type=RelWithDebInfo --enable-assertions"
   configure="$configure --enable-asan"
 fi
-caf="../../../../../../../../CAF/develop branch $compiler/label_exp"
-label=$(ls "$caf" | grep "$OS")
-caf="$caf/$label/build"
-configure="$configure --with-caf='$caf'"
 
 # Build.
 eval $configure
