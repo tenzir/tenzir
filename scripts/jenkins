@@ -6,10 +6,10 @@
 set -e # Abort on error.
 
 usage() {
-  printf "usage: %s <caf>\n" $(basename $0)
+  printf "usage: %s [caf]\n" $(basename $0)
   echo
   echo 'arguments:'
-  echo '    <caf>     path to CAF build directory'
+  echo '    caf       path to CAF build directory (build manually if not given)'
   echo
   echo 'environment variables:'
   echo '    BUILD     build type [Relase|Debug|ASAN]'
@@ -18,20 +18,12 @@ usage() {
   echo
 }
 
-# Infer location of CAF build if not given.
+# Command line handling.
 caf="$1"
-if [ -z "$caf" ]; then
-  caf="../../../../../../../../CAF/develop branch $COMPILER/label_exp"
-  label=$(ls "$caf" | grep "$PLATFORM")
-  caf="$caf/$label/build"
-fi
-if [ ! -d "$caf" ]; then
-  printf "no such directory: %s\n\n" "$caf"
-  usage
-  exit 1
-fi
 
 # Adjust build environment.
+workspace="$(pwd)"
+PATH="$workspace/build/bin:$PATH"
 os=$(uname)
 if [ "$os" = "FreeBSD" ]; then
   # BSD make in combintation with CMake has trouble with paths that contain
@@ -43,7 +35,38 @@ if [ "$os" = "Darwin" ]; then
 else
   export LD_LIBRARY_PATH="$PWD/build/lib"
 fi
-PATH="$(pwd)/build/bin:$PATH"
+
+# Build CAF locally if no path provided.
+if [ -z "$caf" ]; then
+  caf="aux/caf"
+  if [ -d "$caf" ]; then
+    cd "$caf"
+    git pull
+  else
+    git clone https://github.com/actor-framework/actor-framework.git "$caf"
+    cd "$caf"
+    git checkout develop
+  fi
+  configure="./configure --no-examples --no-unit-tests --with-log-level=DEBUG"
+  configure="$configure --no-opencl --no-tools --no-python"
+  if [ "$BUILD" = "Release" ]; then
+    configure="$configure --build-type=Release"
+  elif [ "$BUILD" = "Debug" ]; then
+    configure="$configure --build-type=Debug --with-runtime-checks"
+  elif [ "$BUILD" = "ASAN" ]; then
+    configure="$configure --enable-address-sanitizer"
+  fi
+  eval $configure
+  cd build
+  make
+  cd "$workspace"
+  caf="$caf/build"
+fi
+if [ ! -d "$caf" ]; then
+  printf "no such directory: %s\n\n" "$caf"
+  usage
+  exit 1
+fi
 
 # Setup configure script arguments according to build matrix.
 configure="./configure --with-caf='$caf'"
