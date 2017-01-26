@@ -59,7 +59,7 @@ behavior profiler(stateful_actor<profiler_state>* self, path dir,
       }
     },
     [=](start_atom, heap_atom) {
-#ifdef VAST_USE_TCMALLOC
+#ifdef VAST_USE_PERFTOOLS_HEAP_PROFILER
       if (IsHeapProfilerRunning()) {
         VAST_WARNING(self, "ignores request to start enabled heap profiler");
       } else if (prepare()) {
@@ -73,7 +73,7 @@ behavior profiler(stateful_actor<profiler_state>* self, path dir,
 #endif
     },
     [=](stop_atom, heap_atom) {
-#ifdef VAST_USE_TCMALLOC
+#ifdef VAST_USE_PERFTOOLS_HEAP_PROFILER
       if (!IsHeapProfilerRunning()) {
         VAST_WARNING(self, "ignores request to stop disabled heap profiler");
       } else {
