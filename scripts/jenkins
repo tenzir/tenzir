@@ -54,7 +54,7 @@ if [ -z "$caf" ]; then
   elif [ "$BUILD" = "Debug" ]; then
     configure="$configure --build-type=Debug --with-runtime-checks"
   elif [ "$BUILD" = "ASAN" ]; then
-    configure="$configure --enable-address-sanitizer"
+    configure="$configure --with-address-sanitizer"
   fi
   eval $configure
   cd build
