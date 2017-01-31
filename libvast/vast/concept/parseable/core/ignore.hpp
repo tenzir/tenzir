@@ -1,6 +1,8 @@
 #ifndef VAST_CONCEPT_PARSEABLE_CORE_IGNORE_HPP
 #define VAST_CONCEPT_PARSEABLE_CORE_IGNORE_HPP
 
+#include <type_traits>
+
 #include "vast/concept/parseable/core/parser.hpp"
 
 namespace vast {
@@ -24,13 +26,12 @@ private:
 };
 
 template <typename Parser>
-auto ignore(Parser const& p) {
-  return ignore_parser<Parser>{p};
-}
-
-template <typename Parser>
-auto ignore(Parser&& p) {
-  return ignore_parser<Parser>{std::move(p)};
+auto ignore(Parser&& p)
+-> std::enable_if_t<
+     is_parser<std::decay_t<Parser>>::value,
+     ignore_parser<std::decay_t<Parser>>
+   > {
+  return ignore_parser<std::decay_t<Parser>>{std::move(p)};
 }
 
 } // namespace vast
