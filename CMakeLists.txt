@@ -161,10 +161,23 @@ if (VAST_ENABLE_ASSERTIONS)
   endif ()
 endif ()
 
+if (VAST_USE_OPENCL)
+  find_package(OpenCL)
+  if (OpenCL_FOUND)
+    include_directories(${OpenCL_INCLUDE_DIRS})
+  else ()
+    message(FATAL_ERROR "Could not find OpenCL")
+  endif ()
+endif ()
+
 if (NOT CAF_ROOT_DIR AND VAST_PREFIX)
   set(CAF_ROOT_DIR ${VAST_PREFIX})
 endif ()
-find_package(CAF COMPONENTS core io test)
+set(caf_components core io test)
+if (VAST_USE_OPENCL)
+  set(caf_components ${caf_components} opencl)
+endif ()
+find_package(CAF COMPONENTS ${caf_components})
 if (CAF_FOUND)
   include_directories(${CAF_INCLUDE_DIRS})
 else ()
@@ -273,6 +286,8 @@ macro(display test desc summary)
 endmacro()
 
 display(SHOW_TIME_REPORT yes time_report_summary)
+display(VAST_ENABLE_ASSERTIONS yes assertions_summary)
+display(ASAN_FOUND yes asan_summary)
 
 if (VAST_LOG_LEVEL EQUAL -1)
   set(log_level_summary quiet)
@@ -305,8 +320,7 @@ display(GPERFTOOLS_FOUND "${GPERFTOOLS_INCLUDE_DIR}" perftools_summary)
 display(DOXYGEN_FOUND yes doxygen_summary)
 display(MD2MAN_FOUND yes md2man_summary)
 display(VAST_USE_TCMALLOC yes tcmalloc_summary)
-display(VAST_ENABLE_ASSERTIONS yes assertions_summary)
-display(ASAN_FOUND yes asan_summary)
+display(VAST_USE_OPENCL "${OpenCL_LIBRARIES}" opencl_summary)
 
 set(summary
     "====================|  Build Summary  |===================="
@@ -318,9 +332,10 @@ set(summary
     "\nInstall prefix:   ${CMAKE_INSTALL_PREFIX}"
     "\n"
     "\nBuild type:       ${CMAKE_BUILD_TYPE}"
+    "\nLog level:        ${log_level_summary}"
     "\nShow time report: ${time_report_summary}"
     "\nAssertions:       ${assertions_summary}"
-    "\nLog level:        ${log_level_summary}"
+    "\nAddressSanitizer: ${asan_summary}"
     "\n"
     "\nCC:               ${CMAKE_C_COMPILER}"
     "\nCXX:              ${CMAKE_CXX_COMPILER}"
@@ -334,7 +349,7 @@ set(summary
     "\nmd2man:           ${md2man_summary}"
     "\n"
     "\ntcmalloc:         ${tcmalloc_summary}"
-    "\nAddressSanitizer: ${asan_summary}"
+    "\nOpenCL:           ${opencl_summary}"
     "\n"
     "\n===========================================================")
 

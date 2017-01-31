@@ -1,5 +1,11 @@
+#include "vast/config.hpp"
+
 #include <caf/message_builder.hpp>
 #include <caf/io/middleman.hpp>
+
+#ifdef VAST_USE_OPENCL
+#include <caf/opencl/manager.hpp>
+#endif
 
 #include "vast/batch.hpp"
 #include "vast/bitmap.hpp"
@@ -73,6 +79,11 @@ configuration::configuration() {
   add_error_category(atom("system"), caf_renderer);
   // Load modules.
   load<io::middleman>();
+  // GPU acceleration.
+#ifdef VAST_USE_OPENCL
+  load<opencl::manager>();
+  add_message_type<std::vector<uint32_t>>("std::vector<uint32_t>");
+#endif
 }
 
 configuration::configuration(int argc, char** argv) : configuration{} {

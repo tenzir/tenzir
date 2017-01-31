@@ -227,8 +227,11 @@ set(tests
 )
 
 if (PCAP_FOUND)
-  set(tests ${tests}
-    test/format/pcap.cpp)
+  set(tests ${tests} test/format/pcap.cpp)
+endif ()
+
+if (VAST_USE_OPENCL)
+  set(tests ${tests} test/system/opencl.cpp)
 endif ()
 
 add_executable(vast-test ${tests})
