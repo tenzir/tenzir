@@ -142,21 +142,25 @@ public:
     a_.deallocate(reinterpret_cast<char*>(p), n * sizeof(T));
   }
 
-  template <class T1, size_t N1, size_t A1, class U, size_t M, size_t A2>
-  friend bool operator==(const short_alloc<T1, N1, A1>& x,
-                         const short_alloc<U, M, A2>& y) noexcept {
-    return N == M && A1 == A2 && &x.a_ == &y.a_;
-  }
-
-  template <class T1, size_t N1, size_t A1, class U, size_t M, size_t A2>
-  friend bool operator!=(const short_alloc<T1, N1, A1>& x,
-                         const short_alloc<U, M, A2>& y) noexcept {
-    return !(x == y);
-  }
+  template <class T0, size_t N0, size_t A0, class T1, size_t N1, size_t A1>
+  friend bool operator==(const short_alloc<T0, N0, A0>&,
+                         const short_alloc<T1, N1, A1>&) noexcept;
 
 private:
   arena_type& a_;
 };
+
+template <class T0, size_t N0, size_t A0, class T1, size_t N1, size_t A1>
+bool operator==(const short_alloc<T0, N0, A0>& x,
+                const short_alloc<T1, N1, A1>& y) noexcept {
+  return N0 == N1 && A0 == A1 && &x.a_ == &y.a_;
+}
+
+template <class T0, size_t N0, size_t A0, class T1, size_t N1, size_t A1>
+bool operator!=(const short_alloc<T0, N0, A0>& x,
+                const short_alloc<T1, N1, A1>& y) noexcept {
+  return !(x == y);
+}
 
 } // namespace detail
 } // namespace vast

@@ -155,9 +155,9 @@ public:
   // The functionality below enhances the stock version of std::vector<bool>.
 
   using block = Block;
-  using word = word<Block>;
+  using word_type = word<Block>;
   using block_vector = std::vector<Block>;
-  static constexpr auto npos = word::npos;
+  static constexpr auto npos = word_type::npos;
 
   /// Retrieves the underlying sequence of blocks.
   block_vector const& blocks() const noexcept;
@@ -165,8 +165,8 @@ public:
   /// Appends a single block or a prefix of a block.
   /// @param x The block value.
   /// @param n The number of bits of *x* to append, counting from the LSB.
-  /// @pre `bits > 0 && bits <= word::width`
-  void append_block(block x, size_type bits = word::width);
+  /// @pre `bits > 0 && bits <= word_type::width`
+  void append_block(block x, size_type bits = word_type::width);
 
   /// Appends a sequence of blocks.
   /// @param first An iterator to the first complete block to append.
@@ -183,19 +183,19 @@ public:
 
 private:
   static size_type bits_to_blocks(size_type n) {
-    return n == 0 ? 0 : 1 + ((n - 1) / word::width);
+    return n == 0 ? 0 : 1 + ((n - 1) / word_type::width);
   }
 
   block& block_at_bit(size_type i) {
-    return blocks_[i / word::width];
+    return blocks_[i / word_type::width];
   }
 
   const block& block_at_bit(size_type i) const {
-    return blocks_[i / word::width];
+    return blocks_[i / word_type::width];
   }
 
   size_type partial_bits() const {
-    return size_ % word::width;
+    return size_ % word_type::width;
   }
 
   block_vector blocks_;
@@ -269,7 +269,7 @@ bitvector<Block, Allocator>::bitvector(size_type n, const Allocator& alloc)
 template <class Block, class Allocator>
 bitvector<Block, Allocator>::bitvector(size_type n, const value_type& value,
                                        const Allocator& alloc)
-  : blocks_(bits_to_blocks(n), value ? word::all : word::none, alloc),
+  : blocks_(bits_to_blocks(n), value ? word_type::all : word_type::none, alloc),
     size_{n} {
 }
 
@@ -277,8 +277,7 @@ template <class Block, class Allocator>
 template <class InputIterator>
 bitvector<Block, Allocator>::bitvector(InputIterator first, InputIterator last,
                                        const Allocator& alloc)
-  : bitvector{alloc},
-    size_{0} {
+  : bitvector{alloc} {
   assign(first, last);
 }
 
@@ -357,6 +356,10 @@ private:
 
   void advance(typename Bitvector::size_type n) {
     i_ += n;
+  }
+
+  auto distance_to(bitvector_iterator const& other) const {
+    return other.i_ - i_;
   }
 
   auto dereference() const {
@@ -461,15 +464,15 @@ bitvector<Block, Allocator>::size() const noexcept {
 template <class Block, class Allocator>
 typename bitvector<Block, Allocator>::size_type
 bitvector<Block, Allocator>::max_size() const noexcept {
-  return blocks_.max_size() * word::width;
+  return blocks_.max_size() * word_type::width;
 }
 
 template <class Block, class Allocator>
 typename bitvector<Block, Allocator>::size_type
 bitvector<Block, Allocator>::capacity() const noexcept {
-  auto c = blocks_.capacity() * word::width;
+  auto c = blocks_.capacity() * word_type::width;
   auto p = partial_bits();
-  return p == 0 ? c : c + word::width - p;
+  return p == 0 ? c : c + word_type::width - p;
 }
 
 template <class Block, class Allocator>
@@ -482,16 +485,16 @@ void bitvector<Block, Allocator>::resize(size_type n, value_type value) {
   // Fill up last word first.
   auto p = partial_bits();
   if (p > 0) {
-    auto m = word::all << p;
+    auto m = word_type::all << p;
     value ? blocks_.back() |= m : blocks_.back() &= ~m;
     // If everything fits in the last word, we're done.
-    if (n - size_ <= word::width - p) {
+    if (n - size_ <= word_type::width - p) {
       size_ = n;
       return;
     }
   }
   // Fill remaining words.
-  blocks_.resize(bits_to_blocks(n), value ? word::all : word::none);
+  blocks_.resize(bits_to_blocks(n), value ? word_type::all : word_type::none);
   size_ = n;
 }
 
@@ -511,14 +514,14 @@ template <class Block, class Allocator>
 typename bitvector<Block, Allocator>::reference
 bitvector<Block, Allocator>::operator[](size_type i) {
   VAST_ASSERT(i < size_);
-  return {&block_at_bit(i), word::mask(i % word::width)};
+  return {&block_at_bit(i), word_type::mask(i % word_type::width)};
 }
 
 template <class Block, class Allocator>
 typename bitvector<Block, Allocator>::const_reference
 bitvector<Block, Allocator>::operator[](size_type i) const {
   VAST_ASSERT(i < size_);
-  return (block_at_bit(i) & word::mask(i % word::width)) != 0;
+  return (block_at_bit(i) & word_type::mask(i % word_type::width)) != 0;
 }
 
 template <class Block, class Allocator>
@@ -579,11 +582,11 @@ template <class Block, class Allocator>
 void bitvector<Block, Allocator>::push_back(const value_type& x) {
   auto p = partial_bits();
   if (p == 0)
-    blocks_.push_back(x ? word::all : word::none);
+    blocks_.push_back(x ? word_type::all : word_type::none);
   else if (x)
-    blocks_.back() |= word::all << p;
+    blocks_.back() |= word_type::all << p;
   else
-    blocks_.back() &= ~(word::all << p);
+    blocks_.back() &= ~(word_type::all << p);
   ++size_;
 }
 
@@ -631,9 +634,9 @@ bool operator==(bitvector<Block, Allocator> const& x,
   if (!std::equal(xbegin, xend, ybegin, yend))
     return false;
   // Compare last block.
-  using word = typename bitvector<Block, Allocator>::word;
-  auto xlast = *xend & word::lsb_mask(x.partial_bits());
-  auto ylast = *yend & word::lsb_mask(y.partial_bits());
+  using word_type = typename bitvector<Block, Allocator>::word_type;
+  auto xlast = *xend & word_type::lsb_mask(x.partial_bits());
+  auto ylast = *yend & word_type::lsb_mask(y.partial_bits());
   return xlast == ylast;
 }
 
@@ -646,14 +649,14 @@ bitvector<Block, Allocator>::blocks() const noexcept{
 template <class Block, class Allocator>
 void bitvector<Block, Allocator>::append_block(block x, size_type bits) {
   VAST_ASSERT(bits > 0);
-  VAST_ASSERT(bits <= word::width);
+  VAST_ASSERT(bits <= word_type::width);
   auto p = partial_bits();
   if (p == 0) {
     blocks_.push_back(x);
   } else {
     auto& last = blocks_.back();
-    last = (last & word::lsb_mask(p)) | (x << p);
-    auto available = word::width - p;
+    last = (last & word_type::lsb_mask(p)) | (x << p);
+    auto available = word_type::width - p;
     if (bits > available)
       blocks_.push_back(x >> available);
   }
@@ -667,14 +670,14 @@ void bitvector<Block, Allocator>::append_blocks(InputIterator first,
   auto p = partial_bits();
   if (p == 0) {
     blocks_.insert(blocks_.end(), first, last);
-    size_ = blocks_.size() * word::width;
+    size_ = blocks_.size() * word_type::width;
   } else {
     while (first != last) {
       auto x = *first;
       auto& last = blocks_.back();
-      last = (last & word::lsb_mask(p)) | (x << p);
-      blocks_.push_back(x >> (word::width - p));
-      size_ += word::width;
+      last = (last & word_type::lsb_mask(p)) | (x << p);
+      blocks_.push_back(x >> (word_type::width - p));
+      size_ += word_type::width;
       ++first;
     }
   }
@@ -683,15 +686,17 @@ void bitvector<Block, Allocator>::append_blocks(InputIterator first,
 template <bool Bit = true, class Block, class Allocator>
 typename bitvector<Block, Allocator>::size_type
 rank(bitvector<Block, Allocator> const& bv) {
-  using word = typename bitvector<Block, Allocator>::word;
+  using word_type = typename bitvector<Block, Allocator>::word_type;
   using size_type = typename bitvector<Block, Allocator>::size_type;
   auto result = size_type{0};
   auto n = bv.size();
   auto p = bv.blocks().data();
-  for (; n >= word::width; ++p, n -= word::width)
-    result += Bit ? word::popcount(*p) : word::width - word::popcount(*p);
+  for (; n >= word_type::width; ++p, n -= word_type::width)
+    result += Bit 
+      ? word_type::popcount(*p) 
+      : word_type::width - word_type::popcount(*p);
   if (n > 0) {
-    auto last = word::popcount(*p & word::lsb_mask(n));
+    auto last = word_type::popcount(*p & word_type::lsb_mask(n));
     result += Bit ? last : n - last;
   }
   return result;

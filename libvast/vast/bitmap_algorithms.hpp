@@ -52,12 +52,12 @@ binary_eval(LHS const& lhs, RHS const& rhs, Operation op) {
   using result_type = detail::eval_result_type_t<LHS, RHS>;
   static_assert(
     detail::are_same<
-      typename LHS::word_type,
-      typename RHS::word_type,
-      typename result_type::word_type
+      typename LHS::word_type::value_type,
+      typename RHS::word_type::value_type,
+      typename result_type::word_type::value_type
     >::value,
-    "LHS, RHS, and result type must exhibit same word type");
-  using word = typename result_type::word_type;
+    "LHS, RHS, and result bitmaps must exhibit same block type");
+  using word_type = typename result_type::word_type;
   result_type result;
   // Check corner cases.
   if (lhs.empty() && rhs.empty())
@@ -81,28 +81,28 @@ binary_eval(LHS const& lhs, RHS const& rhs, Operation op) {
   // we can operate on the bit sequences directly, possibly leading to
   // simplifications.
   auto is_fill = [](auto x) {
-    return x->homogeneous() && x->size() >= word::width;
+    return x->homogeneous() && x->size() >= word_type::width;
   };
   // Iterate.
   while (lhs_begin != lhs_end && rhs_begin != rhs_end) {
     auto block = op(lhs_begin->data(), rhs_begin->data());
     if (is_fill(lhs_begin) && is_fill(rhs_begin)) {
       auto min_bits = std::min(lhs_bits, rhs_bits);
-      VAST_ASSERT(word::all_or_none(block));
+      VAST_ASSERT(word_type::all_or_none(block));
       result.append_bits(block, min_bits);
       lhs_bits -= min_bits;
       rhs_bits -= min_bits;
     } else if (is_fill(lhs_begin)) {
       VAST_ASSERT(rhs_bits > 0);
-      VAST_ASSERT(rhs_bits <= word::width);
+      VAST_ASSERT(rhs_bits <= word_type::width);
       result.append_block(block);
-      lhs_bits -= word::width;
+      lhs_bits -= word_type::width;
       rhs_bits = 0;
     } else if (is_fill(rhs_begin)) {
       VAST_ASSERT(lhs_bits > 0);
-      VAST_ASSERT(lhs_bits <= word::width);
+      VAST_ASSERT(lhs_bits <= word_type::width);
       result.append_block(block);
-      rhs_bits -= word::width;
+      rhs_bits -= word_type::width;
       lhs_bits = 0;
     } else {
       result.append_block(block, std::max(lhs_bits, rhs_bits));
@@ -315,7 +315,7 @@ class select_range : public detail::range_facade<select_range<BitRange>> {
 public:
   using bits_type = std::decay_t<decltype(std::declval<BitRange>().get())>;
   using size_type = typename bits_type::size_type;
-  using word = typename bits_type::word;
+  using word_type = typename bits_type::word_type;
 
   select_range(BitRange rng) : rng_{rng} {
     if (!rng_.done()) {
@@ -325,7 +325,7 @@ public:
   }
 
   size_type get() const {
-    VAST_ASSERT(i_ != word::npos);
+    VAST_ASSERT(i_ != word_type::npos);
     return n_ + i_;
   }
 
@@ -341,10 +341,10 @@ public:
     auto remaining = rank(bits) - prev;
     if (n <= remaining) {
       i_ = select(bits, prev + n);
-      VAST_ASSERT(i_ != word::npos);
+      VAST_ASSERT(i_ != word_type::npos);
     } else {
       n -= remaining;
-      i_ = word::npos;
+      i_ = word_type::npos;
       n_ += bits.size();
       rng_.next();
       while (rng_) {
@@ -352,7 +352,7 @@ public:
           n -= rank(rng_.get());
         } else {
           i_ = select(rng_.get(), n);
-          if (i_ != word::npos)
+          if (i_ != word_type::npos)
             break;
         }
         n_ += rng_.get().size();
@@ -363,14 +363,14 @@ public:
 
   void skip(size_type n) {
     VAST_ASSERT(n > 0);
-    VAST_ASSERT(i_ != word::npos);
+    VAST_ASSERT(i_ != word_type::npos);
     auto remaining = rng_.get().size() - i_ - 1;
     if (n <= remaining) {
       i_ += n - 1;
       next();
     } else {
       n -= remaining;
-      i_ = word::npos;
+      i_ = word_type::npos;
       n_ += rng_.get().size();
       rng_.next();
       while (rng_) {
@@ -388,12 +388,12 @@ public:
   }
 
   bool done() const {
-    return rng_.done() && i_ == word::npos;
+    return rng_.done() && i_ == word_type::npos;
   }
 
 protected:
   void scan() {
-    while (i_ == word::npos) {
+    while (i_ == word_type::npos) {
       n_ += rng_.get().size();
       rng_.next();
       if (rng_.done())
@@ -404,7 +404,7 @@ protected:
 
   BitRange rng_;
   size_type n_ = 0;
-  size_type i_ = word::npos;
+  size_type i_ = word_type::npos;
 };
 
 /// Lifts a bit range into a ::select_range.
@@ -423,14 +423,14 @@ auto select(const Bitmap& bm) {
 /// @returns `true` iff all bits in *bm* have value *Bit*.
 template <bool Bit = true, class Bitmap>
 bool all(Bitmap const& bm) {
-  using word = typename Bitmap::word_type;
+  using word_type = typename Bitmap::word_type;
   for (auto b : bit_range(bm)) {
     auto data = b.data();
-    if (b.size() >= word::width) {
-      if (data != (Bit ? word::all : word::none))
+    if (b.size() >= word_type::width) {
+      if (data != (Bit ? word_type::all : word_type::none))
         return false;
     } else {
-      if (data != (Bit ? word::lsb_mask(b.size()) : word::none))
+      if (data != (Bit ? word_type::lsb_mask(b.size()) : word_type::none))
         return false;
     }
   }

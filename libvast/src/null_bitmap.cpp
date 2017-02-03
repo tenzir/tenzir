@@ -53,7 +53,6 @@ bool null_bitmap_range::done() const {
 }
 
 void null_bitmap_range::scan() {
-  using word_type = null_bitmap::bitvector_type::word;
   auto last = end_ - 1;
   if (block_ == last) {
     // Process the last block.

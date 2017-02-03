@@ -39,6 +39,8 @@
 
 #include <caf/detail/scope_guard.hpp>
 
+#include "vast/config.hpp"
+
 #include "vast/detail/assert.hpp"
 #include "vast/detail/operators.hpp"
 #include "vast/detail/type_traits.hpp"
@@ -335,11 +337,20 @@ private:
                            std::forward<Args>(args)...);
   }
 
+ // FIXME: GCC complains in variant_inspect_helper::inspect below that
+ // construct is private to variant. But shouldn't it be irrelevant because
+ // all structs defined inside a class are automatically befriended?
+#ifdef VAST_GCC
+public:
+#endif
   template <class T>
   void construct(T&& x) {
     using type = std::remove_reference_t<T>;
     new (&storage_) type(std::forward<T>(x));
   }
+#ifdef VAST_GCC
+private:
+#endif
 
   struct dtor {
     template <class T>
@@ -403,9 +414,10 @@ private:
     friend auto inspect(Inspector& f, variant_inspect_helper& helper) {
       auto dispatcher = [&](auto& x) {
         std::decay_t<decltype(x)> value;
-        auto guard = caf::detail::make_scope_guard(
-          [&] { helper.self.construct(std::move(value)); }
-        );
+        auto guard = caf::detail::make_scope_guard([&] {
+          // See note on construct() above.
+          helper.self.construct(std::move(value));
+        });
         return f(value);
       };
       return apply_visitor(dispatcher, helper.self);

@@ -3,9 +3,54 @@
 
 #include "vast/bitmap_base.hpp"
 #include "vast/bitvector.hpp"
+#include "vast/word.hpp"
+
 #include "vast/detail/operators.hpp"
 
 namespace vast {
+
+template <class Block>
+struct wah_word : word<Block> {
+  using typename word<Block>::size_type;
+
+  // The number of bits that a literal word contains.
+  static constexpr auto literal_word_size = word<Block>::width - 1;
+
+  // The maximum length of a fill that a single word can represent.
+  static constexpr size_type max_fill_words = word<Block>::all >> 2;
+
+  // A mask for the fill bit in a fill word.
+  static constexpr Block fill_mask = word<Block>::msb1 >> 1;
+
+  // Retrieves the type of a fill.
+  // Precondition: is_fill(block)
+  static constexpr bool fill_type(Block block) {
+    return (block & fill_mask) == fill_mask;
+  }
+
+  // Checks whether a block is a fill.
+  static constexpr bool is_fill(Block block) {
+    return block & word<Block>::msb1;
+  }
+
+  // Checks whether a block is a fill of a specific type.
+  static constexpr bool is_fill(Block block, bool bit) {
+    return is_fill(block) && fill_type(block) == bit;
+  }
+
+  // Counts the number literal words in a fill block.
+  // Precondition: is_fill(block)
+  static constexpr size_type fill_words(Block block) {
+    return block & (word<Block>::all >> 2);
+  }
+
+  // Creates a fill word of a specific value and count.
+  // Precondition: n <= max_fill_words
+  static constexpr Block make_fill(bool bit, size_type n) {
+    auto type = static_cast<Block>(bit) << (word<Block>::width - 2);
+    return word<Block>::msb1 | type | Block{n};
+  }
+};
 
 class wah_bitmap_range;
 
@@ -23,6 +68,7 @@ class wah_bitmap : public bitmap_base<wah_bitmap>,
   friend wah_bitmap_range;
 
 public:
+  using word_type = wah_word<block_type>;
   using block_vector = std::vector<block_type>;
 
   wah_bitmap() = default;
@@ -67,6 +113,8 @@ private:
 class wah_bitmap_range
   : public bit_range_base<wah_bitmap_range, wah_bitmap::block_type> {
 public:
+  using word_type = wah_bitmap::word_type;
+
   wah_bitmap_range() = default;
 
   explicit wah_bitmap_range(wah_bitmap const& bm);

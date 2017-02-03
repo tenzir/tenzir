@@ -20,10 +20,10 @@ struct header {
 struct message {
   std::string protocol;
   double version;
-  std::vector<header> headers;
+  std::vector<http::header> headers;
   std::string body;
 
-  header const* header(std::string const& name) const;
+  http::header const* header(std::string const& name) const;
 };
 
 /// A HTTP request message.

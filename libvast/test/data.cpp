@@ -16,10 +16,7 @@
 using namespace vast;
 
 TEST(vector) {
-  auto v = std::vector<data>{-42, 42, 84};
-  CHECK(v[0] == -42);
-  auto u = vector{std::move(v)};
-  CHECK(u[0] == -42);
+  REQUIRE(std::is_same<std::vector<data>, vector>::value);
 }
 
 TEST(set) {

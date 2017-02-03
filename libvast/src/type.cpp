@@ -65,12 +65,10 @@ struct less_than {
 } // namespace
 
 bool operator==(const type& x, const type& y) {
-  //return uhash<type::hasher>{}(x) == uhash<type::hasher>{}(y);
   return visit(equal_to{}, x, y);
 }
 
 bool operator<(const type& x, const type& y) {
-  //return uhash<type::hasher>{}(x) < uhash<type::hasher>{}(y);
   return visit(less_than{}, x, y);
 }
 

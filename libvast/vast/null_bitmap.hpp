@@ -57,6 +57,8 @@ private:
 class null_bitmap_range
   : public bit_range_base<null_bitmap_range, null_bitmap::block_type> {
 public:
+  using word_type = null_bitmap::word_type;
+
   explicit null_bitmap_range(null_bitmap const& bm);
 
   void next();

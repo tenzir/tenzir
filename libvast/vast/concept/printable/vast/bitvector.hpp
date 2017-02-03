@@ -19,7 +19,8 @@ template <class Bitvector, class Order>
 struct bitvector_printer : printer<bitvector_printer<Bitvector, Order>> {
   using attribute = Bitvector;
 
-  static constexpr bool msb_to_lsb = std::is_same<Order, policy::msb_to_lsb>{};
+  static constexpr bool msb_to_lsb =
+    std::is_same<Order, policy::msb_to_lsb>::value;
 
   template <class Iterator>
   bool print(Iterator& out, Bitvector const& bv) const {

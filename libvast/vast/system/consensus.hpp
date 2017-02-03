@@ -266,7 +266,7 @@ struct server_state {
   server_id voted_for = 0;
 
   /// The sequence of log entries applied to the state machine.
-  std::unique_ptr<log> log;
+  std::unique_ptr<raft::log> log;
 
   // -- volatile state --------------------------------------------------------
 

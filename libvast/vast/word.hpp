@@ -3,6 +3,7 @@
 
 #include <cstddef>
 #include <limits>
+#include <type_traits>
 
 #include "vast/detail/assert.hpp"
 

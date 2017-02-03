@@ -43,7 +43,7 @@ public:
   using const_reference = type const&;
   using pointer = type*;
   using const_pointer = type const*;
-  using error_type = error;
+  using error_type = vast::error;
 
   /// Type for storing values.
   using storage =
@@ -426,7 +426,7 @@ public:
   using const_reference = type const&;
   using pointer = type const*;
   using const_pointer = type const*;
-  using error_type = error;
+  using error_type = vast::error;
 
   maybe() = default;
 

@@ -39,7 +39,7 @@ set(VERSION_MAJ_MIN "${VERSION_MAJOR}.${VERSION_MINOR}")
 #------------------------------------------------------------------------------
 
 if (NOT CMAKE_CXX_FLAGS)
-  set(EXTRA_FLAGS "-Wall -Wextra -pedantic -std=c++1y")
+  set(EXTRA_FLAGS "-Wall -Wextra -pedantic -std=c++14")
   set(CMAKE_CXX_FLAGS_DEBUG          "-O0 -g")
   set(CMAKE_CXX_FLAGS_MINSIZEREL     "-Os")
   set(CMAKE_CXX_FLAGS_RELEASE        "-O3")
@@ -58,11 +58,13 @@ try_run(program_result
 if (NOT compilation_succeeded OR NOT program_result EQUAL 0)
   message(FATAL_ERROR "Cannot determine compiler version")
 elseif ("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
-  if (compiler_version VERSION_GREATER 5.0
-      OR compiler_version VERSION_EQUAL 5.0)
+  # Too many false positives.
+  set(EXTRA_FLAGS "${EXTRA_FLAGS} -Wno-maybe-uninitialized")
+  if (compiler_version VERSION_GREATER 6.0
+      OR compiler_version VERSION_EQUAL 6.0)
     message(STATUS "Found GCC ${compiler_version}")
   else ()
-    message(FATAL_ERROR "GCC >= 5.0 required, found ${compiler_version}")
+    message(FATAL_ERROR "GCC >= 6.0 required, found ${compiler_version}")
   endif ()
   if (${CMAKE_SYSTEM_NAME} MATCHES "FreeBSD")
     # Works around issues with libstdc++ and C++11. For details, see:
@@ -79,17 +81,17 @@ elseif ("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
     set (EXTRA_FLAGS "${EXTRA_FLAGS} -fno-builtin-realloc -fno-builtin-free")
   endif ()
 elseif ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
-  if (compiler_version VERSION_GREATER 3.4
-      OR compiler_version VERSION_EQUAL 3.4)
+  if (compiler_version VERSION_GREATER 3.5
+      OR compiler_version VERSION_EQUAL 3.5)
     message(STATUS "Found Clang ${compiler_version}")
   else ()
-    message(FATAL_ERROR "Clang >= 3.4 required, found ${compiler_version}")
+    message(FATAL_ERROR "Clang >= 3.5 required, found ${compiler_version}")
   endif ()
   if (NOT NO_AUTO_LIBCPP)
     # Standard library selection: check if libc++ is available, and if so, use
     # it. Otherwise fall back to libstdc++.
     set(CXXFLAGS_BACKUP "${CMAKE_CXX_FLAGS}")
-    set(CMAKE_CXX_FLAGS "-std=c++1y -stdlib=libc++")
+    set(CMAKE_CXX_FLAGS "-std=c++14 -stdlib=libc++")
     try_run(program_result
             compilation_succeeded
             "${CMAKE_BINARY_DIR}"

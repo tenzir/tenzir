@@ -17,7 +17,7 @@ header const* message::header(std::string const& name) const {
   };
   auto i = std::find_if(headers.begin(), headers.end(), pred);
   return i == headers.end() ? nullptr : &*i;
-};
+}
 
 } // namspace http
 } // namspace vast

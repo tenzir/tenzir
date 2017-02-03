@@ -489,8 +489,8 @@ private:
               relational_operator op, value_type x) const {
     VAST_ASSERT(!(op == in || op == not_in));
     // All coders must have the same number of elements.
-    VAST_ASSERT(std::all_of(coders.begin(), coders.end(),
-                            [=](auto c) { return c.size() == size(); }));
+    auto pred = [n=size()](auto c) { return c.size() == n; };
+    VAST_ASSERT(std::all_of(coders.begin(), coders.end(), pred));
     // Check boundaries first.
     if (x == 0) {
       if (op == less) // A < min => false
