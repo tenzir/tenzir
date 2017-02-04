@@ -3,6 +3,7 @@
 
 #include <chrono>
 #include <ctime>
+#include <cstring>
 
 #include "vast/access.hpp"
 #include "vast/time.hpp"
@@ -194,7 +195,6 @@ namespace parsers {
 static auto const timestamp = timestamp_parser{};
 
 } // namespace parsers
-
 } // namespace vast
 
 #endif

@@ -21,10 +21,8 @@ struct access::parser<data> : vast::parser<access::parser<data>> {
 
   template <typename Iterator>
   static auto make() {
-    auto to_set = [](set&& xs) { return xs; };
-    auto to_table = [](table&& xs) -> table { return xs; };
-    static auto ws = ignore(*parsers::space);
     rule<Iterator, data> p;
+    auto ws = ignore(*parsers::space);
     auto x = ws >> p >> ws;
     p = parsers::timespan
       | parsers::timestamp
@@ -38,9 +36,9 @@ struct access::parser<data> : vast::parser<access::parser<data>> {
       | parsers::qq_str
       | parsers::pattern
       | '[' >> (x % ',') >> ']' // default: vector<data>
-      | '{' >> (x % ',') ->* to_set >> '}'
-      | '{' >> ((x >> "->" >> x) % ',') ->* to_table >> '}'
-      | "nil"_p ->* [] { return nil; }
+      | '{' >> as<set>(x % ',') >> '}'
+      | '{' >> as<table>((x >> "->" >> x) % ',') >> '}'
+      | as<none>("nil"_p)
       ;
     return p;
   }
