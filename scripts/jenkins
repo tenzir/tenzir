@@ -39,6 +39,8 @@ fi
 # Setup compilers.
 if [ "$COMPILER" = "gcc" ]; then
   export CC=gcc-6 CXX=g++-6
+elif [ "$COMPILER" = "clang" ]; then
+  export CC=clang CXX=clang++
 fi
 
 # Build CAF locally if no path provided.
