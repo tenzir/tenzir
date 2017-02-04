@@ -111,6 +111,14 @@ public:
       return {i, false};
   };
 
+  std::pair<iterator, bool> insert(iterator, value_type x) {
+    return insert(std::move(x));
+  };
+
+  std::pair<iterator, bool> insert(const_iterator, value_type x) {
+    return insert(std::move(x));
+  };
+
   template <class InputIterator>
   void insert(InputIterator first, InputIterator last) {
     while (first != last)
