@@ -21,7 +21,7 @@ usage() {
 # Command line handling.
 caf="$1"
 
-# Adjust build environment.
+# Configure build environment.
 workspace="$(pwd)"
 PATH="$workspace/build/bin:$PATH"
 os=$(uname)
@@ -34,6 +34,11 @@ if [ "$os" = "Darwin" ]; then
   export DYLD_LIBRARY_PATH="$PWD/build/lib"
 else
   export LD_LIBRARY_PATH="$PWD/build/lib"
+fi
+
+# Setup compilers.
+if [ "$COMPILER" = "gcc" ]; then
+  export CC=gcc-6 CXX=g++-6
 fi
 
 # Build CAF locally if no path provided.
