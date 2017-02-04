@@ -2,6 +2,7 @@
 #include "vast/coder.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/bitmap.hpp"
+#include "vast/concept/printable/vast/coder.hpp"
 #include "vast/detail/order.hpp"
 #include "vast/load.hpp"
 #include "vast/null_bitmap.hpp"
@@ -362,4 +363,19 @@ TEST(serialization multi-level coder) {
   CHECK_EQUAL(to_string(y.decode(not_equal, 42)), "01011");
   CHECK_EQUAL(to_string(y.decode(not_equal, 84)), "10111");
   CHECK_EQUAL(to_string(y.decode(not_equal, 13)), "11111");
+}
+
+TEST(printable) {
+  equality_coder<null_bitmap> c{5};
+  c.encode(1);
+  c.encode(2);
+  c.encode(1);
+  c.encode(0);
+  c.encode(4);
+  auto expected = R"__(0	0001
+1	101
+2	01
+3	
+4	00001)__";
+  CHECK_EQUAL(to_string(c), expected);
 }
