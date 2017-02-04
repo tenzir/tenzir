@@ -256,31 +256,6 @@ TEST(not) {
   CHECK_EQUAL(str, "chewie");
 }
 
-// -- custom type -------------------------------------------------------------
-
-namespace ns {
-
-struct foo {
-  int i = 42;
-};
-
-} // namespace n
-
-template <>
-struct access::printer<ns::foo> : vast::printer<access::printer<ns::foo>> {
-  template <typename Iterator>
-  bool print(Iterator& out, ns::foo const& x) const {
-    using vast::print;
-    return print(out, x.i);
-  }
-};
-
-TEST(custom type) {
-  std::string str;
-  CHECK(print(std::back_inserter(str), ns::foo{}));
-  CHECK_EQUAL(str, "+42");
-}
-
 // -- std::chrono -------------------------------------------------------------
 
 TEST(std::chrono) {
@@ -296,10 +271,11 @@ TEST(std::chrono) {
 // -- API ---------------------------------------------------------------------
 
 TEST(stream) {
+  using namespace std::chrono;
   std::ostringstream ss;
-  auto x = ns::foo{};
+  auto x = nanoseconds(42);
   ss << x;
-  CHECK(ss.str() == "+42");
+  CHECK_EQUAL(ss.str(), "+42ns");
 }
 
 TEST(to) {

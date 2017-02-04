@@ -90,9 +90,9 @@ struct address_parser : vast::parser<address_parser> {
   bool parse(Iterator& f, Iterator const& l, unused_type) const {
     static auto v4 = make_v4();
     static auto v6 = make_v6();
-    if (v4.parse(f, l, unused))
+    if (v4(f, l, unused))
       return true;
-    if (v6.parse(f, l, unused))
+    if (v6(f, l, unused))
       return true;
     return false;
   }
@@ -105,21 +105,20 @@ struct access::parser<address> : vast::parser<access::parser<address>> {
   template <typename Iterator>
   bool parse(Iterator& f, Iterator const& l, unused_type) const {
     static auto const p = address_parser{};
-    return p.parse(f, l, unused);
+    return p(f, l, unused);
   }
 
   template <typename Iterator>
   bool parse(Iterator& f, Iterator const& l, address& a) const {
     static auto const v4 = address_parser::make_v4();
-    auto a4 = std::tie(a.bytes_[12], a.bytes_[13], a.bytes_[14], a.bytes_[15]);
     auto begin = f;
-    if (v4.parse(f, l, a4)) {
+    if (v4(f, l, a.bytes_[12], a.bytes_[13], a.bytes_[14], a.bytes_[15])) {
       std::copy(address::v4_mapped_prefix.begin(),
                 address::v4_mapped_prefix.end(), a.bytes_.begin());
       return true;
     }
     static auto const v6 = address_parser::make_v6();
-    if (v6.parse(f, l, unused)) {
+    if (v6(f, l, unused)) {
       // We still need to enhance the parseable concept with a few more tools
       // so that we can transparently parse into 16-byte sequence. Until
       // then, we rely on inet_pton. Unfortunately this incurs an extra copy

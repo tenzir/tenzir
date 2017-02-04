@@ -21,8 +21,7 @@ struct endpoint_parser : parser<endpoint_parser> {
       = (hostname >> ~port)
       | port ->* [](uint16_t x) { return std::make_tuple(""s, x); }
       ;
-    auto t = std::tie(e.host, e.port);
-    return p.parse(f, l, t);
+    return p(f, l, e.host, e.port);
   }
 };
 

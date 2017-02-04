@@ -29,8 +29,7 @@ struct access::parser<subnet> : vast::parser<access::parser<subnet>> {
   template <typename Iterator>
   bool parse(Iterator& f, Iterator const& l, subnet& a) const {
     static auto p = make();
-    auto t = std::tie(a.network_, a.length_);
-    if (!p.parse(f, l, t))
+    if (!p(f, l, a.network_, a.length_))
       return false;
     a.initialize();
     return true;

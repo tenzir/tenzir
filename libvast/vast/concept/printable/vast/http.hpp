@@ -19,7 +19,7 @@ struct http_header_printer : printer<http_header_printer> {
   bool print(Iterator& out, http::header const& hdr) const {
     using namespace printers;
     auto p = str << ": " << str;
-    return p.print(out, std::tie(hdr.name, hdr.value));
+    return p(out, hdr.name, hdr.value);
   }
 };
 
@@ -48,9 +48,8 @@ struct http_response_printer : printer<http::response> {
       << "\r\n\r\n"
       << str      // body
       ;
-    auto t = std::tie(res.protocol, res.version, res.status_code,
-                      res.status_text, res.headers, res.body);
-    return p.print(out, t);
+    return p(out, res.protocol, res.version, res.status_code, res.status_text,
+             res.headers, res.body);
   }
 };
 

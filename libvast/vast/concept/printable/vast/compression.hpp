@@ -23,6 +23,7 @@ struct compression_printer : printer<compression_printer> {
         return str.print(out, "snappy");
 #endif
     }
+    return false;
   }
 };
 
