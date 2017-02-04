@@ -34,8 +34,8 @@ struct consensus : actor_system {
     self->send(server1, peer_atom::value, server3, raft::server_id{3});
     self->send(server2, peer_atom::value, server1, raft::server_id{1});
     self->send(server2, peer_atom::value, server3, raft::server_id{3});
-    self->send(server3, peer_atom::value, server1, raft::server_id{2});
-    self->send(server3, peer_atom::value, server2, raft::server_id{3});
+    self->send(server3, peer_atom::value, server1, raft::server_id{1});
+    self->send(server3, peer_atom::value, server2, raft::server_id{2});
     self->send(server1, run_atom::value);
     self->send(server2, run_atom::value);
     self->send(server3, run_atom::value);
