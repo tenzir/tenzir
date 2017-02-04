@@ -21,22 +21,9 @@ struct access::parser<data> : vast::parser<access::parser<data>> {
 
   template <typename Iterator>
   static auto make() {
-    auto to_vector = [](std::vector<data>&& v) { return vector{std::move(v)}; };
-    auto to_set = [](std::vector<data>&& v) {
-      set s;
-      for (auto& x : v)
-        s.insert(std::move(x));
-      return s;
-    };
-    auto to_table = [](std::vector<std::tuple<data, data>>&& v) -> table {
-      table t;
-      for (auto& x : v)
-        t.emplace(std::move(get<0>(x)), std::move(get<1>(x)));
-      return t;
-    };
-    static auto ws = ignore(*parsers::space);
     rule<Iterator, data> p;
-    auto wsp = ws >> p >> ws;
+    auto ws = ignore(*parsers::space);
+    auto x = ws >> p >> ws;
     p = parsers::timespan
       | parsers::timestamp
       | parsers::net
@@ -48,10 +35,10 @@ struct access::parser<data> : vast::parser<access::parser<data>> {
       | parsers::tf
       | parsers::qq_str
       | parsers::pattern
-      | '[' >> (wsp % ',') ->* to_vector >> ']'
-      | '{' >> (wsp % ',') ->* to_set >> '}'
-      | '{' >> ((wsp >> "->" >> wsp) % ',') ->* to_table >> '}'
-      | "nil"_p ->* [] { return nil; }
+      | '[' >> (x % ',') >> ']' // default: vector<data>
+      | '{' >> as<set>(x % ',') >> '}'
+      | '{' >> as<table>((x >> "->" >> x) % ',') >> '}'
+      | as<none>("nil"_p)
       ;
     return p;
   }

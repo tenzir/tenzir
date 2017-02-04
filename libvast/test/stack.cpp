@@ -56,7 +56,6 @@ TEST(move assignment) {
   REQUIRE_EQUAL(v.size(), 5u);
   CHECK_EQUAL(v[0], 3);
   CHECK_EQUAL(v[4], 7);
-  CHECK_EQUAL(w.size(), 5u);
 }
 
 TEST(insertion at end) {

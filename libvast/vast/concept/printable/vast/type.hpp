@@ -26,7 +26,7 @@ struct enumeration_type_printer : printer<enumeration_type_printer> {
     using namespace printers;
     auto p = "enum {"_P << (str % ", ") << '}';
     auto a = detail::make_attr_printer(e);
-    return (p << a).print(out, std::tie(e.fields, e.attributes()));
+    return (p << a)(out, e.fields, e.attributes());
   }
 };
 
@@ -114,7 +114,7 @@ struct type_printer : printer<type_printer<Policy>> {
     if (show_name && !t.name().empty()) {
       auto guard = printers::eps.with([] { return show_type; });
       auto p = (printers::str << ~(&guard << " = "));
-      if (!p.print(out, t.name()))
+      if (!p(out, t.name()))
         return false;
     }
     if (show_type || t.name().empty()) {
@@ -137,7 +137,7 @@ struct type_printer : printer<type_printer<Policy>> {
              | record_type_printer{}
              | alias_type_printer{}
              ;
-      return p.print(out, expose(t));
+      return p(out, expose(t));
     }
     return true;
   }
@@ -160,14 +160,14 @@ template <typename Iterator>
 bool vector_type_printer::print(Iterator& out, vector_type const& t) const {
   auto p = "vector<" << type_printer<policy::name_only>{} << '>';
   auto a = detail::make_attr_printer(t);
-  return (p << a).print(out, std::tie(t.value_type, t.attributes()));
+  return (p << a)(out, t.value_type, t.attributes());
 }
 
 template <typename Iterator>
 bool set_type_printer::print(Iterator& out, set_type const& t) const {
   auto p = "set<" << type_printer<policy::name_only>{} << '>';
   auto a = detail::make_attr_printer(t);
-  return (p << a).print(out, std::tie(t.value_type, t.attributes()));
+  return (p << a)(out, t.value_type, t.attributes());
 }
 
 template <typename Iterator>
@@ -179,8 +179,7 @@ bool table_type_printer::print(Iterator& out, table_type const& t) const {
          << type_printer<policy::name_only>{}
          << '>';
   auto a = detail::make_attr_printer(t);
-  return (p << a).print(out, std::tie(t.key_type, t.value_type,
-                                      t.attributes()));
+  return (p << a)(out, t.key_type, t.value_type, t.attributes());
 }
 
 struct record_field_printer : printer<record_field_printer> {
@@ -189,7 +188,7 @@ struct record_field_printer : printer<record_field_printer> {
   template <typename Iterator>
   bool print(Iterator& out, record_field const& f) const {
     auto p = printers::str << ": " << type_printer<policy::name_only>{};
-    return p.print(out, std::tie(f.name, f.type));
+    return p(out, f.name, f.type);
   }
 };
 
@@ -202,14 +201,14 @@ template <typename Iterator>
 bool record_type_printer::print(Iterator& out, record_type const& t) const {
   auto p = "record{"_P << (record_field_printer{} % ", ") << '}';
   auto a = detail::make_attr_printer(t);
-  return (p << a).print(out, std::tie(t.fields, t.attributes()));
+  return (p << a)(out, t.fields, t.attributes());
 }
 
 template <typename Iterator>
 bool alias_type_printer::print(Iterator& out, alias_type const& t) const {
   auto p = type_printer<policy::name_only>{};
   auto a = detail::make_attr_printer(t);
-  return (p << a).print(out, std::tie(t.value_type, t.attributes()));
+  return (p << a)(out, t.value_type, t.attributes());
 }
 
 namespace printers {

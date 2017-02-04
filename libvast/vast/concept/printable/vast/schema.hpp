@@ -20,7 +20,7 @@ struct schema_printer : printer<schema_printer> {
           << printers::type<policy::type_only>
           << '\n';
     for (auto& t : s)
-      if (!p.print(out, std::tie(t.name(), t)))
+      if (!p(out, t.name(), t))
         return false;
     return true;
   }

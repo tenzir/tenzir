@@ -100,6 +100,8 @@ TEST(multiple replicated stores) {
     [](int) { /* nop */ },
     error_handler()
   );
+  MESSAGE("sleeping until state replay finishes");
+  std::this_thread::sleep_for(raft::heartbeat_period * 2);
   for (auto store : {store1, store2, store3})
     self->request(store, timeout, get_atom::value, 42).receive(
       [&](optional<int> i) {

@@ -1,11 +1,12 @@
 #ifndef VAST_DETAIL_TYPE_TRAITS_HPP
 #define VAST_DETAIL_TYPE_TRAITS_HPP
 
-#include <type_traits>
-#include <vector>
+#include <iterator>
 #include <streambuf>
 #include <string>
 #include <tuple>
+#include <type_traits>
+#include <vector>
 
 #include <caf/detail/type_traits.hpp>
 

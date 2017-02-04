@@ -3,6 +3,7 @@
 
 #include <chrono>
 #include <ctime>
+#include <cstring>
 
 #include "vast/access.hpp"
 #include "vast/time.hpp"
@@ -128,8 +129,7 @@ struct ymdhms_parser : vast::parser<ymdhms_parser> {
     auto ms = std::tie(tm.tm_min, tm.tm_sec);
     auto hms = std::tie(tm.tm_hour, ms);
     auto dhms = std::tie(tm.tm_mday, hms);
-    auto ymdhms = std::tie(tm.tm_year, tm.tm_mon, dhms);
-    if (!p.parse(f, l, ymdhms))
+    if (!p(f, l, tm.tm_year, tm.tm_mon, dhms))
       return false;
 // TODO
 //    if (!time_zone_set) {
@@ -194,7 +194,6 @@ namespace parsers {
 static auto const timestamp = timestamp_parser{};
 
 } // namespace parsers
-
 } // namespace vast
 
 #endif

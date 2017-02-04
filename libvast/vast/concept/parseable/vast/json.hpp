@@ -15,18 +15,6 @@ struct json_parser : parser<json_parser> {
 
   template <typename Iterator>
   static auto make() {
-    auto to_array = [](maybe<std::vector<json>> v) {
-      return v ? json::array(std::move(*v)) : json::array{};
-    };
-    using key_value_pair = std::tuple<std::string, json>;
-    auto to_object = [](maybe<std::vector<key_value_pair>> m) {
-      json::object o;
-      if (!m)
-        return o;
-      for (auto& p : *m)
-        o.emplace(std::move(std::get<0>(p)), std::move(std::get<1>(p)));
-      return o;
-    };
     rule<Iterator, json> j;
     auto ws = ignore(*parsers::space);
     auto lbracket = ws >> '[' >> ws;
@@ -38,9 +26,9 @@ struct json_parser : parser<json_parser> {
     auto true_false = ws >> parsers::boolean;
     auto string = ws >> parsers::qq_str;
     auto number = ws >> parsers::real_opt_dot;
-    auto array = (lbracket >> -(j % delim) >> rbracket) ->* to_array;
+    auto array = as<json::array>(lbracket >> ~(j % delim) >> rbracket);
     auto key_value = ws >> string >> ws >> ':' >> ws >> j;
-    auto object = (lbrace >> -(key_value % delim) >> rbrace) ->* to_object;
+    auto object = as<json::object>(lbrace >> ~(key_value % delim) >> rbrace);
     j = null
       | true_false
       | number

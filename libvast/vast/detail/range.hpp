@@ -1,6 +1,8 @@
 #ifndef VAST_DETAIL_RANGE_HPP
 #define VAST_DETAIL_RANGE_HPP
 
+#include "vast/config.hpp"
+
 #include "vast/detail/assert.hpp"
 #include "vast/detail/iterator.hpp"
 
@@ -86,6 +88,10 @@ private:
     static_cast<Derived*>(this)->next();
   }
 
+// FIXME: Why doesn't GCC like the above friend declaration?
+#ifdef VAST_GCC
+public:
+#endif
   decltype(auto) dereference() const {
     return static_cast<Derived const*>(this)->get();
   }

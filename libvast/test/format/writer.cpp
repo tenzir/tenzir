@@ -25,8 +25,6 @@ auto first_ascii_bgpdump_txt_line = R"__(bgpdump::state_change [1844674407370955
 
 auto first_json_bgpdump_txt_line = R"__({"id": 18446744073709551615, "timestamp": 1408579214000000000, "value": {"type": {"name": "bgpdump::state_change", "kind": "record", "structure": {"timestamp": {"name": "", "kind": "timestamp", "structure": null, "attributes": {}}, "source_ip": {"name": "", "kind": "address", "structure": null, "attributes": {}}, "source_as": {"name": "", "kind": "count", "structure": null, "attributes": {}}, "old_state": {"name": "", "kind": "string", "structure": null, "attributes": {}}, "new_state": {"name": "", "kind": "string", "structure": null, "attributes": {}}}, "attributes": {}}, "data": {"timestamp": 1408579214000000000, "source_ip": "2a02:20c8:1f:1::4", "source_as": 50304, "old_state": "3", "new_state": "2"}}})__";
 
-auto first_ascii_random_data = R"__([nil, T, -41320, 0, -0.8615482563, "Q#v7DT,VGx1s.+\"Xb)Gxq_`N2\"Xb)=:MmS~#vweqS>OXbi'm]!Je13O*uJ%qT,P6WuIw$$$%Q#6zmSQcW5)G&?p&P6W5jUY", +2738741017ns, +139027088141ns, 230.117.119.145, ::/46, 1826/?])__";
-
 template <class Writer>
 std::vector<std::string> generate(std::vector<event> const& xs) {
   std::string str;
@@ -45,25 +43,26 @@ std::vector<std::string> generate(std::vector<event> const& xs) {
 
 } // namespace <anonymous>
 
-TEST(writer) {
-  MESSAGE("Bro");
+TEST(Bro writer) {
   auto lines = generate<format::ascii::writer>(bro_http_log);
   CHECK_EQUAL(lines.back(), last_bro_http_log_line);
-  MESSAGE("BGPdump");
-  lines = generate<format::ascii::writer>(bgpdump_txt);
+}
+
+TEST(BGPdump writer) {
+  auto lines = generate<format::ascii::writer>(bgpdump_txt);
   CHECK_EQUAL(lines.size(), 11782u);
   CHECK_EQUAL(lines.front(), first_ascii_bgpdump_txt_line);
-  MESSAGE("CSV");
-  lines = generate<format::csv::writer>(bro_http_log);
+}
+
+TEST(CSV writer) {
+  auto lines = generate<format::csv::writer>(bro_http_log);
   CHECK_EQUAL(lines.front(), first_csv_http_log_line);
   CHECK_EQUAL(lines.back(), last_csv_http_log_line);
-  MESSAGE("JSON");
-  lines = generate<format::json::writer>(bgpdump_txt);
+}
+
+TEST(JSON writer) {
+  auto lines = generate<format::json::writer>(bgpdump_txt);
   CHECK_EQUAL(lines.front(), first_json_bgpdump_txt_line);
-  MESSAGE("test");
-  lines = generate<format::ascii::writer>(random);
-  // Only check the suffix, since each event has a unique timestamp.
-  CHECK(detail::ends_with(lines.front(), first_ascii_random_data));
 }
 
 FIXTURE_SCOPE_END()

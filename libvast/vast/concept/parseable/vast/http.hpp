@@ -32,7 +32,7 @@ struct http_header_parser : parser<http_header_parser> {
   template <typename Iterator>
   bool parse(Iterator& f, Iterator const& l, unused_type) const {
     static auto p = make();
-    return p.parse(f, l, unused);
+    return p(f, l, unused);
   }
 
   template <typename Iterator>
@@ -40,8 +40,7 @@ struct http_header_parser : parser<http_header_parser> {
     static auto p = make();
     a.name.clear();
     a.value.clear();
-    auto t = std::tie(a.name, a.value);
-    return p.parse(f, l, t);
+    return p(f, l, a.name, a.value);
   }
 };
 
@@ -74,15 +73,13 @@ struct http_request_parser : parser<http_request_parser> {
   template <typename Iterator>
   bool parse(Iterator& f, Iterator const& l, unused_type) const {
     static auto p = make();
-    return p.parse(f, l, unused);
+    return p(f, l, unused);
   }
 
   template <typename Iterator>
   bool parse(Iterator& f, Iterator const& l, http::request& a) const {
     static auto p = make();
-    auto t =
-      std::tie(a.method, a.uri, a.protocol, a.version, a.headers, a.body);
-    return p.parse(f, l, t);
+    return p(f, l, a.method, a.uri, a.protocol, a.version, a.headers, a.body);
   }
 };
 

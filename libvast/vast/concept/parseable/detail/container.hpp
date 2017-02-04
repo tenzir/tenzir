@@ -32,7 +32,7 @@ struct container {
       attribute
     >::value_type;
 
-  static constexpr bool modified = std::is_same<vector_type, attribute>{};
+  static constexpr bool modified = std::is_same<vector_type, attribute>::value;
 
   template <typename Container, typename T>
   static void push_back(Container& c, T&& x) {

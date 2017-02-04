@@ -1,6 +1,8 @@
 #ifndef VAST_FORMAT_CSV_HPP
 #define VAST_FORMAT_CSV_HPP
 
+#include "vast/config.hpp"
+
 #include "vast/concept/printable/core.hpp"
 #include "vast/concept/printable/numeric.hpp"
 #include "vast/concept/printable/string.hpp"
@@ -122,8 +124,7 @@ struct value_printer : printer<value_printer> {
     auto f = [&] { visit(renderer<Iterator>{out}, e.type(), e.data()); };
     auto ev = eps ->* f;
     auto p = header << name << comma << u64 << comma << ts << comma << ev;
-    auto t = std::forward_as_tuple(e.type().name(), e.id(), e.timestamp());
-    return p.print(out, t);
+    return p(out, e.type().name(), e.id(), e.timestamp());
   }
 
   // FIXME: relax print() constness constraint?!

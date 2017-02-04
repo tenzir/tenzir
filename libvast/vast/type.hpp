@@ -8,6 +8,7 @@
 
 #include <caf/intrusive_ptr.hpp>
 #include <caf/ref_counted.hpp>
+#include <caf/detail/type_list.hpp>
 
 #include "vast/aliases.hpp"
 #include "vast/attribute.hpp"
@@ -22,6 +23,7 @@
 
 #include "vast/concept/hashable/uhash.hpp"
 #include "vast/concept/hashable/xxhash.hpp"
+
 #include "vast/detail/operators.hpp"
 #include "vast/detail/range.hpp"
 #include "vast/detail/stack_vector.hpp"
@@ -36,6 +38,25 @@ class port;
 class schema;
 class subnet;
 
+struct none_type;
+struct boolean_type;
+struct integer_type;
+struct count_type;
+struct real_type;
+struct timespan_type;
+struct timestamp_type;
+struct string_type;
+struct pattern_type;
+struct address_type;
+struct subnet_type;
+struct port_type;
+struct enumeration_type;
+struct vector_type;
+struct set_type;
+struct table_type;
+struct record_type;
+struct alias_type;
+
 /// An abstract type for ::data.
 class type : detail::totally_ordered<type> {
   friend schema; // pointer tracking
@@ -48,7 +69,34 @@ public:
 
   /// Constructs a type from a concrete type.
   /// @param x The concrete type.
-  template <class T, class>
+  template <
+    class T,
+    class = std::enable_if_t<
+      caf::detail::tl_contains<
+        caf::detail::type_list<
+          none_type,
+          boolean_type,
+          integer_type,
+          count_type,
+          real_type,
+          timespan_type,
+          timestamp_type,
+          string_type,
+          pattern_type,
+          address_type,
+          subnet_type,
+          port_type,
+          enumeration_type,
+          vector_type,
+          set_type,
+          table_type,
+          record_type,
+          alias_type
+        >,
+        std::decay_t<T>
+      >::value
+    >
+  >
   type(T&& x);
 
   /// Sets the name of the type.
@@ -94,9 +142,7 @@ private:
 
 /// The base class for all concrete types.
 template <class Derived>
-class concrete_type
-  : detail::totally_ordered<concrete_type<Derived>>,
-    detail::totally_ordered<Derived> {
+class concrete_type : detail::totally_ordered<concrete_type<Derived>> {
 public:
   using base_type = concrete_type<Derived>;
 
@@ -107,10 +153,6 @@ public:
   friend bool operator<(const concrete_type& x, const concrete_type& y) {
     return std::tie(x.name_, x.attributes_) < std::tie(y.name_, y.attributes_);
   }
-
-  // To be implemented by derived types.
-  friend bool operator==(const Derived& x, const Derived& y);
-  friend bool operator<(const Derived& x, const Derived& y);
 
   template <class Inspector>
   friend auto inspect(Inspector& f, concrete_type& t) {
@@ -150,7 +192,7 @@ struct basic_type : concrete_type<Derived> {
 };
 
 #define VAST_DEFINE_DATA_TYPE(T, U)                                           \
-struct T : basic_type<T> {                                                    \
+struct T : basic_type<T>, detail::totally_ordered<T> {                        \
   friend bool operator==(T const& x, T const& y) {                            \
     return static_cast<const base_type&>(x) ==                                \
            static_cast<const base_type&>(y);                                  \
@@ -214,10 +256,15 @@ template <class Derived>
 struct recursive_type : complex_type<Derived> {};
 
 /// The enumeration type consisting of a fixed number of strings.
-struct enumeration_type : complex_type<enumeration_type> {
+struct enumeration_type
+  : complex_type<enumeration_type>,
+    detail::totally_ordered<enumeration_type> {
   using data_type = enumeration;
 
   enumeration_type(std::vector<std::string> fields = {});
+
+  friend bool operator==(const enumeration_type& x, const enumeration_type& y);
+  friend bool operator<(const enumeration_type& x, const enumeration_type& y);
 
   template <class Inspector>
   friend auto inspect(Inspector& f, enumeration_type& e) {
@@ -230,10 +277,14 @@ struct enumeration_type : complex_type<enumeration_type> {
 };
 
 /// A type representing a sequence of elements.
-struct vector_type : recursive_type<vector_type> {
+struct vector_type
+  : recursive_type<vector_type>, detail::totally_ordered<vector_type> {
   using data_type = vector;
 
   vector_type(type t = {});
+
+  friend bool operator==(const vector_type& x, const vector_type& y);
+  friend bool operator<(const vector_type& x, const vector_type& y);
 
   template <class Inspector>
   friend auto inspect(Inspector& f, vector_type& t) {
@@ -246,10 +297,13 @@ struct vector_type : recursive_type<vector_type> {
 };
 
 /// A type representing a mathematical set.
-struct set_type : recursive_type<set_type> {
+struct set_type : recursive_type<set_type>, detail::totally_ordered<set_type> {
   using data_type = set;
 
   set_type(type t = {});
+
+  friend bool operator==(const set_type& x, const set_type& y);
+  friend bool operator<(const set_type& x, const set_type& y);
 
   template <class Inspector>
   friend auto inspect(Inspector& f, set_type& t) {
@@ -262,10 +316,14 @@ struct set_type : recursive_type<set_type> {
 };
 
 /// A type representinng an associative array.
-struct table_type : recursive_type<table_type> {
+struct table_type
+  : recursive_type<table_type>, detail::totally_ordered<table_type> {
   using data_type = table;
 
   table_type(type key = {}, type value = {});
+
+  friend bool operator==(const table_type& x, const table_type& y);
+  friend bool operator<(const table_type& x, const table_type& y);
 
   template <class Inspector>
   friend auto inspect(Inspector& f, table_type& t) {
@@ -295,7 +353,8 @@ struct record_field : detail::totally_ordered<record_field> {
 };
 
 /// A sequence of fields, where each fields has a name and a type.
-struct record_type : recursive_type<record_type> {
+struct record_type
+  : recursive_type<record_type>, detail::totally_ordered<record_type> {
   using data_type = vector;
 
   /// Enables recursive record iteration.
@@ -363,6 +422,9 @@ struct record_type : recursive_type<record_type> {
   /// @returns The type at offset *o* or `nullptr` if *o* doesn't resolve.
   type const* at(offset const& o) const;
 
+  friend bool operator==(const record_type& x, const record_type& y);
+  friend bool operator<(const record_type& x, const record_type& y);
+
   template <class Inspector>
   friend auto inspect(Inspector& f, record_type& t) {
     return f(static_cast<base_type&>(t),
@@ -388,10 +450,14 @@ record_type unflatten(record_type const& rec);
 type unflatten(type const& t);
 
 /// An alias of another type.
-struct alias_type : recursive_type<alias_type> {
+struct alias_type
+  : recursive_type<alias_type>, detail::totally_ordered<alias_type> {
   using data_type = std::false_type;
 
   alias_type(type t = {});
+
+  friend bool operator==(const alias_type& x, const alias_type& y);
+  friend bool operator<(const alias_type& x, const alias_type& y);
 
   template <class Inspector>
   friend auto inspect(Inspector& f, alias_type& t) {
@@ -458,52 +524,47 @@ data construct(type const& t);
 
 // -- implementation details -------------------------------------------------
 
-namespace detail {
+struct type::impl : caf::ref_counted {
+  using type_variant = variant<
+    none_type,
+    boolean_type,
+    integer_type,
+    count_type,
+    real_type,
+    timespan_type,
+    timestamp_type,
+    string_type,
+    pattern_type,
+    address_type,
+    subnet_type,
+    port_type,
+    enumeration_type,
+    vector_type,
+    set_type,
+    table_type,
+    record_type,
+    alias_type
+  >;
 
-using type_variant = variant<
-  none_type,
-  boolean_type,
-  integer_type,
-  count_type,
-  real_type,
-  timespan_type,
-  timestamp_type,
-  string_type,
-  pattern_type,
-  address_type,
-  subnet_type,
-  port_type,
-  enumeration_type,
-  vector_type,
-  set_type,
-  table_type,
-  record_type,
-  alias_type
->;
+  impl() = default;
 
-using type_types = typename type_variant::types;
+  template <class T>
+  impl(T&& x) : types{std::forward<T>(x)} {
+  }
 
-} // namespace detail
-
-struct type::impl : caf::ref_counted, detail::type_variant {
-  using detail::type_variant::type_variant;
+  type_variant types;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, impl& i) {
-    return f(static_cast<detail::type_variant&>(i));
+    return f(i.types);
   }
 };
 
 inline auto& expose(type& t) {
-  return static_cast<detail::type_variant&>(*t.ptr_);
+  return t.ptr_->types;
 }
 
-template <
-  class T,
-  class = std::enable_if_t<
-    detail::contains<std::decay_t<T>, detail::type_types>{}
-  >
->
+template <class T, class>
 type::type(T&& x) : ptr_{new impl{std::forward<T>(x)}} {
 }
 

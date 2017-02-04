@@ -17,7 +17,7 @@ struct rle {};
 template <class T, class Policy = policy::expanded>
 struct bits_printer : printer<bits_printer<T , Policy>> {
   using attribute = bits<T>;
-  using word_type = typename bits<T>::word;
+  using word_type = typename bits<T>::word_type;
 
   template <class Iterator, class P = Policy>
   auto print(Iterator& out, bits<T> const& b) const

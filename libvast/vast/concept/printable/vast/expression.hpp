@@ -30,40 +30,39 @@ struct expression_printer : printer<expression_printer> {
 
     bool operator()(conjunction const& c) const {
       auto p = '{' << (expression_printer{} % " && ") << '}';
-      return p.print(out_, c);
+      return p(out_, c);
     }
 
     bool operator()(disjunction const& d) const {
       auto p = '(' << (expression_printer{} % " || ") << ')';
-      return p.print(out_, d);
+      return p(out_, d);
     }
 
     bool operator()(negation const& n) const {
       auto p = "! " << expression_printer{};
-      return p.print(out_, n.expr());
+      return p(out_, n.expr());
     }
 
     bool operator()(predicate const& p) const {
       auto op = ' ' << make_printer<relational_operator>{} << ' ';
-      return visit(*this, p.lhs) && op.print(out_, p.op) && visit(*this, p.rhs);
+      return visit(*this, p.lhs) && op(out_, p.op) && visit(*this, p.rhs);
     }
 
     bool operator()(attribute_extractor const& e) const {
-      auto p = '&' << printers::str;
-      return p.print(out_, e.attr);
+      return ('&' << printers::str)(out_, e.attr);
     }
 
     bool operator()(key_extractor const& e) const {
-      return printers::key.print(out_, e.key);
+      return printers::key(out_, e.key);
     }
 
     bool operator()(data_extractor const& e) const {
       auto p = printers::type<policy::name_only> << ~('@' << printers::offset);
-      return p.print(out_, std::tie(e.type, e.offset));
+      return p(out_, e.type, e.offset);
     }
 
     bool operator()(data const& d) const {
-      return printers::data.print(out_, d);
+      return printers::data(out_, d);
     }
 
     Iterator& out_;

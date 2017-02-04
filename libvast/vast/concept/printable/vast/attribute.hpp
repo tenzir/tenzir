@@ -17,7 +17,7 @@ struct attribute_printer : printer<attribute_printer> {
     using namespace printers;
     auto prepend_eq = [](std::string const& x) { return '=' + x; };
     auto p = '&'_P << str << -(str ->* prepend_eq);
-    return p.print(out, std::tie(attr.key, attr.value));
+    return p(out, attr.key, attr.value);
   }
 };
 

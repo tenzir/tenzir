@@ -3,6 +3,7 @@
 
 #include <type_traits>
 #include <iterator>
+#include <tuple>
 
 #include "vast/concept/support/unused_type.hpp"
 
@@ -31,11 +32,31 @@ struct printer {
     return guard_printer<Derived, Guard>{derived(), fun};
   }
 
+  // FIXME: don't ignore ADL.
   template <typename Range, typename Attribute = unused_type>
   auto operator()(Range&& r, Attribute const& a = unused) const
-    -> decltype(std::back_inserter(r), bool()) {
+  -> decltype(std::begin(r), std::end(r), bool()) {
     auto out = std::back_inserter(r);
     return derived().print(out, a);
+  }
+
+  // FIXME: don't ignore ADL.
+  template <typename Range, typename A0, typename A1, typename... As>
+  auto operator()(Range&& r, A0 const& a0, A1 const& a1, As const&... as) const
+  -> decltype(std::begin(r), std::end(r), bool()) {
+    return operator()(r, std::tie(a0, a1, as...));
+  }
+
+  template <typename Iterator, typename Attribute>
+  auto operator()(Iterator&& out, Attribute const& a) const
+  -> decltype(*out, ++out, bool()) {
+    return derived().print(out, a);
+  }
+
+  template <typename Iterator, typename A0, typename A1, typename... As>
+  auto operator()(Iterator&& out, A0 const& a0, A1 const& a1, As const&... as) const
+  -> decltype(*out, ++out, bool()) {
+    return operator()(out, std::tie(a0, a1, as...));
   }
 
 private:

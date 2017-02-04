@@ -3,8 +3,11 @@
 
 #include <type_traits>
 #include <iterator>
+#include <tuple>
 
 #include "vast/concept/support/unused_type.hpp"
+
+#include "vast/detail/type_traits.hpp"
 
 namespace vast {
 
@@ -31,13 +34,35 @@ struct parser {
     return guard_parser<Derived, Guard>{derived(), fun};
   }
 
+  // FIXME: don't ignore ADL.
   template <typename Range, typename Attribute = unused_type>
-  bool operator()(Range&& r, Attribute& a = unused) const {
-    using std::begin;
-    using std::end;
-    auto f = begin(r);
-    auto l = end(r);
+  auto operator()(Range&& r, Attribute& a = unused) const
+  -> decltype(std::begin(r), std::end(r), bool()) {
+    auto f = std::begin(r);
+    auto l = std::end(r);
     return derived().parse(f, l, a);
+  }
+
+  // FIXME: don't ignore ADL.
+  template <typename Range, typename A0, typename A1, typename... As>
+  auto operator()(Range&& r, A0& a0, A1& a1, As&... as) const
+  -> decltype(std::begin(r), std::end(r), bool()) {
+    auto t = std::tie(a0, a1, as...);
+    return operator()(r, t);
+  }
+
+  template <typename Iterator, typename Attribute>
+  auto operator()(Iterator& f, Iterator const& l, Attribute& a) const
+  -> decltype(*f, ++f, f == l, bool()) {
+    return derived().parse(f, l, a);
+  }
+
+  template <typename Iterator, typename A0, typename A1, typename... As>
+  auto operator()(Iterator& f, Iterator const& l, A0& a0, A1& a1,
+                  As&... as) const
+  -> decltype(*f, ++f, f == l, bool()) {
+    auto t = std::tie(a0, a1, as...);
+    return derived().parse(f, l, t);
   }
 
 private:
