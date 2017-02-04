@@ -55,7 +55,7 @@ if [ -z "$caf" ]; then
     git checkout develop
   fi
   configure="./configure --no-examples --no-unit-tests --with-log-level=DEBUG"
-  configure="$configure --no-opencl --no-tools --no-python"
+  configure="$configure --no-tools --no-python"
   if [ "$BUILD" = "Release" ]; then
     configure="$configure --build-type=Release"
   elif [ "$BUILD" = "Debug" ]; then
