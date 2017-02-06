@@ -17,11 +17,10 @@ namespace {
 
 } // namespace <anonymous>
 
-TEST(non-empty first device) {
+TEST(show first device) {
   auto& first = self->system().opencl_manager().get_device();
-  REQUIRE(first);
-  CHECK(!first->get_name().empty());
-  std::cout << first->get_name() << std::endl;
+  if (first)
+    MESSAGE("found GPU: " << first->get_name());
 }
 
 FIXTURE_SCOPE_END()
