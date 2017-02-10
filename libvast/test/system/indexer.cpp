@@ -7,7 +7,6 @@
 #include "vast/bitmap.hpp"
 
 #include "vast/system/indexer.hpp"
-#include "vast/system/task.hpp"
 
 #define SUITE index
 #include "test.hpp"
@@ -22,32 +21,18 @@ TEST(indexer) {
   directory /= "indexer";
   const auto conn_log_type = bro_conn_log[0].type();
   auto i = self->spawn(system::event_indexer, directory, conn_log_type);
-  auto t = self->spawn<monitored>(system::task<>);
   MESSAGE("ingesting events");
-  self->send(t, i);
-  self->send(i, bro_conn_log, t);
-  self->receive(
-    [&](down_msg const& msg) { CHECK(msg.source == t); },
-    error_handler()
-  );
+  self->send(i, bro_conn_log);
   // Event indexers operate with predicates, whereas partitions take entire
   // expressions.
   MESSAGE("querying");
   auto pred = to<predicate>("id.resp_p == 995/?");
   REQUIRE(pred);
-  t = self->spawn<monitored>(system::task<>);
-  self->send(t, i);
-  self->send(i, *pred, self, t);
   bitmap result;
-  self->receive(
-    [&](predicate const& p, bitmap const& bm) {
-      CHECK(p == *pred);
-      result = bm;
+  self->request(i, infinite, *pred).receive(
+    [&](bitmap& bm) {
+      result = std::move(bm);
     },
-    error_handler()
-  );
-  self->receive(
-    [&](down_msg const& msg) { CHECK(msg.source == t); },
     error_handler()
   );
   CHECK_EQUAL(rank(result), 53u);
@@ -62,38 +47,31 @@ TEST(indexer) {
       CHECK(check_uid(bro_conn_log[3594], "GDzpFiROJQi")); // intermediate
     else if (i == 6338)
       CHECK(check_uid(bro_conn_log[6338], "zwCckCCgXDb")); // last
-  MESSAGE("flushing to filesystem");
-  t = self->spawn<monitored>(system::task<>);
-  self->send(t, i);
-  self->send(i, flush_atom::value, t);
-  self->receive(
-    [&](down_msg const& msg) { CHECK(msg.source == t); },
-    error_handler()
-  );
+  MESSAGE("shutting down indexer");
+  self->send(i, system::shutdown_atom::value);
+  self->wait_for(i);
   CHECK(exists(directory));
   CHECK(exists(directory / "data" / "id" / "orig_h"));
   CHECK(exists(directory / "meta" / "time"));
-  MESSAGE("shutting down indexer");
-  self->monitor(i);
-  self->send(i, system::shutdown_atom::value);
-  self->receive(
-    [&](down_msg const& msg) { CHECK(msg.source == i); },
-    error_handler()
-  );
   MESSAGE("respawning indexer from file system");
   i = self->spawn(system::event_indexer, directory, conn_log_type);
-  // Same as above: create a task, submit the query, verify the result.
-  t = self->spawn<monitored>(system::task<>);
-  self->send(t, i);
-  self->send(i, *pred, self, t);
-  self->receive(
-    [&](predicate const& p, bitmap const& bm) {
-      CHECK(p == *pred);
-      result = bm;
+  // Same as above: submit the query and verify the result.
+  self->request(i, infinite, *pred).receive(
+    [&](bitmap& bm) {
+      CHECK_EQUAL(rank(bm), 53u);
     },
     error_handler()
   );
-  CHECK_EQUAL(rank(result), 53u);
+  // Test another query that involves a map-reduce computation of value
+  // indexers.
+  pred = to<predicate>("addr == 65.55.184.16");
+  REQUIRE(pred);
+  self->request(i, infinite, *pred).receive(
+    [&](const bitmap& bm) {
+      CHECK_EQUAL(rank(bm), 2u);
+    },
+    error_handler()
+  );
 }
 
 FIXTURE_SCOPE_END()
