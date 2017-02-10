@@ -13,6 +13,9 @@
 #include "vast/type.hpp"
 #include "vast/variant.hpp"
 
+#include "vast/concept/hashable/uhash.hpp"
+#include "vast/concept/hashable/xxhash.hpp"
+
 namespace vast {
 
 class expression;
@@ -183,5 +186,44 @@ private:
 expression normalize(expression const& expr);
 
 } // namespace vast
+
+namespace std {
+
+template<>
+struct std::hash<vast::attribute_extractor> {
+  size_t operator()(const vast::attribute_extractor& x) const {
+    return vast::uhash<vast::xxhash>{}(x);
+  }
+};
+
+template<>
+struct std::hash<vast::key_extractor> {
+  size_t operator()(const vast::key_extractor& x) const {
+    return vast::uhash<vast::xxhash>{}(x);
+  }
+};
+
+template<>
+struct std::hash<vast::data_extractor> {
+  size_t operator()(const vast::data_extractor& x) const {
+    return vast::uhash<vast::xxhash>{}(x);
+  }
+};
+
+template<>
+struct std::hash<vast::predicate> {
+  size_t operator()(const vast::predicate& x) const {
+    return vast::uhash<vast::xxhash>{}(x);
+  }
+};
+
+template<>
+struct std::hash<vast::expression> {
+  size_t operator()(const vast::expression& x) const {
+    return vast::uhash<vast::xxhash>{}(x);
+  }
+};
+
+} // namespace std
 
 #endif
