@@ -54,7 +54,7 @@ actor dispatch(stateful_actor<index_state>* self, uuid const& part,
   if (self->state.passive.size() < self->state.passive.capacity()) {
     VAST_DEBUG(self, "spawns passive partition", part);
     auto a = self->spawn<monitored>(partition,
-                                    self->state.dir / to_string(part), self);
+                                    self->state.dir / to_string(part));
     self->state.passive.emplace(part, a);
     return a;
   }
@@ -101,8 +101,7 @@ void consolidate(stateful_actor<index_state>* self, uuid const& part,
         && self->state.passive.count(entry.part) == 0) {
       VAST_DEBUG(self, "schedules next passive partition", entry.part);
       auto p = self->spawn<monitored>(partition,
-                                      self->state.dir / to_string(entry.part),
-                                      self);
+                                      self->state.dir / to_string(entry.part));
       self->state.passive.emplace(entry.part, p); // automatically evicts 'part'
       for (auto& next_expr : entry.queries) {
         auto q = self->state.queries.find(next_expr);
@@ -171,7 +170,7 @@ behavior index(stateful_actor<index_state>* self, path const& dir,
     VAST_DEBUG(self, "re-opens active partition with", fillable->second.events,
                "events");
     auto part_dir = self->state.dir / to_string(fillable->first);
-    auto p = self->spawn<monitored>(partition, part_dir, self);
+    auto p = self->spawn<monitored>(partition, part_dir);
     self->state.active = p;
     self->state.active_id = fillable->first;
   }
@@ -263,7 +262,7 @@ behavior index(stateful_actor<index_state>* self, path const& dir,
         self->state.active_id = uuid::random();
         VAST_DEBUG(self, "spawns new active partition", self->state.active_id);
         auto part_dir = self->state.dir / to_string(self->state.active_id);
-        self->state.active = self->spawn<monitored>(partition, part_dir, self);
+        self->state.active = self->spawn<monitored>(partition, part_dir);
         auto* active = &self->state.partitions[self->state.active_id];
         // Register continuous queries.
         for (auto& q : self->state.queries)
