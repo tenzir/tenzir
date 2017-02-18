@@ -23,7 +23,9 @@ struct exporter_state {
   caf::actor index;
   caf::actor sink;
   accountant_type accountant;
-  double progress = 0.0;
+  size_t expected = 0;
+  size_t scheduled = 0;
+  size_t received = 0;
   uint64_t processed = 0;
   uint64_t shipped = 0;
   uint64_t requested = 0;
@@ -34,7 +36,6 @@ struct exporter_state {
   std::vector<event> results;
   std::chrono::steady_clock::time_point start;
   uuid id;
-  bool index_lookup_complete = false;
   char const* name = "exporter";
 };
 

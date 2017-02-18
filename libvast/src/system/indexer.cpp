@@ -353,7 +353,7 @@ behavior event_indexer(stateful_actor<event_indexer_state>* self,
       VAST_DEBUG(self, "asks", indexers.size(), "indexers");
       // Manual map-reduce over the indexers.
       auto n = std::make_shared<size_t>(indexers.size());
-      auto reducer = self->system().spawn([=]() -> behavior {
+      auto reducer = self->system().spawn([=]() mutable -> behavior {
         auto result = std::make_shared<bitmap>();
         return {
           [=](const bitmap& bm) mutable {

@@ -5,6 +5,7 @@
 #include "vast/concept/printable/std/chrono.hpp"
 #include "vast/concept/printable/vast/event.hpp"
 #include "vast/concept/printable/vast/expression.hpp"
+#include "vast/concept/printable/vast/uuid.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/expression_visitors.hpp"
 
@@ -21,8 +22,7 @@ namespace system {
 
 namespace {
 
-template <class Actor>
-void ship_results(Actor* self) {
+void ship_results(stateful_actor<exporter_state>* self) {
   if (self->state.results.empty() || self->state.requested == 0)
     return;
   VAST_DEBUG(self, "relays", self->state.results.size(), "events");
@@ -46,8 +46,7 @@ void ship_results(Actor* self) {
   self->send(self->state.sink, msg);
 }
 
-template <class Actor>
-void shutdown(Actor* self) {
+void shutdown(stateful_actor<exporter_state>* self) {
   if (rank(self->state.unprocessed) > 0 || !self->state.results.empty())
     return;
   timespan runtime = steady_clock::now() - self->state.start;
@@ -69,10 +68,27 @@ void shutdown(Actor* self) {
   self->send_exit(self, exit_reason::normal);
 }
 
+void request_more_hits(stateful_actor<exporter_state>* self) {
+  auto waiting_for_hits = self->state.received == self->state.scheduled;
+  auto need_more_results = self->state.requested > 0;
+  auto have_no_inflight_requests = !self->state.unprocessed.empty()
+                                   && !all<0>(self->state.unprocessed);
+  // If we're (1) no longer waiting for index hits, (2) still need more
+  // results, and (3) have no inflight requests to the archive, we ask
+  // the index for more hits.
+  if (waiting_for_hits && need_more_results && have_no_inflight_requests) {
+    auto remaining = self->state.expected - self->state.received;
+    // TODO: Figure out right amount of partitions to ask for.
+    auto n = std::min(remaining, size_t{2});
+    VAST_DEBUG(self, "asks index to process", n, "more partitions");
+    self->send(self->state.index, self->state.id, n);
+  }
+}
+
 } // namespace <anonymous>
 
 behavior exporter(stateful_actor<exporter_state>* self, expression expr,
-                  query_options opts) {
+                  query_options) {
   auto eu = self->system().dummy_execution_unit();
   self->state.sink = actor_pool::make(eu, actor_pool::broadcast());
   // Register the accountant, if available.
@@ -105,6 +121,21 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
       VAST_DEBUG(self, "forwards hits to archive");
       // FIXME: restrict according to configured limit.
       self->send(self->state.archive, std::move(hits));
+      // Figure out if we're done and report progress.
+      auto remaining = self->state.expected - ++self->state.received;
+      auto total = self->state.expected;
+      auto progress = (total - double(remaining)) / total;
+      self->send(self->state.sink, self->state.id, progress);
+      if (remaining > 0) {
+        VAST_DEBUG(self, "received", self->state.received << '/' << total,
+                   "bitmaps");
+        request_more_hits(self);
+      } else {
+        VAST_DEBUG(self, "received all", total, "bitmap(s) in", runtime);
+        if (self->state.accountant)
+          self->send(self->state.accountant, "exporter.hits.runtime", runtime);
+        shutdown(self);
+      }
     },
     [=](std::vector<event>& candidates) {
       VAST_DEBUG(self, "got batch of", candidates.size(), "events");
@@ -132,20 +163,9 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
       self->state.processed += candidates.size();
       self->state.unprocessed -= mask;
       ship_results(self);
-      if (self->state.index_lookup_complete)
+      request_more_hits(self);
+      if (self->state.received == self->state.expected)
         shutdown(self);
-    },
-    [=](progress_atom, uint64_t remaining, uint64_t total) {
-      self->state.progress = (total - double(remaining)) / total;
-      self->send(self->state.sink, self->state.id, progress_atom::value,
-                 self->state.progress, total);
-    },
-    [=](done_atom, timespan runtime, expression const&) {
-      VAST_DEBUG(self, "completed index interaction in", runtime);
-      self->state.index_lookup_complete = true;
-      if (self->state.accountant)
-        self->send(self->state.accountant, "exporter.hits.runtime", runtime);
-      shutdown(self);
     },
     [=](extract_atom) {
       if (self->state.requested == max_events) {
@@ -154,6 +174,7 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
       }
       self->state.requested = max_events;
       ship_results(self);
+      request_more_hits(self);
     },
     [=](extract_atom, uint64_t requested) {
       if (self->state.requested == max_events) {
@@ -165,6 +186,7 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
       VAST_DEBUG(self, "got request to extract", n, "new events in addition to",
                  self->state.requested, "pending results");
       ship_results(self);
+      request_more_hits(self);
     },
     [=](archive_type const& archive) {
       VAST_DEBUG(self, "registers archive", archive);
@@ -181,13 +203,20 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
     [=](run_atom) {
       VAST_INFO(self, "executes query", expr);
       self->state.start = steady_clock::now();
-      self->request(self->state.index, infinite, expr, opts, self).then(
-        [=](actor const& task) {
-          VAST_DEBUG(self, "received task from index");
-          self->send(task, subscriber_atom::value, self);
+      self->request(self->state.index, infinite, expr).then(
+        [=](const uuid& lookup, size_t partitions, size_t scheduled) {
+          VAST_DEBUG(self, "got lookup handle", lookup << ", scheduled",
+                     scheduled << '/' << partitions, "partitions");
+          self->state.id = lookup;
+          if (partitions > 0) {
+            self->state.expected = partitions;
+            self->state.scheduled = scheduled;
+          } else {
+            shutdown(self);
+          }
         },
         [=](const error& e) {
-          VAST_DEBUG(self, "failed to send query to index:",
+          VAST_DEBUG(self, "failed to lookup query at index:",
                      self->system().render(e));
         }
       );

@@ -114,15 +114,12 @@ behavior evaluator(stateful_actor<evaluator_state>* self,
 } // namespace <anonymous>
 
 behavior partition(stateful_actor<partition_state>* self, path dir) {
-  // Register the accountant, if available.
   auto accountant = accountant_type{};
-  if (auto a = self->system().registry().get(accountant_atom::value)) {
-    VAST_DEBUG(self, "registers accountant");
+  if (auto a = self->system().registry().get(accountant_atom::value))
     accountant = actor_cast<accountant_type>(a);
-  }
   // If the directory exists already, we must have some state and are loading
   // all INDEXERs.
-  if (exists(dir)) {
+  if (exists(dir / "meta")) {
     std::vector<std::pair<std::string, type>> indexers;
     auto result = load(dir / "meta", indexers);
     if (!result) {
@@ -159,12 +156,13 @@ behavior partition(stateful_actor<partition_state>* self, path dir) {
       auto rp = self->make_response_promise<bitmap>();
       auto start = steady_clock::now();
       if (self->state.indexers.empty()) {
+        VAST_DEBUG(self, "has no indexers available");
         rp.deliver(bitmap{});
         return;
       }
       // Spawn a sink that accumulates the stream of bitmaps from the evaluator.
       auto accumulator = self->system().spawn(
-        [=](event_based_actor* job) -> behavior {
+        [=](event_based_actor* job) mutable -> behavior {
           auto bm = std::make_shared<bitmap>();
           return {
             [=](const bitmap& hits) mutable {
@@ -215,6 +213,7 @@ behavior partition(stateful_actor<partition_state>* self, path dir) {
         }
       );
       // Save persistent state.
+      // TODO: only do so when the partition got dirty.
       std::vector<std::pair<std::string, type>> indexers;
       indexers.reserve(self->state.indexers.size());
       for (auto& x : self->state.indexers)

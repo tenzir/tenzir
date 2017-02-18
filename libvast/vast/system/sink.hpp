@@ -78,8 +78,8 @@ sink(caf::stateful_actor<sink_state<Writer>>* self, Writer&& writer) {
         }
       }
     },
-    [=](const uuid& id, progress_atom, double progress, uint64_t total) {
-      VAST_DEBUG(self, "got progress from", id << ':', progress, "of", total);
+    [=](const uuid& id, double progress) {
+      VAST_DEBUG(self, "got progress from", id << ':', progress);
     },
     [=](limit_atom, uint64_t max) {
       VAST_DEBUG(self, "caps event export at", max, "events");
