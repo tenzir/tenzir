@@ -14,6 +14,7 @@
 #include "vast/event.hpp"
 
 #include "vast/system/atoms.hpp"
+#include "vast/system/query_statistics.hpp"
 
 namespace vast {
 namespace system {
@@ -50,9 +51,9 @@ sink(caf::stateful_actor<sink_state<Writer>>* self, Writer&& writer) {
   self->state.name = self->state.writer.name();
   self->state.last_flush = steady_clock::now();
   return {
-    [=](const std::vector<event>& es) {
-      for (auto& e : es) {
-        auto r = self->state.writer.write(e);
+    [=](const std::vector<event>& xs) {
+      for (auto& x : xs) {
+        auto r = self->state.writer.write(x);
         if (!r) {
           VAST_ERROR(self->system().render(r.error()));
           self->quit(r.error());
@@ -70,8 +71,8 @@ sink(caf::stateful_actor<sink_state<Writer>>* self, Writer&& writer) {
         }
       }
     },
-    [=](const uuid& id, double progress) {
-      VAST_DEBUG(self, "got progress from", id << ':', progress);
+    [=](const uuid& id, const query_statistics&) {
+      VAST_DEBUG(self, "got query statistics from", id);
     },
     [=](limit_atom, uint64_t max) {
       VAST_DEBUG(self, "caps event export at", max, "events");

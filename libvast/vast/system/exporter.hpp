@@ -1,5 +1,5 @@
-#ifndef VAST_ACTOR_EXPORTER_HPP
-#define VAST_ACTOR_EXPORTER_HPP
+#ifndef VAST_SYSTEM_EXPORTER_HPP
+#define VAST_SYSTEM_EXPORTER_HPP
 
 #include <chrono>
 #include <deque>
@@ -14,6 +14,7 @@
 
 #include "vast/system/accountant.hpp"
 #include "vast/system/archive.hpp"
+#include "vast/system/query_statistics.hpp"
 
 namespace vast {
 namespace system {
@@ -23,18 +24,13 @@ struct exporter_state {
   caf::actor index;
   caf::actor sink;
   accountant_type accountant;
-  size_t expected = 0;
-  size_t scheduled = 0;
-  size_t received = 0;
-  uint64_t processed = 0;
-  uint64_t shipped = 0;
-  uint64_t requested = 0;
   bitmap hits;
   bitmap unprocessed;
   std::unordered_map<type, expression> checkers;
   std::deque<event> candidates;
   std::vector<event> results;
   std::chrono::steady_clock::time_point start;
+  query_statistics stats;
   uuid id;
   char const* name = "exporter";
 };
