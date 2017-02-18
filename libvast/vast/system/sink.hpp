@@ -14,7 +14,6 @@
 #include "vast/event.hpp"
 
 #include "vast/system/atoms.hpp"
-#include "vast/system/accountant.hpp"
 
 namespace vast {
 namespace system {
@@ -37,7 +36,6 @@ template <class Writer>
 struct sink_state {
   std::chrono::steady_clock::duration flush_interval = std::chrono::seconds(1);
   std::chrono::steady_clock::time_point last_flush;
-  accountant_type accountant;
   uint64_t processed = 0;
   uint64_t limit = 0;
   Writer writer;
@@ -51,12 +49,6 @@ sink(caf::stateful_actor<sink_state<Writer>>* self, Writer&& writer) {
   self->state.writer = std::move(writer);
   self->state.name = self->state.writer.name();
   self->state.last_flush = steady_clock::now();
-  // Register the accountant, if available.
-  auto acc = self->system().registry().get(accountant_atom::value);
-  if (acc) {
-    VAST_DEBUG(self, "registers accountant", acc);
-    self->state.accountant = caf::actor_cast<accountant_type>(acc);
-  }
   return {
     [=](const std::vector<event>& es) {
       for (auto& e : es) {
