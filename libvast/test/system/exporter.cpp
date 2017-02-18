@@ -18,7 +18,7 @@ using namespace std::chrono;
 FIXTURE_SCOPE(exporter_tests, fixtures::actor_system_and_events)
 
 TEST(exporter) {
-  auto i = self->spawn(system::index, directory / "index", 1000, 2);
+  auto i = self->spawn(system::index, directory / "index", 1000, 5, 5);
   auto a = self->spawn(system::archive, directory / "archive", 1, 1024);
   MESSAGE("ingesting conn.log");
   self->send(i, bro_conn_log);

@@ -101,16 +101,19 @@ expected<actor> spawn_importer(local_actor* self, options& opts) {
 }
 
 expected<actor> spawn_index(local_actor* self, options& opts) {
-  uint64_t max_events = 1 << 20;
-  uint64_t passive = 10;
+  size_t max_events = 1 << 20;
+  size_t max_parts = 10;
+  size_t taste_parts = 5;
   auto r = opts.params.extract_opts({
-    {"events,e", "maximum events per partition", max_events},
-    {"passive,p", "maximum number of passive partitions", passive}
+    {"max-events,e", "maximum events per partition", max_events},
+    {"max-parts,p", "maximum number of in-memory partitions", max_parts},
+    {"taste-parts,p", "number of immediately scheduled partitions", taste_parts}
   });
   opts.params = r.remainder;
   if (!r.error.empty())
     return make_error(ec::syntax_error, r.error);
-  return self->spawn(index, opts.dir / opts.label, max_events, passive);
+  return self->spawn(index, opts.dir / opts.label, max_events, max_parts,
+                     taste_parts);
 }
 
 expected<actor> spawn_metastore(local_actor* self, options& opts) {

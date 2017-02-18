@@ -43,7 +43,6 @@ using limit_atom = caf::atom_constant<caf::atom("limit")>;
 using link_atom = caf::atom_constant<caf::atom("link")>;
 using list_atom = caf::atom_constant<caf::atom("list")>;
 using load_atom = caf::atom_constant<caf::atom("load")>;
-using overload_atom = caf::atom_constant<caf::atom("overload")>;
 using peer_atom = caf::atom_constant<caf::atom("peer")>;
 using persist_atom = caf::atom_constant<caf::atom("persist")>;
 using ping_atom = caf::atom_constant<caf::atom("ping")>;
@@ -69,7 +68,7 @@ using statistics_atom = caf::atom_constant<caf::atom("statistics")>;
 using stop_atom = caf::atom_constant<caf::atom("stop")>;
 using store_atom = caf::atom_constant<caf::atom("store")>;
 using submit_atom = caf::atom_constant<caf::atom("submit")>;
-using underload_atom = caf::atom_constant<caf::atom("underload")>;
+using unload_atom = caf::atom_constant<caf::atom("unload")>;
 using value_atom = caf::atom_constant<caf::atom("value")>;
 using write_atom = caf::atom_constant<caf::atom("write")>;
 

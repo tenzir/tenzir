@@ -95,7 +95,7 @@ expected<void> flush_active_segment(Actor* self) {
     auto rate = bytes(self->state.active) * 1e6 / unit;
     self->send(self->state.accountant, "archive.flush.rate", rate);
   }
-  VAST_DEBUG(self, "wrote active segment to", filename);
+  VAST_DEBUG(self, "wrote active segment to", filename.trim(-3));
   self->state.cache.emplace(id, std::move(self->state.active));
   self->state.active = {};
   // Update meta data on filessytem.

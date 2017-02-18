@@ -14,7 +14,7 @@
 #include "vast/event.hpp"
 
 #include "vast/system/atoms.hpp"
-#include "vast/system/accountant.hpp"
+#include "vast/system/query_statistics.hpp"
 
 namespace vast {
 namespace system {
@@ -37,7 +37,6 @@ template <class Writer>
 struct sink_state {
   std::chrono::steady_clock::duration flush_interval = std::chrono::seconds(1);
   std::chrono::steady_clock::time_point last_flush;
-  accountant_type accountant;
   uint64_t processed = 0;
   uint64_t limit = 0;
   Writer writer;
@@ -51,16 +50,10 @@ sink(caf::stateful_actor<sink_state<Writer>>* self, Writer&& writer) {
   self->state.writer = std::move(writer);
   self->state.name = self->state.writer.name();
   self->state.last_flush = steady_clock::now();
-  // Register the accountant, if available.
-  auto acc = self->system().registry().get(accountant_atom::value);
-  if (acc) {
-    VAST_DEBUG(self, "registers accountant", acc);
-    self->state.accountant = caf::actor_cast<accountant_type>(acc);
-  }
   return {
-    [=](const std::vector<event>& es) {
-      for (auto& e : es) {
-        auto r = self->state.writer.write(e);
+    [=](const std::vector<event>& xs) {
+      for (auto& x : xs) {
+        auto r = self->state.writer.write(x);
         if (!r) {
           VAST_ERROR(self->system().render(r.error()));
           self->quit(r.error());
@@ -78,8 +71,8 @@ sink(caf::stateful_actor<sink_state<Writer>>* self, Writer&& writer) {
         }
       }
     },
-    [=](const uuid& id, progress_atom, double progress, uint64_t total) {
-      VAST_DEBUG(self, "got progress from", id << ':', progress, "of", total);
+    [=](const uuid& id, const query_statistics&) {
+      VAST_DEBUG(self, "got query statistics from", id);
     },
     [=](limit_atom, uint64_t max) {
       VAST_DEBUG(self, "caps event export at", max, "events");

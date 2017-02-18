@@ -50,32 +50,14 @@ template <bool FillLHS, bool FillRHS, class LHS, class RHS, class Operation>
 detail::eval_result_type_t<LHS, RHS>
 binary_eval(LHS const& lhs, RHS const& rhs, Operation op) {
   using result_type = detail::eval_result_type_t<LHS, RHS>;
+  using word_type = typename result_type::word_type;
   static_assert(
     detail::are_same<
       typename LHS::word_type::value_type,
       typename RHS::word_type::value_type,
       typename result_type::word_type::value_type
     >::value,
-    "LHS, RHS, and result bitmaps must exhibit same block type");
-  using word_type = typename result_type::word_type;
-  result_type result;
-  // Check corner cases.
-  if (lhs.empty() && rhs.empty())
-    return result;
-  if (lhs.empty())
-    return rhs;
-  if (rhs.empty())
-    return lhs;
-  // Initialize LHS.
-  auto lhs_range = bit_range(lhs);
-  auto lhs_begin = lhs_range.begin();
-  auto lhs_end = lhs_range.end();
-  auto lhs_bits = lhs_begin->size();
-  // Initialize RHS.
-  auto rhs_range = bit_range(rhs);
-  auto rhs_begin = rhs_range.begin();
-  auto rhs_end = rhs_range.end();
-  auto rhs_bits = rhs_begin->size();
+    "LHS, RHS, and result bitmaps must have same block type");
   // TODO: figure out whether we still need the notion of a "fill," i.e., a
   // homogeneous sequence greater-than-or-equal to the word size, or whether
   // we can operate on the bit sequences directly, possibly leading to
@@ -83,12 +65,23 @@ binary_eval(LHS const& lhs, RHS const& rhs, Operation op) {
   auto is_fill = [](auto x) {
     return x->homogeneous() && x->size() >= word_type::width;
   };
+  result_type result;
+  // Initialize LHS.
+  auto lhs_range = bit_range(lhs);
+  auto lhs_begin = lhs_range.begin();
+  auto lhs_end = lhs_range.end();
+  // Initialize RHS.
+  auto rhs_range = bit_range(rhs);
+  auto rhs_begin = rhs_range.begin();
+  auto rhs_end = rhs_range.end();
   // Iterate.
+  uint64_t lhs_bits = lhs.empty() ? 0 : lhs_begin->size();
+  uint64_t rhs_bits = rhs.empty() ? 0 : rhs_begin->size();
   while (lhs_begin != lhs_end && rhs_begin != rhs_end) {
     auto block = op(lhs_begin->data(), rhs_begin->data());
     if (is_fill(lhs_begin) && is_fill(rhs_begin)) {
-      auto min_bits = std::min(lhs_bits, rhs_bits);
       VAST_ASSERT(word_type::all_or_none(block));
+      auto min_bits = std::min(lhs_bits, rhs_bits);
       result.append_bits(block, min_bits);
       lhs_bits -= min_bits;
       rhs_bits -= min_bits;
@@ -113,36 +106,37 @@ binary_eval(LHS const& lhs, RHS const& rhs, Operation op) {
     if (rhs_bits == 0 && ++rhs_begin != rhs_end)
       rhs_bits = rhs_begin->size();
   }
-  if (FillLHS) {
-    while (lhs_begin != lhs_end) {
-      if (is_fill(lhs_begin))
-        result.append_bits(lhs_begin->data(), lhs_bits);
-      else
-        result.append_block(lhs_begin->data(), lhs_begin->size());
-      ++lhs_begin;
-      if (lhs_begin != lhs_end)
-        lhs_bits = lhs_begin->size();
+  // Fill the remaining bits, either with zeros or with the longer bitmap. If
+  // we woudn't fill up the bitmap, we would end up with a shorter bitmap that
+  // doesn't reflect the true result size.
+  if (!FillLHS && !FillLHS) {
+    auto max_size = std::max(lhs.size(), rhs.size());
+    VAST_ASSERT(max_size >= result.size());
+    result.append_bits(false, max_size - result.size());
+  } else {
+    if (FillLHS) {
+      while (lhs_begin != lhs_end) {
+        if (is_fill(lhs_begin))
+          result.append_bits(lhs_begin->data(), lhs_bits);
+        else
+          result.append_block(lhs_begin->data(), lhs_begin->size());
+        ++lhs_begin;
+        if (lhs_begin != lhs_end)
+          lhs_bits = lhs_begin->size();
+      }
+    }
+    if (FillRHS) {
+      while (rhs_begin != rhs_end) {
+        if (is_fill(rhs_begin))
+          result.append_bits(rhs_begin->data(), rhs_bits);
+        else
+          result.append_block(rhs_begin->data(), rhs_begin->size());
+        ++rhs_begin;
+        if (rhs_begin != rhs_end)
+          rhs_bits = rhs_begin->size();
+      }
     }
   }
-  if (FillRHS) {
-    while (rhs_begin != rhs_end) {
-      if (is_fill(rhs_begin))
-        result.append_bits(rhs_begin->data(), rhs_bits);
-      else
-        result.append_block(rhs_begin->data(), rhs_begin->size());
-      ++rhs_begin;
-      if (rhs_begin != rhs_end)
-        rhs_bits = rhs_begin->size();
-    }
-  }
-  // If the result has not yet been filled with the remaining bits of either
-  // LHS or RHS, we have to fill it up with zeros. This is necessary, for
-  // example, to ensure that the complement of the result can still be used in
-  // further bitwise operations with bitmaps having the size of
-  // max(size(LHS), size(RHS)).
-  auto max_size = std::max(lhs.size(), rhs.size());
-  VAST_ASSERT(max_size >= result.size());
-  result.append_bits(false, max_size - result.size());
   return result;
 }
 

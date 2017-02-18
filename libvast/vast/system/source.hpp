@@ -62,12 +62,8 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader&& reader) {
   self->state.name = self->state.reader.name();
   auto eu = self->system().dummy_execution_unit();
   self->state.sink = actor_pool::make(eu, actor_pool::round_robin());
-  // Register the accountant, if available.
-  auto acc = self->system().registry().get(accountant_atom::value);
-  if (acc) {
-    VAST_DEBUG(self, "registers accountant", acc);
+  if (auto acc = self->system().registry().get(accountant_atom::value))
     self->state.accountant = actor_cast<accountant_type>(acc);
-  }
   self->set_exit_handler(
     [=](const exit_msg& msg) {
       if (self->state.accountant) {
@@ -75,7 +71,7 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader&& reader) {
         self->send(self->state.accountant, "source.end", now);
       }
       self->send(self->state.sink, sys_atom::value, delete_atom::value);
-      self->send(self->state.sink, msg);
+      self->send_exit(self->state.sink, msg.reason);
       self->quit(msg.reason);
     }
   );

@@ -4,7 +4,6 @@
 #include <vector>
 
 #include "vast/expression.hpp"
-#include "vast/bitmap_algorithms.hpp"
 #include "vast/expected.hpp"
 #include "vast/maybe.hpp"
 #include "vast/none.hpp"
@@ -147,59 +146,6 @@ struct event_evaluator {
   event const& event_;
   relational_operator op_;
 };
-
-/// Base class for expression evaluators operating on bitmaps.
-/// @tparam Derived The CRTP client.
-/// @tparam Bitmap The type of bitmap used during evaluation.
-template <class Function, class Bitmap>
-struct bitmap_evaluator {
-  bitmap_evaluator(Function f) : f_{f} {
-  }
-
-  Bitmap operator()(none) const {
-    return {};
-  }
-
-  Bitmap operator()(conjunction const& c) const {
-    auto hits = visit(*this, c[0]);
-    if (hits.empty() || all<0>(hits))
-      return {};
-    for (size_t i = 1; i < c.size(); ++i) {
-      hits &= visit(*this, c[i]);
-      if (hits.empty() || all<0>(hits)) // short-circuit
-        return {};
-    }
-    return hits;
-  }
-
-  Bitmap operator()(disjunction const& d) const {
-    Bitmap hits;
-    for (auto& op : d) {
-      hits |= visit(*this, op);
-      if (!hits.empty() && all<1>(hits)) // short-circuit
-        break;
-    }
-    return hits;
-  }
-
-  Bitmap operator()(negation const& n) const {
-    auto hits = visit(*this, n.expr());
-    hits.flip();
-    return hits;
-  }
-
-  Bitmap operator()(predicate const& pred) const {
-    auto* bm = f_(pred);
-    return bm ? *bm : Bitmap{};
-  }
-
-  Function f_;
-};
-
-template <class Bitmap, class Function>
-auto make_bitmap_evaluator(Function f) {
-  return bitmap_evaluator<Function, Bitmap>{f};
-}
 
 } // namespace vast
 

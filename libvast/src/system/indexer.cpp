@@ -40,7 +40,7 @@ behavior value_indexer(stateful_actor<value_indexer_state>* self,
   self->state.type = std::move(index_type);
   self->state.filename = std::move(filename);
   if (exists(self->state.filename)) {
-    // Materialize an existing index when encountering persistent state.
+    // Materialize the index when encountering persistent state.
     detail::value_index_inspect_helper tmp{self->state.type, self->state.idx};
     auto result = load(self->state.filename, self->state.last_flush, tmp);
     if (!result) {
@@ -52,45 +52,13 @@ behavior value_indexer(stateful_actor<value_indexer_state>* self,
                  self->state.idx->offset());
     }
   } else {
-    // Construct a new index.
+    // Otherwise construct a new one.
     self->state.idx = value_index::make(self->state.type);
     if (!self->state.idx)
       self->quit(make_error(ec::unspecified, "failed to construct index"));
   }
-  // Flush bitmap index to disk.
-  auto dir = self->state.filename.parent();
-  auto flush = [=]() -> expected<void> {
-    auto& last = self->state.last_flush;
-    auto offset = self->state.idx->offset();
-    if (offset == last)
-      return {};
-    // Create parent directory if it doesn't exist.
-    if (!exists(dir)) {
-      auto result = mkdir(dir);
-      if (!result)
-        return result.error();
-    }
-    VAST_DEBUG(self, "flushes index", "(" << (offset - last) << '/' << offset,
-               "new/total bits)");
-    last = offset;
-    detail::value_index_inspect_helper tmp{self->state.type, self->state.idx};
-    return save(self->state.filename, self->state.last_flush, tmp);
-  };
   return {
-    [=](shutdown_atom) {
-      auto result = flush();
-      if (result)
-        self->quit(exit_reason::user_shutdown);
-      else
-        self->quit(result.error());
-    },
-    [=](flush_atom, actor const& task) {
-      auto result = flush();
-      self->send(task, done_atom::value);
-      if (!result)
-        self->quit(result.error());
-    },
-    [=](std::vector<event> const& events, actor const& task) {
+    [=](std::vector<event> const& events) {
       VAST_TRACE(self, "got", events.size(), "events");
       for (auto& e : events) {
         VAST_ASSERT(e.id() != invalid_event_id);
@@ -103,27 +71,46 @@ behavior value_indexer(stateful_actor<value_indexer_state>* self,
           }
         }
       }
-      self->send(task, done_atom::value);
     },
-    [=](predicate const& pred, actor const& sink, actor const& task) {
+    [=](predicate const& pred) -> result<bitmap> {
       VAST_TRACE(self, "got predicate:", pred);
-      auto result = self->state.idx->lookup(pred.op, get<data>(pred.rhs));
-      if (result) {
-        self->send(sink, pred, std::move(*result));
-      } else {
-        VAST_ERROR(self, "failed to lookup:", pred,
-                   '(' << self->system().render(result.error()) << ')');
-        self->quit(result.error());
+      return self->state.idx->lookup(pred.op, get<data>(pred.rhs));
+    },
+    [=](shutdown_atom) {
+      // Flush index to disk.
+      auto offset = self->state.idx->offset();
+      if (offset == self->state.last_flush) {
+        // Nothing to write.
+        self->quit(exit_reason::user_shutdown);
+        return;
       }
-      self->send(task, done_atom::value);
-    }
+      // Create parent directory if it doesn't exist.
+      auto dir = self->state.filename.parent();
+      if (!exists(dir)) {
+        auto result = mkdir(dir);
+        if (!result) {
+          self->quit(result.error());
+          return;
+        }
+      }
+      VAST_DEBUG(self, "flushes index ("
+                 << (offset - self->state.last_flush) << '/' << offset,
+                 "new/total bits)");
+      self->state.last_flush = offset;
+      detail::value_index_inspect_helper tmp{self->state.type, self->state.idx};
+      auto result = save(self->state.filename, self->state.last_flush, tmp);
+      if (result)
+        self->quit(exit_reason::user_shutdown);
+      else
+        self->quit(result.error());
+    },
   };
 }
 
 // In the current event indexing design, all indexers receive all events and
 // pick the aspect of the event that's relevant to them. For event meta data
 // indexers, every event is relevant. Event data indexers concern themselves
-// only a specific aspect of a specific event type.
+// only with a specific aspect of an event.
 
 behavior time_indexer(stateful_actor<value_indexer_state>* self,
                            path const& p) {
@@ -296,13 +283,13 @@ behavior event_indexer(stateful_actor<event_indexer_state>* self,
                        path dir, type event_type) {
   self->state.dir = dir;
   self->state.event_type = event_type;
-  VAST_DEBUG(self, "operates for type", event_type.name(), "in", dir);
+  VAST_DEBUG(self, "operates for event", event_type);
   // If the directory doesn't exist yet, we're in "construction" mode,
   // where we spawn all indexers to be able to handle incoming events directly.
   // Otherwise we deal with a "frozen" indexer that only spawns indexers as
   // needed for answering queries.
   if (!exists(dir)) {
-    VAST_DEBUG(self, "has no persistent state, spawning indexers");
+    VAST_DEBUG(self, "didn't find persistent state, spawning new indexers");
     // Spawn indexers for event meta data.
     auto p = dir / "meta" / "time";
     auto a = self->spawn<monitored>(time_indexer, p);
@@ -312,7 +299,7 @@ behavior event_indexer(stateful_actor<event_indexer_state>* self,
       auto r = get_if<record_type>(event_type);
       if (!r) {
         p = dir / "data";
-        VAST_DEBUG(self, "spawns new value index at", p);
+        VAST_DEBUG(self, "spawns data indexer");
         a = self->spawn<monitored>(flat_data_indexer, p, event_type);
         self->state.indexers.emplace(p, a);
       } else {
@@ -322,7 +309,8 @@ behavior event_indexer(stateful_actor<event_indexer_state>* self,
             p = dir / "data";
             for (auto& k : f.key())
               p /= k;
-            VAST_DEBUG(self, "spawns new value index at", p);
+            VAST_DEBUG(self, "spawns field indexer at offset", f.offset,
+                       "with type", value_type);
             a = self->spawn<monitored>(field_data_indexer, p, event_type,
                                        value_type, f.offset);
             self->state.indexers.emplace(p, a);
@@ -344,6 +332,46 @@ behavior event_indexer(stateful_actor<event_indexer_state>* self,
     [=](down_msg const& msg) { remove_indexer(msg.source); }
   );
   return {
+    [=](std::vector<event> const&) {
+      auto msg = self->current_mailbox_element()->move_content_to_message();
+      for (auto& x : self->state.indexers)
+        self->send(x.second, msg);
+    },
+    [=](predicate const& pred) {
+      VAST_DEBUG(self, "got predicate:", pred);
+      auto rp = self->make_response_promise<bitmap>();
+      // For now, we require that the predicate is part of a normalized
+      // expression, i.e., LHS an extractor type and RHS of type data.
+      auto rhs = get_if<data>(pred.rhs);
+      VAST_ASSERT(rhs);
+      auto indexers = visit(loader{self, pred.op}, pred.lhs, pred.rhs);
+      // Forward predicate to all available indexers.
+      if (indexers.empty()) {
+        VAST_DEBUG(self, "did not find matching indexers for", pred);
+        rp.deliver(bitmap{});
+        return;
+      }
+      VAST_DEBUG(self, "asks", indexers.size(), "indexers");
+      // Manual map-reduce over the indexers.
+      auto n = std::make_shared<size_t>(indexers.size());
+      auto reducer = self->system().spawn([=]() mutable -> behavior {
+        auto result = std::make_shared<bitmap>();
+        return {
+          [=](const bitmap& bm) mutable {
+            if (!bm.empty())
+              *result |= bm;
+            if (--*n == 0)
+              rp.deliver(std::move(*result));
+          },
+          [=](error& e) mutable {
+            rp.deliver(std::move(e));
+          }
+        };
+      });
+      auto msg = self->current_mailbox_element()->move_content_to_message();
+      for (auto& x : indexers)
+        send_as(reducer, x, msg);
+    },
     [=](shutdown_atom) {
       for (auto& i : self->state.indexers)
         self->send(i.second, shutdown_atom::value);
@@ -356,41 +384,6 @@ behavior event_indexer(stateful_actor<event_indexer_state>* self,
         }
       );
     },
-    [=](std::vector<event> const&, actor task) {
-      auto msg = self->current_mailbox_element()->move_content_to_message();
-      for (auto& i : self->state.indexers) {
-        self->send(task, i.second);
-        self->send(i.second, msg);
-      }
-      self->send(task, done_atom::value);
-    },
-    [=](flush_atom, actor const& task) {
-      VAST_DEBUG(self, "flushes", self->state.indexers.size(), "indexers");
-      for (auto& i : self->state.indexers) {
-        self->send(task, i.second);
-        self->send(i.second, flush_atom::value, task);
-      }
-      self->send(task, done_atom::value);
-    },
-    [=](predicate const& pred, actor const& /* sink */, actor task) {
-      // For now, we require that the predicate is part of a normalized
-      // expression, i.e., LHS an extractor type and RHS of type data.
-      VAST_DEBUG(self, "got predicate:", pred);
-      auto rhs = get_if<data>(pred.rhs);
-      VAST_ASSERT(rhs);
-      auto indexers = visit(loader{self, pred.op}, pred.lhs, pred.rhs);
-      // Forward predicate to all available indexers.
-      if (indexers.empty())
-        VAST_DEBUG(self, "did not find matching indexers for", pred);
-      else
-        VAST_DEBUG(self, "found", indexers.size(), "matching indexers");
-      auto msg = self->current_mailbox_element()->move_content_to_message();
-      for (auto& i : indexers) {
-        self->send(task, i);
-        self->send(i, msg);
-      }
-      self->send(task, done_atom::value);
-    }
   };
 }
 
