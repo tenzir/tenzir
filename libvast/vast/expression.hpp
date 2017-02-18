@@ -190,35 +190,35 @@ expression normalize(expression const& expr);
 namespace std {
 
 template<>
-struct std::hash<vast::attribute_extractor> {
+struct hash<vast::attribute_extractor> {
   size_t operator()(const vast::attribute_extractor& x) const {
     return vast::uhash<vast::xxhash>{}(x);
   }
 };
 
 template<>
-struct std::hash<vast::key_extractor> {
+struct hash<vast::key_extractor> {
   size_t operator()(const vast::key_extractor& x) const {
     return vast::uhash<vast::xxhash>{}(x);
   }
 };
 
 template<>
-struct std::hash<vast::data_extractor> {
+struct hash<vast::data_extractor> {
   size_t operator()(const vast::data_extractor& x) const {
     return vast::uhash<vast::xxhash>{}(x);
   }
 };
 
 template<>
-struct std::hash<vast::predicate> {
+struct hash<vast::predicate> {
   size_t operator()(const vast::predicate& x) const {
     return vast::uhash<vast::xxhash>{}(x);
   }
 };
 
 template<>
-struct std::hash<vast::expression> {
+struct hash<vast::expression> {
   size_t operator()(const vast::expression& x) const {
     return vast::uhash<vast::xxhash>{}(x);
   }
