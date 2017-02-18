@@ -283,13 +283,13 @@ behavior event_indexer(stateful_actor<event_indexer_state>* self,
                        path dir, type event_type) {
   self->state.dir = dir;
   self->state.event_type = event_type;
-  VAST_DEBUG(self, "operates for type", event_type.name(), "in", dir);
+  VAST_DEBUG(self, "operates for event", event_type);
   // If the directory doesn't exist yet, we're in "construction" mode,
   // where we spawn all indexers to be able to handle incoming events directly.
   // Otherwise we deal with a "frozen" indexer that only spawns indexers as
   // needed for answering queries.
   if (!exists(dir)) {
-    VAST_DEBUG(self, "has no persistent state, spawning indexers");
+    VAST_DEBUG(self, "didn't find persistent state, spawning new indexers");
     // Spawn indexers for event meta data.
     auto p = dir / "meta" / "time";
     auto a = self->spawn<monitored>(time_indexer, p);
@@ -299,7 +299,7 @@ behavior event_indexer(stateful_actor<event_indexer_state>* self,
       auto r = get_if<record_type>(event_type);
       if (!r) {
         p = dir / "data";
-        VAST_DEBUG(self, "spawns new value index at", p);
+        VAST_DEBUG(self, "spawns data indexer");
         a = self->spawn<monitored>(flat_data_indexer, p, event_type);
         self->state.indexers.emplace(p, a);
       } else {
@@ -309,7 +309,8 @@ behavior event_indexer(stateful_actor<event_indexer_state>* self,
             p = dir / "data";
             for (auto& k : f.key())
               p /= k;
-            VAST_DEBUG(self, "spawns new value index at", p);
+            VAST_DEBUG(self, "spawns field indexer at offset", f.offset,
+                       "with type", value_type);
             a = self->spawn<monitored>(field_data_indexer, p, event_type,
                                        value_type, f.offset);
             self->state.indexers.emplace(p, a);

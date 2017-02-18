@@ -19,37 +19,41 @@ namespace {
 
 // Persists importer state.
 expected<void> read_state(stateful_actor<importer_state>* self) {
-  if (!exists(self->state.dir))
-    return {};
-  // Load current batch size.
-  std::ifstream available{to_string(self->state.dir / "available")};
-  std::ifstream next{to_string(self->state.dir / "next")};
-  if (!available || !next)
-    return make_error(ec::filesystem_error, std::strerror(errno));
-  available >> self->state.available;
-  next >> self->state.next;
-  VAST_DEBUG(self, "found", self->state.available, "local IDs");
-  VAST_DEBUG(self, "found next event ID:", self->state.next);
+  if (exists(self->state.dir / "available")) {
+    std::ifstream available{to_string(self->state.dir / "available")};
+    available >> self->state.available;
+    VAST_DEBUG(self, "found", self->state.available, "local IDs");
+  }
+  if (exists(self->state.dir / "next")) {
+    std::ifstream next{to_string(self->state.dir / "next")};
+    next >> self->state.next;
+    VAST_DEBUG(self, "found next ID:", self->state.next);
+  }
   return {};
 }
 
 // Reads persistent importer state.
 expected<void> write_state(stateful_actor<importer_state>* self) {
-  if (self->state.next == 0 && self->state.available == 0)
-    return {};
-  if (!exists(self->state.dir)) {
-    auto result = mkdir(self->state.dir);
-    if (!result)
-      return result.error();
+  if (self->state.available > 0) {
+    if (!exists(self->state.dir)) {
+      auto result = mkdir(self->state.dir);
+      if (!result)
+        return result.error();
+    }
+    std::ofstream available{to_string(self->state.dir / "available")};
+    available << self->state.available;
+    VAST_DEBUG(self, "saved", self->state.available, "available IDs");
   }
-  std::ofstream available{to_string(self->state.dir / "available")};
-  std::ofstream next{to_string(self->state.dir / "next")};
-  if (!available || !next)
-    return make_error(ec::filesystem_error, std::strerror(errno));
-  available << self->state.available;
-  next << self->state.next;
-  VAST_DEBUG(self, "saved available IDs:", self->state.available);
-  VAST_DEBUG(self, "saved next next ID:", self->state.next);
+  if (self->state.next > 0) {
+    if (!exists(self->state.dir)) {
+      auto result = mkdir(self->state.dir);
+      if (!result)
+        return result.error();
+    }
+    std::ofstream next{to_string(self->state.dir / "next")};
+    next << self->state.next;
+    VAST_DEBUG(self, "saved next ID:", self->state.next);
+  }
   return {};
 }
 

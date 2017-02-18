@@ -55,6 +55,7 @@ TEST(index) {
   );
   self->send_exit(index, exit_reason::user_shutdown);
   self->wait_for(index);
+  CHECK(exists(directory / "meta"));
   MESSAGE("reloading index");
   index = self->spawn(system::index, directory, 1000, 2, 2);
   MESSAGE("issueing queries");

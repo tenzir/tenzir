@@ -91,16 +91,12 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
                   query_options) {
   auto eu = self->system().dummy_execution_unit();
   self->state.sink = actor_pool::make(eu, actor_pool::broadcast());
-  // Register the accountant, if available.
-  auto acc = self->system().registry().get(accountant_atom::value);
-  if (acc) {
-    VAST_DEBUG(self, "registers accountant", acc);
+  if (auto acc = self->system().registry().get(accountant_atom::value))
     self->state.accountant = actor_cast<accountant_type>(acc);
-  }
   self->set_exit_handler(
-    [=](exit_msg const& msg) {
+    [=](const exit_msg& msg) {
       self->send(self->state.sink, sys_atom::value, delete_atom::value);
-      self->send(self->state.sink, msg);
+      self->send_exit(self->state.sink, msg.reason);
       self->quit(msg.reason);
     }
   );
@@ -220,7 +216,7 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
                      self->system().render(e));
         }
       );
-    }
+    },
   };
 }
 

@@ -25,7 +25,7 @@ void init(Actor self, path const& filename) {
       return;
     }
   }
-  VAST_DEBUG(self, "opens log file:", filename);
+  VAST_DEBUG(self, "opens log file:", filename.trim(-4));
   auto& file = self->state.file;
   file.open(filename.str());
   if (!file.is_open()) {
