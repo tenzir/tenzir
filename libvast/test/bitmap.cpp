@@ -115,6 +115,9 @@ struct bitmap_test_harness {
     auto str = "00111111001111110011111100111111"s;
     str += "0000000000000000000000000000000000000000000000000000000000000000";
     CHECK_EQUAL(to_string(bm1 & bm2), str);
+    auto zeros = Bitmap{bm1.size(), 0};
+    CHECK_EQUAL(bm1 & Bitmap{}, zeros);
+    CHECK_EQUAL(Bitmap{} & bm1, zeros);
   }
 
   void test_bitwise_or() {
@@ -124,6 +127,8 @@ struct bitmap_test_harness {
     bm2.append_bits(false, 50);
     bm2.append_bits(true, 50);
     CHECK_EQUAL(to_string(bm1 | bm2), std::string(100, '1'));
+    CHECK_EQUAL(to_string(bm1 | Bitmap{}), to_string(bm1));
+    CHECK_EQUAL(to_string(Bitmap{} | bm1), to_string(bm1));
   }
 
   void test_bitwise_nand() {
@@ -137,6 +142,8 @@ struct bitmap_test_harness {
     str.append(13, '0');
     str.append(36, '1');
     CHECK_EQUAL(to_string(bm1 - bm2), str);
+    CHECK_EQUAL(to_string(bm1 - Bitmap{}), to_string(bm1));
+    CHECK_EQUAL(to_string(Bitmap{} - bm1), "");
   }
 
   void test_bitwise_nary() {
