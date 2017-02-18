@@ -15,8 +15,10 @@ using namespace caf;
 namespace vast {
 namespace system {
 
-template <class Actor>
-expected<void> read_state(Actor* self) {
+namespace {
+
+// Persists importer state.
+expected<void> read_state(stateful_actor<importer_state>* self) {
   if (!exists(self->state.dir))
     return {};
   // Load current batch size.
@@ -31,8 +33,8 @@ expected<void> read_state(Actor* self) {
   return {};
 }
 
-template <class Actor>
-expected<void> write_state(Actor* self) {
+// Reads persistent importer state.
+expected<void> write_state(stateful_actor<importer_state>* self) {
   if (self->state.next == 0 && self->state.available == 0)
     return {};
   if (!exists(self->state.dir)) {
@@ -51,21 +53,34 @@ expected<void> write_state(Actor* self) {
   return {};
 }
 
-template <class Actor>
-void ship(Actor* self, std::vector<event>&& batch) {
+// Generates the default EXIT handler that saves states and shuts down internal
+// components.
+auto shutdown(stateful_actor<importer_state>* self) {
+  return [=](exit_msg const& msg) {
+    write_state(self);
+    self->anon_send(self->state.archive, sys_atom::value, delete_atom::value);
+    self->anon_send(self->state.index, sys_atom::value, delete_atom::value);
+    self->send_exit(self->state.archive, msg.reason);
+    self->send_exit(self->state.index, msg.reason);
+    self->quit(msg.reason);
+  };
+}
+
+// Ships a batch of events to archive and index.
+void ship(stateful_actor<importer_state>* self, std::vector<event>&& batch) {
   VAST_ASSERT(batch.size() <= self->state.available);
   for (auto& e : batch)
     e.id(self->state.next++);
   self->state.available -= batch.size();
   VAST_DEBUG(self, "ships", batch.size(), "events");
-  // FIXME: How to retain type safety without copying?
+  // TODO: How to retain type safety without copying the entire batch?
   auto msg = make_message(std::move(batch));
   self->send(actor_cast<actor>(self->state.archive), msg);
   self->send(self->state.index, msg);
 }
 
-template <class Actor>
-void replenish(Actor* self) {
+// Asks the metastore for more IDs.
+void replenish(stateful_actor<importer_state>* self) {
   auto now = steady_clock::now();
   if (now - self->state.last_replenish < 10s) {
     VAST_DEBUG(self, "had to replenish twice within 10 secs");
@@ -74,7 +89,7 @@ void replenish(Actor* self) {
     self->state.batch_size *= 2;
   }
   if (self->state.remainder.size() > self->state.batch_size) {
-    VAST_DEBUG(self, "adjusts batch size to buffered events:",
+    VAST_DEBUG(self, "raises batch size to buffered events:",
                self->state.batch_size, "->", self->state.remainder.size());
     self->state.batch_size = self->state.remainder.size();
   }
@@ -82,6 +97,14 @@ void replenish(Actor* self) {
   VAST_DEBUG(self, "replenishes", self->state.batch_size, "IDs");
   VAST_ASSERT(max_event_id - self->state.next >= self->state.batch_size);
   auto n = self->state.batch_size;
+  // If we get an EXIT message while expecting a response from the metastore,
+  // we'll give it a bit of time to come back;
+  self->set_exit_handler(
+    [=](const exit_msg& msg) {
+      self->delayed_send(self, 5s, msg);
+      self->set_exit_handler(shutdown(self));
+    }
+  );
   self->send(self->state.meta_store, add_atom::value, "id", data{n});
   self->become(
     keep_behavior,
@@ -98,16 +121,19 @@ void replenish(Actor* self) {
                    self->system().render(result.error()));
         self->quit(result.error());
       }
+      self->set_exit_handler(shutdown(self));
       self->unbecome();
     }
   );
 }
 
+} // namespace <anonymous>
+
 behavior importer(stateful_actor<importer_state>* self, path dir,
                   size_t batch_size) {
   self->state.dir = dir;
   self->state.batch_size = batch_size;
-  self->state.last_replenish = std::chrono::steady_clock::now();
+  self->state.last_replenish = steady_clock::time_point::min();
   auto result = read_state(self);
   if (!result) {
     VAST_ERROR(self, "failed to load state:",
@@ -119,20 +145,11 @@ behavior importer(stateful_actor<importer_state>* self, path dir,
   self->state.archive = actor_pool::make(eu, actor_pool::round_robin());
   self->state.index = actor_pool::make(eu, actor_pool::round_robin());
   self->set_default_handler(skip);
+  self->set_exit_handler(shutdown(self));
   self->set_down_handler(
     [=](down_msg const& msg) {
       if (msg.source == self->state.meta_store)
         self->state.meta_store = meta_store_type{};
-    }
-  );
-  self->set_exit_handler(
-    [=](exit_msg const& msg) {
-      write_state(self);
-      self->anon_send(self->state.archive, sys_atom::value, delete_atom::value);
-      self->anon_send(self->state.index, sys_atom::value, delete_atom::value);
-      self->anon_send(self->state.archive, msg);
-      self->anon_send(self->state.index, msg);
-      self->quit(msg.reason);
     }
   );
   return {
@@ -158,10 +175,11 @@ behavior importer(stateful_actor<importer_state>* self, path dir,
         self->quit(make_error(ec::unspecified, "no meta store configured"));
         return;
       }
-      // Attempt to ship the incoming events.
       if (events.size() <= self->state.available) {
+        // Ship the events immediately if we have enough IDs.
         ship(self, std::move(events));
       } else if (self->state.available > 0) {
+        // Ship a subset if we have any IDs left.
         auto remainder = std::vector<event>(
           std::make_move_iterator(events.begin() + self->state.available),
           std::make_move_iterator(events.end()));
@@ -169,6 +187,7 @@ behavior importer(stateful_actor<importer_state>* self, path dir,
         events.resize(self->state.available);
         self->state.remainder = std::move(remainder);
       } else {
+        // Buffer events otherwise.
         self->state.remainder = std::move(events);
       }
       auto running_low = self->state.available < self->state.batch_size * 0.1;
