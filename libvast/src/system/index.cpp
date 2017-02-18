@@ -152,8 +152,8 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
   if (auto a = self->system().registry().get(accountant_atom::value))
     accountant = actor_cast<accountant_type>(a);
   // Read persistent state.
-  if (exists(self->state.dir / "partitions")) {
-    auto result = load(self->state.dir / "partitions", self->state.part_index);
+  if (exists(self->state.dir / "meta")) {
+    auto result = load(self->state.dir / "meta", self->state.part_index);
     if (!result) {
       VAST_ERROR(self, "failed to load partition index:",
                  self->system().render(result.error()));
@@ -161,6 +161,57 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
       return {};
     }
   }
+  self->set_exit_handler(
+    [=](const exit_msg& msg) {
+      auto can_terminate = [=] {
+        return !self->state.active.partition && self->state.loaded.empty();
+      };
+      // Shut down all partitions.
+      if (!can_terminate()) {
+        if (self->state.active.partition)
+          self->send(self->state.active.partition, shutdown_atom::value);
+        for (auto& x : self->state.loaded)
+          self->send(x.second, shutdown_atom::value);
+        self->set_down_handler(
+          [=](const down_msg& msg) {
+            if (self->state.active.partition == msg.source) {
+              self->state.active.partition = {};
+            } else {
+              auto pred = [&](auto& x) { return x.second == msg.source; };
+              auto i = std::find_if(self->state.loaded.begin(),
+                                    self->state.loaded.end(), pred);
+              if (i != self->state.loaded.end())
+                self->state.loaded.erase(i);
+            }
+            if (can_terminate())
+              self->quit(msg.reason);
+          }
+        );
+      }
+      // Save our own state only if we have written something.
+      if (self->state.active.partition) {
+        VAST_DEBUG(self, "persists partition index");
+        if (!exists(self->state.dir)) {
+          auto result = mkdir(self->state.dir);
+          if (!result) {
+            VAST_ERROR(self, self->system().render(result.error()));
+            self->quit(result.error());
+            return;
+          }
+        }
+        auto result = save(self->state.dir / "meta",
+                           self->state.part_index);
+        if (!result) {
+          VAST_ERROR(self, "failed to persist partition index:",
+                     self->system().render(result.error()));
+          self->quit(result.error());
+          return;
+        }
+      }
+      if (can_terminate())
+        self->quit(msg.reason);
+    }
+  );
   self->set_down_handler(
     [=](const down_msg& msg) {
       auto i = std::find_if(
@@ -256,53 +307,6 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
         schedule(self, *i, id);
       ctx.partitions.resize(ctx.partitions.size() - n);
     },
-    [=](shutdown_atom) {
-      auto can_terminate = [=] {
-        return !self->state.active.partition && self->state.loaded.empty();
-      };
-      // Shut down all partitions.
-      if (!can_terminate()) {
-        if (self->state.active.partition)
-          self->send(self->state.active.partition, shutdown_atom::value);
-        for (auto& x : self->state.loaded)
-          self->send(x.second, shutdown_atom::value);
-        self->set_down_handler(
-          [=](const down_msg& msg) {
-            if (self->state.active.partition == msg.source) {
-              self->state.active.partition = {};
-            } else {
-              auto pred = [&](auto& x) { return x.second == msg.source; };
-              auto i = std::find_if(self->state.loaded.begin(),
-                                    self->state.loaded.end(), pred);
-              if (i != self->state.loaded.end())
-                self->state.loaded.erase(i);
-            }
-            if (can_terminate())
-              self->quit(exit_reason::user_shutdown);
-          }
-        );
-      }
-      // Save our own state.
-      VAST_DEBUG(self, "persists partition index");
-      if (!exists(self->state.dir)) {
-        auto result = mkdir(self->state.dir);
-        if (!result) {
-          VAST_ERROR(self, self->system().render(result.error()));
-          self->quit(result.error());
-          return;
-        }
-      }
-      auto result = save(self->state.dir / "partitions",
-                         self->state.part_index);
-      if (!result) {
-        VAST_ERROR(self, "failed to persist partition index:",
-                   self->system().render(result.error()));
-        self->quit(result.error());
-        return;
-      }
-      if (can_terminate())
-        self->quit(exit_reason::user_shutdown);
-    }
   };
 }
 

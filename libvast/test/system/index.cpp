@@ -53,7 +53,7 @@ TEST(index) {
     },
     error_handler()
   );
-  self->send(index, system::shutdown_atom::value);
+  self->send_exit(index, exit_reason::user_shutdown);
   self->wait_for(index);
   MESSAGE("reloading index");
   index = self->spawn(system::index, directory, 1000, 2, 2);
@@ -80,7 +80,7 @@ TEST(index) {
     },
     error_handler()
   );
-  self->send(index, system::shutdown_atom::value);
+  self->send_exit(index, exit_reason::user_shutdown);
   self->wait_for(index);
 }
 
