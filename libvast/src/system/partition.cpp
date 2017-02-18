@@ -55,11 +55,11 @@ behavior collector(stateful_actor<collector_state>* self, predicate pred,
   self->state.pred = std::move(pred);
   return {
     [=](const bitmap& hits) {
-      VAST_DEBUG(self, "got", rank(hits), "hits ("
-                 << (self->state.got + 1) << '/' << expected << ')',
-                 "bitmaps");
+      VAST_DEBUG(self, "got", rank(hits), "hits,",
+                 (self->state.got + 1) << '/' << expected, "bitmaps");
       self->state.hits |= hits;
       if (++self->state.got == expected) {
+        VAST_DEBUG(self, "relays", rank(self->state.hits), "to evaluator");
         self->send(evaluator, std::move(self->state.pred), self->state.hits);
         self->quit();
       }
@@ -67,9 +67,56 @@ behavior collector(stateful_actor<collector_state>* self, predicate pred,
   };
 }
 
+struct bitmap_evaluator {
+  bitmap_evaluator(const std::unordered_map<predicate, bitmap>& bitmaps)
+    : bitmaps{bitmaps} {
+    // nop
+  }
+
+  bitmap operator()(none) const {
+    return {};
+  }
+
+  bitmap operator()(conjunction const& c) const {
+    auto bm = visit(*this, c[0]);
+    if (bm.empty() || all<0>(bm))
+      return {};
+    for (size_t i = 1; i < c.size(); ++i) {
+      bm &= visit(*this, c[i]);
+      if (bm.empty() || all<0>(bm)) // short-circuit
+        return {};
+    }
+    return bm;
+  }
+
+  bitmap operator()(disjunction const& d) const {
+    bitmap bm;
+    for (auto& op : d) {
+      bm |= visit(*this, op);
+      if (!bm.empty() && all<1>(bm)) // short-circuit
+        break;
+    }
+    return bm;
+  }
+
+  bitmap operator()(negation const& n) const {
+    auto bm = visit(*this, n.expr());
+    bm.flip();
+    return bm;
+  }
+
+  bitmap operator()(predicate const& pred) const {
+    auto i = bitmaps.find(pred);
+    return i != bitmaps.end() ? i->second : bitmap{};
+  }
+
+  const std::unordered_map<predicate, bitmap>& bitmaps;
+};
+
 struct evaluator_state {
   bitmap hits;
-  std::unordered_map<predicate, std::pair<bitmap, bool>> predicates;
+  std::unordered_map<predicate, bitmap> predicates;
+  size_t num_predicates;
   const char* name = "evaluator";
 };
 
@@ -77,33 +124,21 @@ struct evaluator_state {
 // re-evaluates the expression and relays new hits to its sinks.
 behavior evaluator(stateful_actor<evaluator_state>* self,
                    expression expr, actor sink) {
-  for (auto& pred : visit(predicatizer{}, expr))
-    self->state.predicates[pred].second = false;
-  auto visitor = make_bitmap_evaluator<bitmap>(
-    [=](const predicate& pred) -> const bitmap* {
-      auto& bm = self->state.predicates[pred];
-      return bm.second ? &bm.first : nullptr;
-    }
-  );
+  self->state.num_predicates = visit(predicatizer{}, expr).size();
   return {
-    [=](const predicate& pred, bitmap& hits) {
-      VAST_DEBUG(self, "evaluates", expr);
-      self->state.predicates[pred] = {std::move(hits), true};
-      auto new_hits = visit(visitor, expr);
-      auto delta = new_hits - self->state.hits;
+    [=](predicate& pred, bitmap& hits) {
+      self->state.predicates.emplace(std::move(pred), std::move(hits));
+      auto expr_hits = visit(bitmap_evaluator{self->state.predicates}, expr);
+      auto delta = expr_hits - self->state.hits;
+      VAST_DEBUG(self, "produced", rank(delta) << '/' << rank(expr_hits),
+                 "new/total hits for", expr);
       if (!delta.empty() && !all<0>(delta)) {
-        VAST_DEBUG(self, "relays", rank(delta), "hits");
         self->state.hits |= delta;
         self->send(sink, std::move(delta));
       }
-      // We're done with evaluation if all predicates are done.
-      auto i = std::adjacent_find(self->state.predicates.begin(),
-                                  self->state.predicates.end(),
-                                  [](auto& x, auto& y) {
-                                    return x.second.second != y.second.second;
-                                  });
-      if (i == self->state.predicates.end()) {
-        VAST_DEBUG(self, "completed evaluation of expression", expr);
+      // We're done with evaluation if all predicates have reported their hits.
+      if (self->state.predicates.size() == self->state.num_predicates) {
+        VAST_DEBUG(self, "completed", expr);
         self->send(sink, done_atom::value);
         self->quit();
       }

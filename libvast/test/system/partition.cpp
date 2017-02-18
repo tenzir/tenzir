@@ -13,40 +13,67 @@ using namespace caf;
 using namespace vast;
 using namespace std::chrono;
 
-CAF_ALLOW_UNSAFE_MESSAGE_TYPE(steady_clock::time_point)
+namespace {
 
-FIXTURE_SCOPE(partition_tests, fixtures::actor_system_and_events)
+struct partition_fixture : fixtures::actor_system_and_events {
+  partition_fixture() {
+    directory /= "partition";
+    MESSAGE("ingesting conn.log");
+    partition = self->spawn(system::partition, directory);
+    self->send(partition, bro_conn_log);
+    MESSAGE("ingesting http.log");
+    self->send(partition, bro_http_log);
+    MESSAGE("completed ingestion");
+  }
 
-TEST(partition) {
-  auto issue_query = [&](auto& part) {
+  ~partition_fixture() {
+    self->send(partition, system::shutdown_atom::value);
+    self->wait_for(partition);
+  }
+
+  bitmap query(const std::string& str) {
     MESSAGE("sending query");
-    auto expr = to<expression>("string == \"SF\" && id.resp_p == 443/?");
+    auto expr = to<expression>(str);
     REQUIRE(expr);
-    self->request(part, infinite, *expr).receive(
-      [&](bitmap const& hits) {
-        CHECK_EQUAL(rank(hits), 38u);
+    bitmap result;
+    self->request(partition, infinite, *expr).receive(
+      [&](bitmap& hits) {
+        result = std::move(hits);
       },
       error_handler()
     );
-  };
-  directory /= "partition";
-  MESSAGE("ingesting conn.log");
-  auto part = self->spawn(system::partition, directory);
-  self->send(part, bro_conn_log);
-  MESSAGE("ingesting http.log");
-  self->send(part, bro_http_log);
-  issue_query(part);
-  MESSAGE("shutting down partition");
-  self->send(part, system::shutdown_atom::value);
-  self->wait_for(part);
-  REQUIRE(exists(directory));
-  REQUIRE(exists(directory / "547119946" / "data" / "id" / "orig_h"));
-  REQUIRE(exists(directory / "547119946" / "meta" / "time"));
-  MESSAGE("loading persistent state from file system");
-  part = self->spawn(system::partition, directory);
-  issue_query(part);
-  self->send(part, system::shutdown_atom::value);
-  self->wait_for(part);
+    MESSAGE("shutting down partition");
+    self->send(partition, system::shutdown_atom::value);
+    self->wait_for(partition);
+    REQUIRE(exists(directory));
+    REQUIRE(exists(directory / "547119946" / "data" / "id" / "orig_h"));
+    REQUIRE(exists(directory / "547119946" / "meta" / "time"));
+    MESSAGE("respawning partition and sending query again");
+    partition = self->spawn(system::partition, directory);
+    self->request(partition, infinite, *expr).receive(
+      [&](const bitmap& hits) {
+        REQUIRE_EQUAL(hits, result);
+      },
+      error_handler()
+    );
+    return result;
+  }
+
+  actor partition;
+};
+
+} // namespace <anonymous>
+
+FIXTURE_SCOPE(partition_tests, partition_fixture)
+
+TEST(partition queries 1) {
+  auto hits = query("string == \"SF\" && id.resp_p == 443/?");
+  CHECK_EQUAL(rank(hits), 38u);
+}
+
+TEST(partition queries 2) {
+  auto hits = query("service == \"http\" && addr == 212.227.96.110");
+  CHECK_EQUAL(rank(hits), 28u);
 }
 
 FIXTURE_SCOPE_END()
