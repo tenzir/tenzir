@@ -52,6 +52,10 @@ struct expression_printer : printer<expression_printer> {
       return ('&' << printers::str)(out_, e.attr);
     }
 
+    bool operator()(type_extractor const& e) const {
+      return (':' << printers::type<policy::name_only>)(out_, e.type);
+    }
+
     bool operator()(key_extractor const& e) const {
       return printers::key(out_, e.key);
     }

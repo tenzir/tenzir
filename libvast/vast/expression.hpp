@@ -52,6 +52,21 @@ struct key_extractor : detail::totally_ordered<key_extractor> {
   }
 };
 
+/// Extracts one or more values according to a given key.
+struct type_extractor : detail::totally_ordered<type_extractor> {
+  type_extractor(vast::type t = {});
+
+  vast::type type;
+
+  friend bool operator==(type_extractor const& lhs, type_extractor const& rhs);
+  friend bool operator<(type_extractor const& lhs, type_extractor const& rhs);
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, type_extractor& ex) {
+    return f(ex.type);
+  }
+};
+
 /// Extracts a specific data value from a type according to an offset. During
 /// AST resolution, the ::key_extractor generates multiple instantiations of
 /// this extractor according to a given ::schema.
@@ -79,6 +94,7 @@ struct predicate : detail::totally_ordered<predicate> {
   using operand = variant<
       attribute_extractor,
       key_extractor,
+      type_extractor,
       data_extractor,
       data
     >;
@@ -199,6 +215,13 @@ struct hash<vast::attribute_extractor> {
 template<>
 struct hash<vast::key_extractor> {
   size_t operator()(const vast::key_extractor& x) const {
+    return vast::uhash<vast::xxhash>{}(x);
+  }
+};
+
+template<>
+struct hash<vast::type_extractor> {
+  size_t operator()(const vast::type_extractor& x) const {
     return vast::uhash<vast::xxhash>{}(x);
   }
 };

@@ -84,15 +84,17 @@ struct time_restrictor {
 
 /// Transforms all ::key_extractor into ::data_extractor instances according to
 /// a given type.
-struct key_resolver {
-  key_resolver(type const& t);
+struct type_resolver {
+  type_resolver(type const& t);
 
   expected<expression> operator()(none);
   expected<expression> operator()(conjunction const& c);
   expected<expression> operator()(disjunction const& d);
   expected<expression> operator()(negation const& n);
   expected<expression> operator()(predicate const& p);
-  expected<expression> operator()(key_extractor const& e, data const& d);
+  expected<expression> operator()(type_extractor const& ex, data const& d);
+  expected<expression> operator()(data const& d, type_extractor const& ex);
+  expected<expression> operator()(key_extractor const& ex, data const& d);
   expected<expression> operator()(data const& d, key_extractor const& e);
 
   template <typename T, typename U>
@@ -106,8 +108,8 @@ struct key_resolver {
 
 // Tailors an expression to a specific type by pruning all unecessary branches
 // and resolving keys into the corresponding data extractors.
-struct type_resolver {
-  type_resolver(type const& event_type);
+struct type_pruner {
+  type_pruner(type const& event_type);
 
   expression operator()(none);
   expression operator()(conjunction const& c);
@@ -130,6 +132,7 @@ struct event_evaluator {
   bool operator()(predicate const& p);
   bool operator()(attribute_extractor const&, data const& d);
   bool operator()(key_extractor const&, data const&);
+  bool operator()(type_extractor const&, data const&);
   bool operator()(data_extractor const& e, data const& d);
 
   template <typename T>

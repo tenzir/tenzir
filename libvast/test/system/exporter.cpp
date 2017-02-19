@@ -23,7 +23,7 @@ TEST(exporter) {
   MESSAGE("ingesting conn.log");
   self->send(i, bro_conn_log);
   self->send(a, bro_conn_log);
-  auto expr = to<expression>("service == \"http\" && addr == 212.227.96.110");
+  auto expr = to<expression>("service == \"http\" && :addr == 212.227.96.110");
   REQUIRE(expr);
   MESSAGE("issueing query");
   auto e = self->spawn(system::exporter, *expr, historical);

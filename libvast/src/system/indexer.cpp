@@ -187,46 +187,43 @@ struct loader {
     return result;
   }
 
-  result_type operator()(key_extractor const& ex, data const& x) {
+  result_type operator()(type_extractor const& ex, data const&) {
     result_type result;
-    VAST_ASSERT(!ex.key.empty());
-    // TODO: this branching logic is identical to the one used during index
-    // lookup in src/expression_visitors.cpp. We should factor it.
-    // First, try to interpret the key as a type.
-    if (auto t = to<type>(ex.key[0])) {
-      if (ex.key.size() == 1) {
-        if (auto r = get_if<record_type>(self->state.event_type)) {
-          for (auto& f : record_type::each{*r}) {
-            auto& value_type = f.trace.back()->type;
-            if (congruent(value_type, *t)) {
-              auto p = self->state.dir / "data";
-              for (auto& k : f.key())
-                p /= k;
-              VAST_DEBUG(self, "loads value index at", p);
-              auto& a = self->state.indexers[p];
-              if (!a)
-                a = self->spawn<monitored>(field_data_indexer, p,
-                                           self->state.event_type,
-                                           value_type, f.offset);
-              result.push_back(a);
-            }
-          }
-        } else if (congruent(self->state.event_type, *t)) {
+    if (auto r = get_if<record_type>(self->state.event_type)) {
+      for (auto& f : record_type::each{*r}) {
+        auto& value_type = f.trace.back()->type;
+        if (congruent(value_type, ex.type)) {
           auto p = self->state.dir / "data";
+          for (auto& k : f.key())
+            p /= k;
           VAST_DEBUG(self, "loads value index at", p);
           auto& a = self->state.indexers[p];
           if (!a)
-            a = self->spawn<monitored>(flat_data_indexer, p,
-                                       self->state.event_type);
+            a = self->spawn<monitored>(field_data_indexer, p,
+                                       self->state.event_type,
+                                       value_type, f.offset);
           result.push_back(a);
         }
-      } else {
-        // Keys that look like types, but have more than one component don't
-        // make sense, e.g., addr.count.vector<int>.
-        VAST_WARNING(self, "got weird key:", ex.key);
       }
-    // Second, interpret the key as a suffix of a record field name.
-    } else if (auto r = get_if<record_type>(self->state.event_type)) {
+    } else if (congruent(self->state.event_type, ex.type)) {
+      auto p = self->state.dir / "data";
+      VAST_DEBUG(self, "loads value index at", p);
+      auto& a = self->state.indexers[p];
+      if (!a)
+        a = self->spawn<monitored>(flat_data_indexer, p,
+                                   self->state.event_type);
+      result.push_back(a);
+    }
+    return result;
+  }
+
+  // TODO: this branching logic is identical to the one used during index
+  // lookup in src/expression_visitors.cpp. We should factor it.
+  result_type operator()(key_extractor const& ex, data const& x) {
+    result_type result;
+    VAST_ASSERT(!ex.key.empty());
+    // Frist, interpret the key as a suffix of a record field name.
+    if (auto r = get_if<record_type>(self->state.event_type)) {
       auto suffixes = r->find_suffix(ex.key);
       // All suffixes must pass the type check, otherwise the RHS of a
       // predicate would be ambiguous.
@@ -255,7 +252,7 @@ struct loader {
                                      *r->at(pair.first), pair.first);
         result.push_back(a);
       }
-    // Third, try to interpret the key as the name of a single type.
+    // Second, try to interpret the key as the name of a single type.
     } else if (ex.key[0] == self->state.event_type.name()) {
       if (!compatible(self->state.event_type, op, x)) {
           VAST_WARNING(self, "encountered type clash: ",

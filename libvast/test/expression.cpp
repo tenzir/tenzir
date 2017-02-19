@@ -22,8 +22,8 @@ struct fixture {
     auto p1 = predicate{attribute_extractor{{"foo"}}, equal, data{true}};
     auto conj = conjunction{p0, p1};
     expr0 = negation{conj};
-    // expro0 || expr0
-    auto p2 = predicate{key_extractor{{"bar"}}, not_equal, data{"x"}};
+    // expr0 || :real > 4.2
+    auto p2 = predicate{type_extractor{real_type{}}, greater_equal, data{4.2}};
     expr1 = disjunction{expr0, p2};
   }
 

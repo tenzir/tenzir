@@ -33,16 +33,16 @@ TEST(parseable/printable - predicate) {
   CHECK(pred.rhs == data{"foo"});
   CHECK_EQUAL(to_string(pred), str);
   // LHS: data, RHS: type
-  str = "10.0.0.0/8 ni addr";
+  str = "10.0.0.0/8 ni :addr";
   CHECK(parsers::predicate(str, pred));
   CHECK(pred.lhs == data{*to<subnet>("10.0.0.0/8")});
   CHECK(pred.op == ni);
-  CHECK(pred.rhs == key_extractor{{"addr"}});
+  CHECK(pred.rhs == type_extractor{address_type{}});
   CHECK_EQUAL(to_string(pred), str);
   // LHS: type, RHS: data
-  str = "real >= -4.8";
+  str = ":real >= -4.8";
   CHECK(parsers::predicate(str, pred));
-  CHECK(pred.lhs == key_extractor{key{"real"}});
+  CHECK(pred.lhs == type_extractor{real_type{}});
   CHECK(pred.op == greater_equal);
   CHECK(pred.rhs == data{-4.8});
   CHECK_EQUAL(to_string(pred), str);
@@ -65,24 +65,24 @@ TEST(parseable/printable - predicate) {
 TEST(parseable - expression) {
   expression expr;
   predicate p1{key_extractor{key{"x"}}, equal, data{42u}};
-  predicate p2{key_extractor{key{"port"}}, equal, data{port{53, port::udp}}};
+  predicate p2{type_extractor{port_type{}}, equal, data{port{53, port::udp}}};
   predicate p3{key_extractor{key{"a"}}, greater, key_extractor{key{"b"}}};
   MESSAGE("conjunction");
-  CHECK(parsers::expr("x == 42 && port == 53/udp", expr));
+  CHECK(parsers::expr("x == 42 && :port == 53/udp", expr));
   CHECK_EQUAL(expr, expression(conjunction{p1, p2}));
-  CHECK(parsers::expr("x == 42 && port == 53/udp && x == 42", expr));
+  CHECK(parsers::expr("x == 42 && :port == 53/udp && x == 42", expr));
   CHECK_EQUAL(expr, expression(conjunction{p1, p2, p1}));
-  CHECK(parsers::expr("x == 42 && ! port == 53/udp && x == 42", expr));
+  CHECK(parsers::expr("x == 42 && ! :port == 53/udp && x == 42", expr));
   CHECK_EQUAL(expr, expression(conjunction{p1, negation{p2}, p1}));
   CHECK(parsers::expr("x > 0 && x < 42 && a.b == x.y", expr));
   MESSAGE("disjunction");
-  CHECK(parsers::expr("x == 42 || port == 53/udp || x == 42", expr));
+  CHECK(parsers::expr("x == 42 || :port == 53/udp || x == 42", expr));
   CHECK_EQUAL(expr, expression(disjunction{p1, p2, p1}));
   CHECK(parsers::expr("a==b || b==c || c==d", expr));
   MESSAGE("negation");
   CHECK(parsers::expr("! x == 42", expr));
   CHECK_EQUAL(expr, expression(negation{p1}));
-  CHECK(parsers::expr("!(x == 42 || port == 53/udp)", expr));
+  CHECK(parsers::expr("!(x == 42 || :port == 53/udp)", expr));
   CHECK_EQUAL(expr, expression(negation{disjunction{p1, p2}}));
   MESSAGE("parentheses");
   CHECK(parsers::expr("(x == 42)", expr));

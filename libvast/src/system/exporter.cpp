@@ -142,9 +142,9 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
         auto& checker = self->state.checkers[candidate.type()];
         // Construct a candidate checker if we don't have one for this type.
         if (is<none>(checker)) {
-          auto x = visit(key_resolver{candidate.type()}, expr);
+          auto x = visit(type_resolver{candidate.type()}, expr);
           VAST_ASSERT(x);
-          checker = visit(type_resolver{candidate.type()}, *x);
+          checker = visit(type_pruner{candidate.type()}, *x);
           VAST_ASSERT(!is<none>(checker));
           VAST_DEBUG(self, "resolved AST for", candidate.type() << ':',
                      checker);

@@ -27,6 +27,17 @@ bool operator<(key_extractor const& lhs, key_extractor const& rhs) {
   return lhs.key < rhs.key;
 }
 
+type_extractor::type_extractor(vast::type t) : type{std::move(t)} {
+}
+
+bool operator==(type_extractor const& lhs, type_extractor const& rhs) {
+  return lhs.type == rhs.type;
+}
+
+bool operator<(type_extractor const& lhs, type_extractor const& rhs) {
+  return lhs.type < rhs.type;
+}
+
 data_extractor::data_extractor(vast::type t, vast::offset o)
   : type{std::move(t)}, offset{std::move(o)} {
 }

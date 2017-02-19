@@ -5,6 +5,7 @@
 #include "vast/concept/parseable/string/char_class.hpp"
 #include "vast/concept/parseable/vast/data.hpp"
 #include "vast/concept/parseable/vast/key.hpp"
+#include "vast/concept/parseable/vast/type.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/expression.hpp"
 
@@ -17,14 +18,18 @@ struct predicate_parser : parser<predicate_parser> {
     auto to_attr_extractor = [](std::string str) -> predicate::operand {
       return attribute_extractor{str};
     };
+    auto to_type_extractor = [](type t) -> predicate::operand {
+      return type_extractor{t};
+    };
     auto to_key_extractor = [](key k) -> predicate::operand {
       return key_extractor{k};
     };
     auto id = +(parsers::alnum | parsers::chr{'_'} | parsers::chr{'-'});
     auto operand
-      = parsers::data ->* [](data d) -> predicate::operand { return d; }
-      | '&' >> id     ->* to_attr_extractor
-      | parsers::key  ->* to_key_extractor
+      = parsers::data        ->* [](data d) -> predicate::operand { return d; }
+      | '&' >> id            ->* to_attr_extractor
+      | ':' >> parsers::type ->* to_type_extractor
+      | parsers::key         ->* to_key_extractor
       ;
     auto pred_op
       = "~"_p   ->* [] { return match; }

@@ -176,22 +176,15 @@ expected<void> validator::operator()(negation const& n) const {
 expected<void> validator::operator()(predicate const& p) const {
   auto valid = [&](predicate::operand const& lhs,
                    predicate::operand const& rhs) -> expected<void> {
-    // If a single-element key exists and matches a built-in type, the RHS
-    // data must have the matching type.
-    // TODO: we could provide the validator an entire schema for more detailed
-    // AST analysis including custom types.
-    if (auto k = get_if<key_extractor>(lhs)) {
-      if (k->key.size() == 1) {
-        // If we don't have data on the RHS, we cannot perform a type check.
-        auto d = get_if<data>(rhs);
-        if (!d)
-          return {};
-        // Try to parse the key type.
-        if (auto t = to<type>(k->key[0]))
-          if (!type_check(*t, *d))
-            return make_error(ec::type_clash, "invalid predicate: ",
-                              *t, ' ', p.op, ' ', *d);
-      }
+    // If a single-element key exists and matches a built-in type, the RHS data
+    // must have the matching type.
+    if (auto ex = get_if<type_extractor>(lhs)) {
+      auto d = get_if<data>(rhs);
+      if (!d) // Without data on the RHS, we cannot perform a type check.
+        return {};
+      if (!type_check(ex->type, *d))
+        return make_error(ec::type_clash, "invalid predicate: ",
+                          ex->type, ' ', p.op, ' ', *d);
     }
     return {};
   };
@@ -253,14 +246,14 @@ bool time_restrictor::operator()(predicate const& p) const {
 }
 
 
-key_resolver::key_resolver(type const& t) : type_{t} {
+type_resolver::type_resolver(type const& t) : type_{t} {
 }
 
-expected<expression> key_resolver::operator()(none) {
+expected<expression> type_resolver::operator()(none) {
   return expression{};
 }
 
-expected<expression> key_resolver::operator()(conjunction const& c) {
+expected<expression> type_resolver::operator()(conjunction const& c) {
   conjunction result;
   for (auto& op : c) {
     auto r = visit(*this, op);
@@ -280,7 +273,7 @@ expected<expression> key_resolver::operator()(conjunction const& c) {
     return {std::move(result)};
 }
 
-expected<expression> key_resolver::operator()(disjunction const& d) {
+expected<expression> type_resolver::operator()(disjunction const& d) {
   disjunction result;
   for (auto& op : d) {
     auto r = visit(*this, op);
@@ -298,7 +291,7 @@ expected<expression> key_resolver::operator()(disjunction const& d) {
 }
 
 
-expected<expression> key_resolver::operator()(negation const& n) {
+expected<expression> type_resolver::operator()(negation const& n) {
   auto r = visit(*this, n.expr());
   if (!r)
     return r;
@@ -308,38 +301,46 @@ expected<expression> key_resolver::operator()(negation const& n) {
     return expression{};
 }
 
-expected<expression> key_resolver::operator()(predicate const& p) {
+expected<expression> type_resolver::operator()(predicate const& p) {
   op_ = p.op;
   return visit(*this, p.lhs, p.rhs);
 }
 
-expected<expression> key_resolver::operator()(key_extractor const& ex,
-                                              data const& d) {
+expected<expression> type_resolver::operator()(type_extractor const& ex,
+                                               data const& d) {
   disjunction dis;
-  // TODO: this branching logic is identical to the one used during index
-  // lookup in src/system/indexer.cpp. We should factor it.
-  // First, try to interpret the key as a type.
-  if (auto t = to<type>(ex.key[0])) {
-    if (ex.key.size() == 1) {
-      if (auto r = get_if<record_type>(type_)) {
-        for (auto& f : record_type::each{*r}) {
-          auto& value_type = f.trace.back()->type;
-          if (congruent(value_type, *t)) {
-            auto x = data_extractor{type_, f.offset};
-            dis.emplace_back(predicate{std::move(x), op_, d});
-          }
-        }
-      } else if (congruent(type_, *t)) {
-        auto x = data_extractor{type_, offset{}};
+  if (auto r = get_if<record_type>(type_)) {
+    for (auto& f : record_type::each{*r}) {
+      auto& value_type = f.trace.back()->type;
+      if (congruent(value_type, ex.type)) {
+        auto x = data_extractor{type_, f.offset};
         dis.emplace_back(predicate{std::move(x), op_, d});
       }
-    } else {
-      // Keys that look like types, but have more than one component don't
-      // make sense, e.g., addr.count.vector<int>.
-      return make_error(ec::unspecified, "weird key" + to_string(ex.key));
     }
-  // Second, interpret the key as a suffix of a record field name.
-  } else if (auto r = get_if<record_type>(type_)) {
+  } else if (congruent(type_, ex.type)) {
+    auto x = data_extractor{type_, offset{}};
+    dis.emplace_back(predicate{std::move(x), op_, d});
+  }
+  if (dis.empty())
+    return expression{}; // did not resolve
+  else if (dis.size() == 1)
+    return {std::move(dis[0])};
+  else
+    return {std::move(dis)};
+}
+
+expected<expression> type_resolver::operator()(data const& d,
+                                               type_extractor const& ex) {
+  return (*this)(ex, d);
+}
+
+// TODO: this branching logic is identical to the one used during index
+// lookup in src/system/indexer.cpp. We should factor it.
+expected<expression> type_resolver::operator()(key_extractor const& ex,
+                                               data const& d) {
+  disjunction dis;
+  // First, interpret the key as a suffix of a record field name.
+  if (auto r = get_if<record_type>(type_)) {
     auto suffixes = r->find_suffix(ex.key);
     // All suffixes must pass the type check, otherwise the RHS of a
     // predicate would be ambiguous.
@@ -353,7 +354,7 @@ expected<expression> key_resolver::operator()(key_extractor const& ex,
       auto x = data_extractor{type_, std::move(pair.first)};
       dis.emplace_back(predicate{std::move(x), op_, d});
     }
-  // Third, try to interpret the key as the name of a single type.
+  // Second, try to interpret the key as the name of a single type.
   } else if (ex.key[0] == type_.name()) {
     if (!compatible(type_, op_, d)) {
       return make_error(ec::type_clash, type_, op_, d);
@@ -369,20 +370,20 @@ expected<expression> key_resolver::operator()(key_extractor const& ex,
     return {std::move(dis)};
 }
 
-expected<expression> key_resolver::operator()(data const& d,
-                                              key_extractor const& ex) {
+expected<expression> type_resolver::operator()(data const& d,
+                                               key_extractor const& ex) {
   return (*this)(ex, d);
 }
 
 
-type_resolver::type_resolver(type const& event_type) : type_{event_type} {
+type_pruner::type_pruner(type const& event_type) : type_{event_type} {
 }
 
-expression type_resolver::operator()(none) {
+expression type_pruner::operator()(none) {
   return {};
 }
 
-expression type_resolver::operator()(conjunction const& c) {
+expression type_pruner::operator()(conjunction const& c) {
   conjunction result;
   for (auto& op : c) {
     auto e = visit(*this, op);
@@ -402,7 +403,7 @@ expression type_resolver::operator()(conjunction const& c) {
   return result;
 }
 
-expression type_resolver::operator()(disjunction const& d) {
+expression type_pruner::operator()(disjunction const& d) {
   disjunction result;
   for (auto& op : d) {
     auto e = visit(*this, op);
@@ -416,36 +417,30 @@ expression type_resolver::operator()(disjunction const& d) {
   return result;
 }
 
-expression type_resolver::operator()(negation const& n) {
+expression type_pruner::operator()(negation const& n) {
   auto e = visit(*this, n.expr());
   if (is<none>(e))
     return e;
   return negation{std::move(e)};
 }
 
-expression type_resolver::operator()(predicate const& p) {
-  if (auto lhs = get_if<key_extractor>(p.lhs)) {
-    // Try to parse a single key.
-    if (lhs->key.size() == 1) {
-      if (auto t = to<type>(lhs->key[0])) {
-        if (auto r = get_if<record_type>(type_)) {
-          disjunction result;
-          for (auto& e : record_type::each{*r})
-            if (congruent(e.trace.back()->type, *t)) {
-              auto de = data_extractor{type_, e.offset};
-              result.emplace_back(predicate{std::move(de), p.op, p.rhs});
-            }
-          if (result.empty())
-            return {};
-          if (result.size() == 1)
-            return result[0];
-          return result;
-        } else if (congruent(type_, *t)) {
-          return predicate{data_extractor{type_, {}}, p.op, p.rhs};
+expression type_pruner::operator()(predicate const& p) {
+  if (auto lhs = get_if<type_extractor>(p.lhs)) {
+    if (auto r = get_if<record_type>(type_)) {
+      disjunction result;
+      for (auto& e : record_type::each{*r})
+        if (congruent(e.trace.back()->type, lhs->type)) {
+          auto de = data_extractor{type_, e.offset};
+          result.emplace_back(predicate{std::move(de), p.op, p.rhs});
         }
-      }
+      if (result.empty())
+        return {};
+      if (result.size() == 1)
+        return result[0];
+      return result;
+    } else if (congruent(type_, lhs->type)) {
+      return predicate{data_extractor{type_, {}}, p.op, p.rhs};
     }
-    return {};
   } else if (auto lhs = get_if<data_extractor>(p.lhs)) {
     if (lhs->type != type_)
       return {};
@@ -491,6 +486,10 @@ bool event_evaluator::operator()(attribute_extractor const& e, data const& d) {
   if (e.attr == "time")
     return evaluate(event_.timestamp(), op_, d);
   return false;
+}
+
+bool event_evaluator::operator()(type_extractor const&, data const&) {
+  die("type extractor should have been resolved at this point");
 }
 
 bool event_evaluator::operator()(key_extractor const&, data const&) {

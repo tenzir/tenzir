@@ -28,7 +28,7 @@ TEST(index) {
   self->send(index, bro_dns_log);
   self->send(index, bro_http_log);
   MESSAGE("issueing queries");
-  auto expr = to<expression>("addr == 74.125.19.100");
+  auto expr = to<expression>(":addr == 74.125.19.100");
   REQUIRE(expr);
   auto total_hits = size_t{11u + 0 + 24}; // conn + dns + http
   // An index lookup first returns a unique ID along with the number of

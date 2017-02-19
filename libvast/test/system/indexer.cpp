@@ -8,7 +8,7 @@
 
 #include "vast/system/indexer.hpp"
 
-#define SUITE index
+#define SUITE system
 #include "test.hpp"
 #include "fixtures/actor_system_and_events.hpp"
 
@@ -64,7 +64,7 @@ TEST(indexer) {
   );
   // Test another query that involves a map-reduce computation of value
   // indexers.
-  pred = to<predicate>("addr == 65.55.184.16");
+  pred = to<predicate>(":addr == 65.55.184.16");
   REQUIRE(pred);
   self->request(i, infinite, *pred).receive(
     [&](const bitmap& bm) {

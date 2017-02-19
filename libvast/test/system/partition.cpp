@@ -5,7 +5,7 @@
 #include "vast/system/partition.hpp"
 #include "vast/system/task.hpp"
 
-#define SUITE index
+#define SUITE system
 #include "test.hpp"
 #include "fixtures/actor_system_and_events.hpp"
 
@@ -67,12 +67,12 @@ struct partition_fixture : fixtures::actor_system_and_events {
 FIXTURE_SCOPE(partition_tests, partition_fixture)
 
 TEST(partition queries 1) {
-  auto hits = query("string == \"SF\" && id.resp_p == 443/?");
+  auto hits = query(":string == \"SF\" && id.resp_p == 443/?");
   CHECK_EQUAL(rank(hits), 38u);
 }
 
 TEST(partition queries 2) {
-  auto hits = query("service == \"http\" && addr == 212.227.96.110");
+  auto hits = query("service == \"http\" && :addr == 212.227.96.110");
   CHECK_EQUAL(rank(hits), 28u);
 }
 
