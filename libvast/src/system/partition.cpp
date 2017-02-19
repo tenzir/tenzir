@@ -207,7 +207,7 @@ behavior partition(stateful_actor<partition_state>* self, path dir) {
             [=](done_atom) mutable {
               auto stop = steady_clock::now();
               rp.deliver(std::move(*bm));
-              auto runtime = stop - start;
+              timespan runtime = stop - start;
               VAST_DEBUG(self, "answered", expr, "in", runtime);
               if (accountant)
                 job->send(accountant, "partition.query.runtime", runtime);
