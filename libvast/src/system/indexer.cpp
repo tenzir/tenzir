@@ -9,6 +9,7 @@
 #include "vast/detail/assert.hpp"
 #include "vast/event.hpp"
 #include "vast/expression.hpp"
+#include "vast/expression_visitors.hpp"
 #include "vast/filesystem.hpp"
 #include "vast/load.hpp"
 #include "vast/logger.hpp"
@@ -162,9 +163,29 @@ bool skip(type const& t) {
 struct loader {
   using result_type = std::vector<actor>;
 
+  template <class T>
+  result_type operator()(T const&) {
+    return {};
+  }
+
   template <class T, class U>
   result_type operator()(T const&, U const&) {
     return {};
+  }
+
+  result_type operator()(disjunction const& d) {
+    result_type result;
+    for (auto& op : d) {
+      auto x = visit(*this, op);
+      result.insert(result.end(),
+                    std::make_move_iterator(x.begin()),
+                    std::make_move_iterator(x.end()));
+    }
+    return result;
+  }
+
+  result_type operator()(predicate const& p) {
+    return visit(*this, p.lhs, p.rhs);
   }
 
   result_type operator()(attribute_extractor const& ex, data const& x) {
@@ -187,91 +208,36 @@ struct loader {
     return result;
   }
 
-  result_type operator()(type_extractor const& ex, data const&) {
+  result_type operator()(data_extractor const& dx, data const&) {
     result_type result;
-    if (auto r = get_if<record_type>(self->state.event_type)) {
-      for (auto& f : record_type::each{*r}) {
-        auto& value_type = f.trace.back()->type;
-        if (congruent(value_type, ex.type)) {
-          auto p = self->state.dir / "data";
-          for (auto& k : f.key())
-            p /= k;
-          VAST_DEBUG(self, "loads value index at", p);
-          auto& a = self->state.indexers[p];
-          if (!a)
-            a = self->spawn<monitored>(field_data_indexer, p,
-                                       self->state.event_type,
-                                       value_type, f.offset);
-          result.push_back(a);
-        }
-      }
-    } else if (congruent(self->state.event_type, ex.type)) {
+    if (dx.offset.empty()) {
       auto p = self->state.dir / "data";
-      VAST_DEBUG(self, "loads value index at", p);
+      VAST_DEBUG(self, "loads value index for", self->state.event_type.name());
       auto& a = self->state.indexers[p];
       if (!a)
         a = self->spawn<monitored>(flat_data_indexer, p,
                                    self->state.event_type);
       result.push_back(a);
-    }
-    return result;
-  }
-
-  // TODO: this branching logic is identical to the one used during index
-  // lookup in src/expression_visitors.cpp. We should factor it.
-  result_type operator()(key_extractor const& ex, data const& x) {
-    result_type result;
-    VAST_ASSERT(!ex.key.empty());
-    // Frist, interpret the key as a suffix of a record field name.
-    if (auto r = get_if<record_type>(self->state.event_type)) {
-      auto suffixes = r->find_suffix(ex.key);
-      // All suffixes must pass the type check, otherwise the RHS of a
-      // predicate would be ambiguous.
-      for (auto& pair : suffixes) {
-        auto t = r->at(pair.first);
-        VAST_ASSERT(t);
-        if (!compatible(*t, op, x)) {
-          VAST_WARNING(self, "encountered type clash: ", *t, op, x);
-          return {};
-        }
-      }
-      for (auto& pair : suffixes) {
-        auto p = self->state.dir / "data";
-        if (!pair.second.empty()) {
-          // The suffix contains the top-level record name as well, which we
-          // don't need here.
-          VAST_ASSERT(pair.second.size() >= 2);
-          for (auto i = pair.second.begin() + 1; i != pair.second.end(); ++i)
-            p /= *i;
-        }
-        VAST_DEBUG(self, "loads value index at", p);
-        auto& a = self->state.indexers[p];
-        if (!a)
-          a = self->spawn<monitored>(field_data_indexer, p,
-                                     self->state.event_type,
-                                     *r->at(pair.first), pair.first);
-        result.push_back(a);
-      }
-    // Second, try to interpret the key as the name of a single type.
-    } else if (ex.key[0] == self->state.event_type.name()) {
-      if (!compatible(self->state.event_type, op, x)) {
-          VAST_WARNING(self, "encountered type clash: ",
-                       self->state.event_type, op, x);
-      } else {
-        auto p = self->state.dir / "data";
-        VAST_DEBUG(self, "loads value index at", p);
-        auto& a = self->state.indexers[p];
-        if (!a)
-          a = self->spawn<monitored>(flat_data_indexer, p,
-                                     self->state.event_type);
-        result.push_back(a);
-      }
+    } else {
+      auto r = get<record_type>(dx.type);
+      auto k = r.resolve(dx.offset);
+      VAST_ASSERT(k);
+      auto t = r.at(dx.offset);
+      VAST_ASSERT(t);
+      auto p = self->state.dir / "data";
+      for (auto& x : *k)
+        p /= x;
+      VAST_DEBUG(self, "loads value index for", *k);
+      auto& a = self->state.indexers[p];
+      if (!a)
+        a = self->spawn<monitored>(field_data_indexer, p, dx.type, *t,
+                                   dx.offset);
+      result.push_back(a);
     }
     return result;
   }
 
   stateful_actor<event_indexer_state>* self;
-  relational_operator op;
 };
 
 } // namespace <anonymous>
@@ -341,7 +307,15 @@ behavior event_indexer(stateful_actor<event_indexer_state>* self,
       // expression, i.e., LHS an extractor type and RHS of type data.
       auto rhs = get_if<data>(pred.rhs);
       VAST_ASSERT(rhs);
-      auto indexers = visit(loader{self, pred.op}, pred.lhs, pred.rhs);
+      auto resolved = type_resolver{self->state.event_type}(pred);
+      if (!resolved) {
+        VAST_DEBUG(self, "failed to resolve predicate:",
+                   self->system().render(resolved.error()));
+        rp.deliver(resolved.error());
+        return;
+      }
+
+      auto indexers = visit(loader{self}, *resolved);
       // Forward predicate to all available indexers.
       if (indexers.empty()) {
         VAST_DEBUG(self, "did not find matching indexers for", pred);

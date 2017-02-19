@@ -334,8 +334,6 @@ expected<expression> type_resolver::operator()(data const& d,
   return (*this)(ex, d);
 }
 
-// TODO: this branching logic is identical to the one used during index
-// lookup in src/system/indexer.cpp. We should factor it.
 expected<expression> type_resolver::operator()(key_extractor const& ex,
                                                data const& d) {
   disjunction dis;

@@ -82,8 +82,8 @@ struct time_restrictor {
   timestamp last_;
 };
 
-/// Transforms all ::key_extractor into ::data_extractor instances according to
-/// a given type.
+/// Transforms all ::key_extractor and ::type_extractor predicates into
+/// ::data_extractor instances according to a given type.
 struct type_resolver {
   type_resolver(type const& t);
 
