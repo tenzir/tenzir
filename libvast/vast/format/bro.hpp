@@ -13,11 +13,11 @@
 #include "vast/concept/parseable/vast/address.hpp"
 #include "vast/concept/parseable/vast/subnet.hpp"
 #include "vast/data.hpp"
-#include "vast/detail/line_range.hpp"
 #include "vast/expected.hpp"
 #include "vast/filesystem.hpp"
-#include "vast/maybe.hpp"
 #include "vast/schema.hpp"
+
+#include "vast/detail/line_range.hpp"
 
 namespace vast {
 
@@ -219,7 +219,7 @@ public:
   /// @param input The stream of logs to read.
   explicit reader(std::unique_ptr<std::istream> input);
 
-  maybe<event> read();
+  expected<event> read();
 
   expected<void> schema(vast::schema const& sch);
 

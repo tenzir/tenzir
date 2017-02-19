@@ -5,21 +5,21 @@
 #include <type_traits>
 
 #include "vast/error.hpp"
-#include "vast/maybe.hpp"
+#include "vast/expected.hpp"
 #include "vast/concept/printable/print.hpp"
 
 namespace vast {
 
-template <typename To, typename From, typename... Opts>
+template <class To, class From, class... Opts>
 auto to(From&& from, Opts&&... opts)
 -> std::enable_if_t<
      std::is_same<std::string, To>{} && has_printer<std::decay_t<From>>{},
-     maybe<std::string>
+     expected<std::string>
    > {
   std::string str;
-  if (! print(std::back_inserter(str), from, std::forward<Opts>(opts)...))
+  if (!print(std::back_inserter(str), from, std::forward<Opts>(opts)...))
     return make_error(ec::print_error);
-  return maybe<std::string>{std::move(str)};
+  return str;
 }
 
 } // namespace vast

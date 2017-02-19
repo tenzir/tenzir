@@ -10,6 +10,7 @@
 #include "vast/concept/printable/std/chrono.hpp"
 #include "vast/concept/printable/vast/error.hpp"
 #include "vast/detail/assert.hpp"
+#include "vast/error.hpp"
 #include "vast/event.hpp"
 #include "vast/expected.hpp"
 #include "vast/schema.hpp"
@@ -25,7 +26,7 @@ namespace system {
 struct Reader {
   Reader();
 
-  maybe<result> read();
+  expected<result> read();
 
   expected<void> schema(vast::schema&);
 
@@ -89,13 +90,13 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader&& reader) {
         auto e = self->state.reader.read();
         if (e) {
           self->state.events.push_back(std::move(*e));
-        } else if (e.empty()) {
+        } else if (!e.error()) {
           continue; // Try again.
         } else {
-          if (e == ec::parse_error) {
+          if (e.error() == ec::parse_error) {
             VAST_WARNING(self->system().render(e.error()));
             continue; // Just skip bogous events.
-          } else if (e == ec::end_of_input) {
+          } else if (e.error() == ec::end_of_input) {
             VAST_INFO(self->system().render(e.error()));
           } else {
             VAST_ERROR(self->system().render(e.error()));

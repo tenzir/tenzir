@@ -1,5 +1,5 @@
-#ifndef VAST_NONE
-#define VAST_NONE
+#ifndef VAST_NONE_HPP
+#define VAST_NONE_HPP
 
 #include <caf/none.hpp>
 

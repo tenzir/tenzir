@@ -7,6 +7,8 @@ namespace vast {
 
 using caf::expected;
 
+constexpr auto no_error = caf::no_error;
+
 } // namespace vast
 
 #endif

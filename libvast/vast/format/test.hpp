@@ -7,7 +7,6 @@
 #include "vast/data.hpp"
 #include "vast/event.hpp"
 #include "vast/expected.hpp"
-#include "vast/maybe.hpp"
 #include "vast/schema.hpp"
 #include "vast/variant.hpp"
 #include "vast/detail/random.hpp"
@@ -53,7 +52,7 @@ public:
   /// @param id The base event ID to start at.
   reader(size_t seed = 0, uint64_t n = 100, event_id id = 0);
 
-  maybe<event> read();
+  expected<event> read();
 
   expected<void> schema(vast::schema sch);
 

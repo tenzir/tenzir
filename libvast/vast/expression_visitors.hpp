@@ -5,7 +5,6 @@
 
 #include "vast/expression.hpp"
 #include "vast/expected.hpp"
-#include "vast/maybe.hpp"
 #include "vast/none.hpp"
 #include "vast/operator.hpp"
 #include "vast/time.hpp"
@@ -57,11 +56,11 @@ struct predicatizer {
 
 /// Ensures that LHS and RHS of a predicate fit together.
 struct validator {
-  maybe<void> operator()(none) const;
-  maybe<void> operator()(conjunction const& c) const;
-  maybe<void> operator()(disjunction const& d) const;
-  maybe<void> operator()(negation const& n) const;
-  maybe<void> operator()(predicate const& p) const;
+  expected<void> operator()(none) const;
+  expected<void> operator()(conjunction const& c) const;
+  expected<void> operator()(disjunction const& d) const;
+  expected<void> operator()(negation const& n) const;
+  expected<void> operator()(predicate const& p) const;
 };
 
 /// Checks whether an expression is valid for a given time interval. The

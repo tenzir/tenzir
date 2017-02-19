@@ -7,7 +7,9 @@
 #include <caf/binary_deserializer.hpp>
 #include <caf/binary_serializer.hpp>
 
+#include "vast/error.hpp"
 #include "vast/logger.hpp"
+#include "vast/none.hpp"
 
 #include "vast/system/consensus.hpp"
 #include "vast/system/key_value_store.hpp"

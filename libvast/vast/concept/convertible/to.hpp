@@ -3,8 +3,9 @@
 
 #include <type_traits>
 
-#include "vast/maybe.hpp"
 #include "vast/concept/convertible/is_convertible.hpp"
+#include "vast/error.hpp"
+#include "vast/expected.hpp"
 
 namespace vast {
 
@@ -17,12 +18,12 @@ template <typename To, typename From, typename... Opts>
 auto to(From&& from, Opts&&... opts)
   -> std::enable_if_t<
        is_convertible<std::decay_t<From>, To>{},
-       maybe<To>
+       expected<To>
      > {
-  maybe<To> x{To()};
+  expected<To> x{To()};
   if (convert(from, *x, std::forward<Opts>(opts)...))
     return x;
-  return {};
+  return make_error(ec::convert_error);
 }
 
 template <typename To, typename From, typename... Opts>

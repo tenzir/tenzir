@@ -12,8 +12,8 @@
 
 #include "vast/aliases.hpp"
 #include "vast/attribute.hpp"
+#include "vast/expected.hpp"
 #include "vast/key.hpp"
-#include "vast/maybe.hpp"
 #include "vast/none.hpp"
 #include "vast/offset.hpp"
 #include "vast/operator.hpp"
@@ -390,12 +390,12 @@ struct record_type
   /// Attemps to resolve a ::key to an ::offset.
   /// @param k The key to resolve.
   /// @returns The ::offset corresponding to *k*.
-  maybe<offset> resolve(key const& k) const;
+  expected<offset> resolve(key const& k) const;
 
   /// Attemps to resolve an ::offset to a ::key.
   /// @param o The offset to resolve.
   /// @returns The ::key corresponding to *o*.
-  maybe<key> resolve(offset const& o) const;
+  expected<key> resolve(offset const& o) const;
 
   /// Finds all offset-key pairs for an *exact* key in this and nested records.
   /// @param k The key to resolve.

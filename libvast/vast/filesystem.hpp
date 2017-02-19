@@ -11,7 +11,7 @@
 #include <string>
 #include <vector>
 
-#include "vast/maybe.hpp"
+#include "vast/expected.hpp"
 
 #include "vast/detail/iterator.hpp"
 #include "vast/detail/operators.hpp"
@@ -192,7 +192,7 @@ public:
   ///             function attempts to create non-existing parent directories.
   /// @param append If `false`, the first write truncates the file.
   /// @returns `true` on success.
-  maybe<void> open(open_mode mode = read_write, bool append = false);
+  expected<void> open(open_mode mode = read_write, bool append = false);
 
   /// Attempts to close the file.
   /// @returns `true` on success.
@@ -304,12 +304,12 @@ bool rm(path const& p);
 /// If the path does not exist, create it as directory.
 /// @param p The path to a directory to create.
 /// @returns `true` on success or if *p* exists already.
-maybe<void> mkdir(path const& p);
+expected<void> mkdir(path const& p);
 
 // Loads file contents into a string.
 // @param p The path of the file to load.
 // @returns The contents of the file *p*.
-maybe<std::string> load_contents(path const& p);
+expected<std::string> load_contents(path const& p);
 
 } // namespace vast
 

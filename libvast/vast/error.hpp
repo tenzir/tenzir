@@ -22,6 +22,8 @@ enum class ec : uint8_t {
   parse_error,
   /// Failure during printing.
   print_error,
+  /// Failed to convert one type to another.
+  convert_error,
   /// Malformed query expression.
   invalid_query,
   /// An error with an input/output format.

@@ -1,3 +1,4 @@
+#include "vast/error.hpp"
 #include "vast/event.hpp"
 
 #include "vast/concept/parseable/to.hpp"
@@ -16,13 +17,14 @@ TEST(PCAP read/write 1) {
   // Initialize a PCAP source with no cutoff (-1), and at most 5 flow table
   // entries.
   format::pcap::reader reader{traces::nmap_vsn, uint64_t(-1), 5};
-  maybe<event> e;
+  auto e = expected<event>{no_error};
   std::vector<event> events;
-  while (!e.error()) {
+  while (e || !e.error()) {
     e = reader.read();
     if (e)
       events.push_back(std::move(*e));
   }
+  REQUIRE(!e);
   CHECK(e.error() == ec::end_of_input);
   REQUIRE(!events.empty());
   CHECK_EQUAL(events.size(), 44u);
@@ -46,13 +48,14 @@ TEST(PCAP read/write 2) {
   // Spawn a PCAP source with a 64-byte cutoff, at most 100 flow table entries,
   // with flows inactive for more than 5 seconds to be evicted every 2 seconds.
   format::pcap::reader reader{traces::workshop_2011_browse, 64, 100, 5, 2};
-  maybe<event> e;
+  auto e = expected<event>{no_error};
   std::vector<event> events;
-  while (!e.error()) {
+  while (e || !e.error()) {
     e = reader.read();
     if (e)
       events.push_back(std::move(*e));
   }
+  REQUIRE(!e);
   CHECK(e.error() == ec::end_of_input);
   REQUIRE(!events.empty());
   CHECK_EQUAL(events.size(), 36u);

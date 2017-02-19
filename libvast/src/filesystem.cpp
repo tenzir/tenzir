@@ -230,7 +230,7 @@ file::~file() {
     close();
 }
 
-maybe<void> file::open(open_mode mode, bool append) {
+expected<void> file::open(open_mode mode, bool append) {
   if (is_open_)
     return make_error(ec::filesystem_error, "file already open");
   if (mode == read_only && append)
@@ -419,7 +419,7 @@ bool rm(const path& p) {
   return false;
 }
 
-maybe<void> mkdir(path const& p) {
+expected<void> mkdir(path const& p) {
   auto components = split(p);
   if (components.empty())
     return make_error(ec::filesystem_error, "cannot mkdir empty path");
@@ -448,8 +448,7 @@ maybe<void> mkdir(path const& p) {
   return {};
 }
 
-// Loads file contents into a string.
-maybe<std::string> load_contents(path const& p) {
+expected<std::string> load_contents(path const& p) {
   std::string contents;
   caf::containerbuf<std::string> obuf{contents};
   std::ostream out{&obuf};

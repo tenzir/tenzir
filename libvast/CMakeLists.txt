@@ -188,7 +188,6 @@ set(tests
   test/json.cpp
   test/key.cpp
   test/main.cpp
-  test/maybe.cpp
   test/mmapbuf.cpp
   test/offset.cpp
   test/parseable.cpp

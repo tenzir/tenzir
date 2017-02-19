@@ -1,3 +1,4 @@
+#include "vast/error.hpp"
 #include "vast/format/pcap.hpp"
 #include "vast/system/sink.hpp"
 
@@ -14,9 +15,9 @@ FIXTURE_SCOPE(sink_tests, fixtures::actor_system)
 TEST(PCAP sink) {
   // First read some events.
   format::pcap::reader reader{traces::nmap_vsn};
-  maybe<event> e;
+  auto e = expected<event>{no_error};
   std::vector<event> events;
-  while (!e.error()) {
+  while (e || !e.error()) {
     e = reader.read();
     if (e)
       events.push_back(std::move(*e));

@@ -11,6 +11,7 @@ const char* descriptions[] = {
   "unsupported_operator",
   "parse_error",
   "print_error",
+  "convert_error",
   "invalid_query",
   "format_error",
   "end_of_input",

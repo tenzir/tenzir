@@ -7,9 +7,11 @@
 
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/vast/filesystem.hpp"
-#include "vast/detail/coding.hpp"
+#include "vast/error.hpp"
 
 #include "vast/system/accountant.hpp"
+
+#include "vast/detail/coding.hpp"
 
 namespace vast {
 namespace system {

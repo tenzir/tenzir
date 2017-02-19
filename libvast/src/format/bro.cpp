@@ -8,7 +8,9 @@
 #include "vast/detail/assert.hpp"
 #include "vast/detail/fdoutbuf.hpp"
 #include "vast/detail/string.hpp"
+#include "vast/error.hpp"
 #include "vast/event.hpp"
+#include "vast/none.hpp"
 #include "vast/logger.hpp"
 
 #include "vast/format/bro.hpp"
@@ -249,7 +251,7 @@ reader::reader(std::unique_ptr<std::istream> input) : input_{std::move(input)} {
   lines_ = std::make_unique<detail::line_range>(*input_);
 }
 
-maybe<event> reader::read() {
+expected<event> reader::read() {
   if (lines_->done())
     return make_error(ec::end_of_input, "input exhausted");
   if (is<none_type>(type_)) {
@@ -277,7 +279,7 @@ maybe<event> reader::read() {
     } else {
       VAST_DEBUG(name(), "ignored comment at line",
                  lines_->line_number() << ':', lines_->get());
-      return {};
+      return no_error;
     }
   }
   // Construct the record.
@@ -289,7 +291,7 @@ maybe<event> reader::read() {
   for (auto& e : record_type::each{get<record_type>(type_)}) {
     if (f == s.size()) {
       VAST_WARNING(name(), "accessed field", f, "out of bounds");
-      return {};
+      return no_error;
     }
     if (e.trace.size() > depth) {
       for (size_t i = 0; i < e.depth() - depth; ++i) {
@@ -330,7 +332,7 @@ maybe<event> reader::read() {
 
 expected<void> reader::schema(vast::schema const& sch) {
   schema_ = sch;
-  return {};
+  return no_error;
 }
 
 expected<schema> reader::schema() const {
@@ -463,7 +465,7 @@ expected<void> reader::parse_header() {
   parsers_.resize(flat.fields.size());
   for (size_t i = 0; i < flat.fields.size(); i++)
     parsers_[i] = make_parser(flat.fields[i].type, set_separator_);
-  return {};
+  return no_error;
 }
 
 writer::writer(path dir) {
@@ -518,14 +520,14 @@ expected<void> writer::write(event const& e) {
   VAST_ASSERT(os != nullptr);
   visit(streamer{*os}, e.type(), e.data());
   *os << '\n';
-  return {};
+  return no_error;
 }
 
 expected<void> writer::flush() {
   for (auto& pair : streams_)
     if (pair.second)
       pair.second->flush();
-  return {};
+  return no_error;
 }
 
 const char* writer::name() const {

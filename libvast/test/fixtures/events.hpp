@@ -3,6 +3,7 @@
 
 #include <caf/all.hpp>
 
+#include "vast/error.hpp"
 #include "vast/event.hpp"
 #include "vast/format/bro.hpp"
 #include "vast/format/bgpdump.hpp"
@@ -39,13 +40,14 @@ private:
 
   template <class Reader>
   static std::vector<event> extract(Reader&& reader) {
-    maybe<event> e;
+    auto e = expected<event>{no_error};
     std::vector<event> events;
-    while (!e.error()) {
+    while (e || !e.error()) {
       e = reader.read();
       if (e)
         events.push_back(std::move(*e));
     }
+    REQUIRE(!e);
     CHECK(e.error() == ec::end_of_input);
     REQUIRE(!events.empty());
     return events;

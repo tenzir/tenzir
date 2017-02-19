@@ -2,10 +2,12 @@
 #include "vast/concept/parseable/numeric/real.hpp"
 #include "vast/concept/parseable/string/char_class.hpp"
 #include "vast/concept/parseable/vast/schema.hpp"
-#include "vast/detail/assert.hpp"
-#include "vast/detail/type_traits.hpp"
+#include "vast/error.hpp"
 
 #include "vast/format/test.hpp"
+
+#include "vast/detail/assert.hpp"
+#include "vast/detail/type_traits.hpp"
 
 namespace vast {
 namespace format {
@@ -13,13 +15,13 @@ namespace test {
 
 namespace {
 
-maybe<distribution> make_distribution(type const& t) {
+expected<distribution> make_distribution(type const& t) {
   using parsers::real_opt_dot;
   using parsers::alpha;
   auto i = std::find_if(t.attributes().begin(), t.attributes().end(),
                         [](auto& attr) { return attr.key == "default"; });
   if (i == t.attributes().end() || !i->value)
-    return {};
+    return no_error;
   auto parser = +alpha >> '(' >> real_opt_dot >> ',' >> real_opt_dot >> ')';
   std::string name;
   double p0, p1;
@@ -52,13 +54,13 @@ struct initializer {
   template <class T>
   expected<void> operator()(T const& t) {
     auto dist = make_distribution(t);
-    if (dist.error())
-      return dist.error();
     if (dist)
       distributions_.push_back(std::move(*dist));
-    else
+    else if (!dist.error())
       *data_ = nil;
-    return {};
+    else
+      return dist.error();
+    return no_error;
   }
 
   expected<void> operator()(record_type const& r) {
@@ -70,7 +72,7 @@ struct initializer {
       if (!result)
         return result;
     }
-    return {};
+    return no_error;
   }
 
   std::vector<distribution>& distributions_;
@@ -220,7 +222,7 @@ reader::reader(size_t seed, uint64_t n, event_id id)
   VAST_ASSERT(result);
 }
 
-maybe<event> reader::read() {
+expected<event> reader::read() {
   VAST_ASSERT(next_ != schema_.end());
   // Generate random data.
   auto& t = *next_;
@@ -251,7 +253,7 @@ expected<void> reader::schema(vast::schema sch) {
   schema_ = std::move(sch);
   blueprints_ = std::move(blueprints);
   next_ = schema_.begin();
-  return {};
+  return no_error;
 }
 
 expected<schema> reader::schema() const {

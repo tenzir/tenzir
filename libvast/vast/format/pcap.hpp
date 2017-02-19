@@ -12,7 +12,6 @@
 #include "vast/concept/hashable/xxhash.hpp"
 #include "vast/detail/operators.hpp"
 #include "vast/expected.hpp"
-#include "vast/maybe.hpp"
 #include "vast/port.hpp"
 #include "vast/schema.hpp"
 #include "vast/time.hpp"
@@ -85,7 +84,7 @@ public:
 
   ~reader();
 
-  maybe<event> read();
+  expected<event> read();
 
   expected<void> schema(vast::schema const& sch);
 

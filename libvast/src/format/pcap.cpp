@@ -2,13 +2,15 @@
 
 #include <thread>
 
-#include "vast/detail/assert.hpp"
-#include "vast/detail/byte_swap.hpp"
+#include "vast/error.hpp"
 #include "vast/event.hpp"
 #include "vast/filesystem.hpp"
 #include "vast/logger.hpp"
 
 #include "vast/format/pcap.hpp"
+
+#include "vast/detail/assert.hpp"
+#include "vast/detail/byte_swap.hpp"
 
 namespace vast {
 namespace format {
@@ -50,7 +52,7 @@ reader::~reader() {
     ::pcap_close(pcap_);
 }
 
-maybe<event> reader::read() {
+expected<event> reader::read() {
   char buf[PCAP_ERRBUF_SIZE]; // for errors.
   if (!pcap_) {
     // Determine interfaces.
@@ -88,7 +90,6 @@ maybe<event> reader::read() {
         return make_error(ec::format_error, "failed to open pcap file ",
                           input_, ": ", std::string{buf});
       }
-
       VAST_INFO(name(), "reads trace from", input_);
       if (pseudo_realtime_ > 0)
         VAST_INFO(name(), "uses pseudo-realtime factor 1/" << pseudo_realtime_);
@@ -103,7 +104,7 @@ maybe<event> reader::read() {
   pcap_pkthdr* header;
   auto r = ::pcap_next_ex(pcap_, &header, &data);
   if (r == 0)
-    return {}; // Attempt to fetch next packet timed out.
+    return no_error; // Attempt to fetch next packet timed out.
   if (r == -2) {
     return make_error(ec::end_of_input, "reached end of trace");
   }
@@ -123,7 +124,7 @@ maybe<event> reader::read() {
   uint64_t payload_size = packet_size;
   switch (detail::to_host_order(layer2_type)) {
     default:
-      return {}; // Skip all non-IP packets.
+      return no_error; // Skip all non-IP packets.
     case 0x0800: {
       if (header->len < 14 + 20)
         return make_error(ec::format_error, "IPv4 header too short");
@@ -184,13 +185,12 @@ maybe<event> reader::read() {
     last_expire_ = packet_time;
   auto i = flows_.find(conn);
   if (i == flows_.end())
-    i = flows_.insert(std::make_pair(conn, connection_state{0, packet_time}))
-          .first;
+    i = flows_.emplace(conn, connection_state{0, packet_time}).first;
   else
     i->second.last = packet_time;
   auto& flow_size = i->second.bytes;
   if (flow_size == cutoff_)
-    return {};
+    return no_error; // Skip cut off packets.
   if (flow_size + payload_size <= cutoff_) {
     flow_size += payload_size;
   } else {
@@ -223,8 +223,7 @@ maybe<event> reader::read() {
     auto offset = unif2(generator_);
     VAST_ASSERT(offset < bucket_size);
     auto begin = flows_.begin(bucket);
-    for (size_t n = 0; n < offset; ++n)
-      ++begin;
+    std::advance(begin, offset);
     flows_.erase(begin->first);
   }
   // Assemble packet.
@@ -270,7 +269,7 @@ expected<void> reader::schema(vast::schema const& sch) {
   if (!congruent(packet_type_, *t))
     return make_error(ec::format_error, "incongruent schema provided");
   packet_type_ = *t;
-  return {};
+  return no_error;
 }
 
 expected<schema> reader::schema() const {
@@ -336,7 +335,7 @@ expected<void> writer::write(event const& e) {
     if (!r)
       return r.error();
   }
-  return {};
+  return no_error;
 }
 
 expected<void> writer::flush() {
@@ -345,7 +344,7 @@ expected<void> writer::flush() {
   VAST_DEBUG(name(), "flushes at packet", total_packets_);
   if (::pcap_dump_flush(dumper_) == -1)
     return make_error(ec::format_error, "failed to flush");
-  return {};
+  return no_error;
 }
 
 const char* writer::name() const {

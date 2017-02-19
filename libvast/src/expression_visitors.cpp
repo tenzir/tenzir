@@ -147,11 +147,11 @@ std::vector<predicate> predicatizer::operator()(predicate const& pred) const {
 }
 
 
-maybe<void> validator::operator()(none) const {
+expected<void> validator::operator()(none) const {
   return make_error(ec::unspecified, "nil expression");
 }
 
-maybe<void> validator::operator()(conjunction const& c) const {
+expected<void> validator::operator()(conjunction const& c) const {
   for (auto& op : c) {
     auto m = visit(*this, op);
     if (!m)
@@ -160,7 +160,7 @@ maybe<void> validator::operator()(conjunction const& c) const {
   return {};
 }
 
-maybe<void> validator::operator()(disjunction const& d) const {
+expected<void> validator::operator()(disjunction const& d) const {
   for (auto& op : d) {
     auto m = visit(*this, op);
     if (!m)
@@ -169,13 +169,13 @@ maybe<void> validator::operator()(disjunction const& d) const {
   return {};
 }
 
-maybe<void> validator::operator()(negation const& n) const {
+expected<void> validator::operator()(negation const& n) const {
   return visit(*this, n.expr());
 }
 
-maybe<void> validator::operator()(predicate const& p) const {
+expected<void> validator::operator()(predicate const& p) const {
   auto valid = [&](predicate::operand const& lhs,
-                   predicate::operand const& rhs) -> maybe<void> {
+                   predicate::operand const& rhs) -> expected<void> {
     // If a single-element key exists and matches a built-in type, the RHS
     // data must have the matching type.
     // TODO: we could provide the validator an entire schema for more detailed

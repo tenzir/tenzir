@@ -197,7 +197,7 @@ record_type::each::range_state const& record_type::each::get() const {
   return state_;
 }
 
-maybe<offset> record_type::resolve(key const& k) const {
+expected<offset> record_type::resolve(key const& k) const {
   if (k.empty())
     return make_error(ec::unspecified, "empty symbol sequence");
   offset off;
@@ -221,10 +221,10 @@ maybe<offset> record_type::resolve(key const& k) const {
   }
   if (!found)
     return make_error(ec::unspecified, "non-existant field name");
-  return std::move(off);
+  return off;
 }
 
-maybe<key> record_type::resolve(offset const& o) const {
+expected<key> record_type::resolve(offset const& o) const {
   if (o.empty())
     return make_error(ec::unspecified, "empty offset sequence");
   key k;
@@ -240,7 +240,7 @@ maybe<key> record_type::resolve(offset const& o) const {
                           "intermediate fields must be records");
     }
   }
-  return std::move(k);
+  return k;
 }
 
 namespace {

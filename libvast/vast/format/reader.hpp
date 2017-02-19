@@ -9,7 +9,6 @@
 #include "vast/error.hpp"
 #include "vast/event.hpp"
 #include "vast/expected.hpp"
-#include "vast/maybe.hpp"
 
 namespace vast {
 namespace format {
@@ -27,7 +26,7 @@ public:
     lines_ = std::make_unique<detail::line_range>(*in_);
   }
 
-  maybe<event> read() {
+  expected<event> read() {
     if (lines_->done())
       return make_error(ec::end_of_input, "input exhausted");
     event e;

@@ -17,7 +17,6 @@
 #include "vast/none.hpp"
 #include "vast/offset.hpp"
 #include "vast/optional.hpp"
-#include "vast/maybe.hpp"
 #include "vast/time.hpp"
 #include "vast/type.hpp"
 #include "vast/variant.hpp"
