@@ -122,7 +122,7 @@ VAST comes with a [3-clause BSD licence][license-url].
 [chat-url]: https://gitter.im/vast-io/vast
 [jenkins-url]: https://jenkins.inet.haw-hamburg.de/view/VAST%20Build%20Status/
 [jenkins-badge]: https://jenkins.inet.haw-hamburg.de/buildStatus/icon?job=VAST/master%20branch
-[license-badge]: https://img.shields.io/badge/License-BSD-blue.svg
+[license-badge]: https://img.shields.io/badge/license-BSD-blue.svg
 [license-url]: https://raw.github.com/vast-io/vast/master/COPYING
 
 [caf-obs]: https://build.opensuse.org/package/show/devel:libraries:caf/caf
