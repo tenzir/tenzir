@@ -37,7 +37,7 @@ struct bro_parser {
 
   template <class Parser>
   bool parse(Parser const& p) const {
-    return p.parse(f_, l_, attr_);
+    return p(f_, l_, attr_);
   }
 
   template <class T>

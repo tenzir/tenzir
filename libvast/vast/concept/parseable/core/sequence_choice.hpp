@@ -46,11 +46,11 @@ public:
   template <typename Iterator, typename Attribute>
   bool parse(Iterator& f, Iterator const& l, Attribute& a) const {
     optional<rhs_attribute> rhs_attr;
-    if (lhs_.parse(f, l, left_attr(a)) && rhs_opt_.parse(f, l, rhs_attr)) {
+    if (lhs_(f, l, left_attr(a)) && rhs_opt_(f, l, rhs_attr)) {
       right_attr(a) = std::move(rhs_attr);
       return true;
     }
-    return rhs_.parse(f, l, right_attr(a));
+    return rhs_(f, l, right_attr(a));
   }
 
 private:

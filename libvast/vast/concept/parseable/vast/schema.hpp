@@ -35,7 +35,7 @@ struct schema_parser : parser<schema_parser> {
     auto decl = ("type" >> ws >> id >> ws >> '=' >> ws >> tp) ->* to_type;
     auto declarations = +(ws >> decl);
     std::vector<type> v;
-    if (!declarations.parse(f, l, v))
+    if (!declarations(f, l, v))
       return false;
     sch.clear();
     for (auto& t : v)

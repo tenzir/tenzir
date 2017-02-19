@@ -70,20 +70,20 @@ private:
   template <typename Left, typename Iterator, typename Attribute>
   auto parse_left(Iterator& f, Iterator const& l, Attribute& a) const
   -> std::enable_if_t<is_choice_parser<Left>{}, bool> {
-    return lhs_.parse(f, l, a); // recurse
+    return lhs_(f, l, a); // recurse
   }
 
   template <typename Left, typename Iterator>
   auto parse_left(Iterator& f, Iterator const& l, unused_type) const
   -> std::enable_if_t<!is_choice_parser<Left>::value, bool> {
-    return lhs_.parse(f, l, unused);
+    return lhs_(f, l, unused);
   }
 
   template <typename Left, typename Iterator, typename Attribute>
   auto parse_left(Iterator& f, Iterator const& l, Attribute& a) const
   -> std::enable_if_t<!is_choice_parser<Left>::value, bool> {
     lhs_attribute al;
-    if (!lhs_.parse(f, l, al))
+    if (!lhs_(f, l, al))
       return false;
     a = std::move(al);
     return true;
@@ -91,13 +91,13 @@ private:
 
   template <typename Iterator>
   bool parse_right(Iterator& f, Iterator const& l, unused_type) const {
-    return rhs_.parse(f, l, unused);
+    return rhs_(f, l, unused);
   }
 
   template <typename Iterator, typename Attribute>
   auto parse_right(Iterator& f, Iterator const& l, Attribute& a) const {
     rhs_attribute ar;
-    if (!rhs_.parse(f, l, ar))
+    if (!rhs_(f, l, ar))
       return false;
     a = std::move(ar);
     return true;

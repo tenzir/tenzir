@@ -35,7 +35,7 @@ struct bgpdump_parser : parser<bgpdump_parser> {
     vast::address source_ip;
     count source_as;
     auto tuple = std::tie(ts, update, source_ip, source_as);
-    if (!head.parse(f, l, tuple))
+    if (!head(f, l, tuple))
       return false;
     vector v;
     v.emplace_back(ts);
@@ -60,7 +60,7 @@ struct bgpdump_parser : parser<bgpdump_parser> {
       optional<std::string> aggregator;
       auto t = std::tie(sn, as_path, origin_as, origin, nexthop, local_pref,
                         med, community, atomic_aggregate, aggregator);
-      if (!tail.parse(f, l, t))
+      if (!tail(f, l, t))
         return {};
       v.emplace_back(std::move(sn));
       v.emplace_back(vector(std::move(as_path)));
@@ -76,7 +76,7 @@ struct bgpdump_parser : parser<bgpdump_parser> {
       e.timestamp(ts);
     } else if (update == "W") {
       subnet sn;
-      if (!net.parse(f, l, sn))
+      if (!net(f, l, sn))
         return {};
       v.emplace_back(sn);
       e = event{{std::move(v), withdraw_type}};
@@ -86,7 +86,7 @@ struct bgpdump_parser : parser<bgpdump_parser> {
       optional<std::string> old_state;
       optional<std::string> new_state;
       auto t = std::tie(old_state, new_state);
-      if (!tail.parse(f, l, t))
+      if (!tail(f, l, t))
         return false;
       v.emplace_back(std::move(old_state));
       v.emplace_back(std::move(new_state));

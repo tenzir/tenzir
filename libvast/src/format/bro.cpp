@@ -313,7 +313,7 @@ expected<event> reader::read() {
       r->emplace_back(construct(e.trace.back()->type));
     } else {
       data d;
-      if (!parsers_[f].parse(s[f].first, s[f].second, d))
+      if (!parsers_[f](s[f].first, s[f].second, d))
         return make_error(ec::parse_error,
                           "field", f, "line", lines_->line_number(),
                           std::string(s[f].first, s[f].second));

@@ -113,42 +113,42 @@ private:
 
   template <typename Iterator, typename... Ts>
   bool parse_left(Iterator& f, Iterator const& l, std::tuple<Ts...>& t) const {
-    return lhs_.parse(f, l, get_helper<lhs_type>(t));
+    return lhs_(f, l, get_helper<lhs_type>(t));
   }
 
   template <typename Iterator, typename... Ts>
   bool parse_right(Iterator& f, Iterator const& l, std::tuple<Ts...>& t) const {
-    return rhs_.parse(f, l, std::get<depth()>(t));
+    return rhs_(f, l, std::get<depth()>(t));
   }
 
   template <typename Iterator>
   bool parse_left(Iterator& f, Iterator const& l, unused_type) const {
-    return lhs_.parse(f, l, unused);
+    return lhs_(f, l, unused);
   }
 
   template <typename Iterator>
   bool parse_right(Iterator& f, Iterator const& l, unused_type) const {
-    return rhs_.parse(f, l, unused);
+    return rhs_(f, l, unused);
   }
 
   template <typename Iterator, typename T, typename U>
   bool parse_left(Iterator& f, Iterator const& l, std::pair<T, U>& p) const {
-    return lhs_.parse(f, l, p.first);
+    return lhs_(f, l, p.first);
   }
 
   template <typename Iterator, typename T, typename U>
   bool parse_right(Iterator& f, Iterator const& l, std::pair<T, U>& p) const {
-    return rhs_.parse(f, l, p.second);
+    return rhs_(f, l, p.second);
   }
 
   template <typename Iterator, typename Attribute>
   bool parse_left(Iterator& f, Iterator const& l, Attribute& a) const {
-    return lhs_.parse(f, l, a);
+    return lhs_(f, l, a);
   }
 
   template <typename Iterator, typename Attribute>
   bool parse_right(Iterator& f, Iterator const& l, Attribute& a) const {
-    return rhs_.parse(f, l, a);
+    return rhs_(f, l, a);
   }
 
   Lhs lhs_;

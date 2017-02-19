@@ -26,7 +26,7 @@ struct base_parser : parser<base_parser> {
     auto regular = '['_p >> (num % delim) >> ']';
     auto p = uniform ->* to_uniform_base
            | regular ->* to_base;
-    return p.parse(f, l, a);
+    return p(f, l, a);
   }
 };
 

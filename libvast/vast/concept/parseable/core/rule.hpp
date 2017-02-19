@@ -25,11 +25,11 @@ public:
   }
 
   bool parse(Iterator& f, Iterator const& l, unused_type) const override {
-    return parser_.parse(f, l, unused);
+    return parser_(f, l, unused);
   }
 
   bool parse(Iterator& f, Iterator const& l, Attribute& a) const override {
-    return parser_.parse(f, l, a);
+    return parser_(f, l, a);
   }
 
 private:

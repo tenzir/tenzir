@@ -45,7 +45,7 @@ TEST(subnet) {
   auto f = str.begin();
   auto l = str.end();
   subnet s;
-  CHECK(p.parse(f, l, s));
+  CHECK(p(f, l, s));
   CHECK(f == l);
   CHECK(s == subnet{*to<address>("192.168.0.0"), 24});
   CHECK(s.network().is_v4());
@@ -53,7 +53,7 @@ TEST(subnet) {
   str = "beef::cafe/40";
   f = str.begin();
   l = str.end();
-  CHECK(p.parse(f, l, s));
+  CHECK(p(f, l, s));
   CHECK(f == l);
   CHECK(s == subnet{*to<address>("beef::cafe"), 40});
   CHECK(s.network().is_v6());

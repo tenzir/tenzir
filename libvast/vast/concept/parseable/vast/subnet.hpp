@@ -23,7 +23,7 @@ struct access::parser<subnet> : vast::parser<access::parser<subnet>> {
   template <typename Iterator>
   bool parse(Iterator& f, Iterator const& l, unused_type) const {
     static auto p = make();
-    return p.parse(f, l, unused);
+    return p(f, l, unused);
   }
 
   template <typename Iterator>

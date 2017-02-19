@@ -16,7 +16,7 @@ struct offset_parser : parser<offset_parser> {
   template <typename Iterator, typename Attribute>
   bool parse(Iterator& f, Iterator const& l, Attribute& a) const {
     static auto p = parsers::u32 % ',';
-    return p.parse(f, l, a);
+    return p(f, l, a);
   }
 };
 

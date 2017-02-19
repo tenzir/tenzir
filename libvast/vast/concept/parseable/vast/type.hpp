@@ -33,7 +33,7 @@ public:
 
   template <typename Iterator, typename Attribute>
   bool parse(Iterator& f, Iterator const& l, Attribute& a) const {
-    return symbols_.parse(f, l, a);
+    return symbols_(f, l, a);
   }
 
 private:
@@ -171,7 +171,7 @@ struct type_parser : parser<type_parser> {
         | table_type_parser
         | record_type_parser
         ;
-    return type_type.parse(f, l, a);
+    return type_type(f, l, a);
   }
 
   type_table const* symbol_type;

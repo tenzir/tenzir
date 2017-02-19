@@ -24,7 +24,7 @@ struct key_parser : parser<key_parser> {
       return false;
     using namespace parsers;
     static auto p = +(alnum | chr{'_'} | chr{':'}) % '.';
-    return p.parse(f, l, a);
+    return p(f, l, a);
   }
 };
 

@@ -12,36 +12,36 @@ namespace detail {
 struct single_char_bool_policy {
   template <typename Iterator>
   static bool parse_true(Iterator& f, Iterator const& l) {
-    return char_parser{'T'}.parse(f, l, unused);
+    return char_parser{'T'}(f, l, unused);
   }
 
   template <typename Iterator>
   static bool parse_false(Iterator& f, Iterator const& l) {
-    return char_parser{'F'}.parse(f, l, unused);
+    return char_parser{'F'}(f, l, unused);
   }
 };
 
 struct zero_one_bool_policy {
   template <typename Iterator>
   static bool parse_true(Iterator& f, Iterator const& l) {
-    return char_parser{'1'}.parse(f, l, unused);
+    return char_parser{'1'}(f, l, unused);
   }
 
   template <typename Iterator>
   static bool parse_false(Iterator& f, Iterator const& l) {
-    return char_parser{'0'}.parse(f, l, unused);
+    return char_parser{'0'}(f, l, unused);
   }
 };
 
 struct literal_bool_policy {
   template <typename Iterator>
   static bool parse_true(Iterator& f, Iterator const& l) {
-    return c_string_parser{"true"}.parse(f, l, unused);
+    return c_string_parser{"true"}(f, l, unused);
   }
 
   template <typename Iterator>
   static bool parse_false(Iterator& f, Iterator const& l) {
-    return c_string_parser{"false"}.parse(f, l, unused);
+    return c_string_parser{"false"}(f, l, unused);
   }
 };
 

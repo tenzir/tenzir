@@ -46,14 +46,14 @@ struct access::parser<data> : vast::parser<access::parser<data>> {
   template <typename Iterator>
   bool parse(Iterator& f, Iterator const& l, unused_type) const {
     static auto p = make<Iterator>();
-    return p.parse(f, l, unused);
+    return p(f, l, unused);
   }
 
   template <typename Iterator>
   bool parse(Iterator& f, Iterator const& l, data& a) const {
     using namespace parsers;
     static auto p = make<Iterator>();
-    return p.parse(f, l, a);
+    return p(f, l, a);
   }
 };
 

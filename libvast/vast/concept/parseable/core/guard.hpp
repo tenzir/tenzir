@@ -20,13 +20,13 @@ public:
 
   template <typename Iterator>
   bool parse(Iterator& f, Iterator const& l, unused_type) const {
-    return parser_.parse(f, l, unused);
+    return parser_(f, l, unused);
   }
 
   template <typename Iterator, typename Attribute>
   bool parse(Iterator& f, Iterator const& l, Attribute& a) const {
     attribute attr;
-    if (!(parser_.parse(f, l, attr) && guard_(attr)))
+    if (!(parser_(f, l, attr) && guard_(attr)))
       return false;
     a = std::move(attr);
     return true;

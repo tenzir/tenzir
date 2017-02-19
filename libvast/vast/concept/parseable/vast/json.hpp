@@ -14,7 +14,8 @@ struct json_parser : parser<json_parser> {
   using attribute = json;
 
   template <typename Iterator>
-  static auto make() {
+  bool parse(Iterator& f, Iterator const& l, json& x) const {
+    using namespace parsers;
     rule<Iterator, json> j;
     auto ws = ignore(*parsers::space);
     auto lbracket = ws >> '[' >> ws;
@@ -36,14 +37,7 @@ struct json_parser : parser<json_parser> {
       | array
       | object
       ;
-    return j;
-  }
-
-  template <typename Iterator>
-  bool parse(Iterator& f, Iterator const& l, json& j) const {
-    using namespace parsers;
-    static auto p = make<Iterator>();
-    return p.parse(f, l, j);
+    return j(f, l, x);
   }
 };
 

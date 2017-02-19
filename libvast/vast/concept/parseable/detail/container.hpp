@@ -52,7 +52,7 @@ struct container {
   template <typename Parser, typename Iterator>
   static bool parse(Parser const& p, Iterator& f, Iterator const& l,
                     unused_type) {
-    return p.parse(f, l, unused);
+    return p(f, l, unused);
   }
 
   template <typename Parser, typename Iterator, typename Attribute>
@@ -60,7 +60,7 @@ struct container {
                     Attribute& a)
     -> std::enable_if_t<!is_pair<typename Attribute::value_type>{}, bool> {
     value_type x;
-    if (!p.parse(f, l, x))
+    if (!p(f, l, x))
       return false;
     push_back(a, std::move(x));
     return true;
@@ -76,7 +76,7 @@ struct container {
         typename Attribute::value_type::second_type
       >;
     pair_type pair;
-    if (!p.parse(f, l, pair))
+    if (!p(f, l, pair))
       return false;
     push_back(a, std::move(pair));
     return true;

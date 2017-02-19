@@ -19,8 +19,8 @@ public:
   template <typename Iterator, typename Attribute>
   bool parse(Iterator& f, Iterator const& l, Attribute& a) const {
     auto save = f;
-    if (!rhs_.parse(f, l, unused))
-      return lhs_.parse(f, l, a); // Invoke LHS only if RHS doesn't fail.
+    if (!rhs_(f, l, unused))
+      return lhs_(f, l, a); // Invoke LHS only if RHS doesn't fail.
     f = save;
     return false;
   }

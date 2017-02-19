@@ -11,14 +11,14 @@ namespace vast {
 template <typename Iterator, typename T, typename... Args>
 auto parse(Iterator& f, Iterator const& l, T& x, Args&&... args)
   -> std::enable_if_t<has_parser<T>::value, bool> {
-  return make_parser<T>{std::forward<Args>(args)...}.parse(f, l, x);
+  return make_parser<T>{std::forward<Args>(args)...}(f, l, x);
 }
 
 template <typename Iterator, typename T, typename... Args>
 auto parse(Iterator& f, Iterator const& l, T& x, Args&&... args)
   -> std::enable_if_t<!has_parser<T>::value && has_access_parser<T>::value,
                       bool> {
-  return access::parser<T>{std::forward<Args>(args)...}.parse(f, l, x);
+  return access::parser<T>{std::forward<Args>(args)...}(f, l, x);
 }
 
 namespace detail {

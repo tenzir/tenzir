@@ -9,7 +9,7 @@
 namespace vast {
 
 template <typename Parser, int Min, int Max = Min>
-class repeat_parser : parser<repeat_parser<Parser, Min, Max>> {
+class repeat_parser : public parser<repeat_parser<Parser, Min, Max>> {
   static_assert(Min <= Max, "minimum must be smaller than maximum");
 
 public:

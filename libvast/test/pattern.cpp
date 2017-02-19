@@ -40,7 +40,7 @@ TEST(parseable) {
   auto f = str.begin();
   auto l = str.end();
   pattern pat;
-  CHECK(p.parse(f, l, pat));
+  CHECK(p(f, l, pat));
   CHECK(f == l);
   CHECK(to_string(pat) == str);
 
@@ -48,7 +48,7 @@ TEST(parseable) {
   pat = {};
   f = str.begin();
   l = str.end();
-  CHECK(p.parse(f, l, pat));
+  CHECK(p(f, l, pat));
   CHECK(f == l);
   CHECK(to_string(pat) == str);
 }

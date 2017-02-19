@@ -60,14 +60,14 @@ struct predicate_parser : parser<predicate_parser> {
   template <typename Iterator>
   bool parse(Iterator& f, Iterator const& l, unused_type) const {
     static auto p = make();
-    return p.parse(f, l, unused);
+    return p(f, l, unused);
   }
 
   template <typename Iterator>
   bool parse(Iterator& f, Iterator const& l, predicate& a) const {
     using namespace parsers;
     static auto p = make();
-    return p.parse(f, l, a);
+    return p(f, l, a);
   }
 };
 
@@ -146,13 +146,13 @@ struct expression_parser : parser<expression_parser> {
   template <typename Iterator>
   bool parse(Iterator& f, Iterator const& l, unused_type) const {
     static auto p = make<Iterator>();
-    return p.parse(f, l, unused);
+    return p(f, l, unused);
   }
 
   template <typename Iterator>
   bool parse(Iterator& f, Iterator const& l, expression& a) const {
     static auto p = make<Iterator>();
-    return p.parse(f, l, a);
+    return p(f, l, a);
   }
 };
 

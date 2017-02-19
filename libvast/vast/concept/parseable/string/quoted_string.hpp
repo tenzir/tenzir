@@ -17,15 +17,11 @@ public:
 
   quoted_string_parser() = default;
 
-  static auto make() {
-    auto escaped_quote = Esc >> char_parser{Quote};
-    return Quote >> +(escaped_quote | (parsers::print - Quote)) >> Quote;
-  }
-
   template <typename Iterator, typename Attribute>
   bool parse(Iterator& f, Iterator const& l, Attribute& a) const {
-    static auto p = make();
-    return p.parse(f, l, a);
+    auto escaped_quote = Esc >> char_parser{Quote};
+    auto p = Quote >> +(escaped_quote | (parsers::print - Quote)) >> Quote;
+    return p(f, l, a);
   }
 };
 

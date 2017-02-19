@@ -18,7 +18,7 @@ public:
 
   template <typename Iterator, typename Attribute>
   bool parse(Iterator& f, Iterator const& l, Attribute&) const {
-    return parser_.parse(f, l, unused);
+    return parser_(f, l, unused);
   }
 
 private:

@@ -18,7 +18,7 @@ template <
 auto from_string(Iterator begin, Iterator end, Args&&... args)
   -> std::enable_if_t<is_parseable<Iterator, To>::value, optional<To>> {
   optional<To> t{To{}};
-  if (Parser{std::forward<Args>(args)...}.parse(begin, end, *t))
+  if (Parser{std::forward<Args>(args)...}(begin, end, *t))
     return t;
   return {};
 }

@@ -24,7 +24,7 @@ public:
     if (!container::parse(lhs_, f, l, a))
       return false;
     auto save = f;
-    while (rhs_.parse(f, l, unused) && container::parse(lhs_, f, l, a))
+    while (rhs_(f, l, unused) && container::parse(lhs_, f, l, a))
       save = f;
     f = save;
     return true;

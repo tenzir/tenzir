@@ -31,10 +31,10 @@ struct duration_parser : parser<duration_parser<Rep, Period>> {
     using namespace parsers;
     auto save = f;
     Rep i;
-    if (!make_parser<Rep>{}.parse(f, l, i))
+    if (!make_parser<Rep>{}(f, l, i))
       return false;
     static auto whitespace = *space;
-    if (!whitespace.parse(f, l, unused)) {
+    if (!whitespace(f, l, unused)) {
       f = save;
       return false;
     }
@@ -69,7 +69,7 @@ struct duration_parser : parser<duration_parser<Rep, Period>> {
       | "year"_p  ->* [] { return cast(hours(24 * 365)); }
       | "y"_p     ->* [] { return cast(hours(24 * 365)); }
       ;
-    if (!unit.parse(f, l, a)) {
+    if (!unit(f, l, a)) {
       f = save;
       return false;
     }
@@ -117,7 +117,7 @@ struct ymdhms_parser : vast::parser<ymdhms_parser> {
   template <typename Iterator>
   bool parse(Iterator& f, Iterator const& l, unused_type) const {
     static auto p = make();
-    return p.parse(f, l, unused);
+    return p(f, l, unused);
   }
 
   template <typename Iterator>
@@ -180,7 +180,7 @@ struct timestamp_parser : parser<timestamp_parser> {
       | "in" >> ws >> parsers::timespan ->* plus
       | (parsers::timespan ->* minus) >> ws >> "ago"
       ;
-    return p.parse(f, l, a);
+    return p(f, l, a);
   }
 };
 

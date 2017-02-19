@@ -29,7 +29,7 @@ public:
   auto parse(Iterator& f, Iterator const& l, Attribute&) const
   -> std::enable_if_t<detail::action_traits<A>::no_args_returns_void, bool> {
     inner_attribute x;
-    if (!parser_.parse(f, l, x))
+    if (!parser_(f, l, x))
       return false;
     action_();
     return true;
@@ -40,7 +40,7 @@ public:
   auto parse(Iterator& f, Iterator const& l, Attribute&) const
   -> std::enable_if_t<detail::action_traits<A>::one_arg_returns_void, bool> {
     action_arg_type x;
-    if (!parser_.parse(f, l, x))
+    if (!parser_(f, l, x))
       return false;
     action_(std::move(x));
     return true;
@@ -53,7 +53,7 @@ public:
     detail::action_traits<A>::no_args_returns_non_void, bool
   > {
     inner_attribute x;
-    if (!parser_.parse(f, l, x))
+    if (!parser_(f, l, x))
       return false;
     a = action_();
     return true;
@@ -66,7 +66,7 @@ public:
     detail::action_traits<A>::one_arg_returns_non_void, bool
   > {
     action_arg_type x;
-    if (!parser_.parse(f, l, x))
+    if (!parser_(f, l, x))
       return false;
     a = action_(std::move(x));
     return true;

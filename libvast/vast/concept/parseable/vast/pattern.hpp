@@ -16,14 +16,12 @@ struct access::parser<pattern> : vast::parser<access::parser<pattern>> {
 
   template <typename Iterator>
   bool parse(Iterator& f, Iterator const& l, unused_type) const {
-    static auto const p = pattern_parser{};
-    return p.parse(f, l, unused);
+    return pattern_parser{}(f, l, unused);
   }
 
   template <typename Iterator>
   bool parse(Iterator& f, Iterator const& l, pattern& a) const {
-    static auto const p = pattern_parser{};
-    return p.parse(f, l, a.str_);
+    return pattern_parser{}(f, l, a.str_);
   }
 };
 

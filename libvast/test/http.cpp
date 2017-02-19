@@ -45,7 +45,7 @@ TEST(HTTP header) {
   auto f = str.begin();
   auto l = str.end();
   http::header hdr;
-  CHECK(p.parse(f, l, hdr));
+  CHECK(p(f, l, hdr));
   CHECK(hdr.name == "FOO");
   CHECK(hdr.value == "bar");
   CHECK(f == l);
@@ -53,7 +53,7 @@ TEST(HTTP header) {
   str = "Content-Type:application/pdf";
   f = str.begin();
   l = str.end();
-  CHECK(p.parse(f, l, hdr));
+  CHECK(p(f, l, hdr));
   CHECK(hdr.name == "CONTENT-TYPE");
   CHECK(hdr.value == "application/pdf");
   CHECK(f == l);
@@ -69,7 +69,7 @@ TEST(HTTP request) {
   auto f = str.begin();
   auto l = str.end();
   http::request req;
-  CHECK(p.parse(f, l, req));
+  CHECK(p(f, l, req));
   CHECK(req.method == "GET");
   CHECK(req.uri.path[0] == "foo");
   CHECK(req.uri.path[1] == "bar baz");
@@ -92,7 +92,7 @@ TEST(URI with HTTP URL) {
   auto f = str.begin();
   auto l = str.end();
   uri u;
-  CHECK(p.parse(f, l, u));
+  CHECK(p(f, l, u));
   CHECK(u.scheme == "http");
   CHECK(u.host == "foo.bar");
   CHECK(u.port == 80);
@@ -110,7 +110,7 @@ TEST(URI with path only) {
   auto f = str.begin();
   auto l = str.end();
   uri u;
-  CHECK(p.parse(f, l, u));
+  CHECK(p(f, l, u));
   CHECK(u.scheme == "");
   CHECK(u.host == "");
   CHECK(u.port == 0);
