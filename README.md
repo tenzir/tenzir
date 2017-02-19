@@ -1,15 +1,11 @@
 # VAST
 
-[![Gitter][gitter-badge]](https://gitter.im/vast-io/vast)
 [![Build Status][jenkins-badge]][jenkins-url]
+[![Chat][chat-badge]][chat-url]
+[![License][license-badge]][license-url]
 
 **Visibility Across Space and Time (VAST)** is a unified platform for network
 forensics and incident response.
-
-## !! Attention !!
-
-VAST currently undergoes a substantial rewrite and will not work until the
-heavy lifting has completed. Please stay tuned.
 
 ## Synopsis
 
@@ -40,7 +36,7 @@ Send [Bro](http://www.bro.org) logs to the remote node:
 
 ### Contact
 
-- Chat: [Gitter](http://chat.vast.io)
+- Chat: [Gitter][chat-url]
 - Twitter: [@vast_io](https://twitter.com/vast_io)
 - Mailing lists:
     - [vast@icir.org][mailing-list]: general help and discussion
@@ -118,14 +114,16 @@ proceedings][nsdi-proceedings].
 
 ## License
 
-VAST comes with a [3-clause BSD
-licence](https://raw.github.com/vast-io/vast/master/COPYING).
+VAST comes with a [3-clause BSD licence][license-url].
 
 [mailing-list]: http://mailman.icsi.berkeley.edu/mailman/listinfo/vast
 [mailing-list-commits]: http://mailman.icsi.berkeley.edu/mailman/listinfo/vast-commits
-[gitter-badge]: https://img.shields.io/badge/gitter-join%20chat%20%E2%86%92-green.svg
+[chat-badge]: https://img.shields.io/badge/gitter-chat-brightgreen.svg
+[chat-url]: https://gitter.im/vast-io/vast
 [jenkins-url]: https://jenkins.inet.haw-hamburg.de/view/VAST%20Build%20Status/
 [jenkins-badge]: https://jenkins.inet.haw-hamburg.de/buildStatus/icon?job=VAST/master%20branch
+[license-badge]: https://img.shields.io/badge/License-BSD-blue.svg
+[license-url]: https://raw.github.com/vast-io/vast/master/COPYING
 
 [caf-obs]: https://build.opensuse.org/package/show/devel:libraries:caf/caf
 [vast-paper]: https://www.usenix.org/system/files/conference/nsdi16/nsdi16-paper-vallentin.pdf
