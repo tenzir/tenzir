@@ -131,7 +131,14 @@ if (ENABLE_ADDRESS_SANITIZER)
 endif ()
 
 if (ENABLE_GCOV)
+  # For compile flags, GCC and Clang share the same options.
   set(EXTRA_FLAGS "${EXTRA_FLAGS} -fprofile-arcs -ftest-coverage")
+  # For link flags, GCC wants -lgcov and Clang --coverage.
+  if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
+    set(LDFLAGS ${LDFLAGS} -lgcov)
+  elseif ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
+    set(LDFLAGS ${LDFLAGS} --coverage)
+  endif()
 endif ()
 
 if (SHOW_TIME_REPORT)
@@ -142,6 +149,12 @@ endif ()
 if (NOT CMAKE_CXX_FLAGS)
   set(CMAKE_CXX_FLAGS ${EXTRA_FLAGS})
 endif ()
+
+if (LDFLAGS)
+  set(CMAKE_EXE_LINKER_FLAGS ${LDFLAGS})
+  set(CMAKE_SHARED_LINKER_FLAGS ${LDFLAGS})
+  set(CMAKE_STATIC_LINKER_FLAGS ${LDFLAGS})
+endif()
 
 # Pick up 3rd-party packages and ports.
 if (${CMAKE_SYSTEM_NAME} MATCHES "FreeBSD")
@@ -348,6 +361,7 @@ set(summary
     "\nCC:               ${CMAKE_C_COMPILER}"
     "\nCXX:              ${CMAKE_CXX_COMPILER}"
     "\nCXXFLAGS:         ${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_${build_type}}"
+    "\nLDFLAGS:          ${LDFLAGS}"
     "\n"
     "\nCAF:              ${caf_summary}"
     "\nSnappy            ${snappy_summary}"
