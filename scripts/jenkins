@@ -8,17 +8,32 @@ set -e # Abort on error.
 usage() {
   printf "usage: %s [caf]\n" $(basename $0)
   echo
+  echo 'options:'
+  echo '    -g        build with gcov support and generate coverage data'
+  echo
   echo 'arguments:'
   echo '    caf       path to CAF build directory (build manually if not given)'
   echo
   echo 'environment variables:'
   echo '    BUILD     build type [Relase|Debug|ASAN]'
   echo '    COMPILER  compiler type [clang|gcc]'
-  echo '    PLATFORM  Jenkins label expression of executing node'
   echo
 }
 
+while getopts "gh?" opt; do
+  case "$opt" in
+    g)
+      gcov=1
+      ;;
+    h|\?)
+      usage
+      exit 0
+    ;;
+  esac
+done
+
 # Command line handling.
+shift $(expr $OPTIND - 1)
 caf="$1"
 
 # Configure build environment.
@@ -75,8 +90,11 @@ if [ ! -d "$caf" ]; then
   exit 1
 fi
 
-# Setup configure script arguments according to build matrix.
+# Setup configure script arguments according to options and build matrix.
 configure="./configure --with-caf='$caf'"
+if [ -n "$gcov" ]; then
+  configure="$configure --build-type=Debug --enable-assertions --enable-gcov"
+fi
 if [ "$BUILD" = "Release" ]; then
   configure="$configure --build-type=Release"
 elif [ "$BUILD" = "Debug" ]; then
@@ -92,4 +110,8 @@ cd build
 make
 
 # Run unit tests.
-vast-test -v 3 -n -r 600
+if [ -n "$gcov" ]; then
+  make coverage
+else
+  vast-test -v 3 -n -r 600
+fi

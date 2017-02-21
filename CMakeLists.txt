@@ -52,7 +52,7 @@ set(EXTRA_FLAGS "${EXTRA_FLAGS} -march=native -mpopcnt")
 # Requirement checks
 try_run(program_result
         compilation_succeeded
-        "${CMAKE_BINARY_DIR}"
+        "${CMAKE_CURRENT_BINARY_DIR}"
         "${CMAKE_CURRENT_SOURCE_DIR}/cmake/get_compiler_version.cpp"
         RUN_OUTPUT_VARIABLE compiler_version)
 if (NOT compilation_succeeded OR NOT program_result EQUAL 0)
@@ -127,9 +127,75 @@ if (ENABLE_ADDRESS_SANITIZER)
   else()
     message(STATUS "Enabling Address Sanitizer")
     set(EXTRA_FLAGS "${EXTRA_FLAGS} -fsanitize=address -fno-omit-frame-pointer")
-    set(ASAN_FOUND true)
   endif()
-endif(ENABLE_ADDRESS_SANITIZER)
+endif ()
+
+if (ENABLE_GCOV)
+  # Locate gcov and gcovr.
+  find_package(GCOV)
+  if (NOT GCOV_FOUND)
+    message(FATAL_ERROR "Could not find gcov")
+  endif ()
+  find_package(GCOV)
+  if (NOT GCOV_FOUND)
+    message(FATAL_ERROR "Could not find gcovr")
+  endif ()
+  # For compile flags, GCC and Clang share the same options.
+  set(EXTRA_FLAGS "${EXTRA_FLAGS} -fprofile-arcs -ftest-coverage")
+  set(EXTRA_FLAGS "${EXTRA_FLAGS} -fno-omit-frame-pointer")
+  # For link flags, GCC wants -lgcov and Clang --coverage.
+  if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
+    set(LDFLAGS ${LDFLAGS} -lgcov)
+  elseif ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
+    set(LDFLAGS ${LDFLAGS} --coverage)
+  endif()
+  # Create a CMake script that removes all *.gcda files. We'll call this below
+  # in the custom target.
+  file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/remove_gcda.cmake
+    "file(GLOB_RECURSE GCDA_FILES \"${CMAKE_CURRENT_BINARY_DIR}/*.gcda\")\n"
+    "if(NOT GCDA_FILES STREQUAL \"\")\n"
+    "  file(REMOVE \${GCDA_FILES})\n"
+    "endif()")
+  file(GLOB_RECURSE GCOV_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/libvast/*")
+  set(GCOV_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/coverage")
+  # Add new target that invokes the unit test suite followed by gcov.
+  add_custom_target(gcov
+    # Reset coverage counters.
+    COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_BINARY_DIR}/remove_gcda.cmake
+    # Run unit tests.
+    COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
+    # Invoke gcov.
+    COMMAND ${CMAKE_COMMAND}
+      -DGCOV_SOURCES="${GCOV_SOURCES}"
+      -DGCOV_OUTPUT_DIR="${GCOV_OUTPUT_DIR}"
+      -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/GenerateGcov.cmake
+    COMMENT "Generating gcov output")
+  # Add gcovr targets to generate various output files.
+  add_custom_target(gcovr-txt
+    COMMAND gcovr -k -g -r .. -e libvast/test
+              --object-directory=${GCOV_OUTPUT_DIR}
+              -o coverage.txt
+    COMMENT "Creating gcov text summary")
+  add_custom_target(gcovr-xml
+    COMMAND gcovr -k -g -r .. -e libvast/test
+              --object-directory=${GCOV_OUTPUT_DIR}
+              -x -o coverage.xml
+    COMMENT "Creating gcov XML summary")
+  add_custom_target(gcovr-html
+    COMMAND gcovr -k -g -r .. -e libvast/test
+              --object-directory=${GCOV_OUTPUT_DIR}
+              --html --html-details -o coverage.html
+    COMMENT "Creating gcov HTML summary")
+  # Target that runs gcov and generates all summaries.
+  add_custom_target(coverage)
+  add_dependencies(coverage gcov)
+  add_dependencies(gcovr-txt gcov)
+  add_dependencies(gcovr-xml gcov)
+  add_dependencies(gcovr-html gcov)
+  add_dependencies(coverage gcovr-txt)
+  add_dependencies(coverage gcovr-xml)
+  add_dependencies(coverage gcovr-html)
+endif ()
 
 if (SHOW_TIME_REPORT)
   set(EXTRA_FLAGS "${EXTRA_FLAGS} -ftime-report")
@@ -139,6 +205,12 @@ endif ()
 if (NOT CMAKE_CXX_FLAGS)
   set(CMAKE_CXX_FLAGS ${EXTRA_FLAGS})
 endif ()
+
+if (LDFLAGS)
+  set(CMAKE_EXE_LINKER_FLAGS ${LDFLAGS})
+  set(CMAKE_SHARED_LINKER_FLAGS ${LDFLAGS})
+  set(CMAKE_STATIC_LINKER_FLAGS ${LDFLAGS})
+endif()
 
 # Pick up 3rd-party packages and ports.
 if (${CMAKE_SYSTEM_NAME} MATCHES "FreeBSD")
@@ -289,7 +361,9 @@ endmacro()
 
 display(SHOW_TIME_REPORT yes time_report_summary)
 display(VAST_ENABLE_ASSERTIONS yes assertions_summary)
+display(ENABLE_ADDRESS_SANITIZER yes asan_summary)
 display(ASAN_FOUND yes asan_summary)
+display(ENABLE_GCOV yes gcov_summary)
 
 if (VAST_LOG_LEVEL EQUAL -1)
   set(log_level_summary quiet)
@@ -338,10 +412,12 @@ set(summary
     "\nShow time report: ${time_report_summary}"
     "\nAssertions:       ${assertions_summary}"
     "\nAddressSanitizer: ${asan_summary}"
+    "\ngcov:             ${gcov_summary}"
     "\n"
     "\nCC:               ${CMAKE_C_COMPILER}"
     "\nCXX:              ${CMAKE_CXX_COMPILER}"
     "\nCXXFLAGS:         ${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_${build_type}}"
+    "\nLDFLAGS:          ${LDFLAGS}"
     "\n"
     "\nCAF:              ${caf_summary}"
     "\nSnappy            ${snappy_summary}"
