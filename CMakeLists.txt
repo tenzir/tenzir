@@ -24,7 +24,7 @@ endif ()
 
 # Keep make output sane
 set(CMAKE_VERBOSE_MAKEFILE false
-  CACHE STRING "Show all outputs including compiler lines." FORCE)
+    CACHE STRING "Show all outputs including compiler lines." FORCE)
 
 # Extract VERSION
 file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" VAST_VERSION LIMIT_COUNT 1)
@@ -39,15 +39,21 @@ set(VERSION_MAJ_MIN "${VERSION_MAJOR}.${VERSION_MINOR}")
 #------------------------------------------------------------------------------
 
 if (NOT CMAKE_CXX_FLAGS)
-  set(EXTRA_FLAGS "-Wall -Wextra -pedantic -std=c++14")
+  # Our default flags.
+  set(EXTRA_FLAGS "-std=c++14 -Wall -Wextra -pedantic")
+  set(PERFORMANCE_FLAGS "-march=native -mpopcnt")
+  # Increase maximum number of template instantiations, for all that
+  # template-heavy code.
+  set(EXTRA_FLAGS "${EXTRA_FLAGS} -ftemplate-depth=512")
+  # Reduce the number of template instantiations shown in backtrace to keep the
+  # already insane error messages readable.
+  set(EXTRA_FLAGS "${EXTRA_FLAGS} -ftemplate-backtrace-limit=3")
+  # Build-type specific flags.
   set(CMAKE_CXX_FLAGS_DEBUG          "-O0 -g")
   set(CMAKE_CXX_FLAGS_MINSIZEREL     "-Os")
-  set(CMAKE_CXX_FLAGS_RELEASE        "-O3")
+  set(CMAKE_CXX_FLAGS_RELEASE        "-O3 ${PERFORMANCE_FLAGS}")
   set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O2 -g")
 endif()
-
-# Performance.
-set(EXTRA_FLAGS "${EXTRA_FLAGS} -march=native -mpopcnt")
 
 # Requirement checks
 try_run(program_result
@@ -77,8 +83,8 @@ elseif ("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
   if (VAST_USE_TCMALLOC)
     # GCC makes some optimizations assuming it is using its own, built-in
     # malloc; that assumption obviously isn't true with tcmalloc.
-    set (EXTRA_FLAGS "${EXTRA_FLAGS} -fno-builtin-malloc -fno-builtin-calloc")
-    set (EXTRA_FLAGS "${EXTRA_FLAGS} -fno-builtin-realloc -fno-builtin-free")
+    set(EXTRA_FLAGS "${EXTRA_FLAGS} -fno-builtin-malloc -fno-builtin-calloc")
+    set(EXTRA_FLAGS "${EXTRA_FLAGS} -fno-builtin-realloc -fno-builtin-free")
   endif ()
 elseif ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
   if (compiler_version VERSION_GREATER 3.5
@@ -107,12 +113,6 @@ elseif ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
 else ()
   message(FATAL_ERROR "Unsupported compiler: ${CMAKE_CXX_COMPILER_ID}")
 endif ()
-
-# Increase maximum number of instantiations.
-set(EXTRA_FLAGS "${EXTRA_FLAGS} -ftemplate-depth=512")
-
-# Reduce the number of template instantiations shown in backtrace.
-set(EXTRA_FLAGS "${EXTRA_FLAGS} -ftemplate-backtrace-limit=3")
 
 if (ENABLE_ADDRESS_SANITIZER)
   set(CXXFLAGS_BACKUP "${CMAKE_CXX_FLAGS}")
@@ -398,6 +398,7 @@ display(MD2MAN_FOUND yes md2man_summary)
 display(VAST_USE_TCMALLOC yes tcmalloc_summary)
 display(VAST_USE_OPENCL "${OpenCL_LIBRARIES}" opencl_summary)
 
+STRING(TOUPPER "${CMAKE_BUILD_TYPE}" build_type)
 set(summary
     "====================|  Build Summary  |===================="
     "\n"
