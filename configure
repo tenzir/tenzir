@@ -38,7 +38,6 @@ Usage: $0 [OPTION]... [VAR=VALUE]...
 
   Optional features:
     --enable-tcmalloc       link against tcmalloc (requires gperftools)
-    --enable-opencl         use GPU acceleration via OpenCL
 
   Required packages in non-standard locations:
     --with-caf=PATH         path to CAF install root or build directory
@@ -142,9 +141,6 @@ while [ $# -ne 0 ]; do
       ;;
     --enable-tcmalloc)
       append_cache_entry VAST_USE_TCMALLOC BOOL true
-      ;;
-    --enable-opencl)
-      append_cache_entry VAST_USE_OPENCL BOOL true
       ;;
     --with-caf=*)
       append_cache_entry CAF_ROOT_DIR PATH "$optarg"
