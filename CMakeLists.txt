@@ -52,7 +52,7 @@ if (NOT CMAKE_CXX_FLAGS)
   set(CMAKE_CXX_FLAGS_DEBUG          "-O0 -g")
   set(CMAKE_CXX_FLAGS_MINSIZEREL     "-Os")
   set(CMAKE_CXX_FLAGS_RELEASE        "-O3 ${PERFORMANCE_FLAGS}")
-  set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O2 -g")
+  set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O2 -g -fno-omit-frame-pointer")
 endif()
 
 # Requirement checks
