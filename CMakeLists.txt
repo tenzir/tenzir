@@ -249,6 +249,7 @@ include_directories(${CAF_INCLUDE_DIRS})
 find_package(CAF COMPONENTS opencl QUIET)
 if (CAF_LIBRARY_OPENCL)
   message(STATUS "Found CAF's OpenCL module, enabling OpenCL support")
+  include_directories(${CAF_INCLUDE_DIR_OPENCL})
   find_package(OpenCL)
   if (NOT OpenCL_FOUND)
     message(FATAL_ERROR
