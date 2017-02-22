@@ -21,6 +21,7 @@
 
 #include "vast/system/configuration.hpp"
 #include "vast/system/replicated_store.hpp"
+#include "vast/system/query_statistics.hpp"
 #include "vast/system/tracker.hpp"
 
 using namespace caf;
@@ -46,6 +47,7 @@ configuration::configuration() {
   // Actor-specific messages
   add_message_type<registry>("vast::system::registry");
   add_message_type<registry_entry>("vast::system::registry_entry");
+  add_message_type<query_statistics>("vast::system::query_statistics");
   add_message_type<actor_identity>("vast::system::actor_identity");
   // Register VAST's custom error type.
   auto vast_renderer = [](uint8_t x, atom_value, const message& msg) {
