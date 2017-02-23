@@ -47,6 +47,7 @@ expected<actor> spawn_archive(local_actor* self, options& opts) {
   opts.params = r.remainder;
   if (!r.error.empty())
     return make_error(ec::syntax_error, r.error);
+  mss <<= 20; // MB'ify.
   auto a = self->spawn(archive, opts.dir / opts.label, segments, mss);
   return actor_cast<actor>(a);
 }
