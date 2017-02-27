@@ -115,11 +115,13 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
       }
       VAST_DEBUG(self, "got", rank(hits), "index hits in ["
                  << select(hits, 1) << ',' << (select(hits, -1) + 1) << ')');
-      self->state.hits |= hits;
-      self->state.unprocessed |= hits;
-      VAST_DEBUG(self, "forwards hits to archive");
-      // FIXME: restrict according to configured limit.
-      self->send(self->state.archive, std::move(hits));
+      if (count > 0) {
+        self->state.hits |= hits;
+        self->state.unprocessed |= hits;
+        VAST_DEBUG(self, "forwards hits to archive");
+        // FIXME: restrict according to configured limit.
+        self->send(self->state.archive, std::move(hits));
+      }
       // Figure out if we're done.
       ++self->state.stats.received;
       self->send(self->state.sink, self->state.id, self->state.stats);
