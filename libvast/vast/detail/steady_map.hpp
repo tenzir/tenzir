@@ -1,15 +1,27 @@
 #ifndef VAST_DETAIL_STEADY_MAP_HPP
 #define VAST_DETAIL_STEADY_MAP_HPP
 
-#include <algorithm>
-#include <functional>
-#include <stdexcept>
-#include <vector>
-
-#include "vast/detail/operators.hpp"
+#include "vast/detail/vector_map.hpp"
 
 namespace vast {
 namespace detail {
+
+struct steady_map_policy {
+  template <class Ts, class T>
+  static auto add(Ts& xs, T&& x) {
+    auto i = lookup(xs, x);
+    if (i == xs.end())
+      return std::make_pair(xs.insert(i, std::forward<T>(x)), true);
+    else
+      return std::make_pair(i, false);
+  }
+
+  template <class Ts, class T>
+  static auto lookup(Ts&& xs, const T& x) {
+    auto pred = [&](auto& p) { return p.first == x; };
+    return std::find_if(xs.begin(), xs.end(), pred);
+  }
+};
 
 /// A map abstraction over an unsorted `std::vector`.
 template <
@@ -17,203 +29,9 @@ template <
   class T,
   class Allocator = std::allocator<std::pair<Key, T>>
 >
-class steady_map : totally_ordered<steady_map<Key, T, Allocator>> {
+class steady_map : public vector_map<Key, T, Allocator, steady_map_policy> {
 public:
-  // -- types ----------------------------------------------------------------
-
-  using key_type = Key;
-  using mapped_type = T;
-  using value_type = std::pair<Key, T>;
-  using vector_type = std::vector<value_type, Allocator>;
-  using allocator_type = typename vector_type::allocator_type;
-  using size_type = typename vector_type::size_type;
-  using difference_type = typename vector_type::difference_type;
-  using reference = typename vector_type::reference;
-  using const_reference = typename vector_type::const_reference;
-  using pointer = typename vector_type::pointer;
-  using const_pointer = typename vector_type::const_pointer;
-  using iterator = typename vector_type::iterator;
-  using const_iterator = typename vector_type::const_iterator;
-  using reverse_iterator = typename vector_type::reverse_iterator;
-  using const_reverse_iterator = typename vector_type::const_reverse_iterator;
-
-  // -- construction ---------------------------------------------------------
-
-  steady_map() = default;
-
-  steady_map(std::initializer_list<value_type> l) {
-    reserve(l.size());
-    for (auto& x : l)
-      insert(x);
-  }
-
-  template <class InputIterator>
-  steady_map(InputIterator first, InputIterator last) {
-    insert(first, last);
-  }
-
-  // -- iterators ------------------------------------------------------------
-
-  iterator begin() {
-    return xs_.begin();
-  }
-
-  const_iterator begin() const {
-    return xs_.begin();
-  }
-
-  iterator end() {
-    return xs_.end();
-  }
-
-  const_iterator end() const {
-    return xs_.end();
-  }
-
-  reverse_iterator rbegin() {
-    return xs_.rbegin();
-  }
-
-  const_reverse_iterator rbegin() const {
-    return xs_.rbegin();
-  }
-
-  reverse_iterator rend() {
-    return xs_.rend();
-  }
-
-  const_reverse_iterator rend() const {
-    return xs_.rend();
-  }
-
-  // -- capacity -------------------------------------------------------------
-
-  bool empty() const {
-    return xs_.empty();
-  }
-
-  size_type size() const {
-    return xs_.size();
-  }
-
-  void reserve(size_type count) {
-    xs_.reserve(count);
-  }
-
-  void shrink_to_fit() {
-    xs_.shrink_to_fit();
-  }
-
-  // -- modifiers ------------------------------------------------------------
-
-  void clear() {
-    return xs_.clear();
-  }
-
-  std::pair<iterator, bool> insert(value_type x) {
-    auto i = find(x.first);
-    if (i == end())
-      return {xs_.insert(i, std::move(x)), true};
-    else
-      return {i, false};
-  };
-
-  std::pair<iterator, bool> insert(iterator, value_type x) {
-    return insert(std::move(x));
-  };
-
-  std::pair<iterator, bool> insert(const_iterator, value_type x) {
-    return insert(std::move(x));
-  };
-
-  template <class InputIterator>
-  void insert(InputIterator first, InputIterator last) {
-    while (first != last)
-      insert(*first++);
-  }
-
-  template <class... Ts>
-  std::pair<iterator, bool> emplace(Ts&&... xs) {
-    return insert(value_type(std::forward<Ts>(xs)...));
-  }
-
-  template <class... Ts>
-  std::pair<iterator, bool> emplace_hint(const_iterator, Ts&&... xs) {
-    return emplace(std::forward<Ts>(xs)...);
-  }
-
-  iterator erase(const_iterator i) {
-    return xs_.erase(i);
-  }
-
-  iterator erase(const_iterator first, const_iterator last) {
-    return xs_.erase(first, last);
-  }
-
-  size_type erase(const key_type& x) {
-    auto pred = [&](auto& p) { return p.first == x; };
-    auto i = std::remove_if(begin(), end(), pred);
-    if (i == end())
-      return 0;
-    erase(i);
-    return 1;
-  }
-
-  void swap(steady_map& other) {
-    xs_.swap(other);
-  }
-
-  // -- lookup ---------------------------------------------------------------
-
-  mapped_type& at(const key_type& key) {
-    auto i = find(key);
-    if (i == end())
-      throw std::out_of_range{"vast::detail::steady_map::at"};
-    return i->second;
-  }
-
-  const mapped_type& at(const key_type& key) const {
-    auto i = find(key);
-    if (i == end())
-      throw std::out_of_range{"vast::detail::steady_map::at"};
-    return i->second;
-  }
-
-  mapped_type& operator[](const key_type& key) {
-    auto i = find(key);
-    if (i != end())
-      return i->second;
-    return xs_.insert(i, value_type{key, mapped_type{}})->second;
-  }
-
-  iterator find(const key_type& x) {
-    return std::find_if(begin(), end(), [&](auto& p) { return p.first == x; });
-  }
-
-  const_iterator find(const key_type& x) const {
-    return std::find_if(begin(), end(), [&](auto& p) { return p.first == x; });
-  }
-
-  size_type count(const key_type& x) const {
-    return find(x) == end() ? 0 : 1;
-  }
-
-  // -- operators ------------------------------------------------------------
-
-  friend bool operator<(const steady_map& x, const steady_map& y) {
-    return x.xs_ < y.xs_;
-  }
-
-  friend bool operator==(const steady_map& x, const steady_map& y) {
-    return x.xs_ == y.xs_;
-  }
-
-  explicit operator const vector_type() const {
-    return xs_;
-  }
-
-private:
-  vector_type xs_;
+  using vector_map<Key, T, Allocator, steady_map_policy>::vector_map;
 };
 
 } // namespace detail
