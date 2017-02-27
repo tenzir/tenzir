@@ -4,8 +4,8 @@
 [![Chat][chat-badge]][chat-url]
 [![License][license-badge]][license-url]
 
-**Visibility Across Space and Time (VAST)** is a unified platform for network
-forensics and incident response.
+**Visibility Across Space and Time (VAST)** is a platform for network forensics
+at scale.
 
 ## Synopsis
 
@@ -74,17 +74,17 @@ Optional:
 FreeBSD ships with a C++14 compiler.
 One can install as the dependencies as follows:
 
-    pkg install cmake google-perftools
+    pkg install cmake
 
-Even though FreeBSD provides a CAF port, VAST depends the develop branch and
-therefore requires a manual CAF installation.
+Even though FreeBSD provides a CAF port, VAST currently depends the CAF develop
+branch and therefore requires manual installation.
 
 #### Linux
 
-On recent Debian-based distributions (e.g., Ubuntu 15.04), getting a working
-toolchain involves installing the following packages:
+On recent Debian-based distributions, getting a working toolchain involves
+installing the following packages:
 
-    apt-get install clang libc++-dev cmake libpcap-dev libgoogle-perftools-dev
+    apt-get install cmake
 
 CAF offers binary packages via [openSUSE's Build Service][caf-obs].
 
@@ -93,7 +93,7 @@ CAF offers binary packages via [openSUSE's Build Service][caf-obs].
 Mac OS also ships with a C++14 compiler out of the box.
 [Homebrew](http://brew.sh) makes it easy to install the dependencies:
 
-    brew install cmake google-perftools
+    brew install cmake
     brew install caf --HEAD
 
 ## Scientific Use
