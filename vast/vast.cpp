@@ -61,10 +61,10 @@ int run_import(scoped_actor& self, actor& node, message args) {
   }
   // Connect source to importers.
   self->request(node, infinite, get_atom::value).receive(
-    [&](const std::string& name, system::registry& reg) {
-      auto er = reg[name].equal_range("importer");
+    [&](const std::string& id, system::registry& reg) {
+      auto er = reg[id].equal_range("importer");
       if (er.first == er.second) {
-        VAST_ERROR("no importers available at node", name);
+        VAST_ERROR("no importers available at node", id);
         stop = true;
       } else {
         VAST_DEBUG("connecting source to importers");
@@ -255,12 +255,12 @@ int main(int argc, char* argv[]) {
   auto dir = "vast"s;
   auto node_endpoint_str = ""s;
   auto node_endpoint = endpoint{"", 42000};
-  auto name = vast::detail::split_to_str(vast::detail::hostname(), ".")[0];
+  auto id = vast::detail::split_to_str(vast::detail::hostname(), ".")[0];
   auto conf = message_builder(cmd_line.begin(), cmd).extract_opts({
     {"dir,d", "directory for persistent state", dir},
     {"endpoint,e", "node endpoint", node_endpoint_str},
-    {"local,l", "apply command to a locally spawned node"},
-    {"name,n", "the name of this node", name},
+    {"id,i", "the ID of this node", id},
+    {"node,n", "spawn a local node instead of connecting"},
     {"version,v", "print version and exit"},
   });
   auto syntax = "vast [options] <command> [arguments]";
@@ -369,8 +369,8 @@ int main(int argc, char* argv[]) {
   scoped_actor self{sys};
   actor node;
   if (spawn_node) {
-    VAST_INFO("spawning local node:", name);
-    node = self->spawn(system::node, name, abs_dir);
+    VAST_INFO("spawning local node:", id);
+    node = self->spawn(system::node, id, abs_dir);
     if (start.opts.count("bare") == 0) {
       // If we're not in bare mode, we spawn all core actors.
       auto spawn_component = [&](auto&&... xs) {

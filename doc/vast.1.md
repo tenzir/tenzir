@@ -72,16 +72,16 @@ The following *options* are available:
 `-e` *endpoint* [*127.0.0.1:42000*]
   The endpoint of the node to connect to or launch. (See below)
 
+`-i` *id* [*hostname*]
+  Overrides the node *id*, which defaults to the system hostname.
+  Each node in a topology must have a unique ID, otherwise peering fails.
+
 `-h`
   Display a help message and exit.
 
-`-l`
+`-n`
   Do not attempt to connect to a remote **node** but start a local instance
   instead.
-
-`-n` *name* [*hostname*]
-  Overrides the node *name*, which defaults to the system hostname. Each node
-  in a topology must have a unique name, otherwise peering fails.
 
 `-v`
   Print VAST version and exit.
@@ -283,17 +283,17 @@ Available *component* values with corresponding *parameters*:
 
 Synopsis:
 
-  *kill* *name*
+  *kill* *label*
 
-Terminates a component. The argument *name* refers to a component label.
+Terminates a component. The argument *label* refers to a component label.
 
 ### send
 
 Synopsis:
 
-  *send* *name* *message*
+  *send* *label* *message*
 
-Sends a message to a component. The argument *name* refers to the component to
+Sends a message to a component. The argument *label* refers to the component to
 run. The argument *message* represents the data to send to the component.
 
 Available messages:
@@ -342,7 +342,7 @@ Start a node at 10.0.0.1 on port 42000 in the foreground:
 
 Send [Bro](http://www.bro.org) logs to the remote node:
 
-    zcat *.log.gz | vast -e 10.0.0.1:42000 import bro
+    zcat *.log.gz | vast import bro
 
 Import a PCAP trace into a local VAST node in one shot:
 

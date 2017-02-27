@@ -1,4 +1,4 @@
-.TH VAST 1 "January 23, 2017" 0.1 "Visibility Across Space and Time"
+.TH VAST 1 "February 26, 2017" 0.1 "Visibility Across Space and Time"
 .SH NAME
 .PP
 \fB\fCvast\fR \-\- manage a VAST topology
@@ -62,16 +62,16 @@ The VAST directory for logs and state.
 \fB\fC\-e\fR \fIendpoint\fP [\fI127.0.0.1:42000\fP]
 The endpoint of the node to connect to or launch. (See below)
 .TP
+\fB\fC\-i\fR \fIid\fP [\fIhostname\fP]
+Overrides the node \fIid\fP, which defaults to the system hostname.
+Each node in a topology must have a unique ID, otherwise peering fails.
+.TP
 \fB\fC\-h\fR
 Display a help message and exit.
 .TP
-\fB\fC\-l\fR
+\fB\fC\-n\fR
 Do not attempt to connect to a remote \fBnode\fP but start a local instance
 instead.
-.TP
-\fB\fC\-n\fR \fIname\fP [\fIhostname\fP]
-Overrides the node \fIname\fP, which defaults to the system hostname. Each node
-in a topology must have a unique name, otherwise peering fails.
 .TP
 \fB\fC\-v\fR
 Print VAST version and exit.
@@ -269,16 +269,16 @@ Available \fIcomponent\fP values with corresponding \fIparameters\fP:
 .PP
 Synopsis:
 .IP
-\fIkill\fP \fIname\fP
+\fIkill\fP \fIlabel\fP
 .PP
-Terminates a component. The argument \fIname\fP refers to a component label.
+Terminates a component. The argument \fIlabel\fP refers to a component label.
 .SS send
 .PP
 Synopsis:
 .IP
-\fIsend\fP \fIname\fP \fImessage\fP
+\fIsend\fP \fIlabel\fP \fImessage\fP
 .PP
-Sends a message to a component. The argument \fIname\fP refers to the component to
+Sends a message to a component. The argument \fIlabel\fP refers to the component to
 run. The argument \fImessage\fP represents the data to send to the component.
 .PP
 Available messages:
@@ -329,7 +329,7 @@ Send Bro \[la]http://www.bro.org\[ra] logs to the remote node:
 .PP
 .RS
 .nf
-zcat *.log.gz | vast \-e 10.0.0.1:42000 import bro
+zcat *.log.gz | vast import bro
 .fi
 .RE
 .PP

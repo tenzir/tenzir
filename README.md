@@ -9,23 +9,24 @@ forensics and incident response.
 
 ## Synopsis
 
-Import a PCAP trace into a local VAST node in one shot:
+Ingest a [PCAP](https://en.wikipedia.org/wiki/Pcap) trace into a local VAST
+node:
 
-    vast -l import pcap < trace.pcap
+    vast -n import pcap < trace.pcap
 
-Query a local node and get the result back as PCAP trace:
+Query a local VAST node and get the result back as PCAP trace:
 
-    vast -l export pcap -h "sport > 60000/tcp && src !in 10.0.0.0/8" \
+    vast -n export pcap -h "sport > 60000/tcp && src !in 10.0.0.0/8" \
       | ipsumdump --collate -w - \
       | tcpdump -r - -nl
 
-Start a node listening at 10.0.0.1 in the foreground:
+Start a VAST node in the foreground, listening at 10.0.0.1:
 
     vast -e 10.0.0.1 start -f
 
-Send [Bro](http://www.bro.org) logs to the remote node:
+Send [Bro](http://www.bro.org) logs to a remote node:
 
-    zcat *.log.gz | vast -e 10.0.0.1 import bro
+    zcat *.log.gz | vast import bro
 
 ## Resources
 

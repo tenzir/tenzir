@@ -20,9 +20,9 @@ struct node_state {
 
 /// Spawns a node.
 /// @param self The actor handle
-/// @param name The name of the node.
+/// @param id The unique ID of the node.
 /// @param dir The directory where to store persistent state.
-caf::behavior node(caf::stateful_actor<node_state>* self, std::string name,
+caf::behavior node(caf::stateful_actor<node_state>* self, std::string id,
                    path dir);
 
 } // namespace system
