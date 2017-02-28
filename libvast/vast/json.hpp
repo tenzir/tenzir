@@ -83,7 +83,7 @@ public:
   /// An associative data structure exposing key-value pairs with unique keys.
   struct object : detail::steady_map<string, json> {
     using super = detail::steady_map<string, json>;
-    using super::steady_map;
+    using super::vector_map;
 
     object() = default;
 

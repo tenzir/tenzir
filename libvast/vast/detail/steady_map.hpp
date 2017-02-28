@@ -9,7 +9,7 @@ namespace detail {
 struct steady_map_policy {
   template <class Ts, class T>
   static auto add(Ts& xs, T&& x) {
-    auto i = lookup(xs, x);
+    auto i = lookup(xs, x.first);
     if (i == xs.end())
       return std::make_pair(xs.insert(i, std::forward<T>(x)), true);
     else
@@ -29,10 +29,7 @@ template <
   class T,
   class Allocator = std::allocator<std::pair<Key, T>>
 >
-class steady_map : public vector_map<Key, T, Allocator, steady_map_policy> {
-public:
-  using vector_map<Key, T, Allocator, steady_map_policy>::vector_map;
-};
+using steady_map = vector_map<Key, T, Allocator, steady_map_policy>;
 
 } // namespace detail
 } // namespace vast

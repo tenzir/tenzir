@@ -1,6 +1,11 @@
 #ifndef VAST_DETAIL_STEADY_SET_HPP
 #define VAST_DETAIL_STEADY_SET_HPP
 
+#include <algorithm>
+#include <functional>
+#include <memory>
+#include <utility>
+
 #include "vast/detail/vector_set.hpp"
 
 namespace vast {
@@ -24,10 +29,7 @@ struct steady_set_policy {
 
 /// A set abstraction over an unsorted `std::vector`.
 template <class T, class Allocator = std::allocator<T>>
-class steady_set : public vector_set<T, Allocator, steady_set_policy> {
-public:
-  using vector_set<T, Allocator, steady_set_policy>::vector_set;
-};
+using steady_set = vector_set<T, Allocator, steady_set_policy>;
 
 } // namespace detail
 } // namespace vast

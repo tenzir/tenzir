@@ -40,7 +40,7 @@ TEST(steady_map at) {
   } catch (std::out_of_range& e) {
     exception = std::move(e);
   }
-  CHECK_EQUAL(exception.what(), "vast::detail::steady_map::at"s);
+  CHECK_EQUAL(exception.what(), "vast::detail::vector_map::at"s);
 }
 
 TEST(steady_map insert) {

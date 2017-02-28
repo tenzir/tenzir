@@ -1,6 +1,7 @@
 #ifndef VAST_DETAIL_VECTOR_SET_HPP
 #define VAST_DETAIL_VECTOR_SET_HPP
 
+#include <algorithm>
 #include <vector>
 
 #include "vast/detail/operators.hpp"
@@ -110,10 +111,12 @@ public:
   };
 
   std::pair<iterator, bool> insert(iterator, value_type x) {
+    // TODO: don't ignore hint.
     return insert(std::move(x));
   };
 
   std::pair<iterator, bool> insert(const_iterator, value_type x) {
+    // TODO: don't ignore hint.
     return insert(std::move(x));
   };
 
@@ -130,6 +133,7 @@ public:
 
   template <class... Ts>
   std::pair<iterator, bool> emplace_hint(const_iterator, Ts&&... xs) {
+    // TODO: don't ignore hint.
     return emplace(std::forward<Ts>(xs)...);
   }
 

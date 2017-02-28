@@ -1,6 +1,11 @@
 #ifndef VAST_DETAIL_FLAT_SET_HPP
 #define VAST_DETAIL_FLAT_SET_HPP
 
+#include <algorithm>
+#include <functional>
+#include <memory>
+#include <utility>
+
 #include "vast/detail/vector_set.hpp"
 
 namespace vast {
@@ -10,7 +15,7 @@ template <class Compare>
 struct flat_set_policy {
   template <class Ts, class T>
   static auto add(Ts& xs, T&& x) {
-    auto i = lookup(xs, x);
+    auto i = std::lower_bound(xs.begin(), xs.end(), x, Compare{});
     if (i == xs.end() || Compare{}(x, *i))
       return std::make_pair(xs.insert(i, std::forward<T>(x)), true);
     else
@@ -19,7 +24,8 @@ struct flat_set_policy {
 
   template <class Ts, class T>
   static auto lookup(Ts&& xs, const T& x) {
-    return std::lower_bound(xs.begin(), xs.end(), x, Compare{});
+    auto i = std::lower_bound(xs.begin(), xs.end(), x, Compare{});
+    return i != xs.end() && !Compare{}(x, *i) ? i : xs.end();
   }
 };
 
@@ -29,10 +35,7 @@ template <
   class Compare = std::less<T>,
   class Allocator = std::allocator<T>
 >
-class flat_set : public vector_set<T, Allocator, flat_set_policy<Compare>> {
-public:
-  using vector_set<T, Allocator, flat_set_policy<Compare>>::vector_set;
-};
+using flat_set = vector_set<T, Allocator, flat_set_policy<Compare>>;
 
 } // namespace detail
 } // namespace vast

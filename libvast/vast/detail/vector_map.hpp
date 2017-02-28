@@ -115,10 +115,12 @@ public:
   };
 
   std::pair<iterator, bool> insert(iterator, value_type x) {
+    // TODO: don't ignore hint.
     return insert(std::move(x));
   };
 
   std::pair<iterator, bool> insert(const_iterator, value_type x) {
+    // TODO: don't ignore hint.
     return insert(std::move(x));
   };
 

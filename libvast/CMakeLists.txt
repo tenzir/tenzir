@@ -198,8 +198,6 @@ set(tests
   test/save_load.cpp
   test/schema.cpp
   test/stack.cpp
-  test/steady_map.cpp
-  test/steady_set.cpp
   test/string.cpp
   test/subnet.cpp
   test/time.cpp
@@ -208,6 +206,8 @@ set(tests
   test/value.cpp
   test/value_index.cpp
   test/variant.cpp
+  test/vector_map.cpp
+  test/vector_set.cpp
   test/word.cpp
   test/system/archive.cpp
   test/system/consensus.cpp
