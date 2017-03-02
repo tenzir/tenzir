@@ -70,7 +70,7 @@ class bits {
   ///          not such position exists..
   template <bool Bit = true>
   size_type find_first() const {
-    auto data = Bit ? data_ : ~data_;
+    value_type data = Bit ? data_ : ~data_;
     if (size_ > word_type::width)
       return data == word_type::all ? 0 : word_type::npos;
     if (data == word_type::none)
@@ -86,7 +86,7 @@ class bits {
   size_type find_next(size_type i) const {
     if (i >= size_ - 1)
       return word_type::npos;
-    auto data = Bit ? data_ : ~data_;
+    value_type data = Bit ? data_ : ~data_;
     if (size_ > word_type::width)
       return data == word_type::all ? i + 1 : word_type::npos;
     data &= ~word_type::lsb_mask(i + 1);
@@ -100,7 +100,7 @@ class bits {
   /// @returns The position of the last bit having value *Bit*.
   template <bool Bit = true>
   size_type find_last() const {
-    auto data = Bit ? data_ : ~data_;
+    value_type data = Bit ? data_ : ~data_;
     if (size_ > word_type::width)
       return data == word_type::all ? size_ - 1 : word_type::npos;
     if (data == word_type::none)
@@ -126,7 +126,7 @@ typename bits<T>::size_type
 rank(const bits<T>& b, typename bits<T>::size_type i) {
   using word_type = typename bits<T>::word_type;
   VAST_ASSERT(i < b.size());
-  auto data = Bit ? b.data() : ~b.data();
+  T data = Bit ? b.data() : ~b.data();
   if (b.size() > word_type::width)
     return data == word_type::none ? 0 : i + 1;
   if (i == word_type::width - 1)
@@ -154,7 +154,7 @@ select(const bits<T>& b, typename bits<T>::size_type i) {
   using word_type = typename bits<T>::word_type;
   VAST_ASSERT(i > 0);
   VAST_ASSERT(i <= b.size());
-  auto data = Bit ? b.data() : ~b.data();
+  T data = Bit ? b.data() : ~b.data();
   if (b.size() > word_type::width)
     return data == word_type::all ? i - 1 : word_type::npos;
   return word_type::select(data, i);
