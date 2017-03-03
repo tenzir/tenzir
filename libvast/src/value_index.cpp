@@ -231,12 +231,12 @@ string_index::lookup_impl(relational_operator op, data const& x) const {
       if (str_size > chars_.size())
         return bitmap{length_.size(), op == not_equal};
       auto result = length_.lookup(less_equal, str_size);
-      if (all<0>(result))
+      if (result.empty() || all<0>(result))
         return bitmap{length_.size(), op == not_equal};
       for (auto i = 0u; i < str_size; ++i) {
         auto b = chars_[i].lookup(equal, static_cast<uint8_t>((*str)[i]));
         result &= b;
-        if (all<0>(result))
+        if (result.empty() || all<0>(result))
           return bitmap{length_.size(), op == not_equal};
       }
       if (op == not_equal)
@@ -256,7 +256,7 @@ string_index::lookup_impl(relational_operator op, data const& x) const {
         auto skip = false;
         for (auto j = 0u; j < str_size; ++j) {
           auto bm = chars_[i + j].lookup(equal, (*str)[j]);
-          if (all<0>(bm)) {
+          if (bm.empty() || all<0>(bm)) {
             skip = true;
             break;
           }
@@ -309,7 +309,7 @@ address_index::lookup_impl(relational_operator op, data const& x) const {
     for (auto i = addr->is_v4() ? 12u : 0u; i < 16; ++i) {
       auto bm = bytes_[i].lookup(equal, bytes[i]);
       result &= bm;
-      if (all<0>(result))
+      if (result.empty() || all<0>(result))
         return bitmap{size, op == not_equal};
     }
     if (op == not_equal)
@@ -403,7 +403,7 @@ port_index::lookup_impl(relational_operator op, data const& x) const {
   if (!p)
     return make_error(ec::type_clash, x);
   auto n = num_.lookup(op, p->number());
-  if (all<0>(n))
+  if (n.empty() || all<0>(n))
     return bitmap{offset(), false};
   if (p->type() != port::unknown)
     n &= proto_.lookup(equal, p->type());

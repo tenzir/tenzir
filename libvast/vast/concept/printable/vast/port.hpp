@@ -3,8 +3,8 @@
 
 #include "vast/concept/printable/core/printer.hpp"
 #include "vast/concept/printable/numeric/integral.hpp"
+#include "vast/concept/printable/string/char.hpp"
 #include "vast/concept/printable/string/string.hpp"
-#include "vast/concept/printable/string/any.hpp"
 #include "vast/port.hpp"
 
 namespace vast {
@@ -15,17 +15,17 @@ struct port_printer : vast::printer<port_printer> {
   template <typename Iterator>
   bool print(Iterator& out, port const& p) const {
     using namespace printers;
-    if (!(u16.print(out, p.number()) && any.print(out, '/')))
+    if (!(u16(out, p.number()) && chr<'/'>(out)))
       return false;
     switch (p.type()) {
       default:
-        return any.print(out, '?');
+        return chr<'?'>(out);
       case port::tcp:
-        return str.print(out, "tcp");
+        return str(out, "tcp");
       case port::udp:
-        return str.print(out, "udp");
+        return str(out, "udp");
       case port::icmp:
-        return str.print(out, "icmp");
+        return str(out, "icmp");
     }
   }
 };

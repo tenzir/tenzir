@@ -288,6 +288,8 @@ struct bitmap_test_harness {
 
   void test_all() {
     MESSAGE("all");
+    CHECK(!all<0>(Bitmap{}));
+    CHECK(!all<1>(Bitmap{}));
     CHECK(!all<0>(a));
     CHECK(!all<0>(b));
     CHECK(!all<1>(a));
@@ -302,6 +304,24 @@ struct bitmap_test_harness {
     CHECK(!all<1>(Bitmap{1000, false}));
   }
 
+  void test_any() {
+    MESSAGE("any");
+    CHECK(!any<0>(Bitmap{}));
+    CHECK(!any<1>(Bitmap{}));
+    CHECK(any<0>(a));
+    CHECK(any<0>(b));
+    CHECK(any<1>(a));
+    CHECK(any<1>(b));
+    CHECK(any<0>(Bitmap{10, false}));
+    CHECK(any<0>(Bitmap{1000, false}));
+    CHECK(!any<0>(Bitmap{10, true}));
+    CHECK(!any<0>(Bitmap{1000, true}));
+    CHECK(any<1>(Bitmap{10, true}));
+    CHECK(any<1>(Bitmap{1000, true}));
+    CHECK(!any<1>(Bitmap{10, false}));
+    CHECK(!any<1>(Bitmap{1000, false}));
+  }
+
   void execute() {
     test_append();
     test_construction();
@@ -314,6 +334,7 @@ struct bitmap_test_harness {
     test_select();
     test_span();
     test_all();
+    test_any();
   }
 
   Bitmap a;

@@ -47,8 +47,8 @@ struct printer {
     return operator()(r, std::tie(a0, a1, as...));
   }
 
-  template <typename Iterator, typename Attribute>
-  auto operator()(Iterator&& out, Attribute const& a) const
+  template <typename Iterator, typename Attribute = unused_type>
+  auto operator()(Iterator&& out, Attribute const& a = unused) const
   -> decltype(*out, ++out, bool()) {
     return derived().print(out, a);
   }

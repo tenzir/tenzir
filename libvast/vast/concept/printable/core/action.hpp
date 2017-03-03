@@ -6,7 +6,7 @@
 
 namespace vast {
 
-/// Executes a function after successfully parsing the inner attribute.
+/// Executes a function before printing the inner attribute.
 template <typename Printer, typename Action>
 class action_printer : public printer<action_printer<Printer, Action>> {
 public:

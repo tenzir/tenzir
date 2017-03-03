@@ -93,7 +93,7 @@ struct bitmap_evaluator {
     bitmap bm;
     for (auto& op : d) {
       bm |= visit(*this, op);
-      if (!bm.empty() && all<1>(bm)) // short-circuit
+      if (all<1>(bm)) // short-circuit
         break;
     }
     return bm;
@@ -132,7 +132,7 @@ behavior evaluator(stateful_actor<evaluator_state>* self,
       auto delta = expr_hits - self->state.hits;
       VAST_DEBUG(self, "produced", rank(delta) << '/' << rank(expr_hits),
                  "new/total hits for", expr);
-      if (!delta.empty() && !all<0>(delta)) {
+      if (any<0>(delta)) {
         self->state.hits |= delta;
         self->send(sink, std::move(delta));
       }
@@ -201,7 +201,7 @@ behavior partition(stateful_actor<partition_state>* self, path dir) {
           auto bm = std::make_shared<bitmap>();
           return {
             [=](const bitmap& hits) mutable {
-              VAST_ASSERT(!hits.empty() && !all<0>(hits));
+              VAST_ASSERT(any<0>(hits));
               *bm |= hits;
             },
             [=](done_atom) mutable {

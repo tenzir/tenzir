@@ -73,8 +73,7 @@ void request_more_hits(stateful_actor<exporter_state>* self) {
   auto waiting_for_hits =
     self->state.stats.received == self->state.stats.scheduled;
   auto need_more_results = self->state.stats.requested > 0;
-  auto have_no_inflight_requests = !self->state.unprocessed.empty()
-                                   && !all<0>(self->state.unprocessed);
+  auto have_no_inflight_requests = any<1>(self->state.unprocessed);
   // If we're (1) no longer waiting for index hits, (2) still need more
   // results, and (3) have no inflight requests to the archive, we ask
   // the index for more hits.

@@ -3,8 +3,9 @@
 
 #include "vast/access.hpp"
 #include "vast/uuid.hpp"
-#include "vast/concept/printable/core/printer.hpp"
+#include "vast/concept/printable/core.hpp"
 #include "vast/concept/printable/string/any.hpp"
+#include "vast/concept/printable/string/char.hpp"
 #include "vast/detail/coding.hpp"
 
 namespace vast {
@@ -15,14 +16,14 @@ struct access::printer<uuid> : vast::printer<access::printer<uuid>> {
 
   template <typename Iterator>
   bool print(Iterator& out, uuid const& u) const {
-    using namespace printers;
+    static auto byte = printers::any << printers::any;
     for (size_t i = 0; i < 16; ++i) {
-      auto& byte = u.id_[i];
-      if (!(any.print(out, detail::byte_to_char((byte >> 4) & 0x0f))
-            && any.print(out, detail::byte_to_char(byte & 0x0f))))
+      auto hi = detail::byte_to_char((u.id_[i] >> 4) & 0x0f);
+      auto lo = detail::byte_to_char(u.id_[i] & 0x0f);
+      if (!byte(out, hi, lo))
         return false;
       if (i == 3 || i == 5 || i == 7 || i == 9)
-        if (!any.print(out, '-'))
+        if (!printers::chr<'-'>(out))
           return false;
     }
     return true;
