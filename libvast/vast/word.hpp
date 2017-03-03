@@ -204,39 +204,36 @@ struct word {
   /// word.
   /// @param x The block value.
   /// @returns The number of set bits in *x*.
-  /// @pre `x > 0`
   template <class Block = T>
   static constexpr auto popcount(value_type x)
   -> std::enable_if_t<(word<Block>::width <= 32), size_type> {
-    return __builtin_popcount(x);
+    return x == 0 ? 0 : __builtin_popcount(x);
   }
 
   template <class Block = T>
   static constexpr auto popcount(value_type x)
   -> std::enable_if_t<(word<Block>::width == 64), size_type> {
-    return __builtin_popcountll(x);
+    return x == 0 ? 0 : __builtin_popcountll(x);
   }
 
   /// Counts the number of trailing zeros.
   /// @param x The block value.
   /// @returns The number trailing zeros in *x*.
-  /// @pre `x > 0`
   template <class Block = T>
   static constexpr auto count_trailing_zeros(value_type x)
   -> std::enable_if_t<(word<Block>::width <= 32), size_type> {
-    return __builtin_ctz(x);
+    return x == 0 ? width : __builtin_ctz(x);
   }
 
   template <class Block = T>
   static constexpr auto count_trailing_zeros(value_type x)
   -> std::enable_if_t<(word<Block>::width == 64), size_type> {
-    return __builtin_ctzll(x);
+    return x == 0 ? width : __builtin_ctzll(x);
   }
 
   /// Counts the number of trailing ones.
   /// @param x The block value.
   /// @returns The number trailing ones in *x*.
-  /// @pre `x != all`
   static constexpr auto count_trailing_ones(value_type x) {
     return count_trailing_zeros(~x);
   }
@@ -244,25 +241,23 @@ struct word {
   /// Counts the number of leading zeros.
   /// @param x The block value.
   /// @returns The number leading zeros in *x*.
-  /// @pre `x > 0`
   template <class Block = T>
   static constexpr auto count_leading_zeros(value_type x)
   -> std::enable_if_t<(word<Block>::width <= 32), size_type> {
     // The compiler builtin always assumes a width of 32 bits. We have to adapt
     // the return value according to the actual block width.
-    return __builtin_clz(x) - (32 - word<Block>::width);
+    return x == 0 ? width : (__builtin_clz(x) - (32 - width));
   }
 
   template <class Block = T>
   static constexpr auto count_leading_zeros(value_type x)
   -> std::enable_if_t<(word<Block>::width == 64), size_type> {
-    return __builtin_clzll(x);
+    return x == 0 ? width : __builtin_clzll(x);
   }
 
   /// Counts the number of leading ones.
   /// @param x The block value.
   /// @returns The number leading ones in *x*.
-  /// @pre `x != all`
   static constexpr auto count_leading_ones(value_type x) {
     return count_leading_zeros(~x);
   }
@@ -320,6 +315,24 @@ constexpr typename word<T>::value_type word<T>::lsb1;
 
 // -- counting --------------------------------------------------------------
 
+template <bool Bit = true, class T>
+static constexpr auto rank(T x)
+-> std::enable_if_t<
+  Bit && detail::is_unsigned_integral<T>::value,
+  detail::word_size_type<T>
+> {
+  return word<T>::popcount(x);
+}
+
+template <bool Bit, class T>
+static constexpr auto rank(T x)
+-> std::enable_if_t<
+  !Bit && detail::is_unsigned_integral<T>::value,
+  detail::word_size_type<T>
+> {
+  return word<T>::popcount(static_cast<T>(~x));
+}
+
 /// Computes *rank_i* of a block, i.e., the number of 1-bits up to and
 /// including position *i*, counted from the LSB.
 /// @param x The block to compute the rank for.
@@ -332,8 +345,8 @@ static constexpr auto rank(T x, detail::word_size_type<T> i)
   Bit && detail::is_unsigned_integral<T>::value,
   detail::word_size_type<T>
 > {
-  auto masked = x & word<T>::lsb_fill(i + 1);
-  return masked == 0 ? 0 : word<T>::popcount(masked);
+  T masked = x & word<T>::lsb_fill(i + 1);
+  return rank<1>(masked);
 }
 
 template <bool Bit, class T>
@@ -342,7 +355,7 @@ static constexpr auto rank(T x, detail::word_size_type<T> i)
   !Bit && detail::is_unsigned_integral<T>::value,
   detail::word_size_type<T>
 > {
-  return rank<1>(~x, i);
+  return rank<1>(static_cast<T>(~x), i);
 }
 
 // -- searching -------------------------------------------------------------
@@ -356,7 +369,8 @@ static constexpr auto find_first(T x)
   Bit && detail::is_unsigned_integral<T>::value,
   detail::word_size_type<T>
 > {
-  return x == word<T>::none ? word<T>::npos : word<T>::count_trailing_zeros(x);
+  auto tzs = word<T>::count_trailing_zeros(x);
+  return tzs == word<T>::width ? word<T>::npos : tzs;
 }
 
 template <bool Bit, class T>
@@ -365,7 +379,7 @@ static constexpr auto find_first(T x)
   !Bit && detail::is_unsigned_integral<T>::value,
   detail::word_size_type<T>
 > {
-  return x == word<T>::all ? word<T>::npos : word<T>::count_trailing_zeros(~x);
+  return find_first<1>(static_cast<T>(~x));
 }
 
 template <bool Bit = true, class T>
@@ -373,10 +387,9 @@ static constexpr auto find_last(T x)
 -> std::enable_if_t<
   Bit && detail::is_unsigned_integral<T>::value,
   detail::word_size_type<T>
-  > {
-  return x == word<T>::none
-    ? word<T>::npos
-    : (word<T>::width - word<T>::count_leading_zeros(x) - 1);
+> {
+  auto lzs = word<T>::count_leading_zeros(x);
+  return lzs == word<T>::width ? word<T>::npos : (word<T>::width - lzs - 1);
 }
 
 template <bool Bit, class T>
@@ -384,10 +397,8 @@ static constexpr auto find_last(T x)
 -> std::enable_if_t<
   !Bit && detail::is_unsigned_integral<T>::value,
   detail::word_size_type<T>
-  > {
-  return x == word<T>::all
-    ? word<T>::npos
-    : (word<T>::width - word<T>::count_leading_zeros(~x) - 1);
+> {
+  return find_last<1>(static_cast<T>(~x));
 }
 
 /// Finds the next 1-bit starting at position relative to the LSB.
@@ -401,7 +412,7 @@ static constexpr auto find_next(T x, detail::word_size_type<T> i)
   > {
   if (i == word<T>::width - 1)
     return word<T>::npos;
-  auto top = x & (word<T>::all << (i + 1));
+  T top = x & (word<T>::all << (i + 1));
   return top == 0 ? word<T>::npos : word<T>::count_trailing_zeros(top);
 }
 
@@ -414,10 +425,10 @@ static constexpr auto find_prev(T x, detail::word_size_type<T> i)
 -> std::enable_if_t<
   detail::is_unsigned_integral<T>::value,
   detail::word_size_type<T>
-  > {
+> {
   if (i == 0)
     return word<T>::npos;
-  auto low = x & ~(word<T>::all << i);
+  T low = x & ~(word<T>::all << i);
   return low == 0
     ? word<T>::npos
     : word<T>::width - word<T>::count_leading_zeros(low) - 1;

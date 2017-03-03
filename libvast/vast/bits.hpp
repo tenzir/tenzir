@@ -72,10 +72,7 @@ std::enable_if_t<Bit, typename bits<T>::size_type>
 find_first(const bits<T>& b) {
   if (b.size() > word<T>::width)
     return b.data() == word<T>::all ? 0 : word<T>::npos;
-  // TODO: delegate to proper word-level function.
-  if (b.data() == word<T>::none)
-    return word<T>::npos;
-  return find_first<Bit>(b.data());
+  return find_first<1>(b.data());
 }
 
 template <bool Bit, class T>
@@ -83,11 +80,8 @@ std::enable_if_t<!Bit, typename bits<T>::size_type>
 find_first(const bits<T>& b) {
   if (b.size() > word<T>::width)
     return b.data() == word<T>::none ? 0 : word<T>::npos;
-  // TODO: delegate to proper word-level function.
-  T x = b.data() | word<T>::msb_mask(word<T>::width - b.size());
-  if (x == word<T>::all)
-    return word<T>::npos;
-  return word<T>::count_trailing_ones(x);
+  T masked = b.data() | word<T>::msb_mask(word<T>::width - b.size());
+  return find_first<0>(masked);
 }
 
 /// Finds the next bit after at a particular offset.
@@ -101,11 +95,7 @@ find_next(const bits<T>& b, typename bits<T>::size_type i) {
     return word<T>::npos;
   if (b.size() > word<T>::width)
     return b.data() == word<T>::all ? i + 1 : word<T>::npos;
-  // TODO: delegate to proper word-level function.
-  T x = b.data() & ~word<T>::lsb_mask(i + 1);
-  if (x == word<T>::none)
-    return word<T>::npos;
-  return word<T>::count_trailing_zeros(x);
+  return find_next(b.data(), i);
 }
 
 template <bool Bit, class T>
@@ -115,13 +105,8 @@ find_next(const bits<T>& b, typename bits<T>::size_type i) {
     return word<T>::npos;
   if (b.size() > word<T>::width)
     return b.data() == word<T>::none ? i + 1 : word<T>::npos;
-  // TODO: delegate to proper word-level function.
-  T x = b.data();
-  x |= word<T>::msb_mask(word<T>::width - b.size());
-  x |= word<T>::lsb_mask(i + 1);
-  if (x == word<T>::all)
-    return word<T>::npos;
-  return word<T>::count_trailing_ones(x);
+  T masked = ~b.data() & word<T>::lsb_fill(b.size());
+  return find_next(masked, i);
 }
 
 /// Finds the last bit of a particular value.
@@ -132,11 +117,7 @@ std::enable_if_t<Bit, typename bits<T>::size_type>
 find_last(const bits<T>& b) {
   if (b.size() > word<T>::width)
     return b.data() == word<T>::all ? b.size() - 1 : word<T>::npos;
-  // TODO: delegate to proper word-level function.
-  if (b.data() == word<T>::none)
-    return word<T>::npos;
-  T x = b.data() << (word<T>::width - b.size());
-  return b.size() - word<T>::count_leading_zeros(x) - 1;
+  return find_last<1>(b.data());
 }
 
 template <bool Bit, class T>
@@ -144,11 +125,8 @@ std::enable_if_t<!Bit, typename bits<T>::size_type>
 find_last(const bits<T>& b) {
   if (b.size() > word<T>::width)
     return b.data() == word<T>::none ? b.size() - 1 : word<T>::npos;
-  // TODO: delegate to proper word-level function.
-  if (b.data() == word<T>::all)
-    return word<T>::npos;
-  T x = b.data() << (word<T>::width - b.size());
-  return b.size() - word<T>::count_leading_ones(x) - 1;
+  T masked = ~b.data() & word<T>::lsb_fill(b.size());
+  return find_last<1>(masked);
 }
 
 // -- counting ---------------------------------------------------------------
@@ -162,8 +140,7 @@ auto rank(const bits<T>& b)
 -> std::enable_if_t<Bit, typename bits<T>::size_type> {
   if (b.size() > word<T>::width)
     return b.data() == word<T>::all ? b.size() : 0;
-  // TODO: delegate to proper word-level function.
-  return b.data() == word<T>::none ? 0 : word<T>::popcount(b.data());
+  return rank<1>(b.data());
 }
 
 template <bool Bit, class T>
@@ -171,8 +148,8 @@ auto rank(const bits<T>& b)
 -> std::enable_if_t<!Bit, typename bits<T>::size_type> {
   if (b.size() > word<T>::width)
     return b.data() == word<T>::none ? b.size() : 0;
-  // TODO: delegate to proper word-level function.
-  return b.data() == word<T>::all ? b.size() : word<T>::popcount(~b.data());
+  T masked = ~b.data() & word<T>::lsb_fill(b.size());
+  return rank<1>(masked);
 }
 
 /// Computes the number of occurrences of a bit value in *[0,i]*.
@@ -189,7 +166,7 @@ rank(const bits<T>& b, typename bits<T>::size_type i) {
   if (b.size() > word<T>::width)
     return data == word<T>::none ? 0 : i + 1;
   if (i == word<T>::width - 1)
-    return data == word<T>::none ? 0 : word<T>::popcount(data);
+    return word<T>::popcount(data);
   return rank(data, i);
 }
 
