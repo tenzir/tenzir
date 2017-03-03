@@ -253,6 +253,39 @@ struct bitmap_test_harness {
     CHECK(!rng);
   }
 
+  void test_span() {
+    MESSAGE("span");
+    // Empty bitmap.
+    auto npos_pair = std::make_pair(Bitmap::word_type::npos,
+                                    Bitmap::word_type::npos);
+    CHECK_EQUAL(span<0>(Bitmap{}), npos_pair);
+    CHECK_EQUAL(span<1>(Bitmap{}), npos_pair);
+    Bitmap bm1;
+    bm1.template append<1>(100);
+    bm1.template append<0>();
+    bm1.template append<1>();
+    bm1.template append<0>(200);
+    bm1.template append<1>();
+    bm1.template append<1>(1000);
+    bm1.template append<0>(500);
+    Bitmap bm2;
+    bm2.template append<1>(10);
+    bm2.template append<0>();
+    bm2.template append<1>(500);
+    auto s0 = span<0>(bm1);
+    CHECK_EQUAL(s0.first, 100u);
+    CHECK_EQUAL(s0.second, bm1.size() - 1);
+    auto s1 = span<1>(bm1);
+    CHECK_EQUAL(s1.first, 0u);
+    CHECK_EQUAL(s1.second, bm1.size() - 500 - 1);
+    s0 = span<0>(bm2);
+    CHECK_EQUAL(s0.first, s0.second);
+    CHECK_EQUAL(s0.first, 10u);
+    s1 = span<1>(bm2);
+    CHECK_EQUAL(s1.first, 0u);
+    CHECK_EQUAL(s1.second, bm2.size() - 1);
+  }
+
   void test_all() {
     MESSAGE("all");
     CHECK(!all<0>(a));
@@ -279,6 +312,7 @@ struct bitmap_test_harness {
     test_bitwise_nary();
     test_rank();
     test_select();
+    test_span();
     test_all();
   }
 

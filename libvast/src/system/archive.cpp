@@ -208,7 +208,8 @@ archive(archive_type::stateful_pointer<archive_state> self,
       return rp;
     },
     [=](bitmap const& bm) -> lookup_promise {
-      VAST_DEBUG(self, "got query in range ["
+      VAST_ASSERT(rank(bm) > 0);
+      VAST_DEBUG(self, "got query for", rank(bm), "events in range ["
                  << select(bm, 1) << ',' << (select(bm, -1) + 1) << ')');
       auto rp = self->make_response_promise<lookup_promise>();
       // Collect candidate segments by seeking through the query bitmap and

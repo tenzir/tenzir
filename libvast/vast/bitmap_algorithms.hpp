@@ -273,7 +273,7 @@ typename Bitmap::size_type rank(Bitmap const& bm) {
 /// @param i The position of the *i*-th occurrence of *Bit* in *bm*.
 ///          If `i == -1`, then select the last occurrence of *Bit*.
 /// @pre `i > 0`
-/// @relates select_range
+/// @relates select_range span
 template <bool Bit = true, class Bitmap>
 typename Bitmap::size_type
 select(Bitmap const& bm, typename Bitmap::size_type i) {
@@ -303,7 +303,7 @@ select(Bitmap const& bm, typename Bitmap::size_type i) {
 /// A higher-order range that takes a bit-sequence range and transforms it into
 /// range of 1-bits. In ther words, this range provides an incremental
 /// interface to the one-shot algorithm that ::select computes.
-/// @relates select
+/// @relates select span
 template <class BitRange>
 class select_range : public detail::range_facade<select_range<BitRange>> {
 public:
@@ -404,11 +404,42 @@ protected:
 /// Lifts a bit range into a ::select_range.
 /// @param rng The bit range from which to construct a select range.
 /// @returns The select frange for *rng*.
-/// @relates select_range
+/// @relates select_range span
 template <class Bitmap>
 auto select(const Bitmap& bm) {
   return select_range<decltype(bit_range(bm))>(bit_range(bm));
 }
+
+/// Computes the *span* of a bitmap, i.e., the interval *[a,b]* with *a* being
+/// the first and *b* the last position of a particular bit value.
+/// @tparam Bit the bit value to locate.
+/// @param bm The bitmap to select from.
+/// @returns The span of *bm*.
+/// @relates select
+template <bool Bit = true, class Bitmap>
+auto span(Bitmap const& bm) {
+  auto result = std::make_pair(Bitmap::word_type::npos,
+                               Bitmap::word_type::npos);
+  auto n = typename Bitmap::size_type{0};
+  auto rng = bit_range(bm);
+  auto begin = rng.begin();
+  auto end = rng.end();
+  // Locate first position.
+  for (; begin != end; n += begin->size(), ++begin) {
+    auto first = begin->template find_first<Bit>();
+    if (first != Bitmap::word_type::npos) {
+      result.first = result.second = n + first;
+      break;
+    }
+  }
+  for (; begin != end; n += begin->size(), ++begin) {
+    auto last = begin->template find_last<Bit>();
+    if (last != Bitmap::word_type::npos)
+      result.second = n + last;
+  }
+  return result;
+}
+
 
 /// Tests whether a bitmap consists of a homogeneous sequence of a particular
 /// bit value.

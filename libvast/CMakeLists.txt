@@ -170,6 +170,7 @@ set(tests
   test/binner.cpp
   test/bitmap.cpp
   test/bitmap_index.cpp
+  test/bits.cpp
   test/bitvector.cpp
   test/cache.cpp
   test/coder.cpp
