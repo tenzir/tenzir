@@ -1,19 +1,39 @@
 #ifndef VAST_WORD_HPP
 #define VAST_WORD_HPP
 
-#include <cstddef>
+#include <cstdint>
 #include <limits>
 #include <type_traits>
 
 #include "vast/detail/assert.hpp"
+#include "vast/detail/type_traits.hpp"
 
 namespace vast {
+namespace detail {
+
+template <class T>
+using is_unsigned_integral = bool_constant<
+  std::is_unsigned<T>::value && std::is_integral<T>::value
+>;
+
+// Type alias used for SFINAE of free functions below. If we would simply use
+// typename word<T>::size_type, the static_assert would fire. With this work
+// around, we avoid going through word<T> so that overload resolution can
+// proceed.
+template <class T>
+using word_size_type = std::conditional_t<
+  is_unsigned_integral<T>::value,
+  uint64_t,
+  void
+>;
+
+} // namespace detail
 
 /// A fixed-size piece unsigned piece of data that supports various bitwise
 /// operations.
 template <class T>
 struct word {
-  static_assert(std::is_unsigned<T>::value && std::is_integral<T>::value,
+  static_assert(detail::is_unsigned_integral<T>::value,
                 "bitwise operations require unsigned integral, types");
 
   // -- general ---------------------------------------------------------------
@@ -22,7 +42,7 @@ struct word {
   using value_type = T;
 
   /// The type to represent sizes.
-  using size_type = size_t;
+  using size_type = detail::word_size_type<T>;
 
   /// The number of bits per block (aka. word size).
   static constexpr size_type width = std::numeric_limits<value_type>::digits;
@@ -64,6 +84,7 @@ struct word {
   /// @param i The number least significant bits to set to 1.
   /// @returns `~(all << i)`
   /// @pre `i < width`
+  /// @relates lsb_fill
   static constexpr value_type lsb_mask(size_type i) {
     return ~(all << i);
   }
@@ -72,6 +93,7 @@ struct word {
   /// @param i The number least significant bits to set to 1.
   /// @returns `all >> (width - i)`
   /// @pre `i > 0 && i <= width`
+  /// @relates lsb_mask
   static constexpr value_type lsb_fill(size_type i) {
     return all >> (width - i);
   }
@@ -80,6 +102,7 @@ struct word {
   /// @param i The number most significant bits to set to 1.
   /// @returns `~(all << i)`
   /// @pre `i < width`
+  /// @relates msb_fill
   static constexpr value_type msb_mask(size_type i) {
     return ~(all >> i);
   }
@@ -88,11 +111,21 @@ struct word {
   /// @param i The number most significant bits to set to 1.
   /// @returns `all << (width - i)`
   /// @pre `i > 0 && i <= width`
+  /// @relates msb_mask
   static constexpr value_type msb_fill(size_type i) {
     return all << (width - i);
   }
 
   // -- tests -----------------------------------------------------------------
+
+  /// Extracts the *i*-th bit in a block.
+  /// @param x The block to test.
+  /// @param i The bit to extract.
+  /// @returns The value at position *i*, counted from the LSB.
+  /// @pre `i < width`
+  static constexpr bool test(value_type x, size_type i) {
+    return (x & mask(i)) == mask(i);
+  }
 
   /// Tests whether a block is either all 0 or all 1.
   /// @param x The block to test.
@@ -110,16 +143,33 @@ struct word {
     return ((x + 1) & lsb_mask(k)) <= 1;
   }
 
-  /// Extracts the *i*-th bit in a block.
-  /// @param x The block to test.
-  /// @param i The bit to extract.
-  /// @returns The value at position *i*, counted from the LSB.
+  // -- manipulation ----------------------------------------------------------
+
+  /// Sets a specific bit in a block to 0 or 1.
+  /// @tparam Bit The bit value to set.
+  /// @param x The block to set the bit in.
+  /// @param i The position to set.
   /// @pre `i < width`
-  static constexpr bool test(value_type x, size_type i) {
-    return (x & mask(i)) == mask(i);
+  template <bool Bit>
+  static constexpr std::enable_if_t<Bit, value_type>
+  set(value_type x, size_type i) {
+    return x | mask(i);
   }
 
-  // -- manipulation ----------------------------------------------------------
+  template <bool Bit>
+  static constexpr std::enable_if_t<!Bit, value_type>
+  set(value_type x, size_type i) {
+    return x & ~mask(i);
+  }
+
+  /// Sets a specific bit in a block to 0 or 1.
+  /// @param x The block to set the bit in.
+  /// @param i The position to set.
+  /// @param b The bit value to set.
+  /// @pre `i < width`
+  static constexpr value_type set(value_type x, size_type i, bool b) {
+    return b ? set<1>(x, i) : set<0>(x, i);
+  }
 
   /// Flips a bit in a block at a given position.
   /// @param x The block to flip a bit in.
@@ -130,41 +180,64 @@ struct word {
     return x ^ mask(i);
   }
 
-  /// Sets a specific bit in a block to 0 or 1.
-  /// @param x The block to set the bit in.
-  /// @param i The position to set.
-  /// @pre `i < width`
-  static constexpr value_type set(value_type x, size_type i, bool b) {
-    return b ? x | mask(i) : x & ~mask(i);
+  // -- searching -------------------------------------------------------------
+
+  /// Locates the first index of a 1-bit.
+  /// @param x The block value.
+  /// @returns The index of the first 1-bit in *x*.
+  /// @pre `x > 0`
+  template <class Block = T>
+  static constexpr auto find_first_set(value_type x)
+  -> std::enable_if_t<(word<Block>::width <= 32), size_type> {
+    return __builtin_ffs(x);
+  }
+
+  template <class Block = T>
+  static constexpr auto find_first_set(value_type x)
+  -> std::enable_if_t<(word<Block>::width == 64), size_type> {
+    return __builtin_ffsll(x);
   }
 
   // -- counting --------------------------------------------------------------
 
-  template <class B>
-  using enable_if_32 = std::enable_if_t<(word<B>::width <= 32), B>;
+  /// Computes the population count (aka. *Hamming weight* or *popcount*) of a
+  /// word.
+  /// @param x The block value.
+  /// @returns The number of set bits in *x*.
+  /// @pre `x > 0`
+  template <class Block = T>
+  static constexpr auto popcount(value_type x)
+  -> std::enable_if_t<(word<Block>::width <= 32), size_type> {
+    return __builtin_popcount(x);
+  }
 
-  template <class B>
-  using enable_if_64 = std::enable_if_t<(word<B>::width == 64), B>;
+  template <class Block = T>
+  static constexpr auto popcount(value_type x)
+  -> std::enable_if_t<(word<Block>::width == 64), size_type> {
+    return __builtin_popcountll(x);
+  }
 
   /// Counts the number of trailing zeros.
   /// @param x The block value.
   /// @returns The number trailing zeros in *x*.
   /// @pre `x > 0`
-  template <class B = value_type>
-  static constexpr auto count_trailing_zeros(value_type x) -> enable_if_32<B> {
+  template <class Block = T>
+  static constexpr auto count_trailing_zeros(value_type x)
+  -> std::enable_if_t<(word<Block>::width <= 32), size_type> {
     return __builtin_ctz(x);
   }
 
-  template <class B = value_type>
-  static constexpr auto count_trailing_zeros(value_type x) -> enable_if_64<B> {
+  template <class Block = T>
+  static constexpr auto count_trailing_zeros(value_type x)
+  -> std::enable_if_t<(word<Block>::width == 64), size_type> {
     return __builtin_ctzll(x);
   }
 
   /// Counts the number of trailing ones.
   /// @param x The block value.
   /// @returns The number trailing ones in *x*.
-  /// @pre `x > 0`
-  static constexpr value_type count_trailing_ones(value_type x) {
+  /// @pre `x != all`
+  static constexpr auto count_trailing_ones(value_type x) {
     return count_trailing_zeros(~x);
   }
 
@@ -172,102 +245,42 @@ struct word {
   /// @param x The block value.
   /// @returns The number leading zeros in *x*.
   /// @pre `x > 0`
-  template <class B = value_type>
-  static constexpr auto count_leading_zeros(value_type x) -> enable_if_32<B> {
+  template <class Block = T>
+  static constexpr auto count_leading_zeros(value_type x)
+  -> std::enable_if_t<(word<Block>::width <= 32), size_type> {
     // The compiler builtin always assumes a width of 32 bits. We have to adapt
     // the return value according to the actual block width.
-    return __builtin_clz(x) - (32 - width);
+    return __builtin_clz(x) - (32 - word<Block>::width);
   }
 
-  template <class B = value_type>
-  static constexpr auto count_leading_zeros(value_type x) -> enable_if_64<B> {
+  template <class Block = T>
+  static constexpr auto count_leading_zeros(value_type x)
+  -> std::enable_if_t<(word<Block>::width == 64), size_type> {
     return __builtin_clzll(x);
   }
 
   /// Counts the number of leading ones.
   /// @param x The block value.
   /// @returns The number leading ones in *x*.
-  /// @pre `x > 0`
-  static constexpr value_type count_leading_ones(value_type x) {
+  /// @pre `x != all`
+  static constexpr auto count_leading_ones(value_type x) {
     return count_leading_zeros(~x);
-  }
-
-  /// Counts the number of set bits
-  /// @param x The block value.
-  /// @returns The number of set bits in *x*.
-  /// @pre `x > 0`
-  template <class B = value_type>
-  static constexpr auto popcount(value_type x) -> enable_if_32<B> {
-    return __builtin_popcount(x);
-  }
-
-  template <class B = value_type>
-  static constexpr auto popcount(value_type x) -> enable_if_64<B> {
-    return __builtin_popcountll(x);
-  }
-
-  /// Computes *rank_i* of a block, i.e., the number of 1-bits up to and
-  /// including position *i*, counted from the LSB.
-  /// @param x The block to compute the rank for.
-  /// @param i The position up to where to count.
-  /// @returns *rank_i(x)*.
-  /// @pre `i < width`
-  static constexpr size_type rank(value_type x, size_type i) {
-    auto masked = x & lsb_fill(i + 1);
-    return masked == 0 ? 0 : popcount(masked);
   }
 
   /// Computes the parity of a block, i.e., the number of 1-bits modulo 2.
   /// @param x The block value.
   /// @returns The parity of *x*.
   /// @pre `x > 0`
-  template <class B = value_type>
-  static constexpr auto parity(value_type x) -> enable_if_32<B> {
+  template <class Block = T>
+  static constexpr auto parity(value_type x)
+  -> std::enable_if_t<(word<Block>::width <= 32), size_type> {
     return __builtin_parity(x);
   }
 
-  template <class B = value_type>
-  static constexpr auto parity(value_type x) -> enable_if_64<B> {
+  template <class Block = T>
+  static constexpr auto parity(value_type x)
+  -> std::enable_if_t<(word<Block>::width == 64), size_type> {
     return __builtin_parityll(x);
-  }
-
-  // -- search ----------------------------------------------------------------
-
-  /// Find the next 1-bit starting at position relative to the LSB.
-  /// @param x The block to search.
-  /// @param i The position relative to the LSB to start searching.
-  static constexpr size_type next(value_type x, size_type i) {
-    if (i == width - 1)
-      return npos;
-    auto top = x & (all << (i + 1));
-    return top == 0 ? npos : count_trailing_zeros(top);
-  }
-
-  /// Find the previous 1-bit starting at position relative to the LSB.
-  /// @param x The block to search.
-  /// @param i The position relative to the LSB to start searching.
-  /// @pre `i < width`
-  static constexpr size_type prev(value_type x, size_type i) {
-    if (i == 0)
-      return npos;
-    auto bottom = x & ~(all << i);
-    return bottom == 0 ? npos : width - count_leading_zeros(bottom) - 1;
-  }
-
-  /// Computes the position of the i-th occurrence of a 1-bit.
-  /// @param x The block to search.
-  /// @param i The position of the *i*-th occurrence of 1 in *b*.
-  /// @pre `i > 0 && i <= width`
-  static constexpr size_type select(value_type x, size_type i) {
-    // TODO: make this efficient and branch-free. There is one implementation
-    // that counts from the right for 64-bit here:
-    // http://graphics.stanford.edu/~seander/bithacks.html
-    auto cum = 0u;
-    for (auto j = 0u; j < width; ++j)
-      if (test(x, j))
-        if (++cum == i)
-          return j;
-    return npos;
   }
 
   // -- math ------------------------------------------------------------------
@@ -276,7 +289,7 @@ struct word {
   /// @param x The block value.
   /// @returns `log2(x)`
   /// @pre `x > 0`
-  static constexpr value_type log2(value_type x) {
+  static constexpr auto log2(value_type x) {
     return width - count_leading_zeros(x) - 1;
   }
 };
@@ -304,6 +317,148 @@ constexpr typename word<T>::value_type word<T>::lsb0;
 
 template <class T>
 constexpr typename word<T>::value_type word<T>::lsb1;
+
+// -- counting --------------------------------------------------------------
+
+/// Computes *rank_i* of a block, i.e., the number of 1-bits up to and
+/// including position *i*, counted from the LSB.
+/// @param x The block to compute the rank for.
+/// @param i The position up to where to count.
+/// @returns *rank_i(x)*.
+/// @pre `i < width`
+template <bool Bit = true, class T>
+static constexpr auto rank(T x, detail::word_size_type<T> i)
+-> std::enable_if_t<
+  Bit && detail::is_unsigned_integral<T>::value,
+  detail::word_size_type<T>
+> {
+  auto masked = x & word<T>::lsb_fill(i + 1);
+  return masked == 0 ? 0 : word<T>::popcount(masked);
+}
+
+template <bool Bit, class T>
+static constexpr auto rank(T x, detail::word_size_type<T> i)
+-> std::enable_if_t<
+  !Bit && detail::is_unsigned_integral<T>::value,
+  detail::word_size_type<T>
+> {
+  return rank<1>(~x, i);
+}
+
+// -- searching -------------------------------------------------------------
+
+/// Finds the next 1-bit starting at position relative to the LSB.
+/// @param x The block to search.
+/// @param i The position relative to the LSB to start searching.
+template <bool Bit = true, class T>
+static constexpr auto find_first(T x)
+-> std::enable_if_t<
+  Bit && detail::is_unsigned_integral<T>::value,
+  detail::word_size_type<T>
+> {
+  return x == word<T>::none ? word<T>::npos : word<T>::count_trailing_zeros(x);
+}
+
+template <bool Bit, class T>
+static constexpr auto find_first(T x)
+-> std::enable_if_t<
+  !Bit && detail::is_unsigned_integral<T>::value,
+  detail::word_size_type<T>
+> {
+  return x == word<T>::all ? word<T>::npos : word<T>::count_trailing_zeros(~x);
+}
+
+template <bool Bit = true, class T>
+static constexpr auto find_last(T x)
+-> std::enable_if_t<
+  Bit && detail::is_unsigned_integral<T>::value,
+  detail::word_size_type<T>
+  > {
+  return x == word<T>::none
+    ? word<T>::npos
+    : (word<T>::width - word<T>::count_leading_zeros(x) - 1);
+}
+
+template <bool Bit, class T>
+static constexpr auto find_last(T x)
+-> std::enable_if_t<
+  !Bit && detail::is_unsigned_integral<T>::value,
+  detail::word_size_type<T>
+  > {
+  return x == word<T>::all
+    ? word<T>::npos
+    : (word<T>::width - word<T>::count_leading_zeros(~x) - 1);
+}
+
+/// Finds the next 1-bit starting at position relative to the LSB.
+/// @param x The block to search.
+/// @param i The position relative to the LSB to start searching.
+template <class T>
+static constexpr auto find_next(T x, detail::word_size_type<T> i)
+-> std::enable_if_t<
+  detail::is_unsigned_integral<T>::value,
+  detail::word_size_type<T>
+  > {
+  if (i == word<T>::width - 1)
+    return word<T>::npos;
+  auto top = x & (word<T>::all << (i + 1));
+  return top == 0 ? word<T>::npos : word<T>::count_trailing_zeros(top);
+}
+
+/// Finds the previous 1-bit starting at position relative to the LSB.
+/// @param x The block to search.
+/// @param i The position relative to the LSB to start searching.
+/// @pre `i < width`
+template <class T>
+static constexpr auto find_prev(T x, detail::word_size_type<T> i)
+-> std::enable_if_t<
+  detail::is_unsigned_integral<T>::value,
+  detail::word_size_type<T>
+  > {
+  if (i == 0)
+    return word<T>::npos;
+  auto low = x & ~(word<T>::all << i);
+  return low == 0
+    ? word<T>::npos
+    : word<T>::width - word<T>::count_leading_zeros(low) - 1;
+}
+
+/// Computes the position of the i-th occurrence of a bit.
+/// @param Bit The bit value.
+/// @param x The block to search.
+/// @param i The position of the *i*-th occurrence of *Bit* in *b*.
+/// @pre `i > 0 && i <= width`
+template <bool Bit = true, class T>
+static constexpr auto select(T x, detail::word_size_type<T> i)
+-> std::enable_if_t<
+  Bit && detail::is_unsigned_integral<T>::value,
+  detail::word_size_type<T>
+> {
+  // TODO: make this efficient and branch-free. There is one implementation
+  // that counts from the right for 64-bit here:
+  // http://graphics.stanford.edu/~seander/bithacks.html
+  auto cum = 0u;
+  for (auto j = 0u; j < word<T>::width; ++j)
+    if (word<T>::test(x, j))
+      if (++cum == i)
+        return j;
+  return word<T>::npos;
+}
+
+template <bool Bit, class T>
+static constexpr auto select(T x, detail::word_size_type<T> i)
+-> std::enable_if_t<
+  !Bit && detail::is_unsigned_integral<T>::value,
+  detail::word_size_type<T>
+> {
+  // TODO: see note above.
+  auto cum = 0u;
+  for (auto j = 0u; j < word<T>::width; ++j)
+    if (!word<T>::test(x, j))
+      if (++cum == i)
+        return j;
+  return word<T>::npos;
+}
 
 } // namespace vast
 

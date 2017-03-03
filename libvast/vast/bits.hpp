@@ -14,7 +14,7 @@ class bits {
   public:
   using word_type = word<T>;
   using value_type = typename word_type::value_type;
-  using size_type = uint64_t;
+  using size_type = typename word_type::size_type;
 
   static constexpr value_type mask(value_type x, size_type n) {
     return n < word_type::width ? x & word_type::lsb_mask(n) : x;
@@ -51,99 +51,9 @@ class bits {
   /// Checks whether all bits have the same value.
   /// @returns `true` if the bits are either all 0 or all 1.
   bool homogeneous() const {
-    return size_ == word_type::width 
-      ? word_type::all_or_none(data_) 
+    return size_ == word_type::width
+      ? word_type::all_or_none(data_)
       : word_type::all_or_none(data_, size_);
-  }
-
-  /// Computes the number 1-bits.
-  /// @returns The population count of this bit sequence.
-  size_type count() const {
-    if (size_ <= word_type::width && data_ > 0)
-      return word_type::popcount(data_);
-    return data_ == word_type::all ? size_ : 0;
-  }
-
-  /// Finds the first bit of a particular value.
-  /// @tparam Bit The bit value to look for.
-  /// @returns The position of the first bit having value *Bit*, or `npos` if
-  ///          not such position exists..
-  template <bool Bit = true>
-  std::enable_if_t<Bit, size_type> find_first() const {
-    if (size_ > word_type::width)
-      return data_ == word_type::all ? 0 : word_type::npos;
-    // TODO: delegate to proper word-level function.
-    if (data_ == word_type::none)
-      return word_type::npos;
-    return word_type::count_trailing_zeros(data_);
-  }
-
-  template <bool Bit>
-  std::enable_if_t<!Bit, size_type> find_first() const {
-    if (size_ > word_type::width)
-      return data_ == word_type::none ? 0 : word_type::npos;
-    // TODO: delegate to proper word-level function.
-    auto x = data_ | word_type::msb_mask(word_type::width - size_);
-    if (x == word_type::all)
-      return word_type::npos;
-    return word_type::count_trailing_ones(x);
-  }
-
-  /// Finds the next bit after at a particular offset.
-  /// @param i The offset after where to begin searching.
-  /// @returns The position *p*, where *p > i*, of the bit having value *Bit*,
-  ///          or `npos` if no such *p* exists.
-  template <bool Bit = true>
-  std::enable_if_t<Bit, size_type> find_next(size_type i) const {
-    if (i >= size_ - 1)
-      return word_type::npos;
-    if (size_ > word_type::width)
-      return data_ == word_type::all ? i + 1 : word_type::npos;
-    // TODO: delegate to proper word-level function.
-    value_type x = data_ & ~word_type::lsb_mask(i + 1);
-    if (x == word_type::none)
-      return word_type::npos;
-    return word_type::count_trailing_zeros(x);
-  }
-
-  template <bool Bit>
-  std::enable_if_t<!Bit, size_type> find_next(size_type i) const {
-    if (i >= size_ - 1)
-      return word_type::npos;
-    if (size_ > word_type::width)
-      return data_ == word_type::none ? i + 1 : word_type::npos;
-    // TODO: delegate to proper word-level function.
-    value_type x = data_;
-    x |= word_type::msb_mask(word_type::width - size_);
-    x |= word_type::lsb_mask(i + 1);
-    if (x == word_type::all)
-      return word_type::npos;
-    return word_type::count_trailing_ones(x);
-  }
-
-  /// Finds the last bit of a particular value.
-  /// @tparam Bit The bit value to look for.
-  /// @returns The position of the last bit having value *Bit*.
-  template <bool Bit = true>
-  std::enable_if_t<Bit, size_type> find_last() const {
-    if (size_ > word_type::width)
-      return data_ == word_type::all ? size_ - 1 : word_type::npos;
-    // TODO: delegate to proper word-level function.
-    if (data_ == word_type::none)
-      return word_type::npos;
-    value_type x = data_ << (word_type::width - size_);
-    return size_ - word_type::count_leading_zeros(x) - 1;
-  }
-
-  template <bool Bit>
-  std::enable_if_t<!Bit, size_type> find_last() const {
-    if (size_ > word_type::width)
-      return data_ == word_type::none ? size_ - 1 : word_type::npos;
-    // TODO: delegate to proper word-level function.
-    if (data_ == word_type::all)
-      return word_type::npos;
-    value_type x = data_ << (word_type::width - size_);
-    return size_ - word_type::count_leading_ones(x) - 1;
   }
 
 private:
@@ -151,7 +61,119 @@ private:
   size_type size_;
 };
 
-// -- algorithms -------------------------------------------------------------
+// -- searching --------------------------------------------------------------
+
+/// Finds the first bit of a particular value.
+/// @tparam Bit The bit value to look for.
+/// @returns The position of the first bit having value *Bit*, or `npos` if
+///          not such position exists..
+template <bool Bit = true, class T>
+std::enable_if_t<Bit, typename bits<T>::size_type>
+find_first(const bits<T>& b) {
+  if (b.size() > word<T>::width)
+    return b.data() == word<T>::all ? 0 : word<T>::npos;
+  // TODO: delegate to proper word-level function.
+  if (b.data() == word<T>::none)
+    return word<T>::npos;
+  return find_first<Bit>(b.data());
+}
+
+template <bool Bit, class T>
+std::enable_if_t<!Bit, typename bits<T>::size_type>
+find_first(const bits<T>& b) {
+  if (b.size() > word<T>::width)
+    return b.data() == word<T>::none ? 0 : word<T>::npos;
+  // TODO: delegate to proper word-level function.
+  T x = b.data() | word<T>::msb_mask(word<T>::width - b.size());
+  if (x == word<T>::all)
+    return word<T>::npos;
+  return word<T>::count_trailing_ones(x);
+}
+
+/// Finds the next bit after at a particular offset.
+/// @param i The offset after where to begin searching.
+/// @returns The position *p*, where *p > i*, of the bit having value *Bit*,
+///          or `npos` if no such *p* exists.
+template <bool Bit = true, class T>
+std::enable_if_t<Bit, typename bits<T>::size_type>
+find_next(const bits<T>& b, typename bits<T>::size_type i) {
+  if (i >= b.size() - 1)
+    return word<T>::npos;
+  if (b.size() > word<T>::width)
+    return b.data() == word<T>::all ? i + 1 : word<T>::npos;
+  // TODO: delegate to proper word-level function.
+  T x = b.data() & ~word<T>::lsb_mask(i + 1);
+  if (x == word<T>::none)
+    return word<T>::npos;
+  return word<T>::count_trailing_zeros(x);
+}
+
+template <bool Bit, class T>
+std::enable_if_t<!Bit, typename bits<T>::size_type>
+find_next(const bits<T>& b, typename bits<T>::size_type i) {
+  if (i >= b.size() - 1)
+    return word<T>::npos;
+  if (b.size() > word<T>::width)
+    return b.data() == word<T>::none ? i + 1 : word<T>::npos;
+  // TODO: delegate to proper word-level function.
+  T x = b.data();
+  x |= word<T>::msb_mask(word<T>::width - b.size());
+  x |= word<T>::lsb_mask(i + 1);
+  if (x == word<T>::all)
+    return word<T>::npos;
+  return word<T>::count_trailing_ones(x);
+}
+
+/// Finds the last bit of a particular value.
+/// @tparam Bit The bit value to look for.
+/// @returns The position of the last bit having value *Bit*.
+template <bool Bit = true, class T>
+std::enable_if_t<Bit, typename bits<T>::size_type>
+find_last(const bits<T>& b) {
+  if (b.size() > word<T>::width)
+    return b.data() == word<T>::all ? b.size() - 1 : word<T>::npos;
+  // TODO: delegate to proper word-level function.
+  if (b.data() == word<T>::none)
+    return word<T>::npos;
+  T x = b.data() << (word<T>::width - b.size());
+  return b.size() - word<T>::count_leading_zeros(x) - 1;
+}
+
+template <bool Bit, class T>
+std::enable_if_t<!Bit, typename bits<T>::size_type>
+find_last(const bits<T>& b) {
+  if (b.size() > word<T>::width)
+    return b.data() == word<T>::none ? b.size() - 1 : word<T>::npos;
+  // TODO: delegate to proper word-level function.
+  if (b.data() == word<T>::all)
+    return word<T>::npos;
+  T x = b.data() << (word<T>::width - b.size());
+  return b.size() - word<T>::count_leading_ones(x) - 1;
+}
+
+// -- counting ---------------------------------------------------------------
+
+/// Computes the number of occurrences of a bit value.
+/// @tparam Bit The bit value to count.
+/// @param b The bit sequence to count.
+/// @returns The population count of *b*.
+template <bool Bit = true, class T>
+auto rank(const bits<T>& b)
+-> std::enable_if_t<Bit, typename bits<T>::size_type> {
+  if (b.size() > word<T>::width)
+    return b.data() == word<T>::all ? b.size() : 0;
+  // TODO: delegate to proper word-level function.
+  return b.data() == word<T>::none ? 0 : word<T>::popcount(b.data());
+}
+
+template <bool Bit, class T>
+auto rank(const bits<T>& b)
+-> std::enable_if_t<!Bit, typename bits<T>::size_type> {
+  if (b.size() > word<T>::width)
+    return b.data() == word<T>::none ? b.size() : 0;
+  // TODO: delegate to proper word-level function.
+  return b.data() == word<T>::all ? b.size() : word<T>::popcount(~b.data());
+}
 
 /// Computes the number of occurrences of a bit value in *[0,i]*.
 /// @tparam Bit The bit value to count.
@@ -162,23 +184,13 @@ private:
 template <bool Bit = true, class T>
 typename bits<T>::size_type
 rank(const bits<T>& b, typename bits<T>::size_type i) {
-  using word_type = typename bits<T>::word_type;
   VAST_ASSERT(i < b.size());
   T data = Bit ? b.data() : ~b.data();
-  if (b.size() > word_type::width)
-    return data == word_type::none ? 0 : i + 1;
-  if (i == word_type::width - 1)
-    return data == word_type::none ? 0 : word_type::popcount(data);
-  return word_type::rank(data, i);
-}
-
-/// Computes the number of occurrences of a bit value.
-/// @tparam Bit The bit value to count.
-/// @param b The bit sequence to count.
-/// @returns The population count of *b*.
-template <bool Bit = true, class T>
-auto rank(const bits<T>& b) {
-  return rank<Bit>(b, b.size() - 1);
+  if (b.size() > word<T>::width)
+    return data == word<T>::none ? 0 : i + 1;
+  if (i == word<T>::width - 1)
+    return data == word<T>::none ? 0 : word<T>::popcount(data);
+  return rank(data, i);
 }
 
 /// Computes the position of the i-th occurrence of a bit.
@@ -189,13 +201,12 @@ auto rank(const bits<T>& b) {
 template <bool Bit = true, class T>
 typename bits<T>::size_type
 select(const bits<T>& b, typename bits<T>::size_type i) {
-  using word_type = typename bits<T>::word_type;
   VAST_ASSERT(i > 0);
   VAST_ASSERT(i <= b.size());
   T data = Bit ? b.data() : ~b.data();
-  if (b.size() > word_type::width)
-    return data == word_type::all ? i - 1 : word_type::npos;
-  return word_type::select(data, i);
+  if (b.size() > word<T>::width)
+    return data == word<T>::all ? i - 1 : word<T>::npos;
+  return select(data, i);
 }
 
 } // namespace vast

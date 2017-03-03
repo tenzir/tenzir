@@ -252,7 +252,7 @@ rank(Bitmap const& bm, typename Bitmap::size_type i) {
   for (auto b : bit_range(bm)) {
     if (i >= n && i < n + b.size())
       return result + rank<Bit>(b, i - n);
-    result += Bit ? b.count() : b.size() - b.count();
+    result += Bit ? rank<1>(b) : b.size() - rank<1>(b);
     n += b.size();
   }
   return result;
@@ -278,12 +278,12 @@ template <bool Bit = true, class Bitmap>
 typename Bitmap::size_type
 select(Bitmap const& bm, typename Bitmap::size_type i) {
   VAST_ASSERT(i > 0);
-  auto rank = typename Bitmap::size_type{0};
+  auto rnk = typename Bitmap::size_type{0};
   auto n = typename Bitmap::size_type{0};
   if (i == Bitmap::word_type::npos) {
     auto last = Bitmap::word_type::npos;
     for (auto b : bit_range(bm)) {
-      auto l = b.find_last();
+      auto l = find_last(b);
       if (l != Bitmap::word_type::npos)
         last = n + l;
       n += b.size();
@@ -291,10 +291,10 @@ select(Bitmap const& bm, typename Bitmap::size_type i) {
     return last;
   }
   for (auto b : bit_range(bm)) {
-    auto count = Bit ? b.count() : b.size() - b.count();
-    if (rank + count >= i)
-      return n + select<Bit>(b, i - rank); // Last sequence.
-    rank += count;
+    auto count = Bit ? rank<1>(b) : b.size() - rank<1>(b);
+    if (rnk + count >= i)
+      return n + select<Bit>(b, i - rnk); // Last sequence.
+    rnk += count;
     n += b.size();
   }
   return Bitmap::word_type::npos;
@@ -313,7 +313,7 @@ public:
 
   select_range(BitRange rng) : rng_{rng} {
     if (!rng_.done()) {
-      i_ = rng_.get().find_first();
+      i_ = find_first(rng_.get());
       scan();
     }
   }
@@ -325,7 +325,7 @@ public:
 
   void next() {
     VAST_ASSERT(!done());
-    i_ = rng_.get().find_next(i_);
+    i_ = find_next(rng_.get(), i_);
     scan();
   }
 
@@ -392,7 +392,7 @@ protected:
       rng_.next();
       if (rng_.done())
         return;
-      i_ = rng_.get().find_first();
+      i_ = find_first(rng_.get());
     }
   }
 
@@ -426,14 +426,14 @@ auto span(Bitmap const& bm) {
   auto end = rng.end();
   // Locate first position.
   for (; begin != end; n += begin->size(), ++begin) {
-    auto first = begin->template find_first<Bit>();
+    auto first = find_first<Bit>(*begin);
     if (first != Bitmap::word_type::npos) {
       result.first = result.second = n + first;
       break;
     }
   }
   for (; begin != end; n += begin->size(), ++begin) {
-    auto last = begin->template find_last<Bit>();
+    auto last = find_last<Bit>(*begin);
     if (last != Bitmap::word_type::npos)
       result.second = n + last;
   }

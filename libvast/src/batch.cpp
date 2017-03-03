@@ -105,15 +105,15 @@ expected<std::vector<event>> batch::reader::read(const bitmap& ids) {
   auto rng = bit_range(ids);
   auto begin = rng.begin();
   auto end = rng.end();
-  auto next = [&](auto bits, auto id) {
-    auto i = bits.find_next(id - n);
+  auto next = [&](auto& bits, auto id) {
+    auto i = find_next(bits, id - n);
     if (i != word::npos)
       i += n;
     return i;
   };
   for ( ; begin != end; n += begin->size(), ++begin) {
     auto& bits = *begin;
-    auto first = bits.find_first();
+    auto first = find_first(bits);
     if (first == word::npos)
       continue;
     auto id = n + first;

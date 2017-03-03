@@ -126,6 +126,9 @@ struct contains<T, std::tuple<T, Ts...>> : std::true_type {};
 
 // -- C++17 ------------------------------------------------------------------
 
+template <bool B>
+using bool_constant = std::integral_constant<bool, B>;
+
 //template <class F, class Tuple, size_t... I>
 //constexpr decltype(auto) apply_impl(F&& f, Tuple&& t,
 //                                    std::index_sequence<I...> ) {

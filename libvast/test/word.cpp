@@ -72,7 +72,9 @@ TEST(manipulation) {
   CHECK_EQUAL(w8::flip(w8::msb1, 7), w8::none);
   CHECK_EQUAL(w8::flip(w8::lsb0, 0), w8::all);
   CHECK_EQUAL(w8::flip(w8::lsb1, 0), w8::none);
-  CHECK_EQUAL(w8::set(w8::lsb0, 0, 0), w8::lsb0); //nop
+  CHECK_EQUAL(w8::set<0>(w8::lsb0, 0), w8::lsb0); //nop
+  CHECK_EQUAL(w8::set<1>(w8::lsb0, 0), w8::all);
+  CHECK_EQUAL(w8::set(w8::lsb0, 0, 0), w8::lsb0);
   CHECK_EQUAL(w8::set(w8::lsb0, 0, 1), w8::all);
   CHECK_EQUAL(w8::set(w8::none, 5, 1), 0b00100000);
   CHECK_EQUAL(w8::set(w8::all, 5, 0), 0b11011111);
@@ -88,8 +90,8 @@ TEST(counting) {
   CHECK_EQUAL(w8::parity(0b10111100), 1u);
   CHECK_EQUAL(w8::parity(0b01111110), 0u);
   // Make sure SFINAE overloads work.
-  auto x = 0b0000000001010100010101000101010001010100010101000101010000000000;
-  auto y = 0b1111111111111110000000000000000000000000000000000000000011111111;
+  auto x = 0b0000000001010100010101000101010001010100010101000101010000000000u;
+  auto y = 0b1111111111111110000000000000000000000000000000000000000011111111u;
   CHECK_EQUAL(w64::count_trailing_zeros(x), 10u);
   CHECK_EQUAL(w64::count_trailing_zeros(y), 0u);
   CHECK_EQUAL(w64::count_trailing_ones(x), 0u);
@@ -104,71 +106,76 @@ TEST(counting) {
   MESSAGE("parity");
   CHECK_EQUAL(w64::parity(x), 0u);
   CHECK_EQUAL(w64::parity(y), 1u);
+}
+
+TEST(rank) {
+  auto x = 0b0000000001010100010101000101010001010100010101000101010000000000u;
+  auto y = 0b1111111111111110000000000000000000000000000000000000000011111111u;
   MESSAGE("rank");
   for (auto i = 0u; i < w8::width; ++i)
-    CHECK_EQUAL(w8::rank(w8::all, i), i + 1);
-  CHECK_EQUAL(w8::rank(0b01011000, 7), 3u);
-  CHECK_EQUAL(w8::rank(0b01011000, 3), 1u);
-  CHECK_EQUAL(w8::rank(0b01011000, 4), 2u);
-  CHECK_EQUAL(w8::rank(0b01011000, 5), 2u);
-  CHECK_EQUAL(w64::rank(x, 63), w64::popcount(x));
-  CHECK_EQUAL(w64::rank(y, 63), w64::popcount(y));
-  CHECK_EQUAL(w64::rank(x, 0), 0u);
-  CHECK_EQUAL(w64::rank(y, 0), 1u);
-  CHECK_EQUAL(w64::rank(x, 1), 0u);
-  CHECK_EQUAL(w64::rank(y, 1), 2u);
-  CHECK_EQUAL(w64::rank(x, 10), 1u);
-  CHECK_EQUAL(w64::rank(y, 10), 8u);
+    CHECK_EQUAL(rank(w8::all, i), i + 1);
+  CHECK_EQUAL(rank(0b01011000u, 7), 3u);
+  CHECK_EQUAL(rank(0b01011000u, 3), 1u);
+  CHECK_EQUAL(rank(0b01011000u, 4), 2u);
+  CHECK_EQUAL(rank(0b01011000u, 5), 2u);
+  CHECK_EQUAL(rank(x, 63), w64::popcount(x));
+  CHECK_EQUAL(rank(y, 63), w64::popcount(y));
+  CHECK_EQUAL(rank(x, 0), 0u);
+  CHECK_EQUAL(rank(y, 0), 1u);
+  CHECK_EQUAL(rank(x, 1), 0u);
+  CHECK_EQUAL(rank(y, 1), 2u);
+  CHECK_EQUAL(rank(x, 10), 1u);
+  CHECK_EQUAL(rank(y, 10), 8u);
 }
 
-TEST(next) {
-  CHECK_EQUAL(w8::next(w8::none, 0), w8::npos);
-  CHECK_EQUAL(w8::next(w8::none, 7), w8::npos);
+TEST(find_next) {
+  CHECK_EQUAL(find_next(w8::none, 0), w8::npos);
+  CHECK_EQUAL(find_next(w8::none, 7), w8::npos);
   for (auto i = 0u; i < w8::width - 1; ++i)
-    CHECK_EQUAL(w8::next(w8::all, i), i + 1);
-  auto x = 0b0000000001010100010101000101010001010100010101000101010000000000;
+    CHECK_EQUAL(find_next(w8::all, i), i + 1);
+  auto x = 0b0000000001010100010101000101010001010100010101000101010000000000u;
   auto first_one = w64::count_trailing_zeros(x);
   auto last_one = w64::width - w64::count_leading_zeros(x) - 1;
-  CHECK_EQUAL(w64::next(x, 0), first_one);
-  CHECK_EQUAL(w64::next(x, 1), first_one);
-  CHECK_EQUAL(w64::next(x, 9), first_one);
-  CHECK_EQUAL(w64::next(x, 10), first_one + 2);
-  CHECK_EQUAL(w64::next(x, last_one), w64::npos);
-  CHECK_EQUAL(w64::next(x, last_one - 1), last_one);
-  CHECK_EQUAL(w64::next(x, last_one - 2), last_one);
-  CHECK_EQUAL(w64::next(x, last_one - 3), last_one - 2);
+  CHECK_EQUAL(find_next(x, 0), first_one);
+  CHECK_EQUAL(find_next(x, 1), first_one);
+  CHECK_EQUAL(find_next(x, 9), first_one);
+  CHECK_EQUAL(find_next(x, 10), first_one + 2);
+  CHECK_EQUAL(find_next(x, last_one), w64::npos);
+  CHECK_EQUAL(find_next(x, last_one - 1), last_one);
+  CHECK_EQUAL(find_next(x, last_one - 2), last_one);
+  CHECK_EQUAL(find_next(x, last_one - 3), last_one - 2);
 }
 
-TEST(prev) {
-  CHECK_EQUAL(w8::prev(w8::none, 0), w8::npos);
-  CHECK_EQUAL(w8::prev(w8::none, 7), w8::npos);
+TEST(find_prev) {
+  CHECK_EQUAL(find_prev(w8::none, 0), w8::npos);
+  CHECK_EQUAL(find_prev(w8::none, 7), w8::npos);
   for (auto i = 1u; i < w8::width; ++i)
-    CHECK_EQUAL(w8::prev(w8::all, i), i - 1);
-  auto x = 0b1111111111111110000000000000000000000000000000000000000011111111;
-  CHECK_EQUAL(w64::prev(x, 0), w64::npos);
-  CHECK_EQUAL(w64::prev(x, 1), 0u);
+    CHECK_EQUAL(find_prev(w8::all, i), i - 1);
+  auto x = 0b1111111111111110000000000000000000000000000000000000000011111111u;
+  CHECK_EQUAL(find_prev(x, 0), w64::npos);
+  CHECK_EQUAL(find_prev(x, 1), 0u);
   auto first_zero = w64::count_trailing_ones(x);
   auto last_zero = w64::width - w64::count_leading_ones(x) - 1;
-  CHECK_EQUAL(w64::prev(x, first_zero), first_zero - 1);
-  CHECK_EQUAL(w64::prev(x, first_zero + 10), first_zero - 1);
-  CHECK_EQUAL(w64::prev(x, 63), 62u);
-  CHECK_EQUAL(w64::prev(x, last_zero), first_zero - 1);
-  CHECK_EQUAL(w64::prev(x, last_zero + 1), first_zero - 1);
-  CHECK_EQUAL(w64::prev(x, last_zero + 2), last_zero + 1);
+  CHECK_EQUAL(find_prev(x, first_zero), first_zero - 1);
+  CHECK_EQUAL(find_prev(x, first_zero + 10), first_zero - 1);
+  CHECK_EQUAL(find_prev(x, 63), 62u);
+  CHECK_EQUAL(find_prev(x, last_zero), first_zero - 1);
+  CHECK_EQUAL(find_prev(x, last_zero + 1), first_zero - 1);
+  CHECK_EQUAL(find_prev(x, last_zero + 2), last_zero + 1);
 }
 
 TEST(select) {
-  CHECK_EQUAL(w8::select(w8::none, 1), w8::npos);
+  CHECK_EQUAL(select(w8::none, 1), w8::npos);
   for (auto i = 0u; i < w8::width; ++i)
-    CHECK_EQUAL(w8::select(w8::all, i + 1), i);
-  CHECK_EQUAL(w8::select(w8::msb1, 1), 7u);
-  CHECK_EQUAL(w8::select(w8::msb1, 2), w8::npos);
-  CHECK_EQUAL(w8::select(w8::lsb1, 1), 0u);
-  CHECK_EQUAL(w8::select(w8::lsb1, 2), w8::npos);
-  CHECK_EQUAL(w8::select(0b01011000, 1), 3u);
-  CHECK_EQUAL(w8::select(0b01011000, 2), 4u);
-  CHECK_EQUAL(w8::select(0b01011000, 3), 6u);
-  CHECK_EQUAL(w8::select(0b01011000, 4), w8::npos);
+    CHECK_EQUAL(select(w8::all, i + 1), i);
+  CHECK_EQUAL(select(w8::msb1, 1), 7u);
+  CHECK_EQUAL(select(w8::msb1, 2), w8::npos);
+  CHECK_EQUAL(select(w8::lsb1, 1), 0u);
+  CHECK_EQUAL(select(w8::lsb1, 2), w8::npos);
+  CHECK_EQUAL(select(0b01011000u, 1), 3u);
+  CHECK_EQUAL(select(0b01011000u, 2), 4u);
+  CHECK_EQUAL(select(0b01011000u, 3), 6u);
+  CHECK_EQUAL(select(0b01011000u, 4), w8::npos);
 }
 
 TEST(math) {
