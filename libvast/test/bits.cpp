@@ -81,6 +81,22 @@ TEST(finding - block) {
   CHECK_EQUAL(x.find_next<0>(6), bits8::word_type::npos);
   CHECK_EQUAL(x.find_next<0>(7), bits8::word_type::npos);
   CHECK_EQUAL(x.find_last<0>(), 6u);
+  x = bits8{0b10000000, 7};
+  CHECK_EQUAL(x.find_first<1>(), bits8::word_type::npos);
+  CHECK_EQUAL(x.find_last<1>(), bits8::word_type::npos);
+  CHECK_EQUAL(x.find_first<0>(), 0u);
+  CHECK_EQUAL(x.find_last<0>(), 6u);
+  x = bits8{0b01111111, 6};
+  CHECK_EQUAL(x.find_first<1>(), 0u);
+  CHECK_EQUAL(x.find_last<1>(), 5u);
+  CHECK_EQUAL(x.find_next<1>(0), 1u);
+  CHECK_EQUAL(x.find_next<1>(4), 5u);
+  CHECK_EQUAL(x.find_next<1>(5), bits8::word_type::npos);
+  CHECK_EQUAL(x.find_first<0>(), bits8::word_type::npos);
+  CHECK_EQUAL(x.find_last<0>(), bits8::word_type::npos);
+  CHECK_EQUAL(x.find_next<0>(0), bits8::word_type::npos);
+  CHECK_EQUAL(x.find_next<0>(4), bits8::word_type::npos);
+  CHECK_EQUAL(x.find_next<0>(5), bits8::word_type::npos);
   MESSAGE("64 bits");
   auto y =
     bits64{0b0000000001010100010101000101010001010100010101000101010000000000};
@@ -94,6 +110,12 @@ TEST(finding - block) {
   CHECK_EQUAL(y.find_last<1>(), 63u);
   CHECK_EQUAL(y.find_first<0>(), 8u);
   CHECK_EQUAL(y.find_last<0>(), 48u);
+  y = bits64{0b0111101111111110000000001000000000001000000000000000000011110111,
+             48};
+  CHECK_EQUAL(y.find_first<1>(), 0u);
+  CHECK_EQUAL(y.find_last<1>(), 39u);
+  CHECK_EQUAL(y.find_first<0>(), 3u);
+  CHECK_EQUAL(y.find_last<0>(), 47u);
 }
 
 TEST(finding - sequence) {

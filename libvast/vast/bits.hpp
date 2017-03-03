@@ -69,13 +69,24 @@ class bits {
   /// @returns The position of the first bit having value *Bit*, or `npos` if
   ///          not such position exists..
   template <bool Bit = true>
-  size_type find_first() const {
-    value_type data = Bit ? data_ : ~data_;
+  std::enable_if_t<Bit, size_type> find_first() const {
     if (size_ > word_type::width)
-      return data == word_type::all ? 0 : word_type::npos;
-    if (data == word_type::none)
+      return data_ == word_type::all ? 0 : word_type::npos;
+    // TODO: delegate to proper word-level function.
+    if (data_ == word_type::none)
       return word_type::npos;
-    return word_type::count_trailing_zeros(data);
+    return word_type::count_trailing_zeros(data_);
+  }
+
+  template <bool Bit>
+  std::enable_if_t<!Bit, size_type> find_first() const {
+    if (size_ > word_type::width)
+      return data_ == word_type::none ? 0 : word_type::npos;
+    // TODO: delegate to proper word-level function.
+    auto x = data_ | word_type::msb_mask(word_type::width - size_);
+    if (x == word_type::all)
+      return word_type::npos;
+    return word_type::count_trailing_ones(x);
   }
 
   /// Finds the next bit after at a particular offset.
@@ -83,29 +94,56 @@ class bits {
   /// @returns The position *p*, where *p > i*, of the bit having value *Bit*,
   ///          or `npos` if no such *p* exists.
   template <bool Bit = true>
-  size_type find_next(size_type i) const {
+  std::enable_if_t<Bit, size_type> find_next(size_type i) const {
     if (i >= size_ - 1)
       return word_type::npos;
-    value_type data = Bit ? data_ : ~data_;
     if (size_ > word_type::width)
-      return data == word_type::all ? i + 1 : word_type::npos;
-    data &= ~word_type::lsb_mask(i + 1);
-    if (data == word_type::none)
+      return data_ == word_type::all ? i + 1 : word_type::npos;
+    // TODO: delegate to proper word-level function.
+    value_type x = data_ & ~word_type::lsb_mask(i + 1);
+    if (x == word_type::none)
       return word_type::npos;
-    return word_type::count_trailing_zeros(data);
+    return word_type::count_trailing_zeros(x);
+  }
+
+  template <bool Bit>
+  std::enable_if_t<!Bit, size_type> find_next(size_type i) const {
+    if (i >= size_ - 1)
+      return word_type::npos;
+    if (size_ > word_type::width)
+      return data_ == word_type::none ? i + 1 : word_type::npos;
+    // TODO: delegate to proper word-level function.
+    value_type x = data_;
+    x |= word_type::msb_mask(word_type::width - size_);
+    x |= word_type::lsb_mask(i + 1);
+    if (x == word_type::all)
+      return word_type::npos;
+    return word_type::count_trailing_ones(x);
   }
 
   /// Finds the last bit of a particular value.
   /// @tparam Bit The bit value to look for.
   /// @returns The position of the last bit having value *Bit*.
   template <bool Bit = true>
-  size_type find_last() const {
-    value_type data = Bit ? data_ : ~data_;
+  std::enable_if_t<Bit, size_type> find_last() const {
     if (size_ > word_type::width)
-      return data == word_type::all ? size_ - 1 : word_type::npos;
-    if (data == word_type::none)
+      return data_ == word_type::all ? size_ - 1 : word_type::npos;
+    // TODO: delegate to proper word-level function.
+    if (data_ == word_type::none)
       return word_type::npos;
-    return word_type::width - word_type::count_leading_zeros(data) - 1;
+    value_type x = data_ << (word_type::width - size_);
+    return size_ - word_type::count_leading_zeros(x) - 1;
+  }
+
+  template <bool Bit>
+  std::enable_if_t<!Bit, size_type> find_last() const {
+    if (size_ > word_type::width)
+      return data_ == word_type::none ? size_ - 1 : word_type::npos;
+    // TODO: delegate to proper word-level function.
+    if (data_ == word_type::all)
+      return word_type::npos;
+    value_type x = data_ << (word_type::width - size_);
+    return size_ - word_type::count_leading_ones(x) - 1;
   }
 
 private:
