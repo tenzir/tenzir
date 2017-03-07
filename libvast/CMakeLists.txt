@@ -1,4 +1,19 @@
 # ----------------------------------------------------------------------------
+#                                 flatbuffers
+# ----------------------------------------------------------------------------
+
+file(GLOB flatbuffers_schemas ${CMAKE_CURRENT_SOURCE_DIR}/flatbuffers/*.fbs)
+add_custom_target(flatbuffers
+  ${FLATBUFFERS_EXECUTABLE} --cpp --scoped-enums
+                            -o ${CMAKE_CURRENT_BINARY_DIR}/flat
+                            ${flatbuffers_schemas}
+  COMMENT "Compiling flatbuffers schemas")
+
+file(GLOB flatbuffers_headers ${CMAKE_CURRENT_BINARY_DIR}/flat/*)
+install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/flat/
+        DESTINATION include/vast FILES_MATCHING PATTERN "*.")
+
+# ----------------------------------------------------------------------------
 #                                   libvast
 # ----------------------------------------------------------------------------
 
@@ -112,6 +127,8 @@ set_target_properties(libvast
   SOVERSION ${VERSION_MAJOR}
   VERSION ${VERSION_MAJOR}.${VERSION_MINOR}
   OUTPUT_NAME vast)
+
+add_dependencies(libvast flatbuffers)
 
 target_link_libraries(libvast ${libvast_libs})
 

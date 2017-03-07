@@ -259,6 +259,16 @@ if (CAF_LIBRARY_OPENCL)
   set(VAST_USE_OPENCL true)
 endif ()
 
+if (NOT FLATBUFFERS_ROOT_DIR AND VAST_PREFIX)
+  set(FLATBUFFERS_ROOT_DIR ${VAST_PREFIX})
+endif ()
+find_package(FLATBUFFERS QUIET)
+if (NOT FLATBUFFERS_FOUND)
+  message(FATAL_ERROR "Could not find flatbuffers")
+else ()
+  include_directories(${FLATBUFFERS_INCLUDE_DIR})
+endif ()
+
 if (NOT SNAPPY_ROOT_DIR AND VAST_PREFIX)
   set(SNAPPY_ROOT_DIR ${VAST_PREFIX})
 endif ()
@@ -391,6 +401,7 @@ else ()
 endif ()
 
 display(CAF_FOUND ${caf_dir} caf_summary)
+display(FLATBUFFERS_FOUND ${FLATBUFFERS_EXECUTABLE} flatbuffers_summary)
 display(SNAPPY_FOUND "${SNAPPY_INCLUDE_DIR}" snappy_summary)
 display(PCAP_FOUND "${PCAP_INCLUDE_DIR}" pcap_summary)
 display(GPERFTOOLS_FOUND "${GPERFTOOLS_INCLUDE_DIR}" perftools_summary)
@@ -422,6 +433,7 @@ set(summary
     "\nLDFLAGS:          ${LDFLAGS}"
     "\n"
     "\nCAF:              ${caf_summary}"
+    "\nflatbuffers:      ${flatbuffers_summary}"
     "\nSnappy            ${snappy_summary}"
     "\nPCAP:             ${pcap_summary}"
     "\nGperftools:       ${perftools_summary}"
