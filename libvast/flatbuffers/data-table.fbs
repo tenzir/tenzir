@@ -1,0 +1,62 @@
+table Address {
+  bytes:[ubyte];
+}
+
+table Subnet {
+  address:Address;
+  network:ushort;
+}
+
+enum PortType : ubyte {
+  Unknown,
+  TCP,
+  UDP,
+  ICMP
+}
+
+struct Port {
+  number:short = 0;
+  type:PortType = Unknown;
+}
+
+enum DataType : ubyte {
+  NoneType,
+  BooleanType,
+  IntegerType,
+  CountType,
+  RealType,
+  TimestampType,
+  TimespanType,
+  StringType,
+  PatternType,
+  AddressType,
+  SubnetType,
+  PortType,
+  VectorType,
+  SetType,
+  TableType
+}
+
+table MapEntry {
+  key:Data;
+  value:Data;
+}
+
+table Data {
+  which:DataType = NoneType;
+  boolean:bool = false;
+  integer:long = 0;
+  count:ulong = 0;
+  real:double = 0.0;
+  timestamp:long = 0;
+  timespan:long = 0;
+  str:string;
+  pattern:string;
+  address:Address;
+  subnet:Subnet;
+  port:Port;
+  vector:[Data];
+  set:[Data];
+  map:[MapEntry];
+}
+

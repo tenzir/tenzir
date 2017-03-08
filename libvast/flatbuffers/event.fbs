@@ -1,0 +1,21 @@
+include "data-table.fbs";
+
+namespace vast.flat;
+
+table Attribute {
+  key:string (key);
+  value:Data;
+}
+
+table MetaData {
+  id:ulong = 18446744073709551615;
+  timestamp:ulong = 0;
+  attributes:[Attribute];
+}
+
+table Event {
+  data:Data;
+  meta:MetaData;
+}
+
+root_type Event;

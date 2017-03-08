@@ -1,8 +1,0 @@
-// Defines VAST's data model in terms of flatbuffers.
-
-namespace vast.flat;
-
-table data {
-}
-
-root_type data;

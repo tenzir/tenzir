@@ -1,0 +1,10 @@
+include "batch.fbs";
+
+namespace vast.flat;
+
+table Segment {
+  id:string;
+  batches:[Batch];
+}
+
+root_type Segment;
