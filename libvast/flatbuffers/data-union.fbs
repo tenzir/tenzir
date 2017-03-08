@@ -1,5 +1,3 @@
-// VAST's data model.
-
 namespace vast.flat;
 
 table Boolean {

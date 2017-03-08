@@ -1,3 +1,5 @@
+namespace vast.flat;
+
 table Address {
   bytes:[ubyte];
 }
