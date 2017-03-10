@@ -61,6 +61,7 @@ Required dependencies:
   - GCC 6
 - [CMake](http://www.cmake.org)
 - [CAF](https://github.com/actor-framework/actor-framework) (develop branch)
+- [Flatbuffers](https://google.github.io/flatbuffers/)
 
 Optional:
 
@@ -74,7 +75,7 @@ Optional:
 FreeBSD ships with a C++14 compiler.
 One can install as the dependencies as follows:
 
-    pkg install cmake
+    pkg install cmake flatbuffers
 
 Even though FreeBSD provides a CAF port, VAST currently depends the CAF develop
 branch and therefore requires manual installation.
@@ -84,7 +85,7 @@ branch and therefore requires manual installation.
 On recent Debian-based distributions, getting a working toolchain involves
 installing the following packages:
 
-    apt-get install cmake
+    apt-get install cmake flatbuffers
 
 CAF offers binary packages via [openSUSE's Build Service][caf-obs].
 
@@ -93,7 +94,7 @@ CAF offers binary packages via [openSUSE's Build Service][caf-obs].
 Mac OS also ships with a C++14 compiler out of the box.
 [Homebrew](http://brew.sh) makes it easy to install the dependencies:
 
-    brew install cmake
+    brew install cmake flatbuffers
     brew install caf --HEAD
 
 ## Scientific Use
