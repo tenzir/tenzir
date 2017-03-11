@@ -1,12 +1,8 @@
 namespace vast.detail;
 
-table Address {
-  bytes:[ubyte];
-}
-
 table Subnet {
-  network:Address;
-  length:ushort;
+  network:[ubyte];
+  length:ubyte;
 }
 
 enum PortType : ubyte {
@@ -37,7 +33,7 @@ enum DataType : ubyte {
   PortType,
   VectorType,
   SetType,
-  TableType
+  MapType
 }
 
 table MapEntry {
@@ -51,16 +47,11 @@ table Data {
   integer:long = 0;
   count:ulong = 0;
   real:double = 0.0;
-  timestamp:long = 0;
-  timespan:long = 0;
-  enumeration:uint = 0;
-  address:Address;
+  address:[ubyte];
   subnet:Subnet;
   port:Port;
   str:string;
-  pattern:string;
   vector:[Data];
-  set:[Data];
   map:[MapEntry];
 }
 

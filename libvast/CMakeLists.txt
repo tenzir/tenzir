@@ -48,11 +48,13 @@ set(libvast_sources
   src/chunk.cpp
   src/compression.cpp
   src/data.cpp
+  src/data_view.cpp
   src/die.cpp
   src/expression.cpp
   src/expression_visitors.cpp
   src/error.cpp
   src/event.cpp
+  src/event_view.cpp
   src/ewah_bitmap.cpp
   src/filesystem.cpp
   src/key.cpp
@@ -242,6 +244,7 @@ set(tests
   test/variant.cpp
   test/vector_map.cpp
   test/vector_set.cpp
+  test/view.cpp
   test/word.cpp
   test/system/archive.cpp
   test/system/consensus.cpp

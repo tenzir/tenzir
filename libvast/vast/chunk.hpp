@@ -39,8 +39,9 @@ public:
   /// @param deleter The function to invoke on when destroying the chunk.
   template <class Deleter>
   chunk(size_t size, void* ptr, Deleter deleter = [](byte_type*, size_t) {})
-    : chunk{size, ptr} {
-    deleter_ = deleter;
+    : data_{reinterpret_cast<byte_type*>(ptr)},
+      size_{size},
+      deleter_{std::move(deleter)} {
   }
 
   /// Destroys the chunk and deallocates any owned memory.
