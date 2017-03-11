@@ -1,6 +1,6 @@
 include "event.fbs";
 
-namespace vast.flat;
+namespace vast.detail;
 
 table Batch {
   events:[Event];

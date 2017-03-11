@@ -1,6 +1,6 @@
-include "data-table.fbs";
+include "data_table.fbs";
 
-namespace vast.flat;
+namespace vast.detail;
 
 table Attribute {
   key:string (key);
@@ -8,7 +8,7 @@ table Attribute {
 }
 
 table MetaData {
-  id:ulong = 18446744073709551615;
+  id:ulong = -1;
   timestamp:ulong = 0;
   attributes:[Attribute];
 }

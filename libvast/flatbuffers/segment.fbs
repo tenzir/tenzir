@@ -1,6 +1,6 @@
 include "batch.fbs";
 
-namespace vast.flat;
+namespace vast.detail;
 
 table Segment {
   id:string;

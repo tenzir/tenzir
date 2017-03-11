@@ -1,12 +1,12 @@
-namespace vast.flat;
+namespace vast.detail;
 
 table Address {
   bytes:[ubyte];
 }
 
 table Subnet {
-  address:Address;
-  network:ushort;
+  network:Address;
+  length:ushort;
 }
 
 enum PortType : ubyte {
@@ -17,7 +17,7 @@ enum PortType : ubyte {
 }
 
 struct Port {
-  number:short = 0;
+  number:ushort = 0;
   type:PortType = Unknown;
 }
 
@@ -29,6 +29,7 @@ enum DataType : ubyte {
   RealType,
   TimestampType,
   TimespanType,
+  EnumerationType,
   StringType,
   PatternType,
   AddressType,
@@ -52,13 +53,15 @@ table Data {
   real:double = 0.0;
   timestamp:long = 0;
   timespan:long = 0;
-  str:string;
-  pattern:string;
+  enumeration:uint = 0;
   address:Address;
   subnet:Subnet;
   port:Port;
+  str:string;
+  pattern:string;
   vector:[Data];
   set:[Data];
   map:[MapEntry];
 }
 
+root_type Data;

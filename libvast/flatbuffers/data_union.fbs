@@ -1,4 +1,4 @@
-namespace vast.flat;
+namespace vast.detail;
 
 table Boolean {
   data:bool = false;
