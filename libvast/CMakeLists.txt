@@ -3,13 +3,28 @@
 # ----------------------------------------------------------------------------
 
 file(GLOB flatbuffers_schemas ${CMAKE_CURRENT_SOURCE_DIR}/flatbuffers/*.fbs)
-add_custom_target(flatbuffers
-  ${FLATBUFFERS_EXECUTABLE} --cpp --scoped-enums
-                            -o ${CMAKE_CURRENT_BINARY_DIR}/vast/flat
+set(flatbuffers_output_path ${CMAKE_CURRENT_BINARY_DIR}/vast/detail)
+
+# Translate paths to desired output paths.
+foreach (schema ${flatbuffers_schemas})
+  get_filename_component(basename ${schema} NAME_WE)
+  set(output_path "${flatbuffers_output_path}/${basename}_generated.h")
+  list(APPEND generated_schemas ${output_path})
+endforeach()
+
+# Specify translation from schemas to headers.
+add_custom_command(
+  OUTPUT ${generated_schemas}
+  COMMAND ${FLATBUFFERS_EXECUTABLE} --cpp --scoped-enums
+                            -I ${CMAKE_CURRENT_SOURCE_DIR}/flatbuffers
+                            -o ${flatbuffers_output_path}
                             ${flatbuffers_schemas}
+  DEPENDS ${flatbuffers_schemas}
   COMMENT "Compiling flatbuffers schemas")
 
-install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/vast/flat/
+add_custom_target(flatbuffers DEPENDS ${generated_schemas})
+
+install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/vast/detail/
         DESTINATION include/vast)
 
 # ----------------------------------------------------------------------------
