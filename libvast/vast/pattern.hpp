@@ -43,6 +43,8 @@ public:
   /// @returns `true` if the pattern matches inside *str*.
   bool search(std::string const& str) const;
 
+  const std::string& string() const;
+
   friend bool operator==(pattern const& lhs, pattern const& rhs);
   friend bool operator<(pattern const& lhs, pattern const& rhs);
 
