@@ -389,7 +389,7 @@ elseif (VAST_LOG_LEVEL EQUAL 3)
 elseif (VAST_LOG_LEVEL EQUAL 4)
   set(log_level_summary trace)
 else ()
-  message(FATAL "invalid log level")
+  message(FATAL_ERROR "Invalid log level: ${VAST_LOG_LEVEL}")
 endif ()
 
 set(caf_dir ${CAF_LIBRARY_CORE})
