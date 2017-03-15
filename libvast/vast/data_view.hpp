@@ -12,7 +12,7 @@
 #include "vast/chunk.hpp"
 
 #include "vast/detail/assert.hpp"
-#include "vast/detail/data_table_generated.h"
+#include "vast/detail/data_generated.h"
 
 namespace vast {
 
