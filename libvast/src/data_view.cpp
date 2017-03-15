@@ -2,25 +2,42 @@
 
 namespace vast {
 
-string_view::string_view(chunk_ptr chk, const flatbuffers::String* str)
-  : bytes_view<char>{chk, str} {
+const uint8_t* bytes_view::data() const {
+  VAST_ASSERT(bytes_ != nullptr);
+  return bytes_->data();
+}
+
+size_t bytes_view::size() const {
+  VAST_ASSERT(bytes_ != nullptr);
+  return bytes_->size();
+}
+
+bytes_view::bytes_view(chunk_ptr chk, const flatbuffers::Vector<uint8_t>* bytes)
+  : bytes_{bytes},
+    chunk_{chk} {
+}
+
+string_view::string_view(chunk_ptr chk, const flatbuffers::Vector<uint8_t>* str)
+  : bytes_view{chk, str} {
 }
 
 std::string unpack(string_view view) {
-  return std::string(view.data(), view.size());
+  return std::string(reinterpret_cast<const char*>(view.data()), view.size());
 }
 
-pattern_view::pattern_view(chunk_ptr chk, const flatbuffers::String* str)
-  : bytes_view<char>{chk, str} {
+pattern_view::pattern_view(chunk_ptr chk,
+                           const flatbuffers::Vector<uint8_t>* str)
+  : bytes_view{chk, str} {
 }
 
 pattern unpack(pattern_view view) {
-  return pattern{std::string(view.data(), view.size())};
+  auto s = std::string(reinterpret_cast<const char*>(view.data()), view.size());
+  return pattern{std::move(s)};
 }
 
 address_view::address_view(chunk_ptr chk,
                            const flatbuffers::Vector<uint8_t>* addr)
-  : bytes_view<uint8_t>{chk, addr} {
+  : bytes_view{chk, addr} {
 }
 
 address unpack(address_view view) {
@@ -30,19 +47,21 @@ address unpack(address_view view) {
 }
 
 
-subnet_view::subnet_view(chunk_ptr chk, const detail::Subnet* sn)
-  : subnet_{sn},
+subnet_view::subnet_view(chunk_ptr chk,
+                         const flatbuffers::Vector<uint8_t>* addr,
+                         count length)
+  : addr_{addr},
+    length_{static_cast<uint8_t>(length)},
     chunk_{chk} {
 }
 
 address_view subnet_view::network() const {
-  VAST_ASSERT(subnet_ != nullptr);
-  return address_view{chunk_, subnet_->network()};
+  VAST_ASSERT(addr_ != nullptr);
+  return address_view{chunk_, addr_};
 }
 
 uint8_t subnet_view::length() const {
-  VAST_ASSERT(subnet_ != nullptr);
-  return subnet_->length();
+  return length_;
 }
 
 subnet unpack(subnet_view view) {
@@ -125,7 +144,7 @@ build(flatbuffers::FlatBufferBuilder& builder, const data& x) {
     auto operator()(boolean x) {
       detail::DataBuilder db{builder_};
       db.add_which(detail::DataType::BooleanType);
-      db.add_boolean(x);
+      db.add_integer(x ? 1 : 0);
       return db.Finish();
     }
     auto operator()(integer x) {
@@ -165,17 +184,19 @@ build(flatbuffers::FlatBufferBuilder& builder, const data& x) {
       return db.Finish();
     }
     auto operator()(const std::string& x) {
-      auto str = builder_.CreateString(x);
+      auto ptr = reinterpret_cast<const uint8_t*>(x.data());
+      auto bytes = builder_.CreateVector<uint8_t>(ptr, x.size());
       detail::DataBuilder db{builder_};
       db.add_which(detail::DataType::StringType);
-      db.add_str(str);
+      db.add_bytes(bytes);
       return db.Finish();
     }
     auto operator()(const pattern& x) {
-      auto str = builder_.CreateString(x.string());
+      auto ptr = reinterpret_cast<const uint8_t*>(x.string().data());
+      auto bytes = builder_.CreateVector<uint8_t>(ptr, x.string().size());
       detail::DataBuilder db{builder_};
       db.add_which(detail::DataType::PatternType);
-      db.add_str(str);
+      db.add_bytes(bytes);
       return db.Finish();
     }
     auto operator()(const address& x) {
@@ -184,38 +205,24 @@ build(flatbuffers::FlatBufferBuilder& builder, const data& x) {
         : builder_.CreateVector<uint8_t>(x.data().data(), 16);
       detail::DataBuilder db{builder_};
       db.add_which(detail::DataType::AddressType);
-      db.add_address(bytes);
+      db.add_bytes(bytes);
       return db.Finish();
     }
     auto operator()(const subnet& x) {
       auto bytes = x.network().is_v4()
         ? builder_.CreateVector<uint8_t>(x.network().data().data() + 12, 4)
         : builder_.CreateVector<uint8_t>(x.network().data().data(), 16);
-      auto sn = detail::CreateSubnet(builder_, bytes, x.length());
       detail::DataBuilder db{builder_};
       db.add_which(detail::DataType::SubnetType);
-      db.add_subnet(sn);
+      db.add_count(x.length());
+      db.add_bytes(bytes);
       return db.Finish();
     }
     auto operator()(const port& x) {
-      auto t = detail::PortType::Unknown;
-      switch (x.type()) {
-        default:
-          break;
-        case port::tcp:
-          t = detail::PortType::TCP;
-          break;
-        case port::udp:
-          t = detail::PortType::UDP;
-          break;
-        case port::icmp:
-          t = detail::PortType::ICMP;
-          break;
-      }
-      auto p = detail::Port{x.number(), t};
       detail::DataBuilder db{builder_};
       db.add_which(detail::DataType::PortType);
-      db.add_port(&p);
+      db.add_integer(static_cast<integer>(x.type()));
+      db.add_count(static_cast<count>(x.number()));
       return db.Finish();
     }
     auto operator()(const vector& xs) {

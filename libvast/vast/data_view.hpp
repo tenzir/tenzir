@@ -19,34 +19,22 @@ namespace vast {
 class data_view;
 class subnet_view;
 
-template <class Byte>
 class bytes_view {
-  static_assert(sizeof(Byte) == 1, "need a valid byte type");
-
 public:
   bytes_view() = default;
 
-  const Byte* data() const {
-    VAST_ASSERT(bytes_ != nullptr);
-    return bytes_->data();
-  }
+  const uint8_t* data() const;
 
-  size_t size() const {
-    VAST_ASSERT(bytes_ != nullptr);
-    return bytes_->size();
-  }
+  size_t size() const;
 
 protected:
-  explicit bytes_view(chunk_ptr chk, const flatbuffers::Vector<Byte>* bytes)
-    : bytes_{bytes},
-      chunk_{chk} {
-  }
+  explicit bytes_view(chunk_ptr chk, const flatbuffers::Vector<uint8_t>* bytes);
 
-  const flatbuffers::Vector<Byte>* bytes_;
+  const flatbuffers::Vector<uint8_t>* bytes_;
   chunk_ptr chunk_;
 };
 
-class string_view : public bytes_view<char> {
+class string_view : public bytes_view {
   friend data_view; // construction
   template <class F>
   friend auto visit(F&& f, data_view x);
@@ -55,13 +43,14 @@ public:
   string_view() = default;
 
 private:
-  explicit string_view(chunk_ptr chk, const flatbuffers::String* str);
+  explicit string_view(chunk_ptr chk, const flatbuffers::Vector<uint8_t>* str);
 };
 
 std::string unpack(string_view view);
 
-class pattern_view : public bytes_view<char> {
+class pattern_view : public bytes_view {
   friend data_view; // construction
+  friend pattern unpack(pattern_view view);
   template <class F>
   friend auto visit(F&& f, data_view x);
 
@@ -69,12 +58,12 @@ public:
   pattern_view() = default;
 
 private:
-  explicit pattern_view(chunk_ptr chk, const flatbuffers::String* str);
+  explicit pattern_view(chunk_ptr chk, const flatbuffers::Vector<uint8_t>* str);
 };
 
 pattern unpack(pattern_view view);
 
-class address_view : public bytes_view<uint8_t> {
+class address_view : public bytes_view {
   friend data_view; // construction
   friend subnet_view;
   template <class F>
@@ -103,9 +92,11 @@ public:
   uint8_t length() const;
 
 private:
-  explicit subnet_view(chunk_ptr chk, const detail::Subnet* sn);
+  explicit subnet_view(chunk_ptr chk, const flatbuffers::Vector<uint8_t>* addr,
+                       count length);
 
-  const detail::Subnet* subnet_ = nullptr;
+  const flatbuffers::Vector<uint8_t>* addr_ = nullptr;
+  uint8_t length_;
   chunk_ptr chunk_;
 };
 
@@ -194,7 +185,7 @@ public:
       case detail::DataType::NoneType:
         return f(nil);
       case detail::DataType::BooleanType:
-        return f(x.data_->boolean());
+        return f(x.data_->integer() == 1);
       case detail::DataType::IntegerType:
         return f(x.data_->integer());
       case detail::DataType::CountType:
@@ -208,31 +199,18 @@ public:
       case detail::DataType::EnumerationType:
         return f(static_cast<enumeration>(x.data_->integer()));
       case detail::DataType::PortType: {
-        port::port_type t;
-        switch (x.data_->port()->type()) {
-          case detail::PortType::Unknown:
-            t = port::unknown;
-            break;
-          case detail::PortType::TCP:
-            t = port::tcp;
-            break;
-          case detail::PortType::UDP:
-            t = port::udp;
-            break;
-          case detail::PortType::ICMP:
-            t = port::icmp;
-            break;
-        }
-        return f(port{x.data_->port()->number(), t});
+        auto type = static_cast<port::port_type>(x.data_->integer());
+        auto num = static_cast<port::number_type>(x.data_->count());
+        return f(port{num, type});
       }
       case detail::DataType::StringType:
-        return f(string_view{x.chunk_, x.data_->str()});
+        return f(string_view{x.chunk_, x.data_->bytes()});
       case detail::DataType::PatternType:
-        return f(pattern_view{x.chunk_, x.data_->str()});
+        return f(pattern_view{x.chunk_, x.data_->bytes()});
       case detail::DataType::AddressType:
-        return f(address_view{x.chunk_, x.data_->address()});
+        return f(address_view{x.chunk_, x.data_->bytes()});
       case detail::DataType::SubnetType:
-        return f(subnet_view{x.chunk_, x.data_->subnet()});
+        return f(subnet_view{x.chunk_, x.data_->bytes(), x.data_->count()});
       case detail::DataType::VectorType:
         return f(vector_view{x.chunk_, x.data_->vector()});
       case detail::DataType::SetType:
