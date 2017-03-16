@@ -1,0 +1,10 @@
+include "data.fbs";
+
+namespace vast.detail;
+
+table Attribute {
+  key:string (key);
+  value:Data;
+}
+
+root_type Attribute;

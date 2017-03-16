@@ -1,20 +1,22 @@
+include "attribute.fbs";
 include "data.fbs";
+include "type.fbs";
 
 namespace vast.detail;
 
-table Attribute {
-  key:string (key);
-  value:Data;
-}
-
 table MetaData {
+  attributes:[Attribute];
   id:ulong = -1;
   timestamp:ulong = 0;
-  attributes:[Attribute];
+}
+
+table Value {
+  type:Type;
+  data:Data;
 }
 
 table Event {
-  data:Data;
+  value:Value;
   meta:MetaData;
 }
 

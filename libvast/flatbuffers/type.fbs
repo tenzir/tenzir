@@ -1,0 +1,13 @@
+include "attribute.fbs";
+include "data.fbs";
+
+namespace vast.detail;
+
+table Type {
+  which:DataType = NoneType;
+  name:string;
+  attributes:[Attribute];
+  subtypes:[Type];
+}
+
+root_type Type;
