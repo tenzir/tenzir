@@ -157,9 +157,9 @@ public:
 private:
   explicit table_view(
     chunk_ptr chk,
-    const flatbuffers::Vector<flatbuffers::Offset<detail::MapEntry>>* xs);
+    const flatbuffers::Vector<flatbuffers::Offset<detail::Data>>* xs);
 
-  const flatbuffers::Vector<flatbuffers::Offset<detail::MapEntry>>* xs_;
+  const flatbuffers::Vector<flatbuffers::Offset<detail::Data>>* xs_;
   chunk_ptr chunk_;
 };
 
@@ -218,7 +218,7 @@ public:
       case detail::DataType::SetType:
         return f(set_view{x.chunk_, x.data_->vector()});
       case detail::DataType::MapType:
-        return f(table_view{x.chunk_, x.data_->map()});
+        return f(table_view{x.chunk_, x.data_->vector()});
     }
     VAST_ASSERT(!"should never be reached");
     return f(nil);

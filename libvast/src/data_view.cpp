@@ -103,7 +103,7 @@ set unpack(set_view view) {
 
 table_view::table_view(
   chunk_ptr chk,
-  const flatbuffers::Vector<flatbuffers::Offset<detail::MapEntry>>* xs)
+  const flatbuffers::Vector<flatbuffers::Offset<detail::Data>>* xs)
   : xs_{xs},
     chunk_{chk} {
 }
@@ -111,13 +111,11 @@ table_view::table_view(
 table unpack(table_view view) {
   VAST_ASSERT(view.xs_ != nullptr);
   table xs;
-  auto f = [&](auto x) {
-    auto key = unpack(data_view{view.chunk_, x->key()});
-    auto val = unpack(data_view{view.chunk_, x->value()});
-    return std::make_pair(key, val);
-  };
-  std::transform(view.xs_->begin(), view.xs_->end(),
-                 std::inserter(xs, xs.end()), f);
+  for (auto i = 0u; i < view.xs_->size(); i += 2) {
+    auto key = unpack(data_view{view.chunk_, view.xs_->Get(i)});
+    auto val = unpack(data_view{view.chunk_, view.xs_->Get(i + 1)});
+    xs.emplace(std::move(key), std::move(val));
+  }
   return xs;
 }
 
@@ -137,53 +135,54 @@ build(flatbuffers::FlatBufferBuilder& builder, const data& x) {
   struct converter {
     converter(flatbuffers::FlatBufferBuilder& builder) : builder_{builder} {
     }
-    auto operator()(none) {
+    using result_type = flatbuffers::Offset<detail::Data>;
+    result_type operator()(none) {
       detail::DataBuilder db{builder_};
       return db.Finish();
     }
-    auto operator()(boolean x) {
+    result_type operator()(boolean x) {
       detail::DataBuilder db{builder_};
       db.add_which(detail::DataType::BooleanType);
       db.add_integer(x ? 1 : 0);
       return db.Finish();
     }
-    auto operator()(integer x) {
+    result_type operator()(integer x) {
       detail::DataBuilder db{builder_};
       db.add_which(detail::DataType::IntegerType);
       db.add_integer(x);
       return db.Finish();
     }
-    auto operator()(count x) {
+    result_type operator()(count x) {
       detail::DataBuilder db{builder_};
       db.add_which(detail::DataType::CountType);
       db.add_count(x);
       return db.Finish();
     }
-    auto operator()(real x) {
+    result_type operator()(real x) {
       detail::DataBuilder db{builder_};
       db.add_which(detail::DataType::RealType);
       db.add_real(x);
       return db.Finish();
     }
-    auto operator()(timestamp x) {
+    result_type operator()(timestamp x) {
       detail::DataBuilder db{builder_};
       db.add_which(detail::DataType::TimestampType);
       db.add_integer(x.time_since_epoch().count());
       return db.Finish();
     }
-    auto operator()(timespan x) {
+    result_type operator()(timespan x) {
       detail::DataBuilder db{builder_};
       db.add_which(detail::DataType::TimespanType);
       db.add_integer(x.count());
       return db.Finish();
     }
-    auto operator()(const enumeration& x) {
+    result_type operator()(const enumeration& x) {
       detail::DataBuilder db{builder_};
       db.add_which(detail::DataType::EnumerationType);
       db.add_integer(x);
       return db.Finish();
     }
-    auto operator()(const std::string& x) {
+    result_type operator()(const std::string& x) {
       auto ptr = reinterpret_cast<const uint8_t*>(x.data());
       auto bytes = builder_.CreateVector<uint8_t>(ptr, x.size());
       detail::DataBuilder db{builder_};
@@ -191,7 +190,7 @@ build(flatbuffers::FlatBufferBuilder& builder, const data& x) {
       db.add_bytes(bytes);
       return db.Finish();
     }
-    auto operator()(const pattern& x) {
+    result_type operator()(const pattern& x) {
       auto ptr = reinterpret_cast<const uint8_t*>(x.string().data());
       auto bytes = builder_.CreateVector<uint8_t>(ptr, x.string().size());
       detail::DataBuilder db{builder_};
@@ -199,7 +198,7 @@ build(flatbuffers::FlatBufferBuilder& builder, const data& x) {
       db.add_bytes(bytes);
       return db.Finish();
     }
-    auto operator()(const address& x) {
+    result_type operator()(const address& x) {
       if (x.is_v4()) {
         detail::DataBuilder db{builder_};
         db.add_which(detail::DataType::AddressType);
@@ -213,7 +212,7 @@ build(flatbuffers::FlatBufferBuilder& builder, const data& x) {
         return db.Finish();
       }
     }
-    auto operator()(const subnet& x) {
+    result_type operator()(const subnet& x) {
       if (x.network().is_v4()) {
         detail::DataBuilder db{builder_};
         db.add_which(detail::DataType::AddressType);
@@ -231,14 +230,14 @@ build(flatbuffers::FlatBufferBuilder& builder, const data& x) {
         return db.Finish();
       }
     }
-    auto operator()(const port& x) {
+    result_type operator()(const port& x) {
       detail::DataBuilder db{builder_};
       db.add_which(detail::DataType::PortType);
       db.add_integer(static_cast<integer>(x.type()));
       db.add_count(static_cast<count>(x.number()));
       return db.Finish();
     }
-    auto operator()(const vector& xs) {
+    result_type operator()(const vector& xs) {
       std::vector<flatbuffers::Offset<detail::Data>> offsets;
       offsets.reserve(xs.size());
       std::transform(xs.begin(), xs.end(), std::back_inserter(offsets),
@@ -249,7 +248,7 @@ build(flatbuffers::FlatBufferBuilder& builder, const data& x) {
       db.add_vector(v);
       return db.Finish();
     }
-    auto operator()(const set& xs) {
+    result_type operator()(const set& xs) {
       std::vector<flatbuffers::Offset<detail::Data>> offsets;
       offsets.reserve(xs.size());
       std::transform(xs.begin(), xs.end(), std::back_inserter(offsets),
@@ -260,18 +259,17 @@ build(flatbuffers::FlatBufferBuilder& builder, const data& x) {
       db.add_vector(v);
       return db.Finish();
     }
-    auto operator()(const table& xs) {
-      std::vector<flatbuffers::Offset<detail::MapEntry>> offsets;
-      auto f = [&](auto& x) {
-        auto key = visit(*this, x.first);
-        auto val = visit(*this, x.second);
-        return detail::CreateMapEntry(builder_, key, val);
+    result_type operator()(const table& xs) {
+      std::vector<flatbuffers::Offset<detail::Data>> offsets;
+      offsets.reserve(xs.size() * 2);
+      for (auto& x : xs) {
+        offsets.push_back(visit(*this, x.first));
+        offsets.push_back(visit(*this, x.second));
       };
-      std::transform(xs.begin(), xs.end(), std::back_inserter(offsets), f);
       auto v = builder_.CreateVector(offsets);
       detail::DataBuilder db{builder_};
       db.add_which(detail::DataType::MapType);
-      db.add_map(v);
+      db.add_vector(v);
       return db.Finish();
     }
     flatbuffers::FlatBufferBuilder& builder_;

@@ -19,11 +19,6 @@ enum DataType : ubyte {
   MapType
 }
 
-table MapEntry {
-  key:Data;
-  value:Data;
-}
-
 table Data {
   which:DataType = NoneType;
   integer:long = 0;
@@ -31,7 +26,6 @@ table Data {
   real:double = 0.0;
   bytes:[ubyte];
   vector:[Data];
-  map:[MapEntry];
 }
 
 root_type Data;
