@@ -63,9 +63,10 @@ private:
 
 pattern unpack(pattern_view view);
 
-class address_view : public bytes_view {
+class address_view {
   friend data_view; // construction
   friend subnet_view;
+  friend address unpack(address_view view);
   template <class F>
   friend auto visit(F&& f, data_view x);
 
@@ -73,14 +74,17 @@ public:
   address_view() = default;
 
 private:
-  explicit address_view(chunk_ptr chk,
-                        const flatbuffers::Vector<uint8_t>* addr);
+  explicit address_view(chunk_ptr chk, const detail::Data* data);
+
+  const detail::Data* data_;
+  chunk_ptr chunk_;
 };
 
 address unpack(address_view view);
 
 class subnet_view {
   friend data_view; // construction
+  friend subnet unpack(subnet_view view);
   template <class F>
   friend auto visit(F&& f, data_view x);
 
@@ -92,11 +96,9 @@ public:
   uint8_t length() const;
 
 private:
-  explicit subnet_view(chunk_ptr chk, const flatbuffers::Vector<uint8_t>* addr,
-                       count length);
+  explicit subnet_view(chunk_ptr chk, const detail::Data* data);
 
-  const flatbuffers::Vector<uint8_t>* addr_ = nullptr;
-  uint8_t length_;
+  const detail::Data* data_;
   chunk_ptr chunk_;
 };
 
@@ -208,9 +210,9 @@ public:
       case detail::DataType::PatternType:
         return f(pattern_view{x.chunk_, x.data_->bytes()});
       case detail::DataType::AddressType:
-        return f(address_view{x.chunk_, x.data_->bytes()});
+        return f(address_view{x.chunk_, x.data_});
       case detail::DataType::SubnetType:
-        return f(subnet_view{x.chunk_, x.data_->bytes(), x.data_->count()});
+        return f(subnet_view{x.chunk_, x.data_});
       case detail::DataType::VectorType:
         return f(vector_view{x.chunk_, x.data_->vector()});
       case detail::DataType::SetType:

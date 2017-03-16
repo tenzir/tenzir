@@ -35,33 +35,33 @@ pattern unpack(pattern_view view) {
   return pattern{std::move(s)};
 }
 
-address_view::address_view(chunk_ptr chk,
-                           const flatbuffers::Vector<uint8_t>* addr)
-  : bytes_view{chk, addr} {
+address_view::address_view(chunk_ptr chk, const detail::Data* data)
+  : data_{data},
+    chunk_{chk} {
 }
 
 address unpack(address_view view) {
-  auto data = reinterpret_cast<const uint32_t*>(view.data());
-  auto family = view.size() == 4 ? address::ipv4 : address::ipv6;
-  return {data, family, address::network};
+  VAST_ASSERT(view.data_ != nullptr);
+  if (view.data_->bytes() != nullptr) {
+    auto data = reinterpret_cast<const uint32_t*>(view.data_->bytes()->data());
+    return {data, address::ipv6, address::network};
+  } else {
+    auto data = static_cast<const uint32_t>(view.data_->count());
+    return {&data, address::ipv4, address::network};
+  }
 }
 
-
-subnet_view::subnet_view(chunk_ptr chk,
-                         const flatbuffers::Vector<uint8_t>* addr,
-                         count length)
-  : addr_{addr},
-    length_{static_cast<uint8_t>(length)},
+subnet_view::subnet_view(chunk_ptr chk, const detail::Data* data)
+  : data_{data},
     chunk_{chk} {
 }
 
 address_view subnet_view::network() const {
-  VAST_ASSERT(addr_ != nullptr);
-  return address_view{chunk_, addr_};
+  return address_view{chunk_, data_};
 }
 
 uint8_t subnet_view::length() const {
-  return length_;
+  return static_cast<uint8_t>(data_->integer());
 }
 
 subnet unpack(subnet_view view) {
@@ -200,23 +200,36 @@ build(flatbuffers::FlatBufferBuilder& builder, const data& x) {
       return db.Finish();
     }
     auto operator()(const address& x) {
-      auto bytes = x.is_v4()
-        ? builder_.CreateVector<uint8_t>(x.data().data() + 12, 4)
-        : builder_.CreateVector<uint8_t>(x.data().data(), 16);
-      detail::DataBuilder db{builder_};
-      db.add_which(detail::DataType::AddressType);
-      db.add_bytes(bytes);
-      return db.Finish();
+      if (x.is_v4()) {
+        detail::DataBuilder db{builder_};
+        db.add_which(detail::DataType::AddressType);
+        db.add_count(*reinterpret_cast<const count*>(x.data().data() + 12));
+        return db.Finish();
+      } else {
+        auto bytes = builder_.CreateVector<uint8_t>(x.data().data(), 16);
+        detail::DataBuilder db{builder_};
+        db.add_which(detail::DataType::AddressType);
+        db.add_bytes(bytes);
+        return db.Finish();
+      }
     }
     auto operator()(const subnet& x) {
-      auto bytes = x.network().is_v4()
-        ? builder_.CreateVector<uint8_t>(x.network().data().data() + 12, 4)
-        : builder_.CreateVector<uint8_t>(x.network().data().data(), 16);
-      detail::DataBuilder db{builder_};
-      db.add_which(detail::DataType::SubnetType);
-      db.add_count(x.length());
-      db.add_bytes(bytes);
-      return db.Finish();
+      if (x.network().is_v4()) {
+        detail::DataBuilder db{builder_};
+        db.add_which(detail::DataType::AddressType);
+        auto ptr = x.network().data().data() + 12;
+        db.add_count(*reinterpret_cast<const count*>(ptr));
+        db.add_integer(static_cast<integer>(x.length()));
+        return db.Finish();
+      } else {
+        auto ptr = x.network().data().data();
+        auto bytes = builder_.CreateVector<uint8_t>(ptr, 16);
+        detail::DataBuilder db{builder_};
+        db.add_which(detail::DataType::AddressType);
+        db.add_bytes(bytes);
+        db.add_integer(static_cast<integer>(x.length()));
+        return db.Finish();
+      }
     }
     auto operator()(const port& x) {
       detail::DataBuilder db{builder_};
