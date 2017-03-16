@@ -1,3 +1,5 @@
+#include <iomanip>
+
 #include "vast/data.hpp"
 #include "vast/data_view.hpp"
 #include "vast/event.hpp"
@@ -21,12 +23,15 @@ namespace {
 FIXTURE_SCOPE(view_tests, fixtures::events)
 
 TEST(data) {
-  auto& x = bro_conn_log[0].data(); // first line, 115 bytes in ASCII.
-  auto chk = pack(x);
-  MESSAGE("packed data into chunk of " << chk->size() << " bytes");
+  vector xs;
+  std::transform(bro_conn_log.begin(), bro_conn_log.end(),
+                 std::back_inserter(xs), [](auto& x) { return x.data(); });
+  auto chk = pack(data{xs});
+  auto ratio = chk->size() / 1'026'256.0; // bro-cut < conn.log | wc -c
+  MESSAGE("ASCII/packed bytes ratio: " << std::setprecision(3) << ratio);
   auto v = get_if<vector_view>(data_view{chk});
   REQUIRE(v);
-  CHECK_EQUAL(unpack(*v), x);
+  CHECK_EQUAL(unpack(*v), xs);
 }
 
 TEST(event) {
