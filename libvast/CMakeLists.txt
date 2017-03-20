@@ -233,6 +233,7 @@ set(tests
   test/range_map.cpp
   test/save_load.cpp
   test/schema.cpp
+  test/serialization.cpp
   test/stack.cpp
   test/string.cpp
   test/subnet.cpp
