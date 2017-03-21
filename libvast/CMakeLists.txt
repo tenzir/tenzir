@@ -61,12 +61,15 @@ set(libvast_sources
   src/http.cpp
   src/null_bitmap.cpp
   src/operator.cpp
+  src/overlay.cpp
+  src/packer.cpp
   src/pattern.cpp
   src/port.cpp
   src/schema.cpp
   src/subnet.cpp
   src/time.cpp
   src/type.cpp
+  src/unpacker.cpp
   src/uuid.cpp
   src/value.cpp
   src/value_index.cpp
@@ -226,6 +229,7 @@ set(tests
   test/main.cpp
   test/mmapbuf.cpp
   test/offset.cpp
+  test/packing.cpp
   test/parseable.cpp
   test/pattern.cpp
   test/port.cpp
