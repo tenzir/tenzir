@@ -19,10 +19,6 @@ size_t chunk::size() const {
   return size_;
 }
 
-chunk::chunk() : data_{nullptr}, size_{0} {
-  // nop
-}
-
 chunk::chunk(size_t size)
   : data_{new char[size]},
     size_{size},

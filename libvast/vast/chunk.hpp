@@ -20,6 +20,9 @@ using chunk_ptr = caf::intrusive_ptr<chunk>;
 /// A contiguous block of memory with customizable ownership semantics.
 class chunk : public caf::ref_counted,
               detail::totally_ordered<chunk> {
+  chunk() = delete;
+  chunk& operator=(const chunk&) = delete;
+
 public:
   /// Factory function to create a chunk without calling `new`.
   /// @relates chunk
@@ -27,6 +30,25 @@ public:
   static chunk_ptr make(Ts&&... xs) {
     return new chunk(std::forward<Ts>(xs)...);
   }
+
+  /// Destroys the chunk and deallocates any owned memory.
+  ~chunk();
+
+  /// @returns The pointer to the chunk buffer.
+  const char* data() const;
+
+  /// @returns The size of the chunk.
+  size_t size() const;
+
+private:
+  /// Construct an owning pointer of a particular size.
+  /// @param size The number of bytes to allocate.
+  explicit chunk(size_t size);
+
+  /// Constructs a chunk that doesn't own its memory.
+  /// @param size The number of bytes of *ptr*.
+  /// @param ptr A pointer to a contiguous memory region of size *size*.
+  chunk(size_t size, void* ptr);
 
   /// Constructs a chunk with a custom deallocation policy.
   /// @tparam Deleter The function to invoke when destroying the chunk.
@@ -40,27 +62,11 @@ public:
       deleter_{std::move(deleter)} {
   }
 
-  /// Destroys the chunk and deallocates any owned memory.
-  ~chunk();
-
-  /// @returns The pointer to the chunk buffer.
-  const char* data() const;
-
-  /// @returns The size of the chunk.
-  size_t size() const;
-
-private:
-  /// Default-constructs an empty chunk.
-  chunk();
-
-  /// Construct an owning pointer of a particular size.
-  /// @param size The number of bytes to allocate.
-  explicit chunk(size_t size);
-
-  /// Constructs a chunk that doesn't own its memory.
-  /// @param size The number of bytes of *ptr*.
-  /// @param ptr A pointer to a contiguous memory region of size *size*.
-  chunk(size_t size, void* ptr);
+  /// Constructs a chunk tha memory-maps a file.
+  /// @param filename The name of the file to memory-map.
+  /// @param size The number of bytes to map.
+  /// @param offset Where to start in terms of number of bytes from the start. 
+  chunk(const std::string& filename, size_t size, size_t offset);
 
   char* data_;
   size_t size_;
