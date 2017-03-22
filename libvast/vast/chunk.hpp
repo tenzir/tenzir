@@ -3,6 +3,7 @@
 
 #include <cstddef>
 #include <functional>
+#include <string>
 
 #include "caf/ref_counted.hpp"
 #include "caf/intrusive_ptr.hpp"
@@ -30,6 +31,13 @@ public:
   static chunk_ptr make(Ts&&... xs) {
     return new chunk(std::forward<Ts>(xs)...);
   }
+
+  /// Memory-maps a chunk from a file.
+  /// @param filename The name of the file to memory-map.
+  /// @param size The number of bytes to map. If 0, map the entire file.
+  /// @param offset Where to start in terms of number of bytes from the start. 
+  static chunk_ptr mmap(const std::string& filename,
+                        size_t size = 0, size_t offset = 0);
 
   /// Destroys the chunk and deallocates any owned memory.
   ~chunk();
@@ -61,12 +69,6 @@ private:
       size_{size},
       deleter_{std::move(deleter)} {
   }
-
-  /// Constructs a chunk tha memory-maps a file.
-  /// @param filename The name of the file to memory-map.
-  /// @param size The number of bytes to map.
-  /// @param offset Where to start in terms of number of bytes from the start. 
-  chunk(const std::string& filename, size_t size, size_t offset);
 
   char* data_;
   size_t size_;
