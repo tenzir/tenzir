@@ -9,6 +9,9 @@
 #include <map>
 #include <type_traits>
 
+#include "vast/concept/hashable/uhash.hpp"
+#include "vast/concept/hashable/xxhash.hpp"
+
 #include "vast/aliases.hpp"
 #include "vast/address.hpp"
 #include "vast/pattern.hpp"
@@ -211,5 +214,16 @@ bool convert(data const& v, json& j);
 bool convert(data const& v, json& j, type const& t);
 
 } // namespace vast
+
+namespace std {
+
+template <>
+struct hash<vast::data> {
+  size_t operator()(const vast::data& x) const {
+    return vast::uhash<vast::xxhash>{}(x);
+  }
+};
+
+} // namespace std
 
 #endif
