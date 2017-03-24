@@ -19,7 +19,8 @@ namespace vast {
 class packer {
 public:
   /// Default-constructs a packer with one builder.
-  packer();
+  /// @param buffer_size The initial buffer size used for serialization.
+  explicit packer(size_t buffer_size = 2048);
 
   /// Serializes an element into the churrently currently built.
   /// @param x The element to pack.

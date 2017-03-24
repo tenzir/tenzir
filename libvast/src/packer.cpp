@@ -6,7 +6,6 @@
 #include "vast/detail/byte_swap.hpp"
 
 namespace vast {
-
 namespace {
 
 // Compes the adjacent difference similar to the standard library function,
@@ -23,26 +22,26 @@ void delta_encode(std::vector<T>& xs) {
 
 } // namespace <anonymous>
 
-packer::packer() : serializer_{nullptr, buffer_} {
+packer::packer(size_t buffer_size) : serializer_{nullptr, buffer_} {
+  buffer_.reserve(buffer_size);
+  // Reserve space for location of offset table.
+  buffer_.resize(sizeof(uint32_t));
 }
 
 chunk_ptr packer::finish() {
-  std::vector<char> buffer;
-  buffer.reserve(buffer_.size());
-  buffer.resize(sizeof(uint32_t)); // reserved space for data offset
-  // Serialize offsets, buffer, and data start.
-  serializer_type sink{nullptr, buffer};
+  // Embed location of offset table.
+  auto off = static_cast<uint32_t>(buffer_.size());
+  auto ptr = reinterpret_cast<uint32_t*>(buffer_.data());
+  *ptr = detail::to_network_order(off);
+  // Serialize offset table.
   delta_encode(offsets_);
-  sink << offsets_;
-  auto start = static_cast<uint32_t>(buffer.size());
-  sink.apply_raw(buffer_.size(), buffer_.data());
-  auto ptr = reinterpret_cast<uint32_t*>(buffer.data());
-  *ptr = detail::to_network_order(start);
-  buffer.shrink_to_fit();
+  serializer_ << offsets_;
+  buffer_.shrink_to_fit();
   // Construct overlay from buffer.
-  auto data = buffer.data();
-  auto size = buffer.size();
-  auto deleter = [buf=std::move(buffer)](char*, size_t) { /* nop */ };
+  auto data = buffer_.data();
+  auto size = buffer_.size();
+  auto deleter = [buf=std::move(buffer_)](char*, size_t) { /* nop */ };
+  buffer_ = {};
   return chunk::make(size, data, std::move(deleter));
 }
 

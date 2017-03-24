@@ -12,16 +12,16 @@ namespace vast {
 /// On the wire, the overlay has the following format:
 ///
 ///        4 bytes       variable      variable
-///     +-------------+---........---+------...
-///     | data offset | offset table | data
-///     +-------------+---........---+------...
-///             |                    ^
-///             |--------------------|
+///     +--------+---.........---+------...
+///     | offset |      data     | offset table
+///     +--------+---.........---+------...
+///              |               ^
+///              |---------------|
 ///
-/// The `data offset` is a varbyte encoded value that points to the beginning
-/// of the `data` buffer. The `offset table` is a varbyte and delta-encoded
-/// sequence of offsets, where each offset *i* maps to the buffer at location
-/// `data + i`.
+/// The *offset* is a 32-bit unsigned integer that points to the beginning
+/// of the *offset table*, which is a varbyte and delta-encoded sequence of
+/// relative positions, where each position points to a contiguous memory
+/// region inside *data*.
 ///
 /// @relates packer unpacker
 class overlay {

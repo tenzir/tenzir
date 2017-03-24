@@ -27,15 +27,14 @@ size_t overlay::offset_table::size() const {
 }
 
 overlay::overlay(chunk_ptr chk)
-  : offsets_{chk->data() + sizeof(uint32_t)},
+  : offsets_{chk->data() + detail::to_host_order(
+                             *reinterpret_cast<const uint32_t*>(chk->data()))},
     chunk_{chk} {
 }
 
 const char* overlay::operator[](size_t i) const {
   VAST_ASSERT(chunk_);
-  auto off = reinterpret_cast<const uint32_t*>(chunk_->data());
-  auto base_offset = detail::to_host_order(*off);
-  return chunk_->data() + base_offset + offsets_[i];
+  return chunk_->data() + sizeof(uint32_t) + offsets_[i];
 }
 
 size_t overlay::size() const {
