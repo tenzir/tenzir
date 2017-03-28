@@ -21,11 +21,12 @@ mmapbuf::mmapbuf(const std::string& filename, size_t size, size_t offset)
       return;
     size_ = st.st_size;
   }
-  fd_ = ::open(filename.c_str(), O_RDWR, 0644);
-  if (fd_ == -1)
+  auto fd = ::open(filename.c_str(), O_RDWR, 0644);
+  if (fd == -1)
     return;
   auto prot = PROT_READ | PROT_WRITE;
-  auto map = ::mmap(nullptr, size_, prot, MAP_SHARED, fd_, offset);
+  auto map = ::mmap(nullptr, size_, prot, MAP_SHARED, fd, offset);
+  ::close(fd);
   if (map == MAP_FAILED)
     return;
   map_ = reinterpret_cast<char_type*>(map);
@@ -36,8 +37,6 @@ mmapbuf::mmapbuf(const std::string& filename, size_t size, size_t offset)
 mmapbuf::~mmapbuf() {
   if (!map_)
     ::munmap(map_, size_);
-  if (fd_ != -1)
-    ::close(fd_);
 }
 
 const mmapbuf::char_type* mmapbuf::data() const {
