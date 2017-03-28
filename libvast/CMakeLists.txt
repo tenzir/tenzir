@@ -3,7 +3,7 @@
 # ----------------------------------------------------------------------------
 
 file(GLOB flatbuffers_schemas ${CMAKE_CURRENT_SOURCE_DIR}/flatbuffers/*.fbs)
-set(flatbuffers_output_path ${CMAKE_CURRENT_BINARY_DIR}/vast/detail)
+set(flatbuffers_output_path ${CMAKE_CURRENT_BINARY_DIR}/vast/fbs)
 
 # Translate paths to desired output paths.
 foreach (schema ${flatbuffers_schemas})
@@ -24,7 +24,7 @@ add_custom_command(
 
 add_custom_target(flatbuffers DEPENDS ${generated_schemas})
 
-install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/vast/detail/
+install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/vast/fbs/
         DESTINATION include/vast)
 
 # ----------------------------------------------------------------------------
@@ -241,6 +241,7 @@ set(tests
   test/stack.cpp
   test/string.cpp
   test/subnet.cpp
+  test/tallybuf.cpp
   test/time.cpp
   test/type.cpp
   test/uuid.cpp
