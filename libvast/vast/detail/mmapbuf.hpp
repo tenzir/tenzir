@@ -54,7 +54,6 @@ protected:
 
 private:
   size_t size_;
-  int fd_ = -1;
   char_type* map_ = nullptr;
 };
 

@@ -25,12 +25,12 @@ chunk_ptr chunk::mmap(const std::string& filename, size_t size, size_t offset) {
   if (fd == -1)
     return {};
   auto map = ::mmap(nullptr, size, PROT_READ, MAP_SHARED, fd, offset);
+  ::close(fd);
   if (map == MAP_FAILED)
     return {};
   // Construct a chunk from it that unmaps itself upon deletion.
-  auto deleter = [=](char* buf, size_t n) {
+  auto deleter = [](char* buf, size_t n) {
     ::munmap(buf, n);
-    ::close(fd);
   };
   return make(size, reinterpret_cast<char*>(map), deleter);
 }
