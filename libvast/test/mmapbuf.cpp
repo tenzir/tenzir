@@ -37,9 +37,10 @@ TEST(memory-mapped streambuffer) {
   // Seek back to beginning.
   sb.pubseekpos(0, std::ios::in);
   CHECK_EQUAL(sb.in_avail(), static_cast<std::streamsize>(sb.size()));
-  sb.sbumpc();
-  sb.sbumpc();
-  CHECK_EQUAL(sb.in_avail(), 10);
+  data = "corge ";
+  n = sb.sputn(data.data(), data.size());
+  CHECK_EQUAL(n, static_cast<std::streamsize>(data.size()));
+  CHECK_EQUAL(std::string(sb.data(), sb.size()), "corge bazqux");
 }
 
 FIXTURE_SCOPE_END()
