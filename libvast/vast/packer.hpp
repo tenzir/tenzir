@@ -21,7 +21,7 @@ namespace vast {
 ///
 /// The byte stream has the following format:
 ///
-///         varaible       variable    4 bytes
+///         variable       variable    4 bytes
 ///     +---........---+---........---+--------+
 ///     |     data     | offset table | offset |
 ///     +---........---+---........---+--------|
@@ -54,9 +54,15 @@ public:
   /// Writes an element into the segment.
   /// @param e The event to serialize.
   template <class T>
-  void pack(T&& x) {
-    offsets_.push_back(streambuf_.put());
-    serializer_ << x;
+  expected<void> pack(T&& x) {
+    auto offset = streambuf_.put();
+    if (auto e = serializer_.apply(const_cast<T&>(x))) {
+      if (streambuf_.put() != offset)
+        streambuf_.pubseekoff(offset, std::ios::beg, std::ios::out);
+      return e;
+    }
+    offsets_.push_back(offset);
+    return no_error;
   }
 
   /// Deserializes an object at a given position *i*.
