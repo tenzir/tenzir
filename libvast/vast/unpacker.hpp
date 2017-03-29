@@ -41,9 +41,6 @@ public:
       cum += delta;
     }
     offsets_.push_back(cum);
-    // Reposition at beginning. This is optional, but facilitates sequential
-    // reading.
-    streambuf.pubseekoff(0, std::ios::beg, std::ios::in);
   }
 
   /// Deserializes an object at a given position *i*.
