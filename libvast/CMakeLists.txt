@@ -61,7 +61,6 @@ set(libvast_sources
   src/http.cpp
   src/null_bitmap.cpp
   src/operator.cpp
-  src/overlay.cpp
   src/packer.cpp
   src/pattern.cpp
   src/port.cpp

@@ -1,46 +1,71 @@
 #ifndef VAST_PACKER_HPP
 #define VAST_PACKER_HPP
 
-#include <memory>
+#include <cstdint>
+#include <cstddef>
+#include <streambuf>
 #include <vector>
 
-#include <caf/streambuf.hpp>
-
-#include "vast/chunk.hpp"
-#include "vast/expected.hpp"
+#include "vast/error.hpp"
 
 #include "vast/detail/coded_serializer.hpp"
+#include "vast/detail/tallybuf.hpp"
+#include "vast/detail/byte_swap.hpp"
 
 namespace vast {
 
-/// Serializes elements into a contiguous chunk of memory, where each element
-/// is identified by an offset relative to the beginning of the chunk.
+/// Serializes elements into a streambuffer, recording its individual offsets
+/// for later random access.
+///
+/// The byte stream has the following format:
+///
+///         varaible       variable    4 bytes
+///     +---........---+---........---+--------+
+///     |     data     | offset table | offset |
+///     +---........---+---........---+--------|
+///                    ^                  |
+///                    |------------------|
+///
+/// The *offset* is a 32-bit unsigned integer that points to the beginning
+/// of the *offset table*, which is a varbyte and delta-encoded sequence of
+/// relative positions, where each position points to a contiguous memory
+/// region inside *data*.
+///
 /// @relates unpacker overlay
 class packer {
-public:
-  /// Default-constructs a packer with one builder.
-  /// @param buffer_size The initial buffer size used for serialization.
-  explicit packer(size_t buffer_size = 2048);
+  packer(const packer&) = delete;
+  packer& operator=(const packer&) = delete;
 
-  /// Serializes an element into the churrently currently built.
-  /// @param x The element to pack.
-  template <class T>
-  expected<void> pack(T&& x) {
-    offsets_.push_back(buffer_.size());
-    return serializer_.apply(const_cast<T&>(x));
+public:
+  /// Constructs a packer from a stream buffer.
+  /// @param streambuf A reference to a streambuf to write into.
+  template <class Streambuf>
+  explicit packer(Streambuf& streambuf) 
+    : streambuf_{streambuf},
+      serializer_{streambuf_} {
   }
 
-  /// Finalize packing of elements in the current block and return the
-  /// corresponding contiguous buffer prepended with an offset table.
-  /// @returns A chunk of memory representing offset table and element buffer.
-  chunk_ptr finish();
+  /// If not called previously, invokes finish().
+  ~packer();
+
+  /// Writes an element into the segment.
+  /// @param e The event to serialize.
+  template <class T>
+  void pack(T&& x) {
+    offsets_.push_back(streambuf_.put());
+    serializer_ << x;
+  }
+
+  /// Completes writing the segment by adding the trailer.
+  size_t finish();
 
 private:
-  using serializer_type = detail::coded_serializer<caf::vectorbuf>;
+  using streambuf_type = detail::tallybuf<std::streambuf>;
+  using serializer = detail::coded_serializer<streambuf_type&>;
 
   std::vector<uint32_t> offsets_;
-  std::vector<char> buffer_;
-  serializer_type serializer_;
+  streambuf_type streambuf_;
+  serializer serializer_;
 };
 
 } // namespace vast

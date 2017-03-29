@@ -1,48 +1,29 @@
-#include <algorithm>
-
 #include "vast/packer.hpp"
 
-#include "vast/detail/assert.hpp"
 #include "vast/detail/byte_swap.hpp"
 
 namespace vast {
-namespace {
 
-// Compes the adjacent difference similar to the standard library function,
-// except that it drops the first (identity) computation. For examples, instead
-// of converting the sequence [1, 3, 7] to [1, 2, 4], this algorithm produces
-// the result [2, 4].
-template <class T>
-void delta_encode(std::vector<T>& xs) {
-  VAST_ASSERT(!xs.empty());
-  for (auto i = 0u; i < xs.size() - 1; ++i)
-    xs[i] = xs[i + 1] - xs[i];
-  xs.pop_back();
+packer::~packer() {
+  if (!offsets_.empty())
+    finish();
 }
 
-} // namespace <anonymous>
-
-packer::packer(size_t buffer_size) : serializer_{nullptr, buffer_} {
-  buffer_.reserve(buffer_size);
-  // Reserve space for location of offset table.
-  buffer_.resize(sizeof(uint32_t));
-}
-
-chunk_ptr packer::finish() {
-  // Embed location of offset table.
-  auto off = static_cast<uint32_t>(buffer_.size());
-  auto ptr = reinterpret_cast<uint32_t*>(buffer_.data());
-  *ptr = detail::to_network_order(off);
-  // Serialize offset table.
-  delta_encode(offsets_);
+size_t packer::finish() {
+  if (offsets_.empty())
+    return 0;
+  // Delta-encode offsets and serialize them.
+  for (auto i = 0u; i < offsets_.size() - 1; ++i)
+    offsets_[i] = offsets_[i + 1] - offsets_[i];
+  offsets_.pop_back();
+  uint32_t offsets_position = streambuf_.put();
   serializer_ << offsets_;
-  buffer_.shrink_to_fit();
-  // Construct overlay from buffer.
-  auto data = buffer_.data();
-  auto size = buffer_.size();
-  auto deleter = [buf=std::move(buffer_)](char*, size_t) { /* nop */ };
-  buffer_ = {};
-  return chunk::make(size, data, std::move(deleter));
+  // Write offset position as trailing byte.
+  char buf[sizeof(uint32_t)];
+  auto ptr = reinterpret_cast<uint32_t*>(&buf);
+  *ptr = detail::to_network_order(offsets_position);
+  serializer_.apply_raw(sizeof(uint32_t), buf);
+  return streambuf_.put();
 }
 
 } // namespace vast

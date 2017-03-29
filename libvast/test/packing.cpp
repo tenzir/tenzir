@@ -24,18 +24,18 @@ struct fixture : fixtures::events {
 
 FIXTURE_SCOPE(view_tests, fixture)
 
-TEST(basic packing-unpacking) {
+TEST(packing-unpacking) {
   // Serialize a vector of data.
-  packer pkg;
+  std::stringbuf sb;
+  packer pkg{sb};
   for (auto& x : xs)
     pkg.pack(x);
-  auto chk = pkg.finish();
+  auto size = pkg.finish();
   auto ascii_size = 1'026'256.0; // bro-cut < conn.log | wc -c
-  auto ratio = chk->size() / ascii_size;
+  auto ratio = size / ascii_size;
   MESSAGE("packed/ASCII bytes ratio: " << std::setprecision(3) << ratio);
   // Selectively deserialize values.
-  unpacker unpkg{chk};
-  REQUIRE_EQUAL(unpkg.size(), xs.size());
+  unpacker unpkg{sb};
   // Check first.
   auto x = unpkg.unpack<data>(0);
   REQUIRE(x);
