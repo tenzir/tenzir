@@ -41,6 +41,10 @@ TEST(memory-mapped streambuffer) {
   n = sb.sputn(data.data(), data.size());
   CHECK_EQUAL(n, static_cast<std::streamsize>(data.size()));
   CHECK_EQUAL(std::string(sb.data(), sb.size()), "corge bazqux");
+  CHECK(sb.truncate(data.size() - 1));
+  // Figure out current position.
+  size_t cur = sb.pubseekoff(0, std::ios::cur, std::ios::out);
+  CHECK_EQUAL(cur, sb.size()); // we're at the end!
 }
 
 FIXTURE_SCOPE_END()

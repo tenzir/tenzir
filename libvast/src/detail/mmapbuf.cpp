@@ -12,8 +12,21 @@
 namespace vast {
 namespace detail {
 
+mmapbuf::mmapbuf(size_t size) : size_{size} {
+  VAST_ASSERT(size > 0);
+  auto prot = PROT_READ | PROT_WRITE;
+  auto map = ::mmap(nullptr, size_, prot, MAP_ANON | MAP_SHARED, -1, 0);
+  if (map == MAP_FAILED)
+    return;
+  map_ = reinterpret_cast<char_type*>(map);
+  setg(map_, map_, map_ + size_);
+  setp(map_, map_ + size_);
+}
+
 mmapbuf::mmapbuf(const std::string& filename, size_t size, size_t offset)
   : size_{size} {
+  VAST_ASSERT(size > 0);
+  VAST_ASSERT(offset < size);
   if (size == 0) {
     struct stat st;
     auto result = ::stat(filename.c_str(), &st);
@@ -21,12 +34,11 @@ mmapbuf::mmapbuf(const std::string& filename, size_t size, size_t offset)
       return;
     size_ = st.st_size;
   }
-  auto fd = ::open(filename.c_str(), O_RDWR, 0644);
-  if (fd == -1)
+  auto fd_ = ::open(filename.c_str(), O_RDWR, 0644);
+  if (fd_ == -1)
     return;
   auto prot = PROT_READ | PROT_WRITE;
-  auto map = ::mmap(nullptr, size_, prot, MAP_SHARED, fd, offset);
-  ::close(fd);
+  auto map = ::mmap(nullptr, size_, prot, MAP_SHARED, fd_, offset);
   if (map == MAP_FAILED)
     return;
   map_ = reinterpret_cast<char_type*>(map);
@@ -37,6 +49,8 @@ mmapbuf::mmapbuf(const std::string& filename, size_t size, size_t offset)
 mmapbuf::~mmapbuf() {
   if (!map_)
     ::munmap(map_, size_);
+  if (fd_ != -1)
+    ::close(fd_);
 }
 
 const mmapbuf::char_type* mmapbuf::data() const {
@@ -45,6 +59,30 @@ const mmapbuf::char_type* mmapbuf::data() const {
 
 size_t mmapbuf::size() const {
   return size_;
+}
+
+// We could inform the OS that we don't need the unused pages any more by
+// calling something along the lines of:
+//
+//   madvise(map_ + new_size, map_ + new_size - size_, MADV_DONT_NEED);
+//
+// However, we must be very careful not to evict pages that overlap with the
+// active region, which requires rounding up to the address of next page.
+bool mmapbuf::truncate(size_t new_size) {
+  if (new_size >= size())
+    return false;
+  // Save stream buffer positions.
+  size_t put_pos = pptr() - pbase();
+  size_t get_pos = gptr() - eback();
+  // Truncate file.
+  if (fd_ != -1 && ::ftruncate(fd_, new_size) != 0)
+    return false;
+  size_ = new_size;
+  // Restore stream buffer positions.
+  setg(map_, map_ + std::min(get_pos, size_), map_ + size_);
+  setp(map_, map_ + size_);
+  pbump(static_cast<int>(std::min(put_pos, size_)));
+  return true;
 }
 
 std::streamsize mmapbuf::showmanyc() {
@@ -92,7 +130,7 @@ mmapbuf::pos_type mmapbuf::seekoff(off_type off, std::ios_base::seekdir dir,
 mmapbuf::pos_type mmapbuf::seekpos(pos_type pos,
                                    std::ios_base::openmode which) {
   VAST_ASSERT(map_);
-  VAST_ASSERT(pos < static_cast<pos_type>(size_));
+  VAST_ASSERT(pos <= static_cast<pos_type>(size_));
   if (which == std::ios_base::in)
     setg(map_, map_ + pos, map_ + size_);
   if (which == std::ios_base::out)

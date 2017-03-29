@@ -8,16 +8,21 @@
 namespace vast {
 namespace detail {
 
-/// A memory-mapped streambuffer. The put and get areas corresponds to the
+/// A memory-mapped stream buffer. The put and get areas corresponds to the
 /// mapped memory region.
 class mmapbuf : public std::streambuf {
 public:
-  /// Constructs a memory-mapped streambuffer from a file.
+  /// Constructs an anonymous memory-mapped stream buffer.
+  /// @param size The size of the mapped region.
+  /// @pre `size > 0`
+  explicit mmapbuf(size_t size);
+
+  /// Constructs a file-backed memory-mapped stream buffer.
   /// @param filename The path to the file to open.
   /// @param size The size of the file in bytes. If 0, figure out file size
   ///             automatically.
   /// @param offset An offset where to begin mapping.
-  /// @pre `offset < size`
+  /// @pre `size > 0 && offset < size`
   explicit mmapbuf(const std::string& filename, size_t size = 0,
                    size_t offset = 0);
 
@@ -29,6 +34,11 @@ public:
 
   /// Returns the size of the mapped memory region.
   size_t size() const;
+
+  /// Truncates the underlying file to a given size.
+  /// @param new_size The new size of the underlying file.
+  /// @returns `true` on success.
+  bool truncate(size_t new_size);
 
 protected:
   // -- get area --------------------------------------------------------------
@@ -53,7 +63,8 @@ protected:
                      std::ios_base::in | std::ios_base::out) override;
 
 private:
-  size_t size_;
+  int fd_ = -1;
+  size_t size_ = 0;
   char_type* map_ = nullptr;
 };
 
