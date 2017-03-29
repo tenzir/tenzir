@@ -9,6 +9,10 @@ packer::~packer() {
     finish();
 }
 
+size_t packer::size() const {
+  return offsets_.size();
+}
+
 size_t packer::finish() {
   if (offsets_.empty())
     return 0;

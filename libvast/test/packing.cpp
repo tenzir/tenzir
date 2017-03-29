@@ -24,7 +24,7 @@ struct fixture : fixtures::events {
 
 FIXTURE_SCOPE(view_tests, fixture)
 
-TEST(packing-unpacking) {
+TEST(packing and unpacking) {
   // Serialize a vector of data.
   std::stringbuf sb;
   packer pkg{sb};
@@ -52,6 +52,36 @@ TEST(packing-unpacking) {
   x = unpkg.unpack<data>(unpkg.size() - 1);
   REQUIRE(x);
   CHECK_EQUAL(*x, xs.back());
+}
+
+TEST(unpacking while packing) {
+  std::stringbuf sb;
+  MESSAGE("packing");
+  packer pkg{sb};
+  for (auto i = 0u; i < 10; ++i)
+    pkg.pack(xs[i]);
+  CHECK_EQUAL(pkg.size(), 10u);
+  auto x = pkg.unpack<data>(0);
+  REQUIRE(x);
+  CHECK_EQUAL(*x, xs.front());
+  x = pkg.unpack<data>(7);
+  REQUIRE(x);
+  CHECK_EQUAL(*x, xs[7]);
+  for (auto i = 10u; i < 20; ++i)
+    pkg.pack(xs[i]);
+  CHECK_EQUAL(pkg.size(), 20u);
+  x = pkg.unpack<data>(15);
+  REQUIRE(x);
+  CHECK_EQUAL(*x, xs[15]);
+  pkg.finish();
+  MESSAGE("unpacking");
+  unpacker unpkg{sb};
+  REQUIRE_EQUAL(unpkg.size(), 20u);
+  for (auto i = 0u; i < unpkg.size(); ++i) {
+    x = unpkg.unpack<data>(i);
+    REQUIRE(x);
+    CHECK_EQUAL(*x, xs[i]);
+  }
 }
 
 FIXTURE_SCOPE_END()
