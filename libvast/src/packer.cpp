@@ -27,6 +27,8 @@ size_t packer::finish() {
   auto ptr = reinterpret_cast<uint32_t*>(&buf);
   *ptr = detail::to_network_order(offsets_position);
   serializer_.apply_raw(sizeof(uint32_t), buf);
+  // Enable re-use of packer by resetting offset table.
+  offsets_.clear();
   return streambuf_.put();
 }
 
