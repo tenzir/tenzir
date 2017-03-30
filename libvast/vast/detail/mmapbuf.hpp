@@ -5,6 +5,8 @@
 #include <streambuf>
 #include <string>
 
+#include "vast/chunk.hpp"
+
 namespace vast {
 namespace detail {
 
@@ -22,7 +24,6 @@ public:
   /// @param size The size of the file in bytes. If 0, figure out file size
   ///             automatically.
   /// @param offset An offset where to begin mapping.
-  /// @pre `size > 0 && offset < size`
   explicit mmapbuf(const std::string& filename, size_t size = 0,
                    size_t offset = 0);
 
@@ -39,6 +40,11 @@ public:
   /// @param new_size The new size of the underlying file.
   /// @returns `true` on success.
   bool truncate(size_t new_size);
+
+  /// Release the underlying memory region. Subsequent operations on the stream
+  /// evoke undefined behavior
+  /// @returns A chunk representing the mapped memory region.
+  chunk_ptr release();
 
 protected:
   // -- get area --------------------------------------------------------------

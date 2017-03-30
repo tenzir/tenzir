@@ -25,15 +25,14 @@ mmapbuf::mmapbuf(size_t size) : size_{size} {
 
 mmapbuf::mmapbuf(const std::string& filename, size_t size, size_t offset)
   : size_{size} {
-  VAST_ASSERT(size > 0);
-  VAST_ASSERT(offset < size);
   if (size == 0) {
     struct stat st;
     auto result = ::stat(filename.c_str(), &st);
-    if (result == -1)
+    if (result == -1 || st.st_size == 0)
       return;
     size_ = st.st_size;
   }
+  VAST_ASSERT(size_ > 0);
   auto fd_ = ::open(filename.c_str(), O_RDWR, 0644);
   if (fd_ == -1)
     return;
@@ -85,6 +84,20 @@ bool mmapbuf::truncate(size_t new_size) {
   return true;
 }
 
+chunk_ptr mmapbuf::release() {
+  auto deleter = [](char* map, size_t n) { ::munmap(map, n); };
+  auto chk = chunk::make(size_, map_, deleter);
+  map_ = nullptr;
+  size_ = 0;
+  if (fd_ != -1) {
+    ::close(fd_);
+    fd_ = -1;
+  }
+  setg(nullptr, nullptr, nullptr);
+  setp(nullptr, nullptr);
+  return chk;
+}
+
 std::streamsize mmapbuf::showmanyc() {
   VAST_ASSERT(map_);
   return egptr() - gptr();
@@ -108,6 +121,7 @@ std::streamsize mmapbuf::xsputn(const char_type* s, std::streamsize n) {
 
 mmapbuf::pos_type mmapbuf::seekoff(off_type off, std::ios_base::seekdir dir,
                                    std::ios_base::openmode which) {
+  VAST_ASSERT(map_);
   // We cannot reposition put and get area simultaneously because the return
   // value would be meaningless.
   if ((which & std::ios_base::in) && (which & std::ios_base::out))
