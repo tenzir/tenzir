@@ -18,24 +18,28 @@ class chunk;
 /// @relates chunk
 using chunk_ptr = caf::intrusive_ptr<chunk>;
 
-/// A contiguous block of memory with customizable ownership semantics.
+/// A contiguous block of memory.
 class chunk : public caf::ref_counted,
               detail::totally_ordered<chunk> {
   chunk() = delete;
   chunk& operator=(const chunk&) = delete;
 
 public:
-  /// Factory function to create a chunk without calling `new`.
-  /// @relates chunk
+  using deleter_type = std::function<void(char*, size_t)>;
+  using value_type = const char;
+  using size_type = size_t;
+  using const_iterator = const char*;
+
+  /// Factory function to construct a chunk.
   template <class... Ts>
   static chunk_ptr make(Ts&&... xs) {
-    return new chunk(std::forward<Ts>(xs)...);
+    return chunk_ptr{new chunk(std::forward<Ts>(xs)...), false};
   }
 
-  /// Memory-maps a chunk from a file.
+  /// Memory-maps a chunk from a read-only file.
   /// @param filename The name of the file to memory-map.
   /// @param size The number of bytes to map. If 0, map the entire file.
-  /// @param offset Where to start in terms of number of bytes from the start. 
+  /// @param offset Where to start in terms of number of bytes from the start.
   static chunk_ptr mmap(const std::string& filename,
                         size_t size = 0, size_t offset = 0);
 
@@ -48,31 +52,36 @@ public:
   /// @returns The size of the chunk.
   size_t size() const;
 
-private:
-  /// Construct an owning pointer of a particular size.
-  /// @param size The number of bytes to allocate.
-  explicit chunk(size_t size);
+  /// @returns A pointer to the first byte in the chunk.
+  const_iterator begin() const;
 
-  /// Constructs a chunk that doesn't own its memory.
-  /// @param size The number of bytes of *ptr*.
-  /// @param ptr A pointer to a contiguous memory region of size *size*.
-  chunk(size_t size, void* ptr);
+  /// @returns A pointer to one past the last byte in the chunk.
+  const_iterator end() const;
+
+  /// Creates a new chunk that structurally shares the data of this chunk.
+  /// @param start The offset from the beginning where to begin the new chunk.
+  /// @param length The length of the slice, beginning at *start*. If 0, the
+  ///               slice ranges from *start* to the end of the chunk.
+  /// @returns A new chunk over the subset.
+  /// @pre `start + length < size()`
+  chunk_ptr slice(size_t start, size_t length = 0) const;
+
+private:
+  /// Construct a chunk of a particular size using `::operator new`.
+  /// @param size The number of bytes to allocate.
+  /// @pre `size > 0`
+  explicit chunk(size_t size);
 
   /// Constructs a chunk with a custom deallocation policy.
   /// @tparam Deleter The function to invoke when destroying the chunk.
-  /// @param size The number of bytes of *ptr*.
+  /// @param size The number of bytes starting at *ptr*.
   /// @param ptr A pointer to a contiguous memory region of size *size*.
   /// @param deleter The function to invoke on when destroying the chunk.
-  template <class Deleter>
-  chunk(size_t size, void* ptr, Deleter deleter = [](char*, size_t) {})
-    : data_{reinterpret_cast<char*>(ptr)},
-      size_{size},
-      deleter_{std::move(deleter)} {
-  }
+  chunk(size_t size, void* ptr, deleter_type deleter = deleter_type{});
 
   char* data_;
   size_t size_;
-  std::function<void(char*, size_t)> deleter_;
+  deleter_type deleter_;
 };
 
 /// @relates chunk
