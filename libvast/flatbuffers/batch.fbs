@@ -1,9 +1,0 @@
-include "event.fbs";
-
-namespace vast.detail;
-
-table Batch {
-  events:[Event];
-}
-
-root_type Batch;

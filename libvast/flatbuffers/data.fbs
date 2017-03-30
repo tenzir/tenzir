@@ -1,26 +1,6 @@
-namespace vast.detail;
-
-enum DataType : ubyte {
-  NoneType,
-  BooleanType,
-  IntegerType,
-  CountType,
-  RealType,
-  TimestampType,
-  TimespanType,
-  EnumerationType,
-  StringType,
-  PatternType,
-  AddressType,
-  SubnetType,
-  PortType,
-  VectorType,
-  SetType,
-  MapType
-}
+namespace vast.fbs;
 
 table Data {
-  which:DataType = NoneType;
   integer:long = 0;
   count:ulong = 0;
   real:double = 0.0;

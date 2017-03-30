@@ -1,10 +1,30 @@
 include "attribute.fbs";
 include "data.fbs";
 
-namespace vast.detail;
+namespace vast.fbs;
+
+enum TypeTag : ubyte {
+  None,
+  Boolean,
+  Integer,
+  Count,
+  Real,
+  Timestamp,
+  Timespan,
+  Enumeration,
+  String,
+  Pattern,
+  Address,
+  Subnet,
+  Port,
+  Vector,
+  Set,
+  Map,
+  Record,
+}
 
 table Type {
-  which:DataType = NoneType;
+  which:TypeTag = None;
   name:string;
   attributes:[Attribute];
   subtypes:[Type];

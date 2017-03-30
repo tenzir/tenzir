@@ -1,10 +1,10 @@
-include "batch.fbs";
+include "event.fbs";
 
-namespace vast.detail;
+namespace vast.fbs;
 
 table Segment {
-  id:string;
-  batches:[Batch];
+  uuid:string;
+  events:[Event];
 }
 
 root_type Segment;

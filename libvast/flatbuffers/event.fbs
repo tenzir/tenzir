@@ -2,7 +2,7 @@ include "attribute.fbs";
 include "data.fbs";
 include "type.fbs";
 
-namespace vast.detail;
+namespace vast.fbs;
 
 table MetaData {
   attributes:[Attribute];

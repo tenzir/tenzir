@@ -1,6 +1,6 @@
 include "data.fbs";
 
-namespace vast.detail;
+namespace vast.fbs;
 
 table Attribute {
   key:string (key);
