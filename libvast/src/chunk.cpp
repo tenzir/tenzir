@@ -28,15 +28,12 @@ chunk_ptr chunk::mmap(const std::string& filename, size_t size, size_t offset) {
   ::close(fd);
   if (map == MAP_FAILED)
     return {};
-  // Construct a chunk from it that unmaps itself upon deletion.
-  auto deleter = [](char* buf, size_t n) {
-    ::munmap(buf, n);
-  };
+  auto deleter = [](char* buf, size_t n) { ::munmap(buf, n); };
   return make(size, reinterpret_cast<char*>(map), deleter);
 }
 
 chunk::~chunk() {
-  if (deleter_)
+  //if (deleter_)
     deleter_(data_, size_);
 }
 
@@ -48,16 +45,35 @@ size_t chunk::size() const {
   return size_;
 }
 
+chunk::const_iterator chunk::begin() const {
+  return data_;
+}
+
+chunk::const_iterator chunk::end() const {
+  return data_ + size_;
+}
+
+chunk_ptr chunk::slice(size_t start, size_t length) const {
+  VAST_ASSERT(start + length < size());
+  if (length == 0)
+    length = size() - start;
+  auto self = const_cast<chunk*>(this); // Atomic ref-counting is fine.
+  self->ref();
+  auto deleter = [=](char*, size_t) { self->deref(); };
+  return make(length, data_ + start, std::move(deleter));
+}
+
 chunk::chunk(size_t size)
   : data_{new char[size]},
     size_{size},
     deleter_{[](char* ptr, size_t) { delete[] ptr; }} {
-  VAST_ASSERT(size_ > 0);
+  VAST_ASSERT(size > 0);
 }
 
-chunk::chunk(size_t size, void* ptr)
+chunk::chunk(size_t size, void* ptr, deleter_type deleter)
   : data_{reinterpret_cast<char*>(ptr)},
-    size_{size} {
+    size_{size},
+    deleter_{std::move(deleter)} {
 }
 
 bool operator==(const chunk& x, const chunk& y) {
