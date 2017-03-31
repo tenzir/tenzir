@@ -12,6 +12,7 @@
 #include "vast/none.hpp"
 
 #include "vast/detail/assert.hpp"
+#include "vast/detail/zigzag.hpp"
 
 namespace vast {
 namespace detail {
@@ -28,11 +29,10 @@ protected:
   template <class T>
   error zig_zag_varbyte_decode(T& x) {
     static_assert(std::is_signed<T>::value, "T must be an signed type");
-    using unsigned_type = typename std::make_unsigned<T>::type;
-    auto u = unsigned_type{0};
+    auto u = std::make_unsigned_t<T>{0};
     if (auto e = this->varbyte_decode(u))
       return e;
-    x = (u >> 1) ^ -static_cast<T>(u & 1); // zig-zag decode
+    x = zigzag::decode(u);
     return nil;
   }
 
