@@ -12,6 +12,11 @@
 namespace vast {
 namespace detail {
 
+mmapbuf::mmapbuf() {
+  setg(nullptr, nullptr, nullptr);
+  setp(nullptr, nullptr);
+}
+
 mmapbuf::mmapbuf(size_t size) : size_{size} {
   VAST_ASSERT(size > 0);
   auto prot = PROT_READ | PROT_WRITE;
