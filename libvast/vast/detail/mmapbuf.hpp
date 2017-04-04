@@ -14,6 +14,9 @@ namespace detail {
 /// mapped memory region.
 class mmapbuf : public std::streambuf {
 public:
+  /// Default-constructs an empty memory-mapped buffer.
+  mmapbuf();
+
   /// Constructs an anonymous memory-mapped stream buffer.
   /// @param size The size of the mapped region.
   /// @pre `size > 0`
