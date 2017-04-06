@@ -3,6 +3,7 @@
 #include "vast/type.hpp"
 #include "vast/save.hpp"
 #include "vast/concept/hashable/uhash.hpp"
+#include "vast/concept/hashable/xxhash.hpp"
 #include "vast/concept/parseable/vast/type.hpp"
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/to_string.hpp"
@@ -35,12 +36,12 @@ TEST(construction and assignment) {
 
 TEST(name) {
   auto v = vector_type{integer_type{}};
-  auto h0 = uhash<type::hasher>{}(v);
+  auto h0 = uhash<xxhash>{}(v);
   v.name("foo");
-  auto h1 = uhash<type::hasher>{}(v);
+  auto h1 = uhash<xxhash>{}(v);
   CHECK_NOT_EQUAL(h0, h1);
   v.name("");
-  h1 = uhash<type::hasher>{}(v);
+  h1 = uhash<xxhash>{}(v);
   CHECK_EQUAL(h0, h1);
   v.name("bar");
   auto t = type{v};

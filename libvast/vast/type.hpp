@@ -62,8 +62,6 @@ class type : detail::totally_ordered<type> {
   friend schema; // pointer tracking
 
 public:
-  using hasher = xxhash32;
-
   /// Default-constructs an invalid type.
   type();
 
@@ -575,7 +573,7 @@ namespace std {
 template <>
 struct hash<vast::type> {
   size_t operator()(vast::type const& t) const {
-    return vast::uhash<vast::type::hasher>{}(t);
+    return vast::uhash<vast::xxhash32>{}(t);
   }
 };
 
