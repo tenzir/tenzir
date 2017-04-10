@@ -6,22 +6,23 @@
 #include <tuple>
 
 #include "vast/chunk.hpp"
+#include "vast/filesystem.hpp"
 
 #include "vast/detail/assert.hpp"
 
 namespace vast {
 
-chunk_ptr chunk::mmap(const std::string& filename, size_t size, size_t offset) {
+chunk_ptr chunk::mmap(const path& filename, size_t size, size_t offset) {
   // Figure out the file size if not provided.
   if (size == 0) {
     struct stat st;
-    auto result = ::stat(filename.c_str(), &st);
+    auto result = ::stat(filename.str().c_str(), &st);
     if (result == -1)
       return {};
     size = st.st_size;
   }
   // Open and memory-map the file.
-  auto fd = ::open(filename.c_str(), O_RDONLY, 0644);
+  auto fd = ::open(filename.str().c_str(), O_RDONLY, 0644);
   if (fd == -1)
     return {};
   auto map = ::mmap(nullptr, size, PROT_READ, MAP_SHARED, fd, offset);

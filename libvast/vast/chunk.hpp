@@ -13,6 +13,7 @@
 namespace vast {
 
 class chunk;
+class path;
 
 /// A pointer to a chunk.
 /// @relates chunk
@@ -40,7 +41,7 @@ public:
   /// @param filename The name of the file to memory-map.
   /// @param size The number of bytes to map. If 0, map the entire file.
   /// @param offset Where to start in terms of number of bytes from the start.
-  static chunk_ptr mmap(const std::string& filename,
+  static chunk_ptr mmap(const path& filename,
                         size_t size = 0, size_t offset = 0);
 
   /// Destroys the chunk and deallocates any owned memory.
