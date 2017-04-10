@@ -8,6 +8,9 @@
 #include "vast/chunk.hpp"
 
 namespace vast {
+
+class path;
+
 namespace detail {
 
 /// A memory-mapped stream buffer. The put and get areas corresponds to the
@@ -27,7 +30,7 @@ public:
   /// @param size The size of the file in bytes. If 0, figure out file size
   ///             automatically.
   /// @param offset An offset where to begin mapping.
-  explicit mmapbuf(const std::string& filename, size_t size = 0,
+  explicit mmapbuf(const path& filename, size_t size = 0,
                    size_t offset = 0);
 
   /// Closes the opened file and unmaps the mapped memory region.

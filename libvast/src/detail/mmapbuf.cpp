@@ -6,6 +6,8 @@
 #include <cstdio>
 #include <cstring>
 
+#include "vast/filesystem.hpp"
+
 #include "vast/detail/assert.hpp"
 #include "vast/detail/mmapbuf.hpp"
 
@@ -28,17 +30,17 @@ mmapbuf::mmapbuf(size_t size) : size_{size} {
   setp(map_, map_ + size_);
 }
 
-mmapbuf::mmapbuf(const std::string& filename, size_t size, size_t offset)
+mmapbuf::mmapbuf(const path& filename, size_t size, size_t offset)
   : size_{size} {
   if (size == 0) {
     struct stat st;
-    auto result = ::stat(filename.c_str(), &st);
+    auto result = ::stat(filename.str().c_str(), &st);
     if (result == -1 || st.st_size == 0)
       return;
     size_ = st.st_size;
   }
   VAST_ASSERT(size_ > 0);
-  auto fd_ = ::open(filename.c_str(), O_RDWR, 0644);
+  auto fd_ = ::open(filename.str().c_str(), O_RDWR, 0644);
   if (fd_ == -1)
     return;
   auto prot = PROT_READ | PROT_WRITE;
@@ -76,8 +78,8 @@ bool mmapbuf::truncate(size_t new_size) {
   if (new_size >= size())
     return false;
   // Save stream buffer positions.
-  size_t put_pos = pptr() - pbase();
   size_t get_pos = gptr() - eback();
+  size_t put_pos = pptr() - pbase();
   // Truncate file.
   if (fd_ != -1 && ::ftruncate(fd_, new_size) != 0)
     return false;
