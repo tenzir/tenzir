@@ -64,7 +64,7 @@ public:
 
   auto pubseekpos(pos_type pos, std::ios_base::openmode which =
                                   std::ios_base::in | std::ios_base::out ) {
-    return pubseekpos(pos, which);
+    return streambuf_.pubseekpos(pos, which);
   }
 
   auto pubsync() {
