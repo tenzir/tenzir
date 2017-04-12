@@ -129,18 +129,52 @@ struct contains<T, std::tuple<T, Ts...>> : std::true_type {};
 template <bool B>
 using bool_constant = std::integral_constant<bool, B>;
 
-//template <class F, class Tuple, size_t... I>
-//constexpr decltype(auto) apply_impl(F&& f, Tuple&& t,
-//                                    std::index_sequence<I...> ) {
-//  return invoke(std::forward<F>(f), std::get<I>(std::forward<Tuple>(t))...);
-//}
-//
-//template <class F, class Tuple>
-//constexpr decltype(auto) apply(F&& f, Tuple&& t) {
-//  return apply_impl(std::forward<F>(f), std::forward<Tuple>(t),
-//        std::make_index_sequence<std::tuple_size_v<std::decay_t<Tuple>>>{});
-//}
+template <class...>
+using void_t = void;
 
+// -- Library Fundamentals v2 ------------------------------------------------
+
+struct nonesuch {
+  nonesuch() = delete;
+  ~nonesuch() = delete;
+  nonesuch(nonesuch const&) = delete;
+  void operator=(nonesuch const&) = delete;
+};
+
+namespace {
+
+template <
+  class Default,
+  class AlwaysVoid,
+  template <class...> class Op,
+  class... Args
+>
+struct detector {
+  using value_t = std::false_type;
+  using type = Default;
+};
+
+template <class Default, template<class...> class Op, class... Args>
+struct detector<Default, void_t<Op<Args...>>, Op, Args...> {
+  using value_t = std::true_type;
+  using type = Op<Args...>;
+};
+
+} // namespace <anonymous>
+
+template <template <class...> class Op, class... Args>
+using is_detected
+  = typename detector<nonesuch, void, Op, Args...>::value_t;
+
+template <template <class...> class Op, class... Args>
+using detected_t
+  = typename detector<nonesuch, void, Op, Args...>::type;
+
+template <class Default, template<class...> class Op, class... Args>
+using detected_or = detector<Default, void, Op, Args...>;
+
+template <class Default, template<class...> class Op, class... Args>
+using detected_or_t = typename detected_or<Default, Op, Args...>::type;
 
 } // namespace detail
 } // namespace vast
