@@ -1,3 +1,4 @@
+#include "vast/bitmap.hpp"
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/vast/event.hpp"
 #include "vast/system/archive.hpp"
@@ -20,10 +21,10 @@ TEST(archiving and querying) {
   self->send(a, bgpdump_txt);
   MESSAGE("querying event set {[100,150), [10150,10200)}");
   bitmap bm;
-  bm.append_bits(false, 100);
-  bm.append_bits(true, 50);
-  bm.append_bits(false, 10000);
-  bm.append_bits(true, 50);
+  bm.append<0>(100);
+  bm.append<1>(50);
+  bm.append<0>(10000);
+  bm.append<1>(50);
   std::vector<event> result;
   self->request(a, infinite, bm).receive(
     [&](std::vector<event>& xs) { result = std::move(xs); },

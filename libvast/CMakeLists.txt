@@ -59,16 +59,16 @@ set(libvast_sources
   src/filesystem.cpp
   src/key.cpp
   src/http.cpp
+  src/layout.cpp
   src/null_bitmap.cpp
   src/operator.cpp
-  src/packer.cpp
   src/pattern.cpp
   src/port.cpp
   src/schema.cpp
+  src/segment.cpp
   src/subnet.cpp
   src/time.cpp
   src/type.cpp
-  src/unpacker.cpp
   src/uuid.cpp
   src/value.cpp
   src/value_index.cpp
@@ -225,10 +225,10 @@ set(tests
   test/iterator.cpp
   test/json.cpp
   test/key.cpp
+  test/layout.cpp
   test/main.cpp
   test/mmapbuf.cpp
   test/offset.cpp
-  test/packing.cpp
   test/parseable.cpp
   test/pattern.cpp
   test/port.cpp
@@ -236,6 +236,7 @@ set(tests
   test/range_map.cpp
   test/save_load.cpp
   test/schema.cpp
+  test/segment.cpp
   test/serialization.cpp
   test/stack.cpp
   test/string.cpp
@@ -249,7 +250,6 @@ set(tests
   test/variant.cpp
   test/vector_map.cpp
   test/vector_set.cpp
-  test/view.cpp
   test/word.cpp
   test/system/archive.cpp
   test/system/consensus.cpp

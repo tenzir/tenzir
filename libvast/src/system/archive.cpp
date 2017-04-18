@@ -2,18 +2,20 @@
 
 #include "vast/logger.hpp"
 
-#include "vast/batch.hpp"
+#include "vast/bitmap.hpp"
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/error.hpp"
 #include "vast/concept/printable/vast/filesystem.hpp"
 #include "vast/concept/printable/vast/uuid.hpp"
-#include "vast/detail/assert.hpp"
 #include "vast/expected.hpp"
 #include "vast/load.hpp"
 #include "vast/save.hpp"
 
+#include "vast/system/accountant.hpp"
 #include "vast/system/archive.hpp"
+
+#include "vast/detail/assert.hpp"
 
 using std::chrono::steady_clock;
 using std::chrono::duration_cast;
@@ -23,198 +25,113 @@ using namespace caf;
 namespace vast {
 namespace system {
 
-const segment::magic_type segment::magic;
-const segment::version_type segment::version;
-
-void segment::add(batch&& b) {
-  auto min = select(b.ids(), 1);
-  VAST_ASSERT(min != invalid_event_id);
-  VAST_ASSERT(batches_.find(min) == batches_.end());
-  bytes_ += bytes(b);
-  batches_.emplace(min, std::move(b));
-}
-
-// FIXME: this algorithm is not very efficient. It operates in O(MN) time where
-// M is the number of batches and N the size of the bitmap. Conceptually,
-// there's a straight-forward O(log M * N) or even O(N) algorithm by walking
-// through the query bitmap in lock-step with the batches.
-expected<std::vector<event>> segment::extract(bitmap const& bm) const {
-  std::vector<event> result;
-  auto min = select(bm, 1);
-  auto max = select(bm, -1);
-  // FIXME: what we really want here is detail::range_map, but it's currently
-  // missing lower_bound()/upper_bound() functionality, so we emulate it here.
-  auto begin = batches_.lower_bound(min);
-  if (begin != batches_.begin()
-      && (begin == batches_.end() || begin->first > min))
-    --begin;
-  auto end = batches_.upper_bound(max);
-  for (; begin != end; ++begin) {
-    batch::reader reader{begin->second};
-    auto xs = reader.read(bm);
-    if (!xs)
-      return xs;
-    result.reserve(result.size() + xs->size());
-    std::move(xs->begin(), xs->end(), std::back_inserter(result));
-  }
-  return result;
-}
-
-uuid const& segment::id() const {
-  return id_;
-}
-
-uint64_t bytes(segment const& s) {
-  return s.bytes_;
-}
-
-namespace {
-
-template <class Actor>
-expected<void> flush_active_segment(Actor* self) {
-  VAST_DEBUG(self, "flushes current segment", self->state.active.id());
-  // Don't touch filesystem if we have nothing to do.
-  if (bytes(self->state.active) == 0)
-    return {};
-  // Write segment to file system.
-  if (!exists(self->state.dir)) {
-    auto result = mkdir(self->state.dir);
-    if (!result)
-      return result.error();
-  }
-  auto id = self->state.active.id();
-  auto filename = self->state.dir / to_string(id);
-  auto start = steady_clock::now();
-  auto result = save(filename, segment::magic, segment::version,
-                     self->state.active);
-  if (!result)
-    return result.error();
-  if (self->state.accountant) {
-    auto stop = steady_clock::now();
-    auto unit = duration_cast<microseconds>(stop - start).count();
-    auto rate = bytes(self->state.active) * 1e6 / unit;
-    self->send(self->state.accountant, "archive.flush.rate", rate);
-  }
-  VAST_DEBUG(self, "wrote active segment to", filename.trim(-3));
-  self->state.cache.emplace(id, std::move(self->state.active));
-  self->state.active = {};
-  // Update meta data on filessytem.
-  auto t = save(self->state.dir / "meta", self->state.segments);
-  if (!t)
-    return t.error();
-  VAST_DEBUG(self, "updated persistent meta data");
-  return {};
-}
-
-using flush_promise = typed_response_promise<ok_atom>;
-using lookup_promise = typed_response_promise<std::vector<event>>;
-
-} // namespace <anonymous>
-
 archive_type::behavior_type
 archive(archive_type::stateful_pointer<archive_state> self,
         path dir, size_t capacity, size_t max_segment_size) {
   VAST_ASSERT(max_segment_size > 0);
-  self->state.dir = std::move(dir);
-  self->state.max_segment_size = max_segment_size;
+  auto active_segment_filename = [=] {
+    return dir / to_string(self->state.builder_id);
+  };
+  self->state.builder =
+    segment_builder{active_segment_filename(), max_segment_size};
   self->state.cache.capacity(capacity);
   self->state.cache.on_evict(
-    [=](uuid& id, segment&) {
+    [=](uuid& id, segment_viewer&) {
       VAST_DEBUG(self, "evicts cache entry: segment", id);
+      // Segment destructor will reduce refcount of underlying chunk.
     }
   );
-  // Load meta data about existing segments.
-  if (exists(self->state.dir / "meta")) {
-    auto t = load(self->state.dir / "meta", self->state.segments);
-    if (!t) {
-      VAST_ERROR(self, "failed to unarchive meta data:",
-                 self->system().render(t.error()));
-      self->quit(t.error());
+  // Load meta data of existing segments.
+  if (exists(dir / "meta"))
+    for (auto& filename : directory{dir / "meta"}) {
+      // TODO: Load [from,to) event ID range and place in known segments.
+      //auto segment_uuid = to<uuid>(filename.basename().str());
+      //if (!t) {
+      //  VAST_ERROR(self, "failed to unarchive meta data:",
+      //             self->system().render(t.error()));
+      //  self->quit(t.error());
+      //}
     }
-  }
+  // Register accountant, if available.
+  auto accountant = accountant_type{};
+  if (auto acc = self->system().registry().get(accountant_atom::value))
+    accountant = actor_cast<accountant_type>(acc);
+  // On exit, we attempt to complete the currenly active segment.
   self->set_exit_handler(
     [=](const exit_msg& msg) {
-      flush_active_segment(self);
-      self->quit(msg.reason);
+      auto seg = self->state.builder.finish();
+      self->quit(seg ? msg.reason : seg.error());
     }
   );
-  // Register the accountant, if available.
-  auto acc = self->system().registry().get(accountant_atom::value);
-  if (acc) {
-    VAST_DEBUG(self, "registers accountant", acc);
-    self->state.accountant = actor_cast<accountant_type>(acc);
-  }
   return {
     [=](std::vector<event> const& events) {
       VAST_ASSERT(!events.empty());
-      // Ensure that all events have strictly monotonic IDs
-      auto non_monotonic = [](auto& x, auto& y) {
-        return x.id() != y.id() - 1;
-      };
-      auto valid = std::adjacent_find(events.begin(), events.end(),
-                                      non_monotonic) == events.end();
-      if (!valid) {
-        VAST_WARNING(self, "ignores", events.size(),
-                     "events with non-monotonic IDs");
-        return;
-      }
-      // Construct a batch from the events.
-      auto first_id = events.front().id();
-      auto last_id  = events.back().id();
+      auto first = events.front().id();
+      auto last  = events.back().id();
       VAST_DEBUG(self, "got", events.size(),
-                 "events [" << first_id << ',' << (last_id + 1) << ')');
+                 "events [" << first << ',' << (last + 1) << ')');
+      // Assert event ID contiguity.
+      VAST_ASSERT(events.size() == last - first);
+      // If the new events would cause the segment to exceed its maximum size,
+      // then start anew.
+      auto too_big = [=] {
+        auto empty = bytes(self->state.builder) == 0;
+        auto full = bytes(self->state.builder) >= max_segment_size;
+        return !empty && full;
+      };
       auto start = steady_clock::now();
-      batch::writer writer{compression::lz4};
-      for (auto& e : events)
-        if (!writer.write(e)) {
-          self->quit(make_error(ec::unspecified, "failed to create batch"));
+      auto j = size_t{0};
+      for (auto i = 0u; i < events.size(); ++i) {
+        while (!too_big()) {
+          auto result = self->state.builder.put(events[i]);
+          if (!result) {
+            VAST_ERROR(self, "failed to put event into segment",
+                       self->system().render(result.error()));
+            self->state.builder.finish(); // Try to complete segment.
+            self->quit(result.error());
+            return;
+          }
+        }
+        VAST_DEBUG(self, "exceeded maximum segment size");
+        // The current segment is too big. Put the active one into the cache
+        // and start over with a new one.
+        self->state.segments.inject(events[j].id(), events[i].id(),
+                                    self->state.builder_id);
+        auto chk = self->state.builder.finish();
+        if (!chk) {
+          self->quit(chk.error());
           return;
         }
-      auto b = writer.seal();
-      b.ids(first_id, last_id + 1);
+        self->state.cache.emplace(self->state.builder_id,
+                                  segment_viewer{std::move(*chk)});
+        self->state.builder_id = uuid::random();
+        self->state.builder =
+          segment_builder{active_segment_filename(), max_segment_size};
+        j = i;
+      }
+      VAST_DEBUG(self, "records events in ["
+                         << events[j].id() << ',' << events.back().id() << ')');
+      self->state.segments.inject(events[j].id(), events.back().id(),
+                                  self->state.builder_id);
       auto stop = steady_clock::now();
-      if (self->state.accountant) {
+      // Record statistics.
+      if (accountant) {
         auto runtime = stop - start;
         auto unit = duration_cast<microseconds>(runtime).count();
         auto rate = events.size() * 1e6 / unit;
-        self->send(self->state.accountant, "archive.compression.rate", rate);
+        self->send(accountant, "archive.throughput", rate);
         uint64_t num = events.size();
-        self->send(self->state.accountant, "archive.events.per.batch", num);
+        self->send(accountant, "archive.batch_size", num);
       }
-      // If the batch would cause the segment to exceed its maximum size, then
-      // flush the active segment and append the batch to the new one.
-      auto too_big = bytes(self->state.active) >= self->state.max_segment_size;
-      auto empty = bytes(self->state.active) == 0;
-      if (!empty && too_big) {
-        auto result = flush_active_segment(self);
-        if (!result) {
-          self->quit(result.error());
-          return;
-        }
-      }
-      auto active_id = self->state.active.id();
-      self->state.segments.inject(first_id, last_id + 1, active_id);
-      self->state.active.add(std::move(b));
     },
-    [=](flush_atom) -> flush_promise {
-      auto rp = self->make_response_promise<flush_promise>();
-      auto result = flush_active_segment(self);
-      if (!result) {
-        rp.deliver(result.error());
-        self->quit(result.error());
-      } else {
-        rp.deliver(ok_atom::value);
-      }
-      return rp;
-    },
-    [=](bitmap const& bm) -> lookup_promise {
+    [=](bitmap const& bm) -> result<std::vector<event>> {
       VAST_ASSERT(rank(bm) > 0);
       VAST_DEBUG(self, "got query for", rank(bm), "events in range ["
                  << select(bm, 1) << ',' << (select(bm, -1) + 1) << ')');
-      auto rp = self->make_response_promise<lookup_promise>();
+      auto rp = self->make_response_promise<std::vector<event>>();
       // Collect candidate segments by seeking through the query bitmap and
       // probing each ID interval.
-      std::vector<uuid const*> candidates;
+      std::vector<uuid> candidates;
       auto ones = select(bm);
       auto i = self->state.segments.begin();
       auto end = self->state.segments.end();
@@ -222,65 +139,49 @@ archive(archive_type::stateful_pointer<archive_state> self,
         if (ones.get() < i->left) {
           // Bitmap must catch up, segment is ahead.
           ones.skip(i->left - ones.get());
-        } else if (ones.get() < i->right) {
-          // Match: bitmap is within an existing segment.
-          candidates.push_back(&i->value);
-          ones.skip(i->right - ones.get());
+        } else if (ones.get() >= i->right) {
+          // Segment must catch up, bitmap is ahead.
           ++i;
         } else {
-          // Segment must catch up, bitmap is ahead.
+          // Match: bitmap is within an existing segment.
+          candidates.push_back(i->value);
+          ones.skip(i->right - ones.get());
           ++i;
         }
       }
-      // Process candidates *in reverse order* to get maximum LRU cache hits.
+      VAST_DEBUG(self, "processes", candidates.size(), "candidates");
+      // Assumption: more recent segments are more likely to be cached.
+      std::reverse(candidates.begin(), candidates.end());
+      // Look into cached segments first, otherwise we'll evict some just to
+      // swap them in later again.
+      auto cached = [&](auto& x) { return self->state.cache.count(x) > 0; };
+      std::stable_partition(candidates.begin(), candidates.end(), cached);
+      // Proceed with event extraction.
       std::vector<event> result;
-      VAST_DEBUG(self, "processing", candidates.size(), "candidates");
-      for (auto c = candidates.rbegin(); c != candidates.rend(); ++c) {
-        segment* s = nullptr;
-        // If the segment turns out to be the active segment, we can
-        // can query it immediately.
-        if (**c == self->state.active.id()) {
-          VAST_DEBUG(self, "looking into active segment");
-          s = &self->state.active;
+      for (auto& candidate : candidates) {
+        auto xs = expected<std::vector<event>>{no_error};
+        if (candidate == self->state.builder_id) {
+          VAST_DEBUG(self, "looks into segment builder");
+          xs = self->state.builder.get(bm);
         } else {
-          // Otherwise we look into the cache.
-          auto i = self->state.cache.find(**c);
-          if (i != self->state.cache.end()) {
-            VAST_DEBUG(self, "got cache hit for segment", **c);
-            s = &i->second;
-          } else {
-            VAST_DEBUG(self, "got cache miss for segment", **c);
-            auto filename = self->state.dir / to_string(**c);
-            segment::magic_type m;
-            segment::version_type v;
-            segment seg;
-            auto result = load(filename, m, v, seg);
-            if (!result) {
-              rp.deliver(result.error());
-              return rp;
-            }
-            if (m != segment::magic) {
-              rp.deliver(make_error(ec::unspecified, "segment magic error"));
-              return rp;
-            }
-            if (v < segment::version) {
-              rp.deliver(make_error(ec::version_error, v, segment::version));
-              return rp;
-            }
-            i = self->state.cache.emplace(**c, std::move(seg)).first;
-            s = &i->second;
+          VAST_DEBUG(self, "looks into segment cache");
+          auto i = self->state.cache.find(candidate);
+          if (i == self->state.cache.end()) {
+            VAST_DEBUG(self, "got cache miss for segment", candidate);
+            auto chk = chunk::mmap(dir / to_string(candidate));
+            if (!chk)
+              return rp.deliver(make_error(ec::unspecified, "chunk::mmap"));
+            i = self->state.cache.emplace(candidate, segment_viewer{chk}).first;
           }
+          xs = i->second.get(bm);
         }
-        // Perform lookup in segment and append extracted events to result.
-        VAST_ASSERT(s != nullptr);
-        auto xs = s->extract(bm);
-        if (!xs) {
-          VAST_ERROR(self, self->system().render(xs.error()));
-          rp.deliver(xs.error());
-          return rp;
-        }
+        if (!xs)
+          return rp.deliver(xs.error());
+        VAST_DEBUG(self, "extracted", xs->size(), "events");
         result.reserve(result.size() + xs->size());
-        std::move(xs->begin(), xs->end(), std::back_inserter(result));
+        result.insert(result.end(),
+                      std::make_move_iterator(xs->begin()),
+                      std::make_move_iterator(xs->end()));
       }
       VAST_DEBUG(self, "delivers", result.size(), "events");
       rp.deliver(std::move(result));
