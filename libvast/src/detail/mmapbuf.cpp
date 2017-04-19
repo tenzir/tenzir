@@ -59,6 +59,10 @@ mmapbuf::~mmapbuf() {
     ::close(fd_);
 }
 
+mmapbuf::operator bool() const {
+  return map_ != nullptr;
+}
+
 const mmapbuf::char_type* mmapbuf::data() const {
   return map_;
 }

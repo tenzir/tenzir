@@ -36,6 +36,10 @@ public:
   /// Closes the opened file and unmaps the mapped memory region.
   ~mmapbuf();
 
+  /// Checks whether the memory map is valid.
+  /// @returns `true` if the mapping returned by `mmap` is valid.
+  explicit operator bool() const;
+
   /// Exposes the underlying memory region.
   const char_type* data() const;
 
