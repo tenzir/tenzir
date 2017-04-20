@@ -40,7 +40,7 @@ mmapbuf::mmapbuf(const path& filename, size_t size, size_t offset)
     size_ = st.st_size;
   }
   VAST_ASSERT(size_ > 0);
-  auto fd_ = ::open(filename.str().c_str(), O_RDWR, 0644);
+  auto fd_ = ::open(filename.str().c_str(), O_RDWR | O_CREAT, 0644);
   if (fd_ == -1)
     return;
   auto prot = PROT_READ | PROT_WRITE;
