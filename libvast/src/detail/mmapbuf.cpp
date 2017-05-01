@@ -41,9 +41,8 @@ mmapbuf::mmapbuf(const path& filename, size_t size, size_t offset)
   auto result = ::stat(filename.str().c_str(), &st);
   if (result == 0)
     file_size = st.st_size;
-  else if (result == -1)
-    if (errno != ENOENT)
-      return;
+  else if (result < 0 && errno != ENOENT)
+    return;
   // Open/create file and resize if the mapping is larger than the file.
   auto fd = open(filename.str().c_str(), O_RDWR | O_CREAT, 0644);
   if (fd == -1)
@@ -51,7 +50,7 @@ mmapbuf::mmapbuf(const path& filename, size_t size, size_t offset)
   if (size == 0)
     size = file_size;
   else if (size > file_size)
-    if (ftruncate(fd, file_size) < 0)
+    if (ftruncate(fd, size) < 0)
       return;
   // Map file into memory.
   auto map = mmap(nullptr, size, prot_, flags_, fd, offset);
@@ -87,7 +86,7 @@ bool mmapbuf::resize(size_t new_size) {
     return false;
   if (new_size == size())
     return true;
-  // Save current stream buffer positions from beginning.
+  // Save current stream buffer positions relative to the beginning.
   size_t get_pos = gptr() - eback();
   size_t put_pos = pptr() - pbase();
   // Resize the underlying file, if available.
@@ -98,9 +97,10 @@ bool mmapbuf::resize(size_t new_size) {
     // the mapping under the assumption that no user accesses the previously
     // allocated memory. While convenient, this approach wastes virtual memory,
     // which could become an issue on 32-bit systems. To relinquish no-longer
-    // used frames, we inform the OS that we're done with them. However, we
-    // must be very careful not to evict pages that overlap with the active
-    // region, which requires rounding up to the address of next page.
+    // used frames, we give the OS a hint (which it may ignore) that we're
+    // done with them. However, we must be very careful not to evict pages that
+    // overlap with the active region, which requires rounding up to the
+    // address of the next page.
     auto unused_pages = (size_ - new_size) / page_size();
     if (unused_pages > 0) {
       auto used_pages = (new_size + page_size() - 1) / page_size(); // ceil
@@ -116,7 +116,6 @@ bool mmapbuf::resize(size_t new_size) {
     //     and then create a new one with the new size.
     auto remap = true;
     // If the current mapping is a multiple of the page size, we can try (1).
-    VAST_ASSERT(page_size() >= 1);
     if (size_ % page_size() == 0) {
       auto flags = flags_ | MAP_FIXED;
       auto map = mmap(map_ + size_, new_size - size_, prot_, flags, fd_, 0);
