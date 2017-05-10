@@ -339,7 +339,7 @@ int main(int argc, char* argv[]) {
     // TODO: teach CAF how to apply the filter to the console only.
   }
   // We spawn a node either for the "start" command or when -n is given.
-  auto spawn_node = *cmd == "start" || conf.opts.count("local") > 0;
+  auto spawn_node = *cmd == "start" || conf.opts.count("node") > 0;
   // Setup log file.
   if (!spawn_node) {
     sys_cfg.logger_filename.clear();
