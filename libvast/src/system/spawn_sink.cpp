@@ -8,7 +8,9 @@
 #include "vast/format/bro.hpp"
 #include "vast/format/csv.hpp"
 #include "vast/format/json.hpp"
+#ifdef VAST_HAVE_PCAP
 #include "vast/format/pcap.hpp"
+#endif
 
 #include "vast/system/atoms.hpp"
 #include "vast/system/sink.hpp"

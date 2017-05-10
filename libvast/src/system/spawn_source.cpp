@@ -11,7 +11,9 @@
 
 #include "vast/format/bgpdump.hpp"
 #include "vast/format/bro.hpp"
+#ifdef VAST_HAVE_PCAP
 #include "vast/format/pcap.hpp"
+#endif
 #include "vast/format/test.hpp"
 
 #include "vast/system/atoms.hpp"

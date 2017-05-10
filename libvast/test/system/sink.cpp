@@ -1,34 +1,24 @@
 #include "vast/error.hpp"
-#include "vast/format/pcap.hpp"
+#include "vast/format/bro.hpp"
 #include "vast/system/sink.hpp"
 
 #define SUITE system
 #include "test.hpp"
 #include "data.hpp"
-#include "fixtures/actor_system.hpp"
+#include "fixtures/actor_system_and_events.hpp"
 
 using namespace vast;
 using namespace vast::system;
 
-FIXTURE_SCOPE(sink_tests, fixtures::actor_system)
+FIXTURE_SCOPE(sink_tests, fixtures::actor_system_and_events)
 
-TEST(PCAP sink) {
-  // First read some events.
-  format::pcap::reader reader{traces::nmap_vsn};
-  auto e = expected<event>{no_error};
-  std::vector<event> events;
-  while (e || !e.error()) {
-    e = reader.read();
-    if (e)
-      events.push_back(std::move(*e));
-  }
-  REQUIRE_EQUAL(events.size(), 44u);
+TEST(Bro sink) {
   // Now write those events.
   MESSAGE("constructing a sink");
-  format::pcap::writer writer{"/dev/null"};
-  auto snk = self->spawn(sink<format::pcap::writer>, std::move(writer));
+  format::bro::writer writer{directory / "bro"};
+  auto snk = self->spawn(sink<format::bro::writer>, std::move(writer));
   MESSAGE("sending events");
-  self->send(snk, std::move(events));
+  self->send(snk, bro_conn_log);
   MESSAGE("shutting down");
   self->send_exit(snk, caf::exit_reason::user_shutdown);
   self->wait_for(snk);

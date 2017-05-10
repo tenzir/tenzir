@@ -4,23 +4,10 @@
 
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
-#include "vast/concept/parseable/vast/schema.hpp"
 #include "vast/concept/printable/vast/expression.hpp"
 #include "vast/data.hpp"
 #include "vast/error.hpp"
 #include "vast/query_options.hpp"
-
-#include "vast/detail/posix.hpp"
-#include "vast/detail/fdinbuf.hpp"
-#include "vast/detail/fdostream.hpp"
-
-#include "vast/format/ascii.hpp"
-#include "vast/format/bgpdump.hpp"
-#include "vast/format/bro.hpp"
-#include "vast/format/csv.hpp"
-#include "vast/format/json.hpp"
-#include "vast/format/pcap.hpp"
-#include "vast/format/test.hpp"
 
 #include "vast/system/atoms.hpp"
 #include "vast/system/archive.hpp"
