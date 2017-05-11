@@ -112,8 +112,9 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
         self->send(self->state.accountant, "exporter.hits.arrived", runtime);
         self->send(self->state.accountant, "exporter.hits.count", count);
       }
-      VAST_DEBUG(self, "got", rank(hits), "index hits in ["
-                 << select(hits, 1) << ',' << (select(hits, -1) + 1) << ')');
+      VAST_DEBUG(self, "got", count, "index hits",
+                 (count == 0 ? "" : ("in ["s + to_string(select(hits, 1)) + ','
+                                     + to_string(select(hits, -1) + 1) + ')')));
       if (count > 0) {
         self->state.hits |= hits;
         self->state.unprocessed |= hits;

@@ -133,6 +133,7 @@ behavior evaluator(stateful_actor<evaluator_state>* self,
       VAST_DEBUG(self, "produced", rank(delta) << '/' << rank(expr_hits),
                  "new/total hits for", expr);
       if (any<0>(delta)) {
+        VAST_DEBUG(self, "relays", rank(delta), "new hits to sink");
         self->state.hits |= delta;
         self->send(sink, std::move(delta));
       }
