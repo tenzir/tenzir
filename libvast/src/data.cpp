@@ -266,33 +266,32 @@ data flatten(data const& d) {
   return v ? flatten(*v) : d;
 }
 
-optional<vector> unflatten(vector const& v, record_type const& t) {
-  auto i = v.begin();
-  size_t depth = 1;
-  vector result;
-  vector* x = &result;
-  for (auto& e : record_type::each{t}) {
-    if (i == v.end())
+namespace {
+
+template <class Iterator>
+optional<vector> unflatten(Iterator& f, Iterator l, const record_type& rec) {
+  vector xs;
+  xs.reserve(rec.fields.size());
+  for (auto& field : rec.fields)
+    if (auto r = get_if<record_type>(field.type)) {
+      auto ys = unflatten(f, l, *r);
+      if (!ys)
+        return ys;
+      xs.push_back(std::move(*ys));
+    } else if (f != l) {
+      xs.push_back(*f++);
+    } else {
       return {};
-    if (e.depth() > depth) {
-      for (size_t j = 0; j < e.depth() - depth; ++j) {
-        ++depth;
-        x->push_back(vector{});
-        x = get_if<vector>(x->back());
-      }
-    } else if (e.depth() < depth) {
-      x = &result;
-      depth = e.depth();
-      for (size_t j = 0; j < depth - 1; ++j)
-        x = get_if<vector>(x->back());
     }
-    auto& field_type = e.trace.back()->type;
-    if (is<none>(*i) || type_check(field_type, *i))
-      x->push_back(*i++);
-    else
-      return {};
-  }
-  return result;
+  return xs;
+}
+
+} // namespace <anonymous>
+
+optional<vector> unflatten(vector const& v, record_type const& t) {
+  auto first = v.begin();
+  auto last = v.end();
+  return unflatten(first, last, t);
 }
 
 optional<vector> unflatten(data const& d, type const& t) {

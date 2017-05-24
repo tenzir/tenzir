@@ -57,7 +57,7 @@ TEST(records) {
   auto flattened = flatten(structured);
   CHECK(flattened == flat);
   MESSAGE("unflatten");
-  auto t = record_type{
+  auto t0 = record_type{
     {"foo", string_type{}},
     {"r0", record_type{{
       {"i", integer_type{}},
@@ -66,9 +66,23 @@ TEST(records) {
     {"bar", string_type{}},
     {"baz", port_type{}}
   };
-  auto attempt = unflatten(v, t);
+  auto attempt = unflatten(v, t0);
   REQUIRE(attempt);
-  CHECK(*attempt == structured);
+  CHECK_EQUAL(*attempt, structured);
+  MESSAGE("nested unflatten");
+  auto t1 = record_type{
+    {"x0", record_type{{
+      {"x1", record_type{{
+        {"x2", integer_type{}}}}}}}},
+    {"y0", record_type{{
+      {"y1", record_type{{
+        {"y2", integer_type{}}}}}}}}
+  };
+  v = vector{42, 42};
+  structured = vector{vector{data{vector{42}}}, vector{data{vector{42}}}};
+  attempt = unflatten(v, t1);
+  REQUIRE(attempt);
+  CHECK_EQUAL(*attempt, structured);
   MESSAGE("serialization");
   std::string buf;
   save(buf, structured);
