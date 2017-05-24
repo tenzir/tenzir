@@ -246,35 +246,33 @@ data const* get(data const& d, offset const& o) {
   return nullptr;
 }
 
-vector flatten(vector const& v) {
-  vector result;
-  result.reserve(v.size());
-  for (auto& x : v)
-    if (auto rec = get_if<vector>(x)) {
-      auto flat = flatten(*rec);
-      result.insert(result.end(),
-                    std::make_move_iterator(flat.begin()),
-                    std::make_move_iterator(flat.end()));
-    } else {
-      result.push_back(x);
-    }
-  return result;
-}
-
-data flatten(data const& d) {
-  auto v = get_if<vector>(d);
-  return v ? flatten(*v) : d;
-}
-
 namespace {
+
+template <class Iterator>
+vector flatten(Iterator& f, Iterator l) {
+  vector xs;
+  xs.reserve(l - f);
+  for (; f != l; ++f)
+    if (auto v = get_if<vector>(*f)) {
+      auto begin = Iterator{v->begin()};
+      auto end = Iterator{v->end()};
+      auto ys = flatten(begin, end);
+      xs.insert(xs.end(),
+                std::make_move_iterator(ys.begin()),
+                std::make_move_iterator(ys.end()));
+    } else {
+      xs.push_back(*f);
+    }
+  return xs;
+}
 
 template <class Iterator>
 optional<vector> unflatten(Iterator& f, Iterator l, const record_type& rec) {
   vector xs;
   xs.reserve(rec.fields.size());
   for (auto& field : rec.fields)
-    if (auto r = get_if<record_type>(field.type)) {
-      auto ys = unflatten(f, l, *r);
+    if (auto rt = get_if<record_type>(field.type)) {
+      auto ys = unflatten(f, l, *rt);
       if (!ys)
         return ys;
       xs.push_back(std::move(*ys));
@@ -288,16 +286,50 @@ optional<vector> unflatten(Iterator& f, Iterator l, const record_type& rec) {
 
 } // namespace <anonymous>
 
-optional<vector> unflatten(vector const& v, record_type const& t) {
-  auto first = v.begin();
-  auto last = v.end();
-  return unflatten(first, last, t);
+vector flatten(vector const& xs) {
+  auto f = xs.begin();
+  auto l = xs.end();
+  return flatten(f, l);
 }
 
-optional<vector> unflatten(data const& d, type const& t) {
-  auto v = get_if<vector>(d);
+vector flatten(vector&& xs) {
+  auto f = std::make_move_iterator(xs.begin());
+  auto l = std::make_move_iterator(xs.end());
+  return flatten(f, l);
+}
+
+data flatten(data const& x) {
+  auto xs = get_if<vector>(x);
+  return xs ? flatten(*xs) : x;
+}
+
+data flatten(data&& x) {
+  auto xs = get_if<vector>(x);
+  return xs ? flatten(std::move(*xs)) : x;
+}
+
+optional<vector> unflatten(vector const& xs, record_type const& rt) {
+  auto first = xs.begin();
+  auto last = xs.end();
+  return unflatten(first, last, rt);
+}
+
+optional<vector> unflatten(vector&& xs, record_type const& rt) {
+  auto first = std::make_move_iterator(xs.begin());
+  auto last = std::make_move_iterator(xs.end());
+  return unflatten(first, last, rt);
+}
+
+optional<vector> unflatten(data const& x, type const& t) {
+  auto xs = get_if<vector>(x);
   auto rt = get_if<record_type>(t);
-  return v && rt ? unflatten(*v, *rt) : optional<vector>{};
+  return xs && rt ? unflatten(*xs, *rt) : optional<vector>{};
+}
+
+optional<vector> unflatten(data&& x, type const& t) {
+  auto xs = get_if<vector>(x);
+  auto rt = get_if<record_type>(t);
+  return xs && rt ? unflatten(std::move(*xs), *rt) : optional<vector>{};
 }
 
 namespace {

@@ -178,19 +178,35 @@ data const* get(vector const& v, offset const& o);
 data const* get(data const& d, offset const& o);
 
 /// Flattens a vector.
-/// @param v The vector to flatten.
+/// @param xs The vector to flatten.
 /// @returns The flattened vector.
 /// @see unflatten
-vector flatten(vector const& v);
-data flatten(data const& d);
+vector flatten(vector const& xs);
+vector flatten(vector&& xs);
+
+/// Flattens a vector.
+/// @param x The vector to flatten.
+/// @returns The flattened vector as `data` if *x* is a `vector`.
+/// @see unflatten
+data flatten(data const& x);
+data flatten(data&& x);
 
 /// Unflattens a vector according to a record type.
-/// @param v The vector to unflatten according to *t*.
-/// @param t The type that defines the vector structure.
-/// @returns The unflattened vector of *v* according to *t*.
+/// @param xs The vector to unflatten according to *rt*.
+/// @param rt The type that defines the vector structure.
+/// @returns The unflattened vector of *xs* according to *rt*.
 /// @see flatten
-optional<vector> unflatten(vector const& v, record_type const& t);
-optional<vector> unflatten(data const& d, type const& t);
+optional<vector> unflatten(vector const& xs, record_type const& rt);
+optional<vector> unflatten(vector&& xs, record_type const& rt);
+
+/// Unflattens a vector according to a record type.
+/// @param x The vector to unflatten according to *t*.
+/// @param t The type that defines the vector structure.
+/// @returns The unflattened vector of *x* according to *t* if *x* is a
+///          `vector` and *t* a `record_type`.
+/// @see flatten
+optional<vector> unflatten(data const& x, type const& t);
+optional<vector> unflatten(data&& x, type const& t);
 
 /// Evaluates a data predicate.
 /// @param lhs The LHS of the predicate.
