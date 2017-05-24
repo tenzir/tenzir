@@ -175,6 +175,7 @@ behavior importer(stateful_actor<importer_state>* self, path dir,
     [=](std::vector<event>& events) {
       VAST_ASSERT(!events.empty());
       VAST_DEBUG(self, "got", events.size(), "events");
+      VAST_DEBUG(self, "has", self->state.available, "IDs available");
       if (!self->state.meta_store) {
         self->quit(make_error(ec::unspecified, "no meta store configured"));
         return;
@@ -187,8 +188,8 @@ behavior importer(stateful_actor<importer_state>* self, path dir,
         auto remainder = std::vector<event>(
           std::make_move_iterator(events.begin() + self->state.available),
           std::make_move_iterator(events.end()));
-        ship(self, std::move(events));
         events.resize(self->state.available);
+        ship(self, std::move(events));
         self->state.remainder = std::move(remainder);
       } else {
         // Buffer events otherwise.
