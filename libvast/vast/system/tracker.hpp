@@ -29,7 +29,7 @@ auto inspect(Inspector& f, component_state& cs) {
 
 using component_map = std::unordered_multimap<std::string, component_state>;
 using registry = std::unordered_map<std::string, component_map>;
-using registry_entry = registry::value_type;
+using registry_entry = std::pair<std::string, component_map>;
 
 struct tracker_state {
   registry components;

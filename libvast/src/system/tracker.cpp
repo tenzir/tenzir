@@ -138,8 +138,7 @@ tracker(tracker_type::stateful_pointer<tracker_state> self, std::string node) {
       rp.delegate(peer, state_atom::value, self->state.components);
       return rp;
     },
-    [=](state_atom, registry& components)
-    -> result<ok_atom> {
+    [=](state_atom, registry& components) -> result<ok_atom> {
       VAST_DEBUG(self, "got state for", components.size(), "peers");
       for (auto& peer : components)
         for (auto& pair : peer.second)
@@ -154,7 +153,8 @@ tracker(tracker_type::stateful_pointer<tracker_state> self, std::string node) {
       for (auto& peer : self->state.components) {
         auto& t = peer.second.find("tracker")->second.actor;
         if (t != self)
-          self->send(actor_cast<tracker_type>(t), state_atom::value, *i);
+          self->send(actor_cast<tracker_type>(t), state_atom::value,
+                     registry_entry{*i});
       }
       return ok_atom::value;
     },
