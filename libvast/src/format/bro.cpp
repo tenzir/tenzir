@@ -277,55 +277,44 @@ expected<event> reader::read() {
         return make_error(ec::end_of_input, "input exhausted");
       s = detail::split(lines_->get(), separator_);
     } else {
-      VAST_DEBUG(name(), "ignored comment at line",
+      VAST_DEBUG(name(), "ignores comment at line",
                  lines_->line_number() << ':', lines_->get());
       return no_error;
     }
   }
-  // Construct the record.
-  size_t f = 0;
-  size_t depth = 1;
-  vector record;
-  vector* r = &record;
-  optional<timestamp> ts;
-  for (auto& e : record_type::each{get<record_type>(type_)}) {
-    if (f == s.size()) {
-      VAST_WARNING(name(), "accessed field", f, "out of bounds");
-      return no_error;
-    }
-    if (e.trace.size() > depth) {
-      for (size_t i = 0; i < e.depth() - depth; ++i) {
-        ++depth;
-        r->push_back(vector{});
-        r = get_if<vector>(r->back());
-      }
-    } else if (e.depth() < depth) {
-      r = &record;
-      depth = e.depth();
-      for (size_t i = 0; i < depth - 1; ++i)
-        r = get_if<vector>(r->back());
-    }
-    if (std::equal(unset_field_.begin(), unset_field_.end(), s[f].first,
-                   s[f].second)) {
-      r->emplace_back(nil);
-    } else if (std::equal(empty_field_.begin(), empty_field_.end(), s[f].first,
-                          s[f].second)) {
-      r->emplace_back(construct(e.trace.back()->type));
-    } else {
-      data d;
-      if (!parsers_[f](s[f].first, s[f].second, d))
-        return make_error(ec::parse_error,
-                          "field", f, "line", lines_->line_number(),
-                          std::string(s[f].first, s[f].second));
-      // Get the event timestamp if we're at the timestamp field.
-      if (f == static_cast<size_t>(timestamp_field_))
-        if (auto tp = get_if<timestamp>(d))
-          ts = *tp;
-      r->push_back(std::move(d));
-    }
-    ++f;
+  if (s.size() != parsers_.size()) {
+    VAST_WARNING(name(), "ignores invalid record at line",
+                 lines_->line_number() << ':', "got", s.size(),
+                 "fields but need", parsers_.size());
+    return no_error;
   }
-  event e{{std::move(record), type_}};
+  // Construct the record.
+  vector xs(s.size());
+  optional<timestamp> ts;
+  auto is_unset = [&](auto i) {
+    return std::equal(unset_field_.begin(), unset_field_.end(),
+                   s[i].first, s[i].second);
+  };
+  auto is_empty = [&](auto i) {
+    return std::equal(empty_field_.begin(), empty_field_.end(),
+                      s[i].first, s[i].second);
+  };
+  for (auto i = 0u; i < s.size(); ++i) {
+    if (is_unset(i))
+      continue;
+    if (is_empty(i))
+      xs[i] = construct(record_.fields[i].type);
+    else if (!parsers_[i](s[i].first, s[i].second, xs[i]))
+      return make_error(ec::parse_error,
+                        "field", i, "line", lines_->line_number(),
+                        std::string(s[i].first, s[i].second));
+    if (i == static_cast<size_t>(timestamp_field_))
+      if (auto tp = get_if<timestamp>(xs[i]))
+        ts = *tp;
+  }
+  auto ys = unflatten(std::move(xs), type_);
+  VAST_ASSERT(ys);
+  event e{{std::move(*ys), type_}};
   e.timestamp(ts ? *ts : timestamp::clock::now());
   return e;
 }
@@ -421,8 +410,8 @@ expected<void> reader::parse_header() {
     record_fields.emplace_back(fields[i], *t);
   }
   // Construct type.
-  record_type flat{std::move(record_fields)};
-  type_ = unflatten(flat);
+  record_ = std::move(record_fields);
+  type_ = unflatten(record_);
   type_.name("bro::" + path);
   VAST_DEBUG(name(), "parsed bro header:");
   VAST_DEBUG(name(), "    #separator", separator_);
@@ -431,9 +420,9 @@ expected<void> reader::parse_header() {
   VAST_DEBUG(name(), "    #unset_field", unset_field_);
   VAST_DEBUG(name(), "    #path", path);
   VAST_DEBUG(name(), "    #fields:");
-  for (auto i = 0u; i < flat.fields.size(); ++i)
+  for (auto i = 0u; i < record_.fields.size(); ++i)
     VAST_DEBUG(name(), "     ", i << ')',
-               flat.fields[i].name << ':', flat.fields[i].type);
+               record_.fields[i].name << ':', record_.fields[i].type);
   // If a congruent type exists in the schema, we give the schema type
   // precedence.
   if (auto t = schema_.find(path))
@@ -448,7 +437,7 @@ expected<void> reader::parse_header() {
     VAST_DEBUG(name(), "uses event timestamp from field", timestamp_field_);
   } else {
     size_t i = 0;
-    for (auto& f : flat.fields) {
+    for (auto& f : record_.fields) {
       if (is<timestamp_type>(f.type)) {
         VAST_INFO(name(), "auto-detected field", i, "as event timestamp");
         timestamp_field_ = static_cast<int>(i);
@@ -462,9 +451,9 @@ expected<void> reader::parse_header() {
     using iterator_type = std::string::const_iterator;
     return make_bro_parser<iterator_type>(type, set_sep);
   };
-  parsers_.resize(flat.fields.size());
-  for (size_t i = 0; i < flat.fields.size(); i++)
-    parsers_[i] = make_parser(flat.fields[i].type, set_separator_);
+  parsers_.resize(record_.fields.size());
+  for (size_t i = 0; i < record_.fields.size(); i++)
+    parsers_[i] = make_parser(record_.fields[i].type, set_separator_);
   return no_error;
 }
 
