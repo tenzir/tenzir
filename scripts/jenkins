@@ -93,15 +93,14 @@ fi
 # Setup configure script arguments according to options and build matrix.
 configure="./configure --with-caf='$caf'"
 if [ -n "$gcov" ]; then
-  configure="$configure --build-type=Debug --enable-assertions --enable-gcov"
+  configure="$configure --build-type=Debug --enable-gcov"
 fi
 if [ "$BUILD" = "Release" ]; then
   configure="$configure --build-type=Release"
 elif [ "$BUILD" = "Debug" ]; then
-  configure="$configure --build-type=Debug --enable-assertions"
+  configure="$configure --build-type=Debug"
 elif [ "$BUILD" = "ASAN" ]; then
-  configure="$configure --build-type=RelWithDebInfo --enable-assertions"
-  configure="$configure --enable-asan"
+  configure="$configure --build-type=RelWithDebInfo --enable-asan"
 fi
 
 # Build.

@@ -227,6 +227,14 @@ if (NOT Threads_FOUND)
   message(FATAL_ERROR "Could not find system threading libraries")
 endif ()
 
+
+if (CMAKE_BUILD_TYPE STREQUAL "Release")
+  if (VAST_ENABLE_ASSERTIONS)
+    message(STATUS "Automatically disabling assertions for Release build")
+    set (VAST_ENABLE_ASSERTIONS false)
+  endif ()
+endif ()
+
 if (VAST_ENABLE_ASSERTIONS)
   find_package(Backtrace)
   if (NOT Backtrace_FOUND)

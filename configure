@@ -32,7 +32,7 @@ Usage: $0 [OPTION]... [VAR=VALUE]...
 
   Debugging:
     --log-level=LEVEL       maximum compile-time log level [debug]
-    --enable-assertions     turn on assertions
+    --disable-assertions    disable assertions
     --enable-asan           enable AddressSanitizer
     --enable-gcov           enable GCOV
 
@@ -90,6 +90,7 @@ builddir=build
 CMakeCacheEntries=""
 append_cache_entry CMAKE_INSTALL_PREFIX   PATH      /usr/local
 append_cache_entry CMAKE_BUILD_TYPE       STRING    RelWithDebInfo
+append_cache_entry VAST_ENABLE_ASSERTIONS BOOL      true
 append_cache_entry VAST_LOG_LEVEL         INTEGER   $(levelize debug)
 append_cache_entry VAST_USE_TCMALLOC      BOOL      false
 
@@ -130,8 +131,8 @@ while [ $# -ne 0 ]; do
     --log-level=*)
       append_cache_entry VAST_LOG_LEVEL INTEGER $(levelize $optarg)
       ;;
-    --enable-assertions)
-      append_cache_entry VAST_ENABLE_ASSERTIONS BOOL true
+    --disable-assertions)
+      append_cache_entry VAST_ENABLE_ASSERTIONS BOOL false
       ;;
     --enable-asan)
       append_cache_entry ENABLE_ADDRESS_SANITIZER BOOL true
