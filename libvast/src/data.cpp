@@ -271,15 +271,15 @@ optional<vector> unflatten(Iterator& f, Iterator l, const record_type& rec) {
   vector xs;
   xs.reserve(rec.fields.size());
   for (auto& field : rec.fields)
-    if (auto rt = get_if<record_type>(field.type)) {
+    if (f == l) {
+      return {};
+    } else if (auto rt = get_if<record_type>(field.type)) {
       auto ys = unflatten(f, l, *rt);
       if (!ys)
         return ys;
       xs.push_back(std::move(*ys));
-    } else if (f != l) {
-      xs.push_back(*f++);
     } else {
-      return {};
+      xs.push_back(*f++);
     }
   return xs;
 }
