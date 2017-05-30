@@ -34,8 +34,8 @@ chunk_ptr chunk::mmap(const path& filename, size_t size, size_t offset) {
 }
 
 chunk::~chunk() {
-  //if (deleter_)
-    deleter_(data_, size_);
+  VAST_ASSERT(deleter_);
+  deleter_(data_, size_);
 }
 
 const char* chunk::data() const {
