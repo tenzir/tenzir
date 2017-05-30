@@ -93,7 +93,7 @@ TEST(viewing) {
     CHECK(writer.write(x));
   auto size = writer.finish();
   REQUIRE(size < sb.size());
-  REQUIRE(sb.truncate(size));
+  REQUIRE(sb.resize(size));
   MESSAGE("viewer access");
   auto view = layout::viewer{sb.release()};
   CHECK_EQUAL(view.size(), xs.size());

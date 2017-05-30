@@ -124,6 +124,7 @@ size_t layout::viewer::offset_table::size() const {
 }
 
 const char* layout::viewer::offset_table_start(chunk_ptr chk) {
+  VAST_ASSERT(chk != nullptr);
   auto ptr = chk->end() - sizeof(entry_type);
   auto off = detail::to_host_order(*reinterpret_cast<const entry_type*>(ptr));
   return chk->data() + off;

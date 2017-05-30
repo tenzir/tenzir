@@ -80,7 +80,7 @@ public:
   /// @returns The event having ID *id*.
   expected<event> get(event_id id) const;
 
-  /// Retrieves a set event of events according to a bitmap.
+  /// Retrieves a set of events according to a bitmap.
   /// @param ids The event IDs of the events to retrieve.
   /// @returns The events according to *ids*.
   expected<std::vector<event>> get(const bitmap& ids) const;

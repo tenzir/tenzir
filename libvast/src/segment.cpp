@@ -43,6 +43,13 @@ auto inspect(Inspector& f, event_unpack_helper& helper) {
 
 } // namespace <anonymous>
 
+// We structure the layout internally as follows:
+//
+//     +---........---+---....---+
+//     |  event data  |  types   |
+//     +---........---+---....---+
+//          0 - n        n + 1
+
 segment_builder::segment_builder(size_t size)
   : streambuf_{std::make_unique<detail::mmapbuf>(size)},
     writer_{std::make_unique<layout::writer>(*streambuf_)} {
@@ -54,13 +61,14 @@ segment_builder::segment_builder(const path& filename, size_t size)
 }
 
 expected<void> segment_builder::put(const event& e) {
+  if (streambuf_->size() == 0)
+    return ec::unspecified;
   auto helper = event_pack_helper{{e.id(), e.timestamp()}, 0, e.data()};
   auto i = std::find(types_.begin(), types_.end(), e.type());
   if (i == types_.end())
     types_.push_back(e.type());
   helper.type_index = std::distance(types_.begin(), i);
-  writer_->write(helper);
-  return no_error;
+  return writer_->write(helper);
 }
 
 expected<event> segment_builder::get(event_id id) const {
@@ -89,12 +97,14 @@ expected<std::vector<event>> segment_builder::get(const bitmap& ids) const {
 }
 
 expected<chunk_ptr> segment_builder::finish() {
-  // Write types in the last slot.
+  if (!writer_ || writer_->size() == 0)
+    return ec::unspecified;
+  // Write types at position n + 1.
   auto result = writer_->write(types_);
   if (!result)
     return result.error();
   auto bytes_written = writer_->finish();
-  if (!streambuf_->truncate(bytes_written))
+  if (bytes_written < streambuf_->size() && !streambuf_->resize(bytes_written))
     return ec::unspecified;
   types_.clear();
   return streambuf_->release();
