@@ -656,9 +656,9 @@ bool compatible(type const& lhs, relational_operator op, data const& rhs) {
     case in:
     case not_in:
       if (is<string_type>(lhs))
-        return is<string_type>(rhs) || is_container(rhs);
+        return is<std::string>(rhs) || is_container(rhs);
       else if (is<address_type>(lhs))
-        return is<subnet_type>(rhs) || is_container(rhs);
+        return is<subnet>(rhs) || is_container(rhs);
       else
         return is_container(rhs);
     case ni:

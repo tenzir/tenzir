@@ -1,3 +1,4 @@
+#include "vast/data.hpp"
 #include "vast/json.hpp"
 #include "vast/load.hpp"
 #include "vast/type.hpp"
@@ -74,6 +75,11 @@ TEST(introspection) {
   CHECK(is_recursive(table_type{}));
   CHECK(is_recursive(record_type{}));
   CHECK(is_recursive(alias_type{}));
+}
+
+TEST(type/data compatibility) {
+  CHECK(compatible(address_type{}, in, subnet_type{}));
+  CHECK(compatible(address_type{}, in, subnet{}));
 }
 
 TEST(serialization) {
