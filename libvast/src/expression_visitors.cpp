@@ -153,7 +153,7 @@ std::vector<predicate> predicatizer::operator()(predicate const& pred) const {
 
 
 expected<void> validator::operator()(none) {
-  return make_error(ec::unspecified, "nil expression");
+  return make_error(ec::syntax_error, "nil expression is invalid");
 }
 
 expected<void> validator::operator()(conjunction const& c) {
