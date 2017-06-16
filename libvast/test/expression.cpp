@@ -1,5 +1,6 @@
 #include "vast/event.hpp"
 #include "vast/expression.hpp"
+#include "vast/expression_visitors.hpp"
 #include "vast/load.hpp"
 #include "vast/save.hpp"
 #include "vast/schema.hpp"
@@ -76,6 +77,11 @@ TEST(normalization) {
   REQUIRE(expr);
   REQUIRE(normalized);
   CHECK_EQUAL(normalize(*expr), *normalized);
+  // The normalizer must not touch predicates with two extractors, regardless
+  // of whether that's actually a valid construct.
+  expr = to<expression>("&foo == &bar");
+  REQUIRE(expr);
+  CHECK_EQUAL(normalize(*expr), *expr);
   MESSAGE("pushing down negations to predicate level");
   expr = to<expression>("! (x > 42 && x < 84)");
   normalized = to<expression>("x <= 42 || x >= 84");
@@ -110,6 +116,41 @@ TEST(normalization) {
   REQUIRE(expr);
   REQUIRE(normalized);
   CHECK_EQUAL(normalize(*expr), *normalized);
+}
+
+TEST(validation - attribute extractor) {
+  // The "type" attribute extractor requires a string operand.
+  auto expr = to<expression>("&type == \"foo\"");
+  REQUIRE(expr);
+  CHECK(visit(validator{}, *expr));
+  expr = to<expression>("&type == 42");
+  REQUIRE(expr);
+  CHECK(!visit(validator{}, *expr));
+  expr = to<expression>("&type == bro::conn");
+  REQUIRE(expr);
+  CHECK(!visit(validator{}, *expr));
+  // The "time" attribute extractor requires a timestamp operand.
+  expr = to<expression>("&time < now");
+  REQUIRE(expr);
+  CHECK(visit(validator{}, *expr));
+  expr = to<expression>("&time < 2017-06-16");
+  REQUIRE(expr);
+  CHECK(visit(validator{}, *expr));
+  expr = to<expression>("&time > -42");
+  REQUIRE(expr);
+  CHECK(!visit(validator{}, *expr));
+  expr = to<expression>("&time > -42 secs");
+  REQUIRE(expr);
+  CHECK(!visit(validator{}, *expr));
+}
+
+TEST(validation - type extractor) {
+  auto expr = to<expression>(":port == 443/tcp");
+  REQUIRE(expr);
+  CHECK(visit(validator{}, *expr));
+  expr = to<expression>(":port > -42");
+  REQUIRE(expr);
+  CHECK(!visit(validator{}, *expr));
 }
 
 FIXTURE_SCOPE_END()

@@ -3,11 +3,16 @@
 
 #include <vector>
 
+#include "vast/error.hpp"
 #include "vast/expression.hpp"
 #include "vast/expected.hpp"
 #include "vast/none.hpp"
 #include "vast/operator.hpp"
 #include "vast/time.hpp"
+
+#include "vast/concept/printable/vast/data.hpp"
+#include "vast/concept/printable/vast/key.hpp"
+#include "vast/concept/printable/vast/type.hpp"
 
 namespace vast {
 
@@ -56,11 +61,22 @@ struct predicatizer {
 
 /// Ensures that LHS and RHS of a predicate fit together.
 struct validator {
-  expected<void> operator()(none) const;
-  expected<void> operator()(conjunction const& c) const;
-  expected<void> operator()(disjunction const& d) const;
-  expected<void> operator()(negation const& n) const;
-  expected<void> operator()(predicate const& p) const;
+  expected<void> operator()(none);
+  expected<void> operator()(conjunction const& c);
+  expected<void> operator()(disjunction const& d);
+  expected<void> operator()(negation const& n);
+  expected<void> operator()(predicate const& p);
+  expected<void> operator()(attribute_extractor const& ex, data const& d);
+  expected<void> operator()(type_extractor const& ex, data const& d);
+  expected<void> operator()(key_extractor const& ex, data const& d);
+
+  template <typename T, typename U>
+  expected<void> operator()(T const& lhs, U const& rhs) {
+    return make_error(ec::syntax_error, "incompatible predicate operands", lhs,
+                      rhs);
+  }
+
+  relational_operator op_;
 };
 
 /// Checks whether an expression is valid for a given time interval. The

@@ -6,6 +6,8 @@
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/concept/printable/vast/expression.hpp"
 #include "vast/data.hpp"
+#include "vast/expression.hpp"
+#include "vast/expression_visitors.hpp"
 #include "vast/error.hpp"
 #include "vast/query_options.hpp"
 
@@ -59,6 +61,9 @@ expected<actor> spawn_exporter(local_actor* self, options& opts) {
   if (!expr)
     return expr.error();
   *expr = normalize(*expr);
+  auto result = visit(validator{}, *expr);
+  if (!result)
+    return result.error();
   // Parse query options.
   auto query_opts = no_query_options;
   if (r.opts.count("continuous") > 0)

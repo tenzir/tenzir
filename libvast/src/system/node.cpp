@@ -14,7 +14,6 @@
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/json.hpp"
-#include "vast/expression.hpp"
 #include "vast/json.hpp"
 #include "vast/logger.hpp"
 
