@@ -148,57 +148,56 @@ std::vector<predicate> predicatizer::operator()(predicate const& pred) const {
 }
 
 
-expected<void> validator::operator()(none) const {
+expected<void> validator::operator()(none) {
   return make_error(ec::unspecified, "nil expression");
 }
 
-expected<void> validator::operator()(conjunction const& c) const {
+expected<void> validator::operator()(conjunction const& c) {
   for (auto& op : c) {
     auto m = visit(*this, op);
     if (!m)
       return m;
   }
-  return {};
+  return no_error;
 }
 
-expected<void> validator::operator()(disjunction const& d) const {
+expected<void> validator::operator()(disjunction const& d) {
   for (auto& op : d) {
     auto m = visit(*this, op);
     if (!m)
       return m;
   }
-  return {};
+  return no_error;
 }
 
-expected<void> validator::operator()(negation const& n) const {
+expected<void> validator::operator()(negation const& n) {
   return visit(*this, n.expr());
 }
 
-expected<void> validator::operator()(predicate const& p) const {
-  auto valid = [&](predicate::operand const& lhs,
-                   predicate::operand const& rhs) -> expected<void> {
-    // If a single-element key exists and matches a built-in type, the RHS data
-    // must have the matching type.
-    if (auto ex = get_if<type_extractor>(lhs)) {
-      auto d = get_if<data>(rhs);
-      if (!d) // Without data on the RHS, we cannot perform a type check.
-        return {};
-      if (!type_check(ex->type, *d))
-        return make_error(ec::type_clash, "invalid predicate: ",
-                          ex->type, ' ', p.op, ' ', *d);
-    }
-    return {};
-  };
-  auto tl = valid(p.lhs, p.rhs);
-  auto tr = valid(p.rhs, p.lhs);
-  if (tl || tr)
-    return {};
-  else if (tl)
-    return tr;
-  else
-    return tl;
+expected<void> validator::operator()(predicate const& p) {
+  op_ = p.op;
+  return visit(*this, p.lhs, p.rhs);
 }
 
+expected<void> validator::operator()(attribute_extractor const& ex,
+                                     data const& d) {
+  if (ex.attr == "type" && !is<std::string>(d))
+    return make_error(ec::syntax_error,
+                      "type attribute extractor requires string operand",
+                      ex.attr, op_, d);
+  else if (ex.attr == "time" && !is<timestamp>(d))
+    return make_error(ec::syntax_error,
+                      "time attribute extractor requires timestamp operand",
+                      ex.attr, op_, d);
+  return no_error;
+}
+
+expected<void> validator::operator()(type_extractor const& ex, data const& d) {
+  if (!type_check(ex.type, d))
+    return make_error(ec::syntax_error, "type extractor type check failure",
+                      ex.type, op_, d);
+  return no_error;
+}
 
 time_restrictor::time_restrictor(timestamp first, timestamp last)
   : first_{first}, last_{last} {

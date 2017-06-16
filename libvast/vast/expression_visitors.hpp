@@ -56,11 +56,20 @@ struct predicatizer {
 
 /// Ensures that LHS and RHS of a predicate fit together.
 struct validator {
-  expected<void> operator()(none) const;
-  expected<void> operator()(conjunction const& c) const;
-  expected<void> operator()(disjunction const& d) const;
-  expected<void> operator()(negation const& n) const;
-  expected<void> operator()(predicate const& p) const;
+  expected<void> operator()(none);
+  expected<void> operator()(conjunction const& c);
+  expected<void> operator()(disjunction const& d);
+  expected<void> operator()(negation const& n);
+  expected<void> operator()(predicate const& p);
+  expected<void> operator()(attribute_extractor const& ex, data const& d);
+  expected<void> operator()(type_extractor const& ex, data const& d);
+
+  template <typename T, typename U>
+  expected<void> operator()(T const&, U const&) {
+    return no_error;
+  }
+
+  relational_operator op_;
 };
 
 /// Checks whether an expression is valid for a given time interval. The
