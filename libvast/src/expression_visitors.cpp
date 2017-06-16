@@ -75,7 +75,11 @@ expression aligner::operator()(negation const& n) const {
 }
 
 expression aligner::operator()(predicate const& p) const {
-  return {is<data>(p.rhs) ? p : predicate{p.rhs, flip(p.op), p.lhs}};
+  auto is_extractor = [](auto& operand) { return !is<data>(operand); };
+  // Already aligned if LHS is an extractor or no extractor present.
+  if (is_extractor(p.lhs) || !is_extractor(p.rhs))
+    return p;
+  return predicate{p.rhs, flip(p.op), p.lhs};
 }
 
 

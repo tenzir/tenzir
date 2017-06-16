@@ -77,6 +77,11 @@ TEST(normalization) {
   REQUIRE(expr);
   REQUIRE(normalized);
   CHECK_EQUAL(normalize(*expr), *normalized);
+  // The normalizer must not touch predicates with two extractors, regardless
+  // of whether that's actually a valid construct.
+  expr = to<expression>("&foo == &bar");
+  REQUIRE(expr);
+  CHECK_EQUAL(normalize(*expr), *expr);
   MESSAGE("pushing down negations to predicate level");
   expr = to<expression>("! (x > 42 && x < 84)");
   normalized = to<expression>("x <= 42 || x >= 84");
@@ -112,7 +117,6 @@ TEST(normalization) {
   REQUIRE(normalized);
   CHECK_EQUAL(normalize(*expr), *normalized);
 }
-
 
 TEST(validation - attribute extractor) {
   // The "type" attribute extractor requires a string operand.
