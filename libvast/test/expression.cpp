@@ -126,6 +126,9 @@ TEST(validation - attribute extractor) {
   expr = to<expression>("&type == 42");
   REQUIRE(expr);
   CHECK(!visit(validator{}, *expr));
+  expr = to<expression>("&type == bro::conn");
+  REQUIRE(expr);
+  CHECK(!visit(validator{}, *expr));
   // The "time" attribute extractor requires a timestamp operand.
   expr = to<expression>("&time < now");
   REQUIRE(expr);

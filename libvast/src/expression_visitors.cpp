@@ -203,6 +203,12 @@ expected<void> validator::operator()(type_extractor const& ex, data const& d) {
   return no_error;
 }
 
+expected<void> validator::operator()(key_extractor const&, data const&) {
+  // Validity of a key extractor requires a specific schema, which we don't
+  // have in this context.
+  return no_error;
+}
+
 time_restrictor::time_restrictor(timestamp first, timestamp last)
   : first_{first}, last_{last} {
 }
