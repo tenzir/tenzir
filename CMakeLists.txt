@@ -38,9 +38,17 @@ set(VERSION_MAJ_MIN "${VERSION_MAJOR}.${VERSION_MINOR}")
 #                               Compiler Setup
 #------------------------------------------------------------------------------
 
+# Ninja doesn't colorize compiler diagnostics by default.
+if (CMAKE_GENERATOR STREQUAL "Ninja")
+  set(EXTRA_FLAGS "-fdiagnostics-color")
+endif ()
+
+# To give the user full control, we don't mess with with CXX_FLAGS if provided.
+# This is a deliberate decision but contrasts to many other packages that
+# append flags to the user-provide environment variable.
 if (NOT CMAKE_CXX_FLAGS)
   # Our default flags.
-  set(EXTRA_FLAGS "-std=c++14 -Wall -Wextra -pedantic")
+  set(EXTRA_FLAGS "${EXTRA_FLAGS} -std=c++14 -Wall -Wextra -pedantic")
   set(PERFORMANCE_FLAGS "-march=native -mpopcnt")
   # Increase maximum number of template instantiations, for all that
   # template-heavy code.
@@ -53,7 +61,7 @@ if (NOT CMAKE_CXX_FLAGS)
   set(CMAKE_CXX_FLAGS_MINSIZEREL     "-Os")
   set(CMAKE_CXX_FLAGS_RELEASE        "-O3 ${PERFORMANCE_FLAGS}")
   set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O2 -g -fno-omit-frame-pointer")
-endif()
+endif ()
 
 # Requirement checks
 try_run(program_result
