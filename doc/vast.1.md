@@ -350,7 +350,7 @@ Import a PCAP trace into a local VAST node in one shot:
 
 Query a local node and get the result back as PCAP trace:
 
-    vast export pcap -h "sport > 60000/tcp && src !in 10.0.0.0/8" \
+    vast export pcap "sport > 60000/tcp && src !in 10.0.0.0/8" \
       | ipsumdump --collate -w - \
       | tcpdump -r - -nl
 
@@ -364,7 +364,7 @@ Connect to a node running at 1.2.3.4 on port 31337 and display topology details:
 
 Run a historical query, printed in ASCII, limited to at most 10 results:
 
-    vast export ascii -h -e 10 :addr in 10.0.0.0/8
+    vast export ascii -e 10 :addr in 10.0.0.0/8
 
 ISSUES
 ------

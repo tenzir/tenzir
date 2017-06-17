@@ -1,4 +1,4 @@
-.TH VAST 1 "February 26, 2017" 0.1 "Visibility Across Space and Time"
+.TH VAST 1 "June 17, 2017" 0.1 "Visibility Across Space and Time"
 .SH NAME
 .PP
 \fB\fCvast\fR \-\- manage a VAST topology
@@ -345,7 +345,7 @@ Query a local node and get the result back as PCAP trace:
 .PP
 .RS
 .nf
-vast export pcap \-h "sport > 60000/tcp && src !in 10.0.0.0/8" \\
+vast export pcap "sport > 60000/tcp && src !in 10.0.0.0/8" \\
   | ipsumdump \-\-collate \-w \- \\
   | tcpdump \-r \- \-nl
 .fi
@@ -371,7 +371,7 @@ Run a historical query, printed in ASCII, limited to at most 10 results:
 .PP
 .RS
 .nf
-vast export ascii \-h \-e 10 :addr in 10.0.0.0/8
+vast export ascii \-e 10 :addr in 10.0.0.0/8
 .fi
 .RE
 .SH ISSUES

@@ -16,7 +16,7 @@ node:
 
 Query a local VAST node and get the result back as PCAP trace:
 
-    vast -n export pcap -h "sport > 60000/tcp && src !in 10.0.0.0/8" \
+    vast -n export pcap "sport > 60000/tcp && src !in 10.0.0.0/8" \
       | ipsumdump --collate -w - \
       | tcpdump -r - -nl
 

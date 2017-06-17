@@ -72,8 +72,9 @@ expected<actor> spawn_exporter(local_actor* self, options& opts) {
     query_opts = query_opts + historical;
   if (r.opts.count("unified") > 0)
     query_opts = unified;
+  // Default to historical if no options provided.
   if (query_opts == no_query_options)
-    return make_error(ec::syntax_error, "missing query options (-h, -c, -u)");
+    query_opts = historical;
   auto exp = self->spawn(exporter, std::move(*expr), query_opts);
   if (limit > 0)
     anon_send(exp, extract_atom::value, limit);
