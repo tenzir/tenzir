@@ -5,30 +5,22 @@
 
 #include "vast/error.hpp"
 #include "vast/event.hpp"
-#include "vast/format/bro.hpp"
-#include "vast/format/bgpdump.hpp"
-#include "vast/format/test.hpp"
 
 #include "data.hpp"
+#include "test.hpp"
 
 namespace fixtures {
 
 using namespace vast;
 
 struct events {
-  events() {
-    bro_conn_log = inhale<format::bro::reader>(bro::conn);
-    bro_dns_log = inhale<format::bro::reader>(bro::dns);
-    bro_http_log = inhale<format::bro::reader>(bro::http);
-    bgpdump_txt = inhale<format::bgpdump::reader>(bgpdump::updates20140821);
-    random = extract(vast::format::test::reader{42, 1000});
-  }
+  events();
 
-  std::vector<event> bro_conn_log;
-  std::vector<event> bro_dns_log;
-  std::vector<event> bro_http_log;
-  std::vector<event> bgpdump_txt;
-  std::vector<event> random;
+  static std::vector<event> bro_conn_log;
+  static std::vector<event> bro_dns_log;
+  static std::vector<event> bro_http_log;
+  static std::vector<event> bgpdump_txt;
+  static std::vector<event> random;
 
 private:
   template <class Reader>

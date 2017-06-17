@@ -222,6 +222,7 @@ set(tests
   test/system/sink.cpp
   test/system/source.cpp
   test/system/task.cpp
+  test/fixtures/events.cpp
   test/format/bro.cpp
   test/format/writer.cpp
 )
