@@ -120,6 +120,40 @@ expression denegator::operator()(predicate const& p) const {
   return predicate{p.lhs, negate_ ? negate(p.op) : p.op, p.rhs};
 }
 
+
+expression deduplicator::operator()(none) const {
+  return nil;
+}
+
+expression deduplicator::operator()(conjunction const& c) const {
+  conjunction result;
+  for (auto& op : c) {
+    auto p = visit(*this, op);
+    if (std::count(result.begin(), result.end(), p) == 0)
+      result.push_back(p);
+  }
+  return result;
+}
+
+expression deduplicator::operator()(disjunction const& d) const {
+  disjunction result;
+  for (auto& op : d) {
+    auto p = visit(*this, op);
+    if (std::count(result.begin(), result.end(), p) == 0)
+      result.push_back(p);
+  }
+  return result;
+}
+
+expression deduplicator::operator()(negation const& n) const {
+  return visit(*this, n.expr());
+}
+
+expression deduplicator::operator()(predicate const& p) const {
+  return p;
+}
+
+
 namespace {
 
 template <class Ts, class Us>

@@ -123,6 +123,7 @@ expression normalize(expression const& expr) {
   r = visit(hoister{}, expr);
   r = visit(aligner{}, r);
   r = visit(denegator{}, r);
+  r = visit(deduplicator{}, r);
   r = visit(hoister{}, r);
   return r;
 }

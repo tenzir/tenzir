@@ -50,6 +50,15 @@ struct denegator {
   bool negate_ = false;
 };
 
+/// Removes duplicate predicates from conjunctions and disjunctions.
+struct deduplicator {
+  expression operator()(none) const;
+  expression operator()(conjunction const& c) const;
+  expression operator()(disjunction const& d) const;
+  expression operator()(negation const& n) const;
+  expression operator()(predicate const& p) const;
+};
+
 /// Extracts all predicates from an expression.
 struct predicatizer {
   std::vector<predicate> operator()(none) const;
