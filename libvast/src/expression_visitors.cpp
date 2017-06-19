@@ -120,27 +120,38 @@ expression denegator::operator()(predicate const& p) const {
   return predicate{p.lhs, negate_ ? negate(p.op) : p.op, p.rhs};
 }
 
+namespace {
 
-std::vector<predicate> predicatizer::operator()(disjunction const& dis) const {
-  std::vector<predicate> preds;
-  for (auto& op : dis) {
-    auto ps = visit(*this, op);
-    std::move(ps.begin(), ps.end(), std::back_inserter(preds));
-  }
-  return preds;
+template <class Ts, class Us>
+auto inplace_union(Ts& xs, const Us& ys) {
+  auto mid = xs.size();
+  std::copy(ys.begin(), ys.end(), std::back_inserter(xs));
+  std::inplace_merge(xs.begin(), xs.begin() + mid, xs.end());
+  xs.erase(std::unique(xs.begin(), xs.end()), xs.end());
 }
+
+} // namespace <anonymous>
 
 std::vector<predicate> predicatizer::operator()(none) const {
   return {};
 }
 
 std::vector<predicate> predicatizer::operator()(conjunction const& con) const {
-  std::vector<predicate> preds;
+  std::vector<predicate> result;
   for (auto& op : con) {
     auto ps = visit(*this, op);
-    std::move(ps.begin(), ps.end(), std::back_inserter(preds));
+    inplace_union(result, ps);
   }
-  return preds;
+  return result;
+}
+
+std::vector<predicate> predicatizer::operator()(disjunction const& dis) const {
+  std::vector<predicate> result;
+  for (auto& op : dis) {
+    auto ps = visit(*this, op);
+    inplace_union(result, ps);
+  }
+  return result;
 }
 
 std::vector<predicate> predicatizer::operator()(negation const& n) const {
