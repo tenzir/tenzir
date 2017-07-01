@@ -233,7 +233,8 @@ private:
              std::is_nothrow_destructible<Rhs>{} &&
              std::is_nothrow_move_constructible<Rhs>{}) {
       if (self.index_ == rhs_index) {
-        *reinterpret_cast<Rhs*>(&self.storage_) = rhs;
+        auto x = reinterpret_cast<Rhs*>(&self.storage_);
+        *x = rhs;
       } else {
         Rhs tmp(rhs);
         self.destruct();
@@ -276,7 +277,8 @@ private:
              std::is_nothrow_move_constructible<Rhs>{}) {
       using rhs_type = typename std::remove_const<Rhs>::type;
       if (self.index_ == rhs_index) {
-        *reinterpret_cast<rhs_type*>(&self.storage_) = std::move(rhs);
+        auto x = reinterpret_cast<rhs_type*>(&self.storage_);
+        *x = std::move(rhs);
       } else {
         self.destruct();
         self.construct(std::move(rhs));
@@ -371,7 +373,8 @@ private:
 
     template <class Rhs>
     bool operator()(const Rhs& rhs) const {
-      return *reinterpret_cast<const Rhs*>(&self.storage_) == rhs;
+      auto x = reinterpret_cast<const Rhs*>(&self.storage_);
+      return *x == rhs;
     }
 
     const variant& self;
@@ -383,7 +386,8 @@ private:
 
     template <class Rhs>
     bool operator()(const Rhs& rhs) const {
-      return *reinterpret_cast<const Rhs*>(&self.storage_) < rhs;
+      auto x = reinterpret_cast<const Rhs*>(&self.storage_);
+      return *x < rhs;
     }
 
     const variant& self;
