@@ -8,11 +8,12 @@
 #include <vector>
 
 #include "vast/detail/assert.hpp"
+#include "vast/detail/operators.hpp"
 
 namespace vast {
 
 /// A base for value (de)composition.
-class base {
+class base : detail::equality_comparable<base> {
 public:
   using value_type = size_t;
   using vector_type = std::vector<value_type>;
@@ -82,7 +83,7 @@ public:
   }
 
   // -- container -------------------------------------------------------------
-  
+
   using iterator = typename vector_type::iterator;
   using const_iterator = typename vector_type::const_iterator;
 
@@ -105,6 +106,8 @@ public:
   friend auto inspect(Inspector& f, base& b) {
     return f(b.values_);
   }
+
+  friend bool operator==(const base& x, const base& y);
 
 private:
   vector_type values_;

@@ -51,4 +51,8 @@ typename base::const_iterator base::end() const {
   return values_.end();
 }
 
+bool operator==(const base& x, const base& y) {
+  return x.values_ == y.values_;
+}
+
 } // namespace vast
