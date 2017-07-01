@@ -45,8 +45,14 @@ struct printer_registry<T, std::enable_if_t<std::is_integral<T>::value>> {
 
 namespace printers {
 
+// GCC 7.1 complains about this version
+//
+//     template <typename T>
+//     auto const integral = integral_printer<T>{};
+//
+// but for some reason doesn't care if we "rewrite" it as follows. (#132)
 template <typename T>
-auto const integral = integral_printer<T>{};
+const integral_printer<T> integral;
 
 auto const i8 = integral_printer<int8_t>{};
 auto const i16 = integral_printer<int16_t>{};
