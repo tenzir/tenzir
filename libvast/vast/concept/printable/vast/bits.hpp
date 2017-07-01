@@ -24,8 +24,8 @@ struct bits_printer : printer<bits_printer<T , Policy>> {
   -> std::enable_if_t<std::is_same<P, policy::rle>::value, bool> {
     auto print_run = [&](auto bit, auto length) {
       using size_type = typename word_type::size_type;
-      return printers::integral<size_type>.print(out, length) &&
-             printers::any.print(out, bit ? 'T' : 'F');
+      return printers::integral<size_type>(out, length) &&
+             printers::any(out, bit ? 'T' : 'F');
     };
     if (b.homogeneous()) {
       if (!print_run(!!b.data(), b.size()))
@@ -56,12 +56,12 @@ struct bits_printer : printer<bits_printer<T , Policy>> {
     if (b.size() > word_type::width) {
       auto c = b.data() ? '1' : '0';
       for (auto i = 0u; i < b.size(); ++i)
-        if (!printers::any.print(out, c))
+        if (!printers::any(out, c))
           return false;
     } else {
       for (auto i = 0u; i < b.size(); ++i) {
         auto c = b.data() & word_type::mask(i) ? '1' : '0';
-        if (!printers::any.print(out, c))
+        if (!printers::any(out, c))
           return false;
        }
     }
