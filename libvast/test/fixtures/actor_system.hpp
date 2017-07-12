@@ -17,11 +17,11 @@ namespace fixtures {
 struct actor_system : filesystem {
   struct configuration : vast::system::configuration {
     configuration() {
-      logger_filename = "vast-unit-test.log";
-      logger_filter = "vast|caf";
+      logger_file_name = "vast-unit-test.log";
+      logger_component_filter = "vast|caf";
       // Always begin with an empy log file.
-      if (vast::exists(logger_filename))
-        vast::rm(logger_filename);
+      if (vast::exists(logger_file_name))
+        vast::rm(logger_file_name);
     }
   };
 

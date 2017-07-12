@@ -334,21 +334,21 @@ int main(int argc, char* argv[]) {
     // Enable the console in foreground only.
     sys_cfg.logger_console = atom("COLORED");
     // Only override if not previously specified via --caf#logger.filter.
-    if (sys_cfg.logger_filter.empty())
-      sys_cfg.logger_filter = "vast";
+    if (sys_cfg.logger_component_filter.empty())
+      sys_cfg.logger_component_filter = "vast";
     // TODO: teach CAF how to apply the filter to the console only.
   }
   // We spawn a node either for the "start" command or when -n is given.
   auto spawn_node = *cmd == "start" || conf.opts.count("node") > 0;
   // Setup log file.
   if (!spawn_node) {
-    sys_cfg.logger_filename.clear();
+    sys_cfg.logger_file_name.clear();
   } else {
     auto secs = duration_cast<seconds>(system_clock::now().time_since_epoch());
     auto pid = vast::detail::process_id();
     auto current = std::to_string(secs.count()) + '_' + std::to_string(pid);
     auto log_path = abs_dir / "log" / current / "vast.log";
-    sys_cfg.logger_filename = log_path.str();
+    sys_cfg.logger_file_name = log_path.str();
     if (!exists(log_path.parent())) {
       auto result = mkdir(log_path.parent());
       if (!result) {
