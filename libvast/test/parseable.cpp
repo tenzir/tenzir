@@ -413,7 +413,6 @@ TEST(real) {
 TEST(byte) {
   using namespace parsers;
   auto str = "\x01\x02\x03\x04\x05\x06\x07\x08"s;
-
   MESSAGE("single byte");
   auto f = str.begin();
   auto l = f + 1;
@@ -421,7 +420,6 @@ TEST(byte) {
   CHECK(byte(f, l, u8));
   CHECK(u8 == 0x01);
   CHECK(f == l);
-
   MESSAGE("big endian");
   f = str.begin();
   l = f + 2;
@@ -441,7 +439,6 @@ TEST(byte) {
   CHECK(b64be(f, l, u64));
   CHECK(u64 == 0x0102030405060708);
   CHECK(f == l);
-
   MESSAGE("little endian");
   f = str.begin();
   l = f + 2;
@@ -458,6 +455,25 @@ TEST(byte) {
   CHECK(b64le(f, l, u64));
   CHECK(u64 == 0x0807060504030201);
   CHECK(f == l);
+}
+
+TEST(byte - type promotion regression) {
+  using namespace parsers;
+  uint16_t x;
+  CHECK(b16be("\x00\x8d"s, x));
+  CHECK_EQUAL(x, 0x8du);
+  CHECK(b16le("\x8d\x00"s, x));
+  CHECK_EQUAL(x, 0x8du);
+  uint32_t y;
+  CHECK(b32be("\x00\x00\x00\x8d"s, y));
+  CHECK_EQUAL(y, 0x8dul);
+  CHECK(b32le("\x8d\x00\x00\x00"s, y));
+  CHECK_EQUAL(y, 0x8dul);
+  uint64_t z;
+  CHECK(b64be("\x00\x00\x00\x00\x00\x00\x00\x8d"s, z));
+  CHECK_EQUAL(z, 0x8Dull);
+  CHECK(b64le("\x8d\x00\x00\x00\x00\x00\x00\x00"s, z));
+  CHECK_EQUAL(z, 0x8Dull);
 }
 
 // -- API ---------------------------------------------------------------------
