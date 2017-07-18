@@ -1,4 +1,4 @@
-.TH VAST 1 "June 17, 2017" 0.1 "Visibility Across Space and Time"
+.TH VAST 1 "July 18, 2017" 0.1 "Visibility Across Space and Time"
 .SH NAME
 .PP
 \fB\fCvast\fR \-\- manage a VAST topology
@@ -205,7 +205,7 @@ Available \fIcomponent\fP values with corresponding \fIparameters\fP:
   \fB\fC\-r\fR \fIinput\fP
     Filesystem path or type\-specific name that identifies event \fIinput\fP\&.
   \fB\fC\-s\fR \fIschema\fP
-    Path to an alterative \fIschema\fP file that overrides the default attributes.
+    Path to an alterative \fIschema\fP file that overrides the default schema.
   \fB\fC\-d\fR
     Treats \fB\fC\-r\fR as a listening UNIX domain socket instead of a regular file.
 .PP
@@ -341,6 +341,14 @@ vast import pcap < trace.pcap
 .fi
 .RE
 .PP
+Run a historical query, printed in ASCII, limited to at most 10 results:
+.PP
+.RS
+.nf
+vast export ascii \-e 10 :addr in 10.0.0.0/8
+.fi
+.RE
+.PP
 Query a local node and get the result back as PCAP trace:
 .PP
 .RS
@@ -366,12 +374,133 @@ Connect to a node running at 1.2.3.4 on port 31337 and display topology details:
 vast \-e 1.2.3.4:31337 show
 .fi
 .RE
+.SH DATA MODEL
 .PP
-Run a historical query, printed in ASCII, limited to at most 10 results:
+VAST relies on a rich and strong type interface to support various
+type\-specific query operations and optimizations.
+.SS Terminology
+.PP
+The phyiscal representation of information in VAST is \fIdata\fP\&. A \fItype\fP
+describes how to interpret data semantically. A type optionally carries a name
+and a list of \fIattributes\fP in the form of key\-value pairs. Together, a data
+instance and a type form a \fIvalue\fP\&. A value with a named type is an \fIevent\fP\&.
+In addition to a value, an event has a timestamp and unique ID.
+.SS Types
+.PP
+A type can be a \fIbasic type\fP, a \fIcontainer type\fP or a \fIcompound type\fP\&.
+.SS Basic Types
+.RS
+.IP \(bu 2
+\fB\fCbool\fR: a boolean value
+.IP \(bu 2
+\fB\fCint\fR: a 64\-bit signed integer
+.IP \(bu 2
+\fB\fCcount\fR: a 64\-bit unsigned integer
+.IP \(bu 2
+\fB\fCreal\fR: a 64\-bit double (IEEE 754)
+.IP \(bu 2
+\fB\fCduration\fR: a time duration (nanoseconds granularity)
+.IP \(bu 2
+\fB\fCtime\fR: a time point (nanoseconds granularity)
+.IP \(bu 2
+\fB\fCstring\fR: a fixed\-length string optimized for short strings
+.IP \(bu 2
+\fB\fCpattern\fR: a regular expression
+.IP \(bu 2
+\fB\fCaddress\fR: an IPv4 or IPv6 address
+.IP \(bu 2
+\fB\fCsubnet\fR: an IPv4 or IPv6 subnet
+.IP \(bu 2
+\fB\fCport\fR: a transport\-layer port
+.RE
+.SS Container Types
+.RS
+.IP \(bu 2
+\fB\fCvector<T>\fR: a sequence of instances of type T
+.IP \(bu 2
+\fB\fCset<T>\fR: an unordered mathematical set of instances of type T
+.IP \(bu 2
+\fB\fCtable<T, U>\fR: an associative array that maps instances of type T to type U
+.RE
+.SS Compound types
+.RS
+.IP \(bu 2
+\fB\fCrecord { ... }\fR: a structure that contains a fixed number of typed and named
+\fIfields\fP\&.
+.RE
+.SS Schemas
+.PP
+A \fIschema\fP consists of a sequence of type statements having the form
 .PP
 .RS
 .nf
-vast export ascii \-e 10 :addr in 10.0.0.0/8
+type T = x
+.fi
+.RE
+.PP
+where \fB\fCT\fR is the name of a new type and \fB\fCx\fR the name of an existing or built\-in
+type. Example:
+.PP
+.RS
+.nf
+type foo = count
+
+type bar = record {
+  x: foo,
+  y: string,
+  z: set<addr>
+}
+.fi
+.RE
+.PP
+This schema defines two types, a simple alias \fB\fCfoo\fR and a record \fB\fCbar\fR\&.
+.SS Specifying Schemas
+.PP
+During data import, VAST attempts to infer the \fIschema\fP, i.e., the pyiscal
+representation of data along with plausible types. Users can also control
+explicitly how to handle data by manually providing a path to schema file via
+the command line option \fB\fC\-s <schema>\fR\&.
+.PP
+The only restriction is that the manually provided schema must be \fIcongruent\fP
+to the existing schema, that is, the types must be representationall equal.
+Record field names do not affect congruence. Neither do type attributes.
+.PP
+For example, let's look at the builtin schema for PCAP data:
+.PP
+.RS
+.nf
+type pcap::packet = record {
+  meta: record {
+    src: addr,
+    dst: addr,
+    sport: port,
+    dport: port
+  },
+  data: string &skip
+}
+.fi
+.RE
+.PP
+A packet consists of meta data and a payload. The above schema skips the
+payload (note the \fB\fC&skip\fR attribute) because there exists no one\-size\-fits\-all
+strategy to indexing it. A congruent schema that further skips the
+transport\-layer ports may look as follows:
+.PP
+.RS
+.nf
+type originator = addr
+
+type responder = addr
+
+type pcap::packet = record {
+  header: record {
+    orig: originator,
+    resp: responder,
+    sport: port &skip,
+    dport: port &skip
+  },
+  payload: string &skip
+}
 .fi
 .RE
 .SH ISSUES

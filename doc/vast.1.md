@@ -218,7 +218,7 @@ Available *component* values with corresponding *parameters*:
   `-r` *input*
     Filesystem path or type-specific name that identifies event *input*.
   `-s` *schema*
-    Path to an alterative *schema* file that overrides the default attributes.
+    Path to an alterative *schema* file that overrides the default schema.
   `-d`
     Treats `-r` as a listening UNIX domain socket instead of a regular file.
 
@@ -348,6 +348,10 @@ Import a PCAP trace into a local VAST node in one shot:
 
     vast import pcap < trace.pcap
 
+Run a historical query, printed in ASCII, limited to at most 10 results:
+
+    vast export ascii -e 10 :addr in 10.0.0.0/8
+
 Query a local node and get the result back as PCAP trace:
 
     vast export pcap "sport > 60000/tcp && src !in 10.0.0.0/8" \
@@ -362,17 +366,117 @@ Connect to a node running at 1.2.3.4 on port 31337 and display topology details:
 
     vast -e 1.2.3.4:31337 show
 
-Run a historical query, printed in ASCII, limited to at most 10 results:
+DATA MODEL
+----------
 
-    vast export ascii -e 10 :addr in 10.0.0.0/8
+VAST relies on a rich and strong type interface to support various
+type-specific query operations and optimizations.
+
+### Terminology
+
+The phyiscal representation of information in VAST is *data*. A *type*
+describes how to interpret data semantically. A type optionally carries a name
+and a list of *attributes* in the form of key-value pairs. Together, a data
+instance and a type form a *value*. A value with a named type is an *event*.
+In addition to a value, an event has a timestamp and unique ID.
+
+### Types
+
+A type can be a *basic type*, a *container type* or a *compound type*.
+
+#### Basic Types
+
+- `bool`: a boolean value
+- `int`: a 64-bit signed integer
+- `count`: a 64-bit unsigned integer
+- `real`: a 64-bit double (IEEE 754)
+- `duration`: a time duration (nanoseconds granularity)
+- `time`: a time point (nanoseconds granularity)
+- `string`: a fixed-length string optimized for short strings
+- `pattern`: a regular expression
+- `address`: an IPv4 or IPv6 address
+- `subnet`: an IPv4 or IPv6 subnet
+- `port`: a transport-layer port
+
+#### Container Types
+
+- `vector<T>`: a sequence of instances of type T
+- `set<T>`: an unordered mathematical set of instances of type T
+- `table<T, U>`: an associative array that maps instances of type T to type U
+
+#### Compound types
+
+- `record { ... }`: a structure that contains a fixed number of typed and named
+  *fields*.
+
+### Schemas
+
+A *schema* consists of a sequence of type statements having the form
+
+    type T = x
+
+where `T` is the name of a new type and `x` the name of an existing or built-in
+type. Example:
+
+    type foo = count
+
+    type bar = record {
+      x: foo,
+      y: string,
+      z: set<addr>
+    }
+
+This schema defines two types, a simple alias `foo` and a record `bar`.
+
+### Specifying Schemas
+
+During data import, VAST attempts to infer the *schema*, i.e., the pyiscal
+representation of data along with plausible types. Users can also control
+explicitly how to handle data by manually providing a path to schema file via
+the command line option `-s <schema>`.
+
+The only restriction is that the manually provided schema must be *congruent*
+to the existing schema, that is, the types must be representationall equal.
+Record field names do not affect congruence. Neither do type attributes.
+
+For example, let's look at the builtin schema for PCAP data:
+
+    type pcap::packet = record {
+      meta: record {
+        src: addr,
+        dst: addr,
+        sport: port,
+        dport: port
+      },
+      data: string &skip
+    }
+
+A packet consists of meta data and a payload. The above schema skips the
+payload (note the `&skip` attribute) because there exists no one-size-fits-all
+strategy to indexing it. A congruent schema that further skips the
+transport-layer ports may look as follows:
+
+    type originator = addr
+
+    type responder = addr
+
+    type pcap::packet = record {
+      header: record {
+        orig: originator,
+        resp: responder,
+        sport: port &skip,
+        dport: port &skip
+      },
+      payload: string &skip
+    }
 
 ISSUES
 ------
 
 If you encounter a bug or have suggestions for improvement, please file an
-issue at http://vast.fail.
+issue at <http://vast.fail>.
 
 SEE ALSO
 --------
 
-Visit http://vast.io for more information about VAST.
+Visit <http://vast.io> for more information about VAST.
