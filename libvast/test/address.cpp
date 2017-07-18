@@ -52,6 +52,14 @@ TEST(IPv4) {
   uint32_t n = 3232235691;
   address b{&n, address::ipv4, address::host};
   CHECK(to_string(b) == "192.168.0.171");
+
+  std::array<uint8_t, 4> n8h{ {0xAB, 0x00, 0xA8, 0xC0} };
+  address b8h{n8h.data(), address::ipv4, address::host};
+  CHECK(to_string(b8h) == "192.168.0.171");
+
+  std::array<uint8_t, 4> n8n{ {0xC0, 0xA8, 0x00, 0xAB} };
+  address b8n{n8n.data(), address::ipv4, address::network};
+  CHECK(to_string(b8n) == "192.168.0.171");
 }
 
 TEST(IPv6) {
@@ -85,6 +93,10 @@ TEST(IPv6) {
   address f(p, address::ipv6, address::host);
   CHECK(f == (a ^ d));
   CHECK(f == e);
+
+  address g{raw8, address::ipv6, address::network};
+  CHECK(g == (a ^ d));
+  CHECK(g == e);
 
   CHECK(!a.mask(129));
   CHECK(a.mask(128)); // No modification
@@ -135,4 +147,3 @@ TEST(parseable) {
   CHECK(a.is_v6());
   CHECK(to_string(a) == str);
 }
-
