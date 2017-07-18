@@ -258,7 +258,9 @@ behavior event_indexer(stateful_actor<event_indexer_state>* self,
     auto a = self->spawn<monitored>(time_indexer, p);
     self->state.indexers.emplace(p, a);
     // Spawn indexers for event data.
-    if (!skip(event_type)) {
+    if (skip(event_type)) {
+      VAST_DEBUG(self, "skips event:", event_type);
+    } else {
       auto r = get_if<record_type>(event_type);
       if (!r) {
         p = dir / "data";
@@ -268,7 +270,9 @@ behavior event_indexer(stateful_actor<event_indexer_state>* self,
       } else {
         for (auto& f : record_type::each{*r}) {
           auto& value_type = f.trace.back()->type;
-          if (!skip(value_type)) {
+          if (skip(value_type)) {
+            VAST_DEBUG(self, "skips record field:", f.key());
+          } else {
             p = dir / "data";
             for (auto& k : f.key())
               p /= k;
