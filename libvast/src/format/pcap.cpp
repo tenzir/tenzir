@@ -263,7 +263,7 @@ expected<event> reader::read() {
 }
 
 expected<void> reader::schema(vast::schema const& sch) {
-  auto t = sch.find("vast::packet");
+  auto t = sch.find(pcap_packet_type.name());
   if (!t)
     return make_error(ec::format_error, "did not find packet type in schema");
   if (!congruent(packet_type_, *t))
