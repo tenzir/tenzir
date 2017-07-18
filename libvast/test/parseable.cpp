@@ -455,6 +455,25 @@ TEST(byte) {
   CHECK(b64le(f, l, u64));
   CHECK(u64 == 0x0807060504030201);
   CHECK(f == l);
+  MESSAGE("variable length");
+  f = str.begin();
+  l = f + 3;
+  std::array<uint8_t, 3> a3;
+  a3.fill(0);
+  CHECK(bytes<3>(f, l, a3));
+  CHECK(a3[0] == 0x01);
+  CHECK(a3[1] == 0x02);
+  CHECK(a3[2] == 0x03);
+  f = str.begin();
+  l = f + 5;
+  std::array<uint8_t, 5> a5;
+  a5.fill(0);
+  CHECK(bytes<5>(f, l, a5));
+  CHECK(a5[0] == 0x01);
+  CHECK(a5[1] == 0x02);
+  CHECK(a5[2] == 0x03);
+  CHECK(a5[3] == 0x04);
+  CHECK(a5[4] == 0x05);
 }
 
 TEST(byte - type promotion regression) {

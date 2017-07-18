@@ -108,6 +108,21 @@ struct byte_parser : parser<byte_parser<T, Policy, Bytes>> {
   }
 };
 
+template <size_t N>
+struct bytes_parser : parser<bytes_parser<N>> {
+  using attribute = std::array<uint8_t, N>;
+
+  template <typename Iterator>
+  bool parse(Iterator& f, Iterator const& l, std::array<uint8_t, N>& x) const {
+    auto save = f;
+    for (auto i = 0u; i < N; i++)
+      if (!detail::extract<1>::parse(save, l, x[i]))
+        return false;
+    f = save;
+    return true;
+  }
+};
+
 namespace parsers {
 
 auto const byte = byte_parser<uint8_t>{};
@@ -117,6 +132,9 @@ auto const b64be = byte_parser<uint64_t, policy::no_swap>{};
 auto const b16le = byte_parser<uint16_t, policy::swap>{};
 auto const b32le = byte_parser<uint32_t, policy::swap>{};
 auto const b64le = byte_parser<uint64_t, policy::swap>{};
+
+template <size_t N>
+auto const bytes = bytes_parser<N>{};
 
 } // namespace parsers
 } // namespace vast
