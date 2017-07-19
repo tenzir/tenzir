@@ -21,21 +21,20 @@ address::address() {
   bytes_.fill(0);
 }
 
-address::address(uint32_t const* bytes, family fam, byte_order order) {
+address::address(const void* bytes, family fam, byte_order order) {
+  auto b = reinterpret_cast<const uint32_t*>(bytes);
   if (fam == ipv4) {
     std::copy(v4_mapped_prefix.begin(), v4_mapped_prefix.end(), bytes_.begin());
     auto p = reinterpret_cast<uint32_t*>(&bytes_[12]);
-    if (order == host)
-      *p = detail::to_network_order(*bytes);
-    else
-      *p = *bytes;
+    *p = (order == host) ? detail::to_network_order(*b) : *b;
   } else if (order == host) {
     for (auto i = 0u; i < 4u; ++i) {
       auto p = reinterpret_cast<uint32_t*>(&bytes_[i * 4]);
-      *p = detail::to_network_order(*(bytes + i));
+      *p = detail::to_network_order(*(b + i));
     }
   } else {
-    std::copy(bytes, bytes + 4, reinterpret_cast<uint32_t*>(bytes_.data()));
+    std::copy_n(reinterpret_cast<const uint64_t*>(b), 2,
+                reinterpret_cast<uint64_t*>(bytes_.data()));
   }
 }
 
