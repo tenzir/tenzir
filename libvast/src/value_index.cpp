@@ -360,19 +360,54 @@ bool subnet_index::push_back_impl(data const& x, size_type skip) {
 
 expected<bitmap>
 subnet_index::lookup_impl(relational_operator op, data const& x) const {
-  if (!(op == equal || op == not_equal))
-    return make_error(ec::unsupported_operator, op);
   auto sn = get_if<subnet>(x);
   if (!sn)
     return make_error(ec::type_clash, x);
-  auto result = network_.lookup(equal, sn->network());
-  if (!result)
-    return result;
-  auto n = length_.lookup(equal, sn->length());
-  *result &= n;
-  if (op == not_equal)
-    result->flip();
-  return result;
+  switch (op) {
+    default:
+      return make_error(ec::unsupported_operator, op);
+    case equal:
+    case not_equal: {
+      auto result = network_.lookup(equal, sn->network());
+      if (!result)
+        return result;
+      auto n = length_.lookup(equal, sn->length());
+      *result &= n;
+      if (op == not_equal)
+        result->flip();
+      return result;
+    }
+    case in:
+    case not_in: {
+      // For a subnet index U and subnet x, the in operator signifies a
+      // subset relationship such that `U in x` translates to U ⊆ x, i.e.,
+      // the lookup returns all subnets in U that are a subset of x.
+      auto result = network_.lookup(in, *sn);
+      if (!result)
+        return result;
+      *result &= length_.lookup(greater_equal, sn->length());
+      if (op == not_in)
+        result->flip();
+      return result;
+    }
+    case ni:
+    case not_ni: {
+      // For a subnet index U and subnet x, the ni operator signifies a
+      // subset relationship such that `U ni x` translates to U ⊇ x, i.e.,
+      // the lookup returns all subnets in U that include x.
+      bitmap result;
+      for (auto i = uint8_t{1}; i <= sn->length(); ++i) {
+        auto bm = network_.lookup(in, subnet{sn->network(), i});
+        if (!bm)
+          return bm;
+        *bm &= length_.lookup(equal, i);
+        result |= *bm;
+      }
+      if (op == not_ni)
+        result.flip();
+      return result;
+    }
+  }
 }
 
 
