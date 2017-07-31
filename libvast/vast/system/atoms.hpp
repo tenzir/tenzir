@@ -99,6 +99,8 @@ using subscriber_atom = caf::atom_constant<caf::atom("subscriber")>;
 using supervisor_atom = caf::atom_constant<caf::atom("supervisor")>;
 using search_atom = caf::atom_constant<caf::atom("search")>;
 using tracker_atom = caf::atom_constant<caf::atom("tracker")>;
+using exporter_atom = caf::atom_constant<caf::atom("exporter")>;
+using importer_atom = caf::atom_constant<caf::atom("importer")>;
 
 } // namespace vast::system
 
