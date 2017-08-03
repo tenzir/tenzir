@@ -115,9 +115,11 @@ struct bytes_parser : parser<bytes_parser<N>> {
   template <typename Iterator>
   bool parse(Iterator& f, Iterator const& l, std::array<uint8_t, N>& x) const {
     auto save = f;
-    for (auto i = 0u; i < N; i++)
-      if (!detail::extract<1>::parse(save, l, x[i]))
+    for (auto i = 0u; i < N; i++) {
+      if (save == l)
         return false;
+      x[i] = *save++ & 0xFF;
+    }
     f = save;
     return true;
   }

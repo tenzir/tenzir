@@ -474,6 +474,35 @@ TEST(byte) {
   CHECK(a5[2] == 0x03);
   CHECK(a5[3] == 0x04);
   CHECK(a5[4] == 0x05);
+  std::array<uint8_t, 8> a8;
+  CHECK(bytes<8>(str, a8));
+  CHECK(a8[0] == 0x01);
+  CHECK(a8[1] == 0x02);
+  CHECK(a8[2] == 0x03);
+  CHECK(a8[3] == 0x04);
+  CHECK(a8[4] == 0x05);
+  CHECK(a8[5] == 0x06);
+  CHECK(a8[6] == 0x07);
+  CHECK(a8[7] == 0x08);
+  auto ip = "\xdf\x00\x0d\xb8\x00\x00\x00\x00\x02\x02\xb3\xff\xfe\x1e\x83\x28"s;
+  std::array<uint8_t, 16> a16;
+  CHECK(bytes<16>(ip, a16));
+  CHECK(a16[0] == 0xdf);
+  CHECK(a16[1] == 0x00);
+  CHECK(a16[2] == 0x0d);
+  CHECK(a16[3] == 0xb8);
+  CHECK(a16[4] == 0x00);
+  CHECK(a16[5] == 0x00);
+  CHECK(a16[6] == 0x00);
+  CHECK(a16[7] == 0x00);
+  CHECK(a16[8] == 0x02);
+  CHECK(a16[9] == 0x02);
+  CHECK(a16[10] == 0xb3);
+  CHECK(a16[11] == 0xff);
+  CHECK(a16[12] == 0xfe);
+  CHECK(a16[13] == 0x1e);
+  CHECK(a16[14] == 0x83);
+  CHECK(a16[15] == 0x28);
 }
 
 TEST(byte - type promotion regression) {
