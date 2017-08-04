@@ -120,7 +120,7 @@ struct evaluator_state {
   const char* name = "evaluator";
 };
 
-// Wraps a query expression in an actor. Upon receiving hits from predicators,
+// Wraps a query expression in an actor. Upon receiving hits from COLLECTORs,
 // re-evaluates the expression and relays new hits to its sinks.
 behavior evaluator(stateful_actor<evaluator_state>* self,
                    expression expr, actor sink) {
@@ -153,22 +153,20 @@ behavior partition(stateful_actor<partition_state>* self, path dir) {
   auto accountant = accountant_type{};
   if (auto a = self->system().registry().get(accountant_atom::value))
     accountant = actor_cast<accountant_type>(a);
-  // If the directory exists already, we must have some state and are loading
-  // all INDEXERs.
-  if (exists(dir / "meta")) {
+  // If the directory exists already, we must have some state from the past and
+  // are pre-loading all INDEXER types we are aware of, so that we can spawn
+  // them as we need them.
+  if (exists(dir)) {
     std::vector<std::pair<std::string, type>> indexers;
     auto result = load(dir / "meta", indexers);
     if (!result) {
       VAST_ERROR(self, self->system().render(result.error()));
       self->quit(result.error());
       return {};
-    } else {
-      self->state.indexers.reserve(indexers.size());
-      for (auto& x : indexers) {
-        auto indexer = self->spawn(event_indexer, dir / x.first, x.second);
-        self->state.indexers.emplace(x.second, indexer);
-      }
     }
+    self->state.indexers.reserve(indexers.size());
+    for (auto& x : indexers)
+      self->state.indexers.emplace(x.second, actor{});
   }
   return {
     [=](std::vector<event> const& events) {
@@ -178,21 +176,39 @@ behavior partition(stateful_actor<partition_state>* self, path dir) {
       vast::detail::flat_set<actor> indexers;
       for (auto& e : events) {
         auto& i = self->state.indexers[e.type()];
-        if (!i)
+        if (!i) {
+          VAST_DEBUG(self, "creates event-indexer for type", e.type());
           i = self->spawn(event_indexer, dir / to_digest(e.type()), e.type());
+        }
         indexers.insert(i);
       }
-      // Forward events to all indexers.
+      // Forward events to relevant indexers.
       auto msg = self->current_mailbox_element()->move_content_to_message();
       for (auto& indexer : indexers)
         self->send(indexer, msg);
     },
     [=](expression const& expr) {
       VAST_DEBUG(self, "got expression:", expr);
-      auto rp = self->make_response_promise<bitmap>();
       auto start = steady_clock::now();
-      if (self->state.indexers.empty()) {
-        VAST_DEBUG(self, "has no indexers available");
+      auto rp = self->make_response_promise<bitmap>();
+      // For each known type, check whether the expression could match.
+      // If so, locate/load the corresponding INDEXER.
+      vast::detail::flat_set<actor> indexers;
+      for (auto& x : self->state.indexers) {
+        auto resolved = visit(type_resolver{x.first}, expr);
+        if (resolved && visit(matcher{x.first}, *resolved)) {
+          VAST_DEBUG(self, "found matching type for expression:", x.first);
+          if (!x.second) {
+            VAST_DEBUG(self, "loads event-indexer for type", x.first);
+            auto indexer_dir = dir / to_digest(x.first);
+            x.second = self->spawn(event_indexer, indexer_dir, x.first);
+          }
+          indexers.insert(x.second);
+        }
+      }
+      if (indexers.empty()) {
+        VAST_DEBUG(self, "did not find a matching type in",
+                   self->state.indexers.size(), "indexer(s)");
         rp.deliver(bitmap{});
         return;
       }
@@ -216,19 +232,22 @@ behavior partition(stateful_actor<partition_state>* self, path dir) {
           };
         }
       );
+      // Spawn a dedicated actor responsible for expression evaluation.
       auto eval = self->spawn(evaluator, expr, accumulator);
       // Connect COLLECTORs with INDEXERs and EVALUATOR.
       for (auto& pred : visit(predicatizer{}, expr)) {
-        // FIXME: locate the smallest subset of INDEXERs (checking whether the
-        // predicate could match the type of the INDEXER) instead of querying
-        // all INDEXERs.
-        auto n = self->state.indexers.size();
-        auto coll = self->spawn(collector, pred, eval, n);
-        for (auto& x : self->state.indexers)
-          send_as(coll, x.second, pred);
+        auto coll = self->spawn(collector, pred, eval, indexers.size());
+        for (auto& x : indexers)
+          send_as(coll, x, pred);
       }
     },
     [=](shutdown_atom) {
+      for (auto i = self->state.indexers.begin();
+           i != self->state.indexers.end(); )
+        if (!i->second)
+          i = self->state.indexers.erase(i);
+        else
+          ++i;
       if (self->state.indexers.empty()) {
         self->quit(exit_reason::user_shutdown);
         return;

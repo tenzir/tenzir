@@ -164,4 +164,34 @@ TEST(validation - type extractor) {
   CHECK(!visit(validator{}, *expr));
 }
 
+TEST(matcher) {
+  auto match = [](const std::string& str, auto&& t) {
+    auto expr = to<expression>(str);
+    REQUIRE(expr);
+    auto resolved = visit(type_resolver(t), *expr);
+    REQUIRE(resolved);
+    return visit(matcher{t}, *resolved);
+  };
+  MESSAGE("type extractors");
+  CHECK(match(":real < 4.2", real_type{}));
+  CHECK(!match(":int == -42", real_type{}));
+  CHECK(!match(":count == 42 && :real < 4.2", real_type{}));
+  CHECK(match(":count == 42 || :real < 4.2", real_type{}));
+  auto r = record_type{
+    {"x", real_type{}},
+    {"y", port_type{}},
+    {"z", address_type{}}
+  };
+  CHECK(match(":count == 42 || :real < 4.2", r));
+  CHECK(match(":port == 80/tcp && :real < 4.2", r));
+  MESSAGE("key extractors");
+  CHECK(match("x < 4.2 || (y == 80/tcp && z in 10.0.0.0/8)", r));
+  CHECK(match("x < 4.2 && (y == 80/tcp || :bool == F)", r));
+  CHECK(!match("x < 4.2 && a == T", r));
+  MESSAGE("attribute extractors");
+  CHECK(!match("&type == \"foo\"", r));
+  r.name("foo");
+  CHECK(match("&type == \"foo\"", r));
+}
+
 FIXTURE_SCOPE_END()

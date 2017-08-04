@@ -561,4 +561,44 @@ bool event_evaluator::operator()(data_extractor const& e, data const& d) {
   return false;
 }
 
+
+bool matcher::operator()(none) {
+  return false;
+}
+
+bool matcher::operator()(conjunction const& c) {
+  for (auto& op : c)
+    if (!visit(*this, op))
+      return false;
+  return true;
+}
+
+bool matcher::operator()(disjunction const& d) {
+  for (auto& op : d)
+    if (visit(*this, op))
+      return true;
+  return false;
+}
+
+bool matcher::operator()(negation const& n) {
+  return visit(*this, n.expr());
+}
+
+bool matcher::operator()(predicate const& p) {
+  return visit(*this, p.lhs, p.rhs);
+}
+
+bool matcher::operator()(attribute_extractor const& e, const data& d) {
+  if (e.attr == "type")
+    return type_.name() == get<std::string>(d);
+  return e.attr == "time"; // Every event has a timestamp.
+}
+
+bool matcher::operator()(data_extractor const&, data const&) {
+  // If we encounter a data_extractor, it must have been created through a
+  // previous invocation of a type_resolver visitation. The presence of
+  // data_extractor indicates that the expression matches.
+  return true;
+}
+
 } // namespace vast

@@ -146,7 +146,7 @@ struct type_pruner {
   type const& type_;
 };
 
-/// Evaluates an event over a resolved expression.
+/// Evaluates an event over a [resolved](@ref type_extractor) expression.
 struct event_evaluator {
   event_evaluator(event const& e);
 
@@ -155,14 +155,14 @@ struct event_evaluator {
   bool operator()(disjunction const& d);
   bool operator()(negation const& n);
   bool operator()(predicate const& p);
-  bool operator()(attribute_extractor const&, data const& d);
+  bool operator()(attribute_extractor const& e, data const& d);
   bool operator()(key_extractor const&, data const&);
   bool operator()(type_extractor const&, data const&);
   bool operator()(data_extractor const& e, data const& d);
 
   template <typename T>
-  bool operator()(data const& d, T const& e) {
-    return (*this)(e, d);
+  bool operator()(data const& d, T const& x) {
+    return (*this)(x, d);
   }
 
   template <typename T, typename U>
@@ -172,6 +172,32 @@ struct event_evaluator {
 
   event const& event_;
   relational_operator op_;
+};
+
+/// Checks whether a [resolved](@ref type_extractor) expression matches a given
+/// type. That is, this visitor tests whether an expression consists of a
+/// viable set of predicates for a type. For conjunctions, all operands must
+/// match. For disjunctions, at least one operand must match.
+struct matcher {
+  bool operator()(none);
+  bool operator()(conjunction const&);
+  bool operator()(disjunction const&);
+  bool operator()(negation const&);
+  bool operator()(predicate const&);
+  bool operator()(attribute_extractor const&, data const&);
+  bool operator()(data_extractor const&, data const&);
+
+  template <typename T>
+  bool operator()(data const& d, T const& x) {
+    return (*this)(x, d);
+  }
+
+  template <typename T, typename U>
+  bool operator()(T const&, U const&) {
+    return false;
+  }
+
+  const type& type_;
 };
 
 } // namespace vast
