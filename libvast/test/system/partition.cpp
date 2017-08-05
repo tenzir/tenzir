@@ -48,6 +48,7 @@ struct partition_fixture : fixtures::actor_system_and_events {
     REQUIRE(exists(directory));
     REQUIRE(exists(directory / "547119946" / "data" / "id" / "orig_h"));
     REQUIRE(exists(directory / "547119946" / "meta" / "time"));
+    REQUIRE(exists(directory / "547119946" / "meta" / "type"));
     MESSAGE("respawning partition and sending query again");
     partition = self->spawn(system::partition, directory);
     self->request(partition, infinite, *expr).receive(
@@ -66,12 +67,28 @@ struct partition_fixture : fixtures::actor_system_and_events {
 
 FIXTURE_SCOPE(partition_tests, partition_fixture)
 
-TEST(partition queries 1) {
-  auto hits = query(":string == \"SF\" && id.resp_p == 443/?");
+TEST(partition queries - type extractors) {
+  auto hits = query(":string == \"SF\" && :port == 443/?");
   CHECK_EQUAL(rank(hits), 38u);
 }
 
-TEST(partition queries 2) {
+TEST(partition queries - key extractors) {
+  auto hits = query("conn_state == \"SF\" && id.resp_p == 443/?");
+  CHECK_EQUAL(rank(hits), 38u);
+}
+
+TEST(partition queries - attribute extractors) {
+  MESSAGE("&type");
+  auto hits = query("&type == \"bro::http\"");
+  CHECK_EQUAL(rank(hits), 4896u);
+  hits = query("&type == \"bro::conn\"");
+  CHECK_EQUAL(rank(hits), 8462u);
+  MESSAGE("&time");
+  hits = query("&time > 1970-01-01");
+  CHECK_EQUAL(rank(hits), 4896u + 8462u);
+}
+
+TEST(partition queries - mixed) {
   auto hits = query("service == \"http\" && :addr == 212.227.96.110");
   CHECK_EQUAL(rank(hits), 28u);
 }

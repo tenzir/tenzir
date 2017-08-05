@@ -114,10 +114,17 @@ behavior value_indexer(stateful_actor<value_indexer_state>* self,
 // only with a specific aspect of an event.
 
 behavior time_indexer(stateful_actor<value_indexer_state>* self,
-                           path const& p) {
+                      path const& p) {
   // TODO: add type attributes to tune index, e.g., for seconds granularity.
   auto t = timestamp_type{};
   auto extract = [](event const& e) { return optional<data>{e.timestamp()}; };
+  return value_indexer(self, p, t, extract);
+}
+
+behavior type_indexer(stateful_actor<value_indexer_state>* self,
+                      path const& p) {
+  auto t = string_type{};
+  auto extract = [](event const& e) { return optional<data>{e.type().name()}; };
   return value_indexer(self, p, t, extract);
 }
 
@@ -192,16 +199,21 @@ struct loader {
     result_type result;
     auto p = self->state.dir / "meta";
     if (ex.attr == "time") {
-      if (!is<timestamp>(x)) {
-        VAST_WARNING(self, "got time attribute but no timestamp:", x);
-      } else {
-        p /= "time";
-        VAST_DEBUG(self, "loads value index at", p);
-        auto& a = self->state.indexers[p];
-        if (!a)
-          a = self->spawn<monitored>(time_indexer, p);
-        result.push_back(a);
-      }
+      VAST_ASSERT(is<timestamp>(x));
+      p /= ex.attr;
+      VAST_DEBUG(self, "loads time index at", p);
+      auto& a = self->state.indexers[p];
+      if (!a)
+        a = self->spawn<monitored>(time_indexer, p);
+      result.push_back(a);
+    } else if (ex.attr == "type") {
+      VAST_ASSERT(is<std::string>(x));
+      p /= ex.attr;
+      VAST_DEBUG(self, "loads type index at", p);
+      auto& a = self->state.indexers[p];
+      if (!a)
+        a = self->spawn<monitored>(type_indexer, p);
+      result.push_back(a);
     } else {
       VAST_WARNING(self, "got unsupported attribute:", ex.attr);
     }
@@ -256,6 +268,9 @@ behavior event_indexer(stateful_actor<event_indexer_state>* self,
     // Spawn indexers for event meta data.
     auto p = dir / "meta" / "time";
     auto a = self->spawn<monitored>(time_indexer, p);
+    self->state.indexers.emplace(p, a);
+    p = dir / "meta" / "type";
+    a = self->spawn<monitored>(type_indexer, p);
     self->state.indexers.emplace(p, a);
     // Spawn indexers for event data.
     if (skip(event_type)) {
