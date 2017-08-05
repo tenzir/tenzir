@@ -116,30 +116,31 @@ struct bitmap_evaluator {
 struct evaluator_state {
   bitmap hits;
   std::unordered_map<predicate, bitmap> predicates;
-  size_t num_predicates;
   const char* name = "evaluator";
 };
 
 // Wraps a query expression in an actor. Upon receiving hits from COLLECTORs,
 // re-evaluates the expression and relays new hits to its sinks.
 behavior evaluator(stateful_actor<evaluator_state>* self,
-                   expression expr, actor sink) {
-  self->state.num_predicates = visit(predicatizer{}, expr).size();
+                   expression expr, size_t num_predicates, actor sink) {
   return {
     [=](predicate& pred, bitmap& hits) {
       self->state.predicates.emplace(std::move(pred), std::move(hits));
       auto expr_hits = visit(bitmap_evaluator{self->state.predicates}, expr);
       auto delta = expr_hits - self->state.hits;
-      VAST_DEBUG(self, "produced", rank(delta) << '/' << rank(expr_hits),
+      VAST_DEBUG(self, "evaluated",
+                 self->state.predicates.size() << '/' << num_predicates,
+                 "predicates, yielding",
+                 rank(delta) << '/' << rank(expr_hits),
                  "new/total hits for", expr);
-      if (any<0>(delta)) {
+      if (any<1>(delta)) {
         VAST_DEBUG(self, "relays", rank(delta), "new hits to sink");
         self->state.hits |= delta;
         self->send(sink, std::move(delta));
       }
       // We're done with evaluation if all predicates have reported their hits.
-      if (self->state.predicates.size() == self->state.num_predicates) {
-        VAST_DEBUG(self, "completed", expr);
+      if (self->state.predicates.size() == num_predicates) {
+        VAST_DEBUG(self, "completed expression evaluation");
         self->send(sink, done_atom::value);
         self->quit();
       }
@@ -192,8 +193,8 @@ behavior partition(stateful_actor<partition_state>* self, path dir) {
       auto start = steady_clock::now();
       auto rp = self->make_response_promise<bitmap>();
       // For each known type, check whether the expression could match.
-      // If so, locate/load the corresponding INDEXER.
-      vast::detail::flat_set<actor> indexers;
+      // If so, locate/load the corresponding indexer.
+      std::vector<actor> indexers;
       for (auto& x : self->state.indexers) {
         auto resolved = visit(type_resolver{x.first}, expr);
         if (resolved && visit(matcher{x.first}, *resolved)) {
@@ -203,7 +204,7 @@ behavior partition(stateful_actor<partition_state>* self, path dir) {
             auto indexer_dir = dir / to_digest(x.first);
             x.second = self->spawn(event_indexer, indexer_dir, x.first);
           }
-          indexers.insert(x.second);
+          indexers.push_back(x.second);
         }
       }
       if (indexers.empty()) {
@@ -212,30 +213,37 @@ behavior partition(stateful_actor<partition_state>* self, path dir) {
         rp.deliver(bitmap{});
         return;
       }
-      // Spawn a sink that accumulates the stream of bitmaps from the evaluator.
+      // Spawn a sink that accumulates the stream of bitmaps from the evaluator
+      // and ultimately responds to the user with the result.
       auto accumulator = self->system().spawn(
         [=](event_based_actor* job) mutable -> behavior {
-          auto bm = std::make_shared<bitmap>();
+          auto result = std::make_shared<bitmap>();
           return {
             [=](const bitmap& hits) mutable {
-              VAST_ASSERT(any<0>(hits));
-              *bm |= hits;
+              VAST_ASSERT(any<1>(hits));
+              *result |= hits;
             },
             [=](done_atom) mutable {
               auto stop = steady_clock::now();
-              rp.deliver(std::move(*bm));
+              rp.deliver(std::move(*result));
               timespan runtime = stop - start;
               VAST_DEBUG(self, "answered", expr, "in", runtime);
               if (accountant)
                 job->send(accountant, "partition.query.runtime", runtime);
+              job->quit();
             }
           };
         }
       );
-      // Spawn a dedicated actor responsible for expression evaluation.
-      auto eval = self->spawn(evaluator, expr, accumulator);
-      // Connect COLLECTORs with INDEXERs and EVALUATOR.
-      for (auto& pred : visit(predicatizer{}, expr)) {
+      // Spawn a dedicated actor responsible for expression evaluation. This
+      // actor re-evaluates the expression whenever it receives new hits from
+      // a collector.
+      auto predicates = visit(predicatizer{}, expr);
+      auto eval = self->spawn(evaluator, expr, predicates.size(), accumulator);
+      for (auto& pred : predicates) {
+        // FIXME: locate the smallest subset of indexers (checking whether the
+        // predicate could match the type of the indexer) instead of querying
+        // all indexers.
         auto coll = self->spawn(collector, pred, eval, indexers.size());
         for (auto& x : indexers)
           send_as(coll, x, pred);
