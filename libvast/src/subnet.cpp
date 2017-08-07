@@ -19,9 +19,11 @@ subnet::subnet(address addr, uint8_t length)
 }
 
 bool subnet::contains(address const& addr) const {
-  address p{addr};
-  p.mask(length_);
-  return p == network_;
+  return addr.compare(network_, length_);
+}
+
+bool subnet::contains(subnet const& other) const {
+  return length_ <= other.length_ && contains(other.network_);
 }
 
 address const& subnet::network() const {

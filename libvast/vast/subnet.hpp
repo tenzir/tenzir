@@ -21,9 +21,20 @@ public:
   /// @param length The prefix length.
   subnet(address addr, uint8_t length);
 
-  /// Checks whether this prefix includes a given address.
-  /// @param addr The address to test for .
+  /// Checks whether this subnet includes a given address.
+  /// @param addr The address to test for containment.
+  /// @returns `true` if *addr* is an element of this subnet.
   bool contains(address const& addr) const;
+
+  /// Checks whether this subnet includes another subnet.
+  /// For two subnets *A* and *B*, the subset relationship *A ⊆ B* holds true
+  /// if all hosts of A are also part of B. This is true if (1) *A*'s prefix
+  /// length is less than or equal to *B*'s, and (2) if the host address of *A*
+  /// and *B* are equal in the first *k* bits, where *k* is the prefix length
+  /// of *A*.
+  /// @param other The subnet to test for containment.
+  /// @returns `true` if *other* is contained within this subnet.
+  bool contains(subnet const& other) const;
 
   /// Retrieves the network address of the prefix.
   /// @returns The prefix address.

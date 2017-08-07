@@ -10,6 +10,7 @@
 #include "vast/concept/printable/vast/address.hpp"
 #include "vast/detail/byte_swap.hpp"
 #include "vast/json.hpp"
+#include "vast/word.hpp"
 
 std::array<uint8_t, 12> const vast::address::v4_mapped_prefix = {
   {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff}
@@ -113,6 +114,17 @@ address& address::operator^=(address const& other) {
 
 std::array<uint8_t, 16> const& address::data() const {
   return bytes_;
+}
+
+bool address::compare(const address& other, size_t k) const {
+  VAST_ASSERT(k > 0 && k <= 128);
+  auto x = bytes_.data();
+  auto y = other.bytes_.data();
+  for (; k > 8; k -= 8)
+    if (*x++ != *y++)
+      return false;
+  auto mask = word<uint8_t>::msb_fill(k);
+  return (*x & mask) == (*y & mask);
 }
 
 bool operator==(address const& x, address const& y) {

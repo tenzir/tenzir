@@ -90,6 +90,13 @@ public:
   /// @returns A reference to an array of 16 bytes.
   std::array<uint8_t, 16> const& data() const;
 
+  /// Compares the top-k bits of this address with another one.
+  /// @param other The other address.
+  /// @param k The number of bits to compare, starting from the top.
+  /// @returns `true` if the first *k* bits of both addresses are equal
+  /// @pre `k > 0 && k <= 128`
+  bool compare(const address& other, size_t k) const;
+
   friend bool operator==(address const& x, address const& y);
   friend bool operator<(address const& x, address const& y);
 

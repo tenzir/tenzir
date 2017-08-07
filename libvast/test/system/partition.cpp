@@ -23,6 +23,8 @@ struct partition_fixture : fixtures::actor_system_and_events {
     self->send(partition, bro_conn_log);
     MESSAGE("ingesting http.log");
     self->send(partition, bro_http_log);
+    MESSAGE("ingesting bgpdump log");
+    self->send(partition, bgpdump_txt);
     MESSAGE("completed ingestion");
   }
 
@@ -70,6 +72,8 @@ FIXTURE_SCOPE(partition_tests, partition_fixture)
 TEST(partition queries - type extractors) {
   auto hits = query(":string == \"SF\" && :port == 443/?");
   CHECK_EQUAL(rank(hits), 38u);
+  hits = query(":subnet in 86.111.146.0/23");
+  CHECK_EQUAL(rank(hits), 72u);
 }
 
 TEST(partition queries - key extractors) {

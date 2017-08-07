@@ -627,7 +627,7 @@ bool compatible(type const& lhs, relational_operator op, type const& rhs) {
     case not_in:
       if (is<string_type>(lhs))
         return is<string_type>(rhs) || is_container(rhs);
-      else if (is<address_type>(lhs))
+      else if (is<address_type>(lhs) || is<subnet_type>(lhs))
         return is<subnet_type>(rhs) || is_container(rhs);
       else
         return is_container(rhs);
@@ -657,45 +657,23 @@ bool compatible(type const& lhs, relational_operator op, data const& rhs) {
     case not_in:
       if (is<string_type>(lhs))
         return is<std::string>(rhs) || is_container(rhs);
-      else if (is<address_type>(lhs))
+      else if (is<address_type>(lhs) || is<subnet_type>(lhs))
         return is<subnet>(rhs) || is_container(rhs);
       else
         return is_container(rhs);
     case ni:
-      return compatible(rhs, in, lhs);
     case not_ni:
-      return compatible(rhs, not_in, lhs);
+      if (is<std::string>(rhs))
+        return is<string_type>(lhs) || is_container(lhs);
+      else if (is<address>(rhs) || is<subnet>(rhs))
+        return is<subnet_type>(lhs) || is_container(lhs);
+      else
+        return is_container(lhs);
   }
 }
 
 bool compatible(data const& lhs, relational_operator op, type const& rhs) {
-  switch (op) {
-    default:
-      return false;
-    case match:
-    case not_match:
-      return is<std::string>(lhs) && is<pattern_type>(rhs);
-    case equal:
-    case not_equal:
-      return is<none>(lhs) || is<none_type>(rhs) || congruent(lhs, rhs);
-    case less:
-    case less_equal:
-    case greater:
-    case greater_equal:
-      return congruent(lhs, rhs);
-    case in:
-    case not_in:
-      if (is<std::string>(lhs))
-        return is<string_type>(rhs) || is_container(rhs);
-      else if (is<address>(lhs))
-        return is<subnet_type>(rhs) || is_container(rhs);
-      else
-        return is_container(rhs);
-    case ni:
-      return compatible(rhs, in, lhs);
-    case not_ni:
-      return compatible(rhs, not_in, lhs);
-  }
+  return compatible(rhs, flip(op), lhs);
 }
 
 namespace {

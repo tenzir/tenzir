@@ -172,6 +172,10 @@ TEST(evaluation) {
   lhs = *to<address>("10.0.0.1");
   rhs = *to<subnet>("10.0.0.0/8");
   CHECK(evaluate(lhs, in, rhs));
+  lhs = *to<subnet>("10.0.42.0/16");
+  CHECK(evaluate(lhs, in, rhs));
+  rhs = *to<subnet>("10.0.42.0/17");
+  CHECK(!evaluate(lhs, in, rhs));
 
   rhs = real{4.2};
   CHECK(!evaluate(lhs, equal, rhs));

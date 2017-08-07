@@ -154,6 +154,10 @@ struct in_visitor {
     return rhs.contains(lhs);
   }
 
+  bool operator()(subnet const& lhs, subnet const& rhs) const {
+    return rhs.contains(lhs);
+  }
+
   template <class T>
   bool operator()(T const& lhs, set const& rhs) const {
     return std::find(rhs.begin(), rhs.end(), lhs) != rhs.end();
