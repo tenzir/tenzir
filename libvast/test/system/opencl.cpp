@@ -18,9 +18,8 @@ namespace {
 } // namespace <anonymous>
 
 TEST(show first device) {
-  auto& first = self->system().opencl_manager().get_device();
-  if (first)
-    MESSAGE("found GPU: " << first->get_name());
+  if (auto first = self->system().opencl_manager().find_device())
+    MESSAGE("found GPU: " << (*first)->name());
 }
 
 FIXTURE_SCOPE_END()
