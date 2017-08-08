@@ -218,6 +218,7 @@ set(tests
   test/system/indexer.cpp
   test/system/key_value_store.cpp
   test/system/partition.cpp
+  test/system/queries.cpp
   test/system/replicated_store.cpp
   test/system/sink.cpp
   test/system/source.cpp
