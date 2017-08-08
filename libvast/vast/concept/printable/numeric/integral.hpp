@@ -52,7 +52,7 @@ namespace printers {
 //
 // but for some reason doesn't care if we "rewrite" it as follows. (#132)
 template <typename T>
-const integral_printer<T> integral;
+const integral_printer<T> integral = integral_printer<T>{};
 
 auto const i8 = integral_printer<int8_t>{};
 auto const i16 = integral_printer<int16_t>{};
