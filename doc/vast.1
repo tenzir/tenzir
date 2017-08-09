@@ -1,4 +1,4 @@
-.TH VAST 1 "July 18, 2017" 0.1 "Visibility Across Space and Time"
+.TH VAST 1 "August 08, 2017" 0.1 "Visibility Across Space and Time"
 .SH NAME
 .PP
 \fB\fCvast\fR \-\- manage a VAST topology
@@ -199,9 +199,11 @@ Available \fIcomponent\fP values with corresponding \fIparameters\fP:
   \fB\fC\-l\fR \fIn\fP [\fI0\fP]
     Limit the number of events to extract; \fIn = 0\fP means unlimited.
 .PP
-\fIsource\fP \fBX\fP [\fIparameters\fP]
-  \fBX\fP specifies the format of \fIsource\fP\&. Each source format has its own set of
-  parameters, but the following parameters apply to all formats:
+\fIsource\fP \fBX\fP [\fIparameters\fP] [\fIexpression\fP]
+  \fBX\fP specifies the format of \fIsource\fP\&. If \fIexpression\fP is present, it will
+  act as a whitelist that will skip all events that do not match. Each source
+  format has its own set of parameters, but the following parameters apply to
+  all formats:
   \fB\fC\-r\fR \fIinput\fP
     Filesystem path or type\-specific name that identifies event \fIinput\fP\&.
   \fB\fC\-s\fR \fIschema\fP

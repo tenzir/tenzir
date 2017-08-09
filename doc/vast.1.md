@@ -212,9 +212,11 @@ Available *component* values with corresponding *parameters*:
   `-l` *n* [*0*]
     Limit the number of events to extract; *n = 0* means unlimited.
 
-*source* **X** [*parameters*]
-  **X** specifies the format of *source*. Each source format has its own set of
-  parameters, but the following parameters apply to all formats:
+*source* **X** [*parameters*] [*expression*]
+  **X** specifies the format of *source*. If *expression* is present, it will
+  act as a whitelist that will skip all events that do not match. Each source
+  format has its own set of parameters, but the following parameters apply to
+  all formats:
   `-r` *input*
     Filesystem path or type-specific name that identifies event *input*.
   `-s` *schema*

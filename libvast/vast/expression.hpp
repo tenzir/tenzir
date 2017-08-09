@@ -201,6 +201,18 @@ private:
 /// @returns The normalized expression.
 expression normalize(expression const& expr);
 
+/// [Normalizes](@ref normalize) and [validates](@ref validator) an expression.
+/// @param expr The expression to normalize and validate.
+/// @returns The normalized and validated expression on success.
+expected<expression> normalize_and_validate(const expression& expr);
+
+/// Tailors an expression to a specific type.
+/// @param expr The expression to tailor to *t*.
+/// @param t The type to tailor *expr* to.
+/// @returns An optimized version of *expr* specifically for evaluating events
+///          of type *t*.
+expected<expression> tailor(const expression& expr, const type& t);
+
 } // namespace vast
 
 namespace std {

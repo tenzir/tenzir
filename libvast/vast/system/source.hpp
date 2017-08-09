@@ -1,6 +1,8 @@
 #ifndef VAST_SYSTEM_SOURCE_HPP
 #define VAST_SYSTEM_SOURCE_HPP
 
+#include <unordered_map>
+
 #include "vast/logger.hpp"
 
 #include <caf/actor_pool.hpp>
@@ -9,10 +11,13 @@
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/std/chrono.hpp"
 #include "vast/concept/printable/vast/error.hpp"
+#include "vast/concept/printable/vast/expression.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/error.hpp"
 #include "vast/event.hpp"
 #include "vast/expected.hpp"
+#include "vast/expression.hpp"
+#include "vast/expression_visitors.hpp"
 #include "vast/schema.hpp"
 
 #include "vast/system/accountant.hpp"
@@ -43,6 +48,8 @@ struct source_state {
   static constexpr size_t max_batch_size = 1 << 20;
   uint64_t batch_size = 65536;
   std::vector<event> events;
+  expression filter;
+  std::unordered_map<type, expression> checkers;
   std::chrono::steady_clock::time_point start;
   accountant_type accountant;
   caf::actor sink;
@@ -89,6 +96,16 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader&& reader) {
       while (self->state.events.size() < self->state.batch_size) {
         auto e = self->state.reader.read();
         if (e) {
+          if (!is<none>(self->state.filter)) {
+            auto& checker = self->state.checkers[e->type()];
+            if (is<none>(checker)) {
+              auto x = tailor(self->state.filter, e->type());
+              VAST_ASSERT(x);
+              checker = std::move(*x);
+            }
+            if (!visit(event_evaluator{*e}, checker))
+              continue;
+          }
           self->state.events.push_back(std::move(*e));
         } else if (!e.error()) {
           continue; // Try again.
@@ -158,6 +175,10 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader&& reader) {
       if (r)
         return {};
       return r.error();
+    },
+    [=](expression& expr) {
+      VAST_DEBUG(self, "sets filter expression to:", expr);
+      self->state.filter = std::move(expr);
     },
     [=](sink_atom, actor const& sink) {
       VAST_ASSERT(sink);

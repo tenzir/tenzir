@@ -128,4 +128,23 @@ expression normalize(expression const& expr) {
   return r;
 }
 
+expected<expression> normalize_and_validate(const expression& expr) {
+  auto normalized = normalize(expr);
+  auto result = visit(validator{}, normalized);
+  if (!result)
+    return result.error();
+  return normalized;
+}
+
+expected<expression> tailor(const expression& expr, const type& t) {
+  if (is<none>(expr))
+    return make_error(ec::unspecified, "invalid expression");
+  auto x = visit(type_resolver{t}, expr);
+  if (!x)
+    return x.error();
+  *x = visit(type_pruner{t}, *x);
+  VAST_ASSERT(!is<none>(*x));
+  return std::move(*x);
+}
+
 } // namespace vast

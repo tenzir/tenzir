@@ -60,10 +60,9 @@ expected<actor> spawn_exporter(local_actor* self, options& opts) {
   auto expr = to<expression>(str);
   if (!expr)
     return expr.error();
-  *expr = normalize(*expr);
-  auto result = visit(validator{}, *expr);
-  if (!result)
-    return result.error();
+  expr = normalize_and_validate(*expr);
+  if (!expr)
+    return expr.error();
   // Parse query options.
   auto query_opts = no_query_options;
   if (r.opts.count("continuous") > 0)

@@ -5,8 +5,10 @@
 #include "vast/config.hpp"
 
 #include "vast/concept/parseable/to.hpp"
+#include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/concept/parseable/vast/schema.hpp"
 #include "vast/error.hpp"
+#include "vast/expression.hpp"
 #include "vast/query_options.hpp"
 
 #include "vast/format/bgpdump.hpp"
@@ -33,7 +35,7 @@ expected<actor> spawn_source(local_actor* self, options& opts) {
     return make_error(ec::syntax_error, "missing format");
   auto& format = opts.params.get_as<std::string>(0);
   auto source_args = opts.params.drop(1);
-  // Parse common parameters first.
+  // Parse format-independent parameters first.
   auto input = "-"s;
   std::string schema_file;
   auto r = source_args.extract_opts({
@@ -41,9 +43,12 @@ expected<actor> spawn_source(local_actor* self, options& opts) {
     {"schema,s", "path to alternate schema", schema_file},
     {"uds,d", "treat -r as listening UNIX domain socket"}
   });
+  // Ensure that, upon leaving this function, we have updated the parameter
+  // list such that it no longer contains the command line options that we have
+  // used in this function
   auto grd = caf::detail::make_scope_guard([&] { opts.params = r.remainder; });
+  // Parse format-specific parameters, if any.
   actor src;
-  // Parse source-specific parameters, if any.
   if (format == "pcap") {
 #ifndef VAST_HAVE_PCAP
     return make_error(ec::unspecified, "not compiled with pcap support");
@@ -107,6 +112,20 @@ expected<actor> spawn_source(local_actor* self, options& opts) {
       return sch.error();
     // Send anonymously, since we can't process the reply here.
     anon_send(src, put_atom::value, std::move(*sch));
+  }
+  // Attempt to parse the remainder as an expression.
+  if (!r.remainder.empty()) {
+    auto str = r.remainder.get_as<std::string>(0);
+    for (auto i = 1u; i < r.remainder.size(); ++i)
+      str += ' ' + r.remainder.get_as<std::string>(i);
+    auto expr = to<expression>(str);
+    if (!expr)
+      return expr.error();
+    expr = normalize_and_validate(*expr);
+    if (!expr)
+      return expr.error();
+    r.remainder = {};
+    anon_send(src, std::move(*expr));
   }
   return src;
 }
