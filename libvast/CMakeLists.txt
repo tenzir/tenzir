@@ -176,7 +176,6 @@ set(tests
   test/coder.cpp
   test/compressedbuf.cpp
   test/data.cpp
-  test/date.cpp
   test/endpoint.cpp
   test/event.cpp
   test/expression.cpp
