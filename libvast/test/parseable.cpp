@@ -6,6 +6,7 @@
 #include "vast/concept/parseable/stream.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/key.hpp"
+#include "vast/concept/parseable/vast/time.hpp"
 
 #define SUITE parseable
 #include "test.hpp"
@@ -522,6 +523,25 @@ TEST(byte - type promotion regression) {
   CHECK_EQUAL(z, 0x8Dull);
   CHECK(b64le("\x8d\x00\x00\x00\x00\x00\x00\x00"s, z));
   CHECK_EQUAL(z, 0x8Dull);
+}
+
+// -- time --------------------------------------------------------------------
+
+TEST(timestamp - now) {
+  timestamp ts;
+  CHECK(parsers::timestamp("now", ts));
+  CHECK(ts > timestamp::min()); // must be greater than the UNIX epoch
+}
+
+TEST(timestamp - YMD) {
+  using namespace std::chrono;
+  timestamp ts;
+  CHECK(parsers::timestamp("2017-08-13", ts));
+  auto utc_secs = seconds{1502582400};
+  CHECK_EQUAL(ts.time_since_epoch(), utc_secs);
+  CHECK(parsers::timestamp("2017-08-13+21:10:42", ts));
+  utc_secs = std::chrono::seconds{1502658642};
+  CHECK_EQUAL(ts.time_since_epoch(), utc_secs);
 }
 
 // -- API ---------------------------------------------------------------------

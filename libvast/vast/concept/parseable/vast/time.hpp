@@ -5,6 +5,8 @@
 #include <ctime>
 #include <cstring>
 
+#include <date.h>
+
 #include "vast/access.hpp"
 #include "vast/time.hpp"
 #include "vast/concept/parseable/core.hpp"
@@ -96,12 +98,12 @@ struct ymdhms_parser : vast::parser<ymdhms_parser> {
   using attribute = timestamp;
 
   static auto make() {
+    using namespace std::chrono;
+    using namespace date;
     auto year = integral_parser<int, 4, 4>{}
-                  .with([](auto x) { return x >= 1900; })
-                  ->* [](int y) { return y - 1900; };
+                  .with([](auto x) { return x >= 1900; });
     auto mon = integral_parser<int, 2, 2>{}
-                 .with([](auto x) { return x >= 1 && x <= 12; })
-                  ->* [](int m) { return m - 1; };
+                 .with([](auto x) { return x >= 1 && x <= 12; });
     auto day = integral_parser<int, 2, 2>{}
                  .with([](auto x) { return x >= 1 && x <= 31; });
     auto hour = integral_parser<int, 2, 2>{}
@@ -109,7 +111,7 @@ struct ymdhms_parser : vast::parser<ymdhms_parser> {
     auto min = integral_parser<int, 2, 2>{}
                  .with([](auto x) { return x >= 0 && x <= 59; });
     auto sec = integral_parser<int, 2, 2>{}
-                 .with([](auto x) { return x >= 0 && x <= 60; }); // leap sec
+                 .with([](auto x) { return x >= 0 && x <= 60; });
     return year >> '-' >> mon
         >> ~('-' >> day >> ~('+' >> hour >> ~(':' >> min >> ~(':' >> sec))));
   }
@@ -122,26 +124,24 @@ struct ymdhms_parser : vast::parser<ymdhms_parser> {
 
   template <typename Iterator>
   bool parse(Iterator& f, Iterator const& l, timestamp& tp) const {
+    using namespace std::chrono;
+    using namespace date;
+    auto secs = 0;
+    auto mins = 0;
+    auto hrs = 0;
+    auto dys = 0;
+    auto mons = 0;
+    auto yrs = 0;
+    // Compose to match parser attribute.
+    auto ms = std::tie(mins, secs);
+    auto hms = std::tie(hrs, ms);
+    auto dhms = std::tie(dys, hms);
     static auto p = make();
-    std::tm tm;
-    std::memset(&tm, 0, sizeof(tm));
-    tm.tm_mday = 1;
-    auto ms = std::tie(tm.tm_min, tm.tm_sec);
-    auto hms = std::tie(tm.tm_hour, ms);
-    auto dhms = std::tie(tm.tm_mday, hms);
-    if (!p(f, l, tm.tm_year, tm.tm_mon, dhms))
+    if (!p(f, l, yrs, mons, dhms))
       return false;
-// TODO
-//    if (!time_zone_set) {
-//      std::lock_guard<std::mutex> lock{time_zone_mutex};
-//      if (::setenv("TZ", "GMT", 1))
-//        die("could not set timzone variable");
-//      time_zone_set = true;
-//    }
-    auto t = std::mktime(&tm);
-    if (t == -1)
-      return false;
-    tp = std::chrono::system_clock::from_time_t(t);
+    sys_days ymd = year{yrs} / mons / dys;
+    auto delta = hours{hrs} + minutes{mins} + seconds{secs};
+    tp = timestamp{ymd} + delta;
     return true;
   }
 };
