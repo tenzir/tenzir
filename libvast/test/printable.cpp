@@ -259,13 +259,18 @@ TEST(not) {
 // -- std::chrono -------------------------------------------------------------
 
 TEST(std::chrono) {
+  using namespace date;
   using namespace std::chrono;
-  auto ns = nanoseconds(15);
-  CHECK_EQUAL(to_string(ns), "+15ns");
-  auto us = microseconds(42);
-  CHECK_EQUAL(to_string(us), "+42us");
-  auto ms = milliseconds(-7);
-  CHECK_EQUAL(to_string(ms), "-7ms");
+  CHECK_EQUAL(to_string(nanoseconds(15)), "15.0ns");
+  CHECK_EQUAL(to_string(nanoseconds(15'450)), "15.45us");
+  CHECK_EQUAL(to_string(microseconds(42)), "42.0us");
+  CHECK_EQUAL(to_string(microseconds(42'123)), "42.12ms");
+  CHECK_EQUAL(to_string(milliseconds(-7)), "-7.0ms");
+  CHECK_EQUAL(to_string(seconds(59)), "59.0s");
+  CHECK_EQUAL(to_string(seconds(60)), "1.0m");
+  CHECK_EQUAL(to_string(seconds(-90)), "-1.5m");
+  CHECK_EQUAL(to_string(seconds(390)), "6.5m");
+  CHECK_EQUAL(to_string(days(-100)), "-100.0d");
 }
 
 // -- API ---------------------------------------------------------------------

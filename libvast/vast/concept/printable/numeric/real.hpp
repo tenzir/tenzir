@@ -51,6 +51,12 @@ namespace printers {
 
 auto const fp = real_printer<float>{};
 auto const real = real_printer<double>{};
+auto const real1 = real_printer<double, 1>{};
+auto const real2 = real_printer<double, 2>{};
+auto const real3 = real_printer<double, 3>{};
+auto const real4 = real_printer<double, 4>{};
+auto const real5 = real_printer<double, 5>{};
+auto const real6 = real_printer<double, 6>{};
 
 } // namespace printers
 } // namespace vast
