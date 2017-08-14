@@ -1,6 +1,6 @@
 #include <sstream>
 
-#include "vast/date.hpp"
+#include <date.h>
 
 #define SUITE date
 #include "test.hpp"
@@ -8,9 +8,9 @@
 // These are just very rough functionality tests, no need duplicate Howard's
 // test suite in detail.
 
-using namespace vast;
-using namespace vast::date;
 using namespace std::chrono;
+using namespace date;
+using namespace vast;
 
 // Quick hack until we have added a to_string overload for streamable types.
 template <class T>

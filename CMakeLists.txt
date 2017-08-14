@@ -351,14 +351,15 @@ endif ()
 # make configure
 add_custom_target(configure COMMAND ${CMAKE_CURRENT_BINARY_DIR}/config.status)
 
-include_directories(BEFORE ${CMAKE_CURRENT_BINARY_DIR})
-include_directories(BEFORE ${CMAKE_SOURCE_DIR}/aux)
-
 set(EXECUTABLE_OUTPUT_PATH ${CMAKE_CURRENT_BINARY_DIR}/bin
   CACHE PATH "Single directory for all executables")
 
 set (LIBRARY_OUTPUT_PATH ${CMAKE_CURRENT_BINARY_DIR}/lib CACHE
   PATH "Single directory for all libraries")
+
+include_directories(BEFORE ${CMAKE_CURRENT_BINARY_DIR})
+include_directories(BEFORE ${CMAKE_SOURCE_DIR}/aux)
+include_directories(BEFORE ${CMAKE_SOURCE_DIR}/aux/date)
 
 add_subdirectory(aux)
 add_subdirectory(doc)
