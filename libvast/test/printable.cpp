@@ -293,8 +293,8 @@ TEST(std::chrono::time_point) {
   using namespace std::chrono;
   auto ts = system_clock::time_point{seconds{0}};
   CHECK_EQUAL(to_string(ts), "1970-01-01+00:00:00.0");
-  ts = system_clock::time_point{milliseconds{1502658642123}};
-  CHECK_EQUAL(to_string(ts), "2017-08-13+21:10:42.123000");
+  ts = system_clock::time_point{microseconds{1502658642123456}};
+  CHECK_EQUAL(to_string(ts), "2017-08-13+21:10:42.123");
 }
 
 

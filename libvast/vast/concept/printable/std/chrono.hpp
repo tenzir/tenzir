@@ -89,6 +89,7 @@ struct time_point_printer : printer<time_point_printer<Clock, Duration>> {
     auto sd = floor<days>(tp);
     auto ymd = year_month_day{sd};
     auto t = make_time(tp - sd);
+    auto sub_secs = duration_cast<milliseconds>(t.subseconds());
     return p(out,
              static_cast<int>(ymd.year()),
              static_cast<unsigned>(ymd.month()),
@@ -96,7 +97,7 @@ struct time_point_printer : printer<time_point_printer<Clock, Duration>> {
              static_cast<int>(t.hours().count()),
              static_cast<int>(t.minutes().count()),
              static_cast<int>(t.seconds().count()),
-             static_cast<int>(t.subseconds().count()));
+             static_cast<int>(sub_secs.count()));
   }
 };
 

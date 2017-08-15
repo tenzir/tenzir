@@ -15,11 +15,11 @@ FIXTURE_SCOPE(ascii_tests, fixtures::events)
 
 namespace {
 
-auto last_bro_http_log_line = R"__(bro::http [19481|2009-11-19+07:56:02.396400896] [2009-11-19+07:56:02.396400896, "aRcY4DjxcQ5", [192.168.1.103, 1232/?, 87.106.12.47, 80/?], 1, "POST", "87.106.12.47", "/rpc.html?e=bl", nil, "SCSDK-6.0.0", 992, 96, 200, "OK", nil, nil, nil, {}, nil, nil, nil, "application/octet-stream", nil, nil])__";
+auto last_bro_http_log_line = R"__(bro::http [19481|2009-11-19+07:56:02.396] [2009-11-19+07:56:02.396, "aRcY4DjxcQ5", [192.168.1.103, 1232/?, 87.106.12.47, 80/?], 1, "POST", "87.106.12.47", "/rpc.html?e=bl", nil, "SCSDK-6.0.0", 992, 96, 200, "OK", nil, nil, nil, {}, nil, nil, nil, "application/octet-stream", nil, nil])__";
 
 auto first_csv_http_log_line = "type,id,timestamp,ts,uid,id.orig_h,id.orig_p,id.resp_h,id.resp_p,trans_depth,method,host,uri,referrer,user_agent,request_body_len,response_body_len,status_code,status_msg,info_code,info_msg,filename,tags,username,password,proxied,mime_type,md5,extraction_file";
 
-auto last_csv_http_log_line = R"__(bro::http,19481,1258617362396400896,2009-11-19+07:56:02.396400896,"aRcY4DjxcQ5",192.168.1.103,1232/?,87.106.12.47,80/?,1,"POST","87.106.12.47","/rpc.html?e=bl",,"SCSDK-6.0.0",992,96,200,"OK",,,,"",,,,"application/octet-stream",,)__";
+auto last_csv_http_log_line = R"__(bro::http,19481,1258617362396400896,2009-11-19+07:56:02.396,"aRcY4DjxcQ5",192.168.1.103,1232/?,87.106.12.47,80/?,1,"POST","87.106.12.47","/rpc.html?e=bl",,"SCSDK-6.0.0",992,96,200,"OK",,,,"",,,,"application/octet-stream",,)__";
 
 auto first_ascii_bgpdump_txt_line = R"__(bgpdump::state_change [19482|2014-08-21+00:00:14.0] [2014-08-21+00:00:14.0, 2a02:20c8:1f:1::4, 50304, "3", "2"])__";
 
