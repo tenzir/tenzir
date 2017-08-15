@@ -18,13 +18,18 @@ using namespace std::string_literals;
 // -- numeric -----------------------------------------------------------------
 
 TEST(signed integers) {
+  MESSAGE("no sign");
   auto i = 42;
   std::string str;
   CHECK(printers::integral<int>(str, i));
-  CHECK_EQUAL(str, "+42");
-
-  int8_t j = -42;
+  CHECK_EQUAL(str, "42");
+  MESSAGE("forced sign");
   str.clear();
+  CHECK(printers::integral<int, policy::force_sign>(str, i));
+  CHECK_EQUAL(str, "+42");
+  MESSAGE("negative sign");
+  str.clear();
+  int8_t j = -42;
   CHECK(printers::i8(str, j));
   CHECK_EQUAL(str, "-42");
 }
@@ -34,6 +39,17 @@ TEST(unsigned integers) {
   std::string str;
   CHECK(printers::integral<unsigned>(str, i));
   CHECK_EQUAL(str, "42");
+}
+
+TEST(integral minimum digits) {
+  std::string str;
+  auto i = 0;
+  CHECK(printers::integral<int, policy::plain, 5>(str, i));
+  CHECK_EQUAL(str, "00000");
+  str.clear();
+  i = 42;
+  CHECK(printers::integral<int, policy::force_sign, 4>(str, i));
+  CHECK_EQUAL(str, "+0042");
 }
 
 TEST(floating point) {
@@ -141,7 +157,7 @@ TEST(choice) {
   str.clear();
   x = int64_t{64};
   CHECK(p(str, x));
-  CHECK_EQUAL(str, "+64");
+  CHECK_EQUAL(str, "64");
 }
 
 TEST(kleene) {
@@ -171,11 +187,11 @@ TEST(list) {
   auto p = printers::integral<int> % ' ';
   std::string str;
   CHECK(p(str, xs));
-  CHECK_EQUAL(str, "+1 +2 +4 +8");
+  CHECK_EQUAL(str, "1 2 4 8");
   xs.resize(1);
   str.clear();
   CHECK(p(str, xs));
-  CHECK_EQUAL(str, "+1");
+  CHECK_EQUAL(str, "1");
   xs.clear();
   CHECK(!p(str, xs)); // need at least one element
 }
@@ -188,7 +204,7 @@ TEST(optional) {
   CHECK(str.empty()); // nothing to see here, move along
   x = 42;
   CHECK(p(str, x));
-  CHECK_EQUAL(str, "+42");
+  CHECK_EQUAL(str, "42");
 }
 
 TEST(action) {
@@ -198,22 +214,22 @@ TEST(action) {
   std::string str;
   CHECK(p0(str, 42));
   CHECK(flag);
-  CHECK_EQUAL(str, "+42");
+  CHECK_EQUAL(str, "42");
   // one arg, void result type
   auto p1 = printers::integral<int> ->* [&](int i) { flag = i % 2 == 0; };
   str.clear();
   CHECK(p1(str, 8));
-  CHECK_EQUAL(str, "+8");
+  CHECK_EQUAL(str, "8");
   // no args, non-void result type
   auto p2 = printers::integral<int> ->* [] { return 42; };
   str.clear();
   CHECK(p2(str, 7));
-  CHECK_EQUAL(str, "+42");
+  CHECK_EQUAL(str, "42");
   // one arg, non-void result type
   auto p3 = printers::integral<int> ->* [](int i) { return ++i; };
   str.clear();
   CHECK(p3(str, 41));
-  CHECK_EQUAL(str, "+42");
+  CHECK_EQUAL(str, "42");
 }
 
 TEST(epsilon) {
@@ -230,7 +246,7 @@ TEST(guard) {
   CHECK(!even(str, 41));
   CHECK(str.empty());
   CHECK(even(str, 42));
-  CHECK_EQUAL(str, "+42");
+  CHECK_EQUAL(str, "42");
 }
 
 TEST(and) {
@@ -280,7 +296,7 @@ TEST(stream) {
   std::ostringstream ss;
   auto x = nanoseconds(42);
   ss << x;
-  CHECK_EQUAL(ss.str(), "+42ns");
+  CHECK_EQUAL(ss.str(), "42.0ns");
 }
 
 TEST(to) {

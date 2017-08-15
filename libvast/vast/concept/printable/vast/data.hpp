@@ -27,7 +27,11 @@ struct data_printer : printer<data_printer> {
 
     template <typename T>
     bool operator()(T const& x) const {
-      return make_printer<T>{}.print(out_, x);
+      return make_printer<T>{}(out_, x);
+    }
+
+    bool operator()(integer x) const {
+      return printers::integral<integer, policy::force_sign>(out_, x);
     }
 
     bool operator()(std::string const& str) const {
@@ -37,7 +41,7 @@ struct data_printer : printer<data_printer> {
         return detail::byte_escape(x, "\"");
       };
       auto p = '"' << escaped << '"';
-      return p.print(out_, str);
+      return p(out_, str);
     }
 
     Iterator& out_;

@@ -1,6 +1,7 @@
 #ifndef VAST_CONCEPT_PRINTABLE_NUMERIC_INTEGRAL_HPP
 #define VAST_CONCEPT_PRINTABLE_NUMERIC_INTEGRAL_HPP
 
+#include <cmath>
 #include <cstdint>
 #include <type_traits>
 
@@ -8,33 +9,54 @@
 #include "vast/concept/printable/core/printer.hpp"
 
 namespace vast {
+namespace policy {
 
-template <typename T>
-struct integral_printer : printer<integral_printer<T>> {
+/// Only display a `-` sign when the number is negative.
+struct plain;
+
+/// In addition to displaying a `-` sign for negative numbers, also display a
+/// `+` sign for positive numbers.
+struct force_sign;
+
+} // namespace policy
+
+template <
+  typename T,
+  typename Policy = policy::plain,
+  int MinDigits = 0
+>
+struct integral_printer : printer<integral_printer<T, Policy, MinDigits>> {
   static_assert(std::is_integral<T>{}, "T must be an integral type");
 
   using attribute = T;
 
+  template <typename Iterator, typename U>
+  static void pad(Iterator& out, U x) {
+    if (MinDigits > 0) {
+      int magnitude = x == 0 ? 0 : std::log10(x < 0 ? -x : x);
+      for (auto i = 1; i < MinDigits - magnitude; ++i)
+        *out++ = '0';
+    }
+  }
+
   template <typename Iterator, typename U = T>
-  static auto dispatch(Iterator& out, T x)
-    -> std::enable_if_t<std::is_unsigned<U>{}, bool> {
+  auto print(Iterator& out, U x) const
+  -> std::enable_if_t<std::is_unsigned<U>{}, bool> {
+    pad(out, x);
     return detail::print_numeric(out, x);
   }
 
   template <typename Iterator, typename U = T>
-  static auto dispatch(Iterator& out, T x)
-    -> std::enable_if_t<std::is_signed<U>{}, bool> {
+  auto print(Iterator& out, U x) const
+  -> std::enable_if_t<std::is_signed<U>{}, bool> {
     if (x < 0) {
       *out++ = '-';
-      return detail::print_numeric(out, -x);
+      x = -x;
+    } else if (std::is_same<Policy, policy::force_sign>::value) {
+      *out++ = '+';
     }
-    *out++ = '+';
+    pad(out, x);
     return detail::print_numeric(out, x);
-  }
-
-  template <typename Iterator>
-  bool print(Iterator& out, T x) const {
-    return dispatch(out, x);
   }
 };
 
@@ -47,12 +69,17 @@ namespace printers {
 
 // GCC 7.1 complains about this version
 //
-//     template <typename T>
-//     auto const integral = integral_printer<T>{};
+//     template <class T, Policy = ...>
+//     auto const integral = integral_printer<T, Policy>{};
 //
 // but for some reason doesn't care if we "rewrite" it as follows. (#132)
-template <typename T>
-const integral_printer<T> integral = integral_printer<T>{};
+template <
+  typename T,
+  typename Policy = policy::plain,
+  int MinDigits = 0
+>
+const integral_printer<T, Policy, MinDigits> integral =
+  integral_printer<T, Policy, MinDigits>{};
 
 auto const i8 = integral_printer<int8_t>{};
 auto const i16 = integral_printer<int16_t>{};
