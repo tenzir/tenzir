@@ -73,18 +73,31 @@ struct duration_printer : printer<duration_printer<Rep, Period, Policy>> {
 };
 
 template <class Clock, class Duration>
-class time_point_printer : printer<time_point_printer<Clock, Duration>> {
-public:
+struct time_point_printer : printer<time_point_printer<Clock, Duration>> {
   using attribute = std::chrono::time_point<Clock, Duration>;
 
   template <typename Iterator>
   bool print(Iterator& out, std::chrono::time_point<Clock, Duration> tp) const {
-    // TODO: use Howard's timezone extensions for this. 
-    return make_printer<Duration>{}(out, tp.time_since_epoch());
+    using namespace std::chrono;
+    using namespace date;
+    auto num = printers::integral<int>;
+    auto num2 = printers::integral<int, policy::plain, 2>;
+    auto unum2 = printers::integral<unsigned, policy::plain, 2>;
+    auto p = num << '-' << unum2 << '-' << unum2
+                 << '+' << num2 << ':' << num2 << ':' << num2
+                 << '.' << num;
+    auto sd = floor<days>(tp);
+    auto ymd = year_month_day{sd};
+    auto t = make_time(tp - sd);
+    return p(out,
+             static_cast<int>(ymd.year()),
+             static_cast<unsigned>(ymd.month()),
+             static_cast<unsigned>(ymd.day()),
+             static_cast<int>(t.hours().count()),
+             static_cast<int>(t.minutes().count()),
+             static_cast<int>(t.seconds().count()),
+             static_cast<int>(t.subseconds().count()));
   }
-
-private:
-  char const* fmt_;
 };
 
 template <typename Rep, typename Period>
@@ -105,6 +118,9 @@ const auto duration = duration_printer<
   typename Duration::period,
   Policy
 >{};
+
+template <class Clock, class Duration = typename Clock::duration>
+const auto time_point = time_point_printer<Clock, Duration>{};
 
 } // namespace printers
 } // namespace vast

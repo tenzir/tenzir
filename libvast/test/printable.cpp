@@ -274,7 +274,7 @@ TEST(not) {
 
 // -- std::chrono -------------------------------------------------------------
 
-TEST(std::chrono) {
+TEST(std::chrono::duration) {
   using namespace date;
   using namespace std::chrono;
   CHECK_EQUAL(to_string(nanoseconds(15)), "15.0ns");
@@ -288,6 +288,15 @@ TEST(std::chrono) {
   CHECK_EQUAL(to_string(seconds(390)), "6.5m");
   CHECK_EQUAL(to_string(days(-100)), "-100.0d");
 }
+
+TEST(std::chrono::time_point) {
+  using namespace std::chrono;
+  auto ts = system_clock::time_point{seconds{0}};
+  CHECK_EQUAL(to_string(ts), "1970-01-01+00:00:00.0");
+  ts = system_clock::time_point{milliseconds{1502658642123}};
+  CHECK_EQUAL(to_string(ts), "2017-08-13+21:10:42.123000");
+}
+
 
 // -- API ---------------------------------------------------------------------
 
