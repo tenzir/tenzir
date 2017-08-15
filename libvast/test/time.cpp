@@ -1,3 +1,5 @@
+#include <date.h>
+
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/time.hpp"
 #include "vast/concept/printable/std/chrono.hpp"
@@ -9,15 +11,7 @@
 
 using namespace vast;
 using namespace std::chrono;
-
-TEST(printable) {
-  CHECK_EQUAL(to_string(nanoseconds(42)), "+42ns");
-  CHECK_EQUAL(to_string(microseconds(42)), "+42us");
-  CHECK_EQUAL(to_string(milliseconds(42)), "+42ms");
-  CHECK_EQUAL(to_string(seconds(42)), "+42s");
-  CHECK_EQUAL(to_string(minutes(42)), "+42min");
-  CHECK_EQUAL(to_string(hours(42)), "+42h");
-}
+using namespace date;
 
 TEST(parseable) {
   timespan sp;
@@ -68,22 +62,46 @@ TEST(parseable) {
 // CHECK(parsers::timespan("5m99s", sp));
 // CHECK(sp.count() == 399000000000ll);
   timestamp ts;
-// FIXME
   MESSAGE("YYYY-MM-DD+HH:MM:SS");
   CHECK(parsers::timestamp("2012-08-12+23:55:04", ts));
-//  CHECK(ts == point::utc(2012, 8, 12, 23, 55, 4));
+  auto sd = floor<days>(ts);
+  auto t = make_time(ts - sd);
+  CHECK(sd == 2012_y/8/12);
+  CHECK(t.hours() == hours{23});
+  CHECK(t.minutes() == minutes{55});
+  CHECK(t.seconds() == seconds{4});
   MESSAGE("YYYY-MM-DD+HH:MM");
   CHECK(parsers::timestamp("2012-08-12+23:55", ts));
-//  CHECK(ts == point::utc(2012, 8, 12, 23, 55));
+  sd = floor<days>(ts);
+  t = make_time(ts - sd);
+  CHECK(sd == 2012_y/8/12);
+  CHECK(t.hours() == hours{23});
+  CHECK(t.minutes() == minutes{55});
+  CHECK(t.seconds() == seconds{0});
   MESSAGE("YYYY-MM-DD+HH");
   CHECK(parsers::timestamp("2012-08-12+23", ts));
-//  CHECK(ts == point::utc(2012, 8, 12, 23));
+  sd = floor<days>(ts);
+  t = make_time(ts - sd);
+  CHECK(sd == 2012_y/8/12);
+  CHECK(t.hours() == hours{23});
+  CHECK(t.minutes() == minutes{0});
+  CHECK(t.seconds() == seconds{0});
   MESSAGE("YYYY-MM-DD");
   CHECK(parsers::timestamp("2012-08-12", ts));
-//  CHECK(ts == point::utc(2012, 8, 12));
+  sd = floor<days>(ts);
+  t = make_time(ts - sd);
+  CHECK(sd == 2012_y/8/12);
+  CHECK(t.hours() == hours{0});
+  CHECK(t.minutes() == minutes{0});
+  CHECK(t.seconds() == seconds{0});
   MESSAGE("YYYY-MM");
   CHECK(parsers::timestamp("2012-08", ts));
-//  CHECK(ts == point::utc(2012, 8));
+  sd = floor<days>(ts);
+  t = make_time(ts - sd);
+  CHECK(sd == 2012_y/8/1);
+  CHECK(t.hours() == hours{0});
+  CHECK(t.minutes() == minutes{0});
+  CHECK(t.seconds() == seconds{0});
   MESSAGE("UNIX epoch");
   CHECK(parsers::timestamp("@1444040673", ts));
   CHECK(ts.time_since_epoch() == seconds{1444040673});

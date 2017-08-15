@@ -129,8 +129,8 @@ struct ymdhms_parser : vast::parser<ymdhms_parser> {
     auto secs = 0;
     auto mins = 0;
     auto hrs = 0;
-    auto dys = 0;
-    auto mons = 0;
+    auto dys = 1;
+    auto mons = 1;
     auto yrs = 0;
     // Compose to match parser attribute.
     auto ms = std::tie(mins, secs);
