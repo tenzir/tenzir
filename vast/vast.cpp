@@ -62,7 +62,7 @@ int run_import(scoped_actor& self, actor& node, message args) {
   // Connect source to importers.
   self->request(node, infinite, get_atom::value).receive(
     [&](const std::string& id, system::registry& reg) {
-      auto er = reg[id].equal_range("importer");
+      auto er = reg.components[id].equal_range("importer");
       if (er.first == er.second) {
         VAST_ERROR("no importers available at node", id);
         stop = true;

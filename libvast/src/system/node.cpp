@@ -71,7 +71,7 @@ void show(node_ptr self, message /* args */) {
   self->request(self->state.tracker, infinite, get_atom::value).then(
     [=](const registry& reg) mutable {
       json::object result;
-      for (auto& peer : reg) {
+      for (auto& peer : reg.components) {
         json::array xs;
         for (auto& pair : peer.second)
           xs.push_back(pair.second.label);
@@ -104,7 +104,8 @@ void spawn(node_ptr self, message args) {
     {"sink", bind(spawn_sink)},
     {"profiler", bind(spawn_profiler)}
   };
-  // Split arguments into two halves at the command.
+  // Split arguments into two halves at the command: the first half pertains to
+  // "spawn" and the second half the command.
   factory_function fun;
   std::string component;
   size_t i;
@@ -133,11 +134,12 @@ void spawn(node_ptr self, message args) {
   }
   if (!r.error.empty())
     rp.deliver(make_error(ec::syntax_error, std::move(r.error)));
-  // Check if we can spawn more than one instance of the given component.
+  // Register the component.
   self->request(self->state.tracker, infinite, get_atom::value).then(
     [=](registry& reg) mutable {
-      VAST_ASSERT(reg.count(self->state.name) > 0);
-      auto& local = reg[self->state.name];
+      VAST_ASSERT(reg.components.count(self->state.name) > 0);
+      auto& local = reg.components[self->state.name];
+      // Check if we can spawn more than one instance of the given component.
       for (auto c : {"metastore", "archive", "index", "profiler"})
         if (c == component && local.count(component) > 0) {
           rp.deliver(make_error(ec::unspecified, "component already exists"));
@@ -192,7 +194,7 @@ void kill(node_ptr self, message args) {
   self->request(self->state.tracker, infinite, get_atom::value).then(
     [=](registry& reg) mutable {
       auto& label = args.get_as<std::string>(0);
-      auto& local = reg[self->state.name];
+      auto& local = reg.components[self->state.name];
       auto i = std::find_if(local.begin(), local.end(),
                             [&](auto& p) { return p.second.label == label; });
       if (i == local.end()) {
@@ -220,7 +222,7 @@ void send(node_ptr self, message args) {
   self->request(self->state.tracker, infinite, get_atom::value).then(
     [=](registry& reg) mutable {
       auto& label = args.get_as<std::string>(0);
-      auto& local = reg[self->state.name];
+      auto& local = reg.components[self->state.name];
       auto i = std::find_if(local.begin(), local.end(),
                             [&](auto& p) { return p.second.label == label; });
       if (i == local.end()) {

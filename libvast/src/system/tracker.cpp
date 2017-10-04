@@ -17,21 +17,24 @@ namespace system {
 
 tracker_type::behavior_type
 tracker(tracker_type::stateful_pointer<tracker_state> self, std::string node) {
-  self->state.components[node].emplace("tracker",
-                                       component_state{actor_cast<actor>(self),
-                                                       "tracker"});
-  //auto qualify = [=](auto str) {
-  //  auto split = detail::split_to_str(str, "@");
-  //  return split[0] + '@' + (split.size() == 1 ? node : split[1]);
-  //};
+  self->state.registry.components[node].emplace(
+    "tracker", component_state{actor_cast<actor>(self), "tracker"});
+  auto extract_name_from_label = [=](auto&& label) {
+    auto split = detail::split_to_str(label, "@");
+    return split.size() == 1 ? node : split[1];
+  };
+  auto qualify_label = [=](auto&& label) {
+    auto split = detail::split_to_str(label, "@");
+    return split[0] + '@' + (split.size() == 1 ? node : split[1]);
+  };
   self->set_down_handler(
     [=](const down_msg& msg) {
       auto pred = [&](auto& p) { return p.second.actor == msg.source; };
-      for (auto& peer : self->state.components) {
+      for (auto& peer : self->state.registry.components) {
         auto i = std::find_if(peer.second.begin(), peer.second.end(), pred);
         if (i != peer.second.end()) {
           if (i->first == "tracker")
-            self->state.components.erase(peer.first);
+            self->state.registry.components.erase(peer.first);
           else
             peer.second.erase(i);
           return;
@@ -47,7 +50,8 @@ tracker(tracker_type::stateful_pointer<tracker_state> self, std::string node) {
       // nesting.
       self->set_exit_handler({});
       self->spawn(
-        [=, parent=actor_cast<actor>(self), local=self->state.components[node]]
+        [=, parent=actor_cast<actor>(self),
+         local=self->state.registry.components[node]]
         (blocking_actor* terminator) mutable {
           auto shutdown = [&](auto key) {
             auto er = local.equal_range(key);
@@ -82,7 +86,7 @@ tracker(tracker_type::stateful_pointer<tracker_state> self, std::string node) {
       VAST_DEBUG(self, "got new", type, '(' << label << ')');
       // Save new component.
       self->monitor(component);
-      auto& local = self->state.components[node];
+      auto& local = self->state.registry.components[node];
       local.emplace(type, component_state{component, label});
       // Wire it to existing components.
       auto actors = [&](auto key) {
@@ -116,62 +120,63 @@ tracker(tracker_type::stateful_pointer<tracker_state> self, std::string node) {
           self->anon_send(a, sink_atom::value, component);
       }
       // Propagate new component to peer.
-      auto msg = make_message(state_atom::value, node, type, component, label);
-      for (auto& peer : self->state.components) {
+      auto msg = make_message(put_atom::value, node, type, component, label);
+      for (auto& peer : self->state.registry.components) {
         auto& t = peer.second.find("tracker")->second.actor;
         if (t != self)
           self->anon_send(t, msg);
       }
       return ok_atom::value;
     },
+    [=](put_atom, const std::string& name, const std::string& type,
+        const actor& component, const std::string& label) {
+      VAST_DEBUG(self, "got PUT from peer", name, "for", type);
+      auto& components = self->state.registry.components[name];
+      components.emplace(type, component_state{component, label});
+      self->monitor(component);
+    },
     [=](get_atom) -> result<registry> {
-      return self->state.components;
+      return self->state.registry;
     },
     [=](peer_atom, const actor& peer, const std::string& peer_name)
     -> typed_response_promise<state_atom, registry> {
       auto rp = self->make_response_promise<state_atom, registry>();
-      if (self->state.components.count(peer_name) > 0) {
+      if (self->state.registry.components.count(peer_name) > 0) {
         VAST_ERROR(self, "peer name already exists", peer_name);
         return rp.deliver(make_error(ec::unspecified, "duplicate node name"));
       }
       VAST_DEBUG(self, "shipping state to new peer", peer_name);
-      rp.delegate(peer, state_atom::value, self->state.components);
+      rp.delegate(peer, state_atom::value, self->state.registry);
       return rp;
     },
-    [=](state_atom, registry& components) -> result<ok_atom> {
-      VAST_DEBUG(self, "got state for", components.size(), "peers");
-      for (auto& peer : components)
+    [=](state_atom, registry& reg) -> result<ok_atom> {
+      VAST_DEBUG(self, "got state for", reg.components.size(), "peers");
+      // Monitor all remote components.
+      for (auto& peer : reg.components)
         for (auto& pair : peer.second)
           self->monitor(pair.second.actor);
       // Incorporate new state from peer.
-      std::move(components.begin(), components.end(),
-                std::inserter(self->state.components,
-                              self->state.components.end()));
+      std::move(reg.components.begin(), reg.components.end(),
+                std::inserter(self->state.registry.components,
+                              self->state.registry.components.end()));
       // Broadcast our own state to all peers, without expecting a reply.
-      auto i = self->state.components.find(node);
-      VAST_ASSERT(i != self->state.components.end());
-      for (auto& peer : self->state.components) {
+      auto i = self->state.registry.components.find(node);
+      VAST_ASSERT(i != self->state.registry.components.end());
+      for (auto& peer : self->state.registry.components) {
         auto& t = peer.second.find("tracker")->second.actor;
         if (t != self)
           self->send(actor_cast<tracker_type>(t), state_atom::value,
-                     registry_entry{*i});
+                     component_map_entry{*i});
       }
       return ok_atom::value;
     },
-    [=](state_atom, registry_entry& entry) {
+    [=](state_atom, component_map_entry& entry) {
       VAST_DEBUG(self, "got components from new peer");
       for (auto& pair : entry.second)
         self->monitor(pair.second.actor);
-      auto result = self->state.components.insert(std::move(entry));
+      auto result = self->state.registry.components.insert(std::move(entry));
       VAST_ASSERT(result.second);
-    },
-    [=](state_atom, const std::string& name, const std::string& type,
-        const actor& component, const std::string& label) {
-      VAST_DEBUG(self, "got PUT from peer", name, "for", type);
-      auto& reg = self->state.components[name];
-      reg.emplace(type, component_state{component, label});
-      self->monitor(component);
-    },
+    }
   };
 }
 

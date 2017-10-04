@@ -54,7 +54,7 @@ struct node : actor_system_and_events {
     actor importer;
     self->request(test_node, infinite, get_atom::value).receive(
       [&](const std::string& id, system::registry& reg) {
-        auto er = reg[id].equal_range("importer");
+        auto er = reg.components[id].equal_range("importer");
         if (er.first == er.second)
           FAIL("no importers available at test node");
         importer = er.first->second.actor;

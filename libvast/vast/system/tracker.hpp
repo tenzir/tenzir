@@ -17,6 +17,7 @@
 namespace vast {
 namespace system {
 
+/// State maintained per component.
 struct component_state {
   caf::actor actor;
   std::string label;
@@ -27,31 +28,51 @@ auto inspect(Inspector& f, component_state& cs) {
   return f(cs.actor, cs.label);
 }
 
-using component_map = std::unordered_multimap<std::string, component_state>;
-using registry = std::unordered_map<std::string, component_map>;
-using registry_entry = std::pair<std::string, component_map>;
+/// Maps a component type ("archive", "index", etc.) to its state.
+using component_state_map = std::unordered_multimap<std::string, component_state>;
+
+/// Maps node names to component state.
+using component_map = std::unordered_map<std::string, component_state_map>;
+
+/// An entry of the `component_map`.
+using component_map_entry = std::pair<std::string, component_state_map>;
+
+/// The graph of connected components..
+//using link_map = std::unordered_multimap<caf::actor, caf::actor>;
+
+/// Tracker meta data: components and their links.
+struct registry {
+  component_map components;
+  //link_map links;
+};
+
+template <class Inspector>
+auto inspect(Inspector& f, registry& r) {
+  //return f(r.components, r.links);
+  return f(r.components);
+}
 
 struct tracker_state {
-  registry components;
+  vast::system::registry registry;
   const char* name = "tracker";
 };
 
 using tracker_type = caf::typed_actor<
-  // Add a component.
+  // Adds a component.
   caf::replies_to<put_atom, std::string, caf::actor, std::string>
     ::with<ok_atom>,
-  // Retrieves the component
+  // Propagated PUT received from peer.
+  caf::reacts_to<put_atom, std::string, std::string, caf::actor, std::string>,
+  // Retrieves the component registry.
   caf::replies_to<get_atom>::with<registry>,
-  // Connects two components identified by their name.
-  //caf::replies_to<connect_atom, std::string, std::string>::with<ok_atom>,
-  // Disconnects two connected components.
-  //caf::replies_to<disconnect_atom, std::string, std::string>::with<ok_atom>,
-  // Peering and state propagation.
+  // The peering between two trackers A and B comprises 3 messages:
+  // (1) B -> A: Respond to a peering request from new remote peer A.
   caf::replies_to<peer_atom, caf::actor, std::string>
     ::with<state_atom, registry>,
+  // (2) A -> B: Confirm peering handshake after receiving state.
   caf::replies_to<state_atom, registry>::with<ok_atom>,
-  caf::reacts_to<state_atom, registry_entry>,
-  caf::reacts_to<state_atom, std::string, std::string, caf::actor, std::string>
+  // (3) A -> B: Broadcast own state to peers
+  caf::reacts_to<state_atom, component_map_entry>
 >;
 
 /// Keeps track of the topology in a VAST deployment.
