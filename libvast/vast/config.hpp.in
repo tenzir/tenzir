@@ -8,6 +8,7 @@
 #cmakedefine VAST_HAVE_SNAPPY
 #cmakedefine VAST_USE_TCMALLOC
 #cmakedefine VAST_USE_OPENCL
+#cmakedefine VAST_USE_OPENSSL
 
 #include <caf/config.hpp>
 

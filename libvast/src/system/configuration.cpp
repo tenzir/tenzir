@@ -2,9 +2,11 @@
 
 #include <caf/message_builder.hpp>
 #include <caf/io/middleman.hpp>
-
 #ifdef VAST_USE_OPENCL
 #include <caf/opencl/manager.hpp>
+#endif
+#ifdef VAST_USE_OPENSSL
+#include <caf/openssl/manager.hpp>
 #endif
 
 #include "vast/batch.hpp"
@@ -86,6 +88,9 @@ configuration::configuration() {
 #ifdef VAST_USE_OPENCL
   load<opencl::manager>();
   add_message_type<std::vector<uint32_t>>("std::vector<uint32_t>");
+#endif
+#ifdef VAST_USE_OPENSSL
+  load<openssl::manager>();
 #endif
 }
 

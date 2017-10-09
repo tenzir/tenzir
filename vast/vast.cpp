@@ -16,6 +16,9 @@
 
 #include <caf/all.hpp>
 #include <caf/io/all.hpp>
+#ifdef VAST_USE_OPENSSL
+#include <caf/openssl/all.hpp>
+#endif
 
 #include "vast/banner.hpp"
 #include "vast/filesystem.hpp"
@@ -300,6 +303,8 @@ int main(int argc, char* argv[]) {
   // Start assembling the actor system configuration.
   system::configuration sys_cfg{caf_opts};
   sys_cfg.middleman_enable_automatic_connections = true;
+#ifdef VAST_USE_OPENSSL
+#endif
   // Parse options for the "start" command already here, because they determine
   // how to configure the logger.
   decltype(conf) start;
@@ -365,6 +370,11 @@ int main(int argc, char* argv[]) {
   }
   // Start or connect to a node.
   actor_system sys{sys_cfg};
+  auto use_encryption = !sys_cfg.openssl_certificate.empty()
+                        || !sys_cfg.openssl_key.empty()
+                        || !sys_cfg.openssl_passphrase.empty()
+                        || !sys_cfg.openssl_capath.empty()
+                        || !sys_cfg.openssl_cafile.empty();
   VAST_INFO(banner() << '\n');
   scoped_actor self{sys};
   actor node;
@@ -401,8 +411,18 @@ int main(int argc, char* argv[]) {
     if (node_endpoint.host.empty())
       node_endpoint.host = "127.0.0.1";
     VAST_INFO("connecting to", node_endpoint.host << ':' << node_endpoint.port);
-    auto& mm = sys.middleman();
-    auto a = mm.remote_actor(node_endpoint.host, node_endpoint.port);
+    auto remote_actor = [&] {
+      if (use_encryption)
+#ifdef VAST_USE_OPENSSL
+        return openssl::remote_actor(sys, node_endpoint.host,
+                                     node_endpoint.port);
+#else
+        return make_error(ec::unspecified, "not compiled with OpenSSL support");
+#endif
+      auto& mm = sys.middleman();
+      return mm.remote_actor(node_endpoint.host, node_endpoint.port);
+    };
+    auto a = remote_actor();
     if (!a) {
       VAST_ERROR("failed to connect:", sys.render(a.error()));
       return 1;
@@ -416,8 +436,17 @@ int main(int argc, char* argv[]) {
     // Publish the node.
     auto host =
       node_endpoint.host.empty() ? nullptr : node_endpoint.host.c_str();
-    auto& mm = self->system().middleman();
-    auto bound_port = mm.publish(node, node_endpoint.port, host);
+    auto publish = [&] {
+      if (use_encryption)
+#ifdef VAST_USE_OPENSSL
+        return openssl::publish(node, node_endpoint.port, host);
+#else
+        return make_error(ec::unspecified, "not compiled with OpenSSL support");
+#endif
+      auto& mm = self->system().middleman();
+      return mm.publish(node, node_endpoint.port, host);
+    };
+    auto bound_port = publish();
     if (!bound_port) {
       VAST_ERROR(self->system().render(bound_port.error()));
       self->send_exit(node, exit_reason::user_shutdown);

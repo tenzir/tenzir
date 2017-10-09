@@ -263,7 +263,7 @@ message(STATUS "Found CAF")
 set(CAF_FOUND_SAVE ${CAF_FOUND})
 include_directories(${CAF_INCLUDE_DIRS})
 # ...and then optional components.
-find_package(CAF COMPONENTS opencl QUIET)
+find_package(CAF COMPONENTS opencl openssl QUIET)
 if (CAF_LIBRARY_OPENCL)
   message(STATUS "Found CAF's OpenCL module, enabling OpenCL support")
   include_directories(${CAF_INCLUDE_DIR_OPENCL})
@@ -274,6 +274,11 @@ if (CAF_LIBRARY_OPENCL)
   endif ()
   include_directories(${OpenCL_INCLUDE_DIRS})
   set(VAST_USE_OPENCL true)
+endif ()
+if (CAF_LIBRARY_OPENSSL)
+  message(STATUS "Found CAF's OpenSSL module, enabling OpenSSL support")
+  include_directories(${CAF_INCLUDE_DIR_OPENSSL})
+  set(VAST_USE_OPENSSL true)
 endif ()
 set(CAF_FOUND ${CAF_FOUND_SAVE})
 
@@ -417,6 +422,7 @@ display(DOXYGEN_FOUND yes doxygen_summary)
 display(MD2MAN_FOUND yes md2man_summary)
 display(VAST_USE_TCMALLOC yes tcmalloc_summary)
 display(VAST_USE_OPENCL "${OpenCL_LIBRARIES}" opencl_summary)
+display(VAST_USE_OPENSSL yes openssl_summary)
 
 STRING(TOUPPER "${CMAKE_BUILD_TYPE}" build_type)
 set(summary
@@ -449,6 +455,7 @@ set(summary
     "\n"
     "\ntcmalloc:         ${tcmalloc_summary}"
     "\nOpenCL:           ${opencl_summary}"
+    "\nOpenSSL:          ${openssl_summary}"
     "\n"
     "\n===========================================================")
 
