@@ -145,7 +145,13 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
         // Construct a candidate checker if we don't have one for this type.
         if (is<none>(checker)) {
           auto x = tailor(expr, candidate.type());
-          VAST_ASSERT(x);
+          if (!x) {
+            VAST_ERROR(self, "failed to tailor expression:",
+                       self->system().render(x.error()));
+            ship_results(self);
+            self->send_exit(self, exit_reason::normal);
+            return;
+          }
           checker = std::move(*x);
           VAST_DEBUG(self, "tailored AST to", candidate.type() << ':', checker);
         }
