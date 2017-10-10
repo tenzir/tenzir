@@ -31,9 +31,9 @@
 // We did not mean to shout.
 
 #ifdef _WIN32
-   // Windows.h will be included directly and indirectly (e.g. by curl).
-   // We need to define these macros to prevent Windows.h bringing in
-   // more than we need and do it early so Windows.h doesn't get included
+   // windows.h will be included directly and indirectly (e.g. by curl).
+   // We need to define these macros to prevent windows.h bringing in
+   // more than we need and do it early so windows.h doesn't get included
    // without these macros having been defined.
    // min/max macros interfere with the C++ versions.
 #  ifndef NOMINMAX
@@ -80,11 +80,11 @@
 
 #  endif  // __MINGW32__
 
-#  include <Windows.h>
+#  include <windows.h>
 #endif  // _WIN32
 
-#include "tz_private.h"
-#include "ios.h"
+#include "date/tz_private.h"
+#include "date/ios.h"
 
 #if USE_OS_TZDB
 #  include <dirent.h>
@@ -93,6 +93,7 @@
 #include <cctype>
 #include <cstdlib>
 #include <cstring>
+#include <exception>
 #include <fstream>
 #include <iostream>
 #include <iterator>
@@ -107,7 +108,7 @@
 #include <sys/stat.h>
 
 // unistd.h is used on some platforms as part of the the means to get
-// the current time zone. On Win32 Windows.h provides a means to do it.
+// the current time zone. On Win32 windows.h provides a means to do it.
 // gcc/mingw supports unistd.h on Win32 but MSVC does not.
 
 #ifdef _WIN32
@@ -118,14 +119,16 @@
                         //   (see https://github.com/philsquared/Catch/issues/690)
 #  endif
 
-#  include <ShlObj.h> // CoTaskFree, ShGetKnownFolderPath etc.
+#  include <shlobj.h> // CoTaskFree, ShGetKnownFolderPath etc.
 #  if HAS_REMOTE_API
 #    include <direct.h> // _mkdir
-#    include <Shellapi.h> // ShFileOperation etc.
+#    include <shellapi.h> // ShFileOperation etc.
 #  endif  // HAS_REMOTE_API
 #else   // !_WIN32
 #  include <unistd.h>
-#  include <wordexp.h>
+#  if !USE_OS_TZDB
+#    include <wordexp.h>
+#  endif
 #  include <limits.h>
 #  include <string.h>
 #  if !USE_SHELL_API
@@ -142,7 +145,12 @@
 #if HAS_REMOTE_API
    // Note curl includes windows.h so we must include curl AFTER definitions of things
    // that effect windows.h such as NOMINMAX.
+#if defined(_MSC_VER) && defined(SHORTENED_CURL_INCLUDE)
+   // For rmt_curl nuget package
+#  include <curl.h>
+#else
 #  include <curl/curl.h>
+#endif
 #endif
 
 #ifdef _WIN32
@@ -182,7 +190,7 @@ get_known_folder(const GUID& folderid)
 {
     std::string folder;
     PWSTR pfolder = nullptr;
-    HRESULT hr = SHGetKnownFolderPath(folderid, KF_FLAG_DEFAULT, NULL, &pfolder);
+    HRESULT hr = SHGetKnownFolderPath(folderid, KF_FLAG_DEFAULT, nullptr, &pfolder);
     if (SUCCEEDED(hr))
     {
         co_task_mem_ptr folder_ptr(pfolder);
@@ -211,10 +219,11 @@ expand_path(std::string path)
     return date::iOSUtils::get_tzdata_path();
 #      else  // !TARGET_OS_IPHONE
     ::wordexp_t w{};
+    std::unique_ptr<::wordexp_t, void(*)(::wordexp_t*)> hold{&w, ::wordfree};
     ::wordexp(path.c_str(), &w, 0);
-    assert(w.we_wordc == 1);
+    if (w.we_wordc != 1)
+        throw std::runtime_error("Cannot expand path: " + path);
     path = w.we_wordv[0];
-    ::wordfree(&w);
     return path;
 #      endif  // !TARGET_OS_IPHONE
 }
@@ -246,7 +255,7 @@ static
 std::string&
 access_install()
 {
-    static std::string install 
+    static std::string install
 #ifndef INSTALL
 
     = get_download_folder() + folder_delimiter + "tzdata";
@@ -258,6 +267,8 @@ access_install()
 
     = STRINGIZE(INSTALL) + std::string(1, folder_delimiter) + "tzdata";
 
+    #undef STRINGIZEIMP
+    #undef STRINGIZE
 #endif  // !INSTALL
 
     return install;
@@ -303,7 +314,37 @@ CONSTCD14 const sys_seconds min_seconds = sys_days(min_year/min_day);
 #endif  // USE_OS_TZDB
 
 #ifndef _WIN32
-constexpr const char tz_dir[] = "/usr/share/zoneinfo";
+#  ifndef __APPLE__
+static const std::string tz_dir = "/usr/share/zoneinfo";
+#  else  // __APPLE__
+
+static
+std::string
+discover_tz_dir()
+{
+    struct stat sb;
+    CONSTDATA auto timezone = "/etc/localtime";
+    using namespace std;
+    if (!(lstat(timezone, &sb) == 0 && S_ISLNK(sb.st_mode) && sb.st_size > 0))
+        throw runtime_error("discover_tz_dir failed\n");
+    string result;
+    char rp[PATH_MAX];
+    if (realpath(timezone, rp))
+        result = string(rp);
+    else
+        throw system_error(errno, system_category(), "realpath() failed");
+    auto i = result.find("zoneinfo");
+    if (i == string::npos)
+        throw runtime_error("discover_tz_dir failed to find zoneinfo\n");
+    i = result.find('/', i);
+    if (i == string::npos)
+        throw runtime_error("discover_tz_dir failed to find '/'\n");
+    return result.substr(0, i);
+}
+
+static const std::string tz_dir = discover_tz_dir();
+
+#  endif  // __APPLE__
 #endif
 
 // +-------------------+
@@ -319,11 +360,11 @@ struct undocumented {explicit undocumented() = default;};
 static_assert(min_year <= max_year, "Configuration error");
 #endif
 
-static std::unique_ptr<TZ_DB> init_tzdb();
+static std::unique_ptr<tzdb> init_tzdb();
 
 tzdb_list::~tzdb_list()
 {
-    const TZ_DB* ptr = head_;
+    const tzdb* ptr = head_;
     head_ = nullptr;
     while (ptr != nullptr)
     {
@@ -339,7 +380,7 @@ tzdb_list::tzdb_list(tzdb_list&& x) noexcept
 }
 
 void
-tzdb_list::push_front(TZ_DB* tzdb) noexcept
+tzdb_list::push_front(tzdb* tzdb) noexcept
 {
     tzdb->next = head_;
     head_ = tzdb;
@@ -356,7 +397,7 @@ tzdb_list::erase_after(const_iterator p) noexcept
 
 struct tzdb_list::undocumented_helper
 {
-    static void push_front(tzdb_list& db_list, TZ_DB* tzdb) noexcept
+    static void push_front(tzdb_list& db_list, tzdb* tzdb) noexcept
     {
         db_list.push_front(tzdb);
     }
@@ -878,6 +919,8 @@ detail::operator>>(std::istream& is, MonthDayTime& x)
 {
     using namespace date;
     using namespace std::chrono;
+    assert(((std::ios::failbit | std::ios::badbit) & is.exceptions()) ==
+            (std::ios::failbit | std::ios::badbit));
     x = MonthDayTime{};
     if (!is.eof() && ws(is) && !is.eof() && is.peek() != '#')
     {
@@ -895,11 +938,11 @@ detail::operator>>(std::istream& is, MonthDayTime& x)
             else if (std::isalpha(is.peek()))
             {
                 auto dow = parse_dow(is);
-                char c;
+                char c{};
                 is >> c;
                 if (c == '<' || c == '>')
                 {
-                    char c2;
+                    char c2{};
                     is >> c2;
                     if (c2 != '=')
                         throw std::runtime_error(std::string("bad operator: ") + c + c2);
@@ -1358,7 +1401,7 @@ find_previous_rule(const Rule* r, date::year y)
     if (y == r->starting_year())
     {
         if (r == &rules.front() || r->name() != r[-1].name())
-            return {nullptr, year::min()};
+            std::terminate();  // never called with first rule
         --r;
         if (y == r->starting_year())
             return {r, y};
@@ -2533,10 +2576,10 @@ get_version()
 # endif
 
 static
-std::unique_ptr<TZ_DB>
+std::unique_ptr<tzdb>
 init_tzdb()
 {
-    std::unique_ptr<TZ_DB> db(new TZ_DB);
+    std::unique_ptr<tzdb> db(new tzdb);
 
     //Iterate through folders
     std::queue<std::string> subfolders;
@@ -2575,7 +2618,7 @@ init_tzdb()
                 }
                 else
                 {
-                    db->zones.emplace_back(subname.substr(sizeof(tz_dir)),
+                    db->zones.emplace_back(subname.substr(tz_dir.size()+1),
                                            detail::undocumented{});
                 }
             }
@@ -3158,7 +3201,7 @@ remote_download(const std::string& version)
 #  else  // !_WIN32
     // Create download folder if it does not exist on UNIX system
     auto download_folder = get_download_folder();
-    if (!file_exists(download_folder)) 
+    if (!file_exists(download_folder))
     {
         make_directory(download_folder);
     }
@@ -3240,7 +3283,7 @@ get_version(const std::string& path)
 }
 
 static
-std::unique_ptr<TZ_DB>
+std::unique_ptr<tzdb>
 init_tzdb()
 {
     using namespace date;
@@ -3248,7 +3291,7 @@ init_tzdb()
     const std::string path = install + folder_delimiter;
     std::string line;
     bool continue_zone = false;
-    std::unique_ptr<TZ_DB> db(new TZ_DB);
+    std::unique_ptr<tzdb> db(new tzdb);
 
 #if AUTO_DOWNLOAD
     if (!file_exists(install))
@@ -3365,7 +3408,7 @@ init_tzdb()
     return db;
 }
 
-const TZ_DB&
+const tzdb&
 reload_tzdb()
 {
 #if AUTO_DOWNLOAD
@@ -3379,7 +3422,7 @@ reload_tzdb()
 
 #endif  // !USE_OS_TZDB
 
-const TZ_DB&
+const tzdb&
 get_tzdb()
 {
     return get_tzdb_list().front();
@@ -3387,9 +3430,9 @@ get_tzdb()
 
 const time_zone*
 #if HAS_STRING_VIEW
-TZ_DB::locate_zone(std::string_view tz_name) const
+tzdb::locate_zone(std::string_view tz_name) const
 #else
-TZ_DB::locate_zone(const std::string& tz_name) const
+tzdb::locate_zone(const std::string& tz_name) const
 #endif
 {
     auto zi = std::lower_bound(zones.begin(), zones.end(), tz_name,
@@ -3442,7 +3485,7 @@ locate_zone(const std::string& tz_name)
 #if USE_OS_TZDB
 
 std::ostream&
-operator<<(std::ostream& os, const TZ_DB& db)
+operator<<(std::ostream& os, const tzdb& db)
 {
     os << "Version: " << db.version << "\n\n";
     for (const auto& x : db.zones)
@@ -3458,7 +3501,7 @@ operator<<(std::ostream& os, const TZ_DB& db)
 #else  // !USE_OS_TZDB
 
 std::ostream&
-operator<<(std::ostream& os, const TZ_DB& db)
+operator<<(std::ostream& os, const tzdb& db)
 {
     os << "Version: " << db.version << '\n';
     std::string title("--------------------------------------------"
@@ -3539,7 +3582,7 @@ getTimeZoneKeyName()
 }
 
 const time_zone*
-TZ_DB::current_zone() const
+tzdb::current_zone() const
 {
     std::string win_tzid = getTimeZoneKeyName();
     std::string standard_tzid;
@@ -3557,7 +3600,7 @@ TZ_DB::current_zone() const
 #else  // !_WIN32
 
 const time_zone*
-TZ_DB::current_zone() const
+tzdb::current_zone() const
 {
     // On some OS's a file called /etc/localtime may
     // exist and it may be either a real file
@@ -3586,7 +3629,7 @@ TZ_DB::current_zone() const
 
         const size_t pos = result.find(tz_dir);
         if (pos != result.npos)
-            result.erase(0, sizeof(tz_dir)+pos);
+            result.erase(0, tz_dir.size()+1+pos);
         return locate_zone(result);
     }
     {
@@ -3594,6 +3637,20 @@ TZ_DB::current_zone() const
     // the current timezone might be in the first line of
     // the /etc/timezone file.
         std::ifstream timezone_file("/etc/timezone");
+        if (timezone_file.is_open())
+        {
+            std::string result;
+            std::getline(timezone_file, result);
+            if (!result.empty())
+                return locate_zone(result);
+        }
+        // Fall through to try other means.
+    }
+    {
+    // On some versions of some bsd distro's (e.g. FreeBSD),
+    // the current timezone might be in the first line of
+    // the /var/db/zoneinfo file.
+        std::ifstream timezone_file("/var/db/zoneinfo");
         if (timezone_file.is_open())
         {
             std::string result;
