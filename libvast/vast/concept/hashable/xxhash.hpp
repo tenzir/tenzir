@@ -30,7 +30,18 @@ public:
   }
 
 private:
-  struct state_type { long long ll[ 6]; };
+  // Must be kept in sync with xxhash.h.
+  struct state_type {
+    unsigned total_len_32;
+    unsigned large_len;
+    unsigned v1;
+    unsigned v2;
+    unsigned v3;
+    unsigned v4;
+    unsigned mem32[4];
+    unsigned memsize;
+    unsigned reserved;
+  };
 
   state_type state_;
 };
@@ -50,7 +61,17 @@ public:
   }
 
 private:
-  struct state_type { long long ll[11]; };
+  // Must be kept in sync with xxhash.h.
+  struct state_type {
+    unsigned long long total_len;
+    unsigned long long v1;
+    unsigned long long v2;
+    unsigned long long v3;
+    unsigned long long v4;
+    unsigned long long mem64[4];
+    unsigned memsize;
+    unsigned reserved[2];
+  };
 
   state_type state_;
 };

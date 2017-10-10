@@ -5,7 +5,7 @@
 #include <ctime>
 #include <cstring>
 
-#include <date.h>
+#include <date/date.h>
 
 #include "vast/access.hpp"
 #include "vast/time.hpp"
