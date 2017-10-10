@@ -1,3 +1,6 @@
+#define XXH_ACCEPT_NULL_INPUT_POINTER
+#define XXH_PRIVATE_API
+#define XXH_STATIC_LINKING_ONLY
 #include "xxhash/xxhash.h"
 
 #include "vast/concept/hashable/xxhash.hpp"

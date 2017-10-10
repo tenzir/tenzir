@@ -8,6 +8,7 @@ Repositories
 ------------
 
 - **date**: `git@github.com:HowardHinnant/date.git`
+- **xxHash**: `git@github.com:Cyan4973/xxHash.git`
 
 Adding a New Repository
 -----------------------
@@ -18,7 +19,6 @@ To add a new repository **foo** at location `REMOTE` (e.g.,
 1. Add a new mapping above that specifies the remote location
 2. Add the repository as a subtree:
 
-       git remote add aux/foo REMOTE
        git subtree add --prefix=aux/foo --squash REMOTE master
        git commit -a -m 'Add 3rd-party library foo'
        git push
