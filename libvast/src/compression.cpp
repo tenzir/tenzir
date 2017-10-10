@@ -1,4 +1,6 @@
-#include "lz4/lz4.h"
+#define LZ4_DISABLE_DEPRECATE_WARNINGS
+#define LZ4_FORCE_INLINE
+#include "lz4/lib/lz4.c"
 
 #include "vast/compression.hpp"
 #include "vast/die.hpp"

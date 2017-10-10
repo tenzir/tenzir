@@ -8,6 +8,7 @@ Repositories
 ------------
 
 - **date**: `git@github.com:HowardHinnant/date.git`
+- **lz4**: `git@github.com:lz4/lz4.git`
 - **xxHash**: `git@github.com:Cyan4973/xxHash.git`
 
 Adding a New Repository
