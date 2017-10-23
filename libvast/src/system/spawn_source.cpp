@@ -12,6 +12,7 @@
 #include "vast/query_options.hpp"
 
 #include "vast/format/bgpdump.hpp"
+#include "vast/format/mrt.hpp"
 #include "vast/format/bro.hpp"
 #ifdef VAST_HAVE_PCAP
 #include "vast/format/pcap.hpp"
@@ -72,16 +73,19 @@ expected<actor> spawn_source(local_actor* self, options& opts) {
                                 pseudo_realtime};
     src = self->spawn(source<format::pcap::reader>, std::move(reader));
 #endif
-  } else if (format == "bro" || format == "bgpdump") {
+  } else if (format == "bro" || format == "bgpdump" || format == "mrt") {
     auto in = detail::make_input_stream(input, r.opts.count("uds") > 0);
     if (!in)
       return in.error();
     if (format == "bro") {
       format::bro::reader reader{std::move(*in)};
       src = self->spawn(source<format::bro::reader>, std::move(reader));
-    } else /* if (format == "bgpdump") */ {
+    } else if (format == "bgpdump") {
       format::bgpdump::reader reader{std::move(*in)};
       src = self->spawn(source<format::bgpdump::reader>, std::move(reader));
+    } else if (format == "mrt") {
+      format::mrt::reader reader{std::move(*in)};
+      src = self->spawn(source<format::mrt::reader>, std::move(reader));
     }
   } else if (format == "test") {
     auto seed = size_t{0};

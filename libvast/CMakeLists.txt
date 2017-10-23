@@ -71,6 +71,7 @@ set(libvast_sources
   src/system/task.cpp
   src/system/tracker.cpp
   src/format/bgpdump.cpp
+  src/format/mrt.cpp
   src/format/bro.cpp
   src/format/csv.cpp
   src/format/test.cpp
@@ -143,6 +144,16 @@ foreach (log ${logs})
   set (test_data "${test_data}\n${this}")
 endforeach ()
 set(test_data "${test_data}\n\n} // namespace bgpdump")
+
+# MRT logs.
+set(test_data "${test_data}\n\nnamespace mrt {\n")
+file(GLOB logs test/logs/mrt/*.0)
+foreach (log ${logs})
+  get_filename_component(log_basename ${log} NAME_WE)
+  set (this "constexpr auto ${log_basename} = \"${log}\";")
+  set (test_data "${test_data}\n${this}")
+endforeach ()
+set(test_data "${test_data}\n\n} // namespace mrt")
 
 # PCAP traces.
 set(test_data "${test_data}\n\nnamespace traces {\n")
@@ -222,6 +233,7 @@ set(tests
   test/system/source.cpp
   test/system/task.cpp
   test/fixtures/events.cpp
+  test/format/mrt.cpp
   test/format/bro.cpp
   test/format/writer.cpp
 )
