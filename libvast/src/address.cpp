@@ -18,6 +18,14 @@ std::array<uint8_t, 12> const vast::address::v4_mapped_prefix = {
 
 namespace vast {
 
+address address::v4(const void* bytes, byte_order order) {
+  return address{bytes, ipv4, order};
+};
+
+address address::v6(const void* bytes, byte_order order) {
+  return address{bytes, ipv6, order};
+};
+
 address::address() {
   bytes_.fill(0);
 }
