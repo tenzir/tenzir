@@ -525,6 +525,24 @@ TEST(byte - type promotion regression) {
   CHECK_EQUAL(z, 0x8Dull);
 }
 
+TEST(dynamic bytes) {
+  using namespace parsers;
+  std::string foo;
+  auto three = 3;
+  CHECK(nbytes<char>(three)("foobar"s, foo));
+  CHECK_EQUAL(foo, "foo"s);
+  MESSAGE("input too short");
+  foo.clear();
+  auto two = 2;
+  CHECK(!nbytes<char>(two)("foobar"s, foo));
+  CHECK_EQUAL(foo, "fo"s);
+  MESSAGE("input too large");
+  foo.clear();
+  auto seven = 7;
+  CHECK(!nbytes<char>(seven)("foobar"s, foo));
+  CHECK_EQUAL(foo, "foobar"s);
+}
+
 // -- time --------------------------------------------------------------------
 
 TEST(timestamp - now) {
