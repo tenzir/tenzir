@@ -603,7 +603,7 @@ TEST(dynamic bytes) {
   MESSAGE("input too short");
   foo.clear();
   auto two = 2;
-  CHECK(!nbytes<char>(two)("foobar"s, foo));
+  CHECK(nbytes<char>(two)("foobar"s, foo));
   CHECK_EQUAL(foo, "fo"s);
   MESSAGE("input too large");
   foo.clear();
