@@ -47,9 +47,9 @@ using variant_type_concat =
   >;
 
 template <typename T, typename U>
-using flattened_variant = make_variant_from<
+using flattened_variant = typename make_variant_from<
   variant_type_concat<T, U>
->;
+>::type;
 
 } // namespace detail
 } // namespace vast
