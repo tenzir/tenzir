@@ -3,9 +3,12 @@
 
 #include <type_traits>
 
+#include "vast/variant.hpp"
+
 #include "vast/concept/parseable/core/parser.hpp"
 #include "vast/concept/support/detail/variant.hpp"
-#include "vast/variant.hpp"
+
+#include "vast/detail/type_traits.hpp"
 
 namespace vast {
 
@@ -89,13 +92,19 @@ private:
     return true;
   }
 
-  template <typename Iterator>
-  bool parse_right(Iterator& f, Iterator const& l, unused_type) const {
+  template <typename Iterator, typename Attribute>
+  auto parse_right(Iterator& f, Iterator const& l, Attribute&) const
+  -> std::enable_if_t<
+    detail::is_any<unused_type, Attribute, rhs_attribute>::value, bool
+  > {
     return rhs_(f, l, unused);
   }
 
   template <typename Iterator, typename Attribute>
-  auto parse_right(Iterator& f, Iterator const& l, Attribute& a) const {
+  auto parse_right(Iterator& f, Iterator const& l, Attribute& a) const
+  -> std::enable_if_t<
+    !detail::is_any<unused_type, Attribute, rhs_attribute>::value, bool
+  > {
     rhs_attribute ar;
     if (!rhs_(f, l, ar))
       return false;
