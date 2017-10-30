@@ -17,7 +17,7 @@ public:
   using attribute =
     std::conditional_t<
       action_traits::returns_void,
-      unused_type,
+      inner_attribute,
       typename action_traits::result_type
     >;
 
@@ -26,10 +26,9 @@ public:
 
   // No argument, void return type.
   template <typename Iterator, typename Attribute, typename A = Action>
-  auto parse(Iterator& f, Iterator const& l, Attribute&) const
+  auto parse(Iterator& f, Iterator const& l, Attribute& a) const
   -> std::enable_if_t<detail::action_traits<A>::no_args_returns_void, bool> {
-    inner_attribute x;
-    if (!parser_(f, l, x))
+    if (!parser_(f, l, a))
       return false;
     action_();
     return true;
@@ -37,12 +36,11 @@ public:
 
   // One argument, void return type.
   template <typename Iterator, typename Attribute, typename A = Action>
-  auto parse(Iterator& f, Iterator const& l, Attribute&) const
+  auto parse(Iterator& f, Iterator const& l, Attribute& a) const
   -> std::enable_if_t<detail::action_traits<A>::one_arg_returns_void, bool> {
-    action_arg_type x;
-    if (!parser_(f, l, x))
+    if (!parser_(f, l, a))
       return false;
-    action_(std::move(x));
+    action_(a);
     return true;
   }
 

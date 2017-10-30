@@ -1,10 +1,13 @@
 #include <sstream>
 
+#include "vast/address.hpp"
+
 #include "vast/concept/parseable/core.hpp"
 #include "vast/concept/parseable/numeric.hpp"
 #include "vast/concept/parseable/string.hpp"
 #include "vast/concept/parseable/stream.hpp"
 #include "vast/concept/parseable/to.hpp"
+#include "vast/concept/parseable/vast/address.hpp"
 #include "vast/concept/parseable/vast/key.hpp"
 #include "vast/concept/parseable/vast/time.hpp"
 
@@ -39,6 +42,15 @@ TEST(container attribute folding) {
   auto spaces = *' '_p;
   static_assert(std::is_same<decltype(spaces)::attribute, unused_type>::value,
                 "container attribute folding failed");
+}
+
+TEST(action) {
+  using namespace parsers;
+  auto make_v4 = [](uint32_t a) { return address::v4(&a); };
+  auto ipv4_addr = b32be ->* make_v4;
+  address x;
+  CHECK(ipv4_addr("\x0A\x00\x00\x01", x));
+  CHECK_EQUAL(x, *to<address>("10.0.0.1"));
 }
 
 TEST(branch) {
