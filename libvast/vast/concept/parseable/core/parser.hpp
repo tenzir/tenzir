@@ -12,6 +12,9 @@
 namespace vast {
 
 template <typename, typename>
+class when_parser;
+
+template <typename, typename>
 class action_parser;
 
 template <typename, typename>
@@ -19,6 +22,11 @@ class guard_parser;
 
 template <typename Derived>
 struct parser {
+  template <typename Condition>
+  auto when(Condition fun) const {
+    return when_parser<Derived, Condition>{derived(), fun};
+  }
+
   template <typename Action>
   auto then(Action fun) const {
     return action_parser<Derived, Action>{derived(), fun};
