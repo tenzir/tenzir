@@ -1,6 +1,8 @@
 #ifndef VAST_ACCESS_HPP
 #define VAST_ACCESS_HPP
 
+#include <type_traits>
+
 namespace vast {
 
 /// Wrapper to encapsulate the implementation of concepts requiring access to
