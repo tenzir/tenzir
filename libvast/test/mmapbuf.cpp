@@ -2,6 +2,7 @@
 #include <string>
 
 #include "vast/detail/mmapbuf.hpp"
+#include "vast/detail/system.hpp"
 
 #define SUITE streambuf
 #include "test.hpp"
@@ -37,9 +38,35 @@ TEST(memory-mapped streambuffer) {
   // Seek back to beginning.
   sb.pubseekpos(0, std::ios::in);
   CHECK_EQUAL(sb.in_avail(), static_cast<std::streamsize>(sb.size()));
-  sb.sbumpc();
-  sb.sbumpc();
-  CHECK_EQUAL(sb.in_avail(), 10);
+  data = "corge ";
+  n = sb.sputn(data.data(), data.size());
+  CHECK_EQUAL(n, static_cast<std::streamsize>(data.size()));
+  CHECK_EQUAL(std::string(sb.data(), sb.size()), "corge bazqux");
+  CHECK(sb.resize(data.size() - 1));
+  // Figure out current position.
+  size_t cur = sb.pubseekoff(0, std::ios::cur, std::ios::out);
+  CHECK_EQUAL(cur, sb.size()); // we're at the end!
+}
+
+TEST(memory-mapped streambuffer aligned resize) {
+  auto filename = directory / "aligned";
+  auto page_size = detail::page_size();
+  detail::mmapbuf sb{filename.str(), page_size};
+  REQUIRE(sb.data() != nullptr);
+  CHECK_EQUAL(sb.size(), page_size);
+  // Aligned resizing.
+  REQUIRE(sb.resize(page_size * 2));
+  CHECK_EQUAL(sb.size(), page_size * 2);
+  // Seek in the middle and perform a random write.
+  sb.pubseekpos(page_size, std::ios::out);
+  sb.sputc('x');
+  // Unaligned resizing.
+  REQUIRE(sb.resize(page_size / 2));
+  CHECK_EQUAL(sb.size(), page_size / 2);
+  REQUIRE(sb.resize(sb.size() * 8));
+  CHECK_EQUAL(sb.size(), page_size * 4);
+  sb.pubseekpos(page_size * 3, std::ios::out);
+  sb.sputc('x');
 }
 
 FIXTURE_SCOPE_END()

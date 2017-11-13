@@ -24,6 +24,10 @@ bool pattern::search(std::string const& str) const {
   return std::regex_search(str.begin(), str.end(), std::regex{str_});
 }
 
+const std::string& pattern::string() const {
+  return str_;
+}
+
 bool operator==(pattern const& lhs, pattern const& rhs) {
   return lhs.str_ == rhs.str_;
 }

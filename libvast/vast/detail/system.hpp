@@ -11,6 +11,10 @@ namespace detail {
 /// @returns The system hostname.
 std::string hostname();
 
+/// Retrieves the page size of the OS.
+/// @returns The number of bytes of a page.
+size_t page_size();
+
 /// Retrieves the process ID.
 /// @returns The ID of this process.
 int32_t process_id();

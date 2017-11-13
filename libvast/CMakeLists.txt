@@ -15,6 +15,7 @@ set(libvast_sources
   src/base.cpp
   src/batch.cpp
   src/bitmap.cpp
+  src/chunk.cpp
   src/compression.cpp
   src/data.cpp
   src/die.cpp
@@ -172,6 +173,7 @@ set(tests
   test/bits.cpp
   test/bitvector.cpp
   test/cache.cpp
+  test/chunk.cpp
   test/coder.cpp
   test/compressedbuf.cpp
   test/data.cpp
@@ -196,6 +198,7 @@ set(tests
   test/range_map.cpp
   test/save_load.cpp
   test/schema.cpp
+  test/serialization.cpp
   test/stack.cpp
   test/string.cpp
   test/subnet.cpp

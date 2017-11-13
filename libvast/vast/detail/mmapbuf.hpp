@@ -5,46 +5,82 @@
 #include <streambuf>
 #include <string>
 
+#include "vast/chunk.hpp"
+#include "vast/filesystem.hpp"
+
 namespace vast {
 namespace detail {
 
-// TODO: add support for writing to the buffer via the put area.
-
-/// A memory-mapped streambuffer. The put and get areas corresponds to the
+/// A memory-mapped stream buffer. The put and get areas corresponds to the
 /// mapped memory region.
 class mmapbuf : public std::streambuf {
 public:
-  /// Constructs a memory-mapped streambuffer from a file.
+  /// Default-constructs an empty memory-mapped buffer.
+  mmapbuf();
+
+  /// Constructs an anonymous memory-mapped stream buffer.
+  /// @param size The size of the mapped region.
+  /// @pre `size > 0`
+  explicit mmapbuf(size_t size);
+
+  /// Constructs a file-backed memory-mapped stream buffer.
   /// @param filename The path to the file to open.
   /// @param size The size of the file in bytes. If 0, figure out file size
   ///             automatically.
-  /// @param offset An offset where to begin mapping.
-  /// @pre `offset < size`
-  explicit mmapbuf(const std::string& filename, size_t size = 0);
+  /// @param offset The offset where to begin mapping; same as in `mmap(2)`.
+  explicit mmapbuf(const path& filename, size_t size = 0,
+                   size_t offset = 0);
 
   /// Closes the opened file and unmaps the mapped memory region.
   ~mmapbuf();
 
-  /// Returns the size of the mapped memory region.
+  /// Exposes the underlying memory region.
+  const char_type* data() const;
+
+  /// @returns the size of the mapped memory region.
   size_t size() const;
 
-protected:
-  std::streamsize showmanyc() override;
+  /// Resizes the underlying file and re-maps the file.
+  /// @param new_size The new size of the underlying file.
+  /// @returns `true` on success.
+  bool resize(size_t new_size);
 
-  int_type underflow() override;
+  /// Release the underlying memory region. Subsequent operations on the stream
+  /// evoke undefined behavior
+  /// @returns A chunk representing the mapped memory region.
+  chunk_ptr release();
+
+protected:
+  // -- get area --------------------------------------------------------------
+
+  std::streamsize showmanyc() override;
 
   std::streamsize xsgetn(char_type* s, std::streamsize n) override;
 
+  // -- put area --------------------------------------------------------------
+
+  std::streamsize xsputn(const char_type* s, std::streamsize n) override;
+
+  // -- positioning -----------------------------------------------------------
+
   pos_type seekoff(off_type off,
                    std::ios_base::seekdir dir,
-                   std::ios_base::openmode which = std::ios_base::in) override;
+                   std::ios_base::openmode which =
+                     std::ios_base::in | std::ios_base::out) override;
 
   pos_type seekpos(pos_type pos,
-                   std::ios_base::openmode which = std::ios_base::in) override;
+                   std::ios_base::openmode which =
+                     std::ios_base::in | std::ios_base::out) override;
 
 private:
-  size_t size_;
+  void reset();
+
+  path filename_;
   int fd_ = -1;
+  size_t size_ = 0;
+  size_t offset_ = 0;
+  int prot_ = 0;
+  int flags_ = 0;
   char_type* map_ = nullptr;
 };
 
