@@ -128,12 +128,13 @@ bool mmapbuf::resize(size_t new_size) {
     }
     // If (1) failed or was not possible, we have to resort to (2).
     if (remap) {
-      if (munmap(map_, size_) < 0) {
+      auto map = mmap(nullptr, new_size, prot_, flags_, fd_, offset_);
+      if (map == MAP_FAILED) {
         reset();
         return false;
       }
-      auto map = mmap(nullptr, new_size, prot_, flags_, fd_, offset_);
-      if (map == MAP_FAILED) {
+      std::memcpy(map, map_, size_);
+      if (munmap(map_, size_) < 0) {
         reset();
         return false;
       }
