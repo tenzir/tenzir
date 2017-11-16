@@ -43,6 +43,7 @@ Usage: $0 [OPTION]... [VAR=VALUE]...
     --with-caf=PATH         path to CAF install root or build directory
 
   Optional packages in non-standard locations:
+    --with-arrow=PATH       path to Arrow install root or build directory
     --with-snappy=PATH      path to Snappy install root
     --with-pcap=PATH        path to libpcap install root
     --with-perftools=PATH   path to gperftools install root
@@ -145,6 +146,9 @@ while [ $# -ne 0 ]; do
       ;;
     --with-caf=*)
       append_cache_entry CAF_ROOT_DIR PATH "$optarg"
+      ;;
+    --with-arrow=*)
+      append_cache_entry ARROW_ROOT_DIR PATH "$optarg"
       ;;
     --with-snappy=*)
       append_cache_entry SNAPPY_ROOT_DIR PATH "$optarg"
