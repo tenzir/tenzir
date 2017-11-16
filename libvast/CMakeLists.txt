@@ -125,6 +125,12 @@ set(libvast_sources
   src/wah_bitmap.cpp
 )
 
+if (VAST_HAVE_ARROW)
+  set(libvast_sources ${libvast_sources}
+      src/format/arrow.cpp
+  )
+endif ()
+
 if (PCAP_FOUND)
   set(libvast_sources ${libvast_sources}
     src/system/pcap_reader_command.cpp
@@ -155,6 +161,14 @@ endif ()
 if (VAST_ENABLE_ASSERTIONS)
   target_include_directories(libvast PUBLIC ${Backtrace_INCLUDE_DIRECTORIES})
   target_link_libraries(libvast PUBLIC ${Backtrace_LIBRARIES})
+endif ()
+
+if (ARROW_CORE_FOUND)
+  target_link_libraries(libvast PUBLIC arrow::core)
+endif ()
+
+if (ARROW_PLASMA_FOUND)
+  target_link_libraries(libvast PUBLIC arrow::plasma)
 endif ()
 
 if (SNAPPY_FOUND)
@@ -277,7 +291,11 @@ set(tests
   test/word.cpp
 )
 
-if (PCAP_FOUND)
+if (VAST_HAVE_ARROW)
+  set(tests ${tests} test/format/arrow.cpp)
+endif ()
+
+if (VAST_HAVE_PCAP)
   set(tests ${tests} test/format/pcap.cpp)
 endif ()
 

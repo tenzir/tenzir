@@ -400,6 +400,20 @@ if (CAF_LIBRARY_OPENSSL)
 endif ()
 set(CAF_FOUND ${CAF_FOUND_SAVE})
 
+if (NOT ARROW_ROOT_DIR AND VAST_PREFIX)
+  set(ARROW_ROOT_DIR ${VAST_PREFIX})
+endif ()
+find_package(ARROW COMPONENTS core plasma QUIET)
+if (ARROW_CORE_FOUND)
+  message(STATUS "Found Apache Arrow (core library)")
+endif ()
+if (ARROW_PLASMA_FOUND)
+  message(STATUS "Found Apache Arrow (Plasma store)")
+endif ()
+if (ARROW_CORE_FOUND AND ARROW_PLASMA_FOUND)
+  set(VAST_HAVE_ARROW true)
+endif ()
+
 if (BROKER_ROOT_DIR)
   find_package(BROKER REQUIRED)
   set(VAST_HAVE_BROKER true)
@@ -578,6 +592,7 @@ endif ()
 
 display(CAF_FOUND ${caf_dir} caf_summary)
 display(BROKER_FOUND "${broker_dir}" broker_summary)
+display(VAST_HAVE_ARROW "${ARROW_CORE_INCLUDE_DIR}" arrow_summary)
 display(SNAPPY_FOUND "${SNAPPY_INCLUDE_DIR}" snappy_summary)
 display(PCAP_FOUND "${PCAP_INCLUDE_DIR}" pcap_summary)
 display(GPERFTOOLS_FOUND "${GPERFTOOLS_INCLUDE_DIR}" perftools_summary)
@@ -615,6 +630,7 @@ set(summary
     "\nLDFLAGS:             ${LDFLAGS}"
     "\n"
     "\nCAF:                 ${caf_summary}"
+    "\nArrow:               ${arrow_summary}"
     "\nBroker:              ${broker_summary}"
     "\nSnappy               ${snappy_summary}"
     "\nPCAP:                ${pcap_summary}"
