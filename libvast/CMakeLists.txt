@@ -84,6 +84,10 @@ endif ()
 
 set(libvast_libs ${CAF_LIBRARIES})
 
+if (ARROW_FOUND)
+  set(libvast_libs ${libvast_libs} ${ARROW_LIBRARIES})
+endif ()
+
 if (VAST_ENABLE_ASSERTIONS)
   set(libvast_libs ${libvast_libs} ${Backtrace_LIBRARIES})
 endif ()

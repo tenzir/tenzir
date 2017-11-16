@@ -291,6 +291,15 @@ if (SNAPPY_FOUND)
   include_directories(${SNAPPY_INCLUDE_DIR})
 endif ()
 
+if (NOT ARROW_ROOT_DIR AND VAST_PREFIX)
+  set(ARROW_ROOT_DIR ${VAST_PREFIX})
+endif ()
+find_package(ARROW QUIET)
+if (ARROW_FOUND)
+  set(VAST_HAVE_ARRROW true)
+  include_directories(${ARROW_INCLUDE_DIR})
+endif ()
+
 if (NOT PCAP_ROOT_DIR AND VAST_PREFIX)
   set(PCAP_ROOT_DIR ${VAST_PREFIX})
 endif ()
@@ -414,6 +423,7 @@ else ()
 endif ()
 
 display(CAF_FOUND ${caf_dir} caf_summary)
+display(ARROW_FOUND ${ARROW_INCLUDE_DIR} arrow_summary)
 display(SNAPPY_FOUND "${SNAPPY_INCLUDE_DIR}" snappy_summary)
 display(PCAP_FOUND "${PCAP_INCLUDE_DIR}" pcap_summary)
 display(GPERFTOOLS_FOUND "${GPERFTOOLS_INCLUDE_DIR}" perftools_summary)
@@ -446,6 +456,7 @@ set(summary
     "\nLDFLAGS:          ${LDFLAGS}"
     "\n"
     "\nCAF:              ${caf_summary}"
+    "\nArrow:            ${arrow_summary}"
     "\nSnappy            ${snappy_summary}"
     "\nPCAP:             ${pcap_summary}"
     "\nGperftools:       ${perftools_summary}"
