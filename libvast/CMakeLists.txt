@@ -77,22 +77,27 @@ set(libvast_sources
   src/format/test.cpp
 )
 
-if (PCAP_FOUND)
-  set(libvast_sources ${libvast_sources}
-    src/format/pcap.cpp)
+if (VAST_HAVE_ARROW)
+  set(libvast_sources ${libvast_sources} src/format/arrow.cpp)
+endif ()
+
+if (VAST_HAVE_PCAP)
+  set(libvast_sources ${libvast_sources} src/format/pcap.cpp)
 endif ()
 
 set(libvast_libs ${CAF_LIBRARIES})
 
-if (ARROW_FOUND)
-  set(libvast_libs ${libvast_libs} ${ARROW_LIBRARIES})
+if (VAST_HAVE_ARRROW)
+  set(libvast_libs ${libvast_libs}
+    ${ARROW_CORE_LIBRARIES}
+    ${ARROW_PLASMA_LIBRARIES})
 endif ()
 
 if (VAST_ENABLE_ASSERTIONS)
   set(libvast_libs ${libvast_libs} ${Backtrace_LIBRARIES})
 endif ()
 
-if (SNAPPY_FOUND)
+if (VAST_HAVE_SNAPPY)
   set(libvast_libs ${libvast_libs} ${SNAPPY_LIBRARIES})
 endif ()
 
@@ -101,12 +106,12 @@ if (PCAP_FOUND)
 endif ()
 
 # Always link with -lprofile if we have Gperftools.
-if (GPERFTOOLS_FOUND)
+if (VAST_HAVE_GPERFTOOLS)
   set(libvast_libs ${libvast_libs} ${GPERFTOOLS_PROFILER})
 endif ()
 
 # Only link against tcmalloc if requested.
-if (GPERFTOOLS_FOUND AND VAST_USE_PERFTOOLS_HEAP_PROFILER)
+if (VAST_HAVE_GPERFTOOLS AND VAST_USE_PERFTOOLS_HEAP_PROFILER)
   set(libvast_libs ${libvast_libs} ${GPERFTOOLS_TCMALLOC})
 endif ()
 
@@ -233,7 +238,11 @@ set(tests
   test/format/writer.cpp
 )
 
-if (PCAP_FOUND)
+if (VAST_HAVE_ARRROW)
+  set(tests ${tests} test/format/arrow.cpp)
+endif ()
+
+if (VAST_HAVE_PCAP)
   set(tests ${tests} test/format/pcap.cpp)
 endif ()
 
