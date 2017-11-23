@@ -87,7 +87,7 @@ endif ()
 
 set(libvast_libs ${CAF_LIBRARIES})
 
-if (VAST_HAVE_ARRROW)
+if (VAST_HAVE_ARROW)
   set(libvast_libs ${libvast_libs}
     ${ARROW_CORE_LIBRARIES}
     ${ARROW_PLASMA_LIBRARIES})
@@ -238,7 +238,7 @@ set(tests
   test/format/writer.cpp
 )
 
-if (VAST_HAVE_ARRROW)
+if (VAST_HAVE_ARROW)
   set(tests ${tests} test/format/arrow.cpp)
 endif ()
 
