@@ -26,7 +26,9 @@ public:
 
   ~writer();
 
-  expected<void> write(event const& e);
+  expected<void> write(const std::vector<event>& xs);
+
+  expected<void> write(const event& x);
 
   expected<void> flush();
 

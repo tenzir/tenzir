@@ -9,11 +9,13 @@
 using namespace vast;
 using namespace std::string_literals;
 
-FIXTURE_SCOPE(bro_tests, fixtures::events)
+FIXTURE_SCOPE(arrow_tests, fixtures::events)
 
 TEST(arrow writer) {
   format::arrow::writer writer{"/tmp/plasma"};
-  CHECK(!writer.connected());
+  REQUIRE(writer.connected());
+  for (auto& x : bro_conn_log)
+    CHECK(writer.write(x));
 }
 
 FIXTURE_SCOPE_END()
