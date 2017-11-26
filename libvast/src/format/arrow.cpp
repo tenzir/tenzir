@@ -27,10 +27,8 @@ namespace arrow {
 
 writer::writer(const std::string& plasma_socket) {
   VAST_DEBUG(name(), "connects to plasma store at", plasma_socket);
-  // TODO: change the last retry parameter from 1 to 0 after our PR got merged
-  // (https://github.com/apache/arrow/pull/1354).
   auto status = plasma_client_.Connect(plasma_socket, "",
-                                       PLASMA_DEFAULT_RELEASE_DELAY, 1);
+                                       PLASMA_DEFAULT_RELEASE_DELAY, 0);
   connected_ = status.ok();
   if (!connected())
     VAST_ERROR(name(), "failed to connect to plasma store", status.ToString());
