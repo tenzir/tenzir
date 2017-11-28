@@ -1,4 +1,6 @@
-#include "arrow/table.h"
+#include "arrow/api.h"
+#include "arrow/io/api.h"
+#include "arrow/ipc/api.h"
 #include "plasma/common.h"
 
 #include "vast/error.hpp"
@@ -13,12 +15,38 @@ namespace vast {
 
 namespace {
 
-// TODO: write a function to transpose a vector of events such that it can be
-// copied into a plasma object.
-//std::shared_ptr<arrow::Table> transpose(const std::vector<event>& xs) {
-//  std::vector<std::shared_ptr<arrow::ArrayData>> columns;
-//  arrow::RecordBatch batch{nullptr, 0, std::move(columns)};
-//}
+// Transposes a vector of events from a row-wise into the columnar Arrow
+// representation in the form of a record batch.
+std::unique_ptr<arrow::RecordBatch> transpose(const std::vector<event>& /* xs */) {
+  // TODO: implement this function.
+  return {};
+}
+
+// Writes a Record batch into an in-memory buffer.
+expected<std::shared_ptr<arrow::Buffer>> write_to_buffer(const arrow::RecordBatch& batch) {
+  auto pool = arrow::default_memory_pool();
+  auto buffer = std::make_shared<arrow::PoolBuffer>(pool);
+  auto sink = std::make_unique<arrow::io::BufferOutputStream>(buffer);
+  std::shared_ptr<arrow::ipc::RecordBatchWriter> writer;
+  auto status = arrow::ipc::RecordBatchStreamWriter::Open(
+    sink.get(), batch.schema(), &writer);
+  if (!status.ok())
+    return make_error(ec::format_error, "failed to open arrow stream writer",
+                      status.ToString());
+  status = writer->WriteRecordBatch(batch);
+  if (!status.ok())
+    return make_error(ec::format_error, "failed to write batch",
+                      status.ToString());
+  status = writer->Close();
+  if (!status.ok())
+    return make_error(ec::format_error, "failed to close arrow stream writer",
+                      status.ToString());
+  status = sink->Close();
+  if (!status.ok())
+    return make_error(ec::format_error, "failed to close arrow stream writer",
+                      status.ToString());
+  return buffer;
+}
 
 } // namespace <anonymous>
 
@@ -40,23 +68,37 @@ writer::~writer() {
     VAST_ERROR(name(), "failed to disconnect from plasma store");
 }
 
-expected<void> writer::write(const std::vector<event>& /* xs */) {
-  // TODO: Implement this function.
+expected<void> writer::write(const std::vector<event>& xs) {
+  if (!connected())
+    return make_error(ec::format_error, "not connected to plasma store");
+  auto record_batch = transpose(xs);
+  if (!record_batch)
+    return make_error(ec::format_error, "failed to transpose events");
+  auto buf = write_to_buffer(*record_batch);
+  if (!buf)
+    return buf.error();
+  VAST_ASSERT(*buf);
+  auto oid = make_object((*buf)->data(), static_cast<size_t>((*buf)->size()));
+  if (!oid)
+    return oid.error();
+  std::cout << oid->hex() << std::endl;
   return no_error;
 }
 
 expected<void> writer::write(const event& x) {
-  if (!connected())
-    return make_error(ec::format_error, "not connected to plasma store");
-  // FIXME: For testing purposes, we store the string representation of each
-  // event as separate event.
-  auto str = to_string(x);
-  auto oid = make_object(str.data(), str.size());
-  if (!oid)
-    return oid;
-  std::cout << oid->hex() << std::endl;
+  buffer_.push_back(x); // TODO: avoid copy.
   return no_error;
 }
+
+expected<void> writer::flush() {
+  if (buffer_.empty())
+    return no_error;
+  auto r = write(buffer_);
+  if (!r)
+    return r;
+  buffer_.clear();
+  return no_error;
+};
 
 const char* writer::name() const {
   return "arrow-writer";

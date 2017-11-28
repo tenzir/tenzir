@@ -43,6 +43,7 @@ private:
 
   bool connected_;
   plasma::PlasmaClient plasma_client_;
+  std::vector<event> buffer_;
 };
 
 } // namespace arrow
