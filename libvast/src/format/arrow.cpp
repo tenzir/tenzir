@@ -40,7 +40,7 @@ writer::~writer() {
     VAST_ERROR(name(), "failed to disconnect from plasma store");
 }
 
-expected<void> writer::write(const std::vector<event>& xs) {
+expected<void> writer::write(const std::vector<event>& /* xs */) {
   // TODO: Implement this function.
   return no_error;
 }
@@ -51,20 +51,10 @@ expected<void> writer::write(const event& x) {
   // FIXME: For testing purposes, we store the string representation of each
   // event as separate event.
   auto str = to_string(x);
-  auto oid = plasma::ObjectID::from_random();
-  uint8_t* buffer;
-  auto status = plasma_client_.Create(oid, static_cast<int64_t>(str.size()),
-                                      nullptr, 0, &buffer);
-  if (!status.ok())
-    return make_error(ec::format_error, "failed to create object",
-                      status.ToString());
-  std::memcpy(buffer, str.data(), str.size());
-  status = plasma_client_.Seal(oid);
-  if (!status.ok())
-    return make_error(ec::format_error, "failed to create object",
-                      status.ToString());
-  VAST_DEBUG(name(), "sealed object", oid.hex(), "of size", str.size());
-  std::cout << oid.hex() << std::endl;
+  auto oid = make_object(str.data(), str.size());
+  if (!oid)
+    return oid;
+  std::cout << oid->hex() << std::endl;
   return no_error;
 }
 
@@ -74,6 +64,24 @@ const char* writer::name() const {
 
 bool writer::connected() const {
   return connected_;
+}
+
+expected<plasma::ObjectID>
+writer::make_object(const void* data, size_t size) {
+  auto oid = plasma::ObjectID::from_random();
+  uint8_t* buffer;
+  auto status = plasma_client_.Create(oid, static_cast<int64_t>(size),
+                                      nullptr, 0, &buffer);
+  if (!status.ok())
+    return make_error(ec::format_error, "failed to create object",
+                      status.ToString());
+  std::memcpy(buffer, reinterpret_cast<const char*>(data), size);
+  status = plasma_client_.Seal(oid);
+  if (!status.ok())
+    return make_error(ec::format_error, "failed to create object",
+                      status.ToString());
+  VAST_DEBUG(name(), "sealed object", oid.hex(), "of size", size);
+  return oid;
 }
 
 } // namespace arrow

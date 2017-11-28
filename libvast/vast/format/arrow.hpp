@@ -39,6 +39,8 @@ public:
   bool connected() const;
 
 private:
+  expected<plasma::ObjectID> make_object(const void* data, size_t size);
+
   bool connected_;
   plasma::PlasmaClient plasma_client_;
 };
