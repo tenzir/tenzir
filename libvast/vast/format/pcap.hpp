@@ -8,13 +8,17 @@
 #include <random>
 
 #include "vast/address.hpp"
-#include "vast/concept/hashable/hash_append.hpp"
-#include "vast/concept/hashable/xxhash.hpp"
-#include "vast/detail/operators.hpp"
 #include "vast/expected.hpp"
 #include "vast/port.hpp"
 #include "vast/schema.hpp"
 #include "vast/time.hpp"
+
+#include "vast/concept/hashable/hash_append.hpp"
+#include "vast/concept/hashable/xxhash.hpp"
+
+#include "vast/format/writer.hpp"
+
+#include "vast/detail/operators.hpp"
 
 namespace vast {
 
@@ -113,7 +117,7 @@ private:
 };
 
 /// A PCAP writer.
-class writer {
+class writer : public format::writer<writer> {
 public:
   writer() = default;
 
@@ -124,7 +128,7 @@ public:
 
   ~writer();
 
-  expected<void> write(event const& e);
+  expected<void> process(event const& e);
 
   expected<void> flush();
 

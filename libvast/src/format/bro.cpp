@@ -471,7 +471,7 @@ writer::~writer() {
       *pair.second << footer;
 }
 
-expected<void> writer::write(event const& e) {
+expected<void> writer::process(event const& e) {
   if (!is<record_type>(e.type()))
     return make_error(ec::format_error, "cannot process non-record events");
   std::ostream* os = nullptr;

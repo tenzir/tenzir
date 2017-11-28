@@ -294,7 +294,7 @@ writer::~writer() {
     ::pcap_close(pcap_);
 }
 
-expected<void> writer::write(event const& e) {
+expected<void> writer::process(event const& e) {
   if (!pcap_) {
 #ifdef PCAP_TSTAMP_PRECISION_NANO
     pcap_ = ::pcap_open_dead_with_tstamp_precision(DLT_RAW, 65535,

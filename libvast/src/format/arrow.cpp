@@ -40,7 +40,12 @@ writer::~writer() {
     VAST_ERROR(name(), "failed to disconnect from plasma store");
 }
 
-expected<void> writer::write(event const& x) {
+expected<void> writer::write(const std::vector<event>& xs) {
+  // TODO: Implement this function.
+  return no_error;
+}
+
+expected<void> writer::write(const event& x) {
   if (!connected())
     return make_error(ec::format_error, "not connected to plasma store");
   // FIXME: For testing purposes, we store the string representation of each

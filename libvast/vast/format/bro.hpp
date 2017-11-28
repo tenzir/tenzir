@@ -7,15 +7,18 @@
 #include <unordered_map>
 #include <vector>
 
+#include "vast/data.hpp"
+#include "vast/expected.hpp"
+#include "vast/filesystem.hpp"
+#include "vast/schema.hpp"
+
 #include "vast/concept/parseable/core.hpp"
 #include "vast/concept/parseable/numeric.hpp"
 #include "vast/concept/parseable/string/any.hpp"
 #include "vast/concept/parseable/vast/address.hpp"
 #include "vast/concept/parseable/vast/subnet.hpp"
-#include "vast/data.hpp"
-#include "vast/expected.hpp"
-#include "vast/filesystem.hpp"
-#include "vast/schema.hpp"
+
+#include "vast/format/writer.hpp"
 
 #include "vast/detail/line_range.hpp"
 
@@ -244,7 +247,7 @@ private:
 };
 
 /// A Bro writer.
-class writer {
+class writer : public format::writer<writer> {
 public:
   writer() = default;
   writer(writer&&) = default;
@@ -256,7 +259,7 @@ public:
 
   ~writer();
 
-  expected<void> write(event const& e);
+  expected<void> process(event const& e);
 
   expected<void> flush();
 

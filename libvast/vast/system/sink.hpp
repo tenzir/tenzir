@@ -52,23 +52,33 @@ sink(caf::stateful_actor<sink_state<Writer>>* self, Writer&& writer) {
   self->state.last_flush = steady_clock::now();
   return {
     [=](const std::vector<event>& xs) {
-      for (auto& x : xs) {
-        auto r = self->state.writer.write(x);
+      if (self->state.processed + xs.size() <= self->state.limit) {
+        // Process batch as a whole.
+        auto r = self->state.writer.write(xs);
         if (!r) {
           VAST_ERROR(self->system().render(r.error()));
           self->quit(r.error());
           return;
         }
-        if (++self->state.processed == self->state.limit) {
-          VAST_INFO(self, "reached limit:", self->state.limit, "events");
-          self->quit();
-          return;
+      } else {
+        for (auto& x : xs) {
+          auto r = self->state.writer.write(x);
+          if (!r) {
+            VAST_ERROR(self->system().render(r.error()));
+            self->quit(r.error());
+            return;
+          }
+          if (++self->state.processed == self->state.limit) {
+            VAST_INFO(self, "reached limit:", self->state.limit, "events");
+            self->quit();
+            return;
+          }
         }
-        auto now = steady_clock::now();
-        if (now - self->state.last_flush > self->state.flush_interval) {
-          self->state.writer.flush();
-          self->state.last_flush = now;
-        }
+      }
+      auto now = steady_clock::now();
+      if (now - self->state.last_flush > self->state.flush_interval) {
+        self->state.writer.flush();
+        self->state.last_flush = now;
       }
     },
     [=](const uuid& id, const query_statistics&) {

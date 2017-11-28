@@ -4,7 +4,7 @@
 #include "vast/json.hpp"
 #include "vast/concept/printable/vast/json.hpp"
 
-#include "vast/format/writer.hpp"
+#include "vast/format/stream_writer.hpp"
 
 namespace vast {
 namespace format {
@@ -20,9 +20,9 @@ struct event_printer : printer<event_printer> {
   }
 };
 
-class writer : public format::writer<event_printer>{
+class writer : public format::stream_writer<event_printer>{
 public:
-  using format::writer<event_printer>::writer;
+  using stream_writer<event_printer>::stream_writer;
 
   char const* name() const {
     return "json-writer";
