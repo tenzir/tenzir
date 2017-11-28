@@ -13,11 +13,16 @@
 
 #pragma once
 
+#include <memory>
 #include <string>
+#include <unordered_map>
+#include <vector>
 
+#include <arrow/array/builder_base.h>
 #include <plasma/client.h>
 
 #include "vast/format/writer.hpp"
+#include "vast/type.hpp"
 
 namespace vast::format::arrow {
 
@@ -44,9 +49,12 @@ public:
   bool connected() const;
 
 private:
+  using array_builder_ptr = std::unique_ptr<::arrow::ArrayBuilder>;
+
   plasma::PlasmaClient plasma_client_;
   std::string plasma_socket_;
   bool connected_ = false;
+  std::unordered_map<record_type, std::vector<array_builder_ptr>> builders_;
 };
 
 } // namespace vast::format::arrow
