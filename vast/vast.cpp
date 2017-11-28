@@ -411,7 +411,7 @@ int main(int argc, char* argv[]) {
     if (node_endpoint.host.empty())
       node_endpoint.host = "127.0.0.1";
     VAST_INFO("connecting to", node_endpoint.host << ':' << node_endpoint.port);
-    auto remote_actor = [&] {
+    auto remote_actor = [&]() -> expected<actor> {
       if (use_encryption)
 #ifdef VAST_USE_OPENSSL
         return openssl::remote_actor(sys, node_endpoint.host,
@@ -436,7 +436,7 @@ int main(int argc, char* argv[]) {
     // Publish the node.
     auto host =
       node_endpoint.host.empty() ? nullptr : node_endpoint.host.c_str();
-    auto publish = [&] {
+    auto publish = [&]() -> expected<uint16_t> {
       if (use_encryption)
 #ifdef VAST_USE_OPENSSL
         return openssl::publish(node, node_endpoint.port, host);
