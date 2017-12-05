@@ -17,6 +17,7 @@
 #  ARROW_FOUND              System has (at least) Arrow C++ libs/headers
 #  ARROW_CORE_LIBRARIES     The Arrow C++ libraries
 #  ARROW_CORE_INCLUDE_DIR   The location of Arrow C++ headers
+#  ARROW_CORE_FOUND         System has Arrow libs/headers
 #  ARROW_PLASMA_FOUND       System has Plasma libs/headers
 #  ARROW_PLASMA_LIBRARIES   The Plasma libraries
 #  ARROW_PLASMA_INCLUDE_DIR The location of Plasma headers
