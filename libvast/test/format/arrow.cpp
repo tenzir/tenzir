@@ -16,6 +16,7 @@ TEST(arrow writer) {
   REQUIRE(writer.connected());
   for (auto& x : bro_conn_log)
     CHECK(writer.write(x));
+  CHECK(writer.flush());
 }
 
 FIXTURE_SCOPE_END()
