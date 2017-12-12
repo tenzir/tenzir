@@ -1,8 +1,8 @@
 #include "arrow/api.h"
+#include "arrow/builder.h"
 #include "arrow/io/api.h"
 #include "arrow/ipc/api.h"
 #include "arrow/type.h"
-#include "arrow/builder.h"
 #include "plasma/common.h"
 
 #include "vast/error.hpp"
@@ -17,22 +17,18 @@ namespace vast {
 
 namespace {
 
-std::shared_ptr<arrow::Field>convert_vast_type_to_arrow_field(const type& value) {
+std::shared_ptr<arrow::Field>
+convert_vast_type_to_arrow_field(const type& value) {
   auto field = arrow::field("none", arrow::null());
   // Period
-  std::vector<std::shared_ptr<arrow::Field>> schema_period = {
+  std::vector<std::shared_ptr<arrow::Field>> schema_vector_period = {
     arrow::field("num", arrow::int64()),
     arrow::field("denum", arrow::int64()),
   };
   // Timespan
-  std::vector<std::shared_ptr<arrow::Field>> schema_timespan = {
+  std::vector<std::shared_ptr<arrow::Field>> schema_vector_timespan = {
     arrow::field("rep", arrow::int64()),
-    arrow::field("period", arrow::struct_(schema_period)),
-  };
-  // Timepoint
-  std::vector<std::shared_ptr<arrow::Field>> schema_timepoint = {
-    arrow::field("clock", arrow::int64()),
-    arrow::field("timespan", arrow::struct_(schema_timespan)),
+    arrow::field("period", arrow::struct_(schema_vector_period)),
   };
   if (is<boolean_type>(value)) {
     field = arrow::field("bool", arrow::boolean());
@@ -43,43 +39,56 @@ std::shared_ptr<arrow::Field>convert_vast_type_to_arrow_field(const type& value)
   } else if (is<real_type>(value)) {
     field = arrow::field("double", arrow::float64());
   } else if (is<timespan_type>(value)) {
-    //field = arrow::field("timespan", arrow::struct_(schema_timespan));
+    auto timespan_struct
+      = std::make_shared<arrow::StructType>(schema_vector_timespan);
+    field = arrow::field("timespan", timespan_struct);
   } else if (is<timestamp_type>(value)) {
-    //field = arrow::field("timepoint", arrow::struct_(schema_timepoint));
+    auto timespan_struct
+      = std::make_shared<arrow::StructType>(schema_vector_timespan);
+    // Timepoint
+    std::vector<std::shared_ptr<arrow::Field>> schema_vector_timepoint = {
+      arrow::field("clock", arrow::int64()),
+      arrow::field("timespan", timespan_struct),
+    };
+    auto timepoint_struct
+      = std::make_shared<arrow::StructType>(schema_vector_timepoint);
+    field = arrow::field("timepoint", timepoint_struct);
   } else if (is<string_type>(value)) {
-        // String
-    //const std::shared_ptr<arrow::StringType> string_ptr;
-    //field = arrow::field("string", string_ptr);
+    // String
+    auto string_ptr = std::make_shared<arrow::StringType>();
+    field = arrow::field("string", string_ptr);
   } else if (is<pattern_type>(value)) {
     field = arrow::field("pattern", arrow::boolean());
   } else if (is<subnet_type>(value)) {
-    // size must set to 16
-    std::shared_ptr<arrow::FixedSizeBinaryType> address_ptr;
-    std::vector<std::shared_ptr<arrow::Field>> schema_subnet = {
+    auto address_ptr = std::make_shared<arrow::FixedSizeBinaryType>(16);
+    std::vector<std::shared_ptr<arrow::Field>> schema_vector_subnet = {
       arrow::field("address", address_ptr),
       arrow::field("mask", arrow::int8()),
     };
-    //field = arrow::field("subnet", arrow::struct_(schema_subnet));
+    auto subnet_struct
+      = std::make_shared<arrow::StructType>(schema_vector_subnet);
+    field = arrow::field("subnet", subnet_struct);
   } else if (is<address_type>(value)) {
     // size must set to 16 ??
-    std::shared_ptr<arrow::FixedSizeBinaryType> address_ptr;
-    //field = arrow::field("address", address_ptr);
+    auto address_ptr = std::make_shared<arrow::FixedSizeBinaryType>(16);
+    field = arrow::field("address", address_ptr);
   } else if (is<port_type>(value)) {
-    std::vector<std::shared_ptr<arrow::Field>> schema_port = {
+    std::vector<std::shared_ptr<arrow::Field>> schema_vector_port = {
       arrow::field("port_type", arrow::int8()),
       arrow::field("mask", arrow::int16()),
     };
-    //field = arrow::field("port", arrow::struct_(schema_port));
+    auto port_struct = std::make_shared<arrow::StructType>(schema_vector_port);
+    field = arrow::field("port", port_struct);
   } else if (is<record_type>(value)) {
     auto r = get<record_type>(value);
-      std::vector<std::shared_ptr<arrow::Field>> schema_record;
-      for (auto& e : record_type::each(r)){
-        schema_record.push_back(
-            std::move(convert_vast_type_to_arrow_field(e.trace.back()->type)));
-      }
-     field = arrow::field("record", arrow::struct_(schema_record));
-  // Datasets {vector, set and table}
-  } 
+    std::vector<std::shared_ptr<arrow::Field>> schema_record;
+    for (auto& e : record_type::each(r)) {
+      schema_record.push_back(
+        std::move(convert_vast_type_to_arrow_field(e.trace.back()->type)));
+    }
+    field = arrow::field("record", arrow::struct_(schema_record));
+    // Datasets {vector, set and table}
+  }
   return field;
 }
 
@@ -89,11 +98,11 @@ std::shared_ptr<arrow::RecordBatch> transpose(const std::vector<event>& xs) {
   std::vector<std::shared_ptr<arrow::Field>> schema_vector;
   std::vector<type> data;
   for (const auto& e : xs) {
-    //std::cout << e.type().name() << " " << to_string(e.data()) << std::endl;
+    // std::cout << e.type().name() << " " << to_string(e.data()) << std::endl;
     schema_vector.push_back(
-    std::move(convert_vast_type_to_arrow_field(e.type())));
-    //std::cout << e.type().name() <<  " bla " << e.type() << std::endl;  
-    //data.push_back();
+      std::move(convert_vast_type_to_arrow_field(e.type())));
+    // std::cout << e.type().name() <<  " bla " << e.type() << std::endl;
+    // data.push_back();
   }
   auto schema = std::make_shared<arrow::Schema>(schema_vector);
   std::cout << schema->ToString() << std::endl;
@@ -132,15 +141,15 @@ write_to_buffer(const arrow::RecordBatch& batch) {
   return buffer;
 }
 
-} // namespace <anonymous>
+} // namespace
 
 namespace format {
 namespace arrow {
 
 writer::writer(const std::string& plasma_socket) {
   VAST_DEBUG(name(), "connects to plasma store at", plasma_socket);
-  auto status = plasma_client_.Connect(plasma_socket, "",
-                                       PLASMA_DEFAULT_RELEASE_DELAY);
+  auto status
+    = plasma_client_.Connect(plasma_socket, "", PLASMA_DEFAULT_RELEASE_DELAY);
   connected_ = status.ok();
   if (!connected())
     VAST_ERROR(name(), "failed to connect to plasma store", status.ToString());
@@ -191,12 +200,11 @@ bool writer::connected() const {
   return connected_;
 }
 
-expected<plasma::ObjectID>
-writer::make_object(const void* data, size_t size) {
+expected<plasma::ObjectID> writer::make_object(const void* data, size_t size) {
   auto oid = plasma::ObjectID::from_random();
   uint8_t* buffer;
-  auto status = plasma_client_.Create(oid, static_cast<int64_t>(size),
-                                      nullptr, 0, &buffer);
+  auto status = plasma_client_.Create(oid, static_cast<int64_t>(size), nullptr,
+                                      0, &buffer);
   if (!status.ok())
     return make_error(ec::format_error, "failed to create object",
                       status.ToString());
