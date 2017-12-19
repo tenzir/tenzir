@@ -52,13 +52,15 @@ private:
   Parser parser_;
 };
 
-template <class Parser>
-class dynamic_repeat_parser : public parser<dynamic_repeat_parser<Parser>> {
+template <class Parser, class T>
+class dynamic_repeat_parser : public parser<dynamic_repeat_parser<Parser, T>> {
+  static_assert(std::is_integral<T>::value, "T must be an an integral type");
+
 public:
   using container = detail::container<typename Parser::attribute>;
   using attribute = typename container::attribute;
 
-  dynamic_repeat_parser(Parser p, const int& min, const int& max)
+  dynamic_repeat_parser(Parser p, const T& min, const T& max)
     : parser_{std::move(p)},
       min_{min},
       max_{max} {
@@ -72,8 +74,8 @@ public:
 
 private:
   Parser parser_;
-  const int& min_;
-  const int& max_;
+  const T& min_;
+  const T& max_;
 };
 
 template <int Min, int Max = Min, class Parser>
@@ -81,14 +83,14 @@ auto repeat(Parser const& p) {
   return static_repeat_parser<Parser, Min, Max>{p};
 }
 
-template <class Parser>
-auto repeat(Parser const& p, int n) {
-  return dynamic_repeat_parser<Parser>{p, n, n};
+template <class Parser, class T>
+auto repeat(Parser const& p, const T& n) {
+  return dynamic_repeat_parser<Parser, T>{p, n, n};
 }
 
-template <class Parser>
-auto repeat(Parser const& p, int min, int max) {
-  return dynamic_repeat_parser<Parser>{p, min, max};
+template <class Parser, class T>
+auto repeat(Parser const& p, const T& min, const T& max) {
+  return dynamic_repeat_parser<Parser, T>{p, min, max};
 }
 
 namespace parsers {
@@ -98,13 +100,13 @@ auto rep(Parser const& p) {
   return repeat<Min, Max>(p);
 }
 
-template <class Parser>
-auto rep(Parser const& p, const int& n) {
+template <class Parser, class T>
+auto rep(Parser const& p, const T& n) {
   return repeat(p, n);
 }
 
-template <class Parser>
-auto rep(Parser const& p, const int& min, const int& max) {
+template <class Parser, class T>
+auto rep(Parser const& p, const T& min, const T& max) {
   return repeat(p, min, max);
 }
 
