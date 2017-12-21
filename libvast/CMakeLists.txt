@@ -148,7 +148,7 @@ set(test_data "${test_data}\n\n} // namespace bgpdump")
 
 # MRT logs.
 set(test_data "${test_data}\n\nnamespace mrt {\n")
-file(GLOB logs test/logs/mrt/*.0)
+file(GLOB logs test/logs/mrt/*)
 foreach (log ${logs})
   get_filename_component(log_basename ${log} NAME_WE)
   set (this "constexpr auto ${log_basename} = \"${log}\";")
