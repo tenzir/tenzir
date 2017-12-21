@@ -91,7 +91,8 @@ struct message_header_parser : parser<message_header_parser> {
       static auto header_length = 16 + 2 + 1;
       if (x.length < header_length || x.length > 4096)
         throw std::runtime_error{"cannot parse RFC-violoating records"};
-      f += x.length - header_length;
+      f += std::min(static_cast<size_t>(l - f),
+                    static_cast<size_t>(x.length - header_length));
     };
     auto p = (bytes<16> >> b16be >> byte) ->* skip;
     return p(f, l, x.marker, x.length, x.type);
@@ -449,7 +450,6 @@ struct peer_entries_parser : parser<peer_entries_parser> {
   bool parse(Iterator& f, const Iterator& l, peer_entries& x)
   const {
     using namespace parsers;
-    auto peer_type = byte ->* [&] { f += 3; }; // skip to next 32-bit field
     auto ip_addr = detail::make_ip_v4_v6_parser(
       [&] { return (x.peer_type & 1) == 0; }
     );
@@ -458,7 +458,7 @@ struct peer_entries_parser : parser<peer_entries_parser> {
         (b16be ->* to_u32).when([&] { return (x.peer_type & 2) == 0; })
       | b32be
       ;
-    auto p = peer_type >> b32be >> ip_addr >> peer_as;
+    auto p = byte >> b32be >> ip_addr >> peer_as;
     return p(f, l, x.peer_type, x.peer_bgp_id, x.peer_ip_address, x.peer_as);
   }
 };
@@ -526,7 +526,8 @@ struct record_parser : parser<record_parser> {
         && x.header.subtype == bgp4mp::MESSAGE_AS4;
     });
     auto skip = parsers::eps ->* [&] {
-      f += x.header.length;
+      f += std::min(static_cast<size_t>(l - f),
+                    static_cast<size_t>(x.header.length));
     };
     auto msg = peer_index_table
              | message_as4
