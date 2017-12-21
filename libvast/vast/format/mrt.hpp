@@ -1,10 +1,9 @@
 #ifndef VAST_FORMAT_MRT_HPP
 #define VAST_FORMAT_MRT_HPP
 
-#include <iostream>
-
 #include "vast/address.hpp"
 #include "vast/event.hpp"
+#include "vast/none.hpp"
 #include "vast/schema.hpp"
 
 #include "vast/concept/parseable/core.hpp"
@@ -507,6 +506,7 @@ struct message_as4_parser : parser<message_as4_parser> {
 struct record {
   common_header header;
   variant<
+    none,
     table_dump_v2::peer_index_table,
     bgp4mp::message_as4
   > message;

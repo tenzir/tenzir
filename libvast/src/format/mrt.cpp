@@ -41,6 +41,10 @@ const auto message_as4_type = type{};
 namespace {
 
 struct factory {
+  value operator()(none) const {
+    return {};
+  }
+
   value operator()(table_dump_v2::peer_index_table& /* x */) const {
     // TODO: Implement this function.
     return {nil, table_dump_v2::peer_index_table_type};
