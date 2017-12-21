@@ -5,6 +5,7 @@
 #include "vast/event.hpp"
 #include "vast/none.hpp"
 #include "vast/schema.hpp"
+#include "vast/subnet.hpp"
 
 #include "vast/concept/parseable/core.hpp"
 #include "vast/concept/parseable/numeric.hpp"
@@ -179,23 +180,92 @@ enum subtypes {
   RIB_GENERIC = 6,
 };
 
-// TODO
-struct rib_ipv4_unicast {
+struct rib_entry;
+
+/// RIB Entry Header.
+///
+/// 0                   1                   2                   3
+///        0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+///       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+///       |                         Sequence Number                       |
+///       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+///       | Prefix Length |
+///       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+///       |                        Prefix (variable)                      |
+///       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+///       |         Entry Count           |  RIB Entries (variable)
+///       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+struct rib_entry_header {
+  uint32_t sequence_number;
+  uint8_t prefix_length;
+  std::vector<subnet> prefix;
+  uint16_t entry_count;
+  std::vector<rib_entry> rib_entries;
 };
 
-// TODO
-struct rib_ipv4_multicast {
+struct attribute;
+
+/// RIB Entry. The RIB Entries are repeated Entry Count times.  These entries
+/// share a common format as shown below.  They include a Peer Index from the
+/// PEER_INDEX_TABLE MRT record, an originated time for the RIB Entry, and the
+/// BGP path attribute length and attributes.  All AS numbers in the AS_PATH
+/// attribute MUST be encoded as 4-byte AS numbers.
+///
+///         0                   1                   2                   3
+///         0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+///        +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+///        |         Peer Index            |
+///        +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+///        |                         Originated Time                       |
+///        +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+///        |      Attribute Length         |
+///        +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+///        |                    BGP Attributes... (variable)
+///        +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+struct rib_entry {
+  uint16_t peer_index;
+  uint32_t originated_time;
+  uint16_t attribute_length;
+  std::vector<attribute> bgp_attributes;
 };
 
-// TODO
-struct rib_ipv6_unicast {
+struct attribute {
+  // TODO
 };
 
-// TODO
-struct rib_ipv6_multicast {
+/// RIB_GENERIC Entry Header.
+///
+///     0                   1                   2                   3
+///        0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+///       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+///       |                         Sequence Number                       |
+///       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+///       |    Address Family Identifier  |Subsequent AFI |
+///       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+///       |     Network Layer Reachability Information (variable)         |
+///       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+///       |         Entry Count           |  RIB Entries (variable)
+///       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+struct rib_generic_header {
+  uint32_t sequence_number;
+  uint16_t afi_id;
+  uint8_t subsequent_afi;
+  // TODO
 };
 
-struct peer_entries; // forward declaration
+/// AFI/SAFI-Specific RIB Subtypes.
+struct rib_afi_safi {
+  rib_entry_header header;
+  std::vector<rib_entry> entries;
+};
+
+/// RIB_GENERIC Subtype.
+struct rib_generic {
+  rib_generic_header header;
+  std::vector<rib_entry> entries;
+};
+
+struct peer_entries;
 
 /// An initial PEER_INDEX_TABLE MRT record provides the BGP ID of the
 /// collector, an OPTIONAL view name, and a list of indexed peers.
@@ -257,10 +327,6 @@ struct peer_entries {
   uint32_t peer_bgp_id;
   address peer_ip_address;
   uint32_t peer_as;
-};
-
-// TODO
-struct rib_generic {
 };
 
 } // namespace table_dump_v2
