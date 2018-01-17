@@ -47,6 +47,12 @@ Usage: $0 [OPTION]... [VAR=VALUE]...
     --with-pcap=PATH        path to libpcap install root
     --with-perftools=PATH   path to gperftools install root
     --with-doxygen=PATH     path to Doxygen install root
+
+  Influential Environment Variables (only on first invocation):
+    CXX                         C++ compiler command
+    CXXFLAGS                    C++ compiler flags
+    LDFLAGS                     Additional linker flags
+    CMAKE_GENERATOR     Selects a custom generator
 "
 
 # Function to append a CMake cache entry definition to the
@@ -93,6 +99,11 @@ append_cache_entry CMAKE_BUILD_TYPE       STRING    RelWithDebInfo
 append_cache_entry VAST_ENABLE_ASSERTIONS BOOL      true
 append_cache_entry VAST_LOG_LEVEL         INTEGER   $(levelize debug)
 append_cache_entry VAST_USE_TCMALLOC      BOOL      false
+
+# Parse custom environment variable to initialize CMakeGenerator.
+if [ -n "$CMAKE_GENERATOR" ]; then
+  CMakeGenerator="$CMAKE_GENERATOR"
+fi
 
 # Parse command line arguments.
 while [ $# -ne 0 ]; do
