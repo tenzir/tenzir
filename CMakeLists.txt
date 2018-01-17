@@ -38,6 +38,9 @@ set(VERSION_MAJ_MIN "${VERSION_MAJOR}.${VERSION_MINOR}")
 #                               Compiler Setup
 #------------------------------------------------------------------------------
 
+# Respect environment variables.
+set(LDFLAGS "$ENV{LDFLAGS}")
+
 # Ninja doesn't colorize compiler diagnostics by default.
 if (CMAKE_GENERATOR STREQUAL "Ninja")
   set(EXTRA_FLAGS "-fdiagnostics-color")
