@@ -10,6 +10,9 @@ if (APPLE AND NOT DEFINED CMAKE_MACOSX_RPATH)
   set(CMAKE_MACOSX_RPATH true)
 endif()
 
+# Support Clang tools such as clang-tidy
+set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
+
 set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 include(CTest)
 include(Helpers)

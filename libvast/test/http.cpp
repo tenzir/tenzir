@@ -42,9 +42,9 @@ TEST(URI) {
   u.scheme = "http";
   u.host = "foo.bar";
   u.port = 80;
-  u.path.push_back("foo");
-  u.path.push_back("bar");
-  u.path.push_back("baz");
+  u.path.emplace_back("foo");
+  u.path.emplace_back("bar");
+  u.path.emplace_back("baz");
   u.query["opt1"] = "val 1";
   u.query["opt2"] = "val2";
   u.fragment = "frag 1";

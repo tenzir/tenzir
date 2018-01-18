@@ -30,10 +30,10 @@ TEST(default construction) {
 }
 
 TEST(copy construction) {
-  bitvector<uint8_t> x{0, 1, 1, 0, 0, 0, 1};
+  bitvector<uint8_t> x{false, true, true, false, false, false, true};
   bitvector<uint8_t> y{x};
   REQUIRE_EQUAL(x, y);
-  y.push_back(1);
+  y.push_back(true);
   CHECK_NOT_EQUAL(x, y);
   y.pop_back();
   CHECK_EQUAL(x, y);
@@ -52,7 +52,7 @@ TEST(size construction) {
 }
 
 TEST(initializer_list construction) {
-  bitvector<uint8_t> x{0, 0, 0, 1, 0, 1}; // implicitly tests assign(f, l).
+  bitvector<uint8_t> x{false, false, false, true, false, true}; // implicitly tests assign(f, l).
   REQUIRE_EQUAL(x.size(), 6u);
   CHECK(!x[0]);
   CHECK(!x[1]);
@@ -241,11 +241,11 @@ TEST(rank) {
   bitvector<uint64_t> x(1024, true);
   CHECK_EQUAL(rank<0>(x), 0u);
   CHECK_EQUAL(rank<1>(x), 1024u);
-  x.push_back(0);
-  x.push_back(0);
-  x.push_back(0);
-  x.push_back(0);
-  x.push_back(1);
+  x.push_back(false);
+  x.push_back(false);
+  x.push_back(false);
+  x.push_back(false);
+  x.push_back(true);
   CHECK_EQUAL(rank<0>(x), 4u);
   CHECK_EQUAL(rank<1>(x), 1025u);
   x.resize(2048, false);

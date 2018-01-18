@@ -86,7 +86,7 @@ bool uds_send_fd(int socket, int fd) {
   // Setup message header.
   ::msghdr m;
   std::memset(&m, 0, sizeof(struct msghdr));
-  m.msg_name = NULL;
+  m.msg_name = nullptr;
   m.msg_namelen = 0;
   m.msg_iov = iov;
   m.msg_iovlen = 1;

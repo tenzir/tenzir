@@ -106,7 +106,7 @@ TEST(parseable) {
   str = "[    ]";
   CHECK(parsers::json(str, j));
   CHECK(j == json::array{});
-  str = "[ 42,-1337 , \"foo\", null ,true ]"s;
+  str = R"([ 42,-1337 , "foo", null ,true ])";
   CHECK(parsers::json(str, j));
   CHECK(j == json::array{42, -1337, "foo", nil, true});
   MESSAGE("object");

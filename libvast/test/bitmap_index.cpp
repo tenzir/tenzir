@@ -96,22 +96,22 @@ TEST(multi-level range-coded bitmap index 2) {
   all_ones.append_bits(true, 7);
   // > 8
   null_bitmap greater_eight;
-  greater_eight.append_bit(1);
-  greater_eight.append_bit(1);
-  greater_eight.append_bit(1);
-  greater_eight.append_bit(0);
-  greater_eight.append_bit(1);
-  greater_eight.append_bit(1);
-  greater_eight.append_bit(1);
+  greater_eight.append_bit(true);
+  greater_eight.append_bit(true);
+  greater_eight.append_bit(true);
+  greater_eight.append_bit(false);
+  greater_eight.append_bit(true);
+  greater_eight.append_bit(true);
+  greater_eight.append_bit(true);
   // > 80
   null_bitmap greater_eighty;
-  greater_eighty.append_bit(0);
-  greater_eighty.append_bit(1);
-  greater_eighty.append_bit(0);
-  greater_eighty.append_bit(0);
-  greater_eighty.append_bit(1);
-  greater_eighty.append_bit(0);
-  greater_eighty.append_bit(1);
+  greater_eighty.append_bit(false);
+  greater_eighty.append_bit(true);
+  greater_eighty.append_bit(false);
+  greater_eighty.append_bit(false);
+  greater_eighty.append_bit(true);
+  greater_eighty.append_bit(false);
+  greater_eighty.append_bit(true);
   CHECK(bmi.lookup(greater, 1) == all_ones);
   CHECK(bmi.lookup(greater, 2) == all_ones);
   CHECK(bmi.lookup(greater, 3) == all_ones);
