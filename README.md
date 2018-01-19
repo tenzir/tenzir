@@ -69,6 +69,10 @@ Optional:
 - [Doxygen](http://www.doxygen.org)
 - [md2man](https://github.com/sunaku/md2man)
 
+To build the API documentation locally:
+
+    make doc
+
 #### FreeBSD
 
 FreeBSD ships with a C++14 compiler.
