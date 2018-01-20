@@ -81,6 +81,10 @@ struct is_contiguous_byte_container<
   >
 > : std::true_type {};
 
+template <class T>
+inline constexpr bool is_contiguous_byte_container_v
+  = is_contiguous_byte_container<T>::value;
+
 // -- SFINAE helpers ---------------------------------------------------------
 // http://bit.ly/uref-copy.
 

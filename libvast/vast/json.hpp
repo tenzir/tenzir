@@ -181,17 +181,17 @@ inline bool convert(bool b, json& j) {
 }
 
 template <typename T>
-auto convert(T x, json& j)
--> std::enable_if_t<std::is_arithmetic<T>::value, bool> {
-  j = json::number(x);
-  return true;
-}
-
-template <typename T>
-auto convert(T&& x, json& j)
--> std::enable_if_t<std::is_convertible<T, std::string>{}, bool> {
-  j = std::string(std::forward<T>(x));
-  return true;
+bool convert(T x, json& j) {
+  if constexpr (std::is_arithmetic<T>::value) {
+    j = json::number(x);
+    return true;
+  } else if constexpr (std::is_convertible_v<T, std::string>) {
+    j = std::string{std::forward<T>(x)};
+    return true;
+  } else {
+    static_assert(!std::is_same_v<T, T>,
+                  "T is neither arithmetic nor convertible to std::string");
+  }
 }
 
 template <typename T>

@@ -42,23 +42,20 @@ struct formatter {
   };
 
   template <class T>
-  auto operator<<(T const& x)
-  -> std::enable_if_t<is_streamable<std::ostringstream, T>::value, formatter&> {
-    message << x;
-    return *this;
-  }
-
-  template <class T>
-  auto operator<<(T const& x)
-  -> std::enable_if_t<
-       !is_streamable<std::ostringstream, T>::value
-          && vast::is_printable<std::ostreambuf_iterator<char>, T>::value,
-       formatter&
-     > {
-    using vast::print;
-    if (!print(std::ostreambuf_iterator<char>{message}, x))
-      message.setstate(std::ios_base::failbit);
-    return *this;
+  formatter& operator<<(T const& x) {
+    if constexpr (is_streamable<std::ostringstream, T>::value) {
+      message << x;
+      return *this;
+    } else if constexpr (vast::is_printable<std::ostreambuf_iterator<char>,
+                                            T>::value) {
+      using vast::print;
+      if (!print(std::ostreambuf_iterator<char>{message}, x))
+        message.setstate(std::ios_base::failbit);
+      return *this;
+    } else {
+      static_assert(!std::is_same_v<T, T>,
+                    "T is neither streamable nor printable");
+    }
   }
 
   template <class T, class... Ts>

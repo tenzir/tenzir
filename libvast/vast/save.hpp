@@ -31,71 +31,42 @@
 
 namespace vast {
 
-/// Serializes a sequence of objects into a streambuffer.
+/// Serializes a sequence of objects into a sink.
 /// @see load
-template <
-  compression Method = compression::null,
-  class Streambuf,
-  class T,
-  class... Ts
->
-auto save(Streambuf& streambuf, T&& x, Ts&&... xs)
--> std::enable_if_t<detail::is_streambuf<Streambuf>::value, expected<void>> {
-  try {
-    if (Method == compression::null) {
-      caf::stream_serializer<Streambuf&> s{streambuf};
-      detail::write(s, std::forward<T>(x), std::forward<Ts>(xs)...);
-    } else {
-      detail::compressedbuf compressed{streambuf, Method};
-      caf::stream_serializer<detail::compressedbuf&> s{compressed};
-      detail::write(s, std::forward<T>(x), std::forward<Ts>(xs)...);
-      compressed.pubsync();
+template <compression Method = compression::null, class Sink, class... Ts>
+expected<void> save(Sink&& out, Ts&&... xs) {
+  static_assert(sizeof...(Ts) > 0);
+  using sink_type = std::decay_t<Sink>;
+  if constexpr (detail::is_streambuf<sink_type>::value) {
+    try {
+      if (Method == compression::null) {
+        caf::stream_serializer<sink_type&> s{out};
+        detail::write(s, std::forward<Ts>(xs)...);
+      } else {
+        detail::compressedbuf compressed{out, Method};
+        caf::stream_serializer<detail::compressedbuf&> s{compressed};
+        detail::write(s, std::forward<Ts>(xs)...);
+        compressed.pubsync();
+      }
+    } catch (std::exception& e) {
+      return make_error(ec::unspecified, e.what());
     }
-  } catch (std::exception const& e) {
-    return make_error(ec::unspecified, e.what());
+    return {};
+  } else if constexpr (std::is_base_of_v<std::ostream, sink_type>) {
+    auto sb = out.rdbuf();
+    return save<Method>(*sb, std::forward<Ts>(xs)...);
+  } else if constexpr (detail::is_contiguous_byte_container_v<sink_type>) {
+    caf::containerbuf<sink_type> sink{out};
+    return save<Method>(sink, std::forward<Ts>(xs)...);
+  } else if constexpr (std::is_same_v<sink_type, path>) {
+    std::ofstream fs{out.str()};
+    if (!fs)
+      return make_error(ec::filesystem_error, "failed to create filestream",
+                        out);
+    return save<Method>(*fs.rdbuf(), std::forward<Ts>(xs)...);
+  } else {
+    static_assert(!std::is_same_v<Sink, Sink>, "unexpected Sink type");
   }
-  return {};
-}
-
-template <
-  compression Method = compression::null,
-  class T,
-  class... Ts
->
-expected<void> save(std::ostream& os, T&& x, Ts&&... xs) {
-  auto sb = os.rdbuf();
-  return save<Method>(*sb, std::forward<T>(x), std::forward<Ts>(xs)...);
-}
-
-/// Serializes a sequence of objects into a container of bytes.
-/// @see load
-template <
-  compression Method = compression::null,
-  class Container,
-  class T,
-  class... Ts
->
-auto save(Container& container, T&& x, Ts&&... xs)
--> std::enable_if_t<
-  detail::is_contiguous_byte_container<Container>::value,
-  expected<void>
-> {
-  caf::containerbuf<Container> sink{container};
-  return save<Method>(sink, std::forward<T>(x), std::forward<Ts>(xs)...);
-}
-
-/// Serializes a sequence of objects into a file.
-/// @see load
-template <
-  compression Method = compression::null,
-  class T,
-  class... Ts
->
-expected<void> save(path const& p, T&& x, Ts&&... xs) {
-  std::ofstream fs{p.str()};
-  if (!fs)
-    return make_error(ec::filesystem_error, "failed to create filestream", p);
-  return save<Method>(*fs.rdbuf(), std::forward<T>(x), std::forward<Ts>(xs)...);
 }
 
 } // namespace vast

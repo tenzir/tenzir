@@ -69,29 +69,24 @@ struct container {
   }
 
   template <typename Parser, typename Iterator, typename Attribute>
-  static auto parse(Parser const& p, Iterator& f, Iterator const& l,
-                    Attribute& a)
-    -> std::enable_if_t<!is_pair<typename Attribute::value_type>{}, bool> {
-    value_type x;
-    if (!p(f, l, x))
-      return false;
-    push_back(a, std::move(x));
-    return true;
-  }
-
-  template <typename Parser, typename Iterator, typename Attribute>
-  static auto parse(Parser const& p, Iterator& f, Iterator const& l,
-                    Attribute& a)
-    -> std::enable_if_t<is_pair<typename Attribute::value_type>{}, bool> {
-    using pair_type =
-      std::pair<
-        std::remove_const_t<typename Attribute::value_type::first_type>,
-        typename Attribute::value_type::second_type
-      >;
-    pair_type pair;
-    if (!p(f, l, pair))
-      return false;
-    push_back(a, std::move(pair));
+  static bool parse(Parser const& p, Iterator& f, Iterator const& l,
+                    Attribute& a) {
+    if constexpr (!is_pair<typename Attribute::value_type>::value) {
+      value_type x;
+      if (!p(f, l, x))
+        return false;
+      push_back(a, std::move(x));
+    } else {
+      using pair_type =
+        std::pair<
+          std::remove_const_t<typename Attribute::value_type::first_type>,
+          typename Attribute::value_type::second_type
+        >;
+      pair_type pair;
+      if (!p(f, l, pair))
+        return false;
+      push_back(a, std::move(pair));
+    }
     return true;
   }
 };

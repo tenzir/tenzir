@@ -24,35 +24,29 @@ namespace vast::detail::varbyte {
 
 /// Computes the size a given value will take in variable byte encoding.
 template <class T>
-constexpr std::enable_if_t<sizeof(T) == 8, size_t> size(T x) {
-  return x >= (T(1) << 63) ? 10 :
-         x >= (T(1) << 56) ? 9 :
-         x >= (T(1) << 49) ? 8 :
-         x >= (T(1) << 42) ? 7 :
-         x >= (T(1) << 35) ? 6 :
-         x >= (T(1) << 28) ? 5 :
-         x >= (T(1) << 21) ? 4 :
-         x >= (T(1) << 14) ? 3 :
-         x >= (T(1) << 7) ? 2 : 1;
-}
-
-template <class T>
-constexpr std::enable_if_t<sizeof(T) == 4, size_t> size(T x) {
-  return x >= (T(1) << 28) ? 5 :
-         x >= (T(1) << 21) ? 4 :
-         x >= (T(1) << 14) ? 3 :
-         x >= (T(1) << 7) ? 2 : 1;
-}
-
-template <class T>
-constexpr std::enable_if_t<sizeof(T) == 2, size_t> size(T x) {
-  return x >= (T(1) << 14) ? 3 :
-         x >= (T(1) << 7) ? 2 : 1;
-}
-
-template <class T>
-constexpr std::enable_if_t<sizeof(T) == 1, size_t> size(T x) {
-  return x >= (T(1) << 7) ? 2 : 1;
+constexpr size_t size(T x) noexcept {
+  if constexpr (sizeof(T) == 8)
+    return x >= (T(1) << 63) ? 10 :
+           x >= (T(1) << 56) ? 9 :
+           x >= (T(1) << 49) ? 8 :
+           x >= (T(1) << 42) ? 7 :
+           x >= (T(1) << 35) ? 6 :
+           x >= (T(1) << 28) ? 5 :
+           x >= (T(1) << 21) ? 4 :
+           x >= (T(1) << 14) ? 3 :
+           x >= (T(1) << 7) ? 2 : 1;
+  else if constexpr (sizeof(T) == 4)
+    return x >= (T(1) << 28) ? 5 :
+           x >= (T(1) << 21) ? 4 :
+           x >= (T(1) << 14) ? 3 :
+           x >= (T(1) << 7) ? 2 : 1;
+  else if constexpr (sizeof(T) == 2)
+    return x >= (T(1) << 14) ? 3 :
+           x >= (T(1) << 7) ? 2 : 1;
+  else if constexpr (sizeof(T) == 1)
+    return x >= (T(1) << 7) ? 2 : 1;
+  else
+    static_assert(!std::is_same_v<T, T>, "unsupported integer type");
 }
 
 /// Computes maximum number of bytes required to encode an integral type *T*.
