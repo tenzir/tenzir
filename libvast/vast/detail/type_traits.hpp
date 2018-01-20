@@ -29,9 +29,6 @@ template <class...> class variant;
 
 namespace detail {
 
-using caf::detail::conjunction;
-using caf::detail::disjunction;
-
 // Computes the sum of its arguments.
 template <size_t ...>
 struct sum;
@@ -112,10 +109,10 @@ using disable_if_same = disable_if_t<std::is_same<T, U>::value, R>;
 // -- traits -----------------------------------------------------------------
 
 template <class T, class...Ts>
-struct is_any : disjunction<std::is_same<T, Ts>::value...> {};
+struct is_any : std::disjunction<std::is_same<T, Ts>...> {};
 
 template <class T, class...Ts>
-struct are_same : conjunction<std::is_same<T, Ts>::value...> {};
+struct are_same : std::conjunction<std::is_same<T, Ts>...> {};
 
 // -- tuple ------------------------------------------------------------------
 

@@ -144,14 +144,14 @@ public:
   }
 
   variant(const variant& other)
-  noexcept(detail::conjunction<std::is_nothrow_constructible<Ts>{}...>::value) {
+  noexcept(std::conjunction<std::is_nothrow_constructible<Ts>...>::value) {
     other.apply(copy_constructor{*this});
     index_ = other.index_;
   }
 
   variant(variant&& other)
-  noexcept(detail::conjunction<
-             std::is_nothrow_move_constructible<Ts>{}...
+  noexcept(std::conjunction<
+             std::is_nothrow_move_constructible<Ts>...
            >::value) {
     other.apply(move_constructor{*this});
     index_ = other.index_;
@@ -164,8 +164,8 @@ public:
   }
 
   variant& operator=(variant&& rhs)
-  noexcept(detail::conjunction<
-             std::is_nothrow_move_assignable<Ts>{}...
+  noexcept(std::conjunction<
+             std::is_nothrow_move_assignable<Ts>...
            >::value) {
     rhs.apply(move_assigner{*this, rhs.index_});
     index_ = rhs.index_;

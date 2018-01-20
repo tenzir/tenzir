@@ -58,7 +58,7 @@ template <class ...T>
 struct is_uniquely_represented<std::tuple<T...>>
   : std::integral_constant<
       bool,
-      detail::conjunction<is_uniquely_represented<T>::value...>{}
+      std::conjunction<is_uniquely_represented<T>...>::value
         && detail::sum<sizeof(T)...>{} == sizeof(std::tuple<T...>)
     > {};
 
