@@ -19,11 +19,8 @@
 #include <limits>
 #include <type_traits>
 
-namespace vast {
-namespace detail {
-
 /// The *variable byte* coding.
-namespace varbyte {
+namespace vast::detail::varbyte {
 
 /// Computes the size a given value will take in variable byte encoding.
 template <class T>
@@ -104,8 +101,6 @@ decode(T& x, void const* source) {
   return i;
 }
 
-} // namespace varbyte
-} // namespace detail
-} // namespace vast
+} // namespace vast::detail::varbyte
 
 #endif

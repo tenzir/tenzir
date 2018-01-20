@@ -18,8 +18,7 @@
 
 #include "vast/detail/operators.hpp"
 
-namespace vast {
-namespace detail {
+namespace vast::detail {
 
 /// Generates random numbers according to the [Pareto
 /// distribution](http://en.wikipedia.org/wiki/Pareto_distribution).
@@ -133,7 +132,6 @@ R pareto_distribution<R>::operator()(
   return pareto_distribution<R>{parm}(g);
 }
 
-} // namespace detail
-} // namespace vast
+} // namespace vast::detail
 
 #endif

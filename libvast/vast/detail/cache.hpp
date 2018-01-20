@@ -28,8 +28,7 @@
 #include "vast/detail/operators.hpp"
 #include "vast/detail/type_traits.hpp"
 
-namespace vast {
-namespace detail {
+namespace vast::detail {
 
 struct lru;
 
@@ -268,7 +267,6 @@ struct mru {
   }
 };
 
-} // namespace detail
-} // namespace vast
+} // namespace vast::detail
 
 #endif

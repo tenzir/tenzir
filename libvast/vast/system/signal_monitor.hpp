@@ -20,8 +20,7 @@
 
 #include "vast/system/atoms.hpp"
 
-namespace vast {
-namespace system {
+namespace vast::system {
 
 struct signal_monitor_state {
   const char* name = "signal-monitor";
@@ -41,7 +40,6 @@ signal_monitor(signal_monitor_type::stateful_pointer<signal_monitor_state> self,
                std::chrono::milliseconds monitoring_interval,
                caf::actor receiver);
 
-} // namespace system
-} // namespace vast
+} // namespace vast::system
 
 #endif

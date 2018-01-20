@@ -25,8 +25,7 @@
 #include "vast/concept/printable/print.hpp"
 #include "vast/detail/pp.hpp"
 
-namespace vast {
-namespace detail {
+namespace vast::detail {
 
 struct formatter {
   template <class Stream, class T>
@@ -94,8 +93,7 @@ struct formatter {
   std::ostringstream message;
 };
 
-} // namespace detail
-} // namespace vast
+} // namespace vast::detail
 
 #if defined(CAF_LOG_LEVEL)
   #define VAST_LOG_IMPL(lvl, msg)                                              \

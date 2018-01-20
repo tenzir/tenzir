@@ -26,8 +26,7 @@
 #include "vast/detail/assert.hpp"
 #include "vast/detail/coding.hpp"
 
-namespace vast {
-namespace detail {
+namespace vast::detail {
 
 /// Unscapes a string according to an escaper.
 /// @param str The string to escape.
@@ -782,7 +781,6 @@ TextIterator search_knuth_morris_pratt(PatternIterator p0, PatternIterator p1,
   return make_knuth_morris_pratt(p0, p1)(t0, t1);
 }
 
-} // namespace detail
-} // namespace vast
+} // namespace vast::detail
 
 #endif

@@ -19,8 +19,7 @@
 
 #include "vast/detail/operators.hpp"
 
-namespace vast {
-namespace detail {
+namespace vast::detail {
 
 /// A set abstraction as sorted STL vector.
 template <class T, class Allocator, class Policy>
@@ -202,7 +201,6 @@ private:
   vector_type xs_;
 };
 
-} // namespace detail
-} // namespace vast
+} // namespace vast::detail
 
 #endif

@@ -16,8 +16,7 @@
 
 #include <streambuf>
 
-namespace vast {
-namespace detail {
+namespace vast::detail {
 
 /// A streambuffer that proxies writes to an underlying POSIX file descriptor.
 class fdoutbuf : public std::streambuf {
@@ -34,7 +33,6 @@ private:
   int fd_;
 };
 
-} // namespace detail
-} // namespace vast
+} // namespace vast::detail
 
 #endif

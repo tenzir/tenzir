@@ -21,8 +21,7 @@
 
 #include "vast/detail/vector_set.hpp"
 
-namespace vast {
-namespace detail {
+namespace vast::detail {
 
 struct steady_set_policy {
   template <class Ts, class T>
@@ -44,7 +43,6 @@ struct steady_set_policy {
 template <class T, class Allocator = std::allocator<T>>
 using steady_set = vector_set<T, Allocator, steady_set_policy>;
 
-} // namespace detail
-} // namespace vast
+} // namespace vast::detail
 
 #endif

@@ -21,8 +21,7 @@
 
 #include "vast/uri.hpp"
 
-namespace vast {
-namespace http {
+namespace vast::http {
 
 struct header {
   std::string name;
@@ -51,7 +50,6 @@ struct response : message {
   std::string status_text;
 };
 
-} // namespace http
-} // namespace vast
+} // namespace vast::http
 
 #endif

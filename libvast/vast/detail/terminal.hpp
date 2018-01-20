@@ -14,12 +14,9 @@
 #ifndef VAST_DETAIL_TERMINAL_HPP
 #define VAST_DETAIL_TERMINAL_HPP
 
-namespace vast {
-namespace detail {
-
 /// This namesapce hosts various functions related to controling the terminal.
 /// @warn All functions in this namesapce are not thread-safe.
-namespace terminal {
+namespace vast::detail::terminal {
 
 /// RAII helper for scope-wise terminal unbuffering.
 struct unbufferer {
@@ -59,8 +56,6 @@ bool enable_echo();
 /// from STDIN.
 bool get(char& c, int timeout = 100);
 
-} // namespace terminal
-} // namespace detail
-} // namespace vast
+} // namespace vast::detail::terminal
 
 #endif

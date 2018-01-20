@@ -16,13 +16,11 @@
 
 #include <chrono>
 
-namespace vast {
-namespace system {
+namespace vast::system {
 
 /// Timeout when interacting with the consensus module.
 constexpr auto consensus_timeout = std::chrono::seconds(10);
 
-} // namespace system
-} // namespace vast
+} // namespace vast::system
 
 #endif

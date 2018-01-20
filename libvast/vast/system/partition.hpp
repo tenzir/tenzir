@@ -22,8 +22,7 @@
 #include "vast/filesystem.hpp"
 #include "vast/type.hpp"
 
-namespace vast {
-namespace system {
+namespace vast::system {
 
 struct partition_state {
   std::unordered_map<type, caf::actor> indexers;
@@ -36,7 +35,6 @@ struct partition_state {
 /// @param dir The directory where to store this partition on the file system.
 caf::behavior partition(caf::stateful_actor<partition_state>* self, path dir);
 
-} // namespace system
-} // namespace vast
+} // namespace vast::system
 
 #endif

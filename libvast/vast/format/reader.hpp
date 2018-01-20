@@ -23,8 +23,7 @@
 #include "vast/event.hpp"
 #include "vast/expected.hpp"
 
-namespace vast {
-namespace format {
+namespace vast::format {
 
 /// A generic event reader.
 template <class Parser>
@@ -57,7 +56,6 @@ private:
   std::unique_ptr<detail::line_range> lines_;
 };
 
-} // namespace format
-} // namespace vast
+} // namespace vast::format
 
 #endif

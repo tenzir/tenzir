@@ -21,8 +21,7 @@
 
 #include "vast/detail/vector_set.hpp"
 
-namespace vast {
-namespace detail {
+namespace vast::detail {
 
 template <class Compare>
 struct flat_set_policy {
@@ -50,7 +49,6 @@ template <
 >
 using flat_set = vector_set<T, Allocator, flat_set_policy<Compare>>;
 
-} // namespace detail
-} // namespace vast
+} // namespace vast::detail
 
 #endif

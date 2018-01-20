@@ -19,8 +19,7 @@
 
 #include <caf/actor_system_config.hpp>
 
-namespace vast {
-namespace system {
+namespace vast::system {
 
 /// Bundles all configuration parameters of a VAST system.
 class configuration : public caf::actor_system_config {
@@ -38,7 +37,6 @@ public:
   configuration(const std::vector<std::string>& opts);
 };
 
-} // namespace system
-} // namespace vast
+} // namespace vast::system
 
 #endif

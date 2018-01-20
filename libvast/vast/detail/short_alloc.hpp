@@ -44,8 +44,7 @@
 
 #include "vast/detail/assert.hpp"
 
-namespace vast {
-namespace detail {
+namespace vast::detail {
 
 // See the following resources for details:
 // - http://howardhinnant.github.io/short_alloc.html.
@@ -175,7 +174,6 @@ bool operator!=(const short_alloc<T0, N0, A0>& x,
   return !(x == y);
 }
 
-} // namespace detail
-} // namespace vast
+} // namespace vast::detail
 
 #endif

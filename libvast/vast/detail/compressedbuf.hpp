@@ -20,8 +20,7 @@
 
 #include "vast/compression.hpp"
 
-namespace vast {
-namespace detail {
+namespace vast::detail {
 
 /// A compressed streambuffer that compresses/uncompresses into/from an
 /// underlying `std::streambuf`. It uses two buffers internally, for compressed
@@ -85,7 +84,6 @@ private:
   std::vector<char> uncompressed_;
 };
 
-} // namespace detail
-} // namespace vast
+} // namespace vast::detail
 
 #endif

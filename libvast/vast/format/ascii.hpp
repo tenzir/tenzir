@@ -19,9 +19,7 @@
 
 #include "vast/format/writer.hpp"
 
-namespace vast {
-namespace format {
-namespace ascii {
+namespace vast::format::ascii {
 
 struct ascii_printer : printer<ascii_printer> {
   using attribute = event;
@@ -41,9 +39,7 @@ public:
   }
 };
 
-} // namespace ascii
-} // namespace format
-} // namespace vast
+} // namespace vast::format::ascii
 
 #endif
 

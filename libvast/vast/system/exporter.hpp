@@ -29,8 +29,7 @@
 #include "vast/system/archive.hpp"
 #include "vast/system/query_statistics.hpp"
 
-namespace vast {
-namespace system {
+namespace vast::system {
 
 struct exporter_state {
   archive_type archive;
@@ -57,7 +56,6 @@ struct exporter_state {
 caf::behavior exporter(caf::stateful_actor<exporter_state>* self,
                        expression expr, query_options opts);
 
-} // namespace system
-} // namespace vast
+} // namespace vast::system
 
 #endif

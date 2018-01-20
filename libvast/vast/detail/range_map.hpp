@@ -20,8 +20,7 @@
 #include "vast/detail/assert.hpp"
 #include "vast/detail/iterator.hpp"
 
-namespace vast {
-namespace detail {
+namespace vast::detail {
 
 /// An associative data structure that maps half-open, *disjoint* intervals to
 /// values.
@@ -286,7 +285,6 @@ private:
   map_type map_;
 };
 
-} // namespace detail
-} // namespace vast
+} // namespace vast::detail
 
 #endif

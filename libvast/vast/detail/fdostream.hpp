@@ -18,8 +18,7 @@
 
 #include "vast/detail/fdoutbuf.hpp"
 
-namespace vast {
-namespace detail {
+namespace vast::detail {
 
 /// An output stream which wraps a ::fdoutbuf.
 class fdostream : public std::ostream {
@@ -30,7 +29,6 @@ private:
   fdoutbuf buf_;
 };
 
-} // namespace detail
-} // namespace vast
+} // namespace vast::detail
 
 #endif

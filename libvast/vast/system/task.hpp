@@ -22,8 +22,7 @@
 
 #include "vast/system/atoms.hpp"
 
-namespace vast {
-namespace system {
+namespace vast::system {
 
 struct task_state {
   uint64_t total = 0;
@@ -50,7 +49,6 @@ caf::behavior task(caf::stateful_actor<task_state>* self, Ts... xs) {
   return detail::task(self, std::move(done_msg));
 }
 
-} // namespace system
-} // namespace vast
+} // namespace vast::system
 
 #endif

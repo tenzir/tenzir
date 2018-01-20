@@ -18,8 +18,7 @@
 #include <streambuf>
 #include <vector>
 
-namespace vast {
-namespace detail {
+namespace vast::detail {
 
 /// A streambuffer that proxies reads to an underlying POSIX file descriptor.
 class fdinbuf : public std::streambuf {
@@ -40,7 +39,6 @@ private:
   std::vector<char> buffer_;
 };
 
-} // namespace detail
-} // namespace vast
+} // namespace vast::detail
 
 #endif

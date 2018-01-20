@@ -18,8 +18,7 @@
 
 #include <caf/detail/type_traits.hpp>
 
-namespace vast {
-namespace detail {
+namespace vast::detail {
 
 template <class Guard>
 struct guard_traits {
@@ -32,8 +31,7 @@ struct guard_traits {
   static constexpr bool one_arg_returns_bool = arity == 1 && returns_bool;
 };
 
-} // namespace detail
-} // namespace vast
+} // namespace vast::detail
 
 #endif
 

@@ -19,8 +19,7 @@
 
 #include "vast/time.hpp"
 
-namespace vast {
-namespace system {
+namespace vast::system {
 
 /// Statistics about a query.
 struct query_statistics {
@@ -39,7 +38,6 @@ auto inspect(Inspector& f, query_statistics& qs) {
            qs.shipped, qs.requested);
 }
 
-} // namespace system
-} // namespace vast
+} // namespace vast::system
 
 #endif

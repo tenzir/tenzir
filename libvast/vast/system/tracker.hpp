@@ -27,8 +27,7 @@
 #include "vast/system/atoms.hpp"
 #include "vast/detail/radix_tree.hpp"
 
-namespace vast {
-namespace system {
+namespace vast::system {
 
 /// State maintained per component.
 struct component_state {
@@ -94,7 +93,6 @@ using tracker_type = caf::typed_actor<
 tracker_type::behavior_type
 tracker(tracker_type::stateful_pointer<tracker_state> self, std::string node);
 
-} // namespace system
-} // namespace vast
+} // namespace vast::system
 
 #endif

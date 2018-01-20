@@ -27,8 +27,7 @@
 #include "vast/detail/endian.hpp"
 #include "vast/detail/type_traits.hpp"
 
-namespace vast {
-namespace detail {
+namespace vast::detail {
 
 // -- is_uniquely_represented ------------------------------------------------
 
@@ -304,7 +303,6 @@ private:
   Hasher h_;
 };
 
-} // namespace detail
-} // namespace vast
+} // namespace vast::detail
 
 #endif

@@ -22,8 +22,7 @@
 
 #include "vast/system/atoms.hpp"
 
-namespace vast {
-namespace system {
+namespace vast::system {
 
 template <class Key, class Value>
 using key_value_store_type = caf::typed_actor<
@@ -37,7 +36,6 @@ using key_value_store_type = caf::typed_actor<
   typename caf::replies_to<get_atom, Key>::template with<optional<Value>>
 >;
 
-} // namespace system
-} // namespace vast
+} // namespace vast::system
 
 #endif

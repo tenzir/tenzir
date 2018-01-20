@@ -22,8 +22,7 @@
 #include "vast/die.hpp"
 #include "vast/detail/assert.hpp"
 
-namespace vast {
-namespace detail {
+namespace vast::detail {
 
 // The order functions permute bits in arithmetic types to achieve a bitwise
 // total ordering by re-coding the bits as offset binary.
@@ -108,7 +107,6 @@ uint64_t order(T x) {
 template <class T>
 using ordered_type = decltype(order(T{}));
 
-} // namespace detail
-} // namespace vast
+} // namespace vast::detail
 
 #endif

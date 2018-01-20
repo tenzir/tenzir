@@ -17,8 +17,7 @@
 #include "vast/detail/type_list.hpp"
 #include "vast/variant.hpp"
 
-namespace vast {
-namespace detail {
+namespace vast::detail {
 
 template <typename... Ts>
 struct lazy_type_list {
@@ -64,8 +63,7 @@ using flattened_variant = make_variant_from<
   variant_type_concat<T, U>
 >;
 
-} // namespace detail
-} // namespace vast
+} // namespace vast::detail
 
 #endif
 

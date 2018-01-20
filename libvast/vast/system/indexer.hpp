@@ -21,8 +21,7 @@
 #include "vast/filesystem.hpp"
 #include "vast/type.hpp"
 
-namespace vast {
-namespace system {
+namespace vast::system {
 
 struct event_indexer_state {
   path dir;
@@ -38,7 +37,6 @@ struct event_indexer_state {
 caf::behavior event_indexer(caf::stateful_actor<event_indexer_state>* self,
                             path dir, type event_type);
 
-} // namespace system
-} // namespace vast
+} // namespace vast::system
 
 #endif

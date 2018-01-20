@@ -58,8 +58,7 @@
 #include "vast/detail/operators.hpp"
 #include "vast/detail/type_traits.hpp"
 
-namespace vast {
-namespace detail {
+namespace vast::detail {
 
 template <class Visitor>
 class delayed_visitor {
@@ -108,7 +107,9 @@ private:
   Visitable& visitable;
 };
 
-} // namespace detail
+} // namespace vast::detail
+
+namespace vast {
 
 /// A variant class modeled after C++17's variant.
 /// @tparam Ts the types the variant should assume.

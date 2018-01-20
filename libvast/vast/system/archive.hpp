@@ -32,8 +32,7 @@
 #include "vast/system/atoms.hpp"
 #include "vast/system/accountant.hpp"
 
-namespace vast {
-namespace system {
+namespace vast::system {
 
 /// A sequence of batches.
 class segment {
@@ -92,7 +91,6 @@ archive_type::behavior_type
 archive(archive_type::stateful_pointer<archive_state> self, path dir,
         size_t capacity, size_t max_segment_size);
 
-} // namespace system
-} // namespace vast
+} // namespace vast::system
 
 #endif

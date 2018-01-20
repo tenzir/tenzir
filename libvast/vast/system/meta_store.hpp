@@ -18,12 +18,10 @@
 
 #include "vast/system/key_value_store.hpp"
 
-namespace vast {
-namespace system {
+namespace vast::system {
 
 using meta_store_type = key_value_store_type<std::string, data>;
 
-} // namespace system
-} // namespace vast
+} // namespace vast::system
 
 #endif

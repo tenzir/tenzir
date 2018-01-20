@@ -21,8 +21,7 @@
 #include "vast/detail/assert.hpp"
 #include "vast/detail/type_traits.hpp"
 
-namespace vast {
-namespace detail {
+namespace vast::detail {
 
 template <class T>
 using is_unsigned_integral = bool_constant<
@@ -40,7 +39,9 @@ using word_size_type = std::conditional_t<
   void
 >;
 
-} // namespace detail
+} // namespace vast::detail
+
+namespace vast {
 
 /// A fixed-size piece unsigned piece of data that supports various bitwise
 /// operations.

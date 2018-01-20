@@ -20,8 +20,7 @@
 
 #include "vast/system/key_value_store.hpp"
 
-namespace vast {
-namespace system {
+namespace vast::system {
 
 template <class Key, class Value>
 struct data_store_state {
@@ -61,8 +60,7 @@ data_store(
   };
 }
 
-} // namespace system
-} // namespace vast
+} // namespace vast::system
 
 #endif
 

@@ -27,8 +27,7 @@
 #include "vast/detail/assert.hpp"
 #include "vast/detail/zigzag.hpp"
 
-namespace vast {
-namespace detail {
+namespace vast::detail {
 
 template <class Streambuf>
 class coded_serializer : public caf::stream_serializer<Streambuf> {
@@ -107,7 +106,6 @@ protected:
   }
 };
 
-} // namespace detail
-} // namespace vast
+} // namespace vast::detail
 
 #endif
