@@ -40,6 +40,10 @@ optional<base> parse_base(type const& t) {
 
 } // namespace <anonymous>
 
+value_index::~value_index() {
+  // nop
+}
+
 std::unique_ptr<value_index> value_index::make(type const& t) {
   struct factory {
     using result_type = std::unique_ptr<value_index>;

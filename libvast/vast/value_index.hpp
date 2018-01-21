@@ -38,6 +38,8 @@ namespace vast {
 /// and an explit query for nil, e.g., `x != 42 || x == nil`.
 class value_index {
 public:
+  virtual ~value_index();
+
   using size_type = typename bitmap::size_type;
 
   /// Constructs a value index from a given type.
