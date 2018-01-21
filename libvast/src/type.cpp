@@ -12,6 +12,7 @@
  ******************************************************************************/
 
 #include <tuple>
+#include <utility>
 
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/type.hpp"
@@ -261,8 +262,8 @@ namespace {
 struct finder {
   enum mode { prefix, suffix, exact, any };
 
-  finder(key const& k, mode m, std::string const& init = "")
-    : mode_{m}, key_{k} {
+  finder(key  k, mode m, std::string const& init = "")
+    : mode_{m}, key_{std::move(k)} {
     VAST_ASSERT(!key_.empty());
     if (!init.empty())
       trace_.push_back(init);

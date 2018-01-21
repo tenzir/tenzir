@@ -14,8 +14,7 @@
 #ifndef VAST_DETAIL_OPERATORS_HPP
 #define VAST_DETAIL_OPERATORS_HPP
 
-namespace vast {
-namespace detail {
+namespace vast::detail {
 
 template <typename T, typename U = T>
 struct equality_comparable {
@@ -107,7 +106,6 @@ struct integer_arithmetic : additive<T, U>, integer_multiplicative<T, U> {};
 template <typename T, typename U = T>
 struct bitwise : andable<T, U>, orable<T, U>, xorable<T, U> {};
 
-} // namespace detail
-} // namespace vast
+} // namespace vast::detail
 
 #endif // VAST_DETAIL_OPERATORS_HPP

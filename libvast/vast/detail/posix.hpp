@@ -18,8 +18,7 @@
 
 /// Various POSIX-compliant helper tools.
 
-namespace vast {
-namespace detail {
+namespace vast::detail {
 
 /// Constructs a UNIX domain socket.
 /// @param path The file system path where to construct the socket.
@@ -136,7 +135,6 @@ bool write(int fd, void const* buffer, size_t bytes, size_t* put = nullptr);
 /// @returns `true` on successful seek.
 bool seek(int fd, size_t bytes);
 
-} // namespace detail
-} // namespace vast
+} // namespace vast::detail
 
 #endif

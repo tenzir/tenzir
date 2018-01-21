@@ -22,9 +22,7 @@
 
 #include "vast/format/reader.hpp"
 
-namespace vast {
-namespace format {
-namespace bgpdump {
+namespace vast::format::bgpdump {
 
 /// A parser that reading ASCII output from the BGPDump utility.
 struct bgpdump_parser : parser<bgpdump_parser> {
@@ -128,9 +126,7 @@ public:
   char const* name() const;
 };
 
-} // namespace bgpdump
-} // namespace format
-} // namespace vast
+} // namespace vast::format::bgpdump
 
 #endif
 

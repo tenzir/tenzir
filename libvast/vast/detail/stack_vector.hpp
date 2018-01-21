@@ -19,8 +19,7 @@
 
 #include "vast/detail/short_alloc.hpp"
 
-namespace vast {
-namespace detail {
+namespace vast::detail {
 
 // This base class exists to bind the lifetime of the corresponding container
 // to the arena, such that the allocator will never outlive the the stack-based
@@ -85,7 +84,6 @@ struct stack_vector : private stack_container<T, N>, short_vector<T, N> {
   }
 };
 
-} // namespace detail
-} // namespace vast
+} // namespace vast::detail
 
 #endif

@@ -10,6 +10,9 @@ if (APPLE AND NOT DEFINED CMAKE_MACOSX_RPATH)
   set(CMAKE_MACOSX_RPATH true)
 endif()
 
+# Support Clang tools such as clang-tidy
+set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
+
 set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 include(CTest)
 include(Helpers)
@@ -51,7 +54,7 @@ endif ()
 # append flags to the user-provide environment variable.
 if (NOT CMAKE_CXX_FLAGS)
   # Our default flags.
-  set(EXTRA_FLAGS "${EXTRA_FLAGS} -std=c++14 -Wall -Wextra -pedantic")
+  set(EXTRA_FLAGS "${EXTRA_FLAGS} -std=c++17 -Wall -Wextra -pedantic")
   set(PERFORMANCE_FLAGS "-march=native -mpopcnt")
   # Increase maximum number of template instantiations, for all that
   # template-heavy code.
@@ -108,7 +111,7 @@ elseif ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
     # Standard library selection: check if libc++ is available, and if so, use
     # it. Otherwise fall back to libstdc++.
     set(CXXFLAGS_BACKUP "${CMAKE_CXX_FLAGS}")
-    set(CMAKE_CXX_FLAGS "-std=c++14 -stdlib=libc++")
+    set(CMAKE_CXX_FLAGS "-std=c++17 -stdlib=libc++")
     try_run(program_result
             compilation_succeeded
             "${CMAKE_BINARY_DIR}"

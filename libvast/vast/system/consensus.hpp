@@ -30,16 +30,13 @@
 
 #include "vast/detail/mmapbuf.hpp"
 
-namespace vast {
-namespace system {
-
 /// The Raft consensus algorithm.
 ///
 /// This implementation of Raft treats state machine and consensus module as
 /// independent pieces. The consensus module is passive and only reacts to
 /// requests from the state machine. It does not initiate communication to the
 /// state machine.
-namespace raft {
+namespace vast::system::raft {
 
 /// The clock type for timeouts.
 using clock = std::chrono::steady_clock;
@@ -333,8 +330,6 @@ struct server_state {
 /// @param dir The directory where to store persistent state.
 caf::behavior consensus(caf::stateful_actor<server_state>* self, path dir);
 
-} // namespace raft
-} // namespace system
-} // namespace vast
+} // namespace vast::system::raft
 
 #endif

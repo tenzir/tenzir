@@ -36,8 +36,7 @@
 #include "vast/system/accountant.hpp"
 #include "vast/system/atoms.hpp"
 
-namespace vast {
-namespace system {
+namespace vast::system {
 
 #if 0
 /// The *Reader* concept.
@@ -201,7 +200,6 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader&& reader) {
   };
 }
 
-} // namespace system
-} // namespace vast
+} // namespace vast::system
 
 #endif

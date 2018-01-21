@@ -102,16 +102,12 @@ struct integral_parser
     return parse_pos(f, l, a);
   }
 
-  template <typename Iterator, typename Attribute, typename This = T>
-  static auto dispatch(Iterator& f, Iterator const& l, Attribute& a)
-    -> std::enable_if_t<std::is_signed<This>{}, bool> {
-    return parse_signed(f, l, a);
-  }
-
-  template <typename Iterator, typename Attribute, typename This = T>
-  static auto dispatch(Iterator& f, Iterator const& l, Attribute& a)
-    -> std::enable_if_t<std::is_unsigned<This>{}, bool> {
-    return parse_unsigned(f, l, a);
+  template <typename Iterator, typename Attribute>
+  static bool dispatch(Iterator& f, Iterator const& l, Attribute& a) {
+    if constexpr (std::is_signed_v<T>)
+      return parse_signed(f, l, a);
+    else
+      return parse_unsigned(f, l, a);
   }
 
   template <typename Iterator, typename Attribute>

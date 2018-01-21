@@ -20,8 +20,7 @@
 
 #include "vast/system/tracker.hpp"
 
-namespace vast {
-namespace system {
+namespace vast::system {
 
 /// A container for VAST components.
 struct node_state {
@@ -38,7 +37,6 @@ struct node_state {
 caf::behavior node(caf::stateful_actor<node_state>* self, std::string id,
                    path dir);
 
-} // namespace system
-} // namespace vast
+} // namespace vast::system
 
 #endif

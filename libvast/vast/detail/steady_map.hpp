@@ -16,8 +16,7 @@
 
 #include "vast/detail/vector_map.hpp"
 
-namespace vast {
-namespace detail {
+namespace vast::detail {
 
 struct steady_map_policy {
   template <class Ts, class T>
@@ -44,7 +43,6 @@ template <
 >
 using steady_map = vector_map<Key, T, Allocator, steady_map_policy>;
 
-} // namespace detail
-} // namespace vast
+} // namespace vast::detail
 
 #endif

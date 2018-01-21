@@ -31,8 +31,7 @@
 #include "vast/detail/assert.hpp"
 #include "vast/detail/operators.hpp"
 
-namespace vast {
-namespace system {
+namespace vast::system {
 
 template <class Key, class Value>
 struct replicated_store_state {
@@ -291,7 +290,6 @@ replicated_store(
   };
 }
 
-} // namespace system
-} // namespace vast
+} // namespace vast::system
 
 #endif

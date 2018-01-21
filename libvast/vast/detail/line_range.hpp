@@ -20,8 +20,7 @@
 
 #include "vast/detail/range.hpp"
 
-namespace vast {
-namespace detail {
+namespace vast::detail {
 
 // A range of non-empty lines, extracted via `std::getline`.
 class line_range : range_facade<line_range> {
@@ -44,7 +43,6 @@ private:
   size_t line_number_ = 0;
 };
 
-} // namespace detail
-} // namespace vast
+} // namespace vast::detail
 
 #endif

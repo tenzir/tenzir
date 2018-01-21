@@ -16,8 +16,7 @@
 
 #include <caf/atom.hpp>
 
-namespace vast {
-namespace system {
+namespace vast::system {
 
 // Inherited from CAF
 using caf::add_atom;
@@ -101,7 +100,6 @@ using supervisor_atom = caf::atom_constant<caf::atom("supervisor")>;
 using search_atom = caf::atom_constant<caf::atom("search")>;
 using tracker_atom = caf::atom_constant<caf::atom("tracker")>;
 
-} // namespace system
-} // namespace vast
+} // namespace vast::system
 
 #endif

@@ -61,8 +61,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <utility>
 #include <string>
 
-namespace vast {
-namespace detail {
+namespace vast::detail {
 
 /// A radix tree data structure that facilitates *O(k)* operations, including
 /// finding elements that match a given prefix. Keys are byte-strings and
@@ -1217,7 +1216,6 @@ operator=(iterator rhs) {
   return *this;
 }
 
-} // namespace detail
-} // namespace vast
+} // namespace vast::detail
 
 #endif

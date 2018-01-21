@@ -35,53 +35,37 @@ public:
     >;
 
   action_parser(Parser p, Action fun) : parser_{std::move(p)}, action_(fun) {
+    // nop
   }
 
-  // No argument, void return type.
-  template <typename Iterator, typename Attribute, typename A = Action>
-  auto parse(Iterator& f, Iterator const& l, Attribute&) const
-  -> std::enable_if_t<detail::action_traits<A>::no_args_returns_void, bool> {
-    inner_attribute x;
-    if (!parser_(f, l, x))
-      return false;
-    action_();
-    return true;
-  }
-
-  // One argument, void return type.
-  template <typename Iterator, typename Attribute, typename A = Action>
-  auto parse(Iterator& f, Iterator const& l, Attribute&) const
-  -> std::enable_if_t<detail::action_traits<A>::one_arg_returns_void, bool> {
-    action_arg_type x;
-    if (!parser_(f, l, x))
-      return false;
-    action_(std::move(x));
-    return true;
-  }
-
-  // No argument, non-void return type.
-  template <typename Iterator, typename Attribute, typename A = Action>
-  auto parse(Iterator& f, Iterator const& l, Attribute& a) const
-  -> std::enable_if_t<
-    detail::action_traits<A>::no_args_returns_non_void, bool
-  > {
-    inner_attribute x;
-    if (!parser_(f, l, x))
-      return false;
-    a = action_();
-    return true;
-  }
-
-  // One argument, non-void return type.
-  template <typename Iterator, typename Attribute, typename A = Action>
-  auto parse(Iterator& f, Iterator const& l, Attribute& a) const
-  -> std::enable_if_t<
-    detail::action_traits<A>::one_arg_returns_non_void, bool
-  > {
-    action_arg_type x;
-    if (!parser_(f, l, x))
-      return false;
-    a = action_(std::move(x));
+  template <class Iterator, class Attribute, class A = Action>
+  bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
+    if constexpr (detail::action_traits<A>::no_args_returns_void) {
+      // No argument, void return type.
+      inner_attribute x;
+      if (!parser_(f, l, x))
+        return false;
+      action_();
+    } else if constexpr (detail::action_traits<A>::one_arg_returns_void) {
+      // One argument, void return type.
+      action_arg_type x;
+      if (!parser_(f, l, x))
+        return false;
+      action_(std::move(x));
+    } else if constexpr (detail::action_traits<A>::no_args_returns_non_void) {
+      // No argument, non-void return type.
+      inner_attribute x;
+      if (!parser_(f, l, x))
+        return false;
+      a = action_();
+    } else {
+      // One argument, non-void return type.
+      static_assert(detail::action_traits<A>::one_arg_returns_non_void);
+      action_arg_type x;
+      if (!parser_(f, l, x))
+        return false;
+      a = action_(std::move(x));
+    }
     return true;
   }
 

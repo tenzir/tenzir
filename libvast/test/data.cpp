@@ -251,7 +251,7 @@ TEST(parseable) {
   CHECK(d == 10.01);
 
   MESSAGE("string");
-  str = "\"bar\""s;
+  str = R"("bar")";
   f = str.begin();
   l = str.end();
   CHECK(p(f, l, d));

@@ -19,9 +19,7 @@
 
 #include "vast/format/writer.hpp"
 
-namespace vast {
-namespace format {
-namespace json {
+namespace vast::format::json {
 
 struct event_printer : printer<event_printer> {
   using attribute = event;
@@ -42,9 +40,7 @@ public:
   }
 };
 
-} // namespace csv
-} // namespace format
-} // namespace vast
+} // namespace vast::format::json
 
 #endif
 

@@ -14,11 +14,9 @@
 #ifndef VAST_DETAIL_COLOR_HPP
 #define VAST_DETAIL_COLOR_HPP
 
-namespace vast {
-namespace detail {
+namespace vast::detail::color {
 
 /// UNIX TTY color codes.
-namespace color {
 namespace {
 
 // UNIX terminal color codes
@@ -41,8 +39,7 @@ constexpr char bold_cyan[]    = "\033[1m\033[36m";
 constexpr char bold_white[]   = "\033[1m\033[37m";
 
 } // namespace <anonymous>
-} // namespace color
-} // namespace detail
-} // namespace vast
+
+} // namespace vast::detail::color
 
 #endif

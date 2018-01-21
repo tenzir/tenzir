@@ -58,8 +58,7 @@
 #include "vast/detail/operators.hpp"
 #include "vast/detail/type_traits.hpp"
 
-namespace vast {
-namespace detail {
+namespace vast::detail {
 
 template <class Visitor>
 class delayed_visitor {
@@ -108,7 +107,9 @@ private:
   Visitable& visitable;
 };
 
-} // namespace detail
+} // namespace vast::detail
+
+namespace vast {
 
 /// A variant class modeled after C++17's variant.
 /// @tparam Ts the types the variant should assume.
@@ -144,14 +145,14 @@ public:
   }
 
   variant(const variant& other)
-  noexcept(detail::conjunction<std::is_nothrow_constructible<Ts>{}...>::value) {
+  noexcept(std::conjunction<std::is_nothrow_constructible<Ts>...>::value) {
     other.apply(copy_constructor{*this});
     index_ = other.index_;
   }
 
   variant(variant&& other)
-  noexcept(detail::conjunction<
-             std::is_nothrow_move_constructible<Ts>{}...
+  noexcept(std::conjunction<
+             std::is_nothrow_move_constructible<Ts>...
            >::value) {
     other.apply(move_constructor{*this});
     index_ = other.index_;
@@ -164,8 +165,8 @@ public:
   }
 
   variant& operator=(variant&& rhs)
-  noexcept(detail::conjunction<
-             std::is_nothrow_move_assignable<Ts>{}...
+  noexcept(std::conjunction<
+             std::is_nothrow_move_assignable<Ts>...
            >::value) {
     rhs.apply(move_assigner{*this, rhs.index_});
     index_ = rhs.index_;

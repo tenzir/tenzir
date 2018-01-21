@@ -19,8 +19,7 @@
 #include "vast/detail/assert.hpp"
 #include "vast/detail/iterator.hpp"
 
-namespace vast {
-namespace detail {
+namespace vast::detail {
 
 template <typename Derived>
 class range {
@@ -136,7 +135,6 @@ auto make_iterator_range(Iterator begin, Iterator end) {
   return iterator_range<Iterator>(begin, end);
 }
 
-} // namespace detail
-} // namespace vast
+} // namespace vast::detail
 
 #endif

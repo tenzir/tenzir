@@ -17,9 +17,6 @@
 #include <limits>
 #include <type_traits>
 
-namespace vast {
-namespace detail {
-
 /// The *zig-zag* coding of signed integers into unsigned integers, with the
 /// goal to produce small absolute values. The coding works as follows:
 ///
@@ -29,7 +26,7 @@ namespace detail {
 ///     -2 => 3
 ///      2 -> 4
 ///      ...
-namespace zigzag {
+namespace vast::detail::zigzag {
 
 /// Encodes a signed integral value.
 /// @param x The value to encode.
@@ -56,8 +53,6 @@ auto decode(T x)
   return (x >> 1) ^ -static_cast<std::make_signed_t<T>>(x & 1);
 }
 
-} // namespace zigzag
-} // namespace detail
-} // namespace vast
+} // namespace vast::detail::zigzag
 
 #endif

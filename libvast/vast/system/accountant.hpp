@@ -25,8 +25,7 @@
 
 #include "vast/system/atoms.hpp"
 
-namespace vast {
-namespace system {
+namespace vast::system {
 
 struct accountant_state {
   using stopwatch = std::chrono::steady_clock;
@@ -55,7 +54,6 @@ accountant_type::behavior_type
 accountant(accountant_type::stateful_pointer<accountant_state> self,
            path const& filename);
 
-} // namespace system
-} // namespace vast
+} // namespace vast::system
 
 #endif

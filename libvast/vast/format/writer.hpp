@@ -22,8 +22,7 @@
 #include "vast/event.hpp"
 #include "vast/expected.hpp"
 
-namespace vast {
-namespace format {
+namespace vast::format {
 
 /// A generic event writer.
 template <class Printer>
@@ -56,8 +55,7 @@ private:
   Printer printer_;
 };
 
-} // namespace format
-} // namespace vast
+} // namespace vast::format
 
 #endif
 

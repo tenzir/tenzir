@@ -49,7 +49,7 @@ TEST(printable) {
 
 TEST(parseable) {
   auto p = make_parser<pattern>{};
-  auto str = "/^\\w{3}\\w{3}\\w{3}$/"s;
+  auto str = R"(/^\w{3}\w{3}\w{3}$/)"s;
   auto f = str.begin();
   auto l = str.end();
   pattern pat;
@@ -57,7 +57,7 @@ TEST(parseable) {
   CHECK(f == l);
   CHECK(to_string(pat) == str);
 
-  str = "/foo\\+(bar){2}|\"baz\"*/";
+  str = R"(/foo\+(bar){2}|"baz"*/)";
   pat = {};
   f = str.begin();
   l = str.end();

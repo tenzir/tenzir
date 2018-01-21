@@ -18,8 +18,7 @@
 
 #include <caf/detail/type_list.hpp>
 
-namespace vast {
-namespace detail {
+namespace vast::detail {
 
 using caf::detail::tbind;
 
@@ -138,7 +137,6 @@ struct tl_make<T<Ts...>> {
 template <class T>
 using tl_make_t = typename tl_make<T>::type;
 
-} // namspace detail
-} // namspace vast
+} // namespace vast::detail
 
 #endif

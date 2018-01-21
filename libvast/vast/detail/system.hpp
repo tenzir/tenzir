@@ -17,8 +17,7 @@
 #include <cstdint>
 #include <string>
 
-namespace vast {
-namespace detail {
+namespace vast::detail {
 
 /// Retrieves the hostname of the system.
 /// @returns The system hostname.
@@ -32,7 +31,6 @@ size_t page_size();
 /// @returns The ID of this process.
 int32_t process_id();
 
-} // namespace detail
-} // namespace vast
+} // namespace vast::detail
 
 #endif

@@ -19,8 +19,7 @@
 
 #include "vast/detail/fdinbuf.hpp"
 
-namespace vast {
-namespace detail {
+namespace vast::detail {
 
 /// An input stream which wraps a ::fdinbuf.
 class fdistream : public std::istream {
@@ -31,7 +30,6 @@ private:
   fdinbuf buf_;
 };
 
-} // namespace detail
-} // namespace vast
+} // namespace vast::detail
 
 #endif

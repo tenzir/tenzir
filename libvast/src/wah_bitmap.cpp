@@ -149,20 +149,20 @@ void wah_bitmap::merge_active_word() {
   if (fill_type) {
     // All 1s.
     auto& prev = *(blocks_.rbegin() + 1);
-    if (word_type::is_fill(prev, 1) && word_type::fill_words(prev) < word_type::max_fill_words) {
-      prev = word_type::make_fill(1, word_type::fill_words(prev) + 1);
+    if (word_type::is_fill(prev, true) && word_type::fill_words(prev) < word_type::max_fill_words) {
+      prev = word_type::make_fill(true, word_type::fill_words(prev) + 1);
       blocks_.pop_back();
     } else {
-      blocks_.back() = word_type::make_fill(1, 1);
+      blocks_.back() = word_type::make_fill(true, 1);
     }
   } else {
     // All 0s.
     auto& prev = *(blocks_.rbegin() + 1);
-    if (word_type::is_fill(prev, 0) && word_type::fill_words(prev) < word_type::max_fill_words) {
-      prev = word_type::make_fill(0, word_type::fill_words(prev) + 1);
+    if (word_type::is_fill(prev, false) && word_type::fill_words(prev) < word_type::max_fill_words) {
+      prev = word_type::make_fill(false, word_type::fill_words(prev) + 1);
       blocks_.pop_back();
     } else {
-      blocks_.back() = word_type::make_fill(0, 1);
+      blocks_.back() = word_type::make_fill(false, 1);
     }
   }
 }

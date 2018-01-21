@@ -16,8 +16,7 @@
 
 #include "vast/detail/endian.hpp"
 
-namespace vast {
-namespace detail {
+namespace vast::detail {
 
 /// Swaps the endianness of an unsigned integer.
 /// @param x The value whose bytes to swap.
@@ -61,7 +60,6 @@ T to_host_order(T x) {
   return to_network_order(x);
 }
 
-} // namespace detail
-} // namespace vast
+} // namespace vast::detail
 
 #endif

@@ -52,8 +52,7 @@
 # error unsupported platform
 #endif
 
-namespace vast {
-namespace detail {
+namespace vast::detail {
 
 /// Describes the two possible byte orders.
 enum endianness {
@@ -68,7 +67,6 @@ constexpr endianness host_endian = little_endian;
 constexpr endianness host_endian = big_endian;
 #endif
 
-} // namespace detail
-} // namespace vast
+} // namespace vast::detail
 
 #endif // VAST_DETAIL_ENDIAN_HPP

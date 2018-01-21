@@ -26,8 +26,7 @@
 #include "vast/detail/assert.hpp"
 #include "vast/detail/coding.hpp"
 
-namespace vast {
-namespace detail {
+namespace vast::detail {
 
 /// Unscapes a string according to an escaper.
 /// @param str The string to escape.
@@ -473,19 +472,16 @@ std::string join(Iterator begin, Iterator end, std::string const& sep) {
 }
 
 template <typename T>
-std::enable_if_t<std::is_same<T, std::string>::value, std::string>
-join(std::vector<T> const& v, std::string const& sep) {
-  return join(v.begin(), v.end(), sep);
-}
-
-template <typename T>
-std::enable_if_t<!std::is_same<T, std::string>::value, std::string>
-join(std::vector<T> const& v, std::string const& sep) {
-  auto pred = [](auto& x) {
-    using std::to_string;
-    return to_string(x);
-  };
-  return join(v.begin(), v.end(), sep, pred);
+std::string join(std::vector<T> const& v, std::string const& sep) {
+  if constexpr (std::is_same_v<T, std::string>) {
+    return join(v.begin(), v.end(), sep);
+  } else {
+    auto pred = [](auto& x) {
+      using std::to_string;
+      return to_string(x);
+    };
+    return join(v.begin(), v.end(), sep, pred);
+  }
 }
 
 /// Determines whether a string occurs at the beginning of another.
@@ -782,7 +778,6 @@ TextIterator search_knuth_morris_pratt(PatternIterator p0, PatternIterator p1,
   return make_knuth_morris_pratt(p0, p1)(t0, t1);
 }
 
-} // namespace detail
-} // namespace vast
+} // namespace vast::detail
 
 #endif

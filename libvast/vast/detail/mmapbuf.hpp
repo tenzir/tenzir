@@ -21,8 +21,7 @@
 #include "vast/chunk.hpp"
 #include "vast/filesystem.hpp"
 
-namespace vast {
-namespace detail {
+namespace vast::detail {
 
 /// A memory-mapped stream buffer. The put and get areas corresponds to the
 /// mapped memory region.
@@ -97,7 +96,6 @@ private:
   char_type* map_ = nullptr;
 };
 
-} // namespace detail
-} // namespace vast
+} // namespace vast::detail
 
 #endif

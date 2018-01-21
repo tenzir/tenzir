@@ -18,8 +18,7 @@
 
 #include "vast/detail/operators.hpp"
 
-namespace vast {
-namespace detail {
+namespace vast::detail {
 
 template <typename, typename, typename, typename, typename>
 class iterator_facade;
@@ -297,7 +296,6 @@ class iterator_adaptor
     Base iterator_;
 };
 
-} // namspace detail
-} // namespace vast
+} // namespace vast::detail
 
 #endif

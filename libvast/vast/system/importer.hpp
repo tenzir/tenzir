@@ -27,8 +27,7 @@
 #include "vast/system/archive.hpp"
 #include "vast/system/meta_store.hpp"
 
-namespace vast {
-namespace system {
+namespace vast::system {
 
 /// Receives chunks from SOURCEs, imbues them with an ID, and relays them to
 /// ARCHIVE and INDEX.
@@ -52,7 +51,6 @@ struct importer_state {
 caf::behavior importer(caf::stateful_actor<importer_state>* self,
                        path dir, size_t batch_size);
 
-} // namespace system
-} // namespace vast
+} // namespace vast::system
 
 #endif

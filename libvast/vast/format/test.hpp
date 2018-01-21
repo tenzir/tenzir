@@ -24,9 +24,7 @@
 #include "vast/variant.hpp"
 #include "vast/detail/random.hpp"
 
-namespace vast {
-namespace format {
-namespace test {
+namespace vast::format::test {
 
 // A type-erased probability distribution.
 using distribution =
@@ -82,8 +80,6 @@ private:
   std::unordered_map<type, blueprint> blueprints_;
 };
 
-} // namespace test
-} // namespace format
-} // namespace vast
+} // namespace vast::format::test
 
 #endif

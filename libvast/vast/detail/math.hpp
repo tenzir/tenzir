@@ -38,8 +38,7 @@
 
 #include <cstdint>
 
-namespace vast {
-namespace detail {
+namespace vast::detail {
 
 template <int exp, typename T>
 constexpr T pow(T base);
@@ -102,7 +101,6 @@ constexpr int ilog(T x) {
   return x > 0 ? ilog_helper<base>(x) : -1;
 }
 
-} // namespace detail
-} // namespace vast
+} // namespace vast::detail
 
 #endif

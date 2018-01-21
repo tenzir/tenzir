@@ -105,19 +105,16 @@ struct byte_parser : parser<byte_parser<T, Policy, Bytes>> {
     return true;
   }
 
-  template <typename Iterator, typename P = Policy>
-  auto parse(Iterator& f, Iterator const& l, T& x) const
-  -> std::enable_if_t<std::is_same<P, policy::no_swap>{}, bool> {
-    return extract(f, l, x);
-  }
-
-  template <typename Iterator, typename P = Policy>
-  auto parse(Iterator& f, Iterator const& l, T& x) const
-  -> std::enable_if_t<std::is_same<P, policy::swap>{}, bool> {
-    if (!extract(f, l, x))
-      return false;
-    x = detail::byte_swap(x);
-    return true;
+  template <typename Iterator>
+  bool parse(Iterator& f, Iterator const& l, T& x) const {
+    if constexpr (std::is_same_v<Policy, policy::no_swap>){
+      return extract(f, l, x);
+    } else {
+      if (!extract(f, l, x))
+        return false;
+      x = detail::byte_swap(x);
+      return true;
+    }
   }
 };
 

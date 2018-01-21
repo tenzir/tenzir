@@ -17,8 +17,7 @@
 #include <limits>
 #include <type_traits>
 
-namespace vast {
-namespace detail {
+namespace vast::detail {
 
 /// Converts a byte value into an ASCII character.
 /// @param b The byte to convert.
@@ -77,7 +76,6 @@ char hex_to_byte(T hi, T lo) {
   return byte;
 }
 
-} // namespace detail
-} // namespace vast
+} // namespace vast::detail
 
 #endif

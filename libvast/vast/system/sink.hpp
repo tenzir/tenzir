@@ -29,8 +29,7 @@
 #include "vast/system/atoms.hpp"
 #include "vast/system/query_statistics.hpp"
 
-namespace vast {
-namespace system {
+namespace vast::system {
 
 #if 0
 /// The *Writer* concept.
@@ -98,7 +97,6 @@ sink(caf::stateful_actor<sink_state<Writer>>* self, Writer&& writer) {
   };
 }
 
-} // namespace system
-} // namespace vast
+} // namespace vast::system
 
 #endif

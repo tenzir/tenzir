@@ -14,7 +14,7 @@
 #include "vast/detail/terminal.hpp"
 
 #include <sys/select.h>
-#include <stdio.h>
+#include <cstdio>
 #include <termios.h>
 #include <unistd.h>
 #include <cstdlib>

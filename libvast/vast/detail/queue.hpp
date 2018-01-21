@@ -18,8 +18,7 @@
 #include <mutex>
 #include <queue>
 
-namespace vast {
-namespace detail {
+namespace vast::detail {
 
 /// A thread-safe `std::queue`.
 template <typename T>
@@ -102,7 +101,6 @@ private:
   std::condition_variable cond_;
 };
 
-} // namespace detail
-} // namespace vast
+} // namespace vast::detail
 
 #endif

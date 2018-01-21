@@ -24,9 +24,7 @@
 
 #include "vast/format/writer.hpp"
 
-namespace vast {
-namespace format {
-namespace csv {
+namespace vast::format::csv {
 
 struct value_printer : printer<value_printer> {
   using attribute = event;
@@ -153,8 +151,6 @@ public:
   }
 };
 
-} // namespace csv
-} // namespace format
-} // namespace vast
+} // namespace vast::format::csv
 
 #endif

@@ -52,14 +52,12 @@
 #define CHECK_FAIL CAF_CHECK_FAIL
 #define FAIL CAF_FAIL
 
-namespace vast {
-namespace test {
+namespace vast::test {
 
 // Holds global configuration options passed on the command line after the
 // special -- delimiter.
 extern std::set<std::string> config;
 
-} // namespace test
-} // namespace vast
+} // namespace vast::test
 
 #endif

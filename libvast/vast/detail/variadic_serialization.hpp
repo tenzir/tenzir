@@ -17,8 +17,7 @@
 #include <caf/deserializer.hpp>
 #include <caf/serializer.hpp>
 
-namespace vast {
-namespace detail {
+namespace vast::detail {
 
 // Variadic helpers to interface with CAF's serialization framework.
 
@@ -55,7 +54,6 @@ void read(caf::deserializer& source, T& x, Ts&... xs) {
   read(source, xs...);
 }
 
-} // namespace detail
-} // namespace vast
+} // namespace vast::detail
 
 #endif

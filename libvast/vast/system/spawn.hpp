@@ -21,8 +21,7 @@
 #include "vast/expected.hpp"
 #include "vast/filesystem.hpp"
 
-namespace vast {
-namespace system {
+namespace vast::system {
 
 struct options {
   caf::message params;
@@ -48,7 +47,6 @@ expected<caf::actor> spawn_source(caf::local_actor* self, options& opts);
 
 expected<caf::actor> spawn_sink(caf::local_actor* self, options& opts);
 
-} // namespace system
-} // namespace vast
+} // namespace vast::system
 
 #endif

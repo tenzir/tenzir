@@ -21,8 +21,7 @@
 
 #include "vast/detail/operators.hpp"
 
-namespace vast {
-namespace detail {
+namespace vast::detail {
 
 /// A map abstraction over an unsorted `std::vector`.
 template <class Key, class T, class Allocator, class Policy>
@@ -227,7 +226,6 @@ private:
   vector_type xs_;
 };
 
-} // namespace detail
-} // namespace vast
+} // namespace vast::detail
 
 #endif

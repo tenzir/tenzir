@@ -269,7 +269,7 @@ string_index::lookup_impl(relational_operator op, data const& x) const {
       // TODO: Be more clever than iterating over all k-grams (#45).
       bitmap result{length_.size(), false};
       for (auto i = 0u; i < chars_.size() - str_size + 1; ++i) {
-        bitmap substr{length_.size(), 1};
+        bitmap substr{length_.size(), true};
         auto skip = false;
         for (auto j = 0u; j < str_size; ++j) {
           auto bm = chars_[i + j].lookup(equal, (*str)[j]);

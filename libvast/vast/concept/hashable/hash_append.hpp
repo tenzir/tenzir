@@ -80,7 +80,7 @@ template <class ...T>
 struct is_uniquely_represented<std::tuple<T...>>
   : std::integral_constant<
       bool,
-      detail::conjunction<is_uniquely_represented<T>::value...>{}
+      std::conjunction<is_uniquely_represented<T>...>::value
         && detail::sum<sizeof(T)...>{} == sizeof(std::tuple<T...>)
     > {};
 
@@ -105,15 +105,9 @@ constexpr void reverse_bytes(T& x) {
 }
 
 template <class T, class Hasher>
-constexpr std::enable_if_t<Hasher::endian == host_endian>
-maybe_reverse_bytes(T&, Hasher&) {
-  // nop
-}
-
-template <class T, class Hasher>
-constexpr std::enable_if_t<Hasher::endian != host_endian>
-maybe_reverse_bytes(T& x, Hasher&) {
-  reverse_bytes(x);
+void maybe_reverse_bytes(T& x, Hasher&) {
+  if constexpr (Hasher::endian != host_endian)
+    reverse_bytes(x);
 }
 
 // -- is_contiguously_hashable -----------------------------------------------
@@ -134,6 +128,10 @@ struct is_contiguously_hashable<T[N], Hasher>
         && (sizeof(T) == 1 || Hasher::endian == host_endian)
     > {};
 
+template <class T, class Hasher>
+inline constexpr bool is_contiguously_hashable_v
+  = is_contiguously_hashable<T, Hasher>::value;
+
 } // namespace detail
 
 template <class Hasher, class T>
@@ -145,23 +143,22 @@ hash_append(Hasher& h, T const& x) noexcept {
 // -- Scalars -----------------------------------------------------------------
 
 template <class Hasher, class T>
-std::enable_if_t<
-  !detail::is_contiguously_hashable<T, Hasher>{}
-    && (std::is_integral<T>{} || std::is_pointer<T>{} || std::is_enum<T>{})
->
+std::enable_if_t<!detail::is_contiguously_hashable_v<T, Hasher>
+                 && std::is_scalar_v<T>>
 hash_append(Hasher& h, T x) noexcept {
-  detail::reverse_bytes(x);
-  h(std::addressof(x), sizeof(x));
-}
-
-template <class Hasher, class T>
-std::enable_if_t<std::is_floating_point<T>{}>
-hash_append(Hasher& h, T x) noexcept {
-  // When hashing, we treat -0 and 0 the same.
-  if (x == 0)
-    x = 0;
-  detail::maybe_reverse_bytes(x, h);
-  h(&x, sizeof(x));
+  if constexpr (std::is_integral_v<T> || std::is_pointer_v<T>
+                || std::is_enum_v<T>) {
+    detail::reverse_bytes(x);
+    h(std::addressof(x), sizeof(x));
+  } else if constexpr (std::is_floating_point_v<T>) {
+    // When hashing, we treat -0 and 0 the same.
+    if (x == 0)
+      x = 0;
+    detail::maybe_reverse_bytes(x, h);
+    h(&x, sizeof(x));
+  } else {
+    static_assert(std::is_same_v<T, T>, "T is neither integral nor a float");
+  }
 }
 
 template <class Hasher>

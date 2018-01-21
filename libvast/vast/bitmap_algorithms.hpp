@@ -458,22 +458,20 @@ auto span(Bitmap const& bm) {
 /// @param bm The bitmap to test.
 /// @relates all
 template <bool Bit = true, class Bitmap>
-auto any(Bitmap const& bm) -> std::enable_if_t<Bit, bool> {
-  for (auto b : bit_range(bm))
-    if (b.data())
-      return true;
-  return false;
-}
-
-template <bool Bit, class Bitmap>
-auto any(Bitmap const& bm) -> std::enable_if_t<!Bit, bool> {
-  using word_type = typename Bitmap::word_type;
-  for (auto b : bit_range(bm)) {
-    auto x = b.data();
-    if (b.size() <= word_type::width)
-      x |= word_type::msb_fill(word_type::width - b.size());
-    if (x != word_type::all)
-      return true;
+bool any(Bitmap const& bm) {
+  if constexpr (Bit) {
+    for (auto b : bit_range(bm))
+      if (b.data())
+        return true;
+  } else {
+    using word_type = typename Bitmap::word_type;
+    for (auto b : bit_range(bm)) {
+      auto x = b.data();
+      if (b.size() <= word_type::width)
+        x |= word_type::msb_fill(word_type::width - b.size());
+      if (x != word_type::all)
+        return true;
+    }
   }
   return false;
 }
