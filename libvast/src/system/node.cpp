@@ -266,6 +266,7 @@ caf::behavior node(node_ptr self, std::string id, path dir) {
   self->state.tracker = self->spawn<monitored>(tracker, self->state.name);
   self->set_down_handler(
     [=](const down_msg& msg) {
+      VAST_IGNORE_UNUSED(msg);
       VAST_DEBUG(self, "got DOWN from", msg.source);
       self->send_exit(self, exit_reason::user_shutdown);
     }
@@ -322,6 +323,7 @@ caf::behavior node(node_ptr self, std::string id, path dir) {
       );
     },
     [=](signal_atom, int signal) {
+      VAST_IGNORE_UNUSED(signal);
       VAST_INFO(self, "got signal", ::strsignal(signal));
     }
   };

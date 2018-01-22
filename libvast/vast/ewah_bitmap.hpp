@@ -157,7 +157,6 @@ private:
   ewah_bitmap const* bm_;
   size_t next_ = 0;
   size_t num_dirty_ = 0;
-  size_t num_bits_ = 0;
 };
 
 ewah_bitmap_range bit_range(ewah_bitmap const& bm);

@@ -133,6 +133,7 @@ archive(archive_type::stateful_pointer<archive_state> self,
   self->state.cache.capacity(capacity);
   self->state.cache.on_evict(
     [=](uuid& id, segment&) {
+      VAST_IGNORE_UNUSED(id);
       VAST_DEBUG(self, "evicts cache entry: segment", id);
     }
   );

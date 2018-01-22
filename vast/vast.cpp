@@ -89,6 +89,7 @@ int run_import(scoped_actor& self, actor& node, message args) {
       }
     },
     [&](const error& e) {
+      VAST_IGNORE_UNUSED(e);
       VAST_ERROR(self->system().render(e));
       stop = true;
     }
@@ -141,6 +142,7 @@ int run_export(scoped_actor& self, actor& node, message args) {
       exp = a;
     },
     [&](const error& e) {
+      VAST_IGNORE_UNUSED(e);
       VAST_ERROR("failed to spawn exporter:", self->system().render(e));
     }
   );
@@ -230,6 +232,7 @@ int run_remote(scoped_actor& self, actor& node, std::string cmd, message args) {
       std::cout << str << std::endl;
     },
     [&](const error& e) {
+      VAST_IGNORE_UNUSED(e);
       VAST_ERROR(self->system().render(e));
       result = false;
     }
