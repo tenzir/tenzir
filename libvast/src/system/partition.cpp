@@ -13,7 +13,7 @@
 
 #include <caf/all.hpp>
 
-#include "vast/bitmap.hpp"
+#include "vast/ids.hpp"
 #include "vast/concept/parseable/numeric/integral.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/printable/stream.hpp"
@@ -53,7 +53,7 @@ auto to_digest(const T& x) {
 }
 
 struct collector_state {
-  bitmap hits;
+  ids hits;
   size_t got = 0;
   predicate pred;
   std::string name = "collector";
@@ -67,9 +67,9 @@ behavior collector(stateful_actor<collector_state>* self, predicate pred,
   self->state.name += '[' + to_string(pred) + ']';
   self->state.pred = std::move(pred);
   return {
-    [=](const bitmap& hits) {
+    [=](const ids& hits) {
       VAST_DEBUG(self, "got", rank(hits), "hits,",
-                 (self->state.got + 1) << '/' << expected, "bitmaps");
+                 (self->state.got + 1) << '/' << expected, "ID sets");
       self->state.hits |= hits;
       if (++self->state.got == expected) {
         VAST_DEBUG(self, "relays", rank(self->state.hits), "to evaluator");
@@ -80,55 +80,55 @@ behavior collector(stateful_actor<collector_state>* self, predicate pred,
   };
 }
 
-struct bitmap_evaluator {
-  bitmap_evaluator(const std::unordered_map<predicate, bitmap>& bitmaps)
-    : bitmaps{bitmaps} {
+struct ids_evaluator {
+  ids_evaluator(const std::unordered_map<predicate, ids>& xs)
+    : xs{xs} {
     // nop
   }
 
-  bitmap operator()(none) const {
+  ids operator()(none) const {
     return {};
   }
 
-  bitmap operator()(const conjunction& c) const {
-    auto bm = visit(*this, c[0]);
-    if (bm.empty() || all<0>(bm))
+  ids operator()(const conjunction& c) const {
+    auto result = visit(*this, c[0]);
+    if (result.empty() || all<0>(result))
       return {};
     for (size_t i = 1; i < c.size(); ++i) {
-      bm &= visit(*this, c[i]);
-      if (bm.empty() || all<0>(bm)) // short-circuit
+      result &= visit(*this, c[i]);
+      if (result.empty() || all<0>(result)) // short-circuit
         return {};
     }
-    return bm;
+    return result;
   }
 
-  bitmap operator()(const disjunction& d) const {
-    bitmap bm;
+  ids operator()(const disjunction& d) const {
+    ids result;
     for (auto& op : d) {
-      bm |= visit(*this, op);
-      if (all<1>(bm)) // short-circuit
+      result |= visit(*this, op);
+      if (all<1>(result)) // short-circuit
         break;
     }
-    return bm;
+    return result;
   }
 
-  bitmap operator()(const negation& n) const {
-    auto bm = visit(*this, n.expr());
-    bm.flip();
-    return bm;
+  ids operator()(const negation& n) const {
+    auto result = visit(*this, n.expr());
+    result.flip();
+    return result;
   }
 
-  bitmap operator()(const predicate& pred) const {
-    auto i = bitmaps.find(pred);
-    return i != bitmaps.end() ? i->second : bitmap{};
+  ids operator()(const predicate& pred) const {
+    auto i = xs.find(pred);
+    return i != xs.end() ? i->second : ids{};
   }
 
-  const std::unordered_map<predicate, bitmap>& bitmaps;
+  const std::unordered_map<predicate, ids>& xs;
 };
 
 struct evaluator_state {
-  bitmap hits;
-  std::unordered_map<predicate, bitmap> predicates;
+  ids hits;
+  std::unordered_map<predicate, ids> predicates;
   const char* name = "evaluator";
 };
 
@@ -137,9 +137,9 @@ struct evaluator_state {
 behavior evaluator(stateful_actor<evaluator_state>* self,
                    expression expr, size_t num_predicates, actor sink) {
   return {
-    [=](predicate& pred, bitmap& hits) {
+    [=](predicate& pred, ids& hits) {
       self->state.predicates.emplace(std::move(pred), std::move(hits));
-      auto expr_hits = visit(bitmap_evaluator{self->state.predicates}, expr);
+      auto expr_hits = visit(ids_evaluator{self->state.predicates}, expr);
       auto delta = expr_hits - self->state.hits;
       VAST_DEBUG(self, "evaluated",
                  self->state.predicates.size() << '/' << num_predicates,
@@ -204,7 +204,7 @@ behavior partition(stateful_actor<partition_state>* self, path dir) {
     [=](const expression& expr) {
       VAST_DEBUG(self, "got expression:", expr);
       auto start = steady_clock::now();
-      auto rp = self->make_response_promise<bitmap>();
+      auto rp = self->make_response_promise<ids>();
       // For each known type, check whether the expression could match.
       // If so, locate/load the corresponding indexer.
       std::vector<actor> indexers;
@@ -223,16 +223,16 @@ behavior partition(stateful_actor<partition_state>* self, path dir) {
       if (indexers.empty()) {
         VAST_DEBUG(self, "did not find a matching type in",
                    self->state.indexers.size(), "indexer(s)");
-        rp.deliver(bitmap{});
+        rp.deliver(ids{});
         return;
       }
-      // Spawn a sink that accumulates the stream of bitmaps from the evaluator
+      // Spawn a sink that accumulates the stream of ids from the evaluator
       // and ultimately responds to the user with the result.
       auto accumulator = self->system().spawn(
         [=](event_based_actor* job) mutable -> behavior {
-          auto result = std::make_shared<bitmap>();
+          auto result = std::make_shared<ids>();
           return {
-            [=](const bitmap& hits) mutable {
+            [=](const ids& hits) mutable {
               VAST_ASSERT(any<1>(hits));
               *result |= hits;
             },

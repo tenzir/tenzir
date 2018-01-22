@@ -19,7 +19,7 @@
 #include <type_traits>
 
 #include "vast/ewah_bitmap.hpp"
-#include "vast/bitmap.hpp"
+#include "vast/ids.hpp"
 #include "vast/bitmap_index.hpp"
 #include "vast/data.hpp"
 #include "vast/concept/printable/vast/data.hpp"
@@ -40,7 +40,7 @@ class value_index {
 public:
   virtual ~value_index();
 
-  using size_type = typename bitmap::size_type;
+  using size_type = typename ids::size_type;
 
   /// Constructs a value index from a given type.
   /// @param t The type to construct a value index for.
@@ -63,7 +63,7 @@ public:
   /// @param op The relation operator.
   /// @param x The value to lookup.
   /// @returns The result of the lookup or an error upon failure.
-  expected<bitmap> lookup(relational_operator op, const data& x) const;
+  expected<ids> lookup(relational_operator op, const data& x) const;
 
   /// Merges another value index with this one.
   /// @param other The value index to merge.
@@ -85,7 +85,7 @@ protected:
 private:
   virtual bool push_back_impl(const data& x, size_type skip) = 0;
 
-  virtual expected<bitmap>
+  virtual expected<ids>
   lookup_impl(relational_operator op, const data& x) const = 0;
 
   size_type nils_ = 0;
@@ -117,8 +117,8 @@ public:
   using coder_type =
     std::conditional_t<
       std::is_same<T, boolean>{},
-      singleton_coder<bitmap>,
-      multi_level_coder<range_coder<bitmap>>
+      singleton_coder<ids>,
+      multi_level_coder<range_coder<ids>>
     >;
 
   using binner_type =
@@ -185,11 +185,11 @@ private:
 
     template <class U>
     auto operator()(const U& x) const
-    -> std::enable_if_t<!std::is_arithmetic<U>{}, expected<bitmap>> {
+    -> std::enable_if_t<!std::is_arithmetic<U>{}, expected<ids>> {
       return make_error(ec::type_clash, value_type{}, x);
     }
 
-    expected<bitmap> operator()(boolean x) const {
+    expected<ids> operator()(boolean x) const {
       // Boolean indexes support only equality
       if (!(op_ == equal || op_ == not_equal))
         return make_error(ec::unsupported_operator, op_);
@@ -198,16 +198,16 @@ private:
 
     template <class U>
     auto operator()(U x) const
-    -> std::enable_if_t<std::is_arithmetic<U>{}, expected<bitmap>> {
+    -> std::enable_if_t<std::is_arithmetic<U>{}, expected<ids>> {
       // No operator constraint on arithmetic type.
       return bmi_.lookup(op_, x);
     }
 
-    expected<bitmap> operator()(timestamp x) const {
+    expected<ids> operator()(timestamp x) const {
       return (*this)(x.time_since_epoch().count());
     }
 
-    expected<bitmap> operator()(timespan x) const {
+    expected<ids> operator()(timespan x) const {
       return (*this)(x.count());
     }
 
@@ -219,7 +219,7 @@ private:
     return visit(appender{bmi_, skip}, x);
   }
 
-  expected<bitmap>
+  expected<ids>
   lookup_impl(relational_operator op, const data& x) const override {
     return visit(searcher{bmi_, op}, x);
   };
@@ -246,13 +246,13 @@ private:
 
   /// The index which holds the string length.
   using length_bitmap_index =
-    bitmap_index<uint32_t, multi_level_coder<range_coder<bitmap>>>;
+    bitmap_index<uint32_t, multi_level_coder<range_coder<ids>>>;
 
   void init();
 
   bool push_back_impl(const data& x, size_type skip) override;
 
-  expected<bitmap>
+  expected<ids>
   lookup_impl(relational_operator op, const data& x) const override;
 
   size_t max_length_;
@@ -278,7 +278,7 @@ private:
 
   bool push_back_impl(const data& x, size_type skip) override;
 
-  expected<bitmap>
+  expected<ids>
   lookup_impl(relational_operator op, const data& x) const override;
 
   std::array<byte_index, 16> bytes_;
@@ -302,7 +302,7 @@ private:
 
   bool push_back_impl(const data& x, size_type skip) override;
 
-  expected<bitmap>
+  expected<ids>
   lookup_impl(relational_operator op, const data& x) const override;
 
   address_index network_;
@@ -336,7 +336,7 @@ private:
 
   bool push_back_impl(const data& x, size_type skip) override;
 
-  expected<bitmap>
+  expected<ids>
   lookup_impl(relational_operator op, const data& x) const override;
 
   number_index num_;
@@ -354,7 +354,7 @@ public:
 
   /// The bitmap index holding the sequence size.
   using size_bitmap_index =
-    bitmap_index<uint32_t, multi_level_coder<range_coder<bitmap>>>;
+    bitmap_index<uint32_t, multi_level_coder<range_coder<ids>>>;
 
   friend void serialize(caf::serializer& sink, const sequence_index& idx);
   friend void serialize(caf::deserializer& source, sequence_index& idx);
@@ -386,7 +386,7 @@ private:
 
   bool push_back_impl(const data& x, size_type skip) override;
 
-  expected<bitmap>
+  expected<ids>
   lookup_impl(relational_operator op, const data& x) const override;
 
   std::vector<std::unique_ptr<value_index>> elements_;

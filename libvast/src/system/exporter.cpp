@@ -115,7 +115,7 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
     }
   );
   return {
-    [=](bitmap& hits) {
+    [=](ids& hits) {
       timespan runtime = steady_clock::now() - self->state.start;
       self->state.stats.runtime = runtime;
       auto count = rank(hits);
@@ -140,11 +140,11 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
       self->send(self->state.sink, self->state.id, self->state.stats);
       if (self->state.stats.received < self->state.stats.expected) {
         VAST_DEBUG(self, "received", self->state.stats.received << '/'
-                                     << self->state.stats.expected, "bitmaps");
+                                     << self->state.stats.expected, "ID sets");
         request_more_hits(self);
       } else {
         VAST_DEBUG(self, "received all", self->state.stats.expected,
-                   "bitmap(s) in", runtime);
+                   "ID set(s) in", runtime);
         if (self->state.accountant)
           self->send(self->state.accountant, "exporter.hits.runtime", runtime);
         shutdown(self);

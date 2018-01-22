@@ -20,7 +20,7 @@
 #include <unordered_map>
 
 #include "vast/aliases.hpp"
-#include "vast/bitmap.hpp"
+#include "vast/ids.hpp"
 #include "vast/expression.hpp"
 #include "vast/query_options.hpp"
 #include "vast/uuid.hpp"
@@ -36,8 +36,8 @@ struct exporter_state {
   caf::actor index;
   caf::actor sink;
   accountant_type accountant;
-  bitmap hits;
-  bitmap unprocessed;
+  ids hits;
+  ids unprocessed;
   std::unordered_map<type, expression> checkers;
   std::deque<event> candidates;
   std::vector<event> results;

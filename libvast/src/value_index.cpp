@@ -178,7 +178,7 @@ expected<void> value_index::push_back(const data& x, event_id id) {
   return {};
 }
 
-expected<bitmap>
+expected<ids>
 value_index::lookup(relational_operator op, const data& x) const {
   if (is<none>(x)) {
     if (!(op == equal || op == not_equal))
@@ -226,7 +226,7 @@ bool string_index::push_back_impl(const data& x, size_type skip) {
   return true;
 }
 
-expected<bitmap>
+expected<ids>
 string_index::lookup_impl(relational_operator op, const data& x) const {
   auto str = get_if<std::string>(x);
   if (!str)
@@ -315,7 +315,7 @@ bool address_index::push_back_impl(const data& x, size_type skip) {
   return true;
 }
 
-expected<bitmap>
+expected<ids>
 address_index::lookup_impl(relational_operator op, const data& x) const {
   auto size = v4_.size();
   if (auto addr = get_if<address>(x)) {
@@ -375,7 +375,7 @@ bool subnet_index::push_back_impl(const data& x, size_type skip) {
   return false;
 }
 
-expected<bitmap>
+expected<ids>
 subnet_index::lookup_impl(relational_operator op, const data& x) const {
   auto sn = get_if<subnet>(x);
   if (!sn)
@@ -414,11 +414,11 @@ subnet_index::lookup_impl(relational_operator op, const data& x) const {
       // the lookup returns all subnets in U that include x.
       bitmap result;
       for (auto i = uint8_t{1}; i <= sn->length(); ++i) {
-        auto bm = network_.lookup(in, subnet{sn->network(), i});
-        if (!bm)
-          return bm;
-        *bm &= length_.lookup(equal, i);
-        result |= *bm;
+        auto xs = network_.lookup(in, subnet{sn->network(), i});
+        if (!xs)
+          return xs;
+        *xs &= length_.lookup(equal, i);
+        result |= *xs;
       }
       if (op == not_ni)
         result.flip();
@@ -445,7 +445,7 @@ bool port_index::push_back_impl(const data& x, size_type skip) {
   return false;
 }
 
-expected<bitmap>
+expected<ids>
 port_index::lookup_impl(relational_operator op, const data& x) const {
   if (op == in || op == not_in)
     return make_error(ec::unsupported_operator, op);
@@ -487,7 +487,7 @@ bool sequence_index::push_back_impl(const data& x, size_type skip) {
   return false;
 }
 
-expected<bitmap>
+expected<ids>
 sequence_index::lookup_impl(relational_operator op, const data& x) const {
   if (op == ni)
     op = in;
