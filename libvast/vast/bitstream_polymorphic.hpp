@@ -40,7 +40,7 @@ private:
     virtual ~iterator_concept() = default;
     virtual std::unique_ptr<iterator_concept> copy() const = 0;
 
-    virtual bool equals(iterator_concept const& other) const = 0;
+    virtual bool equals(const iterator_concept& other) const = 0;
     virtual void increment() = 0;
     virtual size_type dereference() const = 0;
   };
@@ -59,7 +59,7 @@ private:
       return std::make_unique<iterator_model>(*this);
     }
 
-    virtual bool equals(iterator_concept const& other) const final {
+    virtual bool equals(const iterator_concept& other) const final {
       auto x = dynamic_cast<iterator_model const*>(&other);
       if (x == nullptr)
         die("bad iterator cast");
@@ -94,15 +94,15 @@ public:
           std::forward<Iterator>(i)}} {
     }
 
-    iterator(iterator const& other);
+    iterator(const iterator& other);
     iterator(iterator&& other);
-    iterator& operator=(iterator const& other);
+    iterator& operator=(const iterator& other);
     iterator& operator=(iterator&& other);
 
   private:
     friend util::iterator_access;
 
-    bool equals(iterator const& other) const;
+    bool equals(const iterator& other) const;
     void increment();
     size_type dereference() const;
 
@@ -113,13 +113,13 @@ public:
   virtual std::unique_ptr<bitstream_concept> copy() const = 0;
 
   // Interface as required by bitstream_base<T>.
-  virtual bool equals(bitstream_concept const& other) const = 0;
+  virtual bool equals(const bitstream_concept& other) const = 0;
   virtual void bitwise_not() = 0;
-  virtual void bitwise_and(bitstream_concept const& other) = 0;
-  virtual void bitwise_or(bitstream_concept const& other) = 0;
-  virtual void bitwise_xor(bitstream_concept const& other) = 0;
-  virtual void bitwise_subtract(bitstream_concept const& other) = 0;
-  virtual void append_impl(bitstream_concept const& other) = 0;
+  virtual void bitwise_and(const bitstream_concept& other) = 0;
+  virtual void bitwise_or(const bitstream_concept& other) = 0;
+  virtual void bitwise_xor(const bitstream_concept& other) = 0;
+  virtual void bitwise_subtract(const bitstream_concept& other) = 0;
+  virtual void append_impl(const bitstream_concept& other) = 0;
   virtual void append_impl(size_type n, bool bit) = 0;
   virtual void append_block_impl(block_type block, size_type bits) = 0;
   virtual void push_back_impl(bool bit) = 0;
@@ -136,7 +136,7 @@ public:
   virtual size_type find_next_impl(size_type i) const = 0;
   virtual size_type find_last_impl() const = 0;
   virtual size_type find_prev_impl(size_type i) const = 0;
-  virtual bitvector const& bits_impl() const = 0;
+  virtual const bitvector& bits_impl() const = 0;
 
 protected:
   bitstream_concept() = default;
@@ -148,7 +148,7 @@ class bitstream_model : public bitstream_concept,
                         util::equality_comparable<bitstream_model<Bitstream>> {
   friend access;
 
-  Bitstream const& cast(bitstream_concept const& c) const {
+  const Bitstream& cast(const bitstream_concept& c) const {
     auto x = dynamic_cast<bitstream_model const*>(&c);
     if (x == nullptr)
       die("bad bitstream cast");
@@ -162,7 +162,7 @@ class bitstream_model : public bitstream_concept,
     return x->bitstream_;
   }
 
-  friend bool operator==(bitstream_model const& x, bitstream_model const& y) {
+  friend bool operator==(const bitstream_model& x, const bitstream_model& y) {
     return x.bitstream_ == y.bitstream_;
   }
 
@@ -181,7 +181,7 @@ public:
     return std::make_unique<bitstream_model>(*this);
   }
 
-  virtual bool equals(bitstream_concept const& other) const final {
+  virtual bool equals(const bitstream_concept& other) const final {
     return bitstream_.equals(cast(other));
   }
 
@@ -189,23 +189,23 @@ public:
     bitstream_.bitwise_not();
   }
 
-  virtual void bitwise_and(bitstream_concept const& other) final {
+  virtual void bitwise_and(const bitstream_concept& other) final {
     bitstream_.bitwise_and(cast(other));
   }
 
-  virtual void bitwise_or(bitstream_concept const& other) final {
+  virtual void bitwise_or(const bitstream_concept& other) final {
     bitstream_.bitwise_or(cast(other));
   }
 
-  virtual void bitwise_xor(bitstream_concept const& other) final {
+  virtual void bitwise_xor(const bitstream_concept& other) final {
     bitstream_.bitwise_xor(cast(other));
   }
 
-  virtual void bitwise_subtract(bitstream_concept const& other) final {
+  virtual void bitwise_subtract(const bitstream_concept& other) final {
     bitstream_.bitwise_subtract(cast(other));
   }
 
-  virtual void append_impl(bitstream_concept const& other) final {
+  virtual void append_impl(const bitstream_concept& other) final {
     bitstream_.append_impl(cast(other));
   }
 
@@ -273,7 +273,7 @@ public:
     return bitstream_.find_prev_impl(i);
   }
 
-  virtual bitvector const& bits_impl() const final {
+  virtual const bitvector& bits_impl() const final {
     return bitstream_.bits_impl();
   }
 
@@ -287,14 +287,14 @@ private:
 class bitstream : public bitstream_base<bitstream>,
                   util::equality_comparable<bitstream> {
   friend access;
-  friend bool operator==(bitstream const& x, bitstream const& y);
+  friend bool operator==(const bitstream& x, const bitstream& y);
 
 public:
   using iterator = detail::bitstream_concept::iterator;
   using const_iterator = detail::bitstream_concept::const_iterator;
 
   bitstream() = default;
-  bitstream(bitstream const& other);
+  bitstream(const bitstream& other);
   bitstream(bitstream&& other);
 
   template <
@@ -306,7 +306,7 @@ public:
         std::forward<Bitstream>(bs)}} {
   }
 
-  bitstream& operator=(bitstream const& other);
+  bitstream& operator=(const bitstream& other);
   bitstream& operator=(bitstream&& other);
 
   explicit operator bool() const;
@@ -319,13 +319,13 @@ public:
 private:
   friend bitstream_base<bitstream>;
 
-  bool equals(bitstream const& other) const;
+  bool equals(const bitstream& other) const;
   void bitwise_not();
-  void bitwise_and(bitstream const& other);
-  void bitwise_or(bitstream const& other);
-  void bitwise_xor(bitstream const& other);
-  void bitwise_subtract(bitstream const& other);
-  void append_impl(bitstream const& other);
+  void bitwise_and(const bitstream& other);
+  void bitwise_or(const bitstream& other);
+  void bitwise_xor(const bitstream& other);
+  void bitwise_subtract(const bitstream& other);
+  void append_impl(const bitstream& other);
   void append_impl(size_type n, bool bit);
   void append_block_impl(block_type block, size_type bits);
   void push_back_impl(bool bit);
@@ -342,7 +342,7 @@ private:
   size_type find_next_impl(size_type i) const;
   size_type find_last_impl() const;
   size_type find_prev_impl(size_type i) const;
-  bitvector const& bits_impl() const;
+  const bitvector& bits_impl() const;
 
   std::unique_ptr<detail::bitstream_concept> concept_;
 };

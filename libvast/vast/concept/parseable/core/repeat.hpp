@@ -33,7 +33,7 @@ public:
   }
 
   template <typename Iterator, typename Attribute>
-  bool parse(Iterator& f, Iterator const& l, Attribute& a) const {
+  bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
     if (Max == 0)
       return true; // If we have nothing todo, we're succeeding.
     auto save = f;
@@ -54,14 +54,14 @@ private:
 };
 
 template <int Min, int Max = Min, typename Parser>
-auto repeat(Parser const& p) {
+auto repeat(const Parser& p) {
   return repeat_parser<Parser, Min, Max>{p};
 }
 
 namespace parsers {
 
 template <int Min, int Max = Min, typename Parser>
-auto rep(Parser const& p) {
+auto rep(const Parser& p) {
   return repeat<Min, Max, Parser>(p);
 }
 

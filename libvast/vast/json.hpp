@@ -86,7 +86,7 @@ public:
 
     array() = default;
 
-    array(super const& s) : super(s) {
+    array(const super& s) : super(s) {
     }
 
     array(super&& s) : super(std::move(s)) {
@@ -100,7 +100,7 @@ public:
 
     object() = default;
 
-    object(super const& s) : super(s) {
+    object(const super& s) : super(s) {
     }
 
     object(super&& s) : super(std::move(s)) {
@@ -141,36 +141,36 @@ private:
 private:
   struct less_than {
     template <typename T>
-    bool operator()(T const& x, T const& y) {
+    bool operator()(const T& x, const T& y) {
       return x < y;
     }
 
     template <typename T, typename U>
-    bool operator()(T const&, U const&) {
+    bool operator()(const T&, const U&) {
       return false;
     }
   };
 
   struct equals {
     template <typename T>
-    bool operator()(T const& x, T const& y) {
+    bool operator()(const T& x, const T& y) {
       return x == y;
     }
 
     template <typename T, typename U>
-    bool operator()(T const&, U const&) {
+    bool operator()(const T&, const U&) {
       return false;
     }
   };
 
-  friend bool operator<(json const& x, json const& y) {
+  friend bool operator<(const json& x, const json& y) {
     if (x.value_.index() == y.value_.index())
       return visit(less_than{}, x.value_, y.value_);
     else
       return x.value_.index() < y.value_.index();
   }
 
-  friend bool operator==(json const& x, json const& y) {
+  friend bool operator==(const json& x, const json& y) {
     return visit(equals{}, x.value_, y.value_);
   }
 };
@@ -195,7 +195,7 @@ bool convert(T x, json& j) {
 }
 
 template <typename T>
-bool convert(std::vector<T> const& v, json& j) {
+bool convert(const std::vector<T>& v, json& j) {
   json::array a;
   for (auto& x : v) {
     json i;
@@ -208,7 +208,7 @@ bool convert(std::vector<T> const& v, json& j) {
 }
 
 template <typename K, typename V>
-bool convert(std::map<K, V> const& m, json& j) {
+bool convert(const std::map<K, V>& m, json& j) {
   json::object o;
   for (auto& p : m) {
     auto k = to<std::string>(p.first);
@@ -222,7 +222,7 @@ bool convert(std::map<K, V> const& m, json& j) {
 }
 
 template <typename T, typename... Opts>
-json to_json(T const& x, Opts&&... opts) {
+json to_json(const T& x, Opts&&... opts) {
   json j;
   if (convert(x, j, std::forward<Opts>(opts)...))
     return j;

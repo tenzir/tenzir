@@ -27,7 +27,7 @@ struct offset_parser : parser<offset_parser> {
   using attribute = offset;
 
   template <typename Iterator, typename Attribute>
-  bool parse(Iterator& f, Iterator const& l, Attribute& a) const {
+  bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
     static auto p = parsers::u32 % ',';
     return p(f, l, a);
   }

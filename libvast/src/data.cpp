@@ -144,45 +144,45 @@ struct adder {
 };
 
 struct match_visitor {
-  bool operator()(std::string const& lhs, pattern const& rhs) const {
+  bool operator()(const std::string& lhs, const pattern& rhs) const {
     return rhs.match(lhs);
   }
 
   template <class T, class U>
-  bool operator()(T const&, U const&) const {
+  bool operator()(const T&, const U&) const {
     return false;
   }
 };
 
 struct in_visitor {
-  bool operator()(std::string const& lhs, std::string const& rhs) const {
+  bool operator()(const std::string& lhs, const std::string& rhs) const {
     return rhs.find(lhs) != std::string::npos;
   }
 
-  bool operator()(std::string const& lhs, pattern const& rhs) const {
+  bool operator()(const std::string& lhs, const pattern& rhs) const {
     return rhs.search(lhs);
   }
 
-  bool operator()(address const& lhs, subnet const& rhs) const {
+  bool operator()(const address& lhs, const subnet& rhs) const {
     return rhs.contains(lhs);
   }
 
-  bool operator()(subnet const& lhs, subnet const& rhs) const {
+  bool operator()(const subnet& lhs, const subnet& rhs) const {
     return rhs.contains(lhs);
   }
 
   template <class T>
-  bool operator()(T const& lhs, set const& rhs) const {
+  bool operator()(const T& lhs, const set& rhs) const {
     return std::find(rhs.begin(), rhs.end(), lhs) != rhs.end();
   }
 
   template <class T>
-  bool operator()(T const& lhs, vector const& rhs) const {
+  bool operator()(const T& lhs, const vector& rhs) const {
     return std::find(rhs.begin(), rhs.end(), lhs) != rhs.end();
   }
 
   template <class T, class U>
-  bool operator()(T const&, U const&) const {
+  bool operator()(const T&, const U&) const {
     return false;
   }
 };
@@ -192,7 +192,7 @@ struct in_visitor {
 data::data(none) {
 }
 
-data& data::operator+=(data const& rhs) {
+data& data::operator+=(const data& rhs) {
   visit(adder{*this}, *this, rhs);
   return *this;
 }
@@ -201,15 +201,15 @@ detail::data_variant& expose(data& d) {
   return d.data_;
 }
 
-bool operator==(data const& lhs, data const& rhs) {
+bool operator==(const data& lhs, const data& rhs) {
   return lhs.data_ == rhs.data_;
 }
 
-bool operator<(data const& lhs, data const& rhs) {
+bool operator<(const data& lhs, const data& rhs) {
   return lhs.data_ < rhs.data_;
 }
 
-bool evaluate(data const& lhs, relational_operator op, data const& rhs) {
+bool evaluate(const data& lhs, relational_operator op, const data& rhs) {
   switch (op) {
     default:
       VAST_ASSERT(!"missing case");
@@ -241,7 +241,7 @@ bool evaluate(data const& lhs, relational_operator op, data const& rhs) {
   }
 }
 
-data const* get(vector const& v, offset const& o) {
+data const* get(const vector& v, const offset& o) {
   vector const* x = &v;
   for (size_t i = 0; i < o.size(); ++i) {
     auto& idx = o[i];
@@ -257,7 +257,7 @@ data const* get(vector const& v, offset const& o) {
   return nullptr;
 }
 
-data const* get(data const& d, offset const& o) {
+data const* get(const data& d, const offset& o) {
   if (auto v = get_if<vector>(d))
     return get(*v, o);
   return nullptr;
@@ -303,7 +303,7 @@ optional<vector> unflatten(Iterator& f, Iterator l, const record_type& rec) {
 
 } // namespace <anonymous>
 
-vector flatten(vector const& xs) {
+vector flatten(const vector& xs) {
   auto f = xs.begin();
   auto l = xs.end();
   return flatten(f, l);
@@ -315,7 +315,7 @@ vector flatten(vector&& xs) {
   return flatten(f, l);
 }
 
-data flatten(data const& x) {
+data flatten(const data& x) {
   auto xs = get_if<vector>(x);
   return xs ? flatten(*xs) : x;
 }
@@ -325,25 +325,25 @@ data flatten(data&& x) {
   return xs ? flatten(std::move(*xs)) : x;
 }
 
-optional<vector> unflatten(vector const& xs, record_type const& rt) {
+optional<vector> unflatten(const vector& xs, const record_type& rt) {
   auto first = xs.begin();
   auto last = xs.end();
   return unflatten(first, last, rt);
 }
 
-optional<vector> unflatten(vector&& xs, record_type const& rt) {
+optional<vector> unflatten(vector&& xs, const record_type& rt) {
   auto first = std::make_move_iterator(xs.begin());
   auto last = std::make_move_iterator(xs.end());
   return unflatten(first, last, rt);
 }
 
-optional<vector> unflatten(data const& x, type const& t) {
+optional<vector> unflatten(const data& x, const type& t) {
   auto xs = get_if<vector>(x);
   auto rt = get_if<record_type>(t);
   return xs && rt ? unflatten(*xs, *rt) : optional<vector>{};
 }
 
-optional<vector> unflatten(data&& x, type const& t) {
+optional<vector> unflatten(data&& x, const type& t) {
   auto xs = get_if<vector>(x);
   auto rt = get_if<record_type>(t);
   return xs && rt ? unflatten(std::move(*xs), *rt) : optional<vector>{};
@@ -358,13 +358,13 @@ struct jsonizer {
     return true;
   }
 
-  bool operator()(std::string const& str) const {
+  bool operator()(const std::string& str) const {
     j_ = str;
     return true;
   }
 
   template <class T>
-  bool operator()(T const& x) const {
+  bool operator()(const T& x) const {
     return convert(x, j_);
   }
 
@@ -373,7 +373,7 @@ struct jsonizer {
 
 } // namespace <anonymous>
 
-bool convert(vector const& v, json& j) {
+bool convert(const vector& v, json& j) {
   json::array a(v.size());
   for (auto i = 0u; i < v.size(); ++i)
     if (!visit(jsonizer{a[i]}, v[i]))
@@ -382,7 +382,7 @@ bool convert(vector const& v, json& j) {
   return true;
 }
 
-bool convert(set const& s, json& j) {
+bool convert(const set& s, json& j) {
   json::array a(s.size());
   auto i = 0u;
   for (auto& x : s)
@@ -392,7 +392,7 @@ bool convert(set const& s, json& j) {
   return true;
 }
 
-bool convert(table const& t, json& j) {
+bool convert(const table& t, json& j) {
   json::array values;
   for (auto& p : t) {
     json::array a;
@@ -409,11 +409,11 @@ bool convert(table const& t, json& j) {
   return true;
 }
 
-bool convert(data const& d, json& j) {
+bool convert(const data& d, json& j) {
   return visit(jsonizer{j}, d);
 }
 
-bool convert(data const& d, json& j, type const& t) {
+bool convert(const data& d, json& j, const type& t) {
   auto v = get_if<vector>(d);
   auto rt = get_if<record_type>(t);
   if (v && rt) {

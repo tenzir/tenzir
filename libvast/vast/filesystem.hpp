@@ -76,8 +76,8 @@ public:
   /// @param str The string representing of a path.
   path(std::string str);
 
-  path& operator/=(path const& p);
-  path& operator+=(path const& p);
+  path& operator/=(const path& p);
+  path& operator+=(const path& p);
 
   /// Checks whether the path is empty.
   /// @param `true` if the path is empty.
@@ -121,7 +121,7 @@ public:
 
   /// Retrieves the underlying string representation.
   /// @returns The string representation of the path.
-  std::string const& str() const;
+  const std::string& str() const;
 
   //
   // Filesystem operations
@@ -142,8 +142,8 @@ public:
   /// @returns `true` if the path is a symlink.
   bool is_symlink() const;
 
-  friend bool operator==(path const& x, path const& y);
-  friend bool operator<(path const& x, path const& y);
+  friend bool operator==(const path& x, const path& y);
+  friend bool operator<(const path& x, const path& y);
 
   template <class Inspector>
   friend auto inspect(Inspector&f, path& p) {
@@ -158,8 +158,8 @@ constexpr bool close_on_destruction = true;
 
 /// A simple file abstraction.
 class file {
-  file(file const&) = delete;
-  file& operator=(file const&) = delete;
+  file(const file&) = delete;
+  file& operator=(const file&) = delete;
 
 public:
 /// The native type of a file.
@@ -237,7 +237,7 @@ public:
 
   /// Retrieves the ::path for this file.
   /// @returns The ::path for this file.
-  vast::path const& path() const;
+  const vast::path& path() const;
 
   /// Retrieves the native handle for this file.
   /// @returns The native handle.
@@ -259,15 +259,15 @@ public:
       : public detail::iterator_facade<
           iterator,
           std::input_iterator_tag,
-          path const&,
-          path const&
+          const path&,
+          const path&
         > {
   public:
     iterator(directory* dir = nullptr);
 
     void increment();
-    path const& dereference() const;
-    bool equals(iterator const& other) const;
+    const path& dereference() const;
+    bool equals(const iterator& other) const;
 
   private:
     path current_;
@@ -285,7 +285,7 @@ public:
 
   /// Retrieves the ::path for this file.
   /// @returns The ::path for this file.
-  vast::path const& path() const;
+  const vast::path& path() const;
 
 private:
   vast::path path_;
@@ -297,32 +297,32 @@ private:
 /// Splits the string at the path separator.
 /// @param p The path to split.
 /// @returns A vector of the path components.
-std::vector<path> split(path const& p);
+std::vector<path> split(const path& p);
 
 /// Checks whether the path exists on the filesystem.
 /// @param p The path to check for existance.
 /// @returns `true` if *p* exists.
-bool exists(path const& p);
+bool exists(const path& p);
 
 /// Creates a symlink (aka. "soft link").
 /// @param target The existing file that should be linked.
 /// @param link The symlink that points to *target*.
-void create_symlink(path const& target, path const& link);
+void create_symlink(const path& target, const path& link);
 
 /// Deletes the path on the filesystem.
 /// @param p The path to a directory to delete.
 /// @returns `true` if *p* has been successfully deleted.
-bool rm(path const& p);
+bool rm(const path& p);
 
 /// If the path does not exist, create it as directory.
 /// @param p The path to a directory to create.
 /// @returns `true` on success or if *p* exists already.
-expected<void> mkdir(path const& p);
+expected<void> mkdir(const path& p);
 
 // Loads file contents into a string.
 // @param p The path of the file to load.
 // @returns The contents of the file *p*.
-expected<std::string> load_contents(path const& p);
+expected<std::string> load_contents(const path& p);
 
 } // namespace vast
 
@@ -330,7 +330,7 @@ namespace std {
 
 template <>
 struct hash<vast::path> {
-  size_t operator()(vast::path const& p) const {
+  size_t operator()(const vast::path& p) const {
     return hash<std::string>{}(p.str());
   }
 };

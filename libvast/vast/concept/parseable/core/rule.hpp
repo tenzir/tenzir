@@ -27,8 +27,8 @@ namespace detail {
 template <typename Iterator, typename Attribute>
 struct abstract_rule {
   ~abstract_rule() = default;
-  virtual bool parse(Iterator& f, Iterator const& l, unused_type) const = 0;
-  virtual bool parse(Iterator& f, Iterator const& l, Attribute& a) const = 0;
+  virtual bool parse(Iterator& f, const Iterator& l, unused_type) const = 0;
+  virtual bool parse(Iterator& f, const Iterator& l, Attribute& a) const = 0;
 };
 
 template <typename Parser, typename Iterator, typename Attribute>
@@ -37,11 +37,11 @@ public:
   explicit rule_definition(Parser p) : parser_(std::move(p)) {
   }
 
-  bool parse(Iterator& f, Iterator const& l, unused_type) const override {
+  bool parse(Iterator& f, const Iterator& l, unused_type) const override {
     return parser_(f, l, unused);
   }
 
-  bool parse(Iterator& f, Iterator const& l, Attribute& a) const override {
+  bool parse(Iterator& f, const Iterator& l, Attribute& a) const override {
     return parser_(f, l, a);
   }
 
@@ -90,12 +90,12 @@ public:
     make_parser<RHS>(std::forward<RHS>(rhs));
   }
 
-  bool parse(Iterator& f, Iterator const& l, unused_type) const {
+  bool parse(Iterator& f, const Iterator& l, unused_type) const {
     VAST_ASSERT(*parser_ != nullptr);
     return (*parser_)->parse(f, l, unused);
   }
 
-  bool parse(Iterator& f, Iterator const& l, Attribute& a) const {
+  bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
     VAST_ASSERT(*parser_ != nullptr);
     return (*parser_)->parse(f, l, a);
   }

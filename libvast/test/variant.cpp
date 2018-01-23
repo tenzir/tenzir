@@ -50,24 +50,24 @@ struct referencer {
 
 struct binary {
   template <typename T>
-  bool operator()(T const&, T const&) const {
+  bool operator()(const T&, const T&) const {
     return true;
   }
 
   template <typename T, typename U>
-  bool operator()(T const&, U const&) const {
+  bool operator()(const T&, const U&) const {
     return false;
   }
 };
 
 struct ternary {
   template <typename T, typename U>
-  double operator()(bool c, T const& t, U const& f) const {
+  double operator()(bool c, const T& t, const U& f) const {
     return c ? t : f;
   }
 
   template <typename T, typename U, typename V>
-  double operator()(T const&, U const&, V const&) const {
+  double operator()(const T&, const U&, const V&) const {
     return 42;
   }
 };

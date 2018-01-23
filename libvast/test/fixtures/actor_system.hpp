@@ -70,7 +70,7 @@ struct actor_system : filesystem {
   }
 
   auto error_handler() {
-    return [&](caf::error const& e) { FAIL(system.render(e)); };
+    return [&](const caf::error& e) { FAIL(system.render(e)); };
   }
 
   configuration config;

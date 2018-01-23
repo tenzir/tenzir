@@ -44,7 +44,7 @@ bool print_delimited(InputIterator begin, InputIterator end,
 /// Prints a delimited Iterator range.
 template <typename InputIterator, typename OutputIterator, typename Delimiter>
 bool print_delimited(InputIterator begin, InputIterator end,
-                     OutputIterator&& out, Delimiter const& delim) {
+                     OutputIterator&& out, const Delimiter& delim) {
   if (begin == end)
     return true;
   if (!print(out, *begin))

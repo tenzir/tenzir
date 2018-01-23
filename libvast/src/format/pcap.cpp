@@ -275,7 +275,7 @@ expected<event> reader::read() {
   return e;
 }
 
-expected<void> reader::schema(vast::schema const& sch) {
+expected<void> reader::schema(const vast::schema& sch) {
   auto t = sch.find(pcap_packet_type.name());
   if (!t)
     return make_error(ec::format_error, "did not find packet type in schema");
@@ -307,7 +307,7 @@ writer::~writer() {
     ::pcap_close(pcap_);
 }
 
-expected<void> writer::write(event const& e) {
+expected<void> writer::write(const event& e) {
   if (!pcap_) {
 #ifdef PCAP_TSTAMP_PRECISION_NANO
     pcap_ = ::pcap_open_dead_with_tstamp_precision(DLT_RAW, 65535,

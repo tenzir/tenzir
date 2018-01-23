@@ -16,46 +16,46 @@
 
 namespace vast {
 
-bool value::type(vast::type const& t) {
+bool value::type(const vast::type& t) {
   if (!type_check(t, data_))
     return false;
   type_ = t;
   return true;
 }
 
-type const& value::type() const {
+const type& value::type() const {
   return type_;
 }
 
-vast::data const& value::data() const {
+const vast::data& value::data() const {
   return data_;
 }
 
-value flatten(value const& v) {
+value flatten(const value& v) {
   return {flatten(v.data()), flatten(v.type())};
 }
 
-bool operator==(value const& lhs, value const& rhs) {
+bool operator==(const value& lhs, const value& rhs) {
   return lhs.data_ == rhs.data_;
 }
 
-bool operator!=(value const& lhs, value const& rhs) {
+bool operator!=(const value& lhs, const value& rhs) {
   return lhs.data_ != rhs.data_;
 }
 
-bool operator<(value const& lhs, value const& rhs) {
+bool operator<(const value& lhs, const value& rhs) {
   return lhs.data_ < rhs.data_;
 }
 
-bool operator<=(value const& lhs, value const& rhs) {
+bool operator<=(const value& lhs, const value& rhs) {
   return lhs.data_ <= rhs.data_;
 }
 
-bool operator>=(value const& lhs, value const& rhs) {
+bool operator>=(const value& lhs, const value& rhs) {
   return lhs.data_ >= rhs.data_;
 }
 
-bool operator>(value const& lhs, value const& rhs) {
+bool operator>(const value& lhs, const value& rhs) {
   return lhs.data_ > rhs.data_;
 }
 
@@ -63,7 +63,7 @@ detail::data_variant& expose(value& v) {
   return expose(v.data_);
 }
 
-bool convert(value const& v, json& j) {
+bool convert(const value& v, json& j) {
   json::object o;
   if (!convert(v.type(), o["type"]))
     return false;

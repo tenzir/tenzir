@@ -28,7 +28,7 @@ public:
   }
 
   template <typename Iterator>
-  bool parse(Iterator& f, Iterator const& l, unused_type) const {
+  bool parse(Iterator& f, const Iterator& l, unused_type) const {
     auto i = f;
     auto begin = str_.begin();
     auto end = str_.end();
@@ -40,7 +40,7 @@ public:
   }
 
   template <typename Iterator, typename Attribute>
-  bool parse(Iterator& f, Iterator const& l, Attribute& a) const {
+  bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
     a.clear();
     auto out = std::back_inserter(a);
     auto i = f;

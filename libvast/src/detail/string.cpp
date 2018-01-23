@@ -19,11 +19,11 @@
 namespace vast {
 namespace detail {
 
-std::string byte_escape(std::string const& str) {
+std::string byte_escape(const std::string& str) {
   return escape(str, print_escaper);
 }
 
-std::string byte_escape(std::string const& str, std::string const& extra) {
+std::string byte_escape(const std::string& str, const std::string& extra) {
   auto print_extra_escaper = [&](auto& f, auto l, auto out) {
     if (extra.find(*f) != std::string::npos) {
       *out++ = '\\';
@@ -35,15 +35,15 @@ std::string byte_escape(std::string const& str, std::string const& extra) {
   return escape(str, print_extra_escaper);
 }
 
-std::string byte_escape_all(std::string const& str) {
+std::string byte_escape_all(const std::string& str) {
   return escape(str, hex_escaper);
 }
 
-std::string byte_unescape(std::string const& str) {
+std::string byte_unescape(const std::string& str) {
   return unescape(str, byte_unescaper);
 }
 
-std::string json_escape(std::string const& str) {
+std::string json_escape(const std::string& str) {
   if (str.empty())
     return "\"\"";
   std::string result;
@@ -58,7 +58,7 @@ std::string json_escape(std::string const& str) {
   return result;
 }
 
-std::string json_unescape(std::string const& str) {
+std::string json_unescape(const std::string& str) {
   // Unescape everything until the closing double quote.
   auto f = str.begin();
   auto l = str.end();
@@ -77,19 +77,19 @@ std::string json_unescape(std::string const& str) {
   return result;
 }
 
-std::string percent_escape(std::string const& str) {
+std::string percent_escape(const std::string& str) {
   return escape(str, percent_escaper);
 }
 
-std::string percent_unescape(std::string const& str) {
+std::string percent_unescape(const std::string& str) {
   return unescape(str, percent_unescaper);
 }
 
-std::string double_escape(std::string const& str, std::string const& esc) {
+std::string double_escape(const std::string& str, const std::string& esc) {
   return escape(str, double_escaper(esc));
 }
 
-std::string double_unescape(std::string const& str, std::string const& esc) {
+std::string double_unescape(const std::string& str, const std::string& esc) {
   return unescape(str, double_unescaper(esc));
 }
 

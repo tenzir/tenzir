@@ -182,7 +182,7 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader&& reader) {
         return *sch;
       return sch.error();
     },
-    [=](put_atom, schema const& sch) -> result<void> {
+    [=](put_atom, const schema& sch) -> result<void> {
       auto r = self->state.reader.schema(sch);
       if (r)
         return {};
@@ -192,7 +192,7 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader&& reader) {
       VAST_DEBUG(self, "sets filter expression to:", expr);
       self->state.filter = std::move(expr);
     },
-    [=](sink_atom, actor const& sink) {
+    [=](sink_atom, const actor& sink) {
       VAST_ASSERT(sink);
       VAST_DEBUG(self, "registers sink", sink);
       self->send(self->state.sink, sys_atom::value, put_atom::value, sink);

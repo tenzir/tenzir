@@ -26,7 +26,7 @@ namespace vast {
 //  using attribute = json::type;
 //
 //  template <typename Iterator>
-//  bool print(Iterator& out, json::type const& t) {
+//  bool print(Iterator& out, const json::type& t) {
 //    using namespace printers;
 //    switch (t) {
 //      default:
@@ -66,7 +66,7 @@ struct json_printer : printer<json_printer<TreePolicy, Indent, Padding>> {
   struct print_visitor {
     print_visitor(Iterator& out) : out_{out} {}
 
-    bool operator()(none const&) {
+    bool operator()(const none&) {
       return printers::str.print(out_, "null");
     }
 
@@ -86,11 +86,11 @@ struct json_printer : printer<json_printer<TreePolicy, Indent, Padding>> {
       return printers::str.print(out_, str);
     }
 
-    bool operator()(std::string const& str) {
+    bool operator()(const std::string& str) {
       return printers::str.print(out_, detail::json_escape(str));
     }
 
-    bool operator()(json::array const& a) {
+    bool operator()(const json::array& a) {
       using namespace printers;
       if (depth_ == 0 && !pad())
         return false;
@@ -122,7 +122,7 @@ struct json_printer : printer<json_printer<TreePolicy, Indent, Padding>> {
       return any.print(out_, ']');
     }
 
-    bool operator()(json::object const& o) {
+    bool operator()(const json::object& o) {
       using namespace printers;
       if (depth_ == 0 && !pad())
         return false;
@@ -183,7 +183,7 @@ struct json_printer : printer<json_printer<TreePolicy, Indent, Padding>> {
   };
 
   template <typename Iterator, typename T>
-  auto print(Iterator& out, T const& x) const
+  auto print(Iterator& out, const T& x) const
   -> std::enable_if_t<
     !std::is_same<json::jsonize<T>, std::false_type>::value,
     bool
@@ -192,7 +192,7 @@ struct json_printer : printer<json_printer<TreePolicy, Indent, Padding>> {
   }
 
   template <typename Iterator>
-  bool print(Iterator& out, json const& j) const {
+  bool print(Iterator& out, const json& j) const {
     return visit(print_visitor<Iterator>{out}, j);
   }
 };

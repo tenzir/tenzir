@@ -45,16 +45,16 @@ public:
 
   void add(batch&& b);
 
-  expected<std::vector<event>> extract(bitmap const& bm) const;
+  expected<std::vector<event>> extract(const bitmap& bm) const;
 
-  uuid const& id() const;
+  const uuid& id() const;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, segment& s) {
     return f(s.batches_, s.bytes_, s.id_);
   }
 
-  friend uint64_t bytes(segment const& s);
+  friend uint64_t bytes(const segment& s);
 
 private:
   // TODO: use a vector & binary_search for O(1) append and O(log N) search.

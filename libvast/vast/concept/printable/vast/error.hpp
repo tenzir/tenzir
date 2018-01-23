@@ -24,7 +24,7 @@ struct error_printer : printer<error_printer> {
   using attribute = error;
 
   template <typename Iterator>
-  bool print(Iterator& out, error const& e) const {
+  bool print(Iterator& out, const error& e) const {
     auto msg = to_string(e);
     return printers::str.print(out, msg);
   }

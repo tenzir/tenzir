@@ -279,7 +279,7 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
       auto msg = self->current_mailbox_element()->move_content_to_message();
       self->send(self->state.active.partition, msg);
     },
-    [=](expression const& expr) -> result<uuid, size_t, size_t> {
+    [=](const expression& expr) -> result<uuid, size_t, size_t> {
       auto sender = actor_cast<actor>(self->current_sender());
       VAST_DEBUG(self, "got lookup:", expr);
       // Identify the relevant partitions.
@@ -307,7 +307,7 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
       ctx.first->second.partitions = std::move(partitions);
       return {id, num_partitions, n};
     },
-    [=](uuid const& id, size_t n) {
+    [=](const uuid& id, size_t n) {
       auto& ctx = self->state.lookups[id];
       VAST_DEBUG(self, "processes lookup", id << ':', ctx.expr);
       if (n == 0) {

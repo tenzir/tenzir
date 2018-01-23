@@ -36,7 +36,7 @@ namespace vast::system {
 struct Writer {
   Writer();
 
-  expected<void> write(event const&);
+  expected<void> write(const event&);
 
   expected<void> flush();
 

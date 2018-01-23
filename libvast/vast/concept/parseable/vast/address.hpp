@@ -100,7 +100,7 @@ struct address_parser : vast::parser<address_parser> {
   }
 
   template <typename Iterator>
-  bool parse(Iterator& f, Iterator const& l, unused_type) const {
+  bool parse(Iterator& f, const Iterator& l, unused_type) const {
     static auto v4 = make_v4();
     static auto v6 = make_v6();
     if (v4(f, l, unused))
@@ -116,13 +116,13 @@ struct access::parser<address> : vast::parser<access::parser<address>> {
   using attribute = address;
 
   template <typename Iterator>
-  bool parse(Iterator& f, Iterator const& l, unused_type) const {
+  bool parse(Iterator& f, const Iterator& l, unused_type) const {
     static auto const p = address_parser{};
     return p(f, l, unused);
   }
 
   template <typename Iterator>
-  bool parse(Iterator& f, Iterator const& l, address& a) const {
+  bool parse(Iterator& f, const Iterator& l, address& a) const {
     static auto const v4 = address_parser::make_v4();
     auto begin = f;
     if (v4(f, l, a.bytes_[12], a.bytes_[13], a.bytes_[14], a.bytes_[15])) {

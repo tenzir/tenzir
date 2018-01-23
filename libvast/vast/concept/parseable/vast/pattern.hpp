@@ -28,12 +28,12 @@ struct access::parser<pattern> : vast::parser<access::parser<pattern>> {
   using attribute = pattern;
 
   template <typename Iterator>
-  bool parse(Iterator& f, Iterator const& l, unused_type) const {
+  bool parse(Iterator& f, const Iterator& l, unused_type) const {
     return pattern_parser{}(f, l, unused);
   }
 
   template <typename Iterator>
-  bool parse(Iterator& f, Iterator const& l, pattern& a) const {
+  bool parse(Iterator& f, const Iterator& l, pattern& a) const {
     return pattern_parser{}(f, l, a.str_);
   }
 };

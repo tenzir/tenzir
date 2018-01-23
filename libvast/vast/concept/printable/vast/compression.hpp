@@ -24,7 +24,7 @@ struct compression_printer : printer<compression_printer> {
   using attribute = compression;
 
   template <typename Iterator>
-  bool print(Iterator& out, compression const& method) const {
+  bool print(Iterator& out, const compression& method) const {
     using namespace printers;
     switch (method) {
       case compression::null:

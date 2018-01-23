@@ -46,11 +46,11 @@ void bitmap::flip() {
   visit([](auto& bm) { bm.flip(); }, bitmap_);
 }
 
-bool operator==(bitmap const& x, bitmap const& y) {
+bool operator==(const bitmap& x, const bitmap& y) {
   return x.bitmap_ == y.bitmap_;
 }
 
-bitmap_bit_range::bitmap_bit_range(bitmap const& bm) {
+bitmap_bit_range::bitmap_bit_range(const bitmap& bm) {
   auto visitor = [&](auto& b) {
     auto r = bit_range(b);
     if (!r.done())
@@ -72,7 +72,7 @@ bool bitmap_bit_range::done() const {
   return visit([](auto& rng) { return rng.done(); }, range_);
 }
 
-bitmap_bit_range bit_range(bitmap const& bm) {
+bitmap_bit_range bit_range(const bitmap& bm) {
   return bitmap_bit_range{bm};
 }
 

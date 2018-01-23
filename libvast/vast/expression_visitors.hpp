@@ -35,19 +35,19 @@ class event;
 /// disjunction one level in the tree.
 struct hoister {
   expression operator()(none) const;
-  expression operator()(conjunction const& c) const;
-  expression operator()(disjunction const& d) const;
-  expression operator()(negation const& n) const;
-  expression operator()(predicate const& p) const;
+  expression operator()(const conjunction& c) const;
+  expression operator()(const disjunction& d) const;
+  expression operator()(const negation& n) const;
+  expression operator()(const predicate& p) const;
 };
 
 /// Ensures that extractors always end up on the LHS of a predicate.
 struct aligner {
   expression operator()(none) const;
-  expression operator()(conjunction const& c) const;
-  expression operator()(disjunction const& d) const;
-  expression operator()(negation const& n) const;
-  expression operator()(predicate const& p) const;
+  expression operator()(const conjunction& c) const;
+  expression operator()(const disjunction& d) const;
+  expression operator()(const negation& n) const;
+  expression operator()(const predicate& p) const;
 };
 
 /// Pushes negations down to the predicate level and removes double negations.
@@ -55,10 +55,10 @@ struct denegator {
   denegator(bool negate = false);
 
   expression operator()(none) const;
-  expression operator()(conjunction const& c) const;
-  expression operator()(disjunction const& d) const;
-  expression operator()(negation const& n) const;
-  expression operator()(predicate const& p) const;
+  expression operator()(const conjunction& c) const;
+  expression operator()(const disjunction& d) const;
+  expression operator()(const negation& n) const;
+  expression operator()(const predicate& p) const;
 
   bool negate_ = false;
 };
@@ -66,34 +66,34 @@ struct denegator {
 /// Removes duplicate predicates from conjunctions and disjunctions.
 struct deduplicator {
   expression operator()(none) const;
-  expression operator()(conjunction const& c) const;
-  expression operator()(disjunction const& d) const;
-  expression operator()(negation const& n) const;
-  expression operator()(predicate const& p) const;
+  expression operator()(const conjunction& c) const;
+  expression operator()(const disjunction& d) const;
+  expression operator()(const negation& n) const;
+  expression operator()(const predicate& p) const;
 };
 
 /// Extracts all predicates from an expression.
 struct predicatizer {
   std::vector<predicate> operator()(none) const;
-  std::vector<predicate> operator()(conjunction const& c) const;
-  std::vector<predicate> operator()(disjunction const& d) const;
-  std::vector<predicate> operator()(negation const& n) const;
-  std::vector<predicate> operator()(predicate const& p) const;
+  std::vector<predicate> operator()(const conjunction& c) const;
+  std::vector<predicate> operator()(const disjunction& d) const;
+  std::vector<predicate> operator()(const negation& n) const;
+  std::vector<predicate> operator()(const predicate& p) const;
 };
 
 /// Ensures that LHS and RHS of a predicate fit together.
 struct validator {
   expected<void> operator()(none);
-  expected<void> operator()(conjunction const& c);
-  expected<void> operator()(disjunction const& d);
-  expected<void> operator()(negation const& n);
-  expected<void> operator()(predicate const& p);
-  expected<void> operator()(attribute_extractor const& ex, data const& d);
-  expected<void> operator()(type_extractor const& ex, data const& d);
-  expected<void> operator()(key_extractor const& ex, data const& d);
+  expected<void> operator()(const conjunction& c);
+  expected<void> operator()(const disjunction& d);
+  expected<void> operator()(const negation& n);
+  expected<void> operator()(const predicate& p);
+  expected<void> operator()(const attribute_extractor& ex, const data& d);
+  expected<void> operator()(const type_extractor& ex, const data& d);
+  expected<void> operator()(const key_extractor& ex, const data& d);
 
   template <typename T, typename U>
-  expected<void> operator()(T const& lhs, U const& rhs) {
+  expected<void> operator()(const T& lhs, const U& rhs) {
     return make_error(ec::syntax_error, "incompatible predicate operands", lhs,
                       rhs);
   }
@@ -111,10 +111,10 @@ struct time_restrictor {
   time_restrictor(timestamp first, timestamp second);
 
   bool operator()(none) const;
-  bool operator()(conjunction const& con) const;
-  bool operator()(disjunction const& dis) const;
-  bool operator()(negation const& n) const;
-  bool operator()(predicate const& p) const;
+  bool operator()(const conjunction& con) const;
+  bool operator()(const disjunction& dis) const;
+  bool operator()(const negation& n) const;
+  bool operator()(const predicate& p) const;
 
   timestamp first_;
   timestamp last_;
@@ -123,67 +123,67 @@ struct time_restrictor {
 /// Transforms all ::key_extractor and ::type_extractor predicates into
 /// ::data_extractor instances according to a given type.
 struct type_resolver {
-  type_resolver(type const& t);
+  type_resolver(const type& t);
 
   expected<expression> operator()(none);
-  expected<expression> operator()(conjunction const& c);
-  expected<expression> operator()(disjunction const& d);
-  expected<expression> operator()(negation const& n);
-  expected<expression> operator()(predicate const& p);
-  expected<expression> operator()(type_extractor const& ex, data const& d);
-  expected<expression> operator()(data const& d, type_extractor const& ex);
-  expected<expression> operator()(key_extractor const& ex, data const& d);
-  expected<expression> operator()(data const& d, key_extractor const& e);
+  expected<expression> operator()(const conjunction& c);
+  expected<expression> operator()(const disjunction& d);
+  expected<expression> operator()(const negation& n);
+  expected<expression> operator()(const predicate& p);
+  expected<expression> operator()(const type_extractor& ex, const data& d);
+  expected<expression> operator()(const data& d, const type_extractor& ex);
+  expected<expression> operator()(const key_extractor& ex, const data& d);
+  expected<expression> operator()(const data& d, const key_extractor& e);
 
   template <typename T, typename U>
-  expected<expression> operator()(T const& lhs, U const& rhs) {
+  expected<expression> operator()(const T& lhs, const U& rhs) {
     return {predicate{lhs, op_, rhs}};
   }
 
   relational_operator op_;
-  type const& type_;
+  const type& type_;
 };
 
 // Tailors an expression to a specific type by pruning all unecessary branches
 // and resolving keys into the corresponding data extractors.
 struct type_pruner {
-  type_pruner(type const& event_type);
+  type_pruner(const type& event_type);
 
   expression operator()(none);
-  expression operator()(conjunction const& c);
-  expression operator()(disjunction const& d);
-  expression operator()(negation const& n);
-  expression operator()(predicate const& p);
+  expression operator()(const conjunction& c);
+  expression operator()(const disjunction& d);
+  expression operator()(const negation& n);
+  expression operator()(const predicate& p);
 
   relational_operator op_;
-  type const& type_;
+  const type& type_;
 };
 
 /// Evaluates an event over a [resolved](@ref type_extractor) expression.
 struct event_evaluator {
-  event_evaluator(event const& e);
+  event_evaluator(const event& e);
 
   bool operator()(none);
-  bool operator()(conjunction const& c);
-  bool operator()(disjunction const& d);
-  bool operator()(negation const& n);
-  bool operator()(predicate const& p);
-  bool operator()(attribute_extractor const& e, data const& d);
-  bool operator()(key_extractor const&, data const&);
-  bool operator()(type_extractor const&, data const&);
-  bool operator()(data_extractor const& e, data const& d);
+  bool operator()(const conjunction& c);
+  bool operator()(const disjunction& d);
+  bool operator()(const negation& n);
+  bool operator()(const predicate& p);
+  bool operator()(const attribute_extractor& e, const data& d);
+  bool operator()(const key_extractor&, const data&);
+  bool operator()(const type_extractor&, const data&);
+  bool operator()(const data_extractor& e, const data& d);
 
   template <typename T>
-  bool operator()(data const& d, T const& x) {
+  bool operator()(const data& d, const T& x) {
     return (*this)(x, d);
   }
 
   template <typename T, typename U>
-  bool operator()(T const&, U const&) {
+  bool operator()(const T&, const U&) {
     return false;
   }
 
-  event const& event_;
+  const event& event_;
   relational_operator op_;
 };
 
@@ -193,20 +193,20 @@ struct event_evaluator {
 /// match. For disjunctions, at least one operand must match.
 struct matcher {
   bool operator()(none);
-  bool operator()(conjunction const&);
-  bool operator()(disjunction const&);
-  bool operator()(negation const&);
-  bool operator()(predicate const&);
-  bool operator()(attribute_extractor const&, data const&);
-  bool operator()(data_extractor const&, data const&);
+  bool operator()(const conjunction&);
+  bool operator()(const disjunction&);
+  bool operator()(const negation&);
+  bool operator()(const predicate&);
+  bool operator()(const attribute_extractor&, const data&);
+  bool operator()(const data_extractor&, const data&);
 
   template <typename T>
-  bool operator()(data const& d, T const& x) {
+  bool operator()(const data& d, const T& x) {
     return (*this)(x, d);
   }
 
   template <typename T, typename U>
-  bool operator()(T const&, U const&) {
+  bool operator()(const T&, const U&) {
     return false;
   }
 

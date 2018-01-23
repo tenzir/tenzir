@@ -44,7 +44,7 @@ struct string_printer : printer<string_printer> {
   }
 
   template <typename Iterator>
-  static bool print_string(Iterator& out, std::string const& str) {
+  static bool print_string(Iterator& out, const std::string& str) {
     return print_string(out, str.begin(), str.end());
   }
 
@@ -54,7 +54,7 @@ struct string_printer : printer<string_printer> {
   }
 
   template <typename Iterator, typename Attribute>
-  bool print(Iterator& out, Attribute const& str) const {
+  bool print(Iterator& out, const Attribute& str) const {
     return print_string(out, str);
   }
 };

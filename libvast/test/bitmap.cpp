@@ -436,7 +436,7 @@ ewah_bitmap make_ewah3() {
   return bm;
 }
 
-std::string to_block_string(ewah_bitmap const& bm) {
+std::string to_block_string(const ewah_bitmap& bm) {
   using word_type = ewah_bitmap::word_type;
   std::string str;
   if (bm.blocks().empty())

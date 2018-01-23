@@ -35,7 +35,7 @@ public:
   explicit writer(std::unique_ptr<std::ostream> out) : out_{std::move(out)} {
   }
 
-  expected<void> write(event const& e) {
+  expected<void> write(const event& e) {
     auto i = std::ostreambuf_iterator<char>(*out_);
     if (!printer_.print(i, e))
       return make_error(ec::print_error, "failed to print event:", e);

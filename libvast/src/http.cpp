@@ -19,7 +19,7 @@
 namespace vast {
 namespace http {
 
-header const* message::header(std::string const& name) const {
+header const* message::header(const std::string& name) const {
   auto pred = [&](auto& x) -> bool {
     if (x.name.size() != name.size())
       return false;

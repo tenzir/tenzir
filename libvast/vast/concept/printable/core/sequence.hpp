@@ -71,7 +71,7 @@ public:
   }
 
   template <typename Iterator, typename Attribute>
-  bool print(Iterator& out, Attribute const& a) const {
+  bool print(Iterator& out, const Attribute& a) const {
     return print_left(out, a) && print_right(out, a);
   }
 
@@ -109,13 +109,13 @@ private:
   }
 
   template <typename L, typename T>
-  static auto get_helper(T const& x)
-  -> std::enable_if_t<is_sequence_printer<L>{}, T const&> {
+  static auto get_helper(const T& x)
+  -> std::enable_if_t<is_sequence_printer<L>{}, const T&> {
     return x;
   }
 
   template <typename L, typename T>
-  static auto get_helper(T const& x)
+  static auto get_helper(const T& x)
   -> std::enable_if_t<
        ! is_sequence_printer<L>::value,
        decltype(std::get<0>(x))
@@ -124,12 +124,12 @@ private:
   }
 
   template <typename Iterator, typename... Ts>
-  bool print_left(Iterator& out, std::tuple<Ts...> const& t) const {
+  bool print_left(Iterator& out, const std::tuple<Ts...>& t) const {
     return lhs_.print(out, get_helper<lhs_type>(t));
   }
 
   template <typename Iterator, typename... Ts>
-  bool print_right(Iterator& out, std::tuple<Ts...> const& t) const {
+  bool print_right(Iterator& out, const std::tuple<Ts...>& t) const {
     return rhs_.print(out, std::get<depth()>(t));
   }
 
@@ -144,22 +144,22 @@ private:
   }
 
   template <typename Iterator, typename T, typename U>
-  bool print_left(Iterator& out, std::pair<T, U> const& p) const {
+  bool print_left(Iterator& out, const std::pair<T, U>& p) const {
     return lhs_.print(out, p.first);
   }
 
   template <typename Iterator, typename T, typename U>
-  bool print_right(Iterator& out, std::pair<T, U> const& p) const {
+  bool print_right(Iterator& out, const std::pair<T, U>& p) const {
     return rhs_.print(out, p.second);
   }
 
   template <typename Iterator, typename Attribute>
-  bool print_left(Iterator& out, Attribute const& a) const {
+  bool print_left(Iterator& out, const Attribute& a) const {
     return lhs_.print(out, a);
   }
 
   template <typename Iterator, typename Attribute>
-  bool print_right(Iterator& out, Attribute const& a) const {
+  bool print_right(Iterator& out, const Attribute& a) const {
     return rhs_.print(out, a);
   }
 

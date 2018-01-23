@@ -60,7 +60,7 @@ struct coder {
   /// Appends another coder to this instance.
   /// @param other The coder to append.
   /// @pre `size() + other.size() < Bitmap::max_size`
-  void append(coder const& other);
+  void append(const coder& other);
 
   /// Retrieves the number entries in the coder, i.e., the number of rows.
   /// @returns The size of the coder measured in number of entries.
@@ -92,7 +92,7 @@ public:
     return result;
   }
 
-  void append(singleton_coder const& other) {
+  void append(const singleton_coder& other) {
     bitmap_.append(other.bitmap_);
   }
 
@@ -100,11 +100,11 @@ public:
     return bitmap_.size();
   }
 
-  Bitmap const& storage() const {
+  const Bitmap& storage() const {
     return bitmap_;
   }
 
-  friend bool operator==(singleton_coder const& x, singleton_coder const& y) {
+  friend bool operator==(const singleton_coder& x, const singleton_coder& y) {
     return x.bitmap_ == y.bitmap_;
   }
 
@@ -130,7 +130,7 @@ public:
   vector_coder(size_t n) : size_{0}, bitmaps_(n) {
   }
 
-  void append(vector_coder const& other) {
+  void append(const vector_coder& other) {
     append(other, false);
   }
 
@@ -142,7 +142,7 @@ public:
     return bitmaps_;
   }
 
-  friend bool operator==(vector_coder const& x, vector_coder const& y) {
+  friend bool operator==(const vector_coder& x, const vector_coder& y) {
     return x.size_ == y.size_ && x.bitmaps_ == y.bitmaps_;
   }
 
@@ -152,7 +152,7 @@ public:
   }
 
 protected:
-  void append(vector_coder const& other, bool bit) {
+  void append(const vector_coder& other, bool bit) {
     VAST_ASSERT(bitmaps_.size() == other.bitmaps_.size());
     for (auto i = 0u; i < bitmaps_.size(); ++i) {
       bitmaps_[i].append_bits(bit, this->size() - bitmaps_[i].size());
@@ -303,7 +303,7 @@ public:
     }
   }
 
-  void append(range_coder const& other) {
+  void append(const range_coder& other) {
     vector_coder<Bitmap>::append(other, true);
   }
 };
@@ -440,7 +440,7 @@ public:
     return coders_.empty() ? bitmap_type{} : decode(coders_, op, x);
   }
 
-  void append(multi_level_coder const& other) {
+  void append(const multi_level_coder& other) {
     VAST_ASSERT(coders_.size() == other.coders_.size());
     for (auto i = 0u; i < coders_.size(); ++i)
       coders_[i].append(other.coders_[i]);
@@ -454,8 +454,8 @@ public:
     return coders_;
   }
 
-  friend bool operator==(multi_level_coder const& x,
-                         multi_level_coder const& y) {
+  friend bool operator==(const multi_level_coder& x,
+                         const multi_level_coder& y) {
     return x.base_ == y.base_ && x.coders_ == y.coders_;
   }
 
@@ -498,7 +498,7 @@ private:
   }
 
   // Range-Eval-Opt
-  auto decode(std::vector<range_coder<bitmap_type>> const& coders,
+  auto decode(const std::vector<range_coder<bitmap_type>>& coders,
               relational_operator op, value_type x) const {
     VAST_ASSERT(!(op == in || op == not_in));
     // All coders must have the same number of elements.
@@ -552,7 +552,7 @@ private:
   // If we don't have a range_coder, we only support simple equality queries at
   // this point.
   template <class C>
-  auto decode(std::vector<C> const& coders, relational_operator op,
+  auto decode(const std::vector<C>& coders, relational_operator op,
               value_type x) const
   -> std::enable_if_t<
     is_equality_coder<C>{} || is_bitslice_coder<C>{},

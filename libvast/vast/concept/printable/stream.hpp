@@ -22,7 +22,7 @@
 namespace vast {
 
 template <typename Char, typename Traits, typename T>
-auto operator<<(std::basic_ostream<Char, Traits>& out, T const& x)
+auto operator<<(std::basic_ostream<Char, Traits>& out, const T& x)
   -> std::enable_if_t<
        is_printable<std::ostreambuf_iterator<Char>, T>::value, decltype(out)
      > {

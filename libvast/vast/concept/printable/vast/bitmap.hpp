@@ -25,7 +25,7 @@ struct bitmap_printer : printer<bitmap_printer<Bitmap, Policy>> {
   using attribute = Bitmap;
 
   template <class Iterator>
-  bool print(Iterator& out, Bitmap const& bm) const {
+  bool print(Iterator& out, const Bitmap& bm) const {
     auto p = *printers::bits<typename Bitmap::block_type, Policy>;
     return p.print(out, bit_range(bm));
   }

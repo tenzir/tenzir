@@ -29,7 +29,7 @@ class uuid : detail::totally_ordered<uuid> {
 public:
   using value_type = uint8_t;
   using reference = value_type&;
-  using const_reference = value_type const&;
+  using const_reference = const value_type&;
   using iterator = value_type*;
   using const_iterator = value_type const*;
   using size_type = size_t;
@@ -50,8 +50,8 @@ public:
 
   void swap(uuid& other);
 
-  friend bool operator==(uuid const& x, uuid const& y);
-  friend bool operator<(uuid const& x, uuid const& y);
+  friend bool operator==(const uuid& x, const uuid& y);
+  friend bool operator<(const uuid& x, const uuid& y);
 
   template <class Inspector>
   friend auto inspect(Inspector& f, uuid& u) {
@@ -70,7 +70,7 @@ namespace std {
 
 template <>
 struct hash<vast::uuid> {
-  size_t operator()(vast::uuid const& u) const {
+  size_t operator()(const vast::uuid& u) const {
     size_t x = 0;
     for (auto& byte : u)
       x ^= static_cast<size_t>(byte) + 0x9e3779b9 + (x << 6) + (x >> 2);

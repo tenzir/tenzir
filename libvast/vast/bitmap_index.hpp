@@ -75,7 +75,7 @@ public:
 
   /// Appends the contents of another bitmap index to this one.
   /// @param other The other bitmap index.
-  void append(bitmap_index const& other) {
+  void append(const bitmap_index& other) {
     coder_.append(other.coder_);
   }
 
@@ -101,11 +101,11 @@ public:
 
   /// Accesses the underlying coder of the bitmap index.
   /// @returns The coder of this bitmap index.
-  coder_type const& coder() const {
+  const coder_type& coder() const {
     return coder_;
   }
 
-  friend bool operator==(bitmap_index const& x, bitmap_index const& y) {
+  friend bool operator==(const bitmap_index& x, const bitmap_index& y) {
     return x.coder_ == y.coder_;
   }
 

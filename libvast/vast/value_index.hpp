@@ -44,18 +44,18 @@ public:
 
   /// Constructs a value index from a given type.
   /// @param t The type to construct a value index for.
-  static std::unique_ptr<value_index> make(type const& t);
+  static std::unique_ptr<value_index> make(const type& t);
 
   /// Appends a data value.
   /// @param x The data to append to the index.
   /// @returns `true` if appending succeeded.
-  expected<void> push_back(data const& x);
+  expected<void> push_back(const data& x);
 
   /// Appends a data value.
   /// @param x The data to append to the index.
   /// @param id The positional identifier of *x*.
   /// @returns `true` if appending succeeded.
-  expected<void> push_back(data const& x, event_id id);
+  expected<void> push_back(const data& x, event_id id);
 
   /// Looks up data under a relational operator. If the value to look up is
   /// `nil`, only `==` and `!=` are valid operations. The concrete index
@@ -63,12 +63,12 @@ public:
   /// @param op The relation operator.
   /// @param x The value to lookup.
   /// @returns The result of the lookup or an error upon failure.
-  expected<bitmap> lookup(relational_operator op, data const& x) const;
+  expected<bitmap> lookup(relational_operator op, const data& x) const;
 
   /// Merges another value index with this one.
   /// @param other The value index to merge.
   /// @returns `true` on success.
-  //bool merge(value_index const& other);
+  //bool merge(const value_index& other);
 
   /// Retrieves the ID of the last ::push_back operation.
   /// @returns The largest ID in the index.
@@ -83,10 +83,10 @@ protected:
   value_index() = default;
 
 private:
-  virtual bool push_back_impl(data const& x, size_type skip) = 0;
+  virtual bool push_back_impl(const data& x, size_type skip) = 0;
 
   virtual expected<bitmap>
-  lookup_impl(relational_operator op, data const& x) const = 0;
+  lookup_impl(relational_operator op, const data& x) const = 0;
 
   size_type nils_ = 0;
   ewah_bitmap mask_;
@@ -157,7 +157,7 @@ private:
     }
 
     template <class U>
-    bool operator()(U const&) const {
+    bool operator()(const U&) const {
       return false;
     }
 
@@ -179,12 +179,12 @@ private:
   };
 
   struct searcher {
-    searcher(bitmap_index_type const& idx, relational_operator op)
+    searcher(const bitmap_index_type& idx, relational_operator op)
       : bmi_{idx}, op_{op} {
     }
 
     template <class U>
-    auto operator()(U const& x) const
+    auto operator()(const U& x) const
     -> std::enable_if_t<!std::is_arithmetic<U>{}, expected<bitmap>> {
       return make_error(ec::type_clash, value_type{}, x);
     }
@@ -211,16 +211,16 @@ private:
       return (*this)(x.count());
     }
 
-    bitmap_index_type const& bmi_;
+    const bitmap_index_type& bmi_;
     relational_operator op_;
   };
 
-  bool push_back_impl(data const& x, size_type skip) override {
+  bool push_back_impl(const data& x, size_type skip) override {
     return visit(appender{bmi_, skip}, x);
   }
 
   expected<bitmap>
-  lookup_impl(relational_operator op, data const& x) const override {
+  lookup_impl(relational_operator op, const data& x) const override {
     return visit(searcher{bmi_, op}, x);
   };
 
@@ -250,10 +250,10 @@ private:
 
   void init();
 
-  bool push_back_impl(data const& x, size_type skip) override;
+  bool push_back_impl(const data& x, size_type skip) override;
 
   expected<bitmap>
-  lookup_impl(relational_operator op, data const& x) const override;
+  lookup_impl(relational_operator op, const data& x) const override;
 
   size_t max_length_;
   length_bitmap_index length_;
@@ -276,10 +276,10 @@ public:
 private:
   void init();
 
-  bool push_back_impl(data const& x, size_type skip) override;
+  bool push_back_impl(const data& x, size_type skip) override;
 
   expected<bitmap>
-  lookup_impl(relational_operator op, data const& x) const override;
+  lookup_impl(relational_operator op, const data& x) const override;
 
   std::array<byte_index, 16> bytes_;
   type_index v4_;
@@ -300,10 +300,10 @@ public:
 private:
   void init();
 
-  bool push_back_impl(data const& x, size_type skip) override;
+  bool push_back_impl(const data& x, size_type skip) override;
 
   expected<bitmap>
-  lookup_impl(relational_operator op, data const& x) const override;
+  lookup_impl(relational_operator op, const data& x) const override;
 
   address_index network_;
   prefix_index length_;
@@ -334,10 +334,10 @@ public:
 private:
   void init();
 
-  bool push_back_impl(data const& x, size_type skip) override;
+  bool push_back_impl(const data& x, size_type skip) override;
 
   expected<bitmap>
-  lookup_impl(relational_operator op, data const& x) const override;
+  lookup_impl(relational_operator op, const data& x) const override;
 
   number_index num_;
   protocol_index proto_;
@@ -356,7 +356,7 @@ public:
   using size_bitmap_index =
     bitmap_index<uint32_t, multi_level_coder<range_coder<bitmap>>>;
 
-  friend void serialize(caf::serializer& sink, sequence_index const& idx);
+  friend void serialize(caf::serializer& sink, const sequence_index& idx);
   friend void serialize(caf::deserializer& source, sequence_index& idx);
 
 private:
@@ -384,10 +384,10 @@ private:
     return true;
   }
 
-  bool push_back_impl(data const& x, size_type skip) override;
+  bool push_back_impl(const data& x, size_type skip) override;
 
   expected<bitmap>
-  lookup_impl(relational_operator op, data const& x) const override;
+  lookup_impl(relational_operator op, const data& x) const override;
 
   std::vector<std::unique_ptr<value_index>> elements_;
   size_bitmap_index size_;
@@ -410,59 +410,59 @@ struct value_index_inspect_helper {
     }
 
     template <class T>
-    result_type operator()(T const&) const {
+    result_type operator()(const T&) const {
       die("invalid type");
     }
 
-    result_type operator()(boolean_type const&) const {
+    result_type operator()(const boolean_type&) const {
       return f_(static_cast<arithmetic_index<boolean>&>(idx_));
     }
 
-    result_type operator()(integer_type const&) const {
+    result_type operator()(const integer_type&) const {
       return f_(static_cast<arithmetic_index<integer>&>(idx_));
     }
 
-    result_type operator()(count_type const&) const {
+    result_type operator()(const count_type&) const {
       return f_(static_cast<arithmetic_index<count>&>(idx_));
     }
 
-    result_type operator()(real_type const&) const {
+    result_type operator()(const real_type&) const {
       return f_(static_cast<arithmetic_index<real>&>(idx_));
     }
 
-    result_type operator()(timespan_type const&) const {
+    result_type operator()(const timespan_type&) const {
       return f_(static_cast<arithmetic_index<timespan>&>(idx_));
     }
 
-    result_type operator()(timestamp_type const&) const {
+    result_type operator()(const timestamp_type&) const {
       return f_(static_cast<arithmetic_index<timestamp>&>(idx_));
     }
 
-    result_type operator()(string_type const&) const {
+    result_type operator()(const string_type&) const {
       return f_(static_cast<string_index&>(idx_));
     }
 
-    result_type operator()(address_type const&) const {
+    result_type operator()(const address_type&) const {
       return f_(static_cast<address_index&>(idx_));
     }
 
-    result_type operator()(subnet_type const&) const {
+    result_type operator()(const subnet_type&) const {
       return f_(static_cast<subnet_index&>(idx_));
     }
 
-    result_type operator()(port_type const&) const {
+    result_type operator()(const port_type&) const {
       return f_(static_cast<port_index&>(idx_));
     }
 
-    result_type operator()(vector_type const&) const {
+    result_type operator()(const vector_type&) const {
       return f_(static_cast<sequence_index&>(idx_));
     }
 
-    result_type operator()(set_type const&) const {
+    result_type operator()(const set_type&) const {
       return f_(static_cast<sequence_index&>(idx_));
     }
 
-    result_type operator()(alias_type const& t) const {
+    result_type operator()(const alias_type& t) const {
       return visit(*this, t.value_type);
     }
 
@@ -474,59 +474,59 @@ struct value_index_inspect_helper {
     using result_type = std::unique_ptr<value_index>;
 
     template <class T>
-    result_type operator()(T const&) const {
+    result_type operator()(const T&) const {
       die("invalid type");
     }
 
-    result_type operator()(boolean_type const&) const {
+    result_type operator()(const boolean_type&) const {
       return std::make_unique<arithmetic_index<boolean>>();
     }
 
-    result_type operator()(integer_type const&) const {
+    result_type operator()(const integer_type&) const {
       return std::make_unique<arithmetic_index<integer>>();
     }
 
-    result_type operator()(count_type const&) const {
+    result_type operator()(const count_type&) const {
       return std::make_unique<arithmetic_index<count>>();
     }
 
-    result_type operator()(real_type const&) const {
+    result_type operator()(const real_type&) const {
       return std::make_unique<arithmetic_index<real>>();
     }
 
-    result_type operator()(timespan_type const&) const {
+    result_type operator()(const timespan_type&) const {
       return std::make_unique<arithmetic_index<timespan>>();
     }
 
-    result_type operator()(timestamp_type const&) const {
+    result_type operator()(const timestamp_type&) const {
       return std::make_unique<arithmetic_index<timestamp>>();
     }
 
-    result_type operator()(string_type const&) const {
+    result_type operator()(const string_type&) const {
       return std::make_unique<string_index>();
     }
 
-    result_type operator()(address_type const&) const {
+    result_type operator()(const address_type&) const {
       return std::make_unique<address_index>();
     }
 
-    result_type operator()(subnet_type const&) const {
+    result_type operator()(const subnet_type&) const {
       return std::make_unique<subnet_index>();
     }
 
-    result_type operator()(port_type const&) const {
+    result_type operator()(const port_type&) const {
       return std::make_unique<port_index>();
     }
 
-    result_type operator()(vector_type const&) const {
+    result_type operator()(const vector_type&) const {
       return std::make_unique<sequence_index>();
     }
 
-    result_type operator()(set_type const&) const {
+    result_type operator()(const set_type&) const {
       return std::make_unique<sequence_index>();
     }
 
-    result_type operator()(alias_type const& t) const {
+    result_type operator()(const alias_type& t) const {
       return visit(*this, t.value_type);
     }
   };

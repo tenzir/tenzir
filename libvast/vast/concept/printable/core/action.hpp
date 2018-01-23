@@ -39,7 +39,7 @@ public:
   }
 
   template <typename Iterator, typename Attribute>
-  bool print(Iterator& out, Attribute const& attr) const {
+  bool print(Iterator& out, const Attribute& attr) const {
     if constexpr (action_traits::no_args_returns_void) {
       action_();
       return printer_.print(out, attr);

@@ -18,37 +18,37 @@ namespace vast::detail {
 
 template <typename T, typename U = T>
 struct equality_comparable {
-  friend bool operator!=(T const& x, U const& y) {
+  friend bool operator!=(const T& x, const U& y) {
     return !(x == y);
   }
 };
 
 template <typename T, typename U = T>
 struct less_than_comparable {
-  friend bool operator>(T const& x, U const& y) {
+  friend bool operator>(const T& x, const U& y) {
     return y < x;
   }
 
-  friend bool operator<=(T const& x, U const& y) {
+  friend bool operator<=(const T& x, const U& y) {
     return !(y < x);
   }
 
-  friend bool operator>=(T const& x, U const& y) {
+  friend bool operator>=(const T& x, const U& y) {
     return !(x < y);
   }
 };
 
 template <typename T, typename U = T>
 struct partially_ordered {
-  friend bool operator>(T const& x, U const& y) {
+  friend bool operator>(const T& x, const U& y) {
     return y < x;
   }
 
-  friend bool operator<=(T const& x, U const& y) {
+  friend bool operator<=(const T& x, const U& y) {
     return x < y || x == y;
   }
 
-  friend bool operator>=(T const& x, U const& y) {
+  friend bool operator>=(const T& x, const U& y) {
     return y < x || x == y;
   }
 };
@@ -60,7 +60,7 @@ struct totally_ordered : equality_comparable<T, U>,
 #define VAST_BINARY_OPERATOR_NON_COMMUTATIVE(NAME, OP)                         \
   template <typename T, typename U = T>                                        \
   struct NAME {                                                                \
-    friend T operator OP(T const& x, U const& y) {                             \
+    friend T operator OP(const T& x, const U& y) {                             \
       T t(x);                                                                  \
       t OP## = y;                                                              \
       return t;                                                                \
@@ -70,7 +70,7 @@ struct totally_ordered : equality_comparable<T, U>,
 #define VAST_BINARY_OPERATOR_COMMUTATIVE(NAME, OP)                             \
   template <typename T, typename U = T>                                        \
   struct NAME {                                                                \
-    friend T operator OP(T const& x, U const& y) {                             \
+    friend T operator OP(const T& x, const U& y) {                             \
       T t(x);                                                                  \
       t OP## = y;                                                              \
       return t;                                                                \

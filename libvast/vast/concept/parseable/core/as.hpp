@@ -28,7 +28,7 @@ public:
   }
 
   template <typename Iterator, typename Attr>
-  bool parse(Iterator& f, Iterator const& l, Attr& a) const {
+  bool parse(Iterator& f, const Iterator& l, Attr& a) const {
     attribute x;
     if (!parser_(f, l, x))
       return false;

@@ -143,10 +143,10 @@ public:
     : data_(data_type<T>(std::forward<T>(x))) {
   }
 
-  data& operator+=(data const& rhs);
+  data& operator+=(const data& rhs);
 
-  friend bool operator==(data const& lhs, data const& rhs);
-  friend bool operator<(data const& lhs, data const& rhs);
+  friend bool operator==(const data& lhs, const data& rhs);
+  friend bool operator<(const data& lhs, const data& rhs);
 
   template <class Inspector>
   friend auto inspect(Inspector&f, data& d) {
@@ -190,21 +190,21 @@ private:
 /// @param o The offset to access.
 /// @returns A pointer to the data at *o* or `nullptr` if *o* does not
 ///          describe a valid offset.
-data const* get(vector const& v, offset const& o);
-data const* get(data const& d, offset const& o);
+data const* get(const vector& v, const offset& o);
+data const* get(const data& d, const offset& o);
 
 /// Flattens a vector.
 /// @param xs The vector to flatten.
 /// @returns The flattened vector.
 /// @see unflatten
-vector flatten(vector const& xs);
+vector flatten(const vector& xs);
 vector flatten(vector&& xs);
 
 /// Flattens a vector.
 /// @param x The vector to flatten.
 /// @returns The flattened vector as `data` if *x* is a `vector`.
 /// @see unflatten
-data flatten(data const& x);
+data flatten(const data& x);
 data flatten(data&& x);
 
 /// Unflattens a vector according to a record type.
@@ -212,8 +212,8 @@ data flatten(data&& x);
 /// @param rt The type that defines the vector structure.
 /// @returns The unflattened vector of *xs* according to *rt*.
 /// @see flatten
-optional<vector> unflatten(vector const& xs, record_type const& rt);
-optional<vector> unflatten(vector&& xs, record_type const& rt);
+optional<vector> unflatten(const vector& xs, const record_type& rt);
+optional<vector> unflatten(vector&& xs, const record_type& rt);
 
 /// Unflattens a vector according to a record type.
 /// @param x The vector to unflatten according to *t*.
@@ -221,26 +221,26 @@ optional<vector> unflatten(vector&& xs, record_type const& rt);
 /// @returns The unflattened vector of *x* according to *t* if *x* is a
 ///          `vector` and *t* a `record_type`.
 /// @see flatten
-optional<vector> unflatten(data const& x, type const& t);
-optional<vector> unflatten(data&& x, type const& t);
+optional<vector> unflatten(const data& x, const type& t);
+optional<vector> unflatten(data&& x, const type& t);
 
 /// Evaluates a data predicate.
 /// @param lhs The LHS of the predicate.
 /// @param op The relational operator.
 /// @param rhs The RHS of the predicate.
-bool evaluate(data const& lhs, relational_operator op, data const& rhs);
+bool evaluate(const data& lhs, relational_operator op, const data& rhs);
 
 // -- convertible -------------------------------------------------------------
 
-bool convert(vector const& v, json& j);
-bool convert(set const& v, json& j);
-bool convert(table const& v, json& j);
-bool convert(data const& v, json& j);
+bool convert(const vector& v, json& j);
+bool convert(const set& v, json& j);
+bool convert(const table& v, json& j);
+bool convert(const data& v, json& j);
 
 /// Converts data with a type to "zipped" JSON, i.e., the JSON object for
 /// records contains the field names from the type corresponding to the given
 /// data.
-bool convert(data const& v, json& j, type const& t);
+bool convert(const data& v, json& j, const type& t);
 
 } // namespace vast
 

@@ -44,7 +44,7 @@ struct real_parser : parser<real_parser<T, Policies...>> {
     >::value;
 
   template <typename Iterator>
-  static bool parse_dot(Iterator& f, Iterator const& l) {
+  static bool parse_dot(Iterator& f, const Iterator& l) {
     if (f == l || *f != '.')
       return false;
     ++f;
@@ -71,7 +71,7 @@ struct real_parser : parser<real_parser<T, Policies...>> {
   }
 
   template <typename Iterator, typename Attribute>
-  bool parse(Iterator& f, Iterator const& l, Attribute& a) const {
+  bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
     if (f == l)
       return false;
     auto save = f;

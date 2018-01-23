@@ -31,7 +31,7 @@ struct extract;
 template <>
 struct extract<1> {
   template <typename Iterator, typename Attribute>
-  static bool parse(Iterator& f, Iterator const& l, Attribute& a) {
+  static bool parse(Iterator& f, const Iterator& l, Attribute& a) {
     if (f == l)
       return false;
     a |= *f++ & 0xFF;
@@ -42,7 +42,7 @@ struct extract<1> {
 template <>
 struct extract<2> {
   template <typename Iterator, typename Attribute>
-  static bool parse(Iterator& f, Iterator const& l, Attribute& a) {
+  static bool parse(Iterator& f, const Iterator& l, Attribute& a) {
     if (!extract<1>::parse(f, l, a))
       return false;
     a <<= 8;
@@ -53,7 +53,7 @@ struct extract<2> {
 template <>
 struct extract<4> {
   template <typename Iterator, typename Attribute>
-  static bool parse(Iterator& f, Iterator const& l, Attribute& a) {
+  static bool parse(Iterator& f, const Iterator& l, Attribute& a) {
     if (!extract<2>::parse(f, l, a))
       return false;
     a <<= 8;
@@ -64,7 +64,7 @@ struct extract<4> {
 template <>
 struct extract<8> {
   template <typename Iterator, typename Attribute>
-  static bool parse(Iterator& f, Iterator const& l, Attribute& a) {
+  static bool parse(Iterator& f, const Iterator& l, Attribute& a) {
     if (!extract<4>::parse(f, l, a))
       return false;
     a <<= 8;
@@ -86,7 +86,7 @@ struct byte_parser : parser<byte_parser<T, Policy, Bytes>> {
   using attribute = T;
 
   template <typename Iterator>
-  static bool extract(Iterator& f, Iterator const& l, T& x) {
+  static bool extract(Iterator& f, const Iterator& l, T& x) {
     auto save = f;
     x = 0;
     if (!detail::extract<Bytes>::parse(save, l, x))
@@ -96,7 +96,7 @@ struct byte_parser : parser<byte_parser<T, Policy, Bytes>> {
   }
 
   template <typename Iterator>
-  bool parse(Iterator& f, Iterator const& l, unused_type) const {
+  bool parse(Iterator& f, const Iterator& l, unused_type) const {
     for (auto i = 0u; i < Bytes; ++i)
       if (f != l)
         ++f;
@@ -106,7 +106,7 @@ struct byte_parser : parser<byte_parser<T, Policy, Bytes>> {
   }
 
   template <typename Iterator>
-  bool parse(Iterator& f, Iterator const& l, T& x) const {
+  bool parse(Iterator& f, const Iterator& l, T& x) const {
     if constexpr (std::is_same_v<Policy, policy::no_swap>){
       return extract(f, l, x);
     } else {
@@ -123,7 +123,7 @@ struct bytes_parser : parser<bytes_parser<N>> {
   using attribute = std::array<uint8_t, N>;
 
   template <typename Iterator>
-  bool parse(Iterator& f, Iterator const& l, std::array<uint8_t, N>& x) const {
+  bool parse(Iterator& f, const Iterator& l, std::array<uint8_t, N>& x) const {
     auto save = f;
     for (auto i = 0u; i < N; i++) {
       if (save == l)

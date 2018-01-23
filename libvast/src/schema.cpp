@@ -22,7 +22,7 @@
 
 namespace vast {
 
-optional<schema> schema::merge(schema const& s1, schema const& s2) {
+optional<schema> schema::merge(const schema& s1, const schema& s2) {
   auto result = s2;
   for (auto& t : s1) {
     if (auto u = s2.find(t.name())) {
@@ -36,14 +36,14 @@ optional<schema> schema::merge(schema const& s1, schema const& s2) {
   return result;
 }
 
-bool schema::add(type const& t) {
+bool schema::add(const type& t) {
   if (is<none_type>(t) || t.name().empty() || find(t.name()))
     return false;
   types_.push_back(std::move(t));
   return true;
 }
 
-type const* schema::find(std::string const& name) const {
+type const* schema::find(const std::string& name) const {
   for (auto& t : types_)
     if (t.name() == name)
       return &t;
@@ -70,7 +70,7 @@ void schema::clear() {
   types_.clear();
 }
 
-bool operator==(schema const& x, schema const& y) {
+bool operator==(const schema& x, const schema& y) {
   return x.types_ == y.types_;
 }
 
@@ -80,7 +80,7 @@ bool operator==(schema const& x, schema const& y) {
 //namespace {
 //
 //struct pointer_hash {
-//  size_t operator()(type const& t) const noexcept {
+//  size_t operator()(const type& t) const noexcept {
 //    return reinterpret_cast<size_t>(t.ptr_.get());
 //  }
 //};
@@ -108,24 +108,24 @@ bool operator==(schema const& x, schema const& y) {
 //  }
 //
 //  template <class T>
-//  void operator()(T const& x) const {
+//  void operator()(const T& x) const {
 //    sink_ << x;
 //  };
 //
-//  void operator()(vector_type const& t) const {
+//  void operator()(const vector_type& t) const {
 //    save_type(t.value_type);
 //  }
 //
-//  void operator()(set_type const& t) const {
+//  void operator()(const set_type& t) const {
 //    save_type(t.value_type);
 //  }
 //
-//  void operator()(table_type const& t) const {
+//  void operator()(const table_type& t) const {
 //    save_type(t.key_type);
 //    save_type(t.value_type);
 //  }
 //
-//  void operator()(record_type const& t) const {
+//  void operator()(const record_type& t) const {
 //    auto size = t.fields.size();
 //    sink_.begin_sequence(size);
 //    for (auto& f : t.fields) {
@@ -141,7 +141,7 @@ bool operator==(schema const& x, schema const& y) {
 //
 //} // namespace <anonymous>
 
-void serialize(caf::serializer& sink, schema const& sch) {
+void serialize(caf::serializer& sink, const schema& sch) {
   sink << to_string(sch);
 }
 
@@ -155,7 +155,7 @@ void serialize(caf::deserializer& source, schema& sch) {
   parse(i, str.end(), sch);
 }
 
-bool convert(schema const& s, json& j) {
+bool convert(const schema& s, json& j) {
   json::object o;
   json::array a;
   std::transform(s.begin(), s.end(), std::back_inserter(a),

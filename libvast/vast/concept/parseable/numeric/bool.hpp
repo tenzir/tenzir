@@ -24,36 +24,36 @@ namespace detail {
 
 struct single_char_bool_policy {
   template <typename Iterator>
-  static bool parse_true(Iterator& f, Iterator const& l) {
+  static bool parse_true(Iterator& f, const Iterator& l) {
     return char_parser{'T'}(f, l, unused);
   }
 
   template <typename Iterator>
-  static bool parse_false(Iterator& f, Iterator const& l) {
+  static bool parse_false(Iterator& f, const Iterator& l) {
     return char_parser{'F'}(f, l, unused);
   }
 };
 
 struct zero_one_bool_policy {
   template <typename Iterator>
-  static bool parse_true(Iterator& f, Iterator const& l) {
+  static bool parse_true(Iterator& f, const Iterator& l) {
     return char_parser{'1'}(f, l, unused);
   }
 
   template <typename Iterator>
-  static bool parse_false(Iterator& f, Iterator const& l) {
+  static bool parse_false(Iterator& f, const Iterator& l) {
     return char_parser{'0'}(f, l, unused);
   }
 };
 
 struct literal_bool_policy {
   template <typename Iterator>
-  static bool parse_true(Iterator& f, Iterator const& l) {
+  static bool parse_true(Iterator& f, const Iterator& l) {
     return c_string_parser{"true"}(f, l, unused);
   }
 
   template <typename Iterator>
-  static bool parse_false(Iterator& f, Iterator const& l) {
+  static bool parse_false(Iterator& f, const Iterator& l) {
     return c_string_parser{"false"}(f, l, unused);
   }
 };
@@ -65,7 +65,7 @@ struct bool_parser : parser<bool_parser<Policy>> {
   using attribute = bool;
 
   template <typename Iterator, typename Attribute>
-  bool parse(Iterator& f, Iterator const& l, Attribute& a) const {
+  bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
     if (f == l)
       return false;
     if (Policy::parse_true(f, l))

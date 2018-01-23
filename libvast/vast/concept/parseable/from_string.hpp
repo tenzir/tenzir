@@ -41,7 +41,7 @@ template <
   typename Parser = make_parser<To>,
   typename... Args
 >
-auto from_string(std::string const& str, Args&&... args) {
+auto from_string(const std::string& str, Args&&... args) {
   auto f = str.begin();
   auto l = str.end();
   return from_string<To, Parser, std::string::const_iterator, Args...>(

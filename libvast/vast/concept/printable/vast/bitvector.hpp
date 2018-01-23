@@ -36,7 +36,7 @@ struct bitvector_printer : printer<bitvector_printer<Bitvector, Order>> {
     std::is_same<Order, policy::msb_to_lsb>::value;
 
   template <class Iterator>
-  bool print(Iterator& out, Bitvector const& bv) const {
+  bool print(Iterator& out, const Bitvector& bv) const {
     auto render = [&](auto f, auto l) {
       for (; f != l; ++f)
         if (!printers::any.print(out, *f ? '1' : '0'))

@@ -42,7 +42,7 @@ struct connection : detail::equality_comparable<connection> {
   port sport;
   port dport;
 
-  friend bool operator==(connection const& lhs, connection const& rhs) {
+  friend bool operator==(const connection& lhs, const connection& rhs) {
     return lhs.src == rhs.src
       && lhs.dst == rhs.dst
       && lhs.sport == rhs.sport
@@ -51,7 +51,7 @@ struct connection : detail::equality_comparable<connection> {
 };
 
 template <class Hasher>
-void hash_append(Hasher& h, connection const& c) {
+void hash_append(Hasher& h, const connection& c) {
   hash_append(h, c.src, c.dst, c.sport.number(), c.dport.number());
 }
 
@@ -63,7 +63,7 @@ namespace std {
 
 template <>
 struct hash<vast::format::pcap::connection> {
-  size_t operator()(vast::format::pcap::connection const& c) const {
+  size_t operator()(const vast::format::pcap::connection& c) const {
     return vast::uhash<vast::xxhash>{}(c);
   }
 };
@@ -99,7 +99,7 @@ public:
 
   expected<event> read();
 
-  expected<void> schema(vast::schema const& sch);
+  expected<void> schema(const vast::schema& sch);
 
   expected<vast::schema> schema() const;
 
@@ -137,7 +137,7 @@ public:
 
   ~writer();
 
-  expected<void> write(event const& e);
+  expected<void> write(const event& e);
 
   expected<void> flush();
 

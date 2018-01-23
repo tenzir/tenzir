@@ -27,7 +27,7 @@ FIXTURE_SCOPE(task_tests, fixtures::actor_system)
 
 namespace {
 
-behavior worker(event_based_actor* self, actor const& task) {
+behavior worker(event_based_actor* self, const actor& task) {
   return [=](std::string) {
     self->send(task, done_atom::value);
     self->quit();

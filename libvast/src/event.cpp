@@ -44,29 +44,29 @@ vast::timestamp event::timestamp() const {
   return timestamp_;
 }
 
-event flatten(event const& e) {
-  event result = flatten(static_cast<value const&>(e));
+event flatten(const event& e) {
+  event result = flatten(static_cast<const value&>(e));
   result.id(e.id());
   result.timestamp(e.timestamp());
   return result;
 }
 
-bool operator==(event const& x, event const& y) {
+bool operator==(const event& x, const event& y) {
   return x.id() == y.id() &&
     x.timestamp() == y.timestamp() &&
-    static_cast<value const&>(x) == static_cast<value const&>(y);
+    static_cast<const value&>(x) == static_cast<const value&>(y);
 }
 
-bool operator<(event const& x, event const& y) {
-  return std::tie(x.id_, x.timestamp_, static_cast<value const&>(x)) <
-    std::tie(y.id_, y.timestamp_, static_cast<value const&>(y));
+bool operator<(const event& x, const event& y) {
+  return std::tie(x.id_, x.timestamp_, static_cast<const value&>(x)) <
+    std::tie(y.id_, y.timestamp_, static_cast<const value&>(y));
 }
 
-bool convert(event const& e, json& j) {
+bool convert(const event& e, json& j) {
   json::object o;
   o["id"] = e.id();
   o["timestamp"] = e.timestamp().time_since_epoch().count();
-  if (!convert(static_cast<value const&>(e), o["value"]))
+  if (!convert(static_cast<const value&>(e), o["value"]))
     return false;
   j = std::move(o);
   return true;

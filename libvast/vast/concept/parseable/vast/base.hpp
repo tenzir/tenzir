@@ -25,7 +25,7 @@ struct base_parser : parser<base_parser> {
   using attribute = base;
 
   template <typename Iterator, typename Attribute>
-  bool parse(Iterator& f, Iterator const& l, Attribute& a) const {
+  bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
     auto num = parsers::integral<size_t>;
     auto to_base = [](std::vector<size_t> xs) { return base{xs}; };
     auto to_uniform_base = [](std::tuple<size_t, optional<size_t>> tuple) {

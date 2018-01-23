@@ -27,7 +27,7 @@ struct uuid_parser : parser<uuid_parser> {
   // TODO: parser for unused type.
 
   template <typename Iterator>
-  bool parse(Iterator& f, Iterator const& l, uuid& a) const {
+  bool parse(Iterator& f, const Iterator& l, uuid& a) const {
     // TODO: convert to declarative parser.
     if (f == l)
       return false;

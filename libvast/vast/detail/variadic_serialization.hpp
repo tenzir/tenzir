@@ -33,12 +33,12 @@ void process(Processor& proc, T&& x, Ts&&... xs) {
 }
 
 template <class T>
-void write(caf::serializer& sink, T const& x) {
+void write(caf::serializer& sink, const T& x) {
   sink << x;
 }
 
 template <class T, class... Ts>
-void write(caf::serializer& sink, T const& x, Ts const&... xs) {
+void write(caf::serializer& sink, const T& x, const Ts&... xs) {
   write(sink, x);
   write(sink, xs...);
 }

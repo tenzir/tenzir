@@ -48,7 +48,7 @@ struct stack_vector : private stack_container<T, N>, short_vector<T, N> {
   stack_vector() : vector_type(this->arena_) {
   }
 
-  stack_vector(size_t n, T const& x) : vector_type(n, x, this->arena_) {
+  stack_vector(size_t n, const T& x) : vector_type(n, x, this->arena_) {
   }
 
   explicit stack_vector(size_t n) : vector_type(n, this->arena_) {
@@ -63,7 +63,7 @@ struct stack_vector : private stack_container<T, N>, short_vector<T, N> {
     : vector_type(first, last, this->arena_) {
   }
 
-  stack_vector(stack_vector const& other)
+  stack_vector(const stack_vector& other)
     : vector_type(other, this->arena_) {
   }
 
@@ -72,7 +72,7 @@ struct stack_vector : private stack_container<T, N>, short_vector<T, N> {
     : vector_type(std::move(other), this->arena_) {
   }
 
-  stack_vector& operator=(stack_vector const& other) {
+  stack_vector& operator=(const stack_vector& other) {
     static_cast<vector_type&>(*this) = other;
     return *this;
   }

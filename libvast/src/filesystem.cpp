@@ -70,7 +70,7 @@ path::path(char const* str) : str_{str} {
 path::path(std::string str) : str_{std::move(str)} {
 }
 
-path& path::operator/=(path const& p) {
+path& path::operator/=(const path& p) {
   if (p.empty() || (detail::ends_with(str_, separator) && p == separator))
     return *this;
   if (str_.empty())
@@ -82,7 +82,7 @@ path& path::operator/=(path const& p) {
   return *this;
 }
 
-path& path::operator+=(path const& p) {
+path& path::operator+=(const path& p) {
   str_ = str_ + p.str_;
   return *this;
 }
@@ -180,7 +180,7 @@ path path::chop(int n) const {
   return r;
 }
 
-std::string const& path::str() const {
+const std::string& path::str() const {
   return str_;
 }
 
@@ -219,11 +219,11 @@ bool path::is_symlink() const {
   return kind() == symlink;
 }
 
-bool operator==(path const& x, path const& y) {
+bool operator==(const path& x, const path& y) {
   return x.str_ == y.str_;
 }
 
-bool operator<(path const& x, path const& y) {
+bool operator<(const path& x, const path& y) {
   return x.str_ < y.str_;
 }
 
@@ -322,7 +322,7 @@ bool file::seek(size_t bytes) {
   return true;
 }
 
-path const& file::path() const {
+const path& file::path() const {
   return path_;
 }
 
@@ -355,11 +355,11 @@ void directory::iterator::increment() {
 #endif
 }
 
-path const& directory::iterator::dereference() const {
+const path& directory::iterator::dereference() const {
   return current_;
 }
 
-bool directory::iterator::equals(iterator const& other) const {
+bool directory::iterator::equals(const iterator& other) const {
   return dir_ == other.dir_;
 }
 
@@ -382,11 +382,11 @@ directory::iterator directory::end() const {
   return {};
 }
 
-path const& directory::path() const {
+const path& directory::path() const {
   return path_;
 }
 
-std::vector<path> split(path const& p) {
+std::vector<path> split(const path& p) {
   if (p.empty())
     return {};
   auto components = detail::to_strings(
@@ -404,7 +404,7 @@ std::vector<path> split(path const& p) {
   return result;
 }
 
-bool exists(path const& p) {
+bool exists(const path& p) {
 #ifdef VAST_POSIX
   struct stat st;
   return ::lstat(p.str().data(), &st) == 0;
@@ -413,7 +413,7 @@ bool exists(path const& p) {
 #endif // VAST_POSIX
 }
 
-void create_symlink(path const& target, path const& link) {
+void create_symlink(const path& target, const path& link) {
   ::symlink(target.str().c_str(), link.str().c_str());
 }
 
@@ -432,7 +432,7 @@ bool rm(const path& p) {
   return false;
 }
 
-expected<void> mkdir(path const& p) {
+expected<void> mkdir(const path& p) {
   auto components = split(p);
   if (components.empty())
     return make_error(ec::filesystem_error, "cannot mkdir empty path");
@@ -461,7 +461,7 @@ expected<void> mkdir(path const& p) {
   return {};
 }
 
-expected<std::string> load_contents(path const& p) {
+expected<std::string> load_contents(const path& p) {
   std::string contents;
   caf::containerbuf<std::string> obuf{contents};
   std::ostream out{&obuf};

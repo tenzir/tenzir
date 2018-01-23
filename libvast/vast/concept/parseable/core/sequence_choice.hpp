@@ -57,7 +57,7 @@ public:
   }
 
   template <typename Iterator, typename Attribute>
-  bool parse(Iterator& f, Iterator const& l, Attribute& a) const {
+  bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
     optional<rhs_attribute> rhs_attr;
     if (lhs_(f, l, left_attr(a)) && rhs_opt_(f, l, rhs_attr)) {
       right_attr(a) = std::move(rhs_attr);

@@ -34,12 +34,12 @@ TEST(Bro source) {
   self->monitor(src);
   self->send(src, sink_atom::value, self);
   self->send(src, run_atom::value);
-  self->receive([&](std::vector<event> const& events) {
+  self->receive([&](const std::vector<event>& events) {
     CHECK_EQUAL(events.size(), 8462u);
     CHECK_EQUAL(events[0].type().name(), "bro::conn");
   });
   // A source terminates normally after having consumed the entire input.
-  self->receive([&](caf::down_msg const& msg) {
+  self->receive([&](const caf::down_msg& msg) {
     CHECK(msg.reason == caf::exit_reason::normal);
   });
 }

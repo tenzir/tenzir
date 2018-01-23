@@ -54,14 +54,14 @@ public:
 
   // -- concepts -------------------------------------------------------------
 
-  friend bool operator==(null_bitmap const& x, null_bitmap const& y);
+  friend bool operator==(const null_bitmap& x, const null_bitmap& y);
 
   template <class Inspector>
   friend auto inspect(Inspector&f, null_bitmap& bm) {
     return f(bm.bitvector_);
   }
 
-  friend null_bitmap_range bit_range(null_bitmap const& bm);
+  friend null_bitmap_range bit_range(const null_bitmap& bm);
 
 private:
   bitvector_type bitvector_;
@@ -72,7 +72,7 @@ class null_bitmap_range
 public:
   using word_type = null_bitmap::word_type;
 
-  explicit null_bitmap_range(null_bitmap const& bm);
+  explicit null_bitmap_range(const null_bitmap& bm);
 
   void next();
   bool done() const;

@@ -57,8 +57,8 @@ public:
   /// @param t The new port type.
   void type(port_type t);
 
-  friend bool operator==(port const& x, port const& y);
-  friend bool operator<(port const& x, port const& y);
+  friend bool operator==(const port& x, const port& y);
+  friend bool operator<(const port& x, const port& y);
 
   template <class Inspector>
   friend auto inspect(Inspector& f, port& p) {
@@ -70,7 +70,7 @@ private:
   port_type type_ = unknown;
 };
 
-bool convert(port const& p, json& j);
+bool convert(const port& p, json& j);
 
 } // namespace vast
 

@@ -78,22 +78,22 @@ public:
   /// Sets the type of the value.
   /// @param t The new type of the value.
   /// @returns `true` if the value had no data or if the type check succeeded.
-  bool type(vast::type const& t);
+  bool type(const vast::type& t);
 
   /// Retrieves the type of the value.
   /// @returns The type of the value.
-  vast::type const& type() const;
+  const vast::type& type() const;
 
   /// Retrieves the data of the value.
   /// @returns The value data.
-  vast::data const& data() const;
+  const vast::data& data() const;
 
-  friend bool operator==(value const& lhs, value const& rhs);
-  friend bool operator!=(value const& lhs, value const& rhs);
-  friend bool operator<(value const& lhs, value const& rhs);
-  friend bool operator<=(value const& lhs, value const& rhs);
-  friend bool operator>=(value const& lhs, value const& rhs);
-  friend bool operator>(value const& lhs, value const& rhs);
+  friend bool operator==(const value& lhs, const value& rhs);
+  friend bool operator!=(const value& lhs, const value& rhs);
+  friend bool operator<(const value& lhs, const value& rhs);
+  friend bool operator<=(const value& lhs, const value& rhs);
+  friend bool operator>=(const value& lhs, const value& rhs);
+  friend bool operator>(const value& lhs, const value& rhs);
 
   template <class Inspector>
   friend auto inspect(Inspector&f, value& v) {
@@ -110,9 +110,9 @@ private:
 /// Flattens a value if it is a record.
 /// @param v The value to to flatten.
 /// @returns The flattened value or *v* if not a record.
-value flatten(value const& v);
+value flatten(const value& v);
 
-bool convert(value const& v, json& j);
+bool convert(const value& v, json& j);
 
 } // namespace vast
 

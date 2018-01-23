@@ -44,7 +44,7 @@ private:
     i_ += n;
   }
 
-  auto distance_to(iterator const& other) const {
+  auto distance_to(const iterator& other) const {
     using distance = std::ptrdiff_t;
     return static_cast<distance>(other.i_) - static_cast<distance>(i_);
   }
@@ -53,7 +53,7 @@ private:
     return *(array_ + i_);
   }
 
-  bool equals(iterator const& other) const {
+  bool equals(const iterator& other) const {
     return i_ == other.i_;
   }
 

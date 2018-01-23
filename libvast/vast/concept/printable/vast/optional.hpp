@@ -26,7 +26,7 @@ struct optional_printer : printer<optional_printer<T>> {
   using attribute = optional<T>;
 
   template <typename Iterator>
-  bool print(Iterator& out, optional<T> const& o) const {
+  bool print(Iterator& out, const optional<T>& o) const {
     static auto p = make_printer<T>{};
     static auto n = make_printer<none>{};
     return o ? p.print(out, *o) : n.print(out, nil);

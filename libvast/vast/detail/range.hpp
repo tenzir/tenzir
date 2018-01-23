@@ -57,7 +57,7 @@ private:
   explicit range_iterator(Range& rng) : rng_{&rng} {
   }
 
-  bool equals(range_iterator const&) const {
+  bool equals(const range_iterator&) const {
     return rng_->complete();
   }
 

@@ -61,7 +61,7 @@ using eval_result_type_t = typename eval_result_type<T, U>::type;
 /// according to *op*.
 template <bool FillLHS, bool FillRHS, class LHS, class RHS, class Operation>
 detail::eval_result_type_t<LHS, RHS>
-binary_eval(LHS const& lhs, RHS const& rhs, Operation op) {
+binary_eval(const LHS& lhs, const RHS& rhs, Operation op) {
   using result_type = detail::eval_result_type_t<LHS, RHS>;
   using word_type = typename result_type::word_type;
   static_assert(
@@ -201,31 +201,31 @@ auto nary_eval(Iterator begin, Iterator end, Operation op) {
 }
 
 template <class LHS, class RHS>
-auto binary_and(LHS const& lhs, RHS const& rhs) {
+auto binary_and(const LHS& lhs, const RHS& rhs) {
   auto op = [](auto x, auto y) { return x & y; };
   return binary_eval<false, false>(lhs, rhs, op);
 }
 
 template <class LHS, class RHS>
-auto binary_or(LHS const& lhs, RHS const& rhs) {
+auto binary_or(const LHS& lhs, const RHS& rhs) {
   auto op = [](auto x, auto y) { return x | y; };
   return binary_eval<true, true>(lhs, rhs, op);
 }
 
 template <class LHS, class RHS>
-auto binary_xor(LHS const& lhs, RHS const& rhs) {
+auto binary_xor(const LHS& lhs, const RHS& rhs) {
   auto op = [](auto x, auto y) { return x ^ y; };
   return binary_eval<true, true>(lhs, rhs, op);
 }
 
 template <class LHS, class RHS>
-auto binary_nand(LHS const& lhs, RHS const& rhs) {
+auto binary_nand(const LHS& lhs, const RHS& rhs) {
   auto op = [](auto x, auto y) { return x & ~y; };
   return binary_eval<true, false>(lhs, rhs, op);
 }
 
 template <class LHS, class RHS>
-auto binary_nor(LHS const& lhs, RHS const& rhs) {
+auto binary_nor(const LHS& lhs, const RHS& rhs) {
   auto op = [](auto x, auto y) { return x | ~y; };
   return binary_eval<true, true>(lhs, rhs, op);
 }
@@ -257,7 +257,7 @@ auto nary_xor(Iterator begin, Iterator end) {
 /// @pre `i > 0 && i < bm.size()`
 template <bool Bit = true, class Bitmap>
 typename Bitmap::size_type
-rank(Bitmap const& bm, typename Bitmap::size_type i) {
+rank(const Bitmap& bm, typename Bitmap::size_type i) {
   VAST_ASSERT(i > 0);
   VAST_ASSERT(i < bm.size());
   auto result = typename Bitmap::size_type{0};
@@ -276,7 +276,7 @@ rank(Bitmap const& bm, typename Bitmap::size_type i) {
 /// @param bm The bitmap whose rank to compute.
 /// @returns The population count of *bm*.
 template <bool Bit = true, class Bitmap>
-typename Bitmap::size_type rank(Bitmap const& bm) {
+typename Bitmap::size_type rank(const Bitmap& bm) {
   return bm.empty() ? 0 : rank<Bit>(bm, bm.size() - 1);
 }
 
@@ -289,7 +289,7 @@ typename Bitmap::size_type rank(Bitmap const& bm) {
 /// @relates select_range span
 template <bool Bit = true, class Bitmap>
 typename Bitmap::size_type
-select(Bitmap const& bm, typename Bitmap::size_type i) {
+select(const Bitmap& bm, typename Bitmap::size_type i) {
   VAST_ASSERT(i > 0);
   auto rnk = typename Bitmap::size_type{0};
   auto n = typename Bitmap::size_type{0};
@@ -430,7 +430,7 @@ auto select(const Bitmap& bm) {
 /// @returns The span of *bm*.
 /// @relates select
 template <bool Bit = true, class Bitmap>
-auto span(Bitmap const& bm) {
+auto span(const Bitmap& bm) {
   auto result = std::make_pair(Bitmap::word_type::npos,
                                Bitmap::word_type::npos);
   auto n = typename Bitmap::size_type{0};
@@ -458,7 +458,7 @@ auto span(Bitmap const& bm) {
 /// @param bm The bitmap to test.
 /// @relates all
 template <bool Bit = true, class Bitmap>
-bool any(Bitmap const& bm) {
+bool any(const Bitmap& bm) {
   if constexpr (Bit) {
     for (auto b : bit_range(bm))
       if (b.data())
@@ -483,7 +483,7 @@ bool any(Bitmap const& bm) {
 /// @returns `true` iff all bits in *bm* have value *Bit*.
 /// @relates any
 template <bool Bit = true, class Bitmap>
-auto all(Bitmap const& bm) {
+auto all(const Bitmap& bm) {
   if (bm.empty())
     return false;
   return !any<!Bit>(bm);

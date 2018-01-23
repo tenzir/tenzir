@@ -23,42 +23,42 @@ struct unused_type : detail::equality_comparable<unused_type>,
   unused_type() = default;
 
   template <typename T>
-  unused_type(T const&) {
+  unused_type(const T&) {
   }
 
-  unused_type& operator=(unused_type const&) = default;
+  unused_type& operator=(const unused_type&) = default;
 
-  unused_type const& operator=(unused_type const&) const {
+  const unused_type& operator=(const unused_type&) const {
     return *this;
   }
 
   template <typename T>
-  unused_type& operator=(T const&) {
+  unused_type& operator=(const T&) {
     return *this;
   }
 
   template <typename T>
-  unused_type const& operator=(T const&) const {
+  const unused_type& operator=(const T&) const {
     return *this;
   }
 
   template <typename T>
-  unused_type const& operator+=(T&&) const {
+  const unused_type& operator+=(T&&) const {
     return *this;
   }
 
   template <typename T>
-  unused_type const& operator-=(T&&) const {
+  const unused_type& operator-=(T&&) const {
     return *this;
   }
 
   template <typename T>
-  unused_type const& operator*=(T&&) const {
+  const unused_type& operator*=(T&&) const {
     return *this;
   }
 
   template <typename T>
-  unused_type const& operator/=(T&&) const {
+  const unused_type& operator/=(T&&) const {
     return *this;
   }
 };

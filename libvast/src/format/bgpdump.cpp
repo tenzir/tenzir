@@ -59,7 +59,7 @@ bgpdump_parser::bgpdump_parser() {
   state_change_type.name("bgpdump::state_change");
 }
 
-expected<void> reader::schema(vast::schema const& sch) {
+expected<void> reader::schema(const vast::schema& sch) {
   auto types = {
     &parser_.announce_type,
     &parser_.route_type,

@@ -46,7 +46,7 @@ namespace vast {
 ///
 ///    // Provides a range instance with .begin() and .end() member functions
 ///    // to iterate over the bitmap in terms of sequences of bits.
-///    auto bit_range(bitmap const& bm);
+///    auto bit_range(const bitmap& bm);
 ///
 /// If possible, derived types shall provide an optimized version of the
 /// following operators:
@@ -76,7 +76,7 @@ public:
   /// @param other The other bitmap.
   /// @pre `size() + other.size()` <= max_size`
   template <class Bitmap>
-  void append(Bitmap const& other) {
+  void append(const Bitmap& other) {
     VAST_ASSERT(derived().size() + other.size() <= max_size);
     for (auto bits : bit_range(other))
       if (bits.size() > word_type::width)
@@ -145,31 +145,31 @@ public:
 
   /// Computes the bitwise AND of two bitmaps.
   template <class Rhs = Derived>
-  friend auto operator&(Derived const& lhs, Rhs const& rhs) {
+  friend auto operator&(const Derived& lhs, const Rhs& rhs) {
     return binary_and(lhs, rhs);
   }
 
   /// Computes the bitwise OR of two bitmaps.
   template <class Rhs = Derived>
-  friend auto operator|(Derived const& lhs, Rhs const& rhs) {
+  friend auto operator|(const Derived& lhs, const Rhs& rhs) {
     return binary_or(lhs, rhs);
   }
 
   /// Computes the bitwise XOR of two bitmaps.
   template <class Rhs = Derived>
-  friend auto operator^(Derived const& lhs, Rhs const& rhs) {
+  friend auto operator^(const Derived& lhs, const Rhs& rhs) {
     return binary_xor(lhs, rhs);
   }
 
   /// Computes the bitwise NAND of two bitmaps.
   template <class Rhs = Derived>
-  friend auto operator-(Derived const& lhs, Rhs const& rhs) {
+  friend auto operator-(const Derived& lhs, const Rhs& rhs) {
     return binary_nand(lhs, rhs);
   }
 
   /// Computes the bitwise NOR of two bitmaps.
   template <class Rhs = Derived>
-  friend auto operator/(Derived const& lhs, Rhs const& rhs) {
+  friend auto operator/(const Derived& lhs, const Rhs& rhs) {
     return binary_nor(lhs, rhs);
   }
 
@@ -207,7 +207,7 @@ private:
     return *static_cast<Derived*>(this);
   }
 
-  Derived const& derived() const {
+  const Derived& derived() const {
     return *static_cast<Derived const*>(this);
   }
 };
@@ -216,7 +216,7 @@ private:
 template <class Derived, class Block>
 class bit_range_base : public detail::range_facade<Derived> {
 public:
-  bits<Block> const& get() const {
+  const bits<Block>& get() const {
     return bits_;
   }
 

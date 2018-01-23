@@ -25,7 +25,7 @@ struct ascii_printer : printer<ascii_printer> {
   using attribute = event;
 
   template <class Iterator>
-  bool print(Iterator&& out, event const& e) const {
+  bool print(Iterator&& out, const event& e) const {
     return event_printer{}.print(out, e);
   }
 };

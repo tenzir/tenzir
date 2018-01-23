@@ -43,7 +43,7 @@ public:
       return scale_;
     }
 
-    friend bool operator==(param_type const& lhs, param_type const& rhs) {
+    friend bool operator==(const param_type& lhs, const param_type& rhs) {
       return lhs.shape_ == rhs.shape_ && lhs.scale_ == rhs.scale_;
     }
 
@@ -63,7 +63,7 @@ public:
   result_type operator()(URNG& g);
 
   template <typename URNG>
-  result_type operator()(URNG& g, param_type const& parm);
+  result_type operator()(URNG& g, const param_type& parm);
 
   param_type param() const {
     return params_;
@@ -81,8 +81,8 @@ public:
     return params_.scale();
   }
 
-  friend bool operator==(pareto_distribution const& lhs,
-                         pareto_distribution const& rhs) {
+  friend bool operator==(const pareto_distribution& lhs,
+                         const pareto_distribution& rhs) {
     return lhs.params_ == rhs.params_;
   }
 
@@ -91,7 +91,7 @@ private:
 };
 
 template <typename R>
-R pdf(pareto_distribution<R> const& dist, R x) {
+R pdf(const pareto_distribution<R>& dist, R x) {
   auto shape = dist.shape();
   auto scale = dist.scale();
   if (x < scale)
@@ -100,7 +100,7 @@ R pdf(pareto_distribution<R> const& dist, R x) {
 }
 
 template <typename R>
-R cdf(pareto_distribution<R> const& dist, R x) {
+R cdf(const pareto_distribution<R>& dist, R x) {
   auto shape = dist.shape();
   auto scale = dist.scale();
   if (x <= scale)
@@ -109,7 +109,7 @@ R cdf(pareto_distribution<R> const& dist, R x) {
 }
 
 template <typename R>
-R quantile(pareto_distribution<R> const& dist, R p) {
+R quantile(const pareto_distribution<R>& dist, R p) {
   auto shape = dist.shape();
   auto scale = dist.scale();
   if (p == 0)
@@ -128,7 +128,7 @@ R pareto_distribution<R>::operator()(URNG& g) {
 template <typename R>
 template <typename URNG>
 R pareto_distribution<R>::operator()(
-  URNG& g, typename pareto_distribution<R>::param_type const& parm) {
+  URNG& g, const typename pareto_distribution<R>::param_type& parm) {
   return pareto_distribution<R>{parm}(g);
 }
 

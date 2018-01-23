@@ -69,8 +69,8 @@ public:
   /// @returns The event timestamp.
   vast::timestamp timestamp() const;
 
-  friend bool operator==(event const& x, event const& y);
-  friend bool operator<(event const& x, event const& y);
+  friend bool operator==(const event& x, const event& y);
+  friend bool operator<(const event& x, const event& y);
 
   template <class Inspector>
   friend auto inspect(Inspector&f, event& e) {
@@ -82,12 +82,12 @@ private:
   vast::timestamp timestamp_;
 };
 
-bool convert(event const& e, json& j);
+bool convert(const event& e, json& j);
 
 /// Flattens an event.
 /// @param e The event to flatten.
 /// @returns The flattened event.
-event flatten(event const& e);
+event flatten(const event& e);
 
 } // namespace vast
 
