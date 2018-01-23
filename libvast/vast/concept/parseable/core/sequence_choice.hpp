@@ -84,7 +84,7 @@ private:
   >
   static auto left_attr(Attribute& a)
     -> std::enable_if_t<
-         ! std::is_same<L, unused_type>{} && std::is_same<R, unused_type>{},
+         !std::is_same<L, unused_type>{} && std::is_same<R, unused_type>{},
          optional<L>&
        > {
     return a;
@@ -97,7 +97,7 @@ private:
   >
   static auto left_attr(std::tuple<Ts...>& t)
     -> std::enable_if_t<
-         ! std::is_same<L, unused_type>{} && ! std::is_same<R, unused_type>{},
+         !std::is_same<L, unused_type>{} && !std::is_same<R, unused_type>{},
          optional<L>&
        > {
     return std::get<0>(t);
@@ -120,7 +120,7 @@ private:
   >
   static auto right_attr(Attribute& a)
     -> std::enable_if_t<
-         std::is_same<L, unused_type>{} && ! std::is_same<R, unused_type>{},
+         std::is_same<L, unused_type>{} && !std::is_same<R, unused_type>{},
          optional<R>&
        > {
     return a;
@@ -133,7 +133,7 @@ private:
   >
   static auto right_attr(std::tuple<Ts...>& t)
     -> std::enable_if_t<
-         ! std::is_same<L, unused_type>{} && ! std::is_same<R, unused_type>{},
+         !std::is_same<L, unused_type>{} && !std::is_same<R, unused_type>{},
          optional<R>&
        > {
     return std::get<1>(t);

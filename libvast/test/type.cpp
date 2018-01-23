@@ -288,7 +288,7 @@ TEST(congruence) {
   CHECK(s0 != s1);
   CHECK(s0 != s2);
   CHECK(congruent(s0, s1));
-  CHECK(! congruent(s1, s2));
+  CHECK(!congruent(s1, s2));
   MESSAGE("records");
   auto r0 = record_type{
     {"a", address_type{}},

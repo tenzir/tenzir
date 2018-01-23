@@ -49,7 +49,7 @@ size_t compress_bound(size_t size) {
 
 size_t uncompress_bound(const char* data, size_t size) {
   size_t n;
-  if (! ::snappy::GetUncompressedLength(data, size, &n))
+  if (!::snappy::GetUncompressedLength(data, size, &n))
     return 0;
   return n;
 }

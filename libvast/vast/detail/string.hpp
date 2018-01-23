@@ -74,7 +74,7 @@ auto hex_unescaper = [](auto& f, auto l, auto out) {
   if (f == l)
     return false;
   auto lo = *f++;
-  if (! std::isxdigit(hi) || ! std::isxdigit(lo))
+  if (!std::isxdigit(hi) || !std::isxdigit(lo))
     return false;
   *out++ = hex_to_byte(hi, lo);
   return true;
@@ -208,7 +208,7 @@ auto json_unescaper = [](auto& f, auto l, auto out) {
         std::copy(bytes.begin(), bytes.end(), out);
       } else {
         // Hex-unescape the XX portion of \u00XX.
-        if (! std::isxdigit(bytes[2]) || ! std::isxdigit(bytes[3]))
+        if (!std::isxdigit(bytes[2]) || !std::isxdigit(bytes[3]))
           return false;
         *out++ = hex_to_byte(bytes[2], bytes[3]);
       }

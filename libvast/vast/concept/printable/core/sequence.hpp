@@ -97,8 +97,8 @@ private:
   static constexpr auto depth_helper()
   -> std::enable_if_t<
        is_sequence_printer<T>::value
-        && ! std::is_same<typename T::lhs_attribute, unused_type>::value
-        && ! std::is_same<typename T::rhs_attribute, unused_type>::value,
+        && !std::is_same<typename T::lhs_attribute, unused_type>::value
+        && !std::is_same<typename T::rhs_attribute, unused_type>::value,
        size_t
      > {
     return 1 + depth_helper<typename T::lhs_type>();

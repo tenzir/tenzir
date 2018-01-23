@@ -75,7 +75,7 @@ public:
   template <
     typename RHS,
     typename = std::enable_if_t<
-      is_parser<std::decay_t<RHS>>{} && ! detail::is_same_or_derived<rule, RHS>::value
+      is_parser<std::decay_t<RHS>>{} && !detail::is_same_or_derived<rule, RHS>::value
     >
   >
   rule(RHS&& rhs)

@@ -422,7 +422,7 @@ bool convert(const data& d, json& j, const type& t) {
     json::object o;
     for (auto i = 0u; i < v->size(); ++i) {
       auto& f = rt->fields[i];
-      if (! convert((*v)[i], o[f.name], f.type))
+      if (!convert((*v)[i], o[f.name], f.type))
         return false;
     }
     j = std::move(o);

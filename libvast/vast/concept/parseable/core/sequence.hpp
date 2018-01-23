@@ -98,8 +98,8 @@ private:
   static constexpr auto depth_helper()
     -> std::enable_if_t<
          is_sequence_parser<T>::value
-          && ! std::is_same<typename T::lhs_attribute, unused_type>::value
-          && ! std::is_same<typename T::rhs_attribute, unused_type>::value,
+          && !std::is_same<typename T::lhs_attribute, unused_type>::value
+          && !std::is_same<typename T::rhs_attribute, unused_type>::value,
          size_t
        > {
     return 1 + depth_helper<typename T::lhs_type>();
@@ -118,7 +118,7 @@ private:
   template <typename L, typename T>
   static auto get_helper(T& x)
     -> std::enable_if_t<
-         ! is_sequence_parser<L>::value,
+         !is_sequence_parser<L>::value,
          decltype(std::get<0>(x))
        > {
     return std::get<0>(x);

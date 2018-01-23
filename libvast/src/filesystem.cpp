@@ -423,7 +423,7 @@ bool rm(const path& p) {
   auto t = p.kind();
   if (t == path::type::directory) {
     for (auto& entry : directory{p})
-      if (! rm(entry))
+      if (!rm(entry))
         return false;
     return VAST_DELETE_DIRECTORY(p.str().data());
   }

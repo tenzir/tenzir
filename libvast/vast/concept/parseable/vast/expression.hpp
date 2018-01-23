@@ -125,14 +125,14 @@ struct expression_parser : parser<expression_parser> {
         if (std::get<0>(t) == logical_and) {
           con.emplace_back(std::move(std::get<1>(t)));
         } else if (std::get<0>(t) == logical_or) {
-          VAST_ASSERT(! con.empty());
+          VAST_ASSERT(!con.empty());
           if (con.size() == 1)
             dis.emplace_back(std::move(con[0]));
           else
             dis.emplace_back(std::move(con));
           con = conjunction{std::move(std::get<1>(t))};
         } else {
-          VAST_ASSERT(! "negations must not exist here");
+          VAST_ASSERT(!"negations must not exist here");
         }
       if (con.size() == 1)
         dis.emplace_back(std::move(con[0]));
