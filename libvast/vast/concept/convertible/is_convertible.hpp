@@ -21,7 +21,7 @@ namespace detail {
 
 struct is_convertible {
   template <typename From, typename To>
-  static auto test(From const* from, To* to)
+  static auto test(const From* from, To* to)
     -> decltype(convert(*from, *to), std::true_type());
 
   template <typename, typename>

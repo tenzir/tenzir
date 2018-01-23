@@ -53,7 +53,7 @@
 
 namespace vast {
 
-constexpr char const* path::separator;
+constexpr const char* path::separator;
 
 path path::current() {
 #ifdef VAST_POSIX
@@ -64,7 +64,7 @@ path path::current() {
 #endif
 }
 
-path::path(char const* str) : str_{str} {
+path::path(const char* str) : str_{str} {
 }
 
 path::path(std::string str) : str_{std::move(str)} {
@@ -308,7 +308,7 @@ bool file::read(void* sink, size_t bytes, size_t* got) {
   return is_open_ && detail::read(handle_, sink, bytes, got);
 }
 
-bool file::write(void const* source, size_t bytes, size_t* put) {
+bool file::write(const void* source, size_t bytes, size_t* put) {
   return is_open_ && detail::write(handle_, source, bytes, put);
 }
 

@@ -208,7 +208,7 @@ private:
   }
 
   const Derived& derived() const {
-    return *static_cast<Derived const*>(this);
+    return *static_cast<const Derived*>(this);
   }
 };
 

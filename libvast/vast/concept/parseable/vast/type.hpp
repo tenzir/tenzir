@@ -57,7 +57,7 @@ private:
 struct type_parser : parser<type_parser> {
   using attribute = type;
 
-  type_parser(type_table const* symbols = nullptr)
+  type_parser(const type_table* symbols = nullptr)
     : symbol_type{symbols} {
   }
 
@@ -187,7 +187,7 @@ struct type_parser : parser<type_parser> {
     return type_type(f, l, a);
   }
 
-  type_table const* symbol_type;
+  const type_table* symbol_type;
 };
 
 template <>

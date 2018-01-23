@@ -241,8 +241,8 @@ bool evaluate(const data& lhs, relational_operator op, const data& rhs) {
   }
 }
 
-data const* get(const vector& v, const offset& o) {
-  vector const* x = &v;
+const data* get(const vector& v, const offset& o) {
+  const vector* x = &v;
   for (size_t i = 0; i < o.size(); ++i) {
     auto& idx = o[i];
     if (idx >= x->size())
@@ -257,7 +257,7 @@ data const* get(const vector& v, const offset& o) {
   return nullptr;
 }
 
-data const* get(const data& d, const offset& o) {
+const data* get(const data& d, const offset& o) {
   if (auto v = get_if<vector>(d))
     return get(*v, o);
   return nullptr;

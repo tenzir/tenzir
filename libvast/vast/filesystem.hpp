@@ -41,9 +41,9 @@ class path : detail::totally_ordered<path>,
 
 public:
 #ifdef VAST_WINDOWS
-  static constexpr char const* separator = "\\";
+  static constexpr const char* separator = "\\";
 #else
-  static constexpr char const* separator = "/";
+  static constexpr const char* separator = "/";
 #endif
 
   /// The maximum length of a path.
@@ -70,7 +70,7 @@ public:
 
   /// Constructs a path from a C string.
   /// @param str The string representing of a path.
-  path(char const* str);
+  path(const char* str);
 
   /// Constructs a path from a string.
   /// @param str The string representing of a path.
@@ -227,7 +227,7 @@ public:
   /// @param size The number of bytes to write.
   /// @param put The number of bytes written.
   /// @returns `true` on success.
-  bool write(void const* source, size_t size, size_t* put = nullptr);
+  bool write(const void* source, size_t size, size_t* put = nullptr);
 
   /// Seeks the file forward.
   /// @param bytes The number of bytes to seek forward relative to the current
@@ -271,7 +271,7 @@ public:
 
   private:
     path current_;
-    directory const* dir_ = nullptr;
+    const directory* dir_ = nullptr;
   };
 
   /// Constructs a directory stream.

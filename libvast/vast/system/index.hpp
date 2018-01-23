@@ -97,7 +97,7 @@ struct index_state {
   std::unordered_map<uuid, lookup_state> lookups;
   size_t capacity;
   path dir;
-  char const* name = "index";
+  const char* name = "index";
 };
 
 /// Indexes events in horizontal partitions.

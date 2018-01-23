@@ -43,7 +43,7 @@ bool schema::add(const type& t) {
   return true;
 }
 
-type const* schema::find(const std::string& name) const {
+const type* schema::find(const std::string& name) const {
   for (auto& t : types_)
     if (t.name() == name)
       return &t;

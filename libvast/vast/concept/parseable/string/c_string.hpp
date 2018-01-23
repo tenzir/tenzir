@@ -21,9 +21,9 @@ namespace vast {
 
 class c_string_parser : public parser<c_string_parser> {
 public:
-  using attribute = char const*;
+  using attribute = const char*;
 
-  c_string_parser(char const* str) : str_{str} {
+  c_string_parser(const char* str) : str_{str} {
     VAST_ASSERT(str != nullptr);
   }
 
@@ -40,11 +40,11 @@ public:
   }
 
 private:
-  char const* str_;
+  const char* str_;
 };
 
 template <>
-struct parser_registry<char const*> {
+struct parser_registry<const char*> {
   using type = c_string_parser;
 };
 

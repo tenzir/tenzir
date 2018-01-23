@@ -44,7 +44,7 @@ struct exporter_state {
   std::chrono::steady_clock::time_point start;
   query_statistics stats;
   uuid id;
-  char const* name = "exporter";
+  const char* name = "exporter";
 };
 
 /// The EXPORTER receives index hits, looks up the corresponding events in the

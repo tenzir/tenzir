@@ -127,7 +127,7 @@ bool read(int fd, void* buffer, size_t bytes, size_t* got = nullptr);
 /// @param bytes The number of bytes to write into *fd* from *buffer*.
 /// @param put If not-nullptr, receives the number of bytes actually read.
 /// @returns `true` on successful reading.
-bool write(int fd, void const* buffer, size_t bytes, size_t* put = nullptr);
+bool write(int fd, const void* buffer, size_t bytes, size_t* put = nullptr);
 
 /// Wraps `seek(2)`.
 /// @param fd A seekable file descriptor.

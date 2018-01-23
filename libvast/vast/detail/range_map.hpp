@@ -202,7 +202,7 @@ public:
   /// @param p The point to lookup.
   /// @returns A pointer to the value associated with the half-open interval
   ///          *[a,b)* if *a <= p < b* and `nullptr` otherwise.
-  Value const* lookup(const Point& p) const {
+  const Value* lookup(const Point& p) const {
     auto i = locate(p, map_.lower_bound(p));
     return i != map_.end() ? &i->second.second : nullptr;
   }
@@ -214,9 +214,9 @@ public:
   ///          and `nullptr` otherwise. If the last component points to a
   ///          valid value, then the first two represent *[a,b)* and *[0,0)*
   ///          otherwise.
-  std::tuple<Point, Point, Value const*> find(const Point& p) const {
+  std::tuple<Point, Point, const Value*> find(const Point& p) const {
     // GCC 4.9 still has an explicit tuple ctor.
-    using tuple_type = std::tuple<Point, Point, Value const*>;
+    using tuple_type = std::tuple<Point, Point, const Value*>;
     auto i = locate(p, map_.lower_bound(p));
     if (i == map_.end())
       return tuple_type{0, 0, nullptr};

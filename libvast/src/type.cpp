@@ -341,11 +341,11 @@ record_type::find_suffix(const key& k) const {
   return finder{k, finder::suffix, name()}(*this);
 }
 
-type const* record_type::at(const key& k) const {
+const type* record_type::at(const key& k) const {
   auto r = this;
   for (size_t i = 0; i < k.size(); ++i) {
     auto& id = k[i];
-    record_field const* f = nullptr;
+    const record_field* f = nullptr;
     for (auto& a : r->fields)
       if (a.name == id) {
         f = &a;
@@ -362,7 +362,7 @@ type const* record_type::at(const key& k) const {
   return nullptr;
 }
 
-type const* record_type::at(const offset& o) const {
+const type* record_type::at(const offset& o) const {
   auto r = this;
   for (size_t i = 0; i < o.size(); ++i) {
     auto& idx = o[i];

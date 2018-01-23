@@ -52,7 +52,7 @@ public:
   class reference;
   using const_reference = bool;
   using pointer = reference*;
-  using const_pointer = bool const*;
+  using const_pointer = const bool*;
   using iterator = detail::bitvector_iterator<bitvector>;
   using const_iterator = detail::bitvector_iterator<bitvector const>;
   using reverse_iterator = std::reverse_iterator<iterator>;

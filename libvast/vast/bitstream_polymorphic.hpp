@@ -60,7 +60,7 @@ private:
     }
 
     virtual bool equals(const iterator_concept& other) const final {
-      auto x = dynamic_cast<iterator_model const*>(&other);
+      auto x = dynamic_cast<const iterator_model*>(&other);
       if (x == nullptr)
         die("bad iterator cast");
       return iterator_ == x->iterator_;
@@ -149,7 +149,7 @@ class bitstream_model : public bitstream_concept,
   friend access;
 
   const Bitstream& cast(const bitstream_concept& c) const {
-    auto x = dynamic_cast<bitstream_model const*>(&c);
+    auto x = dynamic_cast<const bitstream_model*>(&c);
     if (x == nullptr)
       die("bad bitstream cast");
     return x->bitstream_;

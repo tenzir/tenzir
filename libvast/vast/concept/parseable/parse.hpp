@@ -62,7 +62,7 @@ namespace detail {
 
 struct is_parseable {
   template <typename I, typename T>
-  static auto test(I* f, I const* l, T* x)
+  static auto test(I* f, const I* l, T* x)
     -> decltype(parse(*f, *l, *x), std::true_type());
 
   template <typename, typename>

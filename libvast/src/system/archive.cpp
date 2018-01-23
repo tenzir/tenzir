@@ -228,7 +228,7 @@ archive(archive_type::stateful_pointer<archive_state> self,
       auto rp = self->make_response_promise<lookup_promise>();
       // Collect candidate segments by seeking through the query bitmap and
       // probing each ID interval.
-      std::vector<uuid const*> candidates;
+      std::vector<const uuid*> candidates;
       auto ones = select(bm);
       auto i = self->state.segments.begin();
       auto end = self->state.segments.end();

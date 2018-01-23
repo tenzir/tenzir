@@ -225,9 +225,9 @@ bool read(int fd, void* buffer, size_t bytes, size_t* got) {
   return true;
 }
 
-bool write(int fd, void const* buffer, size_t bytes, size_t* put) {
+bool write(int fd, const void* buffer, size_t bytes, size_t* put) {
   auto total = size_t{0};
-  auto buf = reinterpret_cast<uint8_t const*>(buffer);
+  auto buf = reinterpret_cast<const uint8_t*>(buffer);
   while (total < bytes) {
     ssize_t written;
     do {

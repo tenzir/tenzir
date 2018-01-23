@@ -190,8 +190,8 @@ private:
 /// @param o The offset to access.
 /// @returns A pointer to the data at *o* or `nullptr` if *o* does not
 ///          describe a valid offset.
-data const* get(const vector& v, const offset& o);
-data const* get(const data& d, const offset& o);
+const data* get(const vector& v, const offset& o);
+const data* get(const data& d, const offset& o);
 
 /// Flattens a vector.
 /// @param xs The vector to flatten.

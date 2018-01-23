@@ -34,7 +34,7 @@ class writer : public format::writer<ascii_printer>{
 public:
   using format::writer<ascii_printer>::writer;
 
-  char const* name() const {
+  const char* name() const {
     return "ascii-writer";
   }
 };

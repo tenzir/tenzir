@@ -49,7 +49,7 @@ struct Reader {
 
   expected<vast::schema> schema() const;
 
-  char const* name() const;
+  const char* name() const;
 };
 #endif
 
@@ -66,7 +66,7 @@ struct source_state {
   accountant_type accountant;
   caf::actor sink;
   Reader reader;
-  char const* name;
+  const char* name;
 };
 
 /// An event producer.

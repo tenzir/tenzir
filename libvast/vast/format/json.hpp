@@ -35,7 +35,7 @@ class writer : public format::writer<event_printer>{
 public:
   using format::writer<event_printer>::writer;
 
-  char const* name() const {
+  const char* name() const {
     return "json-writer";
   }
 };

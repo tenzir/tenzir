@@ -85,7 +85,7 @@ expected<schema> reader::schema() const {
   return sch;
 }
 
-char const* reader::name() const {
+const char* reader::name() const {
   return "bgpdump-reader";
 }
 

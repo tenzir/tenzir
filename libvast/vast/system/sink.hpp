@@ -40,7 +40,7 @@ struct Writer {
 
   expected<void> flush();
 
-  char const* name() const;
+  const char* name() const;
 };
 #endif
 

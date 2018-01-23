@@ -26,11 +26,11 @@ inline auto operator"" _P(char c) {
   return literal_printer{c};
 }
 
-inline auto operator"" _P(char const* str) {
+inline auto operator"" _P(const char* str) {
   return literal_printer{str};
 }
 
-inline auto operator"" _P(char const* str, size_t size) {
+inline auto operator"" _P(const char* str, size_t size) {
   return literal_printer{{str, size}};
 }
 

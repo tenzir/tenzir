@@ -29,7 +29,7 @@ xxhash32::xxhash32(result_type seed) noexcept {
   ::XXH32_reset(state, seed);
 }
 
-void xxhash32::operator()(void const* x, size_t n) noexcept {
+void xxhash32::operator()(const void* x, size_t n) noexcept {
   VAST_ASSERT(n <= (1u << 31) - 1);
   auto state = reinterpret_cast<XXH32_state_t*>(&state_);
   auto result = ::XXH32_update(state, x, n);
@@ -50,7 +50,7 @@ xxhash64::xxhash64(result_type seed) noexcept {
   ::XXH64_reset(state, seed);
 }
 
-void xxhash64::operator()(void const* x, size_t n) noexcept {
+void xxhash64::operator()(const void* x, size_t n) noexcept {
   auto state = reinterpret_cast<XXH64_state_t*>(&state_);
   auto result = ::XXH64_update(state, x, n);
   VAST_ASSERT(result == XXH_OK);

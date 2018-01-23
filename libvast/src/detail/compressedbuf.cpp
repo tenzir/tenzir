@@ -75,7 +75,7 @@ compressedbuf::int_type compressedbuf::overflow(int_type c) {
   return c;
 }
 
-std::streamsize compressedbuf::xsputn(char_type const* s, std::streamsize n) {
+std::streamsize compressedbuf::xsputn(const char_type* s, std::streamsize n) {
   auto put = std::streamsize{0};
   while (put < n) {
     while (epptr() == pptr()) {

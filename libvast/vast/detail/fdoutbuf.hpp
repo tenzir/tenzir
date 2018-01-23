@@ -27,7 +27,7 @@ public:
 
 protected:
   int_type overflow(int_type c) override;
-  std::streamsize xsputn(char const* s, std::streamsize n) override;
+  std::streamsize xsputn(const char* s, std::streamsize n) override;
 
 private:
   int fd_;

@@ -126,7 +126,7 @@ constexpr auto empty_field = "(empty)";
 constexpr auto unset_field = "-";
 
 struct time_factory {
-  char const* fmt = "%Y-%m-%d-%H-%M-%S";
+  const char* fmt = "%Y-%m-%d-%H-%M-%S";
 };
 
 template <class Stream>
@@ -380,7 +380,7 @@ expected<void> reader::parse_header() {
     }
   }
   // Retrieve remaining header lines.
-  char const* prefixes[] = {
+  const char* prefixes[] = {
     "#set_separator",
     "#empty_field",
     "#unset_field",
@@ -389,7 +389,7 @@ expected<void> reader::parse_header() {
     "#fields",
     "#types",
   };
-  std::vector<std::string> header(sizeof(prefixes) / sizeof(char const*));
+  std::vector<std::string> header(sizeof(prefixes) / sizeof(const char*));
   for (auto i = 0u; i < header.size(); ++i) {
     lines_->next();
     if (lines_->done())

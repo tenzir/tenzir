@@ -167,14 +167,14 @@ auto nary_eval(Iterator begin, Iterator end, Operation op) {
   // Exposes a pointer to represent either a non-owned bitmap from the input
   // sequence or an intermediary result.
   struct element {
-    explicit element(bitmap_type const* bm) : bitmap{bm} {
+    explicit element(const bitmap_type* bm) : bitmap{bm} {
     }
     explicit element(bitmap_type&& bm)
       : data{std::make_shared<bitmap_type>(std::move(bm))},
         bitmap{data.get()} {
     }
     std::shared_ptr<bitmap_type> data;
-    bitmap_type const* bitmap;
+    const bitmap_type* bitmap;
   };
   auto cmp = [](auto& lhs, auto& rhs) {
     // TODO: instead of using the bitmap size, we should consider whether

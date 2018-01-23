@@ -55,7 +55,7 @@ public:
   /// Retrieves the type for a given name.
   /// @param name The name of the type to lookup.
   /// @returns The type with name *name* or `nullptr if no such type exists.
-  type const* find(const std::string& name) const;
+  const type* find(const std::string& name) const;
 
   // -- container API ----------------------------------------------------------
 

@@ -32,7 +32,7 @@ fdoutbuf::int_type fdoutbuf::overflow(int_type c) {
   return c;
 }
 
-std::streamsize fdoutbuf::xsputn(char const* s, std::streamsize n) {
+std::streamsize fdoutbuf::xsputn(const char* s, std::streamsize n) {
   return ::write(fd_, s, n);
 }
 

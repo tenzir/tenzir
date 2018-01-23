@@ -57,7 +57,7 @@ template <
 auto from_string(char const (&str)[N], Args&&... args) {
   auto f = str;
   auto l = str + N - 1; // No NUL byte.
-  return from_string<To, Parser, char const*, Args...>(
+  return from_string<To, Parser, const char*, Args...>(
     f, l, std::forward<Args>(args)...);
 }
 

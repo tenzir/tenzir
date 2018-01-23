@@ -123,7 +123,7 @@ void crc(const void * key, int len, uint32_t seed, void * out) {
 
 crc32::crc32(uint32_t seed) : digest_{seed} { }
 
-void crc32::operator()(void const* x, size_t n) {
+void crc32::operator()(const void* x, size_t n) {
   VAST_ASSERT(n <= (1u << 31) - 1);
   crc(x, static_cast<int>(n), digest_, &digest_);
 }

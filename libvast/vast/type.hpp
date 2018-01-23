@@ -375,7 +375,7 @@ struct record_type
       vast::key key() const;
       size_t depth() const;
 
-      detail::stack_vector<record_field const*, 64> trace;
+      detail::stack_vector<const record_field*, 64> trace;
       vast::offset offset;
     };
 
@@ -389,7 +389,7 @@ struct record_type
     const range_state& get() const;
 
     range_state state_;
-    detail::stack_vector<record_type const*, 64> records_;
+    detail::stack_vector<const record_type*, 64> records_;
   };
 
   /// Constructs a record type from a list of fields.
@@ -426,12 +426,12 @@ struct record_type
   /// Retrieves the type at a given key.
   /// @param k The key to resolve.
   /// @returns The type at key *k* or `nullptr` if *k* doesn't resolve.
-  type const* at(const key& k) const;
+  const type* at(const key& k) const;
 
   /// Retrieves the type at a given offset.
   /// @param o The offset to resolve.
   /// @returns The type at offset *o* or `nullptr` if *o* doesn't resolve.
-  type const* at(const offset& o) const;
+  const type* at(const offset& o) const;
 
   friend bool operator==(const record_type& x, const record_type& y);
   friend bool operator<(const record_type& x, const record_type& y);

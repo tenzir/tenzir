@@ -81,8 +81,8 @@ encode(T x, void* sink) {
 /// @returns The number of bytes read from *source*.
 template <class T>
 std::enable_if_t<std::is_integral<T>{} && std::is_unsigned<T>{}, size_t>
-decode(T& x, void const* source) {
-  auto in = reinterpret_cast<uint8_t const*>(source);
+decode(T& x, const void* source) {
+  auto in = reinterpret_cast<const uint8_t*>(source);
   size_t i = 0;
   uint8_t low7;
   x = 0;

@@ -31,7 +31,7 @@ struct formatter {
   template <class Stream, class T>
   struct is_streamable {
     template <class S, class U>
-    static auto test(U const* x)
+    static auto test(const U* x)
     -> decltype(std::declval<S&>() << *x, std::true_type());
 
     template <class, class>

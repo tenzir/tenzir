@@ -62,7 +62,7 @@ namespace detail {
 
 struct is_printable {
   template <typename I, typename T>
-  static auto test(I* out, T const* x) -> decltype(print(*out, *x), std::true_type());
+  static auto test(I* out, const T* x) -> decltype(print(*out, *x), std::true_type());
 
   template <typename, typename>
   static auto test(...) -> std::false_type;

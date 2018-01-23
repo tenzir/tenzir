@@ -154,7 +154,7 @@ public:
 private:
   void scan();
 
-  ewah_bitmap const* bm_;
+  const ewah_bitmap* bm_;
   size_t next_ = 0;
   size_t num_dirty_ = 0;
 };

@@ -38,10 +38,10 @@ namespace lz4 {
 size_t compress_bound(size_t size);
 
 /// Compresses a contiguous byte sequence.
-size_t compress(char const* in, size_t in_size, char* out, size_t out_size);
+size_t compress(const char* in, size_t in_size, char* out, size_t out_size);
 
 /// Uncompresses a contiguous byte sequence.
-size_t uncompress(char const* in, size_t in_size, char* out, size_t out_size);
+size_t uncompress(const char* in, size_t in_size, char* out, size_t out_size);
 
 } // namespace lz4
 
@@ -55,13 +55,13 @@ size_t compress_bound(size_t size);
 
 /// Returns the size of the uncompressed output.
 /// @param size The size of the uncompressed input.
-size_t uncompress_bound(char const* data, size_t size);
+size_t uncompress_bound(const char* data, size_t size);
 
 /// Compresses a contiguous byte sequence.
-size_t compress(char const* in, size_t in_size, char* out);
+size_t compress(const char* in, size_t in_size, char* out);
 
 /// Uncompresses a contiguous byte sequence.
-bool uncompress(char const* in, size_t in_size, char* out);
+bool uncompress(const char* in, size_t in_size, char* out);
 
 } // namespace snappy
 #endif // VAST_SNAPPY

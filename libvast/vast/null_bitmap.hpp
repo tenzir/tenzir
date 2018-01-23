@@ -80,7 +80,7 @@ public:
 private:
   void scan();
 
-  null_bitmap::bitvector_type const* bitvector_;
+  const null_bitmap::bitvector_type* bitvector_;
   typename null_bitmap::bitvector_type::block_vector::const_iterator block_;
   typename null_bitmap::bitvector_type::block_vector::const_iterator end_;
 };

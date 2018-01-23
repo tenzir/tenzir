@@ -33,7 +33,7 @@ class xxhash32 : public xxhash_base {
 public:
   explicit xxhash32(result_type seed = 0) noexcept;
 
-  void operator()(void const* x, size_t n) noexcept;
+  void operator()(const void* x, size_t n) noexcept;
 
   explicit operator result_type() noexcept;
 
@@ -64,7 +64,7 @@ class xxhash64 : public xxhash_base {
 public:
   explicit xxhash64(result_type seed = 0) noexcept;
 
-  void operator()(void const* x, size_t n) noexcept;
+  void operator()(const void* x, size_t n) noexcept;
 
   explicit operator result_type() noexcept;
 

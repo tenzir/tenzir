@@ -123,7 +123,7 @@ public:
 
   expected<vast::schema> schema() const;
 
-  char const* name() const;
+  const char* name() const;
 };
 
 } // namespace vast::format::bgpdump

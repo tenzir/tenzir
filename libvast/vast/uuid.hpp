@@ -31,7 +31,7 @@ public:
   using reference = value_type&;
   using const_reference = const value_type&;
   using iterator = value_type*;
-  using const_iterator = value_type const*;
+  using const_iterator = const value_type*;
   using size_type = size_t;
 
   static uuid random();

@@ -163,7 +163,7 @@ hash_append(Hasher& h, T x) noexcept {
 
 template <class Hasher>
 void hash_append(Hasher& h, std::nullptr_t) noexcept {
-  void const* p = nullptr;
+  const void* p = nullptr;
   detail::maybe_reverse_bytes(p, h);
   h(&p, sizeof(p));
 }

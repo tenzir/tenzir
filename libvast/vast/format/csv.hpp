@@ -146,7 +146,7 @@ class writer : public format::writer<value_printer>{
 public:
   using format::writer<value_printer>::writer;
 
-  char const* name() const {
+  const char* name() const {
     return "csv-writer";
   }
 };

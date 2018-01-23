@@ -33,7 +33,7 @@ public:
   }
 
   bool empty() const {
-    auto d = static_cast<Derived const*>(this);
+    auto d = static_cast<const Derived*>(this);
     return d->begin() == d->end();
   }
 };
@@ -93,7 +93,7 @@ private:
   friend iterator;
 
   bool complete() const {
-    return static_cast<Derived const*>(this)->done();
+    return static_cast<const Derived*>(this)->done();
   }
 
   void increment() {
@@ -105,7 +105,7 @@ private:
 public:
 #endif
   decltype(auto) dereference() const {
-    return static_cast<Derived const*>(this)->get();
+    return static_cast<const Derived*>(this)->get();
   }
 };
 
