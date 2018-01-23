@@ -31,7 +31,7 @@ public:
   }
 
   template <typename Iterator, typename Attribute>
-  bool parse(Iterator& f, Iterator const& l, Attribute& a) const {
+  bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
     while (container::parse(parser_, f, l, a))
       ;
     return true;

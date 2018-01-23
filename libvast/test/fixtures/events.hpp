@@ -37,7 +37,7 @@ struct events {
 
 private:
   template <class Reader>
-  static std::vector<event> inhale(char const* filename) {
+  static std::vector<event> inhale(const char* filename) {
     auto input = std::make_unique<std::ifstream>(filename);
     Reader reader{std::move(input)};
     return extract(reader);

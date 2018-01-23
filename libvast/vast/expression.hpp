@@ -39,10 +39,10 @@ struct attribute_extractor : detail::totally_ordered<attribute_extractor> {
 
   std::string attr;
 
-  friend bool operator==(attribute_extractor const&,
-                         attribute_extractor const&);
-  friend bool operator<(attribute_extractor const&,
-                        attribute_extractor const&);
+  friend bool operator==(const attribute_extractor&,
+                         const attribute_extractor&);
+  friend bool operator<(const attribute_extractor&,
+                        const attribute_extractor&);
 
   template <class Inspector>
   friend auto inspect(Inspector& f, attribute_extractor& ex) {
@@ -56,8 +56,8 @@ struct key_extractor : detail::totally_ordered<key_extractor> {
 
   vast::key key;
 
-  friend bool operator==(key_extractor const& lhs, key_extractor const& rhs);
-  friend bool operator<(key_extractor const& lhs, key_extractor const& rhs);
+  friend bool operator==(const key_extractor& lhs, const key_extractor& rhs);
+  friend bool operator<(const key_extractor& lhs, const key_extractor& rhs);
 
   template <class Inspector>
   friend auto inspect(Inspector& f, key_extractor& ex) {
@@ -71,8 +71,8 @@ struct type_extractor : detail::totally_ordered<type_extractor> {
 
   vast::type type;
 
-  friend bool operator==(type_extractor const& lhs, type_extractor const& rhs);
-  friend bool operator<(type_extractor const& lhs, type_extractor const& rhs);
+  friend bool operator==(const type_extractor& lhs, const type_extractor& rhs);
+  friend bool operator<(const type_extractor& lhs, const type_extractor& rhs);
 
   template <class Inspector>
   friend auto inspect(Inspector& f, type_extractor& ex) {
@@ -91,8 +91,8 @@ struct data_extractor : detail::totally_ordered<data_extractor> {
   vast::type type;
   vast::offset offset;
 
-  friend bool operator==(data_extractor const& lhs, data_extractor const& rhs);
-  friend bool operator<(data_extractor const& lhs, data_extractor const& rhs);
+  friend bool operator==(const data_extractor& lhs, const data_extractor& rhs);
+  friend bool operator<(const data_extractor& lhs, const data_extractor& rhs);
 
   template <class Inspector>
   friend auto inspect(Inspector& f, data_extractor& ex) {
@@ -118,8 +118,8 @@ struct predicate : detail::totally_ordered<predicate> {
   relational_operator op;
   operand rhs;
 
-  friend bool operator==(predicate const& lhs, predicate const& rhs);
-  friend bool operator<(predicate const& lhs, predicate const& rhs);
+  friend bool operator==(const predicate& lhs, const predicate& rhs);
+  friend bool operator<(const predicate& lhs, const predicate& rhs);
 
   template <class Inspector>
   friend auto inspect(Inspector& f, predicate& p) {
@@ -142,18 +142,18 @@ struct negation : detail::totally_ordered<negation> {
   negation();
   negation(expression expr);
 
-  negation(negation const& other);
+  negation(const negation& other);
   negation(negation&& other) noexcept;
 
-  negation& operator=(negation const& other);
+  negation& operator=(const negation& other);
   negation& operator=(negation&& other) noexcept;
 
   // Access the contained expression.
-  expression const& expr() const;
+  const expression& expr() const;
   expression& expr();
 
-  friend bool operator==(negation const& lhs, negation const& rhs);
-  friend bool operator<(negation const& lhs, negation const& rhs);
+  friend bool operator==(const negation& lhs, const negation& rhs);
+  friend bool operator<(const negation& lhs, const negation& rhs);
 
   template <class Inspector>
   friend auto inspect(Inspector& f, negation& n) {
@@ -190,8 +190,8 @@ public:
   expression(T&& x) : node_{std::forward<T>(x)} {
   }
 
-  friend bool operator==(expression const& lhs, expression const& rhs);
-  friend bool operator<(expression const& lhs, expression const& rhs);
+  friend bool operator==(const expression& lhs, const expression& rhs);
+  friend bool operator<(const expression& lhs, const expression& rhs);
 
   template <class Inspector>
   friend auto inspect(Inspector&f, expression& e) {
@@ -212,7 +212,7 @@ private:
 ///
 /// @param expr The expression to normalize.
 /// @returns The normalized expression.
-expression normalize(expression const& expr);
+expression normalize(const expression& expr);
 
 /// [Normalizes](@ref normalize) and [validates](@ref validator) an expression.
 /// @param expr The expression to normalize and validate.

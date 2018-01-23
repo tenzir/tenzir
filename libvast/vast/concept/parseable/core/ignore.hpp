@@ -30,7 +30,7 @@ public:
   }
 
   template <typename Iterator, typename Attribute>
-  bool parse(Iterator& f, Iterator const& l, Attribute&) const {
+  bool parse(Iterator& f, const Iterator& l, Attribute&) const {
     return parser_(f, l, unused);
   }
 

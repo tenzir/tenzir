@@ -30,7 +30,7 @@ wah_bitmap::size_type wah_bitmap::size() const {
   return num_bits_;
 }
 
-wah_bitmap::block_vector const& wah_bitmap::blocks() const {
+const wah_bitmap::block_vector& wah_bitmap::blocks() const {
   return blocks_;
 }
 
@@ -167,11 +167,11 @@ void wah_bitmap::merge_active_word() {
   }
 }
 
-bool operator==(wah_bitmap const& x, wah_bitmap const& y) {
+bool operator==(const wah_bitmap& x, const wah_bitmap& y) {
   return x.blocks_ == y.blocks_ && x.num_bits_ == y.num_bits_;
 }
 
-wah_bitmap_range::wah_bitmap_range(wah_bitmap const& bm)
+wah_bitmap_range::wah_bitmap_range(const wah_bitmap& bm)
   : bm_{&bm},
     begin_{bm.blocks_.begin()},
     end_{bm.blocks_.end()} {
@@ -204,7 +204,7 @@ void wah_bitmap_range::scan() {
   }
 }
 
-wah_bitmap_range bit_range(wah_bitmap const& bm) {
+wah_bitmap_range bit_range(const wah_bitmap& bm) {
   return wah_bitmap_range{bm};
 }
 

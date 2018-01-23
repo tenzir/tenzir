@@ -94,7 +94,7 @@ public:
 
   size_type size() const;
 
-  block_vector const& blocks() const;
+  const block_vector& blocks() const;
 
   // -- modifiers ------------------------------------------------------------
 
@@ -108,7 +108,7 @@ public:
 
   // -- concepts -------------------------------------------------------------
 
-  friend bool operator==(wah_bitmap const& x, wah_bitmap const& y);
+  friend bool operator==(const wah_bitmap& x, const wah_bitmap& y);
 
   template <class Inspector>
   friend auto inspect(Inspector&f, wah_bitmap& bm) {
@@ -130,7 +130,7 @@ public:
 
   wah_bitmap_range() = default;
 
-  explicit wah_bitmap_range(wah_bitmap const& bm);
+  explicit wah_bitmap_range(const wah_bitmap& bm);
 
   void next();
   bool done() const;
@@ -143,7 +143,7 @@ private:
   wah_bitmap::block_vector::const_iterator end_;
 };
 
-wah_bitmap_range bit_range(wah_bitmap const& bm);
+wah_bitmap_range bit_range(const wah_bitmap& bm);
 
 } // namespace vast
 

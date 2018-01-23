@@ -31,7 +31,7 @@ struct formatter {
   template <class Stream, class T>
   struct is_streamable {
     template <class S, class U>
-    static auto test(U const* x)
+    static auto test(const U* x)
     -> decltype(std::declval<S&>() << *x, std::true_type());
 
     template <class, class>
@@ -42,7 +42,7 @@ struct formatter {
   };
 
   template <class T>
-  formatter& operator<<(T const& x) {
+  formatter& operator<<(const T& x) {
     if constexpr (is_streamable<std::ostringstream, T>::value) {
       message << x;
       return *this;
@@ -65,21 +65,21 @@ struct formatter {
   }
 
   template <class... Ts>
-  formatter& operator<<(caf::typed_actor<Ts...> const& a) {
+  formatter& operator<<(const caf::typed_actor<Ts...>& a) {
     return *this << a->address();
   }
 
-  formatter& operator<<(caf::actor const& a) {
+  formatter& operator<<(const caf::actor& a) {
     return *this << a->address();
   }
 
-  formatter& operator<<(caf::actor_addr const& a) {
+  formatter& operator<<(const caf::actor_addr& a) {
     message << a.id();
     return *this;
   }
 
   // E.g., self->current_sender()
-  formatter& operator<<(caf::strong_actor_ptr const& a) {
+  formatter& operator<<(const caf::strong_actor_ptr& a) {
     if (a)
       message << a->id();
     else

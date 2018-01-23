@@ -40,21 +40,21 @@ struct value_printer : printer<value_printer> {
     }
 
     template <class T>
-    bool operator()(T const&, none) {
+    bool operator()(const T&, none) {
       return true;
     }
 
     template <class T, class U>
-    auto operator()(T const&, U const& x)
+    auto operator()(const T&, const U& x)
     -> std::enable_if_t<!std::is_same<U, none>::value, bool> {
       return make_printer<U>{}.print(out_, x);
     }
 
-    bool operator()(real_type const&, real r) {
+    bool operator()(const real_type&, real r) {
       return real_printer<real, 6>{}.print(out_, r);
     }
 
-    bool operator()(string_type const&, std::string const& str) {
+    bool operator()(const string_type&, const std::string& str) {
       using printers::chr;
       using printers::eps;
       auto escape = [&] {
@@ -67,7 +67,7 @@ struct value_printer : printer<value_printer> {
       return p.print(out_, unused);
     }
 
-    bool operator()(record_type const& r, vector const& v) {
+    bool operator()(const record_type& r, const vector& v) {
       VAST_ASSERT(!v.empty());
       VAST_ASSERT(r.fields.size() == v.size());
       using printers::eps;
@@ -82,27 +82,27 @@ struct value_printer : printer<value_printer> {
       return p.print(out_, v);
     }
 
-    bool operator()(vector_type const& t, vector const& v) {
+    bool operator()(const vector_type& t, const vector& v) {
       return render(v, t.value_type, set_separator);
     }
 
-    bool operator()(set_type const& t, set const& s) {
+    bool operator()(const set_type& t, const set& s) {
       return render(s, t.value_type, set_separator);
     }
 
-    bool operator()(table_type const&, table const&) {
+    bool operator()(const table_type&, const table&) {
       return false; // not yet supported
     }
 
   private:
     template <class Container, class Sep>
-    bool render(Container& c, type const& t, Sep const& sep) {
+    bool render(Container& c, const type& t, const Sep& sep) {
       using printers::eps;
       using printers::str;
       if (c.empty())
         return str.print(out_, empty);
       auto f = this;
-      auto elem = eps.with([&](data const& x) { return visit(*f, t, x); });
+      auto elem = eps.with([&](const data& x) { return visit(*f, t, x); });
       auto p = (elem % sep);
       return p.print(out_, c);
     }
@@ -111,7 +111,7 @@ struct value_printer : printer<value_printer> {
   };
 
   template <class Iterator>
-  bool print(Iterator& out, event const& e) const {
+  bool print(Iterator& out, const event& e) const {
     using namespace printers;
     // Print a new header each time we encounter a new event type.
     auto header = eps.with([&] {
@@ -129,7 +129,7 @@ struct value_printer : printer<value_printer> {
       return p.print(out, hdr);
     });
     // Print event data.
-    auto name = str.with([](std::string const& x) { return !x.empty(); });
+    auto name = str.with([](const std::string& x) { return !x.empty(); });
     auto comma = chr<','>;
     auto ts = u64 ->* [](timestamp t) { return t.time_since_epoch().count(); };
     auto f = [&] { visit(renderer<Iterator>{out}, e.type(), e.data()); };
@@ -146,7 +146,7 @@ class writer : public format::writer<value_printer>{
 public:
   using format::writer<value_printer>::writer;
 
-  char const* name() const {
+  const char* name() const {
     return "csv-writer";
   }
 };

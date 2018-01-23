@@ -18,7 +18,7 @@
 
 namespace vast {
 
-[[noreturn]] void die(std::string const& msg) {
+[[noreturn]] void die(const std::string& msg) {
   if (!msg.empty())
     std::cerr << "\nERROR: " << msg << std::endl;
   std::abort();

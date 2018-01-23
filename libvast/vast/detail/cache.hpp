@@ -148,7 +148,7 @@ public:
   /// the function default-constructs a value of `mapped_type`.
   /// @param key The key to lookup.
   /// @returns The value corresponding to *key*.
-  mapped_type& operator[](key_type const& x) {
+  mapped_type& operator[](const key_type& x) {
     auto i = tracker_.find(x);
     if (i == tracker_.end())
       return insert({x, {}}).first->second;
@@ -189,7 +189,7 @@ public:
   /// Removes an entry for a given key without invoking the eviction callback.
   /// @param x The key to remove.
   /// @returns The number of entries removed.
-  size_t erase(key_type const& x) {
+  size_t erase(const key_type& x) {
     auto i = tracker_.find(x);
     if (i == tracker_.end())
       return 0;

@@ -119,11 +119,11 @@ class reader : public format::reader<bgpdump_parser> {
 public:
   using format::reader<bgpdump_parser>::reader;
 
-  expected<void> schema(vast::schema const& sch);
+  expected<void> schema(const vast::schema& sch);
 
   expected<vast::schema> schema() const;
 
-  char const* name() const;
+  const char* name() const;
 };
 
 } // namespace vast::format::bgpdump

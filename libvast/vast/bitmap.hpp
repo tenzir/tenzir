@@ -74,7 +74,7 @@ public:
 
   // -- concepts -------------------------------------------------------------
 
-  friend bool operator==(bitmap const& x, bitmap const& y);
+  friend bool operator==(const bitmap& x, const bitmap& y);
 
   template <class Inspector>
   friend auto inspect(Inspector&f, bitmap& bm) {
@@ -92,7 +92,7 @@ private:
 class bitmap_bit_range
   : public bit_range_base<bitmap_bit_range, bitmap::block_type> {
 public:
-  explicit bitmap_bit_range(bitmap const& bm);
+  explicit bitmap_bit_range(const bitmap& bm);
 
   void next();
   bool done() const;
@@ -107,7 +107,7 @@ private:
   range_variant range_;
 };
 
-bitmap_bit_range bit_range(bitmap const& bm);
+bitmap_bit_range bit_range(const bitmap& bm);
 
 } // namespace vast
 

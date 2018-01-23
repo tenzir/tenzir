@@ -20,7 +20,7 @@
 
 namespace vast {
 
-void serialize(caf::serializer& sink, std::vector<event> const& events) {
+void serialize(caf::serializer& sink, const std::vector<event>& events) {
   util::flat_set<type::hash_type::digest_type> digests;
   auto size = events.size();
   sink.begin_sequence(size);

@@ -26,7 +26,7 @@ using namespace std::string_literals;
 namespace {
 
 template <class Attribute>
-bool bro_parse(type const& t, std::string const& s, Attribute& attr) {
+bool bro_parse(const type& t, const std::string& s, Attribute& attr) {
   return format::bro::make_bro_parser<std::string::const_iterator>(t)(s, attr);
 }
 

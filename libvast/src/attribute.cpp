@@ -25,11 +25,11 @@ attribute::attribute(std::string key, optional<std::string> value)
     value{std::move(value)} {
 }
 
-bool operator==(attribute const& x, attribute const& y) {
+bool operator==(const attribute& x, const attribute& y) {
   return x.key == y.key && x.value == y.value;
 };
 
-bool operator<(attribute const& x, attribute const& y) {
+bool operator<(const attribute& x, const attribute& y) {
   return std::tie(x.key, x.value) < std::tie(y.key, y.value);
 }
 

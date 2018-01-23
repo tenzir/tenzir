@@ -113,7 +113,7 @@ expected<event> reader::read() {
     VAST_INFO(name(), "evicts flows after", max_age_ << "s of inactivity");
     VAST_INFO(name(), "expires flow table every", expire_interval_ << "s");
   }
-  uint8_t const* data;
+  const uint8_t* data;
   pcap_pkthdr* header;
   auto r = ::pcap_next_ex(pcap_, &header, &data);
   if (r == 0)
@@ -131,9 +131,9 @@ expected<event> reader::read() {
   connection conn;
   auto packet_size = header->len - 14;
   auto layer3 = data + 14;
-  uint8_t const* layer4 = nullptr;
+  const uint8_t* layer4 = nullptr;
   uint8_t layer4_proto = 0;
-  auto layer2_type = *reinterpret_cast<uint16_t const*>(data + 12);
+  auto layer2_type = *reinterpret_cast<const uint16_t*>(data + 12);
   uint64_t payload_size = packet_size;
   switch (detail::to_host_order(layer2_type)) {
     default:
@@ -145,8 +145,8 @@ expected<event> reader::read() {
       if (header_size < 20)
         return make_error(ec::format_error, "IPv4 header too short: ",
                           header_size, " bytes");
-      auto orig_h = reinterpret_cast<uint32_t const*>(layer3 + 12);
-      auto resp_h = reinterpret_cast<uint32_t const*>(layer3 + 16);
+      auto orig_h = reinterpret_cast<const uint32_t*>(layer3 + 12);
+      auto resp_h = reinterpret_cast<const uint32_t*>(layer3 + 16);
       conn.src = {orig_h, address::ipv4, address::network};
       conn.dst = {resp_h, address::ipv4, address::network};
       layer4_proto = *(layer3 + 9);
@@ -156,8 +156,8 @@ expected<event> reader::read() {
     case 0x86dd: {
       if (header->len < 14 + 40)
         return make_error(ec::format_error, "IPv6 header too short");
-      auto orig_h = reinterpret_cast<uint32_t const*>(layer3 + 8);
-      auto resp_h = reinterpret_cast<uint32_t const*>(layer3 + 24);
+      auto orig_h = reinterpret_cast<const uint32_t*>(layer3 + 8);
+      auto resp_h = reinterpret_cast<const uint32_t*>(layer3 + 24);
       conn.src = {orig_h, address::ipv4, address::network};
       conn.dst = {resp_h, address::ipv4, address::network};
       layer4_proto = *(layer3 + 6);
@@ -167,18 +167,18 @@ expected<event> reader::read() {
   }
   if (layer4_proto == IPPROTO_TCP) {
     VAST_ASSERT(layer4);
-    auto orig_p = *reinterpret_cast<uint16_t const*>(layer4);
-    auto resp_p = *reinterpret_cast<uint16_t const*>(layer4 + 2);
+    auto orig_p = *reinterpret_cast<const uint16_t*>(layer4);
+    auto resp_p = *reinterpret_cast<const uint16_t*>(layer4 + 2);
     orig_p = detail::to_host_order(orig_p);
     resp_p = detail::to_host_order(resp_p);
     conn.sport = {orig_p, port::tcp};
     conn.dport = {resp_p, port::tcp};
-    auto data_offset = *reinterpret_cast<uint8_t const*>(layer4 + 12) >> 4;
+    auto data_offset = *reinterpret_cast<const uint8_t*>(layer4 + 12) >> 4;
     payload_size -= data_offset * 4;
   } else if (layer4_proto == IPPROTO_UDP) {
     VAST_ASSERT(layer4);
-    auto orig_p = *reinterpret_cast<uint16_t const*>(layer4);
-    auto resp_p = *reinterpret_cast<uint16_t const*>(layer4 + 2);
+    auto orig_p = *reinterpret_cast<const uint16_t*>(layer4);
+    auto resp_p = *reinterpret_cast<const uint16_t*>(layer4 + 2);
     orig_p = detail::to_host_order(orig_p);
     resp_p = detail::to_host_order(resp_p);
     conn.sport = {orig_p, port::udp};
@@ -186,8 +186,8 @@ expected<event> reader::read() {
     payload_size -= 8;
   } else if (layer4_proto == IPPROTO_ICMP) {
     VAST_ASSERT(layer4);
-    auto message_type = *reinterpret_cast<uint8_t const*>(layer4);
-    auto message_code = *reinterpret_cast<uint8_t const*>(layer4 + 1);
+    auto message_type = *reinterpret_cast<const uint8_t*>(layer4);
+    auto message_code = *reinterpret_cast<const uint8_t*>(layer4 + 1);
     conn.sport = {message_type, port::icmp};
     conn.dport = {message_code, port::icmp};
     payload_size -= 8; // TODO: account for variable-size data.
@@ -248,7 +248,7 @@ expected<event> reader::read() {
   meta.emplace_back(std::move(conn.dport));
   packet.emplace_back(std::move(meta));
   // We start with the network layer and skip the link layer.
-  auto str = reinterpret_cast<char const*>(data + 14);
+  auto str = reinterpret_cast<const char*>(data + 14);
   packet.emplace_back(std::string{str, packet_size});
   using namespace std::chrono;
   auto secs = seconds(header->ts.tv_sec);
@@ -275,7 +275,7 @@ expected<event> reader::read() {
   return e;
 }
 
-expected<void> reader::schema(vast::schema const& sch) {
+expected<void> reader::schema(const vast::schema& sch) {
   auto t = sch.find(pcap_packet_type.name());
   if (!t)
     return make_error(ec::format_error, "did not find packet type in schema");
@@ -307,7 +307,7 @@ writer::~writer() {
     ::pcap_close(pcap_);
 }
 
-expected<void> writer::write(event const& e) {
+expected<void> writer::write(const event& e) {
   if (!pcap_) {
 #ifdef PCAP_TSTAMP_PRECISION_NANO
     pcap_ = ::pcap_open_dead_with_tstamp_precision(DLT_RAW, 65535,
@@ -342,7 +342,7 @@ expected<void> writer::write(event const& e) {
   header.len = payload->size();
   // Dump packet.
   ::pcap_dump(reinterpret_cast<uint8_t*>(dumper_), &header,
-              reinterpret_cast<uint8_t const*>(payload->c_str()));
+              reinterpret_cast<const uint8_t*>(payload->c_str()));
   if (++total_packets_ % flush_interval_ == 0) {
     auto r = flush();
     if (!r)

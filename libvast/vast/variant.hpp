@@ -205,7 +205,7 @@ private:
     }
 
     template <typename T>
-    void operator()(T const&) const
+    void operator()(const T&) const
     noexcept(std::is_nothrow_default_constructible<T>{}) {
       self_.construct(T());
     }
@@ -532,7 +532,7 @@ variant<Ts...>& expose(variant<Ts...>& v) {
 }
 
 template <class T>
-auto& expose(T const& v) {
+auto& expose(const T& v) {
   return expose(const_cast<T&>(v));
 }
 

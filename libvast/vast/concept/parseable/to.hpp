@@ -24,7 +24,7 @@
 namespace vast {
 
 template <typename To, typename Iterator>
-auto to(Iterator& f, Iterator const& l)
+auto to(Iterator& f, const Iterator& l)
   -> std::enable_if_t<is_parseable<Iterator, To>{}, expected<To>> {
   expected<To> t{To{}};
   if (!parse(f, l, *t))

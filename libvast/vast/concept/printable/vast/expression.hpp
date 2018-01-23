@@ -41,44 +41,44 @@ struct expression_printer : printer<expression_printer> {
       return print(out_, nil);
     }
 
-    bool operator()(conjunction const& c) const {
+    bool operator()(const conjunction& c) const {
       auto p = '{' << (expression_printer{} % " && ") << '}';
       return p(out_, c);
     }
 
-    bool operator()(disjunction const& d) const {
+    bool operator()(const disjunction& d) const {
       auto p = '(' << (expression_printer{} % " || ") << ')';
       return p(out_, d);
     }
 
-    bool operator()(negation const& n) const {
+    bool operator()(const negation& n) const {
       auto p = "! " << expression_printer{};
       return p(out_, n.expr());
     }
 
-    bool operator()(predicate const& p) const {
+    bool operator()(const predicate& p) const {
       auto op = ' ' << make_printer<relational_operator>{} << ' ';
       return visit(*this, p.lhs) && op(out_, p.op) && visit(*this, p.rhs);
     }
 
-    bool operator()(attribute_extractor const& e) const {
+    bool operator()(const attribute_extractor& e) const {
       return ('&' << printers::str)(out_, e.attr);
     }
 
-    bool operator()(type_extractor const& e) const {
+    bool operator()(const type_extractor& e) const {
       return (':' << printers::type<policy::name_only>)(out_, e.type);
     }
 
-    bool operator()(key_extractor const& e) const {
+    bool operator()(const key_extractor& e) const {
       return printers::key(out_, e.key);
     }
 
-    bool operator()(data_extractor const& e) const {
+    bool operator()(const data_extractor& e) const {
       auto p = printers::type<policy::name_only> << ~('@' << printers::offset);
       return p(out_, e.type, e.offset);
     }
 
-    bool operator()(data const& d) const {
+    bool operator()(const data& d) const {
       return printers::data(out_, d);
     }
 
@@ -86,7 +86,7 @@ struct expression_printer : printer<expression_printer> {
   };
 
   template <typename Iterator, typename T>
-  auto print(Iterator& out, T const& x) const
+  auto print(Iterator& out, const T& x) const
     -> std::enable_if_t<
          std::is_same<T, attribute_extractor>::value
          || std::is_same<T, key_extractor>::value
@@ -102,7 +102,7 @@ struct expression_printer : printer<expression_printer> {
   }
 
   template <typename Iterator>
-  bool print(Iterator& out, expression const& e) const
+  bool print(Iterator& out, const expression& e) const
   {
     return visit(visitor<Iterator>{out}, e);
   }

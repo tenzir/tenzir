@@ -30,7 +30,7 @@ public:
   }
 
   template <typename Iterator, typename Attribute>
-  bool print(Iterator& out, Attribute const& a) const {
+  bool print(Iterator& out, const Attribute& a) const {
     printer_.print(out, a);
     return true;
   }

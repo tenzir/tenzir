@@ -33,7 +33,7 @@ struct symbol_table : parser<symbol_table<T>> {
   }
 
   template <typename Iterator, typename Attribute>
-  bool parse(Iterator& f, Iterator const& l, Attribute& a) const {
+  bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
     auto input = std::string{f, l};
     auto prefixes = symbols.prefix_of(input);
     if (prefixes.empty())

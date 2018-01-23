@@ -39,23 +39,23 @@ public:
   using const_iterator = std::vector<type>::const_iterator;
   using iterator = std::vector<type>::iterator;
 
-  friend bool operator==(schema const& x, schema const& y);
+  friend bool operator==(const schema& x, const schema& y);
 
   /// Merges two schemata.
   /// @param s1 The first schema.
   /// @param s2 The second schema.
   /// @returns The union of *s1* and *s2* schema if the .
-  static optional<schema> merge(schema const& s1, schema const& s2);
+  static optional<schema> merge(const schema& s1, const schema& s2);
 
   /// Adds a new type to the schema.
   /// @param t The type to add.
   /// @returns `true` on success.
-  bool add(type const& t);
+  bool add(const type& t);
 
   /// Retrieves the type for a given name.
   /// @param name The name of the type to lookup.
   /// @returns The type with name *name* or `nullptr if no such type exists.
-  type const* find(std::string const& name) const;
+  const type* find(const std::string& name) const;
 
   // -- container API ----------------------------------------------------------
 
@@ -65,14 +65,14 @@ public:
   bool empty() const;
   void clear();
 
-  friend void serialize(caf::serializer& sink, schema const& sch);
+  friend void serialize(caf::serializer& sink, const schema& sch);
   friend void serialize(caf::deserializer& source, schema& sch);
 
 private:
   std::vector<type> types_;
 };
 
-bool convert(schema const& s, json& j);
+bool convert(const schema& s, json& j);
 
 } // namespace vast
 

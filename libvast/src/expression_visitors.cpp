@@ -34,7 +34,7 @@ expression hoister::operator()(none) const {
   return expression{};
 }
 
-expression hoister::operator()(conjunction const& c) const {
+expression hoister::operator()(const conjunction& c) const {
   conjunction hoisted;
   for (auto& op : c)
     if (auto inner = get_if<conjunction>(op))
@@ -45,7 +45,7 @@ expression hoister::operator()(conjunction const& c) const {
   return hoisted.size() == 1 ? hoisted[0] : hoisted;
 }
 
-expression hoister::operator()(disjunction const& d) const {
+expression hoister::operator()(const disjunction& d) const {
   disjunction hoisted;
   for (auto& op : d)
     if (auto inner = get_if<disjunction>(op))
@@ -56,11 +56,11 @@ expression hoister::operator()(disjunction const& d) const {
   return hoisted.size() == 1 ? hoisted[0] : hoisted;
 }
 
-expression hoister::operator()(negation const& n) const {
+expression hoister::operator()(const negation& n) const {
   return {negation{visit(*this, n.expr())}};
 }
 
-expression hoister::operator()(predicate const& p) const {
+expression hoister::operator()(const predicate& p) const {
   return {p};
 }
 
@@ -69,25 +69,25 @@ expression aligner::operator()(none) const {
   return nil;
 }
 
-expression aligner::operator()(conjunction const& c) const {
+expression aligner::operator()(const conjunction& c) const {
   conjunction result;
   for (auto& op : c)
     result.push_back(visit(*this, op));
   return result;
 }
 
-expression aligner::operator()(disjunction const& d) const {
+expression aligner::operator()(const disjunction& d) const {
   disjunction result;
   for (auto& op : d)
     result.push_back(visit(*this, op));
   return result;
 }
 
-expression aligner::operator()(negation const& n) const {
+expression aligner::operator()(const negation& n) const {
   return {negation{visit(*this, n.expr())}};
 }
 
-expression aligner::operator()(predicate const& p) const {
+expression aligner::operator()(const predicate& p) const {
   auto is_extractor = [](auto& operand) { return !is<data>(operand); };
   // Already aligned if LHS is an extractor or no extractor present.
   if (is_extractor(p.lhs) || !is_extractor(p.rhs))
@@ -103,7 +103,7 @@ expression denegator::operator()(none) const {
   return nil;
 }
 
-expression denegator::operator()(conjunction const& c) const {
+expression denegator::operator()(const conjunction& c) const {
   auto add = [&](auto x) -> expression {
     for (auto& op : c)
       x.push_back(visit(*this, op));
@@ -112,7 +112,7 @@ expression denegator::operator()(conjunction const& c) const {
   return negate_ ? add(disjunction{}) : add(conjunction{});
 }
 
-expression denegator::operator()(disjunction const& d) const {
+expression denegator::operator()(const disjunction& d) const {
   auto add = [&](auto x) -> expression {
     for (auto& op : d)
       x.push_back(visit(*this, op));
@@ -121,7 +121,7 @@ expression denegator::operator()(disjunction const& d) const {
   return negate_ ? add(conjunction{}) : add(disjunction{});
 }
 
-expression denegator::operator()(negation const& n) const {
+expression denegator::operator()(const negation& n) const {
   // Step through double negations.
   if (auto inner = get_if<negation>(n.expr()))
     return visit(*this, inner->expr());
@@ -129,7 +129,7 @@ expression denegator::operator()(negation const& n) const {
   return visit(denegator{!negate_}, n.expr());
 }
 
-expression denegator::operator()(predicate const& p) const {
+expression denegator::operator()(const predicate& p) const {
   return predicate{p.lhs, negate_ ? negate(p.op) : p.op, p.rhs};
 }
 
@@ -138,7 +138,7 @@ expression deduplicator::operator()(none) const {
   return nil;
 }
 
-expression deduplicator::operator()(conjunction const& c) const {
+expression deduplicator::operator()(const conjunction& c) const {
   conjunction result;
   for (auto& op : c) {
     auto p = visit(*this, op);
@@ -148,7 +148,7 @@ expression deduplicator::operator()(conjunction const& c) const {
   return result;
 }
 
-expression deduplicator::operator()(disjunction const& d) const {
+expression deduplicator::operator()(const disjunction& d) const {
   disjunction result;
   for (auto& op : d) {
     auto p = visit(*this, op);
@@ -158,11 +158,11 @@ expression deduplicator::operator()(disjunction const& d) const {
   return result;
 }
 
-expression deduplicator::operator()(negation const& n) const {
+expression deduplicator::operator()(const negation& n) const {
   return visit(*this, n.expr());
 }
 
-expression deduplicator::operator()(predicate const& p) const {
+expression deduplicator::operator()(const predicate& p) const {
   return p;
 }
 
@@ -183,7 +183,7 @@ std::vector<predicate> predicatizer::operator()(none) const {
   return {};
 }
 
-std::vector<predicate> predicatizer::operator()(conjunction const& con) const {
+std::vector<predicate> predicatizer::operator()(const conjunction& con) const {
   std::vector<predicate> result;
   for (auto& op : con) {
     auto ps = visit(*this, op);
@@ -192,7 +192,7 @@ std::vector<predicate> predicatizer::operator()(conjunction const& con) const {
   return result;
 }
 
-std::vector<predicate> predicatizer::operator()(disjunction const& dis) const {
+std::vector<predicate> predicatizer::operator()(const disjunction& dis) const {
   std::vector<predicate> result;
   for (auto& op : dis) {
     auto ps = visit(*this, op);
@@ -201,11 +201,11 @@ std::vector<predicate> predicatizer::operator()(disjunction const& dis) const {
   return result;
 }
 
-std::vector<predicate> predicatizer::operator()(negation const& n) const {
+std::vector<predicate> predicatizer::operator()(const negation& n) const {
   return visit(*this, n.expr());
 }
 
-std::vector<predicate> predicatizer::operator()(predicate const& pred) const {
+std::vector<predicate> predicatizer::operator()(const predicate& pred) const {
   return {pred};
 }
 
@@ -214,7 +214,7 @@ expected<void> validator::operator()(none) {
   return make_error(ec::syntax_error, "nil expression is invalid");
 }
 
-expected<void> validator::operator()(conjunction const& c) {
+expected<void> validator::operator()(const conjunction& c) {
   for (auto& op : c) {
     auto m = visit(*this, op);
     if (!m)
@@ -223,7 +223,7 @@ expected<void> validator::operator()(conjunction const& c) {
   return no_error;
 }
 
-expected<void> validator::operator()(disjunction const& d) {
+expected<void> validator::operator()(const disjunction& d) {
   for (auto& op : d) {
     auto m = visit(*this, op);
     if (!m)
@@ -232,17 +232,17 @@ expected<void> validator::operator()(disjunction const& d) {
   return no_error;
 }
 
-expected<void> validator::operator()(negation const& n) {
+expected<void> validator::operator()(const negation& n) {
   return visit(*this, n.expr());
 }
 
-expected<void> validator::operator()(predicate const& p) {
+expected<void> validator::operator()(const predicate& p) {
   op_ = p.op;
   return visit(*this, p.lhs, p.rhs);
 }
 
-expected<void> validator::operator()(attribute_extractor const& ex,
-                                     data const& d) {
+expected<void> validator::operator()(const attribute_extractor& ex,
+                                     const data& d) {
   if (ex.attr == "type" && !is<std::string>(d))
     return make_error(ec::syntax_error,
                       "type attribute extractor requires string operand",
@@ -254,14 +254,14 @@ expected<void> validator::operator()(attribute_extractor const& ex,
   return no_error;
 }
 
-expected<void> validator::operator()(type_extractor const& ex, data const& d) {
+expected<void> validator::operator()(const type_extractor& ex, const data& d) {
   if (!type_check(ex.type, d))
     return make_error(ec::syntax_error, "type extractor type check failure",
                       ex.type, op_, d);
   return no_error;
 }
 
-expected<void> validator::operator()(key_extractor const&, data const&) {
+expected<void> validator::operator()(const key_extractor&, const data&) {
   // Validity of a key extractor requires a specific schema, which we don't
   // have in this context.
   return no_error;
@@ -276,21 +276,21 @@ bool time_restrictor::operator()(none) const {
   return false;
 }
 
-bool time_restrictor::operator()(conjunction const& con) const {
+bool time_restrictor::operator()(const conjunction& con) const {
   for (auto& op : con)
     if (!visit(*this, op))
       return false;
   return true;
 }
 
-bool time_restrictor::operator()(disjunction const& dis) const {
+bool time_restrictor::operator()(const disjunction& dis) const {
   for (auto& op : dis)
     if (visit(*this, op))
       return true;
   return false;
 }
 
-bool time_restrictor::operator()(negation const& n) const {
+bool time_restrictor::operator()(const negation& n) const {
   // We can only apply a negation if it sits directly on top of a time
   // extractor, because only then we can negate the meaning of the temporal
   // constraint.
@@ -302,7 +302,7 @@ bool time_restrictor::operator()(negation const& n) const {
   return r;
 }
 
-bool time_restrictor::operator()(predicate const& p) const {
+bool time_restrictor::operator()(const predicate& p) const {
   if (auto a = get_if<attribute_extractor>(p.lhs)) {
     if (a->attr == "time") {
       auto d = get_if<data>(p.rhs);
@@ -314,14 +314,14 @@ bool time_restrictor::operator()(predicate const& p) const {
 }
 
 
-type_resolver::type_resolver(type const& t) : type_{t} {
+type_resolver::type_resolver(const type& t) : type_{t} {
 }
 
 expected<expression> type_resolver::operator()(none) {
   return expression{};
 }
 
-expected<expression> type_resolver::operator()(conjunction const& c) {
+expected<expression> type_resolver::operator()(const conjunction& c) {
   conjunction result;
   for (auto& op : c) {
     auto r = visit(*this, op);
@@ -341,7 +341,7 @@ expected<expression> type_resolver::operator()(conjunction const& c) {
     return {std::move(result)};
 }
 
-expected<expression> type_resolver::operator()(disjunction const& d) {
+expected<expression> type_resolver::operator()(const disjunction& d) {
   disjunction result;
   for (auto& op : d) {
     auto r = visit(*this, op);
@@ -359,7 +359,7 @@ expected<expression> type_resolver::operator()(disjunction const& d) {
 }
 
 
-expected<expression> type_resolver::operator()(negation const& n) {
+expected<expression> type_resolver::operator()(const negation& n) {
   auto r = visit(*this, n.expr());
   if (!r)
     return r;
@@ -369,13 +369,13 @@ expected<expression> type_resolver::operator()(negation const& n) {
     return expression{};
 }
 
-expected<expression> type_resolver::operator()(predicate const& p) {
+expected<expression> type_resolver::operator()(const predicate& p) {
   op_ = p.op;
   return visit(*this, p.lhs, p.rhs);
 }
 
-expected<expression> type_resolver::operator()(type_extractor const& ex,
-                                               data const& d) {
+expected<expression> type_resolver::operator()(const type_extractor& ex,
+                                               const data& d) {
   disjunction dis;
   if (auto r = get_if<record_type>(type_)) {
     for (auto& f : record_type::each{*r}) {
@@ -397,13 +397,13 @@ expected<expression> type_resolver::operator()(type_extractor const& ex,
     return {std::move(dis)};
 }
 
-expected<expression> type_resolver::operator()(data const& d,
-                                               type_extractor const& ex) {
+expected<expression> type_resolver::operator()(const data& d,
+                                               const type_extractor& ex) {
   return (*this)(ex, d);
 }
 
-expected<expression> type_resolver::operator()(key_extractor const& ex,
-                                               data const& d) {
+expected<expression> type_resolver::operator()(const key_extractor& ex,
+                                               const data& d) {
   disjunction dis;
   // First, interpret the key as a suffix of a record field name.
   if (auto r = get_if<record_type>(type_)) {
@@ -436,20 +436,20 @@ expected<expression> type_resolver::operator()(key_extractor const& ex,
     return {std::move(dis)};
 }
 
-expected<expression> type_resolver::operator()(data const& d,
-                                               key_extractor const& ex) {
+expected<expression> type_resolver::operator()(const data& d,
+                                               const key_extractor& ex) {
   return (*this)(ex, d);
 }
 
 
-type_pruner::type_pruner(type const& event_type) : type_{event_type} {
+type_pruner::type_pruner(const type& event_type) : type_{event_type} {
 }
 
 expression type_pruner::operator()(none) {
   return {};
 }
 
-expression type_pruner::operator()(conjunction const& c) {
+expression type_pruner::operator()(const conjunction& c) {
   conjunction result;
   for (auto& op : c) {
     auto e = visit(*this, op);
@@ -469,7 +469,7 @@ expression type_pruner::operator()(conjunction const& c) {
   return result;
 }
 
-expression type_pruner::operator()(disjunction const& d) {
+expression type_pruner::operator()(const disjunction& d) {
   disjunction result;
   for (auto& op : d) {
     auto e = visit(*this, op);
@@ -483,14 +483,14 @@ expression type_pruner::operator()(disjunction const& d) {
   return result;
 }
 
-expression type_pruner::operator()(negation const& n) {
+expression type_pruner::operator()(const negation& n) {
   auto e = visit(*this, n.expr());
   if (is<none>(e))
     return e;
   return negation{std::move(e)};
 }
 
-expression type_pruner::operator()(predicate const& p) {
+expression type_pruner::operator()(const predicate& p) {
   if (auto lhs = get_if<type_extractor>(p.lhs)) {
     if (auto r = get_if<record_type>(type_)) {
       disjunction result;
@@ -514,37 +514,37 @@ expression type_pruner::operator()(predicate const& p) {
   return p;
 }
 
-event_evaluator::event_evaluator(event const& e) : event_{e} {
+event_evaluator::event_evaluator(const event& e) : event_{e} {
 }
 
 bool event_evaluator::operator()(none) {
   return false;
 }
 
-bool event_evaluator::operator()(conjunction const& c) {
+bool event_evaluator::operator()(const conjunction& c) {
   for (auto& op : c)
     if (!visit(*this, op))
       return false;
   return true;
 }
 
-bool event_evaluator::operator()(disjunction const& d) {
+bool event_evaluator::operator()(const disjunction& d) {
   for (auto& op : d)
     if (visit(*this, op))
       return true;
   return false;
 }
 
-bool event_evaluator::operator()(negation const& n) {
+bool event_evaluator::operator()(const negation& n) {
   return !visit(*this, n.expr());
 }
 
-bool event_evaluator::operator()(predicate const& p) {
+bool event_evaluator::operator()(const predicate& p) {
   op_ = p.op;
   return visit(*this, p.lhs, p.rhs);
 }
 
-bool event_evaluator::operator()(attribute_extractor const& e, data const& d) {
+bool event_evaluator::operator()(const attribute_extractor& e, const data& d) {
   // FIXME: perform a transformation on the AST that replaces the attribute
   // with the corresponding function object.
   if (e.attr == "type")
@@ -554,15 +554,15 @@ bool event_evaluator::operator()(attribute_extractor const& e, data const& d) {
   return false;
 }
 
-bool event_evaluator::operator()(type_extractor const&, data const&) {
+bool event_evaluator::operator()(const type_extractor&, const data&) {
   die("type extractor should have been resolved at this point");
 }
 
-bool event_evaluator::operator()(key_extractor const&, data const&) {
+bool event_evaluator::operator()(const key_extractor&, const data&) {
   die("key extractor should have been resolved at this point");
 }
 
-bool event_evaluator::operator()(data_extractor const& e, data const& d) {
+bool event_evaluator::operator()(const data_extractor& e, const data& d) {
   if (e.type != event_.type())
     return false;
   if (e.offset.empty())
@@ -579,35 +579,35 @@ bool matcher::operator()(none) {
   return false;
 }
 
-bool matcher::operator()(conjunction const& c) {
+bool matcher::operator()(const conjunction& c) {
   for (auto& op : c)
     if (!visit(*this, op))
       return false;
   return true;
 }
 
-bool matcher::operator()(disjunction const& d) {
+bool matcher::operator()(const disjunction& d) {
   for (auto& op : d)
     if (visit(*this, op))
       return true;
   return false;
 }
 
-bool matcher::operator()(negation const& n) {
+bool matcher::operator()(const negation& n) {
   return visit(*this, n.expr());
 }
 
-bool matcher::operator()(predicate const& p) {
+bool matcher::operator()(const predicate& p) {
   return visit(*this, p.lhs, p.rhs);
 }
 
-bool matcher::operator()(attribute_extractor const& e, const data& d) {
+bool matcher::operator()(const attribute_extractor& e, const data& d) {
   if (e.attr == "type")
     return type_.name() == get<std::string>(d);
   return e.attr == "time"; // Every event has a timestamp.
 }
 
-bool matcher::operator()(data_extractor const&, data const&) {
+bool matcher::operator()(const data_extractor&, const data&) {
   // If we encounter a data_extractor, it must have been created through a
   // previous invocation of a type_resolver visitation. The presence of
   // data_extractor indicates that the expression matches.

@@ -22,13 +22,13 @@
 namespace vast {
 
 template <typename Iterator, typename T, typename... Args>
-auto parse(Iterator& f, Iterator const& l, T& x, Args&&... args)
+auto parse(Iterator& f, const Iterator& l, T& x, Args&&... args)
   -> std::enable_if_t<has_parser<T>::value, bool> {
   return make_parser<T>{std::forward<Args>(args)...}(f, l, x);
 }
 
 template <typename Iterator, typename T, typename... Args>
-auto parse(Iterator& f, Iterator const& l, T& x, Args&&... args)
+auto parse(Iterator& f, const Iterator& l, T& x, Args&&... args)
   -> std::enable_if_t<!has_parser<T>::value && has_access_parser<T>::value,
                       bool> {
   return access::parser<T>{std::forward<Args>(args)...}(f, l, x);
@@ -37,19 +37,19 @@ auto parse(Iterator& f, Iterator const& l, T& x, Args&&... args)
 namespace detail {
 
 template <typename Iterator, typename T>
-bool conjunctive_parse(Iterator& f, Iterator const& l, T& x) {
+bool conjunctive_parse(Iterator& f, const Iterator& l, T& x) {
   return parse(f, l, x);
 }
 
 template <typename Iterator, typename T, typename... Ts>
-bool conjunctive_parse(Iterator& f, Iterator const& l, T& x, Ts&... xs) {
+bool conjunctive_parse(Iterator& f, const Iterator& l, T& x, Ts&... xs) {
   return conjunctive_parse(f, l, x) && conjunctive_parse(f, l, xs...);
 }
 
 } // namespace detail
 
 template <typename Iterator, typename T>
-auto parse(Iterator& f, Iterator const& l, T& x)
+auto parse(Iterator& f, const Iterator& l, T& x)
   -> std::enable_if_t<!has_parser<T>::value && has_access_state<T>::value,
                       bool> {
   bool r;
@@ -62,7 +62,7 @@ namespace detail {
 
 struct is_parseable {
   template <typename I, typename T>
-  static auto test(I* f, I const* l, T* x)
+  static auto test(I* f, const I* l, T* x)
     -> decltype(parse(*f, *l, *x), std::true_type());
 
   template <typename, typename>

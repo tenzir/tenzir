@@ -35,9 +35,9 @@ class range_map {
 
 public:
   struct entry {
-    Point const& left;
-    Point const& right;
-    Value const& value;
+    const Point& left;
+    const Point& right;
+    const Value& value;
   };
 
   class const_iterator
@@ -202,7 +202,7 @@ public:
   /// @param p The point to lookup.
   /// @returns A pointer to the value associated with the half-open interval
   ///          *[a,b)* if *a <= p < b* and `nullptr` otherwise.
-  Value const* lookup(Point const& p) const {
+  const Value* lookup(const Point& p) const {
     auto i = locate(p, map_.lower_bound(p));
     return i != map_.end() ? &i->second.second : nullptr;
   }
@@ -214,9 +214,9 @@ public:
   ///          and `nullptr` otherwise. If the last component points to a
   ///          valid value, then the first two represent *[a,b)* and *[0,0)*
   ///          otherwise.
-  std::tuple<Point, Point, Value const*> find(Point const& p) const {
+  std::tuple<Point, Point, const Value*> find(const Point& p) const {
     // GCC 4.9 still has an explicit tuple ctor.
-    using tuple_type = std::tuple<Point, Point, Value const*>;
+    using tuple_type = std::tuple<Point, Point, const Value*>;
     auto i = locate(p, map_.lower_bound(p));
     if (i == map_.end())
       return tuple_type{0, 0, nullptr};
@@ -263,14 +263,14 @@ private:
   }
 
   // Finds the interval of a point.
-  map_const_iterator locate(Point const& p, map_const_iterator lb) const {
+  map_const_iterator locate(const Point& p, map_const_iterator lb) const {
     if ((lb != map_.end() && p == left(lb))
         || (lb != map_.begin() && p < right(--lb)))
       return lb;
     return map_.end();
   }
 
-  map_iterator locate(Point const& p, map_iterator lb) {
+  map_iterator locate(const Point& p, map_iterator lb) {
     if ((lb != map_.end() && p == left(lb))
         || (lb != map_.begin() && p < right(--lb)))
       return lb;

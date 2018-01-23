@@ -27,7 +27,7 @@ struct schema_parser : parser<schema_parser> {
   using attribute = schema;
 
   template <typename Iterator>
-  bool parse(Iterator& f, Iterator const& l, schema& sch) const {
+  bool parse(Iterator& f, const Iterator& l, schema& sch) const {
     type_table symbols;
     auto to_type = [&](std::tuple<std::string, type> t) -> type {
       auto& name = std::get<0>(t);

@@ -26,10 +26,10 @@ template <typename T>
 struct std_vector_printer : printer<std_vector_printer<T>> {
   using attribute = std::vector<T>;
 
-  std_vector_printer(std::string const& delim = ", ") : delim_{delim} {}
+  std_vector_printer(const std::string& delim = ", ") : delim_{delim} {}
 
   template <typename Iterator>
-  bool print(Iterator& out, attribute const& a) const {
+  bool print(Iterator& out, const attribute& a) const {
     return detail::print_delimited(a.begin(), a.end(), out, delim_);
   }
 

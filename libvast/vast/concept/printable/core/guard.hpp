@@ -37,13 +37,13 @@ public:
   }
 
   template <typename Iterator, typename Attribute, typename G = Guard>
-  auto print(Iterator& out, Attribute const& a) const
+  auto print(Iterator& out, const Attribute& a) const
   -> std::enable_if_t<detail::guard_traits<G>::no_args_returns_bool, bool> {
     return guard_() && printer_.print(out, a);
   }
 
   template <typename Iterator, typename Attribute, typename G = Guard>
-  auto print(Iterator& out, Attribute const& a) const
+  auto print(Iterator& out, const Attribute& a) const
   -> std::enable_if_t<detail::guard_traits<G>::one_arg_returns_bool, bool> {
     return guard_(a) && printer_.print(out, a);
   }

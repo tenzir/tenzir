@@ -977,7 +977,7 @@ behavior consensus(stateful_actor<server_state>* self, path dir) {
       //                     "not enough commited entries to snapshot");
       return save_snapshot(self, index, snapshot);
     },
-    [=](peer_atom, actor const& peer, server_id peer_id) {
+    [=](peer_atom, const actor& peer, server_id peer_id) {
       VAST_DEBUG(role(self), "re-activates peer", peer_id);
       VAST_ASSERT(peer_id != 0);
       auto i = std::find_if(self->state.peers.begin(),
@@ -1070,7 +1070,7 @@ behavior consensus(stateful_actor<server_state>* self, path dir) {
     [=](seed_atom, uint64_t value) {
       self->state.prng.seed(value);
     },
-    [=](peer_atom, actor const& peer, server_id peer_id) {
+    [=](peer_atom, const actor& peer, server_id peer_id) {
       VAST_ASSERT(peer_id != 0);
       VAST_DEBUG(role(self), "adds new peer", peer_id);
       if (peer_id == self->state.id) {

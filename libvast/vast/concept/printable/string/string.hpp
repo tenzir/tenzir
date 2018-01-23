@@ -36,7 +36,7 @@ struct string_printer : printer<string_printer> {
   }
 
   template <typename Iterator>
-  static bool print_string(Iterator& out, char const* str) {
+  static bool print_string(Iterator& out, const char* str) {
     while (*str != '\0')
       if (!printers::any.print(out, *str++))
         return false;
@@ -44,7 +44,7 @@ struct string_printer : printer<string_printer> {
   }
 
   template <typename Iterator>
-  static bool print_string(Iterator& out, std::string const& str) {
+  static bool print_string(Iterator& out, const std::string& str) {
     return print_string(out, str.begin(), str.end());
   }
 
@@ -54,7 +54,7 @@ struct string_printer : printer<string_printer> {
   }
 
   template <typename Iterator, typename Attribute>
-  bool print(Iterator& out, Attribute const& str) const {
+  bool print(Iterator& out, const Attribute& str) const {
     return print_string(out, str);
   }
 };
@@ -70,7 +70,7 @@ struct printer_registry<char[N]> {
 };
 
 template <>
-struct printer_registry<char const*> {
+struct printer_registry<const char*> {
   using type = string_printer;
 };
 

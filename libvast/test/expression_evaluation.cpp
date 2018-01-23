@@ -58,8 +58,8 @@ struct fixture {
   }
 
   schema sch;
-  type const* foo;
-  type const* bar;
+  const type* foo;
+  const type* bar;
   event e;
   event e0;
   event e1;

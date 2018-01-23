@@ -52,7 +52,7 @@ public:
   class reference;
   using const_reference = bool;
   using pointer = reference*;
-  using const_pointer = bool const*;
+  using const_pointer = const bool*;
   using iterator = detail::bitvector_iterator<bitvector>;
   using const_iterator = detail::bitvector_iterator<bitvector const>;
   using reverse_iterator = std::reverse_iterator<iterator>;
@@ -79,7 +79,7 @@ public:
 
   ~bitvector() = default;
 
-  bitvector& operator=(bitvector const&) = default;
+  bitvector& operator=(const bitvector&) = default;
   bitvector& operator=(bitvector&&) = default;
   bitvector& operator=(std::initializer_list<value_type>);
 
@@ -156,10 +156,10 @@ public:
   // -- relational operators --------------------------------------------------
 
   template <class B, class A>
-  friend bool operator==(bitvector<B, A> const& x, bitvector<B, A> const& y);
+  friend bool operator==(const bitvector<B, A>& x, const bitvector<B, A>& y);
 
   template <class B, class A>
-  friend bool operator<(bitvector<B, A> const& x, bitvector<B, A> const& y);
+  friend bool operator<(const bitvector<B, A>& x, const bitvector<B, A>& y);
 
   // -------------------------------------------------------------------------
   // -- non-standard extensions ----------------------------------------------
@@ -173,7 +173,7 @@ public:
   static constexpr auto npos = word_type::npos;
 
   /// Retrieves the underlying sequence of blocks.
-  block_vector const& blocks() const noexcept;
+  const block_vector& blocks() const noexcept;
 
   /// Appends a single block or a prefix of a block.
   /// @param x The block value.
@@ -233,7 +233,7 @@ public:
     return *this;
   }
 
-  reference& operator=(reference const& other) noexcept {
+  reference& operator=(const reference& other) noexcept {
     other ? *block_ |= mask_ : *block_ &= ~mask_;
   }
 
@@ -353,7 +353,7 @@ private:
     : bitvector_{&bv}, i_{off} {
   }
 
-  bool equals(bitvector_iterator const& other) const {
+  bool equals(const bitvector_iterator& other) const {
     return i_ == other.i_;
   }
 
@@ -371,7 +371,7 @@ private:
     i_ += n;
   }
 
-  auto distance_to(bitvector_iterator const& other) const {
+  auto distance_to(const bitvector_iterator& other) const {
     return other.i_ - i_;
   }
 
@@ -631,8 +631,8 @@ void bitvector<Block, Allocator>::clear() noexcept {
 }
 
 template <class Block, class Allocator>
-bool operator==(bitvector<Block, Allocator> const& x,
-                bitvector<Block, Allocator> const& y) {
+bool operator==(const bitvector<Block, Allocator>& x,
+                const bitvector<Block, Allocator>& y) {
   if (x.size_ != y.size_)
     return false;
   // Compare all but last block.
@@ -654,7 +654,7 @@ bool operator==(bitvector<Block, Allocator> const& x,
 }
 
 template <class Block, class Allocator>
-typename bitvector<Block, Allocator>::block_vector const&
+const typename bitvector<Block, Allocator>::block_vector&
 bitvector<Block, Allocator>::blocks() const noexcept{
   return blocks_;
 }
@@ -698,7 +698,7 @@ void bitvector<Block, Allocator>::append_blocks(InputIterator first,
 
 template <bool Bit = true, class Block, class Allocator>
 typename bitvector<Block, Allocator>::size_type
-rank(bitvector<Block, Allocator> const& bv) {
+rank(const bitvector<Block, Allocator>& bv) {
   using word_type = typename bitvector<Block, Allocator>::word_type;
   using size_type = typename bitvector<Block, Allocator>::size_type;
   auto result = size_type{0};

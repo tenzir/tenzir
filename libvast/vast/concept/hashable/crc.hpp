@@ -29,7 +29,7 @@ public:
 
   crc32(uint32_t seed = 0);
 
-  void operator()(void const* x, size_t n);
+  void operator()(const void* x, size_t n);
 
   operator result_type() const;
 

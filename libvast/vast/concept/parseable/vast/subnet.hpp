@@ -34,13 +34,13 @@ struct access::parser<subnet> : vast::parser<access::parser<subnet>> {
   }
 
   template <typename Iterator>
-  bool parse(Iterator& f, Iterator const& l, unused_type) const {
+  bool parse(Iterator& f, const Iterator& l, unused_type) const {
     static auto p = make();
     return p(f, l, unused);
   }
 
   template <typename Iterator>
-  bool parse(Iterator& f, Iterator const& l, subnet& a) const {
+  bool parse(Iterator& f, const Iterator& l, subnet& a) const {
     static auto p = make();
     if (!p(f, l, a.network_, a.length_))
       return false;

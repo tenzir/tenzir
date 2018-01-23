@@ -98,11 +98,11 @@ void uuid::swap(uuid& other) {
   std::swap_ranges(begin(), end(), other.begin());
 }
 
-bool operator==(uuid const& x, uuid const& y) {
+bool operator==(const uuid& x, const uuid& y) {
   return std::equal(x.begin(), x.end(), y.begin());
 }
 
-bool operator<(uuid const& x, uuid const& y) {
+bool operator<(const uuid& x, const uuid& y) {
   return std::lexicographical_compare(x.begin(), x.end(), y.begin(), y.end());
 }
 

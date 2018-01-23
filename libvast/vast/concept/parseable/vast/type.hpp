@@ -36,7 +36,7 @@ public:
       add(pair.first, pair.second);
   }
 
-  bool add(std::string const& name, type t) {
+  bool add(const std::string& name, type t) {
     if (name.empty() || name != t.name())
       return false;
     t.name(name);
@@ -45,7 +45,7 @@ public:
   }
 
   template <typename Iterator, typename Attribute>
-  bool parse(Iterator& f, Iterator const& l, Attribute& a) const {
+  bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
     return symbols_(f, l, a);
   }
 
@@ -57,7 +57,7 @@ private:
 struct type_parser : parser<type_parser> {
   using attribute = type;
 
-  type_parser(type_table const* symbols = nullptr)
+  type_parser(const type_table* symbols = nullptr)
     : symbol_type{symbols} {
   }
 
@@ -69,7 +69,7 @@ struct type_parser : parser<type_parser> {
   };
 
   template <typename Iterator, typename Attribute>
-  bool parse(Iterator& f, Iterator const& l, Attribute& a) const {
+  bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
     // Whitespace
     static auto ws = ignore(*parsers::space);
     // Attributes: type meta data
@@ -187,7 +187,7 @@ struct type_parser : parser<type_parser> {
     return type_type(f, l, a);
   }
 
-  type_table const* symbol_type;
+  const type_table* symbol_type;
 };
 
 template <>

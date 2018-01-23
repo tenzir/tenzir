@@ -48,7 +48,7 @@ expected<void> load(Source&& in, Ts&&... xs) {
         caf::stream_deserializer<detail::compressedbuf&> s{compressed};
         detail::read(s, std::forward<Ts>(xs)...);
       }
-    } catch (std::exception const& e) {
+    } catch (const std::exception& e) {
       return make_error(ec::unspecified, e.what());
     }
     return {};

@@ -49,7 +49,7 @@ TEST(indexer) {
     error_handler()
   );
   CHECK_EQUAL(rank(result), 53u);
-  auto check_uid = [](event const& e, std::string const& uid) {
+  auto check_uid = [](const event& e, const std::string& uid) {
     auto& v = get<vector>(e.data());
     return v[1] == uid;
   };

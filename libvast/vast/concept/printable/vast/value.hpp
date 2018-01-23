@@ -23,7 +23,7 @@ struct value_printer : printer<value_printer> {
   using attribute = value;
 
   template <typename Iterator>
-  bool print(Iterator& out, value const& v) const {
+  bool print(Iterator& out, const value& v) const {
     static auto const p = make_printer<data>{};
     return p.print(out, v.data());
   }

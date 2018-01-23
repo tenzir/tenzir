@@ -32,12 +32,12 @@ public:
   }
 
   template <typename Iterator>
-  bool parse(Iterator& f, Iterator const& l, unused_type) const {
+  bool parse(Iterator& f, const Iterator& l, unused_type) const {
     return parser_(f, l, unused);
   }
 
   template <typename Iterator, typename Attribute>
-  bool parse(Iterator& f, Iterator const& l, Attribute& a) const {
+  bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
     attribute attr;
     if (!(parser_(f, l, attr) && guard_(attr)))
       return false;

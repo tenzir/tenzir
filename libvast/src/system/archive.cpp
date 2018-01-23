@@ -51,7 +51,7 @@ void segment::add(batch&& b) {
 // M is the number of batches and N the size of the bitmap. Conceptually,
 // there's a straight-forward O(log M * N) or even O(N) algorithm by walking
 // through the query bitmap in lock-step with the batches.
-expected<std::vector<event>> segment::extract(bitmap const& bm) const {
+expected<std::vector<event>> segment::extract(const bitmap& bm) const {
   std::vector<event> result;
   auto min = select(bm, 1);
   auto max = select(bm, -1);
@@ -73,11 +73,11 @@ expected<std::vector<event>> segment::extract(bitmap const& bm) const {
   return result;
 }
 
-uuid const& segment::id() const {
+const uuid& segment::id() const {
   return id_;
 }
 
-uint64_t bytes(segment const& s) {
+uint64_t bytes(const segment& s) {
   return s.bytes_;
 }
 
@@ -159,7 +159,7 @@ archive(archive_type::stateful_pointer<archive_state> self,
     self->state.accountant = actor_cast<accountant_type>(acc);
   }
   return {
-    [=](std::vector<event> const& events) {
+    [=](const std::vector<event>& events) {
       VAST_ASSERT(!events.empty());
       // Ensure that all events have strictly monotonic IDs
       auto non_monotonic = [](auto& x, auto& y) {
@@ -221,14 +221,14 @@ archive(archive_type::stateful_pointer<archive_state> self,
       }
       return rp;
     },
-    [=](bitmap const& bm) -> lookup_promise {
+    [=](const bitmap& bm) -> lookup_promise {
       VAST_ASSERT(rank(bm) > 0);
       VAST_DEBUG(self, "got query for", rank(bm), "events in range ["
                  << select(bm, 1) << ',' << (select(bm, -1) + 1) << ')');
       auto rp = self->make_response_promise<lookup_promise>();
       // Collect candidate segments by seeking through the query bitmap and
       // probing each ID interval.
-      std::vector<uuid const*> candidates;
+      std::vector<const uuid*> candidates;
       auto ones = select(bm);
       auto i = self->state.segments.begin();
       auto end = self->state.segments.end();

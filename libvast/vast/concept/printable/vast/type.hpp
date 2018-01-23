@@ -35,7 +35,7 @@ struct enumeration_type_printer : printer<enumeration_type_printer> {
   using attribute = enumeration_type;
 
   template <typename Iterator>
-  bool print(Iterator& out, enumeration_type const& e) const {
+  bool print(Iterator& out, const enumeration_type& e) const {
     using namespace printers;
     auto p = "enum {"_P << (str % ", ") << '}';
     auto a = detail::make_attr_printer(e);
@@ -53,7 +53,7 @@ struct printer_registry<enumeration_type> {
     using attribute = TYPE;                                                    \
                                                                                \
     template <typename Iterator>                                               \
-    bool print(Iterator& out, TYPE const& t) const {                           \
+    bool print(Iterator& out, const TYPE& t) const {                           \
       using namespace printers;                                                \
       auto p = DESC##_P << detail::make_attr_printer(t);                       \
       return p.print(out, t.attributes());                                     \
@@ -85,7 +85,7 @@ VAST_DEFINE_BASIC_TYPE_PRINTER(port_type, "port")
     using attribute = TYPE;                                                    \
                                                                                \
     template <typename Iterator>                                               \
-    bool print(Iterator& out, TYPE const&) const;                              \
+    bool print(Iterator& out, const TYPE&) const;                              \
   };                                                                           \
                                                                                \
   template <>                                                                  \
@@ -123,7 +123,7 @@ struct type_printer : printer<type_printer<Policy>> {
   static_assert(show_name || show_type, "must show something");
 
   template <typename Iterator>
-  bool print(Iterator& out, type const& t) const {
+  bool print(Iterator& out, const type& t) const {
     if (show_name && !t.name().empty()) {
       auto guard = printers::eps.with([] { return show_type; });
       auto p = (printers::str << ~(&guard << " = "));
@@ -170,21 +170,21 @@ struct printer_registry<type> {
 // -- implementation of recursive type printers ------------------------------
 
 template <typename Iterator>
-bool vector_type_printer::print(Iterator& out, vector_type const& t) const {
+bool vector_type_printer::print(Iterator& out, const vector_type& t) const {
   auto p = "vector<" << type_printer<policy::name_only>{} << '>';
   auto a = detail::make_attr_printer(t);
   return (p << a)(out, t.value_type, t.attributes());
 }
 
 template <typename Iterator>
-bool set_type_printer::print(Iterator& out, set_type const& t) const {
+bool set_type_printer::print(Iterator& out, const set_type& t) const {
   auto p = "set<" << type_printer<policy::name_only>{} << '>';
   auto a = detail::make_attr_printer(t);
   return (p << a)(out, t.value_type, t.attributes());
 }
 
 template <typename Iterator>
-bool table_type_printer::print(Iterator& out, table_type const& t) const {
+bool table_type_printer::print(Iterator& out, const table_type& t) const {
   using namespace printers;
   auto p =  "table<"
          << type_printer<policy::name_only>{}
@@ -199,7 +199,7 @@ struct record_field_printer : printer<record_field_printer> {
   using attribute = record_field;
 
   template <typename Iterator>
-  bool print(Iterator& out, record_field const& f) const {
+  bool print(Iterator& out, const record_field& f) const {
     auto p = printers::str << ": " << type_printer<policy::name_only>{};
     return p(out, f.name, f.type);
   }
@@ -211,14 +211,14 @@ struct printer_registry<record_field> {
 };
 
 template <typename Iterator>
-bool record_type_printer::print(Iterator& out, record_type const& t) const {
+bool record_type_printer::print(Iterator& out, const record_type& t) const {
   auto p = "record{"_P << (record_field_printer{} % ", ") << '}';
   auto a = detail::make_attr_printer(t);
   return (p << a)(out, t.fields, t.attributes());
 }
 
 template <typename Iterator>
-bool alias_type_printer::print(Iterator& out, alias_type const& t) const {
+bool alias_type_printer::print(Iterator& out, const alias_type& t) const {
   auto p = type_printer<policy::name_only>{};
   auto a = detail::make_attr_printer(t);
   return (p << a)(out, t.value_type, t.attributes());

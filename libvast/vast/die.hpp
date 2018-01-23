@@ -20,7 +20,7 @@ namespace vast {
 
 /// Terminates the process immediately.
 /// @param msg The message to print before terminating.
-[[noreturn]] void die(std::string const& = "");
+[[noreturn]] void die(const std::string& = "");
 
 } // namespace vast
 

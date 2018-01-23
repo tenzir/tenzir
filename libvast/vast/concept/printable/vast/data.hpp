@@ -39,7 +39,7 @@ struct data_printer : printer<data_printer> {
     }
 
     template <typename T>
-    bool operator()(T const& x) const {
+    bool operator()(const T& x) const {
       return make_printer<T>{}(out_, x);
     }
 
@@ -47,10 +47,10 @@ struct data_printer : printer<data_printer> {
       return printers::integral<integer, policy::force_sign>(out_, x);
     }
 
-    bool operator()(std::string const& str) const {
+    bool operator()(const std::string& str) const {
       // TODO: create a printer that escapes the output on the fly, as opposed
       // to going through an extra copy.
-      auto escaped = printers::str ->* [](std::string const& x) {
+      auto escaped = printers::str ->* [](const std::string& x) {
         return detail::byte_escape(x, "\"");
       };
       auto p = '"' << escaped << '"';
@@ -61,7 +61,7 @@ struct data_printer : printer<data_printer> {
   };
 
   template <typename Iterator>
-  bool print(Iterator& out, data const& d) const {
+  bool print(Iterator& out, const data& d) const {
     return visit(visitor<Iterator>{out}, d);
   }
 };
@@ -79,7 +79,7 @@ struct vector_printer : printer<vector_printer> {
   using attribute = vector;
 
   template <typename Iterator>
-  bool print(Iterator& out, vector const& v) const {
+  bool print(Iterator& out, const vector& v) const {
     auto p = '[' << ~(data_printer{} % ", ") << ']';
     return p.print(out, v);
   }
@@ -94,7 +94,7 @@ struct set_printer : printer<set_printer> {
   using attribute = set;
 
   template <typename Iterator>
-  bool print(Iterator& out, set const& s) const {
+  bool print(Iterator& out, const set& s) const {
     auto p = '{' << ~(data_printer{} % ", ") << '}';
     return p.print(out, s);
   }
@@ -109,7 +109,7 @@ struct table_printer : printer<table_printer> {
   using attribute = table;
 
   template <typename Iterator>
-  bool print(Iterator& out, table const& t) const {
+  bool print(Iterator& out, const table& t) const {
     auto pair = (data_printer{} << " -> " << data_printer{});
     auto p = '{' << ~(pair % ", ") << '}';
     return p.print(out, t);

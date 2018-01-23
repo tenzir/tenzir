@@ -73,7 +73,7 @@ expected<void> write_state(stateful_actor<importer_state>* self) {
 // Generates the default EXIT handler that saves states and shuts down internal
 // components.
 auto shutdown(stateful_actor<importer_state>* self) {
-  return [=](exit_msg const& msg) {
+  return [=](const exit_msg& msg) {
     write_state(self);
     self->anon_send(self->state.archive, sys_atom::value, delete_atom::value);
     self->anon_send(self->state.index, sys_atom::value, delete_atom::value);
@@ -164,24 +164,24 @@ behavior importer(stateful_actor<importer_state>* self, path dir,
   self->set_default_handler(skip);
   self->set_exit_handler(shutdown(self));
   self->set_down_handler(
-    [=](down_msg const& msg) {
+    [=](const down_msg& msg) {
       if (msg.source == self->state.meta_store)
         self->state.meta_store = meta_store_type{};
     }
   );
   return {
-    [=](meta_store_type const& ms) {
+    [=](const meta_store_type& ms) {
       VAST_DEBUG(self, "registers meta store");
       VAST_ASSERT(ms != self->state.meta_store);
       self->monitor(ms);
       self->state.meta_store = ms;
     },
-    [=](archive_type const& archive) {
+    [=](const archive_type& archive) {
       VAST_DEBUG(self, "registers archive", archive);
       self->send(self->state.archive, sys_atom::value, put_atom::value,
                  actor_cast<actor>(archive));
     },
-    [=](index_atom, actor const& index) {
+    [=](index_atom, const actor& index) {
       VAST_DEBUG(self, "registers index", index);
       self->send(self->state.index, sys_atom::value, put_atom::value, index);
     },

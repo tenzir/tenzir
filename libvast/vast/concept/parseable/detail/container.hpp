@@ -63,13 +63,13 @@ struct container {
   }
 
   template <typename Parser, typename Iterator>
-  static bool parse(Parser const& p, Iterator& f, Iterator const& l,
+  static bool parse(const Parser& p, Iterator& f, const Iterator& l,
                     unused_type) {
     return p(f, l, unused);
   }
 
   template <typename Parser, typename Iterator, typename Attribute>
-  static bool parse(Parser const& p, Iterator& f, Iterator const& l,
+  static bool parse(const Parser& p, Iterator& f, const Iterator& l,
                     Attribute& a) {
     if constexpr (!is_pair<typename Attribute::value_type>::value) {
       value_type x;

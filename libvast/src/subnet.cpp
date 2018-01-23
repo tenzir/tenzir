@@ -31,15 +31,15 @@ subnet::subnet(address addr, uint8_t length)
   }
 }
 
-bool subnet::contains(address const& addr) const {
+bool subnet::contains(const address& addr) const {
   return addr.compare(network_, length_);
 }
 
-bool subnet::contains(subnet const& other) const {
+bool subnet::contains(const subnet& other) const {
   return length_ <= other.length_ && contains(other.network_);
 }
 
-address const& subnet::network() const {
+const address& subnet::network() const {
   return network_;
 }
 
@@ -59,15 +59,15 @@ bool subnet::initialize() {
   return true;
 }
 
-bool operator==(subnet const& x, subnet const& y) {
+bool operator==(const subnet& x, const subnet& y) {
   return x.network_ == y.network_ && x.length_ == y.length_;
 }
 
-bool operator<(subnet const& x, subnet const& y) {
+bool operator<(const subnet& x, const subnet& y) {
   return std::tie(x.network_, x.length_) < std::tie(y.network_, y.length_);
 }
 
-bool convert(subnet const& sn, json& j) {
+bool convert(const subnet& sn, json& j) {
   j = to_string(sn);
   return true;
 }

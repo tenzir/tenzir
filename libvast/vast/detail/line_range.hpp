@@ -27,7 +27,7 @@ class line_range : range_facade<line_range> {
 public:
   line_range(std::istream& input);
 
-  std::string const& get() const;
+  const std::string& get() const;
 
   void next();
 

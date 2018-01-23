@@ -47,7 +47,7 @@ struct printer {
 
   // FIXME: don't ignore ADL.
   template <typename Range, typename Attribute = unused_type>
-  auto operator()(Range&& r, Attribute const& a = unused) const
+  auto operator()(Range&& r, const Attribute& a = unused) const
   -> decltype(std::begin(r), std::end(r), bool()) {
     auto out = std::back_inserter(r);
     return derived().print(out, a);
@@ -55,26 +55,26 @@ struct printer {
 
   // FIXME: don't ignore ADL.
   template <typename Range, typename A0, typename A1, typename... As>
-  auto operator()(Range&& r, A0 const& a0, A1 const& a1, As const&... as) const
+  auto operator()(Range&& r, const A0& a0, const A1& a1, const As&... as) const
   -> decltype(std::begin(r), std::end(r), bool()) {
     return operator()(r, std::tie(a0, a1, as...));
   }
 
   template <typename Iterator, typename Attribute = unused_type>
-  auto operator()(Iterator&& out, Attribute const& a = unused) const
+  auto operator()(Iterator&& out, const Attribute& a = unused) const
   -> decltype(*out, ++out, bool()) {
     return derived().print(out, a);
   }
 
   template <typename Iterator, typename A0, typename A1, typename... As>
-  auto operator()(Iterator&& out, A0 const& a0, A1 const& a1, As const&... as) const
+  auto operator()(Iterator&& out, const A0& a0, const A1& a1, const As&... as) const
   -> decltype(*out, ++out, bool()) {
     return operator()(out, std::tie(a0, a1, as...));
   }
 
 private:
-  Derived const& derived() const {
-    return static_cast<Derived const&>(*this);
+  const Derived& derived() const {
+    return static_cast<const Derived&>(*this);
   }
 };
 

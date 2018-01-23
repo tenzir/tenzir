@@ -21,7 +21,7 @@ line_range::line_range(std::istream& input) : input_{input} {
   next(); // prime the pump
 }
 
-std::string const& line_range::get() const {
+const std::string& line_range::get() const {
   return line_;
 }
 

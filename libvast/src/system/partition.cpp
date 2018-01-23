@@ -90,7 +90,7 @@ struct bitmap_evaluator {
     return {};
   }
 
-  bitmap operator()(conjunction const& c) const {
+  bitmap operator()(const conjunction& c) const {
     auto bm = visit(*this, c[0]);
     if (bm.empty() || all<0>(bm))
       return {};
@@ -102,7 +102,7 @@ struct bitmap_evaluator {
     return bm;
   }
 
-  bitmap operator()(disjunction const& d) const {
+  bitmap operator()(const disjunction& d) const {
     bitmap bm;
     for (auto& op : d) {
       bm |= visit(*this, op);
@@ -112,13 +112,13 @@ struct bitmap_evaluator {
     return bm;
   }
 
-  bitmap operator()(negation const& n) const {
+  bitmap operator()(const negation& n) const {
     auto bm = visit(*this, n.expr());
     bm.flip();
     return bm;
   }
 
-  bitmap operator()(predicate const& pred) const {
+  bitmap operator()(const predicate& pred) const {
     auto i = bitmaps.find(pred);
     return i != bitmaps.end() ? i->second : bitmap{};
   }
@@ -183,7 +183,7 @@ behavior partition(stateful_actor<partition_state>* self, path dir) {
       self->state.indexers.emplace(x.second, actor{});
   }
   return {
-    [=](std::vector<event> const& events) {
+    [=](const std::vector<event>& events) {
       VAST_ASSERT(!events.empty());
       VAST_DEBUG(self, "got", events.size(), "events");
       // Locate relevant indexers.
@@ -201,7 +201,7 @@ behavior partition(stateful_actor<partition_state>* self, path dir) {
       for (auto& indexer : indexers)
         self->send(indexer, msg);
     },
-    [=](expression const& expr) {
+    [=](const expression& expr) {
       VAST_DEBUG(self, "got expression:", expr);
       auto start = steady_clock::now();
       auto rp = self->make_response_promise<bitmap>();

@@ -29,7 +29,7 @@
 namespace vast {
 namespace detail {
 
-int uds_listen(std::string const& path) {
+int uds_listen(const std::string& path) {
   int fd;
   if ((fd = ::socket(AF_UNIX, SOCK_STREAM, 0)) < 0)
     return fd;
@@ -57,7 +57,7 @@ int uds_accept(int socket) {
   return fd;
 }
 
-int uds_connect(std::string const& path) {
+int uds_connect(const std::string& path) {
   int fd;
   if ((fd = ::socket(AF_UNIX, SOCK_STREAM, 0)) < 0)
     return fd;
@@ -131,18 +131,18 @@ int uds_recv_fd(int socket) {
 }
 
 VAST_DIAGNOSTIC_POP
-int unix_domain_socket::listen(std::string const& path) {
+int unix_domain_socket::listen(const std::string& path) {
   return detail::uds_listen(path);
 }
 
-unix_domain_socket unix_domain_socket::accept(std::string const& path) {
+unix_domain_socket unix_domain_socket::accept(const std::string& path) {
   auto server = detail::uds_listen(path);
   if (server != -1)
     return unix_domain_socket{detail::uds_accept(server)};
   return unix_domain_socket{};
 }
 
-unix_domain_socket unix_domain_socket::connect(std::string const& path) {
+unix_domain_socket unix_domain_socket::connect(const std::string& path) {
   return unix_domain_socket{detail::uds_connect(path)};
 }
 
@@ -225,9 +225,9 @@ bool read(int fd, void* buffer, size_t bytes, size_t* got) {
   return true;
 }
 
-bool write(int fd, void const* buffer, size_t bytes, size_t* put) {
+bool write(int fd, const void* buffer, size_t bytes, size_t* put) {
   auto total = size_t{0};
-  auto buf = reinterpret_cast<uint8_t const*>(buffer);
+  auto buf = reinterpret_cast<const uint8_t*>(buffer);
   while (total < bytes) {
     ssize_t written;
     do {

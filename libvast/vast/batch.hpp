@@ -75,7 +75,7 @@ public:
   }
 
   // TODO: make this a generic concept that leverages the inspection API.
-  friend uint64_t bytes(batch const&);
+  friend uint64_t bytes(const batch&);
 
 private:
   compression method_;
@@ -94,7 +94,7 @@ public:
 
   /// Writes an event into the batch.
   /// @param e The event to serialize.
-  bool write(event const& e);
+  bool write(const event& e);
 
   /// Constructs a batch from the accumulated events.
   batch seal();
@@ -111,7 +111,7 @@ class batch::reader {
 public:
   /// Constructs a reader from a batch.
   /// @param b The batch to extract objects from.
-  reader(batch const& b);
+  reader(const batch& b);
 
   /// Extracts all events.
   /// @returns The set events in the corresponding batch.
@@ -125,7 +125,7 @@ public:
 private:
   expected<event> materialize();
 
-  buffer_type const& data_;
+  const buffer_type& data_;
   std::unordered_map<uint32_t, type> type_cache_;
   select_range<bitmap_bit_range> id_range_;
   size_type available_;

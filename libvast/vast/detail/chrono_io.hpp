@@ -68,8 +68,8 @@ class string_literal
 public:
     using const_iterator = const CharT*;
 
-    string_literal(string_literal const&) = default;
-    string_literal& operator=(string_literal const&) = delete;
+    string_literal(const string_literal&) = default;
+    string_literal& operator=(const string_literal&) = delete;
 
     template <std::size_t N1 = 2,
               class = std::enable_if_t<N1 == N>>
@@ -94,7 +94,7 @@ public:
     }
 
     template <class CharT2, class = std::enable_if_t<!std::is_same<CharT2, CharT>{}>>
-    constexpr string_literal(string_literal<CharT2, N> const& a) noexcept
+    constexpr string_literal(const string_literal<CharT2, N>& a) noexcept
         : p_{}
     {
         for (std::size_t i = 0; i < N; ++i)
@@ -120,7 +120,7 @@ public:
     constexpr const_iterator begin() const noexcept {return p_;}
     constexpr const_iterator end()   const noexcept {return p_ + N-1;}
 
-    constexpr CharT const& operator[](std::size_t n) const noexcept
+    constexpr const CharT& operator[](std::size_t n) const noexcept
     {
         return p_[n];
     }

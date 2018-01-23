@@ -28,11 +28,11 @@ inline auto operator"" _p(char c) {
   return ignore(char_parser{c});
 }
 
-inline auto operator"" _p(char const* str) {
+inline auto operator"" _p(const char* str) {
   return ignore(string_parser{str});
 }
 
-inline auto operator"" _p(char const* str, size_t size) {
+inline auto operator"" _p(const char* str, size_t size) {
   return ignore(string_parser{{str, size}});
 }
 

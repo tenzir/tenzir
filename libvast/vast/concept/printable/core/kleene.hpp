@@ -32,7 +32,7 @@ public:
   }
 
   template <typename Iterator, typename Attribute>
-  bool print(Iterator& out, Attribute const& a) const {
+  bool print(Iterator& out, const Attribute& a) const {
     using std::begin;
     using std::end;
     auto f = begin(a);

@@ -97,12 +97,12 @@ TEST(IPv6) {
 
   uint8_t raw8[16] = {0xdf, 0x00, 0x0d, 0xb8, 0x00, 0x00, 0x00, 0x00,
                       0x02, 0x02, 0xb3, 0xff, 0xfe, 0x1e, 0x83, 0x28};
-  auto p = reinterpret_cast<uint32_t const*>(raw8);
+  auto p = reinterpret_cast<const uint32_t*>(raw8);
   address e(p, address::ipv6, address::network);
   CHECK(e == (a ^ d));
 
   uint32_t raw32[4] = {0xdf000db8, 0x00000000, 0x0202b3ff, 0xfe1e8328};
-  p = reinterpret_cast<uint32_t const*>(raw32);
+  p = reinterpret_cast<const uint32_t*>(raw32);
   address f(p, address::ipv6, address::host);
   CHECK(f == (a ^ d));
   CHECK(f == e);

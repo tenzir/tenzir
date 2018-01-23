@@ -53,7 +53,7 @@ struct integral_parser
   }
 
   template <typename Iterator, typename Attribute, typename F>
-  static auto accumulate(Iterator& f, Iterator const& l, Attribute& a, F acc) {
+  static auto accumulate(Iterator& f, const Iterator& l, Attribute& a, F acc) {
     int digits = 0;
     a = 0;
     while (f != l && isdigit(*f)) {
@@ -67,12 +67,12 @@ struct integral_parser
   }
 
   template <typename Iterator>
-  static auto parse_pos(Iterator& f, Iterator const& l, unused_type) {
+  static auto parse_pos(Iterator& f, const Iterator& l, unused_type) {
     return accumulate(f, l, unused, [](auto&, auto) {});
   }
 
   template <typename Iterator, typename Attribute>
-  static auto parse_pos(Iterator& f, Iterator const& l, Attribute& a) {
+  static auto parse_pos(Iterator& f, const Iterator& l, Attribute& a) {
     return accumulate(f, l, a, [](auto& n, auto x) {
       n *= Radix;
       n += x;
@@ -80,12 +80,12 @@ struct integral_parser
   }
 
   template <typename Iterator>
-  static auto parse_neg(Iterator& f, Iterator const& l, unused_type) {
+  static auto parse_neg(Iterator& f, const Iterator& l, unused_type) {
     return accumulate(f, l, unused, [](auto&, auto) {});
   }
 
   template <typename Iterator, typename Attribute>
-  static auto parse_neg(Iterator& f, Iterator const& l, Attribute& a) {
+  static auto parse_neg(Iterator& f, const Iterator& l, Attribute& a) {
     return accumulate(f, l, a, [](auto& n, auto x) {
       n *= Radix;
       n -= x;
@@ -93,17 +93,17 @@ struct integral_parser
   }
 
   template <typename Iterator, typename Attribute>
-  static bool parse_signed(Iterator& f, Iterator const& l, Attribute& a) {
+  static bool parse_signed(Iterator& f, const Iterator& l, Attribute& a) {
     return detail::parse_sign(f) ? parse_neg(f, l, a) : parse_pos(f, l, a);
   }
 
   template <typename Iterator, typename Attribute>
-  static bool parse_unsigned(Iterator& f, Iterator const& l, Attribute& a) {
+  static bool parse_unsigned(Iterator& f, const Iterator& l, Attribute& a) {
     return parse_pos(f, l, a);
   }
 
   template <typename Iterator, typename Attribute>
-  static bool dispatch(Iterator& f, Iterator const& l, Attribute& a) {
+  static bool dispatch(Iterator& f, const Iterator& l, Attribute& a) {
     if constexpr (std::is_signed_v<T>)
       return parse_signed(f, l, a);
     else
@@ -111,7 +111,7 @@ struct integral_parser
   }
 
   template <typename Iterator, typename Attribute>
-  bool parse(Iterator& f, Iterator const& l, Attribute& a) const {
+  bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
     if (f == l)
       return false;
     auto save = f;

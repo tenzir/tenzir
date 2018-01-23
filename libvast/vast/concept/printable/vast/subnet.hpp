@@ -26,7 +26,7 @@ struct subnet_printer : printer<subnet_printer> {
   using attribute = subnet;
 
   template <typename Iterator>
-  bool print(Iterator& out, subnet const& sn) const {
+  bool print(Iterator& out, const subnet& sn) const {
     using namespace printers;
     return (addr << chr<'/'> << u8)(out, sn.network(), sn.length());
   }

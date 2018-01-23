@@ -42,7 +42,7 @@ inline auto as_printer(std::string str) {
 template <typename T>
 auto as_printer(T x)
 -> std::enable_if_t<
-     std::is_arithmetic<T>{} && ! std::is_same<T, bool>::value,
+     std::is_arithmetic<T>{} && !std::is_same<T, bool>::value,
      literal_printer
    > {
   return literal_printer{x};
@@ -60,7 +60,7 @@ using is_convertible_to_unary_printer =
   std::integral_constant<
     bool,
     std::is_convertible<T, std::string>{}
-    || (std::is_arithmetic<T>{} && ! std::is_same<T, bool>::value)
+    || (std::is_arithmetic<T>{} && !std::is_same<T, bool>::value)
   >;
 
 template <typename T, typename U>

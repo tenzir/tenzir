@@ -26,7 +26,7 @@ struct schema_printer : printer<schema_printer> {
   using attribute = schema;
 
   template <typename Iterator>
-  bool print(Iterator& out, schema const& s) const {
+  bool print(Iterator& out, const schema& s) const {
     auto p = "type "
           << printers::str
           << " = "

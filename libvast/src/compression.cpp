@@ -29,11 +29,11 @@ size_t compress_bound(size_t size) {
   return LZ4_compressBound(size);
 }
 
-size_t compress(char const* in, size_t in_size, char* out, size_t out_size) {
+size_t compress(const char* in, size_t in_size, char* out, size_t out_size) {
   return LZ4_compress_default(in, out, in_size, out_size);
 }
 
-size_t uncompress(char const* in, size_t in_size, char* out, size_t out_size) {
+size_t uncompress(const char* in, size_t in_size, char* out, size_t out_size) {
   return LZ4_decompress_safe(in, out, static_cast<int>(in_size),
                              static_cast<int>(out_size));
 }
@@ -47,20 +47,20 @@ size_t compress_bound(size_t size) {
   return ::snappy::MaxCompressedLength(size);
 }
 
-size_t uncompress_bound(char const* data, size_t size) {
+size_t uncompress_bound(const char* data, size_t size) {
   size_t n;
-  if (! ::snappy::GetUncompressedLength(data, size, &n))
+  if (!::snappy::GetUncompressedLength(data, size, &n))
     return 0;
   return n;
 }
 
-size_t compress(char const* in, size_t in_size, char* out) {
+size_t compress(const char* in, size_t in_size, char* out) {
   size_t n;
   ::snappy::RawCompress(in, in_size, out, &n);
   return n;
 }
 
-bool uncompress(char const* in, size_t in_size, char* out) {
+bool uncompress(const char* in, size_t in_size, char* out) {
   return ::snappy::RawUncompress(in, in_size, out);
 }
 

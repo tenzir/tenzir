@@ -57,7 +57,7 @@ public:
   }
 
   template <typename Iterator, typename Attribute>
-  bool parse(Iterator& f, Iterator const& l, Attribute& a) const {
+  bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
     optional<rhs_attribute> rhs_attr;
     if (lhs_(f, l, left_attr(a)) && rhs_opt_(f, l, rhs_attr)) {
       right_attr(a) = std::move(rhs_attr);
@@ -84,7 +84,7 @@ private:
   >
   static auto left_attr(Attribute& a)
     -> std::enable_if_t<
-         ! std::is_same<L, unused_type>{} && std::is_same<R, unused_type>{},
+         !std::is_same<L, unused_type>{} && std::is_same<R, unused_type>{},
          optional<L>&
        > {
     return a;
@@ -97,7 +97,7 @@ private:
   >
   static auto left_attr(std::tuple<Ts...>& t)
     -> std::enable_if_t<
-         ! std::is_same<L, unused_type>{} && ! std::is_same<R, unused_type>{},
+         !std::is_same<L, unused_type>{} && !std::is_same<R, unused_type>{},
          optional<L>&
        > {
     return std::get<0>(t);
@@ -120,7 +120,7 @@ private:
   >
   static auto right_attr(Attribute& a)
     -> std::enable_if_t<
-         std::is_same<L, unused_type>{} && ! std::is_same<R, unused_type>{},
+         std::is_same<L, unused_type>{} && !std::is_same<R, unused_type>{},
          optional<R>&
        > {
     return a;
@@ -133,7 +133,7 @@ private:
   >
   static auto right_attr(std::tuple<Ts...>& t)
     -> std::enable_if_t<
-         ! std::is_same<L, unused_type>{} && ! std::is_same<R, unused_type>{},
+         !std::is_same<L, unused_type>{} && !std::is_same<R, unused_type>{},
          optional<R>&
        > {
     return std::get<1>(t);

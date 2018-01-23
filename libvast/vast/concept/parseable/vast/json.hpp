@@ -27,7 +27,7 @@ struct json_parser : parser<json_parser> {
   using attribute = json;
 
   template <typename Iterator>
-  bool parse(Iterator& f, Iterator const& l, json& x) const {
+  bool parse(Iterator& f, const Iterator& l, json& x) const {
     using namespace parsers;
     rule<Iterator, json> j;
     auto ws = ignore(*parsers::space);

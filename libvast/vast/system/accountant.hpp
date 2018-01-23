@@ -52,7 +52,7 @@ using accountant_type =
 /// @param filename The path of the file containing the accounting details.
 accountant_type::behavior_type
 accountant(accountant_type::stateful_pointer<accountant_state> self,
-           path const& filename);
+           const path& filename);
 
 } // namespace vast::system
 

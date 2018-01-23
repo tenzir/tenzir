@@ -35,7 +35,7 @@ struct message {
   std::vector<http::header> headers;
   std::string body;
 
-  http::header const* header(std::string const& name) const;
+  const http::header* header(const std::string& name) const;
 };
 
 /// A HTTP request message.

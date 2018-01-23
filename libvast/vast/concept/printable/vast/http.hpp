@@ -29,7 +29,7 @@ struct http_header_printer : printer<http_header_printer> {
   using attribute = http::header;
 
   template <typename Iterator>
-  bool print(Iterator& out, http::header const& hdr) const {
+  bool print(Iterator& out, const http::header& hdr) const {
     using namespace printers;
     auto p = str << ": " << str;
     return p(out, hdr.name, hdr.value);
@@ -45,7 +45,7 @@ struct http_response_printer : printer<http::response> {
   using attribute = http::response;
 
   template <typename Iterator>
-  bool print(Iterator& out, http::response const& res) const {
+  bool print(Iterator& out, const http::response& res) const {
     using namespace printers;
     auto version = real_printer<double, 1>{};
     auto p 

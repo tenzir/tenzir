@@ -25,7 +25,7 @@ struct event_printer : printer<event_printer> {
   using attribute = event;
 
   template <class Iterator>
-  bool print(Iterator& out, event const& e) const {
+  bool print(Iterator& out, const event& e) const {
     vast::json j;
     return convert(e, j) && printers::json<policy::oneline>.print(out, j);
   }
@@ -35,7 +35,7 @@ class writer : public format::writer<event_printer>{
 public:
   using format::writer<event_printer>::writer;
 
-  char const* name() const {
+  const char* name() const {
     return "json-writer";
   }
 };

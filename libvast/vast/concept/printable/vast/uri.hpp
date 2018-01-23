@@ -30,7 +30,7 @@ struct key_value_printer : printer<key_value_printer> {
   using attribute = std::pair<std::string,std::string>;
 
   template <typename Iterator>
-  bool print(Iterator& out, std::pair<std::string,std::string> const& kv) const {
+  bool print(Iterator& out, const std::pair<std::string,std::string>& kv) const {
     using namespace printers;
     return str.print(out, detail::percent_escape(kv.first)) 
         && str.print(out, "=") 
@@ -47,7 +47,7 @@ struct uri_printer : printer<uri_printer> {
   using attribute = uri;
   
   template <typename Iterator>
-  bool print(Iterator& out, uri const& u) const {
+  bool print(Iterator& out, const uri& u) const {
     using namespace printers;
     
     if (u.scheme != "") {

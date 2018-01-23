@@ -65,7 +65,7 @@ protected:
 
   int_type overflow(int_type c) override;
 
-  std::streamsize xsputn(char_type const* s, std::streamsize n) override;
+  std::streamsize xsputn(const char_type* s, std::streamsize n) override;
 
   // -- get area -------------------------------------------------------------
 

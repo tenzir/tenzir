@@ -21,33 +21,33 @@ attribute_extractor::attribute_extractor(std::string str)
   : attr{std::move(str)} {
 }
 
-bool operator==(attribute_extractor const& x, attribute_extractor const& y) {
+bool operator==(const attribute_extractor& x, const attribute_extractor& y) {
   return x.attr == y.attr;
 }
 
-bool operator<(attribute_extractor const& x, attribute_extractor const& y) {
+bool operator<(const attribute_extractor& x, const attribute_extractor& y) {
   return x.attr < y.attr;
 }
 
 key_extractor::key_extractor(vast::key k) : key{std::move(k)} {
 }
 
-bool operator==(key_extractor const& lhs, key_extractor const& rhs) {
+bool operator==(const key_extractor& lhs, const key_extractor& rhs) {
   return lhs.key == rhs.key;
 }
 
-bool operator<(key_extractor const& lhs, key_extractor const& rhs) {
+bool operator<(const key_extractor& lhs, const key_extractor& rhs) {
   return lhs.key < rhs.key;
 }
 
 type_extractor::type_extractor(vast::type t) : type{std::move(t)} {
 }
 
-bool operator==(type_extractor const& lhs, type_extractor const& rhs) {
+bool operator==(const type_extractor& lhs, const type_extractor& rhs) {
   return lhs.type == rhs.type;
 }
 
-bool operator<(type_extractor const& lhs, type_extractor const& rhs) {
+bool operator<(const type_extractor& lhs, const type_extractor& rhs) {
   return lhs.type < rhs.type;
 }
 
@@ -55,11 +55,11 @@ data_extractor::data_extractor(vast::type t, vast::offset o)
   : type{std::move(t)}, offset{std::move(o)} {
 }
 
-bool operator==(data_extractor const& lhs, data_extractor const& rhs) {
+bool operator==(const data_extractor& lhs, const data_extractor& rhs) {
   return lhs.type == rhs.type && lhs.offset == rhs.offset;
 }
 
-bool operator<(data_extractor const& lhs, data_extractor const& rhs) {
+bool operator<(const data_extractor& lhs, const data_extractor& rhs) {
   return std::tie(lhs.type, lhs.offset) < std::tie(rhs.type, rhs.offset);
 }
 
@@ -67,11 +67,11 @@ predicate::predicate(operand l, relational_operator o, operand r)
   : lhs{std::move(l)}, op{o}, rhs{std::move(r)} {
 }
 
-bool operator==(predicate const& lhs, predicate const& rhs) {
+bool operator==(const predicate& lhs, const predicate& rhs) {
   return lhs.lhs == rhs.lhs && lhs.op == rhs.op && lhs.rhs == rhs.rhs;
 }
 
-bool operator<(predicate const& lhs, predicate const& rhs) {
+bool operator<(const predicate& lhs, const predicate& rhs) {
   return std::tie(lhs.lhs, lhs.op, lhs.rhs)
          < std::tie(rhs.lhs, rhs.op, rhs.rhs);
 }
@@ -84,7 +84,7 @@ negation::negation(expression expr)
   : expr_{std::make_unique<expression>(std::move(expr))} {
 }
 
-negation::negation(negation const& other)
+negation::negation(const negation& other)
   : expr_{std::make_unique<expression>(*other.expr_)} {
 }
 
@@ -92,7 +92,7 @@ negation::negation(negation&& other) noexcept
   : expr_{std::move(other.expr_)} {
 }
 
-negation& negation::operator=(negation const& other) {
+negation& negation::operator=(const negation& other) {
   *expr_ = *other.expr_;
   return *this;
 }
@@ -102,7 +102,7 @@ negation& negation::operator=(negation&& other) noexcept {
   return *this;
 }
 
-expression const& negation::expr() const {
+const expression& negation::expr() const {
   return *expr_;
 }
 
@@ -111,19 +111,19 @@ expression& negation::expr() {
 }
 
 
-bool operator==(negation const& lhs, negation const& rhs) {
+bool operator==(const negation& lhs, const negation& rhs) {
   return *lhs.expr_ == *rhs.expr_;
 }
 
-bool operator<(negation const& lhs, negation const& rhs) {
+bool operator<(const negation& lhs, const negation& rhs) {
   return *lhs.expr_ < *rhs.expr_;
 }
 
-bool operator==(expression const& lhs, expression const& rhs) {
+bool operator==(const expression& lhs, const expression& rhs) {
   return lhs.node_ == rhs.node_;
 }
 
-bool operator<(expression const& lhs, expression const& rhs) {
+bool operator<(const expression& lhs, const expression& rhs) {
   return lhs.node_ < rhs.node_;
 }
 
@@ -131,7 +131,7 @@ expression::node& expose(expression& e) {
   return e.node_;
 }
 
-expression normalize(expression const& expr) {
+expression normalize(const expression& expr) {
   expression r;
   r = visit(hoister{}, expr);
   r = visit(aligner{}, r);

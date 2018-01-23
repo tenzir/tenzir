@@ -29,8 +29,8 @@ struct attribute : detail::totally_ordered<attribute> {
   std::string key;
   optional<std::string> value;
 
-  friend bool operator==(attribute const& x, attribute const& y);
-  friend bool operator<(attribute const& x, attribute const& y);
+  friend bool operator==(const attribute& x, const attribute& y);
+  friend bool operator<(const attribute& x, const attribute& y);
 
   template <class Inspector>
   friend auto inspect(Inspector& f, attribute& a) {

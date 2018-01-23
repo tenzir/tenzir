@@ -41,7 +41,7 @@ template <
   typename Parser = make_parser<To>,
   typename... Args
 >
-auto from_string(std::string const& str, Args&&... args) {
+auto from_string(const std::string& str, Args&&... args) {
   auto f = str.begin();
   auto l = str.end();
   return from_string<To, Parser, std::string::const_iterator, Args...>(
@@ -57,7 +57,7 @@ template <
 auto from_string(char const (&str)[N], Args&&... args) {
   auto f = str;
   auto l = str + N - 1; // No NUL byte.
-  return from_string<To, Parser, char const*, Args...>(
+  return from_string<To, Parser, const char*, Args...>(
     f, l, std::forward<Args>(args)...);
 }
 

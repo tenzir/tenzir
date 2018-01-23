@@ -204,15 +204,15 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
       ship_results(self);
       request_more_hits(self);
     },
-    [=](archive_type const& archive) {
+    [=](const archive_type& archive) {
       VAST_DEBUG(self, "registers archive", archive);
       self->state.archive = archive;
     },
-    [=](index_atom, actor const& index) {
+    [=](index_atom, const actor& index) {
       VAST_DEBUG(self, "registers index", index);
       self->state.index = index;
     },
-    [=](sink_atom, actor const& sink) {
+    [=](sink_atom, const actor& sink) {
       VAST_DEBUG(self, "registers index", sink);
       self->send(self->state.sink, sys_atom::value, put_atom::value, sink);
     },

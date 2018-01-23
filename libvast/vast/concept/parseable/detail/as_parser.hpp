@@ -42,7 +42,7 @@ inline auto as_parser(std::string str) {
 template <typename T>
 auto as_parser(T x)
   -> std::enable_if_t<
-       std::is_arithmetic<T>{} && ! std::is_same<T, bool>::value,
+       std::is_arithmetic<T>{} && !std::is_same<T, bool>::value,
        decltype(ignore(string_parser{""}))
      > {
   return ignore(string_parser{std::to_string(x)});
@@ -60,7 +60,7 @@ using is_convertible_to_unary_parser =
   std::integral_constant<
     bool,
     std::is_convertible<T, std::string>{}
-    || (std::is_arithmetic<T>{} && ! std::is_same<T, bool>::value)
+    || (std::is_arithmetic<T>{} && !std::is_same<T, bool>::value)
   >;
 
 template <typename T, typename U>

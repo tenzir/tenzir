@@ -68,13 +68,13 @@ public:
   }
 
   template <typename Iterator, typename Attribute>
-  bool print(Iterator& out, Attribute const& a) const {
+  bool print(Iterator& out, const Attribute& a) const {
     return print_left<Lhs>(out, a) || print_right(out, a);
   }
 
 private:
   template <typename Left, typename Iterator, typename Attribute>
-  auto print_left(Iterator& out, Attribute const& a) const
+  auto print_left(Iterator& out, const Attribute& a) const
   -> std::enable_if_t<is_choice_printer<Left>{}, bool> {
     return lhs_.print(out, a); // recurse
   }
@@ -86,7 +86,7 @@ private:
   }
 
   template <typename Left, typename Iterator, typename Attribute>
-  auto print_left(Iterator& out, Attribute const& a) const
+  auto print_left(Iterator& out, const Attribute& a) const
   -> std::enable_if_t<!is_choice_printer<Left>::value, bool> {
     auto x = get_if<lhs_attribute>(a);
     return x && lhs_.print(out, *x);
@@ -98,7 +98,7 @@ private:
   }
 
   template <typename Iterator, typename Attribute>
-  auto print_right(Iterator& out, Attribute const& a) const {
+  auto print_right(Iterator& out, const Attribute& a) const {
     auto x = get_if<rhs_attribute>(a);
     return x && rhs_.print(out, *x);
   }

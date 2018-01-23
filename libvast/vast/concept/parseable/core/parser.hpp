@@ -65,13 +65,13 @@ struct parser {
   }
 
   template <typename Iterator, typename Attribute>
-  auto operator()(Iterator& f, Iterator const& l, Attribute& a) const
+  auto operator()(Iterator& f, const Iterator& l, Attribute& a) const
   -> decltype(*f, ++f, f == l, bool()) {
     return derived().parse(f, l, a);
   }
 
   template <typename Iterator, typename A0, typename A1, typename... As>
-  auto operator()(Iterator& f, Iterator const& l, A0& a0, A1& a1,
+  auto operator()(Iterator& f, const Iterator& l, A0& a0, A1& a1,
                   As&... as) const
   -> decltype(*f, ++f, f == l, bool()) {
     auto t = std::tie(a0, a1, as...);
@@ -79,8 +79,8 @@ struct parser {
   }
 
 private:
-  Derived const& derived() const {
-    return static_cast<Derived const&>(*this);
+  const Derived& derived() const {
+    return static_cast<const Derived&>(*this);
   }
 };
 

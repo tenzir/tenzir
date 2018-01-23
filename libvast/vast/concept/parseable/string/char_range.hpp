@@ -26,7 +26,7 @@ public:
   using attribute = char;
 
   template <typename Iterator, typename Attribute>
-  bool parse(Iterator& f, Iterator const& l, Attribute& a) const {
+  bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
     if (f == l || !check<From, To, Ranges...>(*f))
       return false;
     detail::absorb(a, *f);

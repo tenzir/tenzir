@@ -25,7 +25,7 @@ struct arithmetic_operator_printer : printer<arithmetic_operator_printer> {
   using attribute = arithmetic_operator;
 
   template <typename Iterator>
-  bool print(Iterator& out, arithmetic_operator const& op) const {
+  bool print(Iterator& out, const arithmetic_operator& op) const {
     switch (op) {
       default:
         die("missing case for arithmetic operator");
@@ -57,7 +57,7 @@ struct relational_operator_printer : printer<relational_operator_printer> {
   using attribute = relational_operator;
 
   template <typename Iterator>
-  bool print(Iterator& out, relational_operator const& op) const {
+  bool print(Iterator& out, const relational_operator& op) const {
     switch (op) {
       default:
         die("missing case for relational operator");
@@ -93,7 +93,7 @@ struct boolean_operator_printer : printer<boolean_operator_printer> {
   using attribute = boolean_operator;
 
   template <typename Iterator>
-  bool print(Iterator& out, boolean_operator const& op) const {
+  bool print(Iterator& out, const boolean_operator& op) const {
     switch (op) {
       default:
         die("missing case for boolean operator");
