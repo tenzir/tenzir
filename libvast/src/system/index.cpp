@@ -240,6 +240,7 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
         auto j = std::remove_if(self->state.scheduled.begin(),
                                 self->state.scheduled.end(), is_only_lookup);
         auto n = self->state.scheduled.end() - j;
+        VAST_IGNORE_UNUSED(n);
         VAST_DEBUG(self, "erases", n, "scheduled lookups");
         self->state.scheduled.erase(j, self->state.scheduled.end());
       } else {

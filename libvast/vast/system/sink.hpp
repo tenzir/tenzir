@@ -84,6 +84,7 @@ sink(caf::stateful_actor<sink_state<Writer>>* self, Writer&& writer) {
       }
     },
     [=](const uuid& id, const query_statistics&) {
+      VAST_IGNORE_UNUSED(id);
       VAST_DEBUG(self, "got query statistics from", id);
     },
     [=](limit_atom, uint64_t max) {

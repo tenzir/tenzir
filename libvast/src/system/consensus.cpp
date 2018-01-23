@@ -300,6 +300,7 @@ result<index_type> save_snapshot(Actor* self, index_type index,
   self->state.last_snapshot_term = hdr.last_included_term;
   // Truncate now no longer needed entries.
   auto n = self->state.log->truncate_before(index + 1);
+  VAST_IGNORE_UNUSED(n);
   VAST_DEBUG(role(self), "truncated", n, "log entries");
   return index;
 }
@@ -641,6 +642,7 @@ auto send_install_snapshot(Actor* self, peer_state& peer) {
   auto req_term = req->term;
   self->request(peer.peer, request_timeout, std::move(*req)).then(
     [=](const install_snapshot::response& resp) {
+      VAST_IGNORE_UNUSED(peer_id);
       VAST_DEBUG(role(self), "got InstallSnapshot response from peer", peer_id,
                  ": term =", resp.term << ", bytes stored =",
                  resp.bytes_stored);
@@ -792,6 +794,7 @@ auto send_append_entries(Actor* self, peer_state& peer) {
   auto req_term = req.term;
   auto num_entries = req.entries.size();
   auto peer_id = peer.id;
+  VAST_IGNORE_UNUSED(peer_id);
   VAST_DEBUG(role(self), "sends AppendEntries request to peer", peer_id,
              "with", num_entries, "entries");
   // Send request away and process response.
@@ -893,6 +896,7 @@ handle_append_entries(Actor* self, append_entries::request& req) {
     auto n = xs.size();
     auto res = self->state.log->append(std::move(xs));
     if (!res) {
+      VAST_IGNORE_UNUSED(n);
       VAST_ERROR(role(self), "failed to append", n, "entries to log");
       return res.error();
     }

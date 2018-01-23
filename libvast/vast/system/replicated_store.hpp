@@ -129,6 +129,7 @@ void update(Actor* self, caf::message& command) {
   command.apply({
     [=](const actor_identity& identity, uint64_t id, caf::message operation) {
       if (identity != self->address()) {
+        VAST_IGNORE_UNUSED(id);
         VAST_DEBUG(self, "got remote operation", id);
         apply(self, operation);
       } else {
