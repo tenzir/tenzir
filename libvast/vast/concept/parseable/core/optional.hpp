@@ -20,7 +20,7 @@
 
 namespace vast {
 
-template <typename Parser>
+template <class Parser>
 class optional_parser : public parser<optional_parser<Parser>> {
 public:
   using inner_attribute =
@@ -37,13 +37,13 @@ public:
     : parser_{std::move(p)} {
   }
 
-  template <typename Iterator>
+  template <class Iterator>
   bool parse(Iterator& f, const Iterator& l, unused_type) const {
     parser_(f, l, unused);
     return true;
   }
 
-  template <typename Iterator, typename Attribute>
+  template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
     inner_attribute attr;
     if (parser_(f, l, attr))

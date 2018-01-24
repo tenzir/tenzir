@@ -24,7 +24,7 @@ using namespace vast;
 namespace {
 
 struct stateful {
-  template <typename T>
+  template <class T>
   void operator()(T&) {
     ++state;
   }
@@ -33,14 +33,14 @@ struct stateful {
 };
 
 struct doppler {
-  template <typename T>
+  template <class T>
   void operator()(T& x) const {
     x += x;
   }
 };
 
 struct referencer {
-  template <typename T>
+  template <class T>
   int& operator()(T) const {
     return *i;
   }
@@ -49,24 +49,24 @@ struct referencer {
 };
 
 struct binary {
-  template <typename T>
+  template <class T>
   bool operator()(const T&, const T&) const {
     return true;
   }
 
-  template <typename T, typename U>
+  template <class T, class U>
   bool operator()(const T&, const U&) const {
     return false;
   }
 };
 
 struct ternary {
-  template <typename T, typename U>
+  template <class T, class U>
   double operator()(bool c, const T& t, const U& f) const {
     return c ? t : f;
   }
 
-  template <typename T, typename U, typename V>
+  template <class T, class U, class V>
   double operator()(const T&, const U&, const V&) const {
     return 42;
   }

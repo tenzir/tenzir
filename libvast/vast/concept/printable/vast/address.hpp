@@ -30,7 +30,7 @@ template <>
 struct access::printer<address> : vast::printer<access::printer<address>> {
   using attribute = address;
 
-  template <typename Iterator>
+  template <class Iterator>
   bool print(Iterator& out, const address& a) const {
     char buf[INET6_ADDRSTRLEN];
     std::memset(buf, 0, sizeof(buf));

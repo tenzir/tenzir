@@ -20,7 +20,7 @@
 namespace vast {
 
 /// Executes a function after successfully parsing the inner attribute.
-template <typename Parser, typename Action>
+template <class Parser, class Action>
 class action_parser : public parser<action_parser<Parser, Action>> {
 public:
   using inner_attribute = typename Parser::attribute;

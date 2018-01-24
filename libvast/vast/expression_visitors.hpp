@@ -92,7 +92,7 @@ struct validator {
   expected<void> operator()(const type_extractor& ex, const data& d);
   expected<void> operator()(const key_extractor& ex, const data& d);
 
-  template <typename T, typename U>
+  template <class T, class U>
   expected<void> operator()(const T& lhs, const U& rhs) {
     return make_error(ec::syntax_error, "incompatible predicate operands", lhs,
                       rhs);
@@ -135,7 +135,7 @@ struct type_resolver {
   expected<expression> operator()(const key_extractor& ex, const data& d);
   expected<expression> operator()(const data& d, const key_extractor& e);
 
-  template <typename T, typename U>
+  template <class T, class U>
   expected<expression> operator()(const T& lhs, const U& rhs) {
     return {predicate{lhs, op_, rhs}};
   }
@@ -173,12 +173,12 @@ struct event_evaluator {
   bool operator()(const type_extractor&, const data&);
   bool operator()(const data_extractor& e, const data& d);
 
-  template <typename T>
+  template <class T>
   bool operator()(const data& d, const T& x) {
     return (*this)(x, d);
   }
 
-  template <typename T, typename U>
+  template <class T, class U>
   bool operator()(const T&, const U&) {
     return false;
   }
@@ -200,12 +200,12 @@ struct matcher {
   bool operator()(const attribute_extractor&, const data&);
   bool operator()(const data_extractor&, const data&);
 
-  template <typename T>
+  template <class T>
   bool operator()(const data& d, const T& x) {
     return (*this)(x, d);
   }
 
-  template <typename T, typename U>
+  template <class T, class U>
   bool operator()(const T&, const U&) {
     return false;
   }

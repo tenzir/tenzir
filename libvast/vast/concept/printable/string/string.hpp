@@ -22,12 +22,12 @@ namespace vast {
 struct string_printer : printer<string_printer> {
   using attribute = std::string;
 
-  template <typename Iterator>
+  template <class Iterator>
   static bool print_string(Iterator& out, char c) {
     return printers::any.print(out, c);
   }
 
-  template <typename Iterator, typename StringIterator>
+  template <class Iterator, class StringIterator>
   static bool print_string(Iterator& out, StringIterator f, StringIterator l) {
     while (f != l)
       if (!printers::any.print(out, *f++))
@@ -35,7 +35,7 @@ struct string_printer : printer<string_printer> {
     return true;
   }
 
-  template <typename Iterator>
+  template <class Iterator>
   static bool print_string(Iterator& out, const char* str) {
     while (*str != '\0')
       if (!printers::any.print(out, *str++))
@@ -43,17 +43,17 @@ struct string_printer : printer<string_printer> {
     return true;
   }
 
-  template <typename Iterator>
+  template <class Iterator>
   static bool print_string(Iterator& out, const std::string& str) {
     return print_string(out, str.begin(), str.end());
   }
 
-  template <typename Iterator, size_t N>
+  template <class Iterator, size_t N>
   static bool print(Iterator& out, const char(&str)[N]) {
     return print_string(out, str, str + N - 1); // without the last NUL byte.
   }
 
-  template <typename Iterator, typename Attribute>
+  template <class Iterator, class Attribute>
   bool print(Iterator& out, const Attribute& str) const {
     return print_string(out, str);
   }

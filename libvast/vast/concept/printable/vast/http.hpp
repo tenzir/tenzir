@@ -28,7 +28,7 @@ namespace vast {
 struct http_header_printer : printer<http_header_printer> {
   using attribute = http::header;
 
-  template <typename Iterator>
+  template <class Iterator>
   bool print(Iterator& out, const http::header& hdr) const {
     using namespace printers;
     auto p = str << ": " << str;
@@ -44,7 +44,7 @@ struct printer_registry<http::header> {
 struct http_response_printer : printer<http::response> {
   using attribute = http::response;
 
-  template <typename Iterator>
+  template <class Iterator>
   bool print(Iterator& out, const http::response& res) const {
     using namespace printers;
     auto version = real_printer<double, 1>{};

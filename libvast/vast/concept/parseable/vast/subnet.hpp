@@ -33,13 +33,13 @@ struct access::parser<subnet> : vast::parser<access::parser<subnet>> {
     return addr >> '/' >> prefix;
   }
 
-  template <typename Iterator>
+  template <class Iterator>
   bool parse(Iterator& f, const Iterator& l, unused_type) const {
     static auto p = make();
     return p(f, l, unused);
   }
 
-  template <typename Iterator>
+  template <class Iterator>
   bool parse(Iterator& f, const Iterator& l, subnet& a) const {
     static auto p = make();
     if (!p(f, l, a.network_, a.length_))

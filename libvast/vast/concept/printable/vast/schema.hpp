@@ -25,7 +25,7 @@ namespace vast {
 struct schema_printer : printer<schema_printer> {
   using attribute = schema;
 
-  template <typename Iterator>
+  template <class Iterator>
   bool print(Iterator& out, const schema& s) const {
     auto p = "type "
           << printers::str

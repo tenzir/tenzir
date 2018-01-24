@@ -19,7 +19,7 @@
 namespace vast {
 
 /// Casts a parser's attribute to a specific type.
-template <typename Parser, typename Attribute>
+template <class Parser, class Attribute>
 class as_parser : public parser<as_parser<Parser, Attribute>> {
 public:
   using attribute = Attribute;
@@ -27,7 +27,7 @@ public:
   as_parser(Parser p) : parser_{std::move(p)} {
   }
 
-  template <typename Iterator, typename Attr>
+  template <class Iterator, class Attr>
   bool parse(Iterator& f, const Iterator& l, Attr& a) const {
     attribute x;
     if (!parser_(f, l, x))
@@ -40,7 +40,7 @@ private:
   Parser parser_;
 };
 
-template <typename Attribute, typename Parser>
+template <class Attribute, class Parser>
 auto as(Parser&& p)
 -> std::enable_if_t<
      is_parser<std::decay_t<Parser>>::value,

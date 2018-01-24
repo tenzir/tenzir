@@ -30,7 +30,7 @@ struct extract;
 
 template <>
 struct extract<1> {
-  template <typename Iterator, typename Attribute>
+  template <class Iterator, class Attribute>
   static bool parse(Iterator& f, const Iterator& l, Attribute& a) {
     if (f == l)
       return false;
@@ -41,7 +41,7 @@ struct extract<1> {
 
 template <>
 struct extract<2> {
-  template <typename Iterator, typename Attribute>
+  template <class Iterator, class Attribute>
   static bool parse(Iterator& f, const Iterator& l, Attribute& a) {
     if (!extract<1>::parse(f, l, a))
       return false;
@@ -52,7 +52,7 @@ struct extract<2> {
 
 template <>
 struct extract<4> {
-  template <typename Iterator, typename Attribute>
+  template <class Iterator, class Attribute>
   static bool parse(Iterator& f, const Iterator& l, Attribute& a) {
     if (!extract<2>::parse(f, l, a))
       return false;
@@ -63,7 +63,7 @@ struct extract<4> {
 
 template <>
 struct extract<8> {
-  template <typename Iterator, typename Attribute>
+  template <class Iterator, class Attribute>
   static bool parse(Iterator& f, const Iterator& l, Attribute& a) {
     if (!extract<4>::parse(f, l, a))
       return false;
@@ -85,7 +85,7 @@ template <class T, class Policy = policy::no_swap, size_t Bytes = sizeof(T)>
 struct byte_parser : parser<byte_parser<T, Policy, Bytes>> {
   using attribute = T;
 
-  template <typename Iterator>
+  template <class Iterator>
   static bool extract(Iterator& f, const Iterator& l, T& x) {
     auto save = f;
     x = 0;
@@ -95,7 +95,7 @@ struct byte_parser : parser<byte_parser<T, Policy, Bytes>> {
     return true;
   }
 
-  template <typename Iterator>
+  template <class Iterator>
   bool parse(Iterator& f, const Iterator& l, unused_type) const {
     for (auto i = 0u; i < Bytes; ++i)
       if (f != l)
@@ -105,7 +105,7 @@ struct byte_parser : parser<byte_parser<T, Policy, Bytes>> {
     return true;
   }
 
-  template <typename Iterator>
+  template <class Iterator>
   bool parse(Iterator& f, const Iterator& l, T& x) const {
     if constexpr (std::is_same_v<Policy, policy::no_swap>){
       return extract(f, l, x);
@@ -122,7 +122,7 @@ template <size_t N>
 struct bytes_parser : parser<bytes_parser<N>> {
   using attribute = std::array<uint8_t, N>;
 
-  template <typename Iterator>
+  template <class Iterator>
   bool parse(Iterator& f, const Iterator& l, std::array<uint8_t, N>& x) const {
     auto save = f;
     for (auto i = 0u; i < N; i++) {

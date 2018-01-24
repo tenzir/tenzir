@@ -28,7 +28,7 @@ namespace vast {
 struct key_parser : parser<key_parser> {
   using attribute = key;
 
-  template <typename Iterator, typename Attribute>
+  template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
     // FIXME: we currently cannot parse character sequences into containers,
     // e.g., (alpha | '_') >> +(alnum ...). Until we have enhanced the

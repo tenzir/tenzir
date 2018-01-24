@@ -23,7 +23,7 @@ namespace vast {
 struct path_printer : printer<path_printer> {
   using attribute = path;
 
-  template <typename Iterator>
+  template <class Iterator>
   bool print(Iterator& out, const path& p) const {
     return printers::str.print(out, p.str());
   }

@@ -24,7 +24,7 @@ struct unused_type;
 
 namespace detail {
 
-template <typename Attribute>
+template <class Attribute>
 struct attr_fold : std::decay<Attribute> {};
 
 template <>

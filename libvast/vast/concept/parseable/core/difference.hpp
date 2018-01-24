@@ -18,7 +18,7 @@
 
 namespace vast {
 
-template <typename Lhs, typename Rhs>
+template <class Lhs, class Rhs>
 class difference_parser : public parser<difference_parser<Lhs, Rhs>> {
 public:
   using lhs_attribute = typename Lhs::attribute;
@@ -29,7 +29,7 @@ public:
     : lhs_{std::move(lhs)}, rhs_{std::move(rhs)} {
   }
 
-  template <typename Iterator, typename Attribute>
+  template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
     auto save = f;
     if (!rhs_(f, l, unused))

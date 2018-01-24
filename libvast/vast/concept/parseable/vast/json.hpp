@@ -26,7 +26,7 @@ namespace vast {
 struct json_parser : parser<json_parser> {
   using attribute = json;
 
-  template <typename Iterator>
+  template <class Iterator>
   bool parse(Iterator& f, const Iterator& l, json& x) const {
     using namespace parsers;
     rule<Iterator, json> j;

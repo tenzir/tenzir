@@ -21,7 +21,7 @@
 namespace vast {
 
 /// Wraps a parser and ignores its attribute.
-template <typename Parser>
+template <class Parser>
 class ignore_parser : public parser<ignore_parser<Parser>> {
 public:
   using attribute = unused_type;
@@ -29,7 +29,7 @@ public:
   explicit ignore_parser(Parser p) : parser_{std::move(p)} {
   }
 
-  template <typename Iterator, typename Attribute>
+  template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute&) const {
     return parser_(f, l, unused);
   }
@@ -38,7 +38,7 @@ private:
   Parser parser_;
 };
 
-template <typename Parser>
+template <class Parser>
 auto ignore(Parser&& p)
 -> std::enable_if_t<
      is_parser<std::decay_t<Parser>>::value,

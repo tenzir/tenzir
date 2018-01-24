@@ -25,7 +25,7 @@ namespace vast {
 //struct json_type_printer : printer<json_type_printer> {
 //  using attribute = json::type;
 //
-//  template <typename Iterator>
+//  template <class Iterator>
 //  bool print(Iterator& out, const json::type& t) {
 //    using namespace printers;
 //    switch (t) {
@@ -54,7 +54,7 @@ struct oneline {};
 
 } // namespace policy
 
-template <typename TreePolicy, int Indent = 2, int Padding = 0>
+template <class TreePolicy, int Indent = 2, int Padding = 0>
 struct json_printer : printer<json_printer<TreePolicy, Indent, Padding>> {
   using attribute = json;
 
@@ -62,7 +62,7 @@ struct json_printer : printer<json_printer<TreePolicy, Indent, Padding>> {
 
   static_assert(Padding >= 0, "padding must not be negative");
 
-  template <typename Iterator>
+  template <class Iterator>
   struct print_visitor {
     print_visitor(Iterator& out) : out_{out} {}
 
@@ -182,7 +182,7 @@ struct json_printer : printer<json_printer<TreePolicy, Indent, Padding>> {
     int depth_ = 0;
   };
 
-  template <typename Iterator, typename T>
+  template <class Iterator, class T>
   auto print(Iterator& out, const T& x) const
   -> std::enable_if_t<
     !std::is_same<json::jsonize<T>, std::false_type>::value,
@@ -191,13 +191,13 @@ struct json_printer : printer<json_printer<TreePolicy, Indent, Padding>> {
     return print_visitor<Iterator>{out}(x);
   }
 
-  template <typename Iterator>
+  template <class Iterator>
   bool print(Iterator& out, const json& j) const {
     return visit(print_visitor<Iterator>{out}, j);
   }
 };
 
-template <typename TreePolicy, int Indent, int Padding>
+template <class TreePolicy, int Indent, int Padding>
 constexpr bool json_printer<TreePolicy, Indent, Padding>::tree;
 
 template <>
@@ -217,7 +217,7 @@ struct printer_registry<json> {
 
 namespace printers {
 
-template <typename Policy>
+template <class Policy>
 auto json = json_printer<Policy>{};
 
 } // namespace printers

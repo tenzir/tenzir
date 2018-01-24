@@ -49,10 +49,10 @@ template <class... Ts>
 struct is_variant<variant<Ts...>> : std::true_type {};
 
 /// Checks whether a type is a std::tuple.
-template <typename>
+template <class>
 struct is_tuple : std::false_type {};
 
-template <typename... Ts>
+template <class... Ts>
 struct is_tuple<std::tuple<Ts...>> : std::true_type {};
 
 /// Checks whether a type derives from `basic_streambuf<Char>`.
@@ -121,7 +121,7 @@ struct are_same : std::conjunction<std::is_same<T, Ts>...> {};
 // -- tuple ------------------------------------------------------------------
 
 // Wraps a type into a tuple if it is not already a tuple.
-template <typename T>
+template <class T>
 using tuple_wrap = std::conditional_t<is_tuple<T>::value, T, std::tuple<T>>;
 
 // Checks whether a tuple contains a given type.

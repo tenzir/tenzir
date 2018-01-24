@@ -22,17 +22,17 @@
 
 namespace vast {
 
-template <typename Lhs, typename Rhs>
+template <class Lhs, class Rhs>
 class choice_parser;
 
-template <typename>
+template <class>
 struct is_choice_parser : std::false_type {};
 
-template <typename Lhs, typename Rhs>
+template <class Lhs, class Rhs>
 struct is_choice_parser<choice_parser<Lhs, Rhs>> : std::true_type {};
 
 /// Attempts to parse either LHS or RHS.
-template <typename Lhs, typename Rhs>
+template <class Lhs, class Rhs>
 class choice_parser : public parser<choice_parser<Lhs, Rhs>> {
 public:
   using lhs_attribute = typename Lhs::attribute;
@@ -67,7 +67,7 @@ public:
     : lhs_{std::move(lhs)}, rhs_{std::move(rhs)} {
   }
 
-  template <typename Iterator, typename Attribute>
+  template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
     auto save = f;
     if (parse_left<Lhs>(f, l, a))
@@ -80,19 +80,19 @@ public:
   }
 
 private:
-  template <typename Left, typename Iterator, typename Attribute>
+  template <class Left, class Iterator, class Attribute>
   auto parse_left(Iterator& f, const Iterator& l, Attribute& a) const
   -> std::enable_if_t<is_choice_parser<Left>{}, bool> {
     return lhs_(f, l, a); // recurse
   }
 
-  template <typename Left, typename Iterator>
+  template <class Left, class Iterator>
   auto parse_left(Iterator& f, const Iterator& l, unused_type) const
   -> std::enable_if_t<!is_choice_parser<Left>::value, bool> {
     return lhs_(f, l, unused);
   }
 
-  template <typename Left, typename Iterator, typename Attribute>
+  template <class Left, class Iterator, class Attribute>
   auto parse_left(Iterator& f, const Iterator& l, Attribute& a) const
   -> std::enable_if_t<!is_choice_parser<Left>::value, bool> {
     lhs_attribute al;
@@ -102,12 +102,12 @@ private:
     return true;
   }
 
-  template <typename Iterator>
+  template <class Iterator>
   bool parse_right(Iterator& f, const Iterator& l, unused_type) const {
     return rhs_(f, l, unused);
   }
 
-  template <typename Iterator, typename Attribute>
+  template <class Iterator, class Attribute>
   auto parse_right(Iterator& f, const Iterator& l, Attribute& a) const {
     rhs_attribute ar;
     if (!rhs_(f, l, ar))

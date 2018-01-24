@@ -42,13 +42,13 @@ struct http_header_parser : parser<http_header_parser> {
     return name >> ':' >> ws >> value;
   }
 
-  template <typename Iterator>
+  template <class Iterator>
   bool parse(Iterator& f, const Iterator& l, unused_type) const {
     static auto p = make();
     return p(f, l, unused);
   }
 
-  template <typename Iterator>
+  template <class Iterator>
   bool parse(Iterator& f, const Iterator& l, http::header& a) const {
     static auto p = make();
     a.name.clear();
@@ -83,13 +83,13 @@ struct http_request_parser : parser<http_request_parser> {
     return request;
   }
 
-  template <typename Iterator>
+  template <class Iterator>
   bool parse(Iterator& f, const Iterator& l, unused_type) const {
     static auto p = make();
     return p(f, l, unused);
   }
 
-  template <typename Iterator>
+  template <class Iterator>
   bool parse(Iterator& f, const Iterator& l, http::request& a) const {
     static auto p = make();
     return p(f, l, a.method, a.uri, a.protocol, a.version, a.headers, a.body);

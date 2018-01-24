@@ -26,7 +26,7 @@ namespace vast {
 struct schema_parser : parser<schema_parser> {
   using attribute = schema;
 
-  template <typename Iterator>
+  template <class Iterator>
   bool parse(Iterator& f, const Iterator& l, schema& sch) const {
     type_table symbols;
     auto to_type = [&](std::tuple<std::string, type> t) -> type {

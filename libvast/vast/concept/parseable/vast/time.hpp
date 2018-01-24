@@ -41,7 +41,7 @@ struct duration_parser : parser<duration_parser<Rep, Period>> {
     return std::chrono::duration_cast<duration_type>(d);
   }
 
-  template <typename Iterator, typename Attribute>
+  template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
     using namespace parsers;
     auto save = f;
@@ -129,13 +129,13 @@ struct ymdhms_parser : vast::parser<ymdhms_parser> {
         >> ~('-' >> day >> ~('+' >> hour >> ~(':' >> min >> ~(':' >> sec))));
   }
 
-  template <typename Iterator>
+  template <class Iterator>
   bool parse(Iterator& f, const Iterator& l, unused_type) const {
     static auto p = make();
     return p(f, l, unused);
   }
 
-  template <typename Iterator>
+  template <class Iterator>
   bool parse(Iterator& f, const Iterator& l, timestamp& tp) const {
     using namespace std::chrono;
     using namespace date;
@@ -175,7 +175,7 @@ auto const epoch = real_opt_dot
 struct timestamp_parser : parser<timestamp_parser> {
   using attribute = timestamp;
 
-  template <typename Iterator, typename Attribute>
+  template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
     static auto plus = [](timespan span) {
       return timestamp::clock::now() + span;

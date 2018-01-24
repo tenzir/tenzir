@@ -18,7 +18,7 @@
 
 namespace vast {
 
-template <typename Parser>
+template <class Parser>
 class not_parser : public parser<not_parser<Parser>> {
 public:
   using attribute = unused_type;
@@ -26,7 +26,7 @@ public:
   explicit not_parser(Parser p) : parser_{std::move(p)} {
   }
 
-  template <typename Iterator, typename Attribute>
+  template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute&) const {
     auto i = f; // Do not consume input.
     return !parser_(i, l, unused);

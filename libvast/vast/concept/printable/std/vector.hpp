@@ -22,13 +22,13 @@
 
 namespace vast {
 
-template <typename T>
+template <class T>
 struct std_vector_printer : printer<std_vector_printer<T>> {
   using attribute = std::vector<T>;
 
   std_vector_printer(const std::string& delim = ", ") : delim_{delim} {}
 
-  template <typename Iterator>
+  template <class Iterator>
   bool print(Iterator& out, const attribute& a) const {
     return detail::print_delimited(a.begin(), a.end(), out, delim_);
   }
@@ -36,7 +36,7 @@ struct std_vector_printer : printer<std_vector_printer<T>> {
   std::string delim_;
 };
 
-template <typename T>
+template <class T>
 struct printer_registry<std::vector<T>> {
   using type = std_vector_printer<T>;
 };

@@ -61,13 +61,13 @@ struct uri_parser : parser<uri_parser> {
     return uri;
   }
 
-  template <typename Iterator>
+  template <class Iterator>
   bool parse(Iterator& f, const Iterator& l, unused_type) const {
     static auto p = make();
     return p(f, l, unused);
   }
 
-  template <typename Iterator>
+  template <class Iterator>
   bool parse(Iterator& f, const Iterator& l, uri& u) const {
     static auto p = make();
     return p(f, l, u.scheme, u.host, u.port, u.path, u.query, u.fragment);

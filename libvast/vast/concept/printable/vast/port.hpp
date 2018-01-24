@@ -25,7 +25,7 @@ namespace vast {
 struct port_printer : vast::printer<port_printer> {
   using attribute = port;
 
-  template <typename Iterator>
+  template <class Iterator>
   bool print(Iterator& out, const port& p) const {
     using namespace printers;
     if (!(u16(out, p.number()) && chr<'/'>(out)))

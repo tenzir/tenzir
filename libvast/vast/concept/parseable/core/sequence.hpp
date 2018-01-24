@@ -23,16 +23,16 @@
 
 namespace vast {
 
-template <typename Lhs, typename Rhs>
+template <class Lhs, class Rhs>
 class sequence_parser;
 
-template <typename>
+template <class>
 struct is_sequence_parser : std::false_type {};
 
-template <typename... Ts>
+template <class... Ts>
 struct is_sequence_parser<sequence_parser<Ts...>> : std::true_type {};
 
-template <typename Lhs, typename Rhs>
+template <class Lhs, class Rhs>
 class sequence_parser : public parser<sequence_parser<Lhs, Rhs>> {
 public:
   using lhs_type = Lhs;
@@ -67,7 +67,7 @@ public:
     : lhs_{std::move(lhs)}, rhs_{std::move(rhs)} {
   }
 
-  template <typename Iterator, typename Attribute>
+  template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
     auto save = f;
     if (parse_left(f, l, a) && parse_right(f, l, a))
@@ -77,13 +77,13 @@ public:
   }
 
 private:
-  template <typename T>
+  template <class T>
   static constexpr auto depth_helper()
     -> std::enable_if_t<!is_sequence_parser<T>::value, size_t> {
     return 0;
   }
 
-  template <typename T>
+  template <class T>
   static constexpr auto depth_helper()
     -> std::enable_if_t<
          is_sequence_parser<T>::value
@@ -94,7 +94,7 @@ private:
   { return depth_helper<typename T::lhs_type>();
   }
 
-  template <typename T>
+  template <class T>
   static constexpr auto depth_helper()
     -> std::enable_if_t<
          is_sequence_parser<T>::value
@@ -109,13 +109,13 @@ private:
     return depth_helper<sequence_parser>();
   }
 
-  template <typename L, typename T>
+  template <class L, class T>
   static auto get_helper(T& x)
     -> std::enable_if_t<is_sequence_parser<L>{}, T&> {
     return x;
   }
 
-  template <typename L, typename T>
+  template <class L, class T>
   static auto get_helper(T& x)
     -> std::enable_if_t<
          !is_sequence_parser<L>::value,
@@ -124,42 +124,42 @@ private:
     return std::get<0>(x);
   }
 
-  template <typename Iterator, typename... Ts>
+  template <class Iterator, class... Ts>
   bool parse_left(Iterator& f, const Iterator& l, std::tuple<Ts...>& t) const {
     return lhs_(f, l, get_helper<lhs_type>(t));
   }
 
-  template <typename Iterator, typename... Ts>
+  template <class Iterator, class... Ts>
   bool parse_right(Iterator& f, const Iterator& l, std::tuple<Ts...>& t) const {
     return rhs_(f, l, std::get<depth()>(t));
   }
 
-  template <typename Iterator>
+  template <class Iterator>
   bool parse_left(Iterator& f, const Iterator& l, unused_type) const {
     return lhs_(f, l, unused);
   }
 
-  template <typename Iterator>
+  template <class Iterator>
   bool parse_right(Iterator& f, const Iterator& l, unused_type) const {
     return rhs_(f, l, unused);
   }
 
-  template <typename Iterator, typename T, typename U>
+  template <class Iterator, class T, class U>
   bool parse_left(Iterator& f, const Iterator& l, std::pair<T, U>& p) const {
     return lhs_(f, l, p.first);
   }
 
-  template <typename Iterator, typename T, typename U>
+  template <class Iterator, class T, class U>
   bool parse_right(Iterator& f, const Iterator& l, std::pair<T, U>& p) const {
     return rhs_(f, l, p.second);
   }
 
-  template <typename Iterator, typename Attribute>
+  template <class Iterator, class Attribute>
   bool parse_left(Iterator& f, const Iterator& l, Attribute& a) const {
     return lhs_(f, l, a);
   }
 
-  template <typename Iterator, typename Attribute>
+  template <class Iterator, class Attribute>
   bool parse_right(Iterator& f, const Iterator& l, Attribute& a) const {
     return rhs_(f, l, a);
   }

@@ -33,12 +33,12 @@ namespace vast {
 struct data_printer : printer<data_printer> {
   using attribute = data;
 
-  template <typename Iterator>
+  template <class Iterator>
   struct visitor {
     visitor(Iterator& out) : out_{out} {
     }
 
-    template <typename T>
+    template <class T>
     bool operator()(const T& x) const {
       return make_printer<T>{}(out_, x);
     }
@@ -60,7 +60,7 @@ struct data_printer : printer<data_printer> {
     Iterator& out_;
   };
 
-  template <typename Iterator>
+  template <class Iterator>
   bool print(Iterator& out, const data& d) const {
     return visit(visitor<Iterator>{out}, d);
   }
@@ -78,7 +78,7 @@ namespace printers {
 struct vector_printer : printer<vector_printer> {
   using attribute = vector;
 
-  template <typename Iterator>
+  template <class Iterator>
   bool print(Iterator& out, const vector& v) const {
     auto p = '[' << ~(data_printer{} % ", ") << ']';
     return p.print(out, v);
@@ -93,7 +93,7 @@ struct printer_registry<vector> {
 struct set_printer : printer<set_printer> {
   using attribute = set;
 
-  template <typename Iterator>
+  template <class Iterator>
   bool print(Iterator& out, const set& s) const {
     auto p = '{' << ~(data_printer{} % ", ") << '}';
     return p.print(out, s);
@@ -108,7 +108,7 @@ struct printer_registry<set> {
 struct table_printer : printer<table_printer> {
   using attribute = table;
 
-  template <typename Iterator>
+  template <class Iterator>
   bool print(Iterator& out, const table& t) const {
     auto pair = (data_printer{} << " -> " << data_printer{});
     auto p = '{' << ~(pair % ", ") << '}';

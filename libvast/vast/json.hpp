@@ -48,7 +48,7 @@ public:
 
   /// Meta-function that converts a type into a JSON value.
   /// If conversion is impossible it returns `std::false_type`.
-  template <typename T>
+  template <class T>
   using json_value = std::conditional_t<
     std::is_same<T, none>::value,
     null,
@@ -76,7 +76,7 @@ public:
   >;
 
   /// Maps an arbitrary type to a json type.
-  template <typename T>
+  template <class T>
   using jsonize = json_value<std::decay_t<T>>;
 
   /// A sequence of JSON values.
@@ -114,8 +114,8 @@ public:
   /// @tparam The JSON type.
   /// @param x A JSON type.
   template <
-    typename T,
-    typename =
+    class T,
+    class =
       std::enable_if_t<!std::is_same<std::false_type, jsonize<T>>::value>
   >
   json(T&& x)
@@ -140,24 +140,24 @@ private:
 
 private:
   struct less_than {
-    template <typename T>
+    template <class T>
     bool operator()(const T& x, const T& y) {
       return x < y;
     }
 
-    template <typename T, typename U>
+    template <class T, class U>
     bool operator()(const T&, const U&) {
       return false;
     }
   };
 
   struct equals {
-    template <typename T>
+    template <class T>
     bool operator()(const T& x, const T& y) {
       return x == y;
     }
 
-    template <typename T, typename U>
+    template <class T, class U>
     bool operator()(const T&, const U&) {
       return false;
     }
@@ -180,7 +180,7 @@ inline bool convert(bool b, json& j) {
   return true;
 }
 
-template <typename T>
+template <class T>
 bool convert(T x, json& j) {
   if constexpr (std::is_arithmetic<T>::value) {
     j = json::number(x);
@@ -194,7 +194,7 @@ bool convert(T x, json& j) {
   }
 }
 
-template <typename T>
+template <class T>
 bool convert(const std::vector<T>& v, json& j) {
   json::array a;
   for (auto& x : v) {
@@ -207,7 +207,7 @@ bool convert(const std::vector<T>& v, json& j) {
   return true;
 }
 
-template <typename K, typename V>
+template <class K, class V>
 bool convert(const std::map<K, V>& m, json& j) {
   json::object o;
   for (auto& p : m) {
@@ -221,7 +221,7 @@ bool convert(const std::map<K, V>& m, json& j) {
   return true;
 }
 
-template <typename T, typename... Opts>
+template <class T, class... Opts>
 json to_json(const T& x, Opts&&... opts) {
   json j;
   if (convert(x, j, std::forward<Opts>(opts)...))

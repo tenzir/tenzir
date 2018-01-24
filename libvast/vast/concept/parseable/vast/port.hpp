@@ -24,14 +24,14 @@ template <>
 struct access::parser<port> : vast::parser<access::parser<port>> {
   using attribute = port;
 
-  template <typename Iterator>
+  template <class Iterator>
   bool parse(Iterator& f, const Iterator& l, unused_type) const {
     using namespace parsers;
     auto p = u16 >> '/' >> ("?"_p | "tcp" | "udp" | "icmp");
     return p(f, l, unused);
   }
 
-  template <typename Iterator>
+  template <class Iterator>
   bool parse(Iterator& f, const Iterator& l, port& a) const {
     using namespace parsers;
     static auto p

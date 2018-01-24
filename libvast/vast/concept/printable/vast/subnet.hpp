@@ -25,7 +25,7 @@ namespace vast {
 struct subnet_printer : printer<subnet_printer> {
   using attribute = subnet;
 
-  template <typename Iterator>
+  template <class Iterator>
   bool print(Iterator& out, const subnet& sn) const {
     using namespace printers;
     return (addr << chr<'/'> << u8)(out, sn.network(), sn.length());

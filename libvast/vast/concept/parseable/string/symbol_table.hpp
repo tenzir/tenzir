@@ -22,7 +22,7 @@ namespace vast {
 
 /// A dynamic parser which acts as an associative array. For symbols sharing
 /// the same prefix, the parser returns the longest match.
-template <typename T>
+template <class T>
 struct symbol_table : parser<symbol_table<T>> {
   using attribute = T;
 
@@ -32,7 +32,7 @@ struct symbol_table : parser<symbol_table<T>> {
     : symbols(init) {
   }
 
-  template <typename Iterator, typename Attribute>
+  template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
     auto input = std::string{f, l};
     auto prefixes = symbols.prefix_of(input);

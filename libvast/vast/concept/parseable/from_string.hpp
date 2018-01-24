@@ -23,10 +23,10 @@
 namespace vast {
 
 template <
-  typename To,
-  typename Parser = make_parser<To>,
-  typename Iterator,
-  typename... Args
+  class To,
+  class Parser = make_parser<To>,
+  class Iterator,
+  class... Args
 >
 auto from_string(Iterator begin, Iterator end, Args&&... args)
   -> std::enable_if_t<is_parseable<Iterator, To>::value, optional<To>> {
@@ -37,9 +37,9 @@ auto from_string(Iterator begin, Iterator end, Args&&... args)
 }
 
 template <
-  typename To,
-  typename Parser = make_parser<To>,
-  typename... Args
+  class To,
+  class Parser = make_parser<To>,
+  class... Args
 >
 auto from_string(const std::string& str, Args&&... args) {
   auto f = str.begin();
@@ -49,10 +49,10 @@ auto from_string(const std::string& str, Args&&... args) {
 }
 
 template <
-  typename To,
-  typename Parser = make_parser<To>,
+  class To,
+  class Parser = make_parser<To>,
   size_t N,
-  typename... Args
+  class... Args
 >
 auto from_string(char const (&str)[N], Args&&... args) {
   auto f = str;

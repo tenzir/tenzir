@@ -23,7 +23,7 @@ namespace vast {
 struct none_printer : printer<none_printer> {
   using attribute = none;
 
-  template <typename Iterator>
+  template <class Iterator>
   bool print(Iterator& out, none) const {
     return printers::str.print(out, "nil");
   }

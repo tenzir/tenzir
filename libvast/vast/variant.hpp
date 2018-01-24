@@ -204,7 +204,7 @@ private:
     default_constructor(variant& self) : self_(self) {
     }
 
-    template <typename T>
+    template <class T>
     void operator()(const T&) const
     noexcept(std::is_nothrow_default_constructible<T>{}) {
       self_.construct(T());

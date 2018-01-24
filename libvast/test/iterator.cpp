@@ -19,7 +19,7 @@
 using namespace vast;
 
 // A simple iterator over an array.
-template <typename T, size_t N>
+template <class T, size_t N>
 struct iterator
   : detail::iterator_facade<iterator<T, N>, T, std::random_access_iterator_tag> {
 public:

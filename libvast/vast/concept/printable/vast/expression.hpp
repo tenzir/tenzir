@@ -31,7 +31,7 @@ namespace vast {
 struct expression_printer : printer<expression_printer> {
   using attribute = expression;
 
-  template <typename Iterator>
+  template <class Iterator>
   struct visitor {
     visitor(Iterator& out) : out_{out} {
     }
@@ -85,7 +85,7 @@ struct expression_printer : printer<expression_printer> {
     Iterator& out_;
   };
 
-  template <typename Iterator, typename T>
+  template <class Iterator, class T>
   auto print(Iterator& out, const T& x) const
     -> std::enable_if_t<
          std::is_same<T, attribute_extractor>::value
@@ -101,14 +101,14 @@ struct expression_printer : printer<expression_printer> {
     return visitor<Iterator>{out}(x);
   }
 
-  template <typename Iterator>
+  template <class Iterator>
   bool print(Iterator& out, const expression& e) const
   {
     return visit(visitor<Iterator>{out}, e);
   }
 };
 
-template <typename T>
+template <class T>
 struct printer_registry<
   T,
   std::enable_if_t<

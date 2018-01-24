@@ -21,7 +21,7 @@
 namespace vast::detail {
 
 /// A thread-safe `std::queue`.
-template <typename T>
+template <class T>
 class queue : std::queue<T> {
   queue(queue&) = delete;
   queue& operator=(queue&) = delete;
@@ -55,7 +55,7 @@ public:
   /// constructed in-place, i.e., no copy or move operations are performed.
   /// The constructor of the element is called with exactly the same
   /// arguments, as supplied to the function.
-  template <typename... Args>
+  template <class... Args>
   void emplace(Args&&... args) {
     std::unique_lock<std::mutex> lock(mutex_);
     bool const empty = super::empty();

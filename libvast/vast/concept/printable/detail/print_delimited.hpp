@@ -22,10 +22,10 @@ namespace detail {
 
 /// Prints a delimited Iterator range.
 template <
-  typename T,
-  typename Delimiter,
-  typename InputIterator,
-  typename OutputIterator
+  class T,
+  class Delimiter,
+  class InputIterator,
+  class OutputIterator
 >
 bool print_delimited(InputIterator begin, InputIterator end,
                      OutputIterator&& out) {
@@ -42,7 +42,7 @@ bool print_delimited(InputIterator begin, InputIterator end,
 }
 
 /// Prints a delimited Iterator range.
-template <typename InputIterator, typename OutputIterator, typename Delimiter>
+template <class InputIterator, class OutputIterator, class Delimiter>
 bool print_delimited(InputIterator begin, InputIterator end,
                      OutputIterator&& out, const Delimiter& delim) {
   if (begin == end)

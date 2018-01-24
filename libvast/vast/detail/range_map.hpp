@@ -24,7 +24,7 @@ namespace vast::detail {
 
 /// An associative data structure that maps half-open, *disjoint* intervals to
 /// values.
-template <typename Point, typename Value>
+template <class Point, class Value>
 class range_map {
   static_assert(std::is_arithmetic<Point>::value,
                 "Point must be an arithmetic type");
@@ -247,17 +247,17 @@ public:
   }
 
 private:
-  template <typename Iterator>
+  template <class Iterator>
   static auto& left(Iterator i) {
     return i->first;
   }
 
-  template <typename Iterator>
+  template <class Iterator>
   static auto& right(Iterator i) {
     return i->second.first;
   }
 
-  template <typename Iterator>
+  template <class Iterator>
   static auto& value(Iterator i) {
     return i->second.second;
   }

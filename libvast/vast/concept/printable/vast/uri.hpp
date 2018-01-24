@@ -29,7 +29,7 @@ namespace vast {
 struct key_value_printer : printer<key_value_printer> {
   using attribute = std::pair<std::string,std::string>;
 
-  template <typename Iterator>
+  template <class Iterator>
   bool print(Iterator& out, const std::pair<std::string,std::string>& kv) const {
     using namespace printers;
     return str.print(out, detail::percent_escape(kv.first)) 
@@ -46,7 +46,7 @@ struct printer_registry<std::pair<std::string,std::string>> {
 struct uri_printer : printer<uri_printer> {
   using attribute = uri;
   
-  template <typename Iterator>
+  template <class Iterator>
   bool print(Iterator& out, const uri& u) const {
     using namespace printers;
     

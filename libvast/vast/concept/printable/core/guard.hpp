@@ -23,7 +23,7 @@ namespace vast {
 /// @tparam Printer The printer to augment with a guard expression.
 /// @tparam Guard A function that either takes no arguments or the attribute by
 ///               const-reference and returns `bool`.
-template <typename Printer, typename Guard>
+template <class Printer, class Guard>
 class guard_printer : public printer<guard_printer<Printer, Guard>> {
 public:
   using attribute = typename Printer::attribute;
@@ -31,18 +31,18 @@ public:
   guard_printer(Printer p, Guard fun) : printer_{std::move(p)}, guard_(fun) {
   }
 
-  template <typename Iterator>
+  template <class Iterator>
   bool print(Iterator& out, unused_type) const {
     return guard_() && printer_.print(out, unused);
   }
 
-  template <typename Iterator, typename Attribute, typename G = Guard>
+  template <class Iterator, class Attribute, class G = Guard>
   auto print(Iterator& out, const Attribute& a) const
   -> std::enable_if_t<detail::guard_traits<G>::no_args_returns_bool, bool> {
     return guard_() && printer_.print(out, a);
   }
 
-  template <typename Iterator, typename Attribute, typename G = Guard>
+  template <class Iterator, class Attribute, class G = Guard>
   auto print(Iterator& out, const Attribute& a) const
   -> std::enable_if_t<detail::guard_traits<G>::one_arg_returns_bool, bool> {
     return guard_(a) && printer_.print(out, a);

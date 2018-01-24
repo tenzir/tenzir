@@ -35,12 +35,12 @@ public:
   literal_printer(bool b) : str_{b ? "T" : "F"} {
   }
 
-  template <typename T>
+  template <class T>
   literal_printer(T x, enable_if_non_fp_arithmetic<T>* = nullptr)
     : str_{std::to_string(x)} {
   }
 
-  template <typename T>
+  template <class T>
   literal_printer(T x, enable_if_fp<T>* = nullptr) : str_{std::to_string(x)} {
     // Remove trailing zeros.
     str_.erase(str_.find_last_not_of('0') + 1, std::string::npos);
@@ -59,7 +59,7 @@ public:
   literal_printer(std::string str) : str_(std::move(str)) {
   }
 
-  template <typename Iterator>
+  template <class Iterator>
   bool print(Iterator& out, unused_type) const {
     return printers::str.print(out, str_);
   }

@@ -23,7 +23,7 @@
 namespace vast {
 namespace detail {
 
-template <typename Iterator, typename T>
+template <class Iterator, class T>
 bool print_numeric(Iterator& out, T x) {
   static_assert(std::is_integral<T>{}, "T must be an integral type");
   if (x == 0) {

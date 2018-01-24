@@ -25,7 +25,7 @@ namespace vast {
 struct offset_printer : printer<offset_printer> {
   using attribute = offset;
 
-  template <typename Iterator>
+  template <class Iterator>
   bool print(Iterator& out, const offset& o) const {
     using delim = char_printer<','>;
     return detail::print_delimited<size_t, delim>(o.begin(), o.end(), out);

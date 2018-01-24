@@ -23,7 +23,7 @@ namespace vast {
 struct compression_printer : printer<compression_printer> {
   using attribute = compression;
 
-  template <typename Iterator>
+  template <class Iterator>
   bool print(Iterator& out, const compression& method) const {
     using namespace printers;
     switch (method) {

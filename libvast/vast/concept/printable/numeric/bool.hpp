@@ -25,7 +25,7 @@ namespace vast {
 struct bool_printer : printer<bool_printer> {
   using attribute = bool;
 
-  template <typename Iterator>
+  template <class Iterator>
   bool print(Iterator& out, bool x) const {
     return printers::any.print(out, x ? 'T' : 'F');
   }
