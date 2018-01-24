@@ -46,7 +46,7 @@ private:
   };
 
   /// A concrete model for a specific bitstream iterator.
-  template <typename Iterator>
+  template <class Iterator>
   class iterator_model : public iterator_concept {
   public:
     iterator_model() = default;
@@ -86,8 +86,8 @@ public:
     iterator() = default;
 
     template <
-      typename Iterator,
-      typename = util::disable_if_same_or_derived_t<iterator, Iterator>
+      class Iterator,
+      class = util::disable_if_same_or_derived_t<iterator, Iterator>
     >
     iterator(Iterator&& i)
       : concept_{new iterator_model<std::decay_t<Iterator>>{
@@ -143,7 +143,7 @@ protected:
 };
 
 /// A concrete bitstream.
-template <typename Bitstream>
+template <class Bitstream>
 class bitstream_model : public bitstream_concept,
                         util::equality_comparable<bitstream_model<Bitstream>> {
   friend access;
@@ -298,8 +298,8 @@ public:
   bitstream(bitstream&& other);
 
   template <
-    typename Bitstream,
-    typename = util::disable_if_same_or_derived_t<bitstream, Bitstream>
+    class Bitstream,
+    class = util::disable_if_same_or_derived_t<bitstream, Bitstream>
   >
   explicit bitstream(Bitstream&& bs)
     : concept_{new detail::bitstream_model<std::decay_t<Bitstream>>{

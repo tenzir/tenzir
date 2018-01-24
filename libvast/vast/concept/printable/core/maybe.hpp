@@ -20,7 +20,7 @@ namespace vast {
 
 /// Like ::optional_printer, but exposes `T` instead of `optional<T>` as
 /// attribute.
-template <typename Printer>
+template <class Printer>
 class maybe_printer : public printer<maybe_printer<Printer>> {
 public:
   using attribute = typename Printer::attribute;
@@ -29,7 +29,7 @@ public:
     : printer_{std::move(p)} {
   }
 
-  template <typename Iterator, typename Attribute>
+  template <class Iterator, class Attribute>
   bool print(Iterator& out, const Attribute& a) const {
     printer_.print(out, a);
     return true;

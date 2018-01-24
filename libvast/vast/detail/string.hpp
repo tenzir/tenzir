@@ -360,7 +360,7 @@ std::string replace_all(std::string str, const std::string& search,
 /// @pre `! sep.empty()`
 /// @returns A vector of iterator pairs each of which delimit a single field
 ///          with a range *[start, end)*.
-template <typename Iterator>
+template <class Iterator>
 std::vector<std::pair<Iterator, Iterator>>
 split(Iterator begin, Iterator end, const std::string& sep,
       const std::string& esc = "", size_t max_splits = -1,
@@ -426,7 +426,7 @@ inline split(const std::string& str, const std::string& sep,
 /// Constructs a `std::vector<std::string>` from a ::split result.
 /// @param v The vector of iterator pairs from ::split.
 /// @returns a vector of strings with the split elements.
-template <typename Iterator>
+template <class Iterator>
 auto to_strings(const std::vector<std::pair<Iterator, Iterator>>& v) {
   std::vector<std::string> strs;
   strs.resize(v.size());
@@ -436,7 +436,7 @@ auto to_strings(const std::vector<std::pair<Iterator, Iterator>>& v) {
 }
 
 /// Combines ::split and ::to_strings.
-template <typename Iterator>
+template <class Iterator>
 auto split_to_str(Iterator begin, Iterator end, const std::string& sep,
                   const std::string& esc = "", size_t max_splits = -1,
                   bool include_sep = false) {
@@ -455,7 +455,7 @@ inline auto split_to_str(const std::string& str, const std::string& sep,
 /// @param end The end of the sequence.
 /// @param sep The string to insert between each element of the sequence.
 /// @returns The joined string.
-template <typename Iterator, typename Predicate>
+template <class Iterator, class Predicate>
 std::string join(Iterator begin, Iterator end, const std::string& sep,
                  Predicate p) {
   std::string result;
@@ -466,12 +466,12 @@ std::string join(Iterator begin, Iterator end, const std::string& sep,
   return result;
 }
 
-template <typename Iterator>
+template <class Iterator>
 std::string join(Iterator begin, Iterator end, const std::string& sep) {
   return join(begin, end, sep, [](auto&& x) -> decltype(x) { return x; });
 }
 
-template <typename T>
+template <class T>
 std::string join(const std::vector<T>& v, const std::string& sep) {
   if constexpr (std::is_same_v<T, std::string>) {
     return join(v.begin(), v.end(), sep);
@@ -489,7 +489,7 @@ std::string join(const std::vector<T>& v, const std::string& sep) {
 /// @param end The end of the string.
 /// @param str The substring to check at the start of *[begin, end)*.
 /// @returns `true` iff *str* occurs at the beginning of *[begin, end)*.
-template <typename Iterator>
+template <class Iterator>
 bool starts_with(Iterator begin, Iterator end, const std::string& str) {
   using diff = typename std::iterator_traits<Iterator>::difference_type;
   if (static_cast<diff>(str.size()) > end - begin)
@@ -506,7 +506,7 @@ inline bool starts_with(const std::string& str, const std::string& start) {
 /// @param end The end of the string.
 /// @param str The substring to check at the end of *[begin, end)*.
 /// @returns `true` iff *str* occurs at the end of *[begin, end)*.
-template <typename Iterator>
+template <class Iterator>
 bool ends_with(Iterator begin, Iterator end, const std::string& str) {
   using diff = typename std::iterator_traits<Iterator>::difference_type;
   return static_cast<diff>(str.size()) <= end - begin
@@ -519,7 +519,7 @@ inline bool ends_with(const std::string& str, const std::string& end) {
 
 // -- string searching -------------------------------------------------------
 
-template <typename Key, typename Value>
+template <class Key, class Value>
 class unordered_skip_table {
   static_assert(sizeof(Key) > 1,
                 "unordered skip table makes only sense for large keys");
@@ -543,7 +543,7 @@ private:
   Value const default_;
 };
 
-template <typename Key, typename Value>
+template <class Key, class Value>
 class array_skip_table {
   static_assert(std::is_integral<Key>::value,
                 "array skip table key must be integral");
@@ -571,9 +571,9 @@ private:
 /// A stateful [Boyer-Moore](http://bit.ly/boyer-moore-pub) search context. It
 /// can look for a pattern *P* over a (text) sequence *T*.
 /// @tparam PatternIterator The iterator type over the pattern.
-template <typename PatternIterator>
+template <class PatternIterator>
 class boyer_moore {
-  template <typename Iterator, typename Container>
+  template <class Iterator, class Container>
   static void make_prefix(Iterator begin, Iterator end, Container& pfx) {
     VAST_ASSERT(end - begin > 0);
     VAST_ASSERT(pfx.size() == static_cast<size_t>(end - begin));
@@ -627,7 +627,7 @@ public:
   /// @param end The end of *T*
   /// @returns The position in *T* where *P* occurrs or *end* if *P* does not
   ///     exist in *T*.
-  template <typename TextIterator>
+  template <class TextIterator>
   TextIterator operator()(TextIterator begin, TextIterator end) const {
     /// Empty *P* always matches at the beginning of *T*.
     if (n_ == 0)
@@ -672,7 +672,7 @@ private:
 /// @tparam Iterator A random-access iterator for the pattern
 /// @param begin The iterator to the start of the pattern.
 /// @param end The iterator to the end of the pattern.
-template <typename Iterator>
+template <class Iterator>
 auto make_boyer_moore(Iterator begin, Iterator end) {
   return boyer_moore<Iterator>{begin, end};
 }
@@ -688,7 +688,7 @@ auto make_boyer_moore(Iterator begin, Iterator end) {
 /// @param t0 The iterator to the end of *T*.
 /// @returns An iterator to the first occurrence of *P* in *T* or *t1* if *P*
 ///     does not occur in *T*.
-template <typename TextIterator, typename PatternIterator>
+template <class TextIterator, class PatternIterator>
 TextIterator search_boyer_moore(PatternIterator p0, PatternIterator p1,
                                 TextIterator t0, TextIterator t1) {
   return make_boyer_moore(p0, p1)(t0, t1);
@@ -697,7 +697,7 @@ TextIterator search_boyer_moore(PatternIterator p0, PatternIterator p1,
 /// A stateful [Knuth-Morris-Pratt](http://bit.ly/knuth-morris-pratt) search
 /// context. It can look for a pattern *P* over a (text) sequence *T*.
 /// @tparam PatternIterator The iterator type over the pattern.
-template <typename PatternIterator>
+template <class PatternIterator>
 class knuth_morris_pratt {
   using pat_difference_type =
     typename std::iterator_traits<PatternIterator>::difference_type;
@@ -726,7 +726,7 @@ public:
   /// @param end The end of *T*
   /// @returns The position in *T* where *P* occurrs or *end* if *P* does not
   ///     exist in *T*.
-  template <typename TextIterator>
+  template <class TextIterator>
   TextIterator operator()(TextIterator begin, TextIterator end) const {
     /// Empty *P* always matches at the beginning of *T*.
     if (n_ == 0)
@@ -756,7 +756,7 @@ private:
 /// @tparam Iterator A random-access iterator for the pattern
 /// @param begin The iterator to the start of the pattern.
 /// @param end The iterator to the end of the pattern.
-template <typename Iterator>
+template <class Iterator>
 auto make_knuth_morris_pratt(Iterator begin, Iterator end) {
   return knuth_morris_pratt<Iterator>{begin, end};
 }
@@ -772,7 +772,7 @@ auto make_knuth_morris_pratt(Iterator begin, Iterator end) {
 /// @param t0 The iterator to the end of *T*.
 /// @returns An iterator to the first occurrence of *P* in *T* or *t1* if *P*
 ///     does not occur in *T*.
-template <typename TextIterator, typename PatternIterator>
+template <class TextIterator, class PatternIterator>
 TextIterator search_knuth_morris_pratt(PatternIterator p0, PatternIterator p1,
                                        TextIterator t0, TextIterator t1) {
   return make_knuth_morris_pratt(p0, p1)(t0, t1);

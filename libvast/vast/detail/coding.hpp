@@ -24,8 +24,8 @@ namespace vast::detail {
 /// @returns The ASCII representation of *b*.
 /// @relates byte_to_hex hex_to_byte
 template <
-  typename T,
-  typename = std::enable_if_t<std::is_integral<T>::value>
+  class T,
+  class = std::enable_if_t<std::is_integral<T>::value>
 >
 char byte_to_char(T b) {
   return b < 10 ? '0' + b : 'a' + b - 10;
@@ -36,8 +36,8 @@ char byte_to_char(T b) {
 /// @returns b The two hex nibbles as `(high, low)` pair.
 /// @relates byte_to_char hex_to_byte
 template <
-  typename T,
-  typename = std::enable_if_t<std::is_integral<T>::value>
+  class T,
+  class = std::enable_if_t<std::is_integral<T>::value>
 >
 std::pair<char, char> byte_to_hex(T b) {
   static constexpr char hex[] = "0123456789ABCDEF";
@@ -49,8 +49,8 @@ std::pair<char, char> byte_to_hex(T b) {
 /// @returns The byte value of *hex* or 0 if *hex* is not a valid hex char.
 /// @relates byte_to_hex byte_to_char
 template <
-  typename T,
-  typename = std::enable_if_t<std::is_integral<T>::value>
+  class T,
+  class = std::enable_if_t<std::is_integral<T>::value>
 >
 char hex_to_byte(T hex) {
   if (hex >= '0' && hex <= '9')
@@ -67,8 +67,8 @@ char hex_to_byte(T hex) {
 /// @param lo The low hex nibble.
 /// @relates byte_to_hex byte_to_char
 template <
-  typename T,
-  typename = std::enable_if_t<std::is_integral<T>::value>
+  class T,
+  class = std::enable_if_t<std::is_integral<T>::value>
 >
 char hex_to_byte(T hi, T lo) {
   auto byte = hex_to_byte(hi) << 4;

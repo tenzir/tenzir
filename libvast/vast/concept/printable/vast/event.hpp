@@ -27,7 +27,7 @@ namespace vast {
 struct event_printer : printer<event_printer> {
   using attribute = event;
 
-  template <typename Iterator>
+  template <class Iterator>
   bool print(Iterator& out, const event& e) const {
     using namespace printers;
     static auto p = str << str << u64 << chr<'|'>

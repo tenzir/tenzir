@@ -19,7 +19,7 @@
 namespace vast {
 
 // The AND parser does not consume its input and serves as basic look-ahead.
-template <typename Parser>
+template <class Parser>
 class and_parser : public parser<and_parser<Parser>> {
 public:
   using attribute = unused_type;
@@ -27,7 +27,7 @@ public:
   explicit and_parser(Parser p) : parser_{std::move(p)} {
   }
 
-  template <typename Iterator, typename Attribute>
+  template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute&) const {
     auto i = f; // Do not consume input.
     return parser_(i, l, unused);

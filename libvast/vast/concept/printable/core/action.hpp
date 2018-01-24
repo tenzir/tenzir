@@ -20,7 +20,7 @@
 namespace vast {
 
 /// Executes a function before printing the inner attribute.
-template <typename Printer, typename Action>
+template <class Printer, class Action>
 class action_printer : public printer<action_printer<Printer, Action>> {
 public:
   using inner_attribute = typename Printer::attribute;
@@ -38,7 +38,7 @@ public:
     // nop
   }
 
-  template <typename Iterator, typename Attribute>
+  template <class Iterator, class Attribute>
   bool print(Iterator& out, const Attribute& attr) const {
     if constexpr (action_traits::no_args_returns_void) {
       action_();

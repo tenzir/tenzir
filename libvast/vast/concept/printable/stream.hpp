@@ -21,7 +21,7 @@
 
 namespace vast {
 
-template <typename Char, typename Traits, typename T>
+template <class Char, class Traits, class T>
 auto operator<<(std::basic_ostream<Char, Traits>& out, const T& x)
   -> std::enable_if_t<
        is_printable<std::ostreambuf_iterator<Char>, T>::value, decltype(out)

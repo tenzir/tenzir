@@ -22,7 +22,7 @@ class epsilon_printer : public printer<epsilon_printer> {
 public:
   using attribute = unused_type;
 
-  template <typename Iterator>
+  template <class Iterator>
   bool print(Iterator&, unused_type) const {
     return true;
   }

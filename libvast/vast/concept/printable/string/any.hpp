@@ -21,7 +21,7 @@ namespace vast {
 struct any_printer : printer<any_printer> {
   using attribute = char;
 
-  template <typename Iterator>
+  template <class Iterator>
   bool print(Iterator& out, char x) const {
     // TODO: in the future when we have ranges, we should add a mechanism to
     // check whether we exceed the bounds instead of just deref'ing the

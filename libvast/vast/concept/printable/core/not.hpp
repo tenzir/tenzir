@@ -18,7 +18,7 @@
 
 namespace vast {
 
-template <typename Printer>
+template <class Printer>
 class not_printer : public printer<not_printer<Printer>> {
 public:
   using attribute = unused_type;
@@ -26,7 +26,7 @@ public:
   explicit not_printer(Printer p) : printer_{std::move(p)} {
   }
 
-  template <typename Iterator, typename Attribute>
+  template <class Iterator, class Attribute>
   bool print(Iterator& out, const Attribute&) const {
     return !printer_.print(out, unused);
   }

@@ -26,7 +26,7 @@ struct char_printer : printer<char_printer<Chars...>> {
 
   static constexpr std::array<char, sizeof...(Chars)> chars = {{Chars...}};
 
-  template <typename Iterator>
+  template <class Iterator>
   bool print(Iterator& out, unused_type) const {
     // TODO: in the future when we have ranges, we should add a mechanism to
     // check whether we exceed the bounds instead of just deref'ing the

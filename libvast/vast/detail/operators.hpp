@@ -16,14 +16,14 @@
 
 namespace vast::detail {
 
-template <typename T, typename U = T>
+template <class T, class U = T>
 struct equality_comparable {
   friend bool operator!=(const T& x, const U& y) {
     return !(x == y);
   }
 };
 
-template <typename T, typename U = T>
+template <class T, class U = T>
 struct less_than_comparable {
   friend bool operator>(const T& x, const U& y) {
     return y < x;
@@ -38,7 +38,7 @@ struct less_than_comparable {
   }
 };
 
-template <typename T, typename U = T>
+template <class T, class U = T>
 struct partially_ordered {
   friend bool operator>(const T& x, const U& y) {
     return y < x;
@@ -53,12 +53,12 @@ struct partially_ordered {
   }
 };
 
-template <typename T, typename U = T>
+template <class T, class U = T>
 struct totally_ordered : equality_comparable<T, U>,
                          less_than_comparable<T, U> {};
 
 #define VAST_BINARY_OPERATOR_NON_COMMUTATIVE(NAME, OP)                         \
-  template <typename T, typename U = T>                                        \
+  template <class T, class U = T>                                        \
   struct NAME {                                                                \
     friend T operator OP(const T& x, const U& y) {                             \
       T t(x);                                                                  \
@@ -68,7 +68,7 @@ struct totally_ordered : equality_comparable<T, U>,
   };
 
 #define VAST_BINARY_OPERATOR_COMMUTATIVE(NAME, OP)                             \
-  template <typename T, typename U = T>                                        \
+  template <class T, class U = T>                                        \
   struct NAME {                                                                \
     friend T operator OP(const T& x, const U& y) {                             \
       T t(x);                                                                  \
@@ -88,22 +88,22 @@ VAST_BINARY_OPERATOR_COMMUTATIVE(orable, | )
 
 #undef VAST_BINARY_OPERATOR_COMMUTATIVE
 
-template <typename T, typename U = T>
+template <class T, class U = T>
 struct additive : addable<T, U>, subtractable<T, U> {};
 
-template <typename T, typename U = T>
+template <class T, class U = T>
 struct multiplicative : multipliable<T, U>, dividable<T, U> {};
 
-template <typename T, typename U = T>
+template <class T, class U = T>
 struct integer_multiplicative : multiplicative<T, U>, modable<T, U> {};
 
-template <typename T, typename U = T>
+template <class T, class U = T>
 struct arithmetic : additive<T, U>, multiplicative<T, U> {};
 
-template <typename T, typename U = T>
+template <class T, class U = T>
 struct integer_arithmetic : additive<T, U>, integer_multiplicative<T, U> {};
 
-template <typename T, typename U = T>
+template <class T, class U = T>
 struct bitwise : andable<T, U>, orable<T, U>, xorable<T, U> {};
 
 } // namespace vast::detail

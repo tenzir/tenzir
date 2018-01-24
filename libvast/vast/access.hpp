@@ -19,65 +19,65 @@ namespace vast {
 /// Wrapper to encapsulate the implementation of concepts requiring access to
 /// private state.
 struct access {
-  template <typename, typename = void>
+  template <class, class = void>
   struct state;
 
-  template <typename, typename = void>
+  template <class, class = void>
   struct parser;
 
-  template <typename, typename = void>
+  template <class, class = void>
   struct printer;
 
-  template <typename, typename = void>
+  template <class, class = void>
   struct converter;
 };
 
 namespace detail {
 
 struct has_access_state {
-  template <typename T>
+  template <class T>
   static auto test(T* x) -> decltype(access::state<T>{}, std::true_type());
 
-  template <typename>
+  template <class>
   static auto test(...) -> std::false_type;
 };
 
 struct has_access_parser {
-  template <typename T>
+  template <class T>
   static auto test(T* x) -> decltype(access::parser<T>{}, std::true_type());
 
-  template <typename>
+  template <class>
   static auto test(...) -> std::false_type;
 };
 
 struct has_access_printer {
-  template <typename T>
+  template <class T>
   static auto test(T* x) -> decltype(access::printer<T>{}, std::true_type());
 
-  template <typename>
+  template <class>
   static auto test(...) -> std::false_type;
 };
 
 struct has_access_converter {
-  template <typename T>
+  template <class T>
   static auto test(T* x) -> decltype(access::converter<T>{}, std::true_type());
 
-  template <typename>
+  template <class>
   static auto test(...) -> std::false_type;
 };
 
 } // namespace detail
 
-template <typename T>
+template <class T>
 struct has_access_state : decltype(detail::has_access_state::test<T>(0)) {};
 
-template <typename T>
+template <class T>
 struct has_access_parser : decltype(detail::has_access_parser::test<T>(0)) {};
 
-template <typename T>
+template <class T>
 struct has_access_printer : decltype(detail::has_access_printer::test<T>(0)) {};
 
-template <typename T>
+template <class T>
 struct has_access_converter
   : decltype(detail::has_access_converter::test<T>(0)) {};
 

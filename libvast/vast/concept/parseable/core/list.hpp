@@ -21,7 +21,7 @@
 
 namespace vast {
 
-template <typename Lhs, typename Rhs>
+template <class Lhs, class Rhs>
 class list_parser : public parser<list_parser<Lhs, Rhs>> {
 public:
   using lhs_attribute = typename Lhs::attribute;
@@ -32,7 +32,7 @@ public:
   list_parser(Lhs lhs, Rhs rhs) : lhs_{std::move(lhs)}, rhs_{std::move(rhs)} {
   }
 
-  template <typename Iterator, typename Attribute>
+  template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
     if (!container::parse(lhs_, f, l, a))
       return false;

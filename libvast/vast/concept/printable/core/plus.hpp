@@ -21,7 +21,7 @@
 
 namespace vast {
 
-template <typename Printer>
+template <class Printer>
 class plus_printer : public printer<plus_printer<Printer>> {
 public:
   using inner_attribute = typename Printer::attribute;
@@ -32,7 +32,7 @@ public:
   explicit plus_printer(Printer p) : printer_{std::move(p)} {
   }
 
-  template <typename Iterator, typename Attribute>
+  template <class Iterator, class Attribute>
   bool print(Iterator& out, const Attribute& a) const {
     using std::begin;
     using std::end;

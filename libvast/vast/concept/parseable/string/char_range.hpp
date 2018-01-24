@@ -25,7 +25,7 @@ class char_range_parser : public parser<char_range_parser<From, To>> {
 public:
   using attribute = char;
 
-  template <typename Iterator, typename Attribute>
+  template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
     if (f == l || !check<From, To, Ranges...>(*f))
       return false;

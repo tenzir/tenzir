@@ -30,7 +30,7 @@
 namespace vast {
 namespace detail {
 
-template <typename Bitvector>
+template <class Bitvector>
 class bitvector_iterator;
 
 } // namespace detail
@@ -329,7 +329,7 @@ void bitvector<Block, Allocator>::assign(InputIterator first,
 
 namespace detail {
 
-template <typename Bitvector>
+template <class Bitvector>
 class bitvector_iterator
   : public iterator_facade<
       bitvector_iterator<Bitvector>,

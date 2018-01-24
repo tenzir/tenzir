@@ -34,7 +34,7 @@ public:
   /// @param x An instance of type `T`.
   /// @param t The type of the value.
   /// @returns A valid event if *t* can successfully check *x*.
-  template <typename T>
+  template <class T>
   static event make(T&& x, vast::type t) {
     return value::make(std::forward<T>(x), std::move(t));
   }

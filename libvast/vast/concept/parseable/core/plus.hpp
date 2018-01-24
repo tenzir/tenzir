@@ -21,7 +21,7 @@
 
 namespace vast {
 
-template <typename Parser>
+template <class Parser>
 class plus_parser : public parser<plus_parser<Parser>> {
 public:
   using container = detail::container<typename Parser::attribute>;
@@ -30,7 +30,7 @@ public:
   explicit plus_parser(Parser p) : parser_{std::move(p)} {
   }
 
-  template <typename Iterator, typename Attribute>
+  template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
     if (!container::parse(parser_, f, l, a))
       return false;

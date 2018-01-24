@@ -27,7 +27,7 @@ public:
     VAST_ASSERT(str != nullptr);
   }
 
-  template <typename Iterator, typename Attribute>
+  template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
     auto i = f;
     auto p = str_;

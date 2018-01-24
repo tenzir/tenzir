@@ -20,7 +20,7 @@
 
 namespace vast {
 
-template <typename Printer>
+template <class Printer>
 class optional_printer : public printer<optional_printer<Printer>> {
 public:
   using inner_attribute =
@@ -37,13 +37,13 @@ public:
     : printer_{std::move(p)} {
   }
 
-  template <typename Iterator>
+  template <class Iterator>
   bool print(Iterator& out, unused_type) const {
     printer_.print(out, unused);
     return true;
   }
 
-  template <typename Iterator, typename Attribute>
+  template <class Iterator, class Attribute>
   bool print(Iterator& out, const Attribute& a) const {
     return !a || printer_.print(out, *a);
   }

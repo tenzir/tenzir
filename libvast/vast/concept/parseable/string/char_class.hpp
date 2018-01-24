@@ -36,12 +36,12 @@ struct space_class {};
 struct upper_class {};
 struct xdigit_class {};
 
-template <typename CharClass>
+template <class CharClass>
 class char_class_parser : public parser<char_class_parser<CharClass>> {
 public:
   using attribute = char;
 
-  template <typename Iterator, typename Attribute>
+  template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
     if (f == l || !test_char(*f, CharClass{}))
       return false;

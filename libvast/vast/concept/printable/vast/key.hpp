@@ -25,7 +25,7 @@ namespace vast {
 struct key_printer : printer<key_printer> {
   using attribute = key;
 
-  template <typename Iterator>
+  template <class Iterator>
   bool print(Iterator& out, const key& k) const {
     return detail::print_delimited(k.begin(), k.end(), out, key::delimiter);
   }

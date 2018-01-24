@@ -21,11 +21,11 @@
 
 namespace vast {
 
-template <typename T>
+template <class T>
 struct optional_printer : printer<optional_printer<T>> {
   using attribute = optional<T>;
 
-  template <typename Iterator>
+  template <class Iterator>
   bool print(Iterator& out, const optional<T>& o) const {
     static auto p = make_printer<T>{};
     static auto n = make_printer<none>{};
@@ -33,7 +33,7 @@ struct optional_printer : printer<optional_printer<T>> {
   }
 };
 
-template <typename T>
+template <class T>
 struct printer_registry<optional<T>, std::enable_if_t<has_printer<T>{}>> {
   using type = optional_printer<T>;
 };

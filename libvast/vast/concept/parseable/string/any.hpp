@@ -21,7 +21,7 @@ namespace vast {
 struct any_parser : public parser<any_parser> {
   using attribute = char;
 
-  template <typename Iterator, typename Attribute>
+  template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
     if (f == l)
       return false;

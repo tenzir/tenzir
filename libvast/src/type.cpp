@@ -269,7 +269,7 @@ struct finder {
       trace_.push_back(init);
   }
 
-  template <typename T>
+  template <class T>
   std::vector<std::pair<offset, key>> operator()(const T&) const {
     std::vector<std::pair<offset, key>> r;
     if (off_.empty() || key_.size() > trace_.size())
@@ -470,23 +470,23 @@ bool is_container(const data& x) {
 namespace {
 
 struct type_congruence_checker {
-  template <typename T>
+  template <class T>
   bool operator()(const T&, const T&) const {
     return true;
   }
 
-  template <typename T, typename U>
+  template <class T, class U>
   bool operator()(const T&, const U&) const {
     return false;
   }
 
-  template <typename T>
+  template <class T>
   bool operator()(const T& x, const alias_type& a) const {
     using namespace std::placeholders;
     return visit(std::bind(std::cref(*this), std::cref(x), _1), a.value_type);
   }
 
-  template <typename T>
+  template <class T>
   bool operator()(const alias_type& a, const T& x) const {
     return (*this)(x, a);
   }
@@ -523,7 +523,7 @@ struct type_congruence_checker {
 };
 
 struct data_congruence_checker {
-  template <typename T, typename U>
+  template <class T, class U>
   bool operator()(const T&, const U&) const {
     return false;
   }
@@ -601,7 +601,7 @@ struct data_congruence_checker {
     return true;
   }
 
-  template <typename T>
+  template <class T>
   bool operator()(const alias_type& t, const T& x) const {
     using namespace std::placeholders;
     return visit(std::bind(std::cref(*this), _1, std::cref(x)), t.value_type);
@@ -719,7 +719,7 @@ VAST_SPECIALIZE_DATA_TO_TYPE(port, port_type)
 struct data_checker {
   data_checker(const type& t) : type_{t} { }
 
-  template <typename T>
+  template <class T>
   bool operator()(const T&) const {
     return is<typename data_to_type<T>::type>(type_);
   }
@@ -778,7 +778,7 @@ struct default_constructor {
     return nil;
   }
 
-  template <typename T>
+  template <class T>
   data operator()(const T&) const {
     return type_to_data<T>{};
   }
@@ -882,7 +882,7 @@ struct kind_printer {
 struct jsonizer {
   jsonizer(json& j) : json_{j} { }
 
-  template <typename T>
+  template <class T>
   bool operator()(const T&) {
     json_ = {};
     return true;

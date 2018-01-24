@@ -21,7 +21,7 @@
 
 namespace vast {
 
-template <typename Lhs, typename Rhs>
+template <class Lhs, class Rhs>
 class list_printer : public printer<list_printer<Lhs, Rhs>> {
 public:
   using lhs_attribute = typename Lhs::attribute;
@@ -32,7 +32,7 @@ public:
   list_printer(Lhs lhs, Rhs rhs) : lhs_{std::move(lhs)}, rhs_{std::move(rhs)} {
   }
 
-  template <typename Iterator, typename Attribute>
+  template <class Iterator, class Attribute>
   bool print(Iterator& out, const Attribute& a) const {
     using std::begin;
     using std::end;

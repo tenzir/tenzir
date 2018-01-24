@@ -27,7 +27,7 @@ public:
   string_parser(std::string str) : str_{std::move(str)} {
   }
 
-  template <typename Iterator>
+  template <class Iterator>
   bool parse(Iterator& f, const Iterator& l, unused_type) const {
     auto i = f;
     auto begin = str_.begin();
@@ -39,7 +39,7 @@ public:
     return true;
   }
 
-  template <typename Iterator, typename Attribute>
+  template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
     a.clear();
     auto out = std::back_inserter(a);

@@ -21,7 +21,7 @@
 
 namespace vast::detail {
 
-template <typename Derived>
+template <class Derived>
 class range {
 public:
   explicit operator bool() const {
@@ -38,7 +38,7 @@ public:
   }
 };
 
-template <typename Range>
+template <class Range>
 class range_iterator
   : public iterator_facade<
       range_iterator<Range>,
@@ -75,7 +75,7 @@ private:
   Range* rng_;
 };
 
-template <typename Derived>
+template <class Derived>
 class range_facade : public range<range_facade<Derived>> {
 public:
   using iterator = range_iterator<range_facade<Derived>>;
@@ -109,10 +109,10 @@ public:
   }
 };
 
-template <typename ForwardIterator>
+template <class ForwardIterator>
 class iterator_range : public range<iterator_range<ForwardIterator>> {
 public:
-  template <typename Iterator>
+  template <class Iterator>
   iterator_range(Iterator begin, Iterator end)
     : begin_{begin}, end_{end} {
   }

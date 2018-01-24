@@ -21,7 +21,7 @@
 
 namespace vast {
 
-template <typename Parser, int Min, int Max = Min>
+template <class Parser, int Min, int Max = Min>
 class repeat_parser : public parser<repeat_parser<Parser, Min, Max>> {
   static_assert(Min <= Max, "minimum must be smaller than maximum");
 
@@ -32,7 +32,7 @@ public:
   explicit repeat_parser(Parser p) : parser_{std::move(p)} {
   }
 
-  template <typename Iterator, typename Attribute>
+  template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
     if (Max == 0)
       return true; // If we have nothing todo, we're succeeding.
@@ -53,14 +53,14 @@ private:
   Parser parser_;
 };
 
-template <int Min, int Max = Min, typename Parser>
+template <int Min, int Max = Min, class Parser>
 auto repeat(const Parser& p) {
   return repeat_parser<Parser, Min, Max>{p};
 }
 
 namespace parsers {
 
-template <int Min, int Max = Min, typename Parser>
+template <int Min, int Max = Min, class Parser>
 auto rep(const Parser& p) {
   return repeat<Min, Max, Parser>(p);
 }

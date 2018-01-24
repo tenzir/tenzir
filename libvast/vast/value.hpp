@@ -44,8 +44,8 @@ public:
   /// Constructs an untyped value from data.
   /// @param x The data for the value.
   template <
-    typename T,
-    typename = detail::disable_if_t<
+    class T,
+    class = detail::disable_if_t<
       detail::is_same_or_derived<value, T>::value
       || std::is_same<data_type<T>, std::false_type>::value
     >
@@ -65,7 +65,7 @@ public:
   /// @param x An instance of type `T`.
   /// @param t The type of the value.
   /// @post If `! t.check(d)` then `*this = nil`.
-  template <typename T>
+  template <class T>
   value(T&& x, vast::type t)
     : value{vast::data(std::forward<T>(x)), std::move(t)} {
   }

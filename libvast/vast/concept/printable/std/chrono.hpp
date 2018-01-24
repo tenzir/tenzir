@@ -89,7 +89,7 @@ template <class Clock, class Duration>
 struct time_point_printer : printer<time_point_printer<Clock, Duration>> {
   using attribute = std::chrono::time_point<Clock, Duration>;
 
-  template <typename Iterator>
+  template <class Iterator>
   bool print(Iterator& out, std::chrono::time_point<Clock, Duration> tp) const {
     using namespace std::chrono;
     using namespace date;
@@ -114,12 +114,12 @@ struct time_point_printer : printer<time_point_printer<Clock, Duration>> {
   }
 };
 
-template <typename Rep, typename Period>
+template <class Rep, class Period>
 struct printer_registry<std::chrono::duration<Rep, Period>> {
   using type = duration_printer<Rep, Period>;
 };
 
-template <typename Clock, typename Duration>
+template <class Clock, class Duration>
 struct printer_registry<std::chrono::time_point<Clock, Duration>> {
   using type = time_point_printer<Clock, Duration>;
 };
@@ -133,7 +133,7 @@ const auto duration = duration_printer<
   Policy
 >{};
 
-template <class Clock, class Duration = typename Clock::duration>
+template <class Clock, class Duration = class Clock::duration>
 const auto time_point = time_point_printer<Clock, Duration>{};
 
 } // namespace printers

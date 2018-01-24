@@ -22,7 +22,7 @@ namespace vast::detail {
 
 /// Generates random numbers according to the [Pareto
 /// distribution](http://en.wikipedia.org/wiki/Pareto_distribution).
-template <typename RealType = double>
+template <class RealType = double>
 class pareto_distribution : equality_comparable<pareto_distribution<RealType>> {
 public:
   using result_type = RealType;
@@ -59,10 +59,10 @@ public:
   pareto_distribution(param_type parm) : params_{std::move(parm)} {
   }
 
-  template <typename URNG>
+  template <class URNG>
   result_type operator()(URNG& g);
 
-  template <typename URNG>
+  template <class URNG>
   result_type operator()(URNG& g, const param_type& parm);
 
   param_type param() const {
@@ -90,7 +90,7 @@ private:
   param_type params_;
 };
 
-template <typename R>
+template <class R>
 R pdf(const pareto_distribution<R>& dist, R x) {
   auto shape = dist.shape();
   auto scale = dist.scale();
@@ -99,7 +99,7 @@ R pdf(const pareto_distribution<R>& dist, R x) {
   return shape * std::pow(scale, shape) / std::pow(x, shape + 1);
 }
 
-template <typename R>
+template <class R>
 R cdf(const pareto_distribution<R>& dist, R x) {
   auto shape = dist.shape();
   auto scale = dist.scale();
@@ -108,7 +108,7 @@ R cdf(const pareto_distribution<R>& dist, R x) {
   return R{1} - std::pow(scale / x, shape);
 }
 
-template <typename R>
+template <class R>
 R quantile(const pareto_distribution<R>& dist, R p) {
   auto shape = dist.shape();
   auto scale = dist.scale();
@@ -119,14 +119,14 @@ R quantile(const pareto_distribution<R>& dist, R p) {
   return scale / std::pow(1 - p, 1 / shape);
 }
 
-template <typename R>
-template <typename URNG>
+template <class R>
+template <class URNG>
 R pareto_distribution<R>::operator()(URNG& g) {
   return quantile(*this, std::uniform_real_distribution<result_type>{}(g));
 }
 
-template <typename R>
-template <typename URNG>
+template <class R>
+template <class URNG>
 R pareto_distribution<R>::operator()(
   URNG& g, const typename pareto_distribution<R>::param_type& parm) {
   return pareto_distribution<R>{parm}(g);

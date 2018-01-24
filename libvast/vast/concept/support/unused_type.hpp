@@ -22,7 +22,7 @@ struct unused_type : detail::equality_comparable<unused_type>,
                      detail::integer_arithmetic<unused_type> {
   unused_type() = default;
 
-  template <typename T>
+  template <class T>
   unused_type(const T&) {
   }
 
@@ -32,32 +32,32 @@ struct unused_type : detail::equality_comparable<unused_type>,
     return *this;
   }
 
-  template <typename T>
+  template <class T>
   unused_type& operator=(const T&) {
     return *this;
   }
 
-  template <typename T>
+  template <class T>
   const unused_type& operator=(const T&) const {
     return *this;
   }
 
-  template <typename T>
+  template <class T>
   const unused_type& operator+=(T&&) const {
     return *this;
   }
 
-  template <typename T>
+  template <class T>
   const unused_type& operator-=(T&&) const {
     return *this;
   }
 
-  template <typename T>
+  template <class T>
   const unused_type& operator*=(T&&) const {
     return *this;
   }
 
-  template <typename T>
+  template <class T>
   const unused_type& operator/=(T&&) const {
     return *this;
   }

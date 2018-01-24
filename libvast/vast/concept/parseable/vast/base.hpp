@@ -24,7 +24,7 @@ namespace vast {
 struct base_parser : parser<base_parser> {
   using attribute = base;
 
-  template <typename Iterator, typename Attribute>
+  template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
     auto num = parsers::integral<size_t>;
     auto to_base = [](std::vector<size_t> xs) { return base{xs}; };

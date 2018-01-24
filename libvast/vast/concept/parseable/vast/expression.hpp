@@ -75,13 +75,13 @@ struct predicate_parser : parser<predicate_parser> {
     return pred;
   }
 
-  template <typename Iterator>
+  template <class Iterator>
   bool parse(Iterator& f, const Iterator& l, unused_type) const {
     static auto p = make();
     return p(f, l, unused);
   }
 
-  template <typename Iterator>
+  template <class Iterator>
   bool parse(Iterator& f, const Iterator& l, predicate& a) const {
     using namespace parsers;
     static auto p = make();
@@ -103,7 +103,7 @@ static auto const predicate = make_parser<vast::predicate>();
 struct expression_parser : parser<expression_parser> {
   using attribute = expression;
 
-  template <typename Iterator>
+  template <class Iterator>
   static auto make() {
     using raw_expr =
       std::tuple<
@@ -161,13 +161,13 @@ struct expression_parser : parser<expression_parser> {
     return expr;
   }
 
-  template <typename Iterator>
+  template <class Iterator>
   bool parse(Iterator& f, const Iterator& l, unused_type) const {
     static auto p = make<Iterator>();
     return p(f, l, unused);
   }
 
-  template <typename Iterator>
+  template <class Iterator>
   bool parse(Iterator& f, const Iterator& l, expression& a) const {
     static auto p = make<Iterator>();
     return p(f, l, a);

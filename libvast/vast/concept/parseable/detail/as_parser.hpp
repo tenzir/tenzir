@@ -39,7 +39,7 @@ inline auto as_parser(std::string str) {
   return ignore(string_parser{std::move(str)});
 }
 
-template <typename T>
+template <class T>
 auto as_parser(T x)
   -> std::enable_if_t<
        std::is_arithmetic<T>{} && !std::is_same<T, bool>::value,
@@ -48,14 +48,14 @@ auto as_parser(T x)
   return ignore(string_parser{std::to_string(x)});
 }
 
-template <typename T>
+template <class T>
 auto as_parser(T x) -> std::enable_if_t<is_parser<T>{}, T> {
   return x; // A good compiler will elide the copy.
 }
 
 // -- binary ------------------------------------------------------------------
 
-template <typename T>
+template <class T>
 using is_convertible_to_unary_parser =
   std::integral_constant<
     bool,
@@ -63,7 +63,7 @@ using is_convertible_to_unary_parser =
     || (std::is_arithmetic<T>{} && !std::is_same<T, bool>::value)
   >;
 
-template <typename T, typename U>
+template <class T, class U>
 using is_convertible_to_binary_parser =
   std::integral_constant<
     bool,
@@ -73,9 +73,9 @@ using is_convertible_to_binary_parser =
   >;
 
 template <
-  template <typename, typename> class BinaryParser,
-  typename T,
-  typename U
+  template <class, class> class BinaryParser,
+  class T,
+  class U
 >
 using make_binary_parser =
   std::conditional_t<
@@ -93,9 +93,9 @@ using make_binary_parser =
   >;
 
 template <
-  template <typename, typename> class BinaryParser,
-  typename T,
-  typename U
+  template <class, class> class BinaryParser,
+  class T,
+  class U
 >
 auto as_parser(T&& x, U&& y)
   -> std::enable_if_t<

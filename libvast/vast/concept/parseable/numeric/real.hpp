@@ -29,7 +29,7 @@ struct optional_dot {};
 
 } // namespace policy
 
-template <typename T, typename... Policies>
+template <class T, class... Policies>
 struct real_parser : parser<real_parser<T, Policies...>> {
   using attribute = T;
   using policies =
@@ -43,7 +43,7 @@ struct real_parser : parser<real_parser<T, Policies...>> {
       detail::tbind<std::is_same, policy::require_dot>::template type
     >::value;
 
-  template <typename Iterator>
+  template <class Iterator>
   static bool parse_dot(Iterator& f, const Iterator& l) {
     if (f == l || *f != '.')
       return false;
@@ -51,7 +51,7 @@ struct real_parser : parser<real_parser<T, Policies...>> {
     return true;
   }
 
-  template <typename Base, typename Exp>
+  template <class Base, class Exp>
   static Base pow10(Exp exp) {
     return std::pow(Base{10}, exp);
   }
@@ -70,7 +70,7 @@ struct real_parser : parser<real_parser<T, Policies...>> {
     }
   }
 
-  template <typename Iterator, typename Attribute>
+  template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
     if (f == l)
       return false;
@@ -114,7 +114,7 @@ struct real_parser : parser<real_parser<T, Policies...>> {
   }
 };
 
-template <typename T>
+template <class T>
 struct parser_registry<T, std::enable_if_t<std::is_floating_point<T>::value>> {
   using type = real_parser<T, policy::require_dot>;
 };

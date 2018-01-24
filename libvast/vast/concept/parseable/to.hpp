@@ -23,7 +23,7 @@
 
 namespace vast {
 
-template <typename To, typename Iterator>
+template <class To, class Iterator>
 auto to(Iterator& f, const Iterator& l)
   -> std::enable_if_t<is_parseable<Iterator, To>{}, expected<To>> {
   expected<To> t{To{}};
@@ -32,7 +32,7 @@ auto to(Iterator& f, const Iterator& l)
   return t;
 }
 
-template <typename To, typename Range>
+template <class To, class Range>
 auto to(Range&& rng)
   -> std::enable_if_t<
        is_parseable<decltype(std::begin(rng)), To>{}, expected<To>
@@ -44,7 +44,7 @@ auto to(Range&& rng)
   return to<To>(f, l);
 }
 
-template <typename To, size_t N>
+template <class To, size_t N>
 auto to(char const(&str)[N]) {
   auto first = str;
   auto last = str + N - 1; // No NUL byte.

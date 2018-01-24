@@ -21,7 +21,7 @@
 
 namespace vast {
 
-template <typename CharT, typename Traits, typename T>
+template <class CharT, class Traits, class T>
 auto operator>>(std::basic_istream<CharT, Traits>& in, T& x)
   -> std::enable_if_t<is_parseable<std::istreambuf_iterator<CharT>, T>::value,
                       decltype(in)> {

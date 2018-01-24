@@ -24,14 +24,14 @@
 namespace vast {
 namespace detail {
 
-template <typename Iterator, typename Attribute>
+template <class Iterator, class Attribute>
 struct abstract_rule {
   ~abstract_rule() = default;
   virtual bool parse(Iterator& f, const Iterator& l, unused_type) const = 0;
   virtual bool parse(Iterator& f, const Iterator& l, Attribute& a) const = 0;
 };
 
-template <typename Parser, typename Iterator, typename Attribute>
+template <class Parser, class Iterator, class Attribute>
 class rule_definition : public abstract_rule<Iterator, Attribute> {
 public:
   explicit rule_definition(Parser p) : parser_(std::move(p)) {
@@ -52,12 +52,12 @@ private:
 } // namespace detail
 
 /// A type-erased parser which can store any other parser.
-template <typename Iterator, typename Attribute = unused_type>
+template <class Iterator, class Attribute = unused_type>
 class rule : public parser<rule<Iterator, Attribute>> {
   using abstract_rule_type = detail::abstract_rule<Iterator, Attribute>;
   using rule_pointer = std::unique_ptr<abstract_rule_type>;
 
-  template <typename RHS>
+  template <class RHS>
   void make_parser(RHS&& rhs) {
     // TODO:
     // static_assert(is_compatible_attribute<RHS, typename RHS::attribute>{},
@@ -73,8 +73,8 @@ public:
   }
 
   template <
-    typename RHS,
-    typename = std::enable_if_t<
+    class RHS,
+    class = std::enable_if_t<
       is_parser<std::decay_t<RHS>>{} && !detail::is_same_or_derived<rule, RHS>::value
     >
   >
@@ -83,7 +83,7 @@ public:
     make_parser<RHS>(std::forward<RHS>(rhs));
   }
 
-  template <typename RHS>
+  template <class RHS>
   auto operator=(RHS&& rhs)
     -> std::enable_if_t<is_parser<std::decay_t<RHS>>{}
                         && !detail::is_same_or_derived<rule, RHS>::value> {

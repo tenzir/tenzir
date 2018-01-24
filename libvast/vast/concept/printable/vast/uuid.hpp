@@ -27,7 +27,7 @@ template <>
 struct access::printer<uuid> : vast::printer<access::printer<uuid>> {
   using attribute = uuid;
 
-  template <typename Iterator>
+  template <class Iterator>
   bool print(Iterator& out, const uuid& u) const {
     static auto byte = printers::any << printers::any;
     for (size_t i = 0; i < 16; ++i) {

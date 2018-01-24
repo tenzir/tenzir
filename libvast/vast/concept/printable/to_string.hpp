@@ -21,7 +21,7 @@
 
 namespace vast {
 
-template <typename From, typename... Opts>
+template <class From, class... Opts>
 auto to_string(From&& from, Opts&&... opts)
   -> std::enable_if_t<
        is_printable<

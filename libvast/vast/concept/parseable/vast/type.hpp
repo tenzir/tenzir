@@ -44,7 +44,7 @@ public:
     return true;
   }
 
-  template <typename Iterator, typename Attribute>
+  template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
     return symbols_(f, l, a);
   }
@@ -61,14 +61,14 @@ struct type_parser : parser<type_parser> {
     : symbol_type{symbols} {
   }
 
-  template <typename T>
+  template <class T>
   static type to_basic_type(std::vector<vast::attribute> a) {
     T b;
     b.attributes() = std::move(a);
     return b;
   };
 
-  template <typename Iterator, typename Attribute>
+  template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
     // Whitespace
     static auto ws = ignore(*parsers::space);

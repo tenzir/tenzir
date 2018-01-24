@@ -24,7 +24,7 @@
 namespace vast {
 
 // (LHS >> ~RHS) | RHS
-template <typename Lhs, typename Rhs>
+template <class Lhs, class Rhs>
 class sequence_choice_parser : public parser<sequence_choice_parser<Lhs, Rhs>> {
 public:
   using lhs_type = Lhs;
@@ -56,7 +56,7 @@ public:
     : lhs_{std::move(lhs)}, rhs_{rhs}, rhs_opt_{std::move(rhs)} {
   }
 
-  template <typename Iterator, typename Attribute>
+  template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
     optional<rhs_attribute> rhs_attr;
     if (lhs_(f, l, left_attr(a)) && rhs_opt_(f, l, rhs_attr)) {
@@ -68,9 +68,9 @@ public:
 
 private:
   template <
-    typename Attribute,
-    typename L = lhs_attribute,
-    typename R = rhs_attribute
+    class Attribute,
+    class L = lhs_attribute,
+    class R = rhs_attribute
   >
   static auto left_attr(Attribute&)
     -> std::enable_if_t<std::is_same<L, unused_type>{}, unused_type&> {
@@ -78,9 +78,9 @@ private:
   }
 
   template <
-    typename Attribute,
-    typename L = lhs_attribute,
-    typename R = rhs_attribute
+    class Attribute,
+    class L = lhs_attribute,
+    class R = rhs_attribute
   >
   static auto left_attr(Attribute& a)
     -> std::enable_if_t<
@@ -91,9 +91,9 @@ private:
   }
 
   template <
-    typename... Ts,
-    typename L = lhs_attribute,
-    typename R = rhs_attribute
+    class... Ts,
+    class L = lhs_attribute,
+    class R = rhs_attribute
   >
   static auto left_attr(std::tuple<Ts...>& t)
     -> std::enable_if_t<
@@ -104,9 +104,9 @@ private:
   }
 
   template <
-    typename Attribute,
-    typename L = lhs_attribute,
-    typename R = rhs_attribute
+    class Attribute,
+    class L = lhs_attribute,
+    class R = rhs_attribute
   >
   static auto right_attr(Attribute&)
     -> std::enable_if_t<std::is_same<R, unused_type>{}, unused_type&> {
@@ -114,9 +114,9 @@ private:
   }
 
   template <
-    typename Attribute,
-    typename L = lhs_attribute,
-    typename R = rhs_attribute
+    class Attribute,
+    class L = lhs_attribute,
+    class R = rhs_attribute
   >
   static auto right_attr(Attribute& a)
     -> std::enable_if_t<
@@ -127,9 +127,9 @@ private:
   }
 
   template <
-    typename... Ts,
-    typename L = lhs_attribute,
-    typename R = rhs_attribute
+    class... Ts,
+    class L = lhs_attribute,
+    class R = rhs_attribute
   >
   static auto right_attr(std::tuple<Ts...>& t)
     -> std::enable_if_t<

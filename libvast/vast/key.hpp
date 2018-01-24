@@ -30,7 +30,7 @@ struct key : detail::stack_vector<std::string, 128> {
   static constexpr char delimiter = '.';
 
   /// Creates a key string reprentation of an arbitrary sequence.
-  template <typename... Ts>
+  template <class... Ts>
   static std::string str(Ts&&... xs);
 };
 
@@ -38,7 +38,7 @@ struct key : detail::stack_vector<std::string, 128> {
 
 #include "vast/concept/printable/vast/key.hpp"
 
-template <typename... Ts>
+template <class... Ts>
 std::string vast::key::str(Ts&&... xs) {
   using vast::to_string;
   using std::to_string;

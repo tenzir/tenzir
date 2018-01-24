@@ -24,13 +24,13 @@
 
 namespace vast {
 
-template <typename T, int MaxDigits = 10>
+template <class T, int MaxDigits = 10>
 struct real_printer : printer<real_printer<T, MaxDigits>> {
   static_assert(std::is_floating_point<T>{}, "T must be a floating point type");
 
   using attribute = T;
 
-  template <typename Iterator>
+  template <class Iterator>
   bool print(Iterator& out, T x) const {
     // negative = positive + sign
     if (x < 0) {
@@ -55,7 +55,7 @@ struct real_printer : printer<real_printer<T, MaxDigits>> {
   }
 };
 
-template <typename T>
+template <class T>
 struct printer_registry<T, std::enable_if_t<std::is_floating_point<T>::value>> {
   using type = real_printer<T>;
 };

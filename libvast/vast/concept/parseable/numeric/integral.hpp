@@ -21,7 +21,7 @@
 namespace vast {
 namespace detail {
 
-template <typename Iterator>
+template <class Iterator>
 bool parse_sign(Iterator& i) {
   auto minus = *i == '-';
   if (minus || *i == '+') {
@@ -34,7 +34,7 @@ bool parse_sign(Iterator& i) {
 } // namespace detail
 
 template <
-  typename T,
+  class T,
   int MaxDigits = std::numeric_limits<T>::digits10 + 1,
   int MinDigits = 1,
   int Radix = 10
@@ -52,7 +52,7 @@ struct integral_parser
     return c >= '0' && c <= '9';
   }
 
-  template <typename Iterator, typename Attribute, typename F>
+  template <class Iterator, class Attribute, class F>
   static auto accumulate(Iterator& f, const Iterator& l, Attribute& a, F acc) {
     int digits = 0;
     a = 0;
@@ -66,12 +66,12 @@ struct integral_parser
     return true;
   }
 
-  template <typename Iterator>
+  template <class Iterator>
   static auto parse_pos(Iterator& f, const Iterator& l, unused_type) {
     return accumulate(f, l, unused, [](auto&, auto) {});
   }
 
-  template <typename Iterator, typename Attribute>
+  template <class Iterator, class Attribute>
   static auto parse_pos(Iterator& f, const Iterator& l, Attribute& a) {
     return accumulate(f, l, a, [](auto& n, auto x) {
       n *= Radix;
@@ -79,12 +79,12 @@ struct integral_parser
     });
   }
 
-  template <typename Iterator>
+  template <class Iterator>
   static auto parse_neg(Iterator& f, const Iterator& l, unused_type) {
     return accumulate(f, l, unused, [](auto&, auto) {});
   }
 
-  template <typename Iterator, typename Attribute>
+  template <class Iterator, class Attribute>
   static auto parse_neg(Iterator& f, const Iterator& l, Attribute& a) {
     return accumulate(f, l, a, [](auto& n, auto x) {
       n *= Radix;
@@ -92,17 +92,17 @@ struct integral_parser
     });
   }
 
-  template <typename Iterator, typename Attribute>
+  template <class Iterator, class Attribute>
   static bool parse_signed(Iterator& f, const Iterator& l, Attribute& a) {
     return detail::parse_sign(f) ? parse_neg(f, l, a) : parse_pos(f, l, a);
   }
 
-  template <typename Iterator, typename Attribute>
+  template <class Iterator, class Attribute>
   static bool parse_unsigned(Iterator& f, const Iterator& l, Attribute& a) {
     return parse_pos(f, l, a);
   }
 
-  template <typename Iterator, typename Attribute>
+  template <class Iterator, class Attribute>
   static bool dispatch(Iterator& f, const Iterator& l, Attribute& a) {
     if constexpr (std::is_signed_v<T>)
       return parse_signed(f, l, a);
@@ -110,7 +110,7 @@ struct integral_parser
       return parse_unsigned(f, l, a);
   }
 
-  template <typename Iterator, typename Attribute>
+  template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
     if (f == l)
       return false;
@@ -122,7 +122,7 @@ struct integral_parser
   }
 };
 
-template <typename T>
+template <class T>
 struct parser_registry<T, std::enable_if_t<std::is_integral<T>::value>> {
   using type = integral_parser<T>;
 };

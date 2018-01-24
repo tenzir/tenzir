@@ -32,7 +32,7 @@ template <>
 struct access::parser<data> : vast::parser<access::parser<data>> {
   using attribute = data;
 
-  template <typename Iterator>
+  template <class Iterator>
   static auto make() {
     rule<Iterator, data> p;
     auto ws = ignore(*parsers::space);
@@ -56,13 +56,13 @@ struct access::parser<data> : vast::parser<access::parser<data>> {
     return p;
   }
 
-  template <typename Iterator>
+  template <class Iterator>
   bool parse(Iterator& f, const Iterator& l, unused_type) const {
     static auto p = make<Iterator>();
     return p(f, l, unused);
   }
 
-  template <typename Iterator>
+  template <class Iterator>
   bool parse(Iterator& f, const Iterator& l, data& a) const {
     using namespace parsers;
     static auto p = make<Iterator>();

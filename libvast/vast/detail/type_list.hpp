@@ -58,28 +58,28 @@ using caf::detail::tl_apply;
 // using caf::detail::tl_is_strict_subset;
 using caf::detail::tl_equal;
 
-template <typename List>
+template <class List>
 using tl_head_t = typename tl_head<List>::type;
 
-template <typename List>
+template <class List>
 using tl_tail_t = typename tl_tail<List>::type;
 
-template <typename List>
+template <class List>
 using tl_back_t = typename tl_back<List>::type;
 
-template <typename List, size_t First, size_t Last>
+template <class List, size_t First, size_t Last>
 using tl_slice_t = typename tl_slice<List, First, Last>::type;
 
 template <class ListA, class ListB, template <class, class> class Fun>
 using tl_zip_t = typename tl_zip<ListA, ListB, Fun>::type;
 
-template <typename List>
+template <class List>
 using tl_unzip_t = typename tl_unzip<List>::type;
 
-template <typename List>
+template <class List>
 using tl_reverse_t = typename tl_reverse<List>::type;
 
-template <typename ListA, typename ListB>
+template <class ListA, class ListB>
 using tl_concat_t = typename tl_concat<ListA, ListB>::type;
 
 template <class List, class What>
@@ -99,10 +99,10 @@ template <class List, template <class> class Trait, bool TRes,
 using tl_map_conditional_t =
   typename tl_map_conditional<List, Trait, TRes, Funs...>::type;
 
-template <typename List>
+template <class List>
 using tl_popback_t = typename tl_pop_back<List>::type;
 
-template <typename List, size_t N>
+template <class List, size_t N>
 using tl_at_t = typename tl_at<List, N>::type;
 
 template <class List, class What>
@@ -114,7 +114,7 @@ using tl_filter_t = typename tl_filter<List, Pred>::type;
 template <class List, template <class> class Pred>
 using tl_filter_not_t = typename tl_filter_not<List, Pred>::type;
 
-template <typename List>
+template <class List>
 using tl_distinct_t = typename tl_distinct<List>::type;
 
 template <class List, class What>

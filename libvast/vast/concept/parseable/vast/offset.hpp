@@ -26,7 +26,7 @@ namespace vast {
 struct offset_parser : parser<offset_parser> {
   using attribute = offset;
 
-  template <typename Iterator, typename Attribute>
+  template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
     static auto p = parsers::u32 % ',';
     return p(f, l, a);

@@ -30,7 +30,7 @@ public:
 
   quoted_string_parser() = default;
 
-  template <typename Iterator, typename Attribute>
+  template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
     auto escaped_quote = Esc >> char_parser{Quote};
     auto p = Quote >> +(escaped_quote | (parsers::print - Quote)) >> Quote;

@@ -27,7 +27,7 @@ struct access::printer<vast::pattern>
   : vast::printer<access::printer<vast::pattern>> {
   using attribute = pattern;
 
-  template <typename Iterator>
+  template <class Iterator>
   bool print(Iterator& out, const pattern& pat) const {
     auto p = '/' << printers::str << '/';
     return p.print(out, pat.str_);

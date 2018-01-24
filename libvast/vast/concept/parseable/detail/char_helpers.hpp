@@ -20,7 +20,7 @@
 namespace vast {
 namespace detail {
 
-template <typename Attribute, typename T>
+template <class Attribute, class T>
 void absorb(Attribute& a, T&& x) {
   a = std::move(x);
 }

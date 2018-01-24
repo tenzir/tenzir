@@ -72,7 +72,7 @@ namespace vast::detail {
 /// using unsigned integers or IP addresses as keys, they should be provided in
 /// "network" order).
 /// @tparam T The element type of the radix tree.
-template <typename T, std::size_t N = 10>
+template <class T, std::size_t N = 10>
 class radix_tree {
   struct node;
 
@@ -872,7 +872,7 @@ private:
   node* root;
 };
 
-template <typename T, std::size_t N>
+template <class T, std::size_t N>
 void radix_tree<T, N>::node4::add_child(node** ref, unsigned char c,
                                         node* child) {
   if (n.num_children < 4) {
@@ -900,7 +900,7 @@ void radix_tree<T, N>::node4::add_child(node** ref, unsigned char c,
   nn->add_child(ref, c, child);
 }
 
-template <typename T, std::size_t N>
+template <class T, std::size_t N>
 void radix_tree<T, N>::node16::add_child(node** ref, unsigned char c,
                                          node* child) {
   if (n.num_children < 16) {
@@ -937,7 +937,7 @@ void radix_tree<T, N>::node16::add_child(node** ref, unsigned char c,
   nn->add_child(ref, c, child);
 }
 
-template <typename T, std::size_t N>
+template <class T, std::size_t N>
 void radix_tree<T, N>::node48::add_child(node** ref, unsigned char c,
                                          node* child) {
   if (n.num_children < 48) {
@@ -958,14 +958,14 @@ void radix_tree<T, N>::node48::add_child(node** ref, unsigned char c,
   nn->add_child(ref, c, child);
 }
 
-template <typename T, std::size_t N>
+template <class T, std::size_t N>
 void radix_tree<T, N>::node256::add_child(node**, unsigned char c,
                                           node* child) {
   ++n.num_children;
   children[c] = child;
 }
 
-template <typename T, std::size_t N>
+template <class T, std::size_t N>
 void radix_tree<T, N>::node4::rem_child(node** ref, node** child) {
   int pos = child - children.data();
   std::copy(keys.begin() + pos + 1, keys.begin() + n.num_children,
@@ -999,7 +999,7 @@ void radix_tree<T, N>::node4::rem_child(node** ref, node** child) {
   delete this;
 }
 
-template <typename T, std::size_t N>
+template <class T, std::size_t N>
 void radix_tree<T, N>::node16::rem_child(node** ref, node** child) {
   int pos = child - children.data();
   std::copy(keys.begin() + pos + 1, keys.begin() + n.num_children,
@@ -1016,7 +1016,7 @@ void radix_tree<T, N>::node16::rem_child(node** ref, node** child) {
   delete this;
 }
 
-template <typename T, std::size_t N>
+template <class T, std::size_t N>
 void radix_tree<T, N>::node48::rem_child(node** ref, unsigned char c) {
   int pos = keys[c];
   keys[c] = 0;
@@ -1038,7 +1038,7 @@ void radix_tree<T, N>::node48::rem_child(node** ref, unsigned char c) {
   delete this;
 }
 
-template <typename T, std::size_t N>
+template <class T, std::size_t N>
 void radix_tree<T, N>::node256::rem_child(node** ref, unsigned char c) {
   children[c] = nullptr;
   --n.num_children;
@@ -1057,34 +1057,34 @@ void radix_tree<T, N>::node256::rem_child(node** ref, unsigned char c) {
   delete this;
 }
 
-template <typename T, std::size_t N>
+template <class T, std::size_t N>
 radix_tree<T, N>::iterator::iterator(node* arg_root, node* starting_point)
   : root(arg_root), node_ptr(starting_point), ready_to_iterate(false) {
 }
 
-template <typename T, std::size_t N>
+template <class T, std::size_t N>
 typename radix_tree<T, N>::iterator::reference radix_tree<T, N>::iterator::
 operator*() const {
   return reinterpret_cast<leaf*>(node_ptr)->kv;
 }
 
-template <typename T, std::size_t N>
+template <class T, std::size_t N>
 typename radix_tree<T, N>::iterator::pointer radix_tree<T, N>::iterator::
 operator->() const {
   return &reinterpret_cast<leaf*>(node_ptr)->kv;
 }
 
-template <typename T, std::size_t N>
+template <class T, std::size_t N>
 bool radix_tree<T, N>::iterator::operator==(const iterator& other) const {
   return node_ptr == other.node_ptr;
 }
 
-template <typename T, std::size_t N>
+template <class T, std::size_t N>
 bool radix_tree<T, N>::iterator::operator!=(const iterator& other) const {
   return node_ptr != other.node_ptr;
 }
 
-template <typename T, std::size_t N>
+template <class T, std::size_t N>
 const typename radix_tree<T, N>::iterator& radix_tree<T, N>::iterator::
 operator++() {
   prepare();
@@ -1092,7 +1092,7 @@ operator++() {
   return *this;
 }
 
-template <typename T, std::size_t N>
+template <class T, std::size_t N>
 typename radix_tree<T, N>::iterator radix_tree<T, N>::iterator::
 operator++(int) {
   prepare();
@@ -1101,7 +1101,7 @@ operator++(int) {
   return rval;
 }
 
-template <typename T, std::size_t N>
+template <class T, std::size_t N>
 void radix_tree<T, N>::iterator::increment() {
   while (!visited->empty()) {
     uint16_t& next_idx = visited->front().idx;
@@ -1165,7 +1165,7 @@ void radix_tree<T, N>::iterator::increment() {
   node_ptr = nullptr;
 }
 
-template <typename T, std::size_t N>
+template <class T, std::size_t N>
 void radix_tree<T, N>::iterator::prepare() {
   if (ready_to_iterate)
     return;
@@ -1190,7 +1190,7 @@ void radix_tree<T, N>::iterator::prepare() {
   }
 }
 
-template <typename T, std::size_t N>
+template <class T, std::size_t N>
 radix_tree<T, N>::iterator::iterator(const iterator& other)
   : root(other.root),
     node_ptr(other.node_ptr),
@@ -1199,7 +1199,7 @@ radix_tree<T, N>::iterator::iterator(const iterator& other)
     visited.reset(new std::deque<node_visit>{*other.visited});
 }
 
-template <typename T, std::size_t N>
+template <class T, std::size_t N>
 void swap(typename radix_tree<T, N>::iterator& a,
           typename radix_tree<T, N>::iterator& b) {
   using std::swap;
@@ -1209,7 +1209,7 @@ void swap(typename radix_tree<T, N>::iterator& a,
   swap(a.visited, b.visited);
 }
 
-template <typename T, std::size_t N>
+template <class T, std::size_t N>
 typename radix_tree<T, N>::iterator& radix_tree<T, N>::iterator::
 operator=(iterator rhs) {
   swap(*this, rhs);

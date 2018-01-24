@@ -20,7 +20,7 @@ namespace vast {
 
 /// Like ::optional_parser, but exposes `T` instead of `optional<T>` as
 /// attribute.
-template <typename Parser>
+template <class Parser>
 class maybe_parser : public parser<maybe_parser<Parser>> {
 public:
   using attribute = typename Parser::attribute;
@@ -29,7 +29,7 @@ public:
     : parser_{std::move(p)} {
   }
 
-  template <typename Iterator, typename Attribute>
+  template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
     parser_(f, l, a);
     return true;
