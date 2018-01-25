@@ -11,7 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/bitmap.hpp"
+#include "vast/ids.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/query_options.hpp"
@@ -57,9 +57,9 @@ TEST(index) {
       CHECK_EQUAL(scheduled, 3u);
       // After the lookup ID has arrived,
       size_t i = 0;
-      bitmap all;
+      ids all;
       self->receive_for(i, scheduled)(
-        [&](const bitmap& hits) { all |= hits; },
+        [&](const ids& hits) { all |= hits; },
         error_handler()
       );
       CHECK_EQUAL(rank(all), total_hits);
@@ -79,15 +79,15 @@ TEST(index) {
       CHECK_EQUAL(total, 3u);
       CHECK_EQUAL(scheduled, 2u); // Only two this time
       size_t i = 0;
-      bitmap all;
+      ids all;
       self->receive_for(i, scheduled)(
-        [&](const bitmap& hits) { all |= hits; },
+        [&](const ids& hits) { all |= hits; },
         error_handler()
       );
       // Evict one partition.
       self->send(index, id, size_t{1});
       self->receive(
-        [&](const bitmap& hits) { all |= hits; },
+        [&](const ids& hits) { all |= hits; },
         error_handler()
       );
       CHECK_EQUAL(rank(all), total_hits); // conn + dns + http

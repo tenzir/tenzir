@@ -11,7 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/bitmap.hpp"
+#include "vast/ids.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
 
@@ -46,13 +46,13 @@ struct partition_fixture : fixtures::actor_system_and_events {
     self->wait_for(partition);
   }
 
-  bitmap query(const std::string& str) {
+  ids query(const std::string& str) {
     MESSAGE("sending query");
     auto expr = to<expression>(str);
     REQUIRE(expr);
-    bitmap result;
+    ids result;
     self->request(partition, infinite, *expr).receive(
-      [&](bitmap& hits) {
+      [&](ids& hits) {
         result = std::move(hits);
       },
       error_handler()
@@ -67,7 +67,7 @@ struct partition_fixture : fixtures::actor_system_and_events {
     MESSAGE("respawning partition and sending query again");
     partition = self->spawn(system::partition, directory);
     self->request(partition, infinite, *expr).receive(
-      [&](const bitmap& hits) {
+      [&](const ids& hits) {
         REQUIRE_EQUAL(hits, result);
       },
       error_handler()

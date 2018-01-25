@@ -18,7 +18,6 @@
 
 #include <caf/stateful_actor.hpp>
 
-#include "vast/bitmap.hpp"
 #include "vast/expression.hpp"
 #include "vast/filesystem.hpp"
 #include "vast/uuid.hpp"
