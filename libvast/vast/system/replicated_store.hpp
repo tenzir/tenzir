@@ -43,7 +43,7 @@ struct replicated_store_state {
   uint64_t request_id = 0;
   std::unordered_map<uint64_t, caf::response_promise> requests;
   std::chrono::steady_clock::time_point last_stats_update;
-  const char* name = "replicated-store";
+  static inline const char* name = "replicated-store";
 };
 
 template <class Inspector, class Key, class Value>

@@ -27,7 +27,7 @@ struct event_indexer_state {
   path dir;
   type event_type;
   std::unordered_map<path, caf::actor> indexers;
-  const char* name = "event-indexer";
+  static inline const char* name = "event-indexer";
 };
 
 /// Indexes an event.

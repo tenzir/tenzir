@@ -129,7 +129,7 @@ struct ids_evaluator {
 struct evaluator_state {
   ids hits;
   std::unordered_map<predicate, ids> predicates;
-  const char* name = "evaluator";
+  static inline const char* name = "evaluator";
 };
 
 // Wraps a query expression in an actor. Upon receiving hits from COLLECTORs,

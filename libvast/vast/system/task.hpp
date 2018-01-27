@@ -30,7 +30,7 @@ struct task_state {
   std::map<caf::actor_addr, uint64_t> workers;
   detail::flat_set<caf::actor> subscribers;
   detail::flat_set<caf::actor> supervisors;
-  const char* name = "task";
+  static inline const char* name = "task";
 };
 
 namespace detail {

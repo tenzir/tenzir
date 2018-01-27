@@ -23,7 +23,7 @@
 namespace vast::system {
 
 struct signal_monitor_state {
-  const char* name = "signal-monitor";
+  static inline const char* name = "signal-monitor";
 };
 
 using signal_monitor_type = caf::typed_actor<caf::reacts_to<run_atom>>;

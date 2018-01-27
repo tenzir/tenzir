@@ -71,7 +71,7 @@ struct archive_state {
   detail::cache<uuid, segment> cache;
   segment active;
   accountant_type accountant;
-  const char* name = "archive";
+  static inline const char* name = "archive";
 };
 
 using archive_type = caf::typed_actor<

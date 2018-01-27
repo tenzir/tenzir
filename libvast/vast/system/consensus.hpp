@@ -322,7 +322,7 @@ struct server_state {
   path dir;
 
   // Name of this actor (for logging purposes).
-  const char* name = "raft";
+  static inline const char* name = "raft";
 };
 
 /// Spawns a consensus module.

@@ -25,7 +25,7 @@ class path;
 namespace system {
 
 struct profiler_state {
-  const char* name = "profiler";
+  static inline const char* name = "profiler";
 };
 
 /// Profiles CPU and heap usage via gperftools.
