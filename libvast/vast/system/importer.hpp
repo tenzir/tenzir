@@ -41,7 +41,7 @@ struct importer_state {
   std::chrono::steady_clock::time_point last_replenish;
   std::vector<event> remainder;
   path dir;
-  const char* name = "importer";
+  static inline const char* name = "importer";
 };
 
 /// Spawns an IMPORTER.

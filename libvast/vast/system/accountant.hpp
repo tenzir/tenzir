@@ -30,9 +30,8 @@ namespace vast::system {
 struct accountant_state {
   using stopwatch = std::chrono::steady_clock;
   std::ofstream file;
-  const char* name = "accountant";
+  static inline const char* name = "accountant";
 };
-
 
 using accountant_type =
   caf::typed_actor<

@@ -66,7 +66,7 @@ auto inspect(Inspector& f, registry& r) {
 
 struct tracker_state {
   vast::system::registry registry;
-  const char* name = "tracker";
+  static inline const char* name = "tracker";
 };
 
 using tracker_type = caf::typed_actor<

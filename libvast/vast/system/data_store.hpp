@@ -25,7 +25,7 @@ namespace vast::system {
 template <class Key, class Value>
 struct data_store_state {
   std::unordered_map<Key, Value> store;
-  const char* name = "data-store";
+  static inline const char* name = "data-store";
 };
 
 /// A key-value store that stores its data in a `std::unordered_map`.

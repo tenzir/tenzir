@@ -44,7 +44,7 @@ struct value_indexer_state {
   vast::type type;
   std::unique_ptr<value_index> idx;
   value_index::size_type last_flush = 0;
-  const char* name = "value-indexer";
+  static inline const char* name = "value-indexer";
 };
 
 // Wraps a value index into an actor.

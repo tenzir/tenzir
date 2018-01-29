@@ -26,7 +26,7 @@ namespace vast::system {
 
 struct partition_state {
   std::unordered_map<type, caf::actor> indexers;
-  const char* name = "partition";
+  static inline const char* name = "partition";
 };
 
 /// A horizontal partition of the INDEX.
