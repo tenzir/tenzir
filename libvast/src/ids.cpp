@@ -11,34 +11,25 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_IDS_HPP
-#define VAST_IDS_HPP
-
-#include "vast/bitmap.hpp"
-#include "vast/aliases.hpp"
+#include "vast/ids.hpp"
 
 namespace vast {
 
-/// A set of IDs.
-using ids = bitmap;
-
-/// An open interval of IDs.
-struct id_range {
-  id_range(event_id from, event_id to) : first(from), last(to) {
-    // nop
+ids make_ids(std::initializer_list<id_range> ranges) {
+  ids result;
+  for (auto [first, last] : ranges) {
+    VAST_ASSERT(first < last);
+    if (first >= result.size()) {
+      result.append_bits(false, first - result.size());
+      result.append_bits(true, (last - first));
+    } else {
+      ids tmp;
+      tmp.append_bits(false, first);
+      tmp.append_bits(true, (last - first));
+      result |= tmp;
+    }
   }
-  id_range(event_id id) : id_range(id, id + 1) {
-    // nop
-  }
-  event_id first;
-  event_id last;
-};
-
-/// Generates an ID set for the given ranges. For example,
-/// `make_ids({{10, 12}, {20, 22}})` will return an ID set containing the
-/// ranges [10, 12) and [20, 22), i.e., 10, 11, 20, and 21.
-ids make_ids(std::initializer_list<id_range> ranges);
+  return result;
+}
 
 } // namespace vast
-
-#endif

@@ -24,6 +24,7 @@ set(libvast_sources
   src/error.cpp
   src/event.cpp
   src/ewah_bitmap.cpp
+  src/ids.cpp
   src/filesystem.cpp
   src/key.cpp
   src/http.cpp
@@ -185,6 +186,7 @@ set(tests
   test/filesystem.cpp
   test/hash.cpp
   test/http.cpp
+  test/ids.cpp
   test/iterator.cpp
   test/json.cpp
   test/key.cpp
