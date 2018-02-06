@@ -76,12 +76,12 @@ struct extract<8> {
 
 namespace policy {
 
-struct swap {};
-struct no_swap {};
+struct big_endian {}; // network byte order
+struct little_endian {};
 
 } // namespace policy
 
-template <class T, class Policy = policy::no_swap, size_t Bytes = sizeof(T)>
+template <class T, class Policy = policy::big_endian, size_t Bytes = sizeof(T)>
 struct byte_parser : parser<byte_parser<T, Policy, Bytes>> {
   using attribute = T;
 
@@ -107,7 +107,15 @@ struct byte_parser : parser<byte_parser<T, Policy, Bytes>> {
 
   template <class Iterator>
   bool parse(Iterator& f, const Iterator& l, T& x) const {
-    if constexpr (std::is_same_v<Policy, policy::no_swap>){
+    // swap bytes only if the input byte order differs from the host byte order
+    if constexpr (
+      (std::is_same_v<
+         Policy,
+         policy::big_endian> && detail::host_endian == detail::big_endian)
+      || (std::is_same_v<
+            Policy,
+            policy::
+              little_endian> && detail::host_endian == detail::little_endian)) {
       return extract(f, l, x);
     } else {
       if (!extract(f, l, x))
@@ -137,13 +145,13 @@ struct bytes_parser : parser<bytes_parser<N>> {
 
 namespace parsers {
 
-auto const byte = byte_parser<uint8_t>{};
-auto const b16be = byte_parser<uint16_t, policy::no_swap>{};
-auto const b32be = byte_parser<uint32_t, policy::no_swap>{};
-auto const b64be = byte_parser<uint64_t, policy::no_swap>{};
-auto const b16le = byte_parser<uint16_t, policy::swap>{};
-auto const b32le = byte_parser<uint32_t, policy::swap>{};
-auto const b64le = byte_parser<uint64_t, policy::swap>{};
+auto const byte = byte_parser<uint8_t, policy::big_endian>{};
+auto const b16be = byte_parser<uint16_t, policy::big_endian>{};
+auto const b32be = byte_parser<uint32_t, policy::big_endian>{};
+auto const b64be = byte_parser<uint64_t, policy::big_endian>{};
+auto const b16le = byte_parser<uint16_t, policy::little_endian>{};
+auto const b32le = byte_parser<uint32_t, policy::little_endian>{};
+auto const b64le = byte_parser<uint64_t, policy::little_endian>{};
 
 template <size_t N>
 auto const bytes = bytes_parser<N>{};
