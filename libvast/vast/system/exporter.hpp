@@ -43,6 +43,7 @@ struct exporter_state {
   std::vector<event> results;
   std::chrono::steady_clock::time_point start;
   query_statistics stats;
+  query_options options;
   uuid id;
   static inline const char* name = "exporter";
 };

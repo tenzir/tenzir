@@ -11,6 +11,8 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
+#include <iterator>
+
 #include <caf/all.hpp>
 
 #include "vast/config.hpp"
@@ -54,7 +56,8 @@ expected<actor> spawn_archive(local_actor* self, options& opts) {
   return actor_cast<actor>(a);
 }
 
-expected<actor> spawn_exporter(local_actor* self, options& opts) {
+expected<actor> spawn_exporter(stateful_actor<node_state>* self,
+                               options& opts) {
   auto limit = uint64_t{0};
   auto r = opts.params.extract_opts({
     {"continuous,c", "marks a query as continuous"},
@@ -92,10 +95,27 @@ expected<actor> spawn_exporter(local_actor* self, options& opts) {
     anon_send(exp, extract_atom::value, limit);
   else
     anon_send(exp, extract_atom::value);
+  // Send the running IMPORTERs to the EXPORTER if it handles a continous query.
+  if (has_continuous_option(query_opts)) {
+    self->request(self->state.tracker, infinite, get_atom::value).then(
+      [=](registry& reg) mutable {
+        VAST_DEBUG(self, "looks for importers");
+        auto& local = reg.components[self->state.name];
+        const std::string wanted = "importer";
+        std::vector<actor> importers;
+        for (auto& [component, state] : local)
+          if (std::equal(wanted.begin(), wanted.end(), component.begin()))
+            importers.push_back(state.actor);
+        if (!importers.empty())
+          self->send(exp, importer_atom::value, std::move(importers));
+      }
+    );
+  }
   return exp;
 }
 
-expected<actor> spawn_importer(local_actor* self, options& opts) {
+expected<actor> spawn_importer(stateful_actor<node_state>* self,
+                               options& opts) {
   auto ids = size_t{128};
   auto r = opts.params.extract_opts({
     {"ids,n", "number of initial IDs to request", ids},
@@ -103,6 +123,7 @@ expected<actor> spawn_importer(local_actor* self, options& opts) {
   opts.params = r.remainder;
   if (!r.error.empty())
     return make_error(ec::syntax_error, r.error);
+  // FIXME: Notify exporters with a continuous query.
   return self->spawn(importer, opts.dir / opts.label, ids);
 }
 
