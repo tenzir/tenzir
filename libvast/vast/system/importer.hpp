@@ -40,6 +40,7 @@ struct importer_state {
   size_t batch_size;
   std::chrono::steady_clock::time_point last_replenish;
   std::vector<event> remainder;
+  std::vector<caf::actor> continuous_queries;
   path dir;
   static inline const char* name = "importer";
 };
