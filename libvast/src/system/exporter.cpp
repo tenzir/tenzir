@@ -81,14 +81,14 @@ void report_statistics(stateful_actor<exporter_state>* self) {
 
 void shutdown(stateful_actor<exporter_state>* self) {
   if (rank(self->state.unprocessed) > 0 || !self->state.results.empty()
-      || has_continuous_option(self->state.opts))
+      || has_continuous_option(self->state.options))
     return;
   report_statistics(self);
   self->send_exit(self, exit_reason::normal);
 }
 
 void request_more_hits(stateful_actor<exporter_state>* self) {
-  if (!has_historical_option(self->state.opts))
+  if (!has_historical_option(self->state.options))
     return;
   auto waiting_for_hits =
     self->state.stats.received == self->state.stats.scheduled;
@@ -109,15 +109,14 @@ void request_more_hits(stateful_actor<exporter_state>* self) {
 } // namespace <anonymous>
 
 behavior exporter(stateful_actor<exporter_state>* self, expression expr,
-                  query_options opts) {
+                  query_options options) {
   auto eu = self->system().dummy_execution_unit();
   self->state.sink = actor_pool::make(eu, actor_pool::broadcast());
   if (auto a = self->system().registry().get(accountant_atom::value))
     self->state.accountant = actor_cast<accountant_type>(a);
-  self->state.opts = opts;
-  if (has_continuous_option(opts)) {
+  self->state.options = options;
+  if (has_continuous_option(options))
     VAST_DEBUG(self, "has continuous query option");
-  }
   self->set_exit_handler(
     [=](const exit_msg& msg) {
       self->send(self->state.sink, sys_atom::value, delete_atom::value);
@@ -130,7 +129,7 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
   self->set_down_handler(
     [=](const down_msg& msg) {
       VAST_DEBUG(self, "received DOWN from", msg.source);
-      if (has_continuous_option(self->state.opts)
+      if (has_continuous_option(self->state.options)
           && (msg.source == self->state.archive
               || msg.source == self->state.index))
         report_statistics(self);
@@ -233,13 +232,13 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
     [=](const archive_type& archive) {
       VAST_DEBUG(self, "registers archive", archive);
       self->state.archive = archive;
-      if (has_continuous_option(self->state.opts))
+      if (has_continuous_option(self->state.options))
         self->monitor(archive);
     },
     [=](index_atom, const actor& index) {
       VAST_DEBUG(self, "registers index", index);
       self->state.index = index;
-      if (has_continuous_option(self->state.opts))
+      if (has_continuous_option(self->state.options))
         self->monitor(index);
     },
     [=](sink_atom, const actor& sink) {
@@ -249,14 +248,14 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
     },
     [=](importer_atom, const std::vector<actor>& importers) {
       // Register for events at running IMPORTERs.
-      if (has_continuous_option(self->state.opts))
-        for (auto& i : importers)
-          self->send(i, exporter_atom::value, self);
+      if (has_continuous_option(self->state.options))
+        for (auto& x : importers)
+          self->send(x, exporter_atom::value, self);
     },
     [=](run_atom) {
       VAST_INFO(self, "executes query", expr);
       self->state.start = steady_clock::now();
-      if (!has_historical_option(self->state.opts))
+      if (!has_historical_option(self->state.options))
         return;
       self->request(self->state.index, infinite, expr).then(
         [=](const uuid& lookup, size_t partitions, size_t scheduled) {

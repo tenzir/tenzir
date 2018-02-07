@@ -103,9 +103,9 @@ expected<actor> spawn_exporter(stateful_actor<node_state>* self,
         auto& local = reg.components[self->state.name];
         const std::string wanted = "importer";
         std::vector<actor> importers;
-        for (auto& comp : local)
-          if (std::equal(wanted.begin(), wanted.end(), comp.first.begin()))
-            importers.push_back(comp.second.actor);
+        for (auto& [component, state] : local)
+          if (std::equal(wanted.begin(), wanted.end(), component.begin()))
+            importers.push_back(state.actor);
         if (!importers.empty())
           self->send(exp, importer_atom::value, std::move(importers));
       }
