@@ -106,24 +106,13 @@ struct byte_parser : parser<byte_parser<T, Policy, Bytes>> {
   }
 
   template <class Iterator>
-  bool parse(Iterator& f, const Iterator& l, T& x) const {
-    // swap bytes only if the input byte order differs from the host byte order
-    if constexpr (
-      (std::is_same_v<
-         Policy,
-         policy::big_endian> && detail::host_endian == detail::big_endian)
-      || (std::is_same_v<
-            Policy,
-            policy::
-              little_endian> && detail::host_endian == detail::little_endian)) {
-      return extract(f, l, x);
-    } else {
+    bool parse(Iterator& f, const Iterator& l, T& x) const {
       if (!extract(f, l, x))
-        return false;
-      x = detail::byte_swap(x);
+          return false;
+      if constexpr (std::is_same_v<Policy, policy::little_endian>)
+        x = detail::byte_swap(x);
       return true;
     }
-  }
 };
 
 template <size_t N>
