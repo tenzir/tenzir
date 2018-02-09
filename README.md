@@ -45,6 +45,21 @@ Send [Bro](http://www.bro.org) logs to a remote node:
 
 ## Installation
 
+Required dependencies:
+
+- A C++17 compiler:
+  - Clang 5
+  - GCC 7
+- [CMake](http://www.cmake.org)
+- [CAF](https://github.com/actor-framework/actor-framework) (develop branch)
+
+Optional dependencies:
+
+- [libpcap](http://www.tcpdump.org)
+- [gperftools](http://code.google.com/p/google-perftools)
+- [Doxygen](http://www.doxygen.org)
+- [md2man](https://github.com/sunaku/md2man)
+
 ### Source Build
 
 Building VAST involves the following steps:
@@ -54,51 +69,14 @@ Building VAST involves the following steps:
     make test
     make install
 
-Required dependencies:
+The `configure` script is a small wrapper that passes build-related variables
+to CMake. For example, to use [ninja](https://ninja-build.org) as build
+generator, add `--generator=Ninja` to the command line. Passing `--help` shows
+all available options.
 
-- A C++14 compiler:
-  - Clang 3.5
-  - GCC 6
-- [CMake](http://www.cmake.org)
-- [CAF](https://github.com/actor-framework/actor-framework) (develop branch)
-
-Optional:
-
-- [libpcap](http://www.tcpdump.org)
-- [gperftools](http://code.google.com/p/google-perftools)
-- [Doxygen](http://www.doxygen.org)
-- [md2man](https://github.com/sunaku/md2man)
-
-To build the API documentation locally:
+The `doc` target builds the API documentation locally:
 
     make doc
-
-#### FreeBSD
-
-FreeBSD ships with a C++14 compiler.
-One can install as the dependencies as follows:
-
-    pkg install cmake
-
-Even though FreeBSD provides a CAF port, VAST currently depends the CAF develop
-branch and therefore requires manual installation.
-
-#### Linux
-
-On recent Debian-based distributions, getting a working toolchain involves
-installing the following packages:
-
-    apt-get install cmake
-
-CAF offers binary packages via [openSUSE's Build Service][caf-obs].
-
-#### Mac OS
-
-Mac OS also ships with a C++14 compiler out of the box.
-[Homebrew](http://brew.sh) makes it easy to install the dependencies:
-
-    brew install cmake
-    brew install caf --HEAD
 
 ## Scientific Use
 
