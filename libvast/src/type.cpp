@@ -22,6 +22,7 @@
 #include "vast/json.hpp"
 #include "vast/pattern.hpp"
 #include "vast/type.hpp"
+#include "vast/schema.hpp"
 
 namespace vast {
 
@@ -620,6 +621,17 @@ bool congruent(const type& x, const data& y) {
 
 bool congruent(const data& x, const type& y) {
   return visit(data_congruence_checker{}, y, x);
+}
+
+expected<void> replace_if_congruent(std::initializer_list<type*> xs,
+                                    const schema& with) {
+  for (auto x : xs)
+    if (auto t = with.find(x->name()); t != nullptr) {
+      if (!congruent(*x, *t))
+        return make_error(ec::type_clash, "incongruent type:", x->name());
+      *x = *t;
+    }
+  return no_error;
 }
 
 bool compatible(const type& lhs, relational_operator op, const type& rhs) {

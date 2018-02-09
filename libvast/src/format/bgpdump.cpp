@@ -60,20 +60,13 @@ bgpdump_parser::bgpdump_parser() {
 }
 
 expected<void> reader::schema(const vast::schema& sch) {
-  auto types = {
+  auto xs = {
     &parser_.announce_type,
     &parser_.route_type,
     &parser_.withdraw_type,
     &parser_.state_change_type,
   };
-  for (auto t : types)
-    if (auto u = sch.find(t->name())) {
-      if (!congruent(*t, *u))
-        return make_error(ec::format_error, "incongruent type:", t->name());
-      else
-        *t = *u;
-    }
-  return {};
+  return replace_if_congruent(xs, sch);
 }
 
 expected<schema> reader::schema() const {

@@ -507,6 +507,13 @@ bool congruent(const type& x, const data& y);
 
 bool congruent(const data& x, const type& y);
 
+/// Replaces all types in `xs` that are congruent to a type in `with`.
+/// @param xs Pointers to the types that should get replaced.
+/// @param with Schema containing potentially congruent types.
+/// @returns an error if two types with the same name are not congruent.
+expected<void> replace_if_congruent(std::initializer_list<type*> xs,
+                                    const schema& with);
+
 /// Checks whether the types of two nodes in a predicate are compatible with
 /// each other, i.e., whether operator evaluation for the given types is
 /// semantically correct.
