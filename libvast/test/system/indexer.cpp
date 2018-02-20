@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/concept/printable/stream.hpp"
@@ -36,7 +49,7 @@ TEST(indexer) {
     error_handler()
   );
   CHECK_EQUAL(rank(result), 53u);
-  auto check_uid = [](event const& e, std::string const& uid) {
+  auto check_uid = [](const event& e, const std::string& uid) {
     auto& v = get<vector>(e.data());
     return v[1] == uid;
   };

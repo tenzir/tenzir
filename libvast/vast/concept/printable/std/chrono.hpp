@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #ifndef VAST_CONCEPT_PRINTABLE_STD_CHRONO_HPP
 #define VAST_CONCEPT_PRINTABLE_STD_CHRONO_HPP
 
@@ -76,7 +89,7 @@ template <class Clock, class Duration>
 struct time_point_printer : printer<time_point_printer<Clock, Duration>> {
   using attribute = std::chrono::time_point<Clock, Duration>;
 
-  template <typename Iterator>
+  template <class Iterator>
   bool print(Iterator& out, std::chrono::time_point<Clock, Duration> tp) const {
     using namespace std::chrono;
     using namespace date;
@@ -101,12 +114,12 @@ struct time_point_printer : printer<time_point_printer<Clock, Duration>> {
   }
 };
 
-template <typename Rep, typename Period>
+template <class Rep, class Period>
 struct printer_registry<std::chrono::duration<Rep, Period>> {
   using type = duration_printer<Rep, Period>;
 };
 
-template <typename Clock, typename Duration>
+template <class Clock, class Duration>
 struct printer_registry<std::chrono::time_point<Clock, Duration>> {
   using type = time_point_printer<Clock, Duration>;
 };
@@ -120,7 +133,7 @@ const auto duration = duration_printer<
   Policy
 >{};
 
-template <class Clock, class Duration = typename Clock::duration>
+template <class Clock, class Duration = class Clock::duration>
 const auto time_point = time_point_printer<Clock, Duration>{};
 
 } // namespace printers

@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
@@ -90,19 +103,19 @@ bool address::mask(unsigned top_bits_to_keep) {
   return true;
 }
 
-address& address::operator&=(address const& other) {
+address& address::operator&=(const address& other) {
   for (auto i = 0u; i < 16u; ++i)
     bytes_[i] &= other.bytes_[i];
   return *this;
 }
 
-address& address::operator|=(address const& other) {
+address& address::operator|=(const address& other) {
   for (auto i = 0u; i < 16u; ++i)
     bytes_[i] |= other.bytes_[i];
   return *this;
 }
 
-address& address::operator^=(address const& other) {
+address& address::operator^=(const address& other) {
   if (is_v4() || other.is_v4())
     for (auto i = 12u; i < 16u; ++i)
       bytes_[i] ^= other.bytes_[i];
@@ -112,7 +125,7 @@ address& address::operator^=(address const& other) {
   return *this;
 }
 
-std::array<uint8_t, 16> const& address::data() const {
+const std::array<uint8_t, 16>& address::data() const {
   return bytes_;
 }
 
@@ -127,15 +140,15 @@ bool address::compare(const address& other, size_t k) const {
   return (*x & mask) == (*y & mask);
 }
 
-bool operator==(address const& x, address const& y) {
+bool operator==(const address& x, const address& y) {
   return x.bytes_ == y.bytes_;
 }
 
-bool operator<(address const& x, address const& y) {
+bool operator<(const address& x, const address& y) {
   return x.bytes_ < y.bytes_;
 }
 
-bool convert(address const& a, json& j) {
+bool convert(const address& a, json& j) {
   j = to_string(a);
   return true;
 }

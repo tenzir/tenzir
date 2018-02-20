@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #include "vast/json.hpp"
 #include "vast/concept/parseable/vast/json.hpp"
 #include "vast/concept/printable/numeric.hpp"
@@ -93,7 +106,7 @@ TEST(parseable) {
   str = "[    ]";
   CHECK(parsers::json(str, j));
   CHECK(j == json::array{});
-  str = "[ 42,-1337 , \"foo\", null ,true ]"s;
+  str = R"([ 42,-1337 , "foo", null ,true ])";
   CHECK(parsers::json(str, j));
   CHECK(j == json::array{42, -1337, "foo", nil, true});
   MESSAGE("object");

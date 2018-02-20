@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #ifndef VAST_CONCEPT_HASHABLE_XXHASH_HPP
 #define VAST_CONCEPT_HASHABLE_XXHASH_HPP
 
@@ -20,7 +33,7 @@ class xxhash32 : public xxhash_base {
 public:
   explicit xxhash32(result_type seed = 0) noexcept;
 
-  void operator()(void const* x, size_t n) noexcept;
+  void operator()(const void* x, size_t n) noexcept;
 
   explicit operator result_type() noexcept;
 
@@ -51,7 +64,7 @@ class xxhash64 : public xxhash_base {
 public:
   explicit xxhash64(result_type seed = 0) noexcept;
 
-  void operator()(void const* x, size_t n) noexcept;
+  void operator()(const void* x, size_t n) noexcept;
 
   explicit operator result_type() noexcept;
 

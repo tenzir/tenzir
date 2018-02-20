@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #include "vast/concept/parseable/vast/http.hpp"
 #include "vast/concept/parseable/vast/uri.hpp"
 #include "vast/concept/printable/to_string.hpp"
@@ -29,9 +42,9 @@ TEST(URI) {
   u.scheme = "http";
   u.host = "foo.bar";
   u.port = 80;
-  u.path.push_back("foo");
-  u.path.push_back("bar");
-  u.path.push_back("baz");
+  u.path.emplace_back("foo");
+  u.path.emplace_back("bar");
+  u.path.emplace_back("baz");
   u.query["opt1"] = "val 1";
   u.query["opt2"] = "val2";
   u.fragment = "frag 1";

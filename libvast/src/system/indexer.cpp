@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #include <caf/all.hpp>
 
 #include "vast/concept/parseable/to.hpp"
@@ -31,7 +44,7 @@ struct value_indexer_state {
   vast::type type;
   std::unique_ptr<value_index> idx;
   value_index::size_type last_flush = 0;
-  const char* name = "value-indexer";
+  static inline const char* name = "value-indexer";
 };
 
 // Wraps a value index into an actor.
@@ -59,7 +72,7 @@ behavior value_indexer(stateful_actor<value_indexer_state>* self,
       self->quit(make_error(ec::unspecified, "failed to construct index"));
   }
   return {
-    [=](std::vector<event> const& events) {
+    [=](const std::vector<event>& events) {
       VAST_TRACE(self, "got", events.size(), "events");
       for (auto& e : events) {
         VAST_ASSERT(e.id() != invalid_event_id);
@@ -73,7 +86,7 @@ behavior value_indexer(stateful_actor<value_indexer_state>* self,
         }
       }
     },
-    [=](predicate const& pred) -> result<bitmap> {
+    [=](const predicate& pred) -> result<bitmap> {
       VAST_TRACE(self, "got predicate:", pred);
       return self->state.idx->lookup(pred.op, get<data>(pred.rhs));
     },
@@ -114,24 +127,24 @@ behavior value_indexer(stateful_actor<value_indexer_state>* self,
 // only with a specific aspect of an event.
 
 behavior time_indexer(stateful_actor<value_indexer_state>* self,
-                      path const& p) {
+                      const path& p) {
   // TODO: add type attributes to tune index, e.g., for seconds granularity.
   auto t = timestamp_type{};
-  auto extract = [](event const& e) { return optional<data>{e.timestamp()}; };
+  auto extract = [](const event& e) { return optional<data>{e.timestamp()}; };
   return value_indexer(self, p, t, extract);
 }
 
 behavior type_indexer(stateful_actor<value_indexer_state>* self,
-                      path const& p) {
+                      const path& p) {
   auto t = string_type{};
-  auto extract = [](event const& e) { return optional<data>{e.type().name()}; };
+  auto extract = [](const event& e) { return optional<data>{e.type().name()}; };
   return value_indexer(self, p, t, extract);
 }
 
 // Indexes the data from non-record event type.
 behavior flat_data_indexer(stateful_actor<value_indexer_state>* self,
                            path dir, type event_type) {
-  auto extract = [=](event const& e) -> optional<data const&> {
+  auto extract = [=](const event& e) -> optional<const data&> {
     if (e.type() != event_type)
       return {};
     return e.data();
@@ -143,7 +156,7 @@ behavior flat_data_indexer(stateful_actor<value_indexer_state>* self,
 behavior field_data_indexer(stateful_actor<value_indexer_state>* self,
                             path dir, type event_type, type value_type,
                             offset off) {
-  auto extract = [=](event const& e) -> optional<data const&> {
+  auto extract = [=](const event& e) -> optional<const data&> {
     if (e.type() != event_type)
       return {};
     auto v = get_if<vector>(e.data());
@@ -160,7 +173,7 @@ behavior field_data_indexer(stateful_actor<value_indexer_state>* self,
 }
 
 // Tests whether a type has a "skip" attribute.
-bool skip(type const& t) {
+bool skip(const type& t) {
   auto& attrs = t.attributes();
   auto pred = [](auto& x) { return x.key == "skip"; };
   return std::find_if(attrs.begin(), attrs.end(), pred) != attrs.end();
@@ -171,16 +184,16 @@ struct loader {
   using result_type = std::vector<actor>;
 
   template <class T>
-  result_type operator()(T const&) {
+  result_type operator()(const T&) {
     return {};
   }
 
   template <class T, class U>
-  result_type operator()(T const&, U const&) {
+  result_type operator()(const T&, const U&) {
     return {};
   }
 
-  result_type operator()(disjunction const& d) {
+  result_type operator()(const disjunction& d) {
     result_type result;
     for (auto& op : d) {
       auto x = visit(*this, op);
@@ -191,11 +204,11 @@ struct loader {
     return result;
   }
 
-  result_type operator()(predicate const& p) {
+  result_type operator()(const predicate& p) {
     return visit(*this, p.lhs, p.rhs);
   }
 
-  result_type operator()(attribute_extractor const& ex, data const& x) {
+  result_type operator()(const attribute_extractor& ex, const data& x) {
     result_type result;
     auto p = self->state.dir / "meta";
     if (ex.attr == "time") {
@@ -220,7 +233,7 @@ struct loader {
     return result;
   }
 
-  result_type operator()(data_extractor const& dx, data const&) {
+  result_type operator()(const data_extractor& dx, const data&) {
     result_type result;
     if (dx.offset.empty()) {
       auto p = self->state.dir / "data";
@@ -311,15 +324,15 @@ behavior event_indexer(stateful_actor<event_indexer_state>* self,
     self->state.indexers.erase(i);
   };
   self->set_down_handler(
-    [=](down_msg const& msg) { remove_indexer(msg.source); }
+    [=](const down_msg& msg) { remove_indexer(msg.source); }
   );
   return {
-    [=](std::vector<event> const&) {
+    [=](const std::vector<event>&) {
       auto msg = self->current_mailbox_element()->move_content_to_message();
       for (auto& x : self->state.indexers)
         self->send(x.second, msg);
     },
-    [=](predicate const& pred) {
+    [=](const predicate& pred) {
       VAST_DEBUG(self, "got predicate:", pred);
       auto rp = self->make_response_promise<bitmap>();
       // For now, we require that the predicate is part of a normalized
@@ -367,7 +380,7 @@ behavior event_indexer(stateful_actor<event_indexer_state>* self,
         self->send(i.second, shutdown_atom::value);
       // Wait until all indexers have terminated.
       self->set_down_handler(
-        [=](down_msg const& msg) {
+        [=](const down_msg& msg) {
           remove_indexer(msg.source);
           if (self->state.indexers.empty())
             self->quit(exit_reason::user_shutdown);

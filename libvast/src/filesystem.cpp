@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #include <fstream>
 #include <iterator>
 
@@ -40,7 +53,7 @@
 
 namespace vast {
 
-constexpr char const* path::separator;
+constexpr const char* path::separator;
 
 path path::current() {
 #ifdef VAST_POSIX
@@ -51,13 +64,13 @@ path path::current() {
 #endif
 }
 
-path::path(char const* str) : str_{str} {
+path::path(const char* str) : str_{str} {
 }
 
 path::path(std::string str) : str_{std::move(str)} {
 }
 
-path& path::operator/=(path const& p) {
+path& path::operator/=(const path& p) {
   if (p.empty() || (detail::ends_with(str_, separator) && p == separator))
     return *this;
   if (str_.empty())
@@ -69,7 +82,7 @@ path& path::operator/=(path const& p) {
   return *this;
 }
 
-path& path::operator+=(path const& p) {
+path& path::operator+=(const path& p) {
   str_ = str_ + p.str_;
   return *this;
 }
@@ -167,7 +180,7 @@ path path::chop(int n) const {
   return r;
 }
 
-std::string const& path::str() const {
+const std::string& path::str() const {
   return str_;
 }
 
@@ -206,11 +219,11 @@ bool path::is_symlink() const {
   return kind() == symlink;
 }
 
-bool operator==(path const& x, path const& y) {
+bool operator==(const path& x, const path& y) {
   return x.str_ == y.str_;
 }
 
-bool operator<(path const& x, path const& y) {
+bool operator<(const path& x, const path& y) {
   return x.str_ < y.str_;
 }
 
@@ -295,7 +308,7 @@ bool file::read(void* sink, size_t bytes, size_t* got) {
   return is_open_ && detail::read(handle_, sink, bytes, got);
 }
 
-bool file::write(void const* source, size_t bytes, size_t* put) {
+bool file::write(const void* source, size_t bytes, size_t* put) {
   return is_open_ && detail::write(handle_, source, bytes, put);
 }
 
@@ -309,7 +322,7 @@ bool file::seek(size_t bytes) {
   return true;
 }
 
-path const& file::path() const {
+const path& file::path() const {
   return path_;
 }
 
@@ -342,11 +355,11 @@ void directory::iterator::increment() {
 #endif
 }
 
-path const& directory::iterator::dereference() const {
+const path& directory::iterator::dereference() const {
   return current_;
 }
 
-bool directory::iterator::equals(iterator const& other) const {
+bool directory::iterator::equals(const iterator& other) const {
   return dir_ == other.dir_;
 }
 
@@ -369,11 +382,11 @@ directory::iterator directory::end() const {
   return {};
 }
 
-path const& directory::path() const {
+const path& directory::path() const {
   return path_;
 }
 
-std::vector<path> split(path const& p) {
+std::vector<path> split(const path& p) {
   if (p.empty())
     return {};
   auto components = detail::to_strings(
@@ -391,7 +404,7 @@ std::vector<path> split(path const& p) {
   return result;
 }
 
-bool exists(path const& p) {
+bool exists(const path& p) {
 #ifdef VAST_POSIX
   struct stat st;
   return ::lstat(p.str().data(), &st) == 0;
@@ -400,7 +413,7 @@ bool exists(path const& p) {
 #endif // VAST_POSIX
 }
 
-void create_symlink(path const& target, path const& link) {
+void create_symlink(const path& target, const path& link) {
   ::symlink(target.str().c_str(), link.str().c_str());
 }
 
@@ -410,7 +423,7 @@ bool rm(const path& p) {
   auto t = p.kind();
   if (t == path::type::directory) {
     for (auto& entry : directory{p})
-      if (! rm(entry))
+      if (!rm(entry))
         return false;
     return VAST_DELETE_DIRECTORY(p.str().data());
   }
@@ -419,7 +432,7 @@ bool rm(const path& p) {
   return false;
 }
 
-expected<void> mkdir(path const& p) {
+expected<void> mkdir(const path& p) {
   auto components = split(p);
   if (components.empty())
     return make_error(ec::filesystem_error, "cannot mkdir empty path");
@@ -448,7 +461,7 @@ expected<void> mkdir(path const& p) {
   return {};
 }
 
-expected<std::string> load_contents(path const& p) {
+expected<std::string> load_contents(const path& p) {
   std::string contents;
   caf::containerbuf<std::string> obuf{contents};
   std::ostream out{&obuf};

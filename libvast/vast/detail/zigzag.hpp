@@ -1,11 +1,21 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #ifndef VAST_DETAIL_ZIGZAG_HPP
 #define VAST_DETAIL_ZIGZAG_HPP
 
 #include <limits>
 #include <type_traits>
-
-namespace vast {
-namespace detail {
 
 /// The *zig-zag* coding of signed integers into unsigned integers, with the
 /// goal to produce small absolute values. The coding works as follows:
@@ -16,7 +26,7 @@ namespace detail {
 ///     -2 => 3
 ///      2 -> 4
 ///      ...
-namespace zigzag {
+namespace vast::detail::zigzag {
 
 /// Encodes a signed integral value.
 /// @param x The value to encode.
@@ -43,8 +53,6 @@ auto decode(T x)
   return (x >> 1) ^ -static_cast<std::make_signed_t<T>>(x & 1);
 }
 
-} // namespace zigzag
-} // namespace detail
-} // namespace vast
+} // namespace vast::detail::zigzag
 
 #endif

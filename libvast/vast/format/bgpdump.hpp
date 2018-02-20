@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #ifndef VAST_FORMAT_BGPDUMP_HPP
 #define VAST_FORMAT_BGPDUMP_HPP
 
@@ -9,9 +22,7 @@
 
 #include "vast/format/reader.hpp"
 
-namespace vast {
-namespace format {
-namespace bgpdump {
+namespace vast::format::bgpdump {
 
 /// A parser that reading ASCII output from the BGPDump utility.
 struct bgpdump_parser : parser<bgpdump_parser> {
@@ -108,16 +119,14 @@ class reader : public format::reader<bgpdump_parser> {
 public:
   using format::reader<bgpdump_parser>::reader;
 
-  expected<void> schema(vast::schema const& sch);
+  expected<void> schema(const vast::schema& sch);
 
   expected<vast::schema> schema() const;
 
-  char const* name() const;
+  const char* name() const;
 };
 
-} // namespace bgpdump
-} // namespace format
-} // namespace vast
+} // namespace vast::format::bgpdump
 
 #endif
 

@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #ifndef VAST_ADDRESS_HPP
 #define VAST_ADDRESS_HPP
 
@@ -74,21 +87,21 @@ public:
   /// AND's another address to this instance.
   /// @param other The other address.
   /// @returns A reference to `*this`.
-  address& operator&=(address const& other);
+  address& operator&=(const address& other);
 
   /// OR's another address to this instance.
   /// @param other The other address.
   /// @returns A reference to `*this`.
-  address& operator|=(address const& other);
+  address& operator|=(const address& other);
 
   /// XOR's another address to this instance.
   /// @param other The other address.
   /// @returns A reference to `*this`.
-  address& operator^=(address const& other);
+  address& operator^=(const address& other);
 
   /// Retrieves the underlying byte array.
   /// @returns A reference to an array of 16 bytes.
-  std::array<uint8_t, 16> const& data() const;
+  const std::array<uint8_t, 16>& data() const;
 
   /// Compares the top-k bits of this address with another one.
   /// @param other The other address.
@@ -97,15 +110,15 @@ public:
   /// @pre `k > 0 && k <= 128`
   bool compare(const address& other, size_t k) const;
 
-  friend bool operator==(address const& x, address const& y);
-  friend bool operator<(address const& x, address const& y);
+  friend bool operator==(const address& x, const address& y);
+  friend bool operator<(const address& x, const address& y);
 
   template <class Inspector>
   friend auto inspect(Inspector& f, address& a) {
     return f(a.bytes_);
   }
 
-  friend bool convert(address const& a, json& j);
+  friend bool convert(const address& a, json& j);
 
 private:
   std::array<uint8_t, 16> bytes_;

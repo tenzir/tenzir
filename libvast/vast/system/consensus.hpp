@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #ifndef VAST_SYSTEM_CONSENSUS_HPP
 #define VAST_SYSTEM_CONSENSUS_HPP
 
@@ -17,16 +30,13 @@
 
 #include "vast/detail/mmapbuf.hpp"
 
-namespace vast {
-namespace system {
-
 /// The Raft consensus algorithm.
 ///
 /// This implementation of Raft treats state machine and consensus module as
 /// independent pieces. The consensus module is passive and only reacts to
 /// requests from the state machine. It does not initiate communication to the
 /// state machine.
-namespace raft {
+namespace vast::system::raft {
 
 /// The clock type for timeouts.
 using clock = std::chrono::steady_clock;
@@ -312,7 +322,7 @@ struct server_state {
   path dir;
 
   // Name of this actor (for logging purposes).
-  const char* name = "raft";
+  static inline const char* name = "raft";
 };
 
 /// Spawns a consensus module.
@@ -320,8 +330,6 @@ struct server_state {
 /// @param dir The directory where to store persistent state.
 caf::behavior consensus(caf::stateful_actor<server_state>* self, path dir);
 
-} // namespace raft
-} // namespace system
-} // namespace vast
+} // namespace vast::system::raft
 
 #endif

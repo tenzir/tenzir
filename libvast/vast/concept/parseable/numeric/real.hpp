@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #ifndef VAST_CONCEPT_PARSEABLE_NUMERIC_REAL_HPP
 #define VAST_CONCEPT_PARSEABLE_NUMERIC_REAL_HPP
 
@@ -16,7 +29,7 @@ struct optional_dot {};
 
 } // namespace policy
 
-template <typename T, typename... Policies>
+template <class T, class... Policies>
 struct real_parser : parser<real_parser<T, Policies...>> {
   using attribute = T;
   using policies =
@@ -30,15 +43,15 @@ struct real_parser : parser<real_parser<T, Policies...>> {
       detail::tbind<std::is_same, policy::require_dot>::template type
     >::value;
 
-  template <typename Iterator>
-  static bool parse_dot(Iterator& f, Iterator const& l) {
+  template <class Iterator>
+  static bool parse_dot(Iterator& f, const Iterator& l) {
     if (f == l || *f != '.')
       return false;
     ++f;
     return true;
   }
 
-  template <typename Base, typename Exp>
+  template <class Base, class Exp>
   static Base pow10(Exp exp) {
     return std::pow(Base{10}, exp);
   }
@@ -57,8 +70,8 @@ struct real_parser : parser<real_parser<T, Policies...>> {
     }
   }
 
-  template <typename Iterator, typename Attribute>
-  bool parse(Iterator& f, Iterator const& l, Attribute& a) const {
+  template <class Iterator, class Attribute>
+  bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
     if (f == l)
       return false;
     auto save = f;
@@ -101,7 +114,7 @@ struct real_parser : parser<real_parser<T, Policies...>> {
   }
 };
 
-template <typename T>
+template <class T>
 struct parser_registry<T, std::enable_if_t<std::is_floating_point<T>::value>> {
   using type = real_parser<T, policy::require_dot>;
 };

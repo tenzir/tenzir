@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #ifndef VAST_DETAIL_CACHE_HPP
 #define VAST_DETAIL_CACHE_HPP
 
@@ -15,8 +28,7 @@
 #include "vast/detail/operators.hpp"
 #include "vast/detail/type_traits.hpp"
 
-namespace vast {
-namespace detail {
+namespace vast::detail {
 
 struct lru;
 
@@ -136,7 +148,7 @@ public:
   /// the function default-constructs a value of `mapped_type`.
   /// @param key The key to lookup.
   /// @returns The value corresponding to *key*.
-  mapped_type& operator[](key_type const& x) {
+  mapped_type& operator[](const key_type& x) {
     auto i = tracker_.find(x);
     if (i == tracker_.end())
       return insert({x, {}}).first->second;
@@ -177,7 +189,7 @@ public:
   /// Removes an entry for a given key without invoking the eviction callback.
   /// @param x The key to remove.
   /// @returns The number of entries removed.
-  size_t erase(key_type const& x) {
+  size_t erase(const key_type& x) {
     auto i = tracker_.find(x);
     if (i == tracker_.end())
       return 0;
@@ -255,7 +267,6 @@ struct mru {
   }
 };
 
-} // namespace detail
-} // namespace vast
+} // namespace vast::detail
 
 #endif

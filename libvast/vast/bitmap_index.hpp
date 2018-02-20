@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #ifndef VAST_BITMAP_INDEX_HPP
 #define VAST_BITMAP_INDEX_HPP
 
@@ -62,7 +75,7 @@ public:
 
   /// Appends the contents of another bitmap index to this one.
   /// @param other The other bitmap index.
-  void append(bitmap_index const& other) {
+  void append(const bitmap_index& other) {
     coder_.append(other.coder_);
   }
 
@@ -88,11 +101,11 @@ public:
 
   /// Accesses the underlying coder of the bitmap index.
   /// @returns The coder of this bitmap index.
-  coder_type const& coder() const {
+  const coder_type& coder() const {
     return coder_;
   }
 
-  friend bool operator==(bitmap_index const& x, bitmap_index const& y) {
+  friend bool operator==(const bitmap_index& x, const bitmap_index& y) {
     return x.coder_ == y.coder_;
   }
 

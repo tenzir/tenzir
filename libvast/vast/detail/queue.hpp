@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #ifndef VAST_DETAIL_QUEUE_HPP
 #define VAST_DETAIL_QUEUE_HPP
 
@@ -5,11 +18,10 @@
 #include <mutex>
 #include <queue>
 
-namespace vast {
-namespace detail {
+namespace vast::detail {
 
 /// A thread-safe `std::queue`.
-template <typename T>
+template <class T>
 class queue : std::queue<T> {
   queue(queue&) = delete;
   queue& operator=(queue&) = delete;
@@ -43,7 +55,7 @@ public:
   /// constructed in-place, i.e., no copy or move operations are performed.
   /// The constructor of the element is called with exactly the same
   /// arguments, as supplied to the function.
-  template <typename... Args>
+  template <class... Args>
   void emplace(Args&&... args) {
     std::unique_lock<std::mutex> lock(mutex_);
     bool const empty = super::empty();
@@ -89,7 +101,6 @@ private:
   std::condition_variable cond_;
 };
 
-} // namespace detail
-} // namespace vast
+} // namespace vast::detail
 
 #endif

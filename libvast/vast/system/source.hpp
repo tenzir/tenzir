@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #ifndef VAST_SYSTEM_SOURCE_HPP
 #define VAST_SYSTEM_SOURCE_HPP
 
@@ -23,8 +36,7 @@
 #include "vast/system/accountant.hpp"
 #include "vast/system/atoms.hpp"
 
-namespace vast {
-namespace system {
+namespace vast::system {
 
 #if 0
 /// The *Reader* concept.
@@ -37,7 +49,7 @@ struct Reader {
 
   expected<vast::schema> schema() const;
 
-  char const* name() const;
+  const char* name() const;
 };
 #endif
 
@@ -54,7 +66,7 @@ struct source_state {
   accountant_type accountant;
   caf::actor sink;
   Reader reader;
-  char const* name;
+  const char* name;
 };
 
 /// An event producer.
@@ -170,7 +182,7 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader&& reader) {
         return *sch;
       return sch.error();
     },
-    [=](put_atom, schema const& sch) -> result<void> {
+    [=](put_atom, const schema& sch) -> result<void> {
       auto r = self->state.reader.schema(sch);
       if (r)
         return {};
@@ -180,7 +192,7 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader&& reader) {
       VAST_DEBUG(self, "sets filter expression to:", expr);
       self->state.filter = std::move(expr);
     },
-    [=](sink_atom, actor const& sink) {
+    [=](sink_atom, const actor& sink) {
       VAST_ASSERT(sink);
       VAST_DEBUG(self, "registers sink", sink);
       self->send(self->state.sink, sys_atom::value, put_atom::value, sink);
@@ -188,7 +200,6 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader&& reader) {
   };
 }
 
-} // namespace system
-} // namespace vast
+} // namespace vast::system
 
 #endif

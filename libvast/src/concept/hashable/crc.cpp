@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #include "vast/concept/hashable/crc.hpp"
 #include "vast/detail/assert.hpp"
 
@@ -94,7 +107,7 @@ const uint32_t crc_table[256] = {
 #define DO8(buf) DO4(buf); DO4(buf);
 
 void crc(const void * key, int len, uint32_t seed, void * out) {
-  uint8_t* buf = (uint8_t*)key;
+  auto* buf = (uint8_t*)key;
   uint32_t crc = seed ^ 0xffffffffL;
   while (len >= 8) {
     DO8(buf);
@@ -110,7 +123,7 @@ void crc(const void * key, int len, uint32_t seed, void * out) {
 
 crc32::crc32(uint32_t seed) : digest_{seed} { }
 
-void crc32::operator()(void const* x, size_t n) {
+void crc32::operator()(const void* x, size_t n) {
   VAST_ASSERT(n <= (1u << 31) - 1);
   crc(x, static_cast<int>(n), digest_, &digest_);
 }

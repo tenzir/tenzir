@@ -1,11 +1,23 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #ifndef VAST_DETAIL_VARIADIC_SERIALIZATION_HPP
 #define VAST_DETAIL_VARIADIC_SERIALIZATION_HPP
 
 #include <caf/deserializer.hpp>
 #include <caf/serializer.hpp>
 
-namespace vast {
-namespace detail {
+namespace vast::detail {
 
 // Variadic helpers to interface with CAF's serialization framework.
 
@@ -21,12 +33,12 @@ void process(Processor& proc, T&& x, Ts&&... xs) {
 }
 
 template <class T>
-void write(caf::serializer& sink, T const& x) {
+void write(caf::serializer& sink, const T& x) {
   sink << x;
 }
 
 template <class T, class... Ts>
-void write(caf::serializer& sink, T const& x, Ts const&... xs) {
+void write(caf::serializer& sink, const T& x, const Ts&... xs) {
   write(sink, x);
   write(sink, xs...);
 }
@@ -42,7 +54,6 @@ void read(caf::deserializer& source, T& x, Ts&... xs) {
   read(source, xs...);
 }
 
-} // namespace detail
-} // namespace vast
+} // namespace vast::detail
 
 #endif

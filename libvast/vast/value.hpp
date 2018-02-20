@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #ifndef VAST_VALUE_HPP
 #define VAST_VALUE_HPP
 
@@ -31,8 +44,8 @@ public:
   /// Constructs an untyped value from data.
   /// @param x The data for the value.
   template <
-    typename T,
-    typename = detail::disable_if_t<
+    class T,
+    class = detail::disable_if_t<
       detail::is_same_or_derived<value, T>::value
       || std::is_same<data_type<T>, std::false_type>::value
     >
@@ -52,7 +65,7 @@ public:
   /// @param x An instance of type `T`.
   /// @param t The type of the value.
   /// @post If `! t.check(d)` then `*this = nil`.
-  template <typename T>
+  template <class T>
   value(T&& x, vast::type t)
     : value{vast::data(std::forward<T>(x)), std::move(t)} {
   }
@@ -65,22 +78,22 @@ public:
   /// Sets the type of the value.
   /// @param t The new type of the value.
   /// @returns `true` if the value had no data or if the type check succeeded.
-  bool type(vast::type const& t);
+  bool type(const vast::type& t);
 
   /// Retrieves the type of the value.
   /// @returns The type of the value.
-  vast::type const& type() const;
+  const vast::type& type() const;
 
   /// Retrieves the data of the value.
   /// @returns The value data.
-  vast::data const& data() const;
+  const vast::data& data() const;
 
-  friend bool operator==(value const& lhs, value const& rhs);
-  friend bool operator!=(value const& lhs, value const& rhs);
-  friend bool operator<(value const& lhs, value const& rhs);
-  friend bool operator<=(value const& lhs, value const& rhs);
-  friend bool operator>=(value const& lhs, value const& rhs);
-  friend bool operator>(value const& lhs, value const& rhs);
+  friend bool operator==(const value& lhs, const value& rhs);
+  friend bool operator!=(const value& lhs, const value& rhs);
+  friend bool operator<(const value& lhs, const value& rhs);
+  friend bool operator<=(const value& lhs, const value& rhs);
+  friend bool operator>=(const value& lhs, const value& rhs);
+  friend bool operator>(const value& lhs, const value& rhs);
 
   template <class Inspector>
   friend auto inspect(Inspector&f, value& v) {
@@ -97,9 +110,9 @@ private:
 /// Flattens a value if it is a record.
 /// @param v The value to to flatten.
 /// @returns The flattened value or *v* if not a record.
-value flatten(value const& v);
+value flatten(const value& v);
 
-bool convert(value const& v, json& j);
+bool convert(const value& v, json& j);
 
 } // namespace vast
 

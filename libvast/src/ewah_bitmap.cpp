@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #include "vast/ewah_bitmap.hpp"
 
 namespace vast {
@@ -14,7 +27,7 @@ ewah_bitmap::size_type ewah_bitmap::size() const {
   return num_bits_;
 }
 
-ewah_bitmap::block_vector const& ewah_bitmap::blocks() const {
+const ewah_bitmap::block_vector& ewah_bitmap::blocks() const {
   return blocks_;
 }
 
@@ -214,13 +227,13 @@ void ewah_bitmap::bump_dirty_count() {
   }
 }
 
-bool operator==(ewah_bitmap const& x, ewah_bitmap const& y) {
+bool operator==(const ewah_bitmap& x, const ewah_bitmap& y) {
   // If the block vector and the number of bits are equal, so must be the
   // marker by construction.
   return x.blocks_ == y.blocks_ && x.num_bits_ == y.num_bits_;
 }
 
-ewah_bitmap_range::ewah_bitmap_range(ewah_bitmap const& bm)
+ewah_bitmap_range::ewah_bitmap_range(const ewah_bitmap& bm)
   : bm_{&bm} {
   if (!bm_->empty())
     scan();
@@ -276,7 +289,7 @@ void ewah_bitmap_range::scan() {
   }
 }
 
-ewah_bitmap_range bit_range(ewah_bitmap const& bm) {
+ewah_bitmap_range bit_range(const ewah_bitmap& bm) {
   return ewah_bitmap_range{bm};
 }
 

@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #ifndef VAST_CONCEPT_PARSEABLE_VAST_ADDRESS_HPP
 #define VAST_CONCEPT_PARSEABLE_VAST_ADDRESS_HPP
 
@@ -66,7 +79,7 @@ struct address_parser : vast::parser<address_parser> {
     // already consumes the input "f00:" after the first repitition parser, thus
     // erroneously leaving only ":" for next rule `>> h16` to consume.
     auto h16_colon
-      = h16 >> ':' >> ! ':'_p
+      = h16 >> ':' >> !':'_p
       ;
     auto ls32
       = h16 >> ':' >> h16
@@ -86,8 +99,8 @@ struct address_parser : vast::parser<address_parser> {
     return v6;
   }
 
-  template <typename Iterator>
-  bool parse(Iterator& f, Iterator const& l, unused_type) const {
+  template <class Iterator>
+  bool parse(Iterator& f, const Iterator& l, unused_type) const {
     static auto v4 = make_v4();
     static auto v6 = make_v6();
     if (v4(f, l, unused))
@@ -102,14 +115,14 @@ template <>
 struct access::parser<address> : vast::parser<access::parser<address>> {
   using attribute = address;
 
-  template <typename Iterator>
-  bool parse(Iterator& f, Iterator const& l, unused_type) const {
+  template <class Iterator>
+  bool parse(Iterator& f, const Iterator& l, unused_type) const {
     static auto const p = address_parser{};
     return p(f, l, unused);
   }
 
-  template <typename Iterator>
-  bool parse(Iterator& f, Iterator const& l, address& a) const {
+  template <class Iterator>
+  bool parse(Iterator& f, const Iterator& l, address& a) const {
     static auto const v4 = address_parser::make_v4();
     auto begin = f;
     if (v4(f, l, a.bytes_[12], a.bytes_[13], a.bytes_[14], a.bytes_[15])) {

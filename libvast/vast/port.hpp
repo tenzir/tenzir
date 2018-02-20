@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #ifndef VAST_PORT_HPP
 #define VAST_PORT_HPP
 
@@ -44,8 +57,8 @@ public:
   /// @param t The new port type.
   void type(port_type t);
 
-  friend bool operator==(port const& x, port const& y);
-  friend bool operator<(port const& x, port const& y);
+  friend bool operator==(const port& x, const port& y);
+  friend bool operator<(const port& x, const port& y);
 
   template <class Inspector>
   friend auto inspect(Inspector& f, port& p) {
@@ -57,7 +70,7 @@ private:
   port_type type_ = unknown;
 };
 
-bool convert(port const& p, json& j);
+bool convert(const port& p, json& j);
 
 } // namespace vast
 

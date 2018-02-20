@@ -48,4 +48,7 @@
 #  define VAST_POSIX
 #endif
 
+// Convenience macros
+#define VAST_IGNORE_UNUSED(x) CAF_IGNORE_UNUSED(x)
+
 #endif

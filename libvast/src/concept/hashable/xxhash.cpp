@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #define XXH_ACCEPT_NULL_INPUT_POINTER
 #define XXH_PRIVATE_API
 #define XXH_STATIC_LINKING_ONLY
@@ -16,7 +29,7 @@ xxhash32::xxhash32(result_type seed) noexcept {
   ::XXH32_reset(state, seed);
 }
 
-void xxhash32::operator()(void const* x, size_t n) noexcept {
+void xxhash32::operator()(const void* x, size_t n) noexcept {
   VAST_ASSERT(n <= (1u << 31) - 1);
   auto state = reinterpret_cast<XXH32_state_t*>(&state_);
   auto result = ::XXH32_update(state, x, n);
@@ -37,7 +50,7 @@ xxhash64::xxhash64(result_type seed) noexcept {
   ::XXH64_reset(state, seed);
 }
 
-void xxhash64::operator()(void const* x, size_t n) noexcept {
+void xxhash64::operator()(const void* x, size_t n) noexcept {
   auto state = reinterpret_cast<XXH64_state_t*>(&state_);
   auto result = ::XXH64_update(state, x, n);
   VAST_ASSERT(result == XXH_OK);

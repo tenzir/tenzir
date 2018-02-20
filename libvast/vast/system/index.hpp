@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #ifndef VAST_INDEX_HPP
 #define VAST_INDEX_HPP
 
@@ -5,7 +18,6 @@
 
 #include <caf/stateful_actor.hpp>
 
-#include "vast/bitmap.hpp"
 #include "vast/expression.hpp"
 #include "vast/filesystem.hpp"
 #include "vast/uuid.hpp"
@@ -84,7 +96,7 @@ struct index_state {
   std::unordered_map<uuid, lookup_state> lookups;
   size_t capacity;
   path dir;
-  char const* name = "index";
+  static inline const char* name = "index";
 };
 
 /// Indexes events in horizontal partitions.

@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #ifndef VAST_DETAIL_INTERVAL_MAP_HPP
 #define VAST_DETAIL_INTERVAL_MAP_HPP
 
@@ -7,12 +20,11 @@
 #include "vast/detail/assert.hpp"
 #include "vast/detail/iterator.hpp"
 
-namespace vast {
-namespace detail {
+namespace vast::detail {
 
 /// An associative data structure that maps half-open, *disjoint* intervals to
 /// values.
-template <typename Point, typename Value>
+template <class Point, class Value>
 class range_map {
   static_assert(std::is_arithmetic<Point>::value,
                 "Point must be an arithmetic type");
@@ -23,9 +35,9 @@ class range_map {
 
 public:
   struct entry {
-    Point const& left;
-    Point const& right;
-    Value const& value;
+    const Point& left;
+    const Point& right;
+    const Value& value;
   };
 
   class const_iterator
@@ -190,7 +202,7 @@ public:
   /// @param p The point to lookup.
   /// @returns A pointer to the value associated with the half-open interval
   ///          *[a,b)* if *a <= p < b* and `nullptr` otherwise.
-  Value const* lookup(Point const& p) const {
+  const Value* lookup(const Point& p) const {
     auto i = locate(p, map_.lower_bound(p));
     return i != map_.end() ? &i->second.second : nullptr;
   }
@@ -202,9 +214,9 @@ public:
   ///          and `nullptr` otherwise. If the last component points to a
   ///          valid value, then the first two represent *[a,b)* and *[0,0)*
   ///          otherwise.
-  std::tuple<Point, Point, Value const*> find(Point const& p) const {
+  std::tuple<Point, Point, const Value*> find(const Point& p) const {
     // GCC 4.9 still has an explicit tuple ctor.
-    using tuple_type = std::tuple<Point, Point, Value const*>;
+    using tuple_type = std::tuple<Point, Point, const Value*>;
     auto i = locate(p, map_.lower_bound(p));
     if (i == map_.end())
       return tuple_type{0, 0, nullptr};
@@ -235,30 +247,30 @@ public:
   }
 
 private:
-  template <typename Iterator>
+  template <class Iterator>
   static auto& left(Iterator i) {
     return i->first;
   }
 
-  template <typename Iterator>
+  template <class Iterator>
   static auto& right(Iterator i) {
     return i->second.first;
   }
 
-  template <typename Iterator>
+  template <class Iterator>
   static auto& value(Iterator i) {
     return i->second.second;
   }
 
   // Finds the interval of a point.
-  map_const_iterator locate(Point const& p, map_const_iterator lb) const {
+  map_const_iterator locate(const Point& p, map_const_iterator lb) const {
     if ((lb != map_.end() && p == left(lb))
         || (lb != map_.begin() && p < right(--lb)))
       return lb;
     return map_.end();
   }
 
-  map_iterator locate(Point const& p, map_iterator lb) {
+  map_iterator locate(const Point& p, map_iterator lb) {
     if ((lb != map_.end() && p == left(lb))
         || (lb != map_.begin() && p < right(--lb)))
       return lb;
@@ -273,7 +285,6 @@ private:
   map_type map_;
 };
 
-} // namespace detail
-} // namespace vast
+} // namespace vast::detail
 
 #endif

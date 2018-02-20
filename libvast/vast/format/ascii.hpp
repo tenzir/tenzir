@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #ifndef VAST_FORMAT_ASCII_HPP
 #define VAST_FORMAT_ASCII_HPP
 
@@ -6,15 +19,13 @@
 
 #include "vast/format/stream_writer.hpp"
 
-namespace vast {
-namespace format {
-namespace ascii {
+namespace vast::format::ascii {
 
 struct ascii_printer : printer<ascii_printer> {
   using attribute = event;
 
   template <class Iterator>
-  bool print(Iterator&& out, event const& e) const {
+  bool print(Iterator&& out, const event& e) const {
     return event_printer{}.print(out, e);
   }
 };
@@ -23,14 +34,12 @@ class writer : public format::stream_writer<ascii_printer>{
 public:
   using stream_writer<ascii_printer>::stream_writer;
 
-  char const* name() const {
+  const char* name() const {
     return "ascii-writer";
   }
 };
 
-} // namespace ascii
-} // namespace format
-} // namespace vast
+} // namespace vast::format::ascii
 
 #endif
 

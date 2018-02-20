@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #ifndef VAST_BITMAP_HPP
 #define VAST_BITMAP_HPP
 
@@ -61,7 +74,7 @@ public:
 
   // -- concepts -------------------------------------------------------------
 
-  friend bool operator==(bitmap const& x, bitmap const& y);
+  friend bool operator==(const bitmap& x, const bitmap& y);
 
   template <class Inspector>
   friend auto inspect(Inspector&f, bitmap& bm) {
@@ -79,7 +92,7 @@ private:
 class bitmap_bit_range
   : public bit_range_base<bitmap_bit_range, bitmap::block_type> {
 public:
-  explicit bitmap_bit_range(bitmap const& bm);
+  explicit bitmap_bit_range(const bitmap& bm);
 
   void next();
   bool done() const;
@@ -94,7 +107,7 @@ private:
   range_variant range_;
 };
 
-bitmap_bit_range bit_range(bitmap const& bm);
+bitmap_bit_range bit_range(const bitmap& bm);
 
 } // namespace vast
 

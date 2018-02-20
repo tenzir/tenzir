@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #ifndef VAST_CONCEPT_PRINTABLE_CORE_MAYBE_HPP
 #define VAST_CONCEPT_PRINTABLE_CORE_MAYBE_HPP
 
@@ -7,7 +20,7 @@ namespace vast {
 
 /// Like ::optional_printer, but exposes `T` instead of `optional<T>` as
 /// attribute.
-template <typename Printer>
+template <class Printer>
 class maybe_printer : public printer<maybe_printer<Printer>> {
 public:
   using attribute = typename Printer::attribute;
@@ -16,8 +29,8 @@ public:
     : printer_{std::move(p)} {
   }
 
-  template <typename Iterator, typename Attribute>
-  bool print(Iterator& out, Attribute const& a) const {
+  template <class Iterator, class Attribute>
+  bool print(Iterator& out, const Attribute& a) const {
     printer_.print(out, a);
     return true;
   }

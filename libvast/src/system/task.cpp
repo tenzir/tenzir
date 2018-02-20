@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #include "vast/logger.hpp"
 
 #include <caf/all.hpp>
@@ -25,7 +38,7 @@ void notify(Actor self) {
 };
 
 template <class Actor>
-void complete(Actor self, actor_addr const& a) {
+void complete(Actor self, const actor_addr& a) {
   auto w = self->state.workers.find(a);
   if (w == self->state.workers.end()) {
     VAST_ERROR(self, "got completion signal from unknown actor:", a);
@@ -44,32 +57,32 @@ namespace detail {
 behavior task(stateful_actor<task_state>* self, message done_msg) {
   self->state.done_msg = std::move(done_msg);
   self->set_exit_handler(
-    [=](exit_msg const& msg) {
+    [=](const exit_msg& msg) {
       self->state.subscribers.clear();
       notify(self);
       self->quit(msg.reason);
     }
   );
   self->set_down_handler(
-    [=](down_msg const& msg) {
+    [=](const down_msg& msg) {
       if (self->state.workers.erase(msg.source) == 1)
         notify(self);
     }
   );
   return {
-    [=](actor const& a) {
+    [=](const actor& a) {
       VAST_TRACE(self, "registers actor", a);
       self->monitor(a);
       if (++self->state.workers[a.address()] == 1)
         ++self->state.total;
     },
-    [=](actor const& a, uint64_t n) {
+    [=](const actor& a, uint64_t n) {
       VAST_TRACE(self, "registers actor", a, "for", n, "sub-tasks");
       self->monitor(a);
       self->state.workers[a.address()] += n;
       ++self->state.total;
     },
-    [=](done_atom, actor_addr const& addr) {
+    [=](done_atom, const actor_addr& addr) {
       VAST_TRACE(self, "manually completed actor with address", addr);
       complete(self, addr);
     },
@@ -77,11 +90,11 @@ behavior task(stateful_actor<task_state>* self, message done_msg) {
       VAST_TRACE(self, "completed actor", self->current_sender());
       complete(self, actor_cast<actor_addr>(self->current_sender()));
     },
-    [=](supervisor_atom, actor const& a) {
+    [=](supervisor_atom, const actor& a) {
       VAST_TRACE(self, "notifies actor", a, "about task completion");
       self->state.supervisors.insert(a);
     },
-    [=](subscriber_atom, actor const& a) {
+    [=](subscriber_atom, const actor& a) {
       VAST_TRACE(self, "notifies actor", a, "on task status change");
       self->state.subscribers.insert(a);
     },

@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #ifndef VAST_EWAH_BITMAP_HPP
 #define VAST_EWAH_BITMAP_HPP
 
@@ -90,7 +103,7 @@ public:
 
   size_type size() const;
 
-  block_vector const& blocks() const;
+  const block_vector& blocks() const;
 
   // -- modifiers ------------------------------------------------------------
 
@@ -104,7 +117,7 @@ public:
 
   // -- concepts -------------------------------------------------------------
 
-  friend bool operator==(ewah_bitmap const& x, ewah_bitmap const& y);
+  friend bool operator==(const ewah_bitmap& x, const ewah_bitmap& y);
 
   template <class Inspector>
   friend auto inspect(Inspector&f, ewah_bitmap& bm) {
@@ -133,7 +146,7 @@ public:
 
   ewah_bitmap_range() = default;
 
-  explicit ewah_bitmap_range(ewah_bitmap const& bm);
+  explicit ewah_bitmap_range(const ewah_bitmap& bm);
 
   void next();
   bool done() const;
@@ -141,13 +154,12 @@ public:
 private:
   void scan();
 
-  ewah_bitmap const* bm_;
+  const ewah_bitmap* bm_;
   size_t next_ = 0;
   size_t num_dirty_ = 0;
-  size_t num_bits_ = 0;
 };
 
-ewah_bitmap_range bit_range(ewah_bitmap const& bm);
+ewah_bitmap_range bit_range(const ewah_bitmap& bm);
 
 } // namespace vast
 

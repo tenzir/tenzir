@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #ifndef VAST_DETAIL_STEADY_SET_HPP
 #define VAST_DETAIL_STEADY_SET_HPP
 
@@ -8,8 +21,7 @@
 
 #include "vast/detail/vector_set.hpp"
 
-namespace vast {
-namespace detail {
+namespace vast::detail {
 
 struct steady_set_policy {
   template <class Ts, class T>
@@ -31,7 +43,6 @@ struct steady_set_policy {
 template <class T, class Allocator = std::allocator<T>>
 using steady_set = vector_set<T, Allocator, steady_set_policy>;
 
-} // namespace detail
-} // namespace vast
+} // namespace vast::detail
 
 #endif

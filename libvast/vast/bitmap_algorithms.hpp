@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #ifndef VAST_BITMAP_ALGORITHMS_HPP
 #define VAST_BITMAP_ALGORITHMS_HPP
 
@@ -48,7 +61,7 @@ using eval_result_type_t = typename eval_result_type<T, U>::type;
 /// according to *op*.
 template <bool FillLHS, bool FillRHS, class LHS, class RHS, class Operation>
 detail::eval_result_type_t<LHS, RHS>
-binary_eval(LHS const& lhs, RHS const& rhs, Operation op) {
+binary_eval(const LHS& lhs, const RHS& rhs, Operation op) {
   using result_type = detail::eval_result_type_t<LHS, RHS>;
   using word_type = typename result_type::word_type;
   static_assert(
@@ -154,14 +167,14 @@ auto nary_eval(Iterator begin, Iterator end, Operation op) {
   // Exposes a pointer to represent either a non-owned bitmap from the input
   // sequence or an intermediary result.
   struct element {
-    explicit element(bitmap_type const* bm) : bitmap{bm} {
+    explicit element(const bitmap_type* bm) : bitmap{bm} {
     }
     explicit element(bitmap_type&& bm)
       : data{std::make_shared<bitmap_type>(std::move(bm))},
         bitmap{data.get()} {
     }
     std::shared_ptr<bitmap_type> data;
-    bitmap_type const* bitmap;
+    const bitmap_type* bitmap;
   };
   auto cmp = [](auto& lhs, auto& rhs) {
     // TODO: instead of using the bitmap size, we should consider whether
@@ -188,31 +201,31 @@ auto nary_eval(Iterator begin, Iterator end, Operation op) {
 }
 
 template <class LHS, class RHS>
-auto binary_and(LHS const& lhs, RHS const& rhs) {
+auto binary_and(const LHS& lhs, const RHS& rhs) {
   auto op = [](auto x, auto y) { return x & y; };
   return binary_eval<false, false>(lhs, rhs, op);
 }
 
 template <class LHS, class RHS>
-auto binary_or(LHS const& lhs, RHS const& rhs) {
+auto binary_or(const LHS& lhs, const RHS& rhs) {
   auto op = [](auto x, auto y) { return x | y; };
   return binary_eval<true, true>(lhs, rhs, op);
 }
 
 template <class LHS, class RHS>
-auto binary_xor(LHS const& lhs, RHS const& rhs) {
+auto binary_xor(const LHS& lhs, const RHS& rhs) {
   auto op = [](auto x, auto y) { return x ^ y; };
   return binary_eval<true, true>(lhs, rhs, op);
 }
 
 template <class LHS, class RHS>
-auto binary_nand(LHS const& lhs, RHS const& rhs) {
+auto binary_nand(const LHS& lhs, const RHS& rhs) {
   auto op = [](auto x, auto y) { return x & ~y; };
   return binary_eval<true, false>(lhs, rhs, op);
 }
 
 template <class LHS, class RHS>
-auto binary_nor(LHS const& lhs, RHS const& rhs) {
+auto binary_nor(const LHS& lhs, const RHS& rhs) {
   auto op = [](auto x, auto y) { return x | ~y; };
   return binary_eval<true, true>(lhs, rhs, op);
 }
@@ -244,7 +257,7 @@ auto nary_xor(Iterator begin, Iterator end) {
 /// @pre `i > 0 && i < bm.size()`
 template <bool Bit = true, class Bitmap>
 typename Bitmap::size_type
-rank(Bitmap const& bm, typename Bitmap::size_type i) {
+rank(const Bitmap& bm, typename Bitmap::size_type i) {
   VAST_ASSERT(i > 0);
   VAST_ASSERT(i < bm.size());
   auto result = typename Bitmap::size_type{0};
@@ -263,7 +276,7 @@ rank(Bitmap const& bm, typename Bitmap::size_type i) {
 /// @param bm The bitmap whose rank to compute.
 /// @returns The population count of *bm*.
 template <bool Bit = true, class Bitmap>
-typename Bitmap::size_type rank(Bitmap const& bm) {
+typename Bitmap::size_type rank(const Bitmap& bm) {
   return bm.empty() ? 0 : rank<Bit>(bm, bm.size() - 1);
 }
 
@@ -276,7 +289,7 @@ typename Bitmap::size_type rank(Bitmap const& bm) {
 /// @relates select_range span
 template <bool Bit = true, class Bitmap>
 typename Bitmap::size_type
-select(Bitmap const& bm, typename Bitmap::size_type i) {
+select(const Bitmap& bm, typename Bitmap::size_type i) {
   VAST_ASSERT(i > 0);
   auto rnk = typename Bitmap::size_type{0};
   auto n = typename Bitmap::size_type{0};
@@ -417,7 +430,7 @@ auto select(const Bitmap& bm) {
 /// @returns The span of *bm*.
 /// @relates select
 template <bool Bit = true, class Bitmap>
-auto span(Bitmap const& bm) {
+auto span(const Bitmap& bm) {
   auto result = std::make_pair(Bitmap::word_type::npos,
                                Bitmap::word_type::npos);
   auto n = typename Bitmap::size_type{0};
@@ -445,22 +458,20 @@ auto span(Bitmap const& bm) {
 /// @param bm The bitmap to test.
 /// @relates all
 template <bool Bit = true, class Bitmap>
-auto any(Bitmap const& bm) -> std::enable_if_t<Bit, bool> {
-  for (auto b : bit_range(bm))
-    if (b.data())
-      return true;
-  return false;
-}
-
-template <bool Bit, class Bitmap>
-auto any(Bitmap const& bm) -> std::enable_if_t<!Bit, bool> {
-  using word_type = typename Bitmap::word_type;
-  for (auto b : bit_range(bm)) {
-    auto x = b.data();
-    if (b.size() <= word_type::width)
-      x |= word_type::msb_fill(word_type::width - b.size());
-    if (x != word_type::all)
-      return true;
+bool any(const Bitmap& bm) {
+  if constexpr (Bit) {
+    for (auto b : bit_range(bm))
+      if (b.data())
+        return true;
+  } else {
+    using word_type = typename Bitmap::word_type;
+    for (auto b : bit_range(bm)) {
+      auto x = b.data();
+      if (b.size() <= word_type::width)
+        x |= word_type::msb_fill(word_type::width - b.size());
+      if (x != word_type::all)
+        return true;
+    }
   }
   return false;
 }
@@ -472,7 +483,7 @@ auto any(Bitmap const& bm) -> std::enable_if_t<!Bit, bool> {
 /// @returns `true` iff all bits in *bm* have value *Bit*.
 /// @relates any
 template <bool Bit = true, class Bitmap>
-auto all(Bitmap const& bm) {
+auto all(const Bitmap& bm) {
   if (bm.empty())
     return false;
   return !any<!Bit>(bm);

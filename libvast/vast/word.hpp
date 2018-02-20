@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #ifndef VAST_WORD_HPP
 #define VAST_WORD_HPP
 
@@ -8,8 +21,7 @@
 #include "vast/detail/assert.hpp"
 #include "vast/detail/type_traits.hpp"
 
-namespace vast {
-namespace detail {
+namespace vast::detail {
 
 template <class T>
 using is_unsigned_integral = bool_constant<
@@ -27,7 +39,9 @@ using word_size_type = std::conditional_t<
   void
 >;
 
-} // namespace detail
+} // namespace vast::detail
+
+namespace vast {
 
 /// A fixed-size piece unsigned piece of data that supports various bitwise
 /// operations.
@@ -46,6 +60,9 @@ struct word {
 
   /// The number of bits per block (aka. word size).
   static constexpr size_type width = std::numeric_limits<value_type>::digits;
+
+  // Sanity check.
+  static_assert(width <= 64);
 
   /// A value that represents an invalid or "not found" position.
   static constexpr size_type npos = ~size_type{0};
@@ -151,15 +168,11 @@ struct word {
   /// @param i The position to set.
   /// @pre `i < width`
   template <bool Bit>
-  static constexpr std::enable_if_t<Bit, value_type>
-  set(value_type x, size_type i) {
-    return x | mask(i);
-  }
-
-  template <bool Bit>
-  static constexpr std::enable_if_t<!Bit, value_type>
-  set(value_type x, size_type i) {
-    return x & ~mask(i);
+  static constexpr value_type set(value_type x, size_type i) {
+    if constexpr (Bit)
+      return x | mask(i);
+    else
+      return x & ~mask(i);
   }
 
   /// Sets a specific bit in a block to 0 or 1.
@@ -186,16 +199,11 @@ struct word {
   /// @param x The block value.
   /// @returns The index of the first 1-bit in *x*.
   /// @pre `x > 0`
-  template <class Block = T>
-  static constexpr auto find_first_set(value_type x)
-  -> std::enable_if_t<(word<Block>::width <= 32), size_type> {
-    return __builtin_ffs(x);
-  }
-
-  template <class Block = T>
-  static constexpr auto find_first_set(value_type x)
-  -> std::enable_if_t<(word<Block>::width == 64), size_type> {
-    return __builtin_ffsll(x);
+  static constexpr size_type find_first_set(value_type x) {
+    if constexpr (width <= 32)
+      return __builtin_ffs(x);
+    else
+      return __builtin_ffsll(x);
   }
 
   // -- counting --------------------------------------------------------------
@@ -204,31 +212,21 @@ struct word {
   /// word.
   /// @param x The block value.
   /// @returns The number of set bits in *x*.
-  template <class Block = T>
-  static constexpr auto popcount(value_type x)
-  -> std::enable_if_t<(word<Block>::width <= 32), size_type> {
-    return x == 0 ? 0 : __builtin_popcount(x);
-  }
-
-  template <class Block = T>
-  static constexpr auto popcount(value_type x)
-  -> std::enable_if_t<(word<Block>::width == 64), size_type> {
-    return x == 0 ? 0 : __builtin_popcountll(x);
+  static constexpr size_type popcount(value_type x) {
+    if constexpr (width <= 32)
+      return x == 0 ? 0 : __builtin_popcount(x);
+    else
+      return x == 0 ? 0 : __builtin_popcountll(x);
   }
 
   /// Counts the number of trailing zeros.
   /// @param x The block value.
   /// @returns The number trailing zeros in *x*.
-  template <class Block = T>
-  static constexpr auto count_trailing_zeros(value_type x)
-  -> std::enable_if_t<(word<Block>::width <= 32), size_type> {
-    return x == 0 ? width : __builtin_ctz(x);
-  }
-
-  template <class Block = T>
-  static constexpr auto count_trailing_zeros(value_type x)
-  -> std::enable_if_t<(word<Block>::width == 64), size_type> {
-    return x == 0 ? width : __builtin_ctzll(x);
+  static constexpr size_type count_trailing_zeros(value_type x) {
+    if constexpr (width <= 32)
+      return x == 0 ? width : __builtin_ctz(x);
+    else
+      return x == 0 ? width : __builtin_ctzll(x);
   }
 
   /// Counts the number of trailing ones.
@@ -241,18 +239,13 @@ struct word {
   /// Counts the number of leading zeros.
   /// @param x The block value.
   /// @returns The number leading zeros in *x*.
-  template <class Block = T>
-  static constexpr auto count_leading_zeros(value_type x)
-  -> std::enable_if_t<(word<Block>::width <= 32), size_type> {
-    // The compiler builtin always assumes a width of 32 bits. We have to adapt
-    // the return value according to the actual block width.
-    return x == 0 ? width : (__builtin_clz(x) - (32 - width));
-  }
-
-  template <class Block = T>
-  static constexpr auto count_leading_zeros(value_type x)
-  -> std::enable_if_t<(word<Block>::width == 64), size_type> {
-    return x == 0 ? width : __builtin_clzll(x);
+  static constexpr size_type count_leading_zeros(value_type x) {
+    if constexpr (width <= 32)
+      // The compiler builtin always assumes a width of 32 bits. We have to
+      // adapt the return value according to the actual block width.
+      return x == 0 ? width : (__builtin_clz(x) - (32 - width));
+    else
+      return x == 0 ? width : __builtin_clzll(x);
   }
 
   /// Counts the number of leading ones.
@@ -266,16 +259,11 @@ struct word {
   /// @param x The block value.
   /// @returns The parity of *x*.
   /// @pre `x > 0`
-  template <class Block = T>
-  static constexpr auto parity(value_type x)
-  -> std::enable_if_t<(word<Block>::width <= 32), size_type> {
-    return __builtin_parity(x);
-  }
-
-  template <class Block = T>
-  static constexpr auto parity(value_type x)
-  -> std::enable_if_t<(word<Block>::width == 64), size_type> {
-    return __builtin_parityll(x);
+  static constexpr size_type parity(value_type x) {
+    if constexpr (width <= 32)
+      return __builtin_parity(x);
+    else
+      return __builtin_parityll(x);
   }
 
   // -- math ------------------------------------------------------------------
@@ -318,19 +306,13 @@ constexpr typename word<T>::value_type word<T>::lsb1;
 template <bool Bit = true, class T>
 static constexpr auto rank(T x)
 -> std::enable_if_t<
-  Bit && detail::is_unsigned_integral<T>::value,
+  detail::is_unsigned_integral<T>::value,
   detail::word_size_type<T>
 > {
-  return word<T>::popcount(x);
-}
-
-template <bool Bit, class T>
-static constexpr auto rank(T x)
--> std::enable_if_t<
-  !Bit && detail::is_unsigned_integral<T>::value,
-  detail::word_size_type<T>
-> {
-  return word<T>::popcount(static_cast<T>(~x));
+  if constexpr (Bit)
+    return word<T>::popcount(x);
+  else
+    return word<T>::popcount(static_cast<T>(~x));
 }
 
 /// Computes *rank_i* of a block, i.e., the number of 1-bits up to and

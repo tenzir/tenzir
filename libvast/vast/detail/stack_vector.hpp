@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #ifndef VAST_DETAIL_STACK_VECTOR
 #define VAST_DETAIL_STACK_VECTOR
 
@@ -6,8 +19,7 @@
 
 #include "vast/detail/short_alloc.hpp"
 
-namespace vast {
-namespace detail {
+namespace vast::detail {
 
 // This base class exists to bind the lifetime of the corresponding container
 // to the arena, such that the allocator will never outlive the the stack-based
@@ -36,7 +48,7 @@ struct stack_vector : private stack_container<T, N>, short_vector<T, N> {
   stack_vector() : vector_type(this->arena_) {
   }
 
-  stack_vector(size_t n, T const& x) : vector_type(n, x, this->arena_) {
+  stack_vector(size_t n, const T& x) : vector_type(n, x, this->arena_) {
   }
 
   explicit stack_vector(size_t n) : vector_type(n, this->arena_) {
@@ -51,7 +63,7 @@ struct stack_vector : private stack_container<T, N>, short_vector<T, N> {
     : vector_type(first, last, this->arena_) {
   }
 
-  stack_vector(stack_vector const& other)
+  stack_vector(const stack_vector& other)
     : vector_type(other, this->arena_) {
   }
 
@@ -60,7 +72,7 @@ struct stack_vector : private stack_container<T, N>, short_vector<T, N> {
     : vector_type(std::move(other), this->arena_) {
   }
 
-  stack_vector& operator=(stack_vector const& other) {
+  stack_vector& operator=(const stack_vector& other) {
     static_cast<vector_type&>(*this) = other;
     return *this;
   }
@@ -72,7 +84,6 @@ struct stack_vector : private stack_container<T, N>, short_vector<T, N> {
   }
 };
 
-} // namespace detail
-} // namespace vast
+} // namespace vast::detail
 
 #endif

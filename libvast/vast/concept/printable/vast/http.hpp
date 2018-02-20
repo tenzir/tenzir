@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #ifndef VAST_CONCEPT_PRINTABLE_VAST_HTTP_HPP
 #define VAST_CONCEPT_PRINTABLE_VAST_HTTP_HPP
 
@@ -15,8 +28,8 @@ namespace vast {
 struct http_header_printer : printer<http_header_printer> {
   using attribute = http::header;
 
-  template <typename Iterator>
-  bool print(Iterator& out, http::header const& hdr) const {
+  template <class Iterator>
+  bool print(Iterator& out, const http::header& hdr) const {
     using namespace printers;
     auto p = str << ": " << str;
     return p(out, hdr.name, hdr.value);
@@ -31,8 +44,8 @@ struct printer_registry<http::header> {
 struct http_response_printer : printer<http::response> {
   using attribute = http::response;
 
-  template <typename Iterator>
-  bool print(Iterator& out, http::response const& res) const {
+  template <class Iterator>
+  bool print(Iterator& out, const http::response& res) const {
     using namespace printers;
     auto version = real_printer<double, 1>{};
     auto p 

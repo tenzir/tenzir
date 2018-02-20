@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #include <ios>
 #include <iomanip>
 
@@ -18,7 +31,7 @@ namespace system {
 namespace {
 
 template <class Actor>
-void init(Actor self, path const& filename) {
+void init(Actor self, const path& filename) {
   if (!exists(filename.parent())) {
     auto t = mkdir(filename.parent());
     if (!t) {
@@ -44,7 +57,7 @@ void init(Actor self, path const& filename) {
 }
 
 template <class Actor, class T>
-void record(Actor self, std::string const& key, T x) {
+void record(Actor self, const std::string& key, T x) {
   using namespace std::chrono;
   auto node = self->current_sender()->node();
   auto now = system_clock::now().time_since_epoch();
@@ -65,7 +78,7 @@ void record(Actor self, std::string const& key, T x) {
 
 accountant_type::behavior_type accountant(
   accountant_type::stateful_pointer<accountant_state> self,
-  path const& filename) {
+  const path& filename) {
   using namespace std::chrono;
   init(self, filename);
   return {
@@ -80,25 +93,25 @@ accountant_type::behavior_type accountant(
       if (self->current_sender() == self)
         self->delayed_send(self, seconds(10), flush_atom::value);
     },
-    [=](std::string const& key, std::string const& value) {
+    [=](const std::string& key, const std::string& value) {
       record(self, key, value);
     },
     // Helpers to avoid to_string(..) in sender context.
-    [=](std::string const& key, timespan value) {
+    [=](const std::string& key, timespan value) {
       auto us = duration_cast<microseconds>(value).count();
       record(self, key, us);
     },
-    [=](std::string const& key, timestamp value) {
+    [=](const std::string& key, timestamp value) {
       auto us = duration_cast<microseconds>(value.time_since_epoch()).count();
       record(self, key, us);
     },
-    [=](std::string const& key, int64_t value) {
+    [=](const std::string& key, int64_t value) {
       record(self, key, value);
     },
-    [=](std::string const& key, uint64_t value) {
+    [=](const std::string& key, uint64_t value) {
       record(self, key, value);
     },
-    [=](std::string const& key, double value) {
+    [=](const std::string& key, double value) {
       record(self, key, value);
     }
   };

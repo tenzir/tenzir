@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #ifndef VAST_CONCEPT_SUPPORT_UNUSED_TYPE_HPP
 #define VAST_CONCEPT_SUPPORT_UNUSED_TYPE_HPP
 
@@ -9,43 +22,43 @@ struct unused_type : detail::equality_comparable<unused_type>,
                      detail::integer_arithmetic<unused_type> {
   unused_type() = default;
 
-  template <typename T>
-  unused_type(T const&) {
+  template <class T>
+  unused_type(const T&) {
   }
 
-  unused_type& operator=(unused_type const&) = default;
+  unused_type& operator=(const unused_type&) = default;
 
-  unused_type const& operator=(unused_type const&) const {
+  const unused_type& operator=(const unused_type&) const {
     return *this;
   }
 
-  template <typename T>
-  unused_type& operator=(T const&) {
+  template <class T>
+  unused_type& operator=(const T&) {
     return *this;
   }
 
-  template <typename T>
-  unused_type const& operator=(T const&) const {
+  template <class T>
+  const unused_type& operator=(const T&) const {
     return *this;
   }
 
-  template <typename T>
-  unused_type const& operator+=(T&&) const {
+  template <class T>
+  const unused_type& operator+=(T&&) const {
     return *this;
   }
 
-  template <typename T>
-  unused_type const& operator-=(T&&) const {
+  template <class T>
+  const unused_type& operator-=(T&&) const {
     return *this;
   }
 
-  template <typename T>
-  unused_type const& operator*=(T&&) const {
+  template <class T>
+  const unused_type& operator*=(T&&) const {
     return *this;
   }
 
-  template <typename T>
-  unused_type const& operator/=(T&&) const {
+  template <class T>
+  const unused_type& operator/=(T&&) const {
     return *this;
   }
 };

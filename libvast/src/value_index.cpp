@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #include <cmath>
 
 #include "vast/base.hpp"
@@ -9,14 +22,14 @@
 namespace vast {
 namespace {
 
-optional<std::string> extract_attribute(type const& t, std::string const& key) {
+optional<std::string> extract_attribute(const type& t, const std::string& key) {
   for (auto& attr : t.attributes())
     if (attr.key == key && attr.value)
       return attr.value;
   return {};
 }
 
-optional<base> parse_base(type const& t) {
+optional<base> parse_base(const type& t) {
   if (auto a = extract_attribute(t, "base")) {
     if (auto b = to<base>(*a))
       return *b;
@@ -27,46 +40,50 @@ optional<base> parse_base(type const& t) {
 
 } // namespace <anonymous>
 
-std::unique_ptr<value_index> value_index::make(type const& t) {
+value_index::~value_index() {
+  // nop
+}
+
+std::unique_ptr<value_index> value_index::make(const type& t) {
   struct factory {
     using result_type = std::unique_ptr<value_index>;
-    result_type operator()(none_type const&) const {
+    result_type operator()(const none_type&) const {
       return nullptr;
     }
-    result_type operator()(boolean_type const&) const {
+    result_type operator()(const boolean_type&) const {
       return std::make_unique<arithmetic_index<boolean>>();
     }
-    result_type operator()(integer_type const& t) const {
+    result_type operator()(const integer_type& t) const {
       auto b = parse_base(t);
       if (!b)
         return nullptr;
       return std::make_unique<arithmetic_index<integer>>(std::move(*b));
     }
-    result_type operator()(count_type const& t) const {
+    result_type operator()(const count_type& t) const {
       auto b = parse_base(t);
       if (!b)
         return nullptr;
       return std::make_unique<arithmetic_index<count>>(std::move(*b));
     }
-    result_type operator()(real_type const& t) const {
+    result_type operator()(const real_type& t) const {
       auto b = parse_base(t);
       if (!b)
         return nullptr;
       return std::make_unique<arithmetic_index<real>>(std::move(*b));
     }
-    result_type operator()(timespan_type const& t) const {
+    result_type operator()(const timespan_type& t) const {
       auto b = parse_base(t);
       if (!b)
         return nullptr;
       return std::make_unique<arithmetic_index<timespan>>(std::move(*b));
     }
-    result_type operator()(timestamp_type const& t) const {
+    result_type operator()(const timestamp_type& t) const {
       auto b = parse_base(t);
       if (!b)
         return nullptr;
       return std::make_unique<arithmetic_index<timestamp>>(std::move(*b));
     }
-    result_type operator()(string_type const& t) const {
+    result_type operator()(const string_type& t) const {
       auto max_length = size_t{1024};
       if (auto a = extract_attribute(t, "max_length")) {
         if (auto x = to<size_t>(*a))
@@ -76,22 +93,22 @@ std::unique_ptr<value_index> value_index::make(type const& t) {
       }
       return std::make_unique<string_index>(max_length);
     }
-    result_type operator()(pattern_type const&) const {
+    result_type operator()(const pattern_type&) const {
       return nullptr;
     }
-    result_type operator()(address_type const&) const {
+    result_type operator()(const address_type&) const {
       return std::make_unique<address_index>();
     }
-    result_type operator()(subnet_type const&) const {
+    result_type operator()(const subnet_type&) const {
       return std::make_unique<subnet_index>();
     }
-    result_type operator()(port_type const&) const {
+    result_type operator()(const port_type&) const {
       return std::make_unique<port_index>();
     }
-    result_type operator()(enumeration_type const&) const {
+    result_type operator()(const enumeration_type&) const {
       return nullptr;
     }
-    result_type operator()(vector_type const& t) const {
+    result_type operator()(const vector_type& t) const {
       auto max_size = size_t{1024};
       if (auto a = extract_attribute(t, "max_size")) {
         if (auto x = to<size_t>(*a))
@@ -101,7 +118,7 @@ std::unique_ptr<value_index> value_index::make(type const& t) {
       }
       return std::make_unique<sequence_index>(t.value_type, max_size);
     }
-    result_type operator()(set_type const& t) const {
+    result_type operator()(const set_type& t) const {
       auto max_size = size_t{1024};
       if (auto a = extract_attribute(t, "max_size")) {
         if (auto x = to<size_t>(*a))
@@ -111,20 +128,20 @@ std::unique_ptr<value_index> value_index::make(type const& t) {
       }
       return std::make_unique<sequence_index>(t.value_type, max_size);
     }
-    result_type operator()(table_type const&) const {
+    result_type operator()(const table_type&) const {
       return nullptr;
     }
-    result_type operator()(record_type const&) const {
+    result_type operator()(const record_type&) const {
       return nullptr;
     }
-    result_type operator()(alias_type const& t) const {
+    result_type operator()(const alias_type& t) const {
       return visit(*this, t.value_type);
     }
   };
   return visit(factory{}, t);
 }
 
-expected<void> value_index::push_back(data const& x) {
+expected<void> value_index::push_back(const data& x) {
   if (is<none>(x)) {
     none_.append_bit(true);
     ++nils_;
@@ -138,7 +155,7 @@ expected<void> value_index::push_back(data const& x) {
   return {};
 }
 
-expected<void> value_index::push_back(data const& x, event_id id) {
+expected<void> value_index::push_back(const data& x, event_id id) {
   auto off = offset();
   if (id < off)
     // Can only append at the end.
@@ -161,8 +178,8 @@ expected<void> value_index::push_back(data const& x, event_id id) {
   return {};
 }
 
-expected<bitmap>
-value_index::lookup(relational_operator op, data const& x) const {
+expected<ids>
+value_index::lookup(relational_operator op, const data& x) const {
   if (is<none>(x)) {
     if (!(op == equal || op == not_equal))
       return make_error(ec::unsupported_operator, op);
@@ -191,7 +208,7 @@ void string_index::init() {
   }
 }
 
-bool string_index::push_back_impl(data const& x, size_type skip) {
+bool string_index::push_back_impl(const data& x, size_type skip) {
   auto str = get_if<std::string>(x);
   if (!str)
     return false;
@@ -209,8 +226,8 @@ bool string_index::push_back_impl(data const& x, size_type skip) {
   return true;
 }
 
-expected<bitmap>
-string_index::lookup_impl(relational_operator op, data const& x) const {
+expected<ids>
+string_index::lookup_impl(relational_operator op, const data& x) const {
   auto str = get_if<std::string>(x);
   if (!str)
     return make_error(ec::type_clash, x);
@@ -252,7 +269,7 @@ string_index::lookup_impl(relational_operator op, data const& x) const {
       // TODO: Be more clever than iterating over all k-grams (#45).
       bitmap result{length_.size(), false};
       for (auto i = 0u; i < chars_.size() - str_size + 1; ++i) {
-        bitmap substr{length_.size(), 1};
+        bitmap substr{length_.size(), true};
         auto skip = false;
         for (auto j = 0u; j < str_size; ++j) {
           auto bm = chars_[i + j].lookup(equal, (*str)[j]);
@@ -278,7 +295,7 @@ void address_index::init() {
     bytes_.fill(byte_index{8});
 }
 
-bool address_index::push_back_impl(data const& x, size_type skip) {
+bool address_index::push_back_impl(const data& x, size_type skip) {
   init();
   auto addr = get_if<address>(x);
   if (!addr)
@@ -298,8 +315,8 @@ bool address_index::push_back_impl(data const& x, size_type skip) {
   return true;
 }
 
-expected<bitmap>
-address_index::lookup_impl(relational_operator op, data const& x) const {
+expected<ids>
+address_index::lookup_impl(relational_operator op, const data& x) const {
   auto size = v4_.size();
   if (auto addr = get_if<address>(x)) {
     if (!(op == equal || op == not_equal))
@@ -348,7 +365,7 @@ void subnet_index::init() {
     length_ = prefix_index{128 + 1}; // Valid prefixes range from /0 to /128.
 }
 
-bool subnet_index::push_back_impl(data const& x, size_type skip) {
+bool subnet_index::push_back_impl(const data& x, size_type skip) {
   if (auto sn = get_if<subnet>(x)) {
     init();
     auto id = length_.size() + skip;
@@ -358,8 +375,8 @@ bool subnet_index::push_back_impl(data const& x, size_type skip) {
   return false;
 }
 
-expected<bitmap>
-subnet_index::lookup_impl(relational_operator op, data const& x) const {
+expected<ids>
+subnet_index::lookup_impl(relational_operator op, const data& x) const {
   auto sn = get_if<subnet>(x);
   if (!sn)
     return make_error(ec::type_clash, x);
@@ -397,11 +414,11 @@ subnet_index::lookup_impl(relational_operator op, data const& x) const {
       // the lookup returns all subnets in U that include x.
       bitmap result;
       for (auto i = uint8_t{1}; i <= sn->length(); ++i) {
-        auto bm = network_.lookup(in, subnet{sn->network(), i});
-        if (!bm)
-          return bm;
-        *bm &= length_.lookup(equal, i);
-        result |= *bm;
+        auto xs = network_.lookup(in, subnet{sn->network(), i});
+        if (!xs)
+          return xs;
+        *xs &= length_.lookup(equal, i);
+        result |= *xs;
       }
       if (op == not_ni)
         result.flip();
@@ -418,7 +435,7 @@ void port_index::init() {
   }
 }
 
-bool port_index::push_back_impl(data const& x, size_type skip) {
+bool port_index::push_back_impl(const data& x, size_type skip) {
   if (auto p = get_if<port>(x)) {
     init();
     num_.push_back(p->number(), skip);
@@ -428,8 +445,8 @@ bool port_index::push_back_impl(data const& x, size_type skip) {
   return false;
 }
 
-expected<bitmap>
-port_index::lookup_impl(relational_operator op, data const& x) const {
+expected<ids>
+port_index::lookup_impl(relational_operator op, const data& x) const {
   if (op == in || op == not_in)
     return make_error(ec::unsupported_operator, op);
   if (offset() == 0)
@@ -460,7 +477,7 @@ void sequence_index::init() {
   }
 }
 
-bool sequence_index::push_back_impl(data const& x, size_type skip) {
+bool sequence_index::push_back_impl(const data& x, size_type skip) {
   auto v = get_if<vector>(x);
   if (v)
     return push_back_ctnr(*v, skip);
@@ -470,8 +487,8 @@ bool sequence_index::push_back_impl(data const& x, size_type skip) {
   return false;
 }
 
-expected<bitmap>
-sequence_index::lookup_impl(relational_operator op, data const& x) const {
+expected<ids>
+sequence_index::lookup_impl(relational_operator op, const data& x) const {
   if (op == ni)
     op = in;
   else if (op == not_ni)
@@ -495,8 +512,8 @@ sequence_index::lookup_impl(relational_operator op, data const& x) const {
   return result;
 }
 
-void serialize(caf::serializer& sink, sequence_index const& idx) {
-  sink & static_cast<value_index const&>(idx);
+void serialize(caf::serializer& sink, const sequence_index& idx) {
+  sink & static_cast<const value_index&>(idx);
   sink & idx.value_type_;
   sink & idx.max_size_;
   sink & idx.size_;

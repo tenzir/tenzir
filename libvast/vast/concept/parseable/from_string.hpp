@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #ifndef VAST_CONCEPT_PARSEABLE_FROM_STRING_HPP
 #define VAST_CONCEPT_PARSEABLE_FROM_STRING_HPP
 
@@ -10,10 +23,10 @@
 namespace vast {
 
 template <
-  typename To,
-  typename Parser = make_parser<To>,
-  typename Iterator,
-  typename... Args
+  class To,
+  class Parser = make_parser<To>,
+  class Iterator,
+  class... Args
 >
 auto from_string(Iterator begin, Iterator end, Args&&... args)
   -> std::enable_if_t<is_parseable<Iterator, To>::value, optional<To>> {
@@ -24,11 +37,11 @@ auto from_string(Iterator begin, Iterator end, Args&&... args)
 }
 
 template <
-  typename To,
-  typename Parser = make_parser<To>,
-  typename... Args
+  class To,
+  class Parser = make_parser<To>,
+  class... Args
 >
-auto from_string(std::string const& str, Args&&... args) {
+auto from_string(const std::string& str, Args&&... args) {
   auto f = str.begin();
   auto l = str.end();
   return from_string<To, Parser, std::string::const_iterator, Args...>(
@@ -36,15 +49,15 @@ auto from_string(std::string const& str, Args&&... args) {
 }
 
 template <
-  typename To,
-  typename Parser = make_parser<To>,
+  class To,
+  class Parser = make_parser<To>,
   size_t N,
-  typename... Args
+  class... Args
 >
 auto from_string(char const (&str)[N], Args&&... args) {
   auto f = str;
   auto l = str + N - 1; // No NUL byte.
-  return from_string<To, Parser, char const*, Args...>(
+  return from_string<To, Parser, const char*, Args...>(
     f, l, std::forward<Args>(args)...);
 }
 

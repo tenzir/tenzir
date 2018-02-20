@@ -1,4 +1,17 @@
-#include "vast/bitmap.hpp"
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
+#include "vast/ids.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
 
@@ -33,13 +46,13 @@ struct partition_fixture : fixtures::actor_system_and_events {
     self->wait_for(partition);
   }
 
-  bitmap query(const std::string& str) {
+  ids query(const std::string& str) {
     MESSAGE("sending query");
     auto expr = to<expression>(str);
     REQUIRE(expr);
-    bitmap result;
+    ids result;
     self->request(partition, infinite, *expr).receive(
-      [&](bitmap& hits) {
+      [&](ids& hits) {
         result = std::move(hits);
       },
       error_handler()
@@ -54,7 +67,7 @@ struct partition_fixture : fixtures::actor_system_and_events {
     MESSAGE("respawning partition and sending query again");
     partition = self->spawn(system::partition, directory);
     self->request(partition, infinite, *expr).receive(
-      [&](const bitmap& hits) {
+      [&](const ids& hits) {
         REQUIRE_EQUAL(hits, result);
       },
       error_handler()

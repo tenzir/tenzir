@@ -1,10 +1,22 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #ifndef VAST_DETAIL_BYTE_SWAP_HPP
 #define VAST_DETAIL_BYTE_SWAP_HPP
 
 #include "vast/detail/endian.hpp"
 
-namespace vast {
-namespace detail {
+namespace vast::detail {
 
 /// Swaps the endianness of an unsigned integer.
 /// @param x The value whose bytes to swap.
@@ -48,7 +60,6 @@ T to_host_order(T x) {
   return to_network_order(x);
 }
 
-} // namespace detail
-} // namespace vast
+} // namespace vast::detail
 
 #endif

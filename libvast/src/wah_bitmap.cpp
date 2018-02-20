@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #include <iostream>
 #include <caf/detail/scope_guard.hpp>
 
@@ -17,7 +30,7 @@ wah_bitmap::size_type wah_bitmap::size() const {
   return num_bits_;
 }
 
-wah_bitmap::block_vector const& wah_bitmap::blocks() const {
+const wah_bitmap::block_vector& wah_bitmap::blocks() const {
   return blocks_;
 }
 
@@ -136,29 +149,29 @@ void wah_bitmap::merge_active_word() {
   if (fill_type) {
     // All 1s.
     auto& prev = *(blocks_.rbegin() + 1);
-    if (word_type::is_fill(prev, 1) && word_type::fill_words(prev) < word_type::max_fill_words) {
-      prev = word_type::make_fill(1, word_type::fill_words(prev) + 1);
+    if (word_type::is_fill(prev, true) && word_type::fill_words(prev) < word_type::max_fill_words) {
+      prev = word_type::make_fill(true, word_type::fill_words(prev) + 1);
       blocks_.pop_back();
     } else {
-      blocks_.back() = word_type::make_fill(1, 1);
+      blocks_.back() = word_type::make_fill(true, 1);
     }
   } else {
     // All 0s.
     auto& prev = *(blocks_.rbegin() + 1);
-    if (word_type::is_fill(prev, 0) && word_type::fill_words(prev) < word_type::max_fill_words) {
-      prev = word_type::make_fill(0, word_type::fill_words(prev) + 1);
+    if (word_type::is_fill(prev, false) && word_type::fill_words(prev) < word_type::max_fill_words) {
+      prev = word_type::make_fill(false, word_type::fill_words(prev) + 1);
       blocks_.pop_back();
     } else {
-      blocks_.back() = word_type::make_fill(0, 1);
+      blocks_.back() = word_type::make_fill(false, 1);
     }
   }
 }
 
-bool operator==(wah_bitmap const& x, wah_bitmap const& y) {
+bool operator==(const wah_bitmap& x, const wah_bitmap& y) {
   return x.blocks_ == y.blocks_ && x.num_bits_ == y.num_bits_;
 }
 
-wah_bitmap_range::wah_bitmap_range(wah_bitmap const& bm)
+wah_bitmap_range::wah_bitmap_range(const wah_bitmap& bm)
   : bm_{&bm},
     begin_{bm.blocks_.begin()},
     end_{bm.blocks_.end()} {
@@ -191,7 +204,7 @@ void wah_bitmap_range::scan() {
   }
 }
 
-wah_bitmap_range bit_range(wah_bitmap const& bm) {
+wah_bitmap_range bit_range(const wah_bitmap& bm) {
   return wah_bitmap_range{bm};
 }
 

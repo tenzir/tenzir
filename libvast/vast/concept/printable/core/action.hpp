@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #ifndef VAST_CONCEPT_PRINTABLE_CORE_ACTION_HPP
 #define VAST_CONCEPT_PRINTABLE_CORE_ACTION_HPP
 
@@ -7,7 +20,7 @@
 namespace vast {
 
 /// Executes a function before printing the inner attribute.
-template <typename Printer, typename Action>
+template <class Printer, class Action>
 class action_printer : public printer<action_printer<Printer, Action>> {
 public:
   using inner_attribute = typename Printer::attribute;
@@ -22,42 +35,24 @@ public:
     >;
 
   action_printer(Printer p, Action fun) : printer_{std::move(p)}, action_(fun) {
+    // nop
   }
 
-  // No argument, void return type.
-  template <typename Iterator, typename Attribute, typename A = Action>
-  auto print(Iterator& out, Attribute const& attr) const
-  -> std::enable_if_t<detail::action_traits<A>::no_args_returns_void, bool> {
-    action_();
-    return printer_.print(out, attr);
-  }
-
-  // One argument, void return type.
-  template <typename Iterator, typename Attribute, typename A = Action>
-  auto print(Iterator& out, Attribute const& attr) const
-  -> std::enable_if_t<detail::action_traits<A>::one_arg_returns_void, bool> {
-    action_(attr);
-    return printer_.print(out, attr);
-  }
-
-  // No argument, non-void return type.
-  template <typename Iterator, typename Attribute, typename A = Action>
-  auto print(Iterator& out, Attribute const&) const
-  -> std::enable_if_t<
-    detail::action_traits<A>::no_args_returns_non_void, bool
-  > {
-    auto x = action_();
-    return printer_.print(out, x);
-  }
-
-  // One argument, non-void return type.
-  template <typename Iterator, typename Attribute, typename A = Action>
-  auto print(Iterator& out, Attribute const& attr) const
-  -> std::enable_if_t<
-    detail::action_traits<A>::one_arg_returns_non_void, bool
-  > {
-    auto x = action_(attr);
-    return printer_.print(out, x);
+  template <class Iterator, class Attribute>
+  bool print(Iterator& out, const Attribute& attr) const {
+    if constexpr (action_traits::no_args_returns_void) {
+      action_();
+      return printer_.print(out, attr);
+    } else if constexpr (action_traits::one_arg_returns_void) {
+      action_(attr);
+      return printer_.print(out, attr);
+    } else if constexpr (action_traits::no_args_returns_non_void) {
+      auto x = action_();
+      return printer_.print(out, x);
+    } else {
+      auto x = action_(attr);
+      return printer_.print(out, x);
+    }
   }
 
 private:

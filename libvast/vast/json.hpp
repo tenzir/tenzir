@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #ifndef VAST_JSON_HPP
 #define VAST_JSON_HPP
 
@@ -35,7 +48,7 @@ public:
 
   /// Meta-function that converts a type into a JSON value.
   /// If conversion is impossible it returns `std::false_type`.
-  template <typename T>
+  template <class T>
   using json_value = std::conditional_t<
     std::is_same<T, none>::value,
     null,
@@ -63,7 +76,7 @@ public:
   >;
 
   /// Maps an arbitrary type to a json type.
-  template <typename T>
+  template <class T>
   using jsonize = json_value<std::decay_t<T>>;
 
   /// A sequence of JSON values.
@@ -73,7 +86,7 @@ public:
 
     array() = default;
 
-    array(super const& s) : super(s) {
+    array(const super& s) : super(s) {
     }
 
     array(super&& s) : super(std::move(s)) {
@@ -87,7 +100,7 @@ public:
 
     object() = default;
 
-    object(super const& s) : super(s) {
+    object(const super& s) : super(s) {
     }
 
     object(super&& s) : super(std::move(s)) {
@@ -101,8 +114,8 @@ public:
   /// @tparam The JSON type.
   /// @param x A JSON type.
   template <
-    typename T,
-    typename =
+    class T,
+    class =
       std::enable_if_t<!std::is_same<std::false_type, jsonize<T>>::value>
   >
   json(T&& x)
@@ -127,37 +140,37 @@ private:
 
 private:
   struct less_than {
-    template <typename T>
-    bool operator()(T const& x, T const& y) {
+    template <class T>
+    bool operator()(const T& x, const T& y) {
       return x < y;
     }
 
-    template <typename T, typename U>
-    bool operator()(T const&, U const&) {
+    template <class T, class U>
+    bool operator()(const T&, const U&) {
       return false;
     }
   };
 
   struct equals {
-    template <typename T>
-    bool operator()(T const& x, T const& y) {
+    template <class T>
+    bool operator()(const T& x, const T& y) {
       return x == y;
     }
 
-    template <typename T, typename U>
-    bool operator()(T const&, U const&) {
+    template <class T, class U>
+    bool operator()(const T&, const U&) {
       return false;
     }
   };
 
-  friend bool operator<(json const& x, json const& y) {
+  friend bool operator<(const json& x, const json& y) {
     if (x.value_.index() == y.value_.index())
       return visit(less_than{}, x.value_, y.value_);
     else
       return x.value_.index() < y.value_.index();
   }
 
-  friend bool operator==(json const& x, json const& y) {
+  friend bool operator==(const json& x, const json& y) {
     return visit(equals{}, x.value_, y.value_);
   }
 };
@@ -167,22 +180,22 @@ inline bool convert(bool b, json& j) {
   return true;
 }
 
-template <typename T>
-auto convert(T x, json& j)
--> std::enable_if_t<std::is_arithmetic<T>::value, bool> {
-  j = json::number(x);
-  return true;
+template <class T>
+bool convert(T x, json& j) {
+  if constexpr (std::is_arithmetic<T>::value) {
+    j = json::number(x);
+    return true;
+  } else if constexpr (std::is_convertible_v<T, std::string>) {
+    j = std::string{std::forward<T>(x)};
+    return true;
+  } else {
+    static_assert(!std::is_same_v<T, T>,
+                  "T is neither arithmetic nor convertible to std::string");
+  }
 }
 
-template <typename T>
-auto convert(T&& x, json& j)
--> std::enable_if_t<std::is_convertible<T, std::string>{}, bool> {
-  j = std::string(std::forward<T>(x));
-  return true;
-}
-
-template <typename T>
-bool convert(std::vector<T> const& v, json& j) {
+template <class T>
+bool convert(const std::vector<T>& v, json& j) {
   json::array a;
   for (auto& x : v) {
     json i;
@@ -194,8 +207,8 @@ bool convert(std::vector<T> const& v, json& j) {
   return true;
 }
 
-template <typename K, typename V>
-bool convert(std::map<K, V> const& m, json& j) {
+template <class K, class V>
+bool convert(const std::map<K, V>& m, json& j) {
   json::object o;
   for (auto& p : m) {
     auto k = to<std::string>(p.first);
@@ -208,8 +221,8 @@ bool convert(std::map<K, V> const& m, json& j) {
   return true;
 }
 
-template <typename T, typename... Opts>
-json to_json(T const& x, Opts&&... opts) {
+template <class T, class... Opts>
+json to_json(const T& x, Opts&&... opts) {
   json j;
   if (convert(x, j, std::forward<Opts>(opts)...))
     return j;

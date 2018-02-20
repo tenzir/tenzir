@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #ifndef VAST_SYSTEM_IMPORTER_HPP
 #define VAST_SYSTEM_IMPORTER_HPP
 
@@ -14,8 +27,7 @@
 #include "vast/system/archive.hpp"
 #include "vast/system/meta_store.hpp"
 
-namespace vast {
-namespace system {
+namespace vast::system {
 
 /// Receives chunks from SOURCEs, imbues them with an ID, and relays them to
 /// ARCHIVE and INDEX.
@@ -28,8 +40,9 @@ struct importer_state {
   size_t batch_size;
   std::chrono::steady_clock::time_point last_replenish;
   std::vector<event> remainder;
+  std::vector<caf::actor> continuous_queries;
   path dir;
-  const char* name = "importer";
+  static inline const char* name = "importer";
 };
 
 /// Spawns an IMPORTER.
@@ -39,7 +52,6 @@ struct importer_state {
 caf::behavior importer(caf::stateful_actor<importer_state>* self,
                        path dir, size_t batch_size);
 
-} // namespace system
-} // namespace vast
+} // namespace vast::system
 
 #endif

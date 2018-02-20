@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #ifndef VAST_NULL_BITMAP_HPP
 #define VAST_NULL_BITMAP_HPP
 
@@ -41,14 +54,14 @@ public:
 
   // -- concepts -------------------------------------------------------------
 
-  friend bool operator==(null_bitmap const& x, null_bitmap const& y);
+  friend bool operator==(const null_bitmap& x, const null_bitmap& y);
 
   template <class Inspector>
   friend auto inspect(Inspector&f, null_bitmap& bm) {
     return f(bm.bitvector_);
   }
 
-  friend null_bitmap_range bit_range(null_bitmap const& bm);
+  friend null_bitmap_range bit_range(const null_bitmap& bm);
 
 private:
   bitvector_type bitvector_;
@@ -59,7 +72,7 @@ class null_bitmap_range
 public:
   using word_type = null_bitmap::word_type;
 
-  explicit null_bitmap_range(null_bitmap const& bm);
+  explicit null_bitmap_range(const null_bitmap& bm);
 
   void next();
   bool done() const;
@@ -67,7 +80,7 @@ public:
 private:
   void scan();
 
-  null_bitmap::bitvector_type const* bitvector_;
+  const null_bitmap::bitvector_type* bitvector_;
   typename null_bitmap::bitvector_type::block_vector::const_iterator block_;
   typename null_bitmap::bitvector_type::block_vector::const_iterator end_;
 };

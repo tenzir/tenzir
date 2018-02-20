@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #include "vast/format/bgpdump.hpp"
 
 namespace vast {
@@ -46,21 +59,14 @@ bgpdump_parser::bgpdump_parser() {
   state_change_type.name("bgpdump::state_change");
 }
 
-expected<void> reader::schema(vast::schema const& sch) {
-  auto types = {
+expected<void> reader::schema(const vast::schema& sch) {
+  auto xs = {
     &parser_.announce_type,
     &parser_.route_type,
     &parser_.withdraw_type,
     &parser_.state_change_type,
   };
-  for (auto t : types)
-    if (auto u = sch.find(t->name())) {
-      if (!congruent(*t, *u))
-        return make_error(ec::format_error, "incongruent type:", t->name());
-      else
-        *t = *u;
-    }
-  return {};
+  return replace_if_congruent(xs, sch);
 }
 
 expected<schema> reader::schema() const {
@@ -72,7 +78,7 @@ expected<schema> reader::schema() const {
   return sch;
 }
 
-char const* reader::name() const {
+const char* reader::name() const {
   return "bgpdump-reader";
 }
 

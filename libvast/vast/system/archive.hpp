@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #ifndef VAST_SYSTEM_ARCHIVE_HPP
 #define VAST_SYSTEM_ARCHIVE_HPP
 
@@ -19,8 +32,7 @@
 #include "vast/system/atoms.hpp"
 #include "vast/system/accountant.hpp"
 
-namespace vast {
-namespace system {
+namespace vast::system {
 
 /// A sequence of batches.
 class segment {
@@ -33,16 +45,16 @@ public:
 
   void add(batch&& b);
 
-  expected<std::vector<event>> extract(bitmap const& bm) const;
+  expected<std::vector<event>> extract(const bitmap& bm) const;
 
-  uuid const& id() const;
+  const uuid& id() const;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, segment& s) {
     return f(s.batches_, s.bytes_, s.id_);
   }
 
-  friend uint64_t bytes(segment const& s);
+  friend uint64_t bytes(const segment& s);
 
 private:
   // TODO: use a vector & binary_search for O(1) append and O(log N) search.
@@ -59,7 +71,7 @@ struct archive_state {
   detail::cache<uuid, segment> cache;
   segment active;
   accountant_type accountant;
-  char const* name = "archive";
+  static inline const char* name = "archive";
 };
 
 using archive_type = caf::typed_actor<
@@ -79,7 +91,6 @@ archive_type::behavior_type
 archive(archive_type::stateful_pointer<archive_state> self, path dir,
         size_t capacity, size_t max_segment_size);
 
-} // namespace system
-} // namespace vast
+} // namespace vast::system
 
 #endif

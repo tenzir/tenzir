@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #ifndef VAST_CONCEPT_SUPPORT_DETAIL_ACTION_TRAITS_HPP
 #define VAST_CONCEPT_SUPPORT_DETAIL_ACTION_TRAITS_HPP
 
@@ -7,8 +20,7 @@
 
 #include "vast/detail/type_list.hpp"
 
-namespace vast {
-namespace detail {
+namespace vast::detail {
 
 template <class Action>
 struct action_traits {
@@ -27,8 +39,7 @@ struct action_traits {
   static constexpr bool one_arg_returns_non_void = arity == 1 && !returns_void;
 };
 
-} // namespace detail
-} // namespace vast
+} // namespace vast::detail
 
 #endif
 

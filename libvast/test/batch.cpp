@@ -1,5 +1,19 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #include "vast/batch.hpp"
 #include "vast/event.hpp"
+#include "vast/ids.hpp"
 #include "vast/load.hpp"
 #include "vast/save.hpp"
 #include "vast/concept/printable/vast/event.hpp"
@@ -38,21 +52,12 @@ TEST(events with IDs) {
   b.ids(666, 666 + 1000);
   MESSAGE("read a batch");
   batch::reader reader{b};
-  bitmap ids;
-  ids.append_bits(false, 666);
-  ids.append_bits(true, 1000);
-  auto xs = reader.read(ids);
+  auto xs = reader.read(make_ids({{666, 1666}}));
   REQUIRE(xs);
   CHECK(*xs == events);
   MESSAGE("read partial batch");
   batch::reader partial{b};
-  ids = bitmap{};
-  ids.append_bits(false, 666);
-  ids.append_bits(true, 1);
-  ids.append_bits(false, 900);
-  ids.append_bits(true, 90);
-  ids.append_bits(false, 9);
-  xs = partial.read(ids);
+  xs = partial.read(make_ids({{666, 667}, {1567, 1657}}));
   REQUIRE(xs);
   REQUIRE_EQUAL(xs->size(), 91u);
   CHECK_EQUAL(xs->front().id(), 666u);

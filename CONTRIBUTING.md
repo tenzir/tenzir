@@ -184,6 +184,13 @@ Naming
 
 - Put static non-const variables in an anonymous namespace.
 
+- Name generic temporary or input variables `x`, `y`, and `z`. If such
+  variables represent a collection of elements, use their plural form `xs`,
+  `ys`, and `zs`.
+
+- If a function has a return value, use `result` as variable name.
+
+
 Breaking
 --------
 

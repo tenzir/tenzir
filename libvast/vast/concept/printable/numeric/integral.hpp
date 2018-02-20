@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #ifndef VAST_CONCEPT_PRINTABLE_NUMERIC_INTEGRAL_HPP
 #define VAST_CONCEPT_PRINTABLE_NUMERIC_INTEGRAL_HPP
 
@@ -21,8 +34,8 @@ struct force_sign;
 } // namespace policy
 
 template <
-  typename T,
-  typename Policy = policy::plain,
+  class T,
+  class Policy = policy::plain,
   int MinDigits = 0
 >
 struct integral_printer : printer<integral_printer<T, Policy, MinDigits>> {
@@ -30,7 +43,7 @@ struct integral_printer : printer<integral_printer<T, Policy, MinDigits>> {
 
   using attribute = T;
 
-  template <typename Iterator, typename U>
+  template <class Iterator, class U>
   static void pad(Iterator& out, U x) {
     if (MinDigits > 0) {
       int magnitude = x == 0 ? 0 : std::log10(x < 0 ? -x : x);
@@ -39,14 +52,14 @@ struct integral_printer : printer<integral_printer<T, Policy, MinDigits>> {
     }
   }
 
-  template <typename Iterator, typename U = T>
+  template <class Iterator, class U = T>
   auto print(Iterator& out, U x) const
   -> std::enable_if_t<std::is_unsigned<U>{}, bool> {
     pad(out, x);
     return detail::print_numeric(out, x);
   }
 
-  template <typename Iterator, typename U = T>
+  template <class Iterator, class U = T>
   auto print(Iterator& out, U x) const
   -> std::enable_if_t<std::is_signed<U>{}, bool> {
     if (x < 0) {
@@ -60,7 +73,7 @@ struct integral_printer : printer<integral_printer<T, Policy, MinDigits>> {
   }
 };
 
-template <typename T>
+template <class T>
 struct printer_registry<T, std::enable_if_t<std::is_integral<T>::value>> {
   using type = integral_printer<T>;
 };
@@ -74,8 +87,8 @@ namespace printers {
 //
 // but for some reason doesn't care if we "rewrite" it as follows. (#132)
 template <
-  typename T,
-  typename Policy = policy::plain,
+  class T,
+  class Policy = policy::plain,
   int MinDigits = 0
 >
 const integral_printer<T, Policy, MinDigits> integral =

@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #ifndef VAST_PATTERN_HPP
 #define VAST_PATTERN_HPP
 
@@ -24,7 +37,7 @@ public:
   ///
   /// @param str The glob expression.
   /// @returns A pattern for the glob expression *str*.
-  static pattern glob(std::string const& str);
+  static pattern glob(const std::string& str);
 
   /// Default-constructs an empty pattern.
   pattern() = default;
@@ -36,24 +49,24 @@ public:
   /// Matches a string against the pattern.
   /// @param str The string to match.
   /// @returns `true` if the pattern matches exactly *str*.
-  bool match(std::string const& str) const;
+  bool match(const std::string& str) const;
 
   /// Searches a pattern in a string.
   /// @param str The string to search.
   /// @returns `true` if the pattern matches inside *str*.
-  bool search(std::string const& str) const;
+  bool search(const std::string& str) const;
 
   const std::string& string() const;
 
-  friend bool operator==(pattern const& lhs, pattern const& rhs);
-  friend bool operator<(pattern const& lhs, pattern const& rhs);
+  friend bool operator==(const pattern& lhs, const pattern& rhs);
+  friend bool operator<(const pattern& lhs, const pattern& rhs);
 
   template <class Inspector>
   friend auto inspect(Inspector& f, pattern& p) {
     return f(p.str_);
   }
 
-  friend bool convert(pattern const& p, json& j);
+  friend bool convert(const pattern& p, json& j);
 
 private:
   std::string str_;

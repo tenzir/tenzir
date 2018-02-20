@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #ifndef VAST_DETAIL_TYPE_TRAITS_HPP
 #define VAST_DETAIL_TYPE_TRAITS_HPP
 
@@ -15,9 +28,6 @@ namespace vast {
 template <class...> class variant;
 
 namespace detail {
-
-using caf::detail::conjunction;
-using caf::detail::disjunction;
 
 // Computes the sum of its arguments.
 template <size_t ...>
@@ -39,10 +49,10 @@ template <class... Ts>
 struct is_variant<variant<Ts...>> : std::true_type {};
 
 /// Checks whether a type is a std::tuple.
-template <typename>
+template <class>
 struct is_tuple : std::false_type {};
 
-template <typename... Ts>
+template <class... Ts>
 struct is_tuple<std::tuple<Ts...>> : std::true_type {};
 
 /// Checks whether a type derives from `basic_streambuf<Char>`.
@@ -70,6 +80,10 @@ struct is_contiguous_byte_container<
       || std::is_same<T, std::vector<unsigned char>>::value
   >
 > : std::true_type {};
+
+template <class T>
+inline constexpr bool is_contiguous_byte_container_v
+  = is_contiguous_byte_container<T>::value;
 
 // -- SFINAE helpers ---------------------------------------------------------
 // http://bit.ly/uref-copy.
@@ -99,15 +113,15 @@ using disable_if_same = disable_if_t<std::is_same<T, U>::value, R>;
 // -- traits -----------------------------------------------------------------
 
 template <class T, class...Ts>
-struct is_any : disjunction<std::is_same<T, Ts>::value...> {};
+struct is_any : std::bool_constant<(std::is_same_v<T, Ts> || ...)> {};
 
-template <class T, class...Ts>
-struct are_same : conjunction<std::is_same<T, Ts>::value...> {};
+template <class T, class... Ts>
+struct are_same : std::bool_constant<(std::is_same_v<T, Ts> && ...)> {};
 
 // -- tuple ------------------------------------------------------------------
 
 // Wraps a type into a tuple if it is not already a tuple.
-template <typename T>
+template <class T>
 using tuple_wrap = std::conditional_t<is_tuple<T>::value, T, std::tuple<T>>;
 
 // Checks whether a tuple contains a given type.
@@ -137,8 +151,8 @@ using void_t = void;
 struct nonesuch {
   nonesuch() = delete;
   ~nonesuch() = delete;
-  nonesuch(nonesuch const&) = delete;
-  void operator=(nonesuch const&) = delete;
+  nonesuch(const nonesuch&) = delete;
+  void operator=(const nonesuch&) = delete;
 };
 
 namespace {

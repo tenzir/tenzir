@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #include <fstream>
 
 #include "vast/concept/printable/to_string.hpp"
@@ -60,7 +73,7 @@ expected<void> write_state(stateful_actor<importer_state>* self) {
 // Generates the default EXIT handler that saves states and shuts down internal
 // components.
 auto shutdown(stateful_actor<importer_state>* self) {
-  return [=](exit_msg const& msg) {
+  return [=](const exit_msg& msg) {
     write_state(self);
     self->anon_send(self->state.archive, sys_atom::value, delete_atom::value);
     self->anon_send(self->state.index, sys_atom::value, delete_atom::value);
@@ -81,6 +94,8 @@ void ship(stateful_actor<importer_state>* self, std::vector<event>&& batch) {
   auto msg = make_message(std::move(batch));
   self->send(actor_cast<actor>(self->state.archive), msg);
   self->send(self->state.index, msg);
+  for (auto& e : self->state.continuous_queries)
+    self->send(e, msg);
 }
 
 // Asks the metastore for more IDs.
@@ -151,26 +166,39 @@ behavior importer(stateful_actor<importer_state>* self, path dir,
   self->set_default_handler(skip);
   self->set_exit_handler(shutdown(self));
   self->set_down_handler(
-    [=](down_msg const& msg) {
-      if (msg.source == self->state.meta_store)
+    [=](const down_msg& msg) {
+      if (msg.source == self->state.meta_store) {
         self->state.meta_store = meta_store_type{};
+      } else {
+        auto& cq = self->state.continuous_queries;
+        auto itr = find(cq.begin(), cq.end(), msg.source);
+        if (itr != cq.end()) {
+          VAST_DEBUG(self, "finished continuous query for ", msg.source);
+          cq.erase(itr);
+        }
+      }
     }
   );
   return {
-    [=](meta_store_type const& ms) {
+    [=](const meta_store_type& ms) {
       VAST_DEBUG(self, "registers meta store");
       VAST_ASSERT(ms != self->state.meta_store);
       self->monitor(ms);
       self->state.meta_store = ms;
     },
-    [=](archive_type const& archive) {
+    [=](const archive_type& archive) {
       VAST_DEBUG(self, "registers archive", archive);
       self->send(self->state.archive, sys_atom::value, put_atom::value,
                  actor_cast<actor>(archive));
     },
-    [=](index_atom, actor const& index) {
+    [=](index_atom, const actor& index) {
       VAST_DEBUG(self, "registers index", index);
       self->send(self->state.index, sys_atom::value, put_atom::value, index);
+    },
+    [=](exporter_atom, const actor& exporter) {
+      VAST_DEBUG(self, "registers exporter", exporter);
+      self->monitor(exporter);
+      self->state.continuous_queries.push_back(exporter);
     },
     [=](std::vector<event>& events) {
       VAST_ASSERT(!events.empty());

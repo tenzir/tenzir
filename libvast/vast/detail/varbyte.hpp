@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #ifndef VAST_DETAIL_VARBYTE_HPP
 #define VAST_DETAIL_VARBYTE_HPP
 
@@ -6,43 +19,34 @@
 #include <limits>
 #include <type_traits>
 
-namespace vast {
-namespace detail {
-
 /// The *variable byte* coding.
-namespace varbyte {
+namespace vast::detail::varbyte {
 
 /// Computes the size a given value will take in variable byte encoding.
 template <class T>
-constexpr std::enable_if_t<sizeof(T) == 8, size_t> size(T x) {
-  return x >= (T(1) << 63) ? 10 :
-         x >= (T(1) << 56) ? 9 :
-         x >= (T(1) << 49) ? 8 :
-         x >= (T(1) << 42) ? 7 :
-         x >= (T(1) << 35) ? 6 :
-         x >= (T(1) << 28) ? 5 :
-         x >= (T(1) << 21) ? 4 :
-         x >= (T(1) << 14) ? 3 :
-         x >= (T(1) << 7) ? 2 : 1;
-}
-
-template <class T>
-constexpr std::enable_if_t<sizeof(T) == 4, size_t> size(T x) {
-  return x >= (T(1) << 28) ? 5 :
-         x >= (T(1) << 21) ? 4 :
-         x >= (T(1) << 14) ? 3 :
-         x >= (T(1) << 7) ? 2 : 1;
-}
-
-template <class T>
-constexpr std::enable_if_t<sizeof(T) == 2, size_t> size(T x) {
-  return x >= (T(1) << 14) ? 3 :
-         x >= (T(1) << 7) ? 2 : 1;
-}
-
-template <class T>
-constexpr std::enable_if_t<sizeof(T) == 1, size_t> size(T x) {
-  return x >= (T(1) << 7) ? 2 : 1;
+constexpr size_t size(T x) noexcept {
+  if constexpr (sizeof(T) == 8)
+    return x >= (T(1) << 63) ? 10 :
+           x >= (T(1) << 56) ? 9 :
+           x >= (T(1) << 49) ? 8 :
+           x >= (T(1) << 42) ? 7 :
+           x >= (T(1) << 35) ? 6 :
+           x >= (T(1) << 28) ? 5 :
+           x >= (T(1) << 21) ? 4 :
+           x >= (T(1) << 14) ? 3 :
+           x >= (T(1) << 7) ? 2 : 1;
+  else if constexpr (sizeof(T) == 4)
+    return x >= (T(1) << 28) ? 5 :
+           x >= (T(1) << 21) ? 4 :
+           x >= (T(1) << 14) ? 3 :
+           x >= (T(1) << 7) ? 2 : 1;
+  else if constexpr (sizeof(T) == 2)
+    return x >= (T(1) << 14) ? 3 :
+           x >= (T(1) << 7) ? 2 : 1;
+  else if constexpr (sizeof(T) == 1)
+    return x >= (T(1) << 7) ? 2 : 1;
+  else
+    static_assert(!std::is_same_v<T, T>, "unsupported integer type");
 }
 
 /// Computes maximum number of bytes required to encode an integral type *T*.
@@ -77,8 +81,8 @@ encode(T x, void* sink) {
 /// @returns The number of bytes read from *source*.
 template <class T>
 std::enable_if_t<std::is_integral<T>{} && std::is_unsigned<T>{}, size_t>
-decode(T& x, void const* source) {
-  auto in = reinterpret_cast<uint8_t const*>(source);
+decode(T& x, const void* source) {
+  auto in = reinterpret_cast<const uint8_t*>(source);
   size_t i = 0;
   uint8_t low7;
   x = 0;
@@ -91,8 +95,6 @@ decode(T& x, void const* source) {
   return i;
 }
 
-} // namespace varbyte
-} // namespace detail
-} // namespace vast
+} // namespace vast::detail::varbyte
 
 #endif

@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #include "vast/util/assert.hpp"
 #include "vast/util/flat_set.hpp"
 
@@ -7,7 +20,7 @@
 
 namespace vast {
 
-void serialize(caf::serializer& sink, std::vector<event> const& events) {
+void serialize(caf::serializer& sink, const std::vector<event>& events) {
   util::flat_set<type::hash_type::digest_type> digests;
   auto size = events.size();
   sink.begin_sequence(size);

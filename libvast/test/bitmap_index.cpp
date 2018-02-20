@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #include "vast/bitmap_index.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/bitmap.hpp"
@@ -83,22 +96,22 @@ TEST(multi-level range-coded bitmap index 2) {
   all_ones.append_bits(true, 7);
   // > 8
   null_bitmap greater_eight;
-  greater_eight.append_bit(1);
-  greater_eight.append_bit(1);
-  greater_eight.append_bit(1);
-  greater_eight.append_bit(0);
-  greater_eight.append_bit(1);
-  greater_eight.append_bit(1);
-  greater_eight.append_bit(1);
+  greater_eight.append_bit(true);
+  greater_eight.append_bit(true);
+  greater_eight.append_bit(true);
+  greater_eight.append_bit(false);
+  greater_eight.append_bit(true);
+  greater_eight.append_bit(true);
+  greater_eight.append_bit(true);
   // > 80
   null_bitmap greater_eighty;
-  greater_eighty.append_bit(0);
-  greater_eighty.append_bit(1);
-  greater_eighty.append_bit(0);
-  greater_eighty.append_bit(0);
-  greater_eighty.append_bit(1);
-  greater_eighty.append_bit(0);
-  greater_eighty.append_bit(1);
+  greater_eighty.append_bit(false);
+  greater_eighty.append_bit(true);
+  greater_eighty.append_bit(false);
+  greater_eighty.append_bit(false);
+  greater_eighty.append_bit(true);
+  greater_eighty.append_bit(false);
+  greater_eighty.append_bit(true);
   CHECK(bmi.lookup(greater, 1) == all_ones);
   CHECK(bmi.lookup(greater, 2) == all_ones);
   CHECK(bmi.lookup(greater, 3) == all_ones);

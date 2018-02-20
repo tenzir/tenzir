@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #include "vast/null_bitmap.hpp"
 
 namespace vast {
@@ -30,12 +43,12 @@ void null_bitmap::flip() {
   bitvector_.flip();
 }
 
-bool operator==(null_bitmap const& x, null_bitmap const& y) {
+bool operator==(const null_bitmap& x, const null_bitmap& y) {
   return x.bitvector_ == y.bitvector_;
 }
 
 
-null_bitmap_range::null_bitmap_range(null_bitmap const& bm)
+null_bitmap_range::null_bitmap_range(const null_bitmap& bm)
   : bitvector_{&bm.bitvector_},
     block_{bm.bitvector_.blocks().begin()},
     end_{bm.bitvector_.blocks().end()} {
@@ -85,7 +98,7 @@ void null_bitmap_range::scan() {
   }
 }
 
-null_bitmap_range bit_range(null_bitmap const& bm) {
+null_bitmap_range bit_range(const null_bitmap& bm) {
   return null_bitmap_range{bm};
 }
 

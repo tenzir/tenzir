@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #ifndef VAST_CONCEPT_PARSEABLE_VAST_TIME_HPP
 #define VAST_CONCEPT_PARSEABLE_VAST_TIME_HPP
 
@@ -28,8 +41,8 @@ struct duration_parser : parser<duration_parser<Rep, Period>> {
     return std::chrono::duration_cast<duration_type>(d);
   }
 
-  template <typename Iterator, typename Attribute>
-  bool parse(Iterator& f, Iterator const& l, Attribute& a) const {
+  template <class Iterator, class Attribute>
+  bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
     using namespace parsers;
     auto save = f;
     Rep i;
@@ -116,14 +129,14 @@ struct ymdhms_parser : vast::parser<ymdhms_parser> {
         >> ~('-' >> day >> ~('+' >> hour >> ~(':' >> min >> ~(':' >> sec))));
   }
 
-  template <typename Iterator>
-  bool parse(Iterator& f, Iterator const& l, unused_type) const {
+  template <class Iterator>
+  bool parse(Iterator& f, const Iterator& l, unused_type) const {
     static auto p = make();
     return p(f, l, unused);
   }
 
-  template <typename Iterator>
-  bool parse(Iterator& f, Iterator const& l, timestamp& tp) const {
+  template <class Iterator>
+  bool parse(Iterator& f, const Iterator& l, timestamp& tp) const {
     using namespace std::chrono;
     using namespace date;
     auto secs = 0;
@@ -162,8 +175,8 @@ auto const epoch = real_opt_dot
 struct timestamp_parser : parser<timestamp_parser> {
   using attribute = timestamp;
 
-  template <typename Iterator, typename Attribute>
-  bool parse(Iterator& f, Iterator const& l, Attribute& a) const {
+  template <class Iterator, class Attribute>
+  bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
     static auto plus = [](timespan span) {
       return timestamp::clock::now() + span;
     };

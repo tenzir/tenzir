@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/select.h>
@@ -16,7 +29,7 @@
 namespace vast {
 namespace detail {
 
-int uds_listen(std::string const& path) {
+int uds_listen(const std::string& path) {
   int fd;
   if ((fd = ::socket(AF_UNIX, SOCK_STREAM, 0)) < 0)
     return fd;
@@ -44,7 +57,7 @@ int uds_accept(int socket) {
   return fd;
 }
 
-int uds_connect(std::string const& path) {
+int uds_connect(const std::string& path) {
   int fd;
   if ((fd = ::socket(AF_UNIX, SOCK_STREAM, 0)) < 0)
     return fd;
@@ -73,7 +86,7 @@ bool uds_send_fd(int socket, int fd) {
   // Setup message header.
   ::msghdr m;
   std::memset(&m, 0, sizeof(struct msghdr));
-  m.msg_name = NULL;
+  m.msg_name = nullptr;
   m.msg_namelen = 0;
   m.msg_iov = iov;
   m.msg_iovlen = 1;
@@ -118,18 +131,18 @@ int uds_recv_fd(int socket) {
 }
 
 VAST_DIAGNOSTIC_POP
-int unix_domain_socket::listen(std::string const& path) {
+int unix_domain_socket::listen(const std::string& path) {
   return detail::uds_listen(path);
 }
 
-unix_domain_socket unix_domain_socket::accept(std::string const& path) {
+unix_domain_socket unix_domain_socket::accept(const std::string& path) {
   auto server = detail::uds_listen(path);
   if (server != -1)
     return unix_domain_socket{detail::uds_accept(server)};
   return unix_domain_socket{};
 }
 
-unix_domain_socket unix_domain_socket::connect(std::string const& path) {
+unix_domain_socket unix_domain_socket::connect(const std::string& path) {
   return unix_domain_socket{detail::uds_connect(path)};
 }
 
@@ -212,9 +225,9 @@ bool read(int fd, void* buffer, size_t bytes, size_t* got) {
   return true;
 }
 
-bool write(int fd, void const* buffer, size_t bytes, size_t* put) {
+bool write(int fd, const void* buffer, size_t bytes, size_t* put) {
   auto total = size_t{0};
-  auto buf = reinterpret_cast<uint8_t const*>(buffer);
+  auto buf = reinterpret_cast<const uint8_t*>(buffer);
   while (total < bytes) {
     ssize_t written;
     do {

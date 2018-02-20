@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #ifndef VAST_CONCEPT_PRINTABLE_VAST_OPERATOR_HPP
 #define VAST_CONCEPT_PRINTABLE_VAST_OPERATOR_HPP
 
@@ -11,8 +24,8 @@ namespace vast {
 struct arithmetic_operator_printer : printer<arithmetic_operator_printer> {
   using attribute = arithmetic_operator;
 
-  template <typename Iterator>
-  bool print(Iterator& out, arithmetic_operator const& op) const {
+  template <class Iterator>
+  bool print(Iterator& out, const arithmetic_operator& op) const {
     switch (op) {
       default:
         die("missing case for arithmetic operator");
@@ -43,8 +56,8 @@ struct arithmetic_operator_printer : printer<arithmetic_operator_printer> {
 struct relational_operator_printer : printer<relational_operator_printer> {
   using attribute = relational_operator;
 
-  template <typename Iterator>
-  bool print(Iterator& out, relational_operator const& op) const {
+  template <class Iterator>
+  bool print(Iterator& out, const relational_operator& op) const {
     switch (op) {
       default:
         die("missing case for relational operator");
@@ -79,8 +92,8 @@ struct relational_operator_printer : printer<relational_operator_printer> {
 struct boolean_operator_printer : printer<boolean_operator_printer> {
   using attribute = boolean_operator;
 
-  template <typename Iterator>
-  bool print(Iterator& out, boolean_operator const& op) const {
+  template <class Iterator>
+  bool print(Iterator& out, const boolean_operator& op) const {
     switch (op) {
       default:
         die("missing case for boolean operator");

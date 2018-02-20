@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #ifndef VAST_DETAIL_RANGE_HPP
 #define VAST_DETAIL_RANGE_HPP
 
@@ -6,10 +19,9 @@
 #include "vast/detail/assert.hpp"
 #include "vast/detail/iterator.hpp"
 
-namespace vast {
-namespace detail {
+namespace vast::detail {
 
-template <typename Derived>
+template <class Derived>
 class range {
 public:
   explicit operator bool() const {
@@ -21,12 +33,12 @@ public:
   }
 
   bool empty() const {
-    auto d = static_cast<Derived const*>(this);
+    auto d = static_cast<const Derived*>(this);
     return d->begin() == d->end();
   }
 };
 
-template <typename Range>
+template <class Range>
 class range_iterator
   : public iterator_facade<
       range_iterator<Range>,
@@ -45,7 +57,7 @@ private:
   explicit range_iterator(Range& rng) : rng_{&rng} {
   }
 
-  bool equals(range_iterator const&) const {
+  bool equals(const range_iterator&) const {
     return rng_->complete();
   }
 
@@ -63,7 +75,7 @@ private:
   Range* rng_;
 };
 
-template <typename Derived>
+template <class Derived>
 class range_facade : public range<range_facade<Derived>> {
 public:
   using iterator = range_iterator<range_facade<Derived>>;
@@ -81,7 +93,7 @@ private:
   friend iterator;
 
   bool complete() const {
-    return static_cast<Derived const*>(this)->done();
+    return static_cast<const Derived*>(this)->done();
   }
 
   void increment() {
@@ -93,14 +105,14 @@ private:
 public:
 #endif
   decltype(auto) dereference() const {
-    return static_cast<Derived const*>(this)->get();
+    return static_cast<const Derived*>(this)->get();
   }
 };
 
-template <typename ForwardIterator>
+template <class ForwardIterator>
 class iterator_range : public range<iterator_range<ForwardIterator>> {
 public:
-  template <typename Iterator>
+  template <class Iterator>
   iterator_range(Iterator begin, Iterator end)
     : begin_{begin}, end_{end} {
   }
@@ -123,7 +135,6 @@ auto make_iterator_range(Iterator begin, Iterator end) {
   return iterator_range<Iterator>(begin, end);
 }
 
-} // namespace detail
-} // namespace vast
+} // namespace vast::detail
 
 #endif

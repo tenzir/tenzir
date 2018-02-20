@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #ifndef VAST_CONCEPT_PRINTABLE_VAST_JSON_HPP
 #define VAST_CONCEPT_PRINTABLE_VAST_JSON_HPP
 
@@ -12,8 +25,8 @@ namespace vast {
 //struct json_type_printer : printer<json_type_printer> {
 //  using attribute = json::type;
 //
-//  template <typename Iterator>
-//  bool print(Iterator& out, json::type const& t) {
+//  template <class Iterator>
+//  bool print(Iterator& out, const json::type& t) {
 //    using namespace printers;
 //    switch (t) {
 //      default:
@@ -41,7 +54,7 @@ struct oneline {};
 
 } // namespace policy
 
-template <typename TreePolicy, int Indent = 2, int Padding = 0>
+template <class TreePolicy, int Indent = 2, int Padding = 0>
 struct json_printer : printer<json_printer<TreePolicy, Indent, Padding>> {
   using attribute = json;
 
@@ -49,11 +62,11 @@ struct json_printer : printer<json_printer<TreePolicy, Indent, Padding>> {
 
   static_assert(Padding >= 0, "padding must not be negative");
 
-  template <typename Iterator>
+  template <class Iterator>
   struct print_visitor {
     print_visitor(Iterator& out) : out_{out} {}
 
-    bool operator()(none const&) {
+    bool operator()(const none&) {
       return printers::str.print(out_, "null");
     }
 
@@ -73,11 +86,11 @@ struct json_printer : printer<json_printer<TreePolicy, Indent, Padding>> {
       return printers::str.print(out_, str);
     }
 
-    bool operator()(std::string const& str) {
+    bool operator()(const std::string& str) {
       return printers::str.print(out_, detail::json_escape(str));
     }
 
-    bool operator()(json::array const& a) {
+    bool operator()(const json::array& a) {
       using namespace printers;
       if (depth_ == 0 && !pad())
         return false;
@@ -109,7 +122,7 @@ struct json_printer : printer<json_printer<TreePolicy, Indent, Padding>> {
       return any.print(out_, ']');
     }
 
-    bool operator()(json::object const& o) {
+    bool operator()(const json::object& o) {
       using namespace printers;
       if (depth_ == 0 && !pad())
         return false;
@@ -169,8 +182,8 @@ struct json_printer : printer<json_printer<TreePolicy, Indent, Padding>> {
     int depth_ = 0;
   };
 
-  template <typename Iterator, typename T>
-  auto print(Iterator& out, T const& x) const
+  template <class Iterator, class T>
+  auto print(Iterator& out, const T& x) const
   -> std::enable_if_t<
     !std::is_same<json::jsonize<T>, std::false_type>::value,
     bool
@@ -178,13 +191,13 @@ struct json_printer : printer<json_printer<TreePolicy, Indent, Padding>> {
     return print_visitor<Iterator>{out}(x);
   }
 
-  template <typename Iterator>
-  bool print(Iterator& out, json const& j) const {
+  template <class Iterator>
+  bool print(Iterator& out, const json& j) const {
     return visit(print_visitor<Iterator>{out}, j);
   }
 };
 
-template <typename TreePolicy, int Indent, int Padding>
+template <class TreePolicy, int Indent, int Padding>
 constexpr bool json_printer<TreePolicy, Indent, Padding>::tree;
 
 template <>
@@ -204,7 +217,7 @@ struct printer_registry<json> {
 
 namespace printers {
 
-template <typename Policy>
+template <class Policy>
 auto json = json_printer<Policy>{};
 
 } // namespace printers

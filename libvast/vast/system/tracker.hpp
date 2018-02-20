@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #ifndef VAST_SYSTEM_TRACKER_HPP
 #define VAST_SYSTEM_TRACKER_HPP
 
@@ -14,8 +27,7 @@
 #include "vast/system/atoms.hpp"
 #include "vast/detail/radix_tree.hpp"
 
-namespace vast {
-namespace system {
+namespace vast::system {
 
 /// State maintained per component.
 struct component_state {
@@ -54,7 +66,7 @@ auto inspect(Inspector& f, registry& r) {
 
 struct tracker_state {
   vast::system::registry registry;
-  const char* name = "tracker";
+  static inline const char* name = "tracker";
 };
 
 using tracker_type = caf::typed_actor<
@@ -81,7 +93,6 @@ using tracker_type = caf::typed_actor<
 tracker_type::behavior_type
 tracker(tracker_type::stateful_pointer<tracker_state> self, std::string node);
 
-} // namespace system
-} // namespace vast
+} // namespace vast::system
 
 #endif

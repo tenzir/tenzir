@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #ifndef VAST_SYSTEM_REPLICATED_STORE_HPP
 #define VAST_SYSTEM_REPLICATED_STORE_HPP
 
@@ -18,8 +31,7 @@
 #include "vast/detail/assert.hpp"
 #include "vast/detail/operators.hpp"
 
-namespace vast {
-namespace system {
+namespace vast::system {
 
 template <class Key, class Value>
 struct replicated_store_state {
@@ -31,7 +43,7 @@ struct replicated_store_state {
   uint64_t request_id = 0;
   std::unordered_map<uint64_t, caf::response_promise> requests;
   std::chrono::steady_clock::time_point last_stats_update;
-  const char* name = "replicated-store";
+  static inline const char* name = "replicated-store";
 };
 
 template <class Inspector, class Key, class Value>
@@ -41,7 +53,7 @@ auto inspect(Inspector& f, replicated_store_state<Key, Value>& state) {
 
 template <class Key, class Value>
 using replicated_store_type =
-  typename key_value_store_type<Key, Value>::template extend<
+  class key_value_store_type<Key, Value>::template extend<
     caf::replies_to<snapshot_atom>::template with<ok_atom>,
     caf::reacts_to<raft::index_type, caf::message>
   >;
@@ -117,6 +129,7 @@ void update(Actor* self, caf::message& command) {
   command.apply({
     [=](const actor_identity& identity, uint64_t id, caf::message operation) {
       if (identity != self->address()) {
+        VAST_IGNORE_UNUSED(id);
         VAST_DEBUG(self, "got remote operation", id);
         apply(self, operation);
       } else {
@@ -174,7 +187,7 @@ void replicate(Actor* self, const caf::actor& consensus,
 template <class Key, class Value>
 typename replicated_store_type<Key, Value>::behavior_type
 replicated_store(
-  typename replicated_store_type<Key, Value>::template stateful_pointer<
+  class replicated_store_type<Key, Value>::template stateful_pointer<
     replicated_store_state<Key, Value>
   > self,
   caf::actor consensus) {
@@ -278,7 +291,6 @@ replicated_store(
   };
 }
 
-} // namespace system
-} // namespace vast
+} // namespace vast::system
 
 #endif

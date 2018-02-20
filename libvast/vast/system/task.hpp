@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #ifndef VAST_SYSTEM_TASK_HPP
 #define VAST_SYSTEM_TASK_HPP
 
@@ -9,8 +22,7 @@
 
 #include "vast/system/atoms.hpp"
 
-namespace vast {
-namespace system {
+namespace vast::system {
 
 struct task_state {
   uint64_t total = 0;
@@ -18,7 +30,7 @@ struct task_state {
   std::map<caf::actor_addr, uint64_t> workers;
   detail::flat_set<caf::actor> subscribers;
   detail::flat_set<caf::actor> supervisors;
-  const char* name = "task";
+  static inline const char* name = "task";
 };
 
 namespace detail {
@@ -37,7 +49,6 @@ caf::behavior task(caf::stateful_actor<task_state>* self, Ts... xs) {
   return detail::task(self, std::move(done_msg));
 }
 
-} // namespace system
-} // namespace vast
+} // namespace vast::system
 
 #endif

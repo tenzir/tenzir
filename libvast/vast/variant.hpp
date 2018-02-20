@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 // Copyright (C) 2013 Jarryd Beck
 //
 // (adapted by Matthias Vallentin for C++17 conformance).
@@ -45,8 +58,7 @@
 #include "vast/detail/operators.hpp"
 #include "vast/detail/type_traits.hpp"
 
-namespace vast {
-namespace detail {
+namespace vast::detail {
 
 template <class Visitor>
 class delayed_visitor {
@@ -95,7 +107,9 @@ private:
   Visitable& visitable;
 };
 
-} // namespace detail
+} // namespace vast::detail
+
+namespace vast {
 
 /// A variant class modeled after C++17's variant.
 /// @tparam Ts the types the variant should assume.
@@ -131,15 +145,13 @@ public:
   }
 
   variant(const variant& other)
-  noexcept(detail::conjunction<std::is_nothrow_constructible<Ts>{}...>::value) {
+  noexcept((std::is_nothrow_constructible_v<Ts> && ...)) {
     other.apply(copy_constructor{*this});
     index_ = other.index_;
   }
 
   variant(variant&& other)
-  noexcept(detail::conjunction<
-             std::is_nothrow_move_constructible<Ts>{}...
-           >::value) {
+  noexcept((std::is_nothrow_move_constructible_v<Ts> && ...)) {
     other.apply(move_constructor{*this});
     index_ = other.index_;
   }
@@ -151,9 +163,7 @@ public:
   }
 
   variant& operator=(variant&& rhs)
-  noexcept(detail::conjunction<
-             std::is_nothrow_move_assignable<Ts>{}...
-           >::value) {
+  noexcept((std::is_nothrow_move_assignable_v<Ts> && ...)) {
     rhs.apply(move_assigner{*this, rhs.index_});
     index_ = rhs.index_;
     return *this;
@@ -190,8 +200,8 @@ private:
     default_constructor(variant& self) : self_(self) {
     }
 
-    template <typename T>
-    void operator()(T const&) const
+    template <class T>
+    void operator()(const T&) const
     noexcept(std::is_nothrow_default_constructible<T>{}) {
       self_.construct(T());
     }
@@ -518,7 +528,7 @@ variant<Ts...>& expose(variant<Ts...>& v) {
 }
 
 template <class T>
-auto& expose(T const& v) {
+auto& expose(const T& v) {
   return expose(const_cast<T&>(v));
 }
 

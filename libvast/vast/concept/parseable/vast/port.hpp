@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #ifndef VAST_CONCEPT_PARSEABLE_VAST_PORT_HPP
 #define VAST_CONCEPT_PARSEABLE_VAST_PORT_HPP
 
@@ -11,15 +24,15 @@ template <>
 struct access::parser<port> : vast::parser<access::parser<port>> {
   using attribute = port;
 
-  template <typename Iterator>
-  bool parse(Iterator& f, Iterator const& l, unused_type) const {
+  template <class Iterator>
+  bool parse(Iterator& f, const Iterator& l, unused_type) const {
     using namespace parsers;
     auto p = u16 >> '/' >> ("?"_p | "tcp" | "udp" | "icmp");
     return p(f, l, unused);
   }
 
-  template <typename Iterator>
-  bool parse(Iterator& f, Iterator const& l, port& a) const {
+  template <class Iterator>
+  bool parse(Iterator& f, const Iterator& l, port& a) const {
     using namespace parsers;
     static auto p
       =  u16

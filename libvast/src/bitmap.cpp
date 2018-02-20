@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #include "vast/bitmap.hpp"
 
 namespace vast {
@@ -33,11 +46,11 @@ void bitmap::flip() {
   visit([](auto& bm) { bm.flip(); }, bitmap_);
 }
 
-bool operator==(bitmap const& x, bitmap const& y) {
+bool operator==(const bitmap& x, const bitmap& y) {
   return x.bitmap_ == y.bitmap_;
 }
 
-bitmap_bit_range::bitmap_bit_range(bitmap const& bm) {
+bitmap_bit_range::bitmap_bit_range(const bitmap& bm) {
   auto visitor = [&](auto& b) {
     auto r = bit_range(b);
     if (!r.done())
@@ -59,7 +72,7 @@ bool bitmap_bit_range::done() const {
   return visit([](auto& rng) { return rng.done(); }, range_);
 }
 
-bitmap_bit_range bit_range(bitmap const& bm) {
+bitmap_bit_range bit_range(const bitmap& bm) {
   return bitmap_bit_range{bm};
 }
 

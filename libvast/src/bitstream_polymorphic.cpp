@@ -1,9 +1,22 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #include "vast/bitstream_polymorphic.hpp"
 #include "vast/util/assert.hpp"
 
 namespace vast {
 
-detail::bitstream_concept::iterator::iterator(iterator const& other)
+detail::bitstream_concept::iterator::iterator(const iterator& other)
   : concept_{other.concept_ ? other.concept_->copy() : nullptr} {
 }
 
@@ -12,7 +25,7 @@ detail::bitstream_concept::iterator::iterator(iterator&& other)
 }
 
 detail::bitstream_concept::iterator& detail::bitstream_concept::iterator::
-operator=(iterator const& other) {
+operator=(const iterator& other) {
   concept_ = other.concept_ ? other.concept_->copy() : nullptr;
   return *this;
 }
@@ -23,7 +36,7 @@ operator=(iterator&& other) {
   return *this;
 }
 
-bool detail::bitstream_concept::iterator::equals(iterator const& other) const {
+bool detail::bitstream_concept::iterator::equals(const iterator& other) const {
   VAST_ASSERT(concept_);
   VAST_ASSERT(other.concept_);
   return concept_->equals(*other.concept_);
@@ -40,14 +53,14 @@ detail::bitstream_concept::iterator::dereference() const {
   return concept_->dereference();
 }
 
-bitstream::bitstream(bitstream const& other)
+bitstream::bitstream(const bitstream& other)
   : concept_{other.concept_ ? other.concept_->copy() : nullptr} {
 }
 
 bitstream::bitstream(bitstream&& other) : concept_{std::move(other.concept_)} {
 }
 
-bitstream& bitstream::operator=(bitstream const& other) {
+bitstream& bitstream::operator=(const bitstream& other) {
   concept_ = other.concept_ ? other.concept_->copy() : nullptr;
   return *this;
 }
@@ -61,7 +74,7 @@ bitstream::operator bool() const {
   return concept_ != nullptr;
 }
 
-bool bitstream::equals(bitstream const& other) const {
+bool bitstream::equals(const bitstream& other) const {
   VAST_ASSERT(concept_);
   VAST_ASSERT(other.concept_);
   return concept_->equals(*other.concept_);
@@ -72,14 +85,14 @@ void bitstream::bitwise_not() {
     concept_->bitwise_not();
 }
 
-void bitstream::bitwise_and(bitstream const& other) {
+void bitstream::bitwise_and(const bitstream& other) {
   if (concept_ && other.concept_)
     concept_->bitwise_and(*other.concept_);
   else
     concept_.reset();
 }
 
-void bitstream::bitwise_or(bitstream const& other) {
+void bitstream::bitwise_or(const bitstream& other) {
   if (!other.concept_)
     return;
 
@@ -89,19 +102,19 @@ void bitstream::bitwise_or(bitstream const& other) {
     concept_ = other.concept_->copy();
 }
 
-void bitstream::bitwise_xor(bitstream const& other) {
+void bitstream::bitwise_xor(const bitstream& other) {
   if (concept_ && other.concept_)
     concept_->bitwise_xor(*other.concept_);
   else
     concept_.reset();
 }
 
-void bitstream::bitwise_subtract(bitstream const& other) {
+void bitstream::bitwise_subtract(const bitstream& other) {
   if (concept_ && other.concept_)
     concept_->bitwise_subtract(*other.concept_);
 }
 
-void bitstream::append_impl(bitstream const& other) {
+void bitstream::append_impl(const bitstream& other) {
   VAST_ASSERT(concept_);
   VAST_ASSERT(other.concept_);
   concept_->append_impl(*other.concept_);
@@ -187,12 +200,12 @@ bitstream::size_type bitstream::find_prev_impl(size_type i) const {
   return concept_->find_prev_impl(i);
 }
 
-bitvector const& bitstream::bits_impl() const {
+const bitvector& bitstream::bits_impl() const {
   VAST_ASSERT(concept_);
   return concept_->bits_impl();
 }
 
-bool operator==(bitstream const& x, bitstream const& y) {
+bool operator==(const bitstream& x, const bitstream& y) {
   return x.equals(y);
 }
 

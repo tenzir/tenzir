@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #include <deque>
 #include <unordered_set>
 
@@ -227,6 +240,7 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
         auto j = std::remove_if(self->state.scheduled.begin(),
                                 self->state.scheduled.end(), is_only_lookup);
         auto n = self->state.scheduled.end() - j;
+        VAST_IGNORE_UNUSED(n);
         VAST_DEBUG(self, "erases", n, "scheduled lookups");
         self->state.scheduled.erase(j, self->state.scheduled.end());
       } else {
@@ -265,7 +279,7 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
       auto msg = self->current_mailbox_element()->move_content_to_message();
       self->send(self->state.active.partition, msg);
     },
-    [=](expression const& expr) -> result<uuid, size_t, size_t> {
+    [=](const expression& expr) -> result<uuid, size_t, size_t> {
       auto sender = actor_cast<actor>(self->current_sender());
       VAST_DEBUG(self, "got lookup:", expr);
       // Identify the relevant partitions.
@@ -293,7 +307,7 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
       ctx.first->second.partitions = std::move(partitions);
       return {id, num_partitions, n};
     },
-    [=](uuid const& id, size_t n) {
+    [=](const uuid& id, size_t n) {
       auto& ctx = self->state.lookups[id];
       VAST_DEBUG(self, "processes lookup", id << ':', ctx.expr);
       if (n == 0) {

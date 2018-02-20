@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #ifndef VAST_CONCEPT_PRINTABLE_DETAIL_PRINT_DELIMITED_HPP
 #define VAST_CONCEPT_PRINTABLE_DETAIL_PRINT_DELIMITED_HPP
 
@@ -9,10 +22,10 @@ namespace detail {
 
 /// Prints a delimited Iterator range.
 template <
-  typename T,
-  typename Delimiter,
-  typename InputIterator,
-  typename OutputIterator
+  class T,
+  class Delimiter,
+  class InputIterator,
+  class OutputIterator
 >
 bool print_delimited(InputIterator begin, InputIterator end,
                      OutputIterator&& out) {
@@ -29,9 +42,9 @@ bool print_delimited(InputIterator begin, InputIterator end,
 }
 
 /// Prints a delimited Iterator range.
-template <typename InputIterator, typename OutputIterator, typename Delimiter>
+template <class InputIterator, class OutputIterator, class Delimiter>
 bool print_delimited(InputIterator begin, InputIterator end,
-                     OutputIterator&& out, Delimiter const& delim) {
+                     OutputIterator&& out, const Delimiter& delim) {
   if (begin == end)
     return true;
   if (!print(out, *begin))

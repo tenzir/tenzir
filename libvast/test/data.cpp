@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #include "vast/data.hpp"
 #include "vast/json.hpp"
 #include "vast/load.hpp"
@@ -238,7 +251,7 @@ TEST(parseable) {
   CHECK(d == 10.01);
 
   MESSAGE("string");
-  str = "\"bar\""s;
+  str = R"("bar")";
   f = str.begin();
   l = str.end();
   CHECK(p(f, l, d));

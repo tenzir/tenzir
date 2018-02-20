@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #ifndef VAST_DETAIL_STRING_HPP
 #define VAST_DETAIL_STRING_HPP
 
@@ -13,15 +26,14 @@
 #include "vast/detail/assert.hpp"
 #include "vast/detail/coding.hpp"
 
-namespace vast {
-namespace detail {
+namespace vast::detail {
 
 /// Unscapes a string according to an escaper.
 /// @param str The string to escape.
 /// @param escaper The escaper to use.
 /// @returns The escaped version of *str*.
 template <class Escaper>
-std::string escape(std::string const& str, Escaper escaper) {
+std::string escape(const std::string& str, Escaper escaper) {
   std::string result;
   result.reserve(str.size());
   auto f = str.begin();
@@ -37,7 +49,7 @@ std::string escape(std::string const& str, Escaper escaper) {
 /// @param unescaper The unescaper to use.
 /// @returns The unescaped version of *str*.
 template <class Unescaper>
-std::string unescape(std::string const& str, Unescaper unescaper) {
+std::string unescape(const std::string& str, Unescaper unescaper) {
   std::string result;
   result.reserve(str.size());
   auto f = str.begin();
@@ -62,7 +74,7 @@ auto hex_unescaper = [](auto& f, auto l, auto out) {
   if (f == l)
     return false;
   auto lo = *f++;
-  if (! std::isxdigit(hi) || ! std::isxdigit(lo))
+  if (!std::isxdigit(hi) || !std::isxdigit(lo))
     return false;
   *out++ = hex_to_byte(hi, lo);
   return true;
@@ -196,7 +208,7 @@ auto json_unescaper = [](auto& f, auto l, auto out) {
         std::copy(bytes.begin(), bytes.end(), out);
       } else {
         // Hex-unescape the XX portion of \u00XX.
-        if (! std::isxdigit(bytes[2]) || ! std::isxdigit(bytes[3]))
+        if (!std::isxdigit(bytes[2]) || !std::isxdigit(bytes[3]))
           return false;
         *out++ = hex_to_byte(bytes[2], bytes[3]);
       }
@@ -231,7 +243,7 @@ auto percent_unescaper = [](auto& f, auto l, auto out) {
   return hex_unescaper(++f, l, out);
 };
 
-auto double_escaper = [](std::string const& esc) {
+auto double_escaper = [](const std::string& esc) {
   return [&](auto& f, auto, auto out) {
     if (esc.find(*f) != std::string::npos)
       *out++ = *f;
@@ -239,7 +251,7 @@ auto double_escaper = [](std::string const& esc) {
   };
 };
 
-auto double_unescaper = [](std::string const& esc) {
+auto double_unescaper = [](const std::string& esc) {
   return [&](auto& f, auto l, auto out) -> bool {
     auto x = *f++;
     if (f == l) {
@@ -259,7 +271,7 @@ auto double_unescaper = [](std::string const& esc) {
 /// @param str The string to escape.
 /// @returns The escaped string of *str*.
 /// @relates bytes_escape_all byte_unescape
-std::string byte_escape(std::string const& str);
+std::string byte_escape(const std::string& str);
 
 /// Escapes all non-printable characters in a string with `\xAA` where `AA` is
 /// the byte in hexadecimal representation, plus a given list of extra
@@ -268,33 +280,33 @@ std::string byte_escape(std::string const& str);
 /// @param extra The extra characters to escape.
 /// @returns The escaped string of *str*.
 /// @relates bytes_escape_all byte_unescape
-std::string byte_escape(std::string const& str, std::string const& extra);
+std::string byte_escape(const std::string& str, const std::string& extra);
 
 /// Escapes all characters in a string with `\xAA` where `AA` is
 /// the byte in hexadecimal representation of the character.
 /// @param str The string to escape.
 /// @returns The escaped string of *str*.
 /// @relates byte_unescape
-std::string byte_escape_all(std::string const& str);
+std::string byte_escape_all(const std::string& str);
 
 /// Unescapes a byte-escaped string, i.e., replaces all occurrences of `\xAA`
 /// with the value of the byte `AA`.
 /// @param str The string to unescape.
 /// @returns The unescaped string of *str*.
 /// @relates byte_escape bytes_escape_all
-std::string byte_unescape(std::string const& str);
+std::string byte_unescape(const std::string& str);
 
 /// Escapes a string according to JSON escaping.
 /// @param str The string to escape.
 /// @returns The escaped string.
 /// @relates json_unescape
-std::string json_escape(std::string const& str);
+std::string json_escape(const std::string& str);
 
 /// Unescapes a string escaped with JSON escaping.
 /// @param str The string to unescape.
 /// @returns The unescaped string.
 /// @relates json_escape
-std::string json_unescape(std::string const& str);
+std::string json_unescape(const std::string& str);
 
 /// Escapes a string according to percent-encoding.
 /// @note This function escapes all non-*unreserved* characters as listed in
@@ -304,27 +316,27 @@ std::string json_unescape(std::string const& str);
 /// @param str The string to escape.
 /// @returns The escaped string.
 /// @relates percent_unescape
-std::string percent_escape(std::string const& str);
+std::string percent_escape(const std::string& str);
 
 /// Unescapes a percent-encoded string.
 /// @param str The string to unescape.
 /// @returns The unescaped string.
 /// @relates percent_escape
-std::string percent_unescape(std::string const& str);
+std::string percent_unescape(const std::string& str);
 
 /// Escapes a string by repeating characters from a special set.
 /// @param str The string to escape.
 /// @param esc The set of characters to double-escape.
 /// @returns The escaped string.
 /// @relates double_unescape
-std::string double_escape(std::string const& str, std::string const& esc);
+std::string double_escape(const std::string& str, const std::string& esc);
 
 /// Unescapes a string by removing consecutive character sequences.
 /// @param str The string to unescape.
 /// @param esc The set of repeated characters to unescape.
 /// @returns The unescaped string.
 /// @relates double_escape
-std::string double_unescape(std::string const& str, std::string const& esc);
+std::string double_unescape(const std::string& str, const std::string& esc);
 
 /// Replaces find and replace all occurences of a substring.
 /// @param str The string in which to replace a substring.
@@ -348,10 +360,10 @@ std::string replace_all(std::string str, const std::string& search,
 /// @pre `! sep.empty()`
 /// @returns A vector of iterator pairs each of which delimit a single field
 ///          with a range *[start, end)*.
-template <typename Iterator>
+template <class Iterator>
 std::vector<std::pair<Iterator, Iterator>>
-split(Iterator begin, Iterator end, std::string const& sep,
-      std::string const& esc = "", size_t max_splits = -1,
+split(Iterator begin, Iterator end, const std::string& sep,
+      const std::string& esc = "", size_t max_splits = -1,
       bool include_sep = false) {
   VAST_ASSERT(!sep.empty());
   std::vector<std::pair<Iterator, Iterator>> pos;
@@ -405,8 +417,8 @@ split(Iterator begin, Iterator end, std::string const& sep,
 }
 
 std::vector<std::pair<std::string::const_iterator, std::string::const_iterator>>
-inline split(std::string const& str, std::string const& sep,
-             std::string const& esc = "", size_t max_splits = -1,
+inline split(const std::string& str, const std::string& sep,
+             const std::string& esc = "", size_t max_splits = -1,
              bool include_sep = false) {
   return split(str.begin(), str.end(), sep, esc, max_splits, include_sep);
 }
@@ -414,8 +426,8 @@ inline split(std::string const& str, std::string const& sep,
 /// Constructs a `std::vector<std::string>` from a ::split result.
 /// @param v The vector of iterator pairs from ::split.
 /// @returns a vector of strings with the split elements.
-template <typename Iterator>
-auto to_strings(std::vector<std::pair<Iterator, Iterator>> const& v) {
+template <class Iterator>
+auto to_strings(const std::vector<std::pair<Iterator, Iterator>>& v) {
   std::vector<std::string> strs;
   strs.resize(v.size());
   for (size_t i = 0; i < v.size(); ++i)
@@ -424,15 +436,15 @@ auto to_strings(std::vector<std::pair<Iterator, Iterator>> const& v) {
 }
 
 /// Combines ::split and ::to_strings.
-template <typename Iterator>
-auto split_to_str(Iterator begin, Iterator end, std::string const& sep,
-                  std::string const& esc = "", size_t max_splits = -1,
+template <class Iterator>
+auto split_to_str(Iterator begin, Iterator end, const std::string& sep,
+                  const std::string& esc = "", size_t max_splits = -1,
                   bool include_sep = false) {
   return to_strings(split(begin, end, sep, esc, max_splits, include_sep));
 }
 
-inline auto split_to_str(std::string const& str, std::string const& sep,
-                         std::string const& esc = "", size_t max_splits = -1,
+inline auto split_to_str(const std::string& str, const std::string& sep,
+                         const std::string& esc = "", size_t max_splits = -1,
                          bool include_sep = false) {
   return split_to_str(str.begin(), str.end(), sep, esc, max_splits,
                       include_sep);
@@ -443,8 +455,8 @@ inline auto split_to_str(std::string const& str, std::string const& sep,
 /// @param end The end of the sequence.
 /// @param sep The string to insert between each element of the sequence.
 /// @returns The joined string.
-template <typename Iterator, typename Predicate>
-std::string join(Iterator begin, Iterator end, std::string const& sep,
+template <class Iterator, class Predicate>
+std::string join(Iterator begin, Iterator end, const std::string& sep,
                  Predicate p) {
   std::string result;
   if (begin != end)
@@ -454,25 +466,22 @@ std::string join(Iterator begin, Iterator end, std::string const& sep,
   return result;
 }
 
-template <typename Iterator>
-std::string join(Iterator begin, Iterator end, std::string const& sep) {
+template <class Iterator>
+std::string join(Iterator begin, Iterator end, const std::string& sep) {
   return join(begin, end, sep, [](auto&& x) -> decltype(x) { return x; });
 }
 
-template <typename T>
-std::enable_if_t<std::is_same<T, std::string>::value, std::string>
-join(std::vector<T> const& v, std::string const& sep) {
-  return join(v.begin(), v.end(), sep);
-}
-
-template <typename T>
-std::enable_if_t<!std::is_same<T, std::string>::value, std::string>
-join(std::vector<T> const& v, std::string const& sep) {
-  auto pred = [](auto& x) {
-    using std::to_string;
-    return to_string(x);
-  };
-  return join(v.begin(), v.end(), sep, pred);
+template <class T>
+std::string join(const std::vector<T>& v, const std::string& sep) {
+  if constexpr (std::is_same_v<T, std::string>) {
+    return join(v.begin(), v.end(), sep);
+  } else {
+    auto pred = [](auto& x) {
+      using std::to_string;
+      return to_string(x);
+    };
+    return join(v.begin(), v.end(), sep, pred);
+  }
 }
 
 /// Determines whether a string occurs at the beginning of another.
@@ -480,15 +489,15 @@ join(std::vector<T> const& v, std::string const& sep) {
 /// @param end The end of the string.
 /// @param str The substring to check at the start of *[begin, end)*.
 /// @returns `true` iff *str* occurs at the beginning of *[begin, end)*.
-template <typename Iterator>
-bool starts_with(Iterator begin, Iterator end, std::string const& str) {
+template <class Iterator>
+bool starts_with(Iterator begin, Iterator end, const std::string& str) {
   using diff = typename std::iterator_traits<Iterator>::difference_type;
   if (static_cast<diff>(str.size()) > end - begin)
     return false;
   return std::equal(str.begin(), str.end(), begin);
 }
 
-inline bool starts_with(std::string const& str, std::string const& start) {
+inline bool starts_with(const std::string& str, const std::string& start) {
   return starts_with(str.begin(), str.end(), start);
 }
 
@@ -497,20 +506,20 @@ inline bool starts_with(std::string const& str, std::string const& start) {
 /// @param end The end of the string.
 /// @param str The substring to check at the end of *[begin, end)*.
 /// @returns `true` iff *str* occurs at the end of *[begin, end)*.
-template <typename Iterator>
-bool ends_with(Iterator begin, Iterator end, std::string const& str) {
+template <class Iterator>
+bool ends_with(Iterator begin, Iterator end, const std::string& str) {
   using diff = typename std::iterator_traits<Iterator>::difference_type;
   return static_cast<diff>(str.size()) <= end - begin
          && std::equal(str.begin(), str.end(), end - str.size());
 }
 
-inline bool ends_with(std::string const& str, std::string const& end) {
+inline bool ends_with(const std::string& str, const std::string& end) {
   return ends_with(str.begin(), str.end(), end);
 }
 
 // -- string searching -------------------------------------------------------
 
-template <typename Key, typename Value>
+template <class Key, class Value>
 class unordered_skip_table {
   static_assert(sizeof(Key) > 1,
                 "unordered skip table makes only sense for large keys");
@@ -524,7 +533,7 @@ public:
     skip_[key] = value;
   }
 
-  Value operator[](Key const& key) const {
+  Value operator[](const Key& key) const {
     auto i = skip_.find(key);
     return i == skip_.end() ? default_ : i->second;
   }
@@ -534,7 +543,7 @@ private:
   Value const default_;
 };
 
-template <typename Key, typename Value>
+template <class Key, class Value>
 class array_skip_table {
   static_assert(std::is_integral<Key>::value,
                 "array skip table key must be integral");
@@ -562,9 +571,9 @@ private:
 /// A stateful [Boyer-Moore](http://bit.ly/boyer-moore-pub) search context. It
 /// can look for a pattern *P* over a (text) sequence *T*.
 /// @tparam PatternIterator The iterator type over the pattern.
-template <typename PatternIterator>
+template <class PatternIterator>
 class boyer_moore {
-  template <typename Iterator, typename Container>
+  template <class Iterator, class Container>
   static void make_prefix(Iterator begin, Iterator end, Container& pfx) {
     VAST_ASSERT(end - begin > 0);
     VAST_ASSERT(pfx.size() == static_cast<size_t>(end - begin));
@@ -618,7 +627,7 @@ public:
   /// @param end The end of *T*
   /// @returns The position in *T* where *P* occurrs or *end* if *P* does not
   ///     exist in *T*.
-  template <typename TextIterator>
+  template <class TextIterator>
   TextIterator operator()(TextIterator begin, TextIterator end) const {
     /// Empty *P* always matches at the beginning of *T*.
     if (n_ == 0)
@@ -663,7 +672,7 @@ private:
 /// @tparam Iterator A random-access iterator for the pattern
 /// @param begin The iterator to the start of the pattern.
 /// @param end The iterator to the end of the pattern.
-template <typename Iterator>
+template <class Iterator>
 auto make_boyer_moore(Iterator begin, Iterator end) {
   return boyer_moore<Iterator>{begin, end};
 }
@@ -679,7 +688,7 @@ auto make_boyer_moore(Iterator begin, Iterator end) {
 /// @param t0 The iterator to the end of *T*.
 /// @returns An iterator to the first occurrence of *P* in *T* or *t1* if *P*
 ///     does not occur in *T*.
-template <typename TextIterator, typename PatternIterator>
+template <class TextIterator, class PatternIterator>
 TextIterator search_boyer_moore(PatternIterator p0, PatternIterator p1,
                                 TextIterator t0, TextIterator t1) {
   return make_boyer_moore(p0, p1)(t0, t1);
@@ -688,7 +697,7 @@ TextIterator search_boyer_moore(PatternIterator p0, PatternIterator p1,
 /// A stateful [Knuth-Morris-Pratt](http://bit.ly/knuth-morris-pratt) search
 /// context. It can look for a pattern *P* over a (text) sequence *T*.
 /// @tparam PatternIterator The iterator type over the pattern.
-template <typename PatternIterator>
+template <class PatternIterator>
 class knuth_morris_pratt {
   using pat_difference_type =
     typename std::iterator_traits<PatternIterator>::difference_type;
@@ -717,7 +726,7 @@ public:
   /// @param end The end of *T*
   /// @returns The position in *T* where *P* occurrs or *end* if *P* does not
   ///     exist in *T*.
-  template <typename TextIterator>
+  template <class TextIterator>
   TextIterator operator()(TextIterator begin, TextIterator end) const {
     /// Empty *P* always matches at the beginning of *T*.
     if (n_ == 0)
@@ -747,7 +756,7 @@ private:
 /// @tparam Iterator A random-access iterator for the pattern
 /// @param begin The iterator to the start of the pattern.
 /// @param end The iterator to the end of the pattern.
-template <typename Iterator>
+template <class Iterator>
 auto make_knuth_morris_pratt(Iterator begin, Iterator end) {
   return knuth_morris_pratt<Iterator>{begin, end};
 }
@@ -763,13 +772,12 @@ auto make_knuth_morris_pratt(Iterator begin, Iterator end) {
 /// @param t0 The iterator to the end of *T*.
 /// @returns An iterator to the first occurrence of *P* in *T* or *t1* if *P*
 ///     does not occur in *T*.
-template <typename TextIterator, typename PatternIterator>
+template <class TextIterator, class PatternIterator>
 TextIterator search_knuth_morris_pratt(PatternIterator p0, PatternIterator p1,
                                        TextIterator t0, TextIterator t1) {
   return make_knuth_morris_pratt(p0, p1)(t0, t1);
 }
 
-} // namespace detail
-} // namespace vast
+} // namespace vast::detail
 
 #endif

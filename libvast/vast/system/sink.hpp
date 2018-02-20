@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #ifndef VAST_SYSTEM_SINK_HPP
 #define VAST_SYSTEM_SINK_HPP
 
@@ -16,19 +29,18 @@
 #include "vast/system/atoms.hpp"
 #include "vast/system/query_statistics.hpp"
 
-namespace vast {
-namespace system {
+namespace vast::system {
 
 #if 0
 /// The *Writer* concept.
 struct Writer {
   Writer();
 
-  expected<void> write(event const&);
+  expected<void> write(const event&);
 
   expected<void> flush();
 
-  char const* name() const;
+  const char* name() const;
 };
 #endif
 
@@ -82,6 +94,7 @@ sink(caf::stateful_actor<sink_state<Writer>>* self, Writer&& writer) {
       }
     },
     [=](const uuid& id, const query_statistics&) {
+      VAST_IGNORE_UNUSED(id);
       VAST_DEBUG(self, "got query statistics from", id);
     },
     [=](limit_atom, uint64_t max) {
@@ -95,7 +108,6 @@ sink(caf::stateful_actor<sink_state<Writer>>* self, Writer&& writer) {
   };
 }
 
-} // namespace system
-} // namespace vast
+} // namespace vast::system
 
 #endif

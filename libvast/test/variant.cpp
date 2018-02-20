@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #include "vast/load.hpp"
 #include "vast/save.hpp"
 
@@ -11,7 +24,7 @@ using namespace vast;
 namespace {
 
 struct stateful {
-  template <typename T>
+  template <class T>
   void operator()(T&) {
     ++state;
   }
@@ -20,14 +33,14 @@ struct stateful {
 };
 
 struct doppler {
-  template <typename T>
+  template <class T>
   void operator()(T& x) const {
     x += x;
   }
 };
 
 struct referencer {
-  template <typename T>
+  template <class T>
   int& operator()(T) const {
     return *i;
   }
@@ -36,25 +49,25 @@ struct referencer {
 };
 
 struct binary {
-  template <typename T>
-  bool operator()(T const&, T const&) const {
+  template <class T>
+  bool operator()(const T&, const T&) const {
     return true;
   }
 
-  template <typename T, typename U>
-  bool operator()(T const&, U const&) const {
+  template <class T, class U>
+  bool operator()(const T&, const U&) const {
     return false;
   }
 };
 
 struct ternary {
-  template <typename T, typename U>
-  double operator()(bool c, T const& t, U const& f) const {
+  template <class T, class U>
+  double operator()(bool c, const T& t, const U& f) const {
     return c ? t : f;
   }
 
-  template <typename T, typename U, typename V>
-  double operator()(T const&, U const&, V const&) const {
+  template <class T, class U, class V>
+  double operator()(const T&, const U&, const V&) const {
     return 42;
   }
 };

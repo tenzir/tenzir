@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/address.hpp"
 #include "vast/concept/printable/to_string.hpp"
@@ -84,12 +97,12 @@ TEST(IPv6) {
 
   uint8_t raw8[16] = {0xdf, 0x00, 0x0d, 0xb8, 0x00, 0x00, 0x00, 0x00,
                       0x02, 0x02, 0xb3, 0xff, 0xfe, 0x1e, 0x83, 0x28};
-  auto p = reinterpret_cast<uint32_t const*>(raw8);
+  auto p = reinterpret_cast<const uint32_t*>(raw8);
   address e(p, address::ipv6, address::network);
   CHECK(e == (a ^ d));
 
   uint32_t raw32[4] = {0xdf000db8, 0x00000000, 0x0202b3ff, 0xfe1e8328};
-  p = reinterpret_cast<uint32_t const*>(raw32);
+  p = reinterpret_cast<const uint32_t*>(raw32);
   address f(p, address::ipv6, address::host);
   CHECK(f == (a ^ d));
   CHECK(f == e);

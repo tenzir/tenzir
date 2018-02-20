@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #ifndef VAST_CONCEPT_CONVERTIBLE_TO_HPP
 #define VAST_CONCEPT_CONVERTIBLE_TO_HPP
 
@@ -14,7 +27,7 @@ namespace vast {
 /// @tparam From The type to convert to `To`.
 /// @param from The instance to convert.
 /// @returns *from* converted to `T`.
-template <typename To, typename From, typename... Opts>
+template <class To, class From, class... Opts>
 auto to(From&& from, Opts&&... opts)
   -> std::enable_if_t<
        is_convertible<std::decay_t<From>, To>{},
@@ -26,7 +39,7 @@ auto to(From&& from, Opts&&... opts)
   return make_error(ec::convert_error);
 }
 
-template <typename To, typename From, typename... Opts>
+template <class To, class From, class... Opts>
 auto to_string(From&& from, Opts&&... opts)
   -> std::enable_if_t<
        std::is_same<To, std::string>{}

@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #ifndef VAST_CONCEPT_PARSEABLE_VAST_EXPRESSION_HPP
 #define VAST_CONCEPT_PARSEABLE_VAST_EXPRESSION_HPP
 
@@ -62,14 +75,14 @@ struct predicate_parser : parser<predicate_parser> {
     return pred;
   }
 
-  template <typename Iterator>
-  bool parse(Iterator& f, Iterator const& l, unused_type) const {
+  template <class Iterator>
+  bool parse(Iterator& f, const Iterator& l, unused_type) const {
     static auto p = make();
     return p(f, l, unused);
   }
 
-  template <typename Iterator>
-  bool parse(Iterator& f, Iterator const& l, predicate& a) const {
+  template <class Iterator>
+  bool parse(Iterator& f, const Iterator& l, predicate& a) const {
     using namespace parsers;
     static auto p = make();
     return p(f, l, a);
@@ -90,7 +103,7 @@ static auto const predicate = make_parser<vast::predicate>();
 struct expression_parser : parser<expression_parser> {
   using attribute = expression;
 
-  template <typename Iterator>
+  template <class Iterator>
   static auto make() {
     using raw_expr =
       std::tuple<
@@ -112,14 +125,14 @@ struct expression_parser : parser<expression_parser> {
         if (std::get<0>(t) == logical_and) {
           con.emplace_back(std::move(std::get<1>(t)));
         } else if (std::get<0>(t) == logical_or) {
-          VAST_ASSERT(! con.empty());
+          VAST_ASSERT(!con.empty());
           if (con.size() == 1)
             dis.emplace_back(std::move(con[0]));
           else
             dis.emplace_back(std::move(con));
           con = conjunction{std::move(std::get<1>(t))};
         } else {
-          VAST_ASSERT(! "negations must not exist here");
+          VAST_ASSERT(!"negations must not exist here");
         }
       if (con.size() == 1)
         dis.emplace_back(std::move(con[0]));
@@ -148,14 +161,14 @@ struct expression_parser : parser<expression_parser> {
     return expr;
   }
 
-  template <typename Iterator>
-  bool parse(Iterator& f, Iterator const& l, unused_type) const {
+  template <class Iterator>
+  bool parse(Iterator& f, const Iterator& l, unused_type) const {
     static auto p = make<Iterator>();
     return p(f, l, unused);
   }
 
-  template <typename Iterator>
-  bool parse(Iterator& f, Iterator const& l, expression& a) const {
+  template <class Iterator>
+  bool parse(Iterator& f, const Iterator& l, expression& a) const {
     static auto p = make<Iterator>();
     return p(f, l, a);
   }

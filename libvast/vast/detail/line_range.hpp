@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #ifndef VAST_DETAIL_LINE_RANGE_HPP
 #define VAST_DETAIL_LINE_RANGE_HPP
 
@@ -7,15 +20,14 @@
 
 #include "vast/detail/range.hpp"
 
-namespace vast {
-namespace detail {
+namespace vast::detail {
 
 // A range of non-empty lines, extracted via `std::getline`.
 class line_range : range_facade<line_range> {
 public:
   line_range(std::istream& input);
 
-  std::string const& get() const;
+  const std::string& get() const;
 
   void next();
 
@@ -31,7 +43,6 @@ private:
   size_t line_number_ = 0;
 };
 
-} // namespace detail
-} // namespace vast
+} // namespace vast::detail
 
 #endif

@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #ifndef VAST_EVENT_HPP
 #define VAST_EVENT_HPP
 
@@ -21,7 +34,7 @@ public:
   /// @param x An instance of type `T`.
   /// @param t The type of the value.
   /// @returns A valid event if *t* can successfully check *x*.
-  template <typename T>
+  template <class T>
   static event make(T&& x, vast::type t) {
     return value::make(std::forward<T>(x), std::move(t));
   }
@@ -56,8 +69,8 @@ public:
   /// @returns The event timestamp.
   vast::timestamp timestamp() const;
 
-  friend bool operator==(event const& x, event const& y);
-  friend bool operator<(event const& x, event const& y);
+  friend bool operator==(const event& x, const event& y);
+  friend bool operator<(const event& x, const event& y);
 
   template <class Inspector>
   friend auto inspect(Inspector&f, event& e) {
@@ -69,12 +82,12 @@ private:
   vast::timestamp timestamp_;
 };
 
-bool convert(event const& e, json& j);
+bool convert(const event& e, json& j);
 
 /// Flattens an event.
 /// @param e The event to flatten.
 /// @returns The flattened event.
-event flatten(event const& e);
+event flatten(const event& e);
 
 } // namespace vast
 

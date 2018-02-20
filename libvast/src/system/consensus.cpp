@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #include <caf/all.hpp>
 
 #include "vast/concept/parseable/numeric/integral.hpp"
@@ -287,6 +300,7 @@ result<index_type> save_snapshot(Actor* self, index_type index,
   self->state.last_snapshot_term = hdr.last_included_term;
   // Truncate now no longer needed entries.
   auto n = self->state.log->truncate_before(index + 1);
+  VAST_IGNORE_UNUSED(n);
   VAST_DEBUG(role(self), "truncated", n, "log entries");
   return index;
 }
@@ -628,6 +642,7 @@ auto send_install_snapshot(Actor* self, peer_state& peer) {
   auto req_term = req->term;
   self->request(peer.peer, request_timeout, std::move(*req)).then(
     [=](const install_snapshot::response& resp) {
+      VAST_IGNORE_UNUSED(peer_id);
       VAST_DEBUG(role(self), "got InstallSnapshot response from peer", peer_id,
                  ": term =", resp.term << ", bytes stored =",
                  resp.bytes_stored);
@@ -779,6 +794,7 @@ auto send_append_entries(Actor* self, peer_state& peer) {
   auto req_term = req.term;
   auto num_entries = req.entries.size();
   auto peer_id = peer.id;
+  VAST_IGNORE_UNUSED(peer_id);
   VAST_DEBUG(role(self), "sends AppendEntries request to peer", peer_id,
              "with", num_entries, "entries");
   // Send request away and process response.
@@ -880,6 +896,7 @@ handle_append_entries(Actor* self, append_entries::request& req) {
     auto n = xs.size();
     auto res = self->state.log->append(std::move(xs));
     if (!res) {
+      VAST_IGNORE_UNUSED(n);
       VAST_ERROR(role(self), "failed to append", n, "entries to log");
       return res.error();
     }
@@ -960,7 +977,7 @@ behavior consensus(stateful_actor<server_state>* self, path dir) {
       //                     "not enough commited entries to snapshot");
       return save_snapshot(self, index, snapshot);
     },
-    [=](peer_atom, actor const& peer, server_id peer_id) {
+    [=](peer_atom, const actor& peer, server_id peer_id) {
       VAST_DEBUG(role(self), "re-activates peer", peer_id);
       VAST_ASSERT(peer_id != 0);
       auto i = std::find_if(self->state.peers.begin(),
@@ -1053,7 +1070,7 @@ behavior consensus(stateful_actor<server_state>* self, path dir) {
     [=](seed_atom, uint64_t value) {
       self->state.prng.seed(value);
     },
-    [=](peer_atom, actor const& peer, server_id peer_id) {
+    [=](peer_atom, const actor& peer, server_id peer_id) {
       VAST_ASSERT(peer_id != 0);
       VAST_DEBUG(role(self), "adds new peer", peer_id);
       if (peer_id == self->state.id) {

@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #include "vast/concept/parseable/core.hpp"
 #include "vast/concept/parseable/numeric/real.hpp"
 #include "vast/concept/parseable/string/char_class.hpp"
@@ -15,7 +28,7 @@ namespace test {
 
 namespace {
 
-expected<distribution> make_distribution(type const& t) {
+expected<distribution> make_distribution(const type& t) {
   using parsers::real_opt_dot;
   using parsers::alpha;
   auto i = std::find_if(t.attributes().begin(), t.attributes().end(),
@@ -52,7 +65,7 @@ struct initializer {
   }
 
   template <class T>
-  expected<void> operator()(T const& t) {
+  expected<void> operator()(const T& t) {
     auto dist = make_distribution(t);
     if (dist)
       distributions_.push_back(std::move(*dist));
@@ -63,7 +76,7 @@ struct initializer {
     return no_error;
   }
 
-  expected<void> operator()(record_type const& r) {
+  expected<void> operator()(const record_type& r) {
     auto& v = get<vector>(*data_);
     VAST_ASSERT(v.size() == r.fields.size());
     for (auto i = 0u; i < r.fields.size(); ++i) {
@@ -79,7 +92,7 @@ struct initializer {
   data* data_ = nullptr;
 };
 
-expected<blueprint> make_blueprint(type const& t) {
+expected<blueprint> make_blueprint(const type& t) {
   blueprint bp;
   bp.data = construct(t);
   auto result = visit(initializer{bp}, t);
@@ -110,37 +123,37 @@ struct randomizer {
   }
 
   template <class T, class U>
-  auto operator()(T const&, U&) {
+  auto operator()(const T&, U&) {
     // Do nothing.
   }
 
-  void operator()(integer_type const&, integer& x) {
+  void operator()(const integer_type&, integer& x) {
     x = static_cast<integer>(sample());
   }
 
-  void operator()(count_type const&, count& x) {
+  void operator()(const count_type&, count& x) {
     x = static_cast<count>(sample());
   }
 
-  void operator()(real_type const&, real& x) {
+  void operator()(const real_type&, real& x) {
     x = static_cast<real>(sample());
   }
 
-  auto operator()(timestamp_type const&, timestamp& x) {
+  auto operator()(const timestamp_type&, timestamp& x) {
     x += std::chrono::duration_cast<timespan>(double_seconds(sample()));
   }
 
-  auto operator()(timespan_type const&, timespan& x) {
+  auto operator()(const timespan_type&, timespan& x) {
     x += std::chrono::duration_cast<timespan>(double_seconds(sample()));
   }
 
-  void operator()(boolean_type const&, boolean& b) {
+  void operator()(const boolean_type&, boolean& b) {
     lcg gen{static_cast<lcg::result_type>(sample())};
     std::uniform_int_distribution<count> unif{0, 1};
     b = unif(gen);
   }
 
-  void operator()(string_type const&, std::string& str) {
+  void operator()(const string_type&, std::string& str) {
     lcg gen{static_cast<lcg::result_type>(sample())};
     std::uniform_int_distribution<size_t> unif_size{0, 256};
     std::uniform_int_distribution<char> unif_char{32, 126}; // Printable ASCII
@@ -149,7 +162,7 @@ struct randomizer {
       c = unif_char(gen);
   }
 
-  void operator()(address_type const&, address& addr) {
+  void operator()(const address_type&, address& addr) {
     // We hash the generated sample into a 128-bit digest to spread out the
     // bits over the entire domain of an IPv6 address.
     lcg gen{static_cast<lcg::result_type>(sample())};
@@ -163,7 +176,7 @@ struct randomizer {
     addr = {bytes, version, address::network};
   }
 
-  void operator()(subnet_type const&, subnet& sn) {
+  void operator()(const subnet_type&, subnet& sn) {
     static type addr_type = address_type{};
     address addr;
     (*this)(addr_type, addr);
@@ -171,7 +184,7 @@ struct randomizer {
     sn = {std::move(addr), unif(gen_)};
   }
 
-  void operator()(port_type const&, port& p) {
+  void operator()(const port_type&, port& p) {
     using port_type = std::underlying_type_t<port::port_type>;
     std::uniform_int_distribution<port_type> unif{0, 3};
     p.number(static_cast<port::number_type>(sample()));
@@ -179,7 +192,7 @@ struct randomizer {
   }
 
   // Can only be a record, because we don't support randomizing containers.
-  void operator()(record_type const& r, vector& v) {
+  void operator()(const record_type& r, vector& v) {
     for (auto i = 0u; i < v.size(); ++i)
       visit(*this, r.fields[i].type, v[i]);
   }

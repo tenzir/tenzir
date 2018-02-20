@@ -1,4 +1,18 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #include <tuple>
+#include <utility>
 
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/type.hpp"
@@ -8,6 +22,7 @@
 #include "vast/json.hpp"
 #include "vast/pattern.hpp"
 #include "vast/type.hpp"
+#include "vast/schema.hpp"
 
 namespace vast {
 
@@ -19,7 +34,7 @@ type& type::name(std::string str) {
   return *this;
 }
 
-std::string const& type::name() const {
+const std::string& type::name() const {
   return *visit([](auto& x) { return &x.name(); }, *this);
 }
 
@@ -27,7 +42,7 @@ std::vector<attribute>& type::attributes() {
   return *visit([](auto& x) { return &x.attributes(); }, *this);
 }
 
-std::vector<attribute> const& type::attributes() const {
+const std::vector<attribute>& type::attributes() const {
   return *visit([](auto& x) { return &x.attributes(); }, *this);
 }
 
@@ -40,24 +55,24 @@ namespace {
 
 struct equal_to {
   template <class T, class U>
-  bool operator()(T const&, U const&) const noexcept {
+  bool operator()(const T&, const U&) const noexcept {
     return false;
   }
 
   template <class T>
-  bool operator()(T const& x, T const& y) const noexcept {
+  bool operator()(const T& x, const T& y) const noexcept {
     return x == y;
   }
 };
 
 struct less_than {
   template <class T, class U>
-  bool operator()(T const&, U const&) const noexcept {
+  bool operator()(const T&, const U&) const noexcept {
     return false;
   }
 
   template <class T>
-  bool operator()(T const& x, T const& y) const noexcept {
+  bool operator()(const T& x, const T& y) const noexcept {
     return x < y;
   }
 };
@@ -160,7 +175,7 @@ size_t record_type::each::range_state::depth() const {
   return trace.size();
 }
 
-record_type::each::each(record_type const& r) {
+record_type::each::each(const record_type& r) {
   if (r.fields.empty())
     return;
   auto rec = &r;
@@ -193,11 +208,11 @@ bool record_type::each::done() const {
   return records_.empty();
 }
 
-record_type::each::range_state const& record_type::each::get() const {
+const record_type::each::range_state& record_type::each::get() const {
   return state_;
 }
 
-expected<offset> record_type::resolve(key const& k) const {
+expected<offset> record_type::resolve(const key& k) const {
   if (k.empty())
     return make_error(ec::unspecified, "empty symbol sequence");
   offset off;
@@ -224,7 +239,7 @@ expected<offset> record_type::resolve(key const& k) const {
   return off;
 }
 
-expected<key> record_type::resolve(offset const& o) const {
+expected<key> record_type::resolve(const offset& o) const {
   if (o.empty())
     return make_error(ec::unspecified, "empty offset sequence");
   key k;
@@ -248,15 +263,15 @@ namespace {
 struct finder {
   enum mode { prefix, suffix, exact, any };
 
-  finder(key const& k, mode m, std::string const& init = "")
-    : mode_{m}, key_{k} {
+  finder(key  k, mode m, const std::string& init = "")
+    : mode_{m}, key_{std::move(k)} {
     VAST_ASSERT(!key_.empty());
     if (!init.empty())
       trace_.push_back(init);
   }
 
-  template <typename T>
-  std::vector<std::pair<offset, key>> operator()(T const&) const {
+  template <class T>
+  std::vector<std::pair<offset, key>> operator()(const T&) const {
     std::vector<std::pair<offset, key>> r;
     if (off_.empty() || key_.size() > trace_.size())
       return r;
@@ -287,7 +302,7 @@ struct finder {
     return r;
   }
 
-  std::vector<std::pair<offset, key>> operator()(record_type const& r) {
+  std::vector<std::pair<offset, key>> operator()(const record_type& r) {
     std::vector<std::pair<offset, key>> result;
     off_.push_back(0);
     for (auto& f : r.fields) {
@@ -301,7 +316,7 @@ struct finder {
     return result;
   }
 
-  static bool match(std::string const& key, std::string const& trace) {
+  static bool match(const std::string& key, const std::string& trace) {
     return pattern::glob(key).match(trace);
   }
 
@@ -313,25 +328,25 @@ struct finder {
 
 } // namespace <anonymous>
 
-std::vector<std::pair<offset, key>> record_type::find(key const& k) const {
+std::vector<std::pair<offset, key>> record_type::find(const key& k) const {
   return finder{k, finder::exact, name()}(*this);
 }
 
 std::vector<std::pair<offset, key>>
-record_type::find_prefix(key const& k) const {
+record_type::find_prefix(const key& k) const {
   return finder{k, finder::prefix, name()}(*this);
 }
 
 std::vector<std::pair<offset, key>>
-record_type::find_suffix(key const& k) const {
+record_type::find_suffix(const key& k) const {
   return finder{k, finder::suffix, name()}(*this);
 }
 
-type const* record_type::at(key const& k) const {
+const type* record_type::at(const key& k) const {
   auto r = this;
   for (size_t i = 0; i < k.size(); ++i) {
     auto& id = k[i];
-    record_field const* f = nullptr;
+    const record_field* f = nullptr;
     for (auto& a : r->fields)
       if (a.name == id) {
         f = &a;
@@ -348,7 +363,7 @@ type const* record_type::at(key const& k) const {
   return nullptr;
 }
 
-type const* record_type::at(offset const& o) const {
+const type* record_type::at(const offset& o) const {
   auto r = this;
   for (size_t i = 0; i < o.size(); ++i) {
     auto& idx = o[i];
@@ -364,7 +379,7 @@ type const* record_type::at(offset const& o) const {
   return nullptr;
 }
 
-record_type flatten(record_type const& rec) {
+record_type flatten(const record_type& rec) {
   record_type result;
   for (auto& outer : rec.fields)
     if (auto r = get_if<record_type>(outer.type)) {
@@ -377,12 +392,12 @@ record_type flatten(record_type const& rec) {
   return result;
 }
 
-type flatten(type const& t) {
+type flatten(const type& t) {
   auto r = get_if<record_type>(t);
   return r ? flatten(*r) : t;
 }
 
-record_type unflatten(record_type const& rec) {
+record_type unflatten(const record_type& rec) {
   record_type result;
   for (auto& f : rec.fields) {
     auto names = detail::to_strings(detail::split(f.name, "."));
@@ -412,7 +427,7 @@ record_type unflatten(record_type const& rec) {
   return result;
 }
 
-type unflatten(type const& t) {
+type unflatten(const type& t) {
   auto r = get_if<record_type>(t);
   return r ? unflatten(*r) : t;
 }
@@ -456,49 +471,49 @@ bool is_container(const data& x) {
 namespace {
 
 struct type_congruence_checker {
-  template <typename T>
-  bool operator()(T const&, T const&) const {
+  template <class T>
+  bool operator()(const T&, const T&) const {
     return true;
   }
 
-  template <typename T, typename U>
-  bool operator()(T const&, U const&) const {
+  template <class T, class U>
+  bool operator()(const T&, const U&) const {
     return false;
   }
 
-  template <typename T>
-  bool operator()(T const& x, alias_type const& a) const {
+  template <class T>
+  bool operator()(const T& x, const alias_type& a) const {
     using namespace std::placeholders;
     return visit(std::bind(std::cref(*this), std::cref(x), _1), a.value_type);
   }
 
-  template <typename T>
-  bool operator()(alias_type const& a, T const& x) const {
+  template <class T>
+  bool operator()(const alias_type& a, const T& x) const {
     return (*this)(x, a);
   }
 
-  bool operator()(alias_type const& x, alias_type const& y) const {
+  bool operator()(const alias_type& x, const alias_type& y) const {
     return visit(*this, x.value_type, y.value_type);
   }
 
-  bool operator()(enumeration_type const& x, enumeration_type const& y) const {
+  bool operator()(const enumeration_type& x, const enumeration_type& y) const {
     return x.fields.size() == y.fields.size();
   }
 
-  bool operator()(vector_type const& x, vector_type const& y) const {
+  bool operator()(const vector_type& x, const vector_type& y) const {
     return visit(*this, x.value_type, y.value_type);
   }
 
-  bool operator()(set_type const& x, set_type const& y) const {
+  bool operator()(const set_type& x, const set_type& y) const {
     return visit(*this, x.value_type, y.value_type);
   }
 
-  bool operator()(table_type const& x, table_type const& y) const {
+  bool operator()(const table_type& x, const table_type& y) const {
     return visit(*this, x.key_type, y.key_type) &&
         visit(*this, x.value_type, y.value_type);
   }
 
-  bool operator()(record_type const& x, record_type const& y) const {
+  bool operator()(const record_type& x, const record_type& y) const {
     if (x.fields.size() != y.fields.size())
       return false;
     for (size_t i = 0; i < x.fields.size(); ++i)
@@ -509,76 +524,76 @@ struct type_congruence_checker {
 };
 
 struct data_congruence_checker {
-  template <typename T, typename U>
-  bool operator()(T const&, U const&) const {
+  template <class T, class U>
+  bool operator()(const T&, const U&) const {
     return false;
   }
 
-  bool operator()(none_type const&, none) const {
+  bool operator()(const none_type&, none) const {
     return true;
   }
 
-  bool operator()(boolean_type const&, boolean) const {
+  bool operator()(const boolean_type&, boolean) const {
     return true;
   }
 
-  bool operator()(integer_type const&, integer) const {
+  bool operator()(const integer_type&, integer) const {
     return true;
   }
 
-  bool operator()(count_type const&, count) const {
+  bool operator()(const count_type&, count) const {
     return true;
   }
 
-  bool operator()(real_type const&, real) const {
+  bool operator()(const real_type&, real) const {
     return true;
   }
 
-  bool operator()(timespan_type const&, timespan) const {
+  bool operator()(const timespan_type&, timespan) const {
     return true;
   }
 
-  bool operator()(timestamp_type const&, timestamp) const {
+  bool operator()(const timestamp_type&, timestamp) const {
     return true;
   }
 
-  bool operator()(string_type const&, std::string const&) const {
+  bool operator()(const string_type&, const std::string&) const {
     return true;
   }
 
-  bool operator()(pattern_type const&, pattern const&) const {
+  bool operator()(const pattern_type&, const pattern&) const {
     return true;
   }
 
-  bool operator()(address_type const&, address const&) const {
+  bool operator()(const address_type&, const address&) const {
     return true;
   }
 
-  bool operator()(subnet_type const&, subnet const&) const {
+  bool operator()(const subnet_type&, const subnet&) const {
     return true;
   }
 
-  bool operator()(port_type const&, port const&) const {
+  bool operator()(const port_type&, const port&) const {
     return true;
   }
 
-  bool operator()(enumeration_type const& x, std::string const& y) const {
+  bool operator()(const enumeration_type& x, const std::string& y) const {
     return std::find(x.fields.begin(), x.fields.end(), y) != x.fields.end();
   }
 
-  bool operator()(vector_type const&, vector const&) const {
+  bool operator()(const vector_type&, const vector&) const {
     return true;
   }
 
-  bool operator()(set_type const&, set const&) const {
+  bool operator()(const set_type&, const set&) const {
     return true;
   }
 
-  bool operator()(table_type const&, table const&) const {
+  bool operator()(const table_type&, const table&) const {
     return true;
   }
 
-  bool operator()(record_type const& x, vector const& y) const {
+  bool operator()(const record_type& x, const vector& y) const {
     if (x.fields.size() != y.size())
       return false;
     for (size_t i = 0; i < x.fields.size(); ++i)
@@ -587,8 +602,8 @@ struct data_congruence_checker {
     return true;
   }
 
-  template <typename T>
-  bool operator()(alias_type const& t, T const& x) const {
+  template <class T>
+  bool operator()(const alias_type& t, const T& x) const {
     using namespace std::placeholders;
     return visit(std::bind(std::cref(*this), _1, std::cref(x)), t.value_type);
   }
@@ -596,19 +611,30 @@ struct data_congruence_checker {
 
 } // namespace <anonymous>
 
-bool congruent(type const& x, type const& y) {
+bool congruent(const type& x, const type& y) {
   return visit(type_congruence_checker{}, x, y);
 }
 
-bool congruent(type const& x, data const& y) {
+bool congruent(const type& x, const data& y) {
   return visit(data_congruence_checker{}, x, y);
 }
 
-bool congruent(data const& x, type const& y) {
+bool congruent(const data& x, const type& y) {
   return visit(data_congruence_checker{}, y, x);
 }
 
-bool compatible(type const& lhs, relational_operator op, type const& rhs) {
+expected<void> replace_if_congruent(std::initializer_list<type*> xs,
+                                    const schema& with) {
+  for (auto x : xs)
+    if (auto t = with.find(x->name()); t != nullptr) {
+      if (!congruent(*x, *t))
+        return make_error(ec::type_clash, "incongruent type:", x->name());
+      *x = *t;
+    }
+  return no_error;
+}
+
+bool compatible(const type& lhs, relational_operator op, const type& rhs) {
   switch (op) {
     default:
       return false;
@@ -638,7 +664,7 @@ bool compatible(type const& lhs, relational_operator op, type const& rhs) {
   }
 }
 
-bool compatible(type const& lhs, relational_operator op, data const& rhs) {
+bool compatible(const type& lhs, relational_operator op, const data& rhs) {
   switch (op) {
     default:
       return false;
@@ -672,7 +698,7 @@ bool compatible(type const& lhs, relational_operator op, data const& rhs) {
   }
 }
 
-bool compatible(data const& lhs, relational_operator op, type const& rhs) {
+bool compatible(const data& lhs, relational_operator op, const type& rhs) {
   return compatible(rhs, flip(op), lhs);
 }
 
@@ -703,19 +729,19 @@ VAST_SPECIALIZE_DATA_TO_TYPE(port, port_type)
 #undef VAST_SPECIALIZE_DATA_TO_TYPE
 
 struct data_checker {
-  data_checker(type const& t) : type_{t} { }
+  data_checker(const type& t) : type_{t} { }
 
-  template <typename T>
-  bool operator()(T const&) const {
+  template <class T>
+  bool operator()(const T&) const {
     return is<typename data_to_type<T>::type>(type_);
   }
 
-  bool operator()(enumeration const& e) const {
+  bool operator()(const enumeration& e) const {
     auto t = get_if<enumeration_type>(type_);
     return t && e < t->fields.size();
   }
 
-  bool operator()(vector const& v) const {
+  bool operator()(const vector& v) const {
     auto r = get_if<record_type>(type_);
     if (r) {
       if (r->fields.size() != v.size())
@@ -731,14 +757,14 @@ struct data_checker {
     return t && type_check(t->value_type, v[0]);
   }
 
-  bool operator()(set const& s) const {
+  bool operator()(const set& s) const {
     if (s.empty())
       return true;
     auto t = get_if<set_type>(type_);
     return t && type_check(t->value_type, *s.begin());
   }
 
-  bool operator()(table const& x) const {
+  bool operator()(const table& x) const {
     if (x.empty())
       return true;
     auto t = get_if<table_type>(type_);
@@ -748,12 +774,12 @@ struct data_checker {
       type_check(t->value_type, x.begin()->second);
   }
 
-  type const& type_;
+  const type& type_;
 };
 
 } // namespace <anonymous>
 
-bool type_check(type const& t, data const& d) {
+bool type_check(const type& t, const data& d) {
   return is<none>(d) || visit(data_checker{t}, d);
 }
 
@@ -764,26 +790,26 @@ struct default_constructor {
     return nil;
   }
 
-  template <typename T>
-  data operator()(T const&) const {
+  template <class T>
+  data operator()(const T&) const {
     return type_to_data<T>{};
   }
 
-  data operator()(record_type const& r) const {
+  data operator()(const record_type& r) const {
     vector v;
     for (auto& f : r.fields)
       v.push_back(visit(*this, f.type));
     return v;
   }
 
-  data operator()(alias_type const& a) const {
+  data operator()(const alias_type& a) const {
     return construct(a.value_type);
   }
 };
 
 } // namespace <anonymous>
 
-data construct(type const& t) {
+data construct(const type& t) {
   return visit(default_constructor{}, t);
 }
 
@@ -792,75 +818,75 @@ namespace {
 struct kind_printer {
   using result_type = std::string;
 
-  result_type operator()(none_type const&) const {
+  result_type operator()(const none_type&) const {
     return "none";
   }
 
-  result_type operator()(boolean_type const&) const {
+  result_type operator()(const boolean_type&) const {
     return "bool";
   }
 
-  result_type operator()(integer_type const&) const {
+  result_type operator()(const integer_type&) const {
     return "integer";
   }
 
-  result_type operator()(count_type const&) const {
+  result_type operator()(const count_type&) const {
     return "count";
   }
 
-  result_type operator()(real_type const&) const {
+  result_type operator()(const real_type&) const {
     return "real";
   }
 
-  result_type operator()(timespan_type const&) const {
+  result_type operator()(const timespan_type&) const {
     return "timespan";
   }
 
-  result_type operator()(timestamp_type const&) const {
+  result_type operator()(const timestamp_type&) const {
     return "timestamp";
   }
 
-  result_type operator()(string_type const&) const {
+  result_type operator()(const string_type&) const {
     return "string";
   }
 
-  result_type operator()(pattern_type const&) const {
+  result_type operator()(const pattern_type&) const {
     return "pattern";
   }
 
-  result_type operator()(address_type const&) const {
+  result_type operator()(const address_type&) const {
     return "address";
   }
 
-  result_type operator()(subnet_type const&) const {
+  result_type operator()(const subnet_type&) const {
     return "subnet";
   }
 
-  result_type operator()(port_type const&) const {
+  result_type operator()(const port_type&) const {
     return "port";
   }
 
-  result_type operator()(enumeration_type const&) const {
+  result_type operator()(const enumeration_type&) const {
     return "enumeration";
   }
 
-  result_type operator()(vector_type const&) const {
+  result_type operator()(const vector_type&) const {
     return "vector";
   }
 
-  result_type operator()(set_type const&) const {
+  result_type operator()(const set_type&) const {
     return "set";
   }
 
-  result_type operator()(table_type const&) const {
+  result_type operator()(const table_type&) const {
     return "table";
   }
 
-  result_type operator()(record_type const&) const {
+  result_type operator()(const record_type&) const {
     return "record";
   }
 
-  result_type operator()(alias_type const&) const {
+  result_type operator()(const alias_type&) const {
     return "alias";
   }
 };
@@ -868,13 +894,13 @@ struct kind_printer {
 struct jsonizer {
   jsonizer(json& j) : json_{j} { }
 
-  template <typename T>
-  bool operator()(T const&) {
+  template <class T>
+  bool operator()(const T&) {
     json_ = {};
     return true;
   }
 
-  bool operator()(enumeration_type const& e) {
+  bool operator()(const enumeration_type& e) {
     json::array a;
     std::transform(e.fields.begin(),
                    e.fields.end(),
@@ -884,7 +910,7 @@ struct jsonizer {
     return true;
   }
 
-  bool operator()(vector_type const& v) {
+  bool operator()(const vector_type& v) {
     json::object o;
     if (!convert(v.value_type, o["value_type"]))
       return false;
@@ -892,7 +918,7 @@ struct jsonizer {
     return true;
   }
 
-  bool operator()(set_type const& s) {
+  bool operator()(const set_type& s) {
     json::object o;
     if (!convert(s.value_type, o["value_type"]))
       return false;
@@ -900,7 +926,7 @@ struct jsonizer {
     return true;
   }
 
-  bool operator()(table_type const& t) {
+  bool operator()(const table_type& t) {
     json::object o;
     if (!convert(t.key_type, o["key"]))
       return false;
@@ -910,7 +936,7 @@ struct jsonizer {
     return true;
   }
 
-  bool operator()(record_type const& r) {
+  bool operator()(const record_type& r) {
     json::object o;
     for (auto& field : r.fields)
       if (!convert(field.type, o[to_string(field.name)]))
@@ -919,7 +945,7 @@ struct jsonizer {
     return true;
   }
 
-  bool operator()(alias_type const& a) {
+  bool operator()(const alias_type& a) {
     return convert(a.value_type, json_);
   }
 
@@ -928,7 +954,7 @@ struct jsonizer {
 
 } // namespace <anonymous>
 
-bool convert(type const& t, json& j) {
+bool convert(const type& t, json& j) {
   json::object o;
   o["name"] = t.name();
   o["kind"] = visit(kind_printer{}, t);

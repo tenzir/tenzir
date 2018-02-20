@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #include "vast/detail/iterator.hpp"
 
 #define SUITE detail
@@ -6,7 +19,7 @@
 using namespace vast;
 
 // A simple iterator over an array.
-template <typename T, size_t N>
+template <class T, size_t N>
 struct iterator
   : detail::iterator_facade<iterator<T, N>, T, std::random_access_iterator_tag> {
 public:
@@ -31,7 +44,7 @@ private:
     i_ += n;
   }
 
-  auto distance_to(iterator const& other) const {
+  auto distance_to(const iterator& other) const {
     using distance = std::ptrdiff_t;
     return static_cast<distance>(other.i_) - static_cast<distance>(i_);
   }
@@ -40,7 +53,7 @@ private:
     return *(array_ + i_);
   }
 
-  bool equals(iterator const& other) const {
+  bool equals(const iterator& other) const {
     return i_ == other.i_;
   }
 

@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #ifndef VAST_TYPE_HPP
 #define VAST_TYPE_HPP
 
@@ -104,11 +117,11 @@ public:
 
   /// Retrieves the name of the type.
   /// @returns The name of the type.
-  std::string const& name() const;
+  const std::string& name() const;
 
   /// Retrieves the type attributes.
   std::vector<attribute>& attributes();
-  std::vector<attribute> const& attributes() const;
+  const std::vector<attribute>& attributes() const;
   type& attributes(std::initializer_list<attribute> list);
 
   /// Checks whether the hash digest of two types is equal.
@@ -125,7 +138,7 @@ public:
 
   friend auto& expose(type& t);
 
-  friend bool convert(type const& t, json& j);
+  friend bool convert(const type& t, json& j);
 
 private:
   struct impl;
@@ -162,7 +175,7 @@ public:
     return *static_cast<Derived*>(this);
   }
 
-  std::string const& name() const {
+  const std::string& name() const {
     return name_;
   }
 
@@ -170,7 +183,7 @@ public:
     return attributes_;
   }
 
-  std::vector<attribute> const& attributes() const {
+  const std::vector<attribute>& attributes() const {
     return attributes_;
   }
 
@@ -191,12 +204,12 @@ struct basic_type : concrete_type<Derived> {
 
 #define VAST_DEFINE_DATA_TYPE(T, U)                                           \
 struct T : basic_type<T>, detail::totally_ordered<T> {                        \
-  friend bool operator==(T const& x, T const& y) {                            \
+  friend bool operator==(const T& x, const T& y) {                            \
     return static_cast<const base_type&>(x) ==                                \
            static_cast<const base_type&>(y);                                  \
   }                                                                           \
                                                                               \
-  friend bool operator<(T const& x, T const& y) {                             \
+  friend bool operator<(const T& x, const T& y) {                             \
     return static_cast<const base_type&>(x) <                                 \
            static_cast<const base_type&>(y);                                  \
   }                                                                           \
@@ -362,21 +375,21 @@ struct record_type
       vast::key key() const;
       size_t depth() const;
 
-      detail::stack_vector<record_field const*, 64> trace;
+      detail::stack_vector<const record_field*, 64> trace;
       vast::offset offset;
     };
 
-    each(record_type const& r);
+    each(const record_type& r);
 
   private:
     friend detail::range_facade<each>;
 
     void next();
     bool done() const;
-    range_state const& get() const;
+    const range_state& get() const;
 
     range_state state_;
-    detail::stack_vector<record_type const*, 64> records_;
+    detail::stack_vector<const record_type*, 64> records_;
   };
 
   /// Constructs a record type from a list of fields.
@@ -388,37 +401,37 @@ struct record_type
   /// Attemps to resolve a ::key to an ::offset.
   /// @param k The key to resolve.
   /// @returns The ::offset corresponding to *k*.
-  expected<offset> resolve(key const& k) const;
+  expected<offset> resolve(const key& k) const;
 
   /// Attemps to resolve an ::offset to a ::key.
   /// @param o The offset to resolve.
   /// @returns The ::key corresponding to *o*.
-  expected<key> resolve(offset const& o) const;
+  expected<key> resolve(const offset& o) const;
 
   /// Finds all offset-key pairs for an *exact* key in this and nested records.
   /// @param k The key to resolve.
   /// @returns The offset-key pairs corresponding to the found *k*.
-  std::vector<std::pair<offset, key>> find(key const& k) const;
+  std::vector<std::pair<offset, key>> find(const key& k) const;
 
   /// Finds all offset-key pairs for a *prefix* key in this and nested records.
   /// @param k The key to resolve.
   /// @returns The offset-key pairs corresponding to the found *k*.
-  std::vector<std::pair<offset, key>> find_prefix(key const& k) const;
+  std::vector<std::pair<offset, key>> find_prefix(const key& k) const;
 
   /// Finds all offset-key pairs for a *suffix* key in this and nested records.
   /// @param k The key to resolve.
   /// @returns The offset-key pairs corresponding to the found *k*.
-  std::vector<std::pair<offset, key>> find_suffix(key const& k) const;
+  std::vector<std::pair<offset, key>> find_suffix(const key& k) const;
 
   /// Retrieves the type at a given key.
   /// @param k The key to resolve.
   /// @returns The type at key *k* or `nullptr` if *k* doesn't resolve.
-  type const* at(key const& k) const;
+  const type* at(const key& k) const;
 
   /// Retrieves the type at a given offset.
   /// @param o The offset to resolve.
   /// @returns The type at offset *o* or `nullptr` if *o* doesn't resolve.
-  type const* at(offset const& o) const;
+  const type* at(const offset& o) const;
 
   friend bool operator==(const record_type& x, const record_type& y);
   friend bool operator<(const record_type& x, const record_type& y);
@@ -436,16 +449,16 @@ struct record_type
 /// Recursively flattens the arguments of a record type.
 /// @param rec the record to flatten.
 /// @returns The flattened record type.
-record_type flatten(record_type const& rec);
+record_type flatten(const record_type& rec);
 
-type flatten(type const& t);
+type flatten(const type& t);
 
 /// Unflattens a flattened record type.
 /// @param rec the record to unflatten.
 /// @returns The unflattened record type.
-record_type unflatten(record_type const& rec);
+record_type unflatten(const record_type& rec);
 
-type unflatten(type const& t);
+type unflatten(const type& t);
 
 /// An alias of another type.
 struct alias_type
@@ -488,11 +501,18 @@ bool is_container(const type& t);
 /// @param x The first type.
 /// @param y The second type.
 /// @returns `true` *iff* *x* and *y* are congruent.
-bool congruent(type const& x, type const& y);
+bool congruent(const type& x, const type& y);
 
-bool congruent(type const& x, data const& y);
+bool congruent(const type& x, const data& y);
 
-bool congruent(data const& x, type const& y);
+bool congruent(const data& x, const type& y);
+
+/// Replaces all types in `xs` that are congruent to a type in `with`.
+/// @param xs Pointers to the types that should get replaced.
+/// @param with Schema containing potentially congruent types.
+/// @returns an error if two types with the same name are not congruent.
+expected<void> replace_if_congruent(std::initializer_list<type*> xs,
+                                    const schema& with);
 
 /// Checks whether the types of two nodes in a predicate are compatible with
 /// each other, i.e., whether operator evaluation for the given types is
@@ -503,22 +523,22 @@ bool congruent(data const& x, type const& y);
 /// @param op The operator under which to compare *lhs* and *rhs*.
 /// @param rhs The RHS of *op*.
 /// @returns `true` if *lhs* and *rhs* are compatible to each other under *op*.
-bool compatible(type const& lhs, relational_operator op, type const& rhs);
+bool compatible(const type& lhs, relational_operator op, const type& rhs);
 
-bool compatible(type const& lhs, relational_operator op, data const& rhs);
+bool compatible(const type& lhs, relational_operator op, const data& rhs);
 
-bool compatible(data const& lhs, relational_operator op, type const& rhs);
+bool compatible(const data& lhs, relational_operator op, const type& rhs);
 
 /// Checks whether data and type fit together (and can form a ::value).
 /// @param t The type that describes *d*.
 /// @param d The raw data to be checked against *t*.
 /// @returns `true` if *t* is a valid type for *d*.
-bool type_check(type const& t, data const& d);
+bool type_check(const type& t, const data& d);
 
 /// Default-construct a data instance for a given type.
 /// @param t The type to construct ::data from.
 /// @returns a default-constructed instance of type *t*.
-data construct(type const& t);
+data construct(const type& t);
 
 // -- implementation details -------------------------------------------------
 
@@ -572,7 +592,7 @@ namespace std {
 
 template <>
 struct hash<vast::type> {
-  size_t operator()(vast::type const& t) const {
+  size_t operator()(const vast::type& t) const {
     return vast::uhash<vast::xxhash32>{}(t);
   }
 };

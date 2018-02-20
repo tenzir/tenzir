@@ -1,6 +1,20 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/vast/event.hpp"
 #include "vast/system/archive.hpp"
+#include "vast/ids.hpp"
 
 #define SUITE archive
 #include "test.hpp"
@@ -19,11 +33,7 @@ TEST(archiving and querying) {
   self->send(a, bro_http_log);
   self->send(a, bgpdump_txt);
   MESSAGE("querying event set {[100,150), [10150,10200)}");
-  bitmap bm;
-  bm.append_bits(false, 100);
-  bm.append_bits(true, 50);
-  bm.append_bits(false, 10000);
-  bm.append_bits(true, 50);
+  auto bm = make_ids({{100, 150}, {10150, 10200}});
   std::vector<event> result;
   self->request(a, infinite, bm).receive(
     [&](std::vector<event>& xs) { result = std::move(xs); },

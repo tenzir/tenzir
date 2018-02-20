@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #ifndef VAST_CONCEPT_PARSEABLE_DETAIL_AS_PARSER_HPP
 #define VAST_CONCEPT_PARSEABLE_DETAIL_AS_PARSER_HPP
 
@@ -26,31 +39,31 @@ inline auto as_parser(std::string str) {
   return ignore(string_parser{std::move(str)});
 }
 
-template <typename T>
+template <class T>
 auto as_parser(T x)
   -> std::enable_if_t<
-       std::is_arithmetic<T>{} && ! std::is_same<T, bool>::value,
+       std::is_arithmetic<T>{} && !std::is_same<T, bool>::value,
        decltype(ignore(string_parser{""}))
      > {
   return ignore(string_parser{std::to_string(x)});
 }
 
-template <typename T>
+template <class T>
 auto as_parser(T x) -> std::enable_if_t<is_parser<T>{}, T> {
   return x; // A good compiler will elide the copy.
 }
 
 // -- binary ------------------------------------------------------------------
 
-template <typename T>
+template <class T>
 using is_convertible_to_unary_parser =
   std::integral_constant<
     bool,
     std::is_convertible<T, std::string>{}
-    || (std::is_arithmetic<T>{} && ! std::is_same<T, bool>::value)
+    || (std::is_arithmetic<T>{} && !std::is_same<T, bool>::value)
   >;
 
-template <typename T, typename U>
+template <class T, class U>
 using is_convertible_to_binary_parser =
   std::integral_constant<
     bool,
@@ -60,9 +73,9 @@ using is_convertible_to_binary_parser =
   >;
 
 template <
-  template <typename, typename> class BinaryParser,
-  typename T,
-  typename U
+  template <class, class> class BinaryParser,
+  class T,
+  class U
 >
 using make_binary_parser =
   std::conditional_t<
@@ -80,9 +93,9 @@ using make_binary_parser =
   >;
 
 template <
-  template <typename, typename> class BinaryParser,
-  typename T,
-  typename U
+  template <class, class> class BinaryParser,
+  class T,
+  class U
 >
 auto as_parser(T&& x, U&& y)
   -> std::enable_if_t<

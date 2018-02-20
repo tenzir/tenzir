@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #ifndef VAST_CONCEPT_PRINTABLE_DETAIL_AS_PRINTER_HPP
 #define VAST_CONCEPT_PRINTABLE_DETAIL_AS_PRINTER_HPP
 
@@ -26,31 +39,31 @@ inline auto as_printer(std::string str) {
   return literal_printer{std::move(str)};
 }
 
-template <typename T>
+template <class T>
 auto as_printer(T x)
 -> std::enable_if_t<
-     std::is_arithmetic<T>{} && ! std::is_same<T, bool>::value,
+     std::is_arithmetic<T>{} && !std::is_same<T, bool>::value,
      literal_printer
    > {
   return literal_printer{x};
 }
 
-template <typename T>
+template <class T>
 auto as_printer(T x) -> std::enable_if_t<is_printer<T>{}, T> {
   return x; // A good compiler will elide the copy.
 }
 
 // -- binary ------------------------------------------------------------------
 
-template <typename T>
+template <class T>
 using is_convertible_to_unary_printer =
   std::integral_constant<
     bool,
     std::is_convertible<T, std::string>{}
-    || (std::is_arithmetic<T>{} && ! std::is_same<T, bool>::value)
+    || (std::is_arithmetic<T>{} && !std::is_same<T, bool>::value)
   >;
 
-template <typename T, typename U>
+template <class T, class U>
 using is_convertible_to_binary_printer =
   std::integral_constant<
     bool,
@@ -60,9 +73,9 @@ using is_convertible_to_binary_printer =
   >;
 
 template <
-  template <typename, typename> class Binaryprinter,
-  typename T,
-  typename U
+  template <class, class> class Binaryprinter,
+  class T,
+  class U
 >
 using make_binary_printer =
   std::conditional_t<
@@ -80,9 +93,9 @@ using make_binary_printer =
   >;
 
 template <
-  template <typename, typename> class Binaryprinter,
-  typename T,
-  typename U
+  template <class, class> class Binaryprinter,
+  class T,
+  class U
 >
 auto as_printer(T&& x, U&& y)
   -> std::enable_if_t<

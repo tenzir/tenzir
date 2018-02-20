@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #ifndef VAST_CONCEPT_PARSEABLE_VAST_TYPE_HPP
 #define VAST_CONCEPT_PARSEABLE_VAST_TYPE_HPP
 
@@ -23,7 +36,7 @@ public:
       add(pair.first, pair.second);
   }
 
-  bool add(std::string const& name, type t) {
+  bool add(const std::string& name, type t) {
     if (name.empty() || name != t.name())
       return false;
     t.name(name);
@@ -31,8 +44,8 @@ public:
     return true;
   }
 
-  template <typename Iterator, typename Attribute>
-  bool parse(Iterator& f, Iterator const& l, Attribute& a) const {
+  template <class Iterator, class Attribute>
+  bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
     return symbols_(f, l, a);
   }
 
@@ -44,19 +57,19 @@ private:
 struct type_parser : parser<type_parser> {
   using attribute = type;
 
-  type_parser(type_table const* symbols = nullptr)
+  type_parser(const type_table* symbols = nullptr)
     : symbol_type{symbols} {
   }
 
-  template <typename T>
+  template <class T>
   static type to_basic_type(std::vector<vast::attribute> a) {
     T b;
     b.attributes() = std::move(a);
     return b;
   };
 
-  template <typename Iterator, typename Attribute>
-  bool parse(Iterator& f, Iterator const& l, Attribute& a) const {
+  template <class Iterator, class Attribute>
+  bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
     // Whitespace
     static auto ws = ignore(*parsers::space);
     // Attributes: type meta data
@@ -174,7 +187,7 @@ struct type_parser : parser<type_parser> {
     return type_type(f, l, a);
   }
 
-  type_table const* symbol_type;
+  const type_table* symbol_type;
 };
 
 template <>

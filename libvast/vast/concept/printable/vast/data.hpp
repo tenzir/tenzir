@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #ifndef VAST_CONCEPT_PRINTABLE_VAST_DATA_HPP
 #define VAST_CONCEPT_PRINTABLE_VAST_DATA_HPP
 
@@ -20,13 +33,13 @@ namespace vast {
 struct data_printer : printer<data_printer> {
   using attribute = data;
 
-  template <typename Iterator>
+  template <class Iterator>
   struct visitor {
     visitor(Iterator& out) : out_{out} {
     }
 
-    template <typename T>
-    bool operator()(T const& x) const {
+    template <class T>
+    bool operator()(const T& x) const {
       return make_printer<T>{}(out_, x);
     }
 
@@ -34,10 +47,10 @@ struct data_printer : printer<data_printer> {
       return printers::integral<integer, policy::force_sign>(out_, x);
     }
 
-    bool operator()(std::string const& str) const {
+    bool operator()(const std::string& str) const {
       // TODO: create a printer that escapes the output on the fly, as opposed
       // to going through an extra copy.
-      auto escaped = printers::str ->* [](std::string const& x) {
+      auto escaped = printers::str ->* [](const std::string& x) {
         return detail::byte_escape(x, "\"");
       };
       auto p = '"' << escaped << '"';
@@ -47,8 +60,8 @@ struct data_printer : printer<data_printer> {
     Iterator& out_;
   };
 
-  template <typename Iterator>
-  bool print(Iterator& out, data const& d) const {
+  template <class Iterator>
+  bool print(Iterator& out, const data& d) const {
     return visit(visitor<Iterator>{out}, d);
   }
 };
@@ -65,8 +78,8 @@ namespace printers {
 struct vector_printer : printer<vector_printer> {
   using attribute = vector;
 
-  template <typename Iterator>
-  bool print(Iterator& out, vector const& v) const {
+  template <class Iterator>
+  bool print(Iterator& out, const vector& v) const {
     auto p = '[' << ~(data_printer{} % ", ") << ']';
     return p.print(out, v);
   }
@@ -80,8 +93,8 @@ struct printer_registry<vector> {
 struct set_printer : printer<set_printer> {
   using attribute = set;
 
-  template <typename Iterator>
-  bool print(Iterator& out, set const& s) const {
+  template <class Iterator>
+  bool print(Iterator& out, const set& s) const {
     auto p = '{' << ~(data_printer{} % ", ") << '}';
     return p.print(out, s);
   }
@@ -95,8 +108,8 @@ struct printer_registry<set> {
 struct table_printer : printer<table_printer> {
   using attribute = table;
 
-  template <typename Iterator>
-  bool print(Iterator& out, table const& t) const {
+  template <class Iterator>
+  bool print(Iterator& out, const table& t) const {
     auto pair = (data_printer{} << " -> " << data_printer{});
     auto p = '{' << ~(pair % ", ") << '}';
     return p.print(out, t);

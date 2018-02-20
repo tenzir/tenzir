@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #include "vast/batch.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/byte_swap.hpp"
@@ -32,7 +45,7 @@ batch::size_type batch::events() const {
   return events_;
 }
 
-uint64_t bytes(batch const& b) {
+uint64_t bytes(const batch& b) {
   return sizeof(b.method_) + sizeof(b.first_) + sizeof(b.last_) +
     sizeof(b.events_) + sizeof(b.ids_) + sizeof(b.data_) + b.data_.size();
 }
@@ -44,7 +57,7 @@ batch::writer::writer(compression method)
   batch_.method_ = method;
 }
 
-bool batch::writer::write(event const& e) {
+bool batch::writer::write(const event& e) {
   // Write meta data.
   if (e.timestamp() < batch_.first_)
     batch_.first_ = e.timestamp();
@@ -75,7 +88,7 @@ batch batch::writer::seal() {
   return result;
 }
 
-batch::reader::reader(batch const& b)
+batch::reader::reader(const batch& b)
   : data_{b.data_},
     id_range_{bit_range(b.ids_)},
     available_{b.events()},
@@ -177,7 +190,7 @@ expected<event> batch::reader::materialize() {
     }
     e.timestamp(ts);
     return e;
-  } catch (std::runtime_error const& e) {
+  } catch (const std::runtime_error& e) {
     return make_error(ec::unspecified, e.what());
   }
 }

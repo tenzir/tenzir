@@ -1,11 +1,22 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #ifndef VAST_DETAIL_COLOR_HPP
 #define VAST_DETAIL_COLOR_HPP
 
-namespace vast {
-namespace detail {
+namespace vast::detail::color {
 
 /// UNIX TTY color codes.
-namespace color {
 namespace {
 
 // UNIX terminal color codes
@@ -28,8 +39,7 @@ constexpr char bold_cyan[]    = "\033[1m\033[36m";
 constexpr char bold_white[]   = "\033[1m\033[37m";
 
 } // namespace <anonymous>
-} // namespace color
-} // namespace detail
-} // namespace vast
+
+} // namespace vast::detail::color
 
 #endif

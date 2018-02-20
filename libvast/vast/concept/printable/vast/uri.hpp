@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #ifndef VAST_CONCEPT_PRINTABLE_VAST_URI_HPP
 #define VAST_CONCEPT_PRINTABLE_VAST_URI_HPP
 
@@ -16,8 +29,8 @@ namespace vast {
 struct key_value_printer : printer<key_value_printer> {
   using attribute = std::pair<std::string,std::string>;
 
-  template <typename Iterator>
-  bool print(Iterator& out, std::pair<std::string,std::string> const& kv) const {
+  template <class Iterator>
+  bool print(Iterator& out, const std::pair<std::string,std::string>& kv) const {
     using namespace printers;
     return str.print(out, detail::percent_escape(kv.first)) 
         && str.print(out, "=") 
@@ -33,8 +46,8 @@ struct printer_registry<std::pair<std::string,std::string>> {
 struct uri_printer : printer<uri_printer> {
   using attribute = uri;
   
-  template <typename Iterator>
-  bool print(Iterator& out, uri const& u) const {
+  template <class Iterator>
+  bool print(Iterator& out, const uri& u) const {
     using namespace printers;
     
     if (u.scheme != "") {

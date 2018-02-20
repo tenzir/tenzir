@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #ifndef VAST_CONCEPT_PARSEABLE_CORE_REPEAT_HPP
 #define VAST_CONCEPT_PARSEABLE_CORE_REPEAT_HPP
 
@@ -8,7 +21,7 @@
 
 namespace vast {
 
-template <typename Parser, int Min, int Max = Min>
+template <class Parser, int Min, int Max = Min>
 class repeat_parser : public parser<repeat_parser<Parser, Min, Max>> {
   static_assert(Min <= Max, "minimum must be smaller than maximum");
 
@@ -19,8 +32,8 @@ public:
   explicit repeat_parser(Parser p) : parser_{std::move(p)} {
   }
 
-  template <typename Iterator, typename Attribute>
-  bool parse(Iterator& f, Iterator const& l, Attribute& a) const {
+  template <class Iterator, class Attribute>
+  bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
     if (Max == 0)
       return true; // If we have nothing todo, we're succeeding.
     auto save = f;
@@ -40,15 +53,15 @@ private:
   Parser parser_;
 };
 
-template <int Min, int Max = Min, typename Parser>
-auto repeat(Parser const& p) {
+template <int Min, int Max = Min, class Parser>
+auto repeat(const Parser& p) {
   return repeat_parser<Parser, Min, Max>{p};
 }
 
 namespace parsers {
 
-template <int Min, int Max = Min, typename Parser>
-auto rep(Parser const& p) {
+template <int Min, int Max = Min, class Parser>
+auto rep(const Parser& p) {
   return repeat<Min, Max, Parser>(p);
 }
 

@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #ifndef VAST_HTTP_HPP
 #define VAST_HTTP_HPP
 
@@ -8,8 +21,7 @@
 
 #include "vast/uri.hpp"
 
-namespace vast {
-namespace http {
+namespace vast::http {
 
 struct header {
   std::string name;
@@ -23,7 +35,7 @@ struct message {
   std::vector<http::header> headers;
   std::string body;
 
-  http::header const* header(std::string const& name) const;
+  const http::header* header(const std::string& name) const;
 };
 
 /// A HTTP request message.
@@ -38,7 +50,6 @@ struct response : message {
   std::string status_text;
 };
 
-} // namespace http
-} // namespace vast
+} // namespace vast::http
 
 #endif

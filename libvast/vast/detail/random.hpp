@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #ifndef VAST_DETAIL_RANDOM_HPP
 #define VAST_DETAIL_RANDOM_HPP
 
@@ -5,12 +18,11 @@
 
 #include "vast/detail/operators.hpp"
 
-namespace vast {
-namespace detail {
+namespace vast::detail {
 
 /// Generates random numbers according to the [Pareto
 /// distribution](http://en.wikipedia.org/wiki/Pareto_distribution).
-template <typename RealType = double>
+template <class RealType = double>
 class pareto_distribution : equality_comparable<pareto_distribution<RealType>> {
 public:
   using result_type = RealType;
@@ -31,7 +43,7 @@ public:
       return scale_;
     }
 
-    friend bool operator==(param_type const& lhs, param_type const& rhs) {
+    friend bool operator==(const param_type& lhs, const param_type& rhs) {
       return lhs.shape_ == rhs.shape_ && lhs.scale_ == rhs.scale_;
     }
 
@@ -47,11 +59,11 @@ public:
   pareto_distribution(param_type parm) : params_{std::move(parm)} {
   }
 
-  template <typename URNG>
+  template <class URNG>
   result_type operator()(URNG& g);
 
-  template <typename URNG>
-  result_type operator()(URNG& g, param_type const& parm);
+  template <class URNG>
+  result_type operator()(URNG& g, const param_type& parm);
 
   param_type param() const {
     return params_;
@@ -69,8 +81,8 @@ public:
     return params_.scale();
   }
 
-  friend bool operator==(pareto_distribution const& lhs,
-                         pareto_distribution const& rhs) {
+  friend bool operator==(const pareto_distribution& lhs,
+                         const pareto_distribution& rhs) {
     return lhs.params_ == rhs.params_;
   }
 
@@ -78,8 +90,8 @@ private:
   param_type params_;
 };
 
-template <typename R>
-R pdf(pareto_distribution<R> const& dist, R x) {
+template <class R>
+R pdf(const pareto_distribution<R>& dist, R x) {
   auto shape = dist.shape();
   auto scale = dist.scale();
   if (x < scale)
@@ -87,8 +99,8 @@ R pdf(pareto_distribution<R> const& dist, R x) {
   return shape * std::pow(scale, shape) / std::pow(x, shape + 1);
 }
 
-template <typename R>
-R cdf(pareto_distribution<R> const& dist, R x) {
+template <class R>
+R cdf(const pareto_distribution<R>& dist, R x) {
   auto shape = dist.shape();
   auto scale = dist.scale();
   if (x <= scale)
@@ -96,8 +108,8 @@ R cdf(pareto_distribution<R> const& dist, R x) {
   return R{1} - std::pow(scale / x, shape);
 }
 
-template <typename R>
-R quantile(pareto_distribution<R> const& dist, R p) {
+template <class R>
+R quantile(const pareto_distribution<R>& dist, R p) {
   auto shape = dist.shape();
   auto scale = dist.scale();
   if (p == 0)
@@ -107,20 +119,19 @@ R quantile(pareto_distribution<R> const& dist, R p) {
   return scale / std::pow(1 - p, 1 / shape);
 }
 
-template <typename R>
-template <typename URNG>
+template <class R>
+template <class URNG>
 R pareto_distribution<R>::operator()(URNG& g) {
   return quantile(*this, std::uniform_real_distribution<result_type>{}(g));
 }
 
-template <typename R>
-template <typename URNG>
+template <class R>
+template <class URNG>
 R pareto_distribution<R>::operator()(
-  URNG& g, typename pareto_distribution<R>::param_type const& parm) {
+  URNG& g, const typename pareto_distribution<R>::param_type& parm) {
   return pareto_distribution<R>{parm}(g);
 }
 
-} // namespace detail
-} // namespace vast
+} // namespace vast::detail
 
 #endif

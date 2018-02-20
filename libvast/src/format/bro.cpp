@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #include <fstream>
 #include <iomanip>
 
@@ -21,7 +34,7 @@ namespace bro {
 namespace {
 
 // Creates a VAST type from an ASCII Bro type in a log header.
-expected<type> parse_type(std::string const& bro_type) {
+expected<type> parse_type(const std::string& bro_type) {
   type t;
   if (bro_type == "enum" || bro_type == "string" || bro_type == "file")
     t = string_type{};
@@ -74,36 +87,36 @@ expected<type> parse_type(std::string const& bro_type) {
 
 struct bro_type_printer {
   template <class T>
-  std::string operator()(T const& x) const {
+  std::string operator()(const T& x) const {
     return to_string(x);
   }
 
-  std::string operator()(real_type const&) {
+  std::string operator()(const real_type&) {
     return "double";
   }
 
-  std::string operator()(timestamp_type const&) {
+  std::string operator()(const timestamp_type&) {
     return "time";
   }
 
-  std::string operator()(timespan_type const&) {
+  std::string operator()(const timespan_type&) {
     return "interval";
   }
 
-  std::string operator()(vector_type const& t) const {
+  std::string operator()(const vector_type& t) const {
     return "vector[" + visit(*this, t.value_type) + ']';
   }
 
-  std::string operator()(set_type const& t) const {
+  std::string operator()(const set_type& t) const {
     return "set[" + visit(*this, t.value_type) + ']';
   }
 
-  std::string operator()(alias_type const& t) const {
+  std::string operator()(const alias_type& t) const {
     return visit(*this, t.value_type);
   }
 };
 
-expected<std::string> to_bro_string(type const& t) {
+expected<std::string> to_bro_string(const type& t) {
   return visit(bro_type_printer{}, t);
 }
 
@@ -113,18 +126,18 @@ constexpr auto empty_field = "(empty)";
 constexpr auto unset_field = "-";
 
 struct time_factory {
-  char const* fmt = "%Y-%m-%d-%H-%M-%S";
+  const char* fmt = "%Y-%m-%d-%H-%M-%S";
 };
 
 template <class Stream>
-Stream& operator<<(Stream& out, time_factory const& t) {
+Stream& operator<<(Stream& out, const time_factory& t) {
   auto now = std::time(nullptr);
   auto tm = *std::localtime(&now);
   out << std::put_time(&tm, t.fmt);
   return out;
 }
 
-void stream_header(type const& t, std::ostream& out) {
+void stream_header(const type& t, std::ostream& out) {
   auto i = t.name().find("bro::");
   auto path = i == std::string::npos ? t.name() : t.name().substr(5);
   out << "#separator " << separator << '\n'
@@ -148,31 +161,31 @@ struct streamer {
   }
 
   template <class T>
-  void operator()(T const&, none) const {
+  void operator()(const T&, none) const {
     out_ << unset_field;
   }
 
   template <class T, class U>
-  auto operator()(T const&, U const& x) const
+  auto operator()(const T&, const U& x) const
   -> std::enable_if_t<!std::is_same<U, none>::value> {
     out_ << to_string(x);
   }
 
-  void operator()(integer_type const&, integer i) const {
+  void operator()(const integer_type&, integer i) const {
     out_ << i;
   }
 
-  void operator()(count_type const&, count c) const {
+  void operator()(const count_type&, count c) const {
     out_ << c;
   }
 
-  void operator()(real_type const&, real r) const {
+  void operator()(const real_type&, real r) const {
     auto p = real_printer<real, 6>{};
     auto out = std::ostreambuf_iterator<char>(out_);
     p.print(out, r);
   }
 
-  void operator()(timestamp_type const&, timestamp ts) const {
+  void operator()(const timestamp_type&, timestamp ts) const {
     double d;
     convert(ts.time_since_epoch(), d);
     auto p = real_printer<real, 6>{};
@@ -180,7 +193,7 @@ struct streamer {
     p.print(out, d);
   }
 
-  void operator()(timespan_type const&, timespan span) const {
+  void operator()(const timespan_type&, timespan span) const {
     double d;
     convert(span, d);
     auto p = real_printer<real, 6>{};
@@ -188,7 +201,7 @@ struct streamer {
     p.print(out, d);
   }
 
-  void operator()(string_type const&, std::string const& str) const {
+  void operator()(const string_type&, const std::string& str) const {
     auto out = std::ostreambuf_iterator<char>{out_};
     auto f = str.begin();
     auto l = str.end();
@@ -199,11 +212,11 @@ struct streamer {
         out_ << *f;
   }
 
-  void operator()(port_type const&, port const& p) const {
+  void operator()(const port_type&, const port& p) const {
     out_ << p.number();
   }
 
-  void operator()(record_type const& r, vector const& v) const {
+  void operator()(const record_type& r, const vector& v) const {
     VAST_ASSERT(!v.empty());
     VAST_ASSERT(r.fields.size() == v.size());
     visit(*this, r.fields[0].type, v[0]);
@@ -213,20 +226,20 @@ struct streamer {
     }
   }
 
-  void operator()(vector_type const& t, vector const& v) const {
+  void operator()(const vector_type& t, const vector& v) const {
     stream(v, t.value_type, set_separator);
   }
 
-  void operator()(set_type const& t, set const& s) const {
+  void operator()(const set_type& t, const set& s) const {
     stream(s, t.value_type, set_separator);
   }
 
-  void operator()(table_type const&, table const&) const {
+  void operator()(const table_type&, const table&) const {
     VAST_ASSERT(!"not supported by Bro's log format.");
   }
 
   template <class Container, class Sep>
-  void stream(Container& c, type const& value_type, Sep const& sep) const {
+  void stream(Container& c, const type& value_type, const Sep& sep) const {
     if (c.empty()) {
       // Cannot occur if we have a record
       out_ << empty_field;
@@ -319,7 +332,7 @@ expected<event> reader::read() {
   return e;
 }
 
-expected<void> reader::schema(vast::schema const& sch) {
+expected<void> reader::schema(const vast::schema& sch) {
   schema_ = sch;
   return no_error;
 }
@@ -338,9 +351,9 @@ const char* reader::name() const {
 
 // Parses a single header line a Bro log. (Since parsing headers is not on the
 // critical path, we are "lazy" and return strings instead of string views.)
-expected<std::string> parse_header_line(std::string const& line,
-                                        std::string const& sep,
-                                        std::string const& prefix) {
+expected<std::string> parse_header_line(const std::string& line,
+                                        const std::string& sep,
+                                        const std::string& prefix) {
   auto s = detail::split(line, sep, "", 1);
   if (!(s.size() == 2
         && std::equal(prefix.begin(), prefix.end(), s[0].first, s[0].second)))
@@ -367,7 +380,7 @@ expected<void> reader::parse_header() {
     }
   }
   // Retrieve remaining header lines.
-  char const* prefixes[] = {
+  const char* prefixes[] = {
     "#set_separator",
     "#empty_field",
     "#unset_field",
@@ -376,7 +389,7 @@ expected<void> reader::parse_header() {
     "#fields",
     "#types",
   };
-  std::vector<std::string> header(sizeof(prefixes) / sizeof(char const*));
+  std::vector<std::string> header(sizeof(prefixes) / sizeof(const char*));
   for (auto i = 0u; i < header.size(); ++i) {
     lines_->next();
     if (lines_->done())
@@ -447,7 +460,7 @@ expected<void> reader::parse_header() {
     }
   }
   // Create Bro parsers.
-  auto make_parser = [](auto const& type, auto const& set_sep) {
+  auto make_parser = [](const auto& type, const auto& set_sep) {
     using iterator_type = std::string::const_iterator;
     return make_bro_parser<iterator_type>(type, set_sep);
   };
@@ -471,7 +484,7 @@ writer::~writer() {
       *pair.second << footer;
 }
 
-expected<void> writer::process(event const& e) {
+expected<void> writer::write(const event& e) {
   if (!is<record_type>(e.type()))
     return make_error(ec::format_error, "cannot process non-record events");
   std::ostream* os = nullptr;

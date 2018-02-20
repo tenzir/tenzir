@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #ifndef VAST_DETAIL_ITERATOR_HPP
 #define VAST_DETAIL_ITERATOR_HPP
 
@@ -5,45 +18,44 @@
 
 #include "vast/detail/operators.hpp"
 
-namespace vast {
-namespace detail {
+namespace vast::detail {
 
-template <typename, typename, typename, typename, typename>
+template <class, class, class, class, class>
 class iterator_facade;
 
 // Provides clean access to iterator internals.
 class iterator_access {
-  template <typename, typename, typename, typename, typename>
+  template <class, class, class, class, class>
   friend class iterator_facade;
 
 public:
-  template <typename Facade>
-  static decltype(auto) dereference(Facade const& f) {
+  template <class Facade>
+  static decltype(auto) dereference(const Facade& f) {
     return f.dereference();
   }
 
-  template <typename Facade>
+  template <class Facade>
   static void increment(Facade& f) {
     f.increment();
   }
 
-  template <typename Facade>
+  template <class Facade>
   static void decrement(Facade& f) {
     f.decrement();
   }
 
-  template <typename Facade, typename Distance>
+  template <class Facade, class Distance>
   static void advance(Facade& f, Distance n) {
     f.advance(n);
   }
 
-  template <typename Facade1, typename Facade2>
-  static bool equals(Facade1 const& f1, Facade2 const& f2) {
+  template <class Facade1, class Facade2>
+  static bool equals(const Facade1& f1, const Facade2& f2) {
     return f1.equals(f2);
   }
 
-  template <typename Facade1, typename Facade2>
-  static auto distance_from(Facade1 const& f1, Facade2 const& f2) {
+  template <class Facade1, class Facade2>
+  static auto distance_from(const Facade1& f1, const Facade2& f2) {
     return f2.distance_to(f1);
   }
 
@@ -53,11 +65,11 @@ private:
 
 /// A simple version of `boost::iterator_facade`.
 template <
-  typename Derived,
-  typename Value,
-  typename Category,
-  typename Reference  = Value&,
-  typename Difference = std::ptrdiff_t
+  class Derived,
+  class Value,
+  class Category,
+  class Reference  = Value&,
+  class Difference = std::ptrdiff_t
 >
 class iterator_facade : totally_ordered<
                           iterator_facade<
@@ -65,10 +77,10 @@ class iterator_facade : totally_ordered<
                           >
                         > {
 private:
-  template <typename R, typename P>
+  template <class R, class P>
   struct operator_arrow_dispatch {
     struct proxy {
-      explicit proxy(R const& x) : ref(x) {
+      explicit proxy(const R& x) : ref(x) {
       }
 
       R* operator->() {
@@ -80,12 +92,12 @@ private:
 
     using result_type = proxy;
 
-    static result_type apply(R const& x) {
+    static result_type apply(const R& x) {
       return result_type{x};
     }
   };
 
-  template <typename T, typename P>
+  template <class T, class P>
   struct operator_arrow_dispatch<T&, P> {
     using result_type = P;
 
@@ -98,8 +110,8 @@ private:
     return *static_cast<Derived*>(this);
   }
 
-  Derived const& derived() const {
-    return *static_cast<Derived const*>(this);
+  const Derived& derived() const {
+    return *static_cast<const Derived*>(this);
   }
 
 public:
@@ -120,7 +132,7 @@ public:
     >;
 
   struct postfix_increment_proxy {
-    explicit postfix_increment_proxy(Derived const& x) : value(*x) {
+    explicit postfix_increment_proxy(const Derived& x) : value(*x) {
     }
 
     value_type& operator*() const {
@@ -189,29 +201,29 @@ public:
     return result -= x;
   }
 
-  friend bool operator==(iterator_facade const& x, iterator_facade const& y) {
-    return iterator_access::equals(static_cast<Derived const&>(x),
-                                   static_cast<Derived const&>(y));
+  friend bool operator==(const iterator_facade& x, const iterator_facade& y) {
+    return iterator_access::equals(static_cast<const Derived&>(x),
+                                   static_cast<const Derived&>(y));
   }
 
-  friend bool operator<(iterator_facade const& x, iterator_facade const& y) {
-    return 0 > iterator_access::distance_from(static_cast<Derived const&>(x),
-                                              static_cast<Derived const&>(y));
+  friend bool operator<(const iterator_facade& x, const iterator_facade& y) {
+    return 0 > iterator_access::distance_from(static_cast<const Derived&>(x),
+                                              static_cast<const Derived&>(y));
   }
 
-  friend Derived operator+(iterator_facade const& x, difference_type n) {
-    Derived tmp{static_cast<Derived const&>(x)};
+  friend Derived operator+(const iterator_facade& x, difference_type n) {
+    Derived tmp{static_cast<const Derived&>(x)};
     return tmp += n;
   }
 
-  friend Derived operator+(difference_type n, iterator_facade const& x) {
-    Derived tmp{static_cast<Derived const&>(x)};
+  friend Derived operator+(difference_type n, const iterator_facade& x) {
+    Derived tmp{static_cast<const Derived&>(x)};
     return tmp += n;
   }
 
-  friend auto operator-(iterator_facade const& x, iterator_facade const& y) {
-    return iterator_access::distance_from(static_cast<Derived const&>(x),
-                                          static_cast<Derived const&>(y));
+  friend auto operator-(const iterator_facade& x, const iterator_facade& y) {
+    return iterator_access::distance_from(static_cast<const Derived&>(x),
+                                          static_cast<const Derived&>(y));
   }
 
 protected:
@@ -221,12 +233,12 @@ protected:
 
 /// A simple version of `boost::iterator_adaptor`.
 template <
-  typename Derived,
-  typename Base,
-  typename Value,
-  typename Category,
-  typename Reference = Value&,
-  typename Difference = std::ptrdiff_t
+  class Derived,
+  class Base,
+  class Value,
+  class Category,
+  class Reference = Value&,
+  class Difference = std::ptrdiff_t
 >
 class iterator_adaptor
   : public iterator_facade<
@@ -240,11 +252,11 @@ class iterator_adaptor
 
     iterator_adaptor() = default;
 
-    explicit iterator_adaptor(Base const& b)
+    explicit iterator_adaptor(const Base& b)
       : iterator_{b} {
     }
 
-    Base const& base() const {
+    const Base& base() const {
       return iterator_;
     }
 
@@ -260,7 +272,7 @@ class iterator_adaptor
       return *iterator_;
     }
 
-    bool equals(iterator_adaptor const& other) const {
+    bool equals(const iterator_adaptor& other) const {
       return iterator_ == other.base();
     }
 
@@ -276,7 +288,7 @@ class iterator_adaptor
       --iterator_;
     }
 
-    Difference distance_to(iterator_adaptor const& other) const {
+    Difference distance_to(const iterator_adaptor& other) const {
       return other.base() - iterator_;
     }
 
@@ -284,7 +296,6 @@ class iterator_adaptor
     Base iterator_;
 };
 
-} // namspace detail
-} // namespace vast
+} // namespace vast::detail
 
 #endif
