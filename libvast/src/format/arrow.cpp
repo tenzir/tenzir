@@ -6,169 +6,65 @@
 #include "plasma/common.h"
 
 #include "vast/error.hpp"
+#include "vast/event.hpp"
+#include "vast/format/arrow.hpp"
 #include "vast/logger.hpp"
+#include "vast/type.hpp"
 
 #include "vast/concept/printable/to_string.hpp"
-#include "vast/concept/printable/vast/event.hpp"
-
-#include "vast/format/arrow.hpp"
+#include "vast/concept/printable/vast/data.hpp"
 
 namespace vast {
 
 namespace {
 
-std::pair<std::shared_ptr<arrow::Field>,
-          std::vector<std::shared_ptr<arrow::ArrayBuilder>>>
-convert_vast_type_to_arrow_field(const type& value, const data& data) {
-    std::cout << to_string(value) << " | " << to_string(data) << std::endl;
-  auto field = arrow::field("none", arrow::null());
-  std::vector<std::shared_ptr<arrow::ArrayBuilder>> builder_vector;
-  // Period
-  std::vector<std::shared_ptr<arrow::Field>> schema_vector_period = {
-    arrow::field("num", arrow::int64()),
-    arrow::field("denum", arrow::int64()),
-  };
-  // Timespan
-  std::vector<std::shared_ptr<arrow::Field>> schema_vector_timespan = {
-    arrow::field("rep", arrow::int64()),
-    arrow::field("period", arrow::struct_(schema_vector_period)),
-  };
-  if (is<boolean_type>(value)) {
-    std::cout << to_string(data) << std::endl;
-    field = arrow::field("bool", arrow::boolean());
-    auto current_builder = std::make_shared<arrow::BooleanBuilder>();
-    // current_builder->Append(get<boolean>(data));
-    current_builder->Append("1" == to_string(data));
-    builder_vector.push_back(current_builder);
-  } else if (is<integer_type>(value)) {
-    field = arrow::field("int", arrow::int64());
-    auto current_builder = std::make_shared<arrow::Int64Builder>();
-    // current_builder->Append(get<integer>(data));
-    try {
-      current_builder->Append(std::stol(to_string(data)));
-      builder_vector.push_back(current_builder);
-    } catch (std::invalid_argument e) {}
-      builder_vector.push_back(current_builder);
-    } else if (is<count_type>(value)) {
-    std::cout << to_string(data) << std::endl;
-    field = arrow::field("count", arrow::uint64());
-    auto current_builder = std::make_shared<arrow::UInt64Builder>();
-    try {
-      current_builder->Append(std::stol(to_string(data)));
-      builder_vector.push_back(current_builder);
-    } catch (std::invalid_argument e) {
-    }
-  } else if (is<real_type>(value)) {
-    field = arrow::field("double", arrow::float64());
-    auto current_builder = std::make_shared<arrow::FloatBuilder>();
-    try {
-      current_builder->Append(std::stof(to_string(data)));
-      builder_vector.push_back(current_builder);
-    } catch (std::invalid_argument e) {}
-    builder_vector.push_back(std::make_shared<arrow::NullBuilder>());
-  } else if (is<timespan_type>(value)) {
-    auto timespan_struct
-      = std::make_shared<arrow::StructType>(schema_vector_timespan);
-    field = arrow::field("timespan", timespan_struct);
-    builder_vector.push_back(std::make_shared<arrow::NullBuilder>());
-  } else if (is<timestamp_type>(value)) {
-    auto timespan_struct
-      = std::make_shared<arrow::StructType>(schema_vector_timespan);
-    // Timepoint
-    std::vector<std::shared_ptr<arrow::Field>> schema_vector_timepoint = {
-      arrow::field("clock", arrow::int64()),
-      arrow::field("timespan", timespan_struct),
-    };
-    auto timepoint_struct
-      = std::make_shared<arrow::StructType>(schema_vector_timepoint);
-    field = arrow::field("timepoint", timepoint_struct);
-    builder_vector.push_back(std::make_shared<arrow::NullBuilder>());
-  } else if (is<string_type>(value)) {
-    // String
-    auto string_ptr = std::make_shared<arrow::StringType>();
-    field = arrow::field("string", string_ptr);
-    builder_vector.push_back(std::make_shared<arrow::NullBuilder>());
-  } else if (is<pattern_type>(value)) {
-    field = arrow::field("pattern", arrow::boolean());
-  } else if (is<subnet_type>(value)) {
-    auto address_ptr = std::make_shared<arrow::FixedSizeBinaryType>(16);
-    std::vector<std::shared_ptr<arrow::Field>> schema_vector_subnet = {
-      arrow::field("address", address_ptr),
-      arrow::field("mask", arrow::int8()),
-    };
-    auto subnet_struct
-      = std::make_shared<arrow::StructType>(schema_vector_subnet);
-    field = arrow::field("subnet", subnet_struct);
-    builder_vector.push_back(std::make_shared<arrow::NullBuilder>());
-  } else if (is<address_type>(value)) {
-    // size must set to 16 ??
-    auto address_ptr = std::make_shared<arrow::FixedSizeBinaryType>(16);
-    field = arrow::field("address", address_ptr);
-    builder_vector.push_back(std::make_shared<arrow::NullBuilder>());
-  } else if (is<port_type>(value)) {
-    std::vector<std::shared_ptr<arrow::Field>> schema_vector_port = {
-      arrow::field("port_type", arrow::int8()),
-      arrow::field("mask", arrow::int16()),
-    };
-    auto port_struct = std::make_shared<arrow::StructType>(schema_vector_port);
-    field = arrow::field("port", port_struct);
-    builder_vector.push_back(std::make_shared<arrow::NullBuilder>());
-  } else if (is<record_type>(value)) {
+std::shared_ptr<arrow::Field> convert_to_arrow_field(const type& value) {
+  std::shared_ptr<arrow::Field> field;
+  if (is<record_type>(value)) {
     auto r = get<record_type>(value);
-    auto v = get<vector>(data);
     std::vector<std::shared_ptr<arrow::Field>> schema_record;
     u_int32_t i = 0;
     for (auto& e : record_type::each(r)) {
-      if (i == v.size()){
-        break;
-      }
-      auto result = convert_vast_type_to_arrow_field(e.trace.back()->type, v[i]);
-      schema_record.push_back(std::move(result.first));
-      builder_vector.insert(builder_vector.end(), result.second.begin(), result.second.end());
+      auto result = convert_to_arrow_field(e.trace.back()->type);
+      schema_record.push_back(std::move(result));
       i++;
     }
     field = arrow::field("record", arrow::struct_(schema_record));
-    builder_vector.push_back(std::make_shared<arrow::NullBuilder>());
   } else {
-    auto current_builder = std::make_shared<arrow::NullBuilder>();
-    current_builder->AppendNull();
-    builder_vector.push_back(current_builder);
+    format::arrow::convert_visitor f;
+    field = visit(f, value);
   }
-  return std::make_pair(field, builder_vector);
+  return field;
 }
 
 // Transposes a vector of events from a row-wise into the columnar Arrow
 // representation in the form of a record batch.
 std::shared_ptr<arrow::RecordBatch> transpose(const std::vector<event>& xs) {
   std::vector<std::shared_ptr<arrow::Field>> schema_vector;
-  std::vector<std::shared_ptr<arrow::ArrayBuilder>> builder_vector;
-  std::vector<type> data;
   for (const auto& e : xs) {
-    auto result = convert_vast_type_to_arrow_field(e.type(), e.data());
-    schema_vector.push_back(std::move(result.first));
-    builder_vector.insert(builder_vector.end(), result.second.begin(),
-                          result.second.end());
-    if (is<record_type>(e.type())){
+    auto result = convert_to_arrow_field(e.type());
+    schema_vector.push_back(std::move(result));
+    if (is<record_type>(e.type())) {
       break;
     }
   }
   auto schema = std::make_shared<arrow::Schema>(schema_vector);
   std::unique_ptr<arrow::RecordBatchBuilder> builder;
-  arrow::RecordBatchBuilder::Make(schema, arrow::default_memory_pool(),
-                                  &builder);
-  // builder.Append(builder_vector);
+  auto status = arrow::RecordBatchBuilder::Make(
+    schema, arrow::default_memory_pool(), &builder);
   std::shared_ptr<arrow::RecordBatch> batch;
-  //auto batch = arrow::RecordBatch::Make(&schema, 1, &builder_vector);
-
-  /*
-  for (u_int32_t i = 0; i < builder->num_fields(); i++){
-    std::cout << builder->GetField(i)->Append(schema_vector) << std::endl;
+  format::arrow::insert_visitor iv(*builder);
+  if (status.ok()) {
+    for (const auto e : xs) {
+      visit(iv, e.type(), e.data());
+      auto status = builder->Flush(&batch);
+      if (!status.ok())
+        return batch;
+    }
   }
-  */
-
-  builder->Flush(&batch);
-
-  std::cout << schema->ToString() << std::endl;
+  if (status.ok()) {
+    std::cout << schema->ToString() << std::endl;
+  }
   return batch;
 }
 
@@ -203,11 +99,47 @@ write_to_buffer(const arrow::RecordBatch& batch) {
 
 namespace format {
 namespace arrow {
+insert_visitor::insert_visitor(::arrow::RecordBatchBuilder& b) : builder(&b) {
+  // nop
+}
+
+void insert_visitor::operator()(const record_type t,
+                                const std::vector<data> d) {
+  auto structBuilder = builder->GetFieldAs<::arrow::StructBuilder>(0);
+  auto stringBuilder =
+    static_cast<::arrow::StringBuilder*>(structBuilder->field_builder(1));
+  stringBuilder->Append(get<std::string>(d.at(1)));
+  stringBuilder =
+    static_cast<::arrow::StringBuilder*>(structBuilder->field_builder(3));
+  stringBuilder->Append(get<std::string>(d.at(3)));
+  auto nullBuilder =
+    static_cast<::arrow::NullBuilder*>(structBuilder->field_builder(4));
+  nullBuilder->AppendNull();
+  stringBuilder =
+    static_cast<::arrow::StringBuilder*>(structBuilder->field_builder(8));
+  if (is<std::string>(d.at(8))) {
+    //stringBuilder->Append(std::string(get<std::string>(d.at(8))));
+  } else {
+    stringBuilder->AppendNull();
+  }
+  for (int  e = 0; e < d.size(); e++) {
+    std::cout << to_string(d.at(e)) << " " << structBuilder->field_builder(e)->type()->name() << std::endl;
+
+  }
+
+  std::cout << d.size() << std::endl;
+}
+
+void insert_visitor::operator()(const string_type t, const data d) {
+  // auto stringBuilder = builder->GetFieldAs<::arrow::StringBuilder>(0);
+  // auto status = stringBuilder->Append(d);
+  // std::cout << status.message() << "sdsd" << std::endl;
+}
 
 writer::writer(const std::string& plasma_socket) {
   VAST_DEBUG(name(), "connects to plasma store at", plasma_socket);
-  auto status
-    = plasma_client_.Connect(plasma_socket, "", PLASMA_DEFAULT_RELEASE_DELAY);
+  auto status =
+    plasma_client_.Connect(plasma_socket, "", PLASMA_DEFAULT_RELEASE_DELAY);
   connected_ = status.ok();
   if (!connected())
     VAST_ERROR(name(), "failed to connect to plasma store", status.ToString());
@@ -252,7 +184,7 @@ expected<void> writer::flush() {
 
 const char* writer::name() const {
   return "arrow-writer";
-  }
+}
 
 bool writer::connected() const {
   return connected_;
@@ -261,11 +193,12 @@ bool writer::connected() const {
 expected<plasma::ObjectID> writer::make_object(const void* data, size_t size) {
   auto oid = plasma::ObjectID::from_random();
   std::shared_ptr<Buffer> buffer;
-  auto status = plasma_client_.Create(oid, static_cast<int64_t>(size), nullptr, 0, &buffer);
+  auto status =
+    plasma_client_.Create(oid, static_cast<int64_t>(size), nullptr, 0, &buffer);
   if (!status.ok())
     return make_error(ec::format_error, "failed to create object",
                       status.ToString());
-  std::memcpy(buffer->mutable_data(), reinterpret_cast<const char*>(data), size);
+  std::memcpy(buffer->mutable_data(), data, size);
   status = plasma_client_.Seal(oid);
   if (!status.ok())
     return make_error(ec::format_error, "failed to create object",
