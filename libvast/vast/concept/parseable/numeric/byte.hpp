@@ -115,12 +115,14 @@ struct byte_parser : parser<byte_parser<T, Policy, Bytes>> {
     }
 };
 
-template <size_t N>
-struct bytes_parser : parser<bytes_parser<N>> {
-  using attribute = std::array<uint8_t, N>;
+template <size_t N, class T = uint8_t>
+struct static_bytes_parser : parser<static_bytes_parser<N>> {
+  static_assert(sizeof(T) == 1, "byte type T must have size 1");
 
-  template <class Iterator>
-  bool parse(Iterator& f, const Iterator& l, std::array<uint8_t, N>& x) const {
+  using attribute = std::array<T, N>;
+
+  template <typename Iterator>
+  bool parse(Iterator& f, const Iterator& l, std::array<T, N>& x) const {
     auto save = f;
     for (auto i = 0u; i < N; i++) {
       if (save == l)
@@ -130,6 +132,31 @@ struct bytes_parser : parser<bytes_parser<N>> {
     f = save;
     return true;
   }
+};
+
+template <class N = size_t, class T = uint8_t>
+struct dynamic_bytes_parser : parser<dynamic_bytes_parser<N, T>> {
+  static_assert(sizeof(T) == 1, "byte type T must have size 1");
+
+  using attribute = std::vector<T>;
+
+  dynamic_bytes_parser(const N& n) : n_{n} {
+  }
+
+  template <class Iterator, class Attribute>
+  bool parse(Iterator& f, const Iterator& l, Attribute& xs) const {
+    auto save = f;
+    auto out = std::back_inserter(xs);
+    for (auto i = N{0}; i < n_; i++) {
+      if (save == l)
+        return false;
+      *out++ = *save++ & 0xFF;
+    }
+    f = save;
+    return true;
+  }
+
+  const N& n_;
 };
 
 namespace parsers {
@@ -142,8 +169,13 @@ auto const b16le = byte_parser<uint16_t, policy::little_endian>{};
 auto const b32le = byte_parser<uint32_t, policy::little_endian>{};
 auto const b64le = byte_parser<uint64_t, policy::little_endian>{};
 
-template <size_t N>
-auto const bytes = bytes_parser<N>{};
+template <size_t N, class T = uint8_t>
+auto const bytes = static_bytes_parser<N, T>{};
+
+template <class T, class N>
+auto nbytes(const N& n) {
+  return dynamic_bytes_parser<N, T>{n};
+}
 
 } // namespace parsers
 } // namespace vast
