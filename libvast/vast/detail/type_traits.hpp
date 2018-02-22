@@ -112,11 +112,17 @@ using disable_if_same = disable_if_t<std::is_same<T, U>::value, R>;
 
 // -- traits -----------------------------------------------------------------
 
-template <class T, class...Ts>
+template <class T, class... Ts>
 struct is_any : std::bool_constant<(std::is_same_v<T, Ts> || ...)> {};
 
 template <class T, class... Ts>
+inline constexpr bool is_any_v = is_any<T, Ts...>::value;
+
+template <class T, class... Ts>
 struct are_same : std::bool_constant<(std::is_same_v<T, Ts> && ...)> {};
+
+template <class T, class... Ts>
+inline constexpr bool are_same_v = is_any<T, Ts...>::value;
 
 // -- tuple ------------------------------------------------------------------
 
