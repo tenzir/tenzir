@@ -7,86 +7,14 @@ namespace vast {
 namespace format {
 namespace mrt {
 
-namespace table_dump_v2 {
-
-type peer_entry_type = record_type{{
-  {"index", count_type{}},
-  {"bgp_id", count_type{}},
-  {"ip_address", address_type{}},
-  {"as", count_type{}},
-}}.name("mrt::table_dump_v2::peer_entry");
-
-type rib_entry_type = record_type{{
-  {"peer_index", count_type{}},
-  {"prefix", subnet_type{}},
-  {"as_path", vector_type{count_type{}}},
-  {"origin_as", count_type{}},
-  {"origin", string_type{}.attributes({{"skip"}})},
-  {"nexthop", address_type{}},
-  {"local_pref", count_type{}},
-  {"med", count_type{}},
-  {"community", vector_type{count_type{}}},
-  {"atomic_aggregate", boolean_type{}},
-  {"aggregator_as", count_type{}},
-  {"aggregator_ip", address_type{}},
-}}.name("mrt::table_dump_v2::rib_entry");
-
-} // namespace table_dump_v2
-
-namespace bgp4mp {
-
-type open_type = record_type{{
-  {"version", count_type{}},
-  {"my_autonomous_system", count_type{}},
-  {"hold_time", count_type{}},
-  {"bgp_identifier", count_type{}},
-}}.name("mrt::bgp4mp::open");
-
-type update_announcement_type = record_type{{
-  {"source_ip", address_type{}},
-  {"source_as", count_type{}},
-  {"prefix", subnet_type{}},
-  {"as_path", vector_type{count_type{}}},
-  {"origin_as", count_type{}},
-  {"origin", string_type{}.attributes({{"skip"}})},
-  {"nexthop", address_type{}},
-  {"local_pref", count_type{}},
-  {"med", count_type{}},
-  {"community", vector_type{count_type{}}},
-  {"atomic_aggregate", boolean_type{}},
-  {"aggregator_as", count_type{}},
-  {"aggregator_ip", address_type{}},
-}}.name("mrt::bgp4mp::update::announcement");
-
-type update_withdraw_type = record_type{{
-  {"source_ip", address_type{}},
-  {"source_as", count_type{}},
-  {"prefix", subnet_type{}},
-}}.name("mrt::bgp4mp::update::withdrawn");
-
-type notification_type = record_type{{
-  {"error_code", count_type{}},
-  {"error_subcode", count_type{}},
-}}.name("mrt::bgp4mp::notification");
-
-type keepalive_type = record_type{}.name("mrt::bgp4mp::keepalive");
-
-type state_change_type = record_type{{
-  {"source_ip", address_type{}},
-  {"source_as", count_type{}},
-  {"old_state", count_type{}},
-  {"new_state", count_type{}},
-}}.name("mrt::bgp4mp::state_change");
-
-} // namespace bgp4mp
-
 namespace {
 
 struct factory {
-  factory(std::queue<event>& events, uint32_t timestamp) : events_(events) {
-    std::chrono::duration<uint32_t> since_epoch{timestamp};
-    timestamp_ = vast::timestamp{
-      std::chrono::duration_cast<timespan>(since_epoch)};
+  factory(std::queue<event>& events, const reader::types& types, uint32_t ts)
+    : events_{events}, types_{types} {
+    using namespace std::chrono;
+    auto since_epoch = duration<uint32_t>{ts};
+    timestamp_ = timestamp{duration_cast<timespan>(since_epoch)};
   }
 
   void operator()(none) const {
@@ -100,7 +28,7 @@ struct factory {
                x.peer_entries[i].peer_bgp_id,
                x.peer_entries[i].peer_ip_address,
                x.peer_entries[i].peer_as},
-        table_dump_v2::peer_entry_type
+        types_.table_dump_v2_peer_entry_type
       }};
       e.timestamp(timestamp_);
       events_.push(e);
@@ -125,7 +53,7 @@ struct factory {
       event e{{
         vector{x.entries[i].peer_index,
                x.header.prefix[0],
-               as_path,
+               std::move(as_path),
                origin_as,
                x.entries[i].bgp_attributes.origin,
                x.entries[i].bgp_attributes.next_hop,
@@ -135,7 +63,7 @@ struct factory {
                x.entries[i].bgp_attributes.atomic_aggregate,
                x.entries[i].bgp_attributes.aggregator_as,
                x.entries[i].bgp_attributes.aggregator_ip},
-        table_dump_v2::rib_entry_type
+        types_.table_dump_v2_rib_entry_type
       }};
       e.timestamp(timestamp_);
       events_.push(e);
@@ -148,108 +76,104 @@ struct factory {
              x.peer_as_number,
              x.old_state,
              x.new_state},
-      bgp4mp::state_change_type
+      types_.bgp4mp_state_change_type
     }};
     e.timestamp(timestamp_);
     events_.push(e);
   }
 
   void operator()(bgp4mp::message& x) {
-    if(is<bgp::open>(x.message.message)) {
-      auto open = get<bgp::open>(x.message.message);
+    if (auto open = get_if<bgp::open>(x.message.message)) {
       event e{{
-        vector{open.version,
-               open.my_autonomous_system,
-               open.hold_time,
-               open.bgp_identifier},
-        bgp4mp::open_type
+        vector{open->version,
+               open->my_autonomous_system,
+               open->hold_time,
+               open->bgp_identifier},
+        types_.bgp4mp_open_type
       }};
       e.timestamp(timestamp_);
       events_.push(e);
-    }
-    if(is<bgp::update>(x.message.message)) {
-      auto update = get<bgp::update>(x.message.message);
+    } else if (auto update = get_if<bgp::update>(x.message.message)) {
       std::vector<vast::data> as_path;
       count origin_as;
-      for (auto i = 0u; i < update.path_attributes.as_path.size(); i++) {
-        origin_as = update.path_attributes.as_path[i];
+      for (auto i = 0u; i < update->path_attributes.as_path.size(); i++) {
+        origin_as = update->path_attributes.as_path[i];
         as_path.push_back(origin_as);
       }
       std::vector<vast::data> communities;
       count community;
-      for (auto i = 0u; i < update.path_attributes.communities.size(); i++) {
-        community = update.path_attributes.communities[i];
+      for (auto i = 0u; i < update->path_attributes.communities.size(); i++) {
+        community = update->path_attributes.communities[i];
         communities.push_back(community);
       }
-      for (auto i = 0u; i < update.withdrawn_routes.size(); i++) {
+      for (auto i = 0u; i < update->withdrawn_routes.size(); i++) {
         event e{{
           vector{x.peer_ip_address,
                  x.peer_as_number,
-                 update.withdrawn_routes[i]},
-          bgp4mp::update_withdraw_type
+                 update->withdrawn_routes[i]},
+          types_.bgp4mp_update_withdraw_type
         }};
         e.timestamp(timestamp_);
         events_.push(e);
       }
-      for (auto i = 0u; i < update.path_attributes.mp_reach_nlri.size(); i++) {
+      for (auto i = 0u; i < update->path_attributes.mp_reach_nlri.size(); i++) {
         event e{{
           vector{x.peer_ip_address,
                  x.peer_as_number,
-                 update.path_attributes.mp_reach_nlri[i],
+                 update->path_attributes.mp_reach_nlri[i],
                  as_path,
                  origin_as,
-                 update.path_attributes.origin,
-                 update.path_attributes.next_hop,
-                 update.path_attributes.local_pref,
-                 update.path_attributes.multi_exit_disc,
+                 update->path_attributes.origin,
+                 update->path_attributes.next_hop,
+                 update->path_attributes.local_pref,
+                 update->path_attributes.multi_exit_disc,
                  communities,
-                 update.path_attributes.atomic_aggregate,
-                 update.path_attributes.aggregator_as,
-                 update.path_attributes.aggregator_ip},
-          bgp4mp::update_announcement_type
+                 update->path_attributes.atomic_aggregate,
+                 update->path_attributes.aggregator_as,
+                 update->path_attributes.aggregator_ip},
+          types_.bgp4mp_update_announcement_type
         }};
         e.timestamp(timestamp_);
         events_.push(e);
       }
-      for (auto i = 0u; i < update.path_attributes.mp_unreach_nlri.size();
+      for (auto i = 0u; i < update->path_attributes.mp_unreach_nlri.size();
            i++) {
         event e{{
           vector{x.peer_ip_address,
                  x.peer_as_number,
-                 update.path_attributes.mp_unreach_nlri[i]},
-          bgp4mp::update_withdraw_type
+                 update->path_attributes.mp_unreach_nlri[i]},
+          types_.bgp4mp_update_withdraw_type
         }};
         e.timestamp(timestamp_);
         events_.push(e);
       }
       for (auto i = 0u;
-           i < update.network_layer_reachability_information.size(); i++) {
+           i < update->network_layer_reachability_information.size(); i++) {
         event e{{
           vector{x.peer_ip_address,
                  x.peer_as_number,
-                 update.network_layer_reachability_information[i],
+                 update->network_layer_reachability_information[i],
                  as_path,
                  origin_as,
-                 update.path_attributes.origin,
-                 update.path_attributes.next_hop,
-                 update.path_attributes.local_pref,
-                 update.path_attributes.multi_exit_disc,
+                 update->path_attributes.origin,
+                 update->path_attributes.next_hop,
+                 update->path_attributes.local_pref,
+                 update->path_attributes.multi_exit_disc,
                  communities,
-                 update.path_attributes.atomic_aggregate,
-                 update.path_attributes.aggregator_as,
-                 update.path_attributes.aggregator_ip},
-          bgp4mp::update_announcement_type
+                 update->path_attributes.atomic_aggregate,
+                 update->path_attributes.aggregator_as,
+                 update->path_attributes.aggregator_ip},
+          types_.bgp4mp_update_announcement_type
         }};
         e.timestamp(timestamp_);
         events_.push(e);
       }
-    }
-    if(is<bgp::notification>(x.message.message)) {
-      auto notification = get<bgp::notification>(x.message.message);
+    } else if (auto notification =
+               get_if<bgp::notification>(x.message.message)) {
       event e{{
-        vector{notification.error_code,
-               notification.error_subcode},
-        bgp4mp::notification_type
+        vector{notification->error_code,
+               notification->error_subcode},
+        types_.bgp4mp_notification_type
       }};
       e.timestamp(timestamp_);
       events_.push(e);
@@ -257,101 +181,97 @@ struct factory {
   }
 
   void operator()(bgp4mp::message_as4& x) {
-    if(is<bgp::open>(x.message.message)) {
-      auto open = get<bgp::open>(x.message.message);
+    if (auto open = get_if<bgp::open>(x.message.message)) {
       event e{{
-        vector{open.version,
-               open.my_autonomous_system,
-               open.hold_time,
-               open.bgp_identifier},
-        bgp4mp::open_type
+        vector{open->version,
+               open->my_autonomous_system,
+               open->hold_time,
+               open->bgp_identifier},
+        types_.bgp4mp_open_type
       }};
       e.timestamp(timestamp_);
       events_.push(e);
-    }
-    if(is<bgp::update>(x.message.message)) {
-      auto update = get<bgp::update>(x.message.message);
+    } else if (auto update = get_if<bgp::update>(x.message.message)) {
       std::vector<vast::data> as_path;
       count origin_as;
-      for (auto i = 0u; i < update.path_attributes.as_path.size(); i++) {
-        origin_as = update.path_attributes.as_path[i];
+      for (auto i = 0u; i < update->path_attributes.as_path.size(); i++) {
+        origin_as = update->path_attributes.as_path[i];
         as_path.push_back(origin_as);
       }
       std::vector<vast::data> communities;
       count community;
-      for (auto i = 0u; i < update.path_attributes.communities.size(); i++) {
-        community = update.path_attributes.communities[i];
+      for (auto i = 0u; i < update->path_attributes.communities.size(); i++) {
+        community = update->path_attributes.communities[i];
         communities.push_back(community);
       }
-      for (auto i = 0u; i < update.withdrawn_routes.size(); i++) {
+      for (auto i = 0u; i < update->withdrawn_routes.size(); i++) {
         event e{{
           vector{x.peer_ip_address,
                  x.peer_as_number,
-                 update.withdrawn_routes[i]},
-          bgp4mp::update_withdraw_type
+                 update->withdrawn_routes[i]},
+          types_.bgp4mp_update_withdraw_type
         }};
         e.timestamp(timestamp_);
         events_.push(e);
       }
-      for (auto i = 0u; i < update.path_attributes.mp_reach_nlri.size(); i++) {
+      for (auto i = 0u; i < update->path_attributes.mp_reach_nlri.size(); i++) {
         event e{{
           vector{x.peer_ip_address,
                  x.peer_as_number,
-                 update.path_attributes.mp_reach_nlri[i],
+                 update->path_attributes.mp_reach_nlri[i],
                  as_path,
                  origin_as,
-                 update.path_attributes.origin,
-                 update.path_attributes.next_hop,
-                 update.path_attributes.local_pref,
-                 update.path_attributes.multi_exit_disc,
+                 update->path_attributes.origin,
+                 update->path_attributes.next_hop,
+                 update->path_attributes.local_pref,
+                 update->path_attributes.multi_exit_disc,
                  communities,
-                 update.path_attributes.atomic_aggregate,
-                 update.path_attributes.aggregator_as,
-                 update.path_attributes.aggregator_ip},
-          bgp4mp::update_announcement_type
+                 update->path_attributes.atomic_aggregate,
+                 update->path_attributes.aggregator_as,
+                 update->path_attributes.aggregator_ip},
+          types_.bgp4mp_update_announcement_type
         }};
         e.timestamp(timestamp_);
         events_.push(e);
       }
-      for (auto i = 0u; i < update.path_attributes.mp_unreach_nlri.size();
+      for (auto i = 0u; i < update->path_attributes.mp_unreach_nlri.size();
            i++) {
         event e{{
           vector{x.peer_ip_address,
                  x.peer_as_number,
-                 update.path_attributes.mp_unreach_nlri[i]},
-          bgp4mp::update_withdraw_type
+                 update->path_attributes.mp_unreach_nlri[i]},
+          types_.bgp4mp_update_withdraw_type
         }};
         e.timestamp(timestamp_);
         events_.push(e);
       }
       for (auto i = 0u;
-           i < update.network_layer_reachability_information.size(); i++) {
+           i < update->network_layer_reachability_information.size(); i++) {
         event e{{
           vector{x.peer_ip_address,
                  x.peer_as_number,
-                 update.network_layer_reachability_information[i],
+                 update->network_layer_reachability_information[i],
                  as_path,
                  origin_as,
-                 update.path_attributes.origin,
-                 update.path_attributes.next_hop,
-                 update.path_attributes.local_pref,
-                 update.path_attributes.multi_exit_disc,
+                 update->path_attributes.origin,
+                 update->path_attributes.next_hop,
+                 update->path_attributes.local_pref,
+                 update->path_attributes.multi_exit_disc,
                  communities,
-                 update.path_attributes.atomic_aggregate,
-                 update.path_attributes.aggregator_as,
-                 update.path_attributes.aggregator_ip},
-          bgp4mp::update_announcement_type
+                 update->path_attributes.atomic_aggregate,
+                 update->path_attributes.aggregator_as,
+                 update->path_attributes.aggregator_ip},
+          types_.bgp4mp_update_announcement_type
         }};
         e.timestamp(timestamp_);
         events_.push(e);
       }
-    }
-    if(is<bgp::notification>(x.message.message)) {
-      auto notification = get<bgp::notification>(x.message.message);
+    } else if (auto notification =
+               get_if<bgp::notification>(x.message.message)) {
       event e{{
-        vector{notification.error_code,
-               notification.error_subcode},
-        bgp4mp::notification_type
+        vector{notification->error_code,
+               notification->error_subcode},
+        types_.bgp4mp_notification_type
       }};
       e.timestamp(timestamp_);
       events_.push(e);
@@ -364,7 +284,7 @@ struct factory {
              x.peer_as_number,
              x.old_state,
              x.new_state},
-      bgp4mp::state_change_type
+      types_.bgp4mp_state_change_type
     }};
     e.timestamp(timestamp_);
     events_.push(e);
@@ -372,12 +292,71 @@ struct factory {
 
   std::queue<event>& events_;
   vast::timestamp timestamp_;
+  reader::types types_;
 };
 
 } // namespace anonymous
 
 reader::reader(std::unique_ptr<std::istream> input) : input_{std::move(input)} {
   VAST_ASSERT(input_);
+  types_.table_dump_v2_peer_entry_type = record_type{{
+    {"index", count_type{}},
+    {"bgp_id", count_type{}},
+    {"ip_address", address_type{}},
+    {"as", count_type{}},
+  }}.name("mrt::table_dump_v2::peer_entry");
+  types_.table_dump_v2_rib_entry_type = record_type{{
+    {"peer_index", count_type{}},
+    {"prefix", subnet_type{}},
+    {"as_path", vector_type{count_type{}}},
+    {"origin_as", count_type{}},
+    {"origin", string_type{}.attributes({{"skip"}})},
+    {"nexthop", address_type{}},
+    {"local_pref", count_type{}},
+    {"med", count_type{}},
+    {"community", vector_type{count_type{}}},
+    {"atomic_aggregate", boolean_type{}},
+    {"aggregator_as", count_type{}},
+    {"aggregator_ip", address_type{}},
+  }}.name("mrt::table_dump_v2::rib_entry");
+  types_.bgp4mp_open_type = record_type{{
+    {"version", count_type{}},
+    {"my_autonomous_system", count_type{}},
+    {"hold_time", count_type{}},
+    {"bgp_identifier", count_type{}},
+  }}.name("mrt::bgp4mp::open");
+  types_.bgp4mp_update_announcement_type = record_type{{
+    {"source_ip", address_type{}},
+    {"source_as", count_type{}},
+    {"prefix", subnet_type{}},
+    {"as_path", vector_type{count_type{}}},
+    {"origin_as", count_type{}},
+    {"origin", string_type{}.attributes({{"skip"}})},
+    {"nexthop", address_type{}},
+    {"local_pref", count_type{}},
+    {"med", count_type{}},
+    {"community", vector_type{count_type{}}},
+    {"atomic_aggregate", boolean_type{}},
+    {"aggregator_as", count_type{}},
+    {"aggregator_ip", address_type{}},
+  }}.name("mrt::bgp4mp::update::announcement");
+  types_.bgp4mp_update_withdraw_type = record_type{{
+    {"source_ip", address_type{}},
+    {"source_as", count_type{}},
+    {"prefix", subnet_type{}},
+  }}.name("mrt::bgp4mp::update::withdrawn");
+  types_.bgp4mp_notification_type = record_type{{
+    {"error_code", count_type{}},
+    {"error_subcode", count_type{}},
+  }}.name("mrt::bgp4mp::notification");
+  types_.bgp4mp_keepalive_type = record_type{
+  }.name("mrt::bgp4mp::keepalive");
+  types_.bgp4mp_state_change_type = record_type{{
+    {"source_ip", address_type{}},
+    {"source_as", count_type{}},
+    {"old_state", count_type{}},
+    {"new_state", count_type{}},
+  }}.name("mrt::bgp4mp::state_change");
 }
 
 expected<event> reader::read() {
@@ -411,7 +390,7 @@ expected<event> reader::read() {
     return make_error(ec::format_error, "failed to parse MRT message");
   // Convert
   // Take the timestamp from the Common Header as event time.
-  visit(factory{events_, r.header.timestamp}, r.message);
+  visit(factory{events_, types_, r.header.timestamp}, r.message);
   if (!events_.empty()) {
     auto x = std::move(events_.front());
     events_.pop();
@@ -421,36 +400,29 @@ expected<event> reader::read() {
 }
 
 expected<void> reader::schema(vast::schema const& sch) {
-  auto types = {
-    &table_dump_v2::peer_entry_type,
-    &table_dump_v2::rib_entry_type,
-    &bgp4mp::update_announcement_type,
-    &bgp4mp::update_withdraw_type,
-    &bgp4mp::state_change_type,
-    &bgp4mp::open_type,
-    &bgp4mp::notification_type,
-    &bgp4mp::keepalive_type,
+  auto xs = {
+    &types_.table_dump_v2_peer_entry_type,
+    &types_.table_dump_v2_rib_entry_type,
+    &types_.bgp4mp_update_announcement_type,
+    &types_.bgp4mp_update_withdraw_type,
+    &types_.bgp4mp_state_change_type,
+    &types_.bgp4mp_open_type,
+    &types_.bgp4mp_notification_type,
+    &types_.bgp4mp_keepalive_type,
   };
-  for (auto t : types)
-    if (auto u = sch.find(t->name())) {
-      if (!congruent(*t, *u))
-        return make_error(ec::format_error, "incongruent type:", t->name());
-      else
-        *t = *u;
-    }
-  return {};
+  return replace_if_congruent(xs, sch);
 }
 
 expected<vast::schema> reader::schema() const {
   vast::schema sch;
-  sch.add(table_dump_v2::peer_entry_type);
-  sch.add(table_dump_v2::rib_entry_type);
-  sch.add(bgp4mp::update_announcement_type);
-  sch.add(bgp4mp::update_withdraw_type);
-  sch.add(bgp4mp::state_change_type);
-  sch.add(bgp4mp::open_type);
-  sch.add(bgp4mp::notification_type);
-  sch.add(bgp4mp::keepalive_type);
+  sch.add(types_.table_dump_v2_peer_entry_type);
+  sch.add(types_.table_dump_v2_rib_entry_type);
+  sch.add(types_.bgp4mp_update_announcement_type);
+  sch.add(types_.bgp4mp_update_withdraw_type);
+  sch.add(types_.bgp4mp_state_change_type);
+  sch.add(types_.bgp4mp_open_type);
+  sch.add(types_.bgp4mp_notification_type);
+  sch.add(types_.bgp4mp_keepalive_type);
   return sch;
 }
 

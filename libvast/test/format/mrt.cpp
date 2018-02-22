@@ -63,7 +63,7 @@ TEST(MRT) {
   subn = get_if<subnet>(record->at(2));
   CHECK_EQUAL(*subn, *to<subnet>("2a00:bdc0:e003::/48"));
   auto as_path = get_if<vector>(record->at(3));
-  CHECK_EQUAL(as_path->size(), 4);
+  CHECK_EQUAL(as_path->size(), 4u);
   CHECK_EQUAL(as_path->at(0), count{1836});
   CHECK_EQUAL(as_path->at(1), count{6939});
   CHECK_EQUAL(as_path->at(2), count{47541});

@@ -22,23 +22,36 @@
 #include "vast/concept/parseable/vast/data.hpp"
 
 namespace vast {
+
+namespace policy {
+
+struct mrt;
+struct bgp;
+
+} // namespace policy
+
+namespace detail {
+
+template <class F>
+auto make_ip_v4_v6_parser(F f) {
+  using namespace parsers;
+  auto v4 = [](uint32_t a) { return address::v4(&a); };
+  auto v6 = [](std::array<uint8_t, 16> a) {
+    return address::v6(a.data(), address::network);
+  };
+  return (b32be->*v4).when(f) | (bytes<16>->*v6);
+}
+
+} // namespace detail
+
 namespace format {
-namespace mrt {
 
-// -- RFC 4271 ----------------------------------------------------------------
-
-/// This namespace includes BGP types as defined in [RFC
-/// 4271](https://tools.ietf.org/html/rfc4271).
+/// This namespace includes a subset of the BGP types defined in [RFC
+/// 4271](https://tools.ietf.org/html/rfc4271). VAST supports BGP indirectly
+/// via the [MRT](@ref mrt) format, which can encapsulate any type of BGP
+/// message.
 namespace bgp {
 
-/// BGP messages are sent over TCP connections.  A message is processed only
-/// after it is entirely received.  The maximum message size is 4096 octets.
-/// All implementations are required to support this maximum message size.  The
-/// smallest message that may be sent consists of a BGP header without a data
-/// portion (19 octets).
-///
-/// All multi-octet fields are in network byte order.
-///
 /// Each message has a fixed-size header.  There may or may not be a data
 /// portion following the header, depending on the message type.  The layout of
 /// these fields is shown below:
@@ -84,22 +97,23 @@ namespace bgp {
 ///                         3 - NOTIFICATION
 ///                         4 - KEEPALIVE
 ///
-///    [RFC2918](...) defines one more type code.
+///    [RFC 2918](https://tools.ietf.org/html/rfc2918) defines one more type
+///    code.
 struct message_header {
   std::array<uint8_t, 16> marker;
   uint16_t length;
   uint8_t type;
 };
 
+/// @relates message_header
 enum types {
   OPEN = 1,
   UPDATE = 2,
   NOTIFICATION = 3,
-  KEEPALICE = 4,
+  KEEPALIVE = 4,
 };
 
-/// In addition to the fixed-size BGP header, the OPEN message contains
-/// the following fields:
+/// An OPEN message contains the following fields:
 ///
 ///       0                   1                   2                   3
 ///       0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -119,6 +133,7 @@ enum types {
 ///       |                                                               |
 ///       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 ///
+/// @relates types
 struct open {
   uint8_t version;
   uint16_t my_autonomous_system;
@@ -128,6 +143,7 @@ struct open {
   // optional_parameters
 };
 
+/// BGP Path attributes
 struct attributes {
   std::string origin;
   std::vector<uint32_t> as_path;
@@ -142,13 +158,13 @@ struct attributes {
   std::vector<subnet> mp_unreach_nlri;
 };
 
-///   An UPDATE message is used to advertise feasible routes that share
-///   common path attributes to a peer, or to withdraw multiple unfeasible
-///   routes from service (see 3.1).  An UPDATE message MAY simultaneously
-///   advertise a feasible route and withdraw multiple unfeasible routes
-///   from service.  The UPDATE message always includes the fixed-size BGP
-///   header, and also includes the other fields, as shown below (note,
-///   some of the shown fields may not be present in every UPDATE message):
+/// An UPDATE message. This message is used to advertise feasible routes that
+/// share common path attributes to a peer, or to withdraw multiple unfeasible
+/// routes from service (see 3.1).  An UPDATE message MAY simultaneously
+/// advertise a feasible route and withdraw multiple unfeasible routes from
+/// service.  The UPDATE message always includes the fixed-size BGP header, and
+/// also includes the other fields, as shown below (note, some of the shown
+/// fields may not be present in every UPDATE message):
 ///
 ///      +-----------------------------------------------------+
 ///      |   Withdrawn Routes Length (2 octets)                |
@@ -162,6 +178,7 @@ struct attributes {
 ///      |   Network Layer Reachability Information (variable) |
 ///      +-----------------------------------------------------+
 ///
+/// @relates types
 struct update {
   uint16_t withdrawn_routes_length;
   std::vector<subnet> withdrawn_routes;
@@ -170,8 +187,8 @@ struct update {
   std::vector<subnet> network_layer_reachability_information;
 };
 
-/// In addition to the fixed-size BGP header, the NOTIFICATION message
-/// contains the following fields:
+/// A NOTIFICATION message. In addition to the fixed-size BGP header, the
+/// NOTIFICATION message contains the following fields:
 ///
 ///      0                   1                   2                   3
 ///      0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -179,33 +196,358 @@ struct update {
 ///      | Error code    | Error subcode |   Data (variable)             |
 ///      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 ///
+/// @relates types
 struct notification {
   uint8_t error_code;
   uint8_t error_subcode;
-  // data
+  std::string data;
 };
 
-/// A KEEPALIVE message consists of only the message header and has a
-/// length of 19 octets.
-struct keepalive;
-
+/// The main unit of the protocol. Every BGP message has a header and a maximum
+/// size of 4096 bytes. The smallest message that may be sent consists of a BGP
+/// header without a data portion (19 octets).
+/// @relates message_header types
 struct message {
   message_header header;
-  variant<
-    none,
-    open,
-    update,
-    notification
-  > message;
+  variant<none, open, update, notification> message;
+};
+
+// Helper functions to parse attributes.
+
+// Helper that parses a subnet in the form of a prefix plus the number of
+// bytes.
+template <class N>
+struct prefix_parser : parser<prefix_parser<N>> {
+  using attribute = std::vector<subnet>;
+
+  prefix_parser(const N& n, address::family f) : bytes{n}, family{f} {
+    // nop
+  }
+
+  template <class Iterator>
+  bool parse(Iterator& f, const Iterator& l, std::vector<subnet>& xs) const {
+    for (auto n = N{0}; n < bytes;) {
+      uint8_t prefix_length;
+      uint8_t prefix_bytes;
+      auto pfx_len = parsers::byte->*[&] {
+        prefix_bytes = prefix_length / 8;
+        if (prefix_length % 8 != 0)
+          ++prefix_bytes;
+      };
+      std::array<uint8_t, 16> addr_bytes;
+      auto addr = parsers::nbytes<uint8_t>(prefix_bytes)->*[&] {
+        xs.emplace_back(address{addr_bytes.data(), family, address::network},
+                        prefix_length);
+      };
+      if (!(pfx_len >> addr)(f, l, prefix_length, addr_bytes))
+        return false;
+      n += sizeof(uint8_t) + prefix_bytes;
+    }
+    return true;
+  }
+
+  const N& bytes;
+  address::family family;
+};
+
+/// @relates attributes
+template <class TypeCode14Policy>
+struct attributes_parser : parser<attributes_parser<TypeCode14Policy>> {
+  using attribute = attributes;
+
+  attributes_parser(const uint16_t& n, const bool& as4, const bool& afi4)
+    : length{n}, as4{as4}, afi4{afi4} {
+    // nop
+  }
+
+  template <class Iterator>
+  bool parse(Iterator& f, const Iterator& l, attributes& x) const {
+    using namespace parsers;
+    for (auto i = 0; i < length; ) {
+      // Meta data.
+      uint8_t flags;
+      uint8_t type_code;
+      uint16_t attr_length;
+      auto is_extended_length = [&] { return (flags & 0b0001'0000) >> 4 == 1; };
+      auto u8to16 = byte ->* [](uint8_t x) { return uint16_t{x}; };
+      auto len = b16be.when(is_extended_length) | u8to16;
+      auto meta = byte >> byte >> len;
+      auto before = f;
+      if (!meta(f, l, flags, type_code, attr_length))
+        return false;
+      auto after = f;
+      auto meta_length = after - before;
+      i += meta_length + attr_length;
+      // Payload.
+      // TODO: It would be helpful to have a switch-case parser here so that we
+      // can use the combinator style to chain the parser together, as opposed
+      // to dispatching manually.
+      auto t = f;
+      switch (type_code) {
+        case 1: {
+          auto p = parsers::byte ->* [](uint8_t x) {
+            std::string result;
+            switch (x) {
+              case 0:
+                result = "IGP";
+                break;
+              case 1:
+                result = "EGP";
+                break;
+              case 2:
+                result = "INCOMPLETE";
+                break;
+            }
+            return result;
+          };
+          if (!p(t, l, x.origin))
+            return false;
+          break;
+        }
+        case 2: {
+          uint8_t path_segment_type = 0;
+          uint8_t path_segment_length = 0;
+          auto as16 = b16be ->* [](uint16_t x) { return uint32_t{x}; };
+          auto as32 = b32be;
+          auto as = as32.when([&] { return as4; }) | as16;
+          auto p = byte >> byte >> rep(as, path_segment_length);
+          if (!p(t, l, path_segment_type, path_segment_length, x.as_path))
+            return false;
+          break;
+        }
+        case 3: {
+          auto p = b32be ->* [](uint32_t x) { return address::v4(&x); };
+          if (!p(t, l, x.next_hop))
+            return false;
+          break;
+        }
+        case 4:
+          if (!b32be(t, l, x.multi_exit_disc))
+            return false;
+          break;
+        case 5:
+          if (!b32be(t, l, x.local_pref))
+            return false;
+          break;
+        case 6:
+          x.atomic_aggregate = true;
+          break;
+        case 7: {
+          auto as16 = b16be ->* [](uint16_t x) { return uint32_t{x}; };
+          auto as32 = b32be;
+          auto as = as32.when([&] { return as4; }) | as16;
+          auto ipv4 = b32be ->* [](uint32_t x) { return address::v4(&x); };
+          auto p = as >> ipv4;
+          if (!p(t, l, x.aggregator_as, x.aggregator_ip))
+            return false;
+          break;
+        }
+        case 8: {
+          auto community = b32be ->* [](uint32_t x) { return uint64_t{x}; };
+          auto n = attr_length / 4; // n := number of 32-bit values.
+          auto p = rep(community, n);
+          if (!p(t, l, x.communities))
+            return false;
+          break;
+        }
+        case 14: {
+          if constexpr (std::is_same_v<TypeCode14Policy, policy::mrt>) {
+            // BGP type code 14 has a different format in MRT,
+            // per RFC6396 §4.3.4:
+            //
+            // There is one exception to the encoding of BGP attributes for the
+            // BGP MP_REACH_NLRI attribute (BGP Type Code 14) [RFC4760].  Since
+            // the AFI, SAFI, and NLRI information is already encoded in the
+            // RIB Entry Header or RIB_GENERIC Entry Header, only the Next Hop
+            // Address Length and Next Hop Address fields are included.  The
+            // Reserved field is omitted. The attribute length is also adjusted
+            // to reflect only the length of the Next Hop Address Length and
+            // Next Hop Address fields.
+            uint8_t next_hop_network_address_length = 0;
+            if (!byte(t, l, next_hop_network_address_length))
+              return false;
+            auto mp_next_hop
+              = detail::make_ip_v4_v6_parser([&] { return afi4; });
+            if (!mp_next_hop(t, l, x.next_hop))
+              return false;
+          } else if (std::is_same_v<TypeCode14Policy, policy::bgp>) {
+            uint16_t addr_family_id = 0;
+            uint8_t subsequent_addr_family_id = 0;
+            uint8_t next_hop_addr_len = 0;
+            auto mp_next_hop = detail::make_ip_v4_v6_parser(
+              [&] { return addr_family_id == 1; }
+            ).then([&] {
+              // FIXME: Why do we have to perform a manual adjustment here?
+              auto offset = addr_family_id == 1 ? 4 : 16;
+              t += next_hop_addr_len - offset + 1;
+            });
+            auto p = b16be >> byte >> byte >> mp_next_hop;
+            if (!p(t, l, addr_family_id, subsequent_addr_family_id,
+                   next_hop_addr_len, x.next_hop))
+              return false;
+            // FIXME: Where does the magic constant '5' come from?
+            auto mp_nlri_length = attr_length - (5 + next_hop_addr_len);
+            auto field_len = static_cast<size_t>(mp_nlri_length);
+            auto family = addr_family_id == 1 ? address::ipv4 : address::ipv6;
+            if (!prefix_parser{field_len, family}(t, l, x.mp_reach_nlri))
+              return false;
+          } else {
+            static_assert(
+              detail::is_any_v<TypeCode14Policy, policy::bgp, policy::mrt>,
+              "invalid parser policy");
+          }
+          break;
+        }
+        case 15: {
+          uint16_t addr_family_id = 0;
+          uint8_t subsequent_addr_family_id = 0;
+          auto p = b16be >> byte;
+          if (!p(t, l, addr_family_id, subsequent_addr_family_id))
+            return false;
+          auto family = addr_family_id == 1 ? address::ipv4 : address::ipv6;
+          // FIXME: where does the magic number '3' come from?
+          // sizeof(addr_family_id) + sizeof(subsequent_addr_family_id)?
+          auto mp_nlri_length = attr_length - 3;
+          auto field_len = static_cast<size_t>(mp_nlri_length);
+          if (!prefix_parser{field_len, family}(t, l, x.mp_unreach_nlri))
+            return false;
+          break;
+        }
+        case 16: {
+          auto n = attr_length / 8; // n := number of 64-bit communities
+          auto p = rep(b64be, n);
+          if (!p(t, l, x.communities))
+            return false;
+          break;
+        }
+      }
+      f += attr_length;
+    }
+    return true;
+  }
+
+  const uint16_t& length;
+  const bool& as4;
+  const bool& afi4;
+};
+
+/// @relates message_header
+struct message_header_parser : parser<message_header_parser> {
+  using attribute = message_header;
+
+  template <class Iterator>
+  bool parse(Iterator& f, const Iterator& l, message_header& x) const {
+    using namespace parsers;
+    auto p = bytes<16> >> b16be >> byte;
+    return p(f, l, x.marker, x.length, x.type);
+  }
+};
+
+/// @relates open
+struct open_parser : parser<open_parser> {
+  using attribute = open;
+
+  template <class Iterator>
+  bool parse(Iterator& f, const Iterator& l, open& x) const {
+    using namespace parsers;
+    auto skip = [&] {
+      f += std::min(static_cast<size_t>(l - f),
+                    static_cast<size_t>(x.opt_parm_len));
+    };
+    auto p = (byte >> b16be >> b16be >> b32be >> byte)->*skip;
+    return p(f, l, x.version, x.my_autonomous_system, x.hold_time,
+             x.bgp_identifier, x.opt_parm_len);
+  }
+};
+
+/// @relates update
+struct update_parser : parser<update_parser> {
+  using attribute = update;
+
+  update_parser(const uint16_t& message_length, const bool& as4)
+    : message_length_{message_length}, as4{as4} {
+    // nop
+  }
+
+  template <class Iterator>
+  bool parse(Iterator& f, const Iterator& l, update& x) const {
+    using namespace parsers;
+    auto pfxs = prefix_parser{x.withdrawn_routes_length, address::ipv4};
+    auto afi4 = false;
+    auto attrs = attributes_parser<policy::bgp>{x.total_path_attribute_length,
+      as4, afi4};
+    auto nlri = eps.when([&] {
+      if (x.total_path_attribute_length == 0)
+        return true;
+      // FIXME: where does the constant '23' come from?
+      auto nlri_length = message_length_ - 23 - x.total_path_attribute_length
+                         - x.withdrawn_routes_length;
+      auto p = prefix_parser{nlri_length, address::ipv4};
+      return p(f, l, x.network_layer_reachability_information);
+    });
+    auto p = b16be >> pfxs >> b16be >> attrs >> nlri;
+    return p(f, l, x.withdrawn_routes_length, x.withdrawn_routes,
+             x.total_path_attribute_length, x.path_attributes);
+  }
+
+  const uint16_t& message_length_;
+  const bool& as4;
+};
+
+/// @relates notification
+struct notification_parser : parser<notification_parser> {
+  using attribute = notification;
+
+  template <class Iterator>
+  bool parse(Iterator& f, const Iterator& l, notification& x) const {
+    using namespace parsers;
+    auto skip = [&] { f += (l - f); };
+    auto p = (byte >> byte)->*skip;
+    return p(f, l, x.error_code, x.error_subcode);
+  }
+};
+
+/// @relates message
+struct message_parser : parser<message_parser> {
+  using attribute = message;
+
+  message_parser(const bool& as4) : as4_(as4) {
+    // nop
+  }
+
+  template <class Iterator>
+  bool parse(Iterator& f, const Iterator& l, message& x) const {
+    using namespace parsers;
+    auto open = open_parser{}.when([&] { return x.header.type == OPEN; });
+    auto update = update_parser{x.header.length, as4_}.when(
+      [&] { return x.header.type == UPDATE; });
+    auto notification = notification_parser{}.when(
+      [&] { return x.header.type == NOTIFICATION; });
+    auto skip = parsers::eps->*[&] {
+      static auto header_length = 16 + 2 + 1;
+      if (x.header.length < header_length || x.header.length > 4096)
+        throw std::runtime_error{"cannot parse RFC-violoating records"};
+      f += std::min(static_cast<size_t>(l - f),
+                    static_cast<size_t>(x.header.length - header_length));
+    };
+    auto msg = open | update | notification | skip;
+    auto p = message_header_parser{} >> msg;
+    return p(f, l, x.header, x.message);
+  }
+
+  const bool& as4_;
 };
 
 } // namespace bgp
 
+/// The Multi-Threaded Routing Toolkit (MRT) format, as defined in
+/// [RFC6396](https://tools.ietf.org/html/rfc6396).
+namespace mrt {
+
 // -- RFC 6396 (MRT) ----------------------------------------------------------
 
-/// [MRT Common Header](https://tools.ietf.org/html/rfc6396#section-2).
-///
-/// All MRT format records have a Common Header that consists of a Timestamp,
+/// The [MRT Common Header](https://tools.ietf.org/html/rfc6396#section-2).
+/// All MRT records have a Common Header that consists of a Timestamp,
 /// Type, Subtype, and Length field.  The header is followed by a Message
 /// field.  The MRT Common Header is illustrated below.
 ///
@@ -228,8 +570,7 @@ struct common_header {
   uint32_t length = 0;  ///< Number of bytes in message (excluding header)
 };
 
-/// [MRT Types](https://tools.ietf.org/html/rfc6396#section-4).
-///
+/// The [MRT Types](https://tools.ietf.org/html/rfc6396#section-4).
 /// The following MRT Types are currently defined for the MRT format. The MRT
 /// Types that contain the "_ET" suffix in their names identify those types
 /// that use an Extended Timestamp MRT Header.  The Subtype and Message fields
@@ -245,14 +586,6 @@ enum types {
   ISIS_ET = 33,
   OSPFv3 = 48,
   OSPFv3_ET = 49,
-};
-
-// TODO
-struct ospfv2 {
-};
-
-// TODO
-struct table_dump {
 };
 
 /// The TABLE_DUMP_V2 Type updates the TABLE_DUMP Type to include 4-byte
@@ -281,7 +614,7 @@ enum subtypes {
 
 struct rib_entry;
 
-/// RIB Entry Header.
+/// A RIB Entry Header.
 ///
 ///        0                   1                   2                   3
 ///        0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -302,7 +635,7 @@ struct rib_entry_header {
   std::vector<rib_entry> rib_entries;
 };
 
-/// RIB Entry. The RIB Entries are repeated Entry Count times.  These entries
+/// A RIB Entry. The RIB Entries are repeated Entry Count times.  These entries
 /// share a common format as shown below.  They include a Peer Index from the
 /// PEER_INDEX_TABLE MRT record, an originated time for the RIB Entry, and the
 /// BGP path attribute length and attributes.  All AS numbers in the AS_PATH
@@ -326,7 +659,7 @@ struct rib_entry {
   bgp::attributes bgp_attributes;
 };
 
-/// RIB_GENERIC Entry Header.
+/// The RIB_GENERIC Entry Header.
 ///
 ///        0                   1                   2                   3
 ///        0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -576,31 +909,7 @@ struct state_change_as4 {
   uint16_t new_state;
 };
 
-struct message_local {
-  // TODO
-};
-
-struct message_as4_local {
-  // TODO
-};
-
 } // namespace bgp4mp
-
-namespace isis {
-// TODO
-} // namespace isis
-
-namespace isis_et {
-// TODO
-} // namespace isis_et
-
-namespace ospfv3 {
-// TODO
-} // namespace ospfv3
-
-namespace ospfv3_et {
-// TODO
-} // namespace ospfv3_et
 
 // -- Parsers -----------------------------------------------------------------
 
@@ -615,466 +924,7 @@ struct common_header_parser : parser<common_header_parser> {
   }
 };
 
-namespace detail {
-
-template <class F>
-auto make_ip_v4_v6_parser(F f) {
-  using namespace parsers;
-  auto v4 = [](uint32_t a) { return address::v4(&a); };
-  // auto v6 = [](std::array<uint8_t, 16> a) { return address::v6(a.data()); };
-  auto v6 = [](std::array<uint8_t, 16> a) {
-    return address{a.data(), address::ipv6, address::network};
-  };
-  return (b32be ->* v4).when(f) | (bytes<16> ->* v6);
-}
-
-} // namespace detail
-
-namespace bgp {
-
-namespace detail {
-
-template <class Iterator>
-bool parse_prefix(Iterator& f, const Iterator& l, std::vector<subnet>& x,
-                  uint16_t length, bool afi_ipv4) {
-  using namespace parsers;
-  int64_t slength = length;
-  while (slength > 0) {
-    uint8_t prefix_length;
-    if (!byte(f, l, prefix_length))
-      return false;
-    count prefix_bytes = prefix_length / 8;
-    if (prefix_length % 8 != 0)
-      prefix_bytes++;
-    std::array<uint8_t, 16> ip{};
-    for (auto i = 0u; i < prefix_bytes; i++) {
-      if (!byte(f, l, ip[i]))
-        return false;
-    }
-    x.push_back(subnet{address{ip.data(),
-                               afi_ipv4 ? address::ipv4 : address::ipv6,
-                               address::network},
-                       prefix_length});
-    slength -= prefix_bytes + 1;
-  }
-  return true;
-}
-
-template <class Iterator>
-bool parse_attribute_origin(Iterator& f, const Iterator& l, std::string& x) {
-  using namespace parsers;
-  uint8_t value = 0;
-  if (!byte(f, l, value))
-    return false;
-  switch (value) {
-    case 0:
-      x = "IGP";
-      break;
-    case 1:
-      x = "EGP";
-      break;
-    case 2:
-      x = "INCOMPLETE";
-      break;
- }
- return true;
-}
-
-template <class Iterator>
-bool parse_attribute_as_path(Iterator& f, const Iterator& l,
-                             std::vector<uint32_t>& x, bool as4) {
-  using namespace parsers;
-  auto b16be_to_32 = b16be->*[](uint16_t x) { return uint32_t{x}; };
-  uint8_t path_segment_type = 0;
-  uint8_t path_segment_length = 0;
-  uint32_t path_segment_value = 0;
-  auto path_segment_parser = byte >> byte;
-  if (!path_segment_parser(f, l, path_segment_type, path_segment_length))
-    return false;
-  for (auto i = 0u; i < path_segment_length; i++) {
-    if (as4) {
-      if (!b32be(f, l, path_segment_value))
-        return false;
-    } else {
-      if (!b16be_to_32(f, l, path_segment_value))
-        return false;
-    }
-    x.push_back(path_segment_value);
-  }
-  return true;
-}
-
-template <class Iterator>
-bool parse_attribute_aggregator(Iterator& f, const Iterator& l,
-                                uint32_t& aggregator_as, address& aggregator_ip,
-                                bool as4) {
-  using namespace parsers;
-  auto b16be_to_32 = b16be->*[](uint16_t x) { return uint32_t{x}; };
-  if (as4) {
-    if (!b32be(f, l, aggregator_as))
-      return false;
-  } else {
-    if (!b16be_to_32(f, l, aggregator_as))
-      return false;
-  }
-  auto ipv4 = mrt::detail::make_ip_v4_v6_parser( [&] { return true; });
-  if (!ipv4(f, l, aggregator_ip))
-    return false;
-  return true;
-}
-
-template <class Iterator>
-bool parse_attribute_communities(Iterator& f, const Iterator& l,
-                                 std::vector<uint64_t>& communities,
-                                 uint16_t length) {
-  using namespace parsers;
-  auto b32be_to_64 = b32be->*[](uint32_t x) { return uint64_t{x}; };
-  uint64_t community = 0;
-  for (auto i = 0u; i < (length / 4u); i++) {
-    if (!b32be_to_64(f, l, community))
-      return false;
-    communities.push_back(community);
-  }
-  return true;
-}
-
-template <class Iterator>
-bool parse_attribute_extended_communities(Iterator& f, const Iterator& l,
-                                          std::vector<uint64_t>& communities,
-                                          uint16_t length) {
-  using namespace parsers;
-  uint64_t community = 0;
-  for (auto i = 0u; i < (length / 8u); i++) {
-    if (!b64be(f, l, community))
-      return false;
-    communities.push_back(community);
-  }
-  return true;
-}
-
-template <class Iterator>
-bool parse_attributes(Iterator& f, const Iterator& l, attributes& x,
-                      uint16_t length, bool as4) {
-  using namespace parsers;
-  auto byte_to_16 = byte->*[](uint8_t x) { return uint16_t{x}; };
-  int64_t slength = length;
-  while (slength > 0) {
-    uint8_t attr_flags;
-    uint8_t attr_type_code;
-    uint16_t attr_length;
-    auto attribute_type_parser = byte >> byte;
-    if (!attribute_type_parser(f, l, attr_flags, attr_type_code))
-      return false;
-    bool is_extended_length = ((attr_flags & 16) >> 4) == 1;
-    if (is_extended_length) {
-      if (!b16be(f, l, attr_length))
-        return false;
-    } else {
-      if (!byte_to_16(f, l, attr_length))
-        return false;
-    }
-    auto t = f;
-    switch (attr_type_code) {
-      case 1:
-        if (!parse_attribute_origin(t, l, x.origin))
-          return false;
-        break;
-      case 2:
-        if(!parse_attribute_as_path(t, l, x.as_path, as4))
-          return false;
-        break;
-      case 3:
-        {
-          auto ipv4 = mrt::detail::make_ip_v4_v6_parser( [&] { return true; });
-          if (!ipv4(t, l, x.next_hop))
-            return false;
-        }
-        break;
-      case 4:
-        if (!b32be(t, l, x.multi_exit_disc))
-          return false;
-        break;
-      case 5:
-        if (!b32be(t, l, x.local_pref))
-          return false;
-        break;
-      case 6:
-        x.atomic_aggregate = true;
-        break;
-      case 7:
-        if (!parse_attribute_aggregator(t, l, x.aggregator_as, x.aggregator_ip,
-                                       as4))
-          return false;
-        break;
-      case 8:
-        if (!parse_attribute_communities(t, l, x.communities, attr_length))
-          return false;
-        break;
-      case 14:
-        {
-          uint16_t address_family_identifier = 0;
-          uint8_t subsequent_address_family_identifier = 0;
-          uint8_t next_hop_network_address_length = 0;
-          auto mp_reach_nlri_parser = b16be >> byte >> byte;
-             if (!mp_reach_nlri_parser(t, l, address_family_identifier,
-                                       subsequent_address_family_identifier,
-                                       next_hop_network_address_length))
-               return false;
-          auto mp_nlri_length = attr_length -
-                                (5 + next_hop_network_address_length);
-          auto mp_next_hop = mrt::detail::make_ip_v4_v6_parser(
-            [&] { return address_family_identifier == 1; }
-          );
-          if (!mp_next_hop(t, l, x.next_hop))
-            return false;
-          if (address_family_identifier == 1)
-            t += (next_hop_network_address_length - 4 + 1);
-          else
-            t += (next_hop_network_address_length - 16 + 1);
-          if (!parse_prefix(t, l, x.mp_reach_nlri, mp_nlri_length,
-                            (address_family_identifier == 1)))
-            return false;
-        }
-        break;
-      case 15:
-        {
-          uint16_t address_family_identifier = 0;
-          uint8_t subsequent_address_family_identifier = 0;
-          auto mp_unreach_nlri_parser = b16be >> byte;
-          if (!mp_unreach_nlri_parser(t, l, address_family_identifier,
-                                    subsequent_address_family_identifier))
-            return false;
-          auto mp_nlri_length = attr_length - 3;
-          if (!parse_prefix(t, l, x.mp_unreach_nlri, mp_nlri_length,
-                            (address_family_identifier == 1)))
-            return false;
-        }
-        break;
-      case 16:
-        if (!parse_attribute_extended_communities(t, l, x.communities,
-                                                  attr_length))
-             return false;
-           break;
-    }
-    f += attr_length;
-    if (is_extended_length)
-      slength -= attr_length + 4;
-    else
-      slength -= attr_length + 3;
-  }
-  return true;
-}
-
-} // namespace detail
-
-struct message_header_parser : parser<message_header_parser> {
-  using attribute = message_header;
-
-  template <class Iterator>
-  bool parse(Iterator& f, const Iterator& l, message_header& x) const {
-    using namespace parsers;
-    auto p = bytes<16> >> b16be >> byte;
-    return p(f, l, x.marker, x.length, x.type);
-  }
-};
-
-struct open_parser : parser<open_parser> {
-  using attribute = open;
-
-  template <class Iterator>
-  bool parse(Iterator& f, const Iterator& l, open& x) const {
-    using namespace parsers;
-    auto skip = [&] {
-      f += std::min(static_cast<size_t>(l - f),
-                    static_cast<size_t>(x.opt_parm_len));
-    };
-    auto p = (byte >> b16be >> b16be >> b32be >> byte) ->* skip;
-    return p(f, l, x.version, x.my_autonomous_system, x.hold_time,
-             x.bgp_identifier, x.opt_parm_len);
-  }
-};
-
-struct update_parser : parser<update_parser> {
-  using attribute = update;
-
-  update_parser(const uint16_t& message_length, const bool& as4)
-    : message_length_(message_length), as4_(as4) {
-    // nop
-  }
-
-  template <class Iterator>
-  bool parse(Iterator& f, const Iterator& l, update& x) const {
-    using namespace parsers;
-    if (!b16be(f, l, x.withdrawn_routes_length))
-      return false;
-    if (!detail::parse_prefix(f, l, x.withdrawn_routes,
-                              x.withdrawn_routes_length, true))
-      return false;
-    if (!b16be(f, l, x.total_path_attribute_length))
-      return false;
-    if (!detail::parse_attributes(f, l, x.path_attributes,
-                                  x.total_path_attribute_length, as4_))
-      return false;
-    if (x.total_path_attribute_length > 0) {
-      auto network_layer_reachability_information_length = message_length_ -
-        23 - x.total_path_attribute_length - x.withdrawn_routes_length;
-      if (!detail::parse_prefix(f, l, x.network_layer_reachability_information,
-                                network_layer_reachability_information_length,
-                                true))
-        return false;
-    }
-    return true;
-  }
-
-  const uint16_t& message_length_;
-  const bool& as4_;
-};
-
-struct notification_parser : parser<notification_parser> {
-  using attribute = notification;
-
-  template <class Iterator>
-  bool parse(Iterator& f, const Iterator& l, notification& x) const {
-    using namespace parsers;
-    auto skip = [&] {
-      f += (l - f);
-    };
-    auto p = (byte >> byte) ->* skip;
-    return p(f, l, x.error_code, x.error_subcode);
-  }
-};
-
-struct message_parser : parser<message_parser> {
-  using attribute = message;
-
-  message_parser(const bool& as4) : as4_(as4) {
-    // nop
-  }
-
-  template <class Iterator>
-  bool parse(Iterator& f, const Iterator& l, message& x) const {
-    using namespace parsers;
-    auto open = open_parser{}.when([&] {
-      return x.header.type == OPEN;
-    });
-    auto update = update_parser{x.header.length, as4_}.when([&] {
-      return x.header.type == UPDATE;
-    });
-    auto notification = notification_parser{}.when([&] {
-      return x.header.type == NOTIFICATION;
-    });
-    auto skip = parsers::eps ->* [&] {
-      static auto header_length = 16 + 2 + 1;
-      if (x.header.length < header_length || x.header.length > 4096)
-        throw std::runtime_error{"cannot parse RFC-violoating records"};
-      f += std::min(static_cast<size_t>(l - f),
-                    static_cast<size_t>(x.header.length - header_length));
-    };
-    auto msg = open
-             | update
-             | notification
-             | skip;
-    auto p = message_header_parser{} >> msg;
-    return p(f, l, x.header, x.message);
-  }
-
-  const bool& as4_;
-};
-
-} // namespace bgp
-
 namespace table_dump_v2 {
-
-namespace detail {
-
-template <class Iterator>
-bool parse_attributes(Iterator& f, const Iterator& l, bgp::attributes& x,
-                      uint16_t length, bool afi_ipv4, bool as4) {
-  using namespace parsers;
-  auto byte_to_16 = byte->*[](uint8_t x) { return uint16_t{x}; };
-  int64_t slength = length;
-  while (slength > 0) {
-    uint8_t attr_flags;
-    uint8_t attr_type_code;
-    uint16_t attr_length;
-    auto attribute_type_parser = byte >> byte;
-    if (!attribute_type_parser(f, l, attr_flags, attr_type_code))
-      return false;
-    bool is_extended_length = ((attr_flags & 16) >> 4) == 1;
-    if (is_extended_length) {
-      if (!b16be(f, l, attr_length))
-        return false;
-    } else {
-      if (!byte_to_16(f, l, attr_length))
-        return false;
-    }
-    auto t = f;
-    switch (attr_type_code) {
-      case 1:
-        if (!bgp::detail::parse_attribute_origin(t, l, x.origin))
-          return false;
-        break;
-      case 2:
-        if(!bgp::detail::parse_attribute_as_path(t, l, x.as_path, as4))
-          return false;
-        break;
-      case 3:
-        {
-          auto ipv4 = mrt::detail::make_ip_v4_v6_parser( [&] { return true; });
-          if (!ipv4(t, l, x.next_hop))
-            return false;
-        }
-        break;
-      case 4:
-        if (!b32be(t, l, x.multi_exit_disc))
-          return false;
-        break;
-      case 5:
-        if (!b32be(t, l, x.local_pref))
-          return false;
-        break;
-      case 6:
-        x.atomic_aggregate = true;
-        break;
-      case 7:
-        if (!bgp::detail::parse_attribute_aggregator(t, l, x.aggregator_as,
-                                                     x.aggregator_ip, as4))
-          return false;
-        break;
-      case 8:
-        if (!bgp::detail::parse_attribute_communities(t, l, x.communities,
-                                                      attr_length))
-          return false;
-        break;
-      case 14:
-        {
-          uint8_t next_hop_network_address_length = 0;
-          if (!byte(t, l, next_hop_network_address_length))
-            return false;
-          auto mp_next_hop = mrt::detail::make_ip_v4_v6_parser(
-            [&] { return afi_ipv4; }
-          );
-          if (!mp_next_hop(t, l, x.next_hop))
-            return false;;
-        }
-        break;
-      case 16:
-        if (!bgp::detail::parse_attribute_extended_communities(t, l,
-                                                               x.communities,
-                                                               attr_length))
-             return false;
-           break;
-    }
-    f += attr_length;
-    if (is_extended_length)
-      slength -= attr_length + 4;
-    else
-      slength -= attr_length + 3;
-  }
-  return true;
-}
-
-} // namespace detail
 
 struct peer_entry_parser : parser<peer_entry_parser> {
   using attribute = peer_entry;
@@ -1082,14 +932,11 @@ struct peer_entry_parser : parser<peer_entry_parser> {
   template <class Iterator>
   bool parse(Iterator& f, const Iterator& l, peer_entry& x) const {
     using namespace parsers;
-    auto ip_addr = mrt::detail::make_ip_v4_v6_parser(
-      [&] { return (x.peer_type & 1) == 0; }
-    );
+    auto ip_addr
+      = detail::make_ip_v4_v6_parser([&] { return (x.peer_type & 1) == 0; });
     auto to_u32 = [](uint16_t u) { return uint32_t{u}; };
-    auto peer_as =
-        (b16be ->* to_u32).when([&] { return (x.peer_type & 2) == 0; })
-      | b32be
-      ;
+    auto peer_as
+      = (b16be->*to_u32).when([&] { return (x.peer_type & 2) == 0; }) | b32be;
     auto p = byte >> b32be >> ip_addr >> peer_as;
     return p(f, l, x.peer_type, x.peer_bgp_id, x.peer_ip_address, x.peer_as);
   }
@@ -1109,6 +956,7 @@ struct peer_index_table_parser : parser<peer_index_table_parser> {
   }
 };
 
+/// @relates rib_entry_header
 struct rib_entry_header_parser : parser<rib_entry_header_parser> {
   using attribute = rib_entry_header;
 
@@ -1119,18 +967,16 @@ struct rib_entry_header_parser : parser<rib_entry_header_parser> {
   template <class Iterator>
   bool parse(Iterator& f, const Iterator& l, rib_entry_header& x) const {
     using namespace parsers;
-    if (!b32be(f, l, x.sequence_number))
-      return false;
-    if (!bgp::detail::parse_prefix(f, l, x.prefix, 1, afi_ipv4_))
-      return false;
-    if (!b16be(f, l, x.entry_count))
-      return false;
-    return true;
+    // TODO: why is there just a 1 here? Isn't that just the prefix byte?
+    auto pfx = bgp::prefix_parser{1, afi_ipv4_ ? address::ipv4 : address::ipv6};
+    auto p = b32be >> pfx >> b16be;
+    return p(f, l, x.sequence_number, x.prefix, x.entry_count);
   }
 
   const bool& afi_ipv4_;
 };
 
+/// @relates rib_entry
 struct rib_entry_parser : parser<rib_entry_parser> {
   using attribute = rib_entry;
 
@@ -1141,13 +987,12 @@ struct rib_entry_parser : parser<rib_entry_parser> {
   template <class Iterator>
   bool parse(Iterator& f, const Iterator& l, rib_entry& x) const {
     using namespace parsers;
-    auto p = b16be >> b32be >> b16be;
-    if (!p(f, l, x.peer_index, x.originated_time, x.attribute_length))
-      return false;
-    if (!detail::parse_attributes(f, l, x.bgp_attributes, x.attribute_length,
-                                  afi_ipv4_, true))
-      return false;
-    return true;
+    auto as4 = true;
+    auto attrs = bgp::attributes_parser<policy::mrt>{x.attribute_length,
+      as4, afi_ipv4_};
+    auto p = b16be >> b32be >> b16be >> attrs;
+    return p(f, l, x.peer_index, x.originated_time, x.attribute_length,
+             x.bgp_attributes);
   }
 
   const bool& afi_ipv4_;
@@ -1181,11 +1026,10 @@ struct state_change_parser : parser<state_change_parser> {
   template <class Iterator>
   bool parse(Iterator& f, const Iterator& l, state_change& x) const {
     using namespace parsers;
-    auto ip_addr = detail::make_ip_v4_v6_parser(
-      [&] { return x.address_family == 1; }
-    );
-    auto p = b16be >> b16be >> b16be >> b16be >> ip_addr >> ip_addr >> b16be >>
-             b16be;
+    auto ip_addr
+      = detail::make_ip_v4_v6_parser([&] { return x.address_family == 1; });
+    auto p = b16be >> b16be >> b16be >> b16be >> ip_addr >> ip_addr >> b16be
+             >> b16be;
     return p(f, l, x.peer_as_number, x.local_as_number, x.interface_index,
              x.address_family, x.peer_ip_address, x.local_ip_address,
              x.old_state, x.new_state);
@@ -1198,10 +1042,10 @@ struct message_parser : parser<message_parser> {
   template <class Iterator>
   bool parse(Iterator& f, const Iterator& l, message& x) const {
     using namespace parsers;
-    auto ip_addr = detail::make_ip_v4_v6_parser(
-      [&] { return x.address_family == 1; }
-    );
-    auto msg = bgp::message_parser{false};
+    auto ip_addr
+      = detail::make_ip_v4_v6_parser([&] { return x.address_family == 1; });
+    auto as4 = false;
+    auto msg = bgp::message_parser{as4};
     auto p = b16be >> b16be >> b16be >> b16be >> ip_addr >> ip_addr >> msg;
     return p(f, l, x.peer_as_number, x.local_as_number, x.interface_index,
              x.address_family, x.peer_ip_address, x.local_ip_address,
@@ -1215,10 +1059,10 @@ struct message_as4_parser : parser<message_as4_parser> {
   template <class Iterator>
   bool parse(Iterator& f, const Iterator& l, message_as4& x) const {
     using namespace parsers;
-    auto ip_addr = detail::make_ip_v4_v6_parser(
-      [&] { return x.address_family == 1; }
-    );
-    auto msg = bgp::message_parser{true};
+    auto ip_addr
+      = detail::make_ip_v4_v6_parser([&] { return x.address_family == 1; });
+    auto as4 = true;
+    auto msg = bgp::message_parser{as4};
     auto p = b32be >> b32be >> b16be >> b16be >> ip_addr >> ip_addr >> msg;
     return p(f, l, x.peer_as_number, x.local_as_number, x.interface_index,
              x.address_family, x.peer_ip_address, x.local_ip_address,
@@ -1232,11 +1076,10 @@ struct state_change_as4_parser : parser<state_change_as4_parser> {
   template <class Iterator>
   bool parse(Iterator& f, const Iterator& l, state_change_as4& x) const {
     using namespace parsers;
-    auto ip_addr = detail::make_ip_v4_v6_parser(
-      [&] { return x.address_family == 1; }
-    );
-    auto p = b32be >> b32be >> b16be >> b16be >> ip_addr >> ip_addr >> b16be >>
-             b16be;
+    auto ip_addr
+      = detail::make_ip_v4_v6_parser([&] { return x.address_family == 1; });
+    auto p = b32be >> b32be >> b16be >> b16be >> ip_addr >> ip_addr >> b16be
+             >> b16be;
     return p(f, l, x.peer_as_number, x.local_as_number, x.interface_index,
              x.address_family, x.peer_ip_address, x.local_ip_address,
              x.old_state, x.new_state);
@@ -1245,21 +1088,17 @@ struct state_change_as4_parser : parser<state_change_as4_parser> {
 
 } // namespace bgp4mp
 
-/// The top-level MRT record. All MRT format records have a Common Header
-/// followed by a Message field.
+/// The top-level MRT record. All MRT format records have a
+/// [Common Header](common_header) followed by a *Message* field.
 struct record {
   common_header header;
-  variant<
-    none,
-    table_dump_v2::peer_index_table,
-    table_dump_v2::rib_afi_safi,
-    bgp4mp::state_change,
-    bgp4mp::message,
-    bgp4mp::message_as4,
-    bgp4mp::state_change_as4
-  > message;
+  variant<none, table_dump_v2::peer_index_table, table_dump_v2::rib_afi_safi,
+          bgp4mp::state_change, bgp4mp::message, bgp4mp::message_as4,
+          bgp4mp::state_change_as4>
+    message;
 };
 
+/// Parses a [MRT record](@ref record).
 struct record_parser : parser<record_parser> {
   using attribute = record;
 
@@ -1267,46 +1106,38 @@ struct record_parser : parser<record_parser> {
   bool parse(Iterator& f, const Iterator& l, record& x) const {
     auto peer_index_table = table_dump_v2::peer_index_table_parser{}.when([&] {
       return x.header.type == TABLE_DUMP_V2
-        && x.header.subtype == table_dump_v2::PEER_INDEX_TABLE;
+             && x.header.subtype == table_dump_v2::PEER_INDEX_TABLE;
     });
     auto rib_ipv4 = table_dump_v2::rib_afi_safi_parser{true}.when([&] {
       return x.header.type == TABLE_DUMP_V2
-        && ( x.header.subtype == table_dump_v2::RIB_IPV4_UNICAST
-          || x.header.subtype == table_dump_v2::RIB_IPV4_MULTICAST);
+             && (x.header.subtype == table_dump_v2::RIB_IPV4_UNICAST
+                 || x.header.subtype == table_dump_v2::RIB_IPV4_MULTICAST);
     });
     auto rib_ipv6 = table_dump_v2::rib_afi_safi_parser{false}.when([&] {
       return x.header.type == TABLE_DUMP_V2
-        && ( x.header.subtype == table_dump_v2::RIB_IPV6_UNICAST
-          || x.header.subtype == table_dump_v2::RIB_IPV6_MULTICAST);
+             && (x.header.subtype == table_dump_v2::RIB_IPV6_UNICAST
+                 || x.header.subtype == table_dump_v2::RIB_IPV6_MULTICAST);
     });
     auto state_change = bgp4mp::state_change_parser{}.when([&] {
       return x.header.type == BGP4MP
-        && x.header.subtype == bgp4mp::STATE_CHANGE;
+             && x.header.subtype == bgp4mp::STATE_CHANGE;
     });
     auto message = bgp4mp::message_parser{}.when([&] {
-      return x.header.type == BGP4MP
-        && x.header.subtype == bgp4mp::MESSAGE;
+      return x.header.type == BGP4MP && x.header.subtype == bgp4mp::MESSAGE;
     });
     auto message_as4 = bgp4mp::message_as4_parser{}.when([&] {
-      return x.header.type == BGP4MP
-        && x.header.subtype == bgp4mp::MESSAGE_AS4;
+      return x.header.type == BGP4MP && x.header.subtype == bgp4mp::MESSAGE_AS4;
     });
     auto state_change_as4 = bgp4mp::state_change_as4_parser{}.when([&] {
       return x.header.type == BGP4MP
-        && x.header.subtype == bgp4mp::STATE_CHANGE_AS4;
+             && x.header.subtype == bgp4mp::STATE_CHANGE_AS4;
     });
-    auto skip = parsers::eps ->* [&] {
+    auto skip = parsers::eps->*[&] {
       f += std::min(static_cast<size_t>(l - f),
                     static_cast<size_t>(x.header.length));
     };
-    auto msg = peer_index_table
-             | rib_ipv4
-             | rib_ipv6
-             | state_change
-             | message
-             | message_as4
-             | state_change_as4
-             | skip;
+    auto msg = peer_index_table | rib_ipv4 | rib_ipv6 | state_change | message
+               | message_as4 | state_change_as4 | skip;
     auto p = common_header_parser{} >> msg;
     return p(f, l, x.header, x.message);
   }
@@ -1315,6 +1146,17 @@ struct record_parser : parser<record_parser> {
 /// An MRT reader.
 class reader {
 public:
+  struct types {
+    type table_dump_v2_peer_entry_type;
+    type table_dump_v2_rib_entry_type;
+    type bgp4mp_update_announcement_type;
+    type bgp4mp_update_withdraw_type;
+    type bgp4mp_state_change_type;
+    type bgp4mp_open_type;
+    type bgp4mp_notification_type;
+    type bgp4mp_keepalive_type;
+  };
+
   reader() = default;
 
   /// Constructs a MRT reader.
@@ -1333,6 +1175,7 @@ private:
   std::vector<char> buffer_;
   std::queue<event> events_;
   record_parser parser_;
+  types types_;
 };
 
 } // namespace mrt
