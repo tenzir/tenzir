@@ -156,6 +156,15 @@ struct dynamic_bytes_parser : parser<dynamic_bytes_parser<N, T>> {
     return true;
   }
 
+  template <class Iterator, size_t M>
+  bool parse(Iterator& f, const Iterator& l, std::array<T, M>& xs) const {
+    if (M < n_ || static_cast<N>(l - f) < n_)
+      return false;
+    for (auto i = N{0}; i < n_; i++)
+      xs[i] = *f++ & 0xFF;
+    return true;
+  }
+
   const N& n_;
 };
 
@@ -172,6 +181,12 @@ auto const b64le = byte_parser<uint64_t, policy::little_endian>{};
 template <size_t N, class T = uint8_t>
 auto const bytes = static_bytes_parser<N, T>{};
 
+// TODO: Make the interface coherent by replacing the above variable template
+// with this function and then renaming nbytes to bytes.
+//template <size_t N, class T = uint8_t>
+//auto bytes() {
+//  return static_bytes_parser<N, T>{};
+//}
 template <class T, class N>
 auto nbytes(const N& n) {
   return dynamic_bytes_parser<N, T>{n};
