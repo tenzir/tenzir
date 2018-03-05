@@ -209,7 +209,7 @@ Available *component* values with corresponding *parameters*:
   `-u`
     Marks this exporter as *unified*, which is equivalent to both
     `-c` and `-h`.
-  `-l` *n* [*0*]
+  `-e` *n* [*0*]
     Limit the number of events to extract; *n = 0* means unlimited.
 
 *source* **X** [*parameters*] [*expression*]
