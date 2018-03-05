@@ -228,6 +228,8 @@ Available *component* values with corresponding *parameters*:
 
 *source* *bgpdump*
 
+*source* *mrt*
+
 *source* *test* [*parameters*]
   `-e` *events*
     The maximum number of *events* to generate.
@@ -367,6 +369,37 @@ Make the node at 10.0.0.1 peer with 10.0.0.2:
 Connect to a node running at 1.2.3.4 on port 31337 and display topology details:
 
     vast -e 1.2.3.4:31337 show
+
+FORMATS
+-------
+
+VAST can import and export various data formats. Some formats only work for
+import, some only for export, and some for both.
+
+### ASCII
+
+### BGPdump
+
+### Bro
+
+### CSV
+
+### JSON
+
+### MRT
+
+- Type: *reader*
+- Representation: *binary*
+- Description: The **Multi-Threaded Routing Toolkit (MRT)** format describes
+  routing protocol messages, state changes, and routing information base
+  contents. See [RFC 6396](https://tools.ietf.org/html/rfc6396) for a complete
+  reference. The implementation relies on BGP attributes, which [RFC
+  4271](https://tools.ietf.org/html/rfc4271) defines in detail.
+
+### PCAP
+
+### Test
+
 
 DATA MODEL
 ----------
