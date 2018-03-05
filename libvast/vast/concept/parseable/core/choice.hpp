@@ -16,9 +16,12 @@
 
 #include <type_traits>
 
+#include "vast/variant.hpp"
+
 #include "vast/concept/parseable/core/parser.hpp"
 #include "vast/concept/support/detail/variant.hpp"
-#include "vast/variant.hpp"
+
+#include "vast/detail/type_traits.hpp"
 
 namespace vast {
 
@@ -102,18 +105,17 @@ private:
     return true;
   }
 
-  template <class Iterator>
-  bool parse_right(Iterator& f, const Iterator& l, unused_type) const {
-    return rhs_(f, l, unused);
-  }
-
   template <class Iterator, class Attribute>
-  auto parse_right(Iterator& f, const Iterator& l, Attribute& a) const {
-    rhs_attribute ar;
-    if (!rhs_(f, l, ar))
-      return false;
-    a = std::move(ar);
-    return true;
+  bool parse_right(Iterator& f, const Iterator& l, Attribute& a) const {
+    if constexpr (detail::is_any_v<unused_type, Attribute, rhs_attribute>) {
+      return rhs_(f, l, unused);
+    } else {
+      rhs_attribute ar;
+      if (!rhs_(f, l, ar))
+        return false;
+      a = std::move(ar);
+      return true;
+    }
   }
 
   Lhs lhs_;

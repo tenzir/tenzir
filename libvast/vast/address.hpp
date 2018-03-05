@@ -38,6 +38,18 @@ public:
   /// Address byte order.
   enum byte_order { host, network };
 
+  /// Constructs an IPv4 address from raw bytes.
+  /// @param bytes A pointer to 4 bytes.
+  /// @param order The byte order of *bytes*.
+  /// @returns An IPv4 address constructed from *bytes*.
+  static address v4(const void* bytes, byte_order order = host);
+
+  /// Constructs an IPv6 address from raw bytes.
+  /// @param bytes A pointer to 16 bytes.
+  /// @param order The byte order of *bytes*.
+  /// @returns An IPv6 address constructed from *bytes*.
+  static address v6(const void* bytes, byte_order order = host);
+
   /// Default-constructs an (invalid) address.
   address();
 
