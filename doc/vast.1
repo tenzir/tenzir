@@ -1,4 +1,4 @@
-.TH VAST 1 "August 08, 2017" 0.1 "Visibility Across Space and Time"
+.TH VAST 1 "March 05, 2018" 0.1 "Visibility Across Space and Time"
 .SH NAME
 .PP
 \fB\fCvast\fR \-\- manage a VAST topology
@@ -196,7 +196,7 @@ Available \fIcomponent\fP values with corresponding \fIparameters\fP:
   \fB\fC\-u\fR
     Marks this exporter as \fIunified\fP, which is equivalent to both
     \fB\fC\-c\fR and \fB\fC\-h\fR\&.
-  \fB\fC\-l\fR \fIn\fP [\fI0\fP]
+  \fB\fC\-e\fR \fIn\fP [\fI0\fP]
     Limit the number of events to extract; \fIn = 0\fP means unlimited.
 .PP
 \fIsource\fP \fBX\fP [\fIparameters\fP] [\fIexpression\fP]
@@ -214,6 +214,8 @@ Available \fIcomponent\fP values with corresponding \fIparameters\fP:
 \fIsource\fP \fIbro\fP
 .PP
 \fIsource\fP \fIbgpdump\fP
+.PP
+\fIsource\fP \fImrt\fP
 .PP
 \fIsource\fP \fItest\fP [\fIparameters\fP]
   \fB\fC\-e\fR \fIevents\fP
@@ -376,6 +378,30 @@ Connect to a node running at 1.2.3.4 on port 31337 and display topology details:
 vast \-e 1.2.3.4:31337 show
 .fi
 .RE
+.SH FORMATS
+.PP
+VAST can import and export various data formats. Some formats only work for
+import, some only for export, and some for both.
+.SS ASCII
+.SS BGPdump
+.SS Bro
+.SS CSV
+.SS JSON
+.SS MRT
+.RS
+.IP \(bu 2
+Type: \fIreader\fP
+.IP \(bu 2
+Representation: \fIbinary\fP
+.IP \(bu 2
+Description: The \fBMulti\-Threaded Routing Toolkit (MRT)\fP format describes
+routing protocol messages, state changes, and routing information base
+contents. See RFC 6396 \[la]https://tools.ietf.org/html/rfc6396\[ra] for a complete
+reference. The implementation relies on BGP attributes, which RFC
+4271 \[la]https://tools.ietf.org/html/rfc4271\[ra] defines in detail.
+.RE
+.SS PCAP
+.SS Test
 .SH DATA MODEL
 .PP
 VAST relies on a rich and strong type interface to support various

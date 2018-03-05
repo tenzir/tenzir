@@ -58,12 +58,12 @@ expected<actor> spawn_archive(local_actor* self, options& opts) {
 
 expected<actor> spawn_exporter(stateful_actor<node_state>* self,
                                options& opts) {
-  auto limit = uint64_t{0};
+  auto max_events = uint64_t{0};
   auto r = opts.params.extract_opts({
     {"continuous,c", "marks a query as continuous"},
     {"historical,h", "marks a query as historical"},
     {"unified,u", "marks a query as unified"},
-    {"limit,l", "limit the number of results", limit},
+    {"events,e", "maximum number of results", max_events},
   }, nullptr, true);
   if (!r.error.empty())
     return make_error(ec::syntax_error, r.error);
@@ -91,8 +91,8 @@ expected<actor> spawn_exporter(stateful_actor<node_state>* self,
   if (query_opts == no_query_options)
     query_opts = historical;
   auto exp = self->spawn(exporter, std::move(*expr), query_opts);
-  if (limit > 0)
-    anon_send(exp, extract_atom::value, limit);
+  if (max_events > 0)
+    anon_send(exp, extract_atom::value, max_events);
   else
     anon_send(exp, extract_atom::value);
   // Send the running IMPORTERs to the EXPORTER if it handles a continous query.
