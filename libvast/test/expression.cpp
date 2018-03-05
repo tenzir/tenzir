@@ -172,6 +172,9 @@ TEST(validation - type extractor) {
   auto expr = to<expression>(":port == 443/tcp");
   REQUIRE(expr);
   CHECK(visit(validator{}, *expr));
+  expr = to<expression>(":addr in 10.0.0.0/8");
+  REQUIRE(expr);
+  CHECK(visit(validator{}, *expr));
   expr = to<expression>(":port > -42");
   REQUIRE(expr);
   CHECK(!visit(validator{}, *expr));
