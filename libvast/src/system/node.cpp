@@ -147,7 +147,7 @@ void spawn(node_ptr self, message args) {
   }
   if (!r.error.empty())
     rp.deliver(make_error(ec::syntax_error, std::move(r.error)));
-  // Register the component.
+  // Register the component with the track.
   self->request(self->state.tracker, infinite, get_atom::value).then(
     [=](registry& reg) mutable {
       VAST_ASSERT(reg.components.count(self->state.name) > 0);
@@ -277,11 +277,15 @@ caf::behavior node(node_ptr self, std::string id, path dir) {
       self->spawn(
         [=, parent=actor_cast<actor>(self), tracker=self->state.tracker]
         (blocking_actor* terminator) {
+          VAST_DEBUG("terminating tracker");
           terminator->send_exit(tracker, msg.reason);
           terminator->wait_for(tracker);
+          VAST_DEBUG("terminating accountant");
           terminator->send_exit(acc, msg.reason);
           terminator->wait_for(acc);
+          VAST_DEBUG("terminating node");
           terminator->send_exit(parent, msg.reason);
+          VAST_DEBUG("completed shutdown sequence");
         }
       );
     }
