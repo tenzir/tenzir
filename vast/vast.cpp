@@ -62,7 +62,9 @@ using namespace vast;
 namespace {
 
 int run_import(scoped_actor& self, actor& node, message args) {
-  auto sig_mon = self->spawn<detached>(system::signal_monitor, 750ms, self);
+  // FIXME: make this actor detached once the bug with detached hanging actors
+  // in CAF has been resolved.
+  auto sig_mon = self->spawn(system::signal_monitor, 750ms, self);
   auto guard = caf::detail::make_scope_guard([&] {
     self->send_exit(sig_mon, exit_reason::user_shutdown);
   });
@@ -121,7 +123,9 @@ int run_import(scoped_actor& self, actor& node, message args) {
 }
 
 int run_export(scoped_actor& self, actor& node, message args) {
-  auto sig_mon = self->spawn<detached>(system::signal_monitor, 750ms, self);
+  // FIXME: make this actor detached once the bug with detached hanging actors
+  // in CAF has been resolved.
+  auto sig_mon = self->spawn(system::signal_monitor, 750ms, self);
   auto guard = caf::detail::make_scope_guard([&] {
     self->send_exit(sig_mon, exit_reason::user_shutdown);
   });
@@ -188,7 +192,9 @@ int run_export(scoped_actor& self, actor& node, message args) {
 }
 
 int run_start(scoped_actor& self, actor& node) {
-  auto sig_mon = self->spawn<detached>(system::signal_monitor, 750ms, self);
+  // FIXME: make this actor detached once the bug with detached hanging actors
+  // in CAF has been resolved.
+  auto sig_mon = self->spawn(system::signal_monitor, 750ms, self);
   auto guard = caf::detail::make_scope_guard([&] {
     self->send_exit(sig_mon, exit_reason::user_shutdown);
   });
