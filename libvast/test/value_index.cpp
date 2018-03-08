@@ -46,9 +46,9 @@ TEST(boolean) {
   auto t = idx.lookup(not_equal, false);
   REQUIRE(t);
   CHECK_EQUAL(to_string(*t), "11010001");
-  auto e = idx.lookup(in, true);
-  REQUIRE(!e);
-  CHECK(e.error() == ec::unsupported_operator);
+  auto multi = idx.lookup(in, set{true, false});
+  REQUIRE(multi);
+  CHECK_EQUAL(to_string(*multi), "11111111");
   MESSAGE("serialization");
   std::string buf;
   save(buf, idx);
@@ -79,6 +79,9 @@ TEST(integer) {
   auto greater_zero = idx.lookup(greater, 0);
   REQUIRE(greater_zero);
   CHECK(to_string(*greater_zero) == "0111111");
+  auto multi = idx.lookup(in, set{42, 10, 4711});
+  REQUIRE(multi);
+  CHECK_EQUAL(to_string(*multi), "0101011");
   MESSAGE("serialization");
   std::vector<char> buf;
   save(buf, idx);
@@ -212,6 +215,9 @@ TEST(string) {
   CHECK_EQUAL(to_string(*idx.lookup(ni, "rge")),  "0000000010");
   auto e = idx.lookup(match, "foo");
   CHECK(!e);
+  auto multi = idx.lookup(in, set{"foo", "bar", "baz"});
+  REQUIRE(multi);
+  CHECK_EQUAL(to_string(*multi), "1111110000");
   MESSAGE("serialization");
   std::vector<char> buf;
   save(buf, idx);
@@ -265,6 +271,10 @@ TEST(address) {
   bm = idx.lookup(not_in, sub);
   REQUIRE(bm);
   CHECK(to_string(*bm) == "11111111101");
+  auto xs = vector{*to<address>("192.168.0.1"), *to<address>("192.168.0.2")};
+  auto multi = idx.lookup(in, xs);
+  REQUIRE(multi);
+  CHECK_EQUAL(to_string(*multi), "11011100000");
   MESSAGE("gaps");
   CHECK(idx.push_back(*to<address>("192.168.0.2"), 42));
   addr = *to<address>("192.168.0.2");
@@ -320,6 +330,9 @@ TEST(subnet) {
   bm = idx.lookup(ni, *to<subnet>("192.0.0.0/8"));
   REQUIRE(bm);
   CHECK_EQUAL(to_string(*bm), "000000");
+  auto multi = idx.lookup(in, vector{*s0, *s1});
+  REQUIRE(multi);
+  CHECK_EQUAL(to_string(*multi), "111100");
   MESSAGE("serialization");
   std::vector<char> buf;
   save(buf, idx);
@@ -352,6 +365,9 @@ TEST(port) {
   bm = idx.lookup(greater, port{2, port::unknown});
   REQUIRE(bm);
   CHECK(to_string(*bm) == "1111111");
+  auto multi = idx.lookup(in, vector{http, port(53, port::udp)});
+  REQUIRE(multi);
+  CHECK_EQUAL(to_string(*multi), "1010010");
   MESSAGE("serialization");
   std::vector<char> buf;
   save(buf, idx);

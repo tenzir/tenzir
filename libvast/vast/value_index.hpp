@@ -24,11 +24,13 @@
 #include "vast/data.hpp"
 #include "vast/concept/printable/vast/data.hpp"
 #include "vast/concept/printable/vast/operator.hpp"
-#include "vast/detail/assert.hpp"
 #include "vast/die.hpp"
 #include "vast/error.hpp"
 #include "vast/expected.hpp"
 #include "vast/type.hpp"
+
+#include "vast/detail/assert.hpp"
+#include "vast/detail/overload.hpp"
 
 namespace vast {
 
@@ -93,6 +95,49 @@ private:
   ewah_bitmap none_;
 };
 
+namespace detail {
+
+template <class Index>
+expected<ids> container_lookup(const Index& idx, relational_operator op,
+                               const data& d) {
+  auto lookup = [&](auto& xs) -> expected<ids> {
+    ids result;
+    if (op == in) {
+      result = bitmap{idx.offset(), false};
+      for (auto& x : xs) {
+        auto r = idx.lookup(equal, x);
+        if (r)
+          result |= *r;
+        else
+          return r;
+        if (all<1>(result)) // short-circuit
+          return result;
+      }
+    } else if (op == not_in) {
+      result = bitmap{idx.offset(), true};
+      for (auto& x : xs) {
+        auto r = idx.lookup(equal, x);
+        if (r)
+          result -= *r;
+        else
+          return r;
+        if (all<0>(result)) // short-circuit
+          return result;
+      }
+    } else {
+      return make_error(ec::unsupported_operator, op);
+    }
+    return result;
+  };
+  return visit(overload(
+    [&](const auto& x) -> expected<ids> { return make_error(ec::type_clash, x); },
+    [&](const vector& xs) { return lookup(xs); },
+    [&](const set& xs) { return lookup(xs); }
+  ), d);
+}
+
+} // namespace detail
+
 /// An index for arithmetic values.
 template <class T, class Binner = void>
 class arithmetic_index : public value_index {
@@ -152,76 +197,38 @@ public:
   }
 
 private:
-  struct appender {
-    appender(bitmap_index_type& idx, size_type skip) : bmi_{idx}, skip_{skip} {
-    }
-
-    template <class U>
-    bool operator()(const U&) const {
-      return false;
-    }
-
-    bool operator()(value_type x) const {
-      bmi_.push_back(x, skip_);
-      return true;
-    }
-
-    bool operator()(timestamp x) const {
-      return (*this)(x.time_since_epoch().count());
-    }
-
-    bool operator()(timespan x) const {
-      return (*this)(x.count());
-    }
-
-    bitmap_index_type& bmi_;
-    size_type skip_;
-  };
-
-  struct searcher {
-    searcher(const bitmap_index_type& idx, relational_operator op)
-      : bmi_{idx}, op_{op} {
-    }
-
-    template <class U>
-    auto operator()(const U& x) const
-    -> std::enable_if_t<!std::is_arithmetic<U>{}, expected<ids>> {
-      return make_error(ec::type_clash, value_type{}, x);
-    }
-
-    expected<ids> operator()(boolean x) const {
-      // Boolean indexes support only equality
-      if (!(op_ == equal || op_ == not_equal))
-        return make_error(ec::unsupported_operator, op_);
-      return bmi_.lookup(op_, x);
-    }
-
-    template <class U>
-    auto operator()(U x) const
-    -> std::enable_if_t<std::is_arithmetic<U>{}, expected<ids>> {
-      // No operator constraint on arithmetic type.
-      return bmi_.lookup(op_, x);
-    }
-
-    expected<ids> operator()(timestamp x) const {
-      return (*this)(x.time_since_epoch().count());
-    }
-
-    expected<ids> operator()(timespan x) const {
-      return (*this)(x.count());
-    }
-
-    const bitmap_index_type& bmi_;
-    relational_operator op_;
-  };
-
-  bool push_back_impl(const data& x, size_type skip) override {
-    return visit(appender{bmi_, skip}, x);
+  bool push_back_impl(const data& d, size_type skip) override {
+    return visit(detail::overload(
+      [&](const auto&) { return false; },
+      [&](value_type x) {
+        bmi_.push_back(x, skip);
+        return true;
+      },
+      [&](timespan x) {
+        bmi_.push_back(x.count(), skip);
+        return true;
+      },
+      [&](timestamp x) {
+        bmi_.push_back(x.time_since_epoch().count(), skip);
+        return true;
+      }
+    ), d);
   }
 
   expected<ids>
-  lookup_impl(relational_operator op, const data& x) const override {
-    return visit(searcher{bmi_, op}, x);
+  lookup_impl(relational_operator op, const data& d) const override {
+    return visit(detail::overload(
+      [&](const auto& x) -> expected<ids> {
+        return make_error(ec::type_clash, value_type{}, x);
+      },
+      [&](value_type x) -> expected<ids> { return bmi_.lookup(op, x); },
+      [&](timespan x) -> expected<ids> { return bmi_.lookup(op, x.count()); },
+      [&](timestamp x) -> expected<ids> {
+        return bmi_.lookup(op, x.time_since_epoch().count());
+      },
+      [&](const vector& xs) { return detail::container_lookup(*this, op, xs); },
+      [&](const set& xs) { return detail::container_lookup(*this, op, xs); }
+    ), d);
   };
 
   bitmap_index_type bmi_;

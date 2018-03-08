@@ -227,65 +227,71 @@ bool string_index::push_back_impl(const data& x, size_type skip) {
 
 expected<ids>
 string_index::lookup_impl(relational_operator op, const data& x) const {
-  auto str = get_if<std::string>(x);
-  if (!str)
-    return make_error(ec::type_clash, x);
-  auto str_size = str->size();
-  if (str_size > max_length_)
-    str_size = max_length_;
-  switch (op) {
-    default:
-      return make_error(ec::unsupported_operator, op);
-    case equal:
-    case not_equal: {
-      if (str_size == 0) {
-        auto result = length_.lookup(equal, 0);
-        if (op == not_equal)
-          result.flip();
-        return result;
-      }
-      if (str_size > chars_.size())
-        return bitmap{length_.size(), op == not_equal};
-      auto result = length_.lookup(less_equal, str_size);
-      if (result.empty() || all<0>(result))
-        return bitmap{length_.size(), op == not_equal};
-      for (auto i = 0u; i < str_size; ++i) {
-        auto b = chars_[i].lookup(equal, static_cast<uint8_t>((*str)[i]));
-        result &= b;
-        if (result.empty() || all<0>(result))
-          return bitmap{length_.size(), op == not_equal};
-      }
-      if (op == not_equal)
-        result.flip();
-      return result;
-    }
-    case ni:
-    case not_ni: {
-      if (str_size == 0)
-        return bitmap{length_.size(), op == ni};
-      if (str_size > chars_.size())
-        return bitmap{length_.size(), op == not_ni};
-      // TODO: Be more clever than iterating over all k-grams (#45).
-      bitmap result{length_.size(), false};
-      for (auto i = 0u; i < chars_.size() - str_size + 1; ++i) {
-        bitmap substr{length_.size(), true};
-        auto skip = false;
-        for (auto j = 0u; j < str_size; ++j) {
-          auto bm = chars_[i + j].lookup(equal, (*str)[j]);
-          if (bm.empty() || all<0>(bm)) {
-            skip = true;
-            break;
+  return visit(detail::overload(
+    [&](const auto& x) -> expected<ids> {
+      return make_error(ec::type_clash, x);
+    },
+    [&](const std::string& str) -> expected<ids> {
+      auto str_size = str.size();
+      if (str_size > max_length_)
+        str_size = max_length_;
+      switch (op) {
+        default:
+          return make_error(ec::unsupported_operator, op);
+        case equal:
+        case not_equal: {
+          if (str_size == 0) {
+            auto result = length_.lookup(equal, 0);
+            if (op == not_equal)
+              result.flip();
+            return result;
           }
-          substr &= bm;
+          if (str_size > chars_.size())
+            return bitmap{length_.size(), op == not_equal};
+          auto result = length_.lookup(less_equal, str_size);
+          if (result.empty() || all<0>(result))
+            return bitmap{length_.size(), op == not_equal};
+          for (auto i = 0u; i < str_size; ++i) {
+            auto b = chars_[i].lookup(equal, static_cast<uint8_t>(str[i]));
+            result &= b;
+            if (result.empty() || all<0>(result))
+              return bitmap{length_.size(), op == not_equal};
+          }
+          if (op == not_equal)
+            result.flip();
+          return result;
         }
-        if (!skip)
-          result |= substr;
+        case ni:
+        case not_ni: {
+          if (str_size == 0)
+            return bitmap{length_.size(), op == ni};
+          if (str_size > chars_.size())
+            return bitmap{length_.size(), op == not_ni};
+          // TODO: Be more clever than iterating over all k-grams (#45).
+          bitmap result{length_.size(), false};
+          for (auto i = 0u; i < chars_.size() - str_size + 1; ++i) {
+            bitmap substr{length_.size(), true};
+            auto skip = false;
+            for (auto j = 0u; j < str_size; ++j) {
+              auto bm = chars_[i + j].lookup(equal, str[j]);
+              if (bm.empty() || all<0>(bm)) {
+                skip = true;
+                break;
+              }
+              substr &= bm;
+            }
+            if (!skip)
+              result |= substr;
+          }
+          if (op == not_ni)
+            result.flip();
+          return result;
+        }
       }
-      if (op == not_ni)
-        result.flip();
-      return result;
-    }
-  }
+    },
+    [&](const vector& xs) { return detail::container_lookup(*this, op, xs); },
+    [&](const set& xs) { return detail::container_lookup(*this, op, xs); }
+  ), x);
 }
 
 void address_index::init() {
@@ -315,48 +321,52 @@ bool address_index::push_back_impl(const data& x, size_type skip) {
 }
 
 expected<ids>
-address_index::lookup_impl(relational_operator op, const data& x) const {
-  auto size = v4_.size();
-  if (auto addr = get_if<address>(x)) {
-    if (!(op == equal || op == not_equal))
-      return make_error(ec::unsupported_operator, op);
-    auto& bytes = addr->data();
-    auto result = addr->is_v4() ? v4_.coder().storage() : bitmap{size, true};
-    for (auto i = addr->is_v4() ? 12u : 0u; i < 16; ++i) {
-      auto bm = bytes_[i].lookup(equal, bytes[i]);
-      result &= bm;
-      if (result.empty() || all<0>(result))
-        return bitmap{size, op == not_equal};
-    }
-    if (op == not_equal)
-      result.flip();
-    return result;
-  } else if (auto sn = get_if<subnet>(x)) {
-    if (!(op == in || op == not_in))
-      return make_error(ec::unsupported_operator, op);
-    auto topk = sn->length();
-    if (topk == 0)
-      return make_error(ec::unspecified, "invalid IP subnet length: ", topk);
-    auto& net = sn->network();
-    auto is_v4 = net.is_v4();
-    if ((is_v4 ? topk + 96 : topk) == 128)
-      // Asking for /32 or /128 membership is equivalent to an equality lookup.
-      return lookup_impl(op == in ? equal : not_equal, sn->network());
-    auto result = is_v4 ? v4_.coder().storage() : bitmap{size, true};
-    auto& bytes = net.data();
-    size_t i = is_v4 ? 12 : 0;
-    for ( ; i < 16 && topk >= 8; ++i, topk -= 8)
-      result &= bytes_[i].lookup(equal, bytes[i]);
-    for (auto j = 0u; j < topk; ++j) {
-      auto bit = 7 - j;
-      auto& bm = bytes_[i].coder().storage()[bit];
-      result &= (bytes[i] >> bit) & 1 ? ~bm : bm;
-    }
-    if (op == not_in)
-      result.flip();
-    return result;
-  }
-  return make_error(ec::type_clash, x);
+address_index::lookup_impl(relational_operator op, const data& d) const {
+  return visit(detail::overload(
+    [&](const auto& x) -> expected<ids> {
+      return make_error(ec::type_clash, x);
+    },
+    [&](const address& x) -> expected<ids> {
+      if (!(op == equal || op == not_equal))
+        return make_error(ec::unsupported_operator, op);
+      auto result = x.is_v4() ? v4_.coder().storage() : bitmap{v4_.size(), true};
+      for (auto i = x.is_v4() ? 12u : 0u; i < 16; ++i) {
+        auto bm = bytes_[i].lookup(equal, x.data()[i]);
+        result &= bm;
+        if (result.empty() || all<0>(result))
+          return bitmap{v4_.size(), op == not_equal};
+      }
+      if (op == not_equal)
+        result.flip();
+      return result;
+    },
+    [&](const subnet& x) -> expected<ids> {
+      if (!(op == in || op == not_in))
+        return make_error(ec::unsupported_operator, op);
+      auto topk = x.length();
+      if (topk == 0)
+        return make_error(ec::unspecified, "invalid IP subnet length: ", topk);
+      auto is_v4 = x.network().is_v4();
+      if ((is_v4 ? topk + 96 : topk) == 128)
+        // Asking for /32 or /128 membership is equivalent to an equality lookup.
+        return lookup_impl(op == in ? equal : not_equal, x.network());
+      auto result = is_v4 ? v4_.coder().storage() : bitmap{v4_.size(), true};
+      auto& bytes = x.network().data();
+      size_t i = is_v4 ? 12 : 0;
+      for ( ; i < 16 && topk >= 8; ++i, topk -= 8)
+        result &= bytes_[i].lookup(equal, bytes[i]);
+      for (auto j = 0u; j < topk; ++j) {
+        auto bit = 7 - j;
+        auto& bm = bytes_[i].coder().storage()[bit];
+        result &= (bytes[i] >> bit) & 1 ? ~bm : bm;
+      }
+      if (op == not_in)
+        result.flip();
+      return result;
+    },
+    [&](const vector& xs) { return detail::container_lookup(*this, op, xs); },
+    [&](const set& xs) { return detail::container_lookup(*this, op, xs); }
+  ), d);
 }
 
 void subnet_index::init() {
@@ -375,55 +385,61 @@ bool subnet_index::push_back_impl(const data& x, size_type skip) {
 }
 
 expected<ids>
-subnet_index::lookup_impl(relational_operator op, const data& x) const {
-  auto sn = get_if<subnet>(x);
-  if (!sn)
-    return make_error(ec::type_clash, x);
-  switch (op) {
-    default:
-      return make_error(ec::unsupported_operator, op);
-    case equal:
-    case not_equal: {
-      auto result = network_.lookup(equal, sn->network());
-      if (!result)
-        return result;
-      auto n = length_.lookup(equal, sn->length());
-      *result &= n;
-      if (op == not_equal)
-        result->flip();
-      return result;
-    }
-    case in:
-    case not_in: {
-      // For a subnet index U and subnet x, the in operator signifies a
-      // subset relationship such that `U in x` translates to U ⊆ x, i.e.,
-      // the lookup returns all subnets in U that are a subset of x.
-      auto result = network_.lookup(in, *sn);
-      if (!result)
-        return result;
-      *result &= length_.lookup(greater_equal, sn->length());
-      if (op == not_in)
-        result->flip();
-      return result;
-    }
-    case ni:
-    case not_ni: {
-      // For a subnet index U and subnet x, the ni operator signifies a
-      // subset relationship such that `U ni x` translates to U ⊇ x, i.e.,
-      // the lookup returns all subnets in U that include x.
-      bitmap result;
-      for (auto i = uint8_t{1}; i <= sn->length(); ++i) {
-        auto xs = network_.lookup(in, subnet{sn->network(), i});
-        if (!xs)
-          return xs;
-        *xs &= length_.lookup(equal, i);
-        result |= *xs;
+subnet_index::lookup_impl(relational_operator op, const data& d) const {
+  return visit(detail::overload(
+    [&](const auto& x) -> expected<ids> {
+      return make_error(ec::type_clash, x);
+    },
+    [&](const subnet& x) -> expected<ids> {
+      switch (op) {
+        default:
+          return make_error(ec::unsupported_operator, op);
+        case equal:
+        case not_equal: {
+          auto result = network_.lookup(equal, x.network());
+          if (!result)
+            return result;
+          auto n = length_.lookup(equal, x.length());
+          *result &= n;
+          if (op == not_equal)
+            result->flip();
+          return result;
+        }
+        case in:
+        case not_in: {
+          // For a subnet index U and subnet x, the in operator signifies a
+          // subset relationship such that `U in x` translates to U ⊆ x, i.e.,
+          // the lookup returns all subnets in U that are a subset of x.
+          auto result = network_.lookup(in, x);
+          if (!result)
+            return result;
+          *result &= length_.lookup(greater_equal, x.length());
+          if (op == not_in)
+            result->flip();
+          return result;
+        }
+        case ni:
+        case not_ni: {
+          // For a subnet index U and subnet x, the ni operator signifies a
+          // subset relationship such that `U ni x` translates to U ⊇ x, i.e.,
+          // the lookup returns all subnets in U that include x.
+          bitmap result;
+          for (auto i = uint8_t{1}; i <= x.length(); ++i) {
+            auto xs = network_.lookup(in, subnet{x.network(), i});
+            if (!xs)
+              return xs;
+            *xs &= length_.lookup(equal, i);
+            result |= *xs;
+          }
+          if (op == not_ni)
+            result.flip();
+          return result;
+        }
       }
-      if (op == not_ni)
-        result.flip();
-      return result;
-    }
-  }
+    },
+    [&](const vector& xs) { return detail::container_lookup(*this, op, xs); },
+    [&](const set& xs) { return detail::container_lookup(*this, op, xs); }
+  ), d);
 }
 
 
@@ -445,20 +461,26 @@ bool port_index::push_back_impl(const data& x, size_type skip) {
 }
 
 expected<ids>
-port_index::lookup_impl(relational_operator op, const data& x) const {
-  if (op == in || op == not_in)
-    return make_error(ec::unsupported_operator, op);
-  if (offset() == 0)
-    return bitmap{};
-  auto p = get_if<port>(x);
-  if (!p)
-    return make_error(ec::type_clash, x);
-  auto n = num_.lookup(op, p->number());
-  if (n.empty() || all<0>(n))
-    return bitmap{offset(), false};
-  if (p->type() != port::unknown)
-    n &= proto_.lookup(equal, p->type());
-  return n;
+port_index::lookup_impl(relational_operator op, const data& d) const {
+  if (offset() == 0) // FIXME: why do we need this check again?
+    return ids{};
+  return visit(detail::overload(
+    [&](const auto& x) -> expected<ids> {
+      return make_error(ec::type_clash, x);
+    },
+    [&](const port& x) -> expected<ids> {
+      if (op == in || op == not_in)
+        return make_error(ec::unsupported_operator, op);
+      auto n = num_.lookup(op, x.number());
+      if (n.empty() || all<0>(n))
+        return bitmap{offset(), false};
+      if (x.type() != port::unknown)
+        n &= proto_.lookup(equal, x.type());
+      return n;
+    },
+    [&](const vector& xs) { return detail::container_lookup(*this, op, xs); },
+    [&](const set& xs) { return detail::container_lookup(*this, op, xs); }
+  ), d);
 }
 
 
