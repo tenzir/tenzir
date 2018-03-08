@@ -477,11 +477,9 @@ void sequence_index::init() {
 }
 
 bool sequence_index::push_back_impl(const data& x, size_type skip) {
-  auto v = get_if<vector>(x);
-  if (v)
+  if (auto v = get_if<vector>(x))
     return push_back_ctnr(*v, skip);
-  auto s = get_if<set>(x);
-  if (s)
+  if (auto s = get_if<set>(x))
     return push_back_ctnr(*s, skip);
   return false;
 }
