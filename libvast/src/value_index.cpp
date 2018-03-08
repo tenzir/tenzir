@@ -178,8 +178,7 @@ expected<void> value_index::push_back(const data& x, event_id id) {
   return {};
 }
 
-expected<ids>
-value_index::lookup(relational_operator op, const data& x) const {
+expected<ids> value_index::lookup(relational_operator op, const data& x) const {
   if (is<none>(x)) {
     if (!(op == equal || op == not_equal))
       return make_error(ec::unsupported_operator, op);
@@ -489,11 +488,7 @@ bool sequence_index::push_back_impl(const data& x, size_type skip) {
 
 expected<ids>
 sequence_index::lookup_impl(relational_operator op, const data& x) const {
-  if (op == ni)
-    op = in;
-  else if (op == not_ni)
-    op = not_in;
-  if (!(op == in || op == not_in))
+  if (!(op == ni || op == not_ni))
     return make_error(ec::unsupported_operator, op);
   if (elements_.empty())
     return bitmap{};
@@ -507,7 +502,7 @@ sequence_index::lookup_impl(relational_operator op, const data& x) const {
     else
       return mbm;
   }
-  if (op == not_in)
+  if (op == not_ni)
     result->flip();
   return result;
 }

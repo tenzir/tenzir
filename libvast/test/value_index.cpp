@@ -374,17 +374,17 @@ TEST(container) {
   REQUIRE(idx.push_back(v));
   REQUIRE(idx.push_back(v, 7));
   MESSAGE("lookup");
-  CHECK_EQUAL(to_string(*idx.lookup(in, "foo")), "11000000");
-  CHECK_EQUAL(to_string(*idx.lookup(in, "bar")), "10110001");
-  CHECK_EQUAL(to_string(*idx.lookup(not_in, "foo")), "00110001");
-  CHECK_EQUAL(to_string(*idx.lookup(in, "not")), "00000000");
+  CHECK_EQUAL(to_string(*idx.lookup(ni, "foo")), "11000000");
+  CHECK_EQUAL(to_string(*idx.lookup(ni, "bar")), "10110001");
+  CHECK_EQUAL(to_string(*idx.lookup(not_ni, "foo")), "00110001");
+  CHECK_EQUAL(to_string(*idx.lookup(ni, "not")), "00000000");
   MESSAGE("serialization");
   std::vector<char> buf;
   save(buf, idx);
   sequence_index idx2;
   load(buf, idx2);
-  CHECK_EQUAL(to_string(*idx2.lookup(in, "foo")), "11000000");
-  CHECK_EQUAL(to_string(*idx2.lookup(in, "bar")), "10110001");
+  CHECK_EQUAL(to_string(*idx2.lookup(ni, "foo")), "11000000");
+  CHECK_EQUAL(to_string(*idx2.lookup(ni, "bar")), "10110001");
 }
 
 TEST(polymorphic) {
@@ -395,8 +395,8 @@ TEST(polymorphic) {
   REQUIRE(idx->push_back(set{1, 2, 3}));
   REQUIRE(idx->push_back(set{}));
   REQUIRE(idx->push_back(set{42}));
-  CHECK_EQUAL(to_string(*idx->lookup(in, 42)), "1001");
-  CHECK_EQUAL(to_string(*idx->lookup(in, 44)), "0000"); // chopped off
+  CHECK_EQUAL(to_string(*idx->lookup(ni, 42)), "1001");
+  CHECK_EQUAL(to_string(*idx->lookup(ni, 44)), "0000"); // chopped off
   MESSAGE("serialization");
   std::vector<char> buf;
   save(buf, detail::value_index_inspect_helper{t, idx});
@@ -404,7 +404,7 @@ TEST(polymorphic) {
   detail::value_index_inspect_helper helper{t, idx2};
   load(buf, helper);
   REQUIRE(idx2);
-  CHECK_EQUAL(to_string(*idx2->lookup(in, 42)), "1001");
+  CHECK_EQUAL(to_string(*idx2->lookup(ni, 42)), "1001");
   MESSAGE("attributes");
   t = integer_type{}.attributes({{"base", "uniform(2, 4)"}});
   idx = value_index::make(t);
