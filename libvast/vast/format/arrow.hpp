@@ -1,4 +1,5 @@
 #ifndef VAST_FORMAT_ARROW_HPP
+
 #define VAST_FORMAT_ARROW_HPP
 
 #include <string>
@@ -8,9 +9,9 @@
 #include "arrow/api.h"
 #include "arrow/builder.h"
 
+#include "vast/data.hpp"
 #include "vast/expected.hpp"
 #include "vast/type.hpp"
-#include "vast/data.hpp"
 
 namespace vast {
 
@@ -64,32 +65,29 @@ struct convert_visitor {
     ::arrow::field("rep", ::arrow::int64()),
     ::arrow::field("period", ::arrow::struct_(schema_vector_period)),
   };
-  inline
-  result_type operator()(const boolean_type&) {
+  inline result_type operator()(const boolean_type&) {
     return ::arrow::field("bool", ::arrow::boolean());
   }
-  inline
-  result_type operator()(const integer_type&) {
+  inline result_type operator()(const count_type&) {
+    return ::arrow::field("count", ::arrow::uint64());
+  }
+  inline result_type operator()(const integer_type&) {
     return ::arrow::field("integer", ::arrow::int64());
   }
-  inline
-  result_type operator()(const real_type&) {
+  inline result_type operator()(const real_type&) {
     return ::arrow::field("real", ::arrow::float64());
   }
-  inline
-  result_type operator()(const string_type&) {
+  inline result_type operator()(const string_type&) {
     return ::arrow::field("string", std::make_shared<::arrow::StringType>());
   }
-  inline
-  result_type operator()(const pattern_type&) {
+  inline result_type operator()(const pattern_type&) {
     return ::arrow::field("pattern", std::make_shared<::arrow::StringType>());
   }
-  inline
-  result_type operator()(const address_type&) {
-    return ::arrow::field("pattern", std::make_shared<::arrow::StringType>());
+  inline result_type operator()(const address_type&) {
+    return ::arrow::field("address",
+                          std::make_shared<::arrow::FixedSizeBinaryType>(16));
   }
-  inline
-  result_type operator()(const port_type&) {
+  inline result_type operator()(const port_type&) {
     std::vector<result_type> schema_vector_port = {
       ::arrow::field("port_type", ::arrow::int8()),
       ::arrow::field("mask", ::arrow::int16()),
@@ -98,8 +96,7 @@ struct convert_visitor {
       std::make_shared<::arrow::StructType>(schema_vector_port);
     return ::arrow::field("port", port_struct);
   }
-  inline
-  result_type operator()(const subnet_type&) {
+  inline result_type operator()(const subnet_type&) {
     std::vector<result_type> schema_vector_subnet = {
       ::arrow::field("address",
                      std::make_shared<::arrow::FixedSizeBinaryType>(16)),
@@ -109,14 +106,12 @@ struct convert_visitor {
       std::make_shared<::arrow::StructType>(schema_vector_subnet);
     return ::arrow::field("subnet", subnet_struct);
   }
-  inline
-  result_type operator()(const timespan_type&) {
+  inline result_type operator()(const timespan_type&) {
     auto timespan_struct =
       std::make_shared<::arrow::StructType>(schema_vector_timespan);
     return ::arrow::field("timespan", timespan_struct);
   }
-  inline
-  result_type operator()(const timestamp_type&) {
+  inline result_type operator()(const timestamp_type&) {
     auto timespan_struct =
       std::make_shared<::arrow::StructType>(schema_vector_timespan);
     // Timepoint
@@ -135,24 +130,73 @@ struct convert_visitor {
 };
 
 struct insert_visitor {
-  ::arrow::RecordBatchBuilder *builder;
-  insert_visitor(::arrow::RecordBatchBuilder &b);
+  ::arrow::ArrayBuilder* builder;
+  ::arrow::RecordBatchBuilder* rbuilder;
+  u_int64_t counter = 0;
+  insert_visitor(::arrow::ArrayBuilder& b);
+  insert_visitor(::arrow::ArrayBuilder& b, u_int64_t e);
+  insert_visitor(::arrow::RecordBatchBuilder& b);
+  insert_visitor(::arrow::RecordBatchBuilder& b, u_int64_t e);
 
-  void operator()(const record_type t, const std::vector<data> d);
+  ::arrow::Status operator()(const record_type t, const std::vector<data> d);
+  /*
   void operator()(const record_field t, const data d);
   void operator()(const string_type t, const data d);
   void operator()(const real_type t, const data d);
   void operator()(const integer_type t, const data d);
   void operator()(const count_type, const data d);
   void operator()(const boolean t, const data d);
-
+*/
   template <class T1, class T2>
-  void operator()(const T1&, const T2&) {
-    std::cout << typeid(T1).name() << " Wuff " << typeid(T2).name() << std::endl;
+  ::arrow::Status operator()(const T1, const T2) {
+    std::cout << typeid(T1).name() << " Wuff " << typeid(T2).name()
+              << std::endl;
+    return ::arrow::Status::OK();
   };
+  /*
+  inline
+  ::arrow::Status operator()(const u_int64_t d) {
+    std::cout << "count" << std::endl;
+    auto cbuilder = static_cast<::arrow::UInt64Builder*>(builder);
+    return cbuilder->Append(d); 
+  }
+  */
+  inline
+  ::arrow::Status operator()(const type t, const data d) {
+    std::cout << typeid(d).name() << std::endl;
+    std::cout << "default" << std::endl;
+    return ::arrow::Status::OK(); 
+  }
+  inline
+  ::arrow::Status operator()(const none_type t, const none d) {
+    std::cout << typeid(d).name() << std::endl;
+    std::cout << "null" << std::endl;
+    auto nbuilder = static_cast<::arrow::NullBuilder*>(builder);
+    return ::arrow::Status::OK(); 
+    return nbuilder->AppendNull(); 
+  }
+  inline
+  ::arrow::Status operator()(const string_type t, const std::string d) {
+    std::cout << d << std::endl;
+    std::cout << "string" << std::endl;
+    auto nbuilder = static_cast<::arrow::StringBuilder*>(builder);
+    return ::arrow::Status::OK(); 
+    return nbuilder->Append(d); 
+  }
+  inline
+  ::arrow::Status operator()(const boolean_type t, const boolean d) {
+    std::cout << "bool " << builder->type()->name() << " " << d << std::endl;
+    auto bbuilder = static_cast<::arrow::BooleanBuilder*>(builder);
+    std::cout << "bool1" << std::endl;
+    return ::arrow::Status::OK(); 
+    return bbuilder->Append(d); 
+  }
+  inline
+  ::arrow::Status operator()(const vector_type t, const std::vector<data> d) {
+    std::cout << "vector" << std::endl;
+    return ::arrow::Status::OK(); 
+  }
 };
-
-
 } // namespace arrow
 } // namespace format
 } // namespace vast

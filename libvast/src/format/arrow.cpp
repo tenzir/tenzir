@@ -53,17 +53,20 @@ std::shared_ptr<arrow::RecordBatch> transpose(const std::vector<event>& xs) {
   auto status = arrow::RecordBatchBuilder::Make(
     schema, arrow::default_memory_pool(), &builder);
   std::shared_ptr<arrow::RecordBatch> batch;
-  format::arrow::insert_visitor iv(*builder);
+  format::arrow::insert_visitor iv(*builder, 0);
   if (status.ok()) {
     for (const auto e : xs) {
-      visit(iv, e.type(), e.data());
-      auto status = builder->Flush(&batch);
+      auto status = visit(iv, e.type(), e.data());
+      std::cout << "flush" << std::endl;
+      status = builder->Flush(&batch);
+      std::cout << "flush1" << std::endl;
       if (!status.ok())
         return batch;
     }
   }
-  if (status.ok()) {
-    std::cout << schema->ToString() << std::endl;
+  std::cout << batch->schema()->ToString() << std::endl;
+  if (!status.ok()) {
+    std::cout << "failed to flush bash " << status.ToString() << std::endl;
   }
   return batch;
 }
@@ -99,41 +102,37 @@ write_to_buffer(const arrow::RecordBatch& batch) {
 
 namespace format {
 namespace arrow {
-insert_visitor::insert_visitor(::arrow::RecordBatchBuilder& b) : builder(&b) {
+
+insert_visitor::insert_visitor(::arrow::ArrayBuilder& b) : builder(&b) {
+  // nop
+}
+insert_visitor::insert_visitor(::arrow::RecordBatchBuilder& b) : rbuilder(&b) {
+  // nop
+}
+insert_visitor::insert_visitor(::arrow::RecordBatchBuilder& b, u_int64_t e) : rbuilder(&b), counter(e) {
   // nop
 }
 
-void insert_visitor::operator()(const record_type t,
-                                const std::vector<data> d) {
-  auto structBuilder = builder->GetFieldAs<::arrow::StructBuilder>(0);
-  auto stringBuilder =
-    static_cast<::arrow::StringBuilder*>(structBuilder->field_builder(1));
-  stringBuilder->Append(get<std::string>(d.at(1)));
-  stringBuilder =
-    static_cast<::arrow::StringBuilder*>(structBuilder->field_builder(3));
-  stringBuilder->Append(get<std::string>(d.at(3)));
-  auto nullBuilder =
-    static_cast<::arrow::NullBuilder*>(structBuilder->field_builder(4));
-  nullBuilder->AppendNull();
-  stringBuilder =
-    static_cast<::arrow::StringBuilder*>(structBuilder->field_builder(8));
-  if (is<std::string>(d.at(8))) {
-    //stringBuilder->Append(std::string(get<std::string>(d.at(8))));
-  } else {
-    stringBuilder->AppendNull();
+::arrow::Status insert_visitor::operator()(const record_type t,
+                                           const std::vector<data> d) {
+  auto structBuilder = rbuilder->GetFieldAs<::arrow::StructBuilder>(0);
+  for (; counter < d.size(); counter++) {
+    auto b = structBuilder->field_builder(counter);
+      format::arrow::insert_visitor a(*b, counter);
+
+    auto tt = &(*(b->type()));
+    std::cout << "\ne=" << counter << "\n"
+              << tt->ToString() << "\n"
+              << to_string(t.fields[counter].type) << "\n"
+              << to_string(d.at(counter)) << "\n"
+              << std::endl;
+    auto status = visit(a, t.fields[counter].type, d.at(counter));
+    std::cout << "BLA" << std::endl;
+    if (!status.ok()) {
+      return status;
+    }
   }
-  for (int  e = 0; e < d.size(); e++) {
-    std::cout << to_string(d.at(e)) << " " << structBuilder->field_builder(e)->type()->name() << std::endl;
-
-  }
-
-  std::cout << d.size() << std::endl;
-}
-
-void insert_visitor::operator()(const string_type t, const data d) {
-  // auto stringBuilder = builder->GetFieldAs<::arrow::StringBuilder>(0);
-  // auto status = stringBuilder->Append(d);
-  // std::cout << status.message() << "sdsd" << std::endl;
+  return ::arrow::Status::OK();
 }
 
 writer::writer(const std::string& plasma_socket) {
