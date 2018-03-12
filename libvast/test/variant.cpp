@@ -16,6 +16,8 @@
 
 #include "vast/variant.hpp"
 
+#include "vast/detail/overload.hpp"
+
 #define SUITE variant
 #include "test.hpp"
 
@@ -145,6 +147,19 @@ TEST(unary visitation) {
   visit(stateful{}, t1); // rvalue
   visit(doppler{}, t1);
   CHECK_EQUAL(get<double>(t1), 8.4);
+}
+
+TEST(overload visitation) {
+  auto x = triple{42};
+  visit(detail::overload(
+    [&](auto&&) { FAIL("invalid dispatch"); },
+    [&](int i) { CHECK_EQUAL(i, 42); }
+  ), x);
+  x = 4.2;
+  visit(detail::overload(
+    [&](auto&&) { FAIL("invalid dispatch"); },
+    [&](double d) { CHECK_EQUAL(d, 4.2); }
+  ), x);
 }
 
 TEST(reference returning) {

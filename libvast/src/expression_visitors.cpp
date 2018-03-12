@@ -255,7 +255,7 @@ expected<void> validator::operator()(const attribute_extractor& ex,
 }
 
 expected<void> validator::operator()(const type_extractor& ex, const data& d) {
-  if (!type_check(ex.type, d))
+  if (!compatible(ex.type, op_, d))
     return make_error(ec::syntax_error, "type extractor type check failure",
                       ex.type, op_, d);
   return no_error;

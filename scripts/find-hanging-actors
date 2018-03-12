@@ -1,0 +1,19 @@
+#!/bin/sh
+
+log=$1
+if [ -z "$log" ]; then
+  echo "usage: $0 <caf-log>"
+  exit 1
+fi
+
+# AWK filter expression to retrieve SPAWN and TERMINATE log entries.
+filter='$2 == "caf.flow" && $9 ~ /SPAWN|TERMINATE/'
+
+# Identify actor IDs that have a SPAWN without a TERMINATE log entry.
+ids=$(awk "$filter {print \$13, \$9}" "$log" \
+  | sort -n \
+  | awk '{print $1}' \
+  | uniq -u \
+  | paste -d '|' -s -)
+
+awk "$filter && \$13 ~ /$ids/" "$log"

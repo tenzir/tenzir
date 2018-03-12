@@ -66,7 +66,7 @@ struct source_state {
   accountant_type accountant;
   caf::actor sink;
   Reader reader;
-  const char* name;
+  const char* name = "source";
 };
 
 /// An event producer.

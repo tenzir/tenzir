@@ -948,13 +948,13 @@ behavior consensus(stateful_actor<server_state>* self, path dir) {
   self->set_exit_handler(
     [=](const exit_msg& msg) {
       VAST_DEBUG(role(self), "got request to terminate");
-      auto res = save_state(self);
-      if (!res) {
+      if (auto res = save_state(self); !res) {
         VAST_ERROR(role(self), "failed to persist state:",
                    self->system().render(res.error()));
         self->quit(res.error());
+      } else {
+        self->quit(msg.reason);
       }
-      self->quit(msg.reason);
     }
   );
   // -- common behavior ------------------------------------------------------

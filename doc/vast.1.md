@@ -209,7 +209,7 @@ Available *component* values with corresponding *parameters*:
   `-u`
     Marks this exporter as *unified*, which is equivalent to both
     `-c` and `-h`.
-  `-l` *n* [*0*]
+  `-e` *n* [*0*]
     Limit the number of events to extract; *n = 0* means unlimited.
 
 *source* **X** [*parameters*] [*expression*]
@@ -227,6 +227,8 @@ Available *component* values with corresponding *parameters*:
 *source* *bro*
 
 *source* *bgpdump*
+
+*source* *mrt*
 
 *source* *test* [*parameters*]
   `-e` *events*
@@ -367,6 +369,101 @@ Make the node at 10.0.0.1 peer with 10.0.0.2:
 Connect to a node running at 1.2.3.4 on port 31337 and display topology details:
 
     vast -e 1.2.3.4:31337 show
+
+FORMATS
+-------
+
+VAST can import and export various data formats. Some formats only work for
+import, some only for export, and some for both.
+
+### ASCII
+
+- **Type**: writer
+- **Representation**: ASCII
+- **Dependencies**: none
+
+The ASCII format is VAST's built-in way of representing events. It features an
+unambiguous grammar for all data types. For example, an instance of `count`
+is rendered as `42`, a timespan as `42ns`, a `string` as `"foo"`, or a
+`set<bool>` as `{F, F, T}`.
+
+### BGPdump
+
+- **Type**: reader
+- **Representation**: ASCII
+- **Dependencies**: none
+
+The BGPdump format is the textual output of the MRT format (see below).
+
+### Bro
+
+- **Type**: reader, writer
+- **Representation**: ASCII
+- **Dependencies**: none
+
+The Bro format reads and writes ASCII output from the [Bro](https://bro.org)
+network security monitor. A log consists of a sequence of header rows, followed
+by log entries.
+
+### CSV
+
+- **Type**: writer
+- **Representation**: ASCII
+- **Dependencies**: none
+
+The Comma-Separated Values (CSV) format writes one events as rows, prepended by
+a header representing the event type. Whenever a new event type occurs, VAST
+generates a new header.
+
+### JSON
+
+- **Type**: writer
+- **Representation**: ASCII
+- **Dependencies**: none
+
+The JSON format writes events as in
+[JSON Streaming](https://en.wikipedia.org/wiki/JSON_streaming) style. In
+particular, VAST uses line-delimited JSON (LDJSON) to render one event per
+line.
+
+### MRT
+
+- **Type**: reader
+- **Representation**: binary
+- **Dependencies**: none
+
+The **Multi-Threaded Routing Toolkit (MRT)** format describes routing protocol
+messages, state changes, and routing information base contents. See
+[RFC 6396](https://tools.ietf.org/html/rfc6396) for a complete reference. The
+implementation relies on BGP attributes, which
+[RFC 4271](https://tools.ietf.org/html/rfc4271) defines in detail.
+
+### PCAP
+
+- **Type**: reader, writer
+- **Representation**: binary
+- **Dependencies**: libpcap
+
+The PCAP format reads and writes raw network packets with *libpcap*. Events of
+this type consit of the connection 4-tuple plus the binary packet data as given
+by libpcap.
+
+### Test
+
+- **Type**: reader
+- **Representation**: binary
+- **Dependencies**: none
+
+The test format acts as a "traffic generator" to allow users to generate
+arbitrary events according to VAST's data model. It takes a schema as input and
+then looks for specific type attributes describing distribution functions.
+Supported distributions include `uniform(a, b)`, `normal(mu, sigma)`, and
+`pareto(xm, alpha)`.
+
+For example, to generate an event consisting of singular, normally-distributed
+data with mean 42 and variance 10, you would provide the following schema:
+
+  type foo = real &uniform(42, 10)
 
 DATA MODEL
 ----------

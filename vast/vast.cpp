@@ -352,12 +352,8 @@ int main(int argc, char* argv[]) {
     }
     VAST_DIAGNOSTIC_POP
   } else {
-    // Enable the console in foreground only.
+    // Only enable color when we're the console in foreground only.
     sys_cfg.logger_console = atom("COLORED");
-    // Only override if not previously specified via --caf#logger.filter.
-    if (sys_cfg.logger_component_filter.empty())
-      sys_cfg.logger_component_filter = "vast";
-    // TODO: teach CAF how to apply the filter to the console only.
   }
   // We spawn a node either for the "start" command or when -n is given.
   auto spawn_node = *cmd == "start" || conf.opts.count("node") > 0;

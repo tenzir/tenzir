@@ -82,13 +82,15 @@ tracker(tracker_type::stateful_pointer<tracker_state> self, std::string node) {
           shutdown("exporter");
           // For the remaining components, the shutdown order doesn't matter.
           for (auto& pair : local)
-            if (pair.first != "tracker") {
+            if (pair.first != "tracker") { // happens at the very end
               VAST_DEBUG("sending EXIT to", pair.second.label);
               terminator->send_exit(pair.second.actor, msg.reason);
               terminator->wait_for(pair.second.actor);
             }
-          VAST_DEBUG("completed shutdown of all components");
+          VAST_DEBUG("sending EXIT to tracker");
           terminator->send_exit(parent, msg.reason);
+          terminator->wait_for(parent);
+          VAST_DEBUG("completed shutdown of all components");
         }
       );
     }

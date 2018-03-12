@@ -162,7 +162,9 @@ behavior importer(stateful_actor<importer_state>* self, path dir,
   }
   auto eu = self->system().dummy_execution_unit();
   self->state.archive = actor_pool::make(eu, actor_pool::round_robin());
+  self->monitor(self->state.archive);
   self->state.index = actor_pool::make(eu, actor_pool::round_robin());
+  self->monitor(self->state.index);
   self->set_default_handler(skip);
   self->set_exit_handler(shutdown(self));
   self->set_down_handler(

@@ -13,11 +13,14 @@
 
 #include <sstream>
 
+#include "vast/address.hpp"
+
 #include "vast/concept/parseable/core.hpp"
 #include "vast/concept/parseable/numeric.hpp"
 #include "vast/concept/parseable/string.hpp"
 #include "vast/concept/parseable/stream.hpp"
 #include "vast/concept/parseable/to.hpp"
+#include "vast/concept/parseable/vast/address.hpp"
 #include "vast/concept/parseable/vast/key.hpp"
 #include "vast/concept/parseable/vast/time.hpp"
 
@@ -28,6 +31,31 @@ using namespace vast;
 using namespace std::string_literals;
 
 // -- core --------------------------------------------------------------------
+
+TEST(choice) {
+  using namespace parsers;
+  auto p = chr{'x'} | i32;
+  variant<char, int32_t> x;
+  CHECK(p("123", x));
+  auto i = get_if<int32_t>(x);
+  REQUIRE(i);
+  CHECK_EQUAL(*i, 123);
+  CHECK(p("x", x));
+  auto c = get_if<char>(x);
+  REQUIRE(c);
+  CHECK_EQUAL(*c, 'x');
+}
+
+TEST(choice triple) {
+  using namespace parsers;
+  auto fired = false;
+  auto p = chr{'x'}
+         | i32
+         | eps ->* [&] { fired = true; };
+  variant<char, int32_t> x;
+  CHECK(p("foobar", x));
+  CHECK(fired);
+}
 
 TEST(maybe) {
   using namespace parsers;
@@ -52,6 +80,15 @@ TEST(container attribute folding) {
   auto spaces = *' '_p;
   static_assert(std::is_same<decltype(spaces)::attribute, unused_type>::value,
                 "container attribute folding failed");
+}
+
+TEST(action) {
+  using namespace parsers;
+  auto make_v4 = [](uint32_t a) { return address::v4(&a); };
+  auto ipv4_addr = b32be ->* make_v4;
+  address x;
+  CHECK(ipv4_addr("\x0A\x00\x00\x01", x));
+  CHECK_EQUAL(x, *to<address>("10.0.0.1"));
 }
 
 // -- string ------------------------------------------------------------------
@@ -536,6 +573,24 @@ TEST(byte - type promotion regression) {
   CHECK_EQUAL(z, 0x8dull);
   CHECK(b64le("\x8d\x00\x00\x00\x00\x00\x00\x00"s, z));
   CHECK_EQUAL(z, 0x8dull);
+}
+
+TEST(dynamic bytes) {
+  using namespace parsers;
+  std::string foo;
+  auto three = 3;
+  CHECK(nbytes<char>(three)("foobar"s, foo));
+  CHECK_EQUAL(foo, "foo"s);
+  MESSAGE("input too short");
+  foo.clear();
+  auto two = 2;
+  CHECK(nbytes<char>(two)("foobar"s, foo));
+  CHECK_EQUAL(foo, "fo"s);
+  MESSAGE("input too large");
+  foo.clear();
+  auto seven = 7;
+  CHECK(!nbytes<char>(seven)("foobar"s, foo));
+  CHECK_EQUAL(foo, "foobar"s);
 }
 
 // -- time --------------------------------------------------------------------

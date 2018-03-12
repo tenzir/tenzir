@@ -23,8 +23,6 @@
 
 using namespace caf;
 
-namespace vast {
-namespace system {
 namespace {
 
 // Keeps track of all signals by their value from 1 to 31. The flag at index 0 
@@ -41,6 +39,8 @@ extern "C" void signal_handler(int sig) {
 }
 
 } // namespace <anonymous>
+
+namespace vast::system {
 
 signal_monitor_type::behavior_type
 signal_monitor(signal_monitor_type::stateful_pointer<signal_monitor_state> self,
@@ -69,5 +69,4 @@ signal_monitor(signal_monitor_type::stateful_pointer<signal_monitor_state> self,
   };
 }
 
-} // namespace system
-} // namespace vast
+} // namespace vast::system

@@ -45,6 +45,8 @@ namespace vast {
 namespace system {
 
 configuration::configuration() {
+  // Consider only VAST's log messages by default.
+  logger_component_filter = "vast";
   // Register VAST's custom types.
   add_message_type<batch>("vast::batch");
   add_message_type<bitmap>("vast::bitmap");

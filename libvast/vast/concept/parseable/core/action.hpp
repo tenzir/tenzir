@@ -30,7 +30,7 @@ public:
   using attribute =
     std::conditional_t<
       action_traits::returns_void,
-      unused_type,
+      inner_attribute,
       typename action_traits::result_type
     >;
 
@@ -41,19 +41,14 @@ public:
   template <class Iterator, class Attribute, class A = Action>
   bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
     if constexpr (detail::action_traits<A>::no_args_returns_void) {
-      // No argument, void return type.
-      inner_attribute x;
-      if (!parser_(f, l, x))
+      if (!parser_(f, l, a))
         return false;
       action_();
     } else if constexpr (detail::action_traits<A>::one_arg_returns_void) {
-      // One argument, void return type.
-      action_arg_type x;
-      if (!parser_(f, l, x))
+      if (!parser_(f, l, a))
         return false;
-      action_(std::move(x));
+      action_(a);
     } else if constexpr (detail::action_traits<A>::no_args_returns_non_void) {
-      // No argument, non-void return type.
       inner_attribute x;
       if (!parser_(f, l, x))
         return false;
