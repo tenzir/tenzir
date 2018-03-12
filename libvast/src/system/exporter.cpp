@@ -83,7 +83,6 @@ void shutdown(stateful_actor<exporter_state>* self) {
   if (rank(self->state.unprocessed) > 0 || !self->state.results.empty()
       || has_continuous_option(self->state.options))
     return;
-  report_statistics(self);
   self->send_exit(self, exit_reason::normal);
 }
 
