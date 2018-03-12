@@ -72,7 +72,7 @@ behavior collector(stateful_actor<collector_state>* self, predicate pred,
                  (self->state.got + 1) << '/' << expected, "ID sets");
       self->state.hits |= hits;
       if (++self->state.got == expected) {
-        VAST_DEBUG(self, "relays", rank(self->state.hits), "to evaluator");
+        VAST_DEBUG(self, "relays", rank(self->state.hits), "hits to evaluator");
         self->send(evaluator, std::move(self->state.pred), self->state.hits);
         self->quit();
       }

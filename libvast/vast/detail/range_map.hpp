@@ -215,13 +215,11 @@ public:
   ///          valid value, then the first two represent *[a,b)* and *[0,0)*
   ///          otherwise.
   std::tuple<Point, Point, const Value*> find(const Point& p) const {
-    // GCC 4.9 still has an explicit tuple ctor.
-    using tuple_type = std::tuple<Point, Point, const Value*>;
     auto i = locate(p, map_.lower_bound(p));
     if (i == map_.end())
-      return tuple_type{0, 0, nullptr};
+      return {0, 0, nullptr};
     else
-      return tuple_type{left(i), right(i), &i->second.second};
+      return {left(i), right(i), &i->second.second};
   }
 
   /// Retrieves the size of the range map.
