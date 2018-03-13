@@ -17,7 +17,7 @@
 #include "vast/concept/printable/core.hpp"
 #include "vast/concept/printable/vast/event.hpp"
 
-#include "vast/format/stream_writer.hpp"
+#include "vast/format/writer.hpp"
 
 namespace vast::format::ascii {
 
@@ -30,9 +30,9 @@ struct ascii_printer : printer<ascii_printer> {
   }
 };
 
-class writer : public format::stream_writer<ascii_printer>{
+class writer : public format::writer<ascii_printer>{
 public:
-  using stream_writer<ascii_printer>::stream_writer;
+  using format::writer<ascii_printer>::writer;
 
   const char* name() const {
     return "ascii-writer";

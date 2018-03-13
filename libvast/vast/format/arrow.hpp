@@ -47,15 +47,12 @@ public:
 
 private:
   expected<plasma::ObjectID> make_object(const void* data, size_t size);
-
   bool connected_;
   plasma::PlasmaClient plasma_client_;
   std::vector<event> buffer_;
 };
-
 struct convert_visitor {
   using result_type = std::shared_ptr<::arrow::Field>;
-
   std::vector<result_type> schema_vector_period = {
     ::arrow::field("num", ::arrow::int64()),
     ::arrow::field("denum", ::arrow::int64()),
@@ -134,9 +131,7 @@ struct insert_visitor {
   ::arrow::RecordBatchBuilder* rbuilder;
   u_int64_t counter = 0;
   insert_visitor(::arrow::ArrayBuilder& b);
-  insert_visitor(::arrow::ArrayBuilder& b, u_int64_t e);
   insert_visitor(::arrow::RecordBatchBuilder& b);
-  insert_visitor(::arrow::RecordBatchBuilder& b, u_int64_t e);
 
   ::arrow::Status operator()(const record_type t, const std::vector<data> d);
   /*
@@ -158,43 +153,53 @@ struct insert_visitor {
   ::arrow::Status operator()(const u_int64_t d) {
     std::cout << "count" << std::endl;
     auto cbuilder = static_cast<::arrow::UInt64Builder*>(builder);
-    return cbuilder->Append(d); 
+    return cbuilder->Append(d);
   }
   */
-  inline
-  ::arrow::Status operator()(const type t, const data d) {
+  inline ::arrow::Status operator()(const type t, const data d) {
     std::cout << typeid(d).name() << std::endl;
     std::cout << "default" << std::endl;
-    return ::arrow::Status::OK(); 
+    return ::arrow::Status::OK();
   }
-  inline
-  ::arrow::Status operator()(const none_type t, const none d) {
+  inline ::arrow::Status operator()(const none_type t, const none d) {
     std::cout << typeid(d).name() << std::endl;
     std::cout << "null" << std::endl;
     auto nbuilder = static_cast<::arrow::NullBuilder*>(builder);
-    return ::arrow::Status::OK(); 
-    return nbuilder->AppendNull(); 
+    return nbuilder->AppendNull();
   }
-  inline
-  ::arrow::Status operator()(const string_type t, const std::string d) {
+  inline ::arrow::Status operator()(const string_type t, const std::string d) {
     std::cout << d << std::endl;
-    std::cout << "string" << std::endl;
+    std::cout << "string: " << builder->type()->ToString() << std::endl;
     auto nbuilder = static_cast<::arrow::StringBuilder*>(builder);
-    return ::arrow::Status::OK(); 
-    return nbuilder->Append(d); 
+    return nbuilder->Append(d);
   }
-  inline
-  ::arrow::Status operator()(const boolean_type t, const boolean d) {
+  inline ::arrow::Status operator()(const boolean_type t, const bool d) {
     std::cout << "bool " << builder->type()->name() << " " << d << std::endl;
+    std::cout << d << std::endl;
     auto bbuilder = static_cast<::arrow::BooleanBuilder*>(builder);
     std::cout << "bool1" << std::endl;
-    return ::arrow::Status::OK(); 
-    return bbuilder->Append(d); 
+    return bbuilder->Append(d);
   }
-  inline
-  ::arrow::Status operator()(const vector_type t, const std::vector<data> d) {
+  inline ::arrow::Status operator()(const timestamp_type t, const timestamp d) {
+    std::cout << "timestamp" << std::endl;
+    return ::arrow::Status::OK();
+  }
+  inline ::arrow::Status operator()(const subnet_type t, const subnet d) {
+    std::cout << "subnet" << std::endl;
+    return ::arrow::Status::OK();
+  }
+  inline ::arrow::Status operator()(const address_type t, const address d) {
+    std::cout << "address" << std::endl;
+    return ::arrow::Status::OK();
+  }
+  inline ::arrow::Status operator()(const port_type t, const port d) {
+    std::cout << "port" << std::endl;
+    return ::arrow::Status::OK();
+  }
+  inline ::arrow::Status operator()(const vector_type t,
+                                    const std::vector<data> d) {
     std::cout << "vector" << std::endl;
-    return ::arrow::Status::OK(); 
+    return ::arrow::Status::OK();
   }
 };
 } // namespace arrow

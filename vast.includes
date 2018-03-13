@@ -1,0 +1,4 @@
+aux/date/include/date
+aux/lz4/lib
+aux/lz4/programs
+aux/xxhash

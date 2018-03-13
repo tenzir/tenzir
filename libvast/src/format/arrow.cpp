@@ -53,13 +53,17 @@ std::shared_ptr<arrow::RecordBatch> transpose(const std::vector<event>& xs) {
   auto status = arrow::RecordBatchBuilder::Make(
     schema, arrow::default_memory_pool(), &builder);
   std::shared_ptr<arrow::RecordBatch> batch;
-  format::arrow::insert_visitor iv(*builder, 0);
+  format::arrow::insert_visitor iv(*builder);
   if (status.ok()) {
     for (const auto e : xs) {
+      std::cout << "\n\n"
+                << to_string(e.type()) << " " << to_string(e.data()) << "\n"
+                << std::endl;
+      iv.counter = 0;
       auto status = visit(iv, e.type(), e.data());
       std::cout << "flush" << std::endl;
       status = builder->Flush(&batch);
-      std::cout << "flush1" << std::endl;
+      std::cout << "flush1 " << status.message() << std::endl;
       if (!status.ok())
         return batch;
     }
@@ -107,30 +111,32 @@ insert_visitor::insert_visitor(::arrow::ArrayBuilder& b) : builder(&b) {
   // nop
 }
 insert_visitor::insert_visitor(::arrow::RecordBatchBuilder& b) : rbuilder(&b) {
-  // nop
-}
-insert_visitor::insert_visitor(::arrow::RecordBatchBuilder& b, u_int64_t e) : rbuilder(&b), counter(e) {
+  std::cout << b.schema()->ToString() << std::endl;
   // nop
 }
 
 ::arrow::Status insert_visitor::operator()(const record_type t,
                                            const std::vector<data> d) {
   auto structBuilder = rbuilder->GetFieldAs<::arrow::StructBuilder>(0);
-  for (; counter < d.size(); counter++) {
-    auto b = structBuilder->field_builder(counter);
-      format::arrow::insert_visitor a(*b, counter);
-
-    auto tt = &(*(b->type()));
-    std::cout << "\ne=" << counter << "\n"
-              << tt->ToString() << "\n"
-              << to_string(t.fields[counter].type) << "\n"
-              << to_string(d.at(counter)) << "\n"
-              << std::endl;
+  u_int64_t offset = 0;
+  for (; counter < d.size();) {
+    auto b = structBuilder->field_builder(counter + offset);
+    std::cout << "\ntype: " << b->type()->ToString() << std::endl;
+    format::arrow::insert_visitor a(*b);
+    a.rbuilder = this->rbuilder;
+    std::cout << counter << " " << to_string(t.fields[counter].type) << " "
+              << to_string(d.at(counter)) << std::endl;
     auto status = visit(a, t.fields[counter].type, d.at(counter));
-    std::cout << "BLA" << std::endl;
     if (!status.ok()) {
+      std::cout << status.message() << std::endl;
       return status;
     }
+    if (is<record_type>(t.fields[counter].type)
+        && is<std::vector<data>>(d.at(counter))) {
+      auto data_v = get<std::vector<data>>(d.at(counter));
+      offset += data_v.size() - 1;
+    }
+    counter++;
   }
   return ::arrow::Status::OK();
 }
