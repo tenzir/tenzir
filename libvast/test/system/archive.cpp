@@ -32,10 +32,10 @@ TEST(archiving and querying) {
   self->send(a, bro_dns_log);
   self->send(a, bro_http_log);
   self->send(a, bgpdump_txt);
-  MESSAGE("querying event set {[100,150), [10150,10200)}");
-  auto bm = make_ids({{100, 150}, {10150, 10200}});
+  MESSAGE("querying events");
+  auto ids = make_ids({{100, 150}, {10150, 10200}});
   std::vector<event> result;
-  self->request(a, infinite, bm).receive(
+  self->request(a, infinite, ids).receive(
     [&](std::vector<event>& xs) { result = std::move(xs); },
     error_handler()
   );
