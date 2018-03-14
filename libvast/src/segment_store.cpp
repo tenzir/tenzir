@@ -125,7 +125,7 @@ expected<void> segment_store::flush() {
 }
 
 expected<std::vector<event>> segment_store::get(const ids& xs) {
-  // Collect candidate segments by seeking through the query bitmap and
+  // Collect candidate segments by seeking through the ID set and
   // probing each ID interval.
   std::vector<const uuid*> candidates;
   auto ones = select(xs);
@@ -145,7 +145,7 @@ expected<std::vector<event>> segment_store::get(const ids& xs) {
       ++i;
     }
   }
-  // Process candidates *in reverse order* to get maximum LRU cache hits.
+  // Process candidates in reverse order to get maximum LRU cache hits.
   std::vector<event> result;
   VAST_DEBUG("processing", candidates.size(), "candidates");
   for (auto id = candidates.rbegin(); id != candidates.rend(); ++id) {
