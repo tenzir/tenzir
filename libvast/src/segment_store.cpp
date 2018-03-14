@@ -66,7 +66,7 @@ segment_store::segment_store(path dir, size_t max_segment_size,
   VAST_ASSERT(max_segment_size > 0);
   // Load meta data about existing segments.
   if (exists(dir_ / "meta"))
-    if (auto result = load(dir / "meta", segments_); !result) {
+    if (auto result = load(dir_ / "meta", segments_); !result) {
       // TODO: factor into a separate function and do not do this work in the
       // constructor.
       VAST_ERROR("failed to unarchive meta data:", to_string(result.error()));
