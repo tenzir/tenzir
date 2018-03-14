@@ -37,6 +37,7 @@ set(libvast_sources
   src/pattern.cpp
   src/port.cpp
   src/schema.cpp
+  src/segment_store.cpp
   src/subnet.cpp
   src/time.cpp
   src/type.cpp

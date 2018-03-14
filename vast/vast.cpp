@@ -34,6 +34,7 @@
 #endif
 
 #include "vast/banner.hpp"
+#include "vast/error.hpp"
 #include "vast/filesystem.hpp"
 #include "vast/logger.hpp"
 #include "vast/concept/parseable/vast/endpoint.hpp"
