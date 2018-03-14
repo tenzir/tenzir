@@ -131,8 +131,9 @@ expected<std::vector<event>> batch::reader::read(const bitmap& ids) {
       continue;
     auto id = n + first;
     // If a previously materialized event is ahead, we must catch up first.
-    if (e && id < e->id()) {
-      id = next(bits, e->id() - 1);
+    if (e) {
+      if (id < e->id())
+        id = next(bits, e->id() - 1);
       if (id == e->id()) {
         result.push_back(std::move(*e));
         id = next(bits, id);
@@ -157,6 +158,7 @@ expected<std::vector<event>> batch::reader::read(const bitmap& ids) {
       // If we have materialized the event we want, add it to the result.
       if (id == e->id()) {
         result.push_back(std::move(*e));
+        e = expected<event>{make_error(ec::unspecified)};
         id = next(bits, id);
       }
     }
