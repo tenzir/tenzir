@@ -64,6 +64,7 @@ set(libvast_sources
   src/system/configuration.cpp
   src/system/consensus.cpp
   src/system/exporter.cpp
+  src/system/format_factory.cpp
   src/system/importer.cpp
   src/system/index.cpp
   src/system/indexer.cpp

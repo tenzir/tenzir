@@ -24,6 +24,8 @@
 
 namespace vast::system {
 
+using run_import_atom = caf::atom_constant<caf::atom("runimport")>;
+
 /// Spawns a node.
 /// @param self The actor handle
 /// @param id The unique ID of the node.

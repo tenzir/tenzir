@@ -70,9 +70,12 @@ int run_import(scoped_actor& self, actor& node, message args) {
   auto rc = 1;
   auto stop = false;
   // Spawn a source.
-  auto opts = system::options{args, {}, {}};
-  auto src = system::spawn_source(
-    actor_cast<caf::stateful_actor<vast::system::node_state>*>(self), opts);
+  // FIXME: This hack is nessesary because the node stores the 
+  // formants and there is currently no other way to access them.
+  expected<caf::actor> src{actor{}};
+  self->send(node, system::run_import_atom::value, std::move(args), self);
+  self->receive([&](system::run_import_atom, actor s) { src = s; },
+                [&](system::run_import_atom, error& err) { src = err; });
   if (!src) {
     VAST_ERROR("failed to spawn source:", self->system().render(src.error()));
     return rc;

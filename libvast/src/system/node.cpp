@@ -330,8 +330,18 @@ caf::behavior node(node_ptr self, std::string id, path dir, format_factory forma
     [=](signal_atom, int signal) {
       VAST_IGNORE_UNUSED(signal);
       VAST_INFO(self, "got signal", ::strsignal(signal));
-    }
-  };
+    },
+    // FIXME: This handler is required by vast/vast.cpp to spawn new sources.
+    // vast/vast.cpp is not able to spawn new source anymore because the formats 
+    // are now part of the internal state of the node.
+    [=](system::run_import_atom x, message args, actor requester) {
+      auto opts = system::options{args, {}, {}};
+      auto src = system::spawn_source(self, opts);
+      if (!src)
+        self->send(requester, x, src.error());
+      else
+        self->send(requester, x, *src);
+    }};
 }
 
 } // namespace system
