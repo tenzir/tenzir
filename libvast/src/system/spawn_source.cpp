@@ -35,6 +35,7 @@
 #include "vast/system/atoms.hpp"
 #include "vast/system/source.hpp"
 #include "vast/system/spawn.hpp"
+#include "vast/system/format_factory.hpp"
 
 #include "vast/detail/make_io_stream.hpp"
 
@@ -44,9 +45,11 @@ using namespace caf;
 namespace vast {
 namespace system {
 
-expected<actor> spawn_source(local_actor* self, options& opts) {
+expected<actor> spawn_source(caf::stateful_actor<node_state>* self,
+                             options& opts) {
   if (opts.params.empty())
     return make_error(ec::syntax_error, "missing format");
+  auto& formats = self->state.formats;
   auto& format = opts.params.get_as<std::string>(0);
   auto source_args = opts.params.drop(1);
   // Parse format-independent parameters first.
@@ -64,28 +67,9 @@ expected<actor> spawn_source(local_actor* self, options& opts) {
   // Parse format-specific parameters, if any.
   actor src;
   if (format == "pcap") {
-#ifndef VAST_HAVE_PCAP
-    return make_error(ec::unspecified, "not compiled with pcap support");
-#else
-    auto flow_max = uint64_t{1} << 20;
-    auto flow_age = 60u;
-    auto flow_expiry = 10u;
-    auto cutoff = std::numeric_limits<size_t>::max();
-    auto pseudo_realtime = int64_t{0};
-    r = r.remainder.extract_opts({
-      {"cutoff,c", "skip flow packets after this many bytes", cutoff},
-      {"flow-max,m", "number of concurrent flows to track", flow_max},
-      {"flow-age,a", "max flow lifetime before eviction", flow_age},
-      {"flow-expiry,e", "flow table expiration interval", flow_expiry},
-      {"pseudo-realtime,p", "factor c delaying trace packets by 1/c",
-       pseudo_realtime}
-    });
-    if (!r.error.empty())
-      return make_error(ec::syntax_error, r.error);
-    format::pcap::reader reader{input, cutoff, flow_max, flow_age, flow_expiry,
-                                pseudo_realtime};
-    src = self->spawn(source<format::pcap::reader>, std::move(reader));
-#endif
+    auto reader = formats.reader(format);
+    if (reader)
+      src = (*reader)(self, opts.params);  
   } else if (format == "bro" || format == "bgpdump" || format == "mrt") {
     auto in = detail::make_input_stream(input, r.opts.count("uds") > 0);
     if (!in)
@@ -97,8 +81,9 @@ expected<actor> spawn_source(local_actor* self, options& opts) {
       format::bgpdump::reader reader{std::move(*in)};
       src = self->spawn(source<format::bgpdump::reader>, std::move(reader));
     } else if (format == "mrt") {
-      format::mrt::reader reader{std::move(*in)};
-      src = self->spawn(source<format::mrt::reader>, std::move(reader));
+      auto reader = formats.reader(format);
+      if (reader)
+        src = (*reader)(self, opts.params);  
     }
   } else if (format == "test") {
     auto seed = size_t{0};

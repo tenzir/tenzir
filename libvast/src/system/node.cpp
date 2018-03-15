@@ -254,9 +254,10 @@ void send(node_ptr self, message args) {
 
 } // namespace <anonymous>
 
-caf::behavior node(node_ptr self, std::string id, path dir) {
+caf::behavior node(node_ptr self, std::string id, path dir, format_factory formats) {
   self->state.dir = std::move(dir);
   self->state.name = std::move(id);
+  self->state.formats = std::move(formats);
   // Bring up the accountant.
   auto acc_log = self->state.dir / "log" / "current" / "accounting.log";
   auto acc = self->spawn<monitored>(accountant, std::move(acc_log));

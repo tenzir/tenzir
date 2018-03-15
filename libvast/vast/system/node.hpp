@@ -20,14 +20,15 @@
 
 #include "vast/system/node_state.hpp"
 
+#include "vast/system/format_factory.hpp"
+
 namespace vast::system {
 
 /// Spawns a node.
 /// @param self The actor handle
 /// @param id The unique ID of the node.
 /// @param dir The directory where to store persistent state.
-caf::behavior node(caf::stateful_actor<node_state>* self, std::string id,
-                   path dir);
+caf::behavior node(caf::stateful_actor<node_state>* self, std::string id, path dir, format_factory formats);
 
 } // namespace vast::system
 

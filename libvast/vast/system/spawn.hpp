@@ -46,7 +46,8 @@ expected<caf::actor> spawn_metastore(caf::local_actor* self, options& opts);
 
 expected<caf::actor> spawn_profiler(caf::local_actor* self, options& opts);
 
-expected<caf::actor> spawn_source(caf::local_actor* self, options& opts);
+expected<caf::actor> spawn_source(caf::stateful_actor<node_state>* self,
+                                  options& opts);
 
 expected<caf::actor> spawn_sink(caf::local_actor* self, options& opts);
 

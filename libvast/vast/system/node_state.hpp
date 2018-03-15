@@ -5,6 +5,7 @@
 #include "vast/filesystem.hpp"
 
 #include "vast/system/tracker.hpp"
+#include "vast/system/format_factory.hpp"
 
 namespace vast {
 namespace system {
@@ -14,6 +15,7 @@ struct node_state {
   path dir;
   tracker_type tracker;
   std::unordered_map<std::string, int> labels;
+  format_factory formats;
   std::string name = "node";
 };
 

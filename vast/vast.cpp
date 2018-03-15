@@ -47,6 +47,7 @@
 #include "vast/system/node.hpp"
 #include "vast/system/signal_monitor.hpp"
 #include "vast/system/spawn.hpp"
+#include "vast/system/format_factory.hpp"
 
 #include "vast/detail/adjust_resource_consumption.hpp"
 #include "vast/detail/string.hpp"
@@ -70,7 +71,8 @@ int run_import(scoped_actor& self, actor& node, message args) {
   auto stop = false;
   // Spawn a source.
   auto opts = system::options{args, {}, {}};
-  auto src = system::spawn_source(actor_cast<local_actor*>(self), opts);
+  auto src = system::spawn_source(
+    actor_cast<caf::stateful_actor<vast::system::node_state>*>(self), opts);
   if (!src) {
     VAST_ERROR("failed to spawn source:", self->system().render(src.error()));
     return rc;
@@ -392,7 +394,7 @@ int main(int argc, char* argv[]) {
   actor node;
   if (spawn_node) {
     VAST_INFO("spawning local node:", id);
-    node = self->spawn(system::node, id, abs_dir);
+    node = self->spawn(system::node, id, abs_dir, system::format_factory{});
     if (start.opts.count("bare") == 0) {
       // If we're not in bare mode, we spawn all core actors.
       auto spawn_component = [&](auto&&... xs) {
