@@ -18,7 +18,7 @@
 
 int main(int argc, char* argv[]) {
   vast::system::configuration cfg{argc, argv};
-  vast::system::application app{cfg};
   caf::actor_system sys{cfg};
+  vast::system::application app;
   return app.run(sys);
 }

@@ -13,10 +13,38 @@
 
 #include "vast/command.hpp"
 
+#define SUITE command
 #include "test.hpp"
 
 using namespace vast;
 
+class foo : public command {
+public:
+  foo(command* parent, std::string_view name) : command(parent, name) {
+    add_opt("value,v", "Some integer value", value);
+  }
+
+  int value;
+};
+
+TEST(full name) {
+  command root;
+  auto cmd1 = root.add<foo>("foo");
+  auto cmd2 = cmd1->add<command>("bar");
+  CHECK_EQUAL(cmd2->full_name(), "foo bar");
+}
+
+TEST(arg parsing) {
+  command root;
+  auto cmd = root.add<foo>("foo");
+  caf::actor_system_config cfg;
+  caf::actor_system sys{cfg};
+  command::opt_map om;
+  root.run(sys, om, caf::make_message("foo", "-v", "42"));
+  CHECK_EQUAL(cmd->value, 42);
+  CHECK_EQUAL(caf::deep_to_string(om), R"([("value", 42)])");
+}
+/*
 TEST(command) {
   command cmd;
   cmd
@@ -29,3 +57,4 @@ TEST(command) {
   // TODO
   //cmd.dispatch();
 }
+*/

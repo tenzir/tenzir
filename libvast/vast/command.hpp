@@ -14,10 +14,16 @@
 #ifndef VAST_COMMAND_HPP
 #define VAST_COMMAND_HPP
 
-#include <caf/fwd.hpp>
-
+#include <functional>
 #include <memory>
 #include <string>
+#include <string_view>
+
+#include <caf/actor_system_config.hpp>
+#include <caf/fwd.hpp>
+#include <caf/message.hpp>
+
+#include <caf/detail/unordered_flat_map.hpp>
 
 #include "vast/error.hpp"
 #include "vast/data.hpp"
@@ -30,8 +36,11 @@
 
 namespace vast {
 
-/// A command with options that can contain further sub-commands.
-struct command {
+/// A top-level command.
+class command {
+public:
+  // -- member types -----------------------------------------------------------
+
   /// An option of a command.
   struct option {
     template <class T = bool>
@@ -50,29 +59,36 @@ struct command {
     data value;
   };
 
-  using ptr = std::shared_ptr<command>;
+  /// Owning pointer to a command.
+  using unique_ptr = std::unique_ptr<command>;
 
-  /// The callback type when a command gets dispatched. The first argument is a
-  /// reference to the current command and the second argument the list of
-  /// remaining arguments.
-  using callback_type = std::function<
-    void(const command&, std::vector<std::string>)
-  >;
+  /// Group of configuration parameters.
+  using opt_group = caf::actor_system_config::opt_group;
 
-  /// Constructs a command.
-  /// @param desc The description of the command.
-  static ptr make(std::string desc = "");
+  /// Maps names of config parameters to their value.
+  using opt_map = std::map<std::string, caf::config_value>;
 
-  /// Defines an option for the command.
-  /// @tparam T The type of the option value.
-  /// @param tag The tag for the long and optionally short switch.
-  /// @param desc The description of the option.
-  /// @param x The default value for the option.
-  template <class T = bool>
-  command& opt(const std::string& tag, std::string desc, T x = {}) {
-    options.insert(option::make(tag, std::move(desc), std::forward<T>(x)));
-    return *this;
-  }
+  /// Returns a CLI option as name/value pair.
+  using get_opt = std::function<std::pair<std::string, caf::config_value>()>;
+
+  // -- constructors, destructors, and assignment operators --------------------
+
+  command();
+
+  command(command* parent, std::string_view name);
+
+  virtual ~command();
+
+  /// Runs the command and blocks until execution completes.
+  /// @returns An exit code suitable for returning from main.
+  int run(caf::actor_system& sys, caf::message args);
+
+  /// Runs the command and blocks until execution completes.
+  /// @returns An exit code suitable for returning from main.
+  int run(caf::actor_system& sys, opt_map& options, caf::message args);
+
+  /// Prints usage to `std::cerr`.
+  void usage();
 
   /// Defines a sub-command.
   /// @param name The name of the command.
@@ -82,13 +98,7 @@ struct command {
   /// Parses command line arguments and dispatches the contained command to the
   /// registered sub-command.
   /// @param args The command line arguments.
-  void dispatch(const std::vector<std:string>& args) const;
-
-  /// Defines a callback for this command.
-  template <class F>
-  void callback(F f) {
-    callback_ = std::move(f);
-  }
+  void dispatch(const std::vector<std::string>& args) const;
 
   /// Retrieves an option value.
   /// @param x The name of the option.
@@ -97,10 +107,61 @@ struct command {
 
   std::string description;
   detail::steady_map<std::string, option> options;
-  detail::steady_map<std::string, ptr> commands;
+
+  /// Returns the full name for this command.
+  std::string full_name();
+
+  /// Queries whether this command has no parent.
+  bool is_root() const noexcept;
+
+  inline const std::string_view& name() const noexcept {
+    return name_;
+  }
+
+  template <class T, class... Ts>
+  T* add(std::string_view name, Ts&&... xs) {
+    auto ptr = std::make_unique<T>(this, name, std::forward<Ts>(xs)...);
+    auto result = ptr.get();
+    if (!nested_.emplace(name, std::move(ptr)).second) {
+      throw std::invalid_argument("name already exists");
+    }
+    return result;
+  }
+
+protected:
+  virtual int run_impl(caf::actor_system& sys, opt_map& options,
+                       caf::message args);
+
+  template <class T>
+  void add_opt(std::string name, std::string descr, T& ref) {
+    opts_.emplace_back(name, std::move(descr), ref);
+    get_opts_.emplace_back([name, &ref] {
+      using cfg_type =
+        typename std::conditional<
+          std::is_integral<T>::value && !std::is_same<bool, T>::value,
+          int64_t,
+          typename std::conditional<
+            std::is_floating_point<T>::value,
+            double,
+            T
+            >::type
+        >::type;
+      cfg_type copy = ref;
+      return std::make_pair(name, caf::config_value{std::move(copy)});
+    });
+  }
 
 private:
-  callback_type callback_;
+  /// Separates arguments into the arguments for the current command, the name
+  /// of the subcommand, and the arguments for the subcommand.
+  std::tuple<caf::message, std::string, caf::message>
+  separate_args(const caf::message& args);
+
+  caf::detail::unordered_flat_map<std::string_view, unique_ptr> nested_;
+  command* parent_;
+  std::string_view name_;
+  std::vector<caf::message::cli_arg> opts_;
+  std::vector<get_opt> get_opts_;
 };
 
 } // namespace vast

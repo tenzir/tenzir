@@ -147,7 +147,7 @@ int run_export(scoped_actor& self, actor& node, message args) {
   args = make_message("exporter") + opts.params;
   VAST_DEBUG("spawning exporter with parameters:", to_string(args));
   self->request(node, infinite, "spawn", args).receive(
-    [&](const actor& a) { 
+    [&](const actor& a) {
       exp = a;
     },
     [&](const error& e) {
@@ -255,7 +255,7 @@ int run_remote(scoped_actor& self, actor& node, std::string cmd, message args) {
 } // namespace <anonymous>
 
 
-application::application(const configuration& cfg) : config_{cfg} {
+application::application() {
   // TODO: this function has side effects...should we put it elsewhere where
   // it's explicit to the user? Or perhaps make whatever this function does
   // simply a configuration option and use it later?
@@ -283,6 +283,9 @@ application::application(const configuration& cfg) : config_{cfg} {
 }
 
 int application::run(caf::actor_system& sys) {
+  return cmd_.run(sys, sys.config().args_remainder);
+}
+
 //  // TODO: replace this manual parsing by a proper interface in the program
 //  // layout.
 //  auto pred = [](auto& x, auto& cmd) { return x == cmd.first; };
@@ -488,6 +491,6 @@ int application::run(caf::actor_system& sys) {
 //  auto args = message_builder{cmd + 1, config_.command_line.end()}.to_message();
 //  VAST_DEBUG("sending command to remote node:", *cmd, to_string(args));
 //  return run_remote(self, node, *cmd, args);
-}
+//}
 
 } // namespace vast::system
