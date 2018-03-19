@@ -20,6 +20,7 @@
 #include "vast/uuid.hpp"
 
 #include "vast/system/node.hpp"
+#include "vast/system/format_factory.hpp"
 #include "vast/system/query_statistics.hpp"
 
 #include "data.hpp"
@@ -31,7 +32,8 @@ using namespace vast;
 
 struct node : actor_system_and_events {
   node() {
-    test_node = self->spawn(system::node, "test", directory / "node");
+    test_node = self->spawn(system::node, "test", directory / "node",
+                            system::format_factory{});
     MESSAGE("spawning components");
     spawn_component("metastore");
     spawn_component("archive");
