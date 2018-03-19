@@ -11,39 +11,29 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_SYSTEM_CONFIGURATION_HPP
-#define VAST_SYSTEM_CONFIGURATION_HPP
+#ifndef VAST_SYSTEM_APPLICATION_HPP
+#define VAST_SYSTEM_APPLICATION_HPP
 
+#include <memory>
 #include <string>
-#include <vector>
 
-#include <caf/actor_system_config.hpp>
+#include "vast/system/configuration.hpp"
 
 namespace vast::system {
 
-class application;
-
-/// Bundles all configuration parameters of a VAST system.
-class configuration : public caf::actor_system_config {
-  friend application;
-
+class application {
 public:
-  /// Default-constructs a configuration.
-  configuration();
+  /// Constructs an application.
+  /// @param cfg The VAST system configuration.
+  application(const configuration& cfg);
 
-  /// Constructs a configuration from the command line.
-  /// @param argc The argument counter of `main`.
-  /// @param argv The argument vector of `main`.
-  configuration(int argc, char** argv);
+  /// Starts the application and blocks until execution completes.
+  /// @returns An exit code suitable for returning from main.
+  int run(caf::actor_system& sys);
 
-  /// Constructs a configuration from a vector of string options.
-  /// @param opts The vector with CAF options.
-  configuration(const std::vector<std::string>& opts);
-
-  // -- configuration options -------------------------------------------------
-
-  /// The program command line, without --caf# arguments.
-  std::vector<std::string> command_line;
+private:
+  const configuration& config_;
+  //command program_;
 };
 
 } // namespace vast::system

@@ -20,6 +20,7 @@ set(libvast_sources
   src/batch.cpp
   src/bitmap.cpp
   src/chunk.cpp
+  src/command.cpp
   src/compression.cpp
   src/data.cpp
   src/die.cpp
@@ -61,6 +62,7 @@ set(libvast_sources
   src/detail/system.cpp
   src/detail/terminal.cpp
   src/system/accountant.cpp
+  src/system/application.cpp
   src/system/archive.cpp
   src/system/configuration.cpp
   src/system/consensus.cpp
@@ -192,6 +194,7 @@ set(tests
   test/cache.cpp
   test/chunk.cpp
   test/coder.cpp
+  test/command.cpp
   test/compressedbuf.cpp
   test/data.cpp
   test/endpoint.cpp

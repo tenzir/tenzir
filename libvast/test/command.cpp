@@ -11,14 +11,21 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include <caf/actor_system.hpp>
+#include "vast/command.hpp"
 
-#include "vast/system/application.hpp"
-#include "vast/system/configuration.hpp"
+#include "test.hpp"
 
-int main(int argc, char* argv[]) {
-  vast::system::configuration cfg{argc, argv};
-  vast::system::application app{cfg};
-  caf::actor_system sys{cfg};
-  return app.run(sys);
+using namespace vast;
+
+TEST(command) {
+  command cmd;
+  cmd
+    .opt("example,e", "a full option with value", "x")
+    .opt("flag,f", "print version and exit")
+    .opt("long", "a boolean long flag")
+    .callback([](const command& cmd, std::vector<std::string> args) {
+      // TODO
+    });
+  // TODO
+  //cmd.dispatch();
 }
