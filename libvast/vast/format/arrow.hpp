@@ -33,7 +33,7 @@ public:
 
   ~writer();
 
-  expected<void> write(const std::vector<event>& xs);
+  expected<void> write(const std::vector<event>& e);
 
   expected<void> write(const event& x);
 
@@ -53,15 +53,6 @@ private:
 };
 struct convert_visitor {
   using result_type = std::shared_ptr<::arrow::Field>;
-  std::vector<result_type> schema_vector_period = {
-    ::arrow::field("num", ::arrow::int64()),
-    ::arrow::field("denum", ::arrow::int64()),
-  };
-  // Timespan
-  std::vector<result_type> schema_vector_timespan = {
-    ::arrow::field("rep", ::arrow::int64()),
-    ::arrow::field("period", ::arrow::struct_(schema_vector_period)),
-  };
   result_type operator()(const boolean_type&);
   result_type operator()(const count_type&);
   result_type operator()(const integer_type&);
@@ -84,30 +75,37 @@ struct insert_visitor {
   ::arrow::RecordBatchBuilder* rbuilder;
   u_int64_t counter = 0;
   insert_visitor(::arrow::ArrayBuilder& b);
-  insert_visitor(::arrow::ArrayBuilder& b, u_int64_t& c);
+  insert_visitor(::arrow::ArrayBuilder& b, u_int64_t c);
   insert_visitor(::arrow::RecordBatchBuilder& b);
-  insert_visitor(::arrow::RecordBatchBuilder& b, u_int64_t& c);
+  insert_visitor(::arrow::RecordBatchBuilder& b, u_int64_t c);
   ::arrow::Status operator()(const record_type& t, const std::vector<data>& d);
   ::arrow::Status operator()(const count_type&, const count& d);
-  ::arrow::Status operator()(const count_type&, const none&);
+  ::arrow::Status operator()(const integer_type&, const integer& d);
   ::arrow::Status operator()(const real_type&, const real& d);
-  ::arrow::Status operator()(const real_type&, const none&);
   ::arrow::Status operator()(const type&, const data& d);
-  ::arrow::Status operator()(const none_type&, const none&);
   ::arrow::Status operator()(const string_type&, const std::string& d);
-  ::arrow::Status operator()(const string_type&, const none&);
   ::arrow::Status operator()(const boolean_type&, const bool& d);
-  ::arrow::Status operator()(const boolean_type&, const none&);
   ::arrow::Status operator()(const timestamp_type&, const timestamp& d);
   ::arrow::Status operator()(const timespan_type&, const timespan& d);
   ::arrow::Status operator()(const subnet_type&, const subnet& d);
   ::arrow::Status operator()(const address_type&, const address& d);
   ::arrow::Status operator()(const port_type&, const port& d);
-  ::arrow::Status operator()(const vector_type&, const std::vector<data>& d);
+  ::arrow::Status operator()(const vector_type& t, const std::vector<data>& d);
+  ::arrow::Status operator()(const set_type& t, const set& d);
+
+  ::arrow::Status operator()(const none_type&, const none&);
+  ::arrow::Status operator()(const count_type&, const none&);
+  ::arrow::Status operator()(const integer_type&, const none& d);
+  ::arrow::Status operator()(const real_type&, const none&);
+  ::arrow::Status operator()(const string_type&, const none&);
+  ::arrow::Status operator()(const boolean_type&, const none&);
+  ::arrow::Status operator()(const timespan_type&, const none&);
+  ::arrow::Status operator()(const address_type&, const none&);
+  ::arrow::Status operator()(const vector_type&, const none&);
+  ::arrow::Status operator()(const set_type&, const none&);
   template <class T1, class T2>
   ::arrow::Status operator()(const T1, const T2) {
-    std::cout << typeid(T1).name() << " nop " << typeid(T2).name()
-              << std::endl;
+    std::cout << typeid(T1).name() << " nop " << typeid(T2).name() << std::endl;
     return ::arrow::Status::OK();
   };
 };

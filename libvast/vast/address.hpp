@@ -132,7 +132,6 @@ public:
 
   friend bool convert(const address& a, json& j);
 
-private:
   std::array<uint8_t, 16> bytes_;
 };
 
