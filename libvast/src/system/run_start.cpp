@@ -44,7 +44,7 @@ int run_start::run_impl(actor_system& sys, opt_map& options,
   // Spawn our node.
   auto node_opt = spawn_node(self, options);
   if (!node_opt) {
-    // TODO: print error
+    std::cerr << sys.render(node_opt.error()) << std::endl;
     return EXIT_FAILURE;
   }
   auto node = std::move(*node_opt);
