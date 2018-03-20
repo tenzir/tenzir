@@ -38,8 +38,13 @@ int command::run(caf::actor_system& sys, opt_map& options, caf::message args) {
   // Parse arguments for this command.
   auto res = local_args.extract_opts(opts_);
   if (res.opts.count("help") != 0) {
-    // TODO: add subcommands to helptext etc.
     std::cout << res.helptext << std::endl;
+    if (!nested_.empty()) {
+      std::cout << "\nSubcommands:\n";
+      for (auto& kvp : nested_)
+        std::cout << "  " << kvp.first << "\n";
+    }
+    std::cout << std::endl;
     return EXIT_SUCCESS;
   }
   // Populate the map with our values.
