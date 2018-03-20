@@ -212,7 +212,7 @@ command::separate_args(const caf::message& args) {
       pos += 2;
     } else {
       // Found the end of the options list.
-      return std::make_tuple(args.take(pos - 1), arg(pos), args.drop(pos + 1));
+      return std::make_tuple(args.take(pos), arg(pos), args.drop(pos + 1));
     }
   }
   return std::make_tuple(args, "", caf::none);

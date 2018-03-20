@@ -11,12 +11,17 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/command.hpp"
-
 #define SUITE command
 #include "test.hpp"
 
+#include <caf/message_builder.hpp>
+#include <caf/string_algorithms.hpp>
+
+#include "vast/command.hpp"
+
 using namespace vast;
+
+namespace {
 
 class foo : public command {
 public:
@@ -27,34 +32,55 @@ public:
   int value;
 };
 
-TEST(full name) {
+class bar : public command {
+public:
+  bar(command* parent, std::string_view name) : command(parent, name) {
+    add_opt("other-value,o", "Some other integer value", other_value);
+  }
+
+  int other_value;
+};
+
+struct fixture {
   command root;
+  caf::actor_system_config cfg;
+  caf::actor_system sys{cfg};
+  command::opt_map options;
+  int exec(std::string str) {
+    caf::message_builder mb;
+    std::vector<std::string> xs;
+    caf::split(xs, str, ' ', caf::token_compress_on);
+    for (auto& x : xs)
+      mb.append(std::move(x));
+    return root.run(sys, options, mb.move_to_message());
+  }
+};
+
+} // namespace <anonymous>
+
+FIXTURE_SCOPE(command_tests, fixture)
+
+TEST(full name) {
   auto cmd1 = root.add<foo>("foo");
   auto cmd2 = cmd1->add<command>("bar");
   CHECK_EQUAL(cmd2->full_name(), "foo bar");
 }
 
 TEST(arg parsing) {
-  command root;
   auto cmd = root.add<foo>("foo");
-  caf::actor_system_config cfg;
-  caf::actor_system sys{cfg};
-  command::opt_map om;
-  root.run(sys, om, caf::make_message("foo", "-v", "42"));
+  exec("foo -v 42");
   CHECK_EQUAL(cmd->value, 42);
-  CHECK_EQUAL(caf::deep_to_string(om), R"([("value", 42)])");
+  CHECK_EQUAL(caf::deep_to_string(options), R"([("value", 42)])");
 }
-/*
-TEST(command) {
-  command cmd;
-  cmd
-    .opt("example,e", "a full option with value", "x")
-    .opt("flag,f", "print version and exit")
-    .opt("long", "a boolean long flag")
-    .callback([](const command& cmd, std::vector<std::string> args) {
-      // TODO
-    });
-  // TODO
-  //cmd.dispatch();
+
+TEST(nested arg parsing) {
+  auto cmd1 = root.add<foo>("foo");
+  auto cmd2 = cmd1->add<bar>("bar");
+  exec("foo -v 42 bar -o 123");
+  CHECK_EQUAL(cmd1->value, 42);
+  CHECK_EQUAL(cmd2->other_value, 123);
+  CHECK_EQUAL(caf::deep_to_string(options),
+              R"([("other-value", 123), ("value", 42)])");
 }
-*/
+
+FIXTURE_SCOPE_END()

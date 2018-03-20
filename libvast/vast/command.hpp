@@ -135,7 +135,12 @@ protected:
   template <class T>
   void add_opt(std::string name, std::string descr, T& ref) {
     opts_.emplace_back(name, std::move(descr), ref);
-    get_opts_.emplace_back([name, &ref] {
+    // Extract the long name from the full name (format: "long,l").
+    auto pos = name.find_first_of(',');
+    if (pos < name.size())
+      name.resize(pos);
+    get_opts_.emplace_back([name = std::move(name), &ref] {
+      // Map T to the clostest type in config_value.
       using cfg_type =
         typename std::conditional<
           std::is_integral<T>::value && !std::is_same<bool, T>::value,
@@ -145,7 +150,7 @@ protected:
             double,
             T
             >::type
-        >::type;
+          >::type;
       cfg_type copy = ref;
       return std::make_pair(name, caf::config_value{std::move(copy)});
     });
