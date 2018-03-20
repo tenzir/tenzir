@@ -121,6 +121,11 @@ public:
   /// Queries whether this command has no parent.
   bool is_root() const noexcept;
 
+  /// Queries whether this command has no parent.
+  command& root() noexcept {
+    return is_root() ? *this : parent_->root();
+  }
+
   inline const std::string_view& name() const noexcept {
     return name_;
   }
