@@ -23,8 +23,6 @@
 #include <caf/fwd.hpp>
 #include <caf/message.hpp>
 
-#include <caf/detail/unordered_flat_map.hpp>
-
 #include "vast/error.hpp"
 #include "vast/data.hpp"
 
@@ -212,7 +210,7 @@ private:
   std::tuple<caf::message, std::string, caf::message>
   separate_args(const caf::message& args);
 
-  caf::detail::unordered_flat_map<std::string_view, unique_ptr> nested_;
+  std::map<std::string_view, unique_ptr> nested_;
   command* parent_;
   std::string_view name_;
   std::vector<caf::message::cli_arg> opts_;

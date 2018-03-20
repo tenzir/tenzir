@@ -12,6 +12,7 @@
  ******************************************************************************/
 
 #include <caf/actor_system.hpp>
+#include <caf/message_builder.hpp>
 
 #include "vast/logger.hpp"
 
@@ -19,32 +20,43 @@
 #include "vast/system/configuration.hpp"
 #include "vast/system/run_export.hpp"
 #include "vast/system/run_import.hpp"
-#include "vast/system/run_start.hpp"
+#include "vast/system/run_reader.hpp"
 #include "vast/system/run_remote.hpp"
+#include "vast/system/run_start.hpp"
+
+#include "vast/format/bgpdump.hpp"
+#include "vast/format/bro.hpp"
+#include "vast/format/mrt.hpp"
 
 using namespace vast;
+using namespace vast::system;
 
 int main(int argc, char** argv) {
-  VAST_TRACE("");
   // Scaffold
-  system::configuration cfg{argc, argv};
+  configuration cfg{argc, argv};
+  cfg.logger_console = caf::atom("COLORED");
   caf::actor_system sys{cfg};
-  system::application app;
+  application app;
   // Add program commands that run locally.
-  app.add_command<system::run_start>("start");
+  app.add_command<run_start>("start");
   // Add program composed commands.
-  app.add_command<system::run_import>("import");
-  app.add_command<system::run_export>("export");
+  auto cmd = app.add_command<run_import>("import");
+  cmd->add<run_reader<format::bro::reader>>("bro");
+  cmd->add<run_reader<format::mrt::reader>>("mrt");
+  cmd->add<run_reader<format::bgpdump::reader>>("bgpdump");
+  app.add_command<run_export>("export");
   // Add program commands that always run remotely.
-  app.add_command<system::run_remote>("stop");
-  app.add_command<system::run_remote>("show");
-  app.add_command<system::run_remote>("spawn");
-  app.add_command<system::run_remote>("send");
-  app.add_command<system::run_remote>("kill");
-  app.add_command<system::run_remote>("peer");
+  app.add_command<run_remote>("stop");
+  app.add_command<run_remote>("show");
+  app.add_command<run_remote>("spawn");
+  app.add_command<run_remote>("send");
+  app.add_command<run_remote>("kill");
+  app.add_command<run_remote>("peer");
   // Dispatch to root command.
-  return app.run(sys,
-                 caf::message_builder{cfg.command_line.begin(),
-                                      cfg.command_line.end()}
-                 .move_to_message());
+  auto result = app.run(sys,
+                        caf::message_builder{cfg.command_line.begin(),
+                                             cfg.command_line.end()}
+                        .move_to_message());
+  VAST_INFO("shutting down");
+  return result;
 }

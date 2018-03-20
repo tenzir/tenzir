@@ -18,8 +18,6 @@
 #include <string>
 #include <string_view>
 
-#include <caf/detail/unordered_flat_map.hpp>
-
 #include "vast/command.hpp"
 
 #include "vast/system/configuration.hpp"

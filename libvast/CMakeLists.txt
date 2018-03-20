@@ -76,6 +76,7 @@ set(libvast_sources
   src/system/profiler.cpp
   src/system/run_export.cpp
   src/system/run_import.cpp
+  src/system/run_reader_base.cpp
   src/system/run_remote.cpp
   src/system/run_start.cpp
   src/system/signal_monitor.cpp

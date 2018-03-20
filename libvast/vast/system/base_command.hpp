@@ -34,11 +34,20 @@ public:
   caf::expected<caf::actor> spawn_or_connect_to_node(caf::scoped_actor& self,
                                                      const opt_map& opts);
 
+  /// Spawns a new VAST node.
   caf::expected<caf::actor> spawn_node(caf::scoped_actor& self,
                                        const opt_map& opts);
 
+  /// Connects to a remote VAST server.
   caf::expected<caf::actor> connect_to_node(caf::scoped_actor& self,
                                             const opt_map& opts);
+
+protected:
+  /// Cleans up any state before leaving `run_impl`.
+  void cleanup(const caf::actor& node);
+
+private:
+  bool node_spawned_;
 };
 
 } // namespace vast

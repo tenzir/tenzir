@@ -30,7 +30,8 @@ using namespace caf;
 namespace vast::system {
 
 base_command::base_command(command* parent, std::string_view name)
-  : command(parent, name) {
+  : command(parent, name),
+    node_spawned_(false) {
   // nop
 }
 
@@ -50,19 +51,19 @@ expected<actor> base_command::spawn_node(scoped_actor& self,
   // Fetch node ID from config.
   auto id_opt = get<std::string>(opts, "id");
   if (!id_opt)
-    return make_error(sec::invalid_argument,
-                           "ID missing in options map");
+    return make_error(sec::invalid_argument, "ID missing in options map");
   auto id = std::move(*id_opt);
   // Fetch path to persistent state from config.
   auto dir_opt = get<std::string>(opts, "dir");
   if (!dir_opt)
     return make_error(sec::invalid_argument,
-                           "Directory path missing in options map");
+                      "Directory path missing in options map");
   auto dir = std::move(*dir_opt);
   auto abs_dir = path{dir}.complete();
   VAST_INFO("spawning local node:", id);
   // Pointer to the root command to system::node.
   auto node = self->spawn(system::node, id, abs_dir);
+  node_spawned_ = true;
   if (!get_or<bool>(opts, "bare", false)) {
     // If we're not in bare mode, we spawn all core actors.
     auto spawn_component = [&](auto&&... xs) {
@@ -84,7 +85,7 @@ expected<actor> base_command::spawn_node(scoped_actor& self,
     );
     if (err) {
       VAST_ERROR(self->system().render(err));
-      self->send_exit(node, exit_reason::user_shutdown);
+      cleanup(node);
       return err;
     }
   }
@@ -136,6 +137,11 @@ expected<actor> base_command::connect_to_node(scoped_actor& self,
   }
   auto& mm = self->system().middleman();
   return mm.remote_actor(node_endpoint.host, node_endpoint.port);
+}
+
+void base_command::cleanup(const actor& node) {
+  if (node_spawned_)
+    anon_send_exit(node, exit_reason::user_shutdown);
 }
 
 } // namespace vast::system

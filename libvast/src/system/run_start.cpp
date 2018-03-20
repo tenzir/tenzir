@@ -26,6 +26,8 @@
 #include "vast/system/signal_monitor.hpp"
 #include "vast/system/spawn.hpp"
 
+#include "vast/concept/parseable/vast/endpoint.hpp"
+
 using namespace caf;
 
 namespace vast::system {
@@ -42,6 +44,24 @@ run_start::run_start(command* parent, std::string_view name)
 int run_start::run_impl(actor_system& sys, opt_map& options,
                         caf::message args) {
   CAF_LOG_TRACE(CAF_ARG(options) << CAF_ARG(args));
+  // Fetch SSL settings from config.
+  auto& sys_cfg = sys.config();
+  auto use_encryption = !sys_cfg.openssl_certificate.empty()
+                        || !sys_cfg.openssl_key.empty()
+                        || !sys_cfg.openssl_passphrase.empty()
+                        || !sys_cfg.openssl_capath.empty()
+                        || !sys_cfg.openssl_cafile.empty();
+  // Fetch endpoint from config.
+  auto endpoint_opt = get<std::string>(options, "endpoint");
+  if (!endpoint_opt) {
+    VAST_ERROR("endpoint missing in options map");
+    return EXIT_FAILURE;
+  }
+  endpoint node_endpoint;
+  if (!parsers::endpoint(*endpoint_opt, node_endpoint)) {
+    VAST_ERROR("invalid endpoint:", *endpoint_opt);
+    return EXIT_FAILURE;
+  }
   // Get a convenient and blocking way to interact with actors.
   scoped_actor self{sys};
   // Spawn our node.
@@ -51,6 +71,25 @@ int run_start::run_impl(actor_system& sys, opt_map& options,
     return EXIT_FAILURE;
   }
   auto node = std::move(*node_opt);
+  // Publish our node.
+  auto host = node_endpoint.host.empty() ? nullptr : node_endpoint.host.c_str();
+  auto publish = [&]() -> expected<uint16_t> {
+    if (use_encryption)
+#ifdef VAST_USE_OPENSSL
+      return openssl::publish(node, node_endpoint.port, host);
+#else
+      return make_error(ec::unspecified, "not compiled with OpenSSL support");
+#endif
+    auto& mm = sys.middleman();
+    return mm.publish(node, node_endpoint.port, host);
+  };
+  auto bound_port = publish();
+  if (!bound_port) {
+    VAST_ERROR(self->system().render(bound_port.error()));
+    self->send_exit(node, exit_reason::user_shutdown);
+    return EXIT_FAILURE;
+  }
+  VAST_INFO("listening on", (host ? host : "") << ':' << *bound_port);
   // Spawn signal handler.
   auto sig_mon = self->spawn<detached>(system::signal_monitor, 750ms, self);
   auto guard = caf::detail::make_scope_guard([&] {

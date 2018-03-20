@@ -47,6 +47,8 @@ int command::run(caf::actor_system& sys, opt_map& options, caf::message args) {
     std::cout << std::endl;
     return EXIT_SUCCESS;
   }
+  // Only forward unparsed arguments to run_impl.
+  local_args = res.remainder;
   // Populate the map with our values.
   for (auto& f : get_opts_)
     options.emplace(f());

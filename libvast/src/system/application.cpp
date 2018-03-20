@@ -69,7 +69,7 @@ namespace vast::system {
 
 application::root_command::root_command()
   : dir("vast"),
-    endpoint(":4200"),
+    endpoint(":42000"),
     spawn_local(false),
     print_version(false) {
   id = detail::split_to_str(detail::hostname(), ".")[0];
