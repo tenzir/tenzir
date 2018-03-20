@@ -64,6 +64,7 @@ set(libvast_sources
   src/system/accountant.cpp
   src/system/application.cpp
   src/system/archive.cpp
+  src/system/base_command.cpp
   src/system/configuration.cpp
   src/system/consensus.cpp
   src/system/exporter.cpp
@@ -73,6 +74,8 @@ set(libvast_sources
   src/system/node.cpp
   src/system/partition.cpp
   src/system/profiler.cpp
+  src/system/run_import.cpp
+  src/system/run_start.cpp
   src/system/signal_monitor.cpp
   src/system/spawn.cpp
   src/system/spawn_sink.cpp

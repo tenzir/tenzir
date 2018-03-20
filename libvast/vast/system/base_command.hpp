@@ -11,26 +11,36 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include <caf/actor_system.hpp>
+#ifndef VAST_BASE_COMMAND_HPP
+#define VAST_BASE_COMMAND_HPP
 
-#include "vast/logger.hpp"
+#include <caf/expected.hpp>
 
-#include "vast/system/application.hpp"
-#include "vast/system/configuration.hpp"
-#include "vast/system/run_import.hpp"
-#include "vast/system/run_start.hpp"
+#include "vast/command.hpp"
 
-using namespace vast;
+namespace vast::system {
 
-int main(int argc, char** argv) {
-  VAST_TRACE("");
-  system::configuration cfg{argc, argv};
-  caf::actor_system sys{cfg};
-  system::application app;
-  app.add_command<system::run_start>("start");
-  app.add_command<system::run_import>("import");
-  return app.run(sys,
-                 caf::message_builder{cfg.command_line.begin(),
-                                      cfg.command_line.end()}
-                 .move_to_message());
-}
+/// A command that runs on a VAST node.
+class base_command : public command {
+public:
+  // -- constructors, destructors, and assignment operators --------------------
+
+  base_command(command* parent, std::string_view name);
+
+  ~base_command();
+
+  /// Either spawns a new VAST node or connects to a server, depending on the
+  /// configuration.
+  caf::expected<caf::actor> spawn_or_connect_to_node(caf::scoped_actor& self,
+                                                     const opt_map& opts);
+
+  caf::expected<caf::actor> spawn_node(caf::scoped_actor& self,
+                                       const opt_map& opts);
+
+  caf::expected<caf::actor> connect_to_node(caf::scoped_actor& self,
+                                            const opt_map& opts);
+};
+
+} // namespace vast
+
+#endif

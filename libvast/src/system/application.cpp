@@ -22,6 +22,7 @@
 #endif // VAST_USE_OPENSSL
 
 #include "vast/banner.hpp"
+#include "vast/logger.hpp"
 
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/vast/data.hpp"
@@ -65,6 +66,33 @@ using namespace std::string_literals;
 using namespace caf;
 
 namespace vast::system {
+
+application::root_command::root_command()
+  : dir("vast"),
+    endpoint(":4200"),
+    spawn_local(false),
+    print_version(false) {
+  id = detail::split_to_str(detail::hostname(), ".")[0];
+  add_opt("dir,d", "directory for persistent state", dir);
+  add_opt("endpoint,e", "node endpoint", endpoint);
+  add_opt("id,i", "the unique ID of this node", id);
+  // TODO: short options without arguments are currently not supported; add
+  //       short options back in once the command::separate_args function
+  //       recognizes them correctly
+  add_opt("node", "spawn a node instead of connecting to one", spawn_local);
+  add_opt("version", "print version and exit", print_version);
+}
+
+command::proceed_result
+application::root_command::proceed(caf::actor_system& sys, opt_map& options,
+                                   caf::message args) {
+  CAF_LOG_TRACE(CAF_ARG(options) << CAF_ARG(args));
+  if (print_version) {
+    std::cout << VAST_VERSION << std::endl;
+    return stop_successful;
+  }
+  return command::proceed(sys, options, std::move(args));
+}
 
 namespace {
 
@@ -282,8 +310,9 @@ application::application() {
   //program_.cmd("peer");
 }
 
-int application::run(caf::actor_system& sys) {
-  return cmd_.run(sys, sys.config().args_remainder);
+int application::run(caf::actor_system& sys, message args) {
+  CAF_LOG_TRACE(CAF_ARG(args));
+  return root_.run(sys, std::move(args));
 }
 
 //  // TODO: replace this manual parsing by a proper interface in the program

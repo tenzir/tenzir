@@ -27,9 +27,11 @@ class foo : public command {
 public:
   foo(command* parent, std::string_view name) : command(parent, name) {
     add_opt("value,v", "Some integer value", value);
+    add_opt("flag", "Some flag", flag);
   }
 
-  int value;
+  int value = 0;
+  bool flag = false;
 };
 
 class bar : public command {
@@ -38,7 +40,7 @@ public:
     add_opt("other-value,o", "Some other integer value", other_value);
   }
 
-  int other_value;
+  int other_value = 0;
 };
 
 struct fixture {
@@ -66,11 +68,31 @@ TEST(full name) {
   CHECK_EQUAL(cmd2->full_name(), "foo bar");
 }
 
-TEST(arg parsing) {
+TEST(parsing value) {
   auto cmd = root.add<foo>("foo");
   exec("foo -v 42");
+  CHECK_EQUAL(cmd->flag, false);
   CHECK_EQUAL(cmd->value, 42);
-  CHECK_EQUAL(caf::deep_to_string(options), R"([("value", 42)])");
+  CHECK_EQUAL(caf::deep_to_string(options),
+              R"([("flag", false), ("value", 42)])");
+}
+
+TEST(parsing flag) {
+  auto cmd = root.add<foo>("foo");
+  exec("foo --flag");
+  CHECK_EQUAL(cmd->flag, true);
+  CHECK_EQUAL(cmd->value, 0);
+  CHECK_EQUAL(caf::deep_to_string(options),
+              R"([("flag", true), ("value", 0)])");
+}
+
+TEST(parsing both) {
+  auto cmd = root.add<foo>("foo");
+  exec("foo --flag -v 42");
+  CHECK_EQUAL(cmd->flag, true);
+  CHECK_EQUAL(cmd->value, 42);
+  CHECK_EQUAL(caf::deep_to_string(options),
+              R"([("flag", true), ("value", 42)])");
 }
 
 TEST(nested arg parsing) {
@@ -80,7 +102,7 @@ TEST(nested arg parsing) {
   CHECK_EQUAL(cmd1->value, 42);
   CHECK_EQUAL(cmd2->other_value, 123);
   CHECK_EQUAL(caf::deep_to_string(options),
-              R"([("other-value", 123), ("value", 42)])");
+              R"([("flag", false), ("other-value", 123), ("value", 42)])");
 }
 
 FIXTURE_SCOPE_END()

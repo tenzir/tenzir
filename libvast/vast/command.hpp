@@ -71,6 +71,13 @@ public:
   /// Returns a CLI option as name/value pair.
   using get_opt = std::function<std::pair<std::string, caf::config_value>()>;
 
+  /// Wraps the result of proceed.
+  enum proceed_result {
+    proceed_ok,
+    stop_successful,
+    stop_with_error
+  };
+
   // -- constructors, destructors, and assignment operators --------------------
 
   command();
@@ -128,7 +135,42 @@ public:
     return result;
   }
 
+  template <class T>
+  caf::optional<T> get(const opt_map& xs, const std::string& name) {
+    // Map T to the clostest type in config_value.
+    using cfg_type =
+      typename std::conditional<
+        std::is_integral<T>::value && !std::is_same<bool, T>::value,
+        int64_t,
+        typename std::conditional<
+          std::is_floating_point<T>::value,
+          double,
+          T
+          >::type
+        >::type;
+    auto i = xs.find(name);
+    if (i == xs.end())
+      return caf::none;
+    auto result = caf::get_if<cfg_type>(&i->second);
+    if (!result)
+      return caf::none;
+    return static_cast<T>(*result);
+  }
+
+  template <class T>
+  T get_or(const opt_map& xs, const std::string& name, T fallback) {
+    auto result = get<T>(xs, name);
+    if (!result)
+      return fallback;
+    return *result;
+  }
+
 protected:
+  /// Checks whether a command is ready to proceed, i.e., whether the
+  /// configuration allows for calling `run_impl` or `run` on a nested command.
+  virtual proceed_result proceed(caf::actor_system& sys, opt_map& options,
+                                 caf::message args);
+
   virtual int run_impl(caf::actor_system& sys, opt_map& options,
                        caf::message args);
 

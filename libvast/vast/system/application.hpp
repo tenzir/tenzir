@@ -28,8 +28,32 @@ namespace vast::system {
 
 class application {
 public:
-  ///
-  using command_function = int (*)(caf::actor_system& sys);
+  /// Default root command for VAST applications.
+  class root_command : public command {
+  public:
+      root_command();
+
+
+  protected:
+    proceed_result proceed(caf::actor_system& sys, opt_map& options,
+                           caf::message) override;
+
+  private:
+    /// Directory for persistent state.
+    std::string dir;
+
+    /// VAST server.
+    std::string endpoint;
+
+    /// The unique ID of this node.
+    std::string id;
+
+    /// Spawns a local node instead of connecting to a server if set.
+    bool spawn_local;
+
+    /// Print version and exit if set.
+    bool print_version;
+  };
 
   /// Constructs an application.
   /// @param cfg The VAST system configuration.
@@ -38,15 +62,15 @@ public:
   /// Adds a command to the application or overrides an existing mapping.
   template <class T, class... Ts>
   T* add_command(std::string_view name, Ts&&... xs) {
-    cmd_.add<T>(name, std::forward<Ts>(xs)...);
+    return root_.add<T>(name, std::forward<Ts>(xs)...);
   }
 
   /// Starts the application and blocks until execution completes.
   /// @returns An exit code suitable for returning from main.
-  int run(caf::actor_system& sys);
+  int run(caf::actor_system& sys, caf::message args);
 
 private:
-  command cmd_;
+  root_command root_;
 };
 
 } // namespace vast::system

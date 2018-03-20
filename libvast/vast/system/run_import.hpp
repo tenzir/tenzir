@@ -11,26 +11,30 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include <caf/actor_system.hpp>
+#ifndef VAST_SYSTEM_RUN_IMPORT_HPP
+#define VAST_SYSTEM_RUN_IMPORT_HPP
 
-#include "vast/logger.hpp"
+#include <memory>
+#include <string>
+#include <string_view>
 
-#include "vast/system/application.hpp"
-#include "vast/system/configuration.hpp"
-#include "vast/system/run_import.hpp"
-#include "vast/system/run_start.hpp"
+#include <caf/detail/unordered_flat_map.hpp>
 
-using namespace vast;
+#include "vast/system/base_command.hpp"
 
-int main(int argc, char** argv) {
-  VAST_TRACE("");
-  system::configuration cfg{argc, argv};
-  caf::actor_system sys{cfg};
-  system::application app;
-  app.add_command<system::run_start>("start");
-  app.add_command<system::run_import>("import");
-  return app.run(sys,
-                 caf::message_builder{cfg.command_line.begin(),
-                                      cfg.command_line.end()}
-                 .move_to_message());
-}
+namespace vast::system {
+
+/// Default implementation for the `import` command.
+/// @relates application
+class run_import : public base_command {
+public:
+  run_import(command* parent, std::string_view name);
+
+protected:
+  int run_impl(caf::actor_system& sys, opt_map& options,
+               caf::message args) override;
+};
+
+} // namespace vast::system
+
+#endif

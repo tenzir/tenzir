@@ -32,14 +32,29 @@ command::~command() {
 }
 
 int command::run(caf::actor_system& sys, opt_map& options, caf::message args) {
-  VAST_TRACE(CAF_ARG(args));
+  CAF_LOG_TRACE(CAF_ARG(options) << CAF_ARG(args));
   // Split the arguments.
   auto [local_args, subcmd, subcmd_args] = separate_args(args);
   // Parse arguments for this command.
-  local_args.extract_opts(opts_);
+  auto res = local_args.extract_opts(opts_);
+  if (res.opts.count("help") != 0) {
+    // TODO: add subcommands to helptext etc.
+    std::cout << res.helptext << std::endl;
+    return EXIT_SUCCESS;
+  }
   // Populate the map with our values.
   for (auto& f : get_opts_)
     options.emplace(f());
+  // Check whether the options allow for further processing.
+  switch (proceed(sys, options, local_args)) {
+    default:
+        // nop
+        break;
+    case stop_successful:
+      return EXIT_SUCCESS;
+    case stop_with_error:
+      return EXIT_FAILURE;
+  }
   // Invoke run_impl if no subcommand was defined.
   if (subcmd.empty()) {
     VAST_ASSERT(subcmd_args.empty());
@@ -189,7 +204,18 @@ bool command::is_root() const noexcept {
   return parent_ == nullptr;
 }
 
-int command::run_impl(caf::actor_system&, opt_map&, caf::message) {
+command::proceed_result command::proceed(caf::actor_system&, opt_map& options,
+                                         caf::message args) {
+  CAF_LOG_TRACE(CAF_ARG(options) << CAF_ARG(args));
+  CAF_IGNORE_UNUSED(options);
+  CAF_IGNORE_UNUSED(args);
+  return proceed_ok;
+}
+
+int command::run_impl(caf::actor_system&, opt_map& options, caf::message args) {
+  CAF_LOG_TRACE(CAF_ARG(options) << CAF_ARG(args));
+  CAF_IGNORE_UNUSED(options);
+  CAF_IGNORE_UNUSED(args);
   usage();
   return EXIT_FAILURE;
 }
