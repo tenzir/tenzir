@@ -74,6 +74,7 @@ set(libvast_sources
   src/system/node.cpp
   src/system/partition.cpp
   src/system/profiler.cpp
+  src/system/run_export.cpp
   src/system/run_import.cpp
   src/system/run_start.cpp
   src/system/signal_monitor.cpp
