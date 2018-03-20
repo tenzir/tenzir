@@ -11,7 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/system/run_start.hpp"
+#include "vast/system/run_remote.hpp"
 
 #include <iostream>
 
@@ -31,51 +31,52 @@ using namespace caf;
 namespace vast::system {
 using namespace std::chrono_literals;
 
-run_start::run_start(command* parent, std::string_view name)
-  : base_command(parent, name),
-    spawn_bare_node(false),
-    in_foreground(false) {
-  add_opt("bare", "spawn empty node without any components", spawn_bare_node);
-  add_opt("foreground", "run in foreground (do not daemonize)", in_foreground);
+run_remote::run_remote(command* parent, std::string_view name)
+  : base_command(parent, name) {
+  // nop
 }
 
-int run_start::run_impl(actor_system& sys, opt_map& options,
-                        caf::message args) {
-  CAF_LOG_TRACE(CAF_ARG(options) << CAF_ARG(args));
+int run_remote::run_impl(actor_system& sys, opt_map& options, message args) {
+  CAF_LOG_TRACE(CAF_ARG2("name", name()) << CAF_ARG(options) << CAF_ARG(args));
   // Get a convenient and blocking way to interact with actors.
   scoped_actor self{sys};
-  // Spawn our node.
-  auto node_opt = spawn_node(self, options);
+  // Get VAST node.
+  auto node_opt = connect_to_node(self, options);
   if (!node_opt) {
-    std::cerr << sys.render(node_opt.error()) << std::endl;
+    std::cerr << "unable to connect to node: " << sys.render(node_opt.error())
+              << std::endl;
     return EXIT_FAILURE;
   }
   auto node = std::move(*node_opt);
-  // Spawn signal handler.
-  auto sig_mon = self->spawn<detached>(system::signal_monitor, 750ms, self);
-  auto guard = caf::detail::make_scope_guard([&] {
-    self->send_exit(sig_mon, exit_reason::user_shutdown);
-  });
-  // Run main loop.
-  auto rc = 0;
-  auto stop = false;
-  self->do_receive(
+  // Build command to remote node.
+  auto cmd = make_message(std::string{name()}) + args;
+  // Delegate command to node.
+  auto result = true;
+  self->send(node, std::move(cmd), std::move(args));
+  self->receive(
     [&](const down_msg& msg) {
-      VAST_ASSERT(msg.source == node);
-      VAST_DEBUG("received DOWN from node");
-      stop = true;
-      if (msg.reason != exit_reason::user_shutdown)
-        rc = 1;
+      if (msg.reason != exit_reason::user_shutdown) {
+        std::cerr << "remote node down" << std::endl;
+        result = false;
+      }
     },
-    [&](system::signal_atom, int signal) {
-      VAST_DEBUG("got " << ::strsignal(signal));
-      if (signal == SIGINT || signal == SIGTERM)
-        self->send_exit(node, exit_reason::user_shutdown);
-      else
-        self->send(node, system::signal_atom::value, signal);
-    }
-  ).until([&] { return stop; });
-  return rc;
+    [&](ok_atom) {
+      // Standard reply for success.
+    },
+    [&](actor&) {
+      // "vast spawn" returns an actor.
+    },
+    [&](const std::string& str) {
+      // Status messages or query results.
+      std::cout << str << std::endl;
+    },
+    [&](const error& e) {
+      VAST_IGNORE_UNUSED(e);
+      VAST_ERROR(self->system().render(e));
+      std::cerr << self->system().render(e) << std::endl;
+      result = false;
+    });
+  return result ? 0 : 1;
 }
 
 } // namespace vast::system

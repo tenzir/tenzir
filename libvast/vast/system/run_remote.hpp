@@ -11,35 +11,26 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_SYSTEM_RUN_START_HPP
-#define VAST_SYSTEM_RUN_START_HPP
+#ifndef VAST_SYSTEM_RUN_REMOTE_HPP
+#define VAST_SYSTEM_RUN_REMOTE_HPP
 
 #include <memory>
 #include <string>
 #include <string_view>
 
-#include <caf/detail/unordered_flat_map.hpp>
-
 #include "vast/system/base_command.hpp"
 
 namespace vast::system {
 
-/// Default implementation for the `start` command.
+/// Default implementation for the `remote` command.
 /// @relates application
-class run_start : public base_command {
+class run_remote : public base_command {
 public:
-  run_start(command* parent, std::string_view name);
+  run_remote(command* parent, std::string_view name);
 
 protected:
   int run_impl(caf::actor_system& sys, opt_map& options,
                caf::message args) override;
-
-private:
-  /// Spawn empty node without components if set.
-  bool spawn_bare_node;
-
-  /// Run VAST in foreground (do not daemonize) if set.
-  bool in_foreground;
 };
 
 } // namespace vast::system

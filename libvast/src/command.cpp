@@ -205,6 +205,10 @@ std::string command::full_name() {
   return result;
 }
 
+std::string command::name() {
+  return std::string{name_.begin(), name_.end()};
+}
+
 bool command::is_root() const noexcept {
   return parent_ == nullptr;
 }

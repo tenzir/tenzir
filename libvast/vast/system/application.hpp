@@ -33,7 +33,6 @@ public:
   public:
       root_command();
 
-
   protected:
     proceed_result proceed(caf::actor_system& sys, opt_map& options,
                            caf::message) override;

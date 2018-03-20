@@ -87,75 +87,22 @@ command::proceed_result
 application::root_command::proceed(caf::actor_system& sys, opt_map& options,
                                    caf::message args) {
   CAF_LOG_TRACE(CAF_ARG(options) << CAF_ARG(args));
+  CAF_IGNORE_UNUSED(sys);
+  CAF_IGNORE_UNUSED(options);
+  CAF_IGNORE_UNUSED(args);
   if (print_version) {
     std::cout << VAST_VERSION << std::endl;
     return stop_successful;
   }
-  return command::proceed(sys, options, std::move(args));
+  std::cout << banner() << "\n\n";
+  return command::proceed_ok;
 }
-
-namespace {
-
-/*
-
-int run_remote(scoped_actor& self, actor& node, std::string cmd, message args) {
-  auto result = true;
-  self->send(node, std::move(cmd), std::move(args));
-  self->receive(
-    [&](const down_msg& msg) {
-      if (msg.reason != exit_reason::user_shutdown)
-        result = false;
-    },
-    [&](ok_atom) {
-      // Standard reply for success.
-    },
-    [&](actor&) {
-      // "vast spawn" returns an actor.
-    },
-    [&](const std::string& str) {
-      // Status messages or query results.
-      std::cout << str << std::endl;
-    },
-    [&](const error& e) {
-      VAST_IGNORE_UNUSED(e);
-      VAST_ERROR(self->system().render(e));
-      result = false;
-    }
-  );
-  return result ? 0 : 1;
-}
-
-*/
-
-
-} // namespace <anonymous>
-
 
 application::application() {
   // TODO: this function has side effects...should we put it elsewhere where
   // it's explicit to the user? Or perhaps make whatever this function does
   // simply a configuration option and use it later?
   detail::adjust_resource_consumption();
-  // Define program layout.
-  //program_
-  //  .opt("dir,d", "directory for persistent state", "vast")
-  //  .opt("endpoint,e", "node endpoint", ":42000")
-  //  .opt("id,i", "the unique ID of this node",
-  //       detail::split_to_str(detail::hostname(), ".")[0])
-  //  .opt("node,n", "spawn a local node instead of connecting to one")
-  //  .opt("version,v", "print version and exit");
-  //program_
-  //  .cmd("start", "start a node")
-  //    .opt("bare,b", "spawn empty node without any components")
-  //    .opt("foreground,f", "run in foreground (do not daemonize)");
-  //program_.cmd("stop", "stop a node");
-  //program_.cmd("show");
-  //program_.cmd("export");
-  //program_.cmd("import");
-  //program_.cmd("spawn");
-  //program_.cmd("send");
-  //program_.cmd("kill");
-  //program_.cmd("peer");
 }
 
 int application::run(caf::actor_system& sys, message args) {

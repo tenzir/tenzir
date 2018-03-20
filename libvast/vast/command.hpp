@@ -118,6 +118,9 @@ public:
   /// Returns the full name for this command.
   std::string full_name();
 
+  /// Returns the name for this command.
+  std::string name();
+
   /// Queries whether this command has no parent.
   bool is_root() const noexcept;
 
