@@ -94,6 +94,7 @@ set(libvast_sources
 
 if (PCAP_FOUND)
   set(libvast_sources ${libvast_sources}
+    src/system/run_pcap_reader.cpp
     src/format/pcap.cpp)
 endif ()
 

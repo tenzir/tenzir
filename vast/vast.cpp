@@ -28,6 +28,10 @@
 #include "vast/format/bro.hpp"
 #include "vast/format/mrt.hpp"
 
+#ifdef VAST_HAVE_PCAP
+#include "vast/system/run_pcap_reader.hpp"
+#endif
+
 using namespace vast;
 using namespace vast::system;
 
@@ -43,6 +47,9 @@ int main(int argc, char** argv) {
   auto cmd = app.add_command<run_import>("import");
   cmd->add<run_reader<format::bro::reader>>("bro");
   cmd->add<run_reader<format::mrt::reader>>("mrt");
+#ifdef VAST_HAVE_PCAP
+  cmd->add<run_pcap_reader>("pcap");
+#endif
   cmd->add<run_reader<format::bgpdump::reader>>("bgpdump");
   app.add_command<run_export>("export");
   // Add program commands that always run remotely.
