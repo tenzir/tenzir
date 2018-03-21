@@ -39,7 +39,7 @@
 
 namespace vast::system {
 
-int run_reader_base::run_impl(caf::actor_system& sys, opt_map& options,
+int run_reader_base::run_impl(caf::actor_system& sys, option_map& options,
                               caf::message args) {
   using namespace caf;
   using namespace std::chrono_literals;

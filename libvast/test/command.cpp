@@ -47,7 +47,7 @@ struct fixture {
   command root;
   caf::actor_system_config cfg;
   caf::actor_system sys{cfg};
-  command::opt_map options;
+  command::option_map options;
   int exec(std::string str) {
     caf::message_builder mb;
     std::vector<std::string> xs;

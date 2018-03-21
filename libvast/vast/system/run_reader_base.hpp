@@ -45,7 +45,7 @@ public:
   using base_command::base_command;
 
 protected:
-  int run_impl(caf::actor_system& sys, opt_map& options,
+  int run_impl(caf::actor_system& sys, option_map& options,
                caf::message args) override;
 
   virtual expected<caf::actor> make_source(caf::scoped_actor& self,

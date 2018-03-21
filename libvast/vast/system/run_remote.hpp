@@ -29,7 +29,7 @@ public:
   run_remote(command* parent, std::string_view name);
 
 protected:
-  int run_impl(caf::actor_system& sys, opt_map& options,
+  int run_impl(caf::actor_system& sys, option_map& options,
                caf::message args) override;
 };
 

@@ -41,7 +41,7 @@ run_start::run_start(command* parent, std::string_view name)
   add_opt("foreground", "run in foreground (do not daemonize)", in_foreground);
 }
 
-int run_start::run_impl(actor_system& sys, opt_map& options,
+int run_start::run_impl(actor_system& sys, option_map& options,
                         caf::message args) {
   CAF_LOG_TRACE(CAF_ARG(options) << CAF_ARG(args));
   // Fetch SSL settings from config.

@@ -36,7 +36,7 @@ run_import::run_import(command* parent, std::string_view name)
   // nop
 }
 
-int run_import::run_impl(actor_system&, opt_map&, caf::message) {
+int run_import::run_impl(actor_system&, option_map&, caf::message) {
   VAST_ERROR("run_import::run_impl called");
   return EXIT_FAILURE;
 }

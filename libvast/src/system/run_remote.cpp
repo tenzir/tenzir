@@ -36,7 +36,7 @@ run_remote::run_remote(command* parent, std::string_view name)
   // nop
 }
 
-int run_remote::run_impl(actor_system& sys, opt_map& options, message args) {
+int run_remote::run_impl(actor_system& sys, option_map& options, message args) {
   CAF_LOG_TRACE(CAF_ARG2("name", name()) << CAF_ARG(options) << CAF_ARG(args));
   // Get a convenient and blocking way to interact with actors.
   scoped_actor self{sys};

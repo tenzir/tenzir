@@ -40,14 +40,14 @@ base_command::~base_command() {
 }
 
 expected<actor> base_command::spawn_or_connect_to_node(scoped_actor& self,
-                                                       const opt_map& opts) {
+                                                       const option_map& opts) {
   if (get_or<bool>(opts, "node", false))
     return spawn_node(self, opts);
   return connect_to_node(self, opts);
 }
 
 expected<actor> base_command::spawn_node(scoped_actor& self,
-                                         const opt_map& opts) {
+                                         const option_map& opts) {
   // Fetch node ID from config.
   auto id_opt = get<std::string>(opts, "id");
   if (!id_opt)
@@ -93,7 +93,7 @@ expected<actor> base_command::spawn_node(scoped_actor& self,
 }
 
 expected<actor> base_command::connect_to_node(scoped_actor& self,
-                                              const opt_map& opts) {
+                                              const option_map& opts) {
   // Fetch node ID from config.
   auto id_opt = get<std::string>(opts, "id");
   if (!id_opt)

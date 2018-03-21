@@ -18,6 +18,7 @@
 #include <memory>
 #include <string>
 #include <string_view>
+#include <utility>
 
 #include <caf/actor_system_config.hpp>
 #include <caf/fwd.hpp>
@@ -39,35 +40,13 @@ class command {
 public:
   // -- member types -----------------------------------------------------------
 
-  /// An option of a command.
-  struct option {
-    template <class T = bool>
-    static std::pair<std::string, option>
-    make(const std::string& tag, std::string desc, T x = {}) {
-      auto s = detail::split_to_str(tag, ",");
-      std::string shortcut;
-      if (s.size() >= 2)
-        shortcut = s[1][0];
-      return {s[0], {std::move(shortcut), std::move(desc),
-                    data{std::forward<T>(x)}}};
-    }
-
-    std::string shortcut;
-    std::string description;
-    data value;
-  };
-
   /// Owning pointer to a command.
   using unique_ptr = std::unique_ptr<command>;
 
-  /// Group of configuration parameters.
-  using opt_group = caf::actor_system_config::opt_group;
-
   /// Maps names of config parameters to their value.
-  using opt_map = std::map<std::string, caf::config_value>;
+  using option_map = std::map<std::string, caf::config_value>;
 
-  /// Returns a CLI option as name/value pair.
-  using get_opt = std::function<std::pair<std::string, caf::config_value>()>;
+  using get_option = std::function<std::pair<std::string, caf::config_value>()>;
 
   /// Wraps the result of proceed.
   enum proceed_result {
@@ -90,7 +69,7 @@ public:
 
   /// Runs the command and blocks until execution completes.
   /// @returns An exit code suitable for returning from main.
-  int run(caf::actor_system& sys, opt_map& options, caf::message args);
+  int run(caf::actor_system& sys, option_map& options, caf::message args);
 
   /// Prints usage to `std::cerr`.
   void usage();
@@ -104,14 +83,6 @@ public:
   /// registered sub-command.
   /// @param args The command line arguments.
   void dispatch(const std::vector<std::string>& args) const;
-
-  /// Retrieves an option value.
-  /// @param x The name of the option.
-  /// @returns The value for *x* or `nullptr` if `x` is not a valid option.
-  const data* get(const std::string& x) const;
-
-  std::string description;
-  detail::steady_map<std::string, option> options;
 
   /// Returns the full name for this command.
   std::string full_name();
@@ -142,7 +113,7 @@ public:
   }
 
   template <class T>
-  caf::optional<T> get(const opt_map& xs, const std::string& name) {
+  caf::optional<T> get(const option_map& xs, const std::string& name) {
     // Map T to the clostest type in config_value.
     using cfg_type =
       typename std::conditional<
@@ -164,7 +135,7 @@ public:
   }
 
   template <class T>
-  T get_or(const opt_map& xs, const std::string& name, T fallback) {
+  T get_or(const option_map& xs, const std::string& name, T fallback) {
     auto result = get<T>(xs, name);
     if (!result)
       return fallback;
@@ -174,10 +145,10 @@ public:
 protected:
   /// Checks whether a command is ready to proceed, i.e., whether the
   /// configuration allows for calling `run_impl` or `run` on a nested command.
-  virtual proceed_result proceed(caf::actor_system& sys, opt_map& options,
+  virtual proceed_result proceed(caf::actor_system& sys, option_map& options,
                                  caf::message args);
 
-  virtual int run_impl(caf::actor_system& sys, opt_map& options,
+  virtual int run_impl(caf::actor_system& sys, option_map& options,
                        caf::message args);
 
   template <class T>
@@ -187,7 +158,7 @@ protected:
     auto pos = name.find_first_of(',');
     if (pos < name.size())
       name.resize(pos);
-    get_opts_.emplace_back([name = std::move(name), &ref] {
+    kvps_.emplace_back([name = std::move(name), &ref] {
       // Map T to the clostest type in config_value.
       using cfg_type =
         typename std::conditional<
@@ -212,9 +183,15 @@ private:
 
   std::map<std::string_view, unique_ptr> nested_;
   command* parent_;
+
+  /// The user-provided name.
   std::string_view name_;
+
+  /// List of all accepted options.
   std::vector<caf::message::cli_arg> opts_;
-  std::vector<get_opt> get_opts_;
+
+  /// List of function objects that return CLI options as name/value pairs.
+  std::vector<std::function<std::pair<std::string, caf::config_value>()>> kvps_;
 };
 
 } // namespace vast

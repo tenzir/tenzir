@@ -36,7 +36,7 @@ run_export::run_export(command* parent, std::string_view name)
   // nop
 }
 
-int run_export::run_impl(actor_system& sys, opt_map& options,
+int run_export::run_impl(actor_system& sys, option_map& options,
                          caf::message args) {
   // Get a convenient and blocking way to interact with actors.
   scoped_actor self{sys};

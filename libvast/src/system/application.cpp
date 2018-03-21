@@ -84,7 +84,7 @@ application::root_command::root_command()
 }
 
 command::proceed_result
-application::root_command::proceed(caf::actor_system& sys, opt_map& options,
+application::root_command::proceed(caf::actor_system& sys, option_map& options,
                                    caf::message args) {
   CAF_LOG_TRACE(CAF_ARG(options) << CAF_ARG(args));
   CAF_IGNORE_UNUSED(sys);
