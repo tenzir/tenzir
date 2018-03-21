@@ -101,7 +101,7 @@ std::string command::full_name() {
 }
 
 std::string command::name() {
-  return std::string{name_.begin(), name_.end()};
+  return std::string{name_};
 }
 
 bool command::is_root() const noexcept {
