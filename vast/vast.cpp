@@ -47,13 +47,13 @@ int main(int argc, char** argv) {
   caf::actor_system sys{cfg};
   application app;
   // Add program commands that run locally.
-  app.add_command<start_command>("start");
+  app.add<start_command>("start");
   // Add program composed commands.
-  auto import_cmd = app.add_command<import_command>("import");
+  auto import_cmd = app.add<import_command>("import");
   import_cmd->add<reader_command<format::bro::reader>>("bro");
   import_cmd->add<reader_command<format::mrt::reader>>("mrt");
   import_cmd->add<reader_command<format::bgpdump::reader>>("bgpdump");
-  auto export_cmd = app.add_command<export_command>("export");
+  auto export_cmd = app.add<export_command>("export");
   export_cmd->add<writer_command<format::bro::writer>>("bro");
   export_cmd->add<writer_command<format::csv::writer>>("csv");
   export_cmd->add<writer_command<format::ascii::writer>>("ascii");
@@ -63,12 +63,12 @@ int main(int argc, char** argv) {
   export_cmd->add<pcap_writer_command>("pcap");
 #endif
   // Add program commands that always run remotely.
-  app.add_command<remote_command>("stop");
-  app.add_command<remote_command>("show");
-  app.add_command<remote_command>("spawn");
-  app.add_command<remote_command>("send");
-  app.add_command<remote_command>("kill");
-  app.add_command<remote_command>("peer");
+  app.add<remote_command>("stop");
+  app.add<remote_command>("show");
+  app.add<remote_command>("spawn");
+  app.add<remote_command>("send");
+  app.add<remote_command>("kill");
+  app.add<remote_command>("peer");
   // Dispatch to root command.
   auto result = app.run(sys,
                         caf::message_builder{cfg.command_line.begin(),

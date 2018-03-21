@@ -58,7 +58,7 @@ public:
 
   /// Adds a command to the application or overrides an existing mapping.
   template <class T, class... Ts>
-  T* add_command(std::string_view name, Ts&&... xs) {
+  T* add(std::string_view name, Ts&&... xs) {
     return root_.add<T>(name, std::forward<Ts>(xs)...);
   }
 
