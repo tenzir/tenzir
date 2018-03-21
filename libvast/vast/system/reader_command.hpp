@@ -25,8 +25,8 @@
 #include "vast/expression.hpp"
 #include "vast/logger.hpp"
 
-#include "vast/system/run_reader_base.hpp"
-#include "vast/system/run_reader_base.hpp"
+#include "vast/system/reader_command_base.hpp"
+#include "vast/system/reader_command_base.hpp"
 #include "vast/system/signal_monitor.hpp"
 #include "vast/system/source.hpp"
 #include "vast/system/tracker.hpp"
@@ -44,10 +44,10 @@ namespace vast::system {
 /// formats.
 /// @relates application
 template <class Reader>
-class run_reader : public run_reader_base {
+class reader_command : public reader_command_base {
 public:
-  run_reader(command* parent, std::string_view name)
-      : run_reader_base(parent, name),
+  reader_command(command* parent, std::string_view name)
+      : reader_command_base(parent, name),
         input_("-"),
         uds_(false) {
     this->add_opt("read,r", "path to input where to read events from", input_);

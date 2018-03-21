@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_SYSTEM_RUN_PCAP_WRITER_HPP
-#define VAST_SYSTEM_RUN_PCAP_WRITER_HPP
+#include "vast/system/pcap_writer_command.hpp"
 
 #include <memory>
 #include <string>
@@ -25,41 +24,27 @@
 #include "vast/expression.hpp"
 #include "vast/logger.hpp"
 
-#include "vast/system/run_writer_base.hpp"
-#include "vast/system/run_writer_base.hpp"
-#include "vast/system/signal_monitor.hpp"
-#include "vast/system/source.hpp"
-#include "vast/system/tracker.hpp"
+#include "vast/system/sink.hpp"
 
 #include "vast/format/pcap.hpp"
 
-#include "vast/concept/parseable/to.hpp"
-
-#include "vast/concept/parseable/vast/expression.hpp"
-#include "vast/concept/parseable/vast/schema.hpp"
-
-#include "vast/detail/make_io_stream.hpp"
-
 namespace vast::system {
 
-/// PCAP subcommant to `import`.
-/// @relates application
-class run_pcap_writer : public run_writer_base {
-public:
-  using super = run_writer_base;
+pcap_writer_command::pcap_writer_command(command* parent, std::string_view name)
+  : super(parent, name),
+    output_("-"),
+    uds_(false),
+    flush_(10000u) {
+  add_opt("write,w", "path to write events to", output_);
+  add_opt("uds,d", "treat -w as UNIX domain socket to connect to", uds_);
+  add_opt("flush,f", "flush to disk after this many packets", flush_);
+}
 
-  run_pcap_writer(command* parent, std::string_view name);
-
-protected:
-  expected<caf::actor> make_sink(caf::scoped_actor& self,
-                                 caf::message args) override;
-
-private:
-  std::string output_;
-  bool uds_;
-  unsigned flush_;
-};
+expected<caf::actor> pcap_writer_command::make_sink(caf::scoped_actor& self,
+                                                caf::message args) {
+  CAF_LOG_TRACE(CAF_ARG(args));
+  format::pcap::writer writer{output_, flush_};
+  return self->spawn(sink<format::pcap::writer>, std::move(writer));
+}
 
 } // namespace vast::system
-
-#endif

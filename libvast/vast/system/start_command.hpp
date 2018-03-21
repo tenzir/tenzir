@@ -11,40 +11,35 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/system/run_pcap_writer.hpp"
+#ifndef VAST_SYSTEM_START_COMMAND_HPP
+#define VAST_SYSTEM_START_COMMAND_HPP
 
 #include <memory>
 #include <string>
 #include <string_view>
 
-#include <caf/scoped_actor.hpp>
-#include <caf/typed_actor.hpp>
-#include <caf/typed_event_based_actor.hpp>
-
-#include "vast/expression.hpp"
-#include "vast/logger.hpp"
-
-#include "vast/system/sink.hpp"
-
-#include "vast/format/pcap.hpp"
+#include "vast/system/base_command.hpp"
 
 namespace vast::system {
 
-run_pcap_writer::run_pcap_writer(command* parent, std::string_view name)
-  : super(parent, name),
-    output_("-"),
-    uds_(false),
-    flush_(10000u) {
-  add_opt("write,w", "path to write events to", output_);
-  add_opt("uds,d", "treat -w as UNIX domain socket to connect to", uds_);
-  add_opt("flush,f", "flush to disk after this many packets", flush_);
-}
+/// Default implementation for the `start` command.
+/// @relates application
+class start_command : public base_command {
+public:
+  start_command(command* parent, std::string_view name);
 
-expected<caf::actor> run_pcap_writer::make_sink(caf::scoped_actor& self,
-                                                caf::message args) {
-  CAF_LOG_TRACE(CAF_ARG(args));
-  format::pcap::writer writer{output_, flush_};
-  return self->spawn(sink<format::pcap::writer>, std::move(writer));
-}
+protected:
+  int run_impl(caf::actor_system& sys, option_map& options,
+               caf::message args) override;
+
+private:
+  /// Spawn empty node without components if set.
+  bool spawn_bare_node;
+
+  /// Run VAST in foreground (do not daemonize) if set.
+  bool in_foreground;
+};
 
 } // namespace vast::system
+
+#endif

@@ -11,7 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/system/run_start.hpp"
+#include "vast/system/start_command.hpp"
 
 #include <iostream>
 
@@ -33,7 +33,7 @@ using namespace caf;
 namespace vast::system {
 using namespace std::chrono_literals;
 
-run_start::run_start(command* parent, std::string_view name)
+start_command::start_command(command* parent, std::string_view name)
   : base_command(parent, name),
     spawn_bare_node(false),
     in_foreground(false) {
@@ -41,7 +41,7 @@ run_start::run_start(command* parent, std::string_view name)
   add_opt("foreground", "run in foreground (do not daemonize)", in_foreground);
 }
 
-int run_start::run_impl(actor_system& sys, option_map& options,
+int start_command::run_impl(actor_system& sys, option_map& options,
                         caf::message args) {
   CAF_LOG_TRACE(CAF_ARG(options) << CAF_ARG(args));
   // Fetch SSL settings from config.

@@ -14,7 +14,7 @@
 #ifndef VAST_SYSTEM_RUN_writer_HPP
 #define VAST_SYSTEM_RUN_writer_HPP
 
-#include "vast/system/run_writer_base.hpp"
+#include "vast/system/writer_command_base.hpp"
 
 #include <memory>
 #include <string>
@@ -42,7 +42,7 @@ using namespace caf;
 
 namespace vast::system {
 
-int run_writer_base::run_impl(caf::actor_system& sys, option_map& options,
+int writer_command_base::run_impl(caf::actor_system& sys, option_map& options,
                               caf::message args) {
   // Get a convenient and blocking way to interact with actors.
   scoped_actor self{sys};

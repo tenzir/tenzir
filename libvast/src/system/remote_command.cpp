@@ -11,7 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/system/run_remote.hpp"
+#include "vast/system/remote_command.hpp"
 
 #include <iostream>
 
@@ -31,12 +31,12 @@ using namespace caf;
 namespace vast::system {
 using namespace std::chrono_literals;
 
-run_remote::run_remote(command* parent, std::string_view name)
+remote_command::remote_command(command* parent, std::string_view name)
   : base_command(parent, name) {
   // nop
 }
 
-int run_remote::run_impl(actor_system& sys, option_map& options, message args) {
+int remote_command::run_impl(actor_system& sys, option_map& options, message args) {
   CAF_LOG_TRACE(CAF_ARG2("name", name()) << CAF_ARG(options) << CAF_ARG(args));
   // Get a convenient and blocking way to interact with actors.
   scoped_actor self{sys};

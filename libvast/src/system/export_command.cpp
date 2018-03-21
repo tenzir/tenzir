@@ -11,28 +11,34 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_SYSTEM_RUN_IMPORT_HPP
-#define VAST_SYSTEM_RUN_IMPORT_HPP
+#include "vast/system/export_command.hpp"
 
-#include <memory>
-#include <string>
-#include <string_view>
+#include <iostream>
 
-#include "vast/system/base_command.hpp"
+#include <caf/all.hpp>
+#include <caf/io/all.hpp>
+#ifdef VAST_USE_OPENSSL
+#include <caf/openssl/all.hpp>
+#endif // VAST_USE_OPENSSL
+
+#include "vast/logger.hpp"
+
+#include "vast/system/signal_monitor.hpp"
+#include "vast/system/spawn.hpp"
+
+using namespace caf;
 
 namespace vast::system {
+using namespace std::chrono_literals;
 
-/// Default implementation for the `import` command.
-/// @relates application
-class run_import : public base_command {
-public:
-  run_import(command* parent, std::string_view name);
+export_command::export_command(command* parent, std::string_view name)
+  : base_command(parent, name) {
+  // nop
+}
 
-protected:
-  int run_impl(caf::actor_system& sys, option_map& options,
-               caf::message args) override;
-};
+int export_command::run_impl(actor_system&, option_map&, caf::message) {
+  VAST_ERROR("export_command::run_impl called");
+  return EXIT_FAILURE;
+}
 
 } // namespace vast::system
-
-#endif

@@ -18,12 +18,12 @@
 
 #include "vast/system/application.hpp"
 #include "vast/system/configuration.hpp"
-#include "vast/system/run_export.hpp"
-#include "vast/system/run_import.hpp"
-#include "vast/system/run_reader.hpp"
-#include "vast/system/run_remote.hpp"
-#include "vast/system/run_start.hpp"
-#include "vast/system/run_writer.hpp"
+#include "vast/system/export_command.hpp"
+#include "vast/system/import_command.hpp"
+#include "vast/system/reader_command.hpp"
+#include "vast/system/remote_command.hpp"
+#include "vast/system/start_command.hpp"
+#include "vast/system/writer_command.hpp"
 
 #include "vast/format/ascii.hpp"
 #include "vast/format/bgpdump.hpp"
@@ -33,8 +33,8 @@
 #include "vast/format/mrt.hpp"
 
 #ifdef VAST_HAVE_PCAP
-#include "vast/system/run_pcap_reader.hpp"
-#include "vast/system/run_pcap_writer.hpp"
+#include "vast/system/pcap_reader_command.hpp"
+#include "vast/system/pcap_writer_command.hpp"
 #endif
 
 using namespace vast;
@@ -47,28 +47,28 @@ int main(int argc, char** argv) {
   caf::actor_system sys{cfg};
   application app;
   // Add program commands that run locally.
-  app.add_command<run_start>("start");
+  app.add_command<start_command>("start");
   // Add program composed commands.
-  auto import_cmd = app.add_command<run_import>("import");
-  import_cmd->add<run_reader<format::bro::reader>>("bro");
-  import_cmd->add<run_reader<format::mrt::reader>>("mrt");
-  import_cmd->add<run_reader<format::bgpdump::reader>>("bgpdump");
-  auto export_cmd = app.add_command<run_export>("export");
-  export_cmd->add<run_writer<format::bro::writer>>("bro");
-  export_cmd->add<run_writer<format::csv::writer>>("csv");
-  export_cmd->add<run_writer<format::ascii::writer>>("ascii");
-  export_cmd->add<run_writer<format::json::writer>>("json");
+  auto import_cmd = app.add_command<import_command>("import");
+  import_cmd->add<reader_command<format::bro::reader>>("bro");
+  import_cmd->add<reader_command<format::mrt::reader>>("mrt");
+  import_cmd->add<reader_command<format::bgpdump::reader>>("bgpdump");
+  auto export_cmd = app.add_command<export_command>("export");
+  export_cmd->add<writer_command<format::bro::writer>>("bro");
+  export_cmd->add<writer_command<format::csv::writer>>("csv");
+  export_cmd->add<writer_command<format::ascii::writer>>("ascii");
+  export_cmd->add<writer_command<format::json::writer>>("json");
 #ifdef VAST_HAVE_PCAP
-  import_cmd->add<run_pcap_reader>("pcap");
-  export_cmd->add<run_pcap_writer>("pcap");
+  import_cmd->add<pcap_reader_command>("pcap");
+  export_cmd->add<pcap_writer_command>("pcap");
 #endif
   // Add program commands that always run remotely.
-  app.add_command<run_remote>("stop");
-  app.add_command<run_remote>("show");
-  app.add_command<run_remote>("spawn");
-  app.add_command<run_remote>("send");
-  app.add_command<run_remote>("kill");
-  app.add_command<run_remote>("peer");
+  app.add_command<remote_command>("stop");
+  app.add_command<remote_command>("show");
+  app.add_command<remote_command>("spawn");
+  app.add_command<remote_command>("send");
+  app.add_command<remote_command>("kill");
+  app.add_command<remote_command>("peer");
   // Dispatch to root command.
   auto result = app.run(sys,
                         caf::message_builder{cfg.command_line.begin(),

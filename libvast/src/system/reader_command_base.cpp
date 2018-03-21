@@ -14,7 +14,7 @@
 #ifndef VAST_SYSTEM_RUN_READER_HPP
 #define VAST_SYSTEM_RUN_READER_HPP
 
-#include "vast/system/run_reader_base.hpp"
+#include "vast/system/reader_command_base.hpp"
 
 #include <memory>
 #include <string>
@@ -39,7 +39,7 @@
 
 namespace vast::system {
 
-int run_reader_base::run_impl(caf::actor_system& sys, option_map& options,
+int reader_command_base::run_impl(caf::actor_system& sys, option_map& options,
                               caf::message args) {
   using namespace caf;
   using namespace std::chrono_literals;

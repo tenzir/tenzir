@@ -11,34 +11,28 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/system/run_import.hpp"
+#ifndef VAST_SYSTEM_REMOTE_COMMAND_HPP
+#define VAST_SYSTEM_REMOTE_COMMAND_HPP
 
-#include <iostream>
+#include <memory>
+#include <string>
+#include <string_view>
 
-#include <caf/all.hpp>
-#include <caf/io/all.hpp>
-#ifdef VAST_USE_OPENSSL
-#include <caf/openssl/all.hpp>
-#endif // VAST_USE_OPENSSL
-
-#include "vast/logger.hpp"
-
-#include "vast/system/signal_monitor.hpp"
-#include "vast/system/spawn.hpp"
-
-using namespace caf;
+#include "vast/system/base_command.hpp"
 
 namespace vast::system {
-using namespace std::chrono_literals;
 
-run_import::run_import(command* parent, std::string_view name)
-  : base_command(parent, name) {
-  // nop
-}
+/// Default implementation for the `remote` command.
+/// @relates application
+class remote_command : public base_command {
+public:
+  remote_command(command* parent, std::string_view name);
 
-int run_import::run_impl(actor_system&, option_map&, caf::message) {
-  VAST_ERROR("run_import::run_impl called");
-  return EXIT_FAILURE;
-}
+protected:
+  int run_impl(caf::actor_system& sys, option_map& options,
+               caf::message args) override;
+};
 
 } // namespace vast::system
+
+#endif

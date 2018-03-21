@@ -302,10 +302,10 @@ int application::run(caf::actor_system& sys, message args) {
 //      return 1;
 //    }
 //    VAST_INFO("listening on", (host ? host : "") << ':' << *bound_port);
-//    return run_start(self, node);
+//    return start_command(self, node);
 //  } else if (*cmd == "import" || *cmd == "export") {
 //    auto args = message_builder{cmd + 1, config_.command_line.end()}.to_message();
-//    auto run = *cmd == "import" ? run_import : run_export;
+//    auto run = *cmd == "import" ? import_command : export_command;
 //    auto rc = run(self, node, args);
 //    if (spawn_node)
 //      self->send_exit(node, exit_reason::user_shutdown);
@@ -314,7 +314,7 @@ int application::run(caf::actor_system& sys, message args) {
 //  // Send command to remote node.
 //  auto args = message_builder{cmd + 1, config_.command_line.end()}.to_message();
 //  VAST_DEBUG("sending command to remote node:", *cmd, to_string(args));
-//  return run_remote(self, node, *cmd, args);
+//  return remote_command(self, node, *cmd, args);
 //}
 
 } // namespace vast::system

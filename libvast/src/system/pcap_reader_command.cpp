@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_SYSTEM_RUN_WRITER_BASE_HPP
-#define VAST_SYSTEM_RUN_WRITER_BASE_HPP
+#include "vast/system/pcap_reader_command.hpp"
 
 #include <memory>
 #include <string>
@@ -25,10 +24,13 @@
 #include "vast/expression.hpp"
 #include "vast/logger.hpp"
 
-#include "vast/system/base_command.hpp"
+#include "vast/system/reader_command_base.hpp"
+#include "vast/system/reader_command_base.hpp"
 #include "vast/system/signal_monitor.hpp"
 #include "vast/system/source.hpp"
 #include "vast/system/tracker.hpp"
+
+#include "vast/format/pcap.hpp"
 
 #include "vast/concept/parseable/to.hpp"
 
@@ -39,19 +41,32 @@
 
 namespace vast::system {
 
-/// Format-independent implementation for import sub-commands.
-class run_writer_base : public base_command {
-public:
-  using base_command::base_command;
+pcap_reader_command::pcap_reader_command(command* parent, std::string_view name)
+  : super(parent, name),
+    input("-"),
+    uds(false),
+    flow_max(uint64_t{1} << 20),
+    flow_age(60u),
+    flow_expiry(10u),
+    cutoff(std::numeric_limits<size_t>::max()),
+    pseudo_realtime(0) {
+  add_opt("read,r", "path to input where to read events from", input);
+  add_opt("schema,s", "path to alternate schema", schema_file);
+  add_opt("uds,d", "treat -r as listening UNIX domain socket", uds);
+  add_opt("cutoff,c", "skip flow packets after this many bytes", cutoff);
+  add_opt("flow-max,m", "number of concurrent flows to track", flow_max);
+  add_opt("flow-age,a", "max flow lifetime before eviction", flow_age);
+  add_opt("flow-expiry,e", "flow table expiration interval", flow_expiry);
+  add_opt("pseudo-realtime,p", "factor c delaying trace packets by 1/c",
+          pseudo_realtime);
+}
 
-protected:
-  int run_impl(caf::actor_system& sys, option_map& options,
-               caf::message args) override;
-
-  virtual expected<caf::actor> make_sink(caf::scoped_actor& self,
-                                         caf::message args) = 0;
-};
+expected<caf::actor> pcap_reader_command::make_source(caf::scoped_actor& self,
+                                                  caf::message args) {
+  CAF_LOG_TRACE(CAF_ARG(args));
+  format::pcap::reader reader{input,    cutoff,      flow_max,
+                              flow_age, flow_expiry, pseudo_realtime};
+  return self->spawn(source<format::pcap::reader>, std::move(reader));
+}
 
 } // namespace vast::system
-
-#endif

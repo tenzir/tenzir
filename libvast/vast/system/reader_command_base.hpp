@@ -11,26 +11,45 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_SYSTEM_RUN_REMOTE_HPP
-#define VAST_SYSTEM_RUN_REMOTE_HPP
+#ifndef VAST_SYSTEM_RUN_READER_BASE_HPP
+#define VAST_SYSTEM_RUN_READER_BASE_HPP
 
 #include <memory>
 #include <string>
 #include <string_view>
 
+#include <caf/scoped_actor.hpp>
+#include <caf/typed_actor.hpp>
+#include <caf/typed_event_based_actor.hpp>
+
+#include "vast/expression.hpp"
+#include "vast/logger.hpp"
+
 #include "vast/system/base_command.hpp"
+#include "vast/system/signal_monitor.hpp"
+#include "vast/system/source.hpp"
+#include "vast/system/tracker.hpp"
+
+#include "vast/concept/parseable/to.hpp"
+
+#include "vast/concept/parseable/vast/expression.hpp"
+#include "vast/concept/parseable/vast/schema.hpp"
+
+#include "vast/detail/make_io_stream.hpp"
 
 namespace vast::system {
 
-/// Default implementation for the `remote` command.
-/// @relates application
-class run_remote : public base_command {
+/// Format-independent implementation for import sub-commands.
+class reader_command_base : public base_command {
 public:
-  run_remote(command* parent, std::string_view name);
+  using base_command::base_command;
 
 protected:
   int run_impl(caf::actor_system& sys, option_map& options,
                caf::message args) override;
+
+  virtual expected<caf::actor> make_source(caf::scoped_actor& self,
+                                           caf::message args) = 0;
 };
 
 } // namespace vast::system

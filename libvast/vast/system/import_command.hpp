@@ -11,8 +11,8 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_SYSTEM_RUN_START_HPP
-#define VAST_SYSTEM_RUN_START_HPP
+#ifndef VAST_SYSTEM_RUN_IMPORT_HPP
+#define VAST_SYSTEM_RUN_IMPORT_HPP
 
 #include <memory>
 #include <string>
@@ -22,22 +22,15 @@
 
 namespace vast::system {
 
-/// Default implementation for the `start` command.
+/// Default implementation for the `import` command.
 /// @relates application
-class run_start : public base_command {
+class import_command : public base_command {
 public:
-  run_start(command* parent, std::string_view name);
+  import_command(command* parent, std::string_view name);
 
 protected:
   int run_impl(caf::actor_system& sys, option_map& options,
                caf::message args) override;
-
-private:
-  /// Spawn empty node without components if set.
-  bool spawn_bare_node;
-
-  /// Run VAST in foreground (do not daemonize) if set.
-  bool in_foreground;
 };
 
 } // namespace vast::system
