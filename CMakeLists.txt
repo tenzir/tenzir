@@ -270,6 +270,7 @@ message(STATUS "Found CAF")
 set(CAF_FOUND_SAVE ${CAF_FOUND})
 include_directories(${CAF_INCLUDE_DIRS})
 # ...and then optional components.
+find_package(CAF COMPONENTS opencl openssl QUIET)
 if (CAF_LIBRARY_OPENCL)
   message(STATUS "Found CAF's OpenCL module, enabling OpenCL support")
   include_directories(${CAF_INCLUDE_DIR_OPENCL})
