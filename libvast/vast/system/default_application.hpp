@@ -11,24 +11,40 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include <caf/actor_system.hpp>
-#include <caf/message_builder.hpp>
+#ifndef VAST_SYSTEM_DEFAULT_APPLICATION_HPP
+#define VAST_SYSTEM_DEFAULT_APPLICATION_HPP
 
-#include "vast/system/default_application.hpp"
+#include <memory>
+#include <string>
+#include <string_view>
 
-using namespace vast;
-using namespace vast::system;
+#include "vast/command.hpp"
 
-int main(int argc, char** argv) {
-  // Scaffold
-  configuration cfg{argc, argv};
-  cfg.logger_console = caf::atom("COLORED");
-  caf::actor_system sys{cfg};
-  default_application app;
-  // Dispatch to root command.
-  auto result = app.run(sys,
-                        caf::message_builder{cfg.command_line.begin(),
-                                             cfg.command_line.end()}
-                        .move_to_message());
-  return result;
-}
+#include "vast/system/application.hpp"
+#include "vast/system/export_command.hpp"
+#include "vast/system/import_command.hpp"
+
+namespace vast::system {
+
+class default_application : public application {
+public:
+  default_application();
+
+  inline import_command& import_cmd() {
+    VAST_ASSERT(import_ != nullptr);
+    return *import_;
+  }
+
+  inline export_command& export_cmd() {
+    VAST_ASSERT(export_ != nullptr);
+    return *export_;
+  }
+
+private:
+  import_command* import_;
+  export_command* export_;
+};
+
+} // namespace vast::system
+
+#endif
