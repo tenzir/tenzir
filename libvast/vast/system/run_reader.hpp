@@ -48,6 +48,7 @@ class run_reader : public run_reader_base {
 public:
   run_reader(command* parent, std::string_view name)
       : run_reader_base(parent, name),
+        input("-"),
         uds(false) {
     this->add_opt("read,r", "path to input where to read events from", input);
     this->add_opt("schema,s", "path to alternate schema", schema_file);

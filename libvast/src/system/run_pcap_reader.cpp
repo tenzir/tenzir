@@ -43,6 +43,7 @@ namespace vast::system {
 
 run_pcap_reader::run_pcap_reader(command* parent, std::string_view name)
   : super(parent, name),
+    input("-"),
     uds(false),
     flow_max(uint64_t{1} << 20),
     flow_age(60u),

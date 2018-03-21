@@ -39,6 +39,7 @@ class run_writer : public run_writer_base {
 public:
   run_writer(command* parent, std::string_view name)
       : run_writer_base(parent, name),
+        output("-"),
         uds(false) {
     this->add_opt("write,w", "path to write events to", output);
     this->add_opt("uds,d", "treat -w as UNIX domain socket to connect to", uds);

@@ -32,6 +32,7 @@ namespace vast::system {
 
 run_pcap_writer::run_pcap_writer(command* parent, std::string_view name)
   : super(parent, name),
+    output("-"),
     uds(false),
     flush(10000u) {
   add_opt("write,w", "path to write events to", output);
