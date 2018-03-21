@@ -39,10 +39,11 @@ class run_writer : public run_writer_base {
 public:
   run_writer(command* parent, std::string_view name)
       : run_writer_base(parent, name),
-        output("-"),
-        uds(false) {
-    this->add_opt("write,w", "path to write events to", output);
-    this->add_opt("uds,d", "treat -w as UNIX domain socket to connect to", uds);
+        output_("-"),
+        uds_(false) {
+    this->add_opt("write,w", "path to write events to", output_);
+    this->add_opt("uds,d", "treat -w as UNIX domain socket to connect to",
+                  uds_);
   }
 
 protected:
@@ -51,7 +52,7 @@ protected:
     CAF_LOG_TRACE(CAF_ARG(args));
     using ostream_ptr = std::unique_ptr<std::ostream>;
     if constexpr (std::is_constructible<Writer, ostream_ptr>::value) {
-      auto out = detail::make_output_stream(output, uds);
+      auto out = detail::make_output_stream(output_, uds_);
       if (!out)
         return out.error();
       Writer writer{std::move(*out)};
@@ -63,8 +64,8 @@ protected:
   }
 
 private:
-  std::string output;
-  bool uds;
+  std::string output_;
+  bool uds_;
 };
 
 } // namespace vast::system

@@ -55,9 +55,9 @@ protected:
                                  caf::message args) override;
 
 private:
-  std::string output;
-  bool uds;
-  unsigned flush;
+  std::string output_;
+  bool uds_;
+  unsigned flush_;
 };
 
 } // namespace vast::system

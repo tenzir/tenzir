@@ -32,18 +32,18 @@ namespace vast::system {
 
 run_pcap_writer::run_pcap_writer(command* parent, std::string_view name)
   : super(parent, name),
-    output("-"),
-    uds(false),
-    flush(10000u) {
-  add_opt("write,w", "path to write events to", output);
-  add_opt("uds,d", "treat -w as UNIX domain socket to connect to", uds);
-  add_opt("flush,f", "flush to disk after this many packets", flush);
+    output_("-"),
+    uds_(false),
+    flush_(10000u) {
+  add_opt("write,w", "path to write events to", output_);
+  add_opt("uds,d", "treat -w as UNIX domain socket to connect to", uds_);
+  add_opt("flush,f", "flush to disk after this many packets", flush_);
 }
 
 expected<caf::actor> run_pcap_writer::make_sink(caf::scoped_actor& self,
                                                 caf::message args) {
   CAF_LOG_TRACE(CAF_ARG(args));
-  format::pcap::writer writer{output, flush};
+  format::pcap::writer writer{output_, flush_};
   return self->spawn(sink<format::pcap::writer>, std::move(writer));
 }
 

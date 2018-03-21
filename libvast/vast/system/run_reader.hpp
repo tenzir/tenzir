@@ -48,25 +48,25 @@ class run_reader : public run_reader_base {
 public:
   run_reader(command* parent, std::string_view name)
       : run_reader_base(parent, name),
-        input("-"),
-        uds(false) {
-    this->add_opt("read,r", "path to input where to read events from", input);
-    this->add_opt("schema,s", "path to alternate schema", schema_file);
-    this->add_opt("uds,d", "treat -r as listening UNIX domain socket", uds);
+        input_("-"),
+        uds_(false) {
+    this->add_opt("read,r", "path to input where to read events from", input_);
+    this->add_opt("schema,s", "path to alternate schema", schema_file_);
+    this->add_opt("uds,d", "treat -r as listening UNIX domain socket", uds_);
   }
 
 protected:
   expected<caf::actor> make_source(caf::scoped_actor& self,
                                    caf::message args) override {
     CAF_LOG_TRACE(CAF_ARG(args));
-    auto in = detail::make_input_stream(input, uds);
+    auto in = detail::make_input_stream(input_, uds_);
     if (!in)
       return in.error();
     Reader reader{std::move(*in)};
     auto src = self->spawn(source<Reader>, std::move(reader));
     // Supply an alternate schema, if requested.
-    if (!schema_file.empty()) {
-      auto str = load_contents(schema_file);
+    if (!schema_file_.empty()) {
+      auto str = load_contents(schema_file_);
       if (!str)
         return str.error();
       auto sch = to<schema>(*str);
@@ -92,9 +92,9 @@ protected:
   }
 
 private:
-  std::string input;
-  std::string schema_file;
-  bool uds;
+  std::string input_;
+  std::string schema_file_;
+  bool uds_;
 };
 
 } // namespace vast::system
