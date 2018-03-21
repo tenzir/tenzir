@@ -11,34 +11,47 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/system/run_export.hpp"
+#ifndef VAST_SYSTEM_RUN_WRITER_BASE_HPP
+#define VAST_SYSTEM_RUN_WRITER_BASE_HPP
 
-#include <iostream>
+#include <memory>
+#include <string>
+#include <string_view>
 
-#include <caf/all.hpp>
-#include <caf/io/all.hpp>
-#ifdef VAST_USE_OPENSSL
-#include <caf/openssl/all.hpp>
-#endif // VAST_USE_OPENSSL
+#include <caf/scoped_actor.hpp>
+#include <caf/typed_actor.hpp>
+#include <caf/typed_event_based_actor.hpp>
 
+#include "vast/expression.hpp"
 #include "vast/logger.hpp"
 
+#include "vast/system/base_command.hpp"
 #include "vast/system/signal_monitor.hpp"
-#include "vast/system/spawn.hpp"
+#include "vast/system/source.hpp"
+#include "vast/system/tracker.hpp"
 
-using namespace caf;
+#include "vast/concept/parseable/to.hpp"
+
+#include "vast/concept/parseable/vast/expression.hpp"
+#include "vast/concept/parseable/vast/schema.hpp"
+
+#include "vast/detail/make_io_stream.hpp"
 
 namespace vast::system {
-using namespace std::chrono_literals;
 
-run_export::run_export(command* parent, std::string_view name)
-  : base_command(parent, name) {
-  // nop
-}
+/// Format-independent implementation for import sub-commands.
+class run_writer_base : public base_command {
+public:
+  using base_command::base_command;
 
-int run_export::run_impl(actor_system&, option_map&, caf::message) {
-  VAST_ERROR("run_export::run_impl called");
-  return EXIT_FAILURE;
-}
+protected:
+  int run_impl(caf::actor_system& sys, option_map& options,
+               caf::message args) override;
+
+  virtual expected<caf::actor> make_sink(caf::scoped_actor& self,
+                                         caf::message args) = 0;
+};
 
 } // namespace vast::system
+
+#endif

@@ -79,6 +79,7 @@ set(libvast_sources
   src/system/run_reader_base.cpp
   src/system/run_remote.cpp
   src/system/run_start.cpp
+  src/system/run_writer_base.cpp
   src/system/signal_monitor.cpp
   src/system/spawn.cpp
   src/system/spawn_sink.cpp
@@ -95,6 +96,7 @@ set(libvast_sources
 if (PCAP_FOUND)
   set(libvast_sources ${libvast_sources}
     src/system/run_pcap_reader.cpp
+    src/system/run_pcap_writer.cpp
     src/format/pcap.cpp)
 endif ()
 

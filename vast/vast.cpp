@@ -23,13 +23,18 @@
 #include "vast/system/run_reader.hpp"
 #include "vast/system/run_remote.hpp"
 #include "vast/system/run_start.hpp"
+#include "vast/system/run_writer.hpp"
 
+#include "vast/format/ascii.hpp"
 #include "vast/format/bgpdump.hpp"
 #include "vast/format/bro.hpp"
+#include "vast/format/csv.hpp"
+#include "vast/format/json.hpp"
 #include "vast/format/mrt.hpp"
 
 #ifdef VAST_HAVE_PCAP
 #include "vast/system/run_pcap_reader.hpp"
+#include "vast/system/run_pcap_writer.hpp"
 #endif
 
 using namespace vast;
@@ -44,14 +49,19 @@ int main(int argc, char** argv) {
   // Add program commands that run locally.
   app.add_command<run_start>("start");
   // Add program composed commands.
-  auto cmd = app.add_command<run_import>("import");
-  cmd->add<run_reader<format::bro::reader>>("bro");
-  cmd->add<run_reader<format::mrt::reader>>("mrt");
+  auto import_cmd = app.add_command<run_import>("import");
+  import_cmd->add<run_reader<format::bro::reader>>("bro");
+  import_cmd->add<run_reader<format::mrt::reader>>("mrt");
+  import_cmd->add<run_reader<format::bgpdump::reader>>("bgpdump");
+  auto export_cmd = app.add_command<run_export>("export");
+  export_cmd->add<run_writer<format::bro::writer>>("bro");
+  export_cmd->add<run_writer<format::csv::writer>>("csv");
+  export_cmd->add<run_writer<format::ascii::writer>>("ascii");
+  export_cmd->add<run_writer<format::json::writer>>("json");
 #ifdef VAST_HAVE_PCAP
-  cmd->add<run_pcap_reader>("pcap");
+  import_cmd->add<run_pcap_reader>("pcap");
+  export_cmd->add<run_pcap_writer>("pcap");
 #endif
-  cmd->add<run_reader<format::bgpdump::reader>>("bgpdump");
-  app.add_command<run_export>("export");
   // Add program commands that always run remotely.
   app.add_command<run_remote>("stop");
   app.add_command<run_remote>("show");

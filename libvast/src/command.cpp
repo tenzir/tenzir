@@ -66,14 +66,19 @@ int command::run(caf::actor_system& sys, option_map& options,
   // Invoke run_impl if no subcommand was defined.
   if (subcmd.empty()) {
     VAST_ASSERT(subcmd_args.empty());
-    return run_impl(sys, options, std::move(local_args));
+    return run_impl(sys, options, caf::make_message());
+  }
+  // Consume CLI arguments if we have arguments but don't have subcommands.
+  if (nested_.empty()) {
+    return run_impl(sys, options,
+                    caf::make_message(std::move(subcmd)) + subcmd_args);
   }
   // Dispatch to subcommand.
   auto i = nested_.find(subcmd);
   if (i == nested_.end()) {
     std::cerr << "no such command: " << full_name() << " " << subcmd
-              << std::endl
-              << std::endl;
+      << std::endl
+      << std::endl;
     usage();
     return EXIT_FAILURE;
   }
