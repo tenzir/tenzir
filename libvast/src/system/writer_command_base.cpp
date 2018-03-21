@@ -67,7 +67,18 @@ int writer_command_base::run_impl(caf::actor_system& sys, option_map& options,
   auto snk = std::move(*snk_opt);
   // Spawn exporter at the node.
   actor exp;
+  // TODO: we need to also include arguments in CLI format from the export
+  //       command; we really should forward `options` to the node actor
+  //       instead to clean this up
   args = make_message("exporter") + args;
+  if (get_or<bool>(options, "continuous", false))
+    args += make_message("--continuous");
+  if (get_or<bool>(options, "historical", false))
+    args += make_message("--historical");
+  if (get_or<bool>(options, "unified", false))
+    args += make_message("--unified");
+  auto max_events = get_or<uint64_t>(options, "events", 0u);
+  args += make_message("-e", std::to_string(max_events));
   VAST_DEBUG("spawning exporter with parameters:", to_string(args));
   self->request(node, infinite, "spawn", args).receive(
     [&](const actor& a) {
