@@ -14,6 +14,8 @@
 #include <algorithm>
 #include <iostream>
 
+#include "vast/config.hpp"
+
 #include <caf/message_builder.hpp>
 #include <caf/io/middleman.hpp>
 #ifdef VAST_USE_OPENCL

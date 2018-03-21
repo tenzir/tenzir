@@ -18,6 +18,10 @@
 #include <caf/stateful_actor.hpp>
 #include <caf/io/middleman.hpp>
 
+#ifdef VAST_USE_OPENSSL
+#include <caf/openssl/all.hpp>
+#endif
+
 #include "vast/filesystem.hpp"
 #include "vast/logger.hpp"
 
@@ -129,7 +133,7 @@ expected<actor> base_command::connect_to_node(scoped_actor& self,
   VAST_INFO("connecting to", node_endpoint.host << ':' << node_endpoint.port);
   if (use_encryption) {
 #ifdef VAST_USE_OPENSSL
-    return openssl::remote_actor(sys, node_endpoint.host,
+    return openssl::remote_actor(self->system(), node_endpoint.host,
                                  node_endpoint.port);
 #else
     return make_error(ec::unspecified, "not compiled with OpenSSL support");
