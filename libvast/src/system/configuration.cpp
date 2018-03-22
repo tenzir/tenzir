@@ -55,6 +55,8 @@ configuration::configuration() {
   // -- CAF configuration ------------------------------------------------------
   // Consider only VAST's log messages by default.
   logger_component_filter = "vast";
+  // Use 'vast.ini' instead of generic 'caf-application.ini'.
+  config_file_path = "vast.ini";
   // Register VAST's custom types.
   add_message_type<batch>("vast::batch");
   add_message_type<bitmap>("vast::bitmap");
@@ -126,8 +128,7 @@ configuration::configuration(int argc, char** argv) : configuration{} {
   auto caf_opt = std::stable_partition(command_line.begin(),
                                        command_line.end(), is_vast_opt);
   auto opt_msg = message_builder{caf_opt, command_line.end()}.to_message();
-  std::istream dummy{nullptr};
-  parse(opt_msg, dummy);
+  parse(opt_msg);
   command_line.erase(caf_opt, command_line.end());
 }
 
