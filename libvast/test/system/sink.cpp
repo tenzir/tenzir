@@ -28,7 +28,7 @@ FIXTURE_SCOPE(sink_tests, fixtures::actor_system_and_events)
 TEST(Bro sink) {
   MESSAGE("constructing a sink");
   format::bro::writer writer{directory};
-  auto snk = self->spawn(sink<format::bro::writer>, std::move(writer));
+  auto snk = self->spawn(sink<format::bro::writer>, std::move(writer), 0u);
   MESSAGE("sending events");
   self->send(snk, bro_conn_log);
   MESSAGE("shutting down");

@@ -58,7 +58,7 @@ int writer_command_base::run_impl(caf::actor_system& sys, option_map& options,
   });
   // Spawn a sink.
   VAST_DEBUG("spawning sink with parameters:", deep_to_string(options));
-  auto snk_opt = make_sink(self, args);
+  auto snk_opt = make_sink(self, options, args);
   if (!snk_opt) {
     std::cerr << "unable to spawn sink: " << sys.render(snk_opt.error())
               << std::endl;

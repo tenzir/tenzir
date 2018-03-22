@@ -52,16 +52,20 @@ struct sink_state {
   uint64_t processed = 0;
   uint64_t limit = 0;
   Writer writer;
-  const char* name;
+  const char* name = "writer";
 };
 
 template <class Writer>
-caf::behavior
-sink(caf::stateful_actor<sink_state<Writer>>* self, Writer&& writer) {
+caf::behavior sink(caf::stateful_actor<sink_state<Writer>>* self,
+                   Writer&& writer, uint64_t limit) {
   using namespace std::chrono;
   self->state.writer = std::move(writer);
   self->state.name = self->state.writer.name();
   self->state.last_flush = steady_clock::now();
+  if (limit > 0) {
+    VAST_DEBUG(self, "caps event export at", limit, "events");
+    self->state.limit = limit;
+  }
   return {
     [=](const std::vector<event>& xs) {
       for (auto& x : xs) {

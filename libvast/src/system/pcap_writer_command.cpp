@@ -41,10 +41,12 @@ pcap_writer_command::pcap_writer_command(command* parent, std::string_view name)
 }
 
 expected<caf::actor> pcap_writer_command::make_sink(caf::scoped_actor& self,
-                                                caf::message args) {
+                                                    option_map& options,
+                                                    caf::message args) {
   CAF_LOG_TRACE(CAF_ARG(args));
+  auto limit = this->get_or<uint64_t>(options, "events", 0u);
   format::pcap::writer writer{output_, flush_};
-  return self->spawn(sink<format::pcap::writer>, std::move(writer));
+  return self->spawn(sink<format::pcap::writer>, std::move(writer), limit);
 }
 
 } // namespace vast::system
