@@ -11,39 +11,33 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_SYSTEM_CONFIGURATION_HPP
-#define VAST_SYSTEM_CONFIGURATION_HPP
+#ifndef VAST_SYSTEM_START_COMMAND_HPP
+#define VAST_SYSTEM_START_COMMAND_HPP
 
+#include <memory>
 #include <string>
-#include <vector>
+#include <string_view>
 
-#include <caf/actor_system_config.hpp>
+#include "vast/system/base_command.hpp"
 
 namespace vast::system {
 
-class application;
-
-/// Bundles all configuration parameters of a VAST system.
-class configuration : public caf::actor_system_config {
-  friend application;
-
+/// Default implementation for the `start` command.
+/// @relates application
+class start_command : public base_command {
 public:
-  /// Default-constructs a configuration.
-  configuration();
+  start_command(command* parent, std::string_view name);
 
-  /// Constructs a configuration from the command line.
-  /// @param argc The argument counter of `main`.
-  /// @param argv The argument vector of `main`.
-  configuration(int argc, char** argv);
+protected:
+  int run_impl(caf::actor_system& sys, option_map& options,
+               caf::message args) override;
 
-  /// Constructs a configuration from a vector of string options.
-  /// @param opts The vector with CAF options.
-  configuration(const std::vector<std::string>& opts);
+private:
+  /// Spawn empty node without components if set.
+  bool spawn_bare_node;
 
-  // -- configuration options -------------------------------------------------
-
-  /// The program command line, without --caf# arguments.
-  std::vector<std::string> command_line;
+  /// Run VAST in foreground (do not daemonize) if set.
+  bool in_foreground;
 };
 
 } // namespace vast::system

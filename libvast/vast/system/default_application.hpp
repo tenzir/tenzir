@@ -11,39 +11,38 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_SYSTEM_CONFIGURATION_HPP
-#define VAST_SYSTEM_CONFIGURATION_HPP
+#ifndef VAST_SYSTEM_DEFAULT_APPLICATION_HPP
+#define VAST_SYSTEM_DEFAULT_APPLICATION_HPP
 
+#include <memory>
 #include <string>
-#include <vector>
+#include <string_view>
 
-#include <caf/actor_system_config.hpp>
+#include "vast/command.hpp"
+
+#include "vast/system/application.hpp"
+#include "vast/system/export_command.hpp"
+#include "vast/system/import_command.hpp"
 
 namespace vast::system {
 
-class application;
-
-/// Bundles all configuration parameters of a VAST system.
-class configuration : public caf::actor_system_config {
-  friend application;
-
+class default_application : public application {
 public:
-  /// Default-constructs a configuration.
-  configuration();
+  default_application();
 
-  /// Constructs a configuration from the command line.
-  /// @param argc The argument counter of `main`.
-  /// @param argv The argument vector of `main`.
-  configuration(int argc, char** argv);
+  inline import_command& import_cmd() {
+    VAST_ASSERT(import_ != nullptr);
+    return *import_;
+  }
 
-  /// Constructs a configuration from a vector of string options.
-  /// @param opts The vector with CAF options.
-  configuration(const std::vector<std::string>& opts);
+  inline export_command& export_cmd() {
+    VAST_ASSERT(export_ != nullptr);
+    return *export_;
+  }
 
-  // -- configuration options -------------------------------------------------
-
-  /// The program command line, without --caf# arguments.
-  std::vector<std::string> command_line;
+private:
+  import_command* import_;
+  export_command* export_;
 };
 
 } // namespace vast::system

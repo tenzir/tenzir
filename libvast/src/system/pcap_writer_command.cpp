@@ -11,41 +11,40 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_SYSTEM_CONFIGURATION_HPP
-#define VAST_SYSTEM_CONFIGURATION_HPP
+#include "vast/system/pcap_writer_command.hpp"
 
+#include <memory>
 #include <string>
-#include <vector>
+#include <string_view>
 
-#include <caf/actor_system_config.hpp>
+#include <caf/scoped_actor.hpp>
+#include <caf/typed_actor.hpp>
+#include <caf/typed_event_based_actor.hpp>
+
+#include "vast/expression.hpp"
+#include "vast/logger.hpp"
+
+#include "vast/system/sink.hpp"
+
+#include "vast/format/pcap.hpp"
 
 namespace vast::system {
 
-class application;
+pcap_writer_command::pcap_writer_command(command* parent, std::string_view name)
+  : super(parent, name),
+    output_("-"),
+    uds_(false),
+    flush_(10000u) {
+  add_opt("write,w", "path to write events to", output_);
+  add_opt("uds,d", "treat -w as UNIX domain socket to connect to", uds_);
+  add_opt("flush,f", "flush to disk after this many packets", flush_);
+}
 
-/// Bundles all configuration parameters of a VAST system.
-class configuration : public caf::actor_system_config {
-  friend application;
-
-public:
-  /// Default-constructs a configuration.
-  configuration();
-
-  /// Constructs a configuration from the command line.
-  /// @param argc The argument counter of `main`.
-  /// @param argv The argument vector of `main`.
-  configuration(int argc, char** argv);
-
-  /// Constructs a configuration from a vector of string options.
-  /// @param opts The vector with CAF options.
-  configuration(const std::vector<std::string>& opts);
-
-  // -- configuration options -------------------------------------------------
-
-  /// The program command line, without --caf# arguments.
-  std::vector<std::string> command_line;
-};
+expected<caf::actor> pcap_writer_command::make_sink(caf::scoped_actor& self,
+                                                caf::message args) {
+  CAF_LOG_TRACE(CAF_ARG(args));
+  format::pcap::writer writer{output_, flush_};
+  return self->spawn(sink<format::pcap::writer>, std::move(writer));
+}
 
 } // namespace vast::system
-
-#endif

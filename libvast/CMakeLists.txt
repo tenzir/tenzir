@@ -20,6 +20,7 @@ set(libvast_sources
   src/batch.cpp
   src/bitmap.cpp
   src/chunk.cpp
+  src/command.cpp
   src/compression.cpp
   src/data.cpp
   src/die.cpp
@@ -61,22 +62,31 @@ set(libvast_sources
   src/detail/system.cpp
   src/detail/terminal.cpp
   src/system/accountant.cpp
+  src/system/application.cpp
   src/system/archive.cpp
+  src/system/base_command.cpp
   src/system/configuration.cpp
   src/system/consensus.cpp
+  src/system/default_application.cpp
+  src/system/export_command.cpp
   src/system/exporter.cpp
+  src/system/import_command.cpp
   src/system/importer.cpp
   src/system/index.cpp
   src/system/indexer.cpp
   src/system/node.cpp
   src/system/partition.cpp
   src/system/profiler.cpp
+  src/system/reader_command_base.cpp
+  src/system/remote_command.cpp
   src/system/signal_monitor.cpp
   src/system/spawn.cpp
   src/system/spawn_sink.cpp
   src/system/spawn_source.cpp
+  src/system/start_command.cpp
   src/system/task.cpp
   src/system/tracker.cpp
+  src/system/writer_command_base.cpp
   src/format/bgpdump.cpp
   src/format/mrt.cpp
   src/format/bro.cpp
@@ -86,6 +96,8 @@ set(libvast_sources
 
 if (PCAP_FOUND)
   set(libvast_sources ${libvast_sources}
+    src/system/pcap_reader_command.cpp
+    src/system/pcap_writer_command.cpp
     src/format/pcap.cpp)
 endif ()
 
@@ -192,6 +204,7 @@ set(tests
   test/cache.cpp
   test/chunk.cpp
   test/coder.cpp
+  test/command.cpp
   test/compressedbuf.cpp
   test/data.cpp
   test/endpoint.cpp

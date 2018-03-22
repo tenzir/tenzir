@@ -16,6 +16,7 @@
 
 #include <map>
 
+#include <caf/behavior.hpp>
 #include <caf/stateful_actor.hpp>
 
 #include "vast/detail/flat_set.hpp"

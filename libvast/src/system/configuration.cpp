@@ -11,6 +11,9 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
+#include <algorithm>
+#include <iostream>
+
 #include "vast/config.hpp"
 
 #include <caf/message_builder.hpp>
@@ -24,6 +27,7 @@
 
 #include "vast/batch.hpp"
 #include "vast/bitmap.hpp"
+#include "vast/config.hpp"
 #include "vast/error.hpp"
 #include "vast/event.hpp"
 #include "vast/expression.hpp"
@@ -39,12 +43,16 @@
 #include "vast/system/query_statistics.hpp"
 #include "vast/system/tracker.hpp"
 
+#include "vast/detail/adjust_resource_consumption.hpp"
+#include "vast/detail/string.hpp"
+#include "vast/detail/system.hpp"
+
 using namespace caf;
 
-namespace vast {
-namespace system {
+namespace vast::system {
 
 configuration::configuration() {
+  // -- CAF configuration ------------------------------------------------------
   // Consider only VAST's log messages by default.
   logger_component_filter = "vast";
   // Register VAST's custom types.
@@ -99,6 +107,7 @@ configuration::configuration() {
   add_error_category(atom("system"), caf_renderer);
   // Load modules.
   load<io::middleman>();
+  middleman_enable_automatic_connections = true;
   // GPU acceleration.
 #ifdef VAST_USE_OPENCL
   load<opencl::manager>();
@@ -110,15 +119,16 @@ configuration::configuration() {
 }
 
 configuration::configuration(int argc, char** argv) : configuration{} {
-  parse(argc, argv);
-}
-
-configuration::configuration(const std::vector<std::string>& opts)
-  : configuration{} {
-  auto opt_msg = message_builder{opts.begin(), opts.end()}.to_message();
+  command_line = {argv + 1, argv + argc};
+  // Move CAF options to the end of the command line, parse them, and then
+  // remove them.
+  auto is_vast_opt = [](auto& x) { return !starts_with(x, "--caf#"); };
+  auto caf_opt = std::stable_partition(command_line.begin(),
+                                       command_line.end(), is_vast_opt);
+  auto opt_msg = message_builder{caf_opt, command_line.end()}.to_message();
   std::istream dummy{nullptr};
   parse(opt_msg, dummy);
+  command_line.erase(caf_opt, command_line.end());
 }
 
-} // namespace system
-} // namespace vast
+} // namespace vast::system
