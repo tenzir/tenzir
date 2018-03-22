@@ -49,10 +49,10 @@ int remote_command::run_impl(actor_system& sys, option_map& options, message arg
   }
   auto node = std::move(*node_opt);
   // Build command to remote node.
-  auto cmd = make_message(std::string{name()}) + args;
+  auto cmd = make_message(std::string{name()}, std::move(args));
   // Delegate command to node.
   auto result = true;
-  self->send(node, std::move(cmd), std::move(args));
+  self->send(node, std::move(cmd));
   self->receive(
     [&](const down_msg& msg) {
       if (msg.reason != exit_reason::user_shutdown) {
