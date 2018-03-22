@@ -49,6 +49,7 @@ protected:
                caf::message args) override;
 
   virtual expected<caf::actor> make_sink(caf::scoped_actor& self,
+                                         option_map& options,
                                          caf::message args) = 0;
 };
 

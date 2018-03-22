@@ -47,19 +47,20 @@ public:
   }
 
 protected:
-  expected<caf::actor> make_sink(caf::scoped_actor& self,
+  expected<caf::actor> make_sink(caf::scoped_actor& self, option_map& options,
                                  caf::message args) override {
     CAF_LOG_TRACE(CAF_ARG(args));
     using ostream_ptr = std::unique_ptr<std::ostream>;
+    auto limit = this->get_or<uint64_t>(options, "events", 0u);
     if constexpr (std::is_constructible<Writer, ostream_ptr>::value) {
       auto out = detail::make_output_stream(output_, uds_);
       if (!out)
         return out.error();
       Writer writer{std::move(*out)};
-      return self->spawn(sink<Writer>, std::move(writer));
+      return self->spawn(sink<Writer>, std::move(writer), limit);
     } else {
       Writer writer;
-      return self->spawn(sink<Writer>, std::move(writer));
+      return self->spawn(sink<Writer>, std::move(writer), limit);
     }
   }
 

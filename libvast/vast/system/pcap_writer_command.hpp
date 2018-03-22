@@ -51,7 +51,7 @@ public:
   pcap_writer_command(command* parent, std::string_view name);
 
 protected:
-  expected<caf::actor> make_sink(caf::scoped_actor& self,
+  expected<caf::actor> make_sink(caf::scoped_actor& self, option_map& options,
                                  caf::message args) override;
 
 private:

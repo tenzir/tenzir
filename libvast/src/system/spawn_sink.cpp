@@ -63,24 +63,24 @@ expected<actor> spawn_sink(local_actor* self, options& opts) {
     if (!r.error.empty())
       return make_error(ec::syntax_error, r.error);
     format::pcap::writer writer{output, flush};
-    snk = self->spawn(sink<format::pcap::writer>, std::move(writer));
+    snk = self->spawn(sink<format::pcap::writer>, std::move(writer), 0u);
 #endif
   } else if (format == "bro") {
     format::bro::writer writer{output};
-    snk = self->spawn(sink<format::bro::writer>, std::move(writer));
+    snk = self->spawn(sink<format::bro::writer>, std::move(writer), 0u);
   } else {
     auto out = detail::make_output_stream(output, r.opts.count("uds") > 0);
     if (!out)
       return out.error();
     if (format == "csv") {
       format::csv::writer writer{std::move(*out)};
-      snk = self->spawn(sink<format::csv::writer>, std::move(writer));
+      snk = self->spawn(sink<format::csv::writer>, std::move(writer), 0u);
     } else if (format == "ascii") {
       format::ascii::writer writer{std::move(*out)};
-      snk = self->spawn(sink<format::ascii::writer>, std::move(writer));
+      snk = self->spawn(sink<format::ascii::writer>, std::move(writer), 0u);
     } else if (format == "json") {
       format::json::writer writer{std::move(*out)};
-      snk = self->spawn(sink<format::json::writer>, std::move(writer));
+      snk = self->spawn(sink<format::json::writer>, std::move(writer), 0u);
     } else {
       return make_error(ec::syntax_error, "invalid format:", format);
     }
