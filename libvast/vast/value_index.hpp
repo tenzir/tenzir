@@ -198,30 +198,31 @@ public:
 
 private:
   bool push_back_impl(const data& d, size_type skip) override {
+    auto append = [&](auto x) {
+      bmi_.push_back(x, skip);
+      return true;
+    };
     return visit(detail::overload(
-      [&](const auto&) { return false; },
-      [&](value_type x) {
-        bmi_.push_back(x, skip);
-        return true;
-      },
-      [&](timespan x) {
-        bmi_.push_back(x.count(), skip);
-        return true;
-      },
-      [&](timestamp x) {
-        bmi_.push_back(x.time_since_epoch().count(), skip);
-        return true;
-      }
+      [&](auto&&) { return false; },
+      [&](boolean x) { return append(x); },
+      [&](integer x) { return append(x); },
+      [&](count x) { return append(x); },
+      [&](real x) { return append(x); },
+      [&](timespan x) { return append(x.count()); },
+      [&](timestamp x) { return append(x.time_since_epoch().count()); }
     ), d);
   }
 
   expected<ids>
   lookup_impl(relational_operator op, const data& d) const override {
     return visit(detail::overload(
-      [&](const auto& x) -> expected<ids> {
+      [&](auto&& x) -> expected<ids> {
         return make_error(ec::type_clash, value_type{}, x);
       },
-      [&](value_type x) -> expected<ids> { return bmi_.lookup(op, x); },
+      [&](boolean x) -> expected<ids> { return bmi_.lookup(op, x); },
+      [&](integer x) -> expected<ids> { return bmi_.lookup(op, x); },
+      [&](count x) -> expected<ids> { return bmi_.lookup(op, x); },
+      [&](real x) -> expected<ids> { return bmi_.lookup(op, x); },
       [&](timespan x) -> expected<ids> { return bmi_.lookup(op, x.count()); },
       [&](timestamp x) -> expected<ids> {
         return bmi_.lookup(op, x.time_since_epoch().count());
