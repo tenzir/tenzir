@@ -32,7 +32,7 @@ namespace vast::system {
 using namespace std::chrono_literals;
 
 export_command::export_command(command* parent, std::string_view name)
-  : base_command(parent, name),
+  : node_command(parent, name),
     continuous_(false),
     historical_(false),
     unified_(false),

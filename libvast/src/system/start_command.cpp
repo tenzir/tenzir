@@ -34,7 +34,7 @@ namespace vast::system {
 using namespace std::chrono_literals;
 
 start_command::start_command(command* parent, std::string_view name)
-  : base_command(parent, name),
+  : node_command(parent, name),
     spawn_bare_node(false),
     in_foreground(false) {
   add_opt("bare", "spawn empty node without any components", spawn_bare_node);

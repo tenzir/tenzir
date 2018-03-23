@@ -27,7 +27,7 @@
 #include "vast/expression.hpp"
 #include "vast/logger.hpp"
 
-#include "vast/system/base_command.hpp"
+#include "vast/system/node_command.hpp"
 #include "vast/system/signal_monitor.hpp"
 #include "vast/system/source.hpp"
 #include "vast/system/tracker.hpp"

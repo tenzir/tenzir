@@ -11,8 +11,8 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_BASE_COMMAND_HPP
-#define VAST_BASE_COMMAND_HPP
+#ifndef VAST_NODE_COMMAND_HPP
+#define VAST_NODE_COMMAND_HPP
 
 #include <caf/expected.hpp>
 
@@ -20,14 +20,14 @@
 
 namespace vast::system {
 
-/// A command that runs on a VAST node.
-class base_command : public command {
+/// A command that starts or runs on a VAST node.
+class node_command : public command {
 public:
   // -- constructors, destructors, and assignment operators --------------------
 
-  base_command(command* parent, std::string_view name);
+  node_command(command* parent, std::string_view name);
 
-  ~base_command();
+  ~node_command();
 
   /// Either spawns a new VAST node or connects to a server, depending on the
   /// configuration.

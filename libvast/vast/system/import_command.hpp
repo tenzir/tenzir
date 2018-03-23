@@ -18,13 +18,13 @@
 #include <string>
 #include <string_view>
 
-#include "vast/system/base_command.hpp"
+#include "vast/system/node_command.hpp"
 
 namespace vast::system {
 
 /// Default implementation for the `import` command.
 /// @relates application
-class import_command : public base_command {
+class import_command : public node_command {
 public:
   import_command(command* parent, std::string_view name);
 

@@ -32,7 +32,7 @@ namespace vast::system {
 using namespace std::chrono_literals;
 
 remote_command::remote_command(command* parent, std::string_view name)
-  : base_command(parent, name) {
+  : node_command{parent, name} {
   // nop
 }
 

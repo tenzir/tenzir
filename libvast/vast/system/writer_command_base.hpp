@@ -25,7 +25,7 @@
 #include "vast/expression.hpp"
 #include "vast/logger.hpp"
 
-#include "vast/system/base_command.hpp"
+#include "vast/system/node_command.hpp"
 #include "vast/system/signal_monitor.hpp"
 #include "vast/system/source.hpp"
 #include "vast/system/tracker.hpp"
@@ -39,10 +39,10 @@
 
 namespace vast::system {
 
-/// Format-independent implementation for import sub-commands.
-class writer_command_base : public base_command {
+/// Format-independent implementation for export sub-commands.
+class writer_command_base : public node_command {
 public:
-  using base_command::base_command;
+  using node_command::node_command;
 
 protected:
   int run_impl(caf::actor_system& sys, option_map& options,

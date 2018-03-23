@@ -18,13 +18,13 @@
 #include <string>
 #include <string_view>
 
-#include "vast/system/base_command.hpp"
+#include "vast/system/node_command.hpp"
 
 namespace vast::system {
 
-/// Default implementation for the `remote` command.
+/// Default implementation of a remote command.
 /// @relates application
-class remote_command : public base_command {
+class remote_command : public node_command {
 public:
   remote_command(command* parent, std::string_view name);
 

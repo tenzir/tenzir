@@ -11,7 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/system/base_command.hpp"
+#include "vast/system/node_command.hpp"
 
 #include <caf/event_based_actor.hpp>
 #include <caf/scoped_actor.hpp>
@@ -33,24 +33,24 @@ using namespace caf;
 
 namespace vast::system {
 
-base_command::base_command(command* parent, std::string_view name)
+node_command::node_command(command* parent, std::string_view name)
   : command(parent, name),
     node_spawned_(false) {
   // nop
 }
 
-base_command::~base_command() {
+node_command::~node_command() {
   // nop
 }
 
-expected<actor> base_command::spawn_or_connect_to_node(scoped_actor& self,
+expected<actor> node_command::spawn_or_connect_to_node(scoped_actor& self,
                                                        const option_map& opts) {
   if (get_or<bool>(opts, "node", false))
     return spawn_node(self, opts);
   return connect_to_node(self, opts);
 }
 
-expected<actor> base_command::spawn_node(scoped_actor& self,
+expected<actor> node_command::spawn_node(scoped_actor& self,
                                          const option_map& opts) {
   // Fetch node ID from config.
   auto id_opt = get<std::string>(opts, "id");
@@ -96,7 +96,7 @@ expected<actor> base_command::spawn_node(scoped_actor& self,
   return node;
 }
 
-expected<actor> base_command::connect_to_node(scoped_actor& self,
+expected<actor> node_command::connect_to_node(scoped_actor& self,
                                               const option_map& opts) {
   // Fetch node ID from config.
   auto id_opt = get<std::string>(opts, "id");
@@ -143,7 +143,7 @@ expected<actor> base_command::connect_to_node(scoped_actor& self,
   return mm.remote_actor(node_endpoint.host, node_endpoint.port);
 }
 
-void base_command::cleanup(const actor& node) {
+void node_command::cleanup(const actor& node) {
   if (node_spawned_)
     anon_send_exit(node, exit_reason::user_shutdown);
 }

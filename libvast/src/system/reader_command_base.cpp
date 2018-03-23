@@ -27,7 +27,7 @@
 #include "vast/expression.hpp"
 #include "vast/logger.hpp"
 
-#include "vast/system/base_command.hpp"
+#include "vast/system/node_command.hpp"
 #include "vast/system/signal_monitor.hpp"
 #include "vast/system/source.hpp"
 #include "vast/system/tracker.hpp"
@@ -40,7 +40,7 @@
 namespace vast::system {
 
 int reader_command_base::run_impl(caf::actor_system& sys, option_map& options,
-                              caf::message args) {
+                                  caf::message args) {
   using namespace caf;
   using namespace std::chrono_literals;
   // Helper for blocking actor communication.
@@ -53,7 +53,7 @@ int reader_command_base::run_impl(caf::actor_system& sys, option_map& options,
     return EXIT_FAILURE;
   }
   auto src = std::move(*src_opt);
-// Get VAST node.
+  // Get VAST node.
   auto node_opt = spawn_or_connect_to_node(self, options);
   if (!node_opt)
     return EXIT_FAILURE;

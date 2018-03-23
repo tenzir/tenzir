@@ -18,13 +18,13 @@
 #include <string>
 #include <string_view>
 
-#include "vast/system/base_command.hpp"
+#include "vast/system/node_command.hpp"
 
 namespace vast::system {
 
 /// Default implementation for the `start` command.
 /// @relates application
-class start_command : public base_command {
+class start_command : public node_command {
 public:
   start_command(command* parent, std::string_view name);
 

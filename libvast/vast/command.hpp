@@ -107,6 +107,7 @@ public:
     auto ptr = std::make_unique<T>(this, name, std::forward<Ts>(xs)...);
     auto result = ptr.get();
     if (!nested_.emplace(name, std::move(ptr)).second) {
+      // FIXME: do not use exceptions.
       throw std::invalid_argument("name already exists");
     }
     return result;

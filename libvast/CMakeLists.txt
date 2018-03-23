@@ -64,7 +64,6 @@ set(libvast_sources
   src/system/accountant.cpp
   src/system/application.cpp
   src/system/archive.cpp
-  src/system/base_command.cpp
   src/system/configuration.cpp
   src/system/consensus.cpp
   src/system/default_application.cpp
@@ -75,6 +74,7 @@ set(libvast_sources
   src/system/index.cpp
   src/system/indexer.cpp
   src/system/node.cpp
+  src/system/node_command.cpp
   src/system/partition.cpp
   src/system/profiler.cpp
   src/system/reader_command_base.cpp
