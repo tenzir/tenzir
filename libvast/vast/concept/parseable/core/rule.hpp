@@ -26,7 +26,7 @@ namespace detail {
 
 template <class Iterator, class Attribute>
 struct abstract_rule {
-  ~abstract_rule() = default;
+  virtual ~abstract_rule() = default;
   virtual bool parse(Iterator& f, const Iterator& l, unused_type) const = 0;
   virtual bool parse(Iterator& f, const Iterator& l, Attribute& a) const = 0;
 };

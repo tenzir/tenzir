@@ -31,6 +31,8 @@ class event;
 /// A key-value store for events.
 class store {
 public:
+  virtual ~store() = default;
+
   /// Stores a set of events.
   /// @param xs The events to store.
   /// @returns No error on success.
