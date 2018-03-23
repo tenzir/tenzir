@@ -99,6 +99,7 @@ int start_command::run_impl(actor_system& sys, option_map& options,
   // Run main loop.
   auto rc = 0;
   auto stop = false;
+  self->monitor(node);
   self->do_receive(
     [&](const down_msg& msg) {
       VAST_ASSERT(msg.source == node);
