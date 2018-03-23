@@ -22,8 +22,8 @@ command::command() : parent_(nullptr) {
 }
 
 command::command(command* parent, std::string_view name)
-  : parent_(parent),
-    name_(name) {
+  : parent_{parent},
+    name_{name} {
   // nop
 }
 

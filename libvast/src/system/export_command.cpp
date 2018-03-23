@@ -32,11 +32,11 @@ namespace vast::system {
 using namespace std::chrono_literals;
 
 export_command::export_command(command* parent, std::string_view name)
-  : node_command(parent, name),
-    continuous_(false),
-    historical_(false),
-    unified_(false),
-    max_events_(0) {
+  : node_command{parent, name},
+    continuous_{false},
+    historical_{false},
+    unified_{false},
+    max_events_{0} {
   add_opt("continuous,c", "marks a query as continuous", continuous_);
   add_opt("historical,h", "marks a query as historical", historical_);
   add_opt("unified,u", "marks a query as unified", unified_);

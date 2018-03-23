@@ -38,9 +38,9 @@ template <class Writer>
 class writer_command : public writer_command_base {
 public:
   writer_command(command* parent, std::string_view name)
-      : writer_command_base(parent, name),
-        output_("-"),
-        uds_(false) {
+      : writer_command_base{parent, name},
+        output_{"-"},
+        uds_{false} {
     this->add_opt("write,w", "path to write events to", output_);
     this->add_opt("uds,d", "treat -w as UNIX domain socket to connect to",
                   uds_);
