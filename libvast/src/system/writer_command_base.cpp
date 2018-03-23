@@ -127,6 +127,7 @@ int writer_command_base::run_impl(caf::actor_system& sys, option_map& options,
       }
     }
   ).until([&] { return stop; });
+  cleanup(node);
   return rc;
 }
 
