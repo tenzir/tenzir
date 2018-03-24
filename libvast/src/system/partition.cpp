@@ -172,15 +172,14 @@ behavior partition(stateful_actor<partition_state>* self, path dir) {
   // them as we need them.
   if (exists(dir)) {
     std::vector<std::pair<std::string, type>> indexers;
-    auto result = load(dir / "meta", indexers);
-    if (!result) {
+    if (auto result = load(dir / "meta", indexers); !result) {
       VAST_ERROR(self, self->system().render(result.error()));
       self->quit(result.error());
-      return {};
+    } else {
+      self->state.indexers.reserve(indexers.size());
+      for (auto& [str, t] : indexers)
+        self->state.indexers.emplace(t, actor{});
     }
-    self->state.indexers.reserve(indexers.size());
-    for (auto& x : indexers)
-      self->state.indexers.emplace(x.second, actor{});
   }
   return {
     [=](const std::vector<event>& events) {
@@ -189,12 +188,12 @@ behavior partition(stateful_actor<partition_state>* self, path dir) {
       // Locate relevant indexers.
       vast::detail::flat_set<actor> indexers;
       for (auto& e : events) {
-        auto& i = self->state.indexers[e.type()];
-        if (!i) {
+        auto& a = self->state.indexers[e.type()];
+        if (!a) {
           VAST_DEBUG(self, "creates event-indexer for type", e.type());
-          i = self->spawn(event_indexer, dir / to_digest(e.type()), e.type());
+          a = self->spawn(event_indexer, dir / to_digest(e.type()), e.type());
         }
-        indexers.insert(i);
+        indexers.insert(a);
       }
       // Forward events to relevant indexers.
       auto msg = self->current_mailbox_element()->move_content_to_message();
@@ -208,16 +207,16 @@ behavior partition(stateful_actor<partition_state>* self, path dir) {
       // For each known type, check whether the expression could match.
       // If so, locate/load the corresponding indexer.
       std::vector<actor> indexers;
-      for (auto& x : self->state.indexers) {
-        auto resolved = visit(type_resolver{x.first}, expr);
-        if (resolved && visit(matcher{x.first}, *resolved)) {
-          VAST_DEBUG(self, "found matching type for expression:", x.first);
-          if (!x.second) {
-            VAST_DEBUG(self, "loads event-indexer for type", x.first);
-            auto indexer_dir = dir / to_digest(x.first);
-            x.second = self->spawn(event_indexer, indexer_dir, x.first);
+      for (auto& [t, a] : self->state.indexers) {
+        auto resolved = visit(type_resolver{t}, expr);
+        if (resolved && visit(matcher{t}, *resolved)) {
+          VAST_DEBUG(self, "found matching type for expression:", t);
+          if (!a) {
+            VAST_DEBUG(self, "loads event-indexer for type", t);
+            auto indexer_dir = dir / to_digest(t);
+            a = self->spawn(event_indexer, indexer_dir, t);
           }
-          indexers.push_back(x.second);
+          indexers.push_back(a);
         }
       }
       if (indexers.empty()) {
@@ -273,9 +272,9 @@ behavior partition(stateful_actor<partition_state>* self, path dir) {
         self->quit(exit_reason::user_shutdown);
         return;
       }
-      for (auto& x : self->state.indexers) {
-        self->monitor(x.second);
-        self->send(x.second, shutdown_atom::value);
+      for (auto& [t, a] : self->state.indexers) {
+        self->monitor(a);
+        self->send(a, shutdown_atom::value);
       }
       self->set_down_handler(
         [=](const down_msg& msg) {
@@ -292,8 +291,9 @@ behavior partition(stateful_actor<partition_state>* self, path dir) {
       // TODO: only do so when the partition got dirty.
       std::vector<std::pair<std::string, type>> indexers;
       indexers.reserve(self->state.indexers.size());
-      for (auto& x : self->state.indexers)
-        indexers.emplace_back(to_digest(x.first), x.first);
+      for (auto& [t, a] : self->state.indexers) {
+        indexers.emplace_back(to_digest(t), t);
+      }
       if (!exists(dir))
         mkdir(dir);
       auto result = save(dir / "meta", indexers);
