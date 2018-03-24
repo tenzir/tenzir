@@ -24,8 +24,22 @@
 
 namespace vast::system {
 
+/// @relates partition
+struct partition_meta_data {
+  /// Maps type digests (used as directory name for an indexer) to types.
+  std::map<std::string, type> types;
+};
+
+/// @relates partition_meta_data
+template <class Inspector>
+auto inspect(Inspector& f, partition_meta_data& x) {
+  return f(x.types);
+}
+
+/// @relates partition
 struct partition_state {
   std::unordered_map<type, caf::actor> indexers;
+  partition_meta_data meta_data;
   static inline const char* name = "partition";
 };
 
