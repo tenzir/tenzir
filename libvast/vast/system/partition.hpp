@@ -28,6 +28,7 @@ namespace vast::system {
 struct partition_meta_data {
   /// Maps type digests (used as directory name for an indexer) to types.
   std::map<std::string, type> types;
+  bool dirty = false;
 };
 
 /// @relates partition_meta_data

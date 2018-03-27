@@ -191,8 +191,10 @@ behavior partition(stateful_actor<partition_state>* self, path dir) {
           VAST_DEBUG(self, "creates event-indexer for type", e.type());
           auto digest = to_digest(e.type());
           a = self->spawn(event_indexer, dir / digest, e.type());
-          if (self->state.meta_data.types.count(digest) == 0)
+          if (self->state.meta_data.types.count(digest) == 0) {
             self->state.meta_data.types.emplace(digest, e.type());
+            self->state.meta_data.dirty = true;
+          }
         }
         indexers.insert(a);
       }
@@ -269,11 +271,12 @@ behavior partition(stateful_actor<partition_state>* self, path dir) {
         return;
       }
       // Save persistent state.
-      // TODO: only do so when the partition got dirty.
-      if (!exists(dir))
-        mkdir(dir);
-      if (auto result = save(dir / "meta", self->state.meta_data); !result)
-        self->quit(result.error());
+      if (self->state.meta_data.dirty) {
+        if (!exists(dir))
+          mkdir(dir);
+        if (auto result = save(dir / "meta", self->state.meta_data); !result)
+          self->quit(result.error());
+      }
       // Initiate shutdown.
       auto& xs = self->state.indexers;
       for (auto i = xs.begin(); i != xs.end(); ) {
