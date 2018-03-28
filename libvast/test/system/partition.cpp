@@ -97,12 +97,13 @@ TEST(partition queries - key extractors) {
 TEST(partition queries - attribute extractors) {
   MESSAGE("&type");
   auto hits = query("&type == \"bro::http\"");
-  CHECK_EQUAL(rank(hits), 4896u);
+  CHECK_EQUAL(rank(hits), bro_http_log.size());
   hits = query("&type == \"bro::conn\"");
-  CHECK_EQUAL(rank(hits), 8462u);
+  CHECK_EQUAL(rank(hits), bro_conn_log.size());
   MESSAGE("&time");
   hits = query("&time > 1970-01-01");
-  CHECK_EQUAL(rank(hits), 4896u + 8462u);
+  auto all = bro_http_log.size() + bro_conn_log.size() + bgpdump_txt.size();
+  CHECK_EQUAL(rank(hits), all);
 }
 
 TEST(partition queries - mixed) {
