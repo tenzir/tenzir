@@ -208,6 +208,7 @@ TEST(matcher) {
   CHECK(!match("&type == \"foo\"", r));
   r.name("foo");
   CHECK(match("&type == \"foo\"", r));
+  CHECK(match("&type != \"bar\"", r));
 }
 
 FIXTURE_SCOPE_END()
