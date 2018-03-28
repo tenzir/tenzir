@@ -216,8 +216,8 @@ private:
   expected<ids>
   lookup_impl(relational_operator op, const data& d) const override {
     return visit(detail::overload(
-      [&](auto&& x) -> expected<ids> {
-        return make_error(ec::type_clash, value_type{}, x);
+      [&](auto x) -> expected<ids> {
+        return make_error(ec::type_clash, value_type{}, std::move(x));
       },
       [&](boolean x) -> expected<ids> { return bmi_.lookup(op, x); },
       [&](integer x) -> expected<ids> { return bmi_.lookup(op, x); },
