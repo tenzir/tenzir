@@ -51,7 +51,7 @@ public:
 
   private:
     // TODO: use a vector & binary_search for O(1) append and O(log N) search.
-    std::map<event_id, batch> batches_;
+    std::map<vast::id, batch> batches_;
     uint64_t bytes_ = 0;
     uuid id_ = uuid::random();
   };
@@ -72,7 +72,7 @@ public:
 private:
   path dir_;
   uint64_t max_segment_size_;
-  detail::range_map<event_id, uuid> segments_;
+  detail::range_map<id, uuid> segments_;
   detail::cache<uuid, segment> cache_;
   segment active_;
 };

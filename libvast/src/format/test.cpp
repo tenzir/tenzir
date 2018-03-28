@@ -209,7 +209,7 @@ struct randomizer {
 } // namespace <anonymous>
 
 
-reader::reader(size_t seed, uint64_t n, event_id id)
+reader::reader(size_t seed, uint64_t n, vast::id id)
   : generator_{seed},
     id_{id},
     num_events_{n} {

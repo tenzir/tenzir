@@ -102,7 +102,7 @@ expected<actor> spawn_source(local_actor* self, options& opts) {
     }
   } else if (format == "test") {
     auto seed = size_t{0};
-    auto id = event_id{0};
+    auto id = vast::id{0};
     auto n = uint64_t{100};
     r = r.remainder.extract_opts({
       {"seed,s", "the PRNG seed", seed},

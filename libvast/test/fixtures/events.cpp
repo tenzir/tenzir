@@ -37,7 +37,7 @@ events::events() {
   bgpdump_txt = inhale<format::bgpdump::reader>(bgpdump::updates20140821);
   random = extract(vast::format::test::reader{42, 1000});
   // Assign monotonic IDs to events starting at 0.
-  auto id = event_id{0};
+  auto id = vast::id{0};
   auto assign = [&](auto& xs) {
     for (auto& x : xs)
       x.id(id++);

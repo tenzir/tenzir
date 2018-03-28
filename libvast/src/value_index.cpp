@@ -155,7 +155,7 @@ expected<void> value_index::push_back(const data& x) {
   return {};
 }
 
-expected<void> value_index::push_back(const data& x, event_id id) {
+expected<void> value_index::push_back(const data& x, vast::id id) {
   auto off = offset();
   if (id < off)
     // Can only append at the end.

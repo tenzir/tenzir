@@ -16,7 +16,7 @@ namespace vast {
 
 void segment_store::segment::add(batch&& x) {
   auto min = select(x.ids(), 1);
-  VAST_ASSERT(min != invalid_event_id);
+  VAST_ASSERT(min != invalid_id);
   VAST_ASSERT(batches_.find(min) == batches_.end());
   bytes_ += bytes(x);
   batches_.emplace(min, std::move(x));

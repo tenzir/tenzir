@@ -75,7 +75,7 @@ behavior value_indexer(stateful_actor<value_indexer_state>* self,
     [=](const std::vector<event>& events) {
       VAST_TRACE(self, "got", events.size(), "events");
       for (auto& e : events) {
-        VAST_ASSERT(e.id() != invalid_event_id);
+        VAST_ASSERT(e.id() != invalid_id);
         if (auto data = extract(e)) {
           auto result = self->state.idx->push_back(*data, e.id());
           if (!result) {
