@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_LOGGER_HPP
-#define VAST_LOGGER_HPP
+#pragma once
 
 #include <sstream>
 #include <type_traits>
@@ -155,4 +154,3 @@ struct formatter {
   #define VAST_TRACE(...) CAF_VOID_STMT
 #endif
 
-#endif

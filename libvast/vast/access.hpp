@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_ACCESS_HPP
-#define VAST_ACCESS_HPP
+#pragma once
 
 #include <type_traits>
 
@@ -85,4 +84,3 @@ struct has_access_converter
 
 } // namespace vast
 
-#endif

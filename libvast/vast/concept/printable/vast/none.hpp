@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PRINTABLE_VAST_NONE_HPP
-#define VAST_CONCEPT_PRINTABLE_VAST_NONE_HPP
+#pragma once
 
 #include "vast/none.hpp"
 #include "vast/concept/printable/core/printer.hpp"
@@ -36,4 +35,3 @@ struct printer_registry<none> {
 
 } // namespace vast
 
-#endif

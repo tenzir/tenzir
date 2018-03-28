@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_DETAIL_VARBYTE_HPP
-#define VAST_DETAIL_VARBYTE_HPP
+#pragma once
 
 #include <cstddef>
 #include <cstdint>
@@ -97,4 +96,3 @@ decode(T& x, const void* source) {
 
 } // namespace vast::detail::varbyte
 
-#endif

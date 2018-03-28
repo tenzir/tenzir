@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PRINTABLE_VAST_ADDRESS_HPP
-#define VAST_CONCEPT_PRINTABLE_VAST_ADDRESS_HPP
+#pragma once
 
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -53,4 +52,3 @@ auto const addr = make_printer<address>{};
 } // namespace printers
 } // namespace vast
 
-#endif

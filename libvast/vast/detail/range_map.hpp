@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_DETAIL_INTERVAL_MAP_HPP
-#define VAST_DETAIL_INTERVAL_MAP_HPP
+#pragma once
 
 #include <map>
 #include <tuple>
@@ -285,4 +284,3 @@ private:
 
 } // namespace vast::detail
 
-#endif

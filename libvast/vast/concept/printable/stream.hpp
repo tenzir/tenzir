@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PRINTABLE_STREAM_HPP
-#define VAST_CONCEPT_PRINTABLE_STREAM_HPP
+#pragma once
 
 #include <ostream>
 #include <type_traits>
@@ -34,4 +33,3 @@ auto operator<<(std::basic_ostream<Char, Traits>& out, const T& x)
 
 } // namespace vast
 
-#endif

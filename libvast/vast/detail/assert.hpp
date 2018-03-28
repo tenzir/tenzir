@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_DETAIL_ASSERT_HPP
-#define VAST_DETAIL_ASSERT_HPP
+#pragma once
 
 #include "vast/config.hpp"
 
@@ -42,4 +41,3 @@
    static_cast<void>(0)
 #endif
 
-#endif

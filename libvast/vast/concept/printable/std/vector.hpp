@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PRINTABLE_STD_VECTOR_HPP
-#define VAST_CONCEPT_PRINTABLE_STD_VECTOR_HPP
+#pragma once
 
 #include <vector>
 
@@ -43,4 +42,3 @@ struct printer_registry<std::vector<T>> {
 
 } // namespace vast
 
-#endif

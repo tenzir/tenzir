@@ -11,11 +11,9 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PRINTABLE_NUMERIC_HPP
-#define VAST_CONCEPT_PRINTABLE_NUMERIC_HPP
+#pragma once
 
 #include "vast/concept/printable/numeric/bool.hpp"
 #include "vast/concept/printable/numeric/integral.hpp"
 #include "vast/concept/printable/numeric/real.hpp"
 
-#endif

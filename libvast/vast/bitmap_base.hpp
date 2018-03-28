@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_BITMAP_BASE_HPP
-#define VAST_BITMAP_BASE_HPP
+#pragma once
 
 #include <cstdint>
 #include <limits>
@@ -226,4 +225,3 @@ protected:
 
 } // namespace vast
 
-#endif

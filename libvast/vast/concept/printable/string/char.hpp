@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PRINTABLE_STRING_CHAR_HPP
-#define VAST_CONCEPT_PRINTABLE_STRING_CHAR_HPP
+#pragma once
 
 #include <array>
 
@@ -48,4 +47,3 @@ auto chr = char_printer<Char...>{};
 } // namespace printers
 } // namespace vast
 
-#endif

@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PARSEABLE_CORE_MAYBE_HPP
-#define VAST_CONCEPT_PARSEABLE_CORE_MAYBE_HPP
+#pragma once
 
 #include "vast/concept/parseable/core/parser.hpp"
 
@@ -41,4 +40,3 @@ private:
 
 } // namespace vast
 
-#endif

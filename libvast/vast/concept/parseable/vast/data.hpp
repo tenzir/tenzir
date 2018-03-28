@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PARSEABLE_VAST_DATA_HPP
-#define VAST_CONCEPT_PARSEABLE_VAST_DATA_HPP
+#pragma once
 
 #include "vast/data.hpp"
 
@@ -82,4 +81,3 @@ static auto const data = make_parser<vast::data>();
 } // namespace parsers
 } // namespace vast
 
-#endif

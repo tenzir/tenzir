@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_BITMAP_INDEX_HPP
-#define VAST_BITMAP_INDEX_HPP
+#pragma once
 
 #include <type_traits>
 
@@ -140,4 +139,3 @@ private:
 
 } // namespace vast
 
-#endif

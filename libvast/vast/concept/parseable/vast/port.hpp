@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PARSEABLE_VAST_PORT_HPP
-#define VAST_CONCEPT_PARSEABLE_VAST_PORT_HPP
+#pragma once
 
 #include "vast/concept/parseable/core.hpp"
 #include "vast/concept/parseable/numeric/integral.hpp"
@@ -60,4 +59,3 @@ static auto const port = make_parser<vast::port>();
 
 } // namespace vast
 
-#endif

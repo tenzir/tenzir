@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_DIE_HPP
-#define VAST_DIE_HPP
+#pragma once
 
 #include <string>
 
@@ -24,4 +23,3 @@ namespace vast {
 
 } // namespace vast
 
-#endif

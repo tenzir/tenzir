@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PRINTABLE_NUMERIC_BOOL_HPP
-#define VAST_CONCEPT_PRINTABLE_NUMERIC_BOOL_HPP
+#pragma once
 
 #include <type_traits>
 
@@ -43,4 +42,3 @@ auto const tf = bool_printer{};
 } // namespace printers
 } // namespace vast
 
-#endif

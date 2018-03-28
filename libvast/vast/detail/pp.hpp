@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_DETAIL_PP_HPP
-#define VAST_DETAIL_PP_HPP
+#pragma once
 
 // Concatenation.
 // 1) Paste first, then evaluate the result.
@@ -47,5 +46,4 @@
 // Overloading.
 #define VAST_PP_OVERLOAD(PREFIX, ...) VAST_PP_PASTE2(PREFIX, VAST_PP_SIZE(__VA_ARGS__))
 
-#endif
 

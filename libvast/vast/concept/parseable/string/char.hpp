@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PARSEABLE_STRING_CHAR_HPP
-#define VAST_CONCEPT_PARSEABLE_STRING_CHAR_HPP
+#pragma once
 
 #include "vast/concept/parseable/core/parser.hpp"
 #include "vast/concept/parseable/detail/char_helpers.hpp"
@@ -47,4 +46,3 @@ using chr = char_parser;
 } // namespace parsers
 } // namespace vast
 
-#endif

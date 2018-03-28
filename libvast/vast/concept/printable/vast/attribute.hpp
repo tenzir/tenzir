@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PRINTABLE_VAST_ATTRIBUTE_HPP
-#define VAST_CONCEPT_PRINTABLE_VAST_ATTRIBUTE_HPP
+#pragma once
 
 #include "vast/attribute.hpp"
 #include "vast/concept/printable/core.hpp"
@@ -41,4 +40,3 @@ struct printer_registry<attribute> {
 
 } // namespace vast
 
-#endif

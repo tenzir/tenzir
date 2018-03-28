@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_BATCH_HPP
-#define VAST_BATCH_HPP
+#pragma once
 
 #include <cstdint>
 #include <unordered_map>
@@ -136,4 +135,3 @@ private:
 
 } // namespace vast
 
-#endif

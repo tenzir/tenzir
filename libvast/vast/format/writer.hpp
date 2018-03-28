@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_FORMAT_WRITER_HPP
-#define VAST_FORMAT_WRITER_HPP
+#pragma once
 
 #include <iterator>
 #include <memory>
@@ -57,5 +56,4 @@ private:
 
 } // namespace vast::format
 
-#endif
 

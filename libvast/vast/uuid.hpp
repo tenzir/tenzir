@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_UUID_HPP
-#define VAST_UUID_HPP
+#pragma once
 
 #include <array>
 
@@ -80,4 +79,3 @@ struct hash<vast::uuid> {
 
 } // namespace std
 
-#endif

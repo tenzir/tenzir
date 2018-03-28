@@ -39,8 +39,7 @@
 //   ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 //   DEALINGS IN THE SOFTWARE.
 
-#ifndef VAST_VARIANT_HPP
-#define VAST_VARIANT_HPP
+#pragma once
 
 #include <functional>
 #include <map>
@@ -565,4 +564,3 @@ bool is(V&& v) {
 
 } // namespace vast
 
-#endif // VAST_VARIANT_HPP

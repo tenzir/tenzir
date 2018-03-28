@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PRINTABLE_STD_CHRONO_HPP
-#define VAST_CONCEPT_PRINTABLE_STD_CHRONO_HPP
+#pragma once
 
 #include <date/date.h>
 
@@ -139,5 +138,4 @@ const auto time_point = time_point_printer<Clock, Duration>{};
 } // namespace printers
 } // namespace vast
 
-#endif
 

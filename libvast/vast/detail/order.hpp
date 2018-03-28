@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_DETAIL_ORDER_HPP
-#define VAST_DETAIL_ORDER_HPP
+#pragma once
 
 #include <cmath>
 #include <cstdint>
@@ -97,4 +96,3 @@ using ordered_type = decltype(order(T{}));
 
 } // namespace vast::detail
 
-#endif

@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_SYSTEM_CONFIGURATION_HPP
-#define VAST_SYSTEM_CONFIGURATION_HPP
+#pragma once
 
 #include <string>
 #include <vector>
@@ -48,4 +47,3 @@ public:
 
 } // namespace vast::system
 
-#endif

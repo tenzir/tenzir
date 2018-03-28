@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PRINTABLE_VAST_EXPRESSION_HPP
-#define VAST_CONCEPT_PRINTABLE_VAST_EXPRESSION_HPP
+#pragma once
 
 #include "vast/data.hpp"
 #include "vast/expression.hpp"
@@ -128,4 +127,3 @@ struct printer_registry<
 
 } // namespace vast
 
-#endif

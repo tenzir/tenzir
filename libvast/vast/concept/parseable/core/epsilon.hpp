@@ -1,5 +1,4 @@
-#ifndef VAST_CONCEPT_PARSEABLE_CORE_EPSILON_HPP
-#define VAST_CONCEPT_PARSEABLE_CORE_EPSILON_HPP
+#pragma once
 
 #include "vast/concept/parseable/core/parser.hpp"
 
@@ -22,5 +21,4 @@ auto const eps = epsilon_parser{};
 } // namespace parsers
 } // namespace vast
 
-#endif
 

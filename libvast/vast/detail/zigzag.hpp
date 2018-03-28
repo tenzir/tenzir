@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_DETAIL_ZIGZAG_HPP
-#define VAST_DETAIL_ZIGZAG_HPP
+#pragma once
 
 #include <limits>
 #include <type_traits>
@@ -55,4 +54,3 @@ auto decode(T x)
 
 } // namespace vast::detail::zigzag
 
-#endif

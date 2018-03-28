@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PARSEABLE_DETAIL_CONTAINER_HPP
-#define VAST_CONCEPT_PARSEABLE_DETAIL_CONTAINER_HPP
+#pragma once
 
 #include <vector>
 #include <type_traits>
@@ -94,4 +93,3 @@ struct container {
 } // namespace detail
 } // namespace vast
 
-#endif

@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_FORMAT_CSV_HPP
-#define VAST_FORMAT_CSV_HPP
+#pragma once
 
 #include "vast/config.hpp"
 
@@ -153,4 +152,3 @@ public:
 
 } // namespace vast::format::csv
 
-#endif

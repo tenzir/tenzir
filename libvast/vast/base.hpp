@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_BASE_HPP
-#define VAST_BASE_HPP
+#pragma once
 
 #include <cmath>
 #include <cstdint>
@@ -128,4 +127,3 @@ private:
 
 } // namespace vast
 
-#endif

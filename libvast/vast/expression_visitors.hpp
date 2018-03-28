@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_EXPRESSION_VISITORS_HPP
-#define VAST_EXPRESSION_VISITORS_HPP
+#pragma once
 
 #include <vector>
 
@@ -218,4 +217,3 @@ struct matcher {
 
 } // namespace vast
 
-#endif

@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PARSEABLE_STRING_STRING_HPP
-#define VAST_CONCEPT_PARSEABLE_STRING_STRING_HPP
+#pragma once
 
 #include <string>
 
@@ -66,4 +65,3 @@ using str = string_parser;
 } // namespace parsers
 } // namespace vast
 
-#endif

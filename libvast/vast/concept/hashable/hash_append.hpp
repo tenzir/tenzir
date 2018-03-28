@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_HASHABLE_HASH_APPEND_HPP
-#define VAST_CONCEPT_HASHABLE_HASH_APPEND_HPP
+#pragma once
 
 #include <cstddef>
 #include <cstdint>
@@ -437,4 +436,3 @@ hash_append(Hasher& h, const T& x) noexcept {
 
 } // namespace vast
 
-#endif

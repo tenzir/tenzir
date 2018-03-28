@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_QUERY_OPTIONS_HPP
-#define VAST_QUERY_OPTIONS_HPP
+#pragma once
 
 #include <cstdint>
 
@@ -56,4 +55,3 @@ constexpr bool has_unified_option(query_options opts) {
 
 } // namespace vast
 
-#endif

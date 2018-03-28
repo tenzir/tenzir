@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_SYSTEM_SIGNAL_MONITOR_HPP
-#define VAST_SYSTEM_SIGNAL_MONITOR_HPP
+#pragma once
 
 #include <chrono>
 
@@ -42,4 +41,3 @@ signal_monitor(signal_monitor_type::stateful_pointer<signal_monitor_state> self,
 
 } // namespace vast::system
 
-#endif

@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_BINNER_HPP
-#define VAST_BINNER_HPP
+#pragma once
 
 #include <algorithm>
 #include <cmath>
@@ -128,4 +127,3 @@ struct is_precision_binner<precision_binner<P, N>> : std::true_type {};
 } // namespace detail
 } // namespace vast
 
-#endif

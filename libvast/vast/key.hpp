@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_KEY_HPP
-#define VAST_KEY_HPP
+#pragma once
 
 #include <string>
 
@@ -45,4 +44,3 @@ std::string vast::key::str(Ts&&... xs) {
   return to_string(key{to_string(xs)...});
 }
 
-#endif // VAST_KEY_HPP

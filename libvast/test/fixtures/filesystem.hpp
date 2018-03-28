@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef FIXTURES_FILESYSTEM_HPP
-#define FIXTURES_FILESYSTEM_HPP
+#pragma once
 
 #include "vast/filesystem.hpp"
 
@@ -30,5 +29,4 @@ struct filesystem {
 
 } // namespace fixtures
 
-#endif
 

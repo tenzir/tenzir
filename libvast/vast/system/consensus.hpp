@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_SYSTEM_CONSENSUS_HPP
-#define VAST_SYSTEM_CONSENSUS_HPP
+#pragma once
 
 #include <chrono>
 #include <cstdint>
@@ -332,4 +331,3 @@ caf::behavior consensus(caf::stateful_actor<server_state>* self, path dir);
 
 } // namespace vast::system::raft
 
-#endif

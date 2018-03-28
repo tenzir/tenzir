@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_DETAIL_STACK_VECTOR
-#define VAST_DETAIL_STACK_VECTOR
+#pragma once
 
 #include <vector>
 #include <scoped_allocator>
@@ -86,4 +85,3 @@ struct stack_vector : private stack_container<T, N>, short_vector<T, N> {
 
 } // namespace vast::detail
 
-#endif

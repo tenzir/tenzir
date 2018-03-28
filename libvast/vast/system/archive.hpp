@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_SYSTEM_ARCHIVE_HPP
-#define VAST_SYSTEM_ARCHIVE_HPP
+#pragma once
 
 #include <vector>
 
@@ -51,4 +50,3 @@ archive(archive_type::stateful_pointer<archive_state> self, path dir,
 
 } // namespace vast::system
 
-#endif

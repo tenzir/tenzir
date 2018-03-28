@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PARSEABLE_FROM_STRING_HPP
-#define VAST_CONCEPT_PARSEABLE_FROM_STRING_HPP
+#pragma once
 
 #include <string>
 #include <type_traits>
@@ -63,4 +62,3 @@ auto from_string(char const (&str)[N], Args&&... args) {
 
 } // namespace vast
 
-#endif

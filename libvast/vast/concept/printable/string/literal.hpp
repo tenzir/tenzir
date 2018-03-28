@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PRINTABLE_STRING_LITERAL_HPP
-#define VAST_CONCEPT_PRINTABLE_STRING_LITERAL_HPP
+#pragma once
 
 #include <string>
 #include <type_traits>
@@ -75,4 +74,3 @@ using lit = literal_printer;
 } // namespace printers
 } // namespace vast
 
-#endif

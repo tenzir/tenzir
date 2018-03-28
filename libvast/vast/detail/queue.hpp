@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_DETAIL_QUEUE_HPP
-#define VAST_DETAIL_QUEUE_HPP
+#pragma once
 
 #include <condition_variable>
 #include <mutex>
@@ -103,4 +102,3 @@ private:
 
 } // namespace vast::detail
 
-#endif

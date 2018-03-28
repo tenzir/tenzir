@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_SYSTEM_PCAP_READER_COMMAND_HPP
-#define VAST_SYSTEM_PCAP_READER_COMMAND_HPP
+#pragma once
 
 #include <memory>
 #include <string>
@@ -67,4 +66,3 @@ private:
 
 } // namespace vast::system
 
-#endif

@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CHUNK_HPP
-#define VAST_CHUNK_HPP
+#pragma once
 
 #include <cstddef>
 #include <functional>
@@ -106,4 +105,3 @@ bool operator<(const chunk& x, const chunk& y);
 
 } // namespace vast
 
-#endif

@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_COMMAND_HPP
-#define VAST_COMMAND_HPP
+#pragma once
 
 #include <functional>
 #include <memory>
@@ -197,4 +196,3 @@ private:
 
 } // namespace vast
 
-#endif

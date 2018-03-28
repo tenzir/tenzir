@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PARSEABLE_STRING_SYMBOL_TABLE_HPP
-#define VAST_CONCEPT_PARSEABLE_STRING_SYMBOL_TABLE_HPP
+#pragma once
 
 #include "vast/detail/radix_tree.hpp"
 
@@ -53,4 +52,3 @@ struct symbol_table : parser<symbol_table<T>> {
 
 } // namespace vast
 
-#endif

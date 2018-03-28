@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_DETAIL_CODED_SERIALIZER_HPP
-#define VAST_DETAIL_CODED_SERIALIZER_HPP
+#pragma once
 
 #include <cstddef>
 #include <cstdint>
@@ -108,4 +107,3 @@ protected:
 
 } // namespace vast::detail
 
-#endif

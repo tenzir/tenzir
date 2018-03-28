@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_DETAIL_RANDOM_HPP
-#define VAST_DETAIL_RANDOM_HPP
+#pragma once
 
 #include <random>
 
@@ -134,4 +133,3 @@ R pareto_distribution<R>::operator()(
 
 } // namespace vast::detail
 
-#endif

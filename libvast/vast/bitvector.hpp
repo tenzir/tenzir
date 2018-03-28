@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_BITVECTOR_HPP
-#define VAST_BITVECTOR_HPP
+#pragma once
 
 #include <cstdint>
 #include <limits>
@@ -717,4 +716,3 @@ rank(const bitvector<Block, Allocator>& bv) {
 
 } // namespace vast
 
-#endif

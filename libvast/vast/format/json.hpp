@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_FORMAT_JSON_HPP
-#define VAST_FORMAT_JSON_HPP
+#pragma once
 
 #include "vast/json.hpp"
 #include "vast/concept/printable/vast/json.hpp"
@@ -42,6 +41,5 @@ public:
 
 } // namespace vast::format::json
 
-#endif
 
 

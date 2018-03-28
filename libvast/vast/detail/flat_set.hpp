@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_DETAIL_FLAT_SET_HPP
-#define VAST_DETAIL_FLAT_SET_HPP
+#pragma once
 
 #include <algorithm>
 #include <functional>
@@ -51,4 +50,3 @@ using flat_set = vector_set<T, Allocator, flat_set_policy<Compare>>;
 
 } // namespace vast::detail
 
-#endif

@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_SYSTEM_RUN_EXPORT_HPP
-#define VAST_SYSTEM_RUN_EXPORT_HPP
+#pragma once
 
 #include <memory>
 #include <string>
@@ -41,4 +40,3 @@ private:
 
 } // namespace vast::system
 
-#endif

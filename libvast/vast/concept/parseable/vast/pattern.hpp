@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PARSEABLE_VAST_PATTERN_HPP
-#define VAST_CONCEPT_PARSEABLE_VAST_PATTERN_HPP
+#pragma once
 
 #include "vast/pattern.hpp"
 
@@ -51,4 +50,3 @@ static auto const pattern = make_parser<vast::pattern>();
 
 } // namespace vast
 
-#endif

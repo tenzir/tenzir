@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_ENDPOINT_HPP
-#define VAST_ENDPOINT_HPP
+#pragma once
 
 #include <string>
 
@@ -26,4 +25,3 @@ struct endpoint {
 
 } // namespace vast
 
-#endif

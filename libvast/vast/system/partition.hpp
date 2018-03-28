@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_SYSTEM_PARTITION_HPP
-#define VAST_SYSTEM_PARTITION_HPP
+#pragma once
 
 #include <unordered_map>
 
@@ -52,4 +51,3 @@ caf::behavior partition(caf::stateful_actor<partition_state>* self, path dir);
 
 } // namespace vast::system
 
-#endif

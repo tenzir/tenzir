@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_SYSTEM_TIMEOUTS_HPP
-#define VAST_SYSTEM_TIMEOUTS_HPP
+#pragma once
 
 #include <chrono>
 
@@ -23,4 +22,3 @@ constexpr auto consensus_timeout = std::chrono::seconds(10);
 
 } // namespace vast::system
 
-#endif

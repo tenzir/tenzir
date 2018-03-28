@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PARSEABLE_NUMERIC_BYTE_HPP
-#define VAST_CONCEPT_PARSEABLE_NUMERIC_BYTE_HPP
+#pragma once
 
 #include <cstdint>
 #include <type_traits>
@@ -195,4 +194,3 @@ auto nbytes(const N& n) {
 } // namespace parsers
 } // namespace vast
 
-#endif

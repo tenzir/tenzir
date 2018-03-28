@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PRINTABLE_VAST_KEY_HPP
-#define VAST_CONCEPT_PRINTABLE_VAST_KEY_HPP
+#pragma once
 
 #include "vast/key.hpp"
 #include "vast/concept/printable/core/printer.hpp"
@@ -42,4 +41,3 @@ namespace printers {
 
 } // namespace vast
 
-#endif

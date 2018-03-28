@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PARSEABLE_CORE_RULE_HPP
-#define VAST_CONCEPT_PARSEABLE_CORE_RULE_HPP
+#pragma once
 
 #include <memory>
 #include <utility>
@@ -106,4 +105,3 @@ private:
 
 } // namespace vast
 
-#endif

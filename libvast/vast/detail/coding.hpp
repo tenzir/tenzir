@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_DETAIL_CODING_HPP
-#define VAST_DETAIL_CODING_HPP
+#pragma once
 
 #include <limits>
 #include <type_traits>
@@ -78,4 +77,3 @@ char hex_to_byte(T hi, T lo) {
 
 } // namespace vast::detail
 
-#endif

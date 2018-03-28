@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_BITMAP_ALGORITHMS_HPP
-#define VAST_BITMAP_ALGORITHMS_HPP
+#pragma once
 
 #include <algorithm>
 #include <iterator>
@@ -491,4 +490,3 @@ auto all(const Bitmap& bm) {
 
 } // namespace vast
 
-#endif

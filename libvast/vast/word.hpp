@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_WORD_HPP
-#define VAST_WORD_HPP
+#pragma once
 
 #include <cstdint>
 #include <limits>
@@ -455,4 +454,3 @@ static constexpr auto select(T x, detail::word_size_type<T> i)
 
 } // namespace vast
 
-#endif

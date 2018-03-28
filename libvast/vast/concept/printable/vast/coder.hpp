@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PRINTABLE_VAST_CODER_HPP
-#define VAST_CONCEPT_PRINTABLE_VAST_CODER_HPP
+#pragma once
 
 #include "vast/bitmap_base.hpp"
 #include "vast/concept/printable/core.hpp"
@@ -59,5 +58,4 @@ auto const vector_coder = vector_coder_printer<Bitmap, Policy>{};
 } // namespace printers
 } // namespace vast
 
-#endif
 

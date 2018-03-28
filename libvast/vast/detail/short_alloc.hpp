@@ -35,8 +35,7 @@
 //
 // Adapted to fit VAST's coding style.
 
-#ifndef VAST_DETAIL_SHORT_ALLOC_HPP
-#define VAST_DETAIL_SHORT_ALLOC_HPP
+#pragma once
 
 #include <cstddef>
 #include <cassert>
@@ -176,4 +175,3 @@ bool operator!=(const short_alloc<T0, N0, A0>& x,
 
 } // namespace vast::detail
 
-#endif

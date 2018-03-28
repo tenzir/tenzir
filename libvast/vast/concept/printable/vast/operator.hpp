@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PRINTABLE_VAST_OPERATOR_HPP
-#define VAST_CONCEPT_PRINTABLE_VAST_OPERATOR_HPP
+#pragma once
 
 #include "vast/die.hpp"
 #include "vast/error.hpp"
@@ -124,4 +123,3 @@ struct printer_registry<boolean_operator> {
 
 } // namespace vast
 
-#endif

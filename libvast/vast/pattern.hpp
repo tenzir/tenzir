@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_PATTERN_HPP
-#define VAST_PATTERN_HPP
+#pragma once
 
 #include <string>
 
@@ -74,4 +73,3 @@ private:
 
 } // namespace vast
 
-#endif

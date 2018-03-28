@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PARSEABLE_STRING_CHAR_RANGE_HPP
-#define VAST_CONCEPT_PARSEABLE_STRING_CHAR_RANGE_HPP
+#pragma once
 
 #include "vast/concept/parseable/core/parser.hpp"
 #include "vast/concept/parseable/detail/char_helpers.hpp"
@@ -56,4 +55,3 @@ auto const a_zA_Z0_9 = char_range_parser<'a', 'z', 'A', 'Z', '0', '9'>{};
 } // namespace parsers
 } // namespace vast
 
-#endif

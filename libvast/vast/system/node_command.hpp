@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_NODE_COMMAND_HPP
-#define VAST_NODE_COMMAND_HPP
+#pragma once
 
 #include <caf/expected.hpp>
 
@@ -52,4 +51,3 @@ private:
 
 } // namespace vast
 
-#endif

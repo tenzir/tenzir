@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PARSEABLE_CORE_LITERAL_HPP
-#define VAST_CONCEPT_PARSEABLE_CORE_LITERAL_HPP
+#pragma once
 
 #include <cstddef>
 #include <type_traits>
@@ -46,4 +45,3 @@ inline auto operator"" _p(long double x) {
 
 } // namespace vast
 
-#endif

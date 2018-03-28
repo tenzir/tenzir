@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PRINTABLE_PRINT_HPP
-#define VAST_CONCEPT_PRINTABLE_PRINT_HPP
+#pragma once
 
 #include <type_traits>
 
@@ -75,4 +74,3 @@ struct is_printable : decltype(detail::is_printable::test<I, T>(0, 0)) {};
 
 } // namespace vast
 
-#endif

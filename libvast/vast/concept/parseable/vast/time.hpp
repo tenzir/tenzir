@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PARSEABLE_VAST_TIME_HPP
-#define VAST_CONCEPT_PARSEABLE_VAST_TIME_HPP
+#pragma once
 
 #include <chrono>
 #include <ctime>
@@ -209,4 +208,3 @@ static auto const timestamp = timestamp_parser{};
 } // namespace parsers
 } // namespace vast
 
-#endif

@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_BITS_HPP
-#define VAST_BITS_HPP
+#pragma once
 
 #include "vast/word.hpp"
 
@@ -187,4 +186,3 @@ auto select(const bits<T>& b, typename bits<T>::size_type i) {
 
 } // namespace vast
 
-#endif

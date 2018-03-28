@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_EVENT_HPP
-#define VAST_EVENT_HPP
+#pragma once
 
 #include "vast/aliases.hpp"
 #include "vast/type.hpp"
@@ -91,4 +90,3 @@ event flatten(const event& e);
 
 } // namespace vast
 
-#endif

@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PRINTABLE_VAST_OFFSET_HPP
-#define VAST_CONCEPT_PRINTABLE_VAST_OFFSET_HPP
+#pragma once
 
 #include "vast/offset.hpp"
 #include "vast/concept/printable/core/printer.hpp"
@@ -43,4 +42,3 @@ namespace printers {
 
 } // namespace vast
 
-#endif

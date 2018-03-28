@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef FIXTURES_ACTOR_SYSTEM_AND_EVENTS_HPP
-#define FIXTURES_ACTOR_SYSTEM_AND_EVENTS_HPP
+#pragma once
 
 #include "fixtures/actor_system.hpp"
 #include "fixtures/events.hpp"
@@ -24,4 +23,3 @@ struct actor_system_and_events : actor_system, events {
 
 } // namespace fixtures
 
-#endif

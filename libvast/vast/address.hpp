@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_ADDRESS_HPP
-#define VAST_ADDRESS_HPP
+#pragma once
 
 #include <array>
 #include <string>
@@ -138,4 +137,3 @@ private:
 
 } // namespace vast
 
-#endif

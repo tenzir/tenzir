@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_SYSTEM_ATOMS_HPP
-#define VAST_SYSTEM_ATOMS_HPP
+#pragma once
 
 #include <caf/atom.hpp>
 
@@ -104,4 +103,3 @@ using importer_atom = caf::atom_constant<caf::atom("importer")>;
 
 } // namespace vast::system
 
-#endif

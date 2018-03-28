@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PARSEABLE_STRING_QUOTED_STRING_HPP
-#define VAST_CONCEPT_PARSEABLE_STRING_QUOTED_STRING_HPP
+#pragma once
 
 #include <cassert>
 #include <string>
@@ -52,4 +51,3 @@ struct parser_registry<std::string> {
 
 } // namespace vast
 
-#endif

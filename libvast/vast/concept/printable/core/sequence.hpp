@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PRINTABLE_CORE_SEQUENCE_HPP
-#define VAST_CONCEPT_PRINTABLE_CORE_SEQUENCE_HPP
+#pragma once
 
 #include <tuple>
 #include <type_traits>
@@ -169,4 +168,3 @@ private:
 
 } // namespace vast
 
-#endif

@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_SYSTEM_SINK_HPP
-#define VAST_SYSTEM_SINK_HPP
+#pragma once
 
 #include <cstdint>
 #include <chrono>
@@ -104,4 +103,3 @@ caf::behavior sink(caf::stateful_actor<sink_state<Writer>>* self,
 
 } // namespace vast::system
 
-#endif
