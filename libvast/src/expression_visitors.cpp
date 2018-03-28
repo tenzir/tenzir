@@ -610,8 +610,10 @@ bool matcher::operator()(const attribute_extractor& e, const data& d) {
   if (e.attr == "type") {
     VAST_ASSERT(is<std::string>(d));
     return evaluate(d, op_, type_.name());
+  } else if (e.attr == "time") {
+    return true; // Every event has a timestamp.
   }
-  return e.attr == "time"; // Every event has a timestamp.
+  return false;
 }
 
 bool matcher::operator()(const data_extractor&, const data&) {
