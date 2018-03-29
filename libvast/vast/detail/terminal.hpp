@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_DETAIL_TERMINAL_HPP
-#define VAST_DETAIL_TERMINAL_HPP
+#pragma once
 
 /// This namesapce hosts various functions related to controling the terminal.
 /// @warn All functions in this namesapce are not thread-safe.
@@ -58,4 +57,3 @@ bool get(char& c, int timeout = 100);
 
 } // namespace vast::detail::terminal
 
-#endif

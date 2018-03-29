@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PRINTABLE_CORE_PRINTER_HPP
-#define VAST_CONCEPT_PRINTABLE_CORE_PRINTER_HPP
+#pragma once
 
 #include <type_traits>
 #include <iterator>
@@ -113,4 +112,3 @@ using is_printer = std::is_base_of<printer<T>, T>;
 
 } // namespace vast
 
-#endif

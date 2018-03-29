@@ -1,5 +1,4 @@
-#ifndef VAST_CONCEPT_PARSEABLE_CORE_WHEN_HPP
-#define VAST_CONCEPT_PARSEABLE_CORE_WHEN_HPP
+#pragma once
 
 #include "vast/concept/parseable/core/parser.hpp"
 
@@ -25,5 +24,4 @@ private:
 
 } // namespace vast
 
-#endif
 

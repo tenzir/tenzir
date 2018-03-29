@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_DETAIL_LINE_RANGE_HPP
-#define VAST_DETAIL_LINE_RANGE_HPP
+#pragma once
 
 #include <cstdint>
 #include <istream>
@@ -45,4 +44,3 @@ private:
 
 } // namespace vast::detail
 
-#endif

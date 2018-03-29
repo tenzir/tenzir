@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_SCHEMA_HPP
-#define VAST_SCHEMA_HPP
+#pragma once
 
 #include <string>
 #include <vector>
@@ -76,4 +75,3 @@ bool convert(const schema& s, json& j);
 
 } // namespace vast
 
-#endif

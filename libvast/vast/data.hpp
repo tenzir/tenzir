@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_DATA_HPP
-#define VAST_DATA_HPP
+#pragma once
 
 #include <chrono>
 #include <iterator>
@@ -255,4 +254,3 @@ struct hash<vast::data> {
 
 } // namespace std
 
-#endif

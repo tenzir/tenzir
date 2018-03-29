@@ -1,5 +1,4 @@
-#ifndef VAST_SYSTEM_NODE_STATE_HPP
-#define VAST_SYSTEM_NODE_STATE_HPP
+#pragma once
 
 #include "vast/expression.hpp"
 #include "vast/filesystem.hpp"
@@ -20,4 +19,3 @@ struct node_state {
 } // namespace system
 } // namespace vast
 
-#endif

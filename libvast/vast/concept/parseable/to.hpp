@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PARSEABLE_TO_HPP
-#define VAST_CONCEPT_PARSEABLE_TO_HPP
+#pragma once
 
 #include <iterator>
 #include <type_traits>
@@ -53,4 +52,3 @@ auto to(char const(&str)[N]) {
 
 } // namespace vast
 
-#endif

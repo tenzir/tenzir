@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_SYSTEM_EXPORTER_HPP
-#define VAST_SYSTEM_EXPORTER_HPP
+#pragma once
 
 #include <chrono>
 #include <deque>
@@ -59,4 +58,3 @@ caf::behavior exporter(caf::stateful_actor<exporter_state>* self,
 
 } // namespace vast::system
 
-#endif

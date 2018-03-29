@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PRINTABLE_DETAIL_PRINT_DELIMITED_HPP
-#define VAST_CONCEPT_PRINTABLE_DETAIL_PRINT_DELIMITED_HPP
+#pragma once
 
 #include "vast/concept/printable/print.hpp"
 #include "vast/concept/support/unused_type.hpp"
@@ -58,4 +57,3 @@ bool print_delimited(InputIterator begin, InputIterator end,
 } // namespace detail
 } // namespace vast
 
-#endif

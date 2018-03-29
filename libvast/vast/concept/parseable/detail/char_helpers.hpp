@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PARSEABLE_DETAIL_CHAR_HELPERS_HPP
-#define VAST_CONCEPT_PARSEABLE_DETAIL_CHAR_HELPERS_HPP
+#pragma once
 
 #include <string>
 #include <vector>
@@ -36,4 +35,3 @@ inline void absorb(std::vector<char> v, char c) {
 } // namespace detail
 } // namespace vast
 
-#endif

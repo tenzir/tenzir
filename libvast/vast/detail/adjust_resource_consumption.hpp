@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_DETAIL_ADJUST_RESOURCE_CONSUMPTION_HPP
-#define VAST_DETAIL_ADJUST_RESOURCE_CONSUMPTION_HPP
+#pragma once
 
 namespace vast::detail {
 
@@ -22,4 +21,3 @@ bool adjust_resource_consumption();
 
 } // namespace vast::detail
 
-#endif

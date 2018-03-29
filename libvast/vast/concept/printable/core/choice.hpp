@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PRINTABLE_CORE_CHOICE_HPP
-#define VAST_CONCEPT_PRINTABLE_CORE_CHOICE_HPP
+#pragma once
 
 #include <type_traits>
 
@@ -109,5 +108,4 @@ private:
 
 } // namespace vast
 
-#endif
 

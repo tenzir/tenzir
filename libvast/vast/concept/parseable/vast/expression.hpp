@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PARSEABLE_VAST_EXPRESSION_HPP
-#define VAST_CONCEPT_PARSEABLE_VAST_EXPRESSION_HPP
+#pragma once
 
 #include "vast/concept/parseable/core.hpp"
 #include "vast/concept/parseable/string/char_class.hpp"
@@ -186,4 +185,3 @@ static auto const expr = make_parser<vast::expression>();
 } // namespace parsers
 } // namespace vast
 
-#endif

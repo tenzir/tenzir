@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_DETAIL_HASH_CRC_HPP
-#define VAST_DETAIL_HASH_CRC_HPP
+#pragma once
 
 #include <cstddef>
 #include <cstdint>
@@ -44,4 +43,3 @@ private:
 
 } // namespace vast
 
-#endif

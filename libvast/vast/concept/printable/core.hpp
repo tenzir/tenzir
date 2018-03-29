@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PRINTABLE_CORE_HPP
-#define VAST_CONCEPT_PRINTABLE_CORE_HPP
+#pragma once
 
 #include "vast/concept/printable/core/action.hpp"
 #include "vast/concept/printable/core/and.hpp"
@@ -30,4 +29,3 @@
 #include "vast/concept/printable/core/plus.hpp"
 #include "vast/concept/printable/core/sequence.hpp"
 
-#endif

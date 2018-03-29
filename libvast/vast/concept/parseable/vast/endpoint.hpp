@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PARSEABLE_VAST_ENDPOINT_HPP
-#define VAST_CONCEPT_PARSEABLE_VAST_ENDPOINT_HPP
+#pragma once
 
 #include "vast/endpoint.hpp"
 #include "vast/concept/parseable/core.hpp"
@@ -50,4 +49,3 @@ static auto const endpoint = make_parser<vast::endpoint>();
 } // namespace parsers
 } // namespace vast
 
-#endif

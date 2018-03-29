@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_DETAIL_OVERLOAD_HPP
-#define VAST_DETAIL_OVERLOAD_HPP
+#pragma once
 
 namespace vast::detail {
 
@@ -32,4 +31,3 @@ auto overload(Functions... funs) {
 
 } // namespace vast::detail
 
-#endif

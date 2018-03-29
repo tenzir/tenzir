@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_IDS_HPP
-#define VAST_IDS_HPP
+#pragma once
 
 #include "vast/bitmap.hpp"
 #include "vast/aliases.hpp"
@@ -41,4 +40,3 @@ ids make_ids(std::initializer_list<id_range> ranges);
 
 } // namespace vast
 
-#endif

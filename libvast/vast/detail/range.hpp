@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_DETAIL_RANGE_HPP
-#define VAST_DETAIL_RANGE_HPP
+#pragma once
 
 #include "vast/config.hpp"
 
@@ -137,4 +136,3 @@ auto make_iterator_range(Iterator begin, Iterator end) {
 
 } // namespace vast::detail
 
-#endif

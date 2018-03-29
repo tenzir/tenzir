@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_SUPPORT_DETAIL_ATTR_FOLD_HPP
-#define VAST_CONCEPT_SUPPORT_DETAIL_ATTR_FOLD_HPP
+#pragma once
 
 #include <string>
 #include <vector>
@@ -48,5 +47,4 @@ struct attr_fold<std::tuple<std::string, char>> : std::decay<std::string> {};
 } // namespace detail
 } // namespace vast
 
-#endif
 

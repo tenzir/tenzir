@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_NULL_BITMAP_HPP
-#define VAST_NULL_BITMAP_HPP
+#pragma once
 
 #include "vast/bitmap_base.hpp"
 #include "vast/bitvector.hpp"
@@ -88,5 +87,4 @@ private:
 
 } // namespace vast
 
-#endif
 

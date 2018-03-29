@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PRINTABLE_CORE_GUARD_HPP
-#define VAST_CONCEPT_PRINTABLE_CORE_GUARD_HPP
+#pragma once
 
 #include "vast/concept/support/detail/guard_traits.hpp"
 
@@ -55,5 +54,4 @@ private:
 
 } // namespace vast
 
-#endif
 

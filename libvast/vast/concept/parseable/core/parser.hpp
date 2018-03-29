@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PARSEABLE_CORE_PARSER_HPP
-#define VAST_CONCEPT_PARSEABLE_CORE_PARSER_HPP
+#pragma once
 
 #include <type_traits>
 #include <iterator>
@@ -125,4 +124,3 @@ using is_parser = std::is_base_of<parser<T>, T>;
 
 } // namespace vast
 
-#endif

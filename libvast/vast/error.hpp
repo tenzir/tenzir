@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_ERROR_HPP
-#define VAST_ERROR_HPP
+#pragma once
 
 #include <caf/error.hpp>
 #include <caf/make_message.hpp>
@@ -61,4 +60,3 @@ error make_error(ec x, Ts&&... xs) {
 
 } // namespace vast
 
-#endif

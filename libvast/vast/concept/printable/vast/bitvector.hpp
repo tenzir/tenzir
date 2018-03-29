@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PRINTABLE_VAST_BITVECTOR_HPP
-#define VAST_CONCEPT_PRINTABLE_VAST_BITVECTOR_HPP
+#pragma once
 
 #include "vast/bitvector.hpp"
 #include "vast/concept/printable/core.hpp"
@@ -57,4 +56,3 @@ struct printer_registry<bitvector<Block, Allocator>> {
 
 } // namespace vast
 
-#endif

@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_INDEX_HPP
-#define VAST_INDEX_HPP
+#pragma once
 
 #include <unordered_map>
 
@@ -113,4 +112,3 @@ caf::behavior index(caf::stateful_actor<index_state>* self, const path& dir,
 } // namespace system
 } // namespace vast
 
-#endif

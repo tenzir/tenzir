@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_BANNER_HPP
-#define VAST_BANNER_HPP
+#pragma once
 
 #include <string>
 
@@ -24,4 +23,3 @@ std::string banner(bool colorized = false);
 
 } // namespace vast
 
-#endif

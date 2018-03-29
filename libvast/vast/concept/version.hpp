@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_VERSION_HPP
-#define VAST_CONCEPT_VERSION_HPP
+#pragma once
 
 #include <type_traits>
 
@@ -41,4 +40,3 @@ struct is_versionized : decltype(detail::is_versionized::test<T>(0)) {};
 } // namespace detail
 } // namespace vast
 
-#endif

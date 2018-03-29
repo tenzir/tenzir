@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PRINTABLE_TO_HPP
-#define VAST_CONCEPT_PRINTABLE_TO_HPP
+#pragma once
 
 #include <string>
 #include <type_traits>
@@ -37,4 +36,3 @@ auto to(From&& from, Opts&&... opts)
 
 } // namespace vast
 
-#endif

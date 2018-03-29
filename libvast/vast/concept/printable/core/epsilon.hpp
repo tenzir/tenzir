@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PRINTABLE_CORE_EPSILON_HPP
-#define VAST_CONCEPT_PRINTABLE_CORE_EPSILON_HPP
+#pragma once
 
 #include "vast/concept/printable/core/printer.hpp"
 
@@ -35,5 +34,4 @@ auto const eps = epsilon_printer{};
 } // namespace printers
 } // namespace vast
 
-#endif
 

@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_SUBNET_HPP
-#define VAST_SUBNET_HPP
+#pragma once
 
 #include "vast/address.hpp"
 #include "vast/detail/operators.hpp"
@@ -76,4 +75,3 @@ private:
 
 } // namespace vast
 
-#endif

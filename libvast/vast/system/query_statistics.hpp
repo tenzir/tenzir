@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_SYSTEM_QUERY_STATISTICS_HPP
-#define VAST_SYSTEM_QUERY_STATISTICS_HPP
+#pragma once
 
 #include <cstddef>
 #include <cstdint>
@@ -40,4 +39,3 @@ auto inspect(Inspector& f, query_statistics& qs) {
 
 } // namespace vast::system
 
-#endif

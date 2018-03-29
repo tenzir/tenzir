@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_STORE_HPP
-#define VAST_STORE_HPP
+#pragma once
 
 #include <vector>
 
@@ -50,4 +49,3 @@ public:
 
 } // namespace vast
 
-#endif

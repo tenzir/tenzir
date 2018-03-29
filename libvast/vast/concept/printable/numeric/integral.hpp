@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PRINTABLE_NUMERIC_INTEGRAL_HPP
-#define VAST_CONCEPT_PRINTABLE_NUMERIC_INTEGRAL_HPP
+#pragma once
 
 #include <cmath>
 #include <cstdint>
@@ -106,4 +105,3 @@ auto const u64 = integral_printer<uint64_t>{};
 } // namespace printers
 } // namespace vast
 
-#endif

@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_SYSTEM_ACCOUNTANT_HPP
-#define VAST_SYSTEM_ACCOUNTANT_HPP
+#pragma once
 
 #include <cstdint>
 #include <fstream>
@@ -55,4 +54,3 @@ accountant(accountant_type::stateful_pointer<accountant_state> self,
 
 } // namespace vast::system
 
-#endif

@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PRINTABLE_NUMERIC_REAL_HPP
-#define VAST_CONCEPT_PRINTABLE_NUMERIC_REAL_HPP
+#pragma once
 
 #include <cmath>
 #include <cstdint>
@@ -74,4 +73,3 @@ auto const real6 = real_printer<double, 6>{};
 } // namespace printers
 } // namespace vast
 
-#endif

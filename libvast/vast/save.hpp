@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_SAVE_HPP
-#define VAST_SAVE_HPP
+#pragma once
 
 #include <fstream>
 #include <stdexcept>
@@ -71,4 +70,3 @@ expected<void> save(Sink&& out, Ts&&... xs) {
 
 } // namespace vast
 
-#endif

@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PARSEABLE_NUMERIC_INTEGRAL_HPP
-#define VAST_CONCEPT_PARSEABLE_NUMERIC_INTEGRAL_HPP
+#pragma once
 
 #include <cstdint>
 
@@ -149,4 +148,3 @@ auto const u64 = integral_parser<uint64_t>{};
 } // namespace parsers
 } // namespace vast
 
-#endif

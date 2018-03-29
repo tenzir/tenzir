@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_DETAIL_STRING_HPP
-#define VAST_DETAIL_STRING_HPP
+#pragma once
 
 #include <algorithm>
 #include <array>
@@ -780,4 +779,3 @@ TextIterator search_knuth_morris_pratt(PatternIterator p0, PatternIterator p1,
 
 } // namespace vast::detail
 
-#endif

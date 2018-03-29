@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PARSEABLE_STRING_ANY_HPP
-#define VAST_CONCEPT_PARSEABLE_STRING_ANY_HPP
+#pragma once
 
 #include "vast/concept/parseable/core/parser.hpp"
 
@@ -43,4 +42,3 @@ static auto const any = any_parser{};
 } // namespace parsers
 } // namespace vast
 
-#endif

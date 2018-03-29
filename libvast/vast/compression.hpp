@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_COMPRESSION_HPP
-#define VAST_COMPRESSION_HPP
+#pragma once
 
 #include <cstdint>
 #include <cstddef>
@@ -68,4 +67,3 @@ bool uncompress(const char* in, size_t in_size, char* out);
 
 } // namespace vast
 
-#endif

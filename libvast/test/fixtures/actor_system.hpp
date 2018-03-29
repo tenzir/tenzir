@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef FIXTURES_ACTOR_SYSTEM_HPP
-#define FIXTURES_ACTOR_SYSTEM_HPP
+#pragma once
 
 #include <caf/all.hpp>
 
@@ -81,4 +80,3 @@ struct actor_system : filesystem {
 
 } // namespace fixtures
 
-#endif

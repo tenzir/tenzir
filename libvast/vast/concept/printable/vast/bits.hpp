@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PRINTABLE_VAST_BITS_HPP
-#define VAST_CONCEPT_PRINTABLE_VAST_BITS_HPP
+#pragma once
 
 #include "vast/bits.hpp"
 #include "vast/concept/printable/core.hpp"
@@ -95,4 +94,3 @@ auto const bits = bits_printer<T, Policy>{};
 } // namespace printers
 } // namespace vast
 
-#endif

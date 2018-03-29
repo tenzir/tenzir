@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PRINTABLE_VAST_ERROR_HPP
-#define VAST_CONCEPT_PRINTABLE_VAST_ERROR_HPP
+#pragma once
 
 #include "vast/error.hpp"
 #include "vast/concept/printable/core/printer.hpp"
@@ -37,4 +36,3 @@ struct printer_registry<error> {
 
 } // namespace vast
 
-#endif

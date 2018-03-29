@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_DETAIL_SYSTEM_HPP
-#define VAST_DETAIL_SYSTEM_HPP
+#pragma once
 
 #include <cstdint>
 #include <string>
@@ -33,4 +32,3 @@ int32_t process_id();
 
 } // namespace vast::detail
 
-#endif

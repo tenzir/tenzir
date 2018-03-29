@@ -44,8 +44,7 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef VAST_DETAIL_RADIX_TREE_HPP
-#define VAST_DETAIL_RADIX_TREE_HPP
+#pragma once
 
 #include <emmintrin.h>
 
@@ -1218,4 +1217,3 @@ operator=(iterator rhs) {
 
 } // namespace vast::detail
 
-#endif

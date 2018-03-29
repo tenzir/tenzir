@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PARSEABLE_CORE_OPERATORS_HPP
-#define VAST_CONCEPT_PARSEABLE_CORE_OPERATORS_HPP
+#pragma once
 
 #include <type_traits>
 
@@ -142,4 +141,3 @@ auto operator|(LHS&& lhs, RHS&& rhs)
 
 } // namespace vast
 
-#endif

@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PARSEABLE_CORE_KLEENE_HPP
-#define VAST_CONCEPT_PARSEABLE_CORE_KLEENE_HPP
+#pragma once
 
 #include <vector>
 
@@ -43,4 +42,3 @@ private:
 
 } // namespace vast
 
-#endif

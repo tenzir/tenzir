@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PARSEABLE_VAST_TYPE_HPP
-#define VAST_CONCEPT_PARSEABLE_VAST_TYPE_HPP
+#pragma once
 
 #include "vast/concept/parseable/core/list.hpp"
 #include "vast/concept/parseable/core/operators.hpp"
@@ -202,4 +201,3 @@ auto const type = make_parser<vast::type>();
 } // namespace parsers
 } // namespace vast
 
-#endif

@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PARSEABLE_NUMERIC_BOOL_HPP
-#define VAST_CONCEPT_PARSEABLE_NUMERIC_BOOL_HPP
+#pragma once
 
 #include "vast/concept/parseable/core/parser.hpp"
 #include "vast/concept/parseable/string/char.hpp"
@@ -96,4 +95,3 @@ auto const boolean = bool_parser<detail::literal_bool_policy>{};
 } // namespace parsers
 } // namespace vast
 
-#endif

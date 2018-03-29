@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_OFFSET_HPP
-#define VAST_OFFSET_HPP
+#pragma once
 
 #include <cstddef>
 
@@ -28,4 +27,3 @@ struct offset : detail::stack_vector<size_t, 64> {
 
 } // namespace vast
 
-#endif

@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_HTTP_HPP
-#define VAST_HTTP_HPP
+#pragma once
 
 #include <cstdint>
 #include <string>
@@ -52,4 +51,3 @@ struct response : message {
 
 } // namespace vast::http
 
-#endif

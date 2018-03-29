@@ -1,5 +1,4 @@
-#ifndef VAST_CONFIG_HPP
-#define VAST_CONFIG_HPP
+#pragma once
 
 #cmakedefine VAST_ENABLE_ASSERTIONS
 #cmakedefine VAST_HAVE_GPERFTOOLS
@@ -51,4 +50,3 @@
 // Convenience macros
 #define VAST_IGNORE_UNUSED(x) CAF_IGNORE_UNUSED(x)
 
-#endif

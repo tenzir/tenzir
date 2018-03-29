@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_EXPECTED_HPP
-#define VAST_EXPECTED_HPP
+#pragma once
 
 #include <caf/expected.hpp>
 
@@ -24,4 +23,3 @@ constexpr auto no_error = caf::no_error;
 
 } // namespace vast
 
-#endif

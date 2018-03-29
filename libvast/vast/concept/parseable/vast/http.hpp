@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PARSEABLE_VAST_HTTP_HPP
-#define VAST_CONCEPT_PARSEABLE_VAST_HTTP_HPP
+#pragma once
 
 #include <algorithm>
 #include <cctype>
@@ -103,4 +102,3 @@ struct parser_registry<http::request> {
 
 } // namespace vast
 
-#endif

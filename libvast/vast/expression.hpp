@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_EXPRESSION_HPP
-#define VAST_EXPRESSION_HPP
+#pragma once
 
 #include <memory>
 #include <string>
@@ -274,4 +273,3 @@ struct hash<vast::expression> {
 
 } // namespace std
 
-#endif

@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PRINTABLE_VAST_UUID_HPP
-#define VAST_CONCEPT_PRINTABLE_VAST_UUID_HPP
+#pragma once
 
 #include "vast/access.hpp"
 #include "vast/uuid.hpp"
@@ -50,4 +49,3 @@ struct printer_registry<uuid> {
 
 } // namespace vast
 
-#endif

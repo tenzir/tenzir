@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_DETAIL_CACHE_HPP
-#define VAST_DETAIL_CACHE_HPP
+#pragma once
 
 #include <cstddef>
 #include <functional>
@@ -269,4 +268,3 @@ struct mru {
 
 } // namespace vast::detail
 
-#endif

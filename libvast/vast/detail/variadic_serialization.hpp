@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_DETAIL_VARIADIC_SERIALIZATION_HPP
-#define VAST_DETAIL_VARIADIC_SERIALIZATION_HPP
+#pragma once
 
 #include <caf/deserializer.hpp>
 #include <caf/serializer.hpp>
@@ -56,4 +55,3 @@ void read(caf::deserializer& source, T& x, Ts&... xs) {
 
 } // namespace vast::detail
 
-#endif

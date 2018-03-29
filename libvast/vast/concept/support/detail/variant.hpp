@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_SUPPORT_DETAIL_VARIANT_HPP
-#define VAST_CONCEPT_SUPPORT_DETAIL_VARIANT_HPP
+#pragma once
 
 #include "vast/detail/type_list.hpp"
 #include "vast/variant.hpp"
@@ -65,5 +64,4 @@ using flattened_variant = typename make_variant_from<
 
 } // namespace vast::detail
 
-#endif
 

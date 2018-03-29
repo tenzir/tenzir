@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PARSEABLE_NUMERIC_REAL_HPP
-#define VAST_CONCEPT_PARSEABLE_NUMERIC_REAL_HPP
+#pragma once
 
 #include <cmath>
 #include <limits>
@@ -129,4 +128,3 @@ auto const real_opt_dot = real_parser<double, policy::optional_dot>{};
 } // namespace parsers
 } // namespace vast
 
-#endif

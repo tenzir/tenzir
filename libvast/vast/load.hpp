@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_LOAD_HPP
-#define VAST_LOAD_HPP
+#pragma once
 
 #include <fstream>
 #include <stdexcept>
@@ -72,4 +71,3 @@ expected<void> load(Source&& in, Ts&&... xs) {
 
 } // namespace vast
 
-#endif

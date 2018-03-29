@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_VALUE_HPP
-#define VAST_VALUE_HPP
+#pragma once
 
 #include <type_traits>
 
@@ -116,4 +115,3 @@ bool convert(const value& v, json& j);
 
 } // namespace vast
 
-#endif

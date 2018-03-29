@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PRINTABLE_DETAIL_AS_PRINTER_HPP
-#define VAST_CONCEPT_PRINTABLE_DETAIL_AS_PRINTER_HPP
+#pragma once
 
 #include <string>
 
@@ -112,5 +111,4 @@ auto as_printer(T&& x, U&& y)
 } // namespace detail
 } // namespace vast
 
-#endif
 

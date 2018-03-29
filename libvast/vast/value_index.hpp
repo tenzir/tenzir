@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_VALUE_INDEX_HPP
-#define VAST_VALUE_INDEX_HPP
+#pragma once
 
 #include <algorithm>
 #include <memory>
@@ -551,4 +550,3 @@ struct value_index_inspect_helper {
 } // namespace detail
 } // namespace vast
 
-#endif

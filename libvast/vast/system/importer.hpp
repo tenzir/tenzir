@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_SYSTEM_IMPORTER_HPP
-#define VAST_SYSTEM_IMPORTER_HPP
+#pragma once
 
 #include <chrono>
 #include <vector>
@@ -54,4 +53,3 @@ caf::behavior importer(caf::stateful_actor<importer_state>* self,
 
 } // namespace vast::system
 
-#endif

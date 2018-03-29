@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_DETAIL_TYPE_TRAITS_HPP
-#define VAST_DETAIL_TYPE_TRAITS_HPP
+#pragma once
 
 #include <iterator>
 #include <streambuf>
@@ -199,4 +198,3 @@ using detected_or_t = typename detected_or<Default, Op, Args...>::type;
 } // namespace detail
 } // namespace vast
 
-#endif

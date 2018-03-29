@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_SYSTEM_TASK_HPP
-#define VAST_SYSTEM_TASK_HPP
+#pragma once
 
 #include <map>
 
@@ -52,4 +51,3 @@ caf::behavior task(caf::stateful_actor<task_state>* self, Ts... xs) {
 
 } // namespace vast::system
 
-#endif

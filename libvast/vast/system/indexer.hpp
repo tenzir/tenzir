@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_SYSTEM_INDEXER_HPP
-#define VAST_SYSTEM_INDEXER_HPP
+#pragma once
 
 #include <unordered_map>
 
@@ -39,4 +38,3 @@ caf::behavior event_indexer(caf::stateful_actor<event_indexer_state>* self,
 
 } // namespace vast::system
 
-#endif

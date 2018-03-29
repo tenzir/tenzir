@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_SUPPORT_DETAIL_GUARD_TRAITS_HPP
-#define VAST_CONCEPT_SUPPORT_DETAIL_GUARD_TRAITS_HPP
+#pragma once
 
 #include <type_traits>
 
@@ -33,5 +32,4 @@ struct guard_traits {
 
 } // namespace vast::detail
 
-#endif
 

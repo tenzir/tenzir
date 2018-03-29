@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PARSEABLE_STRING_HPP
-#define VAST_CONCEPT_PARSEABLE_STRING_HPP
+#pragma once
 
 #include "vast/concept/parseable/string/any.hpp"
 #include "vast/concept/parseable/string/char.hpp"
@@ -23,4 +22,3 @@
 #include "vast/concept/parseable/string/symbol_table.hpp"
 #include "vast/concept/parseable/string/quoted_string.hpp"
 
-#endif

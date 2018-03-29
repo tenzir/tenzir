@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_TIME_HPP
-#define VAST_TIME_HPP
+#pragma once
 
 #include <chrono>
 #include <cstdint>
@@ -39,4 +38,3 @@ bool convert(timestamp tp, json& j);
 
 } // namespace vast
 
-#endif

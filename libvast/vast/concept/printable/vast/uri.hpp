@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PRINTABLE_VAST_URI_HPP
-#define VAST_CONCEPT_PRINTABLE_VAST_URI_HPP
+#pragma once
 
 #include <string>
 
@@ -99,4 +98,3 @@ struct printer_registry<uri> {
 
 } // namespace vast
 
-#endif

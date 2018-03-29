@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PARSEABLE_VAST_OFFSET_HPP
-#define VAST_CONCEPT_PARSEABLE_VAST_OFFSET_HPP
+#pragma once
 
 #include "vast/offset.hpp"
 
@@ -46,4 +45,3 @@ static auto const offset = make_parser<vast::offset>();
 
 } // namespace vast
 
-#endif

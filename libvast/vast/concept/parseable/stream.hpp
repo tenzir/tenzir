@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PARSEABLE_STREAM_HPP
-#define VAST_CONCEPT_PARSEABLE_STREAM_HPP
+#pragma once
 
 #include <istream>
 #include <type_traits>
@@ -34,4 +33,3 @@ auto operator>>(std::basic_istream<CharT, Traits>& in, T& x)
 
 } // namespace vast
 
-#endif

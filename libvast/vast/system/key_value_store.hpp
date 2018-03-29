@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_SYSTEM_KEY_VALUE_STORE_HPP
-#define VAST_SYSTEM_KEY_VALUE_STORE_HPP
+#pragma once
 
 #include <caf/stateful_actor.hpp>
 #include <caf/replies_to.hpp>
@@ -38,4 +37,3 @@ using key_value_store_type = caf::typed_actor<
 
 } // namespace vast::system
 
-#endif

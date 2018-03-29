@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PARSEABLE_DETAIL_AS_PARSER_HPP
-#define VAST_CONCEPT_PARSEABLE_DETAIL_AS_PARSER_HPP
+#pragma once
 
 #include <string>
 
@@ -112,4 +111,3 @@ auto as_parser(T&& x, U&& y)
 } // namespace detail
 } // namespace vast
 
-#endif

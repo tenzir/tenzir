@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_DETAIL_TYPE_LIST_HPP
-#define VAST_DETAIL_TYPE_LIST_HPP
+#pragma once
 
 #include <tuple>
 
@@ -139,4 +138,3 @@ using tl_make_t = typename tl_make<T>::type;
 
 } // namespace vast::detail
 
-#endif

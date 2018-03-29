@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_JSON_HPP
-#define VAST_JSON_HPP
+#pragma once
 
 #include <string>
 #include <vector>
@@ -231,4 +230,3 @@ json to_json(const T& x, Opts&&... opts) {
 
 } // namespace vast
 
-#endif // VAST_JSON_HPP

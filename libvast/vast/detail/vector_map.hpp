@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_DETAIL_VECTOR_MAP_HPP
-#define VAST_DETAIL_VECTOR_MAP_HPP
+#pragma once
 
 #include <algorithm>
 #include <functional>
@@ -228,4 +227,3 @@ private:
 
 } // namespace vast::detail
 
-#endif

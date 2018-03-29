@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_SEGMENT_STORE_HPP
-#define VAST_SEGMENT_STORE_HPP
+#pragma once
 
 #include <map>
 
@@ -80,4 +79,3 @@ private:
 
 } // namespace vast
 
-#endif

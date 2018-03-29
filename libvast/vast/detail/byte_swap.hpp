@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_DETAIL_BYTE_SWAP_HPP
-#define VAST_DETAIL_BYTE_SWAP_HPP
+#pragma once
 
 #include "vast/detail/endian.hpp"
 
@@ -62,4 +61,3 @@ T to_host_order(T x) {
 
 } // namespace vast::detail
 
-#endif

@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PARSEABLE_CORE_REPEAT_HPP
-#define VAST_CONCEPT_PARSEABLE_CORE_REPEAT_HPP
+#pragma once
 
 #include <vector>
 
@@ -126,4 +125,3 @@ auto rep(const Parser& p, const T& min, const T& max) {
 } // namespace parsers
 } // namespace vast
 
-#endif

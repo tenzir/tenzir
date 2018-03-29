@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_SYSTEM_RUN_WRITER_HPP
-#define VAST_SYSTEM_RUN_WRITER_HPP
+#pragma once
 
 #include <memory>
 #include <string>
@@ -71,4 +70,3 @@ private:
 
 } // namespace vast::system
 
-#endif

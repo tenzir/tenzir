@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_FORMAT_TEST_HPP
-#define VAST_FORMAT_TEST_HPP
+#pragma once
 
 #include <random>
 #include <unordered_map>
@@ -82,4 +81,3 @@ private:
 
 } // namespace vast::format::test
 
-#endif

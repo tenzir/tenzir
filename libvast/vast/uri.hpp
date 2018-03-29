@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_URI_HPP
-#define VAST_URI_HPP
+#pragma once
 
 #include <cstdint>
 #include <string>
@@ -64,4 +63,3 @@ struct uri {
 
 } // namespace vast
 
-#endif

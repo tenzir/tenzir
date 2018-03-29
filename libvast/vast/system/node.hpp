@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_SYSTEM_NODE_HPP
-#define VAST_SYSTEM_NODE_HPP
+#pragma once
 
 #include <string>
 
@@ -31,4 +30,3 @@ caf::behavior node(caf::stateful_actor<node_state>* self, std::string id,
 
 } // namespace vast::system
 
-#endif

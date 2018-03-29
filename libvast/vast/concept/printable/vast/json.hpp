@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PRINTABLE_VAST_JSON_HPP
-#define VAST_CONCEPT_PRINTABLE_VAST_JSON_HPP
+#pragma once
 
 #include "vast/concept/printable/print.hpp"
 #include "vast/concept/printable/string.hpp"
@@ -223,4 +222,3 @@ auto json = json_printer<Policy>{};
 } // namespace printers
 } // namespace vast
 
-#endif

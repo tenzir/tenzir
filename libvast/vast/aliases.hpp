@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_ALIASES_HPP
-#define VAST_ALIASES_HPP
+#pragma once
 
 #include <cstdint>
 #include <limits>
@@ -66,4 +65,3 @@ using enumeration = uint32_t;
 
 } // namespace vast
 
-#endif

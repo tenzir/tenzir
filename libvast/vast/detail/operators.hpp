@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_DETAIL_OPERATORS_HPP
-#define VAST_DETAIL_OPERATORS_HPP
+#pragma once
 
 namespace vast::detail {
 
@@ -108,4 +107,3 @@ struct bitwise : andable<T, U>, orable<T, U>, xorable<T, U> {};
 
 } // namespace vast::detail
 
-#endif // VAST_DETAIL_OPERATORS_HPP
