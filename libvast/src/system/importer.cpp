@@ -114,7 +114,7 @@ void replenish(stateful_actor<importer_state>* self) {
   }
   self->state.last_replenish = now;
   VAST_DEBUG(self, "replenishes", self->state.batch_size, "IDs");
-  VAST_ASSERT(max_event_id - self->state.next >= self->state.batch_size);
+  VAST_ASSERT(max_id - self->state.next >= self->state.batch_size);
   auto n = self->state.batch_size;
   // If we get an EXIT message while expecting a response from the metastore,
   // we'll give it a bit of time to come back;

@@ -54,11 +54,11 @@ public:
   /// Sets the event ID.
   /// @param i The new event ID.
   /// @returns `true` iff *i* is in *[1, 2^64-2]*.
-  bool id(event_id i);
+  bool id(vast::id i);
 
   /// Retrieves the event ID.
   /// @returns The name of the event.
-  event_id id() const;
+  vast::id id() const;
 
   /// Sets the event timestamp.
   /// @param ts The event timestamp.
@@ -77,7 +77,7 @@ public:
   }
 
 private:
-  event_id id_ = invalid_event_id;
+  vast::id id_ = invalid_id;
   vast::timestamp timestamp_;
 };
 

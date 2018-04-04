@@ -23,14 +23,14 @@ using ids = bitmap;
 
 /// An open interval of IDs.
 struct id_range {
-  id_range(event_id from, event_id to) : first(from), last(to) {
+  id_range(id from, id to) : first(from), last(to) {
     // nop
   }
-  id_range(event_id id) : id_range(id, id + 1) {
+  id_range(id id) : id_range(id, id + 1) {
     // nop
   }
-  event_id first;
-  event_id last;
+  id first;
+  id last;
 };
 
 /// Generates an ID set for the given ranges. For example,

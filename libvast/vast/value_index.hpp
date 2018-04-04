@@ -54,9 +54,9 @@ public:
 
   /// Appends a data value.
   /// @param x The data to append to the index.
-  /// @param id The positional identifier of *x*.
+  /// @param pos The positional identifier of *x*.
   /// @returns `true` if appending succeeded.
-  expected<void> push_back(const data& x, event_id id);
+  expected<void> push_back(const data& x, id pos);
 
   /// Looks up data under a relational operator. If the value to look up is
   /// `nil`, only `==` and `!=` are valid operations. The concrete index

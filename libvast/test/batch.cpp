@@ -74,7 +74,7 @@ TEST(events without IDs) {
   auto xs = reader.read();
   REQUIRE(xs);
   REQUIRE_EQUAL(xs->size(), 42u);
-  CHECK_EQUAL(xs->front().id(), invalid_event_id);
+  CHECK_EQUAL(xs->front().id(), invalid_id);
   CHECK_EQUAL(xs->front().type().name(), "foo");
   CHECK_EQUAL(xs->front().type(), event_type);
   CHECK_EQUAL(xs->back().type(), event_type);

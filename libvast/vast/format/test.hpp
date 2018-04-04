@@ -60,7 +60,7 @@ public:
   /// @param seed A seed for the random number generator.
   /// @param n The numer of events to generate.
   /// @param id The base event ID to start at.
-  reader(size_t seed = 0, uint64_t n = 100, event_id id = 0);
+  reader(size_t seed = 0, uint64_t n = 100, id base = 0);
 
   expected<event> read();
 
@@ -73,7 +73,7 @@ public:
 private:
   vast::schema schema_;
   std::mt19937_64 generator_;
-  event_id id_;
+  id id_;
   uint64_t num_events_;
   schema::const_iterator next_;
   std::unordered_map<type, blueprint> blueprints_;

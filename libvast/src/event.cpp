@@ -24,15 +24,15 @@ event::event(none) {
 event::event(value v) : value{std::move(v)} {
 }
 
-bool event::id(event_id i) {
-  if (i <= max_event_id) {
+bool event::id(vast::id i) {
+  if (i <= max_id) {
     id_ = i;
     return true;
   }
   return false;
 }
 
-event_id event::id() const {
+id event::id() const {
   return id_;
 }
 

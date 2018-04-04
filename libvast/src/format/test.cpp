@@ -209,9 +209,9 @@ struct randomizer {
 } // namespace <anonymous>
 
 
-reader::reader(size_t seed, uint64_t n, event_id id)
+reader::reader(size_t seed, uint64_t n, id base)
   : generator_{seed},
-    id_{id},
+    id_{base},
     num_events_{n} {
   VAST_ASSERT(num_events_ > 0);
   static std::string builtin_schema = R"__(
