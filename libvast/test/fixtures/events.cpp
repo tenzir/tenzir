@@ -37,14 +37,14 @@ events::events() {
   bgpdump_txt = inhale<format::bgpdump::reader>(bgpdump::updates20140821);
   random = extract(vast::format::test::reader{42, 1000});
   // Assign monotonic IDs to events starting at 0.
-  auto id = vast::id{0};
+  auto i = id{0};
   auto assign = [&](auto& xs) {
     for (auto& x : xs)
-      x.id(id++);
+      x.id(i++);
   };
   assign(bro_conn_log);
   assign(bro_dns_log);
-  id += 1000; // Cause an artificial gap in the ID sequence.
+  i += 1000; // Cause an artificial gap in the ID sequence.
   assign(bro_http_log);
   assign(bgpdump_txt);
 }

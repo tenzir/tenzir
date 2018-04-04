@@ -60,7 +60,7 @@ public:
   /// @param seed A seed for the random number generator.
   /// @param n The numer of events to generate.
   /// @param id The base event ID to start at.
-  reader(size_t seed = 0, uint64_t n = 100, vast::id id = 0);
+  reader(size_t seed = 0, uint64_t n = 100, id base = 0);
 
   expected<event> read();
 
