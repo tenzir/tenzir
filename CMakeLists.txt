@@ -151,8 +151,8 @@ if (ENABLE_GCOV)
   if (NOT GCOV_FOUND)
     message(FATAL_ERROR "Could not find gcov")
   endif ()
-  find_package(GCOV)
-  if (NOT GCOV_FOUND)
+  find_package(GCOVR)
+  if (NOT GCOVR_FOUND)
     message(FATAL_ERROR "Could not find gcovr")
   endif ()
   # For compile flags, GCC and Clang share the same options.
@@ -160,9 +160,9 @@ if (ENABLE_GCOV)
   set(EXTRA_FLAGS "${EXTRA_FLAGS} -fno-omit-frame-pointer")
   # For link flags, GCC wants -lgcov and Clang --coverage.
   if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
-    set(LDFLAGS ${LDFLAGS} -lgcov)
+    set(LDFLAGS "${LDFLAGS} -lgcov")
   elseif ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
-    set(LDFLAGS ${LDFLAGS} --coverage)
+    set(LDFLAGS "${LDFLAGS} --coverage")
   endif()
   # Create a CMake script that removes all *.gcda files. We'll call this below
   # in the custom target.
