@@ -85,6 +85,7 @@ auto shutdown(stateful_actor<importer_state>* self) {
 
 // Ships a batch of events to archive and index.
 void ship(stateful_actor<importer_state>* self, std::vector<event>&& batch) {
+  CAF_LOG_TRACE(CAF_ARG(batch));
   VAST_ASSERT(batch.size() <= self->state.available);
   for (auto& e : batch)
     e.id(self->state.next++);
@@ -98,8 +99,42 @@ void ship(stateful_actor<importer_state>* self, std::vector<event>&& batch) {
     self->send(e, msg);
 }
 
+// Tries to ship a batch of events to archive and index.
+bool ship_some(stateful_actor<importer_state>* self) {
+  CAF_LOG_TRACE("");
+  using std::swap;
+  auto& st = self->state;
+  if (st.remainder.empty())
+    return false;
+  std::vector<event> tmp;
+  if (st.available >= st.remainder.size()) {
+    // Ship all events immediately if we have enough IDs.
+    swap(tmp, st.remainder);
+  } else if (st.available > 0) {
+    // Ship a subset of the events if we have any IDs left.
+    VAST_ASSERT(st.remainder.size() > st.available);
+    auto first = st.remainder.begin();
+    auto last = first + st.available;
+    tmp.insert(tmp.end(), make_move_iterator(first), make_move_iterator(last));
+    st.remainder.erase(first, last);
+  }
+  if (!tmp.empty()) {
+    ship(self, std::move(tmp));
+    return true;
+  }
+  return false;
+}
+
 // Asks the metastore for more IDs.
 void replenish(stateful_actor<importer_state>* self) {
+  CAF_LOG_TRACE("");
+  auto& st = self->state;
+  if (st.available > (st.batch_size * 0.1)) {
+    // Don't acquire more IDs if we can still ship at least one batch.
+    VAST_DEBUG(self, "did not fall below the threshold of", st.batch_size * 0.1,
+               "for replenishing its IDs, available:", st.available);
+    return;
+  }
   auto now = steady_clock::now();
   if (now - self->state.last_replenish < 10s) {
     VAST_DEBUG(self, "had to replenish twice within 10 secs");
@@ -128,23 +163,90 @@ void replenish(stateful_actor<importer_state>* self) {
   self->become(
     keep_behavior,
     [=](const data& old) {
+      // Update state.
       auto x = is<none>(old) ? count{0} : get<count>(old);
       VAST_DEBUG(self, "got", n, "new IDs starting at", x);
-      self->state.available = n;
-      self->state.next = x;
-      if (!self->state.remainder.empty())
-        ship(self, std::move(self->state.remainder));
+      auto& st = self->state;
+      st.available = n;
+      st.next = x;
+      // Try to send cached events.
+      ship_some(self);
+      // Save state.
       auto result = write_state(self);
       if (!result) {
         VAST_ERROR(self, "failed to save state:",
                    self->system().render(result.error()));
         self->quit(result.error());
       }
+      // Return to previous behavior.
       self->set_exit_handler(shutdown(self));
       self->unbecome();
     }
   );
 }
+
+// Stores additional events in the cache and tries to ship events if possible.
+void store(stateful_actor<importer_state>* self, std::vector<event>&& xs) {
+  CAF_LOG_TRACE(CAF_ARG(xs));
+  using std::make_move_iterator;
+  auto& st = self->state;
+  VAST_ASSERT(st.meta_store);
+  VAST_ASSERT(!xs.empty());
+  VAST_DEBUG(self, "got", xs.size(), "events");
+  VAST_DEBUG(self, "has", st.available, "IDs available");
+  // Fill up `remainder` until it has at least batch_size elements.
+  st.remainder.insert(st.remainder.end(), make_move_iterator(xs.begin()),
+                      make_move_iterator(xs.end()));
+  if (st.remainder.size() < st.batch_size) {
+    VAST_DEBUG(self, "waits for", st.batch_size - st.remainder.size(),
+               "more elements");
+  } else {
+    ship_some(self);
+    replenish(self);
+  }
+}
+
+class driver : public caf::stream_sink_driver<event> {
+public:
+  using pointer = stateful_actor<importer_state>*;
+
+  driver(pointer self) : self_(self) {
+    // nop
+  }
+
+  void process(std::vector<event>& xs) override {
+    CAF_LOG_TRACE(CAF_ARG(xs));
+    store(self_, std::move(xs));
+    auto& st = self_->state;
+    if (st.remainder.size() < st.batch_size) {
+      VAST_DEBUG(self_, "waits for", st.batch_size - st.remainder.size(),
+                 "more elements");
+    } else {
+      ship_some(self_);
+      replenish(self_);
+    }
+  }
+
+  void finalize(const error& err) override {
+    CAF_LOG_TRACE(CAF_ARG(err));
+    CAF_IGNORE_UNUSED(err);
+    auto& st = self_->state;
+    if (!st.remainder.empty()) {
+      ship_some(self_);
+      replenish(self_);
+    }
+    VAST_DEBUG(self_, "is done receiving from a source, cached events:",
+               st.remainder.size());
+  }
+
+  bool congested() const noexcept override {
+    auto& st = self_->state;
+    return st.remainder.size() > st.batch_size;
+  }
+
+private:
+  pointer self_;
+};
 
 } // namespace <anonymous>
 
@@ -202,32 +304,17 @@ behavior importer(stateful_actor<importer_state>* self, path dir,
       self->monitor(exporter);
       self->state.continuous_queries.push_back(exporter);
     },
-    [=](std::vector<event>& events) {
-      VAST_ASSERT(!events.empty());
-      VAST_DEBUG(self, "got", events.size(), "events");
-      VAST_DEBUG(self, "has", self->state.available, "IDs available");
+    [=](stream<event>& in) {
       if (!self->state.meta_store) {
-        self->quit(make_error(ec::unspecified, "no meta store configured"));
+        VAST_ERROR("no meta store configured for importer");
         return;
       }
-      if (events.size() <= self->state.available) {
-        // Ship the events immediately if we have enough IDs.
-        ship(self, std::move(events));
-      } else if (self->state.available > 0) {
-        // Ship a subset if we have any IDs left.
-        auto remainder = std::vector<event>(
-          std::make_move_iterator(events.begin() + self->state.available),
-          std::make_move_iterator(events.end()));
-        events.resize(self->state.available);
-        ship(self, std::move(events));
-        self->state.remainder = std::move(remainder);
-      } else {
-        // Buffer events otherwise.
-        self->state.remainder = std::move(events);
-      }
-      auto running_low = self->state.available < self->state.batch_size * 0.1;
-      if (running_low || !self->state.remainder.empty())
-        replenish(self);
+      self->make_sink<driver>(in, self);
+    },
+    [=](std::vector<event>& one_shot_batch) {
+      store(self, std::move(one_shot_batch));
+      ship_some(self);
+      replenish(self);
     }
   };
 }
