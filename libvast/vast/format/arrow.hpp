@@ -5,6 +5,7 @@
 #include <string>
 
 #include "plasma/client.h"
+#include "plasma/common.h"
 
 #include "arrow/api.h"
 #include "arrow/builder.h"
@@ -35,6 +36,9 @@ public:
 
   expected<void> write(const std::vector<event>& e);
 
+  expected<void> write(const std::vector<event>& e,
+                       std::vector<plasma::ObjectID>& oids);
+
   expected<void> write(const event& x);
 
   expected<void> flush();
@@ -47,8 +51,11 @@ public:
 
 private:
   expected<plasma::ObjectID> make_object(const void* data, size_t size);
+
   bool connected_;
+
   plasma::PlasmaClient plasma_client_;
+
   std::vector<event> buffer_;
 };
 struct convert_visitor {
@@ -71,13 +78,14 @@ struct convert_visitor {
 };
 
 struct insert_visitor {
-  ::arrow::ArrayBuilder* builder;
-  ::arrow::RecordBatchBuilder* rbuilder;
+  std::shared_ptr<::arrow::RecordBatchBuilder> rbuilder;
   u_int64_t counter = 0;
-  insert_visitor(::arrow::ArrayBuilder& b);
-  insert_visitor(::arrow::ArrayBuilder& b, u_int64_t c);
-  insert_visitor(::arrow::RecordBatchBuilder& b);
-  insert_visitor(::arrow::RecordBatchBuilder& b, u_int64_t c);
+  u_int64_t offset = 0;
+  u_int64_t c_builder = 0;
+  insert_visitor(std::shared_ptr<::arrow::RecordBatchBuilder>& b);
+  insert_visitor(std::shared_ptr<::arrow::RecordBatchBuilder>& b, u_int64_t c);
+  insert_visitor(std::shared_ptr<::arrow::RecordBatchBuilder>& b, u_int64_t c,
+                 u_int64_t c_builder);
   ::arrow::Status operator()(const record_type& t, const std::vector<data>& d);
   ::arrow::Status operator()(const count_type&, const count& d);
   ::arrow::Status operator()(const integer_type&, const integer& d);
@@ -92,7 +100,7 @@ struct insert_visitor {
   ::arrow::Status operator()(const port_type&, const port& d);
   ::arrow::Status operator()(const vector_type& t, const std::vector<data>& d);
   ::arrow::Status operator()(const set_type& t, const set& d);
-
+  // none data -> AppendNull
   ::arrow::Status operator()(const none_type&, const none&);
   ::arrow::Status operator()(const count_type&, const none&);
   ::arrow::Status operator()(const integer_type&, const none& d);
@@ -101,6 +109,7 @@ struct insert_visitor {
   ::arrow::Status operator()(const boolean_type&, const none&);
   ::arrow::Status operator()(const timespan_type&, const none&);
   ::arrow::Status operator()(const address_type&, const none&);
+  ::arrow::Status operator()(const port_type&, const none&);
   ::arrow::Status operator()(const vector_type&, const none&);
   ::arrow::Status operator()(const set_type&, const none&);
   template <class T1, class T2>
