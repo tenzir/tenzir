@@ -32,6 +32,14 @@ expected<std::shared_ptr<arrow::RecordBatch>> transpose(const event& e) {
     for (auto& e : record_type::each(r)) {
       schema_vector.push_back(convert_to_arrow_field(e.trace.back()->type));
     }
+  } else if (is<vector_type>(e.type())) {
+    vector_type v = get<vector_type>(e.type());
+    std::cout << "BLA  " <<  v.name() << "\n" << to_string(e.data()) << std::endl;
+    /*
+    for (auto& e : v) {
+      schema_vector.push_back(convert_to_arrow_field(e.type()));
+    }
+    */
   } else {
     schema_vector.push_back(convert_to_arrow_field(e.type()));
   }
@@ -133,6 +141,12 @@ result_type convert_visitor::operator()(const timespan_type&) {
 result_type convert_visitor::operator()(const timestamp_type&) {
   return ::arrow::field("timestamp",
                         ::arrow::timestamp(::arrow::TimeUnit::NANO));
+}
+result_type convert_visitor::operator()(const vector_type& t) {
+  std::vector<result_type> schema_vector = {
+    convert_to_arrow_field(t.value_type) 
+  };
+  return ::arrow::field("vector", std::make_shared<::arrow::StructType>(schema_vector));
 }
 insert_visitor::insert_visitor(std::shared_ptr<::arrow::RecordBatchBuilder>& b)
     : rbuilder(b) {
@@ -356,10 +370,12 @@ expected<void> writer::write(const std::vector<event>& xs) {
 
 expected<void> writer::write(const std::vector<event>& xs,
                              std::vector<plasma::ObjectID>& oids) {
+  std::cout << "Size " << xs.size() << std::endl;
   if (!connected())
     return make_error(ec::format_error, "not connected to plasma store");
   for (auto e : xs) {
     auto record_batch = transpose(e);
+    std::cout << to_string(e.type()) << "\n" << to_string(e.data()) << std::endl;
     if (!record_batch)
       return make_error(ec::format_error, "failed to transpose events");
     auto buf = write_to_buffer(*record_batch);

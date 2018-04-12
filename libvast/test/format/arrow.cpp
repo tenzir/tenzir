@@ -59,26 +59,62 @@ TEST(arrow writer conn) {
   CHECK(status.ok());
   CHECK(b);
   CHECK_EQUAL(oids.size(), bro_conn_log.size());
-  CHECK_EQUAL(b->column(1)->data(), bro_conn_log.at(1));
   auto data_v = get<std::vector<data>>(bro_conn_log.at(0).data());
   auto data_a = std::make_shared<::arrow::StringArray>(b->column(1)->data()); 
   CHECK_EQUAL(data_a->GetString(0), get<std::string>(data_v.at(1)));
 }
-/*
 TEST(arrow writer http) {
   format::arrow::writer writer{"/tmp/plasma"};
   REQUIRE(writer.connected());
-  for (auto& x : bro_http_log)
-    CHECK(writer.write(x));
+  std::vector<plasma::ObjectID> oids;
+  CHECK(writer.write(bro_http_log, oids));
   CHECK(writer.flush());
+  plasma::PlasmaClient client;
+  ARROW_CHECK_OK(
+    client.Connect("/tmp/plasma", "", PLASMA_DEFAULT_RELEASE_DELAY));
+  ARROW_CHECK_OK(client.Disconnect());
+  std::shared_ptr<::arrow::RecordBatch> b;
+  auto status = get_arrow_batch(oids.at(0), b);
+  CHECK(status.ok());
+  CHECK(b);
+  CHECK_EQUAL(oids.size(), bro_http_log.size());
+  auto data_v = get<std::vector<data>>(bro_http_log.at(0).data());
+  auto data_a = std::make_shared<::arrow::StringArray>(b->column(1)->data()); 
+  CHECK_EQUAL(data_a->GetString(0), get<std::string>(data_v.at(1)));
+  std::cout << to_string(bro_http_log.at(0).data()) << std::endl;
+  for (int i = 0; i < b->num_columns(); i++){
+    std::cout << b->column(i)->ToString() << std::endl; 
+  }
 }
 TEST(arrow writer dns) {
   format::arrow::writer writer{"/tmp/plasma"};
   REQUIRE(writer.connected());
-  for (auto& x : bro_dns_log)
-    CHECK(writer.write(x));
-  CHECK(writer.flush());
+  std::vector<plasma::ObjectID> oids;
+  std::cout << "Size " << bro_dns_log.size() << std::endl;
+  auto result = writer.write(bro_dns_log, oids);
+  std::cout << to_string(result.error()) << std::endl;
+  CHECK(result);
+  result = writer.flush();
+  std::cout << to_string(result.error()) << std::endl;
+  CHECK(result);
+  plasma::PlasmaClient client;
+  ARROW_CHECK_OK(
+    client.Connect("/tmp/plasma", "", PLASMA_DEFAULT_RELEASE_DELAY));
+  ARROW_CHECK_OK(client.Disconnect());
+  std::shared_ptr<::arrow::RecordBatch> b;
+  auto status = get_arrow_batch(oids.at(0), b);
+  CHECK(status.ok());
+  CHECK(b);
+  CHECK_EQUAL(oids.size(), bro_dns_log.size());
+  auto data_v = get<std::vector<data>>(bro_dns_log.at(0).data());
+  auto data_a = std::make_shared<::arrow::StringArray>(b->column(1)->data()); 
+  CHECK_EQUAL(data_a->GetString(0), get<std::string>(data_v.at(1)));
+  std::cout << to_string(bro_dns_log.at(100).data()) << std::endl;
+  for (int i = 0; i < b->num_columns(); i++){
+    std::cout << b->column(i)->ToString() << std::endl; 
+  }
 }
+/*
 TEST(arrow writer random) {
   format::arrow::writer writer{"/tmp/plasma"};
   REQUIRE(writer.connected());
