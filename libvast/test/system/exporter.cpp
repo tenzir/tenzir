@@ -21,6 +21,8 @@
 #include "vast/system/index.hpp"
 #include "vast/system/replicated_store.hpp"
 
+#include "vast/detail/spawn_container_source.hpp"
+
 #define SUITE export
 #include "test.hpp"
 #include "fixtures/actor_system_and_events.hpp"
@@ -92,11 +94,77 @@ TEST(exporter continuous -- exporter only) {
   self->send_exit(a, exit_reason::user_shutdown);
 }
 
+
+/*
+TEST(foobar) {
+  struct pseudo_container {
+    struct iterator {
+      int value;
+      iterator(int x = 0) : value(x) {
+        // nop
+      }
+      iterator(const iterator&) = default;
+      iterator& operator=(const iterator&) = default;
+      int operator*() const {
+        return value;
+      }
+      iterator operator++(int) {
+        return value++;
+      }
+      iterator& operator++() {
+        ++value;
+        return *this;
+      }
+      bool operator!=(const iterator& other) const {
+        return value != other.value;
+      }
+      bool operator==(const iterator& other) const {
+        return value == other.value;
+      }
+    };
+    using value_type = int;
+    inline iterator begin() {
+      return 0;
+    }
+    inline iterator end() {
+      return 2048;
+    }
+  };
+  int result = 0;
+  int expected_result = 0;
+  pseudo_container tmp;
+  for (auto i : tmp)
+    expected_result += i;
+  auto snk = self->spawn([&result](event_based_actor* ptr) mutable -> behavior {
+    return {
+      [ptr, &result](stream<int> in) mutable {
+        ptr->make_sink(
+          in,
+          [](unit_t&) {},
+          [&result](unit_t&, int x) mutable {
+            MESSAGE("receive: " << x);
+            result += x;
+          },
+          [ptr](const unit_t&, const error& err) {
+            MESSAGE("sink done: " << ptr->system().render(err));
+            ptr->quit();
+          }
+        );
+      }
+    };
+  });
+  MESSAGE("start streaming");
+  self->wait_for(spawn_container_source(self->system(), snk, tmp));
+  self->wait_for(snk);
+  CHECK_EQUAL(result, expected_result);
+}
+*/
+
 TEST(exporter continuous -- with importer) {
   using namespace system;
   auto ind = self->spawn(system::index, directory / "index", 1000, 5, 5);
   auto arc = self->spawn(archive, directory / "archive", 1, 1024);
-  auto imp = self->spawn(importer, directory / "importer", 128);
+  auto imp = self->spawn(importer, directory / "importer");
   auto con = self->spawn(raft::consensus, directory / "consensus");
   self->send(con, run_atom::value);
   meta_store_type ms = self->spawn(replicated_store<std::string, data>, con);
@@ -114,7 +182,9 @@ TEST(exporter continuous -- with importer) {
   self->send(imp, ms);
   self->send(imp, exporter_atom::value, exp);
   MESSAGE("ingesting conn.log");
-  self->send(imp, bro_conn_log);
+  self->wait_for(
+    vast::detail::spawn_container_source(self->system(), imp, bro_conn_log));
+  //self->send(imp, bro_conn_log);
   MESSAGE("waiting for results");
   std::vector<event> results;
   self->do_receive(
@@ -137,7 +207,7 @@ TEST(exporter universal) {
   using namespace system;
   auto ind = self->spawn(system::index, directory / "index", 1000, 5, 5);
   auto arc = self->spawn(archive, directory / "archive", 1, 1024);
-  auto imp = self->spawn(importer, directory / "importer", 128);
+  auto imp = self->spawn(importer, directory / "importer");
   auto con = self->spawn(raft::consensus, directory / "consensus");
   self->send(con, run_atom::value);
   meta_store_type ms = self->spawn(replicated_store<std::string, data>, con);

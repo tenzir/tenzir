@@ -118,13 +118,13 @@ expected<actor> spawn_importer(stateful_actor<node_state>* self,
                                options& opts) {
   auto ids = size_t{128};
   auto r = opts.params.extract_opts({
-    {"ids,n", "number of initial IDs to request", ids},
+    {"ids,n", "number of initial IDs to request (deprecated)", ids},
   });
   opts.params = r.remainder;
   if (!r.error.empty())
     return make_error(ec::syntax_error, r.error);
   // FIXME: Notify exporters with a continuous query.
-  return self->spawn(importer, opts.dir / opts.label, ids);
+  return self->spawn(importer, opts.dir / opts.label);
 }
 
 expected<actor> spawn_index(local_actor* self, options& opts) {
