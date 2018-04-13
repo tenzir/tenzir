@@ -39,7 +39,7 @@ public:
 protected:
   template <class T>
   error zig_zag_varbyte_decode(T& x) {
-    static_assert(std::is_signed<T>::value, "T must be an signed type");
+    static_assert(std::is_signed_v<T>, "T must be an signed type");
     auto u = std::make_unsigned_t<T>{0};
     if (auto e = this->varbyte_decode(u))
       return e;

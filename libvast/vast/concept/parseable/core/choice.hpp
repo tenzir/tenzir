@@ -33,6 +33,9 @@ struct is_choice_parser : std::false_type {};
 template <class Lhs, class Rhs>
 struct is_choice_parser<choice_parser<Lhs, Rhs>> : std::true_type {};
 
+template <class T>
+inline constexpr bool is_choice_parser_v = is_choice_parser<T>::value;
+
 /// Attempts to parse either LHS or RHS.
 template <class Lhs, class Rhs>
 class choice_parser : public parser<choice_parser<Lhs, Rhs>> {
@@ -90,13 +93,13 @@ private:
 
   template <class Left, class Iterator>
   auto parse_left(Iterator& f, const Iterator& l, unused_type) const
-  -> std::enable_if_t<!is_choice_parser<Left>::value, bool> {
+  -> std::enable_if_t<!is_choice_parser_v<Left>, bool> {
     return lhs_(f, l, unused);
   }
 
   template <class Left, class Iterator, class Attribute>
   auto parse_left(Iterator& f, const Iterator& l, Attribute& a) const
-  -> std::enable_if_t<!is_choice_parser<Left>::value, bool> {
+  -> std::enable_if_t<!is_choice_parser_v<Left>, bool> {
     lhs_attribute al;
     if (!lhs_(f, l, al))
       return false;

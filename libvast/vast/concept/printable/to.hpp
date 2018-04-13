@@ -25,7 +25,7 @@ namespace vast {
 template <class To, class From, class... Opts>
 auto to(From&& from, Opts&&... opts)
 -> std::enable_if_t<
-     std::is_same<std::string, To>{} && has_printer<std::decay_t<From>>{},
+     std::is_same<std::string, To>{} && has_printer_v<std::decay_t<From>>,
      expected<std::string>
    > {
   std::string str;

@@ -165,7 +165,7 @@ public:
   template <class T>
   auto insert(T&& x)
   -> std::enable_if_t<
-    std::is_same<std::decay_t<T>, value_type>::value,
+    std::is_same_v<std::decay_t<T>, value_type>,
     std::pair<iterator, bool>
   > {
     auto i = tracker_.find(x.first);

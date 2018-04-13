@@ -41,35 +41,29 @@ inline auto as_parser(std::string str) {
 template <class T>
 auto as_parser(T x)
   -> std::enable_if_t<
-       std::is_arithmetic<T>{} && !std::is_same<T, bool>::value,
+       std::is_arithmetic_v<T> && !std::is_same_v<T, bool>,
        decltype(ignore(string_parser{""}))
      > {
   return ignore(string_parser{std::to_string(x)});
 }
 
 template <class T>
-auto as_parser(T x) -> std::enable_if_t<is_parser<T>{}, T> {
+auto as_parser(T x) -> std::enable_if_t<is_parser_v<T>, T> {
   return x; // A good compiler will elide the copy.
 }
 
 // -- binary ------------------------------------------------------------------
 
 template <class T>
-using is_convertible_to_unary_parser =
-  std::integral_constant<
-    bool,
-    std::is_convertible<T, std::string>{}
-    || (std::is_arithmetic<T>{} && !std::is_same<T, bool>::value)
-  >;
+inline constexpr bool is_convertible_to_unary_parser_v
+  = std::is_convertible_v<T, std::string>
+    || (std::is_arithmetic_v<T> && !std::is_same_v<T, bool>);
 
 template <class T, class U>
-using is_convertible_to_binary_parser =
-  std::integral_constant<
-    bool,
-    (is_parser<T>{} && is_parser<U>{})
-    || (is_parser<T>{} && is_convertible_to_unary_parser<U>{})
-    || (is_convertible_to_unary_parser<T>{} && is_parser<U>{})
-  >;
+inline constexpr bool is_convertible_to_binary_parser_v =
+    (is_parser_v<T> && is_parser_v<U>)
+    || (is_parser_v<T> && is_convertible_to_unary_parser_v<U>)
+    || (is_convertible_to_unary_parser_v<T> && is_parser_v<U>) ;
 
 template <
   template <class, class> class BinaryParser,
@@ -78,13 +72,13 @@ template <
 >
 using make_binary_parser =
   std::conditional_t<
-    is_parser<T>{} && is_parser<U>{},
+    is_parser_v<T> && is_parser_v<U>,
     BinaryParser<T, U>,
     std::conditional_t<
-      is_parser<T>{} && is_convertible_to_unary_parser<U>{},
+      is_parser_v<T> && is_convertible_to_unary_parser_v<U>,
       BinaryParser<T, decltype(as_parser(std::declval<U>()))>,
       std::conditional_t<
-        is_convertible_to_unary_parser<T>{} && is_parser<U>{},
+        is_convertible_to_unary_parser_v<T> && is_parser_v<U>,
         BinaryParser<decltype(as_parser(std::declval<T>())), U>,
         std::false_type
       >
@@ -98,7 +92,7 @@ template <
 >
 auto as_parser(T&& x, U&& y)
   -> std::enable_if_t<
-       is_convertible_to_binary_parser<std::decay_t<T>, std::decay_t<U>>{},
+       is_convertible_to_binary_parser_v<std::decay_t<T>, std::decay_t<U>>,
        make_binary_parser<
          BinaryParser,
          decltype(detail::as_parser(std::forward<T>(x))),

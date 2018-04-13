@@ -126,7 +126,7 @@ public:
   }
 
   /// Default-construct a variant with the first type.
-  variant() noexcept(std::is_nothrow_default_constructible<first_type>::value) {
+  variant() noexcept(std::is_nothrow_default_constructible_v<first_type>) {
     construct(first_type{});
     index_ = 0;
   }
@@ -325,7 +325,7 @@ private:
   template <class T, class Storage>
   using const_type =
     typename std::conditional<
-      std::is_const<std::remove_reference_t<Storage>>::value, T const, T
+      std::is_const_v<std::remove_reference_t<Storage>>, T const, T
     >::type;
 
   template <class T, class Storage, class Visitor, class... Args>

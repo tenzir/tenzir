@@ -45,8 +45,8 @@ public:
   template <
     class T,
     class = detail::disable_if_t<
-      detail::is_same_or_derived<value, T>::value
-      || std::is_same<data_type<T>, std::false_type>::value
+      detail::is_same_or_derived_v<value, T>
+      || std::is_same_v<data_type<T>, std::false_type>
     >
   >
   value(T&& x)

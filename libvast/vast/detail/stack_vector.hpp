@@ -67,7 +67,7 @@ struct stack_vector : private stack_container<T, N>, short_vector<T, N> {
   }
 
   stack_vector(stack_vector&& other)
-  noexcept(std::is_nothrow_move_constructible<vector_type>::value)
+  noexcept(std::is_nothrow_move_constructible_v<vector_type>)
     : vector_type(std::move(other), this->arena_) {
   }
 
@@ -77,7 +77,7 @@ struct stack_vector : private stack_container<T, N>, short_vector<T, N> {
   }
 
   stack_vector& operator=(stack_vector&& other)
-  noexcept(std::is_nothrow_move_assignable<vector_type>::value) {
+  noexcept(std::is_nothrow_move_assignable_v<vector_type>) {
     static_cast<vector_type&>(*this) = std::move(other);
     return *this;
   }

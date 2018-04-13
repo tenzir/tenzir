@@ -32,6 +32,9 @@ struct is_sequence_printer : std::false_type {};
 template <class... Ts>
 struct is_sequence_printer<sequence_printer<Ts...>> : std::true_type {};
 
+template <class T>
+inline constexpr bool is_sequence_printer_v = is_sequence_printer<T>::value;
+
 // TODO: factor helper functions shared among sequence printer and parser.
 
 template <class Lhs, class Rhs>
@@ -77,16 +80,16 @@ public:
 private:
   template <class T>
   static constexpr auto depth_helper()
-  -> std::enable_if_t<!is_sequence_printer<T>::value, size_t> {
+  -> std::enable_if_t<!is_sequence_printer_v<T>, size_t> {
     return 0;
   }
 
   template <class T>
   static constexpr auto depth_helper()
   -> std::enable_if_t<
-       is_sequence_printer<T>::value
-        && (std::is_same<typename T::lhs_attribute, unused_type>::value
-            || std::is_same<typename T::rhs_attribute, unused_type>::value),
+       is_sequence_printer_v<T>
+        && (std::is_same_v<typename T::lhs_attribute, unused_type>
+            || std::is_same_v<typename T::rhs_attribute, unused_type>),
        size_t
      > {
     return depth_helper<typename T::lhs_type>();
@@ -95,9 +98,9 @@ private:
   template <class T>
   static constexpr auto depth_helper()
   -> std::enable_if_t<
-       is_sequence_printer<T>::value
-        && !std::is_same<typename T::lhs_attribute, unused_type>::value
-        && !std::is_same<typename T::rhs_attribute, unused_type>::value,
+       is_sequence_printer_v<T>
+        && !std::is_same_v<typename T::lhs_attribute, unused_type>
+        && !std::is_same_v<typename T::rhs_attribute, unused_type>,
        size_t
      > {
     return 1 + depth_helper<typename T::lhs_type>();
@@ -116,7 +119,7 @@ private:
   template <class L, class T>
   static auto get_helper(const T& x)
   -> std::enable_if_t<
-       ! is_sequence_printer<L>::value,
+       !is_sequence_printer_v<L>,
        decltype(std::get<0>(x))
      > {
     return std::get<0>(x);

@@ -24,7 +24,7 @@ namespace vast {
 
 template <class To, class Iterator>
 auto to(Iterator& f, const Iterator& l)
-  -> std::enable_if_t<is_parseable<Iterator, To>{}, expected<To>> {
+  -> std::enable_if_t<is_parseable_v<Iterator, To>, expected<To>> {
   expected<To> t{To{}};
   if (!parse(f, l, *t))
     return make_error(ec::parse_error);
@@ -34,7 +34,7 @@ auto to(Iterator& f, const Iterator& l)
 template <class To, class Range>
 auto to(Range&& rng)
   -> std::enable_if_t<
-       is_parseable<decltype(std::begin(rng)), To>{}, expected<To>
+       is_parseable_v<decltype(std::begin(rng)), To>, expected<To>
      > {
   using std::begin;
   using std::end;

@@ -25,7 +25,7 @@ namespace vast::detail {
 /// values.
 template <class Point, class Value>
 class range_map {
-  static_assert(std::is_arithmetic<Point>::value,
+  static_assert(std::is_arithmetic_v<Point>,
                 "Point must be an arithmetic type");
 
   using map_type = std::map<Point, std::pair<Point, Value>>;

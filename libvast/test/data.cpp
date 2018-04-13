@@ -29,7 +29,7 @@
 using namespace vast;
 
 TEST(vector) {
-  REQUIRE(std::is_same<std::vector<data>, vector>::value);
+  REQUIRE(std::is_same_v<std::vector<data>, vector>);
 }
 
 TEST(set) {

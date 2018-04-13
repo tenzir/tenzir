@@ -54,6 +54,9 @@ struct is_tuple : std::false_type {};
 template <class... Ts>
 struct is_tuple<std::tuple<Ts...>> : std::true_type {};
 
+template <class T>
+inline constexpr bool is_tuple_v = is_tuple<T>::value;
+
 /// Checks whether a type derives from `basic_streambuf<Char>`.
 template <class T, class U = void>
 struct is_streambuf : std::false_type {};
@@ -62,9 +65,13 @@ template <class T>
 struct is_streambuf<
   T,
   std::enable_if_t<
-    std::is_base_of<std::basic_streambuf<typename T::char_type>, T>::value
+    std::is_base_of_v<std::basic_streambuf<typename T::char_type>, T>
   >
 > : std::true_type {};
+
+template <class T>
+inline constexpr bool is_streambuf_v = is_streambuf<T>::value;
+
 
 /// Checks whether a type is container which consists of contiguous bytes.
 template <class T, class U = void>
@@ -74,9 +81,9 @@ template <class T>
 struct is_contiguous_byte_container<
   T,
   std::enable_if_t<
-    std::is_same<T, std::string>::value
-      || std::is_same<T, std::vector<char>>::value
-      || std::is_same<T, std::vector<unsigned char>>::value
+    std::is_same_v<T, std::string>
+      || std::is_same_v<T, std::vector<char>>
+      || std::is_same_v<T, std::vector<unsigned char>>
   >
 > : std::true_type {};
 
@@ -87,6 +94,10 @@ inline constexpr bool is_contiguous_byte_container_v
 // -- SFINAE helpers ---------------------------------------------------------
 // http://bit.ly/uref-copy.
 
+template <class A, class B>
+inline constexpr bool is_same_or_derived_v
+  = std::is_base_of_v<A, std::remove_reference_t<B>>;
+
 template <bool B, class T = void>
 using disable_if = std::enable_if<!B, T>;
 
@@ -94,40 +105,31 @@ template <bool B, class T = void>
 using disable_if_t = typename disable_if<B, T>::type;
 
 template <class A, class B>
-using is_same_or_derived = std::is_base_of<A, std::remove_reference_t<B>>;
-
-template <class A, class B>
-using disable_if_same_or_derived = disable_if<is_same_or_derived<A, B>::value>;
+using disable_if_same_or_derived = disable_if<is_same_or_derived_v<A, B>>;
 
 template <class A, class B>
 using disable_if_same_or_derived_t =
   typename disable_if_same_or_derived<A, B>::type;
 
 template <class T, class U, class R = T>
-using enable_if_same = std::enable_if_t<std::is_same<T, U>::value, R>;
+using enable_if_same = std::enable_if_t<std::is_same_v<T, U>, R>;
 
 template <class T, class U, class R = T>
-using disable_if_same = disable_if_t<std::is_same<T, U>::value, R>;
+using disable_if_same = disable_if_t<std::is_same_v<T, U>, R>;
 
 // -- traits -----------------------------------------------------------------
 
 template <class T, class... Ts>
-struct is_any : std::bool_constant<(std::is_same_v<T, Ts> || ...)> {};
+inline constexpr bool is_any_v = (std::is_same_v<T, Ts> || ...);
 
 template <class T, class... Ts>
-inline constexpr bool is_any_v = is_any<T, Ts...>::value;
-
-template <class T, class... Ts>
-struct are_same : std::bool_constant<(std::is_same_v<T, Ts> && ...)> {};
-
-template <class T, class... Ts>
-inline constexpr bool are_same_v = is_any<T, Ts...>::value;
+inline constexpr bool are_same_v = (std::is_same_v<T, Ts> && ...);
 
 // -- tuple ------------------------------------------------------------------
 
 // Wraps a type into a tuple if it is not already a tuple.
 template <class T>
-using tuple_wrap = std::conditional_t<is_tuple<T>::value, T, std::tuple<T>>;
+using tuple_wrap = std::conditional_t<is_tuple_v<T>, T, std::tuple<T>>;
 
 // Checks whether a tuple contains a given type.
 template <class T, class Tuple>
@@ -182,8 +184,8 @@ struct detector<Default, void_t<Op<Args...>>, Op, Args...> {
 } // namespace <anonymous>
 
 template <template <class...> class Op, class... Args>
-using is_detected
-  = typename detector<nonesuch, void, Op, Args...>::value_t;
+inline constexpr bool is_detected_v
+  = detector<nonesuch, void, Op, Args...>::value_t::value;
 
 template <template <class...> class Op, class... Args>
 using detected_t

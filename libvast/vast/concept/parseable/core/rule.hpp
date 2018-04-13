@@ -74,7 +74,7 @@ public:
   template <
     class RHS,
     class = std::enable_if_t<
-      is_parser<std::decay_t<RHS>>{} && !detail::is_same_or_derived<rule, RHS>::value
+      is_parser_v<std::decay_t<RHS>> && !detail::is_same_or_derived_v<rule, RHS>
     >
   >
   rule(RHS&& rhs)
@@ -84,8 +84,8 @@ public:
 
   template <class RHS>
   auto operator=(RHS&& rhs)
-    -> std::enable_if_t<is_parser<std::decay_t<RHS>>{}
-                        && !detail::is_same_or_derived<rule, RHS>::value> {
+    -> std::enable_if_t<is_parser_v<std::decay_t<RHS>>
+                        && !detail::is_same_or_derived_v<rule, RHS>> {
     make_parser<RHS>(std::forward<RHS>(rhs));
   }
 
