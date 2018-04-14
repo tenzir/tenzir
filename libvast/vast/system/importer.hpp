@@ -100,6 +100,9 @@ struct importer_state {
   /// Cache for buffering events for ARCHIVE, INDEX and continuous queries.
   std::vector<event> remainder;
 
+  /// The continous stage that moves data from all sources to all subscribers.
+  caf::stream_stage_ptr<event, caf::broadcast_downstream_manager<event>> stg;
+
   /// Name of this actor in log events.
   static inline const char* name = "importer";
 };

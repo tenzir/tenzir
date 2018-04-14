@@ -111,9 +111,6 @@ auto shutdown(stateful_actor<importer_state>* self) {
 void ship(stateful_actor<importer_state>* self, std::vector<event>&& batch) {
   CAF_LOG_TRACE(CAF_ARG(batch));
   auto& st = self->state;
-  VAST_ASSERT(batch.size() <= static_cast<size_t>(st.available_ids()));
-  for (auto& e : batch)
-    e.id(st.next_id());
   VAST_DEBUG(self, "ships", batch.size(), "events");
   // TODO: How to retain type safety without copying the entire batch?
   auto msg = make_message(std::move(batch));
@@ -188,6 +185,8 @@ void replenish(stateful_actor<importer_state>* self) {
                    self->system().render(result.error()));
         self->quit(result.error());
       }
+      // Try to emit more credit with out new IDs.
+      st.stg->advance();
       // Return to previous behavior.
       st.awaiting_ids = false;
       self->set_default_handler(print_and_drop);
@@ -202,33 +201,45 @@ void store(stateful_actor<importer_state>* self, std::vector<event>&& xs) {
   CAF_LOG_TRACE(CAF_ARG(xs));
   using std::make_move_iterator;
   auto& st = self->state;
-  VAST_DEBUG(self, "got", xs.size(), "events with", st.in_flight_events,
-             "in-flight events");
-  VAST_DEBUG(self, "has", st.available_ids(), "IDs available");
   VAST_ASSERT(!xs.empty());
-  VAST_ASSERT(st.in_flight_events <= st.available_ids());
-  VAST_ASSERT(xs.size() <= static_cast<size_t>(st.in_flight_events));
-  VAST_ASSERT(xs.size() <= static_cast<size_t>(st.available_ids()));
-  VAST_ASSERT(st.meta_store);
   VAST_ASSERT(xs.size()
               <= static_cast<size_t>(std::numeric_limits<int32_t>::max()));
-  // Fill up `remainder` until it has at least batch_size elements.
-  st.in_flight_events -= static_cast<int32_t>(xs.size());
   st.remainder.insert(st.remainder.end(), make_move_iterator(xs.begin()),
                       make_move_iterator(xs.end()));
   ship_some(self);
 }
 
-class driver : public caf::stream_sink_driver<event> {
+using downstream_manager = caf::broadcast_downstream_manager<event>;
+
+class driver : public caf::stream_stage_driver<event, downstream_manager> {
 public:
+  using super = caf::stream_stage_driver<event, downstream_manager>;
+
   using pointer = stateful_actor<importer_state>*;
 
-  driver(pointer self) : self_(self) {
+  driver(downstream_manager& out, pointer self) : super(out), self_(self) {
     // nop
   }
 
-  void process(std::vector<event>& xs) override {
+  void process(caf::downstream<event>& out, std::vector<event>& xs) override {
     CAF_LOG_TRACE(CAF_ARG(xs));
+    auto& st = self_->state;
+    VAST_DEBUG(self_, "has", st.available_ids(), "IDs available");
+    VAST_DEBUG(self_, "got", xs.size(), "events with", st.in_flight_events,
+               "in-flight events");
+    VAST_ASSERT(xs.size() <= static_cast<size_t>(st.available_ids()));
+    VAST_ASSERT(xs.size() <= static_cast<size_t>(st.in_flight_events));
+    st.in_flight_events -= static_cast<int32_t>(xs.size());
+    if (out_.empty()) {
+      for (auto& x : xs)
+        x.id(st.next_id());
+    } else {
+      for (auto& x : xs) {
+        x.id(st.next_id());
+        out.push(x);
+      }
+    }
+    VAST_DEBUG(self_, "tagged", xs.size(), "events with IDs");
     store(self_, std::move(xs));
   }
 
@@ -247,7 +258,7 @@ public:
 
   bool congested() const noexcept override {
     auto& st = self_->state;
-    return st.remainder.size() > batch_size;
+    return st.remainder.size() > batch_size || super::congested();
   }
 
   int32_t acquire_credit(inbound_path* path, int32_t desired) override {
@@ -261,8 +272,7 @@ public:
     }
     // Calculate how much more in-flight events we can allow.
     auto& st = self_->state;
-    auto max_credit = st.available_ids() - st.in_flight_events
-                      - static_cast<int32_t>(st.remainder.size());
+    auto max_credit = st.available_ids() - st.in_flight_events;
     VAST_ASSERT(max_credit >= 0);
     if (max_credit <= desired) {
       // Get more IDs if we're running out.
@@ -311,6 +321,7 @@ behavior importer(stateful_actor<importer_state>* self, path dir) {
       }
     }
   );
+  self->state.stg = self->make_continuous_stage<driver>(self);
   return {
     [=](const meta_store_type& ms) {
       VAST_DEBUG(self, "registers meta store");
@@ -333,11 +344,18 @@ behavior importer(stateful_actor<importer_state>* self, path dir) {
       self->state.continuous_queries.push_back(exporter);
     },
     [=](stream<event>& in) {
-      if (!self->state.meta_store) {
+      auto& st = self->state;
+      if (!st.meta_store) {
         VAST_ERROR("no meta store configured for importer");
         return;
       }
-      self->make_sink<driver>(in, self);
+      VAST_INFO("add a new source to the importer");
+      st.stg->add_inbound_path(in);
+    },
+    [=](add_atom, const actor& subscriber) {
+      auto& st = self->state;
+      VAST_INFO("add a new sink to the importer");
+      st.stg->add_outbound_path(subscriber);
     }
   };
 }
