@@ -33,6 +33,25 @@ using namespace vast;
 
 namespace {
 
+using event_buffer = std::vector<event>;
+using shared_event_buffer = std::shared_ptr<event_buffer>;
+
+behavior dummy_sink(event_based_actor* self, shared_event_buffer buf) {
+  return {
+    [=](stream<event> in) {
+      self->make_sink(
+        in,
+        [=](unit_t&) {
+          // nop
+        },
+        [=](unit_t&, event x) {
+          buf->push_back(std::move(x));
+        }
+      );
+    }
+  };
+}
+
 struct config : fixtures::actor_system::configuration {
   config() {
     // Reset log filter and unload all modules.
@@ -44,21 +63,29 @@ struct config : fixtures::actor_system::configuration {
 struct fixture : test_coordinator_fixture<config>,
                  fixtures::events,
                  fixtures::filesystem {
-  // nop
+  fixture() {
+    MESSAGE("spawn importer + store");
+    directory /= "importer";
+    importer = self->spawn(system::importer, directory);
+    store = self->spawn(system::data_store<std::string, data>);
+    self->send(importer, store);
+    MESSAGE("run initialization code");
+    sched.run();
+  }
+
+  ~fixture() {
+    anon_send_exit(importer, exit_reason::user_shutdown);
+  }
+
+  actor importer;
+  system::key_value_store_type<string, data> store;
 };
 
 } // namespace <anonymous>
 
 FIXTURE_SCOPE(import_tests, fixture)
 
-TEST(importer) {
-  MESSAGE("spawn importer + store");
-  directory /= "importer";
-  auto importer = self->spawn(system::importer, directory);
-  auto store = self->spawn(system::data_store<std::string, data>);
-  self->send(importer, store);
-  CAF_MESSAGE("run initialization code");
-  sched.run();
+TEST(import without subscribers) {
   MESSAGE("spawn dummy source");
   auto src = vast::detail::spawn_container_source(self->system(), importer, bro_conn_log);
   sched.run_once();
@@ -96,8 +123,43 @@ TEST(importer) {
       }
     }
   }
-  self->send_exit(importer, exit_reason::user_shutdown);
+}
+
+TEST(import with one subscriber) {
+  MESSAGE("spawn dummy sink");
+  auto buf = std::make_shared<std::vector<event>>();
+  auto subscriber = self->spawn(dummy_sink, buf);
+  MESSAGE("connect sink to importer");
+  anon_send(importer, add_atom::value, subscriber);
   sched.run();
+  MESSAGE("spawn dummy source");
+  auto src = vast::detail::spawn_container_source(self->system(), importer, bro_conn_log);
+  sched.run_once();
+  MESSAGE("loop until importer becomes idle");
+  sched.run_dispatch_loop(credit_round_interval);
+  MESSAGE("check whether the sink received all events");
+  CHECK_EQUAL(buf->size(), bro_conn_log.size());
+}
+
+TEST(import with two subscribers) {
+  MESSAGE("spawn dummy sinks");
+  auto buf1 = std::make_shared<std::vector<event>>();
+  auto subscriber1 = self->spawn(dummy_sink, buf1);
+  auto buf2 = std::make_shared<std::vector<event>>();
+  auto subscriber2 = self->spawn(dummy_sink, buf2);
+  MESSAGE("connect sinks to importer");
+  anon_send(importer, add_atom::value, subscriber1);
+  anon_send(importer, add_atom::value, subscriber2);
+  sched.run();
+  MESSAGE("spawn dummy source");
+  auto src = vast::detail::spawn_container_source(self->system(), importer, bro_conn_log);
+  sched.run_once();
+  MESSAGE("loop until importer becomes idle");
+  sched.run_dispatch_loop(credit_round_interval);
+  MESSAGE("check whether both sinks received all events");
+  CHECK_EQUAL(*buf1, *buf2);
+  CHECK_EQUAL(buf1->size(), bro_conn_log.size());
+  CHECK_EQUAL(buf2->size(), bro_conn_log.size());
 }
 
 FIXTURE_SCOPE_END()
