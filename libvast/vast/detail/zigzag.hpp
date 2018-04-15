@@ -33,7 +33,7 @@ namespace vast::detail::zigzag {
 template <class T>
 auto encode(T x)
 -> std::enable_if_t<
-  std::is_integral<T>::value && std::is_signed<T>{},
+  std::is_integral_v<T> && std::is_signed_v<T>,
   std::make_unsigned_t<T>
 > {
   static constexpr auto width = std::numeric_limits<T>::digits;
@@ -46,7 +46,7 @@ auto encode(T x)
 template <class T>
 auto decode(T x)
 -> std::enable_if_t<
-  std::is_integral<T>::value && std::is_unsigned<T>{},
+  std::is_integral_v<T> && std::is_unsigned_v<T>,
   std::make_signed_t<T>
 > {
   return (x >> 1) ^ -static_cast<std::make_signed_t<T>>(x & 1);

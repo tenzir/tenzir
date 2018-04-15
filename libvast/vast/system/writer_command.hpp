@@ -51,7 +51,7 @@ protected:
     CAF_LOG_TRACE(CAF_ARG(args));
     using ostream_ptr = std::unique_ptr<std::ostream>;
     auto limit = this->get_or<uint64_t>(options, "events", 0u);
-    if constexpr (std::is_constructible<Writer, ostream_ptr>::value) {
+    if constexpr (std::is_constructible_v<Writer, ostream_ptr>) {
       auto out = detail::make_output_stream(output_, uds_);
       if (!out)
         return out.error();

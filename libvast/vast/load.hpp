@@ -37,7 +37,7 @@ template <compression Method = compression::null, class Source, class... Ts>
 expected<void> load(Source&& in, Ts&&... xs) {
   static_assert(sizeof...(Ts) > 0);
   using source_type = std::decay_t<Source>;
-  if constexpr (detail::is_streambuf<source_type>::value) {
+  if constexpr (detail::is_streambuf_v<source_type>) {
     try {
       if (Method == compression::null) {
         caf::stream_deserializer<source_type&> s{in};

@@ -31,6 +31,9 @@ struct is_sequence_parser : std::false_type {};
 template <class... Ts>
 struct is_sequence_parser<sequence_parser<Ts...>> : std::true_type {};
 
+template <class T>
+inline constexpr bool is_sequence_parser_v = is_sequence_parser<T>::value;
+
 template <class Lhs, class Rhs>
 class sequence_parser : public parser<sequence_parser<Lhs, Rhs>> {
 public:
@@ -78,16 +81,16 @@ public:
 private:
   template <class T>
   static constexpr auto depth_helper()
-    -> std::enable_if_t<!is_sequence_parser<T>::value, size_t> {
+    -> std::enable_if_t<!is_sequence_parser_v<T>, size_t> {
     return 0;
   }
 
   template <class T>
   static constexpr auto depth_helper()
     -> std::enable_if_t<
-         is_sequence_parser<T>::value
-          && (std::is_same<typename T::lhs_attribute, unused_type>::value
-              || std::is_same<typename T::rhs_attribute, unused_type>::value),
+         is_sequence_parser_v<T>
+          && (std::is_same_v<typename T::lhs_attribute, unused_type>
+              || std::is_same_v<typename T::rhs_attribute, unused_type>),
          size_t
        >
   { return depth_helper<typename T::lhs_type>();
@@ -96,9 +99,9 @@ private:
   template <class T>
   static constexpr auto depth_helper()
     -> std::enable_if_t<
-         is_sequence_parser<T>::value
-          && !std::is_same<typename T::lhs_attribute, unused_type>::value
-          && !std::is_same<typename T::rhs_attribute, unused_type>::value,
+         is_sequence_parser_v<T>
+          && !std::is_same_v<typename T::lhs_attribute, unused_type>
+          && !std::is_same_v<typename T::rhs_attribute, unused_type>,
          size_t
        > {
     return 1 + depth_helper<typename T::lhs_type>();
@@ -117,7 +120,7 @@ private:
   template <class L, class T>
   static auto get_helper(T& x)
     -> std::enable_if_t<
-         !is_sequence_parser<L>::value,
+         !is_sequence_parser_v<L>,
          decltype(std::get<0>(x))
        > {
     return std::get<0>(x);

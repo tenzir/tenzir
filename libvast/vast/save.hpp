@@ -36,7 +36,7 @@ template <compression Method = compression::null, class Sink, class... Ts>
 expected<void> save(Sink&& out, Ts&&... xs) {
   static_assert(sizeof...(Ts) > 0);
   using sink_type = std::decay_t<Sink>;
-  if constexpr (detail::is_streambuf<sink_type>::value) {
+  if constexpr (detail::is_streambuf_v<sink_type>) {
     try {
       if (Method == compression::null) {
         caf::stream_serializer<sink_type&> s{out};

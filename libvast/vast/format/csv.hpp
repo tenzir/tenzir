@@ -45,7 +45,7 @@ struct value_printer : printer<value_printer> {
 
     template <class T, class U>
     auto operator()(const T&, const U& x)
-    -> std::enable_if_t<!std::is_same<U, none>::value, bool> {
+    -> std::enable_if_t<!std::is_same_v<U, none>, bool> {
       return make_printer<U>{}.print(out_, x);
     }
 

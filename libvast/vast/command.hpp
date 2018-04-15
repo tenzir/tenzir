@@ -117,10 +117,10 @@ public:
     // Map T to the clostest type in config_value.
     using cfg_type =
       typename std::conditional<
-        std::is_integral<T>::value && !std::is_same<bool, T>::value,
+        std::is_integral_v<T> && !std::is_same_v<bool, T>,
         int64_t,
         typename std::conditional<
-          std::is_floating_point<T>::value,
+          std::is_floating_point_v<T>,
           double,
           T
           >::type
@@ -162,10 +162,10 @@ protected:
       // Map T to the clostest type in config_value.
       using cfg_type =
         typename std::conditional<
-          std::is_integral<T>::value && !std::is_same<bool, T>::value,
+          std::is_integral_v<T> && !std::is_same_v<bool, T>,
           int64_t,
           typename std::conditional<
-            std::is_floating_point<T>::value,
+            std::is_floating_point_v<T>,
             double,
             T
             >::type

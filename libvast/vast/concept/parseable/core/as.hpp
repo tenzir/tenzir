@@ -42,7 +42,7 @@ private:
 template <class Attribute, class Parser>
 auto as(Parser&& p)
 -> std::enable_if_t<
-     is_parser<std::decay_t<Parser>>::value,
+     is_parser_v<std::decay_t<Parser>>,
      as_parser<std::decay_t<Parser>, Attribute>
    > {
   return as_parser<std::decay_t<Parser>, Attribute>{std::forward<Parser>(p)};

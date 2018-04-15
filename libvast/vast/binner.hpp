@@ -40,12 +40,12 @@ struct decimal_binner {
 
   template <class T>
   static T bin(T x) {
-    if constexpr (std::is_integral<T>::value)
+    if constexpr (std::is_integral_v<T>)
       return x / bucket_size;
-    else if constexpr (std::is_floating_point<T>::value)
+    else if constexpr (std::is_floating_point_v<T>)
       return std::round(x / bucket_size);
     else
-      static_assert(!std::is_same<T, T>::value,
+      static_assert(!std::is_same_v<T, T>,
                     "T is neither integral nor a float");
   }
 };
@@ -73,9 +73,9 @@ struct precision_binner {
 
   template <class T>
   static T bin(T x) {
-    if constexpr (std::is_integral<T>::value) {
+    if constexpr (std::is_integral_v<T>) {
       return std::min(x, integral_max);
-    } else if constexpr (std::is_floating_point<T>::value) {
+    } else if constexpr (std::is_floating_point_v<T>) {
       T i;
       auto f = std::modf(x, &i);
       auto negative = std::signbit(x);

@@ -66,7 +66,7 @@ private:
 
 template <class Parser, class T>
 class dynamic_repeat_parser : public parser<dynamic_repeat_parser<Parser, T>> {
-  static_assert(std::is_integral<T>::value, "T must be an an integral type");
+  static_assert(std::is_integral_v<T>, "T must be an an integral type");
 
 public:
   using container = detail::container<typename Parser::attribute>;

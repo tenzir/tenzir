@@ -55,7 +55,7 @@ struct real_printer : printer<real_printer<T, MaxDigits>> {
 };
 
 template <class T>
-struct printer_registry<T, std::enable_if_t<std::is_floating_point<T>::value>> {
+struct printer_registry<T, std::enable_if_t<std::is_floating_point_v<T>>> {
   using type = real_printer<T>;
 };
 

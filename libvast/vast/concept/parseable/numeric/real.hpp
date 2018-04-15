@@ -114,7 +114,7 @@ struct real_parser : parser<real_parser<T, Policies...>> {
 };
 
 template <class T>
-struct parser_registry<T, std::enable_if_t<std::is_floating_point<T>::value>> {
+struct parser_registry<T, std::enable_if_t<std::is_floating_point_v<T>>> {
   using type = real_parser<T, policy::require_dot>;
 };
 

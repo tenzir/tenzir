@@ -544,7 +544,7 @@ private:
 
 template <class Key, class Value>
 class array_skip_table {
-  static_assert(std::is_integral<Key>::value,
+  static_assert(std::is_integral_v<Key>,
                 "array skip table key must be integral");
 
   static_assert(sizeof(Key) == 1, "array skip table key must occupy one byte");
@@ -656,7 +656,7 @@ private:
 
   using skip_table =
     std::conditional_t<
-      std::is_integral<pat_char_type>::value && sizeof(pat_char_type) == 1,
+      std::is_integral_v<pat_char_type> && sizeof(pat_char_type) == 1,
       array_skip_table<pat_char_type, pat_difference_type>,
       unordered_skip_table<pat_char_type, pat_difference_type>
     >;

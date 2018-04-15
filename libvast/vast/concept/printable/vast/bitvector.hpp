@@ -32,7 +32,7 @@ struct bitvector_printer : printer<bitvector_printer<Bitvector, Order>> {
   using attribute = Bitvector;
 
   static constexpr bool msb_to_lsb =
-    std::is_same<Order, policy::msb_to_lsb>::value;
+    std::is_same_v<Order, policy::msb_to_lsb>;
 
   template <class Iterator>
   bool print(Iterator& out, const Bitvector& bv) const {

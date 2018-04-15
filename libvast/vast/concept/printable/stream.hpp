@@ -23,7 +23,7 @@ namespace vast {
 template <class Char, class Traits, class T>
 auto operator<<(std::basic_ostream<Char, Traits>& out, const T& x)
   -> std::enable_if_t<
-       is_printable<std::ostreambuf_iterator<Char>, T>::value, decltype(out)
+       is_printable_v<std::ostreambuf_iterator<Char>, T>, decltype(out)
      > {
   using vast::print; // enable ADL
   if (!print(std::ostreambuf_iterator<Char>{out}, x))

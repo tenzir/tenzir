@@ -64,7 +64,7 @@ struct integral_printer : printer<integral_printer<T, Policy, MinDigits>> {
     if (x < 0) {
       *out++ = '-';
       x = -x;
-    } else if (std::is_same<Policy, policy::force_sign>::value) {
+    } else if (std::is_same_v<Policy, policy::force_sign>) {
       *out++ = '+';
     }
     pad(out, x);
@@ -73,7 +73,7 @@ struct integral_printer : printer<integral_printer<T, Policy, MinDigits>> {
 };
 
 template <class T>
-struct printer_registry<T, std::enable_if_t<std::is_integral<T>::value>> {
+struct printer_registry<T, std::enable_if_t<std::is_integral_v<T>>> {
   using type = integral_printer<T>;
 };
 

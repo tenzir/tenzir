@@ -33,7 +33,7 @@ struct bitmap_printer : printer<bitmap_printer<Bitmap, Policy>> {
 template <class Bitmap>
 struct printer_registry<
   Bitmap,
-  std::enable_if_t<std::is_base_of<bitmap_base<Bitmap>, Bitmap>::value>
+  std::enable_if_t<std::is_base_of_v<bitmap_base<Bitmap>, Bitmap>>
 > {
   using type = bitmap_printer<Bitmap, policy::expanded>;
 };

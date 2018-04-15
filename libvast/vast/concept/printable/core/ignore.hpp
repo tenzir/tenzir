@@ -40,7 +40,7 @@ private:
 template <class Printer>
 auto ignore(Printer&& p)
 -> std::enable_if_t<
-     is_printer<std::decay_t<Printer>>::value,
+     is_printer_v<std::decay_t<Printer>>,
      ignore_printer<std::decay_t<Printer>>
    > {
   return ignore_printer<std::decay_t<Printer>>{std::forward<Printer>(p)};

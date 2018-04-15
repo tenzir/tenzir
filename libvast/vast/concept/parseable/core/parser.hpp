@@ -116,11 +116,12 @@ struct has_parser {
 
 /// Checks whether the parser registry has a given type registered.
 template <class T>
-struct has_parser : decltype(detail::has_parser::test<T>(0)) {};
+inline constexpr bool has_parser_v
+  = decltype(detail::has_parser::test<T>(0))::value;
 
 /// Checks whether a given type is-a parser, i.e., derived from ::vast::parser.
 template <class T>
-using is_parser = std::is_base_of<parser<T>, T>;
+inline constexpr bool is_parser_v = std::is_base_of<parser<T>, T>::value;
 
 } // namespace vast
 

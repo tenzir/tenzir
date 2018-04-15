@@ -57,7 +57,7 @@ template <class TreePolicy, int Indent = 2, int Padding = 0>
 struct json_printer : printer<json_printer<TreePolicy, Indent, Padding>> {
   using attribute = json;
 
-  static constexpr bool tree = std::is_same<TreePolicy, policy::tree>::value;
+  static constexpr bool tree = std::is_same_v<TreePolicy, policy::tree>;
 
   static_assert(Padding >= 0, "padding must not be negative");
 
@@ -184,7 +184,7 @@ struct json_printer : printer<json_printer<TreePolicy, Indent, Padding>> {
   template <class Iterator, class T>
   auto print(Iterator& out, const T& x) const
   -> std::enable_if_t<
-    !std::is_same<json::jsonize<T>, std::false_type>::value,
+    !std::is_same_v<json::jsonize<T>, std::false_type>,
     bool
   > {
     return print_visitor<Iterator>{out}(x);
