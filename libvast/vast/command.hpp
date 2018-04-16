@@ -39,13 +39,8 @@ class command {
 public:
   // -- member types -----------------------------------------------------------
 
-  /// Owning pointer to a command.
-  using unique_ptr = std::unique_ptr<command>;
-
   /// Maps names of config parameters to their value.
   using option_map = std::map<std::string, caf::config_value>;
-
-  using get_option = std::function<std::pair<std::string, caf::config_value>()>;
 
   /// Wraps the result of proceed.
   enum proceed_result {
@@ -73,16 +68,6 @@ public:
   /// Prints usage to `std::cerr`.
   void usage();
 
-  /// Defines a sub-command.
-  /// @param name The name of the command.
-  /// @param desc The description of the command.
-  command& cmd(const std::string& name, std::string desc = "");
-
-  /// Parses command line arguments and dispatches the contained command to the
-  /// registered sub-command.
-  /// @param args The command line arguments.
-  void dispatch(const std::vector<std::string>& args) const;
-
   /// Returns the full name for this command.
   std::string full_name();
 
@@ -101,6 +86,9 @@ public:
     return name_;
   }
 
+  /// Defines a sub-command.
+  /// @param name The name of the command.
+  /// @param xs A number of optional parameters required to create the command.
   template <class T, class... Ts>
   T* add(std::string_view name, Ts&&... xs) {
     auto ptr = std::make_unique<T>(this, name, std::forward<Ts>(xs)...);
@@ -181,7 +169,7 @@ private:
   std::tuple<caf::message, std::string, caf::message>
   separate_args(const caf::message& args);
 
-  std::map<std::string_view, unique_ptr> nested_;
+  std::map<std::string_view, std::unique_ptr<command>> nested_;
   command* parent_;
 
   /// The user-provided name.
