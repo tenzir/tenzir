@@ -42,6 +42,9 @@ public:
   /// Maps names of config parameters to their value.
   using option_map = std::map<std::string, caf::config_value>;
 
+  /// Iterates over CLI arguments.
+  using const_iterator = std::vector<std::string>::const_iterator;
+
   /// Wraps the result of proceed.
   enum proceed_result {
     proceed_ok,
@@ -59,11 +62,13 @@ public:
 
   /// Runs the command and blocks until execution completes.
   /// @returns An exit code suitable for returning from main.
-  int run(caf::actor_system& sys, caf::message args);
+  int run(caf::actor_system& sys, const_iterator args_begin,
+          const_iterator args_end);
 
   /// Runs the command and blocks until execution completes.
   /// @returns An exit code suitable for returning from main.
-  int run(caf::actor_system& sys, option_map& options, caf::message args);
+  int run(caf::actor_system& sys, option_map& options,
+          const_iterator args_begin, const_iterator args_end);
 
   /// Prints usage to `std::cerr`.
   void usage();
@@ -134,7 +139,8 @@ protected:
   /// Checks whether a command is ready to proceed, i.e., whether the
   /// configuration allows for calling `run_impl` or `run` on a nested command.
   virtual proceed_result proceed(caf::actor_system& sys, option_map& options,
-                                 caf::message args);
+                                 const_iterator args_begin,
+                                 const_iterator args_end);
 
   virtual int run_impl(caf::actor_system& sys, option_map& options,
                        caf::message args);
@@ -166,7 +172,7 @@ protected:
 private:
   /// Separates arguments into the arguments for the current command, the name
   /// of the subcommand, and the arguments for the subcommand.
-  std::tuple<caf::message, std::string, caf::message>
+  std::tuple<caf::message, std::string, caf::message, size_t>
   separate_args(const caf::message& args);
 
   std::map<std::string_view, std::unique_ptr<command>> nested_;

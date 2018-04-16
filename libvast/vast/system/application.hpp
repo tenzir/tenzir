@@ -32,7 +32,7 @@ public:
 
   protected:
     proceed_result proceed(caf::actor_system& sys, option_map& options,
-                           caf::message) override;
+                           const_iterator, const_iterator) override;
 
   private:
     /// Directory for persistent state.
@@ -63,7 +63,8 @@ public:
 
   /// Starts the application and blocks until execution completes.
   /// @returns An exit code suitable for returning from main.
-  int run(caf::actor_system& sys, caf::message args);
+  int run(caf::actor_system& sys, command::const_iterator args_begin,
+          command::const_iterator args_end);
 
 private:
   root_command root_;

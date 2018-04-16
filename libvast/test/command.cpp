@@ -30,8 +30,21 @@ public:
     add_opt("flag", "Some flag", flag);
   }
 
+  proceed_result proceed(caf::actor_system&, option_map&, const_iterator,
+                         const_iterator) override {
+    tested_proceed = true;
+    return proceed_ok;
+  }
+
+  int run_impl(caf::actor_system&, option_map&, caf::message) override {
+    was_executed = true;
+    return EXIT_SUCCESS;
+  }
+
   int value = 0;
   bool flag = false;
+  bool tested_proceed = false;
+  bool was_executed = false;
 };
 
 class bar : public command {
@@ -40,7 +53,20 @@ public:
     add_opt("other-value,o", "Some other integer value", other_value);
   }
 
+  proceed_result proceed(caf::actor_system&, option_map&, const_iterator,
+                         const_iterator) override {
+    tested_proceed = true;
+    return proceed_ok;
+  }
+
+  int run_impl(caf::actor_system&, option_map&, caf::message) override {
+    was_executed = true;
+    return EXIT_SUCCESS;
+  }
+
   int other_value = 0;
+  bool tested_proceed = false;
+  bool was_executed = false;
 };
 
 struct fixture {
@@ -49,12 +75,9 @@ struct fixture {
   caf::actor_system sys{cfg};
   command::option_map options;
   int exec(std::string str) {
-    caf::message_builder mb;
     std::vector<std::string> xs;
     caf::split(xs, str, ' ', caf::token_compress_on);
-    for (auto& x : xs)
-      mb.append(std::move(x));
-    return root.run(sys, options, mb.move_to_message());
+    return root.run(sys, options, xs.begin(), xs.end());
   }
 };
 
@@ -101,6 +124,10 @@ TEST(nested arg parsing) {
   exec("foo -v 42 bar -o 123");
   CHECK_EQUAL(cmd1->value, 42);
   CHECK_EQUAL(cmd2->other_value, 123);
+  CHECK_EQUAL(cmd1->tested_proceed, true);
+  CHECK_EQUAL(cmd1->was_executed, false);
+  CHECK_EQUAL(cmd2->tested_proceed, true);
+  CHECK_EQUAL(cmd2->was_executed, true);
   CHECK_EQUAL(caf::deep_to_string(options),
               R"([("flag", false), ("other-value", 123), ("value", 42)])");
 }

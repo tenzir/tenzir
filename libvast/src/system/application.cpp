@@ -85,11 +85,10 @@ application::root_command::root_command()
 
 command::proceed_result
 application::root_command::proceed(caf::actor_system& sys, option_map& options,
-                                   caf::message args) {
-  CAF_LOG_TRACE(CAF_ARG(options) << CAF_ARG(args));
+                                   const_iterator, const_iterator) {
+  CAF_LOG_TRACE(CAF_ARG(options));
   CAF_IGNORE_UNUSED(sys);
   CAF_IGNORE_UNUSED(options);
-  CAF_IGNORE_UNUSED(args);
   if (print_version) {
     std::cout << VAST_VERSION << std::endl;
     return stop_successful;
@@ -105,9 +104,10 @@ application::application() {
   detail::adjust_resource_consumption();
 }
 
-int application::run(caf::actor_system& sys, message args) {
+int application::run(caf::actor_system& sys, command::const_iterator args_begin,
+                     command::const_iterator args_end) {
   CAF_LOG_TRACE(CAF_ARG(args));
-  return root_.run(sys, std::move(args));
+  return root_.run(sys, args_begin, args_end);
 }
 
 //  // TODO: replace this manual parsing by a proper interface in the program
