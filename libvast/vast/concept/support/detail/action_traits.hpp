@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_SUPPORT_DETAIL_ACTION_TRAITS_HPP
-#define VAST_CONCEPT_SUPPORT_DETAIL_ACTION_TRAITS_HPP
+#pragma once
 
 #include <type_traits>
 
@@ -32,7 +31,7 @@ struct action_traits {
   using result_type = typename traits::result_type;
 
   static constexpr auto arity = traits::num_args;
-  static constexpr bool returns_void = std::is_void<result_type>::value;
+  static constexpr bool returns_void = std::is_void_v<result_type>;
   static constexpr bool no_args_returns_void = arity == 0 && returns_void;
   static constexpr bool one_arg_returns_void = arity == 1 && returns_void;
   static constexpr bool no_args_returns_non_void = arity == 0 && !returns_void;
@@ -41,5 +40,4 @@ struct action_traits {
 
 } // namespace vast::detail
 
-#endif
 

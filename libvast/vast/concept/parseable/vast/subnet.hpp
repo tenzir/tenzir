@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PARSEABLE_VAST_SUBNET_HPP
-#define VAST_CONCEPT_PARSEABLE_VAST_SUBNET_HPP
+#pragma once
 
 #include "vast/subnet.hpp"
 
@@ -62,4 +61,3 @@ static auto const net = make_parser<vast::subnet>();
 
 } // namespace vast
 
-#endif

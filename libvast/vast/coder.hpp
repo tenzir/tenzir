@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CODER_HPP
-#define VAST_CODER_HPP
+#pragma once
 
 #include <algorithm>
 #include <array>
@@ -581,4 +580,3 @@ struct is_multi_level_coder<multi_level_coder<C>> : std::true_type {};
 
 } // namespace vast
 
-#endif

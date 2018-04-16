@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_DETAIL_COLOR_HPP
-#define VAST_DETAIL_COLOR_HPP
+#pragma once
 
 namespace vast::detail::color {
 
@@ -42,4 +41,3 @@ constexpr char bold_white[]   = "\033[1m\033[37m";
 
 } // namespace vast::detail::color
 
-#endif

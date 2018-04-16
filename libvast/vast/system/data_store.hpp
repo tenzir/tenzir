@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_SYSTEM_DATA_STORE_HPP
-#define VAST_SYSTEM_DATA_STORE_HPP
+#pragma once
 
 #include <unordered_map>
 
@@ -62,5 +61,4 @@ data_store(
 
 } // namespace vast::system
 
-#endif
 

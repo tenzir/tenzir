@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_DETAIL_CHRONO_IO_HPP
-#define VAST_DETAIL_CHRONO_IO_HPP
+#pragma once
 
 // The MIT License (MIT)
 //
@@ -458,4 +457,3 @@ operator<<(std::basic_ostream<CharT, Traits>& os,
 }  // namespace detail
 }  // namespace vast
 
-#endif  // VAST_DETAIL_CHRONO_IO_HPP

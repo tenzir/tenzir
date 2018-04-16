@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_SYSTEM_CONFIGURATION_HPP
-#define VAST_SYSTEM_CONFIGURATION_HPP
+#pragma once
 
 #include <string>
 #include <vector>
@@ -21,8 +20,12 @@
 
 namespace vast::system {
 
+class application;
+
 /// Bundles all configuration parameters of a VAST system.
 class configuration : public caf::actor_system_config {
+  friend application;
+
 public:
   /// Default-constructs a configuration.
   configuration();
@@ -35,8 +38,12 @@ public:
   /// Constructs a configuration from a vector of string options.
   /// @param opts The vector with CAF options.
   configuration(const std::vector<std::string>& opts);
+
+  // -- configuration options -------------------------------------------------
+
+  /// The program command line, without --caf# arguments.
+  std::vector<std::string> command_line;
 };
 
 } // namespace vast::system
 
-#endif

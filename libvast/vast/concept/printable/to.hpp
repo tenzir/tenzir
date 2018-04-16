@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PRINTABLE_TO_HPP
-#define VAST_CONCEPT_PRINTABLE_TO_HPP
+#pragma once
 
 #include <string>
 #include <type_traits>
@@ -26,7 +25,7 @@ namespace vast {
 template <class To, class From, class... Opts>
 auto to(From&& from, Opts&&... opts)
 -> std::enable_if_t<
-     std::is_same<std::string, To>{} && has_printer<std::decay_t<From>>{},
+     std::is_same<std::string, To>{} && has_printer_v<std::decay_t<From>>,
      expected<std::string>
    > {
   std::string str;
@@ -37,4 +36,3 @@ auto to(From&& from, Opts&&... opts)
 
 } // namespace vast
 
-#endif

@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_OPERATOR_HPP
-#define VAST_OPERATOR_HPP
+#pragma once
 
 #include <cstdint>
 #include <string>
@@ -74,4 +73,3 @@ relational_operator flip(relational_operator op);
 
 } // namespace vast
 
-#endif

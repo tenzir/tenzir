@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_EXPRESSION_VISITORS_HPP
-#define VAST_EXPRESSION_VISITORS_HPP
+#pragma once
 
 #include <vector>
 
@@ -192,6 +191,8 @@ struct event_evaluator {
 /// viable set of predicates for a type. For conjunctions, all operands must
 /// match. For disjunctions, at least one operand must match.
 struct matcher {
+  matcher(const type& t);
+
   bool operator()(none);
   bool operator()(const conjunction&);
   bool operator()(const disjunction&);
@@ -211,8 +212,8 @@ struct matcher {
   }
 
   const type& type_;
+  relational_operator op_;
 };
 
 } // namespace vast
 
-#endif

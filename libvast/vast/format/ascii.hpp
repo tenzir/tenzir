@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_FORMAT_ASCII_HPP
-#define VAST_FORMAT_ASCII_HPP
+#pragma once
 
 #include "vast/concept/printable/core.hpp"
 #include "vast/concept/printable/vast/event.hpp"
@@ -41,6 +40,5 @@ public:
 
 } // namespace vast::format::ascii
 
-#endif
 
 

@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_SYSTEM_PROFILER_HPP
-#define VAST_SYSTEM_PROFILER_HPP
+#pragma once
 
 #include <chrono>
 
@@ -38,4 +37,3 @@ caf::behavior profiler(caf::stateful_actor<profiler_state>* self, path dir,
 } // namespace system
 } // namespace vast
 
-#endif

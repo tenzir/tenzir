@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PRINTABLE_STD_CHRONO_HPP
-#define VAST_CONCEPT_PRINTABLE_STD_CHRONO_HPP
+#pragma once
 
 #include <date/date.h>
 
@@ -59,7 +58,7 @@ struct duration_printer : printer<duration_printer<Rep, Period, Policy>> {
 
   template <class Iterator, class P = Policy>
   auto print(Iterator& out, std::chrono::duration<Rep, Period> d) const
-  -> std::enable_if_t<std::is_same<P, policy::adaptive>::value, bool> {
+  -> std::enable_if_t<std::is_same_v<P, policy::adaptive>, bool> {
     using namespace std::chrono;
     using namespace date;
     auto num = printers::real2;
@@ -80,7 +79,7 @@ struct duration_printer : printer<duration_printer<Rep, Period, Policy>> {
 
   template <class Iterator, class P = Policy>
   auto print(Iterator& out, std::chrono::duration<Rep, Period> d) const
-  -> std::enable_if_t<std::is_same<P, policy::fixed>::value, bool> {
+  -> std::enable_if_t<std::is_same_v<P, policy::fixed>, bool> {
     return (make_printer<Rep>{} << units(d))(out, d.count());
   }
 };
@@ -139,5 +138,4 @@ const auto time_point = time_point_printer<Clock, Duration>{};
 } // namespace printers
 } // namespace vast
 
-#endif
 

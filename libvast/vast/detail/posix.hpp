@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_DETAIL_POSIX_HPP
-#define VAST_DETAIL_POSIX_HPP
+#pragma once
 
 #include <string>
 
@@ -137,4 +136,3 @@ bool seek(int fd, size_t bytes);
 
 } // namespace vast::detail
 
-#endif

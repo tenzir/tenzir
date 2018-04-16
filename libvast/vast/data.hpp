@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_DATA_HPP
-#define VAST_DATA_HPP
+#pragma once
 
 #include <chrono>
 #include <iterator>
@@ -49,32 +48,32 @@ namespace detail {
 
 template <class T>
 using make_data_type = std::conditional_t<
-    std::is_floating_point<T>::value,
+    std::is_floating_point_v<T>,
     real,
     std::conditional_t<
-      std::is_same<T, boolean>::value,
+      std::is_same_v<T, boolean>,
       boolean,
       std::conditional_t<
-        std::is_unsigned<T>::value,
+        std::is_unsigned_v<T>,
         count,
         std::conditional_t<
-          std::is_signed<T>::value,
+          std::is_signed_v<T>,
           integer,
           std::conditional_t<
-            std::is_convertible<T, std::string>::value,
+            std::is_convertible_v<T, std::string>,
             std::string,
             std::conditional_t<
-                 std::is_same<T, none>::value
-              || std::is_same<T, timespan>::value
-              || std::is_same<T, timestamp>::value
-              || std::is_same<T, pattern>::value
-              || std::is_same<T, address>::value
-              || std::is_same<T, subnet>::value
-              || std::is_same<T, port>::value
-              || std::is_same<T, enumeration>::value
-              || std::is_same<T, vector>::value
-              || std::is_same<T, set>::value
-              || std::is_same<T, table>::value,
+                 std::is_same_v<T, none>
+              || std::is_same_v<T, timespan>
+              || std::is_same_v<T, timestamp>
+              || std::is_same_v<T, pattern>
+              || std::is_same_v<T, address>
+              || std::is_same_v<T, subnet>
+              || std::is_same_v<T, port>
+              || std::is_same_v<T, enumeration>
+              || std::is_same_v<T, vector>
+              || std::is_same_v<T, set>
+              || std::is_same_v<T, table>,
               T,
               std::false_type
             >
@@ -135,8 +134,8 @@ public:
   template <
     class T,
     class = detail::disable_if_t<
-      detail::is_same_or_derived<data, T>::value
-      || std::is_same<data_type<T>, std::false_type>::value
+      detail::is_same_or_derived_v<data, T>
+      || std::is_same_v<data_type<T>, std::false_type>
     >
   >
   data(T&& x)
@@ -255,4 +254,3 @@ struct hash<vast::data> {
 
 } // namespace std
 
-#endif

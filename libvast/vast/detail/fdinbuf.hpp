@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_DETAIL_FDINBUF_HPP
-#define VAST_DETAIL_FDINBUF_HPP
+#pragma once
 
 #include <cstddef>
 #include <streambuf>
@@ -41,4 +40,3 @@ private:
 
 } // namespace vast::detail
 
-#endif

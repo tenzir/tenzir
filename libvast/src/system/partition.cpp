@@ -72,7 +72,7 @@ behavior collector(stateful_actor<collector_state>* self, predicate pred,
                  (self->state.got + 1) << '/' << expected, "ID sets");
       self->state.hits |= hits;
       if (++self->state.got == expected) {
-        VAST_DEBUG(self, "relays", rank(self->state.hits), "to evaluator");
+        VAST_DEBUG(self, "relays", rank(self->state.hits), "hits to evaluator");
         self->send(evaluator, std::move(self->state.pred), self->state.hits);
         self->quit();
       }
@@ -171,16 +171,13 @@ behavior partition(stateful_actor<partition_state>* self, path dir) {
   // are pre-loading all INDEXER types we are aware of, so that we can spawn
   // them as we need them.
   if (exists(dir)) {
-    std::vector<std::pair<std::string, type>> indexers;
-    auto result = load(dir / "meta", indexers);
-    if (!result) {
+    if (auto result = load(dir / "meta", self->state.meta_data); !result) {
       VAST_ERROR(self, self->system().render(result.error()));
       self->quit(result.error());
-      return {};
+    } else {
+      for (auto& [str, t] : self->state.meta_data.types)
+        self->state.indexers.emplace(t, actor{});
     }
-    self->state.indexers.reserve(indexers.size());
-    for (auto& x : indexers)
-      self->state.indexers.emplace(x.second, actor{});
   }
   return {
     [=](const std::vector<event>& events) {
@@ -189,12 +186,17 @@ behavior partition(stateful_actor<partition_state>* self, path dir) {
       // Locate relevant indexers.
       vast::detail::flat_set<actor> indexers;
       for (auto& e : events) {
-        auto& i = self->state.indexers[e.type()];
-        if (!i) {
+        auto& a = self->state.indexers[e.type()];
+        if (!a) {
           VAST_DEBUG(self, "creates event-indexer for type", e.type());
-          i = self->spawn(event_indexer, dir / to_digest(e.type()), e.type());
+          auto digest = to_digest(e.type());
+          a = self->spawn(event_indexer, dir / digest, e.type());
+          if (self->state.meta_data.types.count(digest) == 0) {
+            self->state.meta_data.types.emplace(digest, e.type());
+            self->state.meta_data.dirty = true;
+          }
         }
-        indexers.insert(i);
+        indexers.insert(a);
       }
       // Forward events to relevant indexers.
       auto msg = self->current_mailbox_element()->move_content_to_message();
@@ -208,16 +210,16 @@ behavior partition(stateful_actor<partition_state>* self, path dir) {
       // For each known type, check whether the expression could match.
       // If so, locate/load the corresponding indexer.
       std::vector<actor> indexers;
-      for (auto& x : self->state.indexers) {
-        auto resolved = visit(type_resolver{x.first}, expr);
-        if (resolved && visit(matcher{x.first}, *resolved)) {
-          VAST_DEBUG(self, "found matching type for expression:", x.first);
-          if (!x.second) {
-            VAST_DEBUG(self, "loads event-indexer for type", x.first);
-            auto indexer_dir = dir / to_digest(x.first);
-            x.second = self->spawn(event_indexer, indexer_dir, x.first);
+      for (auto& [t, a] : self->state.indexers) {
+        auto resolved = visit(type_resolver{t}, expr);
+        if (resolved && visit(matcher{t}, *resolved)) {
+          VAST_DEBUG(self, "found matching type for expression:", t);
+          if (!a) {
+            VAST_DEBUG(self, "loads event-indexer for type", t);
+            auto indexer_dir = dir / to_digest(t);
+            a = self->spawn(event_indexer, indexer_dir, t);
           }
-          indexers.push_back(x.second);
+          indexers.push_back(a);
         }
       }
       if (indexers.empty()) {
@@ -263,20 +265,34 @@ behavior partition(stateful_actor<partition_state>* self, path dir) {
       }
     },
     [=](shutdown_atom) {
-      for (auto i = self->state.indexers.begin();
-           i != self->state.indexers.end(); )
-        if (!i->second)
-          i = self->state.indexers.erase(i);
-        else
-          ++i;
       if (self->state.indexers.empty()) {
+        VAST_ASSERT(self->state.meta_data.types.empty());
         self->quit(exit_reason::user_shutdown);
         return;
       }
-      for (auto& x : self->state.indexers) {
-        self->monitor(x.second);
-        self->send(x.second, shutdown_atom::value);
+      // Save persistent state.
+      if (self->state.meta_data.dirty) {
+        if (!exists(dir))
+          mkdir(dir);
+        if (auto result = save(dir / "meta", self->state.meta_data); !result)
+          self->quit(result.error());
       }
+      // Initiate shutdown.
+      auto& xs = self->state.indexers;
+      for (auto i = xs.begin(); i != xs.end(); ) {
+        if (!i->second) {
+          i = xs.erase(i);
+        } else {
+          self->monitor(i->second);
+          self->send(i->second, shutdown_atom::value);
+          ++i;
+        }
+      }
+      if (xs.empty()) {
+        self->quit(exit_reason::user_shutdown);
+        return;
+      }
+      // Terminate not before after all indexers have terminated.
       self->set_down_handler(
         [=](const down_msg& msg) {
           auto pred = [&](auto& x) { return x.second == msg.source; };
@@ -288,17 +304,6 @@ behavior partition(stateful_actor<partition_state>* self, path dir) {
             self->quit(exit_reason::user_shutdown);
         }
       );
-      // Save persistent state.
-      // TODO: only do so when the partition got dirty.
-      std::vector<std::pair<std::string, type>> indexers;
-      indexers.reserve(self->state.indexers.size());
-      for (auto& x : self->state.indexers)
-        indexers.emplace_back(to_digest(x.first), x.first);
-      if (!exists(dir))
-        mkdir(dir);
-      auto result = save(dir / "meta", indexers);
-      if (!result)
-        self->quit(result.error());
     },
   };
 }

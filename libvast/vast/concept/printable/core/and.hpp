@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PRINTABLE_CORE_AND_HPP
-#define VAST_CONCEPT_PRINTABLE_CORE_AND_HPP
+#pragma once
 
 #include "vast/concept/printable/core/printer.hpp"
 
@@ -37,6 +36,5 @@ private:
 
 } // namespace vast
 
-#endif
 
 

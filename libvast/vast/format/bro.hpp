@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_FORMAT_BRO_HPP
-#define VAST_FORMAT_BRO_HPP
+#pragma once
 
 #include <chrono>
 #include <iostream>
@@ -284,4 +283,3 @@ private:
 } // namespace format
 } // namespace vast
 
-#endif

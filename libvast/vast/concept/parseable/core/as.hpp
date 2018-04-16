@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PARSEABLE_CORE_AS_HPP
-#define VAST_CONCEPT_PARSEABLE_CORE_AS_HPP
+#pragma once
 
 #include "vast/concept/parseable/core/parser.hpp"
 
@@ -43,7 +42,7 @@ private:
 template <class Attribute, class Parser>
 auto as(Parser&& p)
 -> std::enable_if_t<
-     is_parser<std::decay_t<Parser>>::value,
+     is_parser_v<std::decay_t<Parser>>,
      as_parser<std::decay_t<Parser>, Attribute>
    > {
   return as_parser<std::decay_t<Parser>, Attribute>{std::forward<Parser>(p)};
@@ -51,5 +50,4 @@ auto as(Parser&& p)
 
 } // namespace vast
 
-#endif
 

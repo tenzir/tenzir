@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_DETAIL_ENDIAN_HPP
-#define VAST_DETAIL_ENDIAN_HPP
+#pragma once
 
 #include <cstdint>
 
@@ -69,4 +68,3 @@ constexpr endianness host_endian = big_endian;
 
 } // namespace vast::detail
 
-#endif // VAST_DETAIL_ENDIAN_HPP

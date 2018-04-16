@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef TEST_HPP
-#define TEST_HPP
+#pragma once
 
 #ifdef SUITE
 #define CAF_SUITE SUITE
@@ -60,4 +59,3 @@ extern std::set<std::string> config;
 
 } // namespace vast::test
 
-#endif

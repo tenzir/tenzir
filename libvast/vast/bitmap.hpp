@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_BITMAP_HPP
-#define VAST_BITMAP_HPP
+#pragma once
 
 #include "vast/bitmap_base.hpp"
 #include "vast/detail/type_traits.hpp"
@@ -111,4 +110,3 @@ bitmap_bit_range bit_range(const bitmap& bm);
 
 } // namespace vast
 
-#endif

@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PRINTABLE_PRINT_HPP
-#define VAST_CONCEPT_PRINTABLE_PRINT_HPP
+#pragma once
 
 #include <type_traits>
 
@@ -23,13 +22,13 @@ namespace vast {
 
 template <class Iterator, class T, class... Args>
 auto print(Iterator&& out, const T& x, Args&&... args)
-  -> std::enable_if_t<has_printer<T>::value, bool> {
+  -> std::enable_if_t<has_printer_v<T>, bool> {
   return make_printer<T>{std::forward<Args>(args)...}.print(out, x);
 }
 
 template <class Iterator, class T, class... Args>
 auto print(Iterator&& out, const T& x, Args&&... args)
-  -> std::enable_if_t<!has_printer<T>::value && has_access_printer<T>::value,
+  -> std::enable_if_t<!has_printer_v<T> && has_access_printer_v<T>,
                       bool> {
   return access::printer<T>{std::forward<Args>(args)...}.print(out, x);
 }
@@ -71,8 +70,8 @@ struct is_printable {
 } // namespace detail
 
 template <class I, class T>
-struct is_printable : decltype(detail::is_printable::test<I, T>(0, 0)) {};
+inline constexpr bool is_printable_v
+  = decltype(detail::is_printable::test<I, T>(0, 0))::value;
 
 } // namespace vast
 
-#endif

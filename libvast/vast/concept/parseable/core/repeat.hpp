@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PARSEABLE_CORE_REPEAT_HPP
-#define VAST_CONCEPT_PARSEABLE_CORE_REPEAT_HPP
+#pragma once
 
 #include <vector>
 
@@ -67,7 +66,7 @@ private:
 
 template <class Parser, class T>
 class dynamic_repeat_parser : public parser<dynamic_repeat_parser<Parser, T>> {
-  static_assert(std::is_integral<T>::value, "T must be an an integral type");
+  static_assert(std::is_integral_v<T>, "T must be an an integral type");
 
 public:
   using container = detail::container<typename Parser::attribute>;
@@ -126,4 +125,3 @@ auto rep(const Parser& p, const T& min, const T& max) {
 } // namespace parsers
 } // namespace vast
 
-#endif

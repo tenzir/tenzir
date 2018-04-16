@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PARSEABLE_VAST_KEY_HPP
-#define VAST_CONCEPT_PARSEABLE_VAST_KEY_HPP
+#pragma once
 
 #include "vast/key.hpp"
 
@@ -54,4 +53,3 @@ static auto const key = make_parser<vast::key>();
 
 } // namespace vast
 
-#endif

@@ -78,7 +78,7 @@ TEST(maybe) {
 TEST(container attribute folding) {
   using namespace parsers;
   auto spaces = *' '_p;
-  static_assert(std::is_same<decltype(spaces)::attribute, unused_type>::value,
+  static_assert(std::is_same_v<decltype(spaces)::attribute, unused_type>,
                 "container attribute folding failed");
 }
 

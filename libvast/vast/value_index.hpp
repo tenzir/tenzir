@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_VALUE_INDEX_HPP
-#define VAST_VALUE_INDEX_HPP
+#pragma once
 
 #include <algorithm>
 #include <memory>
@@ -55,9 +54,9 @@ public:
 
   /// Appends a data value.
   /// @param x The data to append to the index.
-  /// @param id The positional identifier of *x*.
+  /// @param pos The positional identifier of *x*.
   /// @returns `true` if appending succeeded.
-  expected<void> push_back(const data& x, event_id id);
+  expected<void> push_back(const data& x, id pos);
 
   /// Looks up data under a relational operator. If the value to look up is
   /// `nil`, only `==` and `!=` are valid operations. The concrete index
@@ -198,30 +197,31 @@ public:
 
 private:
   bool push_back_impl(const data& d, size_type skip) override {
+    auto append = [&](auto x) {
+      bmi_.push_back(x, skip);
+      return true;
+    };
     return visit(detail::overload(
-      [&](const auto&) { return false; },
-      [&](value_type x) {
-        bmi_.push_back(x, skip);
-        return true;
-      },
-      [&](timespan x) {
-        bmi_.push_back(x.count(), skip);
-        return true;
-      },
-      [&](timestamp x) {
-        bmi_.push_back(x.time_since_epoch().count(), skip);
-        return true;
-      }
+      [&](auto&&) { return false; },
+      [&](boolean x) { return append(x); },
+      [&](integer x) { return append(x); },
+      [&](count x) { return append(x); },
+      [&](real x) { return append(x); },
+      [&](timespan x) { return append(x.count()); },
+      [&](timestamp x) { return append(x.time_since_epoch().count()); }
     ), d);
   }
 
   expected<ids>
   lookup_impl(relational_operator op, const data& d) const override {
     return visit(detail::overload(
-      [&](const auto& x) -> expected<ids> {
-        return make_error(ec::type_clash, value_type{}, x);
+      [&](auto x) -> expected<ids> {
+        return make_error(ec::type_clash, value_type{}, std::move(x));
       },
-      [&](value_type x) -> expected<ids> { return bmi_.lookup(op, x); },
+      [&](boolean x) -> expected<ids> { return bmi_.lookup(op, x); },
+      [&](integer x) -> expected<ids> { return bmi_.lookup(op, x); },
+      [&](count x) -> expected<ids> { return bmi_.lookup(op, x); },
+      [&](real x) -> expected<ids> { return bmi_.lookup(op, x); },
       [&](timespan x) -> expected<ids> { return bmi_.lookup(op, x.count()); },
       [&](timestamp x) -> expected<ids> {
         return bmi_.lookup(op, x.time_since_epoch().count());
@@ -550,4 +550,3 @@ struct value_index_inspect_helper {
 } // namespace detail
 } // namespace vast
 
-#endif

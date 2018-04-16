@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PARSEABLE_DETAIL_CONTAINER_HPP
-#define VAST_CONCEPT_PARSEABLE_DETAIL_CONTAINER_HPP
+#pragma once
 
 #include <vector>
 #include <type_traits>
@@ -27,6 +26,9 @@ struct is_pair : std::false_type {};
 
 template <class T, class U>
 struct is_pair<std::pair<T, U>> : std::true_type {};
+
+template <class T>
+inline constexpr bool is_pair_v = is_pair<T>::value;
 
 template <class Elem>
 struct container {
@@ -45,7 +47,7 @@ struct container {
       attribute
     >::value_type;
 
-  static constexpr bool modified = std::is_same<vector_type, attribute>::value;
+  static constexpr bool modified = std::is_same_v<vector_type, attribute>;
 
   template <class Container, class T>
   static void push_back(Container& c, T&& x) {
@@ -71,7 +73,7 @@ struct container {
   template <class Parser, class Iterator, class Attribute>
   static bool parse(const Parser& p, Iterator& f, const Iterator& l,
                     Attribute& a) {
-    if constexpr (!is_pair<typename Attribute::value_type>::value) {
+    if constexpr (!is_pair_v<typename Attribute::value_type>) {
       value_type x;
       if (!p(f, l, x))
         return false;
@@ -94,4 +96,3 @@ struct container {
 } // namespace detail
 } // namespace vast
 
-#endif

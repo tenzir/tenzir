@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PRINTABLE_CORE_CHOICE_HPP
-#define VAST_CONCEPT_PRINTABLE_CORE_CHOICE_HPP
+#pragma once
 
 #include <type_traits>
 
@@ -30,6 +29,9 @@ struct is_choice_printer : std::false_type {};
 
 template <class Lhs, class Rhs>
 struct is_choice_printer<choice_printer<Lhs, Rhs>> : std::true_type {};
+
+template <class T>
+inline constexpr bool is_choice_printer_v = is_choice_printer<T>::value;
 
 /// Attempts to print either LHS or RHS.
 template <class Lhs, class Rhs>
@@ -81,13 +83,13 @@ private:
 
   template <class Left, class Iterator>
   auto print_left(Iterator& out, unused_type) const
-  -> std::enable_if_t<!is_choice_printer<Left>::value, bool> {
+  -> std::enable_if_t<!is_choice_printer_v<Left>, bool> {
     return lhs_.print(out, unused);
   }
 
   template <class Left, class Iterator, class Attribute>
   auto print_left(Iterator& out, const Attribute& a) const
-  -> std::enable_if_t<!is_choice_printer<Left>::value, bool> {
+  -> std::enable_if_t<!is_choice_printer_v<Left>, bool> {
     auto x = get_if<lhs_attribute>(a);
     return x && lhs_.print(out, *x);
   }
@@ -109,5 +111,4 @@ private:
 
 } // namespace vast
 
-#endif
 

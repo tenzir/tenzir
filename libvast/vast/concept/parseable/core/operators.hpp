@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PARSEABLE_CORE_OPERATORS_HPP
-#define VAST_CONCEPT_PARSEABLE_CORE_OPERATORS_HPP
+#pragma once
 
 #include <type_traits>
 
@@ -57,7 +56,7 @@ class choice_parser;
 template <class T>
 auto operator&(T&& x)
   -> std::enable_if_t<
-       is_parser<std::decay_t<T>>{},
+       is_parser_v<std::decay_t<T>>,
        and_parser<std::decay_t<T>>
      > {
   return and_parser<std::decay_t<T>>{std::forward<T>(x)};
@@ -66,7 +65,7 @@ auto operator&(T&& x)
 template <class T>
 auto operator!(T&& x)
   -> std::enable_if_t<
-       is_parser<std::decay_t<T>>{},
+       is_parser_v<std::decay_t<T>>,
        not_parser<std::decay_t<T>>
      > {
   return not_parser<std::decay_t<T>>{std::forward<T>(x)};
@@ -75,7 +74,7 @@ auto operator!(T&& x)
 template <class T>
 auto operator-(T&& x)
   -> std::enable_if_t<
-       is_parser<std::decay_t<T>>{},
+       is_parser_v<std::decay_t<T>>,
        optional_parser<std::decay_t<T>>
      > {
   return optional_parser<std::decay_t<T>>{std::forward<T>(x)};
@@ -84,7 +83,7 @@ auto operator-(T&& x)
 template <class T>
 auto operator*(T&& x)
   -> std::enable_if_t<
-       is_parser<std::decay_t<T>>{},
+       is_parser_v<std::decay_t<T>>,
        kleene_parser<std::decay_t<T>>
      > {
   return kleene_parser<std::decay_t<T>>{std::forward<T>(x)};
@@ -93,7 +92,7 @@ auto operator*(T&& x)
 template <class T>
 auto operator+(T&& x)
   -> std::enable_if_t<
-       is_parser<std::decay_t<T>>{},
+       is_parser_v<std::decay_t<T>>,
        plus_parser<std::decay_t<T>>
      > {
   return plus_parser<std::decay_t<T>>{std::forward<T>(x)};
@@ -102,7 +101,7 @@ auto operator+(T&& x)
 template <class T>
 auto operator~(T&& x)
   -> std::enable_if_t<
-       is_parser<std::decay_t<T>>{},
+       is_parser_v<std::decay_t<T>>,
        maybe_parser<std::decay_t<T>>
      > {
   return maybe_parser<std::decay_t<T>>{std::forward<T>(x)};
@@ -142,4 +141,3 @@ auto operator|(LHS&& lhs, RHS&& rhs)
 
 } // namespace vast
 
-#endif

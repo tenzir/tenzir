@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PARSEABLE_CORE_HPP
-#define VAST_CONCEPT_PARSEABLE_CORE_HPP
+#pragma once
 
 #include "vast/concept/parseable/core/action.hpp"
 #include "vast/concept/parseable/core/and.hpp"
@@ -34,6 +33,6 @@
 #include "vast/concept/parseable/core/rule.hpp"
 #include "vast/concept/parseable/core/sequence.hpp"
 #include "vast/concept/parseable/core/sequence_choice.hpp"
+#include "vast/concept/parseable/core/skip.hpp"
 #include "vast/concept/parseable/core/when.hpp"
 
-#endif

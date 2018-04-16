@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PRINTABLE_CORE_PRINTER_HPP
-#define VAST_CONCEPT_PRINTABLE_CORE_PRINTER_HPP
+#pragma once
 
 #include <type_traits>
 #include <iterator>
@@ -104,13 +103,13 @@ struct has_printer {
 
 /// Checks whether the printer registry has a given type registered.
 template <class T>
-struct has_printer : decltype(detail::has_printer::test<T>(0)) {};
+inline constexpr bool has_printer_v
+  = decltype(detail::has_printer::test<T>(0))::value;
 
 /// Checks whether a given type is-a printer, i.e., derived from
 /// ::vast::printer.
 template <class T>
-using is_printer = std::is_base_of<printer<T>, T>;
+inline constexpr bool is_printer_v = std::is_base_of_v<printer<T>, T>;
 
 } // namespace vast
 
-#endif

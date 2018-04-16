@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_FILE_SYSTEM_HPP
-#define VAST_FILE_SYSTEM_HPP
+#pragma once
 
 #include "vast/config.hpp"
 
@@ -337,4 +336,3 @@ struct hash<vast::path> {
 
 } // namespace std
 
-#endif

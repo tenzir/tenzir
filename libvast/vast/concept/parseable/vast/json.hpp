@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PARSEABLE_VAST_JSON_HPP
-#define VAST_CONCEPT_PARSEABLE_VAST_JSON_HPP
+#pragma once
 
 #include "vast/json.hpp"
 #include "vast/concept/parseable/core.hpp"
@@ -67,4 +66,3 @@ static auto const json = make_parser<vast::json>();
 
 } // namespace vast
 
-#endif

@@ -11,11 +11,11 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_INDEX_HPP
-#define VAST_INDEX_HPP
+#pragma once
 
 #include <unordered_map>
 
+#include <caf/actor.hpp>
 #include <caf/stateful_actor.hpp>
 
 #include "vast/expression.hpp"
@@ -112,4 +112,3 @@ caf::behavior index(caf::stateful_actor<index_state>* self, const path& dir,
 } // namespace system
 } // namespace vast
 
-#endif

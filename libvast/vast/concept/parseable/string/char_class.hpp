@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PARSEABLE_STRING_CHAR_CLASS_HPP
-#define VAST_CONCEPT_PARSEABLE_STRING_CHAR_CLASS_HPP
+#pragma once
 
 #include <cctype>
 #include <string>
@@ -111,4 +110,3 @@ auto const printable = print;
 } // namespace parsers
 } // namespace vast
 
-#endif

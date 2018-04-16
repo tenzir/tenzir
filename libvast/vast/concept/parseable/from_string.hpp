@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PARSEABLE_FROM_STRING_HPP
-#define VAST_CONCEPT_PARSEABLE_FROM_STRING_HPP
+#pragma once
 
 #include <string>
 #include <type_traits>
@@ -29,7 +28,7 @@ template <
   class... Args
 >
 auto from_string(Iterator begin, Iterator end, Args&&... args)
-  -> std::enable_if_t<is_parseable<Iterator, To>::value, optional<To>> {
+  -> std::enable_if_t<is_parseable_v<Iterator, To>, optional<To>> {
   optional<To> t{To{}};
   if (Parser{std::forward<Args>(args)...}(begin, end, *t))
     return t;
@@ -63,4 +62,3 @@ auto from_string(char const (&str)[N], Args&&... args) {
 
 } // namespace vast
 
-#endif

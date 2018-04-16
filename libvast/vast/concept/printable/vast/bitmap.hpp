@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PRINTABLE_VAST_BITMAP_HPP
-#define VAST_CONCEPT_PRINTABLE_VAST_BITMAP_HPP
+#pragma once
 
 #include "vast/bitmap_base.hpp"
 #include "vast/concept/printable/core.hpp"
@@ -34,7 +33,7 @@ struct bitmap_printer : printer<bitmap_printer<Bitmap, Policy>> {
 template <class Bitmap>
 struct printer_registry<
   Bitmap,
-  std::enable_if_t<std::is_base_of<bitmap_base<Bitmap>, Bitmap>::value>
+  std::enable_if_t<std::is_base_of_v<bitmap_base<Bitmap>, Bitmap>>
 > {
   using type = bitmap_printer<Bitmap, policy::expanded>;
 };
@@ -47,4 +46,3 @@ auto const bitmap = bitmap_printer<Bitmap, Policy>{};
 } // namespace printers
 } // namespace vast
 
-#endif

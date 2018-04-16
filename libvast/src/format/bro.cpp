@@ -167,7 +167,7 @@ struct streamer {
 
   template <class T, class U>
   auto operator()(const T&, const U& x) const
-  -> std::enable_if_t<!std::is_same<U, none>::value> {
+  -> std::enable_if_t<!std::is_same_v<U, none>> {
     out_ << to_string(x);
   }
 

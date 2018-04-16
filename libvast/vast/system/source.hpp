@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_SYSTEM_SOURCE_HPP
-#define VAST_SYSTEM_SOURCE_HPP
+#pragma once
 
 #include <unordered_map>
 
@@ -202,4 +201,3 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader&& reader) {
 
 } // namespace vast::system
 
-#endif

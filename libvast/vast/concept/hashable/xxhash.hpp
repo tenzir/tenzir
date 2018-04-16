@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_HASHABLE_XXHASH_HPP
-#define VAST_CONCEPT_HASHABLE_XXHASH_HPP
+#pragma once
 
 #include <cstddef>
 #include <type_traits>
@@ -94,4 +93,3 @@ using xxhash = std::conditional_t<sizeof(void*) == 4, xxhash32, xxhash64>;
 
 } // namespace vast
 
-#endif

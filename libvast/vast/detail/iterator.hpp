@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_DETAIL_ITERATOR_HPP
-#define VAST_DETAIL_ITERATOR_HPP
+#pragma once
 
 #include <memory>
 
@@ -124,7 +123,7 @@ public:
       reference,
       std::add_pointer_t<
         std::conditional_t<
-          std::is_const<Value>::value,
+          std::is_const_v<Value>,
           value_type const,
           value_type
         >
@@ -144,10 +143,8 @@ public:
 
   using postfix_increment_result =
     std::conditional_t<
-      std::is_convertible<
-        reference,
-        std::add_lvalue_reference_t<Value const>
-      >::value,
+      std::is_convertible_v<reference,
+                            std::add_lvalue_reference_t<Value const>>,
       postfix_increment_proxy,
       Derived
     >;
@@ -298,4 +295,3 @@ class iterator_adaptor
 
 } // namespace vast::detail
 
-#endif

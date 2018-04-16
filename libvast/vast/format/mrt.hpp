@@ -1,5 +1,4 @@
-#ifndef VAST_FORMAT_MRT_HPP
-#define VAST_FORMAT_MRT_HPP
+#pragma once
 
 #include <iostream>
 #include <queue>
@@ -1182,4 +1181,3 @@ private:
 } // namespace format
 } // namespace vast
 
-#endif

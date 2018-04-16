@@ -44,6 +44,7 @@ void ship_results(stateful_actor<exporter_state>* self) {
     self->state.stats.requested -= self->state.results.size();
     self->state.stats.shipped += self->state.results.size();
     msg = make_message(std::move(self->state.results));
+    self->state.results = {};
   } else {
     std::vector<event> remainder;
     remainder.reserve(self->state.results.size() - self->state.stats.requested);
@@ -83,7 +84,7 @@ void shutdown(stateful_actor<exporter_state>* self) {
   if (rank(self->state.unprocessed) > 0 || !self->state.results.empty()
       || has_continuous_option(self->state.options))
     return;
-  report_statistics(self);
+  VAST_DEBUG(self, "initiates shutdown");
   self->send_exit(self, exit_reason::normal);
 }
 
@@ -97,9 +98,11 @@ void request_more_hits(stateful_actor<exporter_state>* self) {
   // If we're (1) no longer waiting for index hits, (2) still need more
   // results, and (3) have no inflight requests to the archive, we ask
   // the index for more hits.
-  if (waiting_for_hits && need_more_results && have_no_inflight_requests) {
+  if (!waiting_for_hits && need_more_results && have_no_inflight_requests) {
     auto remaining = self->state.stats.expected - self->state.stats.received;
-    // TODO: Figure out right amount of partitions to ask for.
+    VAST_ASSERT(remaining > 0);
+    // TODO: Figure out right number of partitions to ask for. For now, we
+    // bound the number by an arbitrary constant.
     auto n = std::min(remaining, size_t{2});
     VAST_DEBUG(self, "asks index to process", n, "more partitions");
     self->send(self->state.index, self->state.id, n);

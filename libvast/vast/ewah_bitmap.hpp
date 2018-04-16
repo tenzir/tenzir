@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_EWAH_BITMAP_HPP
-#define VAST_EWAH_BITMAP_HPP
+#pragma once
 
 #include "vast/bitmap_base.hpp"
 #include "vast/bitvector.hpp"
@@ -163,5 +162,4 @@ ewah_bitmap_range bit_range(const ewah_bitmap& bm);
 
 } // namespace vast
 
-#endif
 

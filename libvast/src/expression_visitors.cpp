@@ -575,6 +575,10 @@ bool event_evaluator::operator()(const data_extractor& e, const data& d) {
 }
 
 
+matcher::matcher(const type& t) : type_{t} {
+  // nop
+}
+
 bool matcher::operator()(none) {
   return false;
 }
@@ -598,13 +602,18 @@ bool matcher::operator()(const negation& n) {
 }
 
 bool matcher::operator()(const predicate& p) {
+  op_ = p.op;
   return visit(*this, p.lhs, p.rhs);
 }
 
 bool matcher::operator()(const attribute_extractor& e, const data& d) {
-  if (e.attr == "type")
-    return type_.name() == get<std::string>(d);
-  return e.attr == "time"; // Every event has a timestamp.
+  if (e.attr == "type") {
+    VAST_ASSERT(is<std::string>(d));
+    return evaluate(d, op_, type_.name());
+  } else if (e.attr == "time") {
+    return true; // Every event has a timestamp.
+  }
+  return false;
 }
 
 bool matcher::operator()(const data_extractor&, const data&) {

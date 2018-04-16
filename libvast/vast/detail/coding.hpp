@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_DETAIL_CODING_HPP
-#define VAST_DETAIL_CODING_HPP
+#pragma once
 
 #include <limits>
 #include <type_traits>
@@ -25,7 +24,7 @@ namespace vast::detail {
 /// @relates byte_to_hex hex_to_byte
 template <
   class T,
-  class = std::enable_if_t<std::is_integral<T>::value>
+  class = std::enable_if_t<std::is_integral_v<T>>
 >
 char byte_to_char(T b) {
   return b < 10 ? '0' + b : 'a' + b - 10;
@@ -37,7 +36,7 @@ char byte_to_char(T b) {
 /// @relates byte_to_char hex_to_byte
 template <
   class T,
-  class = std::enable_if_t<std::is_integral<T>::value>
+  class = std::enable_if_t<std::is_integral_v<T>>
 >
 std::pair<char, char> byte_to_hex(T b) {
   static constexpr char hex[] = "0123456789ABCDEF";
@@ -50,7 +49,7 @@ std::pair<char, char> byte_to_hex(T b) {
 /// @relates byte_to_hex byte_to_char
 template <
   class T,
-  class = std::enable_if_t<std::is_integral<T>::value>
+  class = std::enable_if_t<std::is_integral_v<T>>
 >
 char hex_to_byte(T hex) {
   if (hex >= '0' && hex <= '9')
@@ -68,7 +67,7 @@ char hex_to_byte(T hex) {
 /// @relates byte_to_hex byte_to_char
 template <
   class T,
-  class = std::enable_if_t<std::is_integral<T>::value>
+  class = std::enable_if_t<std::is_integral_v<T>>
 >
 char hex_to_byte(T hi, T lo) {
   auto byte = hex_to_byte(hi) << 4;
@@ -78,4 +77,3 @@ char hex_to_byte(T hi, T lo) {
 
 } // namespace vast::detail
 
-#endif

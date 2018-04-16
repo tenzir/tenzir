@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PARSEABLE_VAST_ADDRESS_HPP
-#define VAST_CONCEPT_PARSEABLE_VAST_ADDRESS_HPP
+#pragma once
 
 #include <cstring>
 
@@ -160,4 +159,3 @@ static auto const addr = make_parser<vast::address>();
 
 } // namespace vast
 
-#endif

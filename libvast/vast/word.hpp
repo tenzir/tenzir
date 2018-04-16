@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_WORD_HPP
-#define VAST_WORD_HPP
+#pragma once
 
 #include <cstdint>
 #include <limits>
@@ -24,9 +23,8 @@
 namespace vast::detail {
 
 template <class T>
-using is_unsigned_integral = bool_constant<
-  std::is_unsigned<T>::value && std::is_integral<T>::value
->;
+inline constexpr bool is_unsigned_integral_v
+  = std::is_unsigned_v<T> && std::is_integral_v<T>;
 
 // Type alias used for SFINAE of free functions below. If we would simply use
 // typename word<T>::size_type, the static_assert would fire. With this work
@@ -34,7 +32,7 @@ using is_unsigned_integral = bool_constant<
 // proceed.
 template <class T>
 using word_size_type = std::conditional_t<
-  is_unsigned_integral<T>::value,
+  is_unsigned_integral_v<T>,
   uint64_t,
   void
 >;
@@ -47,7 +45,7 @@ namespace vast {
 /// operations.
 template <class T>
 struct word {
-  static_assert(detail::is_unsigned_integral<T>::value,
+  static_assert(detail::is_unsigned_integral_v<T>,
                 "bitwise operations require unsigned integral, types");
 
   // -- general ---------------------------------------------------------------
@@ -306,7 +304,7 @@ constexpr typename word<T>::value_type word<T>::lsb1;
 template <bool Bit = true, class T>
 static constexpr auto rank(T x)
 -> std::enable_if_t<
-  detail::is_unsigned_integral<T>::value,
+  detail::is_unsigned_integral_v<T>,
   detail::word_size_type<T>
 > {
   if constexpr (Bit)
@@ -324,7 +322,7 @@ static constexpr auto rank(T x)
 template <bool Bit = true, class T>
 static constexpr auto rank(T x, detail::word_size_type<T> i)
 -> std::enable_if_t<
-  Bit && detail::is_unsigned_integral<T>::value,
+  Bit && detail::is_unsigned_integral_v<T>,
   detail::word_size_type<T>
 > {
   T masked = x & word<T>::lsb_fill(i + 1);
@@ -334,7 +332,7 @@ static constexpr auto rank(T x, detail::word_size_type<T> i)
 template <bool Bit, class T>
 static constexpr auto rank(T x, detail::word_size_type<T> i)
 -> std::enable_if_t<
-  !Bit && detail::is_unsigned_integral<T>::value,
+  !Bit && detail::is_unsigned_integral_v<T>,
   detail::word_size_type<T>
 > {
   return rank<1>(static_cast<T>(~x), i);
@@ -348,7 +346,7 @@ static constexpr auto rank(T x, detail::word_size_type<T> i)
 template <bool Bit = true, class T>
 static constexpr auto find_first(T x)
 -> std::enable_if_t<
-  Bit && detail::is_unsigned_integral<T>::value,
+  Bit && detail::is_unsigned_integral_v<T>,
   detail::word_size_type<T>
 > {
   auto tzs = word<T>::count_trailing_zeros(x);
@@ -358,7 +356,7 @@ static constexpr auto find_first(T x)
 template <bool Bit, class T>
 static constexpr auto find_first(T x)
 -> std::enable_if_t<
-  !Bit && detail::is_unsigned_integral<T>::value,
+  !Bit && detail::is_unsigned_integral_v<T>,
   detail::word_size_type<T>
 > {
   return find_first<1>(static_cast<T>(~x));
@@ -367,7 +365,7 @@ static constexpr auto find_first(T x)
 template <bool Bit = true, class T>
 static constexpr auto find_last(T x)
 -> std::enable_if_t<
-  Bit && detail::is_unsigned_integral<T>::value,
+  Bit && detail::is_unsigned_integral_v<T>,
   detail::word_size_type<T>
 > {
   auto lzs = word<T>::count_leading_zeros(x);
@@ -377,7 +375,7 @@ static constexpr auto find_last(T x)
 template <bool Bit, class T>
 static constexpr auto find_last(T x)
 -> std::enable_if_t<
-  !Bit && detail::is_unsigned_integral<T>::value,
+  !Bit && detail::is_unsigned_integral_v<T>,
   detail::word_size_type<T>
 > {
   return find_last<1>(static_cast<T>(~x));
@@ -389,7 +387,7 @@ static constexpr auto find_last(T x)
 template <class T>
 static constexpr auto find_next(T x, detail::word_size_type<T> i)
 -> std::enable_if_t<
-  detail::is_unsigned_integral<T>::value,
+  detail::is_unsigned_integral_v<T>,
   detail::word_size_type<T>
   > {
   if (i == word<T>::width - 1)
@@ -405,7 +403,7 @@ static constexpr auto find_next(T x, detail::word_size_type<T> i)
 template <class T>
 static constexpr auto find_prev(T x, detail::word_size_type<T> i)
 -> std::enable_if_t<
-  detail::is_unsigned_integral<T>::value,
+  detail::is_unsigned_integral_v<T>,
   detail::word_size_type<T>
 > {
   if (i == 0)
@@ -424,7 +422,7 @@ static constexpr auto find_prev(T x, detail::word_size_type<T> i)
 template <bool Bit = true, class T>
 static constexpr auto select(T x, detail::word_size_type<T> i)
 -> std::enable_if_t<
-  Bit && detail::is_unsigned_integral<T>::value,
+  Bit && detail::is_unsigned_integral_v<T>,
   detail::word_size_type<T>
 > {
   // TODO: make this efficient and branch-free. There is one implementation
@@ -441,7 +439,7 @@ static constexpr auto select(T x, detail::word_size_type<T> i)
 template <bool Bit, class T>
 static constexpr auto select(T x, detail::word_size_type<T> i)
 -> std::enable_if_t<
-  !Bit && detail::is_unsigned_integral<T>::value,
+  !Bit && detail::is_unsigned_integral_v<T>,
   detail::word_size_type<T>
 > {
   // TODO: see note above.
@@ -455,4 +453,3 @@ static constexpr auto select(T x, detail::word_size_type<T> i)
 
 } // namespace vast
 
-#endif

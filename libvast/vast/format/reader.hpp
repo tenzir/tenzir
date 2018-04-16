@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_FORMAT_READER_HPP
-#define VAST_FORMAT_READER_HPP
+#pragma once
 
 #include <istream>
 #include <memory>
@@ -58,4 +57,3 @@ private:
 
 } // namespace vast::format
 
-#endif

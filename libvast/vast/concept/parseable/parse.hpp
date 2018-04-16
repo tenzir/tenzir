@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PARSEABLE_PARSE_HPP
-#define VAST_CONCEPT_PARSEABLE_PARSE_HPP
+#pragma once
 
 #include <type_traits>
 
@@ -23,13 +22,13 @@ namespace vast {
 
 template <class Iterator, class T, class... Args>
 auto parse(Iterator& f, const Iterator& l, T& x, Args&&... args)
-  -> std::enable_if_t<has_parser<T>::value, bool> {
+  -> std::enable_if_t<has_parser_v<T>, bool> {
   return make_parser<T>{std::forward<Args>(args)...}(f, l, x);
 }
 
 template <class Iterator, class T, class... Args>
 auto parse(Iterator& f, const Iterator& l, T& x, Args&&... args)
-  -> std::enable_if_t<!has_parser<T>::value && has_access_parser<T>::value,
+  -> std::enable_if_t<!has_parser_v<T> && has_access_parser_v<T>,
                       bool> {
   return access::parser<T>{std::forward<Args>(args)...}(f, l, x);
 }
@@ -50,8 +49,7 @@ bool conjunctive_parse(Iterator& f, const Iterator& l, T& x, Ts&... xs) {
 
 template <class Iterator, class T>
 auto parse(Iterator& f, const Iterator& l, T& x)
-  -> std::enable_if_t<!has_parser<T>::value && has_access_state<T>::value,
-                      bool> {
+  -> std::enable_if_t<!has_parser_v<T> && has_access_state_v<T>, bool> {
   bool r;
   auto fun = [&](auto&... xs) { r = detail::conjunctive_parse(f, l, xs...); };
   access::state<T>::call(x, fun);
@@ -72,8 +70,8 @@ struct is_parseable {
 } // namespace detail
 
 template <class I, class T>
-struct is_parseable : decltype(detail::is_parseable::test<I, T>(0, 0, 0)) {};
+inline constexpr bool is_parseable_v
+  = decltype(detail::is_parseable::test<I, T>(0, 0, 0))::value;
 
 } // namespace vast
 
-#endif

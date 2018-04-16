@@ -33,8 +33,7 @@
 //
 //     3. This notice may not be removed or altered from any source
 //        distribution.
-#ifndef VAST_DETAIL_MATH_HPP
-#define VAST_DETAIL_MATH_HPP
+#pragma once
 
 #include <cstdint>
 
@@ -103,4 +102,3 @@ constexpr int ilog(T x) {
 
 } // namespace vast::detail
 
-#endif

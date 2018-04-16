@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PARSEABLE_CORE_RULE_HPP
-#define VAST_CONCEPT_PARSEABLE_CORE_RULE_HPP
+#pragma once
 
 #include <memory>
 #include <utility>
@@ -26,7 +25,7 @@ namespace detail {
 
 template <class Iterator, class Attribute>
 struct abstract_rule {
-  ~abstract_rule() = default;
+  virtual ~abstract_rule() = default;
   virtual bool parse(Iterator& f, const Iterator& l, unused_type) const = 0;
   virtual bool parse(Iterator& f, const Iterator& l, Attribute& a) const = 0;
 };
@@ -75,7 +74,7 @@ public:
   template <
     class RHS,
     class = std::enable_if_t<
-      is_parser<std::decay_t<RHS>>{} && !detail::is_same_or_derived<rule, RHS>::value
+      is_parser_v<std::decay_t<RHS>> && !detail::is_same_or_derived_v<rule, RHS>
     >
   >
   rule(RHS&& rhs)
@@ -85,8 +84,8 @@ public:
 
   template <class RHS>
   auto operator=(RHS&& rhs)
-    -> std::enable_if_t<is_parser<std::decay_t<RHS>>{}
-                        && !detail::is_same_or_derived<rule, RHS>::value> {
+    -> std::enable_if_t<is_parser_v<std::decay_t<RHS>>
+                        && !detail::is_same_or_derived_v<rule, RHS>> {
     make_parser<RHS>(std::forward<RHS>(rhs));
   }
 
@@ -106,4 +105,3 @@ private:
 
 } // namespace vast
 
-#endif

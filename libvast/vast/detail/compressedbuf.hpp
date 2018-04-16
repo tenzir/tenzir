@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_DETAIL_COMPRESSEDBUF_HPP
-#define VAST_DETAIL_COMPRESSEDBUF_HPP
+#pragma once
 
 #include <cstddef>
 #include <streambuf>
@@ -86,4 +85,3 @@ private:
 
 } // namespace vast::detail
 
-#endif

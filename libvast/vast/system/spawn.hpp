@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_SYSTEM_SPAWN_HPP
-#define VAST_SYSTEM_SPAWN_HPP
+#pragma once
 
 #include <string>
 
@@ -52,4 +51,3 @@ expected<caf::actor> spawn_sink(caf::local_actor* self, options& opts);
 
 } // namespace vast::system
 
-#endif

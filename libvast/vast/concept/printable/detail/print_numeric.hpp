@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PRINTABLE_DETAIL_PRINT_NUMERIC_HPP
-#define VAST_CONCEPT_PRINTABLE_DETAIL_PRINT_NUMERIC_HPP
+#pragma once
 
 #include <algorithm>
 #include <limits>
@@ -43,4 +42,3 @@ bool print_numeric(Iterator& out, T x) {
 } // namespace detail
 } // namespace vast
 
-#endif

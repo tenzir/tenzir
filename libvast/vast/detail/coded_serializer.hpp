@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_DETAIL_CODED_SERIALIZER_HPP
-#define VAST_DETAIL_CODED_SERIALIZER_HPP
+#pragma once
 
 #include <cstddef>
 #include <cstdint>
@@ -40,7 +39,7 @@ public:
 protected:
   template <class T>
   error zig_zag_varbyte_encode(T x) {
-    static_assert(std::is_signed<T>::value, "T must be an signed type");
+    static_assert(std::is_signed_v<T>, "T must be an signed type");
     return this->varbyte_encode(zigzag::encode(x));
   }
 
@@ -108,4 +107,3 @@ protected:
 
 } // namespace vast::detail
 
-#endif

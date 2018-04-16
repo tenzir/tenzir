@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PARSEABLE_STRING_C_STRING_HPP
-#define VAST_CONCEPT_PARSEABLE_STRING_C_STRING_HPP
+#pragma once
 
 #include "vast/concept/parseable/core/parser.hpp"
 #include "vast/detail/assert.hpp"
@@ -50,4 +49,3 @@ struct parser_registry<const char*> {
 
 } // namespace vast
 
-#endif

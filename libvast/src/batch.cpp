@@ -20,7 +20,7 @@
 
 namespace vast {
 
-bool batch::ids(event_id begin, event_id end) {
+bool batch::ids(id begin, id end) {
   if (end - begin != events())
     return false;
   bitmap bm;
@@ -114,7 +114,7 @@ expected<std::vector<event>> batch::reader::read(const bitmap& ids) {
   if (id_range_.done())
     return result;
   auto e = expected<event>{make_error(ec::unspecified)};
-  auto n = event_id{0};
+  auto n = id{0};
   auto rng = bit_range(ids);
   auto begin = rng.begin();
   auto end = rng.end();
@@ -131,8 +131,9 @@ expected<std::vector<event>> batch::reader::read(const bitmap& ids) {
       continue;
     auto id = n + first;
     // If a previously materialized event is ahead, we must catch up first.
-    if (e && id < e->id()) {
-      id = next(bits, e->id() - 1);
+    if (e) {
+      if (id < e->id())
+        id = next(bits, e->id() - 1);
       if (id == e->id()) {
         result.push_back(std::move(*e));
         id = next(bits, id);
@@ -148,7 +149,7 @@ expected<std::vector<event>> batch::reader::read(const bitmap& ids) {
           else
             return e.error();
         }
-        VAST_ASSERT(e->id() != invalid_event_id);
+        VAST_ASSERT(e->id() != invalid_id);
       } while (id > e->id());
       // If the materialized event is ahead, see if the current bit sequence
       // has the event ID.
@@ -157,6 +158,7 @@ expected<std::vector<event>> batch::reader::read(const bitmap& ids) {
       // If we have materialized the event we want, add it to the result.
       if (id == e->id()) {
         result.push_back(std::move(*e));
+        e = expected<event>{make_error(ec::unspecified)};
         id = next(bits, id);
       }
     }

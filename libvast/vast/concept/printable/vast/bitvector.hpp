@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PRINTABLE_VAST_BITVECTOR_HPP
-#define VAST_CONCEPT_PRINTABLE_VAST_BITVECTOR_HPP
+#pragma once
 
 #include "vast/bitvector.hpp"
 #include "vast/concept/printable/core.hpp"
@@ -33,7 +32,7 @@ struct bitvector_printer : printer<bitvector_printer<Bitvector, Order>> {
   using attribute = Bitvector;
 
   static constexpr bool msb_to_lsb =
-    std::is_same<Order, policy::msb_to_lsb>::value;
+    std::is_same_v<Order, policy::msb_to_lsb>;
 
   template <class Iterator>
   bool print(Iterator& out, const Bitvector& bv) const {
@@ -57,4 +56,3 @@ struct printer_registry<bitvector<Block, Allocator>> {
 
 } // namespace vast
 
-#endif

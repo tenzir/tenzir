@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_HASHABLE_HASH_APPEND_HPP
-#define VAST_CONCEPT_HASHABLE_HASH_APPEND_HPP
+#pragma once
 
 #include <cstddef>
 #include <cstdint>
@@ -80,7 +79,7 @@ template <class ...T>
 struct is_uniquely_represented<std::tuple<T...>>
   : std::integral_constant<
       bool,
-      std::conjunction<is_uniquely_represented<T>...>::value
+      std::conjunction_v<is_uniquely_represented<T>...>
         && detail::sum<sizeof(T)...>{} == sizeof(std::tuple<T...>)
     > {};
 
@@ -183,7 +182,7 @@ void hash_append(Hasher& h, std::chrono::time_point<Clock, Duration> t) {
 // -- empty types -------------------------------------------------------------
 
 template <class Hasher, class T>
-std::enable_if_t<std::is_empty<T>::value>
+std::enable_if_t<std::is_empty_v<T>>
 hash_append(Hasher& h, T) noexcept {
   hash_append(h, 0);
 }
@@ -437,4 +436,3 @@ hash_append(Hasher& h, const T& x) noexcept {
 
 } // namespace vast
 
-#endif

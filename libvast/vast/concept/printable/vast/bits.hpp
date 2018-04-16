@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PRINTABLE_VAST_BITS_HPP
-#define VAST_CONCEPT_PRINTABLE_VAST_BITS_HPP
+#pragma once
 
 #include "vast/bits.hpp"
 #include "vast/concept/printable/core.hpp"
@@ -34,7 +33,7 @@ struct bits_printer : printer<bits_printer<T , Policy>> {
 
   template <class Iterator, class P = Policy>
   auto print(Iterator& out, const bits<T>& b) const
-  -> std::enable_if_t<std::is_same<P, policy::rle>::value, bool> {
+  -> std::enable_if_t<std::is_same_v<P, policy::rle>, bool> {
     auto print_run = [&](auto bit, auto length) {
       using size_type = typename word_type::size_type;
       return printers::integral<size_type>(out, length) &&
@@ -65,7 +64,7 @@ struct bits_printer : printer<bits_printer<T , Policy>> {
 
   template <class Iterator, class P = Policy>
   auto print(Iterator& out, const bits<T>& b) const
-  -> std::enable_if_t<std::is_same<P, policy::expanded>::value, bool> {
+  -> std::enable_if_t<std::is_same_v<P, policy::expanded>, bool> {
     if (b.size() > word_type::width) {
       auto c = b.data() ? '1' : '0';
       for (auto i = 0u; i < b.size(); ++i)
@@ -95,4 +94,3 @@ auto const bits = bits_printer<T, Policy>{};
 } // namespace printers
 } // namespace vast
 
-#endif

@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_BITVECTOR_HPP
-#define VAST_BITVECTOR_HPP
+#pragma once
 
 #include <cstdint>
 #include <limits>
@@ -40,9 +39,9 @@ class bitvector_iterator;
 /// of the interface defined in §23.3.12.
 template <class Block = size_t, class Allocator = std::allocator<Block>>
 class bitvector : detail::equality_comparable<bitvector<Block, Allocator>> {
-  static_assert(std::is_unsigned<Block>::value,
+  static_assert(std::is_unsigned_v<Block>,
                 "Block must be unsigned for well-defined bit operations");
-  static_assert(!std::is_same<Block, bool>::value,
+  static_assert(!std::is_same_v<Block, bool>,
                 "Block cannot be bool; you may want std::vector<bool> instead");
 
 public:
@@ -336,7 +335,7 @@ class bitvector_iterator
       typename Bitvector::value_type,
       std::random_access_iterator_tag,
       std::conditional_t<
-        std::is_const<Bitvector>::value,
+        std::is_const_v<Bitvector>,
         typename Bitvector::const_reference,
         typename Bitvector::reference
       >,
@@ -705,8 +704,8 @@ rank(const bitvector<Block, Allocator>& bv) {
   auto n = bv.size();
   auto p = bv.blocks().data();
   for (; n >= word_type::width; ++p, n -= word_type::width)
-    result += Bit 
-      ? word_type::popcount(*p) 
+    result += Bit
+      ? word_type::popcount(*p)
       : word_type::width - word_type::popcount(*p);
   if (n > 0) {
     auto last = word_type::popcount(*p & word_type::lsb_mask(n));
@@ -717,4 +716,3 @@ rank(const bitvector<Block, Allocator>& bv) {
 
 } // namespace vast
 
-#endif

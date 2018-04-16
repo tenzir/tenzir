@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_OPTIONAL_HPP
-#define VAST_OPTIONAL_HPP
+#pragma once
 
 #include <caf/optional.hpp>
 
@@ -23,4 +22,3 @@ using caf::optional;
 
 } // namespace vast
 
-#endif

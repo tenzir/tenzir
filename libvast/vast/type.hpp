@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_TYPE_HPP
-#define VAST_TYPE_HPP
+#pragma once
 
 #include <memory>
 #include <string>
@@ -599,4 +598,3 @@ struct hash<vast::type> {
 
 } // namespace std
 
-#endif

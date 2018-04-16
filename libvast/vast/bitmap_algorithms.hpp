@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_BITMAP_ALGORITHMS_HPP
-#define VAST_BITMAP_ALGORITHMS_HPP
+#pragma once
 
 #include <algorithm>
 #include <iterator>
@@ -34,7 +33,7 @@ namespace detail {
 
 template <class T, class U>
 struct eval_result_type {
-  using type = std::conditional_t<std::is_same<T, U>::value, T, bitmap>;
+  using type = std::conditional_t<std::is_same_v<T, U>, T, bitmap>;
 };
 
 template <class T, class U>
@@ -65,11 +64,11 @@ binary_eval(const LHS& lhs, const RHS& rhs, Operation op) {
   using result_type = detail::eval_result_type_t<LHS, RHS>;
   using word_type = typename result_type::word_type;
   static_assert(
-    detail::are_same<
+    detail::are_same_v<
       typename LHS::word_type::value_type,
       typename RHS::word_type::value_type,
       typename result_type::word_type::value_type
-    >::value,
+    >,
     "LHS, RHS, and result bitmaps must have same block type");
   // TODO: figure out whether we still need the notion of a "fill," i.e., a
   // homogeneous sequence greater-than-or-equal to the word size, or whether
@@ -491,4 +490,3 @@ auto all(const Bitmap& bm) {
 
 } // namespace vast
 
-#endif

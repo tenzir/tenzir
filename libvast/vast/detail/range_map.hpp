@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_DETAIL_INTERVAL_MAP_HPP
-#define VAST_DETAIL_INTERVAL_MAP_HPP
+#pragma once
 
 #include <map>
 #include <tuple>
@@ -26,7 +25,7 @@ namespace vast::detail {
 /// values.
 template <class Point, class Value>
 class range_map {
-  static_assert(std::is_arithmetic<Point>::value,
+  static_assert(std::is_arithmetic_v<Point>,
                 "Point must be an arithmetic type");
 
   using map_type = std::map<Point, std::pair<Point, Value>>;
@@ -215,13 +214,11 @@ public:
   ///          valid value, then the first two represent *[a,b)* and *[0,0)*
   ///          otherwise.
   std::tuple<Point, Point, const Value*> find(const Point& p) const {
-    // GCC 4.9 still has an explicit tuple ctor.
-    using tuple_type = std::tuple<Point, Point, const Value*>;
     auto i = locate(p, map_.lower_bound(p));
     if (i == map_.end())
-      return tuple_type{0, 0, nullptr};
+      return {0, 0, nullptr};
     else
-      return tuple_type{left(i), right(i), &i->second.second};
+      return {left(i), right(i), &i->second.second};
   }
 
   /// Retrieves the size of the range map.
@@ -287,4 +284,3 @@ private:
 
 } // namespace vast::detail
 
-#endif

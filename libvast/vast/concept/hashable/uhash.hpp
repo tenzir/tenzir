@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_HASHABLE_UHASH_HPP
-#define VAST_CONCEPT_HASHABLE_UHASH_HPP
+#pragma once
 
 #include "vast/concept/hashable/hash_append.hpp"
 
@@ -40,4 +39,3 @@ private:
 
 } // namespace vast
 
-#endif

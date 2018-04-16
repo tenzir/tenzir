@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_FORMAT_BGPDUMP_HPP
-#define VAST_FORMAT_BGPDUMP_HPP
+#pragma once
 
 #include "vast/schema.hpp"
 #include "vast/concept/parseable/core.hpp"
@@ -128,5 +127,4 @@ public:
 
 } // namespace vast::format::bgpdump
 
-#endif
 

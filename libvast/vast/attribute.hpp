@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_ATTRIBUTE_HPP
-#define VAST_ATTRIBUTE_HPP
+#pragma once
 
 #include <string>
 
@@ -41,4 +40,3 @@ struct attribute : detail::totally_ordered<attribute> {
 
 } // namespace vast
 
-#endif

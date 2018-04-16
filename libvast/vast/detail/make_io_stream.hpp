@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_DETAIL_MAKE_IO_STREAM_HPP
-#define VAST_DETAIL_MAKE_IO_STREAM_HPP
+#pragma once
 
 #include <iostream>
 #include <string>
@@ -29,5 +28,4 @@ make_input_stream(const std::string& input, bool is_uds = false);
 
 } // namespace vast::detail
 
-#endif
 

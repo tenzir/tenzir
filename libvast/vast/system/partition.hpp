@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_SYSTEM_PARTITION_HPP
-#define VAST_SYSTEM_PARTITION_HPP
+#pragma once
 
 #include <unordered_map>
 
@@ -24,8 +23,23 @@
 
 namespace vast::system {
 
+/// @relates partition
+struct partition_meta_data {
+  /// Maps type digests (used as directory name for an indexer) to types.
+  std::map<std::string, type> types;
+  bool dirty = false;
+};
+
+/// @relates partition_meta_data
+template <class Inspector>
+auto inspect(Inspector& f, partition_meta_data& x) {
+  return f(x.types);
+}
+
+/// @relates partition
 struct partition_state {
   std::unordered_map<type, caf::actor> indexers;
+  partition_meta_data meta_data;
   static inline const char* name = "partition";
 };
 
@@ -37,4 +51,3 @@ caf::behavior partition(caf::stateful_actor<partition_state>* self, path dir);
 
 } // namespace vast::system
 
-#endif

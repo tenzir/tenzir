@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_LOGGER_HPP
-#define VAST_LOGGER_HPP
+#pragma once
 
 #include <sstream>
 #include <type_traits>
@@ -41,13 +40,17 @@ struct formatter {
     static constexpr auto value = type::value;
   };
 
+  template <class Stream, class T>
+  static inline constexpr bool is_streamable_v
+    = is_streamable<Stream, T>::value;
+
   template <class T>
   formatter& operator<<(const T& x) {
-    if constexpr (is_streamable<std::ostringstream, T>::value) {
+    if constexpr (is_streamable_v<std::ostringstream, T>) {
       message << x;
       return *this;
-    } else if constexpr (vast::is_printable<std::ostreambuf_iterator<char>,
-                                            T>::value) {
+    } else if constexpr (vast::is_printable_v<std::ostreambuf_iterator<char>,
+                                              T>) {
       using vast::print;
       if (!print(std::ostreambuf_iterator<char>{message}, x))
         message.setstate(std::ios_base::failbit);
@@ -155,4 +158,3 @@ struct formatter {
   #define VAST_TRACE(...) CAF_VOID_STMT
 #endif
 
-#endif

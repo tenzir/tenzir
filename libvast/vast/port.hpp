@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_PORT_HPP
-#define VAST_PORT_HPP
+#pragma once
 
 #include <cstdint>
 
@@ -74,4 +73,3 @@ bool convert(const port& p, json& j);
 
 } // namespace vast
 
-#endif

@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_JSON_HPP
-#define VAST_JSON_HPP
+#pragma once
 
 #include <string>
 #include <vector>
@@ -50,22 +49,22 @@ public:
   /// If conversion is impossible it returns `std::false_type`.
   template <class T>
   using json_value = std::conditional_t<
-    std::is_same<T, none>::value,
+    std::is_same_v<T, none>,
     null,
     std::conditional_t<
-      std::is_same<T, bool>::value,
+      std::is_same_v<T, bool>,
       boolean,
       std::conditional_t<
-        std::is_convertible<T, number>::value,
+        std::is_convertible_v<T, number>,
         number,
         std::conditional_t<
-          std::is_convertible<T, std::string>::value,
+          std::is_convertible_v<T, std::string>,
           string,
           std::conditional_t<
-            std::is_same<T, array>::value,
+            std::is_same_v<T, array>,
             array,
             std::conditional_t<
-              std::is_same<T, object>::value,
+              std::is_same_v<T, object>,
               object,
               std::false_type
             >
@@ -116,7 +115,7 @@ public:
   template <
     class T,
     class =
-      std::enable_if_t<!std::is_same<std::false_type, jsonize<T>>::value>
+      std::enable_if_t<!std::is_same_v<std::false_type, jsonize<T>>>
   >
   json(T&& x)
     : value_(jsonize<T>(std::forward<T>(x))) {
@@ -182,7 +181,7 @@ inline bool convert(bool b, json& j) {
 
 template <class T>
 bool convert(T x, json& j) {
-  if constexpr (std::is_arithmetic<T>::value) {
+  if constexpr (std::is_arithmetic_v<T>) {
     j = json::number(x);
     return true;
   } else if constexpr (std::is_convertible_v<T, std::string>) {
@@ -231,4 +230,3 @@ json to_json(const T& x, Opts&&... opts) {
 
 } // namespace vast
 
-#endif // VAST_JSON_HPP

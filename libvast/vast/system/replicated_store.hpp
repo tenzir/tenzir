@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_SYSTEM_REPLICATED_STORE_HPP
-#define VAST_SYSTEM_REPLICATED_STORE_HPP
+#pragma once
 
 #include <cstdint>
 #include <vector>
@@ -294,4 +293,3 @@ replicated_store(
 
 } // namespace vast::system
 
-#endif

@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PARSEABLE_NUMERIC_REAL_HPP
-#define VAST_CONCEPT_PARSEABLE_NUMERIC_REAL_HPP
+#pragma once
 
 #include <cmath>
 #include <limits>
@@ -115,7 +114,7 @@ struct real_parser : parser<real_parser<T, Policies...>> {
 };
 
 template <class T>
-struct parser_registry<T, std::enable_if_t<std::is_floating_point<T>::value>> {
+struct parser_registry<T, std::enable_if_t<std::is_floating_point_v<T>>> {
   using type = real_parser<T, policy::require_dot>;
 };
 
@@ -129,4 +128,3 @@ auto const real_opt_dot = real_parser<double, policy::optional_dot>{};
 } // namespace parsers
 } // namespace vast
 
-#endif

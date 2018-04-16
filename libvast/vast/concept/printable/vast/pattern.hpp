@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PRINTABLE_VAST_PATTERN_HPP
-#define VAST_CONCEPT_PRINTABLE_VAST_PATTERN_HPP
+#pragma once
 
 #include "vast/access.hpp"
 #include "vast/pattern.hpp"
@@ -41,4 +40,3 @@ struct printer_registry<pattern> {
 
 } // namespace vast
 
-#endif

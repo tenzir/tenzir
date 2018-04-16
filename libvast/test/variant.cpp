@@ -165,7 +165,7 @@ TEST(overload visitation) {
 TEST(reference returning) {
   int i = 42;
   auto& j = visit(referencer{&i}, t0);
-  static_assert(std::is_same<decltype(referencer{nullptr}(42)), int&>::value,
+  static_assert(std::is_same_v<decltype(referencer{nullptr}(42)), int&>,
                 "visitation is not able to return a reference");
   CHECK_EQUAL(i, j); // pro forma
 }

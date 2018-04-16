@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PRINTABLE_TO_STRING_HPP
-#define VAST_CONCEPT_PRINTABLE_TO_STRING_HPP
+#pragma once
 
 #include <string>
 #include <type_traits>
@@ -24,9 +23,9 @@ namespace vast {
 template <class From, class... Opts>
 auto to_string(From&& from, Opts&&... opts)
   -> std::enable_if_t<
-       is_printable<
+       is_printable_v<
           std::back_insert_iterator<std::string>, std::decay_t<From>
-        >{},
+        >,
        std::string
      > {
   std::string str;
@@ -36,4 +35,3 @@ auto to_string(From&& from, Opts&&... opts)
 
 } // namespace vast
 
-#endif

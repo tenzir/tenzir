@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_DETAIL_STEADY_SET_HPP
-#define VAST_DETAIL_STEADY_SET_HPP
+#pragma once
 
 #include <algorithm>
 #include <functional>
@@ -45,4 +44,3 @@ using steady_set = vector_set<T, Allocator, steady_set_policy>;
 
 } // namespace vast::detail
 
-#endif

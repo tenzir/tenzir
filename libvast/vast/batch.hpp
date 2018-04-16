@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_BATCH_HPP
-#define VAST_BATCH_HPP
+#pragma once
 
 #include <cstdint>
 #include <unordered_map>
@@ -55,7 +54,7 @@ public:
   /// @param end The ID one past the last ID in the batch.
   /// @returns `true` if *[begin,end)* is a valid event ID sequence, i.e.,
   ///          `end - begin == events()`
-  bool ids(event_id begin, event_id end);
+  bool ids(id begin, id end);
 
   /// Assigns event IDs to the batch.
   /// @param bm The bitmap representing the IDs for the events in this batch.
@@ -136,4 +135,3 @@ private:
 
 } // namespace vast
 
-#endif

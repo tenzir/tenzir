@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PRINTABLE_STREAM_HPP
-#define VAST_CONCEPT_PRINTABLE_STREAM_HPP
+#pragma once
 
 #include <ostream>
 #include <type_traits>
@@ -24,7 +23,7 @@ namespace vast {
 template <class Char, class Traits, class T>
 auto operator<<(std::basic_ostream<Char, Traits>& out, const T& x)
   -> std::enable_if_t<
-       is_printable<std::ostreambuf_iterator<Char>, T>::value, decltype(out)
+       is_printable_v<std::ostreambuf_iterator<Char>, T>, decltype(out)
      > {
   using vast::print; // enable ADL
   if (!print(std::ostreambuf_iterator<Char>{out}, x))
@@ -34,4 +33,3 @@ auto operator<<(std::basic_ostream<Char, Traits>& out, const T& x)
 
 } // namespace vast
 
-#endif

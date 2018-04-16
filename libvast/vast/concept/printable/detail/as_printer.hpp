@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PRINTABLE_DETAIL_AS_PRINTER_HPP
-#define VAST_CONCEPT_PRINTABLE_DETAIL_AS_PRINTER_HPP
+#pragma once
 
 #include <string>
 
@@ -42,35 +41,36 @@ inline auto as_printer(std::string str) {
 template <class T>
 auto as_printer(T x)
 -> std::enable_if_t<
-     std::is_arithmetic<T>{} && !std::is_same<T, bool>::value,
+     std::is_arithmetic_v<T> && !std::is_same_v<T, bool>,
      literal_printer
    > {
   return literal_printer{x};
 }
 
 template <class T>
-auto as_printer(T x) -> std::enable_if_t<is_printer<T>{}, T> {
+auto as_printer(T x) -> std::enable_if_t<is_printer_v<T>, T> {
   return x; // A good compiler will elide the copy.
 }
 
 // -- binary ------------------------------------------------------------------
 
 template <class T>
-using is_convertible_to_unary_printer =
-  std::integral_constant<
-    bool,
-    std::is_convertible<T, std::string>{}
-    || (std::is_arithmetic<T>{} && !std::is_same<T, bool>::value)
-  >;
+inline constexpr bool is_convertible_to_unary_printer_v =
+  std::is_convertible_v<T, std::string>
+  || (std::is_arithmetic_v<T> && !std::is_same_v<T, bool>);
 
 template <class T, class U>
 using is_convertible_to_binary_printer =
   std::integral_constant<
     bool,
-    (is_printer<T>{} && is_printer<U>{})
-    || (is_printer<T>{} && is_convertible_to_unary_printer<U>{})
-    || (is_convertible_to_unary_printer<T>{} && is_printer<U>{})
+    (is_printer_v<T> && is_printer_v<U>)
+    || (is_printer_v<T> && is_convertible_to_unary_printer_v<U>)
+    || (is_convertible_to_unary_printer_v<T> && is_printer_v<U>)
   >;
+
+template <class T, class U>
+inline constexpr bool is_convertible_to_binary_printer_v
+  = is_convertible_to_binary_printer<T, U>::value;
 
 template <
   template <class, class> class Binaryprinter,
@@ -79,13 +79,13 @@ template <
 >
 using make_binary_printer =
   std::conditional_t<
-    is_printer<T>{} && is_printer<U>{},
+    is_printer_v<T> && is_printer_v<U>,
     Binaryprinter<T, U>,
     std::conditional_t<
-      is_printer<T>{} && is_convertible_to_unary_printer<U>{},
+      is_printer_v<T> && is_convertible_to_unary_printer_v<U>,
       Binaryprinter<T, decltype(as_printer(std::declval<U>()))>,
       std::conditional_t<
-        is_convertible_to_unary_printer<T>{} && is_printer<U>{},
+        is_convertible_to_unary_printer_v<T> && is_printer_v<U>,
         Binaryprinter<decltype(as_printer(std::declval<T>())), U>,
         std::false_type
       >
@@ -99,7 +99,7 @@ template <
 >
 auto as_printer(T&& x, U&& y)
   -> std::enable_if_t<
-       is_convertible_to_binary_printer<std::decay_t<T>, std::decay_t<U>>{},
+       is_convertible_to_binary_printer_v<std::decay_t<T>, std::decay_t<U>>,
        make_binary_printer<
          Binaryprinter,
          decltype(as_printer(std::forward<T>(x))),
@@ -112,5 +112,4 @@ auto as_printer(T&& x, U&& y)
 } // namespace detail
 } // namespace vast
 
-#endif
 

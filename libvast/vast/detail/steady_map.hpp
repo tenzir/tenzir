@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_DETAIL_STEADY_MAP_HPP
-#define VAST_DETAIL_STEADY_MAP_HPP
+#pragma once
 
 #include "vast/detail/vector_map.hpp"
 
@@ -45,4 +44,3 @@ using steady_map = vector_map<Key, T, Allocator, steady_map_policy>;
 
 } // namespace vast::detail
 
-#endif

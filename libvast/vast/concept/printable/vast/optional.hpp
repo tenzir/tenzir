@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PRINTABLE_VAST_OPTIONAL_HPP
-#define VAST_CONCEPT_PRINTABLE_VAST_OPTIONAL_HPP
+#pragma once
 
 #include "vast/error.hpp"
 #include "vast/concept/printable/core/printer.hpp"
@@ -40,4 +39,3 @@ struct printer_registry<optional<T>, std::enable_if_t<has_printer<T>{}>> {
 
 } // namespace vast
 
-#endif

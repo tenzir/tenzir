@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef FIXTURES_EVENTS_HPP
-#define FIXTURES_EVENTS_HPP
+#pragma once
 
 #include <caf/all.hpp>
 
@@ -61,4 +60,3 @@ private:
 
 } // namespace fixtures
 
-#endif

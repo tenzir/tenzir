@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_FORMAT_PCAP_HPP
-#define VAST_FORMAT_PCAP_HPP
+#pragma once
 
 #include <pcap.h>
 
@@ -156,4 +155,3 @@ private:
 } // namespace format
 } // namespace vast
 
-#endif

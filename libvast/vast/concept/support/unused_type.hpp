@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_SUPPORT_UNUSED_TYPE_HPP
-#define VAST_CONCEPT_SUPPORT_UNUSED_TYPE_HPP
+#pragma once
 
 #include "vast/detail/operators.hpp"
 
@@ -83,4 +82,3 @@ inline bool operator==(unused_type, unused_type) {
 
 } // namespace vast
 
-#endif

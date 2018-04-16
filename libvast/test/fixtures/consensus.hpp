@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef FIXTURES_CONSENSUS_HPP
-#define FIXTURES_CONSENSUS_HPP
+#pragma once
 
 #include "vast/system/atoms.hpp"
 #include "vast/system/consensus.hpp"
@@ -103,4 +102,3 @@ struct consensus : actor_system {
 
 } // namespace fixtures
 
-#endif

@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_CONVERTIBLE_IS_CONVERTIBLE_HPP
-#define VAST_CONCEPT_CONVERTIBLE_IS_CONVERTIBLE_HPP
+#pragma once
 
 #include <type_traits>
 
@@ -37,4 +36,3 @@ struct is_convertible
 
 } // namespace vast
 
-#endif

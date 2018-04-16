@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_ALIASES_HPP
-#define VAST_ALIASES_HPP
+#pragma once
 
 #include <cstdint>
 #include <limits>
@@ -47,16 +46,16 @@ class ewah_bitstream;
 using default_bitstream = ewah_bitstream;
 
 /// Uniquely identifies a VAST event.
-using event_id = uint64_t;
+using id = uint64_t;
 
 /// The ID for invalid events
-constexpr event_id invalid_event_id = std::numeric_limits<event_id>::max();
+constexpr id invalid_id = std::numeric_limits<id>::max();
 
 /// The largest possible event ID.
-constexpr event_id max_event_id = invalid_event_id - 1;
+constexpr id max_id = invalid_id - 1;
 
 /// The largest number of representable events.
-constexpr event_id max_events = max_event_id + 1;
+constexpr id max_events = max_id + 1;
 
 /// Uniquely identifies a VAST type.
 using type_id = uint64_t;
@@ -66,4 +65,3 @@ using enumeration = uint32_t;
 
 } // namespace vast
 
-#endif

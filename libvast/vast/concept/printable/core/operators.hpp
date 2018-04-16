@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_CONCEPT_PRINTABLE_CORE_OPERATORS_HPP
-#define VAST_CONCEPT_PRINTABLE_CORE_OPERATORS_HPP
+#pragma once
 
 #include <type_traits>
 
@@ -52,7 +51,7 @@ class choice_printer;
 template <class T>
 auto operator&(T&& x)
 -> std::enable_if_t<
-     is_printer<std::decay_t<T>>{},
+     is_printer_v<std::decay_t<T>>,
      and_printer<std::decay_t<T>>
    > {
   return and_printer<std::decay_t<T>>{std::forward<T>(x)};
@@ -61,7 +60,7 @@ auto operator&(T&& x)
 template <class T>
 auto operator!(T&& x)
 -> std::enable_if_t<
-     is_printer<std::decay_t<T>>{},
+     is_printer_v<std::decay_t<T>>,
      not_printer<std::decay_t<T>>
    > {
   return not_printer<std::decay_t<T>>{std::forward<T>(x)};
@@ -70,7 +69,7 @@ auto operator!(T&& x)
 template <class T>
 auto operator-(T&& x)
 -> std::enable_if_t<
-     is_printer<std::decay_t<T>>{},
+     is_printer_v<std::decay_t<T>>,
      optional_printer<std::decay_t<T>>
    > {
   return optional_printer<std::decay_t<T>>{std::forward<T>(x)};
@@ -79,7 +78,7 @@ auto operator-(T&& x)
 template <class T>
 auto operator*(T&& x)
 -> std::enable_if_t<
-     is_printer<std::decay_t<T>>{},
+     is_printer_v<std::decay_t<T>>,
      kleene_printer<std::decay_t<T>>
    > {
   return kleene_printer<std::decay_t<T>>{std::forward<T>(x)};
@@ -88,7 +87,7 @@ auto operator*(T&& x)
 template <class T>
 auto operator+(T&& x)
 -> std::enable_if_t<
-     is_printer<std::decay_t<T>>{},
+     is_printer_v<std::decay_t<T>>,
      plus_printer<std::decay_t<T>>
    > {
   return plus_printer<std::decay_t<T>>{std::forward<T>(x)};
@@ -97,7 +96,7 @@ auto operator+(T&& x)
 template <class T>
 auto operator~(T&& x)
 -> std::enable_if_t<
-     is_printer<std::decay_t<T>>{},
+     is_printer_v<std::decay_t<T>>,
      maybe_printer<std::decay_t<T>>
    > {
   return maybe_printer<std::decay_t<T>>{std::forward<T>(x)};
@@ -128,4 +127,3 @@ auto operator|(LHS&& lhs, RHS&& rhs)
 
 } // namespace vast
 
-#endif

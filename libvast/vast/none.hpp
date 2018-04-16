@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_NONE_HPP
-#define VAST_NONE_HPP
+#pragma once
 
 #include <caf/none.hpp>
 
@@ -26,4 +25,3 @@ constexpr auto nil = caf::none;
 
 } // namespace vast
 
-#endif

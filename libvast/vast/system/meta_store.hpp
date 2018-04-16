@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_SYSTEM_META_STORE_HPP
-#define VAST_SYSTEM_META_STORE_HPP
+#pragma once
 
 #include "vast/data.hpp"
 
@@ -24,4 +23,3 @@ using meta_store_type = key_value_store_type<std::string, data>;
 
 } // namespace vast::system
 
-#endif

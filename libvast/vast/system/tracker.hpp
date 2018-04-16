@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_SYSTEM_TRACKER_HPP
-#define VAST_SYSTEM_TRACKER_HPP
+#pragma once
 
 #include <unordered_set>
 #include <unordered_map>
@@ -95,4 +94,3 @@ tracker(tracker_type::stateful_pointer<tracker_state> self, std::string node);
 
 } // namespace vast::system
 
-#endif

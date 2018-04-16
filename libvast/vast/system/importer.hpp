@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_SYSTEM_IMPORTER_HPP
-#define VAST_SYSTEM_IMPORTER_HPP
+#pragma once
 
 #include <chrono>
 #include <vector>
@@ -35,8 +34,8 @@ struct importer_state {
   meta_store_type meta_store;
   caf::actor archive;
   caf::actor index;
-  event_id next = 0;
-  event_id available = 0;
+  id next = 0;
+  id available = 0;
   size_t batch_size;
   std::chrono::steady_clock::time_point last_replenish;
   std::vector<event> remainder;
@@ -54,4 +53,3 @@ caf::behavior importer(caf::stateful_actor<importer_state>* self,
 
 } // namespace vast::system
 
-#endif

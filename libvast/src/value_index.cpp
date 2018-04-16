@@ -155,14 +155,14 @@ expected<void> value_index::push_back(const data& x) {
   return {};
 }
 
-expected<void> value_index::push_back(const data& x, event_id id) {
+expected<void> value_index::push_back(const data& x, id pos) { 
   auto off = offset();
-  if (id < off)
-    // Can only append at the end.
-    return make_error(ec::unspecified, id, '<', off);
-  if (id == off)
+  if (pos < off)
+    // Can only append at the end
+    return make_error(ec::unspecified, pos, '<', off);
+  if (pos == off)
     return push_back(x);
-  auto skip = id - off;
+  auto skip = pos - off;
   if (is<none>(x)) {
     none_.append_bits(false, skip);
     none_.append_bit(true);

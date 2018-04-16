@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_BITSTREAM_POLYMORPHIC_HPP
-#define VAST_BITSTREAM_POLYMORPHIC_HPP
+#pragma once
 
 #include "vast/bitstream.hpp"
 #include "vast/die.hpp"
@@ -349,4 +348,3 @@ private:
 
 } // namespace vast
 
-#endif
