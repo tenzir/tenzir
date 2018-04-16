@@ -34,7 +34,6 @@ expected<std::shared_ptr<arrow::RecordBatch>> transpose(const event& e) {
     }
   } else if (is<vector_type>(e.type())) {
     vector_type v = get<vector_type>(e.type());
-    std::cout << "BLA  " <<  v.name() << "\n" << to_string(e.data()) << std::endl;
     /*
     for (auto& e : v) {
       schema_vector.push_back(convert_to_arrow_field(e.type()));
@@ -147,6 +146,12 @@ result_type convert_visitor::operator()(const vector_type& t) {
     convert_to_arrow_field(t.value_type) 
   };
   return ::arrow::field("vector", std::make_shared<::arrow::StructType>(schema_vector));
+}
+result_type convert_visitor::operator()(const set_type& t) {
+  std::vector<result_type> schema_vector = {
+    convert_to_arrow_field(t.value_type) 
+  };
+  return ::arrow::field("set", std::make_shared<::arrow::StructType>(schema_vector));
 }
 insert_visitor::insert_visitor(std::shared_ptr<::arrow::RecordBatchBuilder>& b)
     : rbuilder(b) {
@@ -301,28 +306,11 @@ insert_visitor::insert_visitor(std::shared_ptr<::arrow::RecordBatchBuilder>& b,
   return sbuilder->AppendNull();
 }
 ::arrow::Status insert_visitor::operator()(const set_type& t, const set& d) {
-  /*
-  auto structBuilder = rbuilder->GetFieldAs<::arrow::StructBuilder>(0);
-  u_int64_t offset = 0;
-  // no test data with not emty set available
+  std::cout << to_string(d) << std::endl;
+  auto structBuilder = rbuilder->GetFieldAs<::arrow::StructBuilder>(c_builder);
   for (auto e : d) {
-    auto b = structBuilder->field_builder(counter + offset);
-    format::arrow::insert_visitor a(*b, counter);
-    a.rbuilder = this->rbuilder;
-    auto status = visit(a, t.value_type, e);
-    if (!status.ok()) {
-      return status;
-    }
-    if (is<record_type>(t.value_type) && is<std::vector<data>>(e)) {
-      auto data_v = get<std::vector<data>>(e);
-      offset += data_v.size() - 1;
-    }
-    counter++;
   }
-  return structBuilder->Append(true);
-  */
-  auto builder = rbuilder->GetFieldAs<::arrow::NullBuilder>(c_builder);
-  return builder->AppendNull();
+  return structBuilder->;
 }
 ::arrow::Status insert_visitor::operator()(const set_type&, const none&) {
   auto structBuilder = rbuilder->GetFieldAs<::arrow::StructBuilder>(c_builder);
@@ -370,12 +358,10 @@ expected<void> writer::write(const std::vector<event>& xs) {
 
 expected<void> writer::write(const std::vector<event>& xs,
                              std::vector<plasma::ObjectID>& oids) {
-  std::cout << "Size " << xs.size() << std::endl;
   if (!connected())
     return make_error(ec::format_error, "not connected to plasma store");
   for (auto e : xs) {
     auto record_batch = transpose(e);
-    std::cout << to_string(e.type()) << "\n" << to_string(e.data()) << std::endl;
     if (!record_batch)
       return make_error(ec::format_error, "failed to transpose events");
     auto buf = write_to_buffer(*record_batch);

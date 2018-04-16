@@ -72,6 +72,7 @@ struct convert_visitor {
   result_type operator()(const timespan_type&);
   result_type operator()(const timestamp_type&);
   result_type operator()(const vector_type& t);
+  result_type operator()(const set_type& t);
   template <class T>
   result_type operator()(const T& t) {
     std::cout << "NONE: " << typeid(t).name() << std::endl;
