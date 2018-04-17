@@ -88,7 +88,7 @@ public:
 
   /// Defines a sub-command.
   /// @param name The name of the command.
-  /// @param xs A number of optional parameters required to create the command.
+  /// @param xs The parameters required to construct the command.
   template <class T, class... Ts>
   T* add(std::string_view name, Ts&&... xs) {
     auto ptr = std::make_unique<T>(this, name, std::forward<Ts>(xs)...);
