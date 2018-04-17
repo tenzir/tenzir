@@ -42,9 +42,8 @@ start_command::start_command(command* parent, std::string_view name)
 }
 
 int start_command::run_impl(actor_system& sys, option_map& options,
-                        caf::message args) {
-  CAF_IGNORE_UNUSED(args);
-  CAF_LOG_TRACE(CAF_ARG(options) << CAF_ARG(args));
+                        const_iterator, const_iterator) {
+  CAF_LOG_TRACE(CAF_ARG(options));
   // Fetch SSL settings from config.
   auto& sys_cfg = sys.config();
   auto use_encryption = !sys_cfg.openssl_certificate.empty()

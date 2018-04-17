@@ -40,13 +40,14 @@
 namespace vast::system {
 
 int reader_command_base::run_impl(caf::actor_system& sys, option_map& options,
-                                  caf::message args) {
+                                  const_iterator args_begin,
+                                  const_iterator args_end) {
   using namespace caf;
   using namespace std::chrono_literals;
   // Helper for blocking actor communication.
   scoped_actor self{sys};
   // Spawn the source.
-  auto src_opt = make_source(self, std::move(args));
+  auto src_opt = make_source(self, args_begin, args_end);
   if (!src_opt) {
     std::cerr << "unable to spawn source: " << sys.render(src_opt.error())
               << std::endl;

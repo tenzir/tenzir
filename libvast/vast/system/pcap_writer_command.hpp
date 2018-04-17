@@ -51,7 +51,8 @@ public:
 
 protected:
   expected<caf::actor> make_sink(caf::scoped_actor& self, option_map& options,
-                                 caf::message args) override;
+                                 const_iterator args_begin,
+                                 const_iterator args_end) override;
 
 private:
   std::string output_;

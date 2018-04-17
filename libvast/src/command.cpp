@@ -37,6 +37,7 @@ int command::run(caf::actor_system& sys, option_map& options,
   // Split the arguments.
   auto args = caf::message_builder{args_begin, args_end}.move_to_message();
   auto [local_args, subcmd, subcmd_args, consumed_args] = separate_args(args);
+  // Note: ???????Consumed arguments 
   args_begin += consumed_args;
   // Parse arguments for this command.
   auto res = local_args.extract_opts(opts_);
@@ -66,12 +67,11 @@ int command::run(caf::actor_system& sys, option_map& options,
   // Invoke run_impl if no subcommand was defined.
   if (subcmd.empty()) {
     VAST_ASSERT(subcmd_args.empty());
-    return run_impl(sys, options, caf::make_message());
+    return run_impl(sys, options, args_begin, args_end);
   }
   // Consume CLI arguments if we have arguments but don't have subcommands.
   if (nested_.empty()) {
-    return run_impl(sys, options,
-                    caf::make_message(std::move(subcmd)) + subcmd_args);
+    return run_impl(sys, options, args_begin, args_end);
   }
   // Dispatch to subcommand.
   auto i = nested_.find(subcmd);
@@ -82,7 +82,7 @@ int command::run(caf::actor_system& sys, option_map& options,
     usage();
     return EXIT_FAILURE;
   }
-  return i->second->run(sys, options, args_begin, args_end);
+  return i->second->run(sys, options, args_begin + 1, args_end);
 }
 
 int command::run(caf::actor_system& sys, const_iterator args_begin,
@@ -123,10 +123,9 @@ command::proceed_result command::proceed(caf::actor_system&,
 }
 
 int command::run_impl(caf::actor_system&, option_map& options,
-                      caf::message args) {
-  CAF_LOG_TRACE(CAF_ARG(options) << CAF_ARG(args));
+                      const_iterator, const_iterator) {
+  CAF_LOG_TRACE(CAF_ARG(options));
   CAF_IGNORE_UNUSED(options);
-  CAF_IGNORE_UNUSED(args);
   usage();
   return EXIT_FAILURE;
 }
@@ -150,7 +149,7 @@ command::separate_args(const caf::message& args) {
     } else {
       // Found the end of the options list.
       return std::make_tuple(args.take(pos), arg(pos), args.drop(pos+ 1),
-                             pos + 1);
+                             pos);
     }
   }
   return std::make_tuple(args, "", caf::none, args.size());

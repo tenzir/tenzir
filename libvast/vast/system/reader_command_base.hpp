@@ -44,11 +44,12 @@ public:
   using node_command::node_command;
 
 protected:
-  int run_impl(caf::actor_system& sys, option_map& options,
-               caf::message args) override;
+  int run_impl(caf::actor_system& sys, option_map& options, const_iterator,
+               const_iterator) override;
 
   virtual expected<caf::actor> make_source(caf::scoped_actor& self,
-                                           caf::message args) = 0;
+                                           const_iterator args_begin,
+                                           const_iterator args_end) = 0;
 };
 
 } // namespace vast::system

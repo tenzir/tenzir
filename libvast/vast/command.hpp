@@ -143,7 +143,7 @@ protected:
                                  const_iterator args_end);
 
   virtual int run_impl(caf::actor_system& sys, option_map& options,
-                       caf::message args);
+                       const_iterator args_begin, const_iterator args_end);
 
   template <class T>
   void add_opt(std::string name, std::string descr, T& ref) {

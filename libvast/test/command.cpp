@@ -36,7 +36,8 @@ public:
     return proceed_ok;
   }
 
-  int run_impl(caf::actor_system&, option_map&, caf::message) override {
+  int run_impl(caf::actor_system&, option_map&, const_iterator,
+               const_iterator) override {
     was_executed = true;
     return EXIT_SUCCESS;
   }
@@ -59,14 +60,19 @@ public:
     return proceed_ok;
   }
 
-  int run_impl(caf::actor_system&, option_map&, caf::message) override {
+  int run_impl(caf::actor_system&, option_map&, const_iterator args_begin,
+               const_iterator args_end) override {
     was_executed = true;
+    begin = args_begin;
+    end = args_end;
     return EXIT_SUCCESS;
   }
 
   int other_value = 0;
   bool tested_proceed = false;
   bool was_executed = false;
+  const_iterator begin;
+  const_iterator end;
 };
 
 struct fixture {
@@ -74,8 +80,8 @@ struct fixture {
   caf::actor_system_config cfg;
   caf::actor_system sys{cfg};
   command::option_map options;
+  std::vector<std::string> xs;
   int exec(std::string str) {
-    std::vector<std::string> xs;
     caf::split(xs, str, ' ', caf::token_compress_on);
     return root.run(sys, options, xs.begin(), xs.end());
   }
@@ -121,15 +127,21 @@ TEST(parsing both) {
 TEST(nested arg parsing) {
   auto cmd1 = root.add<foo>("foo");
   auto cmd2 = cmd1->add<bar>("bar");
-  exec("foo -v 42 bar -o 123");
+  exec("foo -v 42 bar -o 123 '--this should not -be parsed ! x'");
   CHECK_EQUAL(cmd1->value, 42);
   CHECK_EQUAL(cmd2->other_value, 123);
+  CHECK_EQUAL(caf::deep_to_string(options),
+              R"([("flag", false), ("other-value", 123), ("value", 42)])");
   CHECK_EQUAL(cmd1->tested_proceed, true);
   CHECK_EQUAL(cmd1->was_executed, false);
   CHECK_EQUAL(cmd2->tested_proceed, true);
-  CHECK_EQUAL(cmd2->was_executed, true);
-  CHECK_EQUAL(caf::deep_to_string(options),
-              R"([("flag", false), ("other-value", 123), ("value", 42)])");
+  REQUIRE(cmd2->was_executed);
+  std::string str;
+  if (cmd2->begin != cmd2->end)
+    str = std::accumulate(
+      std::next(cmd2->begin), cmd2->end, *cmd2->begin,
+      [](std::string a, const std::string& b) { return a += ' ' + b; });
+  CHECK_EQUAL(str, "'--this should not -be parsed ! x'");
 }
 
 FIXTURE_SCOPE_END()
