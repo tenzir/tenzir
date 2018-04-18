@@ -172,7 +172,7 @@ protected:
 private:
   /// Separates arguments into the arguments for the current command, the name
   /// of the subcommand, and the arguments for the subcommand.
-  std::tuple<caf::message, std::string, caf::message, size_t>
+  std::tuple<caf::message, std::string, caf::message>
   separate_args(const caf::message& args);
 
   std::map<std::string_view, std::unique_ptr<command>> nested_;

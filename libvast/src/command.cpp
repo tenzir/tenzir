@@ -36,9 +36,8 @@ int command::run(caf::actor_system& sys, option_map& options,
   CAF_LOG_TRACE(CAF_ARG(options));
   // Split the arguments.
   auto args = caf::message_builder{args_begin, args_end}.move_to_message();
-  auto [local_args, subcmd, subcmd_args, consumed_args] = separate_args(args);
-  // Note: ???????Consumed arguments 
-  args_begin += consumed_args;
+  auto [local_args, subcmd, subcmd_args] = separate_args(args);
+  args_begin += local_args.size();
   // Parse arguments for this command.
   auto res = local_args.extract_opts(opts_);
   if (res.opts.count("help") != 0) {
@@ -130,7 +129,7 @@ int command::run_impl(caf::actor_system&, option_map& options,
   return EXIT_FAILURE;
 }
 
-std::tuple<caf::message, std::string, caf::message, size_t>
+std::tuple<caf::message, std::string, caf::message>
 command::separate_args(const caf::message& args) {
   auto arg = [&](size_t i) -> const std::string& {
     VAST_ASSERT(args.match_element<std::string>(i));
@@ -148,11 +147,10 @@ command::separate_args(const caf::message& args) {
       pos += 2;
     } else {
       // Found the end of the options list.
-      return std::make_tuple(args.take(pos), arg(pos), args.drop(pos+ 1),
-                             pos);
+      return std::make_tuple(args.take(pos), arg(pos), args.drop(pos+ 1));
     }
   }
-  return std::make_tuple(args, "", caf::none, args.size());
+  return std::make_tuple(args, "", caf::none);
 }
 
 } // namespace vast
