@@ -30,15 +30,20 @@ public:
     add_opt("flag", "Some flag", flag);
   }
 
-  proceed_result proceed(caf::actor_system&, option_map&, const_iterator,
-                         const_iterator) override {
+  proceed_result proceed(caf::actor_system&, option_map&,
+                         const_iterator args_begin,
+                         const_iterator args_end) override {
     tested_proceed = true;
+    proceed_begin = args_begin;
+    proceed_end = args_end;
     return proceed_ok;
   }
 
-  int run_impl(caf::actor_system&, option_map&, const_iterator,
-               const_iterator) override {
+  int run_impl(caf::actor_system&, option_map&, const_iterator args_begin,
+               const_iterator args_end) override {
     was_executed = true;
+    run_begin = args_begin;
+    run_end = args_end;
     return EXIT_SUCCESS;
   }
 
@@ -46,6 +51,10 @@ public:
   bool flag = false;
   bool tested_proceed = false;
   bool was_executed = false;
+  const_iterator proceed_begin;
+  const_iterator proceed_end;
+  const_iterator run_begin;
+  const_iterator run_end;
 };
 
 class bar : public command {
@@ -54,25 +63,30 @@ public:
     add_opt("other-value,o", "Some other integer value", other_value);
   }
 
-  proceed_result proceed(caf::actor_system&, option_map&, const_iterator,
-                         const_iterator) override {
+  proceed_result proceed(caf::actor_system&, option_map&,
+                         const_iterator args_begin,
+                         const_iterator args_end) override {
     tested_proceed = true;
+    proceed_begin = args_begin;
+    proceed_end = args_end;
     return proceed_ok;
   }
 
   int run_impl(caf::actor_system&, option_map&, const_iterator args_begin,
                const_iterator args_end) override {
     was_executed = true;
-    begin = args_begin;
-    end = args_end;
+    run_begin = args_begin;
+    run_end = args_end;
     return EXIT_SUCCESS;
   }
 
   int other_value = 0;
   bool tested_proceed = false;
   bool was_executed = false;
-  const_iterator begin;
-  const_iterator end;
+  const_iterator proceed_begin;
+  const_iterator proceed_end;
+  const_iterator run_begin;
+  const_iterator run_end;
 };
 
 struct fixture {
@@ -127,19 +141,27 @@ TEST(parsing both) {
 TEST(nested arg parsing) {
   auto cmd1 = root.add<foo>("foo");
   auto cmd2 = cmd1->add<bar>("bar");
-  exec("foo -v 42 bar -o 123 '--this should not -be parsed ! x'");
+  exec("foo -v 42 bar -o 123");
   CHECK_EQUAL(cmd1->value, 42);
   CHECK_EQUAL(cmd2->other_value, 123);
   CHECK_EQUAL(caf::deep_to_string(options),
               R"([("flag", false), ("other-value", 123), ("value", 42)])");
+}
+
+TEST(parsing arg remainder) {
+  auto cmd1 = root.add<foo>("foo");
+  auto cmd2 = cmd1->add<bar>("bar");
+  exec("foo -v 42 bar -o 123 '--this should not -be parsed ! x'");
   CHECK_EQUAL(cmd1->tested_proceed, true);
   CHECK_EQUAL(cmd1->was_executed, false);
   CHECK_EQUAL(cmd2->tested_proceed, true);
   REQUIRE(cmd2->was_executed);
+  CHECK_EQUAL(cmd2->proceed_begin, cmd2->run_begin);
+  CHECK_EQUAL(cmd2->proceed_end, cmd2->run_end);
   std::string str;
-  if (cmd2->begin != cmd2->end)
+  if (cmd2->run_begin != cmd2->run_end)
     str = std::accumulate(
-      std::next(cmd2->begin), cmd2->end, *cmd2->begin,
+      std::next(cmd2->run_begin), cmd2->run_end, *cmd2->run_begin,
       [](std::string a, const std::string& b) { return a += ' ' + b; });
   CHECK_EQUAL(str, "'--this should not -be parsed ! x'");
 }
