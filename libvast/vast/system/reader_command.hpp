@@ -56,8 +56,8 @@ public:
 
 protected:
   expected<caf::actor> make_source(caf::scoped_actor& self,
-                                   const_iterator args_begin,
-                                   const_iterator args_end) override {
+                                   argument_iterator begin,
+                                   argument_iterator end) override {
     CAF_LOG_TRACE();
     auto in = detail::make_input_stream(input_, uds_);
     if (!in)
@@ -76,9 +76,9 @@ protected:
       anon_send(src, put_atom::value, std::move(*sch));
     }
     // Attempt to parse the remainder as an expression.
-    if (args_begin != args_end) {
+    if (begin != end) {
       auto str = std::accumulate(
-        std::next(args_begin), args_end, *args_begin,
+        std::next(begin), end, *begin,
         [](std::string a, const std::string& b) { return a += ' ' + b; });
       auto expr = to<expression>(str);
       if (!expr)

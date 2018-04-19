@@ -51,8 +51,8 @@ public:
 
 protected:
   expected<caf::actor> make_source(caf::scoped_actor& self,
-                                   const_iterator args_begin,
-                                   const_iterator args_end) override;
+                                   argument_iterator begin,
+                                   argument_iterator end) override;
 
 private:
   std::string input;

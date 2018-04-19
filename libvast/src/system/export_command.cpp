@@ -43,8 +43,8 @@ export_command::export_command(command* parent, std::string_view name)
   add_opt("events,e", "maximum number of results", max_events_);
 }
 
-int export_command::run_impl(actor_system&, option_map&, const_iterator,
-                             const_iterator) {
+int export_command::run_impl(actor_system&, option_map&, argument_iterator,
+                             argument_iterator) {
   VAST_ERROR("export_command::run_impl called");
   return EXIT_FAILURE;
 }

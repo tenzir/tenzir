@@ -43,8 +43,8 @@ using namespace caf;
 namespace vast::system {
 
 int writer_command_base::run_impl(caf::actor_system& sys, option_map& options,
-                                  const_iterator args_begin,
-                                  const_iterator args_end) {
+                                  argument_iterator begin,
+                                  argument_iterator end) {
   // Get a convenient and blocking way to interact with actors.
   scoped_actor self{sys};
   // Get VAST node.
@@ -59,7 +59,7 @@ int writer_command_base::run_impl(caf::actor_system& sys, option_map& options,
   });
   // Spawn a sink.
   VAST_DEBUG("spawning sink with parameters:", deep_to_string(options));
-  auto snk_opt = make_sink(self, options, args_begin, args_end);
+  auto snk_opt = make_sink(self, options, begin, end);
   if (!snk_opt) {
     std::cerr << "unable to spawn sink: " << sys.render(snk_opt.error())
               << std::endl;
@@ -71,7 +71,7 @@ int writer_command_base::run_impl(caf::actor_system& sys, option_map& options,
   // TODO: we need to also include arguments in CLI format from the export
   //       command; we really should forward `options` to the node actor
   //       instead to clean this up
-  auto args = caf::message_builder{args_begin, args_end}.move_to_message();
+  auto args = caf::message_builder{begin, end}.move_to_message();
   args = make_message("exporter") + args;
   if (get_or<bool>(options, "continuous", false))
     args += make_message("--continuous");

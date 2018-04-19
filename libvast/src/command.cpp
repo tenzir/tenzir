@@ -32,12 +32,12 @@ command::~command() {
 }
 
 int command::run(caf::actor_system& sys, option_map& options,
-                 const_iterator args_begin, const_iterator args_end) {
+                 argument_iterator begin, argument_iterator end) {
   CAF_LOG_TRACE(CAF_ARG(options));
   // Split the arguments.
-  auto args = caf::message_builder{args_begin, args_end}.move_to_message();
+  auto args = caf::message_builder{begin, end}.move_to_message();
   auto [local_args, subcmd, subcmd_args] = separate_args(args);
-  args_begin += local_args.size();
+  begin += local_args.size();
   // Parse arguments for this command.
   auto res = local_args.extract_opts(opts_);
   if (res.opts.count("help") != 0) {
@@ -54,7 +54,7 @@ int command::run(caf::actor_system& sys, option_map& options,
   for (auto& kvp : kvps_)
     options.emplace(kvp());
   // Check whether the options allow for further processing.
-  switch (proceed(sys, options, args_begin, args_end)) {
+  switch (proceed(sys, options, begin, end)) {
     default:
         // nop
         break;
@@ -66,11 +66,11 @@ int command::run(caf::actor_system& sys, option_map& options,
   // Invoke run_impl if no subcommand was defined.
   if (subcmd.empty()) {
     VAST_ASSERT(subcmd_args.empty());
-    return run_impl(sys, options, args_begin, args_end);
+    return run_impl(sys, options, begin, end);
   }
   // Consume CLI arguments if we have arguments but don't have subcommands.
   if (nested_.empty()) {
-    return run_impl(sys, options, args_begin, args_end);
+    return run_impl(sys, options, begin, end);
   }
   // Dispatch to subcommand.
   auto i = nested_.find(subcmd);
@@ -81,13 +81,13 @@ int command::run(caf::actor_system& sys, option_map& options,
     usage();
     return EXIT_FAILURE;
   }
-  return i->second->run(sys, options, args_begin + 1, args_end);
+  return i->second->run(sys, options, begin + 1, end);
 }
 
-int command::run(caf::actor_system& sys, const_iterator args_begin,
-                 const_iterator args_end) {
+int command::run(caf::actor_system& sys, argument_iterator begin,
+                 argument_iterator end) {
   option_map options;
-  return run(sys, options, args_begin, args_end);
+  return run(sys, options, begin, end);
 }
 
 void command::usage() {
@@ -114,15 +114,15 @@ bool command::is_root() const noexcept {
 }
 
 command::proceed_result command::proceed(caf::actor_system&,
-                                         option_map& options, const_iterator,
-                                         const_iterator) {
+                                         option_map& options, argument_iterator,
+                                         argument_iterator) {
   CAF_LOG_TRACE(CAF_ARG(options));
   CAF_IGNORE_UNUSED(options);
   return proceed_ok;
 }
 
 int command::run_impl(caf::actor_system&, option_map& options,
-                      const_iterator, const_iterator) {
+                      argument_iterator, argument_iterator) {
   CAF_LOG_TRACE(CAF_ARG(options));
   CAF_IGNORE_UNUSED(options);
   usage();

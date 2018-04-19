@@ -42,8 +42,8 @@ pcap_writer_command::pcap_writer_command(command* parent, std::string_view name)
 
 expected<caf::actor> pcap_writer_command::make_sink(caf::scoped_actor& self,
                                                     option_map& options,
-                                                    const_iterator,
-                                                    const_iterator) {
+                                                    argument_iterator,
+                                                    argument_iterator) {
   CAF_LOG_TRACE();
   auto limit = this->get_or<uint64_t>(options, "events", 0u);
   format::pcap::writer writer{output_, flush_};

@@ -85,7 +85,7 @@ application::root_command::root_command()
 
 command::proceed_result
 application::root_command::proceed(caf::actor_system& sys, option_map& options,
-                                   const_iterator, const_iterator) {
+                                   argument_iterator, argument_iterator) {
   CAF_LOG_TRACE(CAF_ARG(options));
   CAF_IGNORE_UNUSED(sys);
   CAF_IGNORE_UNUSED(options);
@@ -104,10 +104,10 @@ application::application() {
   detail::adjust_resource_consumption();
 }
 
-int application::run(caf::actor_system& sys, command::const_iterator args_begin,
-                     command::const_iterator args_end) {
+int application::run(caf::actor_system& sys, command::argument_iterator begin,
+                     command::argument_iterator end) {
   CAF_LOG_TRACE(CAF_ARG(args));
-  return root_.run(sys, args_begin, args_end);
+  return root_.run(sys, begin, end);
 }
 
 //  // TODO: replace this manual parsing by a proper interface in the program

@@ -47,7 +47,8 @@ public:
 
 protected:
   expected<caf::actor> make_sink(caf::scoped_actor& self, option_map& options,
-                                 const_iterator, const_iterator) override {
+                                 argument_iterator,
+                                 argument_iterator) override {
     CAF_LOG_TRACE();
     using ostream_ptr = std::unique_ptr<std::ostream>;
     auto limit = this->get_or<uint64_t>(options, "events", 0u);

@@ -43,7 +43,7 @@ public:
   using option_map = std::map<std::string, caf::config_value>;
 
   /// Iterates over CLI arguments.
-  using const_iterator = std::vector<std::string>::const_iterator;
+  using argument_iterator = std::vector<std::string>::const_iterator;
 
   /// Wraps the result of proceed.
   enum proceed_result {
@@ -62,13 +62,13 @@ public:
 
   /// Runs the command and blocks until execution completes.
   /// @returns An exit code suitable for returning from main.
-  int run(caf::actor_system& sys, const_iterator args_begin,
-          const_iterator args_end);
+  int run(caf::actor_system& sys, argument_iterator begin,
+          argument_iterator end);
 
   /// Runs the command and blocks until execution completes.
   /// @returns An exit code suitable for returning from main.
   int run(caf::actor_system& sys, option_map& options,
-          const_iterator args_begin, const_iterator args_end);
+          argument_iterator begin, argument_iterator end);
 
   /// Prints usage to `std::cerr`.
   void usage();
@@ -139,11 +139,11 @@ protected:
   /// Checks whether a command is ready to proceed, i.e., whether the
   /// configuration allows for calling `run_impl` or `run` on a nested command.
   virtual proceed_result proceed(caf::actor_system& sys, option_map& options,
-                                 const_iterator args_begin,
-                                 const_iterator args_end);
+                                 argument_iterator begin,
+                                 argument_iterator end);
 
   virtual int run_impl(caf::actor_system& sys, option_map& options,
-                       const_iterator args_begin, const_iterator args_end);
+                       argument_iterator begin, argument_iterator end);
 
   template <class T>
   void add_opt(std::string name, std::string descr, T& ref) {

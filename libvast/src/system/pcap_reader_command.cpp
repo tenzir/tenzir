@@ -62,8 +62,8 @@ pcap_reader_command::pcap_reader_command(command* parent, std::string_view name)
 }
 
 expected<caf::actor> pcap_reader_command::make_source(caf::scoped_actor& self,
-                                                      const_iterator,
-                                                      const_iterator) {
+                                                      argument_iterator,
+                                                      argument_iterator) {
   CAF_LOG_TRACE();
   format::pcap::reader reader{input,    cutoff,      flow_max,
                               flow_age, flow_expiry, pseudo_realtime};

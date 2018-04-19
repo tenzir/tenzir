@@ -31,19 +31,19 @@ public:
   }
 
   proceed_result proceed(caf::actor_system&, option_map&,
-                         const_iterator args_begin,
-                         const_iterator args_end) override {
+                         argument_iterator begin,
+                         argument_iterator end) override {
     tested_proceed = true;
-    proceed_begin = args_begin;
-    proceed_end = args_end;
+    proceed_begin = begin;
+    proceed_end = end;
     return proceed_ok;
   }
 
-  int run_impl(caf::actor_system&, option_map&, const_iterator args_begin,
-               const_iterator args_end) override {
+  int run_impl(caf::actor_system&, option_map&, argument_iterator begin,
+               argument_iterator end) override {
     was_executed = true;
-    run_begin = args_begin;
-    run_end = args_end;
+    run_begin = begin;
+    run_end = end;
     return EXIT_SUCCESS;
   }
 
@@ -51,10 +51,10 @@ public:
   bool flag = false;
   bool tested_proceed = false;
   bool was_executed = false;
-  const_iterator proceed_begin;
-  const_iterator proceed_end;
-  const_iterator run_begin;
-  const_iterator run_end;
+  argument_iterator proceed_begin;
+  argument_iterator proceed_end;
+  argument_iterator run_begin;
+  argument_iterator run_end;
 };
 
 class bar : public command {
@@ -64,29 +64,29 @@ public:
   }
 
   proceed_result proceed(caf::actor_system&, option_map&,
-                         const_iterator args_begin,
-                         const_iterator args_end) override {
+                         argument_iterator begin,
+                         argument_iterator end) override {
     tested_proceed = true;
-    proceed_begin = args_begin;
-    proceed_end = args_end;
+    proceed_begin = begin;
+    proceed_end = end;
     return proceed_ok;
   }
 
-  int run_impl(caf::actor_system&, option_map&, const_iterator args_begin,
-               const_iterator args_end) override {
+  int run_impl(caf::actor_system&, option_map&, argument_iterator begin,
+               argument_iterator end) override {
     was_executed = true;
-    run_begin = args_begin;
-    run_end = args_end;
+    run_begin = begin;
+    run_end = end;
     return EXIT_SUCCESS;
   }
 
   int other_value = 0;
   bool tested_proceed = false;
   bool was_executed = false;
-  const_iterator proceed_begin;
-  const_iterator proceed_end;
-  const_iterator run_begin;
-  const_iterator run_end;
+  argument_iterator proceed_begin;
+  argument_iterator proceed_end;
+  argument_iterator run_begin;
+  argument_iterator run_end;
 };
 
 struct fixture {

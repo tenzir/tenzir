@@ -28,8 +28,8 @@ public:
   export_command(command* parent, std::string_view name);
 
 protected:
-  int run_impl(caf::actor_system& sys, option_map& options, const_iterator,
-               const_iterator) override;
+  int run_impl(caf::actor_system& sys, option_map& options,
+               argument_iterator begin, argument_iterator end) override;
 
 private:
   bool continuous_;
