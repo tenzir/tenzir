@@ -13,148 +13,120 @@
 
 #pragma once
 
-#include <sstream>
-#include <type_traits>
-
 #include <caf/logger.hpp>
-#include <caf/stateful_actor.hpp>
-#include <caf/typed_actor.hpp>
 
-#include "vast/config.hpp"
-#include "vast/concept/printable/print.hpp"
 #include "vast/detail/pp.hpp"
 
-namespace vast::detail {
-
-struct formatter {
-  template <class Stream, class T>
-  struct is_streamable {
-    template <class S, class U>
-    static auto test(const U* x)
-    -> decltype(std::declval<S&>() << *x, std::true_type());
-
-    template <class, class>
-    static auto test(...) -> std::false_type;
-
-    using type = decltype(test<Stream, T>(0));
-    static constexpr auto value = type::value;
-  };
-
-  template <class Stream, class T>
-  static inline constexpr bool is_streamable_v
-    = is_streamable<Stream, T>::value;
-
-  template <class T>
-  formatter& operator<<(const T& x) {
-    if constexpr (is_streamable_v<std::ostringstream, T>) {
-      message << x;
-      return *this;
-    } else if constexpr (vast::is_printable_v<std::ostreambuf_iterator<char>,
-                                              T>) {
-      using vast::print;
-      if (!print(std::ostreambuf_iterator<char>{message}, x))
-        message.setstate(std::ios_base::failbit);
-      return *this;
-    } else {
-      static_assert(!std::is_same_v<T, T>,
-                    "T is neither streamable nor printable");
-    }
-  }
-
-  template <class T, class... Ts>
-  formatter& operator<<(caf::stateful_actor<T, Ts...>* a) {
-    message << a->name();
-    return *this;
-  }
-
-  template <class... Ts>
-  formatter& operator<<(const caf::typed_actor<Ts...>& a) {
-    return *this << a->address();
-  }
-
-  formatter& operator<<(const caf::actor& a) {
-    return *this << a->address();
-  }
-
-  formatter& operator<<(const caf::actor_addr& a) {
-    message << a.id();
-    return *this;
-  }
-
-  // E.g., self->current_sender()
-  formatter& operator<<(const caf::strong_actor_ptr& a) {
-    if (a)
-      message << a->id();
-    else
-      message << "invalid";
-    return *this;
-  }
-
-  std::ostringstream message;
-};
-
-} // namespace vast::detail
+// -- VAST logging macros ------------------------------------------------------
 
 #if defined(CAF_LOG_LEVEL)
-  #define VAST_LOG_IMPL(lvl, msg)                                              \
-    do {                                                                       \
-      vast::detail::formatter __vast_fmt;                                      \
-      __vast_fmt << msg;                                                       \
-      CAF_LOG_IMPL("vast", lvl, __vast_fmt.message.str());                     \
-    } while (false)
 
-  #define VAST_LOG_2(lvl, m1) VAST_LOG_IMPL(lvl, m1)
-  #define VAST_LOG_3(lvl, m1, m2) VAST_LOG_2(lvl, m1 << ' ' << m2)
-  #define VAST_LOG_4(lvl, m1, m2, m3) VAST_LOG_3(lvl, m1, m2 << ' ' << m3)
-  #define VAST_LOG_5(lvl, m1, m2, m3, m4)                                      \
-    VAST_LOG_4(lvl, m1, m2, m3 << ' ' << m4)
-  #define VAST_LOG_6(lvl, m1, m2, m3, m4, m5)                                  \
-    VAST_LOG_5(lvl, m1, m2, m3, m4 << ' ' << m5)
-  #define VAST_LOG_7(lvl, m1, m2, m3, m4, m5, m6)                              \
-    VAST_LOG_6(lvl, m1, m2, m3, m4, m5 << ' ' << m6)
-  #define VAST_LOG_8(lvl, m1, m2, m3, m4, m5, m6, m7)                          \
-    VAST_LOG_7(lvl, m1, m2, m3, m4, m5, m6 << ' ' << m7)
-  #define VAST_LOG_9(lvl, m1, m2, m3, m4, m5, m6, m7, m8)                      \
-    VAST_LOG_8(lvl, m1, m2, m3, m4, m5, m6, m7 << ' ' << m8)
-  #define VAST_LOG_10(lvl, m1, m2, m3, m4, m5, m6, m7, m8, m9)                 \
-    VAST_LOG_9(lvl, m1, m2, m3, m4, m5, m6, m7, m8 << ' ' << m9)
-  #define VAST_LOG(...)                                                        \
-    VAST_PP_OVERLOAD(VAST_LOG_, __VA_ARGS__)(__VA_ARGS__)
+#define VAST_LOG_IMPL(lvl, msg) CAF_LOG_IMPL("vast", lvl, msg)
 
-  #if VAST_LOG_LEVEL >= CAF_LOG_LEVEL_ERROR
-    #define VAST_ERROR(...) VAST_LOG(CAF_LOG_LEVEL_ERROR, __VA_ARGS__)
-  #else
-    #define VAST_ERROR(...) CAF_VOID_STMT
-  #endif
+#define VAST_LOG_2(lvl, m1) VAST_LOG_IMPL(lvl, m1)
 
-  #if VAST_LOG_LEVEL >= CAF_LOG_LEVEL_WARNING
-    #define VAST_WARNING(...) VAST_LOG(CAF_LOG_LEVEL_WARNING, __VA_ARGS__)
-  #else
-    #define VAST_WARNING(...) CAF_VOID_STMT
-  #endif
+#define VAST_LOG_3(lvl, m1, m2) VAST_LOG_IMPL(lvl, m1 << m2)
 
-  #if VAST_LOG_LEVEL >= CAF_LOG_LEVEL_INFO
-    #define VAST_INFO(...) VAST_LOG(CAF_LOG_LEVEL_INFO, __VA_ARGS__)
-  #else
-    #define VAST_INFO(...) CAF_VOID_STMT
-  #endif
+#define VAST_LOG_4(lvl, m1, m2, m3) VAST_LOG_IMPL(lvl, m1 << m2 << m3)
 
-  #if VAST_LOG_LEVEL >= CAF_LOG_LEVEL_DEBUG
-    #define VAST_DEBUG(...) VAST_LOG(CAF_LOG_LEVEL_DEBUG, __VA_ARGS__)
-  #else
-    #define VAST_DEBUG(...) CAF_VOID_STMT
-  #endif
+#define VAST_LOG_5(lvl, m1, m2, m3, m4) VAST_LOG_IMPL(lvl, m1 << m2 << m3 << m4)
 
-  #if VAST_LOG_LEVEL >= CAF_LOG_LEVEL_TRACE
-    #define VAST_TRACE(...) VAST_LOG(CAF_LOG_LEVEL_TRACE, __VA_ARGS__)
-  #else
-    #define VAST_TRACE(...) CAF_VOID_STMT
-  #endif
-#else
-  #define VAST_ERROR(...) CAF_VOID_STMT
-  #define VAST_WARNING(...) CAF_VOID_STMT
-  #define VAST_INFO(...) CAF_VOID_STMT
-  #define VAST_DEBUG(...) CAF_VOID_STMT
-  #define VAST_TRACE(...) CAF_VOID_STMT
-#endif
+#define VAST_LOG_6(lvl, m1, m2, m3, m4, m5)                                    \
+  VAST_LOG_IMPL(lvl, m1 << m2 << m3 << m4 << m5)
 
+#define VAST_LOG_7(lvl, m1, m2, m3, m4, m5, m6)                                \
+  VAST_LOG_IMPL(lvl, m1 << m2 << m3 << m4 << m5 << m6)
+
+#define VAST_LOG_8(lvl, m1, m2, m3, m4, m5, m6, m7)                            \
+  VAST_LOG_IMPL(lvl, m1 << m2 << m3 << m4 << m5 << m6 << m7)
+
+#define VAST_LOG_9(lvl, m1, m2, m3, m4, m5, m6, m7, m8)                        \
+  VAST_LOG_IMPL(lvl, m1 << m2 << m3 << m4 << m5 << m6 << m7 << m8)
+
+#define VAST_LOG_10(lvl, m1, m2, m3, m4, m5, m6, m7, m8, m9)                   \
+  VAST_LOG_IMPL(lvl, m1 << m2 << m3 << m4 << m5 << m6 << m7 << m8 << m9)
+
+#define VAST_LOG(...) VAST_PP_OVERLOAD(VAST_LOG_, __VA_ARGS__)(__VA_ARGS__)
+
+#if CAF_LOG_LEVEL >= CAF_LOG_LEVEL_TRACE
+
+#define VAST_TRACE(...)                                                        \
+  VAST_LOG(CAF_LOG_LEVEL_TRACE, "ENTRY", __VA_ARGS__);                         \
+  auto CAF_UNIFYN(vast_log_trace_guard_) = ::caf::detail::make_scope_guard(    \
+    [=] { VAST_LOG(CAF_LOG_LEVEL_TRACE, "EXIT"); })
+
+#else // CAF_LOG_LEVEL > CAF_LOG_LEVEL_TRACE
+
+#define VAST_TRACE(...) CAF_VOID_STMT
+
+#endif // CAF_LOG_LEVEL > CAF_LOG_LEVEL_TRACE
+
+#else // defined(CAF_LOG_LEVEL)
+
+#define VAST_LOG(...) CAF_VOID_STMT
+
+#define VAST_TRACE(...) CAF_VOID_STMT
+
+#endif // defined(CAF_LOG_LEVEL)
+
+#define VAST_ERROR(...) VAST_LOG(CAF_LOG_LEVEL_ERROR, __VA_ARGS__)
+
+#define VAST_WARNING(...) VAST_LOG(CAF_LOG_LEVEL_WARNING, __VA_ARGS__)
+
+#define VAST_INFO(...) VAST_LOG(CAF_LOG_LEVEL_INFO, __VA_ARGS__)
+
+#define VAST_DEBUG(...) VAST_LOG(CAF_LOG_LEVEL_DEBUG, __VA_ARGS__)
+
+// -- VAST_ARG utility for formatting log output -------------------------------
+
+#define VAST_ARG_1(x) CAF_ARG(x)
+
+#define VAST_ARG_2(x_name, x) CAF_ARG2(x_name, x)
+
+#define VAST_ARG_3(x_name, first, last) CAF_ARG3(x_name, first, last)
+
+/// Nicely formats a variable or argument. For example, `VAST_ARG(foo)`
+/// generates `foo = ...` in log output, where `...` is the content of the
+/// variable. `VAST_ARG("size", xs.size())` generates the output
+/// `size = xs.size()`.
+#define VAST_ARG(...) VAST_PP_OVERLOAD(VAST_ARG_, __VA_ARGS__)(__VA_ARGS__)
+
+// -- VAST_UNUSED utility for suppressing compiler warnings --------------------
+
+#define VAST_UNUSED_1(x1) CAF_IGNORE_UNUSED(x1)
+
+#define VAST_UNUSED_2(x1, x2)                                                  \
+  VAST_UNUSED_1(x1);                                                           \
+  CAF_IGNORE_UNUSED(x2)
+
+#define VAST_UNUSED_3(x1, x2, x3)                                              \
+  VAST_UNUSED_2(x1, x2);                                                       \
+  CAF_IGNORE_UNUSED(x3)
+
+#define VAST_UNUSED_4(x1, x2, x3, x4)                                          \
+  VAST_UNUSED_3(x1, x2, x3);                                                   \
+  CAF_IGNORE_UNUSED(x4)
+
+#define VAST_UNUSED_5(x1, x2, x3, x4, x5)                                      \
+  VAST_UNUSED_4(x1, x2, x3, x4);                                               \
+  CAF_IGNORE_UNUSED(x5)
+
+#define VAST_UNUSED_6(x1, x2, x3, x4, x5, x6)                                  \
+  VAST_UNUSED_5(x1, x2, x3, x4, x5);                                           \
+  CAF_IGNORE_UNUSED(x6)
+
+#define VAST_UNUSED_7(x1, x2, x3, x4, x5, x6, x7)                              \
+  VAST_UNUSED_6(x1, x2, x3, x4, x5, x6);                                       \
+  CAF_IGNORE_UNUSED(x7)
+
+#define VAST_UNUSED_8(x1, x2, x3, x4, x5, x6, x7, x8)                          \
+  VAST_UNUSED_7(x1, x2, x3, x4, x5, x6, x7);                                   \
+  CAF_IGNORE_UNUSED(x8)
+
+#define VAST_UNUSED_9(x1, x2, x3, x4, x5, x6, x7, x8, x9)                      \
+  VAST_UNUSED_8(x1, x2, x3, x4, x5, x6, x7, x8);                               \
+  CAF_IGNORE_UNUSED(x9)
+
+/// Suppresses compiler warnings for unused arguments.
+#define VAST_UNUSED(...)                                                       \
+  VAST_PP_OVERLOAD(VAST_UNUSED_, __VA_ARGS__)(__VA_ARGS__)
