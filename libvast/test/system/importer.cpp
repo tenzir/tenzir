@@ -52,17 +52,7 @@ behavior dummy_sink(event_based_actor* self, shared_event_buffer buf) {
   };
 }
 
-struct config : fixtures::actor_system::configuration {
-  config() {
-    // Reset log filter and unload all modules.
-    logger_component_filter.clear();
-    module_factories.clear();
-  }
-};
-
-struct fixture : test_coordinator_fixture<config>,
-                 fixtures::events,
-                 fixtures::filesystem {
+struct fixture : fixtures::deterministic_actor_system_and_events {
   fixture() {
     MESSAGE("spawn importer + store");
     directory /= "importer";

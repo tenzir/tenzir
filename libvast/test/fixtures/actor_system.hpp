@@ -14,6 +14,7 @@
 #pragma once
 
 #include <caf/all.hpp>
+#include <caf/test/dsl.hpp>
 
 #include "vast/system/atoms.hpp"
 #include "vast/system/configuration.hpp"
@@ -26,17 +27,21 @@
 
 namespace fixtures {
 
-struct actor_system : filesystem {
-  struct configuration : vast::system::configuration {
-    configuration() {
-      logger_file_name = "vast-unit-test.log";
-      logger_component_filter = "vast|caf";
-      // Always begin with an empy log file.
-      if (vast::exists(logger_file_name))
-        vast::rm(logger_file_name);
-    }
-  };
+/// Configures the actor system of a fixture with default settings for unit
+/// testing.
+struct test_configuration : vast::system::configuration {
+  test_configuration() {
+    logger_file_name = "vast-unit-test.log";
+    logger_component_filter.clear();
+    // Always begin with an empy log file.
+    if (vast::exists(logger_file_name))
+      vast::rm(logger_file_name);
+  }
+};
 
+/// A fixture with an actor system that uses the default work-stealing
+/// scheduler.
+struct actor_system : filesystem {
   actor_system() : system{config}, self{system, true} {
     // Clean up state from previous executions.
     if (vast::exists(directory))
@@ -72,10 +77,27 @@ struct actor_system : filesystem {
     return [&](const caf::error& e) { FAIL(system.render(e)); };
   }
 
-  configuration config;
+  test_configuration config;
   caf::actor_system system;
   caf::scoped_actor self;
   caf::actor profiler;
+};
+
+/// A fixture with an actor system that uses the test coordinator for
+/// determinstic testing of actors.
+struct deterministic_actor_system
+  : test_coordinator_fixture<test_configuration>,
+    filesystem {
+
+  deterministic_actor_system() {
+    // Clean up state from previous executions.
+    if (vast::exists(directory))
+      vast::rm(directory);
+  }
+
+  auto error_handler() {
+    return [&](const caf::error& e) { FAIL(sys.render(e)); };
+  }
 };
 
 } // namespace fixtures
