@@ -85,8 +85,10 @@ application::root_command::root_command()
 
 command::proceed_result
 application::root_command::proceed(caf::actor_system& sys, option_map& options,
-                                   argument_iterator, argument_iterator) {
-  CAF_LOG_TRACE(CAF_ARG(options));
+                                   argument_iterator begin,
+                                   argument_iterator end) {
+  VAST_UNUSED(begin, end);
+  VAST_TRACE(VAST_ARG(options), VAST_ARG("args", begin, end));
   CAF_IGNORE_UNUSED(sys);
   CAF_IGNORE_UNUSED(options);
   if (print_version) {
@@ -106,7 +108,7 @@ application::application() {
 
 int application::run(caf::actor_system& sys, command::argument_iterator begin,
                      command::argument_iterator end) {
-  CAF_LOG_TRACE(CAF_ARG(args));
+  VAST_TRACE(VAST_ARG("args", begin, end));
   return root_.run(sys, begin, end);
 }
 

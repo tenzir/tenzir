@@ -33,7 +33,7 @@ command::~command() {
 
 int command::run(caf::actor_system& sys, option_map& options,
                  argument_iterator begin, argument_iterator end) {
-  CAF_LOG_TRACE(CAF_ARG(options));
+  VAST_TRACE(VAST_ARG(options), VAST_ARG("args", begin, end));
   // Split the arguments.
   auto args = caf::message_builder{begin, end}.move_to_message();
   auto [local_args, subcmd, subcmd_args] = separate_args(args);
@@ -114,17 +114,18 @@ bool command::is_root() const noexcept {
 }
 
 command::proceed_result command::proceed(caf::actor_system&,
-                                         option_map& options, argument_iterator,
-                                         argument_iterator) {
-  CAF_LOG_TRACE(CAF_ARG(options));
-  CAF_IGNORE_UNUSED(options);
+                                         option_map& options,
+                                         argument_iterator begin,
+                                         argument_iterator end) {
+  VAST_UNUSED(options, begin, end);
+  VAST_TRACE(VAST_ARG(options), VAST_ARG("args", begin, end));
   return proceed_ok;
 }
 
 int command::run_impl(caf::actor_system&, option_map& options,
-                      argument_iterator, argument_iterator) {
-  CAF_LOG_TRACE(CAF_ARG(options));
-  CAF_IGNORE_UNUSED(options);
+                      argument_iterator begin, argument_iterator end) {
+  VAST_UNUSED(options, begin, end);
+  VAST_TRACE(VAST_ARG(options), VAST_ARG("args", begin, end));
   usage();
   return EXIT_FAILURE;
 }

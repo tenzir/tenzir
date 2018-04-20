@@ -42,8 +42,9 @@ start_command::start_command(command* parent, std::string_view name)
 }
 
 int start_command::run_impl(actor_system& sys, option_map& options,
-                        argument_iterator, argument_iterator) {
-  CAF_LOG_TRACE(CAF_ARG(options));
+                        argument_iterator begin, argument_iterator end) {
+  VAST_UNUSED(begin, end);
+  VAST_TRACE(VAST_ARG(options), VAST_ARG("args", begin, end));
   // Fetch SSL settings from config.
   auto& sys_cfg = sys.config();
   auto use_encryption = !sys_cfg.openssl_certificate.empty()

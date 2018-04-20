@@ -58,7 +58,7 @@ protected:
   expected<caf::actor> make_source(caf::scoped_actor& self,
                                    argument_iterator begin,
                                    argument_iterator end) override {
-    CAF_LOG_TRACE();
+    VAST_TRACE(VAST_ARG("args", begin, end));
     auto in = detail::make_input_stream(input_, uds_);
     if (!in)
       return in.error();

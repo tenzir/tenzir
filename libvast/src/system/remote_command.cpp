@@ -39,7 +39,8 @@ remote_command::remote_command(command* parent, std::string_view name)
 int remote_command::run_impl(actor_system& sys, option_map& options,
                              argument_iterator begin,
                              argument_iterator end) {
-  CAF_LOG_TRACE(CAF_ARG2("name", name()) << CAF_ARG(options));
+  VAST_TRACE(VAST_ARG("name", name()), VAST_ARG(options),
+             VAST_ARG("args", begin, end));
   // Get a convenient and blocking way to interact with actors.
   scoped_actor self{sys};
   // Get VAST node.
