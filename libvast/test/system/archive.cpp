@@ -16,6 +16,8 @@
 #include "vast/system/archive.hpp"
 #include "vast/ids.hpp"
 
+#include "vast/detail/spawn_container_source.hpp"
+
 #define SUITE archive
 #include "test.hpp"
 #include "fixtures/actor_system_and_events.hpp"
@@ -23,22 +25,29 @@
 using namespace caf;
 using namespace vast;
 
-FIXTURE_SCOPE(archive_tests, fixtures::actor_system_and_events)
+FIXTURE_SCOPE(archive_tests, fixtures::deterministic_actor_system_and_events)
 
 TEST(archiving and querying) {
   auto a = self->spawn(system::archive, directory, 10, 1024 * 1024);
-  MESSAGE("sending events");
-  self->send(a, bro_conn_log);
-  self->send(a, bro_dns_log);
-  self->send(a, bro_http_log);
-  self->send(a, bgpdump_txt);
-  MESSAGE("querying events");
+  auto push_to_archive = [&](auto xs) {
+    auto cs = vast::detail::spawn_container_source(sys, a, std::move(xs));
+    run_exhaustively();
+  };
+  MESSAGE("import bro conn logs to archive");
+  push_to_archive(bro_conn_log);
+  MESSAGE("import DNS logs to archive");
+  push_to_archive(bro_dns_log);
+  MESSAGE("import HTTP logs to archive");
+  push_to_archive(bro_http_log);
+  MESSAGE("import BCP dump logs to archive");
+  push_to_archive(bgpdump_txt);
+  MESSAGE("query events");
   auto ids = make_ids({{100, 150}, {10150, 10200}});
-  std::vector<event> result;
-  self->request(a, infinite, ids).receive(
-    [&](std::vector<event>& xs) { result = std::move(xs); },
-    error_handler()
-  );
+  self->send(a, ids);
+  run_exhaustively();
+  auto result_opt = fetch_result<std::vector<event>>();
+  REQUIRE(result_opt);
+  auto& result = *result_opt;
   REQUIRE_EQUAL(result.size(), 100u);
   // We sort because the specific compression algorithm used at the archive
   // determines the order of results.

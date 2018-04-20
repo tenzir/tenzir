@@ -46,19 +46,19 @@ archive(archive_type::stateful_pointer<archive_state> self,
       self->quit(msg.reason);
     }
   );
+  auto handle_batch = [=](const std::vector<event>& xs) {
+    auto first_id = xs.front().id();
+    auto last_id  = xs.back().id();
+    VAST_DEBUG(self, "got", xs.size(),
+               "events [" << first_id << ',' << (last_id + 1) << ')');
+    auto result = self->state.store->put(xs);
+    if (!result) {
+      VAST_ERROR(self, "failed to store events:",
+                 self->system().render(result.error()));
+      self->quit(result.error());
+    }
+  };
   return {
-    [=](const std::vector<event>& xs) {
-      auto first_id = xs.front().id();
-      auto last_id  = xs.back().id();
-      VAST_DEBUG(self, "got", xs.size(),
-                 "events [" << first_id << ',' << (last_id + 1) << ')');
-      auto result = self->state.store->put(xs);
-      if (!result) {
-        VAST_ERROR(self, "failed to store events:",
-                   self->system().render(result.error()));
-        self->quit(result.error());
-      }
-    },
     [=](const ids& xs) {
       VAST_ASSERT(rank(xs) > 0);
       VAST_DEBUG(self, "got query for", rank(xs), "events in range ["
@@ -70,6 +70,25 @@ archive(archive_type::stateful_pointer<archive_state> self,
         VAST_DEBUG(self, "failed to get events:",
                    self->system().render(result.error()));
       return result;
+    },
+    [=](stream<event> in) {
+      self->make_sink(
+        in,
+        [](unit_t&) {
+          // nop
+        },
+        [=](unit_t&, const std::vector<event>& xs) {
+          handle_batch(xs);
+        },
+        [=](unit_t&, const error& err) {
+          if (err) {
+            VAST_ERROR(self, "got a stream error:", self->system().render(err));
+          }
+        }
+      );
+    },
+    [=](const std::vector<event>& xs) {
+      handle_batch(xs);
     },
   };
 }
