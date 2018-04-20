@@ -25,8 +25,7 @@ using namespace std::chrono;
 using namespace std::chrono_literals;
 using namespace caf;
 
-namespace vast {
-namespace system {
+namespace vast::system {
 
 int32_t importer_state::available_ids() const noexcept {
   auto f = [](int32_t x, const id_generator& y) {
@@ -360,5 +359,4 @@ behavior importer(stateful_actor<importer_state>* self, path dir) {
   };
 }
 
-} // namespace system
-} // namespace vast
+} // namespace vast::system
