@@ -64,7 +64,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   }
 
   ~fixture() {
-    anon_send_exit(importer, exit_reason::user_shutdown);
+    anon_send_exit(importer, exit_reason::kill);
   }
 
   actor importer;
@@ -77,7 +77,8 @@ FIXTURE_SCOPE(import_tests, fixture)
 
 TEST(import without subscribers) {
   MESSAGE("spawn dummy source");
-  auto src = vast::detail::spawn_container_source(self->system(), importer, bro_conn_log);
+  auto src = vast::detail::spawn_container_source(self->system(), importer,
+                                                  bro_conn_log);
   sched.run_once();
   MESSAGE("expect the importer to give 0 initial credit");
   expect((open_stream_msg), from(src).to(importer));
@@ -108,7 +109,8 @@ TEST(import without subscribers) {
       expect((timeout_msg), from(importer).to(importer));
       if (!received<upstream_msg>(src)) {
         // No credit was generated, this means the importer lacks IDs.
-        expect((atom_value, string, data), from(importer).to(store).with(_, _, _));
+        expect((atom_value, string, data),
+               from(importer).to(store).with(_, _, _));
         expect((data), from(store).to(importer));
       }
     }
@@ -123,7 +125,8 @@ TEST(import with one subscriber) {
   anon_send(importer, add_atom::value, subscriber);
   sched.run();
   MESSAGE("spawn dummy source");
-  auto src = vast::detail::spawn_container_source(self->system(), importer, bro_conn_log);
+  auto src = vast::detail::spawn_container_source(self->system(), importer,
+                                                  bro_conn_log);
   sched.run_once();
   MESSAGE("loop until importer becomes idle");
   sched.run_dispatch_loop(credit_round_interval);
@@ -142,7 +145,8 @@ TEST(import with two subscribers) {
   anon_send(importer, add_atom::value, subscriber2);
   sched.run();
   MESSAGE("spawn dummy source");
-  auto src = vast::detail::spawn_container_source(self->system(), importer, bro_conn_log);
+  auto src = vast::detail::spawn_container_source(self->system(), importer,
+                                                  bro_conn_log);
   sched.run_once();
   MESSAGE("loop until importer becomes idle");
   sched.run_dispatch_loop(credit_round_interval);
