@@ -19,15 +19,15 @@
 
 namespace vast::detail {
 
-template <class Container>
-caf::actor spawn_container_source(caf::actor_system& system, caf::actor dst,
+template <class Handle, class Container>
+caf::actor spawn_container_source(caf::actor_system& system, Handle dst,
                                   Container elements) {
   using namespace caf;
   struct outer_state {
     /// Name of this actor in log events.
     const char* name = "container-source";
   };
-  auto f = [](stateful_actor<outer_state>* self, actor dest, Container xs) {
+  auto f = [](stateful_actor<outer_state>* self, Handle dest, Container xs) {
     using iterator = typename Container::iterator;
     using value_type = typename Container::value_type;
     struct state {
