@@ -98,9 +98,7 @@ expected<void> write_state(stateful_actor<importer_state>* self) {
 auto shutdown(stateful_actor<importer_state>* self) {
   return [=](const exit_msg& msg) {
     write_state(self);
-    self->anon_send(self->state.archive, sys_atom::value, delete_atom::value);
     self->anon_send(self->state.index, sys_atom::value, delete_atom::value);
-    self->send_exit(self->state.archive, msg.reason);
     self->send_exit(self->state.index, msg.reason);
     self->quit(msg.reason);
   };
@@ -113,7 +111,6 @@ void ship(stateful_actor<importer_state>* self, std::vector<event>&& batch) {
   VAST_DEBUG(self, "ships", batch.size(), "events");
   // TODO: How to retain type safety without copying the entire batch?
   auto msg = make_message(std::move(batch));
-  self->send(actor_cast<actor>(st.archive), msg);
   self->send(st.index, msg);
   for (auto& e : st.continuous_queries)
     self->send(e, msg);
@@ -301,8 +298,6 @@ behavior importer(stateful_actor<importer_state>* self, path dir) {
     return {};
   }
   auto eu = self->system().dummy_execution_unit();
-  self->state.archive = actor_pool::make(eu, actor_pool::round_robin());
-  self->monitor(self->state.archive);
   self->state.index = actor_pool::make(eu, actor_pool::round_robin());
   self->monitor(self->state.index);
   self->set_exit_handler(shutdown(self));
@@ -330,8 +325,7 @@ behavior importer(stateful_actor<importer_state>* self, path dir) {
     },
     [=](const archive_type& archive) {
       VAST_DEBUG(self, "registers archive", archive);
-      self->send(self->state.archive, sys_atom::value, put_atom::value,
-                 actor_cast<actor>(archive));
+      return self->state.stg->add_outbound_path(archive);
     },
     [=](index_atom, const actor& index) {
       VAST_DEBUG(self, "registers index", index);

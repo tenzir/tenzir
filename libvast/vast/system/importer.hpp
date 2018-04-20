@@ -62,9 +62,6 @@ struct importer_state {
   /// Handle to the meta store for obtaining more IDs.
   meta_store_type meta_store;
 
-  /// Handle to the ARCHIVE for persisting incoming events.
-  caf::actor archive;
-
   /// Handle to the INDEX for forwarding incoming events.
   caf::actor index;
 
