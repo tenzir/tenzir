@@ -32,10 +32,12 @@ command::~command() {
 }
 
 int command::run(caf::actor_system& sys, option_map& options,
-                 caf::message args) {
-  CAF_LOG_TRACE(CAF_ARG(options) << CAF_ARG(args));
+                 argument_iterator begin, argument_iterator end) {
+  CAF_LOG_TRACE(CAF_ARG(options));
   // Split the arguments.
+  auto args = caf::message_builder{begin, end}.move_to_message();
   auto [local_args, subcmd, subcmd_args] = separate_args(args);
+  begin += local_args.size();
   // Parse arguments for this command.
   auto res = local_args.extract_opts(opts_);
   if (res.opts.count("help") != 0) {
@@ -48,13 +50,11 @@ int command::run(caf::actor_system& sys, option_map& options,
     std::cout << std::endl;
     return EXIT_SUCCESS;
   }
-  // Only forward unparsed arguments to run_impl.
-  local_args = res.remainder;
   // Populate the map with our key/value pairs for all options.
   for (auto& kvp : kvps_)
     options.emplace(kvp());
   // Check whether the options allow for further processing.
-  switch (proceed(sys, options, local_args)) {
+  switch (proceed(sys, options, begin, end)) {
     default:
         // nop
         break;
@@ -66,12 +66,11 @@ int command::run(caf::actor_system& sys, option_map& options,
   // Invoke run_impl if no subcommand was defined.
   if (subcmd.empty()) {
     VAST_ASSERT(subcmd_args.empty());
-    return run_impl(sys, options, caf::make_message());
+    return run_impl(sys, options, begin, end);
   }
   // Consume CLI arguments if we have arguments but don't have subcommands.
   if (nested_.empty()) {
-    return run_impl(sys, options,
-                    caf::make_message(std::move(subcmd)) + subcmd_args);
+    return run_impl(sys, options, begin, end);
   }
   // Dispatch to subcommand.
   auto i = nested_.find(subcmd);
@@ -82,12 +81,13 @@ int command::run(caf::actor_system& sys, option_map& options,
     usage();
     return EXIT_FAILURE;
   }
-  return i->second->run(sys, options, std::move(subcmd_args));
+  return i->second->run(sys, options, begin + 1, end);
 }
 
-int command::run(caf::actor_system& sys, caf::message args) {
+int command::run(caf::actor_system& sys, argument_iterator begin,
+                 argument_iterator end) {
   option_map options;
-  return run(sys, options, std::move(args));
+  return run(sys, options, begin, end);
 }
 
 void command::usage() {
@@ -113,19 +113,18 @@ bool command::is_root() const noexcept {
   return parent_ == nullptr;
 }
 
-command::proceed_result
-command::proceed(caf::actor_system&, option_map& options, caf::message args) {
-  CAF_LOG_TRACE(CAF_ARG(options) << CAF_ARG(args));
+command::proceed_result command::proceed(caf::actor_system&,
+                                         option_map& options, argument_iterator,
+                                         argument_iterator) {
+  CAF_LOG_TRACE(CAF_ARG(options));
   CAF_IGNORE_UNUSED(options);
-  CAF_IGNORE_UNUSED(args);
   return proceed_ok;
 }
 
 int command::run_impl(caf::actor_system&, option_map& options,
-                      caf::message args) {
-  CAF_LOG_TRACE(CAF_ARG(options) << CAF_ARG(args));
+                      argument_iterator, argument_iterator) {
+  CAF_LOG_TRACE(CAF_ARG(options));
   CAF_IGNORE_UNUSED(options);
-  CAF_IGNORE_UNUSED(args);
   usage();
   return EXIT_FAILURE;
 }
@@ -148,7 +147,7 @@ command::separate_args(const caf::message& args) {
       pos += 2;
     } else {
       // Found the end of the options list.
-      return std::make_tuple(args.take(pos), arg(pos), args.drop(pos + 1));
+      return std::make_tuple(args.take(pos), arg(pos), args.drop(pos+ 1));
     }
   }
   return std::make_tuple(args, "", caf::none);

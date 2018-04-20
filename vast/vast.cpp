@@ -26,9 +26,6 @@ int main(int argc, char** argv) {
   caf::actor_system sys{cfg};
   default_application app;
   // Dispatch to root command.
-  auto result = app.run(sys,
-                        caf::message_builder{cfg.command_line.begin(),
-                                             cfg.command_line.end()}
-                        .move_to_message());
+  auto result = app.run(sys, cfg.command_line.begin(), cfg.command_line.end());
   return result;
 }

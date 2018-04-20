@@ -29,7 +29,7 @@ public:
 
 protected:
   int run_impl(caf::actor_system& sys, option_map& options,
-               caf::message args) override;
+               argument_iterator begin, argument_iterator end) override;
 
 private:
   bool continuous_;

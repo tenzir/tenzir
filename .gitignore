@@ -3,3 +3,4 @@
 build*/
 Makefile
 vast.ini
+compile_commands.json
