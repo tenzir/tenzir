@@ -240,6 +240,8 @@ public:
   const char* name() const;
 
 private:
+  using iterator_type = std::string_view::const_iterator;
+
   expected<void> parse_header();
 
   std::unique_ptr<std::istream> input_;
@@ -252,7 +254,7 @@ private:
   vast::schema schema_;
   type type_;
   record_type record_;
-  std::vector<rule<std::string::const_iterator, data>> parsers_;
+  std::vector<rule<iterator_type, data>> parsers_;
 };
 
 /// A Bro writer.

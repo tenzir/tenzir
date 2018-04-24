@@ -277,8 +277,8 @@ expected<event> reader::read() {
   if (lines_->done())
     return make_error(ec::end_of_input, "input exhausted");
   auto s = detail::split(lines_->get(), separator_);
-  if (s.size() > 0 && s[0].first != s[0].second && *s[0].first == '#') {
-    if (detail::starts_with(s[0].first, s[0].second, "#separator")) {
+  if (s.size() > 0 && !s[0].empty() && s[0].front() == '#') {
+    if (detail::starts_with(s[0], "#separator")) {
       VAST_DEBUG(name(), "restarts with new log");
       timestamp_field_ = -1;
       separator_.clear();
@@ -306,21 +306,25 @@ expected<event> reader::read() {
   optional<timestamp> ts;
   auto is_unset = [&](auto i) {
     return std::equal(unset_field_.begin(), unset_field_.end(),
-                   s[i].first, s[i].second);
+                   s[i].begin(), s[i].end());
   };
   auto is_empty = [&](auto i) {
     return std::equal(empty_field_.begin(), empty_field_.end(),
-                      s[i].first, s[i].second);
+                      s[i].begin(), s[i].end());
   };
   for (auto i = 0u; i < s.size(); ++i) {
     if (is_unset(i))
       continue;
     if (is_empty(i))
       xs[i] = construct(record_.fields[i].type);
-    else if (!parsers_[i](s[i].first, s[i].second, xs[i]))
-      return make_error(ec::parse_error,
-                        "field", i, "line", lines_->line_number(),
-                        std::string(s[i].first, s[i].second));
+    else {
+      // The parser needs an lvalue reference to the first iterator.
+      auto first = s[i].begin();
+      if (!parsers_[i](first, s[i].end(), xs[i]))
+        return make_error(ec::parse_error, "field", i, "line",
+                          lines_->line_number(),
+                          std::string{first, s[i].end()});
+    }
     if (i == static_cast<size_t>(timestamp_field_))
       if (auto tp = get_if<timestamp>(xs[i]))
         ts = *tp;
@@ -356,9 +360,9 @@ expected<std::string> parse_header_line(const std::string& line,
                                         const std::string& prefix) {
   auto s = detail::split(line, sep, "", 1);
   if (!(s.size() == 2
-        && std::equal(prefix.begin(), prefix.end(), s[0].first, s[0].second)))
+        && std::equal(prefix.begin(), prefix.end(), s[0].begin(), s[0].end())))
     return make_error(ec::format_error, "got invalid header line: " + line);
-  return std::string{s[1].first, s[1].second};
+  return std::string{s[1]};
 }
 
 expected<void> reader::parse_header() {
@@ -461,7 +465,6 @@ expected<void> reader::parse_header() {
   }
   // Create Bro parsers.
   auto make_parser = [](const auto& type, const auto& set_sep) {
-    using iterator_type = std::string::const_iterator;
     return make_bro_parser<iterator_type>(type, set_sep);
   };
   parsers_.resize(record_.fields.size());

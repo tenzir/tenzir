@@ -93,9 +93,9 @@ TEST(percent escaping) {
   CHECK(percent_unescape("") == "");
   CHECK(percent_escape("ABC") == "ABC");
 
-  CHECK(percent_escape("/f o o/index.html&foo=b@r") 
+  CHECK(percent_escape("/f o o/index.html&foo=b@r")
         == "%2Ff%20o%20o%2Findex.html%26foo%3Db%40r");
-  CHECK(percent_unescape("/f%20o%20o/index.html&foo=b@r") 
+  CHECK(percent_unescape("/f%20o%20o/index.html&foo=b@r")
         == "/f o o/index.html&foo=b@r");
 
   CHECK(percent_escape("&text") == "%26text");
@@ -124,7 +124,7 @@ TEST(double escaping) {
 TEST(string splitting and joining) {
   using namespace std::string_literals;
 
-  auto s = split_to_str("Der Geist, der stets verneint."s, " ");
+  auto s = split_to_str("Der Geist, der stets verneint.", " ");
   REQUIRE(s.size() == 5);
   CHECK(s[0] == "Der");
   CHECK(s[1] == "Geist,");

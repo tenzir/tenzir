@@ -337,116 +337,41 @@ std::string double_escape(const std::string& str, const std::string& esc);
 /// @relates double_escape
 std::string double_unescape(const std::string& str, const std::string& esc);
 
-/// Replaces find and replace all occurences of a substring.
+/// Replaces all occurences of a substring.
 /// @param str The string in which to replace a substring.
 /// @param search The string to search.
 /// @param replace The replacement string.
 /// @returns The string with replacements.
-std::string replace_all(std::string str, const std::string& search,
-                        const std::string& replace);
+std::string replace_all(std::string str, std::string_view search,
+                        std::string_view replace);
 
-/// Splits a string into a vector of iterator pairs representing the
-/// *[start, end)* range of each element.
-/// @tparam Iterator A random-access iterator to a character sequence.
-/// @param begin The beginning of the string to split.
-/// @param end The end of the string to split.
+/// Splits a character sequence into a vector of substrings.
+/// @param str The string to split.
 /// @param sep The seperator where to split.
 /// @param esc The escape string. If *esc* occurrs immediately in front of
 ///            *sep*, then *sep* will not count as a separator.
 /// @param max_splits The maximum number of splits to perform.
 /// @param include_sep If `true`, also include the separator after each
 ///                    match.
-/// @pre `! sep.empty()`
-/// @returns A vector of iterator pairs each of which delimit a single field
-///          with a range *[start, end)*.
-template <class Iterator>
-std::vector<std::pair<Iterator, Iterator>>
-split(Iterator begin, Iterator end, const std::string& sep,
-      const std::string& esc = "", size_t max_splits = -1,
-      bool include_sep = false) {
-  VAST_ASSERT(!sep.empty());
-  std::vector<std::pair<Iterator, Iterator>> pos;
-  size_t splits = 0;
-  auto i = begin;
-  auto prev = i;
-  while (i != end) {
-    // Find a separator that fits in the string.
-    if (*i != sep[0] || i + sep.size() > end) {
-      ++i;
-      continue;
-    }
-    // Check remaining separator characters.
-    size_t j = 1;
-    auto s = i;
-    while (j < sep.size())
-      if (*++s != sep[j])
-        break;
-      else
-        ++j;
-    // No separator match.
-    if (j != sep.size()) {
-      ++i;
-      continue;
-    }
-    // Make sure it's not an escaped match.
-    if (!esc.empty() && esc.size() < static_cast<size_t>(i - begin)) {
-      auto escaped = true;
-      auto esc_start = i - esc.size();
-      for (size_t j = 0; j < esc.size(); ++j)
-        if (esc_start[j] != esc[j]) {
-          escaped = false;
-          break;
-        }
-      if (escaped) {
-        ++i;
-        continue;
-      }
-    }
-    if (splits++ == max_splits)
-      break;
-    pos.emplace_back(prev, i);
-    if (include_sep)
-      pos.emplace_back(i, i + sep.size());
-    i += sep.size();
-    prev = i;
-  }
-  if (prev != end)
-    pos.emplace_back(prev, end);
-  return pos;
-}
-
-std::vector<std::pair<std::string::const_iterator, std::string::const_iterator>>
-inline split(const std::string& str, const std::string& sep,
-             const std::string& esc = "", size_t max_splits = -1,
-             bool include_sep = false) {
-  return split(str.begin(), str.end(), sep, esc, max_splits, include_sep);
-}
+/// @pre `!sep.empty()`
+/// @warning The lifetime of the returned substrings are bound to the lifetime
+/// of the string pointed to by `str`.
+/// @returns A vector of substrings.
+std::vector<std::string_view> split(std::string_view str, std::string_view sep,
+                                    std::string_view esc = "",
+                                    size_t max_splits = -1,
+                                    bool include_sep = false);
 
 /// Constructs a `std::vector<std::string>` from a ::split result.
 /// @param v The vector of iterator pairs from ::split.
 /// @returns a vector of strings with the split elements.
-template <class Iterator>
-auto to_strings(const std::vector<std::pair<Iterator, Iterator>>& v) {
-  std::vector<std::string> strs;
-  strs.resize(v.size());
-  for (size_t i = 0; i < v.size(); ++i)
-    strs[i] = {v[i].first, v[i].second};
-  return strs;
-}
+std::vector<std::string> to_strings(const std::vector<std::string_view>& v);
 
 /// Combines ::split and ::to_strings.
-template <class Iterator>
-auto split_to_str(Iterator begin, Iterator end, const std::string& sep,
-                  const std::string& esc = "", size_t max_splits = -1,
-                  bool include_sep = false) {
-  return to_strings(split(begin, end, sep, esc, max_splits, include_sep));
-}
-
-inline auto split_to_str(const std::string& str, const std::string& sep,
-                         const std::string& esc = "", size_t max_splits = -1,
+inline auto split_to_str(std::string_view str, std::string_view sep,
+                         std::string_view esc = "", size_t max_splits = -1,
                          bool include_sep = false) {
-  return split_to_str(str.begin(), str.end(), sep, esc, max_splits,
-                      include_sep);
+  return to_strings(split(str, sep, esc, max_splits, include_sep));
 }
 
 /// Joins a sequence of strings according to a seperator.
@@ -489,14 +414,14 @@ std::string join(const std::vector<T>& v, const std::string& sep) {
 /// @param str The substring to check at the start of *[begin, end)*.
 /// @returns `true` iff *str* occurs at the beginning of *[begin, end)*.
 template <class Iterator>
-bool starts_with(Iterator begin, Iterator end, const std::string& str) {
+bool starts_with(Iterator begin, Iterator end, std::string_view str) {
   using diff = typename std::iterator_traits<Iterator>::difference_type;
   if (static_cast<diff>(str.size()) > end - begin)
     return false;
   return std::equal(str.begin(), str.end(), begin);
 }
 
-inline bool starts_with(const std::string& str, const std::string& start) {
+inline bool starts_with(std::string_view str, std::string_view start) {
   return starts_with(str.begin(), str.end(), start);
 }
 
@@ -506,13 +431,13 @@ inline bool starts_with(const std::string& str, const std::string& start) {
 /// @param str The substring to check at the end of *[begin, end)*.
 /// @returns `true` iff *str* occurs at the end of *[begin, end)*.
 template <class Iterator>
-bool ends_with(Iterator begin, Iterator end, const std::string& str) {
+bool ends_with(Iterator begin, Iterator end, std::string_view str) {
   using diff = typename std::iterator_traits<Iterator>::difference_type;
   return static_cast<diff>(str.size()) <= end - begin
          && std::equal(str.begin(), str.end(), end - str.size());
 }
 
-inline bool ends_with(const std::string& str, const std::string& end) {
+inline bool ends_with(std::string_view str, std::string_view end) {
   return ends_with(str.begin(), str.end(), end);
 }
 
