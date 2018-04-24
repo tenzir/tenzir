@@ -1,0 +1,125 @@
+#!/bin/sh
+#
+# Gitlab script to configure, build, and unit-test VAST on multiple platforms.
+#
+
+set -e # Abort on error.
+
+usage() {
+  printf "usage: %s OPTIONS TARGET \n" $(basename $0)
+  echo
+  echo 'TARGET:'
+  echo '    caf  <clone path> <install path>   clone, build and install caf' 
+  echo '    vast <caf path> <install path>     build and install vast'
+  echo '    test <caf install path> <vast install path>  run vast-test'
+  echo
+  echo 'OPTIONS:'
+  echo '    -h        print this info'
+  echo
+  echo 'environment variables:'
+  echo '    BUILD     build type [relase|debug|asan|gcov]'
+  echo '    COMPILER  compiler type [clang|gcc]'
+  echo
+}
+
+while getopts "h?" opt; do
+  case "$opt" in
+    h|\?)
+      usage
+      exit 0
+    ;;
+  esac
+done
+
+# Command line handling.
+shift $(expr $OPTIND - 1)
+target="$1"; shift # caf or vast
+
+# Configure build environment.
+workspace="$(pwd)"
+os=$(uname)
+
+if [ "$os" = "FreeBSD" ]; then
+  # BSD make in combintation with CMake has trouble with paths that contain
+  # white space, so fall back to GNU make...alas.
+  alias make=gmake
+fi
+
+# Setup compilers.
+if [ "$COMPILER" = "gcc" ]; then
+  export CXX=g++-7
+elif [ "$COMPILER" = "clang" ]; then
+  export CXX=/usr/local/opt/llvm/bin/clang++
+  export LDFLAGS=$(/usr/local/opt/llvm/bin/llvm-config --ldflags)
+fi
+# Make should use all available cores.
+export MAKEFLAGS="-j$(sysctl -n hw.ncpu)"
+
+# Build CAF.
+if [ "$target" = "caf" ]; then
+  caf_clone_folder="$workspace/$1"; shift
+  caf_install_folder="$workspace/$1"; shift
+  if [ -d "$caf_clone_folder" ]; then
+    cd "$caf_clone_folder"
+    git pull
+  else
+    git clone https://github.com/actor-framework/actor-framework.git "$caf_clone_folder"
+    cd "$caf_clone_folder"
+  fi
+  configure="./configure --no-examples --no-unit-tests --no-opencl"
+  configure="$configure --no-openssl --no-tools --no-python"
+  configure="$configure --prefix=$caf_install_folder"
+  if [ "$BUILD" = "release" ]; then
+    configure="$configure --build-type=Release"
+  elif [ "$BUILD" = "debug" ]; then
+    configure="$configure --build-type=Debug --with-runtime-checks"
+  elif [ "$BUILD" = "asan" ]; then
+    configure="$configure --with-address-sanitizer"
+  fi
+  eval $configure
+  cd build
+  make
+  make install
+fi
+
+# Build VAST.
+if [ "$target" = "vast" ]; then
+  caf_install_folder="$workspace/$1"; shift
+  vast_install_folder="$workspace/$1"; shift
+  if [ "$os" = "Darwin" ]; then
+    export DYLD_LIBRARY_PATH="$caf_install_folder/lib"
+  else
+    export LD_LIBRARY_PATH="$caf_install_folder/lib"
+  fi
+  configure="./configure --with-caf=$caf_install_folder"
+  configure="$configure --prefix=$vast_install_folder"
+  if [ "$BUILD" = "release" ]; then
+    configure="$configure --build-type=Release"
+  elif [ "$BUILD" = "debug" ]; then
+    configure="$configure --build-type=Debug"
+  elif [ "$BUILD" = "asan" ]; then
+    configure="$configure --build-type=RelWithDebInfo --enable-asan"
+  elif [ "$BUILD" = "gcov" ]; then
+    configure="$configure --build-type=Debug --enable-gcov"
+  fi
+  eval $configure
+  make
+  if [ "$BUILD" = "gcov" ]; then
+    make coverage
+  else
+    make install
+    cp -r build/bin $vast_install_folder/.
+  fi
+fi
+
+if [ "$target" = "test" ]; then
+  caf_install_folder="$workspace/$1"; shift
+  vast_install_folder="$workspace/$1"; shift
+  lib_paths="$caf_install_folder/lib:$vast_install_folder/lib"
+  if [ "$os" = "Darwin" ]; then
+    export DYLD_LIBRARY_PATH="$lib_paths"
+  else
+    export LD_LIBRARY_PATH="$lib_paths"
+  fi
+  $vast_install_folder/bin/vast-test -v 3 -n -r 600
+fi

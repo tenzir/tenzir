@@ -1,0 +1,137 @@
+stages:
+  - dependencies
+  - build
+  - unit-test
+  - coverage
+  - deploy
+
+### Templates
+.build_caf_template: &build_caf_template
+  stage: dependencies
+  script:
+    - scripts/gitlab caf aux/caf caf_install_folder
+  cache:
+    key: "${CI_JOB_NAME}-${CI_PROJECT_DIR}"
+    paths:
+      - aux/caf/
+  artifacts:
+    paths:
+    - caf_install_folder
+
+.build_vast_template: &build_vast_template
+  stage: build
+  script:
+    - scripts/gitlab vast caf_install_folder vast_install_folder
+  cache:
+    key: "${CI_JOB_NAME}-${CI_PROJECT_DIR}"
+    paths:
+      - build/
+  artifacts:
+    paths:
+      - vast_install_folder
+
+.test_template: &test_template
+  stage: unit-test
+  script:
+    - scripts/gitlab test caf_install_folder vast_install_folder
+
+### Code Coverage
+# see: https://tenzir.gitlab.io/vast
+build_vast:osx:clang:gcov:
+  stage: coverage
+  script:
+    - scripts/gitlab vast caf_install_folder vast_install_folder
+  cache:
+    key: "${CI_JOB_NAME}-${CI_PROJECT_DIR}"
+    paths:
+      - build/
+  artifacts:
+    paths:
+      - build/coverage.html
+  variables:
+    BUILD: "gcov"
+    COMPILER: "clang"
+  dependencies:
+    - build_caf:osx:clang:debug
+  tags:
+    - osx
+    - clang
+
+pages:
+  stage: deploy
+  dependencies:
+    - build_vast:osx:clang:gcov
+  script:
+    - mkdir public
+    - mv build/coverage.html public/index.html
+    - ls public/
+  artifacts:
+    paths:
+      - public
+  #only:
+    #- master
+
+####################
+### Matrix Build ###
+####################
+
+### Dependency Stages
+build_caf:osx:clang:release:
+  <<: *build_caf_template
+  variables:
+    BUILD: "release"
+    COMPILER: "clang"
+  tags:
+    - osx
+    - clang
+
+build_caf:osx:clang:debug:
+  <<: *build_caf_template
+  variables:
+    BUILD: "debug"
+    COMPILER: "clang"
+  tags:
+    - osx
+    - clang
+
+### Build Stages
+build_vast:osx:clang:release:
+  <<: *build_vast_template
+  variables:
+    BUILD: "release"
+    COMPILER: "clang"
+  tags:
+    - osx
+    - clang
+  dependencies:
+    - build_caf:osx:clang:release
+
+build_vast:osx:clang:debug:
+  <<: *build_vast_template
+  variables:
+    BUILD: "debug"
+    COMPILER: "clang"
+  tags:
+    - osx
+    - clang
+  dependencies:
+    - build_caf:osx:clang:debug
+
+### Test Stages
+test:osx:clang:release:
+  <<: *test_template
+  dependencies:
+    - build_caf:osx:clang:release
+    - build_vast:osx:clang:release
+  tags:
+    - osx
+    - clang
+
+test:osx:clang:debug:
+  <<: *test_template
+  dependencies:
+    - build_caf:osx:clang:debug
+    - build_vast:osx:clang:debug
+  tags:
+    - osx
+    - clang
