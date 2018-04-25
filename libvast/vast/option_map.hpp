@@ -29,27 +29,40 @@ namespace vast {
 /// A map for CLI options.
 class option_map {
 public:
-  // FIXME: the map api is not complete
-  using map_type = detail::steady_map<std::string, data>;
-  using iterator = map_type::iterator;
-  using const_iterator = map_type::const_iterator;
-  using reverse_iterator = map_type::reverse_iterator;
-  using const_reverse_iterator = map_type::const_reverse_iterator;
-  using size_type = map_type::size_type;
+  // -- types ----------------------------------------------------------------
 
-  optional<data> get(const std::string& name) const;
+  using key_type = std::string;
+  using mapped_type = data;
+  using value_type = std::pair<key_type, mapped_type>;
+  using map_type = detail::steady_map<key_type, mapped_type>;
+  using size_type = typename map_type::size_type;
+  using difference_type = typename map_type::difference_type;
+  using allocator_type = typename map_type::allocator_type;
+  using reference = typename map_type::reference;
+  using const_reference = typename map_type::const_reference;
+  using pointer = typename map_type::pointer;
+  using const_pointer = typename map_type::const_pointer;
+  using iterator = typename map_type::iterator;
+  using const_iterator = typename map_type::const_iterator;
+  using reverse_iterator = typename map_type::reverse_iterator;
+  using const_reverse_iterator = typename map_type::const_reverse_iterator;
 
-  data get_or(const std::string& name, const data& default_value) const;
+  // -- lookup ---------------------------------------------------------------
 
-  inline optional<data> operator[](const std::string& name) const {
-    return get(name);
-  }
+  optional<mapped_type> get(const key_type& name) const;
 
-  void set(const std::string& name, const data& x);
+  mapped_type get_or(const key_type& name,
+                     const mapped_type& default_value) const;
 
-  expected<void> add(const std::string& name, const data& x);
+  optional<mapped_type> operator[](const key_type& name) const;
 
-  void clear() {
+  // -- modifiers ------------------------------------------------------------
+
+  expected<void> add(const key_type& name, const mapped_type& x);
+
+  void set(const key_type& name, const mapped_type& x);
+
+  inline void clear() {
     xs_.clear();
   }
 
@@ -96,7 +109,6 @@ public:
   inline auto size() const {
     return xs_.size();
   }
-
 private:
   map_type xs_;
 };

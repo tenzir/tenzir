@@ -21,25 +21,30 @@
 
 namespace vast {
 
-
-optional<data> option_map::get(const std::string& name) const {
+optional<option_map::mapped_type> option_map::get(const key_type& name) const {
   if (auto x = xs_.find(name); x != xs_.end())
     return x->second;
   return {};
 }
 
-data option_map::get_or(const std::string& name, const data& default_value) const {
+option_map::mapped_type
+option_map::get_or(const key_type& name,
+                   const mapped_type& default_value) const {
   if(auto x = get(name); x)
     return *x;
   return default_value;
 }
 
-void option_map::set(const std::string& name, const data& x) {
+optional<option_map::mapped_type> option_map::
+operator[](const key_type& name) const {
+  return get(name);
+}
+
+void option_map::set(const key_type& name, const mapped_type& x) {
   xs_[name] = x;
 }
 
-
-expected<void> option_map::add(const std::string& name, const data& x) {
+expected<void> option_map::add(const key_type& name, const mapped_type& x) {
   if (auto it = xs_.find(name); it != xs_.end()) 
     return make_error(ec::unspecified, "name: " + name + " already exist");
   set(name, x);

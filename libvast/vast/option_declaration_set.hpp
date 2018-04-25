@@ -27,6 +27,8 @@ namespace vast {
 
 class option_map;
 
+// FIXME: const std::string& to string_view
+
 /// A set of `option_declarations` that can fill an `option_map` from a CLI
 /// string.
 class option_declaration_set {
