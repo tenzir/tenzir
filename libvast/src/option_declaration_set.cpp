@@ -109,7 +109,7 @@ std::string option_declaration_set::usage() const {
 expected<void> option_declaration_set::add(const std::string& name,
                                            const std::string& desciption,
                                            data default_value) {
-  // Parse short name and long name.
+  // Parse short and long name.
   std::string long_name;
   std::vector<char> short_names;
   if (auto idx = name.find(','); idx == std::string_view::npos) {
@@ -146,49 +146,47 @@ expected<void> option_declaration_set::add(const std::string& name,
   return no_error;
 }
 
-std::pair<option_declaration_set::parse_result,
+std::pair<option_declaration_set::parse_state,
           option_declaration_set::argument_iterator>
 option_declaration_set::parse(option_map& xs, argument_iterator begin,
                               argument_iterator end) const {
-  // add all default values to the map
+  // Add all default values to the map.
   for (auto& [long_name, x] : long_opts_) {
-    // FIXME: the option help exists in every declaration and might cause and
-    // error
     if (auto res = xs.add(long_name, x->default_value()); !res)
       if (long_name != "help")
-        return std::make_pair(parse_result::option_already_exists, end);
+        return std::make_pair(parse_state::option_already_exists, end);
   }
-   //TODO: comment parse
   auto parse_argument = [&](auto idx, const auto& option, auto begin, auto end) {
     auto make_result = [](auto state, auto it, auto result) {
       return std::make_pair(std::make_pair(state, it), std::move(result));
     };
     if (begin == end)
-      return make_result(parse_result::arg_declared_but_not_passed, begin,
+      return make_result(parse_state::arg_declared_but_not_passed, begin,
                          data{});
     auto arg = begin->substr(idx);
     auto result = option->parse(arg);
     if (result)
-      return make_result(parse_result::successful, ++begin,
+      return make_result(parse_state::successful, ++begin,
                          std::move(*result));
-    return make_result(parse_result::faild_to_parse_argument, begin, data{});
+    return make_result(parse_state::faild_to_parse_argument, begin, data{});
   };
   auto parse_short_option = [&](auto begin, auto end) {
-    // extract short_name ("-s", "-s42", "-s"+"42")
+    // Extract the short name one of the fllowing strings: 
+    // "-s", "-sXX", ["-s" "XX"]
     auto& x = *begin;
     auto indicator = 1u; // char count of "-"
     if (x.size() <= indicator)
-      return std::make_pair(parse_result::name_not_declartion, begin);
+      return std::make_pair(parse_state::name_not_declartion, begin);
     auto short_name = x[1];
-    // find option
+    // Parse the argument if available.
     auto it = short_opts_.find(short_name);
     if (it == short_opts_.end())
-      return std::make_pair(parse_result::name_not_declartion, begin);
+      return std::make_pair(parse_state::name_not_declartion, begin);
     auto& [_, option] = *it;
     auto& long_name = option->long_name();
-    // parse argument if available
+    // Parse the argument if available.
     if (option->has_argument()) {
-      std::pair<parse_result, decltype(begin)> res;
+      std::pair<parse_state, decltype(begin)> res;
       data argument;
       if (x.size() > indicator + 1) {
         std::tie(res, argument)
@@ -196,56 +194,57 @@ option_declaration_set::parse(option_map& xs, argument_iterator begin,
       } else {
         std::tie(res, argument) = parse_argument(0, option, ++begin, end);
       }
-      if (res.first != parse_result::successful)
+      if (res.first != parse_state::successful)
         return res;
       xs.set(long_name, argument);
-      return std::make_pair(parse_result::in_progress, res.second);
+      return std::make_pair(parse_state::in_progress, res.second);
     } else {
       if (x.size() > indicator + 1)
-        return std::make_pair(parse_result::arg_passed_but_not_declared, begin);
+        return std::make_pair(parse_state::arg_passed_but_not_declared, begin);
       xs.set(long_name, true);
-      return std::make_pair(parse_result::in_progress, ++begin);
+      return std::make_pair(parse_state::in_progress, ++begin);
     }
   };
   auto parse_long_option = [&](auto begin, auto end) {
-    // extract long_name ("--long_name", "--long_name=...")
+    // Extract the long_name from one of the following strings: 
+    // "--long_name", "--long_name=XX".
     auto& x = *begin;
     auto idx = x.find('=');
     auto indicator = 2u; // char count of "--"
     auto long_name = x.substr(indicator, idx - indicator);
-    // find option
+    // Searches for the releated option.
     auto it = long_opts_.find(long_name);
     if (it == long_opts_.end())
-      return std::make_pair(parse_result::name_not_declartion, begin);
+      return std::make_pair(parse_state::name_not_declartion, begin);
     auto& [_, option] = *it;
-    // parse argument if available
+    // Parse the argument if available.
     if (option->has_argument()) {
       if (idx == std::string::npos)
-        return std::make_pair(parse_result::arg_declared_but_not_passed, begin);
+        return std::make_pair(parse_state::arg_declared_but_not_passed, begin);
       auto [res, argument] = parse_argument(idx + 1, option, begin, end);
-      if (res.first != parse_result::successful)
+      if (res.first != parse_state::successful)
         return res;
       xs.set(long_name, argument);
-      return std::make_pair(parse_result::in_progress, res.second);
+      return std::make_pair(parse_state::in_progress, res.second);
     } else {
       if (idx != std::string::npos)
-        return std::make_pair(parse_result::arg_passed_but_not_declared, begin);
+        return std::make_pair(parse_state::arg_passed_but_not_declared, begin);
       xs.set(long_name, true);
-      return std::make_pair(parse_result::in_progress, ++begin);
+      return std::make_pair(parse_state::in_progress, ++begin);
     }
   };
   auto dispatch = [&](auto begin, auto end) {
     if (begin == end)
-      return std::make_pair(parse_result::successful, end);
+      return std::make_pair(parse_state::successful, end);
     if (detail::starts_with(*begin, "--"))
       return parse_long_option(begin, end);
     else if (detail::starts_with(*begin, "-"))
       return parse_short_option(begin, end);
     else
-      return std::make_pair(parse_result::begin_is_not_an_option, begin);
+      return std::make_pair(parse_state::begin_is_not_an_option, begin);
   };
   auto [state, it] = dispatch(begin, end);
-  while (state == parse_result::in_progress) {
+  while (state == parse_state::in_progress) {
     std::tie(state, it) = dispatch(it, end);
   }
   return std::make_pair(state, it);

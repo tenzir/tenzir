@@ -75,7 +75,7 @@ TEST(cli parsing) {
   auto check_all_options = [&](const auto& args) {
     opts.clear();
     auto [state, it] = decl.parse(opts, args.begin(), args.end());
-    CHECK_EQUAL(state, option_declaration_set::parse_result::successful);
+    CHECK_EQUAL(state, option_declaration_set::parse_state::successful);
     CHECK_EQUAL(it, args.end());
     check_option("boolean", true);
     check_option("integer", 42);
@@ -87,7 +87,7 @@ TEST(cli parsing) {
   MESSAGE("Test default values");
   auto args = split("");
   auto [state, it] = decl.parse(opts, args.begin(), args.end());
-  CHECK_EQUAL(state, option_declaration_set::parse_result::successful);
+  CHECK_EQUAL(state, option_declaration_set::parse_state::successful);
   CHECK_EQUAL(it, args.end());
   check_option("boolean", false);
   check_option("integer", 1);
@@ -110,12 +110,12 @@ TEST(cli parsing) {
   opts.clear();
   args = split("--boolean --integer=42 --string=test");
   std::tie(state, it) = decl.parse(opts, args.begin(), args.end());
-  CHECK_EQUAL(state, option_declaration_set::parse_result::successful);
+  CHECK_EQUAL(state, option_declaration_set::parse_state::successful);
   CHECK_EQUAL(it, args.end());
   args = split("--integer2=1337 -stest2");
   std::tie(state, it) = decl2.parse(opts, args.begin(), args.end());
   std::cerr << "state:::" << static_cast<int>(state) << std::endl;
-  CHECK_EQUAL(state, option_declaration_set::parse_result::successful);
+  CHECK_EQUAL(state, option_declaration_set::parse_state::successful);
   CHECK_EQUAL(it, args.end());
   check_option("boolean", true);
   check_option("boolean2", false);

@@ -27,7 +27,9 @@ namespace vast {
 
 class option_map;
 
-// FIXME: const std::string& to string_view
+// FIXME: Use string_view instead of const std::string& where apropiate.
+// The Steady_map currently does not allow to use string_views to search for
+// strings
 
 /// A set of `option_declarations` that can fill an `option_map` from a CLI
 /// string.
@@ -38,24 +40,27 @@ public:
   public:
     /// Constructs a declation of an option.
     /// @param long_name A long name that identifies this option.
-    /// @param short_name A short name that identifies this option.
-    /// @param description An info to this option.
-    /// @param has_argument A flag that describes whether this option an
+    /// @param short_names A vector of short name that identifies this option.
+    /// @param description A decprition to this option.
+    /// @param has_argument A flag that describes whether this option has an
     /// argument.
-    /// @param default_value A value thats is used when the option is not set by
+    /// @param default_value A value that is used when the option is not set by
     /// a user.
     option_declaration(std::string long_name, std::vector<char> short_names,
                        std::string description, bool has_argument,
                        data default_value);
 
+    /// Returns the long name.
     inline const auto& long_name() const {
       return long_name_;
     }
 
+    /// Returns a vector short names.
     inline const auto& short_names() const {
       return short_names_;
     }
 
+    /// Returns a description.
     inline const auto& description() const {
       return description_;
     }
@@ -65,12 +70,12 @@ public:
       return has_argument_;
     }
 
+    /// Returns the default value.
     inline const auto& default_value() const {
       return default_value_;
     }
 
-    /// Creates a `data` from a parsed string.
-    ///// if this option has no argument this function cannot be called
+    /// Creates a `data` with the type of `default_value` from a string.
     /// @param value The string from that the `data` is created.
     /// @returns either a data with the parsed value or an `error`.
     expected<data> parse(const std::string& value) const;
@@ -84,9 +89,8 @@ public:
 
   using argument_iterator = std::vector<std::string>::const_iterator;
 
-  /// Wraps the parse result.
-  enum class parse_result {
-    in_progress = 0,
+  /// Wraps the parse state.
+  enum class parse_state {
     successful,
     option_already_exists,
     begin_is_not_an_option,
@@ -94,13 +98,14 @@ public:
     arg_passed_but_not_declared,
     arg_declared_but_not_passed,
     faild_to_parse_argument,
-    parsing_error // FIXME: remove me
+    in_progress
   };
 
+  /// Creates an a set of `option_declaration`.
   option_declaration_set();
 
   /// Adds an `option_declation` to the set.
-  /// @param name Long and (optional) short option names in the format
+  /// @param name The Long name and optional short option names in the format
   ///             "<long name>,[<short names 1><short name 2><...>]", where a
   ///             short name consists of exact one char.
   /// @returns An error if a) no long option name exists, b) long option is name
@@ -108,9 +113,10 @@ public:
   expected<void> add(const std::string& name, const std::string& desciption,
                      data default_value);
 
-  /// Creates a pretty summary of all option declarations.
+  /// Creates a summary of all option declarations.
   std::string usage() const;
 
+  /// Determines the number of added `options_declarations's.
   inline size_t size() const {
     return long_opts_.size();
   }
@@ -118,17 +124,16 @@ public:
   /// Searches for an `option_declaration` by its long name.
   optional<const option_declaration&> find(const std::string& name) const;
 
-
-  /// Parses CLI arguments and fills a map of options with all found values.
+  /// Fills an `option_map` from parsed CLI arguments.
   /// @param option_map The map of options that shall be filled.
-  /// @param begin The first argument that shall being parsed.
-  /// @param end The *past-the-end* pointer of the last argument.
-  /// @returns a pair constisting of an 'error' and an iterator.
-  ///          The `error` is empty when all arguments are successfully parsed.
-  ///          Otherwise, it contains a description why an error occurred. The
-  ///          'iterator' points to the argument where the parser encountered an
-  ///          error or to the `end`.
-  std::pair<parse_result, argument_iterator>
+  /// @param begin The iterator to the first argument that shall being parsed.
+  /// @param end The *past-the-end* iterator of the last argument.
+  /// @returns a pair constisting of a 'parser_state' and an iterator.
+  ///          The `state` is *successful* when all arguments are successfully
+  ///          parsed. Otherwise, it contains a value specific to the occurred
+  ///          error. The 'iterator' points to the argument where the parser
+  ///          encountered an error otherwise it points to the `end`.
+  std::pair<parse_state, argument_iterator>
   parse(option_map& xs, argument_iterator begin, argument_iterator end) const;
 
 private:

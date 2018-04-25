@@ -24,7 +24,9 @@
 
 namespace vast {
 
-// FIXME: const std::string& to string_view
+// FIXME: Use string_view instead of const std::string& where apropiate.
+// The Steady_map currently does not allow to use string_views to search for
+// strings
 
 /// A map for CLI options.
 class option_map {
