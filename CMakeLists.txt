@@ -379,6 +379,14 @@ add_subdirectory(tools)
 add_subdirectory(vast)
 
 #------------------------------------------------------------------------------
+#                           Additional Installations
+#------------------------------------------------------------------------------
+
+# install date header to PREFIX/include/date
+install(DIRECTORY aux/date/include/date
+        DESTINATION include FILES_MATCHING PATTERN "date.h")
+
+#------------------------------------------------------------------------------
 #                                Build Summary
 #------------------------------------------------------------------------------
 

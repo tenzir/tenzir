@@ -139,6 +139,10 @@ install(TARGETS libvast DESTINATION lib)
 install(DIRECTORY vast/
         DESTINATION include/vast FILES_MATCHING PATTERN "*.hpp")
 
+# Install generated config header.
+install(DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/vast/"
+        DESTINATION include/vast FILES_MATCHING PATTERN "*.hpp")
+
 # ----------------------------------------------------------------------------
 #                                 unit tests
 # ----------------------------------------------------------------------------
