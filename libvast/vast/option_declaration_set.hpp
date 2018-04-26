@@ -75,10 +75,12 @@ public:
     /// Returns the default value.
     const data& default_value() const;
 
-    // FIXME: the comment below is outdated
     /// Creates a `data` with the type of `default_value` from a string.
     /// @param value The string from that the `data` is created.
-    /// @returns either a data with the parsed value or an `error`.
+    /// @returns a pair consisting of a `parser_state` and a `data`.
+    ///          The state is successful when the parser processes `value`
+    ///          without an error. If the state is not successful the
+    ///          *default_value* is returned.
     std::pair<parse_state, data> parse(std::string_view value) const;
   private:
     std::string long_name_;

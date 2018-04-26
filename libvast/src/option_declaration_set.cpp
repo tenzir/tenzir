@@ -237,7 +237,7 @@ option_declaration_set::parse(option_map& xs, argument_iterator begin,
       }
       if (res.first != parse_state::successful)
         return res;
-      xs.set(long_name, argument); //FIXME: std::move(argument)
+      xs.set(long_name, argument);
       return std::make_pair(parse_state::in_progress, res.second);
     } else {
       if (x.size() > indicator + 1)

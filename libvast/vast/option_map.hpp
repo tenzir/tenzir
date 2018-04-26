@@ -85,6 +85,7 @@ public:
   bool empty() const;
 
   size_type size() const;
+
 private:
   map_type xs_;
 };
