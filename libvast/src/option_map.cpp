@@ -13,11 +13,8 @@
 
 #include <sstream>
 
+#include "vast/error.hpp"
 #include "vast/option_map.hpp"
-
-#include "vast/concept/parseable/to.hpp"
-
-#include "vast/detail/string.hpp"
 
 namespace vast {
 

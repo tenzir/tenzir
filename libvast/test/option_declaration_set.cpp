@@ -62,15 +62,16 @@ TEST(declaration adding) {
 
 TEST(data type parsing) {
   using option = option_declaration_set::option_declaration;
+  using parse_state = option_declaration_set::parse_state;
   auto check_option
     = [](const option& opt, const std::string& str, auto expected_value) {
-        auto d = opt.parse(str);
-        REQUIRE(d);
-        CHECK_EQUAL(*d, expected_value);
+        auto [state, x] = opt.parse(str);
+        CHECK_EQUAL(state, parse_state::successful);
+        CHECK_EQUAL(x, expected_value);
       };
   auto check_fail_option = [](const option& opt, const std::string& str) {
-    auto d = opt.parse(str);
-    CHECK(!d);
+    auto [state, x] = opt.parse(str);
+    CHECK_NOT_EQUAL(state, parse_state::successful);
   }; 
   CHECK(decl.add("int", "", 1));  
   CHECK(decl.add("string", "", ""));  
@@ -82,9 +83,8 @@ TEST(data type parsing) {
   check_fail_option(*x, "X");
   MESSAGE("Test string");
   x = decl.find("string");
-  check_option(*x, "2", "2");
-  check_option(*x, "this is a test", "this is a test");
+  check_option(*x, "\"2\"", "2");
+  check_option(*x, "\"this is a test\"", "this is a test");
 }
-
 
 FIXTURE_SCOPE_END()

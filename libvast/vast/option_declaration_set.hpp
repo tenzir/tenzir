@@ -35,6 +35,20 @@ class option_map;
 /// string.
 class option_declaration_set {
 public:
+  /// Wraps the parse state.
+  enum class parse_state {
+    successful,
+    option_already_exists,
+    begin_is_not_an_option,
+    name_not_declartion,
+    arg_passed_but_not_declared,
+    arg_declared_but_not_passed,
+    failed_to_parse_argument,
+    type_not_parsebale,
+    mismatch_of_default_value_and_arugment,
+    in_progress
+  };
+
   /// A declaration of a CLI argument option.
   class option_declaration {
   public:
@@ -75,10 +89,11 @@ public:
       return default_value_;
     }
 
+    // FIXME: the comment below is outdated
     /// Creates a `data` with the type of `default_value` from a string.
     /// @param value The string from that the `data` is created.
     /// @returns either a data with the parsed value or an `error`.
-    expected<data> parse(const std::string& value) const;
+    std::pair<parse_state, data> parse(const std::string& value) const;
   private:
     std::string long_name_;
     std::vector<char> short_names_;
@@ -88,18 +103,6 @@ public:
   };
 
   using argument_iterator = std::vector<std::string>::const_iterator;
-
-  /// Wraps the parse state.
-  enum class parse_state {
-    successful,
-    option_already_exists,
-    begin_is_not_an_option,
-    name_not_declartion,
-    arg_passed_but_not_declared,
-    arg_declared_but_not_passed,
-    faild_to_parse_argument,
-    in_progress
-  };
 
   /// Creates an a set of `option_declaration`.
   option_declaration_set();

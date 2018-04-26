@@ -13,10 +13,13 @@
 
 #include <iomanip>
 
-#include "vast/option_declaration_set.hpp"
-
-#include "vast/option_map.hpp"
+#include "vast/aliases.hpp"
 #include "vast/error.hpp"
+#include "vast/option_declaration_set.hpp"
+#include "vast/option_map.hpp"
+
+#include "vast/concept/parseable/to.hpp"
+#include "vast/concept/parseable/vast/data.hpp"
 
 #include "vast/detail/overload.hpp"
 
@@ -33,28 +36,36 @@ option_declaration_set::option_declaration::option_declaration(
     // nop
 }
 
-expected<data> option_declaration_set::option_declaration::parse(
+std::pair<option_declaration_set::parse_state, data>
+option_declaration_set::option_declaration::parse(
   const std::string& value) const {
-  
-  // FIXME: Use vast parser instead of parsing it by hand
-  return visit(detail::overload(
-    [&](const auto& /*arg*/) -> expected<data> {
-      //using my_type = decltype(arg);
-      //return to<my_type>(std::string{value});
-      return make_error(ec::invalid_query, "");
+  auto result = visit(detail::overload(
+    [&](const auto& arg) {
+      using arg_type = std::decay_t<decltype(arg)>;
+      auto x = to<arg_type>(value);
+      if (!x)
+        // FIXME: We lose valuable error informaton here.
+        return std::make_pair(parse_state::failed_to_parse_argument,
+                              default_value());
+      return std::make_pair(parse_state::successful, data{*x});
     },
-    [&](std::string) -> expected<data> { 
-      return value;
+    [&](const none&) {
+      return std::make_pair(parse_state::type_not_parsebale,
+                              default_value());
     },
-    [&](integer) -> expected<data> { 
-      try {
-        return std::stoll(value); 
-      } catch (const std::invalid_argument& e) {
-        return make_error(ec::unspecified, e.what());
-      } catch (const std::out_of_range& e) {
-        return make_error(ec::unspecified, e.what());
-      }
+    [&](const set&) {
+      return std::make_pair(parse_state::type_not_parsebale,
+                              default_value());
+    },
+    [&](const table&) {
+      return std::make_pair(parse_state::type_not_parsebale,
+                              default_value());
+    },
+    [&](const vector&) {
+      return std::make_pair(parse_state::type_not_parsebale,
+                              default_value());
     }), default_value_);
+  return result; 
 }
 
 option_declaration_set::option_declaration_set() {
@@ -164,11 +175,10 @@ option_declaration_set::parse(option_map& xs, argument_iterator begin,
       return make_result(parse_state::arg_declared_but_not_passed, begin,
                          data{});
     auto arg = begin->substr(idx);
-    auto result = option->parse(arg);
-    if (result)
-      return make_result(parse_state::successful, ++begin,
-                         std::move(*result));
-    return make_result(parse_state::faild_to_parse_argument, begin, data{});
+    auto [state, result] = option->parse(arg);
+    if (state != parse_state::successful)
+      return make_result(state, begin, data{});
+    return make_result(state, ++begin, std::move(result));
   };
   auto parse_short_option = [&](auto begin, auto end) {
     // Extract the short name one of the fllowing strings: 
@@ -196,7 +206,7 @@ option_declaration_set::parse(option_map& xs, argument_iterator begin,
       }
       if (res.first != parse_state::successful)
         return res;
-      xs.set(long_name, argument);
+      xs.set(long_name, argument); //FIXME: std::move(argument)
       return std::make_pair(parse_state::in_progress, res.second);
     } else {
       if (x.size() > indicator + 1)
