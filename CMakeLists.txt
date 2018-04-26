@@ -408,7 +408,12 @@ elseif (VAST_LOG_LEVEL EQUAL 3)
 elseif (VAST_LOG_LEVEL EQUAL 4)
   set(log_level_summary trace)
 else ()
-  message(FATAL_ERROR "Invalid log level: ${VAST_LOG_LEVEL}")
+  # Pick default level based on build type.
+  if (CMAKE_BUILD_TYPE STREQUAL "Release")
+    set(log_level_summary info)
+  else ()
+    set(log_level_summary debug)
+  endif ()
 endif ()
 
 set(caf_dir ${CAF_LIBRARY_CORE})
