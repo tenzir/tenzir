@@ -64,53 +64,31 @@ public:
 
   void set(const key_type& name, const mapped_type& x);
 
-  inline void clear() {
-    xs_.clear();
-  }
+  void clear();
 
   // -- iterators ------------------------------------------------------------
 
-  inline auto begin() {
-    return xs_.begin();
-  }
+  iterator begin();
 
-  inline auto begin() const {
-    return xs_.begin();
-  }
+  const_iterator begin() const;
 
-  inline auto end() {
-    return xs_.end();
-  }
+  iterator end();
 
-  inline auto end() const {
-    return xs_.end();
-  }
+  const_iterator end() const;
 
-  inline auto rbegin() {
-    return xs_.rbegin();
-  }
+  reverse_iterator rbegin();
 
-  inline auto rbegin() const {
-    return xs_.rbegin();
-  }
+  const_reverse_iterator rbegin() const;
 
-  inline auto rend() {
-    return xs_.rend();
-  }
+  reverse_iterator rend();
 
-  inline auto rend() const {
-    return xs_.rend();
-  }
+  const_reverse_iterator rend() const;
 
   // -- capacity -------------------------------------------------------------
 
-  inline auto empty() const {
-    return xs_.empty();
-  }
+  bool empty() const;
 
-  inline auto size() const {
-    return xs_.size();
-  }
+  size_type size() const;
 private:
   map_type xs_;
 };

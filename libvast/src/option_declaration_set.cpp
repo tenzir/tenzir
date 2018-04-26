@@ -68,6 +68,29 @@ option_declaration_set::option_declaration::parse(
   return result; 
 }
 
+const std::string&
+option_declaration_set::option_declaration::long_name() const {
+  return long_name_;
+}
+
+const std::vector<char>&
+option_declaration_set::option_declaration::short_names() const {
+  return short_names_;
+}
+
+const std::string&
+option_declaration_set::option_declaration::description() const {
+  return description_;
+}
+
+bool option_declaration_set::option_declaration::has_argument() const {
+  return has_argument_;
+}
+
+const data& option_declaration_set::option_declaration::default_value() const {
+  return default_value_;
+}
+
 option_declaration_set::option_declaration_set() {
   add("help,h?", "print this text", false);
 }
@@ -115,6 +138,10 @@ std::string option_declaration_set::usage() const {
         << " : " << x->description();
   }
   return res.str();
+}
+
+size_t option_declaration_set::size() const {
+  return long_opts_.size();
 }
 
 expected<void> option_declaration_set::add(const std::string& name,

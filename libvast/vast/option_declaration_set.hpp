@@ -65,29 +65,19 @@ public:
                        data default_value);
 
     /// Returns the long name.
-    inline const auto& long_name() const {
-      return long_name_;
-    }
+    const std::string& long_name() const;
 
     /// Returns a vector short names.
-    inline const auto& short_names() const {
-      return short_names_;
-    }
+    const std::vector<char>& short_names() const;
 
     /// Returns a description.
-    inline const auto& description() const {
-      return description_;
-    }
+    const std::string& description() const;
 
     /// Checks whether this option requires an argument.
-    inline auto has_argument() const {
-      return has_argument_;
-    }
+    bool has_argument() const;
 
     /// Returns the default value.
-    inline const auto& default_value() const {
-      return default_value_;
-    }
+    const data& default_value() const;
 
     // FIXME: the comment below is outdated
     /// Creates a `data` with the type of `default_value` from a string.
@@ -120,9 +110,7 @@ public:
   std::string usage() const;
 
   /// Determines the number of added `options_declarations's.
-  inline size_t size() const {
-    return long_opts_.size();
-  }
+  size_t size() const;
 
   /// Searches for an `option_declaration` by its long name.
   optional<const option_declaration&> find(const std::string& name) const;
