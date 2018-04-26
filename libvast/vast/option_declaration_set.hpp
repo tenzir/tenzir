@@ -27,10 +27,6 @@ namespace vast {
 
 class option_map;
 
-// FIXME: Use string_view instead of const std::string& where apropiate.
-// The Steady_map currently does not allow to use string_views to search for
-// strings
-
 /// A set of `option_declarations` that can fill an `option_map` from a CLI
 /// string.
 class option_declaration_set {
@@ -60,8 +56,8 @@ public:
     /// argument.
     /// @param default_value A value that is used when the option is not set by
     /// a user.
-    option_declaration(std::string long_name, std::vector<char> short_names,
-                       std::string description, bool has_argument,
+    option_declaration(std::string_view long_name, std::vector<char> short_names,
+                       std::string_view description, bool has_argument,
                        data default_value);
 
     /// Returns the long name.
@@ -83,7 +79,7 @@ public:
     /// Creates a `data` with the type of `default_value` from a string.
     /// @param value The string from that the `data` is created.
     /// @returns either a data with the parsed value or an `error`.
-    std::pair<parse_state, data> parse(const std::string& value) const;
+    std::pair<parse_state, data> parse(std::string_view value) const;
   private:
     std::string long_name_;
     std::vector<char> short_names_;
@@ -103,7 +99,7 @@ public:
   ///             short name consists of exact one char.
   /// @returns An error if a) no long option name exists, b) long option is name
   ///          taken, c) short option name is taken
-  expected<void> add(const std::string& name, const std::string& desciption,
+  expected<void> add(std::string_view name, std::string_view desciption,
                      data default_value);
 
   /// Creates a summary of all option declarations.
@@ -113,7 +109,7 @@ public:
   size_t size() const;
 
   /// Searches for an `option_declaration` by its long name.
-  optional<const option_declaration&> find(const std::string& name) const;
+  optional<const option_declaration&> find(std::string_view name) const;
 
   /// Fills an `option_map` from parsed CLI arguments.
   /// @param option_map The map of options that shall be filled.

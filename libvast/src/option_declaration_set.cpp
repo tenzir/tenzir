@@ -26,19 +26,19 @@
 namespace vast {
 
 option_declaration_set::option_declaration::option_declaration(
-  std::string long_name, std::vector<char> short_names, std::string description,
-  bool has_argument, data default_value)
-    : long_name_(std::move(long_name)),
-      short_names_(std::move(short_names)),
-      description_(std::move(description)),
-      has_argument_(has_argument),
-      default_value_(std::move(default_value)) {
-    // nop
+  std::string_view long_name, std::vector<char> short_names,
+  std::string_view description, bool has_argument, data default_value)
+  : long_name_(long_name),
+    short_names_(std::move(short_names)),
+    description_(description),
+    has_argument_(has_argument),
+    default_value_(std::move(default_value)) {
+  // nop
 }
 
 std::pair<option_declaration_set::parse_state, data>
 option_declaration_set::option_declaration::parse(
-  const std::string& value) const {
+  std::string_view value) const {
   auto result = visit(detail::overload(
     [&](const auto& arg) {
       using arg_type = std::decay_t<decltype(arg)>;
@@ -49,6 +49,8 @@ option_declaration_set::option_declaration::parse(
                               default_value());
       return std::make_pair(parse_state::successful, data{*x});
     },
+    // TODO: These overloads are nessesary as no respective parser exists at the 
+    // moment. Remove me when possible.
     [&](const none&) {
       return std::make_pair(parse_state::type_not_parsebale,
                               default_value());
@@ -96,8 +98,9 @@ option_declaration_set::option_declaration_set() {
 }
 
 optional<const option_declaration_set::option_declaration&>
-option_declaration_set::find(const std::string& name) const {
-  if (auto it = long_opts_.find(name); it != long_opts_.end())
+option_declaration_set::find(std::string_view name) const {
+  // TODO: Remove explicit conversion to a string
+  if (auto it = long_opts_.find(std::string{name}); it != long_opts_.end())
     return *it->second;
   return {};
 }
@@ -144,11 +147,11 @@ size_t option_declaration_set::size() const {
   return long_opts_.size();
 }
 
-expected<void> option_declaration_set::add(const std::string& name,
-                                           const std::string& desciption,
+expected<void> option_declaration_set::add(std::string_view name,
+                                           std::string_view desciption,
                                            data default_value) {
   // Parse short and long name.
-  std::string long_name;
+  std::string_view long_name;
   std::vector<char> short_names;
   if (auto idx = name.find(','); idx == std::string_view::npos) {
     long_name = name;
@@ -162,9 +165,10 @@ expected<void> option_declaration_set::add(const std::string& name,
   // Validate short and long name.
   if (long_name.empty())
     return make_error(ec::unspecified, "no long-name specified");
-  if (auto it = long_opts_.find(long_name); it != long_opts_.end())
-    return make_error(ec::unspecified,
-                      "long-name: " + long_name + " already in use");
+  // TODO: Remove explicit conversion to a string
+  if (auto it = long_opts_.find(std::string{long_name}); it != long_opts_.end())
+    return make_error(ec::unspecified, "long-name: " + std::string{long_name}
+                                         + " already in use");
   for (auto x : short_names)
     if (auto it = short_opts_.find(x); it != short_opts_.end())
       return make_error(ec::unspecified,
@@ -176,8 +180,8 @@ expected<void> option_declaration_set::add(const std::string& name,
       return !std::is_same<arg_type, bool>::value;
     }, default_value);
   auto option = std::make_shared<option_declaration>(
-    std::move(long_name), std::move(short_names), std::move(desciption),
-    has_argument, std::move(default_value));
+    long_name, std::move(short_names), desciption, has_argument,
+    std::move(default_value));
   long_opts_.insert(std::make_pair(option->long_name(), option));
   for (auto x : option->short_names())
     short_opts_.insert(std::make_pair(x, option));

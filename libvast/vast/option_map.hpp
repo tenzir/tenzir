@@ -24,10 +24,6 @@
 
 namespace vast {
 
-// FIXME: Use string_view instead of const std::string& where apropiate.
-// The Steady_map currently does not allow to use string_views to search for
-// strings
-
 /// A map for CLI options.
 class option_map {
 public:
@@ -51,12 +47,12 @@ public:
 
   // -- lookup ---------------------------------------------------------------
 
-  optional<mapped_type> get(const key_type& name) const;
+  optional<mapped_type> get(const std::string_view& name) const;
 
-  mapped_type get_or(const key_type& name,
+  mapped_type get_or(const std::string_view& name,
                      const mapped_type& default_value) const;
 
-  optional<mapped_type> operator[](const key_type& name) const;
+  optional<mapped_type> operator[](const std::string_view& name) const;
 
   // -- modifiers ------------------------------------------------------------
 
