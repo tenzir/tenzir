@@ -19,6 +19,7 @@ set(libvast_sources
   src/base.cpp
   src/batch.cpp
   src/bitmap.cpp
+  src/buffer.cpp
   src/chunk.cpp
   src/command.cpp
   src/compression.cpp
@@ -91,6 +92,7 @@ set(libvast_sources
   src/uuid.cpp
   src/value.cpp
   src/value_index.cpp
+  src/view.cpp
   src/wah_bitmap.cpp
 )
 
@@ -201,6 +203,7 @@ set(tests
   test/bitmap_index.cpp
   test/bits.cpp
   test/bitvector.cpp
+  test/buffer.cpp
   test/cache.cpp
   test/chunk.cpp
   test/coder.cpp
@@ -258,6 +261,7 @@ set(tests
   test/variant.cpp
   test/vector_map.cpp
   test/vector_set.cpp
+  test/view.cpp
   test/word.cpp
 )
 
