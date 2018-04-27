@@ -183,10 +183,12 @@ expected<void> option_declaration_set::add(std::string_view name,
   if (auto it = long_opts_.find(std::string{long_name}); it != long_opts_.end())
     return make_error(ec::unspecified, "long-name: " + std::string{long_name}
                                          + " already in use");
-  for (auto x : short_names)
-    if (auto it = short_opts_.find(x); it != short_opts_.end())
-      return make_error(ec::unspecified,
-                        "short-name: " + to_string(x) + " already in use");
+  auto in_short_opts = [&](char c) { return short_opts_.count(c) != 0; };
+  if (auto i
+      = std::find_if(short_names.begin(), short_names.end(), in_short_opts);
+      i != short_names.end())
+    return make_error(ec::unspecified,
+                      "short-name: " + to_string(*i) + " already in use");
   // Update option_declaration_set.
   auto option = std::make_shared<option_declaration>(
     long_name, std::move(short_names), desciption, std::move(default_value));
