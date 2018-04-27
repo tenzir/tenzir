@@ -32,6 +32,7 @@ namespace vast {
 template <class>
 struct view;
 
+/// @relates view
 template <class T>
 using view_t = typename view<T>::type;
 
@@ -90,15 +91,15 @@ struct view<pattern> {
 };
 
 // @relates view
-struct abstract_vector_view;
+struct vector_view;
 
 /// @relates view
-using abstract_vector_view_ptr = caf::intrusive_ptr<abstract_vector_view>;
+using vector_view_ptr = caf::intrusive_ptr<vector_view>;
 
 /// @relates view
 template <>
 struct view<vector> {
-  using type = abstract_vector_view_ptr;
+  using type = vector_view_ptr;
 };
 
 /// A type-erased view over variout types of data.
@@ -122,14 +123,15 @@ struct view<data> {
 };
 
 /// @relates view
-struct abstract_vector_view : public caf::ref_counted {
+struct vector_view : public caf::ref_counted {
   using value_type = view_t<data>;
   using size_type = size_t;
 
-  virtual ~abstract_vector_view() = default;
+  virtual ~vector_view() = default;
 
   /// Retrieves a specific element.
   /// @param i The position of the element to retrieve.
+  /// @returns A view to the element at position *i*.
   virtual value_type at(size_type i) const = 0;
 
   /// @returns The number of elements in the container.
@@ -138,9 +140,9 @@ struct abstract_vector_view : public caf::ref_counted {
 
 /// A view over a @ref vector.
 /// @relates view
-class concrete_vector_view : public abstract_vector_view {
+class default_vector_view : public vector_view {
 public:
-  concrete_vector_view(const vector& xs);
+  default_vector_view(const vector& xs);
 
   value_type at(size_type i) const override;
 
@@ -150,11 +152,12 @@ private:
   const vector& xs_;
 };
 
+/// Creates a type-erased data view from a specific type.
 /// @relates view
 template <class T>
 view_t<data> make_view(const T& x) {
   constexpr auto directly_constructible
-    = detail::is_any_v<T, none, boolean, integer, count, real, timespan,
+    = detail::is_any_v<T, boolean, integer, count, real, timespan,
                        timestamp, std::string>;
   if constexpr (directly_constructible) {
     return view_t<data>{x};
@@ -167,7 +170,7 @@ view_t<data> make_view(const T& x) {
   } else if constexpr (std::is_same_v<T, port>) {
     return {}; // TODO
   } else if constexpr (std::is_same_v<T, vector>) {
-    return abstract_vector_view_ptr{new concrete_vector_view{x}};
+    return vector_view_ptr{new default_vector_view{x}};
   } else if constexpr (std::is_same_v<T, set>) {
     return {}; // TODO
   } else if constexpr (std::is_same_v<T, table>) {

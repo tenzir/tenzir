@@ -15,15 +15,15 @@
 
 namespace vast {
 
-concrete_vector_view::concrete_vector_view(const vector& xs) : xs_{xs} {
+default_vector_view::default_vector_view(const vector& xs) : xs_{xs} {
   // nop
 }
 
-abstract_vector_view::value_type concrete_vector_view::at(size_type i) const {
+vector_view::value_type default_vector_view::at(size_type i) const {
   return make_view(xs_[i]);
 }
 
-abstract_vector_view::size_type concrete_vector_view::size() const {
+vector_view::size_type default_vector_view::size() const {
   return xs_.size();
 }
 
