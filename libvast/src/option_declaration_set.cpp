@@ -124,32 +124,38 @@ std::string option_declaration_set::usage() const {
     auto& shorts = x.short_names();
     arg << "  "; 
     if (!shorts.empty()) {
-      arg << "-" <<shorts[0];
-      arg << " [";
+      auto i = shorts.begin();
+      auto e = shorts.end();
+      arg << "-" << *i << " [";
+      for (++i; i != e; ++i)
+        arg << "-" << *i << ", ";
+      arg << "--" << x.long_name() << ']';
+    } else {
+      arg << "--" << x.long_name();
     }
-    if (shorts.size() > 1)
-      for (auto i = 1u; i < shorts.size(); ++i)
-        arg << "-" << shorts[i] << ",";
-    arg << "--" << x.long_name();
-    if (!shorts.empty())
-      arg << "]";
     if (x.has_argument())
       arg << " arg";
     return arg.str();
   };
   // Calculate the max size the argument column
-  std::vector<size_t> arg_sizes;
-  std::transform(
-    long_opts_.begin(), long_opts_.end(), std::back_inserter(arg_sizes),
-    [&](const auto& x) { return build_argument(*x.second).size(); });
-  auto help_column_width = *max_element(arg_sizes.begin(), arg_sizes.end());
+  std::vector<std::string> args;
+  args.reserve(size());
+  for (auto& x: long_opts_)
+    args.emplace_back(build_argument(*x.second));
+  size_t help_column_width = 0;
+  if (auto it = max_element(args.begin(), args.end(),
+                            [](auto a, auto b) { return a.size() < b.size(); });
+      it != args.end())
+    help_column_width = it->size();
   // create usage string
   std::stringstream res;
   res << "Allowed options:";
-  for (auto& [_, x] : long_opts_) {
+  auto i = 0u;
+  for (auto& x: long_opts_) {
     res << "\n"
-        << std::left << std::setw(help_column_width) << build_argument(*x)
-        << " : " << x->description();
+        << std::left << std::setw(help_column_width) << args[i] << " : "
+        << x.second->description();
+    ++i;
   }
   return res.str();
 }
