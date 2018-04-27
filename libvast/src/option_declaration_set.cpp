@@ -98,10 +98,17 @@ option_declaration_set::option_declaration_set() {
 }
 
 optional<const option_declaration_set::option_declaration&>
-option_declaration_set::find(std::string_view name) const {
+option_declaration_set::find(std::string_view long_name) const {
   // TODO: Remove explicit conversion to a string
   // This requires to override *find* to support equivalent keys.
-  if (auto it = long_opts_.find(std::string{name}); it != long_opts_.end())
+  if (auto it = long_opts_.find(std::string{long_name}); it != long_opts_.end())
+    return *it->second;
+  return {};
+}
+
+optional<const option_declaration_set::option_declaration&>
+option_declaration_set::find(char short_name) const {
+  if (auto it = short_opts_.find(short_name); it != short_opts_.end())
     return *it->second;
   return {};
 }

@@ -112,7 +112,10 @@ private:
   size_t size() const;
 
   /// Searches for an `option_declaration` by its long name.
-  optional<const option_declaration&> find(std::string_view name) const;
+  optional<const option_declaration&> find(std::string_view long_name) const;
+
+  /// Searches for an `option_declaration` by its short name.
+  optional<const option_declaration&> find(char short_name) const;
 
   /// Fills an `option_map` from parsed CLI arguments.
   /// @param option_map The map of options that shall be filled.
