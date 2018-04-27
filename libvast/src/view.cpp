@@ -23,7 +23,7 @@ vector_view::value_type default_vector_view::at(size_type i) const {
   return make_view(xs_[i]);
 }
 
-vector_view::size_type default_vector_view::size() const {
+vector_view::size_type default_vector_view::size() const noexcept {
   return xs_.size();
 }
 

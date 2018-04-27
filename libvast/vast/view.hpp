@@ -127,7 +127,7 @@ struct vector_view : public caf::ref_counted {
   virtual value_type at(size_type i) const = 0;
 
   /// @returns The number of elements in the container.
-  virtual size_type size() const = 0;
+  virtual size_type size() const noexcept = 0;
 };
 
 /// A view over a @ref vector.
@@ -138,7 +138,7 @@ public:
 
   value_type at(size_type i) const override;
 
-  size_type size() const override;
+  size_type size() const noexcept override;
 
 private:
   const vector& xs_;
