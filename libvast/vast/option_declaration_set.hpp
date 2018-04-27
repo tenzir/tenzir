@@ -47,7 +47,7 @@ public:
 
   /// A declaration of a CLI argument option.
   class option_declaration {
-public:
+  public:
     /// Constructs a declation of an option.
     /// @param long_name A long name that identifies this option.
     /// @param short_names A vector of short name that identifies this option.
@@ -82,7 +82,7 @@ public:
     ///          *default_value* is returned.
     std::pair<parse_state, data> parse(std::string_view value) const;
 
-private:
+  private:
     std::string long_name_;
     std::vector<char> short_names_;
     std::string description_;

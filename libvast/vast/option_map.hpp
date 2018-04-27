@@ -33,17 +33,17 @@ public:
   using key_type = map_type::key_type;
   using mapped_type = map_type::mapped_type;
   using value_type = map_type::value_type;
-  using size_type = typename map_type::size_type;
-  using difference_type = typename map_type::difference_type;
-  using allocator_type = typename map_type::allocator_type;
-  using reference = typename map_type::reference;
-  using const_reference = typename map_type::const_reference;
-  using pointer = typename map_type::pointer;
-  using const_pointer = typename map_type::const_pointer;
-  using iterator = typename map_type::iterator;
-  using const_iterator = typename map_type::const_iterator;
-  using reverse_iterator = typename map_type::reverse_iterator;
-  using const_reverse_iterator = typename map_type::const_reverse_iterator;
+  using size_type = map_type::size_type;
+  using difference_type = map_type::difference_type;
+  using allocator_type = map_type::allocator_type;
+  using reference = map_type::reference;
+  using const_reference = map_type::const_reference;
+  using pointer = map_type::pointer;
+  using const_pointer = map_type::const_pointer;
+  using iterator = map_type::iterator;
+  using const_iterator = map_type::const_iterator;
+  using reverse_iterator = map_type::reverse_iterator;
+  using const_reverse_iterator = map_type::const_reverse_iterator;
 
   // -- lookup ---------------------------------------------------------------
 
