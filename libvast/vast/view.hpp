@@ -17,6 +17,7 @@
 #include <variant>
 
 #include <caf/intrusive_ptr.hpp>
+#include <caf/make_counted.hpp>
 #include <caf/ref_counted.hpp>
 
 #include "vast/aliases.hpp"
@@ -162,7 +163,7 @@ view_t<data> make_view(const T& x) {
   } else if constexpr (std::is_same_v<T, port>) {
     return {}; // TODO
   } else if constexpr (std::is_same_v<T, vector>) {
-    return vector_view_ptr{new default_vector_view{x}};
+    return view_t<vector>{caf::make_counted<default_vector_view>(x)};
   } else if constexpr (std::is_same_v<T, set>) {
     return {}; // TODO
   } else if constexpr (std::is_same_v<T, table>) {
