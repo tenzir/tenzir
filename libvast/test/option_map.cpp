@@ -32,7 +32,7 @@ struct fixture {
 
 FIXTURE_SCOPE(command_tests, fixture)
 
-TEST(option map handling) {
+TEST(retrieving data) {
   auto num = 42;
   opts.add("true", true);
   opts.add("false", false);

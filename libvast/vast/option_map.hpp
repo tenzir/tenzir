@@ -29,10 +29,10 @@ class option_map {
 public:
   // -- types ----------------------------------------------------------------
 
-  using key_type = std::string;
-  using mapped_type = data;
-  using value_type = std::pair<key_type, mapped_type>;
-  using map_type = detail::steady_map<key_type, mapped_type>;
+  using map_type = detail::steady_map<std::string, data>;
+  using key_type = map_type::key_type;
+  using mapped_type = map_type::mapped_type;
+  using value_type = map_type::value_type;
   using size_type = typename map_type::size_type;
   using difference_type = typename map_type::difference_type;
   using allocator_type = typename map_type::allocator_type;

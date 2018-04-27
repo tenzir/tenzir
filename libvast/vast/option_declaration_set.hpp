@@ -47,15 +47,15 @@ public:
 
   /// A declaration of a CLI argument option.
   class option_declaration {
-  public:
+public:
     /// Constructs a declation of an option.
     /// @param long_name A long name that identifies this option.
     /// @param short_names A vector of short name that identifies this option.
     /// @param description A decprition to this option.
     /// @param has_argument A flag that describes whether this option has an
-    /// argument.
+    ///        argument.
     /// @param default_value A value that is used when the option is not set by
-    /// a user.
+    ///        a user.
     option_declaration(std::string_view long_name, std::vector<char> short_names,
                        std::string_view description, bool has_argument,
                        data default_value);
@@ -82,7 +82,8 @@ public:
     ///          without an error. If the state is not successful the
     ///          *default_value* is returned.
     std::pair<parse_state, data> parse(std::string_view value) const;
-  private:
+
+private:
     std::string long_name_;
     std::vector<char> short_names_;
     std::string description_;

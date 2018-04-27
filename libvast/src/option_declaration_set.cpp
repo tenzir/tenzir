@@ -100,6 +100,7 @@ option_declaration_set::option_declaration_set() {
 optional<const option_declaration_set::option_declaration&>
 option_declaration_set::find(std::string_view name) const {
   // TODO: Remove explicit conversion to a string
+  // This requires to override *find* to support equivalent keys.
   if (auto it = long_opts_.find(std::string{name}); it != long_opts_.end())
     return *it->second;
   return {};
@@ -126,7 +127,7 @@ std::string option_declaration_set::usage() const {
       arg << " arg";
     return arg.str();
   };
-  // calculate the max size the argument column
+  // Calculate the max size the argument column
   std::vector<size_t> arg_sizes;
   std::transform(
     long_opts_.begin(), long_opts_.end(), std::back_inserter(arg_sizes),
@@ -285,11 +286,9 @@ option_declaration_set::parse(option_map& xs, argument_iterator begin,
       return std::make_pair(parse_state::begin_is_not_an_option, begin);
   };
   auto [state, it] = dispatch(begin, end);
-  while (state == parse_state::in_progress) {
+  while (state == parse_state::in_progress)
     std::tie(state, it) = dispatch(it, end);
-  }
   return std::make_pair(state, it);
-
 }
 
 
