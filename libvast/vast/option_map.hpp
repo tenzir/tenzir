@@ -47,12 +47,12 @@ public:
 
   // -- lookup ---------------------------------------------------------------
 
-  optional<mapped_type> get(const std::string_view& name) const;
+  optional<mapped_type> get(std::string_view name) const;
 
-  mapped_type get_or(const std::string_view& name,
+  mapped_type get_or(std::string_view name,
                      const mapped_type& default_value) const;
 
-  optional<mapped_type> operator[](const std::string_view& name) const;
+  optional<mapped_type> operator[](std::string_view name) const;
 
   // -- modifiers ------------------------------------------------------------
 
