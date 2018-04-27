@@ -19,7 +19,6 @@ set(libvast_sources
   src/base.cpp
   src/batch.cpp
   src/bitmap.cpp
-  src/buffer.cpp
   src/chunk.cpp
   src/command.cpp
   src/compression.cpp
@@ -203,7 +202,6 @@ set(tests
   test/bitmap_index.cpp
   test/bits.cpp
   test/bitvector.cpp
-  test/buffer.cpp
   test/cache.cpp
   test/chunk.cpp
   test/coder.cpp
