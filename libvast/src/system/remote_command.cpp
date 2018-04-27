@@ -36,7 +36,7 @@ remote_command::remote_command(command* parent, std::string_view name)
   // nop
 }
 
-int remote_command::run_impl(actor_system& sys, option_map& options,
+int remote_command::run_impl(actor_system& sys, XXoption_mapXX& options,
                              argument_iterator begin,
                              argument_iterator end) {
   VAST_TRACE(VAST_ARG("name", name()), VAST_ARG(options),

@@ -43,7 +43,7 @@ using namespace caf;
 
 namespace vast::system {
 
-int writer_command_base::run_impl(caf::actor_system& sys, option_map& options,
+int writer_command_base::run_impl(caf::actor_system& sys, XXoption_mapXX& options,
                                   argument_iterator begin,
                                   argument_iterator end) {
   // Get a convenient and blocking way to interact with actors.

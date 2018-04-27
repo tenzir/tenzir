@@ -42,7 +42,7 @@ start_command::start_command(command* parent, std::string_view name)
   add_opt("foreground", "run in foreground (do not daemonize)", in_foreground);
 }
 
-int start_command::run_impl(actor_system& sys, option_map& options,
+int start_command::run_impl(actor_system& sys, XXoption_mapXX& options,
                         argument_iterator begin, argument_iterator end) {
   VAST_UNUSED(begin, end);
   VAST_TRACE(VAST_ARG(options), VAST_ARG("args", begin, end));

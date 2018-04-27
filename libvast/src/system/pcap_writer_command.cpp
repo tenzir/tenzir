@@ -41,7 +41,7 @@ pcap_writer_command::pcap_writer_command(command* parent, std::string_view name)
 }
 
 expected<caf::actor> pcap_writer_command::make_sink(caf::scoped_actor& self,
-                                                    option_map& options,
+                                                    XXoption_mapXX& options,
                                                     argument_iterator begin,
                                                     argument_iterator end) {
   VAST_UNUSED(begin, end);

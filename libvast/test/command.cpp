@@ -30,7 +30,7 @@ public:
     add_opt("flag", "Some flag", flag);
   }
 
-  proceed_result proceed(caf::actor_system&, option_map&,
+  proceed_result proceed(caf::actor_system&, XXoption_mapXX&,
                          argument_iterator begin,
                          argument_iterator end) override {
     tested_proceed = true;
@@ -39,7 +39,7 @@ public:
     return proceed_ok;
   }
 
-  int run_impl(caf::actor_system&, option_map&, argument_iterator begin,
+  int run_impl(caf::actor_system&, XXoption_mapXX&, argument_iterator begin,
                argument_iterator end) override {
     was_executed = true;
     run_begin = begin;
@@ -63,7 +63,7 @@ public:
     add_opt("other-value,o", "Some other integer value", other_value);
   }
 
-  proceed_result proceed(caf::actor_system&, option_map&,
+  proceed_result proceed(caf::actor_system&, XXoption_mapXX&,
                          argument_iterator begin,
                          argument_iterator end) override {
     tested_proceed = true;
@@ -72,7 +72,7 @@ public:
     return proceed_ok;
   }
 
-  int run_impl(caf::actor_system&, option_map&, argument_iterator begin,
+  int run_impl(caf::actor_system&, XXoption_mapXX&, argument_iterator begin,
                argument_iterator end) override {
     was_executed = true;
     run_begin = begin;
@@ -93,7 +93,7 @@ struct fixture {
   command root;
   caf::actor_system_config cfg;
   caf::actor_system sys{cfg};
-  command::option_map options;
+  command::XXoption_mapXX options;
   std::vector<std::string> xs;
   int exec(std::string str) {
     caf::split(xs, str, ' ', caf::token_compress_on);
