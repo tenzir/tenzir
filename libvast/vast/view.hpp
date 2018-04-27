@@ -21,7 +21,6 @@
 
 #include "vast/aliases.hpp"
 #include "vast/data.hpp"
-#include "vast/none.hpp"
 #include "vast/time.hpp"
 
 #include "vast/detail/type_traits.hpp"
@@ -35,12 +34,6 @@ struct view;
 /// @relates view
 template <class T>
 using view_t = typename view<T>::type;
-
-/// @relates view
-template <>
-struct view<none> {
-  using type = none;
-};
 
 /// @relates view
 template <>
@@ -105,7 +98,6 @@ struct view<vector> {
 /// A type-erased view over variout types of data.
 /// @relates view
 using data_view_variant = std::variant<
-  none,
   view_t<boolean>,
   view_t<integer>,
   view_t<count>,
