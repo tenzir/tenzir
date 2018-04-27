@@ -27,11 +27,10 @@ namespace vast {
 
 option_declaration_set::option_declaration::option_declaration(
   std::string_view long_name, std::vector<char> short_names,
-  std::string_view description, bool has_argument, data default_value)
+  std::string_view description, data default_value)
   : long_name_(long_name),
     short_names_(std::move(short_names)),
     description_(description),
-    has_argument_(has_argument),
     default_value_(std::move(default_value)) {
   // nop
 }
@@ -86,7 +85,11 @@ option_declaration_set::option_declaration::description() const {
 }
 
 bool option_declaration_set::option_declaration::has_argument() const {
-  return has_argument_;
+  return visit(
+    [](const auto& arg) {
+      using arg_type = std::decay_t<decltype(arg)>;
+      return !std::is_same<arg_type, bool>::value;
+    }, default_value_);
 }
 
 const data& option_declaration_set::option_declaration::default_value() const {
@@ -182,14 +185,8 @@ expected<void> option_declaration_set::add(std::string_view name,
       return make_error(ec::unspecified,
                         "short-name: " + to_string(x) + " already in use");
   // Update option_declaration_set.
-  auto has_argument = visit(
-    [](const auto& arg) {
-      using arg_type = typename std::decay<decltype(arg)>::type;
-      return !std::is_same<arg_type, bool>::value;
-    }, default_value);
   auto option = std::make_shared<option_declaration>(
-    long_name, std::move(short_names), desciption, has_argument,
-    std::move(default_value));
+    long_name, std::move(short_names), desciption, std::move(default_value));
   long_opts_.insert(std::make_pair(option->long_name(), option));
   for (auto x : option->short_names())
     short_opts_.insert(std::make_pair(x, option));

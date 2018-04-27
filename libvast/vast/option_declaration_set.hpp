@@ -57,8 +57,7 @@ public:
     /// @param default_value A value that is used when the option is not set by
     ///        a user.
     option_declaration(std::string_view long_name, std::vector<char> short_names,
-                       std::string_view description, bool has_argument,
-                       data default_value);
+                       std::string_view description, data default_value);
 
     /// Returns the long name.
     const std::string& long_name() const;
@@ -87,7 +86,6 @@ private:
     std::string long_name_;
     std::vector<char> short_names_;
     std::string description_;
-    bool has_argument_;
     data default_value_;
   };
 
