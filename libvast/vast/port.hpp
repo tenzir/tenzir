@@ -19,13 +19,10 @@
 
 namespace vast {
 
-struct access;
 class json;
 
 /// A transport-layer port.
 class port : detail::totally_ordered<port> {
-  friend access;
-
 public:
   using number_type = uint16_t;
 
@@ -37,13 +34,13 @@ public:
     icmp
   };
 
-  /// Constructs the empty port, i.e., @c 0/unknown.
+  /// Constructs the empty port, i.e., `0/unknown`.
   port() = default;
 
   /// Constructs a port.
-  /// @param number The port number.
-  /// @param type The port type.
-  port(number_type number, port_type type = unknown);
+  /// @param n The port number.
+  /// @param t The port type.
+  port(number_type n, port_type t = unknown);
 
   /// Retrieves the port number.
   /// @returns The port number.
@@ -66,12 +63,11 @@ public:
 
   template <class Inspector>
   friend auto inspect(Inspector& f, port& p) {
-    return f(p.number_, p.type_);
+    return f(p.data_);
   }
 
 private:
-  number_type number_ = 0;
-  port_type type_ = unknown;
+  uint32_t data_ = 0;
 };
 
 bool convert(const port& p, json& j);

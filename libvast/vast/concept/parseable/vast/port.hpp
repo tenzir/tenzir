@@ -19,8 +19,7 @@
 
 namespace vast {
 
-template <>
-struct access::parser<port> : vast::parser<access::parser<port>> {
+struct port_parser : parser<port_parser> {
   using attribute = port;
 
   template <class Iterator>
@@ -31,7 +30,7 @@ struct access::parser<port> : vast::parser<access::parser<port>> {
   }
 
   template <class Iterator>
-  bool parse(Iterator& f, const Iterator& l, port& a) const {
+  bool parse(Iterator& f, const Iterator& l, port& x) const {
     using namespace parsers;
     static auto p
       =  u16
@@ -42,18 +41,23 @@ struct access::parser<port> : vast::parser<access::parser<port>> {
          | "icmp"_p ->* [] { return port::icmp; }
          )
       ;
-    return p(f, l, a.number_, a.type_);
+    port::number_type n;
+    port::port_type t;
+    if (!p(f, l, n, t))
+      return false;
+    x = {n, t};
+    return true;
   }
 };
 
 template <>
 struct parser_registry<port> {
-  using type = access::parser<port>;
+  using type = port_parser;
 };
 
 namespace parsers {
 
-static auto const port = make_parser<vast::port>();
+static auto const port = port_parser{};
 
 } // namespace parsers
 
