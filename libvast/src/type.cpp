@@ -12,6 +12,7 @@
  ******************************************************************************/
 
 #include <tuple>
+#include <typeindex>
 #include <utility>
 
 #include "vast/concept/printable/to_string.hpp"
@@ -68,7 +69,7 @@ struct equal_to {
 struct less_than {
   template <class T, class U>
   bool operator()(const T&, const U&) const noexcept {
-    return false;
+    return std::type_index(typeid(T)) < std::type_index(typeid(U));
   }
 
   template <class T>
