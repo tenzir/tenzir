@@ -30,7 +30,12 @@ public:
   using number_type = uint16_t;
 
   /// The transport layer type.
-  enum port_type : uint8_t { unknown, tcp, udp, icmp };
+  enum port_type : uint8_t {
+    unknown = 0,
+    tcp,
+    udp,
+    icmp
+  };
 
   /// Constructs the empty port, i.e., @c 0/unknown.
   port() = default;
