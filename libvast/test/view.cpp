@@ -23,6 +23,7 @@ TEST(arithmetic view) {
   CHECK_EQUAL(view_t<boolean>{true}, true);
   CHECK_EQUAL(view_t<integer>{42}, 42);
   CHECK_EQUAL(view_t<std::string>{"foo"}, "foo");
+  CHECK_EQUAL(view_t<port>(53, port::udp), port(53, port::udp));
 }
 
 TEST(make_view) {

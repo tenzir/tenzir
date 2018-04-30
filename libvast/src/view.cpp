@@ -15,6 +15,20 @@
 
 namespace vast {
 
+pattern_view::pattern_view(const pattern& x) : pattern_{x.string()} {
+  // nop
+}
+
+address_view::address_view(const address& x) : data_{&x.data()} {
+  // nop
+}
+
+subnet_view::subnet_view(const subnet& x)
+  : network_{x.network()},
+    length_{x.length()} {
+  // nop
+}
+
 default_vector_view::default_vector_view(const vector& xs) : xs_{xs} {
   // nop
 }

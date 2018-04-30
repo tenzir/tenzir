@@ -11,6 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
+#include <array>
 #include <cstdint>
 #include <string>
 #include <type_traits>
@@ -24,6 +25,7 @@
 #include "vast/data.hpp"
 #include "vast/time.hpp"
 
+#include "vast/detail/operators.hpp"
 #include "vast/detail/type_traits.hpp"
 
 namespace vast {
@@ -78,10 +80,87 @@ struct view<std::string> {
   using type = std::string_view;
 };
 
+/// @relates view
+class pattern_view : detail::totally_ordered<pattern_view> {
+public:
+  static pattern glob(std::string_view x);
+
+  pattern_view(const pattern& x);
+
+  bool match(std::string_view x) const;
+  bool search(std::string_view x) const;
+  std::string_view string() const;
+
+  friend bool operator==(pattern_view x, pattern_view y) noexcept;
+  friend bool operator<(pattern_view x, pattern_view y) noexcept;
+
+private:
+  std::string_view pattern_;
+};
+
 //// @relates view
 template <>
 struct view<pattern> {
-  using type = std::string_view;
+  using type = pattern_view;
+};
+
+/// @relates view
+class address_view : detail::totally_ordered<address_view> {
+public:
+  address_view(const address& x);
+
+  // See vast::address for documentation.
+  bool is_v4() const;
+  bool is_v6() const;
+  bool is_loopback() const;
+  bool is_broadcast() const;
+  bool is_multicast() const;
+  bool mask(unsigned top_bits_to_keep) const;
+  bool compare(address_view other, size_t k) const;
+  const std::array<uint8_t, 16>& data() const;
+
+  friend bool operator==(address_view x, address_view y) noexcept;
+  friend bool operator<(address_view x, address_view y) noexcept;
+
+private:
+  const std::array<uint8_t, 16>* data_;
+};
+
+//// @relates view
+template <>
+struct view<address> {
+  using type = address_view;
+};
+
+/// @relates view
+class subnet_view : detail::totally_ordered<subnet_view> {
+public:
+  subnet_view(const subnet& x);
+
+  // See vast::subnet for documentation.
+  bool contains(address_view x) const;
+  bool contains(subnet_view x) const;
+  address_view network() const;
+  uint8_t length() const;
+
+  friend bool operator==(subnet_view x, subnet_view y) noexcept;
+  friend bool operator<(subnet_view x, subnet_view y) noexcept;
+
+private:
+  address_view network_;
+  uint8_t length_;
+};
+
+//// @relates view
+template <>
+struct view<subnet> {
+  using type = subnet_view;
+};
+
+//// @relates view
+template <>
+struct view<port> {
+  using type = port;
 };
 
 // @relates view
@@ -106,6 +185,10 @@ using data_view_variant = std::variant<
   view_t<timespan>,
   view_t<timestamp>,
   view_t<std::string>,
+  view_t<pattern>,
+  view_t<address>,
+  view_t<subnet>,
+  view_t<port>,
   view_t<vector>
 >;
 
@@ -133,7 +216,9 @@ struct vector_view : public caf::ref_counted {
 
 /// A view over a @ref vector.
 /// @relates view
-class default_vector_view : public vector_view {
+class default_vector_view
+  : public vector_view,
+    detail::totally_ordered<default_vector_view> {
 public:
   default_vector_view(const vector& xs);
 
@@ -151,17 +236,9 @@ template <class T>
 view_t<data> make_view(const T& x) {
   constexpr auto directly_constructible
     = detail::is_any_v<T, boolean, integer, count, real, timespan,
-                       timestamp, std::string>;
+                       timestamp, std::string, pattern, address, subnet, port>;
   if constexpr (directly_constructible) {
     return view_t<data>{x};
-  } else if constexpr (std::is_same_v<T, pattern>) {
-    return {}; // TODO
-  } else if constexpr (std::is_same_v<T, address>) {
-    return {}; // TODO
-  } else if constexpr (std::is_same_v<T, subnet>) {
-    return {}; // TODO
-  } else if constexpr (std::is_same_v<T, port>) {
-    return {}; // TODO
   } else if constexpr (std::is_same_v<T, vector>) {
     return view_t<vector>{caf::make_counted<default_vector_view>(x)};
   } else if constexpr (std::is_same_v<T, set>) {
