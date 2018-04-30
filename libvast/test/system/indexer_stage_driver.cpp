@@ -74,23 +74,25 @@ behavior test_stage(event_based_actor* self,
 
 struct fixture : fixtures::deterministic_actor_system_and_events {
   fixture() {
+    // Only needed to calculate the number of types in our data set.
+    std::set<type> test_types;
     // Build a test data set with multiple event types.
     auto pick_some_from = [&](const std::vector<event>& xs, size_t amount) {
       REQUIRE(amount <= xs.size());
-      auto first = xs.begin();
-      auto last = first + amount;
-      std::copy(first, last, std::back_inserter(test_events));
+      std::for_each(xs.begin(), xs.begin() + amount, [&](const event& x) {
+        test_types.emplace(x.type());
+        test_events.emplace_back(x);
+      });
     };
+    // Pick 100 events from various data sets.
     pick_some_from(bro_conn_log, 20);
     pick_some_from(bro_dns_log, 20);
     pick_some_from(bro_http_log, 20);
     pick_some_from(bgpdump_txt, 20);
     pick_some_from(random, 20);
-    // TODO: Compute that number. Currently blocked by story 2587, because we
-    //       can't sort our test events by type to get the number of event
-    //       types via unique.
-    num_types = 5;
-    // Randomize data set.
+    // Store the number of different event types.
+    num_types = test_types.size();
+    // Randomize the data set.
     std::random_device rd;
     std::mt19937 g(rd());
     std::shuffle(test_events.begin(), test_events.end(), g);
@@ -121,7 +123,8 @@ TEST(spawning sink automatically) {
   auto stg = sys.spawn(test_stage,
                        indexer_manager_factory(sys, state_dir, &dummies, buf));
   MESSAGE("spawn the source");
-  auto src = vast::detail::spawn_container_source(self->system(), stg, random);
+  auto src = vast::detail::spawn_container_source(self->system(), stg,
+                                                  test_events);
   MESSAGE("run exhaustively");
   sched.run_dispatch_loop(credit_round_interval);
   CHECK_EQUAL(dummies, num_types);
