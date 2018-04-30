@@ -82,6 +82,14 @@ TEST(equality comparison) {
   CHECK(t0 == t1);
 }
 
+TEST(strict weak ordering) {
+  std::vector<type> xs{string_type{}, address_type{}, pattern_type{}};
+  std::vector<type> ys{string_type{}, pattern_type{}, address_type{}};
+  std::sort(xs.begin(), xs.end());
+  std::sort(ys.begin(), ys.end());
+  CHECK(xs == ys);
+}
+
 TEST(introspection) {
   CHECK(!is_recursive(enumeration_type{}));
   CHECK(is_recursive(vector_type{}));
