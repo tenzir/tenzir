@@ -72,18 +72,18 @@ default_set_view::size_type default_set_view::size() const noexcept {
 }
 
 
-default_table_view::default_table_view(const table& xs) : xs_{xs} {
+default_map_view::default_map_view(const map& xs) : xs_{xs} {
   // nop
 }
 
-default_table_view::value_type default_table_view::at(size_type i) const {
+default_map_view::value_type default_map_view::at(size_type i) const {
   auto it = xs_.begin();
   std::advance(it, i);
   auto& [key, value] = *it;
   return {make_data_view(key), make_data_view(value)};
 }
 
-default_table_view::size_type default_table_view::size() const noexcept {
+default_map_view::size_type default_map_view::size() const noexcept {
   return xs_.size();
 }
 

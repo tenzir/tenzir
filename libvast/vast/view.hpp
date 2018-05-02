@@ -167,7 +167,7 @@ struct view<port> {
 
 struct vector_view_ptr;
 struct set_view_ptr;
-struct table_view_ptr;
+struct map_view_ptr;
 
 /// @relates view
 template <>
@@ -183,8 +183,8 @@ struct view<set> {
 
 /// @relates view
 template <>
-struct view<table> {
-  using type = table_view_ptr;
+struct view<map> {
+  using type = map_view_ptr;
 };
 
 /// A type-erased view over variout types of data.
@@ -203,7 +203,7 @@ using data_view = std::variant<
   view_t<port>,
   view_t<vector>,
   view_t<set>,
-  view_t<table>
+  view_t<map>
 >;
 
 /// @relates view
@@ -307,7 +307,7 @@ struct vector_view_ptr : container_view_ptr<data_view> {};
 struct set_view_ptr : container_view_ptr<data_view> {};
 
 // @relates view
-struct table_view_ptr : container_view_ptr<std::pair<data_view, data_view>> {};
+struct map_view_ptr : container_view_ptr<std::pair<data_view, data_view>> {};
 
 /// A view over a @ref vector.
 /// @relates view
@@ -342,20 +342,20 @@ private:
 };
 
 
-/// A view over a @ref table.
+/// A view over a @ref map.
 /// @relates view
-class default_table_view
+class default_map_view
   : public container_view<std::pair<data_view, data_view>>,
-    detail::totally_ordered<default_table_view> {
+    detail::totally_ordered<default_map_view> {
 public:
-  default_table_view(const table& xs);
+  default_map_view(const map& xs);
 
   value_type at(size_type i) const override;
 
   size_type size() const noexcept override;
 
 private:
-  const table& xs_;
+  const map& xs_;
 };
 
 /// Creates a view from a specific type.
@@ -371,8 +371,8 @@ view_t<T> make_view(const T& x) {
     return vector_view_ptr{caf::make_counted<default_vector_view>(x)};
   } else if constexpr (std::is_same_v<T, set>) {
     return set_view_ptr{caf::make_counted<default_set_view>(x)};
-  } else if constexpr (std::is_same_v<T, table>) {
-    return table_view_ptr{caf::make_counted<default_table_view>(x)};
+  } else if constexpr (std::is_same_v<T, map>) {
+    return map_view_ptr{caf::make_counted<default_map_view>(x)};
   } else {
     VAST_ASSERT(!"missing branch");
     return {};

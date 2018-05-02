@@ -62,12 +62,12 @@ TEST(set view) {
   CHECK_EQUAL(i, v->end());
 }
 
-TEST(table view) {
-  auto xs = table{{42, true}, {84, false}};
+TEST(map view) {
+  auto xs = map{{42, true}, {84, false}};
   auto v = make_view(xs);
   REQUIRE_EQUAL(v->size(), xs.size());
   auto i = v->begin();
-  // FIXME: we currently use a std::table instead of a steady table, which relies
+  // FIXME: we currently use a std::map instead of a steady map, which relies
   // on a non-deterministic ordering. This unit test may fail on some platforms
   // until we have switched to steady_map.
   {
