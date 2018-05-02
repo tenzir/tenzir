@@ -34,7 +34,7 @@ default_vector_view::default_vector_view(const vector& xs) : xs_{xs} {
 }
 
 vector_view::value_type default_vector_view::at(size_type i) const {
-  return make_view(xs_[i]);
+  return make_data_view(xs_[i]);
 }
 
 vector_view::size_type default_vector_view::size() const noexcept {
@@ -42,7 +42,7 @@ vector_view::size_type default_vector_view::size() const noexcept {
 }
 
 view_t<data> make_view(const data& x) {
-  return visit([](const auto& z) { return make_view(z); }, x);
+  return visit([](const auto& z) { return make_data_view(z); }, x);
 }
 
 } // namespace vast

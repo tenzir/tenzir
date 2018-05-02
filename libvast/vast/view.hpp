@@ -230,17 +230,17 @@ private:
   const vector& xs_;
 };
 
-/// Creates a type-erased data view from a specific type.
+/// Creates a view from a specific type.
 /// @relates view
 template <class T>
-view_t<data> make_view(const T& x) {
+view_t<T> make_view(const T& x) {
   constexpr auto directly_constructible
     = detail::is_any_v<T, boolean, integer, count, real, timespan,
                        timestamp, std::string, pattern, address, subnet, port>;
   if constexpr (directly_constructible) {
-    return view_t<data>{x};
+    return x;
   } else if constexpr (std::is_same_v<T, vector>) {
-    return view_t<vector>{caf::make_counted<default_vector_view>(x)};
+    return caf::make_counted<default_vector_view>(x);
   } else if constexpr (std::is_same_v<T, set>) {
     return {}; // TODO
   } else if constexpr (std::is_same_v<T, table>) {
@@ -250,6 +250,14 @@ view_t<data> make_view(const T& x) {
   }
 }
 
+/// @relates view
 view_t<data> make_view(const data& x);
+
+/// Creates a type-erased data view from a specific type.
+/// @relates view
+template <class T>
+view_t<data> make_data_view(const T& x) {
+  return make_view(x);
+}
 
 } // namespace vast

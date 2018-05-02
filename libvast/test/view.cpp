@@ -30,11 +30,11 @@ TEST(make_view) {
   auto x = make_view(true);
   CHECK(std::holds_alternative<boolean>(x));
   auto str = "foo"s;
-  x = make_view(str);
+  x = make_data_view(str);
   CHECK(std::holds_alternative<view_t<std::string>>(x));
   CHECK(std::holds_alternative<std::string_view>(x));
   auto xs = vector{42, true, "foo"};
-  x = make_view(xs);
+  x = make_data_view(xs);
   REQUIRE(std::holds_alternative<view_t<vector>>(x));
   auto v = get<view_t<vector>>(x);
   REQUIRE_EQUAL(v->size(), 3u);
