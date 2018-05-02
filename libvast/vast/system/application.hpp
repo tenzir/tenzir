@@ -31,7 +31,7 @@ public:
       root_command();
 
   protected:
-    proceed_result proceed(caf::actor_system& sys, XXoption_mapXX& options,
+    proceed_result proceed(caf::actor_system& sys, option_map& options,
                            argument_iterator, argument_iterator) override;
 
   private:

@@ -44,7 +44,7 @@ public:
   using node_command::node_command;
 
 protected:
-  int run_impl(caf::actor_system& sys, XXoption_mapXX& options,
+  int run_impl(caf::actor_system& sys, option_map& options,
                argument_iterator begin, argument_iterator end) override;
 
   virtual expected<caf::actor> make_source(caf::scoped_actor& self,

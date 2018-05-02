@@ -44,11 +44,11 @@ public:
   using node_command::node_command;
 
 protected:
-  int run_impl(caf::actor_system& sys, XXoption_mapXX& options,
+  int run_impl(caf::actor_system& sys, option_map& options,
                argument_iterator begin, argument_iterator end) override;
 
   virtual expected<caf::actor>
-  make_sink(caf::scoped_actor& self, XXoption_mapXX& options,
+  make_sink(caf::scoped_actor& self, option_map& options,
             argument_iterator begin, argument_iterator end) = 0;
 };
 

@@ -84,7 +84,7 @@ application::root_command::root_command()
 }
 
 command::proceed_result
-application::root_command::proceed(caf::actor_system& sys, XXoption_mapXX& options,
+application::root_command::proceed(caf::actor_system& sys, option_map& options,
                                    argument_iterator begin,
                                    argument_iterator end) {
   VAST_UNUSED(begin, end);

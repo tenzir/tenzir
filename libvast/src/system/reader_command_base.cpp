@@ -40,7 +40,7 @@
 
 namespace vast::system {
 
-int reader_command_base::run_impl(caf::actor_system& sys, XXoption_mapXX& options,
+int reader_command_base::run_impl(caf::actor_system& sys, option_map& options,
                                   argument_iterator begin,
                                   argument_iterator end) {
   using namespace caf;
