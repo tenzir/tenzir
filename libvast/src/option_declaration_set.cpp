@@ -142,18 +142,16 @@ std::string option_declaration_set::usage() const {
   args.reserve(size());
   for (auto& x: long_opts_)
     args.emplace_back(build_argument(*x.second));
-  size_t help_column_width = 0;
-  if (auto it = max_element(args.begin(), args.end(),
-                            [](auto a, auto b) { return a.size() < b.size(); });
-      it != args.end())
-    help_column_width = it->size();
+  auto max_str_size = [](size_t a, auto& b) { return std::max(a, b.size()); };
+  auto column_width
+    = std::accumulate(args.begin(), args.end(), size_t{0}, max_str_size);
   // create usage string
   std::stringstream res;
   res << "Allowed options:";
   auto i = 0u;
   for (auto& x: long_opts_) {
     res << "\n"
-        << std::left << std::setw(help_column_width) << args[i] << " : "
+        << std::left << std::setw(column_width) << args[i] << " : "
         << x.second->description();
     ++i;
   }
