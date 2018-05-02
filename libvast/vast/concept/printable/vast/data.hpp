@@ -104,7 +104,7 @@ struct printer_registry<set> {
   using type = set_printer;
 };
 
-struct table_printer : printer<table_printer> {
+struct map_printer : printer<map_printer> {
   using attribute = map;
 
   template <class Iterator>
@@ -117,7 +117,7 @@ struct table_printer : printer<table_printer> {
 
 template <>
 struct printer_registry<map> {
-  using type = table_printer;
+  using type = map_printer;
 };
 
 } // namespace vast
