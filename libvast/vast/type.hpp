@@ -328,7 +328,7 @@ struct set_type : recursive_type<set_type>, detail::totally_ordered<set_type> {
 /// A type representinng an associative array.
 struct table_type
   : recursive_type<table_type>, detail::totally_ordered<table_type> {
-  using data_type = table;
+  using data_type = map;
 
   table_type(type key = {}, type value = {});
 

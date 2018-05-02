@@ -466,7 +466,7 @@ bool is_container(const type& t) {
 }
 
 bool is_container(const data& x) {
-  return is<vector>(x) || is<set>(x) || is<table>(x);
+  return is<vector>(x) || is<set>(x) || is<map>(x);
 }
 
 namespace {
@@ -590,7 +590,7 @@ struct data_congruence_checker {
     return true;
   }
 
-  bool operator()(const table_type&, const table&) const {
+  bool operator()(const table_type&, const map&) const {
     return true;
   }
 
@@ -765,7 +765,7 @@ struct data_checker {
     return t && type_check(t->value_type, *s.begin());
   }
 
-  bool operator()(const table& x) const {
+  bool operator()(const map& x) const {
     if (x.empty())
       return true;
     auto t = get_if<table_type>(type_);

@@ -91,7 +91,7 @@ struct adder {
           || std::is_same<T, subnet>{}
           || std::is_same<T, port>{}
           || std::is_same<T, enumeration>{}
-          || std::is_same<T, table>{})
+          || std::is_same<T, map>{})
   >
   operator()(T&, const U&) const {
     // impossible
@@ -392,7 +392,7 @@ bool convert(const set& s, json& j) {
   return true;
 }
 
-bool convert(const table& t, json& j) {
+bool convert(const map& t, json& j) {
   json::array values;
   for (auto& p : t) {
     json::array a;

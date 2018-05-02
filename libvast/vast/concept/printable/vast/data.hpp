@@ -105,10 +105,10 @@ struct printer_registry<set> {
 };
 
 struct table_printer : printer<table_printer> {
-  using attribute = table;
+  using attribute = map;
 
   template <class Iterator>
-  bool print(Iterator& out, const table& t) const {
+  bool print(Iterator& out, const map& t) const {
     auto pair = (data_printer{} << " -> " << data_printer{});
     auto p = '{' << ~(pair % ", ") << '}';
     return p.print(out, t);
@@ -116,7 +116,7 @@ struct table_printer : printer<table_printer> {
 };
 
 template <>
-struct printer_registry<table> {
+struct printer_registry<map> {
   using type = table_printer;
 };
 

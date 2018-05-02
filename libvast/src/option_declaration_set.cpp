@@ -58,7 +58,7 @@ option_declaration_set::option_declaration::parse(
       return std::make_pair(parse_state::type_not_parsebale,
                               default_value());
     },
-    [&](const table&) {
+    [&](const map&) {
       return std::make_pair(parse_state::type_not_parsebale,
                               default_value());
     },

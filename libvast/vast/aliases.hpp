@@ -38,7 +38,7 @@ using vector = std::vector<data>;
 using set = std::set<data>;
 
 /// An associative array with ::data as both key and value.
-using table = std::map<data, data>;
+using map = std::map<data, data>;
 
 // ---------------------------------------------------------------------------
 
