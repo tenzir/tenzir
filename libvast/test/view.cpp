@@ -26,7 +26,7 @@ TEST(arithmetic view) {
   CHECK_EQUAL(view_t<port>(53, port::udp), port(53, port::udp));
 }
 
-TEST(container view) {
+TEST(vector view) {
   auto xs = vector{42, true, "foo", 4.2};
   auto v = make_view(xs);
   REQUIRE_EQUAL(v->size(), xs.size());
@@ -43,6 +43,46 @@ TEST(container view) {
   CHECK_EQUAL(i, v->end());
   auto j = v->begin() + 1;
   CHECK_EQUAL(i - j, xs.size() - 1);
+}
+
+TEST(set view) {
+  auto xs = set{42, true};
+  auto v = make_view(xs);
+  REQUIRE_EQUAL(v->size(), xs.size());
+  auto i = v->begin();
+  // FIXME: we currently use a std::set instead of a steady set, which relies
+  // on a non-deterministic ordering. This unit test may fail on some platforms
+  // until we have switched to steady_set
+  CHECK_EQUAL(*i, v->at(0));
+  CHECK_EQUAL(*i, make_data_view(42));
+  ++i;
+  CHECK_EQUAL(*i, v->at(1));
+  CHECK_EQUAL(*i, make_data_view(true));
+  ++i;
+  CHECK_EQUAL(i, v->end());
+}
+
+TEST(table view) {
+  auto xs = table{{42, true}, {84, false}};
+  auto v = make_view(xs);
+  REQUIRE_EQUAL(v->size(), xs.size());
+  auto i = v->begin();
+  // FIXME: we currently use a std::table instead of a steady table, which relies
+  // on a non-deterministic ordering. This unit test may fail on some platforms
+  // until we have switched to steady_map.
+  {
+    auto [key, value] = v->at(0);
+    CHECK_EQUAL(key, make_data_view(42));
+    CHECK_EQUAL(value, make_data_view(true));
+  }
+  ++i;
+  {
+    auto [key, value] = v->at(1);
+    CHECK_EQUAL(key, make_data_view(84));
+    CHECK_EQUAL(value, make_data_view(false));
+  }
+  ++i;
+  CHECK_EQUAL(i, v->end());
 }
 
 TEST(make_data_view) {

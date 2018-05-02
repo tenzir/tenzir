@@ -25,6 +25,7 @@
 #include "vast/data.hpp"
 #include "vast/time.hpp"
 
+#include "vast/detail/assert.hpp"
 #include "vast/detail/iterator.hpp"
 #include "vast/detail/operators.hpp"
 #include "vast/detail/type_traits.hpp"
@@ -164,11 +165,9 @@ struct view<port> {
   using type = port;
 };
 
-// @relates view
-struct vector_view;
-
-/// @relates view
-using vector_view_ptr = caf::intrusive_ptr<vector_view>;
+struct vector_view_ptr;
+struct set_view_ptr;
+struct table_view_ptr;
 
 /// @relates view
 template <>
@@ -176,9 +175,21 @@ struct view<vector> {
   using type = vector_view_ptr;
 };
 
+/// @relates view
+template <>
+struct view<set> {
+  using type = set_view_ptr;
+};
+
+/// @relates view
+template <>
+struct view<table> {
+  using type = table_view_ptr;
+};
+
 /// A type-erased view over variout types of data.
 /// @relates view
-using data_view_variant = std::variant<
+using data_view = std::variant<
   view_t<boolean>,
   view_t<integer>,
   view_t<count>,
@@ -190,31 +201,40 @@ using data_view_variant = std::variant<
   view_t<address>,
   view_t<subnet>,
   view_t<port>,
-  view_t<vector>
+  view_t<vector>,
+  view_t<set>,
+  view_t<table>
 >;
 
 /// @relates view
 template <>
 struct view<data> {
-  using type = data_view_variant;
+  using type = data_view;
 };
 
+template <class T>
+struct container_view;
+
+/// @relates view
+template <class T>
+using container_view_ptr = caf::intrusive_ptr<container_view<T>>;
 
 namespace detail {
 
 /// @relates view
-template <class View>
+template <class T>
 class container_view_iterator
   : public detail::iterator_facade<
-      container_view_iterator<View>,
-      view_t<data>,
+      container_view_iterator<T>,
+      data_view,
       std::random_access_iterator_tag,
-      view_t<data>
+      data_view
     > {
   friend iterator_access;
 
 public:
-  container_view_iterator(View x, size_t pos) : view_{x}, position_{pos} {
+  container_view_iterator(container_view_ptr<T> x, size_t pos)
+    : view_{x}, position_{pos} {
     // nop
   }
 
@@ -230,8 +250,8 @@ public:
     --position_;
   }
 
-  template <class T>
-  void advance(T n) {
+  template <class N>
+  void advance(N n) {
     position_ += n;
   }
 
@@ -244,24 +264,32 @@ public:
   }
 
 private:
-  View view_;
+  container_view_ptr<T> view_;
   size_t position_;
 };
 
- } // namespace detail
+} // namespace detail
 
+/// Base class for container views.
 /// @relates view
-struct vector_view : public caf::ref_counted {
-  using value_type = view_t<data>;
+template <class T>
+struct container_view : caf::ref_counted {
+  using value_type = T;
   using size_type = size_t;
-  using iterator = detail::container_view_iterator<vector_view_ptr>;
+  using iterator = detail::container_view_iterator<T>;
   using const_iterator = iterator;
 
-  virtual ~vector_view() = default;
+  virtual ~container_view() = default;
 
-  iterator begin() const;
+  iterator begin() const {
+    // TODO: const_cast okay?
+    return {container_view_ptr<T>{const_cast<container_view*>(this), true}, 0};
+  }
 
-  iterator end() const;
+  iterator end() const {
+    // TODO: see above
+    return {container_view_ptr<T>{const_cast<container_view*>(this), true}, size()};
+  }
 
   /// Retrieves a specific element.
   /// @param i The position of the element to retrieve.
@@ -272,10 +300,19 @@ struct vector_view : public caf::ref_counted {
   virtual size_type size() const noexcept = 0;
 };
 
+// @relates view
+struct vector_view_ptr : container_view_ptr<data_view> {};
+
+// @relates view
+struct set_view_ptr : container_view_ptr<data_view> {};
+
+// @relates view
+struct table_view_ptr : container_view_ptr<std::pair<data_view, data_view>> {};
+
 /// A view over a @ref vector.
 /// @relates view
 class default_vector_view
-  : public vector_view,
+  : public container_view<data_view>,
     detail::totally_ordered<default_vector_view> {
 public:
   default_vector_view(const vector& xs);
@@ -288,6 +325,39 @@ private:
   const vector& xs_;
 };
 
+/// A view over a @ref set.
+/// @relates view
+class default_set_view
+  : public container_view<data_view>,
+    detail::totally_ordered<default_set_view> {
+public:
+  default_set_view(const set& xs);
+
+  value_type at(size_type i) const override;
+
+  size_type size() const noexcept override;
+
+private:
+  const set& xs_;
+};
+
+
+/// A view over a @ref table.
+/// @relates view
+class default_table_view
+  : public container_view<std::pair<data_view, data_view>>,
+    detail::totally_ordered<default_table_view> {
+public:
+  default_table_view(const table& xs);
+
+  value_type at(size_type i) const override;
+
+  size_type size() const noexcept override;
+
+private:
+  const table& xs_;
+};
+
 /// Creates a view from a specific type.
 /// @relates view
 template <class T>
@@ -298,23 +368,24 @@ view_t<T> make_view(const T& x) {
   if constexpr (directly_constructible) {
     return x;
   } else if constexpr (std::is_same_v<T, vector>) {
-    return caf::make_counted<default_vector_view>(x);
+    return vector_view_ptr{caf::make_counted<default_vector_view>(x)};
   } else if constexpr (std::is_same_v<T, set>) {
-    return {}; // TODO
+    return set_view_ptr{caf::make_counted<default_set_view>(x)};
   } else if constexpr (std::is_same_v<T, table>) {
-    return {}; // TODO
+    return table_view_ptr{caf::make_counted<default_table_view>(x)};
   } else {
+    VAST_ASSERT(!"missing branch");
     return {};
   }
 }
 
 /// @relates view
-view_t<data> make_view(const data& x);
+data_view make_view(const data& x);
 
 /// Creates a type-erased data view from a specific type.
 /// @relates view
 template <class T>
-view_t<data> make_data_view(const T& x) {
+data_view make_data_view(const T& x) {
   return make_view(x);
 }
 
