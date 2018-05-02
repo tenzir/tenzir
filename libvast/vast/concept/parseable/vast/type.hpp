@@ -130,17 +130,17 @@ struct type_parser : parser<type_parser> {
     auto set_type_parser
       = ("set" >> ws >> '<' >> ws >> type_type >> ws >> '>') ->* to_set
       ;
-    // Table
-    using table_tuple = std::tuple<type, type, std::vector<vast::attribute>>;
-    static auto to_table = [](table_tuple t) -> type {
+    // Map
+    using map_tuple = std::tuple<type, type, std::vector<vast::attribute>>;
+    static auto to_map = [](map_tuple t) -> type {
       auto tab = map_type{std::get<0>(t), std::get<1>(t)};
       tab.attributes() = std::get<2>(t);
       return tab;
     };
-    auto table_type_parser
+    auto map_type_parser
       = ("table" >> ws >> '<' >> ws
       >> type_type >> ws >> ',' >> ws >> type_type >> ws
-      >> '>' >> attr_list) ->* to_table;
+      >> '>' >> attr_list) ->* to_map;
       ;
     // Record
     using record_tuple = std::tuple<
@@ -171,7 +171,7 @@ struct type_parser : parser<type_parser> {
         | enum_type_parser
         | vector_type_parser
         | set_type_parser
-        | table_type_parser
+        | map_type_parser
         | record_type_parser
         ;
     else // As above, just without the symbol table.
@@ -180,7 +180,7 @@ struct type_parser : parser<type_parser> {
         | enum_type_parser
         | vector_type_parser
         | set_type_parser
-        | table_type_parser
+        | map_type_parser
         | record_type_parser
         ;
     return type_type(f, l, a);
