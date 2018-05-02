@@ -23,8 +23,10 @@
 #include <caf/fwd.hpp>
 #include <caf/message.hpp>
 
-#include "vast/error.hpp"
 #include "vast/data.hpp"
+#include "vast/error.hpp"
+#include "vast/option_declaration_set.hpp"
+#include "vast/option_map.hpp"
 
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/data.hpp"
@@ -39,8 +41,9 @@ class command {
 public:
   // -- member types -----------------------------------------------------------
 
+  // TODO #### remove me
   /// Maps names of config parameters to their value.
-  using option_map = std::map<std::string, caf::config_value>;
+  using XXoption_mapXX = std::map<std::string, caf::config_value>;
 
   /// Iterates over CLI arguments.
   using argument_iterator = std::vector<std::string>::const_iterator;
@@ -60,18 +63,31 @@ public:
 
   virtual ~command();
 
+  // TODO #### remove me
   /// Runs the command and blocks until execution completes.
   /// @returns An exit code suitable for returning from main.
   int run(caf::actor_system& sys, argument_iterator begin,
           argument_iterator end);
 
+  // TODO #### remove me
   /// Runs the command and blocks until execution completes.
   /// @returns An exit code suitable for returning from main.
-  int run(caf::actor_system& sys, option_map& options,
+  int run(caf::actor_system& sys, XXoption_mapXX& options,
           argument_iterator begin, argument_iterator end);
 
-  /// Prints usage to `std::cerr`.
-  void usage();
+  /// Runs the command and blocks until execution completes.
+  /// @returns An exit code suitable for returning from main.
+  int run_new(caf::actor_system& sys, argument_iterator begin,
+          argument_iterator end);
+
+  /// Runs the command and blocks until execution completes.
+  /// @returns An exit code suitable for returning from main.
+  int run_new(caf::actor_system& sys, option_map& options,
+          argument_iterator begin, argument_iterator end);
+
+
+  /// Creates a summary of all option declarations and available commands.
+  std::string usage();
 
   /// Returns the full name for this command.
   std::string full_name();
@@ -91,6 +107,7 @@ public:
     return name_;
   }
 
+  // TODO update doxygen comments
   /// Defines a sub-command.
   /// @param name The name of the command.
   /// @param xs The parameters required to construct the command.
@@ -105,8 +122,9 @@ public:
     return result;
   }
 
+  // TODO #### remove me
   template <class T>
-  caf::optional<T> get(const option_map& xs, const std::string& name) {
+  caf::optional<T> get(const XXoption_mapXX& xs, const std::string& name) {
     // Map T to the clostest type in config_value.
     using cfg_type =
       typename std::conditional<
@@ -127,8 +145,9 @@ public:
     return static_cast<T>(*result);
   }
 
+  // TODO #### remove me
   template <class T>
-  T get_or(const option_map& xs, const std::string& name, T fallback) {
+  T get_or(const XXoption_mapXX& xs, const std::string& name, T fallback) {
     auto result = get<T>(xs, name);
     if (!result)
       return fallback;
@@ -136,15 +155,27 @@ public:
   }
 
 protected:
+  // TODO #### remove me
   /// Checks whether a command is ready to proceed, i.e., whether the
   /// configuration allows for calling `run_impl` or `run` on a nested command.
-  virtual proceed_result proceed(caf::actor_system& sys, option_map& options,
+  virtual proceed_result proceed(caf::actor_system& sys, XXoption_mapXX& options,
                                  argument_iterator begin,
                                  argument_iterator end);
 
-  virtual int run_impl(caf::actor_system& sys, option_map& options,
+  // TODO #### remove me
+  virtual int run_impl(caf::actor_system& sys, XXoption_mapXX& options,
                        argument_iterator begin, argument_iterator end);
 
+  /// Checks whether a command is ready to proceed, i.e., whether the
+  /// configuration allows for calling `run_impl` or `run` on a nested command.
+  virtual proceed_result proceed_new(caf::actor_system& sys, option_map& options,
+                                 argument_iterator begin,
+                                 argument_iterator end);
+
+  virtual int run_impl_new(caf::actor_system& sys, option_map& options,
+                       argument_iterator begin, argument_iterator end);
+
+  // TODO #### remove me
   template <class T>
   void add_opt(std::string name, std::string descr, T& ref) {
     opts_.emplace_back(name, std::move(descr), ref);
@@ -169,7 +200,11 @@ protected:
     });
   }
 
+  expected<void> add_opt_new(std::string_view name,
+                             std::string_view description, data default_value);
+
 private:
+  // TODO #### remove me
   /// Separates arguments into the arguments for the current command, the name
   /// of the subcommand, and the arguments for the subcommand.
   std::tuple<caf::message, std::string, caf::message>
@@ -178,14 +213,21 @@ private:
   std::map<std::string_view, std::unique_ptr<command>> nested_;
   command* parent_;
 
+  // TODO: string_view does not have the ownership of the string.
+  // Check whether this is ok here.
   /// The user-provided name.
   std::string_view name_;
 
+  // TODO #### remove me
   /// List of all accepted options.
   std::vector<caf::message::cli_arg> opts_;
 
+  // TODO #### remove me
   /// List of function objects that return CLI options as name/value pairs.
   std::vector<std::function<std::pair<std::string, caf::config_value>()>> kvps_;
+
+  /// List of all accepted options.
+  option_declaration_set opts_new_;
 };
 
 } // namespace vast

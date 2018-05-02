@@ -26,11 +26,11 @@ namespace {
 class foo : public command {
 public:
   foo(command* parent, std::string_view name) : command(parent, name) {
-    add_opt("value,v", "Some integer value", value);
-    add_opt("flag", "Some flag", flag);
+    add_opt_new("value,v", "Some integer value", 0);
+    add_opt_new("flag", "Some flag", false);
   }
 
-  proceed_result proceed(caf::actor_system&, XXoption_mapXX&,
+  proceed_result proceed_new(caf::actor_system&, option_map&,
                          argument_iterator begin,
                          argument_iterator end) override {
     tested_proceed = true;
@@ -39,7 +39,7 @@ public:
     return proceed_ok;
   }
 
-  int run_impl(caf::actor_system&, XXoption_mapXX&, argument_iterator begin,
+  int run_impl_new(caf::actor_system&, option_map&, argument_iterator begin,
                argument_iterator end) override {
     was_executed = true;
     run_begin = begin;
@@ -47,8 +47,6 @@ public:
     return EXIT_SUCCESS;
   }
 
-  int value = 0;
-  bool flag = false;
   bool tested_proceed = false;
   bool was_executed = false;
   argument_iterator proceed_begin;
@@ -60,10 +58,10 @@ public:
 class bar : public command {
 public:
   bar(command* parent, std::string_view name) : command(parent, name) {
-    add_opt("other-value,o", "Some other integer value", other_value);
+    add_opt_new("other-value,o", "Some other integer value", 0);
   }
 
-  proceed_result proceed(caf::actor_system&, XXoption_mapXX&,
+  proceed_result proceed_new(caf::actor_system&, option_map&,
                          argument_iterator begin,
                          argument_iterator end) override {
     tested_proceed = true;
@@ -72,7 +70,7 @@ public:
     return proceed_ok;
   }
 
-  int run_impl(caf::actor_system&, XXoption_mapXX&, argument_iterator begin,
+  int run_impl_new(caf::actor_system&, option_map&, argument_iterator begin,
                argument_iterator end) override {
     was_executed = true;
     run_begin = begin;
@@ -80,7 +78,6 @@ public:
     return EXIT_SUCCESS;
   }
 
-  int other_value = 0;
   bool tested_proceed = false;
   bool was_executed = false;
   argument_iterator proceed_begin;
@@ -93,11 +90,11 @@ struct fixture {
   command root;
   caf::actor_system_config cfg;
   caf::actor_system sys{cfg};
-  command::XXoption_mapXX options;
+  option_map options;
   std::vector<std::string> xs;
   int exec(std::string str) {
     caf::split(xs, str, ' ', caf::token_compress_on);
-    return root.run(sys, options, xs.begin(), xs.end());
+    return root.run_new(sys, options, xs.begin(), xs.end());
   }
 };
 
@@ -111,41 +108,25 @@ TEST(full name) {
   CHECK_EQUAL(cmd2->full_name(), "foo bar");
 }
 
-TEST(parsing value) {
-  auto cmd = root.add<foo>("foo");
-  exec("foo -v 42");
-  CHECK_EQUAL(cmd->flag, false);
-  CHECK_EQUAL(cmd->value, 42);
-  CHECK_EQUAL(caf::deep_to_string(options),
-              R"([("flag", false), ("value", 42)])");
-}
-
-TEST(parsing flag) {
-  auto cmd = root.add<foo>("foo");
-  exec("foo --flag");
-  CHECK_EQUAL(cmd->flag, true);
-  CHECK_EQUAL(cmd->value, 0);
-  CHECK_EQUAL(caf::deep_to_string(options),
-              R"([("flag", true), ("value", 0)])");
-}
-
-TEST(parsing both) {
-  auto cmd = root.add<foo>("foo");
+TEST(parsing args) {
+  root.add<foo>("foo");
   exec("foo --flag -v 42");
-  CHECK_EQUAL(cmd->flag, true);
-  CHECK_EQUAL(cmd->value, 42);
-  CHECK_EQUAL(caf::deep_to_string(options),
-              R"([("flag", true), ("value", 42)])");
+  auto flag = vast::get<boolean>(options.get_or("flag", false));
+  CHECK_EQUAL(flag, true);
+  auto value = vast::get<integer>(options.get_or("value", 0));
+  CHECK_EQUAL(value, 42);
 }
 
 TEST(nested arg parsing) {
   auto cmd1 = root.add<foo>("foo");
-  auto cmd2 = cmd1->add<bar>("bar");
+  cmd1->add<bar>("bar");
   exec("foo -v 42 bar -o 123");
-  CHECK_EQUAL(cmd1->value, 42);
-  CHECK_EQUAL(cmd2->other_value, 123);
-  CHECK_EQUAL(caf::deep_to_string(options),
-              R"([("flag", false), ("other-value", 123), ("value", 42)])");
+  auto flag = vast::get<boolean>(options.get_or("flag", false));
+  CHECK_EQUAL(flag, false);
+  auto value = vast::get<integer>(options.get_or("value", 0));
+  CHECK_EQUAL(value, 42);
+  value = vast::get<integer>(options.get_or("other-value", 0));
+  CHECK_EQUAL(value, 123);
 }
 
 TEST(parsing arg remainder) {
