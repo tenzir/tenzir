@@ -26,11 +26,11 @@ namespace {
 class foo : public command {
 public:
   foo(command* parent, std::string_view name) : command(parent, name) {
-    add_opt_new("value,v", "Some integer value", 0);
-    add_opt_new("flag", "Some flag", false);
+    add_opt("value,v", "Some integer value", 0);
+    add_opt("flag", "Some flag", false);
   }
 
-  proceed_result proceed_new(caf::actor_system&, option_map&,
+  proceed_result proceed(caf::actor_system&, option_map&,
                          argument_iterator begin,
                          argument_iterator end) override {
     tested_proceed = true;
@@ -39,7 +39,7 @@ public:
     return proceed_ok;
   }
 
-  int run_impl_new(caf::actor_system&, option_map&, argument_iterator begin,
+  int run_impl(caf::actor_system&, option_map&, argument_iterator begin,
                argument_iterator end) override {
     was_executed = true;
     run_begin = begin;
@@ -58,10 +58,10 @@ public:
 class bar : public command {
 public:
   bar(command* parent, std::string_view name) : command(parent, name) {
-    add_opt_new("other-value,o", "Some other integer value", 0);
+    add_opt("other-value,o", "Some other integer value", 0);
   }
 
-  proceed_result proceed_new(caf::actor_system&, option_map&,
+  proceed_result proceed(caf::actor_system&, option_map&,
                          argument_iterator begin,
                          argument_iterator end) override {
     tested_proceed = true;
@@ -70,7 +70,7 @@ public:
     return proceed_ok;
   }
 
-  int run_impl_new(caf::actor_system&, option_map&, argument_iterator begin,
+  int run_impl(caf::actor_system&, option_map&, argument_iterator begin,
                argument_iterator end) override {
     was_executed = true;
     run_begin = begin;
@@ -94,7 +94,7 @@ struct fixture {
   std::vector<std::string> xs;
   int exec(std::string str) {
     caf::split(xs, str, ' ', caf::token_compress_on);
-    return root.run_new(sys, options, xs.begin(), xs.end());
+    return root.run(sys, options, xs.begin(), xs.end());
   }
 };
 
