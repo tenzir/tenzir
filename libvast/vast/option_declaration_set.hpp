@@ -41,7 +41,6 @@ public:
     arg_declared_but_not_passed,
     failed_to_parse_argument,
     type_not_parsebale,
-    mismatch_of_default_value_and_arugment,
     in_progress
   };
 
