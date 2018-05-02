@@ -234,6 +234,7 @@ set(tests
   test/offset.cpp
   test/option_declaration_set.cpp
   test/option_map.cpp
+  test/parse_data.cpp
   test/parseable.cpp
   test/pattern.cpp
   test/port.cpp
