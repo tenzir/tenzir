@@ -14,7 +14,7 @@
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/data.hpp"
 
-#define SUITE parseable
+#define SUITE parse_data 
 #include "test.hpp"
 
 using namespace vast;
