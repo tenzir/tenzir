@@ -55,6 +55,8 @@ set(libvast_sources
   src/key.cpp
   src/null_bitmap.cpp
   src/operator.cpp
+  src/option_declaration_set.cpp
+  src/option_map.cpp
   src/pattern.cpp
   src/port.cpp
   src/schema.cpp
@@ -230,6 +232,8 @@ set(tests
   test/main.cpp
   test/mmapbuf.cpp
   test/offset.cpp
+  test/option_declaration_set.cpp
+  test/option_map.cpp
   test/parseable.cpp
   test/pattern.cpp
   test/port.cpp
