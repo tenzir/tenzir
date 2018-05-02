@@ -138,7 +138,7 @@ struct type_parser : parser<type_parser> {
       return tab;
     };
     auto map_type_parser
-      = ("table" >> ws >> '<' >> ws
+      = ("map" >> ws >> '<' >> ws
       >> type_type >> ws >> ',' >> ws >> type_type >> ws
       >> '>' >> attr_list) ->* to_map;
       ;

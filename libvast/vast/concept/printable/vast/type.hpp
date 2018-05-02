@@ -185,7 +185,7 @@ bool set_type_printer::print(Iterator& out, const set_type& t) const {
 template <class Iterator>
 bool map_type_printer::print(Iterator& out, const map_type& t) const {
   using namespace printers;
-  auto p =  "table<"
+  auto p =  "map<"
          << type_printer<policy::name_only>{}
          << ", "
          << type_printer<policy::name_only>{}

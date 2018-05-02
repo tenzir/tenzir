@@ -880,7 +880,7 @@ struct kind_printer {
   }
 
   result_type operator()(const map_type&) const {
-    return "table";
+    return "map";
   }
 
   result_type operator()(const record_type&) const {
