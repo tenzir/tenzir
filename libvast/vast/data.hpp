@@ -73,7 +73,7 @@ using make_data_type = std::conditional_t<
               || std::is_same_v<T, enumeration>
               || std::is_same_v<T, vector>
               || std::is_same_v<T, set>
-              || std::is_same_v<T, table>,
+              || std::is_same_v<T, map>,
               T,
               std::false_type
             >
@@ -99,7 +99,7 @@ using data_variant = variant<
   enumeration,
   vector,
   set,
-  table
+  map 
 >;
 
 } // namespace detail
@@ -233,7 +233,7 @@ bool evaluate(const data& lhs, relational_operator op, const data& rhs);
 
 bool convert(const vector& v, json& j);
 bool convert(const set& v, json& j);
-bool convert(const table& v, json& j);
+bool convert(const map& v, json& j);
 bool convert(const data& v, json& j);
 
 /// Converts data with a type to "zipped" JSON, i.e., the JSON object for

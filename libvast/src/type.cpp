@@ -128,18 +128,18 @@ bool operator<(const set_type& x, const set_type& y) {
   return x.value_type < y.value_type;
 }
 
-table_type::table_type(type key, type value)
+map_type::map_type(type key, type value)
   : key_type{std::move(key)},
     value_type{std::move(value)} {
 }
 
-bool operator==(const table_type& x, const table_type& y) {
-  return static_cast<const table_type::base_type&>(x) ==
-         static_cast<const table_type::base_type&>(y) &&
+bool operator==(const map_type& x, const map_type& y) {
+  return static_cast<const map_type::base_type&>(x) ==
+         static_cast<const map_type::base_type&>(y) &&
     x.key_type == y.key_type && x.value_type == y.value_type;
 }
 
-bool operator<(const table_type& x, const table_type& y) {
+bool operator<(const map_type& x, const map_type& y) {
   return std::tie(x.key_type, x.value_type) <
     std::tie(y.key_type, y.value_type);
 }
@@ -466,7 +466,7 @@ bool is_container(const type& t) {
 }
 
 bool is_container(const data& x) {
-  return is<vector>(x) || is<set>(x) || is<table>(x);
+  return is<vector>(x) || is<set>(x) || is<map>(x);
 }
 
 namespace {
@@ -509,7 +509,7 @@ struct type_congruence_checker {
     return visit(*this, x.value_type, y.value_type);
   }
 
-  bool operator()(const table_type& x, const table_type& y) const {
+  bool operator()(const map_type& x, const map_type& y) const {
     return visit(*this, x.key_type, y.key_type) &&
         visit(*this, x.value_type, y.value_type);
   }
@@ -590,7 +590,7 @@ struct data_congruence_checker {
     return true;
   }
 
-  bool operator()(const table_type&, const table&) const {
+  bool operator()(const map_type&, const map&) const {
     return true;
   }
 
@@ -765,10 +765,10 @@ struct data_checker {
     return t && type_check(t->value_type, *s.begin());
   }
 
-  bool operator()(const table& x) const {
+  bool operator()(const map& x) const {
     if (x.empty())
       return true;
-    auto t = get_if<table_type>(type_);
+    auto t = get_if<map_type>(type_);
     if (!t)
       return false;
     return type_check(t->key_type, x.begin()->first) &&
@@ -879,8 +879,8 @@ struct kind_printer {
     return "set";
   }
 
-  result_type operator()(const table_type&) const {
-    return "table";
+  result_type operator()(const map_type&) const {
+    return "map";
   }
 
   result_type operator()(const record_type&) const {
@@ -927,7 +927,7 @@ struct jsonizer {
     return true;
   }
 
-  bool operator()(const table_type& t) {
+  bool operator()(const map_type& t) {
     json::object o;
     if (!convert(t.key_type, o["key"]))
       return false;

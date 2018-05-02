@@ -94,7 +94,7 @@ TEST(introspection) {
   CHECK(!is_recursive(enumeration_type{}));
   CHECK(is_recursive(vector_type{}));
   CHECK(is_recursive(set_type{}));
-  CHECK(is_recursive(table_type{}));
+  CHECK(is_recursive(map_type{}));
   CHECK(is_recursive(record_type{}));
   CHECK(is_recursive(alias_type{}));
 }
@@ -341,7 +341,7 @@ TEST(printable) {
   CHECK_EQUAL(to_string(vector_type{real_type{}}), "vector<real>");
   CHECK_EQUAL(to_string(set_type{boolean_type{}}), "set<bool>");
   auto b = boolean_type{};
-  CHECK_EQUAL(to_string(table_type{count_type{}, b}), "table<count, bool>");
+  CHECK_EQUAL(to_string(map_type{count_type{}, b}), "map<count, bool>");
   auto r = record_type{{
         {"foo", b},
         {"bar", integer_type{}},
@@ -372,13 +372,13 @@ TEST(printable) {
   // Nested types
   t = s;
   t.attributes().resize(1);
-  t = table_type{count_type{}, t};
-  CHECK_EQUAL(to_string(t), "table<count, set<port> &skip>");
+  t = map_type{count_type{}, t};
+  CHECK_EQUAL(to_string(t), "map<count, set<port> &skip>");
   MESSAGE("signature");
   t.name("jells");
   std::string sig;
   CHECK(printers::type<policy::signature>(sig, t));
-  CHECK_EQUAL(sig, "jells = table<count, set<port> &skip>");
+  CHECK_EQUAL(sig, "jells = map<count, set<port> &skip>");
 }
 
 TEST(parseable) {
@@ -398,8 +398,8 @@ TEST(parseable) {
   CHECK(t == type{vector_type{real_type{}}});
   CHECK(parsers::type("set<port>", t));
   CHECK(t == type{set_type{port_type{}}});
-  CHECK(parsers::type("table<count, bool>", t));
-  CHECK(t == type{table_type{count_type{}, boolean_type{}}});
+  CHECK(parsers::type("map<count, bool>", t));
+  CHECK(t == type{map_type{count_type{}, boolean_type{}}});
   MESSAGE("recursive");
   auto str = "record{r: record{a: addr, i: record{b: bool}}}"s;
   CHECK(parsers::type(str, t));
@@ -421,8 +421,8 @@ TEST(parseable) {
   CHECK(t == type{vector_type{foo}});
   CHECK(p("set<foo>", t));
   CHECK(t == type{set_type{foo}});
-  CHECK(p("table<foo, foo>", t));
-  CHECK(t == type{table_type{foo, foo}});
+  CHECK(p("map<foo, foo>", t));
+  CHECK(t == type{map_type{foo, foo}});
   MESSAGE("record");
   CHECK(p("record{x: int, y: string, z: foo}", t));
   r = record_type{
@@ -453,7 +453,7 @@ TEST(parseable) {
 TEST(json) {
   auto e = enumeration_type{{"foo", "bar", "baz"}};
   e.name("e");
-  auto t = table_type{boolean_type{}, count_type{}};
+  auto t = map_type{boolean_type{}, count_type{}};
   t.name("bit_table");
   auto r = record_type{
     {"x", address_type{}.attributes({{"skip"}})},
