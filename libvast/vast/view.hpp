@@ -25,6 +25,7 @@
 #include "vast/data.hpp"
 #include "vast/time.hpp"
 
+#include "vast/detail/iterator.hpp"
 #include "vast/detail/operators.hpp"
 #include "vast/detail/type_traits.hpp"
 
@@ -198,12 +199,69 @@ struct view<data> {
   using type = data_view_variant;
 };
 
+
+namespace detail {
+
+/// @relates view
+template <class View>
+class container_view_iterator
+  : public detail::iterator_facade<
+      container_view_iterator<View>,
+      view_t<data>,
+      std::random_access_iterator_tag,
+      view_t<data>
+    > {
+  friend iterator_access;
+
+public:
+  container_view_iterator(View x, size_t pos) : view_{x}, position_{pos} {
+    // nop
+  }
+
+  auto dereference() const {
+    return view_->at(position_);
+  }
+
+  void increment() {
+    ++position_;
+  }
+
+  void decremenet() {
+    --position_;
+  }
+
+  template <class T>
+  void advance(T n) {
+    position_ += n;
+  }
+
+  bool equals(container_view_iterator other) const {
+    return view_ == other.view_ && position_ == other.position_;
+  }
+
+  auto distance_to(container_view_iterator other) const {
+    return other.position_ - position_;
+  }
+
+private:
+  View view_;
+  size_t position_;
+};
+
+ } // namespace detail
+
 /// @relates view
 struct vector_view : public caf::ref_counted {
   using value_type = view_t<data>;
   using size_type = size_t;
+  using iterator = detail::container_view_iterator<vector_view_ptr>;
+  using const_iterator = iterator;
 
   virtual ~vector_view() = default;
+
+  iterator begin() const;
+
+  iterator end() const;
 
   /// Retrieves a specific element.
   /// @param i The position of the element to retrieve.

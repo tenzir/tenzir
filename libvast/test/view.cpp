@@ -26,8 +26,27 @@ TEST(arithmetic view) {
   CHECK_EQUAL(view_t<port>(53, port::udp), port(53, port::udp));
 }
 
-TEST(make_view) {
-  auto x = make_view(true);
+TEST(container view) {
+  auto xs = vector{42, true, "foo", 4.2};
+  auto v = make_view(xs);
+  REQUIRE_EQUAL(v->size(), xs.size());
+  auto i = v->begin();
+  CHECK_EQUAL(*i, v->at(0));
+  CHECK_EQUAL(*i, make_data_view(42));
+  ++i;
+  CHECK_EQUAL(*i, v->at(1));
+  CHECK_EQUAL(*i, make_data_view(true));
+  i += 2;
+  CHECK_EQUAL(*i, v->at(3));
+  CHECK_EQUAL(*i, make_data_view(4.2));
+  ++i;
+  CHECK_EQUAL(i, v->end());
+  auto j = v->begin() + 1;
+  CHECK_EQUAL(i - j, xs.size() - 1);
+}
+
+TEST(make_data_view) {
+  auto x = make_data_view(true);
   CHECK(std::holds_alternative<boolean>(x));
   auto str = "foo"s;
   x = make_data_view(str);
