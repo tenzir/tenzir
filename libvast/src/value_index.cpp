@@ -128,7 +128,7 @@ std::unique_ptr<value_index> value_index::make(const type& t) {
       }
       return std::make_unique<sequence_index>(t.value_type, max_size);
     }
-    result_type operator()(const table_type&) const {
+    result_type operator()(const map_type&) const {
       return nullptr;
     }
     result_type operator()(const record_type&) const {

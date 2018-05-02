@@ -234,7 +234,7 @@ struct streamer {
     stream(s, t.value_type, set_separator);
   }
 
-  void operator()(const table_type&, const map&) const {
+  void operator()(const map_type&, const map&) const {
     VAST_ASSERT(!"not supported by Bro's log format.");
   }
 

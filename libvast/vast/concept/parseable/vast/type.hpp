@@ -133,7 +133,7 @@ struct type_parser : parser<type_parser> {
     // Table
     using table_tuple = std::tuple<type, type, std::vector<vast::attribute>>;
     static auto to_table = [](table_tuple t) -> type {
-      auto tab = table_type{std::get<0>(t), std::get<1>(t)};
+      auto tab = map_type{std::get<0>(t), std::get<1>(t)};
       tab.attributes() = std::get<2>(t);
       return tab;
     };

@@ -89,7 +89,7 @@ struct value_printer : printer<value_printer> {
       return render(s, t.value_type, set_separator);
     }
 
-    bool operator()(const table_type&, const map&) {
+    bool operator()(const map_type&, const map&) {
       return false; // not yet supported
     }
 
