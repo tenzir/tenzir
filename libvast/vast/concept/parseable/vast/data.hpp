@@ -49,7 +49,7 @@ struct access::parser<data> : vast::parser<access::parser<data>> {
       | parsers::pattern
       | '[' >> (x % ',') >> ']' // default: vector<data>
       | '{' >> as<set>(x % ',') >> '}'
-      | '{' >> as<table>((x >> "->" >> x) % ',') >> '}'
+      | '{' >> as<map>((x >> "->" >> x) % ',') >> '}'
       | as<none>("nil"_p)
       ;
     return p;

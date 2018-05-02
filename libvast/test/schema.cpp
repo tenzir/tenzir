@@ -225,12 +225,12 @@ TEST(parseable - complex types global) {
     type enum_t = enum{x, y, z}
     type vector_t = vector<addr>
     type set_t = set<pattern>
-    type table_t = table<port, addr>
+    type map_t = map<port, addr>
     type foo = record{
       e: enum_t,
       v: vector_t,
       s: set_t,
-      t: table_t
+      t: map_t
     }
   )__";
   schema sch;
@@ -239,7 +239,7 @@ TEST(parseable - complex types global) {
   REQUIRE(enum_t);
   CHECK(sch.find("vector_t"));
   CHECK(sch.find("set_t"));
-  CHECK(sch.find("table_t"));
+  CHECK(sch.find("map_t"));
   auto foo = sch.find("foo");
   REQUIRE(foo);
   auto r = get_if<record_type>(*foo);

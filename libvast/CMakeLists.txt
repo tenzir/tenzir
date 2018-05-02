@@ -55,6 +55,8 @@ set(libvast_sources
   src/key.cpp
   src/null_bitmap.cpp
   src/operator.cpp
+  src/option_declaration_set.cpp
+  src/option_map.cpp
   src/pattern.cpp
   src/port.cpp
   src/schema.cpp
@@ -138,6 +140,10 @@ target_link_libraries(libvast ${libvast_libs})
 # Install libvast in PREFIX/lib and headers in PREFIX/include/vast.
 install(TARGETS libvast DESTINATION lib)
 install(DIRECTORY vast/
+        DESTINATION include/vast FILES_MATCHING PATTERN "*.hpp")
+
+# Install generated config header.
+install(DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/vast/"
         DESTINATION include/vast FILES_MATCHING PATTERN "*.hpp")
 
 # ----------------------------------------------------------------------------
@@ -227,6 +233,8 @@ set(tests
   test/main.cpp
   test/mmapbuf.cpp
   test/offset.cpp
+  test/option_declaration_set.cpp
+  test/option_map.cpp
   test/parseable.cpp
   test/pattern.cpp
   test/port.cpp

@@ -38,7 +38,7 @@ auto make_ip_v4_v6_parser(F f) {
   auto v6 = [](std::array<uint8_t, 16> a) {
     return address::v6(a.data(), address::network);
   };
-  return (b32be->*v4).when(f) | (bytes<16>->*v6);
+  return (b32be ->* v4).when(f) | (bytes<16> ->* v6);
 }
 
 } // namespace detail
@@ -228,13 +228,13 @@ struct prefix_parser : parser<prefix_parser<N>> {
     for (auto n = N{0}; n < bytes;) {
       uint8_t prefix_length;
       uint8_t prefix_bytes;
-      auto pfx_len = parsers::byte->*[&] {
+      auto pfx_len = parsers::byte ->* [&] {
         prefix_bytes = prefix_length / 8;
         if (prefix_length % 8 != 0)
           ++prefix_bytes;
       };
       std::array<uint8_t, 16> addr_bytes;
-      auto addr = parsers::nbytes<uint8_t>(prefix_bytes)->*[&] {
+      auto addr = parsers::nbytes<uint8_t>(prefix_bytes) ->* [&] {
         xs.emplace_back(address{addr_bytes.data(), family, address::network},
                         prefix_length);
       };
@@ -453,7 +453,7 @@ struct open_parser : parser<open_parser> {
       f += std::min(static_cast<size_t>(l - f),
                     static_cast<size_t>(x.opt_parm_len));
     };
-    auto p = (byte >> b16be >> b16be >> b32be >> byte)->*skip;
+    auto p = (byte >> b16be >> b16be >> b32be >> byte) ->* skip;
     return p(f, l, x.version, x.my_autonomous_system, x.hold_time,
              x.bgp_identifier, x.opt_parm_len);
   }
@@ -501,7 +501,7 @@ struct notification_parser : parser<notification_parser> {
   bool parse(Iterator& f, const Iterator& l, notification& x) const {
     using namespace parsers;
     auto skip = [&] { f += (l - f); };
-    auto p = (byte >> byte)->*skip;
+    auto p = (byte >> byte) ->* skip;
     return p(f, l, x.error_code, x.error_subcode);
   }
 };
@@ -522,7 +522,7 @@ struct message_parser : parser<message_parser> {
       [&] { return x.header.type == UPDATE; });
     auto notification = notification_parser{}.when(
       [&] { return x.header.type == NOTIFICATION; });
-    auto skip = parsers::eps->*[&] {
+    auto skip = parsers::eps ->* [&] {
       static auto header_length = 16 + 2 + 1;
       if (x.header.length < header_length || x.header.length > 4096)
         throw std::runtime_error{"cannot parse RFC-violoating records"};
@@ -935,7 +935,7 @@ struct peer_entry_parser : parser<peer_entry_parser> {
       = detail::make_ip_v4_v6_parser([&] { return (x.peer_type & 1) == 0; });
     auto to_u32 = [](uint16_t u) { return uint32_t{u}; };
     auto peer_as
-      = (b16be->*to_u32).when([&] { return (x.peer_type & 2) == 0; }) | b32be;
+      = (b16be ->* to_u32).when([&] { return (x.peer_type & 2) == 0; }) | b32be;
     auto p = byte >> b32be >> ip_addr >> peer_as;
     return p(f, l, x.peer_type, x.peer_bgp_id, x.peer_ip_address, x.peer_as);
   }
@@ -1131,12 +1131,18 @@ struct record_parser : parser<record_parser> {
       return x.header.type == BGP4MP
              && x.header.subtype == bgp4mp::STATE_CHANGE_AS4;
     });
-    auto skip = parsers::eps->*[&] {
+    auto skip = parsers::eps ->* [&] {
       f += std::min(static_cast<size_t>(l - f),
                     static_cast<size_t>(x.header.length));
     };
-    auto msg = peer_index_table | rib_ipv4 | rib_ipv6 | state_change | message
-               | message_as4 | state_change_as4 | skip;
+    auto msg = peer_index_table
+             | rib_ipv4
+             | rib_ipv6
+             | state_change
+             | message
+             | message_as4
+             | state_change_as4
+             | skip;
     auto p = common_header_parser{} >> msg;
     return p(f, l, x.header, x.message);
   }

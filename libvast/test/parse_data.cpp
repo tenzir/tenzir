@@ -100,11 +100,11 @@ TEST(data) {
   CHECK(f == l);
   CHECK(d == set{-42, 42, -1});
 
-  MESSAGE("table");
+  MESSAGE("map");
   str = "{T->1,F->0}"s;
   f = str.begin();
   l = str.end();
   CHECK(p(f, l, d));
   CHECK(f == l);
-  CHECK(d == table{{true, 1u}, {false, 0u}});
+  CHECK(d == map{{true, 1u}, {false, 0u}});
 }
