@@ -19,6 +19,7 @@
 #include <memory>
 #include <string>
 #include <string_view>
+#include <csignal>
 
 #include <caf/scoped_actor.hpp>
 #include <caf/typed_actor.hpp>

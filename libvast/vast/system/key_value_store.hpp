@@ -26,13 +26,13 @@ namespace vast::system {
 template <class Key, class Value>
 using key_value_store_type = caf::typed_actor<
   // Updates the value of a specific key.
-  class caf::replies_to<put_atom, Key, Value>::template with<ok_atom>,
+  typename caf::replies_to<put_atom, Key, Value>::template with<ok_atom>,
   // Adds a value to a specific key and returns old key.
-  class caf::replies_to<add_atom, Key, Value>::template with<Value>,
+  typename caf::replies_to<add_atom, Key, Value>::template with<Value>,
   // Deletes a key-value pair.
-  class caf::replies_to<delete_atom, Key>::template with<ok_atom>,
+  typename caf::replies_to<delete_atom, Key>::template with<ok_atom>,
   // Retrieves the value for a given key pair.
-  class caf::replies_to<get_atom, Key>::template with<optional<Value>>
+  typename caf::replies_to<get_atom, Key>::template with<optional<Value>>
 >;
 
 } // namespace vast::system

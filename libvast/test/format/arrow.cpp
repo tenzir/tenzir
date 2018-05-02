@@ -13,7 +13,6 @@
 #include "plasma/client.h"
 #include "plasma/common.h"
 
-
 #define SUITE format
 #include "fixtures/events.hpp"
 #include "test.hpp"
@@ -43,7 +42,6 @@ Status get_arrow_batch(plasma::ObjectID id, std::shared_ptr<::arrow::RecordBatch
   status = br->ReadNext(&b);
   return Status::OK();
 }
-
 TEST(arrow writer conn) {
   format::arrow::writer writer{"/tmp/plasma"};
   REQUIRE(writer.connected());
@@ -114,7 +112,6 @@ TEST(arrow writer dns) {
     std::cout << b->column(i)->ToString() << std::endl; 
   }
 }
-/*
 TEST(arrow writer random) {
   format::arrow::writer writer{"/tmp/plasma"};
   REQUIRE(writer.connected());
@@ -122,5 +119,4 @@ TEST(arrow writer random) {
     CHECK(writer.write(x));
   CHECK(writer.flush());
 }
-*/
 FIXTURE_SCOPE_END()

@@ -32,13 +32,6 @@ expected<std::shared_ptr<arrow::RecordBatch>> transpose(const event& e) {
     for (auto& e : record_type::each(r)) {
       schema_vector.push_back(convert_to_arrow_field(e.trace.back()->type));
     }
-  } else if (is<vector_type>(e.type())) {
-    vector_type v = get<vector_type>(e.type());
-    /*
-    for (auto& e : v) {
-      schema_vector.push_back(convert_to_arrow_field(e.type()));
-    }
-    */
   } else {
     schema_vector.push_back(convert_to_arrow_field(e.type()));
   }
@@ -56,6 +49,8 @@ expected<std::shared_ptr<arrow::RecordBatch>> transpose(const event& e) {
       status = sr_builder->Flush(&batch);
   }
   if (!status.ok()) {
+      std::cout << "ERRRRROR: " << to_string(e.data()) 
+<< " " << status.message() << std::endl;
     return make_error(ec::format_error, "failed to flush batch",
                       status.ToString());
   }
@@ -142,10 +137,12 @@ result_type convert_visitor::operator()(const timestamp_type&) {
                         ::arrow::timestamp(::arrow::TimeUnit::NANO));
 }
 result_type convert_visitor::operator()(const vector_type& t) {
-  std::vector<result_type> schema_vector = {
-    convert_to_arrow_field(t.value_type) 
-  };
-  return ::arrow::field("vector", std::make_shared<::arrow::StructType>(schema_vector));
+std::vector<result_type> schema_vector = {
+//convert_to_arrow_field(t.value_type)
+  ::arrow::field("values", std::make_shared<::arrow::StringType>()),
+};  
+auto vector_struct = std::make_shared<::arrow::StructType>(schema_vector);
+  return ::arrow::field("vector" , vector_struct);
 }
 result_type convert_visitor::operator()(const set_type& t) {
   std::vector<result_type> schema_vector = {
@@ -278,28 +275,17 @@ insert_visitor::insert_visitor(std::shared_ptr<::arrow::RecordBatchBuilder>& b,
 }
 ::arrow::Status insert_visitor::operator()(const vector_type& t,
                                            const std::vector<data>& d) {
-  /*
-  auto structBuilder = rbuilder->GetFieldAs<::arrow::StructBuilder>(0);
-  u_int64_t offset = 0;
-  for (; counter < d.size();) {
-    auto b = rbuilder->GetField(counter +
-  offset);//structBuilder->field_builder(counter + offset);
+    auto struct_builder = rbuilder->GetFieldAs<::arrow::StructBuilder>(c_builder);
+    auto builder = static_cast<::arrow::StringBuilder*>(struct_builder->field_builder(0));
 
-    format::arrow::insert_visitor a(*b, counter);
-    a.rbuilder = this->rbuilder;
-    auto status = visit(a, t.value_type, d.at(counter));
-    if (!status.ok()) {
-      return status;
+    for (auto v : d) {
+      auto status = builder->Append(to_string(v));
+
+      if (!status.ok()) {
+        return status;
     }
-    if (is<record_type>(t.value_type) && is<std::vector<data>>(d.at(counter))) {
-      auto data_v = get<std::vector<data>>(d.at(counter));
-      offset += data_v.size() - 1;
-    }
-    counter++;
   }
-  return structBuilder->Append(true);
-  */
-  return ::arrow::Status::OK();
+    return struct_builder->Append(true);
 }
 ::arrow::Status insert_visitor::operator()(const vector_type&, const none&) {
   auto sbuilder = rbuilder->GetFieldAs<::arrow::StructBuilder>(c_builder);
@@ -310,7 +296,7 @@ insert_visitor::insert_visitor(std::shared_ptr<::arrow::RecordBatchBuilder>& b,
   auto structBuilder = rbuilder->GetFieldAs<::arrow::StructBuilder>(c_builder);
   for (auto e : d) {
   }
-  return structBuilder->;
+  return structBuilder->AppendNull();
 }
 ::arrow::Status insert_visitor::operator()(const set_type&, const none&) {
   auto structBuilder = rbuilder->GetFieldAs<::arrow::StructBuilder>(c_builder);
