@@ -90,19 +90,17 @@ optional<const T&> get(const option_map& xs, std::string_view name) {
   auto x = xs[name];
   if (!x)
     return {};
-  auto result = get_if<T>(*x);
-  if (!result)
-    return {};
-  return *result;
+  if (auto result = get_if<T>(*x); result)
+    return *result;
+  return {};
 }
 
 template <class T>
 T get_or(const option_map& xs, std::string_view name,
          const T& default_value) {
-  auto x = get<detail::make_data_type<T>>(xs, name);
-  if (!x)
-    return default_value;
-  return *x;
+  if (auto x = get<detail::make_data_type<T>>(xs, name); x)
+    return *x;
+  return default_value;
 }
 
 } // namespace vast
