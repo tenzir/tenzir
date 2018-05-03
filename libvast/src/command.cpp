@@ -95,6 +95,7 @@ int command::run(caf::actor_system& sys, option_map& options,
     default:
       // TODO: examine what went wrong and inform the user
       std::cerr << "something went wrong!!!" << std::endl;
+      std::cerr << "parser state: " << static_cast<int>(state) << std::endl;
       std::cerr << usage() << std::endl;;
       return EXIT_FAILURE;
     case option_declaration_set::parse_state::successful:

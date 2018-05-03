@@ -54,6 +54,12 @@ option_declaration_set::option_declaration::parse(
       return std::make_pair(parse_state::type_not_parsebale,
                               default_value());
     },
+    [&](const std::string&) {
+      // To parse a string with the vast::to function the string musst be 
+      // surrounded with quotes. However, the CLI remove all quotes. 
+      // Therefore, we have to parse them manually.
+      return std::make_pair(parse_state::successful, data{std::string{value}});
+    },
     [&](const set&) {
       return std::make_pair(parse_state::type_not_parsebale,
                               default_value());
