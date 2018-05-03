@@ -86,9 +86,9 @@ command::~command() {
 
 int command::run(caf::actor_system& sys, option_map& options,
                      argument_iterator begin, argument_iterator end) {
-
+  VAST_TRACE(VAST_ARG(std::string(name_)), VAST_ARG("args", begin, end),
+             VAST_ARG(options));
   // Parse arguments for this command.
-  VAST_TRACE(VAST_ARG(options), VAST_ARG("args", begin, end));
   auto [state, position] = opts_.parse(options, begin, end);
   bool has_subcommand;
   switch(state) {
@@ -194,7 +194,8 @@ command::proceed_result command::proceed(caf::actor_system&,
                                          argument_iterator begin,
                                          argument_iterator end) {
   VAST_UNUSED(options, begin, end);
-  VAST_TRACE(VAST_ARG(options), VAST_ARG("args", begin, end));
+  VAST_TRACE(VAST_ARG(std::string{name_}), VAST_ARG("args", begin, end),
+             VAST_ARG(options));
   return proceed_ok;
 }
 
@@ -209,7 +210,8 @@ command::proceed_result command::proceed(caf::actor_system&,
 int command::run_impl(caf::actor_system&, option_map& options,
                       argument_iterator begin, argument_iterator end) {
   VAST_UNUSED(options, begin, end);
-  VAST_TRACE(VAST_ARG(options), VAST_ARG("args", begin, end));
+  VAST_TRACE(VAST_ARG(std::string{name_}), VAST_ARG("args", begin, end),
+             VAST_ARG(options));
   usage();
   return EXIT_FAILURE;
 }
