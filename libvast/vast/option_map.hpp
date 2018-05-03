@@ -99,7 +99,7 @@ optional<const T&> get(const option_map& xs, std::string_view name) {
 template <class T>
 T get_or(const option_map& xs, std::string_view name,
          const T& default_value) {
-  auto x = get<T>(xs, name);
+  auto x = get<detail::make_data_type<T>>(xs, name);
   if (!x)
     return default_value;
   return *x;

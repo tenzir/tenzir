@@ -46,7 +46,7 @@ struct fixture {
 
 FIXTURE_SCOPE(command_tests, fixture)
 
-TEST(retrieving data) {
+TEST(retrieving arguments) {
   auto num = 42;
   opts.add("true", true);
   opts.add("false", false);
@@ -60,8 +60,13 @@ TEST(retrieving data) {
   CHECK(!i);
   i = get<integer>(opts, "number");
   CHECK(!i);
-  auto j = get_or<integer>(opts, "number", num);
+  auto j = get_or(opts, "number", num);
   CHECK_EQUAL(j, num);
+  opts.add("number", 42);
+  check_option<integer>(opts, "number", 42);
+  CHECK_EQUAL(get_or<integer>(opts, "number", 0), 42);
+  CHECK_EQUAL(get_or<boolean>(opts, "number", 0), 0);
+  CHECK_EQUAL(get_or(opts, "number", 0), 42);
 }
 
 TEST(cli parsing) {
