@@ -304,6 +304,15 @@ Template Metaprogramming
                                                          double>;
   ```
 
+- When adding new type traits, also provide `*_t` and/or `*_v` helpers:
+  ```cpp
+  template <class T>
+  using my_trait_t = typename my_trait<T>::type;
+
+  template <class T>
+  constexpr auto my_trait_v = my_trait<T>::value;
+  ```
+
 Comments
 --------
 
