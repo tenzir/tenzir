@@ -18,25 +18,13 @@
 
 namespace vast {
 
-optional<option_map::mapped_type> option_map::get(std::string_view name) const {
+optional<const option_map::mapped_type&> 
+option_map::operator[](std::string_view name) const {
   // TODO: Remove explicit conversion to a string.
   // This requires to override *find* to support equivalent keys.
   if (auto x = xs_.find(std::string{name}); x != xs_.end())
     return x->second;
   return {};
-}
-
-option_map::mapped_type
-option_map::get_or(std::string_view name,
-                   const mapped_type& default_value) const {
-  if(auto x = get(name); x)
-    return *x;
-  return default_value;
-}
-
-optional<option_map::mapped_type> 
-option_map::operator[](std::string_view name) const {
-  return get(name);
 }
 
 void option_map::set(const key_type& name, const mapped_type& x) {
