@@ -1,4 +1,5 @@
 #! /usr/bin/env python3
+
 import pyarrow as pa
 import pyarrow.plasma as plasma
 
@@ -26,12 +27,12 @@ def main():
     [buffers] = client.get_buffers(
         [plasma.ObjectID(binascii.unhexlify(args.id))]
     )
-    
+
     data = pa.BufferReader(buffers)
-    
+
     batch = pa.RecordBatchStreamReader(data)
     all = batch.read_all()
-    
+
     for b in all:
         print(b.name, b.data.to_pylist())
 
