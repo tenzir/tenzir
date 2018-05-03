@@ -3,6 +3,7 @@
 #include "arrow/io/api.h"
 #include "arrow/ipc/api.h"
 #include "arrow/type.h"
+
 #include "plasma/common.h"
 
 #include "vast/error.hpp"
@@ -49,8 +50,8 @@ expected<std::shared_ptr<arrow::RecordBatch>> transpose(const event& e) {
       status = sr_builder->Flush(&batch);
   }
   if (!status.ok()) {
-      std::cout << "ERRRRROR: " << to_string(e.data()) 
-<< " " << status.message() << std::endl;
+    std::cout << "ERRRRROR: " << to_string(e.data()) << " " << status.message()
+              << std::endl;
     return make_error(ec::format_error, "failed to flush batch",
                       status.ToString());
   }
@@ -137,18 +138,16 @@ result_type convert_visitor::operator()(const timestamp_type&) {
                         ::arrow::timestamp(::arrow::TimeUnit::NANO));
 }
 result_type convert_visitor::operator()(const vector_type& t) {
-std::vector<result_type> schema_vector = {
-//convert_to_arrow_field(t.value_type)
-  ::arrow::field("values", std::make_shared<::arrow::StringType>()),
-};  
-auto vector_struct = std::make_shared<::arrow::StructType>(schema_vector);
-  return ::arrow::field("vector" , vector_struct);
+  std::vector<result_type> schema_vector = {
+    convert_to_arrow_field(t.value_type)};
+  auto vector_struct = std::make_shared<::arrow::StructType>(schema_vector);
+  return ::arrow::field("vector", vector_struct);
 }
 result_type convert_visitor::operator()(const set_type& t) {
   std::vector<result_type> schema_vector = {
-    convert_to_arrow_field(t.value_type) 
-  };
-  return ::arrow::field("set", std::make_shared<::arrow::StructType>(schema_vector));
+    convert_to_arrow_field(t.value_type)};
+  return ::arrow::field("set",
+                        std::make_shared<::arrow::StructType>(schema_vector));
 }
 insert_visitor::insert_visitor(std::shared_ptr<::arrow::RecordBatchBuilder>& b)
     : rbuilder(b) {
@@ -275,28 +274,32 @@ insert_visitor::insert_visitor(std::shared_ptr<::arrow::RecordBatchBuilder>& b,
 }
 ::arrow::Status insert_visitor::operator()(const vector_type& t,
                                            const std::vector<data>& d) {
-    auto struct_builder = rbuilder->GetFieldAs<::arrow::StructBuilder>(c_builder);
-    auto builder = static_cast<::arrow::StringBuilder*>(struct_builder->field_builder(0));
-
-    for (auto v : d) {
-      auto status = builder->Append(to_string(v));
-
-      if (!status.ok()) {
-        return status;
+  auto struct_builder = rbuilder->GetFieldAs<::arrow::StructBuilder>(c_builder);
+  auto builder = struct_builder->field_builder(0);
+  insert_visitor_helper a(builder);
+  for (auto v : d) {
+    auto status = visit(a, t.value_type, v);
+    if (!status.ok()) {
+      return status;
     }
   }
-    return struct_builder->Append(true);
+  return struct_builder->Append(true);
 }
 ::arrow::Status insert_visitor::operator()(const vector_type&, const none&) {
   auto sbuilder = rbuilder->GetFieldAs<::arrow::StructBuilder>(c_builder);
   return sbuilder->AppendNull();
 }
 ::arrow::Status insert_visitor::operator()(const set_type& t, const set& d) {
-  std::cout << to_string(d) << std::endl;
-  auto structBuilder = rbuilder->GetFieldAs<::arrow::StructBuilder>(c_builder);
-  for (auto e : d) {
+  auto struct_builder = rbuilder->GetFieldAs<::arrow::StructBuilder>(c_builder);
+  auto builder = struct_builder->field_builder(0);
+  insert_visitor_helper a(builder);
+  for (auto v : d) {
+    auto status = visit(a, t.value_type, v);
+    if (!status.ok()) {
+      return status;
+    }
   }
-  return structBuilder->AppendNull();
+  return struct_builder->Append(true);
 }
 ::arrow::Status insert_visitor::operator()(const set_type&, const none&) {
   auto structBuilder = rbuilder->GetFieldAs<::arrow::StructBuilder>(c_builder);
@@ -322,6 +325,90 @@ insert_visitor::insert_visitor(std::shared_ptr<::arrow::RecordBatchBuilder>& b,
   return ::arrow::Status::OK();
 }
 
+insert_visitor_helper::insert_visitor_helper(::arrow::ArrayBuilder* b)
+    : builder(b) {
+  // nop
+}
+::arrow::Status insert_visitor_helper::operator()(const boolean_type&,
+                                                  const boolean& d) {
+  auto c_builder = static_cast<::arrow::BooleanBuilder*>(builder);
+  return c_builder->Append(d);
+}
+::arrow::Status insert_visitor_helper::operator()(const count_type&,
+                                                  const count& d) {
+  auto c_builder = static_cast<::arrow::UInt64Builder*>(builder);
+  return c_builder->Append(d);
+}
+::arrow::Status insert_visitor_helper::operator()(const integer_type&,
+                                                  const int& d) {
+  auto c_builder = static_cast<::arrow::Int64Builder*>(builder);
+  return c_builder->Append(d);
+}
+::arrow::Status insert_visitor_helper::operator()(const real_type&,
+                                                  const real& d) {
+  auto c_builder = static_cast<::arrow::FloatBuilder*>(builder);
+  return c_builder->Append(d);
+}
+::arrow::Status insert_visitor_helper::operator()(const string_type&,
+                                                  const std::string& d) {
+  auto c_builder = static_cast<::arrow::StringBuilder*>(builder);
+  return c_builder->Append(d);
+}
+::arrow::Status insert_visitor_helper::operator()(const pattern_type&,
+                                                  const pattern& d) {
+  auto c_builder = static_cast<::arrow::StringBuilder*>(builder);
+  return c_builder->Append(d.string());
+}
+::arrow::Status insert_visitor_helper::operator()(const address_type&,
+                                                  const address& d) {
+  auto c_builder = static_cast<::arrow::FixedSizeBinaryBuilder*>(builder);
+  return c_builder->Append(d.bytes_);
+}
+::arrow::Status insert_visitor_helper::operator()(const port_type&,
+                                                  const port& d) {
+  auto sbuilder = static_cast<::arrow::StructBuilder*>(builder);
+  auto tbuilder =
+    static_cast<::arrow::UInt8Builder*>(sbuilder->field_builder(0));
+  auto status = tbuilder->Append(d.type());
+  if (!status.ok())
+    return status;
+  auto mbuilder =
+    static_cast<::arrow::UInt16Builder*>(sbuilder->field_builder(1));
+  status = mbuilder->Append(d.number());
+  if (!status.ok())
+    return status;
+  return tbuilder->Append(true);
+}
+::arrow::Status insert_visitor_helper::operator()(const subnet_type&,
+                                                  const subnet& d) {
+  auto sbuilder = static_cast<::arrow::StructBuilder*>(builder);
+  auto abuilder =
+    static_cast<::arrow::FixedSizeBinaryBuilder*>(sbuilder->field_builder(0));
+  auto status = abuilder->Append(d.network().bytes_);
+  if (!status.ok())
+    return status;
+  auto mbuilder =
+    static_cast<::arrow::UInt8Builder*>(sbuilder->field_builder(1));
+  status = mbuilder->Append(d.length());
+  if (!status.ok())
+    return status;
+  return sbuilder->Append(true);
+}
+::arrow::Status insert_visitor_helper::operator()(const timespan_type&,
+                                                  const timespan& d) {
+  auto c_builder = static_cast<::arrow::UInt64Builder*>(builder);
+  return c_builder->Append(d.count());
+}
+::arrow::Status insert_visitor_helper::operator()(const timestamp_type&,
+                                                  const timestamp& d) {
+  auto c_builder = static_cast<::arrow::TimestampBuilder*>(builder);
+  return c_builder->Append(d.time_since_epoch().count());
+}
+::arrow::Status insert_visitor_helper::operator()(const none_type&,
+                                                  const none&) {
+  auto c_builder = static_cast<::arrow::NullBuilder*>(builder);
+  return c_builder->AppendNull();
+}
 writer::writer(const std::string& plasma_socket) {
   VAST_DEBUG(name(), "connects to plasma store at", plasma_socket);
   auto status =

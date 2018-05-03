@@ -42,7 +42,7 @@ Status get_arrow_batch(plasma::ObjectID id, std::shared_ptr<::arrow::RecordBatch
   status = br->ReadNext(&b);
   return Status::OK();
 }
-TEST(arrow writer conn) {
+TEST(Arrow writer conn) {
   format::arrow::writer writer{"/tmp/plasma"};
   REQUIRE(writer.connected());
   std::vector<plasma::ObjectID> oids;
@@ -61,7 +61,7 @@ TEST(arrow writer conn) {
   auto data_a = std::make_shared<::arrow::StringArray>(b->column(1)->data()); 
   CHECK_EQUAL(data_a->GetString(0), get<std::string>(data_v.at(1)));
 }
-TEST(arrow writer http) {
+TEST(Arrow writer http) {
   format::arrow::writer writer{"/tmp/plasma"};
   REQUIRE(writer.connected());
   std::vector<plasma::ObjectID> oids;
@@ -79,21 +79,20 @@ TEST(arrow writer http) {
   auto data_v = get<std::vector<data>>(bro_http_log.at(0).data());
   auto data_a = std::make_shared<::arrow::StringArray>(b->column(1)->data()); 
   CHECK_EQUAL(data_a->GetString(0), get<std::string>(data_v.at(1)));
+  /*
   std::cout << to_string(bro_http_log.at(0).data()) << std::endl;
   for (int i = 0; i < b->num_columns(); i++){
     std::cout << b->column(i)->ToString() << std::endl; 
   }
+  */
 }
-TEST(arrow writer dns) {
+TEST(Arrow writer dns) {
   format::arrow::writer writer{"/tmp/plasma"};
   REQUIRE(writer.connected());
   std::vector<plasma::ObjectID> oids;
-  std::cout << "Size " << bro_dns_log.size() << std::endl;
   auto result = writer.write(bro_dns_log, oids);
-  std::cout << to_string(result.error()) << std::endl;
   CHECK(result);
   result = writer.flush();
-  std::cout << to_string(result.error()) << std::endl;
   CHECK(result);
   plasma::PlasmaClient client;
   ARROW_CHECK_OK(
@@ -107,12 +106,14 @@ TEST(arrow writer dns) {
   auto data_v = get<std::vector<data>>(bro_dns_log.at(0).data());
   auto data_a = std::make_shared<::arrow::StringArray>(b->column(1)->data()); 
   CHECK_EQUAL(data_a->GetString(0), get<std::string>(data_v.at(1)));
-  std::cout << to_string(bro_dns_log.at(100).data()) << std::endl;
+  /*
+  std::cout << to_string(bro_dns_log.at(0).data()) << std::endl;
   for (int i = 0; i < b->num_columns(); i++){
     std::cout << b->column(i)->ToString() << std::endl; 
   }
+  */
 }
-TEST(arrow writer random) {
+TEST(Arrow writer random) {
   format::arrow::writer writer{"/tmp/plasma"};
   REQUIRE(writer.connected());
   for (auto& x : random)
