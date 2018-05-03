@@ -108,8 +108,7 @@ int command::run(caf::actor_system& sys, option_map& options,
       break;
   }
   // Check for help option.
-  // FIXME: remove vast namespace when local get function is removed
-  if (vast::get<boolean>(options.get_or("help", false))) {
+  if (get_or<boolean>(options, "help", false)) {
     std::cerr << usage() << std::endl;;
     return EXIT_SUCCESS;
   }

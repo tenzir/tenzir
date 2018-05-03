@@ -46,7 +46,7 @@ expected<caf::actor> pcap_writer_command::make_sink(caf::scoped_actor& self,
                                                     argument_iterator end) {
   VAST_UNUSED(begin, end);
   VAST_TRACE(VAST_ARG("args", begin, end));
-  auto limit = this->get_or<uint64_t>(options, "events", 0u);
+  auto limit = get_or<uint64_t>(options, "events", 0u);
   format::pcap::writer writer{output_, flush_};
   return self->spawn(sink<format::pcap::writer>, std::move(writer), limit);
 }

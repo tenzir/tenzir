@@ -52,7 +52,7 @@ protected:
     VAST_UNUSED(begin, end);
     VAST_TRACE(VAST_ARG(options), VAST_ARG("args", begin, end));
     using ostream_ptr = std::unique_ptr<std::ostream>;
-    auto limit = this->get_or<uint64_t>(options, "events", 0u);
+    auto limit = get_or<uint64_t>(options, "events", 0u);
     if constexpr (std::is_constructible_v<Writer, ostream_ptr>) {
       auto out = detail::make_output_stream(output_, uds_);
       if (!out)

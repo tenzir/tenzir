@@ -111,22 +111,17 @@ TEST(full name) {
 TEST(parsing args) {
   root.add<foo>("foo");
   exec("foo --flag -v 42");
-  auto flag = vast::get<boolean>(options.get_or("flag", false));
-  CHECK_EQUAL(flag, true);
-  auto value = vast::get<integer>(options.get_or("value", 0));
-  CHECK_EQUAL(value, 42);
+  CHECK_EQUAL(get_or(options, "flag", false), true);
+  CHECK_EQUAL(get_or(options, "value", 0), 42);
 }
 
 TEST(nested arg parsing) {
   auto cmd1 = root.add<foo>("foo");
   cmd1->add<bar>("bar");
   exec("foo -v 42 bar -o 123");
-  auto flag = vast::get<boolean>(options.get_or("flag", false));
-  CHECK_EQUAL(flag, false);
-  auto value = vast::get<integer>(options.get_or("value", 0));
-  CHECK_EQUAL(value, 42);
-  value = vast::get<integer>(options.get_or("other-value", 0));
-  CHECK_EQUAL(value, 123);
+  CHECK_EQUAL(get_or(options, "flag", false), false);
+  CHECK_EQUAL(get_or<integer>(options, "value", 0), 42);
+  CHECK_EQUAL(get_or<integer>(options, "other-value", 0), 123);
 }
 
 TEST(parsing arg remainder) {
