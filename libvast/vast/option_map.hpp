@@ -47,12 +47,7 @@ public:
 
   // -- lookup ---------------------------------------------------------------
 
-  optional<mapped_type> get(std::string_view name) const;
-
-  mapped_type get_or(std::string_view name,
-                     const mapped_type& default_value) const;
-
-  optional<mapped_type> operator[](std::string_view name) const;
+  optional<const mapped_type&> operator[](std::string_view name) const;
 
   // -- modifiers ------------------------------------------------------------
 
@@ -89,6 +84,24 @@ public:
 private:
   map_type xs_;
 };
+
+template <class T>
+optional<const T&> get(const option_map& xs, std::string_view name) {
+  auto x = xs[name];
+  if (!x)
+    return {};
+  if (auto result = get_if<T>(*x); result)
+    return *result;
+  return {};
+}
+
+template <class T>
+T get_or(const option_map& xs, std::string_view name,
+         const T& default_value) {
+  if (auto x = get<detail::make_data_type<T>>(xs, name); x)
+    return *x;
+  return default_value;
+}
 
 } // namespace vast
 

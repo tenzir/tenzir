@@ -23,6 +23,20 @@ using namespace vast;
 
 namespace {
 
+template <class T>
+void check_option(const option_map& opts, const std::string& name,
+                  const T& value) {
+  auto d = get<T>(opts, name);
+  REQUIRE(d);
+  CHECK_EQUAL(*d, value);
+};
+
+template <class T>
+void check_fail_option(const option_map& opts, const std::string& name) {
+  auto d = get<T>(opts, name);
+  CHECK(!d);
+};
+
 struct fixture {
   option_declaration_set decl;
   option_map opts;
@@ -32,26 +46,27 @@ struct fixture {
 
 FIXTURE_SCOPE(command_tests, fixture)
 
-TEST(retrieving data) {
+TEST(retrieving arguments) {
   auto num = 42;
   opts.add("true", true);
   opts.add("false", false);
   CHECK(!opts.add("true", true));
   CHECK_EQUAL(opts.size(), 2u);
-  auto x = opts.get("true");
-  REQUIRE(x);
-  CHECK_EQUAL(get<boolean>(*x), true);
-  x = opts.get("false");
-  REQUIRE(x);
-  CHECK_EQUAL(get<boolean>(*x), false);
+  check_option<boolean>(opts, "true", true);
+  check_option<boolean>(opts, "false", false);
   opts.set("true", false);
-  x = opts.get("true");
-  REQUIRE(x);
-  CHECK_EQUAL(get<boolean>(*x), false);
-  x = opts.get("number");
-  CHECK(!x);
-  auto y = opts.get_or("number", num);
-  CHECK_EQUAL(y, num);
+  check_option<boolean>(opts, "true", false);
+  auto i = get<integer>(opts, "true");
+  CHECK(!i);
+  i = get<integer>(opts, "number");
+  CHECK(!i);
+  auto j = get_or(opts, "number", num);
+  CHECK_EQUAL(j, num);
+  opts.add("number", 42);
+  check_option<integer>(opts, "number", 42);
+  CHECK_EQUAL(get_or<integer>(opts, "number", 0), 42);
+  CHECK_EQUAL(get_or<boolean>(opts, "number", 0), 0);
+  CHECK_EQUAL(get_or(opts, "number", 0), 42);
 }
 
 TEST(cli parsing) {
@@ -63,23 +78,14 @@ TEST(cli parsing) {
     }
     return result;
   };
-  auto check_option = [&](const std::string& name, auto value) {
-    auto d = opts.get(name);
-    REQUIRE(d);
-    CHECK_EQUAL(*d, value);
-  };
-  auto check_fail_option = [&](const std::string& name) {
-    auto d = opts.get(name);
-    CHECK(!d);
-  };
   auto check_all_options = [&](const auto& args) {
     opts.clear();
     auto [state, it] = decl.parse(opts, args.begin(), args.end());
     CHECK_EQUAL(state, option_declaration_set::parse_state::successful);
     CHECK_EQUAL(it, args.end());
-    check_option("boolean", true);
-    check_option("integer", 42);
-    check_option("string", "test");
+    check_option<boolean>(opts, "boolean", true);
+    check_option<integer>(opts, "integer", 42);
+    check_option<std::string>(opts, "string", "test");
   };
   CHECK(decl.add("boolean,b", "", false));  
   CHECK(decl.add("integer,i", "", 1));  
@@ -89,10 +95,10 @@ TEST(cli parsing) {
   auto [state, it] = decl.parse(opts, args.begin(), args.end());
   CHECK_EQUAL(state, option_declaration_set::parse_state::successful);
   CHECK_EQUAL(it, args.end());
-  check_option("boolean", false);
-  check_option("integer", 1);
-  check_option("string", "foo");
-  check_fail_option("not-contained");
+  check_option<boolean>(opts, "boolean", false);
+  check_option<integer>(opts, "integer", 1);
+  check_option<std::string>(opts, "string", "foo");
+  check_fail_option<std::string>(opts, "not-contained");
   MESSAGE("Test long names");
   args = split("--boolean --integer=42 --string=\"test\"");
   check_all_options(args);
@@ -116,12 +122,12 @@ TEST(cli parsing) {
   std::tie(state, it) = decl2.parse(opts, args.begin(), args.end());
   CHECK_EQUAL(state, option_declaration_set::parse_state::successful);
   CHECK_EQUAL(it, args.end());
-  check_option("boolean", true);
-  check_option("boolean2", false);
-  check_option("integer", 42);
-  check_option("integer2", 1337);
-  check_option("string", "test");
-  check_option("string2", "test2");
+  check_option<boolean>(opts, "boolean", true);
+  check_option<boolean>(opts, "boolean2", false);
+  check_option<integer>(opts, "integer", 42);
+  check_option<integer>(opts, "integer2", 1337);
+  check_option<std::string>(opts, "string", "test");
+  check_option<std::string>(opts, "string2", "test2");
 }
 
 FIXTURE_SCOPE_END()
