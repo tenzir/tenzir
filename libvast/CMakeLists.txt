@@ -207,6 +207,7 @@ set(tests
   test/bitmap_index.cpp
   test/bits.cpp
   test/bitvector.cpp
+  test/byte.cpp
   test/cache.cpp
   test/chunk.cpp
   test/coder.cpp
@@ -243,6 +244,7 @@ set(tests
   test/save_load.cpp
   test/schema.cpp
   test/serialization.cpp
+  test/span.cpp
   test/stack.cpp
   test/string.cpp
   test/subnet.cpp
