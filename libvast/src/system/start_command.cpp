@@ -13,6 +13,7 @@
 
 #include "vast/system/start_command.hpp"
 
+#include <csignal>
 #include <iostream>
 
 #include <caf/all.hpp>

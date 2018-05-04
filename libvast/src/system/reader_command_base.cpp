@@ -16,6 +16,7 @@
 
 #include "vast/system/reader_command_base.hpp"
 
+#include <csignal>
 #include <memory>
 #include <string>
 #include <string_view>
