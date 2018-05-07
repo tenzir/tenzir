@@ -233,8 +233,9 @@ class container_view_iterator
   friend iterator_access;
 
 public:
-  container_view_iterator(container_view_ptr<T> x, size_t pos)
-    : view_{x.get()}, position_{pos} {
+  container_view_iterator(typename container_view_ptr<T>::const_pointer ptr,
+                          size_t pos)
+    : view_{ptr}, position_{pos} {
     // nop
   }
 
@@ -283,12 +284,12 @@ struct container_view : caf::ref_counted {
 
   iterator begin() const {
     // TODO: const_cast okay?
-    return {container_view_ptr<T>{const_cast<container_view*>(this), true}, 0};
+    return {const_cast<container_view*>(this), 0};
   }
 
   iterator end() const {
     // TODO: see above
-    return {container_view_ptr<T>{const_cast<container_view*>(this), true}, size()};
+    return {const_cast<container_view*>(this), size()};
   }
 
   /// Retrieves a specific element.
