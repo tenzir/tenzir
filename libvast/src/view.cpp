@@ -80,8 +80,6 @@ default_map_view::default_map_view(const map& xs) : xs_{xs} {
 }
 
 default_map_view::value_type default_map_view::at(size_type i) const {
-  auto it = xs_.begin();
-  std::advance(it, i);
   auto& [key, value] = *std::next(xs_.begin(), i);
   return {make_data_view(key), make_data_view(value)};
 }
