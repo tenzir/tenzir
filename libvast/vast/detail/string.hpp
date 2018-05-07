@@ -397,7 +397,7 @@ std::string join(const std::vector<T>& v, std::string_view sep) {
                 || std::is_same_v<T, std::string_view>) {
     return join(v.begin(), v.end(), sep);
   } else {
-    auto pred = [](T& x) {
+    auto pred = [](const T& x) {
       using std::to_string;
       return to_string(x);
     };
