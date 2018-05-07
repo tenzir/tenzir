@@ -72,7 +72,7 @@ application::root_command::root_command()
     endpoint(":42000"),
     spawn_local(false),
     print_version(false) {
-  id = detail::split_to_str(detail::hostname(), ".")[0];
+  id = detail::split(detail::hostname(), ".")[0];
   add_opt("dir,d", "directory for persistent state", dir);
   add_opt("endpoint,e", "node endpoint", endpoint);
   add_opt("id,i", "the unique ID of this node", id);

@@ -87,7 +87,7 @@ public:
     return is_root() ? *this : parent_->root();
   }
 
-  inline const std::string_view& name() const noexcept {
+  inline std::string_view name() const noexcept {
     return name_;
   }
 

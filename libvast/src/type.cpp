@@ -402,15 +402,15 @@ type flatten(const type& t) {
 record_type unflatten(const record_type& rec) {
   record_type result;
   for (auto& f : rec.fields) {
-    auto names = detail::to_strings(detail::split(f.name, "."));
+    auto names = detail::split(f.name, ".");
     VAST_ASSERT(!names.empty());
     record_type* r = &result;
     for (size_t i = 0; i < names.size() - 1; ++i) {
       if (r->fields.empty() || r->fields.back().name != names[i])
-        r->fields.emplace_back(std::move(names[i]), record_type{});
+        r->fields.emplace_back(std::string(names[i]), record_type{});
       r = get_if<record_type>(r->fields.back().type);
     }
-    r->fields.emplace_back(std::move(names.back()), f.type);
+    r->fields.emplace_back(std::string{names.back()}, f.type);
   }
   std::vector<std::vector<record_type*>> rs(1);
   rs.back().push_back(&result);
