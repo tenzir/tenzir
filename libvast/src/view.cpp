@@ -23,6 +23,7 @@ bool operator==(pattern_view x, pattern_view y) noexcept {
   return x.pattern_ == y.pattern_;
 }
 
+// -- address_view ------------------------------------------------------------
 
 address_view::address_view(const address& x) : data_{&x.data()} {
   // nop
@@ -32,6 +33,7 @@ bool operator==(address_view x, address_view y) noexcept {
   return x.data_ == y.data_;
 }
 
+// -- subnet_view -------------------------------------------------------------
 
 subnet_view::subnet_view(const subnet& x)
   : network_{x.network()},
@@ -43,6 +45,7 @@ bool operator==(subnet_view x, subnet_view y) noexcept {
   return x.network_ == y.network_ && x.length_ == y.length_;
 }
 
+// -- default_vector_view -----------------------------------------------------
 
 default_vector_view::default_vector_view(const vector& xs) : xs_{xs} {
   // nop
@@ -56,6 +59,7 @@ default_vector_view::size_type default_vector_view::size() const noexcept {
   return xs_.size();
 }
 
+// -- default_set_view --------------------------------------------------------
 
 default_set_view::default_set_view(const set& xs) : xs_{xs} {
   // nop
@@ -69,6 +73,7 @@ default_set_view::size_type default_set_view::size() const noexcept {
   return xs_.size();
 }
 
+// -- default_map_view --------------------------------------------------------
 
 default_map_view::default_map_view(const map& xs) : xs_{xs} {
   // nop
@@ -85,10 +90,10 @@ default_map_view::size_type default_map_view::size() const noexcept {
   return xs_.size();
 }
 
+// -- make_view ---------------------------------------------------------------
 
 data_view make_view(const data& x) {
   return visit([](const auto& z) { return make_data_view(z); }, x);
 }
-
 
 } // namespace vast

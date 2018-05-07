@@ -341,7 +341,6 @@ private:
   const set& xs_;
 };
 
-
 /// A view over a @ref map.
 /// @relates view
 class default_map_view
