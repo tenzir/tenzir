@@ -380,27 +380,31 @@ inline auto split_to_str(std::string_view str, std::string_view sep,
 /// @param sep The string to insert between each element of the sequence.
 /// @returns The joined string.
 template <class Iterator, class Predicate>
-std::string join(Iterator begin, Iterator end, const std::string& sep,
+std::string join(Iterator begin, Iterator end, const std::string_view& sep,
                  Predicate p) {
   std::string result;
-  if (begin != end)
+  if (begin != end) {
     result += p(*begin++);
-  while (begin != end)
-    result += sep + p(*begin++);
+    for (; begin != end; ++begin) {
+      result += sep;
+      result += p(*begin);
+    }
+  }
   return result;
 }
 
 template <class Iterator>
-std::string join(Iterator begin, Iterator end, const std::string& sep) {
+std::string join(Iterator begin, Iterator end, const std::string_view& sep) {
   return join(begin, end, sep, [](auto&& x) -> decltype(x) { return x; });
 }
 
 template <class T>
-std::string join(const std::vector<T>& v, const std::string& sep) {
-  if constexpr (std::is_same_v<T, std::string>) {
+std::string join(const std::vector<T>& v, const std::string_view& sep) {
+  if constexpr (std::is_same_v<T, std::string>
+                || std::is_same_v<T, std::string_view>) {
     return join(v.begin(), v.end(), sep);
   } else {
-    auto pred = [](auto& x) {
+    auto pred = [](T& x) {
       using std::to_string;
       return to_string(x);
     };
