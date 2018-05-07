@@ -283,13 +283,11 @@ struct container_view : caf::ref_counted {
   virtual ~container_view() = default;
 
   iterator begin() const {
-    // TODO: const_cast okay?
-    return {const_cast<container_view*>(this), 0};
+    return {this, 0};
   }
 
   iterator end() const {
-    // TODO: see above
-    return {const_cast<container_view*>(this), size()};
+    return {this, size()};
   }
 
   /// Retrieves a specific element.
