@@ -12,7 +12,6 @@
  ******************************************************************************/
 
 #include <tuple>
-#include <typeindex>
 #include <utility>
 
 #include "vast/concept/printable/to_string.hpp"
@@ -69,7 +68,7 @@ struct equal_to {
 struct less_than {
   template <class T, class U>
   bool operator()(const T&, const U&) const noexcept {
-    return std::type_index(typeid(T)) < std::type_index(typeid(U));
+    VAST_ASSERT(!"dispatch only defined for equal types");
   }
 
   template <class T>
@@ -85,7 +84,9 @@ bool operator==(const type& x, const type& y) {
 }
 
 bool operator<(const type& x, const type& y) {
-  return visit(less_than{}, x, y);
+  auto i = x.ptr_->types.index();
+  auto j = y.ptr_->types.index();
+  return i == j ? visit(less_than{}, x, y) : i < j;
 }
 
 enumeration_type::enumeration_type(std::vector<std::string> fields)
