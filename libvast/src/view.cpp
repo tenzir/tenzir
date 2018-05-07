@@ -15,6 +15,8 @@
 
 namespace vast {
 
+// -- pattern_view ------------------------------------------------------------
+
 pattern_view::pattern_view(const pattern& x) : pattern_{x.string()} {
   // nop
 }
