@@ -234,7 +234,7 @@ class container_view_iterator
 
 public:
   container_view_iterator(container_view_ptr<T> x, size_t pos)
-    : view_{x}, position_{pos} {
+    : view_{x.get()}, position_{pos} {
     // nop
   }
 
@@ -264,7 +264,7 @@ public:
   }
 
 private:
-  container_view_ptr<T> view_;
+  typename container_view_ptr<T>::const_pointer view_;
   size_t position_;
 };
 
