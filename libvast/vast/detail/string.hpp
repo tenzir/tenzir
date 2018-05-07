@@ -373,7 +373,7 @@ std::vector<std::string> to_strings(const std::vector<std::string_view>& v);
 /// @param sep The string to insert between each element of the sequence.
 /// @returns The joined string.
 template <class Iterator, class Predicate>
-std::string join(Iterator begin, Iterator end, const std::string_view& sep,
+std::string join(Iterator begin, Iterator end, std::string_view sep,
                  Predicate p) {
   std::string result;
   if (begin != end) {
@@ -387,12 +387,12 @@ std::string join(Iterator begin, Iterator end, const std::string_view& sep,
 }
 
 template <class Iterator>
-std::string join(Iterator begin, Iterator end, const std::string_view& sep) {
+std::string join(Iterator begin, Iterator end, std::string_view sep) {
   return join(begin, end, sep, [](auto&& x) -> decltype(x) { return x; });
 }
 
 template <class T>
-std::string join(const std::vector<T>& v, const std::string_view& sep) {
+std::string join(const std::vector<T>& v, std::string_view sep) {
   if constexpr (std::is_same_v<T, std::string>
                 || std::is_same_v<T, std::string_view>) {
     return join(v.begin(), v.end(), sep);

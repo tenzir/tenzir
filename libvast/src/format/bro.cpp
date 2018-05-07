@@ -34,7 +34,7 @@ namespace bro {
 namespace {
 
 // Creates a VAST type from an ASCII Bro type in a log header.
-expected<type> parse_type(const std::string_view& bro_type) {
+expected<type> parse_type(std::string_view bro_type) {
   type t;
   if (bro_type == "enum" || bro_type == "string" || bro_type == "file")
     t = string_type{};
