@@ -93,6 +93,7 @@ set(libvast_sources
   src/uuid.cpp
   src/value.cpp
   src/value_index.cpp
+  src/view.cpp
   src/wah_bitmap.cpp
 )
 
@@ -269,6 +270,7 @@ set(tests
   test/variant.cpp
   test/vector_map.cpp
   test/vector_set.cpp
+  test/view.cpp
   test/word.cpp
 )
 
