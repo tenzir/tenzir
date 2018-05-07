@@ -32,7 +32,7 @@ struct data_store_state {
 template <class Key, class Value>
 typename key_value_store_type<Key, Value>::behavior_type
 data_store(
-  class key_value_store_type<Key, Value>::template stateful_pointer<
+  typename key_value_store_type<Key, Value>::template stateful_pointer<
     data_store_state<Key, Value>
   > self) {
   return {

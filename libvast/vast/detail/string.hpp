@@ -195,7 +195,7 @@ auto json_unescaper = [](auto& f, auto l, auto out) {
       // sequence other than \u00XX as is.
       if (l - f < 4)
         return false;
-      std::array<char, 4> bytes;
+      std::array<char, 4> bytes{{0,0,0,0}};
       bytes[0] = *++f;
       bytes[1] = *++f;
       bytes[2] = *++f;

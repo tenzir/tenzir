@@ -52,7 +52,7 @@ auto inspect(Inspector& f, replicated_store_state<Key, Value>& state) {
 
 template <class Key, class Value>
 using replicated_store_type =
-  class key_value_store_type<Key, Value>::template extend<
+  typename key_value_store_type<Key, Value>::template extend<
     caf::replies_to<snapshot_atom>::template with<ok_atom>,
     caf::reacts_to<raft::index_type, caf::message>
   >;
@@ -186,7 +186,7 @@ void replicate(Actor* self, const caf::actor& consensus,
 template <class Key, class Value>
 typename replicated_store_type<Key, Value>::behavior_type
 replicated_store(
-  class replicated_store_type<Key, Value>::template stateful_pointer<
+  typename replicated_store_type<Key, Value>::template stateful_pointer<
     replicated_store_state<Key, Value>
   > self,
   caf::actor consensus) {

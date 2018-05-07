@@ -15,6 +15,7 @@
 
 #include <unordered_map>
 
+#include <caf/actor.hpp>
 #include <caf/stateful_actor.hpp>
 
 #include "vast/aliases.hpp"
