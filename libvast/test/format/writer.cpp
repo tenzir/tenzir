@@ -49,7 +49,7 @@ std::vector<std::string> generate(const std::vector<event>& xs) {
       FAIL("failed to write event");
   writer.flush();
   REQUIRE(!str.empty());
-  auto lines = detail::split_to_str(str, "\n"s);
+  auto lines = detail::to_strings(detail::split(str, "\n"));
   REQUIRE(!lines.empty());
   return lines;
 }

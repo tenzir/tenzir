@@ -367,13 +367,6 @@ std::vector<std::string_view> split(std::string_view str, std::string_view sep,
 /// @returns a vector of strings with the split elements.
 std::vector<std::string> to_strings(const std::vector<std::string_view>& v);
 
-/// Combines ::split and ::to_strings.
-inline auto split_to_str(std::string_view str, std::string_view sep,
-                         std::string_view esc = "", size_t max_splits = -1,
-                         bool include_sep = false) {
-  return to_strings(split(str, sep, esc, max_splits, include_sep));
-}
-
 /// Joins a sequence of strings according to a seperator.
 /// @param begin The beginning of the sequence.
 /// @param end The end of the sequence.

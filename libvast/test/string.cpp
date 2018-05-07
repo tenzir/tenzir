@@ -124,7 +124,7 @@ TEST(double escaping) {
 TEST(string splitting and joining) {
   using namespace std::string_literals;
 
-  auto s = split_to_str("Der Geist, der stets verneint.", " ");
+  auto s = split("Der Geist, der stets verneint.", " ");
   REQUIRE(s.size() == 5);
   CHECK(s[0] == "Der");
   CHECK(s[1] == "Geist,");
@@ -132,36 +132,36 @@ TEST(string splitting and joining) {
   CHECK(s[3] == "stets");
   CHECK(s[4] == "verneint.");
 
-  s = split_to_str("foo"s, "x");
+  s = split("foo", "x");
   REQUIRE(s.size() == 1);
   CHECK(s[0] == "foo");
 
   // TODO: it would be more consistent if split considered not only before the
   // first seperator, but also after the last one. But this is not how many
   // split implementations operate.
-  s = split_to_str(",,"s, ",");
+  s = split(",,", ",");
   REQUIRE(s.size() == 2);
   CHECK(s[0] == "");
   CHECK(s[1] == "");
 
-  s = split_to_str(",a,b,c,"s, ",");
+  s = split(",a,b,c,"s, ",");
   REQUIRE(s.size() == 4);
   CHECK(s[0] == "");
   CHECK(s[1] == "a");
   CHECK(s[2] == "b");
   CHECK(s[3] == "c");
 
-  s = split_to_str("a*,b,c"s, ",", "*");
+  s = split("a*,b,c", ",", "*");
   REQUIRE(s.size() == 2);
   CHECK(s[0] == "a*,b");
   CHECK(s[1] == "c");
 
-  s = split_to_str("a,b,c,d,e,f"s, ",", "", 1);
+  s = split("a,b,c,d,e,f", ",", "", 1);
   REQUIRE(s.size() == 2);
   CHECK(s[0] == "a");
   CHECK(s[1] == "b,c,d,e,f");
 
-  s = split_to_str("a-b-c*-d"s, "-", "*", -1, true);
+  s = split("a-b-c*-d", "-", "*", -1, true);
   REQUIRE(s.size() == 5);
   CHECK(s[0] == "a");
   CHECK(s[1] == "-");
