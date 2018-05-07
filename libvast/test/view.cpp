@@ -46,43 +46,31 @@ TEST(vector view) {
 }
 
 TEST(set view) {
-  auto xs = set{42, true};
+  auto xs = set{true, 42, "foo"};
   auto v = make_view(xs);
   REQUIRE_EQUAL(v->size(), xs.size());
-  auto i = v->begin();
-  // FIXME: we currently use a std::set instead of a steady set, which relies
-  // on a non-deterministic ordering. This unit test may fail on some platforms
-  // until we have switched to steady_set
-  CHECK_EQUAL(*i, v->at(0));
-  CHECK_EQUAL(*i, make_data_view(42));
-  ++i;
-  CHECK_EQUAL(*i, v->at(1));
-  CHECK_EQUAL(*i, make_data_view(true));
-  ++i;
-  CHECK_EQUAL(i, v->end());
+  MESSAGE("check view contents");
+  for (auto i = 0u; i < xs.size(); ++i)
+    CHECK_EQUAL(v->at(i), *std::next(xs.begin(), i));
+  MESSAGE("check iterator semantics");
+  CHECK_EQUAL(std::next(v->begin(), 3), v->end());
+  CHECK_EQUAL(*std::next(v->begin(), 1), make_data_view(42));
 }
+
 
 TEST(map view) {
   auto xs = map{{42, true}, {84, false}};
   auto v = make_view(xs);
   REQUIRE_EQUAL(v->size(), xs.size());
-  auto i = v->begin();
-  // FIXME: we currently use a std::map instead of a steady map, which relies
-  // on a non-deterministic ordering. This unit test may fail on some platforms
-  // until we have switched to steady_map.
-  {
-    auto [key, value] = v->at(0);
-    CHECK_EQUAL(key, make_data_view(42));
-    CHECK_EQUAL(value, make_data_view(true));
+  MESSAGE("check view contents");
+  for (auto i = 0u; i < xs.size(); ++i) {
+    auto [key, value] = v->at(i);
+    auto& [expected_key, expected_value] = *std::next(xs.begin(), i);
+    CHECK_EQUAL(key, make_data_view(expected_key));
+    CHECK_EQUAL(value, make_data_view(expected_value));
   }
-  ++i;
-  {
-    auto [key, value] = v->at(1);
-    CHECK_EQUAL(key, make_data_view(84));
-    CHECK_EQUAL(value, make_data_view(false));
-  }
-  ++i;
-  CHECK_EQUAL(i, v->end());
+  MESSAGE("check iterator behavior");
+  CHECK_EQUAL(std::next(v->begin(), 2), v->end());
 }
 
 TEST(make_data_view) {
