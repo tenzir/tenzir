@@ -167,7 +167,7 @@ std::vector<std::string> to_strings(const std::vector<std::string_view>& v) {
   std::vector<std::string> strs;
   strs.resize(v.size());
   for (size_t i = 0; i < v.size(); ++i)
-    strs[i].assign(v[i].begin(), v[i].end());
+    strs[i] = v[i];
   return strs;
 }
 
