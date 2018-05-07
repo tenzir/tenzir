@@ -34,7 +34,7 @@ namespace bro {
 namespace {
 
 // Creates a VAST type from an ASCII Bro type in a log header.
-expected<type> parse_type(const std::string& bro_type) {
+expected<type> parse_type(const std::string_view& bro_type) {
   type t;
   if (bro_type == "enum" || bro_type == "string" || bro_type == "file")
     t = string_type{};
@@ -68,7 +68,7 @@ expected<type> parse_type(const std::string& bro_type) {
     auto close = bro_type.rfind("]");
     if (open == std::string::npos || close == std::string::npos)
       return make_error(ec::format_error, "missing container brackets:",
-                        bro_type);
+                        std::string{bro_type});
     auto elem = parse_type(bro_type.substr(open + 1, close - open - 1));
     if (!elem)
       return elem.error();
@@ -81,7 +81,8 @@ expected<type> parse_type(const std::string& bro_type) {
       t = set_type{*elem};
   }
   if (is<none_type>(t))
-    return make_error(ec::format_error, "failed to parse type: ", bro_type);
+    return make_error(ec::format_error, "failed to parse type: ",
+                      std::string{bro_type});
   return t;
 }
 
@@ -415,8 +416,8 @@ expected<void> reader::parse_header() {
   empty_field_ = std::move(header[1]);
   unset_field_ = std::move(header[2]);
   auto& path = header[3];
-  auto fields = detail::to_strings(detail::split(header[5], separator_));
-  auto types = detail::to_strings(detail::split(header[6], separator_));
+  auto fields = detail::split(header[5], separator_);
+  auto types = detail::split(header[6], separator_);
   if (fields.size() != types.size())
     return make_error(ec::format_error, "fields and types have different size");
   std::vector<record_field> record_fields;
@@ -424,7 +425,7 @@ expected<void> reader::parse_header() {
     auto t = parse_type(types[i]);
     if (!t)
       return t.error();
-    record_fields.emplace_back(fields[i], *t);
+    record_fields.emplace_back(std::string{fields[i]}, *t);
   }
   // Construct type.
   record_ = std::move(record_fields);
