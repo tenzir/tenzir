@@ -72,10 +72,9 @@ TEST(retrieving arguments) {
 TEST(cli parsing) {
   auto split = [](const std::string& str) {
     std::vector<std::string> result;
-    auto xs = detail::split(str.begin(), str.end(), " ");
-    for (auto& [begin, end] : xs) {
-      result.emplace_back(std::string{begin, end});
-    }
+    auto xs = detail::split(str, " ");
+    for (auto& x : xs)
+      result.emplace_back(std::string{x});
     return result;
   };
   auto check_all_options = [&](const auto& args) {
@@ -87,9 +86,9 @@ TEST(cli parsing) {
     check_option<integer>(opts, "integer", 42);
     check_option<std::string>(opts, "string", "test");
   };
-  CHECK(decl.add("boolean,b", "", false));  
-  CHECK(decl.add("integer,i", "", 1));  
-  CHECK(decl.add("string,s", "", "foo"));  
+  CHECK(decl.add("boolean,b", "", false));
+  CHECK(decl.add("integer,i", "", 1));
+  CHECK(decl.add("string,s", "", "foo"));
   MESSAGE("Test default values");
   auto args = split("");
   auto [state, it] = decl.parse(opts, args.begin(), args.end());
@@ -110,9 +109,9 @@ TEST(cli parsing) {
   check_all_options(args);
   MESSAGE("Test two option declaration sets");
   option_declaration_set decl2;
-  CHECK(decl2.add("boolean2,b", "", false));  
-  CHECK(decl2.add("integer2,i", "", 2));  
-  CHECK(decl2.add("string2,s", "", "bar"));  
+  CHECK(decl2.add("boolean2,b", "", false));
+  CHECK(decl2.add("integer2,i", "", 2));
+  CHECK(decl2.add("string2,s", "", "bar"));
   opts.clear();
   args = split("--boolean --integer=42 --string=\"test\"");
   std::tie(state, it) = decl.parse(opts, args.begin(), args.end());
