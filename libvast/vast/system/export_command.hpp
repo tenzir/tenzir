@@ -30,12 +30,6 @@ public:
 protected:
   int run_impl(caf::actor_system& sys, option_map& options,
                argument_iterator begin, argument_iterator end) override;
-
-private:
-  bool continuous_;
-  bool historical_;
-  bool unified_;
-  uint64_t max_events_;
 };
 
 } // namespace vast::system

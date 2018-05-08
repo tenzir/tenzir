@@ -30,13 +30,6 @@ public:
 protected:
   int run_impl(caf::actor_system& sys, option_map& options,
                argument_iterator begin, argument_iterator end) override;
-
-private:
-  /// Spawn empty node without components if set.
-  bool spawn_bare_node;
-
-  /// Run VAST in foreground (do not daemonize) if set.
-  bool in_foreground;
 };
 
 } // namespace vast::system

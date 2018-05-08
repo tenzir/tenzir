@@ -48,6 +48,7 @@ protected:
                argument_iterator begin, argument_iterator end) override;
 
   virtual expected<caf::actor> make_source(caf::scoped_actor& self,
+                                           option_map& options,
                                            argument_iterator begin,
                                            argument_iterator end) = 0;
 };
