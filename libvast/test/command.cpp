@@ -30,7 +30,7 @@ public:
     add_opt("flag", "Some flag", false);
   }
 
-  proceed_result proceed(caf::actor_system&, option_map&,
+  proceed_result proceed(caf::actor_system&, const option_map&,
                          argument_iterator begin,
                          argument_iterator end) override {
     tested_proceed = true;
@@ -39,7 +39,7 @@ public:
     return proceed_ok;
   }
 
-  int run_impl(caf::actor_system&, option_map&, argument_iterator begin,
+  int run_impl(caf::actor_system&, const option_map&, argument_iterator begin,
                argument_iterator end) override {
     was_executed = true;
     run_begin = begin;
@@ -61,7 +61,7 @@ public:
     add_opt("other-value,o", "Some other integer value", 0);
   }
 
-  proceed_result proceed(caf::actor_system&, option_map&,
+  proceed_result proceed(caf::actor_system&, const option_map&,
                          argument_iterator begin,
                          argument_iterator end) override {
     tested_proceed = true;
@@ -70,7 +70,7 @@ public:
     return proceed_ok;
   }
 
-  int run_impl(caf::actor_system&, option_map&, argument_iterator begin,
+  int run_impl(caf::actor_system&, const option_map&, argument_iterator begin,
                argument_iterator end) override {
     was_executed = true;
     run_begin = begin;

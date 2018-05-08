@@ -56,7 +56,7 @@ pcap_reader_command::pcap_reader_command(command* parent, std::string_view name)
 }
 
 expected<caf::actor> pcap_reader_command::make_source(caf::scoped_actor& self,
-                                                      option_map& options,
+                                                      const option_map& options,
                                                       argument_iterator begin,
                                                       argument_iterator end) {
   VAST_UNUSED(begin, end);

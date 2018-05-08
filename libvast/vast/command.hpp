@@ -105,11 +105,12 @@ public:
 protected:
   /// Checks whether a command is ready to proceed, i.e., whether the
   /// configuration allows for calling `run_impl` or `run` on a nested command.
-  virtual proceed_result proceed(caf::actor_system& sys, option_map& options,
+  virtual proceed_result proceed(caf::actor_system& sys,
+                                 const option_map& options,
                                  argument_iterator begin,
                                  argument_iterator end);
 
-  virtual int run_impl(caf::actor_system& sys, option_map& options,
+  virtual int run_impl(caf::actor_system& sys, const option_map& options,
                        argument_iterator begin, argument_iterator end);
 
   expected<void> add_opt(std::string_view name,

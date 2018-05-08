@@ -118,7 +118,7 @@ bool command::is_root() const noexcept {
 }
 
 command::proceed_result command::proceed(caf::actor_system&,
-                                         option_map& options,
+                                         const option_map& options,
                                          argument_iterator begin,
                                          argument_iterator end) {
   VAST_UNUSED(options, begin, end);
@@ -127,7 +127,7 @@ command::proceed_result command::proceed(caf::actor_system&,
   return proceed_ok;
 }
 
-int command::run_impl(caf::actor_system&, option_map& options,
+int command::run_impl(caf::actor_system&, const option_map& options,
                       argument_iterator begin, argument_iterator end) {
   VAST_UNUSED(options, begin, end);
   VAST_TRACE(VAST_ARG(std::string{name_}), VAST_ARG("args", begin, end),

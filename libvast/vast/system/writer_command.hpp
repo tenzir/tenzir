@@ -43,7 +43,8 @@ public:
   }
 
 protected:
-  expected<caf::actor> make_sink(caf::scoped_actor& self, option_map& options,
+  expected<caf::actor> make_sink(caf::scoped_actor& self,
+                                 const option_map& options,
                                  argument_iterator begin,
                                  argument_iterator end) override {
     VAST_UNUSED(begin, end);
