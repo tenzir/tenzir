@@ -35,13 +35,14 @@ public:
   enum class parse_state {
     successful,
     option_already_exists,
-    begin_is_not_an_option,
-    name_not_declartion,
+    not_an_option,
+    name_not_declared,
     arg_passed_but_not_declared,
     arg_declared_but_not_passed,
     failed_to_parse_argument,
     type_not_parsebale,
-    in_progress
+    in_progress,
+    last_state
   };
 
   /// A declaration of a CLI argument option.
@@ -132,5 +133,6 @@ private:
   detail::steady_map<char, option_ptr> short_opts_;
 };
 
+const char* to_string(option_declaration_set::parse_state x);
 
 } // namespace vast

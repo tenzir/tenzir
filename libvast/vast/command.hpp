@@ -117,6 +117,14 @@ protected:
                              std::string_view description, data default_value);
 
 private:
+  std::string parse_error(option_declaration_set::parse_state state,
+                    argument_iterator error_position, argument_iterator begin,
+                    argument_iterator end) const;
+
+  std::string subcommand_error(argument_iterator error_position,
+                               argument_iterator begin,
+                               argument_iterator end) const;
+
   std::map<std::string_view, std::unique_ptr<command>> nested_;
   command* parent_;
 

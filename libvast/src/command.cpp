@@ -40,15 +40,12 @@ int command::run(caf::actor_system& sys, option_map& options,
   bool has_subcommand;
   switch(state) {
     default:
-      // TODO: examine what went wrong and inform the user
-      std::cerr << "something went wrong!!!" << std::endl;
-      std::cerr << "parser state: " << static_cast<int>(state) << std::endl;
-      std::cerr << usage() << std::endl;;
+      std::cerr << parse_error(state, position, begin, end) << std::endl;
       return EXIT_FAILURE;
     case option_declaration_set::parse_state::successful:
       has_subcommand = false;
       break;
-    case option_declaration_set::parse_state::begin_is_not_an_option:
+    case option_declaration_set::parse_state::not_an_option:
       if (position == end)
         has_subcommand = false;
       has_subcommand = true;
@@ -78,10 +75,7 @@ int command::run(caf::actor_system& sys, option_map& options,
   // Dispatch to subcommand.
   auto i = nested_.find(*position);
   if (i == nested_.end()) {
-    std::cerr << "no such command: " << full_name() << " " << *position
-              << std::endl
-              << std::endl;
-    std::cerr << usage() << std::endl;;
+    std::cerr << subcommand_error(position, begin, end);
     return EXIT_FAILURE;
   }
   return i->second->run(sys, options, position + 1, end);
@@ -140,6 +134,34 @@ expected<void> command::add_opt(std::string_view name,
                                 std::string_view description,
                                 data default_value) {
   return opts_.add(name, description, std::move(default_value));
+}
+
+std::string command::parse_error(option_declaration_set::parse_state state,
+                                 argument_iterator error_position,
+                                 argument_iterator begin,
+                                 argument_iterator end) const {
+  std::stringstream result;
+  result << "Failed to parse command" << "\n";
+  result << "  Command: " << name() << " " << detail::join(begin, end, " ")
+         << "\n";
+  result << "  Description: " << to_string(state) << "\n";
+  if (error_position != end)
+    result << "  Position: " << *error_position << "\n";
+  else
+    result << "  Position: at the end\n";
+  result << "\n" << usage();
+  return result.str();
+}
+
+std::string command::subcommand_error(argument_iterator error_position,
+                                      argument_iterator,
+                                      argument_iterator end) const {
+  std::stringstream result;
+  result << "No such command: " << full_name();
+  if (error_position != end)
+    result << " " << *error_position;
+  result << "\n\n" << usage();
+  return result.str();
 }
 
 } // namespace vast
