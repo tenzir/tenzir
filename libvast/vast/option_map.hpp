@@ -16,9 +16,10 @@
 #include <string>
 #include <string_view>
 
-#include "vast/optional.hpp"
-#include "vast/expected.hpp"
 #include "vast/data.hpp"
+#include "vast/expected.hpp"
+#include "vast/logger.hpp"
+#include "vast/optional.hpp"
 
 #include "vast/detail/steady_map.hpp"
 
@@ -90,15 +91,16 @@ optional<const T&> get(const option_map& xs, std::string_view name) {
   auto x = xs[name];
   if (!x)
     return {};
-  if (auto result = get_if<T>(*x); result)
+  if (auto result = get_if<detail::make_data_type<T>>(*x); result)
     return *result;
+  VAST_DEBUG("option name found but wrong type requested", VAST_ARG(name));
   return {};
 }
 
 template <class T>
 T get_or(const option_map& xs, std::string_view name,
          const T& default_value) {
-  if (auto x = get<detail::make_data_type<T>>(xs, name); x)
+  if (auto x = get<T>(xs, name); x)
     return *x;
   return default_value;
 }

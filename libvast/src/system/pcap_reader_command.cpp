@@ -47,9 +47,9 @@ pcap_reader_command::pcap_reader_command(command* parent, std::string_view name)
   add_opt("schema,s", "path to alternate schema", "");
   add_opt("uds,d", "treat -r as listening UNIX domain socket", false);
   add_opt("cutoff,c", "skip flow packets after this many bytes",
-          std::numeric_limits<size_t>::max());
+          std::numeric_limits<uint64_t>::max());
   add_opt("flow-max,m", "number of concurrent flows to track",
-          uint64_t{1} << 20);
+          size_t{1} << 20);
   add_opt("flow-age,a", "max flow lifetime before eviction", 60u);
   add_opt("flow-expiry,e", "flow table expiration interval", 10u);
   add_opt("pseudo-realtime,p", "factor c delaying trace packets by 1/c", 0);
@@ -61,7 +61,8 @@ expected<caf::actor> pcap_reader_command::make_source(caf::scoped_actor& self,
                                                       argument_iterator end) {
   VAST_UNUSED(begin, end);
   VAST_TRACE(VAST_ARG("args", begin, end));
-  auto input = get<std::string>(options, "input");
+  VAST_DEBUG(VAST_ARG(options));
+  auto input = get<std::string>(options, "read");
   VAST_ASSERT(input);
   auto cutoff = get<uint64_t>(options, "cutoff");
   VAST_ASSERT(cutoff);

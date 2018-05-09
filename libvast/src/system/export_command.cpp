@@ -36,7 +36,7 @@ export_command::export_command(command* parent, std::string_view name)
   add_opt("continuous,c", "marks a query as continuous", false);
   add_opt("historical,h", "marks a query as historical", false);
   add_opt("unified,u", "marks a query as unified", false);
-  add_opt("events,e", "maximum number of results", 0);
+  add_opt("events,e", "maximum number of results", 0u);
 }
 
 int export_command::run_impl(actor_system&, const option_map&, argument_iterator,
