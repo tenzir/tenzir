@@ -322,8 +322,7 @@ constexpr const char* parser_state_names[] = {
 } // namespace anonymous
 
 const char* to_string(option_declaration_set::parse_state x) {
-  if (x >= option_declaration_set::parse_state::last_state)
-    return "unknown";
+  VAST_ASSERT(x < option_declaration_set::parse_state::last_state);
   return parser_state_names[static_cast<size_t>(x)];
 }
 
