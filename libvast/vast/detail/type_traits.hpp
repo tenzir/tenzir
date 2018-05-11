@@ -135,13 +135,11 @@ inline constexpr bool are_same_v = (std::is_same_v<T, Ts> && ...);
 //       static_assert(always_false_v<T>, "error message");
 //   }
 //
-template <class...>
-struct always_false {
-  static constexpr bool value = false;
-};
+template <class>
+struct always_false : std::false_type {};
 
-template <class... Ts>
-constexpr auto always_false_v = always_false<Ts...>::value;
+template <class T>
+constexpr auto always_false_v = always_false<T>::value;
 
 // -- tuple ------------------------------------------------------------------
 
