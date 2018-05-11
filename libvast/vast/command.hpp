@@ -77,14 +77,17 @@ public:
   std::string full_name() const;
 
   /// Queries whether this command has no parent.
-  bool is_root() const noexcept;
+  inline bool is_root() const noexcept {
+    return parent_ == nullptr;
+  }
 
-  /// Queries whether this command has no parent.
-  command& root() noexcept {
+  /// Returns the root command.
+  inline command& root() noexcept {
     return is_root() ? *this : parent_->root();
   }
 
-  std::string_view name() const noexcept {
+  /// Returns the managed command name.
+  inline std::string_view name() const noexcept {
     return name_;
   }
 
@@ -113,13 +116,13 @@ protected:
   virtual int run_impl(caf::actor_system& sys, const option_map& options,
                        argument_iterator begin, argument_iterator end);
 
-  expected<void> add_opt(std::string_view name,
-                             std::string_view description, data default_value);
+  expected<void> add_opt(std::string_view name, std::string_view description,
+                         data default_value);
 
 private:
   std::string parse_error(option_declaration_set::parse_state state,
-                    argument_iterator error_position, argument_iterator begin,
-                    argument_iterator end) const;
+                          argument_iterator error_position,
+                          argument_iterator begin, argument_iterator end) const;
 
   std::string subcommand_error(argument_iterator error_position,
                                argument_iterator begin,

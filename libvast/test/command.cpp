@@ -120,8 +120,8 @@ TEST(nested arg parsing) {
   cmd1->add<bar>("bar");
   exec("foo -v 42 bar -o 123");
   CHECK_EQUAL(get_or(options, "flag", false), false);
-  CHECK_EQUAL(get_or<integer>(options, "value", 0), 42);
-  CHECK_EQUAL(get_or<integer>(options, "other-value", 0), 123);
+  CHECK_EQUAL(get_or(options, "value", 0), 42);
+  CHECK_EQUAL(get_or(options, "other-value", 0), 123);
 }
 
 TEST(parsing arg remainder) {

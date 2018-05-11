@@ -46,14 +46,12 @@ int command::run(caf::actor_system& sys, option_map& options,
       has_subcommand = false;
       break;
     case option_declaration_set::parse_state::not_an_option:
-      if (position == end)
-        has_subcommand = false;
-      has_subcommand = true;
+      has_subcommand = position != end;
       break;
   }
   // Check for help option.
   if (get_or<boolean>(options, "help", false)) {
-    std::cerr << usage() << std::endl;;
+    std::cerr << usage() << std::endl;
     return EXIT_SUCCESS;
   }
   // Check whether the options allow for further processing.
@@ -105,10 +103,6 @@ std::string command::full_name() const {
     result += ' ';
   result += name_;
   return result;
-}
-
-bool command::is_root() const noexcept {
-  return parent_ == nullptr;
 }
 
 command::proceed_result command::proceed(caf::actor_system&,
