@@ -233,6 +233,7 @@ set(tests
   test/key.cpp
   test/main.cpp
   test/mmapbuf.cpp
+  test/msgpack.cpp
   test/offset.cpp
   test/option_declaration_set.cpp
   test/option_map.cpp
