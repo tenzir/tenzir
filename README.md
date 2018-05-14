@@ -32,7 +32,6 @@ Send [Bro](http://www.bro.org) logs to a remote node:
 
 - [Project page](http://vast.io)
 - [Documentation](http://docs.vast.io)
-- [Issue board](http://vast.fail)
 - [Contribution guidelines](CONTRIBUTING.md)
 
 ### Contact
