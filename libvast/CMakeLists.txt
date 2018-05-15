@@ -25,6 +25,7 @@ set(libvast_sources
   src/concept/hashable/crc.cpp
   src/concept/hashable/xxhash.cpp
   src/data.cpp
+  src/default_table_slice.cpp
   src/detail/adjust_resource_consumption.cpp
   src/detail/compressedbuf.cpp
   src/detail/fdinbuf.cpp
@@ -88,6 +89,7 @@ set(libvast_sources
   src/system/task.cpp
   src/system/tracker.cpp
   src/system/writer_command_base.cpp
+  src/table.cpp
   src/time.cpp
   src/type.cpp
   src/uuid.cpp
@@ -215,6 +217,7 @@ set(tests
   test/command.cpp
   test/compressedbuf.cpp
   test/data.cpp
+  test/default_table_slice.cpp
   test/endpoint.cpp
   test/event.cpp
   test/expression.cpp
