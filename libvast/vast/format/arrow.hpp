@@ -115,17 +115,17 @@ struct insert_visitor {
 
   ::arrow::Status operator()(const record_type& t, const std::vector<data>& d);
 
-  ::arrow::Status operator()(const count_type& t, const count& d);
+  ::arrow::Status operator()(const count_type& t, count d);
 
-  ::arrow::Status operator()(const integer_type& t, const integer& d);
+  ::arrow::Status operator()(const integer_type& t, integer d);
 
-  ::arrow::Status operator()(const real_type& t, const real& d);
+  ::arrow::Status operator()(const real_type& t, real d);
 
   ::arrow::Status operator()(const type& t, const data& d);
 
-  ::arrow::Status operator()(const string_type& t, const std::string& d);
+  ::arrow::Status operator()(const string_type& t, std::string d);
 
-  ::arrow::Status operator()(const boolean_type& t, const bool& d);
+  ::arrow::Status operator()(const boolean_type& t, bool d);
 
   ::arrow::Status operator()(const timestamp_type& t, const timestamp& d);
 
@@ -179,15 +179,15 @@ struct insert_visitor_helper {
 
   insert_visitor_helper(::arrow::ArrayBuilder* b);
 
-  result_type operator()(const boolean_type&, const boolean& d);
+  result_type operator()(const boolean_type&, boolean d);
 
-  result_type operator()(const count_type&, const count& d);
+  result_type operator()(const count_type&, count d);
 
-  result_type operator()(const integer_type&, const int& d);
+  result_type operator()(const integer_type&, int d);
 
-  result_type operator()(const real_type&, const real& d);
+  result_type operator()(const real_type&, real d);
 
-  result_type operator()(const string_type&, const std::string& d);
+  result_type operator()(const string_type&, std::string d);
 
   result_type operator()(const pattern_type&, const pattern& d);
 
@@ -200,8 +200,12 @@ struct insert_visitor_helper {
   result_type operator()(const timespan_type&, const timespan& d);
 
   result_type operator()(const timestamp_type&, const timestamp& d);
+  
+  result_type operator()(const vector_type&, const std::vector<data>& d);
+  
+  result_type operator()(const set_type&, const set& d);
 
-  result_type operator()(const none_type&, const none&);
+  result_type operator()(const none_type&, none);
 
   template <class T1, class T2>
   result_type operator()(const T1& t1, const T2& t2) {
