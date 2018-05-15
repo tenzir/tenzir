@@ -14,16 +14,20 @@
 #include "vast/system/indexer_stage_driver.hpp"
 
 #include <caf/downstream.hpp>
+#include <caf/scheduled_actor.hpp>
 #include <caf/stream_manager.hpp>
 
 namespace vast::system {
 
 indexer_stage_driver::indexer_stage_driver(downstream_manager_type& dm,
-                                           index_manager_factory fac)
+                                           index_manager_factory fac,
+                                           size_t max_partition_size)
   : super(dm),
+    remaining_in_partition_(max_partition_size),
     im_(fac()),
-    factory_(std::move(fac)) {
-  // nop
+    factory_(std::move(fac)),
+    max_partition_size_(max_partition_size) {
+  VAST_ASSERT(max_partition_size_ > 0);
 }
 
 indexer_stage_driver::~indexer_stage_driver() noexcept {
@@ -32,16 +36,29 @@ indexer_stage_driver::~indexer_stage_driver() noexcept {
 
 void indexer_stage_driver::process(caf::downstream<output_type>& out,
                                    std::vector<input_type>& batch) {
+  VAST_TRACE(CAF_ARG(batch));
   // Iterate batch to start new INDEXER actors when needed.
   for (auto& x : batch) {
-    auto entry = im_->get_or_add(x.type());
-    if (entry.second) {
+    if (auto [hdl, added] = im_->get_or_add(x.type()); added) {
       auto slot = out_.parent()
-                  ->add_unchecked_outbound_path<output_type>(entry.first);
+                  ->add_unchecked_outbound_path<output_type>(hdl);
+      VAST_DEBUG("spawned new INDEXER at slot", slot);
       out_.set_filter(slot, x.type());
     }
     // Dispatch event.
     out.push(std::move(x));
+    // Reset the manager and all outbound paths when finalizing a partition.
+    if (--remaining_in_partition_ == 0) {
+      VAST_DEBUG("partition full, close slots", out_.open_path_slots());
+      VAST_ASSERT(out_.buf().size() != 0);
+      out_.fan_out_flush();
+      VAST_ASSERT(out_.buf().size() == 0);
+      out_.force_emit_batches();
+      out_.close();
+      im_ = factory_();
+      VAST_ASSERT(im_->types().empty());
+      remaining_in_partition_ = max_partition_size_;
+    }
   }
 }
 

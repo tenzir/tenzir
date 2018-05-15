@@ -23,18 +23,26 @@
 
 namespace vast::system {
 
+/// @relates indexer_stage_driver
+/// Filter type for dispatching events to INDEXER actors.
 using indexer_stage_filter = type;
 
+/// @relates indexer_stage_driver
+/// Selects an INDEXER actor based on its filter.
 struct indexer_stage_selector {
   inline bool operator()(const indexer_stage_filter& f, const event& x) const {
     return f == x.type();
   }
 };
 
+/// @relates indexer_stage_driver
+/// A downstream manager type for dispatching data to INDEXER actors.
 using indexer_downstream_manager
   = caf::broadcast_downstream_manager<event, indexer_stage_filter,
                                       indexer_stage_selector>;
 
+/// A stream stage for dispatching events to INDEXER actors. One set of INDEXER
+/// actors is used per partition.
 class indexer_stage_driver
   : public caf::stream_stage_driver<event, indexer_downstream_manager> {
 public:
@@ -42,7 +50,8 @@ public:
 
   using index_manager_factory = std::function<indexer_manager_ptr()>;
 
-  indexer_stage_driver(downstream_manager_type& dm, index_manager_factory fac);
+  indexer_stage_driver(downstream_manager_type& dm, index_manager_factory fac,
+                       size_t max_partition_size);
 
   ~indexer_stage_driver() noexcept override;
 
@@ -50,8 +59,14 @@ public:
                std::vector<input_type>& batch) override;
 
 private:
+  /// Stores how many events remain in the current partition.
+  size_t remaining_in_partition_;
+  /// Stores the INDEXER actors for the current partition.
   indexer_manager_ptr im_;
+  /// Generates INDEXER actors for the manager.
   index_manager_factory factory_;
+  /// Stores how many events form one partition.
+  size_t max_partition_size_;
 };
 
 } // namespace vast::system

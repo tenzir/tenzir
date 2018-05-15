@@ -24,10 +24,11 @@
 #include "vast/filesystem.hpp"
 #include "vast/logger.hpp"
 #include "vast/type.hpp"
+#include "vast/uuid.hpp"
 
 namespace vast::system {
 
-/// Manages a set of indexers.
+/// Manages a set of INDEXER actors for a single partition.
 class indexer_manager : public caf::ref_counted {
 public:
   /// Persistent meta state for manager instances.
@@ -41,7 +42,7 @@ public:
 
   using indexer_factory = std::function<caf::actor (path, type)>;
 
-  indexer_manager(path dir, indexer_factory f);
+  indexer_manager(path dir, uuid partition_id, indexer_factory f);
 
   ~indexer_manager() noexcept override;
 
@@ -77,6 +78,7 @@ public:
   ///          newly added.
   std::pair<caf::actor, bool> get_or_add(const type& key);
 
+  /// Returns whether the meta data was changed.
   inline bool dirty() const noexcept {
     return meta_data_.dirty;
   }
@@ -91,10 +93,20 @@ private:
 
   static std::string to_digest(const type& x);
 
+  /// Stores one INDEXER actor per type.
   std::unordered_map<type, caf::actor> indexers_;
+
+  /// Persistent state for the partition.
   meta_data meta_data_;
-  path dir_;
+
+  /// ID of the managed partition.
+  uuid partition_id_;
+
+  /// Factory for spawning INDEXER actors.
   indexer_factory make_event_indexer_;
+
+  /// Directory for persisting the meta data.
+  path dir_;
 };
 
 /// @relates indexer_manager::meta_data
@@ -106,7 +118,7 @@ auto inspect(Inspector& f, indexer_manager::meta_data& x) {
 using indexer_manager_ptr = caf::intrusive_ptr<indexer_manager>;
 
 /// Creates an indexer manager.
-indexer_manager_ptr make_indexer_manager(path dir,
+indexer_manager_ptr make_indexer_manager(path dir, uuid partition_id,
                                          indexer_manager::indexer_factory f);
 
 /// Creates an indexer manager that spawns `event_indexer` instances as

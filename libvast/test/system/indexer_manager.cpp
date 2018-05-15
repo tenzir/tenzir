@@ -52,7 +52,7 @@ struct fixture : fixtures::deterministic_actor_system {
     auto f = [&](path, type) {
       return sys.spawn(dummy_indexer);
     };
-    return vast::system::make_indexer_manager(state_dir, f);
+    return vast::system::make_indexer_manager(state_dir, uuid::random(), f);
   }
 
   /// Returns how many dummy INDEXER actors are currently running.

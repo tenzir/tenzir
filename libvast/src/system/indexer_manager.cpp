@@ -17,15 +17,18 @@
 #include <caf/local_actor.hpp>
 #include <caf/send.hpp>
 
+#include "vast/concept/printable/to_string.hpp"
+#include "vast/concept/printable/vast/uuid.hpp"
 #include "vast/load.hpp"
 #include "vast/save.hpp"
 #include "vast/system/indexer.hpp"
 
 namespace vast::system {
 
-indexer_manager::indexer_manager(path dir, indexer_factory f)
-  : dir_(dir),
-    make_event_indexer_(std::move(f)) {
+indexer_manager::indexer_manager(path dir, uuid partition_id, indexer_factory f)
+  : partition_id_(std::move(partition_id)),
+    make_event_indexer_(std::move(f)),
+    dir_(dir) {
   // If the directory exists already, we must have some state from the past
   // and are pre-loading all INDEXER types we are aware of.
   if (exists(dir_)) {
@@ -39,14 +42,12 @@ indexer_manager::indexer_manager(path dir, indexer_factory f)
 }
 
 indexer_manager::~indexer_manager() noexcept{
-  // Shutdown INDEXER actors.
-  for (auto& [t, a] : indexers_)
-    anon_send_exit(a, caf::exit_reason::user_shutdown);
   // Save persistent state.
   if (meta_data_.dirty) {
-    if (!exists(dir_))
-      mkdir(dir_);
-    save(dir_ / "meta", meta_data_);
+    auto dir = dir_ / to_string(partition_id_);
+    if (!exists(dir))
+      mkdir(dir);
+    save(dir / "meta", meta_data_);
   }
 }
 
@@ -86,17 +87,20 @@ std::string indexer_manager::to_digest(const type& x) {
 }
 
 indexer_manager_ptr make_indexer_manager(path dir,
+                                         uuid partition_id,
                                          indexer_manager::indexer_factory f) {
-  return caf::make_counted<indexer_manager>(std::move(dir), std::move(f));
+  return caf::make_counted<indexer_manager>(
+    std::move(dir), std::move(partition_id), std::move(f));
 }
 
-indexer_manager_ptr make_indexer_manager(caf::local_actor* self, path dir) {
+indexer_manager_ptr make_indexer_manager(caf::local_actor* self, path dir,
+                                         uuid partition_id) {
   auto f = [self](path indexer_path, type indexer_type) {
     VAST_DEBUG(self, "creates event-indexer for type", indexer_type);
     return self->spawn<caf::lazy_init>(event_indexer, std::move(indexer_path),
                                        std::move(indexer_type));
   };
-  return make_indexer_manager(std::move(dir), f);
+  return make_indexer_manager(std::move(dir), std::move(partition_id), f);
 }
 
 } // namespace vast::system
