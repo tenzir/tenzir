@@ -148,8 +148,8 @@ std::string command::parse_error(option_declaration_set::parse_state state,
 }
 
 std::string command::subcommand_not_found(argument_iterator error_position,
-                                      argument_iterator,
-                                      argument_iterator end) const {
+                                          argument_iterator,
+                                          argument_iterator end) const {
   std::stringstream result;
   result << "No such command: " << full_name();
   if (error_position != end)
