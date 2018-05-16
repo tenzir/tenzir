@@ -99,7 +99,7 @@ TEST(cli parsing) {
   check_option<std::string>(opts, "string", "foo");
   check_fail_option<std::string>(opts, "not-contained");
   MESSAGE("Test long names");
-  args = split("--boolean --integer=42 --string=test");
+  args = split("--boolean --integer=42 --string=\"test\"");
   check_all_options(args);
   MESSAGE("Test shortnames");
   args = split("-b -i42 -s test");

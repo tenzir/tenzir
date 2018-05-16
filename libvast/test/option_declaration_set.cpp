@@ -83,7 +83,9 @@ TEST(data type parsing) {
   check_fail_option(*x, "X");
   MESSAGE("Test string");
   x = decl.find("string");
+  check_option(*x, "\"2\"", "2");
   check_option(*x, "2", "2");
+  check_option(*x, "t\"e\"st", "t\"e\"st");
   check_option(*x, "this is a test", "this is a test");
 }
 
