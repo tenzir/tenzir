@@ -124,7 +124,7 @@ private:
                           argument_iterator error_position,
                           argument_iterator begin, argument_iterator end) const;
 
-  std::string subcommand_error(argument_iterator error_position,
+  std::string subcommand_not_found(argument_iterator error_position,
                                argument_iterator begin,
                                argument_iterator end) const;
 
