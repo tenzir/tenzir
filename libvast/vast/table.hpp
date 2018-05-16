@@ -18,10 +18,12 @@
 
 #include <caf/intrusive_ptr.hpp>
 #include <caf/make_counted.hpp>
+#include <caf/optional.hpp>
 #include <caf/ref_counted.hpp>
 
 #include "vast/data.hpp"
 #include "vast/type.hpp"
+#include "vast/view.hpp"
 
 namespace vast {
 
@@ -58,7 +60,7 @@ public:
   /// @param row The row offset.
   /// @param col The column offset.
   /// @pre `row < rows() && col < columns()`
-  data at(size_type row, size_type col) const;
+  caf::optional<data_view> at(size_type row, size_type col) const;
 
   /// @returns The slices in this table.
   const std::vector<table_slice_ptr>& slices() const;
@@ -118,7 +120,7 @@ public:
   /// @param row The row offset.
   /// @param col The column offset.
   /// @pre `row < rows() && col < columns()`
-  virtual data at(size_type row, size_type col) const = 0;
+  virtual caf::optional<data_view> at(size_type row, size_type col) const = 0;
 
 protected:
   /// Constructs a table slice with a specific layout.

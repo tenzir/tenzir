@@ -40,6 +40,10 @@ TEST(default_table_slice) {
   auto slice = builder->finish();
   CHECK_EQUAL(slice->rows(), data{2u});
   CHECK_EQUAL(slice->columns(), data{3u});
-  CHECK_EQUAL(slice->at(0, 1), data{"foo"});
-  CHECK_EQUAL(slice->at(1, 2), data{4.3});
+  auto x = slice->at(0, 1);
+  REQUIRE(x);
+  CHECK_EQUAL(*x, data{"foo"});
+  x = slice->at(1, 2);
+  REQUIRE(x);
+  CHECK_EQUAL(*x, data{4.3});
 }

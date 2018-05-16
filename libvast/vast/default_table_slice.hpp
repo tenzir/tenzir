@@ -28,7 +28,7 @@ public:
   /// @relates builder
   using builder_ptr = caf::intrusive_ptr<builder>;
 
-  virtual data at(size_type row, size_type col) const final;
+  virtual caf::optional<data_view> at(size_type row, size_type col) const final;
 
 private:
   std::vector<data> xs_;

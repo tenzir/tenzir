@@ -22,18 +22,20 @@ default_table_slice::default_table_slice(record_type layout)
   // nop
 }
 
-data default_table_slice::at(size_type row, size_type col) const {
+caf::optional<data_view>
+default_table_slice::at(size_type row, size_type col) const {
   VAST_ASSERT(row < rows_);
   VAST_ASSERT(row < xs_.size());
   VAST_ASSERT(col < columns_);
   if (auto x = get_if<vector>(xs_[row])) {
     VAST_ASSERT(col < x->size());
-    return (*x)[col];
+    return make_view((*x)[col]);
   }
   return {};
 }
 
-default_table_slice::builder_ptr default_table_slice::builder::make(record_type layout) {
+default_table_slice::builder_ptr
+default_table_slice::builder::make(record_type layout) {
   return caf::make_counted<builder>(std::move(layout));
 }
 
