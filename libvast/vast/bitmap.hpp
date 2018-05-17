@@ -13,20 +13,27 @@
 
 #pragma once
 
+#include <caf/variant.hpp>
+#include <caf/detail/type_list.hpp>
+
 #include "vast/bitmap_base.hpp"
-#include "vast/detail/type_traits.hpp"
 #include "vast/ewah_bitmap.hpp"
 #include "vast/null_bitmap.hpp"
 #include "vast/wah_bitmap.hpp"
-#include "vast/variant.hpp"
+
+#include "vast/detail/operators.hpp"
 
 namespace vast {
+
+class bitmap_bit_range;
 
 /// A type-erased bitmap. This type wraps a concrete bitmap instance and models
 /// the Bitmap concept at the same time.
 class bitmap : public bitmap_base<bitmap>,
                detail::equality_comparable<bitmap> {
-  using bitmap_variant = variant<
+  friend bitmap_bit_range;
+
+  using bitmap_variant = caf::variant<
     ewah_bitmap,
     null_bitmap,
     wah_bitmap
@@ -44,7 +51,10 @@ public:
   template <
     class Bitmap,
     class = std::enable_if_t<
-      detail::contains<std::decay_t<Bitmap>, bitmap_variant::types>{}
+      caf::detail::tl_contains<
+        bitmap_variant::types,
+        std::decay_t<Bitmap>
+      >::value
     >
   >
   bitmap(Bitmap&& bm) : bitmap_(std::forward<Bitmap>(bm)) {
@@ -80,10 +90,6 @@ public:
     return f(bm.bitmap_);
   }
 
-  friend auto& expose(bitmap& bm) {
-    return bm.bitmap_;
-  }
-
 private:
   bitmap_variant bitmap_;
 };
@@ -97,7 +103,7 @@ public:
   bool done() const;
 
 private:
-  using range_variant = variant<
+  using range_variant = caf::variant<
     ewah_bitmap_range,
     null_bitmap_range,
     wah_bitmap_range
@@ -109,4 +115,3 @@ private:
 bitmap_bit_range bit_range(const bitmap& bm);
 
 } // namespace vast
-
