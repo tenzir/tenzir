@@ -195,8 +195,8 @@ public:
   }
 
   template <class Inspector>
-  friend auto inspect(Inspector&f, vector_set<T, Allocator, Policy>& x) {
-    return f(x.xs_);
+  friend auto inspect(Inspector&f, vector_set& xs) {
+    return f(xs.xs_);
   }
 
 private:
@@ -204,17 +204,3 @@ private:
 };
 
 } // namespace vast::detail
-
-namespace std {
-
-template <class T, class Allocator, class Policy>
-struct hash<vast::detail::vector_set<T, Allocator, Policy>> {
-  using vector_type = vast::detail::vector_set<T, Allocator, Policy>;
-  size_t operator()(const vector_type& x) const {
-    return vast::uhash<vast::xxhash>{}(
-      static_cast<const typename vector_type::vector_type&>(x));
-  }
-};
-
-} // namespace std
-
