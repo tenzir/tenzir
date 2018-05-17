@@ -16,6 +16,9 @@
 #include <algorithm>
 #include <vector>
 
+#include "vast/concept/hashable/uhash.hpp"
+#include "vast/concept/hashable/xxhash.hpp"
+
 #include "vast/detail/operators.hpp"
 
 namespace vast::detail {
@@ -121,14 +124,9 @@ public:
     return Policy::add(xs_, std::move(x));
   };
 
-  std::pair<iterator, bool> insert(iterator, value_type x) {
+  iterator insert(const_iterator, value_type x) {
     // TODO: don't ignore hint.
-    return insert(std::move(x));
-  };
-
-  std::pair<iterator, bool> insert(const_iterator, value_type x) {
-    // TODO: don't ignore hint.
-    return insert(std::move(x));
+    return insert(std::move(x)).first;
   };
 
   template <class InputIterator>
@@ -196,9 +194,27 @@ public:
     return xs_;
   }
 
+  template <class Inspector>
+  friend auto inspect(Inspector&f, vector_set<T, Allocator, Policy>& x) {
+    return f(x.xs_);
+  }
+
 private:
   vector_type xs_;
 };
 
 } // namespace vast::detail
+
+namespace std {
+
+template <class T, class Allocator, class Policy>
+struct hash<vast::detail::vector_set<T, Allocator, Policy>> {
+  using vector_type = vast::detail::vector_set<T, Allocator, Policy>;
+  size_t operator()(const vector_type& x) const {
+    return vast::uhash<vast::xxhash>{}(
+      static_cast<const typename vector_type::vector_type&>(x));
+  }
+};
+
+} // namespace std
 

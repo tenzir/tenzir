@@ -207,7 +207,7 @@ TEST(serialization) {
   save(buf, d0);
   load(buf, d1);
   CHECK(d0 == d1);
-  CHECK(to_string(d1) == "{8/icmp, 53/udp, 80/tcp}");
+  CHECK(to_string(d1) == "{80/tcp, 53/udp, 8/icmp}");
 }
 
 TEST(printable) {
@@ -296,7 +296,7 @@ TEST(parseable) {
   l = str.end();
   CHECK(p(f, l, d));
   CHECK(f == l);
-  CHECK(d == set{-42, -1, 42});
+  CHECK(d == set{-42, 42, -1});
 
   MESSAGE("map");
   str = "{T->1,F->0}"s;
