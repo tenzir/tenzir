@@ -15,12 +15,11 @@
 
 #include <cstdint>
 #include <limits>
-#include <map>
 #include <memory>
-#include <set>
 #include <vector>
 
 #include "vast/detail/steady_set.hpp"
+#include "vast/detail/steady_map.hpp"
 
 namespace vast {
 
@@ -40,7 +39,7 @@ using vector = std::vector<data>;
 using set = detail::steady_set<data>;
 
 /// An associative array with ::data as both key and value.
-using map = std::map<data, data>;
+using map = detail::steady_map<data, data>;
 
 // ---------------------------------------------------------------------------
 

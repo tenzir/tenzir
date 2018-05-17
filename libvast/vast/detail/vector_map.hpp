@@ -18,6 +18,9 @@
 #include <stdexcept>
 #include <vector>
 
+#include "vast/concept/hashable/uhash.hpp"
+#include "vast/concept/hashable/xxhash.hpp"
+
 #include "vast/detail/operators.hpp"
 
 namespace vast::detail {
@@ -221,9 +224,13 @@ public:
     return xs_;
   }
 
+  template <class Inspector>
+  friend auto inspect(Inspector&f, vector_map& xs) {
+    return f(xs.xs_);
+  }
+
 private:
   vector_type xs_;
 };
 
 } // namespace vast::detail
-
