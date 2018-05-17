@@ -35,15 +35,15 @@ struct json_parser : parser<json_parser> {
     auto lbrace = ws >> '{' >> ws;
     auto rbrace = ws >> '}' >> ws;
     auto delim = ws >> ',' >> ws;
-    auto null = ws >> "null"_p ->* [] { return nil; };
-    auto true_false = ws >> parsers::boolean;
+    auto null = ws >> "null"_p ->* [] { return json::null{}; };
+    auto boolean = ws >> parsers::boolean;
     auto string = ws >> parsers::qq_str;
     auto number = ws >> parsers::real_opt_dot;
     auto array = as<json::array>(lbracket >> ~(j % delim) >> rbracket);
     auto key_value = ws >> string >> ws >> ':' >> ws >> j;
     auto object = as<json::object>(lbrace >> ~(key_value % delim) >> rbrace);
     j = null
-      | true_false
+      | boolean
       | number
       | string
       | array
@@ -65,4 +65,3 @@ static auto const json = make_parser<vast::json>();
 } // namespace parsers
 
 } // namespace vast
-
