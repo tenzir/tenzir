@@ -18,9 +18,6 @@
 #include <stdexcept>
 #include <vector>
 
-#include "vast/concept/hashable/uhash.hpp"
-#include "vast/concept/hashable/xxhash.hpp"
-
 #include "vast/detail/operators.hpp"
 
 namespace vast::detail {
