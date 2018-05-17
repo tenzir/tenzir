@@ -15,11 +15,11 @@
 #include <cstdint>
 #include <string>
 #include <type_traits>
-#include <variant>
 
 #include <caf/intrusive_ptr.hpp>
 #include <caf/make_counted.hpp>
 #include <caf/ref_counted.hpp>
+#include <caf/variant.hpp>
 
 #include "vast/aliases.hpp"
 #include "vast/data.hpp"
@@ -189,7 +189,7 @@ struct view<map> {
 
 /// A type-erased view over variout types of data.
 /// @relates view
-using data_view = std::variant<
+using data_view = caf::variant<
   view_t<boolean>,
   view_t<integer>,
   view_t<count>,
