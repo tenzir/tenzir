@@ -124,7 +124,7 @@ TEST(serialization) {
   save(buf, v);
   load(buf, w);
   CHECK(v == w);
-  CHECK(to_string(w) == "{8/icmp, 53/udp, 80/tcp}");
+  CHECK(to_string(w) == "{80/tcp, 53/udp, 8/icmp}");
 }
 
 TEST(json)

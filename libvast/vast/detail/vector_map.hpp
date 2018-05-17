@@ -221,9 +221,13 @@ public:
     return xs_;
   }
 
+  template <class Inspector>
+  friend auto inspect(Inspector&f, vector_map& xs) {
+    return f(xs.xs_);
+  }
+
 private:
   vector_type xs_;
 };
 
 } // namespace vast::detail
-
