@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #include "arrow/api.h"
 #include "arrow/builder.h"
 #include "arrow/io/api.h"
@@ -82,6 +95,30 @@ write_to_buffer(const std::shared_ptr<arrow::RecordBatch>& batch) {
   return buffer;
 }
 
+::arrow::Status append_port(const port& d, ::arrow::StructBuilder* b) {
+  auto tbuilder = static_cast<::arrow::UInt8Builder*>(b->field_builder(0));
+  auto status = tbuilder->Append(d.type());
+  if (!status.ok())
+    return status;
+  auto mbuilder = static_cast<::arrow::UInt16Builder*>(b->field_builder(1));
+  status = mbuilder->Append(d.number());
+  if (!status.ok())
+    return status;
+  return b->Append(true);
+}
+
+::arrow::Status append_subnet(const subnet& d, ::arrow::StructBuilder* b) {
+  auto abuilder =
+    static_cast<::arrow::FixedSizeBinaryBuilder*>(b->field_builder(0));
+  auto status = abuilder->Append(d.network().bytes_);
+  if (!status.ok())
+    return status;
+  auto mbuilder = static_cast<::arrow::UInt8Builder*>(b->field_builder(1));
+  status = mbuilder->Append(d.length());
+  if (!status.ok())
+    return status;
+  return b->Append(true);
+}
 } // namespace
 
 namespace format {
@@ -253,17 +290,7 @@ insert_visitor::insert_visitor(std::shared_ptr<::arrow::RecordBatchBuilder>& b,
 ::arrow::Status insert_visitor::operator()(const subnet_type&,
                                            const subnet& d) {
   auto builder = rbuilder->GetFieldAs<::arrow::StructBuilder>(c_builder);
-  auto abuilder =
-    static_cast<::arrow::FixedSizeBinaryBuilder*>(builder->field_builder(0));
-  auto status = abuilder->Append(d.network().bytes_);
-  if (!status.ok())
-    return status;
-  auto mbuilder =
-    static_cast<::arrow::UInt8Builder*>(builder->field_builder(1));
-  status = mbuilder->Append(d.length());
-  if (!status.ok())
-    return status;
-  return builder->Append(true);
+  return append_subnet(d, builder);
 }
 
 ::arrow::Status insert_visitor::operator()(const address_type&,
@@ -280,20 +307,10 @@ insert_visitor::insert_visitor(std::shared_ptr<::arrow::RecordBatchBuilder>& b,
 }
 
 ::arrow::Status insert_visitor::operator()(const port_type&, const port& d) {
-
   auto builder = rbuilder->GetFieldAs<::arrow::StructBuilder>(c_builder);
-  auto tbuilder =
-    static_cast<::arrow::UInt8Builder*>(builder->field_builder(0));
-  auto status = tbuilder->Append(d.type());
-  if (!status.ok())
-    return status;
-  auto mbuilder =
-    static_cast<::arrow::UInt16Builder*>(builder->field_builder(1));
-  status = mbuilder->Append(d.number());
-  if (!status.ok())
-    return status;
-  return builder->Append(true);
+  return append_port(d, builder);
 }
+
 ::arrow::Status insert_visitor::operator()(const port_type&, none) {
   auto sbuilder = rbuilder->GetFieldAs<::arrow::StructBuilder>(c_builder);
   return sbuilder->AppendNull();
@@ -374,34 +391,14 @@ insert_visitor_helper::insert_visitor_helper(::arrow::ArrayBuilder* b)
 
 ::arrow::Status insert_visitor_helper::operator()(const port_type&,
                                                   const port& d) {
-  auto sbuilder = static_cast<::arrow::StructBuilder*>(builder);
-  auto tbuilder =
-    static_cast<::arrow::UInt8Builder*>(sbuilder->field_builder(0));
-  auto status = tbuilder->Append(d.type());
-  if (!status.ok())
-    return status;
-  auto mbuilder =
-    static_cast<::arrow::UInt16Builder*>(sbuilder->field_builder(1));
-  status = mbuilder->Append(d.number());
-  if (!status.ok())
-    return status;
-  return tbuilder->Append(true);
+  auto b = static_cast<::arrow::StructBuilder*>(builder);
+  return append_port(d, b);
 }
 
 ::arrow::Status insert_visitor_helper::operator()(const subnet_type&,
                                                   const subnet& d) {
-  auto sbuilder = static_cast<::arrow::StructBuilder*>(builder);
-  auto abuilder =
-    static_cast<::arrow::FixedSizeBinaryBuilder*>(sbuilder->field_builder(0));
-  auto status = abuilder->Append(d.network().bytes_);
-  if (!status.ok())
-    return status;
-  auto mbuilder =
-    static_cast<::arrow::UInt8Builder*>(sbuilder->field_builder(1));
-  status = mbuilder->Append(d.length());
-  if (!status.ok())
-    return status;
-  return sbuilder->Append(true);
+  auto b = static_cast<::arrow::StructBuilder*>(builder);
+  return append_subnet(d, b);
 }
 
 ::arrow::Status insert_visitor_helper::operator()(const timespan_type&,

@@ -1,6 +1,4 @@
-#ifndef VAST_FORMAT_ARROW_HPP
-
-#define VAST_FORMAT_ARROW_HPP
+#pragma once
 
 #include <string>
 
@@ -132,11 +130,12 @@ struct insert_visitor_helper {
   result_type operator()(const T& t, const D& d) {
     return append_to_list(t, d);
   }
-  
+
   template <class T, class D>
   result_type append_to_list(const T& t, const D& d) {
-    if constexpr ((std::is_same_v<T, set_type> || std::is_same_v<T, vector_type>) 
-        && (std::is_same_v<D, std::vector<data>> || std::is_same_v<D, set>)) {
+    if constexpr (
+      (std::is_same_v<T, set_type> || std::is_same_v<T, vector_type>)&&(
+        std::is_same_v<D, std::vector<data>> || std::is_same_v<D, set>)) {
       auto l_builder = static_cast<::arrow::ListBuilder*>(builder);
       auto status = l_builder->Reserve(d.size());
       if (!status.ok())
@@ -232,5 +231,3 @@ struct insert_visitor {
 } // namespace arrow
 } // namespace format
 } // namespace vast
-
-#endif
