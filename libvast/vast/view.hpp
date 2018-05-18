@@ -226,9 +226,9 @@ template <class T>
 class container_view_iterator
   : public detail::iterator_facade<
       container_view_iterator<T>,
-      data_view,
+      T,
       std::random_access_iterator_tag,
-      data_view
+      T
     > {
   friend iterator_access;
 

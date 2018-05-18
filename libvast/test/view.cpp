@@ -71,6 +71,10 @@ TEST(map view) {
   }
   MESSAGE("check iterator behavior");
   CHECK_EQUAL(std::next(v->begin(), 2), v->end());
+  MESSAGE("check iterator value type");
+  auto [key, value] = *v->begin();
+  CHECK_EQUAL(key, make_data_view(42));
+  CHECK_EQUAL(value, make_data_view(true));
 }
 
 TEST(make_data_view) {
