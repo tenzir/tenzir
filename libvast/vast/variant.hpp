@@ -538,7 +538,7 @@ decltype(auto) visit(Visitor&& v, Vs&&... vs) {
 
 template <class T, class V>
 auto get_if(V&& v) {
-  return visit(getter<T>{}, v);
+  return vast::visit(getter<T>{}, v);
 }
 
 class bad_variant_access : public std::exception {
