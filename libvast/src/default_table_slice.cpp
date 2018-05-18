@@ -46,7 +46,7 @@ default_table_slice::builder::builder(record_type layout)
   VAST_ASSERT(!row_.empty());
 }
 
-bool default_table_slice::builder::add(const data& x) {
+bool default_table_slice::builder::add(data&& x) {
   if (!slice_) {
     slice_ = caf::make_counted<default_table_slice>(layout_);
     row_ = vector(layout_.fields.size());
@@ -54,14 +54,18 @@ bool default_table_slice::builder::add(const data& x) {
   }
   // TODO: consider an unchecked version for improved performance.
   if (!type_check(layout_.fields[col_].type, x))
-      return false;
-  row_[col_++] = x;
+    return false;
+  row_[col_++] = std::move(x);
   if (col_ == layout_.fields.size()) {
     slice_->xs_.push_back(std::move(row_));
     row_ = vector(layout_.fields.size());
     col_ = 0;
   }
   return true;
+}
+
+bool default_table_slice::builder::add(const data& x) {
+  return add(data{x});
 }
 
 table_slice_ptr default_table_slice::builder::finish() {

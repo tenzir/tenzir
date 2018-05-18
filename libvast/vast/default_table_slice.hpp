@@ -45,6 +45,8 @@ public:
 
   builder(record_type layout);
 
+  bool add(data&& x);
+
   bool add(const data& x) final;
 
   table_slice_ptr finish() final;
