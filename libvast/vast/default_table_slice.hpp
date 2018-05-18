@@ -45,9 +45,14 @@ public:
 
   builder(record_type layout);
 
-  bool add(data&& x);
+  /// Directly appends data to the slice. Since default_table_slice stores @ref
+  /// data directly, this function offers a more efficient path to add data
+  /// than @ref add.
+  /// @param x The data to add.
+  /// @returns `true` on success.
+  bool append(data x);
 
-  bool add(const data& x) final;
+  bool add(data_view x) final;
 
   table_slice_ptr finish() final;
 

@@ -87,13 +87,16 @@ public:
 
     /// Factory function to construct a builder.
     /// @param layout The layout of the builder.
+    /// @returns A reference-counted pointer to a builder.
     template <class T, class... Ts>
     static builder_ptr make(record_type layout, Ts&&... xs) {
       return T::builder::make(std::move(layout), std::forward<Ts>(xs)...);
     }
 
     /// Adds data to the builder.
-    virtual bool add(const data& x) = 0;
+    /// @param x The data to add.
+    /// @returns `true` on success.
+    virtual bool add(data_view x) = 0;
 
     /// Constructs a table_slice from the currently accumulated state.
     /// @returns A table slice or `nullptr` on failure.

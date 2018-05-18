@@ -46,7 +46,7 @@ default_table_slice::builder::builder(record_type layout)
   VAST_ASSERT(!row_.empty());
 }
 
-bool default_table_slice::builder::add(data&& x) {
+bool default_table_slice::builder::append(data x) {
   if (!slice_) {
     slice_ = caf::make_counted<default_table_slice>(layout_);
     row_ = vector(layout_.fields.size());
@@ -64,8 +64,8 @@ bool default_table_slice::builder::add(data&& x) {
   return true;
 }
 
-bool default_table_slice::builder::add(const data& x) {
-  return add(data{x});
+bool default_table_slice::builder::add(data_view x) {
+  return append(make_data(x));
 }
 
 table_slice_ptr default_table_slice::builder::finish() {
