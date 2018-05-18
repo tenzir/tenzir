@@ -37,26 +37,21 @@ expected<std::shared_ptr<arrow::RecordBatch>> transpose(const event& e) {
     schema_vector.push_back(convert_to_arrow_field(e.type()));
   }
   auto schema = std::make_shared<arrow::Schema>(schema_vector);
-  std::unique_ptr<arrow::RecordBatchBuilder> builder;
+  std::unique_ptr<arrow::RecordBatchBuilder> r_builder;
   auto status = arrow::RecordBatchBuilder::Make(
-    schema, arrow::default_memory_pool(), &builder);
+    schema, arrow::default_memory_pool(), &r_builder);
   std::shared_ptr<arrow::RecordBatch> batch;
   std::shared_ptr<::arrow::RecordBatchBuilder> sr_builder(
-    std::move(builder.release()));
-  format::arrow::insert_visitor iv(sr_builder, 0);
+    std::move(r_builder.release()));
+  format::arrow::insert_visitor iv(sr_builder);
   if (status.ok()) {
     status = visit(iv, e.type(), e.data());
-    if (status.ok()) 
+    if (status.ok())
       status = sr_builder->Flush(&batch);
   }
-  if (!status.ok()) {
-    std::cout << "ERRRRROR: " << to_string(e.data()) << " " << status.message()
-              << std::endl
-              << schema->ToString() << std::endl;
-
+  if (!status.ok())
     return make_error(ec::format_error, "failed to flush batch",
                       status.ToString());
-  }
   return batch;
 }
 
@@ -198,8 +193,7 @@ insert_visitor::insert_visitor(std::shared_ptr<::arrow::RecordBatchBuilder>& b,
   return builder->AppendNull();
 }
 
-::arrow::Status insert_visitor::operator()(const integer_type&,
-                                           integer d) {
+::arrow::Status insert_visitor::operator()(const integer_type&, integer d) {
   auto builder = rbuilder->GetFieldAs<::arrow::UInt64Builder>(c_builder);
   return builder->Append(d);
 }
@@ -219,8 +213,7 @@ insert_visitor::insert_visitor(std::shared_ptr<::arrow::RecordBatchBuilder>& b,
   return builder->AppendNull();
 }
 
-::arrow::Status insert_visitor::operator()(const string_type&,
-                                           std::string d) {
+::arrow::Status insert_visitor::operator()(const string_type&, std::string d) {
   auto builder = rbuilder->GetFieldAs<::arrow::StringBuilder>(c_builder);
   return builder->Append(d);
 }
@@ -305,46 +298,10 @@ insert_visitor::insert_visitor(std::shared_ptr<::arrow::RecordBatchBuilder>& b,
   auto sbuilder = rbuilder->GetFieldAs<::arrow::StructBuilder>(c_builder);
   return sbuilder->AppendNull();
 }
-::arrow::Status insert_visitor::operator()(const vector_type& t,
-                                           const std::vector<data>& d) {
-  auto l_builder = rbuilder->GetFieldAs<::arrow::ListBuilder>(c_builder);
-  auto status = l_builder->Reserve(d.size());
-  if (!status.ok())
-    return status;
-  status = l_builder->Append();
-  if (!status.ok())
-    return status;
-  for (auto v : d) {
-    insert_visitor_helper a(l_builder->value_builder());
-    status = visit(a, t.value_type, v);
-    if (!status.ok())
-      return status;
-
-  }
-  return ::arrow::Status::OK();
-}
 
 ::arrow::Status insert_visitor::operator()(const vector_type&, none) {
   auto sbuilder = rbuilder->GetFieldAs<::arrow::ListBuilder>(c_builder);
   return sbuilder->AppendNull();
-}
-
-::arrow::Status insert_visitor::operator()(const set_type& t, const set& d) {
-  auto l_builder = rbuilder->GetFieldAs<::arrow::ListBuilder>(c_builder);
-  auto status = l_builder->Reserve(d.size());
-  if (!status.ok())
-    return status;
-  status = l_builder->Append();
-  if (!status.ok())
-    return status;
-  for (auto v : d) {
-    insert_visitor_helper a(l_builder->value_builder());
-    status = visit(a, t.value_type, v);
-    if (!status.ok())
-      return status;
-
-  }
-  return ::arrow::Status::OK();
 }
 
 ::arrow::Status insert_visitor::operator()(const set_type&, none) {
@@ -383,20 +340,17 @@ insert_visitor_helper::insert_visitor_helper(::arrow::ArrayBuilder* b)
   return c_builder->Append(d);
 }
 
-::arrow::Status insert_visitor_helper::operator()(const count_type&,
-                                                  count d) {
+::arrow::Status insert_visitor_helper::operator()(const count_type&, count d) {
   auto c_builder = static_cast<::arrow::UInt64Builder*>(builder);
   return c_builder->Append(d);
 }
 
-::arrow::Status insert_visitor_helper::operator()(const integer_type&,
-                                                  int d) {
+::arrow::Status insert_visitor_helper::operator()(const integer_type&, int d) {
   auto c_builder = static_cast<::arrow::Int64Builder*>(builder);
   return c_builder->Append(d);
 }
 
-::arrow::Status insert_visitor_helper::operator()(const real_type&,
-                                                  real d) {
+::arrow::Status insert_visitor_helper::operator()(const real_type&, real d) {
   auto c_builder = static_cast<::arrow::FloatBuilder*>(builder);
   return c_builder->Append(d);
 }
@@ -460,43 +414,6 @@ insert_visitor_helper::insert_visitor_helper(::arrow::ArrayBuilder* b)
                                                   const timestamp& d) {
   auto c_builder = static_cast<::arrow::TimestampBuilder*>(builder);
   return c_builder->Append(d.time_since_epoch().count());
-}
-
-::arrow::Status insert_visitor_helper::operator()(const vector_type& t, const std::vector<data>& d) {
-  auto l_builder = static_cast<::arrow::ListBuilder*>(builder);
-  auto status = l_builder->Reserve(d.size());
-  if (!status.ok())
-    return status;
-  status = l_builder->Append();
-  if (!status.ok())
-    return status;
-  for (auto v : d) {
-    insert_visitor_helper a(l_builder->value_builder());
-    auto status = visit(a, t.value_type, v);
-    if (!status.ok()) {
-      return status;
-    }
-  }
-  return ::arrow::Status::OK();
-}
-
-::arrow::Status insert_visitor_helper::operator()(const set_type& t, const set& d) {
-  auto l_builder = static_cast<::arrow::ListBuilder*>(builder);
-  insert_visitor_helper a(l_builder->value_builder());
-  auto status = l_builder->Reserve(d.size());
-  if (!status.ok())
-    return status;
-  status = l_builder->Append();
-  if (!status.ok())
-    return status;
-  for (auto v : d) {
-    insert_visitor_helper a(l_builder->value_builder());
-    auto status = visit(a, t.value_type, v);
-    if (!status.ok()) {
-      return status;
-    }
-  }
-  return ::arrow::Status::OK();
 }
 
 ::arrow::Status insert_visitor_helper::operator()(const none_type&, none) {

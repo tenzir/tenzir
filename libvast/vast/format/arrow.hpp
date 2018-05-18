@@ -97,81 +97,6 @@ struct convert_visitor {
   }
 };
 
-struct insert_visitor {
-  std::shared_ptr<::arrow::RecordBatchBuilder> rbuilder;
-
-  u_int64_t counter = 0;
-
-  u_int64_t offset = 0;
-
-  u_int64_t c_builder = 0;
-
-  insert_visitor(std::shared_ptr<::arrow::RecordBatchBuilder>& b);
-
-  insert_visitor(std::shared_ptr<::arrow::RecordBatchBuilder>& b, u_int64_t c);
-
-  insert_visitor(std::shared_ptr<::arrow::RecordBatchBuilder>& b, u_int64_t c,
-                 u_int64_t c_builder);
-
-  ::arrow::Status operator()(const record_type& t, const std::vector<data>& d);
-
-  ::arrow::Status operator()(const count_type& t, count d);
-
-  ::arrow::Status operator()(const integer_type& t, integer d);
-
-  ::arrow::Status operator()(const real_type& t, real d);
-
-  ::arrow::Status operator()(const type& t, const data& d);
-
-  ::arrow::Status operator()(const string_type& t, std::string d);
-
-  ::arrow::Status operator()(const boolean_type& t, bool d);
-
-  ::arrow::Status operator()(const timestamp_type& t, const timestamp& d);
-
-  ::arrow::Status operator()(const timespan_type& t, const timespan& d);
-
-  ::arrow::Status operator()(const subnet_type& t, const subnet& d);
-
-  ::arrow::Status operator()(const address_type& t, const address& d);
-
-  ::arrow::Status operator()(const port_type& t, const port& d);
-
-  ::arrow::Status operator()(const vector_type& t, const std::vector<data>& d);
-
-  ::arrow::Status operator()(const set_type& t, const set& d);
-
-  // none data -> AppendNull
-  ::arrow::Status operator()(const none_type&, none);
-
-  ::arrow::Status operator()(const count_type& t, none);
-
-  ::arrow::Status operator()(const integer_type& t, none d);
-
-  ::arrow::Status operator()(const real_type& t, none);
-
-  ::arrow::Status operator()(const string_type& t, none);
-
-  ::arrow::Status operator()(const boolean_type& t, none);
-
-  ::arrow::Status operator()(const timespan_type& t, none);
-
-  ::arrow::Status operator()(const address_type& t, none);
-
-  ::arrow::Status operator()(const port_type& t, none);
-
-  ::arrow::Status operator()(const vector_type& t, none);
-
-  ::arrow::Status operator()(const set_type& t, none);
-
-  template <class T1, class T2>
-  ::arrow::Status operator()(const T1, const T2) {
-    // TODO: remove debugging output.
-    std::cout << typeid(T1).name() << " nop " << typeid(T2).name() << std::endl;
-    return ::arrow::Status::OK();
-  };
-};
-
 struct insert_visitor_helper {
   using result_type = ::arrow::Status;
 
@@ -200,20 +125,108 @@ struct insert_visitor_helper {
   result_type operator()(const timespan_type&, const timespan& d);
 
   result_type operator()(const timestamp_type&, const timestamp& d);
-  
-  result_type operator()(const vector_type&, const std::vector<data>& d);
-  
-  result_type operator()(const set_type&, const set& d);
 
   result_type operator()(const none_type&, none);
 
-  template <class T1, class T2>
-  result_type operator()(const T1& t1, const T2& t2) {
-    // TODO: remove debugging output.
-    std::cout << "Type: " << typeid(t1).name()
-      << ", Data: " << typeid(t2).name() << std::endl;
-    return result_type::OK();
+  template <class T, class D>
+  result_type operator()(const T& t, const D& d) {
+    return append_to_list(t, d);
   }
+  
+  template <class T, class D>
+  result_type append_to_list(const T& t, const D& d) {
+    if constexpr ((std::is_same_v<T, set_type> || std::is_same_v<T, vector_type>) 
+        && (std::is_same_v<D, std::vector<data>> || std::is_same_v<D, set>)) {
+      auto l_builder = static_cast<::arrow::ListBuilder*>(builder);
+      auto status = l_builder->Reserve(d.size());
+      if (!status.ok())
+        return status;
+      status = l_builder->Append();
+      if (!status.ok())
+        return status;
+      for (auto v : d) {
+        format::arrow::insert_visitor_helper a(l_builder->value_builder());
+        status = visit(a, t.value_type, v);
+        if (!status.ok())
+          return status;
+      }
+      return result_type::OK();
+    } else
+      return result_type::TypeError("Invalid Type");
+  }
+};
+
+struct insert_visitor {
+  using result_type = ::arrow::Status;
+
+  std::shared_ptr<::arrow::RecordBatchBuilder> rbuilder;
+
+  u_int64_t counter = 0;
+
+  u_int64_t offset = 0;
+
+  u_int64_t c_builder = 0;
+
+  insert_visitor(std::shared_ptr<::arrow::RecordBatchBuilder>& b);
+
+  insert_visitor(std::shared_ptr<::arrow::RecordBatchBuilder>& b, u_int64_t c);
+
+  insert_visitor(std::shared_ptr<::arrow::RecordBatchBuilder>& b, u_int64_t c,
+                 u_int64_t c_builder);
+
+  result_type operator()(const record_type& t, const std::vector<data>& d);
+
+  result_type operator()(const count_type& t, count d);
+
+  result_type operator()(const integer_type& t, integer d);
+
+  result_type operator()(const real_type& t, real d);
+
+  result_type operator()(const type& t, const data& d);
+
+  result_type operator()(const string_type& t, std::string d);
+
+  result_type operator()(const boolean_type& t, bool d);
+
+  result_type operator()(const timestamp_type& t, const timestamp& d);
+
+  result_type operator()(const timespan_type& t, const timespan& d);
+
+  result_type operator()(const subnet_type& t, const subnet& d);
+
+  result_type operator()(const address_type& t, const address& d);
+
+  result_type operator()(const port_type& t, const port& d);
+
+  // none data -> AppendNull
+  result_type operator()(const none_type&, none);
+
+  result_type operator()(const count_type& t, none);
+
+  result_type operator()(const integer_type& t, none d);
+
+  result_type operator()(const real_type& t, none);
+
+  result_type operator()(const string_type& t, none);
+
+  result_type operator()(const boolean_type& t, none);
+
+  result_type operator()(const timespan_type& t, none);
+
+  result_type operator()(const address_type& t, none);
+
+  result_type operator()(const port_type& t, none);
+
+  result_type operator()(const vector_type& t, none);
+
+  result_type operator()(const set_type& t, none);
+
+  template <class T, class D>
+  result_type operator()(const T& t, const D& d) {
+    auto l_builder = rbuilder->GetField(c_builder);
+    auto a = insert_visitor_helper(l_builder);
+    return a.append_to_list(t, d);
+  };
 };
 
 } // namespace arrow
