@@ -42,8 +42,8 @@ public:
     size_t num = 0;
     for (auto& [t, a] : indexers_) {
       VAST_ASSERT(a != nullptr);
-      auto resolved = visit(type_resolver{t}, expr);
-      if (resolved && visit(matcher{t}, *resolved)) {
+      auto resolved = caf::visit(type_resolver{t}, expr);
+      if (resolved && caf::visit(matcher{t}, *resolved)) {
         VAST_DEBUG("found matching type for expression:", t);
         f(a);
         ++num;

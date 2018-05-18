@@ -158,7 +158,7 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
         VAST_DEBUG(self, "tailored AST to", candidate.type() << ':', checker);
       }
       // Perform candidate check and keep event as result on success.
-      if (visit(event_evaluator{candidate}, checker))
+      if (caf::visit(event_evaluator{candidate}, checker))
         self->state.results.push_back(std::move(candidate));
       else
         VAST_DEBUG(self, "ignores false positive:", candidate);

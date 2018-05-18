@@ -47,7 +47,8 @@ void partition_index::add_one(interval& rng, const event& x) {
 std::vector<uuid> partition_index::lookup(const expression& expr) const {
   std::vector<uuid> result;
   for (auto& x : partitions_)
-    if (visit(time_restrictor{x.second.range.from, x.second.range.to}, expr))
+    if (caf::visit(time_restrictor{x.second.range.from, x.second.range.to},
+                   expr))
       result.push_back(x.first);
   return result;
 }

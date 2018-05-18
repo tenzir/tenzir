@@ -18,15 +18,20 @@
 #include <type_traits>
 #include <vector>
 
+#include <caf/variant.hpp>
+#include <caf/default_sum_type_access.hpp>
+#include <caf/detail/type_list.hpp>
+
 #include "vast/data.hpp"
 #include "vast/key.hpp"
 #include "vast/offset.hpp"
 #include "vast/operator.hpp"
 #include "vast/type.hpp"
-#include "vast/variant.hpp"
 
 #include "vast/concept/hashable/uhash.hpp"
 #include "vast/concept/hashable/xxhash.hpp"
+
+#include "vast/detail/operators.hpp"
 
 namespace vast {
 
@@ -64,7 +69,7 @@ struct key_extractor : detail::totally_ordered<key_extractor> {
   }
 };
 
-/// Extracts one or more values according to a given key.
+/// Extracts one or more values according to a given type.
 struct type_extractor : detail::totally_ordered<type_extractor> {
   type_extractor(vast::type t = {});
 
@@ -81,7 +86,7 @@ struct type_extractor : detail::totally_ordered<type_extractor> {
 
 /// Extracts a specific data value from a type according to an offset. During
 /// AST resolution, the ::key_extractor generates multiple instantiations of
-/// this extractor according to a given ::schema.
+/// this extractor for a given ::schema.
 struct data_extractor : detail::totally_ordered<data_extractor> {
   data_extractor() = default;
 
@@ -103,7 +108,8 @@ struct data_extractor : detail::totally_ordered<data_extractor> {
 struct predicate : detail::totally_ordered<predicate> {
   predicate() = default;
 
-  using operand = variant<
+  /// The operand of a predicate, which can be either LHS or RHS.
+  using operand = caf::variant<
       attribute_extractor,
       key_extractor,
       type_extractor,
@@ -165,16 +171,16 @@ private:
 
 /// A query expression.
 class expression : detail::totally_ordered<expression> {
-  friend access;
-
 public:
-  using node = variant<
+  using types = caf::detail::type_list<
     none,
     conjunction,
     disjunction,
     negation,
     predicate
   >;
+
+  using node = caf::detail::tl_apply_t<types, caf::variant>;
 
   /// Default-constructs empty an expression.
   expression(none = nil) {
@@ -184,10 +190,18 @@ public:
   /// @param x The node to construct an expression from.
   template <
     class T,
-    class = std::enable_if_t<detail::contains<std::decay_t<T>, node::types>{}>
+    class = std::enable_if_t<
+      caf::detail::tl_contains<types, std::decay_t<T>>::value
+    >
   >
-  expression(T&& x) : node_{std::forward<T>(x)} {
+  expression(T&& x) : node_(std::forward<T>(x)) {
+    // nop
   }
+
+  // -- concepts ---------------------------------------------------------------
+
+  const node& get_data() const;
+  node& get_data();
 
   friend bool operator==(const expression& lhs, const expression& rhs);
   friend bool operator<(const expression& lhs, const expression& rhs);
@@ -196,8 +210,6 @@ public:
   friend auto inspect(Inspector&f, expression& e) {
     return f(e.node_);
   }
-
-  friend node& expose(expression& d);
 
 private:
   node node_;
@@ -226,6 +238,16 @@ expected<expression> normalize_and_validate(const expression& expr);
 expected<expression> tailor(const expression& expr, const type& t);
 
 } // namespace vast
+
+namespace caf {
+
+template <>
+struct sum_type_access<vast::expression>
+    : default_sum_type_access<vast::expression> {
+  // nop
+};
+
+} // namespace caf
 
 namespace std {
 

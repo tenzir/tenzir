@@ -113,14 +113,14 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader&& reader) {
       while (produced < num) {
         auto e = st.reader.read();
         if (e) {
-          if (!is<none>(st.filter)) {
-            auto& checker = st.checkers[e->type()];
-            if (is<none>(checker)) {
-              auto x = tailor(st.filter, e->type());
+          if (!caf::holds_alternative<none>(self->state.filter)) {
+            auto& checker = self->state.checkers[e->type()];
+            if (caf::holds_alternative<none>(checker)) {
+              auto x = tailor(self->state.filter, e->type());
               VAST_ASSERT(x);
               checker = std::move(*x);
             }
-            if (!visit(event_evaluator{*e}, checker))
+            if (!caf::visit(event_evaluator{*e}, checker))
               continue;
           }
           ++produced;

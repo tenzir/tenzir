@@ -153,7 +153,7 @@ caf::expected<bitmap> table_index::lookup(const expression& expr) {
   VAST_TRACE(VAST_ARG(expr));
   // Specialize the expression for the type.
   type_resolver resolver{event_type_};
-  auto resolved = visit(resolver, expr);
+  auto resolved = caf::visit(resolver, expr);
   if (!resolved)
     return std::move(resolved.error());
   return lookup_impl(*resolved);
@@ -161,7 +161,7 @@ caf::expected<bitmap> table_index::lookup(const expression& expr) {
 
 caf::expected<bitmap> table_index::lookup_impl(const expression& expr) {
   VAST_TRACE(VAST_ARG(expr));
-  return visit(
+  return caf::visit(
     detail::overload(
       [&](const auto& seq) -> expected<bitmap> {
         static constexpr bool is_disjunction
