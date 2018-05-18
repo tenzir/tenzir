@@ -110,6 +110,42 @@ expression& negation::expr() {
   return *expr_;
 }
 
+expression normalize(const expression& expr) {
+  expression r;
+  r = caf::visit(hoister{}, expr);
+  r = caf::visit(aligner{}, r);
+  r = caf::visit(denegator{}, r);
+  r = caf::visit(deduplicator{}, r);
+  r = caf::visit(hoister{}, r);
+  return r;
+}
+
+expected<expression> normalize_and_validate(const expression& expr) {
+  auto normalized = normalize(expr);
+  auto result = caf::visit(validator{}, normalized);
+  if (!result)
+    return result.error();
+  return normalized;
+}
+
+expected<expression> tailor(const expression& expr, const type& t) {
+  if (caf::holds_alternative<none>(expr))
+    return make_error(ec::unspecified, "invalid expression");
+  auto x = caf::visit(type_resolver{t}, expr);
+  if (!x)
+    return x.error();
+  *x = caf::visit(type_pruner{t}, *x);
+  VAST_ASSERT(!caf::holds_alternative<none>(*x));
+  return std::move(*x);
+}
+
+const expression::node& expression::data() const {
+  return node_;
+}
+
+expression::node& expression::data() {
+  return node_;
+}
 
 bool operator==(const negation& lhs, const negation& rhs) {
   return *lhs.expr_ == *rhs.expr_;
@@ -126,38 +162,4 @@ bool operator==(const expression& lhs, const expression& rhs) {
 bool operator<(const expression& lhs, const expression& rhs) {
   return lhs.node_ < rhs.node_;
 }
-
-expression::node& expose(expression& e) {
-  return e.node_;
-}
-
-expression normalize(const expression& expr) {
-  expression r;
-  r = visit(hoister{}, expr);
-  r = visit(aligner{}, r);
-  r = visit(denegator{}, r);
-  r = visit(deduplicator{}, r);
-  r = visit(hoister{}, r);
-  return r;
-}
-
-expected<expression> normalize_and_validate(const expression& expr) {
-  auto normalized = normalize(expr);
-  auto result = visit(validator{}, normalized);
-  if (!result)
-    return result.error();
-  return normalized;
-}
-
-expected<expression> tailor(const expression& expr, const type& t) {
-  if (is<none>(expr))
-    return make_error(ec::unspecified, "invalid expression");
-  auto x = visit(type_resolver{t}, expr);
-  if (!x)
-    return x.error();
-  *x = visit(type_pruner{t}, *x);
-  VAST_ASSERT(!is<none>(*x));
-  return std::move(*x);
-}
-
 } // namespace vast

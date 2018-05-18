@@ -91,11 +91,11 @@ struct ids_evaluator {
   }
 
   ids operator()(const conjunction& c) const {
-    auto result = visit(*this, c[0]);
+    auto result = caf::visit(*this, c[0]);
     if (result.empty() || all<0>(result))
       return {};
     for (size_t i = 1; i < c.size(); ++i) {
-      result &= visit(*this, c[i]);
+      result &= caf::visit(*this, c[i]);
       if (result.empty() || all<0>(result)) // short-circuit
         return {};
     }
@@ -105,7 +105,7 @@ struct ids_evaluator {
   ids operator()(const disjunction& d) const {
     ids result;
     for (auto& op : d) {
-      result |= visit(*this, op);
+      result |= caf::visit(*this, op);
       if (all<1>(result)) // short-circuit
         break;
     }
@@ -113,7 +113,7 @@ struct ids_evaluator {
   }
 
   ids operator()(const negation& n) const {
-    auto result = visit(*this, n.expr());
+    auto result = caf::visit(*this, n.expr());
     result.flip();
     return result;
   }
@@ -139,7 +139,7 @@ behavior evaluator(stateful_actor<evaluator_state>* self,
   return {
     [=](predicate& pred, ids& hits) {
       self->state.predicates.emplace(std::move(pred), std::move(hits));
-      auto expr_hits = visit(ids_evaluator{self->state.predicates}, expr);
+      auto expr_hits = caf::visit(ids_evaluator{self->state.predicates}, expr);
       auto delta = expr_hits - self->state.hits;
       VAST_DEBUG(self, "evaluated",
                  self->state.predicates.size() << '/' << num_predicates,
@@ -211,8 +211,8 @@ behavior partition(stateful_actor<partition_state>* self, path dir) {
       // If so, locate/load the corresponding indexer.
       std::vector<actor> indexers;
       for (auto& [t, a] : self->state.indexers) {
-        auto resolved = visit(type_resolver{t}, expr);
-        if (resolved && visit(matcher{t}, *resolved)) {
+        auto resolved = caf::visit(type_resolver{t}, expr);
+        if (resolved && caf::visit(matcher{t}, *resolved)) {
           VAST_DEBUG(self, "found matching type for expression:", t);
           if (!a) {
             VAST_DEBUG(self, "loads event-indexer for type", t);
@@ -253,7 +253,7 @@ behavior partition(stateful_actor<partition_state>* self, path dir) {
       // Spawn a dedicated actor responsible for expression evaluation. This
       // actor re-evaluates the expression whenever it receives new hits from
       // a collector.
-      auto predicates = visit(predicatizer{}, expr);
+      auto predicates = caf::visit(predicatizer{}, expr);
       auto eval = self->spawn(evaluator, expr, predicates.size(), accumulator);
       for (auto& pred : predicates) {
         // FIXME: locate the smallest subset of indexers (checking whether the
