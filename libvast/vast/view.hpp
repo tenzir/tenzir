@@ -377,7 +377,7 @@ view_t<T> make_view(const T& x) {
   }
 }
 
-/// @relates view
+/// @relates view data
 data_view make_view(const data& x);
 
 /// Creates a type-erased data view from a specific type.
@@ -386,5 +386,9 @@ template <class T>
 data_view make_data_view(const T& x) {
   return make_view(x);
 }
+
+/// Creates a data instance from a data_view.
+/// @relates view data
+data make_data(data_view x);
 
 } // namespace vast
