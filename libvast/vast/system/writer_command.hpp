@@ -37,37 +37,36 @@ template <class Writer>
 class writer_command : public writer_command_base {
 public:
   writer_command(command* parent, std::string_view name)
-      : writer_command_base{parent, name},
-        output_{"-"},
-        uds_{false} {
-    this->add_opt("write,w", "path to write events to", output_);
-    this->add_opt("uds,d", "treat -w as UNIX domain socket to connect to",
-                  uds_);
+      : writer_command_base{parent, name} {
+    add_opt("write,w", "path to write events to", "-");
+    add_opt("uds,d", "treat -w as UNIX domain socket to connect to", false);
   }
 
 protected:
-  expected<caf::actor> make_sink(caf::scoped_actor& self, option_map& options,
+  expected<caf::actor> make_sink(caf::scoped_actor& self,
+                                 const option_map& options,
                                  argument_iterator begin,
                                  argument_iterator end) override {
     VAST_UNUSED(begin, end);
     VAST_TRACE(VAST_ARG(options), VAST_ARG("args", begin, end));
     using ostream_ptr = std::unique_ptr<std::ostream>;
-    auto limit = this->get_or<uint64_t>(options, "events", 0u);
+    auto limit = get<uint64_t>(options, "events");
+    VAST_ASSERT(limit);
     if constexpr (std::is_constructible_v<Writer, ostream_ptr>) {
-      auto out = detail::make_output_stream(output_, uds_);
+      auto output = get<std::string>(options, "write");
+      VAST_ASSERT(output);
+      auto uds = get<bool>(options, "uds");
+      VAST_ASSERT(uds);
+      auto out = detail::make_output_stream(*output, *uds);
       if (!out)
         return out.error();
       Writer writer{std::move(*out)};
-      return self->spawn(sink<Writer>, std::move(writer), limit);
+      return self->spawn(sink<Writer>, std::move(writer), *limit);
     } else {
       Writer writer;
-      return self->spawn(sink<Writer>, std::move(writer), limit);
+      return self->spawn(sink<Writer>, std::move(writer), *limit);
     }
   }
-
-private:
-  std::string output_;
-  bool uds_;
 };
 
 } // namespace vast::system
