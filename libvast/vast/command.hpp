@@ -124,9 +124,9 @@ private:
                           argument_iterator error_position,
                           argument_iterator begin, argument_iterator end) const;
 
-  std::string unkown_subcommand_error(argument_iterator error_position,
-                                      argument_iterator begin,
-                                      argument_iterator end) const;
+  /// @pre `error_position != end`
+  std::string unknown_subcommand_error(argument_iterator error_position,
+                                       argument_iterator end) const;
 
   std::map<std::string_view, std::unique_ptr<command>> nested_;
   command* parent_;

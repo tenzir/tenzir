@@ -73,7 +73,7 @@ int command::run(caf::actor_system& sys, option_map& options,
   // Dispatch to subcommand.
   auto i = nested_.find(*position);
   if (i == nested_.end()) {
-    std::cerr << unkown_subcommand_error(position, begin, end);
+    std::cerr << unknown_subcommand_error(position, end);
     return EXIT_FAILURE;
   }
   return i->second->run(sys, options, position + 1, end);
@@ -147,14 +147,13 @@ std::string command::parse_error(option_declaration_set::parse_state state,
   return result.str();
 }
 
-std::string command::unkown_subcommand_error(argument_iterator error_position,
-                                             argument_iterator,
-                                             argument_iterator end) const {
+std::string command::unknown_subcommand_error(argument_iterator error_position,
+                                              argument_iterator end) const {
+  VAST_ASSERT(error_position != end);
   std::stringstream result;
-  result << "No such command: " << full_name();
-  if (error_position != end)
-    result << " " << *error_position;
-  result << "\n\n" << usage();
+  result << "No such command: " << full_name() << " " << *error_position
+         << "\n\n"
+         << usage();
   return result.str();
 }
 
