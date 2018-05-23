@@ -115,6 +115,7 @@ TEST(construction) {
   CHECK(is<real>(data{4.2}));
   CHECK(is<std::string>(data{"foo"}));
   CHECK(is<std::string>(data{std::string{"foo"}}));
+  CHECK(is<std::string>(data{std::string_view{"foo"}}));
   CHECK(is<pattern>(data{pattern{"foo"}}));
   CHECK(is<address>(data{address{}}));
   CHECK(is<subnet>(data{subnet{}}));
