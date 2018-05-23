@@ -63,19 +63,23 @@ using make_data_type = std::conditional_t<
             std::is_convertible_v<T, std::string>,
             std::string,
             std::conditional_t<
-                 std::is_same_v<T, none>
-              || std::is_same_v<T, timespan>
-              || std::is_same_v<T, timestamp>
-              || std::is_same_v<T, pattern>
-              || std::is_same_v<T, address>
-              || std::is_same_v<T, subnet>
-              || std::is_same_v<T, port>
-              || std::is_same_v<T, enumeration>
-              || std::is_same_v<T, vector>
-              || std::is_same_v<T, set>
-              || std::is_same_v<T, map>,
-              T,
-              std::false_type
+              std::is_same_v<T, std::string_view>,
+              std::string,
+              std::conditional_t<
+                   std::is_same_v<T, none>
+                || std::is_same_v<T, timespan>
+                || std::is_same_v<T, timestamp>
+                || std::is_same_v<T, pattern>
+                || std::is_same_v<T, address>
+                || std::is_same_v<T, subnet>
+                || std::is_same_v<T, port>
+                || std::is_same_v<T, enumeration>
+                || std::is_same_v<T, vector>
+                || std::is_same_v<T, set>
+                || std::is_same_v<T, map>,
+                T,
+                std::false_type
+              >
             >
           >
         >
