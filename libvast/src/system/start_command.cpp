@@ -36,7 +36,7 @@ using namespace std::chrono_literals;
 
 start_command::start_command(command* parent, std::string_view name)
   : node_command{parent, name} {
-  add_opt("bare", "spawn empty node without any components", false);
+  add_opt("bare,b", "spawn empty node without any components", false);
   add_opt("foreground,f", "run in foreground (do not daemonize)", false);
 }
 
