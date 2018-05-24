@@ -25,6 +25,7 @@ set(libvast_sources
   src/concept/hashable/crc.cpp
   src/concept/hashable/xxhash.cpp
   src/data.cpp
+  src/defaults.cpp
   src/detail/adjust_resource_consumption.cpp
   src/detail/compressedbuf.cpp
   src/detail/fdinbuf.cpp

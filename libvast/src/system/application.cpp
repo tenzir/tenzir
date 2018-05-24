@@ -28,6 +28,7 @@
 #include "vast/concept/printable/vast/data.hpp"
 
 #include "vast/system/application.hpp"
+#include "vast/defaults.hpp"
 
 #include "vast/detail/adjust_resource_consumption.hpp"
 #include "vast/detail/overload.hpp"
@@ -68,14 +69,15 @@ using namespace caf;
 namespace vast::system {
 
 application::root_command::root_command() {
-  auto id = detail::split(detail::hostname(), ".")[0];
-  add_opt("dir,d", "directory for persistent state", "vast");
-  add_opt("endpoint,e", "node endpoint", ":42000");
+  using namespace vast::defaults;
+  add_opt("dir,d", "directory for persistent state", root_command_dir);
+  add_opt("endpoint,e", "node endpoint", root_command_endpoint);
   // TODO: Remove explicit conversion to a string.
   // This requires to add support for std::string_view in data.
-  add_opt("id,i", "the unique ID of this node", std::string{id});
-  add_opt("node,n", "spawn a node instead of connecting to one", false);
-  add_opt("version,v", "print version and exit", false);
+  add_opt("id,i", "the unique ID of this node", std::string{root_command_id});
+  add_opt("node,n", "spawn a node instead of connecting to one",
+          root_command_node);
+  add_opt("version,v", "print version and exit", root_command_version);
 }
 
 command::proceed_result
@@ -86,7 +88,7 @@ application::root_command::proceed(caf::actor_system& sys, const option_map& opt
   VAST_TRACE(VAST_ARG(options), VAST_ARG("args", begin, end));
   CAF_IGNORE_UNUSED(sys);
   CAF_IGNORE_UNUSED(options);
-  if (get_or(options, "version", false)) {
+  if (get_or(options, "version", vast::defaults::root_command_version)) {
     std::cout << VAST_VERSION << std::endl;
     return stop_successful;
   }
