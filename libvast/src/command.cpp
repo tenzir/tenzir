@@ -50,7 +50,7 @@ int command::run(caf::actor_system& sys, option_map& options,
       break;
   }
   // Check for help option.
-  if (get_or<boolean>(options, "help", false)) {
+  if (get_or(options, "help", false)) {
     std::cerr << usage() << std::endl;
     return EXIT_SUCCESS;
   }

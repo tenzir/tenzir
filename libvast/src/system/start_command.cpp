@@ -23,6 +23,7 @@
 #endif // VAST_USE_OPENSSL
 
 #include "vast/logger.hpp"
+#include "vast/defaults.hpp"
 
 #include "vast/system/signal_monitor.hpp"
 #include "vast/system/spawn.hpp"
@@ -36,8 +37,11 @@ using namespace std::chrono_literals;
 
 start_command::start_command(command* parent, std::string_view name)
   : node_command{parent, name} {
-  add_opt("bare", "spawn empty node without any components", false);
-  add_opt("foreground,f", "run in foreground (do not daemonize)", false);
+  using namespace vast::defaults;
+  add_opt("bare", "spawn empty node without any components",
+          start_command_bare);
+  add_opt("foreground,f", "run in foreground (do not daemonize)",
+          start_command_foreground);
 }
 
 int start_command::run_impl(actor_system& sys, const option_map& options,
@@ -52,14 +56,11 @@ int start_command::run_impl(actor_system& sys, const option_map& options,
                         || !sys_cfg.openssl_capath.empty()
                         || !sys_cfg.openssl_cafile.empty();
   // Fetch endpoint from config.
-  auto endpoint_opt = get<std::string>(options, "endpoint");
-  if (!endpoint_opt) {
-    VAST_ERROR("endpoint missing in options map");
-    return EXIT_FAILURE;
-  }
+  auto endpoint_opt
+    = get_or(options, "endpoint", vast::defaults::root_command_endpoint);
   endpoint node_endpoint;
-  if (!parsers::endpoint(*endpoint_opt, node_endpoint)) {
-    VAST_ERROR("invalid endpoint:", *endpoint_opt);
+  if (!parsers::endpoint(endpoint_opt, node_endpoint)) {
+    VAST_ERROR("invalid endpoint:", endpoint_opt);
     return EXIT_FAILURE;
   }
   // Get a convenient and blocking way to interact with actors.
