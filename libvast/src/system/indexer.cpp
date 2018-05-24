@@ -172,13 +172,6 @@ behavior field_data_indexer(stateful_actor<value_indexer_state>* self,
   return value_indexer(self, dir, value_type, extract);
 }
 
-// Tests whether a type has a "skip" attribute.
-bool skip(const type& t) {
-  auto& attrs = t.attributes();
-  auto pred = [](auto& x) { return x.key == "skip"; };
-  return std::find_if(attrs.begin(), attrs.end(), pred) != attrs.end();
-}
-
 // Loads indexes for a predicate.
 struct loader {
   using result_type = std::vector<actor>;
@@ -286,7 +279,7 @@ behavior event_indexer(stateful_actor<event_indexer_state>* self,
     a = self->spawn<monitored>(type_indexer, p);
     self->state.indexers.emplace(p, a);
     // Spawn indexers for event data.
-    if (skip(event_type)) {
+    if (has_skip_attribute(event_type)) {
       VAST_DEBUG(self, "skips event:", event_type);
     } else {
       auto r = get_if<record_type>(event_type);
@@ -298,7 +291,7 @@ behavior event_indexer(stateful_actor<event_indexer_state>* self,
       } else {
         for (auto& f : record_type::each{*r}) {
           auto& value_type = f.trace.back()->type;
-          if (skip(value_type)) {
+          if (has_skip_attribute(value_type)) {
             VAST_DEBUG(self, "skips record field:", f.key());
           } else {
             p = dir / "data";

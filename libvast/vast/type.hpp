@@ -549,6 +549,14 @@ bool type_check(const type& t, const data& d);
 /// @returns a default-constructed instance of type *t*.
 data construct(const type& t);
 
+/// Tests whether a type has a "skip" attribute.
+/// @relates type
+inline bool has_skip_attribute(const type& t) {
+  auto& attrs = t.attributes();
+  auto pred = [](auto& x) { return x.key == "skip"; };
+  return std::any_of(attrs.begin(), attrs.end(), pred);
+}
+
 // -- implementation details -------------------------------------------------
 
 struct type::impl : caf::ref_counted {
