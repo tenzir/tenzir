@@ -30,15 +30,6 @@
 using namespace std::string_literals;
 using namespace vast;
 
-namespace {
-
-// Works around compiler errors when using CHECK_EQUAL(offset{x, y, ...}, ...)
-offset make_offset(std::initializer_list<size_t> xs) {
-  return offset{xs};
-}
-
-} // namespace <anonymous>
-
 TEST(default construction) {
   type t;
   CHECK(get_if<none_type>(t) != nullptr);
@@ -246,16 +237,16 @@ TEST(record flat index computation) {
   using os = caf::optional<size_t>;
   static const os invalid;
   CHECK_EQUAL(flat_size(x), 6u);
-  CHECK_EQUAL(x.flat_index_at(make_offset({0, 0, 0})), os(0u));
-  CHECK_EQUAL(x.flat_index_at(make_offset({0, 0, 1})), os(1u));
-  CHECK_EQUAL(x.flat_index_at(make_offset({0, 1, 0, 0})), os(2u));
-  CHECK_EQUAL(x.flat_index_at(make_offset({0, 1, 1})), os(3u));
-  CHECK_EQUAL(x.flat_index_at(make_offset({0, 2})), os(4u));
-  CHECK_EQUAL(x.flat_index_at(make_offset({1, 0})), os(5u));
-  CHECK_EQUAL(x.flat_index_at(make_offset({0})), invalid);
-  CHECK_EQUAL(x.flat_index_at(make_offset({0, 0})), invalid);
-  CHECK_EQUAL(x.flat_index_at(make_offset({1})), invalid);
-  CHECK_EQUAL(x.flat_index_at(make_offset({2})), invalid);
+  CHECK_EQUAL(x.flat_index_at(offset({0, 0, 0})), os(0u));
+  CHECK_EQUAL(x.flat_index_at(offset({0, 0, 1})), os(1u));
+  CHECK_EQUAL(x.flat_index_at(offset({0, 1, 0, 0})), os(2u));
+  CHECK_EQUAL(x.flat_index_at(offset({0, 1, 1})), os(3u));
+  CHECK_EQUAL(x.flat_index_at(offset({0, 2})), os(4u));
+  CHECK_EQUAL(x.flat_index_at(offset({1, 0})), os(5u));
+  CHECK_EQUAL(x.flat_index_at(offset({0})), invalid);
+  CHECK_EQUAL(x.flat_index_at(offset({0, 0})), invalid);
+  CHECK_EQUAL(x.flat_index_at(offset({1})), invalid);
+  CHECK_EQUAL(x.flat_index_at(offset({2})), invalid);
 }
 
 TEST(record symbol finding) {
