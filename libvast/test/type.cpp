@@ -215,6 +215,40 @@ TEST(record flattening/unflattening) {
   CHECK(u == x);
 }
 
+TEST(record flat index computation) {
+  auto x = record_type{
+    {"x", record_type{
+      {"y", record_type{
+        {"z", integer_type{}}, // 0: x.y.z [0, 0, 0]
+        {"k", boolean_type{}}  // 1: x.y.k [0, 0, 1]
+      }},
+      {"m", record_type{
+        {"y", record_type{
+          {"a", address_type{}}} // 2: x.m.y.a [0, 1, 0, 0]
+        },
+        {"f", real_type{}} // 3: x.m.f [0, 1, 1]
+      }},
+      {"b", boolean_type{}} // 4: x.b [0, 2]
+    }},
+    {"y", record_type{
+      {"b", boolean_type{}} // 5: y.b [1, 0]
+    }}
+  };
+  using os = caf::optional<size_t>;
+  static const os invalid;
+  CHECK_EQUAL(flat_size(x), 6u);
+  CHECK_EQUAL(x.flat_index_at(offset({0, 0, 0})), os(0u));
+  CHECK_EQUAL(x.flat_index_at(offset({0, 0, 1})), os(1u));
+  CHECK_EQUAL(x.flat_index_at(offset({0, 1, 0, 0})), os(2u));
+  CHECK_EQUAL(x.flat_index_at(offset({0, 1, 1})), os(3u));
+  CHECK_EQUAL(x.flat_index_at(offset({0, 2})), os(4u));
+  CHECK_EQUAL(x.flat_index_at(offset({1, 0})), os(5u));
+  CHECK_EQUAL(x.flat_index_at(offset({0})), invalid);
+  CHECK_EQUAL(x.flat_index_at(offset({0, 0})), invalid);
+  CHECK_EQUAL(x.flat_index_at(offset({1})), invalid);
+  CHECK_EQUAL(x.flat_index_at(offset({2})), invalid);
+}
+
 TEST(record symbol finding) {
   auto r = record_type{
     {"x", integer_type{}},

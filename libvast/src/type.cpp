@@ -381,6 +381,38 @@ const type* record_type::at(const offset& o) const {
   return nullptr;
 }
 
+caf::optional<size_t> record_type::flat_index_at(offset o) const {
+  // Empty offsets are invalid.
+  if (o.empty())
+    return caf::none;
+  // Bounds check.
+  if (o[0] >= fields.size())
+    return caf::none;
+  // Example: o = [1] picks the second element. However, we still need the
+  // total amount of nested elements of the first element.
+  size_t flat_index = 0;
+  for (size_t i = 0; i < o[0]; ++i)
+    flat_index += flat_size(fields[i].type);
+  // Now, we know how many fields are on the left. We're done if the offset
+  // points to a non-record field in this record.
+  auto record_field = get_if<record_type>(fields[o[0]].type);
+  if (o.size() == 1) {
+    // Sanity check: the offset is invalid if it points to a record type.
+    if (record_field != nullptr)
+      return caf::none;
+    return flat_index;
+  }
+  // The offset points into the field, therefore it must be a record type.
+  if (record_field == nullptr)
+    return caf::none;
+  // Drop index of the first dimension and dispatch to field recursively.
+  o.erase(o.begin());
+  auto sub_result = record_field->flat_index_at(o);
+  if (!sub_result)
+    return caf::none;
+  return flat_index + *sub_result;
+}
+
 record_type flatten(const record_type& rec) {
   record_type result;
   for (auto& outer : rec.fields)
@@ -397,6 +429,17 @@ record_type flatten(const record_type& rec) {
 type flatten(const type& t) {
   auto r = get_if<record_type>(t);
   return r ? flatten(*r) : t;
+}
+
+size_t flat_size(const record_type& rec) {
+  auto op = [](size_t x, const auto& y) { return x + flat_size(y.type); };
+  return std::accumulate(rec.fields.begin(), rec.fields.end(), size_t{0}, op);
+}
+
+size_t flat_size(const type& t) {
+  if (auto r = get_if<record_type>(t))
+    return flat_size(*r);
+  return 1;
 }
 
 record_type unflatten(const record_type& rec) {
