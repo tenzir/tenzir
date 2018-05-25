@@ -22,6 +22,7 @@
 #endif // VAST_USE_OPENSSL
 
 #include "vast/logger.hpp"
+#include "vast/defaults.hpp"
 
 #include "vast/system/signal_monitor.hpp"
 #include "vast/system/spawn.hpp"
@@ -33,10 +34,13 @@ using namespace std::chrono_literals;
 
 export_command::export_command(command* parent, std::string_view name)
   : node_command{parent, name} {
-  add_opt("continuous,c", "marks a query as continuous", false);
-  add_opt("historical,h", "marks a query as historical", false);
-  add_opt("unified,u", "marks a query as unified", false);
-  add_opt("events,e", "maximum number of results", 0u);
+  using namespace vast::defaults;
+  add_opt("continuous,c", "marks a query as continuous",
+          export_command_continuous);
+  add_opt("historical,h", "marks a query as historical",
+          export_command_historical);
+  add_opt("unified,u", "marks a query as unified", export_command_unified);
+  add_opt("events,e", "maximum number of results", export_command_events);
 }
 
 int export_command::run_impl(actor_system&, const option_map&, argument_iterator,

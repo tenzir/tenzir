@@ -23,6 +23,7 @@
 
 #include "vast/expression.hpp"
 #include "vast/logger.hpp"
+#include "vast/defaults.hpp"
 
 #include "vast/system/reader_command_base.hpp"
 #include "vast/system/reader_command_base.hpp"
@@ -47,9 +48,12 @@ class reader_command : public reader_command_base {
 public:
   reader_command(command* parent, std::string_view name)
       : reader_command_base(parent, name) {
-    add_opt("read,r", "path to input where to read events from", "-");
-    add_opt("schema,s", "path to alternate schema", "");
-    add_opt("uds,d", "treat -r as listening UNIX domain socket", false);
+    using namespace vast::defaults;
+    add_opt("read,r", "path to input where to read events from",
+            reader_command_read);
+    add_opt("schema,s", "path to alternate schema", reader_command_schema);
+    add_opt("uds,d", "treat -r as listening UNIX domain socket",
+            reader_command_uds);
   }
 
 protected:
@@ -58,20 +62,18 @@ protected:
                                    argument_iterator begin,
                                    argument_iterator end) override {
     VAST_TRACE(VAST_ARG("args", begin, end));
-    auto input = get<std::string>(options, "input");
-    VAST_ASSERT(input);
-    auto uds = get<bool>(options, "uds");
-    VAST_ASSERT(uds);
-    auto in = detail::make_input_stream(*input, *uds);
+    using namespace vast::defaults;
+    auto input = get_or(options, "read", reader_command_read);
+    auto uds = get_or(options, "uds", reader_command_uds);
+    auto in = detail::make_input_stream(input, uds);
     if (!in)
       return in.error();
     Reader reader{std::move(*in)};
     auto src = self->spawn(source<Reader>, std::move(reader));
     // Supply an alternate schema, if requested.
-    auto schema_file = get<std::string>(options, "schema");
-    VAST_ASSERT(schema_file);
-    if (!schema_file->empty()) {
-      auto str = load_contents(*schema_file);
+    auto schema_file = get_or(options, "schema", reader_command_schema);
+    if (!schema_file.empty()) {
+      auto str = load_contents(schema_file);
       if (!str)
         return str.error();
       auto sch = to<schema>(*str);

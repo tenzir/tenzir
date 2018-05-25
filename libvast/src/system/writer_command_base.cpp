@@ -27,6 +27,7 @@
 
 #include "vast/expression.hpp"
 #include "vast/logger.hpp"
+#include "vast/defaults.hpp"
 
 #include "vast/system/node_command.hpp"
 #include "vast/system/signal_monitor.hpp"
@@ -47,6 +48,7 @@ int writer_command_base::run_impl(caf::actor_system& sys,
                                   const option_map& options,
                                   argument_iterator begin,
                                   argument_iterator end) {
+  using namespace vast::defaults;
   // Get a convenient and blocking way to interact with actors.
   scoped_actor self{sys};
   // Get VAST node.
@@ -75,13 +77,13 @@ int writer_command_base::run_impl(caf::actor_system& sys,
   //       instead to clean this up
   auto args = caf::message_builder{begin, end}.move_to_message();
   args = make_message("exporter") + args;
-  if (get_or<bool>(options, "continuous", false))
+  if (get_or(options, "continuous", export_command_continuous))
     args += make_message("--continuous");
-  if (get_or<bool>(options, "historical", false))
+  if (get_or(options, "historical", export_command_historical))
     args += make_message("--historical");
-  if (get_or<bool>(options, "unified", false))
+  if (get_or(options, "unified", export_command_unified))
     args += make_message("--unified");
-  auto max_events = get_or<uint64_t>(options, "events", 0u);
+  auto max_events = get_or(options, "events", export_command_events);
   args += make_message("-e", std::to_string(max_events));
   VAST_DEBUG("spawning exporter with parameters:", to_string(args));
   self->request(node, infinite, "spawn", args).receive(

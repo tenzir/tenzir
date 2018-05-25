@@ -87,7 +87,8 @@ private:
 };
 
 template <class T>
-optional<const T&> get(const option_map& xs, std::string_view name) {
+optional<const detail::make_data_type<T>&> get(const option_map& xs,
+                                               std::string_view name) {
   auto x = xs[name];
   if (!x)
     return {};
@@ -98,8 +99,8 @@ optional<const T&> get(const option_map& xs, std::string_view name) {
 }
 
 template <class T>
-T get_or(const option_map& xs, std::string_view name,
-         const T& default_value) {
+detail::make_data_type<T> get_or(const option_map& xs, std::string_view name,
+                                 const T& default_value) {
   if (auto x = get<T>(xs, name); x)
     return *x;
   return default_value;

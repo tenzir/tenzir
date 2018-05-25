@@ -22,6 +22,7 @@
 #include <caf/typed_event_based_actor.hpp>
 
 #include "vast/logger.hpp"
+#include "vast/defaults.hpp"
 
 #include "vast/system/writer_command_base.hpp"
 #include "vast/system/sink.hpp"
@@ -38,8 +39,10 @@ class writer_command : public writer_command_base {
 public:
   writer_command(command* parent, std::string_view name)
       : writer_command_base{parent, name} {
-    add_opt("write,w", "path to write events to", "-");
-    add_opt("uds,d", "treat -w as UNIX domain socket to connect to", false);
+    using namespace vast::defaults;
+    add_opt("write,w", "path to write events to", writer_command_write);
+    add_opt("uds,d", "treat -w as UNIX domain socket to connect to",
+            writer_command_uds);
   }
 
 protected:
@@ -49,22 +52,20 @@ protected:
                                  argument_iterator end) override {
     VAST_UNUSED(begin, end);
     VAST_TRACE(VAST_ARG(options), VAST_ARG("args", begin, end));
+    using namespace vast::defaults;
     using ostream_ptr = std::unique_ptr<std::ostream>;
-    auto limit = get<uint64_t>(options, "events");
-    VAST_ASSERT(limit);
+    auto limit = get_or(options, "events", export_command_events);
     if constexpr (std::is_constructible_v<Writer, ostream_ptr>) {
-      auto output = get<std::string>(options, "write");
-      VAST_ASSERT(output);
-      auto uds = get<bool>(options, "uds");
-      VAST_ASSERT(uds);
-      auto out = detail::make_output_stream(*output, *uds);
+      auto output = get_or(options, "write", writer_command_write);
+      auto uds = get_or(options, "uds", writer_command_uds);
+      auto out = detail::make_output_stream(output, uds);
       if (!out)
         return out.error();
       Writer writer{std::move(*out)};
-      return self->spawn(sink<Writer>, std::move(writer), *limit);
+      return self->spawn(sink<Writer>, std::move(writer), limit);
     } else {
       Writer writer;
-      return self->spawn(sink<Writer>, std::move(writer), *limit);
+      return self->spawn(sink<Writer>, std::move(writer), limit);
     }
   }
 };
