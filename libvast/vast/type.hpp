@@ -432,6 +432,10 @@ struct record_type
   /// @returns The type at offset *o* or `nullptr` if *o* doesn't resolve.
   const type* at(const offset& o) const;
 
+  /// Converts an offset into an index for the flattened representation.
+  /// @param o The offset to resolve.
+  caf::optional<size_t> flat_index_at(offset o) const;
+
   friend bool operator==(const record_type& x, const record_type& y);
   friend bool operator<(const record_type& x, const record_type& y);
 
@@ -451,6 +455,12 @@ struct record_type
 record_type flatten(const record_type& rec);
 
 type flatten(const type& t);
+
+/// Computes the size of a flat representation of `rec`.
+size_t flat_size(const record_type& rec);
+
+/// Computes the size of a flat representation of `rec`.
+size_t flat_size(const type&);
 
 /// Unflattens a flattened record type.
 /// @param rec the record to unflatten.
