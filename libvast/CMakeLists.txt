@@ -65,6 +65,8 @@ set(libvast_sources
   src/system/accountant.cpp
   src/system/application.cpp
   src/system/archive.cpp
+  src/system/column_index.cpp
+  src/system/column_layout.cpp
   src/system/configuration.cpp
   src/system/consensus.cpp
   src/system/default_application.cpp
@@ -252,6 +254,8 @@ set(tests
   test/string.cpp
   test/subnet.cpp
   test/system/archive.cpp
+  test/system/column_index.cpp
+  test/system/column_layout.cpp
   test/system/consensus.cpp
   test/system/exporter.cpp
   test/system/importer.cpp
