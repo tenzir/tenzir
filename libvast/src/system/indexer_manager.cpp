@@ -13,6 +13,7 @@
 
 #include "vast/system/indexer_manager.hpp"
 
+#include <caf/event_based_actor.hpp>
 #include <caf/exit_reason.hpp>
 #include <caf/local_actor.hpp>
 #include <caf/send.hpp>
