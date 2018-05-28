@@ -58,7 +58,7 @@ protected:
                                    argument_iterator begin,
                                    argument_iterator end) override {
     VAST_TRACE(VAST_ARG("args", begin, end));
-    auto input = get<std::string>(options, "input");
+    auto input = get<std::string>(options, "read");
     VAST_ASSERT(input);
     auto uds = get<bool>(options, "uds");
     VAST_ASSERT(uds);
