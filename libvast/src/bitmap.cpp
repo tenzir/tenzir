@@ -46,6 +46,14 @@ void bitmap::flip() {
   caf::visit([](auto& bm) { bm.flip(); }, bitmap_);
 }
 
+bitmap::variant& bitmap::data() {
+  return bitmap_;
+}
+
+const bitmap::variant& bitmap::data() const {
+  return bitmap_;
+}
+
 bool operator==(const bitmap& x, const bitmap& y) {
   return x.bitmap_ == y.bitmap_;
 }
@@ -57,7 +65,7 @@ bitmap_bit_range::bitmap_bit_range(const bitmap& bm) {
       bits_ = r.get();
     range_ = std::move(r);
   };
-  caf::visit(visitor, bm.bitmap_);
+  caf::visit(visitor, bm);
 }
 
 void bitmap_bit_range::next() {

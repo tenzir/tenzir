@@ -243,7 +243,7 @@ namespace caf {
 
 template <>
 struct sum_type_access<vast::expression>
-    : default_sum_type_access<vast::expression> {
+  : default_sum_type_access<vast::expression> {
   // nop
 };
 
@@ -294,4 +294,3 @@ struct hash<vast::expression> {
 };
 
 } // namespace std
-
