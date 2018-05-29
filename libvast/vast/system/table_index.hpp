@@ -32,17 +32,17 @@ namespace vast::system {
 // -- free functions -----------------------------------------------------------
 
 /// Creates a column layout for the given type.
-/// @relates column_layout
-caf::expected<column_layout> make_column_layout(path filename, type event_type);
+/// @relates table_index
+caf::expected<table_index> make_table_index(path filename, type event_type);
 
 // -- class definition ---------------------------------------------------------
 
 /// Wraps multiple `column_index` into a single column layout.
-class column_layout {
+class table_index {
 public:
   // -- friend declarations ----------------------------------------------------
 
-  friend caf::expected<column_layout> make_column_layout(path filename,
+  friend caf::expected<table_index> make_table_index(path filename,
                                                          type event_type);
 
   // -- member and nested types ------------------------------------------------
@@ -60,11 +60,11 @@ public:
 
   // -- constructors, destructors, and assignment operators --------------------
 
-  column_layout(column_layout&&) = default;
+  table_index(table_index&&) = default;
 
-  column_layout& operator=(column_layout&&) = default;
+  table_index& operator=(table_index&&) = default;
 
-  ~column_layout() noexcept;
+  ~table_index() noexcept;
 
   // -- persistency ------------------------------------------------------------
 
@@ -173,7 +173,7 @@ private:
 
   // -- constructors, destructors, and assignment operators --------------------
 
-  column_layout(type event_type, path base_dir);
+  table_index(type event_type, path base_dir);
 
   // -- member variables -------------------------------------------------------
 

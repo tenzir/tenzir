@@ -21,7 +21,6 @@ namespace vast::system {
 
 class application;
 class column_index;
-class column_layout;
 class configuration;
 class default_application;
 class export_command;
@@ -34,6 +33,7 @@ class pcap_writer_command;
 class reader_command_base;
 class remote_command;
 class start_command;
+class table_index;
 class writer_command_base;
 
 // -- structs ------------------------------------------------------------------

@@ -11,7 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#define SUITE column_layout
+#define SUITE table_index
 #include "test.hpp"
 
 #include "fixtures/events.hpp"
@@ -24,7 +24,7 @@
 #include "vast/concept/printable/vast/error.hpp"
 #include "vast/concept/printable/vast/event.hpp"
 #include "vast/concept/printable/vast/expression.hpp"
-#include "vast/system/column_layout.hpp"
+#include "vast/system/table_index.hpp"
 
 using namespace vast;
 using namespace vast::system;
@@ -39,12 +39,12 @@ struct fixture : fixtures::events, fixtures::filesystem {
 
 } // namespace <anonymous>
 
-FIXTURE_SCOPE(column_layout_tests, fixture)
+FIXTURE_SCOPE(table_index_tests, fixture)
 
 TEST(bro conn logs) {
   MESSAGE("generate column layout for bro conn logs");
   const auto conn_log_type = bro_conn_log[0].type();
-  auto ecols = make_column_layout(directory, conn_log_type);
+  auto ecols = make_table_index(directory, conn_log_type);
   REQUIRE(ecols);
   auto cols = std::move(*ecols);
   CHECK_EQUAL(cols.num_meta_columns(), 2u);

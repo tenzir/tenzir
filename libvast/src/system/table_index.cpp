@@ -11,7 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/system/column_layout.hpp"
+#include "vast/system/table_index.hpp"
 
 #include "vast/detail/overload.hpp"
 #include "vast/expression_visitors.hpp"
@@ -21,27 +21,27 @@
 
 namespace vast::system {
 
-caf::expected<column_layout> make_column_layout(path base_dir,
+caf::expected<table_index> make_table_index(path base_dir,
                                                 type event_type) {
   caf::error err;
-  column_layout result{event_type, base_dir};
-  result.columns_.resize(column_layout::meta_column_count
+  table_index result{event_type, base_dir};
+  result.columns_.resize(table_index::meta_column_count
                          + flat_size(event_type));
   return result;
 }
 // -- constructors, destructors, and assignment operators ----------------------
 
-column_layout::~column_layout() noexcept {
+table_index::~table_index() noexcept {
   // nop
 }
 
 /// -- properties --------------------------------------------------------------
 
-column_index& column_layout::at(size_t column_index) {
+column_index& table_index::at(size_t column_index) {
   return *columns_[column_index];
 }
 
-column_index* column_layout::by_name(std::string_view column_name) {
+column_index* table_index::by_name(std::string_view column_name) {
   // TODO: support string_view in path's operator /
   auto fname = base_dir_ / std::string{column_name};
   auto pred = [&](const column_index_ptr& ptr) {
@@ -51,7 +51,7 @@ column_index* column_layout::by_name(std::string_view column_name) {
   return i != columns_.end() ? i->get() : nullptr;
 }
 
-caf::error column_layout::add(const event& x) {
+caf::error table_index::add(const event& x) {
   if (fully_initialized_) {
     for (auto& col : columns_) {
       VAST_ASSERT(col != nullptr);
@@ -110,15 +110,15 @@ caf::error column_layout::add(const event& x) {
     });
 }
 
-path column_layout::meta_dir() const {
+path table_index::meta_dir() const {
   return base_dir_ / "meta";
 }
 
-path column_layout::data_dir() const {
+path table_index::data_dir() const {
   return base_dir_ / "data";
 }
 
-caf::expected<bitmap> column_layout::lookup(const predicate& pred) {
+caf::expected<bitmap> table_index::lookup(const predicate& pred) {
   // For now, we require that the predicate is part of a normalized expression,
   // i.e., LHS an extractor type and RHS of type data.
   auto rhs = get_if<data>(pred.rhs);
@@ -131,7 +131,7 @@ caf::expected<bitmap> column_layout::lookup(const predicate& pred) {
   return lookup(*resolved);
 }
 
-caf::expected<bitmap> column_layout::lookup(const expression& expr) {
+caf::expected<bitmap> table_index::lookup(const expression& expr) {
   return visit(
     detail::overload(
       [&](const disjunction& dis) -> expected<bitmap> {
@@ -168,14 +168,14 @@ caf::expected<bitmap> column_layout::lookup(const expression& expr) {
     expr);
 }
 
-caf::expected<bitmap> column_layout::lookup(const predicate& pred,
-                                            const attribute_extractor& ex,
-                                            const data& x) {
+caf::expected<bitmap> table_index::lookup(const predicate& pred,
+                                          const attribute_extractor& ex,
+                                          const data& x) {
   VAST_IGNORE_UNUSED(x);
   // We know that the columns vector contains two meta fields: time at index
   // 0 and type at index 1.
-  static_assert(column_layout::meta_column_count == 2);
-  VAST_ASSERT(columns_.size() >= column_layout::meta_column_count);
+  static_assert(table_index::meta_column_count == 2);
+  VAST_ASSERT(columns_.size() >= table_index::meta_column_count);
   if (ex.attr == "time") {
     VAST_ASSERT(is<timestamp>(x));
     auto fac = [&] { return make_time_index(meta_dir()); };
@@ -193,9 +193,9 @@ caf::expected<bitmap> column_layout::lookup(const predicate& pred,
   return ec::invalid_query;
 }
 
-caf::expected<bitmap> column_layout::lookup(const predicate& pred,
-                                            const data_extractor& dx,
-                                            const data& x) {
+caf::expected<bitmap> table_index::lookup(const predicate& pred,
+                                          const data_extractor& dx,
+                                          const data& x) {
   VAST_IGNORE_UNUSED(x);
   if (dx.offset.empty()) {
     VAST_ASSERT(num_data_columns() == 1);
@@ -229,7 +229,7 @@ caf::expected<bitmap> column_layout::lookup(const predicate& pred,
 
 // -- constructors, destructors, and assignment operators ----------------------
 
-column_layout::column_layout(type event_type, path base_dir)
+table_index::table_index(type event_type, path base_dir)
   : event_type_(std::move(event_type)),
     base_dir_(std::move(base_dir)),
     fully_initialized_(false) {
