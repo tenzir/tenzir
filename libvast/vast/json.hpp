@@ -85,11 +85,11 @@ public:
 
   // -- concepts --------------------------------------------------------------
 
-  variant& data() {
+  variant& get_data() {
     return data_;
   }
 
-  const variant& data() const {
+  const variant& get_data() const {
     return data_;
   }
 

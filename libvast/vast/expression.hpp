@@ -200,8 +200,8 @@ public:
 
   // -- concepts ---------------------------------------------------------------
 
-  const node& data() const;
-  node& data();
+  const node& get_data() const;
+  node& get_data();
 
   friend bool operator==(const expression& lhs, const expression& rhs);
   friend bool operator<(const expression& lhs, const expression& rhs);

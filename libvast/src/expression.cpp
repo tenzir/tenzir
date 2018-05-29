@@ -139,11 +139,11 @@ expected<expression> tailor(const expression& expr, const type& t) {
   return std::move(*x);
 }
 
-const expression::node& expression::data() const {
+const expression::node& expression::get_data() const {
   return node_;
 }
 
-expression::node& expression::data() {
+expression::node& expression::get_data() {
   return node_;
 }
 
