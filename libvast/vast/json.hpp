@@ -18,6 +18,7 @@
 
 #include <caf/none.hpp>
 #include <caf/variant.hpp>
+#include <caf/detail/type_list.hpp>
 
 #include "vast/concept/printable/to.hpp"
 
@@ -29,7 +30,6 @@ namespace vast {
 
 /// A JSON data type.
 class json : detail::totally_ordered<json> {
-
 public:
   /// A JSON null type.
   using null = caf::none_t;
@@ -62,7 +62,7 @@ public:
   };
 
   /// The sum type of all possible JSON types.
-  using data = caf::variant<
+  using types = caf::detail::type_list<
     null,
     boolean,
     number,
@@ -70,6 +70,9 @@ public:
     array,
     object
   >;
+
+  /// The sum type of all possible JSON types.
+  using variant = caf::detail::tl_apply_t<types, caf::variant>;
 
   /// Default-constructs a null JSON value.
   json() = default;
@@ -80,22 +83,14 @@ public:
   template <class T, class>
   json(T&& x);
 
-  /// @returns The data variant containing the types.
-  data& value() {
+  // -- concepts --------------------------------------------------------------
+
+  variant& data() {
     return data_;
   }
 
-  /// @returns The data variant containing the types.
-  const data& value() const {
+  const variant& data() const {
     return data_;
-  }
-
-  /// Checks whether a JSON value is of a certain type.
-  /// @tparam T the type to test.
-  /// @returns `true` iff the value of *this* is of type `T`.
-  template <class T>
-  bool is() const {
-    return caf::holds_alternative<T>(data_);
   }
 
   friend bool operator==(const json& x, const json& y) {
@@ -107,7 +102,7 @@ public:
   }
 
 private:
-  data data_;
+  variant data_;
 };
 
 namespace detail {
@@ -223,3 +218,10 @@ json to_json(const T& x, Opts&&... opts) {
 }
 
 } // namespace vast
+
+namespace caf {
+
+template <>
+struct sum_type_access<vast::json> : default_sum_type_access<vast::json> {};
+
+} // namespace caf

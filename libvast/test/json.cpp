@@ -25,31 +25,31 @@ using namespace vast;
 using namespace std::string_literals;
 
 TEST(construction) {
-  CHECK(json{}.is<json::null>());
-  CHECK(json{caf::none}.is<json::null>());
-  CHECK(json{true}.is<json::boolean>());
-  CHECK(json{42}.is<json::number>());
-  CHECK(json{4.2}.is<json::number>());
-  CHECK(json{"foo"}.is<json::string>());
-  CHECK(json{"foo"s}.is<json::string>());
-  CHECK(json{json::array{{1, 2, 3}}}.is<json::array>());
-  CHECK(json{json::object{{"foo", 42}}}.is<json::object>());
+  CHECK(caf::holds_alternative<json::null>(json{}));
+  CHECK(caf::holds_alternative<json::null>(json{caf::none}));
+  CHECK(caf::holds_alternative<json::boolean>(json{true}));
+  CHECK(caf::holds_alternative<json::number>(json{42}));
+  CHECK(caf::holds_alternative<json::number>(json{4.2}));
+  CHECK(caf::holds_alternative<json::string>(json{"foo"}));
+  CHECK(caf::holds_alternative<json::string>(json{"foo"s}));
+  CHECK(caf::holds_alternative<json::array>(json{json::array{{1, 2, 3}}}));
+  CHECK(caf::holds_alternative<json::object>(json{json::object{{"foo", 42}}}));
 }
 
 TEST(assignment) {
   json j;
   j = caf::none;
-  CHECK(caf::holds_alternative<json::null>(j.value()));
+  CHECK(caf::holds_alternative<json::null>(j));
   j = true;
-  CHECK(caf::holds_alternative<json::boolean>(j.value()));
+  CHECK(caf::holds_alternative<json::boolean>(j));
   j = 42;
-  CHECK(caf::holds_alternative<json::number>(j.value()));
+  CHECK(caf::holds_alternative<json::number>(j));
   j = "foo";
-  CHECK(caf::holds_alternative<std::string>(j.value()));
+  CHECK(caf::holds_alternative<std::string>(j));
   j = json::array{true, false};
-  CHECK(caf::holds_alternative<json::array>(j.value()));
+  CHECK(caf::holds_alternative<json::array>(j));
   j = json::object{{"x", true}, {"y", false}};
-  CHECK(caf::holds_alternative<json::object>(j.value()));
+  CHECK(caf::holds_alternative<json::object>(j));
 }
 
 TEST(total order) {

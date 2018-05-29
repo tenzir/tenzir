@@ -106,7 +106,7 @@ struct json_printer : printer<json_printer<TreePolicy, Indent, Padding>> {
       while (begin != end) {
         if (!indent())
           return false;
-        if (!caf::visit(*this, begin->value()))
+        if (!caf::visit(*this, *begin))
           return false;
         ;
         ++begin;
@@ -143,7 +143,7 @@ struct json_printer : printer<json_printer<TreePolicy, Indent, Padding>> {
           return false;
         if (!str.print(out_, ": "))
           return false;
-        if (!caf::visit(*this, begin->second.value()))
+        if (!caf::visit(*this, begin->second))
           return false;
         ++begin;
         if (begin != end)
@@ -191,7 +191,7 @@ struct json_printer : printer<json_printer<TreePolicy, Indent, Padding>> {
 
   template <class Iterator>
   bool print(Iterator& out, const json& j) const {
-    return caf::visit(print_visitor<Iterator>{out}, j.value());
+    return caf::visit(print_visitor<Iterator>{out}, j);
   }
 };
 

@@ -33,13 +33,15 @@ class bitmap : public bitmap_base<bitmap>,
                detail::equality_comparable<bitmap> {
   friend bitmap_bit_range;
 
-  using bitmap_variant = caf::variant<
+public:
+  using types = caf::detail::type_list<
     ewah_bitmap,
     null_bitmap,
     wah_bitmap
   >;
 
-public:
+  using variant = caf::detail::tl_apply_t<types, caf::variant>;
+
   /// The concrete bitmap type to be used for default construction.
   using default_bitmap = ewah_bitmap;
 
@@ -51,10 +53,7 @@ public:
   template <
     class Bitmap,
     class = std::enable_if_t<
-      caf::detail::tl_contains<
-        bitmap_variant::types,
-        std::decay_t<Bitmap>
-      >::value
+      caf::detail::tl_contains<types, std::decay_t<Bitmap>>::value
     >
   >
   bitmap(Bitmap&& bm) : bitmap_(std::forward<Bitmap>(bm)) {
@@ -83,6 +82,9 @@ public:
 
   // -- concepts -------------------------------------------------------------
 
+  variant& data();
+  const variant& data() const;
+
   friend bool operator==(const bitmap& x, const bitmap& y);
 
   template <class Inspector>
@@ -91,9 +93,10 @@ public:
   }
 
 private:
-  bitmap_variant bitmap_;
+  variant bitmap_;
 };
 
+/// @relates bitmap
 class bitmap_bit_range
   : public bit_range_base<bitmap_bit_range, bitmap::block_type> {
 public:
@@ -115,3 +118,10 @@ private:
 bitmap_bit_range bit_range(const bitmap& bm);
 
 } // namespace vast
+
+namespace caf {
+
+template <>
+struct sum_type_access<vast::bitmap> : default_sum_type_access<vast::bitmap> {};
+
+} // namespace caf
