@@ -82,8 +82,8 @@ public:
 
   // -- concepts -------------------------------------------------------------
 
-  variant& data();
-  const variant& data() const;
+  variant& get_data();
+  const variant& get_data() const;
 
   friend bool operator==(const bitmap& x, const bitmap& y);
 
