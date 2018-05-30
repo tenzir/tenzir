@@ -109,7 +109,7 @@ caf::error table_index::add(const event& x) {
           auto fac = [&] {
             VAST_DEBUG("make field indexer at offset", f.offset, "with type",
                        value_type);
-            return make_field_data_index(data_dir(), value_type, f.offset);
+            return make_field_data_index(dir, value_type, f.offset);
           };
           auto err = with_data_column(i++, fac, fun);
           if (err)
