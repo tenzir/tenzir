@@ -35,6 +35,12 @@ struct fixture : fixtures::events, fixtures::filesystem {
   fixture() {
     directory /= "column-layout";
   }
+
+  template <class T>
+  T unbox(expected<T> x) {
+    REQUIRE(x);
+    return std::move(*x);
+  }
 };
 
 } // namespace <anonymous>
@@ -44,9 +50,7 @@ FIXTURE_SCOPE(table_index_tests, fixture)
 TEST(bro conn logs) {
   MESSAGE("generate column layout for bro conn logs");
   const auto conn_log_type = bro_conn_log[0].type();
-  auto ecols = make_table_index(directory, conn_log_type);
-  REQUIRE(ecols);
-  auto cols = std::move(*ecols);
+  auto cols = unbox(make_table_index(directory, conn_log_type));
   CHECK_EQUAL(cols.num_meta_columns(), 2u);
   MESSAGE("ingesting events");
   for (auto& entry : bro_conn_log) {
@@ -58,9 +62,7 @@ TEST(bro conn logs) {
   MESSAGE("querying");
   auto pred = to<predicate>("id.resp_p == 995/?");
   REQUIRE(pred);
-  auto eresult = cols.lookup(*pred);
-  REQUIRE(eresult);
-  auto& result = *eresult;
+  auto result = unbox(cols.lookup(*pred));
   CHECK_EQUAL(rank(result), 53u);
   auto check_uid = [](const event& e, const std::string& uid) {
     auto& v = get<vector>(e.data());
