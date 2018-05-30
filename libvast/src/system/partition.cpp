@@ -190,7 +190,7 @@ behavior partition(stateful_actor<partition_state>* self, path dir) {
         if (!a) {
           VAST_DEBUG(self, "creates event-indexer for type", e.type());
           auto digest = to_digest(e.type());
-          a = self->spawn(event_indexer, dir / digest, e.type());
+          a = self->spawn(indexer, dir / digest, e.type());
           if (self->state.meta_data.types.count(digest) == 0) {
             self->state.meta_data.types.emplace(digest, e.type());
             self->state.meta_data.dirty = true;
@@ -217,7 +217,7 @@ behavior partition(stateful_actor<partition_state>* self, path dir) {
           if (!a) {
             VAST_DEBUG(self, "loads event-indexer for type", t);
             auto indexer_dir = dir / to_digest(t);
-            a = self->spawn(event_indexer, indexer_dir, t);
+            a = self->spawn(indexer, indexer_dir, t);
           }
           indexers.push_back(a);
         }

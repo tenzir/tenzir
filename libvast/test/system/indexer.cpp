@@ -33,7 +33,7 @@ FIXTURE_SCOPE(indexer_tests, fixtures::actor_system_and_events)
 TEST(indexer) {
   directory /= "indexer";
   const auto conn_log_type = bro_conn_log[0].type();
-  auto i = self->spawn(system::event_indexer, directory, conn_log_type);
+  auto i = self->spawn(system::indexer, directory, conn_log_type);
   MESSAGE("ingesting events");
   self->send(i, bro_conn_log);
   // Event indexers operate with predicates, whereas partitions take entire
@@ -67,7 +67,7 @@ TEST(indexer) {
   CHECK(exists(directory / "data" / "id" / "orig_h"));
   CHECK(exists(directory / "meta" / "time"));
   MESSAGE("respawning indexer from file system");
-  i = self->spawn(system::event_indexer, directory, conn_log_type);
+  i = self->spawn(system::indexer, directory, conn_log_type);
   // Same as above: submit the query and verify the result.
   self->request(i, infinite, *pred).receive(
     [&](bitmap& bm) {
