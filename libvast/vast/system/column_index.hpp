@@ -66,7 +66,7 @@ public:
   caf::error init();
 
   /// Persists the index to disk.
-  caf::error flush_index_to_disk();
+  caf::error flush_to_disk();
 
   // -- properties -------------------------------------------------------------
 

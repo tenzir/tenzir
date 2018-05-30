@@ -177,13 +177,11 @@ caf::error column_index::init() {
   return caf::none;
 }
 
-caf::error column_index::flush_index_to_disk() {
-  // Flush index to disk.
+caf::error column_index::flush_to_disk() {
+  // Check whether there's something to write.
   auto offset = idx_->offset();
-  if (offset == last_flush_) {
-    // Nothing to write.
+  if (offset == last_flush_)
     return caf::none;
-  }
   // Create parent directory if it doesn't exist.
   auto dir = filename_.parent();
   if (!exists(dir)) {
