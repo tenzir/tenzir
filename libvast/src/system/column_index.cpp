@@ -92,8 +92,10 @@ caf::expected<column_index_ptr> make_field_data_index(path filename,
       auto v = get_if<vector>(x.data());
       if (!v)
         return;
-      if (auto y = get(*v, o_))
+      if (auto y = get(*v, o_)) {
         idx_->push_back(*y);
+        return;
+      }
       // If there is no data at a given offset, it means that an intermediate
       // record is nil but we're trying to access a deeper field.
       static const auto nil_data = data{nil};
