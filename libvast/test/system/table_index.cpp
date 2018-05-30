@@ -128,33 +128,54 @@ TEST(record type) {
 }
 
 TEST(bro conn logs) {
-  MESSAGE("generate column layout for bro conn logs");
-  const auto conn_log_type = bro_conn_log[0].type();
-  auto cols = unbox(make_table_index(directory, conn_log_type));
-  CHECK_EQUAL(cols.num_meta_columns(), 2u);
-  MESSAGE("ingesting events");
-  for (auto& entry : bro_conn_log) {
-    auto err = cols.add(entry);
-    if (err) {
-      FAIL("error during ingestion: " << caf::to_string(err));
+  auto pred = unbox(to<predicate>("id.resp_p == 995/?"));
+  const auto tbl_type = bro_conn_log[0].type();
+  { // lifetime of the first table index
+    MESSAGE("generate column layout for bro conn logs");
+    auto tbl = unbox(make_table_index(directory, tbl_type));
+    CHECK_EQUAL(tbl.num_meta_columns(), 2u);
+    MESSAGE("ingesting events");
+    for (auto& entry : bro_conn_log) {
+      auto err = tbl.add(entry);
+      if (err) {
+        FAIL("error during ingestion: " << caf::to_string(err));
+      }
     }
+    MESSAGE("verify table index");
+    auto result = unbox(tbl.lookup(pred));
+    CHECK_EQUAL(rank(result), 53u);
+    auto check_uid = [](const event& e, const std::string& uid) {
+      auto& v = get<vector>(e.data());
+      return v[1] == uid;
+    };
+    for (auto i : select(result))
+      if (i == 819)
+        CHECK(check_uid(bro_conn_log[819], "KKSlmtmkkxf")); // first
+      else if (i == 3594)
+        CHECK(check_uid(bro_conn_log[3594], "GDzpFiROJQi")); // intermediate
+      else if (i == 6338)
+        CHECK(check_uid(bro_conn_log[6338], "zwCckCCgXDb")); // last
+    MESSAGE("persist table index to disk");
+    tbl.flush_to_disk();
   }
-  MESSAGE("querying");
-  auto pred = to<predicate>("id.resp_p == 995/?");
-  REQUIRE(pred);
-  auto result = unbox(cols.lookup(*pred));
-  CHECK_EQUAL(rank(result), 53u);
-  auto check_uid = [](const event& e, const std::string& uid) {
-    auto& v = get<vector>(e.data());
-    return v[1] == uid;
-  };
-  for (auto i : select(result))
-    if (i == 819)
-      CHECK(check_uid(bro_conn_log[819], "KKSlmtmkkxf")); // first
-    else if (i == 3594)
-      CHECK(check_uid(bro_conn_log[3594], "GDzpFiROJQi")); // intermediate
-    else if (i == 6338)
-      CHECK(check_uid(bro_conn_log[6338], "zwCckCCgXDb")); // last
+  { // lifetime scope of the second table index
+    MESSAGE("restore table index from disk");
+    auto tbl = unbox(make_table_index(directory, tbl_type));
+    MESSAGE("verify table index again");
+    auto result = unbox(tbl.lookup(pred));
+    CHECK_EQUAL(rank(result), 53u);
+    auto check_uid = [](const event& e, const std::string& uid) {
+      auto& v = get<vector>(e.data());
+      return v[1] == uid;
+    };
+    for (auto i : select(result))
+      if (i == 819)
+        CHECK(check_uid(bro_conn_log[819], "KKSlmtmkkxf")); // first
+      else if (i == 3594)
+        CHECK(check_uid(bro_conn_log[3594], "GDzpFiROJQi")); // intermediate
+      else if (i == 6338)
+        CHECK(check_uid(bro_conn_log[6338], "zwCckCCgXDb")); // last
+  }
 }
 
 FIXTURE_SCOPE_END()
