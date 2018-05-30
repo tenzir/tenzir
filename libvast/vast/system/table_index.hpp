@@ -69,7 +69,7 @@ public:
   // -- persistency ------------------------------------------------------------
 
   /// Persists all indexes to disk.
-  caf::error flush_indexes_to_disk();
+  caf::error flush_to_disk();
 
   /// -- properties ------------------------------------------------------------
 

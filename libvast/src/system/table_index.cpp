@@ -35,6 +35,21 @@ table_index::~table_index() noexcept {
   // nop
 }
 
+// -- persistency --------------------------------------------------------------
+
+caf::error table_index::flush_to_disk() {
+  // Unless `add` was called at least once there's nothing to flush.
+  if (!fully_initialized_)
+    return caf::none;
+  for (auto& col : columns_) {
+    VAST_ASSERT(col != nullptr);
+    auto err = col->flush_to_disk();
+    if (err)
+      return err;
+  }
+  return caf::none;
+}
+
 /// -- properties --------------------------------------------------------------
 
 column_index& table_index::at(size_t column_index) {

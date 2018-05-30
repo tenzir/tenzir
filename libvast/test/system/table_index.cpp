@@ -47,6 +47,41 @@ struct fixture : fixtures::events, fixtures::filesystem {
 
 FIXTURE_SCOPE(table_index_tests, fixture)
 
+TEST(flat type) {
+  // Some test data.
+  std::vector<int> xs{1, 2, 3, 1, 2, 3, 1, 2, 3};
+  MESSAGE("generate test queries");
+  auto is1 = unbox(to<predicate>(":int == +1"));
+  auto is2 = unbox(to<predicate>(":int == +2"));
+  auto is3 = unbox(to<predicate>(":int == +3"));
+  auto is4 = unbox(to<predicate>(":int == +4"));
+  { // lifetime of the first table index
+    auto tbl = unbox(make_table_index(directory, integer_type{}));
+    MESSAGE("ingest integer values");
+    for (size_t i = 0; i < xs.size(); ++i) {
+      event x{xs[i]};
+      x.id(i);
+      tbl.add(std::move(x));
+    }
+    MESSAGE("verify table index");
+    CHECK_EQUAL(unbox(tbl.lookup(is1)), make_ids({0, 3, 6}, xs.size()));
+    CHECK_EQUAL(unbox(tbl.lookup(is2)), make_ids({1, 4, 7}, xs.size()));
+    CHECK_EQUAL(unbox(tbl.lookup(is3)), make_ids({2, 5, 8}, xs.size()));
+    CHECK_EQUAL(unbox(tbl.lookup(is4)), make_ids({}, xs.size()));
+    MESSAGE("persist table index to disk");
+    tbl.flush_to_disk();
+  }
+  { // lifetime scope of the second table index
+    MESSAGE("restore table index from disk");
+    auto tbl = unbox(make_table_index(directory, integer_type{}));
+    MESSAGE("verify table index again");
+    CHECK_EQUAL(unbox(tbl.lookup(is1)), make_ids({0, 3, 6}, xs.size()));
+    CHECK_EQUAL(unbox(tbl.lookup(is2)), make_ids({1, 4, 7}, xs.size()));
+    CHECK_EQUAL(unbox(tbl.lookup(is3)), make_ids({2, 5, 8}, xs.size()));
+    CHECK_EQUAL(unbox(tbl.lookup(is4)), make_ids({}, xs.size()));
+  }
+}
+
 TEST(bro conn logs) {
   MESSAGE("generate column layout for bro conn logs");
   const auto conn_log_type = bro_conn_log[0].type();
