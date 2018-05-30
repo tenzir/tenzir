@@ -87,9 +87,9 @@ public:
   std::vector<type> types() const;
 
 private:
-  caf::actor make_event_indexer(const type& key, std::string digest);
+  caf::actor make_indexer(const type& key, std::string digest);
 
-  caf::actor make_event_indexer(const type& key);
+  caf::actor make_indexer(const type& key);
 
   static std::string to_digest(const type& x);
 
@@ -99,11 +99,8 @@ private:
   /// Persistent state for the partition.
   meta_data meta_data_;
 
-  /// ID of the managed partition.
-  uuid partition_id_;
-
   /// Factory for spawning INDEXER actors.
-  indexer_factory make_event_indexer_;
+  indexer_factory make_indexer_;
 
   /// Directory for persisting the meta data.
   path dir_;
@@ -121,12 +118,12 @@ using indexer_manager_ptr = caf::intrusive_ptr<indexer_manager>;
 indexer_manager_ptr make_indexer_manager(path dir, uuid partition_id,
                                          indexer_manager::indexer_factory f);
 
-/// Creates an indexer manager that spawns `event_indexer` instances as
-/// children of `self`.
+/// Creates an indexer manager that spawns `indexer` instances as children of
+/// `self`.
 /// @param `self` The parent actor.
 /// @warning `self` must outlive the returned indexer manager and no other
 ///           actor (or thread) may acquire non-const access to the returned
 ///           indexer manager.
-indexer_manager_ptr make_indexer_manager(caf::local_actor* self, path dir);
+indexer_manager_ptr make_indexer_manager(caf::local_actor* self, path base_dir);
 
 } // namespace vast::system

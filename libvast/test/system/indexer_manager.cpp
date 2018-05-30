@@ -52,7 +52,7 @@ struct fixture : fixtures::deterministic_actor_system {
     auto f = [&](path, type) {
       return sys.spawn(dummy_indexer);
     };
-    return vast::system::make_indexer_manager(state_dir, uuid::random(), f);
+    return vast::system::make_indexer_manager(state_dir, partition_id, f);
   }
 
   /// Returns how many dummy INDEXER actors are currently running.
@@ -76,6 +76,9 @@ struct fixture : fixtures::deterministic_actor_system {
 
   /// Number of actors that run before the manager spawns INDEXER actors.
   size_t min_running_actors;
+
+  /// Some UUID for the partition.
+  uuid partition_id = uuid::random();
 };
 
 } // namespace <anonymous>
