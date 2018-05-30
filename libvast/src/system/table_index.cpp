@@ -63,8 +63,8 @@ caf::error table_index::add(const event& x) {
     col.add(x);
     return caf::none;
   };
-  auto mk_time = [&] { return make_time_index((base_dir_ / "meta") / "time"); };
-  auto mk_type = [&] { return make_type_index((base_dir_ / "meta") / "type"); };
+  auto mk_time = [&] { return make_time_index(meta_dir()); };
+  auto mk_type = [&] { return make_type_index(meta_dir()); };
   return caf::error::eval(
     [&] {
       // Column 0 is our meta index for the time.
@@ -79,7 +79,7 @@ caf::error table_index::add(const event& x) {
       auto r = get_if<record_type>(event_type_);
       if (!r) {
         auto fac = [&] {
-          return make_flat_data_index(base_dir_ / "data", event_type_);
+          return make_flat_data_index(data_dir(), event_type_);
         };
         return with_data_column(0, fac, fun);
       }
@@ -88,14 +88,13 @@ caf::error table_index::add(const event& x) {
       for (auto&& f : record_type::each{*r}) {
         auto& value_type = f.trace.back()->type;
         if (!has_skip_attribute(event_type_)) {
-          auto dir = base_dir_ / "data";
+          auto dir = data_dir();
           for (auto& k : f.key())
             dir /= k;
           auto fac = [&] {
             VAST_DEBUG("make field indexer at offset", f.offset, "with type",
                        value_type);
-            return make_field_data_index(base_dir_ / "data",
-                                         value_type, f.offset);
+            return make_field_data_index(data_dir(), value_type, f.offset);
           };
           auto err = with_data_column(i++, fac, fun);
           if (err)
