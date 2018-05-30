@@ -60,6 +60,8 @@ public:
 
   // -- constructors, destructors, and assignment operators --------------------
 
+  table_index() = default;
+
   table_index(table_index&&) = default;
 
   table_index& operator=(table_index&&) = default;
@@ -144,6 +146,11 @@ public:
   /// Returns the base directory for all stored column indexes.
   inline const path& base_dir() const {
     return base_dir_;
+  }
+
+  /// Returns the type defining this table's layout.
+  inline const type& layout() const {
+    return event_type_;
   }
 
   /// Returns the base directory for meta column indexes.
