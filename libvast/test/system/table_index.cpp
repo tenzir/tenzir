@@ -82,6 +82,51 @@ TEST(flat type) {
   }
 }
 
+TEST(record type) {
+  auto tbl_type = record_type{
+    {"x", record_type{
+      {"a", integer_type{}},
+      {"b", boolean_type{}}
+    }},
+    {"y", record_type{
+      {"a", string_type{}}
+    }}
+  };
+  auto mk_row = [&](int x, bool y, std::string z) {
+    return value::make(vector{vector{x, y}, vector{std::move(z)}}, tbl_type);
+  };
+  // Some test data.
+  std::vector<value> xs{mk_row(1, true, "abc"),    mk_row(10, false, "def"),
+                        mk_row(5, true, "hello"),  mk_row(1, true, "d e f"),
+                        mk_row(15, true, "world"), mk_row(5, true, "bar"),
+                        mk_row(10, true, "a b c"), mk_row(10, true, "baz"),
+                        mk_row(5, true, "foo"),    mk_row(1, true, "test")};
+  MESSAGE(caf::deep_to_string(xs));
+  MESSAGE("generate test queries");
+  auto x_a_is1 = unbox(to<predicate>("x.a == +1"));
+  { // lifetime of the first table index
+    auto tbl = unbox(make_table_index(directory, tbl_type));
+    CHECK_EQUAL(tbl.num_data_columns(), 3u);
+    MESSAGE("ingest table values");
+    for (size_t i = 0; i < xs.size(); ++i) {
+      event x{xs[i]};
+      x.id(i);
+      MESSAGE("ingest" <<  caf::deep_to_string(x));
+      tbl.add(std::move(x));
+    }
+    MESSAGE("verify table index");
+    CHECK_EQUAL(unbox(tbl.lookup(x_a_is1)), make_ids({0, 3, 9}, xs.size()));
+    MESSAGE("persist table index to disk");
+    tbl.flush_to_disk();
+  }
+  { // lifetime scope of the second table index
+    MESSAGE("restore table index from disk");
+    auto tbl = unbox(make_table_index(directory, tbl_type));
+    MESSAGE("verify table index again");
+    CHECK_EQUAL(unbox(tbl.lookup(x_a_is1)), make_ids({0, 3, 9}, xs.size()));
+  }
+}
+
 TEST(bro conn logs) {
   MESSAGE("generate column layout for bro conn logs");
   const auto conn_log_type = bro_conn_log[0].type();
