@@ -41,6 +41,7 @@ using shared_event_buffer_vector = std::vector<shared_event_buffer>;
 behavior dummy_sink(event_based_actor* self, size_t* dummy_sink_count,
                     shared_event_buffer buf) {
   *dummy_sink_count += 1;
+  MESSAGE("initialize sink #" << *dummy_sink_count);
   return {
     [=](stream<event> in) {
       self->make_sink(
@@ -63,7 +64,7 @@ auto indexer_manager_factory(actor_system& sys, path p, size_t* dummy_count,
     bufs->emplace_back(std::make_shared<event_buffer>());
     auto buf = bufs->back();
     auto sink_factory = [=, &sys](path, type t) -> actor {
-      VAST_DEBUG("spawn a new sink for the type", t);
+      MESSAGE("spawn a new sink for type " << t);
       return sys.spawn(dummy_sink, dummy_count, buf);
     };
     auto id = uuid::random();
@@ -85,12 +86,16 @@ behavior test_stage(event_based_actor* self,
 
 struct fixture : fixtures::deterministic_actor_system_and_events {
   fixture() {
+    /// Only needed for computing how many types are in our data set.
+    std::set<type> types;
     /// Makes sure no persistet state exists.
     rm(state_dir);
     // Build a test data set with multiple event types.
     auto pick_from = [&](const std::vector<event>& xs, size_t index) {
       VAST_ASSERT(index < xs.size());
-      test_events.emplace_back(xs[index]);
+      auto& x = xs[index];
+      test_events.emplace_back(x);
+      types.emplace(x.type());
     };
     // Pick 100 events from various data sets in the worst-case distribution of
     // types.
@@ -101,6 +106,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
       pick_from(bgpdump_txt, i);
       pick_from(random, i);
     }
+    num_types = types.size();
   }
 
   /// Directory where the manager is supposed to persist its state.
