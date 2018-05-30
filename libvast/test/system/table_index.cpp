@@ -68,8 +68,7 @@ TEST(flat type) {
     CHECK_EQUAL(unbox(tbl.lookup(is2)), make_ids({1, 4, 7}, xs.size()));
     CHECK_EQUAL(unbox(tbl.lookup(is3)), make_ids({2, 5, 8}, xs.size()));
     CHECK_EQUAL(unbox(tbl.lookup(is4)), make_ids({}, xs.size()));
-    MESSAGE("persist table index to disk");
-    tbl.flush_to_disk();
+    MESSAGE("(automatically) persist table index to disk");
   }
   { // lifetime scope of the second table index
     MESSAGE("restore table index from disk");
@@ -116,8 +115,7 @@ TEST(record type) {
     }
     MESSAGE("verify table index");
     CHECK_EQUAL(unbox(tbl.lookup(x_a_is1)), make_ids({0, 3, 9}, xs.size()));
-    MESSAGE("persist table index to disk");
-    tbl.flush_to_disk();
+    MESSAGE("(automatically) persist table index to disk");
   }
   { // lifetime scope of the second table index
     MESSAGE("restore table index from disk");
@@ -155,8 +153,7 @@ TEST(bro conn logs) {
         CHECK(check_uid(bro_conn_log[3594], "GDzpFiROJQi")); // intermediate
       else if (i == 6338)
         CHECK(check_uid(bro_conn_log[6338], "zwCckCCgXDb")); // last
-    MESSAGE("persist table index to disk");
-    tbl.flush_to_disk();
+    MESSAGE("(automatically) persist table index to disk");
   }
   { // lifetime scope of the second table index
     MESSAGE("restore table index from disk");

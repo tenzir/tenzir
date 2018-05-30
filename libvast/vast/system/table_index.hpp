@@ -195,7 +195,7 @@ private:
   path base_dir_;
 
   /// Allows a shortcut in `add` if all columns are initialized.
-  bool fully_initialized_;
+  bool dirty_;
 };
 
 // -- free functions -----------------------------------------------------------

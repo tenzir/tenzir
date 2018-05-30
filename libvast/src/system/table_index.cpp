@@ -32,14 +32,15 @@ caf::expected<table_index> make_table_index(path base_dir,
 // -- constructors, destructors, and assignment operators ----------------------
 
 table_index::~table_index() noexcept {
-  // nop
+  if (dirty_)
+    flush_to_disk();
 }
 
 // -- persistency --------------------------------------------------------------
 
 caf::error table_index::flush_to_disk() {
   // Unless `add` was called at least once there's nothing to flush.
-  if (!fully_initialized_)
+  if (!dirty_)
     return caf::none;
   for (auto& col : columns_) {
     VAST_ASSERT(col != nullptr);
@@ -67,7 +68,7 @@ column_index* table_index::by_name(std::string_view column_name) {
 }
 
 caf::error table_index::add(const event& x) {
-  if (fully_initialized_) {
+  if (dirty_) {
     for (auto& col : columns_) {
       VAST_ASSERT(col != nullptr);
       col->add(x);
@@ -119,7 +120,7 @@ caf::error table_index::add(const event& x) {
       return caf::none;
     },
     [&]() -> caf::error {
-      fully_initialized_ = true;
+      dirty_ = true;
       return caf::none;
     });
 }
@@ -246,7 +247,7 @@ caf::expected<bitmap> table_index::lookup(const predicate& pred,
 table_index::table_index(type event_type, path base_dir)
   : event_type_(std::move(event_type)),
     base_dir_(std::move(base_dir)),
-    fully_initialized_(false) {
+    dirty_(false) {
   // nop
 }
 
