@@ -281,6 +281,7 @@ set(tests
   test/vector_map.cpp
   test/vector_set.cpp
   test/view.cpp
+  test/visitor.cpp
   test/word.cpp
 )
 
