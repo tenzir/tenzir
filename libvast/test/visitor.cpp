@@ -54,22 +54,16 @@ struct circle : shape {
 } // namespace <anonymous>
 
 TEST(lambda visitation) {
-  auto area = 0.0;
   auto compute_area = make_visitor<rectangle, square, circle>(
-    [&](const rectangle& x) { area = x.x * x.y; },
-    [&](const square& x) { area = std::pow(x.x, 2); },
-    [&](const circle& x) { area = std::pow(x.r, 2) * 3.14; }
+    [&](const rectangle& x) { return x.x * x.y; },
+    [&](const square& x) { return std::pow(x.x, 2); },
+    [&](const circle& x) { return std::pow(x.r, 2) * 3.14; }
   );
   auto x = rectangle{3, 4};
   auto y = square{5};
   auto z = circle{7};
-  shape& sx = x;
-  shape& sy = y;
-  shape& sz = z;
-  compute_area(sx);
-  CHECK_EQUAL(area, 12.0);
-  compute_area(sy);
-  CHECK_EQUAL(area, 25.0);
-  compute_area(sz);
-  CHECK_EQUAL(area, 153.86);
+  auto as_shape = [](auto& x) -> shape& { return x; };
+  CHECK_EQUAL(compute_area(as_shape(x)), 12.0);
+  CHECK_EQUAL(compute_area(as_shape(y)), 25.0);
+  CHECK_EQUAL(compute_area(as_shape(z)), 153.86);
 }
