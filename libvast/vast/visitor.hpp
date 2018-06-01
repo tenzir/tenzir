@@ -23,6 +23,9 @@
 #include <typeinfo>
 #include <type_traits>
 
+#include <caf/optional.hpp>
+#include <caf/detail/type_traits.hpp>
+
 #include "vast/detail/overload.hpp"
 
 namespace vast::detail {
@@ -40,11 +43,12 @@ namespace vast {
 
 /// The base class for polymorphic visitors.
 /// @relates make_visitor
+template <class Result>
 class visitor {
 public:
   template <class T>
-  void operator()(const T& x) {
-    do_visit(detail::get_most_derived(x), typeid(x));
+  caf::optional<Result> operator()(const T& x) {
+    return do_visit(detail::get_most_derived(x), typeid(x));
   }
 
 protected:
@@ -53,43 +57,63 @@ protected:
   }
 
 private:
-  virtual void do_visit(const void* ptr, const std::type_info& info) = 0;
+  virtual caf::optional<Result> do_visit(const void* ptr,
+                                         const std::type_info& info) = 0;
 };
 
 namespace detail {
 
-template <class F, class... Ts>
-class lambda_visitor : public visitor {
+template <class Result, class F, class... Ts>
+class lambda_visitor : public visitor<Result> {
 public:
   explicit lambda_visitor(F f) : f_(std::move(f)) {
     // nop
   }
 
 private:
+  using result_t = std::conditional_t<std::is_same_v<void, Result>,
+                                      caf::unit_t, Result>;
+
   template <class T>
-  bool try_visit(const void* ptr, const std::type_info& info) {
+  bool try_visit(result_t& result, const void* ptr,
+                 const std::type_info& info) {
     if (info != typeid(T))
       return false;
-    f_(*static_cast<const T*>(ptr));
+    if constexpr (std::is_same_v<void, Result>)
+      f_(*static_cast<const T*>(ptr));
+    else
+      result = f_(*static_cast<const T*>(ptr));
     return true;
   }
 
-  void do_visit(const void* ptr, const std::type_info& info) override {
-    (try_visit<Ts>(ptr, info) || ...);
+  caf::optional<Result> do_visit(const void* ptr,
+                                 const std::type_info& info) override {
+    result_t result;
+    if ((try_visit<Ts>(result, ptr, info) || ...))
+      return result;
+    return caf::none;
   }
 
   F f_;
 };
+
+template <class F>
+using lambda_visitor_res = typename caf::detail::get_callable_trait<F>::result_type;
 
 } // namespace detail
 
 /// Constructs a visitor for a selected number of types in a polymorphic
 /// hiearchy.
 /// @relates visitor
-template <class... Ts, class... Fs>
-static auto make_visitor(Fs... fs) {
-  auto lambda = detail::overload(std::move(fs)...);
-  return detail::lambda_visitor<decltype(lambda), Ts...>(std::move(lambda));
+template <class... Ts, class F, class... Fs>
+static auto make_visitor(F f, Fs... fs) {
+  using namespace detail;
+  using result_type = lambda_visitor_res<F>;
+  // All lambdas must return the same type.
+  static_assert((std::is_same_v<result_type, lambda_visitor_res<Fs>> && ...));
+  auto lambda = overload(std::move(f), std::move(fs)...);
+  using visitor_type = lambda_visitor<result_type, decltype(lambda), Ts...>;
+  return visitor_type{std::move(lambda)};
 }
 
 } // namespace vast
