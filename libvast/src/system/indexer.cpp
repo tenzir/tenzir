@@ -196,7 +196,7 @@ struct loader {
   result_type operator()(const disjunction& d) {
     result_type result;
     for (auto& op : d) {
-      auto x = visit(*this, op);
+      auto x = caf::visit(*this, op);
       result.insert(result.end(),
                     std::make_move_iterator(x.begin()),
                     std::make_move_iterator(x.end()));
@@ -205,7 +205,7 @@ struct loader {
   }
 
   result_type operator()(const predicate& p) {
-    return visit(*this, p.lhs, p.rhs);
+    return caf::visit(*this, p.lhs, p.rhs);
   }
 
   result_type operator()(const attribute_extractor& ex, const data& x) {
@@ -337,7 +337,7 @@ behavior event_indexer(stateful_actor<event_indexer_state>* self,
       auto rp = self->make_response_promise<bitmap>();
       // For now, we require that the predicate is part of a normalized
       // expression, i.e., LHS an extractor type and RHS of type data.
-      auto rhs = get_if<data>(pred.rhs);
+      auto rhs = caf::get_if<data>(&pred.rhs);
       VAST_ASSERT(rhs);
       auto resolved = type_resolver{self->state.event_type}(pred);
       if (!resolved) {
@@ -347,7 +347,7 @@ behavior event_indexer(stateful_actor<event_indexer_state>* self,
         return;
       }
 
-      auto indexers = visit(loader{self}, *resolved);
+      auto indexers = caf::visit(loader{self}, *resolved);
       // Forward predicate to all available indexers.
       if (indexers.empty()) {
         VAST_DEBUG(self, "did not find matching indexers for", pred);

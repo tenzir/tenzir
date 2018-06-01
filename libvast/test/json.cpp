@@ -25,33 +25,31 @@ using namespace vast;
 using namespace std::string_literals;
 
 TEST(construction) {
-  CHECK(is<json::null>(json{}));
-  CHECK(is<json::null>(json{nil}));
-  CHECK(is<json::boolean>(json{true}));
-  CHECK(is<json::boolean>(json{false}));
-  CHECK(is<json::number>(json{4.2}));
-  CHECK(is<json::number>(json{42u}));
-  CHECK(is<json::number>(json{-1337}));
-  CHECK(is<json::string>(json{"foo"}));
-  CHECK(is<json::string>(json{"foo"s}));
-  CHECK(is<json::array>(json{json::array{{1, 2, 3}}}));
-  CHECK(is<json::object>(json{json::object{{"foo", 42}}}));
+  CHECK(caf::holds_alternative<json::null>(json{}));
+  CHECK(caf::holds_alternative<json::null>(json{caf::none}));
+  CHECK(caf::holds_alternative<json::boolean>(json{true}));
+  CHECK(caf::holds_alternative<json::number>(json{42}));
+  CHECK(caf::holds_alternative<json::number>(json{4.2}));
+  CHECK(caf::holds_alternative<json::string>(json{"foo"}));
+  CHECK(caf::holds_alternative<json::string>(json{"foo"s}));
+  CHECK(caf::holds_alternative<json::array>(json{json::array{{1, 2, 3}}}));
+  CHECK(caf::holds_alternative<json::object>(json{json::object{{"foo", 42}}}));
 }
 
 TEST(assignment) {
   json j;
-  j = nil;
-  CHECK(is<json::null>(j));
+  j = caf::none;
+  CHECK(caf::holds_alternative<json::null>(j));
   j = true;
-  CHECK(is<json::boolean>(j));
+  CHECK(caf::holds_alternative<json::boolean>(j));
   j = 42;
-  CHECK(is<json::number>(j));
+  CHECK(caf::holds_alternative<json::number>(j));
   j = "foo";
-  CHECK(is<std::string>(j));
+  CHECK(caf::holds_alternative<std::string>(j));
   j = json::array{true, false};
-  CHECK(is<json::array>(j));
+  CHECK(caf::holds_alternative<json::array>(j));
   j = json::object{{"x", true}, {"y", false}};
-  CHECK(is<json::object>(j));
+  CHECK(caf::holds_alternative<json::object>(j));
 }
 
 TEST(total order) {
@@ -84,7 +82,7 @@ TEST(parseable) {
   MESSAGE("null");
   str = "null";
   CHECK(parsers::json(str, j));
-  CHECK(j == nil);
+  CHECK(j == caf::none);
   MESSAGE("number");
   str = "42";
   CHECK(parsers::json(str, j));
@@ -108,7 +106,7 @@ TEST(parseable) {
   CHECK(j == json::array{});
   str = R"([ 42,-1337 , "foo", null ,true ])";
   CHECK(parsers::json(str, j));
-  CHECK(j == json::array{42, -1337, "foo", nil, true});
+  CHECK(j == json::array{42, -1337, "foo", caf::none, true});
   MESSAGE("object");
   str = "{}";
   CHECK(parsers::json(str, j));
@@ -118,7 +116,7 @@ TEST(parseable) {
   CHECK(j == json::object{});
   str = R"json({ "baz": 4.2, "inner": null })json";
   CHECK(parsers::json(str, j));
-  CHECK(j == json::object{{"baz", 4.2}, {"inner", nil}});
+  CHECK(j == json::object{{"baz", 4.2}, {"inner", caf::none}});
   str = R"json({
   "baz": 4.2,
   "inner": null,
@@ -132,7 +130,7 @@ TEST(parseable) {
   CHECK(parsers::json(str, j));
   auto o = json::object{
     {"baz", 4.2},
-    {"inner", nil},
+    {"inner", caf::none},
     {"x", json::array{42, -1337, "foo", true}}
   };
   CHECK(j == o);
@@ -148,12 +146,12 @@ TEST(printable) {
   CHECK_EQUAL(to_string(json{"foo"}), "\"foo\"");
   MESSAGE("one line policy");
   std::string line;
-  json::array a{42, -1337, "foo", nil, true};
+  json::array a{42, -1337, "foo", caf::none, true};
   CHECK(printers::json<policy::oneline>(line, json{a}));
   CHECK_EQUAL(line, "[42, -1337, \"foo\", null, true]");
   json::object o;
   o["foo"] = 42;
-  o["bar"] = nil;
+  o["bar"] = caf::none;
   line.clear();
   CHECK(printers::json<policy::oneline>(line, json{o}));
   CHECK_EQUAL(line, "{\"foo\": 42, \"bar\": null}");
