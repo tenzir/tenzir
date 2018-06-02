@@ -51,6 +51,10 @@ type& type::attributes(std::initializer_list<attribute> list) {
   return *this;
 }
 
+std::string to_digest(const type& x) {
+  return to_string(std::hash<type>{}(x));
+}
+
 namespace {
 
 struct equal_to {
