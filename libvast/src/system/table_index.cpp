@@ -68,6 +68,8 @@ column_index* table_index::by_name(std::string_view column_name) {
 }
 
 caf::error table_index::add(const event& x) {
+  VAST_ASSERT(x.type() == event_type_);
+  VAST_TRACE(VAST_ARG(x));
   if (dirty_) {
     for (auto& col : columns_) {
       VAST_ASSERT(col != nullptr);
@@ -134,6 +136,7 @@ path table_index::data_dir() const {
 }
 
 caf::expected<bitmap> table_index::lookup(const predicate& pred) {
+  VAST_TRACE(VAST_ARG(pred));
   // For now, we require that the predicate is part of a normalized expression,
   // i.e., LHS is an extractor and RHS is a data.
   auto rhs = get_if<data>(pred.rhs);
@@ -147,6 +150,7 @@ caf::expected<bitmap> table_index::lookup(const predicate& pred) {
 }
 
 caf::expected<bitmap> table_index::lookup(const expression& expr) {
+  VAST_TRACE(VAST_ARG(expr));
   // Specialize the expression for the type.
   type_resolver resolver{event_type_};
   auto resolved = visit(resolver, expr);
@@ -156,6 +160,7 @@ caf::expected<bitmap> table_index::lookup(const expression& expr) {
 }
 
 caf::expected<bitmap> table_index::lookup_impl(const expression& expr) {
+  VAST_TRACE(VAST_ARG(expr));
   return visit(
     detail::overload(
       [&](const auto& seq) -> expected<bitmap> {
@@ -221,6 +226,7 @@ caf::expected<bitmap> table_index::lookup_impl(const expression& expr) {
 caf::expected<bitmap> table_index::lookup_impl(const predicate& pred,
                                                const attribute_extractor& ex,
                                                const data& x) {
+  VAST_TRACE(VAST_ARG(pred), VAST_ARG(ex), VAST_ARG(x));
   VAST_IGNORE_UNUSED(x);
   // We know that the columns vector contains two meta fields: time at index
   // 0 and type at index 1.
@@ -246,6 +252,7 @@ caf::expected<bitmap> table_index::lookup_impl(const predicate& pred,
 caf::expected<bitmap> table_index::lookup_impl(const predicate& pred,
                                                const data_extractor& dx,
                                                const data& x) {
+  VAST_TRACE(VAST_ARG(pred), VAST_ARG(dx), VAST_ARG(x));
   VAST_IGNORE_UNUSED(x);
   if (dx.offset.empty()) {
     VAST_ASSERT(num_data_columns() == 1);
@@ -283,7 +290,7 @@ table_index::table_index(type event_type, path base_dir)
   : event_type_(std::move(event_type)),
     base_dir_(std::move(base_dir)),
     dirty_(false) {
-  // nop
+  VAST_TRACE(VAST_ARG(event_type_), VAST_ARG(base_dir_));
 }
 
 } // namespace vast::system
