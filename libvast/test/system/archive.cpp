@@ -43,11 +43,7 @@ TEST(archiving and querying) {
   push_to_archive(bgpdump_txt);
   MESSAGE("query events");
   auto ids = make_ids({{100, 150}, {10150, 10200}});
-  self->send(a, ids);
-  run_exhaustively();
-  auto result_opt = fetch_result<std::vector<event>>();
-  REQUIRE(result_opt);
-  auto& result = *result_opt;
+  auto result = request<std::vector<event>>(a, ids);
   REQUIRE_EQUAL(result.size(), 100u);
   // We sort because the specific compression algorithm used at the archive
   // determines the order of results.
