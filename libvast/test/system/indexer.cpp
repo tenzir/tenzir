@@ -59,6 +59,38 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
 
 FIXTURE_SCOPE(indexer_tests, fixture)
 
+TEST(integer rows) {
+  MESSAGE("ingest integer events");
+  integer_type layout;
+  std::vector<int> ints{1, 2, 3, 1, 2, 3, 1, 2, 3};
+  std::vector<event> events;
+  for (auto i : ints)
+    events.emplace_back(event::make(i, layout, events.size()));
+  auto res = [&](auto... args) {
+    return make_ids({args...}, events.size());
+  };
+  init(events);
+  sched.run();
+  MESSAGE("verify table index");
+  auto verify = [&] {
+    CHECK_EQUAL(query(":int == +1"), res(0, 3, 6));
+    CHECK_EQUAL(query(":int == +2"), res(1, 4, 7));
+    CHECK_EQUAL(query(":int == +3"), res(2, 5, 8));
+    CHECK_EQUAL(query(":int == +4"), res());
+    CHECK_EQUAL(query(":int != +1"), res(1, 2, 4, 5, 7, 8));
+    CHECK_EQUAL(query("!(:int == +1)"), res(1, 2, 4, 5, 7, 8));
+    CHECK_EQUAL(query(":int > +1 && :int < +3"), res(1, 4, 7));
+  };
+  verify();
+  MESSAGE("kill INDEXER");
+  anon_send_exit(indexer, exit_reason::kill);
+  run_exhaustively();
+  MESSAGE("reload INDEXER from disk");
+  init(layout);
+  MESSAGE("verify table index again");
+  verify();
+}
+
 TEST(bro conn logs) {
   MESSAGE("ingest bro conn log");
   init(bro_conn_log);
