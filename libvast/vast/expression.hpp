@@ -139,7 +139,7 @@ struct disjunction : std::vector<expression> {
 /// A NOT expression.
 struct negation : detail::totally_ordered<negation> {
   negation();
-  negation(expression expr);
+  explicit negation(expression expr);
 
   negation(const negation& other);
   negation(negation&& other) noexcept;
