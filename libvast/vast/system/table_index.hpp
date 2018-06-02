@@ -64,8 +64,6 @@ public:
 
   table_index(table_index&&) = default;
 
-  table_index& operator=(table_index&&) = default;
-
   ~table_index() noexcept;
 
   // -- persistency ------------------------------------------------------------
@@ -192,14 +190,14 @@ private:
   // -- member variables -------------------------------------------------------
 
   /// Stores the indexed type whose fields form our columns.
-  type event_type_;
+  const type event_type_;
 
   /// Columns of our type-dependant layout. Lazily filled for columns data to
   /// delay file I/O until a column is accessed by the user.
   columns_vector columns_;
 
   /// Base directory for all children column indexes.
-  path base_dir_;
+  const path base_dir_;
 
   /// Allows a shortcut in `add` if all columns are initialized.
   bool dirty_;

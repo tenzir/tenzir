@@ -25,7 +25,11 @@
 namespace vast::system {
 
 struct indexer_state {
-  table_index tbl;
+  indexer_state();
+  ~indexer_state();
+  void init(table_index&& from);
+  union { table_index tbl; };
+  bool initialized;
   static inline const char* name = "indexer";
 };
 

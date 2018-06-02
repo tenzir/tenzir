@@ -11,6 +11,10 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
+#include "vast/system/indexer.hpp"
+
+#include <new>
+
 #include <caf/all.hpp>
 
 #include "vast/concept/parseable/to.hpp"
@@ -37,6 +41,21 @@ using namespace caf;
 
 namespace vast::system {
 
+indexer_state::indexer_state() : initialized(false) {
+  // nop
+}
+
+indexer_state::~indexer_state() {
+  if (initialized)
+    tbl.~table_index();
+}
+
+void indexer_state::init(table_index&& from) {
+  VAST_ASSERT(!initialized);
+  new (&tbl) table_index(std::move(from));
+  initialized = true;
+}
+
 behavior indexer(stateful_actor<indexer_state>* self, path dir,
                  type event_type) {
   auto maybe_tbl = make_table_index(std::move(dir), event_type);
@@ -44,7 +63,7 @@ behavior indexer(stateful_actor<indexer_state>* self, path dir,
     VAST_ERROR(self, "unable to generate table layout for", event_type);
     return {};
   }
-  self->state.tbl = std::move(*maybe_tbl);
+  self->state.init(std::move(*maybe_tbl));
   VAST_DEBUG(self, "operates for event", event_type);
   auto handle_batch = [=](const std::vector<event>& xs) {
     for (auto& x : xs)
