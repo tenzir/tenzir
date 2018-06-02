@@ -43,15 +43,14 @@ struct fixture : fixtures::events, fixtures::filesystem {
 
 FIXTURE_SCOPE(column_index_tests, fixture)
 
-TEST(flat type) {
+TEST(flat column type) {
   MESSAGE("ingest integer values");
-  auto col = unbox(make_flat_data_index(directory, integer_type{}));
+  integer_type column_type;
+  auto col = unbox(make_flat_data_index(directory, column_type));
   std::vector<int> xs{1, 2, 3, 1, 2, 3, 1, 2, 3};
-  for (size_t i = 0; i < xs.size(); ++i) {
-    event x{xs[i]};
-    x.id(i);
-    col->add(std::move(x));
-  }
+  size_t next_id = 0;
+  for (auto i : xs)
+    col->add(event::make(i, column_type, next_id++));
   MESSAGE("generate test queries");
   auto is1 = unbox(to<predicate>(":int == +1"));
   auto is2 = unbox(to<predicate>(":int == +2"));
