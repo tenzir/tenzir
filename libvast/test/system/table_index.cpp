@@ -78,23 +78,20 @@ TEST(flat type) {
     return make_ids({args...}, xs.size());
   };
   MESSAGE("verify table index");
-  CHECK_EQUAL(query(":int == +1"), res(0, 3, 6));
-  CHECK_EQUAL(query(":int == +2"), res(1, 4, 7));
-  CHECK_EQUAL(query(":int == +3"), res(2, 5, 8));
-  CHECK_EQUAL(query(":int == +4"), res());
-  CHECK_EQUAL(query(":int != +1"), res(1, 2, 4, 5, 7, 8));
-  CHECK_EQUAL(query("!(:int == +1)"), res(1, 2, 4, 5, 7, 8));
-  CHECK_EQUAL(query(":int > +1 && :int < +3"), res(1, 4, 7));
+  auto verify = [&] {
+    CHECK_EQUAL(query(":int == +1"), res(0, 3, 6));
+    CHECK_EQUAL(query(":int == +2"), res(1, 4, 7));
+    CHECK_EQUAL(query(":int == +3"), res(2, 5, 8));
+    CHECK_EQUAL(query(":int == +4"), res());
+    CHECK_EQUAL(query(":int != +1"), res(1, 2, 4, 5, 7, 8));
+    CHECK_EQUAL(query("!(:int == +1)"), res(1, 2, 4, 5, 7, 8));
+    CHECK_EQUAL(query(":int > +1 && :int < +3"), res(1, 4, 7));
+  };
+  verify();
   MESSAGE("(automatically) persist table index and restore from disk");
   reset(make_table_index(directory, integer_type{}));
   MESSAGE("verify table index again");
-  CHECK_EQUAL(query(":int == +1"), res(0, 3, 6));
-  CHECK_EQUAL(query(":int == +2"), res(1, 4, 7));
-  CHECK_EQUAL(query(":int == +3"), res(2, 5, 8));
-  CHECK_EQUAL(query(":int == +4"), res());
-  CHECK_EQUAL(query(":int != +1"), res(1, 2, 4, 5, 7, 8));
-  CHECK_EQUAL(query("!(:int == +1)"), res(1, 2, 4, 5, 7, 8));
-  CHECK_EQUAL(query(":int > +1 && :int < +3"), res(1, 4, 7));
+  verify();
 }
 
 TEST(record type) {
@@ -128,15 +125,16 @@ TEST(record type) {
     return make_ids({args...}, xs.size());
   };
   MESSAGE("verify table index");
-  CHECK_EQUAL(query("x.a == +1"), res(0, 3, 9));
-  CHECK_EQUAL(query("x.a > +1"), res(1, 2, 4, 5, 6, 7, 8));
-  CHECK_EQUAL(query("x.a > +1 && x.b == T"), res(2, 4, 5));
+  auto verify = [&] {
+    CHECK_EQUAL(query("x.a == +1"), res(0, 3, 9));
+    CHECK_EQUAL(query("x.a > +1"), res(1, 2, 4, 5, 6, 7, 8));
+    CHECK_EQUAL(query("x.a > +1 && x.b == T"), res(2, 4, 5));
+  };
+  verify();
   MESSAGE("(automatically) persist table index and restore from disk");
   reset(make_table_index(directory, tbl_type));
   MESSAGE("verify table index again");
-  CHECK_EQUAL(query("x.a == +1"), res(0, 3, 9));
-  CHECK_EQUAL(query("x.a > +1"), res(1, 2, 4, 5, 6, 7, 8));
-  CHECK_EQUAL(query("x.a > +1 && x.b == T"), res(2, 4, 5));
+  verify();
 }
 
 TEST(bro conn logs) {
@@ -149,27 +147,22 @@ TEST(bro conn logs) {
     add(entry);
   }
   MESSAGE("verify table index");
-  CHECK_EQUAL(rank(query("id.resp_p == 995/?")), 53u);
-  CHECK_EQUAL(rank(query("id.resp_p == 5355/?")), 49u);
-  CHECK_EQUAL(rank(query("id.resp_p == 995/? || id.resp_p == 5355/?")), 102u);
-  CHECK_EQUAL(rank(query("&time > 1970-01-01")), bro_conn_log.size());
-  CHECK_EQUAL(rank(query("proto == \"udp\"")), 5306u);
-  CHECK_EQUAL(rank(query("proto == \"tcp\"")), 3135u);
-  CHECK_EQUAL(rank(query("uid == \"nkCxlvNN8pi\"")), 1u);
-  CHECK_EQUAL(rank(query("orig_bytes < 400")), 5332u);
-  CHECK_EQUAL(rank(query("orig_bytes < 400 && proto == \"udp\"")), 4357u);
+  auto verify = [&] {
+    CHECK_EQUAL(rank(query("id.resp_p == 995/?")), 53u);
+    CHECK_EQUAL(rank(query("id.resp_p == 5355/?")), 49u);
+    CHECK_EQUAL(rank(query("id.resp_p == 995/? || id.resp_p == 5355/?")), 102u);
+    CHECK_EQUAL(rank(query("&time > 1970-01-01")), bro_conn_log.size());
+    CHECK_EQUAL(rank(query("proto == \"udp\"")), 5306u);
+    CHECK_EQUAL(rank(query("proto == \"tcp\"")), 3135u);
+    CHECK_EQUAL(rank(query("uid == \"nkCxlvNN8pi\"")), 1u);
+    CHECK_EQUAL(rank(query("orig_bytes < 400")), 5332u);
+    CHECK_EQUAL(rank(query("orig_bytes < 400 && proto == \"udp\"")), 4357u);
+  };
+  verify();
   MESSAGE("(automatically) persist table index and restore from disk");
   reset(make_table_index(directory, tbl_type));
   MESSAGE("verify table index again");
-  CHECK_EQUAL(rank(query("id.resp_p == 995/?")), 53u);
-  CHECK_EQUAL(rank(query("id.resp_p == 5355/?")), 49u);
-  CHECK_EQUAL(rank(query("id.resp_p == 995/? || id.resp_p == 5355/?")), 102u);
-  CHECK_EQUAL(rank(query("&time > 1970-01-01")), bro_conn_log.size());
-  CHECK_EQUAL(rank(query("proto == \"udp\"")), 5306u);
-  CHECK_EQUAL(rank(query("proto == \"tcp\"")), 3135u);
-  CHECK_EQUAL(rank(query("uid == \"nkCxlvNN8pi\"")), 1u);
-  CHECK_EQUAL(rank(query("orig_bytes < 400")), 5332u);
-  CHECK_EQUAL(rank(query("orig_bytes < 400 && proto == \"udp\"")), 4357u);
+  verify();
 }
 
 FIXTURE_SCOPE_END()
