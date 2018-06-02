@@ -46,15 +46,34 @@ behavior indexer(stateful_actor<indexer_state>* self, path dir,
   }
   self->state.tbl = std::move(*maybe_tbl);
   VAST_DEBUG(self, "operates for event", event_type);
+  auto handle_batch = [=](const std::vector<event>& xs) {
+    for (auto& x : xs)
+      if (x.type() == event_type)
+        self->state.tbl.add(x);
+  };
   return {
-    [=](const std::vector<event>& xs) {
-      for (auto& x : xs)
-        if (x.type() == event_type)
-          self->state.tbl.add(x);
-    },
     [=](const predicate& pred) {
       VAST_DEBUG(self, "got predicate:", pred);
       return self->state.tbl.lookup(pred);
+    },
+    [=](const std::vector<event>& xs) {
+      handle_batch(xs);
+    },
+    [=](stream<event> in) {
+      self->make_sink(
+        in,
+        [](unit_t&) {
+          // nop
+        },
+        [=](unit_t&, const std::vector<event>& xs) {
+          handle_batch(xs);
+        },
+        [=](unit_t&, const error& err) {
+          if (err) {
+            VAST_ERROR(self, "got a stream error:", self->system().render(err));
+          }
+        }
+      );
     },
     [=](shutdown_atom) { self->quit(exit_reason::user_shutdown); },
   };
