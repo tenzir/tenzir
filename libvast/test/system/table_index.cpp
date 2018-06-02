@@ -54,7 +54,9 @@ struct fixture : fixtures::events, fixtures::filesystem {
   }
 
   void add(event x) {
-    tbl->add(std::move(x));
+    auto err = tbl->add(std::move(x));
+    if (err)
+      FAIL("error: " << err);
   }
 
   std::unique_ptr<table_index> tbl;
@@ -66,14 +68,13 @@ FIXTURE_SCOPE(table_index_tests, fixture)
 
 TEST(flat type) {
   MESSAGE("generate table layout for flat integer type");
-  reset(make_table_index(directory, integer_type{}));
+  integer_type layout;
+  reset(make_table_index(directory, layout));
   MESSAGE("ingest test data (integers)");
   std::vector<int> xs{1, 2, 3, 1, 2, 3, 1, 2, 3};
-  for (size_t i = 0; i < xs.size(); ++i) {
-    event x{xs[i]};
-    x.id(i);
-    add(std::move(x));
-  }
+  size_t next_id = 0;
+  for (auto i : xs)
+    add(event::make(i, layout, next_id++));
   auto res = [&](auto... args) {
     return make_ids({args...}, xs.size());
   };
