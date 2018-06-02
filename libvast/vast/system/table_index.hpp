@@ -167,16 +167,23 @@ public:
   /// @pre `init()` was called previously.
   caf::expected<bitmap> lookup(const predicate& pred);
 
+  /// Queries event IDs that fulfill the given expression.
+  /// @pre `init()` was called previously.
+  caf::expected<bitmap> lookup(const expression& expr);
+
 private:
   // -- dispatch functions -----------------------------------------------------
 
-  caf::expected<bitmap> lookup(const expression& expr);
+  caf::expected<bitmap> lookup_impl(const predicate& pred);
 
-  caf::expected<bitmap> lookup(const predicate& pred,
-                               const attribute_extractor& ex, const data& x);
+  caf::expected<bitmap> lookup_impl(const expression& expr);
 
-  caf::expected<bitmap> lookup(const predicate& pred, const data_extractor& dx,
-                               const data& x);
+  caf::expected<bitmap> lookup_impl(const predicate& pred,
+                                    const attribute_extractor& ex,
+                                    const data& x);
+
+  caf::expected<bitmap> lookup_impl(const predicate& pred,
+                                    const data_extractor& dx, const data& x);
 
   // -- constructors, destructors, and assignment operators --------------------
 

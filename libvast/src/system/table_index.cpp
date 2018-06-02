@@ -79,8 +79,8 @@ caf::error table_index::add(const event& x) {
     col.add(x);
     return caf::none;
   };
-  auto mk_time = [&] { return make_time_index(meta_dir()); };
-  auto mk_type = [&] { return make_type_index(meta_dir()); };
+  auto mk_time = [&] { return make_time_index(meta_dir() / "time"); };
+  auto mk_type = [&] { return make_type_index(meta_dir() / "type"); };
   return caf::error::eval(
     [&] {
       // Column 0 is our meta index for the time.
@@ -135,7 +135,7 @@ path table_index::data_dir() const {
 
 caf::expected<bitmap> table_index::lookup(const predicate& pred) {
   // For now, we require that the predicate is part of a normalized expression,
-  // i.e., LHS an extractor type and RHS of type data.
+  // i.e., LHS is an extractor and RHS is a data.
   auto rhs = get_if<data>(pred.rhs);
   if (!rhs)
     return ec::invalid_query;
@@ -143,30 +143,67 @@ caf::expected<bitmap> table_index::lookup(const predicate& pred) {
   auto resolved = type_resolver{event_type_}(pred);
   if (!resolved)
     return std::move(resolved.error());
-  return lookup(*resolved);
+  return lookup_impl(*resolved);
 }
 
 caf::expected<bitmap> table_index::lookup(const expression& expr) {
+  // Specialize the expression for the type.
+  type_resolver resolver{event_type_};
+  auto resolved = visit(resolver, expr);
+  if (!resolved)
+    return std::move(resolved.error());
+  return lookup_impl(*resolved);
+}
+
+caf::expected<bitmap> table_index::lookup_impl(const expression& expr) {
   return visit(
     detail::overload(
-      [&](const disjunction& dis) -> expected<bitmap> {
+      [&](const auto& seq) -> expected<bitmap> {
+        static constexpr bool is_disjunction
+          = std::is_same_v<decltype(seq), const disjunction&>;
+        static_assert(is_disjunction
+                      || std::is_same_v<decltype(seq), const conjunction&>);
+        VAST_ASSERT(!seq.empty());
         bitmap result;
-        for (auto& op : dis) {
-          auto sub_result = lookup(op);
-          if (!sub_result)
-            return std::move(sub_result.error());
-          result |= *sub_result;
+        {
+          auto r0 = lookup_impl(seq.front());
+          if (!r0)
+            return r0.error();
+          result = std::move(*r0);
         }
+        for (auto i = seq.begin() + 1; i != seq.end(); ++i) {
+          // short-circuit
+          if constexpr (is_disjunction) {
+            if (all<1>(result))
+              return result;
+          } else {
+            if (all<0>(result))
+              return result;
+          }
+          auto sub_result = lookup_impl(*i);
+          if (!sub_result)
+            return sub_result.error();
+          if constexpr (is_disjunction)
+            result |= *sub_result;
+          else
+            result &= *sub_result;
+        }
+        return result;
+      },
+      [&](const negation& neg) {
+        auto result = lookup_impl(neg.expr());
+        if (result)
+          result->flip();
         return result;
       },
       [&](const predicate& p) {
         return visit(
           detail::overload(
             [&](const attribute_extractor& ex, const data& x) {
-              return lookup(p, ex, x);
+              return lookup_impl(p, ex, x);
             },
             [&](const data_extractor& dx, const data& x) {
-              return lookup(p, dx, x);
+              return lookup_impl(p, dx, x);
             },
             [&](const auto&, const auto&) -> expected<bitmap> {
               // Ignore unexpected lhs/rhs combinations.
@@ -175,17 +212,15 @@ caf::expected<bitmap> table_index::lookup(const expression& expr) {
           ),
           p.lhs, p.rhs);
       },
-      [&](const auto&) -> expected<bitmap> {
-        // Ignore unexpected expressions.
+      [&](const none&) -> expected<bitmap> {
         return bitmap{};
-      }
-    ),
+      }),
     expr);
 }
 
-caf::expected<bitmap> table_index::lookup(const predicate& pred,
-                                          const attribute_extractor& ex,
-                                          const data& x) {
+caf::expected<bitmap> table_index::lookup_impl(const predicate& pred,
+                                               const attribute_extractor& ex,
+                                               const data& x) {
   VAST_IGNORE_UNUSED(x);
   // We know that the columns vector contains two meta fields: time at index
   // 0 and type at index 1.
@@ -193,13 +228,13 @@ caf::expected<bitmap> table_index::lookup(const predicate& pred,
   VAST_ASSERT(columns_.size() >= table_index::meta_column_count);
   if (ex.attr == "time") {
     VAST_ASSERT(is<timestamp>(x));
-    auto fac = [&] { return make_time_index(meta_dir()); };
+    auto fac = [&] { return make_time_index(meta_dir() / "time"); };
     return with_meta_column(0, fac, [&](column_index& col) {
       return col.lookup(pred);
     });
   } else if (ex.attr == "type") {
     VAST_ASSERT(is<std::string>(x));
-    auto fac = [&] { return make_type_index(meta_dir()); };
+    auto fac = [&] { return make_type_index(meta_dir() / "type"); };
     return with_meta_column(1, fac, [&](column_index& col) {
       return col.lookup(pred);
     });
@@ -208,9 +243,9 @@ caf::expected<bitmap> table_index::lookup(const predicate& pred,
   return ec::invalid_query;
 }
 
-caf::expected<bitmap> table_index::lookup(const predicate& pred,
-                                          const data_extractor& dx,
-                                          const data& x) {
+caf::expected<bitmap> table_index::lookup_impl(const predicate& pred,
+                                               const data_extractor& dx,
+                                               const data& x) {
   VAST_IGNORE_UNUSED(x);
   if (dx.offset.empty()) {
     VAST_ASSERT(num_data_columns() == 1);
