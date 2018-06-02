@@ -56,6 +56,10 @@ behavior indexer(stateful_actor<indexer_state>* self, path dir,
       VAST_DEBUG(self, "got predicate:", pred);
       return self->state.tbl.lookup(pred);
     },
+    [=](const expression& expr) {
+      VAST_DEBUG(self, "got expression:", expr);
+      return self->state.tbl.lookup(expr);
+    },
     [=](const std::vector<event>& xs) {
       handle_batch(xs);
     },
