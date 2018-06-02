@@ -103,9 +103,11 @@ void schedule(stateful_actor<index_state>* self, const uuid& part,
     VAST_ASSERT(self->state.scheduled.empty());
     VAST_DEBUG(self, "spawns and dispatches partition", part);
     auto part_dir = self->state.dir / to_string(part);
+    /* TODO: implement me
     auto p = self->spawn<monitored>(partition, std::move(part_dir));
     self->state.loaded.emplace(part, p);
     send_as(ctx.sink, p, ctx.expr);
+    */
     return;
   }
   // If we're full, we delay dispatching until having evicted a partition.
@@ -123,7 +125,8 @@ void schedule(stateful_actor<index_state>* self, const uuid& part,
 }
 
 // FIXME: erase lookups that have completed.
-void unschedule(stateful_actor<index_state>* self, const actor& part) {
+void unschedule(stateful_actor<index_state>*, const actor&) {
+  /* TODO: implement me
   // Check if we got an evicted partition.
   auto i = self->state.evicted.find(part);
   if (i != self->state.evicted.end()) {
@@ -149,6 +152,7 @@ void unschedule(stateful_actor<index_state>* self, const actor& part) {
         evict(self);
     }
   }
+  */
 }
 
 } // namespace <anonymous>
@@ -250,7 +254,8 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
     }
   );
   return {
-    [=](const std::vector<event>& events) {
+    [=](const std::vector<event>&) {
+      /* TODO: implement me
       VAST_DEBUG(self, "got", events.size(), "events ["
                  << events.front().id() << ',' << (events.back().id() + 1)
                  << ')');
@@ -278,8 +283,11 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
       self->state.part_index.add(events, self->state.active.id);
       auto msg = self->current_mailbox_element()->move_content_to_message();
       self->send(self->state.active.partition, msg);
+      */
     },
-    [=](const expression& expr) -> result<uuid, size_t, size_t> {
+    [=](const expression&) -> result<uuid, size_t, size_t> {
+      return caf::sec::bad_function_call;
+      /* TODO: implement me
       auto sender = actor_cast<actor>(self->current_sender());
       VAST_DEBUG(self, "got lookup:", expr);
       // Identify the relevant partitions.
@@ -306,8 +314,10 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
       partitions.resize(partitions.size() - n);
       ctx.first->second.partitions = std::move(partitions);
       return {id, num_partitions, n};
+      */
     },
-    [=](const uuid& id, size_t n) {
+    [=](const uuid&, size_t) {
+      /* TODO: implement me
       auto& ctx = self->state.lookups[id];
       VAST_DEBUG(self, "processes lookup", id << ':', ctx.expr);
       if (n == 0) {
@@ -320,6 +330,7 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
       for (auto i = ctx.partitions.end() - n; i != ctx.partitions.end(); ++i)
         schedule(self, *i, id);
       ctx.partitions.resize(ctx.partitions.size() - n);
+      */
     },
   };
 }

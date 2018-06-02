@@ -13,42 +13,122 @@
 
 #pragma once
 
-#include <unordered_map>
-
-#include <caf/actor.hpp>
-#include <caf/stateful_actor.hpp>
+#include <caf/fwd.hpp>
+#include <caf/detail/unordered_flat_map.hpp>
 
 #include "vast/aliases.hpp"
 #include "vast/filesystem.hpp"
+#include "vast/system/indexer_manager.hpp"
 #include "vast/type.hpp"
+#include "vast/uuid.hpp"
 
 namespace vast::system {
 
-/// @relates partition
-struct partition_meta_data {
-  /// Maps type digests (used as directory name for an indexer) to types.
-  std::map<std::string, type> types;
-  bool dirty = false;
+/// A horizontal partition of the INDEX.
+class partition : public caf::ref_counted {
+public:
+  // -- friends ----------------------------------------------------------------
+
+  friend class indexer_manager;
+
+  // -- member types -----------------------------------------------------------
+
+  /// Persistent meta state for the partition.
+  struct meta_data {
+    /// Maps type digests (used as directory names) to types.
+    caf::detail::unordered_flat_map<std::string, type> types;
+
+    /// Stores whether we modified `types` after loading it.
+    bool dirty = false;
+  };
+
+  // -- constructors, destructors, and assignment operators --------------------
+
+  /// @param base_dir The base directory for all partition. This partition will
+  ///                 save to and load from `base_dir / id`.
+  /// @param id Unique identifier for this partition.
+  /// @param factory Factory function for INDEXER actors.
+  partition(const path& base_dir, uuid id,
+            indexer_manager::indexer_factory factory);
+
+  ~partition() noexcept override;
+
+  // -- properties -------------------------------------------------------------
+
+  /// Returns the INDEXER manager.
+  indexer_manager& manager() noexcept {
+    return mgr_;
+  }
+
+  /// Returns the INDEXER manager.
+  const indexer_manager& manager() const noexcept {
+    return mgr_;
+  }
+
+  /// Returns whether the meta data was changed.
+  inline bool dirty() const noexcept {
+    return meta_data_.dirty;
+  }
+
+  /// Returns the working directory of the partition.
+  inline const path& dir() const noexcept {
+    return dir_;
+  }
+  /// Returns the unique ID of the partition.
+  inline const uuid& id() const noexcept {
+    return id_;
+  }
+
+  /// Returns a list of all types in this partition.
+  std::vector<type> types() const;
+
+  /// Returns the file name for saving or loading the ::meta_data.
+  path meta_file() const;
+
+private:
+  /// Called from the INDEXER manager whenever a new type gets added during
+  /// ingestion.
+  inline void add_type(const std::string& digest, const type& t) {
+    if (meta_data_.types.emplace(digest, t).second && !meta_data_.dirty)
+      meta_data_.dirty = true;
+  }
+
+  /// Spawns one INDEXER per type in the partition (lazily).
+  indexer_manager mgr_;
+
+  /// Keeps track of row types in this partition.
+  meta_data meta_data_;
+
+  /// Directory for persisting the meta data.
+  path dir_;
+
+  /// Uniquely identifies this partition.
+  uuid id_;
 };
 
-/// @relates partition_meta_data
+// -- related types ------------------------------------------------------------
+
+/// @relates partition
+using partition_ptr = caf::intrusive_ptr<partition>;
+
+// -- free functions -----------------------------------------------------------
+
+/// @relates partition::meta_data
 template <class Inspector>
-auto inspect(Inspector& f, partition_meta_data& x) {
+auto inspect(Inspector& f, partition::meta_data& x) {
   return f(x.types);
 }
 
+/// Creates a partition.
 /// @relates partition
-struct partition_state {
-  std::unordered_map<type, caf::actor> indexers;
-  partition_meta_data meta_data;
-  static inline const char* name = "partition";
-};
+partition_ptr make_partition(const path& base_dir, uuid id,
+                             indexer_manager::indexer_factory f);
 
-/// A horizontal partition of the INDEX.
-/// For each event batch, PARTITION spawns one event indexer per
-/// type occurring in the batch and forwards to them the events.
-/// @param dir The directory where to store this partition on the file system.
-caf::behavior partition(caf::stateful_actor<partition_state>* self, path dir);
+/// Creates a partition that spawns regular INDEXER actors as children of
+/// `self`.
+/// @relates partition
+partition_ptr make_indexer_manager(caf::local_actor* self, const path& base_dir,
+                                   uuid id);
 
 } // namespace vast::system
 

@@ -260,7 +260,6 @@ set(tests
   test/system/importer.cpp
   test/system/index.cpp
   test/system/indexer.cpp
-  test/system/indexer_manager.cpp
   test/system/indexer_stage_driver.cpp
   test/system/key_value_store.cpp
   test/system/partition.cpp

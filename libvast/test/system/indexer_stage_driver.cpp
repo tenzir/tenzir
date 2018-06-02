@@ -58,8 +58,8 @@ behavior dummy_sink(event_based_actor* self, size_t* dummy_sink_count,
   };
 }
 
-auto indexer_manager_factory(actor_system& sys, path p, size_t* dummy_count,
-                             shared_ptr<shared_event_buffer_vector> bufs) {
+auto partition_factory(actor_system& sys, path p, size_t* dummy_count,
+                       shared_ptr<shared_event_buffer_vector> bufs) {
   return [=, &sys] {
     bufs->emplace_back(std::make_shared<event_buffer>());
     auto buf = bufs->back();
@@ -68,13 +68,12 @@ auto indexer_manager_factory(actor_system& sys, path p, size_t* dummy_count,
       return sys.spawn(dummy_sink, dummy_count, buf);
     };
     auto id = uuid::random();
-    return caf::make_counted<indexer_manager>(p, id, sink_factory);
+    return make_partition(p, std::move(id), sink_factory);
   };
 }
 
 behavior test_stage(event_based_actor* self,
-                    indexer_stage_driver::index_manager_factory f,
-                    size_t mps) {
+                    indexer_stage_driver::partition_factory f, size_t mps) {
   return {
     [=](stream<event> in) {
       auto mgr = self->make_continuous_stage<indexer_stage_driver>(f, mps);
@@ -126,7 +125,7 @@ TEST(spawning sinks automatically) {
   auto dummies = size_t{0};
   auto bufs = make_shared<shared_event_buffer_vector>();
   auto stg = sys.spawn(test_stage,
-                       indexer_manager_factory(sys, state_dir, &dummies, bufs),
+                       partition_factory(sys, state_dir, &dummies, bufs),
                        std::numeric_limits<size_t>::max());
   MESSAGE("spawn the source and run");
   auto src = vast::detail::spawn_container_source(self->system(), stg,
@@ -148,7 +147,7 @@ TEST(creating partitions automatically) {
   auto dummies = size_t{0};
   auto bufs = make_shared<shared_event_buffer_vector>();
   auto stg = sys.spawn(test_stage,
-                       indexer_manager_factory(sys, state_dir, &dummies, bufs),
+                       partition_factory(sys, state_dir, &dummies, bufs),
                        10u);
   MESSAGE("spawn the source and run");
   auto src = vast::detail::spawn_container_source(self->system(), stg,

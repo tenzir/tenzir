@@ -13,39 +13,26 @@
 
 #pragma once
 
-#include <caf/actor.hpp>
-#include <caf/fwd.hpp>
-#include <caf/ref_counted.hpp>
+#include <functional>
 
-#include "vast/detail/assert.hpp"
-#include "vast/expression.hpp"
-#include "vast/expression.hpp"
-#include "vast/expression_visitors.hpp"
-#include "vast/filesystem.hpp"
-#include "vast/logger.hpp"
+#include <caf/actor.hpp>
+#include <caf/detail/unordered_flat_map.hpp>
+#include <caf/fwd.hpp>
+
+#include "vast/fwd.hpp"
+#include "vast/system/fwd.hpp"
 #include "vast/type.hpp"
-#include "vast/uuid.hpp"
 
 namespace vast::system {
 
 /// Manages a set of INDEXER actors for a single partition.
-class indexer_manager : public caf::ref_counted {
+class indexer_manager {
 public:
-  /// Persistent meta state for manager instances.
-  struct meta_data {
-    /// Maps type digests (used as directory name) to types.
-    std::map<std::string, type> types;
-
-    /// Stores whether we modified `types` after loading it.
-    bool dirty = false;
-  };
-
   using indexer_factory = std::function<caf::actor (path, type)>;
 
-  indexer_manager(path dir, uuid partition_id, indexer_factory f);
+  indexer_manager(partition& parent, indexer_factory f);
 
-  ~indexer_manager() noexcept override;
-
+/*
   /// Applies all matching INDEXER actors for `expr` to `f` and returns the
   /// number of type matches.
   template <class F>
@@ -67,63 +54,31 @@ public:
   /// number of type matches.
   template <class F>
   void for_each(F f) const {
-    for (auto& [t, a] : indexers_) {
-      VAST_ASSERT(a != nullptr);
-      f(a);
+    for (auto& kvp : indexers_) {
+      VAST_ASSERT(kvp->second != nullptr);
+      f(kvp->second);
     }
   }
+*/
 
   /// Adds an INDEXER to the manager if no INDEXER is assigned to `key` yet.
   /// @returns The INDEXER assigned to `key` and whether the INDEXER was
   ///          newly added.
   std::pair<caf::actor, bool> get_or_add(const type& key);
 
-  /// Returns whether the meta data was changed.
-  inline bool dirty() const noexcept {
-    return meta_data_.dirty;
-  }
-
-  /// Returns a list of all types known by the manager.
-  std::vector<type> types() const;
-
 private:
-  caf::actor make_indexer(const type& key, std::string digest);
+  caf::actor make_indexer(const type& key, const std::string& digest);
 
   caf::actor make_indexer(const type& key);
 
-  static std::string to_digest(const type& x);
-
   /// Stores one INDEXER actor per type.
-  std::unordered_map<type, caf::actor> indexers_;
-
-  /// Persistent state for the partition.
-  meta_data meta_data_;
+  caf::detail::unordered_flat_map<type, caf::actor> indexers_;
 
   /// Factory for spawning INDEXER actors.
   indexer_factory make_indexer_;
 
-  /// Directory for persisting the meta data.
-  path dir_;
+  /// Pointer to the owning object.
+  partition& parent_;
 };
-
-/// @relates indexer_manager::meta_data
-template <class Inspector>
-auto inspect(Inspector& f, indexer_manager::meta_data& x) {
-  return f(x.types);
-}
-
-using indexer_manager_ptr = caf::intrusive_ptr<indexer_manager>;
-
-/// Creates an indexer manager.
-indexer_manager_ptr make_indexer_manager(path dir, uuid partition_id,
-                                         indexer_manager::indexer_factory f);
-
-/// Creates an indexer manager that spawns `indexer` instances as children of
-/// `self`.
-/// @param `self` The parent actor.
-/// @warning `self` must outlive the returned indexer manager and no other
-///           actor (or thread) may acquire non-const access to the returned
-///           indexer manager.
-indexer_manager_ptr make_indexer_manager(caf::local_actor* self, path base_dir);
 
 } // namespace vast::system

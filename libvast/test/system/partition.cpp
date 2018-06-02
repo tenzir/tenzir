@@ -11,104 +11,120 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/ids.hpp"
-#include "vast/concept/parseable/to.hpp"
-#include "vast/concept/parseable/vast/expression.hpp"
+#define SUITE partition
+#include "test.hpp"
 
 #include "vast/system/partition.hpp"
-#include "vast/system/task.hpp"
 
-#define SUITE system
-#include "test.hpp"
-#include "fixtures/actor_system_and_events.hpp"
+#include <caf/atom.hpp>
+#include <caf/behavior.hpp>
+#include <caf/event_based_actor.hpp>
 
-using namespace caf;
+#include "vast/concept/printable/to_string.hpp"
+#include "vast/concept/printable/vast/type.hpp"
+
+#include "fixtures/actor_system.hpp"
+
 using namespace vast;
-using namespace std::chrono;
+using namespace vast::system;
 
 namespace {
 
-struct partition_fixture : fixtures::actor_system_and_events {
-  partition_fixture() {
-    directory /= "partition";
-    MESSAGE("ingesting conn.log");
-    partition = self->spawn(system::partition, directory);
-    self->send(partition, bro_conn_log);
-    MESSAGE("ingesting http.log");
-    self->send(partition, bro_http_log);
-    MESSAGE("ingesting bgpdump log");
-    self->send(partition, bgpdump_txt);
-    MESSAGE("completed ingestion");
+caf::behavior dummy_indexer(caf::event_based_actor*) {
+  return {
+    [](caf::ok_atom) {
+      // nop
+    }
+  };
+}
+
+template <class T>
+std::vector<std::string> sorted_strings(const std::vector<T>& xs) {
+  std::vector<std::string> result;
+  for (auto& x : xs)
+    result.emplace_back(to_string(x));
+  std::sort(result.begin(), result.end());
+  return result;
+}
+
+struct fixture : fixtures::deterministic_actor_system {
+  fixture() : types{string_type{}, address_type{}, pattern_type{}} {
+    min_running_actors = sys.registry().running();
   }
 
-  ~partition_fixture() {
-    self->send(partition, system::shutdown_atom::value);
-    self->wait_for(partition);
+  /// Creates an indexer manager that spawns dummy INDEXER actors.
+  partition_ptr make_partition() {
+    auto f = [&](path, type) {
+      return sys.spawn(dummy_indexer);
+    };
+    return vast::system::make_partition(state_dir, partition_id, f);
   }
 
-  ids query(const std::string& str) {
-    MESSAGE("sending query");
-    auto expr = to<expression>(str);
-    REQUIRE(expr);
-    ids result;
-    self->request(partition, infinite, *expr).receive(
-      [&](ids& hits) {
-        result = std::move(hits);
-      },
-      error_handler()
-    );
-    MESSAGE("shutting down partition");
-    self->send(partition, system::shutdown_atom::value);
-    self->wait_for(partition);
-    REQUIRE(exists(directory));
-    REQUIRE(exists(directory / "547119946" / "data" / "id" / "orig_h"));
-    REQUIRE(exists(directory / "547119946" / "meta" / "time"));
-    REQUIRE(exists(directory / "547119946" / "meta" / "type"));
-    MESSAGE("respawning partition and sending query again");
-    partition = self->spawn(system::partition, directory);
-    self->request(partition, infinite, *expr).receive(
-      [&](const ids& hits) {
-        REQUIRE_EQUAL(hits, result);
-      },
-      error_handler()
-    );
-    return result;
+  /// Returns how many dummy INDEXER actors are currently running.
+  size_t running_indexers() {
+    return sys.registry().running() - min_running_actors;
   }
 
-  actor partition;
+  /// Makes sure no persistet state exists.
+  void wipe_persisted_state() {
+    rm(state_dir);
+  }
+
+  /// The partition-under-test.
+  partition_ptr put;
+
+  /// A vector with some event types for testing.
+  std::vector<type> types;
+
+  /// Directory where the manager is supposed to persist its state.
+  path state_dir = directory / "indexer-manager";
+
+  /// Number of actors that run before the manager spawns INDEXER actors.
+  size_t min_running_actors;
+
+  /// Some UUID for the partition.
+  uuid partition_id = uuid::random();
 };
 
 } // namespace <anonymous>
 
-FIXTURE_SCOPE(partition_tests, partition_fixture)
+FIXTURE_SCOPE(indexer_manager_tests, fixture)
 
-TEST(partition queries - type extractors) {
-  auto hits = query(":string == \"SF\" && :port == 443/?");
-  CHECK_EQUAL(rank(hits), 38u);
-  hits = query(":subnet in 86.111.146.0/23");
-  CHECK_EQUAL(rank(hits), 72u);
+TEST(shutdown indexers in destructor) {
+  MESSAGE("start manager");
+  put = make_partition();
+  MESSAGE("add INDEXER actors");
+  for (auto& x : types)
+    put->manager().get_or_add(x);
+  REQUIRE_EQUAL(running_indexers(), types.size());
+  CHECK_EQUAL(sorted_strings(put->types()), sorted_strings(types));
+  MESSAGE("stop manager (and INDEXER actors)");
+  put.reset();
+  sched.run();
+  REQUIRE_EQUAL(running_indexers(), 0u);
 }
 
-TEST(partition queries - key extractors) {
-  auto hits = query("conn_state == \"SF\" && id.resp_p == 443/?");
-  CHECK_EQUAL(rank(hits), 38u);
-}
-
-TEST(partition queries - attribute extractors) {
-  MESSAGE("&type");
-  auto hits = query("&type == \"bro::http\"");
-  CHECK_EQUAL(rank(hits), bro_http_log.size());
-  hits = query("&type == \"bro::conn\"");
-  CHECK_EQUAL(rank(hits), bro_conn_log.size());
-  MESSAGE("&time");
-  hits = query("&time > 1970-01-01");
-  auto all = bro_http_log.size() + bro_conn_log.size() + bgpdump_txt.size();
-  CHECK_EQUAL(rank(hits), all);
-}
-
-TEST(partition queries - mixed) {
-  auto hits = query("service == \"http\" && :addr == 212.227.96.110");
-  CHECK_EQUAL(rank(hits), 28u);
+TEST(restore from meta data) {
+  MESSAGE("start first manager");
+  wipe_persisted_state();
+  put = make_partition();
+  REQUIRE_EQUAL(put->dirty(), false);
+  MESSAGE("add INDEXER actors to first manager");
+  for (auto& x : types)
+    put->manager().get_or_add(x);
+  REQUIRE_EQUAL(put->dirty(), true);
+  REQUIRE_EQUAL(running_indexers(), types.size());
+  CHECK_EQUAL(sorted_strings(put->types()), sorted_strings(types));
+  MESSAGE("stop first manager");
+  put.reset();
+  sched.run();
+  REQUIRE_EQUAL(running_indexers(), 0u);
+  MESSAGE("start second manager and expect it to restore its persisted state");
+  put = make_partition();
+  REQUIRE_EQUAL(put->dirty(), false);
+  REQUIRE_EQUAL(sorted_strings(put->types()), sorted_strings(types));
+  put.reset();
+  sched.run();
 }
 
 FIXTURE_SCOPE_END()

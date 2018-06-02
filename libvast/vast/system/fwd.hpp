@@ -15,6 +15,8 @@
 
 #include <memory>
 
+#include <caf/fwd.hpp>
+
 namespace vast::system {
 
 // -- classes ------------------------------------------------------------------
@@ -28,6 +30,7 @@ class import_command;
 class indexer_manager;
 class indexer_stage_driver;
 class node_command;
+class partition;
 class pcap_reader_command;
 class pcap_writer_command;
 class reader_command_base;
@@ -51,5 +54,6 @@ class writer_command;
 // -- aliases ------------------------------------------------------------------
 
 using column_index_ptr = std::unique_ptr<column_index>;
+using partition_ptr = caf::intrusive_ptr<partition>;
 
 } // namespace vast::system

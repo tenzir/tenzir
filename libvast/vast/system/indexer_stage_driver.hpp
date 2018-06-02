@@ -19,7 +19,7 @@
 #include "vast/type.hpp"
 #include "vast/event.hpp"
 
-#include "vast/system/indexer_manager.hpp"
+#include "vast/system/partition.hpp"
 
 namespace vast::system {
 
@@ -48,9 +48,9 @@ class indexer_stage_driver
 public:
   using super = caf::stream_stage_driver<event, indexer_downstream_manager>;
 
-  using index_manager_factory = std::function<indexer_manager_ptr()>;
+  using partition_factory = std::function<partition_ptr()>;
 
-  indexer_stage_driver(downstream_manager_type& dm, index_manager_factory fac,
+  indexer_stage_driver(downstream_manager_type& dm, partition_factory fac,
                        size_t max_partition_size);
 
   ~indexer_stage_driver() noexcept override;
@@ -61,10 +61,13 @@ public:
 private:
   /// Stores how many events remain in the current partition.
   size_t remaining_in_partition_;
-  /// Stores the INDEXER actors for the current partition.
-  indexer_manager_ptr im_;
-  /// Generates INDEXER actors for the manager.
-  index_manager_factory factory_;
+
+  /// Our current partition.
+  partition_ptr partition_;
+
+  /// Generates new partitions whenever the current partition becomes full.
+  partition_factory factory_;
+
   /// Stores how many events form one partition.
   size_t max_partition_size_;
 };
