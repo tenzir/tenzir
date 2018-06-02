@@ -19,7 +19,10 @@
 #include <caf/detail/unordered_flat_map.hpp>
 #include <caf/fwd.hpp>
 
+#include "vast/expression.hpp"
+#include "vast/expression_visitors.hpp"
 #include "vast/fwd.hpp"
+#include "vast/logger.hpp"
 #include "vast/system/fwd.hpp"
 #include "vast/type.hpp"
 
@@ -32,11 +35,10 @@ public:
 
   indexer_manager(partition& parent, indexer_factory f);
 
-/*
   /// Applies all matching INDEXER actors for `expr` to `f` and returns the
   /// number of type matches.
   template <class F>
-  size_t for_each_match(const expression& expr, F f) const {
+  size_t for_each_match(const expression& expr, F f) {
     size_t num = 0;
     for (auto& [t, a] : indexers_) {
       VAST_ASSERT(a != nullptr);
@@ -50,6 +52,7 @@ public:
     return num;
   }
 
+/*
   /// Applies all matching INDEXER actors for `expr` to `f` and returns the
   /// number of type matches.
   template <class F>

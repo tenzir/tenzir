@@ -13,11 +13,13 @@
 
 #pragma once
 
-#include <caf/fwd.hpp>
 #include <caf/detail/unordered_flat_map.hpp>
+#include <caf/event_based_actor.hpp>
+#include <caf/fwd.hpp>
 
 #include "vast/aliases.hpp"
 #include "vast/filesystem.hpp"
+#include "vast/fwd.hpp"
 #include "vast/system/indexer_manager.hpp"
 #include "vast/type.hpp"
 #include "vast/uuid.hpp"
@@ -85,6 +87,19 @@ public:
   /// Returns the file name for saving or loading the ::meta_data.
   path meta_file() const;
 
+  // -- operations -------------------------------------------------------------
+
+  /// Checks what types could match `expr` and calls
+  /// `self->request(...).then(f)` for each matching INDEXER.
+  /// @returns the number of matched INDEXER actors.
+  template <class F>
+  size_t lookup_requests(caf::event_based_actor* self, const expression& expr,
+                         F callback) {
+    return mgr_.for_each_match(expr, [&](caf::actor& indexer) {
+      self->request(indexer, caf::infinite, expr).then(callback);
+    });
+  }
+
 private:
   /// Called from the INDEXER manager whenever a new type gets added during
   /// ingestion.
@@ -127,8 +142,8 @@ partition_ptr make_partition(const path& base_dir, uuid id,
 /// Creates a partition that spawns regular INDEXER actors as children of
 /// `self`.
 /// @relates partition
-partition_ptr make_indexer_manager(caf::local_actor* self, const path& base_dir,
-                                   uuid id);
+partition_ptr make_partition(caf::local_actor* self, const path& base_dir,
+                             uuid id);
 
 } // namespace vast::system
 
