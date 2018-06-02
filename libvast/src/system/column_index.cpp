@@ -42,6 +42,7 @@ caf::expected<column_index_ptr> make_time_index(path filename) {
     }
 
     void add(const event& x) override {
+      VAST_TRACE(VAST_ARG(x));
       idx_->push_back(x.timestamp());
     }
   };
@@ -55,6 +56,7 @@ caf::expected<column_index_ptr> make_type_index(path filename) {
     }
 
     void add(const event& x) override {
+      VAST_TRACE(VAST_ARG(x));
       idx_->push_back(x.type().name());
     }
   };
@@ -70,7 +72,8 @@ caf::expected<column_index_ptr> make_flat_data_index(path filename,
     }
 
     void add(const event& x) override {
-      if (x.type() == column_type_)
+      VAST_TRACE(VAST_ARG(x));
+      if (x.type() == index_type_)
         idx_->push_back(x.data());
     }
   };
@@ -89,6 +92,7 @@ caf::expected<column_index_ptr> make_field_data_index(path filename,
     }
 
     void add(const event& x) override {
+      VAST_TRACE(VAST_ARG(x));
       auto v = get_if<vector>(x.data());
       if (!v)
         return;
@@ -161,6 +165,7 @@ column_index::~column_index() {
 // -- persistency --------------------------------------------------------------
 
 caf::error column_index::init() {
+  VAST_TRACE("");
   if (exists(filename_)) {
     // Materialize the index when encountering persistent state.
     detail::value_index_inspect_helper tmp{index_type_, idx_};
@@ -180,6 +185,7 @@ caf::error column_index::init() {
 }
 
 caf::error column_index::flush_to_disk() {
+  VAST_TRACE("");
   // Check whether there's something to write.
   auto offset = idx_->offset();
   if (offset == last_flush_)
@@ -204,8 +210,11 @@ caf::error column_index::flush_to_disk() {
 // -- properties -------------------------------------------------------------
 
 caf::expected<bitmap> column_index::lookup(const predicate& pred) {
+  VAST_TRACE(VAST_ARG(pred));
   VAST_ASSERT(idx_ != nullptr);
-  return idx_->lookup(pred.op, get<data>(pred.rhs));
+  auto result = idx_->lookup(pred.op, get<data>(pred.rhs));
+  VAST_DEBUG(VAST_ARG(result));
+  return result;
 }
 
 // -- constructors, destructors, and assignment operators ----------------------
