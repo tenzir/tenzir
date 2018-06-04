@@ -13,9 +13,11 @@
 
 #pragma once
 
+#include <tuple>
 #include <unordered_map>
 
 #include <caf/optional.hpp>
+#include <caf/meta/type_name.hpp>
 
 #include "vast/fwd.hpp"
 #include "vast/time.hpp"
@@ -30,8 +32,11 @@ public:
 
   /// A closed interval.
   struct interval {
-    timestamp from = timestamp::max();
-    timestamp to = timestamp::min();
+    interval();
+    interval(timestamp from, timestamp to);
+
+    timestamp from;
+    timestamp to;
   };
 
   /// Per-partition summary statistics.
@@ -63,23 +68,27 @@ public:
   /// Retrieves the list of partition IDs for a given expression.
   std::vector<uuid> lookup(const expression& expr) const;
 
-  inline size_t size() const {
+  inline size_t size() const noexcept {
     return partitions_.size();
   }
 
-  inline const_iterator begin() const {
+  inline const_iterator begin() const noexcept {
     return partitions_.begin();
   }
 
-  inline const_iterator end() const {
+  inline const_iterator end() const noexcept {
     return partitions_.end();
+  }
+
+  inline const map_type& partitions() const noexcept {
+    return partitions_;
   }
 
   // -- inspection -------------------------------------------------------------
 
   template <class Inspector>
   friend auto inspect(Inspector& f, interval& i) {
-    return f(i.from, i.to);
+    return f(caf::meta::type_name("interval"), i.from, i.to);
   }
 
   template <class Inspector>

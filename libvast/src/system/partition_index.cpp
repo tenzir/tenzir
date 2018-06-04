@@ -18,6 +18,18 @@
 
 namespace vast::system {
 
+partition_index::interval::interval()
+  : from(timestamp::max()),
+    to(timestamp::min()) {
+  // nop
+}
+
+partition_index::interval::interval(timestamp first, timestamp last)
+  : from(first),
+    to(last) {
+  // nop
+}
+
 caf::optional<partition_index::partition_synopsis> partition_index::
 operator[](const uuid& partition) const {
   auto i = partitions_.find(partition);
