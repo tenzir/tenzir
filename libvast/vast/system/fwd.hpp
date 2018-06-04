@@ -31,6 +31,7 @@ class indexer_manager;
 class indexer_stage_driver;
 class node_command;
 class partition;
+class partition_index;
 class pcap_reader_command;
 class pcap_writer_command;
 class reader_command_base;
