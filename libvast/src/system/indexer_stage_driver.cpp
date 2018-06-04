@@ -18,13 +18,17 @@
 #include <caf/stream_manager.hpp>
 
 #include "vast/logger.hpp"
+#include "vast/system/partition.hpp"
+#include "vast/system/partition_index.hpp"
 
 namespace vast::system {
 
 indexer_stage_driver::indexer_stage_driver(downstream_manager_type& dm,
+                                           partition_index& pindex,
                                            partition_factory fac,
                                            size_t max_partition_size)
   : super(dm),
+    pindex_(pindex),
     remaining_in_partition_(max_partition_size),
     partition_(fac()),
     factory_(std::move(fac)),
@@ -36,20 +40,22 @@ indexer_stage_driver::~indexer_stage_driver() noexcept {
   // nop
 }
 
-void indexer_stage_driver::process(caf::downstream<output_type>& out,
-                                   std::vector<input_type>& batch) {
+void indexer_stage_driver::process(downstream_type& out, batch_type& batch) {
   VAST_TRACE(CAF_ARG(batch));
-  // Iterate batch to start new INDEXER actors when needed.
-  for (auto& x : batch) {
-    if (auto [hdl, added] = partition_->manager().get_or_add(x.type()); added) {
-      auto slot = out_.parent()->add_unchecked_outbound_path<output_type>(hdl);
-      VAST_DEBUG("spawned new INDEXER at slot", slot);
-      out_.set_filter(slot, x.type());
-    }
-    // Dispatch event.
-    out.push(std::move(x));
+  VAST_ASSERT(!batch.empty());
+  VAST_ASSERT(partition_ != nullptr);
+  auto i = batch.begin();
+  auto e = batch.end();
+  auto n = std::min(remaining_in_partition_,
+                    static_cast<size_t>(std::distance(i, e)));
+  do {
+    // Consume chunk of the batch.
+    consume(out, i, i + n);
+    // Advance iterator.
+    i = i + n;
     // Reset the manager and all outbound paths when finalizing a partition.
-    if (--remaining_in_partition_ == 0) {
+    remaining_in_partition_ -= n;
+    if (remaining_in_partition_ == 0) {
       VAST_DEBUG("partition full, close slots", out_.open_path_slots());
       VAST_ASSERT(out_.buf().size() != 0);
       out_.fan_out_flush();
@@ -59,8 +65,26 @@ void indexer_stage_driver::process(caf::downstream<output_type>& out,
       partition_ = factory_();
       VAST_ASSERT(partition_->types().empty());
       remaining_in_partition_ = max_partition_size_;
+      // Compute size of the next chunk.
+      n = std::min(remaining_in_partition_,
+                   static_cast<size_t>(std::distance(i, e)));
     }
-  }
+  } while (i != e);
+}
+
+void indexer_stage_driver::consume(downstream_type& out, batch_iterator first,
+                                   batch_iterator last) {
+  pindex_.add(partition_->id(), first, last);
+  std::for_each(first, last, [&](event& x) {
+    // Start new INDEXER actors when needed and add it to the stream.
+    if (auto [hdl, added] = partition_->manager().get_or_add(x.type()); added) {
+      auto slot = out_.parent()->add_unchecked_outbound_path<output_type>(hdl);
+      VAST_DEBUG("spawned new INDEXER at slot", slot);
+      out_.set_filter(slot, x.type());
+    }
+    // Ship event to the INDEXER actors.
+    out.push(std::move(x));
+  });
 }
 
 } // namespace vast::system

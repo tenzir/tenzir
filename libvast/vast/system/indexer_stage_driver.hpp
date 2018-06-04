@@ -19,7 +19,7 @@
 #include "vast/type.hpp"
 #include "vast/event.hpp"
 
-#include "vast/system/partition.hpp"
+#include "vast/system/fwd.hpp"
 
 namespace vast::system {
 
@@ -46,19 +46,39 @@ using indexer_downstream_manager
 class indexer_stage_driver
   : public caf::stream_stage_driver<event, indexer_downstream_manager> {
 public:
+  // -- member types -----------------------------------------------------------
+
   using super = caf::stream_stage_driver<event, indexer_downstream_manager>;
 
   using partition_factory = std::function<partition_ptr()>;
 
-  indexer_stage_driver(downstream_manager_type& dm, partition_factory fac,
-                       size_t max_partition_size);
+  using batch_type = std::vector<input_type>;
+
+  using batch_iterator = batch_type::iterator;
+
+  using downstream_type = caf::downstream<output_type>;
+
+  // -- constructors, destructors, and assignment operators --------------------
+
+  indexer_stage_driver(downstream_manager_type& dm, partition_index& pindex,
+                       partition_factory fac, size_t max_partition_size);
 
   ~indexer_stage_driver() noexcept override;
 
-  void process(caf::downstream<output_type>& out,
-               std::vector<input_type>& batch) override;
+  // -- interface implementation -----------------------------------------------
+
+  void process(downstream_type& out, batch_type& batch) override;
 
 private:
+  // -- utility ----------------------------------------------------------------
+
+  void consume(downstream_type& out, batch_iterator first, batch_iterator last);
+
+  // -- member variables -------------------------------------------------------
+
+  /// Keeps statistics for all partitions.
+  partition_index& pindex_;
+
   /// Stores how many events remain in the current partition.
   size_t remaining_in_partition_;
 

@@ -19,6 +19,8 @@
 
 #include "vast/detail/spawn_container_source.hpp"
 #include "vast/system/indexer_stage_driver.hpp"
+#include "vast/system/partition.hpp"
+#include "vast/system/partition_index.hpp"
 #include "vast/uuid.hpp"
 
 #include "fixtures/actor_system_and_events.hpp"
@@ -72,15 +74,13 @@ auto partition_factory(actor_system& sys, path p, size_t* dummy_count,
   };
 }
 
-behavior test_stage(event_based_actor* self,
+behavior test_stage(event_based_actor* self, partition_index* pi,
                     indexer_stage_driver::partition_factory f, size_t mps) {
-  return {
-    [=](stream<event> in) {
-      auto mgr = self->make_continuous_stage<indexer_stage_driver>(f, mps);
-      mgr->add_inbound_path(in);
-      self->unbecome();
-    }
-  };
+  return {[=](stream<event> in) {
+    auto mgr = self->make_continuous_stage<indexer_stage_driver>(*pi, f, mps);
+    mgr->add_inbound_path(in);
+    self->unbecome();
+  }};
 }
 
 struct fixture : fixtures::deterministic_actor_system_and_events {
@@ -111,6 +111,8 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   /// Directory where the manager is supposed to persist its state.
   path state_dir = directory / "indexer-manager";
 
+  partition_index pindex;
+
   std::vector<event> test_events;
 
   size_t num_types;
@@ -124,7 +126,7 @@ TEST(spawning sinks automatically) {
   MESSAGE("spawn the stage");
   auto dummies = size_t{0};
   auto bufs = make_shared<shared_event_buffer_vector>();
-  auto stg = sys.spawn(test_stage,
+  auto stg = sys.spawn(test_stage, &pindex,
                        partition_factory(sys, state_dir, &dummies, bufs),
                        std::numeric_limits<size_t>::max());
   MESSAGE("spawn the source and run");
@@ -146,7 +148,7 @@ TEST(creating partitions automatically) {
   MESSAGE("spawn the stage");
   auto dummies = size_t{0};
   auto bufs = make_shared<shared_event_buffer_vector>();
-  auto stg = sys.spawn(test_stage,
+  auto stg = sys.spawn(test_stage, &pindex,
                        partition_factory(sys, state_dir, &dummies, bufs),
                        10u);
   MESSAGE("spawn the source and run");
