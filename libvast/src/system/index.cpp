@@ -46,6 +46,7 @@ namespace {
 
 // -- scheduling --------------------------------------------------------------
 
+/*
 void evict(stateful_actor<index_state>* self) {
   // TODO: pick the LRU partition, not just a random one.
   for (auto& x : self->state.loaded) {
@@ -80,11 +81,9 @@ void schedule(stateful_actor<index_state>* self, const uuid& part,
     VAST_ASSERT(self->state.scheduled.empty());
     VAST_DEBUG(self, "spawns and dispatches partition", part);
     auto part_dir = self->state.dir / to_string(part);
-    /* TODO: implement me
     auto p = self->spawn<monitored>(partition, std::move(part_dir));
     self->state.loaded.emplace(part, p);
     send_as(ctx.sink, p, ctx.expr);
-    */
     return;
   }
   // If we're full, we delay dispatching until having evicted a partition.
@@ -100,6 +99,7 @@ void schedule(stateful_actor<index_state>* self, const uuid& part,
     evict(self);
   }
 }
+*/
 
 // FIXME: erase lookups that have completed.
 void unschedule(stateful_actor<index_state>*, const actor&) {
@@ -134,14 +134,39 @@ void unschedule(stateful_actor<index_state>*, const actor&) {
 
 } // namespace <anonymous>
 
+void index_state::init(event_based_actor* self, const path& dir,
+                       size_t partition_size, size_t in_mem_partitions,
+                       size_t taste_partitions) {
+  // Set members.
+  this->self = self;
+  this->dir = dir;
+  this->partition_size = partition_size;
+  this->in_mem_partitions = in_mem_partitions;
+  this->taste_partitions = taste_partitions;
+  // Callback for the stream stage for creating a new partition when the
+  // current one becomes full.
+  auto fac = [this]() -> partition_ptr {
+    // Move the active partition into the loaded category.
+    if (active != nullptr)
+      loaded.emplace(active->id(), active);
+    // Create a new active partition.
+    auto id = uuid::random();
+    active = make_partition(this->self, this->dir, id);
+    // Register the new active partition at the stream manager.
+    return active;
+  };
+  stage = self->make_continuous_stage<indexer_stage_driver>(part_index, fac,
+                                                            partition_size);
+}
+
 behavior index(stateful_actor<index_state>* self, const path& dir,
-               size_t max_events, size_t max_parts, size_t taste_parts) {
-  VAST_ASSERT(max_events > 0);
-  VAST_ASSERT(max_parts > 0);
-  VAST_DEBUG(self, "caps partitions at", max_events, "events");
-  VAST_DEBUG(self, "keeps at most", max_parts, "partitions in memory");
-  self->state.capacity = max_parts;
-  self->state.dir = dir;
+               size_t partition_size, size_t in_mem_partitions, size_t taste_partitions) {
+  VAST_ASSERT(partition_size > 0);
+  VAST_ASSERT(in_mem_partitions > 0);
+  VAST_DEBUG(self, "caps partitions at", partition_size, "events");
+  VAST_DEBUG(self, "keeps at most", in_mem_partitions, "partitions in memory");
+  self->state.init(self, dir, partition_size, in_mem_partitions,
+                   taste_partitions);
   auto accountant = accountant_type{};
   if (auto a = self->system().registry().get(accountant_atom::value))
     accountant = actor_cast<accountant_type>(a);
@@ -155,6 +180,7 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
       return {};
     }
   }
+  /*
   self->set_exit_handler(
     [=](const exit_msg& msg) {
       auto can_terminate = [=] {
@@ -230,9 +256,10 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
       }
     }
   );
+  */
   return {
+    /*
     [=](const std::vector<event>&) {
-      /* TODO: implement me
       VAST_DEBUG(self, "got", events.size(), "events ["
                  << events.front().id() << ',' << (events.back().id() + 1)
                  << ')');
@@ -260,8 +287,8 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
       self->state.part_index.add(events, self->state.active.id);
       auto msg = self->current_mailbox_element()->move_content_to_message();
       self->send(self->state.active.partition, msg);
-      */
     },
+    */
     [=](const expression&) -> result<uuid, size_t, size_t> {
       return caf::sec::bad_function_call;
       /* TODO: implement me
@@ -308,6 +335,10 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
         schedule(self, *i, id);
       ctx.partitions.resize(ctx.partitions.size() - n);
       */
+    },
+    [=](caf::stream<event> in) {
+      VAST_DEBUG(self, "got a new source");
+      return self->state.stage->add_inbound_path(in);
     },
   };
 }

@@ -11,29 +11,97 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/ids.hpp"
-#include "vast/concept/parseable/to.hpp"
-#include "vast/concept/parseable/vast/expression.hpp"
-#include "vast/query_options.hpp"
-
 #include "vast/system/index.hpp"
 
 #define SUITE index
 #include "test.hpp"
+
+#include "vast/concept/parseable/to.hpp"
+#include "vast/concept/parseable/vast/expression.hpp"
+#include "vast/concept/printable/std/chrono.hpp"
+#include "vast/concept/printable/to_string.hpp"
+#include "vast/detail/spawn_generator_source.hpp"
+#include "vast/event.hpp"
+#include "vast/ids.hpp"
+#include "vast/query_options.hpp"
+
 #include "fixtures/actor_system_and_events.hpp"
 
-using namespace caf;
 using namespace vast;
 using namespace std::chrono;
 
+using std::literals::operator""s;
+
 namespace {
+
+static constexpr size_t partition_size = 100;
+
+static constexpr size_t in_mem_partitions = 5;
+
+static constexpr size_t taste_partitions = 10;
+
+const timestamp epoch;
+
+using interval = system::partition_index::interval;
+
+auto int_generator() {
+  int i = 0;
+  return [i]() mutable {
+    auto result = event::make(i, integer_type{});
+    result.timestamp(epoch + std::chrono::seconds(i));
+    ++i;
+    return result;
+  };
+}
+
+struct fixture : fixtures::deterministic_actor_system_and_events {
+  fixture() {
+    directory /= "index";
+    index = self->spawn(system::index, directory / "index", partition_size,
+                        in_mem_partitions, taste_partitions);
+  }
+
+  // Returns the state of the `index`.
+  system::index_state& state() {
+    auto ptr = caf::actor_cast<caf::abstract_actor*>(index);
+    return static_cast<caf::stateful_actor<system::index_state>*>(ptr)->state;
+  }
+
+  auto partition_intervals() {
+    std::vector<interval> result;
+    for (auto& kvp : state().part_index.partitions())
+      result.emplace_back(kvp.second.range);
+    std::sort(result.begin(), result.end(),
+              [](auto& x, auto& y) { return x.from < y.from; });
+    return result;
+  }
+
+  // Handle to the INDEX actor.
+  caf::actor index;
+};
 
 } // namespace <anonymous>
 
-FIXTURE_SCOPE(index_tests, fixtures::actor_system_and_events)
+FIXTURE_SCOPE(index_tests, fixture)
 
-TEST(index) {
-  directory /= "index";
+TEST(ingestion) {
+  MESSAGE("ingest 1000 integers");
+  auto src = detail::spawn_generator_source(sys, index, 1000, int_generator());
+  run_exhaustively();
+  MESSAGE("verify partition index");
+  REQUIRE_EQUAL(state().part_index.size(), 10u);
+  auto intervals = partition_intervals();
+  CHECK_EQUAL(intervals[0], interval(epoch, epoch + 99s));
+  CHECK_EQUAL(intervals[1], interval(epoch + 100s, epoch + 199s));
+  CHECK_EQUAL(intervals[2], interval(epoch + 200s, epoch + 299s));
+  CHECK_EQUAL(intervals[3], interval(epoch + 300s, epoch + 399s));
+  CHECK_EQUAL(intervals[4], interval(epoch + 400s, epoch + 499s));
+  CHECK_EQUAL(intervals[5], interval(epoch + 500s, epoch + 599s));
+  CHECK_EQUAL(intervals[6], interval(epoch + 600s, epoch + 699s));
+  CHECK_EQUAL(intervals[7], interval(epoch + 700s, epoch + 799s));
+  CHECK_EQUAL(intervals[8], interval(epoch + 800s, epoch + 899s));
+  CHECK_EQUAL(intervals[9], interval(epoch + 900s, epoch + 999s));
+/*
   MESSAGE("spawing");
   auto index = self->spawn(system::index, directory, 1000, 5, 10);
   MESSAGE("indexing logs");
@@ -96,6 +164,7 @@ TEST(index) {
   );
   self->send_exit(index, exit_reason::user_shutdown);
   self->wait_for(index);
+*/
 }
 
 FIXTURE_SCOPE_END()
