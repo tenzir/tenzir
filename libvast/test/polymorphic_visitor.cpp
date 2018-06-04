@@ -13,7 +13,7 @@
 
 #include <cmath>
 
-#include "vast/visitor.hpp"
+#include "vast/polymorphic_visitor.hpp"
 
 #define SUITE visitor
 #include "test.hpp"
