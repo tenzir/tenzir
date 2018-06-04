@@ -351,3 +351,18 @@ partition_ptr make_partition(caf::local_actor* self, const path& base_dir,
 
 } // namespace system
 } // namespace vast
+
+namespace std {
+
+namespace {
+
+using pptr = vast::system::partition_ptr;
+
+} // namespace <anonymous>
+
+size_t hash<pptr>::operator()(const pptr& ptr) const {
+  hash<vast::uuid> f;
+  return ptr != nullptr ? f(ptr->id()) : 0u;
+}
+
+} // namespace std

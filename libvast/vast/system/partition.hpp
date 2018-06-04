@@ -13,6 +13,8 @@
 
 #pragma once
 
+#include <functional>
+
 #include <caf/detail/unordered_flat_map.hpp>
 #include <caf/event_based_actor.hpp>
 #include <caf/fwd.hpp>
@@ -147,3 +149,11 @@ partition_ptr make_partition(caf::local_actor* self, const path& base_dir,
 
 } // namespace vast::system
 
+namespace std {
+
+template <>
+struct hash<vast::system::partition_ptr> {
+  size_t operator()(const vast::system::partition_ptr& ptr) const;
+};
+
+} // namespace std
