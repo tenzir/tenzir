@@ -44,7 +44,7 @@ namespace vast {
 /// The base class for polymorphic visitors.
 /// @relates make_visitor
 template <class Result>
-class visitor {
+class polymorphic_visitor {
 public:
   template <class T>
   caf::optional<Result> operator()(const T& x) {
@@ -52,7 +52,7 @@ public:
   }
 
 protected:
-  ~visitor() {
+  ~polymorphic_visitor() {
     // nop
   }
 
@@ -64,7 +64,7 @@ private:
 namespace detail {
 
 template <class Result, class F, class... Ts>
-class lambda_visitor : public visitor<Result> {
+class lambda_visitor : public polymorphic_visitor<Result> {
 public:
   explicit lambda_visitor(F f) : f_(std::move(f)) {
     // nop
@@ -98,7 +98,8 @@ private:
 };
 
 template <class F>
-using lambda_visitor_res = typename caf::detail::get_callable_trait<F>::result_type;
+using lambda_visitor_res =
+  typename caf::detail::get_callable_trait<F>::result_type;
 
 } // namespace detail
 

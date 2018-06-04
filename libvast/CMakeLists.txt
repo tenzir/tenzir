@@ -239,6 +239,7 @@ set(tests
   test/parse_data.cpp
   test/parseable.cpp
   test/pattern.cpp
+  test/polymorphic_visitor.cpp
   test/port.cpp
   test/printable.cpp
   test/range_map.cpp
@@ -271,7 +272,6 @@ set(tests
   test/vector_map.cpp
   test/vector_set.cpp
   test/view.cpp
-  test/visitor.cpp
   test/word.cpp
 )
 
