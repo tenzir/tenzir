@@ -80,6 +80,7 @@ set(libvast_sources
   src/system/node.cpp
   src/system/node_command.cpp
   src/system/partition.cpp
+  src/system/partition_index.cpp
   src/system/profiler.cpp
   src/system/reader_command_base.cpp
   src/system/remote_command.cpp
@@ -263,6 +264,7 @@ set(tests
   test/system/indexer_stage_driver.cpp
   test/system/key_value_store.cpp
   test/system/partition.cpp
+  test/system/partition_index.cpp
   test/system/queries.cpp
   test/system/replicated_store.cpp
   test/system/sink.cpp

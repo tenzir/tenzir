@@ -42,29 +42,6 @@ using namespace caf;
 namespace vast {
 namespace system {
 
-void partition_index::add(const std::vector<event> xs, const uuid& partition) {
-  // Compute span of events.
-  auto bound = [](const interval& a, const interval& b) -> interval {
-    return {std::min(a.from, b.from), std::max(a.to, b.to)};
-  };
-  auto fold = [=](const interval& i, const event& e) {
-    return bound(i, {e.timestamp(), e.timestamp()});
-  };
-  auto init = interval{timestamp::max(), timestamp::min()};
-  auto result = std::accumulate(xs.begin(), xs.end(), init, fold);
-  // Update index.
-  auto& x = partitions_[partition];
-  x.range = bound(x.range, result);
-}
-
-std::vector<uuid> partition_index::lookup(const expression& expr) const {
-  std::vector<uuid> result;
-  for (auto& x : partitions_)
-    if (visit(time_restrictor{x.second.range.from, x.second.range.to}, expr))
-      result.push_back(x.first);
-  return result;
-}
-
 namespace {
 
 // -- scheduling --------------------------------------------------------------

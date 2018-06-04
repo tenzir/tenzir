@@ -18,57 +18,19 @@
 #include <caf/actor.hpp>
 #include <caf/stateful_actor.hpp>
 
+#include "vast/detail/flat_set.hpp"
 #include "vast/expression.hpp"
 #include "vast/filesystem.hpp"
-#include "vast/uuid.hpp"
+#include "vast/system/partition.hpp"
+#include "vast/system/partition_index.hpp"
 #include "vast/time.hpp"
-
-#include "vast/detail/flat_set.hpp"
+#include "vast/uuid.hpp"
 
 namespace vast {
 
 class event;
 
 namespace system {
-
-/// Maps events to horizontal partitions of the ::index.
-class partition_index {
-public:
-  /// A closed interval.
-  struct interval {
-    timestamp from = timestamp::max();
-    timestamp to = timestamp::min();
-  };
-
-  /// Per-partition summary statistics.
-  struct partition_synopsis {
-    interval range;
-  };
-
-  /// Adds a set of events to the index for a given partition.
-  void add(const std::vector<event> xs, const uuid& partition);
-
-  /// Retrieves the list of partition IDs for a given expression.
-  std::vector<uuid> lookup(const expression& expr) const;
-
-  template <class Inspector>
-  friend auto inspect(Inspector& f, interval& i) {
-    return f(i.from, i.to);
-  }
-
-  template <class Inspector>
-  friend auto inspect(Inspector& f, partition_synopsis& ps) {
-    return f(ps.range);
-  }
-
-  template <class Inspector>
-  friend auto inspect(Inspector& f, partition_index& pi) {
-    return f(pi.partitions_);
-  }
-
-private:
-  std::unordered_map<uuid, partition_synopsis> partitions_;
-};
 
 struct active_partition_state {
   uuid id;

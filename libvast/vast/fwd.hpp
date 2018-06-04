@@ -20,6 +20,7 @@ namespace vast {
 class address;
 class data;
 class event;
+class expression;
 class json;
 class path;
 class pattern;
