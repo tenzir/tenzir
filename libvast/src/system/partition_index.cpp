@@ -26,19 +26,10 @@ operator[](const uuid& partition) const {
   return caf::none;
 }
 
-void partition_index::add(const std::vector<event> xs, const uuid& partition) {
-  // Compute span of events.
-  auto bound = [](const interval& a, const interval& b) -> interval {
-    return {std::min(a.from, b.from), std::max(a.to, b.to)};
-  };
-  auto fold = [=](const interval& i, const event& e) {
-    return bound(i, {e.timestamp(), e.timestamp()});
-  };
-  auto init = interval{timestamp::max(), timestamp::min()};
-  auto result = std::accumulate(xs.begin(), xs.end(), init, fold);
-  // Update index.
-  auto& x = partitions_[partition];
-  x.range = bound(x.range, result);
+void partition_index::add_one(interval& rng, const event& x) {
+  auto t = x.timestamp();
+  rng.from = std::min(rng.from, t);
+  rng.to = std::max(rng.to, t);
 }
 
 std::vector<uuid> partition_index::lookup(const expression& expr) const {

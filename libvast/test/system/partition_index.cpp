@@ -144,7 +144,7 @@ TEST(uuid lookup) {
   std::vector<mock_partition> mock_partitions;
   for (size_t i = 0; i < num_partitions; ++i) {
     auto& mp = mock_partitions.emplace_back(ids[i], i);
-    uut.add(mp.events, mp.id);
+    uut.add(mp.id, mp.events);
   }
   MESSAGE("verify generated timestamps");
   {
