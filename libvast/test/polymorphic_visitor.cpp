@@ -15,7 +15,7 @@
 
 #include "vast/polymorphic_visitor.hpp"
 
-#define SUITE visitor
+#define SUITE polymorphic_visitor
 #include "test.hpp"
 
 using namespace vast;
