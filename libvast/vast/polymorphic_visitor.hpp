@@ -65,12 +65,12 @@ template <class F>
 using fun_arg_t = typename fun_arg<F>::type;
 
 template <class Result, class CommonBase, class F, class... Ts>
-class fun final : public polymorphic_visitor<Result, CommonBase> {
+class polymorphic_visitor_impl final : public polymorphic_visitor<Result, CommonBase> {
 public:
   using result_t = std::conditional_t<std::is_same_v<void, Result>,
                                       caf::unit_t, Result>;
 
-  explicit fun(F f) : f_(std::move(f)) {
+  explicit polymorphic_visitor_impl(F f) : f_(std::move(f)) {
     // nop
   }
 
@@ -122,8 +122,9 @@ static auto make_polymorphic_visitor(F f, Fs... fs) {
   static_assert(std::is_base_of_v<CommonBase, fun_arg_t<F>>);
   static_assert((std::is_base_of_v<CommonBase, fun_arg_t<Fs>> && ...));
   auto lambda = overload(std::move(f), std::move(fs)...);
-  using visitor_type = fun<result_type, CommonBase, decltype(lambda),
-                                      fun_arg_t<F>, fun_arg_t<Fs>...>;
+  using visitor_type = polymorphic_visitor_impl<
+    result_type, CommonBase, decltype(lambda), fun_arg_t<F>, fun_arg_t<Fs>...
+  >;
   return visitor_type{std::move(lambda)};
 }
 
