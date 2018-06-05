@@ -134,6 +134,16 @@ void unschedule(stateful_actor<index_state>*, const actor&) {
 
 } // namespace <anonymous>
 
+partition_ptr index_state::partition_factory::operator()(const uuid& id) const {
+  return make_partition(st_->self, st_->dir, id);
+}
+
+index_state::index_state()
+  // Arbitrary default value, overridden in ::init.
+  : partition_cache(10, partition_lookup{}, partition_factory{this}) {
+  // nop
+}
+
 void index_state::init(event_based_actor* self, const path& dir,
                        size_t partition_size, size_t in_mem_partitions,
                        size_t taste_partitions) {
@@ -141,14 +151,14 @@ void index_state::init(event_based_actor* self, const path& dir,
   this->self = self;
   this->dir = dir;
   this->partition_size = partition_size;
-  this->in_mem_partitions = in_mem_partitions;
+  this->partition_cache.size(in_mem_partitions);
   this->taste_partitions = taste_partitions;
   // Callback for the stream stage for creating a new partition when the
   // current one becomes full.
   auto fac = [this]() -> partition_ptr {
-    // Move the active partition into the loaded category.
+    // Move the active partition into the LRU cache.
     if (active != nullptr)
-      loaded.emplace(active->id(), active);
+      partition_cache.add(active);
     // Create a new active partition.
     auto id = uuid::random();
     active = make_partition(this->self, this->dir, id);
@@ -257,38 +267,23 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
     }
   );
   */
-  return {
-    /*
-    [=](const std::vector<event>&) {
-      VAST_DEBUG(self, "got", events.size(), "events ["
-                 << events.front().id() << ',' << (events.back().id() + 1)
-                 << ')');
-      auto partition_full = self->state.active.events > 0
-        && self->state.active.events + events.size() > max_events;
-      if (partition_full || !self->state.active.partition) {
-        if (partition_full) {
-          VAST_DEBUG(self, "encountered full partition");
-          if (self->state.loaded.size() == self->state.capacity) {
-            VAST_DEBUG(self, "evicts active partition");
-            self->send(self->state.active.partition, shutdown_atom::value);
-          } else {
-            VAST_DEBUG(self, "moves active partition to cache");
-            self->state.loaded.emplace(self->state.active.id,
-                                       self->state.active.partition);
-          }
-        }
-        auto id = uuid::random();
-        VAST_DEBUG(self, "spawns new active partition", id);
-        auto part_dir = self->state.dir / to_string(id);
-        auto part = self->spawn<monitored>(partition, part_dir);
-        self->state.active = {id, part, 0};
-      }
-      self->state.active.events += events.size();
-      self->state.part_index.add(events, self->state.active.id);
-      auto msg = self->current_mailbox_element()->move_content_to_message();
-      self->send(self->state.active.partition, msg);
+  self->set_default_handler(caf::skip);
+  self->state.has_worker.assign(
+    [=](const expression&) -> result<uuid, size_t, size_t> {
+      auto& st = self->state;
+      st.next_worker = nullptr;
     },
-    */
+    [=](caf::stream<event> in) {
+      VAST_DEBUG(self, "got a new source");
+      return self->state.stage->add_inbound_path(in);
+    }
+  );
+  return {
+    [=](worker_atom, caf::actor worker) {
+      auto& st = self->state;
+      st.next_worker = worker;
+      self->become(st.has_worker);
+    },
     [=](const expression&) -> result<uuid, size_t, size_t> {
       return caf::sec::bad_function_call;
       /* TODO: implement me

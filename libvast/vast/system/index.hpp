@@ -14,18 +14,18 @@
 #pragma once
 
 #include <unordered_map>
+#include <vector>
 
 #include <caf/actor.hpp>
 #include <caf/stateful_actor.hpp>
 
+#include "vast/detail/flat_lru_cache.hpp"
 #include "vast/detail/flat_set.hpp"
 #include "vast/expression.hpp"
-#include "vast/filesystem.hpp"
 #include "vast/fwd.hpp"
 #include "vast/system/indexer_stage_driver.hpp"
 #include "vast/system/partition.hpp"
 #include "vast/system/partition_index.hpp"
-#include "vast/time.hpp"
 #include "vast/uuid.hpp"
 
 namespace vast::system {
@@ -45,11 +45,42 @@ struct lookup_state {
 struct index_state {
   // -- member types -----------------------------------------------------------
 
-  //using stage_ptr = caf::stream_stage<event, indexer_downstream_manager>;
+  /// Pointer to the stage that multiplexing traffic between our sources and
+  /// the INDEXER actors of the current partition.
   using stage_ptr = indexer_stage_driver::stage_ptr_type;
+
+  /// Looks up partitions in the LRU cache by UUID.
+  class partition_lookup {
+  public:
+    inline auto operator()(const uuid& id) const {
+      return [&](const partition_ptr& ptr) {
+        return ptr->id() == id;
+      };
+    }
+  };
+
+  /// Loads partitions from disk by UUID.
+  class partition_factory {
+  public:
+    inline partition_factory(index_state* st) : st_(st) {
+      // nop
+    }
+
+    partition_ptr operator()(const uuid& id) const;
+
+  private:
+    index_state* st_;
+  };
+
+  using partition_cache_type = detail::flat_lru_cache<partition_ptr,
+                                                      partition_lookup,
+                                                      partition_factory>;
 
   // -- constructors, destructors, and assignment operators --------------------
 
+  index_state();
+
+  /// Initializes the state.
   void init(caf::event_based_actor* self, const path& dir, size_t max_events,
             size_t max_parts, size_t taste_parts);
 
@@ -58,18 +89,13 @@ struct index_state {
   /// Allows to select partitions with timestamps.
   partition_index part_index;
 
+  /// Our current partition.
   partition_ptr active;
 
-  std::unordered_map<uuid, partition_ptr> loaded;
+  /// Recently accessed partitions.
+  partition_cache_type partition_cache;
 
-  std::unordered_map<partition_ptr, uuid> evicted;
-
-  std::deque<scheduled_partition_state> scheduled;
-
-  std::unordered_map<uuid, lookup_state> lookups;
-
-  size_t capacity;
-
+  /// Base directory for all partitions of the index.
   path dir;
 
   /// Stream manager for ingesting events.
@@ -81,14 +107,18 @@ struct index_state {
   /// The maximum number of events per partition.
   size_t partition_size;
 
-  /// The maximum number of partitions to hold in memory.
-  size_t in_mem_partitions;
-
   /// The number of partitions to schedule immediately for each query
   size_t taste_partitions;
 
   /// Name of the INDEX actor.
   static inline const char* name = "index";
+
+  /// Stores the next available worker for queries.
+  caf::actor next_worker;
+
+  /// Allows the index to multiplex between waiting for ready workers and
+  /// queries.
+  caf::behavior has_worker;
 };
 
 /// Indexes events in horizontal partitions.
