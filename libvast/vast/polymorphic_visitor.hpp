@@ -75,7 +75,7 @@ private:
                                       caf::unit_t, Result>;
 
   template <class T>
-  bool try_visit(result_t& result, const void* ptr,
+  bool try_visit(caf::optional<result_t>& result, const void* ptr,
                  const std::type_info& info) {
     if (info != typeid(T))
       return false;
@@ -88,7 +88,7 @@ private:
 
   caf::optional<Result> do_visit(const void* ptr,
                                  const std::type_info& info) override {
-    result_t result;
+    caf::optional<result_t> result;
     if ((try_visit<Ts>(result, ptr, info) || ...))
       return result;
     return caf::none;

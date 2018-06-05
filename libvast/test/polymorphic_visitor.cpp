@@ -51,6 +51,16 @@ struct circle : shape {
   const double r = 0;
 };
 
+struct no_default_ctor {
+  explicit no_default_ctor(int x) : data{x} { }
+  int data = 0;
+};
+
+template <class T>
+const shape& as_shape(const T& x) {
+  return x;
+}
+
 } // namespace <anonymous>
 
 TEST(lambda visitation) {
@@ -62,8 +72,21 @@ TEST(lambda visitation) {
   auto x = rectangle{3, 4};
   auto y = square{5};
   auto z = circle{7};
-  auto as_shape = [](auto& x) -> shape& { return x; };
   CHECK_EQUAL(compute_area(as_shape(x)), 12.0);
   CHECK_EQUAL(compute_area(as_shape(y)), 25.0);
   CHECK_EQUAL(compute_area(as_shape(z)), 153.86);
+}
+
+TEST(default constructability not required) {
+  auto f = make_visitor<rectangle, square>(
+    [&](const rectangle&) { return no_default_ctor{1}; },
+    [&](const square&) { return no_default_ctor{2}; }
+  );
+  auto x = square{5};
+  auto result = f(as_shape(x));
+  REQUIRE(result);
+  CHECK_EQUAL(result->data, 2);
+  auto y = circle{7};
+  result = f(as_shape(y));
+  CHECK(!result);
 }
