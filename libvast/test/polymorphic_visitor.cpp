@@ -37,13 +37,13 @@ struct rectangle : shape {
   const double y = 0;
 };
 
-struct square : rectangle {
+struct square final : rectangle {
   square(double x) : rectangle{x, x} {
     // nop
   }
 };
 
-struct circle : shape {
+struct circle final : shape {
   circle(double r) : r{r} {
     // nop
   }
@@ -56,17 +56,16 @@ struct no_default_ctor {
   int data = 0;
 };
 
-template <class T>
-const shape& as_shape(const T& x) {
+inline const shape& as_shape(const shape& x) {
   return x;
 }
 
 } // namespace <anonymous>
 
-TEST(lambda visitation) {
-  auto compute_area = make_visitor<rectangle, square, circle>(
-    [&](const rectangle& x) { return x.x * x.y; },
+TEST(leaf visitation) {
+  auto compute_area = make_polymorphic_visitor<shape>(
     [&](const square& x) { return std::pow(x.x, 2); },
+    [&](const rectangle& x) { return x.x * x.y; },
     [&](const circle& x) { return std::pow(x.r, 2) * 3.14; }
   );
   auto x = rectangle{3, 4};
@@ -77,10 +76,35 @@ TEST(lambda visitation) {
   CHECK_EQUAL(compute_area(as_shape(z)), 153.86);
 }
 
+TEST(ordering) {
+  using std::literals::operator""s;
+  auto get_name_1 = make_polymorphic_visitor<shape>(
+    [&](const rectangle&) { return "rectangle"s; },
+    // Unreachable, never called because rectangle matches first.
+    [&](const square&) { return "square"s; },
+    [&](const circle&) { return "circle"s; }
+  );
+  auto get_name_2 = make_polymorphic_visitor<shape>(
+    // OK, matches before rectable does.
+    [&](const square&) { return "square"s; },
+    [&](const rectangle&) { return "rectangle"s; },
+    [&](const circle&) { return "circle"s; }
+  );
+  auto x = rectangle{3, 4};
+  auto y = square{5};
+  auto z = circle{7};
+  CHECK_EQUAL(*get_name_1(as_shape(x)), "rectangle");
+  CHECK_EQUAL(*get_name_1(as_shape(y)), "rectangle");
+  CHECK_EQUAL(*get_name_1(as_shape(z)), "circle");
+  CHECK_EQUAL(*get_name_2(as_shape(x)), "rectangle");
+  CHECK_EQUAL(*get_name_2(as_shape(y)), "square");
+  CHECK_EQUAL(*get_name_2(as_shape(z)), "circle");
+}
+
 TEST(default constructability not required) {
-  auto f = make_visitor<rectangle, square>(
-    [&](const rectangle&) { return no_default_ctor{1}; },
-    [&](const square&) { return no_default_ctor{2}; }
+  auto f = make_polymorphic_visitor<shape>(
+    [&](const square&) { return no_default_ctor{2}; },
+    [&](const rectangle&) { return no_default_ctor{1}; }
   );
   auto x = square{5};
   auto result = f(as_shape(x));
