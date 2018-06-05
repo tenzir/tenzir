@@ -23,17 +23,17 @@ namespace vast::detail {
 template <class T, class Predicate, class Factory>
 class flat_lru_cache {
 public:
-  // -- sanity checks ----------------------------------------------------------
-
-  static_assert(std::is_empty_v<Predicate> && std::is_empty_v<Factory>);
-
   // -- member types -----------------------------------------------------------
 
   using vector_type = std::vector<T>;
 
   // -- constructors, destructors, and assignment operators -------------------
 
-  flat_lru_cache(size_t size) : size_(size) {
+  flat_lru_cache(size_t size, Predicate pred = Predicate{},
+                 Factory fac = Factory{})
+    : size_(size),
+      pred_(std::move(pred)),
+      make_(std::move(fac)) {
     elements_.reserve(size_);
   }
 
@@ -54,16 +54,37 @@ public:
         std::rotate(i, i + 1, last);
       return elements_.back();
     }
+    return add(make_(key));
+  }
+
+  /// @pre The new value's key does not collide with any existing element.
+  T& add(T value) {
     // Fill cache if we didn't reach capacity yet.
     if (elements_.size() < size_)
-      return elements_.emplace_back(make_(key));
+      return elements_.emplace_back(std::move(value));
     // Evict oldest element by overriding it.
+    auto first = elements_.begin();
+    auto last = elements_.end();
     std::rotate(first, first + 1, last);
-    return elements_.back() = make_(key);
+    return elements_.back() = std::move(value);
   }
 
   vector_type& elements() {
     return elements_;
+  }
+
+  void size(size_t new_size) {
+    if (new_size < elements_.size()) {
+      auto first = elements_.begin();
+      elements_.erase(first, first + (elements_.size() - new_size));
+    } else {
+      elements_.reserve(size_);
+    }
+    size_ = new_size;
+  }
+
+  size_t size() const noexcept {
+    return size_;
   }
 
 private:
@@ -73,17 +94,14 @@ private:
   /// evicted from the front.
   vector_type elements_;
 
-  // Makes sure pred_ and make_ don't waste any space.
-  union {
-    /// Maximum number of elements.
-    size_t size_;
+  /// Maximum number of elements.
+  size_t size_;
 
-    /// Implements key lookups for `T`.
-    Predicate pred_;
+  /// Implements key lookups for `T`.
+  Predicate pred_;
 
-    /// Creates new instances of `T`.
-    Factory make_;
-  };
+  /// Creates new instances of `T`.
+  Factory make_;
 };
 
 } // namespace vast::detail

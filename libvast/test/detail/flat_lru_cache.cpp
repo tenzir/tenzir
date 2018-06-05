@@ -70,7 +70,7 @@ TEST(filling) {
   std::vector<kvp> expected{kvp{"one"}, kvp{"two"}, kvp{"three"}, kvp{"four"},
                             kvp{"five"}};
   for (auto key : {"one", "two", "three", "four", "five"})
-    cache.get_or_add(key);
+    cache.add(kvp{key});
   CHECK_EQUAL(cache.elements(), expected);
 }
 
@@ -78,7 +78,7 @@ TEST(overriding) {
   std::vector<kvp> expected{kvp{"three"}, kvp{"four"}, kvp{"five"}, kvp{"six"},
                             kvp{"seven"}};
   for (auto key : {"one", "two", "three", "four", "five", "six", "seven"})
-    cache.get_or_add(key);
+    cache.add(kvp{key});
   CHECK_EQUAL(cache.elements(), expected);
 }
 
@@ -86,7 +86,7 @@ TEST(reordering) {
   std::vector<kvp> expected{kvp{"one"}, kvp{"three"}, kvp{"four"}, kvp{"five"},
                             kvp{"two"}};
   for (auto key : {"one", "two", "three", "four", "five"})
-    cache.get_or_add(key);
+    cache.add(kvp{key});
   cache.get_or_add("two");
   CHECK_EQUAL(cache.elements(), expected);
 }
