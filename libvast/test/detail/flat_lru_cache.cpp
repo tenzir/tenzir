@@ -14,7 +14,7 @@
 #define SUITE lru_cache
 #include "test.hpp"
 
-#include "vast/detail/lru_cache.hpp"
+#include "vast/detail/flat_lru_cache.hpp"
 
 #include <string>
 
@@ -59,7 +59,7 @@ struct fixture {
     // nop
   }
 
-  vast::detail::lru_cache<kvp, has_key, make_kvp> cache;
+  vast::detail::flat_lru_cache<kvp, has_key, make_kvp> cache;
 };
 
 } // namespace <anonymous>

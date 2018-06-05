@@ -21,7 +21,7 @@ namespace vast::detail {
 
 /// A flat LRU cache for elements that have a key-like member.
 template <class T, class Predicate, class Factory>
-class lru_cache {
+class flat_lru_cache {
 public:
   // -- sanity checks ----------------------------------------------------------
 
@@ -33,13 +33,13 @@ public:
 
   // -- constructors, destructors, and assignment operators -------------------
 
-  lru_cache(size_t size) : size_(size) {
+  flat_lru_cache(size_t size) : size_(size) {
     elements_.reserve(size_);
   }
 
-  lru_cache(lru_cache&&) = default;
+  flat_lru_cache(flat_lru_cache&&) = default;
 
-  lru_cache& operator=(lru_cache&&) = default;
+  flat_lru_cache& operator=(flat_lru_cache&&) = default;
 
   // -- properties -------------------------------------------------------------
 
