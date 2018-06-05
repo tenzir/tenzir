@@ -220,6 +220,7 @@ set(tests
   test/command.cpp
   test/compressedbuf.cpp
   test/data.cpp
+  test/detail/lru_cache.cpp
   test/endpoint.cpp
   test/event.cpp
   test/expression.cpp
