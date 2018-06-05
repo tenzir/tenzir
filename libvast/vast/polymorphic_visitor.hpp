@@ -28,91 +28,102 @@
 
 #include "vast/detail/overload.hpp"
 
-namespace vast::detail {
-
-template <class T>
-static const void* get_most_derived(const T& x) {
-  if constexpr (!std::is_polymorphic_v<T> || std::is_final_v<T>)
-    return &x;
-  return dynamic_cast<const void*>(&x);
-}
-
-} // namespace vast::detail
-
 namespace vast {
 
 /// The base class for polymorphic visitors.
-/// @relates make_visitor
-template <class Result>
+template <class Result, class CommonBase>
 class polymorphic_visitor {
 public:
   template <class T>
   caf::optional<Result> operator()(const T& x) {
-    return do_visit(detail::get_most_derived(x), typeid(x));
+    static_assert(std::is_base_of_v<CommonBase, T>);
+    return do_visit(&x);
   }
 
 protected:
+  virtual caf::optional<Result> do_visit(const CommonBase* ptr) = 0;
+
   ~polymorphic_visitor() {
     // nop
   }
-
-private:
-  virtual caf::optional<Result> do_visit(const void* ptr,
-                                         const std::type_info& info) = 0;
 };
 
 namespace detail {
 
-template <class Result, class F, class... Ts>
-class lambda_visitor : public polymorphic_visitor<Result> {
-public:
-  explicit lambda_visitor(F f) : f_(std::move(f)) {
-    // nop
-  }
+template <class F>
+using fun_res_t =
+  typename caf::detail::get_callable_trait<F>::result_type;
 
-private:
+template <class F>
+struct fun_arg {
+  using arg_types = typename caf::detail::get_callable_trait<F>::arg_types;
+  static_assert(caf::detail::tl_size<arg_types>::value == 1);
+  using type = std::decay_t<caf::detail::tl_head_t<arg_types>>;
+};
+
+template <class F>
+using fun_arg_t = typename fun_arg<F>::type;
+
+template <class Result, class CommonBase, class F, class... Ts>
+class fun final : public polymorphic_visitor<Result, CommonBase> {
+public:
   using result_t = std::conditional_t<std::is_same_v<void, Result>,
                                       caf::unit_t, Result>;
 
-  template <class T>
-  bool try_visit(caf::optional<result_t>& result, const void* ptr,
-                 const std::type_info& info) {
-    if (info != typeid(T))
-      return false;
-    if constexpr (std::is_same_v<void, Result>)
-      f_(*static_cast<const T*>(ptr));
-    else
-      result = f_(*static_cast<const T*>(ptr));
-    return true;
+  explicit fun(F f) : f_(std::move(f)) {
+    // nop
   }
 
-  caf::optional<Result> do_visit(const void* ptr,
-                                 const std::type_info& info) override {
+protected:
+  template <class T>
+  bool try_visit(caf::optional<result_t>& result, const CommonBase* ptr) {
+    auto invoke = [&](const T* dptr) {
+      if constexpr (std::is_same_v<void, Result>)
+        f_(*dptr);
+      else
+        result = f_(*dptr);
+    };
+    if constexpr (std::is_final_v<T>) {
+      if (typeid(*ptr) == typeid(T)) {
+        invoke(static_cast<const T*>(ptr));
+        return true;
+      }
+    } else {
+      auto dptr = dynamic_cast<const T*>(ptr);
+      if (dptr != nullptr) {
+        invoke(dptr);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  caf::optional<Result> do_visit(const CommonBase* ptr) override {
     caf::optional<result_t> result;
-    (try_visit<Ts>(result, ptr, info) || ...);
+    (try_visit<Ts>(result, ptr) || ...);
     return result;
   }
 
   F f_;
 };
 
-template <class F>
-using lambda_visitor_res =
-  typename caf::detail::get_callable_trait<F>::result_type;
-
 } // namespace detail
 
-/// Constructs a visitor for a selected number of types in a polymorphic
-/// hiearchy.
-/// @relates visitor
-template <class... Ts, class F, class... Fs>
-static auto make_visitor(F f, Fs... fs) {
+/// Constructs a visitor from a list of unary functions. All functions must
+/// take an argument that is-a `CommonBase`.
+/// @relates polymorphic_visitor
+template <class CommonBase, class F, class... Fs>
+static auto make_polymorphic_visitor(F f, Fs... fs) {
   using namespace detail;
-  using result_type = lambda_visitor_res<F>;
+  using result_type = fun_res_t<F>;
   // All lambdas must return the same type.
-  static_assert((std::is_same_v<result_type, lambda_visitor_res<Fs>> && ...));
+  static_assert((std::is_same_v<result_type, fun_res_t<Fs>> && ...));
+  // All lambdas must take one argument that's a subtype of CommonBase.
+  static_assert(std::is_base_of_v<CommonBase, fun_arg_t<F>>);
+  static_assert((std::is_base_of_v<CommonBase, fun_arg_t<Fs>> && ...));
   auto lambda = overload(std::move(f), std::move(fs)...);
-  using visitor_type = lambda_visitor<result_type, decltype(lambda), Ts...>;
+  using visitor_type = fun<result_type, CommonBase, decltype(lambda),
+                                      fun_arg_t<F>, fun_arg_t<Fs>...>;
   return visitor_type{std::move(lambda)};
 }
 
