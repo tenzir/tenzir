@@ -89,9 +89,8 @@ private:
   caf::optional<Result> do_visit(const void* ptr,
                                  const std::type_info& info) override {
     caf::optional<result_t> result;
-    if ((try_visit<Ts>(result, ptr, info) || ...))
-      return result;
-    return caf::none;
+    (try_visit<Ts>(result, ptr, info) || ...);
+    return result;
   }
 
   F f_;
