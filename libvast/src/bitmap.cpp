@@ -46,11 +46,11 @@ void bitmap::flip() {
   caf::visit([](auto& bm) { bm.flip(); }, bitmap_);
 }
 
-bitmap::variant& bitmap::data() {
+bitmap::variant& bitmap::get_data() {
   return bitmap_;
 }
 
-const bitmap::variant& bitmap::data() const {
+const bitmap::variant& bitmap::get_data() const {
   return bitmap_;
 }
 
