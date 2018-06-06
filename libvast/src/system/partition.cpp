@@ -332,6 +332,18 @@ path partition::meta_file() const {
   return dir_ / "meta";
 }
 
+size_t partition::get_indexers(std::vector<caf::actor>& indexers,
+                               const expression& expr) {
+  return mgr_.for_each_match(expr,
+                             [&](caf::actor& x) { indexers.emplace_back(x); });
+}
+
+std::vector<caf::actor> partition::get_indexers(const expression& expr) {
+  std::vector<caf::actor> result;
+  get_indexers(result, expr);
+  return result;
+}
+
 // -- free functions -----------------------------------------------------------
 
 partition_ptr make_partition(const path& base_dir, uuid id,
