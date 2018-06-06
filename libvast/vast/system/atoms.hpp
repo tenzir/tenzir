@@ -98,7 +98,7 @@ using source_atom = caf::atom_constant<caf::atom("source")>;
 using subscriber_atom = caf::atom_constant<caf::atom("subscriber")>;
 using supervisor_atom = caf::atom_constant<caf::atom("supervisor")>;
 using tracker_atom = caf::atom_constant<caf::atom("tracker")>;
-using worker_atom = caf::atom_constant<caf::atom("tracker")>;
+using worker_atom = caf::atom_constant<caf::atom("worker")>;
 using exporter_atom = caf::atom_constant<caf::atom("exporter")>;
 using importer_atom = caf::atom_constant<caf::atom("importer")>;
 
