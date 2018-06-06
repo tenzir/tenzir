@@ -43,6 +43,15 @@ public:
 
   // -- properties -------------------------------------------------------------
 
+  /// Queries whether `key` is present in the cache.
+  template <class K>
+  bool contains(const K& key) {
+    auto first = elements_.begin();
+    auto last = elements_.end();
+    auto i = std::find_if(first, last, pred_(key));
+    return i != last;
+  }
+
   /// Gets the element matching the predicate or creates a new one.
   template <class K>
   T& get_or_add(const K& key) {
