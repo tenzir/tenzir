@@ -15,6 +15,8 @@
 
 #include <array>
 
+#include <caf/meta/hex_formatted.hpp>
+
 #include "vast/detail/operators.hpp"
 
 namespace vast {
@@ -54,7 +56,7 @@ public:
 
   template <class Inspector>
   friend auto inspect(Inspector& f, uuid& u) {
-    return f(u.id_);
+    return f(caf::meta::hex_formatted(), u.id_);
   }
 
 private:
