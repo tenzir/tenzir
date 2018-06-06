@@ -118,6 +118,10 @@ struct index_state {
   /// Maps query IDs to pending lookup state.
   std::unordered_map<uuid, lookup_state> pending;
 
+  /// Stores partitions that are no longer active but have not persisted their
+  /// state yet.
+  std::vector<std::pair<partition_ptr, size_t>> unpersisted;
+
   /// Name of the INDEX actor.
   static inline const char* name = "index";
 };

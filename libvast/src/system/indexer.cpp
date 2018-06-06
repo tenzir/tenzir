@@ -82,6 +82,11 @@ behavior indexer(stateful_actor<indexer_state>* self, path dir,
     [=](const std::vector<event>& xs) {
       handle_batch(xs);
     },
+    [=](persist_atom) -> result<void> {
+      if (auto err = self->state.tbl.flush_to_disk(); err != caf::none)
+        return err;
+      return caf::unit;
+    },
     [=](stream<event> in) {
       self->make_sink(
         in,

@@ -101,9 +101,17 @@ behavior collector(stateful_actor<collector_state>* self, actor master) {
 } // namespace <anonymous>
 
 partition_ptr index_state::partition_factory::operator()(const uuid& id) const {
-  return st_->active != nullptr && st_->active->id() == id
-         ? st_->active
-         : make_partition(st_->self, st_->dir, id);
+  // There are three options for loading a partition: 1) it is active, 2) it is
+  // unpersisted, or 3) it needs be loaded from disk.
+  auto& active = st_->active;
+  if (active != nullptr && active->id() == id)
+    return active;
+  auto pred = [&](auto& kvp) { return kvp.first->id() == id; };
+  auto& xs = st_->unpersisted;
+  if (auto i = std::find_if(xs.begin(), xs.end(), pred); i != xs.end())
+    return i->first;
+  VAST_DEBUG(st_->self, "loads partition", id);
+  return make_partition(st_->self, st_->dir, id);
 }
 
 index_state::index_state()
@@ -124,11 +132,35 @@ void index_state::init(event_based_actor* self, const path& dir,
   // Callback for the stream stage for creating a new partition when the
   // current one becomes full.
   auto fac = [this]() -> partition_ptr {
-    // Move the active partition into the LRU cache.
-    if (active != nullptr && !lru_partitions.contains(active->id()))
-      lru_partitions.add(active);
+    // Persist meta data and the state of all INDEXER actors when the active
+    // partition becomes full.
+    if (active != nullptr) {
+      active->flush_to_disk();
+      auto& mgr = active->manager();
+      // Store this partition as unpersisted to make sure we're not attempting
+      // to load it from disk until it is safe to do so.
+      unpersisted.emplace_back(active, mgr.indexer_count());
+      auto& id = active->id();
+      mgr.for_each([&](const actor& indexer) {
+        this->self->request(indexer, infinite, persist_atom::value).then([=] {
+          auto pred = [=](auto& kvp) { return kvp.first->id() == id; };
+          auto& xs = unpersisted;
+          auto i = std::find_if(xs.begin(), xs.end(), pred);
+          if (i == xs.end()) {
+            VAST_ERROR(this->self,
+                       "received an invalid response to a 'persist' message");
+            return;
+          }
+          if (--i->second == 0) {
+            VAST_DEBUG(this->self, "successfully persisted", id);
+            xs.erase(i);
+          }
+        });
+      });
+    }
     // Create a new active partition.
     auto id = uuid::random();
+    VAST_DEBUG(this->self, "starts a new partition:", id);
     active = make_partition(this->self, this->dir, id);
     // Register the new active partition at the stream manager.
     return active;

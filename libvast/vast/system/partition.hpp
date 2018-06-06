@@ -57,6 +57,10 @@ public:
 
   ~partition() noexcept override;
 
+  // -- persistency ------------------------------------------------------------
+
+  caf::error flush_to_disk();
+
   // -- properties -------------------------------------------------------------
 
   /// Returns the INDEXER manager.

@@ -305,18 +305,35 @@ partition::partition(const path& base_dir, uuid id,
   // are pre-loading all INDEXER types we are aware of.
   if (exists(dir_)) {
     auto res = load(meta_file(), meta_data_);
-    if (!res)
+    if (!res) {
       VAST_ERROR("unable to read partition meta data:", res.error());
+    } else {
+      for (auto& kvp : meta_data_.types) {
+        // We spawn all INDEXER actors immediately. However, the factory spawns
+        // those actors with lazy_init, which means they won't load persisted
+        // state from disk until first access.
+        mgr_.get_or_add(kvp.second);
+      }
+    }
   }
 }
 
 partition::~partition() noexcept {
-  // Save persistent state.
+  flush_to_disk();
+}
+
+// -- persistency ------------------------------------------------------------
+
+caf::error partition::flush_to_disk() {
   if (meta_data_.dirty) {
     if (!exists(dir_))
       mkdir(dir_);
-    save(meta_file(), meta_data_);
+    auto res = save(meta_file(), meta_data_);
+    if (!res)
+      return std::move(res.error());
+    meta_data_.dirty = false;
   }
+  return caf::none;
 }
 
 std::vector<type> partition::types() const {
@@ -353,8 +370,9 @@ partition_ptr make_partition(const path& base_dir, uuid id,
 
 partition_ptr make_partition(caf::local_actor* self, const path& base_dir,
                              uuid id) {
-  auto f = [self](path indexer_path, type indexer_type) {
-    VAST_DEBUG(self, "creates event-indexer for type", indexer_type);
+  auto f = [=](path indexer_path, type indexer_type) {
+    VAST_DEBUG(self, "creates INDEXER in partition", id, "for type",
+               indexer_type);
     return self->spawn<caf::lazy_init>(indexer, std::move(indexer_path),
                                        std::move(indexer_type));
   };

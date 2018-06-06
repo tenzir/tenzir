@@ -21,8 +21,7 @@
 
 namespace vast::system {
 
-caf::expected<table_index> make_table_index(path base_dir,
-                                                type event_type) {
+caf::expected<table_index> make_table_index(path base_dir, type event_type) {
   caf::error err;
   table_index result{event_type, base_dir};
   result.columns_.resize(table_index::meta_column_count
@@ -48,6 +47,7 @@ caf::error table_index::flush_to_disk() {
     if (err)
       return err;
   }
+  dirty_ = false;
   return caf::none;
 }
 

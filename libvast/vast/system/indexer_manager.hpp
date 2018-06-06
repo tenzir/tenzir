@@ -52,17 +52,19 @@ public:
     return num;
   }
 
-/*
-  /// Applies all matching INDEXER actors for `expr` to `f` and returns the
-  /// number of type matches.
+  /// Applies `f` to all INDEXER actors.
   template <class F>
   void for_each(F f) const {
     for (auto& kvp : indexers_) {
-      VAST_ASSERT(kvp->second != nullptr);
-      f(kvp->second);
+      VAST_ASSERT(kvp.second != nullptr);
+      f(kvp.second);
     }
   }
-*/
+
+  /// Returns the number of INDEXER actors.
+  inline size_t indexer_count() const {
+    return indexers_.size();
+  }
 
   /// Adds an INDEXER to the manager if no INDEXER is assigned to `key` yet.
   /// @returns The INDEXER assigned to `key` and whether the INDEXER was
