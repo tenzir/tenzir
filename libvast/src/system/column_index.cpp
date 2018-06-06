@@ -113,49 +113,6 @@ caf::expected<column_index_ptr> make_field_data_index(path filename,
   return init_res(std::move(res));
 }
 
-/*
-caf::expected<bitmap> lookup(column_index::owning_pointer_vec columns,
-                             const type& event_type,
-                             const predicate& x) {
-  // For now, we require that the predicate is part of a normalized expression,
-  // i.e., LHS an extractor type and RHS of type data.
-  auto rhs = get_if<data>(pred.rhs);
-  if (!rhs)
-    return ec::invalid_query;
-  // Specialize the predicate for the type.
-  auto resolved = type_resolver{event_type}(pred);
-  if (!resolved)
-    return std::move(resolved.error());
-  auto indexers = visit(loader{self}, *resolved);
-  // Forward predicate to all available indexers.
-  if (indexers.empty()) {
-    VAST_DEBUG(self, "did not find matching indexers for", pred);
-    rp.deliver(bitmap{});
-    return;
-  }
-  VAST_DEBUG(self, "asks", indexers.size(), "indexers");
-  // Manual map-reduce over the indexers.
-  auto n = std::make_shared<size_t>(indexers.size());
-  auto reducer = self->system().spawn([=]() mutable -> behavior {
-    auto result = std::make_shared<bitmap>();
-    return {
-      [=](const bitmap& bm) mutable {
-        if (!bm.empty())
-          *result |= bm;
-        if (--*n == 0)
-          rp.deliver(std::move(*result));
-      },
-      [=](error& e) mutable {
-        rp.deliver(std::move(e));
-      }
-    };
-  });
-  auto msg = self->current_mailbox_element()->move_content_to_message();
-  for (auto& x : indexers)
-    send_as(reducer, x, msg);
-}
-*/
-
 // -- constructors, destructors, and assignment operators ----------------------
 
 column_index::~column_index() {
