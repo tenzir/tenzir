@@ -30,17 +30,6 @@
 
 namespace vast::system {
 
-struct scheduled_partition_state {
-  uuid id;
-  detail::flat_set<uuid> lookups;
-};
-
-struct lookup_state {
-  expression expr;
-  caf::actor sink;
-  std::vector<uuid> partitions;
-};
-
 /// State of an INDEX actor.
 struct index_state {
   // -- member types -----------------------------------------------------------
@@ -76,6 +65,15 @@ struct index_state {
                                                       partition_lookup,
                                                       partition_factory>;
 
+  /// Stores context information for unfinished queries.
+  struct lookup_state {
+    /// Issued query.
+    expression expr;
+
+    /// Unscheduled partitions.
+    std::vector<uuid> partitions;
+  };
+
   // -- constructors, destructors, and assignment operators --------------------
 
   index_state();
@@ -93,7 +91,7 @@ struct index_state {
   partition_ptr active;
 
   /// Recently accessed partitions.
-  partition_cache_type partition_cache;
+  partition_cache_type lru_partitions;
 
   /// Base directory for all partitions of the index.
   path dir;
@@ -110,15 +108,18 @@ struct index_state {
   /// The number of partitions to schedule immediately for each query
   size_t taste_partitions;
 
-  /// Name of the INDEX actor.
-  static inline const char* name = "index";
-
   /// Stores the next available worker for queries.
   caf::actor next_worker;
 
   /// Allows the index to multiplex between waiting for ready workers and
   /// queries.
   caf::behavior has_worker;
+
+  /// Maps query IDs to pending lookup state.
+  std::unordered_map<uuid, lookup_state> pending;
+
+  /// Name of the INDEX actor.
+  static inline const char* name = "index";
 };
 
 /// Indexes events in horizontal partitions.
@@ -130,7 +131,7 @@ struct index_state {
 /// @pre `partition_size > 0 && in_mem_partitions > 0`
 caf::behavior index(caf::stateful_actor<index_state>* self, const path& dir,
                     size_t partition_size, size_t in_mem_partitions,
-                    size_t taste_partitions);
+                    size_t taste_partitions, size_t num_workers);
 
 } // namespace vast::system
 

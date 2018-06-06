@@ -27,27 +27,30 @@
 
 #include "fixtures/actor_system_and_events.hpp"
 
+using caf::after;
+using std::chrono_literals::operator""s;
+
 using namespace vast;
 using namespace std::chrono;
-
-using std::literals::operator""s;
 
 namespace {
 
 static constexpr size_t partition_size = 100;
 
-static constexpr size_t in_mem_partitions = 5;
+static constexpr size_t in_mem_partitions = 8;
 
-static constexpr size_t taste_partitions = 10;
+static constexpr size_t taste_count = 4;
+
+static constexpr size_t num_collectors = 1;
 
 const timestamp epoch;
 
 using interval = system::partition_index::interval;
 
-auto int_generator() {
+auto int_generator(int mod = std::numeric_limits<int>::max()) {
   int i = 0;
-  return [i]() mutable {
-    auto result = event::make(i, integer_type{});
+  return [i, mod]() mutable {
+    auto result = event::make(i % mod, integer_type{}, i);
     result.timestamp(epoch + std::chrono::seconds(i));
     ++i;
     return result;
@@ -58,13 +61,16 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   fixture() {
     directory /= "index";
     index = self->spawn(system::index, directory / "index", partition_size,
-                        in_mem_partitions, taste_partitions);
+                        in_mem_partitions, taste_count, num_collectors);
+  }
+
+  ~fixture() {
+    anon_send_exit(index, caf::exit_reason::user_shutdown);
   }
 
   // Returns the state of the `index`.
   system::index_state& state() {
-    auto ptr = caf::actor_cast<caf::abstract_actor*>(index);
-    return static_cast<caf::stateful_actor<system::index_state>*>(ptr)->state;
+    return deref<caf::stateful_actor<system::index_state>>(index).state;
   }
 
   auto partition_intervals() {
@@ -101,70 +107,86 @@ TEST(ingestion) {
   CHECK_EQUAL(intervals[7], interval(epoch + 700s, epoch + 799s));
   CHECK_EQUAL(intervals[8], interval(epoch + 800s, epoch + 899s));
   CHECK_EQUAL(intervals[9], interval(epoch + 900s, epoch + 999s));
-/*
-  MESSAGE("spawing");
-  auto index = self->spawn(system::index, directory, 1000, 5, 10);
-  MESSAGE("indexing logs");
-  self->send(index, bro_conn_log);
-  self->send(index, bro_dns_log);
-  self->send(index, bro_http_log);
-  MESSAGE("issueing queries");
-  auto expr = to<expression>(":addr == 74.125.19.100");
-  REQUIRE(expr);
-  auto total_hits = size_t{11u + 0 + 24}; // conn + dns + http
-  // An index lookup first returns a unique ID along with the number of
-  // partitions that the expression spans. In
-  // case the lookup doesn't yield any hits, the index returns the invalid
-  // (nil) ID.
-  self->send(index, *expr);
+}
+
+TEST(one-shot integer query result) {
+  MESSAGE("fill first " << taste_count << " partitions");
+  auto src = detail::spawn_generator_source(sys, index,
+                                            partition_size * taste_count,
+                                            int_generator(2));
+  run_exhaustively();
+  MESSAGE("query half of the values");
+  self->send(index, unbox(to<expression>(":int == 1")));
+  run_exhaustively();
   self->receive(
-    [&](const uuid& id, size_t total, size_t scheduled) {
-      CHECK_NOT_EQUAL(id, uuid::nil());
-      // Each batch wound up in its own partition.
-      CHECK_EQUAL(total, 3u);
-      CHECK_EQUAL(scheduled, 3u);
-      // After the lookup ID has arrived,
-      size_t i = 0;
-      ids all;
-      self->receive_for(i, scheduled)(
-        [&](const ids& hits) { all |= hits; },
-        error_handler()
-      );
-      CHECK_EQUAL(rank(all), total_hits);
+    [&](uuid& query_id, size_t hits, size_t scheduled) {
+      CHECK_EQUAL(query_id, uuid::nil());
+      CHECK_EQUAL(hits, taste_count);
+      CHECK_EQUAL(scheduled, taste_count);
     },
-    error_handler()
-  );
-  self->send_exit(index, exit_reason::user_shutdown);
-  self->wait_for(index);
-  CHECK(exists(directory / "meta"));
-  MESSAGE("reloading index");
-  index = self->spawn(system::index, directory, 1000, 2, 2);
-  MESSAGE("issueing queries");
-  self->send(index, *expr);
+    after(0s) >> [&] { FAIL("INDEX did not respond to query"); });
+  ids expected_result;
+  for (size_t i = 0; i < (partition_size * taste_count) / 2; ++i) {
+    expected_result.append_bit(false);
+    expected_result.append_bit(true);
+  }
+  ids result;
+  for (size_t i = 0; i < taste_count; ++i)
+    self->receive(
+      [&](ids& sub_result) {
+        CHECK_EQUAL(rank<1>(sub_result), partition_size / 2);
+        result |= sub_result;
+      },
+      after(0s) >> [&] { FAIL("missing sub result " << i); });
+  CHECK_EQUAL(result, expected_result);
+}
+
+TEST(iterable integer query result) {
+  MESSAGE("fill first " << (taste_count * 3) << " partitions");
+  auto src = detail::spawn_generator_source(sys, index,
+                                            partition_size * taste_count * 3,
+                                            int_generator(2));
+  run_exhaustively();
+  MESSAGE("query half of the values");
+  self->send(index, unbox(to<expression>(":int == 1")));
+  run_exhaustively();
+  uuid qid;
   self->receive(
-    [&](const uuid& id, size_t total, size_t scheduled) {
-      CHECK_NOT_EQUAL(id, uuid::nil());
-      CHECK_EQUAL(total, 3u);
-      CHECK_EQUAL(scheduled, 2u); // Only two this time
-      size_t i = 0;
-      ids all;
-      self->receive_for(i, scheduled)(
-        [&](const ids& hits) { all |= hits; },
-        error_handler()
-      );
-      // Evict one partition.
-      self->send(index, id, size_t{1});
+    [&](uuid& query_id, size_t hits, size_t scheduled) {
+      qid = query_id;
+      CHECK_NOT_EQUAL(query_id, uuid::nil());
+      CHECK_EQUAL(hits, taste_count * 3);
+      CHECK_EQUAL(scheduled, taste_count);
+    },
+    after(0s) >> [&] { FAIL("INDEX did not respond to query"); });
+  ids expected_result;
+  for (size_t i = 0; i < (partition_size * taste_count * 3) / 2; ++i) {
+    expected_result.append_bit(false);
+    expected_result.append_bit(true);
+  }
+  MESSAGE("collect immediate results");
+  ids result;
+  for (size_t i = 0; i < taste_count; ++i)
+    self->receive(
+      [&](ids& sub_result) {
+        CHECK_EQUAL(rank<1>(sub_result), partition_size / 2);
+        result |= sub_result;
+      },
+      after(0s) >> [&] { FAIL("missing sub result " << i); });
+  MESSAGE("collect remaining results");
+  for (size_t j = 2; j > 0; --j) {
+    CHECK_EQUAL(state().pending[qid].partitions.size(), taste_count * j);
+    self->send(index, qid, taste_count);
+    run_exhaustively();
+    for (size_t i = 0; i < taste_count; ++i)
       self->receive(
-        [&](const ids& hits) { all |= hits; },
-        error_handler()
-      );
-      CHECK_EQUAL(rank(all), total_hits); // conn + dns + http
-    },
-    error_handler()
-  );
-  self->send_exit(index, exit_reason::user_shutdown);
-  self->wait_for(index);
-*/
+        [&](ids& sub_result) {
+          CHECK_EQUAL(rank<1>(sub_result), partition_size / 2);
+          result |= sub_result;
+        },
+        after(0s) >> [&] { FAIL("missing sub result " << i); });
+  }
+  CHECK_EQUAL(result, expected_result);
 }
 
 FIXTURE_SCOPE_END()

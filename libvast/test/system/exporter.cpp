@@ -34,7 +34,7 @@ using namespace std::chrono;
 FIXTURE_SCOPE(exporter_tests, fixtures::actor_system_and_events)
 
 TEST(exporter historical) {
-  auto i = self->spawn(system::index, directory / "index", 1000, 5, 5);
+  auto i = self->spawn(system::index, directory / "index", 1000, 5, 5, 1);
   auto a = self->spawn(system::archive, directory / "archive", 1, 1024);
   MESSAGE("ingesting conn.log");
   self->send(i, bro_conn_log);
@@ -65,7 +65,7 @@ TEST(exporter historical) {
 }
 
 TEST(exporter continuous -- exporter only) {
-  auto i = self->spawn(system::index, directory / "index", 1000, 5, 5);
+  auto i = self->spawn(system::index, directory / "index", 1000, 5, 5, 1);
   auto a = self->spawn(system::archive, directory / "archive", 1, 1024);
   auto expr = to<expression>("service == \"http\" && :addr == 212.227.96.110");
   REQUIRE(expr);
@@ -162,7 +162,7 @@ TEST(foobar) {
 
 TEST(exporter continuous -- with importer) {
   using namespace system;
-  auto ind = self->spawn(system::index, directory / "index", 1000, 5, 5);
+  auto ind = self->spawn(system::index, directory / "index", 1000, 5, 5, 1);
   auto arc = self->spawn(archive, directory / "archive", 1, 1024);
   auto imp = self->spawn(importer, directory / "importer");
   auto con = self->spawn(raft::consensus, directory / "consensus");
@@ -205,7 +205,7 @@ TEST(exporter continuous -- with importer) {
 
 TEST(exporter universal) {
   using namespace system;
-  auto ind = self->spawn(system::index, directory / "index", 1000, 5, 5);
+  auto ind = self->spawn(system::index, directory / "index", 1000, 5, 5, 1);
   auto arc = self->spawn(archive, directory / "archive", 1, 1024);
   auto imp = self->spawn(importer, directory / "importer");
   auto con = self->spawn(raft::consensus, directory / "consensus");
