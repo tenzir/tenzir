@@ -64,8 +64,6 @@ TEST(Arrow Bro log writer) {
     auto& xs = get<std::vector<data>>((*logs)[0].data());
     auto col1 = std::make_shared<::arrow::StringArray>(b->column(1)->data());
     CHECK_EQUAL(col1->GetString(0), get<std::string>(xs[1]));
-    // TODO: remove debugging output.
-    std::cout << std::hex << oids.back().hex() << std::endl;
   }
 }
 

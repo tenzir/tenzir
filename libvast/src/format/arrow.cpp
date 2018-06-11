@@ -32,6 +32,7 @@ namespace vast {
 
 namespace {
 
+// Helper method to call the convert visitor
 std::shared_ptr<arrow::Field> convert_to_arrow_field(const type& value) {
   format::arrow::convert_visitor f;
   return visit(f, value);
@@ -50,17 +51,17 @@ expected<std::shared_ptr<arrow::RecordBatch>> transpose(const event& e) {
     schema_vector.push_back(convert_to_arrow_field(e.type()));
   }
   auto schema = std::make_shared<arrow::Schema>(schema_vector);
-  std::unique_ptr<arrow::RecordBatchBuilder> r_builder;
+  std::unique_ptr<arrow::RecordBatchBuilder> rbuilder;
   auto status = arrow::RecordBatchBuilder::Make(
-    schema, arrow::default_memory_pool(), &r_builder);
+    schema, arrow::default_memory_pool(), &rbuilder);
   std::shared_ptr<arrow::RecordBatch> batch;
-  std::shared_ptr<::arrow::RecordBatchBuilder> sr_builder(
-    std::move(r_builder.release()));
-  format::arrow::insert_visitor iv(sr_builder);
+  std::shared_ptr<::arrow::RecordBatchBuilder> srbuilder(
+    std::move(rbuilder.release()));
+  format::arrow::insert_visitor iv{srbuilder};
   if (status.ok()) {
     status = visit(iv, e.type(), e.data());
     if (status.ok())
-      status = sr_builder->Flush(&batch);
+      status = srbuilder->Flush(&batch);
   }
   if (!status.ok())
     return make_error(ec::format_error, "failed to flush batch",
@@ -199,15 +200,16 @@ insert_visitor::insert_visitor(std::shared_ptr<::arrow::RecordBatchBuilder>& b)
   // nop
 }
 
-insert_visitor::insert_visitor(std::shared_ptr<::arrow::RecordBatchBuilder>& b,
-                               u_int64_t c, u_int64_t c_builder)
-    : rbuilder(b), counter(c), c_builder(c_builder) {
+/*insert_visitor::insert_visitor(std::shared_ptr<::arrow::RecordBatchBuilder>& b,
+                               u_int64_t c, u_int64_t cbuilder)
+    : rbuilder(b), counter(c), cbuilder(cbuilder) {
   // nop
 }
+*/
 
 insert_visitor::insert_visitor(std::shared_ptr<::arrow::RecordBatchBuilder>& b,
                                u_int64_t c)
-    : rbuilder(b), counter(c) {
+    : rbuilder(b), cbuilder(c) {
   // nop
 }
 
@@ -216,126 +218,124 @@ insert_visitor::insert_visitor(std::shared_ptr<::arrow::RecordBatchBuilder>& b,
 }
 
 ::arrow::Status insert_visitor::operator()(const none_type&, none) {
-  auto builder = rbuilder->GetFieldAs<::arrow::NullBuilder>(c_builder);
+  auto builder = rbuilder->GetFieldAs<::arrow::NullBuilder>(cbuilder);
   return builder->AppendNull();
 }
 
 ::arrow::Status insert_visitor::operator()(const count_type&, count d) {
-  auto builder = rbuilder->GetFieldAs<::arrow::UInt64Builder>(c_builder);
+  auto builder = rbuilder->GetFieldAs<::arrow::UInt64Builder>(cbuilder);
   return builder->Append(d);
 }
 
 ::arrow::Status insert_visitor::operator()(const count_type&, none) {
-  auto builder = rbuilder->GetFieldAs<::arrow::UInt64Builder>(c_builder);
+  auto builder = rbuilder->GetFieldAs<::arrow::UInt64Builder>(cbuilder);
   return builder->AppendNull();
 }
 
 ::arrow::Status insert_visitor::operator()(const integer_type&, integer d) {
-  auto builder = rbuilder->GetFieldAs<::arrow::UInt64Builder>(c_builder);
+  auto builder = rbuilder->GetFieldAs<::arrow::UInt64Builder>(cbuilder);
   return builder->Append(d);
 }
 
 ::arrow::Status insert_visitor::operator()(const integer_type&, none) {
-  auto builder = rbuilder->GetFieldAs<::arrow::UInt64Builder>(c_builder);
+  auto builder = rbuilder->GetFieldAs<::arrow::UInt64Builder>(cbuilder);
   return builder->AppendNull();
 }
 
 ::arrow::Status insert_visitor::operator()(const real_type&, real d) {
-  auto builder = rbuilder->GetFieldAs<::arrow::FloatBuilder>(c_builder);
+  auto builder = rbuilder->GetFieldAs<::arrow::FloatBuilder>(cbuilder);
   return builder->Append(d);
 }
 
 ::arrow::Status insert_visitor::operator()(const real_type&, none) {
-  auto builder = rbuilder->GetFieldAs<::arrow::FloatBuilder>(c_builder);
+  auto builder = rbuilder->GetFieldAs<::arrow::FloatBuilder>(cbuilder);
   return builder->AppendNull();
 }
 
 ::arrow::Status insert_visitor::operator()(const string_type&, std::string d) {
-  auto builder = rbuilder->GetFieldAs<::arrow::StringBuilder>(c_builder);
+  auto builder = rbuilder->GetFieldAs<::arrow::StringBuilder>(cbuilder);
   return builder->Append(d);
 }
 
 ::arrow::Status insert_visitor::operator()(const string_type&, none) {
-  auto builder = rbuilder->GetFieldAs<::arrow::StringBuilder>(c_builder);
+  auto builder = rbuilder->GetFieldAs<::arrow::StringBuilder>(cbuilder);
   return builder->AppendNull();
 }
 
 ::arrow::Status insert_visitor::operator()(const boolean_type&, bool d) {
-  auto builder = rbuilder->GetFieldAs<::arrow::BooleanBuilder>(c_builder);
+  auto builder = rbuilder->GetFieldAs<::arrow::BooleanBuilder>(cbuilder);
   return builder->Append(d);
 }
 
 ::arrow::Status insert_visitor::operator()(const boolean_type&, none) {
-  auto builder = rbuilder->GetFieldAs<::arrow::BooleanBuilder>(c_builder);
+  auto builder = rbuilder->GetFieldAs<::arrow::BooleanBuilder>(cbuilder);
   return builder->AppendNull();
 }
 
 ::arrow::Status insert_visitor::operator()(const timestamp_type&,
                                            const timestamp& d) {
-  auto builder = rbuilder->GetFieldAs<::arrow::TimestampBuilder>(c_builder);
+  auto builder = rbuilder->GetFieldAs<::arrow::TimestampBuilder>(cbuilder);
   return builder->Append(d.time_since_epoch().count());
 }
 
 ::arrow::Status insert_visitor::operator()(const timespan_type&,
                                            const timespan& d) {
-  auto builder = rbuilder->GetFieldAs<::arrow::UInt64Builder>(c_builder);
+  auto builder = rbuilder->GetFieldAs<::arrow::UInt64Builder>(cbuilder);
   return builder->Append(d.count());
 }
 
 ::arrow::Status insert_visitor::operator()(const timespan_type&, none) {
-  auto builder = rbuilder->GetFieldAs<::arrow::UInt64Builder>(c_builder);
+  auto builder = rbuilder->GetFieldAs<::arrow::UInt64Builder>(cbuilder);
   return builder->AppendNull();
 }
 
 ::arrow::Status insert_visitor::operator()(const subnet_type&,
                                            const subnet& d) {
-  auto builder = rbuilder->GetFieldAs<::arrow::StructBuilder>(c_builder);
+  auto builder = rbuilder->GetFieldAs<::arrow::StructBuilder>(cbuilder);
   return append_subnet(d, builder);
 }
 
 ::arrow::Status insert_visitor::operator()(const address_type&,
                                            const address& d) {
   auto builder =
-    rbuilder->GetFieldAs<::arrow::FixedSizeBinaryBuilder>(c_builder);
+    rbuilder->GetFieldAs<::arrow::FixedSizeBinaryBuilder>(cbuilder);
   return builder->Append(d.bytes_);
 }
 
 ::arrow::Status insert_visitor::operator()(const address_type&, none) {
   auto builder =
-    rbuilder->GetFieldAs<::arrow::FixedSizeBinaryBuilder>(c_builder);
+    rbuilder->GetFieldAs<::arrow::FixedSizeBinaryBuilder>(cbuilder);
   return builder->AppendNull();
 }
 
 ::arrow::Status insert_visitor::operator()(const port_type&, const port& d) {
-  auto builder = rbuilder->GetFieldAs<::arrow::StructBuilder>(c_builder);
+  auto builder = rbuilder->GetFieldAs<::arrow::StructBuilder>(cbuilder);
   return append_port(d, builder);
 }
 
 ::arrow::Status insert_visitor::operator()(const port_type&, none) {
-  auto sbuilder = rbuilder->GetFieldAs<::arrow::StructBuilder>(c_builder);
+  auto sbuilder = rbuilder->GetFieldAs<::arrow::StructBuilder>(cbuilder);
   return sbuilder->AppendNull();
 }
 
 ::arrow::Status insert_visitor::operator()(const vector_type&, none) {
-  auto sbuilder = rbuilder->GetFieldAs<::arrow::ListBuilder>(c_builder);
+  auto sbuilder = rbuilder->GetFieldAs<::arrow::ListBuilder>(cbuilder);
   return sbuilder->AppendNull();
 }
 
 ::arrow::Status insert_visitor::operator()(const set_type&, none) {
-  auto structBuilder = rbuilder->GetFieldAs<::arrow::ListBuilder>(c_builder);
+  auto structBuilder = rbuilder->GetFieldAs<::arrow::ListBuilder>(cbuilder);
   return structBuilder->AppendNull();
 }
 
 ::arrow::Status insert_visitor::operator()(const record_type& t,
                                            const std::vector<data>& d) {
-  for (; counter < d.size();) {
-    format::arrow::insert_visitor a(this->rbuilder, counter, counter + offset);
+  for (u_int64_t counter = 0; counter < d.size();) {
+    format::arrow::insert_visitor a{this->rbuilder, counter + cbuilder};
     if (is<record_type>(t.fields[counter].type)
         && is<std::vector<data>>(d.at(counter))) {
-      a.counter = 0;
-      a.offset = counter + offset;
       auto data_v = get<std::vector<data>>(d.at(counter));
-      offset = data_v.size() - 1;
+      cbuilder += data_v.size() - 1;
     }
     auto status = visit(a, t.fields[counter].type, d.at(counter));
     if (!status.ok()) {
@@ -353,40 +353,40 @@ insert_visitor_helper::insert_visitor_helper(::arrow::ArrayBuilder* b)
 
 ::arrow::Status insert_visitor_helper::operator()(const boolean_type&,
                                                   boolean d) {
-  auto c_builder = static_cast<::arrow::BooleanBuilder*>(builder);
-  return c_builder->Append(d);
+  auto cbuilder = static_cast<::arrow::BooleanBuilder*>(builder);
+  return cbuilder->Append(d);
 }
 
 ::arrow::Status insert_visitor_helper::operator()(const count_type&, count d) {
-  auto c_builder = static_cast<::arrow::UInt64Builder*>(builder);
-  return c_builder->Append(d);
+  auto cbuilder = static_cast<::arrow::UInt64Builder*>(builder);
+  return cbuilder->Append(d);
 }
 
 ::arrow::Status insert_visitor_helper::operator()(const integer_type&, int d) {
-  auto c_builder = static_cast<::arrow::Int64Builder*>(builder);
-  return c_builder->Append(d);
+  auto cbuilder = static_cast<::arrow::Int64Builder*>(builder);
+  return cbuilder->Append(d);
 }
 
 ::arrow::Status insert_visitor_helper::operator()(const real_type&, real d) {
-  auto c_builder = static_cast<::arrow::FloatBuilder*>(builder);
-  return c_builder->Append(d);
+  auto cbuilder = static_cast<::arrow::FloatBuilder*>(builder);
+  return cbuilder->Append(d);
 }
 
 ::arrow::Status insert_visitor_helper::operator()(const string_type&,
                                                   std::string d) {
-  auto c_builder = static_cast<::arrow::StringBuilder*>(builder);
-  return c_builder->Append(d);
+  auto cbuilder = static_cast<::arrow::StringBuilder*>(builder);
+  return cbuilder->Append(d);
 }
 ::arrow::Status insert_visitor_helper::operator()(const pattern_type&,
                                                   const pattern& d) {
-  auto c_builder = static_cast<::arrow::StringBuilder*>(builder);
-  return c_builder->Append(d.string());
+  auto cbuilder = static_cast<::arrow::StringBuilder*>(builder);
+  return cbuilder->Append(d.string());
 }
 
 ::arrow::Status insert_visitor_helper::operator()(const address_type&,
                                                   const address& d) {
-  auto c_builder = static_cast<::arrow::FixedSizeBinaryBuilder*>(builder);
-  return c_builder->Append(d.bytes_);
+  auto cbuilder = static_cast<::arrow::FixedSizeBinaryBuilder*>(builder);
+  return cbuilder->Append(d.bytes_);
 }
 
 ::arrow::Status insert_visitor_helper::operator()(const port_type&,
@@ -403,19 +403,19 @@ insert_visitor_helper::insert_visitor_helper(::arrow::ArrayBuilder* b)
 
 ::arrow::Status insert_visitor_helper::operator()(const timespan_type&,
                                                   const timespan& d) {
-  auto c_builder = static_cast<::arrow::UInt64Builder*>(builder);
-  return c_builder->Append(d.count());
+  auto cbuilder = static_cast<::arrow::UInt64Builder*>(builder);
+  return cbuilder->Append(d.count());
 }
 
 ::arrow::Status insert_visitor_helper::operator()(const timestamp_type&,
                                                   const timestamp& d) {
-  auto c_builder = static_cast<::arrow::TimestampBuilder*>(builder);
-  return c_builder->Append(d.time_since_epoch().count());
+  auto cbuilder = static_cast<::arrow::TimestampBuilder*>(builder);
+  return cbuilder->Append(d.time_since_epoch().count());
 }
 
 ::arrow::Status insert_visitor_helper::operator()(const none_type&, none) {
-  auto c_builder = static_cast<::arrow::NullBuilder*>(builder);
-  return c_builder->AppendNull();
+  auto cbuilder = static_cast<::arrow::NullBuilder*>(builder);
+  return cbuilder->AppendNull();
 }
 
 writer::writer(const std::string& plasma_socket) {

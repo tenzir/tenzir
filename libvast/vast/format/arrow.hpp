@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #pragma once
 
 #include <string>
@@ -88,9 +101,7 @@ struct convert_visitor {
   result_type operator()(const set_type& t);
 
   template <class T>
-  result_type operator()(const T& t) {
-    // TODO: remove debugging output.
-    std::cout << "NONE: " << typeid(t).name() << std::endl;
+  result_type operator()(const T&) {
     return ::arrow::field("none", ::arrow::null());
   }
 };
@@ -98,6 +109,7 @@ struct convert_visitor {
 struct insert_visitor_helper {
   using result_type = ::arrow::Status;
 
+  // Arrow builder for the current field
   ::arrow::ArrayBuilder* builder;
 
   insert_visitor_helper(::arrow::ArrayBuilder* b);
@@ -126,25 +138,28 @@ struct insert_visitor_helper {
 
   result_type operator()(const none_type&, none);
 
+  // Matched for all complex types
   template <class T, class D>
   result_type operator()(const T& t, const D& d) {
     return append_to_list(t, d);
   }
 
+  // Cast the current builder to Listbuilder if T set_type or vector_type 
+  // and appends all Items for D else returns a TypeError
   template <class T, class D>
   result_type append_to_list(const T& t, const D& d) {
     if constexpr (
       (std::is_same_v<T, set_type> || std::is_same_v<T, vector_type>)&&(
         std::is_same_v<D, std::vector<data>> || std::is_same_v<D, set>)) {
-      auto l_builder = static_cast<::arrow::ListBuilder*>(builder);
-      auto status = l_builder->Reserve(d.size());
+      auto lbuilder = static_cast<::arrow::ListBuilder*>(builder);
+      auto status = lbuilder->Reserve(d.size());
       if (!status.ok())
         return status;
-      status = l_builder->Append();
+      status = lbuilder->Append();
       if (!status.ok())
         return status;
       for (auto v : d) {
-        format::arrow::insert_visitor_helper a(l_builder->value_builder());
+        format::arrow::insert_visitor_helper a(lbuilder->value_builder());
         status = visit(a, t.value_type, v);
         if (!status.ok())
           return status;
@@ -155,23 +170,18 @@ struct insert_visitor_helper {
   }
 };
 
+// Visitor to cast the field builder to the correct buildertype and append data 
 struct insert_visitor {
   using result_type = ::arrow::Status;
 
   std::shared_ptr<::arrow::RecordBatchBuilder> rbuilder;
 
-  u_int64_t counter = 0;
-
-  u_int64_t offset = 0;
-
-  u_int64_t c_builder = 0;
+  // Index of the current builder
+  u_int64_t cbuilder = 0;
 
   insert_visitor(std::shared_ptr<::arrow::RecordBatchBuilder>& b);
 
-  insert_visitor(std::shared_ptr<::arrow::RecordBatchBuilder>& b, u_int64_t c);
-
-  insert_visitor(std::shared_ptr<::arrow::RecordBatchBuilder>& b, u_int64_t c,
-                 u_int64_t c_builder);
+  insert_visitor(std::shared_ptr<::arrow::RecordBatchBuilder>& b, u_int64_t cbuilder);
 
   result_type operator()(const record_type& t, const std::vector<data>& d);
 
@@ -220,10 +230,12 @@ struct insert_visitor {
 
   result_type operator()(const set_type& t, none);
 
+
+  // Matched for all complex types
   template <class T, class D>
   result_type operator()(const T& t, const D& d) {
-    auto l_builder = rbuilder->GetField(c_builder);
-    auto a = insert_visitor_helper(l_builder);
+    auto lbuilder = rbuilder->GetField(cbuilder);
+    auto a = insert_visitor_helper(lbuilder);
     return a.append_to_list(t, d);
   };
 };

@@ -34,7 +34,10 @@ def main():
     all = batch.read_all()
 
     for b in all:
-        print(b.name, b.data.to_pylist())
+        try:
+            print(b.name, b.data.to_pylist())
+        except UnicodeDecodeError:
+            print(args.id)
 
 if __name__ == '__main__':
     main()
