@@ -82,6 +82,42 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     return result;
   }
 
+  auto receive_query_id() {
+    std::tuple<uuid, size_t, size_t> result;
+    self->receive(
+      [&](uuid& query_id, size_t hits, size_t scheduled) {
+        result = std::tie(query_id, hits, scheduled);
+      },
+      after(0s) >> [&] { FAIL("INDEX did not respond to query"); });
+    return result;
+  }
+
+  ids receive_result(const uuid& query_id, size_t hits, size_t scheduled) {
+    ids result;
+    size_t collected = 0;
+    auto fetch = [&](size_t chunk) {
+      for (size_t i = 0; i < chunk; ++i)
+        self->receive(
+          [&](ids& sub_result) {
+            ++collected;
+            result |= sub_result;
+          },
+          after(0s) >> [&] {
+            FAIL("missing sub result #" << (i + 1) << " in partition #"
+                                        << (collected + 1));
+          }
+        );
+    };
+    fetch(scheduled);
+    while (collected < hits) {
+      auto chunk = std::min(hits - collected, taste_count);
+      self->send(index, query_id, chunk);
+      run_exhaustively();
+      fetch(chunk);
+    }
+    return result;
+  }
+
   // Handle to the INDEX actor.
   caf::actor index;
 };
@@ -118,26 +154,16 @@ TEST(one-shot integer query result) {
   MESSAGE("query half of the values");
   self->send(index, unbox(to<expression>(":int == 1")));
   run_exhaustively();
-  self->receive(
-    [&](uuid& query_id, size_t hits, size_t scheduled) {
-      CHECK_EQUAL(query_id, uuid::nil());
-      CHECK_EQUAL(hits, taste_count);
-      CHECK_EQUAL(scheduled, taste_count);
-    },
-    after(0s) >> [&] { FAIL("INDEX did not respond to query"); });
+  auto [query_id, hits, scheduled] = receive_query_id();
+  CHECK_EQUAL(query_id, uuid::nil());
+  CHECK_EQUAL(hits, taste_count);
+  CHECK_EQUAL(scheduled, taste_count);
   ids expected_result;
   for (size_t i = 0; i < (partition_size * taste_count) / 2; ++i) {
     expected_result.append_bit(false);
     expected_result.append_bit(true);
   }
-  ids result;
-  for (size_t i = 0; i < taste_count; ++i)
-    self->receive(
-      [&](ids& sub_result) {
-        CHECK_EQUAL(rank<1>(sub_result), partition_size / 2);
-        result |= sub_result;
-      },
-      after(0s) >> [&] { FAIL("missing sub result " << i); });
+  auto result = receive_result(query_id, hits, scheduled);
   CHECK_EQUAL(result, expected_result);
 }
 
@@ -150,42 +176,17 @@ TEST(iterable integer query result) {
   MESSAGE("query half of the values");
   self->send(index, unbox(to<expression>(":int == 1")));
   run_exhaustively();
-  uuid qid;
-  self->receive(
-    [&](uuid& query_id, size_t hits, size_t scheduled) {
-      qid = query_id;
-      CHECK_NOT_EQUAL(query_id, uuid::nil());
-      CHECK_EQUAL(hits, taste_count * 3);
-      CHECK_EQUAL(scheduled, taste_count);
-    },
-    after(0s) >> [&] { FAIL("INDEX did not respond to query"); });
+  auto [query_id, hits, scheduled] = receive_query_id();
+  CHECK_NOT_EQUAL(query_id, uuid::nil());
+  CHECK_EQUAL(hits, taste_count * 3);
+  CHECK_EQUAL(scheduled, taste_count);
   ids expected_result;
   for (size_t i = 0; i < (partition_size * taste_count * 3) / 2; ++i) {
     expected_result.append_bit(false);
     expected_result.append_bit(true);
   }
-  MESSAGE("collect immediate results");
-  ids result;
-  for (size_t i = 0; i < taste_count; ++i)
-    self->receive(
-      [&](ids& sub_result) {
-        CHECK_EQUAL(rank<1>(sub_result), partition_size / 2);
-        result |= sub_result;
-      },
-      after(0s) >> [&] { FAIL("missing sub result " << i); });
-  MESSAGE("collect remaining results");
-  for (size_t j = 2; j > 0; --j) {
-    CHECK_EQUAL(state().pending[qid].partitions.size(), taste_count * j);
-    self->send(index, qid, taste_count);
-    run_exhaustively();
-    for (size_t i = 0; i < taste_count; ++i)
-      self->receive(
-        [&](ids& sub_result) {
-          CHECK_EQUAL(rank<1>(sub_result), partition_size / 2);
-          result |= sub_result;
-        },
-        after(0s) >> [&] { FAIL("missing sub result " << i); });
-  }
+  MESSAGE("collect results");
+  auto result = receive_result(query_id, hits, scheduled);
   CHECK_EQUAL(result, expected_result);
 }
 
