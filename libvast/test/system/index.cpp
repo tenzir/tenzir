@@ -19,6 +19,7 @@
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/concept/printable/std/chrono.hpp"
+#include "vast/concept/printable/vast/event.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/detail/spawn_container_source.hpp"
 #include "vast/detail/spawn_generator_source.hpp"
@@ -83,7 +84,9 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     return result;
   }
 
-  auto receive_query_id() {
+  auto query(std::string_view expr) {
+    self->send(index, unbox(to<expression>(expr)));
+    run_exhaustively();
     std::tuple<uuid, size_t, size_t> result;
     self->receive(
       [&](uuid& query_id, size_t hits, size_t scheduled) {
@@ -94,6 +97,10 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   }
 
   ids receive_result(const uuid& query_id, size_t hits, size_t scheduled) {
+    if (hits == scheduled)
+      CHECK_EQUAL(query_id, uuid::nil());
+    else
+      CHECK_NOT_EQUAL(query_id, uuid::nil());
     ids result;
     size_t collected = 0;
     auto fetch = [&](size_t chunk) {
@@ -153,9 +160,7 @@ TEST(one-shot integer query result) {
                                             int_generator(2));
   run_exhaustively();
   MESSAGE("query half of the values");
-  self->send(index, unbox(to<expression>(":int == 1")));
-  run_exhaustively();
-  auto [query_id, hits, scheduled] = receive_query_id();
+  auto [query_id, hits, scheduled] = query(":int == 1");
   CHECK_EQUAL(query_id, uuid::nil());
   CHECK_EQUAL(hits, taste_count);
   CHECK_EQUAL(scheduled, taste_count);
@@ -175,9 +180,7 @@ TEST(iterable integer query result) {
                                             int_generator(2));
   run_exhaustively();
   MESSAGE("query half of the values");
-  self->send(index, unbox(to<expression>(":int == 1")));
-  run_exhaustively();
-  auto [query_id, hits, scheduled] = receive_query_id();
+  auto [query_id, hits, scheduled] = query(":int == 1");
   CHECK_NOT_EQUAL(query_id, uuid::nil());
   CHECK_EQUAL(hits, taste_count * 3);
   CHECK_EQUAL(scheduled, taste_count);
@@ -196,21 +199,39 @@ TEST(iterable bro conn log query result) {
   MESSAGE("ingest conn.log");
   detail::spawn_container_source(sys, index, bro_conn_log);
   run_exhaustively();
-  MESSAGE("issue historical query");
-  auto expected_result
-    = make_ids({105,  150,  246,  257,  322,  419,  440,  480,  579,  595,
-                642,  766,  1224, 1251, 1751, 1762, 2670, 3661, 3682, 3820,
-                6345, 6777, 7677, 7843, 8002, 8286, 8325, 8354},
-               bro_conn_log.size());
-  auto expr = to<expression>("service == \"http\" && :addr == 212.227.96.110");
-  self->send(index, unbox(expr));
-  run_exhaustively();
-  auto [query_id, hits, scheduled] = receive_query_id();
-  CHECK_NOT_EQUAL(query_id, uuid::nil());
-  auto result = receive_result(query_id, hits, scheduled);
-  CHECK_EQUAL(rank(expected_result), 28u);
-  CHECK_EQUAL(rank(result), 28u);
-  CHECK_EQUAL(result, expected_result);
+  MESSAGE("issue field type query");
+  {
+    auto expected_result = make_ids({680, 682, 719, 720}, bro_conn_log.size());
+    auto [query_id, hits, scheduled] = query(":addr == 169.254.225.22");
+    auto result = receive_result(query_id, hits, scheduled);
+    for (auto id : select(result)) {
+      printf("%s\n", to_string(bro_conn_log[id]).c_str());
+    }
+    CHECK_EQUAL(rank(result), rank(expected_result));
+    CHECK_EQUAL(result, expected_result);
+  }
+  MESSAGE("issue field name query");
+  {
+    auto expected_result = make_ids({680, 682, 719, 720}, bro_conn_log.size());
+    auto [query_id, hits, scheduled] = query("id.orig_h == 169.254.225.22");
+    auto result = receive_result(query_id, hits, scheduled);
+    CHECK_EQUAL(rank(result), rank(expected_result));
+    CHECK_EQUAL(result, expected_result);
+  }
+  MESSAGE("issue historical point query with conjunction");
+  {
+    auto expected_result
+      = make_ids({105,  150,  246,  257,  322,  419,  440,  480,  579,  595,
+                 642,  766,  1224, 1251, 1751, 1762, 2670, 3661, 3682, 3820,
+                 6345, 6777, 7677, 7843, 8002, 8286, 8325, 8354},
+                 bro_conn_log.size());
+    auto [query_id, hits, scheduled] = query("service == \"http\" "
+                                             "&& :addr == 212.227.96.110");
+    auto result = receive_result(query_id, hits, scheduled);
+    CHECK_EQUAL(rank(expected_result), 28u);
+    CHECK_EQUAL(rank(result), 28u);
+    CHECK_EQUAL(result, expected_result);
+  }
 }
 
 FIXTURE_SCOPE_END()
