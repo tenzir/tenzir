@@ -144,7 +144,7 @@ TEST(spawning sinks automatically) {
   anon_send_exit(stg, exit_reason::user_shutdown);
 }
 
-TEST(creating partitions automatically) {
+TEST(creating integer partitions automatically) {
   MESSAGE("spawn the stage");
   auto dummies = size_t{0};
   auto bufs = make_shared<shared_event_buffer_vector>();
@@ -169,6 +169,29 @@ TEST(creating partitions automatically) {
   std::sort(xs.begin(), xs.end());
   std::sort(test_events.begin(), test_events.end());
   CHECK_EQUAL(xs, test_events);
+  anon_send_exit(stg, exit_reason::user_shutdown);
+}
+
+TEST(creating bro conn log partitions automatically) {
+  MESSAGE("spawn the stage");
+  auto dummies = size_t{0};
+  auto bufs = make_shared<shared_event_buffer_vector>();
+  auto stg = sys.spawn(test_stage, &pindex,
+                       partition_factory(sys, state_dir, &dummies, bufs),
+                       100u);
+  MESSAGE("spawn the source and run");
+  auto src = vast::detail::spawn_container_source(self->system(), stg,
+                                                  bro_conn_log);
+  run_exhaustively();
+  MESSAGE("flatten all partitions into one buffer");
+  event_buffer xs;
+  for (auto& buf : *bufs)
+    xs.insert(xs.end(), buf->begin(), buf->end());
+  CHECK_EQUAL(bro_conn_log.size(), xs.size());
+  std::sort(xs.begin(), xs.end());
+  auto ys = bro_conn_log;
+  std::sort(ys.begin(), ys.end());
+  CHECK_EQUAL(xs, ys);
   anon_send_exit(stg, exit_reason::user_shutdown);
 }
 
