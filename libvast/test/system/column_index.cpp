@@ -72,4 +72,26 @@ TEST(flat column type) {
   CHECK_EQUAL(unbox(col->lookup(is4)), make_ids({}, xs.size()));
 }
 
+TEST(bro conn log) {
+  MESSAGE("ingest origins from bro conn log");
+  auto row_type = get<record_type>(bro_conn_log[0].type());
+  auto col_offset = unbox(row_type.resolve(key{"id", "orig_h"}));
+  auto col_type = row_type.at(col_offset);
+  auto col = unbox(make_field_data_index(directory, *col_type, col_offset));
+  size_t next_id = 0;
+  for (auto entry : bro_conn_log) {
+    entry.id(next_id++);
+    col->add(std::move(entry));
+  }
+  MESSAGE("verify column index");
+  auto pred = unbox(to<predicate>(":addr == 169.254.225.22"));
+  auto expected_result = make_ids({680, 682, 719, 720}, bro_conn_log.size());
+  CHECK_EQUAL(unbox(col->lookup(pred)), expected_result );
+  MESSAGE("persist and reload from disk");
+  col->flush_to_disk();
+  col.reset();
+  MESSAGE("verify column index again");
+  col = unbox(make_field_data_index(directory, *col_type, col_offset));
+}
+
 FIXTURE_SCOPE_END()
