@@ -95,6 +95,9 @@ TEST(bro conn logs) {
   MESSAGE("ingest bro conn log");
   init(bro_conn_log);
   MESSAGE("verify table index");
+  auto res = [&](auto... args) {
+    return make_ids({args...}, bro_conn_log.size());
+  };
   auto verify = [&] {
     CHECK_EQUAL(rank(query("id.resp_p == 995/?")), 53u);
     CHECK_EQUAL(rank(query("id.resp_p == 5355/?")), 49u);
@@ -106,6 +109,7 @@ TEST(bro conn logs) {
     CHECK_EQUAL(rank(query("orig_bytes < 400")), 5332u);
     CHECK_EQUAL(rank(query("orig_bytes < 400 && proto == \"udp\"")), 4357u);
     CHECK_EQUAL(rank(query(":addr == 65.55.184.16")), 2u);
+    CHECK_EQUAL(query(":addr == 169.254.225.22"), res(680, 682, 719, 720));
   };
   verify();
   MESSAGE("kill INDEXER");
