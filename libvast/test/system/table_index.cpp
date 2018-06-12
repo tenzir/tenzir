@@ -158,6 +158,7 @@ TEST(bro conn logs) {
     CHECK_EQUAL(rank(query("uid == \"nkCxlvNN8pi\"")), 1u);
     CHECK_EQUAL(rank(query("orig_bytes < 400")), 5332u);
     CHECK_EQUAL(rank(query("orig_bytes < 400 && proto == \"udp\"")), 4357u);
+    CHECK_EQUAL(rank(query(":addr == 169.254.225.22")), 4u);
   };
   verify();
   MESSAGE("(automatically) persist table index and restore from disk");
