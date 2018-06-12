@@ -27,7 +27,7 @@
 #include "vast/event.hpp"
 #include "vast/ids.hpp"
 
-#include "fixtures/actor_system.hpp"
+#include "fixtures/actor_system_and_events.hpp"
 
 using namespace vast;
 using namespace vast::system;
@@ -69,7 +69,7 @@ std::vector<std::string> sorted_strings(const std::vector<T>& xs) {
   return result;
 }
 
-struct fixture : fixtures::deterministic_actor_system {
+struct fixture : fixtures::deterministic_actor_system_and_events {
   fixture() : types{string_type{}, address_type{}, pattern_type{}} {
     min_running_actors = sys.registry().running();
   }
@@ -184,6 +184,25 @@ TEST(integer rows lookup) {
   CHECK_EQUAL(query(":int != +1"), res(1, 2, 4, 5, 7, 8));
   CHECK_EQUAL(query("!(:int == +1)"), res(1, 2, 4, 5, 7, 8));
   CHECK_EQUAL(query(":int > +1 && :int < +3"), res(1, 4, 7));
+}
+
+TEST(bro conn log lookup) {
+  MESSAGE("generate partiton for bro conn log");
+  put = make_partition();
+  MESSAGE("ingest bro conn logs");
+  std::vector<event> events;
+  size_t next_id = 0;
+  for (auto entry : bro_conn_log) {
+    entry.id(next_id++);
+    events.emplace_back(std::move(entry));
+  }
+  anon_send(put->manager().get_or_add(bro_conn_log[0].type()).first, events);
+  sched.run();
+  MESSAGE("verify partition content");
+  auto res = [&](auto... args) {
+    return make_ids({args...}, events.size());
+  };
+  CHECK_EQUAL(query(":addr == 169.254.225.22"), res(680, 682, 719, 720));
 }
 
 FIXTURE_SCOPE_END()
