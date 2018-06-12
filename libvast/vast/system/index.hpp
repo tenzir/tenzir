@@ -99,7 +99,7 @@ struct index_state {
   /// Stream manager for ingesting events.
   stage_ptr stage;
 
-  /// Pointer to the partent actor.
+  /// Pointer to the parent actor.
   caf::event_based_actor* self;
 
   /// The maximum number of events per partition.
