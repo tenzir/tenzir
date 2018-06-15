@@ -204,9 +204,6 @@ TEST(iterable bro conn log query result) {
     auto expected_result = make_ids({680, 682, 719, 720}, bro_conn_log.size());
     auto [query_id, hits, scheduled] = query(":addr == 169.254.225.22");
     auto result = receive_result(query_id, hits, scheduled);
-    for (auto id : select(result)) {
-      printf("%s\n", to_string(bro_conn_log[id]).c_str());
-    }
     CHECK_EQUAL(rank(result), rank(expected_result));
     CHECK_EQUAL(result, expected_result);
   }
