@@ -87,6 +87,11 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     return vast::system::make_partition(self.ptr(), state_dir, partition_id);
   }
 
+  /// Creates a partition that spawns actual INDEXER actors with custom ID.
+  partition_ptr make_partition(uuid id) {
+    return vast::system::make_partition(self.ptr(), state_dir, id);
+  }
+
   /// Returns how many dummy INDEXER actors are currently running.
   size_t running_indexers() {
     return sys.registry().running() - min_running_actors;
@@ -190,19 +195,46 @@ TEST(bro conn log lookup) {
   MESSAGE("generate partiton for bro conn log");
   put = make_partition();
   MESSAGE("ingest bro conn logs");
-  std::vector<event> events;
-  size_t next_id = 0;
-  for (auto entry : bro_conn_log) {
-    entry.id(next_id++);
-    events.emplace_back(std::move(entry));
-  }
-  anon_send(put->manager().get_or_add(bro_conn_log[0].type()).first, events);
+  auto layout = bro_conn_log[0].type();
+  anon_send(put->manager().get_or_add(layout).first, bro_conn_log);
   sched.run();
   MESSAGE("verify partition content");
   auto res = [&](auto... args) {
-    return make_ids({args...}, events.size());
+    return make_ids({args...}, bro_conn_log.size());
   };
   CHECK_EQUAL(query(":addr == 169.254.225.22"), res(680, 682, 719, 720));
+}
+
+TEST(chunked bro conn log lookup) {
+  static constexpr size_t chunk_size = 100;
+  MESSAGE("ingest bro conn logs into partitions of size " << chunk_size);
+  std::vector<partition_ptr> partitions;
+  auto layout = bro_conn_log[0].type();
+  for (size_t i = 0; i < bro_conn_log.size(); i += chunk_size) {
+    std::vector<event> chunk;
+    MESSAGE("ingest bro conn chunk nr. " << ((i / chunk_size) + 1));
+    for (size_t j = i; j < std::min(i + chunk_size, bro_conn_log.size()); ++j)
+      chunk.emplace_back(bro_conn_log[j]);
+    auto ptr = make_partition(uuid::random());
+    anon_send(ptr->manager().get_or_add(layout).first, std::move(chunk));
+    partitions.emplace_back(std::move(ptr));
+  }
+  sched.run();
+  MESSAGE("verify partition content");
+  auto res = [&](auto... args) {
+    return make_ids({args...}, bro_conn_log.size());
+  };
+  auto expr = unbox(to<expression>(":addr == 169.254.225.22"));
+  ids result;
+  for (auto& ptr : partitions) {
+    query_state qs;
+    sys.spawn(query_actor, &qs, ptr, expr);
+    sched.run();
+    CHECK_EQUAL(qs.expected, qs.received);
+    result |= qs.result;
+  }
+  CHECK_EQUAL(rank(result), 4u);
+  CHECK_EQUAL(result, res(680, 682, 719, 720));
 }
 
 FIXTURE_SCOPE_END()
