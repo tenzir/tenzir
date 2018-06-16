@@ -26,8 +26,8 @@ namespace {
 class foo : public command {
 public:
   foo(command* parent, std::string_view name) : command(parent, name) {
-    add_opt("value,v", "Some integer value", 0);
-    add_opt("flag", "Some flag", false);
+    add_opt<int>("value,v", "Some integer value");
+    add_opt<bool>("flag", "Some flag");
   }
 
   proceed_result proceed(caf::actor_system&, const option_map&,
@@ -58,7 +58,7 @@ public:
 class bar : public command {
 public:
   bar(command* parent, std::string_view name) : command(parent, name) {
-    add_opt("other-value,o", "Some other integer value", 0);
+    add_opt<int>("other-value,o", "Some other integer value");
   }
 
   proceed_result proceed(caf::actor_system&, const option_map&,

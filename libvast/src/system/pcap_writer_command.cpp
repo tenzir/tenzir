@@ -21,20 +21,21 @@
 #include <caf/typed_actor.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
+#include "vast/defaults.hpp"
 #include "vast/expression.hpp"
+#include "vast/format/pcap.hpp"
 #include "vast/logger.hpp"
-
 #include "vast/system/sink.hpp"
 
-#include "vast/format/pcap.hpp"
+using std::string;
 
 namespace vast::system {
 
 pcap_writer_command::pcap_writer_command(command* parent, std::string_view name)
   : super(parent, name) {
-  add_opt("write,w", "path to write events to", "-");
-  add_opt("uds,d", "treat -w as UNIX domain socket to connect to", false);
-  add_opt("flush,f", "flush to disk after this many packets", 10000u);
+  add_opt<string>("write,w", "path to write events to");
+  add_opt<bool>("uds,d", "treat -w as UNIX domain socket to connect to");
+  add_opt<size_t>("flush,f", "flush to disk after this many packets");
 }
 
 expected<caf::actor> pcap_writer_command::make_sink(caf::scoped_actor& self,
@@ -43,14 +44,11 @@ expected<caf::actor> pcap_writer_command::make_sink(caf::scoped_actor& self,
                                                     argument_iterator end) {
   VAST_UNUSED(begin, end);
   VAST_TRACE(VAST_ARG("args", begin, end));
-  auto limit = get<uint64_t>(options, "events");
-  VAST_ASSERT(limit);
-  auto output = get<std::string>(options, "write");
-  VAST_ASSERT(output);
-  auto flush = get<unsigned>(options, "flush");
-  VAST_ASSERT(flush);
-  format::pcap::writer writer{*output, *flush};
-  return self->spawn(sink<format::pcap::writer>, std::move(writer), *limit);
+  auto limit = get_or(options, "events", defaults::command::max_events);
+  auto output = get_or(options, "write", defaults::command::write_path);
+  auto flush = get_or(options, "flush", defaults::command::flush_interval);
+  format::pcap::writer writer{output, flush};
+  return self->spawn(sink<format::pcap::writer>, std::move(writer), limit);
 }
 
 } // namespace vast::system

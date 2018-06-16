@@ -13,15 +13,29 @@
 
 #pragma once
 
-#include <map>
+#include <cstddef>
+#include <cstdint>
 #include <string>
 
-#include <caf/config_value.hpp>
+namespace vast::defaults {
 
-namespace vast {
+namespace command {
 
-/// A map for CLI options.
-using option_map = std::map<std::string, caf::config_value::dictionary>;
+extern const char* directory;
+extern const char* endpoint;
+extern const char* id;
+extern const char* read_path;
+extern const char* schema_path;
+extern const char* write_path;
+extern int64_t pseudo_realtime_factor;
+extern size_t cutoff;
+extern size_t flow_expiry;
+extern size_t flush_interval;
+extern size_t max_events;
+extern size_t max_flow_age;
+extern size_t max_flows;
+extern std::string node_id;
 
-} // namespace vast
+} // namespace command
 
+} // namespace vast::defaults

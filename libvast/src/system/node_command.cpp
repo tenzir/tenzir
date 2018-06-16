@@ -22,11 +22,10 @@
 #include <caf/openssl/all.hpp>
 #endif
 
+#include "vast/concept/parseable/vast/endpoint.hpp"
+#include "vast/defaults.hpp"
 #include "vast/filesystem.hpp"
 #include "vast/logger.hpp"
-
-#include "vast/concept/parseable/vast/endpoint.hpp"
-
 #include "vast/system/node.hpp"
 
 using namespace caf;
@@ -52,17 +51,9 @@ expected<actor> node_command::spawn_or_connect_to_node(scoped_actor& self,
 
 expected<actor> node_command::spawn_node(scoped_actor& self,
                                          const option_map& opts) {
-  // Fetch node ID from config.
-  auto id_opt = get<std::string>(opts, "id");
-  if (!id_opt)
-    return make_error(sec::invalid_argument, "ID missing in options map");
-  auto id = std::move(*id_opt);
-  // Fetch path to persistent state from config.
-  auto dir_opt = get<std::string>(opts, "dir");
-  if (!dir_opt)
-    return make_error(sec::invalid_argument,
-                      "Directory path missing in options map");
-  auto dir = std::move(*dir_opt);
+  // Fetch values from config.
+  auto id = get_or(opts, "id", defaults::command::node_id);
+  auto dir = get_or(opts, "dir", defaults::command::directory);
   auto abs_dir = path{dir}.complete();
   VAST_INFO("spawning local node:", id);
   // Pointer to the root command to system::node.
@@ -98,26 +89,15 @@ expected<actor> node_command::spawn_node(scoped_actor& self,
 
 expected<actor> node_command::connect_to_node(scoped_actor& self,
                                               const option_map& opts) {
-  // Fetch node ID from config.
-  auto id_opt = get<std::string>(opts, "id");
-  if (!id_opt)
-    return make_error(sec::invalid_argument, "ID missing in options map");
-  auto id = std::move(*id_opt);
-  // Fetch path to persistent state from config.
-  auto dir_opt = get<std::string>(opts, "dir");
-  if (!dir_opt)
-    return make_error(sec::invalid_argument,
-                      "Directory path missing in options map");
-  auto dir = std::move(*dir_opt);
+  // Fetch values from config.
+  auto id = get_or(opts, "id", defaults::command::node_id);
+  auto dir = get_or(opts, "dir", defaults::command::directory);
   auto abs_dir = path{dir}.complete();
-  // Fetch endpoint from config.
-  auto endpoint_opt = get<std::string>(opts, "endpoint");
-  if (!endpoint_opt)
-    return make_error(sec::invalid_argument, "endpoint missing in options map");
+  auto endpoint_str = get_or(opts, "endpoint", defaults::command::endpoint);
   endpoint node_endpoint;
-  if (!parsers::endpoint(*endpoint_opt, node_endpoint)) {
+  if (!parsers::endpoint(endpoint_str, node_endpoint)) {
     std::string err = "invalid endpoint: ";
-    err += *endpoint_opt;
+    err += endpoint_str;
     return make_error(sec::invalid_argument, std::move(err));
   }
   VAST_INFO("connect to remote node:", id);

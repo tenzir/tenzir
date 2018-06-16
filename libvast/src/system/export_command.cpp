@@ -33,10 +33,10 @@ using namespace std::chrono_literals;
 
 export_command::export_command(command* parent, std::string_view name)
   : node_command{parent, name} {
-  add_opt("continuous,c", "marks a query as continuous", false);
-  add_opt("historical,h", "marks a query as historical", false);
-  add_opt("unified,u", "marks a query as unified", false);
-  add_opt("events,e", "maximum number of results", 0u);
+  add_opt<bool>("continuous,c", "marks a query as continuous");
+  add_opt<bool>("historical,h", "marks a query as historical");
+  add_opt<bool>("unified,u", "marks a query as unified");
+  add_opt<size_t>("events,e", "maximum number of results");
 }
 
 int export_command::run_impl(actor_system&, const option_map&, argument_iterator,
