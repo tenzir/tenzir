@@ -137,6 +137,13 @@ public:
     return with_column(column_index + num_meta_columns(), factory, f);
   }
 
+  /// Applies `f` to each column pointer.
+  template <class F>
+  void for_each_column(F f) {
+    for (auto& col : columns_)
+      f(col.get());
+  }
+
   /// Returns a pointer the column with given name or `nullptr` if no such
   /// column exists.
   column_index* by_name(std::string_view column_name);
@@ -149,6 +156,11 @@ public:
   /// Returns the type defining this table's layout.
   inline const type& layout() const {
     return event_type_;
+  }
+
+  /// Returns whether `add` was called at least once.
+  inline bool dirty() const {
+    return dirty_;
   }
 
   /// Returns the base directory for meta column indexes.

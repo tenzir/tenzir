@@ -90,6 +90,18 @@ public:
     return f(x.index_type_, x.filename_, tmp, f.last_flush_);
   }
 
+  /// Returns the type of this column.
+  inline const type& index_type() const {
+    return index_type_;
+  }
+
+  /// Returns the value index.
+  /// @pre `init()` was called and did not return an error.
+  const value_index& idx() const {
+    VAST_ASSERT(idx_ != nullptr);
+    return *idx_;
+  }
+
 protected:
   // -- constructors, destructors, and assignment operators --------------------
 
