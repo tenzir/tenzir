@@ -24,8 +24,10 @@
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/type.hpp"
+#include "vast/detail/overload.hpp"
 #include "vast/event.hpp"
 #include "vast/ids.hpp"
+#include "vast/system/indexer.hpp"
 
 #include "fixtures/actor_system_and_events.hpp"
 
@@ -191,7 +193,7 @@ TEST(integer rows lookup) {
   CHECK_EQUAL(query(":int > +1 && :int < +3"), res(1, 4, 7));
 }
 
-TEST(bro conn log lookup) {
+TEST(single partition bro conn log lookup) {
   MESSAGE("generate partiton for bro conn log");
   put = make_partition();
   MESSAGE("ingest bro conn logs");
@@ -205,33 +207,81 @@ TEST(bro conn log lookup) {
   CHECK_EQUAL(query(":addr == 169.254.225.22"), res(680, 682, 719, 720));
 }
 
-TEST(chunked bro conn log lookup) {
-  static constexpr size_t chunk_size = 100;
-  MESSAGE("ingest bro conn logs into partitions of size " << chunk_size);
+TEST(multiple partitions bro conn log lookup no messaging) {
+  // This test bypasses any messaging by reaching directly into the state of
+  // each INDEXER actor.
+  using indexer_type = caf::stateful_actor<indexer_state>;
+  static constexpr size_t part_size = 100;
+  MESSAGE("ingest bro conn logs into partitions of size " << part_size);
   std::vector<partition_ptr> partitions;
   auto layout = bro_conn_log[0].type();
-  for (size_t i = 0; i < bro_conn_log.size(); i += chunk_size) {
-    std::vector<event> chunk;
-    MESSAGE("ingest bro conn chunk nr. " << ((i / chunk_size) + 1));
-    for (size_t j = i; j < std::min(i + chunk_size, bro_conn_log.size()); ++j)
-      chunk.emplace_back(bro_conn_log[j]);
+  record_type flat_layout;
+  visit(detail::overload(
+          [&](const record_type& rt) { flat_layout = flatten(rt); },
+          [&](const auto&) { FAIL("layout is no record type"); }
+        ),
+        layout);
+  for (size_t i = 0; i < bro_conn_log.size(); i += part_size) {
     auto ptr = make_partition(uuid::random());
-    anon_send(ptr->manager().get_or_add(layout).first, std::move(chunk));
+    CHECK_EQUAL(exists(ptr->dir()), false);
+    CHECK_EQUAL(ptr->dirty(), false);
+    auto idx_hdl = ptr->manager().get_or_add(layout).first;
+    sched.run();
+    auto& idx = deref<indexer_type>(idx_hdl);
+    idx.initialize();
+    auto& tbl = idx.state.tbl;
+    CHECK_EQUAL(tbl.dirty(), false);
+    for (size_t j = i; j < std::min(i + part_size, bro_conn_log.size()); ++j)
+      tbl.add(bro_conn_log[j]);
+    CHECK_EQUAL(ptr->dirty(), true);
+    CHECK_EQUAL(tbl.dirty(), true);
     partitions.emplace_back(std::move(ptr));
   }
-  sched.run();
+  MESSAGE("make sure all partitions have different IDs, paths, and INDEXERs");
+  std::set<uuid> id_set;
+  std::set<path> path_set;
+  std::set<caf::actor> indexer_set;
+  for (size_t i = 0; i < partitions.size(); ++i) {
+    auto& part = partitions[i];
+    CHECK(id_set.emplace(part->id()).second);
+    CHECK(path_set.emplace(part->dir()).second);
+    part->manager().for_each([&](const caf::actor& idx_hdl) {
+      auto& tbl = deref<indexer_type>(idx_hdl).state.tbl;
+      CHECK(indexer_set.emplace(idx_hdl).second);
+      CHECK(path_set.emplace(tbl.meta_dir()).second);
+      CHECK(path_set.emplace(tbl.data_dir()).second);
+      size_t col_id = 0;
+      tbl.for_each_column([&](column_index* col) {
+        REQUIRE(col != nullptr);
+        CHECK(path_set.emplace(col->filename()).second);
+        CHECK_EQUAL(col->idx().offset(),
+                    std::min((i + 1) * part_size, bro_conn_log.size()));
+        if (col_id == 0) {
+          // First meta field is the timestamp.
+          CHECK_EQUAL(col->index_type(), timespan_type{});
+        } else if (col_id == 1) {
+          // Second meta field is the type.
+          CHECK_EQUAL(col->index_type(), string_type{});
+        } else {
+          // Data field.
+          offset off{col_id - 2};
+          CHECK_EQUAL(col->index_type(), *flat_layout.at(off));
+        }
+        ++col_id;
+      });
+    });
+  }
   MESSAGE("verify partition content");
   auto res = [&](auto... args) {
     return make_ids({args...}, bro_conn_log.size());
   };
   auto expr = unbox(to<expression>(":addr == 169.254.225.22"));
   ids result;
-  for (auto& ptr : partitions) {
-    query_state qs;
-    sys.spawn(query_actor, &qs, ptr, expr);
-    sched.run();
-    CHECK_EQUAL(qs.expected, qs.received);
-    result |= qs.result;
+  for (auto& part : partitions) {
+    part->manager().for_each([&](const caf::actor& idx_hdl) {
+      auto& tbl = deref<indexer_type>(idx_hdl).state.tbl;
+      result |= unbox(tbl.lookup(expr));
+    });
   }
   CHECK_EQUAL(rank(result), 4u);
   CHECK_EQUAL(result, res(680, 682, 719, 720));
