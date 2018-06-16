@@ -93,6 +93,7 @@ caf::expected<column_index_ptr> make_field_data_index(path filename,
 
     void add(const event& x) override {
       VAST_TRACE(VAST_ARG(x));
+      VAST_ASSERT(x.id() != invalid_id);
       auto v = get_if<vector>(x.data());
       if (!v)
         return;
@@ -123,21 +124,25 @@ column_index::~column_index() {
 
 caf::error column_index::init() {
   VAST_TRACE("");
+  // Materialize the index when encountering persistent state.
   if (exists(filename_)) {
-    // Materialize the index when encountering persistent state.
     detail::value_index_inspect_helper tmp{index_type_, idx_};
     auto result = load(filename_, last_flush_, tmp);
     if (!result) {
-      return result.error();
+      VAST_ERROR("unable to load value index from disk", result.error());
+      return std::move(result.error());
     } else {
       VAST_DEBUG("loaded value index with offset", idx_->offset());
     }
-  } else {
-    // Otherwise construct a new one.
-    idx_ = value_index::make(index_type_);
-    if (!idx_)
-      return make_error(ec::unspecified, "failed to construct index");
+    return caf::none;
   }
+  // Otherwise construct a new one.
+  idx_ = value_index::make(index_type_);
+  if (idx_ == nullptr) {
+    VAST_ERROR("failed to construct index");
+    return make_error(ec::unspecified, "failed to construct index");
+  }
+  VAST_DEBUG("constructed new value index");
   return caf::none;
 }
 
