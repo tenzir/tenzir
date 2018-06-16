@@ -254,8 +254,8 @@ TEST(multiple partitions bro conn log lookup no messaging) {
       tbl.for_each_column([&](column_index* col) {
         REQUIRE(col != nullptr);
         CHECK(path_set.emplace(col->filename()).second);
-        CHECK_EQUAL(col->idx().offset(),
-                    std::min((i + 1) * part_size, bro_conn_log.size()));
+        auto idx_offset = std::min((i + 1) * part_size, bro_conn_log.size());
+        CHECK_EQUAL(col->idx().offset(), idx_offset);
         if (col_id == 0) {
           // First meta field is the timestamp.
           CHECK_EQUAL(col->index_type(), timespan_type{});
