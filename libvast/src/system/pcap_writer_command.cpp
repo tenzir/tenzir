@@ -38,10 +38,11 @@ pcap_writer_command::pcap_writer_command(command* parent, std::string_view name)
   add_opt<size_t>("flush,f", "flush to disk after this many packets");
 }
 
-expected<caf::actor> pcap_writer_command::make_sink(caf::scoped_actor& self,
-                                                    const option_map& options,
-                                                    argument_iterator begin,
-                                                    argument_iterator end) {
+expected<caf::actor>
+pcap_writer_command::make_sink(caf::scoped_actor& self,
+                               const caf::config_value_map& options,
+                               argument_iterator begin,
+                               argument_iterator end) {
   VAST_UNUSED(begin, end);
   VAST_TRACE(VAST_ARG("args", begin, end));
   auto limit = get_or(options, "events", defaults::command::max_events);

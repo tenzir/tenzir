@@ -51,10 +51,11 @@ pcap_reader_command::pcap_reader_command(command* parent, std::string_view name)
   add_opt<size_t>("pseudo-realtime,p", "factor c delaying packets by 1/c");
 }
 
-expected<caf::actor> pcap_reader_command::make_source(caf::scoped_actor& self,
-                                                      const option_map& options,
-                                                      argument_iterator begin,
-                                                      argument_iterator end) {
+expected<caf::actor>
+pcap_reader_command::make_source(caf::scoped_actor& self,
+                                 const caf::config_value_map& options,
+                                 argument_iterator begin,
+                                 argument_iterator end) {
   VAST_UNUSED(begin, end);
   VAST_TRACE(VAST_ARG("args", begin, end));
   VAST_DEBUG(VAST_ARG(options));

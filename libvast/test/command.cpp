@@ -30,7 +30,7 @@ public:
     add_opt<bool>("flag", "Some flag");
   }
 
-  proceed_result proceed(caf::actor_system&, const option_map&,
+  proceed_result proceed(caf::actor_system&, const caf::config_value_map&,
                          argument_iterator begin,
                          argument_iterator end) override {
     tested_proceed = true;
@@ -39,8 +39,8 @@ public:
     return proceed_ok;
   }
 
-  int run_impl(caf::actor_system&, const option_map&, argument_iterator begin,
-               argument_iterator end) override {
+  int run_impl(caf::actor_system&, const caf::config_value_map&,
+               argument_iterator begin, argument_iterator end) override {
     was_executed = true;
     run_begin = begin;
     run_end = end;
@@ -61,7 +61,7 @@ public:
     add_opt<int>("other-value,o", "Some other integer value");
   }
 
-  proceed_result proceed(caf::actor_system&, const option_map&,
+  proceed_result proceed(caf::actor_system&, const caf::config_value_map&,
                          argument_iterator begin,
                          argument_iterator end) override {
     tested_proceed = true;
@@ -70,8 +70,8 @@ public:
     return proceed_ok;
   }
 
-  int run_impl(caf::actor_system&, const option_map&, argument_iterator begin,
-               argument_iterator end) override {
+  int run_impl(caf::actor_system&, const caf::config_value_map&,
+               argument_iterator begin, argument_iterator end) override {
     was_executed = true;
     run_begin = begin;
     run_end = end;
@@ -90,7 +90,7 @@ struct fixture {
   command root;
   caf::actor_system_config cfg;
   caf::actor_system sys{cfg};
-  option_map options;
+  caf::config_value_map options;
   std::vector<std::string> xs;
   int exec(std::string str) {
     caf::split(xs, str, ' ', caf::token_compress_on);

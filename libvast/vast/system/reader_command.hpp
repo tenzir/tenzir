@@ -51,7 +51,7 @@ public:
 
 protected:
   expected<caf::actor> make_source(caf::scoped_actor& self,
-                                   const option_map& options,
+                                   const caf::config_value_map& options,
                                    argument_iterator begin,
                                    argument_iterator end) override {
     VAST_TRACE(VAST_ARG("args", begin, end));

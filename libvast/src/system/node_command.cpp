@@ -42,15 +42,16 @@ node_command::~node_command() {
   // nop
 }
 
-expected<actor> node_command::spawn_or_connect_to_node(scoped_actor& self,
-                                                       const option_map& opts) {
+expected<actor>
+node_command::spawn_or_connect_to_node(scoped_actor& self,
+                                       const caf::config_value_map& opts) {
   if (get_or<bool>(opts, "node", false))
     return spawn_node(self, opts);
   return connect_to_node(self, opts);
 }
 
 expected<actor> node_command::spawn_node(scoped_actor& self,
-                                         const option_map& opts) {
+                                         const caf::config_value_map& opts) {
   // Fetch values from config.
   auto id = get_or(opts, "id", defaults::command::node_id);
   auto dir = get_or(opts, "dir", defaults::command::directory);
@@ -87,8 +88,9 @@ expected<actor> node_command::spawn_node(scoped_actor& self,
   return node;
 }
 
-expected<actor> node_command::connect_to_node(scoped_actor& self,
-                                              const option_map& opts) {
+expected<actor>
+node_command::connect_to_node(scoped_actor& self,
+                              const caf::config_value_map& opts) {
   // Fetch values from config.
   auto id = get_or(opts, "id", defaults::command::node_id);
   auto dir = get_or(opts, "dir", defaults::command::directory);

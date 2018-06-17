@@ -51,7 +51,7 @@ public:
 
 protected:
   expected<caf::actor> make_sink(caf::scoped_actor& self,
-                                 const option_map& options,
+                                 const caf::config_value_map& options,
                                  argument_iterator begin,
                                  argument_iterator end) override;
 };

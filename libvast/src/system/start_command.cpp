@@ -39,8 +39,9 @@ start_command::start_command(command* parent, std::string_view name)
   add_opt<bool>("foreground,f", "run in foreground (do not daemonize)");
 }
 
-int start_command::run_impl(actor_system& sys, const option_map& options,
-                        argument_iterator begin, argument_iterator end) {
+int start_command::run_impl(actor_system& sys,
+                            const caf::config_value_map& options,
+                            argument_iterator begin, argument_iterator end) {
   VAST_UNUSED(begin, end);
   VAST_TRACE(VAST_ARG(options), VAST_ARG("args", begin, end));
   // Fetch SSL settings from config.
