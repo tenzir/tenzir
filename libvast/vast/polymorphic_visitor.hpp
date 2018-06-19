@@ -91,10 +91,12 @@ protected:
     auto invoke = [&](auto... args) {
       if ((!args || ...))
         return false;
-      if constexpr (std::is_void_v<Result>)
+      if constexpr (std::is_void_v<Result>) {
         f_(*args...);
-      else
+        result = caf::unit;
+      } else {
         result = f_(*args...);
+      }
       return true;
     };
     return invoke(downcast<std::decay_t<Args>>(xs)...);
@@ -104,7 +106,10 @@ protected:
     caf::optional<result_type> result;
     (try_visit(Ts{}, result, xs...) || ...);
     VAST_ASSERT(result);
-    return std::move(*result);
+    if constexpr (std::is_void_v<Result>)
+      return;
+    else
+      return std::move(*result);
   }
 
   F f_;

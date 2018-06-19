@@ -115,6 +115,16 @@ TEST(default constructability not required) {
   CHECK_EQUAL(result.data, 0);
 }
 
+TEST(void return) {
+  auto f = make_polymorphic_visitor<shape>(
+    [&](const square&) { CHECK(true); },
+    [&](const rectangle&) { FAIL("rectangle should not match"); },
+    [&](const shape&) { FAIL("shape should not match"); }
+  );
+  auto x = square{42};
+  f(as_shape(x));
+}
+
 TEST(double dispatch) {
   auto equals = make_polymorphic_visitor<shape, shape>(
     [&](const circle&, const circle&) { return true; },
