@@ -137,4 +137,20 @@ static auto make_polymorphic_visitor(F f, Fs... fs) {
   return visitor_type{std::move(lambda)};
 }
 
+/// Performs double-dispatch on a polymorphic type and a sum type.
+/// @tparam Ts The list of concrete types in the polymorphic hierarchy.
+/// @param f The two-ary function that dispatches on *x* and *y*.
+/// @param x The polymorphic type that *f* dispatches on.
+/// @param y The variant that *f* dispatches on.
+template <class... Ts, class F, class Base, class... Us>
+auto poly_visit(F f, const Base& x, const caf::variant<Us...>& y) {
+  auto visitor = [&](const auto& rhs) {
+    auto g = make_polymorphic_visitor<Base>(
+      [&](const Ts& lhs) { f(lhs, rhs); }...
+    );
+    g(x);
+  };
+  visit(visitor, y);
+}
+
 } // namespace vast

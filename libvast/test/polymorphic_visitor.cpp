@@ -13,7 +13,11 @@
 
 #include <cmath>
 
+#include <caf/variant.hpp>
+
 #include "vast/polymorphic_visitor.hpp"
+
+#include "vast/detail/overload.hpp"
 
 #define SUITE polymorphic_visitor
 #include "test.hpp"
@@ -158,4 +162,18 @@ TEST(triple dispatch) {
   CHECK_EQUAL(circles(as_shape(y), as_shape(x), as_shape(x)), 2);
   CHECK_EQUAL(circles(as_shape(x), as_shape(y), as_shape(y)), 1);
   CHECK_EQUAL(circles(as_shape(y), as_shape(y), as_shape(y)), 0);
+}
+
+TEST(dispatch with sum type) {
+  using pair = caf::variant<int, double>;
+  auto f = detail::overload(
+    [&](const circle& a, auto& b) { CHECK_EQUAL(b, pair{42}); },
+    [&](const shape& a, auto& b) { CHECK_EQUAL(b, pair{4.2}); }
+  );
+  circle x0{0};
+  auto y = pair{42};
+  poly_visit<circle, shape>(f, as_shape(x0), y);
+  rectangle x1{1, 2};
+  y = 4.2;
+  poly_visit<circle, shape>(f, as_shape(x1), y);
 }
