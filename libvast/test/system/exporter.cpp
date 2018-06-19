@@ -31,7 +31,7 @@ using namespace caf;
 using namespace vast;
 using namespace std::chrono;
 
-FIXTURE_SCOPE(exporter_tests, fixtures::actor_system_and_events)
+FIXTURE_SCOPE(exporter_tests, fixtures::deterministic_actor_system_and_events)
 
 TEST(exporter historical) {
   auto i = self->spawn(system::index, directory / "index", 1000, 5, 5, 1);
@@ -183,7 +183,7 @@ TEST(exporter continuous -- with importer) {
   self->send(imp, exporter_atom::value, exp);
   MESSAGE("ingesting conn.log");
   self->wait_for(
-    vast::detail::spawn_container_source(self->system(), imp, bro_conn_log));
+    vast::detail::spawn_container_source(self->system(), bro_conn_log, imp));
   //self->send(imp, bro_conn_log);
   MESSAGE("waiting for results");
   std::vector<event> results;

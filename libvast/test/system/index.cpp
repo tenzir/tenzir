@@ -136,7 +136,7 @@ FIXTURE_SCOPE(index_tests, fixture)
 
 TEST(ingestion) {
   MESSAGE("ingest 1000 integers");
-  auto src = detail::spawn_generator_source(sys, index, 1000, int_generator());
+  auto src = detail::spawn_generator_source(sys, 1000, int_generator(), index);
   run_exhaustively();
   MESSAGE("verify partition index");
   REQUIRE_EQUAL(state().part_index.size(), 10u);
@@ -155,9 +155,9 @@ TEST(ingestion) {
 
 TEST(one-shot integer query result) {
   MESSAGE("fill first " << taste_count << " partitions");
-  auto src = detail::spawn_generator_source(sys, index,
+  auto src = detail::spawn_generator_source(sys,
                                             partition_size * taste_count,
-                                            int_generator(2));
+                                            int_generator(2), index);
   run_exhaustively();
   MESSAGE("query half of the values");
   auto [query_id, hits, scheduled] = query(":int == 1");
@@ -175,9 +175,9 @@ TEST(one-shot integer query result) {
 
 TEST(iterable integer query result) {
   MESSAGE("fill first " << (taste_count * 3) << " partitions");
-  auto src = detail::spawn_generator_source(sys, index,
+  auto src = detail::spawn_generator_source(sys,
                                             partition_size * taste_count * 3,
-                                            int_generator(2));
+                                            int_generator(2), index);
   run_exhaustively();
   MESSAGE("query half of the values");
   auto [query_id, hits, scheduled] = query(":int == 1");
@@ -197,7 +197,7 @@ TEST(iterable integer query result) {
 TEST(iterable bro conn log query result) {
   REQUIRE_EQUAL(bro_conn_log.size(), 8462u);
   MESSAGE("ingest conn.log");
-  detail::spawn_container_source(sys, index, bro_conn_log);
+  detail::spawn_container_source(sys, bro_conn_log, index);
   run_exhaustively();
   MESSAGE("issue field type query");
   {

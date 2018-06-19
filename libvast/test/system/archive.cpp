@@ -30,7 +30,7 @@ FIXTURE_SCOPE(archive_tests, fixtures::deterministic_actor_system_and_events)
 TEST(archiving and querying) {
   auto a = self->spawn(system::archive, directory, 10, 1024 * 1024);
   auto push_to_archive = [&](auto xs) {
-    auto cs = vast::detail::spawn_container_source(sys, a, std::move(xs));
+    auto cs = vast::detail::spawn_container_source(sys, std::move(xs), a);
     run_exhaustively();
   };
   MESSAGE("import bro conn logs to archive");

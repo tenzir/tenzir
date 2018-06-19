@@ -19,37 +19,41 @@
 
 namespace vast::detail {
 
-template <class Handle, class Generator>
-caf::actor spawn_generator_source(caf::actor_system& system, Handle dst,
-                                  size_t num_elements, Generator generator) {
+/// Spawns an actor that streams the first `num_elements` items produced by
+/// `generator` to all sinks.
+template <class Generator, class Handle, class... Handles>
+caf::actor spawn_generator_source(caf::actor_system& system,
+                                  size_t num_elements, Generator generator,
+                                  Handle sink, Handles... sinks) {
   using namespace caf;
   struct outer_state {
     /// Name of this actor in log events.
     const char* name = "generator-source";
   };
-  auto f = [](stateful_actor<outer_state>* self, Handle dest, size_t n,
-              Generator f) {
+  auto f = [](stateful_actor<outer_state>* self, size_t n, Generator f,
+              Handle y, Handles... ys) {
     using value_type = decltype(f());
     using ds_type = downstream<value_type>;
-    struct state {
-      size_t i;
-      size_t e;
-    };
-    self->make_source(
-      dest,
-      [&](state& st) {
-        st.i = 0u;
-        st.e = n;
+    auto mgr = self->make_source(
+      std::move(y),
+      [&](size_t& remaining) {
+        remaining = n;
       },
-      [f{std::move(f)}](state& st, ds_type& out, size_t hint) mutable {
-        auto num = std::max(hint, st.e - st.i);
-        for (size_t i = 0; i < num; ++i)
+      [f{std::move(f)}](size_t& remaining, ds_type& out, size_t hint) mutable {
+        auto n = std::min(hint, remaining);
+        for (size_t pushed = 0; pushed < n; ++pushed)
           out.push(f());
-        st.i += num;
+        remaining -= n;
       },
-      [](const state& st) { return st.i == st.e; });
+      [](const size_t& remaining) {
+        return remaining == 0;
+      }
+    ).ptr();
+    if constexpr (sizeof...(Handles) > 0)
+      std::make_tuple(mgr->add_outbound_path(ys)...);
   };
-  return system.spawn(f, std::move(dst), num_elements, std::move(generator));
+  return system.spawn(f, num_elements, std::move(generator),
+                      std::move(sink), std::move(sinks)...);
 }
 
 } // namespace vast::detail

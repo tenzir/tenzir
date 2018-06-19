@@ -77,8 +77,8 @@ FIXTURE_SCOPE(import_tests, fixture)
 
 TEST(import without subscribers) {
   MESSAGE("spawn dummy source");
-  auto src = vast::detail::spawn_container_source(self->system(), importer,
-                                                  bro_conn_log);
+  auto src = vast::detail::spawn_container_source(self->system(),
+                                                  bro_conn_log, importer);
   sched.run_once();
   MESSAGE("expect the importer to give 0 initial credit");
   expect((open_stream_msg), from(src).to(importer));
@@ -125,8 +125,8 @@ TEST(import with one subscriber) {
   anon_send(importer, add_atom::value, subscriber);
   sched.run();
   MESSAGE("spawn dummy source");
-  auto src = vast::detail::spawn_container_source(self->system(), importer,
-                                                  bro_conn_log);
+  auto src = vast::detail::spawn_container_source(self->system(),
+                                                  bro_conn_log, importer);
   sched.run_once();
   MESSAGE("loop until importer becomes idle");
   sched.run_dispatch_loop(credit_round_interval);
@@ -145,8 +145,8 @@ TEST(import with two subscribers) {
   anon_send(importer, add_atom::value, subscriber2);
   sched.run();
   MESSAGE("spawn dummy source");
-  auto src = vast::detail::spawn_container_source(self->system(), importer,
-                                                  bro_conn_log);
+  auto src = vast::detail::spawn_container_source(self->system(),
+                                                  bro_conn_log, importer);
   sched.run_once();
   MESSAGE("loop until importer becomes idle");
   sched.run_dispatch_loop(credit_round_interval);

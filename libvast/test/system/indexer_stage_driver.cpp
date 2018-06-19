@@ -130,8 +130,8 @@ TEST(spawning sinks automatically) {
                        partition_factory(sys, state_dir, &dummies, bufs),
                        std::numeric_limits<size_t>::max());
   MESSAGE("spawn the source and run");
-  auto src = vast::detail::spawn_container_source(self->system(), stg,
-                                                  test_events);
+  auto src = vast::detail::spawn_container_source(self->system(),
+                                                  test_events, stg);
   run_exhaustively();
   CHECK_EQUAL(dummies, num_types);
   MESSAGE("check content of the shared buffer");
@@ -152,8 +152,8 @@ TEST(creating integer partitions automatically) {
                        partition_factory(sys, state_dir, &dummies, bufs),
                        10u);
   MESSAGE("spawn the source and run");
-  auto src = vast::detail::spawn_container_source(self->system(), stg,
-                                                  test_events);
+  auto src = vast::detail::spawn_container_source(self->system(),
+                                                  test_events, stg);
   run_exhaustively();
   MESSAGE("11 segments must exist, 10 with 10 elements and one empty");
   CHECK_EQUAL(bufs->size(), 11u);
@@ -180,8 +180,8 @@ TEST(creating bro conn log partitions automatically) {
                        partition_factory(sys, state_dir, &dummies, bufs),
                        100u);
   MESSAGE("spawn the source and run");
-  auto src = vast::detail::spawn_container_source(self->system(), stg,
-                                                  bro_conn_log);
+  auto src = vast::detail::spawn_container_source(self->system(),
+                                                  bro_conn_log, stg);
   run_exhaustively();
   MESSAGE("flatten all partitions into one buffer");
   event_buffer xs;
