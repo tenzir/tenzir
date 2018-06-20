@@ -150,10 +150,18 @@ TEST(finding - sequence) {
 }
 
 TEST(counting) {
-  CHECK_EQUAL(rank(bits8(0b10110000, 4)), 0u);
-  CHECK_EQUAL(rank(bits8(0b10111011, 6)), 5u);
-  CHECK_EQUAL(rank(bits8(0b10111011)), 6u);
+  CHECK_EQUAL(rank(bits8{w8::all}, 0), 1u);
+  CHECK_EQUAL(rank(bits8{w8::all}, 1), 2u);
+  CHECK_EQUAL(rank(bits8{w8::all}, 2), 3u);
+  CHECK_EQUAL(rank(bits8{w8::all}, 3), 4u);
+  CHECK_EQUAL(rank(bits8{w8::all}, 4), 5u);
+  CHECK_EQUAL(rank(bits8{w8::all}, 5), 6u);
+  CHECK_EQUAL(rank(bits8{w8::all}, 6), 7u);
+  CHECK_EQUAL(rank(bits8{w8::all}, 7), 8u);
   CHECK_EQUAL(rank(bits8(w8::all)), 8u);
   CHECK_EQUAL(rank(bits8(w8::none)), 0u);
+  CHECK_EQUAL(rank(bits8{0b1011'0000}, 4), 1u);
+  CHECK_EQUAL(rank(bits8{0b1011'1011}, 6), 5u);
+  CHECK_EQUAL(rank(bits8{0b1011'1011}), 6u);
 }
 
