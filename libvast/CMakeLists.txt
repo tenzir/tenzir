@@ -277,6 +277,7 @@ set(tests
   test/uuid.cpp
   test/value.cpp
   test/value_index.cpp
+  test/value_index_from_events.cpp
   test/vector_map.cpp
   test/vector_set.cpp
   test/view.cpp
