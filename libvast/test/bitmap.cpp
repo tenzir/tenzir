@@ -176,6 +176,8 @@ struct bitmap_test_harness {
   void test_rank() {
     MESSAGE("rank");
     Bitmap bm;
+    CHECK_EQUAL(rank<0>(bm), 0u);
+    CHECK_EQUAL(rank<1>(bm), 0u);
     bm.append_bit(true);
     bm.append_bit(false);
     CHECK_EQUAL(rank<0>(bm), 1u);
@@ -193,6 +195,8 @@ struct bitmap_test_harness {
     CHECK_EQUAL(rank<0>(bm), 368u);
     CHECK_EQUAL(rank<1>(bm), 575u);
     MESSAGE("partial rank");
+    CHECK_EQUAL(rank<0>(bm, 0), 0u);
+    CHECK_EQUAL(rank<1>(bm, 0), 1u);
     CHECK_EQUAL(rank<0>(bm, 1), 1u);
     CHECK_EQUAL(rank<1>(bm, 1), 1u);
     CHECK_EQUAL(rank<0>(bm, 10), 1u);
@@ -202,6 +206,21 @@ struct bitmap_test_harness {
     CHECK_EQUAL(rank<1>(bm, bm.size() - 1), 575u);
     CHECK_EQUAL(rank<0>(bm, bm.size() - 2), 367u);
     CHECK_EQUAL(rank<1>(bm, bm.size() - 2), 575u);
+    MESSAGE("partial rank - special cases");
+    Bitmap bm2;
+    bm2.append_bit(true);
+    CHECK_EQUAL(rank<0>(bm2, 0), 0u);
+    CHECK_EQUAL(rank<1>(bm2, 0), 1u);
+    bm2.append_bit(false);
+    CHECK_EQUAL(rank<0>(bm2, 1), 1u);
+    CHECK_EQUAL(rank<1>(bm2, 1), 1u);
+    Bitmap bm3;
+    bm3.append_bit(false);
+    CHECK_EQUAL(rank<0>(bm3, 0), 1u);
+    CHECK_EQUAL(rank<1>(bm3, 0), 0u);
+    bm3.append_bit(true);
+    CHECK_EQUAL(rank<0>(bm3, 1), 1u);
+    CHECK_EQUAL(rank<1>(bm3, 1), 1u);
   }
 
   void test_select() {
