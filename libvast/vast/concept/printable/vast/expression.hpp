@@ -57,7 +57,9 @@ struct expression_printer : printer<expression_printer> {
 
     bool operator()(const predicate& p) const {
       auto op = ' ' << make_printer<relational_operator>{} << ' ';
-      return visit(*this, p.lhs) && op(out_, p.op) && visit(*this, p.rhs);
+      return caf::visit(*this, p.lhs)
+             && op(out_, p.op)
+             && caf::visit(*this, p.rhs);
     }
 
     bool operator()(const attribute_extractor& e) const {
@@ -95,15 +97,13 @@ struct expression_printer : printer<expression_printer> {
          || std::is_same_v<T, disjunction>
          || std::is_same_v<T, negation>,
          bool
-       >
-  {
+       > {
     return visitor<Iterator>{out}(x);
   }
 
   template <class Iterator>
-  bool print(Iterator& out, const expression& e) const
-  {
-    return visit(visitor<Iterator>{out}, e);
+  bool print(Iterator& out, const expression& e) const {
+    return caf::visit(visitor<Iterator>{out}, e);
   }
 };
 
@@ -120,10 +120,8 @@ struct printer_registry<
     || std::is_same_v<T, negation>
     || std::is_same_v<T, expression>
   >
->
-{
+> {
   using type = expression_printer;
 };
 
 } // namespace vast
-

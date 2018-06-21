@@ -19,6 +19,7 @@
 
 #include "vast/logger.hpp"
 
+#include <caf/behavior.hpp>
 #include <caf/stateful_actor.hpp>
 
 #include "vast/concept/printable/stream.hpp"

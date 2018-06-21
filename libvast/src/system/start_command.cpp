@@ -13,6 +13,7 @@
 
 #include "vast/system/start_command.hpp"
 
+#include <csignal>
 #include <iostream>
 #include <csignal>
 
@@ -35,17 +36,15 @@ namespace vast::system {
 using namespace std::chrono_literals;
 
 start_command::start_command(command* parent, std::string_view name)
-  : node_command{parent, name},
-    spawn_bare_node{false},
-    in_foreground{false} {
-  add_opt("bare", "spawn empty node without any components", spawn_bare_node);
-  add_opt("foreground", "run in foreground (do not daemonize)", in_foreground);
+  : node_command{parent, name} {
+  add_opt("bare", "spawn empty node without any components", false);
+  add_opt("foreground,f", "run in foreground (do not daemonize)", false);
 }
 
-int start_command::run_impl(actor_system& sys, option_map& options,
-                        caf::message args) {
-  CAF_IGNORE_UNUSED(args);
-  CAF_LOG_TRACE(CAF_ARG(options) << CAF_ARG(args));
+int start_command::run_impl(actor_system& sys, const option_map& options,
+                        argument_iterator begin, argument_iterator end) {
+  VAST_UNUSED(begin, end);
+  VAST_TRACE(VAST_ARG(options), VAST_ARG("args", begin, end));
   // Fetch SSL settings from config.
   auto& sys_cfg = sys.config();
   auto use_encryption = !sys_cfg.openssl_certificate.empty()

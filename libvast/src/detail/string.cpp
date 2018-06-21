@@ -93,14 +93,82 @@ std::string double_unescape(const std::string& str, const std::string& esc) {
   return unescape(str, double_unescaper(esc));
 }
 
-std::string replace_all(std::string str, const std::string& search,
-                        const std::string& replace) {
+std::string replace_all(std::string str, std::string_view search,
+                        std::string_view replace) {
   auto pos = std::string::size_type{0};
   while ((pos = str.find(search, pos)) != std::string::npos) {
      str.replace(pos, search.length(), replace);
      pos += replace.length();
   }
   return str;
+}
+
+std::vector<std::string_view> split(std::string_view str, std::string_view sep,
+                                    std::string_view esc, size_t max_splits,
+                                    bool include_sep) {
+  VAST_ASSERT(!sep.empty());
+  std::vector<std::string_view> pos;
+  size_t splits = 0;
+  auto end = str.end();
+  auto begin = str.begin();
+  auto i = begin;
+  auto prev = i;
+  auto push = [&](auto first, auto last) {
+    using std::distance;
+    pos.emplace_back(str.substr(distance(begin, first), distance(first, last)));
+  };
+  while (i != end) {
+    // Find a separator that fits in the string.
+    if (*i != sep[0] || i + sep.size() > end) {
+      ++i;
+      continue;
+    }
+    // Check remaining separator characters.
+    size_t j = 1;
+    auto s = i;
+    while (j < sep.size())
+      if (*++s != sep[j])
+        break;
+      else
+        ++j;
+    // No separator match.
+    if (j != sep.size()) {
+      ++i;
+      continue;
+    }
+    // Make sure it's not an escaped match.
+    if (!esc.empty() && esc.size() < static_cast<size_t>(i - begin)) {
+      auto escaped = true;
+      auto esc_start = i - esc.size();
+      for (size_t j = 0; j < esc.size(); ++j)
+        if (esc_start[j] != esc[j]) {
+          escaped = false;
+          break;
+        }
+      if (escaped) {
+        ++i;
+        continue;
+      }
+    }
+    if (splits++ == max_splits)
+      break;
+    push(prev, i);
+    if (include_sep)
+      push(i, i + sep.size());
+    i += sep.size();
+    prev = i;
+  }
+  if (prev != end)
+      push(prev, end);
+  return pos;
+}
+
+std::vector<std::string> to_strings(const std::vector<std::string_view>& v) {
+  std::vector<std::string> strs;
+  strs.resize(v.size());
+  for (size_t i = 0; i < v.size(); ++i)
+    strs[i] = v[i];
+  return strs;
 }
 
 } // namespace detail

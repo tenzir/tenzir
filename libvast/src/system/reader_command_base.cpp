@@ -16,6 +16,7 @@
 
 #include "vast/system/reader_command_base.hpp"
 
+#include <csignal>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -40,14 +41,15 @@
 
 namespace vast::system {
 
-int reader_command_base::run_impl(caf::actor_system& sys, option_map& options,
-                                  caf::message args) {
+int reader_command_base::run_impl(caf::actor_system& sys, const option_map& options,
+                                  argument_iterator begin,
+                                  argument_iterator end) {
   using namespace caf;
   using namespace std::chrono_literals;
   // Helper for blocking actor communication.
   scoped_actor self{sys};
   // Spawn the source.
-  auto src_opt = make_source(self, std::move(args));
+  auto src_opt = make_source(self, options, begin, end);
   if (!src_opt) {
     std::cerr << "unable to spawn source: " << sys.render(src_opt.error())
               << std::endl;

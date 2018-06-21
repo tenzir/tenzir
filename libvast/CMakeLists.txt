@@ -22,45 +22,46 @@ set(libvast_sources
   src/chunk.cpp
   src/command.cpp
   src/compression.cpp
-  src/data.cpp
-  src/die.cpp
-  src/expression.cpp
-  src/expression_visitors.cpp
-  src/error.cpp
-  src/event.cpp
-  src/ewah_bitmap.cpp
-  src/ids.cpp
-  src/filesystem.cpp
-  src/key.cpp
-  src/http.cpp
-  src/null_bitmap.cpp
-  src/operator.cpp
-  src/pattern.cpp
-  src/port.cpp
-  src/schema.cpp
-  src/segment_store.cpp
-  src/subnet.cpp
-  src/time.cpp
-  src/type.cpp
-  src/uuid.cpp
-  src/value.cpp
-  src/value_index.cpp
-  src/wah_bitmap.cpp
   src/concept/hashable/crc.cpp
   src/concept/hashable/xxhash.cpp
+  src/data.cpp
   src/detail/adjust_resource_consumption.cpp
   src/detail/compressedbuf.cpp
-  src/detail/line_range.cpp
-  src/detail/fdistream.cpp
   src/detail/fdinbuf.cpp
+  src/detail/fdistream.cpp
   src/detail/fdostream.cpp
   src/detail/fdoutbuf.cpp
+  src/detail/line_range.cpp
   src/detail/make_io_stream.cpp
   src/detail/mmapbuf.cpp
   src/detail/posix.cpp
   src/detail/string.cpp
   src/detail/system.cpp
   src/detail/terminal.cpp
+  src/die.cpp
+  src/error.cpp
+  src/event.cpp
+  src/ewah_bitmap.cpp
+  src/expression.cpp
+  src/expression_visitors.cpp
+  src/filesystem.cpp
+  src/format/bgpdump.cpp
+  src/format/bro.cpp
+  src/format/csv.cpp
+  src/format/mrt.cpp
+  src/format/test.cpp
+  src/http.cpp
+  src/ids.cpp
+  src/key.cpp
+  src/null_bitmap.cpp
+  src/operator.cpp
+  src/option_declaration_set.cpp
+  src/option_map.cpp
+  src/pattern.cpp
+  src/port.cpp
+  src/schema.cpp
+  src/segment_store.cpp
+  src/subnet.cpp
   src/system/accountant.cpp
   src/system/application.cpp
   src/system/archive.cpp
@@ -87,11 +88,13 @@ set(libvast_sources
   src/system/task.cpp
   src/system/tracker.cpp
   src/system/writer_command_base.cpp
-  src/format/bgpdump.cpp
-  src/format/mrt.cpp
-  src/format/bro.cpp
-  src/format/csv.cpp
-  src/format/test.cpp
+  src/time.cpp
+  src/type.cpp
+  src/uuid.cpp
+  src/value.cpp
+  src/value_index.cpp
+  src/view.cpp
+  src/wah_bitmap.cpp
 )
 
 if (VAST_HAVE_ARROW)
@@ -147,6 +150,10 @@ target_link_libraries(libvast ${libvast_libs})
 # Install libvast in PREFIX/lib and headers in PREFIX/include/vast.
 install(TARGETS libvast DESTINATION lib)
 install(DIRECTORY vast/
+        DESTINATION include/vast FILES_MATCHING PATTERN "*.hpp")
+
+# Install generated config header.
+install(DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/vast/"
         DESTINATION include/vast FILES_MATCHING PATTERN "*.hpp")
 
 # ----------------------------------------------------------------------------
@@ -211,6 +218,7 @@ set(tests
   test/bitmap_index.cpp
   test/bits.cpp
   test/bitvector.cpp
+  test/byte.cpp
   test/cache.cpp
   test/chunk.cpp
   test/coder.cpp
@@ -223,6 +231,10 @@ set(tests
   test/expression_evaluation.cpp
   test/expression_parseable.cpp
   test/filesystem.cpp
+  test/fixtures/events.cpp
+  test/format/bro.cpp
+  test/format/mrt.cpp
+  test/format/writer.cpp
   test/hash.cpp
   test/http.cpp
   test/ids.cpp
@@ -232,26 +244,22 @@ set(tests
   test/main.cpp
   test/mmapbuf.cpp
   test/offset.cpp
+  test/option_declaration_set.cpp
+  test/option_map.cpp
+  test/parse_data.cpp
   test/parseable.cpp
   test/pattern.cpp
+  test/polymorphic_visitor.cpp
   test/port.cpp
   test/printable.cpp
   test/range_map.cpp
   test/save_load.cpp
   test/schema.cpp
   test/serialization.cpp
+  test/span.cpp
   test/stack.cpp
   test/string.cpp
   test/subnet.cpp
-  test/time.cpp
-  test/type.cpp
-  test/uuid.cpp
-  test/value.cpp
-  test/value_index.cpp
-  test/variant.cpp
-  test/vector_map.cpp
-  test/vector_set.cpp
-  test/word.cpp
   test/system/archive.cpp
   test/system/consensus.cpp
   test/system/exporter.cpp
@@ -265,10 +273,16 @@ set(tests
   test/system/sink.cpp
   test/system/source.cpp
   test/system/task.cpp
-  test/fixtures/events.cpp
-  test/format/mrt.cpp
-  test/format/bro.cpp
-  test/format/writer.cpp
+  test/time.cpp
+  test/type.cpp
+  test/uuid.cpp
+  test/value.cpp
+  test/value_index.cpp
+  test/variant.cpp
+  test/vector_map.cpp
+  test/vector_set.cpp
+  test/view.cpp
+  test/word.cpp
 )
 
 if (VAST_HAVE_ARROW)

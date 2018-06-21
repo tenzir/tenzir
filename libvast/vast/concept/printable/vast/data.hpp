@@ -104,11 +104,11 @@ struct printer_registry<set> {
   using type = set_printer;
 };
 
-struct table_printer : printer<table_printer> {
-  using attribute = table;
+struct map_printer : printer<map_printer> {
+  using attribute = map;
 
   template <class Iterator>
-  bool print(Iterator& out, const table& t) const {
+  bool print(Iterator& out, const map& t) const {
     auto pair = (data_printer{} << " -> " << data_printer{});
     auto p = '{' << ~(pair % ", ") << '}';
     return p.print(out, t);
@@ -116,8 +116,8 @@ struct table_printer : printer<table_printer> {
 };
 
 template <>
-struct printer_registry<table> {
-  using type = table_printer;
+struct printer_registry<map> {
+  using type = map_printer;
 };
 
 } // namespace vast

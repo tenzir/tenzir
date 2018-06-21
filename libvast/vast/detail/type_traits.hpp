@@ -125,6 +125,22 @@ inline constexpr bool is_any_v = (std::is_same_v<T, Ts> || ...);
 template <class T, class... Ts>
 inline constexpr bool are_same_v = (std::is_same_v<T, Ts> && ...);
 
+// Utility for usage in `static_assert`. For example:
+//
+//   template <class T>
+//   void f() {
+//     if constexpr (is_same_v<T, int>)
+//       ...
+//     else
+//       static_assert(always_false_v<T>, "error message");
+//   }
+//
+template <class>
+struct always_false : std::false_type {};
+
+template <class T>
+constexpr auto always_false_v = always_false<T>::value;
+
 // -- tuple ------------------------------------------------------------------
 
 // Wraps a type into a tuple if it is not already a tuple.

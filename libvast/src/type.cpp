@@ -68,7 +68,7 @@ struct equal_to {
 struct less_than {
   template <class T, class U>
   bool operator()(const T&, const U&) const noexcept {
-    return false;
+    VAST_ASSERT(!"dispatch only defined for equal types");
   }
 
   template <class T>
@@ -84,7 +84,9 @@ bool operator==(const type& x, const type& y) {
 }
 
 bool operator<(const type& x, const type& y) {
-  return visit(less_than{}, x, y);
+  auto i = x.ptr_->types.index();
+  auto j = y.ptr_->types.index();
+  return i == j ? visit(less_than{}, x, y) : i < j;
 }
 
 enumeration_type::enumeration_type(std::vector<std::string> fields)
@@ -127,18 +129,18 @@ bool operator<(const set_type& x, const set_type& y) {
   return x.value_type < y.value_type;
 }
 
-table_type::table_type(type key, type value)
+map_type::map_type(type key, type value)
   : key_type{std::move(key)},
     value_type{std::move(value)} {
 }
 
-bool operator==(const table_type& x, const table_type& y) {
-  return static_cast<const table_type::base_type&>(x) ==
-         static_cast<const table_type::base_type&>(y) &&
+bool operator==(const map_type& x, const map_type& y) {
+  return static_cast<const map_type::base_type&>(x) ==
+         static_cast<const map_type::base_type&>(y) &&
     x.key_type == y.key_type && x.value_type == y.value_type;
 }
 
-bool operator<(const table_type& x, const table_type& y) {
+bool operator<(const map_type& x, const map_type& y) {
   return std::tie(x.key_type, x.value_type) <
     std::tie(y.key_type, y.value_type);
 }
@@ -379,6 +381,38 @@ const type* record_type::at(const offset& o) const {
   return nullptr;
 }
 
+caf::optional<size_t> record_type::flat_index_at(offset o) const {
+  // Empty offsets are invalid.
+  if (o.empty())
+    return caf::none;
+  // Bounds check.
+  if (o[0] >= fields.size())
+    return caf::none;
+  // Example: o = [1] picks the second element. However, we still need the
+  // total amount of nested elements of the first element.
+  size_t flat_index = 0;
+  for (size_t i = 0; i < o[0]; ++i)
+    flat_index += flat_size(fields[i].type);
+  // Now, we know how many fields are on the left. We're done if the offset
+  // points to a non-record field in this record.
+  auto record_field = get_if<record_type>(fields[o[0]].type);
+  if (o.size() == 1) {
+    // Sanity check: the offset is invalid if it points to a record type.
+    if (record_field != nullptr)
+      return caf::none;
+    return flat_index;
+  }
+  // The offset points into the field, therefore it must be a record type.
+  if (record_field == nullptr)
+    return caf::none;
+  // Drop index of the first dimension and dispatch to field recursively.
+  o.erase(o.begin());
+  auto sub_result = record_field->flat_index_at(o);
+  if (!sub_result)
+    return caf::none;
+  return flat_index + *sub_result;
+}
+
 record_type flatten(const record_type& rec) {
   record_type result;
   for (auto& outer : rec.fields)
@@ -397,18 +431,29 @@ type flatten(const type& t) {
   return r ? flatten(*r) : t;
 }
 
+size_t flat_size(const record_type& rec) {
+  auto op = [](size_t x, const auto& y) { return x + flat_size(y.type); };
+  return std::accumulate(rec.fields.begin(), rec.fields.end(), size_t{0}, op);
+}
+
+size_t flat_size(const type& t) {
+  if (auto r = get_if<record_type>(t))
+    return flat_size(*r);
+  return 1;
+}
+
 record_type unflatten(const record_type& rec) {
   record_type result;
   for (auto& f : rec.fields) {
-    auto names = detail::to_strings(detail::split(f.name, "."));
+    auto names = detail::split(f.name, ".");
     VAST_ASSERT(!names.empty());
     record_type* r = &result;
     for (size_t i = 0; i < names.size() - 1; ++i) {
       if (r->fields.empty() || r->fields.back().name != names[i])
-        r->fields.emplace_back(std::move(names[i]), record_type{});
+        r->fields.emplace_back(std::string(names[i]), record_type{});
       r = get_if<record_type>(r->fields.back().type);
     }
-    r->fields.emplace_back(std::move(names.back()), f.type);
+    r->fields.emplace_back(std::string{names.back()}, f.type);
   }
   std::vector<std::vector<record_type*>> rs(1);
   rs.back().push_back(&result);
@@ -465,7 +510,7 @@ bool is_container(const type& t) {
 }
 
 bool is_container(const data& x) {
-  return is<vector>(x) || is<set>(x) || is<table>(x);
+  return is<vector>(x) || is<set>(x) || is<map>(x);
 }
 
 namespace {
@@ -508,7 +553,7 @@ struct type_congruence_checker {
     return visit(*this, x.value_type, y.value_type);
   }
 
-  bool operator()(const table_type& x, const table_type& y) const {
+  bool operator()(const map_type& x, const map_type& y) const {
     return visit(*this, x.key_type, y.key_type) &&
         visit(*this, x.value_type, y.value_type);
   }
@@ -589,7 +634,7 @@ struct data_congruence_checker {
     return true;
   }
 
-  bool operator()(const table_type&, const table&) const {
+  bool operator()(const map_type&, const map&) const {
     return true;
   }
 
@@ -764,10 +809,10 @@ struct data_checker {
     return t && type_check(t->value_type, *s.begin());
   }
 
-  bool operator()(const table& x) const {
+  bool operator()(const map& x) const {
     if (x.empty())
       return true;
-    auto t = get_if<table_type>(type_);
+    auto t = get_if<map_type>(type_);
     if (!t)
       return false;
     return type_check(t->key_type, x.begin()->first) &&
@@ -878,8 +923,8 @@ struct kind_printer {
     return "set";
   }
 
-  result_type operator()(const table_type&) const {
-    return "table";
+  result_type operator()(const map_type&) const {
+    return "map";
   }
 
   result_type operator()(const record_type&) const {
@@ -926,7 +971,7 @@ struct jsonizer {
     return true;
   }
 
-  bool operator()(const table_type& t) {
+  bool operator()(const map_type& t) {
     json::object o;
     if (!convert(t.key_type, o["key"]))
       return false;

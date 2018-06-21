@@ -31,24 +31,8 @@ public:
       root_command();
 
   protected:
-    proceed_result proceed(caf::actor_system& sys, option_map& options,
-                           caf::message) override;
-
-  private:
-    /// Directory for persistent state.
-    std::string dir;
-
-    /// VAST server.
-    std::string endpoint;
-
-    /// The unique ID of this node.
-    std::string id;
-
-    /// Spawns a local node instead of connecting to a server if set.
-    bool spawn_local;
-
-    /// Print version and exit if set.
-    bool print_version;
+    proceed_result proceed(caf::actor_system& sys, const option_map& options,
+                           argument_iterator, argument_iterator) override;
   };
 
   /// Constructs an application.
@@ -63,7 +47,8 @@ public:
 
   /// Starts the application and blocks until execution completes.
   /// @returns An exit code suitable for returning from main.
-  int run(caf::actor_system& sys, caf::message args);
+  int run(caf::actor_system& sys, command::argument_iterator begin,
+          command::argument_iterator end);
 
 private:
   root_command root_;

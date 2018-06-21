@@ -46,7 +46,7 @@ TEST(printable) {
 }
 
 TEST(parseable) {
-  auto p = make_parser<port>();
+  auto& p = parsers::port;
   MESSAGE("tcp");
   auto str = "22/tcp"s;
   auto f = str.begin();
@@ -54,26 +54,26 @@ TEST(parseable) {
   port prt;
   CHECK(p(f, l, prt));
   CHECK(f == l);
-  CHECK(prt == port{22, port::tcp});
+  CHECK_EQUAL(prt, port(22, port::tcp));
   MESSAGE("udp");
   str = "53/udp"s;
   f = str.begin();
   l = str.end();
   CHECK(p(f, l, prt));
   CHECK(f == l);
-  CHECK(prt == port{53, port::udp});
+  CHECK_EQUAL(prt, port(53, port::udp));
   MESSAGE("icmp");
   str = "7/icmp"s;
   f = str.begin();
   l = str.end();
   CHECK(p(f, l, prt));
   CHECK(f == l);
-  CHECK(prt == port{7, port::icmp});
+  CHECK_EQUAL(prt, port(7, port::icmp));
   MESSAGE("unknown");
   str = "42/?"s;
   f = str.begin();
   l = str.end();
   CHECK(p(f, l, prt));
   CHECK(f == l);
-  CHECK(prt == port{42, port::unknown});
+  CHECK_EQUAL(prt, port(42, port::unknown));
 }

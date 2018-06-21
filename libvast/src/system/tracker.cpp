@@ -32,14 +32,6 @@ tracker_type::behavior_type
 tracker(tracker_type::stateful_pointer<tracker_state> self, std::string node) {
   self->state.registry.components[node].emplace(
     "tracker", component_state{actor_cast<actor>(self), "tracker"});
-  auto extract_name_from_label = [=](auto&& label) {
-    auto split = detail::split_to_str(label, "@");
-    return split.size() == 1 ? node : split[1];
-  };
-  auto qualify_label = [=](auto&& label) {
-    auto split = detail::split_to_str(label, "@");
-    return split[0] + '@' + (split.size() == 1 ? node : split[1]);
-  };
   self->set_down_handler(
     [=](const down_msg& msg) {
       auto pred = [&](auto& p) { return p.second.actor == msg.source; };

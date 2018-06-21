@@ -51,17 +51,9 @@ public:
 
 protected:
   expected<caf::actor> make_source(caf::scoped_actor& self,
-                                   caf::message args) override;
-
-private:
-  std::string input;
-  std::string schema_file;
-  bool uds;
-  uint64_t flow_max;
-  unsigned flow_age;
-  unsigned flow_expiry;
-  size_t cutoff;
-  int64_t pseudo_realtime;
+                                   const option_map& options,
+                                   argument_iterator begin,
+                                   argument_iterator end) override;
 };
 
 } // namespace vast::system

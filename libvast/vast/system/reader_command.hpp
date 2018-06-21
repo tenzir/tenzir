@@ -46,26 +46,32 @@ template <class Reader>
 class reader_command : public reader_command_base {
 public:
   reader_command(command* parent, std::string_view name)
-      : reader_command_base(parent, name),
-        input_("-"),
-        uds_(false) {
-    this->add_opt("read,r", "path to input where to read events from", input_);
-    this->add_opt("schema,s", "path to alternate schema", schema_file_);
-    this->add_opt("uds,d", "treat -r as listening UNIX domain socket", uds_);
+      : reader_command_base(parent, name) {
+    add_opt("read,r", "path to input where to read events from", "-");
+    add_opt("schema,s", "path to alternate schema", "");
+    add_opt("uds,d", "treat -r as listening UNIX domain socket", false);
   }
 
 protected:
   expected<caf::actor> make_source(caf::scoped_actor& self,
-                                   caf::message args) override {
-    CAF_LOG_TRACE(CAF_ARG(args));
-    auto in = detail::make_input_stream(input_, uds_);
+                                   const option_map& options,
+                                   argument_iterator begin,
+                                   argument_iterator end) override {
+    VAST_TRACE(VAST_ARG("args", begin, end));
+    auto input = get<std::string>(options, "read");
+    VAST_ASSERT(input);
+    auto uds = get<bool>(options, "uds");
+    VAST_ASSERT(uds);
+    auto in = detail::make_input_stream(*input, *uds);
     if (!in)
       return in.error();
     Reader reader{std::move(*in)};
     auto src = self->spawn(source<Reader>, std::move(reader));
     // Supply an alternate schema, if requested.
-    if (!schema_file_.empty()) {
-      auto str = load_contents(schema_file_);
+    auto schema_file = get<std::string>(options, "schema");
+    VAST_ASSERT(schema_file);
+    if (!schema_file->empty()) {
+      auto str = load_contents(*schema_file);
       if (!str)
         return str.error();
       auto sch = to<schema>(*str);
@@ -75,10 +81,10 @@ protected:
       anon_send(src, put_atom::value, std::move(*sch));
     }
     // Attempt to parse the remainder as an expression.
-    if (!args.empty()) {
-      auto str = args.get_as<std::string>(0);
-      for (size_t i = 1; i < args.size(); ++i)
-        str += ' ' + args.get_as<std::string>(i);
+    if (begin != end) {
+      auto str = std::accumulate(
+        std::next(begin), end, *begin,
+        [](std::string a, const std::string& b) { return a += ' ' + b; });
       auto expr = to<expression>(str);
       if (!expr)
         return expr.error();
@@ -89,11 +95,6 @@ protected:
     }
     return src;
   }
-
-private:
-  std::string input_;
-  std::string schema_file_;
-  bool uds_;
 };
 
 } // namespace vast::system

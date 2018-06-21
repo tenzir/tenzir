@@ -44,12 +44,12 @@ public:
   using node_command::node_command;
 
 protected:
-  int run_impl(caf::actor_system& sys, option_map& options,
-               caf::message args) override;
+  int run_impl(caf::actor_system& sys, const option_map& options,
+               argument_iterator begin, argument_iterator end) override;
 
-  virtual expected<caf::actor> make_sink(caf::scoped_actor& self,
-                                         option_map& options,
-                                         caf::message args) = 0;
+  virtual expected<caf::actor>
+  make_sink(caf::scoped_actor& self, const option_map& options,
+            argument_iterator begin, argument_iterator end) = 0;
 };
 
 } // namespace vast::system

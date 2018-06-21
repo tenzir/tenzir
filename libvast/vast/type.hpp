@@ -65,7 +65,7 @@ struct port_type;
 struct enumeration_type;
 struct vector_type;
 struct set_type;
-struct table_type;
+struct map_type;
 struct record_type;
 struct alias_type;
 
@@ -99,7 +99,7 @@ public:
           enumeration_type,
           vector_type,
           set_type,
-          table_type,
+          map_type,
           record_type,
           alias_type
         >,
@@ -326,19 +326,19 @@ struct set_type : recursive_type<set_type>, detail::totally_ordered<set_type> {
 };
 
 /// A type representinng an associative array.
-struct table_type
-  : recursive_type<table_type>, detail::totally_ordered<table_type> {
-  using data_type = table;
+struct map_type
+  : recursive_type<map_type>, detail::totally_ordered<map_type> {
+  using data_type = map;
 
-  table_type(type key = {}, type value = {});
+  map_type(type key = {}, type value = {});
 
-  friend bool operator==(const table_type& x, const table_type& y);
-  friend bool operator<(const table_type& x, const table_type& y);
+  friend bool operator==(const map_type& x, const map_type& y);
+  friend bool operator<(const map_type& x, const map_type& y);
 
   template <class Inspector>
-  friend auto inspect(Inspector& f, table_type& t) {
+  friend auto inspect(Inspector& f, map_type& t) {
     return f(static_cast<base_type&>(t),
-             caf::meta::type_name("table_type"),
+             caf::meta::type_name("map_type"),
              t.key_type, t.value_type);
   }
 
@@ -432,6 +432,10 @@ struct record_type
   /// @returns The type at offset *o* or `nullptr` if *o* doesn't resolve.
   const type* at(const offset& o) const;
 
+  /// Converts an offset into an index for the flattened representation.
+  /// @param o The offset to resolve.
+  caf::optional<size_t> flat_index_at(offset o) const;
+
   friend bool operator==(const record_type& x, const record_type& y);
   friend bool operator<(const record_type& x, const record_type& y);
 
@@ -451,6 +455,12 @@ struct record_type
 record_type flatten(const record_type& rec);
 
 type flatten(const type& t);
+
+/// Computes the size of a flat representation of `rec`.
+size_t flat_size(const record_type& rec);
+
+/// Computes the size of a flat representation of `rec`.
+size_t flat_size(const type&);
 
 /// Unflattens a flattened record type.
 /// @param rec the record to unflatten.
@@ -558,7 +568,7 @@ struct type::impl : caf::ref_counted {
     enumeration_type,
     vector_type,
     set_type,
-    table_type,
+    map_type,
     record_type,
     alias_type
   >;

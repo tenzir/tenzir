@@ -1,0 +1,151 @@
+#!/usr/bin/env python
+
+# Usage:
+# add_class.py [-o] COMPONENT QUALIFIED-NAME
+# Options:
+# -o   Header-only (do not add .cpp file)
+
+# Usage example:
+# - Header, class, and test: add_class.py libvast vast::system::foo
+# - Header and test: add_class.py -o libvast vast::system::foo
+
+import argparse
+
+copyright="""/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+"""
+
+header_tpl="""
+#pragma once
+
+namespace %(namespace)s {
+
+class %(class)s {
+public:
+  %(class)s();
+  ~%(class)s();
+};
+
+} // namespace %(namespace)s
+"""
+
+source_tpl="""
+#include "%(hpp)s"
+
+namespace %(namespace)s {
+
+%(class)s::%(class)s() {
+  // nop
+}
+
+%(class)s::~%(class)s() {
+  // nop
+}
+
+} // namespace %(namespace)s
+"""
+
+test_tpl="""
+#define SUITE %(class)s
+#include "test.hpp"
+
+#include "%(hpp)s"
+
+namespace {
+
+struct fixture {
+
+};
+
+} // namespace <anonymous>
+
+FIXTURE_SCOPE(%(class)s_tests, fixture)
+
+TEST(todo) {
+  // implement me
+}
+
+FIXTURE_SCOPE_END()
+"""
+
+
+def parse_set_cmd(f, new_entry):
+    file_names=["  " + new_entry]
+    for line_with_newline in f:
+        line = line_with_newline[:-1]
+        if line == new_entry:
+            raise Exception(new_entry + " already exists in CMakeLists.txt")
+        if line == ')':
+            file_names.sort()
+            return file_names
+        else:
+            # Append line without the trailing newline characters.
+            file_names.append(line)
+    raise Exception("format error in CMakeLists.txt: no closing ')' to set(")
+
+def extend_cmake(component, new_source, new_test):
+    lines=[]
+    cmake_path = component + "/CMakeLists.txt"
+    # Read old content from file.
+    with open(cmake_path, "r") as f:
+        sources_marker = "set(" + component + "_sources"
+        test_marker = "set(tests"
+        for line_with_newline in f:
+            line = line_with_newline[:-1]
+            lines.append(line)
+            if new_source != "" and line == sources_marker:
+                lines += parse_set_cmd(f, "  " + new_source)
+                lines.append(')')
+            elif new_test != "" and line == test_marker:
+                lines += parse_set_cmd(f, "  " + new_test)
+                lines.append(')')
+    # Write new content to file.
+    with open(cmake_path, "w") as f:
+        for line in lines:
+            f.write(line)
+            f.write('\n')
+
+def make_file(component, path, tpl, fields):
+    with open(component + '/' + path, "w") as f:
+        f.write(copyright)
+        f.write(tpl % fields)
+
+def main():
+    parser = argparse.ArgumentParser(description='Add a new C++ class.')
+    parser.add_argument('-o', dest='headeronly', action='store_true',
+                        help="header only (don't generate a .cpp file)")
+    parser.add_argument('component', help='name of the project component')
+    parser.add_argument("name", help='fully qualified class name')
+    args = parser.parse_args()
+    # Split the fully qualified name into a list
+    namev = args.name.split("::")
+    if len(namev) < 2:
+        raise Exception(args.name + " is not a qualified name")
+    path = '/'.join(namev[1:])
+    extend_cmake(args.component,
+                 "src/" + path + ".cpp",
+                 "test/" + path + ".cpp")
+    class_name = namev[-1]
+    namespace = '::'.join(namev[:-1])
+    fields = {
+            'class': class_name,
+            'namespace': namespace,
+            'hpp': 'vast/' + path + '.hpp'
+            }
+    make_file(args.component, 'vast/' + path + '.hpp', header_tpl, fields)
+    if not args.headeronly:
+        make_file(args.component, 'src/' + path + '.cpp', source_tpl, fields)
+    make_file(args.component, 'test/' + path + '.cpp', test_tpl, fields)
+
+if __name__ == "__main__":
+    main()

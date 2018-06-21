@@ -40,7 +40,7 @@ TEST(set) {
 }
 
 TEST(tables) {
-  table ports{{"ssh", 22u}, {"http", 80u}, {"https", 443u}, {"imaps", 993u}};
+  map ports{{"ssh", 22u}, {"http", 80u}, {"https", 443u}, {"imaps", 993u}};
   CHECK(ports.size() == 4);
   auto i = ports.find("ssh");
   REQUIRE(i != ports.end());
@@ -121,7 +121,7 @@ TEST(construction) {
   CHECK(is<port>(data{port{53, port::udp}}));
   CHECK(is<vector>(data{vector{}}));
   CHECK(is<set>(data{set{}}));
-  CHECK(is<table>(data{table{}}));
+  CHECK(is<map>(data{map{}}));
 }
 
 TEST(relational_operators) {
@@ -207,7 +207,7 @@ TEST(serialization) {
   save(buf, d0);
   load(buf, d1);
   CHECK(d0 == d1);
-  CHECK(to_string(d1) == "{8/icmp, 53/udp, 80/tcp}");
+  CHECK(to_string(d1) == "{80/tcp, 53/udp, 8/icmp}");
 }
 
 TEST(printable) {
@@ -296,15 +296,15 @@ TEST(parseable) {
   l = str.end();
   CHECK(p(f, l, d));
   CHECK(f == l);
-  CHECK(d == set{-42, -1, 42});
+  CHECK(d == set{-42, 42, -1});
 
-  MESSAGE("table");
+  MESSAGE("map");
   str = "{T->1,F->0}"s;
   f = str.begin();
   l = str.end();
   CHECK(p(f, l, d));
   CHECK(f == l);
-  CHECK(d == table{{true, 1u}, {false, 0u}});
+  CHECK(d == map{{true, 1u}, {false, 0u}});
 }
 
 TEST(json) {

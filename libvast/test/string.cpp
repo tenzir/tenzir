@@ -93,9 +93,9 @@ TEST(percent escaping) {
   CHECK(percent_unescape("") == "");
   CHECK(percent_escape("ABC") == "ABC");
 
-  CHECK(percent_escape("/f o o/index.html&foo=b@r") 
+  CHECK(percent_escape("/f o o/index.html&foo=b@r")
         == "%2Ff%20o%20o%2Findex.html%26foo%3Db%40r");
-  CHECK(percent_unescape("/f%20o%20o/index.html&foo=b@r") 
+  CHECK(percent_unescape("/f%20o%20o/index.html&foo=b@r")
         == "/f o o/index.html&foo=b@r");
 
   CHECK(percent_escape("&text") == "%26text");
@@ -124,7 +124,7 @@ TEST(double escaping) {
 TEST(string splitting and joining) {
   using namespace std::string_literals;
 
-  auto s = split_to_str("Der Geist, der stets verneint."s, " ");
+  auto s = split("Der Geist, der stets verneint.", " ");
   REQUIRE(s.size() == 5);
   CHECK(s[0] == "Der");
   CHECK(s[1] == "Geist,");
@@ -132,36 +132,36 @@ TEST(string splitting and joining) {
   CHECK(s[3] == "stets");
   CHECK(s[4] == "verneint.");
 
-  s = split_to_str("foo"s, "x");
+  s = split("foo", "x");
   REQUIRE(s.size() == 1);
   CHECK(s[0] == "foo");
 
   // TODO: it would be more consistent if split considered not only before the
   // first seperator, but also after the last one. But this is not how many
   // split implementations operate.
-  s = split_to_str(",,"s, ",");
+  s = split(",,", ",");
   REQUIRE(s.size() == 2);
   CHECK(s[0] == "");
   CHECK(s[1] == "");
 
-  s = split_to_str(",a,b,c,"s, ",");
+  s = split(",a,b,c,"s, ",");
   REQUIRE(s.size() == 4);
   CHECK(s[0] == "");
   CHECK(s[1] == "a");
   CHECK(s[2] == "b");
   CHECK(s[3] == "c");
 
-  s = split_to_str("a*,b,c"s, ",", "*");
+  s = split("a*,b,c", ",", "*");
   REQUIRE(s.size() == 2);
   CHECK(s[0] == "a*,b");
   CHECK(s[1] == "c");
 
-  s = split_to_str("a,b,c,d,e,f"s, ",", "", 1);
+  s = split("a,b,c,d,e,f", ",", "", 1);
   REQUIRE(s.size() == 2);
   CHECK(s[0] == "a");
   CHECK(s[1] == "b,c,d,e,f");
 
-  s = split_to_str("a-b-c*-d"s, "-", "*", -1, true);
+  s = split("a-b-c*-d", "-", "*", -1, true);
   REQUIRE(s.size() == 5);
   CHECK(s[0] == "a");
   CHECK(s[1] == "-");
@@ -175,56 +175,3 @@ TEST(string splitting and joining) {
   CHECK(str == "a - b - c*-d");
 }
 
-TEST(boyer-moore) {
-  std::string needle = "foo";
-  std::string haystack = "hello foo world";
-
-  // Function-object API.
-  auto bm = make_boyer_moore(needle.begin(), needle.end());
-  auto i = bm(haystack.begin(), haystack.end());
-  REQUIRE(i != haystack.end());
-
-  // Free-function API
-  auto j = search_boyer_moore(needle.begin(), needle.end(),
-                              haystack.begin(), haystack.end());
-  REQUIRE(j != haystack.end());
-  REQUIRE(i == j);
-  CHECK(needle == std::string(i, i + needle.size()));
-
-  haystack = "Da steh ich nun, ich armer Tor! Und bin so klug als wie zuvor";
-  needle = "ich";
-  bm = make_boyer_moore(needle.begin(), needle.end());
-  for (size_t i = 0; i < 9; ++i)
-    CHECK((bm(haystack.begin() + i, haystack.end()) - haystack.begin()) == 8);
-  for (size_t i = 9; i < 18; ++i)
-    CHECK((bm(haystack.begin() + i, haystack.end()) - haystack.begin()) == 17);
-  for (size_t i = 18; i < haystack.size() - needle.size(); ++i)
-    CHECK(bm(haystack.begin() + i, haystack.end()) == haystack.end());
-}
-
-TEST(knuth-morris-pratt) {
-  std::string needle = "foo";
-  std::string haystack = "hello foo world";
-
-  // Function-object API.
-  auto kmp = make_knuth_morris_pratt(needle.begin(), needle.end());
-  auto i = kmp(haystack.begin(), haystack.end());
-  REQUIRE(i != haystack.end());
-
-  // Free-function API
-  auto j = search_knuth_morris_pratt(needle.begin(), needle.end(),
-                                     haystack.begin(), haystack.end());
-  REQUIRE(j != haystack.end());
-  REQUIRE(i == j);
-  CHECK(needle == std::string(i, i + needle.size()));
-
-  haystack = "Da steh ich nun, ich armer Tor! Und bin so klug als wie zuvor";
-  needle = "ich";
-  kmp = make_knuth_morris_pratt(needle.begin(), needle.end());
-  for (size_t i = 0; i < 9; ++i)
-    CHECK((kmp(haystack.begin() + i, haystack.end()) - haystack.begin()) == 8);
-  for (size_t i = 9; i < 18; ++i)
-    CHECK((kmp(haystack.begin() + i, haystack.end()) - haystack.begin()) == 17);
-  for (size_t i = 18; i < haystack.size() - needle.size(); ++i)
-    CHECK(kmp(haystack.begin() + i, haystack.end()) == haystack.end());
-}

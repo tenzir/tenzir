@@ -247,7 +247,7 @@ expected<void> file::open(open_mode mode, bool append) {
   if (is_open_)
     return make_error(ec::filesystem_error, "file already open");
   if (mode == read_only && append)
-    return make_error(ec::filesystem_error, 
+    return make_error(ec::filesystem_error,
       "cannot open file in read and append mode simultaneously");
 #ifdef VAST_POSIX
   // Support reading from STDIN and writing to STDOUT.
@@ -389,8 +389,7 @@ const path& directory::path() const {
 std::vector<path> split(const path& p) {
   if (p.empty())
     return {};
-  auto components = detail::to_strings(
-    detail::split(p.str(), path::separator, "\\", -1, true));
+  auto components = detail::split(p.str(), path::separator, "\\", -1, true);
   VAST_ASSERT(!components.empty());
   std::vector<path> result;
   size_t begin = 0;
@@ -400,7 +399,7 @@ std::vector<path> split(const path& p) {
     begin = 2;
   }
   for (size_t i = begin; i < components.size(); i += 2)
-    result.emplace_back(std::move(components[i]));
+    result.emplace_back(std::string{components[i]});
   return result;
 }
 

@@ -13,6 +13,8 @@
 
 #pragma once
 
+#include <utility>
+
 namespace vast::detail {
 
 /// Creates a set of overloaded functions. This utility function allows for
