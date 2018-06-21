@@ -107,17 +107,21 @@ configuration::configuration() {
   };
   add_error_category(atom("vast"), vast_renderer);
   add_error_category(atom("system"), caf_renderer);
-  // Load modules.
-  load<io::middleman>();
-  middleman_enable_automatic_connections = true;
   // GPU acceleration.
 #ifdef VAST_USE_OPENCL
   load<opencl::manager>();
   add_message_type<std::vector<uint32_t>>("std::vector<uint32_t>");
 #endif
+}
+
+configuration::configuration(bool load_middleman) : configuration() {
+  if (load_middleman) {
+    load<io::middleman>();
+    set("middleman.enable-automatic-connections", true);
 #ifdef VAST_USE_OPENSSL
-  load<openssl::manager>();
+    load<openssl::manager>();
 #endif
+  }
 }
 
 configuration::configuration(int argc, char** argv) : configuration{} {

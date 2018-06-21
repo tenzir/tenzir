@@ -30,7 +30,9 @@ namespace fixtures {
 /// Configures the actor system of a fixture with default settings for unit
 /// testing.
 struct test_configuration : vast::system::configuration {
-  test_configuration() {
+  using super = vast::system::configuration;
+
+  test_configuration(bool enable_mm = true) : super(enable_mm) {
     logger_file_name = "vast-unit-test.log";
     logger_component_filter.clear();
     // Always begin with an empy log file.
@@ -42,7 +44,10 @@ struct test_configuration : vast::system::configuration {
 /// A fixture with an actor system that uses the default work-stealing
 /// scheduler.
 struct actor_system : filesystem {
-  actor_system() : system{config}, self{system, true} {
+  actor_system(bool enable_mm = true)
+    : config(enable_mm),
+      system(config),
+      self(system, true) {
     // Clean up state from previous executions.
     if (vast::exists(directory))
       vast::rm(directory);
@@ -89,7 +94,9 @@ struct deterministic_actor_system
   : test_coordinator_fixture<test_configuration>,
     filesystem {
 
-  deterministic_actor_system() {
+  using super = test_coordinator_fixture<test_configuration>;
+
+  deterministic_actor_system(bool enable_mm = true) : super(enable_mm) {
     // Clean up state from previous executions.
     if (vast::exists(directory))
       vast::rm(directory);
