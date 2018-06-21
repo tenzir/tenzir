@@ -111,11 +111,13 @@ private:
 
 namespace detail {
 
-template <class T,
-         int = std::is_convertible_v<T, json::number>
-               && !std::is_same_v<T, json::boolean>
-               ? 1
-               : (std::is_convertible_v<T, std::string> ? 2 : 0)>
+template <
+  class T,
+  int = std::is_convertible_v<T, json::number>
+        && !std::is_same_v<T, json::boolean>
+        ? 1
+        : (std::is_convertible_v<T, std::string> ? 2 : 0)
+>
 struct jsonize_helper;
 
 template <class T>

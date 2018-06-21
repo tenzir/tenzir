@@ -160,10 +160,13 @@ TEST(printable) {
   CHECK(printers::json<policy::oneline>(line, json{o}));
   CHECK_EQUAL(line, "{\"baz\": 4.2}");
   MESSAGE("tree policy");
-  o = {{"baz", json{4.2}},
-       {"x", json{a}},
-       {"inner", json{json::object{
-                   {"a", json{false}}, {"c", json{a}}, {"b", json{42}}}}}};
+  o = {
+    {"baz", json{4.2}},
+    {"x", json{a}},
+    {"inner", json{json::object{
+     {"a", json{false}},
+     {"c", json{a}},
+     {"b", json{42}}}}}};
   auto json_tree = R"json({
   "baz": 4.2,
   "x": [
