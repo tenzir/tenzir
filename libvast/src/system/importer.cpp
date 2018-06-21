@@ -329,12 +329,11 @@ behavior importer(stateful_actor<importer_state>* self, path dir) {
     },
     [=](index_atom, const actor& index) {
       VAST_DEBUG(self, "registers index", index);
-      self->send(self->state.index, sys_atom::value, put_atom::value, index);
+      return self->state.stg->add_outbound_path(index);
     },
     [=](exporter_atom, const actor& exporter) {
       VAST_DEBUG(self, "registers exporter", exporter);
-      self->monitor(exporter);
-      self->state.continuous_queries.push_back(exporter);
+      return self->state.stg->add_outbound_path(exporter);
     },
     [=](stream<event>& in) {
       auto& st = self->state;
