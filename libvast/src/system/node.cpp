@@ -87,7 +87,7 @@ void show(node_ptr self, message /* args */) {
       for (auto& peer : reg.components) {
         json::array xs;
         for (auto& pair : peer.second)
-          xs.push_back(pair.second.label);
+          xs.push_back(json{pair.second.label});
         result.emplace(peer.first, std::move(xs));
       }
       rp.deliver(to_string(json{std::move(result)}));
