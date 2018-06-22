@@ -44,22 +44,10 @@ public:
   using string = std::string;
 
   /// A JSON array.
-  struct array : std::vector<json> {
-    using super = std::vector<json>;
-    using super::vector;
-    array() = default;
-    array(const super& s) : super(s) {}
-    array(super&& s) : super(std::move(s)) {}
-  };
+  using array = std::vector<json>;
 
   /// A JSON object.
-  struct object : detail::steady_map<std::string, json> {
-    using super = detail::steady_map<std::string, json>;
-    using super::vector_map;
-    object() = default;
-    object(const super& s) : super(s) {}
-    object(super&& s) : super(std::move(s)) {}
-  };
+  using object = detail::steady_map<std::string, json>;
 
   /// The sum type of all possible JSON types.
   using types = caf::detail::type_list<
@@ -77,11 +65,22 @@ public:
   /// Default-constructs a null JSON value.
   json() = default;
 
+  json(json&&) = default;
+
+  json(const json&) = default;
+
   /// Constructs a JSON value.
   /// @tparam The JSON type.
   /// @param x A JSON type.
-  template <class T, class>
-  json(T&& x);
+  template <class T>
+  explicit json(T x);
+
+  json& operator=(json&&) = default;
+
+  json& operator=(const json&) = default;
+
+  template <class T>
+  json& operator=(T x);
 
   // -- concepts --------------------------------------------------------------
 
@@ -101,49 +100,39 @@ public:
     return x.data_ < y.data_;
   }
 
+  template <class... Ts>
+  static json::array make_array(Ts&&... xs) {
+    return json::array{json{std::forward<Ts>(xs)}...};
+  }
+
 private:
   variant data_;
 };
 
 namespace detail {
 
-template <class, class = void>
-struct jsonize_helper : std::false_type {};
+template <
+  class T,
+  int = std::is_convertible_v<T, json::number>
+        && !std::is_same_v<T, json::boolean>
+        ? 1
+        : (std::is_convertible_v<T, std::string> ? 2 : 0)
+>
+struct jsonize_helper;
 
-template <>
-struct jsonize_helper<caf::none_t> {
-  using type = json::null;
-};
-
-template <>
-struct jsonize_helper<bool> {
-  using type = json::boolean;
+template <class T>
+struct jsonize_helper<T, 0> {
+  using type = T;
 };
 
 template <class T>
-struct jsonize_helper<
-  T,
-  std::enable_if_t<std::is_convertible_v<T, json::number>>
-> {
+struct jsonize_helper<T, 1> {
   using type = json::number;
 };
 
 template <class T>
-struct jsonize_helper<
-  T,
-  std::enable_if_t<std::is_convertible_v<T, std::string>>
-> {
+struct jsonize_helper<T, 2> {
   using type = json::string;
-};
-
-template <>
-struct jsonize_helper<json::array> {
-  using type = json::array;
-};
-
-template <>
-struct jsonize_helper<json::object> {
-  using type = json::object;
 };
 
 } // namespace detail
@@ -153,17 +142,20 @@ struct jsonize_helper<json::object> {
 template <class T>
 using jsonize = typename detail::jsonize_helper<std::decay_t<T>>::type;
 
-template <
-  class T,
-  class = std::enable_if_t<std::is_convertible_v<T, jsonize<T>>>
->
-json::json(T&& x) : data_(jsonize<T>(std::forward<T>(x))) {
+template <class T>
+json::json(T x) : data_(jsonize<T>(std::move(x))) {
   // nop
+}
+
+template <class T>
+json& json::operator=(T x) {
+  data_ = jsonize<T>(std::move(x));
+  return *this;
 }
 
 /// @relates json
 inline bool convert(bool b, json& j) {
-  j = json::boolean{b};
+  j = b;
   return true;
 }
 

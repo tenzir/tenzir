@@ -32,8 +32,8 @@ TEST(construction) {
   CHECK(caf::holds_alternative<json::number>(json{4.2}));
   CHECK(caf::holds_alternative<json::string>(json{"foo"}));
   CHECK(caf::holds_alternative<json::string>(json{"foo"s}));
-  CHECK(caf::holds_alternative<json::array>(json{json::array{{1, 2, 3}}}));
-  CHECK(caf::holds_alternative<json::object>(json{json::object{{"foo", 42}}}));
+  CHECK(caf::holds_alternative<json::array>(json{json::make_array(1, 2, 3)}));
+  CHECK(caf::holds_alternative<json::object>(json{json::object{{"foo", json{42}}}}));
 }
 
 TEST(assignment) {
@@ -46,9 +46,9 @@ TEST(assignment) {
   CHECK(caf::holds_alternative<json::number>(j));
   j = "foo";
   CHECK(caf::holds_alternative<std::string>(j));
-  j = json::array{true, false};
+  j = json::make_array(true, false);
   CHECK(caf::holds_alternative<json::array>(j));
-  j = json::object{{"x", true}, {"y", false}};
+  j = json::object{{"x", json{true}}, {"y", json{false}}};
   CHECK(caf::holds_alternative<json::object>(j));
 }
 
@@ -106,7 +106,7 @@ TEST(parseable) {
   CHECK(j == json::array{});
   str = R"([ 42,-1337 , "foo", null ,true ])";
   CHECK(parsers::json(str, j));
-  CHECK(j == json::array{42, -1337, "foo", caf::none, true});
+  CHECK(j == json::make_array(42, -1337, "foo", caf::none, true));
   MESSAGE("object");
   str = "{}";
   CHECK(parsers::json(str, j));
@@ -116,7 +116,7 @@ TEST(parseable) {
   CHECK(j == json::object{});
   str = R"json({ "baz": 4.2, "inner": null })json";
   CHECK(parsers::json(str, j));
-  CHECK(j == json::object{{"baz", 4.2}, {"inner", caf::none}});
+  CHECK(j == json::object{{"baz", json{4.2}}, {"inner", json{caf::none}}});
   str = R"json({
   "baz": 4.2,
   "inner": null,
@@ -129,9 +129,9 @@ TEST(parseable) {
 })json";
   CHECK(parsers::json(str, j));
   auto o = json::object{
-    {"baz", 4.2},
-    {"inner", caf::none},
-    {"x", json::array{42, -1337, "foo", true}}
+    {"baz", json{4.2}},
+    {"inner", json{caf::none}},
+    {"x", json{json::make_array(42, -1337, "foo", true)}}
   };
   CHECK(j == o);
 }
@@ -146,7 +146,7 @@ TEST(printable) {
   CHECK_EQUAL(to_string(json{"foo"}), "\"foo\"");
   MESSAGE("one line policy");
   std::string line;
-  json::array a{42, -1337, "foo", caf::none, true};
+  auto a = json::make_array(42, -1337, "foo", caf::none, true);
   CHECK(printers::json<policy::oneline>(line, json{a}));
   CHECK_EQUAL(line, "[42, -1337, \"foo\", null, true]");
   json::object o;
@@ -155,16 +155,18 @@ TEST(printable) {
   line.clear();
   CHECK(printers::json<policy::oneline>(line, json{o}));
   CHECK_EQUAL(line, "{\"foo\": 42, \"bar\": null}");
-  o = {{"baz", 4.2}};
+  o = {{"baz", json{4.2}}};
   line.clear();
   CHECK(printers::json<policy::oneline>(line, json{o}));
   CHECK_EQUAL(line, "{\"baz\": 4.2}");
   MESSAGE("tree policy");
   o = {
-    {"baz", 4.2},
-    {"x", a},
-    {"inner", json::object{{"a", false}, {"c", a}, {"b", 42}}}
-  };
+    {"baz", json{4.2}},
+    {"x", json{a}},
+    {"inner", json{json::object{
+     {"a", json{false}},
+     {"c", json{a}},
+     {"b", json{42}}}}}};
   auto json_tree = R"json({
   "baz": 4.2,
   "x": [
@@ -207,9 +209,9 @@ TEST(conversion) {
   MESSAGE("std::vector");
   t = to<json>(std::vector<int>{1, 2, 3});
   REQUIRE(t);
-  CHECK(*t == json::array{1, 2, 3});
+  CHECK(*t == json::make_array(1, 2, 3));
   MESSAGE("std::map");
   t = to<json>(std::map<unsigned, bool>{{1, true}, {2, false}});
   REQUIRE(t);
-  CHECK(*t == json::object{{"1", true}, {"2", false}});
+  CHECK(*t == json::object{{"1", json{true}}, {"2", json{false}}});
 }
