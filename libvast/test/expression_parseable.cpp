@@ -62,7 +62,7 @@ TEST(parseable/printable - predicate) {
   // LHS: data, RHS: time
   str = "now > &time";
   CHECK(parsers::predicate(str, pred));
-  CHECK(is<data>(pred.lhs));
+  CHECK(caf::holds_alternative<data>(pred.lhs));
   CHECK(pred.op == greater);
   CHECK(pred.rhs == attribute_extractor{"time"});
   str = "x == y";

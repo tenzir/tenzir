@@ -108,20 +108,20 @@ private:
 namespace detail {
 
 template <class, class = void>
-struct jsonize_helper : std::false_type {};
+struct json_traits : std::false_type {};
 
 template <>
-struct jsonize_helper<caf::none_t> {
+struct json_traits<caf::none_t> {
   using type = json::null;
 };
 
 template <>
-struct jsonize_helper<bool> {
+struct json_traits<bool> {
   using type = json::boolean;
 };
 
 template <class T>
-struct jsonize_helper<
+struct json_traits<
   T,
   std::enable_if_t<std::is_convertible_v<T, json::number>>
 > {
@@ -129,7 +129,7 @@ struct jsonize_helper<
 };
 
 template <class T>
-struct jsonize_helper<
+struct json_traits<
   T,
   std::enable_if_t<std::is_convertible_v<T, std::string>>
 > {
@@ -137,12 +137,12 @@ struct jsonize_helper<
 };
 
 template <>
-struct jsonize_helper<json::array> {
+struct json_traits<json::array> {
   using type = json::array;
 };
 
 template <>
-struct jsonize_helper<json::object> {
+struct json_traits<json::object> {
   using type = json::object;
 };
 
@@ -151,13 +151,13 @@ struct jsonize_helper<json::object> {
 /// Converts an arbitrary type to the corresponding JSON type.
 /// @relates json
 template <class T>
-using jsonize = typename detail::jsonize_helper<std::decay_t<T>>::type;
+using to_json_type = typename detail::json_traits<std::decay_t<T>>::type;
 
 template <
   class T,
-  class = std::enable_if_t<std::is_convertible_v<T, jsonize<T>>>
+  class = std::enable_if_t<std::is_convertible_v<T, to_json_type<T>>>
 >
-json::json(T&& x) : data_(jsonize<T>(std::forward<T>(x))) {
+json::json(T&& x) : data_{to_json_type<T>(std::forward<T>(x))} {
   // nop
 }
 

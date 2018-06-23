@@ -94,7 +94,7 @@ caf::expected<column_index_ptr> make_field_data_index(path filename,
     void add(const event& x) override {
       VAST_TRACE(VAST_ARG(x));
       VAST_ASSERT(x.id() != invalid_id);
-      auto v = get_if<vector>(x.data());
+      auto v = caf::get_if<vector>(&x.data());
       if (!v)
         return;
       if (auto y = get(*v, o_)) {
@@ -174,7 +174,7 @@ caf::error column_index::flush_to_disk() {
 caf::expected<bitmap> column_index::lookup(const predicate& pred) {
   VAST_TRACE(VAST_ARG(pred));
   VAST_ASSERT(idx_ != nullptr);
-  auto result = idx_->lookup(pred.op, get<data>(pred.rhs));
+  auto result = idx_->lookup(pred.op, caf::get<data>(pred.rhs));
   VAST_DEBUG(VAST_ARG(result));
   return result;
 }

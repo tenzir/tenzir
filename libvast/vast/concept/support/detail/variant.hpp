@@ -13,8 +13,10 @@
 
 #pragma once
 
+#include <caf/variant.hpp>
+#include <caf/detail/type_list.hpp>
+
 #include "vast/detail/type_list.hpp"
-#include "vast/variant.hpp"
 
 namespace vast::detail {
 
@@ -43,13 +45,13 @@ template <class T, class U>
 using variant_type_concat =
   tl_distinct_t<
     typename std::conditional_t<
-      is_variant<T>{} && is_variant<U>{},
+      caf::is_variant<T>{} && caf::is_variant<U>{},
       lazy_variant_concat<T, U>,
       std::conditional_t<
-        is_variant<T>{},
+        caf::is_variant<T>{},
         lazy_variant_push_back<T, U>,
         std::conditional_t<
-          is_variant<U>{},
+          caf::is_variant<U>{},
           lazy_variant_push_back<U, T>,
           lazy_type_list<T, U>
         >
@@ -57,11 +59,11 @@ using variant_type_concat =
     >::type
   >;
 
+
 template <class T, class U>
-using flattened_variant = typename make_variant_from<
-  variant_type_concat<T, U>
->::type;
+using flattened_variant = caf::detail::tl_apply_t<
+  variant_type_concat<T, U>,
+  caf::variant
+>;
 
 } // namespace vast::detail
-
-

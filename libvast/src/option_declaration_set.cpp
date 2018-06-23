@@ -22,6 +22,7 @@
 #include "vast/concept/parseable/vast/data.hpp"
 
 #include "vast/detail/overload.hpp"
+#include "vast/detail/string.hpp"
 
 namespace vast {
 
@@ -38,7 +39,7 @@ option_declaration_set::option_declaration::option_declaration(
 std::pair<option_declaration_set::parse_state, data>
 option_declaration_set::option_declaration::parse(
   std::string_view value) const {
-  auto result = visit(detail::overload(
+  auto result = caf::visit(detail::overload(
     [&](const auto& arg) {
       using arg_type = std::decay_t<decltype(arg)>;
       auto x = to<arg_type>(value);
@@ -48,15 +49,15 @@ option_declaration_set::option_declaration::parse(
                               default_value());
       return std::make_pair(parse_state::successful, data{*x});
     },
-    // TODO: These overloads are nessesary as no respective parser exists at the 
+    // TODO: These overloads are nessesary as no respective parser exists at the
     // moment. Remove me when possible.
     [&](const none&) {
       return std::make_pair(parse_state::type_not_parsebale,
                               default_value());
     },
     [&](const std::string&) {
-      // To parse a string with the vast::to function the string musst be 
-      // surrounded with quotes. However, the CLI remove all quotes. 
+      // To parse a string with the vast::to function the string musst be
+      // surrounded with quotes. However, the CLI remove all quotes.
       // In this case, we have to parse them manually.
       data x;
       if (!value.empty() && value[0] == '"') {
@@ -81,7 +82,7 @@ option_declaration_set::option_declaration::parse(
       return std::make_pair(parse_state::type_not_parsebale,
                               default_value());
     }), default_value_);
-  return result; 
+  return result;
 }
 
 const std::string&
@@ -100,7 +101,7 @@ option_declaration_set::option_declaration::description() const {
 }
 
 bool option_declaration_set::option_declaration::has_argument() const {
-  return visit(
+  return caf::visit(
     [](const auto& arg) {
       using arg_type = std::decay_t<decltype(arg)>;
       return !std::is_same<arg_type, bool>::value;
@@ -137,7 +138,7 @@ std::string option_declaration_set::usage() const {
   auto build_argument = [](const option_declaration& x) {
     std::stringstream arg;
     auto& shorts = x.short_names();
-    arg << "  "; 
+    arg << "  ";
     if (!shorts.empty()) {
       auto i = shorts.begin();
       auto e = shorts.end();
@@ -236,7 +237,7 @@ option_declaration_set::parse(option_map& xs, argument_iterator begin,
     return make_result(state, ++first, std::move(result));
   };
   auto parse_short_option = [&](auto first, auto last) {
-    // Extract the short name one of the fllowing strings: 
+    // Extract the short name one of the fllowing strings:
     // "-s", "-sXX", ["-s" "XX"]
     std::string_view x = *first;
     auto indicator = 1u; // char count of "-"
@@ -271,7 +272,7 @@ option_declaration_set::parse(option_map& xs, argument_iterator begin,
     }
   };
   auto parse_long_option = [&](auto first, auto last) {
-    // Extract the long_name from one of the following strings: 
+    // Extract the long_name from one of the following strings:
     // "--long_name", "--long_name=XX".
     auto& x = *first;
     auto idx = x.find('=');

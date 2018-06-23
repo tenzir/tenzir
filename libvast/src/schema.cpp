@@ -11,6 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
+#include "vast/json.hpp"
 #include "vast/schema.hpp"
 
 #include "vast/concept/parseable/parse.hpp"
@@ -18,7 +19,6 @@
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/schema.hpp"
 #include "vast/concept/printable/vast/type.hpp"
-#include "vast/json.hpp"
 
 namespace vast {
 
@@ -37,7 +37,9 @@ optional<schema> schema::merge(const schema& s1, const schema& s2) {
 }
 
 bool schema::add(const type& t) {
-  if (is<none_type>(t) || t.name().empty() || find(t.name()))
+  if (caf::holds_alternative<none_type>(t)
+      || t.name().empty()
+      || find(t.name()))
     return false;
   types_.push_back(std::move(t));
   return true;

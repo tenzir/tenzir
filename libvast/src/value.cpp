@@ -59,10 +59,6 @@ bool operator>(const value& lhs, const value& rhs) {
   return lhs.data_ > rhs.data_;
 }
 
-detail::data_variant& expose(value& v) {
-  return expose(v.data_);
-}
-
 bool convert(const value& v, json& j) {
   json::object o;
   if (!convert(v.type(), o["type"]))

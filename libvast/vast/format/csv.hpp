@@ -73,7 +73,7 @@ struct value_printer : printer<value_printer> {
       size_t i = 0;
       auto f = this;
       auto elem = eps.with([&] {
-        auto result = visit(*f, r.fields[i].type, v[i]);
+        auto result = caf::visit(*f, r.fields[i].type, v[i]);
         ++i;
         return result;
       });
@@ -101,7 +101,7 @@ struct value_printer : printer<value_printer> {
       if (c.empty())
         return str.print(out_, empty);
       auto f = this;
-      auto elem = eps.with([&](const data& x) { return visit(*f, t, x); });
+      auto elem = eps.with([&](const data& x) { return caf::visit(*f, t, x); });
       auto p = (elem % sep);
       return p.print(out_, c);
     }
@@ -118,7 +118,7 @@ struct value_printer : printer<value_printer> {
         return true;
       event_type = e.type();
       auto hdr = "type,id,timestamp"s;
-      auto r =  get_if<record_type>(e.type());
+      auto r =  caf::get_if<record_type>(&e.type());
       if (!r)
         hdr += ",data";
       else
@@ -131,7 +131,7 @@ struct value_printer : printer<value_printer> {
     auto name = str.with([](const std::string& x) { return !x.empty(); });
     auto comma = chr<','>;
     auto ts = u64 ->* [](timestamp t) { return t.time_since_epoch().count(); };
-    auto f = [&] { visit(renderer<Iterator>{out}, e.type(), e.data()); };
+    auto f = [&] { caf::visit(renderer<Iterator>{out}, e.type(), e.data()); };
     auto ev = eps ->* f;
     auto p = header << name << comma << u64 << comma << ts << comma << ev;
     return p(out, e.type().name(), e.id(), e.timestamp());

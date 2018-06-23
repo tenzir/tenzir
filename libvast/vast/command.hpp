@@ -28,9 +28,6 @@
 #include "vast/option_declaration_set.hpp"
 #include "vast/option_map.hpp"
 
-#include "vast/concept/parseable/to.hpp"
-#include "vast/concept/parseable/vast/data.hpp"
-
 #include "vast/detail/steady_map.hpp"
 #include "vast/detail/string.hpp"
 

@@ -215,12 +215,8 @@ TEST(multiple partitions bro conn log lookup no messaging) {
   MESSAGE("ingest bro conn logs into partitions of size " << part_size);
   std::vector<partition_ptr> partitions;
   auto layout = bro_conn_log[0].type();
-  record_type flat_layout;
-  visit(detail::overload(
-          [&](const record_type& rt) { flat_layout = flatten(rt); },
-          [&](const auto&) { FAIL("layout is no record type"); }
-        ),
-        layout);
+  CAF_REQUIRE(caf::holds_alternative<record_type>(layout));
+  record_type flat_layout = caf::get<record_type>(layout);
   for (size_t i = 0; i < bro_conn_log.size(); i += part_size) {
     auto ptr = make_partition(uuid::random());
     CHECK_EQUAL(exists(ptr->dir()), false);

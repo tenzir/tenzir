@@ -53,7 +53,7 @@ struct fixture {
     REQUIRE(tp);
     e.timestamp(*tp);
     auto t = alias_type{}; // nil type, for meta data only
-    t.name("foo");
+    t = t.name("foo");
     CHECK(e.type(t));
   }
 

@@ -27,6 +27,10 @@
 #define SUITE expression
 #include "test.hpp"
 
+using caf::get;
+using caf::get_if;
+using caf::holds_alternative;
+
 using namespace vast;
 
 struct fixture {
@@ -206,7 +210,7 @@ TEST(matcher) {
   CHECK(!match("x < 4.2 && a == T", r));
   MESSAGE("attribute extractors");
   CHECK(!match("&type == \"foo\"", r));
-  r.name("foo");
+  r = r.name("foo");
   CHECK(match("&type == \"foo\"", r));
   CHECK(match("&type != \"bar\"", r));
 }

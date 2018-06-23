@@ -16,9 +16,10 @@
 #include <string>
 #include <vector>
 
-#include "vast/detail/operators.hpp"
 #include "vast/optional.hpp"
 #include "vast/type.hpp"
+
+#include "vast/detail/operators.hpp"
 
 namespace caf {
 class serializer;
@@ -74,4 +75,3 @@ private:
 bool convert(const schema& s, json& j);
 
 } // namespace vast
-

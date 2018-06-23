@@ -93,7 +93,7 @@ default_map_view::size_type default_map_view::size() const noexcept {
 // -- make_view ---------------------------------------------------------------
 
 data_view make_view(const data& x) {
-  return visit([](const auto& z) { return make_data_view(z); }, x);
+  return caf::visit([](const auto& z) { return make_data_view(z); }, x);
 }
 
 } // namespace vast

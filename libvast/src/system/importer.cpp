@@ -167,8 +167,8 @@ void replenish(stateful_actor<importer_state>* self) {
   self->become(
     keep_behavior,
     [=](const data& old) {
-      // Update state.
-      auto x = is<none>(old) ? count{0} : get<count>(old);
+      auto x = caf::holds_alternative<none>(old) ? count{0}
+                                                 : caf::get<count>(old);
       VAST_DEBUG(self, "got", n, "new IDs starting at", x);
       auto& st = self->state;
       // Add a new ID generator for the available range.
