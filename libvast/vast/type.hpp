@@ -190,6 +190,8 @@ public:
 
   abstract_type_ptr ptr() const;
 
+  const abstract_type* raw_ptr() const noexcept;
+
   const abstract_type* operator->() const noexcept;
 
   /// @pre `ptr() != nullptr`
@@ -865,23 +867,24 @@ struct sum_type_access<vast::type> {
 
   static constexpr bool specialized = true;
 
-  static constexpr bool immutable = true;
-
-  static bool is(const vast::type& x, std::integral_constant<int, 0>) {
-    // Pos 0 is none_type.
+  static bool is(const vast::type& x, sum_type_token<vast::none_type, 0>) {
     return !static_cast<bool>(x);
   }
 
-  template <int Pos>
-  static bool is(const vast::type& x, std::integral_constant<int, Pos>) {
+  template <class T, int Pos>
+  static bool is(const vast::type& x, sum_type_token<T, Pos>) {
     return x->index() == Pos;
   }
 
-  template <int Pos>
-  static const typename detail::tl_at<types, Pos>::type&
-  get(const vast::type& x, std::integral_constant<int, Pos>) {
-    using type = detail::tl_at_t<types, Pos>;
-    return static_cast<const type&>(*x);
+  template <class T, int Pos>
+  static const T& get(const vast::type& x, sum_type_token<T, Pos>) {
+    return static_cast<const T&>(*x);
+  }
+
+  template <class T, int Pos>
+  static const T* get_if(const vast::type* x, sum_type_token<T, Pos>) {
+    auto ptr = x->raw_ptr();
+    return ptr->index() == Pos ? static_cast<const T*>(ptr) : nullptr;
   }
 
   template <class Result, class Visitor, class... Ts>

@@ -95,12 +95,16 @@ abstract_type_ptr type::ptr() const {
   return ptr_;
 }
 
-const abstract_type* type::operator->() const noexcept {
+const abstract_type* type::raw_ptr() const noexcept {
   return ptr_ != nullptr ? ptr_.get() : &none_type_singleton;
 }
 
+const abstract_type* type::operator->() const noexcept {
+  return raw_ptr();
+}
+
 const abstract_type& type::operator*() const noexcept {
-  return ptr_ != nullptr ? *ptr_ : none_type_singleton;
+  return *raw_ptr();
 }
 
 type::type(abstract_type_ptr x) : ptr_{std::move(x)} {
