@@ -17,7 +17,7 @@
 #include "test.hpp"
 
 using namespace vast;
-using namespace std::string_literals;
+using namespace std::literals;
 
 TEST(arithmetic view) {
   CHECK_EQUAL(view_t<boolean>{true}, true);
@@ -85,7 +85,7 @@ TEST(make_data_view) {
   REQUIRE(caf::holds_alternative<view_t<vector>>(x));
   auto v = caf::get<view_t<vector>>(x);
   REQUIRE_EQUAL(v->size(), 3u);
-  CHECK_EQUAL(v->at(0), 42);
+  CHECK_EQUAL(v->at(0), integer{42});
   CHECK_EQUAL(v->at(1), true);
-  CHECK_EQUAL(v->at(2), "foo");
+  CHECK_EQUAL(v->at(2), "foo"sv);
 }
