@@ -25,6 +25,7 @@ set(libvast_sources
   src/concept/hashable/crc.cpp
   src/concept/hashable/xxhash.cpp
   src/data.cpp
+  src/defaults.cpp
   src/detail/adjust_resource_consumption.cpp
   src/detail/compressedbuf.cpp
   src/detail/fdinbuf.cpp
@@ -55,8 +56,6 @@ set(libvast_sources
   src/key.cpp
   src/null_bitmap.cpp
   src/operator.cpp
-  src/option_declaration_set.cpp
-  src/option_map.cpp
   src/pattern.cpp
   src/port.cpp
   src/schema.cpp
@@ -234,8 +233,6 @@ set(tests
   test/main.cpp
   test/mmapbuf.cpp
   test/offset.cpp
-  test/option_declaration_set.cpp
-  test/option_map.cpp
   test/parse_data.cpp
   test/parseable.cpp
   test/pattern.cpp

@@ -61,6 +61,9 @@
 //#include "vast/system/spawn.hpp"
 
 //using namespace std::chrono;
+
+using std::string;
+
 using namespace std::chrono_literals;
 using namespace std::string_literals;
 using namespace caf;
@@ -68,18 +71,16 @@ using namespace caf;
 namespace vast::system {
 
 application::root_command::root_command() {
-  auto id = detail::split(detail::hostname(), ".")[0];
-  add_opt("dir,d", "directory for persistent state", "vast");
-  add_opt("endpoint,e", "node endpoint", ":42000");
-  // TODO: Remove explicit conversion to a string.
-  // This requires to add support for std::string_view in data.
-  add_opt("id,i", "the unique ID of this node", std::string{id});
-  add_opt("node,n", "spawn a node instead of connecting to one", false);
-  add_opt("version,v", "print version and exit", false);
+  add_opt<string>("dir,d", "directory for persistent state");
+  add_opt<string>("endpoint,e", "node endpoint");
+  add_opt<string>("id,i", "the unique ID of this node");
+  add_opt<bool>("node,n", "spawn a node instead of connecting to one");
+  add_opt<bool>("version,v", "print version and exit");
 }
 
 command::proceed_result
-application::root_command::proceed(caf::actor_system& sys, const option_map& options,
+application::root_command::proceed(caf::actor_system& sys,
+                                   const caf::config_value_map& options,
                                    argument_iterator begin,
                                    argument_iterator end) {
   VAST_UNUSED(begin, end);

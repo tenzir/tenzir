@@ -11,26 +11,32 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#pragma once
+#include "vast/defaults.hpp"
 
-#include <memory>
-#include <string>
-#include <string_view>
+#include <limits>
 
-#include "vast/system/node_command.hpp"
+#include "vast/detail/string.hpp"
+#include "vast/detail/system.hpp"
 
-namespace vast::system {
+namespace vast::defaults {
 
-/// Default implementation for the export command.
-/// @relates application
-class export_command : public node_command {
-public:
-  export_command(command* parent, std::string_view name);
+namespace command {
 
-protected:
-  int run_impl(caf::actor_system& sys, const caf::config_value_map& options,
-               argument_iterator begin, argument_iterator end) override;
-};
+const char* directory = "vast";
+const char* endpoint = ":42000";
+const char* id = "";
+const char* read_path = "-";
+const char* schema_path = "-";
+const char* write_path = "-";
+int64_t pseudo_realtime_factor = 0;
+size_t cutoff = std::numeric_limits<size_t>::max();
+size_t flow_expiry = 10;
+size_t flush_interval = 10000;
+size_t max_events = 0;
+size_t max_flow_age = 60;
+size_t max_flows = 1u << 20;
+std::string node_id = std::string{detail::split(detail::hostname(), ".")[0]};
 
-} // namespace vast::system
+} // namespace command
 
+} // namespace vast::defaults

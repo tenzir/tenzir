@@ -13,24 +13,29 @@
 
 #pragma once
 
-#include <memory>
+#include <cstddef>
+#include <cstdint>
 #include <string>
-#include <string_view>
 
-#include "vast/system/node_command.hpp"
+namespace vast::defaults {
 
-namespace vast::system {
+namespace command {
 
-/// Default implementation for the export command.
-/// @relates application
-class export_command : public node_command {
-public:
-  export_command(command* parent, std::string_view name);
+extern const char* directory;
+extern const char* endpoint;
+extern const char* id;
+extern const char* read_path;
+extern const char* schema_path;
+extern const char* write_path;
+extern int64_t pseudo_realtime_factor;
+extern size_t cutoff;
+extern size_t flow_expiry;
+extern size_t flush_interval;
+extern size_t max_events;
+extern size_t max_flow_age;
+extern size_t max_flows;
+extern std::string node_id;
 
-protected:
-  int run_impl(caf::actor_system& sys, const caf::config_value_map& options,
-               argument_iterator begin, argument_iterator end) override;
-};
+} // namespace command
 
-} // namespace vast::system
-
+} // namespace vast::defaults
