@@ -47,7 +47,7 @@ static constexpr size_t num_collectors = 1;
 
 const timestamp epoch;
 
-using interval = system::partition_index::interval;
+using interval = system::meta_index::interval;
 
 auto int_generator(int mod = std::numeric_limits<int>::max()) {
   int i = 0;

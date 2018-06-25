@@ -18,13 +18,13 @@
 #include <caf/stream_manager.hpp>
 
 #include "vast/logger.hpp"
+#include "vast/system/meta_index.hpp"
 #include "vast/system/partition.hpp"
-#include "vast/system/partition_index.hpp"
 
 namespace vast::system {
 
 indexer_stage_driver::indexer_stage_driver(downstream_manager_type& dm,
-                                           partition_index& pindex,
+                                           meta_index& pindex,
                                            partition_factory fac,
                                            size_t max_partition_size)
   : super(dm),

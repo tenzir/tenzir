@@ -26,7 +26,7 @@
 namespace vast::system {
 
 /// Maps events to horizontal partitions of the ::index.
-class partition_index {
+class meta_index {
 public:
   // -- member types -----------------------------------------------------------
 
@@ -97,7 +97,7 @@ public:
   }
 
   template <class Inspector>
-  friend auto inspect(Inspector& f, partition_index& pi) {
+  friend auto inspect(Inspector& f, meta_index& pi) {
     return f(pi.partitions_);
   }
 
@@ -112,11 +112,10 @@ private:
   map_type partitions_;
 };
 
-bool operator==(const partition_index::interval&,
-                const partition_index::interval&);
+bool operator==(const meta_index::interval&, const meta_index::interval&);
 
-inline bool operator!=(const partition_index::interval& x,
-                       const partition_index::interval& y) {
+inline bool operator!=(const meta_index::interval& x,
+                       const meta_index::interval& y) {
   return !(x == y);
 }
 

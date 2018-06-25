@@ -11,26 +11,26 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/system/partition_index.hpp"
+#include "vast/system/meta_index.hpp"
 
 #include "vast/event.hpp"
 #include "vast/expression_visitors.hpp"
 
 namespace vast::system {
 
-partition_index::interval::interval()
+meta_index::interval::interval()
   : from(timestamp::max()),
     to(timestamp::min()) {
   // nop
 }
 
-partition_index::interval::interval(timestamp first, timestamp last)
+meta_index::interval::interval(timestamp first, timestamp last)
   : from(first),
     to(last) {
   // nop
 }
 
-caf::optional<partition_index::partition_synopsis> partition_index::
+caf::optional<meta_index::partition_synopsis> meta_index::
 operator[](const uuid& partition) const {
   auto i = partitions_.find(partition);
   if (i != partitions_.end())
@@ -38,13 +38,13 @@ operator[](const uuid& partition) const {
   return caf::none;
 }
 
-void partition_index::add_one(interval& rng, const event& x) {
+void meta_index::add_one(interval& rng, const event& x) {
   auto t = x.timestamp();
   rng.from = std::min(rng.from, t);
   rng.to = std::max(rng.to, t);
 }
 
-std::vector<uuid> partition_index::lookup(const expression& expr) const {
+std::vector<uuid> meta_index::lookup(const expression& expr) const {
   std::vector<uuid> result;
   for (auto& x : partitions_)
     if (caf::visit(time_restrictor{x.second.range.from, x.second.range.to},
@@ -53,8 +53,7 @@ std::vector<uuid> partition_index::lookup(const expression& expr) const {
   return result;
 }
 
-bool operator==(const partition_index::interval& x,
-                const partition_index::interval& y) {
+bool operator==(const meta_index::interval& x, const meta_index::interval& y) {
   return x.from == y.from && x.to == y.to;
 }
 
