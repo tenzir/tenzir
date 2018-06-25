@@ -54,7 +54,7 @@ public:
 
   default_table_slice(record_type layout);
 
-  virtual caf::optional<data_view> at(size_type row, size_type col) const final;
+  caf::optional<data_view> at(size_type row, size_type col) const final;
 
 private:
   std::vector<data> xs_;
