@@ -51,6 +51,7 @@ int remote_command::run_impl(actor_system& sys,
     return EXIT_FAILURE;
   }
   auto node = std::move(*node_opt);
+  self->monitor(node);
   // Build command to remote node.
   auto args = caf::message_builder{begin, end}.move_to_message();
   auto cmd = make_message(std::string{name()}, std::move(args));
