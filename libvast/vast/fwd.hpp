@@ -19,6 +19,7 @@ namespace vast {
 
 class address;
 class data;
+class default_table_slice;
 class event;
 class expression;
 class json;

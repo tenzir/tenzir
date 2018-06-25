@@ -13,12 +13,10 @@
 
 #pragma once
 
+#include "vast/fwd.hpp"
 #include "vast/table.hpp"
 
 namespace vast {
-
-// TODO: move to vast/fwd.hpp after merge
-class default_table_slice;
 
 /// @relates default_table_slice
 using default_table_slice_ptr = caf::intrusive_ptr<default_table_slice>;
