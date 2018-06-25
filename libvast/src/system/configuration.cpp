@@ -54,7 +54,7 @@ namespace vast::system {
 configuration::configuration() {
   // -- CAF configuration ------------------------------------------------------
   // Consider only VAST's log messages by default.
-  logger_component_filter = "vast";
+  set("logger.component-filter", "vast");
   // Use 'vast.ini' instead of generic 'caf-application.ini'.
   config_file_path = "vast.ini";
   // Register VAST's custom types.
@@ -131,9 +131,10 @@ configuration::configuration(int argc, char** argv) : configuration{} {
   auto is_vast_opt = [](auto& x) { return !starts_with(x, "--caf#"); };
   auto caf_opt = std::stable_partition(command_line.begin(),
                                        command_line.end(), is_vast_opt);
-  auto opt_msg = message_builder{caf_opt, command_line.end()}.to_message();
-  parse(opt_msg);
+  std::vector<std::string> caf_args;
+  std::move(caf_opt, command_line.end(), std::back_inserter(caf_args));
   command_line.erase(caf_opt, command_line.end());
+  parse(std::move(caf_args));
 }
 
 } // namespace vast::system

@@ -33,11 +33,12 @@ struct test_configuration : vast::system::configuration {
   using super = vast::system::configuration;
 
   test_configuration(bool enable_mm = true) : super(enable_mm) {
-    logger_file_name = "vast-unit-test.log";
-    logger_component_filter.clear();
+    std::string log_file = "vast-unit-test.log";
+    set("logger.file-name", log_file);
+    set("logger.component-filter", "");
     // Always begin with an empy log file.
-    if (vast::exists(logger_file_name))
-      vast::rm(logger_file_name);
+    if (vast::exists(log_file))
+      vast::rm(log_file);
   }
 };
 
