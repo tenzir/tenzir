@@ -75,7 +75,7 @@ struct initializer {
     if (dist)
       distributions_.push_back(std::move(*dist));
     else if (!dist.error())
-      *data_ = nil;
+      *data_ = caf::none;
     else
       return dist.error();
     return no_error;

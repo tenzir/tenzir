@@ -105,7 +105,7 @@ TEST(records) {
 }
 
 TEST(construction) {
-  CHECK(caf::holds_alternative<none>(data{}));
+  CHECK(caf::holds_alternative<caf::none_t>(data{}));
   CHECK(caf::holds_alternative<boolean>(data{true}));
   CHECK(caf::holds_alternative<boolean>(data{false}));
   CHECK(caf::holds_alternative<integer>(data{0}));
@@ -141,7 +141,7 @@ TEST(relational_operators) {
   CHECK(!(d1 > d2));
 
   d1 = 42;
-  d2 = nil;
+  d2 = caf::none;
   CHECK(d1 != d2);
   CHECK(!(d1 < d2));
   CHECK(!(d1 <= d2));
@@ -160,7 +160,7 @@ TEST(addtion) {
   auto x = data{42};
   auto y = data{1};
   CHECK_EQUAL(x + y, data{43});
-  y = nil;
+  y = caf::none;
   CHECK_EQUAL(x + y, x);
   y = vector{"foo", 3.14};
   CHECK_EQUAL(x + y, (vector{42, "foo", 3.14}));
@@ -280,7 +280,7 @@ TEST(parseable) {
   l = str.end();
   CHECK(p(f, l, d));
   CHECK(f == l);
-  CHECK(d == vector{42u, 4.2, nil});
+  CHECK(d == vector{42u, 4.2, caf::none});
   MESSAGE("set");
   str = "{-42,+42,-1}"s;
   f = str.begin();

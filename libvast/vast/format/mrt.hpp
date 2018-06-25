@@ -3,6 +3,7 @@
 #include <iostream>
 #include <queue>
 
+#include <caf/none.hpp>
 #include <caf/variant.hpp>
 
 #include "vast/address.hpp"
@@ -10,7 +11,6 @@
 #include "vast/event.hpp"
 #include "vast/expected.hpp"
 #include "vast/logger.hpp"
-#include "vast/none.hpp"
 #include "vast/schema.hpp"
 #include "vast/subnet.hpp"
 #include "vast/time.hpp"
@@ -210,7 +210,7 @@ struct notification {
 /// @relates message_header types
 struct message {
   message_header header;
-  caf::variant<none, open, update, notification> message;
+  caf::variant<caf::none_t, open, update, notification> message;
 };
 
 // Helper functions to parse attributes.
@@ -1094,7 +1094,7 @@ struct state_change_as4_parser : parser<state_change_as4_parser> {
 struct record {
   common_header header;
   caf::variant<
-    none,
+    caf::none_t,
     table_dump_v2::peer_index_table,
     table_dump_v2::rib_afi_safi,
     bgp4mp::state_change,

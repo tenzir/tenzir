@@ -18,16 +18,16 @@
 #include <type_traits>
 
 #include <caf/default_sum_type_access.hpp>
+#include <caf/detail/type_list.hpp>
+#include <caf/none.hpp>
 #include <caf/optional.hpp>
 #include <caf/variant.hpp>
-#include <caf/detail/type_list.hpp>
 
 #include "vast/aliases.hpp"
 #include "vast/address.hpp"
 #include "vast/pattern.hpp"
 #include "vast/subnet.hpp"
 #include "vast/port.hpp"
-#include "vast/none.hpp"
 #include "vast/offset.hpp"
 #include "vast/time.hpp"
 #include "vast/type.hpp"
@@ -61,7 +61,7 @@ using to_data_type = std::conditional_t<
           std::is_convertible_v<T, std::string>,
           std::string,
           std::conditional_t<
-               std::is_same_v<T, none>
+               std::is_same_v<T, caf::none_t>
             || std::is_same_v<T, timespan>
             || std::is_same_v<T, timestamp>
             || std::is_same_v<T, pattern>
@@ -93,7 +93,7 @@ class data : detail::totally_ordered<data>,
              detail::addable<data> {
 public:
   using types = caf::detail::type_list<
-    none,
+    caf::none_t,
     boolean,
     integer,
     count,
@@ -184,7 +184,6 @@ struct data_traits {
     using type = name##_type;                                                  \
   }
 
-VAST_DATA_TRAIT(none);
 VAST_DATA_TRAIT(boolean);
 VAST_DATA_TRAIT(integer);
 VAST_DATA_TRAIT(count);
@@ -201,6 +200,11 @@ VAST_DATA_TRAIT(set);
 VAST_DATA_TRAIT(map);
 
 #undef VAST_DATA_TRAIT
+
+template <>
+struct data_traits<caf::none_t> {
+  using type = none_type;
+};
 
 template <>
 struct data_traits<std::string> {

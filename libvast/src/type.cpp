@@ -614,7 +614,7 @@ struct data_congruence_checker {
     return false;
   }
 
-  bool operator()(const none_type&, none) const {
+  bool operator()(const none_type&, caf::none_t) const {
     return true;
   }
 
@@ -761,7 +761,7 @@ bool compatible(const type& lhs, relational_operator op, const data& rhs) {
              && holds_alternative<pattern>(rhs);
     case equal:
     case not_equal:
-      return !lhs || holds_alternative<none>(rhs) || congruent(lhs, rhs);
+      return !lhs || holds_alternative<caf::none_t>(rhs) || congruent(lhs, rhs);
     case less:
     case less_equal:
     case greater:

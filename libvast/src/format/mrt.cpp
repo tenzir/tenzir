@@ -17,7 +17,7 @@ struct factory {
     timestamp_ = timestamp{duration_cast<timespan>(since_epoch)};
   }
 
-  void operator()(none) const {
+  void operator()(caf::none_t) const {
     // nop
   }
 

@@ -14,6 +14,8 @@
 #include <fstream>
 #include <iomanip>
 
+#include <caf/none.hpp>
+
 #include "vast/concept/printable/numeric.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/data.hpp"
@@ -23,7 +25,6 @@
 #include "vast/detail/string.hpp"
 #include "vast/error.hpp"
 #include "vast/event.hpp"
-#include "vast/none.hpp"
 #include "vast/logger.hpp"
 
 #include "vast/format/bro.hpp"
@@ -163,13 +164,13 @@ struct streamer {
   }
 
   template <class T>
-  void operator()(const T&, none) const {
+  void operator()(const T&, caf::none_t) const {
     out_ << unset_field;
   }
 
   template <class T, class U>
   auto operator()(const T&, const U& x) const
-  -> std::enable_if_t<!std::is_same_v<U, none>> {
+  -> std::enable_if_t<!std::is_same_v<U, caf::none_t>> {
     out_ << to_string(x);
   }
 

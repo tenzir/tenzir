@@ -18,9 +18,10 @@
 #include <type_traits>
 #include <vector>
 
-#include <caf/variant.hpp>
 #include <caf/default_sum_type_access.hpp>
 #include <caf/detail/type_list.hpp>
+#include <caf/none.hpp>
+#include <caf/variant.hpp>
 
 #include "vast/data.hpp"
 #include "vast/key.hpp"
@@ -173,7 +174,7 @@ private:
 class expression : detail::totally_ordered<expression> {
 public:
   using types = caf::detail::type_list<
-    none,
+    caf::none_t,
     conjunction,
     disjunction,
     negation,
@@ -183,7 +184,8 @@ public:
   using node = caf::detail::tl_apply_t<types, caf::variant>;
 
   /// Default-constructs empty an expression.
-  expression(none = nil) {
+  expression(caf::none_t = caf::none) {
+    // nop
   }
 
   /// Constructs an expression.

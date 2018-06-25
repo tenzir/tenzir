@@ -56,11 +56,11 @@ public:
   /// @param v The value to check and convert into an event.
   /// @returns A valid event according *v* if `v.type().check(v.data())`.
   static event make(value v) {
-    return type_check(v.type(), v.data()) ? event{std::move(v)} : nil;
+    return type_check(v.type(), v.data()) ? event{std::move(v)} : caf::none;
   }
 
   /// Constructs an invalid event.
-  event(none = nil);
+  event(caf::none_t = caf::none);
 
   /// Constructs an event from a value.
   event(value v);

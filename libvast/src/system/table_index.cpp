@@ -217,7 +217,7 @@ caf::expected<bitmap> table_index::lookup_impl(const expression& expr) {
           ),
           p.lhs, p.rhs);
       },
-      [&](const none&) -> expected<bitmap> {
+      [&](const caf::none_t&) -> expected<bitmap> {
         return bitmap{};
       }),
     expr);

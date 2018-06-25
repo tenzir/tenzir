@@ -103,7 +103,7 @@ caf::expected<column_index_ptr> make_field_data_index(path filename,
       }
       // If there is no data at a given offset, it means that an intermediate
       // record is nil but we're trying to access a deeper field.
-      static const auto nil_data = data{nil};
+      static const auto nil_data = data{caf::none};
       idx_->push_back(nil_data, x.id());
     }
 
