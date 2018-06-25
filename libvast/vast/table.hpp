@@ -77,7 +77,7 @@ class table_slice : public caf::ref_counted {
 public:
   using size_type = table::size_type;
 
-  virtual ~table_slice() = default;
+  virtual ~table_slice();
 
   /// @returns The table layout.
   const record_type& layout() const;

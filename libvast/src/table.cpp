@@ -15,6 +15,10 @@
 
 namespace vast {
 
+table_slice::~table_slice() {
+  // nop
+}
+
 const record_type& table_slice::layout() const {
   return layout_;
 }
