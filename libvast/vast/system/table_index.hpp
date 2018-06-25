@@ -33,17 +33,17 @@ namespace vast::system {
 
 /// Creates a column layout for the given type.
 /// @relates table_index
-caf::expected<table_index> make_table_index(path filename, type event_type);
+caf::expected<table_index> make_table_index(path filename, type layout);
 
 // -- class definition ---------------------------------------------------------
 
-/// Wraps multiple `column_index` into a single column layout.
+/// Wraps multiple [@ref column_index](column indexes) according to a layout.
 class table_index {
 public:
   // -- friend declarations ----------------------------------------------------
 
   friend caf::expected<table_index> make_table_index(path filename,
-                                                         type event_type);
+                                                     type layout);
 
   // -- member and nested types ------------------------------------------------
 
@@ -66,7 +66,7 @@ public:
 
   ~table_index() noexcept;
 
-  // -- persistency ------------------------------------------------------------
+  // -- persistence ------------------------------------------------------------
 
   /// Persists all indexes to disk.
   caf::error flush_to_disk();
@@ -155,7 +155,7 @@ public:
 
   /// Returns the type defining this table's layout.
   inline const type& layout() const {
-    return event_type_;
+    return layout_;
   }
 
   /// Returns whether `add` was called at least once.
@@ -197,12 +197,12 @@ private:
 
   // -- constructors, destructors, and assignment operators --------------------
 
-  table_index(type event_type, path base_dir);
+  table_index(type layout, path base_dir);
 
   // -- member variables -------------------------------------------------------
 
   /// Stores the indexed type whose fields form our columns.
-  const type event_type_;
+  const type layout_;
 
   /// Columns of our type-dependant layout. Lazily filled for columns data to
   /// delay file I/O until a column is accessed by the user.

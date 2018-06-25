@@ -322,7 +322,7 @@ partition::~partition() noexcept {
   flush_to_disk();
 }
 
-// -- persistency ------------------------------------------------------------
+// -- persistence ------------------------------------------------------------
 
 caf::error partition::flush_to_disk() {
   if (meta_data_.dirty) {

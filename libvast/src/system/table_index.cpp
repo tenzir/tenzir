@@ -21,11 +21,11 @@
 
 namespace vast::system {
 
-caf::expected<table_index> make_table_index(path base_dir, type event_type) {
+caf::expected<table_index> make_table_index(path base_dir, type layout) {
   caf::error err;
-  table_index result{event_type, base_dir};
+  table_index result{layout, base_dir};
   result.columns_.resize(table_index::meta_column_count
-                         + flat_size(event_type));
+                         + flat_size(layout));
   return result;
 }
 // -- constructors, destructors, and assignment operators ----------------------
@@ -35,7 +35,7 @@ table_index::~table_index() noexcept {
     flush_to_disk();
 }
 
-// -- persistency --------------------------------------------------------------
+// -- persistence --------------------------------------------------------------
 
 caf::error table_index::flush_to_disk() {
   // Unless `add` was called at least once there's nothing to flush.
@@ -68,7 +68,7 @@ column_index* table_index::by_name(std::string_view column_name) {
 }
 
 caf::error table_index::add(const event& x) {
-  VAST_ASSERT(x.type() == event_type_);
+  VAST_ASSERT(x.type() == layout_);
   VAST_TRACE(VAST_ARG(x));
   if (dirty_) {
     for (auto& col : columns_) {
@@ -94,10 +94,10 @@ caf::error table_index::add(const event& x) {
     },
     [&]() -> caf::error {
       // Coluns 2-N are our data fields.
-      auto r = get_if<record_type>(event_type_);
+      auto r = get_if<record_type>(layout_);
       if (!r) {
         auto fac = [&] {
-          return make_flat_data_index(data_dir(), event_type_);
+          return make_flat_data_index(data_dir(), layout_);
         };
         return with_data_column(0, fac, fun);
       }
@@ -105,7 +105,7 @@ caf::error table_index::add(const event& x) {
       size_t i = 0;
       for (auto&& f : record_type::each{*r}) {
         auto& value_type = f.trace.back()->type;
-        if (!has_skip_attribute(event_type_)) {
+        if (!has_skip_attribute(layout_)) {
           auto dir = data_dir();
           for (auto& k : f.key())
             dir /= k;
@@ -143,7 +143,7 @@ caf::expected<bitmap> table_index::lookup(const predicate& pred) {
   if (!rhs)
     return ec::invalid_query;
   // Specialize the predicate for the type.
-  auto resolved = type_resolver{event_type_}(pred);
+  auto resolved = type_resolver{layout_}(pred);
   if (!resolved)
     return std::move(resolved.error());
   return lookup_impl(*resolved);
@@ -152,7 +152,7 @@ caf::expected<bitmap> table_index::lookup(const predicate& pred) {
 caf::expected<bitmap> table_index::lookup(const expression& expr) {
   VAST_TRACE(VAST_ARG(expr));
   // Specialize the expression for the type.
-  type_resolver resolver{event_type_};
+  type_resolver resolver{layout_};
   auto resolved = visit(resolver, expr);
   if (!resolved)
     return std::move(resolved.error());
@@ -256,7 +256,7 @@ caf::expected<bitmap> table_index::lookup_impl(const predicate& pred,
   VAST_IGNORE_UNUSED(x);
   if (dx.offset.empty()) {
     VAST_ASSERT(num_data_columns() == 1);
-    auto fac = [&] { return make_flat_data_index(data_dir(), event_type_); };
+    auto fac = [&] { return make_flat_data_index(data_dir(), layout_); };
     return with_data_column(0, fac, [&](column_index& col) {
       return col.lookup(pred);
     });
@@ -286,11 +286,11 @@ caf::expected<bitmap> table_index::lookup_impl(const predicate& pred,
 
 // -- constructors, destructors, and assignment operators ----------------------
 
-table_index::table_index(type event_type, path base_dir)
-  : event_type_(std::move(event_type)),
+table_index::table_index(type layout, path base_dir)
+  : layout_(std::move(layout)),
     base_dir_(std::move(base_dir)),
     dirty_(false) {
-  VAST_TRACE(VAST_ARG(event_type_), VAST_ARG(base_dir_));
+  VAST_TRACE(VAST_ARG(layout_), VAST_ARG(base_dir_));
 }
 
 } // namespace vast::system

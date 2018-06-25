@@ -58,7 +58,7 @@ public:
 
   virtual ~column_index();
 
-  // -- persistency ------------------------------------------------------------
+  // -- persistence ------------------------------------------------------------
 
   /// Materializes the index from disk if `filename()` exists, constructs a new
   /// one otherwise. Automatically called by the factory functions.

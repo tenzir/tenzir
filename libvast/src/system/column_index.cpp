@@ -120,7 +120,7 @@ column_index::~column_index() {
   // nop
 }
 
-// -- persistency --------------------------------------------------------------
+// -- persistence --------------------------------------------------------------
 
 caf::error column_index::init() {
   VAST_TRACE("");

@@ -28,7 +28,8 @@
 
 namespace vast::system {
 
-/// A horizontal partition of the INDEX.
+/// The horizontal data scaling unit of the index. A partition represents a
+/// slice of indexes for a specific ID interval.
 class partition : public caf::ref_counted {
 public:
   // -- friends ----------------------------------------------------------------
@@ -57,7 +58,7 @@ public:
 
   ~partition() noexcept override;
 
-  // -- persistency ------------------------------------------------------------
+  // -- persistence ------------------------------------------------------------
 
   caf::error flush_to_disk();
 
