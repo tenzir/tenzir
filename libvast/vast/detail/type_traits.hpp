@@ -22,11 +22,7 @@
 
 #include <caf/detail/type_traits.hpp>
 
-namespace vast {
-
-template <class...> class variant;
-
-namespace detail {
+namespace vast::detail {
 
 // Computes the sum of its arguments.
 template <size_t ...>
@@ -40,12 +36,6 @@ template <>
 struct sum<> : std::integral_constant<size_t, 0> {};
 
 // -- is_* --------------------------------------------------------------------
-
-template <class T>
-struct is_variant : std::false_type {};
-
-template <class... Ts>
-struct is_variant<variant<Ts...>> : std::true_type {};
 
 /// Checks whether a type is a std::tuple.
 template <class>
@@ -213,6 +203,4 @@ using detected_or = detector<Default, void, Op, Args...>;
 template <class Default, template<class...> class Op, class... Args>
 using detected_or_t = typename detected_or<Default, Op, Args...>::type;
 
-} // namespace detail
-} // namespace vast
-
+} // namespace vast::detail

@@ -16,18 +16,19 @@
 #include <random>
 #include <unordered_map>
 
+#include <caf/variant.hpp>
+
 #include "vast/data.hpp"
 #include "vast/event.hpp"
 #include "vast/expected.hpp"
 #include "vast/schema.hpp"
-#include "vast/variant.hpp"
 #include "vast/detail/random.hpp"
 
 namespace vast::format::test {
 
 // A type-erased probability distribution.
 using distribution =
-  variant<
+  caf::variant<
     std::uniform_int_distribution<integer>,
     std::uniform_int_distribution<count>,
     std::uniform_real_distribution<long double>,
@@ -80,4 +81,3 @@ private:
 };
 
 } // namespace vast::format::test
-

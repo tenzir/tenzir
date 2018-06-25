@@ -329,13 +329,13 @@ public:
   template <std::size_t N,
             class ArrayElementType = std::remove_const_t<element_type>>
   constexpr span(std::array<ArrayElementType, N>& arr) noexcept
-    : storage_(&arr[0], extent_type<N>()) {
+    : storage_(std::data(arr), extent_type<N>()) {
   }
 
   template <std::size_t N>
   constexpr span(
     const std::array<std::remove_const_t<element_type>, N>& arr) noexcept
-    : storage_(&arr[0], extent_type<N>()) {
+    : storage_(std::data(arr), extent_type<N>()) {
   }
 
   // NB: the SFINAE here uses .data() as a incomplete/imperfect proxy for the

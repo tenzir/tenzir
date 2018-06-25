@@ -30,6 +30,8 @@ public:
   /// Default-constructs a configuration.
   configuration();
 
+  explicit configuration(bool load_middleman);
+
   /// Constructs a configuration from the command line.
   /// @param argc The argument counter of `main`.
   /// @param argv The argument vector of `main`.

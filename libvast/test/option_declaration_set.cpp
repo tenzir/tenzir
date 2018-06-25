@@ -29,11 +29,11 @@ struct fixture {
 FIXTURE_SCOPE(option_declaration_set_tests, fixture)
 
 TEST(declaration adding) {
-  CHECK(decl.add("flag,fabc", "this is a flag", false));  
-  CHECK(decl.add("str,s", "this is a string", std::string("")));  
-  CHECK(decl.add("test-int", "this is an int", 1));  
-  CHECK(!decl.add(",x", "using only a short name", 1));  
-  CHECK(!decl.add("flag", "using the same long name again", false));  
+  CHECK(decl.add("flag,fabc", "this is a flag", false));
+  CHECK(decl.add("str,s", "this is a string", std::string("")));
+  CHECK(decl.add("test-int", "this is an int", 1));
+  CHECK(!decl.add(",x", "using only a short name", 1));
+  CHECK(!decl.add("flag", "using the same long name again", false));
   CHECK_EQUAL(decl.size(), 3u + 1u); //3 options added + the help option
   auto x = decl.find("help");
   MESSAGE("Test help option");
@@ -55,7 +55,7 @@ TEST(declaration adding) {
   CHECK_EQUAL(x->has_argument(), false);
   MESSAGE("Test string option");
   x = decl.find("str");
-  REQUIRE(x); 
+  REQUIRE(x);
   CHECK_EQUAL(x->long_name(), "str");
   CHECK_EQUAL(x->has_argument(), true);
 }
@@ -67,14 +67,14 @@ TEST(data type parsing) {
     = [](const option& opt, const std::string& str, auto expected_value) {
         auto [state, x] = opt.parse(str);
         CHECK_EQUAL(state, parse_state::successful);
-        CHECK_EQUAL(x, expected_value);
+        CHECK_EQUAL(x, data{expected_value});
       };
   auto check_fail_option = [](const option& opt, const std::string& str) {
     auto [state, x] = opt.parse(str);
     CHECK_NOT_EQUAL(state, parse_state::successful);
-  }; 
-  CHECK(decl.add("int", "", 1));  
-  CHECK(decl.add("string", "", ""));  
+  };
+  CHECK(decl.add("int", "", 1));
+  CHECK(decl.add("string", "", ""));
   MESSAGE("Test int");
   auto x = decl.find("int");
   check_option(*x, "2", 2);
@@ -84,7 +84,9 @@ TEST(data type parsing) {
   MESSAGE("Test string");
   x = decl.find("string");
   check_option(*x, "\"2\"", "2");
-  check_option(*x, "\"this is a test\"", "this is a test");
+  check_option(*x, "2", "2");
+  check_option(*x, "t\"e\"st", "t\"e\"st");
+  check_option(*x, "this is a test", "this is a test");
 }
 
 FIXTURE_SCOPE_END()

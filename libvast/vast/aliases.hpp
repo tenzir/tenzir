@@ -15,10 +15,11 @@
 
 #include <cstdint>
 #include <limits>
-#include <map>
 #include <memory>
-#include <set>
 #include <vector>
+
+#include "vast/detail/steady_set.hpp"
+#include "vast/detail/steady_map.hpp"
 
 namespace vast {
 
@@ -35,10 +36,10 @@ using real = double;
 using vector = std::vector<data>;
 
 /// A mathematical set where each element is ::data.
-using set = std::set<data>;
+using set = detail::steady_set<data>;
 
 /// An associative array with ::data as both key and value.
-using map = std::map<data, data>;
+using map = detail::steady_map<data, data>;
 
 // ---------------------------------------------------------------------------
 
@@ -56,9 +57,6 @@ constexpr id max_id = invalid_id - 1;
 
 /// The largest number of representable events.
 constexpr id max_events = max_id + 1;
-
-/// Uniquely identifies a VAST type.
-using type_id = uint64_t;
 
 /// The data type for an enumeration.
 using enumeration = uint32_t;

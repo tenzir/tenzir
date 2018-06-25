@@ -26,11 +26,11 @@ namespace {
 class foo : public command {
 public:
   foo(command* parent, std::string_view name) : command(parent, name) {
-    add_opt("value,v", "Some integer value", value);
-    add_opt("flag", "Some flag", flag);
+    add_opt<int>("value,v", "Some integer value");
+    add_opt<bool>("flag", "Some flag");
   }
 
-  proceed_result proceed(caf::actor_system&, option_map&,
+  proceed_result proceed(caf::actor_system&, const caf::config_value_map&,
                          argument_iterator begin,
                          argument_iterator end) override {
     tested_proceed = true;
@@ -39,16 +39,14 @@ public:
     return proceed_ok;
   }
 
-  int run_impl(caf::actor_system&, option_map&, argument_iterator begin,
-               argument_iterator end) override {
+  int run_impl(caf::actor_system&, const caf::config_value_map&,
+               argument_iterator begin, argument_iterator end) override {
     was_executed = true;
     run_begin = begin;
     run_end = end;
     return EXIT_SUCCESS;
   }
 
-  int value = 0;
-  bool flag = false;
   bool tested_proceed = false;
   bool was_executed = false;
   argument_iterator proceed_begin;
@@ -60,10 +58,10 @@ public:
 class bar : public command {
 public:
   bar(command* parent, std::string_view name) : command(parent, name) {
-    add_opt("other-value,o", "Some other integer value", other_value);
+    add_opt<int>("other-value,o", "Some other integer value");
   }
 
-  proceed_result proceed(caf::actor_system&, option_map&,
+  proceed_result proceed(caf::actor_system&, const caf::config_value_map&,
                          argument_iterator begin,
                          argument_iterator end) override {
     tested_proceed = true;
@@ -72,15 +70,14 @@ public:
     return proceed_ok;
   }
 
-  int run_impl(caf::actor_system&, option_map&, argument_iterator begin,
-               argument_iterator end) override {
+  int run_impl(caf::actor_system&, const caf::config_value_map&,
+               argument_iterator begin, argument_iterator end) override {
     was_executed = true;
     run_begin = begin;
     run_end = end;
     return EXIT_SUCCESS;
   }
 
-  int other_value = 0;
   bool tested_proceed = false;
   bool was_executed = false;
   argument_iterator proceed_begin;
@@ -93,7 +90,7 @@ struct fixture {
   command root;
   caf::actor_system_config cfg;
   caf::actor_system sys{cfg};
-  command::option_map options;
+  caf::config_value_map options;
   std::vector<std::string> xs;
   int exec(std::string str) {
     caf::split(xs, str, ' ', caf::token_compress_on);
@@ -111,41 +108,20 @@ TEST(full name) {
   CHECK_EQUAL(cmd2->full_name(), "foo bar");
 }
 
-TEST(parsing value) {
-  auto cmd = root.add<foo>("foo");
-  exec("foo -v 42");
-  CHECK_EQUAL(cmd->flag, false);
-  CHECK_EQUAL(cmd->value, 42);
-  CHECK_EQUAL(caf::deep_to_string(options),
-              R"([("flag", false), ("value", 42)])");
-}
-
-TEST(parsing flag) {
-  auto cmd = root.add<foo>("foo");
-  exec("foo --flag");
-  CHECK_EQUAL(cmd->flag, true);
-  CHECK_EQUAL(cmd->value, 0);
-  CHECK_EQUAL(caf::deep_to_string(options),
-              R"([("flag", true), ("value", 0)])");
-}
-
-TEST(parsing both) {
-  auto cmd = root.add<foo>("foo");
+TEST(parsing args) {
+  root.add<foo>("foo");
   exec("foo --flag -v 42");
-  CHECK_EQUAL(cmd->flag, true);
-  CHECK_EQUAL(cmd->value, 42);
-  CHECK_EQUAL(caf::deep_to_string(options),
-              R"([("flag", true), ("value", 42)])");
+  CHECK_EQUAL(get_or(options, "flag", false), true);
+  CHECK_EQUAL(get_or(options, "value", 0), 42);
 }
 
 TEST(nested arg parsing) {
   auto cmd1 = root.add<foo>("foo");
-  auto cmd2 = cmd1->add<bar>("bar");
+  cmd1->add<bar>("bar");
   exec("foo -v 42 bar -o 123");
-  CHECK_EQUAL(cmd1->value, 42);
-  CHECK_EQUAL(cmd2->other_value, 123);
-  CHECK_EQUAL(caf::deep_to_string(options),
-              R"([("flag", false), ("other-value", 123), ("value", 42)])");
+  CHECK_EQUAL(get_or(options, "flag", false), false);
+  CHECK_EQUAL(get_or(options, "value", 0), 42);
+  CHECK_EQUAL(get_or(options, "other-value", 0), 123);
 }
 
 TEST(parsing arg remainder) {

@@ -31,30 +31,32 @@ command::~command() {
   // nop
 }
 
-int command::run(caf::actor_system& sys, option_map& options,
-                 argument_iterator begin, argument_iterator end) {
-  VAST_TRACE(VAST_ARG(options), VAST_ARG("args", begin, end));
-  // Split the arguments.
-  auto args = caf::message_builder{begin, end}.move_to_message();
-  auto [local_args, subcmd, subcmd_args] = separate_args(args);
-  begin += local_args.size();
+int command::run(caf::actor_system& sys, caf::config_value_map& options,
+                     argument_iterator begin, argument_iterator end) {
+  VAST_TRACE(VAST_ARG(std::string(name_)), VAST_ARG("args", begin, end),
+             VAST_ARG(options));
+  using caf::get_or;
   // Parse arguments for this command.
-  auto res = local_args.extract_opts(opts_);
-  if (res.opts.count("help") != 0) {
-    std::cout << res.helptext << std::endl;
-    if (!nested_.empty()) {
-      std::cout << "\nSubcommands:\n";
-      for (auto& kvp : nested_)
-        std::cout << "  " << kvp.first << "\n";
-    }
-    std::cout << std::endl;
+  auto [state, position] = opts_.parse(options, begin, end);
+  bool has_subcommand;
+  switch(state) {
+    default:
+      std::cerr << parse_error(state, position, begin, end) << std::endl;
+      return EXIT_FAILURE;
+    case caf::pec::success:
+      has_subcommand = false;
+      break;
+    case caf::pec::not_an_option:
+      has_subcommand = position != end;
+      break;
+  }
+  // Check for help option.
+  if (get_or<boolean>(options, "help", false)) {
+    std::cerr << usage() << std::endl;
     return EXIT_SUCCESS;
   }
-  // Populate the map with our key/value pairs for all options.
-  for (auto& kvp : kvps_)
-    options.emplace(kvp());
   // Check whether the options allow for further processing.
-  switch (proceed(sys, options, begin, end)) {
+  switch (proceed(sys, options, position, end)) {
     default:
         // nop
         break;
@@ -64,37 +66,36 @@ int command::run(caf::actor_system& sys, option_map& options,
       return EXIT_FAILURE;
   }
   // Invoke run_impl if no subcommand was defined.
-  if (subcmd.empty()) {
-    VAST_ASSERT(subcmd_args.empty());
-    return run_impl(sys, options, begin, end);
-  }
+  if (!has_subcommand)
+    return run_impl(sys, options, position, end);
   // Consume CLI arguments if we have arguments but don't have subcommands.
-  if (nested_.empty()) {
-    return run_impl(sys, options, begin, end);
-  }
+  if (nested_.empty())
+    return run_impl(sys, options, position, end);
   // Dispatch to subcommand.
-  auto i = nested_.find(subcmd);
+  auto i = nested_.find(*position);
   if (i == nested_.end()) {
-    std::cerr << "no such command: " << full_name() << " " << subcmd
-      << std::endl
-      << std::endl;
-    usage();
+    std::cerr << unknown_subcommand_error(position, end);
     return EXIT_FAILURE;
   }
-  return i->second->run(sys, options, begin + 1, end);
+  return i->second->run(sys, options, position + 1, end);
 }
 
 int command::run(caf::actor_system& sys, argument_iterator begin,
                  argument_iterator end) {
-  option_map options;
+  caf::config_value_map options;
   return run(sys, options, begin, end);
 }
 
-void command::usage() {
-  // nop
+std::string command::usage() const {
+  std::stringstream result;
+  result << opts_.help_text() << "\n";
+  result << "\nSubcommands:\n";
+  for (auto& kvp : nested_)
+    result << "  " << kvp.first << "\n";
+  return result.str();
 }
 
-std::string command::full_name() {
+std::string command::full_name() const {
   std::string result;
   if (is_root())
     return result;
@@ -105,53 +106,50 @@ std::string command::full_name() {
   return result;
 }
 
-std::string command::name() {
-  return std::string{name_};
-}
-
-bool command::is_root() const noexcept {
-  return parent_ == nullptr;
-}
-
 command::proceed_result command::proceed(caf::actor_system&,
-                                         option_map& options,
+                                         const caf::config_value_map& options,
                                          argument_iterator begin,
                                          argument_iterator end) {
   VAST_UNUSED(options, begin, end);
-  VAST_TRACE(VAST_ARG(options), VAST_ARG("args", begin, end));
+  VAST_TRACE(VAST_ARG(std::string{name_}), VAST_ARG("args", begin, end),
+             VAST_ARG(options));
   return proceed_ok;
 }
 
-int command::run_impl(caf::actor_system&, option_map& options,
+int command::run_impl(caf::actor_system&, const caf::config_value_map& options,
                       argument_iterator begin, argument_iterator end) {
   VAST_UNUSED(options, begin, end);
-  VAST_TRACE(VAST_ARG(options), VAST_ARG("args", begin, end));
+  VAST_TRACE(VAST_ARG(std::string{name_}), VAST_ARG("args", begin, end),
+             VAST_ARG(options));
   usage();
   return EXIT_FAILURE;
 }
 
-std::tuple<caf::message, std::string, caf::message>
-command::separate_args(const caf::message& args) {
-  auto arg = [&](size_t i) -> const std::string& {
-    VAST_ASSERT(args.match_element<std::string>(i));
-    return args.get_as<std::string>(i);
-  };
-  size_t pos = 0;
-  while (pos < args.size()) {
-    if (arg(pos).compare(0, 2, "--") == 0) {
-      // Simply skip over long options.
-      ++pos;
-    } else if (arg(pos).compare(0, 1, "-") == 0) {
-      // We assume short options always have an argument.
-      // TODO: we could look into the argument instead of just assuming it
-      //       always take an argument.
-      pos += 2;
-    } else {
-      // Found the end of the options list.
-      return std::make_tuple(args.take(pos), arg(pos), args.drop(pos+ 1));
-    }
-  }
-  return std::make_tuple(args, "", caf::none);
+std::string command::parse_error(caf::pec code,
+                                 argument_iterator error_position,
+                                 argument_iterator begin,
+                                 argument_iterator end) const {
+  std::stringstream result;
+  result << "Failed to parse command" << "\n";
+  result << "  Command: " << name() << " " << detail::join(begin, end, " ")
+         << "\n";
+  result << "  Description: " << to_string(code) << "\n";
+  if (error_position != end)
+    result << "  Position: " << *error_position << "\n";
+  else
+    result << "  Position: at the end\n";
+  result << "\n" << usage();
+  return result.str();
+}
+
+std::string command::unknown_subcommand_error(argument_iterator error_position,
+                                              argument_iterator end) const {
+  VAST_ASSERT(error_position != end);
+  std::stringstream result;
+  result << "No such command: " << full_name() << " " << *error_position
+         << "\n\n"
+         << usage();
+  return result.str();
 }
 
 } // namespace vast

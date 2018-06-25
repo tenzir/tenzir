@@ -11,6 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
+#include <array>
 #include <string>
 #include <vector>
 
@@ -48,4 +49,9 @@ TEST(subspan) {
   CHECK_EQUAL(zs[0], 3);
   CHECK_EQUAL(zs[1], 4);
   CHECK_EQUAL(zs[2], 5);
+}
+
+TEST(construct from empty array) {
+  std::array<int, 42> xs;
+  CHECK_EQUAL(span<int>{xs}.size(), 42);
 }

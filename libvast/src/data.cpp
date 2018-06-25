@@ -14,8 +14,8 @@
 #include "vast/data.hpp"
 #include "vast/json.hpp"
 
-#include "vast/concept/printable/vast/data.hpp"
 #include "vast/detail/assert.hpp"
+#include "vast/detail/overload.hpp"
 
 namespace vast {
 namespace {
@@ -23,15 +23,15 @@ namespace {
 struct adder {
   template <class T>
   std::enable_if_t<
-    !(std::is_same<T, none>{}
+    !(std::is_same<T, caf::none_t>{}
       || std::is_same<T, vector>{}
       || std::is_same<T, set>{})
   >
-  operator()(none, const T& x) const {
+  operator()(caf::none_t, const T& x) const {
     self = x;
   }
 
-  void operator()(none, none) const {
+  void operator()(caf::none_t, caf::none_t) const {
     // nop
   }
 
@@ -189,16 +189,9 @@ struct in_visitor {
 
 } // namespace <anonymous>
 
-data::data(none) {
-}
-
 data& data::operator+=(const data& rhs) {
-  visit(adder{*this}, *this, rhs);
+  caf::visit(adder{*this}, *this, rhs);
   return *this;
-}
-
-detail::data_variant& expose(data& d) {
-  return d.data_;
 }
 
 bool operator==(const data& lhs, const data& rhs) {
@@ -215,17 +208,17 @@ bool evaluate(const data& lhs, relational_operator op, const data& rhs) {
       VAST_ASSERT(!"missing case");
       return false;
     case match:
-      return visit(match_visitor{}, lhs, rhs);
+      return caf::visit(match_visitor{}, lhs, rhs);
     case not_match:
-      return !visit(match_visitor{}, lhs, rhs);
+      return !caf::visit(match_visitor{}, lhs, rhs);
     case in:
-      return visit(in_visitor{}, lhs, rhs);
+      return caf::visit(in_visitor{}, lhs, rhs);
     case not_in:
-      return !visit(in_visitor{}, lhs, rhs);
+      return !caf::visit(in_visitor{}, lhs, rhs);
     case ni:
-      return visit(in_visitor{}, rhs, lhs);
+      return caf::visit(in_visitor{}, rhs, lhs);
     case not_ni:
-      return !visit(in_visitor{}, rhs, lhs);
+      return !caf::visit(in_visitor{}, rhs, lhs);
     case equal:
       return lhs == rhs;
     case not_equal:
@@ -241,6 +234,33 @@ bool evaluate(const data& lhs, relational_operator op, const data& rhs) {
   }
 }
 
+bool is_basic(const data& x) {
+  return caf::visit(detail::overload(
+    [](const auto&) { return true; },
+    [](const enumeration&) { return false; },
+    [](const vector&) { return false; },
+    [](const set&) { return false; },
+    [](const map&) { return false; }
+  ), x);
+}
+
+bool is_complex(const data& x) {
+  return !is_basic(x);
+}
+
+bool is_recursive(const data& x) {
+  return caf::visit(detail::overload(
+    [](const auto&) { return false; },
+    [](const vector&) { return true; },
+    [](const set&) { return true; },
+    [](const map&) { return true; }
+  ), x);
+}
+
+bool is_container(const data& x) {
+  return is_recursive(x);
+}
+
 const data* get(const vector& v, const offset& o) {
   const vector* x = &v;
   for (size_t i = 0; i < o.size(); ++i) {
@@ -250,7 +270,7 @@ const data* get(const vector& v, const offset& o) {
     auto d = &(*x)[idx];
     if (i + 1 == o.size())
       return d;
-    x = get_if<vector>(*d);
+    x = caf::get_if<vector>(d);
     if (!x)
       return nullptr;
   }
@@ -258,7 +278,7 @@ const data* get(const vector& v, const offset& o) {
 }
 
 const data* get(const data& d, const offset& o) {
-  if (auto v = get_if<vector>(d))
+  if (auto v = caf::get_if<vector>(&d))
     return get(*v, o);
   return nullptr;
 }
@@ -269,8 +289,9 @@ template <class Iterator>
 vector flatten(Iterator& f, Iterator l) {
   vector xs;
   xs.reserve(l - f);
-  for (; f != l; ++f)
-    if (auto v = get_if<vector>(*f)) {
+  for (; f != l; ++f) {
+    auto&& x = *f;
+    if (auto v = caf::get_if<vector>(&x)) {
       auto begin = Iterator{v->begin()};
       auto end = Iterator{v->end()};
       auto ys = flatten(begin, end);
@@ -280,17 +301,18 @@ vector flatten(Iterator& f, Iterator l) {
     } else {
       xs.push_back(*f);
     }
+  }
   return xs;
 }
 
 template <class Iterator>
-optional<vector> unflatten(Iterator& f, Iterator l, const record_type& rec) {
+caf::optional<vector> unflatten(Iterator& f, Iterator l, const record_type& rec) {
   vector xs;
   xs.reserve(rec.fields.size());
   for (auto& field : rec.fields)
     if (f == l) {
       return {};
-    } else if (auto rt = get_if<record_type>(field.type)) {
+    } else if (auto rt = caf::get_if<record_type>(&field.type)) {
       auto ys = unflatten(f, l, *rt);
       if (!ys)
         return ys;
@@ -316,68 +338,55 @@ vector flatten(vector&& xs) {
 }
 
 data flatten(const data& x) {
-  auto xs = get_if<vector>(x);
+  auto xs = caf::get_if<vector>(&x);
   return xs ? flatten(*xs) : x;
 }
 
 data flatten(data&& x) {
-  auto xs = get_if<vector>(x);
+  auto xs = caf::get_if<vector>(&x);
   return xs ? flatten(std::move(*xs)) : x;
 }
 
-optional<vector> unflatten(const vector& xs, const record_type& rt) {
+caf::optional<vector> unflatten(const vector& xs, const record_type& rt) {
   auto first = xs.begin();
   auto last = xs.end();
   return unflatten(first, last, rt);
 }
 
-optional<vector> unflatten(vector&& xs, const record_type& rt) {
+caf::optional<vector> unflatten(vector&& xs, const record_type& rt) {
   auto first = std::make_move_iterator(xs.begin());
   auto last = std::make_move_iterator(xs.end());
   return unflatten(first, last, rt);
 }
 
-optional<vector> unflatten(const data& x, const type& t) {
-  auto xs = get_if<vector>(x);
-  auto rt = get_if<record_type>(t);
-  return xs && rt ? unflatten(*xs, *rt) : optional<vector>{};
+caf::optional<vector> unflatten(const data& x, const type& t) {
+  auto xs = caf::get_if<vector>(&x);
+  auto rt = caf::get_if<record_type>(&t);
+  return xs && rt ? unflatten(*xs, *rt) : caf::optional<vector>{};
 }
 
-optional<vector> unflatten(data&& x, const type& t) {
-  auto xs = get_if<vector>(x);
-  auto rt = get_if<record_type>(t);
-  return xs && rt ? unflatten(std::move(*xs), *rt) : optional<vector>{};
+caf::optional<vector> unflatten(data&& x, const type& t) {
+  auto xs = caf::get_if<vector>(&x);
+  auto rt = caf::get_if<record_type>(&t);
+  return xs && rt ? unflatten(std::move(*xs), *rt) : caf::optional<vector>{};
 }
 
 namespace {
 
-struct jsonizer {
-  jsonizer(json& j) : j_{j} { }
-
-  bool operator()(none) const {
-    return true;
-  }
-
-  bool operator()(const std::string& str) const {
-    j_ = str;
-    return true;
-  }
-
-  template <class T>
-  bool operator()(const T& x) const {
-    return convert(x, j_);
-  }
-
-  json& j_;
-};
+json jsonize(const data& x) {
+  return caf::visit(detail::overload(
+    [&](const auto& y) { return to_json(y); },
+    [&](caf::none_t) { return json{}; },
+    [&](const std::string& str) { return json{str}; }
+  ), x);
+}
 
 } // namespace <anonymous>
 
 bool convert(const vector& v, json& j) {
   json::array a(v.size());
   for (auto i = 0u; i < v.size(); ++i)
-    if (!visit(jsonizer{a[i]}, v[i]))
-      return false;
+    a[i] = jsonize(v[i]);
   j = std::move(a);
   return true;
 }
@@ -386,8 +395,7 @@ bool convert(const set& s, json& j) {
   json::array a(s.size());
   auto i = 0u;
   for (auto& x : s)
-    if (!visit(jsonizer{a[i++]}, x))
-      return false;
+    a[i++] = jsonize(x);
   j = std::move(a);
   return true;
 }
@@ -396,13 +404,8 @@ bool convert(const map& t, json& j) {
   json::array values;
   for (auto& p : t) {
     json::array a;
-    json j;
-    if (!visit(jsonizer{j}, p.first))
-      return false;
-    a.push_back(std::move(j));
-    if (!visit(jsonizer{j}, p.second))
-      return false;
-    a.push_back(std::move(j));
+    a.emplace_back(jsonize(p.first));
+    a.emplace_back(jsonize(p.second));
     values.emplace_back(std::move(a));
   };
   j = std::move(values);
@@ -410,12 +413,13 @@ bool convert(const map& t, json& j) {
 }
 
 bool convert(const data& d, json& j) {
-  return visit(jsonizer{j}, d);
+  j = jsonize(d);
+  return true;
 }
 
 bool convert(const data& d, json& j, const type& t) {
-  auto v = get_if<vector>(d);
-  auto rt = get_if<record_type>(t);
+  auto v = caf::get_if<vector>(&d);
+  auto rt = caf::get_if<record_type>(&t);
   if (v && rt) {
     if (v->size() != rt->fields.size())
       return false;

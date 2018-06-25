@@ -11,33 +11,24 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include <caf/all.hpp>
+#include "vast/system/partition.hpp"
 
-#include "vast/ids.hpp"
-#include "vast/concept/parseable/numeric/integral.hpp"
-#include "vast/concept/parseable/to.hpp"
-#include "vast/concept/printable/stream.hpp"
-#include "vast/concept/printable/std/chrono.hpp"
-#include "vast/concept/printable/vast/error.hpp"
+#include <caf/event_based_actor.hpp>
+#include <caf/local_actor.hpp>
+#include <caf/stateful_actor.hpp>
+
+#include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/expression.hpp"
-#include "vast/concept/printable/vast/filesystem.hpp"
-#include "vast/concept/printable/vast/event.hpp"
+#include "vast/concept/printable/vast/uuid.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/event.hpp"
-#include "vast/expression.hpp"
-#include "vast/expression_visitors.hpp"
+#include "vast/ids.hpp"
 #include "vast/load.hpp"
 #include "vast/logger.hpp"
 #include "vast/save.hpp"
-#include "vast/time.hpp"
-
-#include "vast/system/accountant.hpp"
 #include "vast/system/atoms.hpp"
 #include "vast/system/indexer.hpp"
-#include "vast/system/partition.hpp"
-#include "vast/system/task.hpp"
-
-#include "vast/detail/flat_set.hpp"
+#include "vast/time.hpp"
 
 using namespace std::chrono;
 using namespace caf;
@@ -46,11 +37,6 @@ namespace vast {
 namespace system {
 
 namespace {
-
-template <class T>
-auto to_digest(const T& x) {
-  return to_string(std::hash<T>{}(x));
-}
 
 struct collector_state {
   ids hits;
@@ -91,11 +77,11 @@ struct ids_evaluator {
   }
 
   ids operator()(const conjunction& c) const {
-    auto result = visit(*this, c[0]);
+    auto result = caf::visit(*this, c[0]);
     if (result.empty() || all<0>(result))
       return {};
     for (size_t i = 1; i < c.size(); ++i) {
-      result &= visit(*this, c[i]);
+      result &= caf::visit(*this, c[i]);
       if (result.empty() || all<0>(result)) // short-circuit
         return {};
     }
@@ -105,7 +91,7 @@ struct ids_evaluator {
   ids operator()(const disjunction& d) const {
     ids result;
     for (auto& op : d) {
-      result |= visit(*this, op);
+      result |= caf::visit(*this, op);
       if (all<1>(result)) // short-circuit
         break;
     }
@@ -113,7 +99,7 @@ struct ids_evaluator {
   }
 
   ids operator()(const negation& n) const {
-    auto result = visit(*this, n.expr());
+    auto result = caf::visit(*this, n.expr());
     result.flip();
     return result;
   }
@@ -139,7 +125,7 @@ behavior evaluator(stateful_actor<evaluator_state>* self,
   return {
     [=](predicate& pred, ids& hits) {
       self->state.predicates.emplace(std::move(pred), std::move(hits));
-      auto expr_hits = visit(ids_evaluator{self->state.predicates}, expr);
+      auto expr_hits = caf::visit(ids_evaluator{self->state.predicates}, expr);
       auto delta = expr_hits - self->state.hits;
       VAST_DEBUG(self, "evaluated",
                  self->state.predicates.size() << '/' << num_predicates,
@@ -163,6 +149,7 @@ behavior evaluator(stateful_actor<evaluator_state>* self,
 
 } // namespace <anonymous>
 
+/*
 behavior partition(stateful_actor<partition_state>* self, path dir) {
   auto accountant = accountant_type{};
   if (auto a = self->system().registry().get(accountant_atom::value))
@@ -190,7 +177,7 @@ behavior partition(stateful_actor<partition_state>* self, path dir) {
         if (!a) {
           VAST_DEBUG(self, "creates event-indexer for type", e.type());
           auto digest = to_digest(e.type());
-          a = self->spawn(event_indexer, dir / digest, e.type());
+          a = self->spawn(indexer, dir / digest, e.type());
           if (self->state.meta_data.types.count(digest) == 0) {
             self->state.meta_data.types.emplace(digest, e.type());
             self->state.meta_data.dirty = true;
@@ -211,13 +198,13 @@ behavior partition(stateful_actor<partition_state>* self, path dir) {
       // If so, locate/load the corresponding indexer.
       std::vector<actor> indexers;
       for (auto& [t, a] : self->state.indexers) {
-        auto resolved = visit(type_resolver{t}, expr);
-        if (resolved && visit(matcher{t}, *resolved)) {
+        auto resolved = caf::visit(type_resolver{t}, expr);
+        if (resolved && caf::visit(matcher{t}, *resolved)) {
           VAST_DEBUG(self, "found matching type for expression:", t);
           if (!a) {
             VAST_DEBUG(self, "loads event-indexer for type", t);
             auto indexer_dir = dir / to_digest(t);
-            a = self->spawn(event_indexer, indexer_dir, t);
+            a = self->spawn(indexer, indexer_dir, t);
           }
           indexers.push_back(a);
         }
@@ -253,7 +240,7 @@ behavior partition(stateful_actor<partition_state>* self, path dir) {
       // Spawn a dedicated actor responsible for expression evaluation. This
       // actor re-evaluates the expression whenever it receives new hits from
       // a collector.
-      auto predicates = visit(predicatizer{}, expr);
+      auto predicates = caf::visit(predicatizer{}, expr);
       auto eval = self->spawn(evaluator, expr, predicates.size(), accumulator);
       for (auto& pred : predicates) {
         // FIXME: locate the smallest subset of indexers (checking whether the
@@ -307,6 +294,105 @@ behavior partition(stateful_actor<partition_state>* self, path dir) {
     },
   };
 }
+*/
+
+partition::partition(const path& base_dir, uuid id,
+                     indexer_manager::indexer_factory factory)
+  : mgr_(*this, std::move(factory)),
+    dir_(base_dir / to_string(id)),
+    id_(std::move(id)) {
+  // If the directory already exists, we must have some state from the past and
+  // are pre-loading all INDEXER types we are aware of.
+  if (exists(dir_)) {
+    auto res = load(meta_file(), meta_data_);
+    if (!res) {
+      VAST_ERROR("unable to read partition meta data:", res.error());
+    } else {
+      for (auto& kvp : meta_data_.types) {
+        // We spawn all INDEXER actors immediately. However, the factory spawns
+        // those actors with lazy_init, which means they won't load persisted
+        // state from disk until first access.
+        mgr_.get_or_add(kvp.second);
+      }
+    }
+  }
+}
+
+partition::~partition() noexcept {
+  flush_to_disk();
+}
+
+// -- persistence ------------------------------------------------------------
+
+caf::error partition::flush_to_disk() {
+  if (meta_data_.dirty) {
+    if (!exists(dir_))
+      mkdir(dir_);
+    auto res = save(meta_file(), meta_data_);
+    if (!res)
+      return std::move(res.error());
+    meta_data_.dirty = false;
+  }
+  return caf::none;
+}
+
+std::vector<type> partition::types() const {
+  std::vector<type> result;
+  auto& ts = meta_data_.types;
+  result.reserve(ts.size());
+  std::transform(ts.begin(), ts.end(), std::back_inserter(result),
+                 [](auto& kvp) { return kvp.second; });
+  return result;
+}
+
+path partition::meta_file() const {
+  return dir_ / "meta";
+}
+
+size_t partition::get_indexers(std::vector<caf::actor>& indexers,
+                               const expression& expr) {
+  return mgr_.for_each_match(expr,
+                             [&](caf::actor& x) { indexers.emplace_back(x); });
+}
+
+std::vector<caf::actor> partition::get_indexers(const expression& expr) {
+  std::vector<caf::actor> result;
+  get_indexers(result, expr);
+  return result;
+}
+
+// -- free functions -----------------------------------------------------------
+
+partition_ptr make_partition(const path& base_dir, uuid id,
+                             indexer_manager::indexer_factory f) {
+  return caf::make_counted<partition>(base_dir, std::move(id), std::move(f));
+}
+
+partition_ptr make_partition(caf::local_actor* self, const path& base_dir,
+                             uuid id) {
+  auto f = [=](path indexer_path, type indexer_type) {
+    VAST_DEBUG(self, "creates INDEXER in partition", id, "for type",
+               indexer_type);
+    return self->spawn<caf::lazy_init>(indexer, std::move(indexer_path),
+                                       std::move(indexer_type));
+  };
+  return make_partition(base_dir, std::move(id), f);
+}
 
 } // namespace system
 } // namespace vast
+
+namespace std {
+
+namespace {
+
+using pptr = vast::system::partition_ptr;
+
+} // namespace <anonymous>
+
+size_t hash<pptr>::operator()(const pptr& ptr) const {
+  hash<vast::uuid> f;
+  return ptr != nullptr ? f(ptr->id()) : 0u;
+}
+
+} // namespace std

@@ -33,10 +33,10 @@ TEST(vector) {
 }
 
 TEST(set) {
-  auto s = std::set<data>{1, 2, 3};
-  REQUIRE_EQUAL(s.size(), 3u);
-  CHECK_EQUAL(*s.begin(), 1);
-  CHECK_EQUAL(*s.rbegin(), 3);
+  auto xs = set{1, 2, 3};
+  REQUIRE_EQUAL(xs.size(), 3u);
+  CHECK_EQUAL(*xs.begin(), data{1});
+  CHECK_EQUAL(*xs.rbegin(), data{3});
 }
 
 TEST(tables) {
@@ -105,23 +105,23 @@ TEST(records) {
 }
 
 TEST(construction) {
-  CHECK(is<none>(data{}));
-  CHECK(is<boolean>(data{true}));
-  CHECK(is<boolean>(data{false}));
-  CHECK(is<integer>(data{0}));
-  CHECK(is<integer>(data{42}));
-  CHECK(is<integer>(data{-42}));
-  CHECK(is<count>(data{42u}));
-  CHECK(is<real>(data{4.2}));
-  CHECK(is<std::string>(data{"foo"}));
-  CHECK(is<std::string>(data{std::string{"foo"}}));
-  CHECK(is<pattern>(data{pattern{"foo"}}));
-  CHECK(is<address>(data{address{}}));
-  CHECK(is<subnet>(data{subnet{}}));
-  CHECK(is<port>(data{port{53, port::udp}}));
-  CHECK(is<vector>(data{vector{}}));
-  CHECK(is<set>(data{set{}}));
-  CHECK(is<map>(data{map{}}));
+  CHECK(caf::holds_alternative<none>(data{}));
+  CHECK(caf::holds_alternative<boolean>(data{true}));
+  CHECK(caf::holds_alternative<boolean>(data{false}));
+  CHECK(caf::holds_alternative<integer>(data{0}));
+  CHECK(caf::holds_alternative<integer>(data{42}));
+  CHECK(caf::holds_alternative<integer>(data{-42}));
+  CHECK(caf::holds_alternative<count>(data{42u}));
+  CHECK(caf::holds_alternative<real>(data{4.2}));
+  CHECK(caf::holds_alternative<std::string>(data{"foo"}));
+  CHECK(caf::holds_alternative<std::string>(data{std::string{"foo"}}));
+  CHECK(caf::holds_alternative<pattern>(data{pattern{"foo"}}));
+  CHECK(caf::holds_alternative<address>(data{address{}}));
+  CHECK(caf::holds_alternative<subnet>(data{subnet{}}));
+  CHECK(caf::holds_alternative<port>(data{port{53, port::udp}}));
+  CHECK(caf::holds_alternative<vector>(data{vector{}}));
+  CHECK(caf::holds_alternative<set>(data{set{}}));
+  CHECK(caf::holds_alternative<map>(data{map{}}));
 }
 
 TEST(relational_operators) {
@@ -168,20 +168,21 @@ TEST(addtion) {
 }
 
 TEST(evaluation) {
+  MESSAGE("in");
   data lhs{"foo"};
   data rhs{"foobar"};
   CHECK(evaluate(lhs, in, rhs));
   CHECK(evaluate(rhs, not_in, lhs));
   CHECK(evaluate(rhs, ni, lhs));
   CHECK(evaluate(rhs, not_in, lhs));
-
+  MESSAGE("equality");
   lhs = count{42};
   rhs = count{1337};
   CHECK(evaluate(lhs, less_equal, rhs));
   CHECK(evaluate(lhs, less, rhs));
   CHECK(evaluate(lhs, not_equal, rhs));
   CHECK(!evaluate(lhs, equal, rhs));
-
+  MESSAGE("network types");
   lhs = *to<address>("10.0.0.1");
   rhs = *to<subnet>("10.0.0.0/8");
   CHECK(evaluate(lhs, in, rhs));
@@ -189,25 +190,23 @@ TEST(evaluation) {
   CHECK(evaluate(lhs, in, rhs));
   rhs = *to<subnet>("10.0.42.0/17");
   CHECK(!evaluate(lhs, in, rhs));
-
+  MESSAGE("mixed types");
   rhs = real{4.2};
   CHECK(!evaluate(lhs, equal, rhs));
   CHECK(evaluate(lhs, not_equal, rhs));
 }
 
 TEST(serialization) {
-  set s;
-  s.emplace(port{80, port::tcp});
-  s.emplace(port{53, port::udp});
-  s.emplace(port{8, port::icmp});
-
-  data d0{s};
-  data d1;
+  set xs;
+  xs.emplace(port{80, port::tcp});
+  xs.emplace(port{53, port::udp});
+  xs.emplace(port{8, port::icmp});
+  auto x0 = data{xs};
   std::vector<char> buf;
-  save(buf, d0);
-  load(buf, d1);
-  CHECK(d0 == d1);
-  CHECK(to_string(d1) == "{8/icmp, 53/udp, 80/tcp}");
+  save(buf, x0);
+  data x1;
+  load(buf, x1);
+  CHECK(x0 == x1);
 }
 
 TEST(printable) {
@@ -221,7 +220,6 @@ TEST(printable) {
 TEST(parseable) {
   auto p = make_parser<data>();
   data d;
-
   MESSAGE("bool");
   auto str = "T"s;
   auto f = str.begin();
@@ -229,7 +227,6 @@ TEST(parseable) {
   CHECK(p(f, l, d));
   CHECK(f == l);
   CHECK(d == true);
-
   MESSAGE("numbers");
   str = "+1001"s;
   f = str.begin();
@@ -249,7 +246,6 @@ TEST(parseable) {
   CHECK(p(f, l, d));
   CHECK(f == l);
   CHECK(d == 10.01);
-
   MESSAGE("string");
   str = R"("bar")";
   f = str.begin();
@@ -257,7 +253,6 @@ TEST(parseable) {
   CHECK(p(f, l, d));
   CHECK(f == l);
   CHECK(d == "bar");
-
   MESSAGE("pattern");
   str = "/foo/"s;
   f = str.begin();
@@ -265,7 +260,6 @@ TEST(parseable) {
   CHECK(p(f, l, d));
   CHECK(f == l);
   CHECK(d == pattern{"foo"});
-
   MESSAGE("address");
   str = "10.0.0.1"s;
   f = str.begin();
@@ -273,7 +267,6 @@ TEST(parseable) {
   CHECK(p(f, l, d));
   CHECK(f == l);
   CHECK(d == *to<address>("10.0.0.1"));
-
   MESSAGE("port");
   str = "22/tcp"s;
   f = str.begin();
@@ -281,7 +274,6 @@ TEST(parseable) {
   CHECK(p(f, l, d));
   CHECK(f == l);
   CHECK(d == port{22, port::tcp});
-
   MESSAGE("vector");
   str = "[42,4.2,nil]"s;
   f = str.begin();
@@ -289,15 +281,13 @@ TEST(parseable) {
   CHECK(p(f, l, d));
   CHECK(f == l);
   CHECK(d == vector{42u, 4.2, nil});
-
   MESSAGE("set");
   str = "{-42,+42,-1}"s;
   f = str.begin();
   l = str.end();
   CHECK(p(f, l, d));
   CHECK(f == l);
-  CHECK(d == set{-42, -1, 42});
-
+  CHECK(d == set{-42, 42, -1});
   MESSAGE("map");
   str = "{T->1,F->0}"s;
   f = str.begin();
@@ -308,20 +298,15 @@ TEST(parseable) {
 }
 
 TEST(json) {
-  data r = vector{"foo", vector{-42, vector{1001u}}, "x", port{443, port::tcp}};
   MESSAGE("plain");
-  auto expected = R"__([
-  "foo",
-  [
-    -42,
-    [
-      1001
-    ]
-  ],
-  "x",
-  "443/tcp"
-])__";
-  CHECK(to_json(r), expected);
+  data x = vector{"foo", vector{-42, vector{1001u}}, "x", port{443, port::tcp}};
+  json expected = json{json::make_array(
+    "foo",
+    json::make_array(-42, json::make_array(1001)),
+    "x",
+    "443/tcp"
+  )};
+  CHECK_EQUAL(to_json(x), expected);
   MESSAGE("zipped");
   type t = record_type{
     {"x", string_type{}},
@@ -334,7 +319,7 @@ TEST(json) {
     {"str", string_type{}},
     {"port", port_type{}}
   };
-  CHECK(type_check(t, r));
+  CHECK(type_check(t, x));
   expected = R"__({
   "x": "foo",
   "r": {
@@ -346,5 +331,5 @@ TEST(json) {
   "str": "x",
   "port": "443/tcp"
 })__";
-  CHECK(to_string(to_json(r, t)) == expected);
+  CHECK_EQUAL(to_string(to_json(x, t)), expected);
 }

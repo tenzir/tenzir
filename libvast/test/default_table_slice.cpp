@@ -11,12 +11,15 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
+#include <string>
+
 #include "vast/default_table_slice.hpp"
 
 #define SUITE table
 #include "test.hpp"
 
 using namespace vast;
+using namespace std::string_literals;
 
 TEST(default_table_slice) {
   auto layout = record_type{
@@ -41,8 +44,9 @@ TEST(default_table_slice) {
   CHECK_EQUAL(slice->columns(), 3u);
   auto x = slice->at(0, 1);
   REQUIRE(x);
-  CHECK_EQUAL(*x, data{"foo"});
+  auto foo = "foo"s;
+  CHECK_EQUAL(*x, make_view("foo"));
   x = slice->at(1, 2);
   REQUIRE(x);
-  CHECK_EQUAL(*x, data_view{4.3});
+  CHECK_EQUAL(*x, make_view(4.3));
 }

@@ -11,13 +11,15 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#define SUITE option_map
-#include "test.hpp"
-
 #include <limits>
 
 #include "vast/option_map.hpp"
 #include "vast/option_declaration_set.hpp"
+
+#include "vast/detail/string.hpp"
+
+#define SUITE option_map
+#include "test.hpp"
 
 using namespace vast;
 
@@ -102,10 +104,10 @@ TEST(cli parsing) {
   args = split("--boolean --integer=42 --string=\"test\"");
   check_all_options(args);
   MESSAGE("Test shortnames");
-  args = split("-b -i42 -s \"test\"");
+  args = split("-b -i42 -s test");
   check_all_options(args);
   MESSAGE("Test mix of short_names and long_names");
-  args = split("-b -i 42 --string=\"test\"");
+  args = split("-b -i 42 --string=test");
   check_all_options(args);
   MESSAGE("Test two option declaration sets");
   option_declaration_set decl2;
@@ -113,11 +115,11 @@ TEST(cli parsing) {
   CHECK(decl2.add("integer2,i", "", 2));
   CHECK(decl2.add("string2,s", "", "bar"));
   opts.clear();
-  args = split("--boolean --integer=42 --string=\"test\"");
+  args = split("--boolean --integer=42 --string=test");
   std::tie(state, it) = decl.parse(opts, args.begin(), args.end());
   CHECK_EQUAL(state, option_declaration_set::parse_state::successful);
   CHECK_EQUAL(it, args.end());
-  args = split("--integer2=1337 -s\"test2\"");
+  args = split("--integer2=1337 -stest2");
   std::tie(state, it) = decl2.parse(opts, args.begin(), args.end());
   CHECK_EQUAL(state, option_declaration_set::parse_state::successful);
   CHECK_EQUAL(it, args.end());

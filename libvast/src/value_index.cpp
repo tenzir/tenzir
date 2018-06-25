@@ -135,14 +135,14 @@ std::unique_ptr<value_index> value_index::make(const type& t) {
       return nullptr;
     }
     result_type operator()(const alias_type& t) const {
-      return visit(*this, t.value_type);
+      return caf::visit(*this, t.value_type);
     }
   };
-  return visit(factory{}, t);
+  return caf::visit(factory{}, t);
 }
 
 expected<void> value_index::push_back(const data& x) {
-  if (is<none>(x)) {
+  if (caf::holds_alternative<none>(x)) {
     none_.append_bit(true);
     ++nils_;
   } else {
@@ -155,7 +155,7 @@ expected<void> value_index::push_back(const data& x) {
   return {};
 }
 
-expected<void> value_index::push_back(const data& x, id pos) { 
+expected<void> value_index::push_back(const data& x, id pos) {
   auto off = offset();
   if (pos < off)
     // Can only append at the end
@@ -163,7 +163,7 @@ expected<void> value_index::push_back(const data& x, id pos) {
   if (pos == off)
     return push_back(x);
   auto skip = pos - off;
-  if (is<none>(x)) {
+  if (caf::holds_alternative<none>(x)) {
     none_.append_bits(false, skip);
     none_.append_bit(true);
     ++nils_;
@@ -179,7 +179,7 @@ expected<void> value_index::push_back(const data& x, id pos) {
 }
 
 expected<ids> value_index::lookup(relational_operator op, const data& x) const {
-  if (is<none>(x)) {
+  if (caf::holds_alternative<none>(x)) {
     if (!(op == equal || op == not_equal))
       return make_error(ec::unsupported_operator, op);
     return op == equal ? none_ & mask_ : ~none_ & mask_;
@@ -208,7 +208,7 @@ void string_index::init() {
 }
 
 bool string_index::push_back_impl(const data& x, size_type skip) {
-  auto str = get_if<std::string>(x);
+  auto str = caf::get_if<std::string>(&x);
   if (!str)
     return false;
   init();
@@ -227,7 +227,7 @@ bool string_index::push_back_impl(const data& x, size_type skip) {
 
 expected<ids>
 string_index::lookup_impl(relational_operator op, const data& x) const {
-  return visit(detail::overload(
+  return caf::visit(detail::overload(
     [&](const auto& x) -> expected<ids> {
       return make_error(ec::type_clash, x);
     },
@@ -302,7 +302,7 @@ void address_index::init() {
 
 bool address_index::push_back_impl(const data& x, size_type skip) {
   init();
-  auto addr = get_if<address>(x);
+  auto addr = caf::get_if<address>(&x);
   if (!addr)
     return false;
   auto& bytes = addr->data();
@@ -322,7 +322,7 @@ bool address_index::push_back_impl(const data& x, size_type skip) {
 
 expected<ids>
 address_index::lookup_impl(relational_operator op, const data& d) const {
-  return visit(detail::overload(
+  return caf::visit(detail::overload(
     [&](const auto& x) -> expected<ids> {
       return make_error(ec::type_clash, x);
     },
@@ -375,7 +375,7 @@ void subnet_index::init() {
 }
 
 bool subnet_index::push_back_impl(const data& x, size_type skip) {
-  if (auto sn = get_if<subnet>(x)) {
+  if (auto sn = caf::get_if<subnet>(&x)) {
     init();
     auto id = length_.size() + skip;
     length_.push_back(sn->length(), skip);
@@ -386,7 +386,7 @@ bool subnet_index::push_back_impl(const data& x, size_type skip) {
 
 expected<ids>
 subnet_index::lookup_impl(relational_operator op, const data& d) const {
-  return visit(detail::overload(
+  return caf::visit(detail::overload(
     [&](const auto& x) -> expected<ids> {
       return make_error(ec::type_clash, x);
     },
@@ -451,7 +451,7 @@ void port_index::init() {
 }
 
 bool port_index::push_back_impl(const data& x, size_type skip) {
-  if (auto p = get_if<port>(x)) {
+  if (auto p = caf::get_if<port>(&x)) {
     init();
     num_.push_back(p->number(), skip);
     proto_.push_back(p->type(), skip);
@@ -464,7 +464,7 @@ expected<ids>
 port_index::lookup_impl(relational_operator op, const data& d) const {
   if (offset() == 0) // FIXME: why do we need this check again?
     return ids{};
-  return visit(detail::overload(
+  return caf::visit(detail::overload(
     [&](const auto& x) -> expected<ids> {
       return make_error(ec::type_clash, x);
     },
@@ -499,9 +499,9 @@ void sequence_index::init() {
 }
 
 bool sequence_index::push_back_impl(const data& x, size_type skip) {
-  if (auto v = get_if<vector>(x))
+  if (auto v = caf::get_if<vector>(&x))
     return push_back_ctnr(*v, skip);
-  if (auto s = get_if<set>(x))
+  if (auto s = caf::get_if<set>(&x))
     return push_back_ctnr(*s, skip);
   return false;
 }

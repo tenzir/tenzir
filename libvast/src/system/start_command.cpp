@@ -22,12 +22,11 @@
 #include <caf/openssl/all.hpp>
 #endif // VAST_USE_OPENSSL
 
+#include "vast/concept/parseable/vast/endpoint.hpp"
+#include "vast/defaults.hpp"
 #include "vast/logger.hpp"
-
 #include "vast/system/signal_monitor.hpp"
 #include "vast/system/spawn.hpp"
-
-#include "vast/concept/parseable/vast/endpoint.hpp"
 
 using namespace caf;
 
@@ -35,15 +34,14 @@ namespace vast::system {
 using namespace std::chrono_literals;
 
 start_command::start_command(command* parent, std::string_view name)
-  : node_command{parent, name},
-    spawn_bare_node{false},
-    in_foreground{false} {
-  add_opt("bare", "spawn empty node without any components", spawn_bare_node);
-  add_opt("foreground", "run in foreground (do not daemonize)", in_foreground);
+  : node_command{parent, name} {
+  add_opt<bool>("bare", "spawn empty node without any components");
+  add_opt<bool>("foreground,f", "run in foreground (do not daemonize)");
 }
 
-int start_command::run_impl(actor_system& sys, option_map& options,
-                        argument_iterator begin, argument_iterator end) {
+int start_command::run_impl(actor_system& sys,
+                            const caf::config_value_map& options,
+                            argument_iterator begin, argument_iterator end) {
   VAST_UNUSED(begin, end);
   VAST_TRACE(VAST_ARG(options), VAST_ARG("args", begin, end));
   // Fetch SSL settings from config.
@@ -54,14 +52,10 @@ int start_command::run_impl(actor_system& sys, option_map& options,
                         || !sys_cfg.openssl_capath.empty()
                         || !sys_cfg.openssl_cafile.empty();
   // Fetch endpoint from config.
-  auto endpoint_opt = get<std::string>(options, "endpoint");
-  if (!endpoint_opt) {
-    VAST_ERROR("endpoint missing in options map");
-    return EXIT_FAILURE;
-  }
+  auto endpoint_str = get_or(options, "endpoint", defaults::command::endpoint);
   endpoint node_endpoint;
-  if (!parsers::endpoint(*endpoint_opt, node_endpoint)) {
-    VAST_ERROR("invalid endpoint:", *endpoint_opt);
+  if (!parsers::endpoint(endpoint_str, node_endpoint)) {
+    VAST_ERROR("invalid endpoint:", endpoint_str);
     return EXIT_FAILURE;
   }
   // Get a convenient and blocking way to interact with actors.

@@ -73,7 +73,7 @@ default_table_slice::at(size_type row, size_type col) const {
   VAST_ASSERT(row < rows_);
   VAST_ASSERT(row < xs_.size());
   VAST_ASSERT(col < columns_);
-  if (auto x = get_if<vector>(xs_[row])) {
+  if (auto x = caf::get_if<vector>(&xs_[row])) {
     VAST_ASSERT(col < x->size());
     return make_view((*x)[col]);
   }

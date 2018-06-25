@@ -23,27 +23,35 @@ bitmap::bitmap(size_type n, bool bit) : bitmap{} {
 }
 
 bool bitmap::empty() const {
-  return visit([](auto& bm) { return bm.empty(); }, bitmap_);
+  return caf::visit([](auto& bm) { return bm.empty(); }, bitmap_);
 }
 
 bitmap::size_type bitmap::size() const {
-  return visit([](auto& bm) { return bm.size(); }, bitmap_);
+  return caf::visit([](auto& bm) { return bm.size(); }, bitmap_);
 }
 
 void bitmap::append_bit(bool bit) {
-  visit([=](auto& bm) { bm.append_bit(bit); }, bitmap_);
+  caf::visit([=](auto& bm) { bm.append_bit(bit); }, bitmap_);
 }
 
 void bitmap::append_bits(bool bit, size_type n) {
-  visit([=](auto& bm) { bm.append_bits(bit, n); }, bitmap_);
+  caf::visit([=](auto& bm) { bm.append_bits(bit, n); }, bitmap_);
 }
 
 void bitmap::append_block(block_type value, size_type n) {
-  visit([=](auto& bm) { bm.append_block(value, n); }, bitmap_);
+  caf::visit([=](auto& bm) { bm.append_block(value, n); }, bitmap_);
 }
 
 void bitmap::flip() {
-  visit([](auto& bm) { bm.flip(); }, bitmap_);
+  caf::visit([](auto& bm) { bm.flip(); }, bitmap_);
+}
+
+bitmap::variant& bitmap::get_data() {
+  return bitmap_;
+}
+
+const bitmap::variant& bitmap::get_data() const {
+  return bitmap_;
 }
 
 bool operator==(const bitmap& x, const bitmap& y) {
@@ -57,7 +65,7 @@ bitmap_bit_range::bitmap_bit_range(const bitmap& bm) {
       bits_ = r.get();
     range_ = std::move(r);
   };
-  visit(visitor, bm);
+  caf::visit(visitor, bm);
 }
 
 void bitmap_bit_range::next() {
@@ -65,11 +73,11 @@ void bitmap_bit_range::next() {
     rng.next();
     bits_ = rng.get();
   };
-  visit(visitor, range_);
+  caf::visit(visitor, range_);
 }
 
 bool bitmap_bit_range::done() const {
-  return visit([](auto& rng) { return rng.done(); }, range_);
+  return caf::visit([](auto& rng) { return rng.done(); }, range_);
 }
 
 bitmap_bit_range bit_range(const bitmap& bm) {

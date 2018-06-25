@@ -20,14 +20,13 @@
 #include <utility>
 
 #include <caf/actor_system_config.hpp>
+#include <caf/config_option_set.hpp>
 #include <caf/fwd.hpp>
 #include <caf/message.hpp>
+#include <caf/pec.hpp>
 
-#include "vast/error.hpp"
 #include "vast/data.hpp"
-
-#include "vast/concept/parseable/to.hpp"
-#include "vast/concept/parseable/vast/data.hpp"
+#include "vast/error.hpp"
 
 #include "vast/detail/steady_map.hpp"
 #include "vast/detail/string.hpp"
@@ -38,9 +37,6 @@ namespace vast {
 class command {
 public:
   // -- member types -----------------------------------------------------------
-
-  /// Maps names of config parameters to their value.
-  using option_map = std::map<std::string, caf::config_value>;
 
   /// Iterates over CLI arguments.
   using argument_iterator = std::vector<std::string>::const_iterator;
@@ -67,26 +63,27 @@ public:
 
   /// Runs the command and blocks until execution completes.
   /// @returns An exit code suitable for returning from main.
-  int run(caf::actor_system& sys, option_map& options,
+  int run(caf::actor_system& sys, caf::config_value_map& options,
           argument_iterator begin, argument_iterator end);
 
-  /// Prints usage to `std::cerr`.
-  void usage();
+
+  /// Creates a summary of all option declarations and available commands.
+  std::string usage() const;
 
   /// Returns the full name for this command.
-  std::string full_name();
-
-  /// Returns the name for this command.
-  std::string name();
+  std::string full_name() const;
 
   /// Queries whether this command has no parent.
-  bool is_root() const noexcept;
+  inline bool is_root() const noexcept {
+    return parent_ == nullptr;
+  }
 
-  /// Queries whether this command has no parent.
-  command& root() noexcept {
+  /// Returns the root command.
+  inline command& root() noexcept {
     return is_root() ? *this : parent_->root();
   }
 
+  /// Returns the managed command name.
   inline std::string_view name() const noexcept {
     return name_;
   }
@@ -105,75 +102,30 @@ public:
     return result;
   }
 
-  template <class T>
-  caf::optional<T> get(const option_map& xs, const std::string& name) {
-    // Map T to the clostest type in config_value.
-    using cfg_type =
-      typename std::conditional<
-        std::is_integral_v<T> && !std::is_same_v<bool, T>,
-        int64_t,
-        typename std::conditional<
-          std::is_floating_point_v<T>,
-          double,
-          T
-          >::type
-        >::type;
-    auto i = xs.find(name);
-    if (i == xs.end())
-      return caf::none;
-    auto result = caf::get_if<cfg_type>(&i->second);
-    if (!result)
-      return caf::none;
-    return static_cast<T>(*result);
-  }
-
-  template <class T>
-  T get_or(const option_map& xs, const std::string& name, T fallback) {
-    auto result = get<T>(xs, name);
-    if (!result)
-      return fallback;
-    return *result;
-  }
-
 protected:
   /// Checks whether a command is ready to proceed, i.e., whether the
   /// configuration allows for calling `run_impl` or `run` on a nested command.
-  virtual proceed_result proceed(caf::actor_system& sys, option_map& options,
+  virtual proceed_result proceed(caf::actor_system& sys,
+                                 const caf::config_value_map& options,
                                  argument_iterator begin,
                                  argument_iterator end);
 
-  virtual int run_impl(caf::actor_system& sys, option_map& options,
+  virtual int run_impl(caf::actor_system& sys,
+                       const caf::config_value_map& options,
                        argument_iterator begin, argument_iterator end);
 
   template <class T>
-  void add_opt(std::string name, std::string descr, T& ref) {
-    opts_.emplace_back(name, std::move(descr), ref);
-    // Extract the long name from the full name (format: "long,l").
-    auto pos = name.find_first_of(',');
-    if (pos < name.size())
-      name.resize(pos);
-    kvps_.emplace_back([name = std::move(name), &ref] {
-      // Map T to the clostest type in config_value.
-      using cfg_type =
-        typename std::conditional<
-          std::is_integral_v<T> && !std::is_same_v<bool, T>,
-          int64_t,
-          typename std::conditional<
-            std::is_floating_point_v<T>,
-            double,
-            T
-            >::type
-          >::type;
-      cfg_type copy = ref;
-      return std::make_pair(name, caf::config_value{std::move(copy)});
-    });
+  void add_opt(const char* name, const char* description) {
+    opts_.add<T>("global", name, description);
   }
 
 private:
-  /// Separates arguments into the arguments for the current command, the name
-  /// of the subcommand, and the arguments for the subcommand.
-  std::tuple<caf::message, std::string, caf::message>
-  separate_args(const caf::message& args);
+  std::string parse_error(caf::pec code, argument_iterator error_position,
+                          argument_iterator begin, argument_iterator end) const;
+
+  /// @pre `error_position != end`
+  std::string unknown_subcommand_error(argument_iterator error_position,
+                                       argument_iterator end) const;
 
   std::map<std::string_view, std::unique_ptr<command>> nested_;
   command* parent_;
@@ -182,10 +134,7 @@ private:
   std::string_view name_;
 
   /// List of all accepted options.
-  std::vector<caf::message::cli_arg> opts_;
-
-  /// List of function objects that return CLI options as name/value pairs.
-  std::vector<std::function<std::pair<std::string, caf::config_value>()>> kvps_;
+  caf::config_option_set opts_;
 };
 
 } // namespace vast

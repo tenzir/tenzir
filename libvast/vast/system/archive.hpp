@@ -34,6 +34,7 @@ struct archive_state {
 /// @relates archive
 // TODO: change the interface from 'vector<event>' to 'batch'.
 using archive_type = caf::typed_actor<
+  caf::reacts_to<caf::stream<event>>,
   caf::reacts_to<std::vector<event>>,
   caf::replies_to<ids>::with<std::vector<event>>
 >;

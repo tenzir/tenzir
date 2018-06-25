@@ -41,7 +41,7 @@
 
 namespace vast::system {
 
-/// PCAP subcommant to `import`.
+/// PCAP subcommand to `import`.
 /// @relates application
 class pcap_writer_command : public writer_command_base {
 public:
@@ -50,14 +50,10 @@ public:
   pcap_writer_command(command* parent, std::string_view name);
 
 protected:
-  expected<caf::actor> make_sink(caf::scoped_actor& self, option_map& options,
+  expected<caf::actor> make_sink(caf::scoped_actor& self,
+                                 const caf::config_value_map& options,
                                  argument_iterator begin,
                                  argument_iterator end) override;
-
-private:
-  std::string output_;
-  bool uds_;
-  unsigned flush_;
 };
 
 } // namespace vast::system

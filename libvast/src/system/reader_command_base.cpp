@@ -40,7 +40,8 @@
 
 namespace vast::system {
 
-int reader_command_base::run_impl(caf::actor_system& sys, option_map& options,
+int reader_command_base::run_impl(caf::actor_system& sys,
+                                  const caf::config_value_map& options,
                                   argument_iterator begin,
                                   argument_iterator end) {
   using namespace caf;
@@ -48,7 +49,7 @@ int reader_command_base::run_impl(caf::actor_system& sys, option_map& options,
   // Helper for blocking actor communication.
   scoped_actor self{sys};
   // Spawn the source.
-  auto src_opt = make_source(self, begin, end);
+  auto src_opt = make_source(self, options, begin, end);
   if (!src_opt) {
     std::cerr << "unable to spawn source: " << sys.render(src_opt.error())
               << std::endl;

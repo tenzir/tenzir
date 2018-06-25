@@ -30,16 +30,17 @@ public:
 
   /// Either spawns a new VAST node or connects to a server, depending on the
   /// configuration.
-  caf::expected<caf::actor> spawn_or_connect_to_node(caf::scoped_actor& self,
-                                                     const option_map& opts);
+  caf::expected<caf::actor>
+  spawn_or_connect_to_node(caf::scoped_actor& self,
+                           const caf::config_value_map& opts);
 
   /// Spawns a new VAST node.
   caf::expected<caf::actor> spawn_node(caf::scoped_actor& self,
-                                       const option_map& opts);
+                                       const caf::config_value_map& opts);
 
   /// Connects to a remote VAST server.
   caf::expected<caf::actor> connect_to_node(caf::scoped_actor& self,
-                                            const option_map& opts);
+                                            const caf::config_value_map& opts);
 
 protected:
   /// Cleans up any state before leaving `run_impl`.

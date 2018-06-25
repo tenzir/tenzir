@@ -317,10 +317,10 @@ expected<void> writer::write(const event& e) {
   }
   if (!congruent(e.type(), pcap_packet_type))
     return make_error(ec::format_error, "invalid pcap packet type");
-  auto v = get_if<vector>(e.data());
+  auto v = caf::get_if<vector>(&e.data());
   VAST_ASSERT(v);
   VAST_ASSERT(v->size() == 2);
-  auto payload = get_if<std::string>((*v)[1]);
+  auto payload = caf::get_if<std::string>(&((*v)[1]));
   VAST_ASSERT(payload);
   // Make PCAP header.
   ::pcap_pkthdr header;

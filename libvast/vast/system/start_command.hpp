@@ -28,15 +28,8 @@ public:
   start_command(command* parent, std::string_view name);
 
 protected:
-  int run_impl(caf::actor_system& sys, option_map& options,
+  int run_impl(caf::actor_system& sys, const caf::config_value_map& options,
                argument_iterator begin, argument_iterator end) override;
-
-private:
-  /// Spawn empty node without components if set.
-  bool spawn_bare_node;
-
-  /// Run VAST in foreground (do not daemonize) if set.
-  bool in_foreground;
 };
 
 } // namespace vast::system

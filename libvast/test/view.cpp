@@ -17,7 +17,7 @@
 #include "test.hpp"
 
 using namespace vast;
-using namespace std::string_literals;
+using namespace std::literals;
 
 TEST(arithmetic view) {
   CHECK_EQUAL(view_t<boolean>{true}, true);
@@ -53,7 +53,7 @@ TEST(set view) {
   REQUIRE_EQUAL(v->size(), xs.size());
   MESSAGE("check view contents");
   for (auto i = 0u; i < xs.size(); ++i)
-    CHECK_EQUAL(v->at(i), *std::next(xs.begin(), i));
+    CHECK_EQUAL(v->at(i), make_data_view(*std::next(xs.begin(), i)));
   MESSAGE("check iterator semantics");
   CHECK_EQUAL(std::next(v->begin(), 3), v->end());
   CHECK_EQUAL(*std::next(v->begin(), 1), make_data_view(42));
@@ -85,17 +85,17 @@ TEST(map view) {
 
 TEST(make_data_view) {
   auto x = make_data_view(true);
-  CHECK(std::holds_alternative<boolean>(x));
+  CHECK(caf::holds_alternative<boolean>(x));
   auto str = "foo"s;
   x = make_data_view(str);
-  CHECK(std::holds_alternative<view_t<std::string>>(x));
-  CHECK(std::holds_alternative<std::string_view>(x));
+  CHECK(caf::holds_alternative<view_t<std::string>>(x));
+  CHECK(caf::holds_alternative<std::string_view>(x));
   auto xs = vector{42, true, "foo"};
   x = make_data_view(xs);
-  REQUIRE(std::holds_alternative<view_t<vector>>(x));
-  auto v = get<view_t<vector>>(x);
+  REQUIRE(caf::holds_alternative<view_t<vector>>(x));
+  auto v = caf::get<view_t<vector>>(x);
   REQUIRE_EQUAL(v->size(), 3u);
-  CHECK_EQUAL(v->at(0), 42);
+  CHECK_EQUAL(v->at(0), integer{42});
   CHECK_EQUAL(v->at(1), true);
-  CHECK_EQUAL(v->at(2), "foo");
+  CHECK_EQUAL(v->at(2), "foo"sv);
 }

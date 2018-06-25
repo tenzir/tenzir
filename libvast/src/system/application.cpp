@@ -61,37 +61,33 @@
 //#include "vast/system/spawn.hpp"
 
 //using namespace std::chrono;
+
+using std::string;
+
 using namespace std::chrono_literals;
 using namespace std::string_literals;
 using namespace caf;
 
 namespace vast::system {
 
-application::root_command::root_command()
-  : dir("vast"),
-    endpoint(":42000"),
-    spawn_local(false),
-    print_version(false) {
-  id = detail::split(detail::hostname(), ".")[0];
-  add_opt("dir,d", "directory for persistent state", dir);
-  add_opt("endpoint,e", "node endpoint", endpoint);
-  add_opt("id,i", "the unique ID of this node", id);
-  // TODO: short options without arguments are currently not supported; add
-  //       short options back in once the command::separate_args function
-  //       recognizes them correctly
-  add_opt("node", "spawn a node instead of connecting to one", spawn_local);
-  add_opt("version", "print version and exit", print_version);
+application::root_command::root_command() {
+  add_opt<string>("dir,d", "directory for persistent state");
+  add_opt<string>("endpoint,e", "node endpoint");
+  add_opt<string>("id,i", "the unique ID of this node");
+  add_opt<bool>("node,n", "spawn a node instead of connecting to one");
+  add_opt<bool>("version,v", "print version and exit");
 }
 
 command::proceed_result
-application::root_command::proceed(caf::actor_system& sys, option_map& options,
+application::root_command::proceed(caf::actor_system& sys,
+                                   const caf::config_value_map& options,
                                    argument_iterator begin,
                                    argument_iterator end) {
   VAST_UNUSED(begin, end);
   VAST_TRACE(VAST_ARG(options), VAST_ARG("args", begin, end));
   CAF_IGNORE_UNUSED(sys);
   CAF_IGNORE_UNUSED(options);
-  if (print_version) {
+  if (get_or(options, "version", false)) {
     std::cout << VAST_VERSION << std::endl;
     return stop_successful;
   }

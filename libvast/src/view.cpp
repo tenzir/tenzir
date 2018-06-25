@@ -111,7 +111,7 @@ default_map_view::size_type default_map_view::size() const noexcept {
 // -- make_view ---------------------------------------------------------------
 
 data_view make_view(const data& x) {
-  return visit([](const auto& z) { return make_data_view(z); }, x);
+  return caf::visit([](const auto& z) { return make_data_view(z); }, x);
 }
 
 // -- make_data ---------------------------------------------------------------
@@ -120,7 +120,7 @@ data make_data(data_view x) {
   auto make_addr = [](view_t<address> v) {
     return address::v6(v.data().data());
   };
-  return std::visit(detail::overload(
+  return caf::visit(detail::overload(
     [=](view_t<boolean> v) { return data{v}; },
     [=](view_t<integer> v) { return data{v}; },
     [=](view_t<count> v) { return data{v}; },
