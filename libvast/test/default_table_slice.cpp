@@ -30,13 +30,15 @@ TEST(default_table_slice) {
   auto builder = default_table_slice::make_builder(layout);
   REQUIRE(builder);
   MESSAGE("1st row");
+  auto foo = "foo"s;
+  auto bar = "foo"s;
   CHECK(builder->add(make_view(42)));
   CHECK(!builder->add(make_view(true))); // wrong type
-  CHECK(builder->add(make_view("foo")));
+  CHECK(builder->add(make_view(foo)));
   CHECK(builder->add(make_view(4.2)));
   MESSAGE("2nd row");
   CHECK(builder->add(make_view(43)));
-  CHECK(builder->add(make_view("bar")));
+  CHECK(builder->add(make_view(bar)));
   CHECK(builder->add(make_view(4.3)));
   MESSAGE("finish");
   auto slice = builder->finish();
@@ -44,8 +46,7 @@ TEST(default_table_slice) {
   CHECK_EQUAL(slice->columns(), 3u);
   auto x = slice->at(0, 1);
   REQUIRE(x);
-  auto foo = "foo"s;
-  CHECK_EQUAL(*x, make_view("foo"));
+  CHECK_EQUAL(*x, make_view(foo));
   x = slice->at(1, 2);
   REQUIRE(x);
   CHECK_EQUAL(*x, make_view(4.3));
