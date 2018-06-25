@@ -24,7 +24,7 @@ TEST(default_table_slice) {
     {"b", string_type{}},
     {"c", real_type{}}
   };
-  auto builder = default_table_slice::builder::make(layout);
+  auto builder = default_table_slice::make_builder(layout);
   REQUIRE(builder);
   MESSAGE("1st row");
   CHECK(builder->add(make_view(42)));
@@ -32,9 +32,9 @@ TEST(default_table_slice) {
   CHECK(builder->add(make_view("foo")));
   CHECK(builder->add(make_view(4.2)));
   MESSAGE("2nd row");
-  CHECK(builder->append(43));
-  CHECK(builder->append("bar"));
-  CHECK(builder->append(4.3));
+  CHECK(builder->add(make_view(43)));
+  CHECK(builder->add(make_view("bar")));
+  CHECK(builder->add(make_view(4.3)));
   MESSAGE("finish");
   auto slice = builder->finish();
   CHECK_EQUAL(slice->rows(), 2u);

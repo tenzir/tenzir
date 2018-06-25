@@ -17,39 +17,18 @@
 
 namespace vast {
 
-/// The default implementation of `table_slice`.
-class default_table_slice : public table_slice {
-public:
-  default_table_slice(record_type layout);
-
-  /// Enables incremental construction of a table slice.
-  class builder;
-
-  /// @relates builder
-  using builder_ptr = caf::intrusive_ptr<builder>;
-
-  virtual caf::optional<data_view> at(size_type row, size_type col) const final;
-
-private:
-  std::vector<data> xs_;
-};
+// TODO: move to vast/fwd.hpp after merge
+class default_table_slice;
 
 /// @relates default_table_slice
 using default_table_slice_ptr = caf::intrusive_ptr<default_table_slice>;
 
-class default_table_slice::builder : public table_slice::builder {
+namespace detail {
+
+class default_table_slice_builder : public table_slice_builder {
 public:
-  /// Factory function to construct a builder.
-  /// @param layout The layout of the builder.
-  static builder_ptr make(record_type layout);
+  default_table_slice_builder(record_type layout);
 
-  builder(record_type layout);
-
-  /// Directly appends data to the slice. Since default_table_slice stores @ref
-  /// data directly, this function offers a more efficient path to add data
-  /// than @ref add.
-  /// @param x The data to add.
-  /// @returns `true` on success.
   bool append(data x);
 
   bool add(data_view x) final;
@@ -61,6 +40,26 @@ private:
   vector row_;
   size_t col_;
   default_table_slice_ptr slice_;
+};
+
+} // namespace detail
+
+/// The default implementation of `table_slice`.
+class default_table_slice : public table_slice {
+  friend detail::default_table_slice_builder;
+
+public:
+  /// Constructs a builder that generates a default_table_slice.
+  /// @param layout The layout of the table_slice.
+  /// @returns The builder instance.
+  static table_slice_builder_ptr make_builder(record_type layout);
+
+  default_table_slice(record_type layout);
+
+  virtual caf::optional<data_view> at(size_type row, size_type col) const final;
+
+private:
+  std::vector<data> xs_;
 };
 
 } // namespace vast

@@ -75,37 +75,6 @@ private:
 /// @relates table
 class table_slice : public caf::ref_counted {
 public:
-  class builder;
-
-  /// @relates builder
-  using builder_ptr = caf::intrusive_ptr<builder>;
-
-  /// Enables incremental construction of a table slice.
-  class builder : public caf::ref_counted {
-  public:
-    virtual ~builder() = default;
-
-    /// Factory function to construct a builder.
-    /// @param layout The layout of the builder.
-    /// @returns A reference-counted pointer to a builder.
-    template <class T, class... Ts>
-    static builder_ptr make(record_type layout, Ts&&... xs) {
-      return T::builder::make(std::move(layout), std::forward<Ts>(xs)...);
-    }
-
-    /// Adds data to the builder.
-    /// @param x The data to add.
-    /// @returns `true` on success.
-    virtual bool add(data_view x) = 0;
-
-    /// Constructs a table_slice from the currently accumulated state.
-    /// @returns A table slice or `nullptr` on failure.
-    virtual table_slice_ptr finish() = 0;
-
-  protected:
-    builder() = default;
-  };
-
   using size_type = table::size_type;
 
   virtual ~table_slice() = default;
@@ -134,5 +103,27 @@ protected:
   size_type rows_;
   size_type columns_;
 };
+
+/// Enables incremental construction of a table slice.
+/// @relates table_slice
+class table_slice_builder : public caf::ref_counted {
+public:
+  virtual ~table_slice_builder() = default;
+
+  /// Adds data to the builder.
+  /// @param x The data to add.
+  /// @returns `true` on success.
+  virtual bool add(data_view x) = 0;
+
+  /// Constructs a table_slice from the currently accumulated state.
+  /// @returns A table slice or `nullptr` on failure.
+  virtual table_slice_ptr finish() = 0;
+
+protected:
+  table_slice_builder() = default;
+};
+
+/// @relates table_slice_builder
+using table_slice_builder_ptr = caf::intrusive_ptr<table_slice_builder>;
 
 } // namespace vast
