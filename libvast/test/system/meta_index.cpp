@@ -11,13 +11,13 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#define SUITE partition_index
+#define SUITE meta_index
 #include "test.hpp"
 
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/event.hpp"
-#include "vast/system/partition_index.hpp"
+#include "vast/system/meta_index.hpp"
 #include "vast/uuid.hpp"
 
 using namespace vast;
@@ -71,12 +71,12 @@ struct mock_partition {
 
   uuid id;
   std::vector<event> events;
-  partition_index::interval range;
+  meta_index::interval range;
 };
 
 struct fixture {
   // Our unit-under-test.
-  partition_index uut;
+  meta_index uut;
 
   // Partition IDs.
   std::vector<uuid> ids;
@@ -130,7 +130,7 @@ struct fixture {
 
 } // namespace <anonymous>
 
-FIXTURE_SCOPE(partition_index_tests, fixture)
+FIXTURE_SCOPE(meta_index_tests, fixture)
 
 TEST(uuid lookup) {
   MESSAGE("generate " << num_partitions << " UUIDs for the partitions");

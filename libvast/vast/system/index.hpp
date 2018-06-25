@@ -24,8 +24,8 @@
 #include "vast/expression.hpp"
 #include "vast/fwd.hpp"
 #include "vast/system/indexer_stage_driver.hpp"
+#include "vast/system/meta_index.hpp"
 #include "vast/system/partition.hpp"
-#include "vast/system/partition_index.hpp"
 #include "vast/uuid.hpp"
 
 namespace vast::system {
@@ -85,7 +85,7 @@ struct index_state {
   // -- member variables -------------------------------------------------------
 
   /// Allows to select partitions with timestamps.
-  partition_index part_index;
+  meta_index part_index;
 
   /// Our current partition.
   partition_ptr active;

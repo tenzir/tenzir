@@ -19,8 +19,8 @@
 
 #include "vast/detail/spawn_container_source.hpp"
 #include "vast/system/indexer_stage_driver.hpp"
+#include "vast/system/meta_index.hpp"
 #include "vast/system/partition.hpp"
-#include "vast/system/partition_index.hpp"
 #include "vast/uuid.hpp"
 
 #include "fixtures/actor_system_and_events.hpp"
@@ -74,7 +74,7 @@ auto partition_factory(actor_system& sys, path p, size_t* dummy_count,
   };
 }
 
-behavior test_stage(event_based_actor* self, partition_index* pi,
+behavior test_stage(event_based_actor* self, meta_index* pi,
                     indexer_stage_driver::partition_factory f, size_t mps) {
   return {[=](stream<event> in) {
     auto mgr = self->make_continuous_stage<indexer_stage_driver>(*pi, f, mps);
@@ -111,7 +111,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   /// Directory where the manager is supposed to persist its state.
   path state_dir = directory / "indexer-manager";
 
-  partition_index pindex;
+  meta_index pindex;
 
   std::vector<event> test_events;
 
