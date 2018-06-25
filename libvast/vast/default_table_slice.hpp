@@ -23,7 +23,7 @@ using default_table_slice_ptr = caf::intrusive_ptr<default_table_slice>;
 
 namespace detail {
 
-class default_table_slice_builder : public table_slice_builder {
+class default_table_slice_builder final : public table_slice_builder {
 public:
   default_table_slice_builder(record_type layout);
 
@@ -43,7 +43,7 @@ private:
 } // namespace detail
 
 /// The default implementation of `table_slice`.
-class default_table_slice : public table_slice {
+class default_table_slice final : public table_slice {
   friend detail::default_table_slice_builder;
 
 public:
