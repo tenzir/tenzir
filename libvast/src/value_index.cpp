@@ -142,7 +142,7 @@ std::unique_ptr<value_index> value_index::make(const type& t) {
 }
 
 expected<void> value_index::push_back(const data& x) {
-  if (caf::holds_alternative<none>(x)) {
+  if (caf::holds_alternative<caf::none_t>(x)) {
     none_.append_bit(true);
     ++nils_;
   } else {
@@ -163,7 +163,7 @@ expected<void> value_index::push_back(const data& x, id pos) {
   if (pos == off)
     return push_back(x);
   auto skip = pos - off;
-  if (caf::holds_alternative<none>(x)) {
+  if (caf::holds_alternative<caf::none_t>(x)) {
     none_.append_bits(false, skip);
     none_.append_bit(true);
     ++nils_;
@@ -179,7 +179,7 @@ expected<void> value_index::push_back(const data& x, id pos) {
 }
 
 expected<ids> value_index::lookup(relational_operator op, const data& x) const {
-  if (caf::holds_alternative<none>(x)) {
+  if (caf::holds_alternative<caf::none_t>(x)) {
     if (!(op == equal || op == not_equal))
       return make_error(ec::unsupported_operator, op);
     return op == equal ? none_ & mask_ : ~none_ & mask_;

@@ -18,21 +18,21 @@
 #include <type_traits>
 #include <vector>
 
-#include <caf/fwd.hpp>
+#include <caf/detail/type_list.hpp>
 #include <caf/error.hpp>
+#include <caf/fwd.hpp>
 #include <caf/intrusive_ptr.hpp>
 #include <caf/make_counted.hpp>
+#include <caf/none.hpp>
 #include <caf/ref_counted.hpp>
 #include <caf/serializer.hpp>
 #include <caf/variant.hpp>
-#include <caf/detail/type_list.hpp>
 
 #include "vast/aliases.hpp"
 #include "vast/attribute.hpp"
 #include "vast/expected.hpp"
 #include "vast/fwd.hpp"
 #include "vast/key.hpp"
-#include "vast/none.hpp"
 #include "vast/offset.hpp"
 #include "vast/operator.hpp"
 #include "vast/optional.hpp"
@@ -743,7 +743,6 @@ struct type_traits {
     using data_type = name;                                                    \
   }
 
-VAST_TYPE_TRAIT(none);
 VAST_TYPE_TRAIT(boolean);
 VAST_TYPE_TRAIT(integer);
 VAST_TYPE_TRAIT(count);
@@ -760,6 +759,11 @@ VAST_TYPE_TRAIT(set);
 VAST_TYPE_TRAIT(map);
 
 #undef VAST_TYPE_TRAIT
+
+template <>
+struct type_traits<none_type> {
+  using data_type = caf::none_t;
+};
 
 template <>
 struct type_traits<string_type> {

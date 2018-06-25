@@ -90,7 +90,7 @@ TEST(data) {
   l = str.end();
   CHECK(p(f, l, d));
   CHECK(f == l);
-  CHECK(d == vector{42u, 4.2, nil});
+  CHECK(d == vector{42u, 4.2, caf::none});
 
   MESSAGE("set");
   str = "{-42,+42,-1}"s;

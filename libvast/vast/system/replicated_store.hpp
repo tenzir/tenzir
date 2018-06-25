@@ -18,10 +18,10 @@
 
 #include <caf/binary_deserializer.hpp>
 #include <caf/binary_serializer.hpp>
+#include <caf/none.hpp>
 
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
-#include "vast/none.hpp"
 
 #include "vast/system/consensus.hpp"
 #include "vast/system/key_value_store.hpp"
@@ -246,7 +246,7 @@ replicated_store(
     [=](get_atom, const Key& key) -> result<optional<Value>> {
       auto i = self->state.store.find(key);
       if (i == self->state.store.end())
-        return nil;
+        return caf::none;
       return i->second;
     },
     [=](raft::index_type index, message& operation) {

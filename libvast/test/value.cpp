@@ -35,24 +35,24 @@ using namespace vast;
 // This is the default-constructed state.
 TEST(invalid) {
   value v;
-  CHECK(holds_alternative<none>(v));
+  CHECK(holds_alternative<caf::none_t>(v));
   CHECK(!v.type());
 }
 
 // A *data* value contains only data but lacks a type.
 TEST(data value) {
   value v{42};
-  CHECK(type_check(v.type(), nil));
+  CHECK(type_check(v.type(), caf::none));
   CHECK(holds_alternative<integer>(v));
   CHECK(!v.type());
 }
 
 TEST(typed value(empty)) {
   type t = count_type{};
-  value v{nil, t};
-  CHECK(type_check(t, nil));
+  value v{caf::none, t};
+  CHECK(type_check(t, caf::none));
   CHECK(v.type() == t);
-  CHECK(holds_alternative<none>(v));
+  CHECK(holds_alternative<caf::none_t>(v));
   CHECK(holds_alternative<count_type>(v.type()));
 }
 
@@ -74,7 +74,7 @@ TEST(data and type mismatch) {
   // If we do require type safety and cannot guarantee that data and type
   // match, we can use the type-safe factory function.
   auto fail = value::make(42, real_type{});
-  CHECK(holds_alternative<none>(fail));
+  CHECK(holds_alternative<caf::none_t>(fail));
   CHECK(!fail.type());
 }
 

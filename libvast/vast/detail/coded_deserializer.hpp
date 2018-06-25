@@ -21,7 +21,6 @@
 #include <caf/stream_deserializer.hpp>
 
 #include "vast/error.hpp"
-#include "vast/none.hpp"
 
 #include "vast/detail/assert.hpp"
 #include "vast/detail/zigzag.hpp"
@@ -44,7 +43,7 @@ protected:
     if (auto e = this->varbyte_decode(u))
       return e;
     x = zigzag::decode(u);
-    return nil;
+    return caf::none;
   }
 
   error apply_builtin(builtin type, void* val) override {
@@ -78,7 +77,7 @@ protected:
           return e;
         std::istringstream iss{std::move(tmp)};
         iss >> *reinterpret_cast<long double*>(val);
-        return nil;
+        return caf::none;
       }
       case builtin::string8_v: {
         auto& str = *reinterpret_cast<std::string*>(val);

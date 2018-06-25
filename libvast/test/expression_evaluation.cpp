@@ -146,13 +146,13 @@ TEST(evaluation - schema) {
   REQUIRE(ast);
   ast_resolved = caf::visit(type_resolver{*foo}, *ast);
   REQUIRE(ast_resolved);
-  CHECK(caf::holds_alternative<none>(*ast_resolved));
+  CHECK(caf::holds_alternative<caf::none_t>(*ast_resolved));
   // 'q' doesn't exist in 'r'.
   ast = to<expression>("r.q == 80/tcp");
   REQUIRE(ast);
   ast_resolved = caf::visit(type_resolver{*bar}, *ast);
   REQUIRE(ast_resolved);
-  CHECK(caf::holds_alternative<none>(*ast_resolved));
+  CHECK(caf::holds_alternative<caf::none_t>(*ast_resolved));
 }
 
 FIXTURE_SCOPE_END()

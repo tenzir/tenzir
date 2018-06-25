@@ -429,7 +429,7 @@ TEST(polymorphic) {
   idx = value_index::make(t);
   REQUIRE(idx);
   MESSAGE("nil");
-  REQUIRE(idx->push_back(nil));
+  REQUIRE(idx->push_back(caf::none));
 }
 
 // Attention
@@ -441,29 +441,29 @@ TEST(polymorphic) {
 // should nil be less or great than any other value in the domain?
 TEST(polymorphic none values) {
   auto idx = value_index::make(string_type{});
-  REQUIRE(idx->push_back(nil));
+  REQUIRE(idx->push_back(caf::none));
   REQUIRE(idx->push_back("foo"));
   REQUIRE(idx->push_back("foo"));
-  REQUIRE(idx->push_back(nil));
-  REQUIRE(idx->push_back(nil));
-  REQUIRE(idx->push_back(nil));
-  REQUIRE(idx->push_back("foo"));
-  REQUIRE(idx->push_back("bar"));
-  REQUIRE(idx->push_back("bar"));
-  REQUIRE(idx->push_back(nil));
-  REQUIRE(idx->push_back(nil));
-  REQUIRE(idx->push_back(nil));
-  REQUIRE(idx->push_back(nil));
-  REQUIRE(idx->push_back("foo"));
-  REQUIRE(idx->push_back("foo"));
+  REQUIRE(idx->push_back(caf::none));
+  REQUIRE(idx->push_back(caf::none));
+  REQUIRE(idx->push_back(caf::none));
   REQUIRE(idx->push_back("foo"));
   REQUIRE(idx->push_back("bar"));
   REQUIRE(idx->push_back("bar"));
+  REQUIRE(idx->push_back(caf::none));
+  REQUIRE(idx->push_back(caf::none));
+  REQUIRE(idx->push_back(caf::none));
+  REQUIRE(idx->push_back(caf::none));
+  REQUIRE(idx->push_back("foo"));
+  REQUIRE(idx->push_back("foo"));
+  REQUIRE(idx->push_back("foo"));
+  REQUIRE(idx->push_back("bar"));
+  REQUIRE(idx->push_back("bar"));
   REQUIRE(idx->push_back("bar"));
   REQUIRE(idx->push_back("foo"));
   REQUIRE(idx->push_back("foo"));
-  REQUIRE(idx->push_back(nil));
-  REQUIRE(idx->push_back(nil));
+  REQUIRE(idx->push_back(caf::none));
+  REQUIRE(idx->push_back(caf::none));
   auto bm = idx->lookup(equal, "foo");
   REQUIRE(bm);
   CHECK_EQUAL(to_string(*bm), "01100010000001110001100");

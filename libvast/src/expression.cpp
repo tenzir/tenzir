@@ -129,13 +129,13 @@ expected<expression> normalize_and_validate(const expression& expr) {
 }
 
 expected<expression> tailor(const expression& expr, const type& t) {
-  if (caf::holds_alternative<none>(expr))
+  if (caf::holds_alternative<caf::none_t>(expr))
     return make_error(ec::unspecified, "invalid expression");
   auto x = caf::visit(type_resolver{t}, expr);
   if (!x)
     return x.error();
   *x = caf::visit(type_pruner{t}, *x);
-  VAST_ASSERT(!caf::holds_alternative<none>(*x));
+  VAST_ASSERT(!caf::holds_alternative<caf::none_t>(*x));
   return std::move(*x);
 }
 

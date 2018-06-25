@@ -18,6 +18,7 @@
 #include "vast/logger.hpp"
 
 #include <caf/actor_pool.hpp>
+#include <caf/none.hpp>
 #include <caf/stateful_actor.hpp>
 #include <caf/stream_source.hpp>
 
@@ -113,9 +114,9 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader&& reader) {
       while (produced < num) {
         auto e = st.reader.read();
         if (e) {
-          if (!caf::holds_alternative<none>(st.filter)) {
+          if (!caf::holds_alternative<caf::none_t>(st.filter)) {
             auto& checker = st.checkers[e->type()];
-            if (caf::holds_alternative<none>(checker)) {
+            if (caf::holds_alternative<caf::none_t>(checker)) {
               auto x = tailor(st.filter, e->type());
               VAST_ASSERT(x);
               checker = std::move(*x);

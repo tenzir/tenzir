@@ -18,10 +18,10 @@
 #include <string>
 #include <type_traits>
 
+#include <caf/none.hpp>
 #include <caf/stream_serializer.hpp>
 
 #include "vast/error.hpp"
-#include "vast/none.hpp"
 
 #include "vast/detail/assert.hpp"
 #include "vast/detail/zigzag.hpp"

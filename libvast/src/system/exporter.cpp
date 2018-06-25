@@ -145,7 +145,7 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
     for (auto& candidate : candidates) {
       auto& checker = self->state.checkers[candidate.type()];
       // Construct a candidate checker if we don't have one for this type.
-      if (caf::holds_alternative<none>(checker)) {
+      if (caf::holds_alternative<caf::none_t>(checker)) {
         auto x = tailor(expr, candidate.type());
         if (!x) {
           VAST_ERROR(self, "failed to tailor expression:",

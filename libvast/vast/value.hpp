@@ -35,12 +35,13 @@ public:
   /// @param t The type *d* shall have.
   /// @returns If `t.check(d)` then a value containing *d* and `nil` otherwise.
   static value make(vast::data d, vast::type t) {
-    return type_check(t, d) ? value{std::move(d), std::move(t)} : nil;
+    return type_check(t, d) ? value{std::move(d), std::move(t)} : caf::none;
   }
 
   /// Constructs an invalid value.
   /// Same as default-construction, but also enables statements like `v = nil`.
-  value(none = nil) {
+  value(caf::none_t = caf::none) {
+    // nop
   }
 
   /// Constructs an untyped value from data.
