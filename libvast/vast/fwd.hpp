@@ -28,6 +28,7 @@ class pattern;
 class port;
 class schema;
 class subnet;
+class table_slice;
 class type;
 
 // -- structs ------------------------------------------------------------------

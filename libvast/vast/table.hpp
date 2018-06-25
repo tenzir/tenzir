@@ -22,12 +22,11 @@
 #include <caf/ref_counted.hpp>
 
 #include "vast/data.hpp"
+#include "vast/fwd.hpp"
 #include "vast/type.hpp"
 #include "vast/view.hpp"
 
 namespace vast {
-
-class table_slice;
 
 /// @relates table_slice
 using table_slice_ptr = caf::intrusive_ptr<table_slice>;
