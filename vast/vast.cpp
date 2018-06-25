@@ -22,7 +22,7 @@ using namespace vast::system;
 int main(int argc, char** argv) {
   // Scaffold
   configuration cfg{argc, argv};
-  cfg.logger_console = caf::atom("COLORED");
+  cfg.set("logger.console", caf::atom("COLORED"));
   caf::actor_system sys{cfg};
   default_application app;
   // Dispatch to root command.
