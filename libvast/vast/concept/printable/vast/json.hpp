@@ -13,11 +13,13 @@
 
 #pragma once
 
+#include "vast/json.hpp"
+
 #include "vast/concept/printable/print.hpp"
 #include "vast/concept/printable/string.hpp"
 #include "vast/concept/printable/core/printer.hpp"
+
 #include "vast/detail/string.hpp"
-#include "vast/json.hpp"
 
 namespace vast {
 
@@ -65,11 +67,11 @@ struct json_printer : printer<json_printer<TreePolicy, Indent, Padding>> {
   struct print_visitor {
     print_visitor(Iterator& out) : out_{out} {}
 
-    bool operator()(const none&) {
+    bool operator()(json::null) {
       return printers::str.print(out_, "null");
     }
 
-    bool operator()(bool b) {
+    bool operator()(json::boolean b) {
       return printers::str.print(out_, b ? "true" : "false");
     }
 
@@ -85,7 +87,7 @@ struct json_printer : printer<json_printer<TreePolicy, Indent, Padding>> {
       return printers::str.print(out_, str);
     }
 
-    bool operator()(const std::string& str) {
+    bool operator()(const json::string& str) {
       return printers::str.print(out_, detail::json_escape(str));
     }
 
@@ -104,7 +106,7 @@ struct json_printer : printer<json_printer<TreePolicy, Indent, Padding>> {
       while (begin != end) {
         if (!indent())
           return false;
-        if (!visit(*this, *begin))
+        if (!caf::visit(*this, *begin))
           return false;
         ;
         ++begin;
@@ -141,7 +143,7 @@ struct json_printer : printer<json_printer<TreePolicy, Indent, Padding>> {
           return false;
         if (!str.print(out_, ": "))
           return false;
-        if (!visit(*this, begin->second))
+        if (!caf::visit(*this, begin->second))
           return false;
         ++begin;
         if (begin != end)
@@ -181,18 +183,15 @@ struct json_printer : printer<json_printer<TreePolicy, Indent, Padding>> {
     int depth_ = 0;
   };
 
+  // Overload for concrete JSON types.
   template <class Iterator, class T>
-  auto print(Iterator& out, const T& x) const
-  -> std::enable_if_t<
-    !std::is_same_v<json::jsonize<T>, std::false_type>,
-    bool
-  > {
+  bool print(Iterator& out, const T& x) const {
     return print_visitor<Iterator>{out}(x);
   }
 
   template <class Iterator>
   bool print(Iterator& out, const json& j) const {
-    return visit(print_visitor<Iterator>{out}, j);
+    return caf::visit(print_visitor<Iterator>{out}, j);
   }
 };
 

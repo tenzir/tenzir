@@ -15,11 +15,11 @@
 #include <cstdint>
 #include <string>
 #include <type_traits>
-#include <variant>
 
 #include <caf/intrusive_ptr.hpp>
 #include <caf/make_counted.hpp>
 #include <caf/ref_counted.hpp>
+#include <caf/variant.hpp>
 
 #include "vast/aliases.hpp"
 #include "vast/data.hpp"
@@ -189,7 +189,7 @@ struct view<map> {
 
 /// A type-erased view over variout types of data.
 /// @relates view
-using data_view = std::variant<
+using data_view = caf::variant<
   view_t<boolean>,
   view_t<integer>,
   view_t<count>,
@@ -226,9 +226,9 @@ template <class T>
 class container_view_iterator
   : public detail::iterator_facade<
       container_view_iterator<T>,
-      data_view,
+      T,
       std::random_access_iterator_tag,
-      data_view
+      T
     > {
   friend iterator_access;
 
@@ -377,7 +377,7 @@ view_t<T> make_view(const T& x) {
   }
 }
 
-/// @relates view
+/// @relates view data
 data_view make_view(const data& x);
 
 /// Creates a type-erased data view from a specific type.
@@ -386,5 +386,9 @@ template <class T>
 data_view make_data_view(const T& x) {
   return make_view(x);
 }
+
+/// Creates a data instance from a data_view.
+/// @relates view data
+data make_data(data_view x);
 
 } // namespace vast

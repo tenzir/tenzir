@@ -253,11 +253,10 @@ auto nary_xor(Iterator begin, Iterator end) {
 /// @param bm The bitmap whose rank to compute.
 /// @param i The offset where to end counting.
 /// @returns The population count of *bm* up to and including position *i*.
-/// @pre `i > 0 && i < bm.size()`
+/// @pre `i < bm.size()`
 template <bool Bit = true, class Bitmap>
 typename Bitmap::size_type
 rank(const Bitmap& bm, typename Bitmap::size_type i) {
-  VAST_ASSERT(i > 0);
   VAST_ASSERT(i < bm.size());
   auto result = typename Bitmap::size_type{0};
   auto n = typename Bitmap::size_type{0};

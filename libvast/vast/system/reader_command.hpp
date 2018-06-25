@@ -21,21 +21,18 @@
 #include <caf/typed_actor.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
+#include "vast/concept/parseable/to.hpp"
+#include "vast/concept/parseable/vast/expression.hpp"
+#include "vast/concept/parseable/vast/schema.hpp"
+#include "vast/defaults.hpp"
+#include "vast/detail/make_io_stream.hpp"
 #include "vast/expression.hpp"
 #include "vast/logger.hpp"
-
 #include "vast/system/reader_command_base.hpp"
 #include "vast/system/reader_command_base.hpp"
 #include "vast/system/signal_monitor.hpp"
 #include "vast/system/source.hpp"
 #include "vast/system/tracker.hpp"
-
-#include "vast/concept/parseable/to.hpp"
-
-#include "vast/concept/parseable/vast/expression.hpp"
-#include "vast/concept/parseable/vast/schema.hpp"
-
-#include "vast/detail/make_io_stream.hpp"
 
 namespace vast::system {
 
@@ -47,31 +44,29 @@ class reader_command : public reader_command_base {
 public:
   reader_command(command* parent, std::string_view name)
       : reader_command_base(parent, name) {
-    add_opt("read,r", "path to input where to read events from", "-");
-    add_opt("schema,s", "path to alternate schema", "");
-    add_opt("uds,d", "treat -r as listening UNIX domain socket", false);
+    add_opt<std::string>("read,r", "path to input where to read events from");
+    add_opt<std::string>("schema,s", "path to alternate schema");
+    add_opt<bool>("uds,d", "treat -r as listening UNIX domain socket");
   }
 
 protected:
   expected<caf::actor> make_source(caf::scoped_actor& self,
-                                   const option_map& options,
+                                   const caf::config_value_map& options,
                                    argument_iterator begin,
                                    argument_iterator end) override {
     VAST_TRACE(VAST_ARG("args", begin, end));
-    auto input = get<std::string>(options, "input");
-    VAST_ASSERT(input);
-    auto uds = get<bool>(options, "uds");
-    VAST_ASSERT(uds);
-    auto in = detail::make_input_stream(*input, *uds);
+    auto input = get_or(options, "read", defaults::command::read_path);
+    auto uds = get_or(options, "uds", false);
+    auto in = detail::make_input_stream(input, uds);
     if (!in)
       return in.error();
     Reader reader{std::move(*in)};
     auto src = self->spawn(source<Reader>, std::move(reader));
     // Supply an alternate schema, if requested.
-    auto schema_file = get<std::string>(options, "schema");
-    VAST_ASSERT(schema_file);
-    if (!schema_file->empty()) {
-      auto str = load_contents(*schema_file);
+    auto schema_file = get_or(options, "schema",
+                              defaults::command::schema_path);
+    if (!schema_file.empty()) {
+      auto str = load_contents(schema_file);
       if (!str)
         return str.error();
       auto sch = to<schema>(*str);

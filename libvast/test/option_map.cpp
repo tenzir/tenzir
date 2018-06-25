@@ -11,13 +11,15 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#define SUITE option_map
-#include "test.hpp"
-
 #include <limits>
 
 #include "vast/option_map.hpp"
 #include "vast/option_declaration_set.hpp"
+
+#include "vast/detail/string.hpp"
+
+#define SUITE option_map
+#include "test.hpp"
 
 using namespace vast;
 

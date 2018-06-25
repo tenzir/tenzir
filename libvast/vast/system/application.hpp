@@ -31,7 +31,8 @@ public:
       root_command();
 
   protected:
-    proceed_result proceed(caf::actor_system& sys, const option_map& options,
+    proceed_result proceed(caf::actor_system& sys,
+                           const caf::config_value_map& options,
                            argument_iterator, argument_iterator) override;
   };
 

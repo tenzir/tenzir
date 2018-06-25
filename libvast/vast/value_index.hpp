@@ -128,7 +128,7 @@ expected<ids> container_lookup(const Index& idx, relational_operator op,
     }
     return result;
   };
-  return visit(overload(
+  return caf::visit(overload(
     [&](const auto& x) -> expected<ids> { return make_error(ec::type_clash, x); },
     [&](const vector& xs) { return lookup(xs); },
     [&](const set& xs) { return lookup(xs); }
@@ -201,7 +201,7 @@ private:
       bmi_.push_back(x, skip);
       return true;
     };
-    return visit(detail::overload(
+    return caf::visit(detail::overload(
       [&](auto&&) { return false; },
       [&](boolean x) { return append(x); },
       [&](integer x) { return append(x); },
@@ -214,7 +214,7 @@ private:
 
   expected<ids>
   lookup_impl(relational_operator op, const data& d) const override {
-    return visit(detail::overload(
+    return caf::visit(detail::overload(
       [&](auto x) -> expected<ids> {
         return make_error(ec::type_clash, value_type{}, std::move(x));
       },
@@ -470,7 +470,7 @@ struct value_index_inspect_helper {
     }
 
     result_type operator()(const alias_type& t) const {
-      return visit(*this, t.value_type);
+      return caf::visit(*this, t.value_type);
     }
 
     value_index& idx_;
@@ -534,16 +534,16 @@ struct value_index_inspect_helper {
     }
 
     result_type operator()(const alias_type& t) const {
-      return visit(*this, t.value_type);
+      return caf::visit(*this, t.value_type);
     }
   };
 
   template <class Inspector>
   friend auto inspect(Inspector& f, value_index_inspect_helper& helper) {
     if (Inspector::writes_state)
-      helper.idx = visit(default_construct{}, helper.type);
+      helper.idx = caf::visit(default_construct{}, helper.type);
     VAST_ASSERT(helper.idx);
-    return visit(down_cast<Inspector>{*helper.idx, f}, helper.type);
+    return caf::visit(down_cast<Inspector>{*helper.idx, f}, helper.type);
   }
 };
 

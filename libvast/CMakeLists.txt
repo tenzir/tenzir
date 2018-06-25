@@ -25,6 +25,8 @@ set(libvast_sources
   src/concept/hashable/crc.cpp
   src/concept/hashable/xxhash.cpp
   src/data.cpp
+  src/default_table_slice.cpp
+  src/defaults.cpp
   src/detail/adjust_resource_consumption.cpp
   src/detail/compressedbuf.cpp
   src/detail/fdinbuf.cpp
@@ -55,8 +57,6 @@ set(libvast_sources
   src/key.cpp
   src/null_bitmap.cpp
   src/operator.cpp
-  src/option_declaration_set.cpp
-  src/option_map.cpp
   src/pattern.cpp
   src/port.cpp
   src/schema.cpp
@@ -65,6 +65,7 @@ set(libvast_sources
   src/system/accountant.cpp
   src/system/application.cpp
   src/system/archive.cpp
+  src/system/column_index.cpp
   src/system/configuration.cpp
   src/system/consensus.cpp
   src/system/default_application.cpp
@@ -74,6 +75,9 @@ set(libvast_sources
   src/system/importer.cpp
   src/system/index.cpp
   src/system/indexer.cpp
+  src/system/indexer_manager.cpp
+  src/system/indexer_stage_driver.cpp
+  src/system/meta_index.cpp
   src/system/node.cpp
   src/system/node_command.cpp
   src/system/partition.cpp
@@ -85,9 +89,11 @@ set(libvast_sources
   src/system/spawn_sink.cpp
   src/system/spawn_source.cpp
   src/system/start_command.cpp
+  src/system/table_index.cpp
   src/system/task.cpp
   src/system/tracker.cpp
   src/system/writer_command_base.cpp
+  src/table.cpp
   src/time.cpp
   src/type.cpp
   src/uuid.cpp
@@ -215,6 +221,8 @@ set(tests
   test/command.cpp
   test/compressedbuf.cpp
   test/data.cpp
+  test/default_table_slice.cpp
+  test/detail/flat_lru_cache.cpp
   test/endpoint.cpp
   test/event.cpp
   test/expression.cpp
@@ -234,8 +242,6 @@ set(tests
   test/main.cpp
   test/mmapbuf.cpp
   test/offset.cpp
-  test/option_declaration_set.cpp
-  test/option_map.cpp
   test/parse_data.cpp
   test/parseable.cpp
   test/pattern.cpp
@@ -250,24 +256,27 @@ set(tests
   test/string.cpp
   test/subnet.cpp
   test/system/archive.cpp
+  test/system/column_index.cpp
   test/system/consensus.cpp
   test/system/exporter.cpp
   test/system/importer.cpp
   test/system/index.cpp
   test/system/indexer.cpp
+  test/system/indexer_stage_driver.cpp
   test/system/key_value_store.cpp
+  test/system/meta_index.cpp
   test/system/partition.cpp
   test/system/queries.cpp
   test/system/replicated_store.cpp
   test/system/sink.cpp
   test/system/source.cpp
+  test/system/table_index.cpp
   test/system/task.cpp
   test/time.cpp
   test/type.cpp
   test/uuid.cpp
   test/value.cpp
   test/value_index.cpp
-  test/variant.cpp
   test/vector_map.cpp
   test/vector_set.cpp
   test/view.cpp

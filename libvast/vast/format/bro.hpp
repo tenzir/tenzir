@@ -30,6 +30,7 @@
 #include "vast/schema.hpp"
 
 #include "vast/detail/line_range.hpp"
+#include "vast/detail/string.hpp"
 
 namespace vast {
 
@@ -195,11 +196,11 @@ struct bro_parser_factory {
         s.insert(std::move(x));
       return s;
     };
-    return (visit(*this, t.value_type) % set_separator_) ->* set_insert;
+    return (caf::visit(*this, t.value_type) % set_separator_) ->* set_insert;
   }
 
   result_type operator()(const vector_type& t) const {
-    return (visit(*this, t.value_type) % set_separator_)
+    return (caf::visit(*this, t.value_type) % set_separator_)
       ->* [](std::vector<Attribute> x) { return vector(std::move(x)); };
   }
 
@@ -212,14 +213,14 @@ rule<Iterator, Attribute>
 make_bro_parser(const type& t, const std::string& set_separator = ",") {
   rule<Iterator, Attribute> r;
   auto sep = is_container(t) ? set_separator : "";
-  return visit(bro_parser_factory<Iterator, Attribute>{sep}, t);
+  return caf::visit(bro_parser_factory<Iterator, Attribute>{sep}, t);
 }
 
 /// Parses non-container Bro data.
 template <class Iterator, class Attribute = data>
 bool bro_basic_parse(const type& t, Iterator& f, const Iterator& l,
                      Attribute& attr) {
-  return visit(bro_parser<Iterator, Attribute>{f, l, attr}, t);
+  return caf::visit(bro_parser<Iterator, Attribute>{f, l, attr}, t);
 }
 
 /// A Bro reader.

@@ -16,11 +16,15 @@
 #include <string>
 #include <vector>
 
+#include <caf/none.hpp>
+#include <caf/variant.hpp>
+#include <caf/detail/type_list.hpp>
+
 #include "vast/concept/printable/to.hpp"
+
 #include "vast/detail/operators.hpp"
 #include "vast/detail/steady_map.hpp"
-#include "vast/none.hpp"
-#include "vast/variant.hpp"
+#include "vast/detail/type_traits.hpp"
 
 namespace vast {
 
@@ -28,7 +32,7 @@ namespace vast {
 class json : detail::totally_ordered<json> {
 public:
   /// A JSON null type.
-  using null = none;
+  using null = caf::none_t;
 
   /// A JSON bool.
   using boolean = bool;
@@ -40,93 +44,13 @@ public:
   using string = std::string;
 
   /// A JSON array.
-  struct array;
+  using array = std::vector<json>;
 
   /// A JSON object.
-  struct object;
+  using object = detail::steady_map<std::string, json>;
 
-  /// Meta-function that converts a type into a JSON value.
-  /// If conversion is impossible it returns `std::false_type`.
-  template <class T>
-  using json_value = std::conditional_t<
-    std::is_same_v<T, none>,
-    null,
-    std::conditional_t<
-      std::is_same_v<T, bool>,
-      boolean,
-      std::conditional_t<
-        std::is_convertible_v<T, number>,
-        number,
-        std::conditional_t<
-          std::is_convertible_v<T, std::string>,
-          string,
-          std::conditional_t<
-            std::is_same_v<T, array>,
-            array,
-            std::conditional_t<
-              std::is_same_v<T, object>,
-              object,
-              std::false_type
-            >
-          >
-        >
-      >
-    >
-  >;
-
-  /// Maps an arbitrary type to a json type.
-  template <class T>
-  using jsonize = json_value<std::decay_t<T>>;
-
-  /// A sequence of JSON values.
-  struct array : std::vector<json> {
-    using super = std::vector<json>;
-    using super::vector;
-
-    array() = default;
-
-    array(const super& s) : super(s) {
-    }
-
-    array(super&& s) : super(std::move(s)) {
-    }
-  };
-
-  /// An associative data structure exposing key-value pairs with unique keys.
-  struct object : detail::steady_map<string, json> {
-    using super = detail::steady_map<string, json>;
-    using super::vector_map;
-
-    object() = default;
-
-    object(const super& s) : super(s) {
-    }
-
-    object(super&& s) : super(std::move(s)) {
-    }
-  };
-
-  /// Default-constructs a null JSON value.
-  json() = default;
-
-  /// Constructs a JSON value.
-  /// @tparam The JSON type.
-  /// @param x A JSON type.
-  template <
-    class T,
-    class =
-      std::enable_if_t<!std::is_same_v<std::false_type, jsonize<T>>>
-  >
-  json(T&& x)
-    : value_(jsonize<T>(std::forward<T>(x))) {
-  }
-
-  friend auto& expose(json& j) {
-    return j.value_;
-  }
-
-private:
-  using variant_type = variant<
+  /// The sum type of all possible JSON types.
+  using types = caf::detail::type_list<
     null,
     boolean,
     number,
@@ -135,64 +59,119 @@ private:
     object
   >;
 
-  variant_type value_;
+  /// The sum type of all possible JSON types.
+  using variant = caf::detail::tl_apply_t<types, caf::variant>;
 
-private:
-  struct less_than {
-    template <class T>
-    bool operator()(const T& x, const T& y) {
-      return x < y;
-    }
+  /// Default-constructs a null JSON value.
+  json() = default;
 
-    template <class T, class U>
-    bool operator()(const T&, const U&) {
-      return false;
-    }
-  };
+  json(json&&) = default;
 
-  struct equals {
-    template <class T>
-    bool operator()(const T& x, const T& y) {
-      return x == y;
-    }
+  json(const json&) = default;
 
-    template <class T, class U>
-    bool operator()(const T&, const U&) {
-      return false;
-    }
-  };
+  /// Constructs a JSON value.
+  /// @tparam The JSON type.
+  /// @param x A JSON type.
+  template <class T>
+  explicit json(T x);
 
-  friend bool operator<(const json& x, const json& y) {
-    if (x.value_.index() == y.value_.index())
-      return visit(less_than{}, x.value_, y.value_);
-    else
-      return x.value_.index() < y.value_.index();
+  json& operator=(json&&) = default;
+
+  json& operator=(const json&) = default;
+
+  template <class T>
+  json& operator=(T x);
+
+  // -- concepts --------------------------------------------------------------
+
+  variant& get_data() {
+    return data_;
+  }
+
+  const variant& get_data() const {
+    return data_;
   }
 
   friend bool operator==(const json& x, const json& y) {
-    return visit(equals{}, x.value_, y.value_);
+    return x.data_ == y.data_;
   }
+
+  friend bool operator<(const json& x, const json& y) {
+    return x.data_ < y.data_;
+  }
+
+  template <class... Ts>
+  static json::array make_array(Ts&&... xs) {
+    return json::array{json{std::forward<Ts>(xs)}...};
+  }
+
+private:
+  variant data_;
 };
 
-inline bool convert(bool b, json& j) {
-  j = b;
-  return true;
+namespace detail {
+
+template <
+  class T,
+  int = std::is_convertible_v<T, json::number>
+        && !std::is_same_v<T, json::boolean>
+        ? 1
+        : (std::is_convertible_v<T, std::string> ? 2 : 0)
+>
+struct to_json_helper;
+
+template <class T>
+struct to_json_helper<T, 0> {
+  using type = T;
+};
+
+template <class T>
+struct to_json_helper<T, 1> {
+  using type = json::number;
+};
+
+template <class T>
+struct to_json_helper<T, 2> {
+  using type = json::string;
+};
+
+} // namespace detail
+
+/// Converts an arbitrary type to the corresponding JSON type.
+/// @relates json
+template <class T>
+using to_json_type = typename detail::to_json_helper<std::decay_t<T>>::type;
+
+template <class T>
+json::json(T x) : data_(to_json_type<T>(std::move(x))) {
+  // nop
 }
 
 template <class T>
-bool convert(T x, json& j) {
-  if constexpr (std::is_arithmetic_v<T>) {
-    j = json::number(x);
-    return true;
-  } else if constexpr (std::is_convertible_v<T, std::string>) {
-    j = std::string{std::forward<T>(x)};
-    return true;
-  } else {
-    static_assert(!std::is_same_v<T, T>,
-                  "T is neither arithmetic nor convertible to std::string");
-  }
+json& json::operator=(T x) {
+  data_ = to_json_type<T>(std::move(x));
+  return *this;
 }
 
+/// @relates json
+inline bool convert(bool b, json& j) {
+  j = json::boolean{b};
+  return true;
+}
+
+/// @relates json
+template <class T>
+bool convert(T x, json& j) {
+  if constexpr (std::is_arithmetic_v<T>)
+    j = json::number(x);
+  else if constexpr (std::is_convertible_v<T, std::string>)
+    j = std::string(std::forward<T>(x));
+  else
+    static_assert(detail::always_false_v<T>);
+  return true;
+}
+
+/// @relates json
 template <class T>
 bool convert(const std::vector<T>& v, json& j) {
   json::array a;
@@ -206,6 +185,7 @@ bool convert(const std::vector<T>& v, json& j) {
   return true;
 }
 
+/// @relates json
 template <class K, class V>
 bool convert(const std::map<K, V>& m, json& j) {
   json::object o;
@@ -220,6 +200,7 @@ bool convert(const std::map<K, V>& m, json& j) {
   return true;
 }
 
+/// @relates json
 template <class T, class... Opts>
 json to_json(const T& x, Opts&&... opts) {
   json j;
@@ -230,3 +211,9 @@ json to_json(const T& x, Opts&&... opts) {
 
 } // namespace vast
 
+namespace caf {
+
+template <>
+struct sum_type_access<vast::json> : default_sum_type_access<vast::json> {};
+
+} // namespace caf

@@ -35,7 +35,7 @@ struct schema_parser : parser<schema_parser> {
       // to create an alias.
       if (!ty.name().empty())
         ty = alias_type{ty}; // TODO: attributes
-      ty.name(name);
+      ty = ty.name(name);
       symbols.add(name, ty);
       return ty;
     };

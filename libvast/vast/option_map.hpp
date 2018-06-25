@@ -91,7 +91,7 @@ optional<const T&> get(const option_map& xs, std::string_view name) {
   auto x = xs[name];
   if (!x)
     return {};
-  if (auto result = get_if<detail::make_data_type<T>>(*x); result)
+  if (auto result = caf::get_if<detail::to_data_type<T>>(&*x))
     return *result;
   VAST_DEBUG("option name found but wrong type requested", VAST_ARG(name));
   return {};

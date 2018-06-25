@@ -14,7 +14,7 @@
 #pragma once
 
 #include "vast/data.hpp"
-#include "vast/detail/string.hpp"
+
 #include "vast/concept/printable/numeric.hpp"
 #include "vast/concept/printable/print.hpp"
 #include "vast/concept/printable/string.hpp"
@@ -27,41 +27,33 @@
 #include "vast/concept/printable/vast/none.hpp"
 #include "vast/concept/printable/vast/type.hpp"
 
+#include "vast/detail/overload.hpp"
+#include "vast/detail/string.hpp"
+
 namespace vast {
 
 struct data_printer : printer<data_printer> {
   using attribute = data;
 
   template <class Iterator>
-  struct visitor {
-    visitor(Iterator& out) : out_{out} {
-    }
-
-    template <class T>
-    bool operator()(const T& x) const {
-      return make_printer<T>{}(out_, x);
-    }
-
-    bool operator()(integer x) const {
-      return printers::integral<integer, policy::force_sign>(out_, x);
-    }
-
-    bool operator()(const std::string& str) const {
-      // TODO: create a printer that escapes the output on the fly, as opposed
-      // to going through an extra copy.
-      auto escaped = printers::str ->* [](const std::string& x) {
-        return detail::byte_escape(x, "\"");
-      };
-      auto p = '"' << escaped << '"';
-      return p(out_, str);
-    }
-
-    Iterator& out_;
-  };
-
-  template <class Iterator>
   bool print(Iterator& out, const data& d) const {
-    return visit(visitor<Iterator>{out}, d);
+    return caf::visit(detail::overload(
+      [&](const auto& x) {
+        return make_printer<std::decay_t<decltype(x)>>{}(out, x);
+      },
+      [&](integer x) {
+        return printers::integral<integer, policy::force_sign>(out, x);
+      },
+      [&](const std::string& x) {
+        // TODO: create a printer that escapes the output on the fly, as opposed
+        // to going through an extra copy.
+        auto escaped = printers::str ->* [](const std::string& str) {
+          return detail::byte_escape(str, "\"");
+        };
+        auto p = '"' << escaped << '"';
+        return p(out, x);
+      }
+    ), d);
   }
 };
 
@@ -121,4 +113,3 @@ struct printer_registry<map> {
 };
 
 } // namespace vast
-

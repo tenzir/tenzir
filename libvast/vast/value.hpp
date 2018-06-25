@@ -15,9 +15,10 @@
 
 #include <type_traits>
 
+#include <caf/default_sum_type_access.hpp>
+
 #include "vast/data.hpp"
 #include "vast/type.hpp"
-#include "vast/detail/type_traits.hpp"
 
 namespace vast {
 
@@ -26,6 +27,8 @@ class value {
   friend access;
 
 public:
+  using types = data::types;
+
   /// Constructs a type-safe value by checking whether the given data matches
   /// the given type.
   /// @param d The data for the value.
@@ -42,15 +45,9 @@ public:
 
   /// Constructs an untyped value from data.
   /// @param x The data for the value.
-  template <
-    class T,
-    class = detail::disable_if_t<
-      detail::is_same_or_derived_v<value, T>
-      || std::is_same_v<data_type<T>, std::false_type>
-    >
-  >
-  value(T&& x)
-    : data_{std::forward<T>(x)} {
+  template <class T, class = std::enable_if_t<std::is_constructible_v<data, T>>>
+  value(T&& x) : data_{std::forward<T>(x)} {
+    // nop
   }
 
   /// Constructs a typed value from data.
@@ -94,12 +91,22 @@ public:
   friend bool operator>=(const value& lhs, const value& rhs);
   friend bool operator>(const value& lhs, const value& rhs);
 
+  /// @cond PRIVATE
+
+  data::variant& get_data() {
+    return data_.get_data();
+  }
+
+  const data::variant& get_data() const {
+    return data_.get_data();
+  }
+
   template <class Inspector>
   friend auto inspect(Inspector&f, value& v) {
     return f(v.data_, v.type_);
   }
 
-  friend detail::data_variant& expose(value& v);
+  /// @endond
 
 private:
   vast::data data_;
@@ -115,3 +122,9 @@ bool convert(const value& v, json& j);
 
 } // namespace vast
 
+namespace caf {
+
+template <>
+struct sum_type_access<vast::value> : default_sum_type_access<vast::value> {};
+
+} // namespace caf

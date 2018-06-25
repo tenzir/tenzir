@@ -20,16 +20,13 @@
 #include <utility>
 
 #include <caf/actor_system_config.hpp>
+#include <caf/config_option_set.hpp>
 #include <caf/fwd.hpp>
 #include <caf/message.hpp>
+#include <caf/pec.hpp>
 
 #include "vast/data.hpp"
 #include "vast/error.hpp"
-#include "vast/option_declaration_set.hpp"
-#include "vast/option_map.hpp"
-
-#include "vast/concept/parseable/to.hpp"
-#include "vast/concept/parseable/vast/data.hpp"
 
 #include "vast/detail/steady_map.hpp"
 #include "vast/detail/string.hpp"
@@ -66,7 +63,7 @@ public:
 
   /// Runs the command and blocks until execution completes.
   /// @returns An exit code suitable for returning from main.
-  int run(caf::actor_system& sys, option_map& options,
+  int run(caf::actor_system& sys, caf::config_value_map& options,
           argument_iterator begin, argument_iterator end);
 
 
@@ -109,19 +106,21 @@ protected:
   /// Checks whether a command is ready to proceed, i.e., whether the
   /// configuration allows for calling `run_impl` or `run` on a nested command.
   virtual proceed_result proceed(caf::actor_system& sys,
-                                 const option_map& options,
+                                 const caf::config_value_map& options,
                                  argument_iterator begin,
                                  argument_iterator end);
 
-  virtual int run_impl(caf::actor_system& sys, const option_map& options,
+  virtual int run_impl(caf::actor_system& sys,
+                       const caf::config_value_map& options,
                        argument_iterator begin, argument_iterator end);
 
-  expected<void> add_opt(std::string_view name, std::string_view description,
-                         data default_value);
+  template <class T>
+  void add_opt(const char* name, const char* description) {
+    opts_.add<T>("global", name, description);
+  }
 
 private:
-  std::string parse_error(option_declaration_set::parse_state state,
-                          argument_iterator error_position,
+  std::string parse_error(caf::pec code, argument_iterator error_position,
                           argument_iterator begin, argument_iterator end) const;
 
   /// @pre `error_position != end`
@@ -135,7 +134,7 @@ private:
   std::string_view name_;
 
   /// List of all accepted options.
-  option_declaration_set opts_;
+  caf::config_option_set opts_;
 };
 
 } // namespace vast

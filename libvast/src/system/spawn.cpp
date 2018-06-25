@@ -118,29 +118,31 @@ expected<actor> spawn_importer(stateful_actor<node_state>* self,
                                options& opts) {
   auto ids = size_t{128};
   auto r = opts.params.extract_opts({
-    {"ids,n", "number of initial IDs to request", ids},
+    {"ids,n", "number of initial IDs to request (deprecated)", ids},
   });
   opts.params = r.remainder;
   if (!r.error.empty())
     return make_error(ec::syntax_error, r.error);
   // FIXME: Notify exporters with a continuous query.
-  return self->spawn(importer, opts.dir / opts.label, ids);
+  return self->spawn(importer, opts.dir / opts.label);
 }
 
 expected<actor> spawn_index(local_actor* self, options& opts) {
   size_t max_events = 1 << 20;
   size_t max_parts = 10;
   size_t taste_parts = 5;
+  size_t num_collectors = 10;
   auto r = opts.params.extract_opts({
     {"max-events,e", "maximum events per partition", max_events},
     {"max-parts,p", "maximum number of in-memory partitions", max_parts},
-    {"taste-parts,p", "number of immediately scheduled partitions", taste_parts}
+    {"taste-parts,t", "number of immediately scheduled partitions", taste_parts},
+    {"max-queries,q", "maximum number of concurrent queries", num_collectors}
   });
   opts.params = r.remainder;
   if (!r.error.empty())
     return make_error(ec::syntax_error, r.error);
   return self->spawn(index, opts.dir / opts.label, max_events, max_parts,
-                     taste_parts);
+                     taste_parts, num_collectors);
 }
 
 expected<actor> spawn_metastore(local_actor* self, options& opts) {

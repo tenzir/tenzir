@@ -27,6 +27,10 @@
 #define SUITE expression
 #include "test.hpp"
 
+using caf::get;
+using caf::get_if;
+using caf::holds_alternative;
+
 using namespace vast;
 
 struct fixture {
@@ -48,17 +52,17 @@ struct fixture {
 FIXTURE_SCOPE(expr_tests, fixture)
 
 TEST(construction) {
-  auto n = get_if<negation>(expr0);
+  auto n = caf::get_if<negation>(&expr0);
   REQUIRE(n);
-  auto c = get_if<conjunction>(n->expr());
+  auto c = caf::get_if<conjunction>(&n->expr());
   REQUIRE(c);
   REQUIRE(c->size() == 2);
-  auto p0 = get_if<predicate>(c->at(0));
+  auto p0 = caf::get_if<predicate>(&c->at(0));
   REQUIRE(p0);
   CHECK(get<key_extractor>(p0->lhs).key == key{"x", "y", "z"});
   CHECK_EQUAL(p0->op, less_equal);
   CHECK(get<data>(p0->rhs) == data{42});
-  auto p1 = get_if<predicate>(c->at(1));
+  auto p1 = caf::get_if<predicate>(&c->at(1));
   REQUIRE(p1);
   CHECK(get<attribute_extractor>(p1->lhs).attr == attribute{"foo"});
   CHECK_EQUAL(p1->op, equal);
@@ -70,15 +74,15 @@ TEST(serialization) {
   std::vector<char> buf;
   save(buf, expr0, expr1);
   load(buf, ex0, ex1);
-  auto d = get_if<disjunction>(ex1);
+  auto d = caf::get_if<disjunction>(&ex1);
   REQUIRE(d);
   REQUIRE(!d->empty());
-  auto n = get_if<negation>(d->at(0));
+  auto n = caf::get_if<negation>(&d->at(0));
   REQUIRE(n);
-  auto c = get_if<conjunction>(n->expr());
+  auto c = caf::get_if<conjunction>(&n->expr());
   REQUIRE(c);
   REQUIRE_EQUAL(c->size(), 2u);
-  auto p = get_if<predicate>(c->at(1));
+  auto p = caf::get_if<predicate>(&c->at(1));
   REQUIRE(p);
   CHECK_EQUAL(p->op, equal);
 }
@@ -146,47 +150,47 @@ TEST(validation - attribute extractor) {
   // The "type" attribute extractor requires a string operand.
   auto expr = to<expression>("&type == \"foo\"");
   REQUIRE(expr);
-  CHECK(visit(validator{}, *expr));
+  CHECK(caf::visit(validator{}, *expr));
   expr = to<expression>("&type == 42");
   REQUIRE(expr);
-  CHECK(!visit(validator{}, *expr));
+  CHECK(!caf::visit(validator{}, *expr));
   expr = to<expression>("&type == bro::conn");
   REQUIRE(expr);
-  CHECK(!visit(validator{}, *expr));
+  CHECK(!caf::visit(validator{}, *expr));
   // The "time" attribute extractor requires a timestamp operand.
   expr = to<expression>("&time < now");
   REQUIRE(expr);
-  CHECK(visit(validator{}, *expr));
+  CHECK(caf::visit(validator{}, *expr));
   expr = to<expression>("&time < 2017-06-16");
   REQUIRE(expr);
-  CHECK(visit(validator{}, *expr));
+  CHECK(caf::visit(validator{}, *expr));
   expr = to<expression>("&time > -42");
   REQUIRE(expr);
-  CHECK(!visit(validator{}, *expr));
+  CHECK(!caf::visit(validator{}, *expr));
   expr = to<expression>("&time > -42 secs");
   REQUIRE(expr);
-  CHECK(!visit(validator{}, *expr));
+  CHECK(!caf::visit(validator{}, *expr));
 }
 
 TEST(validation - type extractor) {
   auto expr = to<expression>(":port == 443/tcp");
   REQUIRE(expr);
-  CHECK(visit(validator{}, *expr));
+  CHECK(caf::visit(validator{}, *expr));
   expr = to<expression>(":addr in 10.0.0.0/8");
   REQUIRE(expr);
-  CHECK(visit(validator{}, *expr));
+  CHECK(caf::visit(validator{}, *expr));
   expr = to<expression>(":port > -42");
   REQUIRE(expr);
-  CHECK(!visit(validator{}, *expr));
+  CHECK(!caf::visit(validator{}, *expr));
 }
 
 TEST(matcher) {
   auto match = [](const std::string& str, auto&& t) {
     auto expr = to<expression>(str);
     REQUIRE(expr);
-    auto resolved = visit(type_resolver(t), *expr);
+    auto resolved = caf::visit(type_resolver(t), *expr);
     REQUIRE(resolved);
-    return visit(matcher{t}, *resolved);
+    return caf::visit(matcher{t}, *resolved);
   };
   MESSAGE("type extractors");
   CHECK(match(":real < 4.2", real_type{}));
@@ -206,7 +210,7 @@ TEST(matcher) {
   CHECK(!match("x < 4.2 && a == T", r));
   MESSAGE("attribute extractors");
   CHECK(!match("&type == \"foo\"", r));
-  r.name("foo");
+  r = r.name("foo");
   CHECK(match("&type == \"foo\"", r));
   CHECK(match("&type != \"bar\"", r));
 }

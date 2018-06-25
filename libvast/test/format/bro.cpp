@@ -66,7 +66,7 @@ TEST(bro writer) {
   // Sanity check some Bro events.
   CHECK_EQUAL(bro_conn_log.size(), 8462u);
   CHECK_EQUAL(bro_conn_log.front().type().name(), "bro::conn");
-  auto record = get_if<vector>(bro_conn_log.front().data());
+  auto record = caf::get_if<vector>(&bro_conn_log.front().data());
   REQUIRE(record);
   REQUIRE_EQUAL(record->size(), 17u); // 20 columns, but 4 for the conn record
   CHECK_EQUAL(record->at(3), data{"udp"}); // one after the conn record
