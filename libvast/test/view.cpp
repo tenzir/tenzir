@@ -91,13 +91,12 @@ TEST(make_data_view) {
 
 TEST(increment decrement container_view_iterator) {
   auto xs = vector{42, true, "foo", 4.2};
-  auto v1 = make_view(xs);
-  auto v2 = make_view(xs);
-  auto it1 = v1->begin();
-  auto it2 = v2->begin();
+  auto v = make_view(xs);
+  auto it1 = v->begin();
+  auto it2 = v->begin();
   CAF_CHECK_EQUAL(it1.distance_to(it2), 0);
-  it1.increment();
+  ++it1;
   CAF_CHECK_NOT_EQUAL(it1.distance_to(it2), 0);
-  it1.decrement();
+  --it1;
   CAF_CHECK_EQUAL(it1.distance_to(it2), 0);
 }
