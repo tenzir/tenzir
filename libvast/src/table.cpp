@@ -11,45 +11,31 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#pragma once
+#include "vast/table.hpp"
 
 namespace vast {
 
-// -- classes ------------------------------------------------------------------
+table_slice::~table_slice() {
+  // nop
+}
 
-class address;
-class data;
-class default_table_slice;
-class event;
-class expression;
-class json;
-class path;
-class pattern;
-class port;
-class schema;
-class subnet;
-class table_slice;
-class type;
+const record_type& table_slice::layout() const {
+  return layout_;
+}
 
-// -- structs ------------------------------------------------------------------
+table_slice::size_type table_slice::rows() const {
+  return rows_;
+}
 
-struct address_type;
-struct alias_type;
-struct boolean_type;
-struct count_type;
-struct enumeration_type;
-struct integer_type;
-struct map_type;
-struct none_type;
-struct pattern_type;
-struct port_type;
-struct real_type;
-struct record_type;
-struct set_type;
-struct string_type;
-struct subnet_type;
-struct timespan_type;
-struct timestamp_type;
-struct vector_type;
+table_slice::size_type table_slice::columns() const {
+  return columns_;
+}
+
+table_slice::table_slice(record_type layout) 
+  : layout_{std::move(layout)},
+    rows_{0},
+    columns_{flatten(layout_).fields.size()} {
+  // nop
+}
 
 } // namespace vast

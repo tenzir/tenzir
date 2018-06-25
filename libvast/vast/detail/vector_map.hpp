@@ -125,14 +125,14 @@ public:
     return Policy::add(xs_, std::move(x));
   };
 
-  std::pair<iterator, bool> insert(iterator, value_type x) {
+  iterator insert(iterator, value_type x) {
     // TODO: don't ignore hint.
-    return insert(std::move(x));
+    return insert(std::move(x)).first;
   };
 
-  std::pair<iterator, bool> insert(const_iterator, value_type x) {
+  iterator insert(const_iterator, value_type x) {
     // TODO: don't ignore hint.
-    return insert(std::move(x));
+    return insert(std::move(x)).first;
   };
 
   template <class InputIterator>

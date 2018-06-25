@@ -43,6 +43,8 @@ TEST(vector view) {
   CHECK_EQUAL(i, v->end());
   auto j = v->begin() + 1;
   CHECK_EQUAL(i - j, xs.size() - 1);
+  MESSAGE("check conversion back to data");
+  CHECK(make_data(v) == xs);
 }
 
 TEST(set view) {
@@ -55,6 +57,8 @@ TEST(set view) {
   MESSAGE("check iterator semantics");
   CHECK_EQUAL(std::next(v->begin(), 3), v->end());
   CHECK_EQUAL(*std::next(v->begin(), 1), make_data_view(42));
+  MESSAGE("check conversion back to data");
+  CHECK(make_data(v) == xs);
 }
 
 
@@ -71,6 +75,12 @@ TEST(map view) {
   }
   MESSAGE("check iterator behavior");
   CHECK_EQUAL(std::next(v->begin(), 2), v->end());
+  MESSAGE("check iterator value type");
+  auto [key, value] = *v->begin();
+  CHECK_EQUAL(key, make_data_view(42));
+  CHECK_EQUAL(value, make_data_view(true));
+  MESSAGE("check conversion back to data");
+  CHECK(make_data(v) == xs);
 }
 
 TEST(make_data_view) {
