@@ -115,8 +115,11 @@ public:
   /// @returns `true` on success.
   virtual bool add(data_view x) = 0;
 
-  /// Constructs a table_slice from the currently accumulated state.
-  /// @returns A table slice or `nullptr` on failure.
+  /// Constructs a table_slice from the currently accumulated state. After
+  /// calling this function, implementations must reset their internal state
+  /// such that subsequent calls to add will restart with a new table_slice.
+  /// @returns A table slice from the accumulated calls to add or `nullptr` on
+  ///          failure.
   virtual table_slice_ptr finish() = 0;
 
 protected:
