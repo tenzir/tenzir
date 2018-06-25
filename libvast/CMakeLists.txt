@@ -64,6 +64,7 @@ set(libvast_sources
   src/system/accountant.cpp
   src/system/application.cpp
   src/system/archive.cpp
+  src/system/column_index.cpp
   src/system/configuration.cpp
   src/system/consensus.cpp
   src/system/default_application.cpp
@@ -73,9 +74,12 @@ set(libvast_sources
   src/system/importer.cpp
   src/system/index.cpp
   src/system/indexer.cpp
+  src/system/indexer_manager.cpp
+  src/system/indexer_stage_driver.cpp
   src/system/node.cpp
   src/system/node_command.cpp
   src/system/partition.cpp
+  src/system/partition_index.cpp
   src/system/profiler.cpp
   src/system/reader_command_base.cpp
   src/system/remote_command.cpp
@@ -84,6 +88,7 @@ set(libvast_sources
   src/system/spawn_sink.cpp
   src/system/spawn_source.cpp
   src/system/start_command.cpp
+  src/system/table_index.cpp
   src/system/task.cpp
   src/system/tracker.cpp
   src/system/writer_command_base.cpp
@@ -214,6 +219,7 @@ set(tests
   test/command.cpp
   test/compressedbuf.cpp
   test/data.cpp
+  test/detail/flat_lru_cache.cpp
   test/endpoint.cpp
   test/event.cpp
   test/expression.cpp
@@ -248,17 +254,21 @@ set(tests
   test/string.cpp
   test/subnet.cpp
   test/system/archive.cpp
+  test/system/column_index.cpp
   test/system/consensus.cpp
   test/system/exporter.cpp
   test/system/importer.cpp
   test/system/index.cpp
   test/system/indexer.cpp
+  test/system/indexer_stage_driver.cpp
   test/system/key_value_store.cpp
   test/system/partition.cpp
+  test/system/partition_index.cpp
   test/system/queries.cpp
   test/system/replicated_store.cpp
   test/system/sink.cpp
   test/system/source.cpp
+  test/system/table_index.cpp
   test/system/task.cpp
   test/time.cpp
   test/type.cpp

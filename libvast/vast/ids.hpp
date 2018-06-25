@@ -35,8 +35,11 @@ struct id_range {
 
 /// Generates an ID set for the given ranges. For example,
 /// `make_ids({{10, 12}, {20, 22}})` will return an ID set containing the
-/// ranges [10, 12) and [20, 22), i.e., 10, 11, 20, and 21.
-ids make_ids(std::initializer_list<id_range> ranges);
+/// ranges [10, 12) and [20, 22), i.e., 10, 11, 20, and 21. The bitmap is
+/// at least of size `min_size. If the size is less than `min_size`, additional
+/// bits of value `default_bit` are appended.
+ids make_ids(std::initializer_list<id_range> ranges, size_t min_size = 0,
+             bool default_bit = false);
 
 } // namespace vast
 

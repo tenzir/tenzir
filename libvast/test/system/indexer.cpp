@@ -21,70 +21,104 @@
 
 #include "vast/system/indexer.hpp"
 
-#define SUITE system
+#define SUITE indexer
 #include "test.hpp"
 #include "fixtures/actor_system_and_events.hpp"
 
 using namespace caf;
 using namespace vast;
 
-FIXTURE_SCOPE(indexer_tests, fixtures::actor_system_and_events)
+namespace {
 
-TEST(indexer) {
-  directory /= "indexer";
-  const auto conn_log_type = bro_conn_log[0].type();
-  auto i = self->spawn(system::event_indexer, directory, conn_log_type);
-  MESSAGE("ingesting events");
-  self->send(i, bro_conn_log);
-  // Event indexers operate with predicates, whereas partitions take entire
-  // expressions.
-  MESSAGE("querying");
-  auto pred = to<predicate>("id.resp_p == 995/?");
-  REQUIRE(pred);
-  bitmap result;
-  self->request(i, infinite, *pred).receive(
-    [&](bitmap& bm) {
-      result = std::move(bm);
-    },
-    error_handler()
-  );
-  CHECK_EQUAL(rank(result), 53u);
-  auto check_uid = [](const event& e, const std::string& uid) {
-    auto& v = get<vector>(e.data());
-    return v[1] == uid;
+struct fixture : fixtures::deterministic_actor_system_and_events {
+  void init(type event_type) {
+    indexer = self->spawn(system::indexer, directory, event_type);
+    run_exhaustively();
+  }
+
+  void init(std::vector<event> events) {
+    VAST_ASSERT(!events.empty());
+    auto event_type = events.front().type();
+    init(event_type);
+    VAST_ASSERT(std::all_of(events.begin(), events.end(), [&](const event& x) {
+      return x.type() == event_type;
+    }));
+    self->send(indexer, std::move(events));
+    run_exhaustively();
+  }
+
+  ids query(std::string_view what) {
+    auto pred = unbox(to<expression>(what));
+    return request<ids>(indexer, std::move(pred));
+  }
+
+  actor indexer;
+};
+
+} // namespace <anonymous>
+
+FIXTURE_SCOPE(indexer_tests, fixture)
+
+TEST(integer rows) {
+  MESSAGE("ingest integer events");
+  integer_type layout;
+  std::vector<int> ints{1, 2, 3, 1, 2, 3, 1, 2, 3};
+  std::vector<event> events;
+  for (auto i : ints)
+    events.emplace_back(event::make(i, layout, events.size()));
+  auto res = [&](auto... args) {
+    return make_ids({args...}, events.size());
   };
-  for (auto i : select(result))
-    if (i == 819)
-      CHECK(check_uid(bro_conn_log[819], "KKSlmtmkkxf")); // first
-    else if (i == 3594)
-      CHECK(check_uid(bro_conn_log[3594], "GDzpFiROJQi")); // intermediate
-    else if (i == 6338)
-      CHECK(check_uid(bro_conn_log[6338], "zwCckCCgXDb")); // last
-  MESSAGE("shutting down indexer");
-  self->send(i, system::shutdown_atom::value);
-  self->wait_for(i);
-  CHECK(exists(directory));
-  CHECK(exists(directory / "data" / "id" / "orig_h"));
-  CHECK(exists(directory / "meta" / "time"));
-  MESSAGE("respawning indexer from file system");
-  i = self->spawn(system::event_indexer, directory, conn_log_type);
-  // Same as above: submit the query and verify the result.
-  self->request(i, infinite, *pred).receive(
-    [&](bitmap& bm) {
-      CHECK_EQUAL(rank(bm), 53u);
-    },
-    error_handler()
-  );
-  // Test another query that involves a map-reduce computation of value
-  // indexers.
-  pred = to<predicate>(":addr == 65.55.184.16");
-  REQUIRE(pred);
-  self->request(i, infinite, *pred).receive(
-    [&](const bitmap& bm) {
-      CHECK_EQUAL(rank(bm), 2u);
-    },
-    error_handler()
-  );
+  init(events);
+  sched.run();
+  MESSAGE("verify table index");
+  auto verify = [&] {
+    CHECK_EQUAL(query(":int == +1"), res(0, 3, 6));
+    CHECK_EQUAL(query(":int == +2"), res(1, 4, 7));
+    CHECK_EQUAL(query(":int == +3"), res(2, 5, 8));
+    CHECK_EQUAL(query(":int == +4"), res());
+    CHECK_EQUAL(query(":int != +1"), res(1, 2, 4, 5, 7, 8));
+    CHECK_EQUAL(query("!(:int == +1)"), res(1, 2, 4, 5, 7, 8));
+    CHECK_EQUAL(query(":int > +1 && :int < +3"), res(1, 4, 7));
+  };
+  verify();
+  MESSAGE("kill INDEXER");
+  anon_send_exit(indexer, exit_reason::kill);
+  run_exhaustively();
+  MESSAGE("reload INDEXER from disk");
+  init(layout);
+  MESSAGE("verify table index again");
+  verify();
+}
+
+TEST(bro conn logs) {
+  MESSAGE("ingest bro conn log");
+  init(bro_conn_log);
+  MESSAGE("verify table index");
+  auto res = [&](auto... args) {
+    return make_ids({args...}, bro_conn_log.size());
+  };
+  auto verify = [&] {
+    CHECK_EQUAL(rank(query("id.resp_p == 995/?")), 53u);
+    CHECK_EQUAL(rank(query("id.resp_p == 5355/?")), 49u);
+    CHECK_EQUAL(rank(query("id.resp_p == 995/? || id.resp_p == 5355/?")), 102u);
+    CHECK_EQUAL(rank(query("&time > 1970-01-01")), bro_conn_log.size());
+    CHECK_EQUAL(rank(query("proto == \"udp\"")), 5306u);
+    CHECK_EQUAL(rank(query("proto == \"tcp\"")), 3135u);
+    CHECK_EQUAL(rank(query("uid == \"nkCxlvNN8pi\"")), 1u);
+    CHECK_EQUAL(rank(query("orig_bytes < 400")), 5332u);
+    CHECK_EQUAL(rank(query("orig_bytes < 400 && proto == \"udp\"")), 4357u);
+    CHECK_EQUAL(rank(query(":addr == 65.55.184.16")), 2u);
+    CHECK_EQUAL(query(":addr == 169.254.225.22"), res(680, 682, 719, 720));
+  };
+  verify();
+  MESSAGE("kill INDEXER");
+  anon_send_exit(indexer, exit_reason::kill);
+  run_exhaustively();
+  MESSAGE("reload INDEXER from disk");
+  init(bro_conn_log.front().type());
+  MESSAGE("verify table index again");
+  verify();
 }
 
 FIXTURE_SCOPE_END()

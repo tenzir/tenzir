@@ -25,6 +25,7 @@
 #include "vast/aliases.hpp"
 #include "vast/attribute.hpp"
 #include "vast/expected.hpp"
+#include "vast/fwd.hpp"
 #include "vast/key.hpp"
 #include "vast/none.hpp"
 #include "vast/offset.hpp"
@@ -41,33 +42,6 @@
 #include "vast/detail/stack_vector.hpp"
 
 namespace vast {
-
-class address;
-class data;
-class json;
-class pattern;
-class port;
-class schema;
-class subnet;
-
-struct none_type;
-struct boolean_type;
-struct integer_type;
-struct count_type;
-struct real_type;
-struct timespan_type;
-struct timestamp_type;
-struct string_type;
-struct pattern_type;
-struct address_type;
-struct subnet_type;
-struct port_type;
-struct enumeration_type;
-struct vector_type;
-struct set_type;
-struct map_type;
-struct record_type;
-struct alias_type;
 
 /// An abstract type for ::data.
 class type : detail::totally_ordered<type> {
@@ -147,6 +121,10 @@ private:
 
   caf::intrusive_ptr<impl> ptr_;
 };
+
+/// Returns a digest ID for `x`.
+/// @relates type
+std::string to_digest(const type& x);
 
 // -- concrete types ---------------------------------------------------------
 
@@ -548,6 +526,14 @@ bool type_check(const type& t, const data& d);
 /// @param t The type to construct ::data from.
 /// @returns a default-constructed instance of type *t*.
 data construct(const type& t);
+
+/// Tests whether a type has a "skip" attribute.
+/// @relates type
+inline bool has_skip_attribute(const type& t) {
+  auto& attrs = t.attributes();
+  auto pred = [](auto& x) { return x.key == "skip"; };
+  return std::any_of(attrs.begin(), attrs.end(), pred);
+}
 
 // -- implementation details -------------------------------------------------
 

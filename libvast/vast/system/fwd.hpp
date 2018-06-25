@@ -13,39 +13,48 @@
 
 #pragma once
 
-#include <string>
-#include <vector>
+#include <memory>
 
-#include <caf/actor_system_config.hpp>
+#include <caf/fwd.hpp>
 
 namespace vast::system {
 
+// -- classes ------------------------------------------------------------------
+
 class application;
+class column_index;
+class configuration;
+class default_application;
+class export_command;
+class import_command;
+class indexer_manager;
+class indexer_stage_driver;
+class node_command;
+class partition;
+class partition_index;
+class pcap_reader_command;
+class pcap_writer_command;
+class reader_command_base;
+class remote_command;
+class start_command;
+class table_index;
+class writer_command_base;
 
-/// Bundles all configuration parameters of a VAST system.
-class configuration : public caf::actor_system_config {
-  friend application;
+// -- structs ------------------------------------------------------------------
 
-public:
-  /// Default-constructs a configuration.
-  configuration();
+struct query_statistics;
 
-  explicit configuration(bool load_middleman);
+// -- templates ----------------------------------------------------------------
 
-  /// Constructs a configuration from the command line.
-  /// @param argc The argument counter of `main`.
-  /// @param argv The argument vector of `main`.
-  configuration(int argc, char** argv);
+template <class Reader>
+class reader_command;
 
-  /// Constructs a configuration from a vector of string options.
-  /// @param opts The vector with CAF options.
-  configuration(const std::vector<std::string>& opts);
+template <class Writer>
+class writer_command;
 
-  // -- configuration options -------------------------------------------------
+// -- aliases ------------------------------------------------------------------
 
-  /// The program command line, without --caf# arguments.
-  std::vector<std::string> command_line;
-};
+using column_index_ptr = std::unique_ptr<column_index>;
+using partition_ptr = caf::intrusive_ptr<partition>;
 
 } // namespace vast::system
-

@@ -19,6 +19,7 @@
 
 #include <caf/actor_pool.hpp>
 #include <caf/stateful_actor.hpp>
+#include <caf/stream_source.hpp>
 
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/std/chrono.hpp"
@@ -56,8 +57,6 @@ struct Reader {
 /// @tparam Reader The reader type, which must model the *Reader* concept.
 template <class Reader>
 struct source_state {
-  static constexpr size_t max_batch_size = 1 << 20;
-  uint64_t batch_size = 65536;
   std::vector<event> events;
   expression filter;
   std::unordered_map<type, expression> checkers;
@@ -66,6 +65,7 @@ struct source_state {
   caf::actor sink;
   Reader reader;
   const char* name = "source";
+  caf::stream_source_ptr<caf::broadcast_downstream_manager<event>> mgr;
 };
 
 /// An event producer.
@@ -77,47 +77,54 @@ caf::behavior
 source(caf::stateful_actor<source_state<Reader>>* self, Reader&& reader) {
   using namespace caf;
   using namespace std::chrono;
+  // Initialize state.
   self->state.reader = std::move(reader);
   self->state.name = self->state.reader.name();
-  auto eu = self->system().dummy_execution_unit();
-  self->state.sink = actor_pool::make(eu, actor_pool::round_robin());
+  // Fetch accountant from the registry.
   if (auto acc = self->system().registry().get(accountant_atom::value))
     self->state.accountant = actor_cast<accountant_type>(acc);
+  // We link to the importers and fail for the same reason, but still report to
+  // the accountant.
   self->set_exit_handler(
     [=](const exit_msg& msg) {
-      if (self->state.accountant) {
+      auto& st = self->state;
+      if (st.accountant) {
         timestamp now = system_clock::now();
-        self->send(self->state.accountant, "source.end", now);
+        self->send(st.accountant, "source.end", now);
       }
-      self->send(self->state.sink, sys_atom::value, delete_atom::value);
-      self->send_exit(self->state.sink, msg.reason);
       self->quit(msg.reason);
     }
   );
-  return {
-    [=](run_atom) {
-      if (self->state.accountant && self->current_sender() != self) {
-        timestamp now = system_clock::now();
-        self->send(self->state.accountant, "source.start", now);
-      }
+  // Spin up the stream manager for the source.
+  self->state.mgr = self->make_source(
+    // init
+    [=](bool& done) {
+      done = false;
+      timestamp now = system_clock::now();
+      self->send(self->state.accountant, "source.start", now);
+    },
+    // get next element
+    [=](bool& done, downstream<event>& out, size_t num) {
+      auto& st = self->state;
       // Extract events until the source has exhausted its input or until we
       // have completed a batch.
       auto start = steady_clock::now();
-      auto done = false;
-      while (self->state.events.size() < self->state.batch_size) {
-        auto e = self->state.reader.read();
+      size_t produced = 0;
+      while (produced < num) {
+        auto e = st.reader.read();
         if (e) {
-          if (!caf::holds_alternative<none>(self->state.filter)) {
-            auto& checker = self->state.checkers[e->type()];
+          if (!caf::holds_alternative<none>(st.filter)) {
+            auto& checker = st.checkers[e->type()];
             if (caf::holds_alternative<none>(checker)) {
-              auto x = tailor(self->state.filter, e->type());
+              auto x = tailor(st.filter, e->type());
               VAST_ASSERT(x);
               checker = std::move(*x);
             }
             if (!caf::visit(event_evaluator{*e}, checker))
               continue;
           }
-          self->state.events.push_back(std::move(*e));
+          ++produced;
+          out.push(std::move(*e));
         } else if (!e.error()) {
           continue; // Try again.
         } else {
@@ -134,47 +141,33 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader&& reader) {
         }
       }
       auto stop = steady_clock::now();
-      // Ship the current batch.
-      if (!self->state.events.empty()) {
+      // Produce stats for this run.
+      if (produced > 0) {
         auto runtime = stop - start;
         auto unit = duration_cast<microseconds>(runtime).count();
         auto rate = self->state.events.size() * 1e6 / unit;
-        auto events = uint64_t{self->state.events.size()};
+        auto events = uint64_t{produced};
         VAST_INFO(self, "produced", events, "events in", runtime,
                   '(' << size_t(rate), "events/sec)");
-        if (self->state.accountant) {
+        if (st.accountant) {
           auto rt = duration_cast<timespan>(runtime);
-          self->send(self->state.accountant, "source.batch.runtime", rt);
-          self->send(self->state.accountant, "source.batch.events", events);
-          self->send(self->state.accountant, "source.batch.rate", rate);
+          self->send(st.accountant, "source.batch.runtime", rt);
+          self->send(st.accountant, "source.batch.events", events);
+          self->send(st.accountant, "source.batch.rate", rate);
         }
-        self->send(self->state.sink, std::move(self->state.events));
-        self->state.events = {};
-        self->state.events.reserve(self->state.batch_size);
-        // FIXME: if we do not give the stdlib implementation a hint to yield
-        // here, this actor can monopolize all available resources. In
-        // particular, we encountered a scenario where it prevented the BASP
-        // broker from a getting a chance to operate, thereby queuing up
-        // all event batches locally and running out of memory, as opposed to
-        // sending them out as soon as possible. This yield fix temporarily
-        // works around a deeper issue in CAF, which needs to be addressed in
-        // the future.
-        std::this_thread::yield();
       }
-      if (done)
-        self->send_exit(self, exit_reason::normal);
-      else
-        self->send(self, run_atom::value);
+      // TODO: if the source is unable to generate new events then we should
+      //       trigger CAF to poll the source after a predefined interval of
+      //       time again via delayed_send
     },
-    [=](batch_atom, uint64_t batch_size) {
-      if (batch_size > source_state<Reader>::max_batch_size) {
-        VAST_WARNING(self, "ignores too large batch size:", batch_size);
-        return;
-      }
-      VAST_DEBUG(self, "sets batch size to", batch_size);
-      self->state.batch_size = batch_size;
-      self->state.events.reserve(batch_size);
-    },
+    // done?
+    [](const bool& done) {
+      return done;
+    }
+  ).ptr();
+  auto eu = self->system().dummy_execution_unit();
+  self->state.sink = actor_pool::make(eu, actor_pool::round_robin());
+  return {
     [=](get_atom, schema_atom) -> result<schema> {
       auto sch = self->state.reader.schema();
       if (sch)
@@ -192,9 +185,14 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader&& reader) {
       self->state.filter = std::move(expr);
     },
     [=](sink_atom, const actor& sink) {
+      // TODO: Currently, we use a broadcast downstream manager. We need to
+      //       implement an anycast downstream manager and use it for the
+      //       source, because we mustn't duplicate data.
+      VAST_ASSERT(self->state.mgr->out().num_paths() == 0);
       VAST_ASSERT(sink);
       VAST_DEBUG(self, "registers sink", sink);
-      self->send(self->state.sink, sys_atom::value, put_atom::value, sink);
+      self->link_to(sink);
+      self->state.mgr->add_outbound_path(sink);
     },
   };
 }

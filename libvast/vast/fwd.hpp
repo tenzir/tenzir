@@ -13,32 +13,41 @@
 
 #pragma once
 
-#include <unordered_map>
+namespace vast {
 
-#include <caf/actor.hpp>
-#include <caf/stateful_actor.hpp>
+// -- classes ------------------------------------------------------------------
 
-#include "vast/filesystem.hpp"
-#include "vast/system/table_index.hpp"
-#include "vast/type.hpp"
+class address;
+class data;
+class event;
+class expression;
+class json;
+class path;
+class pattern;
+class port;
+class schema;
+class subnet;
+class type;
 
-namespace vast::system {
+// -- structs ------------------------------------------------------------------
 
-struct indexer_state {
-  indexer_state();
-  ~indexer_state();
-  void init(table_index&& from);
-  union { table_index tbl; };
-  bool initialized;
-  static inline const char* name = "indexer";
-};
+struct address_type;
+struct alias_type;
+struct boolean_type;
+struct count_type;
+struct enumeration_type;
+struct integer_type;
+struct map_type;
+struct none_type;
+struct pattern_type;
+struct port_type;
+struct real_type;
+struct record_type;
+struct set_type;
+struct string_type;
+struct subnet_type;
+struct timespan_type;
+struct timestamp_type;
+struct vector_type;
 
-/// Indexes an event.
-/// @param self The actor handle.
-/// @param dir The directory where to store the indexes in.
-/// @param type event_type The type of the event to index.
-caf::behavior indexer(caf::stateful_actor<indexer_state>* self, path dir,
-                      type event_type);
-
-} // namespace vast::system
-
+} // namespace vast
