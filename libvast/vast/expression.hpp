@@ -237,7 +237,7 @@ expected<expression> normalize_and_validate(const expression& expr);
 ///          of type *t*.
 expected<expression> tailor(const expression& expr, const type& t);
 
-} // namespace vast 
+} // namespace vast
 
 namespace caf {
 

@@ -35,13 +35,13 @@ using namespace std::string_literals;
 TEST(choice) {
   using namespace parsers;
   auto p = chr{'x'} | i32;
-  variant<char, int32_t> x;
+  caf::variant<char, int32_t> x;
   CHECK(p("123", x));
-  auto i = get_if<int32_t>(x);
+  auto i = caf::get_if<int32_t>(&x);
   REQUIRE(i);
   CHECK_EQUAL(*i, 123);
   CHECK(p("x", x));
-  auto c = get_if<char>(x);
+  auto c = caf::get_if<char>(&x);
   REQUIRE(c);
   CHECK_EQUAL(*c, 'x');
 }
@@ -52,7 +52,7 @@ TEST(choice triple) {
   auto p = chr{'x'}
          | i32
          | eps ->* [&] { fired = true; };
-  variant<char, int32_t> x;
+  caf::variant<char, int32_t> x;
   CHECK(p("foobar", x));
   CHECK(fired);
 }

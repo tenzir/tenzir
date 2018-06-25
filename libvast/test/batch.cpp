@@ -27,7 +27,7 @@ namespace {
 
 struct fixture {
   fixture() : event_type{integer_type{}} {
-    event_type.name("foo");
+    event_type = event_type.name("foo");
     for (auto i = 0; i < 1000; ++i) {
       events.push_back(event::make(i, event_type));
       events.back().id(666 + i);

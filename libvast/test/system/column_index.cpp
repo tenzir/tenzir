@@ -74,7 +74,7 @@ TEST(flat column type) {
 
 TEST(bro conn log) {
   MESSAGE("ingest origins from bro conn log");
-  auto row_type = get<record_type>(bro_conn_log[0].type());
+  auto row_type = caf::get<record_type>(bro_conn_log[0].type());
   auto col_offset = unbox(row_type.resolve(key{"id", "orig_h"}));
   auto col_type = row_type.at(col_offset);
   auto col = unbox(make_field_data_index(directory, *col_type, col_offset));

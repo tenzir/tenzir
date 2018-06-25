@@ -15,8 +15,6 @@
 
 #include <type_traits>
 
-#include "vast/variant.hpp"
-
 #include "vast/concept/parseable/core/parser.hpp"
 #include "vast/concept/support/detail/variant.hpp"
 

@@ -3,6 +3,8 @@
 #include <iostream>
 #include <queue>
 
+#include <caf/variant.hpp>
+
 #include "vast/address.hpp"
 #include "vast/error.hpp"
 #include "vast/event.hpp"
@@ -208,7 +210,7 @@ struct notification {
 /// @relates message_header types
 struct message {
   message_header header;
-  variant<none, open, update, notification> message;
+  caf::variant<none, open, update, notification> message;
 };
 
 // Helper functions to parse attributes.
@@ -1091,10 +1093,15 @@ struct state_change_as4_parser : parser<state_change_as4_parser> {
 /// [Common Header](common_header) followed by a *Message* field.
 struct record {
   common_header header;
-  variant<none, table_dump_v2::peer_index_table, table_dump_v2::rib_afi_safi,
-          bgp4mp::state_change, bgp4mp::message, bgp4mp::message_as4,
-          bgp4mp::state_change_as4>
-    message;
+  caf::variant<
+    none,
+    table_dump_v2::peer_index_table,
+    table_dump_v2::rib_afi_safi,
+    bgp4mp::state_change,
+    bgp4mp::message,
+    bgp4mp::message_as4,
+    bgp4mp::state_change_as4
+  > message;
 };
 
 /// Parses a [MRT record](@ref record).

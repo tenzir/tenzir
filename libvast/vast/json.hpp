@@ -118,20 +118,20 @@ template <
         ? 1
         : (std::is_convertible_v<T, std::string> ? 2 : 0)
 >
-struct jsonize_helper;
+struct to_json_helper;
 
 template <class T>
-struct jsonize_helper<T, 0> {
+struct to_json_helper<T, 0> {
   using type = T;
 };
 
 template <class T>
-struct jsonize_helper<T, 1> {
+struct to_json_helper<T, 1> {
   using type = json::number;
 };
 
 template <class T>
-struct jsonize_helper<T, 2> {
+struct to_json_helper<T, 2> {
   using type = json::string;
 };
 
@@ -140,22 +140,22 @@ struct jsonize_helper<T, 2> {
 /// Converts an arbitrary type to the corresponding JSON type.
 /// @relates json
 template <class T>
-using jsonize = typename detail::jsonize_helper<std::decay_t<T>>::type;
+using to_json_type = typename detail::to_json_helper<std::decay_t<T>>::type;
 
 template <class T>
-json::json(T x) : data_(jsonize<T>(std::move(x))) {
+json::json(T x) : data_(to_json_type<T>(std::move(x))) {
   // nop
 }
 
 template <class T>
 json& json::operator=(T x) {
-  data_ = jsonize<T>(std::move(x));
+  data_ = to_json_type<T>(std::move(x));
   return *this;
 }
 
 /// @relates json
 inline bool convert(bool b, json& j) {
-  j = b;
+  j = json::boolean{b};
   return true;
 }
 

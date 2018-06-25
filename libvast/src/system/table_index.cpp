@@ -94,7 +94,7 @@ caf::error table_index::add(const event& x) {
     },
     [&]() -> caf::error {
       // Coluns 2-N are our data fields.
-      auto r = get_if<record_type>(layout_);
+      auto r = caf::get_if<record_type>(&layout_);
       if (!r) {
         auto fac = [&] {
           return make_flat_data_index(data_dir(), layout_);
@@ -139,7 +139,7 @@ caf::expected<bitmap> table_index::lookup(const predicate& pred) {
   VAST_TRACE(VAST_ARG(pred));
   // For now, we require that the predicate is part of a normalized expression,
   // i.e., LHS is an extractor and RHS is a data.
-  auto rhs = get_if<data>(pred.rhs);
+  auto rhs = caf::get_if<data>(&pred.rhs);
   if (!rhs)
     return ec::invalid_query;
   // Specialize the predicate for the type.
@@ -153,7 +153,7 @@ caf::expected<bitmap> table_index::lookup(const expression& expr) {
   VAST_TRACE(VAST_ARG(expr));
   // Specialize the expression for the type.
   type_resolver resolver{layout_};
-  auto resolved = visit(resolver, expr);
+  auto resolved = caf::visit(resolver, expr);
   if (!resolved)
     return std::move(resolved.error());
   return lookup_impl(*resolved);
@@ -161,7 +161,7 @@ caf::expected<bitmap> table_index::lookup(const expression& expr) {
 
 caf::expected<bitmap> table_index::lookup_impl(const expression& expr) {
   VAST_TRACE(VAST_ARG(expr));
-  return visit(
+  return caf::visit(
     detail::overload(
       [&](const auto& seq) -> expected<bitmap> {
         static constexpr bool is_disjunction
@@ -233,13 +233,13 @@ caf::expected<bitmap> table_index::lookup_impl(const predicate& pred,
   static_assert(table_index::meta_column_count == 2);
   VAST_ASSERT(columns_.size() >= table_index::meta_column_count);
   if (ex.attr == "time") {
-    VAST_ASSERT(is<timestamp>(x));
+    VAST_ASSERT(caf::holds_alternative<timestamp>(x));
     auto fac = [&] { return make_time_index(meta_dir() / "time"); };
     return with_meta_column(0, fac, [&](column_index& col) {
       return col.lookup(pred);
     });
   } else if (ex.attr == "type") {
-    VAST_ASSERT(is<std::string>(x));
+    VAST_ASSERT(caf::holds_alternative<std::string>(x));
     auto fac = [&] { return make_type_index(meta_dir() / "type"); };
     return with_meta_column(1, fac, [&](column_index& col) {
       return col.lookup(pred);
@@ -261,7 +261,7 @@ caf::expected<bitmap> table_index::lookup_impl(const predicate& pred,
       return col.lookup(pred);
     });
   } else {
-    auto r = get<record_type>(dx.type);
+    auto r = caf::get<record_type>(dx.type);
     auto k = r.resolve(dx.offset);
     VAST_ASSERT(k);
     auto t = r.at(dx.offset);

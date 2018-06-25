@@ -245,11 +245,11 @@ expected<void> validator::operator()(const predicate& p) {
 
 expected<void> validator::operator()(const attribute_extractor& ex,
                                      const data& d) {
-  if (ex.attr == "type" && !is<std::string>(d))
+  if (ex.attr == "type" && !caf::holds_alternative<std::string>(d))
     return make_error(ec::syntax_error,
                       "type attribute extractor requires string operand",
                       ex.attr, op_, d);
-  else if (ex.attr == "time" && !is<timestamp>(d))
+  else if (ex.attr == "time" && !caf::holds_alternative<timestamp>(d))
     return make_error(ec::syntax_error,
                       "time attribute extractor requires timestamp operand",
                       ex.attr, op_, d);
@@ -308,7 +308,7 @@ bool time_restrictor::operator()(const predicate& p) const {
   if (auto a = caf::get_if<attribute_extractor>(&p.lhs)) {
     if (a->attr == "time") {
       auto d = caf::get_if<data>(&p.rhs);
-      VAST_ASSERT(d && is<timestamp>(*d));
+      VAST_ASSERT(d && caf::holds_alternative<timestamp>(*d));
       return evaluate(first_, p.op, *d) || evaluate(last_, p.op, *d);
     }
   }
@@ -379,7 +379,7 @@ expected<expression> type_resolver::operator()(const predicate& p) {
 expected<expression> type_resolver::operator()(const type_extractor& ex,
                                                const data& d) {
   disjunction dis;
-  if (auto r = get_if<record_type>(type_)) {
+  if (auto r = caf::get_if<record_type>(&type_)) {
     for (auto& f : record_type::each{*r}) {
       auto& value_type = f.trace.back()->type;
       if (congruent(value_type, ex.type)) {
@@ -408,7 +408,7 @@ expected<expression> type_resolver::operator()(const key_extractor& ex,
                                                const data& d) {
   disjunction dis;
   // First, interpret the key as a suffix of a record field name.
-  if (auto r = get_if<record_type>(type_)) {
+  if (auto r = caf::get_if<record_type>(&type_)) {
     auto suffixes = r->find_suffix(ex.key);
     // All suffixes must pass the type check, otherwise the RHS of a
     // predicate would be ambiguous.
@@ -494,7 +494,7 @@ expression type_pruner::operator()(const negation& n) {
 
 expression type_pruner::operator()(const predicate& p) {
   if (auto lhs = caf::get_if<type_extractor>(&p.lhs)) {
-    if (auto r = get_if<record_type>(type_)) {
+    if (auto r = caf::get_if<record_type>(&type_)) {
       disjunction result;
       for (auto& e : record_type::each{*r})
         if (congruent(e.trace.back()->type, lhs->type)) {
@@ -569,8 +569,9 @@ bool event_evaluator::operator()(const data_extractor& e, const data& d) {
     return false;
   if (e.offset.empty())
     return evaluate(event_.data(), op_, d);
-  VAST_ASSERT(is<record_type>(event_.type())); // offset wouldn't be empty
-  if (auto r = get_if<vector>(event_.data()))
+  // offset wouldn't be empty
+  VAST_ASSERT(caf::holds_alternative<record_type>(event_.type()));
+  if (auto r = caf::get_if<vector>(&event_.data()))
     if (auto x = get(*r, e.offset))
       return evaluate(*x, op_, d);
   return false;
@@ -610,7 +611,7 @@ bool matcher::operator()(const predicate& p) {
 
 bool matcher::operator()(const attribute_extractor& e, const data& d) {
   if (e.attr == "type") {
-    VAST_ASSERT(is<std::string>(d));
+    VAST_ASSERT(caf::holds_alternative<std::string>(d));
     return evaluate(d, op_, type_.name());
   } else if (e.attr == "time") {
     return true; // Every event has a timestamp.
