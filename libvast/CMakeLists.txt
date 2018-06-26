@@ -26,6 +26,7 @@ set(libvast_sources
   src/concept/hashable/xxhash.cpp
   src/data.cpp
   src/default_table_slice.cpp
+  src/default_table_slice_builder.cpp
   src/defaults.cpp
   src/detail/adjust_resource_consumption.cpp
   src/detail/compressedbuf.cpp
@@ -94,6 +95,8 @@ set(libvast_sources
   src/system/tracker.cpp
   src/system/writer_command_base.cpp
   src/table.cpp
+  src/table_slice.cpp
+  src/table_slice_builder.cpp
   src/time.cpp
   src/type.cpp
   src/uuid.cpp

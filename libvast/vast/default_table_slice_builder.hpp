@@ -11,37 +11,36 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/table.hpp"
+#pragma once
 
-#include <caf/none.hpp>
-#include <caf/optional.hpp>
-
-#include "vast/table_slice.hpp"
+#include "vast/data.hpp"
+#include "vast/default_table_slice.hpp"
+#include "vast/table_slice_builder.hpp"
 
 namespace vast {
 
-table::table(record_type layout)
-  : layout_(std::move(layout)),
-    columns_(flat_size(layout_)) {
-  // nop
-}
+/// The default implementation of `table_slice_builder`.
+class default_table_slice_builder final : public table_slice_builder {
+public:
+  // -- constructors, destructors, and assignment operators --------------------
 
-bool table::add(const_table_slice_ptr slice) {
-  if (slice == nullptr || layout_ != slice->layout())
-    return false;
-  auto offset = slice->offset();
-  slices_.emplace_back(offset, std::move(slice));
-  return true;
-}
+  default_table_slice_builder(record_type layout);
 
-caf::optional<data_view> table::at(size_type row, size_type col) const {
-  auto pred = [&](const value_type& x) {
-    return x.first >= row && row < x.first + x.second->rows();
-  };
-  auto i = std::find_if(slices_.begin(), slices_.end(), pred);
-  if (i != slices_.end())
-    return i->second->at(row - i->first, col);
-  return caf::none;
-}
+  // -- properties -------------------------------------------------------------
+
+  bool append(data x);
+
+  bool add(data_view x) final;
+
+  table_slice_ptr finish() final;
+
+private:
+  // -- member variables -------------------------------------------------------
+
+  record_type layout_;
+  vector row_;
+  size_t col_;
+  default_table_slice_ptr slice_;
+};
 
 } // namespace vast

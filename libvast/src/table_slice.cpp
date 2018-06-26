@@ -11,37 +11,19 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/table.hpp"
-
-#include <caf/none.hpp>
-#include <caf/optional.hpp>
-
 #include "vast/table_slice.hpp"
 
 namespace vast {
 
-table::table(record_type layout)
+table_slice::table_slice(record_type layout)
   : layout_(std::move(layout)),
+    rows_(0),
     columns_(flat_size(layout_)) {
   // nop
 }
 
-bool table::add(const_table_slice_ptr slice) {
-  if (slice == nullptr || layout_ != slice->layout())
-    return false;
-  auto offset = slice->offset();
-  slices_.emplace_back(offset, std::move(slice));
-  return true;
-}
-
-caf::optional<data_view> table::at(size_type row, size_type col) const {
-  auto pred = [&](const value_type& x) {
-    return x.first >= row && row < x.first + x.second->rows();
-  };
-  auto i = std::find_if(slices_.begin(), slices_.end(), pred);
-  if (i != slices_.end())
-    return i->second->at(row - i->first, col);
-  return caf::none;
+table_slice::~table_slice() {
+  // no
 }
 
 } // namespace vast
