@@ -17,6 +17,7 @@
 
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/address.hpp"
+#include "vast/concept/parseable/vast/data.hpp"
 #include "vast/concept/parseable/vast/subnet.hpp"
 #include "vast/concept/parseable/vast/time.hpp"
 #include "vast/concept/printable/to_string.hpp"
@@ -24,6 +25,7 @@
 
 #define SUITE value_index
 #include "test.hpp"
+#include "fixtures/events.hpp"
 
 using namespace vast;
 using namespace std::string_literals;
@@ -471,3 +473,50 @@ TEST(polymorphic none values) {
   REQUIRE(bm);
   CHECK_EQUAL(to_string(*bm), "00000001100000001110000");
 }
+
+FIXTURE_SCOPE(bro_conn_log_value_index_tests, fixtures::events)
+
+// This test uncovered a regression that ocurred when computing the rank of a
+// bitmap representing conn.log events. The culprit was the EWAH bitmap
+// encoding, because swapping out ewah_bitmap for null_bitmap in address_index
+// made the bug disappear.
+TEST(address from events) {
+  auto orig_h = [](const event& x) {
+    auto& log_entry = caf::get<vector>(x.data());
+    auto& conn_id = caf::get<vector>(log_entry[2]);
+    return caf::get<address>(conn_id[0]);
+  };
+  // Populate the index with data up to the critical point.
+  address_index idx;
+  for (auto i = 0; i < 6464; ++i) {
+    auto& x = bro_conn_log[i];
+    CHECK(idx.push_back(orig_h(x), x.id()));
+  }
+  // This is where we are in trouble: the last ID should be 720, but the bogus
+  // test reports 6452.
+  auto addr = *to<data>("169.254.225.22");
+  auto before = idx.lookup(equal, addr);
+  CHECK_EQUAL(rank(*before), 4u);
+  CHECK_EQUAL(select(*before, -1), id{720});
+  auto& x = bro_conn_log[6464];
+  // After adding another event, the correct state is restored again and the
+  // bug doesn't show up anymore.
+  CHECK(idx.push_back(orig_h(x), x.id()));
+  auto after = idx.lookup(equal, addr);
+  CHECK_EQUAL(rank(*after), 4u);
+  CHECK_EQUAL(select(*after, -1), id{720});
+}
+
+TEST(reconstructing a single bitmap) {
+  ewah_bitmap bm;
+  bm.append<0>(719);  //  719
+  bm.append<1>();     //  720
+  for (auto i = bm.size(); i < 6463; ++i)
+    bm.append<0>();
+  CHECK_EQUAL(rank(bm), 1u);
+  bm.append<0>();
+  CHECK_EQUAL(rank(bm), 1u);
+  CHECK_EQUAL(bm.size(), 6464u);
+}
+
+FIXTURE_SCOPE_END()
