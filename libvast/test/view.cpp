@@ -61,7 +61,6 @@ TEST(set view) {
   CHECK(make_data(v) == xs);
 }
 
-
 TEST(map view) {
   auto xs = map{{42, true}, {84, false}};
   auto v = make_view(xs);
@@ -98,4 +97,16 @@ TEST(make_data_view) {
   CHECK_EQUAL(v->at(0), integer{42});
   CHECK_EQUAL(v->at(1), true);
   CHECK_EQUAL(v->at(2), "foo"sv);
+}
+
+TEST(increment decrement container_view_iterator) {
+  auto xs = vector{42, true, "foo", 4.2};
+  auto v = make_view(xs);
+  auto it1 = v->begin();
+  auto it2 = v->begin();
+  CAF_CHECK_EQUAL(it1.distance_to(it2), 0);
+  ++it1;
+  CAF_CHECK_NOT_EQUAL(it1.distance_to(it2), 0);
+  --it1;
+  CAF_CHECK_EQUAL(it1.distance_to(it2), 0);
 }

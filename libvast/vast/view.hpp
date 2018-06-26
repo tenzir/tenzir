@@ -247,7 +247,7 @@ public:
     ++position_;
   }
 
-  void decremenet() {
+  void decrement() {
     --position_;
   }
 
