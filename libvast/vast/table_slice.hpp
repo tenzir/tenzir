@@ -13,8 +13,10 @@
 
 #pragma once
 
-#include <cstdint>
-#include <vector>
+#include <cstddef>
+
+#include <caf/fwd.hpp>
+#include <caf/ref_counted.hpp>
 
 #include "vast/fwd.hpp"
 #include "vast/type.hpp"
@@ -22,59 +24,69 @@
 
 namespace vast {
 
-/// A dataset in tabular form. A table consists of [@ref table_slice](slices),
-/// each of which have the same layout.
-/// @relates table_slice
-class table {
+/// A horizontal partition of a table. A slice defines a tabular interface for
+/// accessing homogenous data independent of the concrete carrier format.
+/// @relates table
+class table_slice : public caf::ref_counted {
 public:
   // -- member types -----------------------------------------------------------
 
   using size_type = uint64_t;
 
-  using value_type = std::pair<id, const_table_slice_ptr>;
-
   // -- constructors, destructors, and assignment operators --------------------
 
-  /// Constructs a table with a specific layout.
+  ~table_slice();
+
+  /// Constructs a table slice with a specific layout.
   /// @param layout The record describing the table columns.
-  table(record_type layout);
+  table_slice(record_type layout);
 
-  // -- properties ------------------------------------------------------------
+  // -- properties -------------------------------------------------------------
 
-  /// Adds a slice to the table.
-  /// @returns A failure if the layout is not compatible with
-  bool add(const_table_slice_ptr slice);
-
-  /// Retrieves the table layout.
+  /// @returns The table layout.
   inline const record_type& layout() const noexcept {
     return layout_;
   }
 
-  /// @returns the number of rows in the table.
-  inline size_type rows() const {
-    return slices_.size();
+  /// @returns the number of rows in the slice.
+  inline size_type rows() const noexcept {
+    return rows_;
   }
 
-  /// @returns the number of rows in the table.
-  inline size_type columns() const {
+  /// @returns the number of rows in the slice.
+  inline size_type columns() const noexcept {
     return columns_;
+  }
+
+  /// @returns the offset in the ID space.
+  inline id offset() const noexcept {
+    return offset_;
+  }
+
+  /// Sets the offset in the ID space.
+  void offset(id offset) noexcept {
+    offset_ = offset;
   }
 
   /// Retrieves data by specifying 2D-coordinates via row and column.
   /// @param row The row offset.
   /// @param col The column offset.
   /// @pre `row < rows() && col < columns()`
-  caf::optional<data_view> at(size_type row, size_type col) const;
+  virtual caf::optional<data_view> at(size_type row, size_type col) const = 0;
 
-  /// @returns The slices in this table.
-  const auto& slices() const {
-    return slices_;
-  }
+protected:
+  // -- member variables -------------------------------------------------------
 
-private:
-  record_type layout_;
+  id offset_;
+  record_type layout_; // flattened
+  size_type rows_;
   size_type columns_;
-  std::vector<value_type> slices_;
 };
+
+/// @relates table_slice
+using table_slice_ptr = caf::intrusive_ptr<table_slice>;
+
+/// @relates table_slice
+using const_table_slice_ptr = caf::intrusive_ptr<const table_slice>;
 
 } // namespace vast

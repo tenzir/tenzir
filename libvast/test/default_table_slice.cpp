@@ -14,6 +14,8 @@
 #include <string>
 
 #include "vast/default_table_slice.hpp"
+#include "vast/table_slice_builder.hpp"
+#include "vast/view.hpp"
 
 #define SUITE table
 #include "test.hpp"

@@ -13,13 +13,16 @@
 
 #pragma once
 
+#include <caf/intrusive_ptr.hpp>
+
 namespace vast {
 
 // -- classes ------------------------------------------------------------------
 
 class address;
-class data;
+
 class default_table_slice;
+class default_table_slice_builder;
 class event;
 class expression;
 class json;
@@ -29,6 +32,7 @@ class port;
 class schema;
 class subnet;
 class table_slice;
+class table_slice_builder;
 class type;
 
 // -- structs ------------------------------------------------------------------
@@ -51,5 +55,15 @@ struct subnet_type;
 struct timespan_type;
 struct timestamp_type;
 struct vector_type;
+
+// -- smart pointers -----------------------------------------------------------
+
+using table_slice_ptr = caf::intrusive_ptr<table_slice>;
+
+using const_table_slice_ptr = caf::intrusive_ptr<const table_slice>;
+
+using table_slice_builder_ptr = caf::intrusive_ptr<table_slice_builder>;
+
+using default_table_slice_ptr = caf::intrusive_ptr<default_table_slice>;
 
 } // namespace vast

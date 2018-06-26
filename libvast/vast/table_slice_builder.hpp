@@ -13,42 +13,39 @@
 
 #pragma once
 
-#include <vector>
+#include <caf/ref_counted.hpp>
 
 #include "vast/fwd.hpp"
-#include "vast/table_slice.hpp"
+#include "vast/view.hpp"
 
 namespace vast {
 
-/// The default implementation of `table_slice`.
-class default_table_slice final : public table_slice {
+/// Enables incremental construction of a table slice.
+/// @relates table_slice
+class table_slice_builder : public caf::ref_counted {
 public:
-  // -- friends ----------------------------------------------------------------
-
-  friend default_table_slice_builder;
-
   // -- constructors, destructors, and assignment operators --------------------
 
-  default_table_slice(record_type layout);
+  table_slice_builder() = default;
 
-  // -- static factory functions -----------------------------------------------
-
-  /// Constructs a builder that generates a default_table_slice.
-  /// @param layout The layout of the table_slice.
-  /// @returns The builder instance.
-  static table_slice_builder_ptr make_builder(record_type layout);
+  ~table_slice_builder();
 
   // -- properties -------------------------------------------------------------
 
-  caf::optional<data_view> at(size_type row, size_type col) const final;
+  /// Adds data to the builder.
+  /// @param x The data to add.
+  /// @returns `true` on success.
+  virtual bool add(data_view x) = 0;
 
-private:
-  // -- member variables -------------------------------------------------------
-
-  std::vector<data> xs_;
+  /// Constructs a table_slice from the currently accumulated state. After
+  /// calling this function, implementations must reset their internal state
+  /// such that subsequent calls to add will restart with a new table_slice.
+  /// @returns A table slice from the accumulated calls to add or `nullptr` on
+  ///          failure.
+  virtual table_slice_ptr finish() = 0;
 };
 
-/// @relates default_table_slice
-using default_table_slice_ptr = caf::intrusive_ptr<default_table_slice>;
+/// @relates table_slice_builder
+using table_slice_builder_ptr = caf::intrusive_ptr<table_slice_builder>;
 
 } // namespace vast
