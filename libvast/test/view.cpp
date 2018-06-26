@@ -104,9 +104,9 @@ TEST(increment decrement container_view_iterator) {
   auto v = make_view(xs);
   auto it1 = v->begin();
   auto it2 = v->begin();
-  CAF_CHECK_EQUAL(it1.distance_to(it2), 0);
+  CAF_CHECK_EQUAL(it1.distance_to(it2), 0u);
   ++it1;
-  CAF_CHECK_NOT_EQUAL(it1.distance_to(it2), 0);
+  CAF_CHECK_NOT_EQUAL(it1.distance_to(it2), 0u);
   --it1;
-  CAF_CHECK_EQUAL(it1.distance_to(it2), 0);
+  CAF_CHECK_EQUAL(it1.distance_to(it2), 0u);
 }
