@@ -306,17 +306,14 @@ bool address_index::push_back_impl(const data& x, size_type skip) {
   if (!addr)
     return false;
   auto& bytes = addr->data();
-  if (addr->is_v4()) {
-    for (auto i = 12u; i < 16; ++i)
-      bytes_[i].push_back(bytes[i], skip);
-    v4_.push_back(true, skip);
-  } else {
-    for (auto i = 0; i < 16; ++i) {
+  if (addr->is_v6())
+    for (auto i = 0u; i < 12; ++i) {
       auto gap = v4_.size() - bytes_[i].size();
       bytes_[i].push_back(bytes[i], gap + skip);
     }
-    v4_.push_back(false, skip);
-  }
+  for (auto i = 12u; i < 16; ++i)
+    bytes_[i].push_back(bytes[i], skip);
+  v4_.push_back(addr->is_v4(), skip);
   return true;
 }
 
