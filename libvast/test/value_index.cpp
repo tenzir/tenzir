@@ -507,13 +507,9 @@ TEST(regression - build an address index from bro events) {
   CHECK_EQUAL(rank(*after), 4u);
   CHECK_EQUAL(select(*after, -1), id{720});
   CHECK_NOT_EQUAL(select(*after, -1), id{6452});
-  for (auto i : select(*before))
-    std::cout << i << std::endl;
-  std::cout << "---------------" << std::endl;
-  for (auto i : select(*after))
-    std::cout << i << std::endl;
 }
 
+// This was the first attempt in figuring out where the bug sat. I didn't fire.
 TEST(regression - checking the result single bitmap) {
   ewah_bitmap bm;
   bm.append<0>(680);
@@ -523,29 +519,29 @@ TEST(regression - checking the result single bitmap) {
   bm.append<0>(36);   //  719
   bm.append<1>();     //  720
   bm.append<1>();     //  721
-  for (auto i = bm.size(); i < 6463; ++i)
+  for (auto i = bm.size(); i < 6464; ++i)
     bm.append<0>();
   CHECK_EQUAL(rank(bm), 4u); // regression had rank 5
   bm.append<0>();
   CHECK_EQUAL(rank(bm), 4u);
-  CHECK_EQUAL(bm.size(), 6464u);
+  CHECK_EQUAL(bm.size(), 6465u);
 }
 
 TEST(regression - manual address bitmap index from bitmaps) {
   MESSAGE("populating index");
   std::array<ewah_bitmap, 32> idx;
-  for (auto n = 0; n < 6463; ++n) {
+  for (auto n = 0; n < 6464; ++n) {
     auto& x = orig_h(bro_conn_log[n]);
     for (auto i = 0u; i < 4; ++i) {
       auto byte = x.data()[i + 12];
       for (auto j = 0u; j < 8; ++j)
-        idx[(i * 8) + j].append_bit((byte >> j) & 1);
+        idx[(i * 8) + j].append_bits((byte >> j) & 1, 1);
     }
   }
   MESSAGE("querying 169.254.225.22");
   auto x = *to<address>("169.254.225.22");
   auto result = ewah_bitmap{idx[0].size(), true};
-  REQUIRE_EQUAL(result.size(), 6463u);
+  REQUIRE_EQUAL(result.size(), 6464u);
   for (auto i = 0u; i < 4; ++i) {
     auto byte = x.data()[i + 12];
     for (auto j = 0u; j < 8; ++j) {
@@ -562,7 +558,7 @@ TEST(regression - manual address bitmap index from 4 byte indexes) {
   std::array<byte_index, 4> idx;
   idx.fill(byte_index{8});
   MESSAGE("populating index");
-  for (auto n = 0; n < 6463; ++n) {
+  for (auto n = 0; n < 6464; ++n) {
     auto& x = orig_h(bro_conn_log[n]);
     for (auto i = 0u; i < 4; ++i) {
       auto byte = x.data()[i + 12];
@@ -572,7 +568,7 @@ TEST(regression - manual address bitmap index from 4 byte indexes) {
   MESSAGE("querying 169.254.225.22");
   auto x = *to<address>("169.254.225.22");
   auto result = ewah_bitmap{idx[0].size(), true};
-  REQUIRE_EQUAL(result.size(), 6463u);
+  REQUIRE_EQUAL(result.size(), 6464u);
   for (auto i = 0u; i < 4; ++i) {
     auto byte = x.data()[i + 12];
     result &= idx[i].lookup(equal, byte);
