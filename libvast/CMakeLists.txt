@@ -110,7 +110,8 @@ if (PCAP_FOUND)
   set(libvast_sources ${libvast_sources}
     src/system/pcap_reader_command.cpp
     src/system/pcap_writer_command.cpp
-    src/format/pcap.cpp)
+    src/format/pcap.cpp
+  )
 endif ()
 
 set(libvast_libs ${CAF_LIBRARIES})

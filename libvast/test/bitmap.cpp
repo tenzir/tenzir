@@ -140,6 +140,7 @@ struct bitmap_test_harness {
     bm2.append_bits(false, 50);
     bm2.append_bits(true, 50);
     CHECK_EQUAL(to_string(bm1 | bm2), std::string(100, '1'));
+    CHECK_EQUAL(to_string(bm2 | bm1), std::string(100, '1'));
     CHECK_EQUAL(to_string(bm1 | Bitmap{}), to_string(bm1));
     CHECK_EQUAL(to_string(Bitmap{} | bm1), to_string(bm1));
   }
@@ -156,7 +157,8 @@ struct bitmap_test_harness {
     str.append(36, '1');
     CHECK_EQUAL(to_string(bm1 - bm2), str);
     CHECK_EQUAL(to_string(bm1 - Bitmap{}), to_string(bm1));
-    CHECK_EQUAL(to_string(Bitmap{} - bm1), "");
+    str = std::string(std::max(bm1.size(), bm2.size()), '0');
+    CHECK_EQUAL(to_string(Bitmap{} - bm1), str);
   }
 
   void test_bitwise_nary() {
@@ -722,6 +724,13 @@ TEST(EWAH bitwise NOT) {
     "1000000000000000000000000000010000000000000000000000000000000000\n"
     "                                                               0\n";
   CHECK_EQUAL(to_block_string(~make_ewah1()), str);
+  auto complete_block = ewah_bitmap{};
+  complete_block.append<1>(63);
+  complete_block.append<0>();
+  auto complement = ewah_bitmap{};
+  complement.append<0>(63);
+  complement.append<1>();
+  CHECK_EQUAL(~complete_block, complement);
 }
 
 TEST(EWAH bitwise AND) {
@@ -741,6 +750,11 @@ TEST(EWAH bitwise AND) {
 TEST(EWAH bitwise OR) {
   auto bm2 = make_ewah2();
   auto bm3 = make_ewah3();
+  auto expected = make_ewah3();
+  expected.append<0>(bm2.size() - bm3.size() - 2);
+  expected.append<1>(2);
+  CHECK_EQUAL((bm2 | bm3), expected);
+  CHECK_EQUAL((bm3 | bm2), expected);
   auto str =
     "1000000000000000000000000000000110000000000000000000000000000010\n"
     "1001100110011001100110011001100010111111111111111111111111111111\n"
@@ -748,6 +762,7 @@ TEST(EWAH bitwise OR) {
     "0000000000000000000000000000000010000000000000000000000000000000\n"
     "                       11000000000000000000000000000000000000000\n";
   CHECK_EQUAL(to_block_string(bm2 | bm3), str);
+  CHECK_EQUAL(to_block_string(bm3 | bm2), str);
 }
 
 TEST(EWAH bitwise XOR) {
