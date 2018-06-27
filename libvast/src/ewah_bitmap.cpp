@@ -163,9 +163,13 @@ void ewah_bitmap::flip() {
       block = ~block;
     }
   }
-  // Only flip the active bits in the last block.
+  // Flip the last (dirty) block manually, because next_marker would always
+  // point to it.
+  blocks_.back() = ~blocks_.back();
+  // Make sure we didn't flip unused bits in the last block.
   auto partial = num_bits_ % word_type::width;
-  blocks_.back() ^= word_type::lsb_mask(partial);
+  if (partial > 0)
+    blocks_.back() &= word_type::lsb_mask(partial);
 }
 
 void ewah_bitmap::integrate_last_block() {

@@ -724,6 +724,13 @@ TEST(EWAH bitwise NOT) {
     "1000000000000000000000000000010000000000000000000000000000000000\n"
     "                                                               0\n";
   CHECK_EQUAL(to_block_string(~make_ewah1()), str);
+  auto complete_block = ewah_bitmap{};
+  complete_block.append<1>(63);
+  complete_block.append<0>();
+  auto complement = ewah_bitmap{};
+  complement.append<0>(63);
+  complement.append<1>();
+  CHECK_EQUAL(~complete_block, complement);
 }
 
 TEST(EWAH bitwise AND) {
