@@ -476,16 +476,17 @@ TEST(polymorphic none values) {
 
 FIXTURE_SCOPE(bro_conn_log_value_index_tests, fixtures::events)
 
+const address& orig_h(const event& x) {
+  auto& log_entry = caf::get<vector>(x.data());
+  auto& conn_id = caf::get<vector>(log_entry[2]);
+  return caf::get<address>(conn_id[0]);
+};
+
 // This test uncovered a regression that ocurred when computing the rank of a
 // bitmap representing conn.log events. The culprit was the EWAH bitmap
 // encoding, because swapping out ewah_bitmap for null_bitmap in address_index
 // made the bug disappear.
-TEST(address from events) {
-  auto orig_h = [](const event& x) {
-    auto& log_entry = caf::get<vector>(x.data());
-    auto& conn_id = caf::get<vector>(log_entry[2]);
-    return caf::get<address>(conn_id[0]);
-  };
+TEST(regression - build an address index from bro events) {
   // Populate the index with data up to the critical point.
   address_index idx;
   for (auto i = 0; i < 6464; ++i) {
@@ -505,18 +506,79 @@ TEST(address from events) {
   auto after = idx.lookup(equal, addr);
   CHECK_EQUAL(rank(*after), 4u);
   CHECK_EQUAL(select(*after, -1), id{720});
+  CHECK_NOT_EQUAL(select(*after, -1), id{6452});
+  for (auto i : select(*before))
+    std::cout << i << std::endl;
+  std::cout << "---------------" << std::endl;
+  for (auto i : select(*after))
+    std::cout << i << std::endl;
 }
 
-TEST(reconstructing a single bitmap) {
+TEST(regression - checking the result single bitmap) {
   ewah_bitmap bm;
-  bm.append<0>(719);  //  719
+  bm.append<0>(680);
+  bm.append<1>();     //  681
+  bm.append<0>();     //  682
+  bm.append<1>();     //  683
+  bm.append<0>(36);   //  719
   bm.append<1>();     //  720
+  bm.append<1>();     //  721
   for (auto i = bm.size(); i < 6463; ++i)
     bm.append<0>();
-  CHECK_EQUAL(rank(bm), 1u);
+  CHECK_EQUAL(rank(bm), 4u); // regression had rank 5
   bm.append<0>();
-  CHECK_EQUAL(rank(bm), 1u);
+  CHECK_EQUAL(rank(bm), 4u);
   CHECK_EQUAL(bm.size(), 6464u);
+}
+
+TEST(regression - manual address bitmap index from bitmaps) {
+  MESSAGE("populating index");
+  std::array<ewah_bitmap, 32> idx;
+  for (auto n = 0; n < 6463; ++n) {
+    auto& x = orig_h(bro_conn_log[n]);
+    for (auto i = 0u; i < 4; ++i) {
+      auto byte = x.data()[i + 12];
+      for (auto j = 0u; j < 8; ++j)
+        idx[(i * 8) + j].append_bit((byte >> j) & 1);
+    }
+  }
+  MESSAGE("querying 169.254.225.22");
+  auto x = *to<address>("169.254.225.22");
+  auto result = ewah_bitmap{idx[0].size(), true};
+  REQUIRE_EQUAL(result.size(), 6463u);
+  for (auto i = 0u; i < 4; ++i) {
+    auto byte = x.data()[i + 12];
+    for (auto j = 0u; j < 8; ++j) {
+      auto& bm = idx[(i * 8) + j];
+      result &= ((byte >> j) & 1) ? bm : ~bm;
+    }
+  }
+  CHECK_EQUAL(rank(result), 4u);
+  CHECK_EQUAL(select(result, -1), id{720});
+}
+
+TEST(regression - manual address bitmap index from 4 byte indexes) {
+  using byte_index = bitmap_index<uint8_t, bitslice_coder<ewah_bitmap>>;
+  std::array<byte_index, 4> idx;
+  idx.fill(byte_index{8});
+  MESSAGE("populating index");
+  for (auto n = 0; n < 6463; ++n) {
+    auto& x = orig_h(bro_conn_log[n]);
+    for (auto i = 0u; i < 4; ++i) {
+      auto byte = x.data()[i + 12];
+      idx[i].push_back(byte);
+    }
+  }
+  MESSAGE("querying 169.254.225.22");
+  auto x = *to<address>("169.254.225.22");
+  auto result = ewah_bitmap{idx[0].size(), true};
+  REQUIRE_EQUAL(result.size(), 6463u);
+  for (auto i = 0u; i < 4; ++i) {
+    auto byte = x.data()[i + 12];
+    result &= idx[i].lookup(equal, byte);
+  }
+  CHECK_EQUAL(rank(result), 4u);
+  CHECK_EQUAL(select(result, -1), id{720});
 }
 
 FIXTURE_SCOPE_END()
