@@ -216,7 +216,7 @@ TEST(multiple partitions bro conn log lookup no messaging) {
   std::vector<partition_ptr> partitions;
   auto layout = bro_conn_log[0].type();
   CAF_REQUIRE(caf::holds_alternative<record_type>(layout));
-  record_type flat_layout = caf::get<record_type>(layout);
+  record_type flat_layout = flatten(caf::get<record_type>(layout));
   for (size_t i = 0; i < bro_conn_log.size(); i += part_size) {
     auto ptr = make_partition(uuid::random());
     CHECK_EQUAL(exists(ptr->dir()), false);
@@ -261,7 +261,9 @@ TEST(multiple partitions bro conn log lookup no messaging) {
         } else {
           // Data field.
           offset off{col_id - 2};
-          CHECK_EQUAL(col->index_type(), *flat_layout.at(off));
+          auto type_at_offset = flat_layout.at(off);
+          REQUIRE_NOT_EQUAL(type_at_offset, nullptr);
+          CHECK_EQUAL(col->index_type(), *type_at_offset);
         }
         ++col_id;
       });
