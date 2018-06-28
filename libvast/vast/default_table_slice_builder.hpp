@@ -34,6 +34,8 @@ public:
 
   table_slice_ptr finish() final;
 
+  size_t rows() const noexcept final;
+
 private:
   // -- member variables -------------------------------------------------------
 

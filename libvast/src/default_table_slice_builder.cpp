@@ -58,4 +58,8 @@ table_slice_ptr default_table_slice_builder::finish() {
   return result;
 };
 
+size_t default_table_slice_builder::rows() const noexcept {
+  return slice_ == nullptr ? 0u : slice_->xs_.size();
+}
+
 } // namespace vast
