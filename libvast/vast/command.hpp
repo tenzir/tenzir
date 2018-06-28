@@ -115,7 +115,7 @@ protected:
                        argument_iterator begin, argument_iterator end);
 
   template <class T>
-  void add_opt(const char* name, const char* description) {
+  void add_opt(std::string_view name, std::string_view description) {
     opts_.add<T>("global", name, description);
   }
 
