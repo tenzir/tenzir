@@ -81,11 +81,11 @@ behavior collector(stateful_actor<collector_state>* self, actor master) {
         self->state.open_requests[id] = std::make_pair(indexers.size(), ids{});
         for (auto& indexer : indexers)
           self->request(indexer, infinite, expr).then([=](ids& sub_result) {
-            auto& entry = self->state.open_requests[id];
-            entry.second |= sub_result;
-            if (--entry.first == 0) {
+            auto& [num_indexers, result] = self->state.open_requests[id];
+            result |= sub_result;
+            if (--num_indexers == 0) {
               VAST_DEBUG(self, "collected all sub results for partition", id);
-              self->send(client, std::move(entry.second));
+              self->send(client, std::move(result));
               self->state.open_requests.erase(id);
               // Ask master for more work after receiving the last sub result.
               if (self->state.open_requests.empty()) {
