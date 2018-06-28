@@ -116,38 +116,44 @@ data_view make_view(const data& x) {
 
 // -- make_data ---------------------------------------------------------------
 
+namespace {
+
+auto make_addr(view_t<address> v) {
+  return address::v6(v.data().data());
+};
+
+} // namespace <anonymous>
+
 data make_data(data_view x) {
-  auto make_addr = [](view_t<address> v) {
-    return address::v6(v.data().data());
-  };
   return caf::visit(detail::overload(
-    [=](view_t<boolean> v) { return data{v}; },
-    [=](view_t<integer> v) { return data{v}; },
-    [=](view_t<count> v) { return data{v}; },
-    [=](view_t<real> v) { return data{v}; },
-    [=](view_t<timespan> v) { return data{v}; },
-    [=](view_t<timestamp> v) { return data{v}; },
-    [=](view_t<std::string> v) { return data{std::string{v}}; },
-    [=](view_t<pattern> v) { return data{pattern{std::string{v.string()}}}; },
-    [=](view_t<address> v) { return data{make_addr(v)}; },
-    [=](view_t<subnet> v) {
+    [](view_t<caf::none_t> v) { return data{v}; },
+    [](view_t<boolean> v) { return data{v}; },
+    [](view_t<integer> v) { return data{v}; },
+    [](view_t<count> v) { return data{v}; },
+    [](view_t<real> v) { return data{v}; },
+    [](view_t<timespan> v) { return data{v}; },
+    [](view_t<timestamp> v) { return data{v}; },
+    [](view_t<std::string> v) { return data{std::string{v}}; },
+    [](view_t<pattern> v) { return data{pattern{std::string{v.string()}}}; },
+    [](view_t<address> v) { return data{make_addr(v)}; },
+    [](view_t<subnet> v) {
       return data{subnet{make_addr(v.network()), v.length()}};
     },
-    [=](view_t<port> v) { return data{v}; },
-    [=](view_t<vector> v) {
+    [](view_t<port> v) { return data{v}; },
+    [](view_t<vector> v) {
       vector xs;
       xs.reserve(v->size());
       std::transform(v->begin(), v->end(), std::back_inserter(xs),
                      [](auto y) { return make_data(y); });
       return data{std::move(xs)};
     },
-    [=](view_t<set> v) {
+    [](view_t<set> v) {
       set xs;
       std::transform(v->begin(), v->end(), std::inserter(xs, xs.end()),
                      [](auto y) { return make_data(y); });
       return data{std::move(xs)};
     },
-    [=](view_t<map> v) {
+    [](view_t<map> v) {
       map xs;
       auto make = [](auto pair) {
         return std::make_pair(make_data(pair.first), make_data(pair.second));

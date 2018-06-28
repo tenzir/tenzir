@@ -42,40 +42,26 @@ struct view;
 template <class T>
 using view_t = typename view<T>::type;
 
-/// @relates view
-template <>
-struct view<boolean> {
-  using type = boolean;
-};
+#define VAST_VIEW_TRAIT(type_name)                                             \
+  template <>                                                                  \
+  struct view<type_name> {                                                     \
+    using type = type_name;                                                    \
+  }
+
+VAST_VIEW_TRAIT(boolean);
+VAST_VIEW_TRAIT(integer);
+VAST_VIEW_TRAIT(count);
+VAST_VIEW_TRAIT(real);
+VAST_VIEW_TRAIT(timespan);
+VAST_VIEW_TRAIT(timestamp);
+VAST_VIEW_TRAIT(port);
+
+#undef VAST_VIEW_TRAIT
 
 /// @relates view
 template <>
-struct view<integer> {
-  using type = integer;
-};
-
-/// @relates view
-template <>
-struct view<count> {
-  using type = count;
-};
-
-/// @relates view
-template <>
-struct view<real> {
-  using type = real;
-};
-
-/// @relates view
-template <>
-struct view<timespan> {
-  using type = timespan;
-};
-
-/// @relates view
-template <>
-struct view<timestamp> {
-  using type = timestamp;
+struct view<caf::none_t> {
+  using type = caf::none_t;
 };
 
 /// @relates view
@@ -161,12 +147,6 @@ struct view<subnet> {
   using type = subnet_view;
 };
 
-//// @relates view
-template <>
-struct view<port> {
-  using type = port;
-};
-
 struct vector_view_ptr;
 struct set_view_ptr;
 struct map_view_ptr;
@@ -192,6 +172,7 @@ struct view<map> {
 /// A type-erased view over variout types of data.
 /// @relates view
 using data_view = caf::variant<
+  view_t<caf::none_t>,
   view_t<boolean>,
   view_t<integer>,
   view_t<count>,
@@ -363,7 +344,7 @@ private:
 template <class T>
 view_t<T> make_view(const T& x) {
   constexpr auto directly_constructible
-    = detail::is_any_v<T, boolean, integer, count, real, timespan,
+    = detail::is_any_v<T, caf::none_t, boolean, integer, count, real, timespan,
                        timestamp, std::string, pattern, address, subnet, port>;
   if constexpr (directly_constructible) {
     return x;

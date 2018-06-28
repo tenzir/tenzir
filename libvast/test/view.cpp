@@ -19,11 +19,36 @@
 using namespace vast;
 using namespace std::literals;
 
-TEST(arithmetic view) {
+TEST(copying views) {
+  MESSAGE("calling view_t directly");
+  CHECK_EQUAL(view_t<caf::none_t>{caf::none}, caf::none);
   CHECK_EQUAL(view_t<boolean>{true}, true);
   CHECK_EQUAL(view_t<integer>{42}, 42);
-  CHECK_EQUAL(view_t<std::string>{"foo"}, "foo");
+  CHECK_EQUAL(view_t<count>{42}, 42u);
+  CHECK_EQUAL(view_t<real>{4.2}, 4.2);
   CHECK_EQUAL(view_t<port>(53, port::udp), port(53, port::udp));
+  MESSAGE("using make_view");
+  CHECK_EQUAL(make_view(caf::none), caf::none);
+  CHECK_EQUAL(make_view(true), true);
+  CHECK_EQUAL(make_view(42), integer(42));
+  CHECK_EQUAL(make_view(42u), count(42u));
+  CHECK_EQUAL(make_view(4.2), real(4.2));
+  CHECK_EQUAL(make_view(port(53, port::udp)), port(53, port::udp));
+  MESSAGE("copying from temporary data");
+  CHECK_EQUAL(make_view(data{caf::none}), caf::none);
+  CHECK_EQUAL(make_view(data{true}), true);
+  CHECK_EQUAL(make_view(data{42}), integer(42));
+  CHECK_EQUAL(make_view(data{42u}), count(42u));
+  CHECK_EQUAL(make_view(data{4.2}), real(4.2));
+  CHECK_EQUAL(make_view(data(port(53, port::udp))), port(53, port::udp));
+}
+
+TEST(string view) {
+  std::string str = "foobar";
+  auto v = make_view(str);
+  CHECK_EQUAL(v, "foobar");
+  str[3] = 'z';
+  CHECK_EQUAL(v, "foozar");
 }
 
 TEST(vector view) {
