@@ -39,8 +39,7 @@ inline type make_packet_type() {
       {"dport", port_type{}}}},
     {"data", string_type{}.attributes({{"skip"}})}
   };
-  packet.name("pcap::packet");
-  return packet;
+  return packet.name("pcap::packet");
 }
 
 static auto const pcap_packet_type = make_packet_type();
