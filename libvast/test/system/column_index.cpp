@@ -78,11 +78,8 @@ TEST(bro conn log) {
   auto col_offset = unbox(row_type.resolve(key{"id", "orig_h"}));
   auto col_type = row_type.at(col_offset);
   auto col = unbox(make_field_data_index(directory, *col_type, col_offset));
-  size_t next_id = 0;
-  for (auto entry : bro_conn_log) {
-    entry.id(next_id++);
-    col->add(std::move(entry));
-  }
+  for (auto entry : bro_conn_log)
+    col->add(entry);
   MESSAGE("verify column index");
   auto pred = unbox(to<predicate>(":addr == 169.254.225.22"));
   auto expected_result = make_ids({680, 682, 719, 720}, bro_conn_log.size());
