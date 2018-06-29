@@ -11,17 +11,9 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/system/indexer_manager.hpp"
-
-#include <caf/event_based_actor.hpp>
-#include <caf/exit_reason.hpp>
-#include <caf/local_actor.hpp>
-#include <caf/send.hpp>
-
-#include "vast/load.hpp"
 #include "vast/logger.hpp"
-#include "vast/save.hpp"
-#include "vast/system/indexer.hpp"
+
+#include "vast/system/indexer_manager.hpp"
 #include "vast/system/partition.hpp"
 
 namespace vast::system {
