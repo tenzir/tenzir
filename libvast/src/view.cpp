@@ -164,4 +164,55 @@ data make_data(data_view x) {
   ), x);
 }
 
+// -- materialization ----------------------------------------------------------
+
+std::string materialize(std::string_view x) {
+  return std::string{x};
+}
+
+pattern materialize(pattern_view x) {
+  return pattern{std::string{x.string()}};
+}
+
+address materialize(address_view x) {
+  return address{x.data()};
+}
+
+subnet materialize(subnet_view x) {
+  return subnet{materialize(x.network()), x.length()};
+}
+
+namespace {
+
+auto materialize(std::pair<data_view, data_view> x) {
+  return std::pair(materialize(x.first), materialize(x.second));
+}
+
+template <class Result, class T>
+Result materialize_container(const T& xs) {
+  Result result;
+  if (xs)
+    for (auto x : *xs)
+      result.insert(result.end(), materialize(x));
+  return result;
+}
+
+} // namespace <anonymous>
+
+vector materialize(vector_view_ptr xs) {
+  return materialize_container<vector>(xs);
+}
+
+set materialize(set_view_ptr xs) {
+  return materialize_container<set>(xs);
+}
+
+map materialize(map_view_ptr xs) {
+  return materialize_container<map>(xs);
+}
+
+data materialize(data_view x) {
+  return caf::visit([](auto y) { return data{materialize(y)}; }, x);
+}
+
 } // namespace vast

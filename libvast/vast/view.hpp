@@ -46,6 +46,9 @@ using view_t = typename view<T>::type;
   template <>                                                                  \
   struct view<type_name> {                                                     \
     using type = type_name;                                                    \
+  };                                                                           \
+  inline auto materialize(type_name x) {                                       \
+    return x;                                                                  \
   }
 
 VAST_VIEW_TRAIT(boolean);
@@ -64,11 +67,13 @@ struct view<caf::none_t> {
   using type = caf::none_t;
 };
 
+
 /// @relates view
 template <>
 struct view<std::string> {
   using type = std::string_view;
 };
+
 
 /// @relates view
 class pattern_view : detail::totally_ordered<pattern_view> {
@@ -146,6 +151,7 @@ template <>
 struct view<subnet> {
   using type = subnet_view;
 };
+
 
 struct vector_view_ptr;
 struct set_view_ptr;
@@ -373,5 +379,27 @@ data_view make_data_view(const T& x) {
 /// Creates a data instance from a data_view.
 /// @relates view data
 data make_data(data_view x);
+
+// -- materialization ----------------------------------------------------------
+
+constexpr auto materialize(caf::none_t x) {
+  return x;
+}
+
+std::string materialize(std::string_view x);
+
+pattern materialize(pattern_view x);
+
+address materialize(address_view x);
+
+subnet materialize(subnet_view x);
+
+vector materialize(vector_view_ptr xs);
+
+set materialize(set_view_ptr xs);
+
+map materialize(map_view_ptr xs);
+
+data materialize(data_view xs);
 
 } // namespace vast
