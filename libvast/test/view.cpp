@@ -126,7 +126,7 @@ TEST(make_data_view) {
   CHECK_EQUAL(v->at(0), integer{42});
   CHECK_EQUAL(v->at(1), true);
   CHECK_EQUAL(v->at(2), "foo"sv);
-  CHECK_EQUAL(x, materialize(v));
+  CHECK_EQUAL(xs, materialize(v));
 }
 
 TEST(increment decrement container_view_iterator) {
