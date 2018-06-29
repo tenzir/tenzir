@@ -17,9 +17,9 @@
 #include <random>
 #include <vector>
 
+#include "vast/meta_index.hpp"
 #include "vast/detail/spawn_container_source.hpp"
 #include "vast/system/indexer_stage_driver.hpp"
-#include "vast/system/meta_index.hpp"
 #include "vast/system/partition.hpp"
 #include "vast/uuid.hpp"
 

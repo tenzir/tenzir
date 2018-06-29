@@ -11,12 +11,12 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/system/meta_index.hpp"
 
 #include "vast/event.hpp"
 #include "vast/expression_visitors.hpp"
+#include "vast/meta_index.hpp"
 
-namespace vast::system {
+namespace vast {
 
 meta_index::interval::interval()
   : from(timestamp::max()),
@@ -57,4 +57,4 @@ bool operator==(const meta_index::interval& x, const meta_index::interval& y) {
   return x.from == y.from && x.to == y.to;
 }
 
-} // namespace vast::system
+} // namespace vast

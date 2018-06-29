@@ -23,7 +23,7 @@
 #include "vast/time.hpp"
 #include "vast/uuid.hpp"
 
-namespace vast::system {
+namespace vast {
 
 /// Maps events to horizontal partitions of the ::index.
 class meta_index {
@@ -119,4 +119,4 @@ inline bool operator!=(const meta_index::interval& x,
   return !(x == y);
 }
 
-} // namespace vast::system
+} // namespace vast

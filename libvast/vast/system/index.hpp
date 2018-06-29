@@ -19,14 +19,15 @@
 #include <caf/actor.hpp>
 #include <caf/stateful_actor.hpp>
 
-#include "vast/detail/flat_lru_cache.hpp"
-#include "vast/detail/flat_set.hpp"
 #include "vast/expression.hpp"
+#include "vast/meta_index.hpp"
 #include "vast/fwd.hpp"
 #include "vast/system/indexer_stage_driver.hpp"
-#include "vast/system/meta_index.hpp"
 #include "vast/system/partition.hpp"
 #include "vast/uuid.hpp"
+
+#include "vast/detail/flat_lru_cache.hpp"
+#include "vast/detail/flat_set.hpp"
 
 namespace vast::system {
 

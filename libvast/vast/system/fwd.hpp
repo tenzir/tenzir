@@ -28,7 +28,6 @@ class export_command;
 class import_command;
 class indexer_manager;
 class indexer_stage_driver;
-class meta_index;
 class node_command;
 class partition;
 class pcap_reader_command;

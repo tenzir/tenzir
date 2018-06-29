@@ -57,6 +57,7 @@ set(libvast_sources
   src/http.cpp
   src/ids.cpp
   src/key.cpp
+  src/meta_index.cpp
   src/null_bitmap.cpp
   src/operator.cpp
   src/pattern.cpp
@@ -78,7 +79,6 @@ set(libvast_sources
   src/system/indexer.cpp
   src/system/indexer_manager.cpp
   src/system/indexer_stage_driver.cpp
-  src/system/meta_index.cpp
   src/system/node.cpp
   src/system/node_command.cpp
   src/system/partition.cpp
@@ -245,6 +245,7 @@ set(tests
   test/json.cpp
   test/key.cpp
   test/main.cpp
+  test/meta_index.cpp
   test/mmapbuf.cpp
   test/offset.cpp
   test/parse_data.cpp
@@ -268,7 +269,6 @@ set(tests
   test/system/indexer.cpp
   test/system/indexer_stage_driver.cpp
   test/system/key_value_store.cpp
-  test/system/meta_index.cpp
   test/system/partition.cpp
   test/system/queries.cpp
   test/system/replicated_store.cpp

@@ -17,11 +17,10 @@
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/event.hpp"
-#include "vast/system/meta_index.hpp"
+#include "vast/meta_index.hpp"
 #include "vast/uuid.hpp"
 
 using namespace vast;
-using namespace vast::system;
 
 using std::literals::operator""s;
 

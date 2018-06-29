@@ -26,6 +26,7 @@ class default_table_slice_builder;
 class event;
 class expression;
 class json;
+class meta_index;
 class path;
 class pattern;
 class port;

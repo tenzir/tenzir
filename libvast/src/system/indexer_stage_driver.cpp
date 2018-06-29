@@ -18,7 +18,7 @@
 #include <caf/stream_manager.hpp>
 
 #include "vast/logger.hpp"
-#include "vast/system/meta_index.hpp"
+#include "vast/meta_index.hpp"
 #include "vast/system/partition.hpp"
 
 namespace vast::system {
