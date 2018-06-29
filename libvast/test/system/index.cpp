@@ -207,13 +207,18 @@ TEST(iterable bro conn log query result) {
     CHECK_EQUAL(rank(result), rank(expected_result));
     CHECK_EQUAL(result, expected_result);
   }
-  MESSAGE("issue field name query");
+  MESSAGE("issue field name queries");
   {
     auto expected_result = make_ids({680, 682, 719, 720}, bro_conn_log.size());
     auto [query_id, hits, scheduled] = query("id.orig_h == 169.254.225.22");
     auto result = receive_result(query_id, hits, scheduled);
     CHECK_EQUAL(rank(result), rank(expected_result));
     CHECK_EQUAL(result, expected_result);
+  }
+  {
+    auto [query_id, hits, scheduled] = query("service == \"http\"");
+    auto result = receive_result(query_id, hits, scheduled);
+    CHECK_EQUAL(rank(result), 2386u);
   }
   MESSAGE("issue historical point query with conjunction");
   {
