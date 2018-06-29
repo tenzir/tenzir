@@ -14,6 +14,7 @@
 #pragma once
 
 #include <cstddef>
+#include <limits>
 
 #include <caf/fwd.hpp>
 #include <caf/ref_counted.hpp>
@@ -33,6 +34,8 @@ public:
 
   using size_type = uint64_t;
 
+  static constexpr size_type npos = std::numeric_limits<size_type>::max();
+
   // -- constructors, destructors, and assignment operators --------------------
 
   ~table_slice();
@@ -43,10 +46,19 @@ public:
 
   // -- properties -------------------------------------------------------------
 
-  /// @returns The table layout.
+  /// @returns the table layout.
   inline const record_type& layout() const noexcept {
     return layout_;
   }
+
+  /// @returns the content of a row wrapped into an event.
+  caf::optional<event> row_to_event(size_type row, size_type first_column = 0u,
+                                    size_type num_columns = npos) const;
+
+  std::vector<event> rows_to_events(size_type first_row = 0u,
+                                    size_type num_rows = npos,
+                                    size_type first_column = 0u,
+                                    size_type num_columns = npos) const;
 
   /// @returns the number of rows in the slice.
   inline size_type rows() const noexcept {

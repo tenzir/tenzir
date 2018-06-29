@@ -15,6 +15,7 @@
 
 #include <chrono>
 #include <string>
+#include <tuple>
 #include <type_traits>
 
 #include <caf/default_sum_type_access.hpp>
@@ -287,6 +288,18 @@ bool convert(const data& v, json& j);
 /// records contains the field names from the type corresponding to the given
 /// data.
 bool convert(const data& v, json& j, const type& t);
+
+/// @relates data
+template <class... Ts>
+auto make_vector(Ts... xs) {
+  return vector{data{std::move(xs)}...};
+}
+
+template <class... Ts>
+auto make_vector(std::tuple<Ts...> tup) {
+  return std::apply([](auto&... xs) { return make_vector(std::move(xs)...); },
+                    tup);
+}
 
 } // namespace vast
 
