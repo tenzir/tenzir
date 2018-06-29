@@ -294,13 +294,6 @@ protected:
   std::vector<attribute> attributes_;
 };
 
-template <class T>
-struct concrete_type_mixin {
-  virtual int index() const noexcept {
-    return caf::detail::tl_index_of<concrete_types, T>::value;
-  }
-};
-
 /// The base class for all concrete types.
 /// @relates type
 template <class Derived>
@@ -338,6 +331,10 @@ public:
   }
 
   /// @cond PRIVATE
+
+  int index() const noexcept final {
+    return type_id<Derived>();
+  }
 
   template <class Inspector>
   friend auto inspect(Inspector& f, concrete_type<Derived>& x) {
@@ -389,10 +386,6 @@ struct basic_type : concrete_type<Derived> {
   type_flags flags() const noexcept final {
     return type_flags::basic;
   }
-
-  int index() const noexcept final {
-    return caf::detail::tl_index_of<concrete_types, Derived>::value;
-  }
 };
 
 /// The base type for types that depend on runtime information.
@@ -401,10 +394,6 @@ template <class Derived>
 struct complex_type : concrete_type<Derived> {
   type_flags flags() const noexcept override {
     return type_flags::complex | type_flags::recursive;
-  }
-
-  int index() const noexcept final {
-    return caf::detail::tl_index_of<concrete_types, Derived>::value;
   }
 };
 
