@@ -169,7 +169,7 @@ TEST(serialization) {
   save(buf, t0);
   type t1;
   load(buf, t1);
-  CHECK(t0 == t1);
+  CHECK_EQUAL(t0, t1);
 }
 
 TEST(record range) {
@@ -529,7 +529,7 @@ TEST(parseable) {
 
 TEST(hashable) {
   auto hash = [&](auto&& x) {
-    return uhash<type_hasher>{type_hasher{xxhash64{}}}(x);
+    return uhash<xxhash64>{}(x);
   };
   auto x = type{};
   CHECK_EQUAL(hash(x), 17241709254077376921ul);

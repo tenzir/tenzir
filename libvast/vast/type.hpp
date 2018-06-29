@@ -23,9 +23,9 @@
 #include <caf/fwd.hpp>
 #include <caf/intrusive_ptr.hpp>
 #include <caf/make_counted.hpp>
+#include <caf/meta/omittable.hpp>
 #include <caf/none.hpp>
 #include <caf/ref_counted.hpp>
-#include <caf/serializer.hpp>
 #include <caf/variant.hpp>
 
 #include "vast/aliases.hpp"
@@ -38,8 +38,6 @@
 #include "vast/optional.hpp"
 #include "vast/time.hpp"
 
-#include "vast/concept/hashable/hash_append.hpp"
-#include "vast/concept/hashable/type_erased_hasher.hpp"
 #include "vast/concept/hashable/uhash.hpp"
 #include "vast/concept/hashable/xxhash.hpp"
 
@@ -119,9 +117,6 @@ constexpr type_id_type type_id() {
 using type_digest = xxhash64::result_type;
 
 /// @relates type
-using type_hasher = type_erased_hasher<type_digest>;
-
-/// @relates type
 using abstract_type_ptr = caf::intrusive_ptr<abstract_type>;
 
 /// The sematic representation of data.
@@ -196,6 +191,11 @@ public:
 
   const abstract_type& operator*() const noexcept;
 
+  struct inspect_helper {
+    uint8_t& type_tag;
+    type& x;
+  };
+
   /// @endcond
 
   friend bool operator==(const type& x, const type& y);
@@ -206,22 +206,6 @@ private:
 
   abstract_type_ptr ptr_;
 };
-
-/// @relates type
-caf::error inspect(caf::serializer& sink, type& x);
-
-/// @relates type
-caf::error inspect(caf::deserializer& source, type& x);
-
-/// @relates type
-void hash_append(type_hasher& hasher, const type& x);
-
-/// @relates type
-template <class Hasher>
-void hash_append(Hasher& hasher, const type& x) {
-  type_hasher h{hasher};
-  hash_append(h, x);
-}
 
 /// Describes properties of a type.
 /// @relates type
@@ -277,10 +261,6 @@ public:
   /// @returns the index of this type in `concrete_types`.
   virtual int index() const noexcept = 0;
 
-  virtual caf::error serialize(caf::serializer& sink) const = 0;
-
-  virtual void hash_append(type_hasher& h) const = 0;
-
   /// @endcond
 
 protected:
@@ -330,31 +310,15 @@ public:
     return x.less_than(y);
   }
 
-  /// @cond PRIVATE
-
   int index() const noexcept final {
     return type_id<Derived>();
   }
 
   template <class Inspector>
-  friend auto inspect(Inspector& f, concrete_type<Derived>& x) {
+  friend auto inspect(Inspector& f, concrete_type& x) {
     return f(x.name_, x.attributes_);
   }
 
-  caf::error serialize(caf::serializer& sink) const final {
-    auto id = type_id<Derived>();
-    return caf::error::eval(
-      [&] { return sink.apply(id); },
-      [&] { return sink.apply(const_cast<Derived&>(derived())); }
-    );
-  }
-
-  void hash_append(type_hasher& h) const final {
-    detail::hash_inspector<type_hasher> f{h};
-    inspect(f, const_cast<Derived&>(derived()));
-  }
-
-  /// @endcond
 
 protected:
   // Convenience function to cast an abstract type into an instance of this
@@ -366,7 +330,7 @@ protected:
 
   template <class T>
   static concrete_type<Derived>& upcast(T& x) {
-    return static_cast<concrete_type<Derived>&>(x);
+    return static_cast<concrete_type&>(x);
   }
 
   abstract_type_ptr clone() const final {
@@ -915,14 +879,60 @@ struct sum_type_access<vast::type> {
 
 } // namespace caf
 
+// -- inspect (needs caf::visit first) -----------------------------------------
+
+namespace vast {
+
+template <class Inspector, class... Ts>
+auto make_inspect(caf::detail::type_list<Ts...>) {
+  return [](Inspector& f, type::inspect_helper& x) {
+    using result_type = typename Inspector::result_type;
+    if constexpr (Inspector::reads_state) {
+      return caf::visit(f, x.x);
+    } else {
+      using reference = type&;
+      using fun = result_type (*)(Inspector&, reference);
+      static fun tbl[] = {
+        [](Inspector& g, reference ref) -> result_type {
+          Ts tmp;
+          auto res = g(tmp);
+          ref = std::move(tmp);
+          return res;
+        }...
+      };
+      return tbl[x.type_tag](f, x.x);
+    }
+  };
+}
+
+/// @relates type
+template <class Inspector>
+auto inspect(Inspector& f, type::inspect_helper& x) {
+  auto g = make_inspect<Inspector>(concrete_types{});
+  return g(f, x);
+}
+
+/// @relates type
+template <class Inspector>
+auto inspect(Inspector& f, type& x) {
+  // We use a single byte for the type index on the wire.
+  auto type_tag = static_cast<uint8_t>(x->index());
+  type::inspect_helper helper{type_tag, x};
+  return f(caf::meta::omittable(), type_tag, helper);
+}
+
+} // namespace vast
+
+// -- std::hash ----------------------------------------------------------------
+
 namespace std {
 
 template <>
 struct hash<vast::type> {
   size_t operator()(const vast::type& x) const {
-    auto hasher = vast::type_hasher{vast::xxhash64{}};
-    return vast::uhash<vast::type_hasher>{hasher}(x);
+    return vast::uhash<vast::xxhash64>{}(x);
   }
 };
 
 } // namespace std
+
