@@ -528,19 +528,20 @@ TEST(parseable) {
 }
 
 TEST(hashable) {
-  auto hash = [&](auto&& x) {
-    return uhash<xxhash64>{}(x);
-  };
-  auto x = type{};
-  CHECK_EQUAL(hash(x), 17241709254077376921ul);
-  x = boolean_type{};
-  CHECK_EQUAL(hash(x), 12612883901365648434ul);
-  x = record_type{
+  auto hash = [&](auto&& x) { return uhash<xxhash64>{}(x); };
+  CHECK_EQUAL(hash(type{}), 10680828680203489530ul);
+  CHECK_EQUAL(hash(boolean_type{}), 12612883901365648434ul);
+  CHECK_EQUAL(hash(type{boolean_type{}}), 13047344884484907481ul);
+  CHECK_NOT_EQUAL(hash(type{boolean_type{}}), hash(boolean_type{}));
+  CHECK_EQUAL(hash(boolean_type{}), hash(address_type{}));
+  CHECK_NOT_EQUAL(hash(type{boolean_type{}}), hash(type{address_type{}}));
+  auto x = record_type{
     {"x", integer_type{}},
     {"y", string_type{}},
     {"z", vector_type{real_type{}}}
   };
-  CHECK_EQUAL(hash(x), 7882356540908153692ul);
+  CHECK_EQUAL(hash(x), 13215642375407153428ul);
+  CHECK_EQUAL(to_digest(x), to_string(hash(type{x})));
 }
 
 TEST(json) {
