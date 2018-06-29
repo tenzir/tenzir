@@ -184,8 +184,8 @@ subnet materialize(subnet_view x) {
 
 namespace {
 
-std::pair<data, data> materialize(std::pair<data_view, data_view> x) {
-  return std::make_pair(materialize(x.first), materialize(x.second));
+auto materialize(std::pair<data_view, data_view> x) {
+  return std::pair(materialize(x.first), materialize(x.second));
 }
 
 template <class Result, class T>
