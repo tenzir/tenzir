@@ -17,22 +17,13 @@
 
 #include <caf/all.hpp>
 
-#include "vast/concept/parseable/to.hpp"
-#include "vast/concept/parseable/vast/type.hpp"
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/vast/expression.hpp"
-#include "vast/concept/printable/vast/filesystem.hpp"
-#include "vast/concept/printable/vast/key.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/event.hpp"
 #include "vast/expression.hpp"
-#include "vast/expression_visitors.hpp"
 #include "vast/filesystem.hpp"
-#include "vast/load.hpp"
 #include "vast/logger.hpp"
-#include "vast/offset.hpp"
-#include "vast/save.hpp"
-#include "vast/value_index.hpp"
 
 #include "vast/system/atoms.hpp"
 #include "vast/system/indexer.hpp"
