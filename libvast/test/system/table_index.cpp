@@ -159,6 +159,9 @@ TEST(bro conn logs) {
     CHECK_EQUAL(rank(query("orig_bytes < 400")), 5332u);
     CHECK_EQUAL(rank(query("orig_bytes < 400 && proto == \"udp\"")), 4357u);
     CHECK_EQUAL(rank(query(":addr == 169.254.225.22")), 4u);
+    CHECK_EQUAL(rank(query("service == \"http\"")), 2386u);
+    CHECK_EQUAL(rank(query("service == \"http\" && :addr == 212.227.96.110")),
+                28u);
   };
   verify();
   MESSAGE("(automatically) persist table index and restore from disk");
