@@ -194,7 +194,6 @@ public:
 
   const abstract_type* operator->() const noexcept;
 
-  /// @pre `ptr() != nullptr`
   const abstract_type& operator*() const noexcept;
 
   /// @endcond
