@@ -34,6 +34,7 @@ class subnet;
 class table_slice;
 class table_slice_builder;
 class type;
+class value;
 
 // -- structs ------------------------------------------------------------------
 

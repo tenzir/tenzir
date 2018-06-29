@@ -14,7 +14,7 @@
 #include <string>
 
 #include "vast/default_table_slice.hpp"
-#include "vast/event.hpp"
+#include "vast/value.hpp"
 #include "vast/table_slice_builder.hpp"
 #include "vast/view.hpp"
 
@@ -38,7 +38,7 @@ struct fixture {
   using tup = std::tuple<integer, std::string, real>;
 
   std::vector<tup> test_data;
-  std::vector<event> test_events;
+  std::vector<value> test_values;
 
   fixture() {
     REQUIRE_NOT_EQUAL(builder, nullptr);
@@ -49,7 +49,7 @@ struct fixture {
       tup{4, "jkl", .42}
     });
     for (auto& x : test_data)
-      test_events.emplace_back(event::make(make_vector(x), layout));
+      test_values.emplace_back(value::make(make_vector(x), layout));
   }
 
   auto make_slice() {
@@ -63,10 +63,17 @@ struct fixture {
     return builder->finish();
   }
 
-  std::vector<event> subset(size_t from, size_t num) {
-    return {test_events.begin() + from, test_events.begin() + (from + num)};
+  std::vector<value> subset(size_t from, size_t num) {
+    return {test_values.begin() + from, test_values.begin() + (from + num)};
   }
 };
+
+template <class T>
+T unbox(caf::optional<T> x) {
+  if (!x)
+    FAIL("unable to unbox value");
+  return std::move(*x);
+}
 
 } // namespace <anonymous>
 
@@ -96,18 +103,18 @@ TEST(add) {
   CHECK_EQUAL(*x, make_view(4.3));
 }
 
-TEST(rows to events) {
+TEST(rows to values) {
   auto slice = make_slice();
-  CHECK_EQUAL(slice->row_to_event(0), test_events[0]);
-  CHECK_EQUAL(slice->row_to_event(1), test_events[1]);
-  CHECK_EQUAL(slice->row_to_event(2), test_events[2]);
-  CHECK_EQUAL(slice->row_to_event(3), test_events[3]);
-  CHECK_EQUAL(slice->rows_to_events(), test_events);
-  CHECK_EQUAL(slice->rows_to_events(0, 1), subset(0, 1));
-  CHECK_EQUAL(slice->rows_to_events(1, 1), subset(1, 1));
-  CHECK_EQUAL(slice->rows_to_events(2, 1), subset(2, 1));
-  CHECK_EQUAL(slice->rows_to_events(0, 2), subset(0, 2));
-  CHECK_EQUAL(slice->rows_to_events(1, 2), subset(1, 2));
+  CHECK_EQUAL(unbox(slice->row_to_value(0)), test_values[0]);
+  CHECK_EQUAL(unbox(slice->row_to_value(1)), test_values[1]);
+  CHECK_EQUAL(unbox(slice->row_to_value(2)), test_values[2]);
+  CHECK_EQUAL(unbox(slice->row_to_value(3)), test_values[3]);
+  CHECK_EQUAL(slice->rows_to_values(), test_values);
+  CHECK_EQUAL(slice->rows_to_values(0, 1), subset(0, 1));
+  CHECK_EQUAL(slice->rows_to_values(1, 1), subset(1, 1));
+  CHECK_EQUAL(slice->rows_to_values(2, 1), subset(2, 1));
+  CHECK_EQUAL(slice->rows_to_values(0, 2), subset(0, 2));
+  CHECK_EQUAL(slice->rows_to_values(1, 2), subset(1, 2));
 }
 
 FIXTURE_SCOPE_END()

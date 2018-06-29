@@ -51,11 +51,11 @@ public:
     return layout_;
   }
 
-  /// @returns the content of a row wrapped into an event.
-  caf::optional<event> row_to_event(size_type row, size_type first_column = 0u,
+  /// @returns the content of a row wrapped into an value.
+  caf::optional<value> row_to_value(size_type row, size_type first_column = 0u,
                                     size_type num_columns = npos) const;
 
-  std::vector<event> rows_to_events(size_type first_row = 0u,
+  std::vector<value> rows_to_values(size_type first_row = 0u,
                                     size_type num_rows = npos,
                                     size_type first_column = 0u,
                                     size_type num_columns = npos) const;
