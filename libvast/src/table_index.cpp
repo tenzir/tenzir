@@ -11,7 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/system/table_index.hpp"
+#include "vast/table_index.hpp"
 
 #include "vast/detail/overload.hpp"
 #include "vast/expression_visitors.hpp"
@@ -19,7 +19,7 @@
 #include "vast/logger.hpp"
 #include "vast/save.hpp"
 
-namespace vast::system {
+namespace vast {
 
 caf::expected<table_index> make_table_index(path base_dir, type layout) {
   caf::error err;
@@ -293,4 +293,4 @@ table_index::table_index(type layout, path base_dir)
   VAST_TRACE(VAST_ARG(layout_), VAST_ARG(base_dir_));
 }
 
-} // namespace vast::system
+} // namespace vast

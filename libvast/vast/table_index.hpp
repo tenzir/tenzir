@@ -21,13 +21,12 @@
 #include <caf/expected.hpp>
 
 #include "vast/filesystem.hpp"
-#include "vast/system/column_index.hpp"
-#include "vast/system/fwd.hpp"
+#include "vast/column_index.hpp"
 #include "vast/type.hpp"
 
 #include "vast/detail/range.hpp"
 
-namespace vast::system {
+namespace vast {
 
 // -- free functions -----------------------------------------------------------
 
@@ -217,5 +216,4 @@ private:
 
 // -- free functions -----------------------------------------------------------
 
-
-} // namespace vast::system
+} // namespace vast

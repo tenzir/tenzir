@@ -24,10 +24,9 @@
 #include "vast/concept/printable/vast/error.hpp"
 #include "vast/concept/printable/vast/event.hpp"
 #include "vast/concept/printable/vast/expression.hpp"
-#include "vast/system/table_index.hpp"
+#include "vast/table_index.hpp"
 
 using namespace vast;
-using namespace vast::system;
 
 namespace {
 

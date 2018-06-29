@@ -11,14 +11,14 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/system/column_index.hpp"
+#include "vast/column_index.hpp"
 
 #include "vast/expression_visitors.hpp"
 #include "vast/load.hpp"
 #include "vast/logger.hpp"
 #include "vast/save.hpp"
 
-namespace vast::system {
+namespace vast {
 
 // -- free functions -----------------------------------------------------------
 
@@ -186,4 +186,4 @@ column_index::column_index(type index_type, path filename)
     filename_(std::move(filename)) {
 }
 
-} // namespace vast::system
+} // namespace vast

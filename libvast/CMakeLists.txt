@@ -20,6 +20,7 @@ set(libvast_sources
   src/batch.cpp
   src/bitmap.cpp
   src/chunk.cpp
+  src/column_index.cpp
   src/command.cpp
   src/compression.cpp
   src/concept/hashable/crc.cpp
@@ -66,7 +67,6 @@ set(libvast_sources
   src/system/accountant.cpp
   src/system/application.cpp
   src/system/archive.cpp
-  src/system/column_index.cpp
   src/system/configuration.cpp
   src/system/consensus.cpp
   src/system/default_application.cpp
@@ -90,11 +90,11 @@ set(libvast_sources
   src/system/spawn_sink.cpp
   src/system/spawn_source.cpp
   src/system/start_command.cpp
-  src/system/table_index.cpp
   src/system/task.cpp
   src/system/tracker.cpp
   src/system/writer_command_base.cpp
   src/table.cpp
+  src/table_index.cpp
   src/table_slice.cpp
   src/table_slice_builder.cpp
   src/time.cpp
@@ -222,6 +222,7 @@ set(tests
   test/cache.cpp
   test/chunk.cpp
   test/coder.cpp
+  test/column_index.cpp
   test/command.cpp
   test/compressedbuf.cpp
   test/data.cpp
@@ -260,7 +261,6 @@ set(tests
   test/string.cpp
   test/subnet.cpp
   test/system/archive.cpp
-  test/system/column_index.cpp
   test/system/consensus.cpp
   test/system/exporter.cpp
   test/system/importer.cpp
@@ -274,8 +274,8 @@ set(tests
   test/system/replicated_store.cpp
   test/system/sink.cpp
   test/system/source.cpp
-  test/system/table_index.cpp
   test/system/task.cpp
+  test/table_index.cpp
   test/time.cpp
   test/type.cpp
   test/uuid.cpp

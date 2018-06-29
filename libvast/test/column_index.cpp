@@ -17,13 +17,12 @@
 #include "fixtures/events.hpp"
 #include "fixtures/filesystem.hpp"
 
+#include "vast/column_index.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
-#include "vast/system/column_index.hpp"
 #include "vast/type.hpp"
 
 using namespace vast;
-using namespace vast::system;
 
 namespace {
 

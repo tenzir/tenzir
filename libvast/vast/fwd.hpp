@@ -20,7 +20,7 @@ namespace vast {
 // -- classes ------------------------------------------------------------------
 
 class address;
-
+class column_index;
 class default_table_slice;
 class default_table_slice_builder;
 class event;
@@ -31,6 +31,7 @@ class pattern;
 class port;
 class schema;
 class subnet;
+class table_index;
 class table_slice;
 class table_slice_builder;
 class type;
@@ -57,6 +58,8 @@ struct timestamp_type;
 struct vector_type;
 
 // -- smart pointers -----------------------------------------------------------
+
+using column_index_ptr = std::unique_ptr<column_index>;
 
 using table_slice_ptr = caf::intrusive_ptr<table_slice>;
 

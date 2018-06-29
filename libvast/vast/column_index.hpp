@@ -21,11 +21,10 @@
 #include "vast/event.hpp"
 #include "vast/expression.hpp"
 #include "vast/filesystem.hpp"
-#include "vast/system/fwd.hpp"
 #include "vast/type.hpp"
 #include "vast/value_index.hpp"
 
-namespace vast::system {
+namespace vast {
 
 // -- free functions -----------------------------------------------------------
 
@@ -142,4 +141,4 @@ caf::expected<bitmap> lookup(column_index::column_index_ptr_vec columns,
 
 */
 
-} // namespace vast::system
+} // namespace vast

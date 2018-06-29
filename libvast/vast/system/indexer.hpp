@@ -19,7 +19,7 @@
 #include <caf/stateful_actor.hpp>
 
 #include "vast/filesystem.hpp"
-#include "vast/system/table_index.hpp"
+#include "vast/table_index.hpp"
 #include "vast/type.hpp"
 
 namespace vast::system {
@@ -41,4 +41,3 @@ caf::behavior indexer(caf::stateful_actor<indexer_state>* self, path dir,
                       type event_type);
 
 } // namespace vast::system
-
