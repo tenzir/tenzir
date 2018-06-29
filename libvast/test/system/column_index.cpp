@@ -73,7 +73,7 @@ TEST(flat column type) {
 }
 
 TEST(bro conn log) {
-  MESSAGE("ingest origins from bro conn log");
+  MESSAGE("ingest originators from bro conn log");
   auto row_type = caf::get<record_type>(bro_conn_log[0].type());
   auto col_offset = unbox(row_type.resolve(key{"id", "orig_h"}));
   auto col_type = row_type.at(col_offset);
@@ -83,12 +83,13 @@ TEST(bro conn log) {
   MESSAGE("verify column index");
   auto pred = unbox(to<predicate>(":addr == 169.254.225.22"));
   auto expected_result = make_ids({680, 682, 719, 720}, bro_conn_log.size());
-  CHECK_EQUAL(unbox(col->lookup(pred)), expected_result );
+  CHECK_EQUAL(unbox(col->lookup(pred)), expected_result);
   MESSAGE("persist and reload from disk");
   col->flush_to_disk();
   col.reset();
   MESSAGE("verify column index again");
   col = unbox(make_field_data_index(directory, *col_type, col_offset));
+  CHECK_EQUAL(unbox(col->lookup(pred)), expected_result);
 }
 
 FIXTURE_SCOPE_END()
