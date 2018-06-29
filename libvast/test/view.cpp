@@ -49,6 +49,7 @@ TEST(string view) {
   CHECK_EQUAL(v, "foobar");
   str[3] = 'z';
   CHECK_EQUAL(v, "foozar");
+  CHECK_EQUAL(str, materialize(v));
 }
 
 TEST(vector view) {
@@ -70,6 +71,7 @@ TEST(vector view) {
   CHECK_EQUAL(i - j, xs.size() - 1);
   MESSAGE("check conversion back to data");
   CHECK(make_data(v) == xs);
+  CHECK_EQUAL(xs, materialize(v));
 }
 
 TEST(set view) {
@@ -84,6 +86,7 @@ TEST(set view) {
   CHECK_EQUAL(*std::next(v->begin(), 1), make_data_view(42));
   MESSAGE("check conversion back to data");
   CHECK(make_data(v) == xs);
+  CHECK_EQUAL(xs, materialize(v));
 }
 
 TEST(map view) {
@@ -105,6 +108,7 @@ TEST(map view) {
   CHECK_EQUAL(value, make_data_view(true));
   MESSAGE("check conversion back to data");
   CHECK(make_data(v) == xs);
+  CHECK_EQUAL(xs, materialize(v));
 }
 
 TEST(make_data_view) {
@@ -122,6 +126,7 @@ TEST(make_data_view) {
   CHECK_EQUAL(v->at(0), integer{42});
   CHECK_EQUAL(v->at(1), true);
   CHECK_EQUAL(v->at(2), "foo"sv);
+  CHECK_EQUAL(x, materialize(v));
 }
 
 TEST(increment decrement container_view_iterator) {

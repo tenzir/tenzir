@@ -31,6 +31,9 @@ class address : detail::totally_ordered<address>, detail::bitwise<address> {
   static std::array<uint8_t, 12> const v4_mapped_prefix;
 
 public:
+  /// Array for storing 128-bit IPv6 addresses.
+  using array_type = std::array<uint8_t, 16>;
+
   /// Address family.
   enum family { ipv4, ipv6 };
 
@@ -51,6 +54,8 @@ public:
 
   /// Default-constructs an (invalid) address.
   address();
+
+  explicit address(const array_type& bytes);
 
   /// Constructs an address from raw bytes.
   /// @param bytes A pointer to the raw byte representation. This must point
