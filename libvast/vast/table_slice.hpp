@@ -15,7 +15,9 @@
 
 #include <cstddef>
 #include <limits>
+#include <vector>
 
+#include <caf/allowed_unsafe_message_type.hpp>
 #include <caf/fwd.hpp>
 #include <caf/ref_counted.hpp>
 
@@ -102,3 +104,11 @@ using table_slice_ptr = caf::intrusive_ptr<table_slice>;
 using const_table_slice_ptr = caf::intrusive_ptr<const table_slice>;
 
 } // namespace vast
+
+CAF_ALLOW_UNSAFE_MESSAGE_TYPE(vast::table_slice_ptr)
+
+CAF_ALLOW_UNSAFE_MESSAGE_TYPE(std::vector<vast::table_slice_ptr>)
+
+CAF_ALLOW_UNSAFE_MESSAGE_TYPE(vast::const_table_slice_ptr)
+
+CAF_ALLOW_UNSAFE_MESSAGE_TYPE(std::vector<vast::const_table_slice_ptr>)
