@@ -17,15 +17,20 @@
 
 #include "vast/logger.hpp"
 
-#include <caf/actor_pool.hpp>
+#include <caf/actor_system_config.hpp>
+#include <caf/broadcast_downstream_manager.hpp>
+#include <caf/downstream.hpp>
+#include <caf/event_based_actor.hpp>
 #include <caf/none.hpp>
 #include <caf/stateful_actor.hpp>
 #include <caf/stream_source.hpp>
 
-#include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/std/chrono.hpp"
+#include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/vast/error.hpp"
 #include "vast/concept/printable/vast/expression.hpp"
+#include "vast/default_table_slice.hpp"
+#include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/error.hpp"
 #include "vast/event.hpp"
@@ -33,9 +38,10 @@
 #include "vast/expression.hpp"
 #include "vast/expression_visitors.hpp"
 #include "vast/schema.hpp"
-
 #include "vast/system/accountant.hpp"
 #include "vast/system/atoms.hpp"
+#include "vast/table_slice.hpp"
+#include "vast/table_slice_builder.hpp"
 
 namespace vast::system {
 
@@ -58,15 +64,60 @@ struct Reader {
 /// @tparam Reader The reader type, which must model the *Reader* concept.
 template <class Reader>
 struct source_state {
-  std::vector<event> events;
+  // -- member types -----------------------------------------------------------
+
+  using factory_type = table_slice_builder_ptr (*)(record_type);
+
+  using downstream_manager = caf::broadcast_downstream_manager<table_slice_ptr>;
+  // -- member variables -------------------------------------------------------
+
+  /// Filters events, i.e., causes the source to drop all matching events.
   expression filter;
+
+  /// Maps types to the tailored filter.
   std::unordered_map<type, expression> checkers;
-  std::chrono::steady_clock::time_point start;
+
+  /// Actor for collecting statistics.
   accountant_type accountant;
-  caf::actor sink;
+
+  /// Wraps the format-specific parser.
   Reader reader;
+
+  /// Generates layout-specific table slice builders.
+  factory_type factory;
+
+  /// Maps layout type names to table slice builders.
+  std::map<std::string, table_slice_builder_ptr> builders;
+
+  /// Pretty name for log files.
   const char* name = "source";
-  caf::stream_source_ptr<caf::broadcast_downstream_manager<event>> mgr;
+
+  /// Takes care of transmitting batches.
+  caf::stream_source_ptr<downstream_manager> mgr;
+
+  /// Tries to access the builder for `layout`.
+  table_slice_builder* builder(const type& layout) {
+    auto i = builders.find(layout.name());
+    if (i != builders.end())
+      return i->second.get();
+    return caf::visit(
+      detail::overload(
+        [&](const record_type& rt) -> table_slice_builder* {
+          // We always add a timestamp as first column to the layout.
+          auto internal = rt;
+          record_field tstamp_field{"timestamp", timestamp_type{}};
+          internal.fields.insert(internal.fields.begin(),
+                                 std::move(tstamp_field));
+          auto& ref = builders[layout.name()];
+          ref = factory(internal);
+          return ref.get();
+        },
+        [&](auto&) -> table_slice_builder* {
+          VAST_ERROR(layout.name(), "is not a record type");
+          return nullptr;
+        }),
+      layout);
+  }
 };
 
 /// An event producer.
@@ -74,13 +125,16 @@ struct source_state {
 /// @param self The actor handle.
 /// @param reader The reader instance.
 template <class Reader>
-caf::behavior
-source(caf::stateful_actor<source_state<Reader>>* self, Reader&& reader) {
+caf::behavior source(caf::stateful_actor<source_state<Reader>>* self,
+                     Reader reader,
+                     typename source_state<Reader>::factory_type factory,
+                     size_t table_slice_size) {
   using namespace caf;
   using namespace std::chrono;
   // Initialize state.
   self->state.reader = std::move(reader);
   self->state.name = self->state.reader.name();
+  self->state.factory = std::move(factory);/// An event producer.
   // Fetch accountant from the registry.
   if (auto acc = self->system().registry().get(accountant_atom::value))
     self->state.accountant = actor_cast<accountant_type>(acc);
@@ -97,7 +151,7 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader&& reader) {
     }
   );
   // Spin up the stream manager for the source.
-  self->state.mgr = self->make_source(
+  self->state.mgr = self->make_continuous_source(
     // init
     [=](bool& done) {
       done = false;
@@ -105,37 +159,64 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader&& reader) {
       self->send(self->state.accountant, "source.start", now);
     },
     // get next element
-    [=](bool& done, downstream<event>& out, size_t num) {
+    [=](bool& done, downstream<table_slice_ptr>& out, size_t num) {
       auto& st = self->state;
-      // Extract events until the source has exhausted its input or until we
-      // have completed a batch.
+      // Extract events until the source has exhausted its input or until
+      // we have completed a batch.
       auto start = steady_clock::now();
       size_t produced = 0;
+      auto push_slice = [&](table_slice_builder* bptr) {
+        if (!bptr)
+          return;
+        auto slice = bptr->finish();
+        if (slice == nullptr)
+          VAST_ERROR("builder::finish returned nullptr");
+        else
+          out.push(std::move(slice));
+      };
       while (produced < num) {
-        auto e = st.reader.read();
-        if (e) {
+        auto maybe_e = st.reader.read();
+        if (maybe_e) {
+          auto& e = *maybe_e;
+          auto bptr = st.builder(e.type());
+          if (bptr == nullptr)
+            continue;
           if (!caf::holds_alternative<caf::none_t>(st.filter)) {
-            auto& checker = st.checkers[e->type()];
+            auto& checker = st.checkers[e.type()];
             if (caf::holds_alternative<caf::none_t>(checker)) {
-              auto x = tailor(st.filter, e->type());
+              auto x = tailor(st.filter, e.type());
               VAST_ASSERT(x);
               checker = std::move(*x);
             }
-            if (!caf::visit(event_evaluator{*e}, checker))
+            if (!caf::visit(event_evaluator{e}, checker)) {
+              // Skip events that don't satisfy our filter.
               continue;
+            }
           }
+          /// Add meta column(s).
+          bptr->add(e.timestamp());
+          /// Add data column(s).
+          bptr->recursive_add(e.data());
           ++produced;
-          out.push(std::move(*e));
-        } else if (!e.error()) {
+          if (bptr->rows() == table_slice_size)
+            push_slice(bptr);
+        } else if (!maybe_e.error()) {
           continue; // Try again.
         } else {
-          if (e.error() == ec::parse_error) {
-            VAST_WARNING(self->system().render(e.error()));
+          auto& err = maybe_e.error();
+          if (err == ec::parse_error) {
+            VAST_WARNING(self->system().render(err));
             continue; // Just skip bogous events.
-          } else if (e.error() == ec::end_of_input) {
-            VAST_INFO(self->system().render(e.error()));
+          } else if (err == ec::end_of_input) {
+            VAST_INFO(self->system().render(err));
           } else {
-            VAST_ERROR(self->system().render(e.error()));
+            VAST_ERROR(self->system().render(err));
+          }
+          /// Produce final slices if possible.
+          for (auto& kvp : st.builders) {
+            auto bptr = kvp.second.get();
+            if (kvp.second != nullptr && bptr->rows() > 0)
+              push_slice(bptr);
           }
           done = true;
           break;
@@ -146,7 +227,7 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader&& reader) {
       if (produced > 0) {
         auto runtime = stop - start;
         auto unit = duration_cast<microseconds>(runtime).count();
-        auto rate = self->state.events.size() * 1e6 / unit;
+        auto rate = (produced * 1e6) / unit;
         auto events = uint64_t{produced};
         VAST_INFO(self, "produced", events, "events in", runtime,
                   '(' << size_t(rate), "events/sec)");
@@ -165,9 +246,7 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader&& reader) {
     [](const bool& done) {
       return done;
     }
-  ).ptr();
-  auto eu = self->system().dummy_execution_unit();
-  self->state.sink = actor_pool::make(eu, actor_pool::round_robin());
+  );
   return {
     [=](get_atom, schema_atom) -> result<schema> {
       auto sch = self->state.reader.schema();
@@ -189,13 +268,24 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader&& reader) {
       // TODO: Currently, we use a broadcast downstream manager. We need to
       //       implement an anycast downstream manager and use it for the
       //       source, because we mustn't duplicate data.
-      VAST_ASSERT(self->state.mgr->out().num_paths() == 0);
-      VAST_ASSERT(sink);
+      VAST_ASSERT(sink != nullptr);
       VAST_DEBUG(self, "registers sink", sink);
-      self->link_to(sink);
+      // We currently support only a single sink.
+      self->unbecome();
+      // Start streaming.
       self->state.mgr->add_outbound_path(sink);
     },
   };
+}
+
+/// An event producer with default table slice settings.
+template <class Reader>
+caf::behavior default_source(caf::stateful_actor<source_state<Reader>>* self,
+                             Reader reader) {
+  auto slice_size = get_or(self->system().config(), "system.table-slice-size",
+                           defaults::system::table_slice_size);
+  return source(self, std::move(reader), default_table_slice::make_builder,
+                slice_size);
 }
 
 } // namespace vast::system

@@ -69,7 +69,7 @@ pcap_reader_command::make_source(caf::scoped_actor& self,
                                 defaults::command::pseudo_realtime_factor);
   format::pcap::reader reader{input,    cutoff,      flow_max,
                               flow_age, flow_expiry, pseudo_realtime};
-  return self->spawn(source<format::pcap::reader>, std::move(reader));
+  return self->spawn(default_source<format::pcap::reader>, std::move(reader));
 }
 
 } // namespace vast::system
