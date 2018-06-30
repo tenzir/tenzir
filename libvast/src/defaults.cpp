@@ -39,4 +39,10 @@ std::string node_id = std::string{detail::split(detail::hostname(), ".")[0]};
 
 } // namespace command
 
+namespace system {
+
+size_t table_slice_size = 10000;
+
+} // namespace system
+
 } // namespace vast::defaults

@@ -38,4 +38,10 @@ extern std::string node_id;
 
 } // namespace command
 
+namespace system {
+
+extern size_t table_slice_size;
+
+} // namespace system
+
 } // namespace vast::defaults
