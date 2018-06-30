@@ -70,7 +70,6 @@ TEST(vector view) {
   auto j = v->begin() + 1;
   CHECK_EQUAL(i - j, xs.size() - 1);
   MESSAGE("check conversion back to data");
-  CHECK(make_data(v) == xs);
   CHECK_EQUAL(xs, materialize(v));
 }
 
@@ -85,7 +84,6 @@ TEST(set view) {
   CHECK_EQUAL(std::next(v->begin(), 3), v->end());
   CHECK_EQUAL(*std::next(v->begin(), 1), make_data_view(42));
   MESSAGE("check conversion back to data");
-  CHECK(make_data(v) == xs);
   CHECK_EQUAL(xs, materialize(v));
 }
 
@@ -107,7 +105,6 @@ TEST(map view) {
   CHECK_EQUAL(key, make_data_view(42));
   CHECK_EQUAL(value, make_data_view(true));
   MESSAGE("check conversion back to data");
-  CHECK(make_data(v) == xs);
   CHECK_EQUAL(xs, materialize(v));
 }
 

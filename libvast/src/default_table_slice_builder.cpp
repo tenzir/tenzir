@@ -41,7 +41,7 @@ bool default_table_slice_builder::append(data x) {
 }
 
 bool default_table_slice_builder::add(data_view x) {
-  return append(make_data(x));
+  return append(materialize(x));
 }
 
 table_slice_ptr default_table_slice_builder::finish() {

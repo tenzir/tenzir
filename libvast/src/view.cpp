@@ -31,40 +31,6 @@ std::string_view pattern_view::string() const {
   return pattern_;
 }
 
-// -- address_view ------------------------------------------------------------
-
-address_view::address_view(const address& x) : data_{&x.data()} {
-  // nop
-}
-
-const std::array<uint8_t, 16>& address_view::data() const {
-  return *data_;
-}
-
-bool operator==(address_view x, address_view y) noexcept {
-  return x.data_ == y.data_;
-}
-
-// -- subnet_view -------------------------------------------------------------
-
-subnet_view::subnet_view(const subnet& x)
-  : network_{x.network()},
-    length_{x.length()} {
-  // nop
-}
-
-address_view subnet_view::network() const {
-  return network_;
-}
-
-uint8_t subnet_view::length() const {
-  return length_;
-}
-
-bool operator==(subnet_view x, subnet_view y) noexcept {
-  return x.network_ == y.network_ && x.length_ == y.length_;
-}
-
 // -- default_vector_view -----------------------------------------------------
 
 default_vector_view::default_vector_view(const vector& xs) : xs_{xs} {
@@ -114,56 +80,6 @@ data_view make_view(const data& x) {
   return caf::visit([](const auto& z) { return make_data_view(z); }, x);
 }
 
-// -- make_data ---------------------------------------------------------------
-
-namespace {
-
-auto make_addr(view_t<address> v) {
-  return address::v6(v.data().data());
-};
-
-} // namespace <anonymous>
-
-data make_data(data_view x) {
-  return caf::visit(detail::overload(
-    [](view_t<caf::none_t> v) { return data{v}; },
-    [](view_t<boolean> v) { return data{v}; },
-    [](view_t<integer> v) { return data{v}; },
-    [](view_t<count> v) { return data{v}; },
-    [](view_t<real> v) { return data{v}; },
-    [](view_t<timespan> v) { return data{v}; },
-    [](view_t<timestamp> v) { return data{v}; },
-    [](view_t<std::string> v) { return data{std::string{v}}; },
-    [](view_t<pattern> v) { return data{pattern{std::string{v.string()}}}; },
-    [](view_t<address> v) { return data{make_addr(v)}; },
-    [](view_t<subnet> v) {
-      return data{subnet{make_addr(v.network()), v.length()}};
-    },
-    [](view_t<port> v) { return data{v}; },
-    [](view_t<vector> v) {
-      vector xs;
-      xs.reserve(v->size());
-      std::transform(v->begin(), v->end(), std::back_inserter(xs),
-                     [](auto y) { return make_data(y); });
-      return data{std::move(xs)};
-    },
-    [](view_t<set> v) {
-      set xs;
-      std::transform(v->begin(), v->end(), std::inserter(xs, xs.end()),
-                     [](auto y) { return make_data(y); });
-      return data{std::move(xs)};
-    },
-    [](view_t<map> v) {
-      map xs;
-      auto make = [](auto pair) {
-        return std::make_pair(make_data(pair.first), make_data(pair.second));
-      };
-      std::transform(v->begin(), v->end(), std::inserter(xs, xs.end()), make);
-      return data{std::move(xs)};
-    }
-  ), x);
-}
-
 // -- materialization ----------------------------------------------------------
 
 std::string materialize(std::string_view x) {
@@ -172,14 +88,6 @@ std::string materialize(std::string_view x) {
 
 pattern materialize(pattern_view x) {
   return pattern{std::string{x.string()}};
-}
-
-address materialize(address_view x) {
-  return address{x.data()};
-}
-
-subnet materialize(subnet_view x) {
-  return subnet{materialize(x.network()), x.length()};
 }
 
 namespace {
