@@ -102,8 +102,8 @@ VAST comes with a [3-clause BSD licence][license-url].
 [mailing-list-commits]: http://mailman.icsi.berkeley.edu/mailman/listinfo/vast-commits
 [chat-badge]: https://img.shields.io/badge/gitter-chat-brightgreen.svg
 [chat-url]: https://gitter.im/vast-io/vast
-[jenkins-url]: https://jenkins.inet.haw-hamburg.de/view/VAST%20Build%20Status/
-[jenkins-badge]: https://jenkins.inet.haw-hamburg.de/buildStatus/icon?job=VAST/master%20branch
+[jenkins-url]: https://jenkins.inet.haw-hamburg.de/job/VAST/job/vast/job/master/
+[jenkins-badge]: https://jenkins.inet.haw-hamburg.de/buildStatus/icon?job=VAST/vast/master
 [license-badge]: https://img.shields.io/badge/license-BSD-blue.svg
 [license-url]: https://raw.github.com/vast-io/vast/master/COPYING
 
