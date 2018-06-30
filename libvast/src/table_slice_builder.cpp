@@ -13,10 +13,28 @@
 
 #include "vast/table_slice_builder.hpp"
 
+#include <algorithm>
+
+#include "vast/data.hpp"
+#include "vast/detail/overload.hpp"
+
 namespace vast {
 
 table_slice_builder::~table_slice_builder() {
   // nop
+}
+
+bool table_slice_builder::recursive_add(const data& x) {
+  return caf::visit(detail::overload(
+                      [&](const vector& xs) {
+                        auto first = xs.begin();
+                        auto last = xs.end();
+                        return std::all_of(first, last, [&](const auto& y) {
+                          return recursive_add(y);
+                        });
+                      },
+                      [&](const auto&) { return add(make_view(x)); }),
+                    x);
 }
 
 } // namespace vast
