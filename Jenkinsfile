@@ -14,12 +14,14 @@ buildMatrix = [
     ]],
     // Additional debug builds with ASAN enabled.
     [ 'Linux', [
-        cmakeArgs: '-D CAF_ENABLE_ADDRESS_SANITIZER:BOOL=yes',
+        cmakeArgs: '-DCAF_ENABLE_ADDRESS_SANITIZER:BOOL=yes ' + // CAF
+                   '-DENABLE_ADDRESS_SANITIZER:BOOL=yes',       // VAST
         builds: ['debug'],
         tools: ['gcc7.2'],
     ]],
     [ 'macOS', [
-        cmakeArgs: '-D CAF_ENABLE_ADDRESS_SANITIZER:BOOL=yes',
+        cmakeArgs: '-DCAF_ENABLE_ADDRESS_SANITIZER:BOOL=yes ' + // CAF
+                   '-DENABLE_ADDRESS_SANITIZER:BOOL=yes',       // VAST
         builds: ['debug'],
         tools: ['clang'],
     ]],
