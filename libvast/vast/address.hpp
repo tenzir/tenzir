@@ -55,8 +55,6 @@ public:
   /// Default-constructs an (invalid) address.
   address();
 
-  explicit address(const array_type& bytes);
-
   /// Constructs an address from raw bytes.
   /// @param bytes A pointer to the raw byte representation. This must point
   ///              to 4 bytes if *fam* is `ipv4`, and to 16 bytes if *fam* is

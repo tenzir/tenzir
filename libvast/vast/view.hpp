@@ -58,6 +58,8 @@ VAST_VIEW_TRAIT(real);
 VAST_VIEW_TRAIT(timespan);
 VAST_VIEW_TRAIT(timestamp);
 VAST_VIEW_TRAIT(port);
+VAST_VIEW_TRAIT(address);
+VAST_VIEW_TRAIT(subnet);
 
 #undef VAST_VIEW_TRAIT
 
@@ -97,59 +99,6 @@ private:
 template <>
 struct view<pattern> {
   using type = pattern_view;
-};
-
-/// @relates view
-class address_view : detail::totally_ordered<address_view> {
-public:
-  address_view(const address& x);
-
-  // See vast::address for documentation.
-  bool is_v4() const;
-  bool is_v6() const;
-  bool is_loopback() const;
-  bool is_broadcast() const;
-  bool is_multicast() const;
-  bool mask(unsigned top_bits_to_keep) const;
-  bool compare(address_view other, size_t k) const;
-  const std::array<uint8_t, 16>& data() const;
-
-  friend bool operator==(address_view x, address_view y) noexcept;
-  friend bool operator<(address_view x, address_view y) noexcept;
-
-private:
-  const std::array<uint8_t, 16>* data_;
-};
-
-//// @relates view
-template <>
-struct view<address> {
-  using type = address_view;
-};
-
-/// @relates view
-class subnet_view : detail::totally_ordered<subnet_view> {
-public:
-  subnet_view(const subnet& x);
-
-  // See vast::subnet for documentation.
-  bool contains(address_view x) const;
-  bool contains(subnet_view x) const;
-  address_view network() const;
-  uint8_t length() const;
-
-  friend bool operator==(subnet_view x, subnet_view y) noexcept;
-  friend bool operator<(subnet_view x, subnet_view y) noexcept;
-
-private:
-  address_view network_;
-  uint8_t length_;
-};
-
-//// @relates view
-template <>
-struct view<subnet> {
-  using type = subnet_view;
 };
 
 
@@ -376,10 +325,6 @@ data_view make_data_view(const T& x) {
   return make_view(x);
 }
 
-/// Creates a data instance from a data_view.
-/// @relates view data
-data make_data(data_view x);
-
 // -- materialization ----------------------------------------------------------
 
 constexpr auto materialize(caf::none_t x) {
@@ -389,10 +334,6 @@ constexpr auto materialize(caf::none_t x) {
 std::string materialize(std::string_view x);
 
 pattern materialize(pattern_view x);
-
-address materialize(address_view x);
-
-subnet materialize(subnet_view x);
 
 vector materialize(vector_view_ptr xs);
 

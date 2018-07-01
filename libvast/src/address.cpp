@@ -43,10 +43,6 @@ address::address() {
   bytes_.fill(0);
 }
 
-address::address(const array_type& bytes) : bytes_(bytes) {
-  // nop
-}
-
 address::address(const void* bytes, family fam, byte_order order) {
   auto b = reinterpret_cast<const uint32_t*>(bytes);
   if (fam == ipv4) {
