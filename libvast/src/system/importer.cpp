@@ -27,6 +27,53 @@ using namespace caf;
 
 namespace vast::system {
 
+importer_state::importer_state(event_based_actor* self_ptr) : self(self_ptr) {
+  // nop
+}
+
+importer_state::~importer_state() {
+  write_state();
+}
+
+caf::error importer_state::read_state() {
+  id_generators.clear();
+  if (exists(dir / "available_ids")) {
+    std::ifstream available{to_string(dir / "available_ids")};
+    std::string line;
+    while (std::getline(available, line)) {
+      id i;
+      id last;
+      std::istringstream in{line};
+      if (in >> i >> last) {
+        VAST_DEBUG(self, "found ID range:", i, "to", last);
+        id_generators.emplace_back(i, last);
+      } else {
+        VAST_ERROR(self, "invalid file format");
+        return ec::parse_error;
+      }
+    }
+  }
+  return caf::none;
+}
+
+caf::error importer_state::write_state() {
+  if (id_generators.empty() || available_ids() == 0)
+    return caf::none;
+  if (!exists(dir)) {
+    auto result = mkdir(dir);
+    if (!result)
+      return std::move(result.error());
+  }
+  std::ofstream available{to_string(dir / "available_ids")};
+  auto i = id_generators.begin();
+  available << i->i << ' ' << i->last;
+  for (++i; i != id_generators.end(); ++i) {
+    available << '\n' << i->i << ' ' << i->last;
+  }
+  VAST_DEBUG(self, "saved", available_ids(), "available IDs");
+  return caf::none;
+}
+
 int32_t importer_state::available_ids() const noexcept {
   auto f = [](int32_t x, const id_generator& y) {
     return x + y.remaining();
@@ -46,93 +93,6 @@ id importer_state::next_id() {
 }
 
 namespace {
-
-// Dummy value until we drop the manual `ship` and switch over to CAF streams
-// for the communication to ARCHIVE and INDEX.
-constexpr size_t batch_size = 1024;
-
-// Reads persistent importer state.
-expected<void> read_state(stateful_actor<importer_state>* self) {
-  auto& st = self->state;
-  st.id_generators.clear();
-  if (exists(st.dir / "available_ids")) {
-    std::ifstream available{to_string(self->state.dir / "available_ids")};
-    std::string line;
-    while (std::getline(available, line)) {
-      id i;
-      id last;
-      std::istringstream in{line};
-      if (in >> i >> last) {
-        VAST_DEBUG(self, "found ID range:", i, "to", last);
-        st.id_generators.emplace_back(i, last);
-      } else {
-        VAST_ERROR(self, "invalid file format");
-      }
-    }
-  }
-  return {};
-}
-
-// Persists importer state.
-expected<void> write_state(stateful_actor<importer_state>* self) {
-  auto& st = self->state;
-  if (st.id_generators.empty() || st.available_ids() == 0)
-    return caf::unit;
-  if (!exists(self->state.dir)) {
-    auto result = mkdir(self->state.dir);
-    if (!result)
-      return result.error();
-  }
-  std::ofstream available{to_string(self->state.dir / "available_ids")};
-  auto i = st.id_generators.begin();
-  available << i->i << ' ' << i->last;
-  for (++i; i != st.id_generators.end(); ++i) {
-    available << '\n' << i->i << ' ' << i->last;
-  }
-  VAST_DEBUG(self, "saved", st.available_ids(), "available IDs");
-  return {};
-}
-
-// Generates the default EXIT handler that saves states and shuts down internal
-// components.
-auto shutdown(stateful_actor<importer_state>* self) {
-  return [=](const exit_msg& msg) {
-    write_state(self);
-    self->anon_send(self->state.index, sys_atom::value, delete_atom::value);
-    self->send_exit(self->state.index, msg.reason);
-    self->quit(msg.reason);
-  };
-}
-
-// Ships a batch of events to archive and index.
-void ship(stateful_actor<importer_state>* self, std::vector<event>&& batch) {
-  CAF_LOG_TRACE(CAF_ARG(batch));
-  auto& st = self->state;
-  VAST_DEBUG(self, "ships", batch.size(), "events");
-  // TODO: How to retain type safety without copying the entire batch?
-  auto msg = make_message(std::move(batch));
-  self->send(st.index, msg);
-  for (auto& e : st.continuous_queries)
-    self->send(e, msg);
-}
-
-// Tries to ship a batch of events to ARCHIVE and INDEX.
-bool ship_some(stateful_actor<importer_state>* self) {
-  CAF_LOG_TRACE("");
-  using std::swap;
-  auto& st = self->state;
-  if (st.remainder.size() < batch_size) {
-    VAST_DEBUG(self, "waits for", batch_size - st.remainder.size(),
-               "more elements before calling ship()");
-    return false;
-  }
-  // Swap remainder with a temporary to not have a moved-from remainder.
-  std::vector<event> tmp;
-  tmp.reserve(batch_size);
-  swap(tmp, st.remainder);
-  ship(self, std::move(tmp));
-  return true;
-}
 
 // Asks the metastore for more IDs.
 void replenish(stateful_actor<importer_state>* self) {
@@ -154,12 +114,6 @@ void replenish(stateful_actor<importer_state>* self) {
   // If we get an EXIT message while expecting a response from the metastore,
   // we'll give it a bit of time to come back;
   self->set_default_handler(skip);
-  self->set_exit_handler(
-    [=](const exit_msg& msg) {
-      self->delayed_send(self, 5s, msg);
-      self->set_exit_handler(shutdown(self));
-    }
-  );
   // Trigger meta store and wait for response.
   auto n = st.id_chunk_size;
   self->send(st.meta_store, add_atom::value, "id", data{n});
@@ -175,34 +129,20 @@ void replenish(stateful_actor<importer_state>* self) {
       VAST_ASSERT(st.awaiting_ids);
       st.id_generators.emplace_back(x, x + n);
       // Save state.
-      auto result = write_state(self);
-      if (!result) {
-        VAST_ERROR(self, "failed to save state:",
-                   self->system().render(result.error()));
-        self->quit(result.error());
+      auto err = self->state.write_state();
+      if (err) {
+        VAST_ERROR(self, "failed to save state:", self->system().render(err));
+        self->quit(std::move(err));
+        return;
       }
       // Try to emit more credit with out new IDs.
       st.stg->advance();
       // Return to previous behavior.
       st.awaiting_ids = false;
       self->set_default_handler(print_and_drop);
-      self->set_exit_handler(shutdown(self));
       self->unbecome();
     }
   );
-}
-
-// Stores additional events in the cache and tries to ship events if possible.
-void store(stateful_actor<importer_state>* self, std::vector<event>&& xs) {
-  CAF_LOG_TRACE(CAF_ARG(xs));
-  using std::make_move_iterator;
-  auto& st = self->state;
-  VAST_ASSERT(!xs.empty());
-  VAST_ASSERT(xs.size()
-              <= static_cast<size_t>(std::numeric_limits<int32_t>::max()));
-  st.remainder.insert(st.remainder.end(), make_move_iterator(xs.begin()),
-                      make_move_iterator(xs.end()));
-  ship_some(self);
 }
 
 using downstream_manager = caf::broadcast_downstream_manager<event>;
@@ -226,35 +166,10 @@ public:
     VAST_ASSERT(xs.size() <= static_cast<size_t>(st.available_ids()));
     VAST_ASSERT(xs.size() <= static_cast<size_t>(st.in_flight_events));
     st.in_flight_events -= static_cast<int32_t>(xs.size());
-    if (out_.empty()) {
-      for (auto& x : xs)
-        x.id(st.next_id());
-    } else {
-      for (auto& x : xs) {
-        x.id(st.next_id());
-        out.push(x);
-      }
+    for (auto& x : xs) {
+      x.id(st.next_id());
+      out.push(std::move(x));
     }
-    VAST_DEBUG(self_, "tagged", xs.size(), "events with IDs");
-    store(self_, std::move(xs));
-  }
-
-  void finalize(const error& err) override {
-    CAF_LOG_TRACE(CAF_ARG(err));
-    CAF_IGNORE_UNUSED(err);
-    auto& st = self_->state;
-    if (!st.remainder.empty()) {
-      // Swap remainder with temporary to not have a moved-from remainder.
-      using std::swap;
-      std::vector<event> tmp;
-      swap(tmp, st.remainder);
-      ship(self_, std::move(tmp));
-    }
-  }
-
-  bool congested() const noexcept override {
-    auto& st = self_->state;
-    return st.remainder.size() > batch_size || super::congested();
   }
 
   int32_t acquire_credit(inbound_path* path, int32_t desired) override {
@@ -290,31 +205,12 @@ private:
 behavior importer(stateful_actor<importer_state>* self, path dir) {
   self->state.dir = dir;
   self->state.last_replenish = steady_clock::time_point::min();
-  auto result = read_state(self);
-  if (!result) {
-    VAST_ERROR(self, "failed to load state:",
-               self->system().render(result.error()));
-    self->quit(result.error());
+  auto err = self->state.read_state();
+  if (err) {
+    VAST_ERROR(self, "failed to load state:", self->system().render(err));
+    self->quit(std::move(err));
     return {};
   }
-  auto eu = self->system().dummy_execution_unit();
-  self->state.index = actor_pool::make(eu, actor_pool::round_robin());
-  self->monitor(self->state.index);
-  self->set_exit_handler(shutdown(self));
-  self->set_down_handler(
-    [=](const down_msg& msg) {
-      if (msg.source == self->state.meta_store) {
-        self->state.meta_store = meta_store_type{};
-      } else {
-        auto& cq = self->state.continuous_queries;
-        auto itr = find(cq.begin(), cq.end(), msg.source);
-        if (itr != cq.end()) {
-          VAST_DEBUG(self, "finished continuous query for ", msg.source);
-          cq.erase(itr);
-        }
-      }
-    }
-  );
   self->state.stg = self->make_continuous_stage<driver>(self);
   return {
     [=](const meta_store_type& ms) {

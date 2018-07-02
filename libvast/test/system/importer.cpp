@@ -75,48 +75,6 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
 
 FIXTURE_SCOPE(import_tests, fixture)
 
-TEST(import without subscribers) {
-  MESSAGE("spawn dummy source");
-  auto src = vast::detail::spawn_container_source(self->system(),
-                                                  bro_conn_log, importer);
-  sched.run_once();
-  MESSAGE("expect the importer to give 0 initial credit");
-  expect((open_stream_msg), from(src).to(importer));
-  expect((upstream_msg::ack_open), from(importer).to(src).with(_, _, 0, _));
-  MESSAGE("expect the importer to fetch more IDs");
-  expect((atom_value, string, data), from(importer).to(store).with(_, _, _));
-  expect((data), from(store).to(importer));
-  MESSAGE("loop until the source is done sending");
-  bool done_sending = false;
-  while (!done_sending) {
-    if (allow((upstream_msg::ack_batch), from(importer).to(src))) {
-      // The importer may have granted more credit. The source responds with
-      // batches.
-      while (allow((downstream_msg::batch), from(src).to(importer))) {
-        // Loop until all batches are handled.
-      }
-      // Check whether the source is done.
-      if  (allow((downstream_msg::close), from(src).to(importer))) {
-        MESSAGE("source is done sending");
-        done_sending = true;
-      }
-    } else {
-      // Check whether the importer can still produce more credit.
-      MESSAGE("trigger timeouts for next credit round");
-      sched.clock().current_time += credit_round_interval;
-      sched.dispatch();
-      allow((timeout_msg), from(src).to(src));
-      expect((timeout_msg), from(importer).to(importer));
-      if (!received<upstream_msg>(src)) {
-        // No credit was generated, this means the importer lacks IDs.
-        expect((atom_value, string, data),
-               from(importer).to(store).with(_, _, _));
-        expect((data), from(store).to(importer));
-      }
-    }
-  }
-}
-
 TEST(import with one subscriber) {
   MESSAGE("spawn dummy sink");
   auto buf = std::make_shared<std::vector<event>>();

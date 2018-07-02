@@ -16,6 +16,7 @@
 #include <chrono>
 #include <vector>
 
+#include <caf/event_based_actor.hpp>
 #include <caf/stateful_actor.hpp>
 
 #include "vast/aliases.hpp"
@@ -59,11 +60,16 @@ struct importer_state {
     }
   };
 
+  importer_state(caf::event_based_actor* self_ptr);
+
+  ~importer_state();
+
+  caf::error read_state();
+
+  caf::error write_state();
+
   /// Handle to the meta store for obtaining more IDs.
   meta_store_type meta_store;
-
-  /// Handle to the INDEX for forwarding incoming events.
-  caf::actor index;
 
   /// Stores currently available IDs.
   std::vector<id_generator> id_generators;
@@ -84,21 +90,17 @@ struct importer_state {
   /// Stores when we received new IDs for the last time.
   std::chrono::steady_clock::time_point last_replenish;
 
-  /// Stores continous queries that receive new events in the same way ARCHIVE
-  /// and INDEX do.
-  std::vector<caf::actor> continuous_queries;
-
   /// State directory.
   path dir;
 
   /// Stores whether we've contacted the meta store to obtain more IDs.
   bool awaiting_ids = false;
 
-  /// Cache for buffering events for ARCHIVE, INDEX and continuous queries.
-  std::vector<event> remainder;
-
   /// The continous stage that moves data from all sources to all subscribers.
   caf::stream_stage_ptr<event, caf::broadcast_downstream_manager<event>> stg;
+
+  /// Pointer to the owning actor.
+  caf::event_based_actor* self;
 
   /// Name of this actor in log events.
   static inline const char* name = "importer";
