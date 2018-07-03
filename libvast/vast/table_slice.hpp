@@ -98,6 +98,14 @@ protected:
 };
 
 /// @relates table_slice
+bool operator==(const table_slice& x, const table_slice& y);
+
+/// @relates table_slice
+inline bool operator!=(const table_slice& x, const table_slice& y) {
+  return !(x == y);
+}
+
+/// @relates table_slice
 using table_slice_ptr = caf::intrusive_ptr<table_slice>;
 
 /// @relates table_slice

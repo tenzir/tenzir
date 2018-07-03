@@ -70,4 +70,23 @@ std::vector<value> table_slice::rows_to_values(size_type first_row,
   return result;
 }
 
+bool operator==(const table_slice& x, const table_slice& y) {
+  if (&x == &y)
+    return true;
+  if (x.rows() != y.rows()
+      || x.columns() != y.columns()
+      || x.layout() != y.layout())
+    return false;
+  for (size_t row = 0; row < x.rows(); ++row)
+    for (size_t col = 0; col < x.columns(); ++col) {
+      // TODO: fix comparison of string_view
+      //if (x.at(row, col) != y.at(row, col))
+      auto lhs = x.at(row, col);
+      auto rhs = y.at(row, col);
+      if (!lhs || !rhs || materialize(*lhs) != materialize(*rhs))
+        return false;
+    }
+  return true;
+}
+
 } // namespace vast
