@@ -75,13 +75,14 @@ TEST(bro source) {
   MESSAGE("start sink and run exhaustively");
   auto snk = self->spawn(test_sink, src);
   run_exhaustively();
+  MESSAGE("get slices");
+  const auto& slices = deref<test_sink_type>(snk).state.slices;
   MESSAGE("collect all rows as values");
-  auto& st = deref<test_sink_type>(snk).state;
-  REQUIRE_EQUAL(st.slices.size(), 85u);
+  REQUIRE_EQUAL(slices.size(), 85u);
   std::vector<value> row_contents;
   for (size_t row = 0; row < 85u; ++row) {
     /// The first column is the automagically added timestamp.
-    auto xs = st.slices[row]->rows_to_values(0, table_slice::npos, 1);
+    auto xs = slices[row]->rows_to_values(0, table_slice::npos, 1);
     std::move(xs.begin(), xs.end(), std::back_inserter(row_contents));
   }
   std::vector<value> bro_conn_log_values;
@@ -90,6 +91,10 @@ TEST(bro source) {
   REQUIRE_EQUAL(row_contents.size(), bro_conn_log_values.size());
   for (size_t i = 0; i < row_contents.size(); ++i)
     REQUIRE_EQUAL(row_contents[i], bro_conn_log_values[i]);
+  MESSAGE("compare slices to auto-generates ones");
+  REQUIRE_EQUAL(slices.size(), bro_conn_log_slices.size());
+  for (size_t i = 0; i < slices.size(); ++i)
+    CHECK_EQUAL(*slices[i], *bro_conn_log_slices[i]);
   MESSAGE("shutdown");
   self->send_exit(src, caf::exit_reason::user_shutdown);
   sched.run();
