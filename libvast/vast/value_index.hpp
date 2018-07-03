@@ -50,13 +50,13 @@ public:
   /// Appends a data value.
   /// @param x The data to append to the index.
   /// @returns `true` if appending succeeded.
-  expected<void> push_back(const data& x);
+  expected<void> append(const data& x);
 
   /// Appends a data value.
   /// @param x The data to append to the index.
   /// @param pos The positional identifier of *x*.
   /// @returns `true` if appending succeeded.
-  expected<void> push_back(const data& x, id pos);
+  expected<void> append(const data& x, id pos);
 
   /// Looks up data under a relational operator. If the value to look up is
   /// `nil`, only `==` and `!=` are valid operations. The concrete index
@@ -71,7 +71,7 @@ public:
   /// @returns `true` on success.
   //bool merge(const value_index& other);
 
-  /// Retrieves the ID of the last ::push_back operation.
+  /// Retrieves the ID of the last append operation.
   /// @returns The largest ID in the index.
   size_type offset() const;
 
@@ -84,7 +84,7 @@ protected:
   value_index() = default;
 
 private:
-  virtual bool push_back_impl(const data& x, size_type skip) = 0;
+  virtual bool append_impl(const data& x, size_type skip) = 0;
 
   virtual expected<ids>
   lookup_impl(relational_operator op, const data& x) const = 0;
@@ -196,9 +196,10 @@ public:
   }
 
 private:
-  bool push_back_impl(const data& d, size_type skip) override {
+  bool append_impl(const data& d, size_type skip) override {
     auto append = [&](auto x) {
-      bmi_.push_back(x, skip);
+      bmi_.skip(skip);
+      bmi_.append(x);
       return true;
     };
     return caf::visit(detail::overload(
@@ -257,7 +258,7 @@ private:
 
   void init();
 
-  bool push_back_impl(const data& x, size_type skip) override;
+  bool append_impl(const data& x, size_type skip) override;
 
   expected<ids>
   lookup_impl(relational_operator op, const data& x) const override;
@@ -283,7 +284,7 @@ public:
 private:
   void init();
 
-  bool push_back_impl(const data& x, size_type skip) override;
+  bool append_impl(const data& x, size_type skip) override;
 
   expected<ids>
   lookup_impl(relational_operator op, const data& x) const override;
@@ -307,7 +308,7 @@ public:
 private:
   void init();
 
-  bool push_back_impl(const data& x, size_type skip) override;
+  bool append_impl(const data& x, size_type skip) override;
 
   expected<ids>
   lookup_impl(relational_operator op, const data& x) const override;
@@ -341,7 +342,7 @@ public:
 private:
   void init();
 
-  bool push_back_impl(const data& x, size_type skip) override;
+  bool append_impl(const data& x, size_type skip) override;
 
   expected<ids>
   lookup_impl(relational_operator op, const data& x) const override;
@@ -370,7 +371,7 @@ private:
   void init();
 
   template <class Container>
-  bool push_back_ctnr(Container& c, size_type skip) {
+  bool container_append(Container& c, size_type skip) {
     init();
     auto seq_size = c.size();
     if (seq_size > max_size_)
@@ -386,12 +387,13 @@ private:
     auto id = size_.size() + skip;
     auto x = c.begin();
     for (auto i = 0u; i < seq_size; ++i)
-      elements_[i]->push_back(*x++, id);
-    size_.push_back(seq_size, skip);
+      elements_[i]->append(*x++, id);
+    size_.skip(skip);
+    size_.append(seq_size);
     return true;
   }
 
-  bool push_back_impl(const data& x, size_type skip) override;
+  bool append_impl(const data& x, size_type skip) override;
 
   expected<ids>
   lookup_impl(relational_operator op, const data& x) const override;

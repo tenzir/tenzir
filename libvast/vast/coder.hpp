@@ -44,10 +44,8 @@ struct coder {
   /// @tparam An unsigned integral type.
   /// @param x The value to encode.
   /// @param n The number of time to add *x*.
-  /// @param skip The number of entries to skip before encoding.
-  /// @pre `Bitmap::max_size - size() >= n + skip`
-  /// @post Skipped entries show up as 0s during decoding.
-  void encode(value_type x, size_type n = 1, size_type skip = 0);
+  /// @pre `Bitmap::max_size - size() >= n`
+  void encode(value_type x, size_type n = 1);
 
   /// Decodes a value under a relational operator.
   /// @param x The value to decode.
@@ -55,6 +53,12 @@ struct coder {
   /// @returns The bitmap for lookup *? op x* where *?* represents the value in
   ///          the coder.
   Bitmap decode(relational_operator op, value_type x) const;
+
+  /// Instructs the coder to add undefined values for the sake of increasing
+  /// the number of elements.
+  /// @param n The number of elements to skip.
+  /// @returns `true` on success.
+  bool skip(size_type n);
 
   /// Appends another coder to this instance.
   /// @param other The coder to append.
@@ -77,9 +81,9 @@ public:
   using size_type = typename Bitmap::size_type;
   using value_type = bool;
 
-  void encode(value_type x, size_type n = 1, size_type skip = 0) {
-    VAST_ASSERT(Bitmap::max_size - size() >= n + skip);
-    bitmap_.append_bits(x, n + skip);
+  void encode(value_type x, size_type n = 1) {
+    VAST_ASSERT(Bitmap::max_size - size() >= n);
+    bitmap_.append_bits(x, n);
   }
 
   Bitmap decode(relational_operator op, value_type x) const {
@@ -89,6 +93,11 @@ public:
       return result;
     result.flip();
     return result;
+  }
+
+  bool skip(size_type n) {
+    bitmap_.append_bits(0, n);
+    return true;
   }
 
   void append(const singleton_coder& other) {
@@ -124,13 +133,11 @@ public:
   using value_type = size_t;
 
   vector_coder() : size_{0} {
+    // nop
   }
 
   vector_coder(size_t n) : size_{0}, bitmaps_(n) {
-  }
-
-  void append(const vector_coder& other) {
-    append(other, false);
+    // nop
   }
 
   auto size() const {
@@ -168,17 +175,18 @@ protected:
 template <class Bitmap>
 class equality_coder : public vector_coder<Bitmap> {
 public:
-  using typename vector_coder<Bitmap>::value_type;
-  using typename vector_coder<Bitmap>::size_type;
-  using vector_coder<Bitmap>::vector_coder;
+  using super = vector_coder<Bitmap>;
+  using typename super::value_type;
+  using typename super::size_type;
+  using super::super;
 
-  void encode(value_type x, size_type n = 1, size_type skip = 0) {
-    VAST_ASSERT(Bitmap::max_size - this->size_ >= n + skip);
+  void encode(value_type x, size_type n = 1) {
+    VAST_ASSERT(Bitmap::max_size - this->size_ >= n);
     VAST_ASSERT(x < this->bitmaps_.size());
     auto& bm = this->bitmaps_[x];
-    bm.append_bits(false, this->size_ + skip - bm.size());
+    bm.append_bits(false, this->size_ - bm.size());
     bm.append_bits(true, n);
-    this->size_ += skip + n;
+    this->size_ += n;
   }
 
   Bitmap decode(relational_operator op, value_type x) const {
@@ -226,6 +234,15 @@ public:
       }
     }
   }
+
+  bool skip(size_type n) {
+    this->size_ += n;
+    return true;
+  }
+
+  void append(const equality_coder& other) {
+    super::append(other, false);
+  }
 };
 
 /// Encodes a value according to an inequalty. Given a value *x* and an index
@@ -233,12 +250,13 @@ public:
 template <class Bitmap>
 class range_coder : public vector_coder<Bitmap> {
 public:
-  using typename vector_coder<Bitmap>::value_type;
-  using typename vector_coder<Bitmap>::size_type;
-  using vector_coder<Bitmap>::vector_coder;
+  using super = vector_coder<Bitmap>;
+  using typename super::value_type;
+  using typename super::size_type;
+  using super::super;
 
-  void encode(value_type x, size_type n = 1, size_type skip = 0) {
-    VAST_ASSERT(Bitmap::max_size - this->size_ >= n + skip);
+  void encode(value_type x, size_type n = 1) {
+    VAST_ASSERT(Bitmap::max_size - this->size_ >= n);
     VAST_ASSERT(x < this->bitmaps_.size() + 1);
     // Lazy append: we only add 0s until we hit index i of value x. The
     // remaining bitmaps are always 1, by definition of the range coding
@@ -247,15 +265,15 @@ public:
     // on complement, which is why it is still commented.
     // for (auto i = 0u; i < x; ++i) {
     //  auto& bm = this->bitmaps_[i];
-    //  bm.append_bits(true, this->size_ + skip - bm.size());
+    //  bm.append_bits(true, this->size_ - bm.size());
     //  bm.append_bits(false, n);
     // }
     for (auto i = 0u; i < this->bitmaps_.size(); ++i) {
       auto& bm = this->bitmaps_[i];
-      bm.append_bits(true, this->size_ + skip - bm.size());
+      bm.append_bits(true, this->size_ - bm.size());
       bm.append_bits(i >= x, n);
     }
-    this->size_ += n + skip;
+    this->size_ += n;
   }
 
   Bitmap decode(relational_operator op, value_type x) const {
@@ -302,8 +320,19 @@ public:
     }
   }
 
+  bool skip(size_type n) {
+    auto f = [=](auto& x) {
+      x.append_bits(true, n);
+      return true;
+    };
+    auto result = std::all_of(this->bitmaps_.begin(), this->bitmaps_.end(), f);
+    if (result)
+      this->size_ += n;
+    return result;
+  }
+
   void append(const range_coder& other) {
-    vector_coder<Bitmap>::append(other, true);
+    super::append(other, true);
   }
 };
 
@@ -313,18 +342,19 @@ public:
 template <class Bitmap>
 class bitslice_coder : public vector_coder<Bitmap> {
 public:
-  using typename vector_coder<Bitmap>::value_type;
-  using typename vector_coder<Bitmap>::size_type;
-  using vector_coder<Bitmap>::vector_coder;
+  using super = vector_coder<Bitmap>;
+  using typename super::value_type;
+  using typename super::size_type;
+  using super::super;
 
-  void encode(value_type x, size_type n = 1, size_type skip = 0) {
-    VAST_ASSERT(Bitmap::max_size - this->size_ >= n + skip);
+  void encode(value_type x, size_type n = 1) {
+    VAST_ASSERT(Bitmap::max_size - this->size_ >= n);
     for (auto i = 0u; i < this->bitmaps_.size(); ++i) {
       auto& bm = this->bitmaps_[i];
-      bm.append_bits(false, this->size_ + skip - bm.size());
+      bm.append_bits(false, this->size_ - bm.size());
       bm.append_bits(((x >> i) & 1) == 0, n);
     }
-    this->size_ += n + skip;
+    this->size_ += n;
   }
 
   // RangeEval-Opt for the special case with uniform base 2.
@@ -381,6 +411,15 @@ public:
     }
     return {this->size_, false};
   }
+
+  bool skip(size_type n) {
+    this->size_ += n;
+    return true;
+  }
+
+  void append(const bitslice_coder& other) {
+    super::append(other, false);
+  }
 };
 
 template <class T>
@@ -427,16 +466,22 @@ public:
     init();
   }
 
-  void encode(value_type x, size_type n = 1, size_type skip = 0) {
+  void encode(value_type x, size_type n = 1) {
     if (xs_.empty())
       init();
     base_.decompose(x, xs_);
     for (auto i = 0u; i < base_.size(); ++i)
-      coders_[i].encode(xs_[i], n, skip);
+      coders_[i].encode(xs_[i], n);
   }
 
   auto decode(relational_operator op, value_type x) const {
     return coders_.empty() ? bitmap_type{} : decode(coders_, op, x);
+  }
+
+  bool skip(size_type n) {
+    return std::all_of(coders_.begin(),
+                       coders_.end(),
+                       [n](auto& x) { return x.skip(n); });
   }
 
   void append(const multi_level_coder& other) {

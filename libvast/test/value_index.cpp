@@ -32,15 +32,15 @@ using namespace std::string_literals;
 
 TEST(boolean) {
   arithmetic_index<boolean> idx;
-  MESSAGE("push_back");
-  REQUIRE(idx.push_back(true));
-  REQUIRE(idx.push_back(true));
-  REQUIRE(idx.push_back(false));
-  REQUIRE(idx.push_back(true));
-  REQUIRE(idx.push_back(false));
-  REQUIRE(idx.push_back(false));
-  REQUIRE(idx.push_back(false));
-  REQUIRE(idx.push_back(true));
+  MESSAGE("append");
+  REQUIRE(idx.append(true));
+  REQUIRE(idx.append(true));
+  REQUIRE(idx.append(false));
+  REQUIRE(idx.append(true));
+  REQUIRE(idx.append(false));
+  REQUIRE(idx.append(false));
+  REQUIRE(idx.append(false));
+  REQUIRE(idx.append(true));
   MESSAGE("lookup");
   auto f = idx.lookup(equal, false);
   REQUIRE(f);
@@ -63,14 +63,14 @@ TEST(boolean) {
 
 TEST(integer) {
   arithmetic_index<integer> idx{base::uniform(10, 20)};
-  MESSAGE("push_back");
-  REQUIRE(idx.push_back(-7));
-  REQUIRE(idx.push_back(42));
-  REQUIRE(idx.push_back(10000));
-  REQUIRE(idx.push_back(4711));
-  REQUIRE(idx.push_back(31337));
-  REQUIRE(idx.push_back(42));
-  REQUIRE(idx.push_back(42));
+  MESSAGE("append");
+  REQUIRE(idx.append(-7));
+  REQUIRE(idx.append(42));
+  REQUIRE(idx.append(10000));
+  REQUIRE(idx.append(4711));
+  REQUIRE(idx.append(31337));
+  REQUIRE(idx.append(42));
+  REQUIRE(idx.append(42));
   MESSAGE("lookup");
   auto leet = idx.lookup(equal, 31337);
   REQUIRE(leet);
@@ -97,14 +97,14 @@ TEST(integer) {
 TEST(floating-point with custom binner) {
   using index_type = arithmetic_index<real, precision_binner<6, 2>>;
   auto idx = index_type{base::uniform<64>(10)};
-  MESSAGE("push_back");
-  REQUIRE(idx.push_back(-7.8));
-  REQUIRE(idx.push_back(42.123));
-  REQUIRE(idx.push_back(10000.0));
-  REQUIRE(idx.push_back(4711.13510));
-  REQUIRE(idx.push_back(31337.3131313));
-  REQUIRE(idx.push_back(42.12258));
-  REQUIRE(idx.push_back(42.125799));
+  MESSAGE("append");
+  REQUIRE(idx.append(-7.8));
+  REQUIRE(idx.append(42.123));
+  REQUIRE(idx.append(10000.0));
+  REQUIRE(idx.append(4711.13510));
+  REQUIRE(idx.append(31337.3131313));
+  REQUIRE(idx.append(42.12258));
+  REQUIRE(idx.append(42.125799));
   MESSAGE("lookup");
   CHECK(to_string(*idx.lookup(less, 100.0)) == "1100011");
   CHECK(to_string(*idx.lookup(less, 43.0)) == "1100011");
@@ -122,13 +122,13 @@ TEST(timespan) {
   using namespace std::chrono;
   // Default binning gives granularity of seconds.
   auto idx = arithmetic_index<timespan>{base::uniform<64>(10)};
-  MESSAGE("push_back");
-  REQUIRE(idx.push_back(milliseconds(1000)));
-  REQUIRE(idx.push_back(milliseconds(2000)));
-  REQUIRE(idx.push_back(milliseconds(3000)));
-  REQUIRE(idx.push_back(milliseconds(1011)));
-  REQUIRE(idx.push_back(milliseconds(2222)));
-  REQUIRE(idx.push_back(milliseconds(2322)));
+  MESSAGE("append");
+  REQUIRE(idx.append(milliseconds(1000)));
+  REQUIRE(idx.append(milliseconds(2000)));
+  REQUIRE(idx.append(milliseconds(3000)));
+  REQUIRE(idx.append(milliseconds(1011)));
+  REQUIRE(idx.append(milliseconds(2222)));
+  REQUIRE(idx.append(milliseconds(2322)));
   MESSAGE("lookup");
   auto hun = idx.lookup(equal, milliseconds(1034));
   REQUIRE(hun);
@@ -145,23 +145,23 @@ TEST(timestamp) {
   arithmetic_index<timestamp> idx{base::uniform<64>(10)};
   auto t = to<timestamp>("2014-01-16+05:30:15");
   REQUIRE(t);
-  MESSAGE("push_back");
-  REQUIRE(idx.push_back(*t));
+  MESSAGE("append");
+  REQUIRE(idx.append(*t));
   t = to<timestamp>("2014-01-16+05:30:12");
   REQUIRE(t);
-  REQUIRE(idx.push_back(*t));
+  REQUIRE(idx.append(*t));
   t = to<timestamp>("2014-01-16+05:30:15");
   REQUIRE(t);
-  REQUIRE(idx.push_back(*t));
+  REQUIRE(idx.append(*t));
   t = to<timestamp>("2014-01-16+05:30:18");
   REQUIRE(t);
-  REQUIRE(idx.push_back(*t));
+  REQUIRE(idx.append(*t));
   t = to<timestamp>("2014-01-16+05:30:15");
   REQUIRE(t);
-  REQUIRE(idx.push_back(*t));
+  REQUIRE(idx.append(*t));
   t = to<timestamp>("2014-01-16+05:30:19");
   REQUIRE(t);
-  REQUIRE(idx.push_back(*t));
+  REQUIRE(idx.append(*t));
   MESSAGE("lookup");
   t = to<timestamp>("2014-01-16+05:30:15");
   REQUIRE(t);
@@ -186,17 +186,17 @@ TEST(timestamp) {
 
 TEST(string) {
   string_index idx{100};
-  MESSAGE("push_back");
-  REQUIRE(idx.push_back("foo"));
-  REQUIRE(idx.push_back("bar"));
-  REQUIRE(idx.push_back("baz"));
-  REQUIRE(idx.push_back("foo"));
-  REQUIRE(idx.push_back("foo"));
-  REQUIRE(idx.push_back("bar"));
-  REQUIRE(idx.push_back(""));
-  REQUIRE(idx.push_back("qux"));
-  REQUIRE(idx.push_back("corge"));
-  REQUIRE(idx.push_back("bazz"));
+  MESSAGE("append");
+  REQUIRE(idx.append("foo"));
+  REQUIRE(idx.append("bar"));
+  REQUIRE(idx.append("baz"));
+  REQUIRE(idx.append("foo"));
+  REQUIRE(idx.append("foo"));
+  REQUIRE(idx.append("bar"));
+  REQUIRE(idx.append(""));
+  REQUIRE(idx.append("qux"));
+  REQUIRE(idx.append("corge"));
+  REQUIRE(idx.append("bazz"));
   MESSAGE("lookup");
   CHECK_EQUAL(to_string(*idx.lookup(equal, "foo")),   "1001100000");
   CHECK_EQUAL(to_string(*idx.lookup(equal, "bar")),   "0100010000");
@@ -231,13 +231,13 @@ TEST(string) {
 
 TEST(address) {
   address_index idx;
-  MESSAGE("push_back");
-  REQUIRE(idx.push_back(*to<address>("192.168.0.1")));
-  REQUIRE(idx.push_back(*to<address>("192.168.0.2")));
-  REQUIRE(idx.push_back(*to<address>("192.168.0.3")));
-  REQUIRE(idx.push_back(*to<address>("192.168.0.1")));
-  REQUIRE(idx.push_back(*to<address>("192.168.0.1")));
-  REQUIRE(idx.push_back(*to<address>("192.168.0.2")));
+  MESSAGE("append");
+  REQUIRE(idx.append(*to<address>("192.168.0.1")));
+  REQUIRE(idx.append(*to<address>("192.168.0.2")));
+  REQUIRE(idx.append(*to<address>("192.168.0.3")));
+  REQUIRE(idx.append(*to<address>("192.168.0.1")));
+  REQUIRE(idx.append(*to<address>("192.168.0.1")));
+  REQUIRE(idx.append(*to<address>("192.168.0.2")));
   MESSAGE("address equality");
   auto addr = *to<address>("192.168.0.1");
   auto bm = idx.lookup(equal, addr);
@@ -249,11 +249,11 @@ TEST(address) {
   CHECK(to_string(*idx.lookup(equal, addr)) == "000000");
   CHECK(!idx.lookup(match, *to<address>("::"))); // Invalid operator
   MESSAGE("prefix membership");
-  CHECK(idx.push_back(*to<address>("192.168.0.128")));
-  CHECK(idx.push_back(*to<address>("192.168.0.130")));
-  CHECK(idx.push_back(*to<address>("192.168.0.240")));
-  CHECK(idx.push_back(*to<address>("192.168.0.127")));
-  CHECK(idx.push_back(*to<address>("192.168.0.33")));
+  CHECK(idx.append(*to<address>("192.168.0.128")));
+  CHECK(idx.append(*to<address>("192.168.0.130")));
+  CHECK(idx.append(*to<address>("192.168.0.240")));
+  CHECK(idx.append(*to<address>("192.168.0.127")));
+  CHECK(idx.append(*to<address>("192.168.0.33")));
   auto sub = subnet{*to<address>("192.168.0.128"), 25};
   bm = idx.lookup(in, sub);
   REQUIRE(bm);
@@ -278,7 +278,7 @@ TEST(address) {
   REQUIRE(multi);
   CHECK_EQUAL(to_string(*multi), "11011100000");
   MESSAGE("gaps");
-  CHECK(idx.push_back(*to<address>("192.168.0.2"), 42));
+  CHECK(idx.append(*to<address>("192.168.0.2"), 42));
   addr = *to<address>("192.168.0.2");
   auto str = "01000100000"s + std::string('0', 42) + '1';
   CHECK_EQUAL(idx.lookup(equal, addr), str);
@@ -298,13 +298,13 @@ TEST(subnet) {
   REQUIRE(s0);
   REQUIRE(s1);
   REQUIRE(s2);
-  MESSAGE("push_back");
-  REQUIRE(idx.push_back(*s0));
-  REQUIRE(idx.push_back(*s1));
-  REQUIRE(idx.push_back(*s0));
-  REQUIRE(idx.push_back(*s0));
-  REQUIRE(idx.push_back(*s2));
-  REQUIRE(idx.push_back(*s2));
+  MESSAGE("append");
+  REQUIRE(idx.append(*s0));
+  REQUIRE(idx.append(*s1));
+  REQUIRE(idx.append(*s0));
+  REQUIRE(idx.append(*s0));
+  REQUIRE(idx.append(*s2));
+  REQUIRE(idx.append(*s2));
   MESSAGE("equality lookup");
   auto bm = idx.lookup(equal, *s0);
   REQUIRE(bm);
@@ -347,14 +347,14 @@ TEST(subnet) {
 
 TEST(port) {
   port_index idx;
-  MESSAGE("push_back");
-  REQUIRE(idx.push_back(port(80, port::tcp)));
-  REQUIRE(idx.push_back(port(443, port::tcp)));
-  REQUIRE(idx.push_back(port(53, port::udp)));
-  REQUIRE(idx.push_back(port(8, port::icmp)));
-  REQUIRE(idx.push_back(port(31337, port::unknown)));
-  REQUIRE(idx.push_back(port(80, port::tcp)));
-  REQUIRE(idx.push_back(port(8080, port::tcp)));
+  MESSAGE("append");
+  REQUIRE(idx.append(port(80, port::tcp)));
+  REQUIRE(idx.append(port(443, port::tcp)));
+  REQUIRE(idx.append(port(53, port::udp)));
+  REQUIRE(idx.append(port(8, port::icmp)));
+  REQUIRE(idx.append(port(31337, port::unknown)));
+  REQUIRE(idx.append(port(80, port::tcp)));
+  REQUIRE(idx.append(port(8080, port::tcp)));
   MESSAGE("lookup");
   port http{80, port::tcp};
   auto bm = idx.lookup(equal, http);
@@ -382,15 +382,15 @@ TEST(port) {
 
 TEST(container) {
   sequence_index idx{string_type{}};
-  MESSAGE("push_back");
+  MESSAGE("append");
   vector v{"foo", "bar"};
-  REQUIRE(idx.push_back(v));
+  REQUIRE(idx.append(v));
   v = {"qux", "foo", "baz", "corge"};
-  REQUIRE(idx.push_back(v));
+  REQUIRE(idx.append(v));
   v = {"bar"};
-  REQUIRE(idx.push_back(v));
-  REQUIRE(idx.push_back(v));
-  REQUIRE(idx.push_back(v, 7));
+  REQUIRE(idx.append(v));
+  REQUIRE(idx.append(v));
+  REQUIRE(idx.append(v, 7));
   MESSAGE("lookup");
   CHECK_EQUAL(to_string(*idx.lookup(ni, "foo")), "11000000");
   CHECK_EQUAL(to_string(*idx.lookup(ni, "bar")), "10110001");
@@ -409,10 +409,10 @@ TEST(polymorphic) {
   type t = set_type{integer_type{}}.attributes({{"max_size", "2"}});
   auto idx = value_index::make(t);
   REQUIRE(idx);
-  REQUIRE(idx->push_back(set{42, 43, 44}));
-  REQUIRE(idx->push_back(set{1, 2, 3}));
-  REQUIRE(idx->push_back(set{}));
-  REQUIRE(idx->push_back(set{42}));
+  REQUIRE(idx->append(set{42, 43, 44}));
+  REQUIRE(idx->append(set{1, 2, 3}));
+  REQUIRE(idx->append(set{}));
+  REQUIRE(idx->append(set{42}));
   CHECK_EQUAL(to_string(*idx->lookup(ni, 42)), "1001");
   CHECK_EQUAL(to_string(*idx->lookup(ni, 44)), "0000"); // chopped off
   MESSAGE("serialization");
@@ -431,7 +431,7 @@ TEST(polymorphic) {
   idx = value_index::make(t);
   REQUIRE(idx);
   MESSAGE("nil");
-  REQUIRE(idx->push_back(caf::none));
+  REQUIRE(idx->append(caf::none));
 }
 
 // Attention
@@ -443,29 +443,29 @@ TEST(polymorphic) {
 // should nil be less or great than any other value in the domain?
 TEST(polymorphic none values) {
   auto idx = value_index::make(string_type{});
-  REQUIRE(idx->push_back(caf::none));
-  REQUIRE(idx->push_back("foo"));
-  REQUIRE(idx->push_back("foo"));
-  REQUIRE(idx->push_back(caf::none));
-  REQUIRE(idx->push_back(caf::none));
-  REQUIRE(idx->push_back(caf::none));
-  REQUIRE(idx->push_back("foo"));
-  REQUIRE(idx->push_back("bar"));
-  REQUIRE(idx->push_back("bar"));
-  REQUIRE(idx->push_back(caf::none));
-  REQUIRE(idx->push_back(caf::none));
-  REQUIRE(idx->push_back(caf::none));
-  REQUIRE(idx->push_back(caf::none));
-  REQUIRE(idx->push_back("foo"));
-  REQUIRE(idx->push_back("foo"));
-  REQUIRE(idx->push_back("foo"));
-  REQUIRE(idx->push_back("bar"));
-  REQUIRE(idx->push_back("bar"));
-  REQUIRE(idx->push_back("bar"));
-  REQUIRE(idx->push_back("foo"));
-  REQUIRE(idx->push_back("foo"));
-  REQUIRE(idx->push_back(caf::none));
-  REQUIRE(idx->push_back(caf::none));
+  REQUIRE(idx->append(caf::none));
+  REQUIRE(idx->append("foo"));
+  REQUIRE(idx->append("foo"));
+  REQUIRE(idx->append(caf::none));
+  REQUIRE(idx->append(caf::none));
+  REQUIRE(idx->append(caf::none));
+  REQUIRE(idx->append("foo"));
+  REQUIRE(idx->append("bar"));
+  REQUIRE(idx->append("bar"));
+  REQUIRE(idx->append(caf::none));
+  REQUIRE(idx->append(caf::none));
+  REQUIRE(idx->append(caf::none));
+  REQUIRE(idx->append(caf::none));
+  REQUIRE(idx->append("foo"));
+  REQUIRE(idx->append("foo"));
+  REQUIRE(idx->append("foo"));
+  REQUIRE(idx->append("bar"));
+  REQUIRE(idx->append("bar"));
+  REQUIRE(idx->append("bar"));
+  REQUIRE(idx->append("foo"));
+  REQUIRE(idx->append("foo"));
+  REQUIRE(idx->append(caf::none));
+  REQUIRE(idx->append(caf::none));
   auto bm = idx->lookup(equal, "foo");
   REQUIRE(bm);
   CHECK_EQUAL(to_string(*bm), "01100010000001110001100");
@@ -491,7 +491,7 @@ TEST(regression - build an address index from bro events) {
   address_index idx;
   for (auto i = 0; i < 6464; ++i) {
     auto& x = bro_conn_log[i];
-    CHECK(idx.push_back(orig_h(x), x.id()));
+    CHECK(idx.append(orig_h(x), x.id()));
   }
   // This is where we are in trouble: the last ID should be 720, but the bogus
   // test reports 6452.
@@ -502,7 +502,7 @@ TEST(regression - build an address index from bro events) {
   auto& x = bro_conn_log[6464];
   // After adding another event, the correct state is restored again and the
   // bug doesn't show up anymore.
-  CHECK(idx.push_back(orig_h(x), x.id()));
+  CHECK(idx.append(orig_h(x), x.id()));
   auto after = idx.lookup(equal, addr);
   CHECK_EQUAL(rank(*after), 4u);
   CHECK_EQUAL(select(*after, -1), id{720});
@@ -562,7 +562,7 @@ TEST(regression - manual address bitmap index from 4 byte indexes) {
     auto& x = orig_h(bro_conn_log[n]);
     for (auto i = 0u; i < 4; ++i) {
       auto byte = x.data()[i + 12];
-      idx[i].push_back(byte);
+      idx[i].append(byte);
     }
   }
   MESSAGE("querying 169.254.225.22");

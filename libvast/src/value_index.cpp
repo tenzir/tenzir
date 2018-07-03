@@ -141,13 +141,13 @@ std::unique_ptr<value_index> value_index::make(const type& t) {
   return caf::visit(factory{}, t);
 }
 
-expected<void> value_index::push_back(const data& x) {
+expected<void> value_index::append(const data& x) {
   if (caf::holds_alternative<caf::none_t>(x)) {
     none_.append_bit(true);
     ++nils_;
   } else {
-    if (!push_back_impl(x, nils_))
-      return make_error(ec::unspecified, "push_back_impl");
+    if (!append_impl(x, nils_))
+      return make_error(ec::unspecified, "append_impl");
     nils_ = 0;
     none_.append_bit(false);
   }
@@ -155,21 +155,21 @@ expected<void> value_index::push_back(const data& x) {
   return {};
 }
 
-expected<void> value_index::push_back(const data& x, id pos) {
+expected<void> value_index::append(const data& x, id pos) {
   auto off = offset();
   if (pos < off)
     // Can only append at the end
     return make_error(ec::unspecified, pos, '<', off);
   if (pos == off)
-    return push_back(x);
+    return append(x);
   auto skip = pos - off;
   if (caf::holds_alternative<caf::none_t>(x)) {
     none_.append_bits(false, skip);
     none_.append_bit(true);
     ++nils_;
   } else {
-    if (!push_back_impl(x, skip + nils_))
-      return make_error(ec::unspecified, "push_back_impl");
+    if (!append_impl(x, skip + nils_))
+      return make_error(ec::unspecified, "append_impl");
     nils_ = 0;
     none_.append_bits(false, skip + 1);
   }
@@ -207,7 +207,7 @@ void string_index::init() {
   }
 }
 
-bool string_index::push_back_impl(const data& x, size_type skip) {
+bool string_index::append_impl(const data& x, size_type skip) {
   auto str = caf::get_if<std::string>(&x);
   if (!str)
     return false;
@@ -219,9 +219,11 @@ bool string_index::push_back_impl(const data& x, size_type skip) {
     chars_.resize(length, char_bitmap_index{8});
   for (auto i = 0u; i < length; ++i) {
     auto gap = length_.size() - chars_[i].size();
-    chars_[i].push_back(static_cast<uint8_t>((*str)[i]), gap + skip);
+    chars_[i].skip(gap + skip);
+    chars_[i].append(static_cast<uint8_t>((*str)[i]));
   }
-  length_.push_back(length, skip);
+  length_.skip(skip);
+  length_.append(length);
   return true;
 }
 
@@ -300,7 +302,7 @@ void address_index::init() {
     bytes_.fill(byte_index{8});
 }
 
-bool address_index::push_back_impl(const data& x, size_type skip) {
+bool address_index::append_impl(const data& x, size_type skip) {
   init();
   auto addr = caf::get_if<address>(&x);
   if (!addr)
@@ -309,11 +311,15 @@ bool address_index::push_back_impl(const data& x, size_type skip) {
   if (addr->is_v6())
     for (auto i = 0u; i < 12; ++i) {
       auto gap = v4_.size() - bytes_[i].size();
-      bytes_[i].push_back(bytes[i], gap + skip);
+      bytes_[i].skip(gap + skip);
+      bytes_[i].append(bytes[i]);
     }
-  for (auto i = 12u; i < 16; ++i)
-    bytes_[i].push_back(bytes[i], skip);
-  v4_.push_back(addr->is_v4(), skip);
+  for (auto i = 12u; i < 16; ++i) {
+    bytes_[i].skip(skip);
+    bytes_[i].append(bytes[i]);
+  }
+  v4_.skip(skip);
+  v4_.append(addr->is_v4());
   return true;
 }
 
@@ -371,12 +377,13 @@ void subnet_index::init() {
     length_ = prefix_index{128 + 1}; // Valid prefixes range from /0 to /128.
 }
 
-bool subnet_index::push_back_impl(const data& x, size_type skip) {
+bool subnet_index::append_impl(const data& x, size_type skip) {
   if (auto sn = caf::get_if<subnet>(&x)) {
     init();
     auto id = length_.size() + skip;
-    length_.push_back(sn->length(), skip);
-    return !!network_.push_back(sn->network(), id);
+    length_.skip(skip);
+    length_.append(sn->length());
+    return !!network_.append(sn->network(), id);
   }
   return false;
 }
@@ -447,11 +454,13 @@ void port_index::init() {
   }
 }
 
-bool port_index::push_back_impl(const data& x, size_type skip) {
+bool port_index::append_impl(const data& x, size_type skip) {
   if (auto p = caf::get_if<port>(&x)) {
     init();
-    num_.push_back(p->number(), skip);
-    proto_.push_back(p->type(), skip);
+    num_.skip(skip);
+    num_.append(p->number());
+    proto_.skip(skip);
+    proto_.append(p->type());
     return true;
   }
   return false;
@@ -495,11 +504,11 @@ void sequence_index::init() {
   }
 }
 
-bool sequence_index::push_back_impl(const data& x, size_type skip) {
+bool sequence_index::append_impl(const data& x, size_type skip) {
   if (auto v = caf::get_if<vector>(&x))
-    return push_back_ctnr(*v, skip);
+    return container_append(*v, skip);
   if (auto s = caf::get_if<set>(&x))
-    return push_back_ctnr(*s, skip);
+    return container_append(*s, skip);
   return false;
 }
 
