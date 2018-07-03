@@ -130,14 +130,14 @@ expected<ids> container_lookup_impl(const Index& idx, relational_operator op,
 
 template <class Index>
 expected<ids> container_lookup(const Index& idx, relational_operator op,
-                               view_t<vector> xs) {
+                               view<vector> xs) {
   VAST_ASSERT(xs);
   return container_lookup_impl(idx, op, *xs);
 }
 
 template <class Index>
 expected<ids> container_lookup(const Index& idx, relational_operator op,
-                               view_t<set> xs) {
+                               view<set> xs) {
   VAST_ASSERT(xs);
   return container_lookup_impl(idx, op, *xs);
 }
@@ -211,12 +211,12 @@ private:
     };
     return caf::visit(detail::overload(
       [&](auto&&) { return false; },
-      [&](view_t<boolean> x) { return append(x); },
-      [&](view_t<integer> x) { return append(x); },
-      [&](view_t<count> x) { return append(x); },
-      [&](view_t<real> x) { return append(x); },
-      [&](view_t<timespan> x) { return append(x.count()); },
-      [&](view_t<timestamp> x) { return append(x.time_since_epoch().count()); }
+      [&](view<boolean> x) { return append(x); },
+      [&](view<integer> x) { return append(x); },
+      [&](view<count> x) { return append(x); },
+      [&](view<real> x) { return append(x); },
+      [&](view<timespan> x) { return append(x.count()); },
+      [&](view<timestamp> x) { return append(x.time_since_epoch().count()); }
     ), d);
   }
 
@@ -226,18 +226,18 @@ private:
       [&](auto x) -> expected<ids> {
         return make_error(ec::type_clash, value_type{}, materialize(x));
       },
-      [&](view_t<boolean> x) -> expected<ids> { return bmi_.lookup(op, x); },
-      [&](view_t<integer> x) -> expected<ids> { return bmi_.lookup(op, x); },
-      [&](view_t<count> x) -> expected<ids> { return bmi_.lookup(op, x); },
-      [&](view_t<real> x) -> expected<ids> { return bmi_.lookup(op, x); },
-      [&](view_t<timespan> x) -> expected<ids> {
+      [&](view<boolean> x) -> expected<ids> { return bmi_.lookup(op, x); },
+      [&](view<integer> x) -> expected<ids> { return bmi_.lookup(op, x); },
+      [&](view<count> x) -> expected<ids> { return bmi_.lookup(op, x); },
+      [&](view<real> x) -> expected<ids> { return bmi_.lookup(op, x); },
+      [&](view<timespan> x) -> expected<ids> {
         return bmi_.lookup(op, x.count());
       },
-      [&](view_t<timestamp> x) -> expected<ids> {
+      [&](view<timestamp> x) -> expected<ids> {
         return bmi_.lookup(op, x.time_since_epoch().count());
       },
-      [&](view_t<vector> xs) { return detail::container_lookup(*this, op, xs); },
-      [&](view_t<set> xs) { return detail::container_lookup(*this, op, xs); }
+      [&](view<vector> xs) { return detail::container_lookup(*this, op, xs); },
+      [&](view<set> xs) { return detail::container_lookup(*this, op, xs); }
     ), d);
   };
 

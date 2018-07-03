@@ -36,15 +36,15 @@ namespace vast {
 
 /// A type-safe overlay over an immutable sequence of bytes.
 template <class>
-struct view;
+struct view_trait;
 
-/// @relates view
+/// @relates view_trait
 template <class T>
-using view_t = typename view<T>::type;
+using view = typename view_trait<T>::type;
 
 #define VAST_VIEW_TRAIT(type_name)                                             \
   template <>                                                                  \
-  struct view<type_name> {                                                     \
+  struct view_trait<type_name> {                                               \
     using type = type_name;                                                    \
   };                                                                           \
   inline auto materialize(type_name x) {                                       \
@@ -63,21 +63,21 @@ VAST_VIEW_TRAIT(subnet);
 
 #undef VAST_VIEW_TRAIT
 
-/// @relates view
+/// @relates view_trait
 template <>
-struct view<caf::none_t> {
+struct view_trait<caf::none_t> {
   using type = caf::none_t;
 };
 
 
-/// @relates view
+/// @relates view_trait
 template <>
-struct view<std::string> {
+struct view_trait<std::string> {
   using type = std::string_view;
 };
 
 
-/// @relates view
+/// @relates view_trait
 class pattern_view : detail::totally_ordered<pattern_view> {
 public:
   static pattern glob(std::string_view x);
@@ -95,9 +95,9 @@ private:
   std::string_view pattern_;
 };
 
-//// @relates view
+//// @relates view_trait
 template <>
-struct view<pattern> {
+struct view_trait<pattern> {
   using type = pattern_view;
 };
 
@@ -106,60 +106,60 @@ struct vector_view_ptr;
 struct set_view_ptr;
 struct map_view_ptr;
 
-/// @relates view
+/// @relates view_trait
 template <>
-struct view<vector> {
+struct view_trait<vector> {
   using type = vector_view_ptr;
 };
 
-/// @relates view
+/// @relates view_trait
 template <>
-struct view<set> {
+struct view_trait<set> {
   using type = set_view_ptr;
 };
 
-/// @relates view
+/// @relates view_trait
 template <>
-struct view<map> {
+struct view_trait<map> {
   using type = map_view_ptr;
 };
 
 /// A type-erased view over variout types of data.
-/// @relates view
+/// @relates view_trait
 using data_view = caf::variant<
-  view_t<caf::none_t>,
-  view_t<boolean>,
-  view_t<integer>,
-  view_t<count>,
-  view_t<real>,
-  view_t<timespan>,
-  view_t<timestamp>,
-  view_t<std::string>,
-  view_t<pattern>,
-  view_t<address>,
-  view_t<subnet>,
-  view_t<port>,
-  view_t<vector>,
-  view_t<set>,
-  view_t<map>
+  view<caf::none_t>,
+  view<boolean>,
+  view<integer>,
+  view<count>,
+  view<real>,
+  view<timespan>,
+  view<timestamp>,
+  view<std::string>,
+  view<pattern>,
+  view<address>,
+  view<subnet>,
+  view<port>,
+  view<vector>,
+  view<set>,
+  view<map>
 >;
 
-/// @relates view
+/// @relates view_trait
 template <>
-struct view<data> {
+struct view_trait<data> {
   using type = data_view;
 };
 
 template <class T>
 struct container_view;
 
-/// @relates view
+/// @relates view_trait
 template <class T>
 using container_view_ptr = caf::intrusive_ptr<container_view<T>>;
 
 namespace detail {
 
-/// @relates view
+/// @relates view_trait
 template <class T>
 class container_view_iterator
   : public detail::iterator_facade<
@@ -210,7 +210,7 @@ private:
 } // namespace detail
 
 /// Base class for container views.
-/// @relates view
+/// @relates view_trait
 template <class T>
 struct container_view : caf::ref_counted {
   using value_type = T;
@@ -237,17 +237,17 @@ struct container_view : caf::ref_counted {
   virtual size_type size() const noexcept = 0;
 };
 
-// @relates view
+// @relates view_trait
 struct vector_view_ptr : container_view_ptr<data_view> {};
 
-// @relates view
+// @relates view_trait
 struct set_view_ptr : container_view_ptr<data_view> {};
 
-// @relates view
+// @relates view_trait
 struct map_view_ptr : container_view_ptr<std::pair<data_view, data_view>> {};
 
 /// A view over a @ref vector.
-/// @relates view
+/// @relates view_trait
 class default_vector_view
   : public container_view<data_view>,
     detail::totally_ordered<default_vector_view> {
@@ -263,7 +263,7 @@ private:
 };
 
 /// A view over a @ref set.
-/// @relates view
+/// @relates view_trait
 class default_set_view
   : public container_view<data_view>,
     detail::totally_ordered<default_set_view> {
@@ -279,7 +279,7 @@ private:
 };
 
 /// A view over a @ref map.
-/// @relates view
+/// @relates view_trait
 class default_map_view
   : public container_view<std::pair<data_view, data_view>>,
     detail::totally_ordered<default_map_view> {
@@ -295,9 +295,9 @@ private:
 };
 
 /// Creates a view from a specific type.
-/// @relates view
+/// @relates view_trait
 template <class T>
-view_t<T> make_view(const T& x) {
+view<T> make_view(const T& x) {
   constexpr auto directly_constructible
     = detail::is_any_v<T, caf::none_t, boolean, integer, count, real, timespan,
                        timestamp, std::string, pattern, address, subnet, port>;
@@ -316,9 +316,9 @@ view_t<T> make_view(const T& x) {
 }
 
 /// Creates a view from a string literal.
-/// @relates view
+/// @relates view_trait
 template <size_t N>
-view_t<std::string> make_view(const char (&xs)[N]) {
+view<std::string> make_view(const char (&xs)[N]) {
   return std::string_view(xs, N - 1);
 }
 
@@ -326,7 +326,7 @@ view_t<std::string> make_view(const char (&xs)[N]) {
 data_view make_view(const data& x);
 
 /// Creates a type-erased data view from a specific type.
-/// @relates view
+/// @relates view_trait
 template <class T>
 data_view make_data_view(const T& x) {
   return make_view(x);

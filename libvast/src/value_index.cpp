@@ -211,7 +211,7 @@ void string_index::init() {
 }
 
 bool string_index::append_impl(data_view x, size_type skip) {
-  auto str = caf::get_if<view_t<std::string>>(&x);
+  auto str = caf::get_if<view<std::string>>(&x);
   if (!str)
     return false;
   init();
@@ -236,7 +236,7 @@ string_index::lookup_impl(relational_operator op, data_view x) const {
     [&](auto x) -> expected<ids> {
       return make_error(ec::type_clash, materialize(x));
     },
-    [&](view_t<std::string> str) -> expected<ids> {
+    [&](view<std::string> str) -> expected<ids> {
       auto str_size = str.size();
       if (str_size > max_length_)
         str_size = max_length_;
@@ -294,8 +294,8 @@ string_index::lookup_impl(relational_operator op, data_view x) const {
         }
       }
     },
-    [&](view_t<vector> xs) { return detail::container_lookup(*this, op, xs); },
-    [&](view_t<set> xs) { return detail::container_lookup(*this, op, xs); }
+    [&](view<vector> xs) { return detail::container_lookup(*this, op, xs); },
+    [&](view<set> xs) { return detail::container_lookup(*this, op, xs); }
   ), x);
 }
 
@@ -309,7 +309,7 @@ void address_index::init() {
 
 bool address_index::append_impl(data_view x, size_type skip) {
   init();
-  auto addr = caf::get_if<view_t<address>>(&x);
+  auto addr = caf::get_if<view<address>>(&x);
   if (!addr)
     return false;
   auto& bytes = addr->data();
@@ -334,7 +334,7 @@ address_index::lookup_impl(relational_operator op, data_view d) const {
     [&](auto x) -> expected<ids> {
       return make_error(ec::type_clash, materialize(x));
     },
-    [&](view_t<address> x) -> expected<ids> {
+    [&](view<address> x) -> expected<ids> {
       if (!(op == equal || op == not_equal))
         return make_error(ec::unsupported_operator, op);
       auto result = x.is_v4() ? v4_.coder().storage() : bitmap{v4_.size(), true};
@@ -348,7 +348,7 @@ address_index::lookup_impl(relational_operator op, data_view d) const {
         result.flip();
       return result;
     },
-    [&](view_t<subnet> x) -> expected<ids> {
+    [&](view<subnet> x) -> expected<ids> {
       if (!(op == in || op == not_in))
         return make_error(ec::unsupported_operator, op);
       auto topk = x.length();
@@ -372,8 +372,8 @@ address_index::lookup_impl(relational_operator op, data_view d) const {
         result.flip();
       return result;
     },
-    [&](view_t<vector> xs) { return detail::container_lookup(*this, op, xs); },
-    [&](view_t<set> xs) { return detail::container_lookup(*this, op, xs); }
+    [&](view<vector> xs) { return detail::container_lookup(*this, op, xs); },
+    [&](view<set> xs) { return detail::container_lookup(*this, op, xs); }
   ), d);
 }
 
@@ -385,7 +385,7 @@ void subnet_index::init() {
 }
 
 bool subnet_index::append_impl(data_view x, size_type skip) {
-  if (auto sn = caf::get_if<view_t<subnet>>(&x)) {
+  if (auto sn = caf::get_if<view<subnet>>(&x)) {
     init();
     auto id = length_.size() + skip;
     length_.skip(skip);
@@ -401,7 +401,7 @@ subnet_index::lookup_impl(relational_operator op, data_view d) const {
     [&](auto x) -> expected<ids> {
       return make_error(ec::type_clash, materialize(x));
     },
-    [&](view_t<subnet> x) -> expected<ids> {
+    [&](view<subnet> x) -> expected<ids> {
       switch (op) {
         default:
           return make_error(ec::unsupported_operator, op);
@@ -448,8 +448,8 @@ subnet_index::lookup_impl(relational_operator op, data_view d) const {
         }
       }
     },
-    [&](view_t<vector> xs) { return detail::container_lookup(*this, op, xs); },
-    [&](view_t<set> xs) { return detail::container_lookup(*this, op, xs); }
+    [&](view<vector> xs) { return detail::container_lookup(*this, op, xs); },
+    [&](view<set> xs) { return detail::container_lookup(*this, op, xs); }
   ), d);
 }
 
@@ -463,7 +463,7 @@ void port_index::init() {
 }
 
 bool port_index::append_impl(data_view x, size_type skip) {
-  if (auto p = caf::get_if<view_t<port>>(&x)) {
+  if (auto p = caf::get_if<view<port>>(&x)) {
     init();
     num_.skip(skip);
     num_.append(p->number());
@@ -482,7 +482,7 @@ port_index::lookup_impl(relational_operator op, data_view d) const {
     [&](auto x) -> expected<ids> {
       return make_error(ec::type_clash, materialize(x));
     },
-    [&](view_t<port> x) -> expected<ids> {
+    [&](view<port> x) -> expected<ids> {
       if (op == in || op == not_in)
         return make_error(ec::unsupported_operator, op);
       auto n = num_.lookup(op, x.number());
@@ -492,8 +492,8 @@ port_index::lookup_impl(relational_operator op, data_view d) const {
         n &= proto_.lookup(equal, x.type());
       return n;
     },
-    [&](view_t<vector> xs) { return detail::container_lookup(*this, op, xs); },
-    [&](view_t<set> xs) { return detail::container_lookup(*this, op, xs); }
+    [&](view<vector> xs) { return detail::container_lookup(*this, op, xs); },
+    [&](view<set> xs) { return detail::container_lookup(*this, op, xs); }
   ), d);
 }
 
@@ -514,9 +514,9 @@ void sequence_index::init() {
 }
 
 bool sequence_index::append_impl(data_view x, size_type skip) {
-  if (auto xs = caf::get_if<view_t<vector>>(&x))
+  if (auto xs = caf::get_if<view<vector>>(&x))
     return container_append(**xs, skip);
-  if (auto xs = caf::get_if<view_t<set>>(&x))
+  if (auto xs = caf::get_if<view<set>>(&x))
     return container_append(**xs, skip);
   return false;
 }
