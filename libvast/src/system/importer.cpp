@@ -17,9 +17,9 @@
 #include "vast/concept/printable/vast/error.hpp"
 #include "vast/concept/printable/vast/filesystem.hpp"
 #include "vast/logger.hpp"
-
 #include "vast/system/atoms.hpp"
 #include "vast/system/importer.hpp"
+#include "vast/table_slice.hpp"
 
 using namespace std::chrono;
 using namespace std::chrono_literals;
@@ -82,11 +82,11 @@ int32_t importer_state::available_ids() const noexcept {
                          int32_t{0}, f);
 }
 
-id importer_state::next_id() {
+id importer_state::next_id_block() {
   VAST_ASSERT(!id_generators.empty());
   auto& g = id_generators.front();
   VAST_ASSERT(!g.at_end());
-  auto result = g.next();
+  auto result = g.next(max_table_slice_size);
   if (g.at_end())
     id_generators.erase(id_generators.begin());
   return result;
@@ -105,17 +105,17 @@ void replenish(stateful_actor<importer_state>* self) {
   auto now = steady_clock::now();
   if ((now - st.last_replenish) < 10s) {
     VAST_DEBUG(self, "had to replenish twice within 10 secs");
-    VAST_DEBUG(self, "increase chunk size:", st.id_chunk_size,
-                    "->", st.id_chunk_size + 1024);
-    st.id_chunk_size += 1024;
+    VAST_DEBUG(self, "increase blocks_per_replenish:", st.blocks_per_replenish,
+                    "->", st.blocks_per_replenish + 100);
+    st.blocks_per_replenish += 100;
   }
   st.last_replenish = now;
-  VAST_DEBUG(self, "replenishes", st.id_chunk_size, "IDs");
+  VAST_DEBUG(self, "replenishes", st.blocks_per_replenish, "ID blocks");
   // If we get an EXIT message while expecting a response from the metastore,
   // we'll give it a bit of time to come back;
   self->set_default_handler(skip);
   // Trigger meta store and wait for response.
-  auto n = st.id_chunk_size;
+  auto n = st.max_table_slice_size * st.blocks_per_replenish;
   self->send(st.meta_store, add_atom::value, "id", data{n});
   st.awaiting_ids = true;
   self->become(
@@ -145,29 +145,30 @@ void replenish(stateful_actor<importer_state>* self) {
   );
 }
 
-using downstream_manager = caf::broadcast_downstream_manager<event>;
-
-class driver : public caf::stream_stage_driver<event, downstream_manager> {
+class driver : public importer_state::driver_base {
 public:
-  using super = caf::stream_stage_driver<event, downstream_manager>;
+  using super = importer_state::driver_base;
 
   using pointer = stateful_actor<importer_state>*;
 
-  driver(downstream_manager& out, pointer self) : super(out), self_(self) {
+  driver(importer_state::downstream_manager& out, pointer self)
+    : super(out),
+      self_(self) {
     // nop
   }
 
-  void process(caf::downstream<event>& out, std::vector<event>& xs) override {
+  void process(caf::downstream<output_type>& out,
+               std::vector<input_type>& xs) override {
     CAF_LOG_TRACE(CAF_ARG(xs));
     auto& st = self_->state;
     VAST_DEBUG(self_, "has", st.available_ids(), "IDs available");
-    VAST_DEBUG(self_, "got", xs.size(), "events with", st.in_flight_events,
-               "in-flight events");
+    VAST_DEBUG(self_, "got", xs.size(), "slices with", st.in_flight_slices,
+               "in-flight slices");
     VAST_ASSERT(xs.size() <= static_cast<size_t>(st.available_ids()));
-    VAST_ASSERT(xs.size() <= static_cast<size_t>(st.in_flight_events));
-    st.in_flight_events -= static_cast<int32_t>(xs.size());
+    VAST_ASSERT(xs.size() <= static_cast<size_t>(st.in_flight_slices));
+    st.in_flight_slices -= static_cast<int32_t>(xs.size());
     for (auto& x : xs) {
-      x.id(st.next_id());
+      x->offset(st.next_id_block());
       out.push(std::move(x));
     }
   }
@@ -183,16 +184,18 @@ public:
     }
     // Calculate how much more in-flight events we can allow.
     auto& st = self_->state;
-    auto max_credit = st.available_ids() - st.in_flight_events;
+    CAF_ASSERT(st.available_ids() % st.max_table_slice_size == 0);
+    auto max_credit = (st.available_ids() / st.max_table_slice_size)
+                      - st.in_flight_slices;
     VAST_ASSERT(max_credit >= 0);
     if (max_credit <= desired) {
       // Get more IDs if we're running out.
       VAST_DEBUG("had to limit acquired credit to", max_credit);
       replenish(self_);
-      st.in_flight_events += max_credit;
+      st.in_flight_slices += max_credit;
       return max_credit;
     }
-    st.in_flight_events += desired;
+    st.in_flight_slices += desired;
     return desired;
   }
 
@@ -202,9 +205,11 @@ private:
 
 } // namespace <anonymous>
 
-behavior importer(stateful_actor<importer_state>* self, path dir) {
+behavior importer(stateful_actor<importer_state>* self, path dir,
+                  size_t max_table_slice_size) {
   self->state.dir = dir;
   self->state.last_replenish = steady_clock::time_point::min();
+  self->state.max_table_slice_size = static_cast<int32_t>(max_table_slice_size);
   auto err = self->state.read_state();
   if (err) {
     VAST_ERROR(self, "failed to load state:", self->system().render(err));
@@ -231,7 +236,7 @@ behavior importer(stateful_actor<importer_state>* self, path dir) {
       VAST_DEBUG(self, "registers exporter", exporter);
       return self->state.stg->add_outbound_path(exporter);
     },
-    [=](stream<event>& in) {
+    [=](stream<importer_state::input_type>& in) {
       auto& st = self->state;
       if (!st.meta_store) {
         VAST_ERROR("no meta store configured for importer");

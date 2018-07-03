@@ -60,7 +60,8 @@ struct fixture : fixture_base {
   }
 
   void spawn_importer() {
-    importer = self->spawn(system::importer, directory / "importer");
+    importer = self->spawn(system::importer, directory / "importer",
+                           slice_size);
   }
 
   void spawn_consensus() {

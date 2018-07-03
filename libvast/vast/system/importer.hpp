@@ -21,7 +21,6 @@
 
 #include "vast/aliases.hpp"
 #include "vast/data.hpp"
-#include "vast/event.hpp"
 #include "vast/filesystem.hpp"
 
 #include "vast/system/archive.hpp"
@@ -32,6 +31,20 @@ namespace vast::system {
 /// Receives chunks from SOURCEs, imbues them with an ID, and relays them to
 /// ARCHIVE, INDEX and continuous queries.
 struct importer_state {
+  // -- member types -----------------------------------------------------------
+
+  /// Type of incoming stream elements.
+  using input_type = table_slice_ptr;
+
+  /// Type of outgoing stream elements.
+  using output_type = const_table_slice_ptr;
+
+  /// Stream object for managing downstream actors.
+  using downstream_manager = caf::broadcast_downstream_manager<output_type>;
+
+  /// Base type for stream drivers implementing the importer.
+  using driver_base = caf::stream_stage_driver<input_type, downstream_manager>;
+
   /// A simple generator for IDs.
   struct id_generator {
     /// The next available ID.
@@ -50,8 +63,11 @@ struct importer_state {
     }
 
     /// Returns the next ID and advances the position in the range.
-    inline id next() noexcept {
-      return i++;
+    inline id next(size_t num = 1) noexcept {
+      VAST_ASSERT(static_cast<size_t>(remaining()) >= num);
+      auto result = i;
+      i += num;
+      return result;
     }
 
     /// Returns how many more times `next` returns a valid ID.
@@ -77,15 +93,20 @@ struct importer_state {
   /// Returns the number of currently available IDs.
   int32_t available_ids() const noexcept;
 
-  /// Returns the next available IDs.
-  /// @pre `available_ids() > 0`
-  id next_id();
+  /// Returns the first ID for an ID block of size `max_table_slice_size`.
+  /// @pre `available_ids() >= max_table_slice_size`
+  id next_id_block();
 
-  /// Stores how many events inbound paths can still send us.
-  int32_t in_flight_events = 0;
+  /// Stores how many slices inbound paths can still send us.
+  int32_t in_flight_slices = 0;
 
-  /// Number of IDs we acquire per replenish.
-  size_t id_chunk_size = 1024;
+  /// User-configured maximum for table slice sizes. This is the granularity
+  /// for credit generation (each received slice consumes that many IDs).
+  int32_t max_table_slice_size;
+
+  /// Number of ID blocks we acquire per replenish, e.g., setting this to 10
+  /// will acquire `max_table_slize * 10` IDs per replenish.
+  size_t blocks_per_replenish = 100;
 
   /// Stores when we received new IDs for the last time.
   std::chrono::steady_clock::time_point last_replenish;
@@ -97,7 +118,7 @@ struct importer_state {
   bool awaiting_ids = false;
 
   /// The continous stage that moves data from all sources to all subscribers.
-  caf::stream_stage_ptr<event, caf::broadcast_downstream_manager<event>> stg;
+  caf::stream_stage_ptr<input_type, downstream_manager> stg;
 
   /// Pointer to the owning actor.
   caf::event_based_actor* self;
@@ -110,7 +131,8 @@ struct importer_state {
 /// @param self The actor handle.
 /// @param dir The directory for persistent state.
 /// @param batch_size The initial number of IDs to request when replenishing.
-caf::behavior importer(caf::stateful_actor<importer_state>* self, path dir);
+caf::behavior importer(caf::stateful_actor<importer_state>* self, path dir,
+                       size_t max_table_slice_size);
 
 } // namespace vast::system
 
