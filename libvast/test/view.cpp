@@ -43,8 +43,15 @@ TEST(copying views) {
   CHECK_EQUAL(make_view(data(port(53, port::udp))), port(53, port::udp));
 }
 
+TEST(string literal view) {
+  auto v = make_view("foobar");
+  CHECK_EQUAL(v.size(), 6u);
+  CHECK_EQUAL(v, "foobar"sv);
+  CHECK_EQUAL(std::string{"foobar"}, materialize(v));
+}
+
 TEST(string view) {
-  std::string str = "foobar";
+  auto str = "foobar"s;
   auto v = make_view(str);
   CHECK_EQUAL(v, "foobar");
   str[3] = 'z';
