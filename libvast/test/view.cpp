@@ -144,3 +144,19 @@ TEST(increment decrement container_view_iterator) {
   --it1;
   CAF_CHECK_EQUAL(it1.distance_to(it2), 0u);
 }
+
+TEST(container comparison) {
+  data xs = vector{42};
+  data ys = vector{42};
+  CHECK(make_view(xs) == make_view(ys));
+  CHECK(!(make_view(xs) < make_view(ys)));
+  caf::get<vector>(ys).push_back(0);
+  CHECK(make_view(xs) != make_view(ys));
+  CHECK(make_view(xs) < make_view(ys));
+  ys = map{{42, true}};
+  CHECK(make_view(xs) != make_view(ys));
+  CHECK(make_view(xs) < make_view(ys));
+  ys = map{{42, false}};
+  CHECK(make_view(xs) != make_view(ys));
+  CHECK(make_view(xs) > make_view(ys));
+}

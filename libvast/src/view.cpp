@@ -23,12 +23,85 @@ pattern_view::pattern_view(const pattern& x) : pattern_{x.string()} {
   // nop
 }
 
-bool operator==(pattern_view x, pattern_view y) noexcept {
-  return x.pattern_ == y.pattern_;
-}
-
 std::string_view pattern_view::string() const {
   return pattern_;
+}
+
+bool operator==(pattern_view x, pattern_view y) noexcept {
+  return x.string() == y.string();
+}
+
+bool operator<(pattern_view x, pattern_view y) noexcept {
+  return x.string() < y.string();
+}
+
+// -- data_view ---------------------------------------------------------------
+
+namespace {
+
+template <template <class> class Predicate, class T>
+bool compare(T x, T y) {
+  auto cmp = [](auto xs, auto ys) {
+    return xs && ys && Predicate{}(*xs, *ys);
+  };
+  return caf::visit(detail::overload(
+    [=](const auto& x, const auto& y) {
+      using lhs_type = std::decay_t<decltype(x)>;
+      using rhs_type = std::decay_t<decltype(y)>;
+      if constexpr (std::is_same_v<lhs_type, rhs_type>) {
+        return Predicate{}(x, y);
+      } else {
+        return false;
+      }
+    },
+    [=](view<vector> xs, view<vector> ys) {
+      return cmp(xs, ys);
+    },
+    [=](view<set> xs, view<set> ys) {
+      return cmp(xs, ys);
+    },
+    [=](view<map> xs, view<map> ys) {
+      return cmp(xs, ys);
+    }
+  ), x, y);
+}
+
+} // namespace <anonymous>
+
+bool operator==(const data_view& x, const data_view& y) {
+  return x.index() == y.index() && compare<std::equal_to>(x, y);
+}
+
+bool operator!=(const data_view& x, const data_view& y) {
+  return !(x == y);
+}
+
+bool operator<(const data_view& x, const data_view& y) {
+  if (y.valueless_by_exception())
+    return false;
+  if (x.valueless_by_exception())
+    return true;
+  auto i = x.index();
+  auto j = y.index();
+  return i != j ? i < j : compare<std::less>(x, y);
+}
+
+bool operator>(const data_view& x, const data_view& y) {
+  if (x.valueless_by_exception())
+    return false;
+  if (y.valueless_by_exception())
+    return true;
+  auto i = x.index();
+  auto j = y.index();
+  return i != j ? i < j : compare<std::greater>(x, y);
+}
+
+bool operator<=(const data_view& x, const data_view& y) {
+  return !(x > y);
+}
+
+bool operator>=(const data_view& x, const data_view& y) {
+  return !(x < y);
 }
 
 // -- default_vector_view -----------------------------------------------------

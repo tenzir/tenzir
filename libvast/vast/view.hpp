@@ -88,12 +88,15 @@ public:
   bool search(std::string_view x) const;
   std::string_view string() const;
 
-  friend bool operator==(pattern_view x, pattern_view y) noexcept;
-  friend bool operator<(pattern_view x, pattern_view y) noexcept;
-
 private:
   std::string_view pattern_;
 };
+
+/// @relates pattern_view
+bool operator==(pattern_view x, pattern_view y) noexcept;
+
+/// @relates pattern_view
+bool operator<(pattern_view x, pattern_view y) noexcept;
 
 //// @relates view_trait
 template <>
@@ -143,6 +146,24 @@ using data_view = caf::variant<
   view<set>,
   view<map>
 >;
+
+/// @relates data_view
+bool operator==(const data_view& x, const data_view& y);
+
+/// @relates data_view
+bool operator!=(const data_view& x, const data_view& y);
+
+/// @relates data_view
+bool operator<(const data_view& x, const data_view& y);
+
+/// @relates data_view
+bool operator>(const data_view& x, const data_view& y);
+
+/// @relates data_view
+bool operator<=(const data_view& x, const data_view& y);
+
+/// @relates data_view
+bool operator>=(const data_view& x, const data_view& y);
 
 /// @relates view_trait
 template <>
@@ -212,7 +233,9 @@ private:
 /// Base class for container views.
 /// @relates view_trait
 template <class T>
-struct container_view : caf::ref_counted {
+struct container_view
+  : caf::ref_counted,
+    detail::totally_ordered<container_view<T>> {
   using value_type = T;
   using size_type = size_t;
   using iterator = detail::container_view_iterator<T>;
@@ -236,6 +259,26 @@ struct container_view : caf::ref_counted {
   /// @returns The number of elements in the container.
   virtual size_type size() const noexcept = 0;
 };
+
+template <class T>
+bool operator==(const container_view<T>& xs, const container_view<T>& ys) {
+  if (xs.size() != ys.size())
+    return false;
+  for (auto i = 0u; i < xs.size(); ++i)
+    if (xs.at(i) != ys.at(i))
+      return false;
+  return true;
+}
+
+template <class T>
+bool operator<(const container_view<T>& xs, const container_view<T>& ys) {
+  if (xs.size() != ys.size())
+    return xs.size() < ys.size();
+  for (auto i = 0u; i < xs.size(); ++i)
+    if (xs.at(i) < ys.at(i))
+      return true;
+  return false;
+}
 
 // @relates view_trait
 struct vector_view_ptr : container_view_ptr<data_view> {};
