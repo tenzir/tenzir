@@ -17,6 +17,7 @@
 
 #include "vast/error.hpp"
 #include "vast/event.hpp"
+#include "vast/fwd.hpp"
 
 #include "data.hpp"
 #include "test.hpp"
@@ -33,6 +34,12 @@ struct events {
   static std::vector<event> bro_http_log;
   static std::vector<event> bgpdump_txt;
   static std::vector<event> random;
+
+  static std::vector<table_slice_ptr> bro_http_log_slices;
+  static std::vector<table_slice_ptr> bro_conn_log_slices;
+  static std::vector<table_slice_ptr> bro_dns_log_slices;
+  static std::vector<table_slice_ptr> bgpdump_txt_slices;
+  static std::vector<table_slice_ptr> random_slices;
 
 private:
   template <class Reader>
