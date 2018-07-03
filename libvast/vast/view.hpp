@@ -315,6 +315,13 @@ view_t<T> make_view(const T& x) {
   }
 }
 
+/// Creates a view from a string literal.
+/// @relates view
+template <size_t N>
+view_t<std::string> make_view(const char (&xs)[N]) {
+  return std::string_view(xs, N - 1);
+}
+
 /// @relates view data
 data_view make_view(const data& x);
 

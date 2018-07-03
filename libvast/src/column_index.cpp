@@ -43,7 +43,7 @@ caf::expected<column_index_ptr> make_time_index(path filename) {
 
     void add(const event& x) override {
       VAST_TRACE(VAST_ARG(x));
-      idx_->push_back(x.timestamp(), x.id());
+      idx_->append(make_data_view(x.timestamp()), x.id());
     }
   };
   return init_res(std::make_unique<impl>(std::move(filename)));
@@ -57,7 +57,7 @@ caf::expected<column_index_ptr> make_type_index(path filename) {
 
     void add(const event& x) override {
       VAST_TRACE(VAST_ARG(x));
-      idx_->push_back(x.type().name(), x.id());
+      idx_->append(make_data_view(x.type().name()), x.id());
     }
   };
   return init_res(std::make_unique<impl>(std::move(filename)));
@@ -74,7 +74,7 @@ caf::expected<column_index_ptr> make_flat_data_index(path filename,
     void add(const event& x) override {
       VAST_TRACE(VAST_ARG(x));
       if (x.type() == index_type_)
-        idx_->push_back(x.data(), x.id());
+        idx_->append(make_view(x.data()), x.id());
     }
   };
   return init_res(std::make_unique<impl>(std::move(event_type),
@@ -98,13 +98,13 @@ caf::expected<column_index_ptr> make_field_data_index(path filename,
       if (!v)
         return;
       if (auto y = get(*v, o_)) {
-        idx_->push_back(*y, x.id());
+        idx_->append(make_view(*y), x.id());
         return;
       }
       // If there is no data at a given offset, it means that an intermediate
       // record is nil but we're trying to access a deeper field.
       static const auto nil_data = data{caf::none};
-      idx_->push_back(nil_data, x.id());
+      idx_->append(make_data_view(nil_data), x.id());
     }
 
     offset o_;
@@ -174,7 +174,7 @@ caf::error column_index::flush_to_disk() {
 caf::expected<bitmap> column_index::lookup(const predicate& pred) {
   VAST_TRACE(VAST_ARG(pred));
   VAST_ASSERT(idx_ != nullptr);
-  auto result = idx_->lookup(pred.op, caf::get<data>(pred.rhs));
+  auto result = idx_->lookup(pred.op, make_data_view(caf::get<data>(pred.rhs)));
   VAST_DEBUG(VAST_ARG(result));
   return result;
 }
