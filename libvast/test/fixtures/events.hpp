@@ -29,6 +29,9 @@ using namespace vast;
 struct events {
   events();
 
+  /// Size of all pre-filled slice vectors.
+  static size_t slice_size;
+
   static std::vector<event> bro_conn_log;
   static std::vector<event> bro_dns_log;
   static std::vector<event> bro_http_log;

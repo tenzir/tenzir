@@ -22,11 +22,7 @@
 
 namespace fixtures {
 
-namespace {
-
-static constexpr size_t slice_size = 100;
-
-} // namespace <anonymous>
+size_t events::slice_size = 100;
 
 std::vector<event> events::bro_conn_log;
 std::vector<event> events::bro_dns_log;
