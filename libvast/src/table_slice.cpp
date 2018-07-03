@@ -20,6 +20,16 @@
 
 namespace vast {
 
+namespace {
+
+using size_type = table_slice::size_type;
+
+auto cap (size_type pos, size_type num, size_type last) {
+  return num == table_slice::npos ? last : std::min(last, pos + num);
+}
+
+} // namespace <anonymous>
+
 table_slice::table_slice(record_type layout)
   : layout_(std::move(layout)),
     rows_(0),
@@ -29,6 +39,17 @@ table_slice::table_slice(record_type layout)
 
 table_slice::~table_slice() {
   // no
+}
+
+record_type table_slice::layout(size_type first_column,
+                                size_type num_columns) const {
+  if (first_column >= columns_)
+    return {};
+  auto col_begin = first_column;
+  auto col_end = cap(first_column, num_columns, columns_);
+  std::vector<record_field> sub_records{layout_.fields.begin() + col_begin,
+                                        layout_.fields.begin() + col_end};
+  return record_type{std::move(sub_records)};
 }
 
 caf::optional<value> table_slice::row_to_value(size_type row,
@@ -45,9 +66,6 @@ std::vector<value> table_slice::rows_to_values(size_type first_row,
                                                size_type num_rows,
                                                size_type first_column,
                                                size_type num_columns) const {
-  auto cap = [](size_type pos, size_type num, size_type last) {
-    return num == npos ? last : std::min(last, pos + num);
-  };
   std::vector<value> result;
   if (first_column >= columns_ || first_row >= rows_)
     return result;
@@ -55,9 +73,7 @@ std::vector<value> table_slice::rows_to_values(size_type first_row,
   auto col_end = cap(first_column, num_columns, columns_);
   auto row_begin = first_row;
   auto row_end = cap(first_row, num_rows, rows_);
-  std::vector<record_field> sub_records{layout_.fields.begin() + col_begin,
-                                        layout_.fields.begin() + col_end};
-  record_type value_layout{std::move(sub_records)};
+  auto value_layout = layout(first_column, num_columns);
   for (size_type row = row_begin; row < row_end; ++row) {
     vector xs;
     for (size_type col = col_begin; col < col_end; ++col) {

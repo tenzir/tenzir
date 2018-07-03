@@ -53,6 +53,11 @@ public:
     return layout_;
   }
 
+  /// @returns the layout for columns in range
+  /// [first_column, first_column + num_columns).
+  record_type layout(size_type first_column,
+                     size_type num_columns = npos) const;
+
   /// @returns the content of a row wrapped into an value.
   caf::optional<value> row_to_value(size_type row, size_type first_column = 0u,
                                     size_type num_columns = npos) const;
