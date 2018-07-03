@@ -20,13 +20,13 @@ using namespace vast;
 using namespace std::literals;
 
 TEST(copying views) {
-  MESSAGE("calling view_t directly");
-  CHECK_EQUAL(view_t<caf::none_t>{caf::none}, caf::none);
-  CHECK_EQUAL(view_t<boolean>{true}, true);
-  CHECK_EQUAL(view_t<integer>{42}, 42);
-  CHECK_EQUAL(view_t<count>{42}, 42u);
-  CHECK_EQUAL(view_t<real>{4.2}, 4.2);
-  CHECK_EQUAL(view_t<port>(53, port::udp), port(53, port::udp));
+  MESSAGE("calling view directly");
+  CHECK_EQUAL(view<caf::none_t>{caf::none}, caf::none);
+  CHECK_EQUAL(view<boolean>{true}, true);
+  CHECK_EQUAL(view<integer>{42}, 42);
+  CHECK_EQUAL(view<count>{42}, 42u);
+  CHECK_EQUAL(view<real>{4.2}, 4.2);
+  CHECK_EQUAL(view<port>(53, port::udp), port(53, port::udp));
   MESSAGE("using make_view");
   CHECK_EQUAL(make_view(caf::none), caf::none);
   CHECK_EQUAL(make_view(true), true);
@@ -120,12 +120,12 @@ TEST(make_data_view) {
   CHECK(caf::holds_alternative<boolean>(x));
   auto str = "foo"s;
   x = make_data_view(str);
-  CHECK(caf::holds_alternative<view_t<std::string>>(x));
+  CHECK(caf::holds_alternative<view<std::string>>(x));
   CHECK(caf::holds_alternative<std::string_view>(x));
   auto xs = vector{42, true, "foo"};
   x = make_data_view(xs);
-  REQUIRE(caf::holds_alternative<view_t<vector>>(x));
-  auto v = caf::get<view_t<vector>>(x);
+  REQUIRE(caf::holds_alternative<view<vector>>(x));
+  auto v = caf::get<view<vector>>(x);
   REQUIRE_EQUAL(v->size(), 3u);
   CHECK_EQUAL(v->at(0), integer{42});
   CHECK_EQUAL(v->at(1), true);
