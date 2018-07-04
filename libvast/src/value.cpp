@@ -32,7 +32,9 @@ const vast::data& value::data() const {
 }
 
 value flatten(const value& v) {
-  return {flatten(v.data()), flatten(v.type())};
+  auto result = flatten(v.data(), v.type());
+  VAST_ASSERT(result);
+  return std::move(*result);
 }
 
 bool operator==(const value& lhs, const value& rhs) {
