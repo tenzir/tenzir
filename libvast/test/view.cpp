@@ -158,4 +158,11 @@ TEST(container comparison) {
   CHECK(make_view(xs) < make_view(ys));
   xs = map{{43, true}};
   CHECK(make_view(xs) > make_view(ys));
+  MESSAGE("strict weak ordering corner cases");
+  auto zs = set{1, 2, 3};
+  CHECK(!(view<set>{} < view<set>{}));
+  CHECK(view<set>{} < make_view(zs));
+  CHECK(!(make_view(zs) < view<set>{}));
+  CHECK(make_data_view(zs) < make_view(xs));
+  CHECK(!(make_view(xs) < make_data_view(zs)));
 }

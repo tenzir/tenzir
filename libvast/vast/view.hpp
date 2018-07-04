@@ -208,7 +208,11 @@ bool operator==(const container_view_handle<Pointer>& x,
 template <class Pointer>
 bool operator<(const container_view_handle<Pointer>& x,
                const container_view_handle<Pointer>& y) {
-  return x && y && *x < *y;
+  if (!x)
+    return static_cast<bool>(y);
+  if (!y)
+    return false;
+  return *x < *y;
 }
 
 namespace detail {
