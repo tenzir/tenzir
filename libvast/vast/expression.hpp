@@ -43,32 +43,34 @@ struct attribute_extractor : detail::totally_ordered<attribute_extractor> {
   attribute_extractor(std::string str = {});
 
   std::string attr;
-
-  friend bool operator==(const attribute_extractor&,
-                         const attribute_extractor&);
-  friend bool operator<(const attribute_extractor&,
-                        const attribute_extractor&);
-
-  template <class Inspector>
-  friend auto inspect(Inspector& f, attribute_extractor& ex) {
-    return f(ex.attr);
-  }
 };
+
+bool operator==(const attribute_extractor& x, const attribute_extractor& y);
+bool operator<(const attribute_extractor& x, const attribute_extractor& y);
+
+template <class Inspector>
+auto inspect(Inspector& f, attribute_extractor& x) {
+  return f(x.attr);
+}
 
 /// Extracts one or more values according to a given key.
 struct key_extractor : detail::totally_ordered<key_extractor> {
   key_extractor(vast::key k = {});
 
   vast::key key;
-
-  friend bool operator==(const key_extractor& lhs, const key_extractor& rhs);
-  friend bool operator<(const key_extractor& lhs, const key_extractor& rhs);
-
-  template <class Inspector>
-  friend auto inspect(Inspector& f, key_extractor& ex) {
-    return f(ex.key);
-  }
 };
+
+/// @relates key_extractor
+bool operator==(const key_extractor& x, const key_extractor& y);
+
+/// @relates key_extractor
+bool operator<(const key_extractor& x, const key_extractor& y);
+
+/// @relates key_extractor
+template <class Inspector>
+auto inspect(Inspector& f, key_extractor& x) {
+  return f(x.key);
+}
 
 /// Extracts one or more values according to a given type.
 struct type_extractor : detail::totally_ordered<type_extractor> {
@@ -76,14 +78,19 @@ struct type_extractor : detail::totally_ordered<type_extractor> {
 
   vast::type type;
 
-  friend bool operator==(const type_extractor& lhs, const type_extractor& rhs);
-  friend bool operator<(const type_extractor& lhs, const type_extractor& rhs);
-
-  template <class Inspector>
-  friend auto inspect(Inspector& f, type_extractor& ex) {
-    return f(ex.type);
-  }
 };
+
+/// @relates type_extractor
+bool operator==(const type_extractor& x, const type_extractor& y);
+
+/// @relates type_extractor
+bool operator<(const type_extractor& x, const type_extractor& y);
+
+/// @relates type_extractor
+template <class Inspector>
+auto inspect(Inspector& f, type_extractor& x) {
+  return f(x.type);
+}
 
 /// Extracts a specific data value from a type according to an offset. During
 /// AST resolution, the ::key_extractor generates multiple instantiations of
@@ -95,15 +102,19 @@ struct data_extractor : detail::totally_ordered<data_extractor> {
 
   vast::type type;
   vast::offset offset;
-
-  friend bool operator==(const data_extractor& lhs, const data_extractor& rhs);
-  friend bool operator<(const data_extractor& lhs, const data_extractor& rhs);
-
-  template <class Inspector>
-  friend auto inspect(Inspector& f, data_extractor& ex) {
-    return f(ex.type, ex.offset);
-  }
 };
+
+/// @relates data_extractor
+bool operator==(const data_extractor& x, const data_extractor& y);
+
+/// @relates data_extractor
+bool operator<(const data_extractor& x, const data_extractor& y);
+
+/// @relates data_extractor
+template <class Inspector>
+auto inspect(Inspector& f, data_extractor& x) {
+  return f(x.type, x.offset);
+}
 
 /// A predicate with two operands evaluated under a relational operator.
 struct predicate : detail::totally_ordered<predicate> {
@@ -123,15 +134,20 @@ struct predicate : detail::totally_ordered<predicate> {
   operand lhs;
   relational_operator op;
   operand rhs;
-
-  friend bool operator==(const predicate& lhs, const predicate& rhs);
-  friend bool operator<(const predicate& lhs, const predicate& rhs);
-
-  template <class Inspector>
-  friend auto inspect(Inspector& f, predicate& p) {
-    return f(p.lhs, p.op, p.rhs);
-  }
 };
+
+
+/// @relates predicate
+bool operator==(const predicate& x, const predicate& y);
+
+/// @relates predicate
+bool operator<(const predicate& x, const predicate& y);
+
+/// @relates predicate
+template <class Inspector>
+auto inspect(Inspector& f, predicate& x) {
+  return f(x.lhs, x.op, x.rhs);
+}
 
 /// A sequence of AND expressions.
 struct conjunction : std::vector<expression> {
@@ -158,17 +174,21 @@ struct negation : detail::totally_ordered<negation> {
   const expression& expr() const;
   expression& expr();
 
-  friend bool operator==(const negation& lhs, const negation& rhs);
-  friend bool operator<(const negation& lhs, const negation& rhs);
-
-  template <class Inspector>
-  friend auto inspect(Inspector& f, negation& n) {
-    return f(*n.expr_);
-  }
-
 private:
   std::unique_ptr<expression> expr_;
 };
+
+/// @relates negation
+bool operator==(const negation& x, const negation& y);
+
+/// @relates negation
+bool operator<(const negation& x, const negation& y);
+
+/// @relates negation
+template <class Inspector>
+auto inspect(Inspector& f, negation& x) {
+  return f(x.expr());
+}
 
 /// A query expression.
 class expression : detail::totally_ordered<expression> {
@@ -184,9 +204,7 @@ public:
   using node = caf::detail::tl_apply_t<types, caf::variant>;
 
   /// Default-constructs empty an expression.
-  expression(caf::none_t = caf::none) {
-    // nop
-  }
+  expression() = default;
 
   /// Constructs an expression.
   /// @param x The node to construct an expression from.
@@ -200,22 +218,28 @@ public:
     // nop
   }
 
-  // -- concepts ---------------------------------------------------------------
+  /// @cond PRIVATE
 
   const node& get_data() const;
   node& get_data();
 
-  friend bool operator==(const expression& lhs, const expression& rhs);
-  friend bool operator<(const expression& lhs, const expression& rhs);
-
-  template <class Inspector>
-  friend auto inspect(Inspector&f, expression& e) {
-    return f(e.node_);
-  }
+  /// @endcond
 
 private:
   node node_;
 };
+
+/// @relates expression
+bool operator==(const expression& x, const expression& y);
+
+/// @relates expression
+bool operator<(const expression& x, const expression& y);
+
+/// @relates expression
+template <class Inspector>
+auto inspect(Inspector&f, expression& x) {
+  return f(x.get_data());
+}
 
 /// Normalizes an expression such that:
 ///
