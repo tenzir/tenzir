@@ -88,7 +88,8 @@ TEST(parseable - expression) {
   CHECK(parsers::expr("x == 42 && ! :port == 53/udp && x == 42", expr));
   CHECK_EQUAL(expr, expression(conjunction{p1, negation{p2}, p1}));
   CHECK(parsers::expr("x > 0 && x < 42 && a.b == x.y", expr));
-  CHECK(parsers::expr("&time < now && &time > now", expr));
+  CHECK(parsers::expr("&time > 2018-07-04+12:00:00.0 "
+                      "&& &time < 2018-07-04+23:55:04.0", expr));
   auto x = caf::get_if<conjunction>(&expr);
   REQUIRE(x);
   REQUIRE_EQUAL(x->size(), 2u);

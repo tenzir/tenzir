@@ -122,8 +122,8 @@ struct ymdhms_parser : vast::parser<ymdhms_parser> {
                  .with([](auto x) { return x >= 0 && x <= 23; });
     auto min = integral_parser<int, 2, 2>{}
                  .with([](auto x) { return x >= 0 && x <= 59; });
-    auto sec = integral_parser<int, 2, 2>{}
-                 .with([](auto x) { return x >= 0 && x <= 60; });
+    auto sec = parsers::real_opt_dot
+                 .with([](auto x) { return x >= 0.0 && x <= 60.0; });
     return year >> '-' >> mon
         >> ~('-' >> day >> ~('+' >> hour >> ~(':' >> min >> ~(':' >> sec))));
   }
@@ -138,7 +138,7 @@ struct ymdhms_parser : vast::parser<ymdhms_parser> {
   bool parse(Iterator& f, const Iterator& l, timestamp& tp) const {
     using namespace std::chrono;
     using namespace date;
-    auto secs = 0;
+    auto secs = 0.0;
     auto mins = 0;
     auto hrs = 0;
     auto dys = 1;
@@ -152,8 +152,8 @@ struct ymdhms_parser : vast::parser<ymdhms_parser> {
     if (!p(f, l, yrs, mons, dhms))
       return false;
     sys_days ymd = year{yrs} / mons / dys;
-    auto delta = hours{hrs} + minutes{mins} + seconds{secs};
-    tp = timestamp{ymd} + delta;
+    auto delta = hours{hrs} + minutes{mins} + double_seconds{secs};
+    tp = timestamp{ymd} + duration_cast<timespan>(delta);
     return true;
   }
 };
