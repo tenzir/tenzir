@@ -23,12 +23,16 @@ pattern_view::pattern_view(const pattern& x) : pattern_{x.string()} {
   // nop
 }
 
-bool operator==(pattern_view x, pattern_view y) noexcept {
-  return x.pattern_ == y.pattern_;
-}
-
 std::string_view pattern_view::string() const {
   return pattern_;
+}
+
+bool operator==(pattern_view x, pattern_view y) noexcept {
+  return x.string() == y.string();
+}
+
+bool operator<(pattern_view x, pattern_view y) noexcept {
+  return x.string() < y.string();
 }
 
 // -- default_vector_view -----------------------------------------------------
@@ -107,15 +111,15 @@ Result materialize_container(const T& xs) {
 
 } // namespace <anonymous>
 
-vector materialize(vector_view_ptr xs) {
+vector materialize(vector_view_handle xs) {
   return materialize_container<vector>(xs);
 }
 
-set materialize(set_view_ptr xs) {
+set materialize(set_view_handle xs) {
   return materialize_container<set>(xs);
 }
 
-map materialize(map_view_ptr xs) {
+map materialize(map_view_handle xs) {
   return materialize_container<map>(xs);
 }
 

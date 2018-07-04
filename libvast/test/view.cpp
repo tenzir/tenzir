@@ -138,9 +138,31 @@ TEST(increment decrement container_view_iterator) {
   auto v = make_view(xs);
   auto it1 = v->begin();
   auto it2 = v->begin();
-  CAF_CHECK_EQUAL(it1.distance_to(it2), 0u);
+  CHECK_EQUAL(it1.distance_to(it2), 0u);
   ++it1;
-  CAF_CHECK_NOT_EQUAL(it1.distance_to(it2), 0u);
+  CHECK_NOT_EQUAL(it1.distance_to(it2), 0u);
   --it1;
-  CAF_CHECK_EQUAL(it1.distance_to(it2), 0u);
+  CHECK_EQUAL(it1.distance_to(it2), 0u);
+}
+
+TEST(container comparison) {
+  data xs = vector{42};
+  data ys = vector{42};
+  CHECK(make_view(xs) == make_view(ys));
+  CHECK(!(make_view(xs) < make_view(ys)));
+  caf::get<vector>(ys).push_back(0);
+  CHECK(make_view(xs) != make_view(ys));
+  CHECK(make_view(xs) < make_view(ys));
+  ys = map{{42, true}};
+  CHECK(make_view(xs) != make_view(ys));
+  CHECK(make_view(xs) < make_view(ys));
+  xs = map{{43, true}};
+  CHECK(make_view(xs) > make_view(ys));
+  MESSAGE("strict weak ordering corner cases");
+  auto zs = set{1, 2, 3};
+  CHECK(!(view<set>{} < view<set>{}));
+  CHECK(view<set>{} < make_view(zs));
+  CHECK(!(make_view(zs) < view<set>{}));
+  CHECK(make_data_view(zs) < make_view(xs));
+  CHECK(!(make_view(xs) < make_data_view(zs)));
 }
