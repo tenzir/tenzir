@@ -88,6 +88,14 @@ TEST(parseable - expression) {
   CHECK(parsers::expr("x == 42 && ! :port == 53/udp && x == 42", expr));
   CHECK_EQUAL(expr, expression(conjunction{p1, negation{p2}, p1}));
   CHECK(parsers::expr("x > 0 && x < 42 && a.b == x.y", expr));
+  CHECK(parsers::expr("&time < now && &time > now", expr));
+  auto x = caf::get_if<conjunction>(&expr);
+  REQUIRE(x);
+  REQUIRE_EQUAL(x->size(), 2u);
+  auto x0 = caf::get_if<predicate>(&x->at(0));
+  auto x1 = caf::get_if<predicate>(&x->at(1));
+  CHECK(caf::holds_alternative<attribute_extractor>(x0->lhs));
+  CHECK(caf::holds_alternative<attribute_extractor>(x1->lhs));
   MESSAGE("disjunction");
   CHECK(parsers::expr("x == 42 || :port == 53/udp || x == 42", expr));
   CHECK_EQUAL(expr, expression(disjunction{p1, p2, p1}));
