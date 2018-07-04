@@ -31,10 +31,17 @@ std::vector<event> events::bgpdump_txt;
 std::vector<event> events::random;
 
 std::vector<table_slice_ptr> events::bro_conn_log_slices;
-std::vector<table_slice_ptr> events::bro_dns_log_slices;
-std::vector<table_slice_ptr> events::bro_http_log_slices;
-std::vector<table_slice_ptr> events::bgpdump_txt_slices;
-std::vector<table_slice_ptr> events::random_slices;
+// std::vector<table_slice_ptr> events::bro_dns_log_slices;
+// std::vector<table_slice_ptr> events::bro_http_log_slices;
+// std::vector<table_slice_ptr> events::bgpdump_txt_slices;
+// std::vector<table_slice_ptr> events::random_slices;
+
+std::vector<const_table_slice_ptr> events::const_bro_conn_log_slices;
+// std::vector<const_table_slice_ptr> events::const_bro_http_log_slices;
+// std::vector<const_table_slice_ptr> events::const_bro_dns_log_slices;
+// std::vector<const_table_slice_ptr> events::const_bgpdump_txt_slices;
+// std::vector<const_table_slice_ptr> events::const_random_slices;
+
 
 events::events() {
   static bool initialized = false;
@@ -74,8 +81,12 @@ events::events() {
       auto first_id_in_slice = i->id();
       for (size_t j = 0; j < size; ++j) {
         auto& e = *i++;
-        builder->add(e.timestamp());
-        builder->recursive_add(e.data());
+        auto add_res = builder->add(e.timestamp());
+        if (!add_res)
+          FAIL("builder->add() failed");
+        auto rec_add_res = builder->recursive_add(e.data());
+        if (!rec_add_res)
+          FAIL("builder->recursive_add() failed");
       }
       slices.emplace_back(builder->finish());
       slices.back()->offset(first_id_in_slice);
@@ -88,10 +99,44 @@ events::events() {
     return slices;
   };
   bro_conn_log_slices = slice_up(bro_conn_log);
-  bro_dns_log_slices = slice_up(bro_dns_log);
-  bro_http_log_slices = slice_up(bro_http_log);
-  bgpdump_txt_slices = slice_up(bgpdump_txt);
-  random_slices = slice_up(random);
+  //bro_dns_log_slices = slice_up(bro_dns_log);
+  //bro_http_log_slices = slice_up(bro_http_log);
+  //bgpdump_txt_slices = slice_up(bgpdump_txt);
+  //random_slices = slice_up(random);
+  auto to_const_vector = [](const auto& xs) {
+    std::vector<const_table_slice_ptr> result;
+    result.reserve(xs.size());
+    result.insert(result.end(), xs.begin(), xs.end());
+    return result;
+  };
+  const_bro_conn_log_slices = to_const_vector(bro_conn_log_slices);
+  // const_bro_dns_log_slices = to_const_vector(bro_dns_log_slices);
+  // const_bro_http_log_slices = to_const_vector(bro_http_log_slices);
+  // const_bgpdump_txt_slices = to_const_vector(bgpdump_txt_slices);
+  // const_random_slices = to_const_vector(random_slices);
+  auto to_events = [](const auto& slices) {
+    std::vector<event> result;
+    for (auto& slice : slices) {
+      auto xs = slice->rows_to_events();
+      std::move(xs.begin(), xs.end(), std::back_inserter(result));
+    }
+    return result;
+  };
+#define SANITY_CHECK(event_vec, slice_vec)                                     \
+  {                                                                            \
+    auto flat_log = to_events(slice_vec);                                      \
+    REQUIRE_EQUAL(event_vec.size(), flat_log.size());                          \
+    for (size_t i = 0; i < event_vec.size(); ++i) {                            \
+      if (flatten(event_vec[i]) != flat_log[i]) {                              \
+        FAIL(#event_vec << " != " << #slice_vec);                              \
+      }                                                                        \
+    }                                                                          \
+  }
+  SANITY_CHECK(bro_conn_log, const_bro_conn_log_slices);
+  //SANITY_CHECK(bro_dns_log, const_bro_dns_log_slices);
+  //SANITY_CHECK(bro_http_log, const_bro_http_log_slices);
+  //SANITY_CHECK(bgpdump_txt, const_bgpdump_txt_slices);
+  //SANITY_CHECK(random, const_random_slices);
 }
 
 } // namespace fixtures

@@ -38,11 +38,20 @@ struct events {
   static std::vector<event> bgpdump_txt;
   static std::vector<event> random;
 
-  static std::vector<table_slice_ptr> bro_http_log_slices;
   static std::vector<table_slice_ptr> bro_conn_log_slices;
-  static std::vector<table_slice_ptr> bro_dns_log_slices;
-  static std::vector<table_slice_ptr> bgpdump_txt_slices;
-  static std::vector<table_slice_ptr> random_slices;
+  // TODO: table_slice::recursive_add flattens too much, why the following
+  //       slices won't work. However, flatten(value) is also broken
+  //       at the moment (cf. #3215), so we can't fix it until then.
+  // static std::vector<table_slice_ptr> bro_http_log_slices;
+  // static std::vector<table_slice_ptr> bro_dns_log_slices;
+  // static std::vector<table_slice_ptr> bgpdump_txt_slices;
+  // static std::vector<table_slice_ptr> random_slices;
+
+  static std::vector<const_table_slice_ptr> const_bro_conn_log_slices;
+  // static std::vector<const_table_slice_ptr> const_bro_http_log_slices;
+  // static std::vector<const_table_slice_ptr> const_bro_dns_log_slices;
+  // static std::vector<const_table_slice_ptr> const_bgpdump_txt_slices;
+  // static std::vector<const_table_slice_ptr> const_random_slices;
 
 private:
   template <class Reader>
