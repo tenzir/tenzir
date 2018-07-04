@@ -143,50 +143,6 @@ struct adder {
   data& self;
 };
 
-struct match_visitor {
-  bool operator()(const std::string& lhs, const pattern& rhs) const {
-    return rhs.match(lhs);
-  }
-
-  template <class T, class U>
-  bool operator()(const T&, const U&) const {
-    return false;
-  }
-};
-
-struct in_visitor {
-  bool operator()(const std::string& lhs, const std::string& rhs) const {
-    return rhs.find(lhs) != std::string::npos;
-  }
-
-  bool operator()(const std::string& lhs, const pattern& rhs) const {
-    return rhs.search(lhs);
-  }
-
-  bool operator()(const address& lhs, const subnet& rhs) const {
-    return rhs.contains(lhs);
-  }
-
-  bool operator()(const subnet& lhs, const subnet& rhs) const {
-    return rhs.contains(lhs);
-  }
-
-  template <class T>
-  bool operator()(const T& lhs, const set& rhs) const {
-    return std::find(rhs.begin(), rhs.end(), lhs) != rhs.end();
-  }
-
-  template <class T>
-  bool operator()(const T& lhs, const vector& rhs) const {
-    return std::find(rhs.begin(), rhs.end(), lhs) != rhs.end();
-  }
-
-  template <class T, class U>
-  bool operator()(const T&, const U&) const {
-    return false;
-  }
-};
-
 } // namespace <anonymous>
 
 data& data::operator+=(const data& rhs) {
@@ -203,22 +159,57 @@ bool operator<(const data& lhs, const data& rhs) {
 }
 
 bool evaluate(const data& lhs, relational_operator op, const data& rhs) {
+  auto check_match = [](const auto& x, const auto& y) {
+    return caf::visit(detail::overload(
+      [](const auto&, const auto&) {
+        return false;
+      },
+      [](const std::string& lhs, const pattern& rhs) {
+        return rhs.match(lhs);
+      }
+    ), x, y);
+  };
+  auto check_in = [](const auto& x, const auto& y) {
+    return caf::visit(detail::overload(
+      [](const auto&, const auto&) {
+        return false;
+      },
+      [](const std::string& lhs, const std::string& rhs) {
+        return rhs.find(lhs) != std::string::npos;
+      },
+      [](const std::string& lhs, const pattern& rhs) {
+        return rhs.search(lhs);
+      },
+      [](const address& lhs, const subnet& rhs) {
+        return rhs.contains(lhs);
+      },
+      [](const subnet& lhs, const subnet& rhs) {
+        return rhs.contains(lhs);
+      },
+      [](const auto& lhs, const vector& rhs) {
+        return std::find(rhs.begin(), rhs.end(), lhs) != rhs.end();
+      },
+      [](const auto& lhs, const set& rhs) {
+        return std::find(rhs.begin(), rhs.end(), lhs) != rhs.end();
+      }
+    ), x, y);
+  };
   switch (op) {
     default:
       VAST_ASSERT(!"missing case");
       return false;
     case match:
-      return caf::visit(match_visitor{}, lhs, rhs);
+      return check_match(lhs, rhs);
     case not_match:
-      return !caf::visit(match_visitor{}, lhs, rhs);
+      return !check_match(lhs, rhs);
     case in:
-      return caf::visit(in_visitor{}, lhs, rhs);
+      return check_in(lhs, rhs);
     case not_in:
-      return !caf::visit(in_visitor{}, lhs, rhs);
+      return !check_in(lhs, rhs);
     case ni:
-      return caf::visit(in_visitor{}, rhs, lhs);
+      return check_in(rhs, lhs);
     case not_ni:
-      return !caf::visit(in_visitor{}, rhs, lhs);
+      return !check_in(rhs, lhs);
     case equal:
       return lhs == rhs;
     case not_equal:
