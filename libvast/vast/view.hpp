@@ -104,27 +104,39 @@ struct view_trait<pattern> {
   using type = pattern_view;
 };
 
+template <class T>
+class container_view_handle;
 
 struct vector_view_ptr;
 struct set_view_ptr;
 struct map_view_ptr;
 
+// @relates view_trait
+using vector_view_handle = container_view_handle<vector_view_ptr>;
+
+// @relates view_trait
+using set_view_handle = container_view_handle<set_view_ptr>;
+
+// @relates view_trait
+using map_view_handle = container_view_handle<map_view_ptr>;
+
+
 /// @relates view_trait
 template <>
 struct view_trait<vector> {
-  using type = vector_view_ptr;
+  using type = vector_view_handle;
 };
 
 /// @relates view_trait
 template <>
 struct view_trait<set> {
-  using type = set_view_ptr;
+  using type = set_view_handle;
 };
 
 /// @relates view_trait
 template <>
 struct view_trait<map> {
-  using type = map_view_ptr;
+  using type = map_view_handle;
 };
 
 /// A type-erased view over variout types of data.
@@ -147,24 +159,6 @@ using data_view = caf::variant<
   view<map>
 >;
 
-/// @relates data_view
-bool operator==(const data_view& x, const data_view& y);
-
-/// @relates data_view
-bool operator!=(const data_view& x, const data_view& y);
-
-/// @relates data_view
-bool operator<(const data_view& x, const data_view& y);
-
-/// @relates data_view
-bool operator>(const data_view& x, const data_view& y);
-
-/// @relates data_view
-bool operator<=(const data_view& x, const data_view& y);
-
-/// @relates data_view
-bool operator>=(const data_view& x, const data_view& y);
-
 /// @relates view_trait
 template <>
 struct view_trait<data> {
@@ -177,6 +171,45 @@ struct container_view;
 /// @relates view_trait
 template <class T>
 using container_view_ptr = caf::intrusive_ptr<container_view<T>>;
+
+/// @relates container_view
+template <class Pointer>
+class container_view_handle
+  : detail::totally_ordered<container_view_handle<Pointer>> {
+public:
+  container_view_handle() = default;
+
+  container_view_handle(Pointer ptr) : ptr_{ptr} {
+    // nop
+  }
+
+  explicit operator bool() const {
+    return static_cast<bool>(ptr_);
+  }
+
+  auto operator->() const {
+    return ptr_.get();
+  }
+
+  const auto& operator*() const {
+    return *ptr_;
+  }
+
+private:
+  Pointer ptr_;
+};
+
+template <class Pointer>
+bool operator==(const container_view_handle<Pointer>& x,
+                const container_view_handle<Pointer>& y) {
+  return x && y && *x == *y;
+}
+
+template <class Pointer>
+bool operator<(const container_view_handle<Pointer>& x,
+               const container_view_handle<Pointer>& y) {
+  return x && y && *x < *y;
+}
 
 namespace detail {
 
@@ -385,11 +418,11 @@ std::string materialize(std::string_view x);
 
 pattern materialize(pattern_view x);
 
-vector materialize(vector_view_ptr xs);
+vector materialize(vector_view_handle xs);
 
-set materialize(set_view_ptr xs);
+set materialize(set_view_handle xs);
 
-map materialize(map_view_ptr xs);
+map materialize(map_view_handle xs);
 
 data materialize(data_view xs);
 

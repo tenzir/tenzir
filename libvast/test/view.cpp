@@ -156,7 +156,6 @@ TEST(container comparison) {
   ys = map{{42, true}};
   CHECK(make_view(xs) != make_view(ys));
   CHECK(make_view(xs) < make_view(ys));
-  ys = map{{42, false}};
-  CHECK(make_view(xs) != make_view(ys));
+  xs = map{{43, true}};
   CHECK(make_view(xs) > make_view(ys));
 }
