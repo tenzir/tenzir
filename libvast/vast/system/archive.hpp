@@ -15,12 +15,15 @@
 
 #include <vector>
 
-#include <caf/all.hpp>
+#include <caf/fwd.hpp>
+#include <caf/replies_to.hpp>
+#include <caf/stateful_actor.hpp>
+#include <caf/typed_actor.hpp>
+#include <caf/typed_event_based_actor.hpp>
 
-#include "vast/event.hpp"
-#include "vast/filesystem.hpp"
+#include "vast/fwd.hpp"
+#include "vast/ids.hpp"
 #include "vast/store.hpp"
-
 #include "vast/system/atoms.hpp"
 
 namespace vast::system {
@@ -34,7 +37,7 @@ struct archive_state {
 /// @relates archive
 // TODO: change the interface from 'vector<event>' to 'batch'.
 using archive_type = caf::typed_actor<
-  caf::reacts_to<caf::stream<event>>,
+  caf::reacts_to<caf::stream<const_table_slice_ptr>>,
   caf::reacts_to<std::vector<event>>,
   caf::replies_to<ids>::with<std::vector<event>>
 >;

@@ -14,9 +14,12 @@
 #include <algorithm>
 
 #include "vast/batch.hpp"
+#include "vast/event.hpp"
 #include "vast/expected.hpp"
 #include "vast/logger.hpp"
 #include "vast/segment_store.hpp"
+#include "vast/store.hpp"
+#include "vast/table_slice.hpp"
 
 #include "vast/concept/printable/stream.hpp"
 
@@ -71,14 +74,16 @@ archive(archive_type::stateful_pointer<archive_state> self,
                    self->system().render(result.error()));
       return result;
     },
-    [=](stream<event> in) {
+    [=](stream<const_table_slice_ptr> in) {
       self->make_sink(
         in,
         [](unit_t&) {
           // nop
         },
-        [=](unit_t&, const std::vector<event>& xs) {
-          handle_batch(xs);
+        [=](unit_t&, std::vector<const_table_slice_ptr>& batch) {
+          // TODO: port store to table slice API (#3214)
+          for (auto& slice : batch)
+            handle_batch(slice->rows_to_events());
         },
         [=](unit_t&, const error& err) {
           if (err) {
