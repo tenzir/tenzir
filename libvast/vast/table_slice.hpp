@@ -67,6 +67,9 @@ public:
                                     size_type first_column = 0u,
                                     size_type num_columns = npos) const;
 
+  std::vector<event> rows_to_events(size_type first_row = 0u,
+                                    size_type num_rows = npos) const;
+
   /// @returns the number of rows in the slice.
   inline size_type rows() const noexcept {
     return rows_;

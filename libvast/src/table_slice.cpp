@@ -16,6 +16,7 @@
 #include "caf/sum_type.hpp"
 
 #include "vast/detail/overload.hpp"
+#include "vast/event.hpp"
 #include "vast/value.hpp"
 
 namespace vast {
@@ -82,6 +83,23 @@ std::vector<value> table_slice::rows_to_values(size_type first_row,
       xs.emplace_back(materialize(*opt));
     }
     result.emplace_back(value::make(std::move(xs), value_layout));
+  }
+  return result;
+}
+
+std::vector<event> table_slice::rows_to_events(size_type first_row,
+                                               size_type num_rows) const {
+  using caf::get;
+  auto values = rows_to_values(first_row, num_rows, 1);
+  auto timestamps = rows_to_values(first_row, num_rows, 0, 1);
+  VAST_ASSERT(values.size() == timestamps.size());
+  std::vector<event> result;
+  result.reserve(values.size());
+  auto event_id = offset() + first_row;
+  for (size_t i = 0; i < values.size(); ++i) {
+    result.emplace_back(event::make(std::move(values[i])));
+    result.back().id(event_id++);
+    result.back().timestamp(get<timestamp>(get<vector>(timestamps[i])[0]));
   }
   return result;
 }
