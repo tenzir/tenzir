@@ -276,7 +276,7 @@ const data* get(const data& d, const offset& o) {
 
 caf::optional<vector> flatten(const vector& xs, const record_type& t) {
   if (xs.size() != t.fields.size())
-    return {};
+    return caf::none;
   vector result;
   for (auto i = 0u; i < xs.size(); ++i) {
     if (auto u = caf::get_if<record_type>(&t.fields[i].type)) {
@@ -287,12 +287,12 @@ caf::optional<vector> flatten(const vector& xs, const record_type& t) {
       } else if (auto ys = caf::get_if<vector>(&xs[i])) {
         auto sub_result = flatten(*ys, *u);
         if (!sub_result)
-          return {};
+          return caf::none;
         result.insert(result.end(),
                       std::make_move_iterator(sub_result->begin()),
                       std::make_move_iterator(sub_result->end()));
       } else {
-        return {};
+        return caf::none;
       }
     } else {
       // We could perform another type-check here, but that's technically
@@ -308,7 +308,7 @@ caf::optional<data> flatten(const data& x, type t) {
   auto r = caf::get_if<record_type>(&t);
   if (xs && r)
     return flatten(*xs, *r);
-  return {};
+  return caf::none;
 }
 
 namespace {
@@ -342,7 +342,7 @@ caf::optional<vector> unflatten(const vector& xs, const record_type& t) {
   auto i = size_t{0};
   if (consume(t, xs, i, result))
     return result;
-  return {};
+  return caf::none;
 }
 
 caf::optional<data> unflatten(const data& x, type t) {
@@ -350,7 +350,7 @@ caf::optional<data> unflatten(const data& x, type t) {
   auto r = caf::get_if<record_type>(&t);
   if (xs && r)
     return unflatten(*xs, *r);
-  return {};
+  return caf::none;
 }
 
 namespace {
