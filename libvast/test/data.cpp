@@ -52,8 +52,7 @@ TEST(tables) {
   CHECK(!ports.emplace("http", 8080u).second);
 }
 
-TEST(records) {
-  MESSAGE("construction");
+TEST(get) {
   auto v = vector{"foo", -42, 1001u, "x", port{443, port::tcp}};
   vector w{100, "bar", v};
   CHECK(v.size() == 5);
@@ -63,45 +62,31 @@ TEST(records) {
   CHECK(*get(w, offset{2}) == v);
   CHECK(*get(w, offset{2, 3}) == data{"x"});
   CHECK(*get(data{w}, offset{2, 2}) == data{1001u});
+}
+
+TEST(flatten) {
   MESSAGE("flatten");
-  auto structured =
-    vector{"foo", vector{-42, vector{1001u}}, "x", port{443, port::tcp}};
-  auto flat = vector{"foo", -42, 1001u, "x", port{443, port::tcp}};
-  auto flattened = flatten(structured);
-  CHECK(flattened == flat);
+  auto t = record_type{
+    {"a", string_type{}},
+    {"b", record_type{
+      {"c", integer_type{}},
+      {"d", vector_type{integer_type{}}}
+    }},
+    {"e", record_type{
+      {"f", address_type{}},
+      {"g", port_type{}}
+    }},
+    {"f", boolean_type{}}
+  };
+  auto xs = vector{"foo", vector{-42, vector{1, 2, 3}}, caf::none, true};
+  auto ys = vector{"foo", -42, vector{1, 2, 3}, caf::none, caf::none, true};
+  auto zs = flatten(xs, t);
+  REQUIRE(zs);
+  CHECK_EQUAL(*zs, ys);
   MESSAGE("unflatten");
-  auto t0 = record_type{
-    {"foo", string_type{}},
-    {"r0", record_type{{
-      {"i", integer_type{}},
-      {"r1", record_type{{
-        {"c", count_type{}}}}}}}},
-    {"bar", string_type{}},
-    {"baz", port_type{}}
-  };
-  auto attempt = unflatten(v, t0);
-  REQUIRE(attempt);
-  CHECK_EQUAL(*attempt, structured);
-  MESSAGE("nested unflatten");
-  auto t1 = record_type{
-    {"x0", record_type{{
-      {"x1", record_type{{
-        {"x2", integer_type{}}}}}}}},
-    {"y0", record_type{{
-      {"y1", record_type{{
-        {"y2", integer_type{}}}}}}}}
-  };
-  v = vector{42, 42};
-  structured = vector{vector{data{vector{42}}}, vector{data{vector{42}}}};
-  attempt = unflatten(v, t1);
-  REQUIRE(attempt);
-  CHECK_EQUAL(*attempt, structured);
-  MESSAGE("serialization");
-  std::string buf;
-  save(buf, structured);
-  decltype(structured) structured2;
-  load(buf, structured2);
-  CHECK(structured2 == structured);
+  zs = unflatten(ys, t);
+  REQUIRE(zs);
+  CHECK_EQUAL(*zs, xs);
 }
 
 TEST(construction) {

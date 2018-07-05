@@ -274,92 +274,83 @@ const data* get(const data& d, const offset& o) {
   return nullptr;
 }
 
-namespace {
-
-template <class Iterator>
-vector flatten(Iterator& f, Iterator l) {
-  vector xs;
-  xs.reserve(l - f);
-  for (; f != l; ++f) {
-    auto&& x = *f;
-    if (auto v = caf::get_if<vector>(&x)) {
-      auto begin = Iterator{v->begin()};
-      auto end = Iterator{v->end()};
-      auto ys = flatten(begin, end);
-      xs.insert(xs.end(),
-                std::make_move_iterator(ys.begin()),
-                std::make_move_iterator(ys.end()));
+caf::optional<vector> flatten(const vector& xs, const record_type& t) {
+  if (xs.size() != t.fields.size())
+    return caf::none;
+  vector result;
+  for (size_t i = 0; i < xs.size(); ++i) {
+    if (auto u = caf::get_if<record_type>(&t.fields[i].type)) {
+      if (caf::holds_alternative<caf::none_t>(xs[i])) {
+        result.reserve(result.size() + u->fields.size());
+        for (size_t j = 0; j < u->fields.size(); ++j)
+          result.emplace_back(caf::none);
+      } else if (auto ys = caf::get_if<vector>(&xs[i])) {
+        auto sub_result = flatten(*ys, *u);
+        if (!sub_result)
+          return caf::none;
+        result.insert(result.end(),
+                      std::make_move_iterator(sub_result->begin()),
+                      std::make_move_iterator(sub_result->end()));
+      } else {
+        return caf::none;
+      }
     } else {
-      xs.push_back(*f);
+      // We could perform another type-check here, but that's technically
+      // orthogonal to the objective of this function.
+      result.emplace_back(xs[i]);
     }
   }
-  return xs;
+  return result;
 }
 
-template <class Iterator>
-caf::optional<vector> unflatten(Iterator& f, Iterator l, const record_type& rec) {
-  vector xs;
-  xs.reserve(rec.fields.size());
-  for (auto& field : rec.fields)
-    if (f == l) {
-      return {};
-    } else if (auto rt = caf::get_if<record_type>(&field.type)) {
-      auto ys = unflatten(f, l, *rt);
-      if (!ys)
-        return ys;
-      xs.push_back(std::move(*ys));
+caf::optional<data> flatten(const data& x, type t) {
+  auto xs = caf::get_if<vector>(&x);
+  auto r = caf::get_if<record_type>(&t);
+  if (xs && r)
+    return flatten(*xs, *r);
+  return caf::none;
+}
+
+namespace {
+
+bool consume(const record_type& t, const vector& xs, size_t& i, vector& res) {
+  for (auto& field : t.fields) {
+    if (auto u = caf::get_if<record_type>(&field.type)) {
+      vector sub_res;
+      if (!consume(*u, xs, i, sub_res))
+        return false;
+      auto is_none = [](const auto& x) {
+        return caf::holds_alternative<caf::none_t>(x);
+      };
+      if (std::all_of(sub_res.begin(), sub_res.end(), is_none))
+        res.emplace_back(caf::none);
+      else
+        res.emplace_back(std::move(sub_res));
+    } else if (i == xs.size()) {
+      return false; // too few elements in vector
     } else {
-      xs.push_back(*f++);
+      res.emplace_back(xs[i++]);
     }
-  return xs;
+  }
+  return true;
 }
 
 } // namespace <anonymous>
 
-vector flatten(const vector& xs) {
-  auto f = xs.begin();
-  auto l = xs.end();
-  return flatten(f, l);
+caf::optional<vector> unflatten(const vector& xs, const record_type& t) {
+  vector result;
+  size_t i = 0;
+  if (consume(t, xs, i, result))
+    return result;
+  return caf::none;
 }
 
-vector flatten(vector&& xs) {
-  auto f = std::make_move_iterator(xs.begin());
-  auto l = std::make_move_iterator(xs.end());
-  return flatten(f, l);
-}
-
-data flatten(const data& x) {
+caf::optional<data> unflatten(const data& x, type t) {
   auto xs = caf::get_if<vector>(&x);
-  return xs ? flatten(*xs) : x;
-}
-
-data flatten(data&& x) {
-  auto xs = caf::get_if<vector>(&x);
-  return xs ? flatten(std::move(*xs)) : x;
-}
-
-caf::optional<vector> unflatten(const vector& xs, const record_type& rt) {
-  auto first = xs.begin();
-  auto last = xs.end();
-  return unflatten(first, last, rt);
-}
-
-caf::optional<vector> unflatten(vector&& xs, const record_type& rt) {
-  auto first = std::make_move_iterator(xs.begin());
-  auto last = std::make_move_iterator(xs.end());
-  return unflatten(first, last, rt);
-}
-
-caf::optional<vector> unflatten(const data& x, const type& t) {
-  auto xs = caf::get_if<vector>(&x);
-  auto rt = caf::get_if<record_type>(&t);
-  return xs && rt ? unflatten(*xs, *rt) : caf::optional<vector>{};
-}
-
-caf::optional<vector> unflatten(data&& x, const type& t) {
-  auto xs = caf::get_if<vector>(&x);
-  auto rt = caf::get_if<record_type>(&t);
-  return xs && rt ? unflatten(std::move(*xs), *rt) : caf::optional<vector>{};
+  auto r = caf::get_if<record_type>(&t);
+  if (xs && r)
+    return unflatten(*xs, *r);
+  return caf::none;
 }
 
 namespace {
@@ -376,7 +367,7 @@ json jsonize(const data& x) {
 
 bool convert(const vector& v, json& j) {
   json::array a(v.size());
-  for (auto i = 0u; i < v.size(); ++i)
+  for (size_t i = 0; i < v.size(); ++i)
     a[i] = jsonize(v[i]);
   j = std::move(a);
   return true;
@@ -384,7 +375,7 @@ bool convert(const vector& v, json& j) {
 
 bool convert(const set& s, json& j) {
   json::array a(s.size());
-  auto i = 0u;
+  size_t i = 0;
   for (auto& x : s)
     a[i++] = jsonize(x);
   j = std::move(a);
@@ -415,7 +406,7 @@ bool convert(const data& d, json& j, const type& t) {
     if (v->size() != rt->fields.size())
       return false;
     json::object o;
-    for (auto i = 0u; i < v->size(); ++i) {
+    for (size_t i = 0; i < v->size(); ++i) {
       auto& f = rt->fields[i];
       if (!convert((*v)[i], o[f.name], f.type))
         return false;

@@ -240,19 +240,15 @@ bool is_container(const data& x);
 const data* get(const vector& v, const offset& o);
 const data* get(const data& d, const offset& o);
 
-/// Flattens a vector.
+/// Flattens a vector recursively according to a record type such that only
+/// nested records are lifted into parent vector.
 /// @param xs The vector to flatten.
-/// @returns The flattened vector.
+/// @param t The record type according to which *xs* should be flattened.
+/// @returns The flattened vector if the nested structure of *xs* is congruent
+///           to *t*.
 /// @see unflatten
-vector flatten(const vector& xs);
-vector flatten(vector&& xs);
-
-/// Flattens a vector.
-/// @param x The vector to flatten.
-/// @returns The flattened vector as `data` if *x* is a `vector`.
-/// @see unflatten
-data flatten(const data& x);
-data flatten(data&& x);
+caf::optional<vector> flatten(const vector& xs, const record_type& t);
+caf::optional<data> flatten(const data& x, type t);
 
 /// Unflattens a vector according to a record type.
 /// @param xs The vector to unflatten according to *rt*.
@@ -260,16 +256,7 @@ data flatten(data&& x);
 /// @returns The unflattened vector of *xs* according to *rt*.
 /// @see flatten
 caf::optional<vector> unflatten(const vector& xs, const record_type& rt);
-caf::optional<vector> unflatten(vector&& xs, const record_type& rt);
-
-/// Unflattens a vector according to a record type.
-/// @param x The vector to unflatten according to *t*.
-/// @param t The type that defines the vector structure.
-/// @returns The unflattened vector of *x* according to *t* if *x* is a
-///          `vector` and *t* a `record_type`.
-/// @see flatten
-caf::optional<vector> unflatten(const data& x, const type& t);
-caf::optional<vector> unflatten(data&& x, const type& t);
+caf::optional<data> unflatten(const data& x, type t);
 
 /// Evaluates a data predicate.
 /// @param lhs The LHS of the predicate.
