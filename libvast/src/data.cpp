@@ -278,11 +278,11 @@ caf::optional<vector> flatten(const vector& xs, const record_type& t) {
   if (xs.size() != t.fields.size())
     return caf::none;
   vector result;
-  for (auto i = 0u; i < xs.size(); ++i) {
+  for (size_t i = 0; i < xs.size(); ++i) {
     if (auto u = caf::get_if<record_type>(&t.fields[i].type)) {
       if (caf::holds_alternative<caf::none_t>(xs[i])) {
         result.reserve(result.size() + u->fields.size());
-        for (auto j = 0u; j < u->fields.size(); ++j)
+        for (size_t j = 0; j < u->fields.size(); ++j)
           result.emplace_back(caf::none);
       } else if (auto ys = caf::get_if<vector>(&xs[i])) {
         auto sub_result = flatten(*ys, *u);
@@ -339,7 +339,7 @@ bool consume(const record_type& t, const vector& xs, size_t& i, vector& res) {
 
 caf::optional<vector> unflatten(const vector& xs, const record_type& t) {
   vector result;
-  auto i = size_t{0};
+  size_t i = 0;
   if (consume(t, xs, i, result))
     return result;
   return caf::none;
@@ -367,7 +367,7 @@ json jsonize(const data& x) {
 
 bool convert(const vector& v, json& j) {
   json::array a(v.size());
-  for (auto i = 0u; i < v.size(); ++i)
+  for (size_t i = 0; i < v.size(); ++i)
     a[i] = jsonize(v[i]);
   j = std::move(a);
   return true;
@@ -375,7 +375,7 @@ bool convert(const vector& v, json& j) {
 
 bool convert(const set& s, json& j) {
   json::array a(s.size());
-  auto i = 0u;
+  size_t i = 0;
   for (auto& x : s)
     a[i++] = jsonize(x);
   j = std::move(a);
@@ -406,7 +406,7 @@ bool convert(const data& d, json& j, const type& t) {
     if (v->size() != rt->fields.size())
       return false;
     json::object o;
-    for (auto i = 0u; i < v->size(); ++i) {
+    for (size_t i = 0; i < v->size(); ++i) {
       auto& f = rt->fields[i];
       if (!convert((*v)[i], o[f.name], f.type))
         return false;
