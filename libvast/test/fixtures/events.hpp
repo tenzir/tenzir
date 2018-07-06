@@ -58,6 +58,11 @@ struct events {
   static std::vector<table_slice_ptr> ascending_integers_slices;
   static std::vector<const_table_slice_ptr> const_ascending_integers_slices;
 
+  /// 10000 integer values, alternating between 0 and 1.
+  static std::vector<event> alternating_integers;
+  static std::vector<table_slice_ptr> alternating_integers_slices;
+  static std::vector<const_table_slice_ptr> const_alternating_integers_slices;
+
   static record_type bro_conn_log_layout();
 
   template <class... Ts>

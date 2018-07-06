@@ -36,6 +36,17 @@ std::vector<event> make_ascending_integers(size_t count) {
   return result;
 }
 
+std::vector<event> make_alternating_integers(size_t count) {
+  std::vector<event> result;
+  type layout = type{record_type{{"value", integer_type{}}}}.name("test::int");
+  for (size_t i = 0; i < count; ++i) {
+    result.emplace_back(event::make(vector{static_cast<integer>(i % 2)},
+                                    layout));
+    result.back().timestamp(epoch + std::chrono::seconds(i));
+  }
+  return result;
+}
+
 } // namespace <anonymous>
 
 size_t events::slice_size = 100;
@@ -62,6 +73,10 @@ std::vector<event> events::ascending_integers;
 std::vector<table_slice_ptr> events::ascending_integers_slices;
 std::vector<const_table_slice_ptr> events::const_ascending_integers_slices;
 
+std::vector<event> events::alternating_integers;
+std::vector<table_slice_ptr> events::alternating_integers_slices;
+std::vector<const_table_slice_ptr> events::const_alternating_integers_slices;
+
 record_type events::bro_conn_log_layout() {
   return const_bro_conn_log_slices[0]->layout();
 }
@@ -78,6 +93,7 @@ events::events() {
   bgpdump_txt = inhale<format::bgpdump::reader>(bgpdump::updates20140821);
   random = extract(vast::format::test::reader{42, 1000});
   ascending_integers = make_ascending_integers(10000);
+  alternating_integers = make_alternating_integers(10000);
   // Assign monotonic IDs to events starting at 0.
   auto i = id{0};
   auto assign = [&](auto& xs) {
@@ -90,6 +106,7 @@ events::events() {
   assign(bro_http_log);
   assign(bgpdump_txt);
   assign(ascending_integers);
+  assign(alternating_integers);
   MESSAGE("building slices of " << slice_size << " events each");
   auto slice_up = [&](const std::vector<event>& src) {
     VAST_ASSERT(src.size() > 0);
@@ -130,6 +147,7 @@ events::events() {
   //bgpdump_txt_slices = slice_up(bgpdump_txt);
   //random_slices = slice_up(random);
   ascending_integers_slices = slice_up(ascending_integers);
+  alternating_integers_slices = slice_up(alternating_integers);
   auto to_const_vector = [](const auto& xs) {
     std::vector<const_table_slice_ptr> result;
     result.reserve(xs.size());
@@ -142,6 +160,8 @@ events::events() {
   // const_bgpdump_txt_slices = to_const_vector(bgpdump_txt_slices);
   // const_random_slices = to_const_vector(random_slices);
   const_ascending_integers_slices = to_const_vector(ascending_integers_slices);
+  const_alternating_integers_slices
+    = to_const_vector(alternating_integers_slices);
   auto to_events = [](const auto& slices) {
     std::vector<event> result;
     for (auto& slice : slices) {
