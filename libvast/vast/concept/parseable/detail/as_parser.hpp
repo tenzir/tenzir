@@ -29,11 +29,6 @@ inline auto as_parser(char c) {
   return ignore(char_parser{c});
 }
 
-template <size_t N>
-auto as_parser(char const(&str)[N]) {
-  return ignore(string_parser{str});
-}
-
 inline auto as_parser(std::string str) {
   return ignore(string_parser{std::move(str)});
 }
