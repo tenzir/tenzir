@@ -883,6 +883,18 @@ struct sum_type_access<vast::type> {
 
 namespace vast {
 
+template <class Inspector, class T>
+auto make_inspect_fun() {
+  using fun = typename Inspector::result_type (*)(Inspector&, type&);
+  auto lambda = [](Inspector& g, type& ref) {
+    T tmp;
+    auto res = g(tmp);
+    ref = std::move(tmp);
+    return res;
+  };
+  return static_cast<fun>(lambda);
+}
+
 template <class Inspector, class... Ts>
 auto make_inspect(caf::detail::type_list<Ts...>) {
   return [](Inspector& f, type::inspect_helper& x) {
@@ -893,12 +905,7 @@ auto make_inspect(caf::detail::type_list<Ts...>) {
       using reference = type&;
       using fun = result_type (*)(Inspector&, reference);
       static fun tbl[] = {
-        [](Inspector& g, reference ref) -> result_type {
-          Ts tmp;
-          auto res = g(tmp);
-          ref = std::move(tmp);
-          return res;
-        }...
+        make_inspect_fun<Inspector, Ts>()...
       };
       return tbl[x.type_tag](f, x.x);
     }
