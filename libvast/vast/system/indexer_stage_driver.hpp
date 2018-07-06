@@ -88,7 +88,9 @@ private:
   /// Generates new partitions whenever the current partition becomes full.
   partition_factory factory_;
 
-  /// Stores how many rows approximately form one partition.
+  /// Threshold for closing partitions, i.e., the stage driver creates a new
+  /// partition once a slice pushes the size of the current partition to or
+  /// over this value.
   size_t max_partition_size_;
 };
 
