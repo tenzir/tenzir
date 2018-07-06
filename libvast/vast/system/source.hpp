@@ -69,6 +69,7 @@ struct source_state {
   using factory_type = table_slice_builder_ptr (*)(record_type);
 
   using downstream_manager = caf::broadcast_downstream_manager<table_slice_ptr>;
+
   // -- member variables -------------------------------------------------------
 
   /// Filters events, i.e., causes the source to drop all matching events.
