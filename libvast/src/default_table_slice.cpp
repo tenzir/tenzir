@@ -42,7 +42,7 @@ table_slice_builder_ptr default_table_slice::make_builder(record_type layout) {
 }
 
 table_slice_ptr default_table_slice::make(record_type layout,
-                                          std::vector<vector>& rows) {
+                                          const std::vector<vector>& rows) {
   auto builder = make_builder(std::move(layout));
   for (auto& row : rows)
     for (auto& item : row)
