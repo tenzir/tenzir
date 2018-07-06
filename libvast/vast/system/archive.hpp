@@ -35,7 +35,6 @@ struct archive_state {
 };
 
 /// @relates archive
-// TODO: change the interface from 'vector<event>' to 'batch'.
 using archive_type = caf::typed_actor<
   caf::reacts_to<caf::stream<const_table_slice_ptr>>,
   caf::reacts_to<std::vector<event>>,
