@@ -99,8 +99,10 @@ private:
 
 // -- related free functions ---------------------------------------------------
 
+/// @relates meta_index::interval
 bool operator==(const meta_index::interval&, const meta_index::interval&);
 
+/// @relates meta_index::interval
 inline bool operator!=(const meta_index::interval& x,
                        const meta_index::interval& y) {
   return !(x == y);
