@@ -48,35 +48,7 @@
 
 namespace vast {
 
-class address;
-class data;
-class json;
-class pattern;
-class port;
-class schema;
-class subnet;
-
 // -- type hierarchy ----------------------------------------------------------
-
-class abstract_type;
-struct none_type;
-struct boolean_type;
-struct integer_type;
-struct count_type;
-struct real_type;
-struct timespan_type;
-struct timestamp_type;
-struct string_type;
-struct pattern_type;
-struct address_type;
-struct subnet_type;
-struct port_type;
-struct enumeration_type;
-struct vector_type;
-struct set_type;
-struct map_type;
-struct record_type;
-struct alias_type;
 
 /// @relates type
 using concrete_types = caf::detail::type_list<
@@ -887,6 +859,18 @@ struct sum_type_access<vast::type> {
 
 namespace vast {
 
+template <class Inspector, class T>
+auto make_inspect_fun() {
+  using fun = typename Inspector::result_type (*)(Inspector&, type&);
+  auto lambda = [](Inspector& g, type& ref) {
+    T tmp;
+    auto res = g(tmp);
+    ref = std::move(tmp);
+    return res;
+  };
+  return static_cast<fun>(lambda);
+}
+
 template <class Inspector, class... Ts>
 auto make_inspect(caf::detail::type_list<Ts...>) {
   return [](Inspector& f, type::inspect_helper& x) {
@@ -897,12 +881,7 @@ auto make_inspect(caf::detail::type_list<Ts...>) {
       using reference = type&;
       using fun = result_type (*)(Inspector&, reference);
       static fun tbl[] = {
-        [](Inspector& g, reference ref) -> result_type {
-          Ts tmp;
-          auto res = g(tmp);
-          ref = std::move(tmp);
-          return res;
-        }...
+        make_inspect_fun<Inspector, Ts>()...
       };
       return tbl[x.type_tag](f, x.x);
     }

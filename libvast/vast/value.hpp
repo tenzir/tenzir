@@ -27,7 +27,7 @@ class value {
   friend access;
 
 public:
-  using types = data::types;
+  using types = vast::data::types;
 
   /// Constructs a type-safe value by checking whether the given data matches
   /// the given type.
