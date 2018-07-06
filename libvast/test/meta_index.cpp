@@ -28,8 +28,8 @@ using std::literals::operator""s;
 
 namespace {
 
-static constexpr size_t num_partitions = 4;
-static constexpr size_t num_events_per_parttion = 25;
+constexpr size_t num_partitions = 4;
+constexpr size_t num_events_per_parttion = 25;
 
 timestamp epoch;
 
