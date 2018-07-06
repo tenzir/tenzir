@@ -374,6 +374,14 @@ const type* record_type::at(const offset& o) const {
   return nullptr;
 }
 
+bool record_type::equals(const abstract_type& other) const {
+  return super::equals(other) && fields == downcast(other).fields;
+}
+
+bool record_type::less_than(const abstract_type& other) const {
+  return super::less_than(other) || fields < downcast(other).fields;
+}
+
 caf::optional<size_t> record_type::flat_index_at(offset o) const {
   // Empty offsets are invalid.
   if (o.empty())

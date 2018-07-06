@@ -110,12 +110,8 @@ TEST(equality comparison) {
 TEST(less-than comparison) {
   CHECK(!(type{} < type{}));
   CHECK(!(real_type{} < real_type{}));
-  auto x = string_type{}.name("a");
-  auto y = string_type{}.name("b");
-  CHECK(x < y);
-  x = x.name("b");
-  y = y.name("a");
-  CHECK(x > y);
+  CHECK(string_type{}.name("a") < string_type{}.name("b"));
+  CHECK(record_type{}.name("a") < record_type{}.name("b"));
 }
 
 TEST(strict weak ordering) {

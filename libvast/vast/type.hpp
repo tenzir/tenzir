@@ -638,13 +638,9 @@ struct record_type final : recursive_type<record_type> {
 
   std::vector<record_field> fields;
 
-  bool equals(const abstract_type& other) const final {
-    return super::equals(other) && fields == downcast(other).fields;
-  }
+  bool equals(const abstract_type& other) const final;
 
-  bool less_than(const abstract_type& other) const final {
-    return super::less_than(other) && fields < downcast(other).fields;
-  }
+  bool less_than(const abstract_type& other) const final;
 };
 
 /// An alias of another type.
