@@ -443,7 +443,7 @@ bool is_flat(const record_type& rec) {
 
 bool is_flat(const type& t) {
   auto r = get_if<record_type>(&t);
-  return r ? is_flat(*r) : true;
+  return !r || is_flat(*r);
 }
 
 size_t flat_size(const record_type& rec) {
