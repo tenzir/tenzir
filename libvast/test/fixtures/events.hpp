@@ -29,7 +29,7 @@ using namespace vast;
 struct events {
   events();
 
-  /// Size of all pre-filled slice vectors.
+  /// Maximum size of all generated slices.
   static size_t slice_size;
 
   static std::vector<event> bro_conn_log;
@@ -52,6 +52,18 @@ struct events {
   // static std::vector<const_table_slice_ptr> const_bro_dns_log_slices;
   // static std::vector<const_table_slice_ptr> const_bgpdump_txt_slices;
   // static std::vector<const_table_slice_ptr> const_random_slices;
+
+  /// 10000 ascending integer values, starting at 0.
+  static std::vector<event> ascending_integers;
+  static std::vector<table_slice_ptr> ascending_integers_slices;
+  static std::vector<const_table_slice_ptr> const_ascending_integers_slices;
+
+  static record_type bro_conn_log_layout();
+
+  template <class... Ts>
+  static std::vector<vector> make_rows(Ts... xs) {
+    return {make_vector(xs)...};
+  }
 
 private:
   template <class Reader>

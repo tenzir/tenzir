@@ -22,6 +22,22 @@
 
 namespace fixtures {
 
+namespace {
+
+timestamp epoch;
+
+std::vector<event> make_ascending_integers(size_t count) {
+  std::vector<event> result;
+  type layout = type{record_type{{"value", integer_type{}}}}.name("test::int");
+  for (size_t i = 0; i < count; ++i) {
+    result.emplace_back(event::make(vector{static_cast<integer>(i)}, layout));
+    result.back().timestamp(epoch + std::chrono::seconds(i));
+  }
+  return result;
+}
+
+} // namespace <anonymous>
+
 size_t events::slice_size = 100;
 
 std::vector<event> events::bro_conn_log;
@@ -42,6 +58,13 @@ std::vector<const_table_slice_ptr> events::const_bro_conn_log_slices;
 // std::vector<const_table_slice_ptr> events::const_bgpdump_txt_slices;
 // std::vector<const_table_slice_ptr> events::const_random_slices;
 
+std::vector<event> events::ascending_integers;
+std::vector<table_slice_ptr> events::ascending_integers_slices;
+std::vector<const_table_slice_ptr> events::const_ascending_integers_slices;
+
+record_type events::bro_conn_log_layout() {
+  return const_bro_conn_log_slices[0]->layout();
+}
 
 events::events() {
   static bool initialized = false;
@@ -54,6 +77,7 @@ events::events() {
   bro_http_log = inhale<format::bro::reader>(bro::http);
   bgpdump_txt = inhale<format::bgpdump::reader>(bgpdump::updates20140821);
   random = extract(vast::format::test::reader{42, 1000});
+  ascending_integers = make_ascending_integers(10000);
   // Assign monotonic IDs to events starting at 0.
   auto i = id{0};
   auto assign = [&](auto& xs) {
@@ -65,10 +89,12 @@ events::events() {
   i += 1000; // Cause an artificial gap in the ID sequence.
   assign(bro_http_log);
   assign(bgpdump_txt);
+  assign(ascending_integers);
   MESSAGE("building slices of " << slice_size << " events each");
   auto slice_up = [&](const std::vector<event>& src) {
     VAST_ASSERT(src.size() > 0);
-    auto layout = caf::get<record_type>(src.front().type());
+    VAST_ASSERT(caf::holds_alternative<record_type>(src[0].type()));
+    auto layout = caf::get<record_type>(src[0].type());
     record_field tstamp_field{"timestamp", timestamp_type{}};
     layout.fields.insert(layout.fields.begin(), std::move(tstamp_field));
     auto builder = default_table_slice::make_builder(std::move(layout));
@@ -103,6 +129,7 @@ events::events() {
   //bro_http_log_slices = slice_up(bro_http_log);
   //bgpdump_txt_slices = slice_up(bgpdump_txt);
   //random_slices = slice_up(random);
+  ascending_integers_slices = slice_up(ascending_integers);
   auto to_const_vector = [](const auto& xs) {
     std::vector<const_table_slice_ptr> result;
     result.reserve(xs.size());
@@ -114,6 +141,7 @@ events::events() {
   // const_bro_http_log_slices = to_const_vector(bro_http_log_slices);
   // const_bgpdump_txt_slices = to_const_vector(bgpdump_txt_slices);
   // const_random_slices = to_const_vector(random_slices);
+  const_ascending_integers_slices = to_const_vector(ascending_integers_slices);
   auto to_events = [](const auto& slices) {
     std::vector<event> result;
     for (auto& slice : slices) {
