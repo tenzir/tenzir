@@ -48,35 +48,7 @@
 
 namespace vast {
 
-class address;
-class data;
-class json;
-class pattern;
-class port;
-class schema;
-class subnet;
-
 // -- type hierarchy ----------------------------------------------------------
-
-class abstract_type;
-struct none_type;
-struct boolean_type;
-struct integer_type;
-struct count_type;
-struct real_type;
-struct timespan_type;
-struct timestamp_type;
-struct string_type;
-struct pattern_type;
-struct address_type;
-struct subnet_type;
-struct port_type;
-struct enumeration_type;
-struct vector_type;
-struct set_type;
-struct map_type;
-struct record_type;
-struct alias_type;
 
 /// @relates type
 using concrete_types = caf::detail::type_list<

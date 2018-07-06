@@ -19,8 +19,10 @@ namespace vast {
 
 // -- classes ------------------------------------------------------------------
 
+class abstract_type;
 class address;
 class column_index;
+class data;
 class default_table_slice;
 class default_table_slice_builder;
 class event;
