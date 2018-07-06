@@ -415,7 +415,9 @@ caf::optional<size_t> record_type::flat_index_at(offset o) const {
 }
 
 record_type flatten(const record_type& rec) {
-  record_type result;
+  /// Make a copy of the original to keep name and attributes.
+  record_type result = rec;
+  result.fields.clear();
   for (auto& outer : rec.fields)
     if (auto r = get_if<record_type>(&outer.type)) {
       auto flat = flatten(*r);
