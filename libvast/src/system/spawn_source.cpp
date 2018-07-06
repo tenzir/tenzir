@@ -84,7 +84,7 @@ expected<actor> spawn_source(local_actor* self, options& opts) {
       return make_error(ec::syntax_error, r.error);
     format::pcap::reader reader{input, cutoff, flow_max, flow_age, flow_expiry,
                                 pseudo_realtime};
-    src = self->spawn(source<format::pcap::reader>, std::move(reader));
+    src = self->spawn(default_source<format::pcap::reader>, std::move(reader));
 #endif
   } else if (format == "bro" || format == "bgpdump" || format == "mrt") {
     auto in = detail::make_input_stream(input, r.opts.count("uds") > 0);
@@ -92,13 +92,14 @@ expected<actor> spawn_source(local_actor* self, options& opts) {
       return in.error();
     if (format == "bro") {
       format::bro::reader reader{std::move(*in)};
-      src = self->spawn(source<format::bro::reader>, std::move(reader));
+      src = self->spawn(default_source<format::bro::reader>, std::move(reader));
     } else if (format == "bgpdump") {
       format::bgpdump::reader reader{std::move(*in)};
-      src = self->spawn(source<format::bgpdump::reader>, std::move(reader));
+      src = self->spawn(default_source<format::bgpdump::reader>,
+                        std::move(reader));
     } else if (format == "mrt") {
       format::mrt::reader reader{std::move(*in)};
-      src = self->spawn(source<format::mrt::reader>, std::move(reader));
+      src = self->spawn(default_source<format::mrt::reader>, std::move(reader));
     }
   } else if (format == "test") {
     auto seed = size_t{0};
@@ -112,7 +113,7 @@ expected<actor> spawn_source(local_actor* self, options& opts) {
     if (!r.error.empty())
       return make_error(ec::syntax_error, r.error);
     format::test::reader reader{seed, n, base};
-    src = self->spawn(source<format::test::reader>, std::move(reader));
+    src = self->spawn(default_source<format::test::reader>, std::move(reader));
     // Since the test source doesn't consume any data and only generates
     // events out of thin air, we use the input channel to specify the schema.
     schema_file = input;

@@ -11,12 +11,17 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
+#include "vast/meta_index.hpp"
 
 #include "vast/event.hpp"
 #include "vast/expression_visitors.hpp"
-#include "vast/meta_index.hpp"
+#include "vast/logger.hpp"
+#include "vast/table_index.hpp"
+#include "vast/table_slice.hpp"
 
 namespace vast {
+
+// -- member types -------------------------------------------------------------
 
 meta_index::interval::interval()
   : from(timestamp::max()),
@@ -30,6 +35,8 @@ meta_index::interval::interval(timestamp first, timestamp last)
   // nop
 }
 
+// -- properties ---------------------------------------------------------------
+
 caf::optional<meta_index::partition_synopsis> meta_index::
 operator[](const uuid& partition) const {
   auto i = partitions_.find(partition);
@@ -38,10 +45,22 @@ operator[](const uuid& partition) const {
   return caf::none;
 }
 
-void meta_index::add_one(interval& rng, const event& x) {
-  auto t = x.timestamp();
-  rng.from = std::min(rng.from, t);
-  rng.to = std::max(rng.to, t);
+void meta_index::add(const uuid& partition,
+                     const const_table_slice_ptr& slice) {
+  auto& rng = partitions_[partition].range;
+  // The first column always contains the timestamp.
+  for (size_t row = 0; row < slice->rows(); ++row) {
+    auto element = slice->at(row, 0);
+    if (!element) {
+      VAST_ERROR("cannot access element 0 in row", row);
+      continue;
+    }
+    if (auto tsv = caf::get_if<view<timestamp>>(&(*element))) {
+      auto ts = materialize(*tsv);
+      rng.from = std::min(rng.from, ts);
+      rng.to = std::max(rng.to, ts);
+    }
+  }
 }
 
 std::vector<uuid> meta_index::lookup(const expression& expr) const {

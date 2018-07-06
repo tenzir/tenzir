@@ -31,6 +31,7 @@ class path;
 class pattern;
 class port;
 class schema;
+class store;
 class subnet;
 class table_index;
 class table_slice;

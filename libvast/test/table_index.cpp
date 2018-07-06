@@ -24,6 +24,7 @@
 #include "vast/concept/printable/vast/error.hpp"
 #include "vast/concept/printable/vast/event.hpp"
 #include "vast/concept/printable/vast/expression.hpp"
+#include "vast/default_table_slice.hpp"
 #include "vast/table_index.hpp"
 
 using namespace vast;
@@ -52,8 +53,8 @@ struct fixture : fixtures::events, fixtures::filesystem {
     reset(std::move(*new_tbl));
   }
 
-  void add(event x) {
-    auto err = tbl->add(std::move(x));
+  void add(const_table_slice_ptr x) {
+    auto err = tbl->add(x);
     if (err)
       FAIL("error: " << err);
   }
@@ -65,20 +66,24 @@ struct fixture : fixtures::events, fixtures::filesystem {
 
 FIXTURE_SCOPE(table_index_tests, fixture)
 
-TEST(flat type) {
+TEST(integer values) {
   MESSAGE("generate table layout for flat integer type");
-  integer_type layout;
+  integer_type column_type;
+  record_type layout{{"value", column_type}};
   reset(make_table_index(directory, layout));
   MESSAGE("ingest test data (integers)");
-  std::vector<int> xs{1, 2, 3, 1, 2, 3, 1, 2, 3};
-  size_t next_id = 0;
-  for (auto i : xs)
-    add(event::make(i, layout, next_id++));
+  auto rows = make_rows(1, 2, 3, 1, 2, 3, 1, 2, 3);
+  auto slice = default_table_slice::make(layout, rows);
+  REQUIRE_NOT_EQUAL(slice.get(), nullptr);
+  REQUIRE_EQUAL(slice->columns(), 1u);
+  REQUIRE_EQUAL(slice->rows(), rows.size());
+  add(slice);
   auto res = [&](auto... args) {
-    return make_ids({args...}, xs.size());
+    return make_ids({args...}, rows.size());
   };
   MESSAGE("verify table index");
   auto verify = [&] {
+    CHECK_EQUAL(query("value == +1"), res(0, 3, 6));
     CHECK_EQUAL(query(":int == +1"), res(0, 3, 6));
     CHECK_EQUAL(query(":int == +2"), res(1, 4, 7));
     CHECK_EQUAL(query(":int == +3"), res(2, 5, 8));
@@ -89,40 +94,35 @@ TEST(flat type) {
   };
   verify();
   MESSAGE("(automatically) persist table index and restore from disk");
-  reset(make_table_index(directory, integer_type{}));
+  reset(make_table_index(directory, layout));
   MESSAGE("verify table index again");
   verify();
 }
 
 TEST(record type) {
   MESSAGE("generate table layout for record type");
-  auto tbl_type = record_type{
-    {"x", record_type{
-      {"a", integer_type{}},
-      {"b", boolean_type{}}
-    }},
-    {"y", record_type{
-      {"a", string_type{}}
-    }}
+  record_type layout {
+    {"x.a", integer_type{}},
+    {"x.b", boolean_type{}},
+    {"y.a", string_type{}},
   };
-  reset(make_table_index(directory, tbl_type));
+  reset(make_table_index(directory, layout));
   MESSAGE("ingest test data (records)");
   auto mk_row = [&](int x, bool y, std::string z) {
-    return value::make(vector{vector{x, y}, vector{std::move(z)}}, tbl_type);
+    return vector{x, y, std::move(z)};
   };
   // Some test data.
-  std::vector<value> xs{mk_row(1, true, "abc"),     mk_row(10, false, "def"),
-                        mk_row(5, true, "hello"),   mk_row(1, true, "d e f"),
-                        mk_row(15, true, "world"),  mk_row(5, true, "bar"),
-                        mk_row(10, false, "a b c"), mk_row(10, false, "baz"),
-                        mk_row(5, false, "foo"),    mk_row(1, true, "test")};
-  for (size_t i = 0; i < xs.size(); ++i) {
-    event x{xs[i]};
-    x.id(i);
-    add(std::move(x));
-  }
+  std::vector<vector> rows{mk_row(1, true, "abc"),     mk_row(10, false, "def"),
+                           mk_row(5, true, "hello"),   mk_row(1, true, "d e f"),
+                           mk_row(15, true, "world"),  mk_row(5, true, "bar"),
+                           mk_row(10, false, "a b c"), mk_row(10, false, "baz"),
+                           mk_row(5, false, "foo"),    mk_row(1, true, "test")};
+  auto slice = default_table_slice::make(layout, rows);
+  REQUIRE_EQUAL(slice->rows(), rows.size());
+  REQUIRE_EQUAL(slice->columns(), 3u);
+  add(slice);
   auto res = [&](auto... args) {
-    return make_ids({args...}, xs.size());
+    return make_ids({args...}, rows.size());
   };
   MESSAGE("verify table index");
   auto verify = [&] {
@@ -132,20 +132,18 @@ TEST(record type) {
   };
   verify();
   MESSAGE("(automatically) persist table index and restore from disk");
-  reset(make_table_index(directory, tbl_type));
+  reset(make_table_index(directory, layout));
   MESSAGE("verify table index again");
   verify();
 }
 
 TEST(bro conn logs) {
   MESSAGE("generate table layout for bro conn logs");
-  auto tbl_type = bro_conn_log[0].type();
-  reset(make_table_index(directory, tbl_type));
-  CHECK_EQUAL(tbl->num_meta_columns(), 2u);
+  auto layout = bro_conn_log_layout();
+  reset(make_table_index(directory, layout));
   MESSAGE("ingest test data (bro conn log)");
-  for (auto& entry : bro_conn_log) {
-    add(entry);
-  }
+  for (auto slice : const_bro_conn_log_slices)
+    add(slice);
   MESSAGE("verify table index");
   auto verify = [&] {
     CHECK_EQUAL(rank(query("id.resp_p == 995/?")), 53u);
@@ -164,7 +162,7 @@ TEST(bro conn logs) {
   };
   verify();
   MESSAGE("(automatically) persist table index and restore from disk");
-  reset(make_table_index(directory, tbl_type));
+  reset(make_table_index(directory, layout));
   MESSAGE("verify table index again");
   verify();
 }

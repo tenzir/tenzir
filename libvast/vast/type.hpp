@@ -638,13 +638,9 @@ struct record_type final : recursive_type<record_type> {
 
   std::vector<record_field> fields;
 
-  bool equals(const abstract_type& other) const final {
-    return super::equals(other) && fields == downcast(other).fields;
-  }
+  bool equals(const abstract_type& other) const final;
 
-  bool less_than(const abstract_type& other) const final {
-    return super::less_than(other) && fields < downcast(other).fields;
-  }
+  bool less_than(const abstract_type& other) const final;
 };
 
 /// An alias of another type.
@@ -664,6 +660,14 @@ record_type flatten(const record_type& rec);
 
 /// @relates type record_type
 type flatten(const type& t);
+
+/// Queries whether `rec` is a flattened record.
+/// @relates type record_type
+bool is_flat(const record_type& rec);
+
+/// Queries whether `rec` is a flattened record.
+/// @relates type record_type
+bool is_flat(const type& t);
 
 /// Computes the size of a flat representation of `rec`.
 size_t flat_size(const record_type& rec);

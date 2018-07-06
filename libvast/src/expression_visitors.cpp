@@ -409,7 +409,30 @@ expected<expression> type_resolver::operator()(const key_extractor& ex,
   disjunction dis;
   // First, interpret the key as a suffix of a record field name.
   if (auto r = caf::get_if<record_type>(&type_)) {
+    // TODO: unflattening the record type is only necessary, because
+    //       find_prefix etc. don't work on flat types [ch3224].
+    decltype(r) r_backup = r;
+    record_type tmp;
+    if (is_flat(*r)) {
+      tmp = unflatten(*r);
+      r = &tmp;
+    }
     auto suffixes = r->find_suffix(ex.key);
+    if (suffixes.empty()) {
+      // For a nested type, we try matching by suffix.
+      suffixes = r->find_suffix(ex.key);
+    }
+    // TODO: Fix the offsets if necessary. Should be unnecessary after
+    //       resolving [ch3224].
+    if (r == &tmp) {
+      for (auto& suffix : suffixes) {
+        auto flat_index = r->flat_index_at(suffix.first);
+        VAST_ASSERT(flat_index);
+        offset fixed_offset{*flat_index};
+        suffix.first = fixed_offset;
+      }
+      r = r_backup;
+    }
     // All suffixes must pass the type check, otherwise the RHS of a
     // predicate would be ambiguous.
     for (auto& pair : suffixes) {

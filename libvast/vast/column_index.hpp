@@ -28,24 +28,14 @@ namespace vast {
 
 // -- free functions -----------------------------------------------------------
 
-/// Creates a single column for the timestamp.
-/// @relates column_index
-caf::expected<column_index_ptr> make_time_index(path filename);
-
 /// Creates a single column for the type name.
 /// @relates column_index
-caf::expected<column_index_ptr> make_type_index(path filename);
+caf::expected<column_index_ptr> make_type_column_index(path filename);
 
-/// Creates a single colum for a value of non-record type `event_type`.
+/// Creates a single colum for a value at column `col`.
 /// @relates column_index
-caf::expected<column_index_ptr> make_flat_data_index(path filename,
-                                                     type event_type);
-
-/// Creates a single colum for a field of record type `event_type`.
-/// @relates column_index
-caf::expected<column_index_ptr> make_field_data_index(path filename,
-                                                      type field_type,
-                                                      offset off);
+caf::expected<column_index_ptr>
+make_column_index(path filename, type column_type, size_t column);
 
 // -- class definition ---------------------------------------------------------
 
@@ -71,7 +61,7 @@ public:
 
   /// Adds an event to the index.
   /// @pre `init()` was called previously.
-  virtual void add(const event& x) = 0;
+  virtual void add(const const_table_slice_ptr& x) = 0;
 
   /// Queries event IDs that fulfill the given predicate.
   /// @pre `init()` was called previously.

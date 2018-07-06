@@ -19,13 +19,16 @@
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/concept/printable/std/chrono.hpp"
-#include "vast/concept/printable/vast/event.hpp"
 #include "vast/concept/printable/to_string.hpp"
+#include "vast/concept/printable/vast/event.hpp"
+#include "vast/default_table_slice.hpp"
 #include "vast/detail/spawn_container_source.hpp"
 #include "vast/detail/spawn_generator_source.hpp"
 #include "vast/event.hpp"
 #include "vast/ids.hpp"
 #include "vast/query_options.hpp"
+#include "vast/table_slice.hpp"
+#include "vast/table_slice_builder.hpp"
 
 #include "fixtures/actor_system_and_events.hpp"
 
@@ -37,8 +40,6 @@ using namespace std::chrono;
 
 namespace {
 
-static constexpr size_t partition_size = 100;
-
 static constexpr size_t in_mem_partitions = 8;
 
 static constexpr size_t taste_count = 4;
@@ -49,20 +50,10 @@ const timestamp epoch;
 
 using interval = meta_index::interval;
 
-auto int_generator(int mod = std::numeric_limits<int>::max()) {
-  int i = 0;
-  return [i, mod]() mutable {
-    auto result = event::make(i % mod, integer_type{}, i);
-    result.timestamp(epoch + std::chrono::seconds(i));
-    ++i;
-    return result;
-  };
-}
-
 struct fixture : fixtures::deterministic_actor_system_and_events {
   fixture() {
     directory /= "index";
-    index = self->spawn(system::index, directory / "index", partition_size,
+    index = self->spawn(system::index, directory / "index", slice_size,
                         in_mem_partitions, taste_count, num_collectors);
   }
 
@@ -126,6 +117,13 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     return result;
   }
 
+  template <class T>
+  T first_n(T xs, size_t n) {
+    T result;
+    result.insert(result.end(), xs.begin(), xs.begin() + n);
+    return result;
+  }
+
   // Handle to the INDEX actor.
   caf::actor index;
 };
@@ -135,11 +133,13 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
 FIXTURE_SCOPE(index_tests, fixture)
 
 TEST(ingestion) {
-  MESSAGE("ingest 1000 integers");
-  auto src = detail::spawn_generator_source(sys, 1000, int_generator(), index);
+  MESSAGE("ingest " << ascending_integers.size() << " integers in slices of "
+                    << slice_size << " each");
+  auto slices = const_ascending_integers_slices;
+  auto src = detail::spawn_container_source(sys, slices, index);
   run_exhaustively();
   MESSAGE("verify partition index");
-  REQUIRE_EQUAL(state().part_index.size(), 10u);
+  REQUIRE_EQUAL(state().part_index.size(), slices.size());
   auto intervals = partition_intervals();
   CHECK_EQUAL(intervals[0], interval(epoch, epoch + 99s));
   CHECK_EQUAL(intervals[1], interval(epoch + 100s, epoch + 199s));
@@ -151,13 +151,13 @@ TEST(ingestion) {
   CHECK_EQUAL(intervals[7], interval(epoch + 700s, epoch + 799s));
   CHECK_EQUAL(intervals[8], interval(epoch + 800s, epoch + 899s));
   CHECK_EQUAL(intervals[9], interval(epoch + 900s, epoch + 999s));
+  // ...
 }
 
 TEST(one-shot integer query result) {
   MESSAGE("fill first " << taste_count << " partitions");
-  auto src = detail::spawn_generator_source(sys,
-                                            partition_size * taste_count,
-                                            int_generator(2), index);
+  auto slices = first_n(const_alternating_integers_slices, taste_count);
+  auto src = detail::spawn_container_source(sys, slices, index);
   run_exhaustively();
   MESSAGE("query half of the values");
   auto [query_id, hits, scheduled] = query(":int == 1");
@@ -165,7 +165,8 @@ TEST(one-shot integer query result) {
   CHECK_EQUAL(hits, taste_count);
   CHECK_EQUAL(scheduled, taste_count);
   ids expected_result;
-  for (size_t i = 0; i < (partition_size * taste_count) / 2; ++i) {
+  expected_result.append_bits(false, alternating_integers[0].id());
+  for (size_t i = 0; i < (slice_size * taste_count) / 2; ++i) {
     expected_result.append_bit(false);
     expected_result.append_bit(true);
   }
@@ -175,9 +176,8 @@ TEST(one-shot integer query result) {
 
 TEST(iterable integer query result) {
   MESSAGE("fill first " << (taste_count * 3) << " partitions");
-  auto src = detail::spawn_generator_source(sys,
-                                            partition_size * taste_count * 3,
-                                            int_generator(2), index);
+  auto slices = first_n(const_alternating_integers_slices, taste_count * 3);
+  auto src = detail::spawn_container_source(sys, slices, index);
   run_exhaustively();
   MESSAGE("query half of the values");
   auto [query_id, hits, scheduled] = query(":int == 1");
@@ -185,7 +185,8 @@ TEST(iterable integer query result) {
   CHECK_EQUAL(hits, taste_count * 3);
   CHECK_EQUAL(scheduled, taste_count);
   ids expected_result;
-  for (size_t i = 0; i < (partition_size * taste_count * 3) / 2; ++i) {
+  expected_result.append_bits(false, alternating_integers[0].id());
+  for (size_t i = 0; i < (slice_size * taste_count * 3) / 2; ++i) {
     expected_result.append_bit(false);
     expected_result.append_bit(true);
   }
@@ -196,8 +197,8 @@ TEST(iterable integer query result) {
 
 TEST(iterable bro conn log query result) {
   REQUIRE_EQUAL(bro_conn_log.size(), 8462u);
-  MESSAGE("ingest conn.log");
-  detail::spawn_container_source(sys, bro_conn_log, index);
+  MESSAGE("ingest conn.log slices");
+  detail::spawn_container_source(sys, const_bro_conn_log_slices, index);
   run_exhaustively();
   MESSAGE("issue field type query");
   {

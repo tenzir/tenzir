@@ -21,9 +21,10 @@
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/concept/printable/vast/expression.hpp"
 #include "vast/data.hpp"
+#include "vast/defaults.hpp"
+#include "vast/error.hpp"
 #include "vast/expression.hpp"
 #include "vast/expression_visitors.hpp"
-#include "vast/error.hpp"
 #include "vast/query_options.hpp"
 
 #include "vast/system/atoms.hpp"
@@ -124,7 +125,9 @@ expected<actor> spawn_importer(stateful_actor<node_state>* self,
   if (!r.error.empty())
     return make_error(ec::syntax_error, r.error);
   // FIXME: Notify exporters with a continuous query.
-  return self->spawn(importer, opts.dir / opts.label);
+  // TODO: make table slice size configurable
+  return self->spawn(importer, opts.dir / opts.label,
+                     defaults::system::table_slice_size);
 }
 
 expected<actor> spawn_index(local_actor* self, options& opts) {

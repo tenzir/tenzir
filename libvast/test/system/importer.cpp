@@ -13,12 +13,12 @@
 
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/vast/event.hpp"
-
+#include "vast/detail/spawn_container_source.hpp"
+#include "vast/event.hpp"
 #include "vast/system/archive.hpp"
 #include "vast/system/data_store.hpp"
 #include "vast/system/importer.hpp"
-
-#include "vast/detail/spawn_container_source.hpp"
+#include "vast/table_slice.hpp"
 
 #define SUITE import
 #include "test.hpp"
@@ -36,16 +36,36 @@ namespace {
 using event_buffer = std::vector<event>;
 using shared_event_buffer = std::shared_ptr<event_buffer>;
 
+template <class T>
+auto unbox(caf::optional<T> res) {
+  if (!res)
+    FAIL("unable to unbox " << caf::to_string(res));
+  return std::move(*res);
+}
+
 behavior dummy_sink(event_based_actor* self, shared_event_buffer buf) {
   return {
-    [=](stream<event> in) {
+    [=](stream<const_table_slice_ptr> in) {
       self->make_sink(
         in,
         [=](unit_t&) {
           // nop
         },
-        [=](unit_t&, event x) {
-          buf->push_back(std::move(x));
+        [=](unit_t&, const_table_slice_ptr x) {
+          using caf::get;
+          auto event_id = x->offset();
+          for (size_t row = 0; row < x->rows(); ++row) {
+            // Get the current row, skipping the timestamp.
+            auto row_data = unbox(x->row_to_value(row, 1));
+            // Get only the timestamp.
+            auto tstamp = unbox(x->row_to_value(row, 0, 1));
+            // Convert the row content back to an event.
+            auto e = event::make(row_data);
+            e.timestamp(get<timestamp>(get<vector>(tstamp.get_data()).front()));
+            e.id(event_id);
+            ++event_id;
+            buf->push_back(std::move(e));
+          }
         }
       );
     }
@@ -56,7 +76,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   fixture() {
     MESSAGE("spawn importer + store");
     directory /= "importer";
-    importer = self->spawn(system::importer, directory);
+    importer = self->spawn(system::importer, directory, slice_size);
     store = self->spawn(system::data_store<std::string, data>);
     self->send(importer, store);
     MESSAGE("run initialization code");
@@ -84,7 +104,8 @@ TEST(import with one subscriber) {
   sched.run();
   MESSAGE("spawn dummy source");
   auto src = vast::detail::spawn_container_source(self->system(),
-                                                  bro_conn_log, importer);
+                                                  bro_conn_log_slices,
+                                                  importer);
   sched.run_once();
   MESSAGE("loop until importer becomes idle");
   sched.run_dispatch_loop(credit_round_interval);
@@ -104,7 +125,8 @@ TEST(import with two subscribers) {
   sched.run();
   MESSAGE("spawn dummy source");
   auto src = vast::detail::spawn_container_source(self->system(),
-                                                  bro_conn_log, importer);
+                                                  bro_conn_log_slices,
+                                                  importer);
   sched.run_once();
   MESSAGE("loop until importer becomes idle");
   sched.run_dispatch_loop(credit_round_interval);

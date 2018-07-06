@@ -20,7 +20,6 @@
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/vast/expression.hpp"
 #include "vast/detail/assert.hpp"
-#include "vast/event.hpp"
 #include "vast/expression.hpp"
 #include "vast/filesystem.hpp"
 #include "vast/logger.hpp"
@@ -48,19 +47,14 @@ void indexer_state::init(table_index&& from) {
 }
 
 behavior indexer(stateful_actor<indexer_state>* self, path dir,
-                 type event_type) {
-  auto maybe_tbl = make_table_index(std::move(dir), event_type);
+                 record_type layout) {
+  auto maybe_tbl = make_table_index(std::move(dir), layout);
   if (!maybe_tbl) {
-    VAST_ERROR(self, "unable to generate table layout for", event_type);
+    VAST_ERROR(self, "unable to generate table layout for", layout);
     return {};
   }
   self->state.init(std::move(*maybe_tbl));
-  VAST_DEBUG(self, "operates for event", event_type);
-  auto handle_batch = [=](const std::vector<event>& xs) {
-    for (auto& x : xs)
-      if (x.type() == event_type)
-        self->state.tbl.add(x);
-  };
+  VAST_DEBUG(self, "operates for layout", layout);
   return {
     [=](const predicate& pred) {
       VAST_DEBUG(self, "got predicate:", pred);
@@ -70,22 +64,20 @@ behavior indexer(stateful_actor<indexer_state>* self, path dir,
       VAST_DEBUG(self, "got expression:", expr);
       return self->state.tbl.lookup(expr);
     },
-    [=](const std::vector<event>& xs) {
-      handle_batch(xs);
-    },
     [=](persist_atom) -> result<void> {
       if (auto err = self->state.tbl.flush_to_disk(); err != caf::none)
         return err;
       return caf::unit;
     },
-    [=](stream<event> in) {
+    [=](stream<const_table_slice_ptr> in) {
       self->make_sink(
         in,
         [](unit_t&) {
           // nop
         },
-        [=](unit_t&, const std::vector<event>& xs) {
-          handle_batch(xs);
+        [=](unit_t&, const std::vector<const_table_slice_ptr>& xs) {
+          for (auto& x : xs)
+            self->state.tbl.add(x);
         },
         [=](unit_t&, const error& err) {
           if (err) {

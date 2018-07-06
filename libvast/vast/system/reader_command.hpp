@@ -61,7 +61,7 @@ protected:
     if (!in)
       return in.error();
     Reader reader{std::move(*in)};
-    auto src = self->spawn(source<Reader>, std::move(reader));
+    auto src = self->spawn(default_source<Reader>, std::move(reader));
     // Supply an alternate schema, if requested.
     auto schema_file = get_or(options, "schema",
                               defaults::command::schema_path);

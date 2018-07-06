@@ -16,8 +16,10 @@
 
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
-#include "vast/event.hpp"
+#include "vast/default_table_slice.hpp"
 #include "vast/meta_index.hpp"
+#include "vast/table_slice.hpp"
+#include "vast/table_slice_builder.hpp"
 #include "vast/uuid.hpp"
 
 using namespace vast;
@@ -26,50 +28,54 @@ using std::literals::operator""s;
 
 namespace {
 
-static constexpr size_t num_partitions = 4;
-static constexpr size_t num_events_per_parttion = 25;
-static constexpr size_t num_events_per_type = 20;
+constexpr size_t num_partitions = 4;
+constexpr size_t num_events_per_parttion = 25;
 
 timestamp epoch;
+
+timestamp get_timestamp(caf::optional<data_view> element){
+  return materialize(caf::get<view<timestamp>>(*element));
+}
 
 // Builds a chain of events that are 1s apart, where consecutive chunk of
 // num_events_per_type events have the same type (order: integer, string,
 // boolean, real).
 struct generator {
-  size_t i;
+  id offset;
 
-  generator(size_t first_event_id) : i(first_event_id) {
+  explicit generator(size_t first_event_id) : offset(first_event_id) {
     // nop
   }
 
-  event operator()() {
-    event result;
-    switch  (i / num_events_per_type) {
-      case 0: result = event::make(i * i, integer_type{}); break;
-      case 1: result = event::make("foo" + std::to_string(i)); break;
-      case 2: result = event::make(i % 2 == 0, boolean_type{}); break;
-      case 3: result = event::make(1.0 / i, real_type{}); break;
-      case 4: result = event::make(vector{i}, vector_type{}); break;
-      default: FAIL("trying to create too many events using the generator");
+  const_table_slice_ptr operator()(size_t num) {
+    record_type layout = record_type{
+      {"timestamp", timestamp_type{}},
+      {"content", string_type{}}
+    };
+    auto builder = default_table_slice::make_builder(layout);
+    auto str = "foo";
+    for (size_t i = 0; i < num; ++i) {
+      auto ts = epoch + std::chrono::seconds(i + offset);
+      builder->add(make_data_view(ts));
+      builder->add(make_data_view(str));
     }
-    result.id(i);
-    result.timestamp(epoch + std::chrono::seconds(i));
-    ++i;
-    return result;
+    auto slice = builder->finish();
+    slice->offset(offset);
+    offset += num;
+    return slice;
   }
 };
 
 struct mock_partition {
   mock_partition(uuid uid, size_t num) : id(std::move(uid)) {
     generator g{num_events_per_parttion * num};
-    for (size_t i = 0; i < num_events_per_parttion; ++i)
-      events.emplace_back(g());
-    range.from = events.front().timestamp();
-    range.to = events.back().timestamp();
+    slice = g(num_events_per_parttion);
+    range.from = get_timestamp(slice->at(0, 0));
+    range.to = get_timestamp(slice->at(slice->rows() - 1, 0));
   }
 
   uuid id;
-  std::vector<event> events;
+  const_table_slice_ptr slice;
   meta_index::interval range;
 };
 
@@ -143,7 +149,7 @@ TEST(uuid lookup) {
   std::vector<mock_partition> mock_partitions;
   for (size_t i = 0; i < num_partitions; ++i) {
     auto& mp = mock_partitions.emplace_back(ids[i], i);
-    uut.add(mp.id, mp.events);
+    uut.add(mp.id, mp.slice);
   }
   MESSAGE("verify generated timestamps");
   {

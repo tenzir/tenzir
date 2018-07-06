@@ -18,14 +18,15 @@
 #include "vast/load.hpp"
 #include "vast/logger.hpp"
 #include "vast/save.hpp"
+#include "vast/table_slice.hpp"
 
 namespace vast {
 
-caf::expected<table_index> make_table_index(path base_dir, type layout) {
+caf::expected<table_index> make_table_index(path base_dir, record_type layout) {
   caf::error err;
-  table_index result{layout, base_dir};
+  table_index result{std::move(layout), base_dir};
   result.columns_.resize(table_index::meta_column_count
-                         + flat_size(layout));
+                         + flat_size(result.layout()));
   return result;
 }
 // -- constructors, destructors, and assignment operators ----------------------
@@ -54,6 +55,7 @@ caf::error table_index::flush_to_disk() {
 /// -- properties --------------------------------------------------------------
 
 column_index& table_index::at(size_t column_index) {
+  VAST_ASSERT(column_index < columns_.size());
   return *columns_[column_index];
 }
 
@@ -67,8 +69,9 @@ column_index* table_index::by_name(std::string_view column_name) {
   return i != columns_.end() ? i->get() : nullptr;
 }
 
-caf::error table_index::add(const event& x) {
-  VAST_ASSERT(x.type() == layout_);
+caf::error table_index::add(const const_table_slice_ptr& x) {
+  VAST_ASSERT(x != nullptr);
+  VAST_ASSERT(x->layout() == layout());
   VAST_TRACE(VAST_ARG(x));
   if (dirty_) {
     for (auto& col : columns_) {
@@ -81,42 +84,31 @@ caf::error table_index::add(const event& x) {
     col.add(x);
     return caf::none;
   };
-  auto mk_time = [&] { return make_time_index(meta_dir() / "time"); };
-  auto mk_type = [&] { return make_type_index(meta_dir() / "type"); };
+  auto mk_type = [&] { return make_type_column_index(meta_dir() / "type"); };
   return caf::error::eval(
     [&] {
-      // Column 0 is our meta index for the time.
-      return with_meta_column(0, mk_time, fun);
-    },
-    [&] {
-      // Column 1 is our meta index for the event type.
-      return with_meta_column(1, mk_type, fun);
+      // Column 0 is our meta index for the event type.
+      return with_meta_column(0, mk_type, fun);
     },
     [&]() -> caf::error {
-      // Coluns 2-N are our data fields.
-      auto r = caf::get_if<record_type>(&layout_);
-      if (!r) {
-        auto fac = [&] {
-          return make_flat_data_index(data_dir(), layout_);
-        };
-        return with_data_column(0, fac, fun);
-      }
+      // Coluns 1-N are our data fields.
       // Iterate all types of the record.
       size_t i = 0;
-      for (auto&& f : record_type::each{*r}) {
+      for (auto&& f : record_type::each{layout()}) {
         auto& value_type = f.trace.back()->type;
-        if (!has_skip_attribute(layout_)) {
+        if (!has_skip_attribute(layout())) {
           auto dir = data_dir();
           for (auto& k : f.key())
             dir /= k;
           auto fac = [&] {
             VAST_DEBUG("make field indexer at offset", f.offset, "with type",
                        value_type);
-            return make_field_data_index(dir, value_type, f.offset);
+            return make_column_index(dir, value_type, i);
           };
-          auto err = with_data_column(i++, fac, fun);
+          auto err = with_data_column(i, fac, fun);
           if (err)
             return err;
+          ++i;
         }
       }
       return caf::none;
@@ -143,7 +135,7 @@ caf::expected<bitmap> table_index::lookup(const predicate& pred) {
   if (!rhs)
     return ec::invalid_query;
   // Specialize the predicate for the type.
-  auto resolved = type_resolver{layout_}(pred);
+  auto resolved = type_resolver{type_erased_layout_}(pred);
   if (!resolved)
     return std::move(resolved.error());
   return lookup_impl(*resolved);
@@ -152,7 +144,7 @@ caf::expected<bitmap> table_index::lookup(const predicate& pred) {
 caf::expected<bitmap> table_index::lookup(const expression& expr) {
   VAST_TRACE(VAST_ARG(expr));
   // Specialize the expression for the type.
-  type_resolver resolver{layout_};
+  type_resolver resolver{type_erased_layout_};
   auto resolved = caf::visit(resolver, expr);
   if (!resolved)
     return std::move(resolved.error());
@@ -230,20 +222,25 @@ caf::expected<bitmap> table_index::lookup_impl(const predicate& pred,
   VAST_IGNORE_UNUSED(x);
   // We know that the columns vector contains two meta fields: time at index
   // 0 and type at index 1.
-  static_assert(table_index::meta_column_count == 2);
+  static_assert(table_index::meta_column_count == 1);
   VAST_ASSERT(columns_.size() >= table_index::meta_column_count);
-  if (ex.attr == "time") {
-    VAST_ASSERT(caf::holds_alternative<timestamp>(x));
-    auto fac = [&] { return make_time_index(meta_dir() / "time"); };
-    return with_meta_column(0, fac, [&](column_index& col) {
-      return col.lookup(pred);
-    });
-  } else if (ex.attr == "type") {
+  if (ex.attr == "type") {
     VAST_ASSERT(caf::holds_alternative<std::string>(x));
-    auto fac = [&] { return make_type_index(meta_dir() / "type"); };
+    auto fac = [&] { return make_type_column_index(meta_dir() / "type"); };
     return with_meta_column(1, fac, [&](column_index& col) {
       return col.lookup(pred);
     });
+  } else if (ex.attr == "time") {
+    // TODO: reconsider whether we still want to support "&time ..." queries.
+    /// We assume column 0 to hold the timestamp.
+    VAST_ASSERT(caf::holds_alternative<timestamp>(x));
+    if (layout().fields.empty() || layout().fields[0].type != timestamp_type{})
+      return ec::invalid_query;
+    record_type rs_rec{{"timestamp", timestamp_type{}}};
+    type t = rs_rec;
+    data_extractor dx{t, vast::offset{0}};
+    // Redirect to ordinary data lookup on column 0.
+    return lookup_impl(pred, dx, x);
   }
   VAST_WARNING("unsupported attribute:", ex.attr);
   return ec::invalid_query;
@@ -255,42 +252,37 @@ caf::expected<bitmap> table_index::lookup_impl(const predicate& pred,
   VAST_TRACE(VAST_ARG(pred), VAST_ARG(dx), VAST_ARG(x));
   VAST_IGNORE_UNUSED(x);
   if (dx.offset.empty()) {
-    VAST_ASSERT(num_data_columns() == 1);
-    auto fac = [&] { return make_flat_data_index(data_dir(), layout_); };
-    return with_data_column(0, fac, [&](column_index& col) {
-      return col.lookup(pred);
-    });
-  } else {
-    auto r = caf::get<record_type>(dx.type);
-    auto k = r.resolve(dx.offset);
-    VAST_ASSERT(k);
-    auto t = r.at(dx.offset);
-    VAST_ASSERT(t);
-    auto fac = [&] {
-      auto p = data_dir();
-      for (auto& x : *k)
-        p /= x;
-      return make_field_data_index(p, *t, dx.offset);
-    };
-    auto index = r.flat_index_at(dx.offset);
-    if (!index) {
-      VAST_DEBUG("invalid offset for record type", dx.type);
-      return bitmap{};
-    }
-    return with_data_column(*index, fac, [&](column_index& col) {
-      return col.lookup(pred);
-    });
+    return bitmap{};
   }
+  auto r = caf::get<record_type>(dx.type);
+  auto k = r.resolve(dx.offset);
+  VAST_ASSERT(k);
+  auto t = r.at(dx.offset);
+  VAST_ASSERT(t);
+  auto index = r.flat_index_at(dx.offset);
+  if (!index) {
+    VAST_DEBUG("invalid offset for record type", dx.type);
+    return bitmap{};
+  }
+  auto fac = [&] {
+    auto p = data_dir();
+    for (auto& x : *k)
+      p /= x;
+    return make_column_index(p, *t, *index);
+  };
+  return with_data_column(*index, fac, [&](column_index& col) {
+    return col.lookup(pred);
+  });
   return bitmap{};
 }
 
 // -- constructors, destructors, and assignment operators ----------------------
 
-table_index::table_index(type layout, path base_dir)
-  : layout_(std::move(layout)),
+table_index::table_index(record_type layout, path base_dir)
+  : type_erased_layout_(std::move(layout)),
     base_dir_(std::move(base_dir)),
     dirty_(false) {
-  VAST_TRACE(VAST_ARG(layout_), VAST_ARG(base_dir_));
+  VAST_TRACE(VAST_ARG(type_erased_layout_), VAST_ARG(base_dir_));
 }
 
 } // namespace vast

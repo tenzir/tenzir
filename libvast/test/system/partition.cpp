@@ -24,10 +24,13 @@
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/type.hpp"
+#include "vast/default_table_slice.hpp"
 #include "vast/detail/overload.hpp"
+#include "vast/detail/spawn_container_source.hpp"
 #include "vast/event.hpp"
 #include "vast/ids.hpp"
 #include "vast/system/indexer.hpp"
+#include "vast/table_slice.hpp"
 
 #include "fixtures/actor_system_and_events.hpp"
 
@@ -72,7 +75,13 @@ std::vector<std::string> sorted_strings(const std::vector<T>& xs) {
 }
 
 struct fixture : fixtures::deterministic_actor_system_and_events {
-  fixture() : types{string_type{}, address_type{}, pattern_type{}} {
+  template <class T>
+  static record_type rec() {
+    return {{"value", T{}}};
+  }
+
+  fixture()
+    : layouts{rec<string_type>(), rec<address_type>(), rec<pattern_type>()} {
     min_running_actors = sys.registry().running();
   }
 
@@ -115,8 +124,8 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   /// The partition-under-test.
   partition_ptr put;
 
-  /// A vector with some event types for testing.
-  std::vector<type> types;
+  /// A vector with some layouts for testing.
+  std::vector<record_type> layouts;
 
   /// Directory where the manager is supposed to persist its state.
   path state_dir = directory / "indexer-manager";
@@ -136,10 +145,10 @@ TEST(shutdown indexers in destructor) {
   MESSAGE("start manager");
   put = make_dummy_partition();
   MESSAGE("add INDEXER actors");
-  for (auto& x : types)
+  for (auto& x : layouts)
     put->manager().get_or_add(x);
-  REQUIRE_EQUAL(running_indexers(), types.size());
-  CHECK_EQUAL(sorted_strings(put->types()), sorted_strings(types));
+  REQUIRE_EQUAL(running_indexers(), layouts.size());
+  CHECK_EQUAL(sorted_strings(put->layouts()), sorted_strings(layouts));
   MESSAGE("stop manager (and INDEXER actors)");
   put.reset();
   sched.run();
@@ -152,11 +161,11 @@ TEST(restore from meta data) {
   put = make_dummy_partition();
   REQUIRE_EQUAL(put->dirty(), false);
   MESSAGE("add INDEXER actors to first manager");
-  for (auto& x : types)
+  for (auto& x : layouts)
     put->manager().get_or_add(x);
   REQUIRE_EQUAL(put->dirty(), true);
-  REQUIRE_EQUAL(running_indexers(), types.size());
-  CHECK_EQUAL(sorted_strings(put->types()), sorted_strings(types));
+  REQUIRE_EQUAL(running_indexers(), layouts.size());
+  CHECK_EQUAL(sorted_strings(put->layouts()), sorted_strings(layouts));
   MESSAGE("stop first manager");
   put.reset();
   sched.run();
@@ -164,7 +173,7 @@ TEST(restore from meta data) {
   MESSAGE("start second manager and expect it to restore its persisted state");
   put = make_dummy_partition();
   REQUIRE_EQUAL(put->dirty(), false);
-  REQUIRE_EQUAL(sorted_strings(put->types()), sorted_strings(types));
+  REQUIRE_EQUAL(sorted_strings(put->layouts()), sorted_strings(layouts));
   put.reset();
   sched.run();
 }
@@ -173,20 +182,21 @@ TEST(integer rows lookup) {
   MESSAGE("generate partition for flat integer type");
   put = make_partition();
   MESSAGE("ingest test data (integers)");
-  integer_type layout;
-  std::vector<int> ints{1, 2, 3, 1, 2, 3, 1, 2, 3};
-  std::vector<event> events;
-  for (auto i : ints)
-    events.emplace_back(event::make(i, layout, events.size()));
-  auto res = [&](auto... args) {
-    return make_ids({args...}, events.size());
-  };
-  anon_send(put->manager().get_or_add(layout).first, events);
-  sched.run();
+  integer_type col_type;
+  record_type layout{{"value", col_type}};
+  auto rows = make_rows(1, 2, 3, 1, 2, 3, 1, 2, 3);
+  auto slice = default_table_slice::make(layout, rows);
+  std::vector<const_table_slice_ptr> slices{slice};
+  detail::spawn_container_source(sys, std::move(slices),
+                                 put->manager().get_or_add(layout).first);
+  run_exhaustively();
   MESSAGE("verify partition content");
+  auto res = [&](auto... args) {
+    return make_ids({args...}, rows.size());
+  };
   CHECK_EQUAL(query(":int == +1"), res(0, 3, 6));
   CHECK_EQUAL(query(":int == +2"), res(1, 4, 7));
-  CHECK_EQUAL(query(":int == +3"), res(2, 5, 8));
+  CHECK_EQUAL(query("value == +3"), res(2, 5, 8));
   CHECK_EQUAL(query(":int == +4"), res());
   CHECK_EQUAL(query(":int != +1"), res(1, 2, 4, 5, 7, 8));
   CHECK_EQUAL(query("!(:int == +1)"), res(1, 2, 4, 5, 7, 8));
@@ -197,9 +207,10 @@ TEST(single partition bro conn log lookup) {
   MESSAGE("generate partiton for bro conn log");
   put = make_partition();
   MESSAGE("ingest bro conn logs");
-  auto layout = bro_conn_log[0].type();
-  anon_send(put->manager().get_or_add(layout).first, bro_conn_log);
-  sched.run();
+  auto layout = bro_conn_log_layout();
+  auto indexer = put->manager().get_or_add(layout).first;
+  detail::spawn_container_source(sys, const_bro_conn_log_slices, indexer);
+  run_exhaustively();
   MESSAGE("verify partition content");
   auto res = [&](auto... args) {
     return make_ids({args...}, bro_conn_log.size());
@@ -211,13 +222,10 @@ TEST(multiple partitions bro conn log lookup no messaging) {
   // This test bypasses any messaging by reaching directly into the state of
   // each INDEXER actor.
   using indexer_type = caf::stateful_actor<indexer_state>;
-  static constexpr size_t part_size = 100;
-  MESSAGE("ingest bro conn logs into partitions of size " << part_size);
+  MESSAGE("ingest bro conn logs into partitions of size " << slice_size);
   std::vector<partition_ptr> partitions;
-  auto layout = bro_conn_log[0].type();
-  CAF_REQUIRE(caf::holds_alternative<record_type>(layout));
-  record_type flat_layout = flatten(caf::get<record_type>(layout));
-  for (size_t i = 0; i < bro_conn_log.size(); i += part_size) {
+  auto layout = bro_conn_log_layout();
+  for (auto& slice : const_bro_conn_log_slices) {
     auto ptr = make_partition(uuid::random());
     CHECK_EQUAL(exists(ptr->dir()), false);
     CHECK_EQUAL(ptr->dirty(), false);
@@ -227,8 +235,7 @@ TEST(multiple partitions bro conn log lookup no messaging) {
     idx.initialize();
     auto& tbl = idx.state.tbl;
     CHECK_EQUAL(tbl.dirty(), false);
-    for (size_t j = i; j < std::min(i + part_size, bro_conn_log.size()); ++j)
-      tbl.add(bro_conn_log[j]);
+    tbl.add(slice);
     CHECK_EQUAL(ptr->dirty(), true);
     CHECK_EQUAL(tbl.dirty(), true);
     partitions.emplace_back(std::move(ptr));
@@ -250,18 +257,15 @@ TEST(multiple partitions bro conn log lookup no messaging) {
       tbl.for_each_column([&](column_index* col) {
         REQUIRE(col != nullptr);
         CHECK(path_set.emplace(col->filename()).second);
-        auto idx_offset = std::min((i + 1) * part_size, bro_conn_log.size());
+        auto idx_offset = std::min((i + 1) * slice_size, bro_conn_log.size());
         CHECK_EQUAL(col->idx().offset(), idx_offset);
         if (col_id == 0) {
-          // First meta field is the timestamp.
-          CHECK_EQUAL(col->index_type(), timespan_type{});
-        } else if (col_id == 1) {
-          // Second meta field is the type.
+          // First (and only) meta field is the type.
           CHECK_EQUAL(col->index_type(), string_type{});
         } else {
           // Data field.
-          offset off{col_id - 2};
-          auto type_at_offset = flat_layout.at(off);
+          offset off{col_id - 1};
+          auto type_at_offset = layout.at(off);
           REQUIRE_NOT_EQUAL(type_at_offset, nullptr);
           CHECK_EQUAL(col->index_type(), *type_at_offset);
         }

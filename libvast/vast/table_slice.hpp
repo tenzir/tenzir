@@ -15,7 +15,9 @@
 
 #include <cstddef>
 #include <limits>
+#include <vector>
 
+#include <caf/allowed_unsafe_message_type.hpp>
 #include <caf/fwd.hpp>
 #include <caf/ref_counted.hpp>
 
@@ -51,6 +53,11 @@ public:
     return layout_;
   }
 
+  /// @returns the layout for columns in range
+  /// [first_column, first_column + num_columns).
+  record_type layout(size_type first_column,
+                     size_type num_columns = npos) const;
+
   /// @returns the content of a row wrapped into an value.
   caf::optional<value> row_to_value(size_type row, size_type first_column = 0u,
                                     size_type num_columns = npos) const;
@@ -59,6 +66,9 @@ public:
                                     size_type num_rows = npos,
                                     size_type first_column = 0u,
                                     size_type num_columns = npos) const;
+
+  std::vector<event> rows_to_events(size_type first_row = 0u,
+                                    size_type num_rows = npos) const;
 
   /// @returns the number of rows in the slice.
   inline size_type rows() const noexcept {
@@ -96,9 +106,25 @@ protected:
 };
 
 /// @relates table_slice
+bool operator==(const table_slice& x, const table_slice& y);
+
+/// @relates table_slice
+inline bool operator!=(const table_slice& x, const table_slice& y) {
+  return !(x == y);
+}
+
+/// @relates table_slice
 using table_slice_ptr = caf::intrusive_ptr<table_slice>;
 
 /// @relates table_slice
 using const_table_slice_ptr = caf::intrusive_ptr<const table_slice>;
 
 } // namespace vast
+
+CAF_ALLOW_UNSAFE_MESSAGE_TYPE(vast::table_slice_ptr)
+
+CAF_ALLOW_UNSAFE_MESSAGE_TYPE(std::vector<vast::table_slice_ptr>)
+
+CAF_ALLOW_UNSAFE_MESSAGE_TYPE(vast::const_table_slice_ptr)
+
+CAF_ALLOW_UNSAFE_MESSAGE_TYPE(std::vector<vast::const_table_slice_ptr>)
