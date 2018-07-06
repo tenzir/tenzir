@@ -32,7 +32,7 @@ namespace vast {
 
 /// Creates a column layout for the given type.
 /// @relates table_index
-caf::expected<table_index> make_table_index(path filename, type layout);
+caf::expected<table_index> make_table_index(path filename, record_type layout);
 
 // -- class definition ---------------------------------------------------------
 
@@ -42,7 +42,7 @@ public:
   // -- friend declarations ----------------------------------------------------
 
   friend caf::expected<table_index> make_table_index(path filename,
-                                                     type layout);
+                                                     record_type layout);
 
   // -- member and nested types ------------------------------------------------
 
@@ -54,8 +54,9 @@ public:
 
   // -- constants --------------------------------------------------------------
 
-  /// Number of columns holding meta information.
-  static constexpr std::ptrdiff_t meta_column_count = 2;
+  /// Number of columns holding meta information. Currently, we only store type
+  /// names as meta data.
+  static constexpr std::ptrdiff_t meta_column_count = 1;
 
   // -- constructors, destructors, and assignment operators --------------------
 
@@ -153,8 +154,10 @@ public:
   }
 
   /// Returns the type defining this table's layout.
-  inline const type& layout() const {
-    return layout_;
+  inline const record_type& layout() const {
+    // Always safe, because the only way to construct a table_index is with a
+    // record_type.
+    return caf::get<record_type>(type_erased_layout_);
   }
 
   /// Returns whether `add` was called at least once.
@@ -168,9 +171,9 @@ public:
   /// Returns the base directory for data column indexes.
   path data_dir() const;
 
-  /// Indexes an event for all columns.
-  /// @param x Event for ingestion.
-  caf::error add(const event& x);
+  /// Indexes a slice for all columns.
+  /// @param x Table slice for ingestion.
+  caf::error add(const const_table_slice_ptr& x);
 
   /// Queries event IDs that fulfill the given predicate on any column.
   /// @pre `init()` was called previously.
@@ -196,19 +199,20 @@ private:
 
   // -- constructors, destructors, and assignment operators --------------------
 
-  table_index(type layout, path base_dir);
+  table_index(record_type layout, path base_dir);
 
   // -- member variables -------------------------------------------------------
 
-  /// Stores the indexed type whose fields form our columns.
-  const type layout_;
+  /// Stores `layout_` in a type-erased handle. We need this type-erased
+  /// representation in a few instances such as expression visitors.
+  type type_erased_layout_;
 
   /// Columns of our type-dependant layout. Lazily filled for columns data to
   /// delay file I/O until a column is accessed by the user.
   columns_vector columns_;
 
   /// Base directory for all children column indexes.
-  const path base_dir_;
+  path base_dir_;
 
   /// Allows a shortcut in `add` if all columns are initialized.
   bool dirty_;

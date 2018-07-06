@@ -20,6 +20,7 @@
 #include "vast/logger.hpp"
 #include "vast/meta_index.hpp"
 #include "vast/system/partition.hpp"
+#include "vast/table_slice.hpp"
 
 namespace vast::system {
 
@@ -40,22 +41,25 @@ indexer_stage_driver::~indexer_stage_driver() noexcept {
   // nop
 }
 
-void indexer_stage_driver::process(downstream_type& out, batch_type& batch) {
-  VAST_TRACE(CAF_ARG(batch));
-  VAST_ASSERT(!batch.empty());
+void indexer_stage_driver::process(downstream_type& out, batch_type& slices) {
+  VAST_TRACE(CAF_ARG(slices));
+  VAST_ASSERT(!slices.empty());
   VAST_ASSERT(partition_ != nullptr);
-  auto i = batch.begin();
-  auto e = batch.end();
-  auto n = std::min(remaining_in_partition_,
-                    static_cast<size_t>(std::distance(i, e)));
-  do {
-    // Consume chunk of the batch.
-    consume(out, i, i + n);
-    // Advance iterator.
-    i = i + n;
+  for (auto& slice : slices) {
+    // Update meta index.
+    pindex_.add(partition_->id(), slice);
+    // Start new INDEXER actors when needed and add it to the stream.
+    auto& layout = slice->layout();
+    if (auto [hdl, added] = partition_->manager().get_or_add(layout); added) {
+      auto slot = out_.parent()->add_unchecked_outbound_path<output_type>(hdl);
+      VAST_DEBUG("spawned new INDEXER at slot", slot);
+      out_.set_filter(slot, layout);
+    }
+    // Ship event to the INDEXER actors.
+    auto slice_size = slice->rows();
+    out.push(std::move(slice));
     // Reset the manager and all outbound paths when finalizing a partition.
-    remaining_in_partition_ -= n;
-    if (remaining_in_partition_ == 0) {
+    if (remaining_in_partition_ <= slice_size) {
       VAST_DEBUG("partition full, close slots", out_.open_path_slots());
       VAST_ASSERT(out_.buf().size() != 0);
       out_.fan_out_flush();
@@ -63,28 +67,12 @@ void indexer_stage_driver::process(downstream_type& out, batch_type& batch) {
       out_.force_emit_batches();
       out_.close();
       partition_ = factory_();
-      VAST_ASSERT(partition_->types().empty());
+      VAST_ASSERT(partition_->layouts().empty());
       remaining_in_partition_ = max_partition_size_;
-      // Compute size of the next chunk.
-      n = std::min(remaining_in_partition_,
-                   static_cast<size_t>(std::distance(i, e)));
+    } else {
+      remaining_in_partition_ -= slice_size;
     }
-  } while (i != e);
-}
-
-void indexer_stage_driver::consume(downstream_type& out, batch_iterator first,
-                                   batch_iterator last) {
-  pindex_.add(partition_->id(), first, last);
-  std::for_each(first, last, [&](event& x) {
-    // Start new INDEXER actors when needed and add it to the stream.
-    if (auto [hdl, added] = partition_->manager().get_or_add(x.type()); added) {
-      auto slot = out_.parent()->add_unchecked_outbound_path<output_type>(hdl);
-      VAST_DEBUG("spawned new INDEXER at slot", slot);
-      out_.set_filter(slot, x.type());
-    }
-    // Ship event to the INDEXER actors.
-    out.push(std::move(x));
-  });
+  }
 }
 
 } // namespace vast::system

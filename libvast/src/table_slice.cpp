@@ -32,7 +32,8 @@ auto cap (size_type pos, size_type num, size_type last) {
 } // namespace <anonymous>
 
 table_slice::table_slice(record_type layout)
-  : layout_(std::move(layout)),
+  : offset_(0),
+    layout_(std::move(layout)),
     rows_(0),
     columns_(flat_size(layout_)) {
   // nop
@@ -97,7 +98,8 @@ std::vector<event> table_slice::rows_to_events(size_type first_row,
   result.reserve(values.size());
   auto event_id = offset() + first_row;
   for (size_t i = 0; i < values.size(); ++i) {
-    result.emplace_back(event::make(std::move(values[i])));
+    result.emplace_back(event::make(std::move(values[i].data()),
+                                    values[i].type().name(layout_.name())));
     result.back().id(event_id++);
     result.back().timestamp(get<timestamp>(get<vector>(timestamps[i])[0]));
   }

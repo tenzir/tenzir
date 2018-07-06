@@ -17,6 +17,7 @@
 #include "vast/load.hpp"
 #include "vast/logger.hpp"
 #include "vast/save.hpp"
+#include "vast/table_slice.hpp"
 
 namespace vast {
 
@@ -35,83 +36,44 @@ caf::expected<column_index_ptr> init_res(column_index_ptr res) {
 
 } // namespace <anonymous>
 
-caf::expected<column_index_ptr> make_time_index(path filename) {
-  struct impl : column_index {
-    impl(path&& fname) : column_index(timespan_type{}, std::move(fname)) {
-      // nop
-    }
-
-    void add(const event& x) override {
-      VAST_TRACE(VAST_ARG(x));
-      idx_->append(make_data_view(x.timestamp()), x.id());
-    }
-  };
-  return init_res(std::make_unique<impl>(std::move(filename)));
-}
-
-caf::expected<column_index_ptr> make_type_index(path filename) {
+caf::expected<column_index_ptr> make_type_column_index(path filename) {
   struct impl : column_index {
     impl(path&& fname) : column_index(string_type{}, std::move(fname)) {
       // nop
     }
 
-    void add(const event& x) override {
+    void add(const const_table_slice_ptr& x) override {
       VAST_TRACE(VAST_ARG(x));
-      idx_->append(make_data_view(x.type().name()), x.id());
+      auto tn = x->layout().name();
+      auto offset = x->offset();
+      for (table_slice::size_type row = 0; row < x->rows(); ++row)
+        idx_->append(make_data_view(tn), offset + row);
     }
   };
   return init_res(std::make_unique<impl>(std::move(filename)));
 }
 
-caf::expected<column_index_ptr> make_flat_data_index(path filename,
-                                                     type event_type) {
+caf::expected<column_index_ptr>
+make_column_index(path filename, type column_type, size_t column) {
   struct impl : column_index {
-    impl(type&& etype, path&& fname)
-      : column_index(std::move(etype), std::move(fname)) {
+    impl(path&& fname, type&& ctype, size_t col)
+      : column_index(std::move(ctype), std::move(fname)),
+        col_(col) {
         // nop
     }
 
-    void add(const event& x) override {
+    void add(const const_table_slice_ptr& x) override {
       VAST_TRACE(VAST_ARG(x));
-      if (x.type() == index_type_)
-        idx_->append(make_view(x.data()), x.id());
+      auto offset = x->offset();
+      for (table_slice::size_type row = 0; row < x->rows(); ++row)
+        if (auto element = x->at(row, col_))
+          idx_->append(*element, offset + row);
     }
+
+    size_t col_;
   };
-  return init_res(std::make_unique<impl>(std::move(event_type),
-                                         std::move(filename)));
-}
-
-caf::expected<column_index_ptr> make_field_data_index(path filename,
-                                                      type field_type,
-                                                      offset off) {
-  struct impl : column_index {
-    impl(type&& ftype, path&& fname, offset o)
-      : column_index(std::move(ftype), std::move(fname)),
-        o_(o) {
-      // nop
-    }
-
-    void add(const event& x) override {
-      VAST_TRACE(VAST_ARG(x));
-      VAST_ASSERT(x.id() != invalid_id);
-      auto v = caf::get_if<vector>(&x.data());
-      if (!v)
-        return;
-      if (auto y = get(*v, o_)) {
-        idx_->append(make_view(*y), x.id());
-        return;
-      }
-      // If there is no data at a given offset, it means that an intermediate
-      // record is nil but we're trying to access a deeper field.
-      static const auto nil_data = data{caf::none};
-      idx_->append(make_data_view(nil_data), x.id());
-    }
-
-    offset o_;
-  };
-  auto res = std::make_unique<impl>(std::move(field_type), std::move(filename),
-                                    off);
-  return init_res(std::move(res));
+  return init_res(std::make_unique<impl>(std::move(filename),
+                                         std::move(column_type), column));
 }
 
 // -- constructors, destructors, and assignment operators ----------------------

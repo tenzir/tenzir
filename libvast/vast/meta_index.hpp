@@ -53,17 +53,7 @@ public:
   /// Returns the synopsis for a partition if present, returns `none` otherwise.
   caf::optional<partition_synopsis> operator[](const uuid& partition) const;
 
-  /// Adds a set of events to the index for a given partition.
-  template <class EventIterator>
-  void add(const uuid& partition, EventIterator first, EventIterator last) {
-    auto& rng = partitions_[partition].range;
-    for_each(first, last, [&](const event& x) { add_one(rng, x); });
-  }
-
-  template <class Container>
-  void add(const uuid& partition, const Container& xs) {
-    add(partition, xs.begin(), xs.end());
-  }
+  void add(const uuid& partition, const const_table_slice_ptr& slice);
 
   /// Retrieves the list of partition IDs for a given expression.
   std::vector<uuid> lookup(const expression& expr) const;
@@ -102,15 +92,12 @@ public:
   }
 
 private:
-  // -- utility ----------------------------------------------------------------
-
-  /// Adds `x` to the time interval `rng`.
-  static void add_one(interval& rng, const event& x);
-
   // -- member variables -------------------------------------------------------
 
   map_type partitions_;
 };
+
+// -- related free functions ---------------------------------------------------
 
 bool operator==(const meta_index::interval&, const meta_index::interval&);
 

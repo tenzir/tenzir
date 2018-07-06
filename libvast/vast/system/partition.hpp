@@ -40,8 +40,9 @@ public:
 
   /// Persistent meta state for the partition.
   struct meta_data {
-    /// Maps type digests (used as directory names) to types.
-    caf::detail::unordered_flat_map<std::string, type> types;
+    /// Maps type digests (used as directory names) to layouts (i.e. record
+    /// types).
+    caf::detail::unordered_flat_map<std::string, record_type> types;
 
     /// Stores whether we modified `types` after loading it.
     bool dirty = false;
@@ -88,15 +89,15 @@ public:
     return id_;
   }
 
-  /// Returns a list of all types in this partition.
-  std::vector<type> types() const;
+  /// Returns all layouts in this partition.
+  std::vector<record_type> layouts() const;
 
   /// Returns the file name for saving or loading the ::meta_data.
   path meta_file() const;
 
   // -- operations -------------------------------------------------------------
 
-  /// Checks what types could match `expr` and calls
+  /// Checks what layout could match `expr` and calls
   /// `self->request(...).then(f)` for each matching INDEXER.
   /// @returns the number of matched INDEXER actors.
   template <class F>
@@ -117,9 +118,9 @@ public:
   std::vector<caf::actor> get_indexers(const expression& expr);
 
 private:
-  /// Called from the INDEXER manager whenever a new type gets added during
+  /// Called from the INDEXER manager whenever a new layout gets added during
   /// ingestion.
-  inline void add_type(const std::string& digest, const type& t) {
+  inline void add_layout(const std::string& digest, const record_type& t) {
     if (meta_data_.types.emplace(digest, t).second && !meta_data_.dirty)
       meta_data_.dirty = true;
   }

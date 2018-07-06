@@ -76,8 +76,8 @@ caf::error partition::flush_to_disk() {
   return caf::none;
 }
 
-std::vector<type> partition::types() const {
-  std::vector<type> result;
+std::vector<record_type> partition::layouts() const {
+  std::vector<record_type> result;
   auto& ts = meta_data_.types;
   result.reserve(ts.size());
   std::transform(ts.begin(), ts.end(), std::back_inserter(result),
@@ -110,7 +110,7 @@ partition_ptr make_partition(const path& base_dir, uuid id,
 
 partition_ptr make_partition(caf::local_actor* self, const path& base_dir,
                              uuid id) {
-  auto f = [=](path indexer_path, type indexer_type) {
+  auto f = [=](path indexer_path, record_type indexer_type) {
     VAST_DEBUG(self, "creates INDEXER in partition", id, "for type",
                indexer_type);
     return self->spawn<caf::lazy_init>(indexer, std::move(indexer_path),

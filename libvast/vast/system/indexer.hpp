@@ -33,11 +33,11 @@ struct indexer_state {
   static inline const char* name = "indexer";
 };
 
-/// Indexes an event.
+/// Indexes table slices.
 /// @param self The actor handle.
 /// @param dir The directory where to store the indexes in.
-/// @param type event_type The type of the event to index.
+/// @param layout The type of individual columns in slices.
 caf::behavior indexer(caf::stateful_actor<indexer_state>* self, path dir,
-                      type event_type);
+                      record_type layout);
 
 } // namespace vast::system

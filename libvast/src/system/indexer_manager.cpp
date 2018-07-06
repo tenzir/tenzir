@@ -24,26 +24,27 @@ indexer_manager::indexer_manager(partition& parent, indexer_factory f)
   // nop
 }
 
-std::pair<caf::actor, bool> indexer_manager::get_or_add(const type& key) {
+std::pair<caf::actor, bool>
+indexer_manager::get_or_add(const record_type& key) {
   VAST_TRACE(VAST_ARG(key));
   auto i = indexers_.find(key);
   if (i != indexers_.end())
     return {i->second, false};
   auto digest = to_digest(key);
-  parent_.add_type(digest, key);
+  parent_.add_layout(digest, key);
   auto res = indexers_.emplace(key, make_indexer(key, digest));
   VAST_ASSERT(res.second == true);
   return {res.first->second, true};
 }
 
-caf::actor indexer_manager::make_indexer(const type& key,
+caf::actor indexer_manager::make_indexer(const record_type& key,
                                          const std::string& digest) {
   VAST_TRACE(VAST_ARG(key), VAST_ARG(digest));
   VAST_ASSERT(make_indexer_ != nullptr);
   return make_indexer_(parent_.dir() / digest, key);
 }
 
-caf::actor indexer_manager::make_indexer(const type& key) {
+caf::actor indexer_manager::make_indexer(const record_type& key) {
   VAST_TRACE(VAST_ARG(key));
   return make_indexer(key, to_digest(key));
 }

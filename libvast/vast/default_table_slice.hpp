@@ -15,6 +15,7 @@
 
 #include <vector>
 
+#include "vast/data.hpp"
 #include "vast/fwd.hpp"
 #include "vast/table_slice.hpp"
 
@@ -37,6 +38,8 @@ public:
   /// @param layout The layout of the table_slice.
   /// @returns The builder instance.
   static table_slice_builder_ptr make_builder(record_type layout);
+
+  static table_slice_ptr make(record_type layout, std::vector<vector>& rows);
 
   // -- properties -------------------------------------------------------------
 

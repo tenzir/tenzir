@@ -11,13 +11,16 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
+#include "vast/bitmap.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/vast/error.hpp"
 #include "vast/concept/printable/vast/event.hpp"
 #include "vast/concept/printable/vast/expression.hpp"
-#include "vast/bitmap.hpp"
+#include "vast/default_table_slice.hpp"
+#include "vast/detail/spawn_container_source.hpp"
+#include "vast/table_slice.hpp"
 
 #include "vast/system/indexer.hpp"
 
@@ -31,19 +34,15 @@ using namespace vast;
 namespace {
 
 struct fixture : fixtures::deterministic_actor_system_and_events {
-  void init(type event_type) {
-    indexer = self->spawn(system::indexer, directory, event_type);
+  void init(record_type layout) {
+    indexer = self->spawn(system::indexer, directory, std::move(layout));
     run_exhaustively();
   }
 
-  void init(std::vector<event> events) {
-    VAST_ASSERT(!events.empty());
-    auto event_type = events.front().type();
-    init(event_type);
-    VAST_ASSERT(std::all_of(events.begin(), events.end(), [&](const event& x) {
-      return x.type() == event_type;
-    }));
-    self->send(indexer, std::move(events));
+  void init(std::vector<const_table_slice_ptr> slices) {
+    VAST_ASSERT(slices.size() > 0);
+    init(slices[0]->layout());
+    vast::detail::spawn_container_source(sys, std::move(slices), indexer);
     run_exhaustively();
   }
 
@@ -61,15 +60,13 @@ FIXTURE_SCOPE(indexer_tests, fixture)
 
 TEST(integer rows) {
   MESSAGE("ingest integer events");
-  integer_type layout;
-  std::vector<int> ints{1, 2, 3, 1, 2, 3, 1, 2, 3};
-  std::vector<event> events;
-  for (auto i : ints)
-    events.emplace_back(event::make(i, layout, events.size()));
+  integer_type column_type;
+  record_type layout{{"value", column_type}};
+  auto rows = make_rows(1, 2, 3, 1, 2, 3, 1, 2, 3);
   auto res = [&](auto... args) {
-    return make_ids({args...}, events.size());
+    return make_ids({args...}, rows.size());
   };
-  init(events);
+  init({default_table_slice::make(layout, rows)});
   sched.run();
   MESSAGE("verify table index");
   auto verify = [&] {
@@ -93,7 +90,7 @@ TEST(integer rows) {
 
 TEST(bro conn logs) {
   MESSAGE("ingest bro conn log");
-  init(bro_conn_log);
+  init(const_bro_conn_log_slices);
   MESSAGE("verify table index");
   auto res = [&](auto... args) {
     return make_ids({args...}, bro_conn_log.size());
@@ -116,7 +113,7 @@ TEST(bro conn logs) {
   anon_send_exit(indexer, exit_reason::kill);
   run_exhaustively();
   MESSAGE("reload INDEXER from disk");
-  init(bro_conn_log.front().type());
+  init(bro_conn_log_layout());
   MESSAGE("verify table index again");
   verify();
 }

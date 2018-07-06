@@ -16,39 +16,43 @@
 #include <caf/broadcast_downstream_manager.hpp>
 #include <caf/stream_stage_driver.hpp>
 
+#include "vast/table_slice.hpp"
 #include "vast/type.hpp"
-#include "vast/event.hpp"
 
 #include "vast/system/fwd.hpp"
 
 namespace vast::system {
 
 /// @relates indexer_stage_driver
-/// Filter type for dispatching events to INDEXER actors.
+/// Filter type for dispatching slices to INDEXER actors.
 using indexer_stage_filter = type;
 
 /// @relates indexer_stage_driver
 /// Selects an INDEXER actor based on its filter.
 struct indexer_stage_selector {
-  inline bool operator()(const indexer_stage_filter& f, const event& x) const {
-    return f == x.type();
+  inline bool operator()(const indexer_stage_filter& f,
+                         const const_table_slice_ptr& x) const {
+    return f == x->layout();
   }
 };
 
 /// @relates indexer_stage_driver
 /// A downstream manager type for dispatching data to INDEXER actors.
 using indexer_downstream_manager
-  = caf::broadcast_downstream_manager<event, indexer_stage_filter,
+  = caf::broadcast_downstream_manager<const_table_slice_ptr,
+                                      indexer_stage_filter,
                                       indexer_stage_selector>;
 
-/// A stream stage for dispatching events to INDEXER actors. One set of INDEXER
+/// A stream stage for dispatching slices to INDEXER actors. One set of INDEXER
 /// actors is used per partition.
 class indexer_stage_driver
-  : public caf::stream_stage_driver<event, indexer_downstream_manager> {
+  : public caf::stream_stage_driver<const_table_slice_ptr,
+                                    indexer_downstream_manager> {
 public:
   // -- member types -----------------------------------------------------------
 
-  using super = caf::stream_stage_driver<event, indexer_downstream_manager>;
+  using super = caf::stream_stage_driver<const_table_slice_ptr,
+                                         indexer_downstream_manager>;
 
   using partition_factory = std::function<partition_ptr()>;
 
@@ -67,19 +71,15 @@ public:
 
   // -- interface implementation -----------------------------------------------
 
-  void process(downstream_type& out, batch_type& batch) override;
+  void process(downstream_type& out, batch_type& slices) override;
 
 private:
-  // -- utility ----------------------------------------------------------------
-
-  void consume(downstream_type& out, batch_iterator first, batch_iterator last);
-
   // -- member variables -------------------------------------------------------
 
   /// Keeps statistics for all partitions.
   meta_index& pindex_;
 
-  /// Stores how many events remain in the current partition.
+  /// Stores how many rows remain in the current partition.
   size_t remaining_in_partition_;
 
   /// Our current partition.
@@ -88,7 +88,7 @@ private:
   /// Generates new partitions whenever the current partition becomes full.
   partition_factory factory_;
 
-  /// Stores how many events form one partition.
+  /// Stores how many rows approximately form one partition.
   size_t max_partition_size_;
 };
 

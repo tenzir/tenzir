@@ -312,7 +312,7 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
                    "partitions left for query ID", query_id);
       }
     },
-    [=](caf::stream<event> in) {
+    [=](caf::stream<const_table_slice_ptr> in) {
       VAST_DEBUG(self, "got a new source");
       return self->state.stage->add_inbound_path(in);
     }
@@ -323,7 +323,7 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
       st.next_worker = worker;
       self->become(keep_behavior, st.has_worker);
     },
-    [=](caf::stream<event> in) {
+    [=](caf::stream<const_table_slice_ptr> in) {
       VAST_DEBUG(self, "got a new source");
       return self->state.stage->add_inbound_path(in);
     }
