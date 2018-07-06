@@ -665,6 +665,14 @@ record_type flatten(const record_type& rec);
 /// @relates type record_type
 type flatten(const type& t);
 
+/// Queries whether `rec` is a flattened record.
+/// @relates type record_type
+bool is_flat(const record_type& rec);
+
+/// Queries whether `rec` is a flattened record.
+/// @relates type record_type
+bool is_flat(const type& t);
+
 /// Computes the size of a flat representation of `rec`.
 size_t flat_size(const record_type& rec);
 

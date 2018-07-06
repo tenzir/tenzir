@@ -424,6 +424,18 @@ type flatten(const type& t) {
   return r ? flatten(*r) : t;
 }
 
+bool is_flat(const record_type& rec) {
+  auto& fs = rec.fields;
+  return std::all_of(fs.begin(), fs.end(), [](auto& f) {
+    return !caf::holds_alternative<record_type>(f.type);
+  });
+}
+
+bool is_flat(const type& t) {
+  auto r = get_if<record_type>(&t);
+  return r ? is_flat(*r) : true;
+}
+
 size_t flat_size(const record_type& rec) {
   auto op = [](size_t x, const auto& y) { return x + flat_size(y.type); };
   return std::accumulate(rec.fields.begin(), rec.fields.end(), size_t{0}, op);
