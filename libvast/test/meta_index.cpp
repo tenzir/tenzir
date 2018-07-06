@@ -30,7 +30,6 @@ namespace {
 
 static constexpr size_t num_partitions = 4;
 static constexpr size_t num_events_per_parttion = 25;
-static constexpr size_t num_events_per_type = 20;
 
 timestamp epoch;
 
