@@ -167,4 +167,30 @@ TEST(bro conn logs) {
   verify();
 }
 
+TEST(bro conn log http slices) {
+  MESSAGE("scrutinize each bro conn log slice individually");
+  // Pre-computed via:
+  // grep http libvast/test/logs/bro/conn.log  -n
+  // | awk -F ':' '{tbl[int($1 / 100)] += 1}
+  //               END { for (key in tbl) { print key " " tbl[key] } }'
+  // | sort -n
+  // | awk '{print $2","}'
+  std::vector<size_t> hits{
+    9,  20, 14, 28, 31, 7,  15, 28, 16, 41, 40, 51, 61, 50, 65, 58, 54,
+    24, 26, 30, 20, 30, 8,  57, 48, 57, 30, 55, 22, 25, 34, 35, 40, 59,
+    40, 23, 31, 26, 27, 53, 26, 5,  56, 35, 1,  5,  7,  10, 4,  44, 48,
+    2,  9,  7,  1,  13, 4,  2,  13, 2,  33, 36, 16, 43, 50, 30, 38, 13,
+    92, 70, 73, 67, 5,  53, 21, 8,  2,  2,  22, 7,  2,  14, 7,
+  };
+  auto layout = bro_conn_log_layout();
+  REQUIRE_EQUAL(std::accumulate(hits.begin(), hits.end(), size_t(0)), 2386u);
+  for (size_t slice_id = 0; slice_id < hits.size(); ++slice_id) {
+    tbl.reset();
+    rm(directory);
+    reset(make_table_index(directory, layout));
+    add(const_bro_conn_log_slices[slice_id]);
+    CHECK_EQUAL(rank(query("service == \"http\"")), hits[slice_id]);
+  }
+}
+
 FIXTURE_SCOPE_END()
