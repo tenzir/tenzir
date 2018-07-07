@@ -216,6 +216,19 @@ TEST(single partition bro conn log lookup) {
     return make_ids({args...}, bro_conn_log.size());
   };
   CHECK_EQUAL(query(":addr == 169.254.225.22"), res(680, 682, 719, 720));
+  CHECK_EQUAL(rank(query("id.resp_p == 995/?")), 53u);
+  CHECK_EQUAL(rank(query("id.resp_p == 5355/?")), 49u);
+  CHECK_EQUAL(rank(query("id.resp_p == 995/? || id.resp_p == 5355/?")), 102u);
+  CHECK_EQUAL(rank(query("&time > 1970-01-01")), bro_conn_log.size());
+  CHECK_EQUAL(rank(query("proto == \"udp\"")), 5306u);
+  CHECK_EQUAL(rank(query("proto == \"tcp\"")), 3135u);
+  CHECK_EQUAL(rank(query("uid == \"nkCxlvNN8pi\"")), 1u);
+  CHECK_EQUAL(rank(query("orig_bytes < 400")), 5332u);
+  CHECK_EQUAL(rank(query("orig_bytes < 400 && proto == \"udp\"")), 4357u);
+  CHECK_EQUAL(rank(query(":addr == 169.254.225.22")), 4u);
+  CHECK_EQUAL(rank(query("service == \"http\"")), 2386u);
+  CHECK_EQUAL(rank(query("service == \"http\" && :addr == 212.227.96.110")),
+              28u);
 }
 
 TEST(multiple partitions bro conn log lookup no messaging) {
@@ -277,16 +290,32 @@ TEST(multiple partitions bro conn log lookup no messaging) {
   auto res = [&](auto... args) {
     return make_ids({args...}, bro_conn_log.size());
   };
-  auto expr = unbox(to<expression>(":addr == 169.254.225.22"));
-  ids result;
-  for (auto& part : partitions) {
-    part->manager().for_each([&](const caf::actor& idx_hdl) {
-      auto& tbl = deref<indexer_type>(idx_hdl).state.tbl;
-      result |= unbox(tbl.lookup(expr));
-    });
-  }
-  CHECK_EQUAL(rank(result), 4u);
-  CHECK_EQUAL(result, res(680, 682, 719, 720));
+  auto query_all = [&](std::string_view expr_str) {
+    ids result;
+    auto expr = unbox(to<expression>(expr_str));
+    for (auto& part : partitions) {
+      part->manager().for_each([&](const caf::actor& idx_hdl) {
+        auto& tbl = deref<indexer_type>(idx_hdl).state.tbl;
+        result |= unbox(tbl.lookup(expr));
+      });
+    }
+    return result;
+  };
+  CHECK_EQUAL(query_all(":addr == 169.254.225.22"), res(680, 682, 719, 720));
+  CHECK_EQUAL(rank(query_all("id.resp_p == 995/?")), 53u);
+  CHECK_EQUAL(rank(query_all("id.resp_p == 5355/?")), 49u);
+  CHECK_EQUAL(rank(query_all("id.resp_p == 995/? || id.resp_p == 5355/?")),
+              102u);
+  CHECK_EQUAL(rank(query_all("&time > 1970-01-01")), bro_conn_log.size());
+  CHECK_EQUAL(rank(query_all("proto == \"udp\"")), 5306u);
+  CHECK_EQUAL(rank(query_all("proto == \"tcp\"")), 3135u);
+  CHECK_EQUAL(rank(query_all("uid == \"nkCxlvNN8pi\"")), 1u);
+  CHECK_EQUAL(rank(query_all("orig_bytes < 400")), 5332u);
+  CHECK_EQUAL(rank(query_all("orig_bytes < 400 && proto == \"udp\"")), 4357u);
+  CHECK_EQUAL(rank(query_all(":addr == 169.254.225.22")), 4u);
+  CHECK_EQUAL(rank(query_all("service == \"http\"")), 2386u);
+  CHECK_EQUAL(rank(query_all("service == \"http\" && :addr == 212.227.96.110")),
+              28u);
 }
 
 FIXTURE_SCOPE_END()
