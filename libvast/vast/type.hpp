@@ -791,6 +791,15 @@ bool convert(const type& t, json& j);
 
 namespace caf {
 
+template <class Result, class Dispatcher, class T>
+auto make_dispatch_fun() {
+  using fun = Result (*)(Dispatcher*, const vast::abstract_type&);
+  auto lambda = [](Dispatcher* d, const vast::abstract_type& ref) {
+    return d->invoke(static_cast<const T&>(ref));
+  };
+  return static_cast<fun>(lambda);
+}
+
 template <>
 struct sum_type_access<vast::type> {
   using types = vast::concrete_types;
@@ -826,9 +835,7 @@ struct sum_type_access<vast::type> {
     Result dispatch(const_reference x, caf::detail::type_list<Us...>) {
       using fun = Result (*)(dispatcher*, const_reference);
       static fun tbl[] = {
-        [](dispatcher* d, const_reference y) {
-          return d->invoke(static_cast<const Us&>(y));
-        }...
+        make_dispatch_fun<Result, dispatcher, Us>()...
       };
       return tbl[x.index()](this, x);
     }
