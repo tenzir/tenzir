@@ -114,7 +114,7 @@ TEST(evaluation - types) {
   CHECK(!caf::visit(event_evaluator{e1}, caf::visit(type_pruner{*bar}, *ast)));
 }
 
-TEST(evaluation - schema) {
+TEST_DISABLED(evaluation - schema) {
   auto ast = to<expression>("foo.s1 == \"babba\" && d1 <= 1337.0");
   REQUIRE(ast);
   auto ast_resolved = caf::visit(type_resolver{*foo}, *ast);
