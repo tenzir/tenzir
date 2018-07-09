@@ -36,7 +36,7 @@ public:
 
   // -- factory functions ------------------------------------------------------
 
-  table_slice_ptr copy() const final;
+  table_slice_ptr clone() const final;
 
   // -- static factory functions -----------------------------------------------
 

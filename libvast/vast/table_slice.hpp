@@ -51,7 +51,7 @@ public:
   // -- factory functions ------------------------------------------------------
 
   /// Makes a copy of this slice.
-  virtual table_slice_ptr copy() const = 0;
+  virtual table_slice_ptr clone() const = 0;
 
   // -- properties -------------------------------------------------------------
 

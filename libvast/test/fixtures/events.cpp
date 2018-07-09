@@ -91,7 +91,7 @@ slice_list events::copy(slice_list xs) {
   slice_list result;
   result.reserve(xs.size());
   for (auto& x : xs)
-    result.emplace_back(x->copy());
+    result.emplace_back(x->clone());
   return result;
 }
 
