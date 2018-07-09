@@ -26,8 +26,14 @@ namespace {
 
 timestamp epoch;
 
-std::vector<event> make_ascending_integers(size_t count) {
-  std::vector<event> result;
+using event_list = events::event_list;
+
+using slice_list = events::slice_list;
+
+using const_slice_list = events::const_slice_list;
+
+event_list make_ascending_integers(size_t count) {
+  event_list result;
   type layout = type{record_type{{"value", integer_type{}}}}.name("test::int");
   for (size_t i = 0; i < count; ++i) {
     result.emplace_back(event::make(vector{static_cast<integer>(i)}, layout));
@@ -36,8 +42,8 @@ std::vector<event> make_ascending_integers(size_t count) {
   return result;
 }
 
-std::vector<event> make_alternating_integers(size_t count) {
-  std::vector<event> result;
+event_list make_alternating_integers(size_t count) {
+  event_list result;
   type layout = type{record_type{{"value", integer_type{}}}}.name("test::int");
   for (size_t i = 0; i < count; ++i) {
     result.emplace_back(event::make(vector{static_cast<integer>(i % 2)},
@@ -51,31 +57,31 @@ std::vector<event> make_alternating_integers(size_t count) {
 
 size_t events::slice_size = 100;
 
-std::vector<event> events::bro_conn_log;
-std::vector<event> events::bro_dns_log;
-std::vector<event> events::bro_http_log;
-std::vector<event> events::bgpdump_txt;
-std::vector<event> events::random;
+event_list events::bro_conn_log;
+event_list events::bro_dns_log;
+event_list events::bro_http_log;
+event_list events::bgpdump_txt;
+event_list events::random;
 
-std::vector<table_slice_ptr> events::bro_conn_log_slices;
-// std::vector<table_slice_ptr> events::bro_dns_log_slices;
-// std::vector<table_slice_ptr> events::bro_http_log_slices;
-// std::vector<table_slice_ptr> events::bgpdump_txt_slices;
-// std::vector<table_slice_ptr> events::random_slices;
+slice_list events::bro_conn_log_slices;
+// slice_list events::bro_dns_log_slices;
+// slice_list events::bro_http_log_slices;
+// slice_list events::bgpdump_txt_slices;
+// slice_list events::random_slices;
 
-std::vector<const_table_slice_ptr> events::const_bro_conn_log_slices;
-// std::vector<const_table_slice_ptr> events::const_bro_http_log_slices;
-// std::vector<const_table_slice_ptr> events::const_bro_dns_log_slices;
-// std::vector<const_table_slice_ptr> events::const_bgpdump_txt_slices;
-// std::vector<const_table_slice_ptr> events::const_random_slices;
+const_slice_list events::const_bro_conn_log_slices;
+// const_slice_list events::const_bro_http_log_slices;
+// const_slice_list events::const_bro_dns_log_slices;
+// const_slice_list events::const_bgpdump_txt_slices;
+// const_slice_list events::const_random_slices;
 
-std::vector<event> events::ascending_integers;
-std::vector<table_slice_ptr> events::ascending_integers_slices;
-std::vector<const_table_slice_ptr> events::const_ascending_integers_slices;
+event_list events::ascending_integers;
+slice_list events::ascending_integers_slices;
+const_slice_list events::const_ascending_integers_slices;
 
-std::vector<event> events::alternating_integers;
-std::vector<table_slice_ptr> events::alternating_integers_slices;
-std::vector<const_table_slice_ptr> events::const_alternating_integers_slices;
+event_list events::alternating_integers;
+slice_list events::alternating_integers_slices;
+const_slice_list events::const_alternating_integers_slices;
 
 record_type events::bro_conn_log_layout() {
   return const_bro_conn_log_slices[0]->layout();
@@ -108,7 +114,7 @@ events::events() {
   assign(ascending_integers);
   assign(alternating_integers);
   MESSAGE("building slices of " << slice_size << " events each");
-  auto slice_up = [&](const std::vector<event>& src) {
+  auto slice_up = [&](const event_list& src) {
     VAST_ASSERT(src.size() > 0);
     VAST_ASSERT(caf::holds_alternative<record_type>(src[0].type()));
     auto layout = caf::get<record_type>(src[0].type());
@@ -116,7 +122,7 @@ events::events() {
     layout.fields.insert(layout.fields.begin(), std::move(tstamp_field));
     auto builder = default_table_slice::make_builder(std::move(layout));
     auto full_slices = src.size() / slice_size;
-    std::vector<table_slice_ptr> slices;
+    slice_list slices;
     auto i = src.begin();
     auto make_slice = [&](size_t size) {
       if (size == 0)
@@ -149,7 +155,7 @@ events::events() {
   ascending_integers_slices = slice_up(ascending_integers);
   alternating_integers_slices = slice_up(alternating_integers);
   auto to_const_vector = [](const auto& xs) {
-    std::vector<const_table_slice_ptr> result;
+    const_slice_list result;
     result.reserve(xs.size());
     result.insert(result.end(), xs.begin(), xs.end());
     return result;
@@ -163,7 +169,7 @@ events::events() {
   const_alternating_integers_slices
     = to_const_vector(alternating_integers_slices);
   auto to_events = [](const auto& slices) {
-    std::vector<event> result;
+    event_list result;
     for (auto& slice : slices) {
       auto xs = slice->rows_to_events();
       std::move(xs.begin(), xs.end(), std::back_inserter(result));
