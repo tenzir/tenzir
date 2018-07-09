@@ -76,6 +76,8 @@ struct events {
     return {make_vector(xs)...};
   }
 
+  slice_list copy(slice_list xs);
+
 private:
   template <class Reader>
   static event_list inhale(const char* filename) {

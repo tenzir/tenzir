@@ -30,7 +30,13 @@ public:
 
   // -- constructors, destructors, and assignment operators --------------------
 
-  default_table_slice(record_type layout);
+  default_table_slice(const default_table_slice&) = default;
+
+  explicit default_table_slice(record_type layout);
+
+  // -- factory functions ------------------------------------------------------
+
+  table_slice_ptr copy() const final;
 
   // -- static factory functions -----------------------------------------------
 
