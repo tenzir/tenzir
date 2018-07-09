@@ -21,6 +21,7 @@
 #include "vast/concept/printable/vast/uuid.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/expression_visitors.hpp"
+#include "vast/table_slice.hpp"
 
 #include "vast/system/archive.hpp"
 #include "vast/system/atoms.hpp"
@@ -282,13 +283,15 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
         }
       );
     },
-    [=](caf::stream<event> in) {
+    [=](caf::stream<const_table_slice_ptr> in) {
       return self->make_sink(
         in,
         [](caf::unit_t&) {
           // nop
         },
-        [=](caf::unit_t&, std::vector<event>& candidates) {
+        [=](caf::unit_t&, const const_table_slice_ptr& slice) {
+          // TODO: port to new table slice API
+          auto candidates = slice->rows_to_events();
           handle_batch(candidates);
         },
         [=](caf::unit_t&, const error& err) {
