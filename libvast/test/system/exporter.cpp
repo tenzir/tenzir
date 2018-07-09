@@ -164,6 +164,8 @@ TEST(historical query with importer) {
   MESSAGE("prepare importer");
   importer_setup();
   MESSAGE("ingest conn.log via importer");
+  // We need to copy bro_conn_log_slices here, because the importer will assign
+  // IDs to the slices it received and we mustn't mess our static test data.
   vast::detail::spawn_container_source(sys, copy(bro_conn_log_slices),
                                        importer);
   run_exhaustively();
@@ -204,6 +206,7 @@ TEST(continuous query with importer) {
   exporter_setup(continuous);
   send(importer, system::exporter_atom::value, exporter);
   MESSAGE("ingest conn.log via importer");
+  // Again: copy because we musn't mutate static test data.
   vast::detail::spawn_container_source(sys, copy(bro_conn_log_slices),
                                        importer);
   run_exhaustively();
