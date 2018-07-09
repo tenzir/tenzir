@@ -195,7 +195,7 @@ TEST(iterable integer query result) {
   CHECK_EQUAL(result, expected_result);
 }
 
-TEST(iterable bro conn log query result) {
+TEST_DISABLED(iterable bro conn log query result) {
   REQUIRE_EQUAL(bro_conn_log.size(), 8462u);
   MESSAGE("ingest conn.log slices");
   detail::spawn_container_source(sys, const_bro_conn_log_slices, index);

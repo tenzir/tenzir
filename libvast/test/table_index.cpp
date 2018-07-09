@@ -167,7 +167,7 @@ TEST(bro conn logs) {
   verify();
 }
 
-TEST(bro conn log http slices) {
+TEST_DISABLED(bro conn log http slices) {
   MESSAGE("scrutinize each bro conn log slice individually");
   // Pre-computed via:
   // grep http libvast/test/logs/bro/conn.log  -n

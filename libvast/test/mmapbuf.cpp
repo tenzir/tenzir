@@ -61,7 +61,7 @@ TEST(memory-mapped streambuffer) {
   CHECK_EQUAL(cur, sb.size()); // we're at the end!
 }
 
-TEST(memory-mapped streambuffer aligned resize) {
+TEST_DISABLED(memory-mapped streambuffer aligned resize) {
   auto filename = directory / "aligned";
   auto page_size = detail::page_size();
   detail::mmapbuf sb{filename.str(), page_size};
