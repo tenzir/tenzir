@@ -6,7 +6,7 @@ buildMatrix = [
     // Release and debug builds for various OS/tool combinations.
     [ 'Linux', [
         builds: ['debug', 'release'],
-        tools: ['gcc7.2'],
+        tools: ['gcc8'],
     ]],
     [ 'macOS', [
         builds: ['debug', 'release'],
@@ -17,7 +17,7 @@ buildMatrix = [
         cmakeArgs: '-DCAF_ENABLE_ADDRESS_SANITIZER:BOOL=yes ' + // CAF
                    '-DENABLE_ADDRESS_SANITIZER:BOOL=yes',       // VAST
         builds: ['debug'],
-        tools: ['gcc7.2'],
+        tools: ['gcc8'],
     ]],
     [ 'macOS', [
         cmakeArgs: '-DCAF_ENABLE_ADDRESS_SANITIZER:BOOL=yes ' + // CAF
