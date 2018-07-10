@@ -306,7 +306,7 @@ target_link_libraries(vast-test libvast ${CMAKE_THREAD_LIBS_INIT})
 macro(make_test suite)
   string(REPLACE " " "_" test_name ${suite})
   set(vast_test ${EXECUTABLE_OUTPUT_PATH}/vast-test)
-  add_test(${test_name} ${vast_test} -v 3 -r 60 -s "^${suite}$" ${ARGN})
+  add_test(${test_name} ${vast_test} -v 3 -r 600 -s "^${suite}$" ${ARGN})
 endmacro()
 
 # Find all test suites.
