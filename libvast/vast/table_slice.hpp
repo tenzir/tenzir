@@ -40,11 +40,18 @@ public:
 
   // -- constructors, destructors, and assignment operators --------------------
 
-  ~table_slice();
+  ~table_slice() override;
+
+  table_slice(const table_slice&) = default;
 
   /// Constructs a table slice with a specific layout.
   /// @param layout The record describing the table columns.
-  table_slice(record_type layout);
+  explicit table_slice(record_type layout);
+
+  // -- factory functions ------------------------------------------------------
+
+  /// Makes a copy of this slice.
+  virtual table_slice_ptr clone() const = 0;
 
   // -- properties -------------------------------------------------------------
 

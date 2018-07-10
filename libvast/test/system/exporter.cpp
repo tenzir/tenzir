@@ -102,7 +102,7 @@ struct fixture : fixture_base {
     send(exporter, system::sink_atom::value, self);
     send(exporter, system::run_atom::value);
     send(exporter, system::extract_atom::value);
-    sched.run();
+    run_exhaustively();
   }
 
   template <class Hdl, class... Ts>
@@ -146,7 +146,8 @@ TEST(historical query without importer) {
   spawn_archive();
   sched.run();
   MESSAGE("ingest conn.log into archive and index");
-  vast::detail::spawn_container_source(sys, bro_conn_log, index, archive);
+  vast::detail::spawn_container_source(sys, const_bro_conn_log_slices, index,
+                                       archive);
   run_exhaustively();
   MESSAGE("spawn exporter for historical query");
   exporter_setup(historical);
@@ -163,7 +164,10 @@ TEST(historical query with importer) {
   MESSAGE("prepare importer");
   importer_setup();
   MESSAGE("ingest conn.log via importer");
-  vast::detail::spawn_container_source(sys, bro_conn_log, importer);
+  // We need to copy bro_conn_log_slices here, because the importer will assign
+  // IDs to the slices it received and we mustn't mess our static test data.
+  vast::detail::spawn_container_source(sys, copy(bro_conn_log_slices),
+                                       importer);
   run_exhaustively();
   MESSAGE("spawn exporter for historical query");
   exporter_setup(historical);
@@ -183,7 +187,8 @@ TEST(continuous query with exporter only) {
   send(exporter, system::extract_atom::value);
   sched.run();
   MESSAGE("send conn.log directly to exporter");
-  vast::detail::spawn_container_source(sys, bro_conn_log, exporter);
+  vast::detail::spawn_container_source(sys, const_bro_conn_log_slices,
+                                       exporter);
   run_exhaustively();
   MESSAGE("fetch results");
   auto results = fetch_results();
@@ -201,7 +206,9 @@ TEST(continuous query with importer) {
   exporter_setup(continuous);
   send(importer, system::exporter_atom::value, exporter);
   MESSAGE("ingest conn.log via importer");
-  vast::detail::spawn_container_source(sys, bro_conn_log, importer);
+  // Again: copy because we musn't mutate static test data.
+  vast::detail::spawn_container_source(sys, copy(bro_conn_log_slices),
+                                       importer);
   run_exhaustively();
   MESSAGE("fetch results");
   auto results = fetch_results();

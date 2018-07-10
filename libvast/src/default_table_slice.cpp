@@ -24,6 +24,10 @@ default_table_slice::default_table_slice(record_type layout)
   // nop
 }
 
+table_slice_ptr default_table_slice::clone() const {
+  return caf::make_counted<default_table_slice>(*this);
+}
+
 caf::optional<data_view>
 default_table_slice::at(size_type row, size_type col) const {
   VAST_ASSERT(row < rows_);
