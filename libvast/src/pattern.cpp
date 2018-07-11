@@ -20,8 +20,10 @@
 
 namespace vast {
 
-pattern pattern::glob(const std::string& str) {
-  auto rx = std::regex_replace(str, std::regex("\\."), "\\.");
+pattern pattern::glob(std::string_view str) {
+  std::string rx;
+  std::regex_replace(std::back_inserter(rx), str.begin(), str.end(),
+                     std::regex("\\."), "\\.");
   rx = std::regex_replace(rx, std::regex("\\*"), ".*");
   return pattern{std::regex_replace(rx, std::regex("\\?"), ".")};
 }
@@ -29,11 +31,11 @@ pattern pattern::glob(const std::string& str) {
 pattern::pattern(std::string str) : str_(std::move(str)) {
 }
 
-bool pattern::match(const std::string& str) const {
+bool pattern::match(std::string_view str) const {
   return std::regex_match(str.begin(), str.end(), std::regex{str_});
 }
 
-bool pattern::search(const std::string& str) const {
+bool pattern::search(std::string_view str) const {
   return std::regex_search(str.begin(), str.end(), std::regex{str_});
 }
 

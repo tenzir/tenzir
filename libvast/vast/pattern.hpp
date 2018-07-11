@@ -36,7 +36,7 @@ public:
   ///
   /// @param str The glob expression.
   /// @returns A pattern for the glob expression *str*.
-  static pattern glob(const std::string& str);
+  static pattern glob(std::string_view str);
 
   /// Default-constructs an empty pattern.
   pattern() = default;
@@ -48,12 +48,12 @@ public:
   /// Matches a string against the pattern.
   /// @param str The string to match.
   /// @returns `true` if the pattern matches exactly *str*.
-  bool match(const std::string& str) const;
+  bool match(std::string_view str) const;
 
   /// Searches a pattern in a string.
   /// @param str The string to search.
   /// @returns `true` if the pattern matches inside *str*.
-  bool search(const std::string& str) const;
+  bool search(std::string_view str) const;
 
   const std::string& string() const;
 
