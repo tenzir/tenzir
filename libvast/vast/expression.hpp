@@ -24,7 +24,6 @@
 #include <caf/variant.hpp>
 
 #include "vast/data.hpp"
-#include "vast/key.hpp"
 #include "vast/offset.hpp"
 #include "vast/operator.hpp"
 #include "vast/type.hpp"
@@ -55,9 +54,9 @@ auto inspect(Inspector& f, attribute_extractor& x) {
 
 /// Extracts one or more values according to a given key.
 struct key_extractor : detail::totally_ordered<key_extractor> {
-  key_extractor(vast::key k = {});
+  key_extractor(std::string k = {});
 
-  vast::key key;
+  std::string key;
 };
 
 /// @relates key_extractor

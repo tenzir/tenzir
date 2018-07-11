@@ -21,7 +21,6 @@
 #include "vast/concept/printable/string.hpp"
 #include "vast/concept/printable/core.hpp"
 #include "vast/concept/printable/vast/data.hpp"
-#include "vast/concept/printable/vast/key.hpp"
 #include "vast/concept/printable/vast/none.hpp"
 #include "vast/concept/printable/vast/offset.hpp"
 #include "vast/concept/printable/vast/operator.hpp"
@@ -73,7 +72,7 @@ struct expression_printer : printer<expression_printer> {
     }
 
     bool operator()(const key_extractor& e) const {
-      return printers::key(out_, e.key);
+      return printers::str(out_, e.key);
     }
 
     bool operator()(const data_extractor& e) const {

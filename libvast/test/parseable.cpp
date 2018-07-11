@@ -21,7 +21,7 @@
 #include "vast/concept/parseable/stream.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/address.hpp"
-#include "vast/concept/parseable/vast/key.hpp"
+#include "vast/concept/parseable/vast/offset.hpp"
 #include "vast/concept/parseable/vast/time.hpp"
 
 #define SUITE parseable
@@ -615,15 +615,15 @@ TEST(timestamp - YMD) {
 // -- API ---------------------------------------------------------------------
 
 TEST(stream) {
-  std::istringstream ss{"a.b.c"};
-  key k;
-  ss >> k;
+  std::istringstream ss{"1,2,3"};
+  offset xs;
+  ss >> xs;
   CHECK(ss.good());
-  CHECK(k == key{"a", "b", "c"});
+  CHECK_EQUAL(xs, (offset{1, 2, 3}));
 }
 
 TEST(to) {
-  auto k = to<key>("a.b.c"); // John!
-  REQUIRE(k);
-  CHECK(*k == key{"a", "b", "c"});
+  auto xs = to<offset>("1,2,3");
+  REQUIRE(xs);
+  CHECK_EQUAL(*xs, (offset{1, 2, 3}));
 }

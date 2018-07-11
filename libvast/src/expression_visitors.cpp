@@ -18,7 +18,6 @@
 #include "vast/concept/parseable/vast/type.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/data.hpp"
-#include "vast/concept/printable/vast/key.hpp"
 #include "vast/concept/printable/vast/operator.hpp"
 #include "vast/concept/printable/vast/type.hpp"
 #include "vast/data.hpp"
@@ -334,7 +333,6 @@ expected<expression> type_resolver::operator()(const conjunction& c) {
     else
       result.push_back(std::move(*r));
   }
-
   if (result.empty())
     return expression{};
   if (result.size() == 1)
@@ -447,9 +445,8 @@ expected<expression> type_resolver::operator()(const key_extractor& ex,
     }
   // Second, try to interpret the key as the name of a single type.
   } else if (ex.key[0] == type_.name()) {
-    if (!compatible(type_, op_, d)) {
+    if (!compatible(type_, op_, d))
       return make_error(ec::type_clash, type_, op_, d);
-    }
     auto x = data_extractor{type_, {}};
     dis.emplace_back(predicate{std::move(x), op_, d});
   }

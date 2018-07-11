@@ -32,8 +32,6 @@ class json;
 
 /// A sequence of types.
 class schema : detail::equality_comparable<schema> {
-  friend access;
-
 public:
   using value_type = type;
   using const_iterator = std::vector<type>::const_iterator;

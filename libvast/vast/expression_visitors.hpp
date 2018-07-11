@@ -21,10 +21,6 @@
 #include "vast/operator.hpp"
 #include "vast/time.hpp"
 
-#include "vast/concept/printable/vast/data.hpp"
-#include "vast/concept/printable/vast/key.hpp"
-#include "vast/concept/printable/vast/type.hpp"
-
 namespace vast {
 
 class event;
@@ -215,4 +211,3 @@ struct matcher {
 };
 
 } // namespace vast
-

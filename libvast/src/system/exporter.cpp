@@ -14,6 +14,7 @@
 #include <caf/all.hpp>
 
 #include "vast/concept/printable/std/chrono.hpp"
+#include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/event.hpp"
 #include "vast/concept/printable/vast/expression.hpp"
 #include "vast/concept/printable/vast/uuid.hpp"
@@ -27,6 +28,8 @@
 #include "vast/system/archive.hpp"
 #include "vast/system/atoms.hpp"
 #include "vast/system/exporter.hpp"
+
+#include "vast/detail/assert.hpp"
 
 using namespace std::chrono;
 using namespace std::string_literals;

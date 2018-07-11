@@ -186,45 +186,42 @@ TEST(record range) {
 
   for (auto& i : record_type::each{r})
     if (i.offset == offset{0, 1, 0, 0})
-      CHECK(i.key() == key{"x", "m", "y", "a"});
+      CHECK_EQUAL(i.key(), "x.m.y.a");
     else if (i.offset == offset{1, 0})
-      CHECK(i.key() == key{"y", "b"});
+      CHECK_EQUAL(i.key(), "y.b");
 }
 
 TEST(record resolving) {
   auto r = record_type{
-    {"x", integer_type{}},
-    {"y", address_type{}},
-    {"z", real_type{}}
-  };
-  // Make it recursive.
-  r = {
     {"a", integer_type{}},
     {"b", count_type{}},
-    {"c", r}
+    {"c", record_type{
+      {"x", integer_type{}},
+      {"y", address_type{}},
+      {"z", real_type{}}
+    }}
   };
-
-  auto o = r.resolve(key{"c"});
+  MESSAGE("top-level offset resolve");
+  auto o = r.resolve("c");
   REQUIRE(o);
-  CHECK(o->size() == 1);
-  CHECK(o->front() == 2);
-
-  o = r.resolve(key{"c", "x"});
+  CHECK_EQUAL(o->size(), 1u);
+  CHECK_EQUAL(o->front(), 2u);
+  MESSAGE("nested offset resolve");
+  o = r.resolve("c.x");
   REQUIRE(o);
-  CHECK(o->size() == 2);
-  CHECK(o->front() == 2);
-  CHECK(o->back() == 0);
-
+  CHECK_EQUAL(o->size(), 2u);
+  CHECK_EQUAL(o->front(), 2u);
+  CHECK_EQUAL(o->back(), 0u);
+  o = r.resolve("c.x.absent");
+  CHECK(!o);
+  MESSAGE("top-level offset resolve");
   auto k = r.resolve(offset{2});
   REQUIRE(k);
-  CHECK(k->size() == 1);
-  CHECK(k->front() == "c");
-
+  CHECK_EQUAL(*k, "c");
+  MESSAGE("nested offset resolve");
   k = r.resolve(offset{2, 0});
   REQUIRE(k);
-  CHECK(k->size() == 2);
-  CHECK(k->front() == "c");
-  CHECK(k->back() == "x");
+  CHECK_EQUAL(*k, "c.x");
 }
 
 TEST(record flattening/unflattening) {
@@ -294,61 +291,102 @@ TEST(record flat index computation) {
 
 TEST(record symbol finding) {
   auto r = record_type{
-    {"x", integer_type{}},
-    {"y", address_type{}},
-    {"z", real_type{}}
-  };
-  r = {
     {"a", integer_type{}},
-    {"b", count_type{}},
-    {"c", record_type{r}}
-  };
-  r = {
-    {"a", integer_type{}},
-    {"b", record_type{r}},
+    {"b", record_type{
+      {"a", integer_type{}},
+      {"b", count_type{}},
+      {"c", record_type{
+        {"x", integer_type{}},
+        {"y", address_type{}},
+        {"z", real_type{}}
+      }}
+    }},
     {"c", count_type{}}
   };
   r = r.name("foo");
-  // Record access by key.
-  auto first = r.at(key{"a"});
+  MESSAGE("record access by key");
+  auto first = r.at("a");
   REQUIRE(first);
   CHECK(holds_alternative<integer_type>(*first));
-  auto deep = r.at(key{"b", "c", "y"});
+  auto deep = r.at("b.c.y");
   REQUIRE(deep);
   CHECK(holds_alternative<address_type>(*deep));
+  auto rec = r.at("b");
+  REQUIRE(rec);
+  CHECK(holds_alternative<record_type>(*rec));
+  rec = r.at("b.c");
+  REQUIRE(rec);
+  CHECK(holds_alternative<record_type>(*rec));
   MESSAGE("prefix finding");
   // Since the type has a name, the prefix has the form "name.first.second".
   // E.g., a full key is foo.a for field 0 or foo.b.c.z for a nested field.
-  auto o = r.find_prefix({"a"});
+  auto o = r.find_prefix("a");
   REQUIRE_EQUAL(o.size(), 0u); // type starts with "foo", not "a"
-  o = r.find_prefix({"foo", "a"});
+  o = r.find_prefix("foo.a");
   offset a{0};
   REQUIRE_EQUAL(o.size(), 1u);
-  CHECK(o[0].first == a);
-  o = r.find_prefix({"foo", "b", "a"});
-  offset ba{1, 0};
+  CHECK_EQUAL(o[0].first, a);
+  CHECK_EQUAL(o[0].second, "foo.a");
+  o = r.find_prefix("foo.b.a");
   REQUIRE_EQUAL(o.size(), 1u);
-  CHECK(o[0].first == ba);
+  CHECK_EQUAL(o[0].first, (offset{1, 0}));
+  CHECK_EQUAL(o[0].second, "foo.b.a");
+  o = r.find_prefix("foo.b");
+  offset b{1};
+  REQUIRE_EQUAL(o.size(), 7u);
+  CHECK_EQUAL(o[0].first, (offset{1}));
+  CHECK_EQUAL(o[1].first, (offset{1, 0}));
+  CHECK_EQUAL(o[2].first, (offset{1, 1}));
+  CHECK_EQUAL(o[3].first, (offset{1, 2}));
+  CHECK_EQUAL(o[4].first, (offset{1, 2, 0}));
+  CHECK_EQUAL(o[5].first, (offset{1, 2, 1}));
+  CHECK_EQUAL(o[6].first, (offset{1, 2, 2}));
+  CHECK_EQUAL(o[0].second, "foo.b");
+  CHECK_EQUAL(o[1].second, "foo.b.a");
+  CHECK_EQUAL(o[2].second, "foo.b.b");
+  CHECK_EQUAL(o[3].second, "foo.b.c");
+  CHECK_EQUAL(o[4].second, "foo.b.c.x");
+  CHECK_EQUAL(o[5].second, "foo.b.c.y");
+  CHECK_EQUAL(o[6].second, "foo.b.c.z");
   MESSAGE("suffix finding");
-  o = r.find_suffix({"z"});
-  offset z{1, 2, 2};
-  REQUIRE_EQUAL(o.size(), 1u);
-  CHECK(o[0].first == z);
-  o = r.find_suffix({"c", "y"});
+  // Find a single deep field.
+  o = r.find_suffix("c.y");
   offset cy{1, 2, 1};
   REQUIRE_EQUAL(o.size(), 1u);
-  CHECK(o[0].first == cy);
-  o = r.find_suffix({"a"});
+  CHECK_EQUAL(o[0].first, cy);
+  CHECK_EQUAL(o[0].second, "foo.b.c.y");
+  // Find a single deep field.
+  o = r.find_suffix("z");
+  offset z{1, 2, 2};
+  REQUIRE_EQUAL(o.size(), 1u);
+  CHECK_EQUAL(o[0].first, z);
+  CHECK_EQUAL(o[0].second, "foo.b.c.z");
+  // Find multiple record fields.
+  o = r.find_suffix("a");
   offset a0{0}, a1{1, 0};
   REQUIRE_EQUAL(o.size(), 2u);
-  CHECK(o[0].first == a0);
-  CHECK(o[1].first == a1);
-  o = r.find_suffix({"c", "*"});
+  CHECK_EQUAL(o[0].first, a0);
+  CHECK_EQUAL(o[1].first, a1);
+  CHECK_EQUAL(o[0].second, "foo.a");
+  CHECK_EQUAL(o[1].second, "foo.b.a");
+  // Use a glob expression.
+  o = r.find_suffix("c.*");
   offset c0{1, 2, 0}, c1{1, 2, 1}, c2{1, 2, 2};
   REQUIRE_EQUAL(o.size(), 3u);
-  CHECK(o[0].first == c0);
-  CHECK(o[1].first == c1);
-  CHECK(o[2].first == c2);
+  CHECK_EQUAL(o[0].first, c0);
+  CHECK_EQUAL(o[1].first, c1);
+  CHECK_EQUAL(o[2].first, c2);
+  CHECK_EQUAL(o[0].second, "foo.b.c.x");
+  CHECK_EQUAL(o[1].second, "foo.b.c.y");
+  CHECK_EQUAL(o[2].second, "foo.b.c.z");
+  // Find a record.
+  o = r.find_suffix("b");
+  REQUIRE_EQUAL(o.size(), 2u);
+  offset bb{1, 1};
+  CHECK_EQUAL(o[0].first, b);
+  CHECK_EQUAL(o[1].first, bb);
+  CHECK_EQUAL(o[0].second, "foo.b");
+  CHECK_EQUAL(o[1].second, "foo.b.b");
 }
 
 TEST(congruence) {
@@ -537,7 +575,7 @@ TEST(hashable) {
     {"z", vector_type{real_type{}}}
   };
   CHECK_EQUAL(hash(x), 13215642375407153428ul);
-  CHECK_EQUAL(to_digest(x), to_string(hash(type{x})));
+  CHECK_EQUAL(to_digest(x), std::to_string(hash(type{x})));
 }
 
 TEST(json) {

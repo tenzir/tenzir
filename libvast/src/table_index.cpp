@@ -21,7 +21,18 @@
 #include "vast/save.hpp"
 #include "vast/table_slice.hpp"
 
+#include "vast/detail/overload.hpp"
+#include "vast/detail/string.hpp"
+
 namespace vast {
+namespace {
+
+// Translates a key to directory.
+auto key_to_dir(std::string key, const path& prefix) {
+  return prefix / detail::replace_all(std::move(key), ".", path::separator);
+}
+
+} // namespace <anonymous>
 
 caf::expected<table_index> make_table_index(path base_dir, record_type layout) {
   caf::error err;
@@ -98,12 +109,10 @@ caf::error table_index::add(const const_table_slice_handle& x) {
       for (auto&& f : record_type::each{layout()}) {
         auto& value_type = f.trace.back()->type;
         if (!has_skip_attribute(layout())) {
-          auto dir = data_dir();
-          for (auto& k : f.key())
-            dir /= k;
           auto fac = [&] {
             VAST_DEBUG("make field indexer at offset", f.offset, "with type",
                        value_type);
+            auto dir = key_to_dir(f.key(), data_dir());
             return make_column_index(dir, value_type, i);
           };
           auto err = with_data_column(i, fac, fun);
@@ -266,10 +275,8 @@ caf::expected<bitmap> table_index::lookup_impl(const predicate& pred,
     return bitmap{};
   }
   auto fac = [&] {
-    auto p = data_dir();
-    for (auto& x : *k)
-      p /= x;
-    return make_column_index(p, *t, *index);
+    auto dir = key_to_dir(*k, data_dir());
+    return make_column_index(dir, *t, *index);
   };
   return with_data_column(*index, fac, [&](column_index& col) {
     return col.lookup(pred);

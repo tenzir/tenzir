@@ -33,7 +33,7 @@ bool operator<(const attribute_extractor& x, const attribute_extractor& y) {
 
 // -- key_extractor ------------------------------------------------------------
 
-key_extractor::key_extractor(vast::key k) : key{std::move(k)} {
+key_extractor::key_extractor(std::string k) : key{std::move(k)} {
 }
 
 bool operator==(const key_extractor& x, const key_extractor& y) {

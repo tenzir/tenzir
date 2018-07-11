@@ -18,6 +18,7 @@
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/schema.hpp"
 #include "vast/concept/printable/stream.hpp"
+#include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/error.hpp"
 #include "vast/concept/printable/vast/json.hpp"
 #include "vast/concept/printable/vast/schema.hpp"
@@ -134,7 +135,7 @@ TEST(schema: bro-style) {
   REQUIRE(ssl);
   auto r = get_if<record_type>(ssl);
   REQUIRE(r);
-  auto id = r->at(key{"id"});
+  auto id = r->at("id");
   REQUIRE(id);
   CHECK(holds_alternative<record_type>(*id));
 }
@@ -191,7 +192,7 @@ TEST(parseable - basic types global) {
   REQUIRE(foo);
   auto r = get_if<record_type>(foo);
   REQUIRE(r);
-  auto t8 = r->at(key{"a8"});
+  auto t8 = r->at("a8");
   REQUIRE(t8);
   CHECK(holds_alternative<pattern_type>(*t8));
 }
@@ -218,7 +219,7 @@ TEST(parseable - basic types local) {
   REQUIRE(foo);
   auto r = get_if<record_type>(foo);
   REQUIRE(r);
-  auto p = r->at(key{"a11"});
+  auto p = r->at("a11");
   REQUIRE(p);
   CHECK(holds_alternative<port_type>(*p));
 }
@@ -247,7 +248,7 @@ TEST(parseable - complex types global) {
   REQUIRE(foo);
   auto r = get_if<record_type>(foo);
   REQUIRE(r);
-  auto e = r->at(key{"e"});
+  auto e = r->at("e");
   REQUIRE(e);
   CHECK(*e == *enum_t);
 }

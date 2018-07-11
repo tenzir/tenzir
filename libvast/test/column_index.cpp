@@ -77,7 +77,7 @@ TEST(integer values) {
 TEST(bro conn log) {
   MESSAGE("ingest originators from bro conn log");
   auto row_type = bro_conn_log_layout();
-  auto col_offset = unbox(row_type.resolve(key{"id.orig_h"}));
+  auto col_offset = unbox(row_type.resolve("id.orig_h"));
   auto col_type = row_type.at(col_offset);
   auto col_index = unbox(row_type.flat_index_at(col_offset));
   REQUIRE_EQUAL(col_index, 3u);

@@ -33,6 +33,7 @@ TEST(functionality) {
   CHECK(pattern("^\\w{3}\\w{3}\\w{3}$").match(str));
   CHECK(pattern::glob("foo*baz").match(str));
   CHECK(pattern::glob("foo???baz").match(str));
+  CHECK(pattern::glob(str).match(str));
   str = "Holla die Waldfee!";
   pattern p{"\\w+ die Waldfe{2}."};
   CHECK(p.match(str));
