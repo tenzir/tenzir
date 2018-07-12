@@ -25,6 +25,8 @@
 #include "vast/table_slice_handle.hpp"
 #include "vast/uuid.hpp"
 
+#include "vast/concept/printable/to_string.hpp"
+
 #include "fixtures/actor_system_and_events.hpp"
 
 using namespace caf;
