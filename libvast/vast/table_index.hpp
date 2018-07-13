@@ -104,7 +104,7 @@ public:
   column_index& at(size_t column_index);
 
   /// @returns the column at given index and creates it lazily from the factory
-  /// in case it doesn't yet exist.
+  ///          in case it doesn't yet exist.
   /// @pre `column_size < num_columns()`
   template <class Factory, class Continuation>
   auto with_column(size_t column_index, Factory& factory, Continuation& f) {
@@ -121,7 +121,7 @@ public:
   }
 
   /// @returns the column for meta information at given index and creates it
-  /// lazily from the factory in case it doesn't yet exist.
+  ///          lazily from the factory in case it doesn't yet exist.
   /// @pre `column_size < num_columns()`
   template <class Factory, class Continuation>
   auto with_meta_column(size_t column_index, Factory factory, Continuation f) {
@@ -130,7 +130,8 @@ public:
   }
 
   /// @returns the column for data at given index and creates it lazily from the
-  /// factory in case it doesn't yet exist. @pre `column_size < num_columns()`
+  ///          factory in case it doesn't yet exist. 
+  /// @pre `column_size < num_columns()`
   template <class Factory, class Continuation>
   auto with_data_column(size_t column_index, Factory factory, Continuation f) {
     VAST_ASSERT(column_index < num_data_columns());
@@ -145,7 +146,7 @@ public:
   }
 
   /// @returns a pointer the column with given name or `nullptr` if no such
-  /// column exists.
+  ///          column exists.
   column_index* by_name(std::string_view column_name);
 
   /// @returns the base directory for all stored column indexes.
