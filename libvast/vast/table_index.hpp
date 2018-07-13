@@ -73,37 +73,37 @@ public:
 
   /// -- properties ------------------------------------------------------------
 
-  /// Returns the colums for storing meta information.
+  /// @returns the colums for storing meta information.
   inline columns_range meta_columns() {
     auto first = columns_.begin();
     return {first, first + meta_column_count};
   }
 
-  /// Returns the columns for storing data.
+  /// @returns the columns for storing data.
   inline columns_range data_columns() {
     return {columns_.begin() + meta_column_count, columns_.end()};
   }
 
-  /// Returns the number of columns.
+  /// @returns the number of columns.
   inline size_t num_columns() const {
     return columns_.size();
   }
 
-  /// Returns the number of columns for storing meta information.
+  /// @returns the number of columns for storing meta information.
   inline size_t num_meta_columns() const {
     return static_cast<size_t>(meta_column_count);
   }
 
-  /// Returns the number of columns for storing data.
+  /// @returns the number of columns for storing data.
   inline size_t num_data_columns() const {
     return num_columns() - num_meta_columns();
   }
 
-  /// Returns the column at given index.
+  /// @returns the column at given index.
   /// @pre `column_size < num_columns()`
   column_index& at(size_t column_index);
 
-  /// Returns the column at given index and creates it lazily from the factory
+  /// @returns the column at given index and creates it lazily from the factory
   /// in case it doesn't yet exist.
   /// @pre `column_size < num_columns()`
   template <class Factory, class Continuation>
@@ -120,7 +120,7 @@ public:
     return f(*col);
   }
 
-  /// Returns the column for meta information at given index and creates it
+  /// @returns the column for meta information at given index and creates it
   /// lazily from the factory in case it doesn't yet exist.
   /// @pre `column_size < num_columns()`
   template <class Factory, class Continuation>
@@ -129,7 +129,7 @@ public:
     return with_column(column_index, factory, f);
   }
 
-  /// Returns the column for data at given index and creates it lazily from the
+  /// @returns the column for data at given index and creates it lazily from the
   /// factory in case it doesn't yet exist. @pre `column_size < num_columns()`
   template <class Factory, class Continuation>
   auto with_data_column(size_t column_index, Factory factory, Continuation f) {
@@ -144,31 +144,31 @@ public:
       f(col.get());
   }
 
-  /// Returns a pointer the column with given name or `nullptr` if no such
+  /// @returns a pointer the column with given name or `nullptr` if no such
   /// column exists.
   column_index* by_name(std::string_view column_name);
 
-  /// Returns the base directory for all stored column indexes.
+  /// @returns the base directory for all stored column indexes.
   inline const path& base_dir() const {
     return base_dir_;
   }
 
-  /// Returns the type defining this table's layout.
+  /// @returns the type defining this table's layout.
   inline const record_type& layout() const {
     // Always safe, because the only way to construct a table_index is with a
     // record_type.
     return caf::get<record_type>(type_erased_layout_);
   }
 
-  /// Returns whether `add` was called at least once.
+  /// @returns whether `add` was called at least once.
   inline bool dirty() const {
     return dirty_;
   }
 
-  /// Returns the base directory for meta column indexes.
+  /// @returns the base directory for meta column indexes.
   path meta_dir() const;
 
-  /// Returns the base directory for data column indexes.
+  /// @returns the base directory for data column indexes.
   path data_dir() const;
 
   /// Indexes a slice for all columns.

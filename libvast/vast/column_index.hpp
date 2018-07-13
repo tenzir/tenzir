@@ -67,7 +67,7 @@ public:
   /// @pre `init()` was called previously.
   caf::expected<bitmap> lookup(const predicate& pred);
 
-  /// Returns the file name for loading and storing the index.
+  /// @returns the file name for loading and storing the index.
   inline const path& filename() const {
     return filename_;
   }
@@ -79,12 +79,12 @@ public:
     return f(x.index_type_, x.filename_, tmp, f.last_flush_);
   }
 
-  /// Returns the type of this column.
+  /// @returns the type of this column.
   inline const type& index_type() const {
     return index_type_;
   }
 
-  /// Returns the value index.
+  /// @returns the value index.
   /// @pre `init()` was called and did not return an error.
   const value_index& idx() const {
     VAST_ASSERT(idx_ != nullptr);

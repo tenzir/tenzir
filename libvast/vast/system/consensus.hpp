@@ -111,7 +111,7 @@ public:
   /// Checks whether the log is empty.
   bool empty() const;
 
-  /// Returns the number of bytes the serialized entries in the log occupy.
+  /// @returns the number of bytes the serialized entries in the log occupy.
   friend uint64_t bytes(log& l);
 
 private:

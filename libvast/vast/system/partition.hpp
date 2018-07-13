@@ -65,34 +65,34 @@ public:
 
   // -- properties -------------------------------------------------------------
 
-  /// Returns the INDEXER manager.
+  /// @returns the INDEXER manager.
   indexer_manager& manager() noexcept {
     return mgr_;
   }
 
-  /// Returns the INDEXER manager.
+  /// @returns the INDEXER manager.
   const indexer_manager& manager() const noexcept {
     return mgr_;
   }
 
-  /// Returns whether the meta data was changed.
+  /// @returns whether the meta data was changed.
   inline bool dirty() const noexcept {
     return meta_data_.dirty;
   }
 
-  /// Returns the working directory of the partition.
+  /// @returns the working directory of the partition.
   inline const path& dir() const noexcept {
     return dir_;
   }
-  /// Returns the unique ID of the partition.
+  /// @returns the unique ID of the partition.
   inline const uuid& id() const noexcept {
     return id_;
   }
 
-  /// Returns all layouts in this partition.
+  /// @returns all layouts in this partition.
   std::vector<record_type> layouts() const;
 
-  /// Returns the file name for saving or loading the ::meta_data.
+  /// @returns the file name for saving or loading the ::meta_data.
   path meta_file() const;
 
   // -- operations -------------------------------------------------------------
@@ -108,12 +108,12 @@ public:
     });
   }
 
-  /// Returns all INDEXER actors that match the expression `expr`.
+  /// @returns all INDEXER actors that match the expression `expr`.
   /// @returns all matched INDEXER actors.
   size_t get_indexers(std::vector<caf::actor>& indexers,
                       const expression& expr);
 
-  /// Returns all INDEXER actors that match the expression `expr`.
+  /// @returns all INDEXER actors that match the expression `expr`.
   /// @returns all matched INDEXER actors.
   std::vector<caf::actor> get_indexers(const expression& expr);
 

@@ -103,7 +103,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     return vast::system::make_partition(self.ptr(), state_dir, id);
   }
 
-  /// Returns how many dummy INDEXER actors are currently running.
+  /// @returns how many dummy INDEXER actors are currently running.
   size_t running_indexers() {
     return sys.registry().running() - min_running_actors;
   }
