@@ -70,7 +70,7 @@ public:
   /// Creates a summary of all option declarations and available commands.
   std::string usage() const;
 
-  /// Returns the full name for this command.
+  /// @returns the full name for this command.
   std::string full_name() const;
 
   /// Queries whether this command has no parent.
@@ -78,12 +78,12 @@ public:
     return parent_ == nullptr;
   }
 
-  /// Returns the root command.
+  /// @returns the root command.
   inline command& root() noexcept {
     return is_root() ? *this : parent_->root();
   }
 
-  /// Returns the managed command name.
+  /// @returns the managed command name.
   inline std::string_view name() const noexcept {
     return name_;
   }

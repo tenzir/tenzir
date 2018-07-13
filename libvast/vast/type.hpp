@@ -772,7 +772,7 @@ bool type_check(const type& t, const data& d);
 /// @relates type data
 data construct(const type& t);
 
-/// Returns a digest ID for `x`.
+/// @returns a digest ID for `x`.
 /// @relates type
 std::string to_digest(const type& x);
 

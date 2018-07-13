@@ -50,7 +50,8 @@ public:
 
   // -- properties -------------------------------------------------------------
 
-  /// Returns the synopsis for a partition if present, returns `none` otherwise.
+  /// @returns the synopsis for a partition if present, returns `none` 
+  ///          otherwise.
   caf::optional<partition_synopsis> operator[](const uuid& partition) const;
 
   void add(const uuid& partition, const const_table_slice_ptr& slice);

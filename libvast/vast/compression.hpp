@@ -32,7 +32,7 @@ enum class compression : int8_t {
 /// The LZ4 compression algorithm.
 namespace lz4 {
 
-/// Returns an upper bound for the compressed output.
+/// @returns an upper bound for the compressed output.
 /// @param size The size of the uncompressed input.
 size_t compress_bound(size_t size);
 
@@ -48,11 +48,11 @@ size_t uncompress(const char* in, size_t in_size, char* out, size_t out_size);
 /// The Snappy compression algorithm.
 namespace snappy {
 
-/// Returns an upper bound for the compressed output.
+/// @returns an upper bound for the compressed output.
 /// @param size The size of the uncompressed input.
 size_t compress_bound(size_t size);
 
-/// Returns the size of the uncompressed output.
+/// @returns the size of the uncompressed output.
 /// @param size The size of the uncompressed input.
 size_t uncompress_bound(const char* data, size_t size);
 

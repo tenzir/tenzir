@@ -48,7 +48,7 @@ public:
   ///          failure.
   virtual table_slice_ptr finish() = 0;
 
-  /// Returns the current number of rows in the table slice.
+  /// @returns the current number of rows in the table slice.
   virtual size_t rows() const noexcept = 0;
 };
 

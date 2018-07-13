@@ -57,12 +57,12 @@ struct importer_state {
       // nop
     }
 
-    /// Returns whether this generator is exhausted.
+    /// @returns whether this generator is exhausted.
     inline bool at_end() const noexcept {
       return i == last;
     }
 
-    /// Returns the next ID and advances the position in the range.
+    /// @returns the next ID and advances the position in the range.
     inline id next(size_t num = 1) noexcept {
       VAST_ASSERT(static_cast<size_t>(remaining()) >= num);
       auto result = i;
@@ -70,7 +70,7 @@ struct importer_state {
       return result;
     }
 
-    /// Returns how many more times `next` returns a valid ID.
+    /// @returns how many more times `next` returns a valid ID.
     inline int32_t remaining() const noexcept {
       return static_cast<int32_t>(last - i);
     }
@@ -90,10 +90,10 @@ struct importer_state {
   /// Stores currently available IDs.
   std::vector<id_generator> id_generators;
 
-  /// Returns the number of currently available IDs.
+  /// @returns the number of currently available IDs.
   int32_t available_ids() const noexcept;
 
-  /// Returns the first ID for an ID block of size `max_table_slice_size`.
+  /// @returns the first ID for an ID block of size `max_table_slice_size`.
   /// @pre `available_ids() >= max_table_slice_size`
   id next_id_block();
 
