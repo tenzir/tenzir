@@ -109,12 +109,10 @@ public:
   }
 
   /// @returns all INDEXER actors that match the expression `expr`.
-  /// @returns all matched INDEXER actors.
   size_t get_indexers(std::vector<caf::actor>& indexers,
                       const expression& expr);
 
   /// @returns all INDEXER actors that match the expression `expr`.
-  /// @returns all matched INDEXER actors.
   std::vector<caf::actor> get_indexers(const expression& expr);
 
 private:
