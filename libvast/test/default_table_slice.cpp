@@ -16,8 +16,10 @@
 #include <caf/binary_deserializer.hpp>
 #include <caf/binary_serializer.hpp>
 
+#include "vast/const_table_slice_handle.hpp"
 #include "vast/default_table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
+#include "vast/table_slice_handle.hpp"
 #include "vast/value.hpp"
 #include "vast/view.hpp"
 
@@ -43,9 +45,18 @@ struct fixture : fixtures::deterministic_actor_system {
   using tup = std::tuple<integer, std::string, real>;
 
   std::vector<tup> test_data;
+
   std::vector<value> test_values;
 
-  fixture() {
+  std::vector<char> buf;
+
+  caf::binary_serializer sink;
+
+  auto make_source() {
+    return caf::binary_deserializer{sys, buf};
+  }
+
+  fixture() : sink(sys, buf) {
     REQUIRE_NOT_EQUAL(builder, nullptr);
     test_data.assign({
       tup{1, "abc", 1.2},
@@ -132,17 +143,12 @@ TEST(object serialization) {
   MESSAGE("make slices");
   auto slice1 = make_slice();
   auto slice2 = caf::make_counted<default_table_slice>(slice1->layout());
-  std::vector<char> buf;
   MESSAGE("save content of the first slice into the buffer");
-  {
-    caf::binary_serializer bs{sys, buf};
-    CHECK_EQUAL(slice1->save(bs), caf::none);
-  }
+  CHECK_EQUAL(slice1->save(sink), caf::none);
   MESSAGE("load content for the second slice from the buffer");
-  {
-    caf::binary_deserializer bs{sys, buf};
-    CHECK_EQUAL(slice2->load(bs), caf::none);
-  }
+  auto source = make_source();
+  CHECK_EQUAL(slice2->load(source), caf::none);
+  MESSAGE("check result of serialization roundtrip");
   CHECK_EQUAL(*slice1, *slice2);
 }
 
@@ -150,19 +156,57 @@ TEST(smart pointer serialization) {
   MESSAGE("make slices");
   auto slice1 = make_slice();
   table_slice_ptr slice2;
-  std::vector<char> buf;
   MESSAGE("save content of the first slice into the buffer");
-  {
-    caf::binary_serializer bs{sys, buf};
-    CHECK_EQUAL(table_slice::save_ptr(bs, slice1), caf::none);
-  }
+  CHECK_EQUAL(table_slice::save_ptr(sink, slice1), caf::none);
   MESSAGE("load content for the second slice from the buffer");
-  {
-    caf::binary_deserializer bs{sys, buf};
-    CHECK_EQUAL(table_slice::load_ptr(bs, slice2), caf::none);
-  }
+  auto source = make_source();
+  CHECK_EQUAL(table_slice::load_ptr(source, slice2), caf::none);
+  MESSAGE("check result of serialization roundtrip");
   REQUIRE_NOT_EQUAL(slice2, nullptr);
   CHECK_EQUAL(*slice1, *slice2);
+}
+
+TEST(handle serialization) {
+  MESSAGE("make slices");
+  auto slice1 = table_slice_handle{make_slice()};
+  table_slice_handle slice2;
+  MESSAGE("save content of the first slice into the buffer");
+  CHECK_EQUAL(sink(slice1), caf::none);
+  MESSAGE("load content for the second slice from the buffer");
+  auto source = make_source();
+  CHECK_EQUAL(source(slice2), caf::none);
+  MESSAGE("check result of serialization roundtrip");
+  REQUIRE_NOT_EQUAL(slice2, nullptr);
+  CHECK_EQUAL(*slice1, *slice2);
+}
+
+TEST(const handle serialization) {
+  MESSAGE("make slices");
+  auto slice1 = const_table_slice_handle{make_slice()};
+  const_table_slice_handle slice2;
+  MESSAGE("save content of the first slice into the buffer");
+  CHECK_EQUAL(sink(slice1), caf::none);
+  MESSAGE("load content for the second slice from the buffer");
+  auto source = make_source();
+  CHECK_EQUAL(source(slice2), caf::none);
+  MESSAGE("check result of serialization roundtrip");
+  REQUIRE_NOT_EQUAL(slice2, nullptr);
+  CHECK_EQUAL(*slice1, *slice2);
+}
+
+TEST(message serialization) {
+  MESSAGE("make slices");
+  auto slice1 = caf::make_message(table_slice_handle{make_slice()});
+  caf::message slice2;
+  MESSAGE("save content of the first slice into the buffer");
+  CHECK_EQUAL(sink(slice1), caf::none);
+  MESSAGE("load content for the second slice from the buffer");
+  auto source = make_source();
+  CHECK_EQUAL(source(slice2), caf::none);
+  MESSAGE("check result of serialization roundtrip");
+  REQUIRE(slice2.match_elements<table_slice_handle>());
+  CHECK_EQUAL(*slice1.get_as<table_slice_handle>(0),
+              *slice2.get_as<table_slice_handle>(0));
 }
 
 FIXTURE_SCOPE_END()

@@ -28,12 +28,15 @@
 #include "vast/batch.hpp"
 #include "vast/bitmap.hpp"
 #include "vast/config.hpp"
+#include "vast/const_table_slice_handle.hpp"
 #include "vast/error.hpp"
 #include "vast/event.hpp"
 #include "vast/expression.hpp"
 #include "vast/operator.hpp"
 #include "vast/query_options.hpp"
 #include "vast/schema.hpp"
+#include "vast/table_slice.hpp"
+#include "vast/table_slice_handle.hpp"
 #include "vast/time.hpp"
 #include "vast/type.hpp"
 #include "vast/uuid.hpp"
@@ -69,6 +72,8 @@ configuration::configuration() {
   add_message_type<type>("vast::type");
   add_message_type<timespan>("vast::timespan");
   add_message_type<uuid>("vast::uuid");
+  add_message_type<table_slice_handle>("vast::table_slice_handle");
+  add_message_type<const_table_slice_handle>("vast::const_table_slice_handle");
   // Containers
   add_message_type<std::vector<event>>("std::vector<vast::event>");
   // Actor-specific messages
