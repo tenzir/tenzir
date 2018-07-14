@@ -128,7 +128,7 @@ TEST(equality) {
   CHECK_EQUAL(*slice1, *slice2);
 }
 
-TEST(serialization) {
+TEST(object serialization) {
   MESSAGE("make slices");
   auto slice1 = make_slice();
   auto slice2 = caf::make_counted<default_table_slice>(slice1->layout());
@@ -143,6 +143,25 @@ TEST(serialization) {
     caf::binary_deserializer bs{sys, buf};
     CHECK_EQUAL(slice2->load(bs), caf::none);
   }
+  CHECK_EQUAL(*slice1, *slice2);
+}
+
+TEST(smart pointer serialization) {
+  MESSAGE("make slices");
+  auto slice1 = make_slice();
+  table_slice_ptr slice2;
+  std::vector<char> buf;
+  MESSAGE("save content of the first slice into the buffer");
+  {
+    caf::binary_serializer bs{sys, buf};
+    CHECK_EQUAL(table_slice::save_ptr(bs, slice1), caf::none);
+  }
+  MESSAGE("load content for the second slice from the buffer");
+  {
+    caf::binary_deserializer bs{sys, buf};
+    CHECK_EQUAL(table_slice::load_ptr(bs, slice2), caf::none);
+  }
+  REQUIRE_NOT_EQUAL(slice2, nullptr);
   CHECK_EQUAL(*slice1, *slice2);
 }
 

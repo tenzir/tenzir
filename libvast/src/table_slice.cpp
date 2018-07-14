@@ -13,9 +13,16 @@
 
 #include "vast/table_slice.hpp"
 
-#include "caf/sum_type.hpp"
+#include <caf/deserializer.hpp>
+#include <caf/error.hpp>
+#include <caf/execution_unit.hpp>
+#include <caf/sec.hpp>
+#include <caf/serializer.hpp>
+#include <caf/sum_type.hpp>
 
+#include "vast/default_table_slice.hpp"
 #include "vast/detail/overload.hpp"
+#include "vast/error.hpp"
 #include "vast/event.hpp"
 #include "vast/value.hpp"
 
@@ -52,6 +59,47 @@ record_type table_slice::layout(size_type first_column,
   std::vector<record_field> sub_records{layout_.fields.begin() + col_begin,
                                         layout_.fields.begin() + col_end};
   return record_type{std::move(sub_records)};
+}
+
+table_slice_ptr table_slice::make(record_type layout, caf::actor_system&,
+                                  caf::atom_value impl) {
+  // TODO: extend CAF to allow storing arbitrary factory functions and remove
+  //       hardwired 'DEFAULT' code here.
+  if (impl == caf::atom("DEFAULT"))
+    return caf::make_counted<default_table_slice>(std::move(layout));
+  return nullptr;
+}
+
+caf::error table_slice::save_ptr(caf::serializer& sink,
+                                 const_table_slice_ptr ptr) {
+  if (!ptr) {
+    record_type dummy;
+    return sink(dummy);
+  }
+  return caf::error::eval([&] { return sink(ptr->layout()); },
+                          [&] { return sink(ptr->implementation_id()); },
+                          [&] { return ptr->save(sink); });
+}
+
+caf::error table_slice::load_ptr(caf::deserializer& source,
+                                 table_slice_ptr& ptr) {
+  if (source.context() == nullptr)
+    return caf::sec::no_context;
+  record_type layout;
+  caf::atom_value impl_id;
+  auto err = caf::error::eval([&] { return source(layout); },
+                              [&] { return source(impl_id); });
+  if (err)
+    return err;
+  // Only default-constructed table slice handles have an empty layout.
+  if (layout.fields.empty()) {
+    ptr.reset();
+    return caf::none;
+  }
+  ptr = make(std::move(layout), source.context()->system(), impl_id);
+  if (!ptr)
+    return ec::invalid_table_slice_type;
+  return ptr->load(source);
 }
 
 caf::optional<value> table_slice::row_to_value(size_type row,

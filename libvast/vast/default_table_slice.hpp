@@ -40,7 +40,7 @@ public:
 
   // -- persistence ------------------------------------------------------------
 
-  caf::error save(caf::serializer& sink) final;
+  caf::error save(caf::serializer& sink) const final;
 
   caf::error load(caf::deserializer& source) final;
 

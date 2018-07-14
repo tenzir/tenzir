@@ -30,7 +30,7 @@ table_slice_ptr default_table_slice::clone() const {
   return caf::make_counted<default_table_slice>(*this);
 }
 
-caf::error default_table_slice::save(caf::serializer& sink) {
+caf::error default_table_slice::save(caf::serializer& sink) const {
   return sink(offset_, xs_);
 }
 
