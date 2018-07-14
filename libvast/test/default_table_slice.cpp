@@ -13,20 +13,25 @@
 
 #include <string>
 
+#include <caf/binary_deserializer.hpp>
+#include <caf/binary_serializer.hpp>
+
 #include "vast/default_table_slice.hpp"
-#include "vast/value.hpp"
 #include "vast/table_slice_builder.hpp"
+#include "vast/value.hpp"
 #include "vast/view.hpp"
 
 #define SUITE default_table_slice
 #include "test.hpp"
+
+#include "fixtures/actor_system.hpp"
 
 using namespace vast;
 using namespace std::string_literals;
 
 namespace {
 
-struct fixture {
+struct fixture : fixtures::deterministic_actor_system {
   record_type layout = record_type{
     {"a", integer_type{}},
     {"b", string_type{}},
@@ -66,14 +71,14 @@ struct fixture {
   std::vector<value> subset(size_t from, size_t num) {
     return {test_values.begin() + from, test_values.begin() + (from + num)};
   }
-};
 
-template <class T>
-T unbox(caf::optional<T> x) {
-  if (!x)
-    FAIL("unable to unbox value");
-  return std::move(*x);
-}
+  template <class T>
+  T unbox(caf::optional<T> x) {
+    if (!x)
+      FAIL("unable to unbox value");
+    return std::move(*x);
+  }
+};
 
 } // namespace <anonymous>
 
@@ -115,6 +120,30 @@ TEST(rows to values) {
   CHECK_EQUAL(slice->rows_to_values(2, 1), subset(2, 1));
   CHECK_EQUAL(slice->rows_to_values(0, 2), subset(0, 2));
   CHECK_EQUAL(slice->rows_to_values(1, 2), subset(1, 2));
+}
+
+TEST(equality) {
+  auto slice1 = make_slice();
+  auto slice2 = make_slice();
+  CHECK_EQUAL(*slice1, *slice2);
+}
+
+TEST(serialization) {
+  MESSAGE("make slices");
+  auto slice1 = make_slice();
+  auto slice2 = caf::make_counted<default_table_slice>(slice1->layout());
+  std::vector<char> buf;
+  MESSAGE("save content of the first slice into the buffer");
+  {
+    caf::binary_serializer bs{sys, buf};
+    CHECK_EQUAL(slice1->save(bs), caf::none);
+  }
+  MESSAGE("load content for the second slice from the buffer");
+  {
+    caf::binary_deserializer bs{sys, buf};
+    CHECK_EQUAL(slice2->load(bs), caf::none);
+  }
+  CHECK_EQUAL(*slice1, *slice2);
 }
 
 FIXTURE_SCOPE_END()

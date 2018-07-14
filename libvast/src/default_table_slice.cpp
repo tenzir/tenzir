@@ -13,7 +13,9 @@
 
 #include "vast/default_table_slice.hpp"
 
+#include <caf/deserializer.hpp>
 #include <caf/make_counted.hpp>
+#include <caf/serializer.hpp>
 
 #include "vast/default_table_slice_builder.hpp"
 
@@ -26,6 +28,16 @@ default_table_slice::default_table_slice(record_type layout)
 
 table_slice_ptr default_table_slice::clone() const {
   return caf::make_counted<default_table_slice>(*this);
+}
+
+caf::error default_table_slice::save(caf::serializer& sink) {
+  return sink(offset_, xs_);
+}
+
+caf::error default_table_slice::load(caf::deserializer& source) {
+  auto err = source(offset_, xs_);
+  rows_ = xs_.size();
+  return err;
 }
 
 caf::optional<data_view>
@@ -54,6 +66,10 @@ table_slice_ptr default_table_slice::make(record_type layout,
   auto result = builder->finish();
   VAST_ASSERT(result != nullptr);
   return result;
+}
+
+caf::atom_value default_table_slice::implementation_id() const noexcept {
+  return caf::atom("DEFAULT");
 }
 
 } // namespace vast

@@ -53,12 +53,23 @@ public:
   /// Makes a copy of this slice.
   virtual table_slice_ptr clone() const = 0;
 
+  // -- persistence ------------------------------------------------------------
+
+  /// Saves the contents (excluding the layout!) of this slice to `sink`.
+  virtual caf::error save(caf::serializer& sink) = 0;
+
+  /// Loads the contents for this slice from `source`.
+  virtual caf::error load(caf::deserializer& source) = 0;
+
   // -- properties -------------------------------------------------------------
 
   /// @returns the table layout.
   inline const record_type& layout() const noexcept {
     return layout_;
   }
+
+  /// @returns an identifier for the implementing class.
+  virtual caf::atom_value implementation_id() const noexcept = 0;
 
   /// @returns the layout for columns in range
   /// [first_column, first_column + num_columns).
