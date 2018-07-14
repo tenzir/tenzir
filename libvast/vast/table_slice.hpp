@@ -61,16 +61,18 @@ public:
   // -- persistence ------------------------------------------------------------
 
   /// Saves the contents (excluding the layout!) of this slice to `sink`.
-  virtual caf::error save(caf::serializer& sink) const = 0;
+  virtual caf::error serialize(caf::serializer& sink) const = 0;
 
   /// Loads the contents for this slice from `source`.
-  virtual caf::error load(caf::deserializer& source) = 0;
+  virtual caf::error deserialize(caf::deserializer& source) = 0;
 
   /// Saves the table slice in `ptr` to `sink`.
-  static caf::error save_ptr(caf::serializer& sink, const_table_slice_ptr ptr);
+  static caf::error serialize_ptr(caf::serializer& sink,
+                                  const_table_slice_ptr ptr);
 
   /// Loads a table slice from `source` into `ptr`.
-  static caf::error load_ptr(caf::deserializer& source, table_slice_ptr& ptr);
+  static caf::error deserialize_ptr(caf::deserializer& source,
+                                    table_slice_ptr& ptr);
 
   // -- properties -------------------------------------------------------------
 

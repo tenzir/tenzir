@@ -25,7 +25,7 @@ const_table_slice_handle::~const_table_slice_handle() {
 }
 
 caf::error inspect(caf::serializer& sink, const_table_slice_handle& hdl) {
-  return table_slice::save_ptr(sink, hdl.get());
+  return table_slice::serialize_ptr(sink, hdl.get());
 }
 
 caf::error inspect(caf::deserializer& source, const_table_slice_handle& hdl) {
@@ -33,7 +33,7 @@ caf::error inspect(caf::deserializer& source, const_table_slice_handle& hdl) {
   auto guard = caf::detail::make_scope_guard([&] {
     hdl = const_table_slice_handle{std::move(ptr)};
   });
-  return table_slice::load_ptr(source, ptr);
+  return table_slice::deserialize_ptr(source, ptr);
 }
 
 } // namespace vast

@@ -40,9 +40,9 @@ public:
 
   // -- persistence ------------------------------------------------------------
 
-  caf::error save(caf::serializer& sink) const final;
+  caf::error serialize(caf::serializer& sink) const final;
 
-  caf::error load(caf::deserializer& source) final;
+  caf::error deserialize(caf::deserializer& source) final;
 
   // -- static factory functions -----------------------------------------------
 

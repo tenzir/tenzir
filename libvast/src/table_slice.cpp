@@ -70,19 +70,19 @@ table_slice_ptr table_slice::make(record_type layout, caf::actor_system&,
   return nullptr;
 }
 
-caf::error table_slice::save_ptr(caf::serializer& sink,
-                                 const_table_slice_ptr ptr) {
+caf::error table_slice::serialize_ptr(caf::serializer& sink,
+                                      const_table_slice_ptr ptr) {
   if (!ptr) {
     record_type dummy;
     return sink(dummy);
   }
   return caf::error::eval([&] { return sink(ptr->layout()); },
                           [&] { return sink(ptr->implementation_id()); },
-                          [&] { return ptr->save(sink); });
+                          [&] { return ptr->serialize(sink); });
 }
 
-caf::error table_slice::load_ptr(caf::deserializer& source,
-                                 table_slice_ptr& ptr) {
+caf::error table_slice::deserialize_ptr(caf::deserializer& source,
+                                        table_slice_ptr& ptr) {
   if (source.context() == nullptr)
     return caf::sec::no_context;
   record_type layout;
@@ -99,7 +99,7 @@ caf::error table_slice::load_ptr(caf::deserializer& source,
   ptr = make(std::move(layout), source.context()->system(), impl_id);
   if (!ptr)
     return ec::invalid_table_slice_type;
-  return ptr->load(source);
+  return ptr->deserialize(source);
 }
 
 caf::optional<value> table_slice::row_to_value(size_type row,

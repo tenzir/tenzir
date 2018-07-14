@@ -144,10 +144,10 @@ TEST(object serialization) {
   auto slice1 = make_slice();
   auto slice2 = caf::make_counted<default_table_slice>(slice1->layout());
   MESSAGE("save content of the first slice into the buffer");
-  CHECK_EQUAL(slice1->save(sink), caf::none);
+  CHECK_EQUAL(slice1->serialize(sink), caf::none);
   MESSAGE("load content for the second slice from the buffer");
   auto source = make_source();
-  CHECK_EQUAL(slice2->load(source), caf::none);
+  CHECK_EQUAL(slice2->deserialize(source), caf::none);
   MESSAGE("check result of serialization roundtrip");
   CHECK_EQUAL(*slice1, *slice2);
 }
@@ -157,10 +157,10 @@ TEST(smart pointer serialization) {
   auto slice1 = make_slice();
   table_slice_ptr slice2;
   MESSAGE("save content of the first slice into the buffer");
-  CHECK_EQUAL(table_slice::save_ptr(sink, slice1), caf::none);
+  CHECK_EQUAL(table_slice::serialize_ptr(sink, slice1), caf::none);
   MESSAGE("load content for the second slice from the buffer");
   auto source = make_source();
-  CHECK_EQUAL(table_slice::load_ptr(source, slice2), caf::none);
+  CHECK_EQUAL(table_slice::deserialize_ptr(source, slice2), caf::none);
   MESSAGE("check result of serialization roundtrip");
   REQUIRE_NOT_EQUAL(slice2, nullptr);
   CHECK_EQUAL(*slice1, *slice2);
