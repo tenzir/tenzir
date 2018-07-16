@@ -590,11 +590,13 @@ struct record_type final : recursive_type<record_type> {
   /// Retrieves the type at a given key.
   /// @param key The key to resolve.
   /// @returns The type at key *key* or `nullptr` if *key* doesn't resolve.
+  // TODO: return caf::optional<type> instead.
   const type* at(std::string_view key) const;
 
   /// Retrieves the type at a given offset.
   /// @param o The offset to resolve.
   /// @returns The type at offset *o* or `nullptr` if *o* doesn't resolve.
+  // TODO: return caf::optional<type> instead.
   const type* at(const offset& o) const;
 
   /// Converts an offset into an index for the flattened representation.
