@@ -23,7 +23,10 @@ struct access;
 class json;
 
 /// A regular expression.
-class pattern : detail::totally_ordered<pattern> {
+class pattern : detail::totally_ordered<pattern>,
+                detail::addable<pattern>,
+                detail::orable<pattern>,
+                detail::andable<pattern> {
   friend access;
 
 public:
@@ -56,6 +59,23 @@ public:
   bool search(std::string_view str) const;
 
   const std::string& string() const;
+
+
+  // -- concepts // ------------------------------------------------------------
+
+  pattern& operator+=(const pattern& other);
+  pattern& operator+=(std::string_view other);
+  pattern& operator|=(const pattern& other);
+  pattern& operator|=(std::string_view other);
+  pattern& operator&=(const pattern& other);
+  pattern& operator&=(std::string_view other);
+
+  friend pattern operator+(const pattern& x, std::string_view y);
+  friend pattern operator+(std::string_view x, const pattern& y);
+  friend pattern operator|(const pattern& x, std::string_view y);
+  friend pattern operator|(std::string_view x, const pattern& y);
+  friend pattern operator&(const pattern& x, std::string_view y);
+  friend pattern operator&(std::string_view x, const pattern& y);
 
   friend bool operator==(const pattern& lhs, const pattern& rhs);
   friend bool operator<(const pattern& lhs, const pattern& rhs);

@@ -43,6 +43,72 @@ const std::string& pattern::string() const {
   return str_;
 }
 
+pattern& pattern::operator+=(const pattern& other) {
+  str_ += other.str_;
+  return *this;
+}
+
+pattern& pattern::operator+=(std::string_view other) {
+  str_ += other;
+  return *this;
+}
+
+pattern& pattern::operator|=(const pattern& other) {
+  return *this |= std::string_view{other.str_};
+}
+
+pattern& pattern::operator|=(std::string_view other) {
+  str_.insert(str_.begin(), '(');
+  str_ += ")|(";
+  str_.append(other.begin(), other.end());
+  str_ += ')';
+  return *this;
+}
+
+pattern& pattern::operator&=(const pattern& other) {
+  return *this &= std::string_view{other.str_};
+}
+
+pattern& pattern::operator&=(std::string_view other) {
+  str_.insert(str_.begin(), '(');
+  str_ += ")(";
+  str_.append(other.begin(), other.end());
+  str_ += ')';
+  return *this;
+}
+
+pattern operator+(const pattern& x, std::string_view y) {
+  return pattern{x.string() + std::string{y}};
+}
+
+pattern operator+(std::string_view x, const pattern& y) {
+  return pattern{std::string{x} + y.string()};
+}
+
+pattern operator|(const pattern& x, std::string_view y) {
+  pattern result{x};
+  result |= y;
+  return result;
+}
+
+pattern operator|(std::string_view x, const pattern& y) {
+  pattern result{std::string{x}};
+  result |= y;
+  return result;
+}
+
+pattern operator&(const pattern& x, std::string_view y) {
+  pattern result{x};
+  result &= y;
+  return result;
+}
+
+pattern operator&(std::string_view x, const pattern& y) {
+  pattern result{std::string{x}};
+  result &= y;
+  return result;
+}
+
 bool operator==(const pattern& lhs, const pattern& rhs) {
   return lhs.str_ == rhs.str_;
 }
