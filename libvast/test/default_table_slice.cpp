@@ -25,8 +25,9 @@
 
 #define SUITE default_table_slice
 #include "test.hpp"
-
 #include "fixtures/actor_system.hpp"
+
+#include <caf/test/dsl.hpp>
 
 using namespace vast;
 using namespace std::string_literals;
@@ -81,13 +82,6 @@ struct fixture : fixtures::deterministic_actor_system {
 
   std::vector<value> subset(size_t from, size_t num) {
     return {test_values.begin() + from, test_values.begin() + (from + num)};
-  }
-
-  template <class T>
-  T unbox(caf::optional<T> x) {
-    if (!x)
-      FAIL("unable to unbox value");
-    return std::move(*x);
   }
 };
 

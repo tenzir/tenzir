@@ -11,12 +11,6 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#define SUITE table_index
-#include "test.hpp"
-
-#include "fixtures/events.hpp"
-#include "fixtures/filesystem.hpp"
-
 #include "vast/bitmap.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
@@ -29,18 +23,19 @@
 #include "vast/table_index.hpp"
 #include "vast/table_slice_handle.hpp"
 
+#define SUITE table_index
+#include "test.hpp"
+
+#include "fixtures/events.hpp"
+#include "fixtures/filesystem.hpp"
+
+#include <caf/test/dsl.hpp>
+
 using namespace vast;
 
 namespace {
 
 struct fixture : fixtures::events, fixtures::filesystem {
-  template <class T>
-  T unbox(expected<T> x) {
-    if (!x)
-      FAIL("error: " << x.error());
-    return std::move(*x);
-  }
-
   ids query(std::string_view what) {
     return unbox(tbl->lookup(unbox(to<expression>(what))));
   }
