@@ -13,8 +13,9 @@
 
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/vast/event.hpp"
-#include "vast/system/archive.hpp"
+#include "vast/const_table_slice_handle.hpp"
 #include "vast/ids.hpp"
+#include "vast/system/archive.hpp"
 #include "vast/table_slice.hpp"
 
 #include "vast/detail/spawn_container_source.hpp"

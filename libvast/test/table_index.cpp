@@ -24,8 +24,10 @@
 #include "vast/concept/printable/vast/error.hpp"
 #include "vast/concept/printable/vast/event.hpp"
 #include "vast/concept/printable/vast/expression.hpp"
+#include "vast/const_table_slice_handle.hpp"
 #include "vast/default_table_slice.hpp"
 #include "vast/table_index.hpp"
+#include "vast/table_slice_handle.hpp"
 
 using namespace vast;
 
@@ -53,7 +55,7 @@ struct fixture : fixtures::events, fixtures::filesystem {
     reset(std::move(*new_tbl));
   }
 
-  void add(const_table_slice_ptr x) {
+  void add(const_table_slice_handle x) {
     auto err = tbl->add(x);
     if (err)
       FAIL("error: " << err);

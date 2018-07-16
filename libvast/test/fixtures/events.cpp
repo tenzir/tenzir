@@ -13,11 +13,13 @@
 
 #include "fixtures/events.hpp"
 
+#include "vast/const_table_slice_handle.hpp"
 #include "vast/default_table_slice.hpp"
 #include "vast/format/bgpdump.hpp"
 #include "vast/format/bro.hpp"
 #include "vast/format/test.hpp"
 #include "vast/table_slice_builder.hpp"
+#include "vast/table_slice_handle.hpp"
 #include "vast/type.hpp"
 
 namespace fixtures {
@@ -57,32 +59,33 @@ std::vector<event> events::bro_http_log;
 std::vector<event> events::bgpdump_txt;
 std::vector<event> events::random;
 
-std::vector<table_slice_ptr> events::bro_conn_log_slices;
-// std::vector<table_slice_ptr> events::bro_dns_log_slices;
-// std::vector<table_slice_ptr> events::bro_http_log_slices;
-// std::vector<table_slice_ptr> events::bgpdump_txt_slices;
-// std::vector<table_slice_ptr> events::random_slices;
+std::vector<table_slice_handle> events::bro_conn_log_slices;
+// std::vector<table_slice_handle> events::bro_dns_log_slices;
+// std::vector<table_slice_handle> events::bro_http_log_slices;
+// std::vector<table_slice_handle> events::bgpdump_txt_slices;
+// std::vector<table_slice_handle> events::random_slices;
 
-std::vector<const_table_slice_ptr> events::const_bro_conn_log_slices;
-// std::vector<const_table_slice_ptr> events::const_bro_http_log_slices;
-// std::vector<const_table_slice_ptr> events::const_bro_dns_log_slices;
-// std::vector<const_table_slice_ptr> events::const_bgpdump_txt_slices;
-// std::vector<const_table_slice_ptr> events::const_random_slices;
+std::vector<const_table_slice_handle> events::const_bro_conn_log_slices;
+// std::vector<const_table_slice_handle> events::const_bro_http_log_slices;
+// std::vector<const_table_slice_handle> events::const_bro_dns_log_slices;
+// std::vector<const_table_slice_handle> events::const_bgpdump_txt_slices;
+// std::vector<const_table_slice_handle> events::const_random_slices;
 
 std::vector<event> events::ascending_integers;
-std::vector<table_slice_ptr> events::ascending_integers_slices;
-std::vector<const_table_slice_ptr> events::const_ascending_integers_slices;
+std::vector<table_slice_handle> events::ascending_integers_slices;
+std::vector<const_table_slice_handle> events::const_ascending_integers_slices;
 
 std::vector<event> events::alternating_integers;
-std::vector<table_slice_ptr> events::alternating_integers_slices;
-std::vector<const_table_slice_ptr> events::const_alternating_integers_slices;
+std::vector<table_slice_handle> events::alternating_integers_slices;
+std::vector<const_table_slice_handle> events::const_alternating_integers_slices;
 
 record_type events::bro_conn_log_layout() {
   return const_bro_conn_log_slices[0]->layout();
 }
 
-std::vector<table_slice_ptr> events::copy(std::vector<table_slice_ptr> xs) {
-  std::vector<table_slice_ptr> result;
+std::vector<table_slice_handle>
+events::copy(std::vector<table_slice_handle> xs) {
+  std::vector<table_slice_handle> result;
   result.reserve(xs.size());
   for (auto& x : xs)
     result.emplace_back(x->clone());
@@ -124,7 +127,7 @@ events::events() {
     layout.fields.insert(layout.fields.begin(), std::move(tstamp_field));
     auto builder = default_table_slice::make_builder(std::move(layout));
     auto full_slices = src.size() / slice_size;
-    std::vector<table_slice_ptr> slices;
+    std::vector<table_slice_handle> slices;
     auto i = src.begin();
     auto make_slice = [&](size_t size) {
       if (size == 0)
@@ -157,7 +160,7 @@ events::events() {
   ascending_integers_slices = slice_up(ascending_integers);
   alternating_integers_slices = slice_up(alternating_integers);
   auto to_const_vector = [](const auto& xs) {
-    std::vector<const_table_slice_ptr> result;
+    std::vector<const_table_slice_handle> result;
     result.reserve(xs.size());
     result.insert(result.end(), xs.begin(), xs.end());
     return result;

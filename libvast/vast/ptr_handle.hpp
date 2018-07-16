@@ -70,6 +70,11 @@ public:
     return ptr_.get();
   }
 
+  /// @returns the stored smart pointer.
+  const caf::intrusive_ptr<T>& ptr() const noexcept {
+    return ptr_;
+  }
+
   // -- comparison -------------------------------------------------------------
 
   /// @returns `get() - other.get()` for total ordering of handles by comparing

@@ -130,7 +130,7 @@ public:
   }
 
   /// @returns the column for data at given index and creates it lazily from the
-  ///          factory in case it doesn't yet exist. 
+  ///          factory in case it doesn't yet exist.
   /// @pre `column_size < num_columns()`
   template <class Factory, class Continuation>
   auto with_data_column(size_t column_index, Factory factory, Continuation f) {
@@ -174,7 +174,7 @@ public:
 
   /// Indexes a slice for all columns.
   /// @param x Table slice for ingestion.
-  caf::error add(const const_table_slice_ptr& x);
+  caf::error add(const const_table_slice_handle& x);
 
   /// Queries event IDs that fulfill the given predicate on any column.
   /// @pre `init()` was called previously.

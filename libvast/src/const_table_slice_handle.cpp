@@ -17,8 +17,15 @@
 #include <caf/error.hpp>
 
 #include "vast/table_slice.hpp"
+#include "vast/table_slice_handle.hpp"
 
 namespace vast {
+
+const_table_slice_handle::const_table_slice_handle(
+  const table_slice_handle& other)
+  : super(other.ptr()) {
+  // nop
+}
 
 const_table_slice_handle::~const_table_slice_handle() {
   // nop

@@ -36,7 +36,7 @@ struct archive_state {
 
 /// @relates archive
 using archive_type = caf::typed_actor<
-  caf::reacts_to<caf::stream<const_table_slice_ptr>>,
+  caf::reacts_to<caf::stream<const_table_slice_handle>>,
   caf::reacts_to<std::vector<event>>,
   caf::replies_to<ids>::with<std::vector<event>>
 >;

@@ -154,7 +154,7 @@ TEST(object serialization) {
 
 TEST(smart pointer serialization) {
   MESSAGE("make slices");
-  auto slice1 = make_slice();
+  auto slice1 = make_slice().ptr();
   table_slice_ptr slice2;
   MESSAGE("save content of the first slice into the buffer");
   CHECK_EQUAL(table_slice::serialize_ptr(sink, slice1), caf::none);
@@ -182,7 +182,7 @@ TEST(handle serialization) {
 
 TEST(const handle serialization) {
   MESSAGE("make slices");
-  auto slice1 = const_table_slice_handle{make_slice()};
+  auto slice1 = const_table_slice_handle{make_slice().ptr()};
   const_table_slice_handle slice2;
   MESSAGE("save content of the first slice into the buffer");
   CHECK_EQUAL(sink(slice1), caf::none);

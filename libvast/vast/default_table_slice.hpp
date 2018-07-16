@@ -36,7 +36,7 @@ public:
 
   // -- factory functions ------------------------------------------------------
 
-  table_slice_ptr clone() const final;
+  table_slice_handle clone() const final;
 
   // -- persistence ------------------------------------------------------------
 
@@ -51,8 +51,8 @@ public:
   /// @returns The builder instance.
   static table_slice_builder_ptr make_builder(record_type layout);
 
-  static table_slice_ptr make(record_type layout,
-                              const std::vector<vector>& rows);
+  static table_slice_handle make(record_type layout,
+                                 const std::vector<vector>& rows);
 
   // -- properties -------------------------------------------------------------
 

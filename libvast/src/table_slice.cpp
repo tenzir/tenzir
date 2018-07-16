@@ -24,6 +24,8 @@
 #include "vast/detail/overload.hpp"
 #include "vast/error.hpp"
 #include "vast/event.hpp"
+#include "vast/table_slice_handle.hpp"
+#include "vast/const_table_slice_handle.hpp"
 #include "vast/value.hpp"
 
 namespace vast {
@@ -61,12 +63,14 @@ record_type table_slice::layout(size_type first_column,
   return record_type{std::move(sub_records)};
 }
 
-table_slice_ptr table_slice::make(record_type layout, caf::actor_system&,
-                                  caf::atom_value impl) {
+table_slice_ptr table_slice::make_ptr(record_type layout, caf::actor_system&,
+                                      caf::atom_value impl) {
   // TODO: extend CAF to allow storing arbitrary factory functions and remove
   //       hardwired 'DEFAULT' code here.
-  if (impl == caf::atom("DEFAULT"))
-    return caf::make_counted<default_table_slice>(std::move(layout));
+  if (impl == caf::atom("DEFAULT")) {
+    auto ptr = caf::make_counted<default_table_slice>(std::move(layout));
+    return ptr;
+  }
   return nullptr;
 }
 
@@ -96,7 +100,7 @@ caf::error table_slice::deserialize_ptr(caf::deserializer& source,
     ptr.reset();
     return caf::none;
   }
-  ptr = make(std::move(layout), source.context()->system(), impl_id);
+  ptr = make_ptr(std::move(layout), source.context()->system(), impl_id);
   if (!ptr)
     return ec::invalid_table_slice_type;
   return ptr->deserialize(source);
