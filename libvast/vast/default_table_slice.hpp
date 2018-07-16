@@ -38,6 +38,12 @@ public:
 
   table_slice_ptr clone() const final;
 
+  // -- persistence ------------------------------------------------------------
+
+  caf::error serialize(caf::serializer& sink) const final;
+
+  caf::error deserialize(caf::deserializer& source) final;
+
   // -- static factory functions -----------------------------------------------
 
   /// Constructs a builder that generates a default_table_slice.
@@ -51,6 +57,8 @@ public:
   // -- properties -------------------------------------------------------------
 
   caf::optional<data_view> at(size_type row, size_type col) const final;
+
+  caf::atom_value implementation_id() const noexcept final;
 
 private:
   // -- member variables -------------------------------------------------------

@@ -13,20 +13,27 @@
 
 #include <string>
 
+#include <caf/binary_deserializer.hpp>
+#include <caf/binary_serializer.hpp>
+
+#include "vast/const_table_slice_handle.hpp"
 #include "vast/default_table_slice.hpp"
-#include "vast/value.hpp"
 #include "vast/table_slice_builder.hpp"
+#include "vast/table_slice_handle.hpp"
+#include "vast/value.hpp"
 #include "vast/view.hpp"
 
 #define SUITE default_table_slice
 #include "test.hpp"
+
+#include "fixtures/actor_system.hpp"
 
 using namespace vast;
 using namespace std::string_literals;
 
 namespace {
 
-struct fixture {
+struct fixture : fixtures::deterministic_actor_system {
   record_type layout = record_type{
     {"a", integer_type{}},
     {"b", string_type{}},
@@ -38,9 +45,18 @@ struct fixture {
   using tup = std::tuple<integer, std::string, real>;
 
   std::vector<tup> test_data;
+
   std::vector<value> test_values;
 
-  fixture() {
+  std::vector<char> buf;
+
+  caf::binary_serializer sink;
+
+  auto make_source() {
+    return caf::binary_deserializer{sys, buf};
+  }
+
+  fixture() : sink(sys, buf) {
     REQUIRE_NOT_EQUAL(builder, nullptr);
     test_data.assign({
       tup{1, "abc", 1.2},
@@ -66,14 +82,14 @@ struct fixture {
   std::vector<value> subset(size_t from, size_t num) {
     return {test_values.begin() + from, test_values.begin() + (from + num)};
   }
-};
 
-template <class T>
-T unbox(caf::optional<T> x) {
-  if (!x)
-    FAIL("unable to unbox value");
-  return std::move(*x);
-}
+  template <class T>
+  T unbox(caf::optional<T> x) {
+    if (!x)
+      FAIL("unable to unbox value");
+    return std::move(*x);
+  }
+};
 
 } // namespace <anonymous>
 
@@ -115,6 +131,82 @@ TEST(rows to values) {
   CHECK_EQUAL(slice->rows_to_values(2, 1), subset(2, 1));
   CHECK_EQUAL(slice->rows_to_values(0, 2), subset(0, 2));
   CHECK_EQUAL(slice->rows_to_values(1, 2), subset(1, 2));
+}
+
+TEST(equality) {
+  auto slice1 = make_slice();
+  auto slice2 = make_slice();
+  CHECK_EQUAL(*slice1, *slice2);
+}
+
+TEST(object serialization) {
+  MESSAGE("make slices");
+  auto slice1 = make_slice();
+  auto slice2 = caf::make_counted<default_table_slice>(slice1->layout());
+  MESSAGE("save content of the first slice into the buffer");
+  CHECK_EQUAL(slice1->serialize(sink), caf::none);
+  MESSAGE("load content for the second slice from the buffer");
+  auto source = make_source();
+  CHECK_EQUAL(slice2->deserialize(source), caf::none);
+  MESSAGE("check result of serialization roundtrip");
+  CHECK_EQUAL(*slice1, *slice2);
+}
+
+TEST(smart pointer serialization) {
+  MESSAGE("make slices");
+  auto slice1 = make_slice();
+  table_slice_ptr slice2;
+  MESSAGE("save content of the first slice into the buffer");
+  CHECK_EQUAL(table_slice::serialize_ptr(sink, slice1), caf::none);
+  MESSAGE("load content for the second slice from the buffer");
+  auto source = make_source();
+  CHECK_EQUAL(table_slice::deserialize_ptr(source, slice2), caf::none);
+  MESSAGE("check result of serialization roundtrip");
+  REQUIRE_NOT_EQUAL(slice2, nullptr);
+  CHECK_EQUAL(*slice1, *slice2);
+}
+
+TEST(handle serialization) {
+  MESSAGE("make slices");
+  auto slice1 = table_slice_handle{make_slice()};
+  table_slice_handle slice2;
+  MESSAGE("save content of the first slice into the buffer");
+  CHECK_EQUAL(sink(slice1), caf::none);
+  MESSAGE("load content for the second slice from the buffer");
+  auto source = make_source();
+  CHECK_EQUAL(source(slice2), caf::none);
+  MESSAGE("check result of serialization roundtrip");
+  REQUIRE_NOT_EQUAL(slice2, nullptr);
+  CHECK_EQUAL(*slice1, *slice2);
+}
+
+TEST(const handle serialization) {
+  MESSAGE("make slices");
+  auto slice1 = const_table_slice_handle{make_slice()};
+  const_table_slice_handle slice2;
+  MESSAGE("save content of the first slice into the buffer");
+  CHECK_EQUAL(sink(slice1), caf::none);
+  MESSAGE("load content for the second slice from the buffer");
+  auto source = make_source();
+  CHECK_EQUAL(source(slice2), caf::none);
+  MESSAGE("check result of serialization roundtrip");
+  REQUIRE_NOT_EQUAL(slice2, nullptr);
+  CHECK_EQUAL(*slice1, *slice2);
+}
+
+TEST(message serialization) {
+  MESSAGE("make slices");
+  auto slice1 = caf::make_message(table_slice_handle{make_slice()});
+  caf::message slice2;
+  MESSAGE("save content of the first slice into the buffer");
+  CHECK_EQUAL(sink(slice1), caf::none);
+  MESSAGE("load content for the second slice from the buffer");
+  auto source = make_source();
+  CHECK_EQUAL(source(slice2), caf::none);
+  MESSAGE("check result of serialization roundtrip");
+  REQUIRE(slice2.match_elements<table_slice_handle>());
+  CHECK_EQUAL(*slice1.get_as<table_slice_handle>(0),
+              *slice2.get_as<table_slice_handle>(0));
 }
 
 FIXTURE_SCOPE_END()

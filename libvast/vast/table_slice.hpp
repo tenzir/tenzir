@@ -53,12 +53,36 @@ public:
   /// Makes a copy of this slice.
   virtual table_slice_ptr clone() const = 0;
 
+  /// @returns a handle holding an instance of type `impl` with given layout if
+  ///          `impl` is a registered type in `sys`, otherwise `nullptr`.
+  static table_slice_ptr make(record_type layout, caf::actor_system& sys,
+                              caf::atom_value impl);
+
+  // -- persistence ------------------------------------------------------------
+
+  /// Saves the contents (excluding the layout!) of this slice to `sink`.
+  virtual caf::error serialize(caf::serializer& sink) const = 0;
+
+  /// Loads the contents for this slice from `source`.
+  virtual caf::error deserialize(caf::deserializer& source) = 0;
+
+  /// Saves the table slice in `ptr` to `sink`.
+  static caf::error serialize_ptr(caf::serializer& sink,
+                                  const_table_slice_ptr ptr);
+
+  /// Loads a table slice from `source` into `ptr`.
+  static caf::error deserialize_ptr(caf::deserializer& source,
+                                    table_slice_ptr& ptr);
+
   // -- properties -------------------------------------------------------------
 
   /// @returns the table layout.
   inline const record_type& layout() const noexcept {
     return layout_;
   }
+
+  /// @returns an identifier for the implementing class.
+  virtual caf::atom_value implementation_id() const noexcept = 0;
 
   /// @returns the layout for columns in range
   /// [first_column, first_column + num_columns).
