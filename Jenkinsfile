@@ -3,32 +3,28 @@
 // Our build matrix. The keys are the operating system labels and the values
 // are lists of tool labels.
 buildMatrix = [
-    // Release and debug builds for various OS/tool combinations.
+    // Release builds for various OS/tool combinations.
     [ 'Linux', [
-        builds: ['debug', 'release'],
+        builds: ['release'],
         tools: ['gcc8'],
     ]],
     [ 'macOS', [
-        builds: ['debug', 'release'],
+        builds: ['release'],
         tools: ['clang'],
     ]],
-    // Additional debug builds with ASAN enabled.
+    // Debug builds with ASAN + trace logs.
     [ 'Linux', [
         cmakeArgs: '-DCAF_ENABLE_ADDRESS_SANITIZER:BOOL=yes ' + // CAF
+                   '-DCAF_LOG_LEVEL=4 ' +                       // CAF
                    '-DENABLE_ADDRESS_SANITIZER:BOOL=yes',       // VAST
         builds: ['debug'],
         tools: ['gcc8'],
     ]],
     [ 'macOS', [
         cmakeArgs: '-DCAF_ENABLE_ADDRESS_SANITIZER:BOOL=yes ' + // CAF
+                   '-DCAF_LOG_LEVEL=4 ' +                       // CAF
                    '-DENABLE_ADDRESS_SANITIZER:BOOL=yes',       // VAST
         builds: ['debug'],
-        tools: ['clang'],
-    ]],
-    // Additional builds with CAF trace logs enabled.
-    ['macOS', [
-        cmakeArgs: '-D CAF_LOG_LEVEL=4',
-        builds: ['debug', 'release'],
         tools: ['clang'],
     ]],
 ]
