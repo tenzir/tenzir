@@ -51,12 +51,12 @@ public:
   // -- factory functions ------------------------------------------------------
 
   /// Makes a copy of this slice.
-  virtual table_slice_ptr clone() const = 0;
+  virtual table_slice_handle clone() const = 0;
 
   /// @returns a handle holding an instance of type `impl` with given layout if
   ///          `impl` is a registered type in `sys`, otherwise `nullptr`.
-  static table_slice_ptr make(record_type layout, caf::actor_system& sys,
-                              caf::atom_value impl);
+  static table_slice_ptr make_ptr(record_type layout, caf::actor_system& sys,
+                                  caf::atom_value impl);
 
   // -- persistence ------------------------------------------------------------
 
@@ -151,11 +151,3 @@ using table_slice_ptr = caf::intrusive_ptr<table_slice>;
 using const_table_slice_ptr = caf::intrusive_ptr<const table_slice>;
 
 } // namespace vast
-
-CAF_ALLOW_UNSAFE_MESSAGE_TYPE(vast::table_slice_ptr)
-
-CAF_ALLOW_UNSAFE_MESSAGE_TYPE(std::vector<vast::table_slice_ptr>)
-
-CAF_ALLOW_UNSAFE_MESSAGE_TYPE(vast::const_table_slice_ptr)
-
-CAF_ALLOW_UNSAFE_MESSAGE_TYPE(std::vector<vast::const_table_slice_ptr>)

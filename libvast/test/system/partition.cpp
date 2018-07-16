@@ -24,6 +24,7 @@
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/type.hpp"
+#include "vast/const_table_slice_handle.hpp"
 #include "vast/default_table_slice.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/detail/spawn_container_source.hpp"
@@ -31,6 +32,7 @@
 #include "vast/ids.hpp"
 #include "vast/system/indexer.hpp"
 #include "vast/table_slice.hpp"
+#include "vast/table_slice_handle.hpp"
 
 #include "fixtures/actor_system_and_events.hpp"
 
@@ -186,7 +188,7 @@ TEST(integer rows lookup) {
   record_type layout{{"value", col_type}};
   auto rows = make_rows(1, 2, 3, 1, 2, 3, 1, 2, 3);
   auto slice = default_table_slice::make(layout, rows);
-  std::vector<const_table_slice_ptr> slices{slice};
+  std::vector<const_table_slice_handle> slices{slice};
   detail::spawn_container_source(sys, std::move(slices),
                                  put->manager().get_or_add(layout).first);
   run_exhaustively();

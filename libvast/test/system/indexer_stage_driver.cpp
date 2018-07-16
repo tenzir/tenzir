@@ -17,10 +17,12 @@
 #include <random>
 #include <vector>
 
-#include "vast/meta_index.hpp"
+#include "vast/const_table_slice_handle.hpp"
 #include "vast/detail/spawn_container_source.hpp"
+#include "vast/meta_index.hpp"
 #include "vast/system/indexer_stage_driver.hpp"
 #include "vast/system/partition.hpp"
+#include "vast/table_slice_handle.hpp"
 #include "vast/uuid.hpp"
 
 #include "fixtures/actor_system_and_events.hpp"
@@ -44,13 +46,13 @@ behavior dummy_sink(event_based_actor* self, size_t* dummy_sink_count,
                     shared_event_buffer buf) {
   *dummy_sink_count += 1;
   return {
-    [=](stream<const_table_slice_ptr> in) {
+    [=](stream<const_table_slice_handle> in) {
       self->make_sink(
         in,
         [=](unit_t&) {
           // nop
         },
-        [=](unit_t&, const_table_slice_ptr slice) {
+        [=](unit_t&, const_table_slice_handle slice) {
           auto xs = slice->rows_to_events();
           for (auto& x : xs)
             buf->emplace_back(std::move(x));
@@ -76,7 +78,7 @@ auto partition_factory(actor_system& sys, path p, size_t* dummy_count,
 
 behavior test_stage(event_based_actor* self, meta_index* pi,
                     indexer_stage_driver::partition_factory f, size_t mps) {
-  return {[=](stream<const_table_slice_ptr> in) {
+  return {[=](stream<const_table_slice_handle> in) {
     auto mgr = self->make_continuous_stage<indexer_stage_driver>(*pi, f, mps);
     mgr->add_inbound_path(in);
     self->unbecome();
@@ -110,7 +112,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
 
   meta_index pindex;
 
-  std::vector<const_table_slice_ptr> test_slices;
+  std::vector<const_table_slice_handle> test_slices;
 
   size_t num_layouts;
 };

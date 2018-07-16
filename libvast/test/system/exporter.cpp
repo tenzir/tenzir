@@ -13,7 +13,9 @@
 
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
+
 #include "vast/query_options.hpp"
+#include "vast/table_slice_handle.hpp"
 
 #include "vast/system/archive.hpp"
 #include "vast/system/exporter.hpp"

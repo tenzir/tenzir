@@ -50,11 +50,11 @@ public:
 
   // -- properties -------------------------------------------------------------
 
-  /// @returns the synopsis for a partition if present, returns `none` 
+  /// @returns the synopsis for a partition if present, returns `none`
   ///          otherwise.
   caf::optional<partition_synopsis> operator[](const uuid& partition) const;
 
-  void add(const uuid& partition, const const_table_slice_ptr& slice);
+  void add(const uuid& partition, const const_table_slice_handle& slice);
 
   /// Retrieves the list of partition IDs for a given expression.
   std::vector<uuid> lookup(const expression& expr) const;

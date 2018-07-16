@@ -13,14 +13,15 @@
 
 #include <caf/all.hpp>
 
-#include "vast/event.hpp"
-#include "vast/logger.hpp"
 #include "vast/concept/printable/std/chrono.hpp"
 #include "vast/concept/printable/vast/event.hpp"
 #include "vast/concept/printable/vast/expression.hpp"
 #include "vast/concept/printable/vast/uuid.hpp"
+#include "vast/const_table_slice_handle.hpp"
 #include "vast/detail/assert.hpp"
+#include "vast/event.hpp"
 #include "vast/expression_visitors.hpp"
+#include "vast/logger.hpp"
 #include "vast/table_slice.hpp"
 
 #include "vast/system/archive.hpp"
@@ -283,13 +284,13 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
         }
       );
     },
-    [=](caf::stream<const_table_slice_ptr> in) {
+    [=](caf::stream<const_table_slice_handle> in) {
       return self->make_sink(
         in,
         [](caf::unit_t&) {
           // nop
         },
-        [=](caf::unit_t&, const const_table_slice_ptr& slice) {
+        [=](caf::unit_t&, const const_table_slice_handle& slice) {
           // TODO: port to new table slice API
           auto candidates = slice->rows_to_events();
           handle_batch(candidates);

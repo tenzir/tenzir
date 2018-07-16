@@ -13,6 +13,7 @@
 
 #include "vast/table_index.hpp"
 
+#include "vast/const_table_slice_handle.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/expression_visitors.hpp"
 #include "vast/load.hpp"
@@ -69,7 +70,7 @@ column_index* table_index::by_name(std::string_view column_name) {
   return i != columns_.end() ? i->get() : nullptr;
 }
 
-caf::error table_index::add(const const_table_slice_ptr& x) {
+caf::error table_index::add(const const_table_slice_handle& x) {
   VAST_ASSERT(x != nullptr);
   VAST_ASSERT(x->layout() == layout());
   VAST_TRACE(VAST_ARG(x));

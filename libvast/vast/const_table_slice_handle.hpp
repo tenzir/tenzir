@@ -34,6 +34,8 @@ public:
 
   using super::super;
 
+  const_table_slice_handle(const table_slice_handle& other);
+
   ~const_table_slice_handle() override;
 };
 

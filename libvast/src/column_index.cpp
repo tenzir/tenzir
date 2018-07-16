@@ -13,6 +13,7 @@
 
 #include "vast/column_index.hpp"
 
+#include "vast/const_table_slice_handle.hpp"
 #include "vast/expression_visitors.hpp"
 #include "vast/load.hpp"
 #include "vast/logger.hpp"
@@ -42,7 +43,7 @@ caf::expected<column_index_ptr> make_type_column_index(path filename) {
       // nop
     }
 
-    void add(const const_table_slice_ptr& x) override {
+    void add(const const_table_slice_handle& x) override {
       VAST_TRACE(VAST_ARG(x));
       auto tn = x->layout().name();
       auto offset = x->offset();
@@ -62,7 +63,7 @@ make_column_index(path filename, type column_type, size_t column) {
         // nop
     }
 
-    void add(const const_table_slice_ptr& x) override {
+    void add(const const_table_slice_handle& x) override {
       VAST_TRACE(VAST_ARG(x));
       auto offset = x->offset();
       for (table_slice::size_type row = 0; row < x->rows(); ++row)

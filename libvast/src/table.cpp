@@ -16,6 +16,7 @@
 #include <caf/none.hpp>
 #include <caf/optional.hpp>
 
+#include "vast/const_table_slice_handle.hpp"
 #include "vast/table_slice.hpp"
 
 namespace vast {
@@ -26,7 +27,7 @@ table::table(record_type layout)
   // nop
 }
 
-bool table::add(const_table_slice_ptr slice) {
+bool table::add(const_table_slice_handle slice) {
   if (slice == nullptr || layout_ != slice->layout())
     return false;
   auto offset = slice->offset();

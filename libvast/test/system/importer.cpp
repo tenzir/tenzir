@@ -13,12 +13,14 @@
 
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/vast/event.hpp"
+#include "vast/const_table_slice_handle.hpp"
 #include "vast/detail/spawn_container_source.hpp"
 #include "vast/event.hpp"
 #include "vast/system/archive.hpp"
 #include "vast/system/data_store.hpp"
 #include "vast/system/importer.hpp"
 #include "vast/table_slice.hpp"
+#include "vast/table_slice_handle.hpp"
 
 #define SUITE import
 #include "test.hpp"
@@ -45,13 +47,13 @@ auto unbox(caf::optional<T> res) {
 
 behavior dummy_sink(event_based_actor* self, shared_event_buffer buf) {
   return {
-    [=](stream<const_table_slice_ptr> in) {
+    [=](stream<const_table_slice_handle> in) {
       self->make_sink(
         in,
         [=](unit_t&) {
           // nop
         },
-        [=](unit_t&, const_table_slice_ptr x) {
+        [=](unit_t&, const_table_slice_handle x) {
           using caf::get;
           auto event_id = x->offset();
           for (size_t row = 0; row < x->rows(); ++row) {

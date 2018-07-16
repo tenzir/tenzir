@@ -18,9 +18,11 @@
 #include "vast/concept/printable/vast/error.hpp"
 #include "vast/concept/printable/vast/event.hpp"
 #include "vast/concept/printable/vast/expression.hpp"
+#include "vast/const_table_slice_handle.hpp"
 #include "vast/default_table_slice.hpp"
 #include "vast/detail/spawn_container_source.hpp"
 #include "vast/table_slice.hpp"
+#include "vast/table_slice_handle.hpp"
 
 #include "vast/system/indexer.hpp"
 
@@ -39,7 +41,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     run_exhaustively();
   }
 
-  void init(std::vector<const_table_slice_ptr> slices) {
+  void init(std::vector<const_table_slice_handle> slices) {
     VAST_ASSERT(slices.size() > 0);
     init(slices[0]->layout());
     vast::detail::spawn_container_source(sys, std::move(slices), indexer);

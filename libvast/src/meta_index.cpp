@@ -13,6 +13,7 @@
 
 #include "vast/meta_index.hpp"
 
+#include "vast/const_table_slice_handle.hpp"
 #include "vast/event.hpp"
 #include "vast/expression_visitors.hpp"
 #include "vast/logger.hpp"
@@ -46,7 +47,7 @@ operator[](const uuid& partition) const {
 }
 
 void meta_index::add(const uuid& partition,
-                     const const_table_slice_ptr& slice) {
+                     const const_table_slice_handle& slice) {
   auto& rng = partitions_[partition].range;
   // The first column always contains the timestamp.
   for (size_t row = 0; row < slice->rows(); ++row) {

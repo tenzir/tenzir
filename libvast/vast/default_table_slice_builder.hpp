@@ -32,7 +32,7 @@ public:
 
   bool add(data_view x) final;
 
-  table_slice_ptr finish() final;
+  table_slice_handle finish() final;
 
   size_t rows() const noexcept final;
 

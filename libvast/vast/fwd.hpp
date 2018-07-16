@@ -22,6 +22,7 @@ namespace vast {
 class abstract_type;
 class address;
 class column_index;
+class const_table_slice_handle;
 class data;
 class default_table_slice;
 class default_table_slice_builder;
@@ -38,6 +39,7 @@ class subnet;
 class table_index;
 class table_slice;
 class table_slice_builder;
+class table_slice_handle;
 class type;
 class value;
 

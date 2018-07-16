@@ -20,9 +20,11 @@
 #include "vast/column_index.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
+#include "vast/const_table_slice_handle.hpp"
 #include "vast/default_table_slice.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
+#include "vast/table_slice_handle.hpp"
 #include "vast/type.hpp"
 
 using namespace vast;

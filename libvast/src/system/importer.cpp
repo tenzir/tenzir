@@ -16,10 +16,12 @@
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/error.hpp"
 #include "vast/concept/printable/vast/filesystem.hpp"
+#include "vast/const_table_slice_handle.hpp"
 #include "vast/logger.hpp"
 #include "vast/system/atoms.hpp"
 #include "vast/system/importer.hpp"
 #include "vast/table_slice.hpp"
+#include "vast/table_slice_handle.hpp"
 
 using namespace std::chrono;
 using namespace std::chrono_literals;
