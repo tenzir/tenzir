@@ -13,6 +13,8 @@
 
 #pragma once
 
+#include <type_traits>
+
 namespace vast::detail {
 
 template <class T, class U = T>
@@ -57,7 +59,7 @@ struct totally_ordered : equality_comparable<T, U>,
                          less_than_comparable<T, U> {};
 
 #define VAST_BINARY_OPERATOR_NON_COMMUTATIVE(NAME, OP)                         \
-  template <class T, class U = T>                                        \
+  template <class T, class U = T>                                              \
   struct NAME {                                                                \
     friend T operator OP(const T& x, const U& y) {                             \
       T t(x);                                                                  \
@@ -67,12 +69,25 @@ struct totally_ordered : equality_comparable<T, U>,
   };
 
 #define VAST_BINARY_OPERATOR_COMMUTATIVE(NAME, OP)                             \
-  template <class T, class U = T>                                        \
+  template <class T, class U = T>                                              \
   struct NAME {                                                                \
     friend T operator OP(const T& x, const U& y) {                             \
-      T t(x);                                                                  \
-      t OP## = y;                                                              \
-      return t;                                                                \
+      T copy(x);                                                               \
+      copy OP## = y;                                                           \
+      return copy;                                                             \
+    }                                                                          \
+                                                                               \
+    template <class Lhs, class Rhs>                                            \
+    friend auto operator OP(const Rhs& y, const Lhs& x)                        \
+    -> std::enable_if_t<std::is_same_v<Lhs, T>                                 \
+                          && std::is_same_v<Rhs, U>                            \
+                          && !std::is_same_v<Lhs, Rhs>,                        \
+                        Lhs> {                                                 \
+      static_assert(std::is_constructible_v<Lhs, Rhs>,                         \
+                    "LHS must be constructible from RHS");                     \
+      Lhs result(y);                                                           \
+      result OP## = x;                                                         \
+      return result;                                                           \
     }                                                                          \
   };
 
