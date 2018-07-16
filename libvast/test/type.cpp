@@ -23,6 +23,7 @@
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/json.hpp"
+#include "vast/concept/printable/vast/offset.hpp"
 #include "vast/concept/printable/vast/type.hpp"
 
 #define SUITE type
@@ -304,89 +305,107 @@ TEST(record symbol finding) {
     {"c", count_type{}}
   };
   r = r.name("foo");
+  auto f = flatten(r);
   MESSAGE("record access by key");
   auto first = r.at("a");
+  REQUIRE(first);
+  CHECK(holds_alternative<integer_type>(*first));
+  first = f.at("a");
   REQUIRE(first);
   CHECK(holds_alternative<integer_type>(*first));
   auto deep = r.at("b.c.y");
   REQUIRE(deep);
   CHECK(holds_alternative<address_type>(*deep));
+  deep = f.at("b.c.y");
+  REQUIRE(deep);
+  CHECK(holds_alternative<address_type>(*deep));
   auto rec = r.at("b");
   REQUIRE(rec);
   CHECK(holds_alternative<record_type>(*rec));
+  rec = f.at("b");
+  // A flat record has no longer an internal record that can be accessed
+  // directly. Hence the access fails.
+  CHECK(!rec);
   rec = r.at("b.c");
   REQUIRE(rec);
   CHECK(holds_alternative<record_type>(*rec));
+  rec = f.at("b.c");
+  CHECK(!rec);
   MESSAGE("prefix finding");
   // Since the type has a name, the prefix has the form "name.first.second".
   // E.g., a full key is foo.a for field 0 or foo.b.c.z for a nested field.
-  auto o = r.find_prefix("a");
-  REQUIRE_EQUAL(o.size(), 0u); // type starts with "foo", not "a"
-  o = r.find_prefix("foo.a");
-  offset a{0};
-  REQUIRE_EQUAL(o.size(), 1u);
-  CHECK_EQUAL(o[0].first, a);
-  CHECK_EQUAL(o[0].second, "foo.a");
-  o = r.find_prefix("foo.b.a");
-  REQUIRE_EQUAL(o.size(), 1u);
-  CHECK_EQUAL(o[0].first, (offset{1, 0}));
-  CHECK_EQUAL(o[0].second, "foo.b.a");
-  o = r.find_prefix("foo.b");
-  offset b{1};
-  REQUIRE_EQUAL(o.size(), 7u);
-  CHECK_EQUAL(o[0].first, (offset{1}));
-  CHECK_EQUAL(o[1].first, (offset{1, 0}));
-  CHECK_EQUAL(o[2].first, (offset{1, 1}));
-  CHECK_EQUAL(o[3].first, (offset{1, 2}));
-  CHECK_EQUAL(o[4].first, (offset{1, 2, 0}));
-  CHECK_EQUAL(o[5].first, (offset{1, 2, 1}));
-  CHECK_EQUAL(o[6].first, (offset{1, 2, 2}));
-  CHECK_EQUAL(o[0].second, "foo.b");
-  CHECK_EQUAL(o[1].second, "foo.b.a");
-  CHECK_EQUAL(o[2].second, "foo.b.b");
-  CHECK_EQUAL(o[3].second, "foo.b.c");
-  CHECK_EQUAL(o[4].second, "foo.b.c.x");
-  CHECK_EQUAL(o[5].second, "foo.b.c.y");
-  CHECK_EQUAL(o[6].second, "foo.b.c.z");
+  using offset_keys = std::vector<std::pair<offset, std::string>>;
+  CHECK_EQUAL(r.find_prefix("a"), (offset_keys{{{0}, "a"}}));
+  CHECK_EQUAL(f.find_prefix("a"), (offset_keys{{{0}, "a"}}));
+  CHECK_EQUAL(r.find_prefix("b.a"), (offset_keys{{{1,0}, "b.a"}}));
+  CHECK_EQUAL(f.find_prefix("b.a"), (offset_keys{{{1}, "b.a"}}));
+  auto b = offset_keys{
+    {{1}, "b"},
+    {{1, 0}, "b.a"},
+    {{1, 1}, "b.b"},
+    {{1, 2}, "b.c"},
+    {{1, 2, 0}, "b.c.x"},
+    {{1, 2, 1}, "b.c.y"},
+    {{1, 2, 2}, "b.c.z"}
+  };
+  auto b_flat = offset_keys{
+    {{1}, "b.a"},
+    {{2}, "b.b"},
+    {{3}, "b.c.x"},
+    {{4}, "b.c.y"},
+    {{5}, "b.c.z"}
+  };
+  CHECK_EQUAL(r.find_prefix("b"), b);
+  CHECK_EQUAL(f.find_prefix("b"), b_flat);
   MESSAGE("suffix finding");
   // Find a single deep field.
-  o = r.find_suffix("c.y");
-  offset cy{1, 2, 1};
-  REQUIRE_EQUAL(o.size(), 1u);
-  CHECK_EQUAL(o[0].first, cy);
-  CHECK_EQUAL(o[0].second, "foo.b.c.y");
-  // Find a single deep field.
-  o = r.find_suffix("z");
-  offset z{1, 2, 2};
-  REQUIRE_EQUAL(o.size(), 1u);
-  CHECK_EQUAL(o[0].first, z);
-  CHECK_EQUAL(o[0].second, "foo.b.c.z");
+  CHECK_EQUAL(r.find_suffix("c.y"), (offset_keys{{{1, 2, 1}, "b.c.y"}}));
+  CHECK_EQUAL(f.find_suffix("c.y"), (offset_keys{{{4}, "b.c.y"}}));
+  CHECK_EQUAL(r.find_suffix("z"), (offset_keys{{{1, 2, 2}, "b.c.z"}}));
+  CHECK_EQUAL(f.find_suffix("z"), (offset_keys{{{5}, "b.c.z"}}));
   // Find multiple record fields.
-  o = r.find_suffix("a");
-  offset a0{0}, a1{1, 0};
-  REQUIRE_EQUAL(o.size(), 2u);
-  CHECK_EQUAL(o[0].first, a0);
-  CHECK_EQUAL(o[1].first, a1);
-  CHECK_EQUAL(o[0].second, "foo.a");
-  CHECK_EQUAL(o[1].second, "foo.b.a");
+  auto a = offset_keys{
+    {{0}, "a"},
+    {{1, 0}, "b.a"},
+  };
+  auto a_flat = offset_keys{
+    {{0}, "a"},
+    {{1}, "b.a"},
+  };
+  CHECK_EQUAL(r.find_suffix("a"), a);
+  CHECK_EQUAL(f.find_suffix("a"), a_flat);
   // Use a glob expression.
-  o = r.find_suffix("c.*");
-  offset c0{1, 2, 0}, c1{1, 2, 1}, c2{1, 2, 2};
-  REQUIRE_EQUAL(o.size(), 3u);
-  CHECK_EQUAL(o[0].first, c0);
-  CHECK_EQUAL(o[1].first, c1);
-  CHECK_EQUAL(o[2].first, c2);
-  CHECK_EQUAL(o[0].second, "foo.b.c.x");
-  CHECK_EQUAL(o[1].second, "foo.b.c.y");
-  CHECK_EQUAL(o[2].second, "foo.b.c.z");
-  // Find a record.
-  o = r.find_suffix("b");
-  REQUIRE_EQUAL(o.size(), 2u);
-  offset bb{1, 1};
-  CHECK_EQUAL(o[0].first, b);
-  CHECK_EQUAL(o[1].first, bb);
-  CHECK_EQUAL(o[0].second, "foo.b");
-  CHECK_EQUAL(o[1].second, "foo.b.b");
+  auto c = offset_keys{
+    {{1, 2, 0}, "b.c.x"},
+    {{1, 2, 1}, "b.c.y"},
+    {{1, 2, 2}, "b.c.z"}
+  };
+  auto c_flat = offset_keys{
+    {{3}, "b.c.x"},
+    {{4}, "b.c.y"},
+    {{5}, "b.c.z"}
+  };
+  CHECK_EQUAL(r.find_suffix("c.*"), c);
+  CHECK_EQUAL(f.find_suffix("c.*"), c_flat);
+  // Find a field that is also a record.
+  CHECK_EQUAL(r.find_suffix("b"), (offset_keys{{{1, 1}, "b.b"}}));
+  CHECK_EQUAL(f.find_suffix("b"), (offset_keys{{{2}, "b.b"}}));
+  MESSAGE("arbitrary finding");
+  auto any_c = offset_keys{
+    {{1, 2}, "b.c"},
+    {{1, 2, 0}, "b.c.x"},
+    {{1, 2, 1}, "b.c.y"},
+    {{1, 2, 2}, "b.c.z"},
+    {{2}, "c"}
+  };
+  auto any_c_flat = offset_keys{
+    {{3}, "b.c.x"},
+    {{4}, "b.c.y"},
+    {{5}, "b.c.z"},
+    {{6}, "c"}
+  };
+  CHECK_EQUAL(r.find("c"), any_c);
+  CHECK_EQUAL(f.find("c"), any_c_flat);
 }
 
 TEST(congruence) {

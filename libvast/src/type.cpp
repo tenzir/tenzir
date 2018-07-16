@@ -31,6 +31,7 @@
 using caf::get_if;
 using caf::holds_alternative;
 using caf::visit;
+using namespace std::string_view_literals;
 
 namespace vast {
 
@@ -272,43 +273,21 @@ template <mode Mode>
 struct finder {
   using result_type = std::vector<std::pair<offset, std::string>>;
 
-  finder(std::string_view key, std::string_view record_name)
-    : key_{detail::split(key, ".")} {
-    VAST_ASSERT(!key_.empty());
-    if (!record_name.empty())
-      trace_.push_back(record_name);
+  finder(std::string_view key) : rx_{pattern::glob(key)} {
+    if constexpr (Mode == mode::prefix)
+      rx_ = "^" + rx_ + ".*";
+    else if constexpr (Mode == mode::suffix)
+      rx_ = ".*" + rx_ + "$";
+    else if constexpr (Mode == mode::exact)
+      rx_ = "^" + rx_ + "$";
+    else if constexpr (Mode == mode::any)
+      rx_ = ".*" + rx_ + ".*";
   }
 
   result_type match() const {
     result_type result;
-    if (off_.empty() || key_.size() > trace_.size())
-      return result;
-    auto check = [](auto x, auto y) { return pattern::glob(x).match(y); };
-    if constexpr (Mode == mode::prefix || Mode == mode::exact) {
-      if constexpr (Mode == mode::exact)
-        if (key_.size() != trace_.size())
-          return result;
-      if (!std::equal(key_.begin(), key_.end(), trace_.begin(), check))
-        return result;
-    } else if constexpr (Mode == mode::suffix) {
-      for (size_t i = 0; i < key_.size(); ++i)
-        if (!check(key_[i], trace_[i + trace_.size() - key_.size()]))
-          return result;
-    } else {
-      VAST_ASSERT(Mode == mode::any);
-      for (size_t run = 0; run < trace_.size() - key_.size(); ++run) {
-        auto found = true;
-        for (size_t i = 0; i < key_.size(); ++i)
-          if (!check(key_[i], trace_[i + run])) {
-            found = false;
-            break;
-          }
-        if (found)
-          break;
-      }
-      return result;
-    }
-    result.emplace_back(off_, detail::join(trace_, "."));
+    if (rx_.match(trace_))
+      result.emplace_back(off_, trace_);
     return result;
   }
 
@@ -319,28 +298,31 @@ struct finder {
 
   result_type operator()(const record_type& r) {
     result_type result;
-    // Check whether we want this record first.
-    auto sub_result = match();
-    result.insert(result.end(),
-                  std::make_move_iterator(sub_result.begin()),
-                  std::make_move_iterator(sub_result.end()));
-    // Recurse otherwise.
+    if constexpr (Mode != mode::suffix) {
+      // Check whether we want this record first. This does not make sense
+      // for suffixes, because they always start at a leaf.
+      auto sub_result = match();
+      result.insert(result.end(),
+                    std::make_move_iterator(sub_result.begin()),
+                    std::make_move_iterator(sub_result.end()));
+    }
     off_.push_back(0);
     for (auto& f : r.fields) {
-      trace_.push_back(f.name);
+      auto prev_trace_size = trace_.size();
+      trace_ += trace_.empty() ? f.name : '.' + f.name;
       auto sub_result = visit(*this, f.type);
       result.insert(result.end(),
                     std::make_move_iterator(sub_result.begin()),
                     std::make_move_iterator(sub_result.end()));
-      trace_.pop_back();
+      trace_.resize(prev_trace_size);
       ++off_.back();
     }
     off_.pop_back();
     return result;
   }
 
-  std::vector<std::string_view> key_;
-  std::vector<std::string_view> trace_;
+  pattern rx_;
+  std::string trace_;
   offset off_;
 };
 
@@ -348,24 +330,24 @@ struct finder {
 
 std::vector<std::pair<offset, std::string>>
 record_type::find(std::string_view key) const {
-  return finder<mode::exact>{key, name()}(*this);
+    return finder<mode::any>{key}(*this);
 }
 
 std::vector<std::pair<offset, std::string>>
 record_type::find_prefix(std::string_view key) const {
-  return finder<mode::prefix>{key, name()}(*this);
+    return finder<mode::prefix>{key}(*this);
 }
 
 std::vector<std::pair<offset, std::string>>
 record_type::find_suffix(std::string_view key) const {
-  return finder<mode::suffix>{key, name()}(*this);
+    return finder<mode::suffix>{key}(*this);
 }
 
 const type* record_type::at(std::string_view key) const {
-  auto xs = finder<mode::exact>{key, ""}(*this);
+  auto xs = finder<mode::exact>{key}(*this);
   if (xs.empty())
     return nullptr;
-  VAST_ASSERT(xs.size() == 1);
+  VAST_ASSERT(xs.size() == 1u);
   return at(xs[0].first);
 }
 
