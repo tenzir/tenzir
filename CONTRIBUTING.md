@@ -80,10 +80,10 @@ General
 - Keywords are always followed by a whitespace: `if (...)`, `template <...>`,
   `while (...)`, etc.
 
-- Leave a whitespace after `!` to make negations easily recognizable.
+- Do not add whitespace when negating an expression with `!`:
 
   ```cpp
-  if (! sunny())
+  if (!sunny())
     stay_home()
   ```
 
