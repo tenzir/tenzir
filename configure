@@ -29,6 +29,7 @@ Usage: $0 [OPTION]... [VAR=VALUE]...
     --build-dir=DIR         directory where to perform build [build]
     --show-time-report      show where the compiler spends its time
     --no-auto-libc++        do not automatically use libc++ with Clang
+    --more-warnings         enables most warnings on GCC and Clang
 
   Debugging:
     --log-level=LEVEL       maximum compile-time log level [debug]
@@ -139,6 +140,9 @@ while [ $# -ne 0 ]; do
     --no-auto-libc++)
       append_cache_entry NO_AUTO_LIBCPP BOOL yes
       ;;
+    --more-warnings)
+        append_cache_entry MORE_WARNINGS BOOL yes
+        ;;
     --log-level=*)
       append_cache_entry VAST_LOG_LEVEL INTEGER $(levelize $optarg)
       ;;
