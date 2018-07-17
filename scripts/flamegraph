@@ -94,7 +94,9 @@ if [ "$os" = "FreeBSD" ] || [ "$os" = "Darwin" ]; then
     -x ustackframes=100 \
     -n "$hertz /$filter/ { $stack } tick-${secs}s { exit(0); }" \
     -o "$file.stacks"
-  stackcollapse.pl < "$file.stacks" > "$file.folded"
+  # Remove leading library name as well as trailing addresses.
+  cleanup='s;([[:space:]]+).*\`([^+]*)(\+0x[[:xdigit:]]+)?;\2;g'
+  sed -E "$cleanup" "$file.stacks" | stackcollapse.pl > "$file.folded"
   flamegraph.pl --title "$title" --width $width < "$file.folded"
   if [ -z "$keep" ]; then
     rm -f "$file.stacks" "$file.folded"
