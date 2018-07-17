@@ -323,6 +323,35 @@ Comments
 
 - Use `@cmd` rather than `\cmd`.
 
+- Document pre- and post-conditions with `@pre` and `@post` (where appropriate).
+
+- Reference other parameters with emphasis:
+  ```cpp
+  /// @param x A number between 0 and 1.
+  /// @param y Scales *x* by a constant factor.
+  ```
+
+- For multi-line comments, break after the `@cmd` argument:
+
+  ```cpp
+  /// Does something.
+  /// @param x This argument has rather sophisticated semantics and therefore
+               needs a detailed explanation.
+  /// @param y Just another arugment.
+  /// @returns A function of *x* and *y*.
+  template <class T, class U>
+  int f(T x, U y);
+  ```
+
+- Use `@tparam` to document template parameters.
+
+- For simple getters or obvious functions returning a value, use a one-line
+  `@returns` statement:
+  ```cpp
+  /// @returns The answer.
+  int f();
+  ```
+
 - Use `//` or `/*` and `*/` to define basic comments that should not be
   swallowed by Doxygen.
 
