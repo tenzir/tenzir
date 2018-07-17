@@ -104,8 +104,7 @@ Header
 
 - Header filenames end in `.hpp` and implementation filenames in `.cpp`.
 
-- All header files should use #define guards to prevent multiple inclusion. The
-  format of the symbol name should be `VAST_<PATH>_<TO>_<FILE>_H`.
+- All header files should use `#pragma once` to prevent multiple inclusion.
 
 - Don't use `#include` when a forward declarations suffices. It can make sense
   to outsource forward declarations into a separate file per module. The file
