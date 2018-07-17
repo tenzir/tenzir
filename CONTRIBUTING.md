@@ -96,8 +96,8 @@ General
   };
   ```
 
-- Do not use the `inline` keyword unless to avoid duplicate symbols. The
-  compiler does a better job at figuring out what functions should be inlined.
+- Use inline functions for trivial code, such as getters/setters or
+  straight-forward logic that does not span more than 3 lines.
 
 Header
 ------
