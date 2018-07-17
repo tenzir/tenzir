@@ -105,6 +105,15 @@ bool mmapbuf::resize(size_t new_size) {
   // Resize the underlying file, if available.
   if (fd_ != -1 && ftruncate(fd_, new_size) < 0)
     return false;
+#if __linux__
+  int flags = MREMAP_MAYMOVE;
+  auto* map = mremap(map_, size_, new_size, flags);
+  if (map == MAP_FAILED) {
+    reset();
+    return false;
+  }
+  map_ = reinterpret_cast<char_type*>(map);
+#else
   if (new_size < size_) {
     // When shrinking the mapping, we can simply truncate the file underneath
     // the mapping under the assumption that no user accesses the previously
@@ -154,6 +163,7 @@ bool mmapbuf::resize(size_t new_size) {
       map_ = reinterpret_cast<char_type*>(map);
     }
   };
+#endif
   size_ = new_size;
   // Restore stream buffer positions.
   setp(map_, map_ + size_);
