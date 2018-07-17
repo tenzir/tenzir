@@ -80,11 +80,11 @@ if (NOT compilation_succeeded OR NOT program_result EQUAL 0)
 elseif ("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
   # Too many false positives.
   set(EXTRA_FLAGS "${EXTRA_FLAGS} -Wno-maybe-uninitialized")
-  if (compiler_version VERSION_GREATER 6.0
-      OR compiler_version VERSION_EQUAL 6.0)
+  if (compiler_version VERSION_GREATER 8.0
+      OR compiler_version VERSION_EQUAL 8.0)
     message(STATUS "Found GCC ${compiler_version}")
   else ()
-    message(FATAL_ERROR "GCC >= 6.0 required, found ${compiler_version}")
+    message(FATAL_ERROR "GCC >= 8.0 required, found ${compiler_version}")
   endif ()
   if (${CMAKE_SYSTEM_NAME} MATCHES "FreeBSD")
     # Works around issues with libstdc++ and C++11. For details, see:
@@ -101,11 +101,11 @@ elseif ("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
     set(EXTRA_FLAGS "${EXTRA_FLAGS} -fno-builtin-realloc -fno-builtin-free")
   endif ()
 elseif ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
-  if (compiler_version VERSION_GREATER 3.5
-      OR compiler_version VERSION_EQUAL 3.5)
+  if (compiler_version VERSION_GREATER 6.0
+      OR compiler_version VERSION_EQUAL 6.0)
     message(STATUS "Found Clang ${compiler_version}")
   else ()
-    message(FATAL_ERROR "Clang >= 3.5 required, found ${compiler_version}")
+    message(FATAL_ERROR "Clang >= 6.0 required, found ${compiler_version}")
   endif ()
   if (NOT NO_AUTO_LIBCPP)
     # Standard library selection: check if libc++ is available, and if so, use
