@@ -64,10 +64,10 @@ General
 - Namespaces and access modifiers (e.g., `public`) do not increase the
   indentation level.
 
-- The `const` keyword follows after type, e.g., `T const&` as opposed to
-  `const T&`.
+- The `const` keyword precedes the type, e.g., `const T&` as opposed to
+  `T const&`.
 
-- `*` and `&` bind to the *type*, e.g., `T const& arg`.
+- `*` and `&` bind to the *type*, e.g., `T* arg` instead of `T *arg`.
 
 - Always use `auto` to declare a variable unless you cannot initialize it
   immediately or if you actually want a type conversion. In the latter case,
