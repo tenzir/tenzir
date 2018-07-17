@@ -419,14 +419,16 @@ Unit Tests
    ******************************************************************************/
 
   #define SUITE foo
-  #include "test.hpp"
-  #include "fixtures/my_fixture.hpp"
+
+  #include "vast/foo.hpp" // Unit under test
+
+  #include "test.hpp"     // Unit test framework and scaffolding
 
   #include <iostream>     // standard library includes
 
   #include <caf/...>      // CAF includes
 
-  #include "vast/foo.hpp" // VAST includes
+  #include "vast/..."     // VAST includes
 
   using namespace vast;
 
