@@ -95,7 +95,7 @@ size_t mmapbuf::size() const {
 bool mmapbuf::resize(size_t new_size) {
   // Also fail if we created a private mapping of a file not opened RW.
   // For now, users cannot control these aspects.
-  if (!map_ || offset_ > new_size)
+  if (!map_)
     return false;
   if (new_size == size())
     return true;
@@ -131,7 +131,7 @@ bool mmapbuf::resize(size_t new_size) {
     // If the current mapping is a multiple of the page size, we can try (1).
     if (size_ % page_size() == 0) {
       auto flags = flags_ | MAP_FIXED;
-      auto map = mmap(map_ + size_, new_size - size_, prot_, flags, fd_, 0);
+      auto map = mmap(map_ + size_, new_size - size_, prot_, flags, fd_, offset_ + size_);
       if (map != MAP_FAILED) {
         remap = false; // It worked!
       } else if (errno != ENOMEM) {
