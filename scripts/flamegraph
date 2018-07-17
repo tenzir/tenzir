@@ -41,7 +41,7 @@ usage() {
 }
 
 # Parse command line.
-while getopts "?hkp:s:t:w:" opt; do
+while getopts "?hikp:s:t:w:" opt; do
   case "$opt" in
     i)
       keep=1
