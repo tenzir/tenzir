@@ -1,0 +1,111 @@
+#!/bin/sh
+#
+# Script to profile VAST and generate a Flame Graph.
+#
+# Requirements from https://github.com/brendangregg/FlameGraph:
+# 1. stackcollapse.pl
+# 2. flamegraph.pl
+#
+# Usage:
+# 1. Invoke this script with the name of the program to profile
+# 2. Launch the program.
+# 3. Wait until the script terminates
+# 4. Inspect the output SVG (per default on stdout)
+#
+# Note: for meaningful stack traces, the program should be compiled with
+# -fno-omit-frame-pointer.
+#
+# TODO: add Linux support for perf_events or ktap, as described in
+# http://www.brendangregg.com/FlameGraphs/cpuflamegraphs.html
+
+set -e
+
+# Defaults.
+program="vast"
+out="-"
+title=
+secs=60
+width=1200
+
+usage() {
+  printf "usage: %s [options]\n" $(basename $0)
+  echo
+  echo 'options:'
+  echo "    -p            program to profile [$program]"
+  echo "    -i            keep intermediate files"
+  echo "    -k            include time spent in kernel"
+  echo "    -s secs       number of seconds to profile [$secs]"
+  echo "    -t title      flamegraph title [$program]"
+  echo "    -w width      width of image [$width]"
+  echo
+}
+
+# Parse command line.
+while getopts "?hikp:s:t:w:" opt; do
+  case "$opt" in
+    i)
+      keep=1
+      ;;
+    k)
+      kernel=1
+      ;;
+    p)
+      program="$OPTARG"
+      ;;
+    s)
+      secs="$OPTARG"
+      ;;
+    t)
+      title="$OPTARG"
+      ;;
+    w)
+      width="$OPTARG"
+      ;;
+    h|\?)
+      usage
+      exit 0
+    ;;
+  esac
+done
+shift $(expr $OPTIND - 1)
+
+# If the user didn't specify a title explicitly, user the name of the program.
+if [ -z "$title" ]; then
+  title="$program"
+fi
+
+if ! which stackcollapse.pl > /dev/null 2>&1; then
+  echo could not find stackcollapse.pl in PATH 1>&2
+  exit 1
+fi
+if ! which flamegraph.pl > /dev/null 2>&1; then
+  echo could not find flamegraph.pl in PATH 1>&2
+  exit 1
+fi
+
+echo "profiling for $secs seconds..." 1>&2
+
+os=$(uname)
+if [ "$os" = "FreeBSD" ] || [ "$os" = "Darwin" ]; then
+  hertz='profile-97'
+  stack="@[ustack()] = count();"
+  filter="execname == \"$program\""
+  if [ -z "$kernel" ]; then
+    filter="$filter && arg1"
+  fi
+  file="tmp-$$"
+  sudo dtrace \
+    -x ustackframes=100 \
+    -n "$hertz /$filter/ { $stack } tick-${secs}s { exit(0); }" \
+    -o "$file.stacks"
+  # Remove leading library name as well as trailing addresses.
+  cleanup='s;([[:space:]]+).*\`([^+]*)(\+0x[[:xdigit:]]+)?;\2;g'
+  sed -E "$cleanup" "$file.stacks" | stackcollapse.pl > "$file.folded"
+  flamegraph.pl --title "$title" --width $width < "$file.folded"
+  if [ -z "$keep" ]; then
+    rm -f "$file.stacks" "$file.folded"
+  fi
+else
+  echo "$os not yet supported" 1>&2
+  exit 1
+fi
