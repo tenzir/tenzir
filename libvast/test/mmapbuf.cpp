@@ -61,25 +61,43 @@ TEST(memory-mapped streambuffer) {
   CHECK_EQUAL(cur, sb.size()); // we're at the end!
 }
 
-TEST_DISABLED(memory-mapped streambuffer aligned resize) {
-  auto filename = directory / "aligned";
-  auto page_size = detail::page_size();
-  detail::mmapbuf sb{filename.str(), page_size};
+namespace {
+
+void aligned_resize_test_impl(const vast::path& filename, size_t size) {
+  detail::mmapbuf sb{filename.str(), size};
   REQUIRE(sb.data() != nullptr);
-  CHECK_EQUAL(sb.size(), page_size);
+  CHECK_EQUAL(sb.size(), size);
+  sb.sputn("Here be content", 15);
   // Aligned resizing.
-  REQUIRE(sb.resize(page_size * 2));
-  CHECK_EQUAL(sb.size(), page_size * 2);
+  REQUIRE(sb.resize(size * 2));
+  CHECK_EQUAL(sb.size(), size * 2);
+  CHECK_EQUAL(std::string(sb.data() + 3, 9), "e be cont");
   // Seek in the middle and perform a random write.
-  sb.pubseekpos(page_size, std::ios::out);
+  sb.pubseekpos(size, std::ios::out);
   sb.sputc('x');
   // Unaligned resizing.
-  REQUIRE(sb.resize(page_size / 2));
-  CHECK_EQUAL(sb.size(), page_size / 2);
+  REQUIRE(sb.resize(size / 2));
+  CHECK_EQUAL(sb.size(), size / 2);
   REQUIRE(sb.resize(sb.size() * 8));
-  CHECK_EQUAL(sb.size(), page_size * 4);
-  sb.pubseekpos(page_size * 3, std::ios::out);
+  CHECK_EQUAL(sb.size(), size * 4);
+  CHECK_EQUAL(std::string(sb.data() + 3, 9), "e be cont");
+  sb.pubseekpos(size * 3, std::ios::out);
   sb.sputc('x');
+}
+
+} // namespace <anonymous>
+
+TEST(memory-mapped streambuffer aligned resize) {
+  auto filename = directory / "aligned";
+  aligned_resize_test_impl(filename, detail::page_size());
+}
+
+TEST(memory-mapped streambuffer aligned resize large) {
+  auto filename = directory / "aligned_large";
+  auto page_size = detail::page_size();
+  auto hundred_mb = size_t{100 * (1 << 20)};
+  auto size = hundred_mb - (hundred_mb % page_size);
+  aligned_resize_test_impl(filename, size);
 }
 
 FIXTURE_SCOPE_END()
