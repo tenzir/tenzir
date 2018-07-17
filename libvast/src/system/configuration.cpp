@@ -119,18 +119,22 @@ configuration::configuration() {
 #endif
 }
 
-configuration::configuration(bool load_middleman) : configuration() {
+configuration::configuration(bool load_middleman, bool allow_ssl_module)
+  : configuration() {
   if (load_middleman) {
     load<io::middleman>();
     set("middleman.enable-automatic-connections", true);
 #ifdef VAST_USE_OPENSSL
+  if (allow_ssl_module)
     load<openssl::manager>();
 #endif
   }
 }
 
-configuration::configuration(int argc, char** argv) : configuration{} {
-  command_line = {argv + 1, argv + argc};
+configuration& configuration::parse(int argc, char** argv) {
+  VAST_ASSERT(argc > 0);
+  VAST_ASSERT(argv != nullptr);
+  command_line.assign(argv + 1, argv + argc);
   // Move CAF options to the end of the command line, parse them, and then
   // remove them.
   auto is_vast_opt = [](auto& x) { return !starts_with(x, "--caf#"); };
@@ -139,7 +143,8 @@ configuration::configuration(int argc, char** argv) : configuration{} {
   std::vector<std::string> caf_args;
   std::move(caf_opt, command_line.end(), std::back_inserter(caf_args));
   command_line.erase(caf_opt, command_line.end());
-  parse(std::move(caf_args));
+  actor_system_config::parse(std::move(caf_args));
+  return *this;
 }
 
 } // namespace vast::system
