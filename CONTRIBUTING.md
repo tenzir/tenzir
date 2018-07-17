@@ -246,7 +246,7 @@ Breaking
   ```cpp
   template <class T>
   auto compute_upper_bound_on_compressed_data(T x)
-  -> std::enable_if_t<std::is_integral::value, T> {
+  -> std::enable_if_t<std::is_integral_v<T>, T> {
     return detail::bound(x);
   }
   ```
