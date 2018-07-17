@@ -137,7 +137,6 @@ bool mmapbuf::resize(size_t new_size) {
       reset();
       return false;
     }
-    std::memcpy(map, map_, size_);
     if (munmap(map_, size_) < 0) {
       reset();
       return false;
