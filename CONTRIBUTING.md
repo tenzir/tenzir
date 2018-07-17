@@ -214,8 +214,8 @@ Breaking
 - Break function arguments after the comma for both declaration and invocation:
 
   ```cpp
-  a_rather_long_return_type f(std::string const& x,
-                              std::string const& y) {
+  a_rather_long_return_type f(const std::string& x,
+                              const std::string& y) {
     // ...
   }
   ```
@@ -225,8 +225,8 @@ Breaking
   ```cpp
   template <typename T>
   black_hole_space_time_warp f(
-    typename T::gravitational_field_manager const& manager,
-    typename T::antimatter_clustear const& cluster) {
+    typename const T::gravitational_field_manager& manager,
+    typename const T::antimatter_clustear& cluster) {
     // ...
   }
   ```
