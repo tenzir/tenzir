@@ -18,6 +18,8 @@
 #define SUITE detail
 #include "test.hpp"
 
+#include "vast/config.hpp"
+
 using namespace std::string_literals;
 using namespace vast;
 
@@ -45,6 +47,7 @@ TEST(steady_map membership) {
   CHECK_EQUAL(xs.count("baz"), 1u);
 }
 
+#ifndef VAST_NO_EXCEPTIONS
 TEST(steady_map at) {
   CHECK_EQUAL(xs.at("foo"), 42);
   auto exception = std::out_of_range{""};
@@ -55,6 +58,7 @@ TEST(steady_map at) {
   }
   CHECK_EQUAL(exception.what(), "vast::detail::vector_map::at"s);
 }
+#endif // VAST_NO_EXCEPTIONS
 
 TEST(steady_map insert) {
   auto i = xs.insert({"qux", 1});

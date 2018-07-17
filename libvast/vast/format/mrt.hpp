@@ -527,7 +527,7 @@ struct message_parser : parser<message_parser> {
     auto skip = parsers::eps ->* [&] {
       static auto header_length = 16 + 2 + 1;
       if (x.header.length < header_length || x.header.length > 4096)
-        throw std::runtime_error{"cannot parse RFC-violoating records"};
+        VAST_RAISE_ERROR("cannot parse RFC-violoating records");
       f += std::min(static_cast<size_t>(l - f),
                     static_cast<size_t>(x.header.length - header_length));
     };

@@ -21,8 +21,9 @@
 
 #include "vast/bits.hpp"
 #include "vast/detail/assert.hpp"
-#include "vast/detail/operators.hpp"
 #include "vast/detail/iterator.hpp"
+#include "vast/detail/operators.hpp"
+#include "vast/detail/raise_error.hpp"
 #include "vast/detail/range.hpp"
 #include "vast/word.hpp"
 
@@ -540,7 +541,7 @@ template <class Block, class Allocator>
 typename bitvector<Block, Allocator>::reference
 bitvector<Block, Allocator>::at(size_type i) {
   if (i >= size_)
-    throw std::out_of_range("bitvector");
+    VAST_RAISE_ERROR("bitvector out of range");
   return (*this)[i];
 }
 
@@ -548,7 +549,7 @@ template <class Block, class Allocator>
 typename bitvector<Block, Allocator>::const_reference
 bitvector<Block, Allocator>::at(size_type i) const {
   if (i >= size_)
-    throw std::out_of_range("bitvector");
+    VAST_RAISE_ERROR("bitvector out of range");
   return (*this)[i];
 }
 

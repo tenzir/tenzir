@@ -23,8 +23,10 @@
 
 #pragma once
 
-#include <exception>
 #include <type_traits>
+
+#include "vast/config.hpp"
+#include "vast/detail/raise_error.hpp"
 
 namespace vast::detail {
 
@@ -33,9 +35,6 @@ template <class T, class U>
 constexpr T narrow_cast(U&& u) noexcept {
   return static_cast<T>(std::forward<U>(u));
 }
-
-/// @relates narrow
-struct narrowing_error : public std::exception {};
 
 template <class T, class U>
 struct is_same_signedness
@@ -47,9 +46,9 @@ template <class T, class U>
 T narrow(U y) {
   T x = narrow_cast<T>(y);
   if (static_cast<U>(x) != y)
-    throw narrowing_error{};
+    VAST_RAISE_ERROR("narrowing error");
   if (!is_same_signedness<T, U>::value && ((x < T{}) != (y < U{})))
-    throw narrowing_error{};
+    VAST_RAISE_ERROR("narrowing error");
   return x;
 }
 

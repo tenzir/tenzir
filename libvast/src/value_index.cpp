@@ -590,7 +590,7 @@ void serialize(caf::deserializer& source, sequence_index& idx) {
     [&] { return source.end_sequence(); }
   );
   if (e)
-    throw std::runtime_error{to_string(e)};
+    VAST_RAISE_ERROR("cannot serialize sequence index");
 }
 
 } // namespace vast

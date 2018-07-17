@@ -37,7 +37,9 @@ expected<void> save(Sink&& out, Ts&&... xs) {
   static_assert(sizeof...(Ts) > 0);
   using sink_type = std::decay_t<Sink>;
   if constexpr (detail::is_streambuf_v<sink_type>) {
+#ifndef VAST_NO_EXCEPTIONS
     try {
+#endif // VAST_NO_EXCEPTIONS
       if (Method == compression::null) {
         caf::stream_serializer<sink_type&> s{out};
         detail::write(s, std::forward<Ts>(xs)...);
@@ -47,9 +49,11 @@ expected<void> save(Sink&& out, Ts&&... xs) {
         detail::write(s, std::forward<Ts>(xs)...);
         compressed.pubsync();
       }
+#ifndef VAST_NO_EXCEPTIONS
     } catch (std::exception& e) {
       return make_error(ec::unspecified, e.what());
     }
+#endif // VAST_NO_EXCEPTIONS
     return {};
   } else if constexpr (std::is_base_of_v<std::ostream, sink_type>) {
     auto sb = out.rdbuf();
