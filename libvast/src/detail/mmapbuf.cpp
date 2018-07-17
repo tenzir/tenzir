@@ -19,6 +19,7 @@
 #include <cstdio>
 #include <cstring>
 
+#include "vast/config.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/mmapbuf.hpp"
 #include "vast/detail/system.hpp"
@@ -105,7 +106,7 @@ bool mmapbuf::resize(size_t new_size) {
   // Resize the underlying file, if available.
   if (fd_ != -1 && ftruncate(fd_, new_size) < 0)
     return false;
-#if VAST_LINUX
+#ifdef VAST_LINUX
   int flags = MREMAP_MAYMOVE;
   auto map = mremap(map_, size_, new_size, flags);
   if (map == MAP_FAILED) {

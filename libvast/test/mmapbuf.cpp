@@ -61,6 +61,8 @@ TEST(memory-mapped streambuffer) {
   CHECK_EQUAL(cur, sb.size()); // we're at the end!
 }
 
+namespace {
+
 void aligned_resize_test_impl(const vast::path& filename, size_t size) {
   detail::mmapbuf sb{filename.str(), size};
   REQUIRE(sb.data() != nullptr);
@@ -69,7 +71,7 @@ void aligned_resize_test_impl(const vast::path& filename, size_t size) {
   // Aligned resizing.
   REQUIRE(sb.resize(size * 2));
   CHECK_EQUAL(sb.size(), size * 2);
-  CHECK_EQUAL(std::string(sb.data()+3, 9), "e be cont");
+  CHECK_EQUAL(std::string(sb.data() + 3, 9), "e be cont");
   // Seek in the middle and perform a random write.
   sb.pubseekpos(size, std::ios::out);
   sb.sputc('x');
@@ -78,9 +80,11 @@ void aligned_resize_test_impl(const vast::path& filename, size_t size) {
   CHECK_EQUAL(sb.size(), size / 2);
   REQUIRE(sb.resize(sb.size() * 8));
   CHECK_EQUAL(sb.size(), size * 4);
-  CHECK_EQUAL(std::string(sb.data()+3, 9), "e be cont");
+  CHECK_EQUAL(std::string(sb.data() + 3, 9), "e be cont");
   sb.pubseekpos(size * 3, std::ios::out);
   sb.sputc('x');
+}
+
 }
 
 TEST(memory-mapped streambuffer aligned resize) {
@@ -91,7 +95,7 @@ TEST(memory-mapped streambuffer aligned resize) {
 TEST(memory-mapped streambuffer aligned resize large) {
   auto filename = directory / "aligned_large";
   auto page_size = detail::page_size();
-  auto hundred_mb = (100 * (1 << 20));
+  auto hundred_mb = size_t{100 * (1 << 20)};
   auto size = hundred_mb - (hundred_mb % page_size);
   aligned_resize_test_impl(filename, size);
 }
