@@ -49,10 +49,10 @@ Usage: $0 [OPTION]... [VAR=VALUE]...
     --with-doxygen=PATH     path to Doxygen install root
 
   Influential Environment Variables (only on first invocation):
-    CXX                         C++ compiler command
-    CXXFLAGS                    C++ compiler flags
-    LDFLAGS                     Additional linker flags
-    CMAKE_GENERATOR     Selects a custom generator
+    CXX                     C++ compiler command
+    CXXFLAGS                C++ compiler flags
+    LDFLAGS                 Additional linker flags
+    CMAKE_GENERATOR         Selects a custom generator
 "
 
 # Function to append a CMake cache entry definition to the
