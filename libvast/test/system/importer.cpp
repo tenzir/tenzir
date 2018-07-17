@@ -38,13 +38,6 @@ namespace {
 using event_buffer = std::vector<event>;
 using shared_event_buffer = std::shared_ptr<event_buffer>;
 
-template <class T>
-auto unbox(caf::optional<T> res) {
-  if (!res)
-    FAIL("unable to unbox " << caf::to_string(res));
-  return std::move(*res);
-}
-
 behavior dummy_sink(event_based_actor* self, shared_event_buffer buf) {
   return {
     [=](stream<const_table_slice_handle> in) {

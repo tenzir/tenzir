@@ -21,7 +21,8 @@ using namespace vast::system;
 
 int main(int argc, char** argv) {
   // Scaffold
-  configuration cfg{argc, argv};
+  configuration cfg{true, true};
+  cfg.parse(argc, argv);
   cfg.set("logger.console", caf::atom("COLORED"));
   caf::actor_system sys{cfg};
   default_application app;

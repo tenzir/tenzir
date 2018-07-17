@@ -11,9 +11,6 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#define SUITE meta_index
-#include "test.hpp"
-
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/const_table_slice_handle.hpp"
@@ -23,6 +20,11 @@
 #include "vast/table_slice_builder.hpp"
 #include "vast/table_slice_handle.hpp"
 #include "vast/uuid.hpp"
+
+#define SUITE meta_index
+#include "test.hpp"
+
+#include <caf/test/dsl.hpp>
 
 using namespace vast;
 
@@ -87,13 +89,6 @@ struct fixture {
 
   // Partition IDs.
   std::vector<uuid> ids;
-
-  template <class T>
-  auto unbox(T x) {
-    if (!x)
-      FAIL("unboxing failed");
-    return std::move(*x);
-  }
 
   auto slice(size_t first, size_t last) const {
     std::vector<uuid> result;

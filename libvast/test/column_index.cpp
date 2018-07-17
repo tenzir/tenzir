@@ -11,12 +11,6 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#define SUITE column_index
-#include "test.hpp"
-
-#include "fixtures/events.hpp"
-#include "fixtures/filesystem.hpp"
-
 #include "vast/column_index.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
@@ -27,6 +21,14 @@
 #include "vast/table_slice_handle.hpp"
 #include "vast/type.hpp"
 
+#define SUITE column_index
+#include "test.hpp"
+
+#include "fixtures/events.hpp"
+#include "fixtures/filesystem.hpp"
+
+#include <caf/test/dsl.hpp>
+
 using namespace vast;
 
 namespace {
@@ -34,18 +36,6 @@ namespace {
 struct fixture : fixtures::events, fixtures::filesystem {
   fixture() {
     directory /= "column-index";
-  }
-
-  template <class T>
-  T unbox(caf::expected<T> x) {
-    REQUIRE(x);
-    return std::move(*x);
-  }
-
-  template <class T>
-  T unbox(caf::optional<T> x) {
-    REQUIRE(x);
-    return std::move(*x);
   }
 };
 
