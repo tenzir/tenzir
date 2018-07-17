@@ -166,5 +166,23 @@ pipeline {
             }
         }
     }
+    post {
+        success {
+            emailext(
+                subject: "✅ VAST build #${env.BUILD_NUMBER} succeeded for job ${env.JOB_NAME}",
+                recipientProviders: [culprits(), developers(), requestor(), upstreamDevelopers()],
+                body: "Check console output at ${env.BUILD_URL}.",
+            )
+        }
+        failure {
+            emailext(
+                subject: "⛔️ VAST build #${env.BUILD_NUMBER} failed for job ${env.JOB_NAME}",
+                attachLog: true,
+                compressLog: true,
+                recipientProviders: [culprits(), developers(), requestor(), upstreamDevelopers()],
+                body: "Check console output at ${env.BUILD_URL} or see attached log.",
+            )
+        }
+    }
 }
 
