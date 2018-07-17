@@ -102,7 +102,7 @@ General
 Header
 ------
 
-- Header filenames end in `.h` and implementation filenames in `.cc`.
+- Header filenames end in `.hpp` and implementation filenames in `.cpp`.
 
 - All header files should use #define guards to prevent multiple inclusion. The
   format of the symbol name should be `VAST_<PATH>_<TO>_<FILE>_H`.
