@@ -1,13 +1,17 @@
 #!/bin/sh
 #
-# Script to profile VAST and generate a flamegraph. 
+# Script to profile VAST and generate a Flame Graph.
 #
-# Usage: 
+# Requirements from https://github.com/brendangregg/FlameGraph:
+# 1. stackcollapse.pl
+# 2. flamegraph.pl
+#
+# Usage:
 # 1. Invoke this script with the name of the program to profile
 # 2. Launch the program.
 # 3. Wait until the script terminates
 # 4. Inspect the output SVG (per default on stdout)
-# 
+#
 # Note: for meaningful stack traces, the program should be compiled with
 # -fno-omit-frame-pointer.
 #
@@ -28,7 +32,7 @@ usage() {
   echo
   echo 'options:'
   echo "    -p            program to profile [$program]"
-  echo "    -i            keep intermediate files"      
+  echo "    -i            keep intermediate files"
   echo "    -k            include time spent in kernel"
   echo "    -s secs       number of seconds to profile [$secs]"
   echo "    -t title      flamegraph title [$program]"
