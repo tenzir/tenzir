@@ -85,7 +85,7 @@ void aligned_resize_test_impl(const vast::path& filename, size_t size) {
   sb.sputc('x');
 }
 
-}
+} // namespace <anonymous>
 
 TEST(memory-mapped streambuffer aligned resize) {
   auto filename = directory / "aligned";
