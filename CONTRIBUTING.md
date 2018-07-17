@@ -125,7 +125,8 @@ Header
 
   Within each section the order should be alphabetical. VAST includes should
   always be in doublequotes and relative to the source directory, whereas
-  system-wide includes in angle brackets.
+  system-wide includes in angle brackets. See below for an example on how to
+  structure includes in unit tests.
 
 - As in the standard library, the order of parameters when declaring a function
   is: inputs, then outputs. API coherence and symmetry trumps this rule, e.g.,
@@ -356,3 +357,77 @@ When integrating 3rd-party code into the code base, use the following scaffold:
 
 (code here)
 ```
+
+Unit Tests
+----------
+
+- Every new feature must come with unit tests.
+
+- The filename and path should mirror the component under test. For example,
+  the component `vast/detail/feature.hpp` should have a test file called
+  `test/detail/feature.cpp`.
+
+- The include order in unit tests resembles the order for standard headers,
+  except that unit test includes and the suite definition comes at the top.
+
+- Make judicious use of *fixtures* for prepping your test environment.
+
+- The snippet below illustrates a simple example for a new component
+  `vast/foo.hpp` that would go into `test/foo.cpp`.
+
+  ```cpp
+  /******************************************************************************
+   *                    _   _____   __________                                  *
+   *                   | | / / _ | / __/_  __/     Visibility                   *
+   *                   | |/ / __ |_\ \  / /          Across                     *
+   *                   |___/_/ |_/___/ /_/       Space and Time                 *
+   *                                                                            *
+   * This file is part of VAST. It is subject to the license terms in the       *
+   * LICENSE file found in the top-level directory of this distribution and at  *
+   * http://vast.io/license. No part of VAST, including this file, may be       *
+   * copied, modified, propagated, or distributed except according to the terms *
+   * contained in the LICENSE file.                                             *
+   ******************************************************************************/
+
+  #define SUITE foo
+  #include "test.hpp"
+  #include "fixtures/my_fixture.hpp"
+
+  #include <iostream>     // standard library includes
+
+  #include <caf/...>      // CAF includes
+
+  #include "vast/foo.hpp" // VAST includes
+
+  using namespace vast;
+
+  namespace {
+
+  struct fixture {
+    fixture() {
+      // Setup
+      context = 42;
+    }
+
+    ~fixture() {
+      // Teardown
+      context = 0;
+    }
+
+    int context;
+  };
+
+  } // namespace <anonymous>
+
+  FIXTURE_SCOPE(foo_tests, fixture)
+
+  TEST(construction) {
+    MESSAGE("default construction");
+    foo x;
+    MESSAGE("assignment");
+    x = 42;
+    CHECK_EQUAL(x, context);
+  }
+
+  FIXTURE_SCOPE_END()
+  ```
