@@ -335,7 +335,7 @@ Comments
   ```cpp
   /// Does something.
   /// @param x This argument has rather sophisticated semantics and therefore
-               needs a detailed explanation.
+  ///          needs a detailed explanation.
   /// @param y Just another arugment.
   /// @returns A function of *x* and *y*.
   template <class T, class U>
