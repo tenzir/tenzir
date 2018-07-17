@@ -64,10 +64,10 @@ General
 - Namespaces and access modifiers (e.g., `public`) do not increase the
   indentation level.
 
-- The `const` keyword follows after type, e.g., `T const&` as opposed to
-  `const T&`.
+- The `const` keyword precedes the type, e.g., `const T&` as opposed to
+  `T const&`.
 
-- `*` and `&` bind to the *type*, e.g., `T const& arg`.
+- `*` and `&` bind to the *type*, e.g., `T* arg` instead of `T *arg`.
 
 - Always use `auto` to declare a variable unless you cannot initialize it
   immediately or if you actually want a type conversion. In the latter case,
@@ -80,10 +80,10 @@ General
 - Keywords are always followed by a whitespace: `if (...)`, `template <...>`,
   `while (...)`, etc.
 
-- Leave a whitespace after `!` to make negations easily recognizable.
+- Do not add whitespace when negating an expression with `!`:
 
   ```cpp
-  if (! sunny())
+  if (!sunny())
     stay_home()
   ```
 
@@ -96,16 +96,15 @@ General
   };
   ```
 
-- Do not use the `inline` keyword unless to avoid duplicate symbols. The
-  compiler does a better job at figuring out what functions should be inlined.
+- Use inline functions for trivial code, such as getters/setters or
+  straight-forward logic that does not span more than 3 lines.
 
 Header
 ------
 
-- Header filenames end in `.h` and implementation filenames in `.cc`.
+- Header filenames end in `.hpp` and implementation filenames in `.cpp`.
 
-- All header files should use #define guards to prevent multiple inclusion. The
-  format of the symbol name should be `VAST_<PATH>_<TO>_<FILE>_H`.
+- All header files should use `#pragma once` to prevent multiple inclusion.
 
 - Don't use `#include` when a forward declarations suffices. It can make sense
   to outsource forward declarations into a separate file per module. The file
@@ -125,7 +124,8 @@ Header
 
   Within each section the order should be alphabetical. VAST includes should
   always be in doublequotes and relative to the source directory, whereas
-  system-wide includes in angle brackets.
+  system-wide includes in angle brackets. See below for an example on how to
+  structure includes in unit tests.
 
 - As in the standard library, the order of parameters when declaring a function
   is: inputs, then outputs. API coherence and symmetry trumps this rule, e.g.,
@@ -214,8 +214,8 @@ Breaking
 - Break function arguments after the comma for both declaration and invocation:
 
   ```cpp
-  a_rather_long_return_type f(std::string const& x,
-                              std::string const& y) {
+  a_rather_long_return_type f(const std::string& x,
+                              const std::string& y) {
     // ...
   }
   ```
@@ -225,8 +225,8 @@ Breaking
   ```cpp
   template <typename T>
   black_hole_space_time_warp f(
-    typename T::gravitational_field_manager const& manager,
-    typename T::antimatter_clustear const& cluster) {
+    typename const T::gravitational_field_manager& manager,
+    typename const T::antimatter_clustear& cluster) {
     // ...
   }
   ```
@@ -246,7 +246,7 @@ Breaking
   ```cpp
   template <class T>
   auto compute_upper_bound_on_compressed_data(T x)
-  -> std::enable_if_t<std::is_integral::value, T> {
+  -> std::enable_if_t<std::is_integral_v<T>, T> {
     return detail::bound(x);
   }
   ```
@@ -322,6 +322,35 @@ Comments
 
 - Use `@cmd` rather than `\cmd`.
 
+- Document pre- and post-conditions with `@pre` and `@post` (where appropriate).
+
+- Reference other parameters with emphasis:
+  ```cpp
+  /// @param x A number between 0 and 1.
+  /// @param y Scales *x* by a constant factor.
+  ```
+
+- For multi-line comments, break after the `@cmd` argument:
+
+  ```cpp
+  /// Does something.
+  /// @param x This argument has rather sophisticated semantics and therefore
+  ///          needs a detailed explanation.
+  /// @param y Just another arugment.
+  /// @returns A function of *x* and *y*.
+  template <class T, class U>
+  int f(T x, U y);
+  ```
+
+- Use `@tparam` to document template parameters.
+
+- For simple getters or obvious functions returning a value, use a one-line
+  `@returns` statement:
+  ```cpp
+  /// @returns The answer.
+  int f();
+  ```
+
 - Use `//` or `/*` and `*/` to define basic comments that should not be
   swallowed by Doxygen.
 
@@ -356,3 +385,79 @@ When integrating 3rd-party code into the code base, use the following scaffold:
 
 (code here)
 ```
+
+Unit Tests
+----------
+
+- Every new feature must come with unit tests.
+
+- The filename and path should mirror the component under test. For example,
+  the component `vast/detail/feature.hpp` should have a test file called
+  `test/detail/feature.cpp`.
+
+- The include order in unit tests resembles the order for standard headers,
+  except that unit test includes and the suite definition comes at the top.
+
+- Make judicious use of *fixtures* for prepping your test environment.
+
+- The snippet below illustrates a simple example for a new component
+  `vast/foo.hpp` that would go into `test/foo.cpp`.
+
+  ```cpp
+  /******************************************************************************
+   *                    _   _____   __________                                  *
+   *                   | | / / _ | / __/_  __/     Visibility                   *
+   *                   | |/ / __ |_\ \  / /          Across                     *
+   *                   |___/_/ |_/___/ /_/       Space and Time                 *
+   *                                                                            *
+   * This file is part of VAST. It is subject to the license terms in the       *
+   * LICENSE file found in the top-level directory of this distribution and at  *
+   * http://vast.io/license. No part of VAST, including this file, may be       *
+   * copied, modified, propagated, or distributed except according to the terms *
+   * contained in the LICENSE file.                                             *
+   ******************************************************************************/
+
+  #define SUITE foo
+
+  #include "vast/foo.hpp" // Unit under test
+
+  #include "test.hpp"     // Unit test framework and scaffolding
+
+  #include <iostream>     // standard library includes
+
+  #include <caf/...>      // CAF includes
+
+  #include "vast/..."     // VAST includes
+
+  using namespace vast;
+
+  namespace {
+
+  struct fixture {
+    fixture() {
+      // Setup
+      context = 42;
+    }
+
+    ~fixture() {
+      // Teardown
+      context = 0;
+    }
+
+    int context;
+  };
+
+  } // namespace <anonymous>
+
+  FIXTURE_SCOPE(foo_tests, fixture)
+
+  TEST(construction) {
+    MESSAGE("default construction");
+    foo x;
+    MESSAGE("assignment");
+    x = 42;
+    CHECK_EQUAL(x, context);
+  }
+
+  FIXTURE_SCOPE_END()
+  ```
