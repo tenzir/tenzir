@@ -57,6 +57,16 @@ TEST(choice triple) {
   CHECK(fired);
 }
 
+TEST(list) {
+  auto p = parsers::alnum % '.';
+  std::vector<char> xs;
+  std::string str;
+  CHECK(p("a.b.c", xs));
+  CHECK(p("a.b.c", str));
+  CHECK_EQUAL(xs, (std::vector<char>{'a', 'b', 'c'}));
+  CHECK_EQUAL(str, "abc");
+}
+
 TEST(maybe) {
   using namespace parsers;
   auto maybe_x = ~chr{'x'};
