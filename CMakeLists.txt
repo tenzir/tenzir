@@ -113,11 +113,7 @@ if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
     set(EXTRA_FLAGS "${EXTRA_FLAGS} -fno-builtin-realloc -fno-builtin-free")
   endif ()
 elseif ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
-  # Check if we are using Apple's Clang or a thir-party installation. Since
-  # Apple modifies the compiler version in an annoying way, we cannot just use
-  # macros or rely the -v flag to get the compiler version. We assume that
-  # users do not mess with the default-compiler
-  if (APPLE AND (CMAKE_CXX_COMPILER MATCHES ".*/usr/bin/c\\+\\+"))
+  if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "AppleClang")
     message(STATUS "Using Clang from XCode")
     check_compiler_version("Apple Clang" ${APPLE_CLANG_MINIMUM_VERSION})
   else ()
