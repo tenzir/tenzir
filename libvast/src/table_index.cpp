@@ -141,8 +141,7 @@ caf::expected<bitmap> table_index::lookup(const predicate& pred) {
   VAST_TRACE(VAST_ARG(pred));
   // For now, we require that the predicate is part of a normalized expression,
   // i.e., LHS is an extractor and RHS is a data.
-  auto rhs = caf::get_if<data>(&pred.rhs);
-  if (!rhs)
+  if (!caf::holds_alternative<data>(pred.rhs))
     return ec::invalid_query;
   // Specialize the predicate for the type.
   auto resolved = type_resolver{type_erased_layout_}(pred);
