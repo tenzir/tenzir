@@ -47,13 +47,10 @@ set(APPLE_CLANG_MINIMUM_VERSION 9.1)
 set(GCC_MINIMUM_VERSION 8.0)
 
 # Ensures that the specified C++ compiler meets our version requirements.
-macro(check_compiler_version compiler minimum_version)
-  if (CMAKE_CXX_COMPILER_VERSION VERSION_GREATER ${minimum_version}
-      OR CMAKE_CXX_COMPILER_VERSION VERSION_EQUAL ${minimum_version})
-    message(STATUS "Found ${compiler} ${compiler_version}")
-  else ()
-    message(FATAL_ERROR "${compiler} >= ${minimum_version} required, "
-                        "found ${compiler_version}")
+macro(check_compiler_version version)
+  message(STATUS "Using ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}")
+  if (CMAKE_CXX_COMPILER_VERSION VERSION_LESS ${version})
+    message(FATAL_ERROR "${CMAKE_CXX_COMPILER_VERSION} >= ${version} required")
   endif ()
 endmacro()
 
@@ -87,7 +84,7 @@ endif ()
 
 # Requirement checks
 if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
-  check_compiler_version("GCC" ${GCC_MINIMUM_VERSION})
+  check_compiler_version(${GCC_MINIMUM_VERSION})
   # Too many false positives.
   set(EXTRA_FLAGS "${EXTRA_FLAGS} -Wno-maybe-uninitialized")
   if (${CMAKE_SYSTEM_NAME} MATCHES "FreeBSD")
@@ -106,10 +103,11 @@ if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
   endif ()
 elseif ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
   if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "AppleClang")
-    message(STATUS "Using Clang from XCode")
-    check_compiler_version("Apple Clang" ${APPLE_CLANG_MINIMUM_VERSION})
+    message(STATUS "Using Clang that ships with XCode")
+    check_compiler_version(${APPLE_CLANG_MINIMUM_VERSION})
   else ()
-    check_compiler_version("Clang" ${CLANG_MINIMUM_VERSION})
+    message(STATUS "Using third-party Clang not from XCode")
+    check_compiler_version(${CLANG_MINIMUM_VERSION})
   endif ()
   # Standard library selection: check if libc++ is available, and if so, use
   # it. Otherwise fall back to libstdc++.
