@@ -167,17 +167,22 @@ TEST(bro conn logs) {
 TEST(bro conn log http slices) {
   MESSAGE("scrutinize each bro conn log slice individually");
   // Pre-computed via:
-  // grep http libvast/test/logs/bro/conn.log  -n
-  // | awk -F ':' '{tbl[int($1 / 100)] += 1}
-  //               END { for (key in tbl) { print key " " tbl[key] } }'
-  // | sort -n
-  // | awk '{print $2","}'
+  //  bro-cut service < test/logs/bro/conn.log \
+  //    | awk '$1 == "http" { xs[int((NR-1)/100)] += 1 }
+  //             END { for (x in xs) print x, xs[x] }' \
+  //    | sort -n \
+  //    | awk '{ print $2 "," }'  \
+  //    | paste -d ' ' - - - - - - - - - -
   std::vector<size_t> hits{
-    9,  20, 14, 28, 31, 7,  15, 28, 16, 41, 40, 51, 61, 50, 65, 58, 54,
-    24, 26, 30, 20, 30, 8,  57, 48, 57, 30, 55, 22, 25, 34, 35, 40, 59,
-    40, 23, 31, 26, 27, 53, 26, 5,  56, 35, 1,  5,  7,  10, 4,  44, 48,
-    2,  9,  7,  1,  13, 4,  2,  13, 2,  33, 36, 16, 43, 50, 30, 38, 13,
-    92, 70, 73, 67, 5,  53, 21, 8,  2,  2,  22, 7,  2,  14, 7,
+    13, 16, 20, 22, 31, 11, 14, 28, 13, 42,
+    45, 52, 59, 54, 59, 59, 51, 29, 21, 31,
+    20, 28, 9, 56, 48, 57, 32, 53, 25, 31,
+    25, 44, 38, 55, 40, 23, 31, 27, 23, 59,
+    23, 2, 62, 29, 1, 5, 7, 10, 5, 52,
+    39, 2, 9, 8, 13, 4, 2, 13, 2, 36,
+    33, 17, 48, 50, 27, 44, 9, 94, 63, 74,
+    66, 5, 54, 21, 7, 2, 3, 21, 7, 2,
+    14, 7
   };
   auto layout = bro_conn_log_layout();
   REQUIRE_EQUAL(std::accumulate(hits.begin(), hits.end(), size_t(0)), 2386u);
