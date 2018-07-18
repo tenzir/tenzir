@@ -66,11 +66,11 @@ TEST(parseable/printable - predicate) {
   CHECK(caf::holds_alternative<data>(pred.lhs));
   CHECK(pred.op == greater);
   CHECK(pred.rhs == attribute_extractor{"time"});
-  str = "x == y";
+  str = "x.a_b == y.c_d";
   CHECK(parsers::predicate(str, pred));
-  CHECK(pred.lhs == key_extractor{"x"});
+  CHECK(pred.lhs == key_extractor{"x.a_b"});
   CHECK(pred.op == equal);
-  CHECK(pred.rhs == key_extractor{"y"});
+  CHECK(pred.rhs == key_extractor{"y.c_d"});
   CHECK_EQUAL(to_string(pred), str);
   // Invalid type name.
   CHECK(!parsers::predicate(":foo == -42"));

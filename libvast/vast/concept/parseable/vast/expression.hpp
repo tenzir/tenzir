@@ -43,10 +43,12 @@ struct predicate_parser : parser<predicate_parser> {
       auto key = detail::join(xs, ".");
       return predicate::operand{key_extractor{std::move(key)}};
     };
-    auto id = +(parsers::alnum | '_'_p | '-'_p);
+    using parsers::alnum;
+    using parsers::chr;
+    auto id = +(alnum | chr{'_'} | chr{'-'});
     // A key cannot start with ':', othwise it would be interpreted as a type
     // extractor.
-    auto key = !':'_p >> (+(parsers::alnum | '_'_p | ':'_p) % '.');
+    auto key = !':'_p >> (+(alnum | chr{'_'} | chr{':'}) % '.');
     auto operand
       = parsers::data        ->* [](data d) -> predicate::operand { return d; }
       | '&' >> id            ->* to_attr_extractor
