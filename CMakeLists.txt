@@ -48,16 +48,8 @@ set(GCC_MINIMUM_VERSION 8.0)
 
 # Ensures that the specified C++ compiler meets our version requirements.
 macro(check_compiler_version compiler minimum_version)
-  try_run(program_result
-          compilation_succeeded
-          "${CMAKE_CURRENT_BINARY_DIR}"
-          "${CMAKE_CURRENT_SOURCE_DIR}/cmake/get_compiler_version.cpp"
-          RUN_OUTPUT_VARIABLE compiler_version)
-  if (NOT compilation_succeeded OR NOT program_result EQUAL 0)
-    message(FATAL_ERROR "Cannot determine compiler version")
-  endif ()
-  if (compiler_version VERSION_GREATER ${minimum_version}
-      OR compiler_version VERSION_EQUAL ${minimum_version})
+  if (CMAKE_CXX_COMPILER_VERSION VERSION_GREATER ${minimum_version}
+      OR CMAKE_CXX_COMPILER_VERSION VERSION_EQUAL ${minimum_version})
     message(STATUS "Found ${compiler} ${compiler_version}")
   else ()
     message(FATAL_ERROR "${compiler} >= ${minimum_version} required, "
