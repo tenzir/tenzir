@@ -211,12 +211,13 @@ caf::optional<offset> record_type::resolve(std::string_view key) const {
   if (key.empty())
     return caf::none;
   auto offset = offset::size_type{0};
-  for (auto& field : fields) {
+  for (auto i = fields.begin(); i != fields.end(); ++i, ++offset) {
+    auto& field = *i;
     auto& name = field.name;
     VAST_ASSERT(!name.empty());
     // Check whether the field name is a prefix of the key to resolve.
-    auto i = std::mismatch(name.begin(), name.end(), key.begin()).first;
-    if (i == name.end()) {
+    auto j = std::mismatch(name.begin(), name.end(), key.begin()).first;
+    if (j == name.end()) {
       result.push_back(offset);
       if (name.size() == key.size())
         return result;
@@ -232,7 +233,6 @@ caf::optional<offset> record_type::resolve(std::string_view key) const {
       result.insert(result.end(), sub_result->begin(), sub_result->end());
       return result;
     }
-    ++offset;
   }
   return caf::none;
 }
