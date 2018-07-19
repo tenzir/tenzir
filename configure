@@ -49,6 +49,10 @@ Usage: $0 [OPTION]... [VAR=VALUE]...
     --with-perftools=PATH   path to gperftools install root
     --with-doxygen=PATH     path to Doxygen install root
 
+  Convenience options:
+    --dev-mode              sets --build-type=debug, --log-level=trace,
+                            and --enable-asan
+
   Influential Environment Variables (only on first invocation):
     CXX                     C++ compiler command
     CXXFLAGS                C++ compiler flags
@@ -172,6 +176,13 @@ while [ $# -ne 0 ]; do
       ;;
     --with-doxygen=*)
       append_cache_entry Doxygen_ROOT_DIR PATH "$optarg"
+      ;;
+    --dev-mode)
+      append_cache_entry CMAKE_BUILD_TYPE STRING Debug
+      append_cache_entry VAST_LOG_LEVEL INTEGER 4
+      append_cache_entry ENABLE_ADDRESS_SANITIZER BOOL true
+      # TODO: eventually, we also want to enable --more-warnings
+      # append_cache_entry MORE_WARNINGS BOOL yes
       ;;
     *)
       echo "Invalid option '$1'.  Try $0 --help to see available options."
