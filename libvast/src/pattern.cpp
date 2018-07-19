@@ -44,8 +44,7 @@ const std::string& pattern::string() const {
 }
 
 pattern& pattern::operator+=(const pattern& other) {
-  str_ += other.str_;
-  return *this;
+  return *this += std::string_view{other.str_};
 }
 
 pattern& pattern::operator+=(std::string_view other) {
