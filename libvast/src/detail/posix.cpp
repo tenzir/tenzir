@@ -197,7 +197,7 @@ bool poll(int fd, int usec) {
   if (rc < 0) {
     switch (rc) {
       default:
-        VAST_RAISE_ERROR("unhandled select() error");
+        VAST_RAISE_ERROR(std::logic_error, "unhandled select() error");
       case EINTR:
       case ENOMEM:
         return false;

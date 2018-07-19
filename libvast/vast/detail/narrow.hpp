@@ -30,6 +30,14 @@
 
 namespace vast::detail {
 
+#ifndef VAST_NO_EXCEPTIONS
+/// @relates narrow
+struct narrowing_error : std::runtime_error {
+  using super = std::runtime_error;
+  using super::super;
+};
+#endif // VAST_NO_EXCEPTIONS
+
 /// A searchable way to do narrowing casts of values.
 template <class T, class U>
 constexpr T narrow_cast(U&& u) noexcept {
@@ -46,9 +54,9 @@ template <class T, class U>
 T narrow(U y) {
   T x = narrow_cast<T>(y);
   if (static_cast<U>(x) != y)
-    VAST_RAISE_ERROR("narrowing error");
+    VAST_RAISE_ERROR(narrowing_error, "narrowing error");
   if (!is_same_signedness<T, U>::value && ((x < T{}) != (y < U{})))
-    VAST_RAISE_ERROR("narrowing error");
+    VAST_RAISE_ERROR(narrowing_error, "narrowing error");
   return x;
 }
 

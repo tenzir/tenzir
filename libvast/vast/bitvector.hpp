@@ -541,7 +541,7 @@ template <class Block, class Allocator>
 typename bitvector<Block, Allocator>::reference
 bitvector<Block, Allocator>::at(size_type i) {
   if (i >= size_)
-    VAST_RAISE_ERROR("bitvector out of range");
+    VAST_RAISE_ERROR(std::out_of_range, "bitvector out of range");
   return (*this)[i];
 }
 
@@ -549,7 +549,7 @@ template <class Block, class Allocator>
 typename bitvector<Block, Allocator>::const_reference
 bitvector<Block, Allocator>::at(size_type i) const {
   if (i >= size_)
-    VAST_RAISE_ERROR("bitvector out of range");
+    VAST_RAISE_ERROR(std::out_of_range, "bitvector out of range");
   return (*this)[i];
 }
 

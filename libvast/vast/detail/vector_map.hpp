@@ -177,14 +177,16 @@ public:
   mapped_type& at(const key_type& key) {
     auto i = find(key);
     if (i == end())
-      VAST_RAISE_ERROR("vast::detail::vector_map::at out of range");
+      VAST_RAISE_ERROR(std::out_of_range,
+                       "vast::detail::vector_map::at out of range");
     return i->second;
   }
 
   const mapped_type& at(const key_type& key) const {
     auto i = find(key);
     if (i == end())
-      VAST_RAISE_ERROR("vast::detail::vector_map::at out of range");
+      VAST_RAISE_ERROR(std::out_of_range,
+                       "vast::detail::vector_map::at out of range");
     return i->second;
   }
 
