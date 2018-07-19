@@ -630,4 +630,51 @@ TEST(regression - manual address bitmap index from 4 byte indexes) {
   CHECK_EQUAL(select(result, -1), id{720});
 }
 
+namespace {
+
+auto service(const event& log) {
+  auto& xs = caf::get<vector>(log.data());
+  return make_view(xs[4]);
+}
+
+bool is_http(view<data> x) {
+  return caf::get<view<std::string>>(x) == "http";
+}
+
+} // namespace <anonymous>
+
+TEST(regression - bro conn log service http) {
+  // The number of occurrences of the 'service == "http"' in the conn.log,
+  // sliced in batches of 100. Pre-computed via:
+  //  bro-cut service < test/logs/bro/conn.log \
+  //    | awk '{ if ($1 == "http") ++n; if (NR % 100 == 0) { print n; n = 0 } }\
+  //           END { print n }' \
+  //    | paste -s -d , -
+  std::vector<size_t> http_per_100_events{
+    13, 16, 20, 22, 31, 11, 14, 28, 13, 42, 45, 52, 59, 54, 59, 59, 51,
+    29, 21, 31, 20, 28, 9,  56, 48, 57, 32, 53, 25, 31, 25, 44, 38, 55,
+    40, 23, 31, 27, 23, 59, 23, 2,  62, 29, 1,  5,  7,  0,  10, 5,  52,
+    39, 2,  0,  9,  8,  0,  13, 4,  2,  13, 2,  36, 33, 17, 48, 50, 27,
+    44, 9,  94, 63, 74, 66, 5,  54, 21, 7,  2,  3,  21, 7,  2,  14, 7
+  };
+  std::vector<std::pair<std::unique_ptr<value_index>, ids>> slices;
+  slices.reserve(http_per_100_events.size());
+  for (size_t i = 0; i < bro_conn_log.size(); ++i) {
+    if (i % 100 == 0) {
+      slices.emplace_back(value_index::make(string_type{}), ids(i, false));
+    }
+    auto& [idx, expected] = slices.back();
+    auto x = service(bro_conn_log[i]);
+    idx->append(x, i);
+    expected.append_bit(is_http(x));
+  }
+  for (size_t i = 0; i < slices.size(); ++i) {
+    MESSAGE("verifying batch [" << (i * 100) << ',' << (i * 100) + 100 << ')');
+    auto& [idx, expected] = slices[i];
+    auto result = idx->lookup(equal, make_data_view("http"));
+    REQUIRE(result);
+    CHECK_EQUAL(rank(*result), http_per_100_events[i]);
+  }
+}
+
 FIXTURE_SCOPE_END()
