@@ -95,8 +95,8 @@ TEST(memory-mapped streambuffer aligned resize) {
 TEST(memory-mapped streambuffer aligned resize large) {
   auto filename = directory / "aligned_large";
   auto page_size = detail::page_size();
-  auto hundred_mb = size_t{100 * (1 << 20)};
-  auto size = hundred_mb - (hundred_mb % page_size);
+  auto ten_mb = size_t{10 * (1 << 20)};
+  auto size = ten_mb - (ten_mb % page_size);
   aligned_resize_test_impl(filename, size);
 }
 
