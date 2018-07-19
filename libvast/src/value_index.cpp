@@ -144,47 +144,32 @@ std::unique_ptr<value_index> value_index::make(const type& t) {
 }
 
 expected<void> value_index::append(data_view x) {
-  if (caf::holds_alternative<caf::none_t>(x)) {
-    none_.append_bit(true);
-    ++nils_;
-  } else {
-    if (!append_impl(x, nils_))
-      return make_error(ec::unspecified, "append_impl");
-    nils_ = 0;
-    none_.append_bit(false);
-  }
-  mask_.append_bit(true);
-  return {};
+  return append(x, offset());
 }
 
 expected<void> value_index::append(data_view x, id pos) {
-  auto off = offset();
+  auto off = mask_.size();
   if (pos < off)
     // Can only append at the end
     return make_error(ec::unspecified, pos, '<', off);
-  if (pos == off)
-    return append(x);
-  auto skip = pos - off;
   if (caf::holds_alternative<caf::none_t>(x)) {
-    none_.append_bits(false, skip);
+    none_.append_bits(false, pos - none_.size());
     none_.append_bit(true);
-    ++nils_;
-  } else {
-    if (!append_impl(x, skip + nils_))
-      return make_error(ec::unspecified, "append_impl");
-    nils_ = 0;
-    none_.append_bits(false, skip + 1);
+  } else if (!append_impl(x, pos - off)) {
+    return make_error(ec::unspecified, "append_impl");
   }
-  mask_.append_bits(false, skip);
+  mask_.append_bits(false, pos - off);
   mask_.append_bit(true);
   return {};
 }
 
 expected<ids> value_index::lookup(relational_operator op, data_view x) const {
   if (caf::holds_alternative<caf::none_t>(x)) {
-    if (!(op == equal || op == not_equal))
-      return make_error(ec::unsupported_operator, op);
-    return op == equal ? none_ & mask_ : ~none_ & mask_;
+    if (op == equal)
+      return none_ & mask_;
+    if (op == not_equal)
+      return ~none_ & mask_;
+    return make_error(ec::unsupported_operator, op);
   }
   auto result = lookup_impl(op, x);
   if (!result)
@@ -193,7 +178,7 @@ expected<ids> value_index::lookup(relational_operator op, data_view x) const {
 }
 
 value_index::size_type value_index::offset() const {
-  return mask_.size(); // none_ would work just as well.
+  return mask_.size();
 }
 
 // -- string_index -------------------------------------------------------------

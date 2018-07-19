@@ -89,7 +89,6 @@ private:
   virtual expected<ids>
   lookup_impl(relational_operator op, data_view x) const = 0;
 
-  size_type nils_ = 0;
   ewah_bitmap mask_;
   ewah_bitmap none_;
 };
