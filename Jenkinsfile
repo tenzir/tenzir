@@ -1,5 +1,16 @@
 #!/usr/bin/env groovy
 
+cafDefaultFlags = [
+  'CAF_NO_TOOLS:BOOL=yes',
+  'CAF_NO_EXAMPLES:BOOL=yes',
+  'CAF_NO_PYTHON:BOOL=yes',
+  'CAF_NO_OPENCL:BOOL=yes',
+]
+
+vastDefaultFlags = [
+  // nop
+]
+
 // Our build matrix. The keys are the operating system labels and the values
 // are lists of tool labels.
 buildMatrix = [
@@ -7,33 +18,96 @@ buildMatrix = [
     [ 'Linux', [
         builds: ['release'],
         tools: ['gcc8'],
+        cmakeArgs: [
+            caf: cafDefaultFlags + [
+                'CAF_ENABLE_RUNTIME_CHECKS:BOOL=yes',
+            ],
+            vast: vastDefaultFlags,
+        ],
     ]],
     [ 'macOS', [
         builds: ['release'],
         tools: ['clang'],
+        cmakeArgs: [
+            caf: cafDefaultFlags + [
+                'CAF_ENABLE_RUNTIME_CHECKS:BOOL=yes',
+            ],
+            vast: vastDefaultFlags,
+        ],
     ]],
     // Debug builds with ASAN + trace logs.
     [ 'Linux', [
-        cmakeArgs: '-DCAF_ENABLE_ADDRESS_SANITIZER:BOOL=yes ' + // CAF
-                   '-DCAF_LOG_LEVEL=4 ' +                       // CAF
-                   '-DENABLE_ADDRESS_SANITIZER:BOOL=yes',       // VAST
         builds: ['debug'],
         tools: ['gcc8'],
+        cmakeArgs: [
+            caf: cafDefaultFlags + [
+                'CAF_ENABLE_RUNTIME_CHECKS:BOOL=yes',
+                'CAF_ENABLE_ADDRESS_SANITIZER:BOOL=yes',
+                'CAF_LOG_LEVEL:STRING=4',
+            ],
+            vast: vastDefaultFlags + [
+                'CAF_ENABLE_RUNTIME_CHECKS:BOOL=yes',
+                'ENABLE_ADDRESS_SANITIZER:BOOL=yes',
+            ],
+        ],
     ]],
     [ 'macOS', [
-        cmakeArgs: '-DCAF_ENABLE_ADDRESS_SANITIZER:BOOL=yes ' + // CAF
-                   '-DCAF_LOG_LEVEL=4 ' +                       // CAF
-                   '-DENABLE_ADDRESS_SANITIZER:BOOL=yes',       // VAST
         builds: ['debug'],
         tools: ['clang'],
+        cmakeArgs: [
+            caf: cafDefaultFlags + [
+                'CAF_ENABLE_ADDRESS_SANITIZER:BOOL=yes',
+                'CAF_LOG_LEVEL:STRING=4',
+            ],
+            vast: vastDefaultFlags + [
+                'ENABLE_ADDRESS_SANITIZER:BOOL=yes',
+            ],
+        ],
+    ]],
+    // One Additional build for coverage reports.
+    ['unix', [
+        builds: ['debug'],
+        tools: ['gcc8 && gcovr'],
+        extraSteps: ['coverageReport'],
+        cmakeArgs: [
+            caf: cafDefaultFlags + [
+                'CAF_ENABLE_GCOV:BOOL=yes',
+                'CAF_NO_EXCEPTIONS:BOOL=yes',
+                'CAF_FORCE_NO_EXCEPTIONS:BOOL=yes',
+            ],
+            vast: vastDefaultFlags + [
+                'ENABLE_GCOV:BOOL=yes',
+                'NO_EXCEPTIONS:BOOL=yes',
+            ],
+        ],
     ]],
 ]
 
 // Optional environment variables for combinations of labels.
 buildEnvironments = [
-  'macOS && gcc': ['CXX=g++'],
-  'Linux && clang': ['CXX=clang++'],
+    nop : [], // Dummy value for getting the proper types.
 ]
+
+def coverageReport(buildType) {
+    dir("vast-$buildType") {
+        sh 'gcovr -e vast -e tools -e libvast/tests -x -r .. > coverage.xml'
+        archiveArtifacts '**/coverage.xml'
+        cobertura([
+          autoUpdateHealth: false,
+          autoUpdateStability: false,
+          coberturaReportFile: '**/coverage.xml',
+          conditionalCoverageTargets: '70, 0, 0',
+          failUnhealthy: false,
+          failUnstable: false,
+          lineCoverageTargets: '80, 0, 0',
+          maxNumberOfBuilds: 0,
+          methodCoverageTargets: '80, 0, 0',
+          onlyStable: false,
+          sourceEncoding: 'ASCII',
+          zoomCoverageChart: false,
+        ])
+    }
+}
 
 def gitSteps(name, url, branch = 'master') {
     def sourceDir = "$name-sources"
@@ -56,6 +130,7 @@ def buildSteps(name, buildType, cmakeArgs) {
     dir("$installDir") {
         deleteDir()
     }
+    echo "cmakeArgs: $cmakeArgs"
     // Separate builds by build type on the file system.
     dir("$name-$buildType") {
         // Make sure no old junk is laying around.
@@ -95,19 +170,17 @@ def buildSteps(name, buildType, cmakeArgs) {
     }
 }
 
+def makeFlags(xs) {
+    xs.collect { x -> '-D' + x }.join(' ')
+}
+
 def buildAll(buildType, settings) {
-    def cmakeArgs = settings['cmakeArgs'] ?: ''
-    buildSteps('caf', buildType,
-               "-DCAF_NO_TOOLS:BOOL=yes " +
-               "-DCAF_NO_EXAMPLES:BOOL=yes " +
-               "-DCAF_NO_PYTHON:BOOL=yes " +
-               "-DCAF_NO_OPENCL:BOOL=yes " +
-               "-DCAF_ENABLE_RUNTIME_CHECKS:BOOL=yes " +
-               cmakeArgs)
-    buildSteps('vast', buildType,
-               "-D CAF_ROOT_DIR=\"$WORKSPACE/caf-$buildType-install\" "
-               + cmakeArgs)
-    (settings['extraSteps'] ?: []).each { fun -> "$fun"() }
+    def cmakeArgs = settings['cmakeArgs']
+    buildSteps('caf', buildType, makeFlags(cmakeArgs['caf']))
+    buildSteps('vast', buildType, makeFlags(cmakeArgs['vast'] + [
+        "CAF_ROOT_DIR=\"$WORKSPACE/caf-$buildType-install\"",
+    ]))
+    (settings['extraSteps'] ?: []).each { fun -> "$fun"(buildType) }
 }
 
 // Builds a stage for given builds. Results in a parallel stage `if builds.size() > 1`.
@@ -118,6 +191,7 @@ def makeBuildStages(matrixIndex, builds, lblExpr, settings) {
             (id):
             {
                 node(lblExpr) {
+                    echo "Trigger build on $NODE_NAME"
                     withEnv(buildEnvironments[lblExpr] ?: []) {
                         buildAll(buildType, settings)
                     }
