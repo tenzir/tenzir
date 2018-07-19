@@ -243,13 +243,14 @@ caf::optional<std::string> record_type::resolve(const offset& o) const {
   std::string result;
   auto r = this;
   for (size_t i = 0; i < o.size(); ++i) {
-    if (o[i] >= r->fields.size())
+    auto x = o[i];
+    if (x >= r->fields.size())
       return caf::none;
     if (!result.empty())
       result += '.';
-    result += r->fields[o[i]].name;
+    result += r->fields[x].name;
     if (i != o.size() - 1) {
-      r = get_if<record_type>(&r->fields[o[i]].type);
+      r = get_if<record_type>(&r->fields[x].type);
       if (!r)
         return caf::none;
     }
