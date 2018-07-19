@@ -155,7 +155,7 @@ expected<void> value_index::append(data_view x, id pos) {
   if (caf::holds_alternative<caf::none_t>(x)) {
     none_.append_bits(false, pos - none_.size());
     none_.append_bit(true);
-  } else if (!append_impl(x, pos - off)) {
+  } else if (!append_impl(x, pos)) {
     return make_error(ec::unspecified, "append_impl");
   }
   mask_.append_bits(false, pos - off);
@@ -195,7 +195,7 @@ void string_index::init() {
   }
 }
 
-bool string_index::append_impl(data_view x, size_type skip) {
+bool string_index::append_impl(data_view x, id pos) {
   auto str = caf::get_if<view<std::string>>(&x);
   if (!str)
     return false;
@@ -206,11 +206,10 @@ bool string_index::append_impl(data_view x, size_type skip) {
   if (length > chars_.size())
     chars_.resize(length, char_bitmap_index{8});
   for (auto i = 0u; i < length; ++i) {
-    auto gap = length_.size() - chars_[i].size();
-    chars_[i].skip(gap + skip);
+    chars_[i].skip(pos - chars_[i].size());
     chars_[i].append(static_cast<uint8_t>((*str)[i]));
   }
-  length_.skip(skip);
+  length_.skip(pos - length_.size());
   length_.append(length);
   return true;
 }
@@ -292,23 +291,18 @@ void address_index::init() {
     bytes_.fill(byte_index{8});
 }
 
-bool address_index::append_impl(data_view x, size_type skip) {
+bool address_index::append_impl(data_view x, id pos) {
   init();
   auto addr = caf::get_if<view<address>>(&x);
   if (!addr)
     return false;
   auto& bytes = addr->data();
-  if (addr->is_v6())
-    for (auto i = 0u; i < 12; ++i) {
-      auto gap = v4_.size() - bytes_[i].size();
-      bytes_[i].skip(gap + skip);
-      bytes_[i].append(bytes[i]);
-    }
-  for (auto i = 12u; i < 16; ++i) {
-    bytes_[i].skip(skip);
+  for (auto i = 0u; i < 16; ++i) {
+    auto gap = pos - bytes_[i].size();
+    bytes_[i].skip(gap);
     bytes_[i].append(bytes[i]);
   }
-  v4_.skip(skip);
+  v4_.skip(pos - v4_.size());
   v4_.append(addr->is_v4());
   return true;
 }
@@ -369,13 +363,12 @@ void subnet_index::init() {
     length_ = prefix_index{128 + 1}; // Valid prefixes range from /0 to /128.
 }
 
-bool subnet_index::append_impl(data_view x, size_type skip) {
+bool subnet_index::append_impl(data_view x, id pos) {
   if (auto sn = caf::get_if<view<subnet>>(&x)) {
     init();
-    auto id = length_.size() + skip;
-    length_.skip(skip);
+    length_.skip(pos - length_.size());
     length_.append(sn->length());
-    return !!network_.append(sn->network(), id);
+    return static_cast<bool>(network_.append(sn->network(), pos));
   }
   return false;
 }
@@ -447,12 +440,12 @@ void port_index::init() {
   }
 }
 
-bool port_index::append_impl(data_view x, size_type skip) {
+bool port_index::append_impl(data_view x, id pos) {
   if (auto p = caf::get_if<view<port>>(&x)) {
     init();
-    num_.skip(skip);
+    num_.skip(pos - num_.size());
     num_.append(p->number());
-    proto_.skip(skip);
+    proto_.skip(pos - proto_.size());
     proto_.append(p->type());
     return true;
   }
@@ -498,11 +491,11 @@ void sequence_index::init() {
   }
 }
 
-bool sequence_index::append_impl(data_view x, size_type skip) {
+bool sequence_index::append_impl(data_view x, id pos) {
   if (auto xs = caf::get_if<view<vector>>(&x))
-    return container_append(**xs, skip);
+    return container_append(**xs, pos);
   if (auto xs = caf::get_if<view<set>>(&x))
-    return container_append(**xs, skip);
+    return container_append(**xs, pos);
   return false;
 }
 

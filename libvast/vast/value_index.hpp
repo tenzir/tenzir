@@ -84,7 +84,7 @@ protected:
   value_index() = default;
 
 private:
-  virtual bool append_impl(data_view x, size_type skip) = 0;
+  virtual bool append_impl(data_view x, id pos) = 0;
 
   virtual expected<ids>
   lookup_impl(relational_operator op, data_view x) const = 0;
@@ -202,9 +202,9 @@ public:
   }
 
 private:
-  bool append_impl(data_view d, size_type skip) override {
+  bool append_impl(data_view d, id pos) override {
     auto append = [&](auto x) {
-      bmi_.skip(skip);
+      bmi_.skip(pos - bmi_.size());
       bmi_.append(x);
       return true;
     };
@@ -266,7 +266,7 @@ private:
 
   void init();
 
-  bool append_impl(data_view x, size_type skip) override;
+  bool append_impl(data_view x, id pos) override;
 
   expected<ids>
   lookup_impl(relational_operator op, data_view x) const override;
@@ -292,7 +292,7 @@ public:
 private:
   void init();
 
-  bool append_impl(data_view x, size_type skip) override;
+  bool append_impl(data_view x, id pos) override;
 
   expected<ids>
   lookup_impl(relational_operator op, data_view x) const override;
@@ -316,7 +316,7 @@ public:
 private:
   void init();
 
-  bool append_impl(data_view x, size_type skip) override;
+  bool append_impl(data_view x, id pos) override;
 
   expected<ids>
   lookup_impl(relational_operator op, data_view x) const override;
@@ -350,7 +350,7 @@ public:
 private:
   void init();
 
-  bool append_impl(data_view x, size_type skip) override;
+  bool append_impl(data_view x, id pos) override;
 
   expected<ids>
   lookup_impl(relational_operator op, data_view x) const override;
@@ -379,7 +379,7 @@ private:
   void init();
 
   template <class Container>
-  bool container_append(Container& c, size_type skip) {
+  bool container_append(Container& c, id pos) {
     init();
     auto seq_size = c.size();
     if (seq_size > max_size_)
@@ -392,16 +392,15 @@ private:
         VAST_ASSERT(elements_[i]);
       }
     }
-    auto id = size_.size() + skip;
     auto x = c.begin();
     for (auto i = 0u; i < seq_size; ++i)
-      elements_[i]->append(*x++, id);
-    size_.skip(skip);
+      elements_[i]->append(*x++, pos);
+    size_.skip(pos - size_.size());
     size_.append(seq_size);
     return true;
   }
 
-  bool append_impl(data_view x, size_type skip) override;
+  bool append_impl(data_view x, id pos) override;
 
   expected<ids>
   lookup_impl(relational_operator op, data_view x) const override;
