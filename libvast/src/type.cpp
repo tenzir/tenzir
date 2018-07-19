@@ -31,6 +31,7 @@
 using caf::get_if;
 using caf::holds_alternative;
 using caf::visit;
+using namespace std::string_view_literals;
 
 namespace vast {
 
@@ -159,11 +160,9 @@ record_type::record_type(std::initializer_list<record_field> xs)
   // nop
 }
 
-key record_type::each::range_state::key() const {
-  vast::key k(trace.size());
-  for (size_t i = 0; i < trace.size(); ++i)
-    k[i] = trace[i]->name;
-  return k;
+std::string record_type::each::range_state::key() const {
+  return detail::join(trace.begin(), trace.end(), ".",
+                      [](auto field) { return field->name; });
 }
 
 size_t record_type::each::range_state::depth() const {
@@ -207,155 +206,147 @@ const record_type::each::range_state& record_type::each::get() const {
   return state_;
 }
 
-expected<offset> record_type::resolve(const key& k) const {
-  if (k.empty())
-    return make_error(ec::unspecified, "empty symbol sequence");
-  offset off;
-  auto found = true;
-  auto rec = this;
-  for (auto id = k.begin(); id != k.end() && found; ++id) {
-    found = false;
-    for (size_t i = 0; i < rec->fields.size(); ++i) {
-      if (rec->fields[i].name == *id) {
-        // If the name matches, we have to check whether we're continuing with
-        // an intermediate record or have reached the last symbol.
-        rec = get_if<record_type>(&rec->fields[i].type);
-        if (!(rec || id + 1 == k.end()))
-          return make_error(ec::unspecified,
-                            "intermediate fields must be records");
-        off.push_back(i);
-        found = true;
-        break;
-      }
+caf::optional<offset> record_type::resolve(std::string_view key) const {
+  offset result;
+  if (key.empty())
+    return caf::none;
+  auto offset = offset::size_type{0};
+  for (auto i = fields.begin(); i != fields.end(); ++i, ++offset) {
+    auto& field = *i;
+    auto& name = field.name;
+    VAST_ASSERT(!name.empty());
+    // Check whether the field name is a prefix of the key to resolve.
+    auto j = std::mismatch(name.begin(), name.end(), key.begin()).first;
+    if (j == name.end()) {
+      result.push_back(offset);
+      if (name.size() == key.size())
+        return result;
+      // In case we have a partial match, e.g., "x" for "x.y", we need to skip
+      // the '.' key separator.
+      auto remainder = key.substr(1 + name.size());
+      auto rec = get_if<record_type>(&field.type);
+      if (!rec)
+        return caf::none;
+      auto sub_result = rec->resolve(remainder);
+      if (!sub_result)
+        return caf::none;
+      result.insert(result.end(), sub_result->begin(), sub_result->end());
+      return result;
     }
   }
-  if (!found)
-    return make_error(ec::unspecified, "non-existant field name");
-  return off;
+  return caf::none;
 }
 
-expected<key> record_type::resolve(const offset& o) const {
+caf::optional<std::string> record_type::resolve(const offset& o) const {
   if (o.empty())
-    return make_error(ec::unspecified, "empty offset sequence");
-  key k;
+    return caf::none;
+  std::string result;
   auto r = this;
   for (size_t i = 0; i < o.size(); ++i) {
-    if (o[i] >= r->fields.size())
-      return make_error(ec::unspecified, "offset index ", i, " out of bounds");
-    k.push_back(r->fields[o[i]].name);
+    auto x = o[i];
+    if (x >= r->fields.size())
+      return caf::none;
+    if (!result.empty())
+      result += '.';
+    result += r->fields[x].name;
     if (i != o.size() - 1) {
-      r = get_if<record_type>(&r->fields[o[i]].type);
+      r = get_if<record_type>(&r->fields[x].type);
       if (!r)
-        return make_error(ec::unspecified,
-                          "intermediate fields must be records");
+        return caf::none;
     }
   }
-  return k;
+  return result;
 }
 
 namespace {
 
-struct finder {
-  enum mode { prefix, suffix, exact, any };
+enum class mode {
+  prefix,
+  suffix,
+  exact,
+  any,
+};
 
-  finder(key  k, mode m, const std::string& init = "")
-    : mode_{m}, key_{std::move(k)} {
-    VAST_ASSERT(!key_.empty());
-    if (!init.empty())
-      trace_.push_back(init);
+template <mode Mode>
+struct finder {
+  using result_type = std::vector<std::pair<offset, std::string>>;
+
+  finder(std::string_view key) : rx_{pattern::glob(key)} {
+    if constexpr (Mode == mode::prefix)
+      rx_ = "^" + rx_ + ".*";
+    else if constexpr (Mode == mode::suffix)
+      rx_ = ".*" + rx_ + "$";
+    else if constexpr (Mode == mode::exact)
+      rx_ = "^" + rx_ + "$";
+    else if constexpr (Mode == mode::any)
+      rx_ = ".*" + rx_ + ".*";
+  }
+
+  result_type match() const {
+    result_type result;
+    if (rx_.match(trace_))
+      result.emplace_back(off_, trace_);
+    return result;
   }
 
   template <class T>
-  std::vector<std::pair<offset, key>> operator()(const T&) const {
-    std::vector<std::pair<offset, key>> r;
-    if (off_.empty() || key_.size() > trace_.size())
-      return r;
-    if (mode_ == prefix || mode_ == exact) {
-      if (mode_ == exact && key_.size() != trace_.size())
-        return r;
-      for (size_t i = 0; i < key_.size(); ++i)
-        if (!match(key_[i], trace_[i]))
-          return r;
-    } else if (mode_ == suffix) {
-      for (size_t i = 0; i < key_.size(); ++i)
-        if (!match(key_[i], trace_[i + trace_.size() - key_.size()]))
-          return r;
-    } else {
-      for (size_t run = 0; run < trace_.size() - key_.size(); ++run) {
-        auto found = true;
-        for (size_t i = 0; i < key_.size(); ++i)
-          if (!match(key_[i], trace_[i + run])) {
-            found = false;
-            break;
-          }
-        if (found)
-          break;
-      }
-      return r;
-    }
-    r.emplace_back(off_, trace_);
-    return r;
+  result_type operator()(const T&) const {
+    return match();
   }
 
-  std::vector<std::pair<offset, key>> operator()(const record_type& r) {
-    std::vector<std::pair<offset, key>> result;
+  result_type operator()(const record_type& r) {
+    result_type result;
+    if constexpr (Mode != mode::suffix) {
+      // Check whether we want this record first. This does not make sense
+      // for suffixes, because they always start at a leaf.
+      auto sub_result = match();
+      result.insert(result.end(),
+                    std::make_move_iterator(sub_result.begin()),
+                    std::make_move_iterator(sub_result.end()));
+    }
     off_.push_back(0);
     for (auto& f : r.fields) {
-      trace_.push_back(f.name);
-      for (auto& p : visit(*this, f.type))
-        result.push_back(std::move(p));
-      trace_.pop_back();
+      auto prev_trace_size = trace_.size();
+      trace_ += trace_.empty() ? f.name : '.' + f.name;
+      auto sub_result = visit(*this, f.type);
+      result.insert(result.end(),
+                    std::make_move_iterator(sub_result.begin()),
+                    std::make_move_iterator(sub_result.end()));
+      trace_.resize(prev_trace_size);
       ++off_.back();
     }
     off_.pop_back();
     return result;
   }
 
-  static bool match(const std::string& key, const std::string& trace) {
-    return pattern::glob(key).match(trace);
-  }
-
-  mode mode_;
-  key key_;
-  key trace_;
+  pattern rx_;
+  std::string trace_;
   offset off_;
 };
 
 } // namespace <anonymous>
 
-std::vector<std::pair<offset, key>> record_type::find(const key& k) const {
-  return finder{k, finder::exact, name()}(*this);
+std::vector<std::pair<offset, std::string>>
+record_type::find(std::string_view key) const {
+  return finder<mode::any>{key}(*this);
 }
 
-std::vector<std::pair<offset, key>>
-record_type::find_prefix(const key& k) const {
-  return finder{k, finder::prefix, name()}(*this);
+std::vector<std::pair<offset, std::string>>
+record_type::find_prefix(std::string_view key) const {
+  return finder<mode::prefix>{key}(*this);
 }
 
-std::vector<std::pair<offset, key>>
-record_type::find_suffix(const key& k) const {
-  return finder{k, finder::suffix, name()}(*this);
+std::vector<std::pair<offset, std::string>>
+record_type::find_suffix(std::string_view key) const {
+  return finder<mode::suffix>{key}(*this);
 }
 
-const type* record_type::at(const key& k) const {
-  auto r = this;
-  for (size_t i = 0; i < k.size(); ++i) {
-    auto& id = k[i];
-    const record_field* f = nullptr;
-    for (auto& a : r->fields)
-      if (a.name == id) {
-        f = &a;
-        break;
-      }
-    if (!f)
-      return nullptr;
-    if (i + 1 == k.size())
-      return &f->type;
-    r = get_if<record_type>(&f->type);
-    if (!r)
-      return nullptr;
-  }
-  return nullptr;
+const type* record_type::at(std::string_view key) const {
+  auto xs = finder<mode::exact>{key}(*this);
+  if (xs.empty())
+    return nullptr;
+  VAST_ASSERT(xs.size() == 1u);
+  return at(xs[0].first);
 }
 
 const type* record_type::at(const offset& o) const {
@@ -437,7 +428,7 @@ type flatten(const type& t) {
 bool is_flat(const record_type& rec) {
   auto& fs = rec.fields;
   return std::all_of(fs.begin(), fs.end(), [](auto& f) {
-    return !caf::holds_alternative<record_type>(f.type);
+    return !holds_alternative<record_type>(f.type);
   });
 }
 
@@ -811,7 +802,7 @@ data construct(const type& x) {
 
 std::string to_digest(const type& x) {
   std::hash<type> h;
-  return to_string(h(x));
+  return std::to_string(h(x));
 }
 
 namespace {

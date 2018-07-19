@@ -125,7 +125,7 @@ struct value_printer : printer<value_printer> {
         hdr += ",data";
       else
         for (auto& i : record_type::each{*r})
-          hdr += ',' + to_string(i.key());
+          hdr += ',' + i.key();
       auto p = str << chr<'\n'>;
       return p.print(out, hdr);
     });

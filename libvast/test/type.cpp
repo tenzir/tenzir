@@ -23,6 +23,7 @@
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/json.hpp"
+#include "vast/concept/printable/vast/offset.hpp"
 #include "vast/concept/printable/vast/type.hpp"
 
 #define SUITE type
@@ -186,45 +187,42 @@ TEST(record range) {
 
   for (auto& i : record_type::each{r})
     if (i.offset == offset{0, 1, 0, 0})
-      CHECK(i.key() == key{"x", "m", "y", "a"});
+      CHECK_EQUAL(i.key(), "x.m.y.a");
     else if (i.offset == offset{1, 0})
-      CHECK(i.key() == key{"y", "b"});
+      CHECK_EQUAL(i.key(), "y.b");
 }
 
 TEST(record resolving) {
   auto r = record_type{
-    {"x", integer_type{}},
-    {"y", address_type{}},
-    {"z", real_type{}}
-  };
-  // Make it recursive.
-  r = {
     {"a", integer_type{}},
     {"b", count_type{}},
-    {"c", r}
+    {"c", record_type{
+      {"x", integer_type{}},
+      {"y", address_type{}},
+      {"z", real_type{}}
+    }}
   };
-
-  auto o = r.resolve(key{"c"});
+  MESSAGE("top-level offset resolve");
+  auto o = r.resolve("c");
   REQUIRE(o);
-  CHECK(o->size() == 1);
-  CHECK(o->front() == 2);
-
-  o = r.resolve(key{"c", "x"});
+  CHECK_EQUAL(o->size(), 1u);
+  CHECK_EQUAL(o->front(), 2u);
+  MESSAGE("nested offset resolve");
+  o = r.resolve("c.x");
   REQUIRE(o);
-  CHECK(o->size() == 2);
-  CHECK(o->front() == 2);
-  CHECK(o->back() == 0);
-
+  CHECK_EQUAL(o->size(), 2u);
+  CHECK_EQUAL(o->front(), 2u);
+  CHECK_EQUAL(o->back(), 0u);
+  o = r.resolve("c.x.absent");
+  CHECK(!o);
+  MESSAGE("top-level offset resolve");
   auto k = r.resolve(offset{2});
   REQUIRE(k);
-  CHECK(k->size() == 1);
-  CHECK(k->front() == "c");
-
+  CHECK_EQUAL(*k, "c");
+  MESSAGE("nested offset resolve");
   k = r.resolve(offset{2, 0});
   REQUIRE(k);
-  CHECK(k->size() == 2);
-  CHECK(k->front() == "c");
-  CHECK(k->back() == "x");
+  CHECK_EQUAL(*k, "c.x");
 }
 
 TEST(record flattening/unflattening) {
@@ -294,61 +292,120 @@ TEST(record flat index computation) {
 
 TEST(record symbol finding) {
   auto r = record_type{
-    {"x", integer_type{}},
-    {"y", address_type{}},
-    {"z", real_type{}}
-  };
-  r = {
     {"a", integer_type{}},
-    {"b", count_type{}},
-    {"c", record_type{r}}
-  };
-  r = {
-    {"a", integer_type{}},
-    {"b", record_type{r}},
+    {"b", record_type{
+      {"a", integer_type{}},
+      {"b", count_type{}},
+      {"c", record_type{
+        {"x", integer_type{}},
+        {"y", address_type{}},
+        {"z", real_type{}}
+      }}
+    }},
     {"c", count_type{}}
   };
   r = r.name("foo");
-  // Record access by key.
-  auto first = r.at(key{"a"});
+  auto f = flatten(r);
+  MESSAGE("record access by key");
+  auto first = r.at("a");
   REQUIRE(first);
   CHECK(holds_alternative<integer_type>(*first));
-  auto deep = r.at(key{"b", "c", "y"});
+  first = f.at("a");
+  REQUIRE(first);
+  CHECK(holds_alternative<integer_type>(*first));
+  auto deep = r.at("b.c.y");
   REQUIRE(deep);
   CHECK(holds_alternative<address_type>(*deep));
+  deep = f.at("b.c.y");
+  REQUIRE(deep);
+  CHECK(holds_alternative<address_type>(*deep));
+  auto rec = r.at("b");
+  REQUIRE(rec);
+  CHECK(holds_alternative<record_type>(*rec));
+  rec = f.at("b");
+  // A flat record has no longer an internal record that can be accessed
+  // directly. Hence the access fails.
+  CHECK(!rec);
+  rec = r.at("b.c");
+  REQUIRE(rec);
+  CHECK(holds_alternative<record_type>(*rec));
+  rec = f.at("b.c");
+  CHECK(!rec);
   MESSAGE("prefix finding");
   // Since the type has a name, the prefix has the form "name.first.second".
   // E.g., a full key is foo.a for field 0 or foo.b.c.z for a nested field.
-  auto o = r.find_prefix({"a"});
-  REQUIRE_EQUAL(o.size(), 0u); // type starts with "foo", not "a"
-  o = r.find_prefix({"foo", "a"});
-  offset a{0};
-  REQUIRE_EQUAL(o.size(), 1u);
-  CHECK(o[0].first == a);
-  o = r.find_prefix({"foo", "b", "a"});
-  offset ba{1, 0};
-  REQUIRE_EQUAL(o.size(), 1u);
-  CHECK(o[0].first == ba);
+  using offset_keys = std::vector<std::pair<offset, std::string>>;
+  CHECK_EQUAL(r.find_prefix("a"), (offset_keys{{{0}, "a"}}));
+  CHECK_EQUAL(f.find_prefix("a"), (offset_keys{{{0}, "a"}}));
+  CHECK_EQUAL(r.find_prefix("b.a"), (offset_keys{{{1,0}, "b.a"}}));
+  CHECK_EQUAL(f.find_prefix("b.a"), (offset_keys{{{1}, "b.a"}}));
+  auto b = offset_keys{
+    {{1}, "b"},
+    {{1, 0}, "b.a"},
+    {{1, 1}, "b.b"},
+    {{1, 2}, "b.c"},
+    {{1, 2, 0}, "b.c.x"},
+    {{1, 2, 1}, "b.c.y"},
+    {{1, 2, 2}, "b.c.z"}
+  };
+  auto b_flat = offset_keys{
+    {{1}, "b.a"},
+    {{2}, "b.b"},
+    {{3}, "b.c.x"},
+    {{4}, "b.c.y"},
+    {{5}, "b.c.z"}
+  };
+  CHECK_EQUAL(r.find_prefix("b"), b);
+  CHECK_EQUAL(f.find_prefix("b"), b_flat);
   MESSAGE("suffix finding");
-  o = r.find_suffix({"z"});
-  offset z{1, 2, 2};
-  REQUIRE_EQUAL(o.size(), 1u);
-  CHECK(o[0].first == z);
-  o = r.find_suffix({"c", "y"});
-  offset cy{1, 2, 1};
-  REQUIRE_EQUAL(o.size(), 1u);
-  CHECK(o[0].first == cy);
-  o = r.find_suffix({"a"});
-  offset a0{0}, a1{1, 0};
-  REQUIRE_EQUAL(o.size(), 2u);
-  CHECK(o[0].first == a0);
-  CHECK(o[1].first == a1);
-  o = r.find_suffix({"c", "*"});
-  offset c0{1, 2, 0}, c1{1, 2, 1}, c2{1, 2, 2};
-  REQUIRE_EQUAL(o.size(), 3u);
-  CHECK(o[0].first == c0);
-  CHECK(o[1].first == c1);
-  CHECK(o[2].first == c2);
+  // Find a single deep field.
+  CHECK_EQUAL(r.find_suffix("c.y"), (offset_keys{{{1, 2, 1}, "b.c.y"}}));
+  CHECK_EQUAL(f.find_suffix("c.y"), (offset_keys{{{4}, "b.c.y"}}));
+  CHECK_EQUAL(r.find_suffix("z"), (offset_keys{{{1, 2, 2}, "b.c.z"}}));
+  CHECK_EQUAL(f.find_suffix("z"), (offset_keys{{{5}, "b.c.z"}}));
+  // Find multiple record fields.
+  auto a = offset_keys{
+    {{0}, "a"},
+    {{1, 0}, "b.a"},
+  };
+  auto a_flat = offset_keys{
+    {{0}, "a"},
+    {{1}, "b.a"},
+  };
+  CHECK_EQUAL(r.find_suffix("a"), a);
+  CHECK_EQUAL(f.find_suffix("a"), a_flat);
+  // Use a glob expression.
+  auto c = offset_keys{
+    {{1, 2, 0}, "b.c.x"},
+    {{1, 2, 1}, "b.c.y"},
+    {{1, 2, 2}, "b.c.z"}
+  };
+  auto c_flat = offset_keys{
+    {{3}, "b.c.x"},
+    {{4}, "b.c.y"},
+    {{5}, "b.c.z"}
+  };
+  CHECK_EQUAL(r.find_suffix("c.*"), c);
+  CHECK_EQUAL(f.find_suffix("c.*"), c_flat);
+  // Find a field that is also a record.
+  CHECK_EQUAL(r.find_suffix("b"), (offset_keys{{{1, 1}, "b.b"}}));
+  CHECK_EQUAL(f.find_suffix("b"), (offset_keys{{{2}, "b.b"}}));
+  MESSAGE("arbitrary finding");
+  auto any_c = offset_keys{
+    {{1, 2}, "b.c"},
+    {{1, 2, 0}, "b.c.x"},
+    {{1, 2, 1}, "b.c.y"},
+    {{1, 2, 2}, "b.c.z"},
+    {{2}, "c"}
+  };
+  auto any_c_flat = offset_keys{
+    {{3}, "b.c.x"},
+    {{4}, "b.c.y"},
+    {{5}, "b.c.z"},
+    {{6}, "c"}
+  };
+  CHECK_EQUAL(r.find("c"), any_c);
+  CHECK_EQUAL(f.find("c"), any_c_flat);
 }
 
 TEST(congruence) {
@@ -537,7 +594,7 @@ TEST(hashable) {
     {"z", vector_type{real_type{}}}
   };
   CHECK_EQUAL(hash(x), 13215642375407153428ul);
-  CHECK_EQUAL(to_digest(x), to_string(hash(type{x})));
+  CHECK_EQUAL(to_digest(x), std::to_string(hash(type{x})));
 }
 
 TEST(json) {

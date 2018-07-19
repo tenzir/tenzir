@@ -32,7 +32,6 @@
 #include "vast/attribute.hpp"
 #include "vast/expected.hpp"
 #include "vast/fwd.hpp"
-#include "vast/key.hpp"
 #include "vast/offset.hpp"
 #include "vast/operator.hpp"
 #include "vast/optional.hpp"
@@ -535,7 +534,7 @@ struct record_type final : recursive_type<record_type> {
   class each : public detail::range_facade<each> {
   public:
     struct range_state {
-      vast::key key() const;
+      std::string key() const;
       size_t depth() const;
 
       detail::stack_vector<const record_field*, 64> trace;
@@ -561,39 +560,43 @@ struct record_type final : recursive_type<record_type> {
   /// Constructs a record type from a list of fields.
   record_type(std::initializer_list<record_field> list);
 
-  /// Attemps to resolve a ::key to an ::offset.
-  /// @param k The key to resolve.
-  /// @returns The ::offset corresponding to *k*.
-  expected<offset> resolve(const key& k) const;
+  /// Attemps to resolve a key to an offset.
+  /// @param key The key to resolve.
+  /// @returns The offset corresponding to *key*.
+  caf::optional<offset> resolve(std::string_view key) const;
 
-  /// Attemps to resolve an ::offset to a ::key.
+  /// Attemps to resolve an offset to a key.
   /// @param o The offset to resolve.
-  /// @returns The ::key corresponding to *o*.
-  expected<key> resolve(const offset& o) const;
+  /// @returns The key corresponding to *o*.
+  caf::optional<std::string> resolve(const offset& o) const;
 
   /// Finds all offset-key pairs for an *exact* key in this and nested records.
-  /// @param k The key to resolve.
-  /// @returns The offset-key pairs corresponding to the found *k*.
-  std::vector<std::pair<offset, key>> find(const key& k) const;
+  /// @param key The key to resolve.
+  /// @returns The offset-key pairs corresponding to the found *key*.
+  std::vector<std::pair<offset, std::string>> find(std::string_view key) const;
 
   /// Finds all offset-key pairs for a *prefix* key in this and nested records.
-  /// @param k The key to resolve.
-  /// @returns The offset-key pairs corresponding to the found *k*.
-  std::vector<std::pair<offset, key>> find_prefix(const key& k) const;
+  /// @param key The key to resolve.
+  /// @returns The offset-key pairs corresponding to the found *key*.
+  std::vector<std::pair<offset, std::string>>
+  find_prefix(std::string_view key) const;
 
   /// Finds all offset-key pairs for a *suffix* key in this and nested records.
-  /// @param k The key to resolve.
-  /// @returns The offset-key pairs corresponding to the found *k*.
-  std::vector<std::pair<offset, key>> find_suffix(const key& k) const;
+  /// @param key The key to resolve.
+  /// @returns The offset-key pairs corresponding to the found *key*.
+  std::vector<std::pair<offset, std::string>>
+  find_suffix(std::string_view key) const;
 
   /// Retrieves the type at a given key.
-  /// @param k The key to resolve.
-  /// @returns The type at key *k* or `nullptr` if *k* doesn't resolve.
-  const type* at(const key& k) const;
+  /// @param key The key to resolve.
+  /// @returns The type at key *key* or `nullptr` if *key* doesn't resolve.
+  // TODO: return caf::optional<type> instead.
+  const type* at(std::string_view key) const;
 
   /// Retrieves the type at a given offset.
   /// @param o The offset to resolve.
   /// @returns The type at offset *o* or `nullptr` if *o* doesn't resolve.
+  // TODO: return caf::optional<type> instead.
   const type* at(const offset& o) const;
 
   /// Converts an offset into an index for the flattened representation.

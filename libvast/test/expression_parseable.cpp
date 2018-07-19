@@ -14,6 +14,7 @@
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/concept/printable/stream.hpp"
+#include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/expression.hpp"
 
 #define SUITE expression
@@ -27,7 +28,7 @@ TEST(parseable/printable - predicate) {
   // LHS: schema, RHS: data
   std::string str = "x.y.z == 42";
   CHECK(parsers::predicate(str, pred));
-  CHECK(pred.lhs == key_extractor{key{"x", "y", "z"}});
+  CHECK(pred.lhs == key_extractor{"x.y.z"});
   CHECK(pred.op == equal);
   CHECK(pred.rhs == data{42u});
   CHECK_EQUAL(to_string(pred), str);
@@ -65,11 +66,11 @@ TEST(parseable/printable - predicate) {
   CHECK(caf::holds_alternative<data>(pred.lhs));
   CHECK(pred.op == greater);
   CHECK(pred.rhs == attribute_extractor{"time"});
-  str = "x == y";
+  str = "x.a_b == y.c_d";
   CHECK(parsers::predicate(str, pred));
-  CHECK(pred.lhs == key_extractor{key{"x"}});
+  CHECK(pred.lhs == key_extractor{"x.a_b"});
   CHECK(pred.op == equal);
-  CHECK(pred.rhs == key_extractor{key{"y"}});
+  CHECK(pred.rhs == key_extractor{"y.c_d"});
   CHECK_EQUAL(to_string(pred), str);
   // Invalid type name.
   CHECK(!parsers::predicate(":foo == -42"));
@@ -77,9 +78,9 @@ TEST(parseable/printable - predicate) {
 
 TEST(parseable - expression) {
   expression expr;
-  predicate p1{key_extractor{key{"x"}}, equal, data{42u}};
+  predicate p1{key_extractor{"x"}, equal, data{42u}};
   predicate p2{type_extractor{port_type{}}, equal, data{port{53, port::udp}}};
-  predicate p3{key_extractor{key{"a"}}, greater, key_extractor{key{"b"}}};
+  predicate p3{key_extractor{"a"}, greater, key_extractor{"b"}};
   MESSAGE("conjunction");
   CHECK(parsers::expr("x == 42 && :port == 53/udp", expr));
   CHECK_EQUAL(expr, expression(conjunction{p1, p2}));

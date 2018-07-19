@@ -11,16 +11,39 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/concept/parseable/vast/key.hpp"
-#include "vast/key.hpp"
-
-#define SUITE parseable
+#define SUITE operators
 #include "test.hpp"
 
-using namespace vast;
+#include "vast/detail/operators.hpp"
 
-TEST(key) {
-  key k;
-  CHECK(parsers::key("foo.bar_baz.qux", k));
-  CHECK(k == key{"foo", "bar_baz", "qux"});
+using namespace vast::detail;
+
+namespace {
+
+struct foo : addable<foo>,
+             addable<foo, int> {
+  explicit foo(int x) : value{x} {
+    // nop
+  }
+
+  foo& operator+=(const foo& other) {
+    value += other.value;
+    return *this;
+  }
+
+  foo& operator+=(int x) {
+    value += x;
+    return *this;
+  }
+
+  int value;
+};
+
+} // namespace <anonymous>
+
+TEST(commutative operators) {
+  auto x = foo{42};
+  auto y = foo{-3};
+  auto result = 1 + x + 1 + y + 1;
+  CHECK_EQUAL(result.value, 42);
 }

@@ -18,7 +18,6 @@
 #include "vast/concept/parseable/vast/type.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/data.hpp"
-#include "vast/concept/printable/vast/key.hpp"
 #include "vast/concept/printable/vast/operator.hpp"
 #include "vast/concept/printable/vast/type.hpp"
 #include "vast/data.hpp"
@@ -334,7 +333,6 @@ expected<expression> type_resolver::operator()(const conjunction& c) {
     else
       result.push_back(std::move(*r));
   }
-
   if (result.empty())
     return expression{};
   if (result.size() == 1)
@@ -409,30 +407,7 @@ expected<expression> type_resolver::operator()(const key_extractor& ex,
   disjunction dis;
   // First, interpret the key as a suffix of a record field name.
   if (auto r = caf::get_if<record_type>(&type_)) {
-    // TODO: unflattening the record type is only necessary, because
-    //       find_prefix etc. don't work on flat types [ch3224].
-    decltype(r) r_backup = r;
-    record_type tmp;
-    if (is_flat(*r)) {
-      tmp = unflatten(*r);
-      r = &tmp;
-    }
     auto suffixes = r->find_suffix(ex.key);
-    if (suffixes.empty()) {
-      // For a nested type, we try matching by suffix.
-      suffixes = r->find_suffix(ex.key);
-    }
-    // TODO: Fix the offsets if necessary. Should be unnecessary after
-    //       resolving [ch3224].
-    if (r == &tmp) {
-      for (auto& suffix : suffixes) {
-        auto flat_index = r->flat_index_at(suffix.first);
-        VAST_ASSERT(flat_index);
-        offset fixed_offset{*flat_index};
-        suffix.first = fixed_offset;
-      }
-      r = r_backup;
-    }
     // All suffixes must pass the type check, otherwise the RHS of a
     // predicate would be ambiguous.
     for (auto& pair : suffixes) {
@@ -447,9 +422,8 @@ expected<expression> type_resolver::operator()(const key_extractor& ex,
     }
   // Second, try to interpret the key as the name of a single type.
   } else if (ex.key[0] == type_.name()) {
-    if (!compatible(type_, op_, d)) {
+    if (!compatible(type_, op_, d))
       return make_error(ec::type_clash, type_, op_, d);
-    }
     auto x = data_extractor{type_, {}};
     dis.emplace_back(predicate{std::move(x), op_, d});
   }

@@ -57,7 +57,6 @@ set(libvast_sources
   src/format/test.cpp
   src/http.cpp
   src/ids.cpp
-  src/key.cpp
   src/meta_index.cpp
   src/null_bitmap.cpp
   src/operator.cpp
@@ -230,6 +229,7 @@ set(tests
   test/data.cpp
   test/default_table_slice.cpp
   test/detail/flat_lru_cache.cpp
+  test/detail/operators.cpp
   test/endpoint.cpp
   test/event.cpp
   test/expression.cpp
@@ -245,7 +245,6 @@ set(tests
   test/ids.cpp
   test/iterator.cpp
   test/json.cpp
-  test/key.cpp
   test/main.cpp
   test/meta_index.cpp
   test/mmapbuf.cpp
