@@ -327,17 +327,17 @@ struct finder {
 
 std::vector<std::pair<offset, std::string>>
 record_type::find(std::string_view key) const {
-    return finder<mode::any>{key}(*this);
+  return finder<mode::any>{key}(*this);
 }
 
 std::vector<std::pair<offset, std::string>>
 record_type::find_prefix(std::string_view key) const {
-    return finder<mode::prefix>{key}(*this);
+  return finder<mode::prefix>{key}(*this);
 }
 
 std::vector<std::pair<offset, std::string>>
 record_type::find_suffix(std::string_view key) const {
-    return finder<mode::suffix>{key}(*this);
+  return finder<mode::suffix>{key}(*this);
 }
 
 const type* record_type::at(std::string_view key) const {
