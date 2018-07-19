@@ -22,7 +22,6 @@
 
 using namespace vast;
 using namespace std::string_literals;
-using namespace std::string_view_literals;
 
 TEST(functionality) {
   std::string str = "1";
