@@ -41,6 +41,19 @@ set(VERSION_MAJ_MIN "${VERSION_MAJOR}.${VERSION_MINOR}")
 #                               Compiler Setup
 #------------------------------------------------------------------------------
 
+# Compiler requirements
+set(CLANG_MINIMUM_VERSION 6.0)
+set(APPLE_CLANG_MINIMUM_VERSION 9.1)
+set(GCC_MINIMUM_VERSION 8.0)
+
+# Ensures that the specified C++ compiler meets our version requirements.
+macro(check_compiler_version version)
+  message(STATUS "Using ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}")
+  if (CMAKE_CXX_COMPILER_VERSION VERSION_LESS ${version})
+    message(FATAL_ERROR "${CMAKE_CXX_COMPILER_VERSION} >= ${version} required")
+  endif ()
+endmacro()
+
 # Respect environment variables.
 set(LDFLAGS "$ENV{LDFLAGS}")
 
@@ -70,22 +83,10 @@ if (NOT CMAKE_CXX_FLAGS)
 endif ()
 
 # Requirement checks
-try_run(program_result
-        compilation_succeeded
-        "${CMAKE_CURRENT_BINARY_DIR}"
-        "${CMAKE_CURRENT_SOURCE_DIR}/cmake/get_compiler_version.cpp"
-        RUN_OUTPUT_VARIABLE compiler_version)
-if (NOT compilation_succeeded OR NOT program_result EQUAL 0)
-  message(FATAL_ERROR "Cannot determine compiler version")
-elseif ("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
+if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
+  check_compiler_version(${GCC_MINIMUM_VERSION})
   # Too many false positives.
   set(EXTRA_FLAGS "${EXTRA_FLAGS} -Wno-maybe-uninitialized")
-  if (compiler_version VERSION_GREATER 8.0
-      OR compiler_version VERSION_EQUAL 8.0)
-    message(STATUS "Found GCC ${compiler_version}")
-  else ()
-    message(FATAL_ERROR "GCC >= 8.0 required, found ${compiler_version}")
-  endif ()
   if (${CMAKE_SYSTEM_NAME} MATCHES "FreeBSD")
     # Works around issues with libstdc++ and C++11. For details, see:
     # - https://bugs.freebsd.org/bugzilla/show_bug.cgi?id=194929
@@ -101,15 +102,16 @@ elseif ("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
     set(EXTRA_FLAGS "${EXTRA_FLAGS} -fno-builtin-realloc -fno-builtin-free")
   endif ()
 elseif ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
-  if (compiler_version VERSION_GREATER 6.0
-      OR compiler_version VERSION_EQUAL 6.0)
-    message(STATUS "Found Clang ${compiler_version}")
+  if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "AppleClang")
+    message(STATUS "Using Clang that ships with XCode")
+    check_compiler_version(${APPLE_CLANG_MINIMUM_VERSION})
   else ()
-    message(FATAL_ERROR "Clang >= 6.0 required, found ${compiler_version}")
+    message(STATUS "Using third-party Clang not from XCode")
+    check_compiler_version(${CLANG_MINIMUM_VERSION})
   endif ()
+  # Standard library selection: check if libc++ is available, and if so, use
+  # it. Otherwise fall back to libstdc++.
   if (NOT NO_AUTO_LIBCPP)
-    # Standard library selection: check if libc++ is available, and if so, use
-    # it. Otherwise fall back to libstdc++.
     set(CXXFLAGS_BACKUP "${CMAKE_CXX_FLAGS}")
     set(CMAKE_CXX_FLAGS "-std=c++17 -stdlib=libc++")
     try_run(program_result
@@ -458,6 +460,9 @@ set(summary
     "\nAssertions:       ${assertions_summary}"
     "\nAddressSanitizer: ${asan_summary}"
     "\ngcov:             ${gcov_summary}"
+    "\n"
+    "\nC compiler:       ${CMAKE_C_COMPILER_ID} ${CMAKE_C_COMPILER_VERSION}"
+    "\nC++ compiler:     ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}"
     "\n"
     "\nCC:               ${CMAKE_C_COMPILER}"
     "\nCXX:              ${CMAKE_CXX_COMPILER}"
