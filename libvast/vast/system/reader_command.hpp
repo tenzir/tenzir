@@ -63,10 +63,9 @@ protected:
     Reader reader{std::move(*in)};
     auto src = self->spawn(default_source<Reader>, std::move(reader));
     // Supply an alternate schema, if requested.
-    auto schema_file = get_or(options, "schema",
-                              defaults::command::schema_path);
-    if (!schema_file.empty()) {
-      auto str = load_contents(schema_file);
+    auto schema_file = caf::get_if<std::string>(&options, "schema");
+    if (schema_file && !schema_file->empty()) {
+      auto str = load_contents(*schema_file);
       if (!str)
         return str.error();
       auto sch = to<schema>(*str);

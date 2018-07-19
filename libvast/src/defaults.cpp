@@ -26,7 +26,6 @@ const char* directory = "vast";
 const char* endpoint = ":42000";
 const char* id = "";
 const char* read_path = "-";
-const char* schema_path = "-";
 const char* write_path = "-";
 int64_t pseudo_realtime_factor = 0;
 size_t cutoff = std::numeric_limits<size_t>::max();
