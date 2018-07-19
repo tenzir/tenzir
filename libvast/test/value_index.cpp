@@ -525,6 +525,10 @@ TEST(polymorphic none values) {
   bm = idx->lookup(not_equal, make_data_view("foo"));
   REQUIRE(bm);
   CHECK_EQUAL(to_string(*bm), "00000001100000001110000");
+  bm = idx->lookup(equal, make_data_view(caf::none));
+  CHECK_EQUAL(to_string(*bm), "10011100011110000000011");
+  bm = idx->lookup(not_equal, make_data_view(caf::none));
+  CHECK_EQUAL(to_string(*bm), "01100011100001111111100");
 }
 
 FIXTURE_SCOPE(bro_conn_log_value_index_tests, fixtures::events)
