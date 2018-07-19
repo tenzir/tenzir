@@ -215,7 +215,7 @@ caf::optional<offset> record_type::resolve(std::string_view key) const {
     auto& name = field.name;
     VAST_ASSERT(!name.empty());
     // Check whether the field name is a prefix of the key to resolve.
-    auto [i, _] = std::mismatch(name.begin(), name.end(), key.begin());
+    auto i = std::mismatch(name.begin(), name.end(), key.begin()).first;
     if (i == name.end()) {
       result.push_back(offset);
       if (name.size() == key.size())
