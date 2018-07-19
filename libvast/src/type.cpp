@@ -264,7 +264,7 @@ enum class mode {
   prefix,
   suffix,
   exact,
-  any
+  any,
 };
 
 template <mode Mode>
