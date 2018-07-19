@@ -27,7 +27,7 @@
 namespace vast {
 namespace {
 
-// Translates a key to directory.
+// Translates a key to a directory.
 auto key_to_dir(std::string key, const path& prefix) {
   return prefix / detail::replace_all(std::move(key), ".", path::separator);
 }
