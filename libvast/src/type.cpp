@@ -161,11 +161,8 @@ record_type::record_type(std::initializer_list<record_field> xs)
 }
 
 std::string record_type::each::range_state::key() const {
-  std::vector<std::string> result;
-  std::transform(trace.begin(), trace.end(),
-                 std::back_inserter(result),
-                 [](auto field) { return field->name; });
-  return detail::join(result, ".");
+  return detail::join(trace.begin(), trace.end(), ".",
+                      [](auto field) { return field->name; });
 }
 
 size_t record_type::each::range_state::depth() const {
