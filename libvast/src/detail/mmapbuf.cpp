@@ -57,6 +57,8 @@ mmapbuf::mmapbuf(const path& filename, size_t size, size_t offset)
     file_size = st.st_size;
   else if (result < 0 && errno != ENOENT)
     return;
+  else
+    is_file_owner_ = true;
   // Open/create file and resize if the mapping is larger than the file.
   auto fd = open(filename.str().c_str(), O_RDWR | O_CREAT, 0644);
   if (fd == -1)
@@ -83,6 +85,8 @@ mmapbuf::~mmapbuf() {
     munmap(map_, size_);
   if (fd_ != -1)
     close(fd_);
+  if (is_file_owner_)
+    std::remove(filename_.str().c_str());
 }
 
 const mmapbuf::char_type* mmapbuf::data() const {

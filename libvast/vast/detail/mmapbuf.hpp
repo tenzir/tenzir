@@ -87,6 +87,7 @@ private:
   void reset();
 
   path filename_;
+  bool is_file_owner_ = false;
   int fd_ = -1;
   size_t size_ = 0;
   size_t offset_ = 0;
