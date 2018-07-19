@@ -47,8 +47,9 @@ Send [Bro](http://www.bro.org) logs to a remote node:
 Required dependencies:
 
 - A C++17 compiler:
-  - Clang >= 6
   - GCC >= 8
+  - Clang >= 6
+  - Apple Clang >= 9.1
 - [CMake](http://www.cmake.org)
 - [CAF](https://github.com/actor-framework/actor-framework) (develop branch)
 
