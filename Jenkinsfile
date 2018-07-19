@@ -1,68 +1,61 @@
 #!/usr/bin/env groovy
 
-cafDefaultFlags = [
-  'CAF_NO_TOOLS:BOOL=yes',
-  'CAF_NO_EXAMPLES:BOOL=yes',
-  'CAF_NO_PYTHON:BOOL=yes',
-  'CAF_NO_OPENCL:BOOL=yes',
+// Default CMake flags for most builds (except coverage).
+defaultBuildFlags = [
+  caf: [
+    'CAF_NO_TOOLS:BOOL=yes',
+    'CAF_NO_EXAMPLES:BOOL=yes',
+    'CAF_NO_PYTHON:BOOL=yes',
+    'CAF_NO_OPENCL:BOOL=yes',
+  ],
+  vast: [
+  ],
 ]
 
-vastDefaultFlags = [
-  // nop
+// CMake flags for release builds.
+releaseBuildFlags = [
+    caf: defaultBuildFlags['caf'] + [
+        'CAF_ENABLE_RUNTIME_CHECKS:BOOL=yes',
+    ],
+    vast: defaultBuildFlags['vast'] + [
+    ],
 ]
 
-// Our build matrix. The keys are the operating system labels and the values
-// are lists of tool labels.
+// CMake flags for debug builds.
+debugBuildFlags = [
+    caf: defaultBuildFlags['caf'] + [
+        'CAF_ENABLE_RUNTIME_CHECKS:BOOL=yes',
+        'CAF_ENABLE_ADDRESS_SANITIZER:BOOL=yes',
+        'CAF_LOG_LEVEL:STRING=4',
+    ],
+    vast: defaultBuildFlags['vast'] + [
+        'ENABLE_ADDRESS_SANITIZER:BOOL=yes',
+    ],
+]
+
+// Our build matrix. Keys are the operating system labels and values are build configurations.
 buildMatrix = [
     // Release builds for various OS/tool combinations.
     [ 'Linux', [
         builds: ['release'],
         tools: ['gcc8'],
-        cmakeArgs: [
-            caf: cafDefaultFlags + [
-                'CAF_ENABLE_RUNTIME_CHECKS:BOOL=yes',
-            ],
-            vast: vastDefaultFlags,
-        ],
+        cmakeArgs: releaseBuildFlags,
     ]],
     [ 'macOS', [
         builds: ['release'],
         tools: ['clang'],
-        cmakeArgs: [
-            caf: cafDefaultFlags + [
-                'CAF_ENABLE_RUNTIME_CHECKS:BOOL=yes',
-            ],
-            vast: vastDefaultFlags,
-        ],
+        cmakeArgs: releaseBuildFlags,
     ]],
     // Debug builds with ASAN + trace logs.
     [ 'Linux', [
         builds: ['debug'],
         tools: ['gcc8'],
-        cmakeArgs: [
-            caf: cafDefaultFlags + [
-                'CAF_ENABLE_RUNTIME_CHECKS:BOOL=yes',
-                'CAF_ENABLE_ADDRESS_SANITIZER:BOOL=yes',
-                'CAF_LOG_LEVEL:STRING=4',
-            ],
-            vast: vastDefaultFlags + [
-                'CAF_ENABLE_RUNTIME_CHECKS:BOOL=yes',
-                'ENABLE_ADDRESS_SANITIZER:BOOL=yes',
-            ],
-        ],
+        cmakeArgs: debugBuildFlags,
     ]],
     [ 'macOS', [
         builds: ['debug'],
         tools: ['clang'],
-        cmakeArgs: [
-            caf: cafDefaultFlags + [
-                'CAF_ENABLE_ADDRESS_SANITIZER:BOOL=yes',
-                'CAF_LOG_LEVEL:STRING=4',
-            ],
-            vast: vastDefaultFlags + [
-                'ENABLE_ADDRESS_SANITIZER:BOOL=yes',
-            ],
-        ],
+        cmakeArgs: debugBuildFlags,
     ]],
     // One Additional build for coverage reports.
     ['unix', [
@@ -70,12 +63,12 @@ buildMatrix = [
         tools: ['gcc8 && gcovr'],
         extraSteps: ['coverageReport'],
         cmakeArgs: [
-            caf: cafDefaultFlags + [
+            caf: defaultBuildFlags['caf'] + [
                 'CAF_ENABLE_GCOV:BOOL=yes',
                 'CAF_NO_EXCEPTIONS:BOOL=yes',
                 'CAF_FORCE_NO_EXCEPTIONS:BOOL=yes',
             ],
-            vast: vastDefaultFlags + [
+            vast: defaultBuildFlags['vast'] + [
                 'ENABLE_GCOV:BOOL=yes',
                 'NO_EXCEPTIONS:BOOL=yes',
             ],
@@ -83,11 +76,17 @@ buildMatrix = [
     ]],
 ]
 
+// Repositories of dependencies.
+repositories = [
+    caf: 'https://github.com/actor-framework/actor-framework.git',
+]
+
 // Optional environment variables for combinations of labels.
 buildEnvironments = [
     nop : [], // Dummy value for getting the proper types.
 ]
 
+// Creates coverage reports via the Cobertura plugin.
 def coverageReport(buildType) {
     dir("vast-$buildType") {
         sh 'gcovr -e vast -e tools -e libvast/tests -x -r .. > coverage.xml'
@@ -109,20 +108,22 @@ def coverageReport(buildType) {
     }
 }
 
-def gitSteps(name, url, branch = 'master') {
+// Clones the repository `name` and stashes the sources in `$name-sources`.
+def gitSteps(name, branch = 'master') {
     def sourceDir = "$name-sources"
+    deleteDir()
     // Checkout in subdirectory.
     dir("$sourceDir") {
-        deleteDir()
         git([
-            url: "$url",
-            branch: "$branch"
+            url: repositories[name],
+            branch: branch,
         ])
     }
     // Make sources available for later stages.
     stash includes: "$sourceDir/**", name: "$sourceDir"
 }
 
+// Builds `name` with CMake and runs the unit tests.
 def buildSteps(name, buildType, cmakeArgs) {
     def sourceDir = "$name-sources"
     def installDir = "$WORKSPACE/$name-$buildType-install"
@@ -170,10 +171,12 @@ def buildSteps(name, buildType, cmakeArgs) {
     }
 }
 
+// Concatenates CMake flags into a single string.
 def makeFlags(xs) {
     xs.collect { x -> '-D' + x }.join(' ')
 }
 
+// Builds all targets.
 def buildAll(buildType, settings) {
     def cmakeArgs = settings['cmakeArgs']
     buildSteps('caf', buildType, makeFlags(cmakeArgs['caf']))
@@ -183,7 +186,7 @@ def buildAll(buildType, settings) {
     (settings['extraSteps'] ?: []).each { fun -> "$fun"(buildType) }
 }
 
-// Builds a stage for given builds. Results in a parallel stage `if builds.size() > 1`.
+// Builds a stage for given builds. Results in a parallel stage if `builds.size() > 1`.
 def makeBuildStages(matrixIndex, builds, lblExpr, settings) {
     builds.collectEntries { buildType ->
         def id = "$matrixIndex $lblExpr: $buildType"
@@ -206,16 +209,25 @@ pipeline {
     stages {
         // Checkout all involved repositories.
         stage('Checkouts') {
-            agent { label 'master' }
-            steps {
-              deleteDir()
-              // Checkout the main repository via default SCM
-              dir('vast-sources') {
-                checkout scm
-              }
-              stash includes: 'vast-sources/**', name: 'vast-sources'
-              // Checkout dependencies manually via Git
-              gitSteps('caf', 'https://github.com/actor-framework/actor-framework.git')
+            parallel {
+                // Checkout the main repository via default SCM.
+                stage('VAST') {
+                    agent { label 'master' }
+                    steps {
+                        deleteDir()
+                        dir('vast-sources') {
+                          checkout scm
+                        }
+                        stash includes: 'vast-sources/**', name: 'vast-sources'
+                    }
+                }
+                // Checkout dependencies via Git.
+                stage('CAF') {
+                    agent { label 'master' }
+                    steps {
+                        gitSteps('caf')
+                    }
+                }
             }
         }
         // Start builds.
