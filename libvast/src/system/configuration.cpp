@@ -55,9 +55,8 @@ using namespace caf;
 namespace vast::system {
 
 configuration::configuration() {
-  // -- CAF configuration ------------------------------------------------------
-  // Consider only VAST's log messages by default.
-  set("logger.component-filter", "vast");
+  // Load I/O module.
+  load<io::middleman>();
   // Use 'vast.ini' instead of generic 'caf-application.ini'.
   config_file_path = "vast.ini";
   // Register VAST's custom types.
@@ -117,18 +116,6 @@ configuration::configuration() {
   load<opencl::manager>();
   add_message_type<std::vector<uint32_t>>("std::vector<uint32_t>");
 #endif
-}
-
-configuration::configuration(bool load_middleman, bool allow_ssl_module)
-  : configuration() {
-  if (load_middleman) {
-    load<io::middleman>();
-    set("middleman.enable-automatic-connections", true);
-#ifdef VAST_USE_OPENSSL
-  if (allow_ssl_module)
-    load<openssl::manager>();
-#endif
-  }
 }
 
 configuration& configuration::parse(int argc, char** argv) {

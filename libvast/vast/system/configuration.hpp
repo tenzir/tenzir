@@ -24,13 +24,10 @@ class application;
 
 /// Bundles all configuration parameters of a VAST system.
 class configuration : public caf::actor_system_config {
-  friend application;
-
 public:
-  /// Default-constructs a configuration.
-  configuration();
+  // -- constructors, destructors, and assignment operators --------------------
 
-  explicit configuration(bool load_middleman, bool allow_ssl_module = false);
+  configuration();
 
   // -- modifiers --------------------------------------------------------------
 

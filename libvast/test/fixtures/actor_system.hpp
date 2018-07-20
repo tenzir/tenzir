@@ -14,6 +14,7 @@
 #pragma once
 
 #include <caf/all.hpp>
+#include <caf/io/middleman.hpp>
 #include <caf/test/dsl.hpp>
 
 #include "vast/system/atoms.hpp"
@@ -30,9 +31,8 @@ namespace fixtures {
 /// Configures the actor system of a fixture with default settings for unit
 /// testing.
 struct test_configuration : vast::system::configuration {
-  using super = vast::system::configuration;
-
-  test_configuration(bool enable_mm = true) : super(enable_mm) {
+  test_configuration() {
+    load<caf::io::middleman>();
     std::string log_file = "vast-unit-test.log";
     set("logger.file-name", log_file);
     set("logger.component-filter", "");
@@ -45,10 +45,7 @@ struct test_configuration : vast::system::configuration {
 /// A fixture with an actor system that uses the default work-stealing
 /// scheduler.
 struct actor_system : filesystem {
-  actor_system(bool enable_mm = true)
-    : config(enable_mm),
-      system(config),
-      self(system, true) {
+  actor_system() : system(config), self(system, true) {
     // Clean up state from previous executions.
     if (vast::exists(directory))
       vast::rm(directory);
@@ -97,7 +94,7 @@ struct deterministic_actor_system
 
   using super = test_coordinator_fixture<test_configuration>;
 
-  deterministic_actor_system(bool enable_mm = true) : super(enable_mm) {
+  deterministic_actor_system() {
     // Clean up state from previous executions.
     if (vast::exists(directory))
       vast::rm(directory);

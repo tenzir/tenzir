@@ -21,21 +21,14 @@ namespace fixtures {
 /// A fixture with an actor system that uses the default work-stealing
 /// scheduler and test data (events).
 struct actor_system_and_events : actor_system, events {
-  template <class... Ts>
-  actor_system_and_events(Ts&&... xs) : actor_system(std::forward<Ts>(xs)...) {
-    // nop
-  }
+  // nop
 };
 
 /// A fixture with an actor system that uses the test coordinator for
 /// determinstic testing of actors and test data (events).
 struct deterministic_actor_system_and_events : deterministic_actor_system,
                                                events {
-  template <class... Ts>
-  deterministic_actor_system_and_events(Ts&&... xs)
-    : deterministic_actor_system(std::forward<Ts>(xs)...) {
-    // nop
-  }
+  // nop
 };
 
 } // namespace fixtures
