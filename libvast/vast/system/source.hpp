@@ -178,7 +178,10 @@ caf::behavior source(caf::stateful_actor<source_state<Reader>>* self,
         else
           out.push(std::move(slice));
       };
-      while (produced < num) {
+      // The streaming operates on slices, while the reader operates on events.
+      // Hence, we can produce up to num * table_slice_size events per run.
+      auto num_events = num * table_slice_size;
+      while (produced < num_events) {
         auto maybe_e = st.reader.read();
         if (maybe_e) {
           auto& e = *maybe_e;
