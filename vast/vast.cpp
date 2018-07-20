@@ -29,7 +29,7 @@ struct config : configuration {
     load<caf::io::middleman>();
     set("middleman.enable-automatic-connections", true);
 #ifdef VAST_USE_OPENSSL
-    load<openssl::manager>();
+    load<caf::openssl::manager>();
 #endif
   }
 };
