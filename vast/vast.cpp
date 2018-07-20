@@ -15,6 +15,12 @@
 #include <caf/io/middleman.hpp>
 #include <caf/message_builder.hpp>
 
+#include "vast/config.hpp"
+
+#ifdef VAST_USE_OPENSSL
+#include <caf/openssl/manager.hpp>
+#endif
+
 #include "vast/system/default_application.hpp"
 
 using namespace vast;
