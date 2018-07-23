@@ -82,6 +82,42 @@ if (NOT CMAKE_CXX_FLAGS)
   set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O2 -g -fno-omit-frame-pointer")
 endif ()
 
+# Enable more (most) warnings when requested by the user.
+if (MORE_WARNINGS)
+  if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    set(WFLAGS "-Weverything -Wno-c++98-compat -Wno-padded "
+               "-Wno-documentation-unknown-command -Wno-exit-time-destructors "
+               "-Wno-global-constructors -Wno-missing-prototypes "
+               "-Wno-c++98-compat-pedantic -Wno-unused-member-function "
+               "-Wno-unused-const-variable -Wno-switch-enum "
+               "-Wno-abstract-vbase-init "
+               "-Wno-missing-noreturn -Wno-covered-switch-default")
+  elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+    set(WFLAGS "-Waddress -Wall -Warray-bounds "
+               "-Wattributes -Wbuiltin-macro-redefined -Wcast-align "
+               "-Wcast-qual -Wchar-subscripts -Wclobbered -Wcomment "
+               "-Wconversion -Wconversion-null -Wcoverage-mismatch "
+               "-Wcpp -Wdelete-non-virtual-dtor -Wdeprecated "
+               "-Wdeprecated-declarations -Wdiv-by-zero -Wdouble-promotion "
+               "-Wempty-body -Wendif-labels -Wenum-compare -Wextra "
+               "-Wfloat-equal -Wformat -Wfree-nonheap-object "
+               "-Wignored-qualifiers -Winit-self "
+               "-Winline -Wint-to-pointer-cast -Winvalid-memory-model "
+               "-Winvalid-offsetof -Wlogical-op -Wmain -Wmaybe-uninitialized "
+               "-Wmissing-braces -Wmultichar "
+               "-Wnarrowing -Wnoexcept -Wnon-template-friend "
+               "-Wnon-virtual-dtor -Wnonnull -Woverflow "
+               "-Woverlength-strings -Wparentheses "
+               "-Wpmf-conversions -Wpointer-arith -Wreorder "
+               "-Wreturn-type -Wsequence-point "
+               "-Wsign-compare -Wswitch -Wtype-limits -Wundef "
+               "-Wuninitialized -Wunused -Wvla -Wwrite-strings")
+  endif()
+  # convert CMake list to a single string, erasing the ";" separators
+  string(REPLACE ";" "" WFLAGS_STR ${WFLAGS})
+  set(EXTRA_FLAGS "${EXTRA_FLAGS} ${WFLAGS_STR}")
+endif()
+
 # Requirement checks
 if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
   check_compiler_version(${GCC_MINIMUM_VERSION})
