@@ -172,7 +172,7 @@ pipeline {
         DYLD_LIBRARY_PATH = "$WORKSPACE/vast-sources/build/lib;" +
                             "$WORKSPACE/caf-install/lib"
         PrettyJobBaseName = env.JOB_BASE_NAME.replace('%2F', '/')
-        PrettyJobName = "CAF build #${env.BUILD_NUMBER} for $PrettyJobBaseName"
+        PrettyJobName = "VAST build #${env.BUILD_NUMBER} for $PrettyJobBaseName"
     }
     stages {
         // Checkout all involved repositories.
