@@ -28,6 +28,7 @@
 #include "vast/data.hpp"
 #include "vast/error.hpp"
 
+#include "vast/detail/raise_error.hpp"
 #include "vast/detail/steady_map.hpp"
 #include "vast/detail/string.hpp"
 
@@ -97,7 +98,7 @@ public:
     auto result = ptr.get();
     if (!nested_.emplace(name, std::move(ptr)).second) {
       // FIXME: do not use exceptions.
-      throw std::invalid_argument("name already exists");
+      VAST_RAISE_ERROR("name already exists in command");
     }
     return result;
   }

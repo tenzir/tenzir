@@ -183,6 +183,11 @@ if (ENABLE_ADDRESS_SANITIZER)
   endif()
 endif ()
 
+# set -fno-exception if requested
+if (NO_EXCEPTIONS)
+  set(EXTRA_FLAGS "${EXTRA_FLAGS} -fno-exceptions")
+endif()
+
 if (ENABLE_GCOV)
   # Locate gcov and gcovr.
   find_package(GCOV)

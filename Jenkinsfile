@@ -1,116 +1,144 @@
 #!/usr/bin/env groovy
 
-// Our build matrix. The keys are the operating system labels and the values
-// are lists of tool labels.
+// Default CMake flags for most builds (except coverage).
+defaultBuildFlags = [
+]
+
+// CMake flags for release builds.
+releaseBuildFlags = defaultBuildFlags + [
+]
+
+// CMake flags for debug builds.
+debugBuildFlags =  defaultBuildFlags + [
+    'ENABLE_ADDRESS_SANITIZER:BOOL=yes',
+]
+
+// Our build matrix. Keys are the operating system labels and values are build configurations.
 buildMatrix = [
+    // Debug builds with ASAN + trace logs.
+    [ 'Linux', [
+        builds: ['debug'],
+        tools: ['gcc8'],
+        cmakeArgs: debugBuildFlags,
+    ]],
+    [ 'macOS', [
+        builds: ['debug'],
+        tools: ['clang'],
+        cmakeArgs: debugBuildFlags,
+    ]],
     // Release builds for various OS/tool combinations.
     [ 'Linux', [
         builds: ['release'],
         tools: ['gcc8'],
+        cmakeArgs: releaseBuildFlags,
     ]],
     [ 'macOS', [
         builds: ['release'],
         tools: ['clang'],
+        cmakeArgs: releaseBuildFlags,
     ]],
-    // Debug builds with ASAN + trace logs.
-    [ 'Linux', [
-        cmakeArgs: '-DCAF_ENABLE_ADDRESS_SANITIZER:BOOL=yes ' + // CAF
-                   '-DCAF_LOG_LEVEL=4 ' +                       // CAF
-                   '-DENABLE_ADDRESS_SANITIZER:BOOL=yes',       // VAST
+    // One Additional build for coverage reports.
+    ['Linux', [
         builds: ['debug'],
-        tools: ['gcc8'],
-    ]],
-    [ 'macOS', [
-        cmakeArgs: '-DCAF_ENABLE_ADDRESS_SANITIZER:BOOL=yes ' + // CAF
-                   '-DCAF_LOG_LEVEL=4 ' +                       // CAF
-                   '-DENABLE_ADDRESS_SANITIZER:BOOL=yes',       // VAST
-        builds: ['debug'],
-        tools: ['clang'],
+        tools: ['gcc8 && gcovr'],
+        extraSteps: ['coverageReport'],
+        cmakeArgs: defaultBuildFlags + [
+            'ENABLE_GCOV:BOOL=yes',
+            'NO_EXCEPTIONS:BOOL=yes',
+        ],
     ]],
 ]
 
 // Optional environment variables for combinations of labels.
 buildEnvironments = [
-  'macOS && gcc': ['CXX=g++'],
-  'Linux && clang': ['CXX=clang++'],
+    nop : [], // Dummy value for getting the proper types.
 ]
 
-def gitSteps(name, url, branch = 'master') {
-    def sourceDir = "$name-sources"
-    // Checkout in subdirectory.
-    dir("$sourceDir") {
-        deleteDir()
-        git([
-            url: "$url",
-            branch: "$branch"
+// Creates coverage reports via the Cobertura plugin.
+def coverageReport() {
+    dir("vast-sources") {
+        sh 'gcovr -e vast -e tools -e ".*/test/.*" -x -r . > coverage.xml'
+        archiveArtifacts '**/coverage.xml'
+        cobertura([
+          autoUpdateHealth: false,
+          autoUpdateStability: false,
+          coberturaReportFile: '**/coverage.xml',
+          conditionalCoverageTargets: '70, 0, 0',
+          failUnhealthy: false,
+          failUnstable: false,
+          lineCoverageTargets: '80, 0, 0',
+          maxNumberOfBuilds: 0,
+          methodCoverageTargets: '80, 0, 0',
+          onlyStable: false,
+          sourceEncoding: 'ASCII',
+          zoomCoverageChart: false,
         ])
     }
-    // Make sources available for later stages.
-    stash includes: "$sourceDir/**", name: "$sourceDir"
 }
 
-def buildSteps(name, buildType, cmakeArgs) {
-    def sourceDir = "$name-sources"
-    def installDir = "$WORKSPACE/$name-$buildType-install"
-    // Make sure no old junk is laying around.
-    dir("$installDir") {
-        deleteDir()
+// Compiles, installs and tests via CMake.
+def cmakeSteps(buildType, cmakeArgs, buildId) {
+    def cafInstallDir = "$WORKSPACE/caf-install"
+    def cafLibraryDir = "$WORKSPACE/caf-install/lib"
+    def vastInstallDir = "$WORKSPACE/$buildId"
+    dir('vast-sources') {
+        // Configure and build.
+        cmakeBuild([
+            buildDir: 'build',
+            buildType: buildType,
+            cmakeArgs: (cmakeArgs + [
+              "CAF_ROOT_DIR=\"$cafInstallDir\"",
+              "CMAKE_INSTALL_PREFIX=\"$vastInstallDir\"",
+            ]).collect { x -> '-D' + x }.join(' '),
+            installation: 'cmake in search path',
+            sourceDir: '.',
+            steps: [[
+                args: '--target install',
+                withCmake: true,
+            ]],
+        ])
+        // Run unit tests.
+        ctest([
+            arguments: '--output-on-failure',
+            installation: 'cmake in search path',
+            workingDir: 'build',
+        ])
     }
-    // Separate builds by build type on the file system.
-    dir("$name-$buildType") {
-        // Make sure no old junk is laying around.
-        deleteDir()
-        // Get sources from previous stage.
-        unstash "$sourceDir"
-        // Build in subdirectory and run unit tests.
-        dir("$sourceDir") {
-            cmakeBuild([
-                buildDir: 'build',
-                buildType: "$buildType",
-                cleanBuild: true,
-                sourceDir: '.',
-                installation: 'cmake in search path',
-                cmakeArgs: "-DCMAKE_INSTALL_PREFIX=\"$installDir\" $cmakeArgs " +
-                           "-DOPENSSL_ROOT_DIR=/usr/local/opt/openssl " +
-                           "-DOPENSSL_INCLUDE_DIR=/usr/local/opt/openssl/include",
-                steps: [[args: 'all install']],
-            ])
-            // We could think of moving testing to a different stage. However,
-            // this is currently not feasible because 1) the vast-test binary
-            // isn't available from the installation directory, and 2) the unit
-            // tests currently have hard-wired paths to the test data.
-            withEnv([
-                "LD_LIBRARY_PATH=$WORKSPACE/caf-$buildType-install/lib;"
-                + "$WORKSPACE/vast-$buildType-install/lib",
-                "DYLD_LIBRARY_PATH=$WORKSPACE/caf-$buildType-install/lib;"
-                + "$WORKSPACE/vast-$buildType-install/lib"
-            ]) {
-                ctest([
-                    arguments: '--output-on-failure',
-                    installation: 'cmake in search path',
-                    workingDir: 'build',
-                ])
-            }
-        }
+    // Only generate artifacts for the master branch.
+    if (PrettyJobBaseName == 'master') {
+        zip([
+            archive: true,
+            dir: buildId,
+            zipFile: "${buildId}.zip",
+        ])
     }
 }
 
-def buildAll(buildType, settings) {
-    def cmakeArgs = settings['cmakeArgs'] ?: ''
-    buildSteps('caf', buildType,
-               "-DCAF_NO_TOOLS:BOOL=yes " +
-               "-DCAF_NO_EXAMPLES:BOOL=yes " +
-               "-DCAF_NO_PYTHON:BOOL=yes " +
-               "-DCAF_NO_OPENCL:BOOL=yes " +
-               "-DCAF_ENABLE_RUNTIME_CHECKS:BOOL=yes " +
-               cmakeArgs)
-    buildSteps('vast', buildType,
-               "-D CAF_ROOT_DIR=\"$WORKSPACE/caf-$buildType-install\" "
-               + cmakeArgs)
-    (settings['extraSteps'] ?: []).each { fun -> "$fun"() }
+// Runs all build steps.
+def buildSteps(buildType, cmakeArgs, buildId) {
+    echo "prepare build steps on stage $STAGE_NAME"
+    deleteDir()
+    dir(buildId) {
+      // Create directory.
+    }
+    echo "get latest CAF master build for $buildId"
+    dir('caf-import') {
+        copyArtifacts([
+            filter: "${buildId}.zip",
+            projectName: 'CAF/actor-framework/master/',
+        ])
+    }
+    unzip([
+        zipFile: "caf-import/${buildId}.zip",
+        dir: 'caf-install',
+        quiet: true,
+    ])
+    echo 'get sources from previous stage and run CMake'
+    unstash 'vast-sources'
+    cmakeSteps(buildType, cmakeArgs, buildId)
 }
 
-// Builds a stage for given builds. Results in a parallel stage `if builds.size() > 1`.
+// Builds a stage for given builds. Results in a parallel stage if `builds.size() > 1`.
 def makeBuildStages(matrixIndex, builds, lblExpr, settings) {
     builds.collectEntries { buildType ->
         def id = "$matrixIndex $lblExpr: $buildType"
@@ -118,8 +146,16 @@ def makeBuildStages(matrixIndex, builds, lblExpr, settings) {
             (id):
             {
                 node(lblExpr) {
-                    withEnv(buildEnvironments[lblExpr] ?: []) {
-                        buildAll(buildType, settings)
+                    stage(id) {
+                        try {
+                            def buildId = "$lblExpr && $buildType"
+                            withEnv(buildEnvironments[lblExpr] ?: []) {
+                              buildSteps(buildType, settings['cmakeArgs'], buildId)
+                              (settings['extraSteps'] ?: []).each { fun -> "$fun"() }
+                            }
+                        } finally {
+                          cleanWs()
+                        }
                     }
                 }
             }
@@ -127,24 +163,29 @@ def makeBuildStages(matrixIndex, builds, lblExpr, settings) {
     }
 }
 
+// Declarative pipeline for triggering all stages.
 pipeline {
     agent none
+    environment {
+        LD_LIBRARY_PATH = "$WORKSPACE/vast-sources/build/lib;" +
+                          "$WORKSPACE/caf-install/lib"
+        DYLD_LIBRARY_PATH = "$WORKSPACE/vast-sources/build/lib;" +
+                            "$WORKSPACE/caf-install/lib"
+        PrettyJobBaseName = env.JOB_BASE_NAME.replace('%2F', '/')
+        PrettyJobName = "VAST build #${env.BUILD_NUMBER} for $PrettyJobBaseName"
+    }
     stages {
         // Checkout all involved repositories.
-        stage('Checkouts') {
+        stage('Git Checkout') {
             agent { label 'master' }
             steps {
-              deleteDir()
-              // Checkout the main repository via default SCM
-              dir('vast-sources') {
-                checkout scm
-              }
-              stash includes: 'vast-sources/**', name: 'vast-sources'
-              // Checkout dependencies manually via Git
-              gitSteps('caf', 'https://github.com/actor-framework/actor-framework.git')
+                deleteDir()
+                dir('vast-sources') {
+                  checkout scm
+                }
+                stash includes: 'vast-sources/**', name: 'vast-sources'
             }
         }
-        // Start builds.
         stage('Builds') {
             agent { label 'master' }
             steps {
@@ -169,14 +210,14 @@ pipeline {
     post {
         success {
             emailext(
-                subject: "✅ VAST build #${env.BUILD_NUMBER} succeeded for job ${env.JOB_NAME}",
+                subject: "✅ $PrettyJobName succeeded",
                 recipientProviders: [culprits(), developers(), requestor(), upstreamDevelopers()],
                 body: "Check console output at ${env.BUILD_URL}.",
             )
         }
         failure {
             emailext(
-                subject: "⛔️ VAST build #${env.BUILD_NUMBER} failed for job ${env.JOB_NAME}",
+                subject: "⛔️ $PrettyJobName failed",
                 attachLog: true,
                 compressLog: true,
                 recipientProviders: [culprits(), developers(), requestor(), upstreamDevelopers()],

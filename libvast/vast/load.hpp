@@ -38,7 +38,9 @@ expected<void> load(Source&& in, Ts&&... xs) {
   static_assert(sizeof...(Ts) > 0);
   using source_type = std::decay_t<Source>;
   if constexpr (detail::is_streambuf_v<source_type>) {
+#ifndef VAST_NO_EXCEPTIONS
     try {
+#endif // VAST_NO_EXCEPTIONS
       if (Method == compression::null) {
         caf::stream_deserializer<source_type&> s{in};
         detail::read(s, std::forward<Ts>(xs)...);
@@ -47,9 +49,11 @@ expected<void> load(Source&& in, Ts&&... xs) {
         caf::stream_deserializer<detail::compressedbuf&> s{compressed};
         detail::read(s, std::forward<Ts>(xs)...);
       }
+#ifndef VAST_NO_EXCEPTIONS
     } catch (const std::exception& e) {
       return make_error(ec::unspecified, e.what());
     }
+#endif // VAST_NO_EXCEPTIONS
     return {};
   } else if constexpr (std::is_base_of_v<std::istream, source_type>) {
     auto sb = in.rdbuf();
