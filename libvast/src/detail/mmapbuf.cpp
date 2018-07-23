@@ -45,29 +45,42 @@ mmapbuf::mmapbuf(size_t size)
   setp(map_, map_ + size_);
 }
 
-mmapbuf::mmapbuf(const path& filename, size_t size, size_t offset)
-  : filename_{filename},
+mmapbuf::mmapbuf(const int fd, const size_t size, const size_t offset)
+  : is_file_owner_{true},
     prot_{PROT_READ | PROT_WRITE},
     flags_{MAP_FILE | MAP_SHARED} {
-  // Auto-detect file size.
-  auto file_size = size_t{0};
-  struct stat st;
-  auto result = ::stat(filename.str().c_str(), &st);
-  if (result == 0)
-    file_size = st.st_size;
-  else if (result < 0 && errno != ENOENT)
-    return;
-  else
-    is_file_owner_ = true;
-  // Open/create file and resize if the mapping is larger than the file.
-  auto fd = open(filename.str().c_str(), O_RDWR | O_CREAT, 0644);
-  if (fd == -1)
-    return;
-  if (size == 0)
-    size = file_size;
-  else if (size > file_size)
+  if (size > 0) {
     if (ftruncate(fd, size) < 0)
       return;
+    size_ = size;
+  } else {
+    struct stat st;
+    if (::fstat(fd, &st) != 0)
+      return;
+    size_ = st.st_size;
+  }
+  // Map file into memory.
+  auto map = mmap(nullptr, size_, prot_, flags_, fd, offset);
+  if (map == MAP_FAILED)
+    return;
+  map_ = reinterpret_cast<char_type*>(map);
+  fd_ = fd;
+  offset_ = offset;
+  setp(map_, map_ + size_);
+  setg(map_, map_, map_ + size_);
+}
+
+mmapbuf::mmapbuf(const path& filename, size_t size, size_t offset)
+  : filename_{filename}, is_file_owner_{false},
+    prot_{PROT_READ | PROT_WRITE},
+    flags_{MAP_FILE | MAP_SHARED} {
+  // Open/create file
+  auto fd = open(filename.str().c_str(), O_RDWR | O_CREAT | O_EXCL, 0644);
+  if (fd == -1 || size == 0)
+    return;
+  // Resize if the mapping is larger than the file.
+  if (ftruncate(fd, size) < 0)
+    return;
   // Map file into memory.
   auto map = mmap(nullptr, size, prot_, flags_, fd, offset);
   if (map == MAP_FAILED)
