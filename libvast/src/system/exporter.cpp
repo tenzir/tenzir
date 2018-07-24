@@ -166,15 +166,16 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
         checker = std::move(*x);
         VAST_DEBUG(self, "tailored AST to", candidate.type() << ':', checker);
       }
+      // Append ID to our bitmap mask.
+      if (sender == self->state.archive) {
+        mask.append_bits(false, candidate.id() - mask.size());
+        mask.append_bit(true);
+      }
       // Perform candidate check and keep event as result on success.
       if (caf::visit(event_evaluator{candidate}, checker))
         self->state.results.push_back(std::move(candidate));
       else
         VAST_DEBUG(self, "ignores false positive:", candidate);
-      if (sender == self->state.archive) {
-        mask.append_bits(false, candidate.id() - mask.size());
-        mask.append_bit(true);
-      }
     }
     self->state.stats.processed += candidates.size();
     if (sender == self->state.archive)
