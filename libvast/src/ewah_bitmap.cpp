@@ -106,8 +106,8 @@ void ewah_bitmap::append_bits(bool bit, size_type n) {
       marker = word_type::marker_num_dirty(marker, 0);
     auto markers = clean_blocks / word_type::marker_clean_max;
     auto last = clean_blocks % word_type::marker_clean_max;
-    while (markers --> 0)
-      blocks_.push_back(word_type::marker_type(word_type::marker_clean_mask, bit));
+    blocks_.resize(blocks_.size() + markers,
+                   word_type::marker_type(word_type::marker_clean_mask, bit));
     if (last > 0)
       blocks_.push_back(
         word_type::marker_type(word_type::marker_num_clean(0, last), bit));
