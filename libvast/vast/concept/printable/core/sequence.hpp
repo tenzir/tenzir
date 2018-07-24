@@ -33,7 +33,7 @@ template <class... Ts>
 struct is_sequence_printer<sequence_printer<Ts...>> : std::true_type {};
 
 template <class T>
-inline constexpr bool is_sequence_printer_v = is_sequence_printer<T>::value;
+constexpr bool is_sequence_printer_v = is_sequence_printer<T>::value;
 
 // TODO: factor helper functions shared among sequence printer and parser.
 

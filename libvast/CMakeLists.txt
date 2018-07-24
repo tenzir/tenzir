@@ -236,6 +236,7 @@ set(tests
   test/expression_evaluation.cpp
   test/expression_parseable.cpp
   test/filesystem.cpp
+  test/fixtures/actor_system.cpp
   test/fixtures/events.cpp
   test/format/bro.cpp
   test/format/mrt.cpp

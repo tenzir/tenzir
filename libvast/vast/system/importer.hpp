@@ -53,17 +53,17 @@ struct importer_state {
     /// The first unavailable ID.
     id last;
 
-    inline id_generator(id from, id to) : i(from), last(to) {
+    id_generator(id from, id to) : i(from), last(to) {
       // nop
     }
 
     /// @returns whether this generator is exhausted.
-    inline bool at_end() const noexcept {
+    bool at_end() const noexcept {
       return i == last;
     }
 
     /// @returns the next ID and advances the position in the range.
-    inline id next(size_t num = 1) noexcept {
+    id next(size_t num = 1) noexcept {
       VAST_ASSERT(static_cast<size_t>(remaining()) >= num);
       auto result = i;
       i += num;
@@ -71,7 +71,7 @@ struct importer_state {
     }
 
     /// @returns how many more times `next` returns a valid ID.
-    inline int32_t remaining() const noexcept {
+    int32_t remaining() const noexcept {
       return static_cast<int32_t>(last - i);
     }
   };

@@ -40,7 +40,7 @@ namespace {
 using fixture_base = fixtures::deterministic_actor_system_and_events;
 
 struct fixture : fixture_base {
-  fixture() : fixture_base(false) {
+  fixture() {
     expr = unbox(to<expression>("service == \"http\" "
                                 "&& :addr == 212.227.96.110"));
   }

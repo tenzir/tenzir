@@ -45,7 +45,7 @@ template <class... Ts>
 struct is_tuple<std::tuple<Ts...>> : std::true_type {};
 
 template <class T>
-inline constexpr bool is_tuple_v = is_tuple<T>::value;
+constexpr bool is_tuple_v = is_tuple<T>::value;
 
 /// Checks whether a type derives from `basic_streambuf<Char>`.
 template <class T, class U = void>
@@ -60,7 +60,7 @@ struct is_streambuf<
 > : std::true_type {};
 
 template <class T>
-inline constexpr bool is_streambuf_v = is_streambuf<T>::value;
+constexpr bool is_streambuf_v = is_streambuf<T>::value;
 
 
 /// Checks whether a type is container which consists of contiguous bytes.
@@ -78,14 +78,14 @@ struct is_contiguous_byte_container<
 > : std::true_type {};
 
 template <class T>
-inline constexpr bool is_contiguous_byte_container_v
+constexpr bool is_contiguous_byte_container_v
   = is_contiguous_byte_container<T>::value;
 
 // -- SFINAE helpers ---------------------------------------------------------
 // http://bit.ly/uref-copy.
 
 template <class A, class B>
-inline constexpr bool is_same_or_derived_v
+constexpr bool is_same_or_derived_v
   = std::is_base_of_v<A, std::remove_reference_t<B>>;
 
 template <bool B, class T = void>
@@ -110,10 +110,10 @@ using disable_if_same = disable_if_t<std::is_same_v<T, U>, R>;
 // -- traits -----------------------------------------------------------------
 
 template <class T, class... Ts>
-inline constexpr bool is_any_v = (std::is_same_v<T, Ts> || ...);
+constexpr bool is_any_v = (std::is_same_v<T, Ts> || ...);
 
 template <class T, class... Ts>
-inline constexpr bool are_same_v = (std::is_same_v<T, Ts> && ...);
+constexpr bool are_same_v = (std::is_same_v<T, Ts> && ...);
 
 // Utility for usage in `static_assert`. For example:
 //
@@ -190,7 +190,7 @@ struct detector<Default, void_t<Op<Args...>>, Op, Args...> {
 } // namespace <anonymous>
 
 template <template <class...> class Op, class... Args>
-inline constexpr bool is_detected_v
+constexpr bool is_detected_v
   = detector<nonesuch, void, Op, Args...>::value_t::value;
 
 template <template <class...> class Op, class... Args>

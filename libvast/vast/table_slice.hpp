@@ -77,7 +77,7 @@ public:
   // -- properties -------------------------------------------------------------
 
   /// @returns the table layout.
-  inline const record_type& layout() const noexcept {
+  const record_type& layout() const noexcept {
     return layout_;
   }
 
@@ -102,17 +102,17 @@ public:
                                     size_type num_rows = npos) const;
 
   /// @returns the number of rows in the slice.
-  inline size_type rows() const noexcept {
+  size_type rows() const noexcept {
     return rows_;
   }
 
   /// @returns the number of rows in the slice.
-  inline size_type columns() const noexcept {
+  size_type columns() const noexcept {
     return columns_;
   }
 
   /// @returns the offset in the ID space.
-  inline id offset() const noexcept {
+  id offset() const noexcept {
     return offset_;
   }
 

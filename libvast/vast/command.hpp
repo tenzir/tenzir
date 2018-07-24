@@ -75,17 +75,17 @@ public:
   std::string full_name() const;
 
   /// Queries whether this command has no parent.
-  inline bool is_root() const noexcept {
+  bool is_root() const noexcept {
     return parent_ == nullptr;
   }
 
   /// @returns the root command.
-  inline command& root() noexcept {
+  command& root() noexcept {
     return is_root() ? *this : parent_->root();
   }
 
   /// @returns the managed command name.
-  inline std::string_view name() const noexcept {
+  std::string_view name() const noexcept {
     return name_;
   }
 

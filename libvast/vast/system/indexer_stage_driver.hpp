@@ -31,8 +31,8 @@ using indexer_stage_filter = type;
 /// @relates indexer_stage_driver
 /// Selects an INDEXER actor based on its filter.
 struct indexer_stage_selector {
-  inline bool operator()(const indexer_stage_filter& f,
-                         const const_table_slice_handle& x) const {
+  bool operator()(const indexer_stage_filter& f,
+                  const const_table_slice_handle& x) const {
     return f == x->layout();
   }
 };

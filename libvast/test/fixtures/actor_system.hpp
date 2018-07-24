@@ -13,71 +13,32 @@
 
 #pragma once
 
-#include <caf/all.hpp>
+#include <caf/actor.hpp>
+#include <caf/actor_system.hpp>
+#include <caf/scoped_actor.hpp>
 #include <caf/test/dsl.hpp>
 
-#include "vast/system/atoms.hpp"
 #include "vast/system/configuration.hpp"
-#include "vast/system/profiler.hpp"
 
-#include "vast/detail/assert.hpp"
-
-#include "test.hpp"
 #include "fixtures/filesystem.hpp"
+#include "test.hpp"
 
 namespace fixtures {
 
 /// Configures the actor system of a fixture with default settings for unit
 /// testing.
 struct test_configuration : vast::system::configuration {
-  using super = vast::system::configuration;
-
-  test_configuration(bool enable_mm = true) : super(enable_mm) {
-    std::string log_file = "vast-unit-test.log";
-    set("logger.file-name", log_file);
-    set("logger.component-filter", "");
-    // Always begin with an empy log file.
-    if (vast::exists(log_file))
-      vast::rm(log_file);
-  }
+  test_configuration();
 };
 
 /// A fixture with an actor system that uses the default work-stealing
 /// scheduler.
 struct actor_system : filesystem {
-  actor_system(bool enable_mm = true)
-    : config(enable_mm),
-      system(config),
-      self(system, true) {
-    // Clean up state from previous executions.
-    if (vast::exists(directory))
-      vast::rm(directory);
-    // Start profiler.
-    if (vast::test::config.count("gperftools") > 0)
-      enable_profiler();
-  }
+  actor_system();
 
-  ~actor_system() {
-    // Stop profiler.
-    using vast::system::stop_atom;
-    using vast::system::heap_atom;
-    using vast::system::cpu_atom;
-    if (profiler) {
-      self->send(profiler, stop_atom::value, cpu_atom::value);
-      self->send(profiler, stop_atom::value, heap_atom::value);
-    }
-  }
+  ~actor_system();
 
-  void enable_profiler() {
-    VAST_ASSERT(!profiler);
-    using vast::system::start_atom;
-    using vast::system::heap_atom;
-    using vast::system::cpu_atom;
-    profiler = self->spawn(vast::system::profiler, directory / "profiler",
-                           std::chrono::seconds(1));
-    self->send(profiler, start_atom::value, cpu_atom::value);
-    self->send(profiler, start_atom::value, heap_atom::value);
-  }
+  void enable_profiler();
 
   auto error_handler() {
     return [&](const caf::error& e) { FAIL(system.render(e)); };
@@ -95,13 +56,7 @@ struct deterministic_actor_system
   : test_coordinator_fixture<test_configuration>,
     filesystem {
 
-  using super = test_coordinator_fixture<test_configuration>;
-
-  deterministic_actor_system(bool enable_mm = true) : super(enable_mm) {
-    // Clean up state from previous executions.
-    if (vast::exists(directory))
-      vast::rm(directory);
-  }
+  deterministic_actor_system();
 
   auto error_handler() {
     return [&](const caf::error& e) { FAIL(sys.render(e)); };

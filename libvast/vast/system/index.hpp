@@ -42,7 +42,7 @@ struct index_state {
   /// Looks up partitions in the LRU cache by UUID.
   class partition_lookup {
   public:
-    inline auto operator()(const uuid& id) const {
+    auto operator()(const uuid& id) const {
       return [&](const partition_ptr& ptr) {
         return ptr->id() == id;
       };
@@ -52,7 +52,7 @@ struct index_state {
   /// Loads partitions from disk by UUID.
   class partition_factory {
   public:
-    inline partition_factory(index_state* st) : st_(st) {
+    partition_factory(index_state* st) : st_(st) {
       // nop
     }
 

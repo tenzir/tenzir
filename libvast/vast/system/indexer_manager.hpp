@@ -62,7 +62,7 @@ public:
   }
 
   /// @returns the number of INDEXER actors.
-  inline size_t indexer_count() const {
+  size_t indexer_count() const {
     return indexers_.size();
   }
 

@@ -28,7 +28,7 @@ template <class T, class U>
 struct is_pair<std::pair<T, U>> : std::true_type {};
 
 template <class T>
-inline constexpr bool is_pair_v = is_pair<T>::value;
+constexpr bool is_pair_v = is_pair<T>::value;
 
 template <class Elem>
 struct container {

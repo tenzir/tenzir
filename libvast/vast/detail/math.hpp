@@ -43,7 +43,7 @@ template <int exp, class T>
 constexpr T pow(T base);
 
 template <int exp, class T>
-inline constexpr T pow_impl(T base, uint64_t result = 1) {
+constexpr T pow_impl(T base, uint64_t result = 1) {
   return exp
     ? (exp & 1
        ? pow_impl<(exp >> 1)>(base * base, base * result)
@@ -70,7 +70,7 @@ constexpr int max_pot_exp(int result = 1) {
 template <int base, class T, int i = max_pot_exp<T, base>()>
 constexpr int ilog_helper(T n, int x = 0) {
   // binary search
-  return i 
+  return i
     ? ilog_helper<base, T, i / 2>(
         n >= pow<i, T>(base) ? n / pow<i, T>(base) : n,
         n >= pow<i, T>(base) ? x + i : x)
