@@ -40,7 +40,7 @@ struct actor_system : filesystem {
 
   void enable_profiler();
 
-  inline auto error_handler() {
+  auto error_handler() {
     return [&](const caf::error& e) { FAIL(system.render(e)); };
   }
 
@@ -58,7 +58,7 @@ struct deterministic_actor_system
 
   deterministic_actor_system();
 
-  inline auto error_handler() {
+  auto error_handler() {
     return [&](const caf::error& e) { FAIL(sys.render(e)); };
   }
 };

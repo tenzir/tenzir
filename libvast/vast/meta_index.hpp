@@ -59,19 +59,19 @@ public:
   /// Retrieves the list of partition IDs for a given expression.
   std::vector<uuid> lookup(const expression& expr) const;
 
-  inline size_t size() const noexcept {
+  size_t size() const noexcept {
     return partitions_.size();
   }
 
-  inline const_iterator begin() const noexcept {
+  const_iterator begin() const noexcept {
     return partitions_.begin();
   }
 
-  inline const_iterator end() const noexcept {
+  const_iterator end() const noexcept {
     return partitions_.end();
   }
 
-  inline const map_type& partitions() const noexcept {
+  const map_type& partitions() const noexcept {
     return partitions_;
   }
 

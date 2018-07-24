@@ -30,7 +30,7 @@ template <class Lhs, class Rhs>
 struct is_choice_printer<choice_printer<Lhs, Rhs>> : std::true_type {};
 
 template <class T>
-inline constexpr bool is_choice_printer_v = is_choice_printer<T>::value;
+constexpr bool is_choice_printer_v = is_choice_printer<T>::value;
 
 /// Attempts to print either LHS or RHS.
 template <class Lhs, class Rhs>

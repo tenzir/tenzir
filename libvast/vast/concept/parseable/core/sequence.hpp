@@ -32,7 +32,7 @@ template <class... Ts>
 struct is_sequence_parser<sequence_parser<Ts...>> : std::true_type {};
 
 template <class T>
-inline constexpr bool is_sequence_parser_v = is_sequence_parser<T>::value;
+constexpr bool is_sequence_parser_v = is_sequence_parser<T>::value;
 
 template <class Lhs, class Rhs>
 class sequence_parser : public parser<sequence_parser<Lhs, Rhs>> {

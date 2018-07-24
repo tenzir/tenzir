@@ -76,16 +76,16 @@ public:
   }
 
   /// @returns whether the meta data was changed.
-  inline bool dirty() const noexcept {
+  bool dirty() const noexcept {
     return meta_data_.dirty;
   }
 
   /// @returns the working directory of the partition.
-  inline const path& dir() const noexcept {
+  const path& dir() const noexcept {
     return dir_;
   }
   /// @returns the unique ID of the partition.
-  inline const uuid& id() const noexcept {
+  const uuid& id() const noexcept {
     return id_;
   }
 
@@ -118,7 +118,7 @@ public:
 private:
   /// Called from the INDEXER manager whenever a new layout gets added during
   /// ingestion.
-  inline void add_layout(const std::string& digest, const record_type& t) {
+  void add_layout(const std::string& digest, const record_type& t) {
     if (meta_data_.types.emplace(digest, t).second && !meta_data_.dirty)
       meta_data_.dirty = true;
   }

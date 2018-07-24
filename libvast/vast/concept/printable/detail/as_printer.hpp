@@ -50,7 +50,7 @@ auto as_printer(T x) -> std::enable_if_t<is_printer_v<T>, T> {
 // -- binary ------------------------------------------------------------------
 
 template <class T>
-inline constexpr bool is_convertible_to_unary_printer_v =
+constexpr bool is_convertible_to_unary_printer_v =
   std::is_convertible_v<T, std::string>
   || (std::is_arithmetic_v<T> && !std::is_same_v<T, bool>);
 
@@ -64,7 +64,7 @@ using is_convertible_to_binary_printer =
   >;
 
 template <class T, class U>
-inline constexpr bool is_convertible_to_binary_printer_v
+constexpr bool is_convertible_to_binary_printer_v
   = is_convertible_to_binary_printer<T, U>::value;
 
 template <

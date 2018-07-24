@@ -128,7 +128,7 @@ struct is_contiguously_hashable<T[N], Hasher>
     > {};
 
 template <class T, class Hasher>
-inline constexpr bool is_contiguously_hashable_v
+constexpr bool is_contiguously_hashable_v
   = is_contiguously_hashable<T, Hasher>::value;
 
 } // namespace detail

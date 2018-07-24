@@ -46,17 +46,17 @@ public:
   bool add(const_table_slice_handle slice);
 
   /// Retrieves the table layout.
-  inline const record_type& layout() const noexcept {
+  const record_type& layout() const noexcept {
     return layout_;
   }
 
   /// @returns the number of rows in the table.
-  inline size_type rows() const {
+  size_type rows() const {
     return slices_.size();
   }
 
   /// @returns the number of rows in the table.
-  inline size_type columns() const {
+  size_type columns() const {
     return columns_;
   }
 

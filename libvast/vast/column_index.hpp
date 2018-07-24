@@ -68,7 +68,7 @@ public:
   caf::expected<bitmap> lookup(const predicate& pred);
 
   /// @returns the file name for loading and storing the index.
-  inline const path& filename() const {
+  const path& filename() const {
     return filename_;
   }
 
@@ -80,7 +80,7 @@ public:
   }
 
   /// @returns the type of this column.
-  inline const type& index_type() const {
+  const type& index_type() const {
     return index_type_;
   }
 

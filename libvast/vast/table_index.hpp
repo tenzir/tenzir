@@ -74,28 +74,28 @@ public:
   /// -- properties ------------------------------------------------------------
 
   /// @returns the colums for storing meta information.
-  inline columns_range meta_columns() {
+  columns_range meta_columns() {
     auto first = columns_.begin();
     return {first, first + meta_column_count};
   }
 
   /// @returns the columns for storing data.
-  inline columns_range data_columns() {
+  columns_range data_columns() {
     return {columns_.begin() + meta_column_count, columns_.end()};
   }
 
   /// @returns the number of columns.
-  inline size_t num_columns() const {
+  size_t num_columns() const {
     return columns_.size();
   }
 
   /// @returns the number of columns for storing meta information.
-  inline size_t num_meta_columns() const {
+  size_t num_meta_columns() const {
     return static_cast<size_t>(meta_column_count);
   }
 
   /// @returns the number of columns for storing data.
-  inline size_t num_data_columns() const {
+  size_t num_data_columns() const {
     return num_columns() - num_meta_columns();
   }
 
@@ -150,19 +150,19 @@ public:
   column_index* by_name(std::string_view column_name);
 
   /// @returns the base directory for all stored column indexes.
-  inline const path& base_dir() const {
+  const path& base_dir() const {
     return base_dir_;
   }
 
   /// @returns the type defining this table's layout.
-  inline const record_type& layout() const {
+  const record_type& layout() const {
     // Always safe, because the only way to construct a table_index is with a
     // record_type.
     return caf::get<record_type>(type_erased_layout_);
   }
 
   /// @returns whether `add` was called at least once.
-  inline bool dirty() const {
+  bool dirty() const {
     return dirty_;
   }
 

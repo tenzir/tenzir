@@ -23,7 +23,7 @@
 namespace vast::detail {
 
 template <class T>
-inline constexpr bool is_unsigned_integral_v
+constexpr bool is_unsigned_integral_v
   = std::is_unsigned_v<T> && std::is_integral_v<T>;
 
 // Type alias used for SFINAE of free functions below. If we would simply use

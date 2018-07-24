@@ -29,12 +29,12 @@ class default_application : public application {
 public:
   default_application();
 
-  inline import_command& import_cmd() {
+  import_command& import_cmd() {
     VAST_ASSERT(import_ != nullptr);
     return *import_;
   }
 
-  inline export_command& export_cmd() {
+  export_command& export_cmd() {
     VAST_ASSERT(export_ != nullptr);
     return *export_;
   }

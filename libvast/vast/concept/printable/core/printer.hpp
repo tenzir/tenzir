@@ -103,13 +103,13 @@ struct has_printer {
 
 /// Checks whether the printer registry has a given type registered.
 template <class T>
-inline constexpr bool has_printer_v
+constexpr bool has_printer_v
   = decltype(detail::has_printer::test<T>(0))::value;
 
 /// Checks whether a given type is-a printer, i.e., derived from
 /// ::vast::printer.
 template <class T>
-inline constexpr bool is_printer_v = std::is_base_of_v<printer<T>, T>;
+constexpr bool is_printer_v = std::is_base_of_v<printer<T>, T>;
 
 } // namespace vast
 
