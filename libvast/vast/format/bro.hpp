@@ -230,7 +230,9 @@ public:
 
   /// Constructs a Bro reader.
   /// @param input The stream of logs to read.
-  explicit reader(std::unique_ptr<std::istream> input);
+  explicit reader(std::unique_ptr<std::istream> in);
+
+  void reset(std::unique_ptr<std::istream> in);
 
   expected<event> read();
 

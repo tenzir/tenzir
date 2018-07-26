@@ -32,8 +32,13 @@ public:
 
   /// Constructs a generic reader.
   /// @param in The stream of logs to read.
-  explicit reader(std::unique_ptr<std::istream> in) : in_{std::move(in)} {
-    VAST_ASSERT(in_);
+  explicit reader(std::unique_ptr<std::istream> in) {
+    reset(std::move(in));
+  }
+
+  void reset(std::unique_ptr<std::istream> in) {
+    VAST_ASSERT(in != nullptr);
+    in_ = std::move(in);
     lines_ = std::make_unique<detail::line_range>(*in_);
   }
 
