@@ -220,9 +220,13 @@ struct source_state {
         }
       }
       /// Add meta column(s).
-      bptr->add(e.timestamp());
+      if (auto ts = e.timestamp(); !bptr->add(ts)) {
+        VAST_INFO(self, "add timestamp failed", ts);
+      }
       /// Add data column(s).
-      bptr->recursive_add(e.data());
+      if (auto data = e.data(); !bptr->recursive_add(data)) {
+        VAST_INFO(self, "add data failed", data);
+      }
       ++produced;
       if (bptr->rows() == table_slice_size)
         finish_slice(bptr);
