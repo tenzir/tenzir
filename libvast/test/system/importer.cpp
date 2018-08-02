@@ -11,55 +11,56 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/concept/printable/stream.hpp"
-#include "vast/concept/printable/vast/event.hpp"
-#include "vast/const_table_slice_handle.hpp"
-#include "vast/detail/spawn_container_source.hpp"
-#include "vast/event.hpp"
-#include "vast/system/archive.hpp"
-#include "vast/system/data_store.hpp"
-#include "vast/system/importer.hpp"
-#include "vast/table_slice.hpp"
-#include "vast/table_slice_handle.hpp"
+#define SUITE importer
 
-#define SUITE import
+#include "vast/system/importer.hpp"
+
 #include "test.hpp"
 #include "fixtures/actor_system_and_events.hpp"
 
 #include <caf/test/dsl.hpp>
 
-using std::string;
+#include "vast/concept/printable/stream.hpp"
+#include "vast/concept/printable/vast/event.hpp"
+#include "vast/const_table_slice_handle.hpp"
+#include "vast/detail/make_io_stream.hpp"
+#include "vast/detail/spawn_container_source.hpp"
+#include "vast/event.hpp"
+#include "vast/format/bro.hpp"
+#include "vast/system/archive.hpp"
+#include "vast/system/data_store.hpp"
+#include "vast/system/source.hpp"
+#include "vast/table_slice.hpp"
+#include "vast/table_slice_handle.hpp"
 
 using namespace caf;
 using namespace vast;
 
+// -- scaffold for both test setups --------------------------------------------
+
 namespace {
 
 using event_buffer = std::vector<event>;
-using shared_event_buffer = std::shared_ptr<event_buffer>;
 
-behavior dummy_sink(event_based_actor* self, shared_event_buffer buf) {
+behavior dummy_sink(event_based_actor* self, size_t num_events, actor overseer) {
   return {
     [=](stream<const_table_slice_handle> in) {
+      self->unbecome();
+      self->send(overseer, ok_atom::value);
       self->make_sink(
         in,
-        [=](unit_t&) {
+        [=](event_buffer&) {
           // nop
         },
-        [=](unit_t&, const_table_slice_handle x) {
-          using caf::get;
-          auto event_id = x->offset();
-          for (size_t row = 0; row < x->rows(); ++row) {
-            // Get the current row, skipping the timestamp.
-            auto row_data = unbox(x->row_to_value(row, 1));
-            // Get only the timestamp.
-            auto tstamp = unbox(x->row_to_value(row, 0, 1));
-            // Convert the row content back to an event.
-            auto e = event::make(row_data);
-            e.timestamp(get<timestamp>(get<vector>(tstamp.get_data()).front()));
-            e.id(event_id);
-            ++event_id;
-            buf->push_back(std::move(e));
+        [=](event_buffer& xs, const_table_slice_handle x) {
+          auto events = x->rows_to_events();
+          for (auto& e : events) {
+            xs.emplace_back(std::move(e));
+            if (xs.size() == num_events) {
+              self->send(overseer, xs);
+            } else if (xs.size() > num_events) {
+              FAIL("dummy sink received too many events");
+            }
           }
         }
       );
@@ -67,68 +68,239 @@ behavior dummy_sink(event_based_actor* self, shared_event_buffer buf) {
   };
 }
 
-struct fixture : fixtures::deterministic_actor_system_and_events {
-  fixture() {
+template <class Base>
+struct importer_fixture : Base {
+  importer_fixture(size_t table_slice_size) : slice_size(table_slice_size) {
     MESSAGE("spawn importer + store");
-    directory /= "importer";
-    importer = self->spawn(system::importer, directory, slice_size);
-    store = self->spawn(system::data_store<std::string, data>);
-    self->send(importer, store);
-    MESSAGE("run initialization code");
-    sched.run();
+    this->directory /= "importer";
+    importer = this->self->spawn(system::importer, this->directory, slice_size);
+    store = this->self->spawn(system::data_store<std::string, data>);
+    this->self->send(importer, store);
   }
 
-  ~fixture() {
-    anon_send_exit(importer, exit_reason::kill);
+  ~importer_fixture() {
+    anon_send_exit(importer, exit_reason::user_shutdown);
   }
 
+  auto make_sink() {
+    return this->self->spawn(dummy_sink, this->bro_conn_log.size(), this->self);
+  }
+
+  void add_sink() {
+    anon_send(importer, add_atom::value, make_sink());
+    fetch_ok();
+  }
+
+  virtual void fetch_ok() = 0;
+
+  auto make_source() {
+    return vast::detail::spawn_container_source(this->self->system(),
+                                                this->bro_conn_log_slices,
+                                                importer);
+  }
+
+  auto make_bro_source() {
+    namespace bf = format::bro;
+    auto stream = vast::detail::make_input_stream(bro::conn);
+    REQUIRE(stream);
+    bf::reader reader{std::move(*stream)};
+    return this->self->spawn(system::source<bf::reader>, std::move(reader),
+                             default_table_slice::make_builder, slice_size);
+  }
+
+  // Checks whether two event buffers are equal.
+  void verify(const event_buffer& result, const event_buffer& reference) {
+    REQUIRE_EQUAL(result.size(), reference.size());
+    for (size_t i = 0; i < result.size(); ++i) {
+      auto flat_ref = flatten(reference[i]);
+      if (result[i].data() != flat_ref.data())
+        FAIL("result differs from reference at index " << i << ": \n"
+             << result[i] << " !! " << flat_ref);
+    }
+  }
+
+  size_t slice_size;
   actor importer;
-  system::key_value_store_type<string, data> store;
+  system::key_value_store_type<std::string, data> store;
 };
 
 } // namespace <anonymous>
 
-FIXTURE_SCOPE(import_tests, fixture)
+// -- deterministic testing ----------------------------------------------------
 
-TEST(import with one subscriber) {
-  MESSAGE("spawn dummy sink");
-  auto buf = std::make_shared<std::vector<event>>();
-  auto subscriber = self->spawn(dummy_sink, buf);
+namespace {
+
+using deterministic_fixture_base
+  = importer_fixture<fixtures::deterministic_actor_system_and_events>;
+
+struct deterministic_fixture : deterministic_fixture_base {
+  deterministic_fixture() : deterministic_fixture_base(100u) {
+    MESSAGE(")run initialization code");
+    sched.run();
+  }
+
+  void fetch_ok() override {
+    sched.run();
+    expect((atom_value), from(_).to(self).with(ok_atom::value));
+  }
+
+  auto fetch_result() {
+    if (!received<event_buffer>(self))
+      FAIL("no result available");
+    event_buffer result;
+    self->receive([&](event_buffer& xs) {
+      using std::swap;
+      swap(xs, result);
+    });
+    return result;
+  }
+};
+
+} // namespace <anonymous>
+
+FIXTURE_SCOPE(deterministic_import_tests, deterministic_fixture)
+
+TEST(deterministic importer with one sink) {
   MESSAGE("connect sink to importer");
-  anon_send(importer, add_atom::value, subscriber);
-  sched.run();
+  add_sink();
   MESSAGE("spawn dummy source");
-  auto src = vast::detail::spawn_container_source(self->system(),
-                                                  bro_conn_log_slices,
-                                                  importer);
+  make_source();
   sched.run_once();
   MESSAGE("loop until importer becomes idle");
   sched.run_dispatch_loop(credit_round_interval);
-  MESSAGE("check whether the sink received all events");
-  CHECK_EQUAL(buf->size(), bro_conn_log.size());
+  MESSAGE("verify results");
+  verify(fetch_result(), bro_conn_log);
 }
 
-TEST(import with two subscribers) {
-  MESSAGE("spawn dummy sinks");
-  auto buf1 = std::make_shared<std::vector<event>>();
-  auto subscriber1 = self->spawn(dummy_sink, buf1);
-  auto buf2 = std::make_shared<std::vector<event>>();
-  auto subscriber2 = self->spawn(dummy_sink, buf2);
-  MESSAGE("connect sinks to importer");
-  anon_send(importer, add_atom::value, subscriber1);
-  anon_send(importer, add_atom::value, subscriber2);
+TEST(deterministic importer with two sinks) {
+  MESSAGE("connect two sinks to importer");
+  add_sink();
+  add_sink();
   sched.run();
   MESSAGE("spawn dummy source");
-  auto src = vast::detail::spawn_container_source(self->system(),
-                                                  bro_conn_log_slices,
-                                                  importer);
+  make_source();
   sched.run_once();
   MESSAGE("loop until importer becomes idle");
   sched.run_dispatch_loop(credit_round_interval);
-  MESSAGE("check whether both sinks received all events");
-  CHECK_EQUAL(*buf1, *buf2);
-  CHECK_EQUAL(buf1->size(), bro_conn_log.size());
-  CHECK_EQUAL(buf2->size(), bro_conn_log.size());
+  MESSAGE("verify results");
+  auto result = fetch_result();
+  auto second_result = fetch_result();
+  CHECK_EQUAL(result, second_result);
+  verify(result, bro_conn_log);
+}
+
+TEST(deterministic importer with one sink and bro source) {
+  MESSAGE("connect sink to importer");
+  add_sink();
+  MESSAGE("spawn bro source");
+  auto src = make_bro_source();
+  sched.run_once();
+  self->send(src, system::sink_atom::value, importer);
+  MESSAGE("loop until importer becomes idle");
+  sched.run_dispatch_loop(credit_round_interval);
+  MESSAGE("verify results");
+  verify(fetch_result(), bro_conn_log);
+}
+
+TEST(deterministic importer with two sinks and bro source) {
+  MESSAGE("connect sinks to importer");
+  add_sink();
+  add_sink();
+  MESSAGE("spawn bro source");
+  auto src = make_bro_source();
+  sched.run_once();
+  self->send(src, system::sink_atom::value, importer);
+  MESSAGE("loop until importer becomes idle");
+  sched.run_dispatch_loop(credit_round_interval);
+  MESSAGE("verify results");
+  auto result = fetch_result();
+  auto second_result = fetch_result();
+  CHECK_EQUAL(result, second_result);
+  verify(result, bro_conn_log);
+}
+
+FIXTURE_SCOPE_END()
+
+// -- nondeterministic testing -------------------------------------------------
+
+namespace {
+
+using nondeterministic_fixture_base
+  = importer_fixture<fixtures::actor_system_and_events>;
+
+struct nondeterministic_fixture : nondeterministic_fixture_base {
+  nondeterministic_fixture()
+    : nondeterministic_fixture_base(vast::defaults::system::table_slice_size) {
+      // nop
+  }
+
+  void fetch_ok() override {
+    self->receive([](ok_atom) {
+      // nop
+    });
+  }
+
+  auto fetch_result() {
+    event_buffer result;
+    self->receive([&](event_buffer& xs) {
+      result = std::move(xs);
+    });
+    return result;
+  }
+};
+
+} // namespace <anonymous>
+
+FIXTURE_SCOPE(nondeterministic_import_tests, nondeterministic_fixture)
+
+TEST(nondeterministic importer with one sink) {
+  MESSAGE("connect sink to importer");
+  add_sink();
+  MESSAGE("spawn dummy source");
+  make_source();
+  MESSAGE("verify results");
+  verify(fetch_result(), bro_conn_log);
+}
+
+TEST(nondeterministic importer with two sinks) {
+  MESSAGE("connect two sinks to importer");
+  add_sink();
+  add_sink();
+  MESSAGE("spawn dummy source");
+  make_source();
+  MESSAGE("verify results");
+  auto result = fetch_result();
+  MESSAGE("got first result");
+  auto second_result = fetch_result();
+  MESSAGE("got second result");
+  CHECK_EQUAL(result, second_result);
+  verify(result, bro_conn_log);
+}
+
+TEST(nondeterministic importer with one sink and bro source) {
+  MESSAGE("connect sink to importer");
+  add_sink();
+  MESSAGE("spawn bro source");
+  auto src = make_bro_source();
+  self->send(src, system::sink_atom::value, importer);
+  MESSAGE("verify results");
+  verify(fetch_result(), bro_conn_log);
+}
+
+TEST(nondeterministic importer with two sinks and bro source) {
+  MESSAGE("connect sinks to importer");
+  add_sink();
+  add_sink();
+  MESSAGE("spawn bro source");
+  auto src = make_bro_source();
+  self->send(src, system::sink_atom::value, importer);
+  MESSAGE("verify results");
+  auto result = fetch_result();
+  MESSAGE("got first result");
+  auto second_result = fetch_result();
+  MESSAGE("got second result");
+  CHECK_EQUAL(result, second_result);
+  verify(result, bro_conn_log);
 }
 
 FIXTURE_SCOPE_END()
