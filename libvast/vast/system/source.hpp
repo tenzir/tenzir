@@ -165,6 +165,15 @@ struct source_state {
   std::pair<size_t, bool> extract_events(size_t max_events,
                                          size_t table_slice_size,
                                          PushSlice& push_slice) {
+    auto finish_slice = [&](table_slice_builder* bptr) {
+      if (!bptr)
+        return;
+      auto slice = bptr->finish();
+      if (slice == nullptr)
+        VAST_ERROR(self, "failed to finish a slice");
+      else
+        push_slice(std::move(slice));
+    };
     size_t produced = 0;
     // The streaming operates on slices, while the reader operates on events.
     // Hence, we can produce up to num * table_slice_size events per run.
@@ -190,7 +199,7 @@ struct source_state {
         for (auto& kvp : builders) {
           auto bptr = kvp.second.get();
           if (kvp.second != nullptr && bptr->rows() > 0)
-            push_slice(bptr);
+            finish_slice(bptr);
         }
         return {produced, true};
       }
@@ -216,7 +225,7 @@ struct source_state {
       bptr->recursive_add(e.data());
       ++produced;
       if (bptr->rows() == table_slice_size)
-        push_slice(bptr);
+        finish_slice(bptr);
     }
     return {produced, false};
   }
@@ -270,14 +279,8 @@ caf::behavior source(caf::stateful_actor<source_state<Reader>>* self,
       // Extract events until the source has exhausted its input or until
       // we have completed a batch.
       auto start = steady_clock::now();
-      auto push_slice = [&](table_slice_builder* bptr) {
-        if (!bptr)
-          return;
-        auto slice = bptr->finish();
-        if (slice == nullptr)
-          VAST_ERROR("builder::finish returned nullptr");
-        else
-          out.push(std::move(slice));
+      auto push_slice = [&](table_slice_handle slice) {
+        out.push(std::move(slice));
       };
       auto [produced, eof] = st.extract_events(num * table_slice_size,
                                                table_slice_size, push_slice);
