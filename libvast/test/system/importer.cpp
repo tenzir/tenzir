@@ -136,11 +136,11 @@ using deterministic_fixture_base
 struct deterministic_fixture : deterministic_fixture_base {
   deterministic_fixture() : deterministic_fixture_base(100u) {
     MESSAGE(")run initialization code");
-    sched.run();
+    run();
   }
 
   void fetch_ok() override {
-    sched.run();
+    run();
     expect((atom_value), from(_).to(self).with(ok_atom::value));
   }
 
@@ -165,9 +165,9 @@ TEST(deterministic importer with one sink) {
   add_sink();
   MESSAGE("spawn dummy source");
   make_source();
-  sched.run_once();
+  consume_message();
   MESSAGE("loop until importer becomes idle");
-  sched.run_dispatch_loop(credit_round_interval);
+  run();
   MESSAGE("verify results");
   verify(fetch_result(), bro_conn_log);
 }
@@ -176,12 +176,12 @@ TEST(deterministic importer with two sinks) {
   MESSAGE("connect two sinks to importer");
   add_sink();
   add_sink();
-  sched.run();
+  run();
   MESSAGE("spawn dummy source");
   make_source();
-  sched.run_once();
+  consume_message();
   MESSAGE("loop until importer becomes idle");
-  sched.run_dispatch_loop(credit_round_interval);
+  run();
   MESSAGE("verify results");
   auto result = fetch_result();
   auto second_result = fetch_result();
@@ -194,10 +194,10 @@ TEST(deterministic importer with one sink and bro source) {
   add_sink();
   MESSAGE("spawn bro source");
   auto src = make_bro_source();
-  sched.run_once();
+  consume_message();
   self->send(src, system::sink_atom::value, importer);
   MESSAGE("loop until importer becomes idle");
-  sched.run_dispatch_loop(credit_round_interval);
+  run();
   MESSAGE("verify results");
   verify(fetch_result(), bro_conn_log);
 }
@@ -208,10 +208,10 @@ TEST(deterministic importer with two sinks and bro source) {
   add_sink();
   MESSAGE("spawn bro source");
   auto src = make_bro_source();
-  sched.run_once();
+  consume_message();
   self->send(src, system::sink_atom::value, importer);
   MESSAGE("loop until importer becomes idle");
-  sched.run_dispatch_loop(credit_round_interval);
+  run();
   MESSAGE("verify results");
   auto result = fetch_result();
   auto second_result = fetch_result();

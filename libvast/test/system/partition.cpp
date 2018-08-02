@@ -118,7 +118,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   ids query(std::string_view what) {
     query_state qs;
     sys.spawn(query_actor, &qs, put, unbox(to<expression>(what)));
-    sched.run();
+    run();
     CHECK_EQUAL(qs.expected, qs.received);
     return std::move(qs.result);
   }
@@ -153,7 +153,7 @@ TEST(shutdown indexers in destructor) {
   CHECK_EQUAL(sorted_strings(put->layouts()), sorted_strings(layouts));
   MESSAGE("stop manager (and INDEXER actors)");
   put.reset();
-  sched.run();
+  run();
   REQUIRE_EQUAL(running_indexers(), 0u);
 }
 
@@ -170,14 +170,14 @@ TEST(restore from meta data) {
   CHECK_EQUAL(sorted_strings(put->layouts()), sorted_strings(layouts));
   MESSAGE("stop first manager");
   put.reset();
-  sched.run();
+  run();
   REQUIRE_EQUAL(running_indexers(), 0u);
   MESSAGE("start second manager and expect it to restore its persisted state");
   put = make_dummy_partition();
   REQUIRE_EQUAL(put->dirty(), false);
   REQUIRE_EQUAL(sorted_strings(put->layouts()), sorted_strings(layouts));
   put.reset();
-  sched.run();
+  run();
 }
 
 TEST(integer rows lookup) {
@@ -191,7 +191,7 @@ TEST(integer rows lookup) {
   std::vector<const_table_slice_handle> slices{slice};
   detail::spawn_container_source(sys, std::move(slices),
                                  put->manager().get_or_add(layout).first);
-  run_exhaustively();
+  run();
   MESSAGE("verify partition content");
   auto res = [&](auto... args) {
     return make_ids({args...}, rows.size());
@@ -212,7 +212,7 @@ TEST(single partition bro conn log lookup) {
   auto layout = bro_conn_log_layout();
   auto indexer = put->manager().get_or_add(layout).first;
   detail::spawn_container_source(sys, const_bro_conn_log_slices, indexer);
-  run_exhaustively();
+  run();
   MESSAGE("verify partition content");
   auto res = [&](auto... args) {
     return make_ids({args...}, bro_conn_log.size());
@@ -245,7 +245,7 @@ TEST_DISABLED(multiple partitions bro conn log lookup no messaging) {
     CHECK_EQUAL(exists(ptr->dir()), false);
     CHECK_EQUAL(ptr->dirty(), false);
     auto idx_hdl = ptr->manager().get_or_add(layout).first;
-    sched.run();
+    run();
     auto& idx = deref<indexer_type>(idx_hdl);
     idx.initialize();
     auto& tbl = idx.state.tbl;

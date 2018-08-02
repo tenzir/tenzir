@@ -50,7 +50,7 @@ struct fixture : fixture_base {
       self->send_exit(hdl, exit_reason::user_shutdown);
     self->send_exit(archive, exit_reason::user_shutdown);
     self->send_exit(meta_store, exit_reason::user_shutdown);
-    sched.run();
+    run();
   }
 
   void spawn_index() {
@@ -90,11 +90,11 @@ struct fixture : fixture_base {
     if (!meta_store)
       spawn_meta_store();
     send(consensus, system::run_atom::value);
-    sched.run();
+    run();
     send(importer, archive);
     send(importer, system::index_atom::value, index);
     send(importer, meta_store);
-    sched.run();
+    run();
   }
 
   void exporter_setup(query_options opts) {
@@ -104,7 +104,7 @@ struct fixture : fixture_base {
     send(exporter, system::sink_atom::value, self);
     send(exporter, system::run_atom::value);
     send(exporter, system::extract_atom::value);
-    run_exhaustively();
+    run();
   }
 
   template <class Hdl, class... Ts>
@@ -146,11 +146,11 @@ TEST(historical query without importer) {
   MESSAGE("spawn index and archive");
   spawn_index();
   spawn_archive();
-  sched.run();
+  run();
   MESSAGE("ingest conn.log into archive and index");
   vast::detail::spawn_container_source(sys, const_bro_conn_log_slices, index,
                                        archive);
-  run_exhaustively();
+  run();
   MESSAGE("spawn exporter for historical query");
   exporter_setup(historical);
   MESSAGE("fetch results");
@@ -170,7 +170,7 @@ TEST(historical query with importer) {
   // IDs to the slices it received and we mustn't mess our static test data.
   vast::detail::spawn_container_source(sys, copy(bro_conn_log_slices),
                                        importer);
-  run_exhaustively();
+  run();
   MESSAGE("spawn exporter for historical query");
   exporter_setup(historical);
   MESSAGE("fetch results");
@@ -187,11 +187,11 @@ TEST(continuous query with exporter only) {
   spawn_exporter(continuous);
   send(exporter, system::sink_atom::value, self);
   send(exporter, system::extract_atom::value);
-  sched.run();
+  run();
   MESSAGE("send conn.log directly to exporter");
   vast::detail::spawn_container_source(sys, const_bro_conn_log_slices,
                                        exporter);
-  run_exhaustively();
+  run();
   MESSAGE("fetch results");
   auto results = fetch_results();
   REQUIRE_EQUAL(results.size(), 28u);
@@ -211,7 +211,7 @@ TEST(continuous query with importer) {
   // Again: copy because we musn't mutate static test data.
   vast::detail::spawn_container_source(sys, copy(bro_conn_log_slices),
                                        importer);
-  run_exhaustively();
+  run();
   MESSAGE("fetch results");
   auto results = fetch_results();
   REQUIRE_EQUAL(results.size(), 28u);

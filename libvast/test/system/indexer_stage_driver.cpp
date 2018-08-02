@@ -133,7 +133,7 @@ TEST(spawning sinks automatically) {
   MESSAGE("spawn the source and run");
   auto src = vast::detail::spawn_container_source(self->system(),
                                                   test_slices, stg);
-  run_exhaustively();
+  run();
   CHECK_EQUAL(dummies, num_layouts);
   MESSAGE("check content of the shared buffer");
   REQUIRE_EQUAL(bufs->size(), 1u);
@@ -156,7 +156,7 @@ TEST(creating bro conn log partitions automatically) {
   auto src = vast::detail::spawn_container_source(self->system(),
                                                   const_bro_conn_log_slices,
                                                   stg);
-  run_exhaustively();
+  run();
   CHECK_EQUAL(bufs->size(), const_bro_conn_log_slices.size());
   MESSAGE("flatten all partitions into one buffer");
   event_buffer xs;

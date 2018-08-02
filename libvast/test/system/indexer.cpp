@@ -38,14 +38,14 @@ namespace {
 struct fixture : fixtures::deterministic_actor_system_and_events {
   void init(record_type layout) {
     indexer = self->spawn(system::indexer, directory, std::move(layout));
-    run_exhaustively();
+    run();
   }
 
   void init(std::vector<const_table_slice_handle> slices) {
     VAST_ASSERT(slices.size() > 0);
     init(slices[0]->layout());
     vast::detail::spawn_container_source(sys, std::move(slices), indexer);
-    run_exhaustively();
+    run();
   }
 
   ids query(std::string_view what) {
@@ -69,7 +69,7 @@ TEST(integer rows) {
     return make_ids({args...}, rows.size());
   };
   init({default_table_slice::make(layout, rows)});
-  sched.run();
+  run();
   MESSAGE("verify table index");
   auto verify = [&] {
     CHECK_EQUAL(query(":int == +1"), res(0, 3, 6));
@@ -83,7 +83,7 @@ TEST(integer rows) {
   verify();
   MESSAGE("kill INDEXER");
   anon_send_exit(indexer, exit_reason::kill);
-  run_exhaustively();
+  run();
   MESSAGE("reload INDEXER from disk");
   init(layout);
   MESSAGE("verify table index again");
@@ -113,7 +113,7 @@ TEST(bro conn logs) {
   verify();
   MESSAGE("kill INDEXER");
   anon_send_exit(indexer, exit_reason::kill);
-  run_exhaustively();
+  run();
   MESSAGE("reload INDEXER from disk");
   init(bro_conn_log_layout());
   MESSAGE("verify table index again");
