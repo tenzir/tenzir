@@ -77,7 +77,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
 
   auto query(std::string_view expr) {
     self->send(index, unbox(to<expression>(expr)));
-    run_exhaustively();
+    run();
     std::tuple<uuid, size_t, size_t> result;
     self->receive(
       [&](uuid& query_id, size_t hits, size_t scheduled) {
@@ -111,7 +111,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     while (collected < hits) {
       auto chunk = std::min(hits - collected, taste_count);
       self->send(index, query_id, chunk);
-      run_exhaustively();
+      run();
       fetch(chunk);
     }
     return result;
@@ -137,7 +137,7 @@ TEST(ingestion) {
                     << slice_size << " each");
   auto slices = const_ascending_integers_slices;
   auto src = detail::spawn_container_source(sys, slices, index);
-  run_exhaustively();
+  run();
   MESSAGE("verify partition index");
   REQUIRE_EQUAL(state().part_index.size(), slices.size());
   auto intervals = partition_intervals();
@@ -158,7 +158,7 @@ TEST(one-shot integer query result) {
   MESSAGE("fill first " << taste_count << " partitions");
   auto slices = first_n(const_alternating_integers_slices, taste_count);
   auto src = detail::spawn_container_source(sys, slices, index);
-  run_exhaustively();
+  run();
   MESSAGE("query half of the values");
   auto [query_id, hits, scheduled] = query(":int == 1");
   CHECK_EQUAL(query_id, uuid::nil());
@@ -178,7 +178,7 @@ TEST(iterable integer query result) {
   MESSAGE("fill first " << (taste_count * 3) << " partitions");
   auto slices = first_n(const_alternating_integers_slices, taste_count * 3);
   auto src = detail::spawn_container_source(sys, slices, index);
-  run_exhaustively();
+  run();
   MESSAGE("query half of the values");
   auto [query_id, hits, scheduled] = query(":int == 1");
   CHECK_NOT_EQUAL(query_id, uuid::nil());
@@ -199,7 +199,7 @@ TEST_DISABLED(iterable bro conn log query result) {
   REQUIRE_EQUAL(bro_conn_log.size(), 8462u);
   MESSAGE("ingest conn.log slices");
   detail::spawn_container_source(sys, const_bro_conn_log_slices, index);
-  run_exhaustively();
+  run();
   MESSAGE("issue field type query");
   {
     auto expected_result = make_ids({680, 682, 719, 720}, bro_conn_log.size());

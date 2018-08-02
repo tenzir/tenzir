@@ -39,7 +39,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   template <class T>
   void push_to_archive(std::vector<T> xs) {
     vast::detail::spawn_container_source(sys, std::move(xs), a);
-    run_exhaustively();
+    run();
   }
 
   std::vector<event> query(std::initializer_list<id_range> ranges) {
@@ -54,7 +54,7 @@ FIXTURE_SCOPE(archive_tests, fixture)
 
 TEST(bro conn log vector) {
   self->send(a, bro_conn_log);
-  run_exhaustively();
+  run();
   auto result = query({{100, 150}});
   CHECK_EQUAL(result.size(), 50u);
 }

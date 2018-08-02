@@ -71,10 +71,10 @@ TEST(bro source) {
   auto src = self->spawn(source<bf::reader>, std::move(reader),
                          default_table_slice::make_builder,
                          100u);
-  sched.run();
+  run();
   MESSAGE("start sink and run exhaustively");
   auto snk = self->spawn(test_sink, src);
-  run_exhaustively();
+  run();
   MESSAGE("get slices");
   const auto& slices = deref<test_sink_type>(snk).state.slices;
   MESSAGE("collect all rows as values");
@@ -97,7 +97,7 @@ TEST(bro source) {
     CHECK_EQUAL(*slices[i], *bro_conn_log_slices[i]);
   MESSAGE("shutdown");
   self->send_exit(src, caf::exit_reason::user_shutdown);
-  sched.run();
+  run();
 }
 
 FIXTURE_SCOPE_END()
