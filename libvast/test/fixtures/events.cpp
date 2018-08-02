@@ -138,7 +138,7 @@ events::events() {
         auto add_res = builder->add(e.timestamp());
         if (!add_res)
           FAIL("builder->add() failed");
-        auto rec_add_res = builder->recursive_add(e.data());
+        auto rec_add_res = builder->recursive_add(e.data(), e.type());
         if (!rec_add_res)
           FAIL("builder->recursive_add() failed");
       }

@@ -28,8 +28,10 @@
 
 #include "vast/concept/printable/std/chrono.hpp"
 #include "vast/concept/printable/stream.hpp"
+#include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/error.hpp"
 #include "vast/concept/printable/vast/expression.hpp"
+#include "vast/concept/printable/vast/type.hpp"
 #include "vast/const_table_slice_handle.hpp"
 #include "vast/default_table_slice.hpp"
 #include "vast/defaults.hpp"
@@ -220,13 +222,11 @@ struct source_state {
         }
       }
       /// Add meta column(s).
-      if (auto ts = e.timestamp(); !bptr->add(ts)) {
+      if (auto ts = e.timestamp(); !bptr->add(ts))
         VAST_INFO(self, "add timestamp failed", ts);
-      }
       /// Add data column(s).
-      if (auto data = e.data(); !bptr->recursive_add(data)) {
+      if (auto data = e.data(); !bptr->recursive_add(data))
         VAST_INFO(self, "add data failed", data);
-      }
       ++produced;
       if (bptr->rows() == table_slice_size)
         finish_slice(bptr);
