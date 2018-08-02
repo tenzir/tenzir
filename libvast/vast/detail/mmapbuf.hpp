@@ -34,10 +34,18 @@ public:
   /// @pre `size > 0`
   explicit mmapbuf(size_t size);
 
-  /// Constructs a file-backed memory-mapped stream buffer.
+  /// Constructs a file-backed memory-mapped stream buffer on an existing file
+  /// @param the descriptor for the file to be used for mapping
+  /// @param size The size of the file in bytes. If 0, the current size of the
+  ///             file pointed to by fd will be used. Otherwise the file will
+  ///             be resized to size.
+  /// @param offset The offset where to begin mapping; same as in `mmap(2)`.
+  explicit mmapbuf(const int fd, const size_t size = 0,
+                   const size_t offset = 0);
+
+  /// Constructs a file-backed memory-mapped stream buffer on a new file.
   /// @param filename The path to the file to open.
-  /// @param size The size of the file in bytes. If 0, figure out file size
-  ///             automatically.
+  /// @param size The size of the file in bytes.
   /// @param offset The offset where to begin mapping; same as in `mmap(2)`.
   explicit mmapbuf(const path& filename, size_t size = 0,
                    size_t offset = 0);
@@ -88,6 +96,7 @@ private:
 
   path filename_;
   int fd_ = -1;
+  bool is_file_owner_ = false;
   size_t size_ = 0;
   size_t offset_ = 0;
   int prot_ = 0;
@@ -96,4 +105,3 @@ private:
 };
 
 } // namespace vast::detail
-
