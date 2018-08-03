@@ -42,15 +42,15 @@ struct events {
   // TODO: table_slice::recursive_add flattens too much, why the following
   //       slices won't work. However, flatten(value) is also broken
   //       at the moment (cf. #3215), so we can't fix it until then.
-  // static std::vector<table_slice_handle> bro_http_log_slices;
-  // static std::vector<table_slice_handle> bro_dns_log_slices;
-  // static std::vector<table_slice_handle> bgpdump_txt_slices;
+  static std::vector<table_slice_handle> bro_http_log_slices;
+  static std::vector<table_slice_handle> bro_dns_log_slices;
+  static std::vector<table_slice_handle> bgpdump_txt_slices;
   // static std::vector<table_slice_handle> random_slices;
 
   static std::vector<const_table_slice_handle> const_bro_conn_log_slices;
-  // static std::vector<const_table_slice_handle> const_bro_http_log_slices;
-  // static std::vector<const_table_slice_handle> const_bro_dns_log_slices;
-  // static std::vector<const_table_slice_handle> const_bgpdump_txt_slices;
+  static std::vector<const_table_slice_handle> const_bro_http_log_slices;
+  static std::vector<const_table_slice_handle> const_bro_dns_log_slices;
+  static std::vector<const_table_slice_handle> const_bgpdump_txt_slices;
   // static std::vector<const_table_slice_handle> const_random_slices;
 
   /// 10000 ascending integer values, starting at 0.
