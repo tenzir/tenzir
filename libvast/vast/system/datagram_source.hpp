@@ -86,6 +86,7 @@ datagram_source(datagram_source_actor<Reader>* self,
   auto udp_res = self->add_udp_datagram_servant(udp_listening_port);
   if (!udp_res) {
     VAST_ERROR(self, "could not open port", udp_listening_port);
+    self->quit(std::move(udp_res.error()));
     return {};
   }
   VAST_DEBUG(self, "starts listening at port", udp_res->second);
@@ -108,22 +109,6 @@ datagram_source(datagram_source_actor<Reader>* self,
     }
   );
   return {
-    [=](get_atom, schema_atom) -> result<schema> {
-      auto sch = self->state.reader.schema();
-      if (sch)
-        return *sch;
-      return sch.error();
-    },
-    [=](put_atom, const schema& sch) -> result<void> {
-      auto r = self->state.reader.schema(sch);
-      if (r)
-        return {};
-      return r.error();
-    },
-    [=](expression& expr) {
-      VAST_DEBUG(self, "sets filter expression to:", expr);
-      self->state.filter = std::move(expr);
-    },
     [=](caf::io::new_datagram_msg& msg) {
       // Check whether we can buffer more slices in the stream.
       VAST_DEBUG(self, "got a new datagram of size", msg.buf.size());
@@ -160,6 +145,22 @@ datagram_source(datagram_source_actor<Reader>* self,
       VAST_DEBUG(self, "registers sink", sink);
       // Start streaming.
       self->state.mgr->add_outbound_path(sink);
+    },
+    [=](get_atom, schema_atom) -> result<schema> {
+      auto sch = self->state.reader.schema();
+      if (sch)
+        return *sch;
+      return sch.error();
+    },
+    [=](put_atom, const schema& sch) -> result<void> {
+      auto r = self->state.reader.schema(sch);
+      if (r)
+        return {};
+      return r.error();
+    },
+    [=](expression& expr) {
+      VAST_DEBUG(self, "sets filter expression to:", expr);
+      self->state.filter = std::move(expr);
     },
   };
 }
