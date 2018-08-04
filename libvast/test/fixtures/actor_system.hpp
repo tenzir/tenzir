@@ -17,6 +17,7 @@
 #include <caf/actor_system.hpp>
 #include <caf/scoped_actor.hpp>
 #include <caf/test/dsl.hpp>
+#include <caf/test/io_dsl.hpp>
 
 #include "vast/system/configuration.hpp"
 
@@ -50,11 +51,12 @@ struct actor_system : filesystem {
   caf::actor profiler;
 };
 
+using test_node_base_fixture = test_coordinator_fixture<test_configuration>;
+
 /// A fixture with an actor system that uses the test coordinator for
 /// determinstic testing of actors.
-struct deterministic_actor_system
-  : test_coordinator_fixture<test_configuration>,
-    filesystem {
+struct deterministic_actor_system : test_node_fixture<test_node_base_fixture>,
+                                    filesystem {
 
   deterministic_actor_system();
 

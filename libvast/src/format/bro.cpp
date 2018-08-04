@@ -262,8 +262,14 @@ struct streamer {
 
 } // namespace <anonymous>
 
-reader::reader(std::unique_ptr<std::istream> input) : input_{std::move(input)} {
-  VAST_ASSERT(input_);
+reader::reader(std::unique_ptr<std::istream> in) {
+  reset(std::move(in));
+}
+
+
+void reader::reset(std::unique_ptr<std::istream> in) {
+  VAST_ASSERT(in != nullptr);
+  input_ = std::move(in);
   lines_ = std::make_unique<detail::line_range>(*input_);
 }
 

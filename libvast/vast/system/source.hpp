@@ -22,6 +22,7 @@
 #include <caf/downstream.hpp>
 #include <caf/event_based_actor.hpp>
 #include <caf/none.hpp>
+#include <caf/send.hpp>
 #include <caf/stateful_actor.hpp>
 #include <caf/stream_source.hpp>
 
@@ -73,6 +74,12 @@ struct source_state {
   using downstream_manager
     = caf::broadcast_downstream_manager<table_slice_handle>;
 
+  // -- constructors, destructors, and assignment operators --------------------
+
+  source_state(caf::scheduled_actor* selfptr) : self(selfptr) {
+    // nop
+  }
+
   // -- member variables -------------------------------------------------------
 
   /// Filters events, i.e., causes the source to drop all matching events.
@@ -99,6 +106,34 @@ struct source_state {
   /// Takes care of transmitting batches.
   caf::stream_source_ptr<downstream_manager> mgr;
 
+  /// Points to the owning actor.
+  caf::scheduled_actor* self;
+
+  // -- utility functions ------------------------------------------------------
+
+  /// Initializes the state.
+  template <class ActorImpl>
+  void init(ActorImpl* self, Reader rd, factory_type f) {
+    // Initialize members from given arguments.
+    reader = std::move(rd);
+    name = reader.name();
+    factory = std::move(f);
+    // Fetch accountant from the registry.
+    if (auto acc = self->system().registry().get(accountant_atom::value))
+      accountant = caf::actor_cast<accountant_type>(acc);
+    // We link to the importers and fail for the same reason, but still report to
+    // the accountant.
+    self->set_exit_handler(
+      [=](const caf::exit_msg& msg) {
+        if (accountant) {
+          timestamp now = std::chrono::system_clock::now();
+          self->send(accountant, "source.end", now);
+        }
+        self->quit(msg.reason);
+      }
+    );
+  }
+
   /// Tries to access the builder for `layout`.
   table_slice_builder* builder(const type& layout) {
     auto i = builders.find(layout.name());
@@ -122,6 +157,99 @@ struct source_state {
         }),
       layout);
   }
+
+  // Extracts events from the source until input is exhausted or until the
+  // maximum is reached.
+  // @returns The number of produced events and whether we've reached the end.
+  template <class PushSlice>
+  std::pair<size_t, bool> extract_events(size_t max_events,
+                                         size_t table_slice_size,
+                                         PushSlice& push_slice) {
+    auto finish_slice = [&](table_slice_builder* bptr) {
+      if (!bptr)
+        return;
+      auto slice = bptr->finish();
+      if (slice == nullptr)
+        VAST_ERROR(self, "failed to finish a slice");
+      else
+        push_slice(std::move(slice));
+    };
+    size_t produced = 0;
+    // The streaming operates on slices, while the reader operates on events.
+    // Hence, we can produce up to num * table_slice_size events per run.
+    while (produced < max_events) {
+      auto maybe_e = reader.read();
+      if (!maybe_e) {
+        // Try again when receiving default-generated errors.
+        if (!maybe_e.error())
+          continue;
+        // Skip bogus input that failed to parse.
+        auto& err = maybe_e.error();
+        if (err == ec::parse_error) {
+          VAST_WARNING(self->system().render(err));
+          continue;
+        }
+        // Log unexpected errors and when reaching the end of input.
+        if (err == ec::end_of_input) {
+          VAST_INFO(self->system().render(err));
+        } else {
+          VAST_ERROR(self->system().render(err));
+        }
+        /// Produce one final slices if possible.
+        for (auto& kvp : builders) {
+          auto bptr = kvp.second.get();
+          if (kvp.second != nullptr && bptr->rows() > 0)
+            finish_slice(bptr);
+        }
+        return {produced, true};
+      }
+      auto& e = *maybe_e;
+      auto bptr = builder(e.type());
+      if (bptr == nullptr)
+        continue;
+      if (!caf::holds_alternative<caf::none_t>(filter)) {
+        auto& checker = checkers[e.type()];
+        if (caf::holds_alternative<caf::none_t>(checker)) {
+          auto x = tailor(filter, e.type());
+          VAST_ASSERT(x);
+          checker = std::move(*x);
+        }
+        if (!caf::visit(event_evaluator{e}, checker)) {
+          // Skip events that don't satisfy our filter.
+          continue;
+        }
+      }
+      /// Add meta column(s).
+      bptr->add(e.timestamp());
+      /// Add data column(s).
+      bptr->recursive_add(e.data());
+      ++produced;
+      if (bptr->rows() == table_slice_size)
+        finish_slice(bptr);
+    }
+    return {produced, false};
+  }
+
+  // Sends stats to the accountant after producing events.
+  template <class Timepoint>
+  void report_stats(size_t produced ,Timepoint start, Timepoint stop) {
+    using namespace std::chrono;
+    if (produced > 0) {
+      auto runtime = stop - start;
+      auto unit = duration_cast<microseconds>(runtime).count();
+      auto rate = (produced * 1e6) / unit;
+      auto events = uint64_t{produced};
+      VAST_INFO(self, "produced", events, "events in", runtime,
+                '(' << size_t(rate), "events/sec)");
+      if (accountant != nullptr) {
+        using caf::anon_send;
+        auto rt = duration_cast<timespan>(runtime);
+        anon_send(accountant, "source.batch.runtime", rt);
+        anon_send(accountant, "source.batch.events", events);
+        anon_send(accountant, "source.batch.rate", rate);
+      }
+    }
+  }
 };
 
 /// An event producer.
@@ -136,24 +264,7 @@ caf::behavior source(caf::stateful_actor<source_state<Reader>>* self,
   using namespace caf;
   using namespace std::chrono;
   // Initialize state.
-  self->state.reader = std::move(reader);
-  self->state.name = self->state.reader.name();
-  self->state.factory = std::move(factory);/// An event producer.
-  // Fetch accountant from the registry.
-  if (auto acc = self->system().registry().get(accountant_atom::value))
-    self->state.accountant = actor_cast<accountant_type>(acc);
-  // We link to the importers and fail for the same reason, but still report to
-  // the accountant.
-  self->set_exit_handler(
-    [=](const exit_msg& msg) {
-      auto& st = self->state;
-      if (st.accountant) {
-        timestamp now = system_clock::now();
-        self->send(st.accountant, "source.end", now);
-      }
-      self->quit(msg.reason);
-    }
-  );
+  self->state.init(self, std::move(reader), std::move(factory));
   // Spin up the stream manager for the source.
   self->state.mgr = self->make_continuous_source(
     // init
@@ -168,83 +279,15 @@ caf::behavior source(caf::stateful_actor<source_state<Reader>>* self,
       // Extract events until the source has exhausted its input or until
       // we have completed a batch.
       auto start = steady_clock::now();
-      size_t produced = 0;
-      auto push_slice = [&](table_slice_builder* bptr) {
-        if (!bptr)
-          return;
-        auto slice = bptr->finish();
-        if (slice == nullptr)
-          VAST_ERROR("builder::finish returned nullptr");
-        else
-          out.push(std::move(slice));
+      auto push_slice = [&](table_slice_handle slice) {
+        out.push(std::move(slice));
       };
-      // The streaming operates on slices, while the reader operates on events.
-      // Hence, we can produce up to num * table_slice_size events per run.
-      auto num_events = num * table_slice_size;
-      while (produced < num_events) {
-        auto maybe_e = st.reader.read();
-        if (maybe_e) {
-          auto& e = *maybe_e;
-          auto bptr = st.builder(e.type());
-          if (bptr == nullptr)
-            continue;
-          if (!caf::holds_alternative<caf::none_t>(st.filter)) {
-            auto& checker = st.checkers[e.type()];
-            if (caf::holds_alternative<caf::none_t>(checker)) {
-              auto x = tailor(st.filter, e.type());
-              VAST_ASSERT(x);
-              checker = std::move(*x);
-            }
-            if (!caf::visit(event_evaluator{e}, checker)) {
-              // Skip events that don't satisfy our filter.
-              continue;
-            }
-          }
-          /// Add meta column(s).
-          bptr->add(e.timestamp());
-          /// Add data column(s).
-          bptr->recursive_add(e.data());
-          ++produced;
-          if (bptr->rows() == table_slice_size)
-            push_slice(bptr);
-        } else if (!maybe_e.error()) {
-          continue; // Try again.
-        } else {
-          auto& err = maybe_e.error();
-          if (err == ec::parse_error) {
-            VAST_WARNING(self->system().render(err));
-            continue; // Just skip bogous events.
-          } else if (err == ec::end_of_input) {
-            VAST_INFO(self->system().render(err));
-          } else {
-            VAST_ERROR(self->system().render(err));
-          }
-          /// Produce final slices if possible.
-          for (auto& kvp : st.builders) {
-            auto bptr = kvp.second.get();
-            if (kvp.second != nullptr && bptr->rows() > 0)
-              push_slice(bptr);
-          }
-          done = true;
-          break;
-        }
-      }
+      auto [produced, eof] = st.extract_events(num * table_slice_size,
+                                               table_slice_size, push_slice);
       auto stop = steady_clock::now();
-      // Produce stats for this run.
-      if (produced > 0) {
-        auto runtime = stop - start;
-        auto unit = duration_cast<microseconds>(runtime).count();
-        auto rate = (produced * 1e6) / unit;
-        auto events = uint64_t{produced};
-        VAST_INFO(self, "produced", events, "events in", runtime,
-                  '(' << size_t(rate), "events/sec)");
-        if (st.accountant) {
-          auto rt = duration_cast<timespan>(runtime);
-          self->send(st.accountant, "source.batch.runtime", rt);
-          self->send(st.accountant, "source.batch.events", events);
-          self->send(st.accountant, "source.batch.rate", rate);
-        }
-      }
+      if (eof)
+        done = true;
+      st.report_stats(produced, start, stop);
       // TODO: if the source is unable to generate new events then we should
       //       trigger CAF to poll the source after a predefined interval of
       //       time again via delayed_send

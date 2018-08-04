@@ -265,6 +265,7 @@ set(tests
   test/subnet.cpp
   test/system/archive.cpp
   test/system/consensus.cpp
+  test/system/datagram_source.cpp
   test/system/exporter.cpp
   test/system/importer.cpp
   test/system/index.cpp
