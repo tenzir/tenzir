@@ -43,12 +43,12 @@ template <class T>
 using view = typename view_trait<T>::type;
 
 #define VAST_VIEW_TRAIT(type_name)                                             \
+  inline auto materialize(type_name x) {                                       \
+    return x;                                                                  \
+  }                                                                            \
   template <>                                                                  \
   struct view_trait<type_name> {                                               \
     using type = type_name;                                                    \
-  };                                                                           \
-  inline auto materialize(type_name x) {                                       \
-    return x;                                                                  \
   }
 
 VAST_VIEW_TRAIT(boolean);
