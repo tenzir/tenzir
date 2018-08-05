@@ -80,14 +80,14 @@ TEST(integer values) {
   };
   MESSAGE("verify table index");
   auto verify = [&] {
-    CHECK_EQUAL(query("value == +1"), res(0, 3, 6));
-    CHECK_EQUAL(query(":int == +1"), res(0, 3, 6));
-    CHECK_EQUAL(query(":int == +2"), res(1, 4, 7));
-    CHECK_EQUAL(query(":int == +3"), res(2, 5, 8));
+    CHECK_EQUAL(query("value == +1"), res(0u, 3u, 6u));
+    CHECK_EQUAL(query(":int == +1"), res(0u, 3u, 6u));
+    CHECK_EQUAL(query(":int == +2"), res(1u, 4u, 7u));
+    CHECK_EQUAL(query(":int == +3"), res(2u, 5u, 8u));
     CHECK_EQUAL(query(":int == +4"), res());
-    CHECK_EQUAL(query(":int != +1"), res(1, 2, 4, 5, 7, 8));
-    CHECK_EQUAL(query("!(:int == +1)"), res(1, 2, 4, 5, 7, 8));
-    CHECK_EQUAL(query(":int > +1 && :int < +3"), res(1, 4, 7));
+    CHECK_EQUAL(query(":int != +1"), res(1u, 2u, 4u, 5u, 7u, 8u));
+    CHECK_EQUAL(query("!(:int == +1)"), res(1u, 2u, 4u, 5u, 7u, 8u));
+    CHECK_EQUAL(query(":int > +1 && :int < +3"), res(1u, 4u, 7u));
   };
   verify();
   MESSAGE("(automatically) persist table index and restore from disk");
@@ -123,9 +123,9 @@ TEST(record type) {
   };
   MESSAGE("verify table index");
   auto verify = [&] {
-    CHECK_EQUAL(query("x.a == +1"), res(0, 3, 9));
-    CHECK_EQUAL(query("x.a > +1"), res(1, 2, 4, 5, 6, 7, 8));
-    CHECK_EQUAL(query("x.a > +1 && x.b == T"), res(2, 4, 5));
+    CHECK_EQUAL(query("x.a == +1"), res(0u, 3u, 9u));
+    CHECK_EQUAL(query("x.a > +1"), res(1u, 2u, 4u, 5u, 6u, 7u, 8u));
+    CHECK_EQUAL(query("x.a > +1 && x.b == T"), res(2u, 4u, 5u));
   };
   verify();
   MESSAGE("(automatically) persist table index and restore from disk");
