@@ -28,10 +28,12 @@
 
 namespace vast {
 namespace system {
+
 namespace {
 
-template <class Actor>
-void init(Actor self, const path& filename) {
+using accountant_actor = accountant_type::stateful_base<accountant_state>;
+
+void init(accountant_actor* self, const path& filename) {
   if (!exists(filename.parent())) {
     auto t = mkdir(filename.parent());
     if (!t) {
@@ -56,29 +58,33 @@ void init(Actor self, const path& filename) {
   self->send(self, flush_atom::value);
 }
 
-template <class Actor, class T>
-void record(Actor self, const std::string& key, T x) {
+template <class T>
+void record(accountant_actor* self, const std::string& key, T x) {
   using namespace std::chrono;
   auto node = self->current_sender()->node();
   auto now = system_clock::now().time_since_epoch();
   auto ts = duration_cast<double_seconds>(now).count();
-  self->state.file << std::fixed << std::showpoint << std::setprecision(6)
-                    << ts << '\t' << std::hex;
+  auto& st = self->state;
+  st.file << std::fixed << std::showpoint << std::setprecision(6)
+          << ts << '\t' << std::hex;
   for (auto byte : node.host_id())
-    self->state.file << static_cast<int>(byte);
-  self->state.file
-    << std::dec << '\t'
-    << node.process_id() << '\t'
-    << self->current_sender()->id() << '\t'
-    << key << '\t'
-    << std::setprecision(6) << x << '\n';
+    st.file << static_cast<int>(byte);
+  st.file << std::dec << '\t'
+          << node.process_id() << '\t'
+          << self->current_sender()->id() << '\t'
+          << key << '\t'
+          << std::setprecision(6) << x << '\n';
+  // Flush after at most 10 seconds.
+  if (!self->state.flush_pending) {
+    st.flush_pending = true;
+    self->delayed_send(self, seconds(10), flush_atom::value);
+  }
 }
 
 } // namespace <anonymous>
 
-accountant_type::behavior_type accountant(
-  accountant_type::stateful_pointer<accountant_state> self,
-  const path& filename) {
+accountant_type::behavior_type accountant(accountant_actor* self,
+                                          const path& filename) {
   using namespace std::chrono;
   init(self, filename);
   return {
@@ -87,11 +93,9 @@ accountant_type::behavior_type accountant(
       self->quit(caf::exit_reason::user_shutdown);
     },
     [=](flush_atom) {
-      // Flush every 10 seconds.
       if (self->state.file)
         self->state.file.flush();
-      if (self->current_sender() == self)
-        self->delayed_send(self, seconds(10), flush_atom::value);
+      self->state.flush_pending = false;
     },
     [=](const std::string& key, const std::string& value) {
       record(self, key, value);
