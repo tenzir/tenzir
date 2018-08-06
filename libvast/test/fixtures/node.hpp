@@ -15,7 +15,9 @@
 
 #include <caf/all.hpp>
 
+#include "vast/detail/spawn_container_source.hpp"
 #include "vast/query_options.hpp"
+#include "vast/table_slice_handle.hpp"
 #include "vast/uuid.hpp"
 
 #include "vast/system/node.hpp"
@@ -28,7 +30,7 @@ namespace fixtures {
 
 using namespace vast;
 
-struct node : actor_system_and_events {
+struct node : deterministic_actor_system_and_events {
   node() {
     test_node = self->spawn(system::node, "test", directory / "node");
     MESSAGE("spawning components");
@@ -47,12 +49,13 @@ struct node : actor_system_and_events {
   caf::actor spawn_component(std::string component, Ts&&... args) {
     using namespace caf;
     actor result;
-    auto cmd_args = make_message(std::move(component),
-                                 std::forward<Ts>(args)...);
-    self->request(test_node, infinite, "spawn", std::move(cmd_args)).receive(
+    auto msg = make_message(std::move(component), std::forward<Ts>(args)...);
+    auto rh = self->request(test_node, infinite, "spawn", std::move(msg));
+    run();
+    rh.receive(
       [&](const actor& a) { result = a; },
       [&](const error& e) {
-        FAIL("failed to spawn " << component << ": " << system.render(e));
+        FAIL("failed to spawn " << component << ": " << sys.render(e));
        }
     );
     return result;
@@ -60,11 +63,12 @@ struct node : actor_system_and_events {
 
   // Ingests a specific type of logs.
   void ingest(const std::string& type) {
-    using namespace caf;
     // Get the importer from the node.
     MESSAGE("getting importer from node");
-    actor importer;
-    self->request(test_node, infinite, get_atom::value).receive(
+    caf::actor importer;
+    auto rh = self->request(test_node, caf::infinite, caf::get_atom::value);
+    run();
+    rh.receive(
       [&](const std::string& id, system::registry& reg) {
         auto er = reg.components[id].equal_range("importer");
         if (er.first == er.second)
@@ -77,14 +81,18 @@ struct node : actor_system_and_events {
     // Send previously parsed logs directly to the importer (as opposed to
     // going through a source).
     if (type == "bro" || type == "all") {
-      self->send(importer, bro_conn_log);
-      self->send(importer, bro_dns_log);
-      self->send(importer, bro_http_log);
+      detail::spawn_container_source(sys, copy(bro_conn_log_slices), importer);
+      // TODO: ship DNS and HTTP log slices when available in the events fixture
+      // self->send(importer, bro_dns_log);
+      // self->send(importer, bro_http_log);
     }
-    if (type == "bgpdump" || type == "all")
-      self->send(importer, bgpdump_txt);
-    if (type == "random" || type == "all")
-      self->send(importer, random);
+    // TODO: ship slices when available in the events fixture
+    // if (type == "bgpdump" || type == "all")
+    //   self->send(importer, bgpdump_txt);
+    // if (type == "random" || type == "all")
+    //   self->send(importer, random);
+    run();
+    MESSAGE("done ingesting logs");
   }
 
   // Performs a historical query and returns the resulting events.
@@ -95,6 +103,7 @@ struct node : actor_system_and_events {
     self->send(exp, system::sink_atom::value, self);
     self->send(exp, system::run_atom::value);
     self->send(exp, system::extract_atom::value);
+    run();
     std::vector<event> result;
     auto done = false;
     self->do_receive(
@@ -109,6 +118,9 @@ struct node : actor_system_and_events {
         if (msg.reason != caf::exit_reason::normal)
           FAIL("terminated with exit reason: " << to_string(msg.reason));
         done = true;
+      },
+      caf::after(std::chrono::seconds(0)) >> [&] {
+        FAIL("self->mailbox().empty()");
       }
     ).until([&]{ return done; });
     return result;
