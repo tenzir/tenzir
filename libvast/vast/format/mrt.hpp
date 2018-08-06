@@ -1034,7 +1034,7 @@ struct state_change_parser : parser<state_change_parser> {
     return p(f, l, x.peer_as_number, x.local_as_number, x.interface_index,
              x.address_family, x.peer_ip_address, x.local_ip_address,
              x.old_state, x.new_state);
-  };
+  }
 };
 
 struct message_parser : parser<message_parser> {
@@ -1051,7 +1051,7 @@ struct message_parser : parser<message_parser> {
     return p(f, l, x.peer_as_number, x.local_as_number, x.interface_index,
              x.address_family, x.peer_ip_address, x.local_ip_address,
              x.message);
-  };
+  }
 };
 
 struct message_as4_parser : parser<message_as4_parser> {
@@ -1068,7 +1068,7 @@ struct message_as4_parser : parser<message_as4_parser> {
     return p(f, l, x.peer_as_number, x.local_as_number, x.interface_index,
              x.address_family, x.peer_ip_address, x.local_ip_address,
              x.message);
-  };
+  }
 };
 
 struct state_change_as4_parser : parser<state_change_as4_parser> {
@@ -1084,7 +1084,7 @@ struct state_change_as4_parser : parser<state_change_as4_parser> {
     return p(f, l, x.peer_as_number, x.local_as_number, x.interface_index,
              x.address_family, x.peer_ip_address, x.local_ip_address,
              x.old_state, x.new_state);
-  };
+  }
 };
 
 } // namespace bgp4mp

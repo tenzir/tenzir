@@ -35,7 +35,7 @@ void notify(Actor self) {
       self->send(s, self->state.done_msg);
     self->quit();
   }
-};
+}
 
 template <class Actor>
 void complete(Actor self, const actor_addr& a) {
@@ -48,7 +48,7 @@ void complete(Actor self, const actor_addr& a) {
     self->state.workers.erase(w);
     notify(self);
   }
-};
+}
 
 } // namespace <anonymous>
 

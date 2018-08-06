@@ -65,7 +65,7 @@ struct type_parser : parser<type_parser> {
   static type to_basic_type(std::vector<vast::attribute> a) {
     T b;
     return b.attributes(std::move(a));
-  };
+  }
 
   template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& a) const {

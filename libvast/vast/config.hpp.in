@@ -29,7 +29,7 @@
 #  define VAST_DIAGNOSTIC_IGNORE_DEPRECATED                                 \
      _Pragma("GCC diagnostic ignored \"-Wdeprecated\"")
 #  define VAST_DIAGNOSTIC_IGNORE_VLA_EXTENSION                              \
-     _Pragma("GCC diagnostic ignored \"-Wvla-extension\"")
+     _Pragma("GCC diagnostic ignored \"-Wvla\"")
 #endif
 
 #if defined(CAF_MACOS)

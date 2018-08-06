@@ -533,7 +533,7 @@ auto orig_h(const event& x) {
   auto& log_entry = caf::get<vector>(x.data());
   auto& conn_id = caf::get<vector>(log_entry[2]);
   return make_view(caf::get<address>(conn_id[0]));
-};
+}
 
 // This test uncovered a regression that ocurred when computing the rank of a
 // bitmap representing conn.log events. The culprit was the EWAH bitmap

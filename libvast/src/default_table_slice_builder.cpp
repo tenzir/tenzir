@@ -61,7 +61,7 @@ table_slice_handle default_table_slice_builder::finish() {
   default_table_slice_ptr result;
   swap(slice_, result);
   return table_slice_handle{std::move(result)};
-};
+}
 
 size_t default_table_slice_builder::rows() const noexcept {
   return slice_ == nullptr ? 0u : slice_->xs_.size();

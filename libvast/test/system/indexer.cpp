@@ -72,13 +72,13 @@ TEST(integer rows) {
   run();
   MESSAGE("verify table index");
   auto verify = [&] {
-    CHECK_EQUAL(query(":int == +1"), res(0, 3, 6));
-    CHECK_EQUAL(query(":int == +2"), res(1, 4, 7));
-    CHECK_EQUAL(query(":int == +3"), res(2, 5, 8));
+    CHECK_EQUAL(query(":int == +1"), res(0u, 3u, 6u));
+    CHECK_EQUAL(query(":int == +2"), res(1u, 4u, 7u));
+    CHECK_EQUAL(query(":int == +3"), res(2u, 5u, 8u));
     CHECK_EQUAL(query(":int == +4"), res());
-    CHECK_EQUAL(query(":int != +1"), res(1, 2, 4, 5, 7, 8));
-    CHECK_EQUAL(query("!(:int == +1)"), res(1, 2, 4, 5, 7, 8));
-    CHECK_EQUAL(query(":int > +1 && :int < +3"), res(1, 4, 7));
+    CHECK_EQUAL(query(":int != +1"), res(1u, 2u, 4u, 5u, 7u, 8u));
+    CHECK_EQUAL(query("!(:int == +1)"), res(1u, 2u, 4u, 5u, 7u, 8u));
+    CHECK_EQUAL(query(":int > +1 && :int < +3"), res(1u, 4u, 7u));
   };
   verify();
   MESSAGE("kill INDEXER");
@@ -108,7 +108,7 @@ TEST(bro conn logs) {
     CHECK_EQUAL(rank(query("orig_bytes < 400")), 5332u);
     CHECK_EQUAL(rank(query("orig_bytes < 400 && proto == \"udp\"")), 4357u);
     CHECK_EQUAL(rank(query(":addr == 65.55.184.16")), 2u);
-    CHECK_EQUAL(query(":addr == 169.254.225.22"), res(680, 682, 719, 720));
+    CHECK_EQUAL(query(":addr == 169.254.225.22"), res(680u, 682u, 719u, 720u));
   };
   verify();
   MESSAGE("kill INDEXER");

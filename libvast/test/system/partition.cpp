@@ -196,13 +196,13 @@ TEST(integer rows lookup) {
   auto res = [&](auto... args) {
     return make_ids({args...}, rows.size());
   };
-  CHECK_EQUAL(query(":int == +1"), res(0, 3, 6));
-  CHECK_EQUAL(query(":int == +2"), res(1, 4, 7));
-  CHECK_EQUAL(query("value == +3"), res(2, 5, 8));
+  CHECK_EQUAL(query(":int == +1"), res(0u, 3u, 6u));
+  CHECK_EQUAL(query(":int == +2"), res(1u, 4u, 7u));
+  CHECK_EQUAL(query("value == +3"), res(2u, 5u, 8u));
   CHECK_EQUAL(query(":int == +4"), res());
-  CHECK_EQUAL(query(":int != +1"), res(1, 2, 4, 5, 7, 8));
-  CHECK_EQUAL(query("!(:int == +1)"), res(1, 2, 4, 5, 7, 8));
-  CHECK_EQUAL(query(":int > +1 && :int < +3"), res(1, 4, 7));
+  CHECK_EQUAL(query(":int != +1"), res(1u, 2u, 4u, 5u, 7u, 8u));
+  CHECK_EQUAL(query("!(:int == +1)"), res(1u, 2u, 4u, 5u, 7u, 8u));
+  CHECK_EQUAL(query(":int > +1 && :int < +3"), res(1u, 4u, 7u));
 }
 
 TEST(single partition bro conn log lookup) {
@@ -217,7 +217,7 @@ TEST(single partition bro conn log lookup) {
   auto res = [&](auto... args) {
     return make_ids({args...}, bro_conn_log.size());
   };
-  CHECK_EQUAL(query(":addr == 169.254.225.22"), res(680, 682, 719, 720));
+  CHECK_EQUAL(query(":addr == 169.254.225.22"), res(680u, 682u, 719u, 720u));
   CHECK_EQUAL(rank(query("id.resp_p == 995/?")), 53u);
   CHECK_EQUAL(rank(query("id.resp_p == 5355/?")), 49u);
   CHECK_EQUAL(rank(query("id.resp_p == 995/? || id.resp_p == 5355/?")), 102u);
@@ -303,7 +303,8 @@ TEST_DISABLED(multiple partitions bro conn log lookup no messaging) {
     }
     return result;
   };
-  CHECK_EQUAL(query_all(":addr == 169.254.225.22"), res(680, 682, 719, 720));
+  CHECK_EQUAL(query_all(":addr == 169.254.225.22"),
+              res(680u, 682u, 719u, 720u));
   CHECK_EQUAL(rank(query_all("id.resp_p == 995/?")), 53u);
   CHECK_EQUAL(rank(query_all("id.resp_p == 5355/?")), 49u);
   CHECK_EQUAL(rank(query_all("id.resp_p == 995/? || id.resp_p == 5355/?")),
