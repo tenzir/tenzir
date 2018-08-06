@@ -133,6 +133,12 @@ inline bool operator!=(const table_slice& x, const table_slice& y) {
 }
 
 /// @relates table_slice
+void intrusive_ptr_add_ref(const table_slice* ptr);
+
+/// @relates table_slice
+void intrusive_ptr_release(const table_slice* ptr);
+
+/// @relates table_slice
 using table_slice_ptr = caf::intrusive_ptr<table_slice>;
 
 /// @relates table_slice
