@@ -51,7 +51,6 @@ protected:
     VAST_TRACE(VAST_ARG(options), VAST_ARG("args", begin, end));
     using ostream_ptr = std::unique_ptr<std::ostream>;
     auto limit = get_or(options, "events", defaults::command::max_events);
-    VAST_ASSERT(limit);
     if constexpr (std::is_constructible_v<Writer, ostream_ptr>) {
       auto output = get_or(options, "write", defaults::command::write_path);
       auto uds = get_or(options, "uds", false);
