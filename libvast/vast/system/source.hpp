@@ -225,7 +225,7 @@ struct source_state {
       if (auto ts = e.timestamp(); !bptr->add(ts))
         VAST_INFO(self, "add timestamp failed", ts);
       /// Add data column(s).
-      if (auto data = e.data(); !bptr->recursive_add(data))
+      if (auto data = e.data(); !bptr->recursive_add(data, e.type()))
         VAST_INFO(self, "add data failed", data);
       ++produced;
       if (bptr->rows() == table_slice_size)
