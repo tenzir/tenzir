@@ -121,6 +121,10 @@ if (VAST_ENABLE_ASSERTIONS)
   set(libvast_libs ${libvast_libs} ${Backtrace_LIBRARIES})
 endif ()
 
+if (BROKER_FOUND)
+  set(libvast_libs ${libvast_libs} ${BROKER_LIBRARY})
+endif ()
+
 if (SNAPPY_FOUND)
   set(libvast_libs ${libvast_libs} ${SNAPPY_LIBRARIES})
 endif ()
