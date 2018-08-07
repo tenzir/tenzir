@@ -242,6 +242,8 @@ reader::reader(size_t seed, uint64_t n, id base)
 
 expected<event> reader::read() {
   VAST_ASSERT(next_ != schema_.end());
+  if (num_events_ == 0)
+    return make_error(ec::end_of_input, "completed generation of events");
   // Generate random data.
   auto& t = *next_;
   auto& bp = blueprints_[t];
@@ -253,9 +255,7 @@ expected<event> reader::read() {
   // Advance to next type in schema.
   if (++next_ == schema_.end())
     next_ = schema_.begin();
-  VAST_ASSERT(num_events_ > 0);
-  if (--num_events_ == 0)
-    return make_error(ec::end_of_input, "completed generation of events");
+  --num_events_;
   return e;
 }
 
