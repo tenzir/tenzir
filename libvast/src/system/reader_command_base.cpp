@@ -116,11 +116,10 @@ int reader_command_base::run_impl(caf::actor_system& sys,
         stop = true;
       } else if (msg.source == src) {
         VAST_DEBUG("received DOWN from source");
-        if (caf::get_or(options, "blocking", false)) {
+        if (caf::get_or(options, "blocking", false))
           self->send(importer, subscribe_atom::value, flush_atom::value, self);
-        } else {
+        else
           stop = true;
-        }
       }
     },
     [&](flush_atom) {
