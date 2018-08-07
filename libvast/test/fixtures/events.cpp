@@ -57,7 +57,7 @@ std::vector<event> make_alternating_integers(size_t count) {
 /// @precondition is_sorted(vec)
 /// @postcondition is_sorted(vec)
 template <typename T, typename Pred>
-auto insert_sorted(std::vector<T>& vec, T const& item, Pred pred) {
+auto insert_sorted(std::vector<T>& vec, const T& item, Pred pred) {
   return vec.insert(std::upper_bound(vec.begin(), vec.end(), item, pred), item);
 }
 
@@ -150,7 +150,7 @@ private:
 /// Tries to access the builder for `layout`.
 class builders {
 public:
-  using Map = std::map<std::string, id_assigning_builder>;
+  using map_type = std::map<std::string, id_assigning_builder>;
 
   id_assigning_builder* get(const type& layout) {
     auto i = builders_.find(layout.name());
@@ -176,12 +176,12 @@ public:
       layout);
   }
 
-  Map& all() {
+  map_type& all() {
     return builders_;
   }
 
 private:
-  Map builders_;
+  map_type builders_;
 };
 
 events::events() {
