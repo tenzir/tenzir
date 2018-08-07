@@ -681,4 +681,61 @@ TEST(regression - bro conn log service http) {
   }
 }
 
+TEST(regression - manual value index for bro conn log service http) {
+  // Setup string size bitmap index.
+  using length_bitmap_index =
+    bitmap_index<uint32_t, multi_level_coder<range_coder<ids>>>;
+  auto length = length_bitmap_index{base::uniform(10, 3)};
+  // Setup one bitmap index per character.
+  using char_bitmap_index = bitmap_index<uint8_t, bitslice_coder<ewah_bitmap>>;
+  std::vector<char_bitmap_index> chars;
+  chars.resize(42, char_bitmap_index{8});
+  // Manually build a failing slice: [8000,8100).
+  ewah_bitmap none;
+  ewah_bitmap mask;
+  for (auto i = 8000; i < 8100; ++i)
+    caf::visit(detail::overload(
+      [&](caf::none_t) {
+        none.append_bits(false, i - none.size());
+        none.append_bit(true);
+        mask.append_bits(false, i - mask.size());
+        mask.append_bit(true);
+      },
+      [&](view<std::string> x) {
+        if (x.size() >= chars.size())
+          FAIL("insufficient character indexes");
+        for (size_t j = 0; j < x.size(); ++j) {
+          chars[j].skip(i - chars[j].size());
+          chars[j].append(static_cast<uint8_t>(x[j]));
+        }
+        length.skip(i - length.size());
+        length.append(x.size());
+        mask.append_bits(false, i - mask.size());
+        mask.append_bit(true);
+      },
+      [&](auto) {
+        FAIL("unexpected service type");
+      }
+    ), service(bro_conn_log[i]));
+  REQUIRE_EQUAL(rank(mask), 100u);
+  // Perform a manual index lookup for "http".
+  auto http = "http"s;
+  auto data = length.lookup(less_equal, http.size());
+  for (auto i = 0u; i < http.size(); ++i)
+    data &= chars[i].lookup(equal, static_cast<uint8_t>(http[i]));
+  // Generated via:
+  // bro-cut service < test/logs/bro/conn.log \
+  //  | awk 'NR > 8000 && NR <= 8100 && $1 == "http" { print NR-1  }' \
+  //  | paste -s -d , -
+  auto expected = make_ids(
+    {
+      8002, 8003, 8004, 8005, 8006, 8007, 8008, 8011, 8012, 8013, 8014,
+      8015, 8016, 8019, 8039, 8041, 8042, 8044, 8047, 8051, 8061,
+    },
+    8100);
+  // Manually subtract none values and mask the result to [8000, 8100).
+  auto result = (data - none) & mask;
+  CHECK_EQUAL(result, expected);
+}
+
 FIXTURE_SCOPE_END()
