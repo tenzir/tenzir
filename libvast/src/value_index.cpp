@@ -144,47 +144,32 @@ std::unique_ptr<value_index> value_index::make(const type& t) {
 }
 
 expected<void> value_index::append(data_view x) {
-  if (caf::holds_alternative<caf::none_t>(x)) {
-    none_.append_bit(true);
-    ++nils_;
-  } else {
-    if (!append_impl(x, nils_))
-      return make_error(ec::unspecified, "append_impl");
-    nils_ = 0;
-    none_.append_bit(false);
-  }
-  mask_.append_bit(true);
-  return {};
+  return append(x, offset());
 }
 
 expected<void> value_index::append(data_view x, id pos) {
-  auto off = offset();
+  auto off = mask_.size();
   if (pos < off)
     // Can only append at the end
     return make_error(ec::unspecified, pos, '<', off);
-  if (pos == off)
-    return append(x);
-  auto skip = pos - off;
   if (caf::holds_alternative<caf::none_t>(x)) {
-    none_.append_bits(false, skip);
+    none_.append_bits(false, pos - none_.size());
     none_.append_bit(true);
-    ++nils_;
-  } else {
-    if (!append_impl(x, skip + nils_))
-      return make_error(ec::unspecified, "append_impl");
-    nils_ = 0;
-    none_.append_bits(false, skip + 1);
+  } else if (!append_impl(x, pos)) {
+    return make_error(ec::unspecified, "append_impl");
   }
-  mask_.append_bits(false, skip);
+  mask_.append_bits(false, pos - off);
   mask_.append_bit(true);
   return {};
 }
 
 expected<ids> value_index::lookup(relational_operator op, data_view x) const {
   if (caf::holds_alternative<caf::none_t>(x)) {
-    if (!(op == equal || op == not_equal))
-      return make_error(ec::unsupported_operator, op);
-    return op == equal ? none_ & mask_ : ~none_ & mask_;
+    if (op == equal)
+      return none_ & mask_;
+    if (op == not_equal)
+      return ~none_ & mask_;
+    return make_error(ec::unsupported_operator, op);
   }
   auto result = lookup_impl(op, x);
   if (!result)
@@ -193,7 +178,7 @@ expected<ids> value_index::lookup(relational_operator op, data_view x) const {
 }
 
 value_index::size_type value_index::offset() const {
-  return mask_.size(); // none_ would work just as well.
+  return mask_.size();
 }
 
 // -- string_index -------------------------------------------------------------
@@ -210,7 +195,7 @@ void string_index::init() {
   }
 }
 
-bool string_index::append_impl(data_view x, size_type skip) {
+bool string_index::append_impl(data_view x, id pos) {
   auto str = caf::get_if<view<std::string>>(&x);
   if (!str)
     return false;
@@ -221,11 +206,10 @@ bool string_index::append_impl(data_view x, size_type skip) {
   if (length > chars_.size())
     chars_.resize(length, char_bitmap_index{8});
   for (auto i = 0u; i < length; ++i) {
-    auto gap = length_.size() - chars_[i].size();
-    chars_[i].skip(gap + skip);
+    chars_[i].skip(pos - chars_[i].size());
     chars_[i].append(static_cast<uint8_t>((*str)[i]));
   }
-  length_.skip(skip);
+  length_.skip(pos - length_.size());
   length_.append(length);
   return true;
 }
@@ -252,15 +236,15 @@ string_index::lookup_impl(relational_operator op, data_view x) const {
             return result;
           }
           if (str_size > chars_.size())
-            return bitmap{length_.size(), op == not_equal};
+            return ids{offset(), op == not_equal};
           auto result = length_.lookup(less_equal, str_size);
           if (all<0>(result))
-            return bitmap{length_.size(), op == not_equal};
+            return ids{offset(), op == not_equal};
           for (auto i = 0u; i < str_size; ++i) {
             auto b = chars_[i].lookup(equal, static_cast<uint8_t>(str[i]));
             result &= b;
             if (all<0>(result))
-              return bitmap{length_.size(), op == not_equal};
+              return ids{offset(), op == not_equal};
           }
           if (op == not_equal)
             result.flip();
@@ -269,13 +253,13 @@ string_index::lookup_impl(relational_operator op, data_view x) const {
         case ni:
         case not_ni: {
           if (str_size == 0)
-            return bitmap{length_.size(), op == ni};
+            return ids{offset(), op == ni};
           if (str_size > chars_.size())
-            return bitmap{length_.size(), op == not_ni};
+            return ids{offset(), op == not_ni};
           // TODO: Be more clever than iterating over all k-grams (#45).
-          bitmap result{length_.size(), false};
+          ids result{offset(), false};
           for (auto i = 0u; i < chars_.size() - str_size + 1; ++i) {
-            bitmap substr{length_.size(), true};
+            ids substr{offset(), true};
             auto skip = false;
             for (auto j = 0u; j < str_size; ++j) {
               auto bm = chars_[i + j].lookup(equal, str[j]);
@@ -307,23 +291,17 @@ void address_index::init() {
     bytes_.fill(byte_index{8});
 }
 
-bool address_index::append_impl(data_view x, size_type skip) {
+bool address_index::append_impl(data_view x, id pos) {
   init();
   auto addr = caf::get_if<view<address>>(&x);
   if (!addr)
     return false;
   auto& bytes = addr->data();
-  if (addr->is_v6())
-    for (auto i = 0u; i < 12; ++i) {
-      auto gap = v4_.size() - bytes_[i].size();
-      bytes_[i].skip(gap + skip);
-      bytes_[i].append(bytes[i]);
-    }
-  for (auto i = 12u; i < 16; ++i) {
-    bytes_[i].skip(skip);
+  for (auto i = 0u; i < 16; ++i) {
+    bytes_[i].skip(pos - bytes_[i].size());
     bytes_[i].append(bytes[i]);
   }
-  v4_.skip(skip);
+  v4_.skip(pos - v4_.size());
   v4_.append(addr->is_v4());
   return true;
 }
@@ -337,12 +315,12 @@ address_index::lookup_impl(relational_operator op, data_view d) const {
     [&](view<address> x) -> expected<ids> {
       if (!(op == equal || op == not_equal))
         return make_error(ec::unsupported_operator, op);
-      auto result = x.is_v4() ? v4_.coder().storage() : bitmap{v4_.size(), true};
+      auto result = x.is_v4() ? v4_.coder().storage() : ids{offset(), true};
       for (auto i = x.is_v4() ? 12u : 0u; i < 16; ++i) {
         auto bm = bytes_[i].lookup(equal, x.data()[i]);
         result &= bm;
         if (all<0>(result))
-          return bitmap{v4_.size(), op == not_equal};
+          return ids{offset(), op == not_equal};
       }
       if (op == not_equal)
         result.flip();
@@ -358,7 +336,7 @@ address_index::lookup_impl(relational_operator op, data_view d) const {
       if ((is_v4 ? topk + 96 : topk) == 128)
         // Asking for /32 or /128 membership is equivalent to an equality lookup.
         return lookup_impl(op == in ? equal : not_equal, x.network());
-      auto result = is_v4 ? v4_.coder().storage() : bitmap{v4_.size(), true};
+      auto result = is_v4 ? v4_.coder().storage() : ids{offset(), true};
       auto& bytes = x.network().data();
       size_t i = is_v4 ? 12 : 0;
       for ( ; i < 16 && topk >= 8; ++i, topk -= 8)
@@ -384,13 +362,12 @@ void subnet_index::init() {
     length_ = prefix_index{128 + 1}; // Valid prefixes range from /0 to /128.
 }
 
-bool subnet_index::append_impl(data_view x, size_type skip) {
+bool subnet_index::append_impl(data_view x, id pos) {
   if (auto sn = caf::get_if<view<subnet>>(&x)) {
     init();
-    auto id = length_.size() + skip;
-    length_.skip(skip);
+    length_.skip(pos - length_.size());
     length_.append(sn->length());
-    return !!network_.append(sn->network(), id);
+    return static_cast<bool>(network_.append(sn->network(), pos));
   }
   return false;
 }
@@ -434,7 +411,7 @@ subnet_index::lookup_impl(relational_operator op, data_view d) const {
           // For a subnet index U and subnet x, the ni operator signifies a
           // subset relationship such that `U ni x` translates to U ⊇ x, i.e.,
           // the lookup returns all subnets in U that include x.
-          bitmap result;
+          ids result;
           for (auto i = uint8_t{1}; i <= x.length(); ++i) {
             auto xs = network_.lookup(in, subnet{x.network(), i});
             if (!xs)
@@ -462,12 +439,12 @@ void port_index::init() {
   }
 }
 
-bool port_index::append_impl(data_view x, size_type skip) {
+bool port_index::append_impl(data_view x, id pos) {
   if (auto p = caf::get_if<view<port>>(&x)) {
     init();
-    num_.skip(skip);
+    num_.skip(pos - num_.size());
     num_.append(p->number());
-    proto_.skip(skip);
+    proto_.skip(pos - proto_.size());
     proto_.append(p->type());
     return true;
   }
@@ -487,7 +464,7 @@ port_index::lookup_impl(relational_operator op, data_view d) const {
         return make_error(ec::unsupported_operator, op);
       auto n = num_.lookup(op, x.number());
       if (all<0>(n))
-        return bitmap{offset(), false};
+        return ids{offset(), false};
       if (x.type() != port::unknown)
         n &= proto_.lookup(equal, x.type());
       return n;
@@ -513,11 +490,11 @@ void sequence_index::init() {
   }
 }
 
-bool sequence_index::append_impl(data_view x, size_type skip) {
+bool sequence_index::append_impl(data_view x, id pos) {
   if (auto xs = caf::get_if<view<vector>>(&x))
-    return container_append(**xs, skip);
+    return container_append(**xs, pos);
   if (auto xs = caf::get_if<view<set>>(&x))
-    return container_append(**xs, skip);
+    return container_append(**xs, pos);
   return false;
 }
 
@@ -526,7 +503,7 @@ sequence_index::lookup_impl(relational_operator op, data_view x) const {
   if (!(op == ni || op == not_ni))
     return make_error(ec::unsupported_operator, op);
   if (elements_.empty())
-    return bitmap{};
+    return ids{};
   auto result = elements_[0]->lookup(equal, x);
   if (!result)
     return result;

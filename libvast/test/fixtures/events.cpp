@@ -99,10 +99,15 @@ events::events() {
   initialized = true;
   MESSAGE("inhaling unit test suite events");
   bro_conn_log = inhale<format::bro::reader>(bro::conn);
+  REQUIRE_EQUAL(bro_conn_log.size(), 8462u);
   bro_dns_log = inhale<format::bro::reader>(bro::dns);
+  REQUIRE_EQUAL(bro_dns_log.size(), 5124u);
   bro_http_log = inhale<format::bro::reader>(bro::http);
+  REQUIRE_EQUAL(bro_http_log.size(), 4896u);
   bgpdump_txt = inhale<format::bgpdump::reader>(bgpdump::updates20140821);
+  REQUIRE_EQUAL(bgpdump_txt.size(), 11782u);
   random = extract(vast::format::test::reader{42, 1000});
+  REQUIRE_EQUAL(random.size(), 1000u);
   ascending_integers = make_ascending_integers(10000);
   alternating_integers = make_alternating_integers(10000);
   // Assign monotonic IDs to events starting at 0.

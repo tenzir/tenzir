@@ -233,7 +233,7 @@ TEST(single partition bro conn log lookup) {
               28u);
 }
 
-TEST_DISABLED(multiple partitions bro conn log lookup no messaging) {
+TEST(multiple partitions bro conn log lookup no messaging) {
   // This test bypasses any messaging by reaching directly into the state of
   // each INDEXER actor.
   using indexer_type = caf::stateful_actor<indexer_state>;

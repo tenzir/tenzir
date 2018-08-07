@@ -525,6 +525,10 @@ TEST(polymorphic none values) {
   bm = idx->lookup(not_equal, make_data_view("foo"));
   REQUIRE(bm);
   CHECK_EQUAL(to_string(*bm), "00000001100000001110000");
+  bm = idx->lookup(equal, make_data_view(caf::none));
+  CHECK_EQUAL(to_string(*bm), "10011100011110000000011");
+  bm = idx->lookup(not_equal, make_data_view(caf::none));
+  CHECK_EQUAL(to_string(*bm), "01100011100001111111100");
 }
 
 FIXTURE_SCOPE(bro_conn_log_value_index_tests, fixtures::events)
@@ -628,6 +632,110 @@ TEST(regression - manual address bitmap index from 4 byte indexes) {
   }
   CHECK_EQUAL(rank(result), 4u);
   CHECK_EQUAL(select(result, -1), id{720});
+}
+
+namespace {
+
+auto service(const event& log) {
+  auto& xs = caf::get<vector>(log.data());
+  return make_view(xs[4]);
+}
+
+bool is_http(view<data> x) {
+  return caf::get<view<std::string>>(x) == "http";
+}
+
+} // namespace <anonymous>
+
+TEST(regression - bro conn log service http) {
+  // The number of occurrences of the 'service == "http"' in the conn.log,
+  // sliced in batches of 100. Pre-computed via:
+  //  bro-cut service < test/logs/bro/conn.log \
+  //    | awk '{ if ($1 == "http") ++n; if (NR % 100 == 0) { print n; n = 0 } }\
+  //           END { print n }' \
+  //    | paste -s -d , -
+  std::vector<size_t> http_per_100_events{
+    13, 16, 20, 22, 31, 11, 14, 28, 13, 42, 45, 52, 59, 54, 59, 59, 51,
+    29, 21, 31, 20, 28, 9,  56, 48, 57, 32, 53, 25, 31, 25, 44, 38, 55,
+    40, 23, 31, 27, 23, 59, 23, 2,  62, 29, 1,  5,  7,  0,  10, 5,  52,
+    39, 2,  0,  9,  8,  0,  13, 4,  2,  13, 2,  36, 33, 17, 48, 50, 27,
+    44, 9,  94, 63, 74, 66, 5,  54, 21, 7,  2,  3,  21, 7,  2,  14, 7
+  };
+  std::vector<std::pair<std::unique_ptr<value_index>, ids>> slices;
+  slices.reserve(http_per_100_events.size());
+  for (size_t i = 0; i < bro_conn_log.size(); ++i) {
+    if (i % 100 == 0) {
+      slices.emplace_back(value_index::make(string_type{}), ids(i, false));
+    }
+    auto& [idx, expected] = slices.back();
+    auto x = service(bro_conn_log[i]);
+    idx->append(x, i);
+    expected.append_bit(is_http(x));
+  }
+  for (size_t i = 0; i < slices.size(); ++i) {
+    MESSAGE("verifying batch [" << (i * 100) << ',' << (i * 100) + 100 << ')');
+    auto& [idx, expected] = slices[i];
+    auto result = idx->lookup(equal, make_data_view("http"));
+    REQUIRE(result);
+    CHECK_EQUAL(rank(*result), http_per_100_events[i]);
+  }
+}
+
+TEST(regression - manual value index for bro conn log service http) {
+  // Setup string size bitmap index.
+  using length_bitmap_index =
+    bitmap_index<uint32_t, multi_level_coder<range_coder<ids>>>;
+  auto length = length_bitmap_index{base::uniform(10, 3)};
+  // Setup one bitmap index per character.
+  using char_bitmap_index = bitmap_index<uint8_t, bitslice_coder<ewah_bitmap>>;
+  std::vector<char_bitmap_index> chars;
+  chars.resize(42, char_bitmap_index{8});
+  // Manually build a failing slice: [8000,8100).
+  ewah_bitmap none;
+  ewah_bitmap mask;
+  for (auto i = 8000; i < 8100; ++i)
+    caf::visit(detail::overload(
+      [&](caf::none_t) {
+        none.append_bits(false, i - none.size());
+        none.append_bit(true);
+        mask.append_bits(false, i - mask.size());
+        mask.append_bit(true);
+      },
+      [&](view<std::string> x) {
+        if (x.size() >= chars.size())
+          FAIL("insufficient character indexes");
+        for (size_t j = 0; j < x.size(); ++j) {
+          chars[j].skip(i - chars[j].size());
+          chars[j].append(static_cast<uint8_t>(x[j]));
+        }
+        length.skip(i - length.size());
+        length.append(x.size());
+        mask.append_bits(false, i - mask.size());
+        mask.append_bit(true);
+      },
+      [&](auto) {
+        FAIL("unexpected service type");
+      }
+    ), service(bro_conn_log[i]));
+  REQUIRE_EQUAL(rank(mask), 100u);
+  // Perform a manual index lookup for "http".
+  auto http = "http"s;
+  auto data = length.lookup(less_equal, http.size());
+  for (auto i = 0u; i < http.size(); ++i)
+    data &= chars[i].lookup(equal, static_cast<uint8_t>(http[i]));
+  // Generated via:
+  // bro-cut service < test/logs/bro/conn.log \
+  //  | awk 'NR > 8000 && NR <= 8100 && $1 == "http" { print NR-1  }' \
+  //  | paste -s -d , -
+  auto expected = make_ids(
+    {
+      8002, 8003, 8004, 8005, 8006, 8007, 8008, 8011, 8012, 8013, 8014,
+      8015, 8016, 8019, 8039, 8041, 8042, 8044, 8047, 8051, 8061,
+    },
+    8100);
+  // Manually subtract none values and mask the result to [8000, 8100).
+  auto result = (data - none) & mask;
+  CHECK_EQUAL(result, expected);
 }
 
 FIXTURE_SCOPE_END()

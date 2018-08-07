@@ -94,7 +94,7 @@ public:
 
   ewah_bitmap() = default;
 
-  ewah_bitmap(size_type n, bool bit = false);
+  explicit ewah_bitmap(size_type n, bool bit = false);
 
   // -- inspectors -----------------------------------------------------------
 

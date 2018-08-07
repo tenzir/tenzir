@@ -85,7 +85,7 @@ public:
 
   wah_bitmap() = default;
 
-  wah_bitmap(size_type n, bool bit = false);
+  explicit wah_bitmap(size_type n, bool bit = false);
 
   // -- inspectors -----------------------------------------------------------
 
