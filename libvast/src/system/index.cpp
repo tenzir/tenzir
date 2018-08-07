@@ -169,6 +169,16 @@ void index_state::init(event_based_actor* self, const path& dir,
                                                             partition_size);
 }
 
+bool index_state::worker_available() {
+  return !idle_workers.empty();
+}
+
+caf::actor index_state::next_worker() {
+  auto result = std::move(idle_workers.back());
+  idle_workers.pop_back();
+  return result;
+}
+
 behavior index(stateful_actor<index_state>* self, const path& dir,
                size_t partition_size, size_t in_mem_partitions,
                size_t taste_partitions, size_t num_workers) {
@@ -214,8 +224,8 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
       }
       // Every return after this points uses up the worker.
       auto guard = caf::detail::make_scope_guard([&] {
-        st.next_worker = nullptr;
-        self->unbecome();
+        if (!st.worker_available())
+          self->unbecome();
       });
       // Allows the client to query further results after initial taste.
       auto query_id = uuid::nil();
@@ -255,7 +265,7 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
         using ls = index_state::lookup_state;
         st.pending.emplace(query_id, ls{expr, std::move(candidates)});
       }
-      self->send(st.next_worker, std::move(expr), std::move(qm),
+      self->send(st.next_worker(), std::move(expr), std::move(qm),
                  actor_cast<actor>(self->current_sender()));
       return {std::move(query_id), hits, scheduled};
     },
@@ -281,8 +291,8 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
                  "more partition(s) for query ID", query_id);
       // Every return after this points uses up the worker.
       auto guard = caf::detail::make_scope_guard([&] {
-        st.next_worker = nullptr;
-        self->unbecome();
+        if (!st.worker_available())
+          self->unbecome();
       });
       // Prefer partitions that are currently in our cache.
       auto& candidates = pending_iter->second.partitions;
@@ -300,7 +310,7 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
         qm.emplace(part->id(), part->get_indexers(expr));
       });
       // Forward request to worker.
-      self->send(st.next_worker, expr, std::move(qm),
+      self->send(st.next_worker(), expr, std::move(qm),
                  actor_cast<actor>(self->current_sender()));
       // Cleanup.
       if (last == candidates.end()) {
@@ -312,15 +322,18 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
                    "partitions left for query ID", query_id);
       }
     },
+    [=](worker_atom, caf::actor& worker) {
+      self->state.idle_workers.emplace_back(std::move(worker));
+    },
     [=](caf::stream<const_table_slice_handle> in) {
       VAST_DEBUG(self, "got a new source");
       return self->state.stage->add_inbound_path(in);
     }
   );
   return {
-    [=](worker_atom, caf::actor worker) {
+    [=](worker_atom, caf::actor& worker) {
       auto& st = self->state;
-      st.next_worker = worker;
+      st.idle_workers.emplace_back(std::move(worker));
       self->become(keep_behavior, st.has_worker);
     },
     [=](caf::stream<const_table_slice_handle> in) {

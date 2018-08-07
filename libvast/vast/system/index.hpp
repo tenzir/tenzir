@@ -83,6 +83,13 @@ struct index_state {
   void init(caf::event_based_actor* self, const path& dir, size_t max_events,
             size_t max_parts, size_t taste_parts);
 
+  /// @returns whether there's an idle worker available.
+  bool worker_available();
+
+  /// Takes the next worker from the idle workers stack and returns it.
+  /// @pre `has_worker()`
+  caf::actor next_worker();
+
   // -- member variables -------------------------------------------------------
 
   /// Allows to select partitions with timestamps.
@@ -109,9 +116,6 @@ struct index_state {
   /// The number of partitions to schedule immediately for each query
   size_t taste_partitions;
 
-  /// Stores the next available worker for queries.
-  caf::actor next_worker;
-
   /// Allows the index to multiplex between waiting for ready workers and
   /// queries.
   caf::behavior has_worker;
@@ -122,6 +126,9 @@ struct index_state {
   /// Stores partitions that are no longer active but have not persisted their
   /// state yet.
   std::vector<std::pair<partition_ptr, size_t>> unpersisted;
+
+  /// Caches idle workers.
+  std::vector<caf::actor> idle_workers;
 
   /// Name of the INDEX actor.
   static inline const char* name = "index";
