@@ -151,7 +151,7 @@ class driver : public importer_state::driver_base {
 public:
   using super = importer_state::driver_base;
 
-  using pointer = stateful_actor<importer_state>*;
+  using pointer = importer_actor*;
 
   driver(importer_state::downstream_manager& out, pointer self)
     : super(out),
@@ -201,9 +201,66 @@ public:
     return desired;
   }
 
+  pointer self() const {
+    return self_;
+  }
+
 private:
   pointer self_;
 };
+
+class manager : public caf::detail::stream_stage_impl<driver> {
+public:
+  using super = caf::detail::stream_stage_impl<driver>;
+
+  manager(importer_actor* self)
+    : caf::stream_manager(self),
+      super(self, self) {
+    // nop
+  }
+
+  using super::handle;
+
+  void handle(caf::stream_slots slots,
+              caf::upstream_msg::ack_batch& x) override {
+    super::handle(slots, x);
+    notify_listeners_if_clean();
+  }
+
+  void input_closed(error reason) override {
+    super::input_closed(std::move(reason));
+    notify_listeners_if_clean();
+  }
+
+  void finalize(const error& reason) override {
+    super::finalize(reason);
+    notify_listeners();
+  }
+
+private:
+  void notify_listeners() {
+    auto self = driver_.self();
+    auto& st = self->state;
+    VAST_DEBUG(self, "sends 'flush' messages to listeners");
+    for (auto& listener : st.flush_listeners)
+      self->send(listener, flush_atom::value);
+    st.flush_listeners.clear();
+  }
+
+  void notify_listeners_if_clean() {
+    auto& st = driver_.self()->state;
+    if (!st.flush_listeners.empty() && inbound_paths().empty()
+        && out().clean()) {
+      notify_listeners();
+    }
+  }
+};
+
+caf::intrusive_ptr<manager> make_importer_stage(importer_actor* self) {
+  auto result = caf::make_counted<manager>(self);
+  result->continuous(true);
+  return result;
+}
 
 } // namespace <anonymous>
 
@@ -218,7 +275,7 @@ behavior importer(stateful_actor<importer_state>* self, path dir,
     self->quit(std::move(err));
     return {};
   }
-  self->state.stg = self->make_continuous_stage<driver>(self);
+  self->state.stg = make_importer_stage(self);
   return {
     [=](const meta_store_type& ms) {
       VAST_DEBUG(self, "registers meta store");
@@ -251,6 +308,16 @@ behavior importer(stateful_actor<importer_state>* self, path dir,
       auto& st = self->state;
       VAST_INFO("add a new sink to the importer");
       st.stg->add_outbound_path(subscriber);
+    },
+    [=](subscribe_atom, flush_atom, actor& listener) {
+      VAST_INFO(self, "adds a new 'flush' subscriber");
+      auto& st = self->state;
+      if (st.stg->inbound_paths().empty() && st.stg->out().clean()) {
+        VAST_DEBUG("all outbound paths clean, send 'flush' immediately");
+        self->send(listener, flush_atom::value);
+      } else {
+        st.flush_listeners.emplace_back(std::move(listener));
+      }
     }
   };
 }

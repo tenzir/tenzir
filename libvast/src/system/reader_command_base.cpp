@@ -40,6 +40,11 @@
 
 namespace vast::system {
 
+reader_command_base::reader_command_base(command* parent, std::string_view name)
+  : super(parent, name) {
+  add_opt<bool>("blocking,b", "block until the IMPORTER forwarded all data");
+}
+
 int reader_command_base::run_impl(caf::actor_system& sys,
                                   const caf::config_value_map& options,
                                   argument_iterator begin,
@@ -72,16 +77,20 @@ int reader_command_base::run_impl(caf::actor_system& sys,
   int rc = EXIT_FAILURE;
   auto stop = false;
   // Connect source to importers.
+  caf::actor importer;
   self->request(node, infinite, get_atom::value).receive(
     [&](const std::string& id, system::registry& reg) {
       auto er = reg.components[id].equal_range("importer");
       if (er.first == er.second) {
         VAST_ERROR("no importers available at node", id);
         stop = true;
+      } else if (reg.components[id].count("importer") > 1) {
+        VAST_ERROR("multiple IMPOTER actors are not yet supported");
+        stop = true;
       } else {
-        VAST_DEBUG("connecting source to importers");
-        for (auto i = er.first; i != er.second; ++i)
-          self->send(src, system::sink_atom::value, i->second.actor);
+        VAST_DEBUG("connecting source to importer");
+        importer = er.first->second.actor;
+        self->send(src, system::sink_atom::value, importer);
       }
     },
     [&](const error& e) {
@@ -104,9 +113,18 @@ int reader_command_base::run_impl(caf::actor_system& sys,
         VAST_DEBUG("received DOWN from node");
         self->send_exit(src, exit_reason::user_shutdown);
         rc = EXIT_FAILURE;
+        stop = true;
       } else if (msg.source == src) {
         VAST_DEBUG("received DOWN from source");
+        if (caf::get_or(options, "blocking", false)) {
+          self->send(importer, subscribe_atom::value, flush_atom::value, self);
+        } else {
+          stop = true;
+        }
       }
+    },
+    [&](flush_atom) {
+      VAST_DEBUG("received flush from IMPORTER");
       stop = true;
     },
     [&](system::signal_atom, int signal) {
@@ -114,7 +132,7 @@ int reader_command_base::run_impl(caf::actor_system& sys,
       if (signal == SIGINT || signal == SIGTERM)
         self->send_exit(src, exit_reason::user_shutdown);
     }
-  ).until([&] { return stop; });
+  ).until(stop);
   cleanup(node);
   return rc;
 }
