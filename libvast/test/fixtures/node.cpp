@@ -38,7 +38,6 @@ node::node() {
 
 node::~node() {
   self->send_exit(test_node, caf::exit_reason::user_shutdown);
-  self->wait_for(test_node);
 }
 
 void node::ingest(const std::string& type) {
@@ -87,7 +86,7 @@ std::vector<event> node::query(std::string expr) {
   auto done = false;
   self->do_receive(
     [&](std::vector<event>& xs) {
-      MESSAGE("got " << xs.size() << " results");
+      MESSAGE("... got " << xs.size() << " events");
       result.insert(result.end(), std::make_move_iterator(xs.begin()),
                     std::make_move_iterator(xs.end()));
     },
@@ -102,6 +101,7 @@ std::vector<event> node::query(std::string expr) {
       done = true;
     }
   ).until(done);
+  MESSAGE("got " << result.size() << " events in total");
   return result;
 }
 

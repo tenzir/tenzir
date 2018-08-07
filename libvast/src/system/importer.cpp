@@ -266,6 +266,7 @@ caf::intrusive_ptr<manager> make_importer_stage(importer_actor* self) {
 
 behavior importer(stateful_actor<importer_state>* self, path dir,
                   size_t max_table_slice_size) {
+  VAST_TRACE(VAST_ARG(dir), VAST_ARG(max_table_slice_size));
   self->state.dir = dir;
   self->state.last_replenish = steady_clock::time_point::min();
   self->state.max_table_slice_size = static_cast<int32_t>(max_table_slice_size);
