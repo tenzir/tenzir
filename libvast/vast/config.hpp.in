@@ -29,7 +29,7 @@
 #  define VAST_DIAGNOSTIC_IGNORE_DEPRECATED                                 \
      _Pragma("GCC diagnostic ignored \"-Wdeprecated\"")
 #  define VAST_DIAGNOSTIC_IGNORE_VLA_EXTENSION                              \
-     _Pragma("GCC diagnostic ignored \"-Wvla-extension\"")
+     _Pragma("GCC diagnostic ignored \"-Wvla\"")
 #endif
 
 #if defined(CAF_MACOS)
@@ -45,6 +45,10 @@
 #endif
 #ifdef CAF_POSIX
 #  define VAST_POSIX
+#endif
+
+#ifdef CAF_NO_EXCEPTIONS
+#define VAST_NO_EXCEPTIONS
 #endif
 
 // Convenience macros

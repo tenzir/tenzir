@@ -19,23 +19,25 @@
 #include <caf/stateful_actor.hpp>
 
 #include "vast/filesystem.hpp"
+#include "vast/table_index.hpp"
 #include "vast/type.hpp"
 
 namespace vast::system {
 
-struct event_indexer_state {
-  path dir;
-  type event_type;
-  std::unordered_map<path, caf::actor> indexers;
-  static inline const char* name = "event-indexer";
+struct indexer_state {
+  indexer_state();
+  ~indexer_state();
+  void init(table_index&& from);
+  union { table_index tbl; };
+  bool initialized;
+  static inline const char* name = "indexer";
 };
 
-/// Indexes an event.
+/// Indexes table slices.
 /// @param self The actor handle.
 /// @param dir The directory where to store the indexes in.
-/// @param type event_type The type of the event to index.
-caf::behavior event_indexer(caf::stateful_actor<event_indexer_state>* self,
-                            path dir, type event_type);
+/// @param layout The type of individual columns in slices.
+caf::behavior indexer(caf::stateful_actor<indexer_state>* self, path dir,
+                      record_type layout);
 
 } // namespace vast::system
-

@@ -15,10 +15,10 @@
 
 #include <algorithm>
 #include <functional>
-#include <stdexcept>
 #include <vector>
 
 #include "vast/detail/operators.hpp"
+#include "vast/detail/raise_error.hpp"
 
 namespace vast::detail {
 
@@ -125,14 +125,14 @@ public:
     return Policy::add(xs_, std::move(x));
   };
 
-  std::pair<iterator, bool> insert(iterator, value_type x) {
+  iterator insert(iterator, value_type x) {
     // TODO: don't ignore hint.
-    return insert(std::move(x));
+    return insert(std::move(x)).first;
   };
 
-  std::pair<iterator, bool> insert(const_iterator, value_type x) {
+  iterator insert(const_iterator, value_type x) {
     // TODO: don't ignore hint.
-    return insert(std::move(x));
+    return insert(std::move(x)).first;
   };
 
   template <class InputIterator>
@@ -177,14 +177,16 @@ public:
   mapped_type& at(const key_type& key) {
     auto i = find(key);
     if (i == end())
-      throw std::out_of_range{"vast::detail::vector_map::at"};
+      VAST_RAISE_ERROR(std::out_of_range,
+                       "vast::detail::vector_map::at out of range");
     return i->second;
   }
 
   const mapped_type& at(const key_type& key) const {
     auto i = find(key);
     if (i == end())
-      throw std::out_of_range{"vast::detail::vector_map::at"};
+      VAST_RAISE_ERROR(std::out_of_range,
+                       "vast::detail::vector_map::at out of range");
     return i->second;
   }
 

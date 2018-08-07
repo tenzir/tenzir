@@ -19,6 +19,7 @@
 #include <cstdio>
 #include <cstring>
 
+#include "vast/config.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/mmapbuf.hpp"
 #include "vast/detail/system.hpp"
@@ -95,7 +96,7 @@ size_t mmapbuf::size() const {
 bool mmapbuf::resize(size_t new_size) {
   // Also fail if we created a private mapping of a file not opened RW.
   // For now, users cannot control these aspects.
-  if (!map_ || offset_ > new_size)
+  if (!map_)
     return false;
   if (new_size == size())
     return true;
@@ -105,6 +106,15 @@ bool mmapbuf::resize(size_t new_size) {
   // Resize the underlying file, if available.
   if (fd_ != -1 && ftruncate(fd_, new_size) < 0)
     return false;
+#ifdef VAST_LINUX
+  int flags = MREMAP_MAYMOVE;
+  auto map = mremap(map_, size_, new_size, flags);
+  if (map == MAP_FAILED) {
+    reset();
+    return false;
+  }
+  map_ = reinterpret_cast<char_type*>(map);
+#else
   if (new_size < size_) {
     // When shrinking the mapping, we can simply truncate the file underneath
     // the mapping under the assumption that no user accesses the previously
@@ -122,38 +132,18 @@ bool mmapbuf::resize(size_t new_size) {
         madvise(map_ + used_bytes, size_ - used_bytes, MADV_DONTNEED);
     }
   } else {
-    // When growing, we have multiple options:
-    // (1) Request a mapping immediately after the current mapping to
-    //     extend the current mapping in a contiguous fashion.
-    // (2) If the OS doesn't allow us (1), we can unmap the existing region
-    //     and then create a new one with the new size.
-    auto remap = true;
-    // If the current mapping is a multiple of the page size, we can try (1).
-    if (size_ % page_size() == 0) {
-      auto flags = flags_ | MAP_FIXED;
-      auto map = mmap(map_ + size_, new_size - size_, prot_, flags, fd_, 0);
-      if (map != MAP_FAILED) {
-        remap = false; // It worked!
-      } else if (errno != ENOMEM) {
-        reset();
-        return false;
-      }
+    auto map = mmap(nullptr, new_size, prot_, flags_, fd_, offset_);
+    if (map == MAP_FAILED) {
+      reset();
+      return false;
     }
-    // If (1) failed or was not possible, we have to resort to (2).
-    if (remap) {
-      auto map = mmap(nullptr, new_size, prot_, flags_, fd_, offset_);
-      if (map == MAP_FAILED) {
-        reset();
-        return false;
-      }
-      std::memcpy(map, map_, size_);
-      if (munmap(map_, size_) < 0) {
-        reset();
-        return false;
-      }
-      map_ = reinterpret_cast<char_type*>(map);
+    if (munmap(map_, size_) < 0) {
+      reset();
+      return false;
     }
+    map_ = reinterpret_cast<char_type*>(map);
   };
+#endif
   size_ = new_size;
   // Restore stream buffer positions.
   setp(map_, map_ + size_);

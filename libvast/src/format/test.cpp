@@ -22,6 +22,9 @@
 #include "vast/detail/assert.hpp"
 #include "vast/detail/type_traits.hpp"
 
+using caf::holds_alternative;
+using caf::visit;
+
 namespace vast {
 namespace format {
 namespace test {
@@ -42,10 +45,12 @@ expected<distribution> make_distribution(const type& t) {
   if (!parser(*i->value, tie))
     return make_error(ec::parse_error, "invalid distribution specification");
   if (name == "uniform") {
-    if (is<integer_type>(t))
+    if (holds_alternative<integer_type>(t))
       return {std::uniform_int_distribution<integer>{static_cast<integer>(p0),
                                                      static_cast<integer>(p1)}};
-    else if (is<boolean_type>(t) || is<count_type>(t) || is<string_type>(t))
+    else if (holds_alternative<boolean_type>(t)
+             || holds_alternative<count_type>(t)
+             || holds_alternative<string_type>(t))
       return {std::uniform_int_distribution<count>{static_cast<count>(p0),
                                                    static_cast<count>(p1)}};
     else
@@ -59,7 +64,7 @@ expected<distribution> make_distribution(const type& t) {
 }
 
 struct initializer {
-  initializer(blueprint& bp) 
+  initializer(blueprint& bp)
     : distributions_{bp.distributions},
       data_{&bp.data} {
   }
@@ -70,14 +75,14 @@ struct initializer {
     if (dist)
       distributions_.push_back(std::move(*dist));
     else if (!dist.error())
-      *data_ = nil;
+      *data_ = caf::none;
     else
       return dist.error();
     return no_error;
   }
 
   expected<void> operator()(const record_type& r) {
-    auto& v = get<vector>(*data_);
+    auto& v = caf::get<vector>(*data_);
     VAST_ASSERT(v.size() == r.fields.size());
     for (auto i = 0u; i < r.fields.size(); ++i) {
       data_ = &v[i];

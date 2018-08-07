@@ -29,11 +29,6 @@ inline auto as_printer(char c) {
   return literal_printer{c};
 }
 
-template <size_t N>
-auto as_printer(char const(&str)[N]) {
-  return literal_printer{str};
-}
-
 inline auto as_printer(std::string str) {
   return literal_printer{std::move(str)};
 }
@@ -55,7 +50,7 @@ auto as_printer(T x) -> std::enable_if_t<is_printer_v<T>, T> {
 // -- binary ------------------------------------------------------------------
 
 template <class T>
-inline constexpr bool is_convertible_to_unary_printer_v =
+constexpr bool is_convertible_to_unary_printer_v =
   std::is_convertible_v<T, std::string>
   || (std::is_arithmetic_v<T> && !std::is_same_v<T, bool>);
 
@@ -69,7 +64,7 @@ using is_convertible_to_binary_printer =
   >;
 
 template <class T, class U>
-inline constexpr bool is_convertible_to_binary_printer_v
+constexpr bool is_convertible_to_binary_printer_v
   = is_convertible_to_binary_printer<T, U>::value;
 
 template <
@@ -97,15 +92,12 @@ template <
   class T,
   class U
 >
-auto as_printer(T&& x, U&& y)
-  -> std::enable_if_t<
-       is_convertible_to_binary_printer_v<std::decay_t<T>, std::decay_t<U>>,
-       make_binary_printer<
-         Binaryprinter,
-         decltype(as_printer(std::forward<T>(x))),
-         decltype(as_printer(std::forward<U>(y)))
-       >
-     > {
+make_binary_printer<
+  Binaryprinter,
+  decltype(as_printer(std::declval<T&>())),
+  decltype(as_printer(std::declval<U&>()))
+>
+as_printer(T&& x, U&& y) {
   return {as_printer(std::forward<T>(x)), as_printer(std::forward<U>(y))};
 }
 

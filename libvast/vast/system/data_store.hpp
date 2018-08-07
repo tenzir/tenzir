@@ -15,6 +15,8 @@
 
 #include <unordered_map>
 
+#include <caf/none.hpp>
+
 #include "vast/data.hpp"
 
 #include "vast/system/key_value_store.hpp"
@@ -53,7 +55,7 @@ data_store(
     [=](get_atom, const Key& key) -> caf::result<optional<Value>> {
       auto i = self->state.store.find(key);
       if (i == self->state.store.end())
-        return nil;
+        return caf::none;
       return i->second;
     }
   };

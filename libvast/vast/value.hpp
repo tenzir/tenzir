@@ -15,9 +15,10 @@
 
 #include <type_traits>
 
+#include <caf/default_sum_type_access.hpp>
+
 #include "vast/data.hpp"
 #include "vast/type.hpp"
-#include "vast/detail/type_traits.hpp"
 
 namespace vast {
 
@@ -26,31 +27,28 @@ class value {
   friend access;
 
 public:
+  using types = vast::data::types;
+
   /// Constructs a type-safe value by checking whether the given data matches
   /// the given type.
   /// @param d The data for the value.
   /// @param t The type *d* shall have.
   /// @returns If `t.check(d)` then a value containing *d* and `nil` otherwise.
   static value make(vast::data d, vast::type t) {
-    return type_check(t, d) ? value{std::move(d), std::move(t)} : nil;
+    return type_check(t, d) ? value{std::move(d), std::move(t)} : caf::none;
   }
 
   /// Constructs an invalid value.
   /// Same as default-construction, but also enables statements like `v = nil`.
-  value(none = nil) {
+  value(caf::none_t = caf::none) {
+    // nop
   }
 
   /// Constructs an untyped value from data.
   /// @param x The data for the value.
-  template <
-    class T,
-    class = detail::disable_if_t<
-      detail::is_same_or_derived_v<value, T>
-      || std::is_same_v<data_type<T>, std::false_type>
-    >
-  >
-  value(T&& x)
-    : data_{std::forward<T>(x)} {
+  template <class T, class = std::enable_if_t<std::is_constructible_v<data, T>>>
+  value(T&& x) : data_{std::forward<T>(x)} {
+    // nop
   }
 
   /// Constructs a typed value from data.
@@ -94,12 +92,22 @@ public:
   friend bool operator>=(const value& lhs, const value& rhs);
   friend bool operator>(const value& lhs, const value& rhs);
 
+  /// @cond PRIVATE
+
+  data::variant& get_data() {
+    return data_.get_data();
+  }
+
+  const data::variant& get_data() const {
+    return data_.get_data();
+  }
+
   template <class Inspector>
   friend auto inspect(Inspector&f, value& v) {
     return f(v.data_, v.type_);
   }
 
-  friend detail::data_variant& expose(value& v);
+  /// @endond
 
 private:
   vast::data data_;
@@ -115,3 +123,9 @@ bool convert(const value& v, json& j);
 
 } // namespace vast
 
+namespace caf {
+
+template <>
+struct sum_type_access<vast::value> : default_sum_type_access<vast::value> {};
+
+} // namespace caf

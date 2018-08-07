@@ -15,7 +15,8 @@
 
 namespace vast {
 
-ids make_ids(std::initializer_list<id_range> ranges) {
+ids make_ids(std::initializer_list<id_range> ranges, size_t min_size,
+             bool default_bit) {
   ids result;
   for (auto [first, last] : ranges) {
     VAST_ASSERT(first < last);
@@ -29,6 +30,8 @@ ids make_ids(std::initializer_list<id_range> ranges) {
       result |= tmp;
     }
   }
+  if (result.size() < min_size)
+    result.append_bits(default_bit, min_size - result.size());
   return result;
 }
 

@@ -13,69 +13,56 @@
 
 #pragma once
 
-#include <caf/all.hpp>
+#include <caf/actor.hpp>
+#include <caf/actor_system.hpp>
+#include <caf/scoped_actor.hpp>
+#include <caf/test/dsl.hpp>
+#include <caf/test/io_dsl.hpp>
 
-#include "vast/system/atoms.hpp"
 #include "vast/system/configuration.hpp"
-#include "vast/system/profiler.hpp"
 
-#include "vast/detail/assert.hpp"
-
-#include "test.hpp"
 #include "fixtures/filesystem.hpp"
+#include "test.hpp"
 
 namespace fixtures {
 
+/// Configures the actor system of a fixture with default settings for unit
+/// testing.
+struct test_configuration : vast::system::configuration {
+  test_configuration();
+};
+
+/// A fixture with an actor system that uses the default work-stealing
+/// scheduler.
 struct actor_system : filesystem {
-  struct configuration : vast::system::configuration {
-    configuration() {
-      logger_file_name = "vast-unit-test.log";
-      logger_component_filter = "vast|caf";
-      // Always begin with an empy log file.
-      if (vast::exists(logger_file_name))
-        vast::rm(logger_file_name);
-    }
-  };
+  actor_system();
 
-  actor_system() : system{config}, self{system, true} {
-    // Clean up state from previous executions.
-    if (vast::exists(directory))
-      vast::rm(directory);
-    // Start profiler.
-    if (vast::test::config.count("gperftools") > 0)
-      enable_profiler();
-  }
+  ~actor_system();
 
-  ~actor_system() {
-    // Stop profiler.
-    using vast::system::stop_atom;
-    using vast::system::heap_atom;
-    using vast::system::cpu_atom;
-    if (profiler) {
-      self->send(profiler, stop_atom::value, cpu_atom::value);
-      self->send(profiler, stop_atom::value, heap_atom::value);
-    }
-  }
-
-  void enable_profiler() {
-    VAST_ASSERT(!profiler);
-    using vast::system::start_atom;
-    using vast::system::heap_atom;
-    using vast::system::cpu_atom;
-    profiler = self->spawn(vast::system::profiler, directory / "profiler",
-                           std::chrono::seconds(1));
-    self->send(profiler, start_atom::value, cpu_atom::value);
-    self->send(profiler, start_atom::value, heap_atom::value);
-  }
+  void enable_profiler();
 
   auto error_handler() {
     return [&](const caf::error& e) { FAIL(system.render(e)); };
   }
 
-  configuration config;
+  test_configuration config;
   caf::actor_system system;
   caf::scoped_actor self;
   caf::actor profiler;
+};
+
+using test_node_base_fixture = test_coordinator_fixture<test_configuration>;
+
+/// A fixture with an actor system that uses the test coordinator for
+/// determinstic testing of actors.
+struct deterministic_actor_system : test_node_fixture<test_node_base_fixture>,
+                                    filesystem {
+
+  deterministic_actor_system();
+
+  auto error_handler() {
+    return [&](const caf::error& e) { FAIL(sys.render(e)); };
+  }
 };
 
 } // namespace fixtures

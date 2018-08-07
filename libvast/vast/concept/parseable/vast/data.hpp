@@ -13,6 +13,8 @@
 
 #pragma once
 
+#include <caf/none.hpp>
+
 #include "vast/data.hpp"
 
 #include "vast/concept/parseable/core/parser.hpp"
@@ -50,7 +52,7 @@ struct access::parser<data> : vast::parser<access::parser<data>> {
       | '[' >> (x % ',') >> ']' // default: vector<data>
       | '{' >> as<set>(x % ',') >> '}'
       | '{' >> as<map>((x >> "->" >> x) % ',') >> '}'
-      | as<none>("nil"_p)
+      | as<caf::none_t>("nil"_p)
       ;
     return p;
   }

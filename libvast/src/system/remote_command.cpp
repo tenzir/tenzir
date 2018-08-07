@@ -36,9 +36,9 @@ remote_command::remote_command(command* parent, std::string_view name)
   // nop
 }
 
-int remote_command::run_impl(actor_system& sys, const option_map& options,
-                             argument_iterator begin,
-                             argument_iterator end) {
+int remote_command::run_impl(actor_system& sys,
+                             const caf::config_value_map& options,
+                             argument_iterator begin, argument_iterator end) {
   VAST_TRACE(VAST_ARG("name", name()), VAST_ARG(options),
              VAST_ARG("args", begin, end));
   // Get a convenient and blocking way to interact with actors.
@@ -51,6 +51,7 @@ int remote_command::run_impl(actor_system& sys, const option_map& options,
     return EXIT_FAILURE;
   }
   auto node = std::move(*node_opt);
+  self->monitor(node);
   // Build command to remote node.
   auto args = caf::message_builder{begin, end}.move_to_message();
   auto cmd = make_message(std::string{name()}, std::move(args));

@@ -38,15 +38,29 @@ public:
     return value::make(std::forward<T>(x), std::move(t));
   }
 
+  /// Type-safe factory function to construct an event from data and type with
+  /// an ID.
+  /// @tparam A type convertible to a value.
+  /// @param x An instance of type `T`.
+  /// @param t The type of the value.
+  /// @param i The ID of the event.
+  /// @returns A valid event if *t* can successfully check *x*.
+  template <class T>
+  static event make(T&& x, vast::type t, vast::id i) {
+    event result = value::make(std::forward<T>(x), std::move(t));
+    result.id(i);
+    return result;
+  }
+
   /// Type-safe factory function to construct an event from an unchecked value.
   /// @param v The value to check and convert into an event.
   /// @returns A valid event according *v* if `v.type().check(v.data())`.
   static event make(value v) {
-    return type_check(v.type(), v.data()) ? event{std::move(v)} : nil;
+    return type_check(v.type(), v.data()) ? event{std::move(v)} : caf::none;
   }
 
   /// Constructs an invalid event.
-  event(none = nil);
+  event(caf::none_t = caf::none);
 
   /// Constructs an event from a value.
   event(value v);

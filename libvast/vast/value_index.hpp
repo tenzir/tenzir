@@ -20,13 +20,13 @@
 #include "vast/ewah_bitmap.hpp"
 #include "vast/ids.hpp"
 #include "vast/bitmap_index.hpp"
-#include "vast/data.hpp"
 #include "vast/concept/printable/vast/data.hpp"
 #include "vast/concept/printable/vast/operator.hpp"
 #include "vast/die.hpp"
 #include "vast/error.hpp"
 #include "vast/expected.hpp"
 #include "vast/type.hpp"
+#include "vast/view.hpp"
 
 #include "vast/detail/assert.hpp"
 #include "vast/detail/overload.hpp"
@@ -50,13 +50,13 @@ public:
   /// Appends a data value.
   /// @param x The data to append to the index.
   /// @returns `true` if appending succeeded.
-  expected<void> push_back(const data& x);
+  expected<void> append(data_view x);
 
   /// Appends a data value.
   /// @param x The data to append to the index.
   /// @param pos The positional identifier of *x*.
   /// @returns `true` if appending succeeded.
-  expected<void> push_back(const data& x, id pos);
+  expected<void> append(data_view x, id pos);
 
   /// Looks up data under a relational operator. If the value to look up is
   /// `nil`, only `==` and `!=` are valid operations. The concrete index
@@ -64,14 +64,14 @@ public:
   /// @param op The relation operator.
   /// @param x The value to lookup.
   /// @returns The result of the lookup or an error upon failure.
-  expected<ids> lookup(relational_operator op, const data& x) const;
+  expected<ids> lookup(relational_operator op, data_view x) const;
 
   /// Merges another value index with this one.
   /// @param other The value index to merge.
   /// @returns `true` on success.
   //bool merge(const value_index& other);
 
-  /// Retrieves the ID of the last ::push_back operation.
+  /// Retrieves the ID of the last append operation.
   /// @returns The largest ID in the index.
   size_type offset() const;
 
@@ -84,10 +84,10 @@ protected:
   value_index() = default;
 
 private:
-  virtual bool push_back_impl(const data& x, size_type skip) = 0;
+  virtual bool append_impl(data_view x, size_type skip) = 0;
 
   virtual expected<ids>
-  lookup_impl(relational_operator op, const data& x) const = 0;
+  lookup_impl(relational_operator op, data_view x) const = 0;
 
   size_type nils_ = 0;
   ewah_bitmap mask_;
@@ -96,43 +96,50 @@ private:
 
 namespace detail {
 
+template <class Index, class Sequence>
+expected<ids> container_lookup_impl(const Index& idx, relational_operator op,
+                               const Sequence& xs) {
+  ids result;
+  if (op == in) {
+    result = bitmap{idx.offset(), false};
+    for (auto x : xs) {
+      auto r = idx.lookup(equal, x);
+      if (r)
+        result |= *r;
+      else
+        return r;
+      if (all<1>(result)) // short-circuit
+        return result;
+    }
+  } else if (op == not_in) {
+    result = bitmap{idx.offset(), true};
+    for (auto x : xs) {
+      auto r = idx.lookup(equal, x);
+      if (r)
+        result -= *r;
+      else
+        return r;
+      if (all<0>(result)) // short-circuit
+        return result;
+    }
+  } else {
+    return make_error(ec::unsupported_operator, op);
+  }
+  return result;
+}
+
 template <class Index>
 expected<ids> container_lookup(const Index& idx, relational_operator op,
-                               const data& d) {
-  auto lookup = [&](auto& xs) -> expected<ids> {
-    ids result;
-    if (op == in) {
-      result = bitmap{idx.offset(), false};
-      for (auto& x : xs) {
-        auto r = idx.lookup(equal, x);
-        if (r)
-          result |= *r;
-        else
-          return r;
-        if (all<1>(result)) // short-circuit
-          return result;
-      }
-    } else if (op == not_in) {
-      result = bitmap{idx.offset(), true};
-      for (auto& x : xs) {
-        auto r = idx.lookup(equal, x);
-        if (r)
-          result -= *r;
-        else
-          return r;
-        if (all<0>(result)) // short-circuit
-          return result;
-      }
-    } else {
-      return make_error(ec::unsupported_operator, op);
-    }
-    return result;
-  };
-  return visit(overload(
-    [&](const auto& x) -> expected<ids> { return make_error(ec::type_clash, x); },
-    [&](const vector& xs) { return lookup(xs); },
-    [&](const set& xs) { return lookup(xs); }
-  ), d);
+                               view<vector> xs) {
+  VAST_ASSERT(xs);
+  return container_lookup_impl(idx, op, *xs);
+}
+
+template <class Index>
+expected<ids> container_lookup(const Index& idx, relational_operator op,
+                               view<set> xs) {
+  VAST_ASSERT(xs);
+  return container_lookup_impl(idx, op, *xs);
 }
 
 } // namespace detail
@@ -196,38 +203,41 @@ public:
   }
 
 private:
-  bool push_back_impl(const data& d, size_type skip) override {
+  bool append_impl(data_view d, size_type skip) override {
     auto append = [&](auto x) {
-      bmi_.push_back(x, skip);
+      bmi_.skip(skip);
+      bmi_.append(x);
       return true;
     };
-    return visit(detail::overload(
+    return caf::visit(detail::overload(
       [&](auto&&) { return false; },
-      [&](boolean x) { return append(x); },
-      [&](integer x) { return append(x); },
-      [&](count x) { return append(x); },
-      [&](real x) { return append(x); },
-      [&](timespan x) { return append(x.count()); },
-      [&](timestamp x) { return append(x.time_since_epoch().count()); }
+      [&](view<boolean> x) { return append(x); },
+      [&](view<integer> x) { return append(x); },
+      [&](view<count> x) { return append(x); },
+      [&](view<real> x) { return append(x); },
+      [&](view<timespan> x) { return append(x.count()); },
+      [&](view<timestamp> x) { return append(x.time_since_epoch().count()); }
     ), d);
   }
 
   expected<ids>
-  lookup_impl(relational_operator op, const data& d) const override {
-    return visit(detail::overload(
+  lookup_impl(relational_operator op, data_view d) const override {
+    return caf::visit(detail::overload(
       [&](auto x) -> expected<ids> {
-        return make_error(ec::type_clash, value_type{}, std::move(x));
+        return make_error(ec::type_clash, value_type{}, materialize(x));
       },
-      [&](boolean x) -> expected<ids> { return bmi_.lookup(op, x); },
-      [&](integer x) -> expected<ids> { return bmi_.lookup(op, x); },
-      [&](count x) -> expected<ids> { return bmi_.lookup(op, x); },
-      [&](real x) -> expected<ids> { return bmi_.lookup(op, x); },
-      [&](timespan x) -> expected<ids> { return bmi_.lookup(op, x.count()); },
-      [&](timestamp x) -> expected<ids> {
+      [&](view<boolean> x) -> expected<ids> { return bmi_.lookup(op, x); },
+      [&](view<integer> x) -> expected<ids> { return bmi_.lookup(op, x); },
+      [&](view<count> x) -> expected<ids> { return bmi_.lookup(op, x); },
+      [&](view<real> x) -> expected<ids> { return bmi_.lookup(op, x); },
+      [&](view<timespan> x) -> expected<ids> {
+        return bmi_.lookup(op, x.count());
+      },
+      [&](view<timestamp> x) -> expected<ids> {
         return bmi_.lookup(op, x.time_since_epoch().count());
       },
-      [&](const vector& xs) { return detail::container_lookup(*this, op, xs); },
-      [&](const set& xs) { return detail::container_lookup(*this, op, xs); }
+      [&](view<vector> xs) { return detail::container_lookup(*this, op, xs); },
+      [&](view<set> xs) { return detail::container_lookup(*this, op, xs); }
     ), d);
   };
 
@@ -257,10 +267,10 @@ private:
 
   void init();
 
-  bool push_back_impl(const data& x, size_type skip) override;
+  bool append_impl(data_view x, size_type skip) override;
 
   expected<ids>
-  lookup_impl(relational_operator op, const data& x) const override;
+  lookup_impl(relational_operator op, data_view x) const override;
 
   size_t max_length_;
   length_bitmap_index length_;
@@ -283,10 +293,10 @@ public:
 private:
   void init();
 
-  bool push_back_impl(const data& x, size_type skip) override;
+  bool append_impl(data_view x, size_type skip) override;
 
   expected<ids>
-  lookup_impl(relational_operator op, const data& x) const override;
+  lookup_impl(relational_operator op, data_view x) const override;
 
   std::array<byte_index, 16> bytes_;
   type_index v4_;
@@ -307,10 +317,10 @@ public:
 private:
   void init();
 
-  bool push_back_impl(const data& x, size_type skip) override;
+  bool append_impl(data_view x, size_type skip) override;
 
   expected<ids>
-  lookup_impl(relational_operator op, const data& x) const override;
+  lookup_impl(relational_operator op, data_view x) const override;
 
   address_index network_;
   prefix_index length_;
@@ -341,10 +351,10 @@ public:
 private:
   void init();
 
-  bool push_back_impl(const data& x, size_type skip) override;
+  bool append_impl(data_view x, size_type skip) override;
 
   expected<ids>
-  lookup_impl(relational_operator op, const data& x) const override;
+  lookup_impl(relational_operator op, data_view x) const override;
 
   number_index num_;
   protocol_index proto_;
@@ -370,7 +380,7 @@ private:
   void init();
 
   template <class Container>
-  bool push_back_ctnr(Container& c, size_type skip) {
+  bool container_append(Container& c, size_type skip) {
     init();
     auto seq_size = c.size();
     if (seq_size > max_size_)
@@ -386,15 +396,16 @@ private:
     auto id = size_.size() + skip;
     auto x = c.begin();
     for (auto i = 0u; i < seq_size; ++i)
-      elements_[i]->push_back(*x++, id);
-    size_.push_back(seq_size, skip);
+      elements_[i]->append(*x++, id);
+    size_.skip(skip);
+    size_.append(seq_size);
     return true;
   }
 
-  bool push_back_impl(const data& x, size_type skip) override;
+  bool append_impl(data_view x, size_type skip) override;
 
   expected<ids>
-  lookup_impl(relational_operator op, const data& x) const override;
+  lookup_impl(relational_operator op, data_view x) const override;
 
   std::vector<std::unique_ptr<value_index>> elements_;
   size_bitmap_index size_;
@@ -470,7 +481,7 @@ struct value_index_inspect_helper {
     }
 
     result_type operator()(const alias_type& t) const {
-      return visit(*this, t.value_type);
+      return caf::visit(*this, t.value_type);
     }
 
     value_index& idx_;
@@ -534,19 +545,18 @@ struct value_index_inspect_helper {
     }
 
     result_type operator()(const alias_type& t) const {
-      return visit(*this, t.value_type);
+      return caf::visit(*this, t.value_type);
     }
   };
 
   template <class Inspector>
   friend auto inspect(Inspector& f, value_index_inspect_helper& helper) {
     if (Inspector::writes_state)
-      helper.idx = visit(default_construct{}, helper.type);
+      helper.idx = caf::visit(default_construct{}, helper.type);
     VAST_ASSERT(helper.idx);
-    return visit(down_cast<Inspector>{*helper.idx, f}, helper.type);
+    return caf::visit(down_cast<Inspector>{*helper.idx, f}, helper.type);
   }
 };
 
 } // namespace detail
 } // namespace vast
-

@@ -70,7 +70,7 @@ struct log_entry {
 template <class Inspector>
 auto inspect(Inspector& f, log_entry& e) {
   return f(e.term, e.index, e.data);
-};
+}
 
 /// A sequence of log entries accessed through monotonically increasing
 /// indexes. The first entry has index 1. Index 0 is invalid. Mutable
@@ -111,7 +111,7 @@ public:
   /// Checks whether the log is empty.
   bool empty() const;
 
-  /// Returns the number of bytes the serialized entries in the log occupy.
+  /// @returns the number of bytes the serialized entries in the log occupy.
   friend uint64_t bytes(log& l);
 
 private:
@@ -137,7 +137,7 @@ struct snapshot_header {
 template <class Inspector>
 auto inspect(Inspector& f, snapshot_header& ss) {
   return f(ss.version, ss.last_included_index, ss.last_included_term);
-};
+}
 
 /// Statistics clients can request.
 struct statistics {
@@ -148,7 +148,7 @@ struct statistics {
 template <class Inspector>
 auto inspect(Inspector& f, statistics& stats) {
   return f(stats.log_bytes, stats.log_entries);
-};
+}
 
 // -- RPC/message types -------------------------------------------------------
 
@@ -170,12 +170,12 @@ struct request_vote {
 template <class Inspector>
 auto inspect(Inspector& f, request_vote::request& r) {
   return f(r.candidate_id, r.term, r.last_log_index, r.last_log_term);
-};
+}
 
 template <class Inspector>
 auto inspect(Inspector& f, request_vote::response& r) {
   return f(r.term, r.vote_granted);
-};
+}
 
 /// The **AppendEntries** RPC. Sent by leader to replicate log entries; also
 /// used as heartbeat.
@@ -200,12 +200,12 @@ template <class Inspector>
 auto inspect(Inspector& f, append_entries::request& r) {
   return f(r.term, r.leader_id, r.prev_log_index, r.prev_log_term,
            r.entries, r.commit_index);
-};
+}
 
 template <class Inspector>
 auto inspect(Inspector& f, append_entries::response& r) {
   return f(r.term, r.success);
-};
+}
 
 /// The **InstallSnapshot** RPC.
 struct install_snapshot {
@@ -228,12 +228,12 @@ template <class Inspector>
 auto inspect(Inspector& f, install_snapshot::request& r) {
   return f(r.term, r.leader_id, r.last_snapshot_index, r.byte_offset, r.data,
            r.done);
-};
+}
 
 template <class Inspector>
 auto inspect(Inspector& f, install_snapshot::response& r) {
   return f(r.term, r.bytes_stored);
-};
+}
 
 // -- actor state -------------------------------------------------------------
 

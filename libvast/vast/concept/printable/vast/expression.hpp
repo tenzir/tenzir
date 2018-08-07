@@ -13,13 +13,14 @@
 
 #pragma once
 
+#include <caf/none.hpp>
+
 #include "vast/data.hpp"
 #include "vast/expression.hpp"
 #include "vast/concept/printable/numeric.hpp"
 #include "vast/concept/printable/string.hpp"
 #include "vast/concept/printable/core.hpp"
 #include "vast/concept/printable/vast/data.hpp"
-#include "vast/concept/printable/vast/key.hpp"
 #include "vast/concept/printable/vast/none.hpp"
 #include "vast/concept/printable/vast/offset.hpp"
 #include "vast/concept/printable/vast/operator.hpp"
@@ -35,9 +36,9 @@ struct expression_printer : printer<expression_printer> {
     visitor(Iterator& out) : out_{out} {
     }
 
-    bool operator()(none) const {
+    bool operator()(caf::none_t) const {
       using vast::print;
-      return print(out_, nil);
+      return print(out_, caf::none);
     }
 
     bool operator()(const conjunction& c) const {
@@ -71,7 +72,7 @@ struct expression_printer : printer<expression_printer> {
     }
 
     bool operator()(const key_extractor& e) const {
-      return printers::key(out_, e.key);
+      return printers::str(out_, e.key);
     }
 
     bool operator()(const data_extractor& e) const {

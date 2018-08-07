@@ -11,33 +11,39 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#pragma once
+#define SUITE operators
+#include "test.hpp"
 
-#include "vast/key.hpp"
-#include "vast/concept/printable/core/printer.hpp"
-#include "vast/concept/printable/detail/print_delimited.hpp"
-#include "vast/concept/printable/numeric/integral.hpp"
-#include "vast/concept/printable/string/char.hpp"
+#include "vast/detail/operators.hpp"
 
-namespace vast {
+using namespace vast::detail;
 
-struct key_printer : printer<key_printer> {
-  using attribute = key;
+namespace {
 
-  template <class Iterator>
-  bool print(Iterator& out, const key& k) const {
-    return detail::print_delimited(k.begin(), k.end(), out, key::delimiter);
+struct foo : addable<foo>,
+             addable<foo, int> {
+  explicit foo(int x) : value{x} {
+    // nop
   }
+
+  foo& operator+=(const foo& other) {
+    value += other.value;
+    return *this;
+  }
+
+  foo& operator+=(int x) {
+    value += x;
+    return *this;
+  }
+
+  int value;
 };
 
-template <>
-struct printer_registry<key> {
-  using type = key_printer;
-};
+} // namespace <anonymous>
 
-namespace printers {
-  auto const key = key_printer{};
-} // namespace printers
-
-} // namespace vast
-
+TEST(commutative operators) {
+  auto x = foo{42};
+  auto y = foo{-3};
+  auto result = 1 + x + 1 + y + 1;
+  CHECK_EQUAL(result.value, 42);
+}

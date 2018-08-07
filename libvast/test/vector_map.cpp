@@ -12,13 +12,16 @@
  ******************************************************************************/
 
 #include <string>
+#include <string_view>
 
 #include "vast/detail/steady_map.hpp"
 
 #define SUITE detail
 #include "test.hpp"
 
-using namespace std::string_literals;
+#include "vast/config.hpp"
+
+using namespace std::string_view_literals;
 using namespace vast;
 
 namespace {
@@ -45,6 +48,7 @@ TEST(steady_map membership) {
   CHECK_EQUAL(xs.count("baz"), 1u);
 }
 
+#ifndef VAST_NO_EXCEPTIONS
 TEST(steady_map at) {
   CHECK_EQUAL(xs.at("foo"), 42);
   auto exception = std::out_of_range{""};
@@ -53,8 +57,9 @@ TEST(steady_map at) {
   } catch (std::out_of_range& e) {
     exception = std::move(e);
   }
-  CHECK_EQUAL(exception.what(), "vast::detail::vector_map::at"s);
+  CHECK_EQUAL(exception.what(), "vast::detail::vector_map::at out of range"sv);
 }
+#endif // VAST_NO_EXCEPTIONS
 
 TEST(steady_map insert) {
   auto i = xs.insert({"qux", 1});

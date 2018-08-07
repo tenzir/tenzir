@@ -30,6 +30,12 @@ using w64 = bits64::word_type;
 
 } // namespace <anonymous>
 
+TEST(construction) {
+  CHECK(bits8{}.empty());
+  CHECK_EQUAL(bits8{}.size(), 0u);
+  CHECK_EQUAL(bits8(w8::all, 7), bits8(0b01111111, 7));
+}
+
 TEST(access) {
   auto x = bits8{0b10110010};
   CHECK(!x[0]);
@@ -55,12 +61,76 @@ TEST(access) {
   CHECK(!x[1336]);
 }
 
+TEST(introspection) {
+  auto x = bits8{};
+  CHECK(x.is_partial_word());
+  CHECK(!x.is_complete_word());
+  CHECK(!x.is_run());
+  x = bits8{0b10110010, 3};
+  CHECK(x.is_partial_word());
+  CHECK(!x.is_complete_word());
+  CHECK(!x.is_run());
+  x = bits8{0b10110010};
+  CHECK(!x.is_partial_word());
+  CHECK(x.is_complete_word());
+  CHECK(!x.is_run());
+  x = bits8{w8::all, 42};
+  CHECK(!x.is_partial_word());
+  CHECK(!x.is_complete_word());
+  CHECK(x.is_run());
+}
+
 TEST(homogeneity) {
   CHECK(!bits8{0b10110000}.homogeneous());
   CHECK(bits8{0b10110000, 4}.homogeneous());
   CHECK(bits8{0b10111111, 6}.homogeneous());
   CHECK(bits8{w8::all}.homogeneous());
   CHECK(bits8{w8::none}.homogeneous());
+}
+
+TEST(slice) {
+  MESSAGE("blocks");
+  auto xs = bits8{0b00000001};
+  CHECK_EQUAL(xs.slice(0), xs);
+  CHECK_EQUAL(xs.slice(0, xs.size()), xs);
+  CHECK_EQUAL(xs.slice(1), bits8(w8::none, 7));
+  CHECK_EQUAL(xs.slice(1, 3), bits8(w8::none, 3));
+  CHECK_EQUAL(xs.slice(7), bits8(w8::none, 1));
+  xs = bits8{0b1111000, 7};
+  CHECK_EQUAL(xs.slice(0), xs);
+  CHECK_EQUAL(xs.slice(1), bits8(0b0111100, 6));
+  CHECK_EQUAL(xs.slice(1, 3).data(), 0b00000100);
+  CHECK_EQUAL(xs.slice(5, 2).data(), 0b00000011);
+  CHECK_EQUAL(xs.slice(6), bits8(w8::all, 1));
+  MESSAGE("runs");
+  xs = bits8{w8::all, 42};
+  CHECK_EQUAL(xs.slice(6), bits8(w8::all, 42 - 6));
+  xs = bits8{w8::all, 10};
+  CHECK_EQUAL(xs.slice(5), bits8(w8::all, 5));
+}
+
+TEST(subsetting) {
+  auto xs = bits8{0b11110000};
+  MESSAGE("drop");
+  auto ys = drop(xs, 6);
+  CHECK_EQUAL(ys.data(), 0b0000'0011);
+  CHECK_EQUAL(ys.size(), 2u);
+  CHECK_EQUAL(drop(xs, 42), bits8{});
+  MESSAGE("drop_right");
+  ys = drop_right(xs, 3);
+  CHECK_EQUAL(ys.data(), 0b00010000);
+  CHECK_EQUAL(ys.size(), 5u);
+  CHECK_EQUAL(drop_right(xs, 42), bits8{});
+  MESSAGE("take");
+  ys = take(xs, 5);
+  CHECK_EQUAL(ys.data(), 0b0001'0000);
+  CHECK_EQUAL(ys.size(), 5u);
+  CHECK_EQUAL(take(xs, 42), xs);
+  MESSAGE("take_right");
+  ys = take_right(xs, 4);
+  CHECK_EQUAL(ys.data(), 0b0000'1111);
+  CHECK_EQUAL(ys.size(), 4u);
+  CHECK_EQUAL(take_right(xs, 42), xs);
 }
 
 TEST(finding - block) {
@@ -164,4 +234,3 @@ TEST(counting) {
   CHECK_EQUAL(rank(bits8{0b1011'1011}, 6), 5u);
   CHECK_EQUAL(rank(bits8{0b1011'1011}), 6u);
 }
-

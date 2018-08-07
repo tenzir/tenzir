@@ -149,7 +149,7 @@ struct type_printer : printer<type_printer<Policy>> {
              | record_type_printer{}
              | alias_type_printer{}
              ;
-      return p(out, expose(t));
+      return p(out, t);
     }
     return true;
   }

@@ -47,8 +47,9 @@ Send [Bro](http://www.bro.org) logs to a remote node:
 Required dependencies:
 
 - A C++17 compiler:
-  - Clang 5
-  - GCC 7
+  - GCC >= 8
+  - Clang >= 6
+  - Apple Clang >= 9.1
 - [CMake](http://www.cmake.org)
 - [CAF](https://github.com/actor-framework/actor-framework) (develop branch)
 
@@ -102,8 +103,8 @@ VAST comes with a [3-clause BSD licence][license-url].
 [mailing-list-commits]: http://mailman.icsi.berkeley.edu/mailman/listinfo/vast-commits
 [chat-badge]: https://img.shields.io/badge/gitter-chat-brightgreen.svg
 [chat-url]: https://gitter.im/vast-io/vast
-[jenkins-url]: https://jenkins.inet.haw-hamburg.de/view/VAST%20Build%20Status/
-[jenkins-badge]: https://jenkins.inet.haw-hamburg.de/buildStatus/icon?job=VAST/master%20branch
+[jenkins-url]: https://jenkins.inet.haw-hamburg.de/blue/organizations/jenkins/VAST%2Fvast
+[jenkins-badge]: https://jenkins.inet.haw-hamburg.de/buildStatus/icon?job=VAST/vast/master
 [license-badge]: https://img.shields.io/badge/license-BSD-blue.svg
 [license-url]: https://raw.github.com/vast-io/vast/master/COPYING
 

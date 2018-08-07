@@ -13,6 +13,8 @@
 
 #include "vast/view.hpp"
 
+#include "vast/detail/overload.hpp"
+
 namespace vast {
 
 // -- pattern_view ------------------------------------------------------------
@@ -21,30 +23,16 @@ pattern_view::pattern_view(const pattern& x) : pattern_{x.string()} {
   // nop
 }
 
+std::string_view pattern_view::string() const {
+  return pattern_;
+}
+
 bool operator==(pattern_view x, pattern_view y) noexcept {
-  return x.pattern_ == y.pattern_;
+  return x.string() == y.string();
 }
 
-// -- address_view ------------------------------------------------------------
-
-address_view::address_view(const address& x) : data_{&x.data()} {
-  // nop
-}
-
-bool operator==(address_view x, address_view y) noexcept {
-  return x.data_ == y.data_;
-}
-
-// -- subnet_view -------------------------------------------------------------
-
-subnet_view::subnet_view(const subnet& x)
-  : network_{x.network()},
-    length_{x.length()} {
-  // nop
-}
-
-bool operator==(subnet_view x, subnet_view y) noexcept {
-  return x.network_ == y.network_ && x.length_ == y.length_;
+bool operator<(pattern_view x, pattern_view y) noexcept {
+  return x.string() < y.string();
 }
 
 // -- default_vector_view -----------------------------------------------------
@@ -93,7 +81,50 @@ default_map_view::size_type default_map_view::size() const noexcept {
 // -- make_view ---------------------------------------------------------------
 
 data_view make_view(const data& x) {
-  return visit([](const auto& z) { return make_data_view(z); }, x);
+  return caf::visit([](const auto& z) { return make_data_view(z); }, x);
+}
+
+// -- materialization ----------------------------------------------------------
+
+std::string materialize(std::string_view x) {
+  return std::string{x};
+}
+
+pattern materialize(pattern_view x) {
+  return pattern{std::string{x.string()}};
+}
+
+namespace {
+
+auto materialize(std::pair<data_view, data_view> x) {
+  return std::pair(materialize(x.first), materialize(x.second));
+}
+
+template <class Result, class T>
+Result materialize_container(const T& xs) {
+  Result result;
+  if (xs)
+    for (auto x : *xs)
+      result.insert(result.end(), materialize(x));
+  return result;
+}
+
+} // namespace <anonymous>
+
+vector materialize(vector_view_handle xs) {
+  return materialize_container<vector>(xs);
+}
+
+set materialize(set_view_handle xs) {
+  return materialize_container<set>(xs);
+}
+
+map materialize(map_view_handle xs) {
+  return materialize_container<map>(xs);
+}
+
+data materialize(data_view x) {
+  return caf::visit([](auto y) { return data{materialize(y)}; }, x);
 }
 
 } // namespace vast

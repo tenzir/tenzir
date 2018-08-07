@@ -13,6 +13,8 @@
 
 #pragma once
 
+#include "vast/type.hpp"
+
 #include "vast/concept/parseable/core/list.hpp"
 #include "vast/concept/parseable/core/operators.hpp"
 #include "vast/concept/parseable/core/parser.hpp"
@@ -20,7 +22,6 @@
 #include "vast/concept/parseable/string/quoted_string.hpp"
 #include "vast/concept/parseable/string/symbol_table.hpp"
 #include "vast/concept/parseable/vast/identifier.hpp"
-#include "vast/type.hpp"
 
 namespace vast {
 
@@ -38,7 +39,7 @@ public:
   bool add(const std::string& name, type t) {
     if (name.empty() || name != t.name())
       return false;
-    t.name(name);
+    t = t.name(name);
     symbols_.symbols.insert({name, t});
     return true;
   }
@@ -56,16 +57,15 @@ private:
 struct type_parser : parser<type_parser> {
   using attribute = type;
 
-  type_parser(const type_table* symbols = nullptr)
-    : symbol_type{symbols} {
+  type_parser(const type_table* symbols = nullptr) : symbol_type{symbols} {
+    // nop
   }
 
   template <class T>
   static type to_basic_type(std::vector<vast::attribute> a) {
     T b;
-    b.attributes() = std::move(a);
-    return b;
-  };
+    return b.attributes(std::move(a));
+  }
 
   template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
@@ -100,9 +100,7 @@ struct type_parser : parser<type_parser> {
       std::vector<vast::attribute>
     >;
     static auto to_enum = [](enum_tuple t) -> type {
-      auto e = enumeration_type{std::get<0>(t)};
-      e.attributes() = std::get<1>(t);
-      return e;
+      return enumeration_type{std::get<0>(t)}.attributes(std::get<1>(t));
     };
     static auto enum_type_parser
       = ("enum" >> ws >> '{'
@@ -114,18 +112,14 @@ struct type_parser : parser<type_parser> {
     // Vector
     using sequence_tuple = std::tuple<type, std::vector<vast::attribute>>;
     static auto to_vector = [](sequence_tuple t) -> type {
-      auto v = vector_type{std::get<0>(t)};
-      v.attributes() = std::get<1>(t);
-      return v;
+      return vector_type{std::get<0>(t)}.attributes(std::get<1>(t));
     };
     auto vector_type_parser
       = ("vector" >> ws >> '<' >> ws >> type_type >> ws >> '>') ->* to_vector
       ;
     // Set
     static auto to_set = [](sequence_tuple t) -> type {
-      auto s = set_type{std::get<0>(t)};
-      s.attributes() = std::get<1>(t);
-      return s;
+      return set_type{std::get<0>(t)}.attributes(std::get<1>(t));
     };
     auto set_type_parser
       = ("set" >> ws >> '<' >> ws >> type_type >> ws >> '>') ->* to_set
@@ -133,9 +127,8 @@ struct type_parser : parser<type_parser> {
     // Map
     using map_tuple = std::tuple<type, type, std::vector<vast::attribute>>;
     static auto to_map = [](map_tuple t) -> type {
-      auto tab = map_type{std::get<0>(t), std::get<1>(t)};
-      tab.attributes() = std::get<2>(t);
-      return tab;
+      auto m = map_type{std::get<0>(t), std::get<1>(t)};
+      return m.attributes(std::get<2>(t));
     };
     auto map_type_parser
       = ("map" >> ws >> '<' >> ws
@@ -151,9 +144,7 @@ struct type_parser : parser<type_parser> {
       return record_field{std::get<0>(t), std::get<1>(t)};
     };
     static auto to_record = [](record_tuple t) -> type {
-      auto r = record_type{std::get<0>(t)};
-      r.attributes() = std::get<1>(t);
-      return r;
+      return record_type{std::get<0>(t)}.attributes(std::get<1>(t));
     };
     auto field
       = (parsers::identifier >> ws >> ':' >> ws >> type_type) ->* to_field
@@ -200,4 +191,3 @@ auto const type = make_parser<vast::type>();
 
 } // namespace parsers
 } // namespace vast
-

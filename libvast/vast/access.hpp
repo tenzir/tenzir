@@ -70,19 +70,19 @@ struct has_access_converter {
 } // namespace detail
 
 template <class T>
-inline constexpr bool has_access_state_v
+constexpr bool has_access_state_v
   = decltype(detail::has_access_state::test<T>(0))::value;
 
 template <class T>
-inline constexpr bool has_access_parser_v
+constexpr bool has_access_parser_v
   = decltype(detail::has_access_parser::test<T>(0))::value;
 
 template <class T>
-inline constexpr bool has_access_printer_v
+constexpr bool has_access_printer_v
   = decltype(detail::has_access_printer::test<T>(0))::value;
 
 template <class T>
-inline constexpr bool has_access_converter_v
+constexpr bool has_access_converter_v
   = decltype(detail::has_access_converter::test<T>(0))::value;
 
 } // namespace vast

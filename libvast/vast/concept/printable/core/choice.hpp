@@ -17,7 +17,6 @@
 
 #include "vast/concept/printable/core/printer.hpp"
 #include "vast/concept/support/detail/variant.hpp"
-#include "vast/variant.hpp"
 
 namespace vast {
 
@@ -31,7 +30,7 @@ template <class Lhs, class Rhs>
 struct is_choice_printer<choice_printer<Lhs, Rhs>> : std::true_type {};
 
 template <class T>
-inline constexpr bool is_choice_printer_v = is_choice_printer<T>::value;
+constexpr bool is_choice_printer_v = is_choice_printer<T>::value;
 
 /// Attempts to print either LHS or RHS.
 template <class Lhs, class Rhs>
@@ -90,7 +89,7 @@ private:
   template <class Left, class Iterator, class Attribute>
   auto print_left(Iterator& out, const Attribute& a) const
   -> std::enable_if_t<!is_choice_printer_v<Left>, bool> {
-    auto x = get_if<lhs_attribute>(a);
+    auto x = caf::get_if<lhs_attribute>(&a);
     return x && lhs_.print(out, *x);
   }
 
@@ -101,7 +100,7 @@ private:
 
   template <class Iterator, class Attribute>
   auto print_right(Iterator& out, const Attribute& a) const {
-    auto x = get_if<rhs_attribute>(a);
+    auto x = caf::get_if<rhs_attribute>(&a);
     return x && rhs_.print(out, *x);
   }
 
@@ -110,5 +109,3 @@ private:
 };
 
 } // namespace vast
-
-

@@ -31,10 +31,11 @@ command::~command() {
   // nop
 }
 
-int command::run(caf::actor_system& sys, option_map& options,
+int command::run(caf::actor_system& sys, caf::config_value_map& options,
                      argument_iterator begin, argument_iterator end) {
   VAST_TRACE(VAST_ARG(std::string(name_)), VAST_ARG("args", begin, end),
              VAST_ARG(options));
+  using caf::get_or;
   // Parse arguments for this command.
   auto [state, position] = opts_.parse(options, begin, end);
   bool has_subcommand;
@@ -42,10 +43,10 @@ int command::run(caf::actor_system& sys, option_map& options,
     default:
       std::cerr << parse_error(state, position, begin, end) << std::endl;
       return EXIT_FAILURE;
-    case option_declaration_set::parse_state::successful:
+    case caf::pec::success:
       has_subcommand = false;
       break;
-    case option_declaration_set::parse_state::not_an_option:
+    case caf::pec::not_an_option:
       has_subcommand = position != end;
       break;
   }
@@ -81,13 +82,13 @@ int command::run(caf::actor_system& sys, option_map& options,
 
 int command::run(caf::actor_system& sys, argument_iterator begin,
                  argument_iterator end) {
-  option_map options;
+  caf::config_value_map options;
   return run(sys, options, begin, end);
 }
 
 std::string command::usage() const {
   std::stringstream result;
-  result << opts_.usage() << "\n";
+  result << opts_.help_text() << "\n";
   result << "\nSubcommands:\n";
   for (auto& kvp : nested_)
     result << "  " << kvp.first << "\n";
@@ -106,7 +107,7 @@ std::string command::full_name() const {
 }
 
 command::proceed_result command::proceed(caf::actor_system&,
-                                         const option_map& options,
+                                         const caf::config_value_map& options,
                                          argument_iterator begin,
                                          argument_iterator end) {
   VAST_UNUSED(options, begin, end);
@@ -115,7 +116,7 @@ command::proceed_result command::proceed(caf::actor_system&,
   return proceed_ok;
 }
 
-int command::run_impl(caf::actor_system&, const option_map& options,
+int command::run_impl(caf::actor_system&, const caf::config_value_map& options,
                       argument_iterator begin, argument_iterator end) {
   VAST_UNUSED(options, begin, end);
   VAST_TRACE(VAST_ARG(std::string{name_}), VAST_ARG("args", begin, end),
@@ -124,13 +125,7 @@ int command::run_impl(caf::actor_system&, const option_map& options,
   return EXIT_FAILURE;
 }
 
-expected<void> command::add_opt(std::string_view name,
-                                std::string_view description,
-                                data default_value) {
-  return opts_.add(name, description, std::move(default_value));
-}
-
-std::string command::parse_error(option_declaration_set::parse_state state,
+std::string command::parse_error(caf::pec code,
                                  argument_iterator error_position,
                                  argument_iterator begin,
                                  argument_iterator end) const {
@@ -138,7 +133,7 @@ std::string command::parse_error(option_declaration_set::parse_state state,
   result << "Failed to parse command" << "\n";
   result << "  Command: " << name() << " " << detail::join(begin, end, " ")
          << "\n";
-  result << "  Description: " << to_string(state) << "\n";
+  result << "  Description: " << to_string(code) << "\n";
   if (error_position != end)
     result << "  Position: " << *error_position << "\n";
   else

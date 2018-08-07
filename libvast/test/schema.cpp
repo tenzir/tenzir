@@ -18,6 +18,7 @@
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/schema.hpp"
 #include "vast/concept/printable/stream.hpp"
+#include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/error.hpp"
 #include "vast/concept/printable/vast/json.hpp"
 #include "vast/concept/printable/vast/schema.hpp"
@@ -26,6 +27,9 @@
 #include "test.hpp"
 
 using namespace vast;
+
+using caf::get_if;
+using caf::holds_alternative;
 
 TEST(offset finding) {
   std::string str = R"__(
@@ -40,18 +44,18 @@ TEST(offset finding) {
   // Type lookup
   auto foo = sch->find("foo");
   REQUIRE(foo);
-  auto r = get_if<record_type>(*foo);
+  auto r = get_if<record_type>(foo);
   // Verify type integrity
   REQUIRE(r);
   auto t = r->at(offset{0});
   REQUIRE(t);
-  CHECK(is<integer_type>(*t));
+  CHECK(holds_alternative<integer_type>(*t));
   t = r->at(offset{2, 0, 1, 1});
   REQUIRE(t);
-  CHECK(is<real_type>(*t));
+  CHECK(holds_alternative<real_type>(*t));
   t = r->at(offset{2, 0, 1});
   REQUIRE(t);
-  auto inner = get_if<record_type>(*t);
+  auto inner = get_if<record_type>(t);
   REQUIRE(inner);
   CHECK(inner->name() == "inner");
 }
@@ -84,7 +88,7 @@ TEST(serialization) {
     {"s2", string_type{}},
     {"d2", real_type{}}
   };
-  t.name("foo");
+  t = t.name("foo");
   sch.add(t);
   // Save & load
   std::vector<char> buf;
@@ -129,11 +133,11 @@ TEST(schema: bro-style) {
   CHECK(parsers::schema(str, sch));
   auto ssl = sch.find("bro::ssl");
   REQUIRE(ssl);
-  auto r = get_if<record_type>(*ssl);
+  auto r = get_if<record_type>(ssl);
   REQUIRE(r);
-  auto id = r->at(key{"id"});
+  auto id = r->at("id");
   REQUIRE(id);
-  CHECK(is<record_type>(*id));
+  CHECK(holds_alternative<record_type>(*id));
 }
 
 TEST(schema: aliases) {
@@ -147,7 +151,7 @@ TEST(schema: aliases) {
   CHECK(parsers::schema(std::string{str}, sch));
   auto foo = sch.find("foo");
   REQUIRE(foo);
-  CHECK(is<address_type>(*foo));
+  CHECK(holds_alternative<address_type>(*foo));
   CHECK(sch.find("bar"));
   CHECK(sch.find("baz"));
   CHECK(sch.find("x"));
@@ -186,11 +190,11 @@ TEST(parseable - basic types global) {
   CHECK(sch.find("t11"));
   auto foo = sch.find("foo");
   REQUIRE(foo);
-  auto r = get_if<record_type>(*foo);
+  auto r = get_if<record_type>(foo);
   REQUIRE(r);
-  auto t8 = r->at(key{"a8"});
+  auto t8 = r->at("a8");
   REQUIRE(t8);
-  CHECK(is<pattern_type>(*t8));
+  CHECK(holds_alternative<pattern_type>(*t8));
 }
 
 TEST(parseable - basic types local) {
@@ -213,11 +217,11 @@ TEST(parseable - basic types local) {
   CHECK(parsers::schema(std::string{str}, sch));
   auto foo = sch.find("foo");
   REQUIRE(foo);
-  auto r = get_if<record_type>(*foo);
+  auto r = get_if<record_type>(foo);
   REQUIRE(r);
-  auto p = r->at(key{"a11"});
+  auto p = r->at("a11");
   REQUIRE(p);
-  CHECK(is<port_type>(*p));
+  CHECK(holds_alternative<port_type>(*p));
 }
 
 TEST(parseable - complex types global) {
@@ -242,9 +246,9 @@ TEST(parseable - complex types global) {
   CHECK(sch.find("map_t"));
   auto foo = sch.find("foo");
   REQUIRE(foo);
-  auto r = get_if<record_type>(*foo);
+  auto r = get_if<record_type>(foo);
   REQUIRE(r);
-  auto e = r->at(key{"e"});
+  auto e = r->at("e");
   REQUIRE(e);
   CHECK(*e == *enum_t);
 }
@@ -252,10 +256,10 @@ TEST(parseable - complex types global) {
 TEST(json) {
   schema s;
   auto t0 = count_type{};
-  t0.name("foo");
+  t0 = t0.name("foo");
   CHECK(s.add(t0));
   auto t1 = string_type{};
-  t1.name("bar");
+  t1 = t1.name("bar");
   CHECK(s.add(t1));
   auto expected = R"__({
   "types": [

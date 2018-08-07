@@ -24,22 +24,16 @@ class application;
 
 /// Bundles all configuration parameters of a VAST system.
 class configuration : public caf::actor_system_config {
-  friend application;
-
 public:
-  /// Default-constructs a configuration.
+  // -- constructors, destructors, and assignment operators --------------------
+
   configuration();
 
-  /// Constructs a configuration from the command line.
-  /// @param argc The argument counter of `main`.
-  /// @param argv The argument vector of `main`.
-  configuration(int argc, char** argv);
+  // -- modifiers --------------------------------------------------------------
 
-  /// Constructs a configuration from a vector of string options.
-  /// @param opts The vector with CAF options.
-  configuration(const std::vector<std::string>& opts);
+  configuration& parse(int argc, char** argv);
 
-  // -- configuration options -------------------------------------------------
+  // -- configuration options --------------------------------------------------
 
   /// The program command line, without --caf# arguments.
   std::vector<std::string> command_line;

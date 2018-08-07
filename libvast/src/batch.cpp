@@ -170,7 +170,9 @@ expected<event> batch::reader::materialize() {
   if (available_ == 0)
     return make_error(ec::end_of_input);
   --available_;
+#ifndef VAST_NO_EXCEPTIONS
   try {
+#endif // VAST_NO_EXCEPTIONS
     // Read type.
     uint32_t type_id;
     deserializer_ >> type_id;
@@ -192,9 +194,11 @@ expected<event> batch::reader::materialize() {
     }
     e.timestamp(ts);
     return e;
+#ifndef VAST_NO_EXCEPTIONS
   } catch (const std::runtime_error& e) {
     return make_error(ec::unspecified, e.what());
   }
+#endif // VAST_NO_EXCEPTIONS
 }
 
 } // namespace vast

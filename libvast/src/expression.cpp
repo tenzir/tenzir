@@ -17,6 +17,8 @@
 
 namespace vast {
 
+// -- attribute_extractor ------------------------------------------------------
+
 attribute_extractor::attribute_extractor(std::string str)
   : attr{std::move(str)} {
 }
@@ -29,52 +31,62 @@ bool operator<(const attribute_extractor& x, const attribute_extractor& y) {
   return x.attr < y.attr;
 }
 
-key_extractor::key_extractor(vast::key k) : key{std::move(k)} {
+// -- key_extractor ------------------------------------------------------------
+
+key_extractor::key_extractor(std::string k) : key{std::move(k)} {
 }
 
-bool operator==(const key_extractor& lhs, const key_extractor& rhs) {
-  return lhs.key == rhs.key;
+bool operator==(const key_extractor& x, const key_extractor& y) {
+  return x.key == y.key;
 }
 
-bool operator<(const key_extractor& lhs, const key_extractor& rhs) {
-  return lhs.key < rhs.key;
+bool operator<(const key_extractor& x, const key_extractor& y) {
+  return x.key < y.key;
 }
+
+// -- type_extractor -----------------------------------------------------------
 
 type_extractor::type_extractor(vast::type t) : type{std::move(t)} {
 }
 
-bool operator==(const type_extractor& lhs, const type_extractor& rhs) {
-  return lhs.type == rhs.type;
+bool operator==(const type_extractor& x, const type_extractor& y) {
+  return x.type == y.type;
 }
 
-bool operator<(const type_extractor& lhs, const type_extractor& rhs) {
-  return lhs.type < rhs.type;
+bool operator<(const type_extractor& x, const type_extractor& y) {
+  return x.type < y.type;
 }
+
+// -- data_extractor -----------------------------------------------------------
 
 data_extractor::data_extractor(vast::type t, vast::offset o)
   : type{std::move(t)}, offset{std::move(o)} {
 }
 
-bool operator==(const data_extractor& lhs, const data_extractor& rhs) {
-  return lhs.type == rhs.type && lhs.offset == rhs.offset;
+bool operator==(const data_extractor& x, const data_extractor& y) {
+  return x.type == y.type && x.offset == y.offset;
 }
 
-bool operator<(const data_extractor& lhs, const data_extractor& rhs) {
-  return std::tie(lhs.type, lhs.offset) < std::tie(rhs.type, rhs.offset);
+bool operator<(const data_extractor& x, const data_extractor& y) {
+  return std::tie(x.type, x.offset) < std::tie(y.type, y.offset);
 }
+
+// -- predicate ----------------------------------------------------------------
 
 predicate::predicate(operand l, relational_operator o, operand r)
   : lhs{std::move(l)}, op{o}, rhs{std::move(r)} {
 }
 
-bool operator==(const predicate& lhs, const predicate& rhs) {
-  return lhs.lhs == rhs.lhs && lhs.op == rhs.op && lhs.rhs == rhs.rhs;
+bool operator==(const predicate& x, const predicate& y) {
+  return x.lhs == y.lhs && x.op == y.op && x.rhs == y.rhs;
 }
 
-bool operator<(const predicate& lhs, const predicate& rhs) {
-  return std::tie(lhs.lhs, lhs.op, lhs.rhs)
-         < std::tie(rhs.lhs, rhs.op, rhs.rhs);
+bool operator<(const predicate& x, const predicate& y) {
+  return std::tie(x.lhs, x.op, x.rhs)
+         < std::tie(y.lhs, y.op, y.rhs);
 }
+
+// -- negation -----------------------------------------------------------------
 
 negation::negation()
   : expr_{std::make_unique<expression>()} {
@@ -110,6 +122,34 @@ expression& negation::expr() {
   return *expr_;
 }
 
+bool operator==(const negation& x, const negation& y) {
+  return x.expr() == y.expr();
+}
+
+bool operator<(const negation& x, const negation& y) {
+  return x.expr() < y.expr();
+}
+
+// -- expression ---------------------------------------------------------------
+
+const expression::node& expression::get_data() const {
+  return node_;
+}
+
+expression::node& expression::get_data() {
+  return node_;
+}
+
+bool operator==(const expression& x, const expression& y) {
+  return x.get_data() == y.get_data();
+}
+
+bool operator<(const expression& x, const expression& y) {
+  return x.get_data() < y.get_data();
+}
+
+// -- free functions -----------------------------------------------------------
+
 expression normalize(const expression& expr) {
   expression r;
   r = caf::visit(hoister{}, expr);
@@ -129,37 +169,13 @@ expected<expression> normalize_and_validate(const expression& expr) {
 }
 
 expected<expression> tailor(const expression& expr, const type& t) {
-  if (caf::holds_alternative<none>(expr))
+  if (caf::holds_alternative<caf::none_t>(expr))
     return make_error(ec::unspecified, "invalid expression");
   auto x = caf::visit(type_resolver{t}, expr);
   if (!x)
     return x.error();
   *x = caf::visit(type_pruner{t}, *x);
-  VAST_ASSERT(!caf::holds_alternative<none>(*x));
+  VAST_ASSERT(!caf::holds_alternative<caf::none_t>(*x));
   return std::move(*x);
-}
-
-const expression::node& expression::get_data() const {
-  return node_;
-}
-
-expression::node& expression::get_data() {
-  return node_;
-}
-
-bool operator==(const negation& lhs, const negation& rhs) {
-  return *lhs.expr_ == *rhs.expr_;
-}
-
-bool operator<(const negation& lhs, const negation& rhs) {
-  return *lhs.expr_ < *rhs.expr_;
-}
-
-bool operator==(const expression& lhs, const expression& rhs) {
-  return lhs.node_ == rhs.node_;
-}
-
-bool operator<(const expression& lhs, const expression& rhs) {
-  return lhs.node_ < rhs.node_;
 }
 } // namespace vast

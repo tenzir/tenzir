@@ -21,7 +21,7 @@
 #include "vast/concept/parseable/stream.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/address.hpp"
-#include "vast/concept/parseable/vast/key.hpp"
+#include "vast/concept/parseable/vast/offset.hpp"
 #include "vast/concept/parseable/vast/time.hpp"
 
 #define SUITE parseable
@@ -35,13 +35,13 @@ using namespace std::string_literals;
 TEST(choice) {
   using namespace parsers;
   auto p = chr{'x'} | i32;
-  variant<char, int32_t> x;
+  caf::variant<char, int32_t> x;
   CHECK(p("123", x));
-  auto i = get_if<int32_t>(x);
+  auto i = caf::get_if<int32_t>(&x);
   REQUIRE(i);
   CHECK_EQUAL(*i, 123);
   CHECK(p("x", x));
-  auto c = get_if<char>(x);
+  auto c = caf::get_if<char>(&x);
   REQUIRE(c);
   CHECK_EQUAL(*c, 'x');
 }
@@ -52,9 +52,19 @@ TEST(choice triple) {
   auto p = chr{'x'}
          | i32
          | eps ->* [&] { fired = true; };
-  variant<char, int32_t> x;
+  caf::variant<char, int32_t> x;
   CHECK(p("foobar", x));
   CHECK(fired);
+}
+
+TEST(list) {
+  auto p = parsers::alnum % '.';
+  std::vector<char> xs;
+  std::string str;
+  CHECK(p("a.b.c", xs));
+  CHECK(p("a.b.c", str));
+  CHECK_EQUAL(xs, (std::vector<char>{'a', 'b', 'c'}));
+  CHECK_EQUAL(str, "abc");
 }
 
 TEST(maybe) {
@@ -615,15 +625,15 @@ TEST(timestamp - YMD) {
 // -- API ---------------------------------------------------------------------
 
 TEST(stream) {
-  std::istringstream ss{"a.b.c"};
-  key k;
-  ss >> k;
+  std::istringstream ss{"1,2,3"};
+  offset xs;
+  ss >> xs;
   CHECK(ss.good());
-  CHECK(k == key{"a", "b", "c"});
+  CHECK_EQUAL(xs, (offset{1, 2, 3}));
 }
 
 TEST(to) {
-  auto k = to<key>("a.b.c"); // John!
-  REQUIRE(k);
-  CHECK(*k == key{"a", "b", "c"});
+  auto xs = to<offset>("1,2,3");
+  REQUIRE(xs);
+  CHECK_EQUAL(*xs, (offset{1, 2, 3}));
 }

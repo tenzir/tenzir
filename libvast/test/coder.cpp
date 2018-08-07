@@ -92,8 +92,9 @@ TEST(singleton-coder) {
   CHECK_EQUAL(to_string(c.decode(not_equal, true)), "01101");
   CHECK_EQUAL(to_string(c.decode(not_equal, false)), "10010");
   // Skipped entries come out as 1s.
-  c.encode(true, 5, 3);
-  CHECK_EQUAL(to_string(c.decode(equal, true)), "1001011111111");
+  CHECK(c.skip(3));
+  c.encode(true, 5);
+  CHECK_EQUAL(to_string(c.decode(equal, true)), "1001000011111");
 }
 
 TEST(equality-coder) {
@@ -122,7 +123,8 @@ TEST(equality-coder) {
   CHECK_EQUAL(to_string(c.decode(greater,       8)), "01000");
   CHECK_EQUAL(to_string(c.decode(greater,       9)), "00000");
   // Skipped entries come out as 0s.
-  c.encode(7, 3, 2);
+  CHECK(c.skip(2));
+  c.encode(7, 3);
   CHECK_EQUAL(to_string(c.decode(equal,         7)), "0000000111");
 }
 
@@ -140,7 +142,8 @@ TEST(range-coder) {
   CHECK_EQUAL(to_string(c.decode(greater_equal, 3)), "11111111100");
   // Skipped entries come out as 0s, even though the underlying bitmaps consist
   // of 1s. That's because the Range-Eval-Opt algorithm turns them into 0s.
-  c.encode(7, 1, 3);
+  CHECK(c.skip(3));
+  c.encode(7, 1);
   CHECK_EQUAL(to_string(c.decode(greater_equal, 7)), "010000000000001");
 }
 

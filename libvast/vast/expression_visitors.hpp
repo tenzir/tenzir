@@ -18,13 +18,8 @@
 #include "vast/error.hpp"
 #include "vast/expression.hpp"
 #include "vast/expected.hpp"
-#include "vast/none.hpp"
 #include "vast/operator.hpp"
 #include "vast/time.hpp"
-
-#include "vast/concept/printable/vast/data.hpp"
-#include "vast/concept/printable/vast/key.hpp"
-#include "vast/concept/printable/vast/type.hpp"
 
 namespace vast {
 
@@ -33,7 +28,7 @@ class event;
 /// Hoists the contained expression of a single-element conjunction or
 /// disjunction one level in the tree.
 struct hoister {
-  expression operator()(none) const;
+  expression operator()(caf::none_t) const;
   expression operator()(const conjunction& c) const;
   expression operator()(const disjunction& d) const;
   expression operator()(const negation& n) const;
@@ -42,7 +37,7 @@ struct hoister {
 
 /// Ensures that extractors always end up on the LHS of a predicate.
 struct aligner {
-  expression operator()(none) const;
+  expression operator()(caf::none_t) const;
   expression operator()(const conjunction& c) const;
   expression operator()(const disjunction& d) const;
   expression operator()(const negation& n) const;
@@ -53,7 +48,7 @@ struct aligner {
 struct denegator {
   denegator(bool negate = false);
 
-  expression operator()(none) const;
+  expression operator()(caf::none_t) const;
   expression operator()(const conjunction& c) const;
   expression operator()(const disjunction& d) const;
   expression operator()(const negation& n) const;
@@ -64,7 +59,7 @@ struct denegator {
 
 /// Removes duplicate predicates from conjunctions and disjunctions.
 struct deduplicator {
-  expression operator()(none) const;
+  expression operator()(caf::none_t) const;
   expression operator()(const conjunction& c) const;
   expression operator()(const disjunction& d) const;
   expression operator()(const negation& n) const;
@@ -73,7 +68,7 @@ struct deduplicator {
 
 /// Extracts all predicates from an expression.
 struct predicatizer {
-  std::vector<predicate> operator()(none) const;
+  std::vector<predicate> operator()(caf::none_t) const;
   std::vector<predicate> operator()(const conjunction& c) const;
   std::vector<predicate> operator()(const disjunction& d) const;
   std::vector<predicate> operator()(const negation& n) const;
@@ -82,7 +77,7 @@ struct predicatizer {
 
 /// Ensures that LHS and RHS of a predicate fit together.
 struct validator {
-  expected<void> operator()(none);
+  expected<void> operator()(caf::none_t);
   expected<void> operator()(const conjunction& c);
   expected<void> operator()(const disjunction& d);
   expected<void> operator()(const negation& n);
@@ -109,7 +104,7 @@ struct validator {
 struct time_restrictor {
   time_restrictor(timestamp first, timestamp second);
 
-  bool operator()(none) const;
+  bool operator()(caf::none_t) const;
   bool operator()(const conjunction& con) const;
   bool operator()(const disjunction& dis) const;
   bool operator()(const negation& n) const;
@@ -124,7 +119,7 @@ struct time_restrictor {
 struct type_resolver {
   type_resolver(const type& t);
 
-  expected<expression> operator()(none);
+  expected<expression> operator()(caf::none_t);
   expected<expression> operator()(const conjunction& c);
   expected<expression> operator()(const disjunction& d);
   expected<expression> operator()(const negation& n);
@@ -148,7 +143,7 @@ struct type_resolver {
 struct type_pruner {
   type_pruner(const type& event_type);
 
-  expression operator()(none);
+  expression operator()(caf::none_t);
   expression operator()(const conjunction& c);
   expression operator()(const disjunction& d);
   expression operator()(const negation& n);
@@ -162,7 +157,7 @@ struct type_pruner {
 struct event_evaluator {
   event_evaluator(const event& e);
 
-  bool operator()(none);
+  bool operator()(caf::none_t);
   bool operator()(const conjunction& c);
   bool operator()(const disjunction& d);
   bool operator()(const negation& n);
@@ -193,7 +188,7 @@ struct event_evaluator {
 struct matcher {
   matcher(const type& t);
 
-  bool operator()(none);
+  bool operator()(caf::none_t);
   bool operator()(const conjunction&);
   bool operator()(const disjunction&);
   bool operator()(const negation&);
@@ -216,4 +211,3 @@ struct matcher {
 };
 
 } // namespace vast
-

@@ -3,12 +3,14 @@
 #include <iostream>
 #include <queue>
 
+#include <caf/none.hpp>
+#include <caf/variant.hpp>
+
 #include "vast/address.hpp"
 #include "vast/error.hpp"
 #include "vast/event.hpp"
 #include "vast/expected.hpp"
 #include "vast/logger.hpp"
-#include "vast/none.hpp"
 #include "vast/schema.hpp"
 #include "vast/subnet.hpp"
 #include "vast/time.hpp"
@@ -208,7 +210,7 @@ struct notification {
 /// @relates message_header types
 struct message {
   message_header header;
-  variant<none, open, update, notification> message;
+  caf::variant<caf::none_t, open, update, notification> message;
 };
 
 // Helper functions to parse attributes.
@@ -525,7 +527,7 @@ struct message_parser : parser<message_parser> {
     auto skip = parsers::eps ->* [&] {
       static auto header_length = 16 + 2 + 1;
       if (x.header.length < header_length || x.header.length > 4096)
-        throw std::runtime_error{"cannot parse RFC-violoating records"};
+        VAST_RAISE_ERROR("cannot parse RFC-violoating records");
       f += std::min(static_cast<size_t>(l - f),
                     static_cast<size_t>(x.header.length - header_length));
     };
@@ -1032,7 +1034,7 @@ struct state_change_parser : parser<state_change_parser> {
     return p(f, l, x.peer_as_number, x.local_as_number, x.interface_index,
              x.address_family, x.peer_ip_address, x.local_ip_address,
              x.old_state, x.new_state);
-  };
+  }
 };
 
 struct message_parser : parser<message_parser> {
@@ -1049,7 +1051,7 @@ struct message_parser : parser<message_parser> {
     return p(f, l, x.peer_as_number, x.local_as_number, x.interface_index,
              x.address_family, x.peer_ip_address, x.local_ip_address,
              x.message);
-  };
+  }
 };
 
 struct message_as4_parser : parser<message_as4_parser> {
@@ -1066,7 +1068,7 @@ struct message_as4_parser : parser<message_as4_parser> {
     return p(f, l, x.peer_as_number, x.local_as_number, x.interface_index,
              x.address_family, x.peer_ip_address, x.local_ip_address,
              x.message);
-  };
+  }
 };
 
 struct state_change_as4_parser : parser<state_change_as4_parser> {
@@ -1082,7 +1084,7 @@ struct state_change_as4_parser : parser<state_change_as4_parser> {
     return p(f, l, x.peer_as_number, x.local_as_number, x.interface_index,
              x.address_family, x.peer_ip_address, x.local_ip_address,
              x.old_state, x.new_state);
-  };
+  }
 };
 
 } // namespace bgp4mp
@@ -1091,10 +1093,15 @@ struct state_change_as4_parser : parser<state_change_as4_parser> {
 /// [Common Header](common_header) followed by a *Message* field.
 struct record {
   common_header header;
-  variant<none, table_dump_v2::peer_index_table, table_dump_v2::rib_afi_safi,
-          bgp4mp::state_change, bgp4mp::message, bgp4mp::message_as4,
-          bgp4mp::state_change_as4>
-    message;
+  caf::variant<
+    caf::none_t,
+    table_dump_v2::peer_index_table,
+    table_dump_v2::rib_afi_safi,
+    bgp4mp::state_change,
+    bgp4mp::message,
+    bgp4mp::message_as4,
+    bgp4mp::state_change_as4
+  > message;
 };
 
 /// Parses a [MRT record](@ref record).

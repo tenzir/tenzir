@@ -490,7 +490,7 @@ private:
     }
   };
 
-  static inline const unsigned char* as_key_data(const std::string& key) {
+  static const unsigned char* as_key_data(const std::string& key) {
     return reinterpret_cast<const unsigned char*>(key.data());
   }
 

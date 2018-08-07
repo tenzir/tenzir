@@ -34,7 +34,7 @@ struct fixture {
       {"x", boolean_type{}},
       {"y", count_type{}},
       {"z", integer_type{}}};
-    t.name("foo");
+    t = t.name("foo");
     // Data
     r.emplace_back(true);
     r.emplace_back(42u);
@@ -55,8 +55,8 @@ FIXTURE_SCOPE(event_tests, fixture)
 
 TEST(basics) {
   CHECK_EQUAL(e.type().name(), "foo");
-  REQUIRE(is<vector>(e.data()));
-  REQUIRE(is<record_type>(e.type()));
+  REQUIRE(caf::holds_alternative<vector>(e.data()));
+  REQUIRE(caf::holds_alternative<record_type>(e.type()));
   MESSAGE("meta data");
   CHECK_EQUAL(e.id(), 123456789ull);
   auto now = timestamp::clock::now();
@@ -107,7 +107,7 @@ TEST(json) {
         },
         "z": {
           "name": "",
-          "kind": "integer",
+          "kind": "int",
           "structure": null,
           "attributes": {}
         }

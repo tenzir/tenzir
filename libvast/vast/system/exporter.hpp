@@ -19,8 +19,9 @@
 #include <unordered_map>
 
 #include "vast/aliases.hpp"
-#include "vast/ids.hpp"
+#include "vast/event.hpp"
 #include "vast/expression.hpp"
+#include "vast/ids.hpp"
 #include "vast/query_options.hpp"
 #include "vast/uuid.hpp"
 

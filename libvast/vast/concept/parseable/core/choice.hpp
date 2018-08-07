@@ -15,8 +15,6 @@
 
 #include <type_traits>
 
-#include "vast/variant.hpp"
-
 #include "vast/concept/parseable/core/parser.hpp"
 #include "vast/concept/support/detail/variant.hpp"
 
@@ -34,7 +32,7 @@ template <class Lhs, class Rhs>
 struct is_choice_parser<choice_parser<Lhs, Rhs>> : std::true_type {};
 
 template <class T>
-inline constexpr bool is_choice_parser_v = is_choice_parser<T>::value;
+constexpr bool is_choice_parser_v = is_choice_parser<T>::value;
 
 /// Attempts to parse either LHS or RHS.
 template <class Lhs, class Rhs>

@@ -12,17 +12,41 @@
  ******************************************************************************/
 
 #include <caf/actor_system.hpp>
+#include <caf/io/middleman.hpp>
 #include <caf/message_builder.hpp>
+
+#include "vast/config.hpp"
+
+#ifdef VAST_USE_OPENSSL
+#include <caf/openssl/manager.hpp>
+#endif
 
 #include "vast/system/default_application.hpp"
 
 using namespace vast;
 using namespace vast::system;
 
+namespace {
+
+struct config : configuration {
+  config() {
+    // Consider only VAST's log messages by default.
+    set("logger.component-filter", "vast");
+    load<caf::io::middleman>();
+    set("middleman.enable-automatic-connections", true);
+#ifdef VAST_USE_OPENSSL
+    load<caf::openssl::manager>();
+#endif
+  }
+};
+
+} // namespace <anonymous>
+
 int main(int argc, char** argv) {
   // Scaffold
-  configuration cfg{argc, argv};
-  cfg.logger_console = caf::atom("COLORED");
+  config cfg;
+  cfg.parse(argc, argv);
+  cfg.set("logger.console", caf::atom("COLORED"));
   caf::actor_system sys{cfg};
   default_application app;
   // Dispatch to root command.

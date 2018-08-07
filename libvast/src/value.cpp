@@ -32,7 +32,9 @@ const vast::data& value::data() const {
 }
 
 value flatten(const value& v) {
-  return {flatten(v.data()), flatten(v.type())};
+  auto result = flatten(v.data(), v.type());
+  VAST_ASSERT(result);
+  return std::move(*result);
 }
 
 bool operator==(const value& lhs, const value& rhs) {
@@ -57,10 +59,6 @@ bool operator>=(const value& lhs, const value& rhs) {
 
 bool operator>(const value& lhs, const value& rhs) {
   return lhs.data_ > rhs.data_;
-}
-
-detail::data_variant& expose(value& v) {
-  return expose(v.data_);
 }
 
 bool convert(const value& v, json& j) {

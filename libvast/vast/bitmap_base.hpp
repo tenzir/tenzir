@@ -64,6 +64,7 @@ public:
   using block_type = uint64_t;
   using size_type = uint64_t;
   using word_type = word<block_type>;
+  using bits_type = bits<block_type>;
 
   // We subtract 1 to let the last value represent an invalid bitmap position.
   static constexpr auto max_size = std::numeric_limits<size_type>::max() - 1;
@@ -78,12 +79,7 @@ public:
   void append(const Bitmap& other) {
     VAST_ASSERT(derived().size() + other.size() <= max_size);
     for (auto bits : bit_range(other))
-      if (bits.size() > word_type::width)
-        derived().append_bits(bits.data(), bits.size());
-      else if (bits.size() == 1)
-        derived().append_bit(bits.data() & word_type::lsb1);
-      else
-        derived().append_block(bits.data(), bits.size());
+      append(bits);
   }
 
   /// Appends a single bit.
@@ -95,25 +91,26 @@ public:
 
   /// Appends multiple bits of a single value.
   /// @tparam Bit the bit value to append.
-  /// @param bits The number of bits with value *Bit* to append.
+  /// @param n The number of bits with value *Bit* to append.
   template <bool Bit>
-  void append(size_t bits) {
-    derived().append_bits(Bit, bits);
+  void append(size_t n) {
+    derived().append_bits(Bit, n);
   }
 
   /// Appends multiple bits of a single value.
   /// @param bit the bit value to append.
-  /// @param bits The number of bits with value *bit* to append.
-  void append(bool bit, size_t bits) {
-    derived().append_bits(bit, bits);
+  /// @param n The number of bits with value *bit* to append.
+  void append(bool bit, size_t n) {
+    derived().append_bits(bit, n);
   }
 
   /// Appends a certain number of bits from a given block.
-  /// @param block The block of data to append.
-  /// @param bits The number of bits from *block* to append.
-  template <class Block, class T>
-  void append(T block, size_t bits) {
-    derived().append_block(Block{block}, bits);
+  /// @param xs The bits to append.
+  void append(bits_type xs) {
+    if (xs.is_run())
+      derived().append_bits(xs.data(), xs.size());
+    else if (!xs.empty())
+      derived().append_block(xs.data(), xs.size());
   }
 
   // -- element access --------------------------------------------------------

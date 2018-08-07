@@ -18,10 +18,12 @@
 
 namespace vast {
 
-event::event(none) {
+event::event(caf::none_t) {
+  // nop
 }
 
 event::event(value v) : value{std::move(v)} {
+  // nop
 }
 
 bool event::id(vast::id i) {

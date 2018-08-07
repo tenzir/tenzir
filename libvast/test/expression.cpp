@@ -27,12 +27,16 @@
 #define SUITE expression
 #include "test.hpp"
 
+using caf::get;
+using caf::get_if;
+using caf::holds_alternative;
+
 using namespace vast;
 
 struct fixture {
   fixture() {
     // expr0 := !(x.y.z <= 42 && &foo == T)
-    auto p0 = predicate{key_extractor{{"x", "y", "z"}}, less_equal, data{42}};
+    auto p0 = predicate{key_extractor{"x.y.z"}, less_equal, data{42}};
     auto p1 = predicate{attribute_extractor{{"foo"}}, equal, data{true}};
     auto conj = conjunction{p0, p1};
     expr0 = negation{conj};
@@ -55,7 +59,7 @@ TEST(construction) {
   REQUIRE(c->size() == 2);
   auto p0 = caf::get_if<predicate>(&c->at(0));
   REQUIRE(p0);
-  CHECK(get<key_extractor>(p0->lhs).key == key{"x", "y", "z"});
+  CHECK_EQUAL(get<key_extractor>(p0->lhs).key, "x.y.z");
   CHECK_EQUAL(p0->op, less_equal);
   CHECK(get<data>(p0->rhs) == data{42});
   auto p1 = caf::get_if<predicate>(&c->at(1));
@@ -206,7 +210,7 @@ TEST(matcher) {
   CHECK(!match("x < 4.2 && a == T", r));
   MESSAGE("attribute extractors");
   CHECK(!match("&type == \"foo\"", r));
-  r.name("foo");
+  r = r.name("foo");
   CHECK(match("&type == \"foo\"", r));
   CHECK(match("&type != \"bar\"", r));
 }

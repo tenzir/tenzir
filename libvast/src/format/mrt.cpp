@@ -17,7 +17,7 @@ struct factory {
     timestamp_ = timestamp{duration_cast<timespan>(since_epoch)};
   }
 
-  void operator()(none) const {
+  void operator()(caf::none_t) const {
     // nop
   }
 
@@ -83,7 +83,7 @@ struct factory {
   }
 
   void operator()(bgp4mp::message& x) {
-    if (auto open = get_if<bgp::open>(x.message.message)) {
+    if (auto open = caf::get_if<bgp::open>(&x.message.message)) {
       event e{{
         vector{open->version,
                open->my_autonomous_system,
@@ -93,7 +93,7 @@ struct factory {
       }};
       e.timestamp(timestamp_);
       events_.push(e);
-    } else if (auto update = get_if<bgp::update>(x.message.message)) {
+    } else if (auto update = caf::get_if<bgp::update>(&x.message.message)) {
       std::vector<vast::data> as_path;
       count origin_as;
       for (auto i = 0u; i < update->path_attributes.as_path.size(); i++) {
@@ -169,7 +169,7 @@ struct factory {
         events_.push(e);
       }
     } else if (auto notification =
-               get_if<bgp::notification>(x.message.message)) {
+               caf::get_if<bgp::notification>(&x.message.message)) {
       event e{{
         vector{notification->error_code,
                notification->error_subcode},
@@ -181,7 +181,7 @@ struct factory {
   }
 
   void operator()(bgp4mp::message_as4& x) {
-    if (auto open = get_if<bgp::open>(x.message.message)) {
+    if (auto open = caf::get_if<bgp::open>(&x.message.message)) {
       event e{{
         vector{open->version,
                open->my_autonomous_system,
@@ -191,7 +191,7 @@ struct factory {
       }};
       e.timestamp(timestamp_);
       events_.push(e);
-    } else if (auto update = get_if<bgp::update>(x.message.message)) {
+    } else if (auto update = caf::get_if<bgp::update>(&x.message.message)) {
       std::vector<vast::data> as_path;
       count origin_as;
       for (auto i = 0u; i < update->path_attributes.as_path.size(); i++) {
@@ -267,7 +267,7 @@ struct factory {
         events_.push(e);
       }
     } else if (auto notification =
-               get_if<bgp::notification>(x.message.message)) {
+               caf::get_if<bgp::notification>(&x.message.message)) {
       event e{{
         vector{notification->error_code,
                notification->error_subcode},

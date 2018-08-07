@@ -15,15 +15,18 @@
 #include <unordered_set>
 
 #include <caf/all.hpp>
+#include <caf/detail/unordered_flat_map.hpp>
 
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/printable/to_string.hpp"
-#include "vast/concept/printable/vast/expression.hpp"
+#include "vast/concept/printable/vast/bitmap.hpp"
 #include "vast/concept/printable/vast/error.hpp"
+#include "vast/concept/printable/vast/expression.hpp"
 #include "vast/concept/printable/vast/uuid.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/event.hpp"
 #include "vast/expression_visitors.hpp"
+#include "vast/ids.hpp"
 #include "vast/json.hpp"
 #include "vast/load.hpp"
 #include "vast/logger.hpp"
@@ -36,131 +39,145 @@
 
 #include "vast/detail/cache.hpp"
 
-using namespace std::chrono;
 using namespace caf;
+using namespace std::chrono;
 
-namespace vast {
-namespace system {
-
-void partition_index::add(const std::vector<event> xs, const uuid& partition) {
-  // Compute span of events.
-  auto bound = [](const interval& a, const interval& b) -> interval {
-    return {std::min(a.from, b.from), std::max(a.to, b.to)};
-  };
-  auto fold = [=](const interval& i, const event& e) {
-    return bound(i, {e.timestamp(), e.timestamp()});
-  };
-  auto init = interval{timestamp::max(), timestamp::min()};
-  auto result = std::accumulate(xs.begin(), xs.end(), init, fold);
-  // Update index.
-  auto& x = partitions_[partition];
-  x.range = bound(x.range, result);
-}
-
-std::vector<uuid> partition_index::lookup(const expression& expr) const {
-  std::vector<uuid> result;
-  for (auto& x : partitions_)
-    if (caf::visit(time_restrictor{x.second.range.from, x.second.range.to}, expr))
-      result.push_back(x.first);
-  return result;
-}
+namespace vast::system {
 
 namespace {
 
-// -- scheduling --------------------------------------------------------------
+/// Maps partition IDs to INDEXER actors for resolving a query.
+using query_map = caf::detail::unordered_flat_map<uuid, std::vector<actor>>;
 
-void evict(stateful_actor<index_state>* self) {
-  // TODO: pick the LRU partition, not just a random one.
-  for (auto& x : self->state.loaded) {
-    if (self->state.evicted.count(x.second) == 0) {
-      VAST_DEBUG(self, "evicts partition", x.first);
-      self->send(x.second, shutdown_atom::value);
-      self->state.evicted.emplace(x.second, x.first);
-      break;
-    }
-  }
+auto get_ids(query_map& xs) {
+  std::vector<uuid> ys;
+  ys.reserve(xs.size());
+  std::transform(xs.begin(), xs.end(), std::back_inserter(ys),
+                 [](auto& kvp) { return kvp.first; });
+  return ys;
 }
 
-// FIXME: erase lookups that have completed.
-void schedule(stateful_actor<index_state>* self, const uuid& part,
-              const uuid& lookup) {
-  auto& ctx = self->state.lookups[lookup];
-  // If we're dealing with the active partition, we dispatch immediately.
-  if (part == self->state.active.id) {
-    VAST_DEBUG(self, "dispatches to active partition", part);
-    send_as(ctx.sink, self->state.active.partition, ctx.expr);
-    return;
+struct collector_state {
+  caf::detail::unordered_flat_map<uuid, std::pair<size_t, ids>> open_requests;
+  std::string name;
+  collector_state(local_actor* self) : name("collector-") {
+    name += std::to_string(self->id());
   }
-  // If the partition is loaded, we can also dispatch immediately.
-  auto l = self->state.loaded.find(part);
-  if (l != self->state.loaded.end()) {
-    VAST_DEBUG(self, "dispatches to loaded partition", part);
-    send_as(ctx.sink, l->second, ctx.expr);
-    return;
-  }
-  // If we have enough room, we can spin up the next partition.
-  if (self->state.loaded.size() < self->state.capacity) {
-    VAST_ASSERT(self->state.scheduled.empty());
-    VAST_DEBUG(self, "spawns and dispatches partition", part);
-    auto part_dir = self->state.dir / to_string(part);
-    auto p = self->spawn<monitored>(partition, std::move(part_dir));
-    self->state.loaded.emplace(part, p);
-    send_as(ctx.sink, p, ctx.expr);
-    return;
-  }
-  // If we're full, we delay dispatching until having evicted a partition.
-  VAST_DEBUG(self, "queues partition", part);
-  auto i = std::find_if(self->state.scheduled.begin(),
-                        self->state.scheduled.end(),
-                        [&](auto& x) { return x.id == part; });
-  if (i != self->state.scheduled.end()) {
-    VAST_ASSERT(!self->state.evicted.empty());
-    i->lookups.insert(lookup);
-  } else {
-    self->state.scheduled.push_back({part, {lookup}});
-    evict(self);
-  }
-}
+};
 
-// FIXME: erase lookups that have completed.
-void unschedule(stateful_actor<index_state>* self, const actor& part) {
-  // Check if we got an evicted partition.
-  auto i = self->state.evicted.find(part);
-  if (i != self->state.evicted.end()) {
-    VAST_DEBUG(self, "completed eviction of partition", i->second);
-    self->state.loaded.erase(i->second);
-    self->state.evicted.erase(i);
-    // Fill the hole if we have scheduled partition.
-    if (!self->state.scheduled.empty()) {
-      auto& next = self->state.scheduled.front();
-      VAST_DEBUG(self, "spawns next partition", next.id);
-      auto part_dir = self->state.dir / to_string(next.id);
-      auto p = self->spawn<monitored>(partition, std::move(part_dir));
-      self->state.loaded.emplace(next.id, p);
-      for (auto& id : next.lookups) {
-        VAST_ASSERT(self->state.lookups.count(id) > 0);
-        auto& ctx = self->state.lookups[id];
-        VAST_DEBUG(self, "dispatches expression", ctx.expr);
-        send_as(ctx.sink, p, ctx.expr);
+behavior collector(stateful_actor<collector_state>* self, actor master) {
+  // Ask master for initial work.
+  self->send(master, worker_atom::value, self);
+  return {
+    [=](expression& expr, query_map& qm, actor& client) {
+      VAST_DEBUG(self, "got a new query for", qm.size(), "partitions:",
+                 get_ids(qm));
+      VAST_ASSERT(self->state.open_requests.empty());
+      for (auto& kvp : qm) {
+        auto& id = kvp.first;
+        auto& indexers = kvp.second;
+        VAST_DEBUG(self, "asks", indexers.size(),
+                   "INDEXER actor(s) for partition", id);
+        self->state.open_requests[id] = std::make_pair(indexers.size(), ids{});
+        for (auto& indexer : indexers)
+          self->request(indexer, infinite, expr).then([=](ids& sub_result) {
+            auto& [num_indexers, result] = self->state.open_requests[id];
+            result |= sub_result;
+            if (--num_indexers == 0) {
+              VAST_DEBUG(self, "collected all sub results for partition", id);
+              self->send(client, std::move(result));
+              self->state.open_requests.erase(id);
+              // Ask master for more work after receiving the last sub result.
+              if (self->state.open_requests.empty()) {
+                VAST_DEBUG(self, "asks INDEX for new work");
+                self->send(master, worker_atom::value, self);
+              }
+            }
+          });
       }
-      self->state.scheduled.pop_front();
-      // If we have more pending partitions, try to evict more.
-      if (self->state.scheduled.size() > self->state.evicted.size())
-        evict(self);
-    }
-  }
+    }};
 }
 
 } // namespace <anonymous>
 
+partition_ptr index_state::partition_factory::operator()(const uuid& id) const {
+  // There are three options for loading a partition: 1) it is active, 2) it is
+  // unpersisted, or 3) it needs be loaded from disk.
+  auto& active = st_->active;
+  if (active != nullptr && active->id() == id)
+    return active;
+  auto pred = [&](auto& kvp) { return kvp.first->id() == id; };
+  auto& xs = st_->unpersisted;
+  if (auto i = std::find_if(xs.begin(), xs.end(), pred); i != xs.end())
+    return i->first;
+  VAST_DEBUG(st_->self, "loads partition", id);
+  return make_partition(st_->self, st_->dir, id);
+}
+
+index_state::index_state()
+  // Arbitrary default value, overridden in ::init.
+  : lru_partitions(10, partition_lookup{}, partition_factory{this}) {
+  // nop
+}
+
+void index_state::init(event_based_actor* self, const path& dir,
+                       size_t partition_size, size_t in_mem_partitions,
+                       size_t taste_partitions) {
+  // Set members.
+  this->self = self;
+  this->dir = dir;
+  this->partition_size = partition_size;
+  this->lru_partitions.size(in_mem_partitions);
+  this->taste_partitions = taste_partitions;
+  // Callback for the stream stage for creating a new partition when the
+  // current one becomes full.
+  auto fac = [this]() -> partition_ptr {
+    // Persist meta data and the state of all INDEXER actors when the active
+    // partition becomes full.
+    if (active != nullptr) {
+      active->flush_to_disk();
+      auto& mgr = active->manager();
+      // Store this partition as unpersisted to make sure we're not attempting
+      // to load it from disk until it is safe to do so.
+      unpersisted.emplace_back(active, mgr.indexer_count());
+      auto& id = active->id();
+      mgr.for_each([&](const actor& indexer) {
+        this->self->request(indexer, infinite, persist_atom::value).then([=] {
+          auto pred = [=](auto& kvp) { return kvp.first->id() == id; };
+          auto& xs = unpersisted;
+          auto i = std::find_if(xs.begin(), xs.end(), pred);
+          if (i == xs.end()) {
+            VAST_ERROR(this->self,
+                       "received an invalid response to a 'persist' message");
+            return;
+          }
+          if (--i->second == 0) {
+            VAST_DEBUG(this->self, "successfully persisted", id);
+            xs.erase(i);
+          }
+        });
+      });
+    }
+    // Create a new active partition.
+    auto id = uuid::random();
+    VAST_DEBUG(this->self, "starts a new partition:", id);
+    active = make_partition(this->self, this->dir, id);
+    // Register the new active partition at the stream manager.
+    return active;
+  };
+  stage = self->make_continuous_stage<indexer_stage_driver>(part_index, fac,
+                                                            partition_size);
+}
+
 behavior index(stateful_actor<index_state>* self, const path& dir,
-               size_t max_events, size_t max_parts, size_t taste_parts) {
-  VAST_ASSERT(max_events > 0);
-  VAST_ASSERT(max_parts > 0);
-  VAST_DEBUG(self, "caps partitions at", max_events, "events");
-  VAST_DEBUG(self, "keeps at most", max_parts, "partitions in memory");
-  self->state.capacity = max_parts;
-  self->state.dir = dir;
+               size_t partition_size, size_t in_mem_partitions,
+               size_t taste_partitions, size_t num_workers) {
+  VAST_ASSERT(partition_size > 0);
+  VAST_ASSERT(in_mem_partitions > 0);
+  VAST_DEBUG(self, "caps partitions at", partition_size, "events");
+  VAST_DEBUG(self, "keeps at most", in_mem_partitions, "partitions in memory");
+  self->state.init(self, dir, partition_size, in_mem_partitions,
+                   taste_partitions);
   auto accountant = accountant_type{};
   if (auto a = self->system().registry().get(accountant_atom::value))
     accountant = actor_cast<accountant_type>(a);
@@ -174,155 +191,143 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
       return {};
     }
   }
-  self->set_exit_handler(
-    [=](const exit_msg& msg) {
-      auto can_terminate = [=] {
-        return !self->state.active.partition && self->state.loaded.empty();
-      };
-      // Shut down all partitions.
-      if (!can_terminate()) {
-        if (self->state.active.partition)
-          self->send(self->state.active.partition, shutdown_atom::value);
-        for (auto& x : self->state.loaded)
-          self->send(x.second, shutdown_atom::value);
-        self->set_down_handler(
-          [=](const down_msg& msg) {
-            if (self->state.active.partition == msg.source) {
-              self->state.active.partition = {};
-            } else {
-              auto pred = [&](auto& x) { return x.second == msg.source; };
-              auto i = std::find_if(self->state.loaded.begin(),
-                                    self->state.loaded.end(), pred);
-              if (i != self->state.loaded.end())
-                self->state.loaded.erase(i);
-            }
-            if (can_terminate())
-              self->quit(msg.reason);
-          }
-        );
+  // Launch workers for resolving queries.
+  for (size_t i = 0; i < num_workers; ++i)
+    self->spawn(collector, self);
+  // We switch between has_worker behavior and the default behavior (which
+  // simply waits for a worker).
+  self->set_default_handler(caf::skip);
+  self->state.has_worker.assign(
+    [=](expression& expr) -> result<uuid, size_t, size_t> {
+      auto& st = self->state;
+      // Sanity check.
+      if (self->current_sender() == nullptr) {
+        VAST_ERROR(self, "got an anonymous query (ignored)");
+        return sec::invalid_argument;
       }
-      // Save our own state only if we have written something.
-      if (self->state.active.partition) {
-        VAST_DEBUG(self, "persists partition index");
-        if (!exists(self->state.dir)) {
-          auto result = mkdir(self->state.dir);
-          if (!result) {
-            VAST_ERROR(self, self->system().render(result.error()));
-            self->quit(result.error());
-            return;
-          }
-        }
-        auto result = save(self->state.dir / "meta",
-                           self->state.part_index);
-        if (!result) {
-          VAST_ERROR(self, "failed to persist partition index:",
-                     self->system().render(result.error()));
-          self->quit(result.error());
-          return;
-        }
+      // Get all potentially matching partitions.
+      auto candidates = st.part_index.lookup(expr);
+      // Report no result if no candidates are found.
+      if (candidates.empty()) {
+        VAST_DEBUG(self, "returns without result: no partitions qualify");
+        return {uuid::nil(), 0, 0};
       }
-      if (can_terminate())
-        self->quit(msg.reason);
-    }
-  );
-  self->set_down_handler(
-    [=](const down_msg& msg) {
-      auto i = std::find_if(
-        self->state.lookups.begin(),
-        self->state.lookups.end(),
-        [&](auto& x) { return x.second.sink == msg.source; });
-      if (i != self->state.lookups.end()) {
-        // A lookup actor went down. We can remove all queued partitions where
-        // this actor was the only lookup.
-        auto is_only_lookup = [&](auto& x) {
-          return x.lookups.size() == 1 && x.lookups.count(i->first) > 0;
-        };
-        auto j = std::remove_if(self->state.scheduled.begin(),
-                                self->state.scheduled.end(), is_only_lookup);
-        auto n = self->state.scheduled.end() - j;
-        VAST_IGNORE_UNUSED(n);
-        VAST_DEBUG(self, "erases", n, "scheduled lookups");
-        self->state.scheduled.erase(j, self->state.scheduled.end());
+      // Every return after this points uses up the worker.
+      auto guard = caf::detail::make_scope_guard([&] {
+        st.next_worker = nullptr;
+        self->unbecome();
+      });
+      // Allows the client to query further results after initial taste.
+      auto query_id = uuid::nil();
+      // Store how many partitions hit and how many we scheduled for the
+      // initial taste.
+      size_t hits = candidates.size();
+      size_t scheduled = st.taste_partitions;
+      // Collects all INDEXER actors that we query for the initial taste.
+      query_map qm;
+      // Deliver everything in one shot if the candidate set fits into our
+      // taste partitions threshold.
+      if (hits <= st.taste_partitions) {
+        VAST_DEBUG(self, "can schedule all partitions immediately");
+        scheduled = hits;
+        for (auto& candidate : candidates) {
+          auto& part = st.lru_partitions.get_or_add(candidate);
+          qm.emplace(part->id(), part->get_indexers(expr));
+        }
       } else {
-        // A partition went down.
-        unschedule(self, actor_cast<actor>(msg.source));
+        query_id = uuid::random();
+        VAST_DEBUG(self, "schedules first", st.taste_partitions,
+                   "partition(s) for query", query_id);
+        // Prefer partitions that are currently in our cache.
+        std::partition(candidates.begin(), candidates.end(),
+                       [&](const uuid& candidate) {
+                         return st.lru_partitions.contains(candidate);
+                       });
+        // Get all INDEXER actors for the taste and store remaining candidates
+        // for later.
+        auto first = candidates.begin();
+        auto last_taste = first + st.taste_partitions;
+        std::for_each(first, last_taste, [&](uuid& candidate) {
+          auto& part = st.lru_partitions.get_or_add(candidate);
+          qm.emplace(part->id(), part->get_indexers(expr));
+        });
+        candidates.erase(first, last_taste);
+        using ls = index_state::lookup_state;
+        st.pending.emplace(query_id, ls{expr, std::move(candidates)});
       }
+      self->send(st.next_worker, std::move(expr), std::move(qm),
+                 actor_cast<actor>(self->current_sender()));
+      return {std::move(query_id), hits, scheduled};
+    },
+    [=](const uuid& query_id, size_t num_partitions) {
+      auto& st = self->state;
+      // A zero as second argument means the client drops further results.
+      if (num_partitions == 0) {
+        VAST_DEBUG(self, "dropped remaining results for query ID", query_id);
+        st.pending.erase(query_id);
+        return;
+      }
+      // Sanity checks.
+      if (self->current_sender() == nullptr) {
+        VAST_ERROR(self, "got an anonymous query (ignored)");
+        return;
+      }
+      auto pending_iter = st.pending.find(query_id);
+      if (pending_iter == st.pending.end()) {
+        VAST_WARNING(self, "got a request for unknown query ID", query_id);
+        return;
+      }
+      VAST_DEBUG(self, "schedules", num_partitions,
+                 "more partition(s) for query ID", query_id);
+      // Every return after this points uses up the worker.
+      auto guard = caf::detail::make_scope_guard([&] {
+        st.next_worker = nullptr;
+        self->unbecome();
+      });
+      // Prefer partitions that are currently in our cache.
+      auto& candidates = pending_iter->second.partitions;
+      std::partition(candidates.begin(), candidates.end(),
+                     [&](const uuid& candidate) {
+                       return st.lru_partitions.contains(candidate);
+                     });
+      // Collect all INDEXER actors that we need to query.
+      auto& expr = pending_iter->second.expr;
+      query_map qm;
+      auto first = candidates.begin();
+      auto last = first + std::min(num_partitions, candidates.size());
+      std::for_each(first, last, [&](uuid& candidate) {
+        auto& part = st.lru_partitions.get_or_add(candidate);
+        qm.emplace(part->id(), part->get_indexers(expr));
+      });
+      // Forward request to worker.
+      self->send(st.next_worker, expr, std::move(qm),
+                 actor_cast<actor>(self->current_sender()));
+      // Cleanup.
+      if (last == candidates.end()) {
+        VAST_DEBUG(self, "exhausted all partitions for query ID", query_id);
+        st.pending.erase(pending_iter);
+      } else {
+        candidates.erase(first, last);
+        VAST_DEBUG(self, "has", candidates.size(),
+                   "partitions left for query ID", query_id);
+      }
+    },
+    [=](caf::stream<const_table_slice_handle> in) {
+      VAST_DEBUG(self, "got a new source");
+      return self->state.stage->add_inbound_path(in);
     }
   );
   return {
-    [=](const std::vector<event>& events) {
-      VAST_DEBUG(self, "got", events.size(), "events ["
-                 << events.front().id() << ',' << (events.back().id() + 1)
-                 << ')');
-      auto partition_full = self->state.active.events > 0
-        && self->state.active.events + events.size() > max_events;
-      if (partition_full || !self->state.active.partition) {
-        if (partition_full) {
-          VAST_DEBUG(self, "encountered full partition");
-          if (self->state.loaded.size() == self->state.capacity) {
-            VAST_DEBUG(self, "evicts active partition");
-            self->send(self->state.active.partition, shutdown_atom::value);
-          } else {
-            VAST_DEBUG(self, "moves active partition to cache");
-            self->state.loaded.emplace(self->state.active.id,
-                                       self->state.active.partition);
-          }
-        }
-        auto id = uuid::random();
-        VAST_DEBUG(self, "spawns new active partition", id);
-        auto part_dir = self->state.dir / to_string(id);
-        auto part = self->spawn<monitored>(partition, part_dir);
-        self->state.active = {id, part, 0};
-      }
-      self->state.active.events += events.size();
-      self->state.part_index.add(events, self->state.active.id);
-      auto msg = self->current_mailbox_element()->move_content_to_message();
-      self->send(self->state.active.partition, msg);
+    [=](worker_atom, caf::actor worker) {
+      auto& st = self->state;
+      st.next_worker = worker;
+      self->become(keep_behavior, st.has_worker);
     },
-    [=](const expression& expr) -> result<uuid, size_t, size_t> {
-      auto sender = actor_cast<actor>(self->current_sender());
-      VAST_DEBUG(self, "got lookup:", expr);
-      // Identify the relevant partitions.
-      auto id = uuid::random();
-      auto partitions = self->state.part_index.lookup(expr);
-      if (partitions.empty()) {
-        VAST_DEBUG(self, "returns without result: no partitions qualify");
-        return {id, 0, 0};
-      }
-      // Construct a new lookup context.
-      VAST_DEBUG(self, "creates new lookup context", id);
-      auto ctx = self->state.lookups.insert({id, {expr, sender, {}}});
-      self->monitor(sender);
-      VAST_ASSERT(ctx.second);
-      // TODO: make initial value configurable and figure out a more meaningful
-      // way to select the first N partitions, e.g., based on accumulated
-      // summary statics.
-      auto num_partitions = partitions.size();
-      auto n = std::min(partitions.size(), taste_parts);
-      // Start processing to deliver a taste of the result.
-      VAST_DEBUG(self, "schedules first", n, "partition(s)");
-      for (auto i = partitions.end() - n; i != partitions.end(); ++i)
-        schedule(self, *i, id);
-      partitions.resize(partitions.size() - n);
-      ctx.first->second.partitions = std::move(partitions);
-      return {id, num_partitions, n};
-    },
-    [=](const uuid& id, size_t n) {
-      auto& ctx = self->state.lookups[id];
-      VAST_DEBUG(self, "processes lookup", id << ':', ctx.expr);
-      if (n == 0) {
-        VAST_DEBUG(self, "cancels lookup");
-        self->state.lookups.erase(id);
-        return;
-      }
-      n = std::min(ctx.partitions.size(), n);
-      VAST_DEBUG(self, "schedules", n, "more partitions");
-      for (auto i = ctx.partitions.end() - n; i != ctx.partitions.end(); ++i)
-        schedule(self, *i, id);
-      ctx.partitions.resize(ctx.partitions.size() - n);
-    },
+    [=](caf::stream<const_table_slice_handle> in) {
+      VAST_DEBUG(self, "got a new source");
+      return self->state.stage->add_inbound_path(in);
+    }
   };
 }
 
-} // namespace system
-} // namespace vast
+} // namespace vast::system

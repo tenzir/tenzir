@@ -17,13 +17,46 @@
 #include "test.hpp"
 
 using namespace vast;
-using namespace std::string_literals;
+using namespace std::literals;
 
-TEST(arithmetic view) {
-  CHECK_EQUAL(view_t<boolean>{true}, true);
-  CHECK_EQUAL(view_t<integer>{42}, 42);
-  CHECK_EQUAL(view_t<std::string>{"foo"}, "foo");
-  CHECK_EQUAL(view_t<port>(53, port::udp), port(53, port::udp));
+TEST(copying views) {
+  MESSAGE("calling view directly");
+  CHECK_EQUAL(view<caf::none_t>{caf::none}, caf::none);
+  CHECK_EQUAL(view<boolean>{true}, true);
+  CHECK_EQUAL(view<integer>{42}, 42);
+  CHECK_EQUAL(view<count>{42}, 42u);
+  CHECK_EQUAL(view<real>{4.2}, 4.2);
+  CHECK_EQUAL(view<port>(53, port::udp), port(53, port::udp));
+  MESSAGE("using make_view");
+  CHECK_EQUAL(make_view(caf::none), caf::none);
+  CHECK_EQUAL(make_view(true), true);
+  CHECK_EQUAL(make_view(42), integer(42));
+  CHECK_EQUAL(make_view(42u), count(42u));
+  CHECK_EQUAL(make_view(4.2), real(4.2));
+  CHECK_EQUAL(make_view(port(53, port::udp)), port(53, port::udp));
+  MESSAGE("copying from temporary data");
+  CHECK_EQUAL(make_view(data{caf::none}), caf::none);
+  CHECK_EQUAL(make_view(data{true}), true);
+  CHECK_EQUAL(make_view(data{42}), integer(42));
+  CHECK_EQUAL(make_view(data{42u}), count(42u));
+  CHECK_EQUAL(make_view(data{4.2}), real(4.2));
+  CHECK_EQUAL(make_view(data(port(53, port::udp))), port(53, port::udp));
+}
+
+TEST(string literal view) {
+  auto v = make_view("foobar");
+  CHECK_EQUAL(v.size(), 6u);
+  CHECK_EQUAL(v, "foobar"sv);
+  CHECK_EQUAL(std::string{"foobar"}, materialize(v));
+}
+
+TEST(string view) {
+  auto str = "foobar"s;
+  auto v = make_view(str);
+  CHECK_EQUAL(v, "foobar");
+  str[3] = 'z';
+  CHECK_EQUAL(v, "foozar");
+  CHECK_EQUAL(str, materialize(v));
 }
 
 TEST(vector view) {
@@ -43,6 +76,8 @@ TEST(vector view) {
   CHECK_EQUAL(i, v->end());
   auto j = v->begin() + 1;
   CHECK_EQUAL(i - j, xs.size() - 1);
+  MESSAGE("check conversion back to data");
+  CHECK_EQUAL(xs, materialize(v));
 }
 
 TEST(set view) {
@@ -55,8 +90,9 @@ TEST(set view) {
   MESSAGE("check iterator semantics");
   CHECK_EQUAL(std::next(v->begin(), 3), v->end());
   CHECK_EQUAL(*std::next(v->begin(), 1), make_data_view(42));
+  MESSAGE("check conversion back to data");
+  CHECK_EQUAL(xs, materialize(v));
 }
-
 
 TEST(map view) {
   auto xs = map{{42, true}, {84, false}};
@@ -71,6 +107,12 @@ TEST(map view) {
   }
   MESSAGE("check iterator behavior");
   CHECK_EQUAL(std::next(v->begin(), 2), v->end());
+  MESSAGE("check iterator value type");
+  auto [key, value] = *v->begin();
+  CHECK_EQUAL(key, make_data_view(42));
+  CHECK_EQUAL(value, make_data_view(true));
+  MESSAGE("check conversion back to data");
+  CHECK_EQUAL(xs, materialize(v));
 }
 
 TEST(make_data_view) {
@@ -78,14 +120,49 @@ TEST(make_data_view) {
   CHECK(caf::holds_alternative<boolean>(x));
   auto str = "foo"s;
   x = make_data_view(str);
-  CHECK(caf::holds_alternative<view_t<std::string>>(x));
+  CHECK(caf::holds_alternative<view<std::string>>(x));
   CHECK(caf::holds_alternative<std::string_view>(x));
   auto xs = vector{42, true, "foo"};
   x = make_data_view(xs);
-  REQUIRE(caf::holds_alternative<view_t<vector>>(x));
-  auto v = caf::get<view_t<vector>>(x);
+  REQUIRE(caf::holds_alternative<view<vector>>(x));
+  auto v = caf::get<view<vector>>(x);
   REQUIRE_EQUAL(v->size(), 3u);
-  CHECK_EQUAL(v->at(0), 42);
+  CHECK_EQUAL(v->at(0), integer{42});
   CHECK_EQUAL(v->at(1), true);
-  CHECK_EQUAL(v->at(2), "foo");
+  CHECK_EQUAL(v->at(2), "foo"sv);
+  CHECK_EQUAL(xs, materialize(v));
+}
+
+TEST(increment decrement container_view_iterator) {
+  auto xs = vector{42, true, "foo", 4.2};
+  auto v = make_view(xs);
+  auto it1 = v->begin();
+  auto it2 = v->begin();
+  CHECK_EQUAL(it1.distance_to(it2), 0u);
+  ++it1;
+  CHECK_NOT_EQUAL(it1.distance_to(it2), 0u);
+  --it1;
+  CHECK_EQUAL(it1.distance_to(it2), 0u);
+}
+
+TEST(container comparison) {
+  data xs = vector{42};
+  data ys = vector{42};
+  CHECK(make_view(xs) == make_view(ys));
+  CHECK(!(make_view(xs) < make_view(ys)));
+  caf::get<vector>(ys).push_back(0);
+  CHECK(make_view(xs) != make_view(ys));
+  CHECK(make_view(xs) < make_view(ys));
+  ys = map{{42, true}};
+  CHECK(make_view(xs) != make_view(ys));
+  CHECK(make_view(xs) < make_view(ys));
+  xs = map{{43, true}};
+  CHECK(make_view(xs) > make_view(ys));
+  MESSAGE("strict weak ordering corner cases");
+  auto zs = set{1, 2, 3};
+  CHECK(!(view<set>{} < view<set>{}));
+  CHECK(view<set>{} < make_view(zs));
+  CHECK(!(make_view(zs) < view<set>{}));
+  CHECK(make_data_view(zs) < make_view(xs));
+  CHECK(!(make_view(xs) < make_data_view(zs)));
 }

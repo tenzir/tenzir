@@ -13,15 +13,38 @@
 
 #pragma once
 
-#include <caf/none.hpp>
+#include <caf/detail/comparable.hpp>
+#include <caf/fwd.hpp>
+
+#include "vast/fwd.hpp"
+#include "vast/ptr_handle.hpp"
 
 namespace vast {
 
-/// A class that models a null value.
-using none = caf::none_t;
+/// Wraps a pointer to a table slize and makes it serializable.
+class const_table_slice_handle
+  : public ptr_handle<const table_slice>,
+    caf::detail::comparable<const_table_slice_handle> {
+public:
+  // -- member types -----------------------------------------------------------
 
-/// The only instance of ::none.
-constexpr auto nil = caf::none;
+  using super = ptr_handle<const table_slice>;
+
+  // -- constructors, destructors, and assignment operators --------------------
+
+  using super::super;
+
+  const_table_slice_handle(const table_slice_handle& other);
+
+  ~const_table_slice_handle() override;
+};
+
+// -- related free functions ---------------------------------------------------
+
+/// @relates table_slice_handle
+caf::error inspect(caf::serializer& sink, const_table_slice_handle& hdl);
+
+/// @relates table_slice_handle
+caf::error inspect(caf::deserializer& source, const_table_slice_handle& hdl);
 
 } // namespace vast
-

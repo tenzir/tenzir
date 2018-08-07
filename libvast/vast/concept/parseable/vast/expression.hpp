@@ -16,10 +16,11 @@
 #include "vast/concept/parseable/core.hpp"
 #include "vast/concept/parseable/string/char_class.hpp"
 #include "vast/concept/parseable/vast/data.hpp"
-#include "vast/concept/parseable/vast/key.hpp"
 #include "vast/concept/parseable/vast/type.hpp"
-#include "vast/detail/assert.hpp"
 #include "vast/expression.hpp"
+
+#include "vast/detail/assert.hpp"
+#include "vast/detail/string.hpp"
 
 namespace vast {
 
@@ -28,20 +29,31 @@ struct predicate_parser : parser<predicate_parser> {
 
   static auto make() {
     auto to_attr_extractor = [](std::string str) -> predicate::operand {
-      return attribute_extractor{str};
+      return attribute_extractor{std::move(str)};
     };
     auto to_type_extractor = [](type t) -> predicate::operand {
       return type_extractor{t};
     };
-    auto to_key_extractor = [](key k) -> predicate::operand {
-      return key_extractor{k};
+    auto to_key_extractor = [](std::vector<std::string> xs) {
+      // TODO: rather than doing all the work with the attributes, it would be
+      // nice if the parser framework would just give us an iterator range over
+      // the raw input. Then we wouldn't have to use expensive attributes and
+      // could simply wrap a parser P into raw(P) or raw_str(P) to obtain a
+      // range/string_view.
+      auto key = detail::join(xs, ".");
+      return predicate::operand{key_extractor{std::move(key)}};
     };
-    auto id = +(parsers::alnum | parsers::chr{'_'} | parsers::chr{'-'});
+    using parsers::alnum;
+    using parsers::chr;
+    auto id = +(alnum | chr{'_'} | chr{'-'});
+    // A key cannot start with ':', othwise it would be interpreted as a type
+    // extractor.
+    auto key = !':'_p >> (+(alnum | chr{'_'} | chr{':'}) % '.');
     auto operand
       = parsers::data        ->* [](data d) -> predicate::operand { return d; }
       | '&' >> id            ->* to_attr_extractor
       | ':' >> parsers::type ->* to_type_extractor
-      | parsers::key         ->* to_key_extractor
+      | key                  ->* to_key_extractor
       ;
     auto pred_op
       = "~"_p   ->* [] { return match; }

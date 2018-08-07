@@ -354,7 +354,7 @@ Import a PCAP trace into a local VAST node in one shot:
 
 Run a historical query, printed in ASCII, limited to at most 10 results:
 
-    vast export ascii -e 10 :addr in 10.0.0.0/8
+    vast export -e 10 ascii :addr in 10.0.0.0/8
 
 Query a local node and get the result back as PCAP trace:
 
@@ -501,7 +501,7 @@ A type can be a *basic type*, a *container type* or a *compound type*.
 
 - `vector<T>`: a sequence of instances of type T
 - `set<T>`: an unordered mathematical set of instances of type T
-- `table<T, U>`: an associative array that maps instances of type T to type U
+- `map<T, U>`: an associative array that maps instances of type T to type U
 
 #### Compound types
 

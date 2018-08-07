@@ -46,6 +46,8 @@ enum class ec : uint8_t {
   version_error,
   /// A command does not adhere to the expected syntax.
   syntax_error,
+  /// Deserialization failed because an unknown implementation type was found.
+  invalid_table_slice_type,
 };
 
 /// @relates ec

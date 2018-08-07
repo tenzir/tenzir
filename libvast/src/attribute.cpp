@@ -27,7 +27,7 @@ attribute::attribute(std::string key, optional<std::string> value)
 
 bool operator==(const attribute& x, const attribute& y) {
   return x.key == y.key && x.value == y.value;
-};
+}
 
 bool operator<(const attribute& x, const attribute& y) {
   return std::tie(x.key, x.value) < std::tie(y.key, y.value);

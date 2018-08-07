@@ -14,6 +14,7 @@
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/concept/printable/stream.hpp"
+#include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/expression.hpp"
 
 #define SUITE expression
@@ -27,7 +28,7 @@ TEST(parseable/printable - predicate) {
   // LHS: schema, RHS: data
   std::string str = "x.y.z == 42";
   CHECK(parsers::predicate(str, pred));
-  CHECK(pred.lhs == key_extractor{key{"x", "y", "z"}});
+  CHECK(pred.lhs == key_extractor{"x.y.z"});
   CHECK(pred.op == equal);
   CHECK(pred.rhs == data{42u});
   CHECK_EQUAL(to_string(pred), str);
@@ -62,14 +63,14 @@ TEST(parseable/printable - predicate) {
   // LHS: data, RHS: time
   str = "now > &time";
   CHECK(parsers::predicate(str, pred));
-  CHECK(is<data>(pred.lhs));
+  CHECK(caf::holds_alternative<data>(pred.lhs));
   CHECK(pred.op == greater);
   CHECK(pred.rhs == attribute_extractor{"time"});
-  str = "x == y";
+  str = "x.a_b == y.c_d";
   CHECK(parsers::predicate(str, pred));
-  CHECK(pred.lhs == key_extractor{key{"x"}});
+  CHECK(pred.lhs == key_extractor{"x.a_b"});
   CHECK(pred.op == equal);
-  CHECK(pred.rhs == key_extractor{key{"y"}});
+  CHECK(pred.rhs == key_extractor{"y.c_d"});
   CHECK_EQUAL(to_string(pred), str);
   // Invalid type name.
   CHECK(!parsers::predicate(":foo == -42"));
@@ -77,9 +78,9 @@ TEST(parseable/printable - predicate) {
 
 TEST(parseable - expression) {
   expression expr;
-  predicate p1{key_extractor{key{"x"}}, equal, data{42u}};
+  predicate p1{key_extractor{"x"}, equal, data{42u}};
   predicate p2{type_extractor{port_type{}}, equal, data{port{53, port::udp}}};
-  predicate p3{key_extractor{key{"a"}}, greater, key_extractor{key{"b"}}};
+  predicate p3{key_extractor{"a"}, greater, key_extractor{"b"}};
   MESSAGE("conjunction");
   CHECK(parsers::expr("x == 42 && :port == 53/udp", expr));
   CHECK_EQUAL(expr, expression(conjunction{p1, p2}));
@@ -88,6 +89,15 @@ TEST(parseable - expression) {
   CHECK(parsers::expr("x == 42 && ! :port == 53/udp && x == 42", expr));
   CHECK_EQUAL(expr, expression(conjunction{p1, negation{p2}, p1}));
   CHECK(parsers::expr("x > 0 && x < 42 && a.b == x.y", expr));
+  CHECK(parsers::expr("&time > 2018-07-04+12:00:00.0 "
+                      "&& &time < 2018-07-04+23:55:04.0", expr));
+  auto x = caf::get_if<conjunction>(&expr);
+  REQUIRE(x);
+  REQUIRE_EQUAL(x->size(), 2u);
+  auto x0 = caf::get_if<predicate>(&x->at(0));
+  auto x1 = caf::get_if<predicate>(&x->at(1));
+  CHECK(caf::holds_alternative<attribute_extractor>(x0->lhs));
+  CHECK(caf::holds_alternative<attribute_extractor>(x1->lhs));
   MESSAGE("disjunction");
   CHECK(parsers::expr("x == 42 || :port == 53/udp || x == 42", expr));
   CHECK_EQUAL(expr, expression(disjunction{p1, p2, p1}));

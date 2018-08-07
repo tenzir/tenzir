@@ -13,34 +13,35 @@
 
 #pragma once
 
-#include <string>
+#include <caf/detail/comparable.hpp>
+#include <caf/fwd.hpp>
 
-#include "vast/concept/printable/string.hpp"
-#include "vast/concept/printable/to_string.hpp"
-#include "vast/detail/stack_vector.hpp"
+#include "vast/fwd.hpp"
+#include "vast/ptr_handle.hpp"
 
 namespace vast {
 
-/// A sequence of names identifying a resource.
-struct key : detail::stack_vector<std::string, 128> {
-  using super = detail::stack_vector<std::string, 128>;
+/// Wraps a pointer to a table slize and makes it serializable.
+class table_slice_handle : public ptr_handle<table_slice>,
+                           caf::detail::comparable<table_slice_handle> {
+public:
+  // -- member types -----------------------------------------------------------
+
+  using super = ptr_handle<table_slice>;
+
+  // -- constructors, destructors, and assignment operators --------------------
+
   using super::super;
 
-  static constexpr char delimiter = '.';
-
-  /// Creates a key string reprentation of an arbitrary sequence.
-  template <class... Ts>
-  static std::string str(Ts&&... xs);
+  ~table_slice_handle() override;
 };
 
+// -- related free functions ---------------------------------------------------
+
+/// @relates table_slice_handle
+caf::error inspect(caf::serializer& sink, table_slice_handle& hdl);
+
+/// @relates table_slice_handle
+caf::error inspect(caf::deserializer& source, table_slice_handle& hdl);
+
 } // namespace vast
-
-#include "vast/concept/printable/vast/key.hpp"
-
-template <class... Ts>
-std::string vast::key::str(Ts&&... xs) {
-  using vast::to_string;
-  using std::to_string;
-  return to_string(key{to_string(xs)...});
-}
-

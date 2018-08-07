@@ -51,31 +51,35 @@ public:
     class... Ts,
     class = std::enable_if_t<std::is_constructible<coder_type, Ts...>{}>
   >
-  explicit bitmap_index(Ts&&... xs)
-    : coder_(std::forward<Ts>(xs)...) {
+  explicit bitmap_index(Ts&&... xs) : coder_(std::forward<Ts>(xs)...) {
+    // nop
   }
 
-  /// Appends a value to the bitmap index. For example, in the case of equality
-  /// coding, this means appending 1 to the single bitmap for the given
-  /// value and 0 to all other bitmaps.
+  /// Appends a value to the bitmap index.
   /// @param x The value to append.
-  /// @post Skipped entries show up as 0s during decoding.
-  void push_back(value_type x, size_type skip = 0) {
-    append(x, 1, skip);
+  void append(value_type x) {
+    append(x, 1);
   }
 
   /// Appends one or more instances of value to the bitmap index.
   /// @param x The value to append.
   /// @param n The number of times to append *x*.
-  /// @post Skipped entries show up as 0s during decoding.
-  void append(value_type x, size_type n, size_type skip = 0) {
-    coder_.encode(transform(binner_type::bin(x)), n, skip);
+  void append(value_type x, size_type n) {
+    coder_.encode(transform(binner_type::bin(x)), n);
   }
 
   /// Appends the contents of another bitmap index to this one.
   /// @param other The other bitmap index.
   void append(const bitmap_index& other) {
     coder_.append(other.coder_);
+  }
+
+  /// Instructs the coder to add undefined values for the sake of increasing
+  /// the number of elements.
+  /// @param n The number of elements to skip.
+  /// @returns `true` on success.
+  bool skip(size_type n) {
+    return coder_.skip(n);
   }
 
   /// Retrieves a bitmap of a given value with respect to a given operator.

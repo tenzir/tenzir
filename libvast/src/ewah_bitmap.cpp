@@ -106,8 +106,8 @@ void ewah_bitmap::append_bits(bool bit, size_type n) {
       marker = word_type::marker_num_dirty(marker, 0);
     auto markers = clean_blocks / word_type::marker_clean_max;
     auto last = clean_blocks % word_type::marker_clean_max;
-    while (markers --> 0)
-      blocks_.push_back(word_type::marker_type(word_type::marker_clean_mask, bit));
+    blocks_.resize(blocks_.size() + markers,
+                   word_type::marker_type(word_type::marker_clean_mask, bit));
     if (last > 0)
       blocks_.push_back(
         word_type::marker_type(word_type::marker_num_clean(0, last), bit));
@@ -163,9 +163,13 @@ void ewah_bitmap::flip() {
       block = ~block;
     }
   }
-  // Only flip the active bits in the last block.
+  // Flip the last (dirty) block manually, because next_marker would always
+  // point to it.
+  blocks_.back() = ~blocks_.back();
+  // Make sure we didn't flip unused bits in the last block.
   auto partial = num_bits_ % word_type::width;
-  blocks_.back() ^= word_type::lsb_mask(partial);
+  if (partial > 0)
+    blocks_.back() &= word_type::lsb_mask(partial);
 }
 
 void ewah_bitmap::integrate_last_block() {

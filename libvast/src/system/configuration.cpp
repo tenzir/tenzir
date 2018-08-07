@@ -28,12 +28,15 @@
 #include "vast/batch.hpp"
 #include "vast/bitmap.hpp"
 #include "vast/config.hpp"
+#include "vast/const_table_slice_handle.hpp"
 #include "vast/error.hpp"
 #include "vast/event.hpp"
 #include "vast/expression.hpp"
 #include "vast/operator.hpp"
 #include "vast/query_options.hpp"
 #include "vast/schema.hpp"
+#include "vast/table_slice.hpp"
+#include "vast/table_slice_handle.hpp"
 #include "vast/time.hpp"
 #include "vast/type.hpp"
 #include "vast/uuid.hpp"
@@ -52,9 +55,8 @@ using namespace caf;
 namespace vast::system {
 
 configuration::configuration() {
-  // -- CAF configuration ------------------------------------------------------
-  // Consider only VAST's log messages by default.
-  logger_component_filter = "vast";
+  // Load I/O module.
+  load<io::middleman>();
   // Use 'vast.ini' instead of generic 'caf-application.ini'.
   config_file_path = "vast.ini";
   // Register VAST's custom types.
@@ -69,6 +71,8 @@ configuration::configuration() {
   add_message_type<type>("vast::type");
   add_message_type<timespan>("vast::timespan");
   add_message_type<uuid>("vast::uuid");
+  add_message_type<table_slice_handle>("vast::table_slice_handle");
+  add_message_type<const_table_slice_handle>("vast::const_table_slice_handle");
   // Containers
   add_message_type<std::vector<event>>("std::vector<vast::event>");
   // Actor-specific messages
@@ -107,29 +111,27 @@ configuration::configuration() {
   };
   add_error_category(atom("vast"), vast_renderer);
   add_error_category(atom("system"), caf_renderer);
-  // Load modules.
-  load<io::middleman>();
-  middleman_enable_automatic_connections = true;
   // GPU acceleration.
 #ifdef VAST_USE_OPENCL
   load<opencl::manager>();
   add_message_type<std::vector<uint32_t>>("std::vector<uint32_t>");
 #endif
-#ifdef VAST_USE_OPENSSL
-  load<openssl::manager>();
-#endif
 }
 
-configuration::configuration(int argc, char** argv) : configuration{} {
-  command_line = {argv + 1, argv + argc};
+configuration& configuration::parse(int argc, char** argv) {
+  VAST_ASSERT(argc > 0);
+  VAST_ASSERT(argv != nullptr);
+  command_line.assign(argv + 1, argv + argc);
   // Move CAF options to the end of the command line, parse them, and then
   // remove them.
   auto is_vast_opt = [](auto& x) { return !starts_with(x, "--caf#"); };
   auto caf_opt = std::stable_partition(command_line.begin(),
                                        command_line.end(), is_vast_opt);
-  auto opt_msg = message_builder{caf_opt, command_line.end()}.to_message();
-  parse(opt_msg);
+  std::vector<std::string> caf_args;
+  std::move(caf_opt, command_line.end(), std::back_inserter(caf_args));
   command_line.erase(caf_opt, command_line.end());
+  actor_system_config::parse(std::move(caf_args));
+  return *this;
 }
 
 } // namespace vast::system

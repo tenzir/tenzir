@@ -13,18 +13,23 @@
 
 #include <caf/all.hpp>
 
-#include "vast/event.hpp"
-#include "vast/logger.hpp"
 #include "vast/concept/printable/std/chrono.hpp"
+#include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/event.hpp"
 #include "vast/concept/printable/vast/expression.hpp"
 #include "vast/concept/printable/vast/uuid.hpp"
+#include "vast/const_table_slice_handle.hpp"
 #include "vast/detail/assert.hpp"
+#include "vast/event.hpp"
 #include "vast/expression_visitors.hpp"
+#include "vast/logger.hpp"
+#include "vast/table_slice.hpp"
 
 #include "vast/system/archive.hpp"
 #include "vast/system/atoms.hpp"
 #include "vast/system/exporter.hpp"
+
+#include "vast/detail/assert.hpp"
 
 using namespace std::chrono;
 using namespace std::string_literals;
@@ -138,6 +143,48 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
         report_statistics(self);
     }
   );
+  auto handle_batch = [=](std::vector<event>& candidates) {
+    VAST_DEBUG(self, "got batch of", candidates.size(), "events");
+    // Events can arrive in any order: sort them by ID first. Otherwise, we
+    // can't compute the bitmap mask as easily.
+    std::sort(candidates.begin(), candidates.end(),
+              [](auto& x, auto& y) { return x.id() < y.id(); });
+    bitmap mask;
+    auto sender = self->current_sender();
+    for (auto& candidate : candidates) {
+      auto& checker = self->state.checkers[candidate.type()];
+      // Construct a candidate checker if we don't have one for this type.
+      if (caf::holds_alternative<caf::none_t>(checker)) {
+        auto x = tailor(expr, candidate.type());
+        if (!x) {
+          VAST_ERROR(self, "failed to tailor expression:",
+                     self->system().render(x.error()));
+          ship_results(self);
+          self->send_exit(self, exit_reason::normal);
+          return;
+        }
+        checker = std::move(*x);
+        VAST_DEBUG(self, "tailored AST to", candidate.type() << ':', checker);
+      }
+      // Append ID to our bitmap mask.
+      if (sender == self->state.archive) {
+        mask.append_bits(false, candidate.id() - mask.size());
+        mask.append_bit(true);
+      }
+      // Perform candidate check and keep event as result on success.
+      if (caf::visit(event_evaluator{candidate}, checker))
+        self->state.results.push_back(std::move(candidate));
+      else
+        VAST_DEBUG(self, "ignores false positive:", candidate);
+    }
+    self->state.stats.processed += candidates.size();
+    if (sender == self->state.archive)
+      self->state.unprocessed -= mask;
+    ship_results(self);
+    request_more_hits(self);
+    if (self->state.stats.received == self->state.stats.expected)
+      shutdown(self);
+  };
   return {
     [=](ids& hits) {
       timespan runtime = steady_clock::now() - self->state.start;
@@ -175,41 +222,7 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
       }
     },
     [=](std::vector<event>& candidates) {
-      VAST_DEBUG(self, "got batch of", candidates.size(), "events");
-      bitmap mask;
-      auto sender = self->current_sender();
-      for (auto& candidate : candidates) {
-        auto& checker = self->state.checkers[candidate.type()];
-        // Construct a candidate checker if we don't have one for this type.
-        if (is<none>(checker)) {
-          auto x = tailor(expr, candidate.type());
-          if (!x) {
-            VAST_ERROR(self, "failed to tailor expression:",
-                       self->system().render(x.error()));
-            ship_results(self);
-            self->send_exit(self, exit_reason::normal);
-            return;
-          }
-          checker = std::move(*x);
-          VAST_DEBUG(self, "tailored AST to", candidate.type() << ':', checker);
-        }
-        // Perform candidate check and keep event as result on success.
-        if (caf::visit(event_evaluator{candidate}, checker))
-          self->state.results.push_back(std::move(candidate));
-        else
-          VAST_DEBUG(self, "ignores false positive:", candidate);
-        if (sender == self->state.archive) {
-          mask.append_bits(false, candidate.id() - mask.size());
-          mask.append_bit(true);
-        }
-      }
-      self->state.stats.processed += candidates.size();
-      if (sender == self->state.archive)
-        self->state.unprocessed -= mask;
-      ship_results(self);
-      request_more_hits(self);
-      if (self->state.stats.received == self->state.stats.expected)
-        shutdown(self);
+      handle_batch(candidates);
     },
     [=](extract_atom) {
       if (self->state.stats.requested == max_events) {
@@ -245,7 +258,7 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
         self->monitor(index);
     },
     [=](sink_atom, const actor& sink) {
-      VAST_DEBUG(self, "registers index", sink);
+      VAST_DEBUG(self, "registers sink", sink);
       self->send(self->state.sink, sys_atom::value, put_atom::value, sink);
       self->monitor(self->state.sink);
     },
@@ -276,6 +289,22 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
           VAST_IGNORE_UNUSED(e);
           VAST_DEBUG(self, "failed to lookup query at index:",
                      self->system().render(e));
+        }
+      );
+    },
+    [=](caf::stream<const_table_slice_handle> in) {
+      return self->make_sink(
+        in,
+        [](caf::unit_t&) {
+          // nop
+        },
+        [=](caf::unit_t&, const const_table_slice_handle& slice) {
+          // TODO: port to new table slice API
+          auto candidates = slice->rows_to_events();
+          handle_batch(candidates);
+        },
+        [=](caf::unit_t&, const error& err) {
+          VAST_ERROR(self, "got error during streaming: ", err);
         }
       );
     },

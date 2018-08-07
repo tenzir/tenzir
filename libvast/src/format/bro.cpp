@@ -14,6 +14,8 @@
 #include <fstream>
 #include <iomanip>
 
+#include <caf/none.hpp>
+
 #include "vast/concept/printable/numeric.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/data.hpp"
@@ -23,7 +25,6 @@
 #include "vast/detail/string.hpp"
 #include "vast/error.hpp"
 #include "vast/event.hpp"
-#include "vast/none.hpp"
 #include "vast/logger.hpp"
 
 #include "vast/format/bro.hpp"
@@ -58,9 +59,10 @@ expected<type> parse_type(std::string_view bro_type) {
     t = subnet_type{};
   else if (bro_type == "port")
     t = port_type{};
-  if (is<none_type>(t) && (detail::starts_with(bro_type, "vector")
-                           || detail::starts_with(bro_type, "set")
-                           || detail::starts_with(bro_type, "table"))) {
+  if (caf::holds_alternative<none_type>(t)
+      && (detail::starts_with(bro_type, "vector")
+          || detail::starts_with(bro_type, "set")
+          || detail::starts_with(bro_type, "table"))) {
     // Bro's logging framwork cannot log nested vectors/sets/tables, so we can
     // safely assume that we're dealing with a basic type inside the brackets.
     // If this will ever change, we'll have to enhance this simple parser.
@@ -80,7 +82,7 @@ expected<type> parse_type(std::string_view bro_type) {
     else
       t = set_type{*elem};
   }
-  if (is<none_type>(t))
+  if (caf::holds_alternative<none_type>(t))
     return make_error(ec::format_error, "failed to parse type: ",
                       std::string{bro_type});
   return t;
@@ -105,20 +107,20 @@ struct bro_type_printer {
   }
 
   std::string operator()(const vector_type& t) const {
-    return "vector[" + visit(*this, t.value_type) + ']';
+    return "vector[" + caf::visit(*this, t.value_type) + ']';
   }
 
   std::string operator()(const set_type& t) const {
-    return "set[" + visit(*this, t.value_type) + ']';
+    return "set[" + caf::visit(*this, t.value_type) + ']';
   }
 
   std::string operator()(const alias_type& t) const {
-    return visit(*this, t.value_type);
+    return caf::visit(*this, t.value_type);
   }
 };
 
 expected<std::string> to_bro_string(const type& t) {
-  return visit(bro_type_printer{}, t);
+  return caf::visit(bro_type_printer{}, t);
 }
 
 constexpr char separator = '\x09';
@@ -148,7 +150,7 @@ void stream_header(const type& t, std::ostream& out) {
       << "#path" << separator << path + '\n'
       << "#open" << separator << time_factory{} << '\n'
       << "#fields";
-  auto r = get<record_type>(t);
+  auto r = caf::get<record_type>(t);
   for (auto& e : record_type::each{r})
     out << separator << to_string(e.key());
   out << "\n#types";
@@ -162,13 +164,13 @@ struct streamer {
   }
 
   template <class T>
-  void operator()(const T&, none) const {
+  void operator()(const T&, caf::none_t) const {
     out_ << unset_field;
   }
 
   template <class T, class U>
   auto operator()(const T&, const U& x) const
-  -> std::enable_if_t<!std::is_same_v<U, none>> {
+  -> std::enable_if_t<!std::is_same_v<U, caf::none_t>> {
     out_ << to_string(x);
   }
 
@@ -220,10 +222,10 @@ struct streamer {
   void operator()(const record_type& r, const vector& v) const {
     VAST_ASSERT(!v.empty());
     VAST_ASSERT(r.fields.size() == v.size());
-    visit(*this, r.fields[0].type, v[0]);
+    caf::visit(*this, r.fields[0].type, v[0]);
     for (auto i = 1u; i < v.size(); ++i) {
       out_ << separator;
-      visit(*this, r.fields[i].type, v[i]);
+      caf::visit(*this, r.fields[i].type, v[i]);
     }
   }
 
@@ -248,10 +250,10 @@ struct streamer {
     }
     auto f = c.begin();
     auto l = c.end();
-    visit(*this, value_type, *f);
+    caf::visit(*this, value_type, *f);
     while (++f != l) {
       out_ << sep;
-      visit(*this, value_type, *f);
+      caf::visit(*this, value_type, *f);
     }
   }
 
@@ -260,15 +262,21 @@ struct streamer {
 
 } // namespace <anonymous>
 
-reader::reader(std::unique_ptr<std::istream> input) : input_{std::move(input)} {
-  VAST_ASSERT(input_);
+reader::reader(std::unique_ptr<std::istream> in) {
+  reset(std::move(in));
+}
+
+
+void reader::reset(std::unique_ptr<std::istream> in) {
+  VAST_ASSERT(in != nullptr);
+  input_ = std::move(in);
   lines_ = std::make_unique<detail::line_range>(*input_);
 }
 
 expected<event> reader::read() {
   if (lines_->done())
     return make_error(ec::end_of_input, "input exhausted");
-  if (is<none_type>(type_)) {
+  if (caf::holds_alternative<none_type>(type_)) {
     auto t = parse_header();
     if (!t)
       return t.error();
@@ -327,7 +335,7 @@ expected<event> reader::read() {
                           std::string{first, s[i].end()});
     }
     if (i == static_cast<size_t>(timestamp_field_))
-      if (auto tp = get_if<timestamp>(xs[i]))
+      if (auto tp = caf::get_if<timestamp>(&xs[i]))
         ts = *tp;
   }
   auto ys = unflatten(std::move(xs), type_);
@@ -343,7 +351,7 @@ expected<void> reader::schema(const vast::schema& sch) {
 }
 
 expected<schema> reader::schema() const {
-  if (is<none_type>(type_))
+  if (caf::holds_alternative<none_type>(type_))
     return make_error(ec::format_error, "schema not yet inferred");
   vast::schema sch;
   sch.add(type_);
@@ -430,7 +438,7 @@ expected<void> reader::parse_header() {
   // Construct type.
   record_ = std::move(record_fields);
   type_ = unflatten(record_);
-  type_.name("bro::" + path);
+  type_ = type_.name("bro::" + path);
   VAST_DEBUG(name(), "parsed bro header:");
   VAST_DEBUG(name(), "    #separator", separator_);
   VAST_DEBUG(name(), "    #set_separator", set_separator_);
@@ -456,7 +464,7 @@ expected<void> reader::parse_header() {
   } else {
     size_t i = 0;
     for (auto& f : record_.fields) {
-      if (is<timestamp_type>(f.type)) {
+      if (caf::holds_alternative<timestamp_type>(f.type)) {
         VAST_INFO(name(), "auto-detected field", i, "as event timestamp");
         timestamp_field_ = static_cast<int>(i);
         break;
@@ -489,7 +497,7 @@ writer::~writer() {
 }
 
 expected<void> writer::write(const event& e) {
-  if (!is<record_type>(e.type()))
+  if (!caf::holds_alternative<record_type>(e.type()))
     return make_error(ec::format_error, "cannot process non-record events");
   std::ostream* os = nullptr;
   if (dir_.empty()) {
@@ -524,7 +532,7 @@ expected<void> writer::write(const event& e) {
     }
   }
   VAST_ASSERT(os != nullptr);
-  visit(streamer{*os}, e.type(), e.data());
+  caf::visit(streamer{*os}, e.type(), e.data());
   *os << '\n';
   return no_error;
 }

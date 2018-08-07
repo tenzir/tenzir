@@ -92,12 +92,13 @@ using index_atom = caf::atom_constant<caf::atom("index")>;
 using follower_atom = caf::atom_constant<caf::atom("follower")>;
 using leader_atom = caf::atom_constant<caf::atom("leader")>;
 using receiver_atom = caf::atom_constant<caf::atom("receiver")>;
+using search_atom = caf::atom_constant<caf::atom("search")>;
 using sink_atom = caf::atom_constant<caf::atom("sink")>;
 using source_atom = caf::atom_constant<caf::atom("source")>;
 using subscriber_atom = caf::atom_constant<caf::atom("subscriber")>;
 using supervisor_atom = caf::atom_constant<caf::atom("supervisor")>;
-using search_atom = caf::atom_constant<caf::atom("search")>;
 using tracker_atom = caf::atom_constant<caf::atom("tracker")>;
+using worker_atom = caf::atom_constant<caf::atom("worker")>;
 using exporter_atom = caf::atom_constant<caf::atom("exporter")>;
 using importer_atom = caf::atom_constant<caf::atom("importer")>;
 

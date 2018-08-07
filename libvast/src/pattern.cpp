@@ -20,8 +20,10 @@
 
 namespace vast {
 
-pattern pattern::glob(const std::string& str) {
-  auto rx = std::regex_replace(str, std::regex("\\."), "\\.");
+pattern pattern::glob(std::string_view str) {
+  std::string rx;
+  std::regex_replace(std::back_inserter(rx), str.begin(), str.end(),
+                     std::regex("\\."), "\\.");
   rx = std::regex_replace(rx, std::regex("\\*"), ".*");
   return pattern{std::regex_replace(rx, std::regex("\\?"), ".")};
 }
@@ -29,16 +31,81 @@ pattern pattern::glob(const std::string& str) {
 pattern::pattern(std::string str) : str_(std::move(str)) {
 }
 
-bool pattern::match(const std::string& str) const {
+bool pattern::match(std::string_view str) const {
   return std::regex_match(str.begin(), str.end(), std::regex{str_});
 }
 
-bool pattern::search(const std::string& str) const {
+bool pattern::search(std::string_view str) const {
   return std::regex_search(str.begin(), str.end(), std::regex{str_});
 }
 
 const std::string& pattern::string() const {
   return str_;
+}
+
+pattern& pattern::operator+=(const pattern& other) {
+  return *this += std::string_view{other.str_};
+}
+
+pattern& pattern::operator+=(std::string_view other) {
+  str_ += other;
+  return *this;
+}
+
+pattern& pattern::operator|=(const pattern& other) {
+  return *this |= std::string_view{other.str_};
+}
+
+pattern& pattern::operator|=(std::string_view other) {
+  str_.insert(str_.begin(), '(');
+  str_ += ")|(";
+  str_.append(other.begin(), other.end());
+  str_ += ')';
+  return *this;
+}
+
+pattern& pattern::operator&=(const pattern& other) {
+  return *this &= std::string_view{other.str_};
+}
+
+pattern& pattern::operator&=(std::string_view other) {
+  str_.insert(str_.begin(), '(');
+  str_ += ")(";
+  str_.append(other.begin(), other.end());
+  str_ += ')';
+  return *this;
+}
+
+pattern operator+(const pattern& x, std::string_view y) {
+  return pattern{x.string() + std::string{y}};
+}
+
+pattern operator+(std::string_view x, const pattern& y) {
+  return pattern{std::string{x} + y.string()};
+}
+
+pattern operator|(const pattern& x, std::string_view y) {
+  pattern result{x};
+  result |= y;
+  return result;
+}
+
+pattern operator|(std::string_view x, const pattern& y) {
+  pattern result{std::string{x}};
+  result |= y;
+  return result;
+}
+
+pattern operator&(const pattern& x, std::string_view y) {
+  pattern result{x};
+  result &= y;
+  return result;
+}
+
+pattern operator&(std::string_view x, const pattern& y) {
+  pattern result{std::string{x}};
+  result &= y;
+  return result;
 }
 
 bool operator==(const pattern& lhs, const pattern& rhs) {

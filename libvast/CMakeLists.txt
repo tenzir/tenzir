@@ -20,11 +20,16 @@ set(libvast_sources
   src/batch.cpp
   src/bitmap.cpp
   src/chunk.cpp
+  src/column_index.cpp
   src/command.cpp
   src/compression.cpp
   src/concept/hashable/crc.cpp
   src/concept/hashable/xxhash.cpp
+  src/const_table_slice_handle.cpp
   src/data.cpp
+  src/default_table_slice.cpp
+  src/default_table_slice_builder.cpp
+  src/defaults.cpp
   src/detail/adjust_resource_consumption.cpp
   src/detail/compressedbuf.cpp
   src/detail/fdinbuf.cpp
@@ -52,11 +57,9 @@ set(libvast_sources
   src/format/test.cpp
   src/http.cpp
   src/ids.cpp
-  src/key.cpp
+  src/meta_index.cpp
   src/null_bitmap.cpp
   src/operator.cpp
-  src/option_declaration_set.cpp
-  src/option_map.cpp
   src/pattern.cpp
   src/port.cpp
   src/schema.cpp
@@ -74,6 +77,8 @@ set(libvast_sources
   src/system/importer.cpp
   src/system/index.cpp
   src/system/indexer.cpp
+  src/system/indexer_manager.cpp
+  src/system/indexer_stage_driver.cpp
   src/system/node.cpp
   src/system/node_command.cpp
   src/system/partition.cpp
@@ -88,6 +93,11 @@ set(libvast_sources
   src/system/task.cpp
   src/system/tracker.cpp
   src/system/writer_command_base.cpp
+  src/table.cpp
+  src/table_index.cpp
+  src/table_slice.cpp
+  src/table_slice_builder.cpp
+  src/table_slice_handle.cpp
   src/time.cpp
   src/type.cpp
   src/uuid.cpp
@@ -105,7 +115,8 @@ if (PCAP_FOUND)
   set(libvast_sources ${libvast_sources}
     src/system/pcap_reader_command.cpp
     src/system/pcap_writer_command.cpp
-    src/format/pcap.cpp)
+    src/format/pcap.cpp
+  )
 endif ()
 
 set(libvast_libs ${CAF_LIBRARIES})
@@ -222,15 +233,20 @@ set(tests
   test/cache.cpp
   test/chunk.cpp
   test/coder.cpp
+  test/column_index.cpp
   test/command.cpp
   test/compressedbuf.cpp
   test/data.cpp
+  test/default_table_slice.cpp
+  test/detail/flat_lru_cache.cpp
+  test/detail/operators.cpp
   test/endpoint.cpp
   test/event.cpp
   test/expression.cpp
   test/expression_evaluation.cpp
   test/expression_parseable.cpp
   test/filesystem.cpp
+  test/fixtures/actor_system.cpp
   test/fixtures/events.cpp
   test/format/bro.cpp
   test/format/mrt.cpp
@@ -240,16 +256,13 @@ set(tests
   test/ids.cpp
   test/iterator.cpp
   test/json.cpp
-  test/key.cpp
   test/main.cpp
+  test/meta_index.cpp
   test/mmapbuf.cpp
   test/offset.cpp
-  test/option_declaration_set.cpp
-  test/option_map.cpp
   test/parse_data.cpp
   test/parseable.cpp
   test/pattern.cpp
-  test/polymorphic_visitor.cpp
   test/port.cpp
   test/printable.cpp
   test/range_map.cpp
@@ -262,10 +275,12 @@ set(tests
   test/subnet.cpp
   test/system/archive.cpp
   test/system/consensus.cpp
+  test/system/datagram_source.cpp
   test/system/exporter.cpp
   test/system/importer.cpp
   test/system/index.cpp
   test/system/indexer.cpp
+  test/system/indexer_stage_driver.cpp
   test/system/key_value_store.cpp
   test/system/partition.cpp
   test/system/queries.cpp
@@ -273,12 +288,12 @@ set(tests
   test/system/sink.cpp
   test/system/source.cpp
   test/system/task.cpp
+  test/table_index.cpp
   test/time.cpp
   test/type.cpp
   test/uuid.cpp
   test/value.cpp
   test/value_index.cpp
-  test/variant.cpp
   test/vector_map.cpp
   test/vector_set.cpp
   test/view.cpp
@@ -308,7 +323,7 @@ target_link_libraries(vast-test libvast ${CMAKE_THREAD_LIBS_INIT})
 macro(make_test suite)
   string(REPLACE " " "_" test_name ${suite})
   set(vast_test ${EXECUTABLE_OUTPUT_PATH}/vast-test)
-  add_test(${test_name} ${vast_test} -v 3 -r 60 -s "^${suite}$" ${ARGN})
+  add_test(${test_name} ${vast_test} -v 3 -r 600 -s "^${suite}$" ${ARGN})
 endmacro()
 
 # Find all test suites.

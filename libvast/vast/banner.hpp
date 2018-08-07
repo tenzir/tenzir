@@ -17,8 +17,7 @@
 
 namespace vast {
 
-/// Returns the VAST banner in ASCII art.
-/// @returns The VAST banner.
+/// @returns the VAST banner in ASCII art.
 std::string banner(bool colorized = false);
 
 } // namespace vast

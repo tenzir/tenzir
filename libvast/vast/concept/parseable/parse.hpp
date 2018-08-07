@@ -70,7 +70,7 @@ struct is_parseable {
 } // namespace detail
 
 template <class I, class T>
-inline constexpr bool is_parseable_v
+constexpr bool is_parseable_v
   = decltype(detail::is_parseable::test<I, T>(0, 0, 0))::value;
 
 } // namespace vast

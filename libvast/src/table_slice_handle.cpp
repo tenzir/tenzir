@@ -11,16 +11,29 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/concept/parseable/vast/key.hpp"
-#include "vast/key.hpp"
+#include "vast/table_slice_handle.hpp"
 
-#define SUITE parseable
-#include "test.hpp"
+#include <caf/detail/scope_guard.hpp>
+#include <caf/error.hpp>
 
-using namespace vast;
+#include "vast/table_slice.hpp"
 
-TEST(key) {
-  key k;
-  CHECK(parsers::key("foo.bar_baz.qux", k));
-  CHECK(k == key{"foo", "bar_baz", "qux"});
+namespace vast {
+
+table_slice_handle::~table_slice_handle() {
+  // nop
 }
+
+caf::error inspect(caf::serializer& sink, table_slice_handle& hdl) {
+  return table_slice::serialize_ptr(sink, hdl.get());
+}
+
+caf::error inspect(caf::deserializer& source, table_slice_handle& hdl) {
+  table_slice_ptr ptr;
+  auto guard = caf::detail::make_scope_guard([&] {
+    hdl = table_slice_handle{std::move(ptr)};
+  });
+  return table_slice::deserialize_ptr(source, ptr);
+}
+
+} // namespace vast

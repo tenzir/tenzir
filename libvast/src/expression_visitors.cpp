@@ -18,7 +18,6 @@
 #include "vast/concept/parseable/vast/type.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/data.hpp"
-#include "vast/concept/printable/vast/key.hpp"
 #include "vast/concept/printable/vast/operator.hpp"
 #include "vast/concept/printable/vast/type.hpp"
 #include "vast/data.hpp"
@@ -30,7 +29,7 @@
 
 namespace vast {
 
-expression hoister::operator()(none) const {
+expression hoister::operator()(caf::none_t) const {
   return expression{};
 }
 
@@ -65,8 +64,8 @@ expression hoister::operator()(const predicate& p) const {
 }
 
 
-expression aligner::operator()(none) const {
-  return nil;
+expression aligner::operator()(caf::none_t) const {
+  return caf::none;
 }
 
 expression aligner::operator()(const conjunction& c) const {
@@ -101,8 +100,8 @@ expression aligner::operator()(const predicate& p) const {
 denegator::denegator(bool negate) : negate_{negate} {
 }
 
-expression denegator::operator()(none) const {
-  return nil;
+expression denegator::operator()(caf::none_t) const {
+  return caf::none;
 }
 
 expression denegator::operator()(const conjunction& c) const {
@@ -136,8 +135,8 @@ expression denegator::operator()(const predicate& p) const {
 }
 
 
-expression deduplicator::operator()(none) const {
-  return nil;
+expression deduplicator::operator()(caf::none_t) const {
+  return caf::none;
 }
 
 expression deduplicator::operator()(const conjunction& c) const {
@@ -181,7 +180,7 @@ auto inplace_union(Ts& xs, const Us& ys) {
 
 } // namespace <anonymous>
 
-std::vector<predicate> predicatizer::operator()(none) const {
+std::vector<predicate> predicatizer::operator()(caf::none_t) const {
   return {};
 }
 
@@ -212,7 +211,7 @@ std::vector<predicate> predicatizer::operator()(const predicate& pred) const {
 }
 
 
-expected<void> validator::operator()(none) {
+expected<void> validator::operator()(caf::none_t) {
   return make_error(ec::syntax_error, "nil expression is invalid");
 }
 
@@ -245,11 +244,11 @@ expected<void> validator::operator()(const predicate& p) {
 
 expected<void> validator::operator()(const attribute_extractor& ex,
                                      const data& d) {
-  if (ex.attr == "type" && !is<std::string>(d))
+  if (ex.attr == "type" && !caf::holds_alternative<std::string>(d))
     return make_error(ec::syntax_error,
                       "type attribute extractor requires string operand",
                       ex.attr, op_, d);
-  else if (ex.attr == "time" && !is<timestamp>(d))
+  else if (ex.attr == "time" && !caf::holds_alternative<timestamp>(d))
     return make_error(ec::syntax_error,
                       "time attribute extractor requires timestamp operand",
                       ex.attr, op_, d);
@@ -273,7 +272,7 @@ time_restrictor::time_restrictor(timestamp first, timestamp last)
   : first_{first}, last_{last} {
 }
 
-bool time_restrictor::operator()(none) const {
+bool time_restrictor::operator()(caf::none_t) const {
   die("should never happen");
   return false;
 }
@@ -308,7 +307,7 @@ bool time_restrictor::operator()(const predicate& p) const {
   if (auto a = caf::get_if<attribute_extractor>(&p.lhs)) {
     if (a->attr == "time") {
       auto d = caf::get_if<data>(&p.rhs);
-      VAST_ASSERT(d && is<timestamp>(*d));
+      VAST_ASSERT(d && caf::holds_alternative<timestamp>(*d));
       return evaluate(first_, p.op, *d) || evaluate(last_, p.op, *d);
     }
   }
@@ -319,7 +318,7 @@ bool time_restrictor::operator()(const predicate& p) const {
 type_resolver::type_resolver(const type& t) : type_{t} {
 }
 
-expected<expression> type_resolver::operator()(none) {
+expected<expression> type_resolver::operator()(caf::none_t) {
   return expression{};
 }
 
@@ -329,12 +328,11 @@ expected<expression> type_resolver::operator()(const conjunction& c) {
     auto r = caf::visit(*this, op);
     if (!r)
       return r;
-    else if (caf::holds_alternative<none>(*r))
+    else if (caf::holds_alternative<caf::none_t>(*r))
       return expression{};
     else
       result.push_back(std::move(*r));
   }
-
   if (result.empty())
     return expression{};
   if (result.size() == 1)
@@ -349,7 +347,7 @@ expected<expression> type_resolver::operator()(const disjunction& d) {
     auto r = caf::visit(*this, op);
     if (!r)
       return r;
-    else if (!caf::holds_alternative<none>(*r))
+    else if (!caf::holds_alternative<caf::none_t>(*r))
       result.push_back(std::move(*r));
   }
   if (result.empty())
@@ -365,7 +363,7 @@ expected<expression> type_resolver::operator()(const negation& n) {
   auto r = caf::visit(*this, n.expr());
   if (!r)
     return r;
-  else if (!caf::holds_alternative<none>(*r))
+  else if (!caf::holds_alternative<caf::none_t>(*r))
     return {negation{std::move(*r)}};
   else
     return expression{};
@@ -379,7 +377,7 @@ expected<expression> type_resolver::operator()(const predicate& p) {
 expected<expression> type_resolver::operator()(const type_extractor& ex,
                                                const data& d) {
   disjunction dis;
-  if (auto r = get_if<record_type>(type_)) {
+  if (auto r = caf::get_if<record_type>(&type_)) {
     for (auto& f : record_type::each{*r}) {
       auto& value_type = f.trace.back()->type;
       if (congruent(value_type, ex.type)) {
@@ -408,7 +406,7 @@ expected<expression> type_resolver::operator()(const key_extractor& ex,
                                                const data& d) {
   disjunction dis;
   // First, interpret the key as a suffix of a record field name.
-  if (auto r = get_if<record_type>(type_)) {
+  if (auto r = caf::get_if<record_type>(&type_)) {
     auto suffixes = r->find_suffix(ex.key);
     // All suffixes must pass the type check, otherwise the RHS of a
     // predicate would be ambiguous.
@@ -424,9 +422,8 @@ expected<expression> type_resolver::operator()(const key_extractor& ex,
     }
   // Second, try to interpret the key as the name of a single type.
   } else if (ex.key[0] == type_.name()) {
-    if (!compatible(type_, op_, d)) {
+    if (!compatible(type_, op_, d))
       return make_error(ec::type_clash, type_, op_, d);
-    }
     auto x = data_extractor{type_, {}};
     dis.emplace_back(predicate{std::move(x), op_, d});
   }
@@ -447,7 +444,7 @@ expected<expression> type_resolver::operator()(const data& d,
 type_pruner::type_pruner(const type& event_type) : type_{event_type} {
 }
 
-expression type_pruner::operator()(none) {
+expression type_pruner::operator()(caf::none_t) {
   return {};
 }
 
@@ -455,7 +452,7 @@ expression type_pruner::operator()(const conjunction& c) {
   conjunction result;
   for (auto& op : c) {
     auto e = caf::visit(*this, op);
-    if (caf::holds_alternative<none>(e))
+    if (caf::holds_alternative<caf::none_t>(e))
       // If any operand of the conjunction is not a viable type resolver, the
       // entire conjunction is not viable. For example, if we have an event
       // consisting only of numeric types and the conjunction (int == +42 &&
@@ -475,7 +472,7 @@ expression type_pruner::operator()(const disjunction& d) {
   disjunction result;
   for (auto& op : d) {
     auto e = caf::visit(*this, op);
-    if (!caf::holds_alternative<none>(e))
+    if (!caf::holds_alternative<caf::none_t>(e))
       result.push_back(std::move(e));
   }
   if (result.empty())
@@ -487,14 +484,14 @@ expression type_pruner::operator()(const disjunction& d) {
 
 expression type_pruner::operator()(const negation& n) {
   auto e = caf::visit(*this, n.expr());
-  if (caf::holds_alternative<none>(e))
+  if (caf::holds_alternative<caf::none_t>(e))
     return e;
   return negation{std::move(e)};
 }
 
 expression type_pruner::operator()(const predicate& p) {
   if (auto lhs = caf::get_if<type_extractor>(&p.lhs)) {
-    if (auto r = get_if<record_type>(type_)) {
+    if (auto r = caf::get_if<record_type>(&type_)) {
       disjunction result;
       for (auto& e : record_type::each{*r})
         if (congruent(e.trace.back()->type, lhs->type)) {
@@ -519,7 +516,7 @@ expression type_pruner::operator()(const predicate& p) {
 event_evaluator::event_evaluator(const event& e) : event_{e} {
 }
 
-bool event_evaluator::operator()(none) {
+bool event_evaluator::operator()(caf::none_t) {
   return false;
 }
 
@@ -569,8 +566,9 @@ bool event_evaluator::operator()(const data_extractor& e, const data& d) {
     return false;
   if (e.offset.empty())
     return evaluate(event_.data(), op_, d);
-  VAST_ASSERT(is<record_type>(event_.type())); // offset wouldn't be empty
-  if (auto r = get_if<vector>(event_.data()))
+  // offset wouldn't be empty
+  VAST_ASSERT(caf::holds_alternative<record_type>(event_.type()));
+  if (auto r = caf::get_if<vector>(&event_.data()))
     if (auto x = get(*r, e.offset))
       return evaluate(*x, op_, d);
   return false;
@@ -581,7 +579,7 @@ matcher::matcher(const type& t) : type_{t} {
   // nop
 }
 
-bool matcher::operator()(none) {
+bool matcher::operator()(caf::none_t) {
   return false;
 }
 
@@ -610,7 +608,7 @@ bool matcher::operator()(const predicate& p) {
 
 bool matcher::operator()(const attribute_extractor& e, const data& d) {
   if (e.attr == "type") {
-    VAST_ASSERT(is<std::string>(d));
+    VAST_ASSERT(caf::holds_alternative<std::string>(d));
     return evaluate(d, op_, type_.name());
   } else if (e.attr == "time") {
     return true; // Every event has a timestamp.

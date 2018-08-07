@@ -25,31 +25,35 @@
 #define SUITE value
 #include "test.hpp"
 
+using caf::get;
+using caf::get_if;
+using caf::holds_alternative;
+
 using namespace vast;
 
 // An *invalid* value has neither a type nor data.
 // This is the default-constructed state.
 TEST(invalid) {
   value v;
-  CHECK(is<none>(v));
-  CHECK(is<none_type>(v.type()));
+  CHECK(holds_alternative<caf::none_t>(v));
+  CHECK(!v.type());
 }
 
 // A *data* value contains only data but lacks a type.
 TEST(data value) {
   value v{42};
-  CHECK(type_check(v.type(), nil));
-  CHECK(is<integer>(v));
-  CHECK(is<none_type>(v.type()));
+  CHECK(type_check(v.type(), caf::none));
+  CHECK(holds_alternative<integer>(v));
+  CHECK(!v.type());
 }
 
 TEST(typed value(empty)) {
   type t = count_type{};
-  value v{nil, t};
-  CHECK(type_check(t, nil));
+  value v{caf::none, t};
+  CHECK(type_check(t, caf::none));
   CHECK(v.type() == t);
-  CHECK(is<none>(v));
-  CHECK(is<count_type>(v.type()));
+  CHECK(holds_alternative<caf::none_t>(v));
+  CHECK(holds_alternative<count_type>(v.type()));
 }
 
 TEST(typed value(data)) {
@@ -57,8 +61,8 @@ TEST(typed value(data)) {
   value v{4.2, t};
   CHECK(type_check(t, 4.2));
   CHECK(v.type() == t);
-  CHECK(is<real>(v));
-  CHECK(is<real_type>(v.type()));
+  CHECK(holds_alternative<real>(v));
+  CHECK(holds_alternative<real_type>(v.type()));
 }
 
 TEST(data and type mismatch) {
@@ -70,8 +74,8 @@ TEST(data and type mismatch) {
   // If we do require type safety and cannot guarantee that data and type
   // match, we can use the type-safe factory function.
   auto fail = value::make(42, real_type{});
-  CHECK(is<none>(fail));
-  CHECK(is<none_type>(fail.type()));
+  CHECK(holds_alternative<caf::none_t>(fail));
+  CHECK(!fail.type());
 }
 
 TEST(relational operators) {
@@ -153,7 +157,7 @@ TEST(json)
       },
       "bar": {
         "name": "",
-        "kind": "integer",
+        "kind": "int",
         "structure": null,
         "attributes": {}
       },

@@ -14,72 +14,105 @@
 #include "vast/data.hpp"
 #include "vast/json.hpp"
 #include "vast/load.hpp"
-#include "vast/type.hpp"
 #include "vast/save.hpp"
+#include "vast/type.hpp"
+
 #include "vast/concept/hashable/uhash.hpp"
 #include "vast/concept/hashable/xxhash.hpp"
 #include "vast/concept/parseable/vast/type.hpp"
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/json.hpp"
+#include "vast/concept/printable/vast/offset.hpp"
 #include "vast/concept/printable/vast/type.hpp"
 
 #define SUITE type
 #include "test.hpp"
+
+using caf::get;
+using caf::get_if;
+using caf::holds_alternative;
 
 using namespace std::string_literals;
 using namespace vast;
 
 TEST(default construction) {
   type t;
-  CHECK(get_if<none_type>(t) != nullptr);
-  CHECK(get_if<boolean_type>(t) == nullptr);
+  CHECK(!t);
+  CHECK(!holds_alternative<boolean_type>(t));
 }
 
-TEST(construction and assignment) {
+TEST(construction) {
   auto s = string_type{};
-  type t;
-  CHECK(get_if<none_type>(t));
-  t = s;
-  CHECK(get_if<string_type>(t));
-  t = vector_type{integer_type{}};
-  auto v = get_if<vector_type>(t);
-  REQUIRE(v);
-  CHECK(get_if<integer_type>(v->value_type));
+  auto t = type{s};
+  CHECK(t);
+  CHECK(holds_alternative<string_type>(t));
+  CHECK(get_if<string_type>(&t) != nullptr);
 }
 
-TEST(name) {
-  auto v = vector_type{integer_type{}};
-  auto h0 = uhash<xxhash>{}(v);
-  v.name("foo");
-  auto h1 = uhash<xxhash>{}(v);
-  CHECK_NOT_EQUAL(h0, h1);
-  v.name("");
-  h1 = uhash<xxhash>{}(v);
-  CHECK_EQUAL(h0, h1);
-  v.name("bar");
-  auto t = type{v};
-  CHECK_EQUAL(t.name(), "bar");
+TEST(assignment) {
+  auto t = type{string_type{}};
+  CHECK(t);
+  CHECK(holds_alternative<string_type>(t));
+  t = real_type{};
+  CHECK(t);
+  CHECK(holds_alternative<real_type>(t));
+  t = {};
+  CHECK(!t);
+  CHECK(!holds_alternative<real_type>(t));
+}
+
+TEST(copying) {
+  auto t = type{string_type{}};
+  auto u = t;
+  CHECK(holds_alternative<string_type>(u));
+}
+
+TEST(names) {
+  type t;
+  t = t.name("foo");
+  CHECK(t.name().empty());
+  t = type{string_type{}};
+  t = t.name("foo");
+  CHECK_EQUAL(t.name(), "foo");
 }
 
 TEST(attributes) {
-  auto t = set_type{};
-  t.attributes().emplace_back("foo", "bar");
-  REQUIRE_EQUAL(t.attributes().size(), 1u);
-  CHECK_EQUAL(t.attributes()[0].key, "foo"s);
-  CHECK_EQUAL(t.attributes()[0].value, "bar"s);
+  auto attrs = std::vector<attribute>{{"key", "value"}};
+  type t;
+  t = t.attributes(attrs);
+  CHECK(t.attributes().empty());
+  t = string_type{};
+  t = t.attributes({{"key", "value"}});
+  CHECK_EQUAL(t.attributes(), attrs);
 }
 
 TEST(equality comparison) {
-  auto t0 = vector_type{boolean_type{}};
-  auto t1 = vector_type{boolean_type{}};
-  CHECK(t0 == t1);
-  CHECK(!(t0 != t1));
-  t0.value_type = count_type{};
-  CHECK(t0 != t1);
-  CHECK(!(t0 == t1));
-  t1.value_type = count_type{};
-  CHECK(t0 == t1);
+  MESSAGE("type-erased comparison");
+  CHECK(type{} == type{});
+  CHECK(type{boolean_type{}} != type{});
+  CHECK(type{boolean_type{}} == type{boolean_type{}});
+  CHECK(type{boolean_type{}} != type{real_type{}});
+  auto x = type{string_type{}};
+  auto y = type{string_type{}};
+  x = x.name("foo");
+  CHECK(x != y);
+  y = y.name("foo");
+  CHECK(x == y);
+  MESSAGE("concrete type comparison");
+  CHECK(real_type{} == real_type{});
+  CHECK(real_type{}.name("foo") != real_type{});
+  CHECK(real_type{}.name("foo") == real_type{}.name("foo"));
+  auto attrs = std::vector<attribute>{{"key", "value"}};
+  CHECK(real_type{}.attributes(attrs) != real_type{});
+  CHECK(real_type{}.attributes(attrs) == real_type{}.attributes(attrs));
+}
+
+TEST(less-than comparison) {
+  CHECK(!(type{} < type{}));
+  CHECK(!(real_type{} < real_type{}));
+  CHECK(string_type{}.name("a") < string_type{}.name("b"));
+  CHECK(record_type{}.name("a") < record_type{}.name("b"));
 }
 
 TEST(strict weak ordering) {
@@ -91,12 +124,21 @@ TEST(strict weak ordering) {
 }
 
 TEST(introspection) {
-  CHECK(!is_recursive(enumeration_type{}));
+  CHECK(is_complex(enumeration_type{}));
+  CHECK(!is_basic(enumeration_type{}));
+  CHECK(is_complex(vector_type{}));
+  CHECK(is_container(vector_type{}));
   CHECK(is_recursive(vector_type{}));
+  CHECK(is_complex(set_type{}));
+  CHECK(is_container(set_type{}));
   CHECK(is_recursive(set_type{}));
+  CHECK(is_complex(map_type{}));
+  CHECK(is_container(map_type{}));
   CHECK(is_recursive(map_type{}));
   CHECK(is_recursive(record_type{}));
+  CHECK(!is_container(record_type{}));
   CHECK(is_recursive(alias_type{}));
+  CHECK(!is_container(alias_type{}));
 }
 
 TEST(type/data compatibility) {
@@ -110,21 +152,21 @@ TEST(serialization) {
   auto r = record_type{
     {"x", integer_type{}},
     {"y", address_type{}},
-    {"z", real_type{}}
+    {"z", real_type{}.attributes({{"key", "value"}})}
   };
   // Make it recursive.
   r = {
-    {"a", integer_type{}},
-    {"b", count_type{}},
+    {"a", map_type{string_type{}, port_type{}}},
+    {"b", vector_type{boolean_type{}}.name("foo")},
     {"c", r}
   };
-  r.name("foo");
+  r = r.name("foo");
   std::vector<char> buf;
   auto t0 = type{r};
   save(buf, t0);
   type t1;
   load(buf, t1);
-  CHECK(t0 == t1);
+  CHECK_EQUAL(t0, t1);
 }
 
 TEST(record range) {
@@ -145,61 +187,60 @@ TEST(record range) {
 
   for (auto& i : record_type::each{r})
     if (i.offset == offset{0, 1, 0, 0})
-      CHECK(i.key() == key{"x", "m", "y", "a"});
+      CHECK_EQUAL(i.key(), "x.m.y.a");
     else if (i.offset == offset{1, 0})
-      CHECK(i.key() == key{"y", "b"});
+      CHECK_EQUAL(i.key(), "y.b");
 }
 
 TEST(record resolving) {
   auto r = record_type{
-    {"x", integer_type{}},
-    {"y", address_type{}},
-    {"z", real_type{}}
-  };
-  // Make it recursive.
-  r = {
     {"a", integer_type{}},
     {"b", count_type{}},
-    {"c", r}
+    {"c", record_type{
+      {"x", integer_type{}},
+      {"y", address_type{}},
+      {"z", real_type{}}
+    }}
   };
-
-  auto o = r.resolve(key{"c"});
+  MESSAGE("top-level offset resolve");
+  auto o = r.resolve("c");
   REQUIRE(o);
-  CHECK(o->size() == 1);
-  CHECK(o->front() == 2);
-
-  o = r.resolve(key{"c", "x"});
+  CHECK_EQUAL(o->size(), 1u);
+  CHECK_EQUAL(o->front(), 2u);
+  MESSAGE("nested offset resolve");
+  o = r.resolve("c.x");
   REQUIRE(o);
-  CHECK(o->size() == 2);
-  CHECK(o->front() == 2);
-  CHECK(o->back() == 0);
-
+  CHECK_EQUAL(o->size(), 2u);
+  CHECK_EQUAL(o->front(), 2u);
+  CHECK_EQUAL(o->back(), 0u);
+  o = r.resolve("c.x.absent");
+  CHECK(!o);
+  MESSAGE("top-level offset resolve");
   auto k = r.resolve(offset{2});
   REQUIRE(k);
-  CHECK(k->size() == 1);
-  CHECK(k->front() == "c");
-
+  CHECK_EQUAL(*k, "c");
+  MESSAGE("nested offset resolve");
   k = r.resolve(offset{2, 0});
   REQUIRE(k);
-  CHECK(k->size() == 2);
-  CHECK(k->front() == "c");
-  CHECK(k->back() == "x");
+  CHECK_EQUAL(*k, "c.x");
 }
 
 TEST(record flattening/unflattening) {
   auto x = record_type{
     {"x", record_type{
-            {"y", record_type{
-                    {"z", integer_type{}},
-                    {"k", boolean_type{}}
-                  }},
-            {"m", record_type{
-                    {"y", record_type{{"a", address_type{}}}},
-                    {"f", real_type{}}
-                  }},
-            {"b", boolean_type{}}
-          }},
-    {"y", record_type{{"b", boolean_type{}}}}
+      {"y", record_type{
+        {"z", integer_type{}},
+        {"k", boolean_type{}}
+      }},
+      {"m", record_type{
+        {"y", record_type{{"a", address_type{}}}},
+        {"f", real_type{}}
+      }},
+      {"b", boolean_type{}}
+    }},
+    {"y", record_type{
+      {"b", boolean_type{}}
+    }}
   };
   auto y = record_type{{
     {"x.y.z", integer_type{}},
@@ -251,63 +292,120 @@ TEST(record flat index computation) {
 
 TEST(record symbol finding) {
   auto r = record_type{
-    {"x", integer_type{}},
-    {"y", address_type{}},
-    {"z", real_type{}}
-  };
-  r = {
     {"a", integer_type{}},
-    {"b", count_type{}},
-    {"c", record_type{r}}
-  };
-  r = {
-    {"a", integer_type{}},
-    {"b", record_type{r}},
+    {"b", record_type{
+      {"a", integer_type{}},
+      {"b", count_type{}},
+      {"c", record_type{
+        {"x", integer_type{}},
+        {"y", address_type{}},
+        {"z", real_type{}}
+      }}
+    }},
     {"c", count_type{}}
   };
-  r.name("foo");
-  // Record access by key.
-  auto first = r.at(key{"a"});
+  r = r.name("foo");
+  auto f = flatten(r);
+  MESSAGE("record access by key");
+  auto first = r.at("a");
   REQUIRE(first);
-  CHECK(get_if<integer_type>(*first));
-  auto deep = r.at(key{"b", "c", "y"});
+  CHECK(holds_alternative<integer_type>(*first));
+  first = f.at("a");
+  REQUIRE(first);
+  CHECK(holds_alternative<integer_type>(*first));
+  auto deep = r.at("b.c.y");
   REQUIRE(deep);
-  CHECK(get_if<address_type>(*deep));
-  //
-  // Prefix finding.
-  //
-  auto o = r.find_prefix({"a"});
-  CHECK(o.size() == 0);
-  o = r.find_prefix({"foo", "a"});
-  offset a{0};
-  REQUIRE(o.size() == 1);
-  CHECK(o[0].first == a);
-  o = r.find_prefix({"foo", "b", "a"});
-  offset ba{1, 0};
-  REQUIRE(o.size() == 1);
-  CHECK(o[0].first == ba);
-  //
-  // Suffix finding.
-  //
-  o = r.find_suffix({"z"});
-  offset z{1, 2, 2};
-  REQUIRE(o.size() == 1);
-  CHECK(o[0].first == z);
-  o = r.find_suffix({"c", "y"});
-  offset cy{1, 2, 1};
-  REQUIRE(o.size() == 1);
-  CHECK(o[0].first == cy);
-  o = r.find_suffix({"a"});
-  offset a0{0}, a1{1, 0};
-  REQUIRE(o.size() == 2);
-  CHECK(o[0].first == a0);
-  CHECK(o[1].first == a1);
-  o = r.find_suffix({"c", "*"});
-  offset c0{1, 2, 0}, c1{1, 2, 1}, c2{1, 2, 2};
-  REQUIRE(o.size() == 3);
-  CHECK(o[0].first == c0);
-  CHECK(o[1].first == c1);
-  CHECK(o[2].first == c2);
+  CHECK(holds_alternative<address_type>(*deep));
+  deep = f.at("b.c.y");
+  REQUIRE(deep);
+  CHECK(holds_alternative<address_type>(*deep));
+  auto rec = r.at("b");
+  REQUIRE(rec);
+  CHECK(holds_alternative<record_type>(*rec));
+  rec = f.at("b");
+  // A flat record has no longer an internal record that can be accessed
+  // directly. Hence the access fails.
+  CHECK(!rec);
+  rec = r.at("b.c");
+  REQUIRE(rec);
+  CHECK(holds_alternative<record_type>(*rec));
+  rec = f.at("b.c");
+  CHECK(!rec);
+  MESSAGE("prefix finding");
+  // Since the type has a name, the prefix has the form "name.first.second".
+  // E.g., a full key is foo.a for field 0 or foo.b.c.z for a nested field.
+  using offset_keys = std::vector<std::pair<offset, std::string>>;
+  CHECK_EQUAL(r.find_prefix("a"), (offset_keys{{{0}, "a"}}));
+  CHECK_EQUAL(f.find_prefix("a"), (offset_keys{{{0}, "a"}}));
+  CHECK_EQUAL(r.find_prefix("b.a"), (offset_keys{{{1,0}, "b.a"}}));
+  CHECK_EQUAL(f.find_prefix("b.a"), (offset_keys{{{1}, "b.a"}}));
+  auto b = offset_keys{
+    {{1}, "b"},
+    {{1, 0}, "b.a"},
+    {{1, 1}, "b.b"},
+    {{1, 2}, "b.c"},
+    {{1, 2, 0}, "b.c.x"},
+    {{1, 2, 1}, "b.c.y"},
+    {{1, 2, 2}, "b.c.z"}
+  };
+  auto b_flat = offset_keys{
+    {{1}, "b.a"},
+    {{2}, "b.b"},
+    {{3}, "b.c.x"},
+    {{4}, "b.c.y"},
+    {{5}, "b.c.z"}
+  };
+  CHECK_EQUAL(r.find_prefix("b"), b);
+  CHECK_EQUAL(f.find_prefix("b"), b_flat);
+  MESSAGE("suffix finding");
+  // Find a single deep field.
+  CHECK_EQUAL(r.find_suffix("c.y"), (offset_keys{{{1, 2, 1}, "b.c.y"}}));
+  CHECK_EQUAL(f.find_suffix("c.y"), (offset_keys{{{4}, "b.c.y"}}));
+  CHECK_EQUAL(r.find_suffix("z"), (offset_keys{{{1, 2, 2}, "b.c.z"}}));
+  CHECK_EQUAL(f.find_suffix("z"), (offset_keys{{{5}, "b.c.z"}}));
+  // Find multiple record fields.
+  auto a = offset_keys{
+    {{0}, "a"},
+    {{1, 0}, "b.a"},
+  };
+  auto a_flat = offset_keys{
+    {{0}, "a"},
+    {{1}, "b.a"},
+  };
+  CHECK_EQUAL(r.find_suffix("a"), a);
+  CHECK_EQUAL(f.find_suffix("a"), a_flat);
+  // Use a glob expression.
+  auto c = offset_keys{
+    {{1, 2, 0}, "b.c.x"},
+    {{1, 2, 1}, "b.c.y"},
+    {{1, 2, 2}, "b.c.z"}
+  };
+  auto c_flat = offset_keys{
+    {{3}, "b.c.x"},
+    {{4}, "b.c.y"},
+    {{5}, "b.c.z"}
+  };
+  CHECK_EQUAL(r.find_suffix("c.*"), c);
+  CHECK_EQUAL(f.find_suffix("c.*"), c_flat);
+  // Find a field that is also a record.
+  CHECK_EQUAL(r.find_suffix("b"), (offset_keys{{{1, 1}, "b.b"}}));
+  CHECK_EQUAL(f.find_suffix("b"), (offset_keys{{{2}, "b.b"}}));
+  MESSAGE("arbitrary finding");
+  auto any_c = offset_keys{
+    {{1, 2}, "b.c"},
+    {{1, 2, 0}, "b.c.x"},
+    {{1, 2, 1}, "b.c.y"},
+    {{1, 2, 2}, "b.c.z"},
+    {{2}, "c"}
+  };
+  auto any_c_flat = offset_keys{
+    {{3}, "b.c.x"},
+    {{4}, "b.c.y"},
+    {{5}, "b.c.z"},
+    {{6}, "c"}
+  };
+  CHECK_EQUAL(r.find("c"), any_c);
+  CHECK_EQUAL(f.find("c"), any_c_flat);
 }
 
 TEST(congruence) {
@@ -315,11 +413,11 @@ TEST(congruence) {
   auto i = integer_type{};
   auto j = integer_type{};
   CHECK(i == j);
-  i.name("i");
-  j.name("j");
+  i = i.name("i");
+  j = j.name("j");
   CHECK(i != j);
   auto c = count_type{};
-  c.name("c");
+  c = c.name("c");
   CHECK(congruent(i, i));
   CHECK(congruent(i, j));
   CHECK(!congruent(i, c));
@@ -344,19 +442,18 @@ TEST(congruence) {
   CHECK(congruent(r0, r1));
   MESSAGE("aliases");
   auto a = alias_type{i};
-  a.name("a");
+  a = a.name("a");
   CHECK(type{a} != type{i});
   CHECK(congruent(a, i));
   a = alias_type{r0};
-  a.name("r0");
+  a = a.name("r0");
   CHECK(type{a} != type{r0});
   CHECK(congruent(a, r0));
 }
 
 TEST(printable) {
-  // Plain types
   MESSAGE("basic types");
-  CHECK_EQUAL(to_string(none_type{}), "none");
+  CHECK_EQUAL(to_string(type{}), "none");
   CHECK_EQUAL(to_string(boolean_type{}), "bool");
   CHECK_EQUAL(to_string(integer_type{}), "int");
   CHECK_EQUAL(to_string(count_type{}), "count");
@@ -368,7 +465,7 @@ TEST(printable) {
   CHECK_EQUAL(to_string(address_type{}), "addr");
   CHECK_EQUAL(to_string(subnet_type{}), "subnet");
   CHECK_EQUAL(to_string(port_type{}), "port");
-  MESSAGE("enumeration");
+  MESSAGE("enumeration_type");
   auto e = enumeration_type{{"foo", "bar", "baz"}};
   CHECK_EQUAL(to_string(e), "enum {foo, bar, baz}");
   MESSAGE("container types");
@@ -385,7 +482,7 @@ TEST(printable) {
   MESSAGE("alias");
   auto a = alias_type{real_type{}};
   CHECK_EQUAL(to_string(a), "real"); // haul through
-  a.name("foo");
+  a = a.name("foo");
   CHECK_EQUAL(to_string(a), "real");
   CHECK_EQUAL(to_string(type{a}), "foo");
   MESSAGE("type");
@@ -400,16 +497,15 @@ TEST(printable) {
   CHECK_EQUAL(to_string(attr), "&skip");
   // Attributes on types.
   auto s = set_type{port_type{}};
-  s.attributes().emplace_back(attr);
-  s.attributes().emplace_back("tokenize", "/rx/");
+  s = s.attributes({attr, {"tokenize", "/rx/"}});
   CHECK_EQUAL(to_string(s), "set<port> &skip &tokenize=/rx/");
   // Nested types
   t = s;
-  t.attributes().resize(1);
+  t = t.attributes({attr});
   t = map_type{count_type{}, t};
   CHECK_EQUAL(to_string(t), "map<count, set<port> &skip>");
   MESSAGE("signature");
-  t.name("jells");
+  t = t.name("jells");
   std::string sig;
   CHECK(printers::type<policy::signature>(sig, t));
   CHECK_EQUAL(sig, "jells = map<count, set<port> &skip>");
@@ -446,7 +542,7 @@ TEST(parseable) {
   CHECK_EQUAL(t, r);
   MESSAGE("symbol table");
   auto foo = boolean_type{};
-  foo.name("foo");
+  foo = foo.name("foo");
   auto symbols = type_table{{"foo", foo}};
   auto p = type_parser{std::addressof(symbols)}; // overloaded operator&
   CHECK(p("foo", t));
@@ -484,17 +580,34 @@ TEST(parseable) {
   CHECK_EQUAL(t, r);
 }
 
+TEST(hashable) {
+  auto hash = [&](auto&& x) { return uhash<xxhash64>{}(x); };
+  CHECK_EQUAL(hash(type{}), 10680828680203489530ul);
+  CHECK_EQUAL(hash(boolean_type{}), 12612883901365648434ul);
+  CHECK_EQUAL(hash(type{boolean_type{}}), 13047344884484907481ul);
+  CHECK_NOT_EQUAL(hash(type{boolean_type{}}), hash(boolean_type{}));
+  CHECK_EQUAL(hash(boolean_type{}), hash(address_type{}));
+  CHECK_NOT_EQUAL(hash(type{boolean_type{}}), hash(type{address_type{}}));
+  auto x = record_type{
+    {"x", integer_type{}},
+    {"y", string_type{}},
+    {"z", vector_type{real_type{}}}
+  };
+  CHECK_EQUAL(hash(x), 13215642375407153428ul);
+  CHECK_EQUAL(to_digest(x), std::to_string(hash(type{x})));
+}
+
 TEST(json) {
   auto e = enumeration_type{{"foo", "bar", "baz"}};
-  e.name("e");
+  e = e.name("e");
   auto t = map_type{boolean_type{}, count_type{}};
-  t.name("bit_table");
+  t = t.name("bit_table");
   auto r = record_type{
     {"x", address_type{}.attributes({{"skip"}})},
     {"y", boolean_type{}.attributes({{"default", "F"}})},
     {"z", record_type{{"inner", e}}}
   };
-  r.name("foo");
+  r = r.name("foo");
   auto expected = R"__({
   "name": "foo",
   "kind": "record",

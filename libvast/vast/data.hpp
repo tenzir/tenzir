@@ -14,30 +14,29 @@
 #pragma once
 
 #include <chrono>
-#include <iterator>
-#include <regex>
 #include <string>
-#include <vector>
-#include <map>
+#include <tuple>
 #include <type_traits>
 
-#include "vast/concept/hashable/uhash.hpp"
-#include "vast/concept/hashable/xxhash.hpp"
+#include <caf/default_sum_type_access.hpp>
+#include <caf/detail/type_list.hpp>
+#include <caf/none.hpp>
+#include <caf/optional.hpp>
+#include <caf/variant.hpp>
 
 #include "vast/aliases.hpp"
 #include "vast/address.hpp"
 #include "vast/pattern.hpp"
 #include "vast/subnet.hpp"
 #include "vast/port.hpp"
-#include "vast/none.hpp"
 #include "vast/offset.hpp"
-#include "vast/optional.hpp"
 #include "vast/time.hpp"
 #include "vast/type.hpp"
-#include "vast/variant.hpp"
-#include "vast/detail/flat_set.hpp"
+
+#include "vast/concept/hashable/uhash.hpp"
+#include "vast/concept/hashable/xxhash.hpp"
+
 #include "vast/detail/operators.hpp"
-#include "vast/detail/string.hpp"
 
 namespace vast {
 
@@ -47,86 +46,90 @@ class json;
 namespace detail {
 
 template <class T>
-using make_data_type = std::conditional_t<
-    std::is_floating_point_v<T>,
-    real,
+using to_data_type = std::conditional_t<
+  std::is_floating_point_v<T>,
+  real,
+  std::conditional_t<
+    std::is_same_v<T, boolean>,
+    boolean,
     std::conditional_t<
-      std::is_same_v<T, boolean>,
-      boolean,
+      std::is_unsigned_v<T>,
+      count,
       std::conditional_t<
-        std::is_unsigned_v<T>,
-        count,
+        std::is_signed_v<T>,
+        integer,
         std::conditional_t<
-          std::is_signed_v<T>,
-          integer,
+          std::is_convertible_v<T, std::string>,
+          std::string,
           std::conditional_t<
-            std::is_convertible_v<T, std::string>,
-            std::string,
-            std::conditional_t<
-                 std::is_same_v<T, none>
-              || std::is_same_v<T, timespan>
-              || std::is_same_v<T, timestamp>
-              || std::is_same_v<T, pattern>
-              || std::is_same_v<T, address>
-              || std::is_same_v<T, subnet>
-              || std::is_same_v<T, port>
-              || std::is_same_v<T, enumeration>
-              || std::is_same_v<T, vector>
-              || std::is_same_v<T, set>
-              || std::is_same_v<T, map>,
-              T,
-              std::false_type
-            >
+               std::is_same_v<T, caf::none_t>
+            || std::is_same_v<T, timespan>
+            || std::is_same_v<T, timestamp>
+            || std::is_same_v<T, pattern>
+            || std::is_same_v<T, address>
+            || std::is_same_v<T, subnet>
+            || std::is_same_v<T, port>
+            || std::is_same_v<T, enumeration>
+            || std::is_same_v<T, vector>
+            || std::is_same_v<T, set>
+            || std::is_same_v<T, map>,
+            T,
+            std::false_type
           >
         >
       >
     >
-  >;
-
-using data_variant = variant<
-  none,
-  boolean,
-  integer,
-  count,
-  real,
-  timespan,
-  timestamp,
-  std::string,
-  pattern,
-  address,
-  subnet,
-  port,
-  enumeration,
-  vector,
-  set,
-  map 
+  >
 >;
 
 } // namespace detail
 
 /// Converts a C++ type to the corresponding VAST data type.
+/// @relates data
 template <class T>
-using data_type = detail::make_data_type<std::decay_t<T>>;
+using to_data_type = detail::to_data_type<std::decay_t<T>>;
 
 /// A type-erased represenation of various types of data.
 class data : detail::totally_ordered<data>,
              detail::addable<data> {
-  friend access;
-
 public:
+  using types = caf::detail::type_list<
+    caf::none_t,
+    boolean,
+    integer,
+    count,
+    real,
+    timespan,
+    timestamp,
+    std::string,
+    pattern,
+    address,
+    subnet,
+    port,
+    enumeration,
+    vector,
+    set,
+    map
+  >;
+
+  /// The sum type of all possible JSON types.
+  using variant = caf::detail::tl_apply_t<types, caf::variant>;
+
   /// Default-constructs empty data.
-  data(none = nil);
+  data() = default;
 
   /// Constructs data from optional data.
   /// @param x The optional data instance.
   template <class T>
-  data(optional<T> x) : data{x ? std::move(*x) : data{}} {
+  data(caf::optional<T> x) : data{x ? std::move(*x) : data{}} {
+    // nop
   }
 
   /// Constructs data from a `std::chrono::duration`.
   /// @param x The duration to construct data from.
   template <class Rep, class Period>
   data(std::chrono::duration<Rep, Period> x) : data_{timespan{x}} {
+    // nop
   }
 
   /// Constructs data.
@@ -134,12 +137,11 @@ public:
   template <
     class T,
     class = detail::disable_if_t<
-      detail::is_same_or_derived_v<data, T>
-      || std::is_same_v<data_type<T>, std::false_type>
+      std::is_same_v<to_data_type<T>, std::false_type>
     >
   >
-  data(T&& x)
-    : data_(data_type<T>(std::forward<T>(x))) {
+  data(T&& x) : data_{to_data_type<T>(std::forward<T>(x))} {
+    // nop
   }
 
   data& operator+=(const data& rhs);
@@ -147,42 +149,88 @@ public:
   friend bool operator==(const data& lhs, const data& rhs);
   friend bool operator<(const data& lhs, const data& rhs);
 
-  template <class Inspector>
-  friend auto inspect(Inspector&f, data& d) {
-    return f(d.data_);
+  /// @cond PRIVATE
+
+  variant& get_data() {
+    return data_;
   }
 
-  friend detail::data_variant& expose(data& d);
+  const variant& get_data() const {
+    return data_;
+  }
+
+  template <class Inspector>
+  friend auto inspect(Inspector&f, data& x) {
+    return f(x.data_);
+  }
+
+  /// @endcond
 
 private:
-  detail::data_variant data_;
+  variant data_;
 };
 
-//template <class T>
-//using is_basic_data = std::integral_constant<
-//    bool,
-//    std::is_same<T, boolean>::value
-//      || std::is_same<T, integer>::value
-//      || std::is_same<T, count>::value
-//      || std::is_same<T, real>::value
-//      || std::is_same<T, timespan>::value
-//      || std::is_same<T, timestamp>::value
-//      || std::is_same<T, std::string>::value
-//      || std::is_same<T, pattern>::value
-//      || std::is_same<T, address>::value
-//      || std::is_same<T, subnet>::value
-//      || std::is_same<T, port>::value
-//  >;
-//
-//template <class T>
-//using is_container_data = std::integral_constant<
-//    bool,
-//    std::is_same<T, vector>::value
-//      || std::is_same<T, set>::value
-//      || std::is_same<T, table>::value
-//  >;
-
 // -- helpers -----------------------------------------------------------------
+
+/// Maps a concrete data type to a corresponding @ref type.
+/// @relates data type
+template <class>
+struct data_traits {
+  using type = std::false_type;
+};
+
+#define VAST_DATA_TRAIT(name)                                                  \
+  template <>                                                                  \
+  struct data_traits<name> {                                                   \
+    using type = name##_type;                                                  \
+  }
+
+VAST_DATA_TRAIT(boolean);
+VAST_DATA_TRAIT(integer);
+VAST_DATA_TRAIT(count);
+VAST_DATA_TRAIT(real);
+VAST_DATA_TRAIT(timespan);
+VAST_DATA_TRAIT(timestamp);
+VAST_DATA_TRAIT(pattern);
+VAST_DATA_TRAIT(address);
+VAST_DATA_TRAIT(subnet);
+VAST_DATA_TRAIT(port);
+VAST_DATA_TRAIT(enumeration);
+VAST_DATA_TRAIT(vector);
+VAST_DATA_TRAIT(set);
+VAST_DATA_TRAIT(map);
+
+#undef VAST_DATA_TRAIT
+
+template <>
+struct data_traits<caf::none_t> {
+  using type = none_type;
+};
+
+template <>
+struct data_traits<std::string> {
+  using type = string_type;
+};
+
+/// @relates data type
+template <class T>
+using data_to_type = typename data_traits<T>::type;
+
+/// @returns `true` if *x is a *basic* data.
+/// @relates data
+bool is_basic(const data& x);
+
+/// @returns `true` if *x is a *complex* data.
+/// @relates data
+bool is_complex(const data& x);
+
+/// @returns `true` if *x is a *recursive* data.
+/// @relates data
+bool is_recursive(const data& x);
+
+/// @returns `true` if *x is a *container* data.
+/// @relates data
+bool is_container(const data& x);
 
 /// Retrieves data at a given offset.
 /// @param v The vector to lookup.
@@ -192,36 +240,23 @@ private:
 const data* get(const vector& v, const offset& o);
 const data* get(const data& d, const offset& o);
 
-/// Flattens a vector.
+/// Flattens a vector recursively according to a record type such that only
+/// nested records are lifted into parent vector.
 /// @param xs The vector to flatten.
-/// @returns The flattened vector.
+/// @param t The record type according to which *xs* should be flattened.
+/// @returns The flattened vector if the nested structure of *xs* is congruent
+///           to *t*.
 /// @see unflatten
-vector flatten(const vector& xs);
-vector flatten(vector&& xs);
-
-/// Flattens a vector.
-/// @param x The vector to flatten.
-/// @returns The flattened vector as `data` if *x* is a `vector`.
-/// @see unflatten
-data flatten(const data& x);
-data flatten(data&& x);
+caf::optional<vector> flatten(const vector& xs, const record_type& t);
+caf::optional<data> flatten(const data& x, type t);
 
 /// Unflattens a vector according to a record type.
 /// @param xs The vector to unflatten according to *rt*.
 /// @param rt The type that defines the vector structure.
 /// @returns The unflattened vector of *xs* according to *rt*.
 /// @see flatten
-optional<vector> unflatten(const vector& xs, const record_type& rt);
-optional<vector> unflatten(vector&& xs, const record_type& rt);
-
-/// Unflattens a vector according to a record type.
-/// @param x The vector to unflatten according to *t*.
-/// @param t The type that defines the vector structure.
-/// @returns The unflattened vector of *x* according to *t* if *x* is a
-///          `vector` and *t* a `record_type`.
-/// @see flatten
-optional<vector> unflatten(const data& x, const type& t);
-optional<vector> unflatten(data&& x, const type& t);
+caf::optional<vector> unflatten(const vector& xs, const record_type& rt);
+caf::optional<data> unflatten(const data& x, type t);
 
 /// Evaluates a data predicate.
 /// @param lhs The LHS of the predicate.
@@ -241,7 +276,26 @@ bool convert(const data& v, json& j);
 /// data.
 bool convert(const data& v, json& j, const type& t);
 
+/// @relates data
+template <class... Ts>
+auto make_vector(Ts... xs) {
+  return vector{data{std::move(xs)}...};
+}
+
+template <class... Ts>
+auto make_vector(std::tuple<Ts...> tup) {
+  return std::apply([](auto&... xs) { return make_vector(std::move(xs)...); },
+                    tup);
+}
+
 } // namespace vast
+
+namespace caf {
+
+template <>
+struct sum_type_access<vast::data> : default_sum_type_access<vast::data> {};
+
+} // namespace caf
 
 namespace std {
 
@@ -253,4 +307,3 @@ struct hash<vast::data> {
 };
 
 } // namespace std
-

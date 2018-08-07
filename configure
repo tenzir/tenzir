@@ -29,10 +29,12 @@ Usage: $0 [OPTION]... [VAR=VALUE]...
     --build-dir=DIR         directory where to perform build [build]
     --show-time-report      show where the compiler spends its time
     --no-auto-libc++        do not automatically use libc++ with Clang
+    --more-warnings         enables most warnings on GCC and Clang
 
   Debugging:
     --log-level=LEVEL       maximum compile-time log level [debug]
     --disable-assertions    disable assertions
+    --disable-exceptions    disable C++ exceptions
     --enable-asan           enable AddressSanitizer
     --enable-gcov           enable GCOV
 
@@ -49,11 +51,15 @@ Usage: $0 [OPTION]... [VAR=VALUE]...
     --with-perftools=PATH   path to gperftools install root
     --with-doxygen=PATH     path to Doxygen install root
 
+  Convenience options:
+    --dev-mode              sets --build-type=debug, --log-level=trace,
+                            and --enable-asan
+
   Influential Environment Variables (only on first invocation):
-    CXX                         C++ compiler command
-    CXXFLAGS                    C++ compiler flags
-    LDFLAGS                     Additional linker flags
-    CMAKE_GENERATOR     Selects a custom generator
+    CXX                     C++ compiler command
+    CXXFLAGS                C++ compiler flags
+    LDFLAGS                 Additional linker flags
+    CMAKE_GENERATOR         Selects a custom generator
 "
 
 # Function to append a CMake cache entry definition to the
@@ -140,11 +146,17 @@ while [ $# -ne 0 ]; do
     --no-auto-libc++)
       append_cache_entry NO_AUTO_LIBCPP BOOL yes
       ;;
+    --more-warnings)
+        append_cache_entry MORE_WARNINGS BOOL yes
+        ;;
     --log-level=*)
       append_cache_entry VAST_LOG_LEVEL INTEGER $(levelize $optarg)
       ;;
     --disable-assertions)
       append_cache_entry VAST_ENABLE_ASSERTIONS BOOL false
+      ;;
+    --disable-exceptions)
+      append_cache_entry NO_EXCEPTIONS BOOL true
       ;;
     --enable-asan)
       append_cache_entry ENABLE_ADDRESS_SANITIZER BOOL true
@@ -172,6 +184,13 @@ while [ $# -ne 0 ]; do
       ;;
     --with-doxygen=*)
       append_cache_entry Doxygen_ROOT_DIR PATH "$optarg"
+      ;;
+    --dev-mode)
+      append_cache_entry CMAKE_BUILD_TYPE STRING Debug
+      append_cache_entry VAST_LOG_LEVEL INTEGER 4
+      append_cache_entry ENABLE_ADDRESS_SANITIZER BOOL true
+      # TODO: eventually, we also want to enable --more-warnings
+      # append_cache_entry MORE_WARNINGS BOOL yes
       ;;
     *)
       echo "Invalid option '$1'.  Try $0 --help to see available options."
