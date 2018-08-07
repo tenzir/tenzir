@@ -53,6 +53,14 @@ std::vector<event> make_alternating_integers(size_t count) {
   return result;
 }
 
+/// insert item into a sorted vector
+/// @precondition is_sorted(vec)
+/// @postcondition is_sorted(vec)
+template <typename T, typename Pred>
+auto insert_sorted(std::vector<T>& vec, T const& item, Pred pred) {
+  return vec.insert(std::upper_bound(vec.begin(), vec.end(), item, pred), item);
+}
+
 } // namespace <anonymous>
 
 size_t events::slice_size = 100;
@@ -70,8 +78,8 @@ std::vector<table_slice_handle> events::bgpdump_txt_slices;
 // std::vector<table_slice_handle> events::random_slices;
 
 std::vector<const_table_slice_handle> events::const_bro_conn_log_slices;
-// std::vector<const_table_slice_handle> events::const_bro_http_log_slices;
-// std::vector<const_table_slice_handle> events::const_bro_dns_log_slices;
+std::vector<const_table_slice_handle> events::const_bro_http_log_slices;
+std::vector<const_table_slice_handle> events::const_bro_dns_log_slices;
 std::vector<const_table_slice_handle> events::const_bgpdump_txt_slices;
 // std::vector<const_table_slice_handle> events::const_random_slices;
 
@@ -96,24 +104,21 @@ events::copy(std::vector<table_slice_handle> xs) {
   return result;
 }
 
-class event_tracking_builder {
-  table_slice_builder_ptr inner_;
-  std::vector<event*> memory_;
-
+/// A wrapper around a table_slice_builder_ptr that assigns ids to each
+/// added event.
+class id_assigning_builder {
 public:
-  event_tracking_builder() {
+  explicit id_assigning_builder(table_slice_builder_ptr b) : inner_{b} {
+    // nop
   }
 
-  explicit event_tracking_builder(table_slice_builder_ptr b) : inner_{b} {
-  }
-
-  bool add(event* e) {
-    if (!inner_->add(e->timestamp()))
+  /// Adds an event to the table slice and assigns an id.
+  bool add(event& e) {
+    if (!inner_->add(e.timestamp()))
       FAIL("builder->add() failed");
-    if (!inner_->recursive_add(e->data(), e->type()))
+    if (!inner_->recursive_add(e.data(), e.type()))
       FAIL("builder->recursive_add() failed");
-
-    memory_.push_back(e);
+    e.id(id_++);
     return true;
   }
 
@@ -121,41 +126,50 @@ public:
     return inner_->rows();
   }
 
-  const std::vector<event*> entries() const {
-    return memory_;
+  bool start_slice(size_t offset) {
+    if (rows() != 0)
+      return false;
+    offset_ = offset;
+    id_ = offset;
+    return true;
   }
 
+  /// Finish the slice and set its offset.
   table_slice_handle finish() {
-    memory_.clear();
-    return inner_->finish();
+    auto slice = inner_->finish();
+    slice->offset(offset_);
+    return slice;
   }
-};
 
+private:
+  table_slice_builder_ptr inner_;
+  size_t offset_ = 0;
+  size_t id_ = 0;
+};
 
 /// Tries to access the builder for `layout`.
 class builders {
-  using Map = std::map<std::string, event_tracking_builder>;
-
-  Map builders_;
-
 public:
-  event_tracking_builder* get(const type& layout) {
+  using Map = std::map<std::string, id_assigning_builder>;
+
+  id_assigning_builder* get(const type& layout) {
     auto i = builders_.find(layout.name());
     if (i != builders_.end())
       return &i->second;
     return caf::visit(
       detail::overload(
-        [&](const record_type& rt) -> event_tracking_builder* {
+        [&](const record_type& rt) -> id_assigning_builder* {
           // We always add a timestamp as first column to the layout.
           auto internal = rt;
           record_field tstamp_field{"timestamp", timestamp_type{}};
           internal.fields.insert(internal.fields.begin(),
                                  std::move(tstamp_field));
-          auto& ref = builders_[layout.name()];
-          ref = event_tracking_builder{default_table_slice::make_builder(std::move(internal))};
-          return &ref;
+          id_assigning_builder tmp{
+            default_table_slice::make_builder(std::move(internal))};
+          return &(
+            builders_.emplace(layout.name(), std::move(tmp)).first->second);
         },
-        [&](auto&) -> event_tracking_builder* {
+        [&](const auto&) -> id_assigning_builder* {
           FAIL("layout is not a record type");
           return nullptr;
         }),
@@ -165,6 +179,9 @@ public:
   Map& all() {
     return builders_;
   }
+
+private:
+  Map builders_;
 };
 
 events::events() {
@@ -186,50 +203,49 @@ events::events() {
     return first;
   };
   MESSAGE("building slices of " << slice_size << " events each");
-  auto slice_up = [&](std::vector<event>& src) {
+  auto assign_ids_and_slice_up = [&](std::vector<event>& src) {
     VAST_ASSERT(src.size() > 0);
     VAST_ASSERT(caf::holds_alternative<record_type>(src[0].type()));
     std::vector<table_slice_handle> slices;
     builders bs;
     auto finish_slice = [&](auto& builder) {
-      auto first = allocate_id_block(slice_size);
-      /// inject ids into the events here
-      size_t i = 0;
-      for(auto eptr : builder.entries()) {
-        eptr->id(first + i++);
-      }
-      slices.emplace_back(builder.finish());
-      slices.back()->offset(first);
+      insert_sorted(slices, builder.finish(),
+                    [](const auto& lhs, const auto& rhs) {
+                      return lhs->offset() < rhs->offset();
+                    });
     };
     for (auto& e : src) {
       auto bptr = bs.get(e.type());
-      bptr->add(&e);
+      if (bptr->rows() == 0)
+        bptr->start_slice(allocate_id_block(slice_size));
+      bptr->add(e);
       if (bptr->rows() == slice_size)
         finish_slice(*bptr);
     }
-    for (auto& [_, builder] : bs.all()) {
+    for (auto& i : bs.all()) {
+      auto builder = i.second;
       if (builder.rows() > 0)
         finish_slice(builder);
     }
     return slices;
   };
-  bro_conn_log_slices = slice_up(bro_conn_log);
-  bro_dns_log_slices = slice_up(bro_dns_log);
+  bro_conn_log_slices = assign_ids_and_slice_up(bro_conn_log);
+  bro_dns_log_slices = assign_ids_and_slice_up(bro_dns_log);
   allocate_id_block(1000); // cause an artificial gap in the ID sequence
-  bro_http_log_slices = slice_up(bro_http_log);
-  bgpdump_txt_slices = slice_up(bgpdump_txt);
+  bro_http_log_slices = assign_ids_and_slice_up(bro_http_log);
+  bgpdump_txt_slices = assign_ids_and_slice_up(bgpdump_txt);
   //random_slices = slice_up(random);
-  ascending_integers_slices = slice_up(ascending_integers);
-  alternating_integers_slices = slice_up(alternating_integers);
+  ascending_integers_slices = assign_ids_and_slice_up(ascending_integers);
+  alternating_integers_slices = assign_ids_and_slice_up(alternating_integers);
   auto to_const_vector = [](const auto& xs) {
     std::vector<const_table_slice_handle> result;
     result.reserve(xs.size());
-    result.insert(result.begin(), xs.begin(), xs.end());
+    result.insert(result.end(), xs.begin(), xs.end());
     return result;
   };
   const_bro_conn_log_slices = to_const_vector(bro_conn_log_slices);
-  // const_bro_dns_log_slices = to_const_vector(bro_dns_log_slices);
-  // const_bro_http_log_slices = to_const_vector(bro_http_log_slices);
+  const_bro_dns_log_slices = to_const_vector(bro_dns_log_slices);
+  const_bro_http_log_slices = to_const_vector(bro_http_log_slices);
   const_bgpdump_txt_slices = to_const_vector(bgpdump_txt_slices);
   // const_random_slices = to_const_vector(random_slices);
   const_ascending_integers_slices = to_const_vector(ascending_integers_slices);
@@ -246,7 +262,6 @@ events::events() {
       auto xs = slice->rows_to_events();
       std::move(xs.begin(), xs.end(), std::back_inserter(result));
     }
-    sort_by_id(result);
     return result;
   };
 #define SANITY_CHECK(event_vec, slice_vec)                                     \
@@ -264,8 +279,8 @@ events::events() {
     }                                                                          \
   }
   SANITY_CHECK(bro_conn_log, const_bro_conn_log_slices);
-  //SANITY_CHECK(bro_dns_log, const_bro_dns_log_slices);
-  //SANITY_CHECK(bro_http_log, const_bro_http_log_slices);
+  SANITY_CHECK(bro_dns_log, const_bro_dns_log_slices);
+  SANITY_CHECK(bro_http_log, const_bro_http_log_slices);
   SANITY_CHECK(bgpdump_txt, const_bgpdump_txt_slices);
   //SANITY_CHECK(random, const_random_slices);
 }
