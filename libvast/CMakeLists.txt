@@ -241,6 +241,7 @@ set(tests
   test/filesystem.cpp
   test/fixtures/actor_system.cpp
   test/fixtures/events.cpp
+  test/fixtures/node.cpp
   test/format/bro.cpp
   test/format/mrt.cpp
   test/format/writer.cpp
