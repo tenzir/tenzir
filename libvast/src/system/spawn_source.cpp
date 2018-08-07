@@ -33,6 +33,9 @@
 #include "vast/format/test.hpp"
 
 #include "vast/system/atoms.hpp"
+#ifdef VAST_HAVE_BROKER
+#include "vast/system/broker_source.hpp"
+#endif
 #include "vast/system/source.hpp"
 #include "vast/system/spawn.hpp"
 
@@ -63,7 +66,30 @@ expected<actor> spawn_source(local_actor* self, options& opts) {
   auto grd = caf::detail::make_scope_guard([&] { opts.params = r.remainder; });
   // Parse format-specific parameters, if any.
   actor src;
-  if (format == "pcap") {
+  if (format == "broker") {
+#ifndef VAST_HAVE_BROKER
+    return make_error(ec::unspecified, "not compiled with broker support");
+#else
+    auto endpoint = "localhost:9999"s;
+    auto listen = false;
+    auto topic = ""s;
+    r = r.remainder.extract_opts({
+      // TODO: should we reuse the -r instead of adding a new flag -e? The
+      // endpoint is technically where the input comes from. --MV
+      {"endpoint,e", "the endpoint to listen on or to connect to", endpoint},
+      {"listen,l", "listen at the endpoint instead of connecting", listen},
+      {"topic,t", "the topic to subscribe to and receive events", topic},
+    });
+    if (!r.error.empty())
+      return make_error(ec::syntax_error, r.error);
+    src = self->spawn(default_broker_source);
+    anon_send(src, subscribe_atom::value, topic);
+    if (listen)
+      anon_send(src, listen_atom::value, endpoint);
+    else
+      anon_send(src, connect_atom::value, endpoint);
+#endif
+  } else if (format == "pcap") {
 #ifndef VAST_HAVE_PCAP
     return make_error(ec::unspecified, "not compiled with pcap support");
 #else

@@ -53,6 +53,7 @@ using key_atom = caf::atom_constant<caf::atom("key")>;
 using limit_atom = caf::atom_constant<caf::atom("limit")>;
 using link_atom = caf::atom_constant<caf::atom("link")>;
 using list_atom = caf::atom_constant<caf::atom("list")>;
+using listen_atom = caf::atom_constant<caf::atom("listen")>;
 using load_atom = caf::atom_constant<caf::atom("load")>;
 using peer_atom = caf::atom_constant<caf::atom("peer")>;
 using persist_atom = caf::atom_constant<caf::atom("persist")>;
