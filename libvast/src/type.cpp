@@ -18,8 +18,8 @@
 #include "vast/data.hpp"
 #include "vast/json.hpp"
 #include "vast/pattern.hpp"
-#include "vast/type.hpp"
 #include "vast/schema.hpp"
+#include "vast/type.hpp"
 
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/type.hpp"
