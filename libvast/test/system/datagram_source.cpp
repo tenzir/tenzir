@@ -66,7 +66,7 @@ caf::behavior test_sink(test_sink_type* self, caf::actor src) {
 
 FIXTURE_SCOPE(source_tests, fixtures::deterministic_actor_system_and_events)
 
-TEST(bro ssl source) {
+TEST(bro conn source) {
   MESSAGE("start source for producing table slices of size 100");
   namespace bf = format::bro;
   bf::reader reader;
