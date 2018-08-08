@@ -226,6 +226,18 @@ Available *component* values with corresponding *parameters*:
 
 *source* *bro*
 
+*source* *broker*
+  `-e` *endpoint* [*127.0.0.1:9999*]
+    The Broker endpoint to connect to or to listen at.
+  `-l`
+    A flag that puts the Broker endpoint into listing mode. If present, then
+    the source attempts to listen at the provided endpoint. Otherwise it
+    attempts to connect to the provided endpoint.
+  `-t` *topic*
+    The *topic* represents a label that the internal Broker endpoint subscribes
+    to. The source assumes that data published to this topic should be
+    imported.
+
 *source* *bgpdump*
 
 *source* *mrt*

@@ -1,13 +1,13 @@
 #pragma once
 
 #cmakedefine VAST_ENABLE_ASSERTIONS
+#cmakedefine VAST_HAVE_BROKER
 #cmakedefine VAST_HAVE_GPERFTOOLS
 #cmakedefine VAST_HAVE_PCAP
-#cmakedefine VAST_HAVE_BROCCOLI
 #cmakedefine VAST_HAVE_SNAPPY
-#cmakedefine VAST_USE_TCMALLOC
 #cmakedefine VAST_USE_OPENCL
 #cmakedefine VAST_USE_OPENSSL
+#cmakedefine VAST_USE_TCMALLOC
 
 #include <caf/config.hpp>
 
