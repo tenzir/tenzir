@@ -94,9 +94,9 @@ struct importer_fixture : Base {
   virtual void fetch_ok() = 0;
 
   auto make_source() {
+    auto slices = this->copy(this->bro_conn_log_slices);
     return vast::detail::spawn_container_source(this->self->system(),
-                                                this->bro_conn_log_slices,
-                                                importer);
+                                                std::move(slices), importer);
   }
 
   auto make_bro_source() {
