@@ -136,7 +136,7 @@ struct insert_visitor_helper {
 
   result_type operator()(const timestamp_type&, const timestamp& d);
 
-  result_type operator()(const none_type&, none);
+  result_type operator()(const none_type&, caf::none_t);
 
   // Matched for all complex types
   template <class T, class D>
@@ -144,7 +144,7 @@ struct insert_visitor_helper {
     return append_to_list(t, d);
   }
 
-  // Cast the current builder to Listbuilder if T set_type or vector_type 
+  // Cast the current builder to Listbuilder if T set_type or vector_type
   // and appends all Items for D else returns a TypeError
   template <class T, class D>
   result_type append_to_list(const T& t, const D& d) {
@@ -160,7 +160,7 @@ struct insert_visitor_helper {
         return status;
       for (auto v : d) {
         format::arrow::insert_visitor_helper a(lbuilder->value_builder());
-        status = visit(a, t.value_type, v);
+        status = caf::visit(a, t.value_type, v);
         if (!status.ok())
           return status;
       }
@@ -170,7 +170,7 @@ struct insert_visitor_helper {
   }
 };
 
-// Visitor to cast the field builder to the correct buildertype and append data 
+// Visitor to cast the field builder to the correct buildertype and append data
 struct insert_visitor {
   using result_type = ::arrow::Status;
 
@@ -181,7 +181,8 @@ struct insert_visitor {
 
   insert_visitor(std::shared_ptr<::arrow::RecordBatchBuilder>& b);
 
-  insert_visitor(std::shared_ptr<::arrow::RecordBatchBuilder>& b, u_int64_t cbuilder);
+  insert_visitor(std::shared_ptr<::arrow::RecordBatchBuilder>& b,
+                 u_int64_t cbuilder);
 
   result_type operator()(const record_type& t, const std::vector<data>& d);
 
@@ -207,29 +208,28 @@ struct insert_visitor {
 
   result_type operator()(const port_type& t, const port& d);
 
-  // none data -> AppendNull
-  result_type operator()(const none_type&, none);
+  // caf::none_t data -> AppendNull
+  result_type operator()(const none_type&, caf::none_t);
 
-  result_type operator()(const count_type& t, none);
+  result_type operator()(const count_type& t, caf::none_t);
 
-  result_type operator()(const integer_type& t, none d);
+  result_type operator()(const integer_type& t, caf::none_t d);
 
-  result_type operator()(const real_type& t, none);
+  result_type operator()(const real_type& t, caf::none_t);
 
-  result_type operator()(const string_type& t, none);
+  result_type operator()(const string_type& t, caf::none_t);
 
-  result_type operator()(const boolean_type& t, none);
+  result_type operator()(const boolean_type& t, caf::none_t);
 
-  result_type operator()(const timespan_type& t, none);
+  result_type operator()(const timespan_type& t, caf::none_t);
 
-  result_type operator()(const address_type& t, none);
+  result_type operator()(const address_type& t, caf::none_t);
 
-  result_type operator()(const port_type& t, none);
+  result_type operator()(const port_type& t, caf::none_t);
 
-  result_type operator()(const vector_type& t, none);
+  result_type operator()(const vector_type& t, caf::none_t);
 
-  result_type operator()(const set_type& t, none);
-
+  result_type operator()(const set_type& t, caf::none_t);
 
   // Matched for all complex types
   template <class T, class D>
@@ -237,7 +237,7 @@ struct insert_visitor {
     auto lbuilder = rbuilder->GetField(cbuilder);
     auto a = insert_visitor_helper(lbuilder);
     return a.append_to_list(t, d);
-  };
+  }
 };
 
 } // namespace arrow

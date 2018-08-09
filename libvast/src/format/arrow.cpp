@@ -16,17 +16,37 @@
 #include "arrow/io/api.h"
 #include "arrow/ipc/api.h"
 #include "arrow/type.h"
-
 #include "plasma/common.h"
 
 #include "vast/error.hpp"
 #include "vast/event.hpp"
 #include "vast/format/arrow.hpp"
 #include "vast/logger.hpp"
+#include <caf/detail/type_list.hpp>
+#include <caf/none.hpp>
+#include <caf/variant.hpp>
+
+#include "vast/address.hpp"
+#include "vast/error.hpp"
+#include "vast/event.hpp"
+#include "vast/expected.hpp"
+#include "vast/logger.hpp"
+#include "vast/schema.hpp"
+#include "vast/subnet.hpp"
+#include "vast/time.hpp"
 #include "vast/type.hpp"
 
+#include "vast/concept/parseable/core.hpp"
+#include "vast/concept/parseable/numeric.hpp"
+#include "vast/concept/parseable/string.hpp"
+#include "vast/concept/parseable/vast/address.hpp"
+#include "vast/concept/parseable/vast/data.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/data.hpp"
+
+using caf::get_if;
+using caf::holds_alternative;
+using caf::visit;
 
 namespace vast {
 
@@ -42,9 +62,8 @@ std::shared_ptr<arrow::Field> convert_to_arrow_field(const type& value) {
 // representation in the form of a record batch.
 expected<std::shared_ptr<arrow::RecordBatch>> transpose(const event& e) {
   std::vector<std::shared_ptr<arrow::Field>> schema_vector;
-  if (is<record_type>(e.type())) {
-    auto r = get<record_type>(e.type());
-    for (auto& e : record_type::each(r)) {
+  if (auto r = get_if<record_type>(&e.type())) {
+    for (auto& e : record_type::each{*r}) {
       schema_vector.push_back(convert_to_arrow_field(e.trace.back()->type));
     }
   } else {
@@ -59,7 +78,7 @@ expected<std::shared_ptr<arrow::RecordBatch>> transpose(const event& e) {
     std::move(rbuilder.release()));
   format::arrow::insert_visitor iv{srbuilder};
   if (status.ok()) {
-    status = visit(iv, e.type(), e.data());
+    status = caf::visit(iv, e.type(), e.data());
     if (status.ok())
       status = srbuilder->Flush(&batch);
   }
@@ -200,9 +219,9 @@ insert_visitor::insert_visitor(std::shared_ptr<::arrow::RecordBatchBuilder>& b)
   // nop
 }
 
-/*insert_visitor::insert_visitor(std::shared_ptr<::arrow::RecordBatchBuilder>& b,
-                               u_int64_t c, u_int64_t cbuilder)
-    : rbuilder(b), counter(c), cbuilder(cbuilder) {
+/*insert_visitor::insert_visitor(std::shared_ptr<::arrow::RecordBatchBuilder>&
+b, u_int64_t c, u_int64_t cbuilder) : rbuilder(b), counter(c),
+cbuilder(cbuilder) {
   // nop
 }
 */
@@ -217,7 +236,7 @@ insert_visitor::insert_visitor(std::shared_ptr<::arrow::RecordBatchBuilder>& b,
   return ::arrow::Status::OK();
 }
 
-::arrow::Status insert_visitor::operator()(const none_type&, none) {
+::arrow::Status insert_visitor::operator()(const none_type&, caf::none_t) {
   auto builder = rbuilder->GetFieldAs<::arrow::NullBuilder>(cbuilder);
   return builder->AppendNull();
 }
@@ -227,7 +246,7 @@ insert_visitor::insert_visitor(std::shared_ptr<::arrow::RecordBatchBuilder>& b,
   return builder->Append(d);
 }
 
-::arrow::Status insert_visitor::operator()(const count_type&, none) {
+::arrow::Status insert_visitor::operator()(const count_type&, caf::none_t) {
   auto builder = rbuilder->GetFieldAs<::arrow::UInt64Builder>(cbuilder);
   return builder->AppendNull();
 }
@@ -237,7 +256,7 @@ insert_visitor::insert_visitor(std::shared_ptr<::arrow::RecordBatchBuilder>& b,
   return builder->Append(d);
 }
 
-::arrow::Status insert_visitor::operator()(const integer_type&, none) {
+::arrow::Status insert_visitor::operator()(const integer_type&, caf::none_t) {
   auto builder = rbuilder->GetFieldAs<::arrow::UInt64Builder>(cbuilder);
   return builder->AppendNull();
 }
@@ -247,7 +266,7 @@ insert_visitor::insert_visitor(std::shared_ptr<::arrow::RecordBatchBuilder>& b,
   return builder->Append(d);
 }
 
-::arrow::Status insert_visitor::operator()(const real_type&, none) {
+::arrow::Status insert_visitor::operator()(const real_type&, caf::none_t) {
   auto builder = rbuilder->GetFieldAs<::arrow::FloatBuilder>(cbuilder);
   return builder->AppendNull();
 }
@@ -257,7 +276,7 @@ insert_visitor::insert_visitor(std::shared_ptr<::arrow::RecordBatchBuilder>& b,
   return builder->Append(d);
 }
 
-::arrow::Status insert_visitor::operator()(const string_type&, none) {
+::arrow::Status insert_visitor::operator()(const string_type&, caf::none_t) {
   auto builder = rbuilder->GetFieldAs<::arrow::StringBuilder>(cbuilder);
   return builder->AppendNull();
 }
@@ -267,7 +286,7 @@ insert_visitor::insert_visitor(std::shared_ptr<::arrow::RecordBatchBuilder>& b,
   return builder->Append(d);
 }
 
-::arrow::Status insert_visitor::operator()(const boolean_type&, none) {
+::arrow::Status insert_visitor::operator()(const boolean_type&, caf::none_t) {
   auto builder = rbuilder->GetFieldAs<::arrow::BooleanBuilder>(cbuilder);
   return builder->AppendNull();
 }
@@ -284,7 +303,7 @@ insert_visitor::insert_visitor(std::shared_ptr<::arrow::RecordBatchBuilder>& b,
   return builder->Append(d.count());
 }
 
-::arrow::Status insert_visitor::operator()(const timespan_type&, none) {
+::arrow::Status insert_visitor::operator()(const timespan_type&, caf::none_t) {
   auto builder = rbuilder->GetFieldAs<::arrow::UInt64Builder>(cbuilder);
   return builder->AppendNull();
 }
@@ -302,7 +321,7 @@ insert_visitor::insert_visitor(std::shared_ptr<::arrow::RecordBatchBuilder>& b,
   return builder->Append(d.bytes_);
 }
 
-::arrow::Status insert_visitor::operator()(const address_type&, none) {
+::arrow::Status insert_visitor::operator()(const address_type&, caf::none_t) {
   auto builder =
     rbuilder->GetFieldAs<::arrow::FixedSizeBinaryBuilder>(cbuilder);
   return builder->AppendNull();
@@ -313,17 +332,17 @@ insert_visitor::insert_visitor(std::shared_ptr<::arrow::RecordBatchBuilder>& b,
   return append_port(d, builder);
 }
 
-::arrow::Status insert_visitor::operator()(const port_type&, none) {
+::arrow::Status insert_visitor::operator()(const port_type&, caf::none_t) {
   auto sbuilder = rbuilder->GetFieldAs<::arrow::StructBuilder>(cbuilder);
   return sbuilder->AppendNull();
 }
 
-::arrow::Status insert_visitor::operator()(const vector_type&, none) {
+::arrow::Status insert_visitor::operator()(const vector_type&, caf::none_t) {
   auto sbuilder = rbuilder->GetFieldAs<::arrow::ListBuilder>(cbuilder);
   return sbuilder->AppendNull();
 }
 
-::arrow::Status insert_visitor::operator()(const set_type&, none) {
+::arrow::Status insert_visitor::operator()(const set_type&, caf::none_t) {
   auto structBuilder = rbuilder->GetFieldAs<::arrow::ListBuilder>(cbuilder);
   return structBuilder->AppendNull();
 }
@@ -332,12 +351,12 @@ insert_visitor::insert_visitor(std::shared_ptr<::arrow::RecordBatchBuilder>& b,
                                            const std::vector<data>& d) {
   for (u_int64_t counter = 0; counter < d.size();) {
     format::arrow::insert_visitor a{this->rbuilder, counter + cbuilder};
-    if (is<record_type>(t.fields[counter].type)
-        && is<std::vector<data>>(d.at(counter))) {
-      auto data_v = get<std::vector<data>>(d.at(counter));
+    if (holds_alternative<record_type>(t.fields[counter].type)
+        && holds_alternative<std::vector<data>>(d.at(counter))) {
+      auto data_v = caf::get<std::vector<data>>(d.at(counter));
       cbuilder += data_v.size() - 1;
     }
-    auto status = visit(a, t.fields[counter].type, d.at(counter));
+    auto status = caf::visit(a, t.fields[counter].type, d.at(counter));
     if (!status.ok()) {
       return status;
     }
@@ -413,7 +432,8 @@ insert_visitor_helper::insert_visitor_helper(::arrow::ArrayBuilder* b)
   return cbuilder->Append(d.time_since_epoch().count());
 }
 
-::arrow::Status insert_visitor_helper::operator()(const none_type&, none) {
+::arrow::Status insert_visitor_helper::operator()(const none_type&,
+                                                  caf::none_t) {
   auto cbuilder = static_cast<::arrow::NullBuilder*>(builder);
   return cbuilder->AppendNull();
 }
@@ -472,7 +492,7 @@ expected<void> writer::flush() {
     return r;
   buffer_.clear();
   return no_error;
-};
+}
 
 const char* writer::name() const {
   return "arrow-writer";

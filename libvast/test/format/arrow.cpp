@@ -1,8 +1,8 @@
 #include "vast/event.hpp"
 
-#include "vast/format/arrow.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/data.hpp"
+#include "vast/format/arrow.hpp"
 
 #include "arrow/api.h"
 #include "arrow/builder.h"
@@ -24,11 +24,12 @@ FIXTURE_SCOPE(arrow_tests, fixtures::events)
 
 namespace {
 
-Status get_arrow_batch(plasma::ObjectID id, std::shared_ptr<::arrow::RecordBatch>& b) {
+Status get_arrow_batch(plasma::ObjectID id,
+                       std::shared_ptr<::arrow::RecordBatch>& b) {
   plasma::PlasmaClient plasma_client_;
   // Connect plasma client
   ARROW_RETURN_NOT_OK(
-  plasma_client_.Connect("/tmp/plasma", "", PLASMA_DEFAULT_RELEASE_DELAY));
+    plasma_client_.Connect("/tmp/plasma", "", PLASMA_DEFAULT_RELEASE_DELAY));
   // load Batch from plasma
   plasma::ObjectBuffer buf;
   auto status = plasma_client_.Get(&id, 1, 10, &buf);
@@ -43,7 +44,7 @@ Status get_arrow_batch(plasma::ObjectID id, std::shared_ptr<::arrow::RecordBatch
   return Status::OK();
 }
 
-} // namespace <anonymous>
+} // namespace
 
 TEST(Arrow Bro log writer) {
   format::arrow::writer writer{"/tmp/plasma"};
@@ -61,9 +62,9 @@ TEST(Arrow Bro log writer) {
     CHECK(status.ok());
     CHECK(b);
     CHECK_EQUAL(oids.size(), logs->size());
-    auto& xs = get<std::vector<data>>((*logs)[0].data());
+    auto& xs = caf::get<std::vector<data>>((*logs)[0].data());
     auto col1 = std::make_shared<::arrow::StringArray>(b->column(1)->data());
-    CHECK_EQUAL(col1->GetString(0), get<std::string>(xs[1]));
+    CHECK_EQUAL(col1->GetString(0), caf::get<std::string>(xs[1]));
   }
 }
 
