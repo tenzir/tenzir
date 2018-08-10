@@ -26,7 +26,6 @@
 #include "vast/system/consensus.hpp"
 #include "vast/system/key_value_store.hpp"
 #include "vast/system/timeouts.hpp"
-#include "vast/system/atoms.hpp"
 
 #include "vast/detail/assert.hpp"
 #include "vast/detail/operators.hpp"

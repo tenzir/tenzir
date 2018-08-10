@@ -15,7 +15,6 @@
 
 #include <csignal>
 #include <iostream>
-#include <csignal>
 
 #include <caf/all.hpp>
 #include <caf/io/all.hpp>

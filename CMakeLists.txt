@@ -74,7 +74,7 @@ if (NOT CMAKE_CXX_FLAGS)
   set(EXTRA_FLAGS "${EXTRA_FLAGS} -ftemplate-depth=512")
   # Reduce the number of template instantiations shown in backtrace to keep the
   # already insane error messages readable.
-  set(EXTRA_FLAGS "${EXTRA_FLAGS} -ftemplate-backtrace-limit=0")
+  set(EXTRA_FLAGS "${EXTRA_FLAGS} -ftemplate-backtrace-limit=3")
   # Build-type specific flags.
   set(CMAKE_CXX_FLAGS_DEBUG          "-O0 -g")
   set(CMAKE_CXX_FLAGS_MINSIZEREL     "-Os")
