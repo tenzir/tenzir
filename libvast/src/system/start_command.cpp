@@ -77,7 +77,8 @@ int start_command::run_impl(actor_system& sys,
       return make_error(ec::unspecified, "not compiled with OpenSSL support");
 #endif
     auto& mm = sys.middleman();
-    return mm.publish(node, node_endpoint.port, host);
+    auto reuse_address = true;
+    return mm.publish(node, node_endpoint.port, host, reuse_address);
   };
   auto bound_port = publish();
   if (!bound_port) {
