@@ -24,17 +24,19 @@ table_slice_builder::~table_slice_builder() {
   // nop
 }
 
-bool table_slice_builder::recursive_add(const data& x) {
+bool table_slice_builder::recursive_add(const data& x, const type& t) {
   return caf::visit(detail::overload(
-                      [&](const vector& xs) {
-                        auto first = xs.begin();
-                        auto last = xs.end();
-                        return std::all_of(first, last, [&](const auto& y) {
-                          return recursive_add(y);
-                        });
+                      [&](const vector& xs, const record_type& rt) {
+                        for (size_t i = 0; i < xs.size(); ++i) {
+                          if (!recursive_add(xs[i], rt.fields[i].type))
+                            return false;
+                        }
+                        return true;
                       },
-                      [&](const auto&) { return add(make_view(x)); }),
-                    x);
+                      [&](const auto&, const auto&) {
+                        return add(make_view(x));
+                      }),
+                    x, t);
 }
 
 } // namespace vast

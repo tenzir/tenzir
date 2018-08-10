@@ -41,7 +41,9 @@ namespace vast::system {
 /// Format-independent implementation for import sub-commands.
 class reader_command_base : public node_command {
 public:
-  using node_command::node_command;
+  using super = node_command;
+
+  reader_command_base(command* parent, std::string_view name);
 
 protected:
   int run_impl(caf::actor_system& sys, const caf::config_value_map& options,

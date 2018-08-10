@@ -195,10 +195,10 @@ public:
     VAST_ASSERT(x < this->bitmaps_.size());
     switch (op) {
       default:
-        return {this->size_, false};
+        return Bitmap{this->size_, false};
       case less: {
         if (x == 0)
-          return {this->size_, false};
+          return Bitmap{this->size_, false};
         auto f = this->bitmaps_.begin();
         auto result = nary_or(f, f + x);
         result.append_bits(false, this->size_ - result.size());
@@ -225,7 +225,7 @@ public:
       }
       case greater: {
         if (x >= this->bitmaps_.size() - 1)
-          return {this->size_, false};
+          return Bitmap{this->size_, false};
         auto f = this->bitmaps_.begin();
         auto l = this->bitmaps_.end();
         auto result = nary_or(f + x + 1, l);
@@ -282,7 +282,7 @@ public:
     VAST_ASSERT(x < this->bitmaps_.size() + 1);
     switch (op) {
       default:
-        return {this->size_, false};
+        return Bitmap{this->size_, false};
       case less: {
         auto result = this->bitmaps_[x > 0 ? x - 1 : 0];
         result.append_bits(true, this->size_ - result.size());
@@ -368,9 +368,9 @@ public:
       case greater_equal: {
         if (x == std::numeric_limits<value_type>::min()) {
           if (op == less)
-            return {this->size_, false};
+            return Bitmap{this->size_, false};
           else if (op == greater_equal)
-            return {this->size_, true};
+            return Bitmap{this->size_, true};
         } else if (op == less || op == greater_equal) {
           --x;
         }
@@ -409,7 +409,7 @@ public:
         return result;
       }
     }
-    return {this->size_, false};
+    return Bitmap{this->size_, false};
   }
 
   bool skip(size_type n) {

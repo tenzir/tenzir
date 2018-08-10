@@ -123,15 +123,20 @@ struct importer_state {
   /// Pointer to the owning actor.
   caf::event_based_actor* self;
 
+  /// List of actors that wait for the next flush event.
+  std::vector<caf::actor> flush_listeners;
+
   /// Name of this actor in log events.
   static inline const char* name = "importer";
 };
+
+using importer_actor = caf::stateful_actor<importer_state>;
 
 /// Spawns an IMPORTER.
 /// @param self The actor handle.
 /// @param dir The directory for persistent state.
 /// @param batch_size The initial number of IDs to request when replenishing.
-caf::behavior importer(caf::stateful_actor<importer_state>* self, path dir,
+caf::behavior importer(importer_actor* self, path dir,
                        size_t max_table_slice_size);
 
 } // namespace vast::system

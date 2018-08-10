@@ -33,7 +33,7 @@ public:
 
   null_bitmap() = default;
 
-  null_bitmap(size_type n, bool bit = false);
+  explicit null_bitmap(size_type n, bool bit = false);
 
   // -- inspectors -----------------------------------------------------------
 
