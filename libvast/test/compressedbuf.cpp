@@ -63,7 +63,7 @@ TEST(compressedbuf - iostream interface) {
 #ifdef VAST_HAVE_SNAPPY
   methods.push_back(compression::snappy);
 #endif
-  std::vector<size_t> block_sizes = {1, 2, 64, 256, 1_KiB, 16_MiB};
+  std::vector<size_t> block_sizes = {1, 2, 64, 256, 1_KiB, 16_KiB};
   auto data = "Im Kampf zwischen dir und der Welt sekundiere der Welt."s;
   auto inflation = 1000;
   for (auto block_size : block_sizes) {
