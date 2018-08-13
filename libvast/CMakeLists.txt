@@ -228,6 +228,7 @@ set(tests
   test/compressedbuf.cpp
   test/data.cpp
   test/default_table_slice.cpp
+  test/detail/counting_stream_buffer.cpp
   test/detail/flat_lru_cache.cpp
   test/detail/operators.cpp
   test/endpoint.cpp
