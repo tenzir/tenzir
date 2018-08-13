@@ -615,14 +615,16 @@ make_install_snapshot(Actor* self, peer_state& peer) {
   if (!peer.snapshot) {
     auto filename = self->state.dir / "snapshot";
     peer.snapshot = std::make_unique<detail::mmapbuf>(filename.str());
-    VAST_ASSERT(peer.snapshot->in_avail() > 0);
     peer.last_snapshot_index = self->state.last_snapshot_index;
   }
+  auto available = peer.snapshot->in_avail();
+  VAST_ASSERT(available > 0);
   req.last_snapshot_index = peer.last_snapshot_index;
-  req.byte_offset = peer.snapshot->size() - peer.snapshot->in_avail();
+  req.byte_offset = peer.snapshot->size() - available;
   // Construct at most chunks of 1 MB.
-  auto min = detail::narrow_cast<std::streamsize>(1_MiB);
-  req.data.resize(std::min(min, peer.snapshot->in_avail()));
+  auto remaining_bytes = detail::narrow_cast<unsigned long long>(available);
+  size_t msg_size = std::min(1_MiB, remaining_bytes);
+  req.data.resize(msg_size);
   VAST_DEBUG(role(self), "fills snapshot chunk with", req.data.size(), "bytes");
   auto got = peer.snapshot->sgetn(req.data.data(), req.data.size());
   if (got != static_cast<std::streamsize>(req.data.size()))
