@@ -39,6 +39,7 @@ set(libvast_sources
   src/detail/line_range.cpp
   src/detail/make_io_stream.cpp
   src/detail/mmapbuf.cpp
+  src/detail/overlay.cpp
   src/detail/posix.cpp
   src/detail/string.cpp
   src/detail/system.cpp
@@ -231,6 +232,7 @@ set(tests
   test/detail/counting_stream_buffer.cpp
   test/detail/flat_lru_cache.cpp
   test/detail/operators.cpp
+  test/detail/overlay.cpp
   test/endpoint.cpp
   test/event.cpp
   test/expression.cpp
