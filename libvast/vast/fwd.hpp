@@ -21,6 +21,7 @@ namespace vast {
 
 class abstract_type;
 class address;
+class bitmap;
 class column_index;
 class const_table_slice_handle;
 class data;
@@ -75,5 +76,9 @@ using const_table_slice_ptr = caf::intrusive_ptr<const table_slice>;
 using table_slice_builder_ptr = caf::intrusive_ptr<table_slice_builder>;
 
 using default_table_slice_ptr = caf::intrusive_ptr<default_table_slice>;
+
+// -- miscellaneous ------------------------------------------------------------
+
+using ids = bitmap; // temporary; until we have a real type for 'ids'
 
 } // namespace vast
