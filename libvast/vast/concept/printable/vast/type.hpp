@@ -36,6 +36,7 @@ struct enumeration_type_printer : printer<enumeration_type_printer> {
   template <class Iterator>
   bool print(Iterator& out, const enumeration_type& e) const {
     using namespace printers;
+    using namespace printer_literals;
     auto p = "enum {"_P << (str % ", ") << '}';
     auto a = detail::make_attr_printer(e);
     return (p << a)(out, e.fields, e.attributes());
@@ -51,9 +52,10 @@ struct printer_registry<enumeration_type> {
   struct TYPE##_printer : printer<TYPE##_printer> {                            \
     using attribute = TYPE;                                                    \
                                                                                \
-    template <class Iterator>                                               \
+    template <class Iterator>                                                  \
     bool print(Iterator& out, const TYPE& t) const {                           \
       using namespace printers;                                                \
+      using namespace printer_literals;                                        \
       auto p = DESC##_P << detail::make_attr_printer(t);                       \
       return p.print(out, t.attributes());                                     \
     }                                                                          \
@@ -83,7 +85,7 @@ VAST_DEFINE_BASIC_TYPE_PRINTER(port_type, "port")
   struct TYPE##_printer : printer<TYPE##_printer> {                            \
     using attribute = TYPE;                                                    \
                                                                                \
-    template <class Iterator>                                               \
+    template <class Iterator>                                                  \
     bool print(Iterator& out, const TYPE&) const;                              \
   };                                                                           \
                                                                                \
@@ -211,6 +213,7 @@ struct printer_registry<record_field> {
 
 template <class Iterator>
 bool record_type_printer::print(Iterator& out, const record_type& t) const {
+  using namespace printer_literals;
   auto p = "record{"_P << (record_field_printer{} % ", ") << '}';
   auto a = detail::make_attr_printer(t);
   return (p << a)(out, t.fields, t.attributes());

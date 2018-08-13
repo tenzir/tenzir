@@ -25,8 +25,9 @@
 #define SUITE printable
 #include "test.hpp"
 
-using namespace vast;
 using namespace std::string_literals;
+using namespace vast;
+using namespace vast::printer_literals;
 
 // -- numeric -----------------------------------------------------------------
 

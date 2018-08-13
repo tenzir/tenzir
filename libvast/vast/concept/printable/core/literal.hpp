@@ -19,7 +19,7 @@
 
 #include "vast/concept/printable/string/literal.hpp"
 
-namespace vast {
+namespace vast::printer_literals {
 
 inline auto operator"" _P(char c) {
   return literal_printer{c};
@@ -41,5 +41,4 @@ inline auto operator"" _P(long double x) {
   return literal_printer{x};
 }
 
-} // namespace vast
-
+} // namespace vast::printer_literals
