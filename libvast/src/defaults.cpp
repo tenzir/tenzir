@@ -15,8 +15,12 @@
 
 #include <limits>
 
+#include "vast/si_literals.hpp"
+
 #include "vast/detail/string.hpp"
 #include "vast/detail/system.hpp"
+
+using namespace vast::si_literals;
 
 namespace vast::defaults {
 
@@ -33,7 +37,7 @@ size_t flow_expiry = 10;
 size_t flush_interval = 10000;
 size_t max_events = 0;
 size_t max_flow_age = 60;
-size_t max_flows = 1u << 20;
+size_t max_flows = 1_Mi;
 std::string node_id = std::string{detail::split(detail::hostname(), ".")[0]};
 
 } // namespace command
