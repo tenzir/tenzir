@@ -11,15 +11,18 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/detail/compressedbuf.hpp"
+#include "vast/si_literals.hpp"
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/vast/compression.hpp"
+
+#include "vast/detail/compressedbuf.hpp"
 
 #define SUITE streambuf
 #include "test.hpp"
 
 using namespace std::string_literals;
 using namespace vast;
+using namespace vast::binary_byte_literals;
 using namespace vast::detail;
 
 TEST(compressedbuf - two blocks) {
@@ -60,7 +63,7 @@ TEST(compressedbuf - iostream interface) {
 #ifdef VAST_HAVE_SNAPPY
   methods.push_back(compression::snappy);
 #endif
-  std::vector<size_t> block_sizes = {1, 2, 64, 256, 1024, 16 << 10};
+  std::vector<size_t> block_sizes = {1, 2, 64, 256, 1_KiB, 16_KiB};
   auto data = "Im Kampf zwischen dir und der Welt sekundiere der Welt."s;
   auto inflation = 1000;
   for (auto block_size : block_sizes) {

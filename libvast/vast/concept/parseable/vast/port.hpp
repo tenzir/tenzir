@@ -25,6 +25,7 @@ struct port_parser : parser<port_parser> {
   template <class Iterator>
   bool parse(Iterator& f, const Iterator& l, unused_type) const {
     using namespace parsers;
+    using namespace parser_literals;
     auto p = u16 >> '/' >> ("?"_p | "tcp" | "udp" | "icmp");
     return p(f, l, unused);
   }
@@ -32,6 +33,7 @@ struct port_parser : parser<port_parser> {
   template <class Iterator>
   bool parse(Iterator& f, const Iterator& l, port& x) const {
     using namespace parsers;
+    using namespace parser_literals;
     static auto p
       =  u16
       >> '/'

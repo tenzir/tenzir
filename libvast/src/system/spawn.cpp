@@ -43,6 +43,7 @@ namespace vast {
 namespace system {
 
 expected<actor> spawn_archive(local_actor* self, options& opts) {
+  using namespace vast::binary_byte_literals;
   auto mss = size_t{128};
   auto segments = size_t{10};
   auto r = opts.params.extract_opts({
@@ -52,7 +53,7 @@ expected<actor> spawn_archive(local_actor* self, options& opts) {
   opts.params = r.remainder;
   if (!r.error.empty())
     return make_error(ec::syntax_error, r.error);
-  mss <<= 20; // MB'ify.
+  mss *= 1_MiB;
   auto a = self->spawn(archive, opts.dir / opts.label, segments, mss);
   return actor_cast<actor>(a);
 }
@@ -131,7 +132,8 @@ expected<actor> spawn_importer(stateful_actor<node_state>* self,
 }
 
 expected<actor> spawn_index(local_actor* self, options& opts) {
-  size_t max_events = 1 << 20;
+  using namespace vast::si_literals;
+  size_t max_events = 1_Mi;
   size_t max_parts = 10;
   size_t taste_parts = 5;
   size_t num_collectors = 10;

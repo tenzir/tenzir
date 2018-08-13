@@ -43,6 +43,7 @@ struct duration_parser : parser<duration_parser<Rep, Period>> {
   template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
     using namespace parsers;
+    using namespace parser_literals;
     auto save = f;
     Rep i;
     if (!make_parser<Rep>{}(f, l, i))
@@ -176,6 +177,7 @@ struct timestamp_parser : parser<timestamp_parser> {
 
   template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
+    using namespace parser_literals;
     static auto plus = [](timespan span) {
       return timestamp::clock::now() + span;
     };

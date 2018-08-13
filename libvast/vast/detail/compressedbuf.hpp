@@ -40,7 +40,7 @@ namespace vast::detail {
 class compressedbuf : public std::streambuf {
 public:
   /// The default buffer size in bytes.
-  static constexpr size_t default_block_size = 16 << 10;
+  static size_t default_block_size;
 
   /// Constructs an compressed streambuffer.
   /// @param sb The underlying streambuffer to read from or write to.

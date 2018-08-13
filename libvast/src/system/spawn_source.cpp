@@ -23,6 +23,7 @@
 #include "vast/error.hpp"
 #include "vast/expression.hpp"
 #include "vast/query_options.hpp"
+#include "vast/si_literals.hpp"
 
 #include "vast/format/bgpdump.hpp"
 #include "vast/format/mrt.hpp"
@@ -43,6 +44,8 @@ using namespace caf;
 
 namespace vast {
 namespace system {
+
+using namespace si_literals;
 
 expected<actor> spawn_source(local_actor* self, options& opts) {
   if (opts.params.empty())
@@ -67,7 +70,7 @@ expected<actor> spawn_source(local_actor* self, options& opts) {
 #ifndef VAST_HAVE_PCAP
     return make_error(ec::unspecified, "not compiled with pcap support");
 #else
-    auto flow_max = uint64_t{1} << 20;
+    auto flow_max = 1_Mi;
     auto flow_age = 60u;
     auto flow_expiry = 10u;
     auto cutoff = std::numeric_limits<size_t>::max();

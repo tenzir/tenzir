@@ -13,13 +13,20 @@
 
 #include <cstring>
 
+#include "vast/si_literals.hpp"
+
 #include "vast/detail/assert.hpp"
 #include "vast/detail/byte_swap.hpp"
 #include "vast/detail/compressedbuf.hpp"
 #include "vast/detail/varbyte.hpp"
 
 namespace vast {
+
+using namespace binary_byte_literals;
+
 namespace detail {
+
+size_t compressedbuf::default_block_size = 16_MiB;
 
 compressedbuf::compressedbuf(std::streambuf& sb, compression method,
                             size_t block_size)

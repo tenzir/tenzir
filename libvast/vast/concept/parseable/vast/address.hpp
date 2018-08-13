@@ -66,6 +66,7 @@ struct address_parser : vast::parser<address_parser> {
 
   static auto make_v6() {
     using namespace parsers;
+    using namespace parser_literals;
     auto h16
       = rep<1, 4>(xdigit)
       ;

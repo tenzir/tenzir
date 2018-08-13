@@ -31,6 +31,7 @@ struct uri_parser : parser<uri_parser> {
 
   static auto make() {
     using namespace parsers;
+    using namespace parser_literals;
     auto query_unescape = [](std::string str) {
       std::replace(str.begin(), str.end(), '+', ' ');
       return detail::percent_unescape(str);
