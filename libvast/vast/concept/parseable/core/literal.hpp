@@ -21,7 +21,7 @@
 #include "vast/concept/parseable/string/char.hpp"
 #include "vast/concept/parseable/string/string.hpp"
 
-namespace vast {
+namespace vast::parser_literals {
 
 inline auto operator"" _p(char c) {
   return ignore(char_parser{c});
@@ -43,5 +43,4 @@ inline auto operator"" _p(long double x) {
   return ignore(string_parser{std::to_string(x)});
 }
 
-} // namespace vast
-
+} // namespace vast::parser_literals

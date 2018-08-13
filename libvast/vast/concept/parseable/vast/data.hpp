@@ -35,6 +35,7 @@ struct access::parser<data> : vast::parser<access::parser<data>> {
 
   template <class Iterator>
   static auto make() {
+    using namespace parser_literals;
     rule<Iterator, data> p;
     auto ws = ignore(*parsers::space);
     auto x = ws >> p >> ws;

@@ -30,11 +30,12 @@ struct http_header_parser : parser<http_header_parser> {
   using attribute = http::header;
 
   static auto make() {
+    using namespace parsers;
+    using namespace parser_literals;
     auto to_upper = [](std::string name) {
       std::transform(name.begin(), name.end(), name.begin(), ::toupper);
       return name;
     };
-    using namespace parsers;
     auto name = +(printable - ':') ->* to_upper;
     auto value = +printable;
     auto ws = *' '_p;
