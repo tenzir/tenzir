@@ -263,7 +263,7 @@ replicated_store(
       self->request(consensus, consensus_timeout, statistics_atom::value).then(
         [=](const raft::statistics& stats) {
           using namespace vast::binary_byte_literals;
-          auto low = 64_MiB;
+          auto low = static_cast<uint64_t>(64_MiB);
           auto high = self->state.last_snapshot_size * 4;
           if (stats.log_bytes > std::max(low, high))
             self->anon_send(self, snapshot_atom::value);
