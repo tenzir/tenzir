@@ -51,6 +51,10 @@ chunk::~chunk() {
   deleter_(data_, size_);
 }
 
+char* chunk::data() {
+  return data_;
+}
+
 const char* chunk::data() const {
   return data_;
 }

@@ -63,6 +63,7 @@ set(libvast_sources
   src/pattern.cpp
   src/port.cpp
   src/schema.cpp
+  src/segment.cpp
   src/segment_store.cpp
   src/subnet.cpp
   src/system/accountant.cpp
@@ -262,6 +263,7 @@ set(tests
   test/span.cpp
   test/stack.cpp
   test/string.cpp
+  test/segment.cpp
   test/subnet.cpp
   test/system/archive.cpp
   test/system/consensus.cpp

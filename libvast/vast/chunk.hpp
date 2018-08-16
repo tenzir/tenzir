@@ -60,6 +60,9 @@ public:
   ~chunk();
 
   /// @returns The pointer to the chunk buffer.
+  char* data();
+
+  /// @returns The pointer to the chunk buffer.
   const char* data() const;
 
   /// @returns The size of the chunk.
