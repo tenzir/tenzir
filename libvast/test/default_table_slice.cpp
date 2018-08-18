@@ -18,6 +18,7 @@
 
 #include "vast/const_table_slice_handle.hpp"
 #include "vast/default_table_slice.hpp"
+#include "vast/default_table_slice_builder.hpp"
 #include "vast/table_slice_builder.hpp"
 #include "vast/table_slice_handle.hpp"
 #include "vast/value.hpp"
@@ -33,6 +34,25 @@ using namespace vast;
 using namespace std::string_literals;
 
 namespace {
+
+class rebranded_table_slice : public default_table_slice {
+public:
+  using super = default_table_slice;
+
+  using super::super;
+
+  rebranded_table_slice(const default_table_slice& other) : super(other) {
+    // nop
+  }
+
+  caf::atom_value implementation_id() const noexcept override {
+    return caf::atom("test");
+  }
+};
+
+table_slice_ptr rebranded_slice_factory(record_type layout) {
+  return caf::make_counted<rebranded_table_slice>(std::move(layout));
+}
 
 struct fixture : fixtures::deterministic_actor_system {
   record_type layout = record_type{
@@ -78,6 +98,17 @@ struct fixture : fixtures::deterministic_actor_system {
         },
         x);
     return builder->finish();
+  }
+
+  const_table_slice_handle make_const_slice() {
+    return make_slice();
+  }
+
+  auto make_rebranded_slice() {
+    auto from = make_slice();
+    auto& dref = static_cast<default_table_slice&>(*from);
+    auto ptr = caf::make_counted<rebranded_table_slice>(dref);
+    return table_slice_handle{std::move(ptr)};
   }
 
   std::vector<value> subset(size_t from, size_t num) {
@@ -176,7 +207,7 @@ TEST(handle serialization) {
 
 TEST(const handle serialization) {
   MESSAGE("make slices");
-  auto slice1 = const_table_slice_handle{make_slice().ptr()};
+  auto slice1 = make_const_slice();
   const_table_slice_handle slice2;
   MESSAGE("save content of the first slice into the buffer");
   CHECK_EQUAL(sink(slice1), caf::none);
@@ -190,7 +221,7 @@ TEST(const handle serialization) {
 
 TEST(message serialization) {
   MESSAGE("make slices");
-  auto slice1 = caf::make_message(table_slice_handle{make_slice()});
+  auto slice1 = caf::make_message(make_slice());
   caf::message slice2;
   MESSAGE("save content of the first slice into the buffer");
   CHECK_EQUAL(sink(slice1), caf::none);
@@ -201,6 +232,29 @@ TEST(message serialization) {
   REQUIRE(slice2.match_elements<table_slice_handle>());
   CHECK_EQUAL(*slice1.get_as<table_slice_handle>(0),
               *slice2.get_as<table_slice_handle>(0));
+  CHECK_EQUAL(slice2.get_as<table_slice_handle>(0)->implementation_id(),
+              caf::atom("DEFAULT"));
+}
+
+TEST(rebranded message serialization) {
+  MESSAGE("register factory");
+  using fptr = caf::runtime_settings_map::generic_function_pointer;
+  sys.runtime_settings().set(caf::atom("test"),
+                             reinterpret_cast<fptr>(rebranded_slice_factory));
+  MESSAGE("make rebranded slices");
+  auto slice1 = caf::make_message(make_rebranded_slice());
+  caf::message slice2;
+  MESSAGE("save content of the first slice into the buffer");
+  CHECK_EQUAL(sink(slice1), caf::none);
+  MESSAGE("load content for the second slice from the buffer");
+  auto source = make_source();
+  CHECK_EQUAL(source(slice2), caf::none);
+  MESSAGE("check result of serialization roundtrip");
+  REQUIRE(slice2.match_elements<table_slice_handle>());
+  CHECK_EQUAL(*slice1.get_as<table_slice_handle>(0),
+              *slice2.get_as<table_slice_handle>(0));
+  CHECK_EQUAL(slice2.get_as<table_slice_handle>(0)->implementation_id(),
+              caf::atom("test"));
 }
 
 FIXTURE_SCOPE_END()
