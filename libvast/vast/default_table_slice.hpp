@@ -22,7 +22,7 @@
 namespace vast {
 
 /// The default implementation of `table_slice`.
-class default_table_slice final : public table_slice {
+class default_table_slice : public table_slice {
 public:
   // -- friends ----------------------------------------------------------------
 
@@ -58,7 +58,7 @@ public:
 
   caf::optional<data_view> at(size_type row, size_type col) const final;
 
-  caf::atom_value implementation_id() const noexcept final;
+  caf::atom_value implementation_id() const noexcept;
 
 private:
   // -- member variables -------------------------------------------------------

@@ -13,6 +13,7 @@
 
 #include "vast/table_slice.hpp"
 
+#include <caf/actor_system.hpp>
 #include <caf/deserializer.hpp>
 #include <caf/error.hpp>
 #include <caf/execution_unit.hpp>
@@ -20,12 +21,13 @@
 #include <caf/serializer.hpp>
 #include <caf/sum_type.hpp>
 
+#include "vast/const_table_slice_handle.hpp"
 #include "vast/default_table_slice.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/error.hpp"
 #include "vast/event.hpp"
+#include "vast/logger.hpp"
 #include "vast/table_slice_handle.hpp"
-#include "vast/const_table_slice_handle.hpp"
 #include "vast/value.hpp"
 
 namespace vast {
@@ -63,15 +65,22 @@ record_type table_slice::layout(size_type first_column,
   return record_type{std::move(sub_records)};
 }
 
-table_slice_ptr table_slice::make_ptr(record_type layout, caf::actor_system&,
+table_slice_ptr table_slice::make_ptr(record_type layout,
+                                      caf::actor_system& sys,
                                       caf::atom_value impl) {
-  // TODO: extend CAF to allow storing arbitrary factory functions and remove
-  //       hardwired 'DEFAULT' code here.
   if (impl == caf::atom("DEFAULT")) {
     auto ptr = caf::make_counted<default_table_slice>(std::move(layout));
     return ptr;
   }
-  return nullptr;
+  using generic_fun = caf::runtime_settings_map::generic_function_pointer;
+  using factory_fun = table_slice_ptr (*)(record_type);
+  auto val = sys.runtime_settings().get(impl);
+  if (!caf::holds_alternative<generic_fun>(val)) {
+    VAST_ERROR("no factory function stored for implementation key", impl);
+    return nullptr;
+  }
+  auto fun = reinterpret_cast<factory_fun>(caf::get<generic_fun>(val));
+  return fun(std::move(layout));
 }
 
 caf::error table_slice::serialize_ptr(caf::serializer& sink,
