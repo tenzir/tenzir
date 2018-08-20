@@ -68,6 +68,7 @@ set(libvast_sources
   src/segment_store.cpp
   src/store.cpp
   src/subnet.cpp
+  src/subset.cpp
   src/system/accountant.cpp
   src/system/application.cpp
   src/system/archive.cpp
@@ -102,6 +103,7 @@ set(libvast_sources
   src/table_slice_builder.cpp
   src/table_slice_handle.cpp
   src/time.cpp
+  src/to_events.cpp
   src/type.cpp
   src/uuid.cpp
   src/value.cpp

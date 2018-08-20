@@ -18,6 +18,7 @@
 
 #include "vast/const_table_slice_handle.hpp"
 #include "vast/default_table_slice.hpp"
+#include "vast/subset.hpp"
 #include "vast/table_slice_builder.hpp"
 #include "vast/table_slice_handle.hpp"
 #include "vast/value.hpp"
@@ -80,7 +81,7 @@ struct fixture : fixtures::deterministic_actor_system {
     return builder->finish();
   }
 
-  std::vector<value> subset(size_t from, size_t num) {
+  std::vector<value> select(size_t from, size_t num) {
     return {test_values.begin() + from, test_values.begin() + (from + num)};
   }
 };
@@ -115,16 +116,12 @@ TEST(add) {
 
 TEST(rows to values) {
   auto slice = make_slice();
-  CHECK_EQUAL(unbox(slice->row_to_value(0)), test_values[0]);
-  CHECK_EQUAL(unbox(slice->row_to_value(1)), test_values[1]);
-  CHECK_EQUAL(unbox(slice->row_to_value(2)), test_values[2]);
-  CHECK_EQUAL(unbox(slice->row_to_value(3)), test_values[3]);
-  CHECK_EQUAL(slice->rows_to_values(), test_values);
-  CHECK_EQUAL(slice->rows_to_values(0, 1), subset(0, 1));
-  CHECK_EQUAL(slice->rows_to_values(1, 1), subset(1, 1));
-  CHECK_EQUAL(slice->rows_to_values(2, 1), subset(2, 1));
-  CHECK_EQUAL(slice->rows_to_values(0, 2), subset(0, 2));
-  CHECK_EQUAL(slice->rows_to_values(1, 2), subset(1, 2));
+  CHECK_EQUAL(subset(*slice), test_values);
+  CHECK_EQUAL(subset(*slice, 0, 1), select(0, 1));
+  CHECK_EQUAL(subset(*slice, 1, 1), select(1, 1));
+  CHECK_EQUAL(subset(*slice, 2, 1), select(2, 1));
+  CHECK_EQUAL(subset(*slice, 0, 2), select(0, 2));
+  CHECK_EQUAL(subset(*slice, 1, 2), select(1, 2));
 }
 
 TEST(equality) {

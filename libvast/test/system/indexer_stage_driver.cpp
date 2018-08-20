@@ -23,6 +23,7 @@
 #include "vast/system/indexer_stage_driver.hpp"
 #include "vast/system/partition.hpp"
 #include "vast/table_slice_handle.hpp"
+#include "vast/to_events.hpp"
 #include "vast/uuid.hpp"
 
 #include "vast/concept/printable/to_string.hpp"
@@ -55,8 +56,7 @@ behavior dummy_sink(event_based_actor* self, size_t* dummy_sink_count,
           // nop
         },
         [=](unit_t&, const_table_slice_handle slice) {
-          auto xs = slice->rows_to_events();
-          for (auto& x : xs)
+          for (auto& x : to_events(*slice))
             buf->emplace_back(std::move(x));
         }
       );
