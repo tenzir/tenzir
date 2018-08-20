@@ -19,12 +19,15 @@
 
 #include <caf/actor_system.hpp>
 #include <caf/expected.hpp>
+#include <caf/fwd.hpp>
 #include <caf/intrusive_ptr.hpp>
 #include <caf/ref_counted.hpp>
 #include <caf/stream_serializer.hpp>
 #include <caf/streambuf.hpp>
 
 #include "vast/aliases.hpp"
+#include "vast/bitmap.hpp"
+#include "vast/bitmap_algorithms.hpp"
 #include "vast/chunk.hpp"
 #include "vast/fwd.hpp"
 #include "vast/uuid.hpp"
@@ -34,9 +37,6 @@ namespace vast {
 // TODO: use a format that's more conducive to mmap'ing, e.g., flatbuffers.
 // Right now we use a packed struct for the header as a poor-man's abstraction
 // for this, but it's inconvenient.
-
-class segment;
-class segment_builder;
 
 /// @relates segment
 using segment_ptr = caf::intrusive_ptr<segment>;
@@ -112,7 +112,7 @@ public:
   chunk_ptr chunk() const;
 
   /// @returns the number of tables slices in the segment.
-  size_t slices() const;
+  size_t num_slices() const;
 
   /// Locates the table slices for IDs.
   /// @param xs The IDs to lookup.
@@ -127,6 +127,35 @@ public:
   /// @endcond
 
 private:
+  template <class F>
+  caf::error for_each_slice(const ids& xs, F f) const {
+    auto rng = select(xs);
+    // Walk in lock-step through the slices and the ID sequence.
+    // TODO: since the table slices have non-decreasing ID offsets, we should use
+    // binary search here to locate the starting point.
+    for (auto& slice : meta_.slices) {
+      if (!rng)
+        return caf::none;
+      // Make the ID range catch up if it's behind.
+      if (rng.get() < slice.offset) {
+        rng.skip(slice.offset);
+        if (!rng)
+          return caf::none;
+      }
+      // If the next ID falls in the current slice, we add to the result.
+      if (rng.get() >= slice.offset && rng.get() <= slice.offset + slice.size) {
+        if (auto error = f(slice))
+          return error;
+        // Fast forward to the ID one past this slice.
+        rng.skip(slice.offset + slice.size);
+      }
+    }
+    return caf::none;
+  }
+
+  caf::expected<const_table_slice_handle>
+  make_slice(const table_slice_synopsis& slice) const;
+
   caf::actor_system& actor_system_;
   chunk_ptr chunk_;
   header header_; 
@@ -151,42 +180,11 @@ auto inspect(Inspector& f, segment::meta_data& x) {
   return f(x.slices);
 }
 
-/// A builder to create a segment from table slices.
 /// @relates segment
-class segment_builder {
-public:
-  /// Constructs a segment builder.
-  /// @param sys The actor system used to construct segments (and deserialize
-  ///            table slices).
-  segment_builder(caf::actor_system& sys);
+/// @pre `x != nullptr`
+caf::error inspect(caf::serializer& sink, const segment_ptr& x);
 
-  /// Adds a table slice to the segment.
-  /// @returns An error if adding the table slice failed.
-  /// @pre The table slice offset (`x.offset()`) must be greater than the
-  ///      offset of the previously added table slice. This requirement enables
-  ///      efficient lookup of table slices from a sequence of IDs.
-  caf::error add(const_table_slice_handle x);
-
-  /// Constructs a segment from previously added table slices.
-  /// @post The builder can now be reused to contruct a new segment.
-  caf::expected<segment_ptr> finish();
-
-  /// @returns The number of bytes of the current segment.
-  size_t table_slice_bytes() const;
-
-private:
-  // Resets the builder state to start with a new segment.
-  void reset();
-
-  caf::actor_system& actor_system_;
-  // Segment state
-  std::vector<char> segment_buffer_;
-  segment::meta_data meta_;
-  // Table slice state
-  id min_table_slice_offset_;
-  std::vector<char> table_slice_buffer_;
-  caf::vectorbuf table_slice_streambuf_;
-  caf::stream_serializer<caf::vectorbuf&> table_slice_serializer_;
-};
+/// @relates segment
+caf::error inspect(caf::deserializer& source, segment_ptr& x);
 
 } // namespace vast
