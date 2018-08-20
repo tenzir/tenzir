@@ -17,6 +17,7 @@
 #include <functional>
 #include <string>
 
+#include "caf/fwd.hpp"
 #include "caf/ref_counted.hpp"
 #include "caf/intrusive_ptr.hpp"
 
@@ -106,5 +107,11 @@ bool operator==(const chunk& x, const chunk& y);
 /// @relates chunk
 bool operator<(const chunk& x, const chunk& y);
 
-} // namespace vast
+/// @relates chunk
+/// @pre `x != nullptr`
+caf::error inspect(caf::serializer& sink, const chunk_ptr& x);
 
+/// @relates chunk
+caf::error inspect(caf::deserializer& source, chunk_ptr& x);
+
+} // namespace vast

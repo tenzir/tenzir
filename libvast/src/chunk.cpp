@@ -18,6 +18,9 @@
 
 #include <tuple>
 
+#include <caf/deserializer.hpp>
+#include <caf/serializer.hpp>
+
 #include "vast/chunk.hpp"
 #include "vast/filesystem.hpp"
 
@@ -102,6 +105,27 @@ bool operator<(const chunk& x, const chunk& y) {
   auto lhs = std::make_tuple(x.data(), x.size());
   auto rhs = std::make_tuple(y.data(), y.size());
   return lhs < rhs;
+}
+
+caf::error inspect(caf::serializer& sink, const chunk_ptr& x) {
+  auto n = x->size();
+  return caf::error::eval(
+    [&] { return sink.begin_sequence(n); },
+    [&] { return n > 0 ? sink.apply_raw(n, x->data()) : caf::none; },
+    [&] { return sink.end_sequence(); }
+  );
+}
+
+caf::error inspect(caf::deserializer& source, chunk_ptr& x) {
+  chunk::size_type n;
+  return caf::error::eval(
+    [&] { return source.begin_sequence(n); },
+    [&] {
+      x = chunk::make(n);
+      return n > 0 ? source.apply_raw(x->size(), x->data()) : caf::none;
+    },
+    [&] { return source.end_sequence(); }
+  );
 }
 
 } // namespace vast

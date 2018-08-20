@@ -11,18 +11,23 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
+#define SUITE chunk
+
 #include "vast/chunk.hpp"
 
 #include "test.hpp"
 
+#include "vast/load.hpp"
+#include "vast/save.hpp"
+
 using namespace vast;
 
-TEST(chunk construction) {
+TEST(construction) {
   auto x = chunk::make(100);
   CHECK_EQUAL(x->size(), 100u);
 }
 
-TEST(chunk slicing) {
+TEST(slicing) {
   char buf[100];
   auto i = 42;
   auto deleter = [&](char*, size_t) { i = 0; };
@@ -36,4 +41,16 @@ TEST(chunk slicing) {
   CHECK_EQUAL(i, 42);
   z = nullptr;
   CHECK_EQUAL(i, 0);
+}
+
+TEST(serialization) {
+  char str[] = "foobarbaz";
+  auto x = chunk::make(sizeof(str));
+  std::memcpy(x->data(), str, sizeof(str));
+  std::vector<char> buf;
+  CHECK(save(buf, x));
+  chunk_ptr y;
+  CHECK(load(buf, y));
+  REQUIRE(y);
+  CHECK(std::equal(x->begin(), x->end(), y->begin(), y->end()));
 }
