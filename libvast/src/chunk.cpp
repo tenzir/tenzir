@@ -97,16 +97,6 @@ chunk::chunk(size_t size, void* ptr, deleter_type deleter)
     deleter_{std::move(deleter)} {
 }
 
-bool operator==(const chunk& x, const chunk& y) {
-  return x.data() == y.data() && x.size() == y.size();
-}
-
-bool operator<(const chunk& x, const chunk& y) {
-  auto lhs = std::make_tuple(x.data(), x.size());
-  auto rhs = std::make_tuple(y.data(), y.size());
-  return lhs < rhs;
-}
-
 caf::error inspect(caf::serializer& sink, const chunk_ptr& x) {
   auto n = x->size();
   return caf::error::eval(

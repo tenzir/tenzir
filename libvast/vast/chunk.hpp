@@ -33,8 +33,7 @@ class path;
 using chunk_ptr = caf::intrusive_ptr<chunk>;
 
 /// A contiguous block of memory.
-class chunk : public caf::ref_counted,
-              detail::totally_ordered<chunk> {
+class chunk : public caf::ref_counted {
   chunk() = delete;
   chunk& operator=(const chunk&) = delete;
 
@@ -100,12 +99,6 @@ private:
   size_t size_;
   deleter_type deleter_;
 };
-
-/// @relates chunk
-bool operator==(const chunk& x, const chunk& y);
-
-/// @relates chunk
-bool operator<(const chunk& x, const chunk& y);
 
 /// @relates chunk
 /// @pre `x != nullptr`
