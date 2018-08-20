@@ -26,7 +26,7 @@ namespace detail {
 expected<std::unique_ptr<std::istream>>
 make_input_stream(const std::string& input, bool is_uds) {
   struct owning_istream : public std::istream {
-    owning_istream(std::streambuf* ptr) : std::istream{ptr} {
+    owning_istream(std::unique_ptr<std::streambuf>&& ptr) : std::istream{ptr.release()} {
       // nop
     }
     ~owning_istream() {
@@ -42,16 +42,16 @@ make_input_stream(const std::string& input, bool is_uds) {
       return make_error(ec::filesystem_error,
                         "failed to connect to UNIX domain socket at", input);
     auto remote_fd = uds.recv_fd(); // Blocks!
-    auto sb = new fdinbuf{remote_fd};
-    return std::make_unique<owning_istream>(sb);
+    auto sb = std::make_unique<fdinbuf>(remote_fd);
+    return std::make_unique<owning_istream>(std::move(sb));
   }
   if (input == "-") {
-    auto sb = new fdinbuf{0};
-    return std::make_unique<owning_istream>(sb);
+    auto sb = std::make_unique<fdinbuf>(0);
+    return std::make_unique<owning_istream>(std::move(sb));
   }
-  auto fb = new std::filebuf{};
+  auto fb = std::make_unique<std::filebuf>();
   fb->open(input, std::ios_base::binary | std::ios_base::in);
-  return std::make_unique<owning_istream>(fb);
+  return std::make_unique<owning_istream>(std::move(fb));
 }
 
 expected<std::unique_ptr<std::ostream>>
