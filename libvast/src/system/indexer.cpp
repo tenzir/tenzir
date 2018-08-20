@@ -81,7 +81,7 @@ behavior indexer(stateful_actor<indexer_state>* self, path dir,
             self->state.tbl.add(x);
         },
         [=](unit_t&, const error& err) {
-          if (err) {
+          if (err && err != caf::exit_reason::user_shutdown) {
             VAST_ERROR(self, "got a stream error:", self->system().render(err));
           }
         }
