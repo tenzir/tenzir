@@ -13,6 +13,8 @@
 
 #include <caf/stream_deserializer.hpp>
 
+#include "vast/bitmap.hpp"
+#include "vast/bitmap_algorithms.hpp"
 #include "vast/const_table_slice_handle.hpp"
 #include "vast/ids.hpp"
 #include "vast/segment.hpp"
@@ -90,14 +92,19 @@ size_t segment::num_slices() const {
 caf::expected<std::vector<const_table_slice_handle>>
 segment::lookup(const ids& xs) const {
   std::vector<const_table_slice_handle> result;
-  auto f = [&](auto& slice) -> caf::error {
+  auto f = [](auto& slice) {
+    return std::pair{slice.offset, slice.offset + slice.size};
+  };
+  auto g = [&](auto& slice) -> caf::error {
     auto x = make_slice(slice);
     if (!x)
       return x.error();
     result.push_back(*x);
     return caf::none;
   };
-  if (auto error = for_each_slice(xs, f))
+  auto begin = meta_.slices.begin();
+  auto end = meta_.slices.end();
+  if (auto error = traverse(xs, begin, end, f, g))
     return error;
   return result;
 }

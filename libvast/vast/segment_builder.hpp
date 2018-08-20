@@ -48,6 +48,12 @@ public:
   /// @post The builder can now be reused to contruct a new segment.
   caf::expected<segment_ptr> finish();
 
+  /// Locates previously added table slices for a given set of IDs.
+  /// @param xs The IDs to lookup.
+  /// @returns The table slices according to *xs*.
+  caf::expected<std::vector<const_table_slice_handle>>
+  lookup(const ids& xs) const;
+
   /// @returns The UUID for the segment under construction.
   const uuid& id() const;
 
@@ -68,6 +74,8 @@ private:
   std::vector<char> table_slice_buffer_;
   caf::vectorbuf table_slice_streambuf_;
   caf::stream_serializer<caf::vectorbuf&> table_slice_serializer_;
+  // Lookup cache
+  std::vector<const_table_slice_handle> slices_;
 };
 
 } // namespace vast

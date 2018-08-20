@@ -26,8 +26,6 @@
 #include <caf/streambuf.hpp>
 
 #include "vast/aliases.hpp"
-#include "vast/bitmap.hpp"
-#include "vast/bitmap_algorithms.hpp"
 #include "vast/chunk.hpp"
 #include "vast/fwd.hpp"
 #include "vast/uuid.hpp"
@@ -114,7 +112,7 @@ public:
   /// @returns the number of tables slices in the segment.
   size_t num_slices() const;
 
-  /// Locates the table slices for IDs.
+  /// Locates the table slices for a given set of IDs.
   /// @param xs The IDs to lookup.
   /// @returns The table slices according to *xs*.
   caf::expected<std::vector<const_table_slice_handle>>
@@ -127,32 +125,6 @@ public:
   /// @endcond
 
 private:
-  template <class F>
-  caf::error for_each_slice(const ids& xs, F f) const {
-    auto rng = select(xs);
-    // Walk in lock-step through the slices and the ID sequence.
-    // TODO: since the table slices have non-decreasing ID offsets, we should use
-    // binary search here to locate the starting point.
-    for (auto& slice : meta_.slices) {
-      if (!rng)
-        return caf::none;
-      // Make the ID range catch up if it's behind.
-      if (rng.get() < slice.offset) {
-        rng.skip(slice.offset);
-        if (!rng)
-          return caf::none;
-      }
-      // If the next ID falls in the current slice, we add to the result.
-      if (rng.get() >= slice.offset && rng.get() <= slice.offset + slice.size) {
-        if (auto error = f(slice))
-          return error;
-        // Fast forward to the ID one past this slice.
-        rng.skip(slice.offset + slice.size);
-      }
-    }
-    return caf::none;
-  }
-
   caf::expected<const_table_slice_handle>
   make_slice(const table_slice_synopsis& slice) const;
 

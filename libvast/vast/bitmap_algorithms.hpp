@@ -18,6 +18,8 @@
 #include <queue>
 #include <type_traits>
 
+#include <caf/error.hpp>
+
 #include "vast/aliases.hpp"
 #include "vast/bits.hpp"
 #include "vast/optional.hpp"
@@ -464,6 +466,42 @@ auto all(const Bitmap& bm) {
   if (bm.empty())
     return false;
   return !any<!Bit>(bm);
+}
+
+/// Traverses an ID sequence in conjunction with an arbitrary range that
+/// represents blocks of IDs.
+/// @param ids The ID sequence to *select*.
+/// @param begin An iterator to the beginning of the other range.
+/// @param end An iterator to the end of the other range.
+/// @param f A function that transforms *begin* into a half-open interval of IDs
+///          *[x, y)* where *x* is the first and *y* one past the last ID.
+/// @param g A function the performs a user-defined action if the current range
+///          values falls into *(x, y)*, where `(x, y) = f(*begin)` .
+template <class IDs, class Iterator, class F, class G>
+caf::error traverse(const IDs& ids, Iterator begin, Iterator end, F f, G g) {
+  auto rng = select(ids);
+  // TODO: since the table slices have non-decreasing ID offsets, we should use
+  // binary search here to locate the starting point.
+  for (; begin != end; ++begin) {
+    // We're done if there are no more IDs.
+    if (!rng)
+      return caf::none;
+    auto [first, last] = f(*begin);
+    // Make the ID range catch up if it's behind.
+    if (rng.get() < first) {
+      rng.skip(first);
+      if (!rng)
+        return caf::none;
+    }
+    // If the next ID falls in the current slice, we invoke the processing
+    // function and move forward.
+    if (rng.get() >= first && rng.get() < last) {
+      if (auto error = g(*begin))
+        return error;
+      rng.skip(last);
+    }
+  }
+  return caf::none;
 }
 
 } // namespace vast

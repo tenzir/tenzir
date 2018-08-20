@@ -67,7 +67,7 @@ TEST(serialization) {
   error = source(y);
   REQUIRE(!error);
   REQUIRE(y);
-  REQUIRE(y->num_slices(), 1u);
+  CHECK_EQUAL(y->num_slices(), 1u);
   CHECK(std::equal(x->chunk()->begin(), x->chunk()->end(),
                    y->chunk()->begin(), y->chunk()->end()));
 }

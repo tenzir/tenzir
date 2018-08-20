@@ -98,6 +98,7 @@ chunk::chunk(size_t size, void* ptr, deleter_type deleter)
 }
 
 caf::error inspect(caf::serializer& sink, const chunk_ptr& x) {
+  VAST_ASSERT(x != nullptr);
   auto n = x->size();
   return caf::error::eval(
     [&] { return sink.begin_sequence(n); },

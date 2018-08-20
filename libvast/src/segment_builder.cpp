@@ -59,6 +59,7 @@ caf::error segment_builder::add(const_table_slice_handle x) {
     detail::narrow_cast<int64_t>(after),
     x->offset(), x->rows()});
   min_table_slice_offset_ = x->offset() + x->rows();
+  slices_.push_back(x);
   return caf::none;
 }
 
@@ -101,6 +102,21 @@ caf::expected<segment_ptr> segment_builder::finish() {
   return result;
 }
 
+caf::expected<std::vector<const_table_slice_handle>>
+segment_builder::lookup(const ids& xs) const {
+  std::vector<const_table_slice_handle> result;
+  auto f = [](auto& slice) {
+    return std::pair{slice->offset(), slice->offset() + slice->rows()};
+  };
+  auto g = [&](auto& slice) {
+    result.push_back(slice);
+    return caf::none;
+  };
+  if (auto error = traverse(xs, slices_.begin(), slices_.end(), f, g))
+    return error;
+  return result;
+}
+
 const uuid& segment_builder::id() const {
   return id_;
 }
@@ -115,6 +131,7 @@ void segment_builder::reset() {
   id_ = uuid::random();
   segment_buffer_ = {};
   table_slice_buffer_.clear();
+  slices_.clear();
 }
 
 } // namespace vast

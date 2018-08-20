@@ -11,35 +11,34 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#pragma once
+#define SUITE segment_store
 
-#include <caf/fwd.hpp>
+#include "vast/segment_store.hpp"
 
-#include <caf/expected.hpp>
+#include "test.hpp"
+#include "test/fixtures/actor_system_and_events.hpp"
 
-#include "vast/fwd.hpp"
+#include "vast/const_table_slice_handle.hpp"
+#include "vast/ids.hpp"
+#include "vast/si_literals.hpp"
+#include "vast/table_slice.hpp"
 
-namespace vast {
+using namespace vast;
+using namespace binary_byte_literals;
 
-/// A key-value store for events.
-class store {
-public:
-  virtual ~store();
+FIXTURE_SCOPE(segment_store_tests,
+              fixtures::deterministic_actor_system_and_events)
 
-  /// Adds a table slice to the store.
-  /// @param xs The table slice to add.
-  /// @returns No error on success.
-  virtual caf::error put(const_table_slice_handle xs) = 0;
+TEST(construction and querying) {
+  // FIXME: use directory from fixture
+  rm("foo");
+  auto store = segment_store::make(sys, path{"foo"}, 512_KiB, 2);
+  REQUIRE(store);
+  for (auto& slice : const_bro_conn_log_slices)
+    REQUIRE(!store->put(slice));
+  auto slices = store->get(make_ids({42, 1337, 8401}));
+  REQUIRE(slices);
+  REQUIRE_EQUAL(slices->size(), 3u);
+}
 
-  /// Retrieves a set of events.
-  /// @param xs The IDs for the events to retrieve.
-  /// @returns The table slice according to *xs*.
-  virtual caf::expected<std::vector<const_table_slice_handle>>
-  get(const ids& xs) = 0;
-
-  /// Flushes in-memory state to persistent storage.
-  /// @returns No error on success.
-  virtual caf::error flush() = 0;
-};
-
-} // namespace vast
+FIXTURE_SCOPE_END()
