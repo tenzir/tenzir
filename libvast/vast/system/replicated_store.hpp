@@ -22,6 +22,7 @@
 
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
+#include "vast/si_literals.hpp"
 
 #include "vast/system/consensus.hpp"
 #include "vast/system/key_value_store.hpp"
@@ -261,7 +262,8 @@ replicated_store(
       self->state.last_stats_update = now;
       self->request(consensus, consensus_timeout, statistics_atom::value).then(
         [=](const raft::statistics& stats) {
-          auto low = uint64_t{64} << 20;
+          using namespace vast::binary_byte_literals;
+          auto low = static_cast<uint64_t>(64_MiB);
           auto high = self->state.last_snapshot_size * 4;
           if (stats.log_bytes > std::max(low, high))
             self->anon_send(self, snapshot_atom::value);

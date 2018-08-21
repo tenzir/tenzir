@@ -11,18 +11,23 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include <fstream>
-#include <string>
-
-#include "vast/detail/mmapbuf.hpp"
-#include "vast/detail/system.hpp"
-
 #define SUITE streambuf
 #include "test.hpp"
 #include "fixtures/filesystem.hpp"
 
+#include "vast/detail/mmapbuf.hpp"
+
+#include <fstream>
+#include <string>
+
+#include "vast/si_literals.hpp"
+
+#include "vast/detail/system.hpp"
+
+
 using namespace std::string_literals;
 using namespace vast;
+using namespace vast::binary_byte_literals;
 
 FIXTURE_SCOPE(fixture_tests, fixtures::filesystem)
 
@@ -95,8 +100,7 @@ TEST(memory-mapped streambuffer aligned resize) {
 TEST(memory-mapped streambuffer aligned resize large) {
   auto filename = directory / "aligned_large";
   auto page_size = detail::page_size();
-  auto ten_mb = size_t{10 * (1 << 20)};
-  auto size = ten_mb - (ten_mb % page_size);
+  auto size = 10_MiB - (10_MiB % page_size);
   aligned_resize_test_impl(filename, size);
 }
 

@@ -28,6 +28,9 @@ struct predicate_parser : parser<predicate_parser> {
   using attribute = predicate;
 
   static auto make() {
+    using parsers::alnum;
+    using parsers::chr;
+    using namespace parser_literals;
     auto to_attr_extractor = [](std::string str) -> predicate::operand {
       return attribute_extractor{std::move(str)};
     };
@@ -43,8 +46,6 @@ struct predicate_parser : parser<predicate_parser> {
       auto key = detail::join(xs, ".");
       return predicate::operand{key_extractor{std::move(key)}};
     };
-    using parsers::alnum;
-    using parsers::chr;
     auto id = +(alnum | chr{'_'} | chr{'-'});
     // A key cannot start with ':', othwise it would be interpreted as a type
     // extractor.
@@ -116,6 +117,7 @@ struct expression_parser : parser<expression_parser> {
 
   template <class Iterator>
   static auto make() {
+    using namespace parser_literals;
     using raw_expr =
       std::tuple<
         expression,

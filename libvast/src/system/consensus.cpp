@@ -20,11 +20,13 @@
 #include "vast/load.hpp"
 #include "vast/logger.hpp"
 #include "vast/save.hpp"
+#include "vast/si_literals.hpp"
 
 #include "vast/system/atoms.hpp"
 #include "vast/system/consensus.hpp"
 
 #include "vast/detail/assert.hpp"
+#include "vast/detail/narrow.hpp"
 #include "vast/detail/string.hpp"
 
 using namespace caf;
@@ -604,6 +606,7 @@ auto handle_request_vote(Actor* self, request_vote::request& req) {
 template <class Actor>
 expected<install_snapshot::request>
 make_install_snapshot(Actor* self, peer_state& peer) {
+  using namespace binary_byte_literals;
   VAST_ASSERT(is_leader(self));
   install_snapshot::request req;
   req.term = self->state.current_term;
@@ -612,14 +615,16 @@ make_install_snapshot(Actor* self, peer_state& peer) {
   if (!peer.snapshot) {
     auto filename = self->state.dir / "snapshot";
     peer.snapshot = std::make_unique<detail::mmapbuf>(filename.str());
-    VAST_ASSERT(peer.snapshot->in_avail() > 0);
     peer.last_snapshot_index = self->state.last_snapshot_index;
   }
+  auto available = peer.snapshot->in_avail();
+  VAST_ASSERT(available > 0);
   req.last_snapshot_index = peer.last_snapshot_index;
-  req.byte_offset = peer.snapshot->size() - peer.snapshot->in_avail();
+  req.byte_offset = peer.snapshot->size() - available;
   // Construct at most chunks of 1 MB.
-  auto one_mb = std::streamsize{1 << 20};
-  req.data.resize(std::min(one_mb, peer.snapshot->in_avail()));
+  auto remaining_bytes = detail::narrow_cast<unsigned long long>(available);
+  size_t msg_size = std::min(1_MiB, remaining_bytes);
+  req.data.resize(msg_size);
   VAST_DEBUG(role(self), "fills snapshot chunk with", req.data.size(), "bytes");
   auto got = peer.snapshot->sgetn(req.data.data(), req.data.size());
   if (got != static_cast<std::streamsize>(req.data.size()))

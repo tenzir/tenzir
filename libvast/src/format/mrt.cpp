@@ -1,5 +1,7 @@
 #include "vast/format/mrt.hpp"
 
+#include "vast/si_literals.hpp"
+
 #include "vast/detail/assert.hpp"
 #include "vast/detail/byte_swap.hpp"
 
@@ -378,7 +380,8 @@ expected<event> reader::read() {
   auto ptr = reinterpret_cast<const uint32_t*>(buffer_.data() + 8);
   auto message_length = vast::detail::to_host_order(*ptr);
   // TODO: Where does the RFC specify the maximum length?
-  static constexpr size_t max_message_length = 1 << 20;
+  using namespace binary_byte_literals;
+  static constexpr size_t max_message_length = 1_MiB;
   if (message_length > max_message_length)
     return make_error(ec::format_error, "MRT message exceeds maximum length",
                       message_length, max_message_length);

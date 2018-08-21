@@ -29,12 +29,11 @@ struct event_printer : printer<event_printer> {
   template <class Iterator>
   bool print(Iterator& out, const event& e) const {
     using namespace printers;
-    static auto p = str << str << u64 << chr<'|'>
-                    << make_printer<timestamp>{} << str
-                    << make_printer<value>{};
+    static auto p = str << str << make_printer<timestamp>{} << str
+                        << make_printer<value>{};
     if (e.type().name().empty() && !str(out, "<anonymous>"))
       return false;
-    return p(out, e.type().name(), " [", e.id(), e.timestamp(), "] ", e);
+    return p(out, e.type().name(), " [", e.timestamp(), "] ", e);
   }
 };
 
@@ -44,4 +43,3 @@ struct printer_registry<event> {
 };
 
 } // namespace vast
-

@@ -25,8 +25,9 @@ struct endpoint_parser : parser<endpoint_parser> {
 
   template <class Iterator>
   bool parse(Iterator& f, const Iterator& l, endpoint& e) const {
-    using namespace parsers;
     using namespace std::string_literals;
+    using namespace parsers;
+    using namespace parser_literals;
     auto hostname = +(alnum | chr{'-'} | chr{'_'} | chr{'.'});
     auto port = ":"_p >> u16;
     auto p

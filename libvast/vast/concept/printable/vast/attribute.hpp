@@ -27,6 +27,7 @@ struct attribute_printer : printer<attribute_printer> {
   template <class Iterator>
   bool print(Iterator& out, const vast::attribute& attr) const {
     using namespace printers;
+    using namespace printer_literals;
     auto prepend_eq = [](const std::string& x) { return '=' + x; };
     auto p = '&'_P << str << -(str ->* prepend_eq);
     return p(out, attr.key, attr.value);

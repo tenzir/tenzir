@@ -72,7 +72,7 @@ TEST(flattening) {
 
 TEST(printable) {
   // TODO: use a saner output format for events
-  auto str = "foo [123456789|1970-01-01+00:00:00.0] [T, 42, -234987]";
+  auto str = "foo [1970-01-01+00:00:00.0] [T, 42, -234987]";
   CHECK_EQUAL(to_string(e), str);
 }
 
