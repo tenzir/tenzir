@@ -26,7 +26,8 @@ namespace detail {
 expected<std::unique_ptr<std::istream>>
 make_input_stream(const std::string& input, bool is_uds) {
   struct owning_istream : public std::istream {
-    owning_istream(std::unique_ptr<std::streambuf>&& ptr) : std::istream{ptr.release()} {
+    owning_istream(std::unique_ptr<std::streambuf>&& ptr)
+      : std::istream{ptr.release()} {
       // nop
     }
     ~owning_istream() {
@@ -46,7 +47,7 @@ make_input_stream(const std::string& input, bool is_uds) {
     return std::make_unique<owning_istream>(std::move(sb));
   }
   if (input == "-") {
-    auto sb = std::make_unique<fdinbuf>(0);
+    auto sb = std::make_unique<fdinbuf>(0); // stdin
     return std::make_unique<owning_istream>(std::move(sb));
   }
   auto fb = std::make_unique<std::filebuf>();
