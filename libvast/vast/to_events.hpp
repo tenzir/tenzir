@@ -15,6 +15,7 @@
 
 #include <vector>
 
+#include "vast/fwd.hpp"
 #include "vast/table_slice.hpp"
 
 namespace vast {
