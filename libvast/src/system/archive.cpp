@@ -21,6 +21,7 @@
 #include "vast/segment_store.hpp"
 #include "vast/store.hpp"
 #include "vast/table_slice.hpp"
+#include "vast/to_events.hpp"
 
 #include "vast/concept/printable/stream.hpp"
 
@@ -62,6 +63,8 @@ archive(archive_type::stateful_pointer<archive_state> self,
       }
       // TODO: extract events from table slices.
       std::vector<event> result;
+      for (auto& slice : *slices)
+        to_events(result, *slice, xs);
       return result;
     },
     [=](stream<const_table_slice_handle> in) {
