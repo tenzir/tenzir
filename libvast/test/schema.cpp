@@ -11,6 +11,11 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
+#define SUITE schema
+
+#include "test.hpp"
+#include "fixtures/actor_system.hpp"
+
 #include "vast/json.hpp"
 #include "vast/load.hpp"
 #include "vast/save.hpp"
@@ -23,13 +28,12 @@
 #include "vast/concept/printable/vast/json.hpp"
 #include "vast/concept/printable/vast/schema.hpp"
 
-#define SUITE schema
-#include "test.hpp"
-
 using namespace vast;
 
 using caf::get_if;
 using caf::holds_alternative;
+
+FIXTURE_SCOPE(schema_tests, fixtures::deterministic_actor_system)
 
 TEST(offset finding) {
   std::string str = R"__(
@@ -92,9 +96,9 @@ TEST(serialization) {
   sch.add(t);
   // Save & load
   std::vector<char> buf;
-  CHECK(save(buf, sch));
+  CHECK(save(sys, buf, sch));
   schema sch2;
-  CHECK(load(buf, sch2));
+  CHECK(load(sys, buf, sch2));
   // Check integrity
   auto u = sch2.find("foo");
   REQUIRE(u);
@@ -279,3 +283,5 @@ TEST(json) {
 })__";
   CHECK_EQUAL(to_string(to_json(s)), expected);
 }
+
+FIXTURE_SCOPE_END()

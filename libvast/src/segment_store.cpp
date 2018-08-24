@@ -42,7 +42,7 @@ segment_store_ptr segment_store::make(caf::actor_system& sys, path dir,
     sys, std::move(dir), max_segment_size, in_memory_segments);
   // Materialize meta data of existing segments.
   if (exists(x->meta_path()))
-    if (auto result = load(x->meta_path(), x->segments_); !result) {
+    if (auto result = load(sys, x->meta_path(), x->segments_); !result) {
       VAST_ERROR("failed to unarchive meta data:", to_string(result.error()));
       return nullptr;
     }
@@ -69,7 +69,7 @@ caf::error segment_store::put(const_table_slice_handle xs) {
     if (auto result = mkdir(segment_path()); !result)
       return result.error();
   auto filename = segment_path() / to_string(seg_ptr->id());
-  if (auto result = save(filename, seg_ptr); !result)
+  if (auto result = save(sys_, filename, seg_ptr); !result)
     return result.error();
   VAST_DEBUG("wrote new segment to", filename.trim(-3));
   // Keep new segment in the cache.
@@ -78,7 +78,7 @@ caf::error segment_store::put(const_table_slice_handle xs) {
 }
 
 caf::error segment_store::flush() {
-  auto result = save(meta_path(), segments_);
+  auto result = save(sys_, meta_path(), segments_);
   return result ? caf::none : result.error();
 }
 
@@ -115,7 +115,8 @@ segment_store::get(const ids& xs) {
         seg_ptr = i->second;
       } else {
         VAST_DEBUG("got cache miss for segment", id);
-        if (auto res = load(segment_path() / to_string(id), seg_ptr); !res) {
+        auto fname = segment_path() / to_string(id);
+        if (auto res = load(sys_, fname, seg_ptr); !res) {
           VAST_ERROR("unable to load segment:", res.error());
           return res.error();
         }
@@ -134,11 +135,11 @@ segment_store::get(const ids& xs) {
 
 segment_store::segment_store(caf::actor_system& sys, path dir,
                              uint64_t max_segment_size, size_t in_memory_segments)
-  : actor_system_{sys},
+  : sys_{sys},
     dir_{std::move(dir)},
     max_segment_size_{max_segment_size},
     cache_{in_memory_segments},
-    builder_{actor_system_} {
+    builder_{sys_} {
   // nop
 }
 

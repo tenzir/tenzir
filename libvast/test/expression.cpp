@@ -11,6 +11,11 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
+#define SUITE expression
+
+#include "test.hpp"
+#include "fixtures/actor_system.hpp"
+
 #include "vast/event.hpp"
 #include "vast/expression.hpp"
 #include "vast/expression_visitors.hpp"
@@ -24,16 +29,13 @@
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/expression.hpp"
 
-#define SUITE expression
-#include "test.hpp"
-
 using caf::get;
 using caf::get_if;
 using caf::holds_alternative;
 
 using namespace vast;
 
-struct fixture {
+struct fixture : fixtures::deterministic_actor_system {
   fixture() {
     // expr0 := !(x.y.z <= 42 && &foo == T)
     auto p0 = predicate{key_extractor{"x.y.z"}, less_equal, data{42}};
@@ -72,8 +74,8 @@ TEST(construction) {
 TEST(serialization) {
   expression ex0, ex1;
   std::vector<char> buf;
-  save(buf, expr0, expr1);
-  load(buf, ex0, ex1);
+  save(sys, buf, expr0, expr1);
+  load(sys, buf, ex0, ex1);
   auto d = caf::get_if<disjunction>(&ex1);
   REQUIRE(d);
   REQUIRE(!d->empty());

@@ -74,7 +74,7 @@ auto partition_factory(actor_system& sys, path p, size_t* dummy_count,
       return sys.spawn(dummy_sink, dummy_count, buf);
     };
     auto id = uuid::random();
-    return make_partition(p, std::move(id), sink_factory);
+    return make_partition(sys, p, std::move(id), sink_factory);
   };
 }
 

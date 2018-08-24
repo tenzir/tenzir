@@ -21,6 +21,7 @@
 #include <vector>
 #include <unordered_map>
 
+#include <caf/fwd.hpp>
 #include <caf/stateful_actor.hpp>
 
 #include "vast/expected.hpp"
@@ -80,7 +81,7 @@ public:
   /// Constructs a log and attempts to read persistent state from the
   /// filesystem.
   /// @param dir The directory where the log stores persistent state.
-  log(path dir);
+  log(caf::actor_system& sys, path dir);
 
   /// Retrieves the first log entry.
   /// @pre `!empty()`
@@ -124,6 +125,7 @@ private:
   std::ofstream meta_file_;
   std::ofstream entries_file_;
   path dir_;
+  caf::actor_system& sys_;
 };
 
 /// A snapshot covering log entries indices in *[1, L]* where *L* is the last

@@ -37,9 +37,11 @@ caf::expected<column_index_ptr> init_res(column_index_ptr res) {
 
 } // namespace <anonymous>
 
-caf::expected<column_index_ptr> make_type_column_index(path filename) {
+caf::expected<column_index_ptr> make_type_column_index(caf::actor_system& sys,
+                                                       path filename) {
   struct impl : column_index {
-    impl(path&& fname) : column_index(string_type{}, std::move(fname)) {
+    impl(caf::actor_system& sys, path&& fname)
+      : column_index(sys, string_type{}, std::move(fname)) {
       // nop
     }
 
@@ -51,14 +53,16 @@ caf::expected<column_index_ptr> make_type_column_index(path filename) {
         idx_->append(make_data_view(tn), offset + row);
     }
   };
-  return init_res(std::make_unique<impl>(std::move(filename)));
+  return init_res(std::make_unique<impl>(sys, std::move(filename)));
 }
 
-caf::expected<column_index_ptr>
-make_column_index(path filename, type column_type, size_t column) {
+caf::expected<column_index_ptr> make_column_index(caf::actor_system& sys,
+                                                  path filename,
+                                                  type column_type,
+                                                  size_t column) {
   struct impl : column_index {
-    impl(path&& fname, type&& ctype, size_t col)
-      : column_index(std::move(ctype), std::move(fname)),
+    impl(caf::actor_system& sys, path&& fname, type&& ctype, size_t col)
+      : column_index(sys, std::move(ctype), std::move(fname)),
         col_(col) {
         // nop
     }
@@ -73,7 +77,7 @@ make_column_index(path filename, type column_type, size_t column) {
 
     size_t col_;
   };
-  return init_res(std::make_unique<impl>(std::move(filename),
+  return init_res(std::make_unique<impl>(sys, std::move(filename),
                                          std::move(column_type), column));
 }
 
@@ -90,7 +94,7 @@ caf::error column_index::init() {
   // Materialize the index when encountering persistent state.
   if (exists(filename_)) {
     detail::value_index_inspect_helper tmp{index_type_, idx_};
-    auto result = load(filename_, last_flush_, tmp);
+    auto result = load(sys_, filename_, last_flush_, tmp);
     if (!result) {
       VAST_ERROR("unable to load value index from disk", result.error());
       return std::move(result.error());
@@ -126,7 +130,7 @@ caf::error column_index::flush_to_disk() {
              "new/total bits)");
   last_flush_ = offset;
   detail::value_index_inspect_helper tmp{index_type_, idx_};
-  auto result = save(filename_, last_flush_, tmp);
+  auto result = save(sys_, filename_, last_flush_, tmp);
   if (!result)
     return result.error();
   return caf::none;
@@ -144,9 +148,12 @@ caf::expected<bitmap> column_index::lookup(const predicate& pred) {
 
 // -- constructors, destructors, and assignment operators ----------------------
 
-column_index::column_index(type index_type, path filename)
+column_index::column_index(caf::actor_system& sys, type index_type,
+                           path filename)
   : index_type_(std::move(index_type)),
-    filename_(std::move(filename)) {
+    filename_(std::move(filename)),
+    sys_(sys) {
+  // nop
 }
 
 } // namespace vast

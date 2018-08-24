@@ -16,11 +16,14 @@
 #include "vast/chunk.hpp"
 
 #include "test.hpp"
+#include "fixtures/actor_system.hpp"
 
 #include "vast/load.hpp"
 #include "vast/save.hpp"
 
 using namespace vast;
+
+FIXTURE_SCOPE(chunk_tests, fixtures::deterministic_actor_system)
 
 TEST(construction) {
   auto x = chunk::make(100);
@@ -48,9 +51,11 @@ TEST(serialization) {
   auto x = chunk::make(sizeof(str));
   std::memcpy(x->data(), str, sizeof(str));
   std::vector<char> buf;
-  CHECK(save(buf, x));
+  CHECK(save(sys, buf, x));
   chunk_ptr y;
-  CHECK(load(buf, y));
+  CHECK(load(sys, buf, y));
   REQUIRE(y);
   CHECK(std::equal(x->begin(), x->end(), y->begin(), y->end()));
 }
+
+FIXTURE_SCOPE_END()

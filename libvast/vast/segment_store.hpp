@@ -71,7 +71,7 @@ private:
     return dir_ / "segments";
   }
 
-  caf::actor_system& actor_system_;
+  caf::actor_system& sys_;
   path dir_;
   uint64_t max_segment_size_;
   detail::range_map<id, uuid> segments_;
