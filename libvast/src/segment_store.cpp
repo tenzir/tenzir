@@ -115,8 +115,10 @@ segment_store::get(const ids& xs) {
         seg_ptr = i->second;
       } else {
         VAST_DEBUG("got cache miss for segment", id);
-        if (auto res = load(segment_path() / to_string(id), seg_ptr); !res)
+        if (auto res = load(segment_path() / to_string(id), seg_ptr); !res) {
+          VAST_ERROR("unable to load segment:", res.error());
           return res.error();
+        }
         i = cache_.emplace(id, seg_ptr).first;
       }
       VAST_ASSERT(seg_ptr != nullptr);
