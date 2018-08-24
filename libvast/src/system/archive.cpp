@@ -56,15 +56,14 @@ archive(archive_type::stateful_pointer<archive_state> self,
       VAST_ASSERT(rank(xs) > 0);
       VAST_DEBUG(self, "got query for", rank(xs), "events in range ["
                  << select(xs, 1) << ',' << (select(xs, -1) + 1) << ')');
+      std::vector<event> result;
       auto slices = self->state.store->get(xs);
-      if (!slices) {
+      if (!slices)
         VAST_DEBUG(self, "failed to lookup IDs in store:",
                    self->system().render(slices.error()));
-      }
-      // TODO: extract events from table slices.
-      std::vector<event> result;
-      for (auto& slice : *slices)
-        to_events(result, *slice, xs);
+      else
+        for (auto& slice : *slices)
+          to_events(result, *slice, xs);
       return result;
     },
     [=](stream<const_table_slice_handle> in) {
