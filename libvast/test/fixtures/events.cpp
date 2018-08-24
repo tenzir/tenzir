@@ -196,8 +196,8 @@ events::events() {
   REQUIRE_EQUAL(bro_dns_log.size(), 5124u);
   bro_http_log = inhale<format::bro::reader>(bro::http);
   REQUIRE_EQUAL(bro_http_log.size(), 4896u);
-  bgpdump_txt = inhale<format::bgpdump::reader>(bgpdump::updates20140821);
-  REQUIRE_EQUAL(bgpdump_txt.size(), 11782u);
+  bgpdump_txt = inhale<format::bgpdump::reader>(bgpdump::updates20180124);
+  REQUIRE_EQUAL(bgpdump_txt.size(), 100u);
   random = extract(vast::format::test::reader{42, 1000});
   REQUIRE_EQUAL(random.size(), 1000u);
   ascending_integers = make_ascending_integers(10000);
