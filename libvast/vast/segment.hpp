@@ -82,7 +82,11 @@ public:
     version_type version;    ///< Version of the segment format.
     uuid id;                 ///< The UUID of the segment.
     uint64_t payload_offset; ///< The offset to the table slices.
-  } __attribute__((packed));
+  };
+
+  // Guarantee proper layout of the header, since we're going to rely on its
+  // in-memory representation.
+  static_assert(sizeof(header) == 32);
 
   /// Per-slice meta data.
   struct table_slice_synopsis {
@@ -121,7 +125,7 @@ public:
   /// @cond PRIVATE
 
   segment(caf::actor_system& sys, chunk_ptr chunk);
-  
+
   /// @endcond
 
 private:
@@ -130,7 +134,7 @@ private:
 
   caf::actor_system& actor_system_;
   chunk_ptr chunk_;
-  header header_; 
+  header header_;
   meta_data meta_;
 };
 
