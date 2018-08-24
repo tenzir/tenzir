@@ -98,17 +98,17 @@ TEST(bro conn logs) {
     return make_ids({args...}, bro_conn_log.size());
   };
   auto verify = [&] {
-    CHECK_EQUAL(rank(query("id.resp_p == 995/?")), 53u);
-    CHECK_EQUAL(rank(query("id.resp_p == 5355/?")), 49u);
-    CHECK_EQUAL(rank(query("id.resp_p == 995/? || id.resp_p == 5355/?")), 102u);
+    CHECK_EQUAL(rank(query("id.resp_p == 53/?")), 3u);
+    CHECK_EQUAL(rank(query("id.resp_p == 137/?")), 5u);
+    CHECK_EQUAL(rank(query("id.resp_p == 53/? || id.resp_p == 137/?")), 8u);
     CHECK_EQUAL(rank(query("&time > 1970-01-01")), bro_conn_log.size());
-    CHECK_EQUAL(rank(query("proto == \"udp\"")), 5306u);
-    CHECK_EQUAL(rank(query("proto == \"tcp\"")), 3135u);
+    CHECK_EQUAL(rank(query("proto == \"udp\"")), 20u);
+    CHECK_EQUAL(rank(query("proto == \"tcp\"")), 0u);
     CHECK_EQUAL(rank(query("uid == \"nkCxlvNN8pi\"")), 1u);
-    CHECK_EQUAL(rank(query("orig_bytes < 400")), 5332u);
-    CHECK_EQUAL(rank(query("orig_bytes < 400 && proto == \"udp\"")), 4357u);
-    CHECK_EQUAL(rank(query(":addr == 65.55.184.16")), 2u);
-    CHECK_EQUAL(query(":addr == 169.254.225.22"), res(680u, 682u, 719u, 720u));
+    CHECK_EQUAL(rank(query("orig_bytes < 400")), 17u);
+    CHECK_EQUAL(rank(query("orig_bytes < 400 && proto == \"udp\"")), 17u);
+    CHECK_EQUAL(rank(query(":addr == fe80::219:e3ff:fee7:5d23")), 1u);
+    CHECK_EQUAL(query(":addr == 192.168.1.104"), res(5u, 6u, 9u, 11u));
   };
   verify();
   MESSAGE("kill INDEXER");

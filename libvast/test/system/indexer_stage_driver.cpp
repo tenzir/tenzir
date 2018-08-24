@@ -138,7 +138,10 @@ TEST(spawning sinks automatically) {
   MESSAGE("check content of the shared buffer");
   REQUIRE_EQUAL(bufs->size(), 1u);
   auto& buf = bufs->back();
-  CHECK_EQUAL(test_slices.size() * slice_size, buf->size());
+  auto rows = std::accumulate(
+    test_slices.begin(), test_slices.end(), size_t{0},
+    [](size_t cnt, const auto& slice) { return cnt + slice->rows(); });
+  CHECK_EQUAL(rows, buf->size());
   std::sort(test_slices.begin(), test_slices.end());
   std::sort(buf->begin(), buf->end());
   CHECK_EQUAL(test_slices, *buf);

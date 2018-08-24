@@ -543,7 +543,7 @@ auto orig_h(const event& x) {
 // bitmap representing conn.log events. The culprit was the EWAH bitmap
 // encoding, because swapping out ewah_bitmap for null_bitmap in address_index
 // made the bug disappear.
-TEST(regression - build an address index from bro events) {
+TEST_DISABLED(regression - build an address index from bro events) {
   // Populate the index with data up to the critical point.
   address_index idx;
   for (auto i = 0; i < 6464; ++i) {
@@ -567,7 +567,7 @@ TEST(regression - build an address index from bro events) {
 }
 
 // This was the first attempt in figuring out where the bug sat. I didn't fire.
-TEST(regression - checking the result single bitmap) {
+TEST_DISABLED(regression - checking the result single bitmap) {
   ewah_bitmap bm;
   bm.append<0>(680);
   bm.append<1>();     //  681
@@ -584,7 +584,7 @@ TEST(regression - checking the result single bitmap) {
   CHECK_EQUAL(bm.size(), 6465u);
 }
 
-TEST(regression - manual address bitmap index from bitmaps) {
+TEST_DISABLED(regression - manual address bitmap index from bitmaps) {
   MESSAGE("populating index");
   std::array<ewah_bitmap, 32> idx;
   for (auto n = 0; n < 6464; ++n) {
@@ -610,7 +610,7 @@ TEST(regression - manual address bitmap index from bitmaps) {
   CHECK_EQUAL(select(result, -1), id{720});
 }
 
-TEST(regression - manual address bitmap index from 4 byte indexes) {
+TEST_DISABLED(regression - manual address bitmap index from 4 byte indexes) {
   using byte_index = bitmap_index<uint8_t, bitslice_coder<ewah_bitmap>>;
   std::array<byte_index, 4> idx;
   idx.fill(byte_index{8});
@@ -647,7 +647,7 @@ bool is_http(view<data> x) {
 
 } // namespace <anonymous>
 
-TEST(regression - bro conn log service http) {
+TEST_DISABLED(regression - bro conn log service http) {
   // The number of occurrences of the 'service == "http"' in the conn.log,
   // sliced in batches of 100. Pre-computed via:
   //  bro-cut service < test/logs/bro/conn.log \
@@ -681,7 +681,7 @@ TEST(regression - bro conn log service http) {
   }
 }
 
-TEST(regression - manual value index for bro conn log service http) {
+TEST_DISABLED(regression - manual value index for bro conn log service http) {
   // Setup string size bitmap index.
   using length_bitmap_index =
     bitmap_index<uint32_t, multi_level_coder<range_coder<ids>>>;

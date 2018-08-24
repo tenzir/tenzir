@@ -101,7 +101,7 @@ struct importer_fixture : Base {
 
   auto make_bro_source() {
     namespace bf = format::bro;
-    auto stream = vast::detail::make_input_stream(bro::conn);
+    auto stream = vast::detail::make_input_stream(bro::small_conn);
     REQUIRE(stream);
     bf::reader reader{std::move(*stream)};
     return this->self->spawn(system::source<bf::reader>, std::move(reader),

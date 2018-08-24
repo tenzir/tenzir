@@ -55,14 +55,14 @@ FIXTURE_SCOPE(archive_tests, fixture)
 TEST(bro conn log vector) {
   self->send(a, bro_conn_log);
   run();
-  auto result = query({{100, 150}});
-  CHECK_EQUAL(result.size(), 50u);
+  auto result = query({{10, 15}});
+  CHECK_EQUAL(result.size(), 5u);
 }
 
 TEST(bro conn logs slices) {
   push_to_archive(const_bro_conn_log_slices);
-  auto result = query({{100, 150}});
-  CHECK_EQUAL(result.size(), 50u);
+  auto result = query({{10, 15}});
+  CHECK_EQUAL(result.size(), 5u);
 }
 
 /*

@@ -190,8 +190,8 @@ events::events() {
     return;
   initialized = true;
   MESSAGE("inhaling unit test suite events");
-  bro_conn_log = inhale<format::bro::reader>(bro::conn);
-  REQUIRE_EQUAL(bro_conn_log.size(), 8462u);
+  bro_conn_log = inhale<format::bro::reader>(bro::small_conn);
+  REQUIRE_EQUAL(bro_conn_log.size(), 20u);
   bro_dns_log = inhale<format::bro::reader>(bro::dns);
   REQUIRE_EQUAL(bro_dns_log.size(), 5124u);
   bro_http_log = inhale<format::bro::reader>(bro::http);

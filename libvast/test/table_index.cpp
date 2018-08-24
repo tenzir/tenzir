@@ -143,19 +143,20 @@ TEST(bro conn logs) {
     add(slice);
   MESSAGE("verify table index");
   auto verify = [&] {
-    CHECK_EQUAL(rank(query("id.resp_p == 995/?")), 53u);
-    CHECK_EQUAL(rank(query("id.resp_p == 5355/?")), 49u);
-    CHECK_EQUAL(rank(query("id.resp_p == 995/? || id.resp_p == 5355/?")), 102u);
+    CHECK_EQUAL(rank(query("id.resp_p == 53/?")), 3u);
+    CHECK_EQUAL(rank(query("id.resp_p == 137/?")), 5u);
+    CHECK_EQUAL(rank(query("id.resp_p == 53/? || id.resp_p == 137/?")), 8u);
     CHECK_EQUAL(rank(query("&time > 1970-01-01")), bro_conn_log.size());
-    CHECK_EQUAL(rank(query("proto == \"udp\"")), 5306u);
-    CHECK_EQUAL(rank(query("proto == \"tcp\"")), 3135u);
+    CHECK_EQUAL(rank(query("proto == \"udp\"")), 20u);
+    CHECK_EQUAL(rank(query("proto == \"tcp\"")), 0u);
     CHECK_EQUAL(rank(query("uid == \"nkCxlvNN8pi\"")), 1u);
-    CHECK_EQUAL(rank(query("orig_bytes < 400")), 5332u);
-    CHECK_EQUAL(rank(query("orig_bytes < 400 && proto == \"udp\"")), 4357u);
-    CHECK_EQUAL(rank(query(":addr == 169.254.225.22")), 4u);
-    CHECK_EQUAL(rank(query("service == \"http\"")), 2386u);
-    CHECK_EQUAL(rank(query("service == \"http\" && :addr == 212.227.96.110")),
-                28u);
+    CHECK_EQUAL(rank(query("orig_bytes < 400")), 17u);
+    CHECK_EQUAL(rank(query("orig_bytes < 400 && proto == \"udp\"")), 17u);
+    CHECK_EQUAL(rank(query(":addr == fe80::219:e3ff:fee7:5d23")), 1u);
+    CHECK_EQUAL(rank(query(":addr == 192.168.1.104")), 4u);
+    CHECK_EQUAL(rank(query("service == \"dns\"")), 11u);
+    CHECK_EQUAL(rank(query("service == \"dns\" && :addr == 192.168.1.102")),
+                4u);
   };
   verify();
   MESSAGE("(automatically) persist table index and restore from disk");
@@ -164,7 +165,7 @@ TEST(bro conn logs) {
   verify();
 }
 
-TEST(bro conn log http slices) {
+TEST_DISABLED(bro conn log http slices) {
   MESSAGE("scrutinize each bro conn log slice individually");
   // Pre-computed via:
   //  bro-cut service < test/logs/bro/conn.log \
