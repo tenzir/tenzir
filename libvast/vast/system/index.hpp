@@ -79,9 +79,24 @@ struct index_state {
 
   index_state();
 
+  ~index_state();
+
   /// Initializes the state.
-  void init(caf::event_based_actor* self, const path& dir, size_t max_events,
-            size_t max_parts, size_t taste_parts);
+  caf::error init(caf::event_based_actor* self, const path& dir,
+                  size_t max_events, size_t max_parts, size_t taste_parts);
+
+  // -- persistence ------------------------------------------------------------
+
+  /// Loads the state from disk.
+  caf::error load_from_disk();
+
+  /// Persists the state to disk.
+  caf::error flush_to_disk();
+
+  // -- convenience functions --------------------------------------------------
+
+  /// Returns the file name for saving or loading the meta index.
+  path part_index_file() const;
 
   // -- member variables -------------------------------------------------------
 

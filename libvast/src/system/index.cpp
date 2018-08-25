@@ -120,15 +120,25 @@ index_state::index_state()
   // nop
 }
 
-void index_state::init(event_based_actor* self, const path& dir,
-                       size_t partition_size, size_t in_mem_partitions,
-                       size_t taste_partitions) {
+index_state::~index_state() {
+  VAST_TRACE("");
+  flush_to_disk();
+}
+
+caf::error index_state::init(event_based_actor* self, const path& dir,
+                             size_t partition_size, size_t in_mem_partitions,
+                             size_t taste_partitions) {
+  VAST_TRACE(VAST_ARG(dir), VAST_ARG(partition_size),
+             VAST_ARG(in_mem_partitions), VAST_ARG(taste_partitions));
   // Set members.
   this->self = self;
   this->dir = dir;
   this->partition_size = partition_size;
   this->lru_partitions.size(in_mem_partitions);
   this->taste_partitions = taste_partitions;
+  // Read persistent state.
+  if (auto err = load_from_disk())
+    return err;
   // Callback for the stream stage for creating a new partition when the
   // current one becomes full.
   auto fac = [this]() -> partition_ptr {
@@ -167,6 +177,48 @@ void index_state::init(event_based_actor* self, const path& dir,
   };
   stage = self->make_continuous_stage<indexer_stage_driver>(part_index, fac,
                                                             partition_size);
+  return caf::none;
+}
+
+caf::error index_state::load_from_disk() {
+  VAST_TRACE("");
+  // Nothing to load is not an error.
+  if (!exists(dir)) {
+    VAST_DEBUG(self, "found no directory to load from");
+    return caf::none;
+  }
+  if (auto fname = part_index_file(); exists(fname)) {
+    if (auto err = load(self->system(), fname, part_index)) {
+      VAST_ERROR(self, "failed to load meta index:",
+                 self->system().render(err));
+      return err;
+    }
+    VAST_DEBUG(self, "loaded a meta index with", part_index.size(), "entries");
+  }
+  return caf::none;
+}
+
+caf::error index_state::flush_to_disk() {
+  VAST_TRACE("");
+  // Create directory if needed.
+  if (!exists(dir)) {
+    if (auto res = mkdir(dir); !res) {
+      VAST_ERROR(self, "was unable create its directory:", VAST_ARG(res));
+      return std::move(res.error());
+    }
+  }
+  // Flush meta index to disk.
+  if (auto err = save(self->system(), part_index_file(), part_index)) {
+    VAST_ERROR(self, "was unable to save meta index:", VAST_ARG(err));
+    return err;
+  } else {
+    VAST_DEBUG(self, "persistet meta index with", part_index.size(), "entries");
+  }
+  return caf::none;
+}
+
+path index_state::part_index_file() const {
+  return dir / "meta";
 }
 
 behavior index(stateful_actor<index_state>* self, const path& dir,
@@ -176,21 +228,14 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
   VAST_ASSERT(in_mem_partitions > 0);
   VAST_DEBUG(self, "caps partitions at", partition_size, "events");
   VAST_DEBUG(self, "keeps at most", in_mem_partitions, "partitions in memory");
-  self->state.init(self, dir, partition_size, in_mem_partitions,
-                   taste_partitions);
+  if (auto err = self->state.init(self, dir, partition_size, in_mem_partitions,
+                                  taste_partitions)) {
+    self->quit(std::move(err));
+    return {};
+  }
   auto accountant = accountant_type{};
   if (auto a = self->system().registry().get(accountant_atom::value))
     accountant = actor_cast<accountant_type>(a);
-  // Read persistent state.
-  if (exists(self->state.dir / "meta")) {
-    if (auto err = load(self->system(), self->state.dir / "meta",
-                        self->state.part_index)) {
-      VAST_ERROR(self, "failed to load partition index:",
-                 self->system().render(err));
-      self->quit(std::move(err));
-      return {};
-    }
-  }
   // Launch workers for resolving queries.
   for (size_t i = 0; i < num_workers; ++i)
     self->spawn(collector, self);
