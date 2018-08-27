@@ -22,6 +22,7 @@ namespace vast {
 class abstract_type;
 class address;
 class bitmap;
+class chunk;
 class column_index;
 class const_table_slice_handle;
 class data;
@@ -70,14 +71,11 @@ struct vector_type;
 
 // -- smart pointers -----------------------------------------------------------
 
+using chunk_ptr = caf::intrusive_ptr<chunk>;
 using column_index_ptr = std::unique_ptr<column_index>;
-
 using table_slice_ptr = caf::intrusive_ptr<table_slice>;
-
 using const_table_slice_ptr = caf::intrusive_ptr<const table_slice>;
-
 using table_slice_builder_ptr = caf::intrusive_ptr<table_slice_builder>;
-
 using default_table_slice_ptr = caf::intrusive_ptr<default_table_slice>;
 
 // -- miscellaneous ------------------------------------------------------------

@@ -21,16 +21,11 @@
 #include "caf/ref_counted.hpp"
 #include "caf/intrusive_ptr.hpp"
 
+#include "vast/fwd.hpp"
+
 #include "vast/detail/operators.hpp"
 
 namespace vast {
-
-class chunk;
-class path;
-
-/// A pointer to a chunk.
-/// @relates chunk
-using chunk_ptr = caf::intrusive_ptr<chunk>;
 
 /// A contiguous block of memory.
 class chunk : public caf::ref_counted {
@@ -99,6 +94,10 @@ private:
   size_t size_;
   deleter_type deleter_;
 };
+
+/// A pointer to a chunk.
+/// @relates chunk
+using chunk_ptr = caf::intrusive_ptr<chunk>;
 
 /// @relates chunk
 /// @pre `x != nullptr`
