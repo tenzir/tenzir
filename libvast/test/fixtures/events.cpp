@@ -193,9 +193,9 @@ events::events() {
   bro_conn_log = inhale<format::bro::reader>(bro::small_conn);
   REQUIRE_EQUAL(bro_conn_log.size(), 20u);
   bro_dns_log = inhale<format::bro::reader>(bro::dns);
-  REQUIRE_EQUAL(bro_dns_log.size(), 5124u);
+  REQUIRE_EQUAL(bro_dns_log.size(), 32u);
   bro_http_log = inhale<format::bro::reader>(bro::http);
-  REQUIRE_EQUAL(bro_http_log.size(), 4896u);
+  REQUIRE_EQUAL(bro_http_log.size(), 40u);
   bgpdump_txt = inhale<format::bgpdump::reader>(bgpdump::updates20180124);
   REQUIRE_EQUAL(bgpdump_txt.size(), 100u);
   random = extract(vast::format::test::reader{42, 1000});
