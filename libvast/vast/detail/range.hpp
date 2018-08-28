@@ -27,10 +27,6 @@ public:
     return !empty();
   }
 
-  bool operator!() const {
-    return empty();
-  }
-
   bool empty() const {
     auto d = static_cast<const Derived*>(this);
     return d->begin() == d->end();
@@ -80,15 +76,15 @@ public:
   using iterator = range_iterator<range_facade<Derived>>;
   using const_iterator = iterator;
 
-  iterator begin() const {
-    return iterator{const_cast<range_facade&>(*this)};
+  const_iterator begin() const {
+    return const_iterator{const_cast<range_facade&>(*this)};
   }
 
-  iterator end() const {
-    return iterator{};
+  const_iterator end() const {
+    return const_iterator{};
   }
 
-private:
+protected:
   friend iterator;
 
   bool complete() const {
