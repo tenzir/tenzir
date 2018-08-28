@@ -259,32 +259,40 @@ struct bitmap_test_harness {
         CHECK_EQUAL(i, b.size() - 1);
     }
     CHECK_EQUAL(r, n);
-    MESSAGE("select_range - next(n)");
-    auto rng = select(b);
+    MESSAGE("bitwise_range::select(n)");
+    auto rng = each(b);
     CHECK_EQUAL(rng.get(), 0u);
-    rng.next(100); // #101
+    rng.select(100); // #101
     REQUIRE(rng);
     CHECK_EQUAL(rng.get(), 100u);
-    rng.next(122); // #101 + #122 = #223
+    rng.select(122); // #101 + #122 = #223
     REQUIRE(rng);
     CHECK_EQUAL(rng.get(), 223u);
-    rng.next(r - 223); // last one
+    rng.select(r - 223); // last one
     REQUIRE(rng);
     CHECK_EQUAL(rng.get(), last);
-    rng.next(42); // UB, but this range simply considers itself done.
+    rng.select(42); // nothing left
     CHECK(!rng);
-    MESSAGE("select_range - skip(n)");
-    rng = select(b);
-    rng.skip(b.size() - 1); // start at 0, then go to last bit.
+    MESSAGE("bitwise_range::next(n)");
+    rng = each(b);
+    rng.next(b.size() - 1); // start at 0, then go to last bit.
     REQUIRE(rng);
     CHECK_EQUAL(rng.get(), b.size() - 1);
-    rng = select(b);
-    rng.skip(225); // Position 225 has a 0-bit, then 1-bit is at 227.
+    rng = each(b);
+    rng.next(225); // Position 225 has a 0-bit, the next 1-bit is at 227.
+    REQUIRE(rng);
+    CHECK_EQUAL(rng.get(), 225u);
+    rng.select();
     REQUIRE(rng);
     CHECK_EQUAL(rng.get(), 227u);
-    rng = select(b);
-    rng.skip(1024); // out of range
+    rng = each(b);
+    rng.next(1024); // out of range
     CHECK(!rng);
+    MESSAGE("bitwise_range::select_at(x)");
+    rng = each(b);
+    rng.select_at(225);
+    REQUIRE(rng);
+    CHECK_EQUAL(rng.get(), 227u);
   }
 
   void test_span() {
