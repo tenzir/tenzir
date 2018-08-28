@@ -29,8 +29,9 @@ template <class T>
 class bits : detail::equality_comparable<bits<T>> {
   public:
   using word_type = word<T>;
-  using value_type = typename word<T>::value_type;
-  using size_type = typename word<T>::size_type;
+  using value_type = typename word_type::value_type;
+  using size_type = typename word_type::size_type;
+  static inline size_type npos = word_type::npos;
 
   /// @returns the width of the underlying block.
   static constexpr size_type width() {
@@ -192,11 +193,11 @@ template <bool Bit = true, class T>
 auto find_first(const bits<T>& b) {
   if constexpr (Bit) {
     if (b.size() > word<T>::width)
-      return b.data() == word<T>::all ? 0 : word<T>::npos;
+      return b.data() == word<T>::all ? 0 : bits<T>::npos;
     return find_first<1>(b.data());
   } else {
     if (b.size() > word<T>::width)
-      return b.data() == word<T>::none ? 0 : word<T>::npos;
+      return b.data() == word<T>::none ? 0 : bits<T>::npos;
     T masked = b.data() | word<T>::msb_mask(word<T>::width - b.size());
     return find_first<0>(masked);
   }
@@ -210,15 +211,15 @@ template <bool Bit = true, class T>
 auto find_next(const bits<T>& b, typename bits<T>::size_type i) {
   if constexpr (Bit) {
     if (i >= b.size() - 1)
-      return word<T>::npos;
+      return bits<T>::npos;
     if (b.size() > word<T>::width)
-      return b.data() == word<T>::all ? i + 1 : word<T>::npos;
+      return b.data() == word<T>::all ? i + 1 : bits<T>::npos;
     return find_next(b.data(), i);
   } else {
     if (i >= b.size() - 1)
-      return word<T>::npos;
+      return bits<T>::npos;
     if (b.size() > word<T>::width)
-      return b.data() == word<T>::none ? i + 1 : word<T>::npos;
+      return b.data() == word<T>::none ? i + 1 : bits<T>::npos;
     T masked = ~b.data() & word<T>::lsb_fill(b.size());
     return find_next(masked, i);
   }
@@ -231,11 +232,11 @@ template <bool Bit = true, class T>
 auto find_last(const bits<T>& b) {
   if constexpr (Bit) {
     if (b.size() > word<T>::width)
-      return b.data() == word<T>::all ? b.size() - 1 : word<T>::npos;
+      return b.data() == word<T>::all ? b.size() - 1 : bits<T>::npos;
     return find_last<1>(b.data());
   } else {
     if (b.size() > word<T>::width)
-      return b.data() == word<T>::none ? b.size() - 1 : word<T>::npos;
+      return b.data() == word<T>::none ? b.size() - 1 : bits<T>::npos;
     T masked = ~b.data() & word<T>::lsb_fill(b.size());
     return find_last<1>(masked);
   }
@@ -289,7 +290,7 @@ auto select(const bits<T>& b, typename bits<T>::size_type i) {
   VAST_ASSERT(i <= b.size());
   T data = Bit ? b.data() : ~b.data();
   if (b.size() > word<T>::width)
-    return data == word<T>::all ? i - 1 : word<T>::npos;
+    return data == word<T>::all ? i - 1 : bits<T>::npos;
   return select(data, i);
 }
 
