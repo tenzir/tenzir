@@ -55,7 +55,8 @@ segment::header make_header(chunk_ptr chunk) {
 
 } // namespace <anonymous>
 
-caf::expected<segment_ptr> segment::make(caf::actor_system& sys, chunk_ptr chunk) {
+caf::expected<segment_ptr> segment::make(caf::actor_system& sys,
+                                         chunk_ptr chunk) {
   VAST_ASSERT(chunk != nullptr);
   if (chunk->size() < sizeof(header))
     return make_error(caf::sec::invalid_argument, "segment too small",
@@ -64,7 +65,8 @@ caf::expected<segment_ptr> segment::make(caf::actor_system& sys, chunk_ptr chunk
   if (hdr.magic != magic)
     return make_error(ec::version_error, "invalid segment magic", hdr.magic);
   if (hdr.version > version)
-    return make_error(ec::version_error, "segment version too big", hdr.version);
+    return make_error(ec::version_error, "segment version too big",
+                      hdr.version);
   // Create a segment and copy the header.
   auto result = caf::make_counted<segment>(sys, chunk);
   result->header_ = hdr;
@@ -121,7 +123,7 @@ segment::make_slice(const table_slice_synopsis& slice) const {
   return result;
 }
 
-segment::segment(caf::actor_system& sys, chunk_ptr chunk) 
+segment::segment(caf::actor_system& sys, chunk_ptr chunk)
   : actor_system_{sys},
     chunk_{std::move(chunk)} {
   // Only the builder and make() call this constructor. In the former case the
