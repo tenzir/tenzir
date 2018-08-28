@@ -142,7 +142,7 @@ struct fixture : fixture_base {
 
 FIXTURE_SCOPE(exporter_tests, fixture)
 
-TEST_DISABLED(historical query without importer) {
+TEST(historical query without importer) {
   MESSAGE("spawn index and archive");
   spawn_index();
   spawn_archive();
@@ -162,7 +162,7 @@ TEST_DISABLED(historical query without importer) {
   CHECK_EQUAL(results.back().id(), 8354u);
 }
 
-TEST_DISABLED(historical query with importer) {
+TEST(historical query with importer) {
   MESSAGE("prepare importer");
   importer_setup();
   MESSAGE("ingest conn.log via importer");
@@ -182,7 +182,7 @@ TEST_DISABLED(historical query with importer) {
   CHECK_EQUAL(results.back().id(), 8354u);
 }
 
-TEST_DISABLED(continuous query with exporter only) {
+TEST(continuous query with exporter only) {
   MESSAGE("prepare exporter for continuous query");
   spawn_exporter(continuous);
   send(exporter, system::sink_atom::value, self);
@@ -201,7 +201,7 @@ TEST_DISABLED(continuous query with exporter only) {
   CHECK_EQUAL(results.back().id(), 8354u);
 }
 
-TEST_DISABLED(continuous query with importer) {
+TEST(continuous query with importer) {
   MESSAGE("prepare importer");
   importer_setup();
   MESSAGE("prepare exporter for continous query");
