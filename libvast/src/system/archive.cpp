@@ -13,7 +13,6 @@
 
 #include <algorithm>
 
-#include "vast/batch.hpp"
 #include "vast/const_table_slice_handle.hpp"
 #include "vast/event.hpp"
 #include "vast/expected.hpp"

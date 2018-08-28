@@ -17,7 +17,6 @@ set(libvast_sources
   src/attribute.cpp
   src/banner.cpp
   src/base.cpp
-  src/batch.cpp
   src/bitmap.cpp
   src/chunk.cpp
   src/column_index.cpp
@@ -218,7 +217,6 @@ include_directories(
 
 set(tests
   test/address.cpp
-  test/batch.cpp
   test/binner.cpp
   test/bitmap.cpp
   test/bitmap_index.cpp
