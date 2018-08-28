@@ -31,7 +31,7 @@ class bits : detail::equality_comparable<bits<T>> {
   using word_type = word<T>;
   using value_type = typename word_type::value_type;
   using size_type = typename word_type::size_type;
-  static inline size_type npos = word_type::npos;
+  static constexpr size_type npos = word_type::npos;
 
   /// @returns the width of the underlying block.
   static constexpr size_type width() {
