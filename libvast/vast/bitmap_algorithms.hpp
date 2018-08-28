@@ -562,18 +562,20 @@ auto all(const Bitmap& bm) {
 ///          values falls into *(x, y)*, where `(x, y) = f(*begin)` .
 template <class IDs, class Iterator, class F, class G>
 caf::error traverse(const IDs& ids, Iterator begin, Iterator end, F f, G g) {
-  // TODO: since the table slices have non-decreasing ID offsets, we should use
-  // binary search here to locate the starting point.
-  auto rng = each(ids);
-  for (; begin != end; ++begin) {
-    if (!rng)
-      return caf::none;
+  auto pred = [&](const auto& x, auto y) { return f(x).second < y; };
+  auto lower_bound = [&](Iterator first, Iterator last, auto x) {
+    return std::lower_bound(first, last, x, pred);
+  };
+  for (auto rng = each(ids);
+       rng && begin != end;
+       begin = lower_bound(begin, end, rng.get())) {
+    // Get the current ID interval.
     auto [first, last] = f(*begin);
     // Make the ID range catch up if it's behind.
     if (rng.get() < first) {
       rng.select_at(first);
       if (!rng)
-        return caf::none;
+        break;
     }
     // If the next ID falls in the current slice, we invoke the processing
     // function and move forward.
@@ -581,6 +583,8 @@ caf::error traverse(const IDs& ids, Iterator begin, Iterator end, F f, G g) {
       if (auto error = g(*begin))
         return error;
       rng.select_at(last);
+      if (!rng)
+        break;
     }
   }
   return caf::none;
