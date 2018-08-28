@@ -112,7 +112,7 @@ segment_builder::lookup(const ids& xs) const {
     result.push_back(slice);
     return caf::none;
   };
-  if (auto error = traverse(xs, slices_.begin(), slices_.end(), f, g))
+  if (auto error = select_with(xs, slices_.begin(), slices_.end(), f, g))
     return error;
   return result;
 }

@@ -551,22 +551,22 @@ auto all(const Bitmap& bm) {
   return !any<!Bit>(bm);
 }
 
-/// Traverses an ID sequence in conjunction with an arbitrary range that
-/// represents blocks of IDs.
-/// @param ids The ID sequence to *select*.
+/// Traverses the 1-bits of a bitmap in conjunction with an iterator range that
+/// represents half-open ID intervals.
+/// @param bm The ID sequence to *select*.
 /// @param begin An iterator to the beginning of the other range.
 /// @param end An iterator to the end of the other range.
 /// @param f A function that transforms *begin* into a half-open interval of IDs
 ///          *[x, y)* where *x* is the first and *y* one past the last ID.
 /// @param g A function the performs a user-defined action if the current range
 ///          values falls into *(x, y)*, where `(x, y) = f(*begin)` .
-template <class IDs, class Iterator, class F, class G>
-caf::error traverse(const IDs& ids, Iterator begin, Iterator end, F f, G g) {
+template <class Bitmap, class Iterator, class F, class G>
+caf::error select_with(const Bitmap& bm, Iterator begin, Iterator end, F f, G g) {
   auto pred = [&](const auto& x, auto y) { return f(x).second < y; };
   auto lower_bound = [&](Iterator first, Iterator last, auto x) {
     return std::lower_bound(first, last, x, pred);
   };
-  for (auto rng = each(ids);
+  for (auto rng = each(bm);
        rng && begin != end;
        begin = lower_bound(begin, end, rng.get())) {
     // Get the current ID interval.

@@ -96,7 +96,7 @@ segment_store::get(const ids& xs) {
   };
   auto begin = segments_.begin();
   auto end = segments_.end();
-  if (auto error = traverse(xs, begin, end, f, g))
+  if (auto error = select_with(xs, begin, end, f, g))
     return error;
   // Process candidates in reverse order for maximum LRU cache hits.
   std::vector<const_table_slice_handle> result;

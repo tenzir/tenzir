@@ -106,7 +106,7 @@ segment::lookup(const ids& xs) const {
   };
   auto begin = meta_.slices.begin();
   auto end = meta_.slices.end();
-  if (auto error = traverse(xs, begin, end, f, g))
+  if (auto error = select_with(xs, begin, end, f, g))
     return error;
   return result;
 }
