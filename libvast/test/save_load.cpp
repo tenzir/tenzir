@@ -60,14 +60,13 @@ FIXTURE_SCOPE(serialization_tests, fixtures::deterministic_actor_system)
 
 TEST(variadic) {
   std::string buf;
-  auto m = save<compression::lz4>(sys, buf, 42, 4.2, 1337u, "foo"s);
-  CHECK(!m.error());
+  CHECK_EQUAL(save<compression::lz4>(sys, buf, 42, 4.2, 1337u, "foo"s),
+              caf::none);
   int i;
   double d;
   unsigned u;
   std::string s;
-  m = load<compression::lz4>(sys, buf, i, d, u, s);
-  CHECK(!m.error());
+  CHECK_EQUAL(load<compression::lz4>(sys, buf, i, d, u, s), caf::none);
   CHECK_EQUAL(i, 42);
   CHECK_EQUAL(d, 4.2);
   CHECK_EQUAL(u, 1337u);
@@ -78,9 +77,9 @@ TEST(custom type modeling serializable) {
   std::vector<char> buf;
   foo x;
   x.i = 42;
-  auto m = save(sys, buf, x);
+  CHECK_EQUAL(save(sys, buf, x), caf::none);
   foo y;
-  m = load(sys, buf, y);
+  CHECK_EQUAL(load(sys, buf, y), caf::none);
   CHECK_EQUAL(x.i, y.i);
 }
 
@@ -88,9 +87,9 @@ TEST(custom type modeling state) {
   std::vector<char> buf;
   bar x;
   x.set(42);
-  auto m = save(sys, buf, x);
+  CHECK_EQUAL(save(sys, buf, x), caf::none);
   bar y;
-  m = load(sys, buf, y);
+  CHECK_EQUAL(load(sys, buf, y), caf::none);
   CHECK_EQUAL(x.get(), y.get());
 }
 

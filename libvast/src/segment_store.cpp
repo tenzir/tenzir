@@ -42,8 +42,8 @@ segment_store_ptr segment_store::make(caf::actor_system& sys, path dir,
     sys, std::move(dir), max_segment_size, in_memory_segments);
   // Materialize meta data of existing segments.
   if (exists(x->meta_path()))
-    if (auto result = load(sys, x->meta_path(), x->segments_); !result) {
-      VAST_ERROR("failed to unarchive meta data:", to_string(result.error()));
+    if (auto err = load(sys, x->meta_path(), x->segments_)) {
+      VAST_ERROR("failed to unarchive meta data:", sys.render(err));
       return nullptr;
     }
   return x;
@@ -69,8 +69,8 @@ caf::error segment_store::put(const_table_slice_handle xs) {
     if (auto result = mkdir(segment_path()); !result)
       return result.error();
   auto filename = segment_path() / to_string(seg_ptr->id());
-  if (auto result = save(sys_, filename, seg_ptr); !result)
-    return result.error();
+  if (auto err = save(sys_, filename, seg_ptr))
+    return err;
   VAST_DEBUG("wrote new segment to", filename.trim(-3));
   // Keep new segment in the cache.
   cache_.emplace(seg_ptr->id(), seg_ptr);
@@ -78,8 +78,7 @@ caf::error segment_store::put(const_table_slice_handle xs) {
 }
 
 caf::error segment_store::flush() {
-  auto result = save(sys_, meta_path(), segments_);
-  return result ? caf::none : result.error();
+  return save(sys_, meta_path(), segments_);
 }
 
 caf::expected<std::vector<const_table_slice_handle>>
@@ -116,9 +115,9 @@ segment_store::get(const ids& xs) {
       } else {
         VAST_DEBUG("got cache miss for segment", id);
         auto fname = segment_path() / to_string(id);
-        if (auto res = load(sys_, fname, seg_ptr); !res) {
-          VAST_ERROR("unable to load segment:", res.error());
-          return res.error();
+        if (auto err = load(sys_, fname, seg_ptr)) {
+          VAST_ERROR("unable to load segment:", sys_.render(err));
+          return err;
         }
         i = cache_.emplace(id, seg_ptr).first;
       }

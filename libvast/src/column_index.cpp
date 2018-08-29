@@ -94,10 +94,9 @@ caf::error column_index::init() {
   // Materialize the index when encountering persistent state.
   if (exists(filename_)) {
     detail::value_index_inspect_helper tmp{index_type_, idx_};
-    auto result = load(sys_, filename_, last_flush_, tmp);
-    if (!result) {
-      VAST_ERROR("unable to load value index from disk", result.error());
-      return std::move(result.error());
+    if (auto err = load(sys_, filename_, last_flush_, tmp)) {
+      VAST_ERROR("unable to load value index from disk", sys_.render(err));
+      return err;
     } else {
       VAST_DEBUG("loaded value index with offset", idx_->offset());
     }
@@ -130,10 +129,7 @@ caf::error column_index::flush_to_disk() {
              "new/total bits)");
   last_flush_ = offset;
   detail::value_index_inspect_helper tmp{index_type_, idx_};
-  auto result = save(sys_, filename_, last_flush_, tmp);
-  if (!result)
-    return result.error();
-  return caf::none;
+  return save(sys_, filename_, last_flush_, tmp);
 }
 
 // -- properties -------------------------------------------------------------

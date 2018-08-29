@@ -34,7 +34,7 @@ namespace vast {
 /// Deserializes a sequence of objects.
 /// @see save
 template <compression Method = compression::null, class Source, class... Ts>
-expected<void> load(caf::actor_system& sys, Source&& in, Ts&... xs) {
+caf::error load(caf::actor_system& sys, Source&& in, Ts&... xs) {
   static_assert(sizeof...(Ts) > 0);
   using source_type = std::decay_t<Source>;
   if constexpr (detail::is_streambuf_v<source_type>) {
@@ -48,7 +48,7 @@ expected<void> load(caf::actor_system& sys, Source&& in, Ts&... xs) {
       if (auto err = s(xs...))
         return err;
     }
-    return {};
+    return caf::none;
   } else if constexpr (std::is_base_of_v<std::istream, source_type>) {
     auto sb = in.rdbuf();
     return load<Method>(sys, *sb, xs...);

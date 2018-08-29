@@ -285,9 +285,9 @@ TEST(serialization) {
   bmi1.append(-100);
   CHECK_EQUAL(to_string(bmi1.lookup(not_equal, 100)), "11011");
   std::vector<char> buf;
-  save(sys, buf, bmi1);
+  CHECK_EQUAL(save(sys, buf, bmi1), caf::none);
   auto bmi2 = bitmap_index_type{};
-  load(sys, buf, bmi2);
+  CHECK_EQUAL(load(sys, buf, bmi2), caf::none);
   CHECK(bmi1 == bmi2);
   CHECK_EQUAL(to_string(bmi2.lookup(not_equal, 100)), "11011");
 }

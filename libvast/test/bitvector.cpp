@@ -213,8 +213,8 @@ TEST(serializable) {
   x.resize(1024, false);
   x[1000] = true;
   std::vector<char> buf;
-  save(sys, buf, x);
-  load(sys, buf, y);
+  CHECK_EQUAL(save(sys, buf, x), caf::none);
+  CHECK_EQUAL(load(sys, buf, y), caf::none);
   REQUIRE_EQUAL(x, y);
   CHECK(y[1000]);
 }

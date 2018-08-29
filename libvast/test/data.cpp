@@ -192,9 +192,9 @@ TEST(serialization) {
   xs.emplace(port{8, port::icmp});
   auto x0 = data{xs};
   std::vector<char> buf;
-  save(sys, buf, x0);
+  CHECK_EQUAL(save(sys, buf, x0), caf::none);
   data x1;
-  load(sys, buf, x1);
+  CHECK_EQUAL(load(sys, buf, x1), caf::none);
   CHECK(x0 == x1);
 }
 
