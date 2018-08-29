@@ -11,6 +11,11 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
+#define SUITE event
+
+#include "test.hpp"
+#include "fixtures/actor_system.hpp"
+
 #include "vast/event.hpp"
 #include "vast/json.hpp"
 #include "vast/load.hpp"
@@ -20,14 +25,11 @@
 #include "vast/concept/printable/vast/event.hpp"
 #include "vast/concept/printable/vast/json.hpp"
 
-#define SUITE event
-#include "test.hpp"
-
 using namespace vast;
 
 namespace {
 
-struct fixture {
+struct fixture : fixtures::deterministic_actor_system {
   fixture() {
     // Type
     t = record_type{
@@ -78,9 +80,9 @@ TEST(printable) {
 
 TEST(serialization) {
   std::vector<char> buf;
-  save(buf, e);
+  save(sys, buf, e);
   event e2;
-  load(buf, e2);
+  load(sys, buf, e2);
   CHECK_EQUAL(e, e2);
 }
 

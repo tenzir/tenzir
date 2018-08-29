@@ -17,7 +17,6 @@ set(libvast_sources
   src/attribute.cpp
   src/banner.cpp
   src/base.cpp
-  src/batch.cpp
   src/bitmap.cpp
   src/chunk.cpp
   src/column_index.cpp
@@ -63,8 +62,12 @@ set(libvast_sources
   src/pattern.cpp
   src/port.cpp
   src/schema.cpp
+  src/segment.cpp
+  src/segment_builder.cpp
   src/segment_store.cpp
+  src/store.cpp
   src/subnet.cpp
+  src/subset.cpp
   src/system/accountant.cpp
   src/system/application.cpp
   src/system/archive.cpp
@@ -99,6 +102,7 @@ set(libvast_sources
   src/table_slice_builder.cpp
   src/table_slice_handle.cpp
   src/time.cpp
+  src/to_events.cpp
   src/type.cpp
   src/uuid.cpp
   src/value.cpp
@@ -213,7 +217,6 @@ include_directories(
 
 set(tests
   test/address.cpp
-  test/batch.cpp
   test/binner.cpp
   test/bitmap.cpp
   test/bitmap_index.cpp
@@ -262,6 +265,8 @@ set(tests
   test/span.cpp
   test/stack.cpp
   test/string.cpp
+  test/segment.cpp
+  test/segment_store.cpp
   test/subnet.cpp
   test/system/archive.cpp
   test/system/consensus.cpp

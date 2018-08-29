@@ -35,18 +35,18 @@ namespace vast {
 namespace system {
 namespace raft {
 
-log::log(path dir) : dir_{std::move(dir)} {
+log::log(caf::actor_system& sys, path dir) : dir_{std::move(dir)}, sys_(sys) {
   auto meta_filename = dir_ / "meta";
   auto entries_filename = dir_ / "entries";
   if (exists(dir_)) {
     if (exists(meta_filename))
-      if (!load(meta_filename, start_))
+      if (!load(sys_, meta_filename, start_))
         die("failed to load raft log meta data");
     if (exists(entries_filename)) {
       std::ifstream entries{entries_filename.str(), std::ios::binary};
       while (entries.peek() != std::ifstream::traits_type::eof()) {
         std::vector<log_entry> xs;
-        if (!load(entries, xs))
+        if (!load(sys_, entries, xs))
           die("failed to load raft log entries");
         std::move(xs.begin(), xs.end(), std::back_inserter(entries_));
       }
@@ -127,7 +127,7 @@ expected<void> log::append(std::vector<log_entry> xs) {
     }
   }
   // Serialize the entries...
-  auto res = save(entries_file_, xs);
+  auto res = save(sys_, entries_file_, xs);
   if (!res)
     return res;
   // ...and make them persistent...
@@ -151,12 +151,12 @@ uint64_t bytes(log& l) {
 }
 
 expected<void> log::persist_meta_data() {
-  return save(dir_ / "meta", start_);
+  return save(sys_, dir_ / "meta", start_);
 }
 
 expected<void> log::persist_entries() {
   entries_file_.close();
-  return save(dir_ / "entries", entries_);
+  return save(sys_, dir_ / "entries", entries_);
 }
 
 namespace {
@@ -205,7 +205,7 @@ std::string role(Actor* self) {
 
 template <class Actor>
 expected<void> save_state(Actor* self) {
-  auto res = save(self->state.dir / "state", self->state.id,
+  auto res = save(self->system(), self->state.dir / "state", self->state.id,
                   self->state.current_term, self->state.voted_for);
   if (res)
     VAST_DEBUG(role(self), "saved persistent state: id =",
@@ -217,7 +217,7 @@ expected<void> save_state(Actor* self) {
 
 template <class Actor>
 expected<void> load_state(Actor* self) {
-  auto res = load(self->state.dir / "state", self->state.id,
+  auto res = load(self->system(), self->state.dir / "state", self->state.id,
                   self->state.current_term, self->state.voted_for);
   if (res)
     VAST_DEBUG(role(self), "loaded persistent state: id =",
@@ -291,7 +291,8 @@ result<index_type> save_snapshot(Actor* self, index_type index,
   snapshot_header hdr;
   hdr.last_included_index = index;
   hdr.last_included_term = self->state.log->at(index).term;
-  auto result = save(self->state.dir / "snapshot", hdr, snapshot);
+  auto result = save(self->system(), self->state.dir / "snapshot",
+                     hdr, snapshot);
   if (!result)
     return result.error();
   VAST_DEBUG(role(self), "completed snapshotting, last included term =",
@@ -313,7 +314,7 @@ expected<void> load_snapshot_header(Actor* self) {
   VAST_DEBUG(role(self), "loads snapshot header");
   snapshot_header hdr;
   // Read snapshot header from filesystem.
-  auto result = load(self->state.dir / "snapshot", hdr);
+  auto result = load(self->system(), self->state.dir / "snapshot", hdr);
   if (!result)
     return result.error();
   if (hdr.version != 1)
@@ -346,7 +347,7 @@ expected<std::vector<char>> load_snapshot_data(Actor* self) {
   VAST_DEBUG(role(self), "loads snapshot data");
   snapshot_header hdr;
   std::vector<char> data;
-  auto result = load(self->state.dir / "snapshot", hdr, data);
+  auto result = load(self->system(), self->state.dir / "snapshot", hdr, data);
   if (!result)
     return result.error();
   if (hdr.version != 1)
@@ -1099,7 +1100,8 @@ behavior consensus(stateful_actor<server_state>* self, path dir) {
         VAST_DEBUG(role(self), "previously voted for server",
                    self->state.voted_for);
       // Load the persistent log into memory.
-      self->state.log = std::make_unique<log>(self->state.dir / "log");
+      self->state.log = std::make_unique<log>(self->system(),
+                                              self->state.dir / "log");
       if (self->state.log->empty())
         VAST_DEBUG(role(self), "initialized new log");
       else

@@ -221,4 +221,3 @@ protected:
 };
 
 } // namespace vast
-

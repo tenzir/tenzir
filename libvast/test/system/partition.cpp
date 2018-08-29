@@ -92,17 +92,18 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     auto f = [&](path, type) {
       return sys.spawn(dummy_indexer);
     };
-    return vast::system::make_partition(state_dir, partition_id, f);
+    return vast::system::make_partition(sys, state_dir, partition_id, f);
   }
 
   /// Creates a partition that spawns actual INDEXER actors.
   partition_ptr make_partition() {
-    return vast::system::make_partition(self.ptr(), state_dir, partition_id);
+    return vast::system::make_partition(sys, self.ptr(), state_dir,
+                                        partition_id);
   }
 
   /// Creates a partition that spawns actual INDEXER actors with custom ID.
   partition_ptr make_partition(uuid id) {
-    return vast::system::make_partition(self.ptr(), state_dir, id);
+    return vast::system::make_partition(sys, self.ptr(), state_dir, id);
   }
 
   /// @returns how many dummy INDEXER actors are currently running.

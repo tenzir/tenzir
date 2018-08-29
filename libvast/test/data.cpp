@@ -11,6 +11,11 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
+#define SUITE data
+
+#include "test.hpp"
+#include "fixtures/actor_system.hpp"
+
 #include "vast/data.hpp"
 #include "vast/json.hpp"
 #include "vast/load.hpp"
@@ -23,10 +28,9 @@
 #include "vast/concept/printable/vast/data.hpp"
 #include "vast/concept/printable/vast/json.hpp"
 
-#define SUITE data
-#include "test.hpp"
-
 using namespace vast;
+
+FIXTURE_SCOPE(data_tests, fixtures::deterministic_actor_system)
 
 TEST(vector) {
   REQUIRE(std::is_same_v<std::vector<data>, vector>);
@@ -188,9 +192,9 @@ TEST(serialization) {
   xs.emplace(port{8, port::icmp});
   auto x0 = data{xs};
   std::vector<char> buf;
-  save(buf, x0);
+  save(sys, buf, x0);
   data x1;
-  load(buf, x1);
+  load(sys, buf, x1);
   CHECK(x0 == x1);
 }
 
@@ -318,3 +322,5 @@ TEST(json) {
 })__";
   CHECK_EQUAL(to_string(to_json(x, t)), expected);
 }
+
+FIXTURE_SCOPE_END()

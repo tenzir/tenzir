@@ -11,6 +11,11 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
+#define SUITE coder
+
+#include "test.hpp"
+#include "fixtures/actor_system.hpp"
+
 #include "vast/base.hpp"
 #include "vast/coder.hpp"
 #include "vast/concept/printable/to_string.hpp"
@@ -20,9 +25,6 @@
 #include "vast/load.hpp"
 #include "vast/null_bitmap.hpp"
 #include "vast/save.hpp"
-
-#define SUITE coder
-#include "test.hpp"
 
 using namespace vast;
 
@@ -44,6 +46,8 @@ std::string dump(double x) {
 }
 
 } // namespace <anonymous>
+
+FIXTURE_SCOPE(coder_tests, fixtures::deterministic_actor_system)
 
 TEST(bitwise total ordering (integral)) {
   using detail::order;
@@ -336,8 +340,8 @@ TEST(serialization range coder) {
   x.encode(21);
   x.encode(30);
   std::string buf;
-  save(buf, x);
-  load(buf, y);
+  save(sys, buf, x);
+  load(sys, buf, y);
   CHECK(x == y);
   CHECK_EQUAL(to_string(y.decode(equal,     21)), "00010");
   CHECK_EQUAL(to_string(y.decode(equal,     30)), "00001");
@@ -365,9 +369,9 @@ TEST(serialization multi-level coder) {
   x.encode(21);
   x.encode(30);
   std::string buf;
-  save(buf, x);
+  save(sys, buf, x);
   auto y = coder_type{};
-  load(buf, y);
+  load(sys, buf, y);
   CHECK(x == y);
   CHECK_EQUAL(to_string(y.decode(equal,     21)), "00010");
   CHECK_EQUAL(to_string(y.decode(equal,     30)), "00001");
@@ -388,10 +392,12 @@ TEST(printable) {
   c.encode(1);
   c.encode(0);
   c.encode(4);
-  auto expected = R"__(0	0001
-1	101
-2	01
-3	
-4	00001)__";
+  auto expected = "0\t0001\n"
+                  "1\t101\n"
+                  "2\t01\n"
+                  "3\t\n"
+                  "4\t00001";
   CHECK_EQUAL(to_string(c), expected);
 }
+
+FIXTURE_SCOPE_END()

@@ -34,14 +34,20 @@ auto key_to_dir(std::string key, const path& prefix) {
 
 } // namespace <anonymous>
 
-caf::expected<table_index> make_table_index(path base_dir, record_type layout) {
+caf::expected<table_index> make_table_index(caf::actor_system& sys,
+                                            path base_dir, record_type layout) {
   caf::error err;
-  table_index result{std::move(layout), base_dir};
+  table_index result{sys, std::move(layout), base_dir};
   result.columns_.resize(table_index::meta_column_count
                          + flat_size(result.layout()));
   return result;
 }
+
 // -- constructors, destructors, and assignment operators ----------------------
+
+table_index::table_index(caf::actor_system& sys) : sys_(sys) {
+  // nop
+}
 
 table_index::~table_index() noexcept {
   if (dirty_)
@@ -96,7 +102,9 @@ caf::error table_index::add(const const_table_slice_handle& x) {
     col.add(x);
     return caf::none;
   };
-  auto mk_type = [&] { return make_type_column_index(meta_dir() / "type"); };
+  auto mk_type = [&] {
+    return make_type_column_index(sys_, meta_dir() / "type");
+  };
   return caf::error::eval(
     [&] {
       // Column 0 is our meta index for the event type.
@@ -113,7 +121,7 @@ caf::error table_index::add(const const_table_slice_handle& x) {
             VAST_DEBUG("make field indexer at offset", f.offset, "with type",
                        value_type);
             auto dir = key_to_dir(f.key(), data_dir());
-            return make_column_index(dir, value_type, i);
+            return make_column_index(sys_, dir, value_type, i);
           };
           auto err = with_data_column(i, fac, fun);
           if (err)
@@ -235,7 +243,9 @@ caf::expected<bitmap> table_index::lookup_impl(const predicate& pred,
   VAST_ASSERT(columns_.size() >= table_index::meta_column_count);
   if (ex.attr == "type") {
     VAST_ASSERT(caf::holds_alternative<std::string>(x));
-    auto fac = [&] { return make_type_column_index(meta_dir() / "type"); };
+    auto fac = [&] {
+      return make_type_column_index(sys_, meta_dir() / "type");
+    };
     return with_meta_column(1, fac, [&](column_index& col) {
       return col.lookup(pred);
     });
@@ -275,7 +285,7 @@ caf::expected<bitmap> table_index::lookup_impl(const predicate& pred,
   }
   auto fac = [&] {
     auto dir = key_to_dir(*k, data_dir());
-    return make_column_index(dir, *t, *index);
+    return make_column_index(sys_, dir, *t, *index);
   };
   return with_data_column(*index, fac, [&](column_index& col) {
     return col.lookup(pred);
@@ -285,10 +295,12 @@ caf::expected<bitmap> table_index::lookup_impl(const predicate& pred,
 
 // -- constructors, destructors, and assignment operators ----------------------
 
-table_index::table_index(record_type layout, path base_dir)
+table_index::table_index(caf::actor_system& sys, record_type layout,
+                         path base_dir)
   : type_erased_layout_(std::move(layout)),
     base_dir_(std::move(base_dir)),
-    dirty_(false) {
+    dirty_(false),
+    sys_(sys) {
   VAST_TRACE(VAST_ARG(type_erased_layout_), VAST_ARG(base_dir_));
 }
 

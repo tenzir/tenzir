@@ -11,6 +11,11 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
+#define SUITE value_index
+
+#include "test.hpp"
+#include "fixtures/actor_system_and_events.hpp"
+
 #include "vast/value_index.hpp"
 #include "vast/load.hpp"
 #include "vast/save.hpp"
@@ -23,12 +28,11 @@
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/bitmap.hpp"
 
-#define SUITE value_index
-#include "test.hpp"
-#include "fixtures/events.hpp"
-
 using namespace vast;
 using namespace std::string_literals;
+
+FIXTURE_SCOPE(value_index_tests,
+              fixtures::deterministic_actor_system_and_events)
 
 TEST(boolean) {
   arithmetic_index<boolean> idx;
@@ -54,9 +58,9 @@ TEST(boolean) {
   CHECK_EQUAL(to_string(*multi), "11111111");
   MESSAGE("serialization");
   std::string buf;
-  save(buf, idx);
+  save(sys, buf, idx);
   arithmetic_index<boolean> idx2;
-  load(buf, idx2);
+  load(sys, buf, idx2);
   t = idx2.lookup(equal, make_data_view(true));
   REQUIRE(t);
   CHECK_EQUAL(to_string(*t), "11010001");
@@ -88,9 +92,9 @@ TEST(integer) {
   CHECK_EQUAL(to_string(*multi), "0101011");
   MESSAGE("serialization");
   std::vector<char> buf;
-  save(buf, idx);
+  save(sys, buf, idx);
   auto idx2 = arithmetic_index<integer>{};
-  load(buf, idx2);
+  load(sys, buf, idx2);
   less_than_leet = idx2.lookup(less, make_data_view(31337));
   REQUIRE(less_than_leet);
   CHECK(to_string(*less_than_leet) == "1111011");
@@ -118,9 +122,9 @@ TEST(floating-point with custom binner) {
   CHECK_EQUAL(to_string(*result), "1110111");
   MESSAGE("serialization");
   std::vector<char> buf;
-  save(buf, idx);
+  save(sys, buf, idx);
   auto idx2 = index_type{};
-  load(buf, idx2);
+  load(sys, buf, idx2);
   result = idx2.lookup(not_equal, make_data_view(4711.14));
   CHECK_EQUAL(to_string(*result), "1110111");
 }
@@ -184,9 +188,9 @@ TEST(timestamp) {
   CHECK(to_string(*eighteen) == "000101");
   MESSAGE("serialization");
   std::vector<char> buf;
-  save(buf, idx);
+  save(sys, buf, idx);
   auto idx2 = decltype(idx){};
-  load(buf, idx2);
+  load(sys, buf, idx2);
   eighteen = idx2.lookup(greater_equal, make_data_view(*t));
   CHECK(to_string(*eighteen) == "000101");
 }
@@ -247,9 +251,9 @@ TEST(string) {
   CHECK_EQUAL(to_string(*result), "1111110000");
   MESSAGE("serialization");
   std::vector<char> buf;
-  save(buf, idx);
+  save(sys, buf, idx);
   string_index idx2{};
-  load(buf, idx2);
+  load(sys, buf, idx2);
   result = idx2.lookup(equal, make_data_view("foo"));
   CHECK_EQUAL(to_string(*result), "1001100000");
   result = idx2.lookup(equal, make_data_view("bar"));
@@ -324,9 +328,9 @@ TEST(address) {
   CHECK_EQUAL(idx.lookup(equal, make_data_view(x)), str);
   MESSAGE("serialization");
   std::vector<char> buf;
-  save(buf, idx);
+  save(sys, buf, idx);
   address_index idx2{};
-  load(buf, idx2);
+  load(sys, buf, idx2);
   CHECK_EQUAL(idx2.lookup(equal, make_data_view(x)), str);
 }
 
@@ -380,9 +384,9 @@ TEST(subnet) {
   CHECK_EQUAL(to_string(*multi), "111100");
   MESSAGE("serialization");
   std::vector<char> buf;
-  save(buf, idx);
+  save(sys, buf, idx);
   subnet_index idx2;
-  load(buf, idx2);
+  load(sys, buf, idx2);
   bm = idx2.lookup(not_equal, make_data_view(s1));
   REQUIRE(bm);
   CHECK_EQUAL(to_string(*bm), "101111");
@@ -416,9 +420,9 @@ TEST(port) {
   CHECK_EQUAL(to_string(*multi), "1010010");
   MESSAGE("serialization");
   std::vector<char> buf;
-  save(buf, idx);
+  save(sys, buf, idx);
   port_index idx2;
-  load(buf, idx2);
+  load(sys, buf, idx2);
   bm = idx2.lookup(less_equal, make_data_view(priv));
   REQUIRE(bm);
   CHECK_EQUAL(to_string(*bm), "1111010");
@@ -445,9 +449,9 @@ TEST(container) {
   CHECK_EQUAL(to_string(*idx.lookup(ni, make_data_view(x))), "00000000");
   MESSAGE("serialization");
   std::vector<char> buf;
-  save(buf, idx);
+  save(sys, buf, idx);
   sequence_index idx2;
-  load(buf, idx2);
+  load(sys, buf, idx2);
   x = "foo";
   CHECK_EQUAL(to_string(*idx2.lookup(ni, make_data_view(x))), "11000000");
 }
@@ -469,10 +473,10 @@ TEST(polymorphic) {
   CHECK_EQUAL(to_string(*idx->lookup(ni, make_data_view(44))), "0000");
   MESSAGE("serialization");
   std::vector<char> buf;
-  save(buf, detail::value_index_inspect_helper{t, idx});
+  save(sys, buf, detail::value_index_inspect_helper{t, idx});
   std::unique_ptr<value_index> idx2;
   detail::value_index_inspect_helper helper{t, idx2};
-  load(buf, helper);
+  load(sys, buf, helper);
   REQUIRE(idx2);
   CHECK_EQUAL(to_string(*idx2->lookup(ni, make_data_view(42))), "1001");
   MESSAGE("attributes");
@@ -530,8 +534,6 @@ TEST(polymorphic none values) {
   bm = idx->lookup(not_equal, make_data_view(caf::none));
   CHECK_EQUAL(to_string(*bm), "01100011100001111111100");
 }
-
-FIXTURE_SCOPE(bro_conn_log_value_index_tests, fixtures::events)
 
 auto orig_h(const event& x) {
   auto& log_entry = caf::get<vector>(x.data());

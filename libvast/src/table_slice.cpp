@@ -115,58 +115,6 @@ caf::error table_slice::deserialize_ptr(caf::deserializer& source,
   return ptr->deserialize(source);
 }
 
-caf::optional<value> table_slice::row_to_value(size_type row,
-                                               size_type first_column,
-                                               size_type num_columns) const {
-  auto result = rows_to_values(row, 1, first_column, num_columns);
-  if (result.empty())
-    return caf::none;
-  VAST_ASSERT(result.size() == 1u);
-  return std::move(result.front());
-}
-
-std::vector<value> table_slice::rows_to_values(size_type first_row,
-                                               size_type num_rows,
-                                               size_type first_column,
-                                               size_type num_columns) const {
-  std::vector<value> result;
-  if (first_column >= columns_ || first_row >= rows_)
-    return result;
-  auto col_begin = first_column;
-  auto col_end = cap(first_column, num_columns, columns_);
-  auto row_begin = first_row;
-  auto row_end = cap(first_row, num_rows, rows_);
-  auto value_layout = layout(first_column, num_columns);
-  for (size_type row = row_begin; row < row_end; ++row) {
-    vector xs;
-    for (size_type col = col_begin; col < col_end; ++col) {
-      auto opt = at(row, col);
-      VAST_ASSERT(opt != caf::none);
-      xs.emplace_back(materialize(*opt));
-    }
-    result.emplace_back(value::make(std::move(xs), value_layout));
-  }
-  return result;
-}
-
-std::vector<event> table_slice::rows_to_events(size_type first_row,
-                                               size_type num_rows) const {
-  using caf::get;
-  auto values = rows_to_values(first_row, num_rows, 1);
-  auto timestamps = rows_to_values(first_row, num_rows, 0, 1);
-  VAST_ASSERT(values.size() == timestamps.size());
-  std::vector<event> result;
-  result.reserve(values.size());
-  auto event_id = offset() + first_row;
-  for (size_t i = 0; i < values.size(); ++i) {
-    result.emplace_back(event::make(std::move(values[i].data()),
-                                    values[i].type().name(layout_.name())));
-    result.back().id(event_id++);
-    result.back().timestamp(get<timestamp>(get<vector>(timestamps[i])[0]));
-  }
-  return result;
-}
-
 bool operator==(const table_slice& x, const table_slice& y) {
   if (&x == &y)
     return true;

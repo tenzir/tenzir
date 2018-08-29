@@ -11,6 +11,11 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
+#define SUITE table_index
+
+#include "test.hpp"
+#include "fixtures/actor_system_and_events.hpp"
+
 #include "vast/bitmap.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
@@ -23,19 +28,11 @@
 #include "vast/table_index.hpp"
 #include "vast/table_slice_handle.hpp"
 
-#define SUITE table_index
-#include "test.hpp"
-
-#include "fixtures/events.hpp"
-#include "fixtures/filesystem.hpp"
-
-#include <caf/test/dsl.hpp>
-
 using namespace vast;
 
 namespace {
 
-struct fixture : fixtures::events, fixtures::filesystem {
+struct fixture : fixtures::deterministic_actor_system_and_events {
   ids query(std::string_view what) {
     return unbox(tbl->lookup(unbox(to<expression>(what))));
   }
@@ -67,7 +64,7 @@ TEST(integer values) {
   MESSAGE("generate table layout for flat integer type");
   integer_type column_type;
   record_type layout{{"value", column_type}};
-  reset(make_table_index(directory, layout));
+  reset(make_table_index(sys, directory, layout));
   MESSAGE("ingest test data (integers)");
   auto rows = make_rows(1, 2, 3, 1, 2, 3, 1, 2, 3);
   auto slice = default_table_slice::make(layout, rows);
@@ -91,7 +88,7 @@ TEST(integer values) {
   };
   verify();
   MESSAGE("(automatically) persist table index and restore from disk");
-  reset(make_table_index(directory, layout));
+  reset(make_table_index(sys, directory, layout));
   MESSAGE("verify table index again");
   verify();
 }
@@ -103,7 +100,7 @@ TEST(record type) {
     {"x.b", boolean_type{}},
     {"y.a", string_type{}},
   };
-  reset(make_table_index(directory, layout));
+  reset(make_table_index(sys, directory, layout));
   MESSAGE("ingest test data (records)");
   auto mk_row = [&](int x, bool y, std::string z) {
     return vector{x, y, std::move(z)};
@@ -129,7 +126,7 @@ TEST(record type) {
   };
   verify();
   MESSAGE("(automatically) persist table index and restore from disk");
-  reset(make_table_index(directory, layout));
+  reset(make_table_index(sys, directory, layout));
   MESSAGE("verify table index again");
   verify();
 }
@@ -137,7 +134,7 @@ TEST(record type) {
 TEST(bro conn logs) {
   MESSAGE("generate table layout for bro conn logs");
   auto layout = bro_conn_log_layout();
-  reset(make_table_index(directory, layout));
+  reset(make_table_index(sys, directory, layout));
   MESSAGE("ingest test data (bro conn log)");
   for (auto slice : const_bro_conn_log_slices)
     add(slice);
@@ -159,7 +156,7 @@ TEST(bro conn logs) {
   };
   verify();
   MESSAGE("(automatically) persist table index and restore from disk");
-  reset(make_table_index(directory, layout));
+  reset(make_table_index(sys, directory, layout));
   MESSAGE("verify table index again");
   verify();
 }
@@ -183,7 +180,7 @@ TEST(bro conn log http slices) {
   for (size_t slice_id = 0; slice_id < hits.size(); ++slice_id) {
     tbl.reset();
     rm(directory);
-    reset(make_table_index(directory, layout));
+    reset(make_table_index(sys, directory, layout));
     add(const_bro_conn_log_slices[slice_id]);
     CHECK_EQUAL(rank(query("service == \"http\"")), hits[slice_id]);
   }

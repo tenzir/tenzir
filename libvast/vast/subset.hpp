@@ -13,33 +13,27 @@
 
 #pragma once
 
-#include <caf/fwd.hpp>
+#include <vector>
 
-#include <caf/expected.hpp>
-
-#include "vast/fwd.hpp"
+#include "vast/table_slice.hpp"
 
 namespace vast {
 
-/// A key-value store for events.
-class store {
-public:
-  virtual ~store();
-
-  /// Adds a table slice to the store.
-  /// @param xs The table slice to add.
-  /// @returns No error on success.
-  virtual caf::error put(const_table_slice_handle xs) = 0;
-
-  /// Retrieves a set of events.
-  /// @param xs The IDs for the events to retrieve.
-  /// @returns The table slice according to *xs*.
-  virtual caf::expected<std::vector<const_table_slice_handle>>
-  get(const ids& xs) = 0;
-
-  /// Flushes in-memory state to persistent storage.
-  /// @returns No error on success.
-  virtual caf::error flush() = 0;
-};
+/// Performs a selection (and optional projection) on a table slice.
+/// @param slice The table slice to subset.
+/// @param first_row The row of the first value.
+/// @param num_rows The number of values to select starting from *first_fow*.
+/// @param first_col The first column to begin selecion
+/// @param num_cols The number of columns from *first_col*.
+/// @returns A subset of *slice*, with rows in the range
+///          *[first_row, first_row + num_rows)* and columns in the range
+///          *[first_col, first_col + num_cols)*.
+/// @see subset_events
+std::vector<value> subset(
+  const table_slice& slice,
+  table_slice::size_type first_row = 0u,
+  table_slice::size_type num_rows = table_slice::npos,
+  table_slice::size_type first_col = 0u,
+  table_slice::size_type num_cols = table_slice::npos);
 
 } // namespace vast

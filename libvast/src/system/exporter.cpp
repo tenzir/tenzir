@@ -24,6 +24,7 @@
 #include "vast/expression_visitors.hpp"
 #include "vast/logger.hpp"
 #include "vast/table_slice.hpp"
+#include "vast/to_events.hpp"
 
 #include "vast/system/archive.hpp"
 #include "vast/system/atoms.hpp"
@@ -299,8 +300,8 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
           // nop
         },
         [=](caf::unit_t&, const const_table_slice_handle& slice) {
-          // TODO: port to new table slice API
-          auto candidates = slice->rows_to_events();
+          // TODO: portjto new table slice API
+          auto candidates = to_events(*slice);
           handle_batch(candidates);
         },
         [=](caf::unit_t&, const error& err) {

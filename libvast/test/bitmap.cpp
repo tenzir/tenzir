@@ -13,6 +13,7 @@
 
 #include "vast/bitmap.hpp"
 #include "vast/ewah_bitmap.hpp"
+#include "vast/ids.hpp"
 #include "vast/null_bitmap.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/bitmap.hpp"
@@ -259,32 +260,103 @@ struct bitmap_test_harness {
         CHECK_EQUAL(i, b.size() - 1);
     }
     CHECK_EQUAL(r, n);
-    MESSAGE("select_range - next(n)");
-    auto rng = select(b);
+    MESSAGE("bitwise_range::select(n)");
+    auto rng = each(b);
     CHECK_EQUAL(rng.get(), 0u);
-    rng.next(100); // #101
+    rng.select(100); // #101
     REQUIRE(rng);
     CHECK_EQUAL(rng.get(), 100u);
-    rng.next(122); // #101 + #122 = #223
+    rng.select(122); // #101 + #122 = #223
     REQUIRE(rng);
     CHECK_EQUAL(rng.get(), 223u);
-    rng.next(r - 223); // last one
+    rng.select(r - 223); // last one
     REQUIRE(rng);
     CHECK_EQUAL(rng.get(), last);
-    rng.next(42); // UB, but this range simply considers itself done.
+    rng.select(42); // nothing left
     CHECK(!rng);
-    MESSAGE("select_range - skip(n)");
-    rng = select(b);
-    rng.skip(b.size() - 1); // start at 0, then go to last bit.
+    MESSAGE("bitwise_range::next(n)");
+    rng = each(b);
+    rng.next(b.size() - 1); // start at 0, then go to last bit.
     REQUIRE(rng);
     CHECK_EQUAL(rng.get(), b.size() - 1);
-    rng = select(b);
-    rng.skip(225); // Position 225 has a 0-bit, then 1-bit is at 227.
+    rng = each(b);
+    rng.next(225); // Position 225 has a 0-bit, the next 1-bit is at 227.
+    REQUIRE(rng);
+    CHECK_EQUAL(rng.get(), 225u);
+    rng.select();
     REQUIRE(rng);
     CHECK_EQUAL(rng.get(), 227u);
-    rng = select(b);
-    rng.skip(1024); // out of range
+    rng = each(b);
+    rng.next(1024); // out of range
     CHECK(!rng);
+    MESSAGE("bitwise_range::select_from(x)");
+    rng = each(b);
+    rng.select_from(225);
+    REQUIRE(rng);
+    CHECK_EQUAL(rng.get(), 227u);
+  }
+
+  void test_select_with() {
+    MESSAGE("select_with");
+    using half_open_interval = std::pair<id, id>;
+    using intervals = std::vector<half_open_interval>;
+    auto xs = intervals{
+      {0, 10},
+      {10, 20},
+      {30, 40},
+      {40, 50},
+      {80, 90},
+    };
+    auto identity = [](auto x) { return x; };
+    intervals ys;
+    auto g = [&](auto& x) {
+      ys.push_back(x);
+      return caf::none;
+    };
+    // The very first ID.
+    auto err = select_with(make_ids({0}), xs.begin(), xs.end(), identity, g);
+    CHECK(!err);
+    CHECK_EQUAL(ys, (intervals{{0, 10}}));
+    ys.clear();
+    // An intermediate ID in the first interval.
+    err = select_with(make_ids({5}), xs.begin(), xs.end(), identity, g);
+    CHECK(!err);
+    CHECK_EQUAL(ys, (intervals{{0, 10}}));
+    ys.clear();
+    // The last ID in the first interval.
+    err = select_with(make_ids({10}), xs.begin(), xs.end(), identity, g);
+    CHECK(!err);
+    CHECK_EQUAL(ys, (intervals{{10, 20}}));
+    ys.clear();
+    // The first ID in an intermediate interval.
+    err = select_with(make_ids({30}), xs.begin(), xs.end(), identity, g);
+    CHECK(!err);
+    CHECK_EQUAL(ys, (intervals{{30, 40}}));
+    ys.clear();
+    // An intermediate ID in an intermediate interval.
+    err = select_with(make_ids({42}), xs.begin(), xs.end(), identity, g);
+    CHECK(!err);
+    CHECK_EQUAL(ys, (intervals{{40, 50}}));
+    ys.clear();
+    // The last ID in an intermediate interval.
+    err = select_with(make_ids({50}), xs.begin(), xs.end(), identity, g);
+    CHECK(!err);
+    CHECK(ys.empty());
+    ys.clear();
+    // An ID outside of the interval range.
+    err = select_with(make_ids({100}), xs.begin(), xs.end(), identity, g);
+    CHECK(!err);
+    CHECK(ys.empty());
+    ys.clear();
+    // Multiple IDs in the first interval.
+    err = select_with(make_ids({0, 1, 2}), xs.begin(), xs.end(), identity, g);
+    CHECK(!err);
+    CHECK_EQUAL(ys, (intervals{{0, 10}}));
+    ys.clear();
+    // Multiple IDs in several intervals.
+    err = select_with(make_ids({5, 10, 42}), xs.begin(), xs.end(), identity, g);
+    CHECK(!err);
+    CHECK_EQUAL(ys, (intervals{{0, 10}, {10, 20}, {40, 50}}));
   }
 
   void test_span() {
@@ -366,6 +438,7 @@ struct bitmap_test_harness {
     test_bitwise_nary();
     test_rank();
     test_select();
+    test_select_with();
     test_span();
     test_all();
     test_any();

@@ -11,47 +11,34 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#pragma once
+#define SUITE segment_store
 
-#include <caf/deserializer.hpp>
-#include <caf/serializer.hpp>
+#include "vast/segment_store.hpp"
 
-namespace vast::detail {
+#include "test.hpp"
+#include "test/fixtures/actor_system_and_events.hpp"
 
-// Variadic helpers to interface with CAF's serialization framework.
+#include "vast/const_table_slice_handle.hpp"
+#include "vast/ids.hpp"
+#include "vast/si_literals.hpp"
+#include "vast/table_slice.hpp"
 
-template <class Processor, class T>
-void process(Processor& proc, T&& x) {
-  proc & const_cast<T&>(x); // CAF promises not to touch it.
+using namespace vast;
+using namespace binary_byte_literals;
+
+FIXTURE_SCOPE(segment_store_tests,
+              fixtures::deterministic_actor_system_and_events)
+
+TEST(construction and querying) {
+  // FIXME: use directory from fixture
+  rm("foo");
+  auto store = segment_store::make(sys, path{"foo"}, 512_KiB, 2);
+  REQUIRE(store);
+  for (auto& slice : const_bro_conn_log_slices)
+    REQUIRE(!store->put(slice));
+  auto slices = store->get(make_ids({42, 1337, 8401}));
+  REQUIRE(slices);
+  REQUIRE_EQUAL(slices->size(), 3u);
 }
 
-template <class Processor, class T, class... Ts>
-void process(Processor& proc, T&& x, Ts&&... xs) {
-  process(proc, std::forward<T>(x));
-  process(proc, std::forward<Ts>(xs)...);
-}
-
-template <class T>
-void write(caf::serializer& sink, const T& x) {
-  sink << x;
-}
-
-template <class T, class... Ts>
-void write(caf::serializer& sink, const T& x, const Ts&... xs) {
-  write(sink, x);
-  write(sink, xs...);
-}
-
-template <class T>
-void read(caf::deserializer& source, T& x) {
-  source >> x;
-}
-
-template <class T, class... Ts>
-void read(caf::deserializer& source, T& x, Ts&... xs) {
-  read(source, x);
-  read(source, xs...);
-}
-
-} // namespace vast::detail
-
+FIXTURE_SCOPE_END()
