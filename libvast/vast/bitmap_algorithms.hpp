@@ -430,7 +430,7 @@ public:
   /// @param i The position to start  where to start the call to select().
   /// @pre `!done() && x >= offset()`
   template <bool Bit = true>
-  void select_at(id x) {
+  void select_from(id x) {
     VAST_ASSERT(!done());
     VAST_ASSERT(x >= offset());
     if (x > offset()) {
@@ -478,8 +478,8 @@ public:
     rng_.template select<Bit>();
   }
 
-  void next_at(id x) {
-    rng_.template select_at<Bit>(x);
+  void next_from(id x) {
+    rng_.template select_from<Bit>(x);
   }
 
 
@@ -521,7 +521,7 @@ caf::error select_with(const Bitmap& bm, Iterator begin, Iterator end, F f, G g)
     auto [first, last] = f(*begin);
     // Make the ID range catch up if it's behind.
     if (rng.get() < first) {
-      rng.next_at(first);
+      rng.next_from(first);
       if (!rng)
         break;
     }
@@ -530,7 +530,7 @@ caf::error select_with(const Bitmap& bm, Iterator begin, Iterator end, F f, G g)
       // function and move forward.
       if (auto error = g(*begin))
         return error;
-      rng.next_at(last);
+      rng.next_from(last);
       if (!rng)
         break;
     }

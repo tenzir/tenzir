@@ -289,9 +289,9 @@ struct bitmap_test_harness {
     rng = each(b);
     rng.next(1024); // out of range
     CHECK(!rng);
-    MESSAGE("bitwise_range::select_at(x)");
+    MESSAGE("bitwise_range::select_from(x)");
     rng = each(b);
-    rng.select_at(225);
+    rng.select_from(225);
     REQUIRE(rng);
     CHECK_EQUAL(rng.get(), 227u);
   }

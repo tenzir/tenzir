@@ -69,7 +69,7 @@ void to_events(std::vector<event>& storage, const table_slice& slice,
   VAST_ASSERT(rng);
   auto event_layout = slice.layout(1).name(slice.layout().name());
   if (rng.get() < begin)
-    rng.next_at(begin);
+    rng.next_from(begin);
   for ( ; rng && rng.get() < end; rng.next())
     storage.emplace_back(to_event(slice, rng.get(), event_layout));
 }
