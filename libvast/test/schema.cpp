@@ -96,9 +96,9 @@ TEST(serialization) {
   sch.add(t);
   // Save & load
   std::vector<char> buf;
-  CHECK(save(sys, buf, sch));
+  CHECK_EQUAL(save(sys, buf, sch), caf::none);
   schema sch2;
-  CHECK(load(sys, buf, sch2));
+  CHECK_EQUAL(load(sys, buf, sch2), caf::none);
   // Check integrity
   auto u = sch2.find("foo");
   REQUIRE(u);

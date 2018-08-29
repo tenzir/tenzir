@@ -45,8 +45,8 @@ partition::partition(caf::actor_system& sys, const path& base_dir, uuid id,
   // If the directory already exists, we must have some state from the past and
   // are pre-loading all INDEXER types we are aware of.
   if (exists(dir_)) {
-    if (auto res = load(sys_, meta_file(), meta_data_); !res) {
-      VAST_ERROR("unable to read partition meta data:", res.error());
+    if (auto err = load(sys_, meta_file(), meta_data_)) {
+      VAST_ERROR("unable to read partition meta data:", sys_.render(err));
     } else {
       for (auto& kvp : meta_data_.types) {
         // We spawn all INDEXER actors immediately. However, the factory spawns
@@ -68,8 +68,8 @@ caf::error partition::flush_to_disk() {
   if (meta_data_.dirty) {
     if (!exists(dir_))
       mkdir(dir_);
-    if (auto res = save(sys_, meta_file(), meta_data_); !res)
-      return std::move(res.error());
+    if (auto err = save(sys_, meta_file(), meta_data_))
+      return err;
     meta_data_.dirty = false;
   }
   return caf::none;

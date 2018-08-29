@@ -51,9 +51,9 @@ TEST(serialization) {
   auto x = chunk::make(sizeof(str));
   std::memcpy(x->data(), str, sizeof(str));
   std::vector<char> buf;
-  CHECK(save(sys, buf, x));
+  CHECK_EQUAL(save(sys, buf, x), caf::none);
   chunk_ptr y;
-  CHECK(load(sys, buf, y));
+  CHECK_EQUAL(load(sys, buf, y), caf::none);
   REQUIRE(y);
   CHECK(std::equal(x->begin(), x->end(), y->begin(), y->end()));
 }

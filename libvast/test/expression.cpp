@@ -74,8 +74,8 @@ TEST(construction) {
 TEST(serialization) {
   expression ex0, ex1;
   std::vector<char> buf;
-  save(sys, buf, expr0, expr1);
-  load(sys, buf, ex0, ex1);
+  CHECK_EQUAL(save(sys, buf, expr0, expr1), caf::none);
+  CHECK_EQUAL(load(sys, buf, ex0, ex1), caf::none);
   auto d = caf::get_if<disjunction>(&ex1);
   REQUIRE(d);
   REQUIRE(!d->empty());

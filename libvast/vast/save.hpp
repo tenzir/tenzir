@@ -33,7 +33,7 @@ namespace vast {
 /// Serializes a sequence of objects into a sink.
 /// @see load
 template <compression Method = compression::null, class Sink, class... Ts>
-expected<void> save(caf::actor_system& sys, Sink&& out, const Ts&... xs) {
+caf::error save(caf::actor_system& sys, Sink&& out, const Ts&... xs) {
   static_assert(sizeof...(Ts) > 0);
   using sink_type = std::decay_t<Sink>;
   if constexpr (detail::is_streambuf_v<sink_type>) {
@@ -48,7 +48,7 @@ expected<void> save(caf::actor_system& sys, Sink&& out, const Ts&... xs) {
         return err;
       compressed.pubsync();
     }
-    return {};
+    return caf::none;
   } else if constexpr (std::is_base_of_v<std::ostream, sink_type>) {
     auto sb = out.rdbuf();
     return save<Method>(sys, *sb, xs...);

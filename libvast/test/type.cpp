@@ -167,9 +167,9 @@ TEST(serialization) {
   r = r.name("foo");
   std::vector<char> buf;
   auto t0 = type{r};
-  save(sys, buf, t0);
+  CHECK_EQUAL(save(sys, buf, t0), caf::none);
   type t1;
-  load(sys, buf, t1);
+  CHECK_EQUAL(load(sys, buf, t1), caf::none);
   CHECK_EQUAL(t0, t1);
 }
 

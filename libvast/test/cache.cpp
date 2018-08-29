@@ -80,9 +80,9 @@ TEST(LRU cache insertion) {
 
 TEST(cache serialization) {
   std::vector<char> buf;
-  save(sys, buf, xs);
+  CHECK_EQUAL(save(sys, buf, xs), caf::none);
   decltype(xs) ys;
-  load(sys, buf, ys);
+  CHECK_EQUAL(load(sys, buf, ys), caf::none);
   CHECK(xs == ys);
 }
 

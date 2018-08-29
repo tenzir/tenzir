@@ -340,8 +340,8 @@ TEST(serialization range coder) {
   x.encode(21);
   x.encode(30);
   std::string buf;
-  save(sys, buf, x);
-  load(sys, buf, y);
+  CHECK_EQUAL(save(sys, buf, x), caf::none);
+  CHECK_EQUAL(load(sys, buf, y), caf::none);
   CHECK(x == y);
   CHECK_EQUAL(to_string(y.decode(equal,     21)), "00010");
   CHECK_EQUAL(to_string(y.decode(equal,     30)), "00001");
@@ -369,9 +369,9 @@ TEST(serialization multi-level coder) {
   x.encode(21);
   x.encode(30);
   std::string buf;
-  save(sys, buf, x);
+  CHECK_EQUAL(save(sys, buf, x), caf::none);
   auto y = coder_type{};
-  load(sys, buf, y);
+  CHECK_EQUAL(load(sys, buf, y), caf::none);
   CHECK(x == y);
   CHECK_EQUAL(to_string(y.decode(equal,     21)), "00010");
   CHECK_EQUAL(to_string(y.decode(equal,     30)), "00001");

@@ -40,13 +40,13 @@ log::log(caf::actor_system& sys, path dir) : dir_{std::move(dir)}, sys_(sys) {
   auto entries_filename = dir_ / "entries";
   if (exists(dir_)) {
     if (exists(meta_filename))
-      if (!load(sys_, meta_filename, start_))
+      if (load(sys_, meta_filename, start_))
         die("failed to load raft log meta data");
     if (exists(entries_filename)) {
       std::ifstream entries{entries_filename.str(), std::ios::binary};
       while (entries.peek() != std::ifstream::traits_type::eof()) {
         std::vector<log_entry> xs;
-        if (!load(sys_, entries, xs))
+        if (load(sys_, entries, xs))
           die("failed to load raft log entries");
         std::move(xs.begin(), xs.end(), std::back_inserter(entries_));
       }
@@ -127,9 +127,8 @@ expected<void> log::append(std::vector<log_entry> xs) {
     }
   }
   // Serialize the entries...
-  auto res = save(sys_, entries_file_, xs);
-  if (!res)
-    return res;
+  if (auto err =  save(sys_, entries_file_, xs))
+    return err;
   // ...and make them persistent...
   entries_file_.flush();
   if (!entries_file_)
@@ -151,12 +150,16 @@ uint64_t bytes(log& l) {
 }
 
 expected<void> log::persist_meta_data() {
-  return save(sys_, dir_ / "meta", start_);
+  if (auto err = save(sys_, dir_ / "meta", start_))
+    return err;
+  return caf::unit;
 }
 
 expected<void> log::persist_entries() {
   entries_file_.close();
-  return save(sys_, dir_ / "entries", entries_);
+  if (auto err = save(sys_, dir_ / "entries", entries_))
+    return err;
+  return caf::unit;
 }
 
 namespace {
@@ -205,26 +208,26 @@ std::string role(Actor* self) {
 
 template <class Actor>
 expected<void> save_state(Actor* self) {
-  auto res = save(self->system(), self->state.dir / "state", self->state.id,
-                  self->state.current_term, self->state.voted_for);
-  if (res)
-    VAST_DEBUG(role(self), "saved persistent state: id =",
-               self->state.id << ", current term =",
-               self->state.current_term << ", voted for =",
-               self->state.voted_for);
-  return res;
+  if (auto err = save(self->system(), self->state.dir / "state", self->state.id,
+                      self->state.current_term, self->state.voted_for))
+    return err;
+  VAST_DEBUG(role(self), "saved persistent state: id =",
+             self->state.id << ", current term =",
+             self->state.current_term << ", voted for =",
+             self->state.voted_for);
+  return caf::unit;
 }
 
 template <class Actor>
 expected<void> load_state(Actor* self) {
-  auto res = load(self->system(), self->state.dir / "state", self->state.id,
-                  self->state.current_term, self->state.voted_for);
-  if (res)
-    VAST_DEBUG(role(self), "loaded persistent state: id =",
-               self->state.id << ", current term",
-               self->state.current_term << ", voted for",
-               self->state.voted_for);
-  return res;
+  if (auto err = load(self->system(), self->state.dir / "state", self->state.id,
+                      self->state.current_term, self->state.voted_for))
+    return err;
+  VAST_DEBUG(role(self), "loaded persistent state: id =",
+             self->state.id << ", current term",
+             self->state.current_term << ", voted for",
+             self->state.voted_for);
+  return caf::unit;
 }
 
 // Retrieves the peer state from a response handler.
@@ -291,10 +294,9 @@ result<index_type> save_snapshot(Actor* self, index_type index,
   snapshot_header hdr;
   hdr.last_included_index = index;
   hdr.last_included_term = self->state.log->at(index).term;
-  auto result = save(self->system(), self->state.dir / "snapshot",
-                     hdr, snapshot);
-  if (!result)
-    return result.error();
+  if (auto err = save(self->system(), self->state.dir / "snapshot",
+                      hdr, snapshot))
+    return err;
   VAST_DEBUG(role(self), "completed snapshotting, last included term =",
              hdr.last_included_term << ", index =", hdr.last_included_index);
   VAST_ASSERT(self->state.log->first_index() <= hdr.last_included_index);
@@ -314,9 +316,8 @@ expected<void> load_snapshot_header(Actor* self) {
   VAST_DEBUG(role(self), "loads snapshot header");
   snapshot_header hdr;
   // Read snapshot header from filesystem.
-  auto result = load(self->system(), self->state.dir / "snapshot", hdr);
-  if (!result)
-    return result.error();
+  if (auto err = load(self->system(), self->state.dir / "snapshot", hdr))
+    return err;
   if (hdr.version != 1)
     return make_error(ec::version_error, "needed version 1, got", hdr.version);
   if (hdr.last_included_index < self->state.last_snapshot_index)
@@ -347,9 +348,8 @@ expected<std::vector<char>> load_snapshot_data(Actor* self) {
   VAST_DEBUG(role(self), "loads snapshot data");
   snapshot_header hdr;
   std::vector<char> data;
-  auto result = load(self->system(), self->state.dir / "snapshot", hdr, data);
-  if (!result)
-    return result.error();
+  if (auto err = load(self->system(), self->state.dir / "snapshot", hdr, data))
+    return err;
   if (hdr.version != 1)
     return make_error(ec::version_error, "needed version 1, got", hdr.version);
   return data;

@@ -80,9 +80,9 @@ TEST(printable) {
 
 TEST(serialization) {
   std::vector<char> buf;
-  save(sys, buf, e);
+  CHECK_EQUAL(save(sys, buf, e), caf::none);
   event e2;
-  load(sys, buf, e2);
+  CHECK_EQUAL(load(sys, buf, e2), caf::none);
   CHECK_EQUAL(e, e2);
 }
 

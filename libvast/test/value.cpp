@@ -129,8 +129,8 @@ TEST(serialization) {
   value v{s, t};
   value w;
   std::vector<char> buf;
-  save(sys, buf, v);
-  load(sys, buf, w);
+  CHECK_EQUAL(save(sys, buf, v), caf::none);
+  CHECK_EQUAL(load(sys, buf, w), caf::none);
   CHECK(v == w);
   CHECK(to_string(w) == "{80/tcp, 53/udp, 8/icmp}");
 }

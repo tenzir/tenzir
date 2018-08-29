@@ -192,8 +192,8 @@ TEST(range_map serialization) {
   x.insert(80, 90, 'b');
   x.insert(20, 30, 'c');
   std::vector<char> buf;
-  save(sys, buf, x);
-  load(sys, buf, y);
+  CHECK_EQUAL(save(sys, buf, x), caf::none);
+  CHECK_EQUAL(load(sys, buf, y), caf::none);
   REQUIRE_EQUAL(y.size(), 3u);
   auto i = y.lookup(50);
   REQUIRE(i);

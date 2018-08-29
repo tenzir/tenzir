@@ -183,12 +183,11 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
     accountant = actor_cast<accountant_type>(a);
   // Read persistent state.
   if (exists(self->state.dir / "meta")) {
-    auto result = load(self->system(), self->state.dir / "meta",
-                       self->state.part_index);
-    if (!result) {
+    if (auto err = load(self->system(), self->state.dir / "meta",
+                        self->state.part_index)) {
       VAST_ERROR(self, "failed to load partition index:",
-                 self->system().render(result.error()));
-      self->quit(result.error());
+                 self->system().render(err));
+      self->quit(std::move(err));
       return {};
     }
   }

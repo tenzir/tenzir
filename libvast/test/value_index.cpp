@@ -58,9 +58,9 @@ TEST(boolean) {
   CHECK_EQUAL(to_string(*multi), "11111111");
   MESSAGE("serialization");
   std::string buf;
-  save(sys, buf, idx);
+  CHECK_EQUAL(save(sys, buf, idx), caf::none);
   arithmetic_index<boolean> idx2;
-  load(sys, buf, idx2);
+  CHECK_EQUAL(load(sys, buf, idx2), caf::none);
   t = idx2.lookup(equal, make_data_view(true));
   REQUIRE(t);
   CHECK_EQUAL(to_string(*t), "11010001");
@@ -92,9 +92,9 @@ TEST(integer) {
   CHECK_EQUAL(to_string(*multi), "0101011");
   MESSAGE("serialization");
   std::vector<char> buf;
-  save(sys, buf, idx);
+  CHECK_EQUAL(save(sys, buf, idx), caf::none);
   auto idx2 = arithmetic_index<integer>{};
-  load(sys, buf, idx2);
+  CHECK_EQUAL(load(sys, buf, idx2), caf::none);
   less_than_leet = idx2.lookup(less, make_data_view(31337));
   REQUIRE(less_than_leet);
   CHECK(to_string(*less_than_leet) == "1111011");
@@ -122,9 +122,9 @@ TEST(floating-point with custom binner) {
   CHECK_EQUAL(to_string(*result), "1110111");
   MESSAGE("serialization");
   std::vector<char> buf;
-  save(sys, buf, idx);
+  CHECK_EQUAL(save(sys, buf, idx), caf::none);
   auto idx2 = index_type{};
-  load(sys, buf, idx2);
+  CHECK_EQUAL(load(sys, buf, idx2), caf::none);
   result = idx2.lookup(not_equal, make_data_view(4711.14));
   CHECK_EQUAL(to_string(*result), "1110111");
 }
@@ -188,9 +188,9 @@ TEST(timestamp) {
   CHECK(to_string(*eighteen) == "000101");
   MESSAGE("serialization");
   std::vector<char> buf;
-  save(sys, buf, idx);
+  CHECK_EQUAL(save(sys, buf, idx), caf::none);
   auto idx2 = decltype(idx){};
-  load(sys, buf, idx2);
+  CHECK_EQUAL(load(sys, buf, idx2), caf::none);
   eighteen = idx2.lookup(greater_equal, make_data_view(*t));
   CHECK(to_string(*eighteen) == "000101");
 }
@@ -251,9 +251,9 @@ TEST(string) {
   CHECK_EQUAL(to_string(*result), "1111110000");
   MESSAGE("serialization");
   std::vector<char> buf;
-  save(sys, buf, idx);
+  CHECK_EQUAL(save(sys, buf, idx), caf::none);
   string_index idx2{};
-  load(sys, buf, idx2);
+  CHECK_EQUAL(load(sys, buf, idx2), caf::none);
   result = idx2.lookup(equal, make_data_view("foo"));
   CHECK_EQUAL(to_string(*result), "1001100000");
   result = idx2.lookup(equal, make_data_view("bar"));
@@ -328,9 +328,9 @@ TEST(address) {
   CHECK_EQUAL(idx.lookup(equal, make_data_view(x)), str);
   MESSAGE("serialization");
   std::vector<char> buf;
-  save(sys, buf, idx);
+  CHECK_EQUAL(save(sys, buf, idx), caf::none);
   address_index idx2{};
-  load(sys, buf, idx2);
+  CHECK_EQUAL(load(sys, buf, idx2), caf::none);
   CHECK_EQUAL(idx2.lookup(equal, make_data_view(x)), str);
 }
 
@@ -384,9 +384,9 @@ TEST(subnet) {
   CHECK_EQUAL(to_string(*multi), "111100");
   MESSAGE("serialization");
   std::vector<char> buf;
-  save(sys, buf, idx);
+  CHECK_EQUAL(save(sys, buf, idx), caf::none);
   subnet_index idx2;
-  load(sys, buf, idx2);
+  CHECK_EQUAL(load(sys, buf, idx2), caf::none);
   bm = idx2.lookup(not_equal, make_data_view(s1));
   REQUIRE(bm);
   CHECK_EQUAL(to_string(*bm), "101111");
@@ -420,9 +420,9 @@ TEST(port) {
   CHECK_EQUAL(to_string(*multi), "1010010");
   MESSAGE("serialization");
   std::vector<char> buf;
-  save(sys, buf, idx);
+  CHECK_EQUAL(save(sys, buf, idx), caf::none);
   port_index idx2;
-  load(sys, buf, idx2);
+  CHECK_EQUAL(load(sys, buf, idx2), caf::none);
   bm = idx2.lookup(less_equal, make_data_view(priv));
   REQUIRE(bm);
   CHECK_EQUAL(to_string(*bm), "1111010");
@@ -449,9 +449,9 @@ TEST(container) {
   CHECK_EQUAL(to_string(*idx.lookup(ni, make_data_view(x))), "00000000");
   MESSAGE("serialization");
   std::vector<char> buf;
-  save(sys, buf, idx);
+  CHECK_EQUAL(save(sys, buf, idx), caf::none);
   sequence_index idx2;
-  load(sys, buf, idx2);
+  CHECK_EQUAL(load(sys, buf, idx2), caf::none);
   x = "foo";
   CHECK_EQUAL(to_string(*idx2.lookup(ni, make_data_view(x))), "11000000");
 }
@@ -473,10 +473,11 @@ TEST(polymorphic) {
   CHECK_EQUAL(to_string(*idx->lookup(ni, make_data_view(44))), "0000");
   MESSAGE("serialization");
   std::vector<char> buf;
-  save(sys, buf, detail::value_index_inspect_helper{t, idx});
+  CHECK_EQUAL(save(sys, buf, detail::value_index_inspect_helper{t, idx}),
+              caf::none);
   std::unique_ptr<value_index> idx2;
   detail::value_index_inspect_helper helper{t, idx2};
-  load(sys, buf, helper);
+  CHECK_EQUAL(load(sys, buf, helper), caf::none);
   REQUIRE(idx2);
   CHECK_EQUAL(to_string(*idx2->lookup(ni, make_data_view(42))), "1001");
   MESSAGE("attributes");
