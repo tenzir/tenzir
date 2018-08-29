@@ -11,6 +11,11 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
+#define SUITE bitvector
+
+#include "test.hpp"
+#include "fixtures/actor_system.hpp"
+
 #include "vast/bitvector.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/bits.hpp"
@@ -18,10 +23,9 @@
 #include "vast/load.hpp"
 #include "vast/save.hpp"
 
-#define SUITE bitvector
-#include "test.hpp"
-
 using namespace vast;
+
+FIXTURE_SCOPE(bitvector_tests, fixtures::deterministic_actor_system)
 
 TEST(default construction) {
   bitvector<uint8_t> x;
@@ -209,8 +213,8 @@ TEST(serializable) {
   x.resize(1024, false);
   x[1000] = true;
   std::vector<char> buf;
-  save(buf, x);
-  load(buf, y);
+  save(sys, buf, x);
+  load(sys, buf, y);
   REQUIRE_EQUAL(x, y);
   CHECK(y[1000]);
 }
@@ -255,3 +259,5 @@ TEST(rank) {
   CHECK_EQUAL(rank<0>(x), 1023u);
   CHECK_EQUAL(rank<1>(x), 1025u + 2048);
 }
+
+FIXTURE_SCOPE_END()

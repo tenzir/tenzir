@@ -18,6 +18,9 @@
 
 #include <tuple>
 
+#include <caf/deserializer.hpp>
+#include <caf/serializer.hpp>
+
 #include "vast/chunk.hpp"
 #include "vast/filesystem.hpp"
 
@@ -49,6 +52,10 @@ chunk_ptr chunk::mmap(const path& filename, size_t size, size_t offset) {
 chunk::~chunk() {
   VAST_ASSERT(deleter_);
   deleter_(data_, size_);
+}
+
+char* chunk::data() {
+  return data_;
 }
 
 const char* chunk::data() const {
@@ -90,14 +97,26 @@ chunk::chunk(size_t size, void* ptr, deleter_type deleter)
     deleter_{std::move(deleter)} {
 }
 
-bool operator==(const chunk& x, const chunk& y) {
-  return x.data() == y.data() && x.size() == y.size();
+caf::error inspect(caf::serializer& sink, const chunk_ptr& x) {
+  VAST_ASSERT(x != nullptr);
+  auto n = x->size();
+  return caf::error::eval(
+    [&] { return sink.begin_sequence(n); },
+    [&] { return n > 0 ? sink.apply_raw(n, x->data()) : caf::none; },
+    [&] { return sink.end_sequence(); }
+  );
 }
 
-bool operator<(const chunk& x, const chunk& y) {
-  auto lhs = std::make_tuple(x.data(), x.size());
-  auto rhs = std::make_tuple(y.data(), y.size());
-  return lhs < rhs;
+caf::error inspect(caf::deserializer& source, chunk_ptr& x) {
+  chunk::size_type n;
+  return caf::error::eval(
+    [&] { return source.begin_sequence(n); },
+    [&] {
+      x = chunk::make(n);
+      return n > 0 ? source.apply_raw(x->size(), x->data()) : caf::none;
+    },
+    [&] { return source.end_sequence(); }
+  );
 }
 
 } // namespace vast

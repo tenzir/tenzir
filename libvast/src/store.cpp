@@ -11,35 +11,12 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#pragma once
-
-#include <caf/fwd.hpp>
-
-#include <caf/expected.hpp>
-
-#include "vast/fwd.hpp"
+#include "vast/store.hpp"
 
 namespace vast {
 
-/// A key-value store for events.
-class store {
-public:
-  virtual ~store();
-
-  /// Adds a table slice to the store.
-  /// @param xs The table slice to add.
-  /// @returns No error on success.
-  virtual caf::error put(const_table_slice_handle xs) = 0;
-
-  /// Retrieves a set of events.
-  /// @param xs The IDs for the events to retrieve.
-  /// @returns The table slice according to *xs*.
-  virtual caf::expected<std::vector<const_table_slice_handle>>
-  get(const ids& xs) = 0;
-
-  /// Flushes in-memory state to persistent storage.
-  /// @returns No error on success.
-  virtual caf::error flush() = 0;
-};
+store::~store() {
+  // nop
+}
 
 } // namespace vast

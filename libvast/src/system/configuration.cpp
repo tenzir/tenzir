@@ -25,7 +25,6 @@
 #include <caf/openssl/manager.hpp>
 #endif
 
-#include "vast/batch.hpp"
 #include "vast/bitmap.hpp"
 #include "vast/config.hpp"
 #include "vast/const_table_slice_handle.hpp"
@@ -60,7 +59,6 @@ configuration::configuration() {
   // Use 'vast.ini' instead of generic 'caf-application.ini'.
   config_file_path = "vast.ini";
   // Register VAST's custom types.
-  add_message_type<batch>("vast::batch");
   add_message_type<bitmap>("vast::bitmap");
   add_message_type<data>("vast::data");
   add_message_type<event>("vast::event");

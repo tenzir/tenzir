@@ -20,6 +20,7 @@
 #include "vast/format/test.hpp"
 #include "vast/table_slice_builder.hpp"
 #include "vast/table_slice_handle.hpp"
+#include "vast/to_events.hpp"
 #include "vast/type.hpp"
 
 #include "vast/concept/printable/to_string.hpp"
@@ -261,17 +262,17 @@ events::events() {
       v.begin(), v.end(),
       [](const auto& lhs, const auto& rhs) { return lhs.id() < rhs.id(); });
   };
-  auto to_events = [&](const auto& slices) {
+  auto as_events = [&](const auto& slices) {
     std::vector<event> result;
     for (auto& slice : slices) {
-      auto xs = slice->rows_to_events();
+      auto xs = to_events(*slice);
       std::move(xs.begin(), xs.end(), std::back_inserter(result));
     }
     return result;
   };
 #define SANITY_CHECK(event_vec, slice_vec)                                     \
   {                                                                            \
-    auto flat_log = to_events(slice_vec);                                      \
+    auto flat_log = as_events(slice_vec);                                      \
     auto sorted_event_vec = event_vec;                                         \
     sort_by_id(sorted_event_vec);                                              \
     REQUIRE_EQUAL(sorted_event_vec.size(), flat_log.size());                   \

@@ -11,11 +11,13 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
+#define SUITE serialization
+
+#include "test.hpp"
+#include "fixtures/actor_system.hpp"
+
 #include "vast/save.hpp"
 #include "vast/load.hpp"
-
-#define SUITE serialization
-#include "test.hpp"
 
 using namespace std::string_literals;
 using namespace vast;
@@ -54,15 +56,17 @@ private:
 
 } // namespace <anonymous>
 
+FIXTURE_SCOPE(serialization_tests, fixtures::deterministic_actor_system)
+
 TEST(variadic) {
   std::string buf;
-  auto m = save<compression::lz4>(buf, 42, 4.2, 1337u, "foo"s);
+  auto m = save<compression::lz4>(sys, buf, 42, 4.2, 1337u, "foo"s);
   CHECK(!m.error());
   int i;
   double d;
   unsigned u;
   std::string s;
-  m = load<compression::lz4>(buf, i, d, u, s);
+  m = load<compression::lz4>(sys, buf, i, d, u, s);
   CHECK(!m.error());
   CHECK_EQUAL(i, 42);
   CHECK_EQUAL(d, 4.2);
@@ -74,9 +78,9 @@ TEST(custom type modeling serializable) {
   std::vector<char> buf;
   foo x;
   x.i = 42;
-  auto m = save(buf, x);
+  auto m = save(sys, buf, x);
   foo y;
-  m = load(buf, y);
+  m = load(sys, buf, y);
   CHECK_EQUAL(x.i, y.i);
 }
 
@@ -84,8 +88,10 @@ TEST(custom type modeling state) {
   std::vector<char> buf;
   bar x;
   x.set(42);
-  auto m = save(buf, x);
+  auto m = save(sys, buf, x);
   bar y;
-  m = load(buf, y);
+  m = load(sys, buf, y);
   CHECK_EQUAL(x.get(), y.get());
 }
+
+FIXTURE_SCOPE_END()

@@ -11,15 +11,19 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
+#define SUITE range_map
+
+#include "test.hpp"
+#include "fixtures/actor_system.hpp"
+
 #include "vast/detail/range_map.hpp"
 #include "vast/load.hpp"
 #include "vast/save.hpp"
 
-#define SUITE detail
-#include "test.hpp"
-
 using namespace vast;
 using namespace vast::detail;
+
+FIXTURE_SCOPE(range_map_tests, fixtures::deterministic_actor_system)
 
 TEST(range_map insertion) {
   range_map<int, std::string> rm;
@@ -188,10 +192,12 @@ TEST(range_map serialization) {
   x.insert(80, 90, 'b');
   x.insert(20, 30, 'c');
   std::vector<char> buf;
-  save(buf, x);
-  load(buf, y);
+  save(sys, buf, x);
+  load(sys, buf, y);
   REQUIRE_EQUAL(y.size(), 3u);
   auto i = y.lookup(50);
   REQUIRE(i);
   CHECK(*i == 'a');
 }
+
+FIXTURE_SCOPE_END()

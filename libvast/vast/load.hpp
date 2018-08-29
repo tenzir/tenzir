@@ -18,13 +18,13 @@
 #include <streambuf>
 #include <type_traits>
 
+#include <caf/actor_system.hpp>
 #include <caf/stream_deserializer.hpp>
 #include <caf/streambuf.hpp>
 
 #include "vast/compression.hpp"
 #include "vast/detail/compressedbuf.hpp"
 #include "vast/detail/type_traits.hpp"
-#include "vast/detail/variadic_serialization.hpp"
 #include "vast/error.hpp"
 #include "vast/expected.hpp"
 #include "vast/filesystem.hpp"
@@ -34,40 +34,34 @@ namespace vast {
 /// Deserializes a sequence of objects.
 /// @see save
 template <compression Method = compression::null, class Source, class... Ts>
-expected<void> load(Source&& in, Ts&&... xs) {
+expected<void> load(caf::actor_system& sys, Source&& in, Ts&... xs) {
   static_assert(sizeof...(Ts) > 0);
   using source_type = std::decay_t<Source>;
   if constexpr (detail::is_streambuf_v<source_type>) {
-#ifndef VAST_NO_EXCEPTIONS
-    try {
-#endif // VAST_NO_EXCEPTIONS
-      if (Method == compression::null) {
-        caf::stream_deserializer<source_type&> s{in};
-        detail::read(s, std::forward<Ts>(xs)...);
-      } else {
-        detail::compressedbuf compressed{in, Method};
-        caf::stream_deserializer<detail::compressedbuf&> s{compressed};
-        detail::read(s, std::forward<Ts>(xs)...);
-      }
-#ifndef VAST_NO_EXCEPTIONS
-    } catch (const std::exception& e) {
-      return make_error(ec::unspecified, e.what());
+    if (Method == compression::null) {
+      caf::stream_deserializer<source_type&> s{sys, in};
+      if (auto err = s(xs...))
+        return err;
+    } else {
+      detail::compressedbuf compressed{in, Method};
+      caf::stream_deserializer<detail::compressedbuf&> s{sys, compressed};
+      if (auto err = s(xs...))
+        return err;
     }
-#endif // VAST_NO_EXCEPTIONS
     return {};
   } else if constexpr (std::is_base_of_v<std::istream, source_type>) {
     auto sb = in.rdbuf();
-    return load<Method>(*sb, std::forward<Ts>(xs)...);
+    return load<Method>(sys, *sb, xs...);
   } else if constexpr (detail::is_contiguous_byte_container_v<source_type>) {
     // load() won't mess with the given reference.
     caf::containerbuf<source_type> sink{const_cast<source_type&>(in)};
-    return load<Method>(sink, std::forward<Ts>(xs)...);
+    return load<Method>(sys, sink, xs...);
   } else if constexpr (std::is_same_v<source_type, path>) {
     std::ifstream fs{in.str()};
     if (!fs)
       return make_error(ec::filesystem_error, "failed to create filestream",
                         in);
-    return load<Method>(*fs.rdbuf(), std::forward<Ts>(xs)...);
+    return load<Method>(sys, *fs.rdbuf(), xs...);
   } else {
     static_assert(!std::is_same_v<Source, Source>, "unexpected Source type");
   }

@@ -111,7 +111,7 @@ partition_ptr index_state::partition_factory::operator()(const uuid& id) const {
   if (auto i = std::find_if(xs.begin(), xs.end(), pred); i != xs.end())
     return i->first;
   VAST_DEBUG(st_->self, "loads partition", id);
-  return make_partition(st_->self, st_->dir, id);
+  return make_partition(st_->self->system(), st_->self, st_->dir, id);
 }
 
 index_state::index_state()
@@ -161,7 +161,7 @@ void index_state::init(event_based_actor* self, const path& dir,
     // Create a new active partition.
     auto id = uuid::random();
     VAST_DEBUG(this->self, "starts a new partition:", id);
-    active = make_partition(this->self, this->dir, id);
+    active = make_partition(this->self->system(), this->self, this->dir, id);
     // Register the new active partition at the stream manager.
     return active;
   };
@@ -183,7 +183,8 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
     accountant = actor_cast<accountant_type>(a);
   // Read persistent state.
   if (exists(self->state.dir / "meta")) {
-    auto result = load(self->state.dir / "meta", self->state.part_index);
+    auto result = load(self->system(), self->state.dir / "meta",
+                       self->state.part_index);
     if (!result) {
       VAST_ERROR(self, "failed to load partition index:",
                  self->system().render(result.error()));

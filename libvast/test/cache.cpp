@@ -11,19 +11,21 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
+#define SUITE detail
+
+#include "test.hpp"
+#include "fixtures/actor_system.hpp"
+
 #include <vast/load.hpp>
 #include <vast/save.hpp>
 #include <vast/detail/cache.hpp>
-
-#define SUITE detail
-#include "test.hpp"
 
 using namespace vast;
 
 namespace {
 
 template <class Policy>
-struct fixture {
+struct fixture : fixtures::deterministic_actor_system {
   fixture() {
     CHECK(xs.emplace("foo", 1).second);
     CHECK(xs.emplace("bar", 2).second);
@@ -78,9 +80,9 @@ TEST(LRU cache insertion) {
 
 TEST(cache serialization) {
   std::vector<char> buf;
-  save(buf, xs);
+  save(sys, buf, xs);
   decltype(xs) ys;
-  load(buf, ys);
+  load(sys, buf, ys);
   CHECK(xs == ys);
 }
 

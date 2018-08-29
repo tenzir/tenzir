@@ -24,6 +24,7 @@
 #include "vast/format/bro.hpp"
 #include "vast/system/atoms.hpp"
 #include "vast/table_slice.hpp"
+#include "vast/subset.hpp"
 
 using namespace vast;
 using namespace vast::system;
@@ -82,7 +83,7 @@ TEST(bro source) {
   std::vector<value> row_contents;
   for (size_t row = 0; row < 1u; ++row) {
     /// The first column is the automagically added timestamp.
-    auto xs = slices[row]->rows_to_values(0, table_slice::npos, 1);
+    auto xs = subset(*slices[row], 0, table_slice::npos, 1);
     std::move(xs.begin(), xs.end(), std::back_inserter(row_contents));
   }
   std::vector<value> bro_conn_log_values;

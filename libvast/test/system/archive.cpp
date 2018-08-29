@@ -52,20 +52,12 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
 
 FIXTURE_SCOPE(archive_tests, fixture)
 
-TEST(bro conn log vector) {
-  self->send(a, bro_conn_log);
-  run();
-  auto result = query({{10, 15}});
-  CHECK_EQUAL(result.size(), 5u);
-}
-
 TEST(bro conn logs slices) {
   push_to_archive(const_bro_conn_log_slices);
   auto result = query({{10, 15}});
   CHECK_EQUAL(result.size(), 5u);
 }
 
-/*
 TEST(archiving and querying) {
   MESSAGE("import bro conn logs to archive");
   push_to_archive(const_bro_conn_log_slices);
@@ -92,6 +84,5 @@ TEST(archiving and querying) {
   CHECK_EQUAL(result[result.size() - 1].id(), 10199u);
   self->send_exit(a, exit_reason::user_shutdown);
 }
-*/
 
 FIXTURE_SCOPE_END()
