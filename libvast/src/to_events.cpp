@@ -22,13 +22,22 @@ namespace vast {
 
 namespace {
 
-event to_event(value& val, value& tstamp, const std::string& layout_name,
-               id event_id) {
-  using caf::get;
-  auto t = val.type().name(layout_name);
-  auto e = event::make(std::move(val.data()), std::move(t));
-  e.id(event_id);
-  e.timestamp(get<timestamp>(get<vector>(tstamp)[0]));
+event to_event(const table_slice& slice, id eid, type event_layout) {
+  vector xs;  // TODO(ch3290): make this a record
+  VAST_ASSERT(slice.columns() > 0);
+  xs.resize(slice.columns() - 1); // one less to exclude timestamp
+  for (table_slice::size_type i = 0; i < slice.columns() - 1; ++i) {
+    auto x = slice.at(eid - slice.offset(), i + 1);
+    VAST_ASSERT(x != caf::none);
+    xs[i] = materialize(*x);
+  }
+  auto e = event::make(std::move(xs), std::move(event_layout));
+  // Get the timestamp from the first column.
+  auto ts = slice.at(eid - slice.offset(), 0);
+  VAST_ASSERT(ts != caf::none);
+  // Assign event meta data.
+  e.id(eid);
+  e.timestamp(caf::get<timestamp>(*ts));
   return e;
 }
 
@@ -37,14 +46,11 @@ event to_event(value& val, value& tstamp, const std::string& layout_name,
 void to_events(std::vector<event>& storage, const table_slice& slice,
                table_slice::size_type first_row,
                table_slice::size_type num_rows) {
-  auto values = subset(slice, first_row, num_rows, 1);
-  auto timestamps = subset(slice, first_row, num_rows, 0, 1);
-  VAST_ASSERT(values.size() == timestamps.size());
-  storage.reserve(storage.size() + values.size());
-  auto event_id = slice.offset() + first_row;
-  for (size_t i = 0; i < values.size(); ++i)
-    storage.emplace_back(to_event(values[i], timestamps[i],
-                                  slice.layout().name(), event_id++));
+  auto event_layout = slice.layout(1).name(slice.layout().name());
+  if (num_rows == table_slice::npos)
+    num_rows = slice.rows();
+  for (auto i = first_row; i < first_row + num_rows; ++i)
+    storage.emplace_back(to_event(slice, slice.offset() + i, event_layout));
 }
 
 std::vector<event> to_events(const table_slice& slice,
@@ -61,16 +67,11 @@ void to_events(std::vector<event>& storage, const table_slice& slice,
   auto end = begin + slice.rows();
   auto rng = select(row_ids);
   VAST_ASSERT(rng);
-  for (rng.next_at(begin); rng && rng.get() < end; rng.next()) {
-    auto id = rng.get();
-    // FIXME: inefficient, because we wrap single values into vectors
-    auto timestamps = subset(slice, id - begin, 1, 0, 1);
-    auto values = subset(slice, id - begin, 1, 1);
-    VAST_ASSERT(timestamps.size() == 1);
-    VAST_ASSERT(values.size() == 1);
-    auto& name = slice.layout().name();
-    storage.emplace_back(to_event(values[0], timestamps[0], name, id));
-  }
+  auto event_layout = slice.layout(1).name(slice.layout().name());
+  if (rng.get() < begin)
+    rng.next_at(begin);
+  for ( ; rng && rng.get() < end; rng.next())
+    storage.emplace_back(to_event(slice, rng.get(), event_layout));
 }
 
 std::vector<event> to_events(const table_slice& slice, const ids& row_ids) {
