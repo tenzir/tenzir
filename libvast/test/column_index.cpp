@@ -84,8 +84,8 @@ TEST(bro conn log) {
   for (auto slice : const_bro_conn_log_slices)
     col->add(slice);
   MESSAGE("verify column index");
-  auto pred = unbox(to<predicate>(":addr == 169.254.225.22"));
-  auto expected_result = make_ids({680, 682, 719, 720}, bro_conn_log.size());
+  auto pred = unbox(to<predicate>(":addr == 192.168.1.103"));
+  auto expected_result = make_ids({1, 3, 7, 14, 16}, bro_conn_log.size());
   CHECK_EQUAL(unbox(col->lookup(pred)), expected_result);
   MESSAGE("persist and reload from disk");
   col->flush_to_disk();

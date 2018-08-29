@@ -196,43 +196,39 @@ TEST(iterable integer query result) {
 }
 
 TEST(iterable bro conn log query result) {
-  REQUIRE_EQUAL(bro_conn_log.size(), 8462u);
+  REQUIRE_EQUAL(bro_conn_log.size(), 20u);
   MESSAGE("ingest conn.log slices");
   detail::spawn_container_source(sys, const_bro_conn_log_slices, index);
   run();
   MESSAGE("issue field type query");
   {
-    auto expected_result = make_ids({680, 682, 719, 720}, bro_conn_log.size());
-    auto [query_id, hits, scheduled] = query(":addr == 169.254.225.22");
+    auto expected_result = make_ids({5, 6, 9, 11}, bro_conn_log.size());
+    auto [query_id, hits, scheduled] = query(":addr == 192.168.1.104");
     auto result = receive_result(query_id, hits, scheduled);
     CHECK_EQUAL(rank(result), rank(expected_result));
     CHECK_EQUAL(result, expected_result);
   }
   MESSAGE("issue field name queries");
   {
-    auto expected_result = make_ids({680, 682, 719, 720}, bro_conn_log.size());
-    auto [query_id, hits, scheduled] = query("id.orig_h == 169.254.225.22");
+    auto expected_result = make_ids({5, 6, 9, 11}, bro_conn_log.size());
+    auto [query_id, hits, scheduled] = query("id.orig_h == 192.168.1.104");
     auto result = receive_result(query_id, hits, scheduled);
     CHECK_EQUAL(rank(result), rank(expected_result));
     CHECK_EQUAL(result, expected_result);
   }
   {
-    auto [query_id, hits, scheduled] = query("service == \"http\"");
+    auto [query_id, hits, scheduled] = query("service == \"dns\"");
     auto result = receive_result(query_id, hits, scheduled);
-    CHECK_EQUAL(rank(result), 2386u);
+    CHECK_EQUAL(rank(result), 11u);
   }
   MESSAGE("issue historical point query with conjunction");
   {
-    auto expected_result
-      = make_ids({105,  150,  246,  257,  322,  419,  440,  480,  579,  595,
-                 642,  766,  1224, 1251, 1751, 1762, 2670, 3661, 3682, 3820,
-                 6345, 6777, 7677, 7843, 8002, 8286, 8325, 8354},
-                 bro_conn_log.size());
-    auto [query_id, hits, scheduled] = query("service == \"http\" "
-                                             "&& :addr == 212.227.96.110");
+    auto expected_result = make_ids({1, 14}, bro_conn_log.size());
+    auto [query_id, hits, scheduled] = query("service == \"dns\" "
+                                             "&& :addr == 192.168.1.103");
     auto result = receive_result(query_id, hits, scheduled);
-    CHECK_EQUAL(rank(expected_result), 28u);
-    CHECK_EQUAL(rank(result), 28u);
+    CHECK_EQUAL(rank(expected_result), 2u);
+    CHECK_EQUAL(rank(result), 2u);
     CHECK_EQUAL(result, expected_result);
   }
 }
