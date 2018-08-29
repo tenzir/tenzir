@@ -13,6 +13,7 @@
 
 #include "vast/bitmap.hpp"
 #include "vast/ewah_bitmap.hpp"
+#include "vast/ids.hpp"
 #include "vast/null_bitmap.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/bitmap.hpp"
@@ -295,6 +296,69 @@ struct bitmap_test_harness {
     CHECK_EQUAL(rng.get(), 227u);
   }
 
+  void test_select_with() {
+    MESSAGE("select_with");
+    using half_open_interval = std::pair<id, id>;
+    using intervals = std::vector<half_open_interval>;
+    auto xs = intervals{
+      {0, 10},
+      {10, 20},
+      {30, 40},
+      {40, 50},
+      {80, 90},
+    };
+    auto identity = [](auto x) { return x; };
+    intervals ys;
+    auto g = [&](auto& x) {
+      ys.push_back(x);
+      return caf::none;
+    };
+    // The very first ID.
+    auto err = select_with(make_ids({0}), xs.begin(), xs.end(), identity, g);
+    CHECK(!err);
+    CHECK_EQUAL(ys, (intervals{{0, 10}}));
+    ys.clear();
+    // An intermediate ID in the first interval.
+    err = select_with(make_ids({5}), xs.begin(), xs.end(), identity, g);
+    CHECK(!err);
+    CHECK_EQUAL(ys, (intervals{{0, 10}}));
+    ys.clear();
+    // The last ID in the first interval.
+    err = select_with(make_ids({10}), xs.begin(), xs.end(), identity, g);
+    CHECK(!err);
+    CHECK_EQUAL(ys, (intervals{{10, 20}}));
+    ys.clear();
+    // The first ID in an intermediate interval.
+    err = select_with(make_ids({30}), xs.begin(), xs.end(), identity, g);
+    CHECK(!err);
+    CHECK_EQUAL(ys, (intervals{{30, 40}}));
+    ys.clear();
+    // An intermediate ID in an intermediate interval.
+    err = select_with(make_ids({42}), xs.begin(), xs.end(), identity, g);
+    CHECK(!err);
+    CHECK_EQUAL(ys, (intervals{{40, 50}}));
+    ys.clear();
+    // The last ID in an intermediate interval.
+    err = select_with(make_ids({50}), xs.begin(), xs.end(), identity, g);
+    CHECK(!err);
+    CHECK(ys.empty());
+    ys.clear();
+    // An ID outside of the interval range.
+    err = select_with(make_ids({100}), xs.begin(), xs.end(), identity, g);
+    CHECK(!err);
+    CHECK(ys.empty());
+    ys.clear();
+    // Multiple IDs in the first interval.
+    err = select_with(make_ids({0, 1, 2}), xs.begin(), xs.end(), identity, g);
+    CHECK(!err);
+    CHECK_EQUAL(ys, (intervals{{0, 10}}));
+    ys.clear();
+    // Multiple IDs in several intervals.
+    err = select_with(make_ids({5, 10, 42}), xs.begin(), xs.end(), identity, g);
+    CHECK(!err);
+    CHECK_EQUAL(ys, (intervals{{0, 10}, {10, 20}, {40, 50}}));
+  }
+
   void test_span() {
     MESSAGE("span");
     // Empty bitmap.
@@ -374,6 +438,7 @@ struct bitmap_test_harness {
     test_bitwise_nary();
     test_rank();
     test_select();
+    test_select_with();
     test_span();
     test_all();
     test_any();

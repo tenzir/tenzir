@@ -317,20 +317,27 @@ public:
     return rng_.get();
   }
 
-  /// @returns The current ID in the range.
+  /// @returns The current position in the range.
   /// @pre `!done()`
-  vast::id id() const {
+  id offset() const {
     VAST_ASSERT(!done());
     return n_ + i_;
   }
 
+  /// @returns The bit value at the current position.
+  /// @pre `!done()`
+  bool value() const {
+    VAST_ASSERT(!done());
+    return bits()[i_];
+  }
+
   // -- range API -------------------------------------------------------------
 
-  /// Retrieves the current ID in the range.
+  /// Retrieves the current position in the range.
   /// @pre `!done()`
   size_type get() const {
     VAST_ASSERT(!done());
-    return id();
+    return offset();
   }
 
   /// @returns `true` if the range is done.
@@ -419,26 +426,26 @@ public:
     }
   }
 
-  /// Advances the range to a given position and then performs a subsequent
-  /// call to select().
-  /// @param x The ID where to start the call to select().
+  /// Selects the next bit of a given value starting at given position.
+  /// @param i The position to start  where to start the call to select().
+  /// @pre `!done() && x >= offset()`
   template <bool Bit = true>
-  void select_at(vast::id x) {
-    VAST_ASSERT(i_ != npos);
-    if (x < id())
-      return;
-    if (x > id()) {
-      next(x - id());
+  void select_at(id x) {
+    VAST_ASSERT(!done());
+    VAST_ASSERT(x >= offset());
+    if (x > offset()) {
+      next(x - offset());
       if (done())
         return;
     }
-    select();
+    if (value() != Bit)
+      select<Bit>();
   }
 
 private:
   BitRange rng_;
   size_type i_ = npos;
-  vast::id n_ = 0;
+  id n_ = 0;
 };
 
 /// Creates a bitwise_range from a bitmap.
@@ -468,8 +475,13 @@ public:
   }
 
   void next() {
-    return rng_.template select<Bit>();
+    rng_.template select<Bit>();
   }
+
+  void next_at(id x) {
+    rng_.template select_at<Bit>(x);
+  }
+
 
 private:
   bitwise_range<BitRange> rng_;
@@ -483,6 +495,47 @@ template <bool Bit = true, class IDs>
 auto select(const IDs& ids) {
   using range_type = decltype(bit_range(ids));
   return select_range<Bit, range_type>(bit_range(ids));
+}
+
+/// Traverses the 1-bits of a bitmap in conjunction with an iterator range that
+/// represents half-open ID intervals.
+/// @param bm The ID sequence to *select*.
+/// @param begin An iterator to the beginning of the other range.
+/// @param end An iterator to the end of the other range.
+/// @param f A function that transforms *begin* into a half-open interval of IDs
+///          *[x, y)* where *x* is the first and *y* one past the last ID.
+/// @param g A function the performs a user-defined action if the current range
+///          values falls into *(x, y)*, where `(x, y) = f(*begin)` .
+/// @pre The range delimited by *begin* and *end* must be sorted in ascending
+///      order.
+template <class Bitmap, class Iterator, class F, class G>
+caf::error select_with(const Bitmap& bm, Iterator begin, Iterator end, F f, G g) {
+  auto pred = [&](const auto& x, auto y) { return f(x).second <= y; };
+  auto lower_bound = [&](Iterator first, Iterator last, auto x) {
+    return std::lower_bound(first, last, x, pred);
+  };
+  for (auto rng = select(bm);
+       rng && begin != end;
+       begin = lower_bound(begin, end, rng.get())) {
+    // Get the current ID interval.
+    auto [first, last] = f(*begin);
+    // Make the ID range catch up if it's behind.
+    if (rng.get() < first) {
+      rng.next_at(first);
+      if (!rng)
+        break;
+    }
+    if (rng.get() >= first && rng.get() < last) {
+      // If the next ID falls in the current slice, we invoke the processing
+      // function and move forward.
+      if (auto error = g(*begin))
+        return error;
+      rng.next_at(last);
+      if (!rng)
+        break;
+    }
+  }
+  return caf::none;
 }
 
 /// Computes the *span* of a bitmap, i.e., the interval *[a,b]* with *a* being
@@ -549,45 +602,6 @@ auto all(const Bitmap& bm) {
   if (bm.empty())
     return false;
   return !any<!Bit>(bm);
-}
-
-/// Traverses the 1-bits of a bitmap in conjunction with an iterator range that
-/// represents half-open ID intervals.
-/// @param bm The ID sequence to *select*.
-/// @param begin An iterator to the beginning of the other range.
-/// @param end An iterator to the end of the other range.
-/// @param f A function that transforms *begin* into a half-open interval of IDs
-///          *[x, y)* where *x* is the first and *y* one past the last ID.
-/// @param g A function the performs a user-defined action if the current range
-///          values falls into *(x, y)*, where `(x, y) = f(*begin)` .
-template <class Bitmap, class Iterator, class F, class G>
-caf::error select_with(const Bitmap& bm, Iterator begin, Iterator end, F f, G g) {
-  auto pred = [&](const auto& x, auto y) { return f(x).second < y; };
-  auto lower_bound = [&](Iterator first, Iterator last, auto x) {
-    return std::lower_bound(first, last, x, pred);
-  };
-  for (auto rng = each(bm);
-       rng && begin != end;
-       begin = lower_bound(begin, end, rng.get())) {
-    // Get the current ID interval.
-    auto [first, last] = f(*begin);
-    // Make the ID range catch up if it's behind.
-    if (rng.get() < first) {
-      rng.select_at(first);
-      if (!rng)
-        break;
-    }
-    // If the next ID falls in the current slice, we invoke the processing
-    // function and move forward.
-    if (rng.get() >= first && rng.get() < last) {
-      if (auto error = g(*begin))
-        return error;
-      rng.select_at(last);
-      if (!rng)
-        break;
-    }
-  }
-  return caf::none;
 }
 
 } // namespace vast
