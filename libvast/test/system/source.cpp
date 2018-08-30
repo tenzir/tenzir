@@ -79,9 +79,9 @@ TEST(bro source) {
   MESSAGE("get slices");
   const auto& slices = deref<test_sink_type>(snk).state.slices;
   MESSAGE("collect all rows as values");
-  REQUIRE_EQUAL(slices.size(), 1u);
+  REQUIRE_EQUAL(slices.size(), 3u);
   std::vector<value> row_contents;
-  for (size_t row = 0; row < 1u; ++row) {
+  for (size_t row = 0; row < 3u; ++row) {
     /// The first column is the automagically added timestamp.
     auto xs = subset(*slices[row], 0, table_slice::npos, 1);
     std::move(xs.begin(), xs.end(), std::back_inserter(row_contents));

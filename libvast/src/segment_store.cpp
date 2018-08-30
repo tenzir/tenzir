@@ -85,12 +85,12 @@ caf::expected<std::vector<const_table_slice_handle>>
 segment_store::get(const ids& xs) {
   // Collect candidate segments by seeking through the ID set and
   // probing each ID interval.
-  std::vector<const uuid*> candidates;
+  std::vector<uuid> candidates;
   auto f = [](auto x) { return std::pair{x.left, x.right}; };
   auto g = [&](auto x) {
-    auto ptr = &x.value;
-    if (candidates.empty() || candidates.back() != ptr)
-      candidates.push_back(ptr);
+    auto id = x.value;
+    if (candidates.empty() || candidates.back() != id)
+      candidates.push_back(id);
     return caf::none;
   };
   auto begin = segments_.begin();
@@ -101,7 +101,7 @@ segment_store::get(const ids& xs) {
   std::vector<const_table_slice_handle> result;
   VAST_DEBUG("processing", candidates.size(), "candidates");
   for (auto cand = candidates.rbegin(); cand != candidates.rend(); ++cand) {
-    auto& id = **cand;
+    auto& id = *cand;
     caf::expected<std::vector<const_table_slice_handle>> slices{caf::no_error};
     if (id == builder_.id()) {
       VAST_DEBUG("looking into builder");

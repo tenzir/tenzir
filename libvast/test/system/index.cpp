@@ -141,16 +141,16 @@ TEST(ingestion) {
   MESSAGE("verify partition index");
   REQUIRE_EQUAL(state().part_index.size(), slices.size());
   auto intervals = partition_intervals();
-  CHECK_EQUAL(intervals[0], interval(epoch, epoch + 99s));
-  CHECK_EQUAL(intervals[1], interval(epoch + 100s, epoch + 199s));
-  CHECK_EQUAL(intervals[2], interval(epoch + 200s, epoch + 299s));
-  CHECK_EQUAL(intervals[3], interval(epoch + 300s, epoch + 399s));
-  CHECK_EQUAL(intervals[4], interval(epoch + 400s, epoch + 499s));
-  CHECK_EQUAL(intervals[5], interval(epoch + 500s, epoch + 599s));
-  CHECK_EQUAL(intervals[6], interval(epoch + 600s, epoch + 699s));
-  CHECK_EQUAL(intervals[7], interval(epoch + 700s, epoch + 799s));
-  CHECK_EQUAL(intervals[8], interval(epoch + 800s, epoch + 899s));
-  CHECK_EQUAL(intervals[9], interval(epoch + 900s, epoch + 999s));
+  CHECK_EQUAL(intervals[0], interval(epoch, epoch + 7s));
+  CHECK_EQUAL(intervals[1], interval(epoch + 8s, epoch + 15s));
+  CHECK_EQUAL(intervals[2], interval(epoch + 16s, epoch + 23s));
+  CHECK_EQUAL(intervals[3], interval(epoch + 24s, epoch + 31s));
+  CHECK_EQUAL(intervals[4], interval(epoch + 32s, epoch + 39s));
+  CHECK_EQUAL(intervals[5], interval(epoch + 40s, epoch + 47s));
+  CHECK_EQUAL(intervals[6], interval(epoch + 48s, epoch + 55s));
+  CHECK_EQUAL(intervals[7], interval(epoch + 56s, epoch + 63s));
+  CHECK_EQUAL(intervals[8], interval(epoch + 64s, epoch + 71s));
+  CHECK_EQUAL(intervals[9], interval(epoch + 72s, epoch + 79s));
   // ...
 }
 
