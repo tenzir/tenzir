@@ -64,7 +64,7 @@ auto insert_sorted(std::vector<T>& vec, const T& item, Pred pred) {
 
 } // namespace <anonymous>
 
-size_t events::slice_size = 100;
+size_t events::slice_size = 8;
 
 std::vector<event> events::bro_conn_log;
 std::vector<event> events::bro_dns_log;
@@ -201,8 +201,8 @@ events::events() {
   REQUIRE_EQUAL(bgpdump_txt.size(), 100u);
   random = extract(vast::format::test::reader{42, 1000});
   REQUIRE_EQUAL(random.size(), 1000u);
-  ascending_integers = make_ascending_integers(10000);
-  alternating_integers = make_alternating_integers(10000);
+  ascending_integers = make_ascending_integers(250);
+  alternating_integers = make_alternating_integers(250);
   auto allocate_id_block = [i = id{0}](size_t size) mutable {
     auto first = i;
     i += size;

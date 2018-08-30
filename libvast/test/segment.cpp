@@ -41,13 +41,12 @@ TEST(construction and querying) {
   auto x = *segment;
   CHECK_EQUAL(x->num_slices(), const_bro_conn_log_slices.size());
   MESSAGE("lookup IDs for some segments");
-  auto xs = x->lookup(make_ids({0, 42, 1337, 4711}));
+  auto xs = x->lookup(make_ids({0, 6, 19, 21}));
   REQUIRE(xs);
   auto& slices = *xs;
-  REQUIRE_EQUAL(slices.size(), 3u); // [0,100), [1300,1400), [4700,4800)
+  REQUIRE_EQUAL(slices.size(), 2u); // [0,8), [16,24)
   CHECK_EQUAL(*slices[0], *const_bro_conn_log_slices[0]);
-  CHECK_EQUAL(*slices[1], *const_bro_conn_log_slices[13]);
-  CHECK_EQUAL(*slices[2], *const_bro_conn_log_slices[47]);
+  CHECK_EQUAL(*slices[1], *const_bro_conn_log_slices[2]);
 }
 
 TEST(serialization) {

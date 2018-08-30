@@ -36,9 +36,9 @@ TEST(construction and querying) {
   REQUIRE(store);
   for (auto& slice : const_bro_conn_log_slices)
     REQUIRE(!store->put(slice));
-  auto slices = store->get(make_ids({42, 1337, 8401}));
+  auto slices = store->get(make_ids({0, 6, 19, 21}));
   REQUIRE(slices);
-  REQUIRE_EQUAL(slices->size(), 3u);
+  REQUIRE_EQUAL(slices->size(), 2u);
 }
 
 FIXTURE_SCOPE_END()
