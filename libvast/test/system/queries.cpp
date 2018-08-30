@@ -23,10 +23,10 @@ using namespace vast;
 
 FIXTURE_SCOPE(query_tests, fixtures::node)
 
-TEST_DISABLED(node queries) {
+TEST(node queries) {
   ingest("bro");
-  auto xs = query("proto == \"tcp\"");
-  CHECK_EQUAL(xs.size(), 3135u);
+  CHECK_EQUAL(query("proto == \"udp\"").size(), 20u);
+  CHECK_EQUAL(query("proto == \"tcp\"").size(), 0u);
 }
 
 FIXTURE_SCOPE_END()
