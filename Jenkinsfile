@@ -211,17 +211,19 @@ pipeline {
         success {
             emailext(
                 subject: "✅ $PrettyJobName succeeded",
-                recipientProviders: [culprits(), developers(), requestor(), upstreamDevelopers()],
-                body: "Check console output at ${env.BUILD_URL}.",
+                to: 'engineering@tenzir.com',
+                recipientProviders: [culprits()],
+                body: "Check console output at ${env.BUILD_URL}.\n",
             )
         }
         failure {
             emailext(
                 subject: "⛔️ $PrettyJobName failed",
+                to: 'engineering@tenzir.com',
+                recipientProviders: [culprits()],
                 attachLog: true,
                 compressLog: true,
-                recipientProviders: [culprits(), developers(), requestor(), upstreamDevelopers()],
-                body: "Check console output at ${env.BUILD_URL} or see attached log.",
+                body: "Check console output at ${env.BUILD_URL} or see attached log.\n",
             )
         }
     }
