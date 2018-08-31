@@ -271,8 +271,9 @@ void node_state::init(std::string init_name, path init_dir) {
   name = std::move(init_name);
   dir = std::move(init_dir);
   // Bring up the accountant.
-  auto acc_log = dir / "log" / "current" / "accounting.log";
-  accountant = self->spawn<monitored>(system::accountant, std::move(acc_log));
+  auto accountant_log = dir / "log" / "current" / "accounting.log";
+  accountant = self->spawn<monitored>(system::accountant,
+                                      std::move(accountant_log));
   self->system().registry().put(accountant_atom::value,
                                 actor_cast<strong_actor_ptr>(accountant));
   // Bring up the tracker.

@@ -75,7 +75,7 @@ void record(accountant_actor* self, const std::string& key, T x) {
           << key << '\t'
           << std::setprecision(6) << x << '\n';
   // Flush after at most 10 seconds.
-  if (!self->state.flush_pending) {
+  if (!st.flush_pending) {
     st.flush_pending = true;
     self->delayed_send(self, seconds(10), flush_atom::value);
   }
