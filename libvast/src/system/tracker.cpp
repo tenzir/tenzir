@@ -28,6 +28,86 @@ using namespace caf;
 namespace vast {
 namespace system {
 
+namespace {
+
+struct terminator_state {
+  terminator_state(event_based_actor* selfptr) : self(selfptr) {
+    // nop
+  }
+
+  caf::error reason;
+  actor parent;
+  component_state_map components;
+  std::vector<std::string> victim_stack;
+  size_t pending_down_messages = 0;
+  event_based_actor* self;
+
+  void init(caf::error reason, caf::actor parent,
+            component_state_map components,
+            std::vector<std::string> victim_stack) {
+    this->reason = std::move(reason);
+    this->parent = std::move(parent);
+    this->components = std::move(components);
+    this->victim_stack = std::move(victim_stack);
+  }
+
+  template <class Label>
+  void kill(const caf::actor& whom, const Label& label) {
+    VAST_DEBUG("sending EXIT to", label);
+    self->monitor(whom);
+    self->send_exit(whom, reason);
+    ++pending_down_messages;
+  }
+
+  void kill_next() {
+    do {
+      if (victim_stack.empty()) {
+        if (parent == nullptr) {
+          self->quit();
+          return;
+        }
+        // Kill parent and remaining components last.
+        for (auto i = components.begin(); i != components.end(); ++i)
+          kill(i->second.actor, i->second.label);
+        components.clear();
+        kill(parent, "tracker");
+        parent = nullptr;
+        return;
+      }
+      auto er = components.equal_range(victim_stack.back());
+      for (auto i = er.first; i != er.second; ++i)
+        kill(i->second.actor, i->second.label);
+      components.erase(er.first, er.second);
+      victim_stack.pop_back();
+    } while (pending_down_messages == 0);
+  }
+
+  void got_down_msg() {
+    if (--pending_down_messages == 0)
+      kill_next();
+  }
+};
+
+behavior terminator(stateful_actor<terminator_state>* self, caf::error reason,
+                    caf::actor parent, component_state_map components,
+                    std::vector<std::string> victim_stack) {
+  VAST_DEBUG("started terminator with", victim_stack.size(),
+             "victims on the stack and", components.size(), "in total");
+  self->state.init(std::move(reason), std::move(parent), std::move(components),
+                   std::move(victim_stack));
+  self->state.kill_next();
+  self->set_down_handler([=](const down_msg&) {
+    self->state.got_down_msg();
+  });
+  return {
+    [] {
+      // Dummy message handler to keep the actor alive and kicking.
+    }
+  };
+}
+
+} // namespace <anonymous>
+
 tracker_type::behavior_type
 tracker(tracker_type::stateful_pointer<tracker_state> self, std::string node) {
   self->state.registry.components[node].emplace(
@@ -49,42 +129,16 @@ tracker(tracker_type::stateful_pointer<tracker_state> self, std::string node) {
   );
   self->set_exit_handler(
     [=](const exit_msg& msg) {
-      // We shut down the components in the order in which data flows so that
-      // downstream components can still process in-flight data. This is much
-      // easier to express with a blocking actor than asynchronously with
-      // nesting.
+      // Only trap the first exit, regularly shutdown on the next one.
       self->set_exit_handler({});
-      self->spawn(
-        [=, parent=actor_cast<actor>(self),
-         local=self->state.registry.components[node]]
-        (blocking_actor* terminator) mutable {
-          auto shutdown = [&](auto key) {
-            auto er = local.equal_range(key);
-            for (auto i = er.first; i != er.second; ++i) {
-              VAST_DEBUG("sending EXIT to", i->second.label);
-              terminator->send_exit(i->second.actor, msg.reason);
-              terminator->wait_for(i->second.actor);
-            }
-            local.erase(er.first, er.second);
-          };
-          shutdown("source");
-          shutdown("importer");
-          shutdown("archive");
-          shutdown("index");
-          shutdown("exporter");
-          // For the remaining components, the shutdown order doesn't matter.
-          for (auto& pair : local)
-            if (pair.first != "tracker") { // happens at the very end
-              VAST_DEBUG("sending EXIT to", pair.second.label);
-              terminator->send_exit(pair.second.actor, msg.reason);
-              terminator->wait_for(pair.second.actor);
-            }
-          VAST_DEBUG("sending EXIT to tracker");
-          terminator->send_exit(parent, msg.reason);
-          terminator->wait_for(parent);
-          VAST_DEBUG("completed shutdown of all components");
-        }
-      );
+      // We shut down the components in the order in which data flows so that
+      // downstream components can still process in-flight data. This means we
+      // put those components in reverse order, since the terminator operators
+      // on a stack.
+      self->spawn(terminator, msg.reason, actor_cast<actor>(self),
+                  self->state.registry.components[node],
+                  std::vector<std::string>{"exporter", "index", "archive",
+                                           "importer", "source"});
     }
   );
   return {
