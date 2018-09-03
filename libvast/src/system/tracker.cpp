@@ -53,7 +53,7 @@ struct terminator_state {
 
   template <class Label>
   void kill(const caf::actor& whom, const Label& label) {
-    VAST_DEBUG("sending EXIT to", label);
+    VAST_DEBUG(self, "sends EXIT to", label);
     self->monitor(whom);
     self->send_exit(whom, reason);
     ++pending_down_messages;
@@ -91,7 +91,7 @@ struct terminator_state {
 behavior terminator(stateful_actor<terminator_state>* self, caf::error reason,
                     caf::actor parent, component_state_map components,
                     std::vector<std::string> victim_stack) {
-  VAST_DEBUG("started terminator with", victim_stack.size(),
+  VAST_DEBUG(self, "starts terminator with", victim_stack.size(),
              "victims on the stack and", components.size(), "in total");
   self->state.init(std::move(reason), std::move(parent), std::move(components),
                    std::move(victim_stack));
