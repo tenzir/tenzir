@@ -132,9 +132,9 @@ tracker(tracker_type::stateful_pointer<tracker_state> self, std::string node) {
       // Only trap the first exit, regularly shutdown on the next one.
       self->set_exit_handler({});
       // We shut down the components in the order in which data flows so that
-      // downstream components can still process in-flight data. This means we
-      // put those components in reverse order, since the terminator operators
-      // on a stack.
+      // downstream components can still process in-flight data. Because the
+      // terminator operates with a stack of components, we specify them in
+      // reverse order.
       self->spawn(terminator, msg.reason, actor_cast<actor>(self),
                   self->state.registry.components[node],
                   std::vector<std::string>{"exporter", "index", "archive",
