@@ -67,8 +67,8 @@ struct terminator_state {
           return;
         }
         // Kill parent and remaining components last.
-        for (auto i = components.begin(); i != components.end(); ++i)
-          kill(i->second.actor, i->second.label);
+        for (auto& component : components)
+          kill(component.second.actor, component.second.label);
         components.clear();
         kill(parent, "tracker");
         parent = nullptr;
