@@ -58,8 +58,7 @@ expected<actor> spawn_archive(local_actor* self, options& opts) {
   return actor_cast<actor>(a);
 }
 
-expected<actor> spawn_exporter(stateful_actor<node_state>* self,
-                               options& opts) {
+expected<actor> spawn_exporter(node_actor* self, options& opts) {
   auto max_events = uint64_t{0};
   auto r = opts.params.extract_opts({
     {"continuous,c", "marks a query as continuous"},
@@ -116,8 +115,7 @@ expected<actor> spawn_exporter(stateful_actor<node_state>* self,
   return exp;
 }
 
-expected<actor> spawn_importer(stateful_actor<node_state>* self,
-                               options& opts) {
+expected<actor> spawn_importer(node_actor* self, options& opts) {
   auto ids = size_t{128};
   auto r = opts.params.extract_opts({
     {"ids,n", "number of initial IDs to request (deprecated)", ids},

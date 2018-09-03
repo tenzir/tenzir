@@ -254,42 +254,41 @@ void send(node_ptr self, message args) {
 
 } // namespace <anonymous>
 
-caf::behavior node(node_ptr self, std::string id, path dir) {
-  self->state.dir = std::move(dir);
-  self->state.name = std::move(id);
+node_state::node_state(caf::event_based_actor* selfptr) : self(selfptr) {
+  // nop
+}
+
+node_state::~node_state() {
+  auto err = self->fail_state();
+  if (!err)
+    err = exit_reason::user_shutdown;
+  self->send_exit(tracker, err);
+  self->send_exit(accountant, std::move(err));
+}
+
+void node_state::init(std::string init_name, path init_dir) {
+  // Set member variables.
+  name = std::move(init_name);
+  dir = std::move(init_dir);
   // Bring up the accountant.
-  auto acc_log = self->state.dir / "log" / "current" / "accounting.log";
-  auto acc = self->spawn<monitored>(accountant, std::move(acc_log));
-  auto ptr = actor_cast<strong_actor_ptr>(acc);
-  self->system().registry().put(accountant_atom::value, ptr);
+  auto accountant_log = dir / "log" / "current" / "accounting.log";
+  accountant = self->spawn<monitored>(system::accountant,
+                                      std::move(accountant_log));
+  self->system().registry().put(accountant_atom::value,
+                                actor_cast<strong_actor_ptr>(accountant));
   // Bring up the tracker.
-  self->state.tracker = self->spawn<monitored>(tracker, self->state.name);
+  tracker = self->spawn<monitored>(system::tracker, name);
   self->set_down_handler(
     [=](const down_msg& msg) {
       VAST_IGNORE_UNUSED(msg);
       VAST_DEBUG(self, "got DOWN from", msg.source);
-      self->send_exit(self, exit_reason::user_shutdown);
+      self->quit(msg.reason);
     }
   );
-  self->set_exit_handler(
-    [=](const exit_msg& msg) {
-      self->set_exit_handler({});
-      self->spawn(
-        [=, parent=actor_cast<actor>(self), tracker=self->state.tracker]
-        (blocking_actor* terminator) {
-          VAST_DEBUG("terminating tracker");
-          terminator->send_exit(tracker, msg.reason);
-          terminator->wait_for(tracker);
-          VAST_DEBUG("terminating accountant");
-          terminator->send_exit(acc, msg.reason);
-          terminator->wait_for(acc);
-          VAST_DEBUG("terminating node");
-          terminator->send_exit(parent, msg.reason);
-          VAST_DEBUG("completed shutdown sequence");
-        }
-      );
-    }
-  );
+}
+
+caf::behavior node(node_ptr self, std::string id, path dir) {
+  self->state.init(std::move(id), std::move(dir));
   return {
     [=](const std::string& cmd, message& args) {
       VAST_DEBUG(self, "got command", cmd, deep_to_string(args));

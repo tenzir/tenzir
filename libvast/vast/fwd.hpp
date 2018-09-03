@@ -69,6 +69,12 @@ struct timespan_type;
 struct timestamp_type;
 struct vector_type;
 
+// -- free functions -----------------------------------------------------------
+
+void intrusive_ptr_add_ref(const table_slice*);
+
+void intrusive_ptr_release(const table_slice*);
+
 // -- smart pointers -----------------------------------------------------------
 
 using chunk_ptr = caf::intrusive_ptr<chunk>;

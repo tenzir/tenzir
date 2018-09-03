@@ -115,6 +115,14 @@ caf::error table_slice::deserialize_ptr(caf::deserializer& source,
   return ptr->deserialize(source);
 }
 
+void intrusive_ptr_add_ref(const table_slice* ptr) {
+  intrusive_ptr_add_ref(static_cast<const caf::ref_counted*>(ptr));
+}
+
+void intrusive_ptr_release(const table_slice* ptr) {
+  intrusive_ptr_release(static_cast<const caf::ref_counted*>(ptr));
+}
+
 bool operator==(const table_slice& x, const table_slice& y) {
   if (&x == &y)
     return true;
