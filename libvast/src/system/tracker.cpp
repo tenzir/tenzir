@@ -52,10 +52,10 @@ struct terminator_state {
   }
 
   template <class Label>
-  void kill(const caf::actor& whom, const Label& label) {
+  void kill(const caf::actor& actor, const Label& label) {
     VAST_DEBUG(self, "sends EXIT to", label);
-    self->monitor(whom);
-    self->send_exit(whom, reason);
+    self->monitor(actor);
+    self->send_exit(actor, reason);
     ++pending_down_messages;
   }
 
