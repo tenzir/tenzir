@@ -73,9 +73,6 @@ caf::error segment_store::flush() {
   if (!x)
     return x.error();
   auto seg_ptr = *x;
-  if (!exists(segment_path()))
-    if (auto result = mkdir(segment_path()); !result)
-      return result.error();
   auto filename = segment_path() / to_string(seg_ptr->id());
   if (auto err = save(sys_, filename, seg_ptr))
     return err;
