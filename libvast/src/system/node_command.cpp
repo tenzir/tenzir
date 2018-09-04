@@ -60,30 +60,27 @@ expected<actor> node_command::spawn_node(scoped_actor& self,
   // Pointer to the root command to system::node.
   auto node = self->spawn(system::node, id, abs_dir);
   node_spawned_ = true;
-  if (!get_or<bool>(opts, "bare", false)) {
-    // If we're not in bare mode, we spawn all core actors.
-    auto spawn_component = [&](auto&&... xs) {
-      return [&] {
-        auto result = error{};
-        auto args = make_message(std::move(xs)...);
-        self->request(node, infinite, "spawn", std::move(args)).receive(
-          [](const actor&) { /* nop */ },
-          [&](error& e) { result = std::move(e); }
-        );
-        return result;
-      };
+  auto spawn_component = [&](auto&&... xs) {
+    return [&] {
+      auto result = error{};
+      auto args = make_message(std::move(xs)...);
+      self->request(node, infinite, "spawn", std::move(args)).receive(
+        [](const actor&) { /* nop */ },
+        [&](error& e) { result = std::move(e); }
+      );
+      return result;
     };
-    auto err = error::eval(
-      spawn_component("metastore"),
-      spawn_component("archive"),
-      spawn_component("index"),
-      spawn_component("importer")
-    );
-    if (err) {
-      VAST_ERROR(self->system().render(err));
-      cleanup(node);
-      return err;
-    }
+  };
+  auto err = error::eval(
+    spawn_component("metastore"),
+    spawn_component("archive"),
+    spawn_component("index"),
+    spawn_component("importer")
+  );
+  if (err) {
+    VAST_ERROR(self->system().render(err));
+    cleanup(node);
+    return err;
   }
   return node;
 }
