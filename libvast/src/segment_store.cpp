@@ -11,8 +11,6 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include <caf/make_counted.hpp>
-
 #include "vast/bitmap_algorithms.hpp"
 #include "vast/error.hpp"
 #include "vast/event.hpp"
@@ -37,15 +35,19 @@ namespace vast {
 segment_store_ptr segment_store::make(caf::actor_system& sys, path dir,
                                       size_t max_segment_size,
                                       size_t in_memory_segments) {
+  VAST_TRACE(VAST_ARG(dir), VAST_ARG(max_segment_size),
+             VAST_ARG(in_memory_segments));
   VAST_ASSERT(max_segment_size > 0);
-  auto x = caf::make_counted<segment_store>(
+  auto x = std::make_unique<segment_store>(
     sys, std::move(dir), max_segment_size, in_memory_segments);
   // Materialize meta data of existing segments.
-  if (exists(x->meta_path()))
+  if (exists(x->meta_path())) {
+    VAST_DEBUG("loading segment meta data from", x->meta_path());
     if (auto err = load(sys, x->meta_path(), x->segments_)) {
       VAST_ERROR("failed to unarchive meta data:", sys.render(err));
       return nullptr;
     }
+  }
   return x;
 }
 
@@ -54,37 +56,39 @@ segment_store::~segment_store() {
 }
 
 caf::error segment_store::put(const_table_slice_handle xs) {
+  VAST_TRACE(VAST_ARG(xs));
+  VAST_DEBUG("adding a table slice");
   if (auto error = builder_.add(xs))
     return error;
   if (!segments_.inject(xs->offset(), xs->offset() + xs->rows(), builder_.id()))
     return make_error(ec::unspecified, "failed to update range_map");
   if (builder_.table_slice_bytes() < max_segment_size_)
     return caf::none;
-  // We have exceeded our maximum segment size and now finish
-  auto x = builder_.finish();
-  if (!x)
-    return x.error();
-  auto seg_ptr = *x;
-  if (!exists(segment_path()))
-    if (auto result = mkdir(segment_path()); !result)
-      return result.error();
-  auto filename = segment_path() / to_string(seg_ptr->id());
-  if (auto err = save(sys_, filename, seg_ptr))
-    return err;
-  VAST_DEBUG("wrote new segment to", filename.trim(-3));
-  // Keep new segment in the cache.
-  cache_.emplace(seg_ptr->id(), seg_ptr);
+  // We have exceeded our maximum segment size and now finish.
   return flush();
 }
 
 caf::error segment_store::flush() {
+  auto x = builder_.finish();
+  if (!x)
+    return x.error();
+  auto seg_ptr = *x;
+  auto filename = segment_path() / to_string(seg_ptr->id());
+  if (auto err = save(sys_, filename, seg_ptr))
+    return err;
+  // Keep new segment in the cache.
+  cache_.emplace(seg_ptr->id(), seg_ptr);
+  VAST_DEBUG("wrote new segment to", filename.trim(-3));
+  VAST_DEBUG("saving segment meta data");
   return save(sys_, meta_path(), segments_);
 }
 
 caf::expected<std::vector<const_table_slice_handle>>
 segment_store::get(const ids& xs) {
+  VAST_TRACE(VAST_ARG(xs));
   // Collect candidate segments by seeking through the ID set and
   // probing each ID interval.
+  VAST_DEBUG("getting table slices with ids");
   std::vector<uuid> candidates;
   auto f = [](auto x) { return std::pair{x.left, x.right}; };
   auto g = [&](auto x) {

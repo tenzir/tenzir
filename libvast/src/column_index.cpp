@@ -118,13 +118,6 @@ caf::error column_index::flush_to_disk() {
   auto offset = idx_->offset();
   if (offset == last_flush_)
     return caf::none;
-  // Create parent directory if it doesn't exist.
-  auto dir = filename_.parent();
-  if (!exists(dir)) {
-    auto result = mkdir(dir);
-    if (!result)
-      return result.error();
-  }
   VAST_DEBUG("flush index (" << (offset - last_flush_) << '/' << offset,
              "new/total bits)");
   last_flush_ = offset;

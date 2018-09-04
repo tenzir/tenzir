@@ -200,13 +200,6 @@ caf::error index_state::load_from_disk() {
 
 caf::error index_state::flush_to_disk() {
   VAST_TRACE("");
-  // Create directory if needed.
-  if (!exists(dir)) {
-    if (auto res = mkdir(dir); !res) {
-      VAST_ERROR(self, "was unable create its directory:", VAST_ARG(res));
-      return std::move(res.error());
-    }
-  }
   // Flush meta index to disk.
   if (auto err = save(self->system(), part_index_file(), part_index)) {
     VAST_ERROR(self, "was unable to save meta index:", VAST_ARG(err));

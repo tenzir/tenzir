@@ -14,8 +14,6 @@
 #pragma once
 
 #include <caf/fwd.hpp>
-#include <caf/intrusive_ptr.hpp>
-#include <caf/ref_counted.hpp>
 
 #include "vast/filesystem.hpp"
 #include "vast/fwd.hpp"
@@ -30,10 +28,10 @@
 namespace vast {
 
 /// @relates segment_store
-using segment_store_ptr = caf::intrusive_ptr<segment_store>;
+using segment_store_ptr = std::unique_ptr<segment_store>;
 
 /// A store that keeps its data in terms of segments.
-class segment_store : public store, public caf::ref_counted {
+class segment_store : public store {
 public:
   /// Constructs a segment store.
   /// @param sys A reference to an actor system for table slice

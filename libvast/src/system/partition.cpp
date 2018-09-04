@@ -66,8 +66,6 @@ partition::~partition() noexcept {
 
 caf::error partition::flush_to_disk() {
   if (meta_data_.dirty) {
-    if (!exists(dir_))
-      mkdir(dir_);
     if (auto err = save(sys_, meta_file(), meta_data_))
       return err;
     meta_data_.dirty = false;

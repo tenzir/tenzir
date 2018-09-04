@@ -42,11 +42,13 @@ archive(archive_type::stateful_pointer<archive_state> self,
   // probably makes sense to pass a unique_ptr<stor> directory to the spawn
   // arguments of the actor. This way, users can provide their own store
   // implementation conveniently.
-  self->state.store = std::make_unique<segment_store>(
+  self->state.store = segment_store::make(
     self->system(), dir, max_segment_size, capacity);
+  VAST_ASSERT(self->state.store != nullptr);
   self->set_exit_handler(
     [=](const exit_msg& msg) {
       self->state.store->flush();
+      self->state.store.reset();
       self->quit(msg.reason);
     }
   );
