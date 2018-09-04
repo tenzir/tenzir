@@ -120,23 +120,6 @@ Synopsis:
 
 Start a node at the specified endpoint.
 
-Available *arguments*:
-
-`-b`
-  Run in *bare* mode, i.e., do not spawn any components. Use *bare* mode when
-  you want to create a custom topology. When not specifying this option, `vast`
-  automatically spawns all core components by executing the following commands
-  upon spawning the node:
-
-      vast spawn metastore
-      vast spawn importer
-      vast spawn archive
-      vast spawn index
-
-`-f`
-  Start in foreground, i.e., do not detach from controlling terminal and
-  run in background. If not specified, `vast` calls daemon(3).
-
 ### stop
 
 Synopsis:
@@ -342,7 +325,7 @@ EXAMPLES
 
 Start a node at 10.0.0.1 on port 42000 in the foreground:
 
-    vast -e 10.0.0.1:42000 start -f
+    vast -e 10.0.0.1:42000 start
 
 Send [Bro](http://www.bro.org) logs to the remote node:
 

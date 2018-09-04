@@ -22,7 +22,7 @@ Query a local VAST node and get the result back as PCAP trace:
 
 Start a VAST node in the foreground, listening at 10.0.0.1:
 
-    vast -e 10.0.0.1 start -f
+    vast -e 10.0.0.1 start
 
 Send [Bro](http://www.bro.org) logs to a remote node:
 
