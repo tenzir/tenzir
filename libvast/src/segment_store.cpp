@@ -35,9 +35,9 @@ namespace vast {
 segment_store_ptr segment_store::make(caf::actor_system& sys, path dir,
                                       size_t max_segment_size,
                                       size_t in_memory_segments) {
-  VAST_ASSERT(max_segment_size > 0);
   VAST_TRACE(VAST_ARG(dir), VAST_ARG(max_segment_size),
              VAST_ARG(in_memory_segments));
+  VAST_ASSERT(max_segment_size > 0);
   auto x = std::make_unique<segment_store>(
     sys, std::move(dir), max_segment_size, in_memory_segments);
   // Materialize meta data of existing segments.
@@ -56,8 +56,8 @@ segment_store::~segment_store() {
 }
 
 caf::error segment_store::put(const_table_slice_handle xs) {
-  VAST_DEBUG("adding a table slice");
   VAST_TRACE(VAST_ARG(xs));
+  VAST_DEBUG("adding a table slice");
   if (auto error = builder_.add(xs))
     return error;
   if (!segments_.inject(xs->offset(), xs->offset() + xs->rows(), builder_.id()))
@@ -85,10 +85,10 @@ caf::error segment_store::flush() {
 
 caf::expected<std::vector<const_table_slice_handle>>
 segment_store::get(const ids& xs) {
+  VAST_TRACE(VAST_ARG(xs));
   // Collect candidate segments by seeking through the ID set and
   // probing each ID interval.
   VAST_DEBUG("getting table slices with ids");
-  VAST_TRACE(VAST_ARG(xs));
   std::vector<uuid> candidates;
   auto f = [](auto x) { return std::pair{x.left, x.right}; };
   auto g = [&](auto x) {
