@@ -1,4 +1,4 @@
-.TH VAST 1 "March 07, 2018" 0.1 "Visibility Across Space and Time"
+.TH VAST 1 "September 04, 2018" 0.1 "Visibility Across Space and Time"
 .SH NAME
 .PP
 \fB\fCvast\fR \-\- manage a VAST topology
@@ -105,28 +105,6 @@ Synopsis:
 \fIstart\fP [\fIarguments\fP]
 .PP
 Start a node at the specified endpoint.
-.PP
-Available \fIarguments\fP:
-.TP
-\fB\fC\-b\fR
-Run in \fIbare\fP mode, i.e., do not spawn any components. Use \fIbare\fP mode when
-you want to create a custom topology. When not specifying this option, \fB\fCvast\fR
-automatically spawns all core components by executing the following commands
-upon spawning the node:
-.PP
-.RS
-.nf
-  vast spawn metastore
-  vast spawn importer
-  vast spawn archive
-  vast spawn index
-.fi
-.RE
-.TP
-\fB\fC\-f\fR
-Start in foreground, i.e., do not detach from controlling terminal and
-run in background. If not specified, \fB\fCvast\fR calls 
-.BR daemon (3).
 .SS stop
 .PP
 Synopsis:
@@ -325,7 +303,7 @@ Start a node at 10.0.0.1 on port 42000 in the foreground:
 .PP
 .RS
 .nf
-vast \-e 10.0.0.1:42000 start \-f
+vast \-e 10.0.0.1:42000 start
 .fi
 .RE
 .PP
@@ -349,7 +327,7 @@ Run a historical query, printed in ASCII, limited to at most 10 results:
 .PP
 .RS
 .nf
-vast export ascii \-e 10 :addr in 10.0.0.0/8
+vast export \-e 10 ascii :addr in 10.0.0.0/8
 .fi
 .RE
 .PP
@@ -541,7 +519,7 @@ A type can be a \fIbasic type\fP, a \fIcontainer type\fP or a \fIcompound type\f
 .IP \(bu 2
 \fB\fCset<T>\fR: an unordered mathematical set of instances of type T
 .IP \(bu 2
-\fB\fCtable<T, U>\fR: an associative array that maps instances of type T to type U
+\fB\fCmap<T, U>\fR: an associative array that maps instances of type T to type U
 .RE
 .SS Compound types
 .RS
