@@ -53,6 +53,7 @@ struct terminator_state {
 
   template <class Label>
   void kill(const caf::actor& actor, const Label& label) {
+    VAST_IGNORE_UNUSED(label);
     VAST_DEBUG(self, "sends EXIT to", label);
     self->monitor(actor);
     self->send_exit(actor, reason);

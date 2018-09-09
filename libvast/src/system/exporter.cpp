@@ -305,6 +305,7 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
           handle_batch(candidates);
         },
         [=](caf::unit_t&, const error& err) {
+          VAST_IGNORE_UNUSED(err);
           VAST_ERROR(self, "got error during streaming: ", err);
         }
       );
