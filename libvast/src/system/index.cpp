@@ -11,6 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
+#include <chrono>
 #include <deque>
 #include <unordered_set>
 
@@ -193,7 +194,7 @@ caf::error index_state::load_from_disk() {
                  self->system().render(err));
       return err;
     }
-    VAST_DEBUG(self, "loaded a meta index with", part_index.size(), "entries");
+    VAST_INFO(self, "loaded a meta index with", part_index.size(), "entries");
   }
   return caf::none;
 }
@@ -205,7 +206,7 @@ caf::error index_state::flush_to_disk() {
     VAST_ERROR(self, "was unable to save meta index:", VAST_ARG(err));
     return err;
   } else {
-    VAST_DEBUG(self, "persistet meta index with", part_index.size(), "entries");
+    VAST_INFO(self, "persistet meta index with", part_index.size(), "entries");
   }
   return caf::none;
 }

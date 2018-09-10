@@ -82,9 +82,9 @@ expected<event> reader::read() {
         }
         if (pseudo_realtime_ > 0) {
           pseudo_realtime_ = 0;
-          VAST_WARNING(name(), "ignores pseudo-realtime in live mode");
+          VAST_WARNING(this, "ignores pseudo-realtime in live mode");
         }
-        VAST_INFO(name(), "listens on interface " << i->name);
+        VAST_INFO(this, "listens on interface " << i->name);
         break;
       }
     ::pcap_freealldevs(iface);
@@ -102,15 +102,15 @@ expected<event> reader::read() {
         return make_error(ec::format_error, "failed to open pcap file ",
                           input_, ": ", std::string{buf});
       }
-      VAST_INFO(name(), "reads trace from", input_);
+      VAST_INFO(this, "reads trace from", input_);
       if (pseudo_realtime_ > 0)
-        VAST_INFO(name(), "uses pseudo-realtime factor 1/" << pseudo_realtime_);
+        VAST_INFO(this, "uses pseudo-realtime factor 1/" << pseudo_realtime_);
     }
-    VAST_INFO(name(), "cuts off flows after", cutoff_,
+    VAST_INFO(this, "cuts off flows after", cutoff_,
                     "bytes in each direction");
-    VAST_INFO(name(), "keeps at most", max_flows_, "concurrent flows");
-    VAST_INFO(name(), "evicts flows after", max_age_ << "s of inactivity");
-    VAST_INFO(name(), "expires flow table every", expire_interval_ << "s");
+    VAST_INFO(this, "keeps at most", max_flows_, "concurrent flows");
+    VAST_INFO(this, "evicts flows after", max_age_ << "s of inactivity");
+    VAST_INFO(this, "expires flow table every", expire_interval_ << "s");
   }
   const uint8_t* data;
   pcap_pkthdr* header;
@@ -259,7 +259,7 @@ expected<event> reader::read() {
 #endif
   if (pseudo_realtime_ > 0) {
     if (ts < last_timestamp_) {
-      VAST_WARNING(name(), "encountered non-monotonic packet timestamps:",
+      VAST_WARNING(this, "encountered non-monotonic packet timestamps:",
                    ts.time_since_epoch().count(), '<',
                    last_timestamp_.time_since_epoch().count());
     }
@@ -347,7 +347,7 @@ expected<void> writer::write(const event& e) {
 expected<void> writer::flush() {
   if (!dumper_)
     return make_error(ec::format_error, "pcap dumper not open");
-  VAST_DEBUG(name(), "flushes at packet", total_packets_);
+  VAST_DEBUG(this, "flushes at packet", total_packets_);
   if (::pcap_dump_flush(dumper_) == -1)
     return make_error(ec::format_error, "failed to flush");
   return no_error;

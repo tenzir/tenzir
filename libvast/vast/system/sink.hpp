@@ -71,7 +71,7 @@ caf::behavior sink(caf::stateful_actor<sink_state<Writer>>* self,
       for (auto& x : xs) {
         auto r = self->state.writer.write(x);
         if (!r) {
-          VAST_ERROR(self->system().render(r.error()));
+          VAST_ERROR(self, self->system().render(r.error()));
           self->quit(r.error());
           return;
         }

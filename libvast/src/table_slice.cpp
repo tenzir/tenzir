@@ -76,7 +76,8 @@ table_slice_ptr table_slice::make_ptr(record_type layout,
   using factory_fun = table_slice_ptr (*)(record_type);
   auto val = sys.runtime_settings().get(impl);
   if (!caf::holds_alternative<generic_fun>(val)) {
-    VAST_ERROR("no factory function stored for implementation key", impl);
+    VAST_ERROR_("table_slice",
+                  "has no factory function for implementation key", impl);
     return nullptr;
   }
   auto fun = reinterpret_cast<factory_fun>(caf::get<generic_fun>(val));

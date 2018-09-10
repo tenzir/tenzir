@@ -188,14 +188,14 @@ struct source_state {
         // Skip bogus input that failed to parse.
         auto& err = maybe_e.error();
         if (err == ec::parse_error) {
-          VAST_WARNING(self->system().render(err));
+          VAST_WARNING(self, self->system().render(err));
           continue;
         }
         // Log unexpected errors and when reaching the end of input.
         if (err == ec::end_of_input) {
-          VAST_INFO(self->system().render(err));
+          VAST_INFO(self, self->system().render(err));
         } else {
-          VAST_ERROR(self->system().render(err));
+          VAST_ERROR(self, self->system().render(err));
         }
         /// Produce one final slices if possible.
         for (auto& kvp : builders) {

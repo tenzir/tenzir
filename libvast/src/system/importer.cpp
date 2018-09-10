@@ -192,7 +192,7 @@ public:
     VAST_ASSERT(max_credit >= 0);
     if (max_credit <= desired) {
       // Get more IDs if we're running out.
-      VAST_DEBUG("had to limit acquired credit to", max_credit);
+      VAST_DEBUG(self_, "had to limit acquired credit to", max_credit);
       replenish(self_);
       st.in_flight_slices += max_credit;
       return max_credit;
@@ -299,22 +299,22 @@ behavior importer(stateful_actor<importer_state>* self, path dir,
     [=](stream<importer_state::input_type>& in) {
       auto& st = self->state;
       if (!st.meta_store) {
-        VAST_ERROR("no meta store configured for importer");
+        VAST_ERROR(self, "has no meta store configured");
         return;
       }
-      VAST_INFO("add a new source to the importer");
+      VAST_INFO(self, "adds a new source");
       st.stg->add_inbound_path(in);
     },
     [=](add_atom, const actor& subscriber) {
       auto& st = self->state;
-      VAST_INFO("add a new sink to the importer");
+      VAST_INFO(self, "adds a new sink");
       st.stg->add_outbound_path(subscriber);
     },
     [=](subscribe_atom, flush_atom, actor& listener) {
       VAST_INFO(self, "adds a new 'flush' subscriber");
       auto& st = self->state;
       if (st.stg->inbound_paths().empty() && st.stg->out().clean()) {
-        VAST_DEBUG("all outbound paths clean, send 'flush' immediately");
+        VAST_DEBUG(self, "sends 'flush' immediately");
         self->send(listener, flush_atom::value);
       } else {
         st.flush_listeners.emplace_back(std::move(listener));

@@ -45,7 +45,7 @@ pcap_reader_command::make_source(caf::scoped_actor& self,
                                  argument_iterator end) {
   VAST_UNUSED(begin, end);
   VAST_TRACE(VAST_ARG("args", begin, end));
-  VAST_DEBUG(VAST_ARG(options));
+  VAST_DEBUG(this, "::make_source called with options:", VAST_ARG(options));
   auto input = get_or(options, "read", defaults::command::read_path);
   auto cutoff = get_or(options, "cutoff", defaults::command::cutoff);
   auto flow_max = get_or(options, "flow-max", defaults::command::max_flows);

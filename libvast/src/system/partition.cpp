@@ -46,7 +46,7 @@ partition::partition(caf::actor_system& sys, const path& base_dir, uuid id,
   // are pre-loading all INDEXER types we are aware of.
   if (exists(dir_)) {
     if (auto err = load(sys_, meta_file(), meta_data_)) {
-      VAST_ERROR("unable to read partition meta data:", sys_.render(err));
+      VAST_ERROR(this, "unable to read meta data:", sys_.render(err));
     } else {
       for (auto& kvp : meta_data_.types) {
         // We spawn all INDEXER actors immediately. However, the factory spawns

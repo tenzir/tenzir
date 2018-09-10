@@ -19,7 +19,7 @@
 
 // -- VAST logging macros ------------------------------------------------------
 
-#if defined(CAF_LOG_LEVEL)
+#if defined(VAST_LOG_LEVEL)
 
 #define VAST_LOG_IMPL(lvl, msg) CAF_LOG_IMPL("vast", lvl, msg)
 
@@ -48,34 +48,61 @@
 
 #define VAST_LOG(...) VAST_PP_OVERLOAD(VAST_LOG_, __VA_ARGS__)(__VA_ARGS__)
 
-#if CAF_LOG_LEVEL >= CAF_LOG_LEVEL_TRACE
+namespace vast::detail {
+template <class T>
+std::string get_name(T x) {
+  using Type = std::remove_pointer_t<T>;
+  static_assert(
+    !std::is_same_v<const char*, T>,
+    "const char* is not allowed for the first argument in a logging statement");
+  if constexpr (std::is_same_v<std::string, T>)
+    return x;
+  if constexpr (caf::detail::has_to_string<T>::value)
+    return to_string(*x);
+  return caf::detail::pretty_type_name(typeid(Type));
+}
+} // namespace detail
+#define VAST_LOG_COMPONENT(lvl, m, ...)                                        \
+  VAST_LOG(lvl, ::vast::detail::get_name(m), __VA_ARGS__)
+
+#if VAST_LOG_LEVEL >= CAF_LOG_LEVEL_TRACE
 
 #define VAST_TRACE(...)                                                        \
   VAST_LOG(CAF_LOG_LEVEL_TRACE, "ENTRY", __VA_ARGS__);                         \
   auto CAF_UNIFYN(vast_log_trace_guard_) = ::caf::detail::make_scope_guard(    \
     [=] { VAST_LOG(CAF_LOG_LEVEL_TRACE, "EXIT"); })
 
-#else // CAF_LOG_LEVEL > CAF_LOG_LEVEL_TRACE
+#else // VAST_LOG_LEVEL > CAF_LOG_LEVEL_TRACE
 
 #define VAST_TRACE(...) CAF_VOID_STMT
 
-#endif // CAF_LOG_LEVEL > CAF_LOG_LEVEL_TRACE
+#endif // VAST_LOG_LEVEL > CAF_LOG_LEVEL_TRACE
 
-#else // defined(CAF_LOG_LEVEL)
+#else // defined(VAST_LOG_LEVEL)
 
 #define VAST_LOG(...) CAF_VOID_STMT
 
+#define VAST_LOG_COMPONENT(...) CAF_VOID_STMT
+
 #define VAST_TRACE(...) CAF_VOID_STMT
 
-#endif // defined(CAF_LOG_LEVEL)
+#endif // defined(VAST_LOG_LEVEL)
 
-#define VAST_ERROR(...) VAST_LOG(CAF_LOG_LEVEL_ERROR, __VA_ARGS__)
+#define VAST_ERROR(...) VAST_LOG_COMPONENT(CAF_LOG_LEVEL_ERROR, __VA_ARGS__)
 
-#define VAST_WARNING(...) VAST_LOG(CAF_LOG_LEVEL_WARNING, __VA_ARGS__)
+#define VAST_WARNING(...) VAST_LOG_COMPONENT(CAF_LOG_LEVEL_WARNING, __VA_ARGS__)
 
-#define VAST_INFO(...) VAST_LOG(CAF_LOG_LEVEL_INFO, __VA_ARGS__)
+#define VAST_INFO(...) VAST_LOG_COMPONENT(CAF_LOG_LEVEL_INFO, __VA_ARGS__)
 
-#define VAST_DEBUG(...) VAST_LOG(CAF_LOG_LEVEL_DEBUG, __VA_ARGS__)
+#define VAST_DEBUG(...) VAST_LOG_COMPONENT(CAF_LOG_LEVEL_DEBUG, __VA_ARGS__)
+
+#define VAST_ERROR_(...) VAST_LOG(CAF_LOG_LEVEL_ERROR, __VA_ARGS__)
+
+#define VAST_WARNING_(...) VAST_LOG(CAF_LOG_LEVEL_WARNING, __VA_ARGS__)
+
+#define VAST_INFO_(...) VAST_LOG(CAF_LOG_LEVEL_INFO, __VA_ARGS__)
+
+#define VAST_DEBUG_(...) VAST_LOG(CAF_LOG_LEVEL_DEBUG, __VA_ARGS__)
 
 // -- VAST_ARG utility for formatting log output -------------------------------
 

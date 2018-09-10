@@ -47,7 +47,7 @@ int writer_command_base::run_impl(caf::actor_system& sys,
     self->send_exit(sig_mon, exit_reason::user_shutdown);
   });
   // Spawn a sink.
-  VAST_DEBUG("spawning sink with parameters:", deep_to_string(options));
+  VAST_DEBUG(this, "spawning sink with parameters:", deep_to_string(options));
   auto snk_opt = make_sink(self, options, begin, end);
   if (!snk_opt) {
     std::cerr << "unable to spawn sink: " << sys.render(snk_opt.error())
@@ -70,14 +70,14 @@ int writer_command_base::run_impl(caf::actor_system& sys,
     args += make_message("--unified");
   auto max_events = get_or<uint64_t>(options, "events", 0u);
   args += make_message("-e", std::to_string(max_events));
-  VAST_DEBUG("spawning exporter with parameters:", to_string(args));
+  VAST_DEBUG(this, "spawning exporter with parameters:", to_string(args));
   self->request(node, infinite, "spawn", args).receive(
     [&](const actor& a) {
       exp = a;
     },
     [&](const error& e) {
       VAST_IGNORE_UNUSED(e);
-      VAST_ERROR("failed to spawn exporter:", self->system().render(e));
+      VAST_ERROR(this, "failed to spawn exporter:", self->system().render(e));
     }
   );
   if (!exp) {
@@ -94,15 +94,15 @@ int writer_command_base::run_impl(caf::actor_system& sys,
   self->do_receive(
     [&](const down_msg& msg) {
       if (msg.source == node)  {
-        VAST_DEBUG("received DOWN from node");
+        VAST_DEBUG(this, "received DOWN from node");
         self->send_exit(snk, exit_reason::user_shutdown);
         self->send_exit(exp, exit_reason::user_shutdown);
         rc = 1;
       } else if (msg.source == exp) {
-        VAST_DEBUG("received DOWN from exporter");
+        VAST_DEBUG(this, "received DOWN from exporter");
         self->send_exit(snk, exit_reason::user_shutdown);
       } else if (msg.source == snk) {
-        VAST_DEBUG("received DOWN from sink");
+        VAST_DEBUG(this, "received DOWN from sink");
         self->send_exit(exp, exit_reason::user_shutdown);
         rc = 1;
       } else {
@@ -111,7 +111,7 @@ int writer_command_base::run_impl(caf::actor_system& sys,
       stop = true;
     },
     [&](system::signal_atom, int signal) {
-      VAST_DEBUG("got " << ::strsignal(signal));
+      VAST_DEBUG(this, "got " << ::strsignal(signal));
       if (signal == SIGINT || signal == SIGTERM) {
         self->send_exit(exp, exit_reason::user_shutdown);
         self->send_exit(snk, exit_reason::user_shutdown);

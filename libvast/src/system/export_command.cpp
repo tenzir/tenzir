@@ -30,7 +30,7 @@ export_command::export_command(command* parent, std::string_view name)
 
 int export_command::run_impl(actor_system&, const caf::config_value_map&,
                              argument_iterator, argument_iterator) {
-  VAST_ERROR("export_command::run_impl called");
+  VAST_ERROR(this, "::run_impl called");
   return EXIT_FAILURE;
 }
 

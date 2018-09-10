@@ -49,11 +49,12 @@ operator[](const uuid& partition) const {
 void meta_index::add(const uuid& partition,
                      const const_table_slice_handle& slice) {
   auto& rng = partitions_[partition].range;
+  VAST_DEBUG(this, "meta_index got table slice:", slice);
   // The first column always contains the timestamp.
   for (size_t row = 0; row < slice->rows(); ++row) {
     auto element = slice->at(row, 0);
     if (!element) {
-      VAST_ERROR("cannot access element 0 in row", row);
+      VAST_ERROR(this, "cannot access element 0 in row", row);
       continue;
     }
     if (auto tsv = caf::get_if<view<timestamp>>(&(*element))) {

@@ -42,9 +42,9 @@ segment_store_ptr segment_store::make(caf::actor_system& sys, path dir,
     sys, std::move(dir), max_segment_size, in_memory_segments);
   // Materialize meta data of existing segments.
   if (exists(x->meta_path())) {
-    VAST_DEBUG("loading segment meta data from", x->meta_path());
+    VAST_DEBUG_(__func__, "loading segment meta data from", x->meta_path());
     if (auto err = load(sys, x->meta_path(), x->segments_)) {
-      VAST_ERROR("failed to unarchive meta data:", sys.render(err));
+      VAST_ERROR_(__func__, "failed to unarchive meta data:", sys.render(err));
       return nullptr;
     }
   }
@@ -57,7 +57,7 @@ segment_store::~segment_store() {
 
 caf::error segment_store::put(const_table_slice_handle xs) {
   VAST_TRACE(VAST_ARG(xs));
-  VAST_DEBUG("adding a table slice");
+  VAST_DEBUG(this, "adding a table slice");
   if (auto error = builder_.add(xs))
     return error;
   if (!segments_.inject(xs->offset(), xs->offset() + xs->rows(), builder_.id()))
@@ -78,8 +78,8 @@ caf::error segment_store::flush() {
     return err;
   // Keep new segment in the cache.
   cache_.emplace(seg_ptr->id(), seg_ptr);
-  VAST_DEBUG("wrote new segment to", filename.trim(-3));
-  VAST_DEBUG("saving segment meta data");
+  VAST_DEBUG(this, "wrote new segment to", filename.trim(-3));
+  VAST_DEBUG(this, "saving segment meta data");
   return save(sys_, meta_path(), segments_);
 }
 
@@ -88,7 +88,7 @@ segment_store::get(const ids& xs) {
   VAST_TRACE(VAST_ARG(xs));
   // Collect candidate segments by seeking through the ID set and
   // probing each ID interval.
-  VAST_DEBUG("getting table slices with ids");
+  VAST_DEBUG(this, "getting table slices with ids");
   std::vector<uuid> candidates;
   auto f = [](auto x) { return std::pair{x.left, x.right}; };
   auto g = [&](auto x) {
@@ -103,24 +103,24 @@ segment_store::get(const ids& xs) {
     return error;
   // Process candidates in reverse order for maximum LRU cache hits.
   std::vector<const_table_slice_handle> result;
-  VAST_DEBUG("processing", candidates.size(), "candidates");
+  VAST_DEBUG(this, "processing", candidates.size(), "candidates");
   for (auto cand = candidates.rbegin(); cand != candidates.rend(); ++cand) {
     auto& id = *cand;
     caf::expected<std::vector<const_table_slice_handle>> slices{caf::no_error};
     if (id == builder_.id()) {
-      VAST_DEBUG("looking into builder");
+      VAST_DEBUG(this, "looking into builder");
       slices = builder_.lookup(xs);
     } else {
       segment_ptr seg_ptr = nullptr;
       auto i = cache_.find(id);
       if (i != cache_.end()) {
-        VAST_DEBUG("got cache hit for segment", id);
+        VAST_DEBUG(this, "got cache hit for segment", id);
         seg_ptr = i->second;
       } else {
-        VAST_DEBUG("got cache miss for segment", id);
+        VAST_DEBUG(this, "got cache miss for segment", id);
         auto fname = segment_path() / to_string(id);
         if (auto err = load(sys_, fname, seg_ptr)) {
-          VAST_ERROR("unable to load segment:", sys_.render(err));
+          VAST_ERROR(this, "unable to load segment:", sys_.render(err));
           return err;
         }
         i = cache_.emplace(id, seg_ptr).first;
