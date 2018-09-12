@@ -203,4 +203,38 @@ using detected_or = detector<Default, void, Op, Args...>;
 template <class Default, template<class...> class Op, class... Args>
 using detected_or_t = typename detected_or<Default, Op, Args...>::type;
 
+// -- operator availability --------------------------------------------------
+
+template <typename T>
+using ostream_operator_t
+  = decltype(std::declval<std::ostream&>() << std::declval<T>());
+
+template <typename T>
+inline constexpr bool has_ostream_operator
+  = is_detected_v<ostream_operator_t, T>;
+
+// -- checks for stringification functions -----------------------------------
+
+template <typename T>
+using to_string_t = decltype(to_string(std::declval<T>()));
+
+template <typename T>
+inline constexpr bool has_to_string = is_detected_v<to_string_t, T>;
+
+template <typename T>
+using name_getter_t =
+  typename std::is_convertible<decltype(std::declval<T>().name()),
+                               std::string_view>::type;
+
+template <typename T>
+inline constexpr bool has_name_getter = is_detected_v<name_getter_t, T>;
+
+template <typename T>
+using name_member_t =
+  typename std::is_convertible<decltype(std::declval<T>().name),
+                               std::string_view>::type;
+
+template <typename T>
+inline constexpr bool has_name_member = is_detected_v<name_member_t, T>;
+
 } // namespace vast::detail
