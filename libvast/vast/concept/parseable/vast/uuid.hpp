@@ -23,10 +23,8 @@ namespace vast {
 struct uuid_parser : parser<uuid_parser> {
   using attribute = uuid;
 
-  // TODO: parser for unused type.
-
-  template <class Iterator>
-  bool parse(Iterator& f, const Iterator& l, uuid& a) const {
+  template <class Iterator, class Attribute>
+  bool parse(Iterator& f, const Iterator& l, Attribute& x) const {
     // TODO: convert to declarative parser.
     if (f == l)
       return false;
@@ -39,8 +37,7 @@ struct uuid_parser : parser<uuid_parser> {
       c = *f++;
     }
     auto with_dashes = false;
-    auto i = 0;
-    for (auto& byte : a) {
+    for (auto i = 0; i < 16; ++i) {
       if (i != 0) {
         if (f == l)
           return false;
@@ -57,13 +54,15 @@ struct uuid_parser : parser<uuid_parser> {
           return false;
         c = *f++;
       }
-      byte = lookup(c);
+      if constexpr (std::is_same_v<Attribute, uuid>)
+        x[i] = lookup(c);
       if (f == l)
         return false;
       c = *f++;
-      byte <<= 4;
-      byte |= lookup(c);
-      ++i;
+      if constexpr (std::is_same_v<Attribute, uuid>) {
+        x[i] <<= 4;
+        x[i] |= lookup(c);
+      }
     }
     if (braced) {
       if (f == l)
