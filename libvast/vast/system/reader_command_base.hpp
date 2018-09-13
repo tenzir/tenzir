@@ -13,28 +13,13 @@
 
 #pragma once
 
-#include <memory>
-#include <string>
 #include <string_view>
 
-#include <caf/scoped_actor.hpp>
-#include <caf/typed_actor.hpp>
-#include <caf/typed_event_based_actor.hpp>
-
-#include "vast/expression.hpp"
-#include "vast/logger.hpp"
+#include <caf/actor.hpp>
+#include <caf/expected.hpp>
+#include <caf/fwd.hpp>
 
 #include "vast/system/node_command.hpp"
-#include "vast/system/signal_monitor.hpp"
-#include "vast/system/source.hpp"
-#include "vast/system/tracker.hpp"
-
-#include "vast/concept/parseable/to.hpp"
-
-#include "vast/concept/parseable/vast/expression.hpp"
-#include "vast/concept/parseable/vast/schema.hpp"
-
-#include "vast/detail/make_io_stream.hpp"
 
 namespace vast::system {
 
@@ -56,4 +41,3 @@ protected:
 };
 
 } // namespace vast::system
-
