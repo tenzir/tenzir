@@ -33,7 +33,7 @@ using namespace std::chrono_literals;
 
 import_command::import_command(command* parent, std::string_view name)
   : node_command{parent, name} {
-  // nop
+  add_opt<bool>("blocking,b", "block until the IMPORTER forwarded all data");
 }
 
 int import_command::run_impl(actor_system&, const caf::config_value_map&,

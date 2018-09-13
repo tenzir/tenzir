@@ -42,7 +42,7 @@ namespace vast::system {
 
 reader_command_base::reader_command_base(command* parent, std::string_view name)
   : super(parent, name) {
-  add_opt<bool>("blocking,b", "block until the IMPORTER forwarded all data");
+  // nop
 }
 
 int reader_command_base::run_impl(caf::actor_system& sys,
