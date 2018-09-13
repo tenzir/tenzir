@@ -11,11 +11,6 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-// TODO:
-// - Handle errors/statuses asynchronously
-// - Add mode to use streaming API
-// - Connect to VAST
-
 #include <cstdint>
 #include <iostream>
 #include <string>
@@ -25,6 +20,7 @@
 #include <broker/bro.hh>
 #include <broker/broker.hh>
 
+#include <vast/defaults.hpp>
 #include <vast/error.hpp>
 #include <vast/event.hpp>
 #include <vast/expression.hpp>
@@ -34,13 +30,17 @@
 #include <vast/concept/parseable/vast/expression.hpp>
 #include <vast/concept/parseable/vast/uuid.hpp>
 
+#include <vast/system/writer_command_base.hpp>
+#include <vast/system/sink.hpp>
+
 #include <vast/detail/assert.hpp>
 #include <vast/detail/overload.hpp>
 
 namespace {
 
-constexpr char default_control_topic[] = "/vast/control";
-constexpr char default_data_topic[] = "/vast/data";
+constexpr char control_topic[] = "/vast/control";
+constexpr char data_topic[] = "/vast/data";
+
 constexpr char default_address[] = "localhost";
 constexpr uint16_t default_port = 43000;
 
@@ -51,23 +51,79 @@ public:
     // As a stand-alone application, we reuse the global option group from CAF
     // to avoid unnecessary prefixing.
     opt_group{custom_options_, "global"}
-      .add<std::string>("control-topic,c",
-                        "the topic for exchanging control messages")
-      .add<std::string>("data-topic,d",
-                        "the topic for exchanging data messages")
       .add<uint16_t>("port,p", "the port to listen at or connect to");
   }
 };
 
-// Performs a lookup of a VAST query expression.
-caf::expected<std::vector<broker::data>> lookup(const std::string& expr) {
-  std::cerr << "answering query '" << expr << "'" << std::endl;
-  std::vector<broker::data> result;
-  // TODO: get actual results from VAST.
-  for (auto i : {42, 43, 44, 45, 46})
-    result.emplace_back(broker::vector{i});
-  return result;
+// Constructs a result event for Bro.
+broker::bro::Event make_bro_event(std::string id, broker::data x) {
+  broker::vector args(2);
+  args[0] = std::move(id);
+  args[1] = std::move(x);
+  return {"VAST::result", std::move(args)};
 }
+
+// A VAST writer that publishes the event it gets to a Bro endpoint.
+class bro_writer {
+public:
+  bro_writer() = default;
+
+  bro_writer(broker::endpoint& endpoint, std::string query_id)
+    : endpoint_{&endpoint},
+      query_id_{std::move(query_id)} {
+    // nop
+  }
+
+  caf::expected<void> write(const vast::event& x) {
+    // TODO: publish to Broker endpoint.
+    std::cout << x.type().name() << std::endl;
+    return caf::no_error;
+  }
+
+  caf::expected<void> flush() {
+    return caf::no_error;
+  }
+
+  auto name() const {
+    return "bro-writer";
+  }
+
+private:
+  broker::endpoint* endpoint_;
+  std::string query_id_;
+};
+
+// A custom command that allows us to re-use VAST command dispatching logic in
+// order to issue a query that writes into a sink with a custom format.
+class bro_command : public vast::system::writer_command_base {
+public:
+  bro_command(broker::endpoint& endpoint)
+    : writer_command_base{nullptr, "bro"},
+      endpoint_{endpoint} {
+    // nop
+  }
+
+  // Sets the query ID to the UUID provided by Bro.
+  void query_id(std::string id) {
+    query_id_ = std::move(id);
+  }
+
+protected:
+  caf::expected<caf::actor> make_sink(caf::scoped_actor& self,
+                                      const caf::config_value_map& options,
+                                      argument_iterator begin,
+                                      argument_iterator end) override {
+    VAST_UNUSED(options, begin, end);
+    bro_writer writer{endpoint_, query_id_};
+    return self->spawn(vast::system::sink<bro_writer>, std::move(writer),
+                       vast::defaults::command::max_events);
+  }
+
+private:
+  broker::endpoint& endpoint_;
+  std::string query_id_;
+};
+
 
 // Parses Broker data as Bro event.
 caf::expected<std::pair<std::string, std::string>>
@@ -102,15 +158,23 @@ int main(int argc, char** argv) {
   cfg.parse(argc, argv);
   std::string address = caf::get_or(cfg, "address", default_address);
   uint16_t port = caf::get_or(cfg, "port", default_port);
-  std::string control_topic = caf::get_or<std::string>(cfg, "control-topic",
-                                                       default_control_topic);
-  std::string data_topic = caf::get_or<std::string>(cfg, "data-topic",
-                                                    default_data_topic);
   // Create a Broker endpoint.
   auto endpoint = broker::endpoint{std::move(cfg)};
   endpoint.listen(address, port);
   // Subscribe to the control channel.
   auto subscriber = endpoint.make_subscriber({control_topic});
+  // Connect to VAST via a custom command.
+  bro_command cmd{endpoint};
+  auto& sys = endpoint.system();
+  caf::scoped_actor self{sys};
+  caf::config_value_map opts;
+  auto node = cmd.connect_to_node(self, opts);
+  if (!node) {
+    std::cerr << "failed to connect to VAST: " << sys.render(node.error())
+              << std::endl;
+    return 1;
+  }
+  std::cerr << "connected to VAST successfully" << std::endl;
   // Block until Bro peers with us.
   auto receive_statuses = true;
   auto status_subscriber = endpoint.make_status_subscriber(receive_statuses);
@@ -122,7 +186,7 @@ int main(int argc, char** argv) {
         // timeout
       },
       [&](broker::error error) {
-        std::cerr << to_string(error) << std::endl;
+        std::cerr << sys.render(error) << std::endl;
       },
       [&](broker::status status) {
         if (status == broker::sc::peer_added)
@@ -132,7 +196,7 @@ int main(int argc, char** argv) {
       }
     ), msg);
   };
-  std::cerr << "established peering successfully" << std::endl;
+  std::cerr << "peered with Bro successfully" << std::endl;
   // Process queries from Bro.
   auto done = false;
   while (!done) {
@@ -141,26 +205,19 @@ int main(int argc, char** argv) {
     // Parse the Bro query event.
     auto result = parse_query_event(data);
     if (!result) {
-      std::cerr << to_string(result.error()) << std::endl;
+      std::cerr << sys.render(result.error()) << std::endl;
       return 1;
     }
     auto& [query_id, expression] = *result;
     // Relay the query expression to VAST.
-    auto xs = lookup(expression);
-    if (!xs) {
-      std::cerr << to_string(xs.error()) << std::endl;
-      return 1;
+    cmd.query_id(query_id);
+    auto args = std::vector<std::string>{expression};
+    auto rc = cmd.run(sys, args.begin(), args.end());
+    if (rc != 0) {
+      std::cerr << "failed to dispatch query to VAST" << std::endl;
+      return rc;
     }
-    // Send results back to Bro. A none value signals that the query has
-    // completed.
-    auto make_result_event = [uuid=query_id](auto x) {
-      broker::vector args(2);
-      args[0] = std::move(uuid);
-      args[1] = std::move(x);
-      return broker::bro::Event{"VAST::result", std::move(args)};
-    };
-    for (auto& x : *xs)
-      endpoint.publish(data_topic, make_result_event(std::move(x)));
-    endpoint.publish(data_topic, make_result_event(broker::nil));
+    // A none value signals that the query has completed.
+    endpoint.publish(data_topic, make_bro_event(query_id, broker::nil));
   }
 }
