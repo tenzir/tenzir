@@ -11,32 +11,19 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#ifndef VAST_SYSTEM_RUN_writer_HPP
-#define VAST_SYSTEM_RUN_writer_HPP
-
 #include "vast/system/writer_command_base.hpp"
 
 #include <csignal>
+#include <iostream>
 #include <memory>
 #include <string>
 #include <string_view>
 
 #include <caf/scoped_actor.hpp>
-#include <caf/typed_actor.hpp>
-#include <caf/typed_event_based_actor.hpp>
 
-#include "vast/expression.hpp"
 #include "vast/logger.hpp"
 
-#include "vast/system/node_command.hpp"
 #include "vast/system/signal_monitor.hpp"
-#include "vast/system/source.hpp"
-#include "vast/system/tracker.hpp"
-
-#include "vast/concept/parseable/to.hpp"
-
-#include "vast/concept/parseable/vast/expression.hpp"
-#include "vast/concept/parseable/vast/schema.hpp"
 
 using namespace std::chrono_literals;
 using namespace caf;
@@ -136,5 +123,3 @@ int writer_command_base::run_impl(caf::actor_system& sys,
 }
 
 } // namespace vast::system
-
-#endif

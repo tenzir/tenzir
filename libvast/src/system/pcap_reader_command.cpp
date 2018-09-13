@@ -13,36 +13,23 @@
 
 #include "vast/system/pcap_reader_command.hpp"
 
-#include <memory>
 #include <string>
-#include <string_view>
 
 #include <caf/scoped_actor.hpp>
-#include <caf/typed_actor.hpp>
-#include <caf/typed_event_based_actor.hpp>
 
-#include "vast/concept/parseable/to.hpp"
-#include "vast/concept/parseable/vast/expression.hpp"
-#include "vast/concept/parseable/vast/schema.hpp"
-#include "vast/detail/make_io_stream.hpp"
-#include "vast/expression.hpp"
-#include "vast/format/pcap.hpp"
-#include "vast/logger.hpp"
 #include "vast/defaults.hpp"
-#include "vast/system/reader_command_base.hpp"
-#include "vast/system/reader_command_base.hpp"
-#include "vast/system/signal_monitor.hpp"
-#include "vast/system/source.hpp"
-#include "vast/system/tracker.hpp"
+#include "vast/logger.hpp"
 
-using std::string;
+#include "vast/format/pcap.hpp"
+
+#include "vast/system/source.hpp"
 
 namespace vast::system {
 
 pcap_reader_command::pcap_reader_command(command* parent, std::string_view name)
   : super(parent, name) {
-  add_opt<string>("read,r", "path to input where to read events from");
-  add_opt<string>("schema,s", "path to alternate schema");
+  add_opt<std::string>("read,r", "path to input where to read events from");
+  add_opt<std::string>("schema,s", "path to alternate schema");
   add_opt<bool>("uds,d", "treat -r as listening UNIX domain socket");
   add_opt<size_t>("cutoff,c", "skip flow packets after this many bytes");
   add_opt<size_t>("flow-max,m", "number of concurrent flows to track");

@@ -13,18 +13,7 @@
 
 #include "vast/system/import_command.hpp"
 
-#include <iostream>
-
-#include <caf/all.hpp>
-#include <caf/io/all.hpp>
-#ifdef VAST_USE_OPENSSL
-#include <caf/openssl/all.hpp>
-#endif // VAST_USE_OPENSSL
-
 #include "vast/logger.hpp"
-
-#include "vast/system/signal_monitor.hpp"
-#include "vast/system/spawn.hpp"
 
 using namespace caf;
 
