@@ -26,11 +26,11 @@
 #endif
 
 #include "vast/config.hpp"
-#include "vast/error.hpp"
 
 #include "vast/system/configuration.hpp"
 
 #include "vast/detail/add_message_types.hpp"
+#include "vast/detail/add_error_categories.hpp"
 #include "vast/detail/adjust_resource_consumption.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/detail/system.hpp"
@@ -41,41 +41,11 @@ namespace vast::system {
 
 configuration::configuration() {
   detail::add_message_types(*this);
-  // Load I/O module.
-  load<io::middleman>();
+  detail::add_error_categories(*this);
   // Use 'vast.ini' instead of generic 'caf-application.ini'.
   config_file_path = "vast.ini";
-  // Register VAST's custom types.
-  // Register VAST's custom error type.
-  auto vast_renderer = [](uint8_t x, atom_value, const message& msg) {
-    std::string result;
-    result += "got ";
-    switch (static_cast<ec>(x)) {
-      default:
-        result += to_string(static_cast<ec>(x));
-        break;
-      case ec::unspecified:
-        result += "unspecified error";
-        break;
-    };
-    if (!msg.empty()) {
-      result += ": ";
-      result += deep_to_string(msg);
-    }
-    return result;
-  };
-  auto caf_renderer = [](uint8_t x, atom_value, const message& msg) {
-    std::string result;
-    result += "got caf::";
-    result += to_string(static_cast<sec>(x));
-    if (!msg.empty()) {
-      result += ": ";
-      result += deep_to_string(msg);
-    }
-    return result;
-  };
-  add_error_category(atom("vast"), vast_renderer);
-  add_error_category(atom("system"), caf_renderer);
+  // Load I/O module.
+  load<io::middleman>();
   // GPU acceleration.
 #ifdef VAST_USE_OPENCL
   load<opencl::manager>();

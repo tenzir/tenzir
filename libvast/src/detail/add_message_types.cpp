@@ -34,6 +34,8 @@
 #include "vast/system/replicated_store.hpp"
 #include "vast/system/tracker.hpp"
 
+#include "vast/detail/add_message_types.hpp"
+
 namespace vast::detail {
 
 void add_message_types(caf::actor_system_config& cfg) {
