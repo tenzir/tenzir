@@ -33,6 +33,7 @@
 #include <vast/system/writer_command_base.hpp>
 #include <vast/system/sink.hpp>
 
+#include <vast/detail/add_error_categories.hpp>
 #include <vast/detail/add_message_types.hpp>
 #include <vast/detail/assert.hpp>
 #include <vast/detail/overload.hpp>
@@ -157,6 +158,7 @@ int main(int argc, char** argv) {
   // Parse the command line.
   config cfg;
   vast::detail::add_message_types(cfg);
+  vast::detail::add_error_categories(cfg);
   cfg.parse(argc, argv);
   std::string address = caf::get_or(cfg, "address", default_address);
   uint16_t port = caf::get_or(cfg, "port", default_port);
