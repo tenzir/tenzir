@@ -13,6 +13,8 @@
 
 #include "vast/system/reader_command_base.hpp"
 
+#include <csignal>
+
 #include <caf/scoped_actor.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
