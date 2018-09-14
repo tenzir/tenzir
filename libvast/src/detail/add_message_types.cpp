@@ -28,7 +28,6 @@
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_handle.hpp"
 #include "vast/type.hpp"
-#include "vast/time.hpp"
 #include "vast/uuid.hpp"
 
 #include "vast/system/query_statistics.hpp"
@@ -46,7 +45,6 @@ void add_message_types(caf::actor_system_config& cfg) {
   cfg.add_message_type<relational_operator>("vast::relational_operator");
   cfg.add_message_type<schema>("vast::schema");
   cfg.add_message_type<type>("vast::type");
-  cfg.add_message_type<timespan>("vast::timespan");
   cfg.add_message_type<uuid>("vast::uuid");
   cfg.add_message_type<table_slice_handle>("vast::table_slice_handle");
   cfg.add_message_type<const_table_slice_handle>(

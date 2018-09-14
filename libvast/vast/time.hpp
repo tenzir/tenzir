@@ -16,16 +16,19 @@
 #include <chrono>
 #include <cstdint>
 
+#include <caf/timespan.hpp>
+#include <caf/timestamp.hpp>
+
 namespace vast {
 
 class json;
 
 /// A duration in time with nanosecond resolution.
-using timespan = std::chrono::duration<int64_t, std::nano>;
+using caf::timespan;
 
 /// An absolute point in time with nanosecond resolution. It is capable to
 /// represent +/- 292 years around the UNIX epoch.
-using timestamp = std::chrono::time_point<std::chrono::system_clock, timespan>;
+using caf::timestamp;
 
 /// A helper type to represent fractional time stamps in type `double`.
 using double_seconds = std::chrono::duration<double, std::ratio<1>>;
@@ -37,4 +40,3 @@ bool convert(timestamp tp, double& d);
 bool convert(timestamp tp, json& j);
 
 } // namespace vast
-
