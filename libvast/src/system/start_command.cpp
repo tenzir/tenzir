@@ -84,7 +84,7 @@ int start_command::run_impl(actor_system& sys,
     self->send_exit(node, exit_reason::user_shutdown);
     return EXIT_FAILURE;
   }
-  VAST_INFO_("... listening on", (host ? host : "") << ':' << *bound_port);
+  VAST_INFO_("VAST node is listening on", (host ? host : "") << ':' << *bound_port);
   // Spawn signal handler.
   auto sig_mon = self->spawn<detached>(system::signal_monitor, 750ms, self);
   auto guard = caf::detail::make_scope_guard([&] {

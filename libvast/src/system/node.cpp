@@ -306,7 +306,7 @@ caf::behavior node(node_ptr self, std::string id, path dir) {
         send(self, args);
       } else {
         auto e = make_error(ec::unspecified, "invalid command", cmd);
-        VAST_INFO(self, self->system().render(e));
+        VAST_WARNING(self, self->system().render(e));
         self->make_response_promise().deliver(std::move(e));
       }
     },
@@ -327,7 +327,7 @@ caf::behavior node(node_ptr self, std::string id, path dir) {
     },
     [=](signal_atom, int signal) {
       VAST_IGNORE_UNUSED(signal);
-      VAST_INFO(self, "got signal", ::strsignal(signal));
+      VAST_WARNING(self, "got signal", ::strsignal(signal));
     }
   };
 }

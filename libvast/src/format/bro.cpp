@@ -465,7 +465,7 @@ expected<void> reader::parse_header() {
     size_t i = 0;
     for (auto& f : record_.fields) {
       if (caf::holds_alternative<timestamp_type>(f.type)) {
-        VAST_INFO(this, "auto-detected field", i, "as event timestamp");
+        VAST_DEBUG(this, "auto-detected field", i, "as event timestamp");
         timestamp_field_ = static_cast<int>(i);
         break;
       }

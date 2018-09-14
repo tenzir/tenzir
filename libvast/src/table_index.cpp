@@ -118,7 +118,7 @@ caf::error table_index::add(const const_table_slice_handle& x) {
         auto& value_type = f.trace.back()->type;
         if (!has_skip_attribute(layout())) {
           auto fac = [&] {
-            VAST_DEBUG(this, "making field indexer at offset", f.offset,
+            VAST_DEBUG(this, "makes field indexer at offset", f.offset,
                        "with type", value_type);
             auto dir = key_to_dir(f.key(), data_dir());
             return make_column_index(sys_, dir, value_type, i);

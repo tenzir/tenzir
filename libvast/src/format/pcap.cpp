@@ -84,7 +84,7 @@ expected<event> reader::read() {
           pseudo_realtime_ = 0;
           VAST_WARNING(this, "ignores pseudo-realtime in live mode");
         }
-        VAST_INFO(this, "listens on interface " << i->name);
+        VAST_DEBUG(this, "listens on interface " << i->name);
         break;
       }
     ::pcap_freealldevs(iface);
@@ -102,15 +102,15 @@ expected<event> reader::read() {
         return make_error(ec::format_error, "failed to open pcap file ",
                           input_, ": ", std::string{buf});
       }
-      VAST_INFO(this, "reads trace from", input_);
+      VAST_DEBUG(this, "reads trace from", input_);
       if (pseudo_realtime_ > 0)
-        VAST_INFO(this, "uses pseudo-realtime factor 1/" << pseudo_realtime_);
+        VAST_DEBUG(this, "uses pseudo-realtime factor 1/" << pseudo_realtime_);
     }
-    VAST_INFO(this, "cuts off flows after", cutoff_,
+    VAST_DEBUG(this, "cuts off flows after", cutoff_,
                     "bytes in each direction");
-    VAST_INFO(this, "keeps at most", max_flows_, "concurrent flows");
-    VAST_INFO(this, "evicts flows after", max_age_ << "s of inactivity");
-    VAST_INFO(this, "expires flow table every", expire_interval_ << "s");
+    VAST_DEBUG(this, "keeps at most", max_flows_, "concurrent flows");
+    VAST_DEBUG(this, "evicts flows after", max_age_ << "s of inactivity");
+    VAST_DEBUG(this, "expires flow table every", expire_interval_ << "s");
   }
   const uint8_t* data;
   pcap_pkthdr* header;

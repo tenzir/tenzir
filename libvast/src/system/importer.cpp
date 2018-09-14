@@ -38,9 +38,12 @@ importer_state::~importer_state() {
 }
 
 caf::error importer_state::read_state() {
+  VAST_TRACE("");
   id_generators.clear();
-  if (exists(dir / "available_ids")) {
-    std::ifstream available{to_string(dir / "available_ids")};
+  auto file = dir / "available_ids";
+  if (exists(file)) {
+    VAST_DEBUG(self, "reads persistent state from", to_string(file));
+    std::ifstream available{to_string(file)};
     std::string line;
     while (std::getline(available, line)) {
       id i;
@@ -50,7 +53,8 @@ caf::error importer_state::read_state() {
         VAST_DEBUG(self, "found ID range:", i, "to", last);
         id_generators.emplace_back(i, last);
       } else {
-        VAST_ERROR(self, "invalid file format");
+        VAST_ERROR(self, "got an invalidly formatted persistence file:",
+                   to_string(file));
         return ec::parse_error;
       }
     }
@@ -59,6 +63,7 @@ caf::error importer_state::read_state() {
 }
 
 caf::error importer_state::write_state() {
+  VAST_TRACE("");
   if (id_generators.empty() || available_ids() == 0)
     return caf::none;
   if (!exists(dir)) {
@@ -98,7 +103,7 @@ namespace {
 
 // Asks the metastore for more IDs.
 void replenish(stateful_actor<importer_state>* self) {
-  CAF_LOG_TRACE("");
+  VAST_TRACE("");
   auto& st = self->state;
   // Do nothing if we're already waiting for a response of the meta store.
   if (st.awaiting_ids)
@@ -161,7 +166,7 @@ public:
 
   void process(caf::downstream<output_type>& out,
                std::vector<input_type>& xs) override {
-    CAF_LOG_TRACE(CAF_ARG(xs));
+    VAST_TRACE(VAST_ARG(xs));
     auto& st = self_->state;
     VAST_DEBUG(self_, "has", st.available_ids(), "IDs available");
     VAST_DEBUG(self_, "got", xs.size(), "slices with", st.in_flight_slices,
@@ -176,7 +181,7 @@ public:
   }
 
   int32_t acquire_credit(inbound_path* path, int32_t desired) override {
-    CAF_LOG_TRACE(CAF_ARG(path) << CAF_ARG(desired));
+    VAST_TRACE(VAST_ARG(path) << VAST_ARG(desired));
     CAF_IGNORE_UNUSED(path);
     // This function makes sure that we never hand out more credit than we have
     // IDs available.
@@ -311,7 +316,7 @@ behavior importer(stateful_actor<importer_state>* self, path dir,
       st.stg->add_outbound_path(subscriber);
     },
     [=](subscribe_atom, flush_atom, actor& listener) {
-      VAST_INFO(self, "adds a new 'flush' subscriber");
+      VAST_DEBUG(self, "adds a new 'flush' subscriber");
       auto& st = self->state;
       if (st.stg->inbound_paths().empty() && st.stg->out().clean()) {
         VAST_DEBUG(self, "sends 'flush' immediately");

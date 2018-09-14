@@ -53,7 +53,7 @@ int reader_command_base::run_impl(caf::actor_system& sys,
   if (!node_opt)
     return EXIT_FAILURE;
   auto node = std::move(*node_opt);
-  VAST_INFO(this, "got node");
+  VAST_DEBUG(this, "got node");
   /// Spawn an actor that takes care of CTRL+C and friends.
   auto sig_mon = self->spawn<detached>(system::signal_monitor, 750ms,
                                        actor{self});

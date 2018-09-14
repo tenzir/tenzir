@@ -56,7 +56,7 @@ expected<actor> node_command::spawn_node(scoped_actor& self,
   auto id = get_or(opts, "id", defaults::command::node_id);
   auto dir = get_or(opts, "dir", defaults::command::directory);
   auto abs_dir = path{dir}.complete();
-  VAST_INFO(this, "spawning local node:", id);
+  VAST_DEBUG(this, "spawns local node:", id);
   // Pointer to the root command to system::node.
   auto node = self->spawn(system::node, id, abs_dir);
   node_spawned_ = true;
@@ -99,7 +99,7 @@ node_command::connect_to_node(scoped_actor& self,
     err += endpoint_str;
     return make_error(sec::invalid_argument, std::move(err));
   }
-  VAST_INFO(&self, "connect to remote node:", id);
+  VAST_DEBUG(&self, "connect to remote node:", id);
   auto& sys_cfg = self->system().config();
   auto use_encryption = !sys_cfg.openssl_certificate.empty()
                         || !sys_cfg.openssl_key.empty()
