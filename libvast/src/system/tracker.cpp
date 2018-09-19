@@ -42,9 +42,16 @@ struct terminator_state {
   size_t pending_down_messages = 0;
   event_based_actor* self;
 
+  // Keeps this actor alive until we manually stop it.
+  strong_actor_ptr anchor;
+
+  static inline const char* name = "terminator";
+
   void init(caf::error reason, caf::actor parent,
             component_state_map components,
             std::vector<std::string> victim_stack) {
+    VAST_TRACE(VAST_ARG(components), VAST_ARG(victim_stack));
+    this->anchor = actor_cast<strong_actor_ptr>(self);
     this->reason = std::move(reason);
     this->parent = std::move(parent);
     this->components = std::move(components);
@@ -54,20 +61,23 @@ struct terminator_state {
   template <class Label>
   void kill(const caf::actor& actor, const Label& label) {
     VAST_IGNORE_UNUSED(label);
-    VAST_DEBUG(self, "sends EXIT to", label);
+    VAST_DEBUG(self, "sends exit_msg to", label);
     self->monitor(actor);
     self->send_exit(actor, reason);
     ++pending_down_messages;
   }
 
   void kill_next() {
+    VAST_TRACE("");
     do {
       if (victim_stack.empty()) {
         if (parent == nullptr) {
+          VAST_DEBUG(self, "stops after stopping all components");
+          anchor = nullptr;
           self->quit();
           return;
         }
-        // Kill parent and remaining components last.
+        VAST_DEBUG(self, "kills parent and remaining components");
         for (auto& component : components)
           kill(component.second.actor, component.second.label);
         components.clear();
@@ -84,6 +94,7 @@ struct terminator_state {
   }
 
   void got_down_msg() {
+    VAST_TRACE("");
     if (--pending_down_messages == 0)
       kill_next();
   }
