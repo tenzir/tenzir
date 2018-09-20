@@ -55,6 +55,7 @@ Required dependencies:
 
 Optional dependencies:
 
+- [Broker](https://github.com/bro/broker)
 - [libpcap](http://www.tcpdump.org)
 - [gperftools](http://code.google.com/p/google-perftools)
 - [Doxygen](http://www.doxygen.org)
