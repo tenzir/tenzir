@@ -20,6 +20,7 @@
 #include <broker/bro.hh>
 #include <broker/broker.hh>
 
+#include <vast/data.hpp>
 #include <vast/defaults.hpp>
 #include <vast/error.hpp>
 #include <vast/event.hpp>
@@ -57,12 +58,72 @@ public:
   }
 };
 
-// Constructs a result event for Bro.
-broker::bro::Event make_bro_event(std::string id, broker::data x) {
+/// Converts VAST data to the corresponding Broker type.
+broker::data to_broker(const vast::data& data) {
+  return caf::visit(vast::detail::overload(
+    [](const auto& x) -> broker::data {
+      return x;
+    },
+    [](caf::none_t) -> broker::data {
+      return {};
+    },
+    [](const vast::pattern& x) -> broker::data {
+      return x.string();
+    },
+    [](const vast::address& x) -> broker::data {
+      auto bytes = reinterpret_cast<const uint32_t*>(x.data().data());
+      return broker::address{bytes, broker::address::family::ipv6,
+                             broker::address::byte_order::network};
+    },
+    [](const vast::subnet& x) -> broker::data {
+      auto bytes = reinterpret_cast<const uint32_t*>(x.network().data().data());
+      auto addr = broker::address{bytes, broker::address::family::ipv6,
+                                  broker::address::byte_order::network};
+      return broker::subnet(addr, x.length());
+    },
+    [](vast::port x) -> broker::data {
+      // We rely on the fact that port types don't change...ever.
+      auto protocol = static_cast<broker::port::protocol>(x.type());
+      return broker::port{x.number(), protocol};
+    },
+    [](vast::enumeration x) -> broker::data {
+      return broker::count{x};
+    },
+    [](const vast::vector& xs) -> broker::data {
+      broker::vector result;
+      result.reserve(xs.size());
+      std::transform(xs.begin(), xs.end(), std::back_inserter(result),
+                     [](const auto& x) { return to_broker(x); });
+      return result;
+    },
+    [](const vast::set& xs) -> broker::data {
+      broker::set result;
+      std::transform(xs.begin(), xs.end(), std::inserter(result, result.end()),
+                     [](const auto& x) { return to_broker(x); });
+      return result;
+    },
+    [](const vast::map& xs) -> broker::data {
+      broker::table result;
+      auto f = [](const auto& x) { return std::pair{to_broker(x.first),
+                                                    to_broker(x.second)}; };
+      std::transform(xs.begin(), xs.end(), std::inserter(result, result.end()),
+                     f);
+      return result;
+    }
+  ), data);
+}
+
+// Constructs a result event for Bro from Broker data.
+broker::bro::Event make_bro_event(std::string name, broker::data x) {
   broker::vector args(2);
-  args[0] = std::move(id);
+  args[0] = std::move(name);
   args[1] = std::move(x);
   return {"VAST::result", std::move(args)};
+}
+
+// Constructs a result event for Bro from a VAST event.
+broker::bro::Event make_bro_event(const vast::event& x) {
+  return make_bro_event(x.type().name(), to_broker(x.data()));
 }
 
 // A VAST writer that publishes the event it gets to a Bro endpoint.
@@ -77,8 +138,8 @@ public:
   }
 
   caf::expected<void> write(const vast::event& x) {
-    // TODO: publish to Broker endpoint.
-    std::cout << x.type().name() << std::endl;
+    std::cerr << '.';
+    endpoint_->publish(data_topic, make_bro_event(x));
     return caf::no_error;
   }
 
@@ -110,6 +171,12 @@ public:
     query_id_ = std::move(id);
   }
 
+  /// Retrieves the current sink actor, which terminates when the exporter
+  /// corresponding to the issued query terminates.
+  caf::actor sink() const {
+    return sink_;
+  }
+
 protected:
   caf::expected<caf::actor> make_sink(caf::scoped_actor& self,
                                       const caf::config_value_map& options,
@@ -117,15 +184,16 @@ protected:
                                       argument_iterator end) override {
     VAST_UNUSED(options, begin, end);
     bro_writer writer{endpoint_, query_id_};
-    return self->spawn(vast::system::sink<bro_writer>, std::move(writer),
-                       vast::defaults::command::max_events);
+    sink_ = self->spawn(vast::system::sink<bro_writer>, std::move(writer),
+                        vast::defaults::command::max_events);
+    return sink_;
   }
 
 private:
   broker::endpoint& endpoint_;
   std::string query_id_;
+  caf::actor sink_;
 };
-
 
 // Parses Broker data as Bro event.
 caf::expected<std::pair<std::string, std::string>>
@@ -216,12 +284,21 @@ int main(int argc, char** argv) {
     // Relay the query expression to VAST.
     cmd.query_id(query_id);
     auto args = std::vector<std::string>{expression};
+    std::cerr << "dispatching query to VAST: " << expression << std::endl;
     auto rc = cmd.run(sys, args.begin(), args.end());
     if (rc != 0) {
       std::cerr << "failed to dispatch query to VAST" << std::endl;
       return rc;
     }
-    // A none value signals that the query has completed.
-    endpoint.publish(data_topic, make_bro_event(query_id, broker::nil));
+    // Our Bro command contains a sink, which terminates automatically when the
+    // exporter for the corresponding query has finished. We use this signal to
+    // send the final terminator event to Bro.
+    self->monitor(cmd.sink());
+    self->receive(
+      [&, query_id=query_id](const caf::down_msg&) {
+        std::cerr << "\ncompleted processing of query results" << std::endl;
+        endpoint.publish(data_topic, make_bro_event(query_id, broker::nil));
+      }
+    );
   }
 }
