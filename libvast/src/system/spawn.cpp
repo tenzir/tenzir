@@ -124,9 +124,10 @@ expected<actor> spawn_importer(node_actor* self, options& opts) {
   if (!r.error.empty())
     return make_error(ec::syntax_error, r.error);
   // FIXME: Notify exporters with a continuous query.
-  // TODO: make table slice size configurable
   return self->spawn(importer, opts.dir / opts.label,
-                     defaults::system::table_slice_size);
+                     caf::get_or(self->system().config(),
+                                 "vast.table-slice-size",
+                                 defaults::system::table_slice_size));
 }
 
 expected<actor> spawn_index(local_actor* self, options& opts) {

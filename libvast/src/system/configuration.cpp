@@ -114,6 +114,9 @@ configuration::configuration() {
   load<opencl::manager>();
   add_message_type<std::vector<uint32_t>>("std::vector<uint32_t>");
 #endif
+  opt_group{custom_options_, "vast"}
+  .add<size_t>("table-slice-size",
+               "Maximum size for sources that generate table slices.");
 }
 
 configuration& configuration::parse(int argc, char** argv) {
