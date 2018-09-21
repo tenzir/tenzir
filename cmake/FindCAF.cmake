@@ -22,18 +22,6 @@ if(CAF_FIND_COMPONENTS STREQUAL "")
   message(FATAL_ERROR "FindCAF requires at least one COMPONENT.")
 endif()
 
-macro(add_include_dir new_dir)
-  set(duplicate false)
-  foreach (p ${CAF_INCLUDE_DIRS})
-    if (${p} STREQUAL ${new_dir})
-      set(duplicate true)
-    endif ()
-  endforeach ()
-  if (NOT duplicate)
-    set(CAF_INCLUDE_DIRS ${CAF_INCLUDE_DIRS} ${new_dir})
-  endif()
-endmacro()
-
 # iterate over user-defined components
 foreach (comp ${CAF_FIND_COMPONENTS})
   # we use uppercase letters only for variable names
@@ -83,10 +71,10 @@ foreach (comp ${CAF_FIND_COMPONENTS})
         message(WARNING "Found all.hpp for CAF core, but not build_config.hpp")
         set(CAF_${comp}_FOUND false)
       else()
-        add_include_dir("${caf_build_header_path}")
+        list(APPEND CAF_INCLUDE_DIRS "${caf_build_header_path}")
       endif()
     endif()
-    add_include_dir("${CAF_INCLUDE_DIR_${UPPERCOMP}}")
+    list(APPEND CAF_INCLUDE_DIRS "${CAF_INCLUDE_DIR_${UPPERCOMP}}")
     # look for (.dll|.so|.dylib) file, again giving hints for non-installed CAFs
     # skip probe_event as it is header only
     if (NOT ${comp} STREQUAL "probe_event" AND NOT ${comp} STREQUAL "test")
@@ -113,6 +101,8 @@ foreach (comp ${CAF_FIND_COMPONENTS})
     endif ()
   endif ()
 endforeach ()
+
+list(REMOVE_DUPLICATES CAF_INCLUDE_DIRS)
 
 # let CMake check whether all requested components have been found
 include(FindPackageHandleStandardArgs)
