@@ -15,6 +15,7 @@
 
 #include <caf/logger.hpp>
 
+#include "vast/config.hpp"
 #include "vast/detail/pp.hpp"
 #include "vast/detail/type_traits.hpp"
 
