@@ -95,6 +95,10 @@ public:
     return *idx_;
   }
 
+  bool has_skip_attribute() const noexcept {
+    return has_skip_attribute_;
+  }
+
 protected:
   // -- constructors, destructors, and assignment operators --------------------
 
@@ -102,6 +106,7 @@ protected:
 
   // -- member variables -------------------------------------------------------
 
+  bool has_skip_attribute_;
   type index_type_;
   path filename_;
   std::unique_ptr<value_index> idx_;
