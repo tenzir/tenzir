@@ -42,6 +42,15 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
 
 FIXTURE_SCOPE(column_index_tests, fixture)
 
+TEST(skip attribute) {
+  auto foo_type = integer_type{}.name("foo");
+  auto bar_type = integer_type{}.attributes({{"skip"}}).name("bar");
+  auto foo = unbox(make_column_index(sys, directory, foo_type, 0));
+  auto bar = unbox(make_column_index(sys, directory, bar_type, 1));
+  CHECK_EQUAL(foo->has_skip_attribute(), false);
+  CHECK_EQUAL(bar->has_skip_attribute(), true);
+}
+
 TEST(integer values) {
   MESSAGE("ingest integer values");
   integer_type column_type;

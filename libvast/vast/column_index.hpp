@@ -95,6 +95,10 @@ public:
     return *idx_;
   }
 
+  bool has_skip_attribute() const noexcept {
+    return has_skip_attribute_;
+  }
+
 protected:
   // -- constructors, destructors, and assignment operators --------------------
 

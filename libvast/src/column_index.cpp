@@ -143,7 +143,7 @@ caf::expected<bitmap> column_index::lookup(const predicate& pred) {
 
 column_index::column_index(caf::actor_system& sys, type index_type,
                            path filename)
-  : has_skip_attribute_(has_skip_attribute(index_type)),
+  : has_skip_attribute_(vast::has_skip_attribute(index_type)),
     index_type_(std::move(index_type)),
     filename_(std::move(filename)),
     sys_(sys) {
