@@ -53,7 +53,7 @@ int start_command::run_impl(actor_system& sys,
   auto endpoint_str = get_or(options, "endpoint", defaults::command::endpoint);
   endpoint node_endpoint;
   if (!parsers::endpoint(endpoint_str, node_endpoint)) {
-    VAST_ERROR_("invalid endpoint:", endpoint_str);
+    VAST_ERROR_ANON("invalid endpoint:", endpoint_str);
     return EXIT_FAILURE;
   }
   // Get a convenient and blocking way to interact with actors.
@@ -80,11 +80,11 @@ int start_command::run_impl(actor_system& sys,
   };
   auto bound_port = publish();
   if (!bound_port) {
-    VAST_ERROR_(self->system().render(bound_port.error()));
+    VAST_ERROR_ANON(self->system().render(bound_port.error()));
     self->send_exit(node, exit_reason::user_shutdown);
     return EXIT_FAILURE;
   }
-  VAST_INFO_("VAST node is listening on", (host ? host : "") << ':' << *bound_port);
+  VAST_INFO_ANON("VAST node is listening on", (host ? host : "") << ':' << *bound_port);
   // Spawn signal handler.
   auto sig_mon = self->spawn<detached>(system::signal_monitor, 750ms, self);
   auto guard = caf::detail::make_scope_guard([&] {
@@ -97,13 +97,13 @@ int start_command::run_impl(actor_system& sys,
   self->do_receive(
     [&](const down_msg& msg) {
       VAST_ASSERT(msg.source == node);
-      VAST_DEBUG_("... received DOWN from node");
+      VAST_DEBUG_ANON("... received DOWN from node");
       stop = true;
       if (msg.reason != exit_reason::user_shutdown)
         rc = 1;
     },
     [&](system::signal_atom, int signal) {
-      VAST_DEBUG_("... got " << ::strsignal(signal));
+      VAST_DEBUG_ANON("... got " << ::strsignal(signal));
       if (signal == SIGINT || signal == SIGTERM)
         self->send_exit(node, exit_reason::user_shutdown);
       else

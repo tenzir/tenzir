@@ -47,7 +47,7 @@ int writer_command_base::run_impl(caf::actor_system& sys,
     self->send_exit(sig_mon, exit_reason::user_shutdown);
   });
   // Spawn a sink.
-  VAST_DEBUG(this, "spawning sink with parameters:", deep_to_string(options));
+  VAST_DEBUG(this, "spawns sink with parameters:", deep_to_string(options));
   auto snk_opt = make_sink(self, options, begin, end);
   if (!snk_opt) {
     std::cerr << "unable to spawn sink: " << sys.render(snk_opt.error())
@@ -70,7 +70,7 @@ int writer_command_base::run_impl(caf::actor_system& sys,
     args += make_message("--unified");
   auto max_events = get_or<uint64_t>(options, "events", 0u);
   args += make_message("-e", std::to_string(max_events));
-  VAST_DEBUG(this, "spawning exporter with parameters:", to_string(args));
+  VAST_DEBUG(this, "spawns exporter with parameters:", to_string(args));
   self->request(node, infinite, "spawn", args).receive(
     [&](const actor& a) {
       exp = a;

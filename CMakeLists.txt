@@ -37,9 +37,8 @@ list(GET version_numbers 0 VERSION_MAJOR)
 list(GET version_numbers 1 VERSION_MINOR)
 set(VERSION_MAJ_MIN "${VERSION_MAJOR}.${VERSION_MINOR}")
 
-if (NOT VAST_LOG_LEVEL)
-  set(VAST_LOG_LEVEL "-1")
-endif ()
+set(VAST_LOG_LEVEL "2" CACHE STRING
+    "maximum log level that can be set during runtime execution")
 
 #------------------------------------------------------------------------------
 #                               Compiler Setup

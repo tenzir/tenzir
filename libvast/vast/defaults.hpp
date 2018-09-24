@@ -63,7 +63,7 @@ extern size_t max_flow_age;
 extern size_t max_flows;
 
 /// The unique ID of this node.
-extern std::string node_id;
+extern const char* node_id;
 
 } // namespace command
 

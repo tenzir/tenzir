@@ -75,7 +75,7 @@ int reader_command_base::run_impl(caf::actor_system& sys,
         VAST_ERROR(this, "does not support multiple IMPORTER actors yet");
         stop = true;
       } else {
-        VAST_DEBUG(this, "connecting to importer");
+        VAST_DEBUG(this, "connects to importer");
         importer = er.first->second.actor;
         self->send(src, system::sink_atom::value, importer);
       }

@@ -78,7 +78,7 @@ expected<actor> node_command::spawn_node(scoped_actor& self,
     spawn_component("importer")
   );
   if (err) {
-    VAST_ERROR(&self, self->system().render(err));
+    VAST_ERROR(self, self->system().render(err));
     cleanup(node);
     return err;
   }
@@ -99,7 +99,7 @@ node_command::connect_to_node(scoped_actor& self,
     err += endpoint_str;
     return make_error(sec::invalid_argument, std::move(err));
   }
-  VAST_DEBUG(&self, "connect to remote node:", id);
+  VAST_DEBUG(self, "connects to remote node:", id);
   auto& sys_cfg = self->system().config();
   auto use_encryption = !sys_cfg.openssl_certificate.empty()
                         || !sys_cfg.openssl_key.empty()
@@ -109,7 +109,7 @@ node_command::connect_to_node(scoped_actor& self,
   auto host = node_endpoint.host;
   if (node_endpoint.host.empty())
     node_endpoint.host = "127.0.0.1";
-  VAST_INFO(&self, "connecting to", node_endpoint.host << ':' << node_endpoint.port);
+  VAST_INFO(self, "connects to", node_endpoint.host << ':' << node_endpoint.port);
   if (use_encryption) {
 #ifdef VAST_USE_OPENSSL
     return openssl::remote_actor(self->system(), node_endpoint.host,

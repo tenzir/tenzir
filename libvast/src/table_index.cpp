@@ -261,7 +261,7 @@ caf::expected<bitmap> table_index::lookup_impl(const predicate& pred,
     // Redirect to ordinary data lookup on column 0.
     return lookup_impl(pred, dx, x);
   }
-  VAST_WARNING(this, "unsupported attribute:", ex.attr);
+  VAST_WARNING(this, "got unsupported attribute:", ex.attr);
   return ec::invalid_query;
 }
 
@@ -280,7 +280,7 @@ caf::expected<bitmap> table_index::lookup_impl(const predicate& pred,
   VAST_ASSERT(t);
   auto index = r.flat_index_at(dx.offset);
   if (!index) {
-    VAST_DEBUG(this, "invalid offset for record type", dx.type);
+    VAST_DEBUG(this, "got invalid offset for record type", dx.type);
     return bitmap{};
   }
   auto fac = [&] {

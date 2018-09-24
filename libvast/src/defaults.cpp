@@ -38,7 +38,7 @@ size_t flush_interval = 10000;
 size_t max_events = 0;
 size_t max_flow_age = 60;
 size_t max_flows = 1_Mi;
-std::string node_id = std::string{detail::split(detail::hostname(), ".")[0]};
+const char* node_id = "node";
 
 } // namespace command
 

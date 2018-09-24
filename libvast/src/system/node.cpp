@@ -306,7 +306,7 @@ caf::behavior node(node_ptr self, std::string id, path dir) {
         send(self, args);
       } else {
         auto e = make_error(ec::unspecified, "invalid command", cmd);
-        VAST_WARNING(self, self->system().render(e));
+        VAST_WARNING(self, "failed to parse command:", self->system().render(e));
         self->make_response_promise().deliver(std::move(e));
       }
     },

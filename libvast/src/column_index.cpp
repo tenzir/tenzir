@@ -99,7 +99,7 @@ caf::error column_index::init() {
   if (exists(filename_)) {
     detail::value_index_inspect_helper tmp{index_type_, idx_};
     if (auto err = load(sys_, filename_, last_flush_, tmp)) {
-      VAST_ERROR(this, "unable to load value index from disk", sys_.render(err));
+      VAST_ERROR(this, "failed to load value index from disk", sys_.render(err));
       return err;
     } else {
       VAST_DEBUG(this, "loaded value index with offset", idx_->offset());
@@ -122,7 +122,7 @@ caf::error column_index::flush_to_disk() {
   auto offset = idx_->offset();
   if (offset == last_flush_)
     return caf::none;
-  VAST_DEBUG(this, "flush index (" << (offset - last_flush_) << '/' << offset,
+  VAST_DEBUG(this, "flushes index (" << (offset - last_flush_) << '/' << offset,
              "new/total bits)");
   last_flush_ = offset;
   detail::value_index_inspect_helper tmp{index_type_, idx_};
