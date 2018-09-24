@@ -47,6 +47,8 @@ caf::expected<column_index_ptr> make_type_column_index(caf::actor_system& sys,
 
     void add(const const_table_slice_handle& x) override {
       VAST_TRACE(VAST_ARG(x));
+      if (has_skip_attribute_)
+        return;
       auto tn = x->layout().name();
       auto offset = x->offset();
       for (table_slice::size_type row = 0; row < x->rows(); ++row)
@@ -69,6 +71,8 @@ caf::expected<column_index_ptr> make_column_index(caf::actor_system& sys,
 
     void add(const const_table_slice_handle& x) override {
       VAST_TRACE(VAST_ARG(x));
+      if (has_skip_attribute_)
+        return;
       auto offset = x->offset();
       for (table_slice::size_type row = 0; row < x->rows(); ++row)
         if (auto element = x->at(row, col_))
@@ -139,7 +143,8 @@ caf::expected<bitmap> column_index::lookup(const predicate& pred) {
 
 column_index::column_index(caf::actor_system& sys, type index_type,
                            path filename)
-  : index_type_(std::move(index_type)),
+  : has_skip_attribute_(has_skip_attribute(index_type)),
+    index_type_(std::move(index_type)),
     filename_(std::move(filename)),
     sys_(sys) {
   // nop

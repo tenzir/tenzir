@@ -102,6 +102,7 @@ protected:
 
   // -- member variables -------------------------------------------------------
 
+  bool has_skip_attribute_;
   type index_type_;
   path filename_;
   std::unique_ptr<value_index> idx_;
