@@ -51,7 +51,7 @@ Required dependencies:
   - Clang >= 6
   - Apple Clang >= 9.1
 - [CMake](http://www.cmake.org)
-- [CAF](https://github.com/actor-framework/actor-framework) (develop branch)
+- [CAF](https://github.com/actor-framework/actor-framework) (master branch)
 
 Optional dependencies:
 
