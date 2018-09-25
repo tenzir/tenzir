@@ -15,6 +15,9 @@
 #include <string>
 
 #include <caf/actor_system_config.hpp>
+#include <caf/deep_to_string.hpp>
+#include <caf/meta/omittable_if_empty.hpp>
+#include <caf/meta/type_name.hpp>
 
 #include "vast/error.hpp"
 
@@ -25,23 +28,10 @@ using namespace caf;
 namespace vast::detail {
 
 void add_error_categories(caf::actor_system_config& cfg) {
-  // Register VAST's custom error type.
   auto vast_renderer = [](uint8_t x, atom_value, const message& msg) {
-    std::string result;
-    result += "got ";
-    switch (static_cast<ec>(x)) {
-      default:
-        result += to_string(static_cast<ec>(x));
-        break;
-      case ec::unspecified:
-        result += "unspecified error";
-        break;
-    };
-    if (!msg.empty()) {
-      result += ": ";
-      result += deep_to_string(msg);
-    }
-    return result;
+    return caf::deep_to_string(caf::meta::type_name("vast.ec"),
+                               static_cast<ec>(x),
+                               caf::meta::omittable_if_empty(), msg);
   };
   auto caf_renderer = [](uint8_t x, atom_value, const message& msg) {
     std::string result;
