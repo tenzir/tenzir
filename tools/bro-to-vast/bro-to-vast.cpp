@@ -87,6 +87,12 @@ broker::data to_broker(const vast::data& data) {
       return broker::port{x.number(), protocol};
     },
     [](vast::enumeration x) -> broker::data {
+      // FIXME: here we face two different implementation approaches for enums.
+      // To represent the actual enum value, Broker uses a string whereas VAST
+      // uses a 32-bit unsigned integer. We currently lose the type information
+      // by converting the VAST enum into a Broker count. A wholistic approach
+      // would include the type information for this data instance and perform
+      // the string conversion.
       return broker::count{x};
     },
     [](const vast::vector& xs) -> broker::data {
