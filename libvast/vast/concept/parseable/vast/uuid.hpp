@@ -37,7 +37,7 @@ struct uuid_parser : parser<uuid_parser> {
       c = *f++;
     }
     auto with_dashes = false;
-    for (auto i = 0; i < 16; ++i) {
+    for (auto i = 0; i < uuid::num_bytes; ++i) {
       if (i != 0) {
         if (f == l)
           return false;

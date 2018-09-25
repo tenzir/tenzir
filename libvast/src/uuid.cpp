@@ -91,7 +91,7 @@ uuid::const_iterator uuid::end() const {
 }
 
 uuid::size_type uuid::size() const {
-  return 16;
+  return num_bytes;
 }
 
 void uuid::swap(uuid& other) {

@@ -28,6 +28,9 @@ class uuid : detail::totally_ordered<uuid> {
   friend access;
 
 public:
+  /// The number of bytes in a UUID;
+  static constexpr int num_bytes = 16;
+
   using value_type = uint8_t;
   using reference = value_type&;
   using const_reference = const value_type&;
@@ -60,7 +63,7 @@ public:
   }
 
 private:
-  std::array<value_type, 16> id_;
+  std::array<value_type, num_bytes> id_;
 };
 
 } // namespace vast
