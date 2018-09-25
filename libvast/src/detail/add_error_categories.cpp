@@ -11,32 +11,29 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#pragma once
-
-#include <chrono>
 #include <cstdint>
+#include <string>
 
-#include <caf/timespan.hpp>
-#include <caf/timestamp.hpp>
+#include <caf/actor_system_config.hpp>
+#include <caf/deep_to_string.hpp>
+#include <caf/meta/omittable_if_empty.hpp>
+#include <caf/meta/type_name.hpp>
 
-namespace vast {
+#include "vast/error.hpp"
 
-class json;
+#include "vast/detail/add_error_categories.hpp"
 
-/// A duration in time with nanosecond resolution.
-using caf::timespan;
+using namespace caf;
 
-/// An absolute point in time with nanosecond resolution. It is capable to
-/// represent +/- 292 years around the UNIX epoch.
-using caf::timestamp;
+namespace vast::detail {
 
-/// A helper type to represent fractional time stamps in type `double`.
-using double_seconds = std::chrono::duration<double, std::ratio<1>>;
+void add_error_categories(caf::actor_system_config& cfg) {
+  auto vast_renderer = [](uint8_t x, atom_value, const message& msg) {
+    return caf::deep_to_string(caf::meta::type_name("vast.ec"),
+                               static_cast<ec>(x),
+                               caf::meta::omittable_if_empty(), msg);
+  };
+  cfg.add_error_category(atom("vast"), vast_renderer);
+}
 
-bool convert(timespan dur, double& d);
-bool convert(timespan dur, json& j);
-
-bool convert(timestamp tp, double& d);
-bool convert(timestamp tp, json& j);
-
-} // namespace vast
+} // namespace vast::detail

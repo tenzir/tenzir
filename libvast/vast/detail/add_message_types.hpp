@@ -1,3 +1,4 @@
+
 /******************************************************************************
  *                    _   _____   __________                                  *
  *                   | | / / _ | / __/_  __/     Visibility                   *
@@ -13,30 +14,12 @@
 
 #pragma once
 
-#include <chrono>
-#include <cstdint>
+#include <caf/fwd.hpp>
 
-#include <caf/timespan.hpp>
-#include <caf/timestamp.hpp>
+namespace vast::detail {
 
-namespace vast {
+/// Adds VAST's message type to a CAF actor system configuration.
+/// @param cfg The actor system configuration to add VAST's types to.
+void add_message_types(caf::actor_system_config& cfg);
 
-class json;
-
-/// A duration in time with nanosecond resolution.
-using caf::timespan;
-
-/// An absolute point in time with nanosecond resolution. It is capable to
-/// represent +/- 292 years around the UNIX epoch.
-using caf::timestamp;
-
-/// A helper type to represent fractional time stamps in type `double`.
-using double_seconds = std::chrono::duration<double, std::ratio<1>>;
-
-bool convert(timespan dur, double& d);
-bool convert(timespan dur, json& j);
-
-bool convert(timestamp tp, double& d);
-bool convert(timestamp tp, json& j);
-
-} // namespace vast
+} // namespace vast::detail
