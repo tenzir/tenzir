@@ -33,18 +33,7 @@ void add_error_categories(caf::actor_system_config& cfg) {
                                static_cast<ec>(x),
                                caf::meta::omittable_if_empty(), msg);
   };
-  auto caf_renderer = [](uint8_t x, atom_value, const message& msg) {
-    std::string result;
-    result += "got caf::";
-    result += to_string(static_cast<sec>(x));
-    if (!msg.empty()) {
-      result += ": ";
-      result += deep_to_string(msg);
-    }
-    return result;
-  };
   cfg.add_error_category(atom("vast"), vast_renderer);
-  cfg.add_error_category(atom("system"), caf_renderer);
 }
 
 } // namespace vast::detail
