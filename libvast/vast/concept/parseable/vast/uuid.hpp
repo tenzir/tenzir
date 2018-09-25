@@ -59,10 +59,8 @@ struct uuid_parser : parser<uuid_parser> {
       if (f == l)
         return false;
       c = *f++;
-      if constexpr (std::is_same_v<Attribute, uuid>) {
-        x[i] <<= 4;
-        x[i] |= lookup(c);
-      }
+      if constexpr (std::is_same_v<Attribute, uuid>)
+        x[i] = (x[i] << 4) | lookup(c);
     }
     if (braced) {
       if (f == l)
