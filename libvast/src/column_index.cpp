@@ -99,20 +99,20 @@ caf::error column_index::init() {
   if (exists(filename_)) {
     detail::value_index_inspect_helper tmp{index_type_, idx_};
     if (auto err = load(sys_, filename_, last_flush_, tmp)) {
-      VAST_ERROR("unable to load value index from disk", sys_.render(err));
+      VAST_ERROR(this, "failed to load value index from disk", sys_.render(err));
       return err;
     } else {
-      VAST_DEBUG("loaded value index with offset", idx_->offset());
+      VAST_DEBUG(this, "loaded value index with offset", idx_->offset());
     }
     return caf::none;
   }
   // Otherwise construct a new one.
   idx_ = value_index::make(index_type_);
   if (idx_ == nullptr) {
-    VAST_ERROR("failed to construct index");
+    VAST_ERROR(this, "failed to construct index");
     return make_error(ec::unspecified, "failed to construct index");
   }
-  VAST_DEBUG("constructed new value index");
+  VAST_DEBUG(this, "constructed new value index");
   return caf::none;
 }
 
@@ -122,7 +122,7 @@ caf::error column_index::flush_to_disk() {
   auto offset = idx_->offset();
   if (offset == last_flush_)
     return caf::none;
-  VAST_DEBUG("flush index (" << (offset - last_flush_) << '/' << offset,
+  VAST_DEBUG(this, "flushes index (" << (offset - last_flush_) << '/' << offset,
              "new/total bits)");
   last_flush_ = offset;
   detail::value_index_inspect_helper tmp{index_type_, idx_};
@@ -135,7 +135,7 @@ caf::expected<bitmap> column_index::lookup(const predicate& pred) {
   VAST_TRACE(VAST_ARG(pred));
   VAST_ASSERT(idx_ != nullptr);
   auto result = idx_->lookup(pred.op, make_data_view(caf::get<data>(pred.rhs)));
-  VAST_DEBUG(VAST_ARG(result));
+  VAST_DEBUG(this, VAST_ARG(result));
   return result;
 }
 

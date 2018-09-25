@@ -11,6 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
+#include <chrono>
 #include <deque>
 #include <unordered_set>
 
@@ -49,6 +50,7 @@ namespace {
 /// Maps partition IDs to INDEXER actors for resolving a query.
 using query_map = caf::detail::unordered_flat_map<uuid, std::vector<actor>>;
 
+[[maybe_unused]]
 auto get_ids(query_map& xs) {
   std::vector<uuid> ys;
   ys.reserve(xs.size());
@@ -193,7 +195,7 @@ caf::error index_state::load_from_disk() {
                  self->system().render(err));
       return err;
     }
-    VAST_DEBUG(self, "loaded a meta index with", part_index.size(), "entries");
+    VAST_INFO(self, "loaded a meta index with", part_index.size(), "entries");
   }
   return caf::none;
 }
@@ -205,7 +207,7 @@ caf::error index_state::flush_to_disk() {
     VAST_ERROR(self, "was unable to save meta index:", VAST_ARG(err));
     return err;
   } else {
-    VAST_DEBUG(self, "persistet meta index with", part_index.size(), "entries");
+    VAST_INFO(self, "persisted meta index with", part_index.size(), "entries");
   }
   return caf::none;
 }
@@ -229,8 +231,8 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
                size_t taste_partitions, size_t num_workers) {
   VAST_ASSERT(partition_size > 0);
   VAST_ASSERT(in_mem_partitions > 0);
-  VAST_DEBUG(self, "caps partitions at", partition_size, "events");
-  VAST_DEBUG(self, "keeps at most", in_mem_partitions, "partitions in memory");
+  VAST_INFO(self, "spawned:", VAST_ARG(partition_size),
+            VAST_ARG(in_mem_partitions), VAST_ARG(taste_partitions));
   if (auto err = self->state.init(self, dir, partition_size, in_mem_partitions,
                                   taste_partitions)) {
     self->quit(std::move(err));

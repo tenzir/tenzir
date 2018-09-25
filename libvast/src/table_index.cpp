@@ -118,8 +118,8 @@ caf::error table_index::add(const const_table_slice_handle& x) {
         auto& value_type = f.trace.back()->type;
         if (!has_skip_attribute(layout())) {
           auto fac = [&] {
-            VAST_DEBUG("make field indexer at offset", f.offset, "with type",
-                       value_type);
+            VAST_DEBUG(this, "makes field indexer at offset", f.offset,
+                       "with type", value_type);
             auto dir = key_to_dir(f.key(), data_dir());
             return make_column_index(sys_, dir, value_type, i);
           };
@@ -261,7 +261,7 @@ caf::expected<bitmap> table_index::lookup_impl(const predicate& pred,
     // Redirect to ordinary data lookup on column 0.
     return lookup_impl(pred, dx, x);
   }
-  VAST_WARNING("unsupported attribute:", ex.attr);
+  VAST_WARNING(this, "got unsupported attribute:", ex.attr);
   return ec::invalid_query;
 }
 
@@ -280,7 +280,7 @@ caf::expected<bitmap> table_index::lookup_impl(const predicate& pred,
   VAST_ASSERT(t);
   auto index = r.flat_index_at(dx.offset);
   if (!index) {
-    VAST_DEBUG("invalid offset for record type", dx.type);
+    VAST_DEBUG(this, "got invalid offset for record type", dx.type);
     return bitmap{};
   }
   auto fac = [&] {

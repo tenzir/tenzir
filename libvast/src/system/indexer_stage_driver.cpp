@@ -52,7 +52,7 @@ void indexer_stage_driver::process(downstream_type& out, batch_type& slices) {
     auto& layout = slice->layout();
     if (auto [hdl, added] = partition_->manager().get_or_add(layout); added) {
       auto slot = out_.parent()->add_unchecked_outbound_path<output_type>(hdl);
-      VAST_DEBUG("spawned new INDEXER at slot", slot);
+      VAST_DEBUG(this, "spawned new INDEXER at slot", slot);
       out_.set_filter(slot, layout);
     }
     // Ship event to the INDEXER actors.
@@ -60,7 +60,8 @@ void indexer_stage_driver::process(downstream_type& out, batch_type& slices) {
     out.push(std::move(slice));
     // Reset the manager and all outbound paths when finalizing a partition.
     if (remaining_in_partition_ <= slice_size) {
-      VAST_DEBUG("partition full, close slots", out_.open_path_slots());
+      VAST_DEBUG(this, "closes slots on full partition",
+                 out_.open_path_slots());
       VAST_ASSERT(out_.buf().size() != 0);
       out_.fan_out_flush();
       VAST_ASSERT(out_.buf().size() == 0);

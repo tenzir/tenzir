@@ -44,7 +44,7 @@ public:
       VAST_ASSERT(a != nullptr);
       auto resolved = caf::visit(type_resolver{t}, expr);
       if (resolved && caf::visit(matcher{t}, *resolved)) {
-        VAST_DEBUG("found matching type for expression:", t);
+        VAST_DEBUG(this, "found matching type for expression:", t);
         f(a);
         ++num;
       }

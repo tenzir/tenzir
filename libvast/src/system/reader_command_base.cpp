@@ -53,7 +53,7 @@ int reader_command_base::run_impl(caf::actor_system& sys,
   if (!node_opt)
     return EXIT_FAILURE;
   auto node = std::move(*node_opt);
-  VAST_INFO("got node");
+  VAST_DEBUG(this, "got node");
   /// Spawn an actor that takes care of CTRL+C and friends.
   auto sig_mon = self->spawn<detached>(system::signal_monitor, 750ms,
                                        actor{self});
@@ -69,20 +69,20 @@ int reader_command_base::run_impl(caf::actor_system& sys,
     [&](const std::string& id, system::registry& reg) {
       auto er = reg.components[id].equal_range("importer");
       if (er.first == er.second) {
-        VAST_ERROR("no importers available at node", id);
+        VAST_ERROR(this, "did not receive any importers from node", id);
         stop = true;
       } else if (reg.components[id].count("importer") > 1) {
-        VAST_ERROR("multiple IMPOTER actors are not yet supported");
+        VAST_ERROR(this, "does not support multiple IMPORTER actors yet");
         stop = true;
       } else {
-        VAST_DEBUG("connecting source to importer");
+        VAST_DEBUG(this, "connects to importer");
         importer = er.first->second.actor;
         self->send(src, system::sink_atom::value, importer);
       }
     },
     [&](const error& e) {
       VAST_IGNORE_UNUSED(e);
-      VAST_ERROR(self->system().render(e));
+      VAST_ERROR(this, self->system().render(e));
       stop = true;
     }
   );
@@ -97,12 +97,12 @@ int reader_command_base::run_impl(caf::actor_system& sys,
   self->do_receive(
     [&](const down_msg& msg) {
       if (msg.source == node)  {
-        VAST_DEBUG("received DOWN from node");
+        VAST_DEBUG(this, "received DOWN from node");
         self->send_exit(src, exit_reason::user_shutdown);
         rc = EXIT_FAILURE;
         stop = true;
       } else if (msg.source == src) {
-        VAST_DEBUG("received DOWN from source");
+        VAST_DEBUG(this, "received DOWN from source");
         if (caf::get_or(options, "blocking", false))
           self->send(importer, subscribe_atom::value, flush_atom::value, self);
         else
@@ -110,11 +110,11 @@ int reader_command_base::run_impl(caf::actor_system& sys,
       }
     },
     [&](flush_atom) {
-      VAST_DEBUG("received flush from IMPORTER");
+      VAST_DEBUG(this, "received flush from IMPORTER");
       stop = true;
     },
     [&](system::signal_atom, int signal) {
-      VAST_DEBUG("got " << ::strsignal(signal));
+      VAST_DEBUG(this, "got " << ::strsignal(signal));
       if (signal == SIGINT || signal == SIGTERM)
         self->send_exit(src, exit_reason::user_shutdown);
     }

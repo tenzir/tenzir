@@ -313,6 +313,47 @@ Template Metaprogramming
   constexpr auto my_trait_v = my_trait<T>::value;
   ```
 
+Logging
+-------
+
+- Available log levels are *ERROR*, *WARNING*, *INFO*, *DEBUG* and *TRACE*.
+
+- Messages can be sent by using the VAST_<level> and VAST_<level>_ANON macros.
+
+- The VAST_<level> macros are intended to be used with a subject as the fist
+  argument. Use them to create a sentence of the form 'subject verb object'.
+  For example:
+  ```cpp
+  VAST_WARNING(self, "got a request for unknown query ID", query_id);
+  ```
+
+  Which gets printed as:
+  ```sh
+  index got a request for unkown query ID <181f5b1f-c673-4e98-acd2-ef762fe567a2>
+  ```
+
+- The VAST_<level>_ANON macros are available for situations where **n**o
+  **s**ubject is suitable for the first argument to the other macro variant.
+  They can either be used to inject a subject manually, or create a message
+  in the *gerund* form. For example:
+  ```cpp
+  VAST_DEBUG_ANON(__func__, "creating directory", dir);
+  ```
+
+- By default, use the VAST_<level> variants.
+
+- Try to restrict usage of the VAST_INFO message type to the main actors.
+  Info is the chattiest level that most users will see, so it should require
+  no or only little understanding of VASTs system architecture for the
+  reader to understand.
+
+- Messages sent at the trace level add the additional effect of writing a
+  second message at the exit of the current scope. The trace level can be
+  used to create a trace of the call stack with fine grained control over
+  its depth. Omit trace messages from helper functions and generic / general
+  purpose algorithm implementations.
+
+
 Comments
 --------
 

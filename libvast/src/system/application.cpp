@@ -63,7 +63,7 @@ application::root_command::proceed(caf::actor_system& sys,
     std::cout << VAST_VERSION << std::endl;
     return stop_successful;
   }
-  std::cerr << banner() << "\n\n";
+  std::cerr << '\n' << banner() << "\n\n";
   return command::proceed_ok;
 }
 
