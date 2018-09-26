@@ -141,7 +141,7 @@ broker::data to_broker(const vast::data& data) {
 }
 
 // Constructs a result event for Bro from Broker data.
-broker::bro::Event make_bro_event(std::string name, broker::data x) {
+broker::bro::Event make_result_event(std::string name, broker::data x) {
   broker::vector args(2);
   args[0] = std::move(name);
   args[1] = std::move(x);
@@ -149,8 +149,8 @@ broker::bro::Event make_bro_event(std::string name, broker::data x) {
 }
 
 // Constructs a result event for Bro from a VAST event.
-broker::bro::Event make_bro_event(const vast::event& x) {
-  return make_bro_event(x.type().name(), to_broker(x.data()));
+broker::bro::Event make_result_event(const vast::event& x) {
+  return make_result_event(x.type().name(), to_broker(x.data()));
 }
 
 // A VAST writer that publishes the event it gets to a Bro endpoint.
@@ -166,7 +166,7 @@ public:
 
   caf::expected<void> write(const vast::event& x) {
     std::cerr << '.';
-    endpoint_->publish(data_topic, make_bro_event(x));
+    endpoint_->publish(data_topic, make_result_event(x));
     return caf::no_error;
   }
 
@@ -334,7 +334,7 @@ int main(int argc, char** argv) {
     self->receive(
       [&, query_id=query_id](const caf::down_msg&) {
         std::cerr << "\ncompleted processing of query results" << std::endl;
-        endpoint.publish(data_topic, make_bro_event(query_id, broker::nil));
+        endpoint.publish(data_topic, make_result_event(query_id, broker::nil));
       }
     );
   }
