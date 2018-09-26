@@ -11,7 +11,10 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
+#include <atomic>
+#include <csignal>
 #include <cstdint>
+#include <cstdlib>
 #include <iostream>
 #include <string>
 
@@ -39,6 +42,8 @@
 #include <vast/detail/assert.hpp>
 #include <vast/detail/overload.hpp>
 
+using namespace std::chrono_literals;
+
 namespace {
 
 constexpr char control_topic[] = "/vast/control";
@@ -46,6 +51,22 @@ constexpr char data_topic[] = "/vast/data";
 
 constexpr char default_address[] = "localhost";
 constexpr uint16_t default_port = 43000;
+
+// The timeout after which a blocking call to retrieve a message from a
+// subscriber should return.
+broker::duration get_timeout = broker::duration{500ms};
+
+// Global flag that indicates that the application is shutting down due to a
+// signal.
+std::atomic<bool> terminating = false;
+
+extern "C" void signal_handler(int sig) {
+  // Catch termination signals only once to allow forced termination by the OS
+  // upon sending the signal a second time.
+  if (sig == SIGINT || sig == SIGTERM)
+    std::signal(sig, SIG_DFL);
+  terminating = true;
+}
 
 // Our custom configuration with extra command line options for this tool.
 class config : public broker::configuration {
@@ -229,6 +250,7 @@ parse_query_event(const broker::data& x) {
 } // namespace <anonymous>
 
 int main(int argc, char** argv) {
+  VAST_ASSERT(terminating.is_lock_free());
   // Parse the command line.
   config cfg;
   vast::detail::add_message_types(cfg);
@@ -258,7 +280,11 @@ int main(int argc, char** argv) {
   auto status_subscriber = endpoint.make_status_subscriber(receive_statuses);
   auto peered = false;
   while (!peered) {
-    auto msg = status_subscriber.get();
+    auto msg = status_subscriber.get(get_timeout);
+    if (terminating)
+      return -1;
+    if (!msg)
+      continue; // timeout
     caf::visit(vast::detail::overload(
       [&](broker::none) {
         // timeout
@@ -272,14 +298,19 @@ int main(int argc, char** argv) {
         else
           std::cerr << to_string(status) << std::endl;
       }
-    ), msg);
+    ), *msg);
   };
   std::cerr << "peered with Bro successfully" << std::endl;
   // Process queries from Bro.
   auto done = false;
   while (!done) {
     std::cerr << "waiting for commands" << std::endl;
-    auto [topic, data] = subscriber.get();
+    auto msg = subscriber.get(get_timeout);
+    if (terminating)
+      return -1;
+    if (!msg)
+      continue; // timeout
+    auto& [topic, data] = *msg;
     // Parse the Bro query event.
     auto result = parse_query_event(data);
     if (!result) {
