@@ -284,7 +284,7 @@ int main(int argc, char** argv) {
     auto result = parse_query_event(data);
     if (!result) {
       std::cerr << sys.render(result.error()) << std::endl;
-      return 1;
+      continue;
     }
     auto& [query_id, expression] = *result;
     // Relay the query expression to VAST.
