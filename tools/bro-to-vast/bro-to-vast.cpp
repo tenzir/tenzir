@@ -39,7 +39,6 @@
 
 #include <vast/detail/add_error_categories.hpp>
 #include <vast/detail/add_message_types.hpp>
-#include <vast/detail/assert.hpp>
 #include <vast/detail/overload.hpp>
 
 using namespace std::chrono_literals;
@@ -59,6 +58,9 @@ broker::duration get_timeout = broker::duration{500ms};
 // Global flag that indicates that the application is shutting down due to a
 // signal.
 std::atomic<bool> terminating = false;
+
+// Double-check the signal handler requirement.
+static_assert(decltype(terminating)::is_always_lock_free);
 
 extern "C" void signal_handler(int sig) {
   // Catch termination signals only once to allow forced termination by the OS
@@ -250,7 +252,6 @@ parse_query_event(const broker::data& x) {
 } // namespace <anonymous>
 
 int main(int argc, char** argv) {
-  VAST_ASSERT(terminating.is_lock_free());
   // Parse the command line.
   config cfg;
   vast::detail::add_message_types(cfg);
