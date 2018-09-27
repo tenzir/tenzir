@@ -11,7 +11,10 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
+#include <atomic>
+#include <csignal>
 #include <cstdint>
+#include <cstdlib>
 #include <iostream>
 #include <string>
 
@@ -36,8 +39,9 @@
 
 #include <vast/detail/add_error_categories.hpp>
 #include <vast/detail/add_message_types.hpp>
-#include <vast/detail/assert.hpp>
 #include <vast/detail/overload.hpp>
+
+using namespace std::chrono_literals;
 
 namespace {
 
@@ -46,6 +50,25 @@ constexpr char data_topic[] = "/vast/data";
 
 constexpr char default_address[] = "localhost";
 constexpr uint16_t default_port = 43000;
+
+// The timeout after which a blocking call to retrieve a message from a
+// subscriber should return.
+broker::duration get_timeout = broker::duration{500ms};
+
+// Global flag that indicates that the application is shutting down due to a
+// signal.
+std::atomic<bool> terminating = false;
+
+// Double-check the signal handler requirement.
+static_assert(decltype(terminating)::is_always_lock_free);
+
+extern "C" void signal_handler(int sig) {
+  // Catch termination signals only once to allow forced termination by the OS
+  // upon sending the signal a second time.
+  if (sig == SIGINT || sig == SIGTERM)
+    std::signal(sig, SIG_DFL);
+  terminating = true;
+}
 
 // Our custom configuration with extra command line options for this tool.
 class config : public broker::configuration {
@@ -120,7 +143,7 @@ broker::data to_broker(const vast::data& data) {
 }
 
 // Constructs a result event for Bro from Broker data.
-broker::bro::Event make_bro_event(std::string name, broker::data x) {
+broker::bro::Event make_result_event(std::string name, broker::data x) {
   broker::vector args(2);
   args[0] = std::move(name);
   args[1] = std::move(x);
@@ -128,8 +151,8 @@ broker::bro::Event make_bro_event(std::string name, broker::data x) {
 }
 
 // Constructs a result event for Bro from a VAST event.
-broker::bro::Event make_bro_event(const vast::event& x) {
-  return make_bro_event(x.type().name(), to_broker(x.data()));
+broker::bro::Event make_result_event(const vast::event& x) {
+  return make_result_event(x.type().name(), to_broker(x.data()));
 }
 
 // A VAST writer that publishes the event it gets to a Bro endpoint.
@@ -145,7 +168,7 @@ public:
 
   caf::expected<void> write(const vast::event& x) {
     std::cerr << '.';
-    endpoint_->publish(data_topic, make_bro_event(x));
+    endpoint_->publish(data_topic, make_result_event(x));
     return caf::no_error;
   }
 
@@ -258,7 +281,11 @@ int main(int argc, char** argv) {
   auto status_subscriber = endpoint.make_status_subscriber(receive_statuses);
   auto peered = false;
   while (!peered) {
-    auto msg = status_subscriber.get();
+    auto msg = status_subscriber.get(get_timeout);
+    if (terminating)
+      return -1;
+    if (!msg)
+      continue; // timeout
     caf::visit(vast::detail::overload(
       [&](broker::none) {
         // timeout
@@ -272,19 +299,24 @@ int main(int argc, char** argv) {
         else
           std::cerr << to_string(status) << std::endl;
       }
-    ), msg);
+    ), *msg);
   };
   std::cerr << "peered with Bro successfully" << std::endl;
   // Process queries from Bro.
   auto done = false;
   while (!done) {
     std::cerr << "waiting for commands" << std::endl;
-    auto [topic, data] = subscriber.get();
+    auto msg = subscriber.get(get_timeout);
+    if (terminating)
+      return -1;
+    if (!msg)
+      continue; // timeout
+    auto& [topic, data] = *msg;
     // Parse the Bro query event.
     auto result = parse_query_event(data);
     if (!result) {
       std::cerr << sys.render(result.error()) << std::endl;
-      return 1;
+      continue;
     }
     auto& [query_id, expression] = *result;
     // Relay the query expression to VAST.
@@ -303,7 +335,7 @@ int main(int argc, char** argv) {
     self->receive(
       [&, query_id=query_id](const caf::down_msg&) {
         std::cerr << "\ncompleted processing of query results" << std::endl;
-        endpoint.publish(data_topic, make_bro_event(query_id, broker::nil));
+        endpoint.publish(data_topic, make_result_event(query_id, broker::nil));
       }
     );
   }
