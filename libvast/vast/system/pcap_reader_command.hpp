@@ -50,11 +50,9 @@ public:
   pcap_reader_command(command* parent, std::string_view name);
 
 protected:
-  expected<caf::actor> make_source(caf::scoped_actor& self,
-                                   const caf::config_value_map& options,
-                                   argument_iterator begin,
-                                   argument_iterator end) override;
+  expected<caf::actor>
+  make_source(caf::scoped_actor& self,
+              const caf::config_value_map& options) override;
 };
 
 } // namespace vast::system
-

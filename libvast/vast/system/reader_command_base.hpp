@@ -34,10 +34,9 @@ protected:
   int run_impl(caf::actor_system& sys, const caf::config_value_map& options,
                argument_iterator begin, argument_iterator end) override;
 
-  virtual expected<caf::actor> make_source(caf::scoped_actor& self,
-                                           const caf::config_value_map& options,
-                                           argument_iterator begin,
-                                           argument_iterator end) = 0;
+  virtual expected<caf::actor> make_source(
+    caf::scoped_actor& self,
+    const caf::config_value_map& options) = 0;
 };
 
 } // namespace vast::system

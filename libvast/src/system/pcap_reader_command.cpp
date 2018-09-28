@@ -40,11 +40,8 @@ pcap_reader_command::pcap_reader_command(command* parent, std::string_view name)
 
 expected<caf::actor>
 pcap_reader_command::make_source(caf::scoped_actor& self,
-                                 const caf::config_value_map& options,
-                                 argument_iterator begin,
-                                 argument_iterator end) {
-  VAST_UNUSED(begin, end);
-  VAST_TRACE(VAST_ARG("args", begin, end));
+                                 const caf::config_value_map& options) {
+  VAST_TRACE("");
   VAST_DEBUG(this, "::make_source called with options:", VAST_ARG(options));
   auto input = get_or(options, "read", defaults::command::read_path);
   auto cutoff = get_or(options, "cutoff", defaults::command::cutoff);
