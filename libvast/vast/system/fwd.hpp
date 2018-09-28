@@ -35,7 +35,7 @@ class pcap_writer_command;
 class source_command;
 class remote_command;
 class start_command;
-class writer_command_base;
+class sink_command;
 
 // -- structs ------------------------------------------------------------------
 

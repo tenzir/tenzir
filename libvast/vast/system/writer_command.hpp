@@ -22,11 +22,8 @@
 #include <caf/typed_event_based_actor.hpp>
 
 #include "vast/logger.hpp"
-
-#include "vast/system/writer_command_base.hpp"
 #include "vast/system/sink.hpp"
-
-#include "vast/detail/make_io_stream.hpp"
+#include "vast/system/sink_command.hpp"
 
 namespace vast::system {
 
@@ -34,10 +31,10 @@ namespace vast::system {
 /// formats.
 /// @relates application
 template <class Writer>
-class writer_command : public writer_command_base {
+class writer_command : public sink_command {
 public:
   writer_command(command* parent, std::string_view name)
-      : writer_command_base{parent, name} {
+      : sink_command{parent, name} {
     add_opt<std::string>("write,w", "path to write events to");
     add_opt<bool>("uds,d", "treat -w as UNIX domain socket to connect to");
   }
