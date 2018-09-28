@@ -22,8 +22,8 @@
 
 #include "vast/defaults.hpp"
 #include "vast/logger.hpp"
-#include "vast/system/reader_command_base.hpp"
 #include "vast/system/source.hpp"
+#include "vast/system/source_command.hpp"
 
 namespace vast::system {
 
@@ -31,10 +31,10 @@ namespace vast::system {
 /// formats.
 /// @relates application
 template <class Generator>
-class generator_command : public reader_command_base {
+class generator_command : public source_command {
 public:
   generator_command(command* parent, std::string_view name)
-      : reader_command_base(parent, name) {
+      : source_command(parent, name) {
     add_opt<size_t>("seed", "the random seed");
     add_opt<size_t>("num,N", "events to generate");
   }

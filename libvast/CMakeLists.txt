@@ -88,9 +88,9 @@ set(libvast_sources
   src/system/node_command.cpp
   src/system/partition.cpp
   src/system/profiler.cpp
-  src/system/reader_command_base.cpp
   src/system/remote_command.cpp
   src/system/signal_monitor.cpp
+  src/system/source_command.cpp
   src/system/spawn.cpp
   src/system/spawn_sink.cpp
   src/system/spawn_source.cpp

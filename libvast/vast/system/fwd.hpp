@@ -32,7 +32,7 @@ class node_command;
 class partition;
 class pcap_reader_command;
 class pcap_writer_command;
-class reader_command_base;
+class source_command;
 class remote_command;
 class start_command;
 class writer_command_base;

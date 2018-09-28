@@ -22,8 +22,8 @@
 #include "vast/defaults.hpp"
 #include "vast/detail/make_io_stream.hpp"
 #include "vast/logger.hpp"
-#include "vast/system/reader_command_base.hpp"
 #include "vast/system/source.hpp"
+#include "vast/system/source_command.hpp"
 
 namespace vast::system {
 
@@ -31,10 +31,10 @@ namespace vast::system {
 /// formats.
 /// @relates application
 template <class Reader>
-class reader_command : public reader_command_base {
+class reader_command : public source_command {
 public:
   reader_command(command* parent, std::string_view name)
-      : reader_command_base(parent, name) {
+      : source_command(parent, name) {
     add_opt<std::string>("read,r", "path to input where to read events from");
     add_opt<bool>("uds,d", "treat -r as listening UNIX domain socket");
   }

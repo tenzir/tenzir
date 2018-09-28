@@ -11,7 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/system/reader_command_base.hpp"
+#include "vast/system/source_command.hpp"
 
 #include <csignal>
 
@@ -37,7 +37,7 @@
 
 namespace vast::system {
 
-reader_command_base::reader_command_base(command* parent, std::string_view name)
+source_command::source_command(command* parent, std::string_view name)
   : super(parent, name) {
   // nop
 }
@@ -60,7 +60,7 @@ caf::expected<expression> parse_expression(command::argument_iterator begin,
   return expr;
 }
 
-int reader_command_base::run_impl(caf::actor_system& sys,
+int source_command::run_impl(caf::actor_system& sys,
                                   const caf::config_value_map& options,
                                   argument_iterator begin,
                                   argument_iterator end) {

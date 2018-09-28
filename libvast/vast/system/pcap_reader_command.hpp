@@ -24,10 +24,9 @@
 #include "vast/expression.hpp"
 #include "vast/logger.hpp"
 
-#include "vast/system/reader_command_base.hpp"
-#include "vast/system/reader_command_base.hpp"
 #include "vast/system/signal_monitor.hpp"
 #include "vast/system/source.hpp"
+#include "vast/system/source_command.hpp"
 #include "vast/system/tracker.hpp"
 
 #include "vast/format/pcap.hpp"
@@ -43,9 +42,9 @@ namespace vast::system {
 
 /// PCAP subcommant to `import`.
 /// @relates application
-class pcap_reader_command : public reader_command_base {
+class pcap_reader_command : public source_command {
 public:
-  using super = reader_command_base;
+  using super = source_command;
 
   pcap_reader_command(command* parent, std::string_view name);
 
