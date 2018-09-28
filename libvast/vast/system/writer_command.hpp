@@ -13,14 +13,13 @@
 
 #pragma once
 
-#include <memory>
 #include <string>
 #include <string_view>
+#include <utility>
 
 #include <caf/scoped_actor.hpp>
-#include <caf/typed_actor.hpp>
-#include <caf/typed_event_based_actor.hpp>
 
+#include "vast/detail/make_io_stream.hpp"
 #include "vast/logger.hpp"
 #include "vast/system/sink.hpp"
 #include "vast/system/sink_command.hpp"
@@ -64,4 +63,3 @@ protected:
 };
 
 } // namespace vast::system
-

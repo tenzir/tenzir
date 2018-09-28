@@ -30,7 +30,6 @@
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/concept/parseable/vast/schema.hpp"
 
-#include "vast/system/node_command.hpp"
 #include "vast/system/signal_monitor.hpp"
 #include "vast/system/source.hpp"
 #include "vast/system/tracker.hpp"

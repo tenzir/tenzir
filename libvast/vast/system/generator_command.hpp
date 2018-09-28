@@ -13,10 +13,10 @@
 
 #pragma once
 
-#include <memory>
 #include <random>
 #include <string>
 #include <string_view>
+#include <utility>
 
 #include <caf/scoped_actor.hpp>
 

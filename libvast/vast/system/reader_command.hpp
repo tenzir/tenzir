@@ -15,6 +15,7 @@
 
 #include <string>
 #include <string_view>
+#include <utility>
 
 #include <caf/config_value.hpp>
 #include <caf/scoped_actor.hpp>
