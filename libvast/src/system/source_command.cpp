@@ -60,9 +60,9 @@ caf::expected<expression> parse_expression(command::argument_iterator begin,
 }
 
 int source_command::run_impl(caf::actor_system& sys,
-                                  const caf::config_value_map& options,
-                                  argument_iterator begin,
-                                  argument_iterator end) {
+                             const caf::config_value_map& options,
+                             argument_iterator begin,
+                             argument_iterator end) {
   using namespace caf;
   using namespace std::chrono_literals;
   // Helper for blocking actor communication.
@@ -78,18 +78,21 @@ int source_command::run_impl(caf::actor_system& sys,
   // Supply an alternate schema, if requested.
   if (auto sf = caf::get_if<std::string>(&options, "schema")) {
     auto schema = load_schema_file(*sf);
-    if (schema)
-      self->send(src, put_atom::value, std::move(*schema));
-    else
+    if (!schema) {
       VAST_ERROR(self, "had a schema error:", sys.render(schema.error()));
+      return EXIT_FAILURE;
+    }
+    self->send(src, put_atom::value, std::move(*schema));
   }
   // Attempt to parse the remainder as an expression.
   if (begin != end) {
     auto expr = parse_expression(begin, end);
-    if (expr)
-      self->send(src, std::move(*expr));
-    else
-      VAST_ERROR(self, sys.render(expr.error()));
+    if (!expr) {
+      VAST_ERROR(self, "failed to parse the remaining arguments:",
+          sys.render(expr.error()));
+      return EXIT_FAILURE;
+    }
+    self->send(src, std::move(*expr));
   }
   // Get VAST node.
   auto node_opt = spawn_or_connect_to_node(self, options);
