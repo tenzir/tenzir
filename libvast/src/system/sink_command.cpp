@@ -11,7 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/system/writer_command_base.hpp"
+#include "vast/system/sink_command.hpp"
 
 #include <csignal>
 #include <iostream>
@@ -30,7 +30,7 @@ using namespace caf;
 
 namespace vast::system {
 
-int writer_command_base::run_impl(caf::actor_system& sys,
+int sink_command::run_impl(caf::actor_system& sys,
                                   const caf::config_value_map& options,
                                   argument_iterator begin,
                                   argument_iterator end) {

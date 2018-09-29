@@ -13,31 +13,44 @@
 
 #pragma once
 
+#include <random>
+#include <string>
 #include <string_view>
+#include <utility>
 
-#include <caf/actor.hpp>
-#include <caf/expected.hpp>
-#include <caf/fwd.hpp>
+#include <caf/scoped_actor.hpp>
 
-#include "vast/system/node_command.hpp"
+#include "vast/defaults.hpp"
+#include "vast/logger.hpp"
+#include "vast/system/source.hpp"
+#include "vast/system/source_command.hpp"
 
 namespace vast::system {
 
-/// Format-independent implementation for import sub-commands.
-class reader_command_base : public node_command {
+/// Default implementation for import sub-commands. Compatible with Bro and MRT
+/// formats.
+/// @relates application
+template <class Generator>
+class generator_command : public source_command {
 public:
-  using super = node_command;
-
-  reader_command_base(command* parent, std::string_view name);
+  generator_command(command* parent, std::string_view name)
+      : source_command(parent, name) {
+    add_opt<size_t>("seed", "the random seed");
+    add_opt<size_t>("num,N", "events to generate");
+  }
 
 protected:
-  int run_impl(caf::actor_system& sys, const caf::config_value_map& options,
-               argument_iterator begin, argument_iterator end) override;
-
-  virtual expected<caf::actor> make_source(caf::scoped_actor& self,
-                                           const caf::config_value_map& options,
-                                           argument_iterator begin,
-                                           argument_iterator end) = 0;
+  expected<caf::actor>
+  make_source(caf::scoped_actor& self,
+              const caf::config_value_map& options) override {
+    VAST_TRACE("");
+    auto seed = caf::get_if<size_t>(&options, "seed");
+    if (!seed)
+      seed = {std::random_device{}()};
+    auto num = get_or(options, "num", defaults::command::generated_events);
+    Generator generator{*seed, num};
+    return self->spawn(default_source<Generator>, std::move(generator));
+  }
 };
 
 } // namespace vast::system

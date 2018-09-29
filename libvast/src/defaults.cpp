@@ -38,6 +38,7 @@ size_t flush_interval = 10000;
 size_t max_events = 0;
 size_t max_flow_age = 60;
 size_t max_flows = 1_Mi;
+size_t generated_events = 100;
 const char* node_id = "node";
 
 } // namespace command

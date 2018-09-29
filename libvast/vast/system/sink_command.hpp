@@ -39,7 +39,7 @@
 namespace vast::system {
 
 /// Format-independent implementation for export sub-commands.
-class writer_command_base : public node_command {
+class sink_command : public node_command {
 public:
   using node_command::node_command;
 
@@ -53,4 +53,3 @@ protected:
 };
 
 } // namespace vast::system
-

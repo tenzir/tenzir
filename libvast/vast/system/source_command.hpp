@@ -15,26 +15,28 @@
 
 #include <string_view>
 
-#include <caf/scoped_actor.hpp>
+#include <caf/actor.hpp>
+#include <caf/expected.hpp>
+#include <caf/fwd.hpp>
 
-#include "vast/format/pcap.hpp"
-#include "vast/system/sink_command.hpp"
+#include "vast/system/node_command.hpp"
 
 namespace vast::system {
 
-/// PCAP subcommand to `import`.
-/// @relates application
-class pcap_writer_command : public sink_command {
+/// Format-independent implementation for import sub-commands.
+class source_command : public node_command {
 public:
-  using super = sink_command;
+  using super = node_command;
 
-  pcap_writer_command(command* parent, std::string_view name);
+  source_command(command* parent, std::string_view name);
 
 protected:
-  expected<caf::actor> make_sink(caf::scoped_actor& self,
-                                 const caf::config_value_map& options,
-                                 argument_iterator begin,
-                                 argument_iterator end) override;
+  int run_impl(caf::actor_system& sys, const caf::config_value_map& options,
+               argument_iterator begin, argument_iterator end) override;
+
+  virtual expected<caf::actor> make_source(
+    caf::scoped_actor& self,
+    const caf::config_value_map& options) = 0;
 };
 
 } // namespace vast::system

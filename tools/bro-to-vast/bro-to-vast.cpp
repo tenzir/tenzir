@@ -34,8 +34,8 @@
 #include <vast/concept/parseable/vast/expression.hpp>
 #include <vast/concept/parseable/vast/uuid.hpp>
 
-#include <vast/system/writer_command_base.hpp>
 #include <vast/system/sink.hpp>
+#include <vast/system/sink_command.hpp>
 
 #include <vast/detail/add_error_categories.hpp>
 #include <vast/detail/add_message_types.hpp>
@@ -187,10 +187,10 @@ private:
 
 // A custom command that allows us to re-use VAST command dispatching logic in
 // order to issue a query that writes into a sink with a custom format.
-class bro_command : public vast::system::writer_command_base {
+class bro_command : public vast::system::sink_command {
 public:
   bro_command(broker::endpoint& endpoint)
-    : writer_command_base{nullptr, "bro"},
+    : sink_command{nullptr, "bro"},
       endpoint_{endpoint} {
     // nop
   }

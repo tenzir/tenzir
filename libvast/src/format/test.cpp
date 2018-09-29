@@ -214,9 +214,8 @@ struct randomizer {
 } // namespace <anonymous>
 
 
-reader::reader(size_t seed, uint64_t n, id base)
+reader::reader(size_t seed, uint64_t n)
   : generator_{seed},
-    id_{base},
     num_events_{n} {
   VAST_ASSERT(num_events_ > 0);
   static std::string builtin_schema = R"__(
@@ -251,7 +250,6 @@ expected<event> reader::read() {
   // Fill a new event.
   event e{value{bp.data, t}};
   e.timestamp(timestamp::clock::now());
-  e.id(id_++);
   // Advance to next type in schema.
   if (++next_ == schema_.end())
     next_ = schema_.begin();

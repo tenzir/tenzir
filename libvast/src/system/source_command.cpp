@@ -11,43 +11,89 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/system/reader_command_base.hpp"
+#include "vast/system/source_command.hpp"
 
 #include <csignal>
 
+#include <caf/config_value.hpp>
 #include <caf/scoped_actor.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
+#include "vast/detail/string.hpp"
+#include "vast/error.hpp"
+#include "vast/expression.hpp"
+#include "vast/filesystem.hpp"
 #include "vast/logger.hpp"
+#include "vast/schema.hpp"
 
-#include "vast/system/node_command.hpp"
+#include "vast/concept/parseable/to.hpp"
+#include "vast/concept/parseable/vast/expression.hpp"
+#include "vast/concept/parseable/vast/schema.hpp"
+
 #include "vast/system/signal_monitor.hpp"
 #include "vast/system/source.hpp"
 #include "vast/system/tracker.hpp"
 
 namespace vast::system {
 
-reader_command_base::reader_command_base(command* parent, std::string_view name)
+source_command::source_command(command* parent, std::string_view name)
   : super(parent, name) {
   // nop
 }
 
-int reader_command_base::run_impl(caf::actor_system& sys,
-                                  const caf::config_value_map& options,
-                                  argument_iterator begin,
-                                  argument_iterator end) {
+caf::expected<schema> load_schema_file(std::string& path) {
+  if (path.empty())
+    return make_error(ec::filesystem_error, "");
+  auto str = load_contents(path);
+  if (!str)
+    return str.error();
+  return to<schema>(*str);
+}
+
+caf::expected<expression> parse_expression(command::argument_iterator begin,
+                                           command::argument_iterator end) {
+  auto str = detail::join(begin, end, " ");
+  auto expr = to<expression>(str);
+  if (expr)
+    expr = normalize_and_validate(*expr);
+  return expr;
+}
+
+int source_command::run_impl(caf::actor_system& sys,
+                             const caf::config_value_map& options,
+                             argument_iterator begin,
+                             argument_iterator end) {
   using namespace caf;
   using namespace std::chrono_literals;
   // Helper for blocking actor communication.
   scoped_actor self{sys};
   // Spawn the source.
-  auto src_opt = make_source(self, options, begin, end);
+  auto src_opt = make_source(self, options);
   if (!src_opt) {
-    std::cerr << "unable to spawn source: " << sys.render(src_opt.error())
-              << std::endl;
+    VAST_ERROR(self, "was not able to spawn a source",
+               sys.render(src_opt.error()));
     return EXIT_FAILURE;
   }
   auto src = std::move(*src_opt);
+  // Supply an alternate schema, if requested.
+  if (auto sf = caf::get_if<std::string>(&options, "schema")) {
+    auto schema = load_schema_file(*sf);
+    if (!schema) {
+      VAST_ERROR(self, "had a schema error:", sys.render(schema.error()));
+      return EXIT_FAILURE;
+    }
+    self->send(src, put_atom::value, std::move(*schema));
+  }
+  // Attempt to parse the remainder as an expression.
+  if (begin != end) {
+    auto expr = parse_expression(begin, end);
+    if (!expr) {
+      VAST_ERROR(self, "failed to parse the remaining arguments:",
+          sys.render(expr.error()));
+      return EXIT_FAILURE;
+    }
+    self->send(src, std::move(*expr));
+  }
   // Get VAST node.
   auto node_opt = spawn_or_connect_to_node(self, options);
   if (!node_opt)

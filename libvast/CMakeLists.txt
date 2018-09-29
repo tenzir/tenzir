@@ -88,16 +88,16 @@ set(libvast_sources
   src/system/node_command.cpp
   src/system/partition.cpp
   src/system/profiler.cpp
-  src/system/reader_command_base.cpp
   src/system/remote_command.cpp
   src/system/signal_monitor.cpp
+  src/system/sink_command.cpp
+  src/system/source_command.cpp
   src/system/spawn.cpp
   src/system/spawn_sink.cpp
   src/system/spawn_source.cpp
   src/system/start_command.cpp
   src/system/task.cpp
   src/system/tracker.cpp
-  src/system/writer_command_base.cpp
   src/table.cpp
   src/table_index.cpp
   src/table_slice.cpp
