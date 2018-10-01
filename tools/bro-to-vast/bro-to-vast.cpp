@@ -273,6 +273,8 @@ int main(int argc, char** argv) {
   vast::detail::add_message_types(cfg);
   vast::detail::add_error_categories(cfg);
   cfg.parse(argc, argv);
+  if (caf::get_or(cfg, "help", false))
+    return 0;
   std::string address = caf::get_or(cfg, "address", default_address);
   uint16_t port = caf::get_or(cfg, "port", default_port);
   // Create a Broker endpoint.
