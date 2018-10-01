@@ -48,7 +48,7 @@ namespace {
 constexpr char control_topic[] = "/vast/control";
 constexpr char data_topic[] = "/vast/data";
 
-constexpr char default_address[] = "localhost";
+constexpr char default_address[] = "127.0.0.1";
 constexpr uint16_t default_port = 43000;
 
 // The timeout after which a blocking call to retrieve a message from a
