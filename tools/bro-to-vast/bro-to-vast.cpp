@@ -81,7 +81,8 @@ public:
     // As a stand-alone application, we reuse the global option group from CAF
     // to avoid unnecessary prefixing.
     opt_group{custom_options_, "global"}
-      .add<uint16_t>("port,p", "the port to listen at or connect to");
+      .add<uint16_t>("port,p", "the port to listen at or connect to")
+      .add<bool>("show-progress,s", "print one '.' for each proccessed event");
   }
 };
 
@@ -167,11 +168,20 @@ public:
   bro_writer(broker::endpoint& endpoint, std::string query_id)
     : endpoint_{&endpoint},
       query_id_{std::move(query_id)} {
-    // nop
+    auto& cfg = endpoint.system().config();
+    show_progress_ = caf::get_or(cfg, "show-progress", false);
+  }
+
+  ~bro_writer() {
+    if (show_progress_ && num_results_ > 0)
+      std::cerr << std::endl;
+    VAST_INFO_ANON("query", query_id_, "had", num_results_, "result(s)");
   }
 
   caf::expected<void> write(const vast::event& x) override {
-    std::cerr << '.';
+    ++num_results_;
+    if (show_progress_)
+      std::cerr << '.';
     endpoint_->publish(data_topic, make_result_event(x));
     return caf::no_error;
   }
@@ -183,6 +193,8 @@ public:
 private:
   broker::endpoint* endpoint_;
   std::string query_id_;
+  bool show_progress_ = false;
+  size_t num_results_ = 0;
 };
 
 // A custom command that allows us to re-use VAST command dispatching logic in
@@ -320,7 +332,7 @@ int main(int argc, char** argv) {
     // Relay the query expression to VAST.
     cmd.query_id(query_id);
     auto args = std::vector<std::string>{expression};
-    VAST_INFO_ANON("dispatching query to VAST: " << expression);
+    VAST_INFO_ANON("dispatching query", query_id, expression);
     auto rc = cmd.run(sys, args.begin(), args.end());
     if (rc != 0) {
       VAST_ERROR_ANON("failed to dispatch query to VAST");
@@ -332,8 +344,6 @@ int main(int argc, char** argv) {
     self->monitor(cmd.sink());
     self->receive(
       [&, query_id=query_id](const caf::down_msg&) {
-        std::cerr << std::endl; // newline after the dots.
-        VAST_INFO_ANON("completed processing of query results");
         endpoint.publish(data_topic, make_result_event(query_id, broker::nil));
       }
     );
