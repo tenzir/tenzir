@@ -152,16 +152,20 @@ broker::data to_broker(const vast::data& data) {
 }
 
 // Constructs a result event for Bro from Broker data.
-broker::bro::Event make_result_event(std::string name, broker::data x) {
+broker::bro::Event make_result_event(std::string query_id, broker::data x) {
   broker::vector args(2);
-  args[0] = std::move(name);
+  args[0] = std::move(query_id);
   args[1] = std::move(x);
   return {"VAST::result", std::move(args)};
 }
 
 // Constructs a result event for Bro from a VAST event.
-broker::bro::Event make_result_event(const vast::event& x) {
-  return make_result_event(x.type().name(), to_broker(x.data()));
+broker::bro::Event make_result_event(std::string query_id,
+                                     const vast::event& x) {
+  broker::vector xs(2);
+  xs[0] = x.type().name();
+  xs[1] = to_broker(x.data());
+  return make_result_event(std::move(query_id), std::move(xs));
 }
 
 // A VAST writer that publishes the event it gets to a Bro endpoint.
@@ -186,7 +190,7 @@ public:
     ++num_results_;
     if (show_progress_)
       std::cerr << '.';
-    endpoint_->publish(data_topic, make_result_event(x));
+    endpoint_->publish(data_topic, make_result_event(query_id_, x));
     return caf::no_error;
   }
 
@@ -350,7 +354,8 @@ int main(int argc, char** argv) {
     self->monitor(cmd.sink());
     self->receive(
       [&, query_id=query_id](const caf::down_msg&) {
-        endpoint.publish(data_topic, make_result_event(query_id, broker::nil));
+        auto nil = broker::data{}; // Avoid ambiguity between VAST & Broker.
+        endpoint.publish(data_topic, make_result_event(query_id, nil));
       }
     );
   }
