@@ -49,7 +49,10 @@ namespace {
 constexpr char control_topic[] = "/vast/control";
 constexpr char data_topic[] = "/vast/data";
 
+/// The address where the Broker endpoint listens at.
 constexpr char default_address[] = "127.0.0.1";
+
+/// The port where the Broker endpoint binds to.
 constexpr uint16_t default_port = 43000;
 
 // The timeout after which a blocking call to retrieve a message from a
@@ -81,7 +84,8 @@ public:
     // As a stand-alone application, we reuse the global option group from CAF
     // to avoid unnecessary prefixing.
     opt_group{custom_options_, "global"}
-      .add<uint16_t>("port,p", "the port to listen at or connect to")
+      .add<std::string>("address,a", "the address where the endpoints listens")
+      .add<uint16_t>("port,p", "the port where the endpoint binds to")
       .add<bool>("show-progress,s", "print one '.' for each proccessed event");
   }
 };
