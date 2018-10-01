@@ -28,6 +28,7 @@
 #include <vast/error.hpp>
 #include <vast/event.hpp>
 #include <vast/expression.hpp>
+#include <vast/logger.hpp>
 #include <vast/uuid.hpp>
 
 #include <vast/concept/parseable/parse.hpp>
@@ -74,6 +75,9 @@ extern "C" void signal_handler(int sig) {
 class config : public broker::configuration {
 public:
   config() {
+    // Print a reasonable amount of logging output to the console.
+    set("logger.console", caf::atom("COLORED"));
+    set("logger.verbosity", caf::atom("INFO"));
     // As a stand-alone application, we reuse the global option group from CAF
     // to avoid unnecessary prefixing.
     opt_group{custom_options_, "global"}
@@ -267,11 +271,10 @@ int main(int argc, char** argv) {
   caf::config_value_map opts;
   auto node = cmd.connect_to_node(self, opts);
   if (!node) {
-    std::cerr << "failed to connect to VAST: " << sys.render(node.error())
-              << std::endl;
+    VAST_ERROR_ANON("failed to connect to VAST: " << sys.render(node.error()));
     return 1;
   }
-  std::cerr << "connected to VAST successfully" << std::endl;
+  VAST_INFO_ANON("connected to VAST successfully" );
   // Block until Bro peers with us.
   auto receive_statuses = true;
   auto status_subscriber = endpoint.make_status_subscriber(receive_statuses);
@@ -287,21 +290,20 @@ int main(int argc, char** argv) {
         // timeout
       },
       [&](broker::error error) {
-        std::cerr << sys.render(error) << std::endl;
+        VAST_ERROR_ANON(sys.render(error));
       },
       [&](broker::status status) {
         if (status == broker::sc::peer_added)
           peered = true;
         else
-          std::cerr << to_string(status) << std::endl;
+          VAST_ERROR_ANON(to_string(status));
       }
     ), *msg);
   };
-  std::cerr << "peered with Bro successfully" << std::endl;
+  VAST_INFO_ANON("peered with Bro successfully, waiting for commands");
   // Process queries from Bro.
   auto done = false;
   while (!done) {
-    std::cerr << "waiting for commands" << std::endl;
     auto msg = subscriber.get(get_timeout);
     if (terminating)
       return -1;
@@ -311,17 +313,17 @@ int main(int argc, char** argv) {
     // Parse the Bro query event.
     auto result = parse_query_event(data);
     if (!result) {
-      std::cerr << sys.render(result.error()) << std::endl;
+      VAST_ERROR_ANON(sys.render(result.error()));
       continue;
     }
     auto& [query_id, expression] = *result;
     // Relay the query expression to VAST.
     cmd.query_id(query_id);
     auto args = std::vector<std::string>{expression};
-    std::cerr << "dispatching query to VAST: " << expression << std::endl;
+    VAST_INFO_ANON("dispatching query to VAST: " << expression);
     auto rc = cmd.run(sys, args.begin(), args.end());
     if (rc != 0) {
-      std::cerr << "failed to dispatch query to VAST" << std::endl;
+      VAST_ERROR_ANON("failed to dispatch query to VAST");
       return rc;
     }
     // Our Bro command contains a sink, which terminates automatically when the
@@ -330,7 +332,8 @@ int main(int argc, char** argv) {
     self->monitor(cmd.sink());
     self->receive(
       [&, query_id=query_id](const caf::down_msg&) {
-        std::cerr << "\ncompleted processing of query results" << std::endl;
+        std::cerr << std::endl; // newline after the dots.
+        VAST_INFO_ANON("completed processing of query results");
         endpoint.publish(data_topic, make_result_event(query_id, broker::nil));
       }
     );
