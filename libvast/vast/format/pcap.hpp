@@ -28,6 +28,8 @@
 #include "vast/schema.hpp"
 #include "vast/time.hpp"
 
+#include "vast/format/writer.hpp"
+
 namespace vast {
 
 class event;
@@ -125,7 +127,7 @@ private:
 };
 
 /// A PCAP writer.
-class writer {
+class writer : public format::writer {
 public:
   writer() = default;
 
@@ -139,6 +141,8 @@ public:
   expected<void> write(const event& e);
 
   expected<void> flush();
+
+  void cleanup();
 
   const char* name() const;
 
@@ -154,4 +158,3 @@ private:
 } // namespace pcap
 } // namespace format
 } // namespace vast
-

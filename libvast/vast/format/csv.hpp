@@ -23,7 +23,7 @@
 #include "vast/concept/printable/vast/data.hpp"
 #include "vast/detail/string.hpp"
 
-#include "vast/format/writer.hpp"
+#include "vast/format/printer_writer.hpp"
 
 namespace vast::format::csv {
 
@@ -143,9 +143,9 @@ struct value_printer : printer<value_printer> {
   mutable type event_type;
 };
 
-class writer : public format::writer<value_printer>{
+class writer : public printer_writer<value_printer>{
 public:
-  using format::writer<value_printer>::writer;
+  using printer_writer<value_printer>::printer_writer;
 
   const char* name() const {
     return "csv-writer";

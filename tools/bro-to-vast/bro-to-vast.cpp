@@ -33,7 +33,7 @@
 #include <vast/concept/parseable/parse.hpp>
 #include <vast/concept/parseable/vast/expression.hpp>
 #include <vast/concept/parseable/vast/uuid.hpp>
-
+#include <vast/format/writer.hpp>
 #include <vast/system/sink.hpp>
 #include <vast/system/sink_command.hpp>
 
@@ -156,7 +156,7 @@ broker::bro::Event make_result_event(const vast::event& x) {
 }
 
 // A VAST writer that publishes the event it gets to a Bro endpoint.
-class bro_writer {
+class bro_writer : public vast::format::writer {
 public:
   bro_writer() = default;
 
@@ -166,17 +166,13 @@ public:
     // nop
   }
 
-  caf::expected<void> write(const vast::event& x) {
+  caf::expected<void> write(const vast::event& x) override {
     std::cerr << '.';
     endpoint_->publish(data_topic, make_result_event(x));
     return caf::no_error;
   }
 
-  caf::expected<void> flush() {
-    return caf::no_error;
-  }
-
-  auto name() const {
+  const char* name() const override {
     return "bro-writer";
   }
 

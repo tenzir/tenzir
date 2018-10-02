@@ -57,14 +57,14 @@ bgpdump_parser::bgpdump_parser() {
     record_type{std::move(state_change_fields)}.name("bgpdump::state_change");
 }
 
-expected<void> reader::schema(const vast::schema& sch) {
+expected<void> reader::schema(vast::schema x) {
   auto xs = {
     &parser_.announce_type,
     &parser_.route_type,
     &parser_.withdraw_type,
     &parser_.state_change_type,
   };
-  return replace_if_congruent(xs, sch);
+  return replace_if_congruent(xs, x);
 }
 
 expected<schema> reader::schema() const {

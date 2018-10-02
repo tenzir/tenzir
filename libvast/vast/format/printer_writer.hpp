@@ -13,33 +13,48 @@
 
 #pragma once
 
-#include "vast/json.hpp"
-#include "vast/concept/printable/vast/json.hpp"
+#include <iterator>
+#include <memory>
+#include <ostream>
 
-#include "vast/format/printer_writer.hpp"
+#include "vast/error.hpp"
+#include "vast/event.hpp"
+#include "vast/expected.hpp"
 
-namespace vast::format::json {
+#include "vast/format/writer.hpp"
 
-struct event_printer : printer<event_printer> {
-  using attribute = event;
+namespace vast::format {
 
-  template <class Iterator>
-  bool print(Iterator& out, const event& e) const {
-    vast::json j;
-    return convert(e, j) && printers::json<policy::oneline>.print(out, j);
-  }
-};
-
-class writer : public printer_writer<event_printer>{
+/// A generic event writer.
+template <class Printer>
+class printer_writer : public writer {
 public:
-  using printer_writer<event_printer>::printer_writer;
+  printer_writer() = default;
 
-  const char* name() const {
-    return "json-writer";
+  /// Constructs a generic writer.
+  /// @param out The stream where to write to
+  explicit printer_writer(std::unique_ptr<std::ostream> out) 
+    : out_{std::move(out)} {
   }
+
+  expected<void> write(const event& e) override {
+    auto i = std::ostreambuf_iterator<char>(*out_);
+    if (!printer_.print(i, e))
+      return make_error(ec::print_error, "failed to print event:", e);
+    *out_ << '\n';
+    return {};
+  }
+
+  expected<void> flush() override {
+    out_->flush();
+    if (!*out_)
+      return make_error(ec::format_error, "failed to flush");
+    return {};
+  }
+
+private:
+  std::unique_ptr<std::ostream> out_;
+  Printer printer_;
 };
 
-} // namespace vast::format::json
-
-
-
+} // namespace vast::format

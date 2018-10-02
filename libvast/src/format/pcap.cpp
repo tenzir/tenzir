@@ -294,10 +294,7 @@ writer::writer(std::string trace, size_t flush_interval)
 }
 
 writer::~writer() {
-  if (dumper_)
-    ::pcap_dump_close(dumper_);
-  if (pcap_)
-    ::pcap_close(pcap_);
+  cleanup();
 }
 
 expected<void> writer::write(const event& e) {
@@ -351,6 +348,13 @@ expected<void> writer::flush() {
   if (::pcap_dump_flush(dumper_) == -1)
     return make_error(ec::format_error, "failed to flush");
   return no_error;
+}
+
+void writer::cleanup() {
+  if (dumper_)
+    ::pcap_dump_close(dumper_);
+  if (pcap_)
+    ::pcap_close(pcap_);
 }
 
 const char* writer::name() const {
