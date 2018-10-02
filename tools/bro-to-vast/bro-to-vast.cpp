@@ -19,6 +19,7 @@
 #include <string>
 
 #include <caf/config_option_adder.hpp>
+#include <caf/config_value.hpp>
 
 #include <broker/bro.hh>
 #include <broker/broker.hh>
@@ -44,20 +45,30 @@
 
 using namespace std::chrono_literals;
 
-namespace {
-
-constexpr char control_topic[] = "/vast/control";
-constexpr char data_topic[] = "/vast/data";
+namespace defaults {
 
 /// The address where the Broker endpoint listens at.
-constexpr char default_address[] = "127.0.0.1";
+constexpr char broker_address[] = "127.0.0.1";
 
 /// The port where the Broker endpoint binds to.
-constexpr uint16_t default_port = 43000;
+constexpr uint16_t broker_port = 43000;
+
+/// The address where the VAST node listens at.
+constexpr char vast_address[] = "127.0.0.1";
+
+/// The port where the VAST node binds to.
+constexpr uint16_t vast_port = 42000;
 
 // The timeout after which a blocking call to retrieve a message from a
 // subscriber should return.
 broker::duration get_timeout = broker::duration{500ms};
+
+} // namespace defaults
+
+namespace {
+
+constexpr char control_topic[] = "/vast/control";
+constexpr char data_topic[] = "/vast/data";
 
 // Global flag that indicates that the application is shutting down due to a
 // signal.
@@ -84,8 +95,14 @@ public:
     // As a stand-alone application, we reuse the global option group from CAF
     // to avoid unnecessary prefixing.
     opt_group{custom_options_, "global"}
-      .add<std::string>("address,a", "the address where the endpoints listens")
-      .add<uint16_t>("port,p", "the port where the endpoint binds to")
+      .add<std::string>("vast-address,A",
+                        "the address where the Broker endpoints listens")
+      .add<uint16_t>("vast-port,P",
+                     "the port where the Broker endpoint binds to")
+      .add<std::string>("broker-address,a",
+                        "the address where the Broker endpoints listens")
+      .add<uint16_t>("broker-port,p",
+                     "the port where the Broker endpoint binds to")
       .add<bool>("show-progress,s", "print one '.' for each proccessed event");
   }
 };
@@ -279,18 +296,29 @@ int main(int argc, char** argv) {
   cfg.parse(argc, argv);
   if (cfg.cli_helptext_printed)
     return 0;
-  std::string address = caf::get_or(cfg, "address", default_address);
-  uint16_t port = caf::get_or(cfg, "port", default_port);
+  std::string broker_address = caf::get_or(cfg, "broker-address",
+                                           defaults::broker_address);
+  uint16_t broker_port = caf::get_or(cfg, "broker-port", defaults::broker_port);
   // Create a Broker endpoint.
   auto endpoint = broker::endpoint{std::move(cfg)};
-  endpoint.listen(address, port);
+  endpoint.listen(broker_address, broker_port);
   // Subscribe to the control channel.
   auto subscriber = endpoint.make_subscriber({control_topic});
   // Connect to VAST via a custom command.
   bro_command cmd{endpoint};
   auto& sys = endpoint.system();
   caf::scoped_actor self{sys};
+  std::string vast_address = caf::get_or(sys.config(), "vast-address",
+                                         defaults::vast_address);
+  uint16_t vast_port = caf::get_or(sys.config(), "vast-port",
+                                   defaults::vast_port);
   caf::config_value_map opts;
+  // TODO: simplify this to set("global", "endpoint", value) after we addressed
+  // https://github.com/actor-framework/actor-framework/issues/769.
+  opts.emplace("global",
+               caf::config_value::dictionary{{
+                 "endpoint", caf::config_value{vast_address + ':'
+                                               + std::to_string(vast_port)}}});
   auto node = cmd.connect_to_node(self, opts);
   if (!node) {
     VAST_ERROR_ANON("failed to connect to VAST: " << sys.render(node.error()));
@@ -302,7 +330,7 @@ int main(int argc, char** argv) {
   auto status_subscriber = endpoint.make_status_subscriber(receive_statuses);
   auto peered = false;
   while (!peered) {
-    auto msg = status_subscriber.get(get_timeout);
+    auto msg = status_subscriber.get(defaults::get_timeout);
     if (terminating)
       return -1;
     if (!msg)
@@ -326,7 +354,7 @@ int main(int argc, char** argv) {
   // Process queries from Bro.
   auto done = false;
   while (!done) {
-    auto msg = subscriber.get(get_timeout);
+    auto msg = subscriber.get(defaults::get_timeout);
     if (terminating)
       return -1;
     if (!msg)
