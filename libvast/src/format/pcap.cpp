@@ -274,7 +274,7 @@ expected<event> reader::read() {
   return e;
 }
 
-expected<void> reader::schema(const vast::schema& sch) {
+expected<void> reader::schema(vast::schema sch) {
   return replace_if_congruent({&packet_type_}, sch);
 }
 
