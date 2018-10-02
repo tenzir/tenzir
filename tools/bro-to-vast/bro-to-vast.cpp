@@ -371,7 +371,7 @@ int main(int argc, char** argv) {
     cmd.query_id(query_id);
     auto args = std::vector<std::string>{expression};
     VAST_INFO_ANON("dispatching query", query_id, expression);
-    auto rc = cmd.run(sys, args.begin(), args.end());
+    auto rc = cmd.run(sys, opts, args.begin(), args.end());
     if (rc != 0) {
       VAST_ERROR_ANON("failed to dispatch query to VAST");
       return rc;
