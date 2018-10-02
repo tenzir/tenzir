@@ -63,7 +63,7 @@ FIXTURE_SCOPE(table_index_tests, fixture)
 TEST(integer values) {
   MESSAGE("generate table layout for flat integer type");
   integer_type column_type;
-  record_type layout{{"value", column_type}};
+  auto layout = record_type{{"value", column_type}}.name("int_log");
   reset(make_table_index(sys, directory, layout));
   MESSAGE("ingest test data (integers)");
   auto rows = make_rows(1, 2, 3, 1, 2, 3, 1, 2, 3);
@@ -85,6 +85,7 @@ TEST(integer values) {
     CHECK_EQUAL(query(":int != +1"), res(1u, 2u, 4u, 5u, 7u, 8u));
     CHECK_EQUAL(query("!(:int == +1)"), res(1u, 2u, 4u, 5u, 7u, 8u));
     CHECK_EQUAL(query(":int > +1 && :int < +3"), res(1u, 4u, 7u));
+    CHECK_EQUAL(query("&type == \"int_log\""), make_ids({{0, 9}}));
   };
   verify();
   MESSAGE("(automatically) persist table index and restore from disk");
