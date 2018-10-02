@@ -246,7 +246,7 @@ caf::expected<bitmap> table_index::lookup_impl(const predicate& pred,
     auto fac = [&] {
       return make_type_column_index(sys_, meta_dir() / "type");
     };
-    return with_meta_column(1, fac, [&](column_index& col) {
+    return with_meta_column(0, fac, [&](column_index& col) {
       return col.lookup(pred);
     });
   } else if (ex.attr == "time") {
