@@ -6,12 +6,17 @@ it acts as bridge between Bro and VAST:
 
                   Bro  <--->  bro-to-vast  <--->  VAST
 
-The accompanying Bro code ships as the separate package [bro-vast][bro-vast].
+Note that `bro-to-vast` acts as a "dumb" relay and does not contain much logic.
+Please consult the documentation of the Bro package [bro-vast][bro-vast] for
+concrete Bro use cases.
 
 ## Installation
 
-First, make sure you have Bro and Broker installed. VAST requires Broker at
-build time to create the `bro-to-vast` binary.
+First, make sure you have Bro and Broker installed. VAST automatically builds
+`bro-to-vast` if Broker is found during the build configuration. If you're
+using the `configure` script in this repo, the flag `--with-broker=PATH` allows
+for specifying a custom install location. `PATH` is either an install prefix or
+a build directory of Broker repository.
 
 Second, install the Bro scripts via:
 
@@ -21,20 +26,25 @@ Now you're ready to go.
 
 ## Usage
 
-VAST must be running prior to starting `bro-to-vast`. If VAST listens on the
-default port (42000), then you only need to invoke the binary:
+As illustrated above, `bro-to-vast` sits between Bro and VAST. If Bro and VAST
+run on the same machine, all you need to do is invoke the program:
 
     bro-to-vast
 
-Otherwise, you can provide a different port with the `-p` flag:
+VAST must be running prior prior to invocation. After connecting to VAST
+successfully, `bro-to-vast` creates a Broker endpoint and waits for Bro to
+connect.
 
-    bro-to-vast -p 44444
+Both sides can be configured separately. To configure the VAST-facing side, use
+the options `--vast-address` (or `-A`) and `--vast-port` (or `-P`):
 
-After `bro-to-vast` connected to VAST successfully, connection attempts from
-Bro can succeed.
+    # Connect to a VAST node running at 10.0.0.1:55555.
+    bro-to-vast -A 10.0.0.1 -P 55555
 
-The `bro-to-vast` bridge acts primarily as a "dumb" relay and does not contain
-much logic. Please consult the documentation of the Bro package
-[bro-vast][bro-vast] for concrete Bro use cases.
+To configure the Bro-facing side, use the options `--broker-address` (or `-a`)
+and `--broker-port` (or `-p`):
+
+    # Wait for Bro to connect at 192.168.0.1:44444
+    bro-to-vast -a 192.168.0.1 -p 44444
 
 [bro-vast]: https://github.com/tenzir/bro-vast
