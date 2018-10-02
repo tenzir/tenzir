@@ -324,7 +324,7 @@ int main(int argc, char** argv) {
     VAST_ERROR_ANON("failed to connect to VAST: " << sys.render(node.error()));
     return 1;
   }
-  VAST_INFO_ANON("connected to VAST successfully" );
+  VAST_INFO_ANON("connected to VAST successfully");
   // Block until Bro peers with us.
   auto receive_statuses = true;
   auto status_subscriber = endpoint.make_status_subscriber(receive_statuses);
