@@ -86,9 +86,6 @@ caf::behavior sink(caf::stateful_actor<sink_state<Writer>>* self,
     [=](const uuid& id, const query_statistics&) {
       VAST_IGNORE_UNUSED(id);
       VAST_DEBUG(self, "got query statistics from", id);
-      // EXPORTERs currently send statistics only when they have completed the
-      // query, so calling cleanup here is safe.
-      self->state.writer.cleanup();
     },
     [=](limit_atom, uint64_t max) {
       VAST_DEBUG(self, "caps event export at", max, "events");
