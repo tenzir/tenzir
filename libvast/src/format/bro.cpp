@@ -25,13 +25,10 @@
 #include "vast/detail/string.hpp"
 #include "vast/error.hpp"
 #include "vast/event.hpp"
+#include "vast/format/bro.hpp"
 #include "vast/logger.hpp"
 
-#include "vast/format/bro.hpp"
-
-namespace vast {
-namespace format {
-namespace bro {
+namespace vast::format::bro {
 namespace {
 
 // Creates a VAST type from an ASCII Bro type in a log header.
@@ -345,8 +342,8 @@ expected<event> reader::read() {
   return e;
 }
 
-expected<void> reader::schema(const vast::schema& sch) {
-  schema_ = sch;
+expected<void> reader::schema(vast::schema sch) {
+  schema_ = std::move(sch);
   return no_error;
 }
 
@@ -487,15 +484,6 @@ writer::writer(path dir) {
     dir_ = std::move(dir);
 }
 
-writer::~writer() {
-  std::ostringstream ss;
-  ss << "#close" << separator << time_factory{} << '\n';
-  auto footer = ss.str();
-  for (auto& pair : streams_)
-    if (pair.second)
-      *pair.second << footer;
-}
-
 expected<void> writer::write(const event& e) {
   if (!caf::holds_alternative<record_type>(e.type()))
     return make_error(ec::format_error, "cannot process non-record events");
@@ -544,10 +532,20 @@ expected<void> writer::flush() {
   return no_error;
 }
 
+void writer::cleanup() {
+  if (streams_.empty())
+    return;
+  std::ostringstream ss;
+  ss << "#close" << separator << time_factory{} << '\n';
+  auto footer = ss.str();
+  for (auto& pair : streams_)
+    if (pair.second)
+      *pair.second << footer;
+  streams_.clear();
+}
+
 const char* writer::name() const {
   return "bro-writer";
 }
 
-} // namespace bro
-} // namespace format
-} // namespace vast
+} // namespace vast::format::bro

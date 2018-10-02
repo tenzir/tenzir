@@ -13,34 +13,48 @@
 
 #pragma once
 
-#include <caf/expected.hpp>
+#include <iterator>
+#include <memory>
+#include <ostream>
 
-#include "vast/fwd.hpp"
+#include "vast/error.hpp"
+#include "vast/event.hpp"
+#include "vast/expected.hpp"
+
+#include "vast/format/writer.hpp"
 
 namespace vast::format {
 
-/// The base class for readers.
-class reader {
+/// A writer that operates with a given printer.
+template <class Printer>
+class printer_writer : public writer {
 public:
-  virtual ~reader();
+  printer_writer() = default;
 
-  /// Reads the next event.
-  /// @returns The event on success, `caf::none` if the underlying format has
-  ///          currently no event (e.g., when it's idling), and an error
-  ///          otherwise.
-  virtual caf::expected<event> read() = 0;
+  /// Constructs a generic writer.
+  /// @param out The stream where to write to
+  explicit printer_writer(std::unique_ptr<std::ostream> out) 
+    : out_{std::move(out)} {
+  }
 
-  /// Sets the schema for events to read.
-  /// @param x The new schema.
-  /// @returns `caf::none` on success.
-  virtual caf::expected<void> schema(vast::schema x) = 0;
+  expected<void> write(const event& e) override {
+    auto i = std::ostreambuf_iterator<char>(*out_);
+    if (!printer_.print(i, e))
+      return make_error(ec::print_error, "failed to print event:", e);
+    *out_ << '\n';
+    return {};
+  }
 
-  /// Retrieves the currently used schema.
-  /// @returns The current schema.
-  virtual caf::expected<vast::schema> schema() const = 0;
+  expected<void> flush() override {
+    out_->flush();
+    if (!*out_)
+      return make_error(ec::format_error, "failed to flush");
+    return {};
+  }
 
-  /// @returns The name of the reader type.
-  virtual const char* name() const = 0;
+private:
+  std::unique_ptr<std::ostream> out_;
+  Printer printer_;
 };
 
 } // namespace vast::format

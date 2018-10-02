@@ -24,6 +24,8 @@
 #include "vast/concept/hashable/xxhash.hpp"
 #include "vast/detail/operators.hpp"
 #include "vast/expected.hpp"
+#include "vast/format/reader.hpp"
+#include "vast/format/writer.hpp"
 #include "vast/port.hpp"
 #include "vast/schema.hpp"
 #include "vast/time.hpp"
@@ -74,7 +76,7 @@ namespace format {
 namespace pcap {
 
 /// A PCAP reader.
-class reader {
+class reader : public format::reader {
 public:
   reader() = default;
 
@@ -96,13 +98,13 @@ public:
 
   ~reader();
 
-  expected<event> read();
+  caf::expected<event> read() override;
 
-  expected<void> schema(const vast::schema& sch);
+  caf::expected<void> schema(vast::schema sch) override;
 
-  expected<vast::schema> schema() const;
+  caf::expected<vast::schema> schema() const override;
 
-  const char* name() const;
+  const char* name() const override;
 
 private:
   struct connection_state {
@@ -125,7 +127,7 @@ private:
 };
 
 /// A PCAP writer.
-class writer {
+class writer : public format::writer {
 public:
   writer() = default;
 
@@ -136,11 +138,13 @@ public:
 
   ~writer();
 
-  expected<void> write(const event& e);
+  caf::expected<void> write(const event& e) override;
 
-  expected<void> flush();
+  caf::expected<void> flush() override;
 
-  const char* name() const;
+  void cleanup() override;
+
+  const char* name() const override;
 
 private:
   vast::schema schema_;
@@ -154,4 +158,3 @@ private:
 } // namespace pcap
 } // namespace format
 } // namespace vast
-

@@ -13,13 +13,13 @@
 
 #pragma once
 
-#include "vast/schema.hpp"
 #include "vast/concept/parseable/core.hpp"
 #include "vast/concept/parseable/string.hpp"
 #include "vast/concept/parseable/numeric.hpp"
 #include "vast/concept/parseable/vast/data.hpp"
-
-#include "vast/format/reader.hpp"
+#include "vast/event.hpp"
+#include "vast/format/parser_reader.hpp"
+#include "vast/schema.hpp"
 
 namespace vast::format::bgpdump {
 
@@ -114,17 +114,15 @@ struct bgpdump_parser : parser<bgpdump_parser> {
   type state_change_type;
 };
 
-class reader : public format::reader<bgpdump_parser> {
+class reader : public parser_reader<bgpdump_parser> {
 public:
-  using format::reader<bgpdump_parser>::reader;
+  using parser_reader<bgpdump_parser>::parser_reader;
 
-  expected<void> schema(const vast::schema& sch);
+  caf::expected<void> schema(vast::schema sch) override;
 
-  expected<vast::schema> schema() const;
+  caf::expected<vast::schema> schema() const override;
 
-  const char* name() const;
+  const char* name() const override;
 };
 
 } // namespace vast::format::bgpdump
-
-

@@ -55,7 +55,9 @@ set(libvast_sources
   src/format/bro.cpp
   src/format/csv.cpp
   src/format/mrt.cpp
+  src/format/reader.cpp
   src/format/test.cpp
+  src/format/writer.cpp
   src/http.cpp
   src/ids.cpp
   src/meta_index.cpp
