@@ -25,7 +25,7 @@
 
 namespace vast::format {
 
-/// A generic event writer.
+/// A writer that operates with a given printer.
 template <class Printer>
 class printer_writer : public writer {
 public:
