@@ -16,7 +16,7 @@ First, make sure you have Bro and Broker installed. VAST automatically builds
 `bro-to-vast` if Broker is found during the build configuration. If you're
 using the `configure` script in this repo, the flag `--with-broker=PATH` allows
 for specifying a custom install location. `PATH` is either an install prefix or
-a build directory of Broker repository.
+a build directory of a Broker repository.
 
 Second, install the Bro scripts via:
 
@@ -31,7 +31,7 @@ run on the same machine, all you need to do is invoke the program:
 
     bro-to-vast
 
-VAST must be running prior prior to invocation. After connecting to VAST
+VAST must be running prior to invocation. After connecting to VAST
 successfully, `bro-to-vast` creates a Broker endpoint and waits for Bro to
 connect.
 
