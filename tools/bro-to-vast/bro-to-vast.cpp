@@ -377,7 +377,8 @@ int main(int argc, char** argv) {
     auto rc = cmd.run(sys, opts, args.begin(), args.end());
     if (rc != 0) {
       VAST_ERROR_ANON("failed to dispatch query to VAST");
-      return rc;
+      self->send_exit(cmd.sink(), caf::exit_reason::user_shutdown);
+      continue;
     }
     // Our Bro command contains a sink, which terminates automatically when the
     // exporter for the corresponding query has finished. We use this signal to
