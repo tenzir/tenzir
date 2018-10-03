@@ -91,8 +91,10 @@ class config : public broker::configuration {
 public:
   config() {
     // Print a reasonable amount of logging output to the console.
-    set("logger.console", caf::atom("COLORED"));
+    // TODO: switch to console-verbosity after the following PR is merged:
+    // https://github.com/actor-framework/actor-framework/pull/766.
     set("logger.verbosity", caf::atom("INFO"));
+    set("logger.console", caf::atom("COLORED"));
     // As a stand-alone application, we reuse the global option group from CAF
     // to avoid unnecessary prefixing.
     opt_group{custom_options_, "global"}
