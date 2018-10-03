@@ -201,7 +201,7 @@ public:
   caf::expected<void> write(const vast::event& x) override {
     ++num_results_;
     if (show_progress_)
-      std::cerr << '.';
+      std::cerr << '.' << std::flush;
     endpoint_->publish(data_topic, make_result_event(query_id_, x));
     return caf::no_error;
   }
