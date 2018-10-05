@@ -165,6 +165,9 @@ def makeBuildStages(matrixIndex, builds, lblExpr, settings) {
 
 // Declarative pipeline for triggering all stages.
 pipeline {
+    options {
+        buildDiscarder(logRotator(numToKeepStr: '50', artifactNumToKeepStr: '10'))
+    }
     agent none
     environment {
         LD_LIBRARY_PATH = "$WORKSPACE/vast-sources/build/lib;" +
