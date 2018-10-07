@@ -19,6 +19,7 @@
 #include <string>
 
 #include <caf/config_option_adder.hpp>
+#include <caf/config_value.hpp>
 
 #include <broker/bro.hh>
 #include <broker/broker.hh>
@@ -28,6 +29,8 @@
 #include <vast/error.hpp>
 #include <vast/event.hpp>
 #include <vast/expression.hpp>
+#include <vast/format/writer.hpp>
+#include <vast/logger.hpp>
 #include <vast/uuid.hpp>
 
 #include <vast/concept/parseable/parse.hpp>
@@ -43,17 +46,30 @@
 
 using namespace std::chrono_literals;
 
-namespace {
+namespace defaults {
 
-constexpr char control_topic[] = "/vast/control";
-constexpr char data_topic[] = "/vast/data";
+/// The address where the Broker endpoint listens at.
+constexpr char broker_address[] = "127.0.0.1";
 
-constexpr char default_address[] = "localhost";
-constexpr uint16_t default_port = 43000;
+/// The port where the Broker endpoint binds to.
+constexpr uint16_t broker_port = 43000;
+
+/// The address where the VAST node listens at.
+constexpr char vast_address[] = "127.0.0.1";
+
+/// The port where the VAST node binds to.
+constexpr uint16_t vast_port = 42000;
 
 // The timeout after which a blocking call to retrieve a message from a
 // subscriber should return.
 broker::duration get_timeout = broker::duration{500ms};
+
+} // namespace defaults
+
+namespace {
+
+constexpr char control_topic[] = "/vast/control";
+constexpr char data_topic[] = "/vast/data";
 
 // Global flag that indicates that the application is shutting down due to a
 // signal.
@@ -74,10 +90,23 @@ extern "C" void signal_handler(int sig) {
 class config : public broker::configuration {
 public:
   config() {
+    // Print a reasonable amount of logging output to the console.
+    // TODO: switch to console-verbosity after the following PR is merged:
+    // https://github.com/actor-framework/actor-framework/pull/766.
+    set("logger.verbosity", caf::atom("INFO"));
+    set("logger.console", caf::atom("COLORED"));
     // As a stand-alone application, we reuse the global option group from CAF
     // to avoid unnecessary prefixing.
     opt_group{custom_options_, "global"}
-      .add<uint16_t>("port,p", "the port to listen at or connect to");
+      .add<std::string>("vast-address,A",
+                        "the address where the Broker endpoints listens")
+      .add<uint16_t>("vast-port,P",
+                     "the port where the Broker endpoint binds to")
+      .add<std::string>("broker-address,a",
+                        "the address where the Broker endpoints listens")
+      .add<uint16_t>("broker-port,p",
+                     "the port where the Broker endpoint binds to")
+      .add<bool>("show-progress,s", "print one '.' for each proccessed event");
   }
 };
 
@@ -143,16 +172,20 @@ broker::data to_broker(const vast::data& data) {
 }
 
 // Constructs a result event for Bro from Broker data.
-broker::bro::Event make_result_event(std::string name, broker::data x) {
+broker::bro::Event make_result_event(std::string query_id, broker::data x) {
   broker::vector args(2);
-  args[0] = std::move(name);
+  args[0] = std::move(query_id);
   args[1] = std::move(x);
   return {"VAST::result", std::move(args)};
 }
 
 // Constructs a result event for Bro from a VAST event.
-broker::bro::Event make_result_event(const vast::event& x) {
-  return make_result_event(x.type().name(), to_broker(x.data()));
+broker::bro::Event make_result_event(std::string query_id,
+                                     const vast::event& x) {
+  broker::vector xs(2);
+  xs[0] = x.type().name();
+  xs[1] = to_broker(x.data());
+  return make_result_event(std::move(query_id), std::move(xs));
 }
 
 // A VAST writer that publishes the event it gets to a Bro endpoint.
@@ -163,13 +196,22 @@ public:
   bro_writer(broker::endpoint& endpoint, std::string query_id)
     : endpoint_{&endpoint},
       query_id_{std::move(query_id)} {
-    // nop
+    auto& cfg = endpoint.system().config();
+    show_progress_ = caf::get_or(cfg, "show-progress", false);
   }
 
   caf::expected<void> write(const vast::event& x) override {
-    std::cerr << '.';
-    endpoint_->publish(data_topic, make_result_event(x));
+    ++num_results_;
+    if (show_progress_)
+      std::cerr << '.' << std::flush;
+    endpoint_->publish(data_topic, make_result_event(query_id_, x));
     return caf::no_error;
+  }
+
+  void cleanup() override {
+    if (show_progress_ && num_results_ > 0)
+      std::cerr << std::endl;
+    VAST_INFO_ANON("query", query_id_, "had", num_results_, "result(s)");
   }
 
   const char* name() const override {
@@ -179,6 +221,8 @@ public:
 private:
   broker::endpoint* endpoint_;
   std::string query_id_;
+  bool show_progress_ = false;
+  size_t num_results_ = 0;
 };
 
 // A custom command that allows us to re-use VAST command dispatching logic in
@@ -253,31 +297,43 @@ int main(int argc, char** argv) {
   vast::detail::add_message_types(cfg);
   vast::detail::add_error_categories(cfg);
   cfg.parse(argc, argv);
-  std::string address = caf::get_or(cfg, "address", default_address);
-  uint16_t port = caf::get_or(cfg, "port", default_port);
+  if (cfg.cli_helptext_printed)
+    return 0;
+  std::string broker_address = caf::get_or(cfg, "broker-address",
+                                           defaults::broker_address);
+  uint16_t broker_port = caf::get_or(cfg, "broker-port", defaults::broker_port);
   // Create a Broker endpoint.
   auto endpoint = broker::endpoint{std::move(cfg)};
-  endpoint.listen(address, port);
+  endpoint.listen(broker_address, broker_port);
   // Subscribe to the control channel.
   auto subscriber = endpoint.make_subscriber({control_topic});
   // Connect to VAST via a custom command.
   bro_command cmd{endpoint};
   auto& sys = endpoint.system();
   caf::scoped_actor self{sys};
+  std::string vast_address = caf::get_or(sys.config(), "vast-address",
+                                         defaults::vast_address);
+  uint16_t vast_port = caf::get_or(sys.config(), "vast-port",
+                                   defaults::vast_port);
   caf::config_value_map opts;
+  // TODO: simplify this to set("global", "endpoint", value) after we addressed
+  // https://github.com/actor-framework/actor-framework/issues/769.
+  opts.emplace("global",
+               caf::config_value::dictionary{{
+                 "endpoint", caf::config_value{vast_address + ':'
+                                               + std::to_string(vast_port)}}});
   auto node = cmd.connect_to_node(self, opts);
   if (!node) {
-    std::cerr << "failed to connect to VAST: " << sys.render(node.error())
-              << std::endl;
+    VAST_ERROR_ANON("failed to connect to VAST: " << sys.render(node.error()));
     return 1;
   }
-  std::cerr << "connected to VAST successfully" << std::endl;
+  VAST_INFO_ANON("connected to VAST successfully");
   // Block until Bro peers with us.
   auto receive_statuses = true;
   auto status_subscriber = endpoint.make_status_subscriber(receive_statuses);
   auto peered = false;
   while (!peered) {
-    auto msg = status_subscriber.get(get_timeout);
+    auto msg = status_subscriber.get(defaults::get_timeout);
     if (terminating)
       return -1;
     if (!msg)
@@ -287,22 +343,21 @@ int main(int argc, char** argv) {
         // timeout
       },
       [&](broker::error error) {
-        std::cerr << sys.render(error) << std::endl;
+        VAST_ERROR_ANON(sys.render(error));
       },
       [&](broker::status status) {
         if (status == broker::sc::peer_added)
           peered = true;
         else
-          std::cerr << to_string(status) << std::endl;
+          VAST_ERROR_ANON(to_string(status));
       }
     ), *msg);
   };
-  std::cerr << "peered with Bro successfully" << std::endl;
+  VAST_INFO_ANON("peered with Bro successfully, waiting for commands");
   // Process queries from Bro.
   auto done = false;
   while (!done) {
-    std::cerr << "waiting for commands" << std::endl;
-    auto msg = subscriber.get(get_timeout);
+    auto msg = subscriber.get(defaults::get_timeout);
     if (terminating)
       return -1;
     if (!msg)
@@ -311,18 +366,19 @@ int main(int argc, char** argv) {
     // Parse the Bro query event.
     auto result = parse_query_event(data);
     if (!result) {
-      std::cerr << sys.render(result.error()) << std::endl;
+      VAST_ERROR_ANON(sys.render(result.error()));
       continue;
     }
     auto& [query_id, expression] = *result;
     // Relay the query expression to VAST.
     cmd.query_id(query_id);
     auto args = std::vector<std::string>{expression};
-    std::cerr << "dispatching query to VAST: " << expression << std::endl;
-    auto rc = cmd.run(sys, args.begin(), args.end());
+    VAST_INFO_ANON("dispatching query", query_id, expression);
+    auto rc = cmd.run(sys, opts, args.begin(), args.end());
     if (rc != 0) {
-      std::cerr << "failed to dispatch query to VAST" << std::endl;
-      return rc;
+      VAST_ERROR_ANON("failed to dispatch query to VAST");
+      self->send_exit(cmd.sink(), caf::exit_reason::user_shutdown);
+      continue;
     }
     // Our Bro command contains a sink, which terminates automatically when the
     // exporter for the corresponding query has finished. We use this signal to
@@ -330,8 +386,8 @@ int main(int argc, char** argv) {
     self->monitor(cmd.sink());
     self->receive(
       [&, query_id=query_id](const caf::down_msg&) {
-        std::cerr << "\ncompleted processing of query results" << std::endl;
-        endpoint.publish(data_topic, make_result_event(query_id, broker::nil));
+        auto nil = broker::data{}; // Avoid ambiguity between VAST & Broker.
+        endpoint.publish(data_topic, make_result_event(query_id, nil));
       }
     );
   }
