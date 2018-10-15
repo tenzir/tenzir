@@ -38,7 +38,8 @@ namespace vast::system {
 
 source_command::source_command(command* parent, std::string_view name)
   : super(parent, name) {
-  add_opt<std::string>("schema,s", "path to alternate schema");
+  add_opt<std::string>("schema-file,s", "path to alternate schema");
+  add_opt<std::string>("schema,S", "alternate schema as string");
 }
 
 caf::expected<schema> load_schema_file(std::string& path) {
@@ -76,13 +77,21 @@ int source_command::run_impl(caf::actor_system& sys,
   }
   auto src = std::move(*src_opt);
   // Supply an alternate schema, if requested.
-  if (auto sf = caf::get_if<std::string>(&options, "schema")) {
-    auto schema = load_schema_file(*sf);
-    if (!schema) {
-      VAST_ERROR(self, "had a schema error:", sys.render(schema.error()));
+  expected<vast::schema> schema{caf::none};
+  if (auto sf = caf::get_if<std::string>(&options, "schema-file")) {
+    if (caf::get_if<std::string>(&options, "schema")) {
+      VAST_ERROR(self, "had both schema and schema-file provided");
       return EXIT_FAILURE;
     }
+    schema = load_schema_file(*sf);
+  } else if (auto sc = caf::get_if<std::string>(&options, "schema")) {
+    schema = to<vast::schema>(*sc);
+  }
+  if (schema) {
     self->send(src, put_atom::value, std::move(*schema));
+  } else if (schema.error()) {
+    VAST_ERROR(self, "had a schema error:", sys.render(schema.error()));
+    return EXIT_FAILURE;
   }
   // Attempt to parse the remainder as an expression.
   if (begin != end) {
