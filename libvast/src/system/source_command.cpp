@@ -38,7 +38,7 @@ namespace vast::system {
 
 source_command::source_command(command* parent, std::string_view name)
   : super(parent, name) {
-  // nop
+  add_opt<std::string>("schema,s", "path to alternate schema");
 }
 
 caf::expected<schema> load_schema_file(std::string& path) {
