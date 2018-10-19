@@ -268,53 +268,6 @@ expected<void> validator::operator()(const key_extractor&, const data&) {
   return no_error;
 }
 
-time_restrictor::time_restrictor(timestamp first, timestamp last)
-  : first_{first}, last_{last} {
-}
-
-bool time_restrictor::operator()(caf::none_t) const {
-  die("should never happen");
-  return false;
-}
-
-bool time_restrictor::operator()(const conjunction& con) const {
-  for (auto& op : con)
-    if (!caf::visit(*this, op))
-      return false;
-  return true;
-}
-
-bool time_restrictor::operator()(const disjunction& dis) const {
-  for (auto& op : dis)
-    if (caf::visit(*this, op))
-      return true;
-  return false;
-}
-
-bool time_restrictor::operator()(const negation& n) const {
-  // We can only apply a negation if it sits directly on top of a time
-  // extractor, because only then we can negate the meaning of the temporal
-  // constraint.
-  auto r = caf::visit(*this, n.expr());
-  if (auto p = caf::get_if<predicate>(&n.expr()))
-    if (auto a = caf::get_if<attribute_extractor>(&p->lhs))
-      if (a->attr == "time")
-        return !r;
-  return r;
-}
-
-bool time_restrictor::operator()(const predicate& p) const {
-  if (auto a = caf::get_if<attribute_extractor>(&p.lhs)) {
-    if (a->attr == "time") {
-      auto d = caf::get_if<data>(&p.rhs);
-      VAST_ASSERT(d && caf::holds_alternative<timestamp>(*d));
-      return evaluate(first_, p.op, *d) || evaluate(last_, p.op, *d);
-    }
-  }
-  return true; // nothing to retrict.
-}
-
-
 type_resolver::type_resolver(const type& t) : type_{t} {
 }
 

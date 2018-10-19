@@ -47,7 +47,7 @@ void indexer_stage_driver::process(downstream_type& out, batch_type& slices) {
   VAST_ASSERT(partition_ != nullptr);
   for (auto& slice : slices) {
     // Update meta index.
-    meta_index_.add(partition_->id(), slice);
+    meta_index_.add(partition_->id(), *slice);
     // Start new INDEXER actors when needed and add it to the stream.
     auto& layout = slice->layout();
     if (auto [hdl, added] = partition_->manager().get_or_add(layout); added) {
