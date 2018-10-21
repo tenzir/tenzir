@@ -97,10 +97,13 @@ private:
   caf::actor_id id_;
 };
 
-namespace detail {
+} // namespace vast::system
+
+namespace vast::detail {
 
 template <class Actor>
 auto apply(Actor* self, caf::message& operation) {
+  using namespace vast::system;
   using key_type = typename decltype(self->state.store)::key_type;
   using value_type = typename decltype(self->state.store)::mapped_type;
   return *operation.apply({
@@ -126,6 +129,7 @@ auto apply(Actor* self, caf::message& operation) {
 // Applies a mutable operation coming from the consensus module.
 template <class Actor>
 void update(Actor* self, caf::message& command) {
+  using namespace vast::system;
   command.apply({
     [=](const actor_identity& identity, uint64_t id, caf::message operation) {
       if (identity != self->address()) {
@@ -156,6 +160,7 @@ void update(Actor* self, caf::message& command) {
 template <class Actor>
 void replicate(Actor* self, const caf::actor& consensus,
                caf::response_promise rp) {
+  using namespace vast::system;
   auto operation = self->current_mailbox_element()->move_content_to_message();
   auto id = ++self->state.request_id;
   self->state.requests.emplace(id, rp);
@@ -171,7 +176,9 @@ void replicate(Actor* self, const caf::actor& consensus,
   );
 }
 
-} // namespace detail
+} // namespace vast::detail
+
+namespace vast::system {
 
 /// A replicated key-value store that sits on top of a consensus module.
 /// @param self The actor handle.

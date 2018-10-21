@@ -21,8 +21,8 @@
 
 using namespace caf;
 
-namespace vast {
-namespace system {
+namespace vast::system {
+
 namespace {
 
 template <class Actor>
@@ -52,9 +52,7 @@ void complete(Actor self, const actor_addr& a) {
 
 } // namespace <anonymous>
 
-namespace detail {
-
-behavior task(stateful_actor<task_state>* self, message done_msg) {
+behavior task_impl(stateful_actor<task_state>* self, message done_msg) {
   self->state.done_msg = std::move(done_msg);
   self->set_exit_handler(
     [=](const exit_msg& msg) {
@@ -105,7 +103,4 @@ behavior task(stateful_actor<task_state>* self, message done_msg) {
   };
 }
 
-} // namespace detail
-
-} // namespace system
-} // namespace vast
+} // namespace vast::system
