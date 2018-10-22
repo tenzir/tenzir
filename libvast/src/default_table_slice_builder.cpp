@@ -67,4 +67,13 @@ size_t default_table_slice_builder::rows() const noexcept {
   return slice_ == nullptr ? 0u : slice_->xs_.size();
 }
 
+void default_table_slice_builder::reserve(size_t num_rows) {
+  if (!slice_) {
+    slice_ = caf::make_counted<default_table_slice>(layout_);
+    row_ = vector(layout_.fields.size());
+    col_ = 0;
+  }
+  slice_->xs_.reserve(num_rows);
+}
+
 } // namespace vast

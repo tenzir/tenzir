@@ -36,6 +36,8 @@ public:
 
   size_t rows() const noexcept final;
 
+  void reserve(size_t num_rows) final;
+
 private:
   // -- member variables -------------------------------------------------------
 

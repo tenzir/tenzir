@@ -137,7 +137,7 @@ struct source_state {
   }
 
   /// Tries to access the builder for `layout`.
-  table_slice_builder* builder(const type& layout) {
+  table_slice_builder* builder(const type& layout, size_t table_slice_size) {
     auto i = builders.find(layout.name());
     if (i != builders.end())
       return i->second.get();
@@ -151,6 +151,7 @@ struct source_state {
                                  std::move(tstamp_field));
           auto& ref = builders[layout.name()];
           ref = factory(internal);
+          ref->reserve(table_slice_size);
           return ref.get();
         },
         [&](auto&) -> table_slice_builder* {
@@ -206,7 +207,7 @@ struct source_state {
         return {produced, true};
       }
       auto& e = *maybe_e;
-      auto bptr = builder(e.type());
+      auto bptr = builder(e.type(), table_slice_size);
       if (bptr == nullptr)
         continue;
       if (!caf::holds_alternative<caf::none_t>(filter)) {
