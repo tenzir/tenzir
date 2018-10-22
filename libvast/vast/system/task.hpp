@@ -33,9 +33,8 @@ struct task_state {
   static inline const char* name = "task";
 };
 
-namespace detail {
-caf::behavior task(caf::stateful_actor<task_state>* self, caf::message done);
-} // namespace detail
+caf::behavior task_impl(caf::stateful_actor<task_state>* self,
+                        caf::message done);
 
 /// An abstraction for work consisting of one or more actor. A work item
 /// completes if the corresponding actor terminates or if one marks the actor
@@ -46,7 +45,7 @@ caf::behavior task(caf::stateful_actor<task_state>* self, caf::message done);
 template <class... Ts>
 caf::behavior task(caf::stateful_actor<task_state>* self, Ts... xs) {
   auto done_msg = caf::make_message(done_atom::value, std::move(xs)...);
-  return detail::task(self, std::move(done_msg));
+  return task_impl(self, std::move(done_msg));
 }
 
 } // namespace vast::system
