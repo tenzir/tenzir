@@ -82,14 +82,14 @@ int sink_command::run_impl(caf::actor_system& sys,
   );
   if (!exp) {
     self->send_exit(snk, exit_reason::user_shutdown);
-    return 1;
+    return EXIT_FAILURE;
   }
   // Start the exporter.
   self->send(exp, system::sink_atom::value, snk);
   self->send(exp, system::run_atom::value);
   self->monitor(snk);
   self->monitor(exp);
-  auto rc = 0;
+  auto rc = EXIT_SUCCESS;
   auto stop = false;
   self->do_receive(
     [&](const down_msg& msg) {
@@ -97,14 +97,14 @@ int sink_command::run_impl(caf::actor_system& sys,
         VAST_DEBUG(this, "received DOWN from node");
         self->send_exit(snk, exit_reason::user_shutdown);
         self->send_exit(exp, exit_reason::user_shutdown);
-        rc = 1;
+        rc = EXIT_FAILURE;
       } else if (msg.source == exp) {
         VAST_DEBUG(this, "received DOWN from exporter");
         self->send_exit(snk, exit_reason::user_shutdown);
       } else if (msg.source == snk) {
         VAST_DEBUG(this, "received DOWN from sink");
         self->send_exit(exp, exit_reason::user_shutdown);
-        rc = 1;
+        rc = EXIT_FAILURE;
       } else {
         VAST_ASSERT(!"received DOWN from inexplicable actor");
       }
