@@ -132,13 +132,19 @@ public:
 
   /// Sets the type name.
   /// @param x The new name of the type.
-  /// @returns a new type with name *x*.
-  void name(const std::string& x);
+  type& name(const std::string& x) &;
+
+  /// Sets the type name.
+  /// @param x The new name of the type.
+  type&& name(const std::string& x) &&;
 
   /// Specifies a list of attributes.
   /// @param xs The list of attributes.
-  /// @returns A new type with *xs* as attributes.
-  type attributes(std::vector<attribute> xs) const;
+  type& attributes(std::vector<attribute> xs) &;
+
+  /// Specifies a list of attributes.
+  /// @param xs The list of attributes.
+  type&& attributes(std::vector<attribute> xs) &&;
 
   // -- inspectors ------------------------------------------------------------
 
@@ -213,12 +219,6 @@ class abstract_type
 public:
   virtual ~abstract_type();
 
-  /// @returns the name of the type.
-  const std::string& name() const;
-
-  /// @returns The attributes of the type.
-  const std::vector<attribute>& attributes() const;
-
   // -- introspection ---------------------------------------------------------
 
   friend bool operator==(const abstract_type& x, const abstract_type& y);
@@ -252,25 +252,38 @@ class concrete_type
   : public abstract_type,
     detail::totally_ordered<Derived, Derived> {
 public:
-  using abstract_type::name;
-  using abstract_type::attributes;
+  /// @returns the name of the type.
+  const std::string& name() const {
+    return this->name_;
+  }
 
   /// Sets the type name.
   /// @param x The new name of the type.
-  /// @returns a new type with name *x*.
-  Derived name(std::string x) const {
-    Derived copy{derived()};
-    copy.name_ = std::move(x);
-    return copy;
+  Derived& name(const std::string& x) & {
+    this->name_ = x;
+    return derived();
   }
 
-  /// Specifies a list of attributes.
-  /// @param xs The list of attributes.
-  /// @returns A new type with *xs* as attributes.
-  Derived attributes(std::vector<attribute> xs) const {
-    Derived copy{derived()};
-    copy.attributes_ = std::move(xs);
-    return copy;
+  /// Sets the type name.
+  /// @param x The new name of the type.
+  Derived&& name(const std::string& x) && {
+    this->name_ = x;
+    return std::move(derived());
+  }
+
+  /// @returns The attributes of the type.
+  const std::vector<attribute>& attributes() const {
+    return this->attributes_;
+  }
+
+  Derived& attributes(std::vector<attribute> xs) & {
+    this->attributes_ = std::move(xs);
+    return derived();
+  }
+
+  Derived&& attributes(std::vector<attribute> xs) && {
+    this->attributes_ = std::move(xs);
+    return std::move(derived());
   }
 
   friend bool operator==(const Derived& x, const Derived& y) {
@@ -309,6 +322,10 @@ protected:
   }
 
 private:
+  Derived& derived() {
+    return *static_cast<Derived*>(this);
+  }
+
   const Derived& derived() const {
     return *static_cast<const Derived*>(this);
   }
@@ -558,7 +575,7 @@ struct record_type final : recursive_type<record_type> {
   record_type(std::vector<record_field> xs = {});
 
   /// Constructs a record type from a list of fields.
-  record_type(std::initializer_list<record_field> list);
+  record_type(std::initializer_list<record_field> xs);
 
   /// Attemps to resolve a key to an offset.
   /// @param key The key to resolve.
