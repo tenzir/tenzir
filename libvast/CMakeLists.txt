@@ -237,6 +237,7 @@ set(tests
   test/default_table_slice.cpp
   test/detail/flat_lru_cache.cpp
   test/detail/operators.cpp
+  test/detail/set_operations.cpp
   test/endpoint.cpp
   test/event.cpp
   test/expression.cpp
