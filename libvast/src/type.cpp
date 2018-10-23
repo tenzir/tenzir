@@ -43,15 +43,6 @@ none_type none_type_singleton;
 
 // -- type ---------------------------------------------------------------------
 
-type::type(const type& x) : ptr_{x.ptr_ ? x.ptr_->clone() : nullptr} {
-  // nop
-}
-
-type& type::operator=(const type& x) {
-  ptr_ = x.ptr_ ? x.ptr_->clone() : nullptr;
-  return *this;
-}
-
 bool operator==(const type& x, const type& y) {
   if (x.ptr_ && y.ptr_)
     return *x.ptr_ == *y.ptr_;
@@ -64,11 +55,9 @@ bool operator<(const type& x, const type& y) {
   return x.ptr_ < y.ptr_;
 }
 
-type type::name(std::string x) const {
-  type copy{*this};
-  if (copy.ptr_)
-    copy.ptr_->name_ = std::move(x);
-  return copy;
+void type::name(const std::string& x) {
+  if (ptr_)
+    ptr_->name_ = std::move(x);
 }
 
 type type::attributes(std::vector<attribute> xs) const {

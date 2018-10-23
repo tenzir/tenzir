@@ -74,10 +74,10 @@ TEST(copying) {
 
 TEST(names) {
   type t;
-  t = t.name("foo");
+  t.name("foo");
   CHECK(t.name().empty());
   t = type{string_type{}};
-  t = t.name("foo");
+  t.name("foo");
   CHECK_EQUAL(t.name(), "foo");
 }
 
@@ -99,9 +99,9 @@ TEST(equality comparison) {
   CHECK(type{boolean_type{}} != type{real_type{}});
   auto x = type{string_type{}};
   auto y = type{string_type{}};
-  x = x.name("foo");
+  x.name("foo");
   CHECK(x != y);
-  y = y.name("foo");
+  y.name("foo");
   CHECK(x == y);
   MESSAGE("concrete type comparison");
   CHECK(real_type{} == real_type{});
@@ -509,7 +509,7 @@ TEST(printable) {
   t = map_type{count_type{}, t};
   CHECK_EQUAL(to_string(t), "map<count, set<port> &skip>");
   MESSAGE("signature");
-  t = t.name("jells");
+  t.name("jells");
   std::string sig;
   CHECK(printers::type<policy::signature>(sig, t));
   CHECK_EQUAL(sig, "jells = map<count, set<port> &skip>");

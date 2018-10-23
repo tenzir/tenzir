@@ -21,7 +21,7 @@
 #include <caf/detail/type_list.hpp>
 #include <caf/error.hpp>
 #include <caf/fwd.hpp>
-#include <caf/intrusive_ptr.hpp>
+#include <caf/intrusive_cow_ptr.hpp>
 #include <caf/make_counted.hpp>
 #include <caf/meta/omittable.hpp>
 #include <caf/none.hpp>
@@ -88,7 +88,7 @@ constexpr type_id_type type_id() {
 using type_digest = xxhash64::result_type;
 
 /// @relates type
-using abstract_type_ptr = caf::intrusive_ptr<abstract_type>;
+using abstract_type_ptr = caf::intrusive_cow_ptr<abstract_type>;
 
 /// The sematic representation of data.
 class type : detail::totally_ordered<type> {
@@ -110,10 +110,10 @@ public:
   }
 
   /// Copy-constructs a type.
-  type(const type& x);
+  type(const type& x) = default;
 
   /// Copy-assigns a type.
-  type& operator=(const type& x);
+  type& operator=(const type& x) = default;
 
   /// Move-constructs a type.
   type(type&&) = default;
@@ -133,7 +133,7 @@ public:
   /// Sets the type name.
   /// @param x The new name of the type.
   /// @returns a new type with name *x*.
-  type name(std::string x) const;
+  void name(const std::string& x);
 
   /// Specifies a list of attributes.
   /// @param xs The list of attributes.
@@ -232,14 +232,14 @@ public:
   /// @returns the index of this type in `concrete_types`.
   virtual int index() const noexcept = 0;
 
+  virtual abstract_type_ptr copy() const = 0;
+
   /// @endcond
 
 protected:
   virtual bool equals(const abstract_type& other) const;
 
   virtual bool less_than(const abstract_type& other) const;
-
-  virtual abstract_type_ptr clone() const = 0;
 
   std::string name_;
   std::vector<attribute> attributes_;
@@ -304,8 +304,8 @@ protected:
     return static_cast<concrete_type&>(x);
   }
 
-  abstract_type_ptr clone() const final {
-    return caf::make_counted<Derived>(derived());
+  abstract_type_ptr copy() const final {
+    return abstract_type_ptr{caf::make_counted<Derived>(derived())};
   }
 
 private:
