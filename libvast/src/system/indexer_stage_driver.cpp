@@ -25,11 +25,11 @@
 namespace vast::system {
 
 indexer_stage_driver::indexer_stage_driver(downstream_manager_type& dm,
-                                           meta_index& pindex,
+                                           meta_index& meta_idx,
                                            partition_factory fac,
                                            size_t max_partition_size)
   : super(dm),
-    pindex_(pindex),
+    meta_index_(meta_idx),
     remaining_in_partition_(max_partition_size),
     partition_(fac()),
     factory_(std::move(fac)),
@@ -47,7 +47,7 @@ void indexer_stage_driver::process(downstream_type& out, batch_type& slices) {
   VAST_ASSERT(partition_ != nullptr);
   for (auto& slice : slices) {
     // Update meta index.
-    pindex_.add(partition_->id(), slice);
+    meta_index_.add(partition_->id(), slice);
     // Start new INDEXER actors when needed and add it to the stream.
     auto& layout = slice->layout();
     if (auto [hdl, added] = partition_->manager().get_or_add(layout); added) {
