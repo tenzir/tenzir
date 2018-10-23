@@ -108,6 +108,11 @@ int sink_command::run_impl(caf::actor_system& sys,
       } else {
         VAST_ASSERT(!"received DOWN from inexplicable actor");
       }
+      if (msg.reason) {
+        VAST_WARNING(
+          this, "received error message:", self->system().render(msg.reason));
+        rc = EXIT_FAILURE;
+      }
       stop = true;
     },
     [&](system::signal_atom, int signal) {
