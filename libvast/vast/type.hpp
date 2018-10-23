@@ -920,12 +920,35 @@ auto inspect(Inspector& f, type& x) {
 
 namespace std {
 
-template <>
-struct hash<vast::type> {
-  size_t operator()(const vast::type& x) const {
-    return vast::uhash<vast::xxhash64>{}(x);
+#define VAST_DEFINE_HASH_SPECIALIZATION(type)             \
+  template <>                                             \
+  struct hash<vast::type> {                               \
+    size_t operator()(const vast::type& x) const {        \
+      return vast::uhash<vast::xxhash64>{}(x);            \
+    }                                                     \
   }
-};
+
+VAST_DEFINE_HASH_SPECIALIZATION(type);
+VAST_DEFINE_HASH_SPECIALIZATION(none_type);
+VAST_DEFINE_HASH_SPECIALIZATION(boolean_type);
+VAST_DEFINE_HASH_SPECIALIZATION(integer_type);
+VAST_DEFINE_HASH_SPECIALIZATION(count_type);
+VAST_DEFINE_HASH_SPECIALIZATION(real_type);
+VAST_DEFINE_HASH_SPECIALIZATION(timespan_type);
+VAST_DEFINE_HASH_SPECIALIZATION(timestamp_type);
+VAST_DEFINE_HASH_SPECIALIZATION(string_type);
+VAST_DEFINE_HASH_SPECIALIZATION(pattern_type);
+VAST_DEFINE_HASH_SPECIALIZATION(address_type);
+VAST_DEFINE_HASH_SPECIALIZATION(subnet_type);
+VAST_DEFINE_HASH_SPECIALIZATION(port_type);
+VAST_DEFINE_HASH_SPECIALIZATION(enumeration_type);
+VAST_DEFINE_HASH_SPECIALIZATION(vector_type);
+VAST_DEFINE_HASH_SPECIALIZATION(set_type);
+VAST_DEFINE_HASH_SPECIALIZATION(map_type);
+VAST_DEFINE_HASH_SPECIALIZATION(record_type);
+VAST_DEFINE_HASH_SPECIALIZATION(alias_type);
+
+#undef VAST_DEFINE_HASH_SPECIALIZATION
 
 } // namespace std
 
