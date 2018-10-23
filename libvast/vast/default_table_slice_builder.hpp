@@ -39,6 +39,11 @@ public:
   void reserve(size_t num_rows) final;
 
 private:
+  // -- utility functions ------------------------------------------------------
+
+  /// Allocates `slice_` and resets related state if necessary.
+  void lazy_init();
+
   // -- member variables -------------------------------------------------------
 
   record_type layout_;
