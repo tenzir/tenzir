@@ -50,6 +50,10 @@ public:
 
   /// @returns the current number of rows in the table slice.
   virtual size_t rows() const noexcept = 0;
+
+  /// Allows the table slice builder to allocate sufficient storage for up to
+  /// `num_rows` rows.
+  virtual void reserve(size_t num_rows);
 };
 
 /// @relates table_slice_builder

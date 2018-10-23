@@ -39,4 +39,8 @@ bool table_slice_builder::recursive_add(const data& x, const type& t) {
                     x, t);
 }
 
+void table_slice_builder::reserve(size_t) {
+  // nop
+}
+
 } // namespace vast
