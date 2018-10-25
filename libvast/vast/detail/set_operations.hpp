@@ -32,7 +32,7 @@ void inplace_intersect(T& result, const T& xs) {
   auto j = xs.begin();
   while (i != result.end() && j != xs.end()) {
     if (*i < *j) {
-      result.erase(i++);
+      i = result.erase(i);
     } else if (*i > *j) {
       ++j;
     } else {
