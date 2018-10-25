@@ -65,25 +65,6 @@ record_type table_slice::layout(size_type first_column,
   return record_type{std::move(sub_records)};
 }
 
-table_slice_ptr table_slice::make_ptr(record_type layout,
-                                      caf::actor_system& sys,
-                                      caf::atom_value impl) {
-  if (impl == caf::atom("DEFAULT")) {
-    auto ptr = caf::make_counted<default_table_slice>(std::move(layout));
-    return ptr;
-  }
-  using generic_fun = caf::runtime_settings_map::generic_function_pointer;
-  using factory_fun = table_slice_ptr (*)(record_type);
-  auto val = sys.runtime_settings().get(impl);
-  if (!caf::holds_alternative<generic_fun>(val)) {
-    VAST_ERROR_ANON("table_slice", "has no factory function for implementation key",
-                impl);
-    return nullptr;
-  }
-  auto fun = reinterpret_cast<factory_fun>(caf::get<generic_fun>(val));
-  return fun(std::move(layout));
-}
-
 caf::error table_slice::serialize_ptr(caf::serializer& sink,
                                       const_table_slice_ptr ptr) {
   if (!ptr) {
@@ -110,10 +91,30 @@ caf::error table_slice::deserialize_ptr(caf::deserializer& source,
     ptr.reset();
     return caf::none;
   }
-  ptr = make_ptr(std::move(layout), source.context()->system(), impl_id);
+  ptr = make_table_slice(std::move(layout), source.context()->system(),
+                         impl_id);
   if (!ptr)
     return ec::invalid_table_slice_type;
   return ptr->deserialize(source);
+}
+
+table_slice_ptr make_table_slice(record_type layout, caf::actor_system& sys,
+                                 caf::atom_value impl) {
+  if (impl == caf::atom("DEFAULT")) {
+    auto ptr = caf::make_counted<default_table_slice>(std::move(layout));
+    return ptr;
+  }
+  using generic_fun = caf::runtime_settings_map::generic_function_pointer;
+  using factory_fun = table_slice_ptr (*)(record_type);
+  auto val = sys.runtime_settings().get(impl);
+  if (!caf::holds_alternative<generic_fun>(val)) {
+    VAST_ERROR_ANON("table_slice",
+                    "has no factory function for implementation key",
+                    impl);
+    return nullptr;
+  }
+  auto fun = reinterpret_cast<factory_fun>(caf::get<generic_fun>(val));
+  return fun(std::move(layout));
 }
 
 void intrusive_ptr_add_ref(const table_slice* ptr) {

@@ -48,15 +48,8 @@ public:
   /// @param layout The record describing the table columns.
   explicit table_slice(record_type layout);
 
-  // -- factory functions ------------------------------------------------------
-
   /// Makes a copy of this slice.
   virtual table_slice_handle clone() const = 0;
-
-  /// @returns a handle holding an instance of type `impl` with given layout if
-  ///          `impl` is a registered type in `sys`, otherwise `nullptr`.
-  static table_slice_ptr make_ptr(record_type layout, caf::actor_system& sys,
-                                  caf::atom_value impl);
 
   // -- persistence ------------------------------------------------------------
 
@@ -123,6 +116,16 @@ protected:
   size_type rows_;
   size_type columns_;
 };
+
+/// Constructs a table slice.
+/// @param layout The layout of the table slice.
+/// @param sys The actor system.
+/// @param impl The registered type in *sys*.
+/// @returns a handle holding an instance of type *impl* with given layout if
+///          *impl* is a registered type in *sys*, otherwise `nullptr`.
+/// @relates table_slice
+table_slice_ptr make_table_slice(record_type layout, caf::actor_system& sys,
+                                 caf::atom_value impl);
 
 /// @relates table_slice
 bool operator==(const table_slice& x, const table_slice& y);
