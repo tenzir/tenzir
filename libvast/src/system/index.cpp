@@ -177,7 +177,7 @@ caf::error index_state::init(event_based_actor* self, const path& dir,
     // Register the new active partition at the stream manager.
     return active;
   };
-  stage = self->make_continuous_stage<indexer_stage_driver>(part_index, fac,
+  stage = self->make_continuous_stage<indexer_stage_driver>(meta_idx, fac,
                                                             partition_size);
   return caf::none;
 }
@@ -189,13 +189,13 @@ caf::error index_state::load_from_disk() {
     VAST_DEBUG(self, "found no directory to load from");
     return caf::none;
   }
-  if (auto fname = part_index_file(); exists(fname)) {
-    if (auto err = load(self->system(), fname, part_index)) {
+  if (auto fname = meta_index_filename(); exists(fname)) {
+    if (auto err = load(self->system(), fname, meta_idx)) {
       VAST_ERROR(self, "failed to load meta index:",
                  self->system().render(err));
       return err;
     }
-    VAST_INFO(self, "loaded a meta index with", part_index.size(), "entries");
+    VAST_INFO(self, "loaded meta index");
   }
   return caf::none;
 }
@@ -203,16 +203,17 @@ caf::error index_state::load_from_disk() {
 caf::error index_state::flush_to_disk() {
   VAST_TRACE("");
   // Flush meta index to disk.
-  if (auto err = save(self->system(), part_index_file(), part_index)) {
-    VAST_ERROR(self, "was unable to save meta index:", VAST_ARG(err));
+  if (auto err = save(self->system(), meta_index_filename(), meta_idx)) {
+    VAST_ERROR(self, "failed to save meta index:",
+               self->system().render(err));
     return err;
   } else {
-    VAST_INFO(self, "persisted meta index with", part_index.size(), "entries");
+    VAST_INFO(self, "saved meta index");
   }
   return caf::none;
 }
 
-path index_state::part_index_file() const {
+path index_state::meta_index_filename() const {
   return dir / "meta";
 }
 
@@ -241,6 +242,16 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
   auto accountant = accountant_type{};
   if (auto a = self->system().registry().get(accountant_atom::value))
     accountant = actor_cast<accountant_type>(a);
+  auto locate_indexers = [=](const expression& expr, auto begin, auto end) {
+    query_map result;
+    for (; begin != end; ++begin) {
+      auto& part = self->state.lru_partitions.get_or_add(*begin);
+      auto indexers = part->get_indexers(expr);
+      VAST_ASSERT(!indexers.empty());
+      result.emplace(part->id(), std::move(indexers));
+    }
+    return result;
+  };
   // Launch workers for resolving queries.
   for (size_t i = 0; i < num_workers; ++i)
     self->spawn(collector, self);
@@ -256,7 +267,7 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
         return sec::invalid_argument;
       }
       // Get all potentially matching partitions.
-      auto candidates = st.part_index.lookup(expr);
+      auto candidates = st.meta_idx.lookup(expr);
       // Report no result if no candidates are found.
       if (candidates.empty()) {
         VAST_DEBUG(self, "returns without result: no partitions qualify");
@@ -280,10 +291,7 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
       if (hits <= st.taste_partitions) {
         VAST_DEBUG(self, "can schedule all partitions immediately");
         scheduled = hits;
-        for (auto& candidate : candidates) {
-          auto& part = st.lru_partitions.get_or_add(candidate);
-          qm.emplace(part->id(), part->get_indexers(expr));
-        }
+        qm = locate_indexers(expr, candidates.begin(), candidates.end());
       } else {
         query_id = uuid::random();
         VAST_DEBUG(self, "schedules first", st.taste_partitions,
@@ -297,10 +305,7 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
         // for later.
         auto first = candidates.begin();
         auto last_taste = first + st.taste_partitions;
-        std::for_each(first, last_taste, [&](uuid& candidate) {
-          auto& part = st.lru_partitions.get_or_add(candidate);
-          qm.emplace(part->id(), part->get_indexers(expr));
-        });
+        qm = locate_indexers(expr, first, last_taste);
         candidates.erase(first, last_taste);
         using ls = index_state::lookup_state;
         st.pending.emplace(query_id, ls{expr, std::move(candidates)});
@@ -342,13 +347,9 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
                      });
       // Collect all INDEXER actors that we need to query.
       auto& expr = pending_iter->second.expr;
-      query_map qm;
       auto first = candidates.begin();
       auto last = first + std::min(num_partitions, candidates.size());
-      std::for_each(first, last, [&](uuid& candidate) {
-        auto& part = st.lru_partitions.get_or_add(candidate);
-        qm.emplace(part->id(), part->get_indexers(expr));
-      });
+      auto qm = locate_indexers(expr, first, last);
       // Forward request to worker.
       self->send(st.next_worker(), expr, std::move(qm),
                  actor_cast<actor>(self->current_sender()));

@@ -46,10 +46,6 @@ static constexpr size_t taste_count = 4;
 
 static constexpr size_t num_collectors = 1;
 
-const timestamp epoch;
-
-using interval = meta_index::interval;
-
 struct fixture : fixtures::deterministic_actor_system_and_events {
   fixture() {
     directory /= "index";
@@ -64,15 +60,6 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   // Returns the state of the `index`.
   system::index_state& state() {
     return deref<caf::stateful_actor<system::index_state>>(index).state;
-  }
-
-  auto partition_intervals() {
-    std::vector<interval> result;
-    for (auto& kvp : state().part_index.partitions())
-      result.emplace_back(kvp.second.range);
-    std::sort(result.begin(), result.end(),
-              [](auto& x, auto& y) { return x.from < y.from; });
-    return result;
   }
 
   auto query(std::string_view expr) {
@@ -131,28 +118,6 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
 } // namespace <anonymous>
 
 FIXTURE_SCOPE(index_tests, fixture)
-
-TEST(ingestion) {
-  MESSAGE("ingest " << ascending_integers.size() << " integers in slices of "
-                    << slice_size << " each");
-  auto slices = const_ascending_integers_slices;
-  auto src = detail::spawn_container_source(sys, slices, index);
-  run();
-  MESSAGE("verify partition index");
-  REQUIRE_EQUAL(state().part_index.size(), slices.size());
-  auto intervals = partition_intervals();
-  CHECK_EQUAL(intervals[0], interval(epoch, epoch + 7s));
-  CHECK_EQUAL(intervals[1], interval(epoch + 8s, epoch + 15s));
-  CHECK_EQUAL(intervals[2], interval(epoch + 16s, epoch + 23s));
-  CHECK_EQUAL(intervals[3], interval(epoch + 24s, epoch + 31s));
-  CHECK_EQUAL(intervals[4], interval(epoch + 32s, epoch + 39s));
-  CHECK_EQUAL(intervals[5], interval(epoch + 40s, epoch + 47s));
-  CHECK_EQUAL(intervals[6], interval(epoch + 48s, epoch + 55s));
-  CHECK_EQUAL(intervals[7], interval(epoch + 56s, epoch + 63s));
-  CHECK_EQUAL(intervals[8], interval(epoch + 64s, epoch + 71s));
-  CHECK_EQUAL(intervals[9], interval(epoch + 72s, epoch + 79s));
-  // ...
-}
 
 TEST(one-shot integer query result) {
   MESSAGE("fill first " << taste_count << " partitions");
