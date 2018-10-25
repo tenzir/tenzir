@@ -90,12 +90,8 @@ struct mock_partition {
 };
 
 struct fixture {
-  fixture() : sys{cfg} {
-  }
-  caf::actor_system_config cfg;
-  caf::actor_system sys;
   // Our unit-under-test.
-  meta_index uut;
+  meta_index meta_idx;
 
   // Partition IDs.
   std::vector<uuid> ids;
@@ -117,7 +113,7 @@ struct fixture {
     std::string q = "&time == 1970-01-01+";
     q += hhmmss;
     q += ".0";
-    return uut.lookup(unbox(to<expression>(q)));
+    return meta_idx.lookup(unbox(to<expression>(q)));
   }
 
   auto empty() const {
@@ -131,7 +127,7 @@ struct fixture {
     q += " && &time <= 1970-01-01+";
     q += hhmmss_to;
     q += ".0";
-    return uut.lookup(unbox(to<expression>(q)));
+    return meta_idx.lookup(unbox(to<expression>(q)));
   }
 };
 
@@ -150,8 +146,8 @@ TEST(uuid lookup) {
   MESSAGE("generate events and add events to the partition index");
   std::vector<mock_partition> mock_partitions;
   for (size_t i = 0; i < num_partitions; ++i) {
-    auto& mp = mock_partitions.emplace_back(ids[i], i);
-    uut.add(mp.id, *mp.slice);
+    auto& part = mock_partitions.emplace_back(ids[i], i);
+    meta_idx.add(part.id, *part.slice);
   }
   MESSAGE("verify generated timestamps");
   {
