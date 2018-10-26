@@ -32,9 +32,11 @@ namespace vast {
 /// data. The meta index may return false positives but never false negatives.
 class meta_index {
 public:
-  using synopsis_factory = std::function<synopsis_ptr(const type&)>;
+  // -- initialization ---------------------------------------------------------
 
   meta_index();
+
+  // -- API --------------------------------------------------------------------
 
   /// Adds all data from a table slice belonging to a given partition to the
   /// index.
@@ -55,8 +57,7 @@ public:
 
   template <class Inspector>
   friend auto inspect(Inspector& f, meta_index& x) {
-    // TODO: implement this function
-    return caf::none;
+    return f(x.partition_synopses_);
   }
 
 private:

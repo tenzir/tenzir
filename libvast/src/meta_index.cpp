@@ -13,9 +13,6 @@
 
 #include "vast/meta_index.hpp"
 
-#include <caf/actor_system.hpp>
-#include <caf/runtime_settings_map.hpp>
-
 #include "vast/expression.hpp"
 #include "vast/logger.hpp"
 #include "vast/table_index.hpp"
@@ -28,18 +25,7 @@
 
 namespace vast {
 
-meta_index::meta_index() {
-  make_synopsis_ = [](const type& x) -> synopsis_ptr {
-    return caf::visit(detail::overload(
-      [](const timestamp_type&) -> synopsis_ptr {
-        auto min = timestamp::max();
-        auto max = timestamp::min();
-        return caf::make_counted<min_max_synopsis<timestamp>>(min, max);
-      },
-      [](const auto&) -> synopsis_ptr {
-        return nullptr;
-      }), x);
-  };
+meta_index::meta_index() : make_synopsis_{make_synopsis} {
 }
 
 void meta_index::add(const uuid& partition, const table_slice& slice) {
@@ -52,7 +38,7 @@ void meta_index::add(const uuid& partition, const table_slice& slice) {
   if (i != part_synopsis.end()) {
     table_syn = &i->second;
   } else {
-    // Create new synopses for a layout we haven't seend before.
+    // Create new synopses for a layout we haven't seen before.
     i = part_synopsis.emplace(layout, table_synopsis{}).first;
     table_syn = &i->second;
     for (auto& field : layout.fields)
@@ -178,13 +164,10 @@ void meta_index::factory(synopsis_factory f) {
 }
 
 bool set_synopsis_factory(meta_index& x, caf::actor_system& sys) {
-  using generic_fun = caf::runtime_settings_map::generic_function_pointer;
-  auto val = sys.runtime_settings().get(caf::atom("S-factory"));
-  if (auto f = caf::get_if<generic_fun>(&val)) {
-    x.factory(reinterpret_cast<synopsis_ptr (*)(type)>(*f));
+  if (auto f = find_synopsis_factory(sys)) {
+    x.factory(f);
     return true;
   }
-  VAST_ERROR_ANON("meta_index", "has no factory function for synopses");
   return false;
 }
 

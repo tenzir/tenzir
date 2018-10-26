@@ -16,18 +16,28 @@
 #include <caf/intrusive_ptr.hpp>
 #include <caf/ref_counted.hpp>
 
+#include "vast/fwd.hpp"
 #include "vast/operator.hpp"
-#include "vast/synopsis.hpp"
+#include "vast/type.hpp"
 #include "vast/view.hpp"
 
-#include "vast/detail/assert.hpp"
-
 namespace vast {
+
+/// @relates synopsis
+using synopsis_ptr = caf::intrusive_ptr<synopsis>;
 
 /// The abstract base class for synopsis data structures.
 class synopsis : public caf::ref_counted {
 public:
+  // -- construction & destruction ---------------------------------------------
+
+  /// Constructs a synopsis from a type.
+  /// @param x The type the synopsis should act for.
+  explicit synopsis(vast::type x);
+
   virtual ~synopsis();
+
+  // -- API --------------------------------------------------------------------
 
   /// Adds data from a table slice.
   /// @param slice The table slice to process.
@@ -39,72 +49,48 @@ public:
   /// @param rhs The RHS of the predicate.
   /// @returns The evaluation result of `*this op rhs`.
   virtual bool lookup(relational_operator op, data_view rhs) const = 0;
+
+  /// @returns the type this synopsis operates for.
+  const vast::type& type() const;
+
+  // -- serialization ----------------------------------------------------------
+
+  /// @returns a unique identifier for the implementing class.
+  //virtual caf::atom_value implementation_id() const noexcept = 0;
+
+  /// Saves the contents (excluding the layout!) of this slice to `sink`.
+  virtual caf::error serialize(caf::serializer& sink) const = 0;
+
+  /// Loads the contents for this slice from `source`.
+  virtual caf::error deserialize(caf::deserializer& source) = 0;
+
+private:
+  vast::type type_;
 };
 
 /// @relates synopsis
-using synopsis_ptr = caf::intrusive_ptr<synopsis>;
+caf::error inspect(caf::serializer& sink, synopsis_ptr& ptr);
 
-/// A synopsis structure that keeps track of the minimum and maximum value.
-template <class T>
-class min_max_synopsis : public synopsis {
-public:
-  min_max_synopsis(T min = T{}, T max = T{}) : min_{min}, max_{max} {
-    // nop
-  }
+/// @relates synopsis
+caf::error inspect(caf::deserializer& source, synopsis_ptr& ptr);
 
-  void add(data_view x) override {
-    auto y = caf::get_if<view<T>>(&x);
-    VAST_ASSERT(y != nullptr);
-    if (*y < min_)
-      min_ = *y;
-    if (*y > max_)
-      max_ = *y;
-  }
+/// Constructs a synopsis for a given type.
+/// @param x The type to construct a synopsis for.
+/// @relates synopsis synopsis_factory
+synopsis_ptr make_synopsis(type x);
 
-  bool lookup(relational_operator op, data_view rhs) const override {
-    // There are 5 possible scenarios to differentiate for the inputs:
-    //
-    //   (1) rhs < min
-    //   (2) rhs == min
-    //   (3) rhs >= min && <= max
-    //   (4) rhs == max
-    //   (5) rhs > max
-    //
-    // For each possibility, we need to make sure that the expression `[min,
-    // max] op rhs` remains valid. Here is an example for operator <:
-    //
-    //   (1) [4,8] < 1 is false (4 < 1 || 8 < 1)
-    //   (2) [4,8] < 4 is false (4 < 4 || 8 < 4)
-    //   (3) [4,8] < 5 is true  (4 < 5 || 8 < 5)
-    //   (4) [4,8] < 8 is true  (4 < 8 || 8 < 8)
-    //   (5) [4,8] < 9 is true  (4 < 9 || 8 < 9)
-    //
-    // Thus, for range comparisons we need to test `min op rhs || max op rhs`.
-    auto x = caf::get_if<view<T>>(&rhs);
-    VAST_ASSERT(x != nullptr);
-    switch (op) {
-      default:
-        VAST_ASSERT(!"unsupported operator");
-        return false;
-      case equal:
-        return min_ <= *x && *x <= max_;
-      case not_equal:
-        return !(min_ <= *x && *x <= max_);
-      case less:
-        return min_ < *x || max_ < *x;
-      case less_equal:
-        return min_ <= *x || max_ <= *x;
-      case greater:
-        return min_ > *x || max_ > *x;
-      case greater_equal:
-        return min_ >= *x || max_ >= *x;
-    }
-  }
+/// The function to create a synopsis.
+/// @relates synopsis find_synopsis_factory
+using synopsis_factory = std::function<synopsis_ptr(type)>;
 
-private:
-  T min_;
-  T max_;
-};
+/// Looks for a synopsis factory in an actor system.
+/// @param sys The actor system to search for a synopsis factory function.
+/// @relates synopsis synopsis_factory
+synopsis_factory find_synopsis_factory(caf::actor_system& sys);
+
+/// Looks for a synopsis factory in an actor system.
+/// @param sys The actor system to search for a synopsis factory tag.
+/// @relates synopsis synopsis_factory find_synopsis_factory
+caf::atom_value find_synopsis_factory_tag(caf::actor_system& sys);
 
 } // namespace vast
-
