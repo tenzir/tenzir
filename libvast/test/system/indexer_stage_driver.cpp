@@ -17,12 +17,10 @@
 #include <random>
 #include <vector>
 
-#include "vast/const_table_slice_handle.hpp"
 #include "vast/detail/spawn_container_source.hpp"
 #include "vast/meta_index.hpp"
 #include "vast/system/indexer_stage_driver.hpp"
 #include "vast/system/partition.hpp"
-#include "vast/table_slice_handle.hpp"
 #include "vast/to_events.hpp"
 #include "vast/uuid.hpp"
 
@@ -49,13 +47,13 @@ behavior dummy_sink(event_based_actor* self, size_t* dummy_sink_count,
                     shared_event_buffer buf) {
   *dummy_sink_count += 1;
   return {
-    [=](stream<const_table_slice_handle> in) {
+    [=](stream<table_slice_ptr> in) {
       self->make_sink(
         in,
         [=](unit_t&) {
           // nop
         },
-        [=](unit_t&, const_table_slice_handle slice) {
+        [=](unit_t&, table_slice_ptr slice) {
           for (auto& x : to_events(*slice))
             buf->emplace_back(std::move(x));
         }
@@ -80,7 +78,7 @@ auto partition_factory(actor_system& sys, path p, size_t* dummy_count,
 
 behavior test_stage(event_based_actor* self, meta_index* pi,
                     indexer_stage_driver::partition_factory f, size_t mps) {
-  return {[=](stream<const_table_slice_handle> in) {
+  return {[=](stream<table_slice_ptr> in) {
     auto mgr = self->make_continuous_stage<indexer_stage_driver>(*pi, f, mps);
     mgr->add_inbound_path(in);
     self->unbecome();
@@ -114,7 +112,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
 
   meta_index pindex;
 
-  std::vector<const_table_slice_handle> test_slices;
+  std::vector<table_slice_ptr> test_slices;
 
   size_t num_layouts;
 };
@@ -157,10 +155,9 @@ TEST(creating bro conn log partitions automatically) {
                        slice_size);
   MESSAGE("spawn the source and run");
   auto src = vast::detail::spawn_container_source(self->system(),
-                                                  const_bro_conn_log_slices,
-                                                  stg);
+                                                  bro_conn_log_slices, stg);
   run();
-  CHECK_EQUAL(bufs->size(), const_bro_conn_log_slices.size());
+  CHECK_EQUAL(bufs->size(), bro_conn_log_slices.size());
   MESSAGE("flatten all partitions into one buffer");
   event_buffer xs;
   for (auto& buf : *bufs)

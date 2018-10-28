@@ -17,7 +17,7 @@
 
 #include "vast/detail/spawn_container_source.hpp"
 #include "vast/query_options.hpp"
-#include "vast/table_slice_handle.hpp"
+#include "vast/table_slice.hpp"
 #include "vast/uuid.hpp"
 
 #include "vast/system/node.hpp"

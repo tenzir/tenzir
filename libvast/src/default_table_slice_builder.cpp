@@ -15,8 +15,6 @@
 
 #include <utility>
 
-#include "vast/table_slice_handle.hpp"
-
 namespace vast {
 
 default_table_slice_builder::default_table_slice_builder(record_type layout)
@@ -44,7 +42,7 @@ bool default_table_slice_builder::add(data_view x) {
   return append(materialize(x));
 }
 
-table_slice_handle default_table_slice_builder::finish() {
+table_slice_ptr default_table_slice_builder::finish() {
   // If we have an incomplete row, we take it as-is and keep the remaining null
   // values. Better to have incomplete than no data.
   if (col_ != 0)
@@ -53,10 +51,7 @@ table_slice_handle default_table_slice_builder::finish() {
   // TODO: this feels messy, but allows for non-virtual parent accessors.
   slice_->rows_ = slice_->xs_.size();
   slice_->columns_ = layout_.fields.size();
-  using std::swap;
-  default_table_slice_ptr result;
-  swap(slice_, result);
-  return table_slice_handle{std::move(result)};
+  return table_slice_ptr{slice_.release(), false};
 }
 
 size_t default_table_slice_builder::rows() const noexcept {
@@ -70,7 +65,7 @@ void default_table_slice_builder::reserve(size_t num_rows) {
 
 void default_table_slice_builder::lazy_init() {
   if (slice_ == nullptr) {
-    slice_ = caf::make_counted<default_table_slice>(layout_);
+    slice_.reset(new default_table_slice(layout_));
     row_ = vector(layout_.fields.size());
     col_ = 0;
   }

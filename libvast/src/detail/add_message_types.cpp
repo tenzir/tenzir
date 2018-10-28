@@ -19,14 +19,12 @@
 #include "vast/config.hpp"
 
 #include "vast/bitmap.hpp"
-#include "vast/const_table_slice_handle.hpp"
 #include "vast/event.hpp"
 #include "vast/expression.hpp"
 #include "vast/operator.hpp"
 #include "vast/query_options.hpp"
 #include "vast/schema.hpp"
 #include "vast/table_slice.hpp"
-#include "vast/table_slice_handle.hpp"
 #include "vast/type.hpp"
 #include "vast/uuid.hpp"
 
@@ -48,9 +46,7 @@ void add_message_types(caf::actor_system_config& cfg) {
   cfg.add_message_type<schema>("vast::schema");
   cfg.add_message_type<type>("vast::type");
   cfg.add_message_type<uuid>("vast::uuid");
-  cfg.add_message_type<table_slice_handle>("vast::table_slice_handle");
-  cfg.add_message_type<const_table_slice_handle>(
-    "vast::const_table_slice_handle");
+  cfg.add_message_type<table_slice_ptr>("vast::table_slice_ptr");
   // Containers
   cfg.add_message_type<std::vector<event>>("std::vector<vast::event>");
   // Actor-specific messages

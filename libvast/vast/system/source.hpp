@@ -32,7 +32,6 @@
 #include "vast/concept/printable/vast/error.hpp"
 #include "vast/concept/printable/vast/expression.hpp"
 #include "vast/concept/printable/vast/type.hpp"
-#include "vast/const_table_slice_handle.hpp"
 #include "vast/default_table_slice.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
@@ -46,7 +45,6 @@
 #include "vast/system/atoms.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
-#include "vast/table_slice_handle.hpp"
 
 namespace vast::system {
 
@@ -74,7 +72,7 @@ struct source_state {
   using factory_type = table_slice_builder_ptr (*)(record_type);
 
   using downstream_manager
-    = caf::broadcast_downstream_manager<table_slice_handle>;
+    = caf::broadcast_downstream_manager<table_slice_ptr>;
 
   // -- constructors, destructors, and assignment operators --------------------
 
@@ -279,12 +277,12 @@ caf::behavior source(caf::stateful_actor<source_state<Reader>>* self,
       self->send(self->state.accountant, "source.start", now);
     },
     // get next element
-    [=](bool& done, downstream<table_slice_handle>& out, size_t num) {
+    [=](bool& done, downstream<table_slice_ptr>& out, size_t num) {
       auto& st = self->state;
       // Extract events until the source has exhausted its input or until
       // we have completed a batch.
       auto start = steady_clock::now();
-      auto push_slice = [&](table_slice_handle slice) {
+      auto push_slice = [&](table_slice_ptr slice) {
         out.push(std::move(slice));
       };
       auto [produced, eof] = st.extract_events(num * table_slice_size,

@@ -32,7 +32,7 @@ public:
 
   bool add(data_view x) final;
 
-  table_slice_handle finish() final;
+  table_slice_ptr finish() final;
 
   size_t rows() const noexcept final;
 
@@ -49,7 +49,7 @@ private:
   record_type layout_;
   vector row_;
   size_t col_;
-  default_table_slice_ptr slice_;
+  std::unique_ptr<default_table_slice> slice_;
 };
 
 } // namespace vast

@@ -135,7 +135,7 @@ FIXTURE_SCOPE(index_tests, fixture)
 TEST(ingestion) {
   MESSAGE("ingest " << ascending_integers.size() << " integers in slices of "
                     << slice_size << " each");
-  auto slices = const_ascending_integers_slices;
+  auto slices = ascending_integers_slices;
   auto src = detail::spawn_container_source(sys, slices, index);
   run();
   MESSAGE("verify partition index");
@@ -156,7 +156,7 @@ TEST(ingestion) {
 
 TEST(one-shot integer query result) {
   MESSAGE("fill first " << taste_count << " partitions");
-  auto slices = first_n(const_alternating_integers_slices, taste_count);
+  auto slices = first_n(alternating_integers_slices, taste_count);
   auto src = detail::spawn_container_source(sys, slices, index);
   run();
   MESSAGE("query half of the values");
@@ -176,7 +176,7 @@ TEST(one-shot integer query result) {
 
 TEST(iterable integer query result) {
   MESSAGE("fill first " << (taste_count * 3) << " partitions");
-  auto slices = first_n(const_alternating_integers_slices, taste_count * 3);
+  auto slices = first_n(alternating_integers_slices, taste_count * 3);
   auto src = detail::spawn_container_source(sys, slices, index);
   run();
   MESSAGE("query half of the values");
@@ -198,7 +198,7 @@ TEST(iterable integer query result) {
 TEST(iterable bro conn log query result) {
   REQUIRE_EQUAL(bro_conn_log.size(), 20u);
   MESSAGE("ingest conn.log slices");
-  detail::spawn_container_source(sys, const_bro_conn_log_slices, index);
+  detail::spawn_container_source(sys, bro_conn_log_slices, index);
   run();
   MESSAGE("issue field type query");
   {

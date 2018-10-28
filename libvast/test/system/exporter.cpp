@@ -15,7 +15,6 @@
 #include "vast/concept/parseable/vast/expression.hpp"
 
 #include "vast/query_options.hpp"
-#include "vast/table_slice_handle.hpp"
 
 #include "vast/system/archive.hpp"
 #include "vast/system/exporter.hpp"
@@ -148,7 +147,7 @@ TEST(historical query without importer) {
   spawn_archive();
   run();
   MESSAGE("ingest conn.log into archive and index");
-  vast::detail::spawn_container_source(sys, const_bro_conn_log_slices, index,
+  vast::detail::spawn_container_source(sys, bro_conn_log_slices, index,
                                        archive);
   run();
   MESSAGE("spawn exporter for historical query");
@@ -189,8 +188,7 @@ TEST(continuous query with exporter only) {
   send(exporter, system::extract_atom::value);
   run();
   MESSAGE("send conn.log directly to exporter");
-  vast::detail::spawn_container_source(sys, const_bro_conn_log_slices,
-                                       exporter);
+  vast::detail::spawn_container_source(sys, bro_conn_log_slices, exporter);
   run();
   MESSAGE("fetch results");
   auto results = fetch_results();

@@ -31,7 +31,6 @@
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/vast/error.hpp"
 #include "vast/concept/printable/vast/expression.hpp"
-#include "vast/const_table_slice_handle.hpp"
 #include "vast/default_table_slice.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
@@ -46,7 +45,6 @@
 #include "vast/system/source.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
-#include "vast/table_slice_handle.hpp"
 
 namespace vast::system {
 
@@ -100,7 +98,7 @@ datagram_source(datagram_source_actor<Reader>* self,
       self->send(self->state.accountant, "source.start", now);
     },
     // get next element
-    [](caf::unit_t&, downstream<table_slice_handle>&, size_t) {
+    [](caf::unit_t&, downstream<table_slice_ptr>&, size_t) {
       // nop, new slices are generated in the new_datagram_msg handler
     },
     // done?
@@ -123,7 +121,7 @@ datagram_source(datagram_source_actor<Reader>* self,
       auto start = steady_clock::now();
       caf::arraybuf<> buf{msg.buf.data(), msg.buf.size()};
       st.reader.reset(std::make_unique<std::istream>(&buf));
-      auto push_slice = [&](table_slice_handle slice) {
+      auto push_slice = [&](table_slice_ptr slice) {
         VAST_DEBUG(self, "produced a slice with", slice->rows(), "rows");
         st.mgr->out().push(std::move(slice));
       };

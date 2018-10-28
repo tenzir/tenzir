@@ -15,7 +15,6 @@
 
 #include "vast/bitmap.hpp"
 #include "vast/bitmap_algorithms.hpp"
-#include "vast/const_table_slice_handle.hpp"
 #include "vast/ids.hpp"
 #include "vast/segment.hpp"
 #include "vast/si_literals.hpp"
@@ -91,9 +90,9 @@ size_t segment::num_slices() const {
   return meta_.slices.size();
 }
 
-caf::expected<std::vector<const_table_slice_handle>>
+caf::expected<std::vector<table_slice_ptr>>
 segment::lookup(const ids& xs) const {
-  std::vector<const_table_slice_handle> result;
+  std::vector<table_slice_ptr> result;
   auto f = [](auto& slice) {
     return std::pair{slice.offset, slice.offset + slice.size};
   };
@@ -111,13 +110,13 @@ segment::lookup(const ids& xs) const {
   return result;
 }
 
-caf::expected<const_table_slice_handle>
+caf::expected<table_slice_ptr>
 segment::make_slice(const table_slice_synopsis& slice) const {
   auto payload = chunk_->data() + header_.payload_offset;
   auto slice_size = detail::narrow_cast<size_t>(slice.end - slice.start);
   caf::charbuf buf{payload + slice.start, slice_size};
   caf::stream_deserializer<caf::charbuf&> deserializer{actor_system_, buf};
-  const_table_slice_handle result;
+  table_slice_ptr result;
   if (auto error = deserializer(result))
     return error;
   return result;

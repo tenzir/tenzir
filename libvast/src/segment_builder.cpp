@@ -15,7 +15,6 @@
 
 #include <caf/detail/scope_guard.hpp>
 
-#include "vast/const_table_slice_handle.hpp"
 #include "vast/ids.hpp"
 #include "vast/logger.hpp"
 #include "vast/segment.hpp"
@@ -44,7 +43,7 @@ segment_builder::segment_builder(caf::actor_system& sys)
   reset();
 }
 
-caf::error segment_builder::add(const_table_slice_handle x) {
+caf::error segment_builder::add(table_slice_ptr x) {
   if (x->offset() < min_table_slice_offset_)
     return make_error(ec::unspecified, "slice offsets not non-decreasing");
   auto before = table_slice_buffer_.size();
@@ -87,7 +86,7 @@ caf::expected<segment_ptr> segment_builder::finish() {
               table_slice_buffer_.size());
   // Move the complete segment buffer into a chunk.
   auto buffer = std::make_shared<std::vector<char>>(std::move(segment_buffer_));
-  auto deleter = [buf=buffer](char* ptr, size_t size) mutable { 
+  auto deleter = [buf=buffer](char* ptr, size_t size) mutable {
     VAST_UNUSED(ptr);
     VAST_UNUSED(size);
     VAST_ASSERT(ptr == buf->data());
@@ -102,9 +101,9 @@ caf::expected<segment_ptr> segment_builder::finish() {
   return result;
 }
 
-caf::expected<std::vector<const_table_slice_handle>>
+caf::expected<std::vector<table_slice_ptr>>
 segment_builder::lookup(const ids& xs) const {
-  std::vector<const_table_slice_handle> result;
+  std::vector<table_slice_ptr> result;
   auto f = [](auto& slice) {
     return std::pair{slice->offset(), slice->offset() + slice->rows()};
   };

@@ -176,7 +176,7 @@ public:
 
   /// Indexes a slice for all columns.
   /// @param x Table slice for ingestion.
-  caf::error add(const const_table_slice_handle& x);
+  caf::error add(const table_slice_ptr& x);
 
   /// Queries event IDs that fulfill the given predicate on any column.
   /// @pre `init()` was called previously.
