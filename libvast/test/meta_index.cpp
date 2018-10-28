@@ -13,12 +13,10 @@
 
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
-#include "vast/const_table_slice_handle.hpp"
 #include "vast/default_table_slice.hpp"
 #include "vast/meta_index.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
-#include "vast/table_slice_handle.hpp"
 #include "vast/uuid.hpp"
 
 #define SUITE meta_index
@@ -51,7 +49,7 @@ struct generator {
     // nop
   }
 
-  const_table_slice_handle operator()(size_t num) {
+  table_slice_ptr operator()(size_t num) {
     record_type layout = record_type{
       {"timestamp", timestamp_type{}},
       {"content", string_type{}}
@@ -64,7 +62,7 @@ struct generator {
       builder->add(make_data_view(str));
     }
     auto slice = builder->finish();
-    slice->offset(offset);
+    slice.unshared().offset(offset);
     offset += num;
     return slice;
   }
@@ -79,7 +77,7 @@ struct mock_partition {
   }
 
   uuid id;
-  const_table_slice_handle slice;
+  table_slice_ptr slice;
   meta_index::interval range;
 };
 

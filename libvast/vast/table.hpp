@@ -31,7 +31,7 @@ public:
 
   using size_type = uint64_t;
 
-  using value_type = std::pair<id, const_table_slice_handle>;
+  using value_type = std::pair<id, table_slice_ptr>;
 
   // -- constructors, destructors, and assignment operators --------------------
 
@@ -43,7 +43,7 @@ public:
 
   /// Adds a slice to the table.
   /// @returns A failure if the layout is not compatible with
-  bool add(const_table_slice_handle slice);
+  bool add(table_slice_ptr slice);
 
   /// Retrieves the table layout.
   const record_type& layout() const noexcept {

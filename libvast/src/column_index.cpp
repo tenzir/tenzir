@@ -13,7 +13,6 @@
 
 #include "vast/column_index.hpp"
 
-#include "vast/const_table_slice_handle.hpp"
 #include "vast/expression_visitors.hpp"
 #include "vast/load.hpp"
 #include "vast/logger.hpp"
@@ -45,7 +44,7 @@ caf::expected<column_index_ptr> make_type_column_index(caf::actor_system& sys,
       // nop
     }
 
-    void add(const const_table_slice_handle& x) override {
+    void add(const table_slice_ptr& x) override {
       VAST_TRACE(VAST_ARG(x));
       if (has_skip_attribute_)
         return;
@@ -69,7 +68,7 @@ caf::expected<column_index_ptr> make_column_index(caf::actor_system& sys,
         // nop
     }
 
-    void add(const const_table_slice_handle& x) override {
+    void add(const table_slice_ptr& x) override {
       VAST_TRACE(VAST_ARG(x));
       if (has_skip_attribute_)
         return;

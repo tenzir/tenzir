@@ -23,10 +23,8 @@
 #include "vast/concept/printable/vast/error.hpp"
 #include "vast/concept/printable/vast/event.hpp"
 #include "vast/concept/printable/vast/expression.hpp"
-#include "vast/const_table_slice_handle.hpp"
 #include "vast/default_table_slice.hpp"
 #include "vast/table_index.hpp"
-#include "vast/table_slice_handle.hpp"
 
 using namespace vast;
 
@@ -47,7 +45,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     reset(std::move(*new_tbl));
   }
 
-  void add(const_table_slice_handle x) {
+  void add(table_slice_ptr x) {
     auto err = tbl->add(x);
     if (err)
       FAIL("error: " << err);
@@ -137,7 +135,7 @@ TEST(bro conn logs) {
   auto layout = bro_conn_log_layout();
   reset(make_table_index(sys, directory, layout));
   MESSAGE("ingest test data (bro conn log)");
-  for (auto slice : const_bro_conn_log_slices)
+  for (auto slice : bro_conn_log_slices)
     add(slice);
   MESSAGE("verify table index");
   auto verify = [&] {
@@ -183,7 +181,7 @@ TEST_DISABLED(bro conn log http slices) {
     tbl.reset();
     rm(directory);
     reset(make_table_index(sys, directory, layout));
-    add(const_bro_conn_log_slices[slice_id]);
+    add(bro_conn_log_slices[slice_id]);
     CHECK_EQUAL(rank(query("service == \"http\"")), hits[slice_id]);
   }
 }

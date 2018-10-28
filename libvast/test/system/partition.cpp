@@ -24,7 +24,6 @@
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/type.hpp"
-#include "vast/const_table_slice_handle.hpp"
 #include "vast/default_table_slice.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/detail/spawn_container_source.hpp"
@@ -32,7 +31,6 @@
 #include "vast/ids.hpp"
 #include "vast/system/indexer.hpp"
 #include "vast/table_slice.hpp"
-#include "vast/table_slice_handle.hpp"
 
 #include "fixtures/actor_system_and_events.hpp"
 
@@ -189,7 +187,7 @@ TEST(integer rows lookup) {
   record_type layout{{"value", col_type}};
   auto rows = make_rows(1, 2, 3, 1, 2, 3, 1, 2, 3);
   auto slice = default_table_slice::make(layout, rows);
-  std::vector<const_table_slice_handle> slices{slice};
+  std::vector<table_slice_ptr> slices{slice};
   detail::spawn_container_source(sys, std::move(slices),
                                  put->manager().get_or_add(layout).first);
   run();
@@ -212,7 +210,7 @@ TEST(single partition bro conn log lookup) {
   MESSAGE("ingest bro conn logs");
   auto layout = bro_conn_log_layout();
   auto indexer = put->manager().get_or_add(layout).first;
-  detail::spawn_container_source(sys, const_bro_conn_log_slices, indexer);
+  detail::spawn_container_source(sys, bro_conn_log_slices, indexer);
   run();
   MESSAGE("verify partition content");
   auto res = [&](auto... args) {
@@ -240,7 +238,7 @@ TEST(multiple partitions bro conn log lookup no messaging) {
   MESSAGE("ingest bro conn logs into partitions of size " << slice_size);
   std::vector<partition_ptr> partitions;
   auto layout = bro_conn_log_layout();
-  for (auto& slice : const_bro_conn_log_slices) {
+  for (auto& slice : bro_conn_log_slices) {
     auto ptr = make_partition(uuid::random());
     CHECK_EQUAL(exists(ptr->dir()), false);
     CHECK_EQUAL(ptr->dirty(), false);

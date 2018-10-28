@@ -18,7 +18,6 @@
 #include "vast/concept/printable/vast/event.hpp"
 #include "vast/concept/printable/vast/expression.hpp"
 #include "vast/concept/printable/vast/uuid.hpp"
-#include "vast/const_table_slice_handle.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/event.hpp"
 #include "vast/expression_visitors.hpp"
@@ -299,14 +298,14 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
         }
       );
     },
-    [=](caf::stream<const_table_slice_handle> in) {
+    [=](caf::stream<table_slice_ptr> in) {
       return self->make_sink(
         in,
         [](caf::unit_t&) {
           // nop
         },
-        [=](caf::unit_t&, const const_table_slice_handle& slice) {
-          // TODO: portjto new table slice API
+        [=](caf::unit_t&, const table_slice_ptr& slice) {
+          // TODO: port to new table slice API
           auto candidates = to_events(*slice);
           handle_batch(candidates);
         },

@@ -38,31 +38,22 @@ struct events {
   static std::vector<event> bgpdump_txt;
   static std::vector<event> random;
 
-  static std::vector<table_slice_handle> bro_conn_log_slices;
+  static std::vector<table_slice_ptr> bro_conn_log_slices;
   // TODO: table_slice::recursive_add flattens too much, why the following
   //       slices won't work. However, flatten(value) is also broken
   //       at the moment (cf. #3215), so we can't fix it until then.
-  static std::vector<table_slice_handle> bro_http_log_slices;
-  static std::vector<table_slice_handle> bro_dns_log_slices;
-  static std::vector<table_slice_handle> bgpdump_txt_slices;
-  // static std::vector<table_slice_handle> random_slices;
-
-  static std::vector<const_table_slice_handle> const_bro_conn_log_slices;
-  static std::vector<const_table_slice_handle> const_bro_http_log_slices;
-  static std::vector<const_table_slice_handle> const_bro_dns_log_slices;
-  static std::vector<const_table_slice_handle> const_bgpdump_txt_slices;
-  // static std::vector<const_table_slice_handle> const_random_slices;
+  static std::vector<table_slice_ptr> bro_http_log_slices;
+  static std::vector<table_slice_ptr> bro_dns_log_slices;
+  static std::vector<table_slice_ptr> bgpdump_txt_slices;
+  // static std::vector<table_slice_ptr> random_slices;
 
   /// 10000 ascending integer values, starting at 0.
   static std::vector<event> ascending_integers;
-  static std::vector<table_slice_handle> ascending_integers_slices;
-  static std::vector<const_table_slice_handle> const_ascending_integers_slices;
+  static std::vector<table_slice_ptr> ascending_integers_slices;
 
   /// 10000 integer values, alternating between 0 and 1.
   static std::vector<event> alternating_integers;
-  static std::vector<table_slice_handle> alternating_integers_slices;
-  static std::vector<const_table_slice_handle>
-    const_alternating_integers_slices;
+  static std::vector<table_slice_ptr> alternating_integers_slices;
 
   static record_type bro_conn_log_layout();
 
@@ -71,7 +62,7 @@ struct events {
     return {make_vector(xs)...};
   }
 
-  std::vector<table_slice_handle> copy(std::vector<table_slice_handle> xs);
+  std::vector<table_slice_ptr> copy(std::vector<table_slice_ptr> xs);
 
 private:
   template <class Reader>
