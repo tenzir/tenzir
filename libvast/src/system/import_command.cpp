@@ -13,18 +13,7 @@
 
 #include "vast/system/import_command.hpp"
 
-#include <iostream>
-
-#include <caf/all.hpp>
-#include <caf/io/all.hpp>
-#ifdef VAST_USE_OPENSSL
-#include <caf/openssl/all.hpp>
-#endif // VAST_USE_OPENSSL
-
 #include "vast/logger.hpp"
-
-#include "vast/system/signal_monitor.hpp"
-#include "vast/system/spawn.hpp"
 
 using namespace caf;
 
@@ -33,12 +22,12 @@ using namespace std::chrono_literals;
 
 import_command::import_command(command* parent, std::string_view name)
   : node_command{parent, name} {
-  // nop
+  add_opt<bool>("blocking,b", "block until the IMPORTER forwarded all data");
 }
 
 int import_command::run_impl(actor_system&, const caf::config_value_map&,
                              argument_iterator, argument_iterator) {
-  VAST_ERROR("import_command::run_impl called");
+  VAST_ERROR(this, "::run_impl called");
   return EXIT_FAILURE;
 }
 

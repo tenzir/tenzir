@@ -24,6 +24,7 @@
 #include "vast/format/bro.hpp"
 #include "vast/system/atoms.hpp"
 #include "vast/table_slice.hpp"
+#include "vast/subset.hpp"
 
 using namespace vast;
 using namespace vast::system;
@@ -64,13 +65,13 @@ FIXTURE_SCOPE(source_tests, fixtures::deterministic_actor_system_and_events)
 TEST(bro source) {
   MESSAGE("start reader");
   namespace bf = format::bro;
-  auto stream = detail::make_input_stream(bro::conn);
+  auto stream = detail::make_input_stream(bro::small_conn);
   REQUIRE(stream);
   bf::reader reader{std::move(*stream)};
-  MESSAGE("start source for producing table slices of size 100");
+  MESSAGE("start source for producing table slices of size 10");
   auto src = self->spawn(source<bf::reader>, std::move(reader),
                          default_table_slice::make_builder,
-                         100u);
+                         events::slice_size);
   run();
   MESSAGE("start sink and run exhaustively");
   auto snk = self->spawn(test_sink, src);
@@ -78,11 +79,11 @@ TEST(bro source) {
   MESSAGE("get slices");
   const auto& slices = deref<test_sink_type>(snk).state.slices;
   MESSAGE("collect all rows as values");
-  REQUIRE_EQUAL(slices.size(), 85u);
+  REQUIRE_EQUAL(slices.size(), 3u);
   std::vector<value> row_contents;
-  for (size_t row = 0; row < 85u; ++row) {
+  for (size_t row = 0; row < 3u; ++row) {
     /// The first column is the automagically added timestamp.
-    auto xs = slices[row]->rows_to_values(0, table_slice::npos, 1);
+    auto xs = subset(*slices[row], 0, table_slice::npos, 1);
     std::move(xs.begin(), xs.end(), std::back_inserter(row_contents));
   }
   std::vector<value> bro_conn_log_values;

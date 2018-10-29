@@ -11,6 +11,11 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
+#define SUITE bitmap_index
+
+#include "test.hpp"
+#include "fixtures/actor_system.hpp"
+
 #include "vast/bitmap_index.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/bitmap.hpp"
@@ -19,11 +24,10 @@
 #include "vast/save.hpp"
 #include "vast/time.hpp"
 
-#define SUITE bitmap_index
-#include "test.hpp"
-
 using namespace vast;
 using namespace std::chrono_literals;
+
+FIXTURE_SCOPE(bitmap_index_tests, fixtures::deterministic_actor_system)
 
 TEST(boolean bitmap index) {
   bitmap_index<bool, singleton_coder<null_bitmap>> bmi;
@@ -281,9 +285,11 @@ TEST(serialization) {
   bmi1.append(-100);
   CHECK_EQUAL(to_string(bmi1.lookup(not_equal, 100)), "11011");
   std::vector<char> buf;
-  save(buf, bmi1);
+  CHECK_EQUAL(save(sys, buf, bmi1), caf::none);
   auto bmi2 = bitmap_index_type{};
-  load(buf, bmi2);
+  CHECK_EQUAL(load(sys, buf, bmi2), caf::none);
   CHECK(bmi1 == bmi2);
   CHECK_EQUAL(to_string(bmi2.lookup(not_equal, 100)), "11011");
 }
+
+FIXTURE_SCOPE_END()

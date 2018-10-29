@@ -13,39 +13,33 @@
 
 #pragma once
 
-#include <vector>
+#include <caf/fwd.hpp>
 
-#include "vast/expected.hpp"
-#include "vast/ids.hpp"
+#include <caf/expected.hpp>
+
+#include "vast/fwd.hpp"
 
 namespace vast {
-
-class event;
-
-// TODO: Instead of using vector<event> as an abstraction for a set of events,
-// we'd like to use vast::batch here eventually. However, this requires first
-// an update of the batch interface/semantics, which is part of a separate
-// story.
 
 /// A key-value store for events.
 class store {
 public:
-  virtual ~store() = default;
+  virtual ~store();
 
-  /// Stores a set of events.
-  /// @param xs The events to store.
+  /// Adds a table slice to the store.
+  /// @param xs The table slice to add.
   /// @returns No error on success.
-  virtual expected<void> put(const std::vector<event>& xs) = 0;
+  virtual caf::error put(const_table_slice_handle xs) = 0;
 
   /// Retrieves a set of events.
   /// @param xs The IDs for the events to retrieve.
-  /// @returns The events according to *xs*.
-  virtual expected<std::vector<event>> get(const ids& xs) = 0;
+  /// @returns The table slice according to *xs*.
+  virtual caf::expected<std::vector<const_table_slice_handle>>
+  get(const ids& xs) = 0;
 
   /// Flushes in-memory state to persistent storage.
   /// @returns No error on success.
-  virtual expected<void> flush() = 0;
+  virtual caf::error flush() = 0;
 };
 
 } // namespace vast
-

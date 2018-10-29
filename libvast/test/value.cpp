@@ -11,6 +11,11 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
+#define SUITE value
+
+#include "test.hpp"
+#include "fixtures/actor_system.hpp"
+
 #include "vast/load.hpp"
 #include "vast/json.hpp"
 #include "vast/save.hpp"
@@ -22,14 +27,13 @@
 #include "vast/concept/printable/vast/json.hpp"
 #include "vast/concept/printable/vast/value.hpp"
 
-#define SUITE value
-#include "test.hpp"
-
 using caf::get;
 using caf::get_if;
 using caf::holds_alternative;
 
 using namespace vast;
+
+FIXTURE_SCOPE(value_tests, fixtures::deterministic_actor_system)
 
 // An *invalid* value has neither a type nor data.
 // This is the default-constructed state.
@@ -125,8 +129,8 @@ TEST(serialization) {
   value v{s, t};
   value w;
   std::vector<char> buf;
-  save(buf, v);
-  load(buf, w);
+  CHECK_EQUAL(save(sys, buf, v), caf::none);
+  CHECK_EQUAL(load(sys, buf, w), caf::none);
   CHECK(v == w);
   CHECK(to_string(w) == "{80/tcp, 53/udp, 8/icmp}");
 }
@@ -178,3 +182,5 @@ TEST(json)
 })__";
   CHECK_EQUAL(to_string(*j), str);
 }
+
+FIXTURE_SCOPE_END()

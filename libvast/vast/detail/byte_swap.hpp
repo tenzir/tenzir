@@ -40,24 +40,36 @@ inline uint64_t byte_swap(uint64_t x) {
 /// Converts the bytes of an unsigned integer from host order to network order.
 /// @param x The value to convert.
 /// @returns The value with bytes in network order.
-/// @see endianness byte_swap to_host_order
+/// @see endianness byte_swap to_host_order to_little_endian to_big_endian
 template <class T>
 T to_network_order(T x) {
-#if defined(VAST_LITTLE_ENDIAN)
-  return byte_swap(x);
-#elif defined(VAST_BIG_ENDIAN)
-  return x;
-#endif
+  if constexpr (host_endian == little_endian)
+    return byte_swap(x);
+  else
+    return x;
 }
 
 /// Converts the bytes of an unsigned integer from network order to host order.
 /// @param x The value to convert.
 /// @returns The value with bytes in host order.
-/// @see endianness byte_swap to_network_order
+/// @see endianness byte_swap to_network_order to_little_endian to_big_endian
 template <class T>
 T to_host_order(T x) {
   return to_network_order(x);
 }
 
-} // namespace vast::detail
+/// Converts bytes from a given endianness to a given endianness.
+/// @tparam From The endianness of *x*.
+/// @tparam To The endianness of the result
+/// @param x The value to convert.
+/// @returns The value in with `To` endianness.
+/// @see endianness byte_swap to_host_order to_network_order
+template <endianness From, endianness To, class T>
+T swap(T x) {
+  constexpr auto noop =
+    (From == little_endian && To == little_endian)
+    || (From == big_endian && To == big_endian);
+  return noop ? x : byte_swap(x);
+}
 
+} // namespace vast::detail

@@ -11,6 +11,11 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
+#define SUITE type
+
+#include "test.hpp"
+#include "fixtures/actor_system.hpp"
+
 #include "vast/data.hpp"
 #include "vast/json.hpp"
 #include "vast/load.hpp"
@@ -26,15 +31,14 @@
 #include "vast/concept/printable/vast/offset.hpp"
 #include "vast/concept/printable/vast/type.hpp"
 
-#define SUITE type
-#include "test.hpp"
-
 using caf::get;
 using caf::get_if;
 using caf::holds_alternative;
 
 using namespace std::string_literals;
 using namespace vast;
+
+FIXTURE_SCOPE(type_tests, fixtures::deterministic_actor_system)
 
 TEST(default construction) {
   type t;
@@ -163,9 +167,9 @@ TEST(serialization) {
   r = r.name("foo");
   std::vector<char> buf;
   auto t0 = type{r};
-  save(buf, t0);
+  CHECK_EQUAL(save(sys, buf, t0), caf::none);
   type t1;
-  load(buf, t1);
+  CHECK_EQUAL(load(sys, buf, t1), caf::none);
   CHECK_EQUAL(t0, t1);
 }
 
@@ -650,3 +654,5 @@ TEST(json) {
 })__";
   CHECK_EQUAL(to_string(to_json(type{r})), expected);
 }
+
+FIXTURE_SCOPE_END()

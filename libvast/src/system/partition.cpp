@@ -36,17 +36,17 @@ using namespace caf;
 namespace vast {
 namespace system {
 
-partition::partition(const path& base_dir, uuid id,
+partition::partition(caf::actor_system& sys, const path& base_dir, uuid id,
                      indexer_manager::indexer_factory factory)
   : mgr_(*this, std::move(factory)),
     dir_(base_dir / to_string(id)),
-    id_(std::move(id)) {
+    id_(std::move(id)),
+    sys_(sys) {
   // If the directory already exists, we must have some state from the past and
   // are pre-loading all INDEXER types we are aware of.
   if (exists(dir_)) {
-    auto res = load(meta_file(), meta_data_);
-    if (!res) {
-      VAST_ERROR("unable to read partition meta data:", res.error());
+    if (auto err = load(sys_, meta_file(), meta_data_)) {
+      VAST_ERROR(this, "failed to read meta data:", sys_.render(err));
     } else {
       for (auto& kvp : meta_data_.types) {
         // We spawn all INDEXER actors immediately. However, the factory spawns
@@ -66,11 +66,8 @@ partition::~partition() noexcept {
 
 caf::error partition::flush_to_disk() {
   if (meta_data_.dirty) {
-    if (!exists(dir_))
-      mkdir(dir_);
-    auto res = save(meta_file(), meta_data_);
-    if (!res)
-      return std::move(res.error());
+    if (auto err = save(sys_, meta_file(), meta_data_))
+      return err;
     meta_data_.dirty = false;
   }
   return caf::none;
@@ -103,20 +100,21 @@ std::vector<caf::actor> partition::get_indexers(const expression& expr) {
 
 // -- free functions -----------------------------------------------------------
 
-partition_ptr make_partition(const path& base_dir, uuid id,
-                             indexer_manager::indexer_factory f) {
-  return caf::make_counted<partition>(base_dir, std::move(id), std::move(f));
+partition_ptr make_partition(caf::actor_system& sys, const path& base_dir,
+                             uuid id, indexer_manager::indexer_factory f) {
+  return caf::make_counted<partition>(sys, base_dir, std::move(id),
+                                      std::move(f));
 }
 
-partition_ptr make_partition(caf::local_actor* self, const path& base_dir,
-                             uuid id) {
+partition_ptr make_partition(caf::actor_system& sys, caf::local_actor* self,
+                             const path& base_dir, uuid id) {
   auto f = [=](path indexer_path, record_type indexer_type) {
     VAST_DEBUG(self, "creates INDEXER in partition", id, "for type",
                indexer_type);
     return self->spawn<caf::lazy_init>(indexer, std::move(indexer_path),
                                        std::move(indexer_type));
   };
-  return make_partition(base_dir, std::move(id), f);
+  return make_partition(sys, base_dir, std::move(id), f);
 }
 
 } // namespace system

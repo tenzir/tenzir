@@ -106,16 +106,14 @@ expected<actor> spawn_source(local_actor* self, options& opts) {
     }
   } else if (format == "test") {
     auto seed = size_t{0};
-    auto base = id{0};
     auto n = uint64_t{100};
     r = r.remainder.extract_opts({
       {"seed,s", "the PRNG seed", seed},
-      {"events,n", "number of events to generate", n},
-      {"id,i", "the base event ID", base}
+      {"events,n", "number of events to generate", n}
     });
     if (!r.error.empty())
       return make_error(ec::syntax_error, r.error);
-    format::test::reader reader{seed, n, base};
+    format::test::reader reader{seed, n};
     src = self->spawn(default_source<format::test::reader>, std::move(reader));
     // Since the test source doesn't consume any data and only generates
     // events out of thin air, we use the input channel to specify the schema.

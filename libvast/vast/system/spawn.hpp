@@ -19,8 +19,7 @@
 
 #include "vast/expected.hpp"
 #include "vast/filesystem.hpp"
-
-#include "vast/system/node_state.hpp"
+#include "vast/system/node.hpp"
 
 namespace vast::system {
 
@@ -30,14 +29,11 @@ struct options {
   std::string label;
 };
 
-expected<caf::actor> spawn_archive(caf::local_actor* self,
-                                   options& opts);
+expected<caf::actor> spawn_archive(caf::local_actor* self, options& opts);
 
-expected<caf::actor> spawn_exporter(caf::stateful_actor<node_state>* self,
-                                    options& opts);
+expected<caf::actor> spawn_exporter(node_actor* self, options& opts);
 
-expected<caf::actor> spawn_importer(caf::stateful_actor<node_state>* self,
-                                    options& opts);
+expected<caf::actor> spawn_importer(node_actor* self, options& opts);
 
 expected<caf::actor> spawn_index(caf::local_actor* self, options& opts);
 

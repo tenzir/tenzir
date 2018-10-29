@@ -13,47 +13,36 @@
 
 #pragma once
 
-#include <iterator>
-#include <memory>
-#include <ostream>
+#include <caf/expected.hpp>
 
-#include "vast/error.hpp"
-#include "vast/event.hpp"
-#include "vast/expected.hpp"
+#include "vast/fwd.hpp"
 
 namespace vast::format {
 
-/// A generic event writer.
-template <class Printer>
+/// The base class for writers.
 class writer {
 public:
-  writer() = default;
+  virtual ~writer();
 
-  /// Constructs a generic writer.
-  /// @param out The stream where to write to
-  explicit writer(std::unique_ptr<std::ostream> out) : out_{std::move(out)} {
-  }
+  /// Processes an event.
+  /// @param x The event to write.
+  /// @returns `caf::none` on success.
+  virtual caf::expected<void> write(const event& x)  = 0;
 
-  expected<void> write(const event& e) {
-    auto i = std::ostreambuf_iterator<char>(*out_);
-    if (!printer_.print(i, e))
-      return make_error(ec::print_error, "failed to print event:", e);
-    *out_ << '\n';
-    return {};
-  }
+  /// Called periodically to flush state.
+  /// @returns `caf::none` on success.
+  /// The default implementation does nothing.
+  virtual caf::expected<void> flush();
 
-  expected<void> flush() {
-    out_->flush();
-    if (!*out_)
-      return make_error(ec::format_error, "failed to flush");
-    return {};
-  }
+  /// Called after last call to write when the writer no longer receives
+  /// events.
+  /// The default implementation does nothing.
+  /// @note This function must be called exactly one. Repeated calls my cause
+  ///       undefined behavior.
+  virtual void cleanup();
 
-private:
-  std::unique_ptr<std::ostream> out_;
-  Printer printer_;
+  /// @returns The name of the writer type.
+  virtual const char* name() const = 0;
 };
 
 } // namespace vast::format
-
-

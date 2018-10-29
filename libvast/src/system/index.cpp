@@ -11,6 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
+#include <chrono>
 #include <deque>
 #include <unordered_set>
 
@@ -49,6 +50,7 @@ namespace {
 /// Maps partition IDs to INDEXER actors for resolving a query.
 using query_map = caf::detail::unordered_flat_map<uuid, std::vector<actor>>;
 
+[[maybe_unused]]
 auto get_ids(query_map& xs) {
   std::vector<uuid> ys;
   ys.reserve(xs.size());
@@ -111,7 +113,7 @@ partition_ptr index_state::partition_factory::operator()(const uuid& id) const {
   if (auto i = std::find_if(xs.begin(), xs.end(), pred); i != xs.end())
     return i->first;
   VAST_DEBUG(st_->self, "loads partition", id);
-  return make_partition(st_->self, st_->dir, id);
+  return make_partition(st_->self->system(), st_->self, st_->dir, id);
 }
 
 index_state::index_state()
@@ -120,15 +122,25 @@ index_state::index_state()
   // nop
 }
 
-void index_state::init(event_based_actor* self, const path& dir,
-                       size_t partition_size, size_t in_mem_partitions,
-                       size_t taste_partitions) {
+index_state::~index_state() {
+  VAST_TRACE("");
+  flush_to_disk();
+}
+
+caf::error index_state::init(event_based_actor* self, const path& dir,
+                             size_t partition_size, size_t in_mem_partitions,
+                             size_t taste_partitions) {
+  VAST_TRACE(VAST_ARG(dir), VAST_ARG(partition_size),
+             VAST_ARG(in_mem_partitions), VAST_ARG(taste_partitions));
   // Set members.
   this->self = self;
   this->dir = dir;
   this->partition_size = partition_size;
   this->lru_partitions.size(in_mem_partitions);
   this->taste_partitions = taste_partitions;
+  // Read persistent state.
+  if (auto err = load_from_disk())
+    return err;
   // Callback for the stream stage for creating a new partition when the
   // current one becomes full.
   auto fac = [this]() -> partition_ptr {
@@ -161,12 +173,57 @@ void index_state::init(event_based_actor* self, const path& dir,
     // Create a new active partition.
     auto id = uuid::random();
     VAST_DEBUG(this->self, "starts a new partition:", id);
-    active = make_partition(this->self, this->dir, id);
+    active = make_partition(this->self->system(), this->self, this->dir, id);
     // Register the new active partition at the stream manager.
     return active;
   };
   stage = self->make_continuous_stage<indexer_stage_driver>(part_index, fac,
                                                             partition_size);
+  return caf::none;
+}
+
+caf::error index_state::load_from_disk() {
+  VAST_TRACE("");
+  // Nothing to load is not an error.
+  if (!exists(dir)) {
+    VAST_DEBUG(self, "found no directory to load from");
+    return caf::none;
+  }
+  if (auto fname = part_index_file(); exists(fname)) {
+    if (auto err = load(self->system(), fname, part_index)) {
+      VAST_ERROR(self, "failed to load meta index:",
+                 self->system().render(err));
+      return err;
+    }
+    VAST_INFO(self, "loaded a meta index with", part_index.size(), "entries");
+  }
+  return caf::none;
+}
+
+caf::error index_state::flush_to_disk() {
+  VAST_TRACE("");
+  // Flush meta index to disk.
+  if (auto err = save(self->system(), part_index_file(), part_index)) {
+    VAST_ERROR(self, "was unable to save meta index:", VAST_ARG(err));
+    return err;
+  } else {
+    VAST_INFO(self, "persisted meta index with", part_index.size(), "entries");
+  }
+  return caf::none;
+}
+
+path index_state::part_index_file() const {
+  return dir / "meta";
+}
+
+bool index_state::worker_available() {
+  return !idle_workers.empty();
+}
+
+caf::actor index_state::next_worker() {
+  auto result = std::move(idle_workers.back());
+  idle_workers.pop_back();
+  return result;
 }
 
 behavior index(stateful_actor<index_state>* self, const path& dir,
@@ -174,23 +231,16 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
                size_t taste_partitions, size_t num_workers) {
   VAST_ASSERT(partition_size > 0);
   VAST_ASSERT(in_mem_partitions > 0);
-  VAST_DEBUG(self, "caps partitions at", partition_size, "events");
-  VAST_DEBUG(self, "keeps at most", in_mem_partitions, "partitions in memory");
-  self->state.init(self, dir, partition_size, in_mem_partitions,
-                   taste_partitions);
+  VAST_INFO(self, "spawned:", VAST_ARG(partition_size),
+            VAST_ARG(in_mem_partitions), VAST_ARG(taste_partitions));
+  if (auto err = self->state.init(self, dir, partition_size, in_mem_partitions,
+                                  taste_partitions)) {
+    self->quit(std::move(err));
+    return {};
+  }
   auto accountant = accountant_type{};
   if (auto a = self->system().registry().get(accountant_atom::value))
     accountant = actor_cast<accountant_type>(a);
-  // Read persistent state.
-  if (exists(self->state.dir / "meta")) {
-    auto result = load(self->state.dir / "meta", self->state.part_index);
-    if (!result) {
-      VAST_ERROR(self, "failed to load partition index:",
-                 self->system().render(result.error()));
-      self->quit(result.error());
-      return {};
-    }
-  }
   // Launch workers for resolving queries.
   for (size_t i = 0; i < num_workers; ++i)
     self->spawn(collector, self);
@@ -214,8 +264,8 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
       }
       // Every return after this points uses up the worker.
       auto guard = caf::detail::make_scope_guard([&] {
-        st.next_worker = nullptr;
-        self->unbecome();
+        if (!st.worker_available())
+          self->unbecome();
       });
       // Allows the client to query further results after initial taste.
       auto query_id = uuid::nil();
@@ -255,7 +305,7 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
         using ls = index_state::lookup_state;
         st.pending.emplace(query_id, ls{expr, std::move(candidates)});
       }
-      self->send(st.next_worker, std::move(expr), std::move(qm),
+      self->send(st.next_worker(), std::move(expr), std::move(qm),
                  actor_cast<actor>(self->current_sender()));
       return {std::move(query_id), hits, scheduled};
     },
@@ -281,8 +331,8 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
                  "more partition(s) for query ID", query_id);
       // Every return after this points uses up the worker.
       auto guard = caf::detail::make_scope_guard([&] {
-        st.next_worker = nullptr;
-        self->unbecome();
+        if (!st.worker_available())
+          self->unbecome();
       });
       // Prefer partitions that are currently in our cache.
       auto& candidates = pending_iter->second.partitions;
@@ -300,7 +350,7 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
         qm.emplace(part->id(), part->get_indexers(expr));
       });
       // Forward request to worker.
-      self->send(st.next_worker, expr, std::move(qm),
+      self->send(st.next_worker(), expr, std::move(qm),
                  actor_cast<actor>(self->current_sender()));
       // Cleanup.
       if (last == candidates.end()) {
@@ -312,15 +362,18 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
                    "partitions left for query ID", query_id);
       }
     },
+    [=](worker_atom, caf::actor& worker) {
+      self->state.idle_workers.emplace_back(std::move(worker));
+    },
     [=](caf::stream<const_table_slice_handle> in) {
       VAST_DEBUG(self, "got a new source");
       return self->state.stage->add_inbound_path(in);
     }
   );
   return {
-    [=](worker_atom, caf::actor worker) {
+    [=](worker_atom, caf::actor& worker) {
       auto& st = self->state;
-      st.next_worker = worker;
+      st.idle_workers.emplace_back(std::move(worker));
       self->become(keep_behavior, st.has_worker);
     },
     [=](caf::stream<const_table_slice_handle> in) {

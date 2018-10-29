@@ -13,45 +13,12 @@
 
 #pragma once
 
-#include <caf/deserializer.hpp>
-#include <caf/serializer.hpp>
+#include <caf/fwd.hpp>
 
 namespace vast::detail {
 
-// Variadic helpers to interface with CAF's serialization framework.
-
-template <class Processor, class T>
-void process(Processor& proc, T&& x) {
-  proc & const_cast<T&>(x); // CAF promises not to touch it.
-}
-
-template <class Processor, class T, class... Ts>
-void process(Processor& proc, T&& x, Ts&&... xs) {
-  process(proc, std::forward<T>(x));
-  process(proc, std::forward<Ts>(xs)...);
-}
-
-template <class T>
-void write(caf::serializer& sink, const T& x) {
-  sink << x;
-}
-
-template <class T, class... Ts>
-void write(caf::serializer& sink, const T& x, const Ts&... xs) {
-  write(sink, x);
-  write(sink, xs...);
-}
-
-template <class T>
-void read(caf::deserializer& source, T& x) {
-  source >> x;
-}
-
-template <class T, class... Ts>
-void read(caf::deserializer& source, T& x, Ts&... xs) {
-  read(source, x);
-  read(source, xs...);
-}
+/// Adds the error categories VAST uses to a CAF actor system configuration.
+/// @param cfg The actor system configuration to add the error categories to.
+void add_error_categories(caf::actor_system_config& cfg);
 
 } // namespace vast::detail
-

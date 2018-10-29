@@ -29,6 +29,7 @@ namespace vast::system {
 struct accountant_state {
   using stopwatch = std::chrono::steady_clock;
   std::ofstream file;
+  bool flush_pending = false;
   static inline const char* name = "accountant";
 };
 

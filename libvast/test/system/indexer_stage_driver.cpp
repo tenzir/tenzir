@@ -23,6 +23,7 @@
 #include "vast/system/indexer_stage_driver.hpp"
 #include "vast/system/partition.hpp"
 #include "vast/table_slice_handle.hpp"
+#include "vast/to_events.hpp"
 #include "vast/uuid.hpp"
 
 #include "vast/concept/printable/to_string.hpp"
@@ -55,8 +56,7 @@ behavior dummy_sink(event_based_actor* self, size_t* dummy_sink_count,
           // nop
         },
         [=](unit_t&, const_table_slice_handle slice) {
-          auto xs = slice->rows_to_events();
-          for (auto& x : xs)
+          for (auto& x : to_events(*slice))
             buf->emplace_back(std::move(x));
         }
       );
@@ -74,7 +74,7 @@ auto partition_factory(actor_system& sys, path p, size_t* dummy_count,
       return sys.spawn(dummy_sink, dummy_count, buf);
     };
     auto id = uuid::random();
-    return make_partition(p, std::move(id), sink_factory);
+    return make_partition(sys, p, std::move(id), sink_factory);
   };
 }
 
@@ -138,7 +138,10 @@ TEST(spawning sinks automatically) {
   MESSAGE("check content of the shared buffer");
   REQUIRE_EQUAL(bufs->size(), 1u);
   auto& buf = bufs->back();
-  CHECK_EQUAL(test_slices.size() * slice_size, buf->size());
+  auto rows = std::accumulate(
+    test_slices.begin(), test_slices.end(), size_t{0},
+    [](size_t cnt, const auto& slice) { return cnt + slice->rows(); });
+  CHECK_EQUAL(rows, buf->size());
   std::sort(test_slices.begin(), test_slices.end());
   std::sort(buf->begin(), buf->end());
   CHECK_EQUAL(test_slices, *buf);

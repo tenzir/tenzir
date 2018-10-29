@@ -19,6 +19,7 @@
 #include <vector>
 
 #include <caf/expected.hpp>
+#include <caf/fwd.hpp>
 
 #include "vast/filesystem.hpp"
 #include "vast/column_index.hpp"
@@ -32,7 +33,8 @@ namespace vast {
 
 /// Creates a column layout for the given type.
 /// @relates table_index
-caf::expected<table_index> make_table_index(path filename, record_type layout);
+caf::expected<table_index> make_table_index(caf::actor_system& sys,
+                                            path filename, record_type layout);
 
 // -- class definition ---------------------------------------------------------
 
@@ -41,8 +43,8 @@ class table_index {
 public:
   // -- friend declarations ----------------------------------------------------
 
-  friend caf::expected<table_index> make_table_index(path filename,
-                                                     record_type layout);
+  friend caf::expected<table_index> make_table_index(caf::actor_system&, path,
+                                                     record_type);
 
   // -- member and nested types ------------------------------------------------
 
@@ -60,7 +62,7 @@ public:
 
   // -- constructors, destructors, and assignment operators --------------------
 
-  table_index() = default;
+  table_index(caf::actor_system& sys);
 
   table_index(table_index&&) = default;
 
@@ -200,7 +202,7 @@ private:
 
   // -- constructors, destructors, and assignment operators --------------------
 
-  table_index(record_type layout, path base_dir);
+  table_index(caf::actor_system& sys, record_type layout, path base_dir);
 
   // -- member variables -------------------------------------------------------
 
@@ -217,6 +219,9 @@ private:
 
   /// Allows a shortcut in `add` if all columns are initialized.
   bool dirty_;
+
+  /// Hosting actor system.
+  caf::actor_system& sys_;
 };
 
 // -- free functions -----------------------------------------------------------

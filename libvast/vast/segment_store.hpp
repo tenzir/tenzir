@@ -13,10 +13,12 @@
 
 #pragma once
 
-#include <map>
+#include <caf/fwd.hpp>
 
-#include "vast/batch.hpp"
 #include "vast/filesystem.hpp"
+#include "vast/fwd.hpp"
+#include "vast/segment.hpp"
+#include "vast/segment_builder.hpp"
 #include "vast/store.hpp"
 #include "vast/uuid.hpp"
 
@@ -25,57 +27,55 @@
 
 namespace vast {
 
+/// @relates segment_store
+using segment_store_ptr = std::unique_ptr<segment_store>;
+
 /// A store that keeps its data in terms of segments.
 class segment_store : public store {
 public:
-  class segment {
-  public:
-    using magic_type = uint32_t;
-    using version_type = uint32_t;
-
-    static inline constexpr magic_type magic = 0x2a2a2a2a;
-    static inline constexpr version_type version = 1;
-
-    void add(batch&& x);
-
-    expected<std::vector<event>> extract(const ids& xs) const;
-
-    const uuid& id() const;
-
-    template <class Inspector>
-    friend auto inspect(Inspector& f, segment& x) {
-      return f(x.batches_, x.bytes_, x.id_);
-    }
-
-    friend uint64_t bytes(const segment& x);
-
-  private:
-    // TODO: use a vector & binary_search for O(1) append and O(log N) search.
-    std::map<vast::id, batch> batches_;
-    uint64_t bytes_ = 0;
-    uuid id_ = uuid::random();
-  };
-
   /// Constructs a segment store.
+  /// @param sys A reference to an actor system for table slice
+  ///            deserialization.
   /// @param dir The directory where to store state.
   /// @param max_segment_size The maximum segment size in bytes.
   /// @param in_memory_segments The number of semgents to cache in memory.
   /// @pre `max_segment_size > 0`
-  segment_store(path dir, size_t max_segment_size, size_t in_memory_segments);
+  static segment_store_ptr make(caf::actor_system& sys,
+                                path dir, size_t max_segment_size,
+                                size_t in_memory_segments);
 
-  expected<void> put(const std::vector<event>& xs) override;
+  ~segment_store();
 
-  expected<std::vector<event>> get(const ids& xs) override;
+  error put(const_table_slice_handle xs) override;
 
-  expected<void> flush() override;
+  caf::expected<std::vector<const_table_slice_handle>>
+  get(const ids& xs) override;
+
+  caf::error flush() override;
+
+  /// @cond PRIVATE
+
+  segment_store(caf::actor_system& sys, path dir, uint64_t max_segment_size,
+                size_t in_memory_segments);
+
+  /// @endcond
 
 private:
+  path meta_path() const {
+    return dir_ / "meta";
+  }
+
+  path segment_path() const {
+    return dir_ / "segments";
+  }
+
+  caf::actor_system& sys_;
   path dir_;
   uint64_t max_segment_size_;
   detail::range_map<id, uuid> segments_;
-  detail::cache<uuid, segment> cache_;
-  segment active_;
+  detail::cache<uuid, segment_ptr> cache_;
+  segment_builder builder_;
+  std::vector<segment_ptr> builder_slices_;
 };
 
 } // namespace vast
-

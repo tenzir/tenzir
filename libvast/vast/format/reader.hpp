@@ -13,52 +13,34 @@
 
 #pragma once
 
-#include <istream>
-#include <memory>
+#include <caf/expected.hpp>
 
-#include "vast/detail/assert.hpp"
-#include "vast/detail/line_range.hpp"
-#include "vast/error.hpp"
-#include "vast/event.hpp"
-#include "vast/expected.hpp"
+#include "vast/fwd.hpp"
 
 namespace vast::format {
 
-/// A generic event reader.
-template <class Parser>
+/// The base class for readers.
 class reader {
 public:
-  reader() = default;
+  virtual ~reader();
 
-  /// Constructs a generic reader.
-  /// @param in The stream of logs to read.
-  explicit reader(std::unique_ptr<std::istream> in) {
-    reset(std::move(in));
-  }
+  /// Reads the next event.
+  /// @returns The event on success, `caf::none` if the underlying format has
+  ///          currently no event (e.g., when it's idling), and an error
+  ///          otherwise.
+  virtual caf::expected<event> read() = 0;
 
-  void reset(std::unique_ptr<std::istream> in) {
-    VAST_ASSERT(in != nullptr);
-    in_ = std::move(in);
-    lines_ = std::make_unique<detail::line_range>(*in_);
-  }
+  /// Sets the schema for events to read.
+  /// @param x The new schema.
+  /// @returns `caf::none` on success.
+  virtual caf::expected<void> schema(vast::schema x) = 0;
 
-  expected<event> read() {
-    if (lines_->done())
-      return make_error(ec::end_of_input, "input exhausted");
-    event e;
-    if (!parser_(lines_->get(), e))
-      return make_error(ec::parse_error, "line", lines_->line_number());
-    lines_->next();
-    return e;
-  }
+  /// Retrieves the currently used schema.
+  /// @returns The current schema.
+  virtual caf::expected<vast::schema> schema() const = 0;
 
-protected:
-  Parser parser_;
-
-private:
-  std::unique_ptr<std::istream> in_;
-  std::unique_ptr<detail::line_range> lines_;
+  /// @returns The name of the reader type.
+  virtual const char* name() const = 0;
 };
 
 } // namespace vast::format
-

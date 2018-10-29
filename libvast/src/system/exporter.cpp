@@ -24,6 +24,7 @@
 #include "vast/expression_visitors.hpp"
 #include "vast/logger.hpp"
 #include "vast/table_slice.hpp"
+#include "vast/to_events.hpp"
 
 #include "vast/system/archive.hpp"
 #include "vast/system/atoms.hpp"
@@ -41,9 +42,11 @@ namespace system {
 namespace {
 
 void ship_results(stateful_actor<exporter_state>* self) {
-  if (self->state.results.empty() || self->state.stats.requested == 0)
+  VAST_TRACE("");
+  if (self->state.results.empty() || self->state.stats.requested == 0) {
     return;
-  VAST_DEBUG(self, "relays", self->state.results.size(), "events");
+  }
+  VAST_INFO(self, "relays", self->state.results.size(), "events");
   message msg;
   if (self->state.results.size() <= self->state.stats.requested) {
     self->state.stats.requested -= self->state.results.size();
@@ -68,7 +71,7 @@ void ship_results(stateful_actor<exporter_state>* self) {
 void report_statistics(stateful_actor<exporter_state>* self) {
   timespan runtime = steady_clock::now() - self->state.start;
   self->state.stats.runtime = runtime;
-  VAST_DEBUG(self, "completed in", runtime);
+  VAST_INFO(self, "completed in", runtime);
   self->send(self->state.sink, self->state.id, self->state.stats);
   if (self->state.accountant) {
     auto hits = rank(self->state.hits);
@@ -299,11 +302,12 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
           // nop
         },
         [=](caf::unit_t&, const const_table_slice_handle& slice) {
-          // TODO: port to new table slice API
-          auto candidates = slice->rows_to_events();
+          // TODO: portjto new table slice API
+          auto candidates = to_events(*slice);
           handle_batch(candidates);
         },
         [=](caf::unit_t&, const error& err) {
+          VAST_IGNORE_UNUSED(err);
           VAST_ERROR(self, "got error during streaming: ", err);
         }
       );

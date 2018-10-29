@@ -25,13 +25,10 @@
 #include "vast/detail/string.hpp"
 #include "vast/error.hpp"
 #include "vast/event.hpp"
+#include "vast/format/bro.hpp"
 #include "vast/logger.hpp"
 
-#include "vast/format/bro.hpp"
-
-namespace vast {
-namespace format {
-namespace bro {
+namespace vast::format::bro {
 namespace {
 
 // Creates a VAST type from an ASCII Bro type in a log header.
@@ -288,7 +285,7 @@ expected<event> reader::read() {
   auto s = detail::split(lines_->get(), separator_);
   if (s.size() > 0 && !s[0].empty() && s[0].front() == '#') {
     if (detail::starts_with(s[0], "#separator")) {
-      VAST_DEBUG(name(), "restarts with new log");
+      VAST_DEBUG(this, "restarts with new log");
       timestamp_field_ = -1;
       separator_.clear();
       auto t = parse_header();
@@ -299,13 +296,13 @@ expected<event> reader::read() {
         return make_error(ec::end_of_input, "input exhausted");
       s = detail::split(lines_->get(), separator_);
     } else {
-      VAST_DEBUG(name(), "ignores comment at line",
+      VAST_DEBUG(this, "ignores comment at line",
                  lines_->line_number() << ':', lines_->get());
       return no_error;
     }
   }
   if (s.size() != parsers_.size()) {
-    VAST_WARNING(name(), "ignores invalid record at line",
+    VAST_WARNING(this, "ignores invalid record at line",
                  lines_->line_number() << ':', "got", s.size(),
                  "fields but need", parsers_.size());
     return no_error;
@@ -345,8 +342,8 @@ expected<event> reader::read() {
   return e;
 }
 
-expected<void> reader::schema(const vast::schema& sch) {
-  schema_ = sch;
+expected<void> reader::schema(vast::schema sch) {
+  schema_ = std::move(sch);
   return no_error;
 }
 
@@ -439,15 +436,15 @@ expected<void> reader::parse_header() {
   record_ = std::move(record_fields);
   type_ = unflatten(record_);
   type_ = type_.name("bro::" + path);
-  VAST_DEBUG(name(), "parsed bro header:");
-  VAST_DEBUG(name(), "    #separator", separator_);
-  VAST_DEBUG(name(), "    #set_separator", set_separator_);
-  VAST_DEBUG(name(), "    #empty_field", empty_field_);
-  VAST_DEBUG(name(), "    #unset_field", unset_field_);
-  VAST_DEBUG(name(), "    #path", path);
-  VAST_DEBUG(name(), "    #fields:");
+  VAST_DEBUG(this, "parsed bro header:");
+  VAST_DEBUG(this, "    #separator", separator_);
+  VAST_DEBUG(this, "    #set_separator", set_separator_);
+  VAST_DEBUG(this, "    #empty_field", empty_field_);
+  VAST_DEBUG(this, "    #unset_field", unset_field_);
+  VAST_DEBUG(this, "    #path", path);
+  VAST_DEBUG(this, "    #fields:");
   for (auto i = 0u; i < record_.fields.size(); ++i)
-    VAST_DEBUG(name(), "     ", i << ')',
+    VAST_DEBUG(this, "     ", i << ')',
                record_.fields[i].name << ':', record_.fields[i].type);
   // If a congruent type exists in the schema, we give the schema type
   // precedence.
@@ -460,12 +457,12 @@ expected<void> reader::parse_header() {
     }
   // Determine the timestamp field.
   if (timestamp_field_ > -1) {
-    VAST_DEBUG(name(), "uses event timestamp from field", timestamp_field_);
+    VAST_DEBUG(this, "uses event timestamp from field", timestamp_field_);
   } else {
     size_t i = 0;
     for (auto& f : record_.fields) {
       if (caf::holds_alternative<timestamp_type>(f.type)) {
-        VAST_INFO(name(), "auto-detected field", i, "as event timestamp");
+        VAST_DEBUG(this, "auto-detected field", i, "as event timestamp");
         timestamp_field_ = static_cast<int>(i);
         break;
       }
@@ -487,22 +484,13 @@ writer::writer(path dir) {
     dir_ = std::move(dir);
 }
 
-writer::~writer() {
-  std::ostringstream ss;
-  ss << "#close" << separator << time_factory{} << '\n';
-  auto footer = ss.str();
-  for (auto& pair : streams_)
-    if (pair.second)
-      *pair.second << footer;
-}
-
 expected<void> writer::write(const event& e) {
   if (!caf::holds_alternative<record_type>(e.type()))
     return make_error(ec::format_error, "cannot process non-record events");
   std::ostream* os = nullptr;
   if (dir_.empty()) {
     if (streams_.empty()) {
-      VAST_DEBUG(name(), "creates a new stream for STDOUT");
+      VAST_DEBUG(this, "creates a new stream for STDOUT");
       auto sb = std::make_unique<detail::fdoutbuf>(1);
       auto out = std::make_unique<std::ostream>(sb.release());
       auto i = streams_.emplace("", std::move(out));
@@ -515,7 +503,7 @@ expected<void> writer::write(const event& e) {
       os = i->second.get();
       VAST_ASSERT(os != nullptr);
     } else {
-      VAST_DEBUG(name(), "creates new stream for event", e.type().name());
+      VAST_DEBUG(this, "creates new stream for event", e.type().name());
       if (!exists(dir_)) {
         auto d = mkdir(dir_);
         if (!d)
@@ -544,10 +532,20 @@ expected<void> writer::flush() {
   return no_error;
 }
 
+void writer::cleanup() {
+  if (streams_.empty())
+    return;
+  std::ostringstream ss;
+  ss << "#close" << separator << time_factory{} << '\n';
+  auto footer = ss.str();
+  for (auto& pair : streams_)
+    if (pair.second)
+      *pair.second << footer;
+  streams_.clear();
+}
+
 const char* writer::name() const {
   return "bro-writer";
 }
 
-} // namespace bro
-} // namespace format
-} // namespace vast
+} // namespace vast::format::bro

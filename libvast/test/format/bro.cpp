@@ -64,7 +64,7 @@ FIXTURE_SCOPE(bro_tests, fixtures::events)
 
 TEST(bro writer) {
   // Sanity check some Bro events.
-  CHECK_EQUAL(bro_conn_log.size(), 8462u);
+  CHECK_EQUAL(bro_conn_log.size(), 20u);
   CHECK_EQUAL(bro_conn_log.front().type().name(), "bro::conn");
   auto record = caf::get_if<vector>(&bro_conn_log.front().data());
   REQUIRE(record);

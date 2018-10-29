@@ -56,34 +56,31 @@ expected<actor> node_command::spawn_node(scoped_actor& self,
   auto id = get_or(opts, "id", defaults::command::node_id);
   auto dir = get_or(opts, "dir", defaults::command::directory);
   auto abs_dir = path{dir}.complete();
-  VAST_INFO("spawning local node:", id);
+  VAST_DEBUG(this, "spawns local node:", id);
   // Pointer to the root command to system::node.
   auto node = self->spawn(system::node, id, abs_dir);
   node_spawned_ = true;
-  if (!get_or<bool>(opts, "bare", false)) {
-    // If we're not in bare mode, we spawn all core actors.
-    auto spawn_component = [&](auto&&... xs) {
-      return [&] {
-        auto result = error{};
-        auto args = make_message(std::move(xs)...);
-        self->request(node, infinite, "spawn", std::move(args)).receive(
-          [](const actor&) { /* nop */ },
-          [&](error& e) { result = std::move(e); }
-        );
-        return result;
-      };
+  auto spawn_component = [&](auto&&... xs) {
+    return [&] {
+      auto result = error{};
+      auto args = make_message(std::move(xs)...);
+      self->request(node, infinite, "spawn", std::move(args)).receive(
+        [](const actor&) { /* nop */ },
+        [&](error& e) { result = std::move(e); }
+      );
+      return result;
     };
-    auto err = error::eval(
-      spawn_component("metastore"),
-      spawn_component("archive"),
-      spawn_component("index"),
-      spawn_component("importer")
-    );
-    if (err) {
-      VAST_ERROR(self->system().render(err));
-      cleanup(node);
-      return err;
-    }
+  };
+  auto err = error::eval(
+    spawn_component("metastore"),
+    spawn_component("archive"),
+    spawn_component("index"),
+    spawn_component("importer")
+  );
+  if (err) {
+    VAST_ERROR(self, self->system().render(err));
+    cleanup(node);
+    return err;
   }
   return node;
 }
@@ -102,7 +99,7 @@ node_command::connect_to_node(scoped_actor& self,
     err += endpoint_str;
     return make_error(sec::invalid_argument, std::move(err));
   }
-  VAST_INFO("connect to remote node:", id);
+  VAST_DEBUG(self, "connects to remote node:", id);
   auto& sys_cfg = self->system().config();
   auto use_encryption = !sys_cfg.openssl_certificate.empty()
                         || !sys_cfg.openssl_key.empty()
@@ -112,7 +109,7 @@ node_command::connect_to_node(scoped_actor& self,
   auto host = node_endpoint.host;
   if (node_endpoint.host.empty())
     node_endpoint.host = "127.0.0.1";
-  VAST_INFO("connecting to", node_endpoint.host << ':' << node_endpoint.port);
+  VAST_INFO(self, "connects to", node_endpoint.host << ':' << node_endpoint.port);
   if (use_encryption) {
 #ifdef VAST_USE_OPENSSL
     return openssl::remote_actor(self->system(), node_endpoint.host,

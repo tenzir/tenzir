@@ -18,6 +18,8 @@
 #include <queue>
 #include <type_traits>
 
+#include <caf/error.hpp>
+
 #include "vast/aliases.hpp"
 #include "vast/bits.hpp"
 #include "vast/optional.hpp"
@@ -290,114 +292,250 @@ select(const Bitmap& bm, typename Bitmap::size_type i) {
   return Bitmap::word_type::npos;
 }
 
+/// A range over a Bitmap with various ways to move forward.
+template <class BitRange>
+class bitwise_range : public detail::range_facade<bitwise_range<BitRange>> {
+public:
+  using bits_type = std::decay_t<decltype(std::declval<BitRange>().get())>;
+  using size_type = typename bits_type::size_type;
+  static inline size_type npos = bits_type::npos;
+
+  /// Constructs an ID range from a bit range.
+  /// @param rng The bit range.
+  bitwise_range(BitRange rng)
+    : rng_{std::move(rng)},
+      i_{rng_.done() ? npos : 0} {
+    // nop
+  }
+
+  // -- range introspection ---------------------------------------------------
+
+  /// @returns The current bit sequence.
+  /// @pre `!done()`
+  const bits_type& bits() const {
+    VAST_ASSERT(!done());
+    return rng_.get();
+  }
+
+  /// @returns The current position in the range.
+  /// @pre `!done()`
+  id offset() const {
+    VAST_ASSERT(!done());
+    return n_ + i_;
+  }
+
+  /// @returns The bit value at the current position.
+  /// @pre `!done()`
+  bool value() const {
+    VAST_ASSERT(!done());
+    return bits()[i_];
+  }
+
+  // -- range API -------------------------------------------------------------
+
+  /// Retrieves the current position in the range.
+  /// @pre `!done()`
+  size_type get() const {
+    VAST_ASSERT(!done());
+    return offset();
+  }
+
+  /// @returns `true` if the range is done.
+  bool done() const {
+    return rng_.done() && i_ == npos;
+  }
+
+  /// Advances to the next bit in the range.
+  void next() {
+    VAST_ASSERT(!done());
+    ++i_;
+    if (i_ == bits().size()) {
+      n_ += bits().size();
+      rng_.next();
+      i_ = rng_.done() ? npos : 0;
+    }
+  }
+
+  // -- explicit range control ------------------------------------------------
+
+  /// Moves the range forward by *k* bits from the current position.
+  /// @param k The number of bits to seek forward.
+  /// @pre `!done() && k > 0`
+  void next(size_type k) {
+    VAST_ASSERT(k > 0);
+    VAST_ASSERT(i_ != npos);
+    VAST_ASSERT(!bits().empty());
+    auto remaining_bits = bits().size() - i_ - 1;
+    if (k <= remaining_bits) {
+      i_ += k - 1;
+      next();
+      return;
+    }
+    for (k -= remaining_bits, i_ = npos, n_ += bits().size(), rng_.next();
+         !rng_.done() && k > 0;
+         k -= bits().size(), n_ += bits().size(), rng_.next()) {
+      if (k <= bits().size()) {
+        i_ = k - 1;
+        return;
+      }
+    }
+  }
+
+  /// Moves to the range to the next bit of a given value.
+  /// @tparam Bit The bit value to move forward to.
+  template <bool Bit = true>
+  void select() {
+    VAST_ASSERT(i_ != npos);
+    i_ = find_next<Bit>(bits(), i_);
+    while (i_ == npos) {
+      n_ += bits().size();
+      rng_.next();
+      if (rng_.done())
+        return;
+      i_ = find_first<Bit>(bits());
+    }
+  }
+
+  /// Moves the range forward by *k* bits having a given value. The effect of
+  /// this function is equivalent to *k* invocations of `next<Bit>()`.
+  /// @tparam Bit The bit value to move forward with.
+  /// @param k The number bits of value *Bit* to move forward.
+  template <bool Bit = true>
+  void select(size_type k) {
+    VAST_ASSERT(k > 0);
+    VAST_ASSERT(i_ != npos);
+    using vast::select;
+    auto prev = rank<Bit>(bits(), i_);
+    auto remaining = rank<Bit>(bits()) - prev;
+    if (k <= remaining) {
+      i_ = select<Bit>(bits(), prev + k);
+      VAST_ASSERT(i_ != npos);
+      return;
+    }
+    for (k -= remaining, i_ = npos, n_ += bits().size(), rng_.next();
+         !rng_.done();
+         n_ += bits().size(), rng_.next()) {
+      VAST_ASSERT(k > 0);
+      if (k > bits().size()) {
+        k -= rank<Bit>(bits());
+      } else {
+        i_ = select<Bit>(bits(), k);
+        if (i_ != npos)
+          break;
+      }
+    }
+  }
+
+  /// Selects the next bit of a given value starting at given position.
+  /// @param i The position to start  where to start the call to select().
+  /// @pre `!done() && x >= offset()`
+  template <bool Bit = true>
+  void select_from(id x) {
+    VAST_ASSERT(!done());
+    VAST_ASSERT(x >= offset());
+    if (x > offset()) {
+      next(x - offset());
+      if (done())
+        return;
+    }
+    if (value() != Bit)
+      select<Bit>();
+  }
+
+private:
+  BitRange rng_;
+  size_type i_ = npos;
+  id n_ = 0;
+};
+
+/// Creates a bitwise_range from a bitmap.
+template <class Bitmap>
+auto each(Bitmap&& xs) {
+  return bitwise_range{bit_range(xs)};
+}
+
 /// A higher-order range that takes a bit-sequence range and transforms it into
 /// range of 1-bits. In ther words, this range provides an incremental
 /// interface to the one-shot algorithm that ::select computes.
 /// @relates select span
-template <class BitRange>
-class select_range : public detail::range_facade<select_range<BitRange>> {
+template <bool Bit, class BitRange>
+class select_range : public detail::range_facade<select_range<Bit, BitRange>> {
 public:
-  using bits_type = std::decay_t<decltype(std::declval<BitRange>().get())>;
-  using size_type = typename bits_type::size_type;
-  using word_type = typename bits_type::word_type;
-
-  select_range(BitRange rng) : rng_{rng} {
-    if (!rng_.done()) {
-      i_ = find_first(rng_.get());
-      scan();
-    }
-  }
-
-  size_type get() const {
-    VAST_ASSERT(i_ != word_type::npos);
-    return n_ + i_;
-  }
-
-  void next() {
-    VAST_ASSERT(!done());
-    i_ = find_next(rng_.get(), i_);
-    scan();
-  }
-
-  void next(size_type n) {
-    auto& bits = rng_.get();
-    auto prev = rank(bits, i_);
-    auto remaining = rank(bits) - prev;
-    if (n <= remaining) {
-      i_ = select(bits, prev + n);
-      VAST_ASSERT(i_ != word_type::npos);
-    } else {
-      n -= remaining;
-      i_ = word_type::npos;
-      n_ += bits.size();
-      rng_.next();
-      while (rng_) {
-        if (n > rng_.get().size()) {
-          n -= rank(rng_.get());
-        } else {
-          i_ = select(rng_.get(), n);
-          if (i_ != word_type::npos)
-            break;
-        }
-        n_ += rng_.get().size();
-        rng_.next();
-      }
-    }
-  }
-
-  void skip(size_type n) {
-    VAST_ASSERT(n > 0);
-    VAST_ASSERT(i_ != word_type::npos);
-    auto remaining = rng_.get().size() - i_ - 1;
-    if (n <= remaining) {
-      i_ += n - 1;
+  select_range(BitRange rng) : rng_{std::move(rng)} {
+    if (!rng_.done() && rng_.bits()[0] != Bit)
       next();
-    } else {
-      n -= remaining;
-      i_ = word_type::npos;
-      n_ += rng_.get().size();
-      rng_.next();
-      while (rng_) {
-        if (n > rng_.get().size()) {
-          n -= rng_.get().size();
-        } else {
-          i_ = n - 2;
-          next();
-          break;
-        }
-        n_ += rng_.get().size();
-        rng_.next();
-      }
-    }
+  }
+
+  auto get() const {
+    return rng_.get();
   }
 
   bool done() const {
-    return rng_.done() && i_ == word_type::npos;
+    return rng_.done();
   }
 
-protected:
-  void scan() {
-    while (i_ == word_type::npos) {
-      n_ += rng_.get().size();
-      rng_.next();
-      if (rng_.done())
-        return;
-      i_ = find_first(rng_.get());
-    }
+  void next() {
+    rng_.template select<Bit>();
   }
 
-  BitRange rng_;
-  size_type n_ = 0;
-  size_type i_ = word_type::npos;
+  void next_from(id x) {
+    rng_.template select_from<Bit>(x);
+  }
+
+
+private:
+  bitwise_range<BitRange> rng_;
 };
 
-/// Lifts a bit range into a ::select_range.
-/// @param rng The bit range from which to construct a select range.
-/// @returns The select frange for *rng*.
+/// Creates a select_range over an ID sequence.
+/// @param ids The IDs.
+/// @returns A select_range for *ids*.
 /// @relates select_range span
-template <class Bitmap>
-auto select(const Bitmap& bm) {
-  return select_range<decltype(bit_range(bm))>(bit_range(bm));
+template <bool Bit = true, class IDs>
+auto select(const IDs& ids) {
+  using range_type = decltype(bit_range(ids));
+  return select_range<Bit, range_type>(bit_range(ids));
+}
+
+/// Traverses the 1-bits of a bitmap in conjunction with an iterator range that
+/// represents half-open ID intervals.
+/// @param bm The ID sequence to *select*.
+/// @param begin An iterator to the beginning of the other range.
+/// @param end An iterator to the end of the other range.
+/// @param f A function that transforms *begin* into a half-open interval of IDs
+///          *[x, y)* where *x* is the first and *y* one past the last ID.
+/// @param g A function the performs a user-defined action if the current range
+///          values falls into *(x, y)*, where `(x, y) = f(*begin)` .
+/// @pre The range delimited by *begin* and *end* must be sorted in ascending
+///      order.
+template <class Bitmap, class Iterator, class F, class G>
+caf::error select_with(const Bitmap& bm, Iterator begin, Iterator end, F f, G g) {
+  auto pred = [&](const auto& x, auto y) { return f(x).second <= y; };
+  auto lower_bound = [&](Iterator first, Iterator last, auto x) {
+    return std::lower_bound(first, last, x, pred);
+  };
+  for (auto rng = select(bm);
+       rng && begin != end;
+       begin = lower_bound(begin, end, rng.get())) {
+    // Get the current ID interval.
+    auto [first, last] = f(*begin);
+    // Make the ID range catch up if it's behind.
+    if (rng.get() < first) {
+      rng.next_from(first);
+      if (!rng)
+        break;
+    }
+    if (rng.get() >= first && rng.get() < last) {
+      // If the next ID falls in the current slice, we invoke the processing
+      // function and move forward.
+      if (auto error = g(*begin))
+        return error;
+      rng.next_from(last);
+      if (!rng)
+        break;
+    }
+  }
+  return caf::none;
 }
 
 /// Computes the *span* of a bitmap, i.e., the interval *[a,b]* with *a* being

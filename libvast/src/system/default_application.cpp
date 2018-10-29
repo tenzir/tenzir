@@ -16,6 +16,7 @@
 #include "vast/system/application.hpp"
 #include "vast/system/configuration.hpp"
 #include "vast/system/export_command.hpp"
+#include "vast/system/generator_command.hpp"
 #include "vast/system/import_command.hpp"
 #include "vast/system/reader_command.hpp"
 #include "vast/system/remote_command.hpp"
@@ -28,6 +29,7 @@
 #include "vast/format/csv.hpp"
 #include "vast/format/json.hpp"
 #include "vast/format/mrt.hpp"
+#include "vast/format/test.hpp"
 
 #ifdef VAST_HAVE_PCAP
 #include "vast/system/pcap_reader_command.hpp"
@@ -44,6 +46,7 @@ default_application::default_application() {
   import_->add<reader_command<format::bro::reader>>("bro");
   import_->add<reader_command<format::mrt::reader>>("mrt");
   import_->add<reader_command<format::bgpdump::reader>>("bgpdump");
+  import_->add<generator_command<format::test::reader>>("test");
   export_ = add<export_command>("export");
   export_->add<writer_command<format::bro::writer>>("bro");
   export_->add<writer_command<format::csv::writer>>("csv");

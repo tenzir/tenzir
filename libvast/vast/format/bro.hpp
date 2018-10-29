@@ -27,17 +27,15 @@
 #include "vast/data.hpp"
 #include "vast/expected.hpp"
 #include "vast/filesystem.hpp"
+#include "vast/format/reader.hpp"
+#include "vast/format/writer.hpp"
+#include "vast/fwd.hpp"
 #include "vast/schema.hpp"
 
 #include "vast/detail/line_range.hpp"
 #include "vast/detail/string.hpp"
 
-namespace vast {
-
-class event;
-
-namespace format {
-namespace bro {
+namespace vast::format::bro {
 
 /// Parses non-container types.
 template <class Iterator, class Attribute>
@@ -224,7 +222,7 @@ bool bro_basic_parse(const type& t, Iterator& f, const Iterator& l,
 }
 
 /// A Bro reader.
-class reader {
+class reader : format::reader {
 public:
   reader() = default;
 
@@ -234,13 +232,13 @@ public:
 
   void reset(std::unique_ptr<std::istream> in);
 
-  expected<event> read();
+  caf::expected<event> read() override;
 
-  expected<void> schema(const vast::schema& sch);
+  caf::expected<void> schema(vast::schema sch) override;
 
-  expected<vast::schema> schema() const;
+  caf::expected<vast::schema> schema() const override;
 
-  const char* name() const;
+  const char* name() const override;
 
 private:
   using iterator_type = std::string_view::const_iterator;
@@ -261,7 +259,7 @@ private:
 };
 
 /// A Bro writer.
-class writer {
+class writer : public format::writer {
 public:
   writer() = default;
   writer(writer&&) = default;
@@ -271,20 +269,17 @@ public:
   /// @param dir The path where to write the log file(s) to.
   writer(path dir);
 
-  ~writer();
+  expected<void> write(const event& e) override;
 
-  expected<void> write(const event& e);
+  expected<void> flush() override;
 
-  expected<void> flush();
+  void cleanup() override;
 
-  const char* name() const;
+  const char* name() const override;
 
 private:
   path dir_;
   std::unordered_map<std::string, std::unique_ptr<std::ostream>> streams_;
 };
 
-} // namespace bro
-} // namespace format
-} // namespace vast
-
+} // namespace vast::format::bro

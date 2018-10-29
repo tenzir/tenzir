@@ -13,18 +13,11 @@
 
 #include "vast/system/remote_command.hpp"
 
+#include <caf/scoped_actor.hpp>
+
 #include <iostream>
 
-#include <caf/all.hpp>
-#include <caf/io/all.hpp>
-#ifdef VAST_USE_OPENSSL
-#include <caf/openssl/all.hpp>
-#endif // VAST_USE_OPENSSL
-
 #include "vast/logger.hpp"
-
-#include "vast/system/signal_monitor.hpp"
-#include "vast/system/spawn.hpp"
 
 using namespace caf;
 
@@ -77,7 +70,7 @@ int remote_command::run_impl(actor_system& sys,
     },
     [&](const error& e) {
       VAST_IGNORE_UNUSED(e);
-      VAST_ERROR(self->system().render(e));
+      VAST_ERROR(this, self->system().render(e));
       std::cerr << self->system().render(e) << std::endl;
       result = false;
     });

@@ -37,6 +37,9 @@ list(GET version_numbers 0 VERSION_MAJOR)
 list(GET version_numbers 1 VERSION_MINOR)
 set(VERSION_MAJ_MIN "${VERSION_MAJOR}.${VERSION_MINOR}")
 
+set(VAST_LOG_LEVEL "2" CACHE STRING
+    "maximum log level that can be set during runtime execution")
+
 #------------------------------------------------------------------------------
 #                               Compiler Setup
 #------------------------------------------------------------------------------
@@ -332,6 +335,15 @@ if (CAF_LIBRARY_OPENSSL)
 endif ()
 set(CAF_FOUND ${CAF_FOUND_SAVE})
 
+if (NOT BROKER_ROOT_DIR AND VAST_PREFIX)
+  set(BROKER_ROOT_DIR ${VAST_PREFIX})
+endif ()
+find_package(BROKER QUIET)
+if (BROKER_FOUND)
+  set(VAST_HAVE_BROKER true)
+  include_directories(${BROKER_INCLUDE_DIRS})
+endif ()
+
 if (NOT SNAPPY_ROOT_DIR AND VAST_PREFIX)
   set(SNAPPY_ROOT_DIR ${VAST_PREFIX})
 endif ()
@@ -482,6 +494,7 @@ else ()
   endif ()
 endif ()
 
+# Figure out whether we point to a build directory or a prefix.
 set(caf_dir ${CAF_LIBRARY_CORE})
 get_filename_component(caf_dir ${caf_dir} PATH)
 if (EXISTS "${caf_dir}/../libcaf_core")
@@ -490,8 +503,20 @@ else ()
   set(caf_dir ${CAF_INCLUDE_DIR_CORE})
 endif ()
 
+# Figure out whether we point to a build directory or a prefix.
+if (BROKER_FOUND)
+  set(broker_dir ${BROKER_LIBRARY})
+  get_filename_component(broker_dir ${broker_dir} PATH)
+  if (EXISTS "${broker_dir}/../broker")
+    get_filename_component(broker_dir ${broker_dir} PATH)
+  else ()
+    set(broker_dir ${BROKER_INCLUDE_DIRS})
+  endif ()
+endif ()
+
 display(CAF_FOUND ${caf_dir} caf_summary)
 display(VAST_HAVE_ARROW "${ARROW_CORE_INCLUDE_DIR}" arrow_summary)
+display(BROKER_FOUND "${broker_dir}" broker_summary)
 display(SNAPPY_FOUND "${SNAPPY_INCLUDE_DIR}" snappy_summary)
 display(PCAP_FOUND "${PCAP_INCLUDE_DIR}" pcap_summary)
 display(GPERFTOOLS_FOUND "${GPERFTOOLS_INCLUDE_DIR}" perftools_summary)
@@ -528,6 +553,7 @@ set(summary
     "\n"
     "\nCAF:              ${caf_summary}"
     "\nArrow:            ${arrow_summary}"
+    "\nBroker:           ${broker_summary}"
     "\nSnappy            ${snappy_summary}"
     "\nPCAP:             ${pcap_summary}"
     "\nGperftools:       ${perftools_summary}"

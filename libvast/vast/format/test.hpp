@@ -21,7 +21,9 @@
 #include "vast/data.hpp"
 #include "vast/event.hpp"
 #include "vast/expected.hpp"
+#include "vast/format/reader.hpp"
 #include "vast/schema.hpp"
+
 #include "vast/detail/random.hpp"
 
 namespace vast::format::test {
@@ -55,26 +57,25 @@ struct blueprint {
 };
 
 /// Produces random events according to a given schema.
-class reader {
+class reader : public format::reader {
 public:
   /// Constructs a test reader.
   /// @param seed A seed for the random number generator.
   /// @param n The numer of events to generate.
   /// @param id The base event ID to start at.
-  reader(size_t seed = 0, uint64_t n = 100, id base = 0);
+  reader(size_t seed = 0, uint64_t n = 100);
 
-  expected<event> read();
+  expected<event> read() override;
 
-  expected<void> schema(vast::schema sch);
+  expected<void> schema(vast::schema sch) override;
 
-  expected<vast::schema> schema() const;
+  expected<vast::schema> schema() const override;
 
-  const char* name() const;
+  const char* name() const override;
 
 private:
   vast::schema schema_;
   std::mt19937_64 generator_;
-  id id_;
   uint64_t num_events_;
   schema::const_iterator next_;
   std::unordered_map<type, blueprint> blueprints_;

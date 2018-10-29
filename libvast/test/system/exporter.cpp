@@ -41,8 +41,8 @@ using fixture_base = fixtures::deterministic_actor_system_and_events;
 
 struct fixture : fixture_base {
   fixture() {
-    expr = unbox(to<expression>("service == \"http\" "
-                                "&& :addr == 212.227.96.110"));
+    expr = unbox(to<expression>("service == \"dns\" "
+                                "&& :addr == 192.168.1.1"));
   }
 
   ~fixture() {
@@ -155,11 +155,11 @@ TEST(historical query without importer) {
   exporter_setup(historical);
   MESSAGE("fetch results");
   auto results = fetch_results();
-  REQUIRE_EQUAL(results.size(), 28u);
+  REQUIRE_EQUAL(results.size(), 5u);
   std::sort(results.begin(), results.end());
-  CHECK_EQUAL(results.front().id(), 105u);
+  CHECK_EQUAL(results.front().id(), 10u);
   CHECK_EQUAL(results.front().type().name(), "bro::conn");
-  CHECK_EQUAL(results.back().id(), 8354u);
+  CHECK_EQUAL(results.back().id(), 19u);
 }
 
 TEST(historical query with importer) {
@@ -175,11 +175,11 @@ TEST(historical query with importer) {
   exporter_setup(historical);
   MESSAGE("fetch results");
   auto results = fetch_results();
-  REQUIRE_EQUAL(results.size(), 28u);
+  REQUIRE_EQUAL(results.size(), 5u);
   std::sort(results.begin(), results.end());
-  CHECK_EQUAL(results.front().id(), 105u);
+  CHECK_EQUAL(results.front().id(), 10u);
   CHECK_EQUAL(results.front().type().name(), "bro::conn");
-  CHECK_EQUAL(results.back().id(), 8354u);
+  CHECK_EQUAL(results.back().id(), 19u);
 }
 
 TEST(continuous query with exporter only) {
@@ -194,11 +194,11 @@ TEST(continuous query with exporter only) {
   run();
   MESSAGE("fetch results");
   auto results = fetch_results();
-  REQUIRE_EQUAL(results.size(), 28u);
+  REQUIRE_EQUAL(results.size(), 5u);
   std::sort(results.begin(), results.end());
-  CHECK_EQUAL(results.front().id(), 105u);
+  CHECK_EQUAL(results.front().id(), 10u);
   CHECK_EQUAL(results.front().type().name(), "bro::conn");
-  CHECK_EQUAL(results.back().id(), 8354u);
+  CHECK_EQUAL(results.back().id(), 19u);
 }
 
 TEST(continuous query with importer) {
@@ -214,11 +214,11 @@ TEST(continuous query with importer) {
   run();
   MESSAGE("fetch results");
   auto results = fetch_results();
-  REQUIRE_EQUAL(results.size(), 28u);
+  REQUIRE_EQUAL(results.size(), 5u);
   std::sort(results.begin(), results.end());
-  CHECK_EQUAL(results.front().id(), 105u);
+  CHECK_EQUAL(results.front().id(), 10u);
   CHECK_EQUAL(results.front().type().name(), "bro::conn");
-  CHECK_EQUAL(results.back().id(), 8354u);
+  CHECK_EQUAL(results.back().id(), 19u);
 }
 
 FIXTURE_SCOPE_END()

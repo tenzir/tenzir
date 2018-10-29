@@ -21,6 +21,8 @@ namespace vast {
 
 class abstract_type;
 class address;
+class bitmap;
+class chunk;
 class column_index;
 class const_table_slice_handle;
 class data;
@@ -34,6 +36,9 @@ class path;
 class pattern;
 class port;
 class schema;
+class segment;
+class segment_builder;
+class segment_store;
 class store;
 class subnet;
 class table_index;
@@ -64,16 +69,23 @@ struct timespan_type;
 struct timestamp_type;
 struct vector_type;
 
+// -- free functions -----------------------------------------------------------
+
+void intrusive_ptr_add_ref(const table_slice*);
+
+void intrusive_ptr_release(const table_slice*);
+
 // -- smart pointers -----------------------------------------------------------
 
+using chunk_ptr = caf::intrusive_ptr<chunk>;
 using column_index_ptr = std::unique_ptr<column_index>;
-
+using const_table_slice_ptr = caf::intrusive_ptr<const table_slice>;
+using default_table_slice_ptr = caf::intrusive_ptr<default_table_slice>;
+using table_slice_builder_ptr = caf::intrusive_ptr<table_slice_builder>;
 using table_slice_ptr = caf::intrusive_ptr<table_slice>;
 
-using const_table_slice_ptr = caf::intrusive_ptr<const table_slice>;
+// -- miscellaneous ------------------------------------------------------------
 
-using table_slice_builder_ptr = caf::intrusive_ptr<table_slice_builder>;
-
-using default_table_slice_ptr = caf::intrusive_ptr<default_table_slice>;
+using ids = bitmap; // temporary; until we have a real type for 'ids'
 
 } // namespace vast

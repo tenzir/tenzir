@@ -25,24 +25,11 @@
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/vast/uuid.hpp"
 #include "vast/event.hpp"
-
+#include "vast/format/writer.hpp"
 #include "vast/system/atoms.hpp"
 #include "vast/system/query_statistics.hpp"
 
 namespace vast::system {
-
-#if 0
-/// The *Writer* concept.
-struct Writer {
-  Writer();
-
-  expected<void> write(const event&);
-
-  expected<void> flush();
-
-  const char* name() const;
-};
-#endif
 
 // The base class for SINK actors.
 template <class Writer>
@@ -58,6 +45,7 @@ struct sink_state {
 template <class Writer>
 caf::behavior sink(caf::stateful_actor<sink_state<Writer>>* self,
                    Writer&& writer, uint64_t limit) {
+  static_assert(std::is_base_of_v<format::writer, Writer>);
   using namespace std::chrono;
   self->state.writer = std::move(writer);
   self->state.name = self->state.writer.name();
@@ -66,17 +54,25 @@ caf::behavior sink(caf::stateful_actor<sink_state<Writer>>* self,
     VAST_DEBUG(self, "caps event export at", limit, "events");
     self->state.limit = limit;
   }
+  self->set_exit_handler(
+    [=](const caf::exit_msg& msg) {
+      self->state.writer.cleanup();
+      self->quit(msg.reason);
+    }
+  );
   return {
     [=](const std::vector<event>& xs) {
       for (auto& x : xs) {
         auto r = self->state.writer.write(x);
         if (!r) {
-          VAST_ERROR(self->system().render(r.error()));
+          VAST_ERROR(self, self->system().render(r.error()));
+          self->state.writer.cleanup();
           self->quit(r.error());
           return;
         }
         if (++self->state.processed == self->state.limit) {
           VAST_INFO(self, "reached limit:", self->state.limit, "events");
+          self->state.writer.cleanup();
           self->quit();
           return;
         }

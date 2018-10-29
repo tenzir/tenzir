@@ -18,12 +18,12 @@
 #include <streambuf>
 #include <type_traits>
 
+#include <caf/actor_system.hpp>
 #include <caf/stream_serializer.hpp>
 
 #include "vast/compression.hpp"
 #include "vast/detail/compressedbuf.hpp"
 #include "vast/detail/type_traits.hpp"
-#include "vast/detail/variadic_serialization.hpp"
 #include "vast/error.hpp"
 #include "vast/expected.hpp"
 #include "vast/filesystem.hpp"
@@ -33,44 +33,44 @@ namespace vast {
 /// Serializes a sequence of objects into a sink.
 /// @see load
 template <compression Method = compression::null, class Sink, class... Ts>
-expected<void> save(Sink&& out, Ts&&... xs) {
+caf::error save(caf::actor_system& sys, Sink&& out, const Ts&... xs) {
   static_assert(sizeof...(Ts) > 0);
   using sink_type = std::decay_t<Sink>;
   if constexpr (detail::is_streambuf_v<sink_type>) {
-#ifndef VAST_NO_EXCEPTIONS
-    try {
-#endif // VAST_NO_EXCEPTIONS
-      if (Method == compression::null) {
-        caf::stream_serializer<sink_type&> s{out};
-        detail::write(s, std::forward<Ts>(xs)...);
-      } else {
-        detail::compressedbuf compressed{out, Method};
-        caf::stream_serializer<detail::compressedbuf&> s{compressed};
-        detail::write(s, std::forward<Ts>(xs)...);
-        compressed.pubsync();
-      }
-#ifndef VAST_NO_EXCEPTIONS
-    } catch (std::exception& e) {
-      return make_error(ec::unspecified, e.what());
+    if (Method == compression::null) {
+      caf::stream_serializer<sink_type&> s{sys, out};
+      if (auto err = s(xs...))
+        return err;
+    } else {
+      detail::compressedbuf compressed{out, Method};
+      caf::stream_serializer<detail::compressedbuf&> s{sys, compressed};
+      if (auto err = s(xs...))
+        return err;
+      compressed.pubsync();
     }
-#endif // VAST_NO_EXCEPTIONS
-    return {};
+    return caf::none;
   } else if constexpr (std::is_base_of_v<std::ostream, sink_type>) {
     auto sb = out.rdbuf();
-    return save<Method>(*sb, std::forward<Ts>(xs)...);
+    return save<Method>(sys, *sb, xs...);
   } else if constexpr (detail::is_contiguous_byte_container_v<sink_type>) {
     caf::containerbuf<sink_type> sink{out};
-    return save<Method>(sink, std::forward<Ts>(xs)...);
+    return save<Method>(sys, sink, xs...);
   } else if constexpr (std::is_same_v<sink_type, path>) {
+    if (auto dir = out.parent(); !exists(dir)) {
+      VAST_DEBUG_ANON(__func__, "creating directory", dir);
+      if (auto res = mkdir(dir); !res) {
+        VAST_DEBUG_ANON(__func__, "failed to create directory", dir);
+        return res.error();
+      }
+    }
     std::ofstream fs{out.str()};
     if (!fs)
       return make_error(ec::filesystem_error, "failed to create filestream",
                         out);
-    return save<Method>(*fs.rdbuf(), std::forward<Ts>(xs)...);
+    return save<Method>(sys, *fs.rdbuf(), xs...);
   } else {
     static_assert(!std::is_same_v<Sink, Sink>, "unexpected Sink type");
   }
 }
 
 } // namespace vast
-

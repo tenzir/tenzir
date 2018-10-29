@@ -1,7 +1,19 @@
-#include <algorithm>
-
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+#include "vast/bitmap_algorithms.hpp"
 #include "vast/error.hpp"
 #include "vast/event.hpp"
+#include "vast/ids.hpp"
 #include "vast/load.hpp"
 #include "vast/logger.hpp"
 #include "vast/save.hpp"
@@ -12,179 +24,125 @@
 #include "vast/concept/printable/vast/filesystem.hpp"
 #include "vast/concept/printable/vast/uuid.hpp"
 
+#include "vast/const_table_slice_handle.hpp"
+#include "vast/segment_store.hpp"
+#include "vast/table_slice.hpp"
+#include "vast/to_events.hpp"
+
 namespace vast {
 
-void segment_store::segment::add(batch&& x) {
-  auto min = select(x.ids(), 1);
-  VAST_ASSERT(min != invalid_id);
-  VAST_ASSERT(batches_.find(min) == batches_.end());
-  bytes_ += bytes(x);
-  batches_.emplace(min, std::move(x));
-}
-
-// FIXME: this algorithm is not very efficient. It operates in O(MN) time where
-// M is the number of batches and N the size of the bitmap. Conceptually,
-// there's a straight-forward O(log M * N) or even O(N) algorithm by walking
-// through the query bitmap in lock-step with the batches.
-expected<std::vector<event>>
-segment_store::segment::extract(const bitmap& xs) const {
-  auto min = select(xs, 1);
-  auto max = select(xs, -1);
-  // FIXME: what we really want here is detail::range_map, but it's currently
-  // missing lower_bound()/upper_bound() functionality, so we emulate it here.
-  auto begin = batches_.lower_bound(min);
-  if (begin != batches_.begin()
-      && (begin == batches_.end() || begin->first > min))
-    --begin;
-  auto end = batches_.upper_bound(max);
-  std::vector<event> result;
-  for (; begin != end; ++begin) {
-    batch::reader reader{begin->second};
-    auto events = reader.read(xs);
-    if (!events)
-      return events;
-    result.reserve(result.size() + events->size());
-    std::move(events->begin(), events->end(), std::back_inserter(result));
-  }
-  return result;
-}
-
-const uuid& segment_store::segment::id() const {
-  return id_;
-}
-
-uint64_t bytes(const segment_store::segment& x) {
-  return x.bytes_;
-}
-
-
-segment_store::segment_store(path dir, size_t max_segment_size,
-                             size_t in_memory_segments)
-  : dir_{std::move(dir)},
-    max_segment_size_{max_segment_size},
-    cache_{in_memory_segments} {
+segment_store_ptr segment_store::make(caf::actor_system& sys, path dir,
+                                      size_t max_segment_size,
+                                      size_t in_memory_segments) {
+  VAST_TRACE(VAST_ARG(dir), VAST_ARG(max_segment_size),
+             VAST_ARG(in_memory_segments));
   VAST_ASSERT(max_segment_size > 0);
-  // Load meta data about existing segments.
-  if (exists(dir_ / "meta"))
-    if (auto result = load(dir_ / "meta", segments_); !result) {
-      // TODO: factor into a separate function and do not do this work in the
-      // constructor.
-      VAST_ERROR("failed to unarchive meta data:", to_string(result.error()));
-      segments_ = {};
+  auto x = std::make_unique<segment_store>(
+    sys, std::move(dir), max_segment_size, in_memory_segments);
+  // Materialize meta data of existing segments.
+  if (exists(x->meta_path())) {
+    VAST_DEBUG_ANON(__func__, "loads segment meta data from", x->meta_path());
+    if (auto err = load(sys, x->meta_path(), x->segments_)) {
+      VAST_ERROR_ANON(__func__, "failed to unarchive meta data:", sys.render(err));
+      return nullptr;
     }
-
-}
-
-expected<void> segment_store::put(const std::vector<event>& xs) {
-  VAST_ASSERT(!xs.empty());
-  // Ensure that all events have strictly monotonic IDs
-  auto non_monotonic = [](auto& x, auto& y) { return x.id() != y.id() - 1; };
-  if (std::adjacent_find(xs.begin(), xs.end(), non_monotonic) != xs.end())
-    return make_error(ec::unspecified, "got batch with non-monotonic IDs");
-  batch::writer writer{compression::lz4};
-  for (auto& e : xs)
-    if (!writer.write(e))
-      return make_error(ec::unspecified, "failed to create batch");
-  auto b = writer.seal();
-  auto first = xs.front().id();
-  auto last  = xs.back().id();
-  b.ids(first, last + 1);
-  // If the batch would cause the segment to exceed its maximum size, then
-  // flush and replace the active segment.
-  if (bytes(active_) >= max_segment_size_) {
-    VAST_ASSERT(bytes(active_) != 0); // must not be empty
-    if (auto result = flush(); !result)
-      return result.error();
   }
-  // Append batch to active segment.
-  segments_.inject(first, last + 1, active_.id());
-  active_.add(std::move(b));
-  return no_error;
+  return x;
 }
 
-expected<void> segment_store::flush() {
-  if (bytes(active_) == 0)
-    return no_error;
-  // Write segment to file system.
-  if (!exists(dir_))
-    if (auto result = mkdir(dir_); !result)
-      return result.error();
-  auto filename = dir_ / to_string(active_.id());
-  auto result = save(filename, segment::magic, segment::version, active_);
-  if (!result)
-    return result.error();
-  // Move active segment into cache.
-  auto segment_id = active_.id();
-  cache_.emplace(segment_id, std::move(active_));
-  active_ = {};
-  // Update persistent meta data.
-  if (auto result = save(dir_ / "meta", segments_); !result)
-    return result.error();
-  VAST_DEBUG("wrote active segment to", filename.trim(-3));
-  return no_error;
+segment_store::~segment_store() {
+  // nop
 }
 
-expected<std::vector<event>> segment_store::get(const ids& xs) {
+caf::error segment_store::put(const_table_slice_handle xs) {
+  VAST_TRACE(VAST_ARG(xs));
+  VAST_DEBUG(this, "adds a table slice");
+  if (auto error = builder_.add(xs))
+    return error;
+  if (!segments_.inject(xs->offset(), xs->offset() + xs->rows(), builder_.id()))
+    return make_error(ec::unspecified, "failed to update range_map");
+  if (builder_.table_slice_bytes() < max_segment_size_)
+    return caf::none;
+  // We have exceeded our maximum segment size and now finish.
+  return flush();
+}
+
+caf::error segment_store::flush() {
+  auto x = builder_.finish();
+  if (!x)
+    return x.error();
+  auto seg_ptr = *x;
+  auto filename = segment_path() / to_string(seg_ptr->id());
+  if (auto err = save(sys_, filename, seg_ptr))
+    return err;
+  // Keep new segment in the cache.
+  cache_.emplace(seg_ptr->id(), seg_ptr);
+  VAST_DEBUG(this, "wrote new segment to", filename.trim(-3));
+  VAST_DEBUG(this, "saves segment meta data");
+  return save(sys_, meta_path(), segments_);
+}
+
+caf::expected<std::vector<const_table_slice_handle>>
+segment_store::get(const ids& xs) {
+  VAST_TRACE(VAST_ARG(xs));
   // Collect candidate segments by seeking through the ID set and
   // probing each ID interval.
-  std::vector<const uuid*> candidates;
-  auto ones = select(xs);
-  auto i = segments_.begin();
+  VAST_DEBUG(this, "retrieves table slices with requested ids");
+  std::vector<uuid> candidates;
+  auto f = [](auto x) { return std::pair{x.left, x.right}; };
+  auto g = [&](auto x) {
+    auto id = x.value;
+    if (candidates.empty() || candidates.back() != id)
+      candidates.push_back(id);
+    return caf::none;
+  };
+  auto begin = segments_.begin();
   auto end = segments_.end();
-  while (ones && i != end) {
-    if (ones.get() < i->left) {
-      // Bitmap must catch up, segment is ahead.
-      ones.skip(i->left - ones.get());
-    } else if (ones.get() < i->right) {
-      // Match: bitmap is within an existing segment.
-      candidates.push_back(&i->value);
-      ones.skip(i->right - ones.get());
-      ++i;
+  if (auto error = select_with(xs, begin, end, f, g))
+    return error;
+  // Process candidates in reverse order for maximum LRU cache hits.
+  std::vector<const_table_slice_handle> result;
+  VAST_DEBUG(this, "processes", candidates.size(), "candidates");
+  for (auto cand = candidates.rbegin(); cand != candidates.rend(); ++cand) {
+    auto& id = *cand;
+    caf::expected<std::vector<const_table_slice_handle>> slices{caf::no_error};
+    if (id == builder_.id()) {
+      VAST_DEBUG(this, "looks into the active segement");
+      slices = builder_.lookup(xs);
     } else {
-      // Segment must catch up, bitmap is ahead.
-      ++i;
-    }
-  }
-  // Process candidates in reverse order to get maximum LRU cache hits.
-  std::vector<event> result;
-  VAST_DEBUG("processing", candidates.size(), "candidates");
-  for (auto id = candidates.rbegin(); id != candidates.rend(); ++id) {
-    segment* s = nullptr;
-    // If the segment turns out to be the active segment, we can
-    // can query it immediately.
-    if (**id == active_.id()) {
-      VAST_DEBUG("looking into active segment");
-      s = &active_;
-    } else {
-      // Otherwise we look into the cache.
-      auto i = cache_.find(**id);
+      segment_ptr seg_ptr = nullptr;
+      auto i = cache_.find(id);
       if (i != cache_.end()) {
-        VAST_DEBUG("got cache hit for segment", **id);
-        s = &i->second;
+        VAST_DEBUG(this, "got cache hit for segment", id);
+        seg_ptr = i->second;
       } else {
-        VAST_DEBUG("got cache miss for segment", **id);
-        segment::magic_type m;
-        segment::version_type v;
-        segment seg;
-        if (auto result = load(dir_ / to_string(**id), m, v, seg); !result)
-          return result.error();
-        if (m != segment::magic)
-          return make_error(ec::unspecified, "segment magic error");
-        if (v < segment::version)
-          return make_error(ec::version_error, v, segment::version);
-        i = cache_.emplace(**id, std::move(seg)).first;
-        s = &i->second;
+        VAST_DEBUG(this, "got cache miss for segment", id);
+        auto fname = segment_path() / to_string(id);
+        if (auto err = load(sys_, fname, seg_ptr)) {
+          VAST_ERROR(this, "unable to load segment:", sys_.render(err));
+          return err;
+        }
+        i = cache_.emplace(id, seg_ptr).first;
       }
+      VAST_ASSERT(seg_ptr != nullptr);
+      slices = seg_ptr->lookup(xs);
     }
-    // Perform lookup in segment and append extracted events to result.
-    VAST_ASSERT(s != nullptr);
-    auto events = s->extract(xs);
-    if (!events)
-      return events.error();
-    result.reserve(result.size() + events->size());
-    std::move(events->begin(), events->end(), std::back_inserter(result));
+    if (!slices)
+      return slices.error();
+    result.reserve(result.size() + slices->size());
+    result.insert(result.end(), slices->begin(), slices->end());
   }
   return result;
+}
+
+segment_store::segment_store(caf::actor_system& sys, path dir,
+                             uint64_t max_segment_size, size_t in_memory_segments)
+  : sys_{sys},
+    dir_{std::move(dir)},
+    max_segment_size_{max_segment_size},
+    cache_{in_memory_segments},
+    builder_{sys_} {
+  // nop
 }
 
 } // namespace vast

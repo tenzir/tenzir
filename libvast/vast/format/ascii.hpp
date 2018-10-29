@@ -15,8 +15,7 @@
 
 #include "vast/concept/printable/core.hpp"
 #include "vast/concept/printable/vast/event.hpp"
-
-#include "vast/format/writer.hpp"
+#include "vast/format/printer_writer.hpp"
 
 namespace vast::format::ascii {
 
@@ -29,16 +28,13 @@ struct ascii_printer : printer<ascii_printer> {
   }
 };
 
-class writer : public format::writer<ascii_printer>{
+class writer : public printer_writer<ascii_printer>{
 public:
-  using format::writer<ascii_printer>::writer;
+  using printer_writer<ascii_printer>::printer_writer;
 
-  const char* name() const {
+  const char* name() const override {
     return "ascii-writer";
   }
 };
 
 } // namespace vast::format::ascii
-
-
-

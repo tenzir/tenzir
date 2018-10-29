@@ -17,23 +17,18 @@
 #include <functional>
 #include <string>
 
+#include "caf/fwd.hpp"
 #include "caf/ref_counted.hpp"
 #include "caf/intrusive_ptr.hpp"
+
+#include "vast/fwd.hpp"
 
 #include "vast/detail/operators.hpp"
 
 namespace vast {
 
-class chunk;
-class path;
-
-/// A pointer to a chunk.
-/// @relates chunk
-using chunk_ptr = caf::intrusive_ptr<chunk>;
-
 /// A contiguous block of memory.
-class chunk : public caf::ref_counted,
-              detail::totally_ordered<chunk> {
+class chunk : public caf::ref_counted {
   chunk() = delete;
   chunk& operator=(const chunk&) = delete;
 
@@ -58,6 +53,9 @@ public:
 
   /// Destroys the chunk and deallocates any owned memory.
   ~chunk();
+
+  /// @returns The pointer to the chunk buffer.
+  char* data();
 
   /// @returns The pointer to the chunk buffer.
   const char* data() const;
@@ -97,11 +95,15 @@ private:
   deleter_type deleter_;
 };
 
+/// A pointer to a chunk.
 /// @relates chunk
-bool operator==(const chunk& x, const chunk& y);
+using chunk_ptr = caf::intrusive_ptr<chunk>;
 
 /// @relates chunk
-bool operator<(const chunk& x, const chunk& y);
+/// @pre `x != nullptr`
+caf::error inspect(caf::serializer& sink, const chunk_ptr& x);
+
+/// @relates chunk
+caf::error inspect(caf::deserializer& source, chunk_ptr& x);
 
 } // namespace vast
-

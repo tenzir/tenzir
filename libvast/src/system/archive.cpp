@@ -13,7 +13,6 @@
 
 #include <algorithm>
 
-#include "vast/batch.hpp"
 #include "vast/const_table_slice_handle.hpp"
 #include "vast/event.hpp"
 #include "vast/expected.hpp"
@@ -21,6 +20,7 @@
 #include "vast/segment_store.hpp"
 #include "vast/store.hpp"
 #include "vast/table_slice.hpp"
+#include "vast/to_events.hpp"
 
 #include "vast/concept/printable/stream.hpp"
 
@@ -42,37 +42,30 @@ archive(archive_type::stateful_pointer<archive_state> self,
   // probably makes sense to pass a unique_ptr<stor> directory to the spawn
   // arguments of the actor. This way, users can provide their own store
   // implementation conveniently.
-  self->state.store = std::make_unique<segment_store>(dir, max_segment_size,
-                                                      capacity);
+  VAST_INFO(self, "spawned:", VAST_ARG(capacity), VAST_ARG(max_segment_size));
+  self->state.store = segment_store::make(
+    self->system(), dir, max_segment_size, capacity);
+  VAST_ASSERT(self->state.store != nullptr);
   self->set_exit_handler(
     [=](const exit_msg& msg) {
       self->state.store->flush();
+      self->state.store.reset();
       self->quit(msg.reason);
     }
   );
-  auto handle_batch = [=](const std::vector<event>& xs) {
-    auto first_id = xs.front().id();
-    auto last_id  = xs.back().id();
-    VAST_DEBUG(self, "got", xs.size(),
-               "events [" << first_id << ',' << (last_id + 1) << ')');
-    auto result = self->state.store->put(xs);
-    if (!result) {
-      VAST_ERROR(self, "failed to store events:",
-                 self->system().render(result.error()));
-      self->quit(result.error());
-    }
-  };
   return {
     [=](const ids& xs) {
       VAST_ASSERT(rank(xs) > 0);
       VAST_DEBUG(self, "got query for", rank(xs), "events in range ["
                  << select(xs, 1) << ',' << (select(xs, -1) + 1) << ')');
-      auto result = self->state.store->get(xs);
-      if (result)
-        VAST_DEBUG(self, "delivers", result->size(), "events");
+      std::vector<event> result;
+      auto slices = self->state.store->get(xs);
+      if (!slices)
+        VAST_DEBUG(self, "failed to lookup IDs in store:",
+                   self->system().render(slices.error()));
       else
-        VAST_DEBUG(self, "failed to get events:",
-                   self->system().render(result.error()));
+        for (auto& slice : *slices)
+          to_events(result, *slice, xs);
       return result;
     },
     [=](stream<const_table_slice_handle> in) {
@@ -82,9 +75,15 @@ archive(archive_type::stateful_pointer<archive_state> self,
           // nop
         },
         [=](unit_t&, std::vector<const_table_slice_handle>& batch) {
-          // TODO: port store to table slice API (#3214)
-          for (auto& slice : batch)
-            handle_batch(slice->rows_to_events());
+          VAST_DEBUG(self, "got", batch.size(), "table slices");
+          for (auto& slice : batch) {
+            if (auto error = self->state.store->put(slice)) {
+              VAST_ERROR(self, "failed to add table slice to store",
+                         self->system().render(error));
+              self->quit(error);
+              break;
+            }
+          }
         },
         [=](unit_t&, const error& err) {
           if (err) {
@@ -92,10 +91,7 @@ archive(archive_type::stateful_pointer<archive_state> self,
           }
         }
       );
-    },
-    [=](const std::vector<event>& xs) {
-      handle_batch(xs);
-    },
+    }
   };
 }
 

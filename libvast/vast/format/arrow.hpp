@@ -62,7 +62,9 @@ public:
 
 private:
   expected<plasma::ObjectID> make_object(const void* data, size_t size);
-
+  
+  expected<plasma::ObjectID> gen_plasma_id();
+  
   bool connected_;
 
   plasma::PlasmaClient plasma_client_;
@@ -175,6 +177,9 @@ struct insert_visitor {
   using result_type = ::arrow::Status;
 
   std::shared_ptr<::arrow::RecordBatchBuilder> rbuilder;
+  
+  // Arrow builder for the current field
+  ::arrow::ArrayBuilder* builder;
 
   // Index of the current builder
   u_int64_t cbuilder = 0;
@@ -213,7 +218,7 @@ struct insert_visitor {
 
   result_type operator()(const count_type& t, caf::none_t);
 
-  result_type operator()(const integer_type& t, caf::none_t d);
+  result_type operator()(const integer_type& t, caf::none_t);
 
   result_type operator()(const real_type& t, caf::none_t);
 

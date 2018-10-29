@@ -20,6 +20,7 @@
 #include "vast/format/test.hpp"
 #include "vast/table_slice_builder.hpp"
 #include "vast/table_slice_handle.hpp"
+#include "vast/to_events.hpp"
 #include "vast/type.hpp"
 
 #include "vast/concept/printable/to_string.hpp"
@@ -63,7 +64,7 @@ auto insert_sorted(std::vector<T>& vec, const T& item, Pred pred) {
 
 } // namespace <anonymous>
 
-size_t events::slice_size = 100;
+size_t events::slice_size = 8;
 
 std::vector<event> events::bro_conn_log;
 std::vector<event> events::bro_dns_log;
@@ -190,18 +191,18 @@ events::events() {
     return;
   initialized = true;
   MESSAGE("inhaling unit test suite events");
-  bro_conn_log = inhale<format::bro::reader>(bro::conn);
-  REQUIRE_EQUAL(bro_conn_log.size(), 8462u);
+  bro_conn_log = inhale<format::bro::reader>(bro::small_conn);
+  REQUIRE_EQUAL(bro_conn_log.size(), 20u);
   bro_dns_log = inhale<format::bro::reader>(bro::dns);
-  REQUIRE_EQUAL(bro_dns_log.size(), 5124u);
+  REQUIRE_EQUAL(bro_dns_log.size(), 32u);
   bro_http_log = inhale<format::bro::reader>(bro::http);
-  REQUIRE_EQUAL(bro_http_log.size(), 4896u);
-  bgpdump_txt = inhale<format::bgpdump::reader>(bgpdump::updates20140821);
-  REQUIRE_EQUAL(bgpdump_txt.size(), 11782u);
+  REQUIRE_EQUAL(bro_http_log.size(), 40u);
+  bgpdump_txt = inhale<format::bgpdump::reader>(bgpdump::updates20180124);
+  REQUIRE_EQUAL(bgpdump_txt.size(), 100u);
   random = extract(vast::format::test::reader{42, 1000});
   REQUIRE_EQUAL(random.size(), 1000u);
-  ascending_integers = make_ascending_integers(10000);
-  alternating_integers = make_alternating_integers(10000);
+  ascending_integers = make_ascending_integers(250);
+  alternating_integers = make_alternating_integers(250);
   auto allocate_id_block = [i = id{0}](size_t size) mutable {
     auto first = i;
     i += size;
@@ -261,17 +262,17 @@ events::events() {
       v.begin(), v.end(),
       [](const auto& lhs, const auto& rhs) { return lhs.id() < rhs.id(); });
   };
-  auto to_events = [&](const auto& slices) {
+  auto as_events = [&](const auto& slices) {
     std::vector<event> result;
     for (auto& slice : slices) {
-      auto xs = slice->rows_to_events();
+      auto xs = to_events(*slice);
       std::move(xs.begin(), xs.end(), std::back_inserter(result));
     }
     return result;
   };
 #define SANITY_CHECK(event_vec, slice_vec)                                     \
   {                                                                            \
-    auto flat_log = to_events(slice_vec);                                      \
+    auto flat_log = as_events(slice_vec);                                      \
     auto sorted_event_vec = event_vec;                                         \
     sort_by_id(sorted_event_vec);                                              \
     REQUIRE_EQUAL(sorted_event_vec.size(), flat_log.size());                   \

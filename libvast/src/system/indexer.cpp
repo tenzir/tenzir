@@ -49,7 +49,7 @@ void indexer_state::init(table_index&& from) {
 
 behavior indexer(stateful_actor<indexer_state>* self, path dir,
                  record_type layout) {
-  auto maybe_tbl = make_table_index(std::move(dir), layout);
+  auto maybe_tbl = make_table_index(self->system(), std::move(dir), layout);
   if (!maybe_tbl) {
     VAST_ERROR(self, "unable to generate table layout for", layout);
     return {};

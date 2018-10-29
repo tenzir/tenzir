@@ -16,7 +16,10 @@
 #include "arrow/io/api.h"
 #include "arrow/ipc/api.h"
 #include "arrow/type.h"
+#include <arrow/io/interfaces.h>
 #include "plasma/common.h"
+#include <plasma/test-util.h>
+#include <plasma/client.h>
 
 #include "vast/error.hpp"
 #include "vast/event.hpp"
@@ -89,13 +92,17 @@ expected<std::shared_ptr<arrow::RecordBatch>> transpose(const event& e) {
 }
 
 // Writes a Record batch into an in-memory buffer.
-expected<std::shared_ptr<arrow::Buffer>>
-write_to_buffer(const std::shared_ptr<arrow::RecordBatch>& batch) {
-  auto pool = arrow::default_memory_pool();
-  auto buffer = std::make_shared<arrow::PoolBuffer>(pool);
-  auto sink = std::make_unique<arrow::io::BufferOutputStream>(buffer);
-  std::shared_ptr<arrow::ipc::RecordBatchWriter> writer;
-  auto status = arrow::ipc::RecordBatchStreamWriter::Open(
+expected<std::shared_ptr<::arrow::Buffer>>
+write_to_buffer(const std::shared_ptr<::arrow::RecordBatch>& batch) {
+  std::shared_ptr<::arrow::ResizableBuffer> buffer;
+  auto status = ::arrow::AllocateResizableBuffer(
+      arrow::default_memory_pool(), sizeof(*batch), &buffer);
+  if (!status.ok())
+    return make_error(ec::format_error, "failed to open arrow stream writer",
+                      status.ToString());
+  auto sink = std::make_shared<::arrow::io::BufferOutputStream>(buffer);
+  std::shared_ptr<::arrow::ipc::RecordBatchWriter> writer;
+  status = ::arrow::ipc::RecordBatchStreamWriter::Open(
     sink.get(), batch->schema(), &writer);
   if (!status.ok())
     return make_error(ec::format_error, "failed to open arrow stream writer",
@@ -219,13 +226,6 @@ insert_visitor::insert_visitor(std::shared_ptr<::arrow::RecordBatchBuilder>& b)
   // nop
 }
 
-/*insert_visitor::insert_visitor(std::shared_ptr<::arrow::RecordBatchBuilder>&
-b, u_int64_t c, u_int64_t cbuilder) : rbuilder(b), counter(c),
-cbuilder(cbuilder) {
-  // nop
-}
-*/
-
 insert_visitor::insert_visitor(std::shared_ptr<::arrow::RecordBatchBuilder>& b,
                                u_int64_t c)
     : rbuilder(b), cbuilder(c) {
@@ -233,12 +233,12 @@ insert_visitor::insert_visitor(std::shared_ptr<::arrow::RecordBatchBuilder>& b,
 }
 
 ::arrow::Status insert_visitor::operator()(const type&, const data&) {
-  return ::arrow::Status::OK();
+return ::arrow::Status::OK();
 }
 
 ::arrow::Status insert_visitor::operator()(const none_type&, caf::none_t) {
-  auto builder = rbuilder->GetFieldAs<::arrow::NullBuilder>(cbuilder);
-  return builder->AppendNull();
+auto builder = rbuilder->GetFieldAs<::arrow::NullBuilder>(cbuilder);
+return builder->AppendNull();
 }
 
 ::arrow::Status insert_visitor::operator()(const count_type&, count d) {
@@ -252,22 +252,22 @@ insert_visitor::insert_visitor(std::shared_ptr<::arrow::RecordBatchBuilder>& b,
 }
 
 ::arrow::Status insert_visitor::operator()(const integer_type&, integer d) {
-  auto builder = rbuilder->GetFieldAs<::arrow::UInt64Builder>(cbuilder);
+  auto builder = rbuilder->GetFieldAs<::arrow::Int64Builder>(cbuilder);
   return builder->Append(d);
 }
 
 ::arrow::Status insert_visitor::operator()(const integer_type&, caf::none_t) {
-  auto builder = rbuilder->GetFieldAs<::arrow::UInt64Builder>(cbuilder);
+  auto builder = rbuilder->GetFieldAs<::arrow::Int64Builder>(cbuilder);
   return builder->AppendNull();
 }
 
 ::arrow::Status insert_visitor::operator()(const real_type&, real d) {
-  auto builder = rbuilder->GetFieldAs<::arrow::FloatBuilder>(cbuilder);
+  auto builder = rbuilder->GetFieldAs<::arrow::DoubleBuilder>(cbuilder);
   return builder->Append(d);
 }
 
 ::arrow::Status insert_visitor::operator()(const real_type&, caf::none_t) {
-  auto builder = rbuilder->GetFieldAs<::arrow::FloatBuilder>(cbuilder);
+  auto builder = rbuilder->GetFieldAs<::arrow::DoubleBuilder>(cbuilder);
   return builder->AppendNull();
 }
 
@@ -387,7 +387,7 @@ insert_visitor_helper::insert_visitor_helper(::arrow::ArrayBuilder* b)
 }
 
 ::arrow::Status insert_visitor_helper::operator()(const real_type&, real d) {
-  auto cbuilder = static_cast<::arrow::FloatBuilder*>(builder);
+  auto cbuilder = static_cast<::arrow::DoubleBuilder*>(builder);
   return cbuilder->Append(d);
 }
 
@@ -441,7 +441,7 @@ insert_visitor_helper::insert_visitor_helper(::arrow::ArrayBuilder* b)
 writer::writer(const std::string& plasma_socket) {
   VAST_DEBUG(name(), "connects to plasma store at", plasma_socket);
   auto status =
-    plasma_client_.Connect(plasma_socket, "", PLASMA_DEFAULT_RELEASE_DELAY);
+    plasma_client_.Connect(plasma_socket, "");
   connected_ = status.ok();
   if (!connected())
     VAST_ERROR(name(), "failed to connect to plasma store", status.ToString());
@@ -502,21 +502,36 @@ bool writer::connected() const {
   return connected_;
 }
 
+expected<plasma::ObjectID> writer::gen_plasma_id() {
+  auto oid = plasma::random_object_id();
+  bool contains = false;
+  auto status = plasma_client_.Contains(oid, &contains);
+  if (!status.ok())
+    return make_error(ec::format_error, "failed to generate object id"
+        , status.ToString());
+  if (contains)
+    return writer::gen_plasma_id();
+  else
+    return oid;
+}
+
 expected<plasma::ObjectID> writer::make_object(const void* data, size_t size) {
-  auto oid = plasma::ObjectID::from_random();
+  auto oid = writer::gen_plasma_id();
+  if (!oid)
+    return oid.error();
   std::shared_ptr<Buffer> buffer;
   auto status =
-    plasma_client_.Create(oid, static_cast<int64_t>(size), nullptr, 0, &buffer);
+    plasma_client_.Create(*oid, static_cast<int64_t>(size), nullptr, 0, &buffer);
   if (!status.ok())
     return make_error(ec::format_error, "failed to create object",
                       status.ToString());
   std::memcpy(buffer->mutable_data(), data, size);
-  status = plasma_client_.Seal(oid);
+  status = plasma_client_.Seal(*oid);
   if (!status.ok())
     return make_error(ec::format_error, "failed to create object",
                       status.ToString());
-  VAST_DEBUG(name(), "sealed object", oid.hex(), "of size", size);
-  return oid;
+  VAST_DEBUG(name(), "sealed object", *oid.hex(), "of size", size);
+  return *oid;
 }
 
 } // namespace arrow

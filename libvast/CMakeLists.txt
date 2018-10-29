@@ -17,7 +17,6 @@ set(libvast_sources
   src/attribute.cpp
   src/banner.cpp
   src/base.cpp
-  src/batch.cpp
   src/bitmap.cpp
   src/chunk.cpp
   src/column_index.cpp
@@ -30,6 +29,8 @@ set(libvast_sources
   src/default_table_slice.cpp
   src/default_table_slice_builder.cpp
   src/defaults.cpp
+  src/detail/add_error_categories.cpp
+  src/detail/add_message_types.cpp
   src/detail/adjust_resource_consumption.cpp
   src/detail/compressedbuf.cpp
   src/detail/fdinbuf.cpp
@@ -54,7 +55,9 @@ set(libvast_sources
   src/format/bro.cpp
   src/format/csv.cpp
   src/format/mrt.cpp
+  src/format/reader.cpp
   src/format/test.cpp
+  src/format/writer.cpp
   src/http.cpp
   src/ids.cpp
   src/meta_index.cpp
@@ -63,8 +66,12 @@ set(libvast_sources
   src/pattern.cpp
   src/port.cpp
   src/schema.cpp
+  src/segment.cpp
+  src/segment_builder.cpp
   src/segment_store.cpp
+  src/store.cpp
   src/subnet.cpp
+  src/subset.cpp
   src/system/accountant.cpp
   src/system/application.cpp
   src/system/archive.cpp
@@ -83,22 +90,23 @@ set(libvast_sources
   src/system/node_command.cpp
   src/system/partition.cpp
   src/system/profiler.cpp
-  src/system/reader_command_base.cpp
   src/system/remote_command.cpp
   src/system/signal_monitor.cpp
+  src/system/sink_command.cpp
+  src/system/source_command.cpp
   src/system/spawn.cpp
   src/system/spawn_sink.cpp
   src/system/spawn_source.cpp
   src/system/start_command.cpp
   src/system/task.cpp
   src/system/tracker.cpp
-  src/system/writer_command_base.cpp
   src/table.cpp
   src/table_index.cpp
   src/table_slice.cpp
   src/table_slice_builder.cpp
   src/table_slice_handle.cpp
   src/time.cpp
+  src/to_events.cpp
   src/type.cpp
   src/uuid.cpp
   src/value.cpp
@@ -223,7 +231,6 @@ include_directories(
 
 set(tests
   test/address.cpp
-  test/batch.cpp
   test/binner.cpp
   test/bitmap.cpp
   test/bitmap_index.cpp
@@ -248,6 +255,7 @@ set(tests
   test/filesystem.cpp
   test/fixtures/actor_system.cpp
   test/fixtures/events.cpp
+  test/fixtures/node.cpp
   test/format/bro.cpp
   test/format/mrt.cpp
   test/format/writer.cpp
@@ -272,6 +280,8 @@ set(tests
   test/span.cpp
   test/stack.cpp
   test/string.cpp
+  test/segment.cpp
+  test/segment_store.cpp
   test/subnet.cpp
   test/system/archive.cpp
   test/system/consensus.cpp

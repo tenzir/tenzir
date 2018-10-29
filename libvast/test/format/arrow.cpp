@@ -29,7 +29,7 @@ Status get_arrow_batch(plasma::ObjectID id,
   plasma::PlasmaClient plasma_client_;
   // Connect plasma client
   ARROW_RETURN_NOT_OK(
-    plasma_client_.Connect("/tmp/plasma", "", PLASMA_DEFAULT_RELEASE_DELAY));
+    plasma_client_.Connect("/tmp/plasma", ""));
   // load Batch from plasma
   plasma::ObjectBuffer buf;
   auto status = plasma_client_.Get(&id, 1, 10, &buf);
@@ -53,9 +53,10 @@ TEST(Arrow Bro log writer) {
     std::vector<plasma::ObjectID> oids;
     CHECK(writer.write(*logs, oids));
     CHECK(writer.flush());
+    REQUIRE_GREATER(oids.size(), 0);
     plasma::PlasmaClient client;
     ARROW_CHECK_OK(
-      client.Connect("/tmp/plasma", "", PLASMA_DEFAULT_RELEASE_DELAY));
+      client.Connect("/tmp/plasma", ""));
     ARROW_CHECK_OK(client.Disconnect());
     std::shared_ptr<arrow::RecordBatch> b;
     auto status = get_arrow_batch(oids.at(0), b);

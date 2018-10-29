@@ -54,7 +54,7 @@ public:
   ///                 save to and load from `base_dir / id`.
   /// @param id Unique identifier for this partition.
   /// @param factory Factory function for INDEXER actors.
-  partition(const path& base_dir, uuid id,
+  partition(caf::actor_system& sys, const path& base_dir, uuid id,
             indexer_manager::indexer_factory factory);
 
   ~partition() noexcept override;
@@ -134,6 +134,9 @@ private:
 
   /// Uniquely identifies this partition.
   uuid id_;
+
+  /// Hosting actor system.
+  caf::actor_system& sys_;
 };
 
 // -- related types ------------------------------------------------------------
@@ -151,14 +154,14 @@ auto inspect(Inspector& f, partition::meta_data& x) {
 
 /// Creates a partition.
 /// @relates partition
-partition_ptr make_partition(const path& base_dir, uuid id,
-                             indexer_manager::indexer_factory f);
+partition_ptr make_partition(caf::actor_system& sys, const path& base_dir,
+                             uuid id, indexer_manager::indexer_factory f);
 
 /// Creates a partition that spawns regular INDEXER actors as children of
 /// `self`.
 /// @relates partition
-partition_ptr make_partition(caf::local_actor* self, const path& base_dir,
-                             uuid id);
+partition_ptr make_partition(caf::actor_system& sys, caf::local_actor* self,
+                             const path& base_dir, uuid id);
 
 } // namespace vast::system
 

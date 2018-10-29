@@ -16,6 +16,7 @@
 #include <memory>
 
 #include <caf/expected.hpp>
+#include <caf/fwd.hpp>
 
 #include "vast/bitmap.hpp"
 #include "vast/event.hpp"
@@ -30,12 +31,15 @@ namespace vast {
 
 /// Creates a single column for the type name.
 /// @relates column_index
-caf::expected<column_index_ptr> make_type_column_index(path filename);
+caf::expected<column_index_ptr> make_type_column_index(caf::actor_system& sys,
+                                                       path filename);
 
 /// Creates a single colum for a value at column `col`.
 /// @relates column_index
-caf::expected<column_index_ptr>
-make_column_index(path filename, type column_type, size_t column);
+caf::expected<column_index_ptr> make_column_index(caf::actor_system& sys,
+                                                  path filename,
+                                                  type column_type,
+                                                  size_t column);
 
 // -- class definition ---------------------------------------------------------
 
@@ -91,17 +95,23 @@ public:
     return *idx_;
   }
 
+  bool has_skip_attribute() const noexcept {
+    return has_skip_attribute_;
+  }
+
 protected:
   // -- constructors, destructors, and assignment operators --------------------
 
-  column_index(type index_type, path filename);
+  column_index(caf::actor_system& sys, type index_type, path filename);
 
   // -- member variables -------------------------------------------------------
 
+  bool has_skip_attribute_;
   type index_type_;
   path filename_;
   std::unique_ptr<value_index> idx_;
   value_index::size_type last_flush_ = 0;
+  caf::actor_system& sys_;
 };
 
 // -- related types ------------------------------------------------------------

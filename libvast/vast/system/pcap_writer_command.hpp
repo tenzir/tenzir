@@ -13,39 +13,20 @@
 
 #pragma once
 
-#include <memory>
-#include <string>
 #include <string_view>
 
 #include <caf/scoped_actor.hpp>
-#include <caf/typed_actor.hpp>
-#include <caf/typed_event_based_actor.hpp>
-
-#include "vast/expression.hpp"
-#include "vast/logger.hpp"
-
-#include "vast/system/writer_command_base.hpp"
-#include "vast/system/writer_command_base.hpp"
-#include "vast/system/signal_monitor.hpp"
-#include "vast/system/source.hpp"
-#include "vast/system/tracker.hpp"
 
 #include "vast/format/pcap.hpp"
-
-#include "vast/concept/parseable/to.hpp"
-
-#include "vast/concept/parseable/vast/expression.hpp"
-#include "vast/concept/parseable/vast/schema.hpp"
-
-#include "vast/detail/make_io_stream.hpp"
+#include "vast/system/sink_command.hpp"
 
 namespace vast::system {
 
 /// PCAP subcommand to `import`.
 /// @relates application
-class pcap_writer_command : public writer_command_base {
+class pcap_writer_command : public sink_command {
 public:
-  using super = writer_command_base;
+  using super = sink_command;
 
   pcap_writer_command(command* parent, std::string_view name);
 
@@ -57,4 +38,3 @@ protected:
 };
 
 } // namespace vast::system
-

@@ -32,6 +32,7 @@
 #include "vast/system/source.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_handle.hpp"
+#include "vast/to_events.hpp"
 
 using namespace caf;
 using namespace vast;
@@ -53,8 +54,7 @@ behavior dummy_sink(event_based_actor* self, size_t num_events, actor overseer) 
           // nop
         },
         [=](event_buffer& xs, const_table_slice_handle x) {
-          auto events = x->rows_to_events();
-          for (auto& e : events) {
+          for (auto& e : to_events(*x)) {
             xs.emplace_back(std::move(e));
             if (xs.size() == num_events) {
               self->send(overseer, xs);
@@ -101,7 +101,7 @@ struct importer_fixture : Base {
 
   auto make_bro_source() {
     namespace bf = format::bro;
-    auto stream = vast::detail::make_input_stream(bro::conn);
+    auto stream = vast::detail::make_input_stream(bro::small_conn);
     REQUIRE(stream);
     bf::reader reader{std::move(*stream)};
     return this->self->spawn(system::source<bf::reader>, std::move(reader),

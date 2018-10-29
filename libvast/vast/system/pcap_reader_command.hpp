@@ -13,48 +13,27 @@
 
 #pragma once
 
-#include <memory>
-#include <string>
 #include <string_view>
 
 #include <caf/scoped_actor.hpp>
-#include <caf/typed_actor.hpp>
-#include <caf/typed_event_based_actor.hpp>
-
-#include "vast/expression.hpp"
-#include "vast/logger.hpp"
-
-#include "vast/system/reader_command_base.hpp"
-#include "vast/system/reader_command_base.hpp"
-#include "vast/system/signal_monitor.hpp"
-#include "vast/system/source.hpp"
-#include "vast/system/tracker.hpp"
 
 #include "vast/format/pcap.hpp"
-
-#include "vast/concept/parseable/to.hpp"
-
-#include "vast/concept/parseable/vast/expression.hpp"
-#include "vast/concept/parseable/vast/schema.hpp"
-
-#include "vast/detail/make_io_stream.hpp"
+#include "vast/system/source_command.hpp"
 
 namespace vast::system {
 
 /// PCAP subcommant to `import`.
 /// @relates application
-class pcap_reader_command : public reader_command_base {
+class pcap_reader_command : public source_command {
 public:
-  using super = reader_command_base;
+  using super = source_command;
 
   pcap_reader_command(command* parent, std::string_view name);
 
 protected:
-  expected<caf::actor> make_source(caf::scoped_actor& self,
-                                   const caf::config_value_map& options,
-                                   argument_iterator begin,
-                                   argument_iterator end) override;
+  expected<caf::actor>
+  make_source(caf::scoped_actor& self,
+              const caf::config_value_map& options) override;
 };
 
 } // namespace vast::system
-
