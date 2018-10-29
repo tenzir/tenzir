@@ -62,6 +62,9 @@ void meta_index::add(const uuid& partition, const table_slice& slice) {
 
 std::vector<uuid> meta_index::lookup(const expression& expr) const {
   VAST_ASSERT(!caf::holds_alternative<caf::none_t>(expr));
+  // TODO: we could consider a flat_set<uuid> here, which would then have
+  // overloads for inplace intersection/union and simplify the implementation
+  // of this function a bit.
   using result_type = std::vector<uuid>;
   auto all_partitions = [&] {
     result_type result;
