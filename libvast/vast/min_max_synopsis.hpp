@@ -24,7 +24,7 @@ namespace vast {
 template <class T>
 class min_max_synopsis : public synopsis {
 public:
-  min_max_synopsis(vast::type x, T min = T{}, T max = T{}) 
+  min_max_synopsis(vast::type x, T min = T{}, T max = T{})
     : synopsis{std::move(x)},
       min_{min},
       max_{max} {
@@ -41,7 +41,9 @@ public:
   }
 
   bool lookup(relational_operator op, data_view rhs) const override {
-    // There are 5 possible scenarios to differentiate for the inputs:
+    // Let *min* and *max* constitute the LHS of the lookup operation and *rhs*
+    // be the value to compare with on the RHS. Then, there are 5 possible
+    // scenarios to differentiate for the inputs:
     //
     //   (1) rhs < min
     //   (2) rhs == min
@@ -70,13 +72,13 @@ public:
       case not_equal:
         return !(min_ <= *x && *x <= max_);
       case less:
-        return min_ < *x || max_ < *x;
+        return min_ < *x;
       case less_equal:
-        return min_ <= *x || max_ <= *x;
+        return min_ <= *x;
       case greater:
-        return min_ > *x || max_ > *x;
+        return max_ > *x;
       case greater_equal:
-        return min_ >= *x || max_ >= *x;
+        return max_ >= *x;
     }
   }
 

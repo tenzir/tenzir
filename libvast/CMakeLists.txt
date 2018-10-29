@@ -273,6 +273,7 @@ set(tests
   test/segment.cpp
   test/segment_store.cpp
   test/subnet.cpp
+  test/synopsis.cpp
   test/system/archive.cpp
   test/system/consensus.cpp
   test/system/datagram_source.cpp
