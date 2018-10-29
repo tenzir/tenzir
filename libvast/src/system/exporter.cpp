@@ -18,7 +18,6 @@
 #include "vast/concept/printable/vast/event.hpp"
 #include "vast/concept/printable/vast/expression.hpp"
 #include "vast/concept/printable/vast/uuid.hpp"
-#include "vast/const_table_slice_handle.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/event.hpp"
 #include "vast/expression_visitors.hpp"
@@ -88,6 +87,11 @@ void report_statistics(stateful_actor<exporter_state>* self) {
   }
 }
 
+void shutdown(stateful_actor<exporter_state>* self, caf::error err) {
+  VAST_DEBUG(self, "initiates shutdown with error", self->system().render(err));
+  self->send_exit(self, std::move(err));
+}
+
 void shutdown(stateful_actor<exporter_state>* self) {
   if (rank(self->state.unprocessed) > 0 || !self->state.results.empty()
       || has_continuous_option(self->state.options))
@@ -130,6 +134,7 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
     VAST_DEBUG(self, "has continuous query option");
   self->set_exit_handler(
     [=](const exit_msg& msg) {
+      VAST_DEBUG(self, "received exit from", msg.source, "with reason:", msg.reason);
       self->send(self->state.sink, sys_atom::value, delete_atom::value);
       self->send_exit(self->state.sink, msg.reason);
       self->quit(msg.reason);
@@ -289,20 +294,18 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
           }
         },
         [=](const error& e) {
-          VAST_IGNORE_UNUSED(e);
-          VAST_DEBUG(self, "failed to lookup query at index:",
-                     self->system().render(e));
+          shutdown(self, e);
         }
       );
     },
-    [=](caf::stream<const_table_slice_handle> in) {
+    [=](caf::stream<table_slice_ptr> in) {
       return self->make_sink(
         in,
         [](caf::unit_t&) {
           // nop
         },
-        [=](caf::unit_t&, const const_table_slice_handle& slice) {
-          // TODO: portjto new table slice API
+        [=](caf::unit_t&, const table_slice_ptr& slice) {
+          // TODO: port to new table slice API
           auto candidates = to_events(*slice);
           handle_batch(candidates);
         },

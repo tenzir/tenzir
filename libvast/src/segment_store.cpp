@@ -24,7 +24,6 @@
 #include "vast/concept/printable/vast/filesystem.hpp"
 #include "vast/concept/printable/vast/uuid.hpp"
 
-#include "vast/const_table_slice_handle.hpp"
 #include "vast/segment_store.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/to_events.hpp"
@@ -54,7 +53,7 @@ segment_store::~segment_store() {
   // nop
 }
 
-caf::error segment_store::put(const_table_slice_handle xs) {
+caf::error segment_store::put(table_slice_ptr xs) {
   VAST_TRACE(VAST_ARG(xs));
   VAST_DEBUG(this, "adds a table slice");
   if (auto error = builder_.add(xs))
@@ -82,7 +81,7 @@ caf::error segment_store::flush() {
   return save(sys_, meta_path(), segments_);
 }
 
-caf::expected<std::vector<const_table_slice_handle>>
+caf::expected<std::vector<table_slice_ptr>>
 segment_store::get(const ids& xs) {
   VAST_TRACE(VAST_ARG(xs));
   // Collect candidate segments by seeking through the ID set and
@@ -101,11 +100,11 @@ segment_store::get(const ids& xs) {
   if (auto error = select_with(xs, begin, end, f, g))
     return error;
   // Process candidates in reverse order for maximum LRU cache hits.
-  std::vector<const_table_slice_handle> result;
+  std::vector<table_slice_ptr> result;
   VAST_DEBUG(this, "processes", candidates.size(), "candidates");
   for (auto cand = candidates.rbegin(); cand != candidates.rend(); ++cand) {
     auto& id = *cand;
-    caf::expected<std::vector<const_table_slice_handle>> slices{caf::no_error};
+    caf::expected<std::vector<table_slice_ptr>> slices{caf::no_error};
     if (id == builder_.id()) {
       VAST_DEBUG(this, "looks into the active segement");
       slices = builder_.lookup(xs);

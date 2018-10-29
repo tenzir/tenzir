@@ -366,7 +366,7 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
     [=](worker_atom, caf::actor& worker) {
       self->state.idle_workers.emplace_back(std::move(worker));
     },
-    [=](caf::stream<const_table_slice_handle> in) {
+    [=](caf::stream<table_slice_ptr> in) {
       VAST_DEBUG(self, "got a new source");
       return self->state.stage->add_inbound_path(in);
     }
@@ -377,7 +377,7 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
       st.idle_workers.emplace_back(std::move(worker));
       self->become(keep_behavior, st.has_worker);
     },
-    [=](caf::stream<const_table_slice_handle> in) {
+    [=](caf::stream<table_slice_ptr> in) {
       VAST_DEBUG(self, "got a new source");
       return self->state.stage->add_inbound_path(in);
     }

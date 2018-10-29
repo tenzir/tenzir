@@ -19,7 +19,6 @@
 
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/vast/expression.hpp"
-#include "vast/const_table_slice_handle.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/expression.hpp"
 #include "vast/filesystem.hpp"
@@ -70,13 +69,13 @@ behavior indexer(stateful_actor<indexer_state>* self, path dir,
         return err;
       return caf::unit;
     },
-    [=](stream<const_table_slice_handle> in) {
+    [=](stream<table_slice_ptr> in) {
       self->make_sink(
         in,
         [](unit_t&) {
           // nop
         },
-        [=](unit_t&, const std::vector<const_table_slice_handle>& xs) {
+        [=](unit_t&, const std::vector<table_slice_ptr>& xs) {
           for (auto& x : xs)
             self->state.tbl.add(x);
         },

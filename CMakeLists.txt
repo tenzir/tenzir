@@ -62,7 +62,7 @@ set(LDFLAGS "$ENV{LDFLAGS}")
 
 # Ninja doesn't colorize compiler diagnostics by default.
 if (CMAKE_GENERATOR STREQUAL "Ninja")
-  set(EXTRA_FLAGS "-fdiagnostics-color")
+  set(EXTRA_FLAGS "${EXTRA_FLAGS} -fdiagnostics-color")
 endif ()
 
 # To give the user full control, we don't mess with with CXX_FLAGS if provided.

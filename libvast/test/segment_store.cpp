@@ -18,7 +18,6 @@
 #include "test.hpp"
 #include "test/fixtures/actor_system_and_events.hpp"
 
-#include "vast/const_table_slice_handle.hpp"
 #include "vast/ids.hpp"
 #include "vast/si_literals.hpp"
 #include "vast/table_slice.hpp"
@@ -34,7 +33,7 @@ TEST(construction and querying) {
   rm("foo");
   auto store = segment_store::make(sys, path{"foo"}, 512_KiB, 2);
   REQUIRE(store);
-  for (auto& slice : const_bro_conn_log_slices)
+  for (auto& slice : bro_conn_log_slices)
     REQUIRE(!store->put(slice));
   auto slices = store->get(make_ids({0, 6, 19, 21}));
   REQUIRE(slices);

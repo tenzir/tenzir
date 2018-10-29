@@ -48,15 +48,8 @@ public:
   /// @param layout The record describing the table columns.
   explicit table_slice(record_type layout);
 
-  // -- factory functions ------------------------------------------------------
-
   /// Makes a copy of this slice.
-  virtual table_slice_handle clone() const = 0;
-
-  /// @returns a handle holding an instance of type `impl` with given layout if
-  ///          `impl` is a registered type in `sys`, otherwise `nullptr`.
-  static table_slice_ptr make_ptr(record_type layout, caf::actor_system& sys,
-                                  caf::atom_value impl);
+  virtual table_slice* copy() const = 0;
 
   // -- persistence ------------------------------------------------------------
 
@@ -68,7 +61,7 @@ public:
 
   /// Saves the table slice in `ptr` to `sink`.
   static caf::error serialize_ptr(caf::serializer& sink,
-                                  const_table_slice_ptr ptr);
+                                  const table_slice_ptr& ptr);
 
   /// Loads a table slice from `source` into `ptr`.
   static caf::error deserialize_ptr(caf::deserializer& source,
@@ -124,6 +117,18 @@ protected:
   size_type columns_;
 };
 
+// -- free functions -----------------------------------------------------------
+
+/// Constructs a table slice.
+/// @param layout The layout of the table slice.
+/// @param sys The actor system.
+/// @param impl The registered type in *sys*.
+/// @returns a handle holding an instance of type *impl* with given layout if
+///          *impl* is a registered type in *sys*, otherwise `nullptr`.
+/// @relates table_slice
+table_slice_ptr make_table_slice(record_type layout, caf::actor_system& sys,
+                                 caf::atom_value impl);
+
 /// @relates table_slice
 bool operator==(const table_slice& x, const table_slice& y);
 
@@ -139,9 +144,15 @@ void intrusive_ptr_add_ref(const table_slice* ptr);
 void intrusive_ptr_release(const table_slice* ptr);
 
 /// @relates table_slice
-using table_slice_ptr = caf::intrusive_ptr<table_slice>;
+table_slice* intrusive_cow_ptr_unshare(table_slice*&);
 
 /// @relates table_slice
-using const_table_slice_ptr = caf::intrusive_ptr<const table_slice>;
+using table_slice_ptr = caf::intrusive_cow_ptr<table_slice>;
+
+/// @relates table_slice
+caf::error inspect(caf::serializer& sink, table_slice_ptr& hdl);
+
+/// @relates table_slice
+caf::error inspect(caf::deserializer& source, table_slice_ptr& hdl);
 
 } // namespace vast
