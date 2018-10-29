@@ -55,7 +55,7 @@ caf::error inspect(caf::deserializer& source, synopsis_ptr& ptr) {
     return caf::none;
   }
   if (source.context() != nullptr) {
-    auto factory = find_synopsis_factory(source.context()->system());
+    auto factory = get_synopsis_factory_fun(source.context()->system());
     ptr = factory ? factory(std::move(t)) : make_synopsis(std::move(t));
   } else {
     ptr = make_synopsis(std::move(t));
@@ -74,6 +74,9 @@ public:
   }
 };
 
+constexpr auto synopis_factory_fun_atom = caf::atom("SYNOPSIS_F");
+constexpr auto synopis_factory_tag_atom = caf::atom("SYNOPSIS_T");
+
 } // namespace <anonymous>
 
 synopsis_ptr make_synopsis(type x) {
@@ -90,19 +93,27 @@ synopsis_ptr make_synopsis(type x) {
 // runtime-settings map, with key being an atom and value a function pointer.
 // Right now, it's a brittle setup where the user must manage two keys.
 
-synopsis_factory find_synopsis_factory(caf::actor_system& sys) {
+synopsis_factory get_synopsis_factory_fun(caf::actor_system& sys) {
   using generic_fun = caf::runtime_settings_map::generic_function_pointer;
-  auto val = sys.runtime_settings().get(caf::atom("SYNOPSIS_F"));
-  if (auto f = caf::get_if<generic_fun>(&val))
-    return reinterpret_cast<synopsis_ptr (*)(type)>(*f);
+  auto val = sys.runtime_settings().get(synopis_factory_fun_atom);
+  if (auto fun = caf::get_if<generic_fun>(&val))
+    return reinterpret_cast<synopsis_ptr (*)(type)>(*fun);
   return {};
 }
 
-caf::atom_value find_synopsis_factory_tag(caf::actor_system& sys) {
-  auto val = sys.runtime_settings().get(caf::atom("SYNOPSIS_T"));
+caf::atom_value get_synopsis_factory_tag(caf::actor_system& sys) {
+  auto val = sys.runtime_settings().get(synopis_factory_tag_atom);
   if (auto x = caf::get_if<caf::atom_value>(&val))
     return *x;
   return {};
+}
+
+void set_synopsis_factory(caf::actor_system& sys,
+                          caf::atom_value tag, synopsis_factory factory) {
+  using generic_fun = caf::runtime_settings_map::generic_function_pointer;
+  auto fun = reinterpret_cast<generic_fun>(factory);
+  sys.runtime_settings().set(synopis_factory_tag_atom, tag);
+  sys.runtime_settings().set(synopis_factory_fun_atom, fun);
 }
 
 } // namespace vast

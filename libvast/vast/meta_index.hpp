@@ -55,10 +55,8 @@ public:
 
   // -- concepts ---------------------------------------------------------------
 
-  template <class Inspector>
-  friend auto inspect(Inspector& f, meta_index& x) {
-    return f(x.partition_synopses_);
-  }
+  friend caf::error inspect(caf::serializer& sink, const meta_index& x);
+  friend caf::error inspect(caf::deserializer& source, meta_index& x);
 
 private:
   // Synopsis structures for a givn layout.
@@ -78,10 +76,10 @@ private:
 };
 
 /// Tries to set a new synopsis factory from an actor system.
-/// @param x The meta index instance.
 /// @param sys The actor system.
+/// @param x The meta index instance.
 /// @returns `true` iff *sys* contains a synopsis factory.
 /// @relates meta_index
-bool set_synopsis_factory(meta_index& x, caf::actor_system& sys);
+bool set_synopsis_factory(caf::actor_system& sys, meta_index& x);
 
 } // namespace vast

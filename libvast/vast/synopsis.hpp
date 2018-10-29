@@ -74,23 +74,32 @@ caf::error inspect(caf::serializer& sink, synopsis_ptr& ptr);
 /// @relates synopsis
 caf::error inspect(caf::deserializer& source, synopsis_ptr& ptr);
 
-/// Constructs a synopsis for a given type.
+/// Constructs a synopsis for a given type. This is the default-factory
+/// function. It is possible to provide a custom factory via
+/// [`set_synopsis_factory`](@ref set_synopsis_factory).
 /// @param x The type to construct a synopsis for.
-/// @relates synopsis synopsis_factory
+/// @relates synopsis synopsis_factory set_synopsis_factory
 synopsis_ptr make_synopsis(type x);
 
 /// The function to create a synopsis.
-/// @relates synopsis find_synopsis_factory
-using synopsis_factory = std::function<synopsis_ptr(type)>;
+/// @relates synopsis get_synopsis_factory_fun set_synopsis_factory
+using synopsis_factory = synopsis_ptr (*)(type);
 
 /// Looks for a synopsis factory in an actor system.
 /// @param sys The actor system to search for a synopsis factory function.
 /// @relates synopsis synopsis_factory
-synopsis_factory find_synopsis_factory(caf::actor_system& sys);
+synopsis_factory get_synopsis_factory_fun(caf::actor_system& sys);
 
 /// Looks for a synopsis factory in an actor system.
 /// @param sys The actor system to search for a synopsis factory tag.
-/// @relates synopsis synopsis_factory find_synopsis_factory
-caf::atom_value find_synopsis_factory_tag(caf::actor_system& sys);
+/// @relates synopsis get_synopsis_factory_fun set_synopsis_factory
+caf::atom_value get_synopsis_factory_tag(caf::actor_system& sys);
+
+/// Sets a factory in an actor system.
+/// @param tag The atom key under which the factory is retrievable.
+/// @param factory A pointer to a factory function.
+/// @relates synopsis get_synopsis_factory_fun get_synopsis_factory_tag
+void set_synopsis_factory(caf::actor_system& sys,
+                          caf::atom_value tag, synopsis_factory factory);
 
 } // namespace vast

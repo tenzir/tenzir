@@ -165,8 +165,36 @@ void meta_index::factory(synopsis_factory f) {
   blacklisted_layouts_.clear();
 }
 
-bool set_synopsis_factory(meta_index& x, caf::actor_system& sys) {
-  if (auto f = find_synopsis_factory(sys)) {
+caf::error inspect(caf::serializer& sink, const meta_index& x) {
+  caf::atom_value tag;
+  if (sink.context() != nullptr)
+    tag = get_synopsis_factory_tag(sink.context()->system());
+  else if (x.make_synopsis_ != make_synopsis)
+    return make_error(ec::unspecified, "no actor system for custom factory");
+  else
+    tag = caf::atom("DEFAULT");
+  return caf::error::eval([&] { return sink(tag); },
+                          [&] { return sink(x.partition_synopses_); });
+}
+
+caf::error inspect(caf::deserializer& source, meta_index& x) {
+  caf::atom_value tag;
+  auto err = source(tag);
+  if (err)
+    return err;
+  if (tag != caf::atom("DEFAULT")) {
+    if (source.context() == nullptr)
+      return make_error(ec::unspecified, "no actor system for custom factory");
+    if (tag != get_synopsis_factory_tag(source.context()->system()))
+      return make_error(ec::unspecified, "synopsis factory mismatch");
+    auto f = get_synopsis_factory_fun(source.context()->system());
+    x.factory(f);
+  }
+  return source(x.partition_synopses_);
+}
+
+bool set_synopsis_factory(caf::actor_system& sys, meta_index& x) {
+  if (auto f = get_synopsis_factory_fun(sys)) {
     x.factory(f);
     return true;
   }
