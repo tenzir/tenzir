@@ -81,14 +81,11 @@ public:
   }
 
   caf::error serialize(caf::serializer& sink) const override {
-    return caf::error::eval([&] { return sink(min_); },
-                            [&] { return sink(max_); });
+    return sink(min_, max_);
   }
 
-  /// Loads the contents for this slice from `source`.
   caf::error deserialize(caf::deserializer& source) override {
-    return caf::error::eval([&] { return source(min_); },
-                            [&] { return source(max_); });
+    return source(min_, max_);
   }
 
 private:

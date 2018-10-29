@@ -176,8 +176,7 @@ caf::error inspect(caf::serializer& sink, const meta_index& x) {
     return make_error(ec::unspecified, "no actor system for custom factory");
   else
     tag = caf::atom("DEFAULT");
-  return caf::error::eval([&] { return sink(tag); },
-                          [&] { return sink(x.partition_synopses_); });
+  return sink(tag, x.partition_synopses_);
 }
 
 caf::error inspect(caf::deserializer& source, meta_index& x) {
