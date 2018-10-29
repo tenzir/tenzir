@@ -104,22 +104,24 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
     },
     [&](const predicate& x) -> result_type {
       // Performs a lookup on all *matching* synopses with operator and data
-      // from the predicate of the expression. A match is determined according
-      // to a given function that uses the record field to determine whether
-      // the synopsis should be queried.
+      // from the predicate of the expression. The match function uses a record
+      // field to determine whether the synopsis should be queried.
       auto search = [&](auto match) {
         VAST_ASSERT(caf::holds_alternative<data>(x.rhs));
         auto& rhs = caf::get<data>(x.rhs);
         result_type result;
+        auto found_matching_synopsis = false;
         for (auto& [part_id, part_syn] : partition_synopses_)
           for (auto& [layout, table_syn] : part_syn)
             for (size_t i = 0; i < table_syn.size(); ++i)
-              if (table_syn[i] && match(layout.fields[i]))
+              if (table_syn[i] && match(layout.fields[i])) {
+                found_matching_synopsis = true;
                 if (table_syn[i]->lookup(x.op, make_view(rhs)))
                   if (result.empty() || result.back() != part_id)
                     result.push_back(part_id);
+              }
         std::sort(result.begin(), result.end());
-        return result;
+        return found_matching_synopsis ? result : all_partitions();
       };
       return caf::visit(detail::overload(
         [&](const attribute_extractor& lhs, const data&) -> result_type {
