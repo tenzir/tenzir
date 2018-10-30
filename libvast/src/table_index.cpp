@@ -108,15 +108,9 @@ caf::error table_index::add(const table_slice_ptr& x) {
   auto first = x->offset();
   auto last = x->offset() + x->rows();
   VAST_ASSERT(first < last);
-  if (first >= row_ids_.size()) {
-    row_ids_.append_bits(false, first - row_ids_.size());
-    row_ids_.append_bits(true, last - first);
-  } else {
-    ids tmp;
-    tmp.append_bits(false, first);
-    tmp.append_bits(true, last - first);
-    row_ids_ |= tmp;
-  }
+  VAST_ASSERT(first >= row_ids_.size());
+  row_ids_.append_bits(false, first - row_ids_.size());
+  row_ids_.append_bits(true, last - first);
   // Iterate columns directly if all columns are present in memory.
   if (dirty_) {
     for (auto& col : columns_) {
