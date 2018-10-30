@@ -272,16 +272,10 @@ TEST(multiple partitions bro conn log lookup no messaging) {
         CHECK(path_set.emplace(col->filename()).second);
         auto idx_offset = std::min((i + 1) * slice_size, bro_conn_log.size());
         CHECK_EQUAL(col->idx().offset(), idx_offset);
-        if (col_id == 0) {
-          // First (and only) meta field is the type.
-          CHECK_EQUAL(col->index_type(), string_type{});
-        } else {
-          // Data field.
-          offset off{col_id - 1};
-          auto type_at_offset = layout.at(off);
-          REQUIRE_NOT_EQUAL(type_at_offset, nullptr);
-          CHECK_EQUAL(col->index_type(), *type_at_offset);
-        }
+        offset off{col_id};
+        auto type_at_offset = layout.at(off);
+        REQUIRE_NOT_EQUAL(type_at_offset, nullptr);
+        CHECK_EQUAL(col->index_type(), *type_at_offset);
         ++col_id;
       });
     });
