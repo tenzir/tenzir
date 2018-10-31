@@ -51,11 +51,7 @@ void meta_index::add(const uuid& partition, const table_slice_ptr& slice) {
   // The first column always contains the timestamp.
   for (size_t row = 0; row < slice->rows(); ++row) {
     auto element = slice->at(row, 0);
-    if (!element) {
-      VAST_ERROR(this, "cannot access element 0 in row", row);
-      continue;
-    }
-    if (auto tsv = caf::get_if<view<timestamp>>(&(*element))) {
+    if (auto tsv = caf::get_if<view<timestamp>>(&element)) {
       auto ts = materialize(*tsv);
       rng.from = std::min(rng.from, ts);
       rng.to = std::max(rng.to, ts);

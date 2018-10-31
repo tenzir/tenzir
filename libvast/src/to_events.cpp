@@ -26,18 +26,14 @@ event to_event(const table_slice& slice, id eid, type event_layout) {
   vector xs;  // TODO(ch3290): make this a record
   VAST_ASSERT(slice.columns() > 0);
   xs.resize(slice.columns() - 1); // one less to exclude timestamp
-  for (table_slice::size_type i = 0; i < slice.columns() - 1; ++i) {
-    auto x = slice.at(eid - slice.offset(), i + 1);
-    VAST_ASSERT(x != caf::none);
-    xs[i] = materialize(*x);
-  }
+  for (table_slice::size_type i = 0; i < slice.columns() - 1; ++i)
+    xs[i] = materialize(slice.at(eid - slice.offset(), i + 1));
   auto e = event::make(std::move(xs), std::move(event_layout));
   // Get the timestamp from the first column.
   auto ts = slice.at(eid - slice.offset(), 0);
-  VAST_ASSERT(ts != caf::none);
   // Assign event meta data.
   e.id(eid);
-  e.timestamp(caf::get<timestamp>(*ts));
+  e.timestamp(caf::get<timestamp>(ts));
   return e;
 }
 

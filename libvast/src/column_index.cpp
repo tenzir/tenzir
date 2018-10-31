@@ -53,8 +53,7 @@ caf::expected<column_index_ptr> make_column_index(caf::actor_system& sys,
         return;
       auto offset = x->offset();
       for (table_slice::size_type row = 0; row < x->rows(); ++row)
-        if (auto element = x->at(row, col_))
-          idx_->append(*element, offset + row);
+        idx_->append(x->at(row, col_), offset + row);
     }
 
     size_t col_;
