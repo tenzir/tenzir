@@ -131,12 +131,8 @@ TEST(add) {
   auto slice = builder->finish();
   CHECK_EQUAL(slice->rows(), 2u);
   CHECK_EQUAL(slice->columns(), 3u);
-  auto x = slice->at(0, 1);
-  REQUIRE(x);
-  CHECK_EQUAL(*x, make_view(foo));
-  x = slice->at(1, 2);
-  REQUIRE(x);
-  CHECK_EQUAL(*x, make_view(4.3));
+  CHECK_EQUAL(slice->at(0, 1), make_view(foo));
+  CHECK_EQUAL(slice->at(1, 2), make_view(4.3));
 }
 
 TEST(rows to values) {

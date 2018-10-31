@@ -106,7 +106,7 @@ public:
   /// @param row The row offset.
   /// @param col The column offset.
   /// @pre `row < rows() && col < columns()`
-  virtual caf::optional<data_view> at(size_type row, size_type col) const = 0;
+  virtual data_view at(size_type row, size_type col) const = 0;
 
 protected:
   // -- member variables -------------------------------------------------------

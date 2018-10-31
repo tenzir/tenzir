@@ -40,16 +40,13 @@ caf::error default_table_slice::deserialize(caf::deserializer& source) {
   return err;
 }
 
-caf::optional<data_view>
-default_table_slice::at(size_type row, size_type col) const {
+data_view default_table_slice::at(size_type row, size_type col) const {
   VAST_ASSERT(row < rows_);
   VAST_ASSERT(row < xs_.size());
   VAST_ASSERT(col < columns_);
-  if (auto x = caf::get_if<vector>(&xs_[row])) {
-    VAST_ASSERT(col < x->size());
-    return make_view((*x)[col]);
-  }
-  return {};
+  auto& x = caf::get<vector>(xs_[row]);
+  VAST_ASSERT(col < x.size());
+  return make_view(x[col]);
 }
 
 table_slice_builder_ptr default_table_slice::make_builder(record_type layout) {
