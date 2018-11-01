@@ -100,7 +100,6 @@ set(libvast_sources
   src/system/start_command.cpp
   src/system/task.cpp
   src/system/tracker.cpp
-  src/table.cpp
   src/table_index.cpp
   src/table_slice.cpp
   src/table_slice_builder.cpp

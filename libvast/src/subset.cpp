@@ -40,11 +40,8 @@ std::vector<value> subset(const table_slice& slice,
   auto value_layout = slice.layout(first_col, num_cols);
   for (auto row = row_begin; row < row_end; ++row) {
     vector xs;
-    for (auto col = col_begin; col < col_end; ++col) {
-      auto opt = slice.at(row, col);
-      VAST_ASSERT(opt != caf::none);
-      xs.emplace_back(materialize(*opt));
-    }
+    for (auto col = col_begin; col < col_end; ++col)
+      xs.emplace_back(materialize(slice.at(row, col)));
     result.emplace_back(value::make(std::move(xs), value_layout));
   }
   return result;

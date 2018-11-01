@@ -56,7 +56,7 @@ public:
 
   // -- properties -------------------------------------------------------------
 
-  caf::optional<data_view> at(size_type row, size_type col) const final;
+  data_view at(size_type row, size_type col) const final;
 
   caf::atom_value implementation_id() const noexcept;
 

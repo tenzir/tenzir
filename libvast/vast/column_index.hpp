@@ -29,11 +29,6 @@ namespace vast {
 
 // -- free functions -----------------------------------------------------------
 
-/// Creates a single column for the type name.
-/// @relates column_index
-caf::expected<column_index_ptr> make_type_column_index(caf::actor_system& sys,
-                                                       path filename);
-
 /// Creates a single colum for a value at column `col`.
 /// @relates column_index
 caf::expected<column_index_ptr> make_column_index(caf::actor_system& sys,
