@@ -163,15 +163,15 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
   ), expr);
 }
 
-void meta_index::factory(caf::atom_value implementation_id,
+void meta_index::factory(caf::atom_value factory_id,
                          synopsis_factory f) {
-  synopsis_type_ = implementation_id;
+  factory_id_ = factory_id;
   make_synopsis_ = f;
   blacklisted_layouts_.clear();
 }
 
 caf::error inspect(caf::serializer& sink, const meta_index& x) {
-  return sink(x.synopsis_type_, x.partition_synopses_);
+  return sink(x.factory_id_, x.partition_synopses_);
 }
 
 caf::error inspect(caf::deserializer& source, meta_index& x) {

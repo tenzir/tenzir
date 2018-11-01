@@ -52,11 +52,11 @@ public:
   std::vector<uuid> lookup(const expression& expr) const;
 
   /// Tries to replace the synopsis factory.
-  /// @param implementation_id The synopsis type to use.
+  /// @param factory_id The system-wide ID for `f`.
   /// @param f The synopsis factory to use.
   /// @pre `f` is registered in the runtime settings unter the key
-  ///      `implementation_id`
-  void factory(caf::atom_value implementation_id, synopsis_factory f);
+  ///      `factory_id`
+  void factory(caf::atom_value factory_id, synopsis_factory f);
 
   // -- concepts ---------------------------------------------------------------
 
@@ -81,7 +81,7 @@ private:
   synopsis_factory make_synopsis_;
 
   /// The implementation ID for objects created by `make_synopsis_`.
-  caf::atom_value synopsis_type_;
+  caf::atom_value factory_id_;
 };
 
 

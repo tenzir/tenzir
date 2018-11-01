@@ -60,8 +60,9 @@ public:
 
   // -- serialization ----------------------------------------------------------
 
-  /// @returns a unique identifier for the implementing class.
-  virtual caf::atom_value implementation_id() const noexcept;
+  /// @returns a unique identifier for the factory required to make instances
+  ///          of this synopsis.
+  virtual caf::atom_value factory_id() const noexcept;
 
   /// Saves the contents (excluding the layout!) of this slice to `sink`.
   virtual caf::error serialize(caf::serializer& sink) const = 0;

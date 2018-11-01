@@ -36,7 +36,7 @@ const vast::type& synopsis::type() const {
   return type_;
 }
 
-caf::atom_value synopsis::implementation_id() const noexcept {
+caf::atom_value synopsis::factory_id() const noexcept {
   return caf::atom("Sy_Default");
 }
 
@@ -46,7 +46,7 @@ caf::error inspect(caf::serializer& sink, synopsis_ptr& ptr) {
     return sink(dummy);
   }
   return caf::error::eval(
-    [&] { return sink(ptr->type(), ptr->implementation_id()); },
+    [&] { return sink(ptr->type(), ptr->factory_id()); },
     [&] { return ptr->serialize(sink); });
 }
 
