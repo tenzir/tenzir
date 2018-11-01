@@ -66,35 +66,6 @@ TEST(offset finding) {
   CHECK_EQUAL(at(foo_record, 3, 1, 1).name(), real_type{});
 }
 
-TEST(offset finding old) {
-  std::string str = R"__(
-    type a = int
-    type inner = record{ x: int, y: real }
-    type middle = record{ a: int, b: inner }
-    type outer = record{ a: middle, b: record { y: string }, c: int }
-    type foo = record{ a: int, b: real, c: outer, d: middle }
-  )__";
-  auto sch = to<schema>(str);
-  REQUIRE(sch);
-  // Type lookup
-  auto foo = sch->find("foo");
-  REQUIRE(foo);
-  auto r = get_if<record_type>(foo);
-  // Verify type integrity
-  REQUIRE(r);
-  auto t = r->at(offset{0});
-  REQUIRE(t);
-  CHECK(holds_alternative<integer_type>(*t));
-  t = r->at(offset{2, 0, 1, 1});
-  REQUIRE(t);
-  CHECK(holds_alternative<real_type>(*t));
-  t = r->at(offset{2, 0, 1});
-  REQUIRE(t);
-  auto inner = get_if<record_type>(t);
-  REQUIRE(inner);
-  CHECK(inner->name() == "inner");
-}
-
 TEST(merging) {
   std::string str = R"__(
     type a = int
