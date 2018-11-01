@@ -14,6 +14,7 @@
 #define SUITE schema
 
 #include "test.hpp"
+#include "type_test.hpp"
 #include "fixtures/actor_system.hpp"
 
 #include "vast/json.hpp"
@@ -30,12 +31,42 @@
 
 using namespace vast;
 
+using caf::get;
 using caf::get_if;
 using caf::holds_alternative;
 
 FIXTURE_SCOPE(schema_tests, fixtures::deterministic_actor_system)
 
 TEST(offset finding) {
+  std::string str = R"__(
+    type a = int
+    type inner = record{ x: int, y: real }
+    type middle = record{ a: int, b: inner }
+    type outer = record{ a: middle, b: record { y: string }, c: int }
+    type foo = record{ a: int, b: real, c: outer, d: middle }
+  )__";
+  auto sch = unbox(to<schema>(str));
+  auto foo_type = sch.find("foo");
+  REQUIRE_NOT_EQUAL(foo_type, nullptr);
+  REQUIRE(holds_alternative<record_type>(*foo_type));
+  auto& foo_record = get<record_type>(*foo_type);
+  CHECK_EQUAL(foo_record.name(), "foo");
+  CHECK_EQUAL(foo_record.fields.size(), 4u);
+  CHECK_EQUAL(at(foo_record, 0), integer_type{});
+  CHECK_EQUAL(at(foo_record, 1), real_type{});
+  CHECK_EQUAL(at(foo_record, 2).name(), "outer");
+  CHECK_EQUAL(rec_at(foo_record, 2).fields.size(), 3u);
+  CHECK_EQUAL(at(foo_record, 2, 0).name(), "middle");
+  CHECK_EQUAL(at(foo_record, 2, 1, 0), string_type{});
+  CHECK_EQUAL(at(foo_record, 2, 2), integer_type{});
+  CHECK_EQUAL(at(foo_record, 3).name(), "middle");
+  CHECK_EQUAL(at(foo_record, 3, 0), integer_type{});
+  CHECK_EQUAL(at(foo_record, 3, 1).name(), "inner");
+  CHECK_EQUAL(at(foo_record, 3, 1, 0).name(), integer_type{});
+  CHECK_EQUAL(at(foo_record, 3, 1, 1).name(), real_type{});
+}
+
+TEST(offset finding old) {
   std::string str = R"__(
     type a = int
     type inner = record{ x: int, y: real }
