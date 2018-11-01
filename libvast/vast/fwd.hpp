@@ -41,6 +41,7 @@ class segment_builder;
 class segment_store;
 class store;
 class subnet;
+class synopsis;
 class table_index;
 class table_slice;
 class table_slice_builder;
@@ -79,6 +80,7 @@ table_slice* intrusive_cow_ptr_unshare(table_slice*&);
 using chunk_ptr = caf::intrusive_ptr<chunk>;
 using column_index_ptr = std::unique_ptr<column_index>;
 using default_table_slice_ptr = caf::intrusive_cow_ptr<default_table_slice>;
+using synopsis_ptr = caf::intrusive_ptr<synopsis>;
 using table_slice_builder_ptr = caf::intrusive_ptr<table_slice_builder>;
 using table_slice_ptr = caf::intrusive_cow_ptr<table_slice>;
 

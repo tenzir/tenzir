@@ -71,6 +71,7 @@ set(libvast_sources
   src/store.cpp
   src/subnet.cpp
   src/subset.cpp
+  src/synopsis.cpp
   src/system/accountant.cpp
   src/system/application.cpp
   src/system/archive.cpp
@@ -234,6 +235,7 @@ set(tests
   test/default_table_slice.cpp
   test/detail/flat_lru_cache.cpp
   test/detail/operators.cpp
+  test/detail/set_operations.cpp
   test/endpoint.cpp
   test/event.cpp
   test/expression.cpp
@@ -270,6 +272,7 @@ set(tests
   test/segment.cpp
   test/segment_store.cpp
   test/subnet.cpp
+  test/synopsis.cpp
   test/system/archive.cpp
   test/system/consensus.cpp
   test/system/datagram_source.cpp

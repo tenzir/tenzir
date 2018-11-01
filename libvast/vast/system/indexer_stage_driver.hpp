@@ -64,7 +64,7 @@ public:
 
   // -- constructors, destructors, and assignment operators --------------------
 
-  indexer_stage_driver(downstream_manager_type& dm, meta_index& pindex,
+  indexer_stage_driver(downstream_manager_type& dm, meta_index& meta_idx,
                        partition_factory fac, size_t max_partition_size);
 
   ~indexer_stage_driver() noexcept override;
@@ -76,8 +76,8 @@ public:
 private:
   // -- member variables -------------------------------------------------------
 
-  /// Keeps statistics for all partitions.
-  meta_index& pindex_;
+  /// Enables efficient identification of relevant partitions for an expression.
+  meta_index& meta_index_;
 
   /// Stores how many rows remain in the current partition.
   size_t remaining_in_partition_;

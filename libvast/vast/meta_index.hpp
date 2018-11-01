@@ -13,100 +13,73 @@
 
 #pragma once
 
-#include <tuple>
+#include <functional>
+#include <unordered_set>
 #include <unordered_map>
+#include <vector>
 
-#include <caf/optional.hpp>
-#include <caf/meta/type_name.hpp>
+#include <caf/fwd.hpp>
 
 #include "vast/fwd.hpp"
-#include "vast/time.hpp"
+#include "vast/synopsis.hpp"
+#include "vast/type.hpp"
 #include "vast/uuid.hpp"
 
 namespace vast {
 
-/// Maps events to horizontal partitions of the ::index.
+/// The meta index is the first data structure that queries hit. The result
+/// represents a list of candidate partition IDs that may contain the desired
+/// data. The meta index may return false positives but never false negatives.
 class meta_index {
 public:
-  // -- member types -----------------------------------------------------------
+  // -- initialization ---------------------------------------------------------
 
-  /// A closed interval.
-  struct interval {
-    interval();
-    interval(timestamp from, timestamp to);
+  meta_index();
 
-    timestamp from;
-    timestamp to;
-  };
+  // -- API --------------------------------------------------------------------
 
-  /// Per-partition summary statistics.
-  struct partition_synopsis {
-    interval range;
-  };
+  /// Adds all data from a table slice belonging to a given partition to the
+  /// index.
+  /// @param slice The table slice to extract data from.
+  /// @param partition The partition ID that *slice* belongs to.
+  void add(const uuid& partition, const table_slice& slice);
 
-  using map_type = std::unordered_map<uuid, partition_synopsis>;
-
-  using const_iterator = map_type::const_iterator;
-
-  // -- properties -------------------------------------------------------------
-
-  /// @returns the synopsis for a partition if present, returns `none`
-  ///          otherwise.
-  caf::optional<partition_synopsis> operator[](const uuid& partition) const;
-
-  void add(const uuid& partition, const table_slice_ptr& slice);
-
-  /// Retrieves the list of partition IDs for a given expression.
+  /// Retrieves the list of candidate partition IDs for a given expression.
+  /// @param expr The expression to lookup.
+  /// @returns A vector of UUIDs representing candidate partitions.
   std::vector<uuid> lookup(const expression& expr) const;
 
-  size_t size() const noexcept {
-    return partitions_.size();
-  }
+  /// Replaces the synopsis factory.
+  /// @param f The factory to use.
+  void factory(synopsis_factory f);
 
-  const_iterator begin() const noexcept {
-    return partitions_.begin();
-  }
+  // -- concepts ---------------------------------------------------------------
 
-  const_iterator end() const noexcept {
-    return partitions_.end();
-  }
-
-  const map_type& partitions() const noexcept {
-    return partitions_;
-  }
-
-  // -- inspection -------------------------------------------------------------
-
-  template <class Inspector>
-  friend auto inspect(Inspector& f, interval& i) {
-    return f(caf::meta::type_name("interval"), i.from, i.to);
-  }
-
-  template <class Inspector>
-  friend auto inspect(Inspector& f, partition_synopsis& ps) {
-    return f(ps.range);
-  }
-
-  template <class Inspector>
-  friend auto inspect(Inspector& f, meta_index& pi) {
-    return f(pi.partitions_);
-  }
+  friend caf::error inspect(caf::serializer& sink, const meta_index& x);
+  friend caf::error inspect(caf::deserializer& source, meta_index& x);
 
 private:
-  // -- member variables -------------------------------------------------------
+  // Synopsis structures for a givn layout.
+  using table_synopsis = std::vector<synopsis_ptr>;
 
-  map_type partitions_;
+  /// Contains synopses per table layout.
+  using partition_synopsis = std::unordered_map<record_type, table_synopsis>;
+
+  /// Layouts for which we cannot generate a synopsis structure.
+  std::unordered_set<record_type> blacklisted_layouts_;
+
+  /// Maps a partition ID to the synopses for that partition.
+  std::unordered_map<uuid, partition_synopsis> partition_synopses_;
+
+  /// The factory function to construct a synopsis structure for a type.
+  synopsis_factory make_synopsis_;
 };
 
-// -- related free functions ---------------------------------------------------
-
-/// @relates meta_index::interval
-bool operator==(const meta_index::interval&, const meta_index::interval&);
-
-/// @relates meta_index::interval
-inline bool operator!=(const meta_index::interval& x,
-                       const meta_index::interval& y) {
-  return !(x == y);
-}
+/// Tries to set a new synopsis factory from an actor system.
+/// @param sys The actor system.
+/// @param x The meta index instance.
+/// @returns `true` iff *sys* contains a synopsis factory.
+/// @relates meta_index
+bool set_synopsis_factory(caf::actor_system& sys, meta_index& x);
 
 } // namespace vast

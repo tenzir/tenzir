@@ -96,7 +96,7 @@ struct index_state {
   // -- convenience functions --------------------------------------------------
 
   /// Returns the file name for saving or loading the meta index.
-  path part_index_file() const;
+  path meta_index_filename() const;
 
   /// @returns whether there's an idle worker available.
   bool worker_available();
@@ -108,7 +108,7 @@ struct index_state {
   // -- member variables -------------------------------------------------------
 
   /// Allows to select partitions with timestamps.
-  meta_index part_index;
+  meta_index meta_idx;
 
   /// Our current partition.
   partition_ptr active;
