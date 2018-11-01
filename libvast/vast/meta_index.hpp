@@ -20,7 +20,6 @@
 
 #include <caf/atom.hpp>
 #include <caf/fwd.hpp>
-#include <caf/meta/load_callback.hpp>
 
 #include "vast/fwd.hpp"
 #include "vast/synopsis.hpp"
@@ -51,7 +50,7 @@ public:
   /// @returns A vector of UUIDs representing candidate partitions.
   std::vector<uuid> lookup(const expression& expr) const;
 
-  /// Tries to replace the synopsis factory.
+  /// Replaces the synopsis factory.
   /// @param factory_id The system-wide ID for `f`.
   /// @param f The synopsis factory to use.
   /// @pre `f` is registered in the runtime settings unter the key
