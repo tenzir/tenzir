@@ -163,7 +163,7 @@ public:
   const abstract_type& operator*() const noexcept;
 
   struct inspect_helper {
-    uint8_t& type_tag;
+    type_id_type& type_tag;
     type& x;
   };
 
@@ -869,9 +869,6 @@ struct sum_type_access<vast::type> {
 
 namespace vast {
 
-/// Identifies default-constructed `type` objects.
-static constexpr uint8_t invalid_type_tag = 255;
-
 /// @private
 template <class Inspector, class T>
 auto make_inspect_fun() {
@@ -891,7 +888,7 @@ auto make_inspect(caf::detail::type_list<Ts...>) {
   return [](Inspector& f, type::inspect_helper& x) -> caf::error {
     using result_type = typename Inspector::result_type;
     if constexpr (Inspector::reads_state) {
-      if (x.type_tag != invalid_type_tag)
+      if (x.type_tag != invalid_type_id)
         caf::visit(f, x.x);
       return caf::none;
     } else {
@@ -900,7 +897,7 @@ auto make_inspect(caf::detail::type_list<Ts...>) {
       static fun tbl[] = {
         make_inspect_fun<Inspector, Ts>()...
       };
-      if (x.type_tag != invalid_type_tag)
+      if (x.type_tag != invalid_type_id)
         return tbl[x.type_tag](f, x.x);
       x.x = type{};
       return caf::none;
@@ -919,7 +916,7 @@ auto inspect(Inspector& f, type::inspect_helper& x) {
 template <class Inspector>
 auto inspect(Inspector& f, type& x) {
   // We use a single byte for the type index on the wire.
-  auto type_tag = x ? static_cast<uint8_t>(x->index()) : invalid_type_tag;
+  auto type_tag = x ? static_cast<type_id_type>(x->index()) : invalid_type_id;
   type::inspect_helper helper{type_tag, x};
   return f(caf::meta::omittable(), type_tag, helper);
 }
