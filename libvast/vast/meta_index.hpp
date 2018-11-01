@@ -18,7 +18,9 @@
 #include <unordered_map>
 #include <vector>
 
+#include <caf/atom.hpp>
 #include <caf/fwd.hpp>
+#include <caf/meta/load_callback.hpp>
 
 #include "vast/fwd.hpp"
 #include "vast/synopsis.hpp"
@@ -49,14 +51,18 @@ public:
   /// @returns A vector of UUIDs representing candidate partitions.
   std::vector<uuid> lookup(const expression& expr) const;
 
-  /// Replaces the synopsis factory.
-  /// @param f The factory to use.
-  void factory(synopsis_factory f);
+  /// Tries to replace the synopsis factory.
+  /// @param implementation_id The synopsis type to use.
+  /// @param f The synopsis factory to use.
+  /// @pre `f` is registered in the runtime settings unter the key
+  ///      `implementation_id`
+  void factory(caf::atom_value implementation_id, synopsis_factory f);
 
   // -- concepts ---------------------------------------------------------------
 
-  friend caf::error inspect(caf::serializer& sink, const meta_index& x);
-  friend caf::error inspect(caf::deserializer& source, meta_index& x);
+  friend caf::error inspect(caf::serializer&, const meta_index&);
+
+  friend caf::error inspect(caf::deserializer&, meta_index&);
 
 private:
   // Synopsis structures for a givn layout.
@@ -73,13 +79,10 @@ private:
 
   /// The factory function to construct a synopsis structure for a type.
   synopsis_factory make_synopsis_;
+
+  /// The implementation ID for objects created by `make_synopsis_`.
+  caf::atom_value synopsis_type_;
 };
 
-/// Tries to set a new synopsis factory from an actor system.
-/// @param sys The actor system.
-/// @param x The meta index instance.
-/// @returns `true` iff *sys* contains a synopsis factory.
-/// @relates meta_index
-bool set_synopsis_factory(caf::actor_system& sys, meta_index& x);
 
 } // namespace vast
