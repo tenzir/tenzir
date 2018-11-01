@@ -18,7 +18,7 @@
 
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
-#include "vast/min_max_synopsis.hpp"
+#include "vast/timestamp_synopsis.hpp"
 
 #include "vast/detail/overload.hpp"
 
@@ -75,26 +75,6 @@ caf::error inspect(caf::deserializer& source, synopsis_ptr& ptr) {
   swap(ptr, new_ptr);
   return caf::none;
 }
-
-namespace {
-
-class timestamp_synopsis final : public min_max_synopsis<timestamp> {
-public:
-  timestamp_synopsis(vast::type x)
-    : min_max_synopsis<timestamp>{std::move(x), timestamp::max(),
-                                  timestamp::min()} {
-    // nop
-  }
-
-  bool equals(const synopsis& other) const noexcept override {
-    if (typeid(other) != typeid(timestamp_synopsis))
-      return false;
-    auto& dref = static_cast<const timestamp_synopsis&>(other);
-    return type() == dref.type() && min() == dref.min() && max() == dref.max();
-  }
-};
-
-} // namespace <anonymous>
 
 synopsis_ptr make_synopsis(type x) {
   return caf::visit(detail::overload(
