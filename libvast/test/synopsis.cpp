@@ -85,6 +85,7 @@ FIXTURE_SCOPE(synopsis_tests, fixtures::deterministic_actor_system)
 
 TEST(serialization) {
   CHECK_ROUNDTRIP(synopsis_ptr{});
+  CHECK_ROUNDTRIP_DEREF(make_synopsis(timestamp_type{}));
 }
 
 FIXTURE_SCOPE_END()

@@ -85,6 +85,13 @@ public:
                                   timestamp::min()} {
     // nop
   }
+
+  bool equals(const synopsis& other) const noexcept override {
+    if (typeid(other) != typeid(timestamp_synopsis))
+      return false;
+    auto& dref = static_cast<const timestamp_synopsis&>(other);
+    return type() == dref.type() && min() == dref.min() && max() == dref.max();
+  }
 };
 
 } // namespace <anonymous>

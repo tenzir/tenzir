@@ -52,6 +52,9 @@ public:
   /// @returns The evaluation result of `*this op rhs`.
   virtual bool lookup(relational_operator op, data_view rhs) const = 0;
 
+  /// Tests whether two objects are equal.
+  virtual bool equals(const synopsis& other) const noexcept = 0;
+
   /// @returns the type this synopsis operates for.
   const vast::type& type() const;
 
@@ -69,6 +72,16 @@ public:
 private:
   vast::type type_;
 };
+
+/// @relates synopsis
+inline bool operator==(const synopsis& x, const synopsis& y) {
+  return x.equals(y);
+}
+
+/// @relates synopsis
+inline bool operator!=(const synopsis& x, const synopsis& y) {
+  return !(x == y);
+}
 
 /// @relates synopsis
 caf::error inspect(caf::serializer& sink, synopsis_ptr& ptr);
