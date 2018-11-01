@@ -66,6 +66,17 @@
     CHECK_EQUAL(roundtrip(x), x);                                              \
   }
 
+// Like `CHECK_ROUNDTRIP`, but compares the objects by dereferencing them via
+// `operator*` first.
+#define CHECK_ROUNDTRIP_DEREF(expr)                                            \
+  {                                                                            \
+    auto x = expr;                                                             \
+    auto y = roundtrip(x);                                                     \
+    REQUIRE_NOT_EQUAL(x, nullptr);                                             \
+    REQUIRE_NOT_EQUAL(y, nullptr);                                             \
+    CHECK_EQUAL(*y, *x);                                                       \
+  }
+
 // -- global state -------------------------------------------------------------
 
 namespace vast::test {
