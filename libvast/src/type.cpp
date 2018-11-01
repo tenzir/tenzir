@@ -57,25 +57,25 @@ bool operator<(const type& x, const type& y) {
 
 type& type::name(const std::string& x) & {
   if (ptr_)
-    ptr_->name_ = x;
+    ptr_.unshared().name_ = x;
   return *this;
 }
 
 type&& type::name(const std::string& x) && {
   if (ptr_)
-    ptr_->name_ = x;
+    ptr_.unshared().name_ = x;
   return std::move(*this);
 }
 
 type& type::attributes(std::vector<attribute> xs) & {
   if (ptr_)
-    ptr_->attributes_ = std::move(xs);
+    ptr_.unshared().attributes_ = std::move(xs);
   return *this;
 }
 
 type&& type::attributes(std::vector<attribute> xs) && {
   if (ptr_)
-    ptr_->attributes_ = std::move(xs);
+    ptr_.unshared().attributes_ = std::move(xs);
   return std::move(*this);
 }
 

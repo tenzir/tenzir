@@ -232,7 +232,7 @@ public:
   /// @returns the index of this type in `concrete_types`.
   virtual int index() const noexcept = 0;
 
-  virtual abstract_type_ptr copy() const = 0;
+  virtual abstract_type* copy() const = 0;
 
   /// @endcond
 
@@ -317,8 +317,8 @@ protected:
     return static_cast<concrete_type&>(x);
   }
 
-  abstract_type_ptr copy() const final {
-    return abstract_type_ptr{caf::make_counted<Derived>(derived())};
+  concrete_type* copy() const final {
+    return new Derived(derived());
   }
 
 private:
