@@ -99,7 +99,7 @@ caf::error table_slice::deserialize_ptr(caf::deserializer& source,
 
 table_slice_ptr make_table_slice(record_type layout, caf::actor_system& sys,
                                  caf::atom_value impl) {
-  if (impl == caf::atom("DEFAULT")) {
+  if (impl == caf::atom("TS_Default")) {
     return caf::make_copy_on_write<default_table_slice>(std::move(layout));
   }
   using generic_fun = caf::runtime_settings_map::generic_function_pointer;

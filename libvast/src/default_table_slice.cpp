@@ -66,7 +66,7 @@ table_slice_ptr default_table_slice::make(record_type layout,
 }
 
 caf::atom_value default_table_slice::implementation_id() const noexcept {
-  return caf::atom("DEFAULT");
+  return caf::atom("TS_Default");
 }
 
 } // namespace vast
