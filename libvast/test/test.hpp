@@ -22,19 +22,22 @@
 
 #include <caf/test/unit_test.hpp>
 
-// Logging
+// -- logging macros -----------------------------------------------------------
+
 #define ERROR CAF_TEST_PRINT_ERROR
 #define INFO CAF_TEST_PRINT_INFO
 #define VERBOSE CAF_TEST_PRINT_VERBOSE
 #define MESSAGE CAF_MESSAGE
 
-// Test setup
+// -- test setup macros --------------------------------------------------------
+
 #define TEST CAF_TEST
 #define TEST_DISABLED CAF_TEST_DISABLED
 #define FIXTURE_SCOPE CAF_TEST_FIXTURE_SCOPE
 #define FIXTURE_SCOPE_END CAF_TEST_FIXTURE_SCOPE_END
 
-// Checking
+// -- macros for checking results ----------------------------------------------
+
 #define REQUIRE CAF_REQUIRE
 #define REQUIRE_EQUAL CAF_REQUIRE_EQUAL
 #define REQUIRE_NOT_EQUAL CAF_REQUIRE_NOT_EQUAL
@@ -51,6 +54,19 @@
 #define CHECK_GREATER_EQUAL CAF_CHECK_GREATER_EQUAL
 #define CHECK_FAIL CAF_CHECK_FAIL
 #define FAIL CAF_FAIL
+
+// -- convenience macros for common check categories ---------------------------
+
+// Checks whether a value initialized from `expr` compares equal to itself
+// after a cycle of serializing and deserializing it. Requires the
+// `deterministic_actor_system` fixture.
+#define CHECK_ROUNDTRIP(expr)                                                  \
+  {                                                                            \
+    auto x = expr;                                                             \
+    CHECK_EQUAL(roundtrip(x), x);                                              \
+  }
+
+// -- global state -------------------------------------------------------------
 
 namespace vast::test {
 
