@@ -19,18 +19,11 @@
 #include <string_view>
 #include <utility>
 
-#include <caf/actor_system_config.hpp>
 #include <caf/config_option_set.hpp>
 #include <caf/fwd.hpp>
-#include <caf/pec.hpp>
 
 #include "vast/data.hpp"
 #include "vast/error.hpp"
-#include "vast/error.hpp"
-
-#include "vast/detail/raise_error.hpp"
-#include "vast/detail/steady_map.hpp"
-#include "vast/detail/string.hpp"
 
 namespace vast {
 

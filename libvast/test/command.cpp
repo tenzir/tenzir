@@ -11,13 +11,13 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
+#include "vast/command.hpp"
+
 #define SUITE command
 #include "test.hpp"
 
+#include <caf/actor_system_config.hpp>
 #include <caf/message.hpp>
-#include <caf/string_algorithms.hpp>
-
-#include "vast/command.hpp"
 
 using namespace vast;
 

@@ -16,6 +16,7 @@
 #include <caf/make_message.hpp>
 #include <caf/message.hpp>
 
+#include "vast/detail/string.hpp"
 #include "vast/logger.hpp"
 
 namespace vast {
