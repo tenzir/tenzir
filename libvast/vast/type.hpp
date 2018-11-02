@@ -163,7 +163,7 @@ public:
   const abstract_type& operator*() const noexcept;
 
   struct inspect_helper {
-    uint8_t& type_tag;
+    type_id_type& type_tag;
     type& x;
   };
 
@@ -869,6 +869,7 @@ struct sum_type_access<vast::type> {
 
 namespace vast {
 
+/// @private
 template <class Inspector, class T>
 auto make_inspect_fun() {
   using fun = typename Inspector::result_type (*)(Inspector&, type&);
@@ -881,19 +882,25 @@ auto make_inspect_fun() {
   return static_cast<fun>(lambda);
 }
 
+/// @private
 template <class Inspector, class... Ts>
 auto make_inspect(caf::detail::type_list<Ts...>) {
-  return [](Inspector& f, type::inspect_helper& x) {
+  return [](Inspector& f, type::inspect_helper& x) -> caf::error {
     using result_type = typename Inspector::result_type;
     if constexpr (Inspector::reads_state) {
-      return caf::visit(f, x.x);
+      if (x.type_tag != invalid_type_id)
+        caf::visit(f, x.x);
+      return caf::none;
     } else {
       using reference = type&;
       using fun = result_type (*)(Inspector&, reference);
       static fun tbl[] = {
         make_inspect_fun<Inspector, Ts>()...
       };
-      return tbl[x.type_tag](f, x.x);
+      if (x.type_tag != invalid_type_id)
+        return tbl[x.type_tag](f, x.x);
+      x.x = type{};
+      return caf::none;
     }
   };
 }
@@ -909,7 +916,7 @@ auto inspect(Inspector& f, type::inspect_helper& x) {
 template <class Inspector>
 auto inspect(Inspector& f, type& x) {
   // We use a single byte for the type index on the wire.
-  auto type_tag = static_cast<uint8_t>(x->index());
+  auto type_tag = x ? static_cast<type_id_type>(x->index()) : invalid_type_id;
   type::inspect_helper helper{type_tag, x};
   return f(caf::meta::omittable(), type_tag, helper);
 }
@@ -920,12 +927,12 @@ auto inspect(Inspector& f, type& x) {
 
 namespace std {
 
-#define VAST_DEFINE_HASH_SPECIALIZATION(type)             \
-  template <>                                             \
-  struct hash<vast::type> {                               \
-    size_t operator()(const vast::type& x) const {        \
-      return vast::uhash<vast::xxhash64>{}(x);            \
-    }                                                     \
+#define VAST_DEFINE_HASH_SPECIALIZATION(type)                                  \
+  template <>                                                                  \
+  struct hash<vast::type> {                                                    \
+    size_t operator()(const vast::type& x) const {                             \
+      return vast::uhash<vast::xxhash64>{}(x);                                 \
+    }                                                                          \
   }
 
 VAST_DEFINE_HASH_SPECIALIZATION(type);

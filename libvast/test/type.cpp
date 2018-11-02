@@ -153,6 +153,43 @@ TEST(type/data compatibility) {
 }
 
 TEST(serialization) {
+  CHECK_ROUNDTRIP(type{});
+  CHECK_ROUNDTRIP(none_type{});
+  CHECK_ROUNDTRIP(boolean_type{});
+  CHECK_ROUNDTRIP(integer_type{});
+  CHECK_ROUNDTRIP(count_type{});
+  CHECK_ROUNDTRIP(real_type{});
+  CHECK_ROUNDTRIP(timespan_type{});
+  CHECK_ROUNDTRIP(timestamp_type{});
+  CHECK_ROUNDTRIP(string_type{});
+  CHECK_ROUNDTRIP(pattern_type{});
+  CHECK_ROUNDTRIP(address_type{});
+  CHECK_ROUNDTRIP(subnet_type{});
+  CHECK_ROUNDTRIP(port_type{});
+  CHECK_ROUNDTRIP(enumeration_type{});
+  CHECK_ROUNDTRIP(vector_type{});
+  CHECK_ROUNDTRIP(set_type{});
+  CHECK_ROUNDTRIP(map_type{});
+  CHECK_ROUNDTRIP(record_type{});
+  CHECK_ROUNDTRIP(alias_type{});
+  CHECK_ROUNDTRIP(type{none_type{}});
+  CHECK_ROUNDTRIP(type{boolean_type{}});
+  CHECK_ROUNDTRIP(type{integer_type{}});
+  CHECK_ROUNDTRIP(type{count_type{}});
+  CHECK_ROUNDTRIP(type{real_type{}});
+  CHECK_ROUNDTRIP(type{timespan_type{}});
+  CHECK_ROUNDTRIP(type{timestamp_type{}});
+  CHECK_ROUNDTRIP(type{string_type{}});
+  CHECK_ROUNDTRIP(type{pattern_type{}});
+  CHECK_ROUNDTRIP(type{address_type{}});
+  CHECK_ROUNDTRIP(type{subnet_type{}});
+  CHECK_ROUNDTRIP(type{port_type{}});
+  CHECK_ROUNDTRIP(type{enumeration_type{}});
+  CHECK_ROUNDTRIP(type{vector_type{}});
+  CHECK_ROUNDTRIP(type{set_type{}});
+  CHECK_ROUNDTRIP(type{map_type{}});
+  CHECK_ROUNDTRIP(type{record_type{}});
+  CHECK_ROUNDTRIP(type{alias_type{}});
   auto r = record_type{
     {"x", integer_type{}},
     {"y", address_type{}},
@@ -164,13 +201,8 @@ TEST(serialization) {
     {"b", vector_type{boolean_type{}}.name("foo")},
     {"c", r}
   };
-  r = r.name("foo");
-  std::vector<char> buf;
-  auto t0 = type{r};
-  CHECK_EQUAL(save(sys, buf, t0), caf::none);
-  type t1;
-  CHECK_EQUAL(load(sys, buf, t1), caf::none);
-  CHECK_EQUAL(t0, t1);
+  r.name("foo");
+  CHECK_ROUNDTRIP(r);
 }
 
 TEST(record range) {
@@ -586,7 +618,7 @@ TEST(parseable) {
 
 TEST(hashable) {
   auto hash = [&](auto&& x) { return uhash<xxhash64>{}(x); };
-  CHECK_EQUAL(hash(type{}), 10680828680203489530ul);
+  CHECK_EQUAL(hash(type{}), 10764519495013463364ul);
   CHECK_EQUAL(hash(boolean_type{}), 12612883901365648434ul);
   CHECK_EQUAL(hash(type{boolean_type{}}), 13047344884484907481ul);
   CHECK_NOT_EQUAL(hash(type{boolean_type{}}), hash(boolean_type{}));

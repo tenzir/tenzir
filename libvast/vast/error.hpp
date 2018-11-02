@@ -48,6 +48,8 @@ enum class ec : uint8_t {
   syntax_error,
   /// Deserialization failed because an unknown implementation type was found.
   invalid_table_slice_type,
+  /// Deserialization failed because an unknown implementation type was found.
+  invalid_synopsis_type,
 };
 
 /// @relates ec
