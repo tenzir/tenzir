@@ -132,6 +132,9 @@ TEST(equality-coder) {
   CHECK_EQUAL(to_string(c.decode(equal,         7)), "0000000111");
 }
 
+#define CHECK_DECODE(op, val, res)                                             \
+  CHECK_EQUAL(to_string(c.decode(op, val)), res)
+
 TEST(range-coder) {
   range_coder<null_bitmap> c{8};
   c.encode(4);
@@ -141,14 +144,106 @@ TEST(range-coder) {
   c.encode(3);
   c.encode(0);
   c.encode(1);
-  CHECK_EQUAL(to_string(c.decode(less, 4)), "00011111111");
-  CHECK_EQUAL(to_string(c.decode(equal, 3)), "00011111100");
-  CHECK_EQUAL(to_string(c.decode(greater_equal, 3)), "11111111100");
+  CHECK_DECODE(less, 0, "00000000000");
+  CHECK_DECODE(less, 1, "00000000010");
+  CHECK_DECODE(less, 2, "00000000011");
+  CHECK_DECODE(less, 3, "00000000011");
+  CHECK_DECODE(less, 4, "00011111111");
+  CHECK_DECODE(less, 5, "10111111111");
+  CHECK_DECODE(less, 6, "10111111111");
+  CHECK_DECODE(less, 7, "10111111111");
+  CHECK_DECODE(less_equal, 0, "00000000010");
+  CHECK_DECODE(less_equal, 1, "00000000011");
+  CHECK_DECODE(less_equal, 2, "00000000011");
+  CHECK_DECODE(less_equal, 3, "00011111111");
+  CHECK_DECODE(less_equal, 4, "10111111111");
+  CHECK_DECODE(less_equal, 5, "10111111111");
+  CHECK_DECODE(less_equal, 6, "10111111111");
+  CHECK_DECODE(less_equal, 7, "11111111111");
+  CHECK_DECODE(equal, 0, "00000000010");
+  CHECK_DECODE(equal, 1, "00000000001");
+  CHECK_DECODE(equal, 2, "00000000000");
+  CHECK_DECODE(equal, 3, "00011111100");
+  CHECK_DECODE(equal, 4, "10100000000");
+  CHECK_DECODE(equal, 5, "00000000000");
+  CHECK_DECODE(equal, 6, "00000000000");
+  CHECK_DECODE(equal, 7, "01000000000");
+  CHECK_DECODE(not_equal, 0, "11111111101");
+  CHECK_DECODE(not_equal, 1, "11111111110");
+  CHECK_DECODE(not_equal, 2, "11111111111");
+  CHECK_DECODE(not_equal, 3, "11100000011");
+  CHECK_DECODE(not_equal, 4, "01011111111");
+  CHECK_DECODE(not_equal, 5, "11111111111");
+  CHECK_DECODE(not_equal, 6, "11111111111");
+  CHECK_DECODE(not_equal, 7, "10111111111");
+  CHECK_DECODE(greater, 0, "11111111101");
+  CHECK_DECODE(greater, 1, "11111111100");
+  CHECK_DECODE(greater, 2, "11111111100");
+  CHECK_DECODE(greater, 3, "11100000000");
+  CHECK_DECODE(greater, 4, "01000000000");
+  CHECK_DECODE(greater, 5, "01000000000");
+  CHECK_DECODE(greater, 6, "01000000000");
+  CHECK_DECODE(greater, 7, "00000000000");
+  CHECK_DECODE(greater_equal, 0, "11111111111");
+  CHECK_DECODE(greater_equal, 1, "11111111101");
+  CHECK_DECODE(greater_equal, 2, "11111111100");
+  CHECK_DECODE(greater_equal, 3, "11111111100");
+  CHECK_DECODE(greater_equal, 4, "11100000000");
+  CHECK_DECODE(greater_equal, 5, "01000000000");
+  CHECK_DECODE(greater_equal, 6, "01000000000");
+  CHECK_DECODE(greater_equal, 7, "01000000000");
   // Skipped entries come out as 0s, even though the underlying bitmaps consist
   // of 1s. That's because the Range-Eval-Opt algorithm turns them into 0s.
   CHECK(c.skip(3));
   c.encode(7, 1);
-  CHECK_EQUAL(to_string(c.decode(greater_equal, 7)), "010000000000001");
+  CHECK_DECODE(less, 0, "000000000000000");
+  CHECK_DECODE(less, 1, "000000000100000");
+  CHECK_DECODE(less, 2, "000000000110000");
+  CHECK_DECODE(less, 3, "000000000110000");
+  CHECK_DECODE(less, 4, "000111111110000");
+  CHECK_DECODE(less, 5, "101111111110000");
+  CHECK_DECODE(less, 6, "101111111110000");
+  CHECK_DECODE(less, 7, "101111111110000");
+  CHECK_DECODE(less_equal, 0, "000000000100000");
+  CHECK_DECODE(less_equal, 1, "000000000110000");
+  CHECK_DECODE(less_equal, 2, "000000000110000");
+  CHECK_DECODE(less_equal, 3, "000111111110000");
+  CHECK_DECODE(less_equal, 4, "101111111110000");
+  CHECK_DECODE(less_equal, 5, "101111111110000");
+  CHECK_DECODE(less_equal, 6, "101111111110000");
+  CHECK_DECODE(less_equal, 7, "111111111110001");
+  CHECK_DECODE(equal, 0, "000000000100000");
+  CHECK_DECODE(equal, 1, "000000000010000");
+  CHECK_DECODE(equal, 2, "000000000000000");
+  CHECK_DECODE(equal, 3, "000111111000000");
+  CHECK_DECODE(equal, 4, "101000000000000");
+  CHECK_DECODE(equal, 5, "000000000000000");
+  CHECK_DECODE(equal, 6, "000000000000000");
+  CHECK_DECODE(equal, 7, "010000000000001");
+  CHECK_DECODE(not_equal, 0, "111111111010001");
+  CHECK_DECODE(not_equal, 1, "111111111100001");
+  CHECK_DECODE(not_equal, 2, "111111111110001");
+  CHECK_DECODE(not_equal, 3, "111000000110001");
+  CHECK_DECODE(not_equal, 4, "010111111110001");
+  CHECK_DECODE(not_equal, 5, "111111111110001");
+  CHECK_DECODE(not_equal, 6, "111111111110001");
+  CHECK_DECODE(not_equal, 7, "101111111110000");
+  CHECK_DECODE(greater, 0, "111111111010001");
+  CHECK_DECODE(greater, 1, "111111111000001");
+  CHECK_DECODE(greater, 2, "111111111000001");
+  CHECK_DECODE(greater, 3, "111000000000001");
+  CHECK_DECODE(greater, 4, "010000000000001");
+  CHECK_DECODE(greater, 5, "010000000000001");
+  CHECK_DECODE(greater, 6, "010000000000001");
+  CHECK_DECODE(greater, 7, "000000000000000");
+  CHECK_DECODE(greater_equal, 0, "111111111110001");
+  CHECK_DECODE(greater_equal, 1, "111111111010001");
+  CHECK_DECODE(greater_equal, 2, "111111111000001");
+  CHECK_DECODE(greater_equal, 3, "111111111000001");
+  CHECK_DECODE(greater_equal, 4, "111000000000001");
+  CHECK_DECODE(greater_equal, 5, "010000000000001");
+  CHECK_DECODE(greater_equal, 6, "010000000000001");
+  CHECK_DECODE(greater_equal, 7, "010000000000001");
 }
 
 TEST(bitslice-coder) {
