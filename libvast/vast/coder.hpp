@@ -323,15 +323,8 @@ public:
     // Lazy append: we only add 0s until we hit index i of value x. The
     // remaining bitmaps are always 1, by definition of the range coding
     // property i >= x for all i in [0,N).
-    // TODO: This requires adapating RangeEval-Opt to perform "lazy extension"
-    // on complement, which is why it is still commented.
-    // for (auto i = 0u; i < x; ++i) {
-    //  auto& bm = this->bitmaps_[i];
-    //  bm.append_bits(true, this->size_ - bm.size());
-    //  bm.append_bits(false, n);
-    // }
-    for (auto i = 0u; i < this->bitmaps_.size(); ++i)
-      bitmap_at(i).append_bits(i >= x, n);
+    for (auto i = 0u; i < x; ++i)
+      bitmap_at(i).append_bits(false, n);
     this->size_ += n;
   }
 
@@ -374,10 +367,6 @@ public:
   }
 
   bool skip(size_type n) {
-    auto f = [=](auto& x) {
-      x.append_bits(true, (this->size_ + n) - x.size());
-    };
-    std::for_each(this->bitmaps_.begin(), this->bitmaps_.end(), f);
     this->size_ += n;
     return true;
   }
