@@ -51,5 +51,8 @@ int main(int argc, char** argv) {
   default_application app;
   // Dispatch to root command.
   auto result = app.run(sys, cfg.command_line.begin(), cfg.command_line.end());
-  return result;
+  if (result.match_elements<caf::error>()) {
+    std::cerr << sys.render(result.get_as<caf::error>(0)) << std::endl;
+    return EXIT_FAILURE;
+  }
 }

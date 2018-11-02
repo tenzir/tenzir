@@ -31,9 +31,10 @@ public:
       root_command();
 
   protected:
-    proceed_result proceed(caf::actor_system& sys,
-                           const caf::config_value_map& options,
-                           argument_iterator, argument_iterator) override;
+    caf::error proceed(caf::actor_system& sys,
+                       const caf::config_value_map& options,
+                       argument_iterator first,
+                       argument_iterator last) override;
   };
 
   /// Constructs an application.
@@ -48,8 +49,8 @@ public:
 
   /// Starts the application and blocks until execution completes.
   /// @returns An exit code suitable for returning from main.
-  int run(caf::actor_system& sys, command::argument_iterator begin,
-          command::argument_iterator end);
+  caf::message run(caf::actor_system& sys, command::argument_iterator begin,
+                   command::argument_iterator end);
 
 private:
   root_command root_;
