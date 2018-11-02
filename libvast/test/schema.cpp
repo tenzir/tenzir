@@ -14,6 +14,7 @@
 #define SUITE schema
 
 #include "test.hpp"
+#include "type_test.hpp"
 #include "fixtures/actor_system.hpp"
 
 #include "vast/json.hpp"
@@ -30,6 +31,7 @@
 
 using namespace vast;
 
+using caf::get;
 using caf::get_if;
 using caf::holds_alternative;
 
@@ -43,25 +45,25 @@ TEST(offset finding) {
     type outer = record{ a: middle, b: record { y: string }, c: int }
     type foo = record{ a: int, b: real, c: outer, d: middle }
   )__";
-  auto sch = to<schema>(str);
-  REQUIRE(sch);
-  // Type lookup
-  auto foo = sch->find("foo");
-  REQUIRE(foo);
-  auto r = get_if<record_type>(foo);
-  // Verify type integrity
-  REQUIRE(r);
-  auto t = r->at(offset{0});
-  REQUIRE(t);
-  CHECK(holds_alternative<integer_type>(*t));
-  t = r->at(offset{2, 0, 1, 1});
-  REQUIRE(t);
-  CHECK(holds_alternative<real_type>(*t));
-  t = r->at(offset{2, 0, 1});
-  REQUIRE(t);
-  auto inner = get_if<record_type>(t);
-  REQUIRE(inner);
-  CHECK(inner->name() == "inner");
+  auto sch = unbox(to<schema>(str));
+  auto foo_type = sch.find("foo");
+  REQUIRE_NOT_EQUAL(foo_type, nullptr);
+  REQUIRE(holds_alternative<record_type>(*foo_type));
+  auto& foo_record = get<record_type>(*foo_type);
+  CHECK_EQUAL(foo_record.name(), "foo");
+  CHECK_EQUAL(foo_record.fields.size(), 4u);
+  CHECK_EQUAL(at(foo_record, 0), integer_type{});
+  CHECK_EQUAL(at(foo_record, 1), real_type{});
+  CHECK_EQUAL(at(foo_record, 2).name(), "outer");
+  CHECK_EQUAL(rec_at(foo_record, 2).fields.size(), 3u);
+  CHECK_EQUAL(at(foo_record, 2, 0).name(), "middle");
+  CHECK_EQUAL(at(foo_record, 2, 1, 0), string_type{});
+  CHECK_EQUAL(at(foo_record, 2, 2), integer_type{});
+  CHECK_EQUAL(at(foo_record, 3).name(), "middle");
+  CHECK_EQUAL(at(foo_record, 3, 0), integer_type{});
+  CHECK_EQUAL(at(foo_record, 3, 1).name(), "inner");
+  CHECK_EQUAL(at(foo_record, 3, 1, 0).name(), integer_type{});
+  CHECK_EQUAL(at(foo_record, 3, 1, 1).name(), real_type{});
 }
 
 TEST(merging) {

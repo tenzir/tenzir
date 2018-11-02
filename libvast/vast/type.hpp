@@ -21,7 +21,7 @@
 #include <caf/detail/type_list.hpp>
 #include <caf/error.hpp>
 #include <caf/fwd.hpp>
-#include <caf/intrusive_ptr.hpp>
+#include <caf/intrusive_cow_ptr.hpp>
 #include <caf/make_counted.hpp>
 #include <caf/meta/omittable.hpp>
 #include <caf/none.hpp>
@@ -88,7 +88,7 @@ constexpr type_id_type type_id() {
 using type_digest = xxhash64::result_type;
 
 /// @relates type
-using abstract_type_ptr = caf::intrusive_ptr<abstract_type>;
+using abstract_type_ptr = caf::intrusive_cow_ptr<abstract_type>;
 
 /// The sematic representation of data.
 class type : detail::totally_ordered<type> {
@@ -110,10 +110,10 @@ public:
   }
 
   /// Copy-constructs a type.
-  type(const type& x);
+  type(const type& x) = default;
 
   /// Copy-assigns a type.
-  type& operator=(const type& x);
+  type& operator=(const type& x) = default;
 
   /// Move-constructs a type.
   type(type&&) = default;
@@ -132,13 +132,19 @@ public:
 
   /// Sets the type name.
   /// @param x The new name of the type.
-  /// @returns a new type with name *x*.
-  type name(std::string x) const;
+  type& name(const std::string& x) &;
+
+  /// Sets the type name.
+  /// @param x The new name of the type.
+  type&& name(const std::string& x) &&;
 
   /// Specifies a list of attributes.
   /// @param xs The list of attributes.
-  /// @returns A new type with *xs* as attributes.
-  type attributes(std::vector<attribute> xs) const;
+  type& attributes(std::vector<attribute> xs) &;
+
+  /// Specifies a list of attributes.
+  /// @param xs The list of attributes.
+  type&& attributes(std::vector<attribute> xs) &&;
 
   // -- inspectors ------------------------------------------------------------
 
@@ -213,12 +219,6 @@ class abstract_type
 public:
   virtual ~abstract_type();
 
-  /// @returns the name of the type.
-  const std::string& name() const;
-
-  /// @returns The attributes of the type.
-  const std::vector<attribute>& attributes() const;
-
   // -- introspection ---------------------------------------------------------
 
   friend bool operator==(const abstract_type& x, const abstract_type& y);
@@ -232,14 +232,14 @@ public:
   /// @returns the index of this type in `concrete_types`.
   virtual int index() const noexcept = 0;
 
+  virtual abstract_type* copy() const = 0;
+
   /// @endcond
 
 protected:
   virtual bool equals(const abstract_type& other) const;
 
   virtual bool less_than(const abstract_type& other) const;
-
-  virtual abstract_type_ptr clone() const = 0;
 
   std::string name_;
   std::vector<attribute> attributes_;
@@ -252,25 +252,38 @@ class concrete_type
   : public abstract_type,
     detail::totally_ordered<Derived, Derived> {
 public:
-  using abstract_type::name;
-  using abstract_type::attributes;
+  /// @returns the name of the type.
+  const std::string& name() const {
+    return this->name_;
+  }
 
   /// Sets the type name.
   /// @param x The new name of the type.
-  /// @returns a new type with name *x*.
-  Derived name(std::string x) const {
-    Derived copy{derived()};
-    copy.name_ = std::move(x);
-    return copy;
+  Derived& name(const std::string& x) & {
+    this->name_ = x;
+    return derived();
   }
 
-  /// Specifies a list of attributes.
-  /// @param xs The list of attributes.
-  /// @returns A new type with *xs* as attributes.
-  Derived attributes(std::vector<attribute> xs) const {
-    Derived copy{derived()};
-    copy.attributes_ = std::move(xs);
-    return copy;
+  /// Sets the type name.
+  /// @param x The new name of the type.
+  Derived&& name(const std::string& x) && {
+    this->name_ = x;
+    return std::move(derived());
+  }
+
+  /// @returns The attributes of the type.
+  const std::vector<attribute>& attributes() const {
+    return this->attributes_;
+  }
+
+  Derived& attributes(std::vector<attribute> xs) & {
+    this->attributes_ = std::move(xs);
+    return derived();
+  }
+
+  Derived&& attributes(std::vector<attribute> xs) && {
+    this->attributes_ = std::move(xs);
+    return std::move(derived());
   }
 
   friend bool operator==(const Derived& x, const Derived& y) {
@@ -304,11 +317,15 @@ protected:
     return static_cast<concrete_type&>(x);
   }
 
-  abstract_type_ptr clone() const final {
-    return caf::make_counted<Derived>(derived());
+  concrete_type* copy() const final {
+    return new Derived(derived());
   }
 
 private:
+  Derived& derived() {
+    return *static_cast<Derived*>(this);
+  }
+
   const Derived& derived() const {
     return *static_cast<const Derived*>(this);
   }
@@ -558,7 +575,7 @@ struct record_type final : recursive_type<record_type> {
   record_type(std::vector<record_field> xs = {});
 
   /// Constructs a record type from a list of fields.
-  record_type(std::initializer_list<record_field> list);
+  record_type(std::initializer_list<record_field> xs);
 
   /// Attemps to resolve a key to an offset.
   /// @param key The key to resolve.

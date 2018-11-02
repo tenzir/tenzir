@@ -36,7 +36,7 @@ struct fixture : fixtures::deterministic_actor_system {
       {"x", boolean_type{}},
       {"y", count_type{}},
       {"z", integer_type{}}};
-    t = t.name("foo");
+    t.name("foo");
     // Data
     r.emplace_back(true);
     r.emplace_back(42u);
