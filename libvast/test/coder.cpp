@@ -48,15 +48,9 @@ std::string dump(double x) {
   return dump(detail::order(x));
 }
 
-template <class Coder>
-void fill(Coder&) {
-  // end of recursion
-}
-
-template <class Coder, class T, class... Ts>
-void fill(Coder& c, T x, Ts... xs) {
-  c.encode(x);
-  fill(c, xs...);
+template <class Coder, class... Ts>
+void fill(Coder& c, Ts... xs) {
+  (c.encode(xs), ...);
 }
 
 } // namespace <anonymous>
