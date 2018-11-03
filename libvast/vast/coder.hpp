@@ -71,7 +71,7 @@ struct coder {
   /// the number of elements.
   /// @param n The number of elements to skip.
   /// @returns `true` on success.
-  bool skip(size_type n);
+  void skip(size_type n);
 
   /// Appends another coder to this instance.
   /// @param other The coder to append.
@@ -122,9 +122,8 @@ public:
     return result;
   }
 
-  bool skip(size_type n) {
+  void skip(size_type n) {
     bitmap_.append_bits(0, n);
-    return true;
   }
 
   void append(const singleton_coder& other) {
@@ -280,9 +279,8 @@ public:
     }
   }
 
-  bool skip(size_type n) {
+  void skip(size_type n) {
     this->size_ += n;
-    return true;
   }
 
   void append(const equality_coder& other) {
@@ -366,9 +364,8 @@ public:
     }
   }
 
-  bool skip(size_type n) {
+  void skip(size_type n) {
     this->size_ += n;
-    return true;
   }
 
   void append(const range_coder& other) {
@@ -466,9 +463,8 @@ public:
     return Bitmap{this->size_, false};
   }
 
-  bool skip(size_type n) {
+  void skip(size_type n) {
     this->size_ += n;
-    return true;
   }
 
   void append(const bitslice_coder& other) {
@@ -532,10 +528,9 @@ public:
     return coders_.empty() ? bitmap_type{} : decode(coders_, op, x);
   }
 
-  bool skip(size_type n) {
-    return std::all_of(coders_.begin(),
-                       coders_.end(),
-                       [n](auto& x) { return x.skip(n); });
+  void skip(size_type n) {
+    for (auto& x : coders_)
+      x.skip(n);
   }
 
   void append(const multi_level_coder& other) {
