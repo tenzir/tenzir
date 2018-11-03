@@ -68,6 +68,8 @@ caf::error inspect(caf::deserializer& source, synopsis_ptr& ptr) {
     return std::move(ex.error());
   // Deserialize into a new instance.
   auto new_ptr = f(std::move(t));
+  if (!new_ptr)
+    return ec::invalid_synopsis_type;
   if (auto err = new_ptr->deserialize(source))
     return err;
   // Change `ptr` only after successfully deserializing.
