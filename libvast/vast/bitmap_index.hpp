@@ -77,7 +77,6 @@ public:
   /// Instructs the coder to add undefined values for the sake of increasing
   /// the number of elements.
   /// @param n The number of elements to skip.
-  /// @returns `true` on success.
   bool skip(size_type n) {
     return coder_.skip(n);
   }
