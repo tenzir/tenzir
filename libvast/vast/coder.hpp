@@ -215,9 +215,9 @@ public:
   using super::super;
 
   bitmap_type& lazy_bitmap_at(size_t index) const {
-    auto& res = this->bitmaps_[index];
-    res.append_bits(false, this->size_ - res.size());
-    return res;
+    auto& result = this->bitmaps_[index];
+    result.append_bits(false, this->size_ - result.size());
+    return result;
   }
 
   bitmap_type& bitmap_at(size_t index) {
@@ -304,9 +304,9 @@ public:
   using super::super;
 
   bitmap_type& lazy_bitmap_at(size_t index) const {
-    auto& res = this->bitmaps_[index];
-    res.append_bits(true, this->size_ - res.size());
-    return res;
+    auto& result = this->bitmaps_[index];
+    result.append_bits(true, this->size_ - result.size());
+    return result;
   }
 
   bitmap_type& bitmap_at(size_t index) {
@@ -391,9 +391,9 @@ public:
   using super::super;
 
   bitmap_type& lazy_bitmap_at(size_t index) const {
-    auto& res = this->bitmaps_[index];
-    res.append_bits(false, this->size_ - res.size());
-    return res;
+    auto& result = this->bitmaps_[index];
+    result.append_bits(false, this->size_ - result.size());
+    return result;
   }
 
   bitmap_type& bitmap_at(size_t index) {
