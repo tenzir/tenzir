@@ -97,9 +97,9 @@ deserialize_synopsis_factory(caf::deserializer& source) {
   synopsis_factory f;
   if (impl_id == caf::atom("Sy_Default")) {
     f = make_synopsis;
+  } else if (source.context() != nullptr) {
+    return caf::sec::no_context;
   } else {
-    if (source.context() != nullptr)
-      return caf::sec::no_context;
     using generic_fun = caf::runtime_settings_map::generic_function_pointer;
     auto& sys = source.context()->system();
     auto val = sys.runtime_settings().get(impl_id);
