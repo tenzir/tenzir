@@ -48,7 +48,8 @@ public:
   }
 
   /// Starts the application and blocks until execution completes.
-  /// @returns An exit code suitable for returning from main.
+  /// @returns the type-erased result of the executed command or a wrapped
+  ///          `caf::error`.
   caf::message run(caf::actor_system& sys, command::argument_iterator begin,
                    command::argument_iterator end);
 

@@ -44,12 +44,12 @@ public:
   virtual ~command();
 
   /// Runs the command and blocks until execution completes.
-  /// @returns An exit code suitable for returning from main.
+  /// @returns a type-erased result or a wrapped `caf::error`.
   caf::message run(caf::actor_system& sys, argument_iterator begin,
                    argument_iterator end);
 
   /// Runs the command and blocks until execution completes.
-  /// @returns An exit code suitable for returning from main.
+  /// @returns a type-erased result or a wrapped `caf::error`.
   caf::message run(caf::actor_system& sys, caf::config_value_map& options,
                    argument_iterator begin, argument_iterator end);
 
