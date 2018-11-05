@@ -19,18 +19,11 @@
 #include <string_view>
 #include <utility>
 
-#include <caf/actor_system_config.hpp>
 #include <caf/config_option_set.hpp>
 #include <caf/fwd.hpp>
-#include <caf/message.hpp>
-#include <caf/pec.hpp>
 
 #include "vast/data.hpp"
 #include "vast/error.hpp"
-
-#include "vast/detail/raise_error.hpp"
-#include "vast/detail/steady_map.hpp"
-#include "vast/detail/string.hpp"
 
 namespace vast {
 
@@ -42,13 +35,6 @@ public:
   /// Iterates over CLI arguments.
   using argument_iterator = std::vector<std::string>::const_iterator;
 
-  /// Wraps the result of proceed.
-  enum proceed_result {
-    proceed_ok,
-    stop_successful,
-    stop_with_error
-  };
-
   // -- constructors, destructors, and assignment operators --------------------
 
   command();
@@ -58,15 +44,14 @@ public:
   virtual ~command();
 
   /// Runs the command and blocks until execution completes.
-  /// @returns An exit code suitable for returning from main.
-  int run(caf::actor_system& sys, argument_iterator begin,
-          argument_iterator end);
+  /// @returns a type-erased result or a wrapped `caf::error`.
+  caf::message run(caf::actor_system& sys, argument_iterator begin,
+                   argument_iterator end);
 
   /// Runs the command and blocks until execution completes.
-  /// @returns An exit code suitable for returning from main.
-  int run(caf::actor_system& sys, caf::config_value_map& options,
-          argument_iterator begin, argument_iterator end);
-
+  /// @returns a type-erased result or a wrapped `caf::error`.
+  caf::message run(caf::actor_system& sys, caf::config_value_map& options,
+                   argument_iterator begin, argument_iterator end);
 
   /// Creates a summary of all option declarations and available commands.
   std::string usage() const;
@@ -104,31 +89,54 @@ public:
   }
 
 protected:
+  // -- customization points ---------------------------------------------------
+
   /// Checks whether a command is ready to proceed, i.e., whether the
   /// configuration allows for calling `run_impl` or `run` on a nested command.
-  virtual proceed_result proceed(caf::actor_system& sys,
-                                 const caf::config_value_map& options,
-                                 argument_iterator begin,
-                                 argument_iterator end);
+  virtual caf::error proceed(caf::actor_system& sys,
+                             const caf::config_value_map& options,
+                             argument_iterator begin, argument_iterator end);
 
-  virtual int run_impl(caf::actor_system& sys,
-                       const caf::config_value_map& options,
-                       argument_iterator begin, argument_iterator end);
+  /// Implements the command-specific application logic.
+  virtual caf::message run_impl(caf::actor_system& sys,
+                                const caf::config_value_map& options,
+                                argument_iterator begin, argument_iterator end);
 
+  // -- convenience functions --------------------------------------------------
+
+  /// Wraps an error into a CAF message.
+  /// @returns `make_message(err)`
+  static caf::message wrap_error(caf::error err);
+
+  /// Wraps an error into a CAF message.
+  /// @returns `make_message(make_error(code, context...))`
+  template <class... Ts>
+  static caf::message wrap_error(ec code, Ts&&... context) {
+    return wrap_error(make_error(code, std::forward<Ts>(context)...));
+  }
+
+  /// Adds a new global option to the options set.
   template <class T>
   void add_opt(std::string_view name, std::string_view description) {
     opts_.add<T>("global", name, description);
   }
 
 private:
-  std::string parse_error(caf::pec code, argument_iterator error_position,
-                          argument_iterator begin, argument_iterator end) const;
+  // -- helper functions -------------------------------------------------------
+
+  caf::error parse_error(caf::pec code, argument_iterator error_position,
+                         argument_iterator begin, argument_iterator end) const;
 
   /// @pre `error_position != end`
-  std::string unknown_subcommand_error(argument_iterator error_position,
-                                       argument_iterator end) const;
+  caf::error unknown_subcommand_error(argument_iterator error_position,
+                                      argument_iterator end) const;
 
+  // -- member variables -------------------------------------------------------
+
+  /// Maps command names to children (nested commands).
   std::map<std::string_view, std::unique_ptr<command>> nested_;
+
+  /// Points to the parent command (nullptr in the root command).
   command* parent_;
 
   /// The user-provided name.

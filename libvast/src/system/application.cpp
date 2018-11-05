@@ -50,21 +50,15 @@ application::root_command::root_command() {
   add_opt<bool>("version,v", "print version and exit");
 }
 
-command::proceed_result
-application::root_command::proceed(caf::actor_system& sys,
+caf::error
+application::root_command::proceed(caf::actor_system&,
                                    const caf::config_value_map& options,
                                    argument_iterator begin,
                                    argument_iterator end) {
+  VAST_UNUSED(options);
   VAST_UNUSED(begin, end);
   VAST_TRACE(VAST_ARG(options), VAST_ARG("args", begin, end));
-  CAF_IGNORE_UNUSED(sys);
-  CAF_IGNORE_UNUSED(options);
-  if (get_or(options, "version", false)) {
-    std::cout << VAST_VERSION << std::endl;
-    return stop_successful;
-  }
-  std::cerr << '\n' << banner() << "\n\n";
-  return command::proceed_ok;
+  return caf::none;
 }
 
 application::application() {
@@ -74,8 +68,9 @@ application::application() {
   detail::adjust_resource_consumption();
 }
 
-int application::run(caf::actor_system& sys, command::argument_iterator begin,
-                     command::argument_iterator end) {
+caf::message application::run(caf::actor_system& sys,
+                              command::argument_iterator begin,
+                              command::argument_iterator end) {
   VAST_TRACE(VAST_ARG("args", begin, end));
   return root_.run(sys, begin, end);
 }

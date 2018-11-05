@@ -29,34 +29,29 @@ remote_command::remote_command(command* parent, std::string_view name)
   // nop
 }
 
-int remote_command::run_impl(actor_system& sys,
-                             const caf::config_value_map& options,
-                             argument_iterator begin, argument_iterator end) {
+caf::message remote_command::run_impl(actor_system& sys,
+                                      const caf::config_value_map& options,
+                                      argument_iterator begin,
+                                      argument_iterator end) {
   VAST_TRACE(VAST_ARG("name", name()), VAST_ARG(options),
              VAST_ARG("args", begin, end));
   // Get a convenient and blocking way to interact with actors.
   scoped_actor self{sys};
   // Get VAST node.
   auto node_opt = connect_to_node(self, options);
-  if (!node_opt) {
-    std::cerr << "unable to connect to node: " << sys.render(node_opt.error())
-              << std::endl;
-    return EXIT_FAILURE;
-  }
+  if (!node_opt)
+    return wrap_error(std::move(node_opt.error()));
   auto node = std::move(*node_opt);
   self->monitor(node);
   // Build command to remote node.
   auto args = caf::message_builder{begin, end}.move_to_message();
   auto cmd = make_message(std::string{name()}, std::move(args));
   // Delegate command to node.
-  auto result = true;
+  caf::error err;
   self->send(node, std::move(cmd));
   self->receive(
-    [&](const down_msg& msg) {
-      if (msg.reason != exit_reason::user_shutdown) {
-        std::cerr << "remote node down" << std::endl;
-        result = false;
-      }
+    [&](const down_msg&) {
+      err = ec::remote_node_down;
     },
     [&](ok_atom) {
       // Standard reply for success.
@@ -68,13 +63,13 @@ int remote_command::run_impl(actor_system& sys,
       // Status messages or query results.
       std::cout << str << std::endl;
     },
-    [&](const error& e) {
-      VAST_IGNORE_UNUSED(e);
-      VAST_ERROR(this, self->system().render(e));
-      std::cerr << self->system().render(e) << std::endl;
-      result = false;
-    });
-  return result ? 0 : 1;
+    [&](error& e) {
+      err = std::move(e);
+    }
+  );
+  if (err)
+    return wrap_error(std::move(err));
+  return caf::none;
 }
 
 } // namespace vast::system
