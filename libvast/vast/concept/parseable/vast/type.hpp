@@ -39,7 +39,7 @@ public:
   bool add(const std::string& name, type t) {
     if (name.empty() || name != t.name())
       return false;
-    t = t.name(name);
+    t.name(name);
     symbols_.symbols.insert({name, t});
     return true;
   }

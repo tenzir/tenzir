@@ -90,6 +90,14 @@ public:
     return source(min_, max_);
   }
 
+  T min() const noexcept {
+    return min_;
+  }
+
+  T max() const noexcept {
+    return max_;
+  }
+
 private:
   T min_;
   T max_;

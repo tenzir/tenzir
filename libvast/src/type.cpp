@@ -43,15 +43,6 @@ none_type none_type_singleton;
 
 // -- type ---------------------------------------------------------------------
 
-type::type(const type& x) : ptr_{x.ptr_ ? x.ptr_->clone() : nullptr} {
-  // nop
-}
-
-type& type::operator=(const type& x) {
-  ptr_ = x.ptr_ ? x.ptr_->clone() : nullptr;
-  return *this;
-}
-
 bool operator==(const type& x, const type& y) {
   if (x.ptr_ && y.ptr_)
     return *x.ptr_ == *y.ptr_;
@@ -64,18 +55,28 @@ bool operator<(const type& x, const type& y) {
   return x.ptr_ < y.ptr_;
 }
 
-type type::name(std::string x) const {
-  type copy{*this};
-  if (copy.ptr_)
-    copy.ptr_->name_ = std::move(x);
-  return copy;
+type& type::name(const std::string& x) & {
+  if (ptr_)
+    ptr_.unshared().name_ = x;
+  return *this;
 }
 
-type type::attributes(std::vector<attribute> xs) const {
-  type copy{*this};
-  if (copy.ptr_)
-    copy.ptr_->attributes_ = std::move(xs);
-  return copy;
+type&& type::name(const std::string& x) && {
+  if (ptr_)
+    ptr_.unshared().name_ = x;
+  return std::move(*this);
+}
+
+type& type::attributes(std::vector<attribute> xs) & {
+  if (ptr_)
+    ptr_.unshared().attributes_ = std::move(xs);
+  return *this;
+}
+
+type&& type::attributes(std::vector<attribute> xs) && {
+  if (ptr_)
+    ptr_.unshared().attributes_ = std::move(xs);
+  return std::move(*this);
 }
 
 type::operator bool() const {
@@ -84,12 +85,12 @@ type::operator bool() const {
 
 const std::string& type::name() const {
   static const std::string empty_string = "";
-  return ptr_ ? ptr_->name() : empty_string;
+  return ptr_ ? ptr_->name_ : empty_string;
 }
 
 const std::vector<attribute>& type::attributes() const {
   static const std::vector<attribute> no_attributes = {};
-  return ptr_ ? ptr_->attributes() : no_attributes;
+  return ptr_ ? ptr_->attributes_ : no_attributes;
 }
 
 abstract_type_ptr type::ptr() const {
@@ -116,14 +117,6 @@ type::type(abstract_type_ptr x) : ptr_{std::move(x)} {
 
 abstract_type::~abstract_type() {
   // nop
-}
-
-const std::string& abstract_type::name() const {
-  return name_;
-}
-
-const std::vector<attribute>& abstract_type::attributes() const {
-  return attributes_;
 }
 
 bool abstract_type::equals(const abstract_type& other) const {
