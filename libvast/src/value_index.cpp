@@ -35,7 +35,9 @@ optional<base> parse_base(const type& t) {
       return *b;
     return {};
   }
-  return base::uniform<64>(10);
+  // Use base 8 by default, as it yields the best performance on average for
+  // VAST's indexing.
+  return base::uniform<64>(8);
 }
 
 } // namespace <anonymous>

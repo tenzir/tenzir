@@ -77,8 +77,8 @@ public:
   /// Instructs the coder to add undefined values for the sake of increasing
   /// the number of elements.
   /// @param n The number of elements to skip.
-  bool skip(size_type n) {
-    return coder_.skip(n);
+  void skip(size_type n) {
+    coder_.skip(n);
   }
 
   /// Retrieves a bitmap of a given value with respect to a given operator.

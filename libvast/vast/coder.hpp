@@ -40,6 +40,19 @@ struct coder {
   using size_type = typename Bitmap::size_type;
   using value_type = size_t;
 
+  /// Returns the number of bitmaps stored by the coder.
+  Bitmap& bitmap_count() const noexcept;
+
+  /// Accesses individual bitmaps. The implementation may lazily fill a bitmap
+  /// before returning it.
+  /// @returns the bitmap for `x`.
+  Bitmap& bitmap_at(size_t index);
+
+  /// Accesses individual bitmaps. The implementation may lazily fill a bitmap
+  /// before returning it.
+  /// @returns the bitmap for `x`.
+  const Bitmap& bitmap_at(size_t index) const;
+
   /// Encodes a single values multiple times.
   /// @tparam An unsigned integral type.
   /// @param x The value to encode.
@@ -57,7 +70,7 @@ struct coder {
   /// Instructs the coder to add undefined values for the sake of increasing
   /// the number of elements.
   /// @param n The number of elements to skip.
-  bool skip(size_type n);
+  void skip(size_type n);
 
   /// Appends another coder to this instance.
   /// @param other The coder to append.
@@ -80,6 +93,20 @@ public:
   using size_type = typename Bitmap::size_type;
   using value_type = bool;
 
+  size_t bitmap_count() const noexcept {
+    return 1;
+  }
+
+  bitmap_type& bitmap_at(size_t index) {
+    VAST_ASSERT(index == 0);
+    return bitmap_;
+  }
+
+  const bitmap_type& bitmap_at(size_t index) const {
+    VAST_ASSERT(index == 0);
+    return bitmap_;
+  }
+
   void encode(value_type x, size_type n = 1) {
     VAST_ASSERT(Bitmap::max_size - size() >= n);
     bitmap_.append_bits(x, n);
@@ -94,9 +121,8 @@ public:
     return result;
   }
 
-  bool skip(size_type n) {
+  void skip(size_type n) {
     bitmap_.append_bits(0, n);
-    return true;
   }
 
   void append(const singleton_coder& other) {
@@ -139,6 +165,10 @@ public:
     // nop
   }
 
+  size_t bitmap_count() const noexcept {
+    return bitmaps_.size();
+  }
+
   auto size() const {
     return size_;
   }
@@ -167,7 +197,7 @@ protected:
   }
 
   size_type size_;
-  std::vector<Bitmap> bitmaps_;
+  mutable std::vector<Bitmap> bitmaps_;
 };
 
 /// Encodes each value in its own bitmap.
@@ -175,16 +205,31 @@ template <class Bitmap>
 class equality_coder : public vector_coder<Bitmap> {
 public:
   using super = vector_coder<Bitmap>;
+
   using typename super::value_type;
   using typename super::size_type;
+  using typename super::bitmap_type;
+
   using super::super;
+
+  bitmap_type& lazy_bitmap_at(size_t index) const {
+    auto& result = this->bitmaps_[index];
+    result.append_bits(false, this->size_ - result.size());
+    return result;
+  }
+
+  bitmap_type& bitmap_at(size_t index) {
+    return lazy_bitmap_at(index);
+  }
+
+  const bitmap_type& bitmap_at(size_t index) const {
+    return lazy_bitmap_at(index);
+  }
 
   void encode(value_type x, size_type n = 1) {
     VAST_ASSERT(Bitmap::max_size - this->size_ >= n);
     VAST_ASSERT(x < this->bitmaps_.size());
-    auto& bm = this->bitmaps_[x];
-    bm.append_bits(false, this->size_ - bm.size());
-    bm.append_bits(true, n);
+    bitmap_at(x).append_bits(true, n);
     this->size_ += n;
   }
 
@@ -211,8 +256,7 @@ public:
       }
       case equal:
       case not_equal: {
-        auto result = this->bitmaps_[x];
-        result.append_bits(false, this->size_ - result.size());
+        auto result = bitmap_at(x);
         if (op == not_equal)
           result.flip();
         return result;
@@ -234,9 +278,8 @@ public:
     }
   }
 
-  bool skip(size_type n) {
+  void skip(size_type n) {
     this->size_ += n;
-    return true;
   }
 
   void append(const equality_coder& other) {
@@ -250,9 +293,26 @@ template <class Bitmap>
 class range_coder : public vector_coder<Bitmap> {
 public:
   using super = vector_coder<Bitmap>;
+
   using typename super::value_type;
   using typename super::size_type;
+  using typename super::bitmap_type;
+
   using super::super;
+
+  bitmap_type& lazy_bitmap_at(size_t index) const {
+    auto& result = this->bitmaps_[index];
+    result.append_bits(true, this->size_ - result.size());
+    return result;
+  }
+
+  bitmap_type& bitmap_at(size_t index) {
+    return lazy_bitmap_at(index);
+  }
+
+  const bitmap_type& bitmap_at(size_t index) const {
+    return lazy_bitmap_at(index);
+  }
 
   void encode(value_type x, size_type n = 1) {
     VAST_ASSERT(Bitmap::max_size - this->size_ >= n);
@@ -260,18 +320,8 @@ public:
     // Lazy append: we only add 0s until we hit index i of value x. The
     // remaining bitmaps are always 1, by definition of the range coding
     // property i >= x for all i in [0,N).
-    // TODO: This requires adapating RangeEval-Opt to perform "lazy extension"
-    // on complement, which is why it is still commented.
-    // for (auto i = 0u; i < x; ++i) {
-    //  auto& bm = this->bitmaps_[i];
-    //  bm.append_bits(true, this->size_ - bm.size());
-    //  bm.append_bits(false, n);
-    // }
-    for (auto i = 0u; i < this->bitmaps_.size(); ++i) {
-      auto& bm = this->bitmaps_[i];
-      bm.append_bits(true, this->size_ - bm.size());
-      bm.append_bits(i >= x, n);
-    }
+    for (auto i = 0u; i < x; ++i)
+      bitmap_at(i).append_bits(false, n);
     this->size_ += n;
   }
 
@@ -283,51 +333,38 @@ public:
       default:
         return Bitmap{this->size_, false};
       case less: {
-        auto result = this->bitmaps_[x > 0 ? x - 1 : 0];
-        result.append_bits(true, this->size_ - result.size());
-        return result;
+        if (x == 0)
+          return Bitmap{this->size_, false};
+        return bitmap_at(x - 1);
       }
       case less_equal: {
-        auto result = this->bitmaps_[x];
-        result.append_bits(true, this->size_ - result.size());
+        return bitmap_at(x);
+      }
+      case equal: {
+        auto result = bitmap_at(x);
+        if (x > 0)
+          result &= ~bitmap_at(x - 1);
         return result;
       }
-      case equal:
       case not_equal: {
-        auto result = this->bitmaps_[x];
-        if (x > 0) {
-          auto prev = ~this->bitmaps_[x - 1];
-          VAST_ASSERT(prev.size() >= result.size());
-          result.append_bits(true, prev.size() - result.size());
-          result &= prev;
-        }
-        result.append_bits(false, this->size_ - result.size());
-        if (op == not_equal)
-          result.flip();
+        auto result = ~bitmap_at(x);
+        if (x > 0)
+          result |= bitmap_at(x - 1);
         return result;
       }
       case greater: {
-        auto result = ~this->bitmaps_[x];
-        result.append_bits(false, this->size_ - result.size());
-        return result;
+        return ~bitmap_at(x);
       }
       case greater_equal: {
-        auto result = ~this->bitmaps_[x > 0 ? x - 1 : 0];
-        result.append_bits(false, this->size_ - result.size());
-        return result;
+        if (x == 0)
+          return Bitmap{this->size_, true};
+        return ~bitmap_at(x - 1);
       }
     }
   }
 
-  bool skip(size_type n) {
-    auto f = [=](auto& x) {
-      x.append_bits(true, n);
-      return true;
-    };
-    auto result = std::all_of(this->bitmaps_.begin(), this->bitmaps_.end(), f);
-    if (result)
-      this->size_ += n;
-    return result;
+  void skip(size_type n) {
+    this->size_ += n;
   }
 
   void append(const range_coder& other) {
@@ -342,17 +379,31 @@ template <class Bitmap>
 class bitslice_coder : public vector_coder<Bitmap> {
 public:
   using super = vector_coder<Bitmap>;
+
   using typename super::value_type;
   using typename super::size_type;
+  using typename super::bitmap_type;
+
   using super::super;
+
+  bitmap_type& lazy_bitmap_at(size_t index) const {
+    auto& result = this->bitmaps_[index];
+    result.append_bits(false, this->size_ - result.size());
+    return result;
+  }
+
+  bitmap_type& bitmap_at(size_t index) {
+    return lazy_bitmap_at(index);
+  }
+
+  const bitmap_type& bitmap_at(size_t index) const {
+    return lazy_bitmap_at(index);
+  }
 
   void encode(value_type x, size_type n = 1) {
     VAST_ASSERT(Bitmap::max_size - this->size_ >= n);
-    for (auto i = 0u; i < this->bitmaps_.size(); ++i) {
-      auto& bm = this->bitmaps_[i];
-      bm.append_bits(false, this->size_ - bm.size());
-      bm.append_bits(((x >> i) & 1) == 0, n);
-    }
+    for (auto i = 0u; i < this->bitmaps_.size(); ++i)
+      bitmap_at(i).append_bits(((x >> i) & 1) == 0, n);
     this->size_ += n;
   }
 
@@ -411,9 +462,8 @@ public:
     return Bitmap{this->size_, false};
   }
 
-  bool skip(size_type n) {
+  void skip(size_type n) {
     this->size_ += n;
-    return true;
   }
 
   void append(const bitslice_coder& other) {
@@ -477,10 +527,9 @@ public:
     return coders_.empty() ? bitmap_type{} : decode(coders_, op, x);
   }
 
-  bool skip(size_type n) {
-    return std::all_of(coders_.begin(),
-                       coders_.end(),
-                       [n](auto& x) { return x.skip(n); });
+  void skip(size_type n) {
+    for (auto& x : coders_)
+      x.skip(n);
   }
 
   void append(const multi_level_coder& other) {
@@ -558,7 +607,9 @@ private:
     }
     base_.decompose(x, xs_);
     bitmap_type result{size(), true};
-    auto bitmaps = [&](auto i) -> auto& { return coders[i].storage(); };
+    auto get_bitmap = [&](size_t coder_index, size_t bitmap_index) -> auto& {
+      return coders[coder_index].bitmap_at(bitmap_index);
+    };
     switch (op) {
       default:
         return bitmap_type{size(), false};
@@ -567,23 +618,23 @@ private:
       case greater:
       case greater_equal: {
         if (xs_[0] < base_[0] - 1) // && bitmap != all_ones
-          result = bitmaps(0)[xs_[0]];
+          result = get_bitmap(0, xs_[0]);
         for (auto i = 1u; i < base_.size(); ++i) {
           if (xs_[i] != base_[i] - 1) // && bitmap != all_ones
-            result &= bitmaps(i)[xs_[i]];
+            result &= get_bitmap(i, xs_[i]);
           if (xs_[i] != 0) // && bitmap != all_ones
-            result |= bitmaps(i)[xs_[i] - 1];
+            result |= get_bitmap(i, xs_[i] - 1);
         }
       } break;
       case equal:
       case not_equal: {
         for (auto i = 0u; i < base_.size(); ++i) {
           if (xs_[i] == 0) // && bitmap != all_ones
-            result &= bitmaps(i)[0];
+            result &= get_bitmap(i, 0);
           else if (xs_[i] == base_[i] - 1)
-            result &= ~bitmaps(i)[base_[i] - 2];
+            result &= ~get_bitmap(i, base_[i] - 2);
           else
-            result &= bitmaps(i)[xs_[i]] ^ bitmaps(i)[xs_[i] - 1];
+            result &= get_bitmap(i, xs_[i]) ^ get_bitmap(i, xs_[i] - 1);
         }
       } break;
     }
