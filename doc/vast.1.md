@@ -83,10 +83,10 @@ The following key components exist:
 The above diagram illustrates the default configuration of a single node and
 the flow of messages between the components. The **importer**, **index**, and
 **archive** are singleton instances within the **node**. **Source**s are spawned
-on demand for each ingestion. **Sink**s and **exporter**s form pairs that are
-spawned on demand for each database query. **Source**s and **sink**s exist in their
-own processes, and are primarily responsible for parsing the input and
-formatting the search results.
+on demand for each data import. **Sink**s and **exporter**s form pairs that are
+spawned on demand for each query. **Source**s and **sink**s exist in their own
+processes, and are primarily responsible for parsing the input and formatting
+the search results.
 
 OPTIONS
 -------

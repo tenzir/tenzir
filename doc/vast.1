@@ -1,4 +1,4 @@
-.TH VAST 1 "November 02, 2018" 0.1 "Visibility Across Space and Time"
+.TH VAST 1 "November 06, 2018" 0.1 "Visibility Across Space and Time"
 .SH NAME
 .PP
 \fB\fCvast\fR \-\- manage a VAST topology
@@ -78,10 +78,10 @@ Accepts query expressions from users, asks \fBindex\fP for hits, takes them to
 The above diagram illustrates the default configuration of a single node and
 the flow of messages between the components. The \fBimporter\fP, \fBindex\fP, and
 \fBarchive\fP are singleton instances within the \fBnode\fP\&. \fBSource\fPs are spawned
-on demand for each ingestion. \fBSink\fPs and \fBexporter\fPs form pairs that are
-spawned on demand for each database query. \fBSource\fPs and \fBsink\fPs exist in their
-own processes, and are primarily responsible for parsing the input and
-formatting the search results.
+on demand for each data import. \fBSink\fPs and \fBexporter\fPs form pairs that are
+spawned on demand for each query. \fBSource\fPs and \fBsink\fPs exist in their own
+processes, and are primarily responsible for parsing the input and formatting
+the search results.
 .SH OPTIONS
 .PP
 The \fIoptions\fP in front of \fIcommand\fP control how to to connect to a node.
