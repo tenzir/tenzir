@@ -29,7 +29,7 @@ them.
 
 Nodes can enter a peering relationship and build a topology. All peers have
 the same authority: if one fails, others can take over. By default, each
-node includes all core components: **archive**, **index**, **importer**. For
+node includes all core components: **archive**, **index**, and **importer**. For
 more fine-grained control about the components running on a node, one can spawn
 the node in "bare" mode to get an empty container. This allows for more
 flexible arrangement of components to best match the available system hardware.
@@ -59,6 +59,35 @@ The following key components exist:
   Accepts query expressions from users, asks **index** for hits, takes them to
   **archive** to extract candidates, and relays matching events to **sink**s.
 
+### Schematic
+```
+                +--------------------------------------------+
+                | Node                                       |
+                |                                            |
+  +--------+    |             +--------+                     |    +-------+
+  | source |    |         +--->archive <------+           +-------> sink  |
+  +-----bro+-------+      |   +--------<---+  v-----------++ |    +---json+
+                |  |      |                |  | exporter   | |
+                | +v------++           +------>------------+ |
+     ...        | |importer|           |   |     ...         |      ...
+                | +^------++           |   |                 |
+                |  |      |            |   +-->------------+ |
+  +--------+-------+      |            |      | exporter   | |
+  | source |    |         |   +--------v      ^-----------++ |    +-------+
+  +----pcap+    |         +---> index  <------+           +-------> sink  |
+                |             +--------+                     |    +--ascii+
+                |                                            |
+                |                                            |
+                +--------------------------------------------+
+```
+The above diagram illustrates the default configuration of a single node and
+the flow of messages between the components. The **importer**, **index**, and
+**archive** are singleton instances within the **node**. **Source**s are spawned
+on demand for each data import. **Sink**s and **exporter**s form pairs that are
+spawned on demand for each query. **Source**s and **sink**s exist in their own
+processes, and are primarily responsible for parsing the input and formatting
+the search results.
+
 OPTIONS
 -------
 
@@ -66,24 +95,24 @@ The *options* in front of *command* control how to to connect to a node.
 
 The following *options* are available:
 
-`-d` *dir* [*.*]
+`-d` *dir*, `--dir`=*dir* [*.*]
   The VAST directory for logs and state.
 
-`-e` *endpoint* [*127.0.0.1:42000*]
+`-e` *endpoint*, `--endpoint`=*endpoint* [*127.0.0.1:42000*]
   The endpoint of the node to connect to or launch. (See below)
 
-`-i` *id* [*hostname*]
+`-i` *id*, `--id`=*id* [*hostname*]
   Overrides the node *id*, which defaults to the system hostname.
   Each node in a topology must have a unique ID, otherwise peering fails.
 
-`-h`
+`-h`, `-?`, `--help`
   Display a help message and exit.
 
-`-n`
+`-n`, `--node`
   Do not attempt to connect to a remote **node** but start a local instance
   instead.
 
-`-v`
+`-v`, `--version`
   Print VAST version and exit.
 
 When specifying an endpoint via `-e`, `vast` connects to that endpoint to
@@ -107,7 +136,7 @@ commands exist:
     *peer*          peers with another node
     *show*          shows various properties of a topology
     *spawn*         creates a new component
-    *kill*          terminates an component
+    *kill*          terminates a component
     *import*        imports data from standard input
     *export*        exports query results to standard output
 
@@ -115,7 +144,7 @@ commands exist:
 
 Synopsis:
 
-  *start* [*arguments*]
+  *start*
 
 Start a node at the specified endpoint.
 
@@ -413,7 +442,7 @@ by libpcap.
 
 ### Test
 
-- **Type**: reader
+- **Type**: generator
 - **Representation**: binary
 - **Dependencies**: none
 
