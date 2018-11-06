@@ -108,7 +108,6 @@ commands exist:
     *show*          shows various properties of a topology
     *spawn*         creates a new component
     *kill*          terminates an component
-    *send*          send a message to an component
     *import*        imports data from standard input
     *export*        exports query results to standard output
 
@@ -273,25 +272,6 @@ Synopsis:
   *kill* *label*
 
 Terminates a component. The argument *label* refers to a component label.
-
-### send
-
-Synopsis:
-
-  *send* *label* *message*
-
-Sends a message to a component. The argument *label* refers to the component to
-run. The argument *message* represents the data to send to the component.
-
-Available messages:
-
-*run*
-  Tells a component to start operating. Most components do not need to be told
-  to run explicitly. Only components having a multi-stage setup phase (e.g.,
-  sources and exporters) can be run explicitly.
-
-*flush*
-  Tells a component to flush its state to the file system.
 
 ### import
 
