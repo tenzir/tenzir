@@ -44,8 +44,10 @@ public:
   using node_command::node_command;
 
 protected:
-  int run_impl(caf::actor_system& sys, const caf::config_value_map& options,
-               argument_iterator begin, argument_iterator end) override;
+  caf::message run_impl(caf::actor_system& sys,
+                        const caf::config_value_map& options,
+                        argument_iterator begin,
+                        argument_iterator end) override;
 
   virtual expected<caf::actor>
   make_sink(caf::scoped_actor& self, const caf::config_value_map& options,

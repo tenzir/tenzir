@@ -13,9 +13,15 @@
 
 #define SUITE synopsis
 
-#include "test.hpp"
+#include "vast/synopsis.hpp"
 
-#include <vast/synopsis.hpp>
+#include "test.hpp"
+#include "fixtures/actor_system.hpp"
+
+#include <vector>
+
+#include <caf/binary_deserializer.hpp>
+#include <caf/binary_serializer.hpp>
 
 using namespace std::chrono_literals;
 using namespace vast;
@@ -74,3 +80,12 @@ TEST(min-max synopsis) {
   CHECK(!x->lookup(greater, nine));
   CHECK(!x->lookup(greater_equal, nine));
 }
+
+FIXTURE_SCOPE(synopsis_tests, fixtures::deterministic_actor_system)
+
+TEST(serialization) {
+  CHECK_ROUNDTRIP(synopsis_ptr{});
+  CHECK_ROUNDTRIP_DEREF(make_synopsis(timestamp_type{}));
+}
+
+FIXTURE_SCOPE_END()

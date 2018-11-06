@@ -223,35 +223,6 @@ void kill(node_ptr self, message args) {
   );
 }
 
-void send(node_ptr self, message args) {
-  auto rp = self->make_response_promise();
-  if (args.empty()) {
-    rp.deliver(make_error(ec::syntax_error, "missing component"));
-    return;
-  } else if (args.size() == 1) {
-    rp.deliver(make_error(ec::syntax_error, "missing command"));
-    return;
-  }
-  self->request(self->state.tracker, infinite, get_atom::value).then(
-    [=](registry& reg) mutable {
-      auto& label = args.get_as<std::string>(0);
-      auto& local = reg.components[self->state.name];
-      auto i = std::find_if(local.begin(), local.end(),
-                            [&](auto& p) { return p.second.label == label; });
-      if (i == local.end()) {
-        rp.deliver(make_error(ec::unspecified, "no such component: " + label));
-        return;
-      }
-      auto cmd = atom_from_string(args.get_as<std::string>(1));
-      self->send(i->second.actor, cmd);
-      rp.deliver(ok_atom::value);
-    },
-    [=](error& e) mutable {
-      rp.deliver(std::move(e));
-    }
-  );
-}
-
 } // namespace <anonymous>
 
 node_state::node_state(caf::event_based_actor* selfptr) : self(selfptr) {
@@ -302,8 +273,6 @@ caf::behavior node(node_ptr self, std::string id, path dir) {
         spawn(self, args);
       } else if (cmd == "kill") {
         kill(self, args);
-      } else if (cmd == "send") {
-        send(self, args);
       } else {
         auto e = make_error(ec::unspecified, "invalid command", cmd);
         VAST_WARNING(self, "failed to parse command:", self->system().render(e));

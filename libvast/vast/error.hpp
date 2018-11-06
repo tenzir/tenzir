@@ -48,6 +48,18 @@ enum class ec : uint8_t {
   syntax_error,
   /// Deserialization failed because an unknown implementation type was found.
   invalid_table_slice_type,
+  /// Deserialization failed because an unknown implementation type was found.
+  invalid_synopsis_type,
+  /// A command failed, because the remote node failed.
+  remote_node_down,
+  /// A command failed because it received an invalid result.
+  invalid_result,
+  /// A command failed because its configuration was invalid.
+  invalid_configuration,
+  /// A command failed because it was unable to connect to an importer.
+  no_importer,
+  /// Encountered a currently unimplemented code path or missing feature.
+  unimplemented,
 };
 
 /// @relates ec

@@ -13,32 +13,28 @@
 
 #pragma once
 
-#include <string_view>
+#include <cstddef>
+#include <vector>
 
-#include <caf/actor.hpp>
-#include <caf/expected.hpp>
-#include <caf/fwd.hpp>
+#include "vast/offset.hpp"
+#include "vast/type.hpp"
 
-#include "vast/system/node_command.hpp"
+#include "test.hpp"
 
-namespace vast::system {
-
-/// Format-independent implementation for import sub-commands.
-class source_command : public node_command {
-public:
-  using super = node_command;
-
-  source_command(command* parent, std::string_view name);
-
-protected:
-  caf::message run_impl(caf::actor_system& sys,
-                        const caf::config_value_map& options,
-                        argument_iterator begin,
-                        argument_iterator end) override;
-
-  virtual expected<caf::actor> make_source(
-    caf::scoped_actor& self,
-    const caf::config_value_map& options) = 0;
+/// Returns the type at `offset{xs...}`.
+template <class... Offsets>
+const vast::type& at(const vast::record_type& rec, Offsets... xs) {
+  auto ptr = rec.at(vast::offset{static_cast<size_t>(xs)...});
+  if (!ptr)
+    FAIL("offset lookup failed at " << std::vector<int>{xs...});
+  return *ptr;
 };
 
-} // namespace vast::system
+/// Returns the record type at `offset{xs...}`.
+template <class... Offsets>
+const vast::record_type& rec_at(const vast::record_type& rec, Offsets... xs) {
+  auto& t = at(rec, xs...);
+  if (!caf::holds_alternative<vast::record_type>(t))
+    FAIL("expected a record type at offset " << std::vector<int>{xs...});
+  return caf::get<vast::record_type>(t);
+};

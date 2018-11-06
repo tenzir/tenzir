@@ -14,6 +14,7 @@
 #define SUITE type
 
 #include "test.hpp"
+#include "type_test.hpp"
 #include "fixtures/actor_system.hpp"
 
 #include "vast/data.hpp"
@@ -74,20 +75,20 @@ TEST(copying) {
 
 TEST(names) {
   type t;
-  t = t.name("foo");
+  t.name("foo");
   CHECK(t.name().empty());
   t = type{string_type{}};
-  t = t.name("foo");
+  t.name("foo");
   CHECK_EQUAL(t.name(), "foo");
 }
 
 TEST(attributes) {
   auto attrs = std::vector<attribute>{{"key", "value"}};
   type t;
-  t = t.attributes(attrs);
+  t.attributes(attrs);
   CHECK(t.attributes().empty());
   t = string_type{};
-  t = t.attributes({{"key", "value"}});
+  t.attributes({{"key", "value"}});
   CHECK_EQUAL(t.attributes(), attrs);
 }
 
@@ -99,9 +100,9 @@ TEST(equality comparison) {
   CHECK(type{boolean_type{}} != type{real_type{}});
   auto x = type{string_type{}};
   auto y = type{string_type{}};
-  x = x.name("foo");
+  x.name("foo");
   CHECK(x != y);
-  y = y.name("foo");
+  y.name("foo");
   CHECK(x == y);
   MESSAGE("concrete type comparison");
   CHECK(real_type{} == real_type{});
@@ -153,6 +154,43 @@ TEST(type/data compatibility) {
 }
 
 TEST(serialization) {
+  CHECK_ROUNDTRIP(type{});
+  CHECK_ROUNDTRIP(none_type{});
+  CHECK_ROUNDTRIP(boolean_type{});
+  CHECK_ROUNDTRIP(integer_type{});
+  CHECK_ROUNDTRIP(count_type{});
+  CHECK_ROUNDTRIP(real_type{});
+  CHECK_ROUNDTRIP(timespan_type{});
+  CHECK_ROUNDTRIP(timestamp_type{});
+  CHECK_ROUNDTRIP(string_type{});
+  CHECK_ROUNDTRIP(pattern_type{});
+  CHECK_ROUNDTRIP(address_type{});
+  CHECK_ROUNDTRIP(subnet_type{});
+  CHECK_ROUNDTRIP(port_type{});
+  CHECK_ROUNDTRIP(enumeration_type{});
+  CHECK_ROUNDTRIP(vector_type{});
+  CHECK_ROUNDTRIP(set_type{});
+  CHECK_ROUNDTRIP(map_type{});
+  CHECK_ROUNDTRIP(record_type{});
+  CHECK_ROUNDTRIP(alias_type{});
+  CHECK_ROUNDTRIP(type{none_type{}});
+  CHECK_ROUNDTRIP(type{boolean_type{}});
+  CHECK_ROUNDTRIP(type{integer_type{}});
+  CHECK_ROUNDTRIP(type{count_type{}});
+  CHECK_ROUNDTRIP(type{real_type{}});
+  CHECK_ROUNDTRIP(type{timespan_type{}});
+  CHECK_ROUNDTRIP(type{timestamp_type{}});
+  CHECK_ROUNDTRIP(type{string_type{}});
+  CHECK_ROUNDTRIP(type{pattern_type{}});
+  CHECK_ROUNDTRIP(type{address_type{}});
+  CHECK_ROUNDTRIP(type{subnet_type{}});
+  CHECK_ROUNDTRIP(type{port_type{}});
+  CHECK_ROUNDTRIP(type{enumeration_type{}});
+  CHECK_ROUNDTRIP(type{vector_type{}});
+  CHECK_ROUNDTRIP(type{set_type{}});
+  CHECK_ROUNDTRIP(type{map_type{}});
+  CHECK_ROUNDTRIP(type{record_type{}});
+  CHECK_ROUNDTRIP(type{alias_type{}});
   auto r = record_type{
     {"x", integer_type{}},
     {"y", address_type{}},
@@ -164,13 +202,8 @@ TEST(serialization) {
     {"b", vector_type{boolean_type{}}.name("foo")},
     {"c", r}
   };
-  r = r.name("foo");
-  std::vector<char> buf;
-  auto t0 = type{r};
-  CHECK_EQUAL(save(sys, buf, t0), caf::none);
-  type t1;
-  CHECK_EQUAL(load(sys, buf, t1), caf::none);
-  CHECK_EQUAL(t0, t1);
+  r.name("foo");
+  CHECK_ROUNDTRIP(r);
 }
 
 TEST(record range) {
@@ -181,19 +214,35 @@ TEST(record range) {
                     {"k", boolean_type{}}
                   }},
             {"m", record_type{
-                    {"y", record_type{{"a", address_type{}}}},
+                    {"y", record_type{
+                            {"a", address_type{}}}},
                     {"f", real_type{}}
                   }},
             {"b", boolean_type{}}
           }},
-    {"y", record_type{{"b", boolean_type{}}}}
+    {"y", record_type{
+            {"b", boolean_type{}}}}
   };
-
+  MESSAGE("check types of record r");
+  auto record_index = r.index();
+  CHECK_EQUAL(at(r, 0)->index(), record_index);
+  CHECK_EQUAL(at(r, 0, 0)->index(), record_index);
+  CHECK_EQUAL(at(r, 0, 0, 0), integer_type{});
+  CHECK_EQUAL(at(r, 0, 0, 1), boolean_type{});
+  CHECK_EQUAL(at(r, 0, 1)->index(), record_index);
+  CHECK_EQUAL(at(r, 0, 1, 0)->index(), record_index);
+  CHECK_EQUAL(at(r, 0, 1, 0, 0), address_type{});
+  CHECK_EQUAL(at(r, 0, 1, 1), real_type{});
+  CHECK_EQUAL(at(r, 0, 2), boolean_type{});
+  CHECK_EQUAL(at(r, 1)->index(), record_index);
+  CHECK_EQUAL(at(r, 1, 0), boolean_type{});
+  MESSAGE("check keys of record r");
+  std::vector<std::string> keys;
   for (auto& i : record_type::each{r})
-    if (i.offset == offset{0, 1, 0, 0})
-      CHECK_EQUAL(i.key(), "x.m.y.a");
-    else if (i.offset == offset{1, 0})
-      CHECK_EQUAL(i.key(), "y.b");
+    keys.emplace_back(i.key());
+  std::vector<std::string> expected_keys{"x.y.z", "x.y.k", "x.m.y.a",
+                                         "x.m.f", "x.b",   "y.b"};
+  CHECK_EQUAL(keys, expected_keys);
 }
 
 TEST(record resolving) {
@@ -505,11 +554,11 @@ TEST(printable) {
   CHECK_EQUAL(to_string(s), "set<port> &skip &tokenize=/rx/");
   // Nested types
   t = s;
-  t = t.attributes({attr});
+  t.attributes({attr});
   t = map_type{count_type{}, t};
   CHECK_EQUAL(to_string(t), "map<count, set<port> &skip>");
   MESSAGE("signature");
-  t = t.name("jells");
+  t.name("jells");
   std::string sig;
   CHECK(printers::type<policy::signature>(sig, t));
   CHECK_EQUAL(sig, "jells = map<count, set<port> &skip>");
@@ -586,7 +635,7 @@ TEST(parseable) {
 
 TEST(hashable) {
   auto hash = [&](auto&& x) { return uhash<xxhash64>{}(x); };
-  CHECK_EQUAL(hash(type{}), 10680828680203489530ul);
+  CHECK_EQUAL(hash(type{}), 10764519495013463364ul);
   CHECK_EQUAL(hash(boolean_type{}), 12612883901365648434ul);
   CHECK_EQUAL(hash(type{boolean_type{}}), 13047344884484907481ul);
   CHECK_NOT_EQUAL(hash(type{boolean_type{}}), hash(boolean_type{}));
@@ -605,7 +654,7 @@ TEST(json) {
   auto e = enumeration_type{{"foo", "bar", "baz"}};
   e = e.name("e");
   auto t = map_type{boolean_type{}, count_type{}};
-  t = t.name("bit_table");
+  t.name("bit_table");
   auto r = record_type{
     {"x", address_type{}.attributes({{"skip"}})},
     {"y", boolean_type{}.attributes({{"default", "F"}})},

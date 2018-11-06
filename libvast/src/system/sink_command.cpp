@@ -30,16 +30,16 @@ using namespace caf;
 
 namespace vast::system {
 
-int sink_command::run_impl(caf::actor_system& sys,
-                                  const caf::config_value_map& options,
-                                  argument_iterator begin,
-                                  argument_iterator end) {
+caf::message sink_command::run_impl(caf::actor_system& sys,
+                                    const caf::config_value_map& options,
+                                    argument_iterator begin,
+                                    argument_iterator end) {
   // Get a convenient and blocking way to interact with actors.
   scoped_actor self{sys};
   // Get VAST node.
   auto node_opt = spawn_or_connect_to_node(self, options);
   if (!node_opt)
-    return EXIT_FAILURE;
+    return wrap_error(std::move(node_opt.error()));
   auto node = std::move(*node_opt);
   /// Spawn an actor that takes care of CTRL+C and friends.
   auto sig_mon = self->spawn<detached>(system::signal_monitor, 750ms, self);
@@ -49,11 +49,8 @@ int sink_command::run_impl(caf::actor_system& sys,
   // Spawn a sink.
   VAST_DEBUG(this, "spawns sink with parameters:", deep_to_string(options));
   auto snk_opt = make_sink(self, options, begin, end);
-  if (!snk_opt) {
-    std::cerr << "unable to spawn sink: " << sys.render(snk_opt.error())
-              << std::endl;
-    return EXIT_FAILURE;
-  }
+  if (!snk_opt)
+    return wrap_error(std::move(snk_opt.error()));
   auto snk = std::move(*snk_opt);
   // Spawn exporter at the node.
   actor exp;
@@ -71,28 +68,29 @@ int sink_command::run_impl(caf::actor_system& sys,
   auto max_events = get_or<uint64_t>(options, "events", 0u);
   args += make_message("-e", std::to_string(max_events));
   VAST_DEBUG(this, "spawns exporter with parameters:", to_string(args));
+  error err;
   self->request(node, infinite, "spawn", args).receive(
-    [&](const actor& a) {
-      exp = a;
+    [&](actor& a) {
+      exp = std::move(a);
+      if (!exp)
+        err = make_error(ec::invalid_result, "remote spawn returned nullptr");
     },
-    [&](const error& e) {
-      VAST_IGNORE_UNUSED(e);
-      VAST_ERROR(this, "failed to spawn exporter:", self->system().render(e));
+    [&](error& e) {
+      err = std::move(e);
     }
   );
-  if (!exp) {
+  if (err) {
     self->send_exit(snk, exit_reason::user_shutdown);
-    return EXIT_FAILURE;
+    return wrap_error(std::move(err));
   }
   // Start the exporter.
   self->send(exp, system::sink_atom::value, snk);
   self->send(exp, system::run_atom::value);
   self->monitor(snk);
   self->monitor(exp);
-  auto rc = EXIT_SUCCESS;
   auto stop = false;
   self->do_receive(
-    [&](const down_msg& msg) {
+    [&](down_msg& msg) {
       if (msg.source == node)  {
         VAST_DEBUG(this, "received DOWN from node");
         self->send_exit(snk, exit_reason::user_shutdown);
@@ -109,7 +107,7 @@ int sink_command::run_impl(caf::actor_system& sys,
       if (msg.reason) {
         VAST_WARNING(
           this, "received error message:", self->system().render(msg.reason));
-        rc = EXIT_FAILURE;
+        err = std::move(msg.reason);
       }
       stop = true;
     },
@@ -122,7 +120,9 @@ int sink_command::run_impl(caf::actor_system& sys,
     }
   ).until([&] { return stop; });
   cleanup(node);
-  return rc;
+  if (err)
+    return wrap_error(std::move(err));
+  return caf::none;
 }
 
 } // namespace vast::system

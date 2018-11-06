@@ -13,6 +13,8 @@
 
 #pragma once
 
+#include <utility>
+
 #include <caf/intrusive_ptr.hpp>
 #include <caf/ref_counted.hpp>
 
@@ -50,13 +52,17 @@ public:
   /// @returns The evaluation result of `*this op rhs`.
   virtual bool lookup(relational_operator op, data_view rhs) const = 0;
 
+  /// Tests whether two objects are equal.
+  virtual bool equals(const synopsis& other) const noexcept = 0;
+
   /// @returns the type this synopsis operates for.
   const vast::type& type() const;
 
   // -- serialization ----------------------------------------------------------
 
-  /// @returns a unique identifier for the implementing class.
-  //virtual caf::atom_value implementation_id() const noexcept = 0;
+  /// @returns a unique identifier for the factory required to make instances
+  ///          of this synopsis.
+  virtual caf::atom_value factory_id() const noexcept;
 
   /// Saves the contents (excluding the layout!) of this slice to `sink`.
   virtual caf::error serialize(caf::serializer& sink) const = 0;
@@ -67,6 +73,16 @@ public:
 private:
   vast::type type_;
 };
+
+/// @relates synopsis
+inline bool operator==(const synopsis& x, const synopsis& y) {
+  return x.equals(y);
+}
+
+/// @relates synopsis
+inline bool operator!=(const synopsis& x, const synopsis& y) {
+  return !(x == y);
+}
 
 /// @relates synopsis
 caf::error inspect(caf::serializer& sink, synopsis_ptr& ptr);
@@ -85,21 +101,8 @@ synopsis_ptr make_synopsis(type x);
 /// @relates synopsis get_synopsis_factory_fun set_synopsis_factory
 using synopsis_factory = synopsis_ptr (*)(type);
 
-/// Looks for a synopsis factory in an actor system.
-/// @param sys The actor system to search for a synopsis factory function.
 /// @relates synopsis synopsis_factory
-synopsis_factory get_synopsis_factory_fun(caf::actor_system& sys);
-
-/// Looks for a synopsis factory in an actor system.
-/// @param sys The actor system to search for a synopsis factory tag.
-/// @relates synopsis get_synopsis_factory_fun set_synopsis_factory
-caf::atom_value get_synopsis_factory_tag(caf::actor_system& sys);
-
-/// Sets a factory in an actor system.
-/// @param tag The atom key under which the factory is retrievable.
-/// @param factory A pointer to a factory function.
-/// @relates synopsis get_synopsis_factory_fun get_synopsis_factory_tag
-void set_synopsis_factory(caf::actor_system& sys,
-                          caf::atom_value tag, synopsis_factory factory);
+expected<std::pair<caf::atom_value, synopsis_factory>>
+deserialize_synopsis_factory(caf::deserializer& source);
 
 } // namespace vast

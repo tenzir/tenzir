@@ -127,7 +127,6 @@ commands exist:
     \fIshow\fP          shows various properties of a topology
     \fIspawn\fP         creates a new component
     \fIkill\fP          terminates a component
-    \fIsend\fP          send a message to a component
     \fIimport\fP        imports data from standard input
     \fIexport\fP        exports query results to standard output
 .SS start
@@ -286,24 +285,6 @@ Synopsis:
 \fIkill\fP \fIlabel\fP
 .PP
 Terminates a component. The argument \fIlabel\fP refers to a component label.
-.SS send
-.PP
-Synopsis:
-.IP
-\fIsend\fP \fIlabel\fP \fImessage\fP
-.PP
-Sends a message to a component. The argument \fIlabel\fP refers to the component to
-run. The argument \fImessage\fP represents the data to send to the component.
-.PP
-Available messages:
-.TP
-\fIrun\fP
-Tells a component to start operating. Most components do not need to be told
-to run explicitly. Only components having a multi\-stage setup phase (e.g.,
-sources and exporters) can be run explicitly.
-.TP
-\fIflush\fP
-Tells a component to flush its state to the file system.
 .SS import
 .PP
 Synopsis:

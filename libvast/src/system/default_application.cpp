@@ -60,7 +60,6 @@ default_application::default_application() {
   add<remote_command>("stop");
   add<remote_command>("show");
   add<remote_command>("spawn");
-  add<remote_command>("send");
   add<remote_command>("kill");
   add<remote_command>("peer");
 }

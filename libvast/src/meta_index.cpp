@@ -163,44 +163,23 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
   ), expr);
 }
 
-void meta_index::factory(synopsis_factory f) {
+void meta_index::factory(caf::atom_value factory_id,
+                         synopsis_factory f) {
+  factory_id_ = factory_id;
   make_synopsis_ = f;
   blacklisted_layouts_.clear();
 }
 
 caf::error inspect(caf::serializer& sink, const meta_index& x) {
-  caf::atom_value tag;
-  if (sink.context() != nullptr)
-    tag = get_synopsis_factory_tag(sink.context()->system());
-  else if (x.make_synopsis_ != make_synopsis)
-    return make_error(ec::unspecified, "no actor system for custom factory");
-  else
-    tag = caf::atom("DEFAULT");
-  return sink(tag, x.partition_synopses_);
+  return sink(x.factory_id_, x.partition_synopses_);
 }
 
 caf::error inspect(caf::deserializer& source, meta_index& x) {
-  caf::atom_value tag;
-  auto err = source(tag);
-  if (err)
-    return err;
-  if (tag != caf::atom("DEFAULT")) {
-    if (source.context() == nullptr)
-      return make_error(ec::unspecified, "no actor system for custom factory");
-    if (tag != get_synopsis_factory_tag(source.context()->system()))
-      return make_error(ec::unspecified, "synopsis factory mismatch");
-    auto f = get_synopsis_factory_fun(source.context()->system());
-    x.factory(f);
-  }
+  if (auto ex = deserialize_synopsis_factory(source))
+    x.factory(ex->first, ex->second);
+  else
+    return std::move(ex.error());
   return source(x.partition_synopses_);
-}
-
-bool set_synopsis_factory(caf::actor_system& sys, meta_index& x) {
-  if (auto f = get_synopsis_factory_fun(sys)) {
-    x.factory(f);
-    return true;
-  }
-  return false;
 }
 
 } // namespace vast

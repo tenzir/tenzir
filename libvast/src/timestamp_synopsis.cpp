@@ -11,34 +11,21 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#pragma once
+#include "vast/timestamp_synopsis.hpp"
 
-#include <string_view>
+namespace vast {
 
-#include <caf/actor.hpp>
-#include <caf/expected.hpp>
-#include <caf/fwd.hpp>
+timestamp_synopsis::timestamp_synopsis(vast::type x)
+  : min_max_synopsis<timestamp>{std::move(x), timestamp::max(),
+                                timestamp::min()} {
+  // nop
+}
 
-#include "vast/system/node_command.hpp"
+bool timestamp_synopsis::equals(const synopsis& other) const noexcept {
+  if (typeid(other) != typeid(timestamp_synopsis))
+    return false;
+  auto& dref = static_cast<const timestamp_synopsis&>(other);
+  return type() == dref.type() && min() == dref.min() && max() == dref.max();
+}
 
-namespace vast::system {
-
-/// Format-independent implementation for import sub-commands.
-class source_command : public node_command {
-public:
-  using super = node_command;
-
-  source_command(command* parent, std::string_view name);
-
-protected:
-  caf::message run_impl(caf::actor_system& sys,
-                        const caf::config_value_map& options,
-                        argument_iterator begin,
-                        argument_iterator end) override;
-
-  virtual expected<caf::actor> make_source(
-    caf::scoped_actor& self,
-    const caf::config_value_map& options) = 0;
-};
-
-} // namespace vast::system
+} // namespace vast

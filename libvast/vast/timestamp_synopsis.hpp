@@ -13,32 +13,16 @@
 
 #pragma once
 
-#include <string_view>
+#include "vast/min_max_synopsis.hpp"
+#include "vast/synopsis.hpp"
 
-#include <caf/actor.hpp>
-#include <caf/expected.hpp>
-#include <caf/fwd.hpp>
+namespace vast {
 
-#include "vast/system/node_command.hpp"
-
-namespace vast::system {
-
-/// Format-independent implementation for import sub-commands.
-class source_command : public node_command {
+class timestamp_synopsis final : public min_max_synopsis<timestamp> {
 public:
-  using super = node_command;
+  timestamp_synopsis(vast::type x);
 
-  source_command(command* parent, std::string_view name);
-
-protected:
-  caf::message run_impl(caf::actor_system& sys,
-                        const caf::config_value_map& options,
-                        argument_iterator begin,
-                        argument_iterator end) override;
-
-  virtual expected<caf::actor> make_source(
-    caf::scoped_actor& self,
-    const caf::config_value_map& options) = 0;
+  bool equals(const synopsis& other) const noexcept override;
 };
 
-} // namespace vast::system
+} // namespace vast

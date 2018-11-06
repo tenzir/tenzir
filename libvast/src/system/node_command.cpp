@@ -13,10 +13,11 @@
 
 #include "vast/system/node_command.hpp"
 
+#include <caf/actor_system_config.hpp>
 #include <caf/event_based_actor.hpp>
+#include <caf/io/middleman.hpp>
 #include <caf/scoped_actor.hpp>
 #include <caf/stateful_actor.hpp>
-#include <caf/io/middleman.hpp>
 
 #ifdef VAST_USE_OPENSSL
 #include <caf/openssl/all.hpp>

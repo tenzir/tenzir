@@ -206,7 +206,7 @@ TEST(message serialization) {
   CHECK_EQUAL(*slice1.get_as<table_slice_ptr>(0),
               *slice2.get_as<table_slice_ptr>(0));
   CHECK_EQUAL(slice2.get_as<table_slice_ptr>(0)->implementation_id(),
-              caf::atom("DEFAULT"));
+              caf::atom("TS_Default"));
 }
 
 TEST(rebranded message serialization) {

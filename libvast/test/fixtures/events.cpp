@@ -33,7 +33,8 @@ timestamp epoch;
 
 std::vector<event> make_ascending_integers(size_t count) {
   std::vector<event> result;
-  type layout = type{record_type{{"value", integer_type{}}}}.name("test::int");
+  type layout{record_type{{"value", integer_type{}}}};
+  layout.name("test::int");
   for (size_t i = 0; i < count; ++i) {
     result.emplace_back(event::make(vector{static_cast<integer>(i)}, layout));
     result.back().timestamp(epoch + std::chrono::seconds(i));
@@ -43,7 +44,8 @@ std::vector<event> make_ascending_integers(size_t count) {
 
 std::vector<event> make_alternating_integers(size_t count) {
   std::vector<event> result;
-  type layout = type{record_type{{"value", integer_type{}}}}.name("test::int");
+  type layout{record_type{{"value", integer_type{}}}};
+  layout.name("test::int");
   for (size_t i = 0; i < count; ++i) {
     result.emplace_back(event::make(vector{static_cast<integer>(i % 2)},
                                     layout));
