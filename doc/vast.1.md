@@ -137,8 +137,8 @@ commands exist:
     *show*          shows various properties of a topology
     *spawn*         creates a new component
     *kill*          terminates a component
-    *import*        imports data from standard input
-    *export*        exports query results to standard output
+    *import*        imports data from STDIN or file
+    *export*        exports query results to STDOUT or file
 
 ### start
 
