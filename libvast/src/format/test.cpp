@@ -211,32 +211,40 @@ struct randomizer {
   Generator& gen_;
 };
 
+std::string_view builtin_schema = R"__(
+  type test = record{
+    n: set<int>,
+    b: bool &default="uniform(0,1)",
+    i: int &default="uniform(-42000,1337)",
+    c: count &default="pareto(0,1)",
+    r: real &default="normal(0,1)",
+    s: string &default="uniform(0,100)",
+    t: time &default="uniform(0,10)",
+    d: duration &default="uniform(100,200)",
+    a: addr &default="uniform(0,2000000)",
+    s: subnet &default="uniform(1000,2000)",
+    p: port &default="uniform(1,65384)"
+  }
+)__";
+
+auto default_schema() {
+  schema result;
+  auto success = parsers::schema(builtin_schema, result);
+  VAST_ASSERT(success);
+  return result;
+}
+
 } // namespace <anonymous>
 
-
-reader::reader(size_t seed, uint64_t n)
+reader::reader(size_t seed, uint64_t n, vast::schema sch)
   : generator_{seed},
     num_events_{n} {
-  VAST_ASSERT(num_events_ > 0);
-  static std::string builtin_schema = R"__(
-    type test = record{
-      n: set<int>,
-      b: bool &default="uniform(0,1)",
-      i: int &default="uniform(-42000,1337)",
-      c: count &default="pareto(0,1)",
-      r: real &default="normal(0,1)",
-      s: string &default="uniform(0,100)",
-      t: time &default="uniform(0,10)",
-      d: duration &default="uniform(100,200)",
-      a: addr &default="uniform(0,2000000)",
-      s: subnet &default="uniform(1000,2000)",
-      p: port &default="uniform(1,65384)"
-    }
-  )__";
-  auto success = parsers::schema(builtin_schema, schema_);
-  VAST_ASSERT(success);
-  auto result = schema(schema_);
+  auto result = schema(std::move(sch));
   VAST_ASSERT(result);
+}
+
+reader::reader(size_t seed, uint64_t n) : reader(seed, n, default_schema()) {
+  // nop
 }
 
 expected<event> reader::read() {
