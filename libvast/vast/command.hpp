@@ -74,6 +74,11 @@ public:
     return name_;
   }
 
+  /// Sets the managed command name.
+  void name(std::string_view value) noexcept {
+    name_ = value;
+  }
+
   /// Defines a sub-command.
   /// @param name The name of the command.
   /// @param xs The parameters required to construct the command.

@@ -49,6 +49,7 @@ int main(int argc, char** argv) {
   cfg.set("logger.console", caf::atom("COLORED"));
   caf::actor_system sys{cfg};
   default_application app;
+  app.name("vast");
   // Dispatch to root command.
   auto result = app.run(sys, cfg.command_line.begin(), cfg.command_line.end());
   if (result.match_elements<caf::error>()) {

@@ -53,6 +53,11 @@ public:
   caf::message run(caf::actor_system& sys, command::argument_iterator begin,
                    command::argument_iterator end);
 
+  /// Sets the name of the root command.
+  void name(std::string_view value) noexcept {
+    root_.name(value);
+  }
+
 private:
   root_command root_;
 };
