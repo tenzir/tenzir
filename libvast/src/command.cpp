@@ -147,9 +147,20 @@ caf::error command::parse_error(caf::pec code, argument_iterator error_position,
 caf::error command::unknown_subcommand_error(argument_iterator error_position,
                                              argument_iterator end) const {
   VAST_ASSERT(error_position != end);
-  std::stringstream result;
-  result << "No such command: " << full_name() << " " << *error_position;
-  return make_error(ec::syntax_error, result.str());
+  auto& str = *error_position;
+  std::string helptext;
+  if (!str.empty() && str.front() == '-') {
+    helptext = "invalid option: ";
+    helptext += str;
+  } else {
+    helptext = "unknown command: ";
+    if (!is_root()) {
+      helptext += full_name();
+      helptext += ' ';
+    }
+    helptext += str;
+  }
+  return make_error(ec::syntax_error, std::move(helptext));
 }
 
 } // namespace vast
