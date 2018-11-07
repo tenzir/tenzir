@@ -36,8 +36,7 @@
 
 namespace vast::system {
 
-source_command::source_command(command* parent, std::string_view name)
-  : super(parent, name) {
+source_command::source_command(command* parent) : super(parent) {
   add_opt<std::string>("schema-file,s", "path to alternate schema");
   add_opt<std::string>("schema,S", "alternate schema as string");
 }

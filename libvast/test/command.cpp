@@ -25,7 +25,7 @@ namespace {
 
 class foo : public command {
 public:
-  foo(command* parent, std::string_view name) : command(parent, name) {
+  foo(command* parent) : command(parent) {
     add_opt<int>("value,v", "Some integer value");
     add_opt<bool>("flag", "Some flag");
   }
@@ -57,7 +57,7 @@ public:
 
 class bar : public command {
 public:
-  bar(command* parent, std::string_view name) : command(parent, name) {
+  bar(command* parent) : command(parent) {
     add_opt<int>("other-value,o", "Some other integer value");
   }
 
@@ -92,32 +92,41 @@ struct fixture {
   caf::actor_system sys{cfg};
   caf::config_value_map options;
   std::vector<std::string> xs;
+
+  fixture() {
+    root.name("vast");
+  }
+
   void exec(std::string str) {
     caf::split(xs, str, ' ', caf::token_compress_on);
     root.run(sys, options, xs.begin(), xs.end());
   }
 };
 
+constexpr std::string_view foo_desc = "A foo command.";
+
+constexpr std::string_view bar_desc = "A bar command.";
+
 } // namespace <anonymous>
 
 FIXTURE_SCOPE(command_tests, fixture)
 
 TEST(full name) {
-  auto cmd1 = root.add<foo>("foo");
-  auto cmd2 = cmd1->add<command>("bar");
+  auto cmd1 = root.add<foo>("foo", foo_desc);
+  auto cmd2 = cmd1->add<bar>("bar", foo_desc);
   CHECK_EQUAL(cmd2->full_name(), "foo bar");
 }
 
 TEST(parsing args) {
-  root.add<foo>("foo");
+  root.add<foo>("foo", foo_desc);
   exec("foo --flag -v 42");
   CHECK_EQUAL(get_or(options, "flag", false), true);
   CHECK_EQUAL(get_or(options, "value", 0), 42);
 }
 
 TEST(nested arg parsing) {
-  auto cmd1 = root.add<foo>("foo");
-  cmd1->add<bar>("bar");
+  auto cmd1 = root.add<foo>("foo", foo_desc);
+  cmd1->add<bar>("bar", bar_desc);
   exec("foo -v 42 bar -o 123");
   CHECK_EQUAL(get_or(options, "flag", false), false);
   CHECK_EQUAL(get_or(options, "value", 0), 42);
@@ -125,8 +134,8 @@ TEST(nested arg parsing) {
 }
 
 TEST(parsing arg remainder) {
-  auto cmd1 = root.add<foo>("foo");
-  auto cmd2 = cmd1->add<bar>("bar");
+  auto cmd1 = root.add<foo>("foo", foo_desc);
+  auto cmd2 = cmd1->add<bar>("bar", bar_desc);
   exec("foo -v 42 bar -o 123 '--this should not -be parsed ! x'");
   CHECK_EQUAL(cmd1->tested_proceed, true);
   CHECK_EQUAL(cmd1->was_executed, false);

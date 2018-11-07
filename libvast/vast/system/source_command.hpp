@@ -28,7 +28,7 @@ class source_command : public node_command {
 public:
   using super = node_command;
 
-  source_command(command* parent, std::string_view name);
+  explicit source_command(command* parent);
 
 protected:
   caf::message run_impl(caf::actor_system& sys,

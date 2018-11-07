@@ -26,8 +26,7 @@
 
 namespace vast::system {
 
-pcap_reader_command::pcap_reader_command(command* parent, std::string_view name)
-  : super(parent, name) {
+pcap_reader_command::pcap_reader_command(command* parent) : super(parent) {
   add_opt<std::string>("read,r", "path to input where to read events from");
   add_opt<std::string>("schema,s", "path to alternate schema");
   add_opt<bool>("uds,d", "treat -r as listening UNIX domain socket");

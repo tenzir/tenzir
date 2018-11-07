@@ -32,8 +32,7 @@ namespace vast::system {
 template <class Writer>
 class writer_command : public sink_command {
 public:
-  writer_command(command* parent, std::string_view name)
-      : sink_command{parent, name} {
+  writer_command(command* parent) : sink_command(parent) {
     add_opt<std::string>("write,w", "path to write events to");
     add_opt<bool>("uds,d", "treat -w as UNIX domain socket to connect to");
   }

@@ -25,7 +25,7 @@ namespace vast::system {
 /// @relates application
 class export_command : public node_command {
 public:
-  export_command(command* parent, std::string_view name);
+  explicit export_command(command* parent);
 
 protected:
   caf::message run_impl(caf::actor_system& sys,

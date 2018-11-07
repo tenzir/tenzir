@@ -20,8 +20,7 @@ using namespace caf;
 namespace vast::system {
 using namespace std::chrono_literals;
 
-import_command::import_command(command* parent, std::string_view name)
-  : node_command{parent, name} {
+import_command::import_command(command* parent) : node_command(parent) {
   add_opt<bool>("blocking,b", "block until the IMPORTER forwarded all data");
 }
 

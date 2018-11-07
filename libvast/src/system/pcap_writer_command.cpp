@@ -22,8 +22,7 @@
 
 namespace vast::system {
 
-pcap_writer_command::pcap_writer_command(command* parent, std::string_view name)
-  : super(parent, name) {
+pcap_writer_command::pcap_writer_command(command* parent) : super(parent) {
   add_opt<std::string>("write,w", "path to write events to");
   add_opt<bool>("uds,d", "treat -w as UNIX domain socket to connect to");
   add_opt<size_t>("flush,f", "flush to disk after this many packets");

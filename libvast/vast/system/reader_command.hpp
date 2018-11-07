@@ -34,8 +34,7 @@ namespace vast::system {
 template <class Reader>
 class reader_command : public source_command {
 public:
-  reader_command(command* parent, std::string_view name)
-      : source_command(parent, name) {
+  reader_command(command* parent) : source_command(parent) {
     add_opt<std::string>("read,r", "path to input where to read events from");
     add_opt<bool>("uds,d", "treat -r as listening UNIX domain socket");
   }

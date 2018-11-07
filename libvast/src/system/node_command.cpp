@@ -33,8 +33,8 @@ using namespace caf;
 
 namespace vast::system {
 
-node_command::node_command(command* parent, std::string_view name)
-  : command{parent, name},
+node_command::node_command(command* parent)
+  : command{parent},
     node_spawned_{false} {
   // nop
 }

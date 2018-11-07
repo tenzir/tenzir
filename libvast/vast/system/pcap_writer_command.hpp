@@ -28,7 +28,7 @@ class pcap_writer_command : public sink_command {
 public:
   using super = sink_command;
 
-  pcap_writer_command(command* parent, std::string_view name);
+  explicit pcap_writer_command(command* parent);
 
 protected:
   expected<caf::actor> make_sink(caf::scoped_actor& self,

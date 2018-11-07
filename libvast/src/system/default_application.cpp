@@ -36,32 +36,47 @@
 #include "vast/system/pcap_writer_command.hpp"
 #endif
 
+#define ADD_READER(ReaderFormat, Description)                                  \
+  import_->add<reader_command<format::ReaderFormat ::reader>>(#ReaderFormat,   \
+                                                              Description)
+
+#define ADD_GENERATOR(ReaderFormat, Description)                               \
+  import_->add<generator_command<format::ReaderFormat ::reader>>(              \
+    #ReaderFormat, Description)
+
+#define ADD_WRITER(ReaderFormat, Description)                                  \
+  export_->add<writer_command<format::ReaderFormat ::writer>>(#ReaderFormat,   \
+                                                              Description)
+
 namespace vast::system {
 
 default_application::default_application() {
   // Add program commands that run locally.
-  add<start_command>("start");
+  add<start_command>("start", "starts a node");
   // Add program composed commands.
-  import_ = add<import_command>("import");
-  import_->add<reader_command<format::bro::reader>>("bro");
-  import_->add<reader_command<format::mrt::reader>>("mrt");
-  import_->add<reader_command<format::bgpdump::reader>>("bgpdump");
-  import_->add<generator_command<format::test::reader>>("test");
-  export_ = add<export_command>("export");
-  export_->add<writer_command<format::bro::writer>>("bro");
-  export_->add<writer_command<format::csv::writer>>("csv");
-  export_->add<writer_command<format::ascii::writer>>("ascii");
-  export_->add<writer_command<format::json::writer>>("json");
+  import_ = add<import_command>("import", "imports data from STDIN or file");
+  ADD_READER(bro, "imports Bro logs from STDIN or file");
+  ADD_READER(mrt, "imports MRT logs from STDIN or file");
+  ADD_READER(bgpdump, "imports Bro logs from STDIN or file");
+  ADD_GENERATOR(test, "imports random data for testing or benchmarking");
+  export_ = add<export_command>("export",
+                                "exports query results to STDOUT or file");
+  ADD_WRITER(bro, "exports query results in Bro format");
+  ADD_WRITER(csv, "exports query results in CSV format");
+  ADD_WRITER(ascii, "exports query results in ASCII format");
+  ADD_WRITER(json, "exports query results in JSON format");
 #ifdef VAST_HAVE_PCAP
-  import_->add<pcap_reader_command>("pcap");
-  export_->add<pcap_writer_command>("pcap");
+  import_->add<pcap_reader_command>("pcap",
+                                    "imports PCAP logs from STDIN or file");
+  export_->add<pcap_writer_command>("pcap",
+                                    "exports query results in PCAP format");
 #endif
   // Add program commands that always run remotely.
-  add<remote_command>("stop");
-  add<remote_command>("show");
-  add<remote_command>("spawn");
-  add<remote_command>("kill");
-  add<remote_command>("peer");
+  add<remote_command>("stop", "stops a node");
+  add<remote_command>("show", "shows various properties of a topology");
+  add<remote_command>("spawn", "creates a new component");
+  add<remote_command>("kill", "terminates a component");
+  add<remote_command>("peer", "peers with another node");
 }
 
 } // namespace vast::system

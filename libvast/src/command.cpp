@@ -21,13 +21,11 @@
 
 namespace vast {
 
-command::command() : parent_(nullptr) {
-  add_opt<bool>("help,h?", "prints the help text");
+command::command() : command(nullptr) {
+  // nop
 }
 
-command::command(command* parent, std::string_view name)
-  : parent_{parent},
-    name_{name} {
+command::command(command* parent) : parent_(parent) {
   add_opt<bool>("help,h?", "prints the help text");
 }
 

@@ -39,7 +39,7 @@ public:
 
   command();
 
-  command(command* parent, std::string_view name);
+  explicit command(command* parent);
 
   virtual ~command();
 
@@ -69,22 +69,34 @@ public:
     return is_root() ? *this : parent_->root();
   }
 
-  /// @returns the managed command name.
+  /// @returns the command name.
   std::string_view name() const noexcept {
     return name_;
   }
 
-  /// Sets the managed command name.
+  /// Sets the command name.
   void name(std::string_view value) noexcept {
     name_ = value;
+  }
+
+  /// @returns the command description.
+  std::string_view description() const noexcept {
+    return description_;
+  }
+
+  /// Sets the command description.
+  void description(std::string_view value) noexcept {
+    description_ = value;
   }
 
   /// Defines a sub-command.
   /// @param name The name of the command.
   /// @param xs The parameters required to construct the command.
   template <class T, class... Ts>
-  T* add(std::string_view name, Ts&&... xs) {
-    auto ptr = std::make_unique<T>(this, name, std::forward<Ts>(xs)...);
+  T* add(std::string_view name, std::string_view description, Ts&&... xs) {
+    auto ptr = std::make_unique<T>(this, std::forward<Ts>(xs)...);
+    ptr->name(name);
+    ptr->description(description);
     auto result = ptr.get();
     if (!nested_.emplace(name, std::move(ptr)).second) {
       // FIXME: do not use exceptions.
@@ -149,6 +161,9 @@ private:
 
   /// List of all accepted options.
   caf::config_option_set opts_;
+
+  /// The user-provided description.
+  std::string_view description_;
 };
 
 } // namespace vast

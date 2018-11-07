@@ -25,7 +25,7 @@ namespace vast::system {
 /// @relates application
 class remote_command : public node_command {
 public:
-  remote_command(command* parent, std::string_view name);
+  remote_command(command* parent);
 
 protected:
   caf::message run_impl(caf::actor_system& sys,

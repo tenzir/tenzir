@@ -20,8 +20,7 @@ using namespace caf;
 namespace vast::system {
 using namespace std::chrono_literals;
 
-export_command::export_command(command* parent, std::string_view name)
-  : node_command{parent, name} {
+export_command::export_command(command* parent) : node_command(parent) {
   add_opt<bool>("continuous,c", "marks a query as continuous");
   add_opt<bool>("historical,h", "marks a query as historical");
   add_opt<bool>("unified,u", "marks a query as unified");

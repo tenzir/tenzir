@@ -24,8 +24,7 @@ using namespace caf;
 namespace vast::system {
 using namespace std::chrono_literals;
 
-remote_command::remote_command(command* parent, std::string_view name)
-  : node_command{parent, name} {
+remote_command::remote_command(command* parent) : node_command(parent) {
   // nop
 }
 

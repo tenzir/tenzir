@@ -33,8 +33,8 @@ using namespace caf;
 namespace vast::system {
 using namespace std::chrono_literals;
 
-start_command::start_command(command* parent, std::string_view name)
-  : node_command{parent, name} {
+start_command::start_command(command* parent) : node_command(parent) {
+  // nop
 }
 
 caf::message start_command::run_impl(actor_system& sys,

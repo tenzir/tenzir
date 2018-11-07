@@ -24,7 +24,7 @@ class node_command : public command {
 public:
   // -- constructors, destructors, and assignment operators --------------------
 
-  node_command(command* parent, std::string_view name);
+  explicit node_command(command* parent);
 
   ~node_command();
 

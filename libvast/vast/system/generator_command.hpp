@@ -33,8 +33,7 @@ namespace vast::system {
 template <class Generator>
 class generator_command : public source_command {
 public:
-  generator_command(command* parent, std::string_view name)
-      : source_command(parent, name) {
+  explicit generator_command(command* parent) : source_command(parent) {
     add_opt<size_t>("seed", "the random seed");
     add_opt<size_t>("num,N", "events to generate");
   }

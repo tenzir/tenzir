@@ -28,7 +28,7 @@ class pcap_reader_command : public source_command {
 public:
   using super = source_command;
 
-  pcap_reader_command(command* parent, std::string_view name);
+  explicit pcap_reader_command(command* parent);
 
 protected:
   expected<caf::actor>

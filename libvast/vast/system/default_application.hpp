@@ -45,4 +45,3 @@ private:
 };
 
 } // namespace vast::system
-
