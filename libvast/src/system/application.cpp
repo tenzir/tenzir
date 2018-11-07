@@ -46,7 +46,6 @@ application::root_command::root_command() {
   add_opt<string>("dir,d", "directory for persistent state");
   add_opt<string>("endpoint,e", "node endpoint");
   add_opt<string>("id,i", "the unique ID of this node");
-  add_opt<bool>("node,n", "spawn a node instead of connecting to one");
   add_opt<bool>("version,v", "print version and exit");
 }
 

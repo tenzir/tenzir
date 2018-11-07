@@ -21,6 +21,7 @@ namespace vast::system {
 using namespace std::chrono_literals;
 
 import_command::import_command(command* parent) : node_command(parent) {
+  add_opt<bool>("node,n", "spawn a node instead of connecting to one");
   add_opt<bool>("blocking,b", "block until the IMPORTER forwarded all data");
 }
 
