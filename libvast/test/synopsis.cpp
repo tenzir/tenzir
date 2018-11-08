@@ -37,10 +37,10 @@ const timestamp epoch;
 TEST(min-max synopsis) {
   auto x = make_synopsis(timestamp_type{});
   REQUIRE(x);
-  x->add(epoch + 4s);
-  x->add(epoch + 7s);
+  x->add(timestamp{epoch + 4s});
+  x->add(timestamp{epoch + 7s});
   MESSAGE("[4,7] op 0");
-  auto zero = epoch + 0s;
+  timestamp zero = epoch + 0s;
   CHECK(!x->lookup(equal, zero));
   CHECK(x->lookup(not_equal, zero));
   CHECK(!x->lookup(less, zero));
@@ -48,7 +48,7 @@ TEST(min-max synopsis) {
   CHECK(x->lookup(greater, zero));
   CHECK(x->lookup(greater_equal, zero));
   MESSAGE("[4,7] op 4");
-  auto four = epoch + 4s;
+  timestamp four = epoch + 4s;
   CHECK(x->lookup(equal, four));
   CHECK(!x->lookup(not_equal, four));
   CHECK(!x->lookup(less, four));
@@ -56,7 +56,7 @@ TEST(min-max synopsis) {
   CHECK(x->lookup(greater, four));
   CHECK(x->lookup(greater_equal, four));
   MESSAGE("[4,7] op 6");
-  auto six = epoch + 6s;
+  timestamp six = epoch + 6s;
   CHECK(x->lookup(equal, six));
   CHECK(!x->lookup(not_equal, six));
   CHECK(x->lookup(less, six));
@@ -64,7 +64,7 @@ TEST(min-max synopsis) {
   CHECK(x->lookup(greater, six));
   CHECK(x->lookup(greater_equal, six));
   MESSAGE("[4,7] op 7");
-  auto seven = epoch + 7s;
+  timestamp seven = epoch + 7s;
   CHECK(x->lookup(equal, seven));
   CHECK(!x->lookup(not_equal, seven));
   CHECK(x->lookup(less, seven));
@@ -72,7 +72,7 @@ TEST(min-max synopsis) {
   CHECK(!x->lookup(greater, seven));
   CHECK(x->lookup(greater_equal, seven));
   MESSAGE("[4,7] op 9");
-  auto nine = epoch + 9s;
+  timestamp nine = epoch + 9s;
   CHECK(!x->lookup(equal, nine));
   CHECK(x->lookup(not_equal, nine));
   CHECK(x->lookup(less, nine));

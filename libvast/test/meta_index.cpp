@@ -24,6 +24,7 @@
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
 #include "vast/uuid.hpp"
+#include "vast/view.hpp"
 
 using namespace vast;
 
@@ -56,7 +57,7 @@ struct generator {
     auto builder = default_table_slice::make_builder(layout);
     auto str = "foo";
     for (size_t i = 0; i < num; ++i) {
-      auto ts = epoch + std::chrono::seconds(i + offset);
+      timestamp ts = epoch + std::chrono::seconds(i + offset);
       builder->add(make_data_view(ts));
       builder->add(make_data_view(str));
     }
