@@ -23,8 +23,8 @@
 
 #include "vast/system/configuration.hpp"
 
-#include "fixtures/filesystem.hpp"
-#include "test.hpp"
+#include "vast/test/fixtures/filesystem.hpp"
+#include "vast/test/test.hpp"
 
 namespace fixtures {
 

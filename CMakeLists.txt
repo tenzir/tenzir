@@ -430,6 +430,7 @@ include_directories(BEFORE ${CMAKE_SOURCE_DIR}/aux/date/include)
 
 add_subdirectory(doc)
 add_subdirectory(libvast)
+add_subdirectory(libvast_test)
 add_subdirectory(tools)
 add_subdirectory(vast)
 

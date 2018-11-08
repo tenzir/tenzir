@@ -22,8 +22,8 @@
 #include "vast/system/node.hpp"
 #include "vast/system/query_statistics.hpp"
 
-#include "data.hpp"
-#include "fixtures/actor_system_and_events.hpp"
+#include "vast/test/data.hpp"
+#include "vast/test/fixtures/actor_system_and_events.hpp"
 
 namespace fixtures {
 

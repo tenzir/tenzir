@@ -16,7 +16,7 @@
 #include "vast/system/atoms.hpp"
 #include "vast/system/consensus.hpp"
 
-#include "fixtures/actor_system.hpp"
+#include "vast/test/fixtures/actor_system.hpp"
 
 namespace fixtures {
 

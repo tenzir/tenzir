@@ -13,8 +13,8 @@
 
 #pragma once
 
-#include "fixtures/actor_system.hpp"
-#include "fixtures/events.hpp"
+#include "vast/test/fixtures/actor_system.hpp"
+#include "vast/test/fixtures/events.hpp"
 
 namespace fixtures {
 
