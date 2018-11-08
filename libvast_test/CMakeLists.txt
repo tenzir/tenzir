@@ -44,7 +44,11 @@ set(test_data "${test_data}\n\n#endif")
 
 configure_file(vast/test/data.hpp.in ${CMAKE_CURRENT_BINARY_DIR}/vast/test/data.hpp)
 
-## bla
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/vast/test/data.hpp"
+        DESTINATION include/vast/test
+)
+
+## test library definition
 
 add_library(libvast_test
   src/actor_system.cpp
@@ -61,3 +65,15 @@ target_include_directories(libvast_test PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/vast/test
 )
 target_link_libraries(libvast_test PUBLIC libvast)
+set_target_properties(libvast
+  PROPERTIES
+  EXPORT_NAME test
+  SOVERSION ${VERSION_MAJOR}
+  VERSION ${VERSION_MAJOR}.${VERSION_MINOR}
+  OUTPUT_NAME vast_test
+)
+install(TARGETS libvast_test DESTINATION lib)
+install(
+  DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/vast"
+  DESTINATION include
+)
