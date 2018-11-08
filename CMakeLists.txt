@@ -275,7 +275,7 @@ endif()
 
 # Pick up 3rd-party packages and ports.
 if (${CMAKE_SYSTEM_NAME} MATCHES "FreeBSD")
-  include_directories(/usr/local/include)
+  include_directories(AFTER SYSTEM /usr/local/include)
   link_directories(/usr/local/lib)
 endif ()
 
