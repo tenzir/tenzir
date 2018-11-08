@@ -35,6 +35,9 @@ public:
   /// Iterates over CLI arguments.
   using argument_iterator = std::vector<std::string>::const_iterator;
 
+  /// Manages command objects.
+  using owning_ptr = std::unique_ptr<command>;
+
   // -- constructors, destructors, and assignment operators --------------------
 
   command();
@@ -98,10 +101,12 @@ public:
     ptr->name(name);
     ptr->description(description);
     auto result = ptr.get();
-    if (!nested_.emplace(name, std::move(ptr)).second) {
+    if (std::any_of(children_.begin(), children_.end(),
+                    [&](auto& x) { return x->name() == result->name(); })) {
       // FIXME: do not use exceptions.
       VAST_RAISE_ERROR("name already exists in command");
     }
+    children_.emplace_back(std::move(ptr));
     return result;
   }
 
@@ -151,7 +156,7 @@ private:
   // -- member variables -------------------------------------------------------
 
   /// Maps command names to children (nested commands).
-  std::map<std::string_view, std::unique_ptr<command>> nested_;
+  std::vector<std::unique_ptr<command>> children_;
 
   /// Points to the parent command (nullptr in the root command).
   command* parent_;

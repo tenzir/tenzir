@@ -69,13 +69,22 @@ caf::message command::run(caf::actor_system& sys,
   if (!has_subcommand)
     return run_impl(sys, options, position, end);
   // Consume CLI arguments if we have arguments but don't have subcommands.
-  if (nested_.empty())
+  if (children_.empty())
     return run_impl(sys, options, position, end);
   // Dispatch to subcommand.
-  auto i = nested_.find(*position);
-  if (i == nested_.end())
+  // TODO: We need to copy the iterator here, because structured binding cannot
+  //       be captured. Clang reports the error "reference to local binding
+  //       'position' declared in enclosing function 'vast::command::run'" when
+  //       trying to use the structured binding inside the lambda.
+  //       See also: https://stackoverflow.com/questions/46114214. Remove this
+  //       workaround when all supported compilers accept accessing structured
+  //       bindings from lambdas.
+  auto pos_cpy = position;
+  auto i = std::find_if(children_.begin(), children_.end(),
+                        [&](auto& x) { return x->name() == *pos_cpy; });
+  if (i == children_.end())
     return wrap_error(unknown_subcommand_error(position, end));
-  return i->second->run(sys, options, position + 1, end);
+  return (*i)->run(sys, options, position + 1, end);
 }
 
 caf::message command::run(caf::actor_system& sys, argument_iterator begin,
@@ -87,10 +96,10 @@ caf::message command::run(caf::actor_system& sys, argument_iterator begin,
 std::string command::usage() const {
   std::stringstream result;
   result << opts_.help_text();
-  if (!nested_.empty()) {
+  if (!children_.empty()) {
     result << "\nsubcommands:\n";
-    for (auto& kvp : nested_)
-      result << "  " << kvp.first << "\n";
+    for (auto& child : children_)
+      result << "  " << child->name() << "\n";
   }
   return result.str();
 }
