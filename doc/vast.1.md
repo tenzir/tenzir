@@ -108,10 +108,6 @@ The following *options* are available:
 `-h`, `-?`, `--help`
   Display a help message and exit.
 
-`-n`, `--node`
-  Do not attempt to connect to a remote **node** but start a local instance
-  instead.
-
 `-v`, `--version`
   Print VAST version and exit.
 
@@ -306,28 +302,31 @@ Terminates a component. The argument *label* refers to a component label.
 
 Synopsis:
 
-  *import* *format* [*arguments*]
+  *import* [*parameters*] *format* [*format-parameters*]
+  `-r` *file*
+    Read from *file* instead of STDIN.
+  `-d`
+    Treat `-r` as listening UNIX domain socket.
 
 Imports data in a specific *format* on standard input and send it to a node.
 This command is a shorthand for spawning a source locally and connecting it to
 the given node's importer.
-All *arguments* get passed to *spawn source*.
-
-Note that *import* implicitly specifies *-a*, and *-r file* has no effect
-because it the process always reads from standard input.
+All *format-parameters* get passed to *format*.
 
 ### export
 
 Synopsis:
 
-  *export* [*arguments*] *expression*
+  *export* [*parameters*] *format* [*format-parameters*] *expression*
+  `-w` *file*
+    Write to *file* instead of STDOUT.
+  `-d`
+    Treat `-w` as UNIX domain socket to connect to.
 
 Issues a query and exports results to standard output. This command is a
 shorthand for spawning a exporter and local sink, linking the two, and relaying
 the resulting event stream arriving at the sink to standard output.
-All *arguments* get passed to *spawn sink*.
-
-Because *export* always writes to standard output, *-w file* has no effect.
+All *format-parameters* get passed to *format*.
 
 EXAMPLES
 --------
