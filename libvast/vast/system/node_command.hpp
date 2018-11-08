@@ -16,12 +16,18 @@
 #include <caf/expected.hpp>
 
 #include "vast/command.hpp"
+#include "vast/scope_linked.hpp"
 
 namespace vast::system {
 
 /// A command that starts or runs on a VAST node.
 class node_command : public command {
 public:
+  // -- member types -----------------------------------------------------------
+
+  using node_factory_result
+    = caf::variant<caf::error, caf::actor, scope_linked_actor>;
+
   // -- constructors, destructors, and assignment operators --------------------
 
   explicit node_command(command* parent);
@@ -30,24 +36,17 @@ public:
 
   /// Either spawns a new VAST node or connects to a server, depending on the
   /// configuration.
-  caf::expected<caf::actor>
+  node_factory_result
   spawn_or_connect_to_node(caf::scoped_actor& self,
                            const caf::config_value_map& opts);
 
   /// Spawns a new VAST node.
-  caf::expected<caf::actor> spawn_node(caf::scoped_actor& self,
-                                       const caf::config_value_map& opts);
+  caf::expected<scope_linked_actor>
+  spawn_node(caf::scoped_actor& self, const caf::config_value_map& opts);
 
   /// Connects to a remote VAST server.
   caf::expected<caf::actor> connect_to_node(caf::scoped_actor& self,
                                             const caf::config_value_map& opts);
-
-protected:
-  /// Cleans up any state before leaving `run_impl`.
-  void cleanup(const caf::actor& node);
-
-private:
-  bool node_spawned_;
 };
 
 } // namespace vast

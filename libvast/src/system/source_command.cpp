@@ -95,9 +95,11 @@ caf::message source_command::run_impl(caf::actor_system& sys,
   }
   // Get VAST node.
   auto node_opt = spawn_or_connect_to_node(self, options);
-  if (!node_opt)
-    return wrap_error(std::move(node_opt.error()));
-  auto node = std::move(*node_opt);
+  if (auto err = caf::get_if<caf::error>(&node_opt))
+    return wrap_error(std::move(*err));
+  auto& node = caf::holds_alternative<caf::actor>(node_opt)
+               ? caf::get<caf::actor>(node_opt)
+               : caf::get<scope_linked_actor>(node_opt).get();
   VAST_DEBUG(this, "got node");
   /// Spawn an actor that takes care of CTRL+C and friends.
   auto sig_mon = self->spawn<detached>(system::signal_monitor, 750ms,
@@ -127,10 +129,8 @@ caf::message source_command::run_impl(caf::actor_system& sys,
       err = std::move(e);
     }
   );
-  if (err) {
-    cleanup(node);
+  if (err)
     return wrap_error(std::move(err));
-  }
   // Start the source.
   bool stop = false;
   self->send(src, system::run_atom::value);
@@ -160,7 +160,6 @@ caf::message source_command::run_impl(caf::actor_system& sys,
         self->send_exit(src, exit_reason::user_shutdown);
     }
   ).until(stop);
-  cleanup(node);
   if (err)
     return wrap_error(std::move(err));
   return caf::none;

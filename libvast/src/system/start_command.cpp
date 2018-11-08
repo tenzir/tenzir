@@ -61,7 +61,7 @@ caf::message start_command::run_impl(actor_system& sys,
   auto node_opt = spawn_node(self, options);
   if (!node_opt)
     return wrap_error(std::move(node_opt.error()));
-  auto node = std::move(*node_opt);
+  auto& node = node_opt->get();
   // Publish our node.
   auto host = node_endpoint.host.empty() ? nullptr : node_endpoint.host.c_str();
   auto publish = [&]() -> expected<uint16_t> {

@@ -266,12 +266,13 @@ set(tests
   test/range_map.cpp
   test/save_load.cpp
   test/schema.cpp
+  test/scope_linked.cpp
+  test/segment.cpp
+  test/segment_store.cpp
   test/serialization.cpp
   test/span.cpp
   test/stack.cpp
   test/string.cpp
-  test/segment.cpp
-  test/segment_store.cpp
   test/subnet.cpp
   test/synopsis.cpp
   test/system/archive.cpp
