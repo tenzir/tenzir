@@ -25,8 +25,8 @@
 #include "vast/view.hpp"
 
 #define SUITE default_table_slice
-#include "test.hpp"
-#include "fixtures/actor_system.hpp"
+#include "vast/test/test.hpp"
+#include "vast/test/fixtures/actor_system.hpp"
 
 #include <caf/test/dsl.hpp>
 

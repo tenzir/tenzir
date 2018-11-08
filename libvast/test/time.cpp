@@ -20,7 +20,7 @@
 #include "vast/time.hpp"
 
 #define SUITE time
-#include "test.hpp"
+#include "vast/test/test.hpp"
 
 using namespace vast;
 using namespace std::chrono;

@@ -12,7 +12,7 @@
  ******************************************************************************/
 
 #define SUITE partition
-#include "test.hpp"
+#include "vast/test/test.hpp"
 
 #include "vast/system/partition.hpp"
 
@@ -32,7 +32,7 @@
 #include "vast/system/indexer.hpp"
 #include "vast/table_slice.hpp"
 
-#include "fixtures/actor_system_and_events.hpp"
+#include "vast/test/fixtures/actor_system_and_events.hpp"
 
 using namespace vast;
 using namespace vast::system;

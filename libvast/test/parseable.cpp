@@ -25,7 +25,7 @@
 #include "vast/concept/parseable/vast/time.hpp"
 
 #define SUITE parseable
-#include "test.hpp"
+#include "vast/test/test.hpp"
 
 using namespace std::string_literals;
 using namespace vast;

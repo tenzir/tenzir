@@ -12,9 +12,9 @@
  ******************************************************************************/
 
 #define SUITE column_index
-#include "test.hpp"
+#include "vast/test/test.hpp"
 
-#include "fixtures/actor_system_and_events.hpp"
+#include "vast/test/fixtures/actor_system_and_events.hpp"
 
 #include "vast/column_index.hpp"
 #include "vast/concept/parseable/to.hpp"

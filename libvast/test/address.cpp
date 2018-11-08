@@ -18,7 +18,7 @@
 #include "vast/address.hpp"
 
 #define SUITE address
-#include "test.hpp"
+#include "vast/test/test.hpp"
 
 using namespace vast;
 using namespace std::string_literals;

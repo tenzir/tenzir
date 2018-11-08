@@ -17,8 +17,8 @@
 #include "vast/format/bro.hpp"
 
 #define SUITE format
-#include "test.hpp"
-#include "fixtures/events.hpp"
+#include "vast/test/test.hpp"
+#include "vast/test/fixtures/events.hpp"
 
 using namespace vast;
 using namespace std::string_literals;

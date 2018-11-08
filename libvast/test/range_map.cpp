@@ -13,8 +13,8 @@
 
 #define SUITE range_map
 
-#include "test.hpp"
-#include "fixtures/actor_system.hpp"
+#include "vast/test/test.hpp"
+#include "vast/test/fixtures/actor_system.hpp"
 
 #include "vast/detail/range_map.hpp"
 #include "vast/load.hpp"

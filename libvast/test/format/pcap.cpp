@@ -21,8 +21,8 @@
 #include "vast/format/pcap.hpp"
 
 #define SUITE format
-#include "test.hpp"
-#include "data.hpp"
+#include "vast/test/test.hpp"
+#include "vast/test/data.hpp"
 
 using namespace vast;
 

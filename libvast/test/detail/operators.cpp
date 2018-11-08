@@ -12,7 +12,7 @@
  ******************************************************************************/
 
 #define SUITE operators
-#include "test.hpp"
+#include "vast/test/test.hpp"
 
 #include "vast/detail/operators.hpp"
 

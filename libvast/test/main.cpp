@@ -18,7 +18,7 @@
 
 #include "vast/detail/adjust_resource_consumption.hpp"
 
-#include "test.hpp"
+#include "vast/test/test.hpp"
 
 namespace vast {
 namespace test {

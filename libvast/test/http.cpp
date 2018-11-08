@@ -18,7 +18,7 @@
 #include "vast/concept/printable/vast/uri.hpp"
 
 #define SUITE http
-#include "test.hpp"
+#include "vast/test/test.hpp"
 
 using namespace vast;
 using namespace std::string_literals;

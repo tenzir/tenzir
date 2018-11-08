@@ -15,8 +15,8 @@
 
 #include "vast/synopsis.hpp"
 
-#include "test.hpp"
-#include "fixtures/actor_system.hpp"
+#include "vast/test/test.hpp"
+#include "vast/test/fixtures/actor_system.hpp"
 
 #include <vector>
 

@@ -14,7 +14,7 @@
 #include "vast/view.hpp"
 
 #define SUITE view
-#include "test.hpp"
+#include "vast/test/test.hpp"
 
 using namespace vast;
 using namespace std::literals;

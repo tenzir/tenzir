@@ -15,8 +15,8 @@
 
 #include "vast/meta_index.hpp"
 
-#include "test.hpp"
-#include "test/fixtures/actor_system.hpp"
+#include "vast/test/test.hpp"
+#include "vast/test/fixtures/actor_system.hpp"
 
 #include <caf/test/dsl.hpp>
 

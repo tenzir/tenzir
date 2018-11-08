@@ -13,8 +13,8 @@
 
 #define SUITE event
 
-#include "test.hpp"
-#include "fixtures/actor_system.hpp"
+#include "vast/test/test.hpp"
+#include "vast/test/fixtures/actor_system.hpp"
 
 #include "vast/event.hpp"
 #include "vast/json.hpp"
