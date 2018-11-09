@@ -57,8 +57,8 @@ add_library(libvast_test SHARED
   src/symbols.cpp
 )
 target_compile_definitions(libvast_test PUBLIC
-  $<BUILD_INTERFACE:VAST_TEST_PATH=${CMAKE_CURRENT_SOURCE_DIR}>
-  $<INSTALL_INTERFACE:VAST_TEST_PATH=${CMAKE_INSTALL_DATADIR}/vast/test>
+  $<BUILD_INTERFACE:VAST_TEST_PATH=\"${CMAKE_CURRENT_SOURCE_DIR}/\">
+  $<INSTALL_INTERFACE:VAST_TEST_PATH=\"${CMAKE_INSTALL_DATADIR}/vast/test/\">
 )
 target_include_directories(libvast_test PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
@@ -82,7 +82,10 @@ set_target_properties(libvast_test
   OUTPUT_NAME vast_test
   EXPORT_NAME test
 )
-install(TARGETS libvast_test DESTINATION lib)
+install(TARGETS libvast_test
+  EXPORT VASTTargets
+  DESTINATION lib
+)
 install(FILES src/main.cpp DESTINATION "${CMAKE_INSTALL_DATADIR}/vast/test")
 install(
   DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/vast"

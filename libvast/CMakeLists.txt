@@ -161,7 +161,10 @@ target_include_directories(libvast PUBLIC
 target_link_libraries(libvast ${libvast_libs})
 
 # Install libvast in PREFIX/lib and headers in PREFIX/include/vast.
-install(TARGETS libvast DESTINATION lib)
+install(TARGETS libvast
+  EXPORT VASTTargets
+  DESTINATION lib
+)
 install(DIRECTORY vast/
         DESTINATION include/vast FILES_MATCHING PATTERN "*.hpp")
 

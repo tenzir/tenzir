@@ -14,10 +14,15 @@ endif()
 set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
 
 set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
-include(GNUInstallDirs)
 include(CTest)
 include(Helpers)
 include(MacDependencyPaths)
+
+include(GNUInstallDirs)
+set(CMAKE_INSTALL_CMAKEDIR "${CMAKE_INSTALL_LIBDIR}/cmake" CACHE PATH
+  "Base directory for installing cmake specific artifacts"
+)
+set(INSTALL_VAST_CMAKEDIR "${CMAKE_INSTALL_CMAKEDIR}/vast")
 
 # Prohibit in-source builds
 if ("${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_BINARY_DIR}")
@@ -439,10 +444,19 @@ add_subdirectory(vast)
 #                           Additional Installations
 #------------------------------------------------------------------------------
 
+export(EXPORT VASTTargets
+  FILE VASTTargets.cmake
+  NAMESPACE vast::
+)
+
 # install date header to PREFIX/include/date
 install(DIRECTORY aux/date/include/date
         DESTINATION include FILES_MATCHING PATTERN "date.h")
 
+install(EXPORT VASTTargets
+  DESTINATION "${INSTALL_VAST_CMAKEDIR}"
+  NAMESPACE vast::
+)
 #------------------------------------------------------------------------------
 #                                Build Summary
 #------------------------------------------------------------------------------
