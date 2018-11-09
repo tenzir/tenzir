@@ -26,6 +26,7 @@
 
 #include "vast/concept/parseable/vast/endpoint.hpp"
 #include "vast/defaults.hpp"
+#include "vast/error.hpp"
 #include "vast/filesystem.hpp"
 #include "vast/logger.hpp"
 #include "vast/system/node.hpp"
