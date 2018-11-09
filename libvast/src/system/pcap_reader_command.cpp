@@ -14,34 +14,31 @@
 #include "vast/system/pcap_reader_command.hpp"
 
 #include <string>
+#include <string_view>
 
+#include <caf/event_based_actor.hpp>
 #include <caf/scoped_actor.hpp>
+#include <caf/stateful_actor.hpp>
+#include <caf/typed_event_based_actor.hpp>
 
 #include "vast/defaults.hpp"
-#include "vast/logger.hpp"
-
+#include "vast/detail/assert.hpp"
+#include "vast/error.hpp"
 #include "vast/format/pcap.hpp"
-
+#include "vast/logger.hpp"
+#include "vast/scope_linked.hpp"
+#include "vast/system/signal_monitor.hpp"
 #include "vast/system/source.hpp"
+#include "vast/system/source_command.hpp"
+#include "vast/system/spawn_or_connect_to_node.hpp"
 
 namespace vast::system {
 
-pcap_reader_command::pcap_reader_command(command* parent) : super(parent) {
-  add_opt<std::string>("read,r", "path to input where to read events from");
-  add_opt<std::string>("schema,s", "path to alternate schema");
-  add_opt<bool>("uds,d", "treat -r as listening UNIX domain socket");
-  add_opt<size_t>("cutoff,c", "skip flow packets after this many bytes");
-  add_opt<size_t>("flow-max,m", "number of concurrent flows to track");
-  add_opt<size_t>("flow-age,a", "max flow lifetime before eviction");
-  add_opt<size_t>("flow-expiry,e", "flow table expiration interval");
-  add_opt<size_t>("pseudo-realtime,p", "factor c delaying packets by 1/c");
-}
-
-expected<caf::actor>
-pcap_reader_command::make_source(caf::scoped_actor& self,
-                                 const caf::config_value_map& options) {
-  VAST_TRACE("");
-  VAST_DEBUG(this, "::make_source called with options:", VAST_ARG(options));
+caf::message pcap_reader_command(const command& cmd, caf::actor_system& sys,
+                                 caf::config_value_map& options,
+                                 command::argument_iterator first,
+                                 command::argument_iterator last) {
+  VAST_TRACE(VAST_ARG(options), VAST_ARG("args", first, last));
   auto input = get_or(options, "read", defaults::command::read_path);
   auto cutoff = get_or(options, "cutoff", defaults::command::cutoff);
   auto flow_max = get_or(options, "flow-max", defaults::command::max_flows);
@@ -52,7 +49,8 @@ pcap_reader_command::make_source(caf::scoped_actor& self,
                                 defaults::command::pseudo_realtime_factor);
   format::pcap::reader reader{input,    cutoff,      flow_max,
                               flow_age, flow_expiry, pseudo_realtime};
-  return self->spawn(default_source<format::pcap::reader>, std::move(reader));
+  auto src = sys.spawn(default_source<format::pcap::reader>, std::move(reader));
+  return source_command(cmd, sys, std::move(src), options, first, last);
 }
 
 } // namespace vast::system

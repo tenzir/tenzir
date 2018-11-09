@@ -31,25 +31,17 @@ namespace vast::system {
 /// formats.
 /// @relates application
 template <class Generator>
-class generator_command : public source_command {
-public:
-  explicit generator_command(command* parent) : source_command(parent) {
-    add_opt<size_t>("seed", "the random seed");
-    add_opt<size_t>("num,N", "events to generate");
-  }
-
-protected:
-  expected<caf::actor>
-  make_source(caf::scoped_actor& self,
-              const caf::config_value_map& options) override {
-    VAST_TRACE("");
-    auto seed = caf::get_if<size_t>(&options, "seed");
-    if (!seed)
-      seed = {std::random_device{}()};
-    auto num = get_or(options, "num", defaults::command::generated_events);
-    Generator generator{*seed, num};
-    return self->spawn(default_source<Generator>, std::move(generator));
-  }
-};
+caf::message generator_command(const command& cmd, caf::actor_system& sys,
+                               caf::config_value_map& options,
+                               command::argument_iterator first,
+                               command::argument_iterator last) {
+  VAST_TRACE("");
+  auto num = get_or(options, "num", defaults::command::generated_events);
+  auto seed_opt = caf::get_if<size_t>(&options, "seed");
+  auto seed = seed_opt ? *seed_opt : std::random_device{}();
+  Generator generator{seed, num};
+  auto src = sys.spawn(default_source<Generator>, std::move(generator));
+  return source_command(cmd, sys, std::move(src), options, first, last);
+}
 
 } // namespace vast::system

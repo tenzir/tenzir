@@ -18,48 +18,32 @@
 #include <string_view>
 
 #include "vast/command.hpp"
-
 #include "vast/system/configuration.hpp"
 
 namespace vast::system {
 
 class application {
 public:
-  /// Default root command for VAST applications.
-  class root_command : public command {
-  public:
-      root_command();
-
-  protected:
-    caf::error proceed(caf::actor_system& sys,
-                       const caf::config_value_map& options,
-                       argument_iterator first,
-                       argument_iterator last) override;
-  };
-
   /// Constructs an application.
   /// @param cfg The VAST system configuration.
   application();
 
-  /// Adds a command to the application or overrides an existing mapping.
-  template <class T, class... Ts>
-  T* add(std::string_view name, Ts&&... xs) {
-    return root_.add<T>(name, std::forward<Ts>(xs)...);
+  /// Adds a new command to the application.
+  auto add(command::fun run, std::string_view name,
+           std::string_view description, caf::config_option_set options = {}) {
+    return root.add(run, name, description, std::move(options));
   }
 
   /// Starts the application and blocks until execution completes.
   /// @returns the type-erased result of the executed command or a wrapped
   ///          `caf::error`.
-  caf::message run(caf::actor_system& sys, command::argument_iterator begin,
-                   command::argument_iterator end);
-
-  /// Sets the name of the root command.
-  void name(std::string_view value) noexcept {
-    root_.name(value);
+  auto run(caf::actor_system& sys, command::argument_iterator first,
+           command::argument_iterator last) {
+    return vast::run(root, sys, first, last);
   }
 
-private:
-  root_command root_;
+  /// The entry point for command dispatching.
+  command root;
 };
 
 } // namespace vast::system

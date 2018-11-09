@@ -20,6 +20,7 @@
 #include <caf/config_value.hpp>
 #include <caf/scoped_actor.hpp>
 
+#include "vast/command.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/make_io_stream.hpp"
 #include "vast/logger.hpp"
@@ -32,26 +33,19 @@ namespace vast::system {
 /// formats.
 /// @relates application
 template <class Reader>
-class reader_command : public source_command {
-public:
-  reader_command(command* parent) : source_command(parent) {
-    add_opt<std::string>("read,r", "path to input where to read events from");
-    add_opt<bool>("uds,d", "treat -r as listening UNIX domain socket");
-  }
-
-protected:
-  expected<caf::actor>
-  make_source(caf::scoped_actor& self,
-              const caf::config_value_map& options) override {
-    VAST_TRACE("");
-    auto input = get_or(options, "read", defaults::command::read_path);
-    auto uds = get_or(options, "uds", false);
-    auto in = detail::make_input_stream(input, uds);
-    if (!in)
-      return in.error();
-    Reader reader{std::move(*in)};
-    return self->spawn(default_source<Reader>, std::move(reader));
-  }
-};
+caf::message reader_command(const command& cmd, caf::actor_system& sys,
+                            caf::config_value_map& options,
+                            command::argument_iterator first,
+                            command::argument_iterator last) {
+  VAST_TRACE(VAST_ARG(options), VAST_ARG("args", first, last));
+  auto input = get_or(options, "read", defaults::command::read_path);
+  auto uds = get_or(options, "uds", false);
+  auto in = detail::make_input_stream(input, uds);
+  if (!in)
+    return caf::make_message(std::move(in.error()));
+  Reader reader{std::move(*in)};
+  auto src = sys.spawn(default_source<Reader>, std::move(reader));
+  return source_command(cmd, sys, std::move(src), options, first, last);
+}
 
 } // namespace vast::system

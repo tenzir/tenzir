@@ -13,45 +13,17 @@
 
 #pragma once
 
-#include <memory>
-
 #include <caf/fwd.hpp>
+
+#include "vast/fwd.hpp"
 
 namespace vast::system {
 
-// -- classes ------------------------------------------------------------------
-
-class application;
-class command;
-class configuration;
-class default_application;
-class export_command;
-class import_command;
-class indexer_manager;
-class indexer_stage_driver;
-class node_command;
-class partition;
-class pcap_reader_command;
-class pcap_writer_command;
-class remote_command;
-class sink_command;
-class source_command;
-class start_command;
-
-// -- structs ------------------------------------------------------------------
-
-struct query_statistics;
-
-// -- templates ----------------------------------------------------------------
-
-template <class Reader>
-class reader_command;
-
-template <class Writer>
-class writer_command;
-
-// -- aliases ------------------------------------------------------------------
-
-using partition_ptr = caf::intrusive_ptr<partition>;
+/// Either spawns a new VAST node or connects to a server, depending on the
+/// configuration.
+caf::variant<caf::error, caf::actor, scope_linked<caf::actor>>
+spawn_or_connect_to_node(caf::scoped_actor& self,
+                         const caf::config_value_map& opts);
 
 } // namespace vast::system
+

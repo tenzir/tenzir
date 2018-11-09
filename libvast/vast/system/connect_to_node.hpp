@@ -13,26 +13,17 @@
 
 #pragma once
 
-#include <memory>
-#include <string>
-#include <string_view>
+#include <caf/config_value.hpp>
+#include <caf/expected.hpp>
+#include <caf/fwd.hpp>
 
-#include "vast/system/node_command.hpp"
+#include "vast/scope_linked.hpp"
 
 namespace vast::system {
 
-/// Default implementation for the export command.
-/// @relates application
-class export_command : public node_command {
-public:
-  explicit export_command(command* parent);
+/// Connects to a remote VAST server.
+caf::expected<caf::actor> connect_to_node(caf::scoped_actor& self,
+                                          const caf::config_value_map& opts);
 
-protected:
-  caf::message run_impl(caf::actor_system& sys,
-                        const caf::config_value_map& options,
-                        argument_iterator begin,
-                        argument_iterator end) override;
-};
-
-} // namespace vast::system
+} // namespace vast
 

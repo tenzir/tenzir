@@ -11,13 +11,14 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/system/node_command.hpp"
+#include "vast/system/connect_to_node.hpp"
 
+#include <caf/actor_system.hpp>
 #include <caf/actor_system_config.hpp>
-#include <caf/event_based_actor.hpp>
 #include <caf/io/middleman.hpp>
 #include <caf/scoped_actor.hpp>
-#include <caf/stateful_actor.hpp>
+
+#include "vast/config.hpp"
 
 #ifdef VAST_USE_OPENSSL
 #include <caf/openssl/all.hpp>
@@ -33,65 +34,8 @@ using namespace caf;
 
 namespace vast::system {
 
-node_command::node_command(command* parent) : command(parent) {
-  // nop
-}
-
-node_command::~node_command() {
-  // nop
-}
-
-auto node_command::spawn_or_connect_to_node(scoped_actor& self,
-                                            const caf::config_value_map& opts)
--> node_factory_result {
-  auto convert = [](auto&& result) -> node_factory_result {
-    if (result)
-      return std::move(*result);
-    else
-      return std::move(result.error());
-  };
-  if (get_or<bool>(opts, "node", false))
-    return convert(spawn_node(self, opts));
-  return convert(connect_to_node(self, opts));
-}
-
-expected<scope_linked_actor>
-node_command::spawn_node(scoped_actor& self,
-                         const caf::config_value_map& opts) {
-  // Fetch values from config.
-  auto id = get_or(opts, "id", defaults::command::node_id);
-  auto dir = get_or(opts, "dir", defaults::command::directory);
-  auto abs_dir = path{dir}.complete();
-  VAST_DEBUG(this, "spawns local node:", id);
-  // Pointer to the root command to system::node.
-  scope_linked_actor node{self->spawn(system::node, id, abs_dir)};
-  auto spawn_component = [&](auto&&... xs) {
-    return [&] {
-      auto result = error{};
-      auto args = make_message(std::move(xs)...);
-      self->request(node.get(), infinite, "spawn", std::move(args)).receive(
-        [](const actor&) { /* nop */ },
-        [&](error& e) { result = std::move(e); }
-      );
-      return result;
-    };
-  };
-  auto err = error::eval(
-    spawn_component("metastore"),
-    spawn_component("archive"),
-    spawn_component("index"),
-    spawn_component("importer")
-  );
-  if (err) {
-    VAST_ERROR(self, self->system().render(err));
-    return err;
-  }
-  return node;
-}
-
-expected<actor>
-node_command::connect_to_node(scoped_actor& self,
-                              const caf::config_value_map& opts) {
+expected<actor> connect_to_node(scoped_actor& self,
+                                const caf::config_value_map& opts) {
   // Fetch values from config.
   auto id = get_or(opts, "id", defaults::command::node_id);
   auto dir = get_or(opts, "dir", defaults::command::directory);

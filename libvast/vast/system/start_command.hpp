@@ -13,26 +13,16 @@
 
 #pragma once
 
-#include <memory>
-#include <string>
-#include <string_view>
-
-#include "vast/system/node_command.hpp"
+#include "vast/command.hpp"
 
 namespace vast::system {
 
 /// Default implementation for the `start` command.
 /// @relates application
-class start_command : public node_command {
-public:
-  explicit start_command(command* parent);
-
-protected:
-  caf::message run_impl(caf::actor_system& sys,
-                        const caf::config_value_map& options,
-                        argument_iterator begin,
-                        argument_iterator end) override;
-};
+caf::message start_command(const command& cmd, caf::actor_system& sys,
+                           caf::config_value_map& options,
+                           command::argument_iterator begin,
+                           command::argument_iterator end);
 
 } // namespace vast::system
 

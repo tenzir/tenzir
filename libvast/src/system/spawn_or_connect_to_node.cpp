@@ -11,27 +11,32 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/system/export_command.hpp"
+#include "vast/system/spawn_or_connect_to_node.hpp"
 
 #include "vast/logger.hpp"
-
-using namespace caf;
+#include "vast/system/connect_to_node.hpp"
+#include "vast/system/spawn_node.hpp"
 
 namespace vast::system {
-using namespace std::chrono_literals;
 
-export_command::export_command(command* parent) : node_command(parent) {
-  add_opt<bool>("node,n", "spawn a node instead of connecting to one");
-  add_opt<bool>("continuous,c", "marks a query as continuous");
-  add_opt<bool>("historical,h", "marks a query as historical");
-  add_opt<bool>("unified,u", "marks a query as unified");
-  add_opt<size_t>("events,e", "maximum number of results");
-}
+namespace {
 
-caf::message export_command::run_impl(actor_system&,
-                                      const caf::config_value_map&,
-                                      argument_iterator, argument_iterator) {
-  return wrap_error(ec::syntax_error, "missing subcommand to export");
+using result_t = caf::variant<caf::error, caf::actor, scope_linked_actor>;
+
+} // namespace <anonymous>
+
+result_t spawn_or_connect_to_node(caf::scoped_actor& self,
+                                  const caf::config_value_map& opts) {
+  VAST_TRACE(VAST_ARG(opts));
+  auto convert = [](auto&& result) -> result_t {
+    if (result)
+      return std::move(*result);
+    else
+      return std::move(result.error());
+  };
+  if (caf::get_or<bool>(opts, "node", false))
+    return convert(spawn_node(self, opts));
+  return convert(connect_to_node(self, opts));
 }
 
 } // namespace vast::system

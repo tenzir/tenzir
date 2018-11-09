@@ -11,47 +11,26 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#pragma once
+#define SUITE spawn_node
 
-#include <memory>
+#include "vast/system/spawn_node.hpp"
 
-#include <caf/fwd.hpp>
+#include "test.hpp"
 
-namespace vast::system {
+using namespace vast;
 
-// -- classes ------------------------------------------------------------------
+namespace {
 
-class application;
-class command;
-class configuration;
-class default_application;
-class export_command;
-class import_command;
-class indexer_manager;
-class indexer_stage_driver;
-class node_command;
-class partition;
-class pcap_reader_command;
-class pcap_writer_command;
-class remote_command;
-class sink_command;
-class source_command;
-class start_command;
+struct fixture {
 
-// -- structs ------------------------------------------------------------------
+};
 
-struct query_statistics;
+} // namespace <anonymous>
 
-// -- templates ----------------------------------------------------------------
+FIXTURE_SCOPE(spawn_node_tests, fixture)
 
-template <class Reader>
-class reader_command;
+TEST(todo) {
+  // implement me
+}
 
-template <class Writer>
-class writer_command;
-
-// -- aliases ------------------------------------------------------------------
-
-using partition_ptr = caf::intrusive_ptr<partition>;
-
-} // namespace vast::system
+FIXTURE_SCOPE_END()

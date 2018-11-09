@@ -13,32 +13,14 @@
 
 #pragma once
 
-#include <string_view>
-
-#include <caf/actor.hpp>
-#include <caf/expected.hpp>
-#include <caf/fwd.hpp>
-
-#include "vast/system/node_command.hpp"
+#include "vast/command.hpp"
 
 namespace vast::system {
 
 /// Format-independent implementation for import sub-commands.
-class source_command : public node_command {
-public:
-  using super = node_command;
-
-  explicit source_command(command* parent);
-
-protected:
-  caf::message run_impl(caf::actor_system& sys,
-                        const caf::config_value_map& options,
-                        argument_iterator begin,
-                        argument_iterator end) override;
-
-  virtual expected<caf::actor> make_source(
-    caf::scoped_actor& self,
-    const caf::config_value_map& options) = 0;
-};
+caf::message source_command(const command& cmd, caf::actor_system& sys,
+                            caf::actor src, caf::config_value_map& options,
+                            command::argument_iterator first,
+                            command::argument_iterator last);
 
 } // namespace vast::system

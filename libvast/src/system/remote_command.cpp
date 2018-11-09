@@ -17,57 +17,53 @@
 
 #include <iostream>
 
+#include "vast/error.hpp"
 #include "vast/logger.hpp"
+#include "vast/system/connect_to_node.hpp"
 
-using namespace caf;
-
-namespace vast::system {
 using namespace std::chrono_literals;
 
-remote_command::remote_command(command* parent) : node_command(parent) {
-  // nop
-}
+namespace vast::system {
 
-caf::message remote_command::run_impl(actor_system& sys,
-                                      const caf::config_value_map& options,
-                                      argument_iterator begin,
-                                      argument_iterator end) {
-  VAST_TRACE(VAST_ARG("name", name()), VAST_ARG(options),
-             VAST_ARG("args", begin, end));
+caf::message remote_command(const command& cmd, caf::actor_system& sys,
+                            caf::config_value_map& options,
+                            command::argument_iterator begin,
+                            command::argument_iterator end) {
+  VAST_TRACE(VAST_ARG(options), VAST_ARG("args", begin, end));
   // Get a convenient and blocking way to interact with actors.
-  scoped_actor self{sys};
+  caf::scoped_actor self{sys};
   // Get VAST node.
   auto node_opt = connect_to_node(self, options);
   if (!node_opt)
-    return wrap_error(std::move(node_opt.error()));
+    return caf::make_message(std::move(node_opt.error()));
   auto node = std::move(*node_opt);
   self->monitor(node);
   // Build command to remote node.
   auto args = caf::message_builder{begin, end}.move_to_message();
-  auto cmd = make_message(std::string{name()}, std::move(args));
+  auto msg = make_message(std::string{cmd.name}, std::move(args));
   // Delegate command to node.
   caf::error err;
-  self->send(node, std::move(cmd));
+  self->send(node, std::move(msg));
   self->receive(
-    [&](const down_msg&) {
+    [&](const caf::down_msg&) {
       err = ec::remote_node_down;
     },
-    [&](ok_atom) {
+    [&](caf::ok_atom) {
       // Standard reply for success.
     },
-    [&](actor&) {
+    [&](caf::actor&) {
       // "vast spawn" returns an actor.
     },
     [&](const std::string& str) {
       // Status messages or query results.
       std::cout << str << std::endl;
     },
-    [&](error& e) {
+    [&](caf::error& e) {
       err = std::move(e);
     }
   );
   if (err)
-    return wrap_error(std::move(err));
+    return caf::make_message(std::move(err));
   return caf::none;
 }
 

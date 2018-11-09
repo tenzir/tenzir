@@ -18,10 +18,7 @@
 #include <string_view>
 
 #include "vast/command.hpp"
-
 #include "vast/system/application.hpp"
-#include "vast/system/export_command.hpp"
-#include "vast/system/import_command.hpp"
 
 namespace vast::system {
 
@@ -29,19 +26,13 @@ class default_application : public application {
 public:
   default_application();
 
-  import_command& import_cmd() {
-    VAST_ASSERT(import_ != nullptr);
-    return *import_;
-  }
+  command& import_cmd();
 
-  export_command& export_cmd() {
-    VAST_ASSERT(export_ != nullptr);
-    return *export_;
-  }
+  command& export_cmd();
 
 private:
-  import_command* import_;
-  export_command* export_;
+  command* import_;
+  command* export_;
 };
 
 } // namespace vast::system

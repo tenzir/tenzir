@@ -13,27 +13,14 @@
 
 #pragma once
 
-#include <string_view>
-
-#include <caf/scoped_actor.hpp>
-
-#include "vast/format/pcap.hpp"
-#include "vast/system/source_command.hpp"
+#include "vast/command.hpp"
 
 namespace vast::system {
 
 /// PCAP subcommant to `import`.
-/// @relates application
-class pcap_reader_command : public source_command {
-public:
-  using super = source_command;
-
-  explicit pcap_reader_command(command* parent);
-
-protected:
-  expected<caf::actor>
-  make_source(caf::scoped_actor& self,
-              const caf::config_value_map& options) override;
-};
+caf::message pcap_reader_command(const command& cmd, caf::actor_system& sys,
+                                 caf::config_value_map& options,
+                                 command::argument_iterator first,
+                                 command::argument_iterator last);
 
 } // namespace vast::system

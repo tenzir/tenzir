@@ -13,48 +13,62 @@
 
 #include "vast/command.hpp"
 
+#include <numeric>
+
 #include <caf/make_message.hpp>
 #include <caf/message.hpp>
 
 #include "vast/detail/string.hpp"
+#include "vast/error.hpp"
 #include "vast/logger.hpp"
 
 namespace vast {
 
-command::command() : command(nullptr) {
-  // nop
+caf::config_option_set command::opts() {
+  return caf::config_option_set{}.add<bool>("help,h?", "prints the help text");
 }
 
-command::command(command* parent) : parent_(parent) {
-  add_opt<bool>("help,h?", "prints the help text");
+command* command::add(fun child_run, std::string_view child_name,
+                      std::string_view child_description,
+                      caf::config_option_set child_options) {
+  return children
+    .emplace_back(new command{this,
+                              child_run,
+                              child_name,
+                              child_description,
+                              std::move(child_options),
+                              {}})
+    .get();
 }
 
-command::~command() {
-  // nop
-}
-
-caf::message command::run(caf::actor_system& sys,
-                          caf::config_value_map& options,
-                          argument_iterator begin, argument_iterator end) {
-  VAST_TRACE(VAST_ARG(std::string(name_)), VAST_ARG("args", begin, end),
-             VAST_ARG(options));
+caf::message run(const command& cmd, caf::actor_system& sys,
+                 caf::config_value_map& options,
+                 command::argument_iterator first,
+                 command::argument_iterator last) {
   using caf::get_or;
+  using caf::make_message;
+  VAST_TRACE(VAST_ARG(std::string(name_)), VAST_ARG("args", first, last),
+             VAST_ARG(options));
   // Parse arguments for this command.
-  auto [state, position] = opts_.parse(options, begin, end);
+  auto [state, position] = cmd.options.parse(options, first, last);
   bool has_subcommand;
   switch(state) {
     default:
-      return wrap_error(parse_error(state, position, begin, end));
+      return make_message(make_error(ec::unrecognized_option, *position));
     case caf::pec::success:
       has_subcommand = false;
       break;
     case caf::pec::not_an_option:
-      has_subcommand = position != end;
+      has_subcommand = position != last;
       break;
   }
+  // Check whether we stopped at an unrecognized option.
+  // TODO: replace `compare` with `starts_with` when switching to C++20
+  if (position != last && position->compare(0, 1, "-") == 0)
+    return make_message(make_error(ec::unrecognized_option, *position));
   // Check for help option.
   if (get_or<bool>(options, "help", false)) {
-    std::cerr << usage() << std::endl;
+    helptext(cmd, std::cerr);
     return caf::none;
   }
   // Check for version option.
@@ -62,15 +76,16 @@ caf::message command::run(caf::actor_system& sys,
     std::cerr << VAST_VERSION << std::endl;
     return caf::none;
   }
-  // Check whether the options allow for further processing.
-  if (auto err = proceed(sys, options, position, end))
-    return wrap_error(std::move(err));
-  // Invoke run_impl if no subcommand was defined.
-  if (!has_subcommand)
-    return run_impl(sys, options, position, end);
+  // Invoke cmd.run if no subcommand was defined.
+  if (!has_subcommand) {
+    // Commands without a run implementation require subcommands.
+    if (cmd.run == nullptr)
+      return make_message(make_error(ec::missing_subcommand));
+    return cmd.run(cmd, sys, options, position, last);
+  }
   // Consume CLI arguments if we have arguments but don't have subcommands.
-  if (children_.empty())
-    return run_impl(sys, options, position, end);
+  if (cmd.children.empty())
+    return cmd.run(cmd, sys, options, position, last);
   // Dispatch to subcommand.
   // TODO: We need to copy the iterator here, because structured binding cannot
   //       be captured. Clang reports the error "reference to local binding
@@ -79,19 +94,130 @@ caf::message command::run(caf::actor_system& sys,
   //       See also: https://stackoverflow.com/questions/46114214. Remove this
   //       workaround when all supported compilers accept accessing structured
   //       bindings from lambdas.
-  auto pos_cpy = position;
-  auto i = std::find_if(children_.begin(), children_.end(),
-                        [&](auto& x) { return x->name() == *pos_cpy; });
-  if (i == children_.end())
-    return wrap_error(unknown_subcommand_error(position, end));
-  return (*i)->run(sys, options, position + 1, end);
+  auto i = std::find_if(cmd.children.begin(), cmd.children.end(),
+                        [p = position](auto& x) { return x->name == *p; });
+  if (i == cmd.children.end())
+    return make_message(make_error(ec::invalid_subcommand, *position));
+  return run(**i, sys, options, position + 1, last);
 }
 
-caf::message command::run(caf::actor_system& sys, argument_iterator begin,
-                          argument_iterator end) {
+caf::message run(const command& cmd, caf::actor_system& sys,
+                 command::argument_iterator first,
+                 command::argument_iterator last) {
   caf::config_value_map options;
-  return run(sys, options, begin, end);
+  return run(cmd, sys, options, first, last);
 }
+
+std::string full_name(const command& cmd) {
+  std::string result{cmd.name};
+  for (auto ptr = cmd.parent; ptr != nullptr; ptr = ptr->parent) {
+    result.insert(result.begin(), ' ');
+    result.insert(result.begin(), ptr->name.begin(), ptr->name.end());
+  }
+  return result;
+}
+
+namespace {
+
+using std::accumulate;
+
+// Returns the field size for printing all names in `xs`.
+auto field_size(const command::children_list& xs) {
+  return accumulate(xs.begin(), xs.end(), size_t{0}, [](size_t x, auto& y) {
+    return std::max(x, y->name.size());
+  });
+}
+
+// Returns the field size for printing all names in `xs`.
+auto field_size(const caf::config_option_set& xs) {
+  return accumulate(xs.begin(), xs.end(), size_t{0}, [](size_t x, auto& y) {
+    // We print parameters in the form "[-h | -? | --help]". So, "[]" adds 2
+    // characters, each short name adds 5 characters with "-X | " and the
+    // long name finally gets the prefix "--".
+    return std::max(x, 4 + (y.short_names().size() * 5) + y.long_name().size());
+  });
+}
+
+void parameters_helptext(const command& cmd, std::ostream& out) {
+  out << "parameters:\n";
+  auto fs = field_size(cmd.options);
+  for (auto& opt : cmd.options) {
+    out << "  ";
+    std::string lst = "[";
+    for (auto ch : opt.short_names()) {
+      lst += '-';
+      lst += ch;
+      lst += " | ";
+    }
+    lst += "--";
+    lst.insert(lst.end(), opt.long_name().begin(), opt.long_name().end());
+    lst += ']';
+    out.width(fs);
+    out << lst << "  " << opt.description() << '\n';
+  }
+}
+
+// Prints the helptext for a command without children.
+void flat_helptext(const command& cmd, std::ostream& out) {
+  // A trivial command without parameters prints its name and description.
+  if (cmd.options.empty()) {
+    out << "usage: " << full_name(cmd) << "\n\n"
+        << cmd.description << "\n\n";
+    return;
+  }
+  // A command with parameters prints 1) its name, 2) a description, and 3) a
+  // list of available parameters.
+  out << "usage: " << full_name(cmd) << " [<parameters>]\n\n"
+      << cmd.description << "\n\n";
+  parameters_helptext(cmd, out);
+}
+
+void subcommand_helptext(const command& cmd, std::ostream& out) {
+  out << "subcommands:\n";
+  auto fs = field_size(cmd.children);
+  for (auto& child : cmd.children) {
+    out << "  ";
+    out.width(fs);
+    out << child->name << "  " << child->description << '\n';
+  }
+}
+
+// Prints the helptext for a command without children.
+void nested_helptext(const command& cmd, std::ostream& out) {
+  // A trivial command without parameters prints name, description and
+  // children.
+  if (cmd.options.empty()) {
+    out << "usage: " << full_name(cmd) << " <command>" << "\n\n"
+        << cmd.description  << "\n\n";
+    subcommand_helptext(cmd, out);
+    return;
+  }
+  out << "usage: " << full_name(cmd) << " [<parameters>] <command>" << "\n\n"
+      << cmd.description << "\n\n";
+  parameters_helptext(cmd, out);
+  out << '\n';
+  subcommand_helptext(cmd, out);
+}
+
+} // namespace <anonymous>
+
+void helptext(const command& cmd, std::ostream& out) {
+  // Make sure fields are filled left-to-right.
+  out << std::left;
+  // Dispatch based on whether or nood cmd has children.
+  if (cmd.children.empty())
+    flat_helptext(cmd, out);
+  else
+    nested_helptext(cmd, out);
+}
+
+std::string helptext(const command& cmd) {
+  std::ostringstream oss;
+  helptext(cmd, oss);
+  return oss.str();
+}
+
+/*
 
 std::string command::usage() const {
   std::stringstream result;
@@ -171,5 +297,6 @@ caf::error command::unknown_subcommand_error(argument_iterator error_position,
   }
   return make_error(ec::syntax_error, std::move(helptext));
 }
+*/
 
 } // namespace vast

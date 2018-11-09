@@ -13,28 +13,14 @@
 
 #pragma once
 
-#include <string_view>
-
-#include <caf/scoped_actor.hpp>
-
-#include "vast/format/pcap.hpp"
-#include "vast/system/sink_command.hpp"
+#include "vast/command.hpp"
 
 namespace vast::system {
 
-/// PCAP subcommand to `import`.
-/// @relates application
-class pcap_writer_command : public sink_command {
-public:
-  using super = sink_command;
-
-  explicit pcap_writer_command(command* parent);
-
-protected:
-  expected<caf::actor> make_sink(caf::scoped_actor& self,
-                                 const caf::config_value_map& options,
-                                 argument_iterator begin,
-                                 argument_iterator end) override;
-};
+/// Format-independent implementation for import sub-commands.
+caf::message pcap_writer_command(const command& cmd, caf::actor_system& sys,
+                                 caf::config_value_map& options,
+                                 command::argument_iterator first,
+                                 command::argument_iterator last);
 
 } // namespace vast::system

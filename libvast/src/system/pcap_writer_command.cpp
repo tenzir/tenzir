@@ -13,33 +13,39 @@
 
 #include "vast/system/pcap_writer_command.hpp"
 
+#include <string>
+#include <string_view>
+
+#include <caf/event_based_actor.hpp>
 #include <caf/scoped_actor.hpp>
+#include <caf/stateful_actor.hpp>
+#include <caf/typed_event_based_actor.hpp>
 
 #include "vast/defaults.hpp"
+#include "vast/detail/assert.hpp"
+#include "vast/error.hpp"
 #include "vast/format/pcap.hpp"
 #include "vast/logger.hpp"
+#include "vast/scope_linked.hpp"
+#include "vast/system/signal_monitor.hpp"
 #include "vast/system/sink.hpp"
+#include "vast/system/sink_command.hpp"
+#include "vast/system/spawn_or_connect_to_node.hpp"
 
 namespace vast::system {
 
-pcap_writer_command::pcap_writer_command(command* parent) : super(parent) {
-  add_opt<std::string>("write,w", "path to write events to");
-  add_opt<bool>("uds,d", "treat -w as UNIX domain socket to connect to");
-  add_opt<size_t>("flush,f", "flush to disk after this many packets");
-}
-
-expected<caf::actor>
-pcap_writer_command::make_sink(caf::scoped_actor& self,
-                               const caf::config_value_map& options,
-                               argument_iterator begin,
-                               argument_iterator end) {
-  VAST_UNUSED(begin, end);
+caf::message pcap_writer_command(const command& cmd, caf::actor_system& sys,
+                                 caf::config_value_map& options,
+                                 command::argument_iterator first,
+                                 command::argument_iterator last) {
+  using caf::get_or;
   VAST_TRACE(VAST_ARG("args", begin, end));
   auto limit = get_or(options, "events", defaults::command::max_events);
   auto output = get_or(options, "write", defaults::command::write_path);
   auto flush = get_or(options, "flush", defaults::command::flush_interval);
   format::pcap::writer writer{output, flush};
-  return self->spawn(sink<format::pcap::writer>, std::move(writer), limit);
+  auto snk = sys.spawn(sink<format::pcap::writer>, std::move(writer), limit);
+  return sink_command(cmd, sys, std::move(snk), options, first, last);
 }
 
 } // namespace vast::system
