@@ -129,10 +129,14 @@ auto field_size(const command::children_list& xs) {
 // Returns the field size for printing all names in `xs`.
 auto field_size(const caf::config_option_set& xs) {
   return accumulate(xs.begin(), xs.end(), size_t{0}, [](size_t x, auto& y) {
-    // We print parameters in the form "[-h | -? | --help]". So, "[]" adds 2
-    // characters, each short name adds 5 characters with "-X | " and the
-    // long name finally gets the prefix "--".
-    return std::max(x, 4 + (y.short_names().size() * 5) + y.long_name().size());
+    // We print parameters in the form "[-h | -? | --help] <type>" (but we omit
+    // the type for boolean). So, "[]" adds 2 characters, each short name adds
+    // 5 characters with "-X | ", the long name gets the 2 character prefix
+    // "--", and finally we add an extra space plus the type name.
+    auto tname = y.type_name();
+    auto tname_size = tname == "boolean" ? 0u : tname.size() + 3;
+    return std::max(x, 4 + (y.short_names().size() * 5) + y.long_name().size()
+                         + tname_size);
   });
 }
 
@@ -150,6 +154,12 @@ void parameters_helptext(const command& cmd, std::ostream& out) {
     lst += "--";
     lst.insert(lst.end(), opt.long_name().begin(), opt.long_name().end());
     lst += ']';
+    auto tname = opt.type_name();
+    if (tname != "boolean") {
+      lst += " <";
+      lst.insert(lst.end(), tname.begin(), tname.end());
+      lst += '>';
+    }
     out.width(fs);
     out << lst << "  " << opt.description() << '\n';
   }
