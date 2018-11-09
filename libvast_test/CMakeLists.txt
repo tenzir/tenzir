@@ -54,6 +54,7 @@ add_library(libvast_test SHARED
   src/actor_system.cpp
   src/events.cpp
   src/node.cpp
+  src/symbols.cpp
 )
 target_include_directories(libvast_test PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
@@ -65,12 +66,18 @@ target_include_directories(libvast_test PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/vast/test
 )
 target_link_libraries(libvast_test PUBLIC libvast)
-set_target_properties(libvast
+set(isExe $<STREQUAL:$<TARGET_PROPERTY:TYPE>,EXECUTABLE>)
+target_sources(libvast_test INTERFACE
+    "$<${isExe}:$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp>>"
+    "$<${isExe}:$<INSTALL_INTERFACE:$<INSTALL_PREFIX>/${CMAKE_INSTALL_DATADIR}/vast/test/main.cpp>>"
+)
+install(FILES src/main.cpp DESTINATION "${CMAKE_INSTALL_DATADIR}/vast/test")
+set_target_properties(libvast_test
   PROPERTIES
-  EXPORT_NAME test
-  SOVERSION ${VERSION_MAJOR}
-  VERSION ${VERSION_MAJOR}.${VERSION_MINOR}
+  SOVERSION "${VERSION_MAJOR}"
+  VERSION "${VERSION_MAJOR}.${VERSION_MINOR}"
   OUTPUT_NAME vast_test
+  EXPORT_NAME test
 )
 install(TARGETS libvast_test DESTINATION lib)
 install(

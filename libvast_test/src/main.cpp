@@ -11,22 +11,28 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include <iostream>
-
-#define CAF_TEST_NO_MAIN
-#include <caf/test/unit_test_impl.hpp>
 
 #include "vast/detail/adjust_resource_consumption.hpp"
-
 #include "vast/test/test.hpp"
 
-namespace vast {
-namespace test {
+#include "caf/message_builder.hpp"
+#include "caf/test/unit_test.hpp"
 
-std::set<std::string> config;
+#include <iostream>
+#include <set>
+#include <string>
 
-} // namespace test
-} // namespace vast
+namespace caf::test {
+
+int main(int, char**);
+
+} // namespace caf::test
+
+namespace vast::test {
+
+extern std::set<std::string> config;
+
+} // namespace vast::test
 
 int main(int argc, char** argv) {
   // Parse everything after after '--'.

@@ -213,7 +213,6 @@ set(tests
   test/ids.cpp
   test/iterator.cpp
   test/json.cpp
-  test/main.cpp
   test/meta_index.cpp
   test/mmapbuf.cpp
   test/offset.cpp

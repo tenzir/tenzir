@@ -14,6 +14,7 @@ endif()
 set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
 
 set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
+include(GNUInstallDirs)
 include(CTest)
 include(Helpers)
 include(MacDependencyPaths)
