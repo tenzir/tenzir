@@ -35,11 +35,16 @@ caf::behavior dummy() {
 FIXTURE_SCOPE(scope_linked_tests, fixtures::deterministic_actor_system)
 
 TEST(exit message on exit) {
+  // Spawn dummy, assign it to a scope_linked handle (sla) and make sure it
+  // gets killed when sla goes out of scope.
   caf::actor hdl;
   { // "lifetime scope" for our dummy
     scope_linked_actor sla{sys.spawn(dummy)};
+    // Store the actor handle in the outer scope, otherwise we can't check for
+    // a message to the dummy.
     hdl = sla.get();
   }
+  // The sla handle must send an exit_msg when going out of scope.
   expect((caf::exit_msg), from(_).to(hdl));
 }
 
