@@ -13,14 +13,16 @@
 
 #define SUITE meta_index
 
+#include "vast/meta_index.hpp"
+
 #include "test.hpp"
+#include "test/fixtures/actor_system.hpp"
 
 #include <caf/test/dsl.hpp>
 
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/default_table_slice.hpp"
-#include "vast/meta_index.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
 #include "vast/uuid.hpp"
@@ -177,6 +179,17 @@ TEST(uuid lookup) {
   MESSAGE("check whether time-range queries return correct slices");
   CHECK_EQUAL(query("00:00:01", "00:00:10"), slice(0));
   CHECK_EQUAL(query("00:00:10", "00:00:30"), slice(0, 2));
+}
+
+FIXTURE_SCOPE_END()
+
+FIXTURE_SCOPE(metaidx_serialization_tests, fixtures::deterministic_actor_system)
+
+TEST(serialization) {
+  meta_index meta_idx;
+  auto part = mock_partition{uuid::random(), 42};
+  meta_idx.add(part.id, *part.slice);
+  CHECK_ROUNDTRIP(meta_idx);
 }
 
 FIXTURE_SCOPE_END()
