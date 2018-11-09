@@ -14,6 +14,7 @@
 #include "vast/table_slice.hpp"
 
 #include <caf/actor_system.hpp>
+#include <caf/actor_system_config.hpp>
 #include <caf/deserializer.hpp>
 #include <caf/error.hpp>
 #include <caf/execution_unit.hpp>
@@ -23,9 +24,12 @@
 #include <caf/sum_type.hpp>
 
 #include "vast/default_table_slice.hpp"
+#include "vast/default_table_slice_builder.hpp"
+#include "vast/defaults.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/error.hpp"
 #include "vast/event.hpp"
+#include "vast/format/test.hpp"
 #include "vast/logger.hpp"
 #include "vast/value.hpp"
 
@@ -113,6 +117,33 @@ table_slice_ptr make_table_slice(record_type layout, caf::actor_system& sys,
   }
   auto fun = reinterpret_cast<factory_fun>(caf::get<generic_fun>(val));
   return fun(std::move(layout));
+}
+
+expected<std::vector<table_slice_ptr>>
+make_random_table_slices(size_t num_slices, size_t slice_size,
+                         record_type layout, id offset, size_t seed) {
+  schema sc;
+  sc.add(layout);
+  format::test::reader src{seed, std::numeric_limits<uint64_t>::max(),
+                           std::move(sc)};
+  std::vector<table_slice_ptr> result;
+  result.reserve(num_slices);
+  default_table_slice_builder builder{std::move(layout)};
+  for (size_t i = 0; i < num_slices; ++i) {
+    for (size_t j = 0; j < slice_size; ++j) {
+      if (auto e = src.read(); !e)
+        return std::move(e.error());
+      else if (!builder.recursive_add(e->data(), e->type()))
+        return make_error(ec::unspecified, "recursive_add failed");
+    }
+    if (auto ptr = builder.finish(); ptr == nullptr) {
+      return make_error(ec::unspecified, "finish failed");
+    } else {
+      result.emplace_back(std::move(ptr)).unshared().offset(offset);
+      offset += slice_size;
+    }
+  }
+  return result;
 }
 
 void intrusive_ptr_add_ref(const table_slice* ptr) {

@@ -129,6 +129,18 @@ protected:
 table_slice_ptr make_table_slice(record_type layout, caf::actor_system& sys,
                                  caf::atom_value impl);
 
+/// Constructs table slices filled with random content for testing purposes.
+/// @param num_slices The number of table slices to generate.
+/// @param slice_size The number of rows per table slices.
+/// @param layout The layout of the table slice.
+/// @param offset The offset of the first table slize.
+/// @param seed The seed value for initializing the random-number generator.
+/// @returns a list of randomnly filled table slices or an error.
+/// @relates table_slice
+expected<std::vector<table_slice_ptr>>
+make_random_table_slices(size_t num_slices, size_t slice_size,
+                         record_type layout, id offset = 0, size_t seed = 0);
+
 /// @relates table_slice
 bool operator==(const table_slice& x, const table_slice& y);
 
