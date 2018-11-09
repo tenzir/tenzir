@@ -289,8 +289,6 @@ set(tests
   test/system/replicated_store.cpp
   test/system/sink.cpp
   test/system/source.cpp
-  test/system/spawn_node.cpp
-  test/system/spawn_or_connect_to_node.cpp
   test/system/task.cpp
   test/table_index.cpp
   test/time.cpp
