@@ -266,12 +266,12 @@ set(tests
   test/range_map.cpp
   test/save_load.cpp
   test/schema.cpp
+  test/segment.cpp
+  test/segment_store.cpp
   test/serialization.cpp
   test/span.cpp
   test/stack.cpp
   test/string.cpp
-  test/segment.cpp
-  test/segment_store.cpp
   test/subnet.cpp
   test/synopsis.cpp
   test/system/archive.cpp
@@ -290,6 +290,7 @@ set(tests
   test/system/source.cpp
   test/system/task.cpp
   test/table_index.cpp
+  test/table_slice.cpp
   test/time.cpp
   test/type.cpp
   test/uuid.cpp
