@@ -62,9 +62,7 @@ caf::message run(const command& cmd, caf::actor_system& sys,
       has_subcommand = position != last;
       break;
   }
-  // Check whether we stopped at an unrecognized option.
-  // TODO: replace `compare` with `starts_with` when switching to C++20
-  if (position != last && position->compare(0, 1, "-") == 0)
+  if (position != last && detail::starts_with(*position, "-"))
     return make_message(make_error(ec::unrecognized_option, *position));
   // Check for help option.
   if (get_or<bool>(options, "help", false)) {
