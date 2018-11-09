@@ -1,42 +1,42 @@
 ## Configure data.hpp
 
 # Bro logs.
-set (test_data "#ifndef TEST_DATA\n#define TEST_DATA")
+set(test_data "#ifndef TEST_DATA\n#define TEST_DATA")
 set(test_data "${test_data}\n\nnamespace bro {\n")
-file(GLOB logs artefacts/logs/bro/*)
+file(GLOB logs RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}" artefacts/logs/bro/*)
 foreach (log ${logs})
   get_filename_component(log_basename ${log} NAME_WE)
-  set (this "constexpr auto ${log_basename} = \"${log}\";")
+  set (this "constexpr auto ${log_basename} = VAST_TEST_PATH\"${log}\";")
   set (test_data "${test_data}\n${this}")
 endforeach ()
 set(test_data "${test_data}\n\n} // namespace bro")
 
 # Bgpdump logs.
 set(test_data "${test_data}\n\nnamespace bgpdump {\n")
-file(GLOB logs artefacts/logs/bgpdump/*.txt)
+file(GLOB logs RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}" artefacts/logs/bgpdump/*.txt)
 foreach (log ${logs})
   get_filename_component(log_basename ${log} NAME_WE)
-  set (this "constexpr auto ${log_basename} = \"${log}\";")
+  set (this "constexpr auto ${log_basename} = VAST_TEST_PATH\"${log}\";")
   set (test_data "${test_data}\n${this}")
 endforeach ()
 set(test_data "${test_data}\n\n} // namespace bgpdump")
 
 # MRT logs.
 set(test_data "${test_data}\n\nnamespace mrt {\n")
-file(GLOB logs artefacts/logs/mrt/*)
+file(GLOB logs RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}" artefacts/logs/mrt/*)
 foreach (log ${logs})
   get_filename_component(log_basename ${log} NAME_WE)
-  set (this "constexpr auto ${log_basename} = \"${log}\";")
+  set (this "constexpr auto ${log_basename} = VAST_TEST_PATH\"${log}\";")
   set (test_data "${test_data}\n${this}")
 endforeach ()
 set(test_data "${test_data}\n\n} // namespace mrt")
 
 # PCAP traces.
 set(test_data "${test_data}\n\nnamespace traces {\n")
-file(GLOB traces artefacts/traces/*.pcap)
+file(GLOB traces RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}" artefacts/traces/*.pcap)
 foreach (trace ${traces})
   get_filename_component(trace_basename ${trace} NAME_WE)
-  set(this "constexpr auto ${trace_basename} = \"${trace}\";")
+  set(this "constexpr auto ${trace_basename} = VAST_TEST_PATH\"${trace}\";")
   set(test_data "${test_data}\n${this}")
 endforeach ()
 set(test_data "${test_data}\n\n} // namespace traces")
@@ -56,6 +56,10 @@ add_library(libvast_test SHARED
   src/node.cpp
   src/symbols.cpp
 )
+target_compile_definitions(libvast_test PUBLIC
+  $<BUILD_INTERFACE:VAST_TEST_PATH=${CMAKE_CURRENT_SOURCE_DIR}>
+  $<INSTALL_INTERFACE:VAST_TEST_PATH=${CMAKE_INSTALL_DATADIR}/vast/test>
+)
 target_include_directories(libvast_test PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
@@ -71,7 +75,6 @@ target_sources(libvast_test INTERFACE
     "$<${isExe}:$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp>>"
     "$<${isExe}:$<INSTALL_INTERFACE:$<INSTALL_PREFIX>/${CMAKE_INSTALL_DATADIR}/vast/test/main.cpp>>"
 )
-install(FILES src/main.cpp DESTINATION "${CMAKE_INSTALL_DATADIR}/vast/test")
 set_target_properties(libvast_test
   PROPERTIES
   SOVERSION "${VERSION_MAJOR}"
@@ -80,7 +83,12 @@ set_target_properties(libvast_test
   EXPORT_NAME test
 )
 install(TARGETS libvast_test DESTINATION lib)
+install(FILES src/main.cpp DESTINATION "${CMAKE_INSTALL_DATADIR}/vast/test")
 install(
   DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/vast"
   DESTINATION include
+)
+install(
+  DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/artefacts"
+  DESTINATION "${CMAKE_INSTALL_DATADIR}/vast/test"
 )
