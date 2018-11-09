@@ -11,13 +11,14 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/system/node_command.hpp"
+#include "vast/system/connect_to_node.hpp"
 
+#include <caf/actor_system.hpp>
 #include <caf/actor_system_config.hpp>
-#include <caf/event_based_actor.hpp>
 #include <caf/io/middleman.hpp>
 #include <caf/scoped_actor.hpp>
-#include <caf/stateful_actor.hpp>
+
+#include "vast/config.hpp"
 
 #ifdef VAST_USE_OPENSSL
 #include <caf/openssl/all.hpp>
@@ -25,6 +26,7 @@
 
 #include "vast/concept/parseable/vast/endpoint.hpp"
 #include "vast/defaults.hpp"
+#include "vast/error.hpp"
 #include "vast/filesystem.hpp"
 #include "vast/logger.hpp"
 #include "vast/system/node.hpp"
@@ -33,62 +35,8 @@ using namespace caf;
 
 namespace vast::system {
 
-node_command::node_command(command* parent, std::string_view name)
-  : command{parent, name},
-    node_spawned_{false} {
-  // nop
-}
-
-node_command::~node_command() {
-  // nop
-}
-
-expected<actor>
-node_command::spawn_or_connect_to_node(scoped_actor& self,
-                                       const caf::config_value_map& opts) {
-  if (get_or<bool>(opts, "node", false))
-    return spawn_node(self, opts);
-  return connect_to_node(self, opts);
-}
-
-expected<actor> node_command::spawn_node(scoped_actor& self,
-                                         const caf::config_value_map& opts) {
-  // Fetch values from config.
-  auto id = get_or(opts, "id", defaults::command::node_id);
-  auto dir = get_or(opts, "dir", defaults::command::directory);
-  auto abs_dir = path{dir}.complete();
-  VAST_DEBUG(this, "spawns local node:", id);
-  // Pointer to the root command to system::node.
-  auto node = self->spawn(system::node, id, abs_dir);
-  node_spawned_ = true;
-  auto spawn_component = [&](auto&&... xs) {
-    return [&] {
-      auto result = error{};
-      auto args = make_message(std::move(xs)...);
-      self->request(node, infinite, "spawn", std::move(args)).receive(
-        [](const actor&) { /* nop */ },
-        [&](error& e) { result = std::move(e); }
-      );
-      return result;
-    };
-  };
-  auto err = error::eval(
-    spawn_component("metastore"),
-    spawn_component("archive"),
-    spawn_component("index"),
-    spawn_component("importer")
-  );
-  if (err) {
-    VAST_ERROR(self, self->system().render(err));
-    cleanup(node);
-    return err;
-  }
-  return node;
-}
-
-expected<actor>
-node_command::connect_to_node(scoped_actor& self,
-                              const caf::config_value_map& opts) {
+expected<actor> connect_to_node(scoped_actor& self,
+                                const caf::config_value_map& opts) {
   // Fetch values from config.
   auto id = get_or(opts, "id", defaults::command::node_id);
   auto dir = get_or(opts, "dir", defaults::command::directory);
@@ -121,11 +69,6 @@ node_command::connect_to_node(scoped_actor& self,
   }
   auto& mm = self->system().middleman();
   return mm.remote_actor(node_endpoint.host, node_endpoint.port);
-}
-
-void node_command::cleanup(const actor& node) {
-  if (node_spawned_)
-    anon_send_exit(node, exit_reason::user_shutdown);
 }
 
 } // namespace vast::system

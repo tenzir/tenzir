@@ -13,138 +13,94 @@
 
 #pragma once
 
-#include <functional>
+#include <iosfwd>
 #include <memory>
 #include <string>
 #include <string_view>
-#include <utility>
 
 #include <caf/config_option_set.hpp>
+#include <caf/error.hpp>
 #include <caf/fwd.hpp>
-
-#include "vast/data.hpp"
-#include "vast/error.hpp"
 
 namespace vast {
 
-/// A top-level command.
-class command {
+/// A named command with optional children.
+struct command {
 public:
   // -- member types -----------------------------------------------------------
 
   /// Iterates over CLI arguments.
   using argument_iterator = std::vector<std::string>::const_iterator;
 
-  // -- constructors, destructors, and assignment operators --------------------
+  /// Manages command objects.
+  using owning_ptr = std::unique_ptr<command>;
 
-  command();
+  /// Stores child commands.
+  using children_list = std::vector<std::unique_ptr<command>>;
 
-  command(command* parent, std::string_view name);
-
-  virtual ~command();
-
-  /// Runs the command and blocks until execution completes.
-  /// @returns a type-erased result or a wrapped `caf::error`.
-  caf::message run(caf::actor_system& sys, argument_iterator begin,
-                   argument_iterator end);
-
-  /// Runs the command and blocks until execution completes.
-  /// @returns a type-erased result or a wrapped `caf::error`.
-  caf::message run(caf::actor_system& sys, caf::config_value_map& options,
-                   argument_iterator begin, argument_iterator end);
-
-  /// Creates a summary of all option declarations and available commands.
-  std::string usage() const;
-
-  /// @returns the full name for this command.
-  std::string full_name() const;
-
-  /// Queries whether this command has no parent.
-  bool is_root() const noexcept {
-    return parent_ == nullptr;
-  }
-
-  /// @returns the root command.
-  command& root() noexcept {
-    return is_root() ? *this : parent_->root();
-  }
-
-  /// @returns the managed command name.
-  std::string_view name() const noexcept {
-    return name_;
-  }
-
-  /// Defines a sub-command.
-  /// @param name The name of the command.
-  /// @param xs The parameters required to construct the command.
-  template <class T, class... Ts>
-  T* add(std::string_view name, Ts&&... xs) {
-    auto ptr = std::make_unique<T>(this, name, std::forward<Ts>(xs)...);
-    auto result = ptr.get();
-    if (!nested_.emplace(name, std::move(ptr)).second) {
-      // FIXME: do not use exceptions.
-      VAST_RAISE_ERROR("name already exists in command");
-    }
-    return result;
-  }
-
-protected:
-  // -- customization points ---------------------------------------------------
-
-  /// Checks whether a command is ready to proceed, i.e., whether the
-  /// configuration allows for calling `run_impl` or `run` on a nested command.
-  virtual caf::error proceed(caf::actor_system& sys,
-                             const caf::config_value_map& options,
-                             argument_iterator begin, argument_iterator end);
-
-  /// Implements the command-specific application logic.
-  virtual caf::message run_impl(caf::actor_system& sys,
-                                const caf::config_value_map& options,
-                                argument_iterator begin, argument_iterator end);
-
-  // -- convenience functions --------------------------------------------------
-
-  /// Wraps an error into a CAF message.
-  /// @returns `make_message(err)`
-  static caf::message wrap_error(caf::error err);
-
-  /// Wraps an error into a CAF message.
-  /// @returns `make_message(make_error(code, context...))`
-  template <class... Ts>
-  static caf::message wrap_error(ec code, Ts&&... context) {
-    return wrap_error(make_error(code, std::forward<Ts>(context)...));
-  }
-
-  /// Adds a new global option to the options set.
-  template <class T>
-  void add_opt(std::string_view name, std::string_view description) {
-    opts_.add<T>("global", name, description);
-  }
-
-private:
-  // -- helper functions -------------------------------------------------------
-
-  caf::error parse_error(caf::pec code, argument_iterator error_position,
-                         argument_iterator begin, argument_iterator end) const;
-
-  /// @pre `error_position != end`
-  caf::error unknown_subcommand_error(argument_iterator error_position,
-                                      argument_iterator end) const;
+  /// Delegates to the command implementation logic.
+  using fun = caf::message (*)(const command&, caf::actor_system&,
+                               caf::config_value_map&, argument_iterator,
+                               argument_iterator);
 
   // -- member variables -------------------------------------------------------
 
-  /// Maps command names to children (nested commands).
-  std::map<std::string_view, std::unique_ptr<command>> nested_;
+  command* parent = nullptr;
 
-  /// Points to the parent command (nullptr in the root command).
-  command* parent_;
+  fun run = nullptr;
 
-  /// The user-provided name.
-  std::string_view name_;
+  std::string_view name;
 
-  /// List of all accepted options.
-  caf::config_option_set opts_;
+  std::string_view description;
+
+  caf::config_option_set options = opts();
+
+  children_list children;
+
+  // -- factory functions ------------------------------------------------------
+
+  /// Creates a config option set pre-initialized with a help option.
+  static caf::config_option_set opts();
+
+  /// Adds a new subcommand.
+  /// @returns a pointer to the new subcommand.
+  command* add(fun child_run, std::string_view child_name,
+               std::string_view child_description,
+               caf::config_option_set child_options = {});
 };
+
+/// Runs the command and blocks until execution completes.
+/// @returns a type-erased result or a wrapped `caf::error`.
+/// @relates command
+caf::message run(const command& cmd, caf::actor_system& sys,
+                 command::argument_iterator first,
+                 command::argument_iterator last);
+
+/// Runs the command and blocks until execution completes.
+/// @returns a type-erased result or a wrapped `caf::error`.
+/// @relates command
+caf::message run(const command& cmd, caf::actor_system& sys,
+                 caf::config_value_map& options,
+                 command::argument_iterator first,
+                 command::argument_iterator last);
+
+/// Returns the full name of `cmd`, i.e., its own name prepended by all parent
+/// names.
+std::string full_name(const command& cmd);
+
+/// Prints the helptext for `cmd` to `out`.
+void helptext(const command& cmd, std::ostream& out);
+
+/// Returns the helptext for `cmd`.
+std::string helptext(const command& cmd);
+
+/// Applies `fun` to `cmd` and each of its children, recursively.
+template <class F>
+void for_each(const command& cmd, F fun) {
+  fun(cmd);
+  for (auto& ptr : cmd.children)
+    for_each(*ptr, fun);
+}
 
 } // namespace vast
 

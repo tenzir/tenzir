@@ -69,6 +69,11 @@ struct timespan_type;
 struct timestamp_type;
 struct vector_type;
 
+// -- templates ----------------------------------------------------------------
+
+template <class>
+class scope_linked;
+
 // -- free functions -----------------------------------------------------------
 
 void intrusive_ptr_add_ref(const table_slice*);

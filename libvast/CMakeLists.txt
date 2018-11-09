@@ -76,18 +76,16 @@ set(libvast_sources
   src/system/application.cpp
   src/system/archive.cpp
   src/system/configuration.cpp
+  src/system/connect_to_node.cpp
   src/system/consensus.cpp
   src/system/default_application.cpp
-  src/system/export_command.cpp
   src/system/exporter.cpp
-  src/system/import_command.cpp
   src/system/importer.cpp
   src/system/index.cpp
   src/system/indexer.cpp
   src/system/indexer_manager.cpp
   src/system/indexer_stage_driver.cpp
   src/system/node.cpp
-  src/system/node_command.cpp
   src/system/partition.cpp
   src/system/profiler.cpp
   src/system/remote_command.cpp
@@ -95,6 +93,8 @@ set(libvast_sources
   src/system/sink_command.cpp
   src/system/source_command.cpp
   src/system/spawn.cpp
+  src/system/spawn_node.cpp
+  src/system/spawn_or_connect_to_node.cpp
   src/system/spawn_sink.cpp
   src/system/spawn_source.cpp
   src/system/start_command.cpp
@@ -266,6 +266,7 @@ set(tests
   test/range_map.cpp
   test/save_load.cpp
   test/schema.cpp
+  test/scope_linked.cpp
   test/segment.cpp
   test/segment_store.cpp
   test/serialization.cpp

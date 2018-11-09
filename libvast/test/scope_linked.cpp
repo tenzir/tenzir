@@ -11,28 +11,41 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#pragma once
+#define SUITE scope_linked
 
-#include <memory>
-#include <string>
-#include <string_view>
+#include "vast/scope_linked.hpp"
 
-#include "vast/system/node_command.hpp"
+#include "test.hpp"
+#include "fixtures/actor_system.hpp"
 
-namespace vast::system {
+using namespace vast;
 
-/// Default implementation for the `import` command.
-/// @relates application
-class import_command : public node_command {
-public:
-  explicit import_command(command* parent);
+namespace {
 
-protected:
-  caf::message run_impl(caf::actor_system& sys,
-                        const caf::config_value_map& options,
-                        argument_iterator begin,
-                        argument_iterator end) override;
-};
+caf::behavior dummy() {
+  return {
+    [] {
+      // nop
+    }
+  };
+}
 
-} // namespace vast::system
+} // namespace <anonymous>
 
+FIXTURE_SCOPE(scope_linked_tests, fixtures::deterministic_actor_system)
+
+TEST(exit message on exit) {
+  // Spawn dummy, assign it to a scope_linked handle (sla) and make sure it
+  // gets killed when sla goes out of scope.
+  caf::actor hdl;
+  { // "lifetime scope" for our dummy
+    scope_linked_actor sla{sys.spawn(dummy)};
+    // Store the actor handle in the outer scope, otherwise we can't check for
+    // a message to the dummy.
+    hdl = sla.get();
+  }
+  // The sla handle must send an exit_msg when going out of scope.
+  expect((caf::exit_msg), from(_).to(hdl));
+}
+
+FIXTURE_SCOPE_END()

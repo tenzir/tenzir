@@ -11,27 +11,19 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/system/export_command.hpp"
+#pragma once
 
-#include "vast/logger.hpp"
+#include <caf/config_value.hpp>
+#include <caf/expected.hpp>
+#include <caf/fwd.hpp>
 
-using namespace caf;
+#include "vast/scope_linked.hpp"
 
 namespace vast::system {
-using namespace std::chrono_literals;
 
-export_command::export_command(command* parent, std::string_view name)
-  : node_command{parent, name} {
-  add_opt<bool>("continuous,c", "marks a query as continuous");
-  add_opt<bool>("historical,h", "marks a query as historical");
-  add_opt<bool>("unified,u", "marks a query as unified");
-  add_opt<size_t>("events,e", "maximum number of results");
-}
+/// Connects to a remote VAST server.
+caf::expected<caf::actor> connect_to_node(caf::scoped_actor& self,
+                                          const caf::config_value_map& opts);
 
-caf::message export_command::run_impl(actor_system&,
-                                      const caf::config_value_map&,
-                                      argument_iterator, argument_iterator) {
-  return wrap_error(ec::syntax_error, "missing subcommand to export");
-}
+} // namespace vast
 
-} // namespace vast::system

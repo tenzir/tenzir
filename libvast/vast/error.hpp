@@ -56,6 +56,12 @@ enum class ec : uint8_t {
   invalid_result,
   /// A command failed because its configuration was invalid.
   invalid_configuration,
+  /// A command failed, because its arguments contained an unrecognized option.
+  unrecognized_option,
+  /// A command failed, because it couldn't find a requested subcommand.
+  invalid_subcommand,
+  /// A command failed, because the command line failed to select a subcommand.
+  missing_subcommand,
   /// A command failed because it was unable to connect to an importer.
   no_importer,
   /// Encountered a currently unimplemented code path or missing feature.

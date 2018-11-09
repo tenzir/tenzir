@@ -13,45 +13,14 @@
 
 #pragma once
 
-#include <memory>
-#include <string>
-#include <string_view>
-
-#include <caf/scoped_actor.hpp>
-#include <caf/typed_actor.hpp>
-#include <caf/typed_event_based_actor.hpp>
-
-#include "vast/expression.hpp"
-#include "vast/logger.hpp"
-
-#include "vast/system/node_command.hpp"
-#include "vast/system/signal_monitor.hpp"
-#include "vast/system/source.hpp"
-#include "vast/system/tracker.hpp"
-
-#include "vast/concept/parseable/to.hpp"
-
-#include "vast/concept/parseable/vast/expression.hpp"
-#include "vast/concept/parseable/vast/schema.hpp"
-
-#include "vast/detail/make_io_stream.hpp"
+#include "vast/command.hpp"
 
 namespace vast::system {
 
-/// Format-independent implementation for export sub-commands.
-class sink_command : public node_command {
-public:
-  using node_command::node_command;
-
-protected:
-  caf::message run_impl(caf::actor_system& sys,
-                        const caf::config_value_map& options,
-                        argument_iterator begin,
-                        argument_iterator end) override;
-
-  virtual expected<caf::actor>
-  make_sink(caf::scoped_actor& self, const caf::config_value_map& options,
-            argument_iterator begin, argument_iterator end) = 0;
-};
+/// Format-independent implementation for import sub-commands.
+caf::message sink_command(const command& cmd, caf::actor_system& sys,
+                          caf::actor snk, caf::config_value_map& options,
+                          command::argument_iterator first,
+                          command::argument_iterator last);
 
 } // namespace vast::system

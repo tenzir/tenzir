@@ -11,28 +11,32 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#pragma once
+#include "vast/system/spawn_or_connect_to_node.hpp"
 
-#include <memory>
-#include <string>
-#include <string_view>
-
-#include "vast/system/node_command.hpp"
+#include "vast/logger.hpp"
+#include "vast/system/connect_to_node.hpp"
+#include "vast/system/spawn_node.hpp"
 
 namespace vast::system {
 
-/// Default implementation for the export command.
-/// @relates application
-class export_command : public node_command {
-public:
-  export_command(command* parent, std::string_view name);
+namespace {
 
-protected:
-  caf::message run_impl(caf::actor_system& sys,
-                        const caf::config_value_map& options,
-                        argument_iterator begin,
-                        argument_iterator end) override;
-};
+using result_t = caf::variant<caf::error, caf::actor, scope_linked_actor>;
+
+} // namespace <anonymous>
+
+result_t spawn_or_connect_to_node(caf::scoped_actor& self,
+                                  const caf::config_value_map& opts) {
+  VAST_TRACE(VAST_ARG(opts));
+  auto convert = [](auto&& result) -> result_t {
+    if (result)
+      return std::move(*result);
+    else
+      return std::move(result.error());
+  };
+  if (caf::get_or<bool>(opts, "node", false))
+    return convert(spawn_node(self, opts));
+  return convert(connect_to_node(self, opts));
+}
 
 } // namespace vast::system
-

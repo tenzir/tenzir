@@ -42,37 +42,11 @@ using namespace caf;
 
 namespace vast::system {
 
-application::root_command::root_command() {
-  add_opt<string>("dir,d", "directory for persistent state");
-  add_opt<string>("endpoint,e", "node endpoint");
-  add_opt<string>("id,i", "the unique ID of this node");
-  add_opt<bool>("node,n", "spawn a node instead of connecting to one");
-  add_opt<bool>("version,v", "print version and exit");
-}
-
-caf::error
-application::root_command::proceed(caf::actor_system&,
-                                   const caf::config_value_map& options,
-                                   argument_iterator begin,
-                                   argument_iterator end) {
-  VAST_UNUSED(options);
-  VAST_UNUSED(begin, end);
-  VAST_TRACE(VAST_ARG(options), VAST_ARG("args", begin, end));
-  return caf::none;
-}
-
 application::application() {
   // TODO: this function has side effects...should we put it elsewhere where
   // it's explicit to the user? Or perhaps make whatever this function does
   // simply a configuration option and use it later?
   detail::adjust_resource_consumption();
-}
-
-caf::message application::run(caf::actor_system& sys,
-                              command::argument_iterator begin,
-                              command::argument_iterator end) {
-  VAST_TRACE(VAST_ARG("args", begin, end));
-  return root_.run(sys, begin, end);
 }
 
 } // namespace vast::system

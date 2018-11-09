@@ -49,6 +49,12 @@ int main(int argc, char** argv) {
   cfg.set("logger.console", caf::atom("COLORED"));
   caf::actor_system sys{cfg};
   default_application app;
+  app.root.description = "manage a VAST topology";
+  app.root.name = argv[0];
+  // Skip any path in the application name.
+  auto find_slash = [&] { return app.root.name.find('/'); };
+  for (auto p = find_slash(); p != std::string_view::npos; p = find_slash())
+    app.root.name.remove_prefix(p + 1);
   // Dispatch to root command.
   auto result = app.run(sys, cfg.command_line.begin(), cfg.command_line.end());
   if (result.match_elements<caf::error>()) {
