@@ -114,4 +114,11 @@ deserialize_synopsis_factory(caf::deserializer& source) {
   return std::make_pair(impl_id, f);
 }
 
+void set_synopsis_factory(caf::actor_system& sys, caf::atom_value id,
+                          synopsis_factory factory) {
+  using generic_fun = caf::runtime_settings_map::generic_function_pointer;
+  auto f = reinterpret_cast<generic_fun>(factory);
+  sys.runtime_settings().set(id, f);
+}
+
 } // namespace vast

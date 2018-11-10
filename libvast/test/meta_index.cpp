@@ -13,18 +13,24 @@
 
 #define SUITE meta_index
 
+#include "vast/meta_index.hpp"
+
 #include "test.hpp"
+#include "test/fixtures/actor_system.hpp"
 
 #include <caf/test/dsl.hpp>
 
-#include "vast/concept/parseable/to.hpp"
-#include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/default_table_slice.hpp"
-#include "vast/meta_index.hpp"
+#include "vast/synopsis.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
 #include "vast/uuid.hpp"
 #include "vast/view.hpp"
+
+#include "vast/concept/parseable/to.hpp"
+#include "vast/concept/parseable/vast/expression.hpp"
+
+#include "vast/detail/overload.hpp"
 
 using namespace vast;
 
@@ -177,6 +183,124 @@ TEST(uuid lookup) {
   MESSAGE("check whether time-range queries return correct slices");
   CHECK_EQUAL(query("00:00:01", "00:00:10"), slice(0));
   CHECK_EQUAL(query("00:00:10", "00:00:30"), slice(0, 2));
+}
+
+FIXTURE_SCOPE_END()
+
+FIXTURE_SCOPE(metaidx_serialization_tests, fixtures::deterministic_actor_system)
+
+TEST(serialization) {
+  meta_index meta_idx;
+  auto part = mock_partition{uuid::random(), 42};
+  meta_idx.add(part.id, *part.slice);
+  CHECK_ROUNDTRIP(meta_idx);
+}
+
+// A synopsis for bools.
+class boolean_synopsis : public synopsis {
+public:
+  explicit boolean_synopsis(vast::type x) : synopsis{std::move(x)} {
+    VAST_ASSERT(caf::holds_alternative<boolean_type>(type()));
+  }
+
+  caf::atom_value factory_id() const noexcept override {
+    return caf::atom("Sy_Test");
+  }
+
+  void add(data_view x) override {
+    if (auto b = caf::get_if<view<boolean>>(&x)) {
+      if (*b)
+        true_ = true;
+      else
+        false_ = true;
+    }
+  }
+
+  bool lookup(relational_operator op, data_view rhs) const override {
+    if (auto b = caf::get_if<view<boolean>>(&rhs)) {
+      if (op == equal)
+        return *b ? true_ : false_;
+      if (op == not_equal)
+        return *b ? false_ : true_;
+    }
+    return false;
+  }
+
+  bool equals(const synopsis& other) const noexcept override {
+    if (typeid(other) != typeid(boolean_synopsis))
+      return false;
+    auto& rhs = static_cast<const boolean_synopsis&>(other);
+    return type() == rhs.type() && false_ == rhs.false_ && true_ == rhs.true_;
+  }
+
+  caf::error serialize(caf::serializer& sink) const override {
+    return sink(false_, true_);
+  }
+
+  caf::error deserialize(caf::deserializer& source) override {
+    return source(false_, true_);
+  }
+
+private:
+  bool false_ = false;
+  bool true_ = false;
+};
+
+synopsis_ptr make_custom_synopsis(type x) {
+  return caf::visit(detail::overload(
+    [&](const boolean_type&) -> synopsis_ptr {
+      return caf::make_counted<boolean_synopsis>(std::move(x));
+    },
+    [&](const auto&) -> synopsis_ptr {
+      return make_synopsis(x);
+    }), x);
+}
+
+TEST(serialization with custom factory) {
+  MESSAGE("register custom factory with meta index");
+  meta_index meta_idx;
+  auto factory_id = caf::atom("Sy_Test");
+  meta_idx.factory(factory_id, make_custom_synopsis);
+  MESSAGE("register custom factory for deserialization");
+  set_synopsis_factory(sys, factory_id, make_custom_synopsis);
+  MESSAGE("generate slice data and add it to the meta index");
+  auto layout = record_type{{"x", boolean_type{}}};
+  auto builder = default_table_slice::make_builder(layout);
+  CHECK(builder->add(make_data_view(true)));
+  auto slice = builder->finish();
+  REQUIRE(slice != nullptr);
+  auto id1 = uuid::random();
+  meta_idx.add(id1, *slice);
+  CHECK(builder->add(make_data_view(false)));
+  slice = builder->finish();
+  REQUIRE(slice != nullptr);
+  auto id2 = uuid::random();
+  meta_idx.add(id2, *slice);
+  MESSAGE("test custom synopsis");
+  auto all = std::vector<uuid>{id1, id2};
+  std::sort(all.begin(), all.end());
+  auto expected1 = std::vector<uuid>{id1};
+  auto expected2 = std::vector<uuid>{id2};
+  auto lookup = [&](auto& expr) {
+    return meta_idx.lookup(unbox(to<expression>(expr)));
+  };
+  // Check by field name field.
+  CHECK_EQUAL(lookup("x == T"), expected1);
+  CHECK_EQUAL(lookup("x != F"), expected1);
+  CHECK_EQUAL(lookup("x == F"), expected2);
+  CHECK_EQUAL(lookup("x != T"), expected2);
+  // Same as above, different extractor.
+  CHECK_EQUAL(lookup(":bool == T"), expected1);
+  CHECK_EQUAL(lookup(":bool != F"), expected1);
+  CHECK_EQUAL(lookup(":bool == F"), expected2);
+  CHECK_EQUAL(lookup(":bool != T"), expected2);
+  // Invalid schema: y does not a valid field
+  CHECK_EQUAL(lookup("y == T"), all);
+  CHECK_EQUAL(lookup("y != F"), all);
+  CHECK_EQUAL(lookup("y == F"), all);
+  CHECK_EQUAL(lookup("y != T"), all);
+  MESSAGE("perform serialization");
+  CHECK_ROUNDTRIP(meta_idx);
 }
 
 FIXTURE_SCOPE_END()
