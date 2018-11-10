@@ -101,8 +101,23 @@ synopsis_ptr make_synopsis(type x);
 /// @relates synopsis get_synopsis_factory_fun set_synopsis_factory
 using synopsis_factory = synopsis_ptr (*)(type);
 
+/// Deserializes a factory identifier and returns the corresponding factory
+/// function if has been registered via set_synopsis_factory previously. For
+/// the default identifier, the function returns [`make_synopsis`](@ref
+/// make_synopsis).
+/// @param source The deserializer to read from.
+/// @returns A pair *(id, factory)* where *id* is the atom identifying
+///          *factory*.
 /// @relates synopsis synopsis_factory
 expected<std::pair<caf::atom_value, synopsis_factory>>
 deserialize_synopsis_factory(caf::deserializer& source);
+
+/// Registers a synopsis factory in an actor system runtime settings map.
+/// @param sys The actor system in which to register the factory.
+/// @param id The factory identifier.
+/// @param factory The factory function to associate with *id*.
+/// @relates deserialize_synopsis_factory
+void set_synopsis_factory(caf::actor_system& sys, caf::atom_value id,
+                          synopsis_factory factory);
 
 } // namespace vast

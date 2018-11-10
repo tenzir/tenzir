@@ -23,10 +23,13 @@
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/default_table_slice.hpp"
+#include "vast/synopsis.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
 #include "vast/uuid.hpp"
 #include "vast/view.hpp"
+
+#include "vast/detail/overload.hpp"
 
 using namespace vast;
 
@@ -189,6 +192,82 @@ TEST(serialization) {
   meta_index meta_idx;
   auto part = mock_partition{uuid::random(), 42};
   meta_idx.add(part.id, *part.slice);
+  CHECK_ROUNDTRIP(meta_idx);
+}
+
+// A synopsis for bools.
+class boolean_synopsis : public synopsis {
+public:
+  explicit boolean_synopsis(vast::type x) : synopsis{std::move(x)} {
+    VAST_ASSERT(caf::holds_alternative<boolean_type>(type()));
+  }
+
+  void add(data_view x) override {
+    if (auto b = caf::get_if<view<boolean>>(&x)) {
+      if (*b)
+        true_ = true;
+      else
+        false_ = true;
+    }
+  }
+
+  bool lookup(relational_operator op, data_view rhs) const override {
+    if (auto b = caf::get_if<view<boolean>>(&rhs)) {
+      if (op == equal)
+        return *b ? true_ : false_;
+      if (op == not_equal)
+        return *b ? true_ : false_;
+    }
+    return false;
+  }
+
+  bool equals(const synopsis& other) const noexcept override {
+    if (typeid(other) != typeid(boolean_synopsis))
+      return false;
+    auto& rhs = static_cast<const boolean_synopsis&>(other);
+    return type() == rhs.type() && false_ == rhs.false_ && true_ == rhs.true_;
+  }
+
+  caf::error serialize(caf::serializer& sink) const override {
+    return sink(false_, true_);
+  }
+
+  caf::error deserialize(caf::deserializer& source) override {
+    return source(false_, true_);
+  }
+
+private:
+  bool false_ = false;
+  bool true_ = false;
+};
+
+synopsis_ptr make_custom_synopsis(type x) {
+  return caf::visit(detail::overload(
+    [&](const boolean_type&) -> synopsis_ptr {
+      return caf::make_counted<boolean_synopsis>(std::move(x));
+    },
+    [&](const auto&) -> synopsis_ptr {
+      return make_synopsis(x);
+    }), x);
+}
+
+TEST(serialization with custom factory) {
+  MESSAGE("generate slice data");
+  auto layout = record_type{{"x", boolean_type{}}};
+  auto builder = default_table_slice::make_builder(layout);
+  for (size_t i = 0; i < 100; ++i) {
+    auto x = i % 5 == 0;
+    builder->add(make_data_view(x));
+  }
+  auto slice = builder->finish();
+  MESSAGE("add slice to meta index");
+  meta_index meta_idx;
+  meta_idx.add(uuid::random(), *slice);
+  MESSAGE("register custom factory with meta index");
+  auto factory_id = caf::atom("Sy_Test");
+  meta_idx.factory(factory_id, make_custom_synopsis);
+  MESSAGE("register custom factory for deserialization");
+  set_synopsis_factory(sys, factory_id, make_custom_synopsis);
   CHECK_ROUNDTRIP(meta_idx);
 }
 

@@ -25,7 +25,10 @@
 
 namespace vast {
 
-meta_index::meta_index() : make_synopsis_{make_synopsis} {
+meta_index::meta_index()
+  : make_synopsis_{make_synopsis},
+    factory_id_{caf::atom("Sy_Default")} {
+  // nop
 }
 
 void meta_index::add(const uuid& partition, const table_slice& slice) {

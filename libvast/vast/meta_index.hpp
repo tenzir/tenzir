@@ -83,5 +83,4 @@ private:
   caf::atom_value factory_id_;
 };
 
-
 } // namespace vast
