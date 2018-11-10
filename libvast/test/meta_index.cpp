@@ -20,14 +20,15 @@
 
 #include <caf/test/dsl.hpp>
 
-#include "vast/concept/parseable/to.hpp"
-#include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/default_table_slice.hpp"
 #include "vast/synopsis.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
 #include "vast/uuid.hpp"
 #include "vast/view.hpp"
+
+#include "vast/concept/parseable/to.hpp"
+#include "vast/concept/parseable/vast/expression.hpp"
 
 #include "vast/detail/overload.hpp"
 
@@ -202,6 +203,10 @@ public:
     VAST_ASSERT(caf::holds_alternative<boolean_type>(type()));
   }
 
+  caf::atom_value factory_id() const noexcept override {
+    return caf::atom("Sy_Test");
+  }
+
   void add(data_view x) override {
     if (auto b = caf::get_if<view<boolean>>(&x)) {
       if (*b)
@@ -216,7 +221,7 @@ public:
       if (op == equal)
         return *b ? true_ : false_;
       if (op == not_equal)
-        return *b ? true_ : false_;
+        return *b ? false_ : true_;
     }
     return false;
   }
@@ -252,22 +257,49 @@ synopsis_ptr make_custom_synopsis(type x) {
 }
 
 TEST(serialization with custom factory) {
-  MESSAGE("generate slice data");
-  auto layout = record_type{{"x", boolean_type{}}};
-  auto builder = default_table_slice::make_builder(layout);
-  for (size_t i = 0; i < 100; ++i) {
-    auto x = i % 5 == 0;
-    builder->add(make_data_view(x));
-  }
-  auto slice = builder->finish();
-  MESSAGE("add slice to meta index");
-  meta_index meta_idx;
-  meta_idx.add(uuid::random(), *slice);
   MESSAGE("register custom factory with meta index");
+  meta_index meta_idx;
   auto factory_id = caf::atom("Sy_Test");
   meta_idx.factory(factory_id, make_custom_synopsis);
   MESSAGE("register custom factory for deserialization");
   set_synopsis_factory(sys, factory_id, make_custom_synopsis);
+  MESSAGE("generate slice data and add it to the meta index");
+  auto layout = record_type{{"x", boolean_type{}}};
+  auto builder = default_table_slice::make_builder(layout);
+  CHECK(builder->add(make_data_view(true)));
+  auto slice = builder->finish();
+  REQUIRE(slice != nullptr);
+  auto id1 = uuid::random();
+  meta_idx.add(id1, *slice);
+  CHECK(builder->add(make_data_view(false)));
+  slice = builder->finish();
+  REQUIRE(slice != nullptr);
+  auto id2 = uuid::random();
+  meta_idx.add(id2, *slice);
+  MESSAGE("test custom synopsis");
+  auto all = std::vector<uuid>{id1, id2};
+  std::sort(all.begin(), all.end());
+  auto expected1 = std::vector<uuid>{id1};
+  auto expected2 = std::vector<uuid>{id2};
+  auto lookup = [&](auto& expr) {
+    return meta_idx.lookup(unbox(to<expression>(expr)));
+  };
+  // Check by field name field.
+  CHECK_EQUAL(lookup("x == T"), expected1);
+  CHECK_EQUAL(lookup("x != F"), expected1);
+  CHECK_EQUAL(lookup("x == F"), expected2);
+  CHECK_EQUAL(lookup("x != T"), expected2);
+  // Same as above, different extractor.
+  CHECK_EQUAL(lookup(":bool == T"), expected1);
+  CHECK_EQUAL(lookup(":bool != F"), expected1);
+  CHECK_EQUAL(lookup(":bool == F"), expected2);
+  CHECK_EQUAL(lookup(":bool != T"), expected2);
+  // Invalid schema: y does not a valid field
+  CHECK_EQUAL(lookup("y == T"), all);
+  CHECK_EQUAL(lookup("y != F"), all);
+  CHECK_EQUAL(lookup("y == F"), all);
+  CHECK_EQUAL(lookup("y != T"), all);
+  MESSAGE("perform serialization");
   CHECK_ROUNDTRIP(meta_idx);
 }
 
