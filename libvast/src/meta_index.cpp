@@ -56,11 +56,10 @@ void meta_index::add(const uuid& partition, const table_slice& slice) {
     }
   }
   VAST_ASSERT(table_syn->size() == slice.columns());
-  for (size_t col = 0; col < slice.columns(); ++col) {
+  for (size_t col = 0; col < slice.columns(); ++col)
     if (auto& syn = (*table_syn)[col])
       for (size_t row = 0; row < slice.rows(); ++row)
         syn->add(slice.at(row, col));
-  }
 }
 
 std::vector<uuid> meta_index::lookup(const expression& expr) const {
