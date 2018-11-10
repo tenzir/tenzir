@@ -46,7 +46,7 @@ const char* descriptions[] = {
 } // namespace <anonymous>
 
 const char* to_string(ec x) {
-  auto index = static_cast<size_t>(x) - 1;
+  auto index = static_cast<size_t>(x);
   VAST_ASSERT(index < sizeof(descriptions));
   return descriptions[index];
 }
