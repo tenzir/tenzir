@@ -238,6 +238,7 @@ set(tests
   test/detail/operators.cpp
   test/detail/set_operations.cpp
   test/endpoint.cpp
+  test/error.cpp
   test/event.cpp
   test/expression.cpp
   test/expression_evaluation.cpp
