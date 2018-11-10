@@ -22,8 +22,10 @@ using caf::error;
 
 /// VAST's error codes.
 enum class ec : uint8_t {
+  /// No error.
+  no_error = 0,
   /// The unspecified default error code.
-  unspecified = 1,
+  unspecified,
   /// An error while accessing the filesystem.
   filesystem_error,
   /// Expected a different type.
