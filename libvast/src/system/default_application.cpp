@@ -36,22 +36,6 @@
 
 namespace vast::system {
 
-/// @returns default options for source commands.
-auto src_opts() {
-  return command::opts()
-    .add<std::string>("schema-file,s", "path to alternate schema")
-    .add<std::string>("schema,S", "alternate schema as string")
-    .add<std::string>("read,r", "path to input where to read events from")
-    .add<bool>("uds,d", "treat -r as listening UNIX domain socket");
-}
-
-// @returns defaults options for sink commands.
-auto snk_opts() {
-  return command::opts()
-    .add<std::string>("write,w", "path to write events to")
-    .add<bool>("uds,d", "treat -w as UNIX domain socket to connect to");
-}
-
 default_application::default_application() {
   // Set global options.
   root.options
