@@ -130,12 +130,8 @@ make_random_table_slices(size_t num_slices, size_t slice_size,
   result.reserve(num_slices);
   default_table_slice_builder builder{std::move(layout)};
   for (size_t i = 0; i < num_slices; ++i) {
-    for (size_t j = 0; j < slice_size; ++j) {
-      if (auto e = src.read(); !e)
-        return std::move(e.error());
-      else if (!builder.recursive_add(e->data(), e->type()))
-        return make_error(ec::unspecified, "recursive_add failed");
-    }
+    if (auto e = src.read(builder, slice_size))
+      return e;
     if (auto ptr = builder.finish(); ptr == nullptr) {
       return make_error(ec::unspecified, "finish failed");
     } else {

@@ -11,16 +11,16 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
+#include "vast/format/test.hpp"
+
 #include "vast/concept/parseable/core.hpp"
 #include "vast/concept/parseable/numeric/real.hpp"
 #include "vast/concept/parseable/string/char_class.hpp"
 #include "vast/concept/parseable/vast/schema.hpp"
-#include "vast/error.hpp"
-
-#include "vast/format/test.hpp"
-
 #include "vast/detail/assert.hpp"
 #include "vast/detail/type_traits.hpp"
+#include "vast/error.hpp"
+#include "vast/table_slice_builder.hpp"
 
 using caf::holds_alternative;
 using caf::visit;
@@ -234,6 +234,8 @@ auto default_schema() {
   return result;
 }
 
+using default_randomizer = randomizer<std::mt19937_64>;
+
 } // namespace <anonymous>
 
 reader::reader(size_t seed, uint64_t n, vast::schema sch)
@@ -254,7 +256,7 @@ expected<event> reader::read() {
   // Generate random data.
   auto& t = *next_;
   auto& bp = blueprints_[t];
-  visit(randomizer<std::mt19937_64>{bp.distributions, generator_}, t, bp.data);
+  visit(default_randomizer{bp.distributions, generator_}, t, bp.data);
   // Fill a new event.
   event e{value{bp.data, t}};
   e.timestamp(timestamp::clock::now());
@@ -263,6 +265,24 @@ expected<event> reader::read() {
     next_ = schema_.begin();
   --num_events_;
   return e;
+}
+
+caf::error reader::read(table_slice_builder& builder, size_t num) {
+  if (num == 0)
+    return caf::none;
+  auto t = type{builder.layout()};
+  auto i = blueprints_.find(t);
+  if (i == blueprints_.end())
+    return ec::invalid_table_slice_type;
+  builder.reserve(builder.rows() + num);
+  auto& bp = i->second;
+  for (size_t i = 0; i < num; ++i) {
+    visit(default_randomizer{bp.distributions, generator_}, t, bp.data);
+    if (!builder.recursive_add(bp.data, t))
+      return make_error(ec::type_clash,
+                        "type check in builder.recursive_add failed");
+  }
+  return caf::none;
 }
 
 expected<void> reader::schema(vast::schema sch) {

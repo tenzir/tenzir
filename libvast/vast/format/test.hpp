@@ -22,6 +22,7 @@
 #include "vast/event.hpp"
 #include "vast/expected.hpp"
 #include "vast/format/reader.hpp"
+#include "vast/fwd.hpp"
 #include "vast/schema.hpp"
 
 #include "vast/detail/random.hpp"
@@ -73,6 +74,8 @@ public:
   explicit reader(size_t seed = 0, uint64_t n = 100);
 
   expected<event> read() override;
+
+  caf::error read(table_slice_builder& builder, size_t num);
 
   expected<void> schema(vast::schema sch) override;
 
