@@ -18,8 +18,8 @@
 namespace vast {
 
 default_table_slice_builder::default_table_slice_builder(record_type layout)
-  : layout_{flatten(layout)},
-    row_(layout_.fields.size()),
+  : super{flatten(layout)},
+    row_(super::layout().fields.size()),
     col_{0} {
   VAST_ASSERT(!row_.empty());
 }
@@ -27,12 +27,12 @@ default_table_slice_builder::default_table_slice_builder(record_type layout)
 bool default_table_slice_builder::append(data x) {
   lazy_init();
   // TODO: consider an unchecked version for improved performance.
-  if (!type_check(layout_.fields[col_].type, x))
+  if (!type_check(layout().fields[col_].type, x))
     return false;
   row_[col_++] = std::move(x);
-  if (col_ == layout_.fields.size()) {
+  if (col_ == layout().fields.size()) {
     slice_->xs_.push_back(std::move(row_));
-    row_ = vector(layout_.fields.size());
+    row_ = vector(layout().fields.size());
     col_ = 0;
   }
   return true;
@@ -50,7 +50,7 @@ table_slice_ptr default_table_slice_builder::finish() {
   // Populate slice.
   // TODO: this feels messy, but allows for non-virtual parent accessors.
   slice_->rows_ = slice_->xs_.size();
-  slice_->columns_ = layout_.fields.size();
+  slice_->columns_ = layout().fields.size();
   return table_slice_ptr{slice_.release(), false};
 }
 
@@ -65,8 +65,8 @@ void default_table_slice_builder::reserve(size_t num_rows) {
 
 void default_table_slice_builder::lazy_init() {
   if (slice_ == nullptr) {
-    slice_.reset(new default_table_slice(layout_));
-    row_ = vector(layout_.fields.size());
+    slice_.reset(new default_table_slice(layout()));
+    row_ = vector(layout().fields.size());
     col_ = 0;
   }
 }

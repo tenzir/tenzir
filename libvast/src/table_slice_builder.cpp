@@ -20,6 +20,11 @@
 
 namespace vast {
 
+table_slice_builder::table_slice_builder(record_type layout)
+  : layout_(std::move(layout)) {
+  // nop
+}
+
 table_slice_builder::~table_slice_builder() {
   // nop
 }

@@ -22,6 +22,10 @@ namespace vast {
 /// The default implementation of `table_slice_builder`.
 class default_table_slice_builder final : public table_slice_builder {
 public:
+  // -- member types -----------------------------------------------------------
+
+  using super = table_slice_builder;
+
   // -- constructors, destructors, and assignment operators --------------------
 
   default_table_slice_builder(record_type layout);
@@ -46,7 +50,6 @@ private:
 
   // -- member variables -------------------------------------------------------
 
-  record_type layout_;
   vector row_;
   size_t col_;
   std::unique_ptr<default_table_slice> slice_;
