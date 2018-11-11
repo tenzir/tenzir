@@ -55,6 +55,7 @@ public:
   /// `num_rows` rows.
   virtual void reserve(size_t num_rows);
 
+  /// @returns the table layout.
   const record_type& layout() const noexcept {
     return layout_;
   }
