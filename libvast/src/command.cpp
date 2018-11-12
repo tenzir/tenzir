@@ -47,7 +47,7 @@ caf::message run(const command& cmd, caf::actor_system& sys,
                  command::argument_iterator last) {
   using caf::get_or;
   using caf::make_message;
-  VAST_TRACE(VAST_ARG(std::string(name_)), VAST_ARG("args", first, last),
+  VAST_TRACE(VAST_ARG(std::string(cmd.name)), VAST_ARG("args", first, last),
              VAST_ARG(options));
   // Parse arguments for this command.
   auto [state, position] = cmd.options.parse(options, first, last);
