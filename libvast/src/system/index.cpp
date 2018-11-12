@@ -25,6 +25,7 @@
 #include "vast/concept/printable/vast/expression.hpp"
 #include "vast/concept/printable/vast/uuid.hpp"
 #include "vast/detail/assert.hpp"
+#include "vast/error.hpp"
 #include "vast/event.hpp"
 #include "vast/expression_visitors.hpp"
 #include "vast/ids.hpp"
@@ -132,6 +133,18 @@ caf::error index_state::init(event_based_actor* self, const path& dir,
                              size_t taste_partitions) {
   VAST_TRACE(VAST_ARG(dir), VAST_ARG(partition_size),
              VAST_ARG(in_mem_partitions), VAST_ARG(taste_partitions));
+  // Look for an alternate synopsis factory for the meta index.
+  auto x = self->system().runtime_settings().get(caf::atom("Sy_FACTORY"));
+  if (auto factory_id = caf::get_if<caf::atom_value>(&x)) {
+    auto y = self->system().runtime_settings().get(*factory_id);
+    using generic_fun = caf::runtime_settings_map::generic_function_pointer;
+    auto fun = caf::get_if<generic_fun>(&y);
+    if (fun == nullptr)
+      return make_error(ec::unspecified, "incomplete synopsis factory setup");
+    auto factory = reinterpret_cast<synopsis_factory>(*fun);
+    VAST_DEBUG(self, "uses custom meta index synopsis factory", *factory_id);
+    meta_idx.factory(*factory_id, factory);
+  }
   // Set members.
   this->self = self;
   this->dir = dir;
