@@ -126,7 +126,7 @@ struct index_state {
   caf::event_based_actor* self;
 
   /// The maximum number of events per partition.
-  size_t partition_size;
+  size_t max_partition_size;
 
   /// The number of partitions to schedule immediately for each query
   size_t taste_partitions;
@@ -151,13 +151,13 @@ struct index_state {
 
 /// Indexes events in horizontal partitions.
 /// @param dir The directory of the index.
-/// @param partition_size The maximum number of events per partition.
+/// @param max_partition_size The maximum number of events per partition.
 /// @param in_mem_partitions The maximum number of partitions to hold in memory.
 /// @param taste_partitions The number of partitions to schedule immediately
 ///                         for each query
-/// @pre `partition_size > 0 && in_mem_partitions > 0`
+/// @pre `max_partition_size > 0 && in_mem_partitions > 0`
 caf::behavior index(caf::stateful_actor<index_state>* self, const path& dir,
-                    size_t partition_size, size_t in_mem_partitions,
+                    size_t max_partition_size, size_t in_mem_partitions,
                     size_t taste_partitions, size_t num_workers);
 
 } // namespace vast::system
