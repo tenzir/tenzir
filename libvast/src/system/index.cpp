@@ -128,8 +128,9 @@ index_state::~index_state() {
 }
 
 caf::error index_state::init(event_based_actor* self, const path& dir,
-                             size_t max_partition_size, size_t
-                             in_mem_partitions, size_t taste_partitions) {
+                             size_t max_partition_size,
+                             size_t in_mem_partitions,
+                             size_t taste_partitions) {
   VAST_TRACE(VAST_ARG(dir), VAST_ARG(max_partition_size),
              VAST_ARG(in_mem_partitions), VAST_ARG(taste_partitions));
   // Set members.

@@ -131,8 +131,7 @@ expected<actor> spawn_importer(node_actor* self, options& opts) {
 }
 
 expected<actor> spawn_index(local_actor* self, options& opts) {
-  using namespace vast::si_literals;
-  size_t max_part_size = 1_Mi;
+  size_t max_part_size = defaults::system::max_partition_size;
   size_t max_parts = 10;
   size_t taste_parts = 5;
   size_t num_collectors = 10;

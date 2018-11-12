@@ -46,6 +46,7 @@ const char* node_id = "node";
 namespace system {
 
 size_t table_slice_size = 10000;
+size_t max_partition_size = 1_Mi;
 
 } // namespace system
 
