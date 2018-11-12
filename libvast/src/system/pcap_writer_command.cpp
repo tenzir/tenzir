@@ -39,7 +39,7 @@ caf::message pcap_writer_command(const command& cmd, caf::actor_system& sys,
                                  command::argument_iterator first,
                                  command::argument_iterator last) {
   using caf::get_or;
-  VAST_TRACE(VAST_ARG("args", begin, end));
+  VAST_TRACE(VAST_ARG("args", first, last));
   auto limit = get_or(options, "events", defaults::command::max_events);
   auto output = get_or(options, "write", defaults::command::write_path);
   auto flush = get_or(options, "flush", defaults::command::flush_interval);
