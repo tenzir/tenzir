@@ -123,12 +123,7 @@ struct synopsis_fixture : fixtures::deterministic_actor_system_and_events {
     directory /= "index";
     // We're adding the default factory under a new name to trigger the code
     // path under test.
-    using generic_fun = caf::runtime_settings_map::generic_function_pointer;
-    auto factory = reinterpret_cast<generic_fun>(make_synopsis);
-    sys.runtime_settings().set(caf::atom("Sy_TEST"), factory);
-    sys.runtime_settings().set(caf::atom("Sy_FACTORY"), caf::atom("Sy_TEST"));
-    index = self->spawn(system::index, directory / "index", slice_size,
-                        in_mem_partitions, taste_count, num_collectors);
+    set_synopsis_factory(sys, caf::atom("Sy_TEST"), make_synopsis);
   }
 
   ~synopsis_fixture() {
@@ -226,7 +221,10 @@ FIXTURE_SCOPE_END()
 FIXTURE_SCOPE(meta_index_setup_test, synopsis_fixture)
 
 TEST(meta index factory) {
-  // Nothing to see here, the fixture contains the test code.
+  auto factory = get_synopsis_factory(sys);
+  REQUIRE(factory);
+  CHECK_EQUAL(factory->first, caf::atom("Sy_TEST"));
+  CHECK_EQUAL(factory->second, make_synopsis);
 }
 
 FIXTURE_SCOPE_END()

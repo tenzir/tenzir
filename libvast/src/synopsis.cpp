@@ -119,6 +119,22 @@ void set_synopsis_factory(caf::actor_system& sys, caf::atom_value id,
   using generic_fun = caf::runtime_settings_map::generic_function_pointer;
   auto f = reinterpret_cast<generic_fun>(factory);
   sys.runtime_settings().set(id, f);
+  sys.runtime_settings().set(caf::atom("Sy_FACTORY"), id);
+}
+
+caf::expected<std::pair<caf::atom_value, synopsis_factory>>
+get_synopsis_factory(caf::actor_system& sys) {
+  auto x = sys.runtime_settings().get(caf::atom("Sy_FACTORY"));
+  if (auto factory_id = caf::get_if<caf::atom_value>(&x)) {
+    auto y = sys.runtime_settings().get(*factory_id);
+    using generic_fun = caf::runtime_settings_map::generic_function_pointer;
+    auto fun = caf::get_if<generic_fun>(&y);
+    if (fun == nullptr)
+      return make_error(ec::unspecified, "incomplete synopsis factory setup");
+    auto factory = reinterpret_cast<synopsis_factory>(*fun);
+    return std::make_pair(*factory_id, factory);
+  }
+  return caf::no_error;
 }
 
 } // namespace vast
