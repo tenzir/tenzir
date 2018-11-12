@@ -15,7 +15,7 @@
 
 #include "vast/table_slice.hpp"
 
-#include "test.hpp"
+#include "vast/test/test.hpp"
 
 #include <caf/test/dsl.hpp>
 
