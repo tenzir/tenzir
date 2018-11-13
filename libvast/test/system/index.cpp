@@ -225,7 +225,7 @@ TEST(meta index factory) {
   auto factory = get_synopsis_factory(sys);
   REQUIRE(factory);
   CHECK_EQUAL(factory->first, caf::atom("Sy_TEST"));
-  CHECK_EQUAL(factory->second, make_synopsis);
+  CHECK(factory->second == make_synopsis);
   // We could additionally go into the state of the actor and verify that the
   // factory has been set.
 }
