@@ -12,7 +12,7 @@
  ******************************************************************************/
 
 #define SUITE indexer_stage_driver
-#include "test.hpp"
+#include "vast/test/test.hpp"
 
 #include <random>
 #include <vector>
@@ -26,7 +26,7 @@
 
 #include "vast/concept/printable/to_string.hpp"
 
-#include "fixtures/actor_system_and_events.hpp"
+#include "vast/test/fixtures/actor_system_and_events.hpp"
 
 using namespace caf;
 using namespace vast;

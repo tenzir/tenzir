@@ -17,8 +17,8 @@
 #include "vast/system/replicated_store.hpp"
 
 #define SUITE consensus
-#include "test.hpp"
-#include "fixtures/consensus.hpp"
+#include "vast/test/test.hpp"
+#include "vast/test/fixtures/consensus.hpp"
 
 using namespace caf;
 using namespace vast;

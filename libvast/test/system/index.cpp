@@ -15,8 +15,8 @@
 
 #include "vast/system/index.hpp"
 
-#include "test.hpp"
-#include "fixtures/actor_system_and_events.hpp"
+#include "vast/test/test.hpp"
+#include "vast/test/fixtures/actor_system_and_events.hpp"
 
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
@@ -33,7 +33,6 @@
 
 #include "vast/detail/spawn_container_source.hpp"
 #include "vast/detail/spawn_generator_source.hpp"
-
 
 using caf::after;
 using std::chrono_literals::operator""s;

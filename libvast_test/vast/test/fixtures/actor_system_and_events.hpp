@@ -11,43 +11,25 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/defaults.hpp"
+#pragma once
 
-#include <limits>
+#include "vast/test/fixtures/actor_system.hpp"
+#include "vast/test/fixtures/events.hpp"
 
-#include "vast/si_literals.hpp"
+namespace fixtures {
 
-#include "vast/detail/string.hpp"
-#include "vast/detail/system.hpp"
+/// A fixture with an actor system that uses the default work-stealing
+/// scheduler and test data (events).
+struct actor_system_and_events : actor_system, events {
+  // nop
+};
 
-using namespace vast::si_literals;
+/// A fixture with an actor system that uses the test coordinator for
+/// determinstic testing of actors and test data (events).
+struct deterministic_actor_system_and_events : deterministic_actor_system,
+                                               events {
+  // nop
+};
 
-namespace vast::defaults {
+} // namespace fixtures
 
-namespace command {
-
-const char* directory = "vast";
-const char* endpoint = ":42000";
-const char* id = "";
-const char* read_path = "-";
-const char* write_path = "-";
-int64_t pseudo_realtime_factor = 0;
-size_t cutoff = std::numeric_limits<size_t>::max();
-size_t flow_expiry = 10;
-size_t flush_interval = 10000;
-size_t max_events = 0;
-size_t max_flow_age = 60;
-size_t max_flows = 1_Mi;
-size_t generated_events = 100;
-const char* node_id = "node";
-
-} // namespace command
-
-namespace system {
-
-size_t table_slice_size = 10000;
-size_t max_partition_size = 1_Mi;
-
-} // namespace system
-
-} // namespace vast::defaults

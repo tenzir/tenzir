@@ -15,8 +15,8 @@
 
 #include "vast/segment_store.hpp"
 
-#include "test.hpp"
-#include "test/fixtures/actor_system_and_events.hpp"
+#include "vast/test/test.hpp"
+#include "vast/test/fixtures/actor_system_and_events.hpp"
 
 #include "vast/ids.hpp"
 #include "vast/si_literals.hpp"

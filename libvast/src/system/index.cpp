@@ -128,9 +128,10 @@ index_state::~index_state() {
 }
 
 caf::error index_state::init(event_based_actor* self, const path& dir,
-                             size_t partition_size, size_t in_mem_partitions,
+                             size_t max_partition_size,
+                             size_t in_mem_partitions,
                              size_t taste_partitions) {
-  VAST_TRACE(VAST_ARG(dir), VAST_ARG(partition_size),
+  VAST_TRACE(VAST_ARG(dir), VAST_ARG(max_partition_size),
              VAST_ARG(in_mem_partitions), VAST_ARG(taste_partitions));
   // Set the synopsis factory for the meta index.
   if (auto factory = get_synopsis_factory(self->system())) {
@@ -147,7 +148,7 @@ caf::error index_state::init(event_based_actor* self, const path& dir,
   // Set members.
   this->self = self;
   this->dir = dir;
-  this->partition_size = partition_size;
+  this->max_partition_size = max_partition_size;
   this->lru_partitions.size(in_mem_partitions);
   this->taste_partitions = taste_partitions;
   // Read persistent state.
@@ -190,7 +191,7 @@ caf::error index_state::init(event_based_actor* self, const path& dir,
     return active;
   };
   stage = self->make_continuous_stage<indexer_stage_driver>(meta_idx, fac,
-                                                            partition_size);
+                                                            max_partition_size);
   return caf::none;
 }
 
@@ -240,14 +241,14 @@ caf::actor index_state::next_worker() {
 }
 
 behavior index(stateful_actor<index_state>* self, const path& dir,
-               size_t partition_size, size_t in_mem_partitions,
+               size_t max_partition_size, size_t in_mem_partitions,
                size_t taste_partitions, size_t num_workers) {
-  VAST_ASSERT(partition_size > 0);
+  VAST_ASSERT(max_partition_size > 0);
   VAST_ASSERT(in_mem_partitions > 0);
-  VAST_INFO(self, "spawned:", VAST_ARG(partition_size),
+  VAST_INFO(self, "spawned:", VAST_ARG(max_partition_size),
             VAST_ARG(in_mem_partitions), VAST_ARG(taste_partitions));
-  if (auto err = self->state.init(self, dir, partition_size, in_mem_partitions,
-                                  taste_partitions)) {
+  if (auto err = self->state.init(self, dir, max_partition_size,
+                                  in_mem_partitions, taste_partitions)) {
     self->quit(std::move(err));
     return {};
   }

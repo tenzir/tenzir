@@ -14,7 +14,7 @@
 #include "vast/detail/byte.hpp"
 
 #define SUITE byte
-#include "test.hpp"
+#include "vast/test/test.hpp"
 
 using namespace vast::detail;
 

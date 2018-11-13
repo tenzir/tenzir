@@ -18,7 +18,7 @@
 #include "vast/subnet.hpp"
 
 #define SUITE port
-#include "test.hpp"
+#include "vast/test/test.hpp"
 
 using namespace vast;
 using namespace std::string_literals;

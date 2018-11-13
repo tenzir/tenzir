@@ -15,7 +15,7 @@
 
 #include "vast/error.hpp"
 
-#include "test.hpp"
+#include "vast/test/test.hpp"
 
 using namespace std::string_literals;
 using namespace vast;

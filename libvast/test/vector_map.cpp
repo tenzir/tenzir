@@ -17,7 +17,7 @@
 #include "vast/detail/steady_map.hpp"
 
 #define SUITE detail
-#include "test.hpp"
+#include "vast/test/test.hpp"
 
 #include "vast/config.hpp"
 

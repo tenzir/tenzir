@@ -15,8 +15,8 @@
 #include <caf/opencl/all.hpp>
 
 #define SUITE opencl
-#include "test.hpp"
-#include "fixtures/actor_system.hpp"
+#include "vast/test/test.hpp"
+#include "vast/test/fixtures/actor_system.hpp"
 
 using namespace caf;
 using namespace vast;

@@ -13,8 +13,8 @@
 
 #define SUITE bitvector
 
-#include "test.hpp"
-#include "fixtures/actor_system.hpp"
+#include "vast/test/test.hpp"
+#include "vast/test/fixtures/actor_system.hpp"
 
 #include "vast/bitvector.hpp"
 #include "vast/concept/printable/to_string.hpp"

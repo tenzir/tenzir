@@ -12,7 +12,7 @@
  ******************************************************************************/
 
 #define SUITE set_operations
-#include "test.hpp"
+#include "vast/test/test.hpp"
 
 #include "vast/detail/set_operations.hpp"
 

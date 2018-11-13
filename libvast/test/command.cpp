@@ -13,7 +13,7 @@
 
 #define SUITE command
 
-#include "test.hpp"
+#include "vast/test/test.hpp"
 
 #include "vast/command.hpp"
 

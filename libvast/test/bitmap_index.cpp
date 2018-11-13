@@ -13,8 +13,8 @@
 
 #define SUITE bitmap_index
 
-#include "test.hpp"
-#include "fixtures/actor_system.hpp"
+#include "vast/test/test.hpp"
+#include "vast/test/fixtures/actor_system.hpp"
 
 #include "vast/bitmap_index.hpp"
 #include "vast/concept/printable/to_string.hpp"

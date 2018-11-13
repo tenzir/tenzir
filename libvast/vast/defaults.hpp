@@ -58,7 +58,6 @@ extern size_t max_events;
 /// Maximum flow lifetime before eviction.
 extern size_t max_flow_age;
 
-
 /// Number of concurrent flows to track.
 extern size_t max_flows;
 
@@ -74,6 +73,9 @@ namespace system {
 
 /// Maximum size for sources that generate table slices.
 extern size_t table_slice_size;
+
+/// Maximum number of events per index partition.
+extern size_t max_partition_size;
 
 } // namespace system
 

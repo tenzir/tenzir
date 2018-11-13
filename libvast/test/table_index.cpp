@@ -13,8 +13,8 @@
 
 #define SUITE table_index
 
-#include "test.hpp"
-#include "fixtures/actor_system_and_events.hpp"
+#include "vast/test/test.hpp"
+#include "vast/test/fixtures/actor_system_and_events.hpp"
 
 #include "vast/bitmap.hpp"
 #include "vast/concept/parseable/to.hpp"

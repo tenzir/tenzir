@@ -12,8 +12,8 @@
  ******************************************************************************/
 
 #define SUITE streambuf
-#include "test.hpp"
-#include "fixtures/filesystem.hpp"
+#include "vast/test/test.hpp"
+#include "vast/test/fixtures/filesystem.hpp"
 
 #include "vast/detail/mmapbuf.hpp"
 

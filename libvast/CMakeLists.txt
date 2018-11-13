@@ -153,10 +153,18 @@ set_target_properties(libvast
   VERSION ${VERSION_MAJOR}.${VERSION_MINOR}
   OUTPUT_NAME vast)
 
+target_include_directories(libvast PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+  $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+)
 target_link_libraries(libvast ${libvast_libs})
 
 # Install libvast in PREFIX/lib and headers in PREFIX/include/vast.
-install(TARGETS libvast DESTINATION lib)
+install(TARGETS libvast
+  EXPORT VASTTargets
+  DESTINATION lib
+)
 install(DIRECTORY vast/
         DESTINATION include/vast FILES_MATCHING PATTERN "*.hpp")
 
@@ -167,50 +175,6 @@ install(DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/vast/"
 # ----------------------------------------------------------------------------
 #                                 unit tests
 # ----------------------------------------------------------------------------
-
-# Bro logs.
-set (test_data "#ifndef TEST_DATA\n#define TEST_DATA")
-set(test_data "${test_data}\n\nnamespace bro {\n")
-file(GLOB logs test/logs/bro/*)
-foreach (log ${logs})
-  get_filename_component(log_basename ${log} NAME_WE)
-  set (this "constexpr auto ${log_basename} = \"${log}\";")
-  set (test_data "${test_data}\n${this}")
-endforeach ()
-set(test_data "${test_data}\n\n} // namespace bro")
-
-# Bgpdump logs.
-set(test_data "${test_data}\n\nnamespace bgpdump {\n")
-file(GLOB logs test/logs/bgpdump/*.txt)
-foreach (log ${logs})
-  get_filename_component(log_basename ${log} NAME_WE)
-  set (this "constexpr auto ${log_basename} = \"${log}\";")
-  set (test_data "${test_data}\n${this}")
-endforeach ()
-set(test_data "${test_data}\n\n} // namespace bgpdump")
-
-# MRT logs.
-set(test_data "${test_data}\n\nnamespace mrt {\n")
-file(GLOB logs test/logs/mrt/*)
-foreach (log ${logs})
-  get_filename_component(log_basename ${log} NAME_WE)
-  set (this "constexpr auto ${log_basename} = \"${log}\";")
-  set (test_data "${test_data}\n${this}")
-endforeach ()
-set(test_data "${test_data}\n\n} // namespace mrt")
-
-# PCAP traces.
-set(test_data "${test_data}\n\nnamespace traces {\n")
-file(GLOB traces test/traces/*.pcap)
-foreach (trace ${traces})
-  get_filename_component(trace_basename ${trace} NAME_WE)
-  set(this "constexpr auto ${trace_basename} = \"${trace}\";")
-  set(test_data "${test_data}\n${this}")
-endforeach ()
-set(test_data "${test_data}\n\n} // namespace traces")
-set(test_data "${test_data}\n\n#endif")
-
-configure_file(test/data.hpp.in ${CMAKE_CURRENT_BINARY_DIR}/test/data.hpp)
 
 include_directories(
   ${CMAKE_SOURCE_DIR}/libvast
@@ -244,9 +208,6 @@ set(tests
   test/expression_evaluation.cpp
   test/expression_parseable.cpp
   test/filesystem.cpp
-  test/fixtures/actor_system.cpp
-  test/fixtures/events.cpp
-  test/fixtures/node.cpp
   test/format/bro.cpp
   test/format/mrt.cpp
   test/format/writer.cpp
@@ -255,7 +216,6 @@ set(tests
   test/ids.cpp
   test/iterator.cpp
   test/json.cpp
-  test/main.cpp
   test/meta_index.cpp
   test/mmapbuf.cpp
   test/offset.cpp
@@ -313,7 +273,7 @@ if (VAST_USE_OPENCL)
 endif ()
 
 add_executable(vast-test ${tests})
-target_link_libraries(vast-test libvast ${CMAKE_THREAD_LIBS_INIT})
+target_link_libraries(vast-test libvast libvast_test ${CMAKE_THREAD_LIBS_INIT})
 
 #
 # Generate CMake tests

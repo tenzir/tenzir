@@ -15,7 +15,7 @@
 #include "vast/detail/steady_set.hpp"
 
 #define SUITE detail
-#include "test.hpp"
+#include "vast/test/test.hpp"
 
 using namespace vast;
 using namespace vast::detail;

@@ -25,8 +25,8 @@
 #include "vast/detail/spawn_container_source.hpp"
 
 #define SUITE exporter
-#include "test.hpp"
-#include "fixtures/actor_system_and_events.hpp"
+#include "vast/test/test.hpp"
+#include "vast/test/fixtures/actor_system_and_events.hpp"
 
 using namespace caf;
 using namespace vast;
