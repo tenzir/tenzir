@@ -3,7 +3,7 @@
 # Bro logs.
 set(test_data "#ifndef TEST_DATA\n#define TEST_DATA")
 set(test_data "${test_data}\n\nnamespace bro {\n")
-file(GLOB logs RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}" artefacts/logs/bro/*)
+file(GLOB logs RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}" artifacts/logs/bro/*)
 foreach (log ${logs})
   get_filename_component(log_basename ${log} NAME_WE)
   set (this "constexpr auto ${log_basename} = VAST_TEST_PATH\"${log}\";")
@@ -13,7 +13,7 @@ set(test_data "${test_data}\n\n} // namespace bro")
 
 # Bgpdump logs.
 set(test_data "${test_data}\n\nnamespace bgpdump {\n")
-file(GLOB logs RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}" artefacts/logs/bgpdump/*.txt)
+file(GLOB logs RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}" artifacts/logs/bgpdump/*.txt)
 foreach (log ${logs})
   get_filename_component(log_basename ${log} NAME_WE)
   set (this "constexpr auto ${log_basename} = VAST_TEST_PATH\"${log}\";")
@@ -23,7 +23,7 @@ set(test_data "${test_data}\n\n} // namespace bgpdump")
 
 # MRT logs.
 set(test_data "${test_data}\n\nnamespace mrt {\n")
-file(GLOB logs RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}" artefacts/logs/mrt/*)
+file(GLOB logs RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}" artifacts/logs/mrt/*)
 foreach (log ${logs})
   get_filename_component(log_basename ${log} NAME_WE)
   set (this "constexpr auto ${log_basename} = VAST_TEST_PATH\"${log}\";")
@@ -33,7 +33,7 @@ set(test_data "${test_data}\n\n} // namespace mrt")
 
 # PCAP traces.
 set(test_data "${test_data}\n\nnamespace traces {\n")
-file(GLOB traces RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}" artefacts/traces/*.pcap)
+file(GLOB traces RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}" artifacts/traces/*.pcap)
 foreach (trace ${traces})
   get_filename_component(trace_basename ${trace} NAME_WE)
   set(this "constexpr auto ${trace_basename} = VAST_TEST_PATH\"${trace}\";")
@@ -92,6 +92,6 @@ install(
   DESTINATION include
 )
 install(
-  DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/artefacts"
+  DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/artifacts"
   DESTINATION "${CMAKE_INSTALL_DATADIR}/vast/test"
 )
