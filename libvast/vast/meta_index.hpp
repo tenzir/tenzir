@@ -57,6 +57,10 @@ public:
   ///      `factory_id`
   void factory(caf::atom_value factory_id, synopsis_factory f);
 
+  /// Retrieves the current factory.
+  /// @returns A pair of factory ID and factory function.
+  std::pair<caf::atom_value, synopsis_factory> factory() const;
+
   // -- concepts ---------------------------------------------------------------
 
   friend caf::error inspect(caf::serializer&, const meta_index&);

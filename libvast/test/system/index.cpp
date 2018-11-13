@@ -225,8 +225,11 @@ TEST(meta index factory) {
   auto factory = unbox(get_synopsis_factory(sys));
   CHECK_EQUAL(factory.first, caf::atom("Sy_TEST"));
   CHECK(factory.second == make_synopsis);
-  // We could additionally go into the state of the actor and verify that the
-  // factory has been set.
+  MESSAGE("run initialization code");
+  run();
+  MESSAGE("verify INDEX state");
+  auto& ref = deref<caf::stateful_actor<system::index_state>>(index);
+  CHECK(ref.state.meta_idx.factory() == factory);
 }
 
 FIXTURE_SCOPE_END()
