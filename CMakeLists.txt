@@ -457,6 +457,25 @@ install(EXPORT VASTTargets
   DESTINATION "${INSTALL_VAST_CMAKEDIR}"
   NAMESPACE vast::
 )
+
+include(CMakePackageConfigHelpers)
+write_basic_package_version_file(
+  "${CMAKE_CURRENT_BINARY_DIR}/VASTConfigVersion.cmake"
+  VERSION ${VAST_VERSION}
+  COMPATIBILITY ExactVersion
+)
+
+configure_package_config_file(
+  "${CMAKE_CURRENT_SOURCE_DIR}/cmake/VASTConfig.cmake.in"
+  "${CMAKE_CURRENT_BINARY_DIR}/VASTConfig.cmake"
+  INSTALL_DESTINATION "${INSTALL_VAST_CMAKEDIR}"
+)
+
+install(FILES
+  "${CMAKE_CURRENT_BINARY_DIR}/VASTConfig.cmake"
+  "${CMAKE_CURRENT_BINARY_DIR}/VASTConfigVersion.cmake"
+  DESTINATION "${INSTALL_VAST_CMAKEDIR}"
+)
 #------------------------------------------------------------------------------
 #                                Build Summary
 #------------------------------------------------------------------------------
