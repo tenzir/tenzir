@@ -131,13 +131,12 @@ expected<actor> spawn_importer(node_actor* self, options& opts) {
 }
 
 expected<actor> spawn_index(local_actor* self, options& opts) {
-  using namespace vast::si_literals;
-  size_t max_events = 1_Mi;
+  size_t max_part_size = defaults::system::max_partition_size;
   size_t max_parts = 10;
   size_t taste_parts = 5;
   size_t num_collectors = 10;
   auto r = opts.params.extract_opts({
-    {"max-events,e", "maximum events per partition", max_events},
+    {"max-events,e", "maximum events per partition", max_part_size},
     {"max-parts,p", "maximum number of in-memory partitions", max_parts},
     {"taste-parts,t", "number of immediately scheduled partitions", taste_parts},
     {"max-queries,q", "maximum number of concurrent queries", num_collectors}
@@ -145,7 +144,7 @@ expected<actor> spawn_index(local_actor* self, options& opts) {
   opts.params = r.remainder;
   if (!r.error.empty())
     return make_error(ec::syntax_error, r.error);
-  return self->spawn(index, opts.dir / opts.label, max_events, max_parts,
+  return self->spawn(index, opts.dir / opts.label, max_part_size, max_parts,
                      taste_parts, num_collectors);
 }
 
