@@ -120,10 +120,11 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
 
 struct synopsis_fixture : fixtures::deterministic_actor_system_and_events {
   synopsis_fixture() {
-    directory /= "index";
     // We're adding the default factory under a new name to trigger the code
     // path under test.
     set_synopsis_factory(sys, caf::atom("Sy_TEST"), make_synopsis);
+    index = self->spawn(system::index, directory / "index", slice_size,
+                        in_mem_partitions, taste_count, num_collectors);
   }
 
   ~synopsis_fixture() {
@@ -225,6 +226,8 @@ TEST(meta index factory) {
   REQUIRE(factory);
   CHECK_EQUAL(factory->first, caf::atom("Sy_TEST"));
   CHECK_EQUAL(factory->second, make_synopsis);
+  // We could additionally go into the state of the actor and verify that the
+  // factory has been set.
 }
 
 FIXTURE_SCOPE_END()

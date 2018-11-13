@@ -25,7 +25,6 @@
 #include "vast/concept/printable/vast/expression.hpp"
 #include "vast/concept/printable/vast/uuid.hpp"
 #include "vast/detail/assert.hpp"
-#include "vast/error.hpp"
 #include "vast/event.hpp"
 #include "vast/expression_visitors.hpp"
 #include "vast/ids.hpp"
@@ -133,6 +132,18 @@ caf::error index_state::init(event_based_actor* self, const path& dir,
                              size_t taste_partitions) {
   VAST_TRACE(VAST_ARG(dir), VAST_ARG(partition_size),
              VAST_ARG(in_mem_partitions), VAST_ARG(taste_partitions));
+  // Set the synopsis factory for the meta index.
+  if (auto factory = get_synopsis_factory(self->system())) {
+    auto [id, fun] = *factory;
+    VAST_DEBUG(name, "uses custom meta index synopsis factory", id);
+    meta_idx.factory(id, fun);
+  } else if (factory.error()) {
+    VAST_ERROR(name, "failed to retrieve synopsis factory",
+               self->system().render(factory.error()));
+    return factory.error();
+  } else {
+    VAST_DEBUG(name, "uses default meta index synopsis factory");
+  }
   // Set members.
   this->self = self;
   this->dir = dir;
@@ -142,18 +153,6 @@ caf::error index_state::init(event_based_actor* self, const path& dir,
   // Read persistent state.
   if (auto err = load_from_disk())
     return err;
-  // Set the synopsis factory for the meta index.
-  if (auto factory = get_synopsis_factory(self->system())) {
-    auto [id, fun] = *factory;
-    VAST_DEBUG(self, "uses custom meta index synopsis factory", id);
-    meta_idx.factory(id, fun);
-  } else if (factory.error()) {
-    VAST_ERROR(self, "failed to retrieve synopsis factory",
-               self->system().render(factory.error()));
-    return factory.error();
-  } else {
-    VAST_DEBUG(self, "uses default meta index synopsis factory");
-  }
   // Callback for the stream stage for creating a new partition when the
   // current one becomes full.
   auto fac = [this]() -> partition_ptr {
