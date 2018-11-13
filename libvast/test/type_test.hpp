@@ -19,7 +19,7 @@
 #include "vast/offset.hpp"
 #include "vast/type.hpp"
 
-#include "test.hpp"
+#include "vast/test/test.hpp"
 
 /// Returns the type at `offset{xs...}`.
 template <class... Offsets>

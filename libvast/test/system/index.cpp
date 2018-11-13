@@ -14,7 +14,7 @@
 #include "vast/system/index.hpp"
 
 #define SUITE index
-#include "test.hpp"
+#include "vast/test/test.hpp"
 
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
@@ -30,7 +30,7 @@
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
 
-#include "fixtures/actor_system_and_events.hpp"
+#include "vast/test/fixtures/actor_system_and_events.hpp"
 
 using caf::after;
 using std::chrono_literals::operator""s;

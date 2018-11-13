@@ -15,7 +15,7 @@
 #include "vast/concept/parseable/vast/data.hpp"
 
 #define SUITE parseable
-#include "test.hpp"
+#include "vast/test/test.hpp"
 
 using namespace vast;
 using namespace std::string_literals;

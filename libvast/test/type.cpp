@@ -13,9 +13,9 @@
 
 #define SUITE type
 
-#include "test.hpp"
+#include "vast/test/test.hpp"
 #include "type_test.hpp"
-#include "fixtures/actor_system.hpp"
+#include "vast/test/fixtures/actor_system.hpp"
 
 #include "vast/data.hpp"
 #include "vast/json.hpp"

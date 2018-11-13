@@ -23,8 +23,8 @@
 
 #include "vast/system/configuration.hpp"
 
-#include "fixtures/filesystem.hpp"
-#include "test.hpp"
+#include "vast/test/fixtures/filesystem.hpp"
+#include "vast/test/test.hpp"
 
 namespace fixtures {
 
@@ -73,21 +73,21 @@ struct deterministic_actor_system : test_node_fixture<test_node_base_fixture>,
     if (auto err = bs(xs...))
       FAIL("error during serialization: " << sys.render(err));
     return buf;
-  };
+  }
 
   template <class... Ts>
   void deserialize(const std::vector<char>& buf, Ts&... xs) {
     caf::binary_deserializer bd{sys.dummy_execution_unit(), buf};
     if (auto err = bd(xs...))
       FAIL("error during deserialization: " << sys.render(err));
-  };
+  }
 
   template <class T>
   T roundtrip(const T& x) {
     T y;
     deserialize(serialize(x), y);
     return y;
-  };
+  }
 };
 
 } // namespace fixtures

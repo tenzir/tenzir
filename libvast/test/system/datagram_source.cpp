@@ -15,10 +15,10 @@
 
 #include "vast/system/datagram_source.hpp"
 
-#include "test.hpp"
-#include "test/data.hpp"
+#include "vast/test/test.hpp"
+#include "vast/test/data.hpp"
 
-#include "fixtures/actor_system_and_events.hpp"
+#include "vast/test/fixtures/actor_system_and_events.hpp"
 
 #include <algorithm>
 #include <fstream>

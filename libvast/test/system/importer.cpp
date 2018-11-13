@@ -15,8 +15,8 @@
 
 #include "vast/system/importer.hpp"
 
-#include "test.hpp"
-#include "fixtures/actor_system_and_events.hpp"
+#include "vast/test/test.hpp"
+#include "vast/test/fixtures/actor_system_and_events.hpp"
 
 #include <caf/test/dsl.hpp>
 

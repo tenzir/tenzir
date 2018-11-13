@@ -16,8 +16,8 @@
 #include "vast/segment.hpp"
 #include "vast/segment_builder.hpp"
 
-#include "test.hpp"
-#include "test/fixtures/actor_system_and_events.hpp"
+#include "vast/test/test.hpp"
+#include "vast/test/fixtures/actor_system_and_events.hpp"
 
 #include <caf/binary_deserializer.hpp>
 #include <caf/binary_serializer.hpp>

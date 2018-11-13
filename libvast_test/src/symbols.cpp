@@ -11,25 +11,11 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#pragma once
+#define CAF_TEST_NO_MAIN
+#include "caf/test/unit_test_impl.hpp"
 
-#include "fixtures/actor_system.hpp"
-#include "fixtures/events.hpp"
+namespace vast::test {
 
-namespace fixtures {
+std::set<std::string> config;
 
-/// A fixture with an actor system that uses the default work-stealing
-/// scheduler and test data (events).
-struct actor_system_and_events : actor_system, events {
-  // nop
-};
-
-/// A fixture with an actor system that uses the test coordinator for
-/// determinstic testing of actors and test data (events).
-struct deterministic_actor_system_and_events : deterministic_actor_system,
-                                               events {
-  // nop
-};
-
-} // namespace fixtures
-
+} // namespace vast::test

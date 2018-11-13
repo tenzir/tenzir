@@ -18,6 +18,12 @@ include(CTest)
 include(Helpers)
 include(MacDependencyPaths)
 
+include(GNUInstallDirs)
+set(CMAKE_INSTALL_CMAKEDIR "${CMAKE_INSTALL_LIBDIR}/cmake" CACHE PATH
+  "Base directory for installing cmake specific artifacts"
+)
+set(INSTALL_VAST_CMAKEDIR "${CMAKE_INSTALL_CMAKEDIR}/vast")
+
 # Prohibit in-source builds
 if ("${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_BINARY_DIR}")
   message(FATAL_ERROR "In-source builds are not allowed. Please use "
@@ -430,6 +436,7 @@ include_directories(BEFORE ${CMAKE_SOURCE_DIR}/aux/date/include)
 
 add_subdirectory(doc)
 add_subdirectory(libvast)
+add_subdirectory(libvast_test)
 add_subdirectory(tools)
 add_subdirectory(vast)
 
@@ -437,10 +444,19 @@ add_subdirectory(vast)
 #                           Additional Installations
 #------------------------------------------------------------------------------
 
+export(EXPORT VASTTargets
+  FILE VASTTargets.cmake
+  NAMESPACE vast::
+)
+
 # install date header to PREFIX/include/date
 install(DIRECTORY aux/date/include/date
         DESTINATION include FILES_MATCHING PATTERN "date.h")
 
+install(EXPORT VASTTargets
+  DESTINATION "${INSTALL_VAST_CMAKEDIR}"
+  NAMESPACE vast::
+)
 #------------------------------------------------------------------------------
 #                                Build Summary
 #------------------------------------------------------------------------------

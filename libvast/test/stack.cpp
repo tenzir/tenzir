@@ -16,7 +16,7 @@
 using namespace vast;
 
 #define SUITE stack
-#include "test.hpp"
+#include "vast/test/test.hpp"
 
 using stack_vector = detail::stack_vector<int, 16>;
 

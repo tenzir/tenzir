@@ -14,7 +14,7 @@
 #include "vast/detail/string.hpp"
 
 #define SUITE string
-#include "test.hpp"
+#include "vast/test/test.hpp"
 
 using namespace vast;
 using namespace detail;

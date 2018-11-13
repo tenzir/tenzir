@@ -11,39 +11,25 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#define SUITE operators
-#include "vast/test/test.hpp"
+#pragma once
 
-#include "vast/detail/operators.hpp"
+#include "vast/test/fixtures/actor_system.hpp"
+#include "vast/test/fixtures/events.hpp"
 
-using namespace vast::detail;
+namespace fixtures {
 
-namespace {
-
-struct foo : addable<foo>,
-             addable<foo, int> {
-  explicit foo(int x) : value{x} {
-    // nop
-  }
-
-  foo& operator+=(const foo& other) {
-    value += other.value;
-    return *this;
-  }
-
-  foo& operator+=(int x) {
-    value += x;
-    return *this;
-  }
-
-  int value;
+/// A fixture with an actor system that uses the default work-stealing
+/// scheduler and test data (events).
+struct actor_system_and_events : actor_system, events {
+  // nop
 };
 
-} // namespace <anonymous>
+/// A fixture with an actor system that uses the test coordinator for
+/// determinstic testing of actors and test data (events).
+struct deterministic_actor_system_and_events : deterministic_actor_system,
+                                               events {
+  // nop
+};
 
-TEST(commutative operators) {
-  auto x = foo{42};
-  auto y = foo{-3};
-  auto result = 1 + x + 1 + y + 1;
-  CHECK_EQUAL(result.value, 42);
-}
+} // namespace fixtures
+

@@ -19,8 +19,8 @@
 #include "vast/event.hpp"
 #include "vast/fwd.hpp"
 
-#include "data.hpp"
-#include "test.hpp"
+#include "vast/test/data.hpp"
+#include "vast/test/test.hpp"
 
 namespace fixtures {
 

@@ -15,8 +15,8 @@
 #include "vast/concept/printable/vast/event.hpp"
 
 #define SUITE system
-#include "test.hpp"
-#include "fixtures/node.hpp"
+#include "vast/test/test.hpp"
+#include "vast/test/fixtures/node.hpp"
 
 using namespace caf;
 using namespace vast;
