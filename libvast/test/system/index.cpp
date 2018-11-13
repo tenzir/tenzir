@@ -222,10 +222,9 @@ FIXTURE_SCOPE_END()
 FIXTURE_SCOPE(meta_index_setup_test, synopsis_fixture)
 
 TEST(meta index factory) {
-  auto factory = get_synopsis_factory(sys);
-  REQUIRE(factory);
-  CHECK_EQUAL(factory->first, caf::atom("Sy_TEST"));
-  CHECK(factory->second == make_synopsis);
+  auto factory = unbox(get_synopsis_factory(sys));
+  CHECK_EQUAL(factory.first, caf::atom("Sy_TEST"));
+  CHECK(factory.second == make_synopsis);
   // We could additionally go into the state of the actor and verify that the
   // factory has been set.
 }
