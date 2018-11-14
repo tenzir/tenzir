@@ -321,16 +321,7 @@ endif ()
 message(STATUS "Found CAF")
 set(CAF_FOUND_SAVE ${CAF_FOUND})
 # ...and then optional components.
-find_package(CAF COMPONENTS opencl openssl QUIET)
-if (CAF_LIBRARY_OPENCL)
-  message(STATUS "Found CAF's OpenCL module, enabling OpenCL support")
-  find_package(OpenCL)
-  if (NOT OpenCL_FOUND)
-    message(FATAL_ERROR
-            "Could not find OpenCL despite having found CAF' OpenCL module")
-  endif ()
-  set(VAST_USE_OPENCL true)
-endif ()
+find_package(CAF COMPONENTS openssl QUIET)
 if (CAF_LIBRARY_OPENSSL)
   message(STATUS "Found CAF's OpenSSL module, enabling OpenSSL support")
   set(VAST_USE_OPENSSL true)
@@ -531,7 +522,6 @@ display(GPERFTOOLS_FOUND "${GPERFTOOLS_INCLUDE_DIR}" perftools_summary)
 display(DOXYGEN_FOUND yes doxygen_summary)
 display(MD2MAN_FOUND yes md2man_summary)
 display(VAST_USE_TCMALLOC yes tcmalloc_summary)
-display(VAST_USE_OPENCL "${OpenCL_LIBRARIES}" opencl_summary)
 display(VAST_USE_OPENSSL yes openssl_summary)
 
 STRING(TOUPPER "${CMAKE_BUILD_TYPE}" build_type)
@@ -568,7 +558,6 @@ set(summary
     "\nmd2man:           ${md2man_summary}"
     "\n"
     "\ntcmalloc:         ${tcmalloc_summary}"
-    "\nOpenCL:           ${opencl_summary}"
     "\nOpenSSL:          ${openssl_summary}"
     "\n"
     "\n===========================================================")

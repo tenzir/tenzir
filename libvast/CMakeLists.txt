@@ -138,10 +138,6 @@ if (VAST_USE_OPENSSL)
   target_link_libraries(libvast PUBLIC caf::openssl)
 endif ()
 
-if (VAST_USE_OPENCL)
-  target_link_libraries(libvast PUBLIC caf::opencl)
-endif ()
-
 if (VAST_ENABLE_ASSERTIONS)
   target_link_libraries(libvast PRIVATE ${Backtrace_LIBRARIES})
 endif ()
@@ -264,10 +260,6 @@ set(tests
 
 if (PCAP_FOUND)
   set(tests ${tests} test/format/pcap.cpp)
-endif ()
-
-if (VAST_USE_OPENCL)
-  set(tests ${tests} test/system/opencl.cpp)
 endif ()
 
 add_executable(vast-test ${tests})
