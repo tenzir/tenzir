@@ -129,8 +129,10 @@ set_target_properties(libvast
 target_include_directories(libvast PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+  $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/aux/date/include>
   $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
+target_include_directories(libvast PRIVATE "${PROJECT_SOURCE_DIR}/aux")
 target_link_libraries(libvast PUBLIC caf::core caf::io)
 if (VAST_USE_OPENSSL)
   target_link_libraries(libvast PUBLIC caf::openssl)
