@@ -130,7 +130,6 @@ caf::message source_command(const command& cmd, caf::actor_system& sys,
     return make_message(std::move(err));
   // Start the source.
   bool stop = false;
-  self->send(src, system::run_atom::value);
   self->monitor(src);
   self->do_receive(
     [&](const down_msg& msg) {
