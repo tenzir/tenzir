@@ -133,6 +133,18 @@ caf::error index_state::init(event_based_actor* self, const path& dir,
                              size_t taste_partitions) {
   VAST_TRACE(VAST_ARG(dir), VAST_ARG(max_partition_size),
              VAST_ARG(in_mem_partitions), VAST_ARG(taste_partitions));
+  // Set the synopsis factory for the meta index.
+  if (auto factory = get_synopsis_factory(self->system())) {
+    auto [id, fun] = *factory;
+    VAST_DEBUG(name, "uses custom meta index synopsis factory", id);
+    meta_idx.factory(id, fun);
+  } else if (factory.error()) {
+    VAST_ERROR(name, "failed to retrieve synopsis factory",
+               self->system().render(factory.error()));
+    return factory.error();
+  } else {
+    VAST_DEBUG(name, "uses default meta index synopsis factory");
+  }
   // Set members.
   this->self = self;
   this->dir = dir;

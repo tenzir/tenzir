@@ -172,6 +172,10 @@ void meta_index::factory(caf::atom_value factory_id,
   blacklisted_layouts_.clear();
 }
 
+std::pair<caf::atom_value, synopsis_factory> meta_index::factory() const {
+  return {factory_id_, make_synopsis_};
+}
+
 caf::error inspect(caf::serializer& sink, const meta_index& x) {
   return sink(x.factory_id_, x.partition_synopses_);
 }

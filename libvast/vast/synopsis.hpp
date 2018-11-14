@@ -116,8 +116,16 @@ deserialize_synopsis_factory(caf::deserializer& source);
 /// @param sys The actor system in which to register the factory.
 /// @param id The factory identifier.
 /// @param factory The factory function to associate with *id*.
-/// @relates deserialize_synopsis_factory
+/// @relates deserialize_synopsis_factory get_synopsis_factory
 void set_synopsis_factory(caf::actor_system& sys, caf::atom_value id,
                           synopsis_factory factory);
+
+/// Retrieves a synopsis factory from an actor system runtime settings map.
+/// @param sys The actor system in which to look for a factory.
+/// @returns A pair of factory identifier and factory function or `nullptr` if
+///          there exists no factory in the system.
+/// @relates set_synopsis_factory
+caf::expected<std::pair<caf::atom_value, synopsis_factory>>
+get_synopsis_factory(caf::actor_system& sys);
 
 } // namespace vast
