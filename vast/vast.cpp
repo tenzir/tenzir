@@ -58,7 +58,10 @@ int main(int argc, char** argv) {
   // Dispatch to root command.
   auto result = app.run(sys, cfg.command_line.begin(), cfg.command_line.end());
   if (result.match_elements<caf::error>()) {
-    std::cerr << sys.render(result.get_as<caf::error>(0)) << std::endl;
+    auto& err = result.get_as<caf::error>(0);
+    if (err)
+      std::cerr << sys.render(err) << std::endl;
+    // else: The user most likely killed the process via CTRL+C, print nothing.
     return EXIT_FAILURE;
   }
 }
