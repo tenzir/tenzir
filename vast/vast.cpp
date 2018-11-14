@@ -14,8 +14,10 @@
 #include <chrono>
 
 #include <caf/actor_system.hpp>
+#include <caf/defaults.hpp>
 #include <caf/io/middleman.hpp>
 #include <caf/message_builder.hpp>
+#include <caf/timestamp.hpp>
 
 #include "vast/config.hpp"
 
@@ -37,12 +39,10 @@ using namespace vast::system;
 namespace {
 
 path make_log_dirname() {
-  using namespace std::chrono;
-  auto secs = duration_cast<seconds>(system_clock::now().time_since_epoch());
-  auto pid = detail::process_id();
-  // TODO: Use YYYY-MM-DD-HH-MM-SS instead of a UNIX timestamp.
-  path dir = std::to_string(secs.count()) + "#" + std::to_string(pid);
-  return "log" / dir;
+  auto dir_name = caf::deep_to_string(caf::make_timestamp());
+  dir_name += '#';
+  dir_name += std::to_string(detail::process_id());
+  return path{"log"} / dir_name;
 }
 
 caf::expected<path> setup_log_file(const path& base_dir) {
@@ -63,44 +63,63 @@ caf::expected<path> setup_log_file(const path& base_dir) {
 
 struct config : configuration {
   config() {
+    // Tweak default logging options.
     set("logger.component-filter", "vast");
-    load<caf::io::middleman>();
+    set("logger.console", caf::atom("COLORED"));
+    set("logger.file-verbosity", caf::atom("DEBUG"));
+    // Allow VAST clusters to form a mesh.
     set("middleman.enable-automatic-connections", true);
+    // Load CAF modules.
+    load<caf::io::middleman>();
 #ifdef VAST_USE_OPENSSL
     load<caf::openssl::manager>();
 #endif
+  }
+
+  // Parses the options from the root command and adds them to the global
+  // configuration.
+  void merge_root_options(application& app) {
+    // Delegate to the root command for argument parsing.
+    caf::config_value_map options;
+    app.root.options.parse(options, command_line.begin(), command_line.end());
+    // Move everything into the system-wide options, but use "vast" as category
+    // instead of the default "global" category.
+    auto& src = options["global"];
+    content["vast"].insert(src.begin(), src.end());
   }
 };
 
 } // namespace <anonymous>
 
 int main(int argc, char** argv) {
-  // Scaffold
-  config cfg;
-  cfg.parse(argc, argv);
-  // Setup path for CAF logger.
-  // FIXME: use config value instead of this hardcoded hack for 'dir'. This
-  // would need parsing the INI file and/or command line at this point, but
-  // happens later. Not sure yet what the best solution is. --MV
-  auto dir = path::current() / defaults::command::directory;
-  auto log_file = setup_log_file(dir.complete());
-  if (!log_file) {
-    std::cerr << "failed to setup log file: " << to_string(log_file.error())
-              << std::endl;
-    return EXIT_FAILURE;
-  }
-  cfg.set("logger.file-name", log_file->str());
-  cfg.set("logger.file-verbosity", caf::atom("DEBUG"));
-  cfg.set("logger.console", caf::atom("COLORED"));
-  // Initialize actor system (and thereby CAF's logger).
-  caf::actor_system sys{cfg};
+  // Application setup.
   default_application app;
   app.root.description = "manage a VAST topology";
   app.root.name = argv[0];
-  // Skip any path in the application name.
+  // We're only interested in the application name, not in its path. For
+  // example, argv[0] might contain "./build/release/bin/vast" and we are only
+  // interested in "vast".
   auto find_slash = [&] { return app.root.name.find('/'); };
   for (auto p = find_slash(); p != std::string_view::npos; p = find_slash())
     app.root.name.remove_prefix(p + 1);
+  // CAF scaffold.
+  config cfg;
+  cfg.parse(argc, argv);
+  cfg.merge_root_options(app);
+  // Setup path for CAF logger if not explicitly specified by the user.
+  auto default_fn = caf::defaults::logger::file_name;
+  if (caf::get_or(cfg, "logger.file-name", default_fn) == default_fn) {
+    path dir = get_or(cfg, "vast.dir", defaults::command::directory);
+    if (auto log_file = setup_log_file(dir.complete()); !log_file) {
+      std::cerr << "failed to setup log file: " << to_string(log_file.error())
+                << std::endl;
+      return EXIT_FAILURE;
+    } else {
+      cfg.set("logger.file-name", log_file->str());
+    }
+  }
+  // Initialize actor system (and thereby CAF's logger).
+  caf::actor_system sys{cfg};
   // Dispatch to root command.
   auto result = app.run(sys, cfg.command_line.begin(), cfg.command_line.end());
   if (result.match_elements<caf::error>()) {
