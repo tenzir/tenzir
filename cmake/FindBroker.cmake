@@ -40,12 +40,20 @@ endif ()
 
 include(FindPackageHandleStandardArgs)
 find_package_handle_standard_args(
-  Broker
+  BROKER
   DEFAULT_MSG
   BROKER_LIBRARY
-  BROKER_INCLUDE_DIR)
+  BROKER_INCLUDE_DIRS)
 
 mark_as_advanced(
   BROKER_ROOT_DIR
   BROKER_LIBRARY
-  BROKER_INCLUDE_DIR)
+  BROKER_INCLUDE_DIRS)
+
+# create IMPORTED target
+if (BROKER_FOUND AND NOT TARGET broker::broker)
+  add_library(broker::broker UNKNOWN IMPORTED)
+  set_target_properties(broker::broker PROPERTIES
+    IMPORTED_LOCATION ${BROKER_LIBRARY}
+    INTERFACE_INCLUDE_DIRECTORIES "${BROKER_INCLUDE_DIRS}")
+endif()

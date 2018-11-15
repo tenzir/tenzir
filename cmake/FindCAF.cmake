@@ -71,7 +71,7 @@ foreach (comp ${CAF_FIND_COMPONENTS})
         message(WARNING "Found all.hpp for CAF core, but not build_config.hpp")
         set(CAF_${comp}_FOUND false)
       else()
-        list(APPEND CAF_INCLUDE_DIRS "${caf_build_header_path}")
+        list(APPEND CAF_INCLUDE_DIR_${UPPERCOMP} "${caf_build_header_path}")
       endif()
     endif()
     list(APPEND CAF_INCLUDE_DIRS "${CAF_INCLUDE_DIR_${UPPERCOMP}}")
@@ -118,3 +118,36 @@ mark_as_advanced(CAF_ROOT_DIR
                  CAF_LIBRARIES
                  CAF_INCLUDE_DIRS)
 
+if (CAF_core_FOUND AND NOT TARGET caf::core)
+  add_library(caf::core UNKNOWN IMPORTED)
+  set_target_properties(caf::core PROPERTIES
+    IMPORTED_LOCATION "${CAF_LIBRARY_CORE}")
+  set_target_properties(caf::core PROPERTIES
+    INTERFACE_INCLUDE_DIRECTORIES "${CAF_INCLUDE_DIR_CORE}")
+endif ()
+if (CAF_io_FOUND AND NOT TARGET caf::io)
+  add_library(caf::io UNKNOWN IMPORTED)
+  set_target_properties(caf::io PROPERTIES
+    IMPORTED_LOCATION "${CAF_LIBRARY_IO}")
+  set_target_properties(caf::io PROPERTIES
+      INTERFACE_INCLUDE_DIRECTORIES "${CAF_INCLUDE_DIR_IO}")
+endif ()
+if (CAF_openssl_FOUND AND NOT TARGET caf::openssl)
+  add_library(caf::openssl UNKNOWN IMPORTED)
+  set_target_properties(caf::openssl PROPERTIES
+    IMPORTED_LOCATION "${CAF_LIBRARY_OPENSSL}")
+  set_target_properties(caf::openssl PROPERTIES
+    INTERFACE_INCLUDE_DIRECTORIES "${CAF_INCLUDE_DIR_OPENSSL}")
+endif ()
+if (CAF_opencl_FOUND AND NOT TARGET caf::opencl)
+  add_library(caf::opencl UNKNOWN IMPORTED)
+  set_target_properties(caf::opencl PROPERTIES
+    IMPORTED_LOCATION "${CAF_LIBRARY_OPENCL}")
+  set_target_properties(caf::opencl PROPERTIES
+    INTERFACE_INCLUDE_DIRECTORIES "${CAF_INCLUDE_DIR_OPENCL}")
+endif ()
+if (CAF_test_FOUND AND NOT TARGET caf::test)
+  add_library(caf::test INTERFACE IMPORTED)
+  set_target_properties(caf::test PROPERTIES
+    INTERFACE_INCLUDE_DIRECTORIES "${CAF_INCLUDE_DIR_TEST}")
+endif ()

@@ -5,9 +5,6 @@
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/vast/config.hpp.in
                ${CMAKE_CURRENT_BINARY_DIR}/vast/config.hpp)
 
-include_directories(${CMAKE_CURRENT_SOURCE_DIR})
-include_directories(${CMAKE_CURRENT_BINARY_DIR})
-
 # Some CMake generators (e.g., XCode) require header files in
 # addition to the sources.
 file(GLOB_RECURSE libvast_headers "${CMAKE_CURRENT_SOURCE_DIR}/vast/*.hpp")
@@ -122,30 +119,6 @@ if (PCAP_FOUND)
   )
 endif ()
 
-set(libvast_libs ${CAF_LIBRARIES})
-
-if (VAST_ENABLE_ASSERTIONS)
-  set(libvast_libs ${libvast_libs} ${Backtrace_LIBRARIES})
-endif ()
-
-if (SNAPPY_FOUND)
-  set(libvast_libs ${libvast_libs} ${SNAPPY_LIBRARIES})
-endif ()
-
-if (PCAP_FOUND)
-  set(libvast_libs ${libvast_libs} ${PCAP_LIBRARIES})
-endif ()
-
-# Always link with -lprofile if we have Gperftools.
-if (GPERFTOOLS_FOUND)
-  set(libvast_libs ${libvast_libs} ${GPERFTOOLS_PROFILER})
-endif ()
-
-# Only link against tcmalloc if requested.
-if (GPERFTOOLS_FOUND AND VAST_USE_PERFTOOLS_HEAP_PROFILER)
-  set(libvast_libs ${libvast_libs} ${GPERFTOOLS_TCMALLOC})
-endif ()
-
 add_library(libvast SHARED ${libvast_sources} ${libvast_headers})
 set_target_properties(libvast
   PROPERTIES
@@ -156,9 +129,36 @@ set_target_properties(libvast
 target_include_directories(libvast PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+  $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/aux/date/include>
   $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
-target_link_libraries(libvast ${libvast_libs})
+target_include_directories(libvast PRIVATE "${PROJECT_SOURCE_DIR}/aux")
+target_link_libraries(libvast PUBLIC caf::core caf::io)
+if (VAST_USE_OPENSSL)
+  target_link_libraries(libvast PUBLIC caf::openssl)
+endif ()
+
+if (VAST_ENABLE_ASSERTIONS)
+  target_link_libraries(libvast PRIVATE ${Backtrace_LIBRARIES})
+endif ()
+
+if (SNAPPY_FOUND)
+  target_link_libraries(libvast PRIVATE snappy::snappy)
+endif ()
+
+if (PCAP_FOUND)
+  target_link_libraries(libvast PRIVATE pcap::pcap)
+endif ()
+
+# Always link with -lprofile if we have Gperftools.
+if (GPERFTOOLS_FOUND)
+  target_link_libraries(libvast PUBLIC gperftools::profiler)
+endif ()
+
+# Only link against tcmalloc if requested.
+if (GPERFTOOLS_FOUND AND VAST_USE_PERFTOOLS_HEAP_PROFILER)
+  target_link_libraries(libvast PUBLIC gperftools::tcmalloc)
+endif ()
 
 # Install libvast in PREFIX/lib and headers in PREFIX/include/vast.
 install(TARGETS libvast
@@ -175,12 +175,6 @@ install(DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/vast/"
 # ----------------------------------------------------------------------------
 #                                 unit tests
 # ----------------------------------------------------------------------------
-
-include_directories(
-  ${CMAKE_SOURCE_DIR}/libvast
-  ${CMAKE_BINARY_DIR}/libvast
-  ${CMAKE_CURRENT_SOURCE_DIR}/test
-  ${CMAKE_CURRENT_BINARY_DIR}/test)
 
 set(tests
   test/address.cpp
@@ -266,10 +260,6 @@ set(tests
 
 if (PCAP_FOUND)
   set(tests ${tests} test/format/pcap.cpp)
-endif ()
-
-if (VAST_USE_OPENCL)
-  set(tests ${tests} test/system/opencl.cpp)
 endif ()
 
 add_executable(vast-test ${tests})

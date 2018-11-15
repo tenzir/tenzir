@@ -43,7 +43,11 @@ list(GET version_numbers 0 VERSION_MAJOR)
 list(GET version_numbers 1 VERSION_MINOR)
 set(VERSION_MAJ_MIN "${VERSION_MAJOR}.${VERSION_MINOR}")
 
-set(VAST_LOG_LEVEL "2" CACHE STRING
+set(default_log_level "4")
+if (CMAKE_BUILD_TYPE STREQUAL Release OR CMAKE_BUILD_TYPE STREQUAL RelWithDebInfo)
+  set(default_log_level "2")
+endif ()
+set(VAST_LOG_LEVEL ${default_log_level} CACHE STRING
     "maximum log level that can be set during runtime execution")
 
 #------------------------------------------------------------------------------
@@ -320,23 +324,10 @@ if (NOT CAF_FOUND)
 endif ()
 message(STATUS "Found CAF")
 set(CAF_FOUND_SAVE ${CAF_FOUND})
-include_directories(${CAF_INCLUDE_DIRS})
 # ...and then optional components.
-find_package(CAF COMPONENTS opencl openssl QUIET)
-if (CAF_LIBRARY_OPENCL)
-  message(STATUS "Found CAF's OpenCL module, enabling OpenCL support")
-  include_directories(${CAF_INCLUDE_DIR_OPENCL})
-  find_package(OpenCL)
-  if (NOT OpenCL_FOUND)
-    message(FATAL_ERROR
-            "Could not find OpenCL despite having found CAF' OpenCL module")
-  endif ()
-  include_directories(${OpenCL_INCLUDE_DIRS})
-  set(VAST_USE_OPENCL true)
-endif ()
+find_package(CAF COMPONENTS openssl QUIET)
 if (CAF_LIBRARY_OPENSSL)
   message(STATUS "Found CAF's OpenSSL module, enabling OpenSSL support")
-  include_directories(${CAF_INCLUDE_DIR_OPENSSL})
   set(VAST_USE_OPENSSL true)
 endif ()
 set(CAF_FOUND ${CAF_FOUND_SAVE})
@@ -344,10 +335,9 @@ set(CAF_FOUND ${CAF_FOUND_SAVE})
 if (NOT BROKER_ROOT_DIR AND VAST_PREFIX)
   set(BROKER_ROOT_DIR ${VAST_PREFIX})
 endif ()
-find_package(BROKER QUIET)
+find_package(Broker QUIET)
 if (BROKER_FOUND)
   set(VAST_HAVE_BROKER true)
-  include_directories(${BROKER_INCLUDE_DIRS})
 endif ()
 
 if (NOT SNAPPY_ROOT_DIR AND VAST_PREFIX)
@@ -356,7 +346,6 @@ endif ()
 find_package(SNAPPY QUIET)
 if (SNAPPY_FOUND)
   set(VAST_HAVE_SNAPPY true)
-  include_directories(${SNAPPY_INCLUDE_DIR})
 endif ()
 
 if (NOT PCAP_ROOT_DIR AND VAST_PREFIX)
@@ -365,7 +354,6 @@ endif ()
 find_package(PCAP QUIET)
 if (PCAP_FOUND)
   set(VAST_HAVE_PCAP true)
-  include_directories(${PCAP_INCLUDE_DIR})
 endif ()
 
 if (NOT Gperftools_ROOT_DIR AND VAST_PREFIX)
@@ -374,7 +362,6 @@ endif ()
 find_package(Gperftools QUIET)
 if (GPERFTOOLS_FOUND)
   set(VAST_HAVE_GPERFTOOLS true)
-  include_directories(BEFORE ${GPERFTOOLS_INCLUDE_DIR})
 endif ()
 
 find_package(Doxygen QUIET)
@@ -429,10 +416,6 @@ set(EXECUTABLE_OUTPUT_PATH ${CMAKE_CURRENT_BINARY_DIR}/bin
 
 set (LIBRARY_OUTPUT_PATH ${CMAKE_CURRENT_BINARY_DIR}/lib CACHE
   PATH "Single directory for all libraries")
-
-include_directories(BEFORE ${CMAKE_CURRENT_BINARY_DIR})
-include_directories(BEFORE ${CMAKE_SOURCE_DIR}/aux)
-include_directories(BEFORE ${CMAKE_SOURCE_DIR}/aux/date/include)
 
 add_subdirectory(doc)
 add_subdirectory(libvast)
@@ -542,7 +525,6 @@ display(GPERFTOOLS_FOUND "${GPERFTOOLS_INCLUDE_DIR}" perftools_summary)
 display(DOXYGEN_FOUND yes doxygen_summary)
 display(MD2MAN_FOUND yes md2man_summary)
 display(VAST_USE_TCMALLOC yes tcmalloc_summary)
-display(VAST_USE_OPENCL "${OpenCL_LIBRARIES}" opencl_summary)
 display(VAST_USE_OPENSSL yes openssl_summary)
 
 STRING(TOUPPER "${CMAKE_BUILD_TYPE}" build_type)
@@ -579,7 +561,6 @@ set(summary
     "\nmd2man:           ${md2man_summary}"
     "\n"
     "\ntcmalloc:         ${tcmalloc_summary}"
-    "\nOpenCL:           ${opencl_summary}"
     "\nOpenSSL:          ${openssl_summary}"
     "\n"
     "\n===========================================================")
