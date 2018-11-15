@@ -105,7 +105,6 @@ CMakeCacheEntries=""
 append_cache_entry CMAKE_INSTALL_PREFIX   PATH      /usr/local
 append_cache_entry CMAKE_BUILD_TYPE       STRING    RelWithDebInfo
 append_cache_entry VAST_ENABLE_ASSERTIONS BOOL      true
-append_cache_entry VAST_LOG_LEVEL         INTEGER   $(levelize debug)
 append_cache_entry VAST_USE_TCMALLOC      BOOL      false
 
 # Parse custom environment variable to initialize CMakeGenerator.
