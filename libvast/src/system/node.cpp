@@ -247,7 +247,8 @@ void node_state::init(std::string init_name, path init_dir) {
   // Set member variables.
   name = std::move(init_name);
   dir = std::move(init_dir);
-  // Bring up the accountant.
+  // Bring up the accountant here where we know the log path. The tracker shuts
+  // it down upon termination.
   auto accountant_log = dir / "log" / "current" / "accounting.log";
   accountant = self->spawn<monitored>(system::accountant,
                                       std::move(accountant_log));
