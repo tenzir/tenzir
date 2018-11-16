@@ -43,16 +43,18 @@ default_application::default_application() {
     .add<std::string>("endpoint,e", "node endpoint")
     .add<std::string>("id,i", "the unique ID of this node")
     .add<bool>("version,v", "print version and exit");
+  // Default options for commands.
+  auto opts = [] { return command::opts(); };
   // Add standalone commands.
-  add(start_command, "start", "starts a node");
-  add(remote_command, "stop", "stops a node");
-  add(remote_command, "show", "shows various properties of a topology");
-  add(remote_command, "spawn", "creates a new component");
-  add(remote_command, "kill", "terminates a component");
-  add(remote_command, "peer", "peers with another node");
+  add(start_command, "start", "starts a node", opts());
+  add(remote_command, "stop", "stops a node", opts());
+  add(remote_command, "show", "shows various properties of a topology", opts());
+  add(remote_command, "spawn", "creates a new component", opts());
+  add(remote_command, "kill", "terminates a component", opts());
+  add(remote_command, "peer", "peers with another node", opts());
   // Add "import" command and its children.
   import_ = add(nullptr, "import", "imports data from STDIN or file",
-                command::opts()
+                opts()
                   .add<bool>("node,n",
                              "spawn a node instead of connecting to one")
                   .add<bool>("blocking,b",
@@ -65,12 +67,12 @@ default_application::default_application() {
                "imports BGPdump logs from STDIN or file", src_opts());
   import_->add(generator_command<format::test::reader>, "test",
                "imports random data for testing or benchmarking",
-               command::opts()
+               opts()
                  .add<size_t>("seed", "the random seed")
                  .add<size_t>("num,N", "events to generate"));
   // Add "export" command and its children.
   export_ = add(nullptr, "export", "exports query results to STDOUT or file",
-                command::opts()
+                opts()
                   .add<bool>("node,n",
                              "spawn a node instead of connecting to one")
                   .add<bool>("continuous,c", "marks a query as continuous")
@@ -89,7 +91,7 @@ default_application::default_application() {
 #ifdef VAST_HAVE_PCAP
   import_->add(
     pcap_reader_command, "pcap", "imports PCAP logs from STDIN or file",
-    command::opts()
+    opts()
       .add<std::string>("read,r", "path to input where to read events from")
       .add<std::string>("schema,s", "path to alternate schema")
       .add<bool>("uds,d", "treat -r as listening UNIX domain socket")
@@ -100,7 +102,7 @@ default_application::default_application() {
       .add<size_t>("pseudo-realtime,p", "factor c delaying packets by 1/c"));
   export_->add(
     pcap_writer_command, "pcap", "exports query results in PCAP format",
-    command::opts()
+    opts()
       .add<std::string>("write,w", "path to write events to")
       .add<bool>("uds,d", "treat -w as UNIX domain socket to connect to")
       .add<size_t>("flush,f", "flush to disk after this many packets"));
