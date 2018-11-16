@@ -139,7 +139,8 @@ if (VAST_USE_OPENSSL)
 endif ()
 
 if (VAST_ENABLE_ASSERTIONS)
-  target_link_libraries(libvast PRIVATE ${Backtrace_LIBRARIES})
+  target_include_directories(libvast PUBLIC ${Backtrace_INCLUDE_DIRECTORIES})
+  target_link_libraries(libvast PUBLIC ${Backtrace_LIBRARIES})
 endif ()
 
 if (SNAPPY_FOUND)
