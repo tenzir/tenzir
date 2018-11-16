@@ -134,13 +134,13 @@ tracker(tracker_type::stateful_pointer<tracker_state> self, std::string node) {
   self->set_down_handler(
     [=](const down_msg& msg) {
       auto pred = [&](auto& p) { return p.second.actor == msg.source; };
-      for (auto& peer : self->state.registry.components) {
-        auto i = std::find_if(peer.second.begin(), peer.second.end(), pred);
-        if (i != peer.second.end()) {
+      for (auto& [node, comp_state] : self->state.registry.components) {
+        auto i = std::find_if(comp_state.begin(), comp_state.end(), pred);
+        if (i != comp_state.end()) {
           if (i->first == "tracker")
-            self->state.registry.components.erase(peer.first);
+            self->state.registry.components.erase(node);
           else
-            peer.second.erase(i);
+            comp_state.erase(i);
           return;
         }
       }

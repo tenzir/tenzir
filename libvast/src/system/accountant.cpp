@@ -54,7 +54,7 @@ void init(accountant_actor* self, const path& filename) {
   file << "time\thost\tpid\taid\tkey\tvalue\n";
   if (!file)
     self->quit(make_error(ec::filesystem_error));
-  // Kick off flush loop.
+  VAST_DEBUG(self, "kicks off flush loop");
   self->send(self, flush_atom::value);
 }
 
@@ -77,7 +77,7 @@ void record(accountant_actor* self, const std::string& key, T x) {
   // Flush after at most 10 seconds.
   if (!st.flush_pending) {
     st.flush_pending = true;
-    self->delayed_send(self, seconds(10), flush_atom::value);
+    self->delayed_send(self, 10s, flush_atom::value);
   }
 }
 
