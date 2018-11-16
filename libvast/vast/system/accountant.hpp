@@ -35,14 +35,13 @@ struct accountant_state {
 
 using accountant_type =
   caf::typed_actor<
-    caf::reacts_to<shutdown_atom>,
-    caf::reacts_to<flush_atom>,
     caf::reacts_to<std::string, std::string>,
     caf::reacts_to<std::string, timespan>,
     caf::reacts_to<std::string, timestamp>,
     caf::reacts_to<std::string, int64_t>,
     caf::reacts_to<std::string, uint64_t>,
-    caf::reacts_to<std::string, double>
+    caf::reacts_to<std::string, double>,
+    caf::reacts_to<flush_atom>
   >;
 
 /// Accumulates various performance metrics in a key-value format and writes

@@ -110,7 +110,14 @@ caf::message source_command(const command& cmd, caf::actor_system& sys,
   caf::actor importer;
   self->request(node, infinite, get_atom::value).receive(
     [&](const std::string& id, system::registry& reg) {
-      auto er = reg.components[id].equal_range("importer");
+      // Assign accountant to source.
+      VAST_DEBUG(&cmd, "assigns accountant from node", id, "to new source");
+      auto er = reg.components[id].equal_range("accountant");
+      VAST_ASSERT(er.first != er.second);
+      auto accountant = er.first->second.actor;
+      self->send(src, actor_cast<accountant_type>(accountant));
+      // Assign IMPORTER to SOURCE and start streaming.
+      er = reg.components[id].equal_range("importer");
       if (er.first == er.second) {
         err = make_error(ec::no_importer);
       } else if (reg.components[id].count("importer") > 1) {

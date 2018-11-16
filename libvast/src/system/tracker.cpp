@@ -122,8 +122,15 @@ behavior terminator(stateful_actor<terminator_state>* self, caf::error reason,
 
 tracker_type::behavior_type
 tracker(tracker_type::stateful_pointer<tracker_state> self, std::string node) {
+  // Insert ourself into the registry.
   self->state.registry.components[node].emplace(
     "tracker", component_state{actor_cast<actor>(self), "tracker"});
+  // Insert the accountant into the registry so that it is easy for remote
+  // actors who query the registry to obtain a reference to the actor.
+  auto ptr = self->system().registry().get(accountant_atom::value);
+  VAST_ASSERT(ptr != nullptr);
+  self->state.registry.components[node].emplace(
+    "accountant", component_state{actor_cast<actor>(ptr), "accountant"});
   self->set_down_handler(
     [=](const down_msg& msg) {
       auto pred = [&](auto& p) { return p.second.actor == msg.source; };

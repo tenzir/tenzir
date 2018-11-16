@@ -87,16 +87,13 @@ accountant_type::behavior_type accountant(accountant_actor* self,
                                           const path& filename) {
   using namespace std::chrono;
   init(self, filename);
-  return {
-    [=](shutdown_atom) {
+  self->set_exit_handler(
+    [=](const caf::exit_msg& msg) {
       self->state.file.flush();
-      self->quit(caf::exit_reason::user_shutdown);
-    },
-    [=](flush_atom) {
-      if (self->state.file)
-        self->state.file.flush();
-      self->state.flush_pending = false;
-    },
+      self->quit(msg.reason);
+    }
+  );
+  return {
     [=](const std::string& key, const std::string& value) {
       record(self, key, value);
     },
@@ -117,7 +114,12 @@ accountant_type::behavior_type accountant(accountant_actor* self,
     },
     [=](const std::string& key, double value) {
       record(self, key, value);
-    }
+    },
+    [=](flush_atom) {
+      if (self->state.file)
+        self->state.file.flush();
+      self->state.flush_pending = false;
+    },
   };
 }
 
