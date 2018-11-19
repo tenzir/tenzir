@@ -79,7 +79,7 @@ void peer(node_ptr self, message args) {
   rp.delegate(*peer, peer_atom::value, t, self->state.name);
 }
 
-void show(node_ptr self, message /* args */) {
+void status(node_ptr self, message /* args */) {
   auto rp = self->make_response_promise();
   self->request(self->state.tracker, infinite, get_atom::value).then(
     [=](const registry& reg) mutable {
@@ -267,8 +267,8 @@ caf::behavior node(node_ptr self, std::string id, path dir) {
         stop(self);
       } else if (cmd == "peer") {
         peer(self, args);
-      } else if (cmd == "show") {
-        show(self, args);
+      } else if (cmd == "status") {
+        status(self, args);
       } else if (cmd == "spawn") {
         spawn(self, args);
       } else if (cmd == "kill") {
