@@ -51,13 +51,13 @@
 #define VAST_LOG(...) VAST_PP_OVERLOAD(VAST_LOG_, __VA_ARGS__)(__VA_ARGS__)
 
 namespace vast::detail {
+
 template <class T>
 auto id_or_name(T&& x) {
   static_assert(
     !std::is_same_v<const char*, std::remove_reference<T>>,
-    "const char* is not allowed for the first argument in a logging statement"
-    "supply a component or use `VAST_[ERROR|WARNING|INFO|DEBUG]_ANON` instead");
-
+    "const char* is not allowed for the first argument in a logging statement. "
+    "Supply a component or use VAST_[ERROR|WARNING|INFO|DEBUG]_ANON instead.");
   if constexpr (std::is_pointer_v<T>) {
     using value_type = std::remove_pointer_t<T>;
     if constexpr (has_ostream_operator<value_type>)
@@ -75,7 +75,9 @@ auto id_or_name(T&& x) {
       return caf::detail::pretty_type_name(typeid(T));
   }
 }
+
 } // namespace vast::detail
+
 #define VAST_LOG_COMPONENT(lvl, m, ...)                                        \
   VAST_LOG(lvl, ::vast::detail::id_or_name(m), __VA_ARGS__)
 
@@ -92,7 +94,7 @@ auto id_or_name(T&& x) {
 
 #endif // VAST_LOG_LEVEL > CAF_LOG_LEVEL_TRACE
 
-#if VAST_LOG_LEVEL >= 0
+#if VAST_LOG_LEVEL >= CAF_LOG_LEVEL_ERROR
 #define VAST_ERROR(...) VAST_LOG_COMPONENT(CAF_LOG_LEVEL_ERROR, __VA_ARGS__)
 #define VAST_ERROR_ANON(...) VAST_LOG(CAF_LOG_LEVEL_ERROR, __VA_ARGS__)
 #else
@@ -101,7 +103,7 @@ auto id_or_name(T&& x) {
 #endif
 
 
-#if VAST_LOG_LEVEL >= 1
+#if VAST_LOG_LEVEL >= CAF_LOG_LEVEL_WARNING
 #define VAST_WARNING(...) VAST_LOG_COMPONENT(CAF_LOG_LEVEL_WARNING, __VA_ARGS__)
 #define VAST_WARNING_ANON(...) VAST_LOG(CAF_LOG_LEVEL_WARNING, __VA_ARGS__)
 #else
@@ -109,7 +111,7 @@ auto id_or_name(T&& x) {
 #define VAST_WARNING_ANON(...) CAF_VOID_STMT
 #endif
 
-#if VAST_LOG_LEVEL >= 2
+#if VAST_LOG_LEVEL >= CAF_LOG_LEVEL_INFO
 #define VAST_INFO(...) VAST_LOG_COMPONENT(CAF_LOG_LEVEL_INFO, __VA_ARGS__)
 #define VAST_INFO_ANON(...) VAST_LOG(CAF_LOG_LEVEL_INFO, __VA_ARGS__)
 #else
@@ -117,7 +119,7 @@ auto id_or_name(T&& x) {
 #define VAST_INFO_ANON(...) CAF_VOID_STMT
 #endif
 
-#if VAST_LOG_LEVEL >= 3
+#if VAST_LOG_LEVEL >= CAF_LOG_LEVEL_DEBUG
 #define VAST_DEBUG(...) VAST_LOG_COMPONENT(CAF_LOG_LEVEL_DEBUG, __VA_ARGS__)
 #define VAST_DEBUG_ANON(...) VAST_LOG(CAF_LOG_LEVEL_DEBUG, __VA_ARGS__)
 #else
