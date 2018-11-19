@@ -130,7 +130,7 @@ commands exist:
     *start*         starts a node
     *stop*          stops a node
     *peer*          peers with another node
-    *show*          shows various properties of a topology
+    *status*        shows various properties of a topology
     *spawn*         creates a new component
     *kill*          terminates a component
     *import*        imports data from STDIN or file
@@ -161,11 +161,11 @@ Synopsis:
 Joins a topology through a node identified by *endpoint*.
 See **OPTIONS** for a description of the *endpoint* syntax.
 
-### show
+### status
 
 Synopsis:
 
-  *show*
+  *status*
 
 Displays various properties of a topology.
 
@@ -359,7 +359,7 @@ Make the node at 10.0.0.1 peer with 10.0.0.2:
 
 Connect to a node running at 1.2.3.4 on port 31337 and display topology details:
 
-    vast -e 1.2.3.4:31337 show
+    vast -e 1.2.3.4:31337 status
 
 FORMATS
 -------

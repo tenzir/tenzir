@@ -48,10 +48,11 @@ default_application::default_application() {
   // Add standalone commands.
   add(start_command, "start", "starts a node", opts());
   add(remote_command, "stop", "stops a node", opts());
-  add(remote_command, "show", "shows various properties of a topology", opts());
   add(remote_command, "spawn", "creates a new component", opts());
   add(remote_command, "kill", "terminates a component", opts());
   add(remote_command, "peer", "peers with another node", opts());
+  add(remote_command, "status", "shows various properties of a topology",
+      opts());
   // Add "import" command and its children.
   import_ = add(nullptr, "import", "imports data from STDIN or file",
                 opts()
