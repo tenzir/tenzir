@@ -25,7 +25,8 @@ find_library(BROKER_LIBRARY
 find_path(BROKER_INCLUDE_DIRS
   NAMES broker/broker.hh
   HINTS ${BROKER_ROOT_DIR}/include
-        ${BROKER_ROOT_DIR}/..)
+        ${BROKER_ROOT_DIR}/..
+        ${BROKER_ROOT_DIR}/../..)
 
 if (BROKER_INCLUDE_DIRS)
   # When we're pointing to a build directory, we must add it to the include path
