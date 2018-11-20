@@ -34,7 +34,11 @@
 #include "vast/logger.hpp"
 
 #include "vast/system/accountant.hpp"
+<<<<<<< HEAD
 #include "vast/system/consensus.hpp"
+=======
+#include "vast/system/node.hpp"
+>>>>>>> Remove unused include
 #include "vast/system/spawn.hpp"
 
 using std::string;
