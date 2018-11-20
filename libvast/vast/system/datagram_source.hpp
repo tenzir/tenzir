@@ -49,10 +49,10 @@
 namespace vast::system {
 
 template <class Reader>
-struct datagram_source_state : source_state<Reader> {
+struct datagram_source_state : source_state<Reader, caf::io::broker> {
   // -- member types -----------------------------------------------------------
 
-  using super = source_state<Reader>;
+  using super = source_state<Reader, caf::io::broker>;
 
   // -- constructors, destructors, and assignment operators --------------------
 
