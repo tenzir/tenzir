@@ -22,6 +22,7 @@
 
 #include "vast/detail/overload.hpp"
 #include "vast/detail/string.hpp"
+#include "vast/system/atoms.hpp"
 
 namespace vast {
 namespace {
@@ -249,14 +250,14 @@ caf::expected<bitmap> table_index::lookup_impl(const predicate& pred,
                                                const attribute_extractor& ex,
                                                const data& x) {
   VAST_TRACE(VAST_ARG(pred), VAST_ARG(ex), VAST_ARG(x));
-  if (ex.attr == "type") {
+  if (ex.attr == system::type_atom::value) {
     VAST_ASSERT(caf::holds_alternative<std::string>(x));
     // No hits if the queries name doesn't match our type.
     if (layout().name() != caf::get<std::string>(x))
       return ids{};
     // Otherwise all rows match.
     return row_ids_;
-  } else if (ex.attr == "time") {
+  } else if (ex.attr == system::time_atom::value) {
     // TODO: reconsider whether we still want to support "&time ..." queries.
     VAST_ASSERT(caf::holds_alternative<timestamp>(x));
     if (layout().fields.empty() || layout().fields[0].type != timestamp_type{})
