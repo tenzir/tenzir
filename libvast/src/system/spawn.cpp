@@ -46,8 +46,12 @@
 #include "vast/query_options.hpp"
 #include "vast/schema.hpp"
 #include "vast/system/archive.hpp"
+<<<<<<< HEAD
 #include "vast/system/atoms.hpp"
 #include "vast/system/exporter.hpp"
+=======
+#include "vast/system/simple_store.hpp"
+>>>>>>> Add option to use simple store
 #include "vast/system/importer.hpp"
 #include "vast/system/index.hpp"
 #include "vast/system/node.hpp"
@@ -173,6 +177,7 @@ maybe_actor spawn_importer(node_actor* self, spawn_arguments& args) {
   return self->spawn(importer, args.dir / args.label,
                      caf::get_or(self->system().config(),
                                  "vast.table-slice-size",
+<<<<<<< HEAD
                                  sd::table_slice_size));
 }
 
@@ -190,6 +195,37 @@ maybe_actor spawn_metastore(local_actor* self, spawn_arguments& args) {
   if (!args.empty())
     return make_error(ec::syntax_error, "unexpected argument(s)");
   auto id = args.opt("global.id", raft::server_id{0});
+=======
+                                 defaults::system::table_slice_size));
+}
+
+expected<actor> spawn_index(local_actor* self, options& opts) {
+  size_t max_part_size = defaults::system::max_partition_size;
+  size_t max_parts = 10;
+  size_t taste_parts = 5;
+  size_t num_collectors = 10;
+  auto r = opts.params.extract_opts({
+    {"max-events,e", "maximum events per partition", max_part_size},
+    {"max-parts,p", "maximum number of in-memory partitions", max_parts},
+    {"taste-parts,t", "number of immediately scheduled partitions", taste_parts},
+    {"max-queries,q", "maximum number of concurrent queries", num_collectors}
+  });
+  opts.params = r.remainder;
+  if (!r.error.empty())
+    return make_error(ec::syntax_error, r.error);
+  return self->spawn(index, opts.dir / opts.label, max_part_size, max_parts,
+                     taste_parts, num_collectors);
+}
+
+expected<actor> spawn_metastore_raft(local_actor* self, options& opts) {
+  auto id = raft::server_id{0};
+  auto r = opts.params.extract_opts({
+    {"id,i", "the server ID of the consensus module", id},
+  });
+  opts.params = r.remainder;
+  if (!r.error.empty())
+    return make_error(ec::syntax_error, r.error);
+>>>>>>> Add option to use simple store
   // Bring up the consensus module.
   auto consensus = self->spawn(raft::consensus, args.dir / "consensus");
   self->monitor(consensus);
@@ -206,7 +242,30 @@ maybe_actor spawn_metastore(local_actor* self, spawn_arguments& args) {
   return caf::actor_cast<actor>(s);
 }
 
+<<<<<<< HEAD
 maybe_actor spawn_profiler(local_actor* self, spawn_arguments& args) {
+=======
+expected<actor> spawn_metastore_simple(local_actor* self,
+                                       options& opts) {
+  auto store = self->spawn(simple_store<std::string, data>,
+                           opts.dir / "simple_store");
+  return actor_cast<actor>(store);
+}
+
+expected<actor> spawn_metastore(local_actor* self, options& opts) {
+  auto backend = "simple"s;
+  auto r = opts.params.extract_opts({
+    {"store-backend", "the store backend (simple|raft)", backend},
+  });
+  opts.params = r.remainder;
+  if (backend == "simple")
+    return spawn_metastore_simple(self, opts);
+  if (backend == "raft")
+    return spawn_metastore_raft(self, opts);
+  return make_error(ec::unrecognized_option, backend);
+}
+
+>>>>>>> Add option to use simple store
 #ifdef VAST_HAVE_GPERFTOOLS
   VAST_UNUSED(self, args);
   return make_error(ec::unspecified, "not compiled with gperftools");
