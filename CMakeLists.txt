@@ -43,12 +43,25 @@ list(GET version_numbers 0 VERSION_MAJOR)
 list(GET version_numbers 1 VERSION_MINOR)
 set(VERSION_MAJ_MIN "${VERSION_MAJOR}.${VERSION_MINOR}")
 
-set(default_log_level "4")
+# Use INFO as default level for release builds and TRACE otherwise.
 if (CMAKE_BUILD_TYPE STREQUAL Release OR CMAKE_BUILD_TYPE STREQUAL RelWithDebInfo)
-  set(default_log_level "2")
+  set(VAST_LOG_LEVEL_DEFAULT "INFO")
+else ()
+  set(VAST_LOG_LEVEL_DEFAULT "TRACE")
 endif ()
-set(VAST_LOG_LEVEL ${default_log_level} CACHE STRING
-    "maximum log level that can be set during runtime execution")
+
+# Make sure log level is defined and all-uppercase.
+set(VAST_LOG_LEVEL_DOC "maximum log level available at runtime")
+if (NOT VAST_LOG_LEVEL)
+  set(VAST_LOG_LEVEL "${VAST_LOG_LEVEL_DEFAULT}"
+      CACHE STRING "${VAST_LOG_LEVEL_DOC}")
+elseif (NOT VAST_LOG_LEVEL STREQUAL "$CACHE{VAST_LOG_LEVEL}")
+  # Override cached variable when re-running CMake.
+  string(TOUPPER "${VAST_LOG_LEVEL}" VAST_LOG_LEVEL)
+  set(VAST_LOG_LEVEL "${VAST_LOG_LEVEL}"
+      CACHE STRING "${VAST_LOG_LEVEL_DOC}"
+      FORCE)
+endif ()
 
 #------------------------------------------------------------------------------
 #                               Compiler Setup
@@ -480,27 +493,6 @@ display(VAST_ENABLE_ASSERTIONS yes assertions_summary)
 display(ASAN_FOUND yes asan_summary)
 display(ENABLE_GCOV yes gcov_summary)
 
-if (VAST_LOG_LEVEL EQUAL -1)
-  set(log_level_summary quiet)
-elseif (VAST_LOG_LEVEL EQUAL 0)
-  set(log_level_summary error)
-elseif (VAST_LOG_LEVEL EQUAL 1)
-  set(log_level_summary warning)
-elseif (VAST_LOG_LEVEL EQUAL 2)
-  set(log_level_summary info)
-elseif (VAST_LOG_LEVEL EQUAL 3)
-  set(log_level_summary debug)
-elseif (VAST_LOG_LEVEL EQUAL 4)
-  set(log_level_summary trace)
-else ()
-  # Pick default level based on build type.
-  if (CMAKE_BUILD_TYPE STREQUAL "Release")
-    set(log_level_summary info)
-  else ()
-    set(log_level_summary debug)
-  endif ()
-endif ()
-
 # Figure out whether we point to a build directory or a prefix.
 set(caf_dir ${CAF_LIBRARY_CORE})
 get_filename_component(caf_dir ${caf_dir} PATH)
@@ -542,7 +534,7 @@ set(summary
     "\nInstall prefix:   ${CMAKE_INSTALL_PREFIX}"
     "\n"
     "\nBuild type:       ${CMAKE_BUILD_TYPE}"
-    "\nLog level:        ${log_level_summary}"
+    "\nLog level:        ${VAST_LOG_LEVEL}"
     "\nShow time report: ${time_report_summary}"
     "\nAssertions:       ${assertions_summary}"
     "\nAddressSanitizer: ${asan_summary}"

@@ -12,7 +12,7 @@
 #include <caf/config.hpp>
 
 #define VAST_VERSION @VERSION_MAJ_MIN@
-#define VAST_LOG_LEVEL @VAST_LOG_LEVEL@
+#define VAST_LOG_LEVEL CAF_LOG_LEVEL_@VAST_LOG_LEVEL@
 
 #if defined(CAF_CLANG)
 #  define VAST_CLANG
