@@ -32,7 +32,7 @@ struct predicate_parser : parser<predicate_parser> {
     using parsers::chr;
     using namespace parser_literals;
     auto to_attr_extractor = [](std::string str) -> predicate::operand {
-      return attribute_extractor{std::move(str)};
+      return attribute_extractor{caf::atom_from_string(str)};
     };
     auto to_type_extractor = [](type t) -> predicate::operand {
       return type_extractor{t};

@@ -15,6 +15,7 @@
 
 #include "vast/expression.hpp"
 #include "vast/logger.hpp"
+#include "vast/system/atoms.hpp"
 #include "vast/table_index.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/time.hpp"
@@ -130,7 +131,7 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
       };
       return caf::visit(detail::overload(
         [&](const attribute_extractor& lhs, const data&) -> result_type {
-          if (lhs.attr == "time") {
+          if (lhs.attr == system::time_atom::value) {
             auto pred = [](auto& field) {
               // FIXME: we should really just look at the &timestamp attribute
               // and not all fields of type time. [ch3843]
