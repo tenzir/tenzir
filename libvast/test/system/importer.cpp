@@ -84,9 +84,11 @@ struct importer_fixture : Base {
     return this->self->spawn(dummy_sink, this->bro_conn_log.size(), this->self);
   }
 
-  void add_sink() {
-    anon_send(importer, add_atom::value, make_sink());
+  auto add_sink() {
+    auto snk = make_sink();
+    anon_send(importer, add_atom::value, snk);
     fetch_ok();
+    return snk;
   }
 
   virtual void fetch_ok() = 0;
@@ -215,6 +217,39 @@ TEST(deterministic importer with two sinks and bro source) {
   auto second_result = fetch_result();
   CHECK_EQUAL(result, second_result);
   verify(result, bro_conn_log);
+}
+
+TEST(deterministic importer with one sink and failing bro source) {
+  MESSAGE("connect sink to importer");
+  auto snk = add_sink();
+  MESSAGE("spawn bro source");
+  auto src = make_bro_source();
+  consume_message();
+  self->send(src, system::sink_atom::value, importer);
+  MESSAGE("loop until first ack_batch");
+  if (!allow((upstream_msg::ack_batch), from(importer).to(src)))
+    sched.run_once();
+  MESSAGE("kill the source");
+  self->send_exit(src, exit_reason::kill);
+  expect((exit_msg), from(self).to(src));
+  MESSAGE("loop until we see the forced_close");
+  if (!allow((downstream_msg::forced_close), from(src).to(importer)))
+    sched.run_once();
+  MESSAGE("make sure importer and sink remain unaffected");
+  self->monitor(snk);
+  self->monitor(importer);
+  do {
+    disallow((downstream_msg::forced_close), from(importer).to(snk));
+  } while (sched.try_run_once());
+  using namespace std::chrono_literals;
+  self->receive(
+    [](const down_msg& x) {
+      FAIL("unexpected down message: " << x);
+    },
+    after(0s) >> [] {
+      // nop
+    }
+  );
 }
 
 FIXTURE_SCOPE_END()
