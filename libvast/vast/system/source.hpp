@@ -65,11 +65,9 @@ struct Reader {
 
 /// The source state.
 /// @tparam Reader The reader type, which must model the *Reader* concept.
-template <class Reader>
+template <class Reader, class Self = caf::event_based_actor>
 struct source_state {
   // -- member types -----------------------------------------------------------
-
-  using source_actor = caf::stateful_actor<source_state>;
 
   using factory_type = table_slice_builder_ptr (*)(record_type);
 
@@ -78,9 +76,12 @@ struct source_state {
 
   // -- constructors, destructors, and assignment operators --------------------
 
-  source_state(caf::scheduled_actor* selfptr)
-    : self{caf::actor_cast<source_actor*>(selfptr)} {
+  source_state(Self* selfptr) : self(selfptr) {
     // nop
+  }
+
+  ~source_state() {
+    self->send(accountant, "source.end", caf::make_timestamp());
   }
 
   // -- member variables -------------------------------------------------------
@@ -110,7 +111,7 @@ struct source_state {
   caf::stream_source_ptr<downstream_manager> mgr;
 
   /// Points to the owning actor.
-  source_actor* self;
+  Self* self;
 
   // -- utility functions ------------------------------------------------------
 
@@ -126,17 +127,6 @@ struct source_state {
       VAST_DEBUG(self, "uses registry accountant:", accountant);
       accountant = caf::actor_cast<accountant_type>(acc);
     }
-    // We link to the importers and fail for the same reason, but still report to
-    // the accountant.
-    self->set_exit_handler(
-      [=](const caf::exit_msg& msg) {
-        if (accountant) {
-          timestamp now = std::chrono::system_clock::now();
-          self->send(accountant, "source.end", now);
-        }
-        self->quit(msg.reason);
-      }
-    );
   }
 
   /// Tries to access the builder for `layout`.
