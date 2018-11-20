@@ -90,6 +90,12 @@ void status(node_ptr self, message /* args */) {
           xs.push_back(json{pair.second.label});
         result.emplace(peer.first, std::move(xs));
       }
+      json::object sys_stats;
+      auto& sys = self->system();
+      sys_stats.emplace("running-actors", sys.registry().running());
+      sys_stats.emplace("detached-actors", sys.detached_actors());
+      sys_stats.emplace("worker-threads", sys.scheduler().num_workers());
+      result.emplace("system", std::move(sys_stats));
       rp.deliver(to_string(json{std::move(result)}));
     }
   );
