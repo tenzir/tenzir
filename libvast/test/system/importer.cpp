@@ -133,7 +133,7 @@ using deterministic_fixture_base
 
 struct deterministic_fixture : deterministic_fixture_base {
   deterministic_fixture() : deterministic_fixture_base(100u) {
-    MESSAGE(")run initialization code");
+    MESSAGE("run initialization code");
     run();
   }
 
