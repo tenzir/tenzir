@@ -72,33 +72,6 @@ append_cache_entry() {
   CMakeCacheEntries="$CMakeCacheEntries -D \"$1:$2=$3\""
 }
 
-levelize() {
-  case "$1" in
-    quiet)
-      echo -1
-      ;;
-    error)
-      echo 0
-      ;;
-    warning)
-      echo 1
-      ;;
-    info)
-      echo 2
-      ;;
-    debug)
-      echo 3
-      ;;
-    trace)
-      echo 4
-      ;;
-    *)
-      echo "invalid log level specification, use:"
-      echo "  quiet|error|warning|info|debug|trace"
-      exit 1;
-  esac
-}
-
 # Set defaults
 builddir=build
 CMakeCacheEntries=""
@@ -153,7 +126,7 @@ while [ $# -ne 0 ]; do
         append_cache_entry MORE_WARNINGS BOOL yes
         ;;
     --log-level=*)
-      append_cache_entry VAST_LOG_LEVEL INTEGER $(levelize $optarg)
+      append_cache_entry VAST_LOG_LEVEL STRING "$optarg"
       ;;
     --disable-assertions)
       append_cache_entry VAST_ENABLE_ASSERTIONS BOOL false
