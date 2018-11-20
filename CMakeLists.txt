@@ -43,20 +43,25 @@ list(GET version_numbers 0 VERSION_MAJOR)
 list(GET version_numbers 1 VERSION_MINOR)
 set(VERSION_MAJ_MIN "${VERSION_MAJOR}.${VERSION_MINOR}")
 
-# make sure log level is defined and all-uppercase
-if (NOT VAST_LOG_LEVEL)
-  # use INFO as default level for release builds and TRACE otherwise
-  if (CMAKE_BUILD_TYPE STREQUAL Release OR CMAKE_BUILD_TYPE STREQUAL RelWithDebInfo)
-    set(VAST_LOG_LEVEL "INFO")
-  else ()
-    set(VAST_LOG_LEVEL "TRACE")
-  endif ()
+# Use INFO as default level for release builds and TRACE otherwise.
+if (CMAKE_BUILD_TYPE STREQUAL Release OR CMAKE_BUILD_TYPE STREQUAL RelWithDebInfo)
+  set(VAST_LOG_LEVEL_DEFAULT "INFO")
 else ()
-  string(TOUPPER "${VAST_LOG_LEVEL}" VAST_LOG_LEVEL)
+  set(VAST_LOG_LEVEL_DEFAULT "TRACE")
 endif ()
 
-set(VAST_LOG_LEVEL ${default_log_level} CACHE STRING
-    "maximum log level that can be set during runtime execution")
+# Make sure log level is defined and all-uppercase.
+set(VAST_LOG_LEVEL_DOC "maximum log level available at runtime")
+if (NOT VAST_LOG_LEVEL)
+  set(VAST_LOG_LEVEL "${VAST_LOG_LEVEL_DEFAULT}"
+      CACHE STRING "${VAST_LOG_LEVEL_DOC}")
+elseif (NOT VAST_LOG_LEVEL STREQUAL "$CACHE{VAST_LOG_LEVEL}")
+  # Override cached variable when re-running CMake.
+  string(TOUPPER "${VAST_LOG_LEVEL}" VAST_LOG_LEVEL)
+  set(VAST_LOG_LEVEL "${VAST_LOG_LEVEL}"
+      CACHE STRING "${VAST_LOG_LEVEL_DOC}"
+      FORCE)
+endif ()
 
 #------------------------------------------------------------------------------
 #                               Compiler Setup
