@@ -40,6 +40,7 @@ caf::message sink_command(const command& cmd, actor_system& sys, caf::actor snk,
                           caf::config_value_map& options,
                           command::argument_iterator first,
                           command::argument_iterator last) {
+  VAST_UNUSED(cmd);
   // Get a convenient and blocking way to interact with actors.
   scoped_actor self{sys};
   // Get VAST node.
