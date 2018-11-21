@@ -15,7 +15,9 @@
 
 #include <cstdint>
 #include <limits>
+#include <map>
 #include <memory>
+#include <string>
 #include <vector>
 
 #include "vast/detail/steady_set.hpp"
@@ -60,6 +62,8 @@ constexpr id max_events = max_id + 1;
 
 /// The data type for an enumeration.
 using enumeration = uint32_t;
+
+using synopsis_options = std::map<std::string, data>;
 
 } // namespace vast
 
