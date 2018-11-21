@@ -67,7 +67,7 @@ caf::error inspect(caf::deserializer& source, synopsis_ptr& ptr) {
   else
     return std::move(ex.error());
   // Deserialize into a new instance.
-  auto new_ptr = f(std::move(t));
+  auto new_ptr = f(std::move(t), synopsis_options{});
   if (!new_ptr)
     return ec::invalid_synopsis_type;
   if (auto err = new_ptr->deserialize(source))
@@ -78,7 +78,7 @@ caf::error inspect(caf::deserializer& source, synopsis_ptr& ptr) {
   return caf::none;
 }
 
-synopsis_ptr make_synopsis(type x) {
+synopsis_ptr make_synopsis(type x, const synopsis_options&) {
   return caf::visit(detail::overload(
     [&](const timestamp_type&) -> synopsis_ptr {
       return caf::make_counted<timestamp_synopsis>(std::move(x));
