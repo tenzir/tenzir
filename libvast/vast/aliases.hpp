@@ -15,6 +15,11 @@
 
 #include <cstdint>
 #include <limits>
+<<<<<<< HEAD
+=======
+#include <map>
+#include <memory>
+>>>>>>> Add synopsis_options to aliases.hpp
 #include <string>
 #include <vector>
 
@@ -71,6 +76,8 @@ using cli_argument_iterator = std::vector<std::string>::const_iterator;
 /// Convenience alias for function return types that either return an actor or
 /// an error.
 using maybe_actor = caf::expected<caf::actor>;
+
+using synopsis_options = std::map<std::string, data>;
 
 } // namespace vast
 
