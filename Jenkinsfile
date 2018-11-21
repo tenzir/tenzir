@@ -26,6 +26,11 @@ buildMatrix = [
         tools: ['clang'],
         cmakeArgs: debugBuildFlags,
     ]],
+    ['FreeBSD', [
+        builds: ['debug'],
+        tools: ['clang'],
+        cmakeArgs: debugBuildFlags,
+    ]],
     // Release builds for various OS/tool combinations.
     [ 'Linux', [
         builds: ['release'],
