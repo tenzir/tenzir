@@ -13,6 +13,7 @@
 
 #include "vast/meta_index.hpp"
 
+#include "vast/data.hpp"
 #include "vast/expression.hpp"
 #include "vast/logger.hpp"
 #include "vast/system/atoms.hpp"
@@ -46,7 +47,8 @@ void meta_index::add(const uuid& partition, const table_slice& slice) {
     i = part_synopsis.emplace(layout, table_synopsis{}).first;
     table_syn = &i->second;
     for (auto& field : layout.fields)
-      if (i->second.emplace_back(make_synopsis_(field.type)) != nullptr)
+      if (i->second.emplace_back(make_synopsis_(field.type, synopsis_options_))
+          != nullptr)
         VAST_DEBUG(this, "created new synopsis structure for type", field.type);
     // If we couldn't create a single synopsis for the layout, we will no
     // longer attempt to create synopses in the future.
@@ -173,12 +175,16 @@ void meta_index::factory(caf::atom_value factory_id,
   blacklisted_layouts_.clear();
 }
 
+void meta_index::set_synopsis_option(std::string key, data value) {
+  synopsis_options_.insert_or_assign(std::move(key), std::move(value));
+}
+
 std::pair<caf::atom_value, synopsis_factory> meta_index::factory() const {
   return {factory_id_, make_synopsis_};
 }
 
 caf::error inspect(caf::serializer& sink, const meta_index& x) {
-  return sink(x.factory_id_, x.partition_synopses_);
+  return sink(x.factory_id_, x.synopsis_options_, x.partition_synopses_);
 }
 
 caf::error inspect(caf::deserializer& source, meta_index& x) {
@@ -186,7 +192,7 @@ caf::error inspect(caf::deserializer& source, meta_index& x) {
     x.factory(ex->first, ex->second);
   else
     return std::move(ex.error());
-  return source(x.partition_synopses_);
+  return source(x.synopsis_options_, x.partition_synopses_);
 }
 
 } // namespace vast

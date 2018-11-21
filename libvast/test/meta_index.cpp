@@ -246,7 +246,7 @@ private:
   bool true_ = false;
 };
 
-synopsis_ptr make_custom_synopsis(type x) {
+synopsis_ptr make_custom_synopsis(type x, const synopsis_options&) {
   return caf::visit(detail::overload(
     [&](const boolean_type&) -> synopsis_ptr {
       return caf::make_counted<boolean_synopsis>(std::move(x));

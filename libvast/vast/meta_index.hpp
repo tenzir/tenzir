@@ -16,6 +16,7 @@
 #include <functional>
 #include <unordered_set>
 #include <unordered_map>
+#include <string>
 #include <vector>
 
 #include <caf/atom.hpp>
@@ -57,6 +58,11 @@ public:
   ///      `factory_id`
   void factory(caf::atom_value factory_id, synopsis_factory f);
 
+  /// Sets an option for the factory.
+  /// @param key The option key.
+  /// @param value The option value.
+  void set_synopsis_option(std::string key, data value);
+
   /// Retrieves the current factory.
   /// @returns A pair of factory ID and factory function.
   std::pair<caf::atom_value, synopsis_factory> factory() const;
@@ -79,6 +85,9 @@ private:
 
   /// Maps a partition ID to the synopses for that partition.
   std::unordered_map<uuid, partition_synopsis> partition_synopses_;
+
+  /// The factory function to construct a synopsis structure for a type.
+  synopsis_options synopsis_options_;
 
   /// The factory function to construct a synopsis structure for a type.
   synopsis_factory make_synopsis_;
