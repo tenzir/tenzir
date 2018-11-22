@@ -240,8 +240,42 @@ caf::actor index_state::next_worker() {
   return result;
 }
 
-caf::config_value::dictionary index_state::status() const {
-  return {};
+caf::dictionary<caf::config_value> index_state::status() const {
+  using caf::put_dictionary;
+  using caf::put_list;
+  caf::dictionary<caf::config_value> result;
+  // Misc parameters.
+  result.emplace("meta-index-filename", meta_index_filename().str());
+  result.emplace("idle", stage->idle());
+  result.emplace("congested", stage->idle());
+  // Resident partitions.
+  auto& partitions = put_dictionary(result, "partitions");
+  partitions.emplace("active", to_string(active->id()));
+  auto& cached = put_list(partitions, "cached");
+  for (auto& part : lru_partitions.elements())
+    cached.emplace_back(to_string(part->id()));
+  auto& unpersisted = put_list(partitions, "unpersisted");
+  for (auto& kvp : this->unpersisted)
+    unpersisted.emplace_back(to_string(kvp.first->id()));
+  // Downstream status.
+  auto& downstream = put_dictionary(result, "downstream");
+  auto& out = stage->out();
+  downstream.emplace("buffered", out.buffered());
+  downstream.emplace("max-capacity", out.max_capacity());
+  downstream.emplace("paths", out.num_paths());
+  downstream.emplace("stalled", out.stalled());
+  downstream.emplace("clean", out.stalled());
+  // Upstream status.
+  auto& upstream = put_dictionary(result, "upstream-paths");
+  auto& ipaths = stage->inbound_paths();
+  for (auto ipath : ipaths) {
+    auto name = "slot-" + std::to_string(ipath->slots.receiver);
+    auto& slot = put_dictionary(upstream, name);
+    slot.emplace("priority", to_string(ipath->prio));
+    slot.emplace("assigned-credit", ipath->assigned_credit);
+    slot.emplace("last-acked-batch-id", ipath->last_acked_batch_id);
+  }
+  return result;
 }
 
 behavior index(stateful_actor<index_state>* self, const path& dir,
