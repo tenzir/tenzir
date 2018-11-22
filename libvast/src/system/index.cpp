@@ -240,6 +240,10 @@ caf::actor index_state::next_worker() {
   return result;
 }
 
+caf::config_value::dictionary index_state::status() const {
+  return {};
+}
+
 behavior index(stateful_actor<index_state>* self, const path& dir,
                size_t max_partition_size, size_t in_mem_partitions,
                size_t taste_partitions, size_t num_workers) {
@@ -382,6 +386,9 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
     [=](caf::stream<table_slice_ptr> in) {
       VAST_DEBUG(self, "got a new source");
       return self->state.stage->add_inbound_path(in);
+    },
+    [=](status_atom) -> caf::config_value::dictionary {
+      return self->state.status();
     }
   );
   return {
@@ -393,6 +400,9 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
     [=](caf::stream<table_slice_ptr> in) {
       VAST_DEBUG(self, "got a new source");
       return self->state.stage->add_inbound_path(in);
+    },
+    [=](status_atom) -> caf::config_value::dictionary {
+      return self->state.status();
     }
   };
 }

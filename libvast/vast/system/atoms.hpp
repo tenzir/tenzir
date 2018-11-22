@@ -76,6 +76,7 @@ using snapshot_atom = caf::atom_constant<caf::atom("snapshot")>;
 using start_atom = caf::atom_constant<caf::atom("start")>;
 using state_atom = caf::atom_constant<caf::atom("state")>;
 using statistics_atom = caf::atom_constant<caf::atom("statistics")>;
+using status_atom = caf::atom_constant<caf::atom("status")>;
 using stop_atom = caf::atom_constant<caf::atom("stop")>;
 using store_atom = caf::atom_constant<caf::atom("store")>;
 using submit_atom = caf::atom_constant<caf::atom("submit")>;
