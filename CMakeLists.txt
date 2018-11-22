@@ -43,6 +43,10 @@ list(GET version_numbers 0 VERSION_MAJOR)
 list(GET version_numbers 1 VERSION_MINOR)
 set(VERSION_MAJ_MIN "${VERSION_MAJOR}.${VERSION_MINOR}")
 
+#------------------------------------------------------------------------------
+#                                Logging Setup
+#------------------------------------------------------------------------------
+
 # Use INFO as default level for release builds and TRACE otherwise.
 if (CMAKE_BUILD_TYPE STREQUAL Release OR CMAKE_BUILD_TYPE STREQUAL RelWithDebInfo)
   set(VAST_LOG_LEVEL_DEFAULT "INFO")
@@ -62,6 +66,13 @@ elseif (NOT VAST_LOG_LEVEL STREQUAL "$CACHE{VAST_LOG_LEVEL}")
       CACHE STRING "${VAST_LOG_LEVEL_DOC}"
       FORCE)
 endif ()
+
+# Raise an error for invalid log levels.
+set(validLogLevels QUIET ERROR WARNING DEBUG TRACE)
+list(FIND validLogLevels "${VAST_LOG_LEVEL}" logLevelIndex)
+if(logLevelIndex LESS 0)
+  MESSAGE(FATAL_ERROR "Invalid log level: \"${VAST_LOG_LEVEL}\"")
+endif()
 
 #------------------------------------------------------------------------------
 #                               Compiler Setup
