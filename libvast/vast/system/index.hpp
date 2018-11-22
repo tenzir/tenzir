@@ -105,6 +105,9 @@ struct index_state {
   /// @pre `has_worker()`
   caf::actor next_worker();
 
+  /// @returns various status metrics.
+  caf::dictionary<caf::config_value> status() const;
+
   // -- member variables -------------------------------------------------------
 
   /// Allows to select partitions with timestamps.

@@ -56,6 +56,7 @@ set(libvast_sources
   src/format/writer.cpp
   src/http.cpp
   src/ids.cpp
+  src/json.cpp
   src/meta_index.cpp
   src/null_bitmap.cpp
   src/operator.cpp
