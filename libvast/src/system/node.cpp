@@ -104,6 +104,11 @@ void collect_component_status(node_ptr self,
     req_state->pending += state_map.size();
     for (auto& kvp : state_map) {
       auto& comp_state = kvp.second;
+      // Skip the tracker. It has no interesting state.
+      if (comp_state.label == "tracker") {
+        req_state->pending -= 1;
+        continue;
+      }
       self->request(comp_state.actor, infinite, status_atom::value).then(
         [=, lbl = comp_state.label, nn = node_name]
         (caf::config_value::dictionary& xs) mutable {
