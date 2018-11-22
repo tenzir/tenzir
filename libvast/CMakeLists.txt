@@ -33,6 +33,7 @@ set(libvast_sources
   src/detail/fdistream.cpp
   src/detail/fdostream.cpp
   src/detail/fdoutbuf.cpp
+  src/detail/fill_status_map.cpp
   src/detail/line_range.cpp
   src/detail/make_io_stream.cpp
   src/detail/mmapbuf.cpp
