@@ -97,6 +97,9 @@ struct importer_state {
   /// @pre `available_ids() >= max_table_slice_size`
   id next_id_block();
 
+  /// @returns various status metrics.
+  caf::dictionary<caf::config_value> status() const;
+
   /// Stores how many slices inbound paths can still send us.
   int32_t in_flight_slices = 0;
 
