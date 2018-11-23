@@ -202,7 +202,12 @@ set(tests
   test/command.cpp
   test/compressedbuf.cpp
   test/data.cpp
+<<<<<<< HEAD
   test/detail/column_iterator.cpp
+=======
+  test/default_table_slice.cpp
+  test/detail/algorithms.cpp
+>>>>>>> Generalize fill_status_map
   test/detail/flat_lru_cache.cpp
   test/detail/operators.cpp
   test/detail/set_operations.cpp

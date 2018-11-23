@@ -13,16 +13,23 @@
 
 #pragma once
 
-#include <caf/fwd.hpp>
+#include <algorithm>
+#include <vector>
 
 namespace vast::detail {
 
-/// Fills `xs` state from the stream manager `mgr`.
-void fill_status_map(caf::dictionary<caf::config_value>& xs,
-                     const caf::stream_manager& mgr);
-
-/// Fills `xs` state from `self`.
-void fill_status_map(caf::dictionary<caf::config_value>& xs,
-                     caf::scheduled_actor* self);
+template <class Collection>
+auto unique_values(const Collection& xs) {
+  std::vector<typename Collection::mapped_type> result;
+  result.reserve(xs.size());
+  for (auto& x : xs)
+    result.emplace_back(x.second);
+  std::sort(result.begin(), result.end());
+  auto e = std::unique(result.begin(), result.end());
+  if (e != result.end())
+    result.erase(e, result.end());
+  return result;
+}
 
 } // namespace vast::detail
+

@@ -256,8 +256,8 @@ caf::dictionary<caf::config_value> index_state::status() const {
   auto& unpersisted = put_list(partitions, "unpersisted");
   for (auto& kvp : this->unpersisted)
     unpersisted.emplace_back(to_string(kvp.first->id()));
-  // Streaming state.
-  detail::fill_status_map(result, *stage);
+  // General state such as open streams.
+  detail::fill_status_map(result, self);
   return result;
 }
 
