@@ -11,18 +11,25 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#pragma once
+#define SUITE algorithms
 
-#include <caf/fwd.hpp>
+#include "vast/detail/algorithms.hpp"
 
-namespace vast::detail {
+#include "vast/test/test.hpp"
 
-/// Fills `xs` state from the stream manager `mgr`.
-void fill_status_map(caf::dictionary<caf::config_value>& xs,
-                     const caf::stream_manager& mgr);
+#include <map>
+#include <vector>
 
-/// Fills `xs` state from `self`.
-void fill_status_map(caf::dictionary<caf::config_value>& xs,
-                     caf::scheduled_actor* self);
+using vast::detail::unique_values;
 
-} // namespace vast::detail
+using imap = std::map<int, int>;
+
+using ivec = std::vector<int>;
+
+TEST(empty collection values) {
+  CHECK_EQUAL(unique_values(imap()), ivec());
+}
+
+TEST(unique collection values) {
+  CHECK_EQUAL(unique_values(imap({{1, 10}, {2, 30}, {3, 30}})), ivec({10, 30}));
+}

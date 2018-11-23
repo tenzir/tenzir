@@ -17,7 +17,10 @@
 #include <caf/downstream_manager.hpp>
 #include <caf/inbound_path.hpp>
 #include <caf/outbound_path.hpp>
+#include <caf/scheduled_actor.hpp>
 #include <caf/stream_manager.hpp>
+
+#include "vast/detail/algorithms.hpp"
 
 namespace vast::detail {
 
@@ -43,6 +46,20 @@ void fill_status_map(caf::dictionary<caf::config_value>& xs,
     put(slot, "priority", to_string(ipath->prio));
     put(slot, "assigned-credit", ipath->assigned_credit);
     put(slot, "last-acked-batch-id", ipath->last_acked_batch_id);
+  }
+}
+
+void fill_status_map(caf::dictionary<caf::config_value>& xs,
+                     caf::scheduled_actor* self) {
+  put(xs, "actor-id", self->id());
+  put(xs, "name", self->name());
+  put(xs, "mailbox-size", self->mailbox().size());
+  size_t counter = 0;
+  std::string name;
+  for (auto& mgr : unique_values(self->stream_managers())) {
+    name = "stream-";
+    name += std::to_string(counter++);
+    fill_status_map(put_dictionary(xs, name), *mgr);
   }
 }
 
