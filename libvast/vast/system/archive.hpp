@@ -37,7 +37,8 @@ struct archive_state {
 /// @relates archive
 using archive_type = caf::typed_actor<
   caf::reacts_to<caf::stream<table_slice_ptr>>,
-  caf::replies_to<ids>::with<std::vector<event>>
+  caf::replies_to<ids>::with<std::vector<event>>,
+  caf::replies_to<status_atom>::with<caf::dictionary<caf::config_value>>
 >;
 
 /// Stores event batches and answers queries for ID sets.
