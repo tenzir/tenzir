@@ -24,25 +24,25 @@ namespace vast::detail {
 void fill_status_map(caf::dictionary<caf::config_value>& xs,
                      const caf::stream_manager& mgr) {
   // Manager status.
-  xs.emplace("idle", mgr.idle());
-  xs.emplace("congested", mgr.idle());
+  put(xs, "idle", mgr.idle());
+  put(xs, "congested", mgr.idle());
   // Downstream status.
   auto& downstream = put_dictionary(xs, "downstream");
   auto& out = mgr.out();
-  downstream.emplace("buffered", out.buffered());
-  downstream.emplace("max-capacity", out.max_capacity());
-  downstream.emplace("paths", out.num_paths());
-  downstream.emplace("stalled", out.stalled());
-  downstream.emplace("clean", out.stalled());
+  put(downstream, "buffered", out.buffered());
+  put(downstream, "max-capacity", out.max_capacity());
+  put(downstream, "paths", out.num_paths());
+  put(downstream, "stalled", out.stalled());
+  put(downstream, "clean", out.stalled());
   // Upstream status.
   auto& upstream = put_dictionary(xs, "upstream-paths");
   auto& ipaths = mgr.inbound_paths();
   for (auto ipath : ipaths) {
     auto name = "slot-" + std::to_string(ipath->slots.receiver);
     auto& slot = put_dictionary(upstream, name);
-    slot.emplace("priority", to_string(ipath->prio));
-    slot.emplace("assigned-credit", ipath->assigned_credit);
-    slot.emplace("last-acked-batch-id", ipath->last_acked_batch_id);
+    put(slot, "priority", to_string(ipath->prio));
+    put(slot, "assigned-credit", ipath->assigned_credit);
+    put(slot, "last-acked-batch-id", ipath->last_acked_batch_id);
   }
 }
 
