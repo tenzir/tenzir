@@ -25,20 +25,31 @@
 namespace vast::detail {
 
 void fill_status_map(caf::dictionary<caf::config_value>& xs,
-                     const caf::stream_manager& mgr) {
+                     caf::stream_manager& mgr) {
   // Manager status.
   put(xs, "idle", mgr.idle());
   put(xs, "congested", mgr.idle());
   // Downstream status.
-  auto& downstream = put_dictionary(xs, "downstream");
   auto& out = mgr.out();
+  auto& downstream = put_dictionary(xs, "downstream");
   put(downstream, "buffered", out.buffered());
   put(downstream, "max-capacity", out.max_capacity());
   put(downstream, "paths", out.num_paths());
   put(downstream, "stalled", out.stalled());
   put(downstream, "clean", out.stalled());
+  out.for_each_path([&](auto& opath) {
+    auto name = "slot-" + std::to_string(opath.slots.sender);
+    auto& slot = put_dictionary(downstream, name);
+    put(slot, "pending", opath.pending());
+    put(slot, "clean", opath.clean());
+    put(slot, "closing", opath.closing);
+    put(slot, "next-batch-id", opath.next_batch_id);
+    put(slot, "open-credit", opath.open_credit);
+    put(slot, "desired-batch-size", opath.desired_batch_size);
+    put(slot, "max-capacity", opath.max_capacity);
+  });
   // Upstream status.
-  auto& upstream = put_dictionary(xs, "upstream-paths");
+  auto& upstream = put_dictionary(xs, "upstream");
   auto& ipaths = mgr.inbound_paths();
   for (auto ipath : ipaths) {
     auto name = "slot-" + std::to_string(ipath->slots.receiver);
