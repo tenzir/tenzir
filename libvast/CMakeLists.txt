@@ -258,6 +258,7 @@ set(tests
   test/system/partition.cpp
   test/system/queries.cpp
   test/system/replicated_store.cpp
+  test/system/simple_store.cpp
   test/system/sink.cpp
   test/system/source.cpp
   test/system/task.cpp
