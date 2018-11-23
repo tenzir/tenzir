@@ -11,14 +11,19 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
+#include "vast/system/importer.hpp"
+
 #include <fstream>
+
+#include <caf/config_value.hpp>
+#include <caf/dictionary.hpp>
 
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/error.hpp"
 #include "vast/concept/printable/vast/filesystem.hpp"
+#include "vast/detail/fill_status_map.hpp"
 #include "vast/logger.hpp"
 #include "vast/system/atoms.hpp"
-#include "vast/system/importer.hpp"
 #include "vast/table_slice.hpp"
 
 using namespace std::chrono;
@@ -94,6 +99,22 @@ id importer_state::next_id_block() {
   auto result = g.next(max_table_slice_size);
   if (g.at_end())
     id_generators.erase(id_generators.begin());
+  return result;
+}
+
+caf::dictionary<caf::config_value> importer_state::status() const {
+  caf::dictionary<caf::config_value> result;
+  // Misc parameters.
+  result.emplace("in-flight-slices", in_flight_slices);
+  result.emplace("max-table-slice-size", max_table_slice_size);
+  result.emplace("blocks-per-replenish", blocks_per_replenish);
+  result.emplace("last-replenish", caf::deep_to_string(last_replenish));
+  result.emplace("awaiting-ids", awaiting_ids);
+  result.emplace("available-ids", available_ids());
+  if (!id_generators.empty())
+    result.emplace("next-id", id_generators.front().i);
+  // General state such as open streams.
+  detail::fill_status_map(result, self);
   return result;
 }
 
@@ -322,6 +343,9 @@ behavior importer(stateful_actor<importer_state>* self, path dir,
       } else {
         st.flush_listeners.emplace_back(std::move(listener));
       }
+    },
+    [=](status_atom) {
+      return self->state.status();
     }
   };
 }
