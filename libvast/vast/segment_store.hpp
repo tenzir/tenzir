@@ -53,6 +53,8 @@ public:
 
   caf::error flush() override;
 
+  void inspect_status(caf::dictionary<caf::config_value>& dict) override;
+
   /// @cond PRIVATE
 
   segment_store(caf::actor_system& sys, path dir, uint64_t max_segment_size,

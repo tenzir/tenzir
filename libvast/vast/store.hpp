@@ -40,6 +40,9 @@ public:
   /// Flushes in-memory state to persistent storage.
   /// @returns No error on success.
   virtual caf::error flush() = 0;
+
+  /// Fills `dict` with implementation-specific status information.
+  virtual void inspect_status(caf::dictionary<caf::config_value>& dict) = 0;
 };
 
 } // namespace vast

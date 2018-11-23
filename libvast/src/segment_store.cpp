@@ -10,6 +10,12 @@
  * copied, modified, propagated, or distributed except according to the terms *
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
+
+#include "vast/segment_store.hpp"
+
+#include <caf/config_value.hpp>
+#include <caf/dictionary.hpp>
+
 #include "vast/bitmap_algorithms.hpp"
 #include "vast/error.hpp"
 #include "vast/event.hpp"
@@ -24,7 +30,6 @@
 #include "vast/concept/printable/vast/filesystem.hpp"
 #include "vast/concept/printable/vast/uuid.hpp"
 
-#include "vast/segment_store.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/to_events.hpp"
 
@@ -132,6 +137,29 @@ segment_store::get(const ids& xs) {
     result.insert(result.end(), slices->begin(), slices->end());
   }
   return result;
+}
+
+void segment_store::inspect_status(caf::dictionary<caf::config_value>& dict) {
+  using caf::put;
+  put(dict, "meta-path", meta_path().str());
+  put(dict, "segment-path", segment_path().str());
+  put(dict, "max-segment-size", max_segment_size_);
+  auto& segments = put_dictionary(dict, "segments");
+  // Note: `for (auto& kvp : segments_)` does not compile.
+  for (auto i = segments_.begin(); i != segments_.end(); ++i) {
+    std::string range = "[";
+    range += std::to_string(i->left);
+    range += ", ";
+    range += std::to_string(i->right);
+    range += ")";
+    put(segments, range, to_string(i->value));
+  }
+  auto& cached = put_list(dict, "cached");
+  for (auto& kvp : cache_)
+    cached.emplace_back(to_string(kvp.first));
+  auto& current = put_dictionary(dict, "current-segment");
+  put(current, "id", to_string(builder_.id()));
+  put(current, "size", builder_.table_slice_bytes());
 }
 
 segment_store::segment_store(caf::actor_system& sys, path dir,
