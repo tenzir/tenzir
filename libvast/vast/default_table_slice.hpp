@@ -15,6 +15,7 @@
 
 #include <vector>
 
+#include "vast/aliases.hpp"
 #include "vast/data.hpp"
 #include "vast/fwd.hpp"
 #include "vast/table_slice.hpp"
@@ -60,10 +61,15 @@ public:
 
   caf::atom_value implementation_id() const noexcept;
 
+  /// @returns the container for storing table slice rows.
+  const vector& container() const noexcept {
+    return xs_;
+  }
+
 private:
   // -- member variables -------------------------------------------------------
 
-  std::vector<data> xs_;
+  vector xs_;
 };
 
 /// @relates default_table_slice
