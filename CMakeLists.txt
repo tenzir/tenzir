@@ -535,6 +535,7 @@ display(DOXYGEN_FOUND yes doxygen_summary)
 display(MD2MAN_FOUND yes md2man_summary)
 display(VAST_USE_TCMALLOC yes tcmalloc_summary)
 display(VAST_USE_OPENSSL yes openssl_summary)
+display(NO_UNIT_TESTS no build_tests_summary)
 
 STRING(TOUPPER "${CMAKE_BUILD_TYPE}" build_type)
 set(summary
@@ -547,6 +548,7 @@ set(summary
     "\nInstall prefix:   ${CMAKE_INSTALL_PREFIX}"
     "\n"
     "\nBuild type:       ${CMAKE_BUILD_TYPE}"
+    "\nBuild unit tests: ${build_tests_summary}"
     "\nLog level:        ${VAST_LOG_LEVEL}"
     "\nShow time report: ${time_report_summary}"
     "\nAssertions:       ${assertions_summary}"
