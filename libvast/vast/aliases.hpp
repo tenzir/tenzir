@@ -16,15 +16,24 @@
 #include <cstdint>
 #include <limits>
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
 #include <map>
+=======
+>>>>>>> Switch to caf::config_value_map
 #include <memory>
 >>>>>>> Add synopsis_options to aliases.hpp
 #include <string>
 #include <vector>
 
+<<<<<<< HEAD
 #include "caf/fwd.hpp"
 
+=======
+#include <caf/config_value.hpp>
+
+#include "vast/detail/steady_set.hpp"
+>>>>>>> Switch to caf::config_value_map
 #include "vast/detail/steady_map.hpp"
 #include "vast/detail/steady_set.hpp"
 #include "vast/fwd.hpp"
@@ -77,7 +86,7 @@ using cli_argument_iterator = std::vector<std::string>::const_iterator;
 /// an error.
 using maybe_actor = caf::expected<caf::actor>;
 
-using synopsis_options = std::map<std::string, data>;
+using synopsis_options = caf::config_value_map;
 
 } // namespace vast
 

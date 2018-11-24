@@ -175,8 +175,9 @@ void meta_index::factory(caf::atom_value factory_id,
   blacklisted_layouts_.clear();
 }
 
-void meta_index::set_synopsis_option(std::string key, data value) {
-  synopsis_options_.insert_or_assign(std::move(key), std::move(value));
+void meta_index::set_synopsis_option(std::string_view key,
+                                     caf::config_value value) {
+  put(synopsis_options_, key, std::move(value));
 }
 
 std::pair<caf::atom_value, synopsis_factory> meta_index::factory() const {
