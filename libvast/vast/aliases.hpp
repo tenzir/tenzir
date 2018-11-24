@@ -15,10 +15,11 @@
 
 #include <cstdint>
 #include <limits>
-#include <map>
 #include <memory>
 #include <string>
 #include <vector>
+
+#include <caf/config_value.hpp>
 
 #include "vast/detail/steady_set.hpp"
 #include "vast/detail/steady_map.hpp"
@@ -63,7 +64,7 @@ constexpr id max_events = max_id + 1;
 /// The data type for an enumeration.
 using enumeration = uint32_t;
 
-using synopsis_options = std::map<std::string, data>;
+using synopsis_options = caf::config_value_map;
 
 } // namespace vast
 

@@ -146,7 +146,8 @@ caf::error index_state::init(event_based_actor* self, const path& dir,
   } else {
     VAST_DEBUG(name, "uses default meta index synopsis factory");
   }
-  meta_idx.set_synopsis_option("max-partition-size", max_partition_size);
+  meta_idx.set_synopsis_option("max-partition-size",
+                               caf::config_value{max_partition_size});
   // Set members.
   this->self = self;
   this->dir = dir;

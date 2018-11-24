@@ -14,8 +14,8 @@
 #pragma once
 
 #include <utility>
-#include <map>
 
+#include <caf/fwd.hpp>
 #include <caf/intrusive_ptr.hpp>
 #include <caf/ref_counted.hpp>
 
@@ -93,7 +93,7 @@ caf::error inspect(caf::deserializer& source, synopsis_ptr& ptr);
 
 /// Additional runtime information to pass to the synopsis factory.
 /// @relates synopsis
-using synopsis_options = std::map<std::string, data>;
+using synopsis_options = caf::config_value_map;
 
 /// Constructs a synopsis for a given type. This is the default-factory
 /// function. It is possible to provide a custom factory via

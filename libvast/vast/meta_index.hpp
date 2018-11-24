@@ -61,7 +61,7 @@ public:
   /// Sets an option for the factory.
   /// @param key The option key.
   /// @param value The option value.
-  void set_synopsis_option(std::string key, data value);
+  void set_synopsis_option(std::string_view key, caf::config_value value);
 
   /// Retrieves the current factory.
   /// @returns A pair of factory ID and factory function.
