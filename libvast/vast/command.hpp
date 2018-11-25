@@ -25,7 +25,7 @@
 namespace vast {
 
 /// A named command with optional children.
-struct command {
+class command {
 public:
   // -- member types -----------------------------------------------------------
 

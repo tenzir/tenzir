@@ -22,7 +22,6 @@ namespace vast::system {
 // -- classes ------------------------------------------------------------------
 
 class application;
-class command;
 class configuration;
 class default_application;
 class export_command;

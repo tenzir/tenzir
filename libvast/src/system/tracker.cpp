@@ -118,10 +118,59 @@ behavior terminator(stateful_actor<terminator_state>* self, caf::error reason,
   };
 }
 
+void put_component(scheduled_actor* self, tracker_state& st,
+                   const std::string& type, const actor& component,
+                   std::string& label) {
+  using caf::anon_send;
+  // Save new component.
+  self->monitor(component);
+  auto& local = st.registry.components[st.node];
+  local.emplace(type, component_state{component, label});
+  // Wire it to existing components.
+  auto actors = [&](auto key) {
+    std::vector<actor> result;
+    auto er = local.equal_range(key);
+    for (auto i = er.first; i != er.second; ++i)
+      result.push_back(i->second.actor);
+    return result;
+  };
+  if (type == "exporter") {
+    for (auto& a : actors("archive"))
+      anon_send(component, actor_cast<archive_type>(a));
+    for (auto& a : actors("index"))
+      anon_send(component, index_atom::value, a);
+    for (auto& a : actors("sink"))
+      anon_send(component, sink_atom::value, a);
+  } else if (type == "importer") {
+    for (auto& a : actors("metastore"))
+      anon_send(component, actor_cast<meta_store_type>(a));
+    for (auto& a : actors("archive"))
+      anon_send(component, actor_cast<archive_type>(a));
+    for (auto& a : actors("index"))
+      anon_send(component, index_atom::value, a);
+    for (auto& a : actors("source"))
+      anon_send(a, sink_atom::value, component);
+  } else if (type == "source") {
+    for (auto& a : actors("importer"))
+      anon_send(component, sink_atom::value, a);
+  } else if (type == "sink") {
+    for (auto& a : actors("exporter"))
+      anon_send(a, sink_atom::value, component);
+  }
+  // Propagate new component to peer.
+  auto msg = make_message(put_atom::value, st.node, type, component, label);
+  for (auto& peer : st.registry.components) {
+    auto& t = peer.second.find("tracker")->second.actor;
+    if (t != self)
+      anon_send(t, msg);
+  }
+}
+
 } // namespace <anonymous>
 
 tracker_type::behavior_type
 tracker(tracker_type::stateful_pointer<tracker_state> self, std::string node) {
+  self->state.node = node;
   self->state.registry.components[node].emplace(
     "tracker", component_state{actor_cast<actor>(self), "tracker"});
   self->set_down_handler(
@@ -157,49 +206,18 @@ tracker(tracker_type::stateful_pointer<tracker_state> self, std::string node) {
     [=](put_atom, const std::string& type, const actor& component,
         std::string& label) -> result<ok_atom> {
       VAST_DEBUG(self, "got new", type, '(' << label << ')');
-      // Save new component.
-      self->monitor(component);
-      auto& local = self->state.registry.components[node];
-      local.emplace(type, component_state{component, label});
-      // Wire it to existing components.
-      auto actors = [&](auto key) {
-        std::vector<actor> result;
-        auto er = local.equal_range(key);
-        for (auto i = er.first; i != er.second; ++i)
-          result.push_back(i->second.actor);
-        return result;
-      };
-      if (type == "exporter") {
-        for (auto& a : actors("archive"))
-          self->anon_send(component, actor_cast<archive_type>(a));
-        for (auto& a : actors("index"))
-          self->anon_send(component, index_atom::value, a);
-        for (auto& a : actors("sink"))
-          self->anon_send(component, sink_atom::value, a);
-      } else if (type == "importer") {
-        for (auto& a : actors("metastore"))
-          self->anon_send(component, actor_cast<meta_store_type>(a));
-        for (auto& a : actors("archive"))
-          self->anon_send(component, actor_cast<archive_type>(a));
-        for (auto& a : actors("index"))
-          self->anon_send(component, index_atom::value, a);
-        for (auto& a : actors("source"))
-          self->anon_send(a, sink_atom::value, component);
-      } else if (type == "source") {
-        for (auto& a : actors("importer"))
-          self->anon_send(component, sink_atom::value, a);
-      } else if (type == "sink") {
-        for (auto& a : actors("exporter"))
-          self->anon_send(a, sink_atom::value, component);
-      }
-      // Propagate new component to peer.
-      auto msg = make_message(put_atom::value, node, type, component, label);
-      for (auto& peer : self->state.registry.components) {
-        auto& t = peer.second.find("tracker")->second.actor;
-        if (t != self)
-          self->anon_send(t, msg);
-      }
+      put_component(self, self->state, type, component, label);
       return ok_atom::value;
+    },
+    [=](try_put_atom, const std::string& type, const actor& component,
+        std::string& label) -> result<void> {
+      VAST_DEBUG(self, "got new", type, '(' << label << ')');
+      auto& st = self->state;
+      auto& local = st.registry.components[node];
+      if (local.count(type) != 0)
+        return make_error(ec::unspecified, "component already exists");
+      put_component(self, st, type, component, label);
+      return caf::unit;
     },
     [=](put_atom, const std::string& name, const std::string& type,
         const actor& component, const std::string& label) {
