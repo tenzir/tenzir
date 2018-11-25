@@ -359,19 +359,19 @@ void node_state::init(string init_name, path init_dir) {
 caf::behavior node(node_actor* self, string id, path dir) {
   self->state.init(std::move(id), std::move(dir));
   return {
-    [=](const string& cmd, message& args) {
-      VAST_DEBUG(self, "got command", cmd, deep_to_string(args));
-      auto& st = self->state;
-      // Convert the input to a simple argument vector.
-      std::vector<string> argv{cmd};
-      for (size_t i = 0; i < args.size(); ++i)
-        if (args.match_element<string>(i))
-          argv.emplace_back(args.get_as<string>(i));
+    [=](const std::vector<std::string>& cli, caf::config_value_map& options) {
+      VAST_DEBUG(self, "got command", cli, "with options", options);
       // Run the command.
       this_node = self;
       // Note: several commands make a response promise. In this case, they
       // return an empty message that has no effect when returning it.
-      return run(st.cmd, self->system(), argv.begin(), argv.end());
+      return run(self->state.cmd, self->system(), options, cli);
+    },
+    [=](const std::vector<std::string>& cli) {
+      VAST_DEBUG(self, "got command", cli);
+      // Run the command.
+      this_node = self;
+      return run(self->state.cmd, self->system(), cli);
     },
     [=](peer_atom, actor& tracker, string& peer_name) {
       self->delegate(self->state.tracker, peer_atom::value,
