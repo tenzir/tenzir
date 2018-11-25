@@ -15,22 +15,29 @@
 
 #include <cstdint>
 #include <limits>
-#include <memory>
+#include <string>
 #include <vector>
 
-#include "vast/detail/steady_set.hpp"
 #include "vast/detail/steady_map.hpp"
+#include "vast/detail/steady_set.hpp"
+#include "vast/fwd.hpp"
 
 namespace vast {
 
-// -- data -------------------------------------------------------------------
-
-class data;
-
+/// Boolean artithmetic type.
 using boolean = bool;
+
+/// Signed integer type.
 using integer = int64_t;
+
+/// Unsigned integer type.
 using count = uint64_t;
+
+/// Floating point type.
 using real = double;
+
+/// Enumeration type.
+using enumeration = uint32_t;
 
 /// A random-access sequence of data.
 using vector = std::vector<data>;
@@ -41,9 +48,7 @@ using set = detail::steady_set<data>;
 /// An associative array with ::data as both key and value.
 using map = detail::steady_map<data, data>;
 
-// ---------------------------------------------------------------------------
-
-class ewah_bitstream;
+/// Default bitstream implementation.
 using default_bitstream = ewah_bitstream;
 
 /// Uniquely identifies a VAST event.
@@ -58,8 +63,8 @@ constexpr id max_id = invalid_id - 1;
 /// The largest number of representable events.
 constexpr id max_events = max_id + 1;
 
-/// The data type for an enumeration.
-using enumeration = uint32_t;
+/// Iterates over CLI arguments.
+using cli_argument_iterator = std::vector<std::string>::const_iterator;
 
 } // namespace vast
 

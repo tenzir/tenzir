@@ -94,8 +94,6 @@ set(libvast_sources
   src/system/spawn.cpp
   src/system/spawn_node.cpp
   src/system/spawn_or_connect_to_node.cpp
-  src/system/spawn_sink.cpp
-  src/system/spawn_source.cpp
   src/system/start_command.cpp
   src/system/task.cpp
   src/system/tracker.cpp

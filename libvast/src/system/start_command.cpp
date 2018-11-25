@@ -65,7 +65,7 @@ caf::message start_command(const command&, caf::actor_system& sys,
   auto& node = node_opt->get();
   // Publish our node.
   auto host = node_endpoint.host.empty() ? nullptr : node_endpoint.host.c_str();
-  auto publish = [&]() -> expected<uint16_t> {
+  auto publish = [&]() -> caf::expected<uint16_t> {
     if (use_encryption)
 #ifdef VAST_USE_OPENSSL
       return caf::openssl::publish(node, node_endpoint.port, host);
