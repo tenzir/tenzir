@@ -131,7 +131,7 @@ void collect_component_status(node_ptr self,
   sys_stats.emplace("running-actors", sys.registry().running());
   sys_stats.emplace("detached-actors", sys.detached_actors());
   sys_stats.emplace("worker-threads", sys.scheduler().num_workers());
-  // Send out requests and collects ansers.
+  // Send out requests and collects answers.
   for (auto& [node_name, state_map] : reg.components) {
     req_state->pending += state_map.size();
     for (auto& kvp : state_map) {
