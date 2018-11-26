@@ -51,6 +51,11 @@ public:
 
   caf::error deserialize(caf::deserializer& source) final;
 
+  // -- visitation -------------------------------------------------------------
+
+  /// Applies all values in column `col` to `idx`.
+  void apply_column(size_type col, value_index& idx) const final;
+
   // -- static factory functions -----------------------------------------------
 
   static table_slice_ptr make(record_type layout,
@@ -60,7 +65,7 @@ public:
 
   data_view at(size_type row, size_type col) const final;
 
-  caf::atom_value implementation_id() const noexcept;
+  caf::atom_value implementation_id() const noexcept override;
 
   /// @returns the container for storing table slice rows.
   const vector& container() const noexcept {

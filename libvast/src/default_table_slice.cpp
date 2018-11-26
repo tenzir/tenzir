@@ -17,6 +17,7 @@
 #include <caf/serializer.hpp>
 
 #include "vast/default_table_slice_builder.hpp"
+#include "vast/value_index.hpp"
 
 namespace vast {
 
@@ -37,6 +38,11 @@ caf::error default_table_slice::deserialize(caf::deserializer& source) {
   auto err = source(offset_, xs_);
   rows_ = xs_.size();
   return err;
+}
+
+void default_table_slice::apply_column(size_type col, value_index& idx) const {
+  for (size_type row = 0; row < rows(); ++row)
+    idx.append(make_view(caf::get<vector>(xs_[row])[col]), offset() + row);
 }
 
 data_view default_table_slice::at(size_type row, size_type col) const {

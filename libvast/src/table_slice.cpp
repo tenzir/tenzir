@@ -32,6 +32,7 @@
 #include "vast/format/test.hpp"
 #include "vast/logger.hpp"
 #include "vast/value.hpp"
+#include "vast/value_index.hpp"
 
 namespace vast {
 
@@ -104,6 +105,11 @@ caf::error table_slice::deserialize_ptr(caf::deserializer& source,
   if (!ptr)
     return ec::invalid_table_slice_type;
   return ptr.unshared().deserialize(source);
+}
+
+void table_slice::apply_column(size_type col, value_index& idx) const {
+  for (size_type row = 0; row < rows(); ++row)
+    idx.append(at(row, col), offset() + row);
 }
 
 table_slice_ptr make_table_slice(record_type layout, caf::actor_system& sys,

@@ -49,11 +49,8 @@ caf::expected<column_index_ptr> make_column_index(caf::actor_system& sys,
 
     void add(const table_slice_ptr& x) override {
       VAST_TRACE(VAST_ARG(x));
-      if (has_skip_attribute_)
-        return;
-      auto offset = x->offset();
-      for (table_slice::size_type row = 0; row < x->rows(); ++row)
-        idx_->append(x->at(row, col_), offset + row);
+      if (!has_skip_attribute_)
+        x->apply_column(col_, *idx_);
     }
 
     size_t col_;
