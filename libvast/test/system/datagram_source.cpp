@@ -75,7 +75,7 @@ TEST(bro conn source) {
   mpx.provide_datagram_servant(8080, hdl);
   auto src = mm.spawn_broker(datagram_source<bf::reader>, uint16_t{8080},
                              std::move(reader),
-                             default_table_slice::make_builder, 100u);
+                             default_table_slice_builder::make, 100u);
   run();
   MESSAGE("start sink and initialize stream");
   auto snk = self->spawn(test_sink, src);

@@ -127,7 +127,8 @@ protected:
 ///          *impl* is a registered type in *sys*, otherwise `nullptr`.
 /// @relates table_slice
 table_slice_ptr make_table_slice(record_type layout, caf::actor_system& sys,
-                                 caf::atom_value impl);
+                                 caf::atom_value impl,
+                                 table_slice::size_type rows);
 
 /// Constructs table slices filled with random content for testing purposes.
 /// @param num_slices The number of table slices to generate.

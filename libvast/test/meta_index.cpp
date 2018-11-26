@@ -20,7 +20,7 @@
 
 #include <caf/test/dsl.hpp>
 
-#include "vast/default_table_slice.hpp"
+#include "vast/default_table_slice_builder.hpp"
 #include "vast/synopsis.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
@@ -60,7 +60,7 @@ struct generator {
   }
 
   table_slice_ptr operator()(size_t num) {
-    auto builder = default_table_slice::make_builder(layout);
+    auto builder = default_table_slice_builder::make(layout);
     auto str = "foo";
     for (size_t i = 0; i < num; ++i) {
       timestamp ts = epoch + std::chrono::seconds(i + offset);
@@ -265,7 +265,7 @@ TEST(serialization with custom factory) {
   set_synopsis_factory(sys, factory_id, make_custom_synopsis);
   MESSAGE("generate slice data and add it to the meta index");
   auto layout = record_type{{"x", boolean_type{}}};
-  auto builder = default_table_slice::make_builder(layout);
+  auto builder = default_table_slice_builder::make(layout);
   CHECK(builder->add(make_data_view(true)));
   auto slice = builder->finish();
   REQUIRE(slice != nullptr);

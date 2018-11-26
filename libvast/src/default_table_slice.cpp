@@ -14,7 +14,6 @@
 #include "vast/default_table_slice.hpp"
 
 #include <caf/deserializer.hpp>
-#include <caf/make_counted.hpp>
 #include <caf/serializer.hpp>
 
 #include "vast/default_table_slice_builder.hpp"
@@ -49,24 +48,19 @@ data_view default_table_slice::at(size_type row, size_type col) const {
   return make_view(x[col]);
 }
 
-table_slice_builder_ptr default_table_slice::make_builder(record_type layout) {
-  using namespace detail;
-  return caf::make_counted<default_table_slice_builder>(std::move(layout));
-}
-
 table_slice_ptr default_table_slice::make(record_type layout,
-                                             const std::vector<vector>& rows) {
-  auto builder = make_builder(std::move(layout));
+                                          const std::vector<vector>& rows) {
+  default_table_slice_builder builder{std::move(layout)};
   for (auto& row : rows)
     for (auto& item : row)
-      builder->add(make_view(item));
-  auto result = builder->finish();
+      builder.add(make_view(item));
+  auto result = builder.finish();
   VAST_ASSERT(result != nullptr);
   return result;
 }
 
 caf::atom_value default_table_slice::implementation_id() const noexcept {
-  return caf::atom("TS_Default");
+  return class_id;
 }
 
 } // namespace vast

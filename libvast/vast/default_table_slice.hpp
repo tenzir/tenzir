@@ -15,6 +15,8 @@
 
 #include <vector>
 
+#include <caf/atom.hpp>
+
 #include "vast/aliases.hpp"
 #include "vast/data.hpp"
 #include "vast/fwd.hpp"
@@ -27,7 +29,11 @@ class default_table_slice : public table_slice {
 public:
   // -- friends ----------------------------------------------------------------
 
-  friend default_table_slice_builder;
+  friend class default_table_slice_builder;
+
+  // -- constants --------------------------------------------------------------
+
+  static constexpr caf::atom_value class_id = caf::atom("TS_Default");
 
   // -- constructors, destructors, and assignment operators --------------------
 
@@ -46,11 +52,6 @@ public:
   caf::error deserialize(caf::deserializer& source) final;
 
   // -- static factory functions -----------------------------------------------
-
-  /// Constructs a builder that generates a default_table_slice.
-  /// @param layout The layout of the table_slice.
-  /// @returns The builder instance.
-  static table_slice_builder_ptr make_builder(record_type layout);
 
   static table_slice_ptr make(record_type layout,
                               const std::vector<vector>& rows);
