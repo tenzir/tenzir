@@ -67,6 +67,11 @@ public:
   static caf::error deserialize_ptr(caf::deserializer& source,
                                     table_slice_ptr& ptr);
 
+  // -- visitation -------------------------------------------------------------
+
+  /// Applies all values in column `col` to `idx`.
+  virtual void apply_column(size_type col, value_index& idx) const;
+
   // -- properties -------------------------------------------------------------
 
   /// @returns the table layout.
