@@ -68,7 +68,7 @@ elseif (NOT VAST_LOG_LEVEL STREQUAL "$CACHE{VAST_LOG_LEVEL}")
 endif ()
 
 # Raise an error for invalid log levels.
-set(validLogLevels QUIET ERROR WARNING DEBUG TRACE)
+set(validLogLevels QUIET ERROR WARNING INFO DEBUG TRACE)
 list(FIND validLogLevels "${VAST_LOG_LEVEL}" logLevelIndex)
 if(logLevelIndex LESS 0)
   MESSAGE(FATAL_ERROR "Invalid log level: \"${VAST_LOG_LEVEL}\"")
