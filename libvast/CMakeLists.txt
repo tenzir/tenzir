@@ -61,6 +61,7 @@ set(libvast_sources
   src/operator.cpp
   src/pattern.cpp
   src/port.cpp
+  src/row_major_matrix_table_slice_builder.cpp
   src/schema.cpp
   src/segment.cpp
   src/segment_builder.cpp

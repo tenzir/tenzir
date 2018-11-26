@@ -23,7 +23,9 @@
 #include <caf/test/dsl.hpp>
 
 #include "vast/default_table_slice_builder.hpp"
+#include "vast/row_major_matrix_table_slice_builder.hpp"
 #include "vast/value.hpp"
+#include "vast/value_index.hpp"
 
 using namespace vast;
 using namespace std::string_literals;
@@ -60,6 +62,11 @@ public:
     return caf::make_counted<rebranded_table_slice_builder>(std::move(layout));
   }
 
+  static table_slice_ptr make_slice(record_type layout,
+                                    table_slice::size_type) {
+    return caf::make_copy_on_write<rebranded_table_slice>(std::move(layout));
+  }
+
   table_slice_ptr finish() override {
     auto result = super::finish();
     eager_init();
@@ -67,6 +74,10 @@ public:
   }
 
   caf::atom_value implementation_id() const noexcept override {
+    return get_implementation_id();
+  }
+
+  static caf::atom_value get_implementation_id() noexcept {
     return rebranded_table_slice::class_id;
   }
 
@@ -78,11 +89,6 @@ private:
   }
 };
 
-table_slice_ptr rebranded_slice_factory(record_type layout,
-                                        table_slice::size_type) {
-  return caf::make_copy_on_write<rebranded_table_slice>(std::move(layout));
-}
-
 struct fixture : fixtures::deterministic_actor_system {
   record_type layout = record_type{
     {"a", integer_type{}},
@@ -93,6 +99,7 @@ struct fixture : fixtures::deterministic_actor_system {
   std::vector<table_slice_builder_ptr> builders{
     default_table_slice_builder::make(layout),
     rebranded_table_slice_builder::make(layout),
+    row_major_matrix_table_slice_builder::make(layout),
   };
 
   using tup = std::tuple<integer, std::string, real>;
@@ -109,6 +116,13 @@ struct fixture : fixtures::deterministic_actor_system {
     return caf::binary_deserializer{sys, buf};
   }
 
+  template <class Builder>
+  void add_slice_factory() {
+    using fptr = caf::runtime_settings_map::generic_function_pointer;
+    sys.runtime_settings().set(Builder::get_implementation_id(),
+                               reinterpret_cast<fptr>(Builder::make_slice));
+  }
+
   fixture() : sink(sys, buf) {
     if (std::any_of(builders.begin(), builders.end(),
                     [](auto& ptr) { return ptr == nullptr; }))
@@ -123,9 +137,8 @@ struct fixture : fixtures::deterministic_actor_system {
     for (auto& x : test_data)
       test_values.emplace_back(value::make(make_vector(x), layout));
     // Register factory.
-    using fptr = caf::runtime_settings_map::generic_function_pointer;
-    sys.runtime_settings().set(rebranded_table_slice::class_id,
-                               reinterpret_cast<fptr>(rebranded_slice_factory));
+    add_slice_factory<rebranded_table_slice_builder>();
+    add_slice_factory<row_major_matrix_table_slice_builder>();
   }
 
   auto make_slice(table_slice_builder& builder) {
@@ -227,6 +240,15 @@ struct fixture : fixtures::deterministic_actor_system {
     CHECK_EQUAL(slice2.get_as<table_slice_ptr>(0)->implementation_id(),
                 builder.implementation_id());
     buf.clear();
+  }
+
+  void test_apply_column(table_slice_builder& builder) {
+    MESSAGE(">> test apply_column");
+    auto idx = value_index::make(integer_type{});
+    REQUIRE(idx != nullptr);
+    auto slice = make_slice(builder);
+    slice->apply_column(0, *idx);
+    CHECK_EQUAL(idx->offset(), 3u);
   }
 
   void test_implementations() {
