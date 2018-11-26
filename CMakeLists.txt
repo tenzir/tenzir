@@ -47,9 +47,11 @@ set(VERSION_MAJ_MIN "${VERSION_MAJOR}.${VERSION_MINOR}")
 #                                Logging Setup
 #------------------------------------------------------------------------------
 
-# Use INFO as default level for release builds and TRACE otherwise.
-if (CMAKE_BUILD_TYPE STREQUAL Release OR CMAKE_BUILD_TYPE STREQUAL RelWithDebInfo)
+# Choose a deafult log level based on build type.
+if (CMAKE_BUILD_TYPE STREQUAL Release)
   set(VAST_LOG_LEVEL_DEFAULT "INFO")
+elseif (CMAKE_BUILD_TYPE STREQUAL RelWithDebInfo)
+  set(VAST_LOG_LEVEL_DEFAULT "DEBUG")
 else ()
   set(VAST_LOG_LEVEL_DEFAULT "TRACE")
 endif ()
