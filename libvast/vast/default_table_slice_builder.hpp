@@ -20,7 +20,7 @@
 namespace vast {
 
 /// The default implementation of `table_slice_builder`.
-class default_table_slice_builder final : public table_slice_builder {
+class default_table_slice_builder : public table_slice_builder {
 public:
   // -- member types -----------------------------------------------------------
 
@@ -30,19 +30,25 @@ public:
 
   default_table_slice_builder(record_type layout);
 
+  // -- factory functions ------------------------------------------------------
+
+  static table_slice_builder_ptr make(record_type layout);
+
   // -- properties -------------------------------------------------------------
 
   bool append(data x);
 
-  bool add(data_view x) final;
+  bool add(data_view x) override;
 
-  table_slice_ptr finish() final;
+  table_slice_ptr finish() override;
 
-  size_t rows() const noexcept final;
+  size_t rows() const noexcept override;
 
-  void reserve(size_t num_rows) final;
+  void reserve(size_t num_rows) override;
 
-private:
+  caf::atom_value implementation_id() const noexcept override;
+
+protected:
   // -- utility functions ------------------------------------------------------
 
   /// Allocates `slice_` and resets related state if necessary.

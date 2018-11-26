@@ -76,6 +76,7 @@ caf::error table_slice::serialize_ptr(caf::serializer& sink,
   }
   return caf::error::eval([&] { return sink(ptr->layout()); },
                           [&] { return sink(ptr->implementation_id()); },
+                          [&] { return sink(ptr->rows()); },
                           [&] { return ptr->serialize(sink); });
 }
 
@@ -84,39 +85,43 @@ caf::error table_slice::deserialize_ptr(caf::deserializer& source,
   if (source.context() == nullptr)
     return caf::sec::no_context;
   record_type layout;
-  caf::atom_value impl_id;
-  auto err = caf::error::eval([&] { return source(layout); },
-                              [&] { return source(impl_id); });
-  if (err)
+  if (auto err = source(layout))
     return err;
   // Only default-constructed table slice handles have an empty layout.
   if (layout.fields.empty()) {
     ptr.reset();
     return caf::none;
   }
+  caf::atom_value impl_id;
+  table_slice::size_type impl_rows;
+  auto err = caf::error::eval([&] { return source(impl_id); },
+                              [&] { return source(impl_rows); });
+  if (err)
+    return err;
+  // Construct a table slice of proper type.
   ptr = make_table_slice(std::move(layout), source.context()->system(),
-                         impl_id);
+                         impl_id, impl_rows);
   if (!ptr)
     return ec::invalid_table_slice_type;
   return ptr.unshared().deserialize(source);
 }
 
 table_slice_ptr make_table_slice(record_type layout, caf::actor_system& sys,
-                                 caf::atom_value impl) {
-  if (impl == caf::atom("TS_Default")) {
+                                 caf::atom_value impl,
+                                 table_slice::size_type rows) {
+  if (impl == default_table_slice::class_id) {
     return caf::make_copy_on_write<default_table_slice>(std::move(layout));
   }
   using generic_fun = caf::runtime_settings_map::generic_function_pointer;
-  using factory_fun = table_slice_ptr (*)(record_type);
+  using factory_fun = table_slice_ptr (*)(record_type, table_slice::size_type);
   auto val = sys.runtime_settings().get(impl);
   if (!caf::holds_alternative<generic_fun>(val)) {
     VAST_ERROR_ANON("table_slice",
-                    "has no factory function for implementation key",
-                    impl);
+                    "has no factory function for implementation key", impl);
     return table_slice_ptr{nullptr};
   }
   auto fun = reinterpret_cast<factory_fun>(caf::get<generic_fun>(val));
-  return fun(std::move(layout));
+  return fun(std::move(layout), rows);
 }
 
 expected<std::vector<table_slice_ptr>>

@@ -192,7 +192,6 @@ set(tests
   test/command.cpp
   test/compressedbuf.cpp
   test/data.cpp
-  test/default_table_slice.cpp
   test/detail/flat_lru_cache.cpp
   test/detail/operators.cpp
   test/detail/set_operations.cpp

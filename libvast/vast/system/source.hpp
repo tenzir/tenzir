@@ -32,7 +32,7 @@
 #include "vast/concept/printable/vast/error.hpp"
 #include "vast/concept/printable/vast/expression.hpp"
 #include "vast/concept/printable/vast/type.hpp"
-#include "vast/default_table_slice.hpp"
+#include "vast/default_table_slice_builder.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/error.hpp"
@@ -337,7 +337,7 @@ caf::behavior default_source(caf::stateful_actor<source_state<Reader>>* self,
                              Reader reader) {
   auto slice_size = get_or(self->system().config(), "vast.table-slice-size",
                            defaults::system::table_slice_size);
-  return source(self, std::move(reader), default_table_slice::make_builder,
+  return source(self, std::move(reader), default_table_slice_builder::make,
                 slice_size);
 }
 
