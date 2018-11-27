@@ -29,38 +29,38 @@ FIXTURE_SCOPE(simple_store_tests, fixtures::actor_system)
 TEST(simple store) {
   auto store_dir = directory / "simple-store";
   {
-    auto store = self->spawn(simple_store<std::string, int>, store_dir);
+    auto store = self->spawn(simple_store, store_dir);
     MESSAGE("put two values");
-    self->request(store, infinite, put_atom::value, "foo", 42).receive(
+    self->request(store, infinite, put_atom::value, "foo", data{42}).receive(
       [&](ok_atom) {},
       error_handler()
     );
     MESSAGE("get a key with a single value");
     self->request(store, infinite, get_atom::value, "foo").receive(
-      [&](optional<int> result) {
+      [&](optional<data> result) {
         REQUIRE(result);
-        CHECK_EQUAL(*result, 42);
+        CHECK_EQUAL(*result, data{42});
       },
       error_handler()
     );
     MESSAGE("get an invalid key value");
     self->request(store, infinite, get_atom::value, "bar").receive(
-      [&](optional<int> result) {
+      [&](optional<data> result) {
         CHECK(!result);
       },
       error_handler()
     );
     MESSAGE("add to an existing single value");
-    self->request(store, infinite, add_atom::value, "foo", 1).receive(
-      [&](int old) {
-        CHECK_EQUAL(old, 42);
+    self->request(store, infinite, add_atom::value, "foo", data{1}).receive(
+      [&](data old) {
+        CHECK_EQUAL(old, data{42});
       },
       error_handler()
     );
     MESSAGE("add to a non-existing single value");
-    self->request(store, infinite, add_atom::value, "baz", 1).receive(
-      [&](int old) {
-        CHECK_EQUAL(old, 0);
+    self->request(store, infinite, add_atom::value, "baz", data{1}).receive(
+      [&](data old) {
+        CHECK_EQUAL(old, data{0});
       },
       error_handler()
     );
@@ -73,18 +73,18 @@ TEST(simple store) {
     self->send_exit(store, exit_reason::user_shutdown);
   }
   {
-    auto store = self->spawn(simple_store<std::string, int>, store_dir);
+    auto store = self->spawn(simple_store, store_dir);
     MESSAGE("get a value from the store's previous lifetime");
     self->request(store, infinite, get_atom::value, "baz").receive(
-      [&](optional<int> result) {
+      [&](optional<data> result) {
         REQUIRE(result);
-        CHECK_EQUAL(*result, 1);
+        CHECK_EQUAL(*result, data{1});
       },
       error_handler()
     );
     MESSAGE("get a key that was deleted during the store's previous lfetime");
     self->request(store, infinite, get_atom::value, "foo").receive(
-      [&](optional<int> result) {
+      [&](optional<data> result) {
         CHECK(!result);
       },
       error_handler()
