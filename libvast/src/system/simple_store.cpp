@@ -25,11 +25,14 @@ namespace vast::system {
 
 namespace {
 
+// TODO: Without this workaround *actor_ptr is not
+//       fully defined below. This should be replaced
+//       by the corret explicit instantiation(s).
 void spawn_metastore(caf::local_actor* self) {
   auto store = self->spawn(simple_store, "");
 }
 
-}
+} // namespace <anonymous>
 
 caf::error simple_store_state::init(actor_ptr self, path dir) {
   file = std::move(dir) / "store";
