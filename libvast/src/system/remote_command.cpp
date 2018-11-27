@@ -30,7 +30,7 @@ caf::message remote_command(const command& cmd, caf::actor_system& sys,
                             caf::config_value_map& options,
                             command::argument_iterator first,
                             command::argument_iterator last) {
-  VAST_TRACE(VAST_ARG(options), VAST_ARG("args", begin, end));
+  VAST_TRACE(VAST_ARG(options), VAST_ARG("args", first, last));
   // Get a convenient and blocking way to interact with actors.
   caf::scoped_actor self{sys};
   // Get VAST node.
