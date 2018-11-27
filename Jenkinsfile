@@ -157,7 +157,8 @@ def makeBuildStages(matrixIndex, builds, lblExpr, settings) {
                     stage(id) {
                         try {
                             def buildId = "$lblExpr && $buildType"
-                            withEnv(buildEnvironments[lblExpr] ?: []) {
+                            withEnv(buildEnvironments[lblExpr] ?: [] +
+                                    ["ASAN_OPTIONS=detect_leaks=0"]) {
                               buildSteps(buildType, settings['cmakeArgs'], buildId)
                               (settings['extraSteps'] ?: []).each { fun -> "$fun"() }
                             }
