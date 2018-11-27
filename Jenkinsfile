@@ -157,8 +157,7 @@ def makeBuildStages(matrixIndex, builds, lblExpr, settings) {
                     stage(id) {
                         try {
                             def buildId = "$lblExpr && $buildType"
-                            withEnv(buildEnvironments[lblExpr] ?: [] +
-                                    ["ASAN_OPTIONS=detect_leaks=0"]) {
+                            withEnv(buildEnvironments[lblExpr] ?: []) {
                               buildSteps(buildType, settings['cmakeArgs'], buildId)
                               (settings['extraSteps'] ?: []).each { fun -> "$fun"() }
                             }
@@ -183,6 +182,7 @@ pipeline {
                           "$WORKSPACE/caf-install/lib"
         DYLD_LIBRARY_PATH = "$WORKSPACE/vast-sources/build/lib;" +
                             "$WORKSPACE/caf-install/lib"
+        ASAN_OPTIONS = 'detect_leaks=0'
         PrettyJobBaseName = env.JOB_BASE_NAME.replace('%2F', '/')
         PrettyJobName = "VAST build #${env.BUILD_NUMBER} for $PrettyJobBaseName"
     }
