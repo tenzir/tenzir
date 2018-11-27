@@ -14,6 +14,7 @@
 #pragma once
 
 #include <cstddef>
+#include <type_traits>
 
 #include <caf/atom.hpp>
 
@@ -40,14 +41,11 @@ struct row_major {
 
   // -- factory functions ------------------------------------------------------
 
-  static column_iterator make_column_iterator(T* ptr, size_t rows,
-                                              size_t column) {
-    return {ptr + column, static_cast<ptrdiff_t>(rows)};
-  }
-
-  static const_column_iterator make_column_iterator(const T* ptr, size_t rows,
-                                                    size_t column) {
-    return {ptr + column, static_cast<ptrdiff_t>(rows)};
+  template <class U>
+  static detail::column_iterator<U> make_column_iterator(U* ptr, size_t columns,
+                                                         size_t column) {
+    static_assert(std::is_same_v<T, U> || std::is_same_v<const T, U>);
+    return {ptr + column, static_cast<ptrdiff_t>(columns)};
   }
 
   // -- element access ---------------------------------------------------------

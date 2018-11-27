@@ -41,12 +41,12 @@ public:
 
   // -- constructors, destructors, and assignment operators ------------------
 
-  column_iterator(pointer ptr, difference_type rows) : ptr_(ptr), rows_(rows) {
+  column_iterator(pointer ptr, difference_type columns) : ptr_(ptr), columns_(columns) {
     //nop
   }
 
-  column_iterator(pointer ptr, size_t rows)
-    : column_iterator(ptr, narrow_cast<difference_type>(rows)) {
+  column_iterator(pointer ptr, size_t columns)
+    : column_iterator(ptr, narrow_cast<difference_type>(columns)) {
     //nop
   }
 
@@ -65,12 +65,12 @@ public:
   }
 
   column_iterator& operator++() {
-    ptr_ += rows_;
+    ptr_ += columns_;
     return *this;
   }
 
   column_iterator& operator+=(difference_type n) {
-    ptr_ += rows_ * n;
+    ptr_ += columns_ * n;
     return *this;
   }
 
@@ -82,17 +82,17 @@ public:
 
   column_iterator operator++(int) {
     auto result = *this;
-    ptr_ += rows_;
+    ptr_ += columns_;
     return result;
   }
 
   column_iterator& operator--() {
-    ptr_ -= rows_;
+    ptr_ -= columns_;
     return *this;
   }
 
   column_iterator& operator-=(difference_type n) {
-    ptr_ -= rows_ * n;
+    ptr_ -= columns_ * n;
     return *this;
   }
 
@@ -104,16 +104,16 @@ public:
 
   column_iterator operator--(int) {
     auto result = *this;
-    ptr_ -= rows_;
+    ptr_ -= columns_;
     return result;
   }
 
   difference_type operator-(const column_iterator& other) {
-    return (ptr_ - other.ptr_) / rows_;
+    return (ptr_ - other.ptr_) / columns_;
   }
 
   reference operator[](difference_type pos) {
-    return ptr_[pos * rows_];
+    return ptr_[pos * columns_];
   }
 
   reference operator*() {
@@ -128,7 +128,7 @@ private:
   // -- member variables -----------------------------------------------------
 
   pointer ptr_;
-  difference_type rows_;
+  difference_type columns_;
 };
 
 } // namespace vast::detail
