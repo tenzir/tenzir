@@ -136,22 +136,22 @@ public:
     return begin() + rows_ * columns_;
   }
 
-  /// Returns the range representing the column at position `pos`.
+  /// @returns the range representing the column at position `pos`.
   detail::iterator_range<column_iterator> column(size_type pos) {
     auto first = LayoutPolicy::make_column_iterator(elements(), rows_, pos);
     return {first, first + columns_};
   }
 
-  /// Returns the range representing the column at position `pos`.
+  /// @returns the range representing the column at position `pos`.
   detail::iterator_range<const_column_iterator> column(size_type pos) const {
     auto first = LayoutPolicy::make_column_iterator(elements(), rows_, pos);
     return {first, first + columns_};
   }
 
-  /// Returns a pointer to the first element.
+  /// @returns a pointer to the first element.
   data* elements();
 
-  /// Returns a pointer to the first element.
+  /// @returns a pointer to the first element.
   const data* elements() const {
     // We restore the const when returning from this member function.
     return const_cast<matrix_table_slice*>(this)->elements();
