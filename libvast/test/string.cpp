@@ -121,7 +121,7 @@ TEST(double escaping) {
   CHECK(double_unescape("|", "|") == "|");
 }
 
-TEST(string splitting and joining) {
+TEST_DISABLED(string splitting and joining) {
   using namespace std::string_literals;
 
   auto s = split("Der Geist, der stets verneint.", " ");

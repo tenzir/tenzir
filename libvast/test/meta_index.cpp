@@ -141,7 +141,7 @@ struct fixture {
 
 FIXTURE_SCOPE(meta_index_tests, fixture)
 
-TEST(uuid lookup) {
+TEST_DISABLED(uuid lookup) {
   MESSAGE("generate " << num_partitions << " UUIDs for the partitions");
   for (size_t i = 0; i < num_partitions; ++i)
     ids.emplace_back(uuid::random());

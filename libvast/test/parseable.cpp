@@ -93,7 +93,7 @@ TEST(container attribute folding) {
                 "container attribute folding failed");
 }
 
-TEST(action) {
+TEST_DISABLED(action) {
   using namespace parsers;
   auto make_v4 = [](uint32_t a) { return address::v4(&a); };
   auto ipv4_addr = b32be ->* make_v4;

@@ -12,7 +12,7 @@
 
 using namespace vast;
 
-TEST(MRT) {
+TEST_DISABLED(MRT) {
   auto in = detail::make_input_stream(mrt::updates20150505, false);
   format::mrt::reader reader{std::move(*in)};
   auto result = expected<event>{no_error};
