@@ -88,6 +88,12 @@ namespace vast::system {
 
 namespace {
 
+// Generates an error for unexpected CLI arguments in `args`.
+auto unexpected_arguments(const spawn_arguments& args) {
+  return make_error(ec::syntax_error, "unexpected argument(s)",
+                    caf::join(args.first, args.last, " "));
+}
+
 // Attempts to parse [args.first, args.last) as vast::expression and
 // returns a normalized and validated version of that expression on success.
 caf::expected<expression> normalized_and_valided(spawn_arguments& args) {
@@ -118,7 +124,7 @@ caf::expected<caf::optional<schema>> read_schema(spawn_arguments& args) {
 
 maybe_actor spawn_archive(local_actor* self, spawn_arguments& args) {
   if (!args.empty())
-    return make_error(ec::syntax_error, "unexpected argument(s)");
+    return unexpected_arguments(args);
   auto mss = args.opt("global.max-segment-size", sd::max_segment_size);
   auto segments = args.opt("global.segments", sd::segments);
   mss *= 1_MiB;
@@ -168,7 +174,7 @@ maybe_actor spawn_exporter(node_actor* self, spawn_arguments& args) {
 
 maybe_actor spawn_importer(node_actor* self, spawn_arguments& args) {
   if (!args.empty())
-    return make_error(ec::syntax_error, "unexpected argument(s)");
+    return unexpected_arguments(args);
   // FIXME: Notify exporters with a continuous query.
   return self->spawn(importer, args.dir / args.label,
                      caf::get_or(self->system().config(),
@@ -178,7 +184,7 @@ maybe_actor spawn_importer(node_actor* self, spawn_arguments& args) {
 
 maybe_actor spawn_index(local_actor* self, spawn_arguments& args) {
   if (!args.empty())
-    return make_error(ec::syntax_error, "unexpected argument(s)");
+    return unexpected_arguments(args);
   return self->spawn(index, args.dir / args.label,
                      args.opt("global.max-events", sd::max_partition_size),
                      args.opt("global.max-parts", sd::max_in_mem_partitions),
@@ -188,7 +194,7 @@ maybe_actor spawn_index(local_actor* self, spawn_arguments& args) {
 
 maybe_actor spawn_metastore(local_actor* self, spawn_arguments& args) {
   if (!args.empty())
-    return make_error(ec::syntax_error, "unexpected argument(s)");
+    return unexpected_arguments(args);
   auto id = args.opt("global.id", raft::server_id{0});
   // Bring up the consensus module.
   auto consensus = self->spawn(raft::consensus, args.dir / "consensus");
@@ -212,7 +218,7 @@ maybe_actor spawn_profiler(local_actor* self, spawn_arguments& args) {
   return make_error(ec::unspecified, "not compiled with gperftools");
 #else // VAST_HAVE_GPERFTOOLS
   if (!args.empty())
-    return make_error(ec::syntax_error, "unexpected argument(s)");
+    return unexpected_arguments(args);
   auto resolution = args.opt("global.resolution", size_t{1});
   auto secs = std::chrono::seconds(resolution);
   auto prof = self->spawn(profiler, args.dir / args.label, secs);
@@ -265,7 +271,7 @@ maybe_actor spawn_test_source(caf::local_actor* self, spawn_arguments& args) {
   // The test source only generates events out of thin air and thus accepts no
   // source expression.
   if (!args.empty())
-    return make_error(ec::syntax_error, "unexpected argument(s)");
+    return unexpected_arguments(args);
   reader_type reader{args.opt("global.seed", size_t{0}),
                      args.opt("global.events", size_t{100})};
   auto src = self->spawn(default_source<reader_type>, std::move(reader));
@@ -303,7 +309,7 @@ maybe_actor spawn_pcap_sink(local_actor* self, spawn_arguments& args) {
   return make_error(ec::unspecified, "not compiled with pcap support");
 #else // VAST_HAVE_PCAP
   if (!args.empty())
-    return make_error(ec::syntax_error, "unexpected argument(s)");
+    return unexpected_arguments(args);
   format::pcap::writer writer{args.opt("global.write", cd::write_path),
                               args.opt("global.flush", size_t{0})};
   return self->spawn(sink<format::pcap::writer>, std::move(writer), 0u);
@@ -312,7 +318,7 @@ maybe_actor spawn_pcap_sink(local_actor* self, spawn_arguments& args) {
 
 maybe_actor spawn_bro_sink(local_actor* self, spawn_arguments& args) {
   if (!args.empty())
-    return make_error(ec::syntax_error, "unexpected argument(s)");
+    return unexpected_arguments(args);
   format::bro::writer writer{args.opt("global.write", "-")};
   return self->spawn(sink<format::bro::writer>, std::move(writer), 0u);
 }
@@ -322,7 +328,7 @@ namespace {
 template <class Writer>
 maybe_actor spawn_generic_sink(local_actor* self, spawn_arguments& args) {
   if (!args.empty())
-    return make_error(ec::syntax_error, "unexpected argument(s)");
+    return unexpected_arguments(args);
   UNBOX_VAR(out, detail::make_output_stream(args.opt("global.write", "-"),
                                             args.opt("uds", false)));
   return self->spawn(sink<Writer>, Writer{std::move(out)}, 0u);
