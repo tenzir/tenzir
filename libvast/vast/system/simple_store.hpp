@@ -22,20 +22,22 @@
 #include "vast/load.hpp"
 #include "vast/save.hpp"
 
-#include "vast/system/key_value_store.hpp"
+#include "vast/system/meta_store.hpp"
 
 namespace vast::system {
 
-template <class Key, class Value>
 struct simple_store_state {
-  using simple_store_actor = typename key_value_store_type<
-    Key, Value>::template stateful_pointer<simple_store_state>;
+  using actor_base = meta_store_type::stateful_base<simple_store_state>;
+  using actor_ptr = meta_store_type::stateful_pointer<simple_store_state>;
+
+  void dummy(actor_base) {
+  }
 
   static inline const char* name = "simple-store";
-  std::unordered_map<Key, Value> store;
+  std::unordered_map<std::string, data> store;
   path file;
 
-  caf::error init(simple_store_actor self, const path& dir) {
+  caf::error init(actor_ptr self, const path& dir) {
     file = dir / "store";
     if (exists(file)) {
       if (auto err = vast::load(self->system(), file, store)) {
@@ -53,26 +55,21 @@ struct simple_store_state {
 
 /// A key-value store that stores its data in a `std::unordered_map`.
 /// @param self The actor handle.
-template <class Key, class Value>
-typename key_value_store_type<Key, Value>::behavior_type
-simple_store(
-  typename key_value_store_type<Key, Value>::template stateful_pointer<
-    simple_store_state<Key, Value>
-  > self, path dir) {
-  using behavior_type =
-    typename key_value_store_type<Key, Value>::behavior_type;
+inline meta_store_type::behavior_type
+simple_store(simple_store_state::actor_ptr self, path dir) {
+  using behavior_type = meta_store_type::behavior_type;
   if (auto err = self->state.init(self, dir)) {
     self->quit(std::move(err));
     return behavior_type::make_empty_behavior();
   }
   return {
-    [=](put_atom, const Key& key, Value& value) -> caf::result<ok_atom> {
+    [=](put_atom, const std::string& key, data& value) -> caf::result<ok_atom> {
       self->state.store[key] = std::move(value);
       if (auto err = self->state.save(self->system()))
         return err;
       return ok_atom::value;
     },
-    [=](add_atom, const Key& key, const Value& value) -> caf::result<Value> {
+    [=](add_atom, const std::string& key, const data& value) -> caf::result<data> {
       auto& v = self->state.store[key];
       auto old = v;
       v += value;
@@ -80,13 +77,13 @@ simple_store(
         return err;
       return old;
     },
-    [=](delete_atom, const Key& key) -> caf::result<ok_atom> {
+    [=](delete_atom, const std::string& key) -> caf::result<ok_atom> {
       self->state.store.erase(key);
       if (auto err = self->state.save(self->system()))
         return err;
       return ok_atom::value;
     },
-    [=](get_atom, const Key& key) -> caf::result<optional<Value>> {
+    [=](get_atom, const std::string& key) -> caf::result<optional<data>> {
       auto i = self->state.store.find(key);
       if (i == self->state.store.end())
         return caf::none;

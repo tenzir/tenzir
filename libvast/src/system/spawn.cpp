@@ -175,7 +175,7 @@ expected<actor> spawn_metastore_raft(local_actor* self, options& opts) {
 
 expected<actor> spawn_metastore_simple(local_actor* self,
                                        options& opts) {
-  auto store = self->spawn(simple_store<std::string, data>,
+  auto store = self->spawn(simple_store,
                            opts.dir / "simple_store");
   return actor_cast<actor>(store);
 }
