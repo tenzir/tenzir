@@ -251,7 +251,10 @@ struct fixture : fixtures::deterministic_actor_system {
     REQUIRE(idx != nullptr);
     auto slice = make_slice(builder);
     slice->apply_column(0, *idx);
-    CHECK_EQUAL(idx->offset(), 3u);
+    CHECK_EQUAL(idx->offset(), 4u);
+    constexpr auto less = relational_operator::less;
+    CHECK_EQUAL(unbox(idx->lookup(less, vast::make_view(3))),
+                make_ids({0, 1}, 4));
   }
 
   void test_implementations() {
@@ -263,6 +266,7 @@ struct fixture : fixtures::deterministic_actor_system {
       test_manual_serialization(*builder);
       test_smart_pointer_serialization(*builder);
       test_message_serialization(*builder);
+      test_apply_column(*builder);
     }
   }
 };

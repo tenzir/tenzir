@@ -136,14 +136,14 @@ public:
 
   /// @returns the range representing the column at position `pos`.
   detail::iterator_range<column_iterator> column(size_type pos) {
-    auto first = LayoutPolicy::make_column_iterator(elements(), rows_, pos);
-    return {first, first + columns_};
+    auto first = LayoutPolicy::make_column_iterator(elements(), columns_, pos);
+    return {first, first + rows_};
   }
 
   /// @returns the range representing the column at position `pos`.
   detail::iterator_range<const_column_iterator> column(size_type pos) const {
-    auto first = LayoutPolicy::make_column_iterator(elements(), rows_, pos);
-    return {first, first + columns_};
+    auto first = LayoutPolicy::make_column_iterator(elements(), columns_, pos);
+    return {first, first + rows_};
   }
 
   /// @returns a pointer to the first element.

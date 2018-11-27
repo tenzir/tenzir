@@ -35,9 +35,10 @@ struct fixture {
     std::iota(buf.begin(), buf.end(), 0);
   }
 
-  column_range column(size_t rows, size_t col) {
-    detail::column_iterator<int> first{buf.data() + col, rows};
-    return {first, first + (16 / rows)};
+  column_range column(size_t columns, size_t col) {
+    auto rows = 16 / columns;
+    detail::column_iterator<int> first{buf.data() + col, columns};
+    return {first, first + rows};
   }
 };
 
