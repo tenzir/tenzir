@@ -13,6 +13,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <cstdlib>
 #include <memory>
 #include <new>
@@ -67,10 +68,7 @@ public:
   ~matrix_table_slice() {
     // The element blocks gets allocated alongside this object. Hence, we need
     // to destroy our elements manually.
-    auto first = elements();
-    auto last = elements() + rows_ + columns_;
-    for (auto i = first; i != last; ++i)
-      i->~data();
+    std::for_each(begin(), end(), [](data& obj) { obj.~data(); });
   }
 
   /// @warning leaves all elements uninitialized.
@@ -202,10 +200,11 @@ data* matrix_table_slice<LayoutPolicy>::elements() {
   return reinterpret_cast<data*>(first);
 }
 
-
+/// A matrix table slice with row-major memory order.
 using row_major_matrix_table_slice
   = matrix_table_slice<policy::row_major<data>>;
 
+/// A matrix table slice with column-major memory order.
 using column_major_matrix_table_slice
   = matrix_table_slice<policy::column_major<data>>;
 
