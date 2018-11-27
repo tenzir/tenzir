@@ -189,7 +189,7 @@ FIXTURE_SCOPE_END()
 
 FIXTURE_SCOPE(metaidx_serialization_tests, fixtures::deterministic_actor_system)
 
-TEST(serialization) {
+TEST_DISABLED(serialization) {
   meta_index meta_idx;
   auto part = mock_partition{uuid::random(), 42};
   meta_idx.add(part.id, *part.slice);
