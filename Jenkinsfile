@@ -43,6 +43,8 @@ buildMatrix = [
         cmakeArgs: releaseBuildFlags,
     ]],
     // One Additional build for coverage reports.
+    /* TODO: this build exhausts all storage on the node and is temporarily
+     *       disabled until resolving the issue
     ['Linux', [
         builds: ['debug'],
         tools: ['gcc8 && gcovr'],
@@ -52,6 +54,7 @@ buildMatrix = [
             'NO_EXCEPTIONS:BOOL=yes',
         ],
     ]],
+    */
 ]
 
 // Optional environment variables for combinations of labels.
