@@ -22,6 +22,7 @@
 #include <caf/make_copy_on_write.hpp>
 #include <caf/test/dsl.hpp>
 
+#include "vast/column_major_matrix_table_slice_builder.hpp"
 #include "vast/default_table_slice_builder.hpp"
 #include "vast/row_major_matrix_table_slice_builder.hpp"
 #include "vast/value.hpp"
@@ -100,6 +101,7 @@ struct fixture : fixtures::deterministic_actor_system {
     default_table_slice_builder::make(layout),
     rebranded_table_slice_builder::make(layout),
     row_major_matrix_table_slice_builder::make(layout),
+    column_major_matrix_table_slice_builder::make(layout),
   };
 
   using tup = std::tuple<integer, std::string, real>;
@@ -139,6 +141,7 @@ struct fixture : fixtures::deterministic_actor_system {
     // Register factory.
     add_slice_factory<rebranded_table_slice_builder>();
     add_slice_factory<row_major_matrix_table_slice_builder>();
+    add_slice_factory<column_major_matrix_table_slice_builder>();
   }
 
   auto make_slice(table_slice_builder& builder) {

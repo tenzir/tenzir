@@ -23,6 +23,7 @@
 
 #include "vast/data.hpp"
 #include "vast/detail/range.hpp"
+#include "vast/policy/column_major.hpp"
 #include "vast/policy/row_major.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/value_index.hpp"
@@ -54,9 +55,6 @@ public:
 
   /// Iterator over stored elements in unspecified order.
   using const_iterator = const data*;
-
-  /// Iterator over stored elements in row-first order.
-  using row_iterator = typename LayoutPolicy::row_iterator;
 
   /// Iterator over stored elements in column-first order.
   using column_iterator = typename LayoutPolicy::column_iterator;
@@ -207,5 +205,8 @@ data* matrix_table_slice<LayoutPolicy>::elements() {
 
 using row_major_matrix_table_slice
   = matrix_table_slice<policy::row_major<data>>;
+
+using column_major_matrix_table_slice
+  = matrix_table_slice<policy::column_major<data>>;
 
 } // namespace vast
