@@ -82,6 +82,10 @@ public:
     return elements_;
   }
 
+  const vector_type& elements() const {
+    return elements_;
+  }
+
   void size(size_t new_size) {
     if (new_size < elements_.size()) {
       auto first = elements_.begin();

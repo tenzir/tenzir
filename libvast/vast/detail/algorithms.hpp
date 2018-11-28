@@ -13,36 +13,23 @@
 
 #pragma once
 
-#include <caf/fwd.hpp>
+#include <algorithm>
+#include <vector>
 
-#include <caf/expected.hpp>
+namespace vast::detail {
 
-#include "vast/fwd.hpp"
+template <class Collection>
+auto unique_values(const Collection& xs) {
+  std::vector<typename Collection::mapped_type> result;
+  result.reserve(xs.size());
+  for (auto& x : xs)
+    result.emplace_back(x.second);
+  std::sort(result.begin(), result.end());
+  auto e = std::unique(result.begin(), result.end());
+  if (e != result.end())
+    result.erase(e, result.end());
+  return result;
+}
 
-namespace vast {
+} // namespace vast::detail
 
-/// A key-value store for events.
-class store {
-public:
-  virtual ~store();
-
-  /// Adds a table slice to the store.
-  /// @param xs The table slice to add.
-  /// @returns No error on success.
-  virtual caf::error put(table_slice_ptr xs) = 0;
-
-  /// Retrieves a set of events.
-  /// @param xs The IDs for the events to retrieve.
-  /// @returns The table slice according to *xs*.
-  virtual caf::expected<std::vector<table_slice_ptr>>
-  get(const ids& xs) = 0;
-
-  /// Flushes in-memory state to persistent storage.
-  /// @returns No error on success.
-  virtual caf::error flush() = 0;
-
-  /// Fills `dict` with implementation-specific status information.
-  virtual void inspect_status(caf::dictionary<caf::config_value>& dict) = 0;
-};
-
-} // namespace vast

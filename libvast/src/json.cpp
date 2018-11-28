@@ -11,38 +11,30 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#pragma once
+#include "vast/json.hpp"
 
-#include <caf/fwd.hpp>
+#include <type_traits>
 
-#include <caf/expected.hpp>
+#include <caf/atom.hpp>
+#include <caf/config_value.hpp>
 
-#include "vast/fwd.hpp"
+#include "vast/detail/overload.hpp"
+#include "vast/detail/type_traits.hpp"
 
 namespace vast {
 
-/// A key-value store for events.
-class store {
-public:
-  virtual ~store();
-
-  /// Adds a table slice to the store.
-  /// @param xs The table slice to add.
-  /// @returns No error on success.
-  virtual caf::error put(table_slice_ptr xs) = 0;
-
-  /// Retrieves a set of events.
-  /// @param xs The IDs for the events to retrieve.
-  /// @returns The table slice according to *xs*.
-  virtual caf::expected<std::vector<table_slice_ptr>>
-  get(const ids& xs) = 0;
-
-  /// Flushes in-memory state to persistent storage.
-  /// @returns No error on success.
-  virtual caf::error flush() = 0;
-
-  /// Fills `dict` with implementation-specific status information.
-  virtual void inspect_status(caf::dictionary<caf::config_value>& dict) = 0;
-};
+bool convert(const caf::config_value& x, json& j) {
+  using detail::is_any_v;
+  using std::is_same_v;
+  using namespace caf;
+  return visit(
+    [&](const auto& y) {
+      using type = std::decay_t<decltype(y)>;
+      if constexpr (is_any_v<type, atom_value, timespan, timestamp, uri>)
+        return convert(deep_to_string(y), j);
+      else
+        return convert(y, j);
+    }, x);
+}
 
 } // namespace vast

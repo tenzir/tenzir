@@ -33,6 +33,7 @@ set(libvast_sources
   src/detail/fdistream.cpp
   src/detail/fdostream.cpp
   src/detail/fdoutbuf.cpp
+  src/detail/fill_status_map.cpp
   src/detail/line_range.cpp
   src/detail/make_io_stream.cpp
   src/detail/mmapbuf.cpp
@@ -56,6 +57,7 @@ set(libvast_sources
   src/format/writer.cpp
   src/http.cpp
   src/ids.cpp
+  src/json.cpp
   src/meta_index.cpp
   src/null_bitmap.cpp
   src/operator.cpp
@@ -193,6 +195,7 @@ set(tests
   test/compressedbuf.cpp
   test/data.cpp
   test/default_table_slice.cpp
+  test/detail/algorithms.cpp
   test/detail/flat_lru_cache.cpp
   test/detail/operators.cpp
   test/detail/set_operations.cpp

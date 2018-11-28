@@ -25,6 +25,7 @@
 #include "vast/concept/printable/vast/expression.hpp"
 #include "vast/concept/printable/vast/uuid.hpp"
 #include "vast/detail/assert.hpp"
+#include "vast/detail/fill_status_map.hpp"
 #include "vast/event.hpp"
 #include "vast/expression_visitors.hpp"
 #include "vast/ids.hpp"
@@ -240,6 +241,26 @@ caf::actor index_state::next_worker() {
   return result;
 }
 
+caf::dictionary<caf::config_value> index_state::status() const {
+  using caf::put_dictionary;
+  using caf::put_list;
+  caf::dictionary<caf::config_value> result;
+  // Misc parameters.
+  result.emplace("meta-index-filename", meta_index_filename().str());
+  // Resident partitions.
+  auto& partitions = put_dictionary(result, "partitions");
+  partitions.emplace("active", to_string(active->id()));
+  auto& cached = put_list(partitions, "cached");
+  for (auto& part : lru_partitions.elements())
+    cached.emplace_back(to_string(part->id()));
+  auto& unpersisted = put_list(partitions, "unpersisted");
+  for (auto& kvp : this->unpersisted)
+    unpersisted.emplace_back(to_string(kvp.first->id()));
+  // General state such as open streams.
+  detail::fill_status_map(result, self);
+  return result;
+}
+
 behavior index(stateful_actor<index_state>* self, const path& dir,
                size_t max_partition_size, size_t in_mem_partitions,
                size_t taste_partitions, size_t num_workers) {
@@ -382,6 +403,9 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
     [=](caf::stream<table_slice_ptr> in) {
       VAST_DEBUG(self, "got a new source");
       return self->state.stage->add_inbound_path(in);
+    },
+    [=](status_atom) -> caf::config_value::dictionary {
+      return self->state.status();
     }
   );
   return {
@@ -393,6 +417,9 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
     [=](caf::stream<table_slice_ptr> in) {
       VAST_DEBUG(self, "got a new source");
       return self->state.stage->add_inbound_path(in);
+    },
+    [=](status_atom) -> caf::config_value::dictionary {
+      return self->state.status();
     }
   };
 }

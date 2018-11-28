@@ -79,24 +79,60 @@ void peer(node_ptr self, message args) {
   rp.delegate(*peer, peer_atom::value, t, self->state.name);
 }
 
+void collect_component_status(node_ptr self,
+                              caf::response_promise status_promise,
+                              registry& reg) {
+  // Shared state between our response handlers.
+  struct req_state_t {
+    // Keeps track of how many requests are pending.
+    size_t pending = 0;
+    // Promise to the original client request.
+    caf::response_promise rp;
+    // Maps nodes to a map associating components with status information.
+    caf::config_value_map content;
+  };
+  auto req_state = std::make_shared<req_state_t>();
+  req_state->rp = std::move(status_promise);
+  // Pre-fill our result with system stats.
+  auto& sys_stats = req_state->content["system"];
+  auto& sys = self->system();
+  sys_stats.emplace("running-actors", sys.registry().running());
+  sys_stats.emplace("detached-actors", sys.detached_actors());
+  sys_stats.emplace("worker-threads", sys.scheduler().num_workers());
+  // Send out requests and collects answers.
+  for (auto& [node_name, state_map] : reg.components) {
+    req_state->pending += state_map.size();
+    for (auto& kvp : state_map) {
+      auto& comp_state = kvp.second;
+      // Skip the tracker. It has no interesting state.
+      if (comp_state.label == "tracker") {
+        req_state->pending -= 1;
+        continue;
+      }
+      self->request(comp_state.actor, infinite, status_atom::value).then(
+        [=, lbl = comp_state.label, nn = node_name]
+        (caf::config_value::dictionary& xs) mutable {
+          auto& st = *req_state;
+          st.content[nn].emplace(std::move(lbl), std::move(xs));
+          if (--st.pending == 0)
+            st.rp.deliver(to_string(to_json(st.content)));
+        },
+        [=, lbl = comp_state.label, nn = node_name](caf::error& err) mutable {
+          auto& st = *req_state;
+          st.content[nn].emplace(std::move(lbl), self->system().render(err));
+          if (--st.pending == 0)
+            st.rp.deliver(to_string(to_json(st.content)));
+        }
+      );
+    }
+  }
+}
+
 void status(node_ptr self, message /* args */) {
   auto rp = self->make_response_promise();
   self->request(self->state.tracker, infinite, get_atom::value).then(
-    [=](const registry& reg) mutable {
-      json::object result;
-      for (auto& peer : reg.components) {
-        json::array xs;
-        for (auto& pair : peer.second)
-          xs.push_back(json{pair.second.label});
-        result.emplace(peer.first, std::move(xs));
-      }
-      json::object sys_stats;
-      auto& sys = self->system();
-      sys_stats.emplace("running-actors", sys.registry().running());
-      sys_stats.emplace("detached-actors", sys.detached_actors());
-      sys_stats.emplace("worker-threads", sys.scheduler().num_workers());
-      result.emplace("system", std::move(sys_stats));
-      rp.deliver(to_string(json{std::move(result)}));
+    [=](registry& reg) mutable {
+      collect_component_status(self, std::move(rp), reg);
     }
   );
 }
