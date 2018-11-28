@@ -54,7 +54,7 @@ void init(accountant_actor* self, const path& filename) {
   file << "time\thost\tpid\taid\tkey\tvalue\n";
   if (!file)
     self->quit(make_error(ec::filesystem_error));
-  // Kick off flush loop.
+  VAST_DEBUG(self, "kicks off flush loop");
   self->send(self, flush_atom::value);
 }
 
@@ -77,7 +77,7 @@ void record(accountant_actor* self, const std::string& key, T x) {
   // Flush after at most 10 seconds.
   if (!st.flush_pending) {
     st.flush_pending = true;
-    self->delayed_send(self, seconds(10), flush_atom::value);
+    self->delayed_send(self, 10s, flush_atom::value);
   }
 }
 
@@ -87,16 +87,13 @@ accountant_type::behavior_type accountant(accountant_actor* self,
                                           const path& filename) {
   using namespace std::chrono;
   init(self, filename);
-  return {
-    [=](shutdown_atom) {
+  self->set_exit_handler(
+    [=](const caf::exit_msg& msg) {
       self->state.file.flush();
-      self->quit(caf::exit_reason::user_shutdown);
-    },
-    [=](flush_atom) {
-      if (self->state.file)
-        self->state.file.flush();
-      self->state.flush_pending = false;
-    },
+      self->quit(msg.reason);
+    }
+  );
+  return {
     [=](const std::string& key, const std::string& value) {
       record(self, key, value);
     },
@@ -117,7 +114,12 @@ accountant_type::behavior_type accountant(accountant_actor* self,
     },
     [=](const std::string& key, double value) {
       record(self, key, value);
-    }
+    },
+    [=](flush_atom) {
+      if (self->state.file)
+        self->state.file.flush();
+      self->state.flush_pending = false;
+    },
   };
 }
 

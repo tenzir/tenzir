@@ -122,18 +122,25 @@ behavior terminator(stateful_actor<terminator_state>* self, caf::error reason,
 
 tracker_type::behavior_type
 tracker(tracker_type::stateful_pointer<tracker_state> self, std::string node) {
+  // Insert ourself into the registry.
   self->state.registry.components[node].emplace(
     "tracker", component_state{actor_cast<actor>(self), "tracker"});
+  // Insert the accountant into the registry so that it is easy for remote
+  // actors who query the registry to obtain a reference to the actor.
+  auto ptr = self->system().registry().get(accountant_atom::value);
+  VAST_ASSERT(ptr != nullptr);
+  self->state.registry.components[node].emplace(
+    "accountant", component_state{actor_cast<actor>(ptr), "accountant"});
   self->set_down_handler(
     [=](const down_msg& msg) {
       auto pred = [&](auto& p) { return p.second.actor == msg.source; };
-      for (auto& peer : self->state.registry.components) {
-        auto i = std::find_if(peer.second.begin(), peer.second.end(), pred);
-        if (i != peer.second.end()) {
+      for (auto& [node, comp_state] : self->state.registry.components) {
+        auto i = std::find_if(comp_state.begin(), comp_state.end(), pred);
+        if (i != comp_state.end()) {
           if (i->first == "tracker")
-            self->state.registry.components.erase(peer.first);
+            self->state.registry.components.erase(node);
           else
-            peer.second.erase(i);
+            comp_state.erase(i);
           return;
         }
       }
