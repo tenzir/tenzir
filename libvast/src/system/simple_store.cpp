@@ -23,19 +23,12 @@
 
 namespace vast::system {
 
-namespace {
-
-// TODO: Without this workaround *actor_ptr is not
-//       fully defined below. This should be replaced
-//       by the corret explicit instantiation(s).
-void spawn_metastore(caf::local_actor* self) {
-  auto store = self->spawn(simple_store, "");
+simple_store_state::simple_store_state(actor_ptr self)
+  : self{self} {
+  // nop
 }
 
-} // namespace <anonymous>
-
-caf::error simple_store_state::init(actor_ptr self, path dir) {
-  this->self = self;
+caf::error simple_store_state::init(path dir) {
   file = std::move(dir) / "store";
   if (exists(file)) {
     if (auto err = vast::load(self->system(), file, store)) {
@@ -55,7 +48,7 @@ caf::error simple_store_state::save() {
 meta_store_type::behavior_type
 simple_store(simple_store_state::actor_ptr self, path dir) {
   using behavior_type = meta_store_type::behavior_type;
-  if (auto err = self->state.init(self, std::move(dir))) {
+  if (auto err = self->state.init(std::move(dir))) {
     self->quit(std::move(err));
     return behavior_type::make_empty_behavior();
   }
