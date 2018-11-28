@@ -24,24 +24,33 @@
 
 namespace vast::system {
 
-class simple_store_state {
-public:
+struct simple_store_state {
   using actor_ptr = meta_store_type::stateful_pointer<simple_store_state>;
 
   static inline const char* name = "simple-store";
-  std::unordered_map<std::string, data> store;
-  path file;
 
-  caf::error init(actor_ptr self, path dir);
+  simple_store_state(actor_ptr self);
 
+  /// Initializes the state.
+  /// @param dir The directory of the store.
+  caf::error init(path dir);
+
+  /// Saves the current state to `file`.
+  /// @pre `init()` was run successfully.
   caf::error save();
 
-private:
   actor_ptr self;
+
+  /// The data container.
+  std::unordered_map<std::string, data> store;
+
+  /// The location of the persistence file.
+  path file;
 };
 
 /// A key-value store that stores its data in a `std::unordered_map`.
 /// @param self The actor handle.
+/// @param dir The directory of the store.
 meta_store_type::behavior_type
 simple_store(simple_store_state::actor_ptr self, path dir);
 
