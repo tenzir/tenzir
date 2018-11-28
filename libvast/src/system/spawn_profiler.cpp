@@ -15,29 +15,31 @@
 
 #include <caf/actor.hpp>
 #include <caf/expected.hpp>
+#include <caf/send.hpp>
 
 #include "vast/config.hpp"
 #include "vast/detail/unbox_var.hpp"
 #include "vast/error.hpp"
 #include "vast/system/node.hpp"
+#include "vast/system/profiler.hpp"
 #include "vast/system/spawn_arguments.hpp"
 
 namespace vast::system {
 
 maybe_actor spawn_profiler([[maybe_unused]] caf::local_actor* self,
                            [[maybe_unused]] spawn_arguments& args) {
-#ifdef VAST_HAVE_GPERFTOOLS
+#ifndef VAST_HAVE_GPERFTOOLS
   return make_error(ec::unspecified, "not compiled with gperftools");
 #else // VAST_HAVE_GPERFTOOLS
   if (!args.empty())
     return unexpected_arguments(args);
-  auto resolution = args.opt("global.resolution", size_t{1});
+  auto resolution = get_or(args.options, "global.resolution", size_t{1});
   auto secs = std::chrono::seconds(resolution);
   auto prof = self->spawn(profiler, args.dir / args.label, secs);
-  if (args.opt("global.cpu", false))
-    anon_send(prof, start_atom::value, cpu_atom::value);
-  if (args.opt("global.heap", false))
-    anon_send(prof, start_atom::value, heap_atom::value);
+  if (get_or(args.options, "global.cpu", false))
+    caf::anon_send(prof, start_atom::value, cpu_atom::value);
+  if (get_or(args.options, "global.heap", false))
+    caf::anon_send(prof, start_atom::value, heap_atom::value);
   return prof;
 #endif // VAST_HAVE_GPERFTOOLS
 }
