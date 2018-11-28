@@ -60,7 +60,7 @@ TEST(simple store) {
     MESSAGE("add to a non-existing single value");
     self->request(store, infinite, add_atom::value, "baz", data{1}).receive(
       [&](data old) {
-        CHECK_EQUAL(old, data{0});
+        CHECK_EQUAL(old, caf::none);
       },
       error_handler()
     );
