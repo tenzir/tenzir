@@ -32,10 +32,19 @@
 #include "vast/detail/assert.hpp"
 #include "vast/json.hpp"
 #include "vast/logger.hpp"
-
 #include "vast/system/accountant.hpp"
 #include "vast/system/consensus.hpp"
-#include "vast/system/spawn.hpp"
+#include "vast/system/spawn_archive.hpp"
+#include "vast/system/spawn_arguments.hpp"
+#include "vast/system/spawn_exporter.hpp"
+#include "vast/system/spawn_importer.hpp"
+#include "vast/system/spawn_index.hpp"
+#include "vast/system/spawn_metastore.hpp"
+#include "vast/system/spawn_node.hpp"
+#include "vast/system/spawn_or_connect_to_node.hpp"
+#include "vast/system/spawn_profiler.hpp"
+#include "vast/system/spawn_sink.hpp"
+#include "vast/system/spawn_source.hpp"
 
 using std::string;
 

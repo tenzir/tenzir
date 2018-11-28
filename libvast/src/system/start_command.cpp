@@ -30,7 +30,6 @@
 #include "vast/logger.hpp"
 #include "vast/scope_linked.hpp"
 #include "vast/system/signal_monitor.hpp"
-#include "vast/system/spawn.hpp"
 #include "vast/system/spawn_node.hpp"
 
 namespace vast::system {

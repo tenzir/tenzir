@@ -24,77 +24,37 @@
 
 namespace vast::system {
 
-struct node_state;
 
-using node_actor = caf::stateful_actor<node_state>;
 
-/// Wraps arguments for spawn functions.
-struct spawn_arguments {
-  /// Current command executed by the node actor.
-  const command& cmd;
+maybe_actor (* self, spawn_arguments& args);
 
-  /// Path to persistent node state.
-  const path& dir;
+maybe_actor (node_actor* self, spawn_arguments& args);
 
-  /// Label for the new component.
-  const std::string& label;
+maybe_actor (* self, spawn_arguments& args);
 
-  /// User-defined options for spawning the component.
-  const caf::config_value_map& options;
+maybe_actor (caf::local_actor* self, spawn_arguments& args);
 
-  /// Iterator to the first CLI argument.
-  cli_argument_iterator first;
+maybe_actor (caf::local_actor* self, spawn_arguments& args);
 
-  /// Past-the-end iterator for CLI arguments.
-  cli_argument_iterator last;
+maybe_actor (caf::local_actor* self, spawn_arguments& args);
 
-  /// Returns whether CLI arguments are empty.
-  bool empty() const noexcept {
-    return first == last;
-  }
+maybe_actor (caf::local_actor* self, spawn_arguments& args);
 
-  /// Returns the user-defined config option `name` or the default value.
-  template <class T>
-  auto opt(caf::string_view name, T default_value) const {
-    return caf::get_or(options, name, default_value);
-  }
-};
+maybe_actor (caf::local_actor* self, spawn_arguments& args);
 
-/// Convenience alias for function return types that either return an actor or
-/// an error.
-using maybe_actor = caf::expected<caf::actor>;
+maybe_actor (caf::local_actor* self, spawn_arguments& args);
 
-maybe_actor spawn_archive(caf::local_actor* self, spawn_arguments& args);
+maybe_actor (caf::local_actor* self, spawn_arguments& args);
 
-maybe_actor spawn_exporter(node_actor* self, spawn_arguments& args);
+maybe_actor (caf::local_actor* self, spawn_arguments& args);
 
-maybe_actor spawn_importer(node_actor* self, spawn_arguments& args);
+maybe_actor (caf::local_actor* self, spawn_arguments& args);
 
-maybe_actor spawn_index(caf::local_actor* self, spawn_arguments& args);
+maybe_actor (caf::local_actor* self, spawn_arguments& args);
 
-maybe_actor spawn_metastore(caf::local_actor* self, spawn_arguments& args);
+maybe_actor (caf::local_actor* self, spawn_arguments& args);
 
-maybe_actor spawn_profiler(caf::local_actor* self, spawn_arguments& args);
-
-maybe_actor spawn_pcap_source(caf::local_actor* self, spawn_arguments& args);
-
-maybe_actor spawn_test_source(caf::local_actor* self, spawn_arguments& args);
-
-maybe_actor spawn_bro_source(caf::local_actor* self, spawn_arguments& args);
-
-maybe_actor spawn_bgpdump_source(caf::local_actor* self, spawn_arguments& args);
-
-maybe_actor spawn_mrt_source(caf::local_actor* self, spawn_arguments& args);
-
-maybe_actor spawn_pcap_sink(caf::local_actor* self, spawn_arguments& args);
-
-maybe_actor spawn_bro_sink(caf::local_actor* self, spawn_arguments& args);
-
-maybe_actor spawn_ascii_sink(caf::local_actor* self, spawn_arguments& args);
-
-maybe_actor spawn_csv_sink(caf::local_actor* self, spawn_arguments& args);
-
-maybe_actor spawn_json_sink(caf::local_actor* self, spawn_arguments& args);
+maybe_actor (caf::local_actor* self, spawn_arguments& args);
 
 } // namespace vast::system
 
