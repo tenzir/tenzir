@@ -18,6 +18,8 @@
 #include <string>
 #include <vector>
 
+#include "caf/fwd.hpp"
+
 #include "vast/detail/steady_map.hpp"
 #include "vast/detail/steady_set.hpp"
 #include "vast/fwd.hpp"
@@ -65,6 +67,10 @@ constexpr id max_events = max_id + 1;
 
 /// Iterates over CLI arguments.
 using cli_argument_iterator = std::vector<std::string>::const_iterator;
+
+/// Convenience alias for function return types that either return an actor or
+/// an error.
+using maybe_actor = caf::expected<caf::actor>;
 
 } // namespace vast
 

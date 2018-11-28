@@ -94,9 +94,17 @@ set(libvast_sources
   src/system/simple_store.cpp
   src/system/sink_command.cpp
   src/system/source_command.cpp
-  src/system/spawn.cpp
+  src/system/spawn_archive.cpp
+  src/system/spawn_arguments.cpp
+  src/system/spawn_exporter.cpp
+  src/system/spawn_importer.cpp
+  src/system/spawn_index.cpp
+  src/system/spawn_metastore.cpp
   src/system/spawn_node.cpp
   src/system/spawn_or_connect_to_node.cpp
+  src/system/spawn_profiler.cpp
+  src/system/spawn_sink.cpp
+  src/system/spawn_source.cpp
   src/system/start_command.cpp
   src/system/task.cpp
   src/system/tracker.cpp

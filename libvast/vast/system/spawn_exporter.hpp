@@ -13,48 +13,17 @@
 
 #pragma once
 
-#include <memory>
-
 #include <caf/fwd.hpp>
+
+#include "vast/aliases.hpp"
+#include "vast/system/fwd.hpp"
 
 namespace vast::system {
 
-// -- classes ------------------------------------------------------------------
-
-class application;
-class configuration;
-class default_application;
-class export_command;
-class import_command;
-class indexer_manager;
-class indexer_stage_driver;
-class node_command;
-class partition;
-class pcap_reader_command;
-class pcap_writer_command;
-class remote_command;
-class sink_command;
-class source_command;
-class start_command;
-
-// -- structs ------------------------------------------------------------------
-
-struct node_state;
-struct query_statistics;
-struct spawn_arguments;
-
-// -- templates ----------------------------------------------------------------
-
-template <class Reader>
-class reader_command;
-
-template <class Writer>
-class writer_command;
-
-// -- aliases ------------------------------------------------------------------
-
-using node_actor = caf::stateful_actor<node_state>;
-using partition_ptr = caf::intrusive_ptr<partition>;
-
+/// Tries to spawn a new EXPORTER.
+/// @param self Points to the parent actor.
+/// @param args Configures the new actor.
+/// @returns a handle to the spawned actor on success, an error otherwise
+maybe_actor spawn_exporter(node_actor* self, spawn_arguments& args);
 
 } // namespace vast::system
