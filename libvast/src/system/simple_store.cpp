@@ -35,6 +35,7 @@ void spawn_metastore(caf::local_actor* self) {
 } // namespace <anonymous>
 
 caf::error simple_store_state::init(actor_ptr self, path dir) {
+  this->self = self;
   file = std::move(dir) / "store";
   if (exists(file)) {
     if (auto err = vast::load(self->system(), file, store)) {
@@ -45,8 +46,8 @@ caf::error simple_store_state::init(actor_ptr self, path dir) {
   return caf::none;
 }
 
-caf::error simple_store_state::save(caf::actor_system& sys) {
-  return vast::save(sys, file, store);
+caf::error simple_store_state::save() {
+  return vast::save(self->system(), file, store);
 }
 
 /// A key-value store that stores its data in a `std::unordered_map`.
@@ -61,7 +62,7 @@ simple_store(simple_store_state::actor_ptr self, path dir) {
   return {
     [=](put_atom, const std::string& key, data& value) -> caf::result<ok_atom> {
       self->state.store[key] = std::move(value);
-      if (auto err = self->state.save(self->system()))
+      if (auto err = self->state.save())
         return err;
       return ok_atom::value;
     },
@@ -69,13 +70,13 @@ simple_store(simple_store_state::actor_ptr self, path dir) {
       auto& v = self->state.store[key];
       auto old = v;
       v += value;
-      if (auto err = self->state.save(self->system()))
+      if (auto err = self->state.save())
         return err;
       return old;
     },
     [=](delete_atom, const std::string& key) -> caf::result<ok_atom> {
       self->state.store.erase(key);
-      if (auto err = self->state.save(self->system()))
+      if (auto err = self->state.save())
         return err;
       return ok_atom::value;
     },
