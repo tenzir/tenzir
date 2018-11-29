@@ -54,8 +54,6 @@
 #include "vast/system/spawn_source.hpp"
 >>>>>>> Split enormous spawn.(h|c)pp into multiple files
 
-using std::string;
-
 using namespace caf;
 
 namespace vast::system {
@@ -66,7 +64,7 @@ namespace {
 thread_local node_actor* this_node;
 
 // Convenience function for wrapping an error into a CAF message.
-auto make_error_msg(ec code, string msg) {
+auto make_error_msg(ec code, std::string msg) {
   return caf::make_message(make_error(code, std::move(msg)));
 }
 
@@ -258,10 +256,10 @@ caf::message spawn_command(const command& cmd, caf::actor_system&,
   auto& st = this_node->state;
   // We configured the command to have the name of the component.
   // Note: caf::string_view is not convertible to string.
-  string comp_name{cmd.name.begin(), cmd.name.end()};
+  std::string comp_name{cmd.name.begin(), cmd.name.end()};
   // Auto-generate label if none given.
-  string label;
-  if (auto label_ptr = caf::get_if<string>(&options, "global.label")) {
+  std::string label;
+  if (auto label_ptr = caf::get_if<std::string>(&options, "global.label")) {
     label = *label_ptr;
   } else {
     label = comp_name;
@@ -337,7 +335,7 @@ node_state::~node_state() {
   self->send_exit(accountant, std::move(err));
 }
 
-void node_state::init(string init_name, path init_dir) {
+void node_state::init(std::string init_name, path init_dir) {
   // Set member variables.
   name = std::move(init_name);
   dir = std::move(init_dir);
@@ -399,11 +397,12 @@ void node_state::init(string init_name, path init_dir) {
             .add<bool>("heap,h", "start the heap profiler")
             .add<size_t>("resolution,r", "seconds between measurements"));
   // Add spawn sink commands.
-  auto src = sp->add(nullptr, "source", "creates a new source",
-                     opts()
-                       .add<string>("read,r", "path to input")
-                       .add<bool>("uds,d", "treat -w as UNIX domain socket")
-                       .add<string>("schema,s", "path to alternate schema"));
+  auto src
+    = sp->add(nullptr, "source", "creates a new source",
+              opts()
+                .add<std::string>("read,r", "path to input")
+                .add<bool>("uds,d", "treat -w as UNIX domain socket")
+                .add<std::string>("schema,s", "path to alternate schema"));
   src->add(spawn_command, "pcap", "creates a new PCAP source",
            opts()
              .add<size_t>("cutoff,c", "skip flow packets after this many bytes")
@@ -422,7 +421,7 @@ void node_state::init(string init_name, path init_dir) {
   // Add spawn sink commands.
   auto snk = sp->add(nullptr, "sink", "creates a new sink",
                      opts()
-                       .add<string>("write,w", "path to write events to")
+                       .add<std::string>("write,w", "path to write events to")
                        .add<bool>("uds,d", "treat -w as UNIX domain socket"));
   snk->add(spawn_command, "pcap", "creates a new PCAP sink",
            opts().add<size_t>("flush,f",
@@ -433,7 +432,7 @@ void node_state::init(string init_name, path init_dir) {
   snk->add(spawn_command, "json", "creates a new JSON sink", opts());
 }
 
-caf::behavior node(node_actor* self, string id, path dir) {
+caf::behavior node(node_actor* self, std::string id, path dir) {
   self->state.init(std::move(id), std::move(dir));
   return {
     [=](const std::vector<std::string>& cli, caf::config_value_map& options) {
@@ -450,7 +449,7 @@ caf::behavior node(node_actor* self, string id, path dir) {
       this_node = self;
       return run(self->state.cmd, self->system(), cli);
     },
-    [=](peer_atom, actor& tracker, string& peer_name) {
+    [=](peer_atom, actor& tracker, std::string& peer_name) {
       self->delegate(self->state.tracker, peer_atom::value,
                      std::move(tracker), std::move(peer_name));
     },
