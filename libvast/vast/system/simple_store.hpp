@@ -13,43 +13,45 @@
 
 #pragma once
 
-#include <vector>
+#include <unordered_map>
 
 #include <caf/fwd.hpp>
-#include <caf/replies_to.hpp>
-#include <caf/stateful_actor.hpp>
-#include <caf/typed_actor.hpp>
-#include <caf/typed_event_based_actor.hpp>
 
-#include "vast/fwd.hpp"
-#include "vast/ids.hpp"
-#include "vast/store.hpp"
-#include "vast/system/atoms.hpp"
+#include "vast/data.hpp"
+#include "vast/filesystem.hpp"
+
+#include "vast/system/meta_store.hpp"
 
 namespace vast::system {
 
-/// @relates archive
-struct archive_state {
-  std::unique_ptr<vast::store> store;
-  static inline const char* name = "archive";
+struct simple_store_state {
+  using actor_ptr = meta_store_type::stateful_pointer<simple_store_state>;
+
+  static inline const char* name = "simple-store";
+
+  simple_store_state(actor_ptr self);
+
+  /// Initializes the state.
+  /// @param dir The directory of the store.
+  caf::error init(path dir);
+
+  /// Saves the current state to `file`.
+  /// @pre `init()` was run successfully.
+  caf::error save();
+
+  actor_ptr self;
+
+  /// The data container.
+  std::unordered_map<std::string, data> store;
+
+  /// The location of the persistence file.
+  path file;
 };
 
-/// @relates archive
-using archive_type = caf::typed_actor<
-  caf::reacts_to<caf::stream<table_slice_ptr>>,
-  caf::replies_to<ids>::with<std::vector<event>>,
-  caf::replies_to<status_atom>::with<caf::dictionary<caf::config_value>>
->;
-
-/// Stores event batches and answers queries for ID sets.
+/// A key-value store that stores its data in a `std::unordered_map`.
 /// @param self The actor handle.
-/// @param dir The root directory of the archive.
-/// @param capacity The number of segments to cache in memory.
-/// @param max_segment_size The maximum segment size in bytes.
-/// @pre `max_segment_size > 0`
-archive_type::behavior_type
-archive(archive_type::stateful_pointer<archive_state> self, path dir,
-        size_t capacity, size_t max_segment_size);
+/// @param dir The directory of the store.
+meta_store_type::behavior_type
+simple_store(simple_store_state::actor_ptr self, path dir);
 
 } // namespace vast::system
-

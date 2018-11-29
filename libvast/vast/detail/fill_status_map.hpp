@@ -15,34 +15,14 @@
 
 #include <caf/fwd.hpp>
 
-#include <caf/expected.hpp>
+namespace vast::detail {
 
-#include "vast/fwd.hpp"
+/// Fills `xs` state from the stream manager `mgr`.
+void fill_status_map(caf::dictionary<caf::config_value>& xs,
+                     caf::stream_manager& mgr);
 
-namespace vast {
+/// Fills `xs` state from `self`.
+void fill_status_map(caf::dictionary<caf::config_value>& xs,
+                     caf::scheduled_actor* self);
 
-/// A key-value store for events.
-class store {
-public:
-  virtual ~store();
-
-  /// Adds a table slice to the store.
-  /// @param xs The table slice to add.
-  /// @returns No error on success.
-  virtual caf::error put(table_slice_ptr xs) = 0;
-
-  /// Retrieves a set of events.
-  /// @param xs The IDs for the events to retrieve.
-  /// @returns The table slice according to *xs*.
-  virtual caf::expected<std::vector<table_slice_ptr>>
-  get(const ids& xs) = 0;
-
-  /// Flushes in-memory state to persistent storage.
-  /// @returns No error on success.
-  virtual caf::error flush() = 0;
-
-  /// Fills `dict` with implementation-specific status information.
-  virtual void inspect_status(caf::dictionary<caf::config_value>& dict) = 0;
-};
-
-} // namespace vast
+} // namespace vast::detail

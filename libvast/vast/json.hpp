@@ -16,9 +16,11 @@
 #include <string>
 #include <vector>
 
+#include <caf/detail/type_list.hpp>
+#include <caf/dictionary.hpp>
+#include <caf/fwd.hpp>
 #include <caf/none.hpp>
 #include <caf/variant.hpp>
-#include <caf/detail/type_list.hpp>
 
 #include "vast/concept/printable/to.hpp"
 
@@ -199,6 +201,15 @@ bool convert(const std::map<K, V>& m, json& j) {
   j = std::move(o);
   return true;
 }
+
+/// @relates json
+template <class V>
+bool convert(const caf::dictionary<V>& xs, json& j) {
+  return convert(xs.container(), j);
+}
+
+/// @relates json
+bool convert(const caf::config_value& x, json& j);
 
 /// @relates json
 template <class T, class... Opts>

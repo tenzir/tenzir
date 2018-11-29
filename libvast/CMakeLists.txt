@@ -33,6 +33,7 @@ set(libvast_sources
   src/detail/fdistream.cpp
   src/detail/fdostream.cpp
   src/detail/fdoutbuf.cpp
+  src/detail/fill_status_map.cpp
   src/detail/line_range.cpp
   src/detail/make_io_stream.cpp
   src/detail/mmapbuf.cpp
@@ -56,6 +57,7 @@ set(libvast_sources
   src/format/writer.cpp
   src/http.cpp
   src/ids.cpp
+  src/json.cpp
   src/meta_index.cpp
   src/null_bitmap.cpp
   src/operator.cpp
@@ -87,6 +89,7 @@ set(libvast_sources
   src/system/profiler.cpp
   src/system/remote_command.cpp
   src/system/signal_monitor.cpp
+  src/system/simple_store.cpp
   src/system/sink_command.cpp
   src/system/source_command.cpp
   src/system/spawn_archive.cpp
@@ -199,6 +202,7 @@ set(tests
   test/compressedbuf.cpp
   test/data.cpp
   test/default_table_slice.cpp
+  test/detail/algorithms.cpp
   test/detail/flat_lru_cache.cpp
   test/detail/operators.cpp
   test/detail/set_operations.cpp
@@ -249,6 +253,7 @@ set(tests
   test/system/partition.cpp
   test/system/queries.cpp
   test/system/replicated_store.cpp
+  test/system/simple_store.cpp
   test/system/sink.cpp
   test/system/source.cpp
   test/system/task.cpp
@@ -269,34 +274,34 @@ if (PCAP_FOUND)
   set(tests ${tests} test/format/pcap.cpp)
 endif ()
 
-add_executable(vast-test ${tests})
-target_link_libraries(vast-test libvast libvast_test ${CMAKE_THREAD_LIBS_INIT})
-
 #
 # Generate CMake tests
 #
 
-# Helper macro to construct a CMake test from a VAST test suite.
-macro(make_test suite)
-  string(REPLACE " " "_" test_name ${suite})
-  set(vast_test ${EXECUTABLE_OUTPUT_PATH}/vast-test)
-  add_test(${test_name} ${vast_test} -v 3 -r 600 -s "^${suite}$" ${ARGN})
-endmacro()
-
-# Find all test suites.
-foreach(test ${tests})
-  file(STRINGS ${test} contents)
-  foreach(line ${contents})
-    if ("${line}" MATCHES "SUITE")
-      string(REGEX REPLACE "#define SUITE \(.*\)" "\\1" suite ${line})
-      list(APPEND suites ${suite})
-    endif()
+if (NOT NO_UNIT_TESTS)
+  # Add vast-test executable.
+  add_executable(vast-test ${tests})
+  target_link_libraries(vast-test libvast libvast_test ${CMAKE_THREAD_LIBS_INIT})
+  # Helper macro to construct a CMake test from a VAST test suite.
+  macro(make_test suite)
+    string(REPLACE " " "_" test_name ${suite})
+    set(vast_test ${EXECUTABLE_OUTPUT_PATH}/vast-test)
+    add_test(${test_name} ${vast_test} -v 3 -r 600 -s "^${suite}$" ${ARGN})
+  endmacro()
+  # Find all test suites.
+  foreach(test ${tests})
+    file(STRINGS ${test} contents)
+    foreach(line ${contents})
+      if ("${line}" MATCHES "SUITE")
+        string(REGEX REPLACE "#define SUITE \(.*\)" "\\1" suite ${line})
+        list(APPEND suites ${suite})
+      endif()
+    endforeach()
   endforeach()
-endforeach()
-list(REMOVE_DUPLICATES suites)
-
-enable_testing()
-
-foreach(suite ${suites})
-  make_test("${suite}")
-endforeach ()
+  list(REMOVE_DUPLICATES suites)
+  # Enable unit testing via CMake/CTest and add all test suites.
+  enable_testing()
+  foreach(suite ${suites})
+    make_test("${suite}")
+  endforeach ()
+endif ()

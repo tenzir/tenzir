@@ -34,6 +34,7 @@
 #include "vast/logger.hpp"
 #include "vast/system/accountant.hpp"
 #include "vast/system/consensus.hpp"
+#include "vast/system/node.hpp"
 #include "vast/system/spawn_archive.hpp"
 #include "vast/system/spawn_arguments.hpp"
 #include "vast/system/spawn_exporter.hpp"
@@ -93,30 +94,63 @@ caf::message peer_command(const command&, caf::actor_system& sys,
   return caf::none;
 }
 
-// Queries registered components for various status information.
+void collect_component_status(node_actor* self,
+                              caf::response_promise status_promise,
+                              registry& reg) {
+  // Shared state between our response handlers.
+  struct req_state_t {
+    // Keeps track of how many requests are pending.
+    size_t pending = 0;
+    // Promise to the original client request.
+    caf::response_promise rp;
+    // Maps nodes to a map associating components with status information.
+    caf::config_value_map content;
+  };
+  auto req_state = std::make_shared<req_state_t>();
+  req_state->rp = std::move(status_promise);
+  // Pre-fill our result with system stats.
+  auto& sys_stats = req_state->content["system"];
+  auto& sys = self->system();
+  sys_stats.emplace("running-actors", sys.registry().running());
+  sys_stats.emplace("detached-actors", sys.detached_actors());
+  sys_stats.emplace("worker-threads", sys.scheduler().num_workers());
+  // Send out requests and collects answers.
+  for (auto& [node_name, state_map] : reg.components) {
+    req_state->pending += state_map.size();
+    for (auto& kvp : state_map) {
+      auto& comp_state = kvp.second;
+      // Skip the tracker. It has no interesting state.
+      if (comp_state.label == "tracker") {
+        req_state->pending -= 1;
+        continue;
+      }
+      self->request(comp_state.actor, infinite, status_atom::value).then(
+        [=, lbl = comp_state.label, nn = node_name]
+        (caf::config_value::dictionary& xs) mutable {
+          auto& st = *req_state;
+          st.content[nn].emplace(std::move(lbl), std::move(xs));
+          if (--st.pending == 0)
+            st.rp.deliver(to_string(to_json(st.content)));
+        },
+        [=, lbl = comp_state.label, nn = node_name](caf::error& err) mutable {
+          auto& st = *req_state;
+          st.content[nn].emplace(std::move(lbl), self->system().render(err));
+          if (--st.pending == 0)
+            st.rp.deliver(to_string(to_json(st.content)));
+        }
+      );
+    }
+  }
+}
+
 caf::message status_command(const command&, caf::actor_system&,
                             caf::config_value_map&, command::argument_iterator,
                             command::argument_iterator) {
-  auto rp = this_node->make_response_promise();
-  this_node->request(this_node->state.tracker, infinite, get_atom::value).then(
-    [=, self = this_node](const registry& reg) mutable {
-      json::object result;
-      for (auto& peer : reg.components) {
-        json::array xs;
-        for (auto& pair : peer.second)
-          xs.push_back(json{pair.second.label});
-        result.emplace(peer.first, std::move(xs));
-      }
-      auto& sys = self->system();
-      json::object sys_stats;
-      sys_stats.emplace("running-actors", sys.registry().running());
-      sys_stats.emplace("detached-actors", sys.detached_actors());
-      sys_stats.emplace("worker-threads", sys.scheduler().num_workers());
-      result.emplace("system", std::move(sys_stats));
-      rp.deliver(to_string(json{std::move(result)}));
-    },
-    [=](caf::error& err) mutable {
-      rp.deliver(std::move(err));
+  auto self = this_node;
+  auto rp = self->make_response_promise();
+  self->request(self->state.tracker, infinite, get_atom::value).then(
+    [=](registry& reg) mutable {
+      collect_component_status(self, std::move(rp), reg);
     }
   );
   return caf::none;
@@ -274,7 +308,8 @@ void node_state::init(std::string init_name, path init_dir) {
   // Set member variables.
   name = std::move(init_name);
   dir = std::move(init_dir);
-  // Bring up the accountant.
+  // Bring up the accountant here where we know the log path. The tracker shuts
+  // it down upon termination.
   auto accountant_log = dir / "log" / "current" / "accounting.log";
   accountant = self->spawn<monitored>(system::accountant,
                                       std::move(accountant_log));
