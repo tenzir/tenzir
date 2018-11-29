@@ -58,7 +58,7 @@ namespace {
 thread_local node_actor* this_node;
 
 // Convenience function for wrapping an error into a CAF message.
-auto err(ec code, string msg) {
+auto make_error_msg(ec code, string msg) {
   return caf::make_message(make_error(code, std::move(msg)));
 }
 
@@ -69,10 +69,11 @@ caf::message peer_command(const command&, caf::actor_system& sys,
                           command::argument_iterator last) {
   VAST_ASSERT(this_node != nullptr);
   if (std::distance(first, last) != 1)
-    return err(ec::syntax_error, "expected exactly one endpoint argument");
+    return make_error_msg(ec::syntax_error,
+                          "expected exactly one endpoint argument");
   auto ep = to<endpoint>(*first);
   if (!ep)
-    return err(ec::parse_error, "invalid endpoint format");
+    return make_error_msg(ec::parse_error, "invalid endpoint format");
   // Use localhost:42000 by default.
   if (ep->host.empty())
     ep->host = "127.0.0.1";
@@ -235,7 +236,8 @@ caf::message kill_command(const command&, caf::actor_system&,
                           command::argument_iterator first,
                           command::argument_iterator last) {
   if (std::distance(first, last) != 1)
-    return err(ec::syntax_error, "expected exactly one component argument");
+    return make_error_msg(ec::syntax_error,
+                          "expected exactly one component argument");
   auto rp = this_node->make_response_promise();
   this_node->request(this_node->state.tracker, infinite, get_atom::value).then(
     [rp, self = this_node, label = *first](registry& reg) mutable {
