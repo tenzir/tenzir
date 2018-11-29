@@ -111,20 +111,20 @@ caf::message status_command(const command&, caf::actor_system&,
   auto rp = this_node->make_response_promise();
   this_node->request(this_node->state.tracker, infinite, get_atom::value).then(
     [=, self = this_node](const registry& reg) mutable {
-      json::object obj;
+      json::object result;
       for (auto& peer : reg.components) {
         json::array xs;
         for (auto& pair : peer.second)
           xs.push_back(json{pair.second.label});
-        obj.emplace(peer.first, std::move(xs));
+        result.emplace(peer.first, std::move(xs));
       }
       auto& sys = self->system();
       json::object sys_stats;
       sys_stats.emplace("running-actors", sys.registry().running());
       sys_stats.emplace("detached-actors", sys.detached_actors());
       sys_stats.emplace("worker-threads", sys.scheduler().num_workers());
-      obj.emplace("system", std::move(sys_stats));
-      rp.deliver(to_string(json{std::move(obj)}));
+      result.emplace("system", std::move(sys_stats));
+      rp.deliver(to_string(json{std::move(result)}));
     },
     [=](caf::error& err) mutable {
       rp.deliver(std::move(err));
