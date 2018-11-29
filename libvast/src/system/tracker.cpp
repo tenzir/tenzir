@@ -118,9 +118,9 @@ behavior terminator(stateful_actor<terminator_state>* self, caf::error reason,
   };
 }
 
-void put_component(scheduled_actor* self, tracker_state& st,
-                   const std::string& type, const actor& component,
-                   std::string& label) {
+void register_component(scheduled_actor* self, tracker_state& st,
+                        const std::string& type, const actor& component,
+                        std::string& label) {
   using caf::anon_send;
   // Save new component.
   self->monitor(component);
@@ -216,7 +216,7 @@ tracker(tracker_type::stateful_pointer<tracker_state> self, std::string node) {
     [=](put_atom, const std::string& type, const actor& component,
         std::string& label) -> result<ok_atom> {
       VAST_DEBUG(self, "got new", type, '(' << label << ')');
-      put_component(self, self->state, type, component, label);
+      register_component(self, self->state, type, component, label);
       return ok_atom::value;
     },
     [=](try_put_atom, const std::string& type, const actor& component,
@@ -226,7 +226,7 @@ tracker(tracker_type::stateful_pointer<tracker_state> self, std::string node) {
       auto& local = st.registry.components[node];
       if (local.count(type) != 0)
         return make_error(ec::unspecified, "component already exists");
-      put_component(self, st, type, component, label);
+      register_component(self, st, type, component, label);
       return caf::unit;
     },
     [=](put_atom, const std::string& name, const std::string& type,
