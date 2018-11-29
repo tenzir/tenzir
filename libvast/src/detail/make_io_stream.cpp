@@ -11,14 +11,17 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
+#include "vast/detail/make_io_stream.hpp"
+
+#include <caf/config_value.hpp>
+
 #include <fstream>
 
-#include "vast/error.hpp"
-
+#include "vast/defaults.hpp"
 #include "vast/detail/fdinbuf.hpp"
 #include "vast/detail/fdostream.hpp"
-#include "vast/detail/make_io_stream.hpp"
 #include "vast/detail/posix.hpp"
+#include "vast/error.hpp"
 
 namespace vast {
 namespace detail {
@@ -56,6 +59,13 @@ make_input_stream(const std::string& input, bool is_uds) {
 }
 
 expected<std::unique_ptr<std::ostream>>
+make_output_stream(const caf::config_value_map& options) {
+  return make_output_stream(
+    get_or(options, "global.write", defaults::command::write_path),
+    get_or(options, "global.uds", false));
+}
+
+expected<std::unique_ptr<std::ostream>>
 make_output_stream(const std::string& output, bool is_uds) {
   if (is_uds) {
       return make_error(ec::filesystem_error,
@@ -70,6 +80,13 @@ make_output_stream(const std::string& output, bool is_uds) {
   if (output == "-")
     return std::make_unique<fdostream>(1); // stdout
   return std::make_unique<std::ofstream>(output);
+}
+
+expected<std::unique_ptr<std::istream>>
+make_input_stream(const caf::config_value_map& options) {
+  return make_input_stream(
+    get_or(options, "global.read", defaults::command::read_path),
+    get_or(options, "global.uds", false));
 }
 
 } // namespace detail

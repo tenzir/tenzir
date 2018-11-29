@@ -25,7 +25,7 @@
 namespace vast {
 
 /// A named command with optional children.
-struct command {
+class command {
 public:
   // -- member types -----------------------------------------------------------
 
@@ -80,9 +80,22 @@ caf::message run(const command& cmd, caf::actor_system& sys,
 /// @returns a type-erased result or a wrapped `caf::error`.
 /// @relates command
 caf::message run(const command& cmd, caf::actor_system& sys,
+                 const std::vector<std::string>& args);
+
+/// Runs the command and blocks until execution completes.
+/// @returns a type-erased result or a wrapped `caf::error`.
+/// @relates command
+caf::message run(const command& cmd, caf::actor_system& sys,
                  caf::config_value_map& options,
                  command::argument_iterator first,
                  command::argument_iterator last);
+
+/// Runs the command and blocks until execution completes.
+/// @returns a type-erased result or a wrapped `caf::error`.
+/// @relates command
+caf::message run(const command& cmd, caf::actor_system& sys,
+                 caf::config_value_map& options,
+                 const std::vector<std::string>& args);
 
 /// Returns the full name of `cmd`, i.e., its own name prepended by all parent
 /// names.

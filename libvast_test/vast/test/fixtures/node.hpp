@@ -36,8 +36,8 @@ struct node : deterministic_actor_system_and_events {
   caf::actor spawn_component(std::string component, Ts&&... args) {
     using namespace caf;
     actor result;
-    auto msg = make_message(std::move(component), std::forward<Ts>(args)...);
-    auto rh = self->request(test_node, infinite, "spawn", std::move(msg));
+    std::vector<std::string> cli{"spawn", component, std::forward<Ts>(args)...};
+    auto rh = self->request(test_node, infinite, std::move(cli));
     run();
     rh.receive(
       [&](const actor& a) { result = a; },

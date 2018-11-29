@@ -15,35 +15,46 @@
 
 #include <string>
 
-#include <caf/local_actor.hpp>
+#include <caf/config_value.hpp>
+#include <caf/fwd.hpp>
+#include <caf/string_view.hpp>
 
-#include "vast/expected.hpp"
-#include "vast/filesystem.hpp"
-#include "vast/system/node.hpp"
+#include "vast/fwd.hpp"
+#include "vast/aliases.hpp"
 
 namespace vast::system {
 
-struct options {
-  caf::message params;
-  path dir;
-  std::string label;
-};
 
-expected<caf::actor> spawn_archive(caf::local_actor* self, options& opts);
 
-expected<caf::actor> spawn_exporter(node_actor* self, options& opts);
+maybe_actor (* self, spawn_arguments& args);
 
-expected<caf::actor> spawn_importer(node_actor* self, options& opts);
+maybe_actor (node_actor* self, spawn_arguments& args);
 
-expected<caf::actor> spawn_index(caf::local_actor* self, options& opts);
+maybe_actor (* self, spawn_arguments& args);
 
-expected<caf::actor> spawn_metastore(caf::local_actor* self, options& opts);
+maybe_actor (caf::local_actor* self, spawn_arguments& args);
 
-expected<caf::actor> spawn_profiler(caf::local_actor* self, options& opts);
+maybe_actor (caf::local_actor* self, spawn_arguments& args);
 
-expected<caf::actor> spawn_source(caf::local_actor* self, options& opts);
+maybe_actor (caf::local_actor* self, spawn_arguments& args);
 
-expected<caf::actor> spawn_sink(caf::local_actor* self, options& opts);
+maybe_actor (caf::local_actor* self, spawn_arguments& args);
+
+maybe_actor (caf::local_actor* self, spawn_arguments& args);
+
+maybe_actor (caf::local_actor* self, spawn_arguments& args);
+
+maybe_actor (caf::local_actor* self, spawn_arguments& args);
+
+maybe_actor (caf::local_actor* self, spawn_arguments& args);
+
+maybe_actor (caf::local_actor* self, spawn_arguments& args);
+
+maybe_actor (caf::local_actor* self, spawn_arguments& args);
+
+maybe_actor (caf::local_actor* self, spawn_arguments& args);
+
+maybe_actor (caf::local_actor* self, spawn_arguments& args);
 
 } // namespace vast::system
 

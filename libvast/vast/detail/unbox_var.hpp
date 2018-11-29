@@ -13,28 +13,15 @@
 
 #pragma once
 
-#include <iostream>
-#include <memory>
-#include <string>
-
-#include "caf/fwd.hpp"
-
-#include "vast/expected.hpp"
-
 namespace vast::detail {
 
-expected<std::unique_ptr<std::ostream>>
-make_output_stream(const std::string& output, bool is_uds = false);
-
-expected<std::unique_ptr<std::ostream>>
-make_output_stream(const caf::config_value_map& options);
-
-expected<std::unique_ptr<std::istream>>
-make_input_stream(const std::string& input, bool is_uds = false);
-
-expected<std::unique_ptr<std::istream>>
-make_input_stream(const caf::config_value_map& options);
+/// Either declares the local variable `var_name` from `expr` or returns with
+/// an error.
+#define VAST_UNBOX_VAR(var_name, expr)                                         \
+  std::remove_reference_t<decltype(*(expr))> var_name;                         \
+  if (auto maybe = expr; !maybe)                                               \
+    return std::move(maybe.error());                                           \
+  else                                                                         \
+    var_name = std::move(*maybe);
 
 } // namespace vast::detail
-
-

@@ -11,143 +11,97 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include <caf/all.hpp>
+#include "vast/system/spawn_source.hpp"
 
-#include <caf/detail/scope_guard.hpp>
+#include <caf/actor.hpp>
+#include <caf/expected.hpp>
+#include <caf/local_actor.hpp>
 
 #include "vast/config.hpp"
-
-#include "vast/concept/parseable/to.hpp"
-#include "vast/concept/parseable/vast/expression.hpp"
-#include "vast/concept/parseable/vast/schema.hpp"
-#include "vast/error.hpp"
-#include "vast/expression.hpp"
-#include "vast/query_options.hpp"
-#include "vast/si_literals.hpp"
-
+#include "vast/defaults.hpp"
+#include "vast/detail/make_io_stream.hpp"
+#include "vast/detail/unbox_var.hpp"
 #include "vast/format/bgpdump.hpp"
-#include "vast/format/mrt.hpp"
 #include "vast/format/bro.hpp"
+#include "vast/format/mrt.hpp"
+#include "vast/format/test.hpp"
+#include "vast/system/node.hpp"
+#include "vast/system/source.hpp"
+#include "vast/system/spawn_arguments.hpp"
+
 #ifdef VAST_HAVE_PCAP
 #include "vast/format/pcap.hpp"
-#endif
-#include "vast/format/test.hpp"
+#endif // VAST_HAVE_PCAP
 
-#include "vast/system/atoms.hpp"
-#include "vast/system/source.hpp"
-#include "vast/system/spawn.hpp"
+namespace vast::system {
 
-#include "vast/detail/make_io_stream.hpp"
+namespace {
 
-using namespace std::string_literals;
-using namespace caf;
-
-namespace vast {
-namespace system {
-
-using namespace si_literals;
-
-expected<actor> spawn_source(local_actor* self, options& opts) {
-  if (opts.params.empty())
-    return make_error(ec::syntax_error, "missing format");
-  auto& format = opts.params.get_as<std::string>(0);
-  auto source_args = opts.params.drop(1);
-  // Parse format-independent parameters first.
-  auto input = "-"s;
-  std::string schema_file;
-  auto r = source_args.extract_opts({
-    {"read,r", "path to input where to read events from", input},
-    {"schema,s", "path to alternate schema", schema_file},
-    {"uds,d", "treat -r as listening UNIX domain socket"}
-  });
-  // Ensure that, upon leaving this function, we have updated the parameter
-  // list such that it no longer contains the command line options that we have
-  // used in this function
-  auto grd = caf::detail::make_scope_guard([&] { opts.params = r.remainder; });
-  // Parse format-specific parameters, if any.
-  actor src;
-  if (format == "pcap") {
-#ifndef VAST_HAVE_PCAP
-    return make_error(ec::unspecified, "not compiled with pcap support");
-#else
-    auto flow_max = 1_Mi;
-    auto flow_age = 60u;
-    auto flow_expiry = 10u;
-    auto cutoff = std::numeric_limits<size_t>::max();
-    auto pseudo_realtime = int64_t{0};
-    r = r.remainder.extract_opts({
-      {"cutoff,c", "skip flow packets after this many bytes", cutoff},
-      {"flow-max,m", "number of concurrent flows to track", flow_max},
-      {"flow-age,a", "max flow lifetime before eviction", flow_age},
-      {"flow-expiry,e", "flow table expiration interval", flow_expiry},
-      {"pseudo-realtime,p", "factor c delaying trace packets by 1/c",
-       pseudo_realtime}
-    });
-    if (!r.error.empty())
-      return make_error(ec::syntax_error, r.error);
-    format::pcap::reader reader{input, cutoff, flow_max, flow_age, flow_expiry,
-                                pseudo_realtime};
-    src = self->spawn(default_source<format::pcap::reader>, std::move(reader));
-#endif
-  } else if (format == "bro" || format == "bgpdump" || format == "mrt") {
-    auto in = detail::make_input_stream(input, r.opts.count("uds") > 0);
-    if (!in)
-      return in.error();
-    if (format == "bro") {
-      format::bro::reader reader{std::move(*in)};
-      src = self->spawn(default_source<format::bro::reader>, std::move(reader));
-    } else if (format == "bgpdump") {
-      format::bgpdump::reader reader{std::move(*in)};
-      src = self->spawn(default_source<format::bgpdump::reader>,
-                        std::move(reader));
-    } else if (format == "mrt") {
-      format::mrt::reader reader{std::move(*in)};
-      src = self->spawn(default_source<format::mrt::reader>, std::move(reader));
-    }
-  } else if (format == "test") {
-    auto seed = size_t{0};
-    auto n = uint64_t{100};
-    r = r.remainder.extract_opts({
-      {"seed,s", "the PRNG seed", seed},
-      {"events,n", "number of events to generate", n}
-    });
-    if (!r.error.empty())
-      return make_error(ec::syntax_error, r.error);
-    format::test::reader reader{seed, n};
-    src = self->spawn(default_source<format::test::reader>, std::move(reader));
-    // Since the test source doesn't consume any data and only generates
-    // events out of thin air, we use the input channel to specify the schema.
-    schema_file = input;
-  } else {
-    return make_error(ec::syntax_error, "invalid format:", format);
-  }
-  // Supply an alternate schema, if requested.
-  if (!schema_file.empty()) {
-    auto str = load_contents(schema_file);
-    if (!str)
-      return str.error();
-    auto sch = to<schema>(*str);
-    if (!sch)
-      return sch.error();
-    // Send anonymously, since we can't process the reply here.
-    anon_send(src, put_atom::value, std::move(*sch));
-  }
-  // Attempt to parse the remainder as an expression.
-  if (!r.remainder.empty()) {
-    auto str = r.remainder.get_as<std::string>(0);
-    for (auto i = 1u; i < r.remainder.size(); ++i)
-      str += ' ' + r.remainder.get_as<std::string>(i);
-    auto expr = to<expression>(str);
-    if (!expr)
-      return expr.error();
-    expr = normalize_and_validate(*expr);
-    if (!expr)
-      return expr.error();
-    r.remainder = {};
-    anon_send(src, std::move(*expr));
-  }
+template <class Reader, class... Ts>
+maybe_actor spawn_generic_source(caf::local_actor* self, spawn_arguments& args,
+                                 Ts&&... writer_args) {
+  VAST_UNBOX_VAR(expr, normalized_and_valided(args));
+  VAST_UNBOX_VAR(sch, read_schema(args));
+  VAST_UNBOX_VAR(out, detail::make_output_stream(args.options));
+  Reader reader{std::forward<Ts>(writer_args)...};
+  auto src = self->spawn(default_source<Reader>, std::move(reader));
+  caf::anon_send(src, std::move(expr));
+  if (sch)
+    caf::anon_send(src, put_atom::value, std::move(*sch));
   return src;
 }
 
-} // namespace system
-} // namespace vast
+} // namespace <anonymous>
+
+maybe_actor spawn_pcap_source([[maybe_unused]] caf::local_actor* self,
+                              [[maybe_unused]] spawn_arguments& args) {
+#ifndef VAST_HAVE_PCAP
+  VAST_UNUSED(self, args);
+  return make_error(ec::unspecified, "not compiled with pcap support");
+#else // VAST_HAVE_PCAP
+  auto opt = [&](caf::string_view key, auto default_value) {
+    return get_or(args.options, key, default_value);
+  };
+  namespace cd = defaults::command;
+  return spawn_generic_source<format::pcap::reader>(
+    self, args, opt("global.read", cd::read_path),
+    opt("global.cutoff", cd::cutoff), opt("global.flow-max", cd::max_flows),
+    opt("global.flow-age", cd::max_flow_age),
+    opt("global.flow-expiry", cd::flow_expiry),
+    opt("global.pseudo-realtime", cd::pseudo_realtime_factor));
+#endif // VAST_HAVE_PCAP
+}
+
+maybe_actor spawn_test_source(caf::local_actor* self, spawn_arguments& args) {
+  using reader_type = format::test::reader;
+  VAST_UNBOX_VAR(sch, read_schema(args));
+  // The test source only generates events out of thin air and thus accepts no
+  // source expression.
+  if (!args.empty())
+    return unexpected_arguments(args);
+  reader_type reader{get_or(args.options, "global.seed", size_t{0}),
+                     get_or(args.options, "global.events", size_t{100})};
+  auto src = self->spawn(default_source<reader_type>, std::move(reader));
+  if (sch)
+    caf::anon_send(src, put_atom::value, std::move(*sch));
+  return src;
+}
+
+maybe_actor spawn_bro_source(caf::local_actor* self, spawn_arguments& args) {
+  VAST_UNBOX_VAR(in, detail::make_input_stream(args.options));
+  return spawn_generic_source<format::bro::reader>(self, args, std::move(in));
+}
+
+maybe_actor spawn_bgpdump_source(caf::local_actor* self,
+                                 spawn_arguments& args) {
+  VAST_UNBOX_VAR(in, detail::make_input_stream(args.options));
+  return spawn_generic_source<format::bgpdump::reader>(self, args,
+                                                       std::move(in));
+}
+
+maybe_actor spawn_mrt_source(caf::local_actor* self, spawn_arguments& args) {
+  VAST_UNBOX_VAR(in, detail::make_input_stream(args.options));
+  return spawn_generic_source<format::mrt::reader>(self, args, std::move(in));
+}
+
+} // namespace vast::system
