@@ -259,6 +259,9 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
       self->state.archive = archive;
       if (has_continuous_option(self->state.options))
         self->monitor(archive);
+      // Register self at the archive
+      if (has_historical_option(self->state.options))
+        self->send(archive, exporter_atom::value, self);
     },
     [=](index_atom, const actor& index) {
       VAST_DEBUG(self, "registers index", index);
