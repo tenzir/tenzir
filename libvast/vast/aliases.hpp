@@ -19,6 +19,7 @@
 #include <string>
 #include <vector>
 
+#include <caf/dictionary.hpp>
 #include <caf/config_value.hpp>
 
 #include "vast/detail/steady_set.hpp"
@@ -64,7 +65,7 @@ constexpr id max_events = max_id + 1;
 /// The data type for an enumeration.
 using enumeration = uint32_t;
 
-using synopsis_options = caf::config_value_map;
+using synopsis_options = caf::dictionary<caf::config_value>;
 
 } // namespace vast
 
