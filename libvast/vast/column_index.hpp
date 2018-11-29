@@ -44,7 +44,8 @@ class column_index {
 public:
   // -- constructors, destructors, and assignment operators --------------------
 
-  virtual ~column_index();
+  column_index(caf::actor_system& sys, type index_type, path filename,
+               size_t column);
 
   // -- persistence ------------------------------------------------------------
 
@@ -60,7 +61,7 @@ public:
 
   /// Adds an event to the index.
   /// @pre `init()` was called previously.
-  virtual void add(const table_slice_ptr& x) = 0;
+  void add(const table_slice_ptr& x);
 
   /// Queries event IDs that fulfill the given predicate.
   /// @pre `init()` was called previously.
@@ -95,16 +96,13 @@ public:
   }
 
 protected:
-  // -- constructors, destructors, and assignment operators --------------------
-
-  column_index(caf::actor_system& sys, type index_type, path filename);
-
   // -- member variables -------------------------------------------------------
 
+  std::unique_ptr<value_index> idx_;
+  size_t col_;
   bool has_skip_attribute_;
   type index_type_;
   path filename_;
-  std::unique_ptr<value_index> idx_;
   value_index::size_type last_flush_ = 0;
   caf::actor_system& sys_;
 };
