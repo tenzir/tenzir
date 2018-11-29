@@ -27,9 +27,13 @@
 #include <vector>
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 #include "caf/fwd.hpp"
 
 =======
+=======
+#include <caf/dictionary.hpp>
+>>>>>>> Use better type alias for synopsis options
 #include <caf/config_value.hpp>
 
 #include "vast/detail/steady_set.hpp"
@@ -86,7 +90,7 @@ using cli_argument_iterator = std::vector<std::string>::const_iterator;
 /// an error.
 using maybe_actor = caf::expected<caf::actor>;
 
-using synopsis_options = caf::config_value_map;
+using synopsis_options = caf::dictionary<caf::config_value>;
 
 } // namespace vast
 
