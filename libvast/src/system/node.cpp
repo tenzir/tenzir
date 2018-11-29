@@ -31,7 +31,6 @@
 #include "vast/logger.hpp"
 
 #include "vast/system/accountant.hpp"
-#include "vast/system/consensus.hpp"
 #include "vast/system/node.hpp"
 #include "vast/system/spawn.hpp"
 

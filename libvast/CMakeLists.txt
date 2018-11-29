@@ -89,6 +89,7 @@ set(libvast_sources
   src/system/profiler.cpp
   src/system/remote_command.cpp
   src/system/signal_monitor.cpp
+  src/system/simple_store.cpp
   src/system/sink_command.cpp
   src/system/source_command.cpp
   src/system/spawn.cpp
@@ -246,6 +247,7 @@ set(tests
   test/system/partition.cpp
   test/system/queries.cpp
   test/system/replicated_store.cpp
+  test/system/simple_store.cpp
   test/system/sink.cpp
   test/system/source.cpp
   test/system/task.cpp
