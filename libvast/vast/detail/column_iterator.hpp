@@ -23,21 +23,19 @@ namespace vast::detail {
 /// Iterates a 1-dimensional row-major array as if it were a column in a
 /// 2-dimensional matrix.
 template <class T>
-class column_iterator : public std::iterator<std::random_access_iterator_tag, T,
-                                             ptrdiff_t, T*, T&> {
+class column_iterator {
 public:
   // -- member types ---------------------------------------------------------
 
-  using super = std::iterator<std::random_access_iterator_tag,
-                              T, ptrdiff_t, T*, T&>;
+  using iterator_category = std::random_access_iterator_tag;
 
-  using difference_type = typename super::difference_type;
+  using difference_type = ptrdiff_t;
 
-  using value_type = typename super::value_type;
+  using value_type = T;
 
-  using pointer = typename super::pointer;
+  using pointer = T*;
 
-  using reference = typename super::reference;
+  using reference = T&;
 
   // -- constructors, destructors, and assignment operators ------------------
 
