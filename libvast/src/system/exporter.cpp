@@ -135,6 +135,7 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
   self->set_exit_handler(
     [=](const exit_msg& msg) {
       VAST_DEBUG(self, "received exit from", msg.source, "with reason:", msg.reason);
+      self->send<message_priority::high>(self->state.index, self->state.id, 0);
       self->send(self->state.sink, sys_atom::value, delete_atom::value);
       self->send_exit(self->state.sink, msg.reason);
       self->quit(msg.reason);
