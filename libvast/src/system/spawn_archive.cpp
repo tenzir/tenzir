@@ -11,49 +11,34 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
+#include "vast/system/spawn_archive.hpp"
+
+#include <caf/actor.hpp>
+#include <caf/actor_cast.hpp>
+#include <caf/config_value.hpp>
+#include <caf/expected.hpp>
+#include <caf/local_actor.hpp>
+
 #include "vast/defaults.hpp"
-
-#include <limits>
-
+#include "vast/filesystem.hpp"
 #include "vast/si_literals.hpp"
+#include "vast/system/archive.hpp"
+#include "vast/system/spawn_arguments.hpp"
 
-#include "vast/detail/string.hpp"
-#include "vast/detail/system.hpp"
+using namespace vast::binary_byte_literals;
 
-using namespace vast::si_literals;
+namespace vast::system {
 
-namespace vast::defaults {
+maybe_actor spawn_archive(caf::local_actor* self, spawn_arguments& args) {
+  namespace sd = vast::defaults::system;
+  if (!args.empty())
+    return unexpected_arguments(args);
+  auto segments = get_or(args.options, "global.segments", sd::segments);
+  auto mss = 1_MiB
+             * get_or(args.options, "global.max-segment-size",
+                      sd::max_segment_size);
+  auto a = self->spawn(archive, args.dir / args.label, segments, mss);
+  return caf::actor_cast<caf::actor>(a);
+}
 
-namespace command {
-
-const char* directory = "vast";
-const char* endpoint = ":42000";
-const char* id = "";
-const char* read_path = "-";
-const char* write_path = "-";
-int64_t pseudo_realtime_factor = 0;
-size_t cutoff = std::numeric_limits<size_t>::max();
-size_t flow_expiry = 10;
-size_t flush_interval = 10000;
-size_t max_events = 0;
-size_t max_flow_age = 60;
-size_t max_flows = 1_Mi;
-size_t generated_events = 100;
-const char* node_id = "node";
-
-} // namespace command
-
-namespace system {
-
-size_t table_slice_size = 100;
-size_t max_partition_size = 1_Mi;
-size_t max_in_mem_partitions = 10;
-size_t taste_partitions = 5;
-size_t num_collectors = 10;
-size_t segments = 10;
-size_t max_segment_size = 128;
-size_t initially_requested_ids = 128;
-
-} // namespace system
-
-} // namespace vast::defaults
+} // namespace vast::system

@@ -74,8 +74,26 @@ namespace system {
 /// Maximum size for sources that generate table slices.
 extern size_t table_slice_size;
 
-/// Maximum number of events per index partition.
+/// Maximum number of events per INDEX partition.
 extern size_t max_partition_size;
+
+/// Maximum number of in-memory INDEX partitions.
+extern size_t max_in_mem_partitions;
+
+/// Number of immediately scheduled INDEX partitions.
+extern size_t taste_partitions;
+
+/// Maximum number of concurrent INDEX queries.
+extern size_t num_collectors;
+
+/// Number of cached ARCHIVE segments.
+extern size_t segments;
+
+/// Maximum size of ARCHIVE segments in MB.
+extern size_t max_segment_size;
+
+/// Number of initial IDs to request in the IMPORTER.
+extern size_t initially_requested_ids;
 
 } // namespace system
 

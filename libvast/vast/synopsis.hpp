@@ -19,6 +19,7 @@
 #include <caf/intrusive_ptr.hpp>
 #include <caf/ref_counted.hpp>
 
+#include "vast/aliases.hpp"
 #include "vast/fwd.hpp"
 #include "vast/operator.hpp"
 #include "vast/type.hpp"
@@ -90,10 +91,6 @@ caf::error inspect(caf::serializer& sink, synopsis_ptr& ptr);
 
 /// @relates synopsis
 caf::error inspect(caf::deserializer& source, synopsis_ptr& ptr);
-
-/// Additional runtime information to pass to the synopsis factory.
-/// @relates synopsis
-using synopsis_options = caf::dictionary<caf::config_value>;
 
 /// Constructs a synopsis for a given type. This is the default-factory
 /// function. It is possible to provide a custom factory via

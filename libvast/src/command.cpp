@@ -42,6 +42,18 @@ command* command::add(fun child_run, std::string_view child_name,
 }
 
 caf::message run(const command& cmd, caf::actor_system& sys,
+                 command::argument_iterator first,
+                 command::argument_iterator last) {
+  caf::config_value_map options;
+  return run(cmd, sys, options, first, last);
+}
+
+caf::message run(const command& cmd, caf::actor_system& sys,
+                 const std::vector<std::string>& args) {
+  return run(cmd, sys, args.begin(), args.end());
+}
+
+caf::message run(const command& cmd, caf::actor_system& sys,
                  caf::config_value_map& options,
                  command::argument_iterator first,
                  command::argument_iterator last) {
@@ -100,10 +112,9 @@ caf::message run(const command& cmd, caf::actor_system& sys,
 }
 
 caf::message run(const command& cmd, caf::actor_system& sys,
-                 command::argument_iterator first,
-                 command::argument_iterator last) {
-  caf::config_value_map options;
-  return run(cmd, sys, options, first, last);
+                 caf::config_value_map& options,
+                 const std::vector<std::string>& args) {
+  return run(cmd, sys, options, args.begin(), args.end());
 }
 
 std::string full_name(const command& cmd) {

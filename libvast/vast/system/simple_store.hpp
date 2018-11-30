@@ -13,48 +13,45 @@
 
 #pragma once
 
-#include <memory>
+#include <unordered_map>
 
 #include <caf/fwd.hpp>
 
+#include "vast/data.hpp"
+#include "vast/filesystem.hpp"
+
+#include "vast/system/meta_store.hpp"
+
 namespace vast::system {
 
-// -- classes ------------------------------------------------------------------
+struct simple_store_state {
+  using actor_ptr = meta_store_type::stateful_pointer<simple_store_state>;
 
-class application;
-class configuration;
-class default_application;
-class export_command;
-class import_command;
-class indexer_manager;
-class indexer_stage_driver;
-class node_command;
-class partition;
-class pcap_reader_command;
-class pcap_writer_command;
-class remote_command;
-class sink_command;
-class source_command;
-class start_command;
+  static inline const char* name = "simple-store";
 
-// -- structs ------------------------------------------------------------------
+  simple_store_state(actor_ptr self);
 
-struct node_state;
-struct query_statistics;
-struct spawn_arguments;
+  /// Initializes the state.
+  /// @param dir The directory of the store.
+  caf::error init(path dir);
 
-// -- templates ----------------------------------------------------------------
+  /// Saves the current state to `file`.
+  /// @pre `init()` was run successfully.
+  caf::error save();
 
-template <class Reader>
-class reader_command;
+  actor_ptr self;
 
-template <class Writer>
-class writer_command;
+  /// The data container.
+  std::unordered_map<std::string, data> store;
 
-// -- aliases ------------------------------------------------------------------
+  /// The location of the persistence file.
+  path file;
+};
 
-using node_actor = caf::stateful_actor<node_state>;
-using partition_ptr = caf::intrusive_ptr<partition>;
-
+/// A key-value store that stores its data in a `std::unordered_map`.
+/// @param self The actor handle.
+/// @param dir The directory of the store.
+meta_store_type::behavior_type
+simple_store(simple_store_state::actor_ptr self, path dir);
 
 } // namespace vast::system

@@ -21,6 +21,8 @@
 #include <vector>
 #include <unordered_map>
 
+#include <caf/behavior.hpp>
+#include <caf/event_based_actor.hpp>
 #include <caf/fwd.hpp>
 #include <caf/stateful_actor.hpp>
 

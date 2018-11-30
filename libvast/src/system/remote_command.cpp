@@ -17,6 +17,7 @@
 
 #include <iostream>
 
+#include "vast/detail/narrow.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
 #include "vast/system/connect_to_node.hpp"
@@ -27,9 +28,9 @@ namespace vast::system {
 
 caf::message remote_command(const command& cmd, caf::actor_system& sys,
                             caf::config_value_map& options,
-                            command::argument_iterator begin,
-                            command::argument_iterator end) {
-  VAST_TRACE(VAST_ARG(options), VAST_ARG("args", begin, end));
+                            command::argument_iterator first,
+                            command::argument_iterator last) {
+  VAST_TRACE(VAST_ARG(options), VAST_ARG("args", first, last));
   // Get a convenient and blocking way to interact with actors.
   caf::scoped_actor self{sys};
   // Get VAST node.
@@ -38,12 +39,13 @@ caf::message remote_command(const command& cmd, caf::actor_system& sys,
     return caf::make_message(std::move(node_opt.error()));
   auto node = std::move(*node_opt);
   self->monitor(node);
-  // Build command to remote node.
-  auto args = caf::message_builder{begin, end}.move_to_message();
-  auto msg = make_message(std::string{cmd.name}, std::move(args));
   // Delegate command to node.
+  std::vector<std::string> argv;
+  argv.reserve(detail::narrow_cast<size_t>(std::distance(first, last) + 1));
+  argv.emplace_back(cmd.name.begin(), cmd.name.end());
+  argv.insert(argv.end(), first, last);
   caf::error err;
-  self->send(node, std::move(msg));
+  self->send(node, std::move(argv), options);
   self->receive(
     [&](const caf::down_msg&) {
       err = ec::remote_node_down;

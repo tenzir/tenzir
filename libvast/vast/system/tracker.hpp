@@ -63,6 +63,7 @@ auto inspect(Inspector& f, registry& r) {
 }
 
 struct tracker_state {
+  std::string node;
   vast::system::registry registry;
   static inline const char* name = "tracker";
 };
@@ -71,6 +72,8 @@ using tracker_type = caf::typed_actor<
   // Adds a component.
   caf::replies_to<put_atom, std::string, caf::actor, std::string>
     ::with<ok_atom>,
+  // Adds a component if it doesn't yet exist.
+  caf::reacts_to<try_put_atom, std::string, caf::actor, std::string>,
   // Propagated PUT received from peer.
   caf::reacts_to<put_atom, std::string, std::string, caf::actor, std::string>,
   // Retrieves the component registry.

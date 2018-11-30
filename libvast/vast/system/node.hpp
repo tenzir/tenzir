@@ -19,6 +19,7 @@
 #include <caf/event_based_actor.hpp>
 #include <caf/stateful_actor.hpp>
 
+#include "vast/command.hpp"
 #include "vast/expression.hpp"
 #include "vast/filesystem.hpp"
 #include "vast/system/accountant.hpp"
@@ -48,10 +49,13 @@ struct node_state {
   accountant_type accountant;
 
   /// Stores how many components per label are active.
-  std::unordered_map<std::string, int> labels;
+  std::unordered_map<std::string, size_t> labels;
 
   /// Gives the actor a recognizable name in log files.
   std::string name = "node";
+
+  /// Dispatches remote commands.
+  command cmd;
 
   /// Points to the node itself.
   caf::event_based_actor* self;

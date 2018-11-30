@@ -13,6 +13,9 @@
 
 #include "vast/system/spawn_node.hpp"
 
+#include <string>
+#include <vector>
+
 #include <caf/config_value.hpp>
 #include <caf/scoped_actor.hpp>
 
@@ -32,13 +35,14 @@ expected<scope_linked_actor> spawn_node(caf::scoped_actor& self,
   VAST_DEBUG_ANON(__func__, "spawns local node:", id);
   // Pointer to the root command to system::node.
   scope_linked_actor node{self->spawn(system::node, id, abs_dir)};
-  auto spawn_component = [&](auto&&... xs) {
+  auto spawn_component = [&](std::string name) {
     return [&] {
       caf::error result;
-      auto args = caf::make_message(std::move(xs)...);
-      self->request(node.get(), caf::infinite, "spawn", std::move(args))
-        .receive([](const caf::actor&) { /* nop */ },
-                 [&](caf::error& e) { result = std::move(e); });
+      std::vector<std::string> args{"spawn", std::move(name)};
+      self->request(node.get(), caf::infinite, std::move(args)).receive(
+        [](const caf::actor&) { /* nop */ },
+        [&](caf::error& e) { result = std::move(e); }
+      );
       return result;
     };
   };

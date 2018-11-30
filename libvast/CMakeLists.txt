@@ -89,11 +89,18 @@ set(libvast_sources
   src/system/profiler.cpp
   src/system/remote_command.cpp
   src/system/signal_monitor.cpp
+  src/system/simple_store.cpp
   src/system/sink_command.cpp
   src/system/source_command.cpp
-  src/system/spawn.cpp
+  src/system/spawn_archive.cpp
+  src/system/spawn_arguments.cpp
+  src/system/spawn_exporter.cpp
+  src/system/spawn_importer.cpp
+  src/system/spawn_index.cpp
+  src/system/spawn_metastore.cpp
   src/system/spawn_node.cpp
   src/system/spawn_or_connect_to_node.cpp
+  src/system/spawn_profiler.cpp
   src/system/spawn_sink.cpp
   src/system/spawn_source.cpp
   src/system/start_command.cpp
@@ -246,6 +253,7 @@ set(tests
   test/system/partition.cpp
   test/system/queries.cpp
   test/system/replicated_store.cpp
+  test/system/simple_store.cpp
   test/system/sink.cpp
   test/system/source.cpp
   test/system/task.cpp
@@ -266,34 +274,34 @@ if (PCAP_FOUND)
   set(tests ${tests} test/format/pcap.cpp)
 endif ()
 
-add_executable(vast-test ${tests})
-target_link_libraries(vast-test libvast libvast_test ${CMAKE_THREAD_LIBS_INIT})
-
 #
 # Generate CMake tests
 #
 
-# Helper macro to construct a CMake test from a VAST test suite.
-macro(make_test suite)
-  string(REPLACE " " "_" test_name ${suite})
-  set(vast_test ${EXECUTABLE_OUTPUT_PATH}/vast-test)
-  add_test(${test_name} ${vast_test} -v 3 -r 600 -s "^${suite}$" ${ARGN})
-endmacro()
-
-# Find all test suites.
-foreach(test ${tests})
-  file(STRINGS ${test} contents)
-  foreach(line ${contents})
-    if ("${line}" MATCHES "SUITE")
-      string(REGEX REPLACE "#define SUITE \(.*\)" "\\1" suite ${line})
-      list(APPEND suites ${suite})
-    endif()
+if (NOT NO_UNIT_TESTS)
+  # Add vast-test executable.
+  add_executable(vast-test ${tests})
+  target_link_libraries(vast-test libvast libvast_test ${CMAKE_THREAD_LIBS_INIT})
+  # Helper macro to construct a CMake test from a VAST test suite.
+  macro(make_test suite)
+    string(REPLACE " " "_" test_name ${suite})
+    set(vast_test ${EXECUTABLE_OUTPUT_PATH}/vast-test)
+    add_test(${test_name} ${vast_test} -v 3 -r 600 -s "^${suite}$" ${ARGN})
+  endmacro()
+  # Find all test suites.
+  foreach(test ${tests})
+    file(STRINGS ${test} contents)
+    foreach(line ${contents})
+      if ("${line}" MATCHES "SUITE")
+        string(REGEX REPLACE "#define SUITE \(.*\)" "\\1" suite ${line})
+        list(APPEND suites ${suite})
+      endif()
+    endforeach()
   endforeach()
-endforeach()
-list(REMOVE_DUPLICATES suites)
-
-enable_testing()
-
-foreach(suite ${suites})
-  make_test("${suite}")
-endforeach ()
+  list(REMOVE_DUPLICATES suites)
+  # Enable unit testing via CMake/CTest and add all test suites.
+  enable_testing()
+  foreach(suite ${suites})
+    make_test("${suite}")
+  endforeach ()
+endif ()

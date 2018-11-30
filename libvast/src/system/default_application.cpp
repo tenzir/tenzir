@@ -45,8 +45,10 @@ default_application::default_application() {
     .add<bool>("version,v", "print version and exit");
   // Default options for commands.
   auto opts = [] { return command::opts(); };
+  auto backend_opt = caf::make_config_option<std::string>(
+    "global", "store-backend", "The backend for the meta store (simple|raft)");
   // Add standalone commands.
-  add(start_command, "start", "starts a node", opts());
+  add(start_command, "start", "starts a node", opts().add(backend_opt));
   add(remote_command, "stop", "stops a node", opts());
   add(remote_command, "spawn", "creates a new component", opts());
   add(remote_command, "kill", "terminates a component", opts());
@@ -59,7 +61,8 @@ default_application::default_application() {
                   .add<bool>("node,n",
                              "spawn a node instead of connecting to one")
                   .add<bool>("blocking,b",
-                             "block until the IMPORTER forwarded all data"));
+                             "block until the IMPORTER forwarded all data")
+                  .add(backend_opt));
   import_->add(reader_command<format::bro::reader>, "bro",
                "imports Bro logs from STDIN or file", src_opts());
   import_->add(reader_command<format::mrt::reader>, "mrt",
@@ -79,7 +82,8 @@ default_application::default_application() {
                   .add<bool>("continuous,c", "marks a query as continuous")
                   .add<bool>("historical,h", "marks a query as historical")
                   .add<bool>("unified,u", "marks a query as unified")
-                  .add<size_t>("events,e", "maximum number of results"));
+                  .add<size_t>("events,e", "maximum number of results")
+                  .add(backend_opt));
   export_->add(writer_command<format::bro::writer>, "bro",
                "exports query results in Bro format", snk_opts());
   export_->add(writer_command<format::csv::writer>, "csv",

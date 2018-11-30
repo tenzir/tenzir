@@ -11,82 +11,74 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include <caf/all.hpp>
+#include "vast/system/spawn_sink.hpp"
 
-#include <caf/detail/scope_guard.hpp>
+#include <caf/actor.hpp>
+#include <caf/expected.hpp>
+#include <caf/local_actor.hpp>
 
 #include "vast/config.hpp"
-
+#include "vast/defaults.hpp"
+#include "vast/detail/make_io_stream.hpp"
+#include "vast/detail/unbox_var.hpp"
 #include "vast/format/ascii.hpp"
 #include "vast/format/bro.hpp"
 #include "vast/format/csv.hpp"
 #include "vast/format/json.hpp"
+#include "vast/system/node.hpp"
+#include "vast/system/sink.hpp"
+#include "vast/system/spawn_arguments.hpp"
+
 #ifdef VAST_HAVE_PCAP
 #include "vast/format/pcap.hpp"
-#endif
+#endif // VAST_HAVE_PCAP
 
-#include "vast/system/atoms.hpp"
-#include "vast/system/sink.hpp"
-#include "vast/system/spawn.hpp"
+namespace vast::system {
 
-#include "vast/detail/make_io_stream.hpp"
+namespace {
 
-using namespace caf;
-
-namespace vast {
-namespace system {
-
-expected<actor> spawn_sink(local_actor* self, options& opts) {
-  if (opts.params.empty())
-    return make_error(ec::syntax_error, "missing format");
-  auto& format = opts.params.get_as<std::string>(0);
-  auto sink_args = opts.params.drop(1);
-  // Parse common parameters first.
-  auto output = "-"s;
-  auto schema_file = ""s;
-  auto r = sink_args.extract_opts({
-    {"write,w", "path to write events to", output},
-    //{"schema,s", "alternate schema file", schema_file},
-    {"uds,d", "treat -w as UNIX domain socket to connect to"}
-  }, nullptr, true);
-  auto grd = caf::detail::make_scope_guard([&] { opts.params = r.remainder; });
-  actor snk;
-  // Parse sink-specific parameters, if any.
-  if (format == "pcap") {
-#ifndef VAST_HAVE_PCAP
-    return make_error(ec::unspecified, "not compiled with pcap support");
-#else
-    auto flush = 10000u;
-    r = r.remainder.extract_opts({
-      {"flush,f", "flush to disk after this many packets", flush}
-    });
-    if (!r.error.empty())
-      return make_error(ec::syntax_error, r.error);
-    format::pcap::writer writer{output, flush};
-    snk = self->spawn(sink<format::pcap::writer>, std::move(writer), 0u);
-#endif
-  } else if (format == "bro") {
-    format::bro::writer writer{output};
-    snk = self->spawn(sink<format::bro::writer>, std::move(writer), 0u);
-  } else {
-    auto out = detail::make_output_stream(output, r.opts.count("uds") > 0);
-    if (!out)
-      return out.error();
-    if (format == "csv") {
-      format::csv::writer writer{std::move(*out)};
-      snk = self->spawn(sink<format::csv::writer>, std::move(writer), 0u);
-    } else if (format == "ascii") {
-      format::ascii::writer writer{std::move(*out)};
-      snk = self->spawn(sink<format::ascii::writer>, std::move(writer), 0u);
-    } else if (format == "json") {
-      format::json::writer writer{std::move(*out)};
-      snk = self->spawn(sink<format::json::writer>, std::move(writer), 0u);
-    } else {
-      return make_error(ec::syntax_error, "invalid format:", format);
-    }
-  }
-  return snk;
+template <class Writer>
+maybe_actor spawn_generic_sink(caf::local_actor* self, spawn_arguments& args) {
+  if (!args.empty())
+    return unexpected_arguments(args);
+  VAST_UNBOX_VAR(out, detail::make_output_stream(args.options));
+  return self->spawn(sink<Writer>, Writer{std::move(out)}, 0u);
 }
 
-} // namespace system
-} // namespace vast
+} // namespace <anonymous>
+
+maybe_actor spawn_pcap_sink([[maybe_unused]] caf::local_actor* self,
+                            [[maybe_unused]] spawn_arguments& args) {
+#ifndef VAST_HAVE_PCAP
+  return make_error(ec::unspecified, "not compiled with pcap support");
+#else // VAST_HAVE_PCAP
+  if (!args.empty())
+    return unexpected_arguments(args);
+  format::pcap::writer writer{
+    get_or(args.options, "global.write", defaults::command::write_path),
+    get_or(args.options, "global.flush", size_t{0})};
+  return self->spawn(sink<format::pcap::writer>, std::move(writer), 0u);
+#endif // VAST_HAVE_PCAP
+}
+
+maybe_actor spawn_bro_sink(caf::local_actor* self, spawn_arguments& args) {
+  if (!args.empty())
+    return unexpected_arguments(args);
+  format::bro::writer writer{get_or(args.options, "global.write",
+                                    defaults::command::write_path)};
+  return self->spawn(sink<format::bro::writer>, std::move(writer), 0u);
+}
+
+maybe_actor spawn_ascii_sink(caf::local_actor* self, spawn_arguments& args) {
+  return spawn_generic_sink<format::ascii::writer>(self, args);
+}
+
+maybe_actor spawn_csv_sink(caf::local_actor* self, spawn_arguments& args) {
+  return spawn_generic_sink<format::csv::writer>(self, args);
+}
+
+maybe_actor spawn_json_sink(caf::local_actor* self, spawn_arguments& args) {
+  return spawn_generic_sink<format::json::writer>(self, args);
+}
+
+} // namespace vast::system
