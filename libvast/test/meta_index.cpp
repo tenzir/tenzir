@@ -308,8 +308,7 @@ TEST(option setting and retrieval) {
   auto& opts = meta_idx.factory_options();
   put(opts, "foo", 42);
   auto x = caf::get_if<caf::config_value::integer>(&opts["foo"]);
-  REQUIRE(x);
-  CHECK_EQUAL(*x, 42);
+  CHECK_EQUAL(unbox(x), 42);
 }
 
 FIXTURE_SCOPE_END()
