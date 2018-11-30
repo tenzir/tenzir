@@ -65,7 +65,7 @@ struct Reader {
 
 /// The source state.
 /// @tparam Reader The reader type, which must model the *Reader* concept.
-template <class Reader>
+template <class Reader, class Self = caf::event_based_actor>
 struct source_state {
   // -- member types -----------------------------------------------------------
 
@@ -76,8 +76,12 @@ struct source_state {
 
   // -- constructors, destructors, and assignment operators --------------------
 
-  source_state(caf::scheduled_actor* selfptr) : self(selfptr) {
+  source_state(Self* selfptr) : self(selfptr) {
     // nop
+  }
+
+  ~source_state() {
+    self->send(accountant, "source.end", caf::make_timestamp());
   }
 
   // -- member variables -------------------------------------------------------
@@ -107,7 +111,7 @@ struct source_state {
   caf::stream_source_ptr<downstream_manager> mgr;
 
   /// Points to the owning actor.
-  caf::scheduled_actor* self;
+  Self* self;
 
   // -- utility functions ------------------------------------------------------
 
@@ -119,19 +123,10 @@ struct source_state {
     name = reader.name();
     factory = std::move(f);
     // Fetch accountant from the registry.
-    if (auto acc = self->system().registry().get(accountant_atom::value))
+    if (auto acc = self->system().registry().get(accountant_atom::value)) {
+      VAST_DEBUG(self, "uses registry accountant:", accountant);
       accountant = caf::actor_cast<accountant_type>(acc);
-    // We link to the importers and fail for the same reason, but still report to
-    // the accountant.
-    self->set_exit_handler(
-      [=](const caf::exit_msg& msg) {
-        if (accountant) {
-          timestamp now = std::chrono::system_clock::now();
-          self->send(accountant, "source.end", now);
-        }
-        self->quit(msg.reason);
-      }
-    );
+    }
   }
 
   /// Tries to access the builder for `layout`.
@@ -235,22 +230,18 @@ struct source_state {
 
   // Sends stats to the accountant after producing events.
   template <class Timepoint>
-  void report_stats(size_t produced ,Timepoint start, Timepoint stop) {
+  void report_stats(size_t produced, Timepoint start, Timepoint stop) {
     using namespace std::chrono;
     if (produced > 0) {
-      auto runtime = stop - start;
+      timespan runtime = stop - start;
       auto unit = duration_cast<microseconds>(runtime).count();
       auto rate = (produced * 1e6) / unit;
       auto events = uint64_t{produced};
       VAST_INFO(self, "produced", events, "events in", runtime,
                 '(' << size_t(rate), "events/sec)");
-      if (accountant != nullptr) {
-        using caf::anon_send;
-        auto rt = duration_cast<timespan>(runtime);
-        anon_send(accountant, "source.batch.runtime", rt);
-        anon_send(accountant, "source.batch.events", events);
-        anon_send(accountant, "source.batch.rate", rate);
-      }
+      self->send(accountant, "source.batch.runtime", runtime);
+      self->send(accountant, "source.batch.events", events);
+      self->send(accountant, "source.batch.rate", rate);
     }
   }
 };
@@ -316,6 +307,10 @@ caf::behavior source(caf::stateful_actor<source_state<Reader>>* self,
     [=](expression& expr) {
       VAST_DEBUG(self, "sets filter expression to:", expr);
       self->state.filter = std::move(expr);
+    },
+    [=](accountant_type accountant) {
+      VAST_DEBUG(self, "sets accountant to", accountant);
+      self->state.accountant = std::move(accountant);
     },
     [=](sink_atom, const actor& sink) {
       // TODO: Currently, we use a broadcast downstream manager. We need to

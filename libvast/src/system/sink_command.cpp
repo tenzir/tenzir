@@ -58,22 +58,11 @@ caf::message sink_command(const command& cmd, actor_system& sys, caf::actor snk,
   });
   // Spawn exporter at the node.
   actor exp;
-  // TODO: we need to also include arguments in CLI format from the export
-  //       command; we really should forward `options` to the node actor
-  //       instead to clean this up
-  auto args = caf::message_builder{first, last}.move_to_message();
-  args = make_message("exporter") + args;
-  if (get_or<bool>(options, "continuous", false))
-    args += make_message("--continuous");
-  if (get_or<bool>(options, "historical", false))
-    args += make_message("--historical");
-  if (get_or<bool>(options, "unified", false))
-    args += make_message("--unified");
-  auto max_events = get_or<uint64_t>(options, "events", 0u);
-  args += make_message("-e", std::to_string(max_events));
-  VAST_DEBUG(&cmd, "spawns exporter with parameters:", to_string(args));
+  std::vector<std::string> args{"spawn", "exporter"};
+  args.insert(args.end(), first, last);
+  VAST_DEBUG(&cmd, "spawns exporter with parameters:", args);
   error err;
-  self->request(node, infinite, "spawn", args).receive(
+  self->request(node, infinite, std::move(args), options).receive(
     [&](actor& a) {
       exp = std::move(a);
       if (!exp)

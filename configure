@@ -31,6 +31,7 @@ Usage: $0 [OPTION]... [VAR=VALUE]...
     --show-time-report      show where the compiler spends its time
     --no-auto-libc++        do not automatically use libc++ with Clang
     --more-warnings         enables most warnings on GCC and Clang
+    --disable-tests         build without unit tests
 
   Debugging:
     --log-level=LEVEL       maximum compile-time log level
@@ -123,8 +124,11 @@ while [ $# -ne 0 ]; do
       append_cache_entry NO_AUTO_LIBCPP BOOL yes
       ;;
     --more-warnings)
-        append_cache_entry MORE_WARNINGS BOOL yes
-        ;;
+      append_cache_entry MORE_WARNINGS BOOL yes
+      ;;
+    --no-unit-tests)
+      append_cache_entry NO_UNIT_TESTS BOOL yes
+      ;;
     --log-level=*)
       append_cache_entry VAST_LOG_LEVEL STRING "$optarg"
       ;;
@@ -213,19 +217,3 @@ if [ -n "$CXXFLAGS" ]; then
 fi
 printf "$command\n" $@ >> config.status
 chmod u+x config.status
-
-makefile="$sourcedir/Makefile"
-if [ -f "$makefile" ]; then
-  if ! head -n 1 "$makefile" | cut -d ' ' -f 2- | grep -q "\"$builddir\""; then
-    sed -i.orig "s/\(DIRS=.*\)/\1 \"$builddir\"/" "$makefile"
-    rm "$makefile.orig"
-    echo "-- added \"$builddir\" to top-level Makefile" 1>&2
-  fi
-else
-  printf "DIRS= \"%s\" \n\n" "$builddir" > "$makefile"
-  if [ "$(uname -s)" = "FreeBSD" ]; then
-    printf ".include \".Makefile.BSD\"" >> "$makefile"
-  else
-    printf "include .Makefile.GNU" >> "$makefile"
-  fi
-fi

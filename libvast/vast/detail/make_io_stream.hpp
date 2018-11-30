@@ -17,6 +17,8 @@
 #include <memory>
 #include <string>
 
+#include "caf/fwd.hpp"
+
 #include "vast/expected.hpp"
 
 namespace vast::detail {
@@ -24,8 +26,14 @@ namespace vast::detail {
 expected<std::unique_ptr<std::ostream>>
 make_output_stream(const std::string& output, bool is_uds = false);
 
+expected<std::unique_ptr<std::ostream>>
+make_output_stream(const caf::config_value_map& options);
+
 expected<std::unique_ptr<std::istream>>
 make_input_stream(const std::string& input, bool is_uds = false);
+
+expected<std::unique_ptr<std::istream>>
+make_input_stream(const caf::config_value_map& options);
 
 } // namespace vast::detail
 

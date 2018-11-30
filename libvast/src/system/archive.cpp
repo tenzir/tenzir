@@ -13,6 +13,8 @@
 
 #include <algorithm>
 
+#include <caf/config_value.hpp>
+
 #include "vast/event.hpp"
 #include "vast/expected.hpp"
 #include "vast/logger.hpp"
@@ -26,6 +28,7 @@
 #include "vast/system/archive.hpp"
 
 #include "vast/detail/assert.hpp"
+#include "vast/detail/fill_status_map.hpp"
 
 using std::chrono::steady_clock;
 using std::chrono::duration_cast;
@@ -90,6 +93,12 @@ archive(archive_type::stateful_pointer<archive_state> self,
           }
         }
       );
+    },
+    [=](status_atom) {
+      caf::dictionary<caf::config_value> result;
+      detail::fill_status_map(result, self);
+      self->state.store->inspect_status(put_dictionary(result, "store"));
+      return result;
     }
   };
 }
