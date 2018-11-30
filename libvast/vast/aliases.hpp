@@ -18,11 +18,14 @@
 #include <string>
 #include <vector>
 
-#include "caf/fwd.hpp"
+#include <caf/fwd.hpp>
+#include <caf/dictionary.hpp>
+#include <caf/config_value.hpp>
+
+#include "vast/fwd.hpp"
 
 #include "vast/detail/steady_map.hpp"
 #include "vast/detail/steady_set.hpp"
-#include "vast/fwd.hpp"
 
 namespace vast {
 
@@ -71,6 +74,9 @@ using cli_argument_iterator = std::vector<std::string>::const_iterator;
 /// Convenience alias for function return types that either return an actor or
 /// an error.
 using maybe_actor = caf::expected<caf::actor>;
+
+/// Additional runtime information to pass to the synopsis factory.
+using synopsis_options = caf::dictionary<caf::config_value>;
 
 } // namespace vast
 

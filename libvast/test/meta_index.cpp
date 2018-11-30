@@ -246,7 +246,7 @@ private:
   bool true_ = false;
 };
 
-synopsis_ptr make_custom_synopsis(type x) {
+synopsis_ptr make_custom_synopsis(type x, const synopsis_options&) {
   return caf::visit(detail::overload(
     [&](const boolean_type&) -> synopsis_ptr {
       return caf::make_counted<boolean_synopsis>(std::move(x));
@@ -301,6 +301,15 @@ TEST(serialization with custom factory) {
   CHECK_EQUAL(lookup("y != T"), all);
   MESSAGE("perform serialization");
   CHECK_ROUNDTRIP(meta_idx);
+}
+
+TEST(option setting and retrieval) {
+  meta_index meta_idx;
+  auto& opts = meta_idx.factory_options();
+  put(opts, "foo", 42);
+  auto x = caf::get_if<caf::config_value::integer>(&opts["foo"]);
+  REQUIRE(x);
+  CHECK_EQUAL(*x, 42);
 }
 
 FIXTURE_SCOPE_END()
