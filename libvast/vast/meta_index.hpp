@@ -58,14 +58,13 @@ public:
   ///      `factory_id`
   void factory(caf::atom_value factory_id, synopsis_factory f);
 
-  /// Sets an option for the factory.
-  /// @param key The option key.
-  /// @param value The option value.
-  void set_synopsis_option(std::string_view key, caf::config_value value);
-
   /// Retrieves the current factory.
   /// @returns A pair of factory ID and factory function.
   std::pair<caf::atom_value, synopsis_factory> factory() const;
+
+  /// Gets the options for the synopsis factory.
+  /// @returns A reference to the synopsis options.
+  synopsis_options& factory_options();
 
   // -- concepts ---------------------------------------------------------------
 
