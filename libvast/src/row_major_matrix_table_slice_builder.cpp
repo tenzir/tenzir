@@ -21,7 +21,12 @@
 
 namespace vast {
 
-row_major_matrix_table_slice_builder ::row_major_matrix_table_slice_builder(
+caf::atom_value
+row_major_matrix_table_slice_builder::get_implementation_id() noexcept {
+  return row_major_matrix_table_slice::class_id;
+}
+
+row_major_matrix_table_slice_builder::row_major_matrix_table_slice_builder(
   record_type layout)
   : super(std::move(layout)),
     col_(0) {
@@ -84,11 +89,6 @@ void row_major_matrix_table_slice_builder::reserve(size_t num_rows) {
 caf::atom_value
 row_major_matrix_table_slice_builder::implementation_id() const noexcept {
   return get_implementation_id();
-}
-
-caf::atom_value
-row_major_matrix_table_slice_builder::get_implementation_id() noexcept {
-  return row_major_matrix_table_slice::class_id;
 }
 
 } // namespace vast

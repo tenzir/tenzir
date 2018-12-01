@@ -29,17 +29,27 @@ public:
 
   using super = table_slice_builder;
 
+  // -- class properties -------------------------------------------------------
+
+  static caf::atom_value get_implementation_id() noexcept;
+
+  // -- constructors, destructors, and assignment operators --------------------
+
   column_major_matrix_table_slice_builder(record_type layout);
 
-  virtual ~column_major_matrix_table_slice_builder();
+  ~column_major_matrix_table_slice_builder() override;
 
   // -- factory functions ------------------------------------------------------
 
   /// @returns a table slice builder instance.
   static table_slice_builder_ptr make(record_type layout);
 
+  /// Generates a table slice with uninitialized elements.
+  /// @param layout Field types for the table slice columns.
+  /// @param rows Number of rows in the table slice.
   /// @returns a default-constructed table slice instance.
-  static table_slice_ptr make_slice(record_type layout, table_slice::size_type);
+  static table_slice_ptr make_slice(record_type layout,
+                                    table_slice::size_type rows);
 
   // -- properties -------------------------------------------------------------
 
@@ -55,8 +65,6 @@ public:
 
   caf::atom_value implementation_id() const noexcept override;
 
-  static caf::atom_value get_implementation_id() noexcept;
-
 private:
   // -- member variables -------------------------------------------------------
 
@@ -67,7 +75,7 @@ private:
   size_t rows_;
 
   /// Elements by column.
-  std::vector<vector> columns_;
+  std::vector<std::vector<data>> columns_;
 };
 
 } // namespace vast

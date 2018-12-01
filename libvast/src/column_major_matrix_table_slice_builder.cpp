@@ -21,6 +21,11 @@
 
 namespace vast {
 
+caf::atom_value
+column_major_matrix_table_slice_builder::get_implementation_id() noexcept {
+  return column_major_matrix_table_slice::class_id;
+}
+
 column_major_matrix_table_slice_builder::
   column_major_matrix_table_slice_builder(record_type layout)
   : super(std::move(layout)),
@@ -40,9 +45,8 @@ column_major_matrix_table_slice_builder::make(record_type layout) {
   return caf::make_counted<impl>(std::move(layout));
 }
 
-table_slice_ptr
-column_major_matrix_table_slice_builder::make_slice(record_type layout,
-                                                 table_slice::size_type rows) {
+table_slice_ptr column_major_matrix_table_slice_builder::make_slice(
+  record_type layout, table_slice::size_type rows) {
   using impl = column_major_matrix_table_slice;
   return table_slice_ptr{impl::make(std::move(layout), rows)};
 }
@@ -96,11 +100,6 @@ void column_major_matrix_table_slice_builder::reserve(size_t num_rows) {
 caf::atom_value
 column_major_matrix_table_slice_builder::implementation_id() const noexcept {
   return get_implementation_id();
-}
-
-caf::atom_value
-column_major_matrix_table_slice_builder::get_implementation_id() noexcept {
-  return column_major_matrix_table_slice::class_id;
 }
 
 } // namespace vast
