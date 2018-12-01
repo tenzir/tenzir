@@ -68,7 +68,7 @@ public:
   ~matrix_table_slice() {
     // The element blocks gets allocated alongside this object. Hence, we need
     // to destroy our elements manually.
-    std::for_each(begin(), end(), [](data& obj) { obj.~data(); });
+    std::destroy(begin(), end());
   }
 
   /// @warning leaves all elements uninitialized.
