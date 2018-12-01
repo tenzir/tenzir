@@ -40,7 +40,8 @@ caf::error default_table_slice::deserialize(caf::deserializer& source) {
   return err;
 }
 
-void default_table_slice::apply_column(size_type col, value_index& idx) const {
+void default_table_slice::append_column_to_index(size_type col,
+                                                 value_index& idx) const {
   for (size_type row = 0; row < rows(); ++row)
     idx.append(make_view(caf::get<vector>(xs_[row])[col]), offset() + row);
 }

@@ -54,7 +54,7 @@ public:
   // -- visitation -------------------------------------------------------------
 
   /// Applies all values in column `col` to `idx`.
-  void apply_column(size_type col, value_index& idx) const final;
+  void append_column_to_index(size_type col, value_index& idx) const final;
 
   // -- static factory functions -----------------------------------------------
 

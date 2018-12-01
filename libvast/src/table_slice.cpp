@@ -107,7 +107,8 @@ caf::error table_slice::deserialize_ptr(caf::deserializer& source,
   return ptr.unshared().deserialize(source);
 }
 
-void table_slice::apply_column(size_type col, value_index& idx) const {
+void table_slice::append_column_to_index(size_type col,
+                                         value_index& idx) const {
   for (size_type row = 0; row < rows(); ++row)
     idx.append(at(row, col), offset() + row);
 }
