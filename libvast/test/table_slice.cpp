@@ -134,7 +134,8 @@ struct fixture : fixtures::deterministic_actor_system {
       tup{1, "abc", 1.2},
       tup{2, "def", 2.1},
       tup{3, "ghi", 42.},
-      tup{4, "jkl", .42}
+      tup{4, "jkl", .42},
+      tup{5, "mno", 123},
     });
     for (auto& x : test_data)
       test_values.emplace_back(value::make(make_vector(x), layout));
@@ -251,10 +252,10 @@ struct fixture : fixtures::deterministic_actor_system {
     REQUIRE(idx != nullptr);
     auto slice = make_slice(builder);
     slice->append_column_to_index(0, *idx);
-    CHECK_EQUAL(idx->offset(), 4u);
+    CHECK_EQUAL(idx->offset(), 5u);
     constexpr auto less = relational_operator::less;
     CHECK_EQUAL(unbox(idx->lookup(less, vast::make_view(3))),
-                make_ids({0, 1}, 4));
+                make_ids({0, 1}, 5));
   }
 
   void test_implementations() {
