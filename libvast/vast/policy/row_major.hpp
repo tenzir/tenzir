@@ -41,9 +41,14 @@ struct row_major {
 
   // -- factory functions ------------------------------------------------------
 
+  /// @returns a random-access iterator to the first element in given column
+  /// @pre `ptr` is at the first element of a contiguous memory block in
+  ///      row-major order of size `rows * column`
+  /// @post `result + rows` computes the past-the-end iterator
   template <class U>
-  static detail::column_iterator<U> make_column_iterator(U* ptr, size_t columns,
-                                                         size_t column) {
+  static detail::column_iterator<U>
+  make_column_iterator(U* ptr, [[maybe_unused]] size_t rows, size_t columns,
+                       size_t column) {
     static_assert(std::is_same_v<T, U> || std::is_same_v<const T, U>);
     return {ptr + column, static_cast<ptrdiff_t>(columns)};
   }

@@ -21,7 +21,7 @@
 
 namespace vast::policy {
 
-/// Configures a ::matrix_table_slice with a row-major memory layout.
+/// Configures a ::matrix_table_slice with a column-major memory layout.
 template <class T>
 struct column_major {
   // -- constants --------------------------------------------------------------
@@ -36,8 +36,14 @@ struct column_major {
 
   // -- factory functions ------------------------------------------------------
 
+  /// @returns a random-access iterator to the first element in given column
+  /// @pre `ptr` is at the first element of a contiguous memory block in
+  ///      column-major order of size `rows * column`
+  /// @post `result + columns` computes the past-the-end iterator
   template <class U>
-  static U* make_column_iterator(U* ptr, size_t rows, size_t column) {
+  static U* make_column_iterator(U* ptr, size_t rows,
+                                 [[maybe_unused]] size_t columns,
+                                 size_t column) {
     return ptr + column * rows;
   }
 
