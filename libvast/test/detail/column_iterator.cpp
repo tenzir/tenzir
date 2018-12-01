@@ -54,7 +54,7 @@ struct fixture {
 FIXTURE_SCOPE(column_iterator_tests, fixture)
 
 TEST(four by four) {
-  MESSAGE("visit buf as if 4x4 matrix");
+  MESSAGE("visit buf as 4x4 matrix");
   CHECK_RANGE(column(4, 0), 0, 4, 8, 12);
   CHECK_RANGE(column(4, 1), 1, 5, 9, 13);
   CHECK_RANGE(column(4, 2), 2, 6, 10, 14);
@@ -62,13 +62,13 @@ TEST(four by four) {
 }
 
 TEST(two by eight) {
-  MESSAGE("visit buf as if 2x8 matrix");
+  MESSAGE("visit buf as 2x8 matrix");
   CHECK_RANGE(column(2, 0), 0, 2, 4, 6, 8, 10, 12, 14);
   CHECK_RANGE(column(2, 1), 1, 3, 5, 7, 9, 11, 13, 15);
 }
 
 TEST(eight by two) {
-  MESSAGE("visit buf as if 8x2 matrix");
+  MESSAGE("visit buf as 8x2 matrix");
   CHECK_RANGE(column(8, 0), 0, 8);
   CHECK_RANGE(column(8, 1), 1, 9);
   CHECK_RANGE(column(8, 2), 2, 10);
