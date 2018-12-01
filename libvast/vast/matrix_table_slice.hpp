@@ -103,7 +103,7 @@ public:
     return caf::none;
   }
 
-  void apply_column(size_type col, value_index& idx) const override {
+  void append_column_to_index(size_type col, value_index& idx) const override {
     auto row = offset();
     for (auto& x : column(col))
       idx.append(make_view(x), row++);

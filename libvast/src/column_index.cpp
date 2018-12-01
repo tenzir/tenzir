@@ -50,7 +50,7 @@ caf::expected<column_index_ptr> make_column_index(caf::actor_system& sys,
     void add(const table_slice_ptr& x) override {
       VAST_TRACE(VAST_ARG(x));
       if (!has_skip_attribute_)
-        x->apply_column(col_, *idx_);
+        x->append_column_to_index(col_, *idx_);
     }
 
     size_t col_;
