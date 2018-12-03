@@ -35,6 +35,7 @@
 #include "vast/save.hpp"
 
 #include "vast/system/accountant.hpp"
+#include "vast/system/collector.hpp"
 #include "vast/system/index.hpp"
 #include "vast/system/partition.hpp"
 #include "vast/system/task.hpp"
@@ -45,63 +46,6 @@ using namespace caf;
 using namespace std::chrono;
 
 namespace vast::system {
-
-namespace {
-
-/// Maps partition IDs to INDEXER actors for resolving a query.
-using query_map = caf::detail::unordered_flat_map<uuid, std::vector<actor>>;
-
-[[maybe_unused]]
-auto get_ids(query_map& xs) {
-  std::vector<uuid> ys;
-  ys.reserve(xs.size());
-  std::transform(xs.begin(), xs.end(), std::back_inserter(ys),
-                 [](auto& kvp) { return kvp.first; });
-  return ys;
-}
-
-struct collector_state {
-  caf::detail::unordered_flat_map<uuid, std::pair<size_t, ids>> open_requests;
-  std::string name;
-  collector_state(local_actor* self) : name("collector-") {
-    name += std::to_string(self->id());
-  }
-};
-
-behavior collector(stateful_actor<collector_state>* self, actor master) {
-  // Ask master for initial work.
-  self->send(master, worker_atom::value, self);
-  return {
-    [=](expression& expr, query_map& qm, actor& client) {
-      VAST_DEBUG(self, "got a new query for", qm.size(), "partitions:",
-                 get_ids(qm));
-      VAST_ASSERT(self->state.open_requests.empty());
-      for (auto& kvp : qm) {
-        auto& id = kvp.first;
-        auto& indexers = kvp.second;
-        VAST_DEBUG(self, "asks", indexers.size(),
-                   "INDEXER actor(s) for partition", id);
-        self->state.open_requests[id] = std::make_pair(indexers.size(), ids{});
-        for (auto& indexer : indexers)
-          self->request(indexer, infinite, expr).then([=](ids& sub_result) {
-            auto& [num_indexers, result] = self->state.open_requests[id];
-            result |= sub_result;
-            if (--num_indexers == 0) {
-              VAST_DEBUG(self, "collected all sub results for partition", id);
-              self->send(client, std::move(result));
-              self->state.open_requests.erase(id);
-              // Ask master for more work after receiving the last sub result.
-              if (self->state.open_requests.empty()) {
-                VAST_DEBUG(self, "asks INDEX for new work");
-                self->send(master, worker_atom::value, self);
-              }
-            }
-          });
-      }
-    }};
-}
-
-} // namespace <anonymous>
 
 partition_ptr index_state::partition_factory::operator()(const uuid& id) const {
   // There are three options for loading a partition: 1) it is active, 2) it is
