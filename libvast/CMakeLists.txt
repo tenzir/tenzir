@@ -74,6 +74,7 @@ set(libvast_sources
   src/system/accountant.cpp
   src/system/application.cpp
   src/system/archive.cpp
+  src/system/collector.cpp
   src/system/configuration.cpp
   src/system/connect_to_node.cpp
   src/system/consensus.cpp
@@ -236,6 +237,7 @@ set(tests
   test/subnet.cpp
   test/synopsis.cpp
   test/system/archive.cpp
+  test/system/collector.cpp
   test/system/consensus.cpp
   test/system/datagram_source.cpp
   test/system/exporter.cpp
