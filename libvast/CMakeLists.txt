@@ -79,6 +79,7 @@ set(libvast_sources
   src/system/connect_to_node.cpp
   src/system/consensus.cpp
   src/system/default_application.cpp
+  src/system/evaluator.cpp
   src/system/exporter.cpp
   src/system/importer.cpp
   src/system/index.cpp
@@ -240,6 +241,7 @@ set(tests
   test/system/collector.cpp
   test/system/consensus.cpp
   test/system/datagram_source.cpp
+  test/system/evaluator.cpp
   test/system/exporter.cpp
   test/system/importer.cpp
   test/system/index.cpp
