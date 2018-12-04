@@ -72,7 +72,7 @@ table_slice_ptr row_major_matrix_table_slice_builder::finish() {
   auto result = impl::make_uninitialized(layout(), rows());
   // Construct the data block.
   std::uninitialized_move(elements_.begin(), elements_.end(),
-                          result->elements());
+                          result->storage());
   // Clean up the builder state and return.
   elements_.clear();
   return table_slice_ptr{result, false};
