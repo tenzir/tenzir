@@ -77,7 +77,7 @@ table_slice_ptr column_major_matrix_table_slice_builder::finish() {
   using impl = column_major_matrix_table_slice;
   auto result = impl::make_uninitialized(layout(), rows_);
   // Construct the data block.
-  auto data_ptr = result->elements();
+  auto data_ptr = result->storage();
   for (auto& col_vec : columns_) {
     VAST_ASSERT(col_vec.size() == rows_);
     std::uninitialized_move(col_vec.begin(), col_vec.end(), data_ptr);

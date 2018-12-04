@@ -114,12 +114,12 @@ public:
   }
 
   data_view at(size_type row, size_type col) const override {
-    auto ptr = elements();
+    auto ptr = storage();
     return make_view(ptr[LayoutPolicy::index_of(rows_, columns_, row, col)]);
   }
 
   iterator begin() {
-    return elements();
+    return storage();
   }
 
   iterator end() {
@@ -127,7 +127,7 @@ public:
   }
 
   const_iterator begin() const {
-    return elements();
+    return storage();
   }
 
   const_iterator end() const {
@@ -136,25 +136,25 @@ public:
 
   /// @returns the range representing the column at position `pos`.
   detail::iterator_range<column_iterator> column(size_type pos) {
-    auto first = LayoutPolicy::make_column_iterator(elements(), rows_,
+    auto first = LayoutPolicy::make_column_iterator(storage(), rows_,
                                                     columns_, pos);
     return {first, first + rows_};
   }
 
   /// @returns the range representing the column at position `pos`.
   detail::iterator_range<const_column_iterator> column(size_type pos) const {
-    auto first = LayoutPolicy::make_column_iterator(elements(), rows_,
+    auto first = LayoutPolicy::make_column_iterator(storage(), rows_,
                                                     columns_, pos);
     return {first, first + rows_};
   }
 
   /// @returns a pointer to the first element.
-  data* elements();
+  data* storage();
 
   /// @returns a pointer to the first element.
-  const data* elements() const {
+  const data* storage() const {
     // We restore the const when returning from this member function.
-    return const_cast<matrix_table_slice*>(this)->elements();
+    return const_cast<matrix_table_slice*>(this)->storage();
   }
 
   // -- memory management ------------------------------------------------------
@@ -194,7 +194,7 @@ matrix_table_slice<LayoutPolicy>::make_uninitialized(record_type layout,
 
 // Needs to be out-of-line, because it needs to call sizeof(matrix_table_slice).
 template <class LayoutPolicy>
-data* matrix_table_slice<LayoutPolicy>::elements() {
+data* matrix_table_slice<LayoutPolicy>::storage() {
   // We always allocate the first data directly following this object.
   using storage = std::aligned_storage_t<sizeof(matrix_table_slice),
                                          alignof(matrix_table_slice)>;
