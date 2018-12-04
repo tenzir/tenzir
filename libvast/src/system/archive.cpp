@@ -68,7 +68,7 @@ archive(archive_type::stateful_pointer<archive_state> self,
                  << select(xs, 1) << ',' << (select(xs, -1) + 1) << ')');
       if (self->state.active_exporters.count(self->current_sender()->address())
           == 0) {
-        VAST_DEBUG(self, "dismissing query for inactive sender");
+        VAST_DEBUG(self, "dismisses query for inactive sender");
         return make_error(ec::no_error);
       }
       std::vector<event> result;
