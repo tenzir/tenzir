@@ -64,11 +64,16 @@ caf::error save(caf::actor_system& sys, Sink&& out, const Ts&... xs) {
         return res.error();
       }
     }
-    std::ofstream fs{out.str()};
+    auto tmp = out.str() + ".tmp";
+    std::ofstream fs{tmp};
     if (!fs)
       return make_error(ec::filesystem_error, "failed to create filestream",
                         out);
-    return save<Method>(sys, *fs.rdbuf(), xs...);
+    if (auto err = save<Method>(sys, *fs.rdbuf(), xs...))
+      return err;
+    if (std::rename(tmp.c_str(), out.str().c_str()) != 0)
+      return make_error(ec::filesystem_error, "failed to rename to", out);
+    return caf::none;
   } else {
     static_assert(!std::is_same_v<Sink, Sink>, "unexpected Sink type");
   }
