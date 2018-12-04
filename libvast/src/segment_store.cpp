@@ -107,11 +107,14 @@ segment_store::get(const ids& xs) {
   // Process candidates in reverse order for maximum LRU cache hits.
   std::vector<table_slice_ptr> result;
   VAST_DEBUG(this, "processes", candidates.size(), "candidates");
-  for (auto cand = candidates.rbegin(); cand != candidates.rend(); ++cand) {
+  std::partition(candidates.begin(), candidates.end(), [&](const auto& id) {
+    return id == builder_.id() || cache_.find(id) != cache_.end();
+  });
+  for (auto cand = candidates.begin(); cand != candidates.end(); ++cand) {
     auto& id = *cand;
     caf::expected<std::vector<table_slice_ptr>> slices{caf::no_error};
     if (id == builder_.id()) {
-      VAST_DEBUG(this, "looks into the active segement");
+      VAST_DEBUG(this, "looks into the active segement", id);
       slices = builder_.lookup(xs);
     } else {
       segment_ptr seg_ptr = nullptr;
@@ -129,6 +132,7 @@ segment_store::get(const ids& xs) {
         i = cache_.emplace(id, seg_ptr).first;
       }
       VAST_ASSERT(seg_ptr != nullptr);
+      VAST_DEBUG(this, "looks into segment", id);
       slices = seg_ptr->lookup(xs);
     }
     if (!slices)
