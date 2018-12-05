@@ -33,6 +33,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
 
   fixture() {
     a = self->spawn(system::archive, directory, 10, 1024 * 1024);
+    self->send(a, system::exporter_atom::value, self);
   }
 
   template <class T>
