@@ -51,6 +51,9 @@ public:
   /// @returns the current number of rows in the table slice.
   virtual size_t rows() const noexcept = 0;
 
+  /// @returns an identifier for the implementing class.
+  virtual caf::atom_value implementation_id() const noexcept = 0;
+
   /// Allows the table slice builder to allocate sufficient storage for up to
   /// `num_rows` rows.
   virtual void reserve(size_t num_rows);
@@ -59,6 +62,9 @@ public:
   const record_type& layout() const noexcept {
     return layout_;
   }
+
+  /// @returns the number of columns in the table slice.
+  size_t columns() const noexcept;
 
 private:
   record_type layout_;

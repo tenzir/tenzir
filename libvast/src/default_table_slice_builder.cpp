@@ -15,6 +15,8 @@
 
 #include <utility>
 
+#include <caf/make_counted.hpp>
+
 namespace vast {
 
 default_table_slice_builder::default_table_slice_builder(record_type layout)
@@ -22,6 +24,10 @@ default_table_slice_builder::default_table_slice_builder(record_type layout)
     row_(super::layout().fields.size()),
     col_{0} {
   VAST_ASSERT(!row_.empty());
+}
+
+table_slice_builder_ptr default_table_slice_builder::make(record_type layout) {
+  return caf::make_counted<default_table_slice_builder>(std::move(layout));
 }
 
 bool default_table_slice_builder::append(data x) {
@@ -61,6 +67,11 @@ size_t default_table_slice_builder::rows() const noexcept {
 void default_table_slice_builder::reserve(size_t num_rows) {
   lazy_init();
   slice_->xs_.reserve(num_rows);
+}
+
+caf::atom_value
+default_table_slice_builder::implementation_id() const noexcept {
+  return default_table_slice::class_id;
 }
 
 void default_table_slice_builder::lazy_init() {

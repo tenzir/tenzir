@@ -13,26 +13,41 @@
 
 #pragma once
 
+#include <vector>
+
 #include "vast/data.hpp"
-#include "vast/default_table_slice.hpp"
+#include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
 
 namespace vast {
 
-/// The default implementation of `table_slice_builder`.
-class default_table_slice_builder : public table_slice_builder {
+class row_major_matrix_table_slice_builder final : public table_slice_builder {
 public:
   // -- member types -----------------------------------------------------------
 
   using super = table_slice_builder;
 
+  // -- class properties -------------------------------------------------------
+
+  static caf::atom_value get_implementation_id() noexcept;
+
   // -- constructors, destructors, and assignment operators --------------------
 
-  default_table_slice_builder(record_type layout);
+  row_major_matrix_table_slice_builder(record_type layout);
+
+  ~row_major_matrix_table_slice_builder() override;
 
   // -- factory functions ------------------------------------------------------
 
+  /// @returns a table slice builder instance.
   static table_slice_builder_ptr make(record_type layout);
+
+  /// Generates a table slice with uninitialized elements.
+  /// @param layout Field types for the table slice columns.
+  /// @param rows Number of rows in the table slice.
+  /// @returns a default-constructed table slice instance.
+  static table_slice_ptr make_slice(record_type layout,
+                                    table_slice::size_type rows);
 
   // -- properties -------------------------------------------------------------
 
@@ -48,17 +63,14 @@ public:
 
   caf::atom_value implementation_id() const noexcept override;
 
-protected:
-  // -- utility functions ------------------------------------------------------
-
-  /// Allocates `slice_` and resets related state if necessary.
-  void lazy_init();
-
+private:
   // -- member variables -------------------------------------------------------
 
-  vector row_;
+  /// Current row index.
   size_t col_;
-  std::unique_ptr<default_table_slice> slice_;
+
+  /// Elements in row-major order.
+  std::vector<data> elements_;
 };
 
 } // namespace vast

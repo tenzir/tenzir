@@ -49,6 +49,7 @@ class table_slice;
 class table_slice_builder;
 class type;
 class value;
+class value_index;
 
 // -- structs ------------------------------------------------------------------
 

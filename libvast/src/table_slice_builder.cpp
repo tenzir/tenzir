@@ -48,4 +48,8 @@ void table_slice_builder::reserve(size_t) {
   // nop
 }
 
+size_t table_slice_builder::columns() const noexcept {
+  return layout_.fields.size();
+}
+
 } // namespace vast

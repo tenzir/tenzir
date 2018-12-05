@@ -67,6 +67,11 @@ public:
   static caf::error deserialize_ptr(caf::deserializer& source,
                                     table_slice_ptr& ptr);
 
+  // -- visitation -------------------------------------------------------------
+
+  /// Appends all values in column `col` to `idx`.
+  virtual void append_column_to_index(size_type col, value_index& idx) const;
+
   // -- properties -------------------------------------------------------------
 
   /// @returns the table layout.
@@ -127,7 +132,8 @@ protected:
 ///          *impl* is a registered type in *sys*, otherwise `nullptr`.
 /// @relates table_slice
 table_slice_ptr make_table_slice(record_type layout, caf::actor_system& sys,
-                                 caf::atom_value impl);
+                                 caf::atom_value impl,
+                                 table_slice::size_type rows);
 
 /// Constructs table slices filled with random content for testing purposes.
 /// @param num_slices The number of table slices to generate.

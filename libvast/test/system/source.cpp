@@ -70,7 +70,7 @@ TEST(bro source) {
   bf::reader reader{std::move(*stream)};
   MESSAGE("start source for producing table slices of size 10");
   auto src = self->spawn(source<bf::reader>, std::move(reader),
-                         default_table_slice::make_builder,
+                         default_table_slice_builder::make,
                          events::slice_size);
   run();
   MESSAGE("start sink and run exhaustively");

@@ -13,7 +13,7 @@
 
 #include "fixtures/events.hpp"
 
-#include "vast/default_table_slice.hpp"
+#include "vast/default_table_slice_builder.hpp"
 #include "vast/format/bgpdump.hpp"
 #include "vast/format/bro.hpp"
 #include "vast/format/test.hpp"
@@ -158,7 +158,7 @@ public:
           internal.fields.insert(internal.fields.begin(),
                                  std::move(tstamp_field));
           id_assigning_builder tmp{
-            default_table_slice::make_builder(std::move(internal))};
+            default_table_slice_builder::make(std::move(internal))};
           return &(
             builders_.emplace(layout.name(), std::move(tmp)).first->second);
         },

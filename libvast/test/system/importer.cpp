@@ -22,6 +22,7 @@
 
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/vast/event.hpp"
+#include "vast/default_table_slice_builder.hpp"
 #include "vast/detail/make_io_stream.hpp"
 #include "vast/detail/spawn_container_source.hpp"
 #include "vast/event.hpp"
@@ -105,7 +106,7 @@ struct importer_fixture : Base {
     REQUIRE(stream);
     bf::reader reader{std::move(*stream)};
     return this->self->spawn(system::source<bf::reader>, std::move(reader),
-                             default_table_slice::make_builder, slice_size);
+                             default_table_slice_builder::make, slice_size);
   }
 
   // Checks whether two event buffers are equal.

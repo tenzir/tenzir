@@ -17,6 +17,7 @@ set(libvast_sources
   src/bitmap.cpp
   src/chunk.cpp
   src/column_index.cpp
+  src/column_major_matrix_table_slice_builder.cpp
   src/command.cpp
   src/compression.cpp
   src/concept/hashable/crc.cpp
@@ -63,6 +64,7 @@ set(libvast_sources
   src/operator.cpp
   src/pattern.cpp
   src/port.cpp
+  src/row_major_matrix_table_slice_builder.cpp
   src/schema.cpp
   src/segment.cpp
   src/segment_builder.cpp
@@ -201,8 +203,8 @@ set(tests
   test/command.cpp
   test/compressedbuf.cpp
   test/data.cpp
-  test/default_table_slice.cpp
   test/detail/algorithms.cpp
+  test/detail/column_iterator.cpp
   test/detail/flat_lru_cache.cpp
   test/detail/operators.cpp
   test/detail/set_operations.cpp

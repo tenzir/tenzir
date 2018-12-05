@@ -15,6 +15,8 @@
 
 #include <vector>
 
+#include <caf/atom.hpp>
+
 #include "vast/aliases.hpp"
 #include "vast/data.hpp"
 #include "vast/fwd.hpp"
@@ -27,7 +29,11 @@ class default_table_slice : public table_slice {
 public:
   // -- friends ----------------------------------------------------------------
 
-  friend default_table_slice_builder;
+  friend class default_table_slice_builder;
+
+  // -- constants --------------------------------------------------------------
+
+  static constexpr caf::atom_value class_id = caf::atom("TS_Default");
 
   // -- constructors, destructors, and assignment operators --------------------
 
@@ -45,12 +51,12 @@ public:
 
   caf::error deserialize(caf::deserializer& source) final;
 
-  // -- static factory functions -----------------------------------------------
+  // -- visitation -------------------------------------------------------------
 
-  /// Constructs a builder that generates a default_table_slice.
-  /// @param layout The layout of the table_slice.
-  /// @returns The builder instance.
-  static table_slice_builder_ptr make_builder(record_type layout);
+  /// Applies all values in column `col` to `idx`.
+  void append_column_to_index(size_type col, value_index& idx) const final;
+
+  // -- static factory functions -----------------------------------------------
 
   static table_slice_ptr make(record_type layout,
                               const std::vector<vector>& rows);
@@ -59,7 +65,7 @@ public:
 
   data_view at(size_type row, size_type col) const final;
 
-  caf::atom_value implementation_id() const noexcept;
+  caf::atom_value implementation_id() const noexcept override;
 
   /// @returns the container for storing table slice rows.
   const vector& container() const noexcept {
