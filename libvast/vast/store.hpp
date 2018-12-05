@@ -24,12 +24,29 @@ namespace vast {
 /// A key-value store for events.
 class store {
 public:
+  /// A session type for managing the state of a lookup.
+  struct lookup {
+    virtual ~lookup();
+
+    /// Obtains the next slice containing events pertaining
+    /// this lookup session.
+    /// @returns caf::no_error when finished.
+    /// @returns A new table slice upon every invocation.
+    virtual caf::expected<table_slice_ptr> next() = 0;
+  };
+
   virtual ~store();
 
   /// Adds a table slice to the store.
   /// @param xs The table slice to add.
   /// @returns No error on success.
   virtual caf::error put(table_slice_ptr xs) = 0;
+
+  /// Starts an iterative extraction session.
+  /// @param xs The IDs for the events to retrieve.
+  /// @returns A pointer to lookup session.
+  /// @relates lookup
+  virtual std::unique_ptr<lookup> extract(const ids& xs) const = 0;
 
   /// Retrieves a set of events.
   /// @param xs The IDs for the events to retrieve.
