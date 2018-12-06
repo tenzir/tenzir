@@ -19,6 +19,7 @@
 #include <caf/binary_deserializer.hpp>
 #include <caf/binary_serializer.hpp>
 #include <caf/none.hpp>
+#include <caf/typed_event_based_actor.hpp>
 
 #include "vast/error.hpp"
 #include "vast/logger.hpp"

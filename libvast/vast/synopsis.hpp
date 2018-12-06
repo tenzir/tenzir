@@ -15,9 +15,11 @@
 
 #include <utility>
 
+#include <caf/fwd.hpp>
 #include <caf/intrusive_ptr.hpp>
 #include <caf/ref_counted.hpp>
 
+#include "vast/aliases.hpp"
 #include "vast/fwd.hpp"
 #include "vast/operator.hpp"
 #include "vast/type.hpp"
@@ -94,12 +96,16 @@ caf::error inspect(caf::deserializer& source, synopsis_ptr& ptr);
 /// function. It is possible to provide a custom factory via
 /// [`set_synopsis_factory`](@ref set_synopsis_factory).
 /// @param x The type to construct a synopsis for.
+/// @param opts Auxiliary context for constructing a synopsis.
 /// @relates synopsis synopsis_factory set_synopsis_factory
-synopsis_ptr make_synopsis(type x);
+/// @note The passed options *opts* may change between invocations for a given
+///       type. Therefore, the type *x* should be sufficient to fully create a
+///       valid synopsis instance.
+synopsis_ptr make_synopsis(type x, const synopsis_options& opts = {});
 
 /// The function to create a synopsis.
 /// @relates synopsis get_synopsis_factory_fun set_synopsis_factory
-using synopsis_factory = synopsis_ptr (*)(type);
+using synopsis_factory = synopsis_ptr (*)(type, const synopsis_options&);
 
 /// Deserializes a factory identifier and returns the corresponding factory
 /// function if has been registered via set_synopsis_factory previously. For

@@ -28,8 +28,6 @@ using namespace vast;
 
 namespace {
 
-using interval = std::pair<timestamp, timestamp>;
-
 const timestamp epoch;
 
 } // namespace <anonymous>

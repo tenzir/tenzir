@@ -47,6 +47,12 @@ namespace system {
 
 size_t table_slice_size = 100;
 size_t max_partition_size = 1_Mi;
+size_t max_in_mem_partitions = 10;
+size_t taste_partitions = 5;
+size_t num_collectors = 10;
+size_t segments = 10;
+size_t max_segment_size = 128;
+size_t initially_requested_ids = 128;
 
 } // namespace system
 

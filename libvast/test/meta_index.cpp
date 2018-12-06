@@ -20,7 +20,7 @@
 
 #include <caf/test/dsl.hpp>
 
-#include "vast/default_table_slice.hpp"
+#include "vast/default_table_slice_builder.hpp"
 #include "vast/synopsis.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
@@ -60,7 +60,7 @@ struct generator {
   }
 
   table_slice_ptr operator()(size_t num) {
-    auto builder = default_table_slice::make_builder(layout);
+    auto builder = default_table_slice_builder::make(layout);
     auto str = "foo";
     for (size_t i = 0; i < num; ++i) {
       timestamp ts = epoch + std::chrono::seconds(i + offset);
@@ -246,7 +246,7 @@ private:
   bool true_ = false;
 };
 
-synopsis_ptr make_custom_synopsis(type x) {
+synopsis_ptr make_custom_synopsis(type x, const synopsis_options&) {
   return caf::visit(detail::overload(
     [&](const boolean_type&) -> synopsis_ptr {
       return caf::make_counted<boolean_synopsis>(std::move(x));
@@ -265,7 +265,7 @@ TEST(serialization with custom factory) {
   set_synopsis_factory(sys, factory_id, make_custom_synopsis);
   MESSAGE("generate slice data and add it to the meta index");
   auto layout = record_type{{"x", boolean_type{}}};
-  auto builder = default_table_slice::make_builder(layout);
+  auto builder = default_table_slice_builder::make(layout);
   CHECK(builder->add(make_data_view(true)));
   auto slice = builder->finish();
   REQUIRE(slice != nullptr);
@@ -301,6 +301,14 @@ TEST(serialization with custom factory) {
   CHECK_EQUAL(lookup("y != T"), all);
   MESSAGE("perform serialization");
   CHECK_ROUNDTRIP(meta_idx);
+}
+
+TEST(option setting and retrieval) {
+  meta_index meta_idx;
+  auto& opts = meta_idx.factory_options();
+  put(opts, "foo", 42);
+  auto x = caf::get_if<caf::config_value::integer>(&opts["foo"]);
+  CHECK_EQUAL(unbox(x), 42);
 }
 
 FIXTURE_SCOPE_END()

@@ -22,7 +22,6 @@ namespace vast::system {
 // -- classes ------------------------------------------------------------------
 
 class application;
-class command;
 class configuration;
 class default_application;
 class export_command;
@@ -40,7 +39,9 @@ class start_command;
 
 // -- structs ------------------------------------------------------------------
 
+struct node_state;
 struct query_statistics;
+struct spawn_arguments;
 
 // -- templates ----------------------------------------------------------------
 
@@ -52,6 +53,8 @@ class writer_command;
 
 // -- aliases ------------------------------------------------------------------
 
+using node_actor = caf::stateful_actor<node_state>;
 using partition_ptr = caf::intrusive_ptr<partition>;
+
 
 } // namespace vast::system

@@ -13,37 +13,17 @@
 
 #pragma once
 
-#include <string>
+#include <caf/fwd.hpp>
 
-#include <caf/local_actor.hpp>
-
-#include "vast/expected.hpp"
-#include "vast/filesystem.hpp"
-#include "vast/system/node.hpp"
+#include "vast/aliases.hpp"
+#include "vast/system/fwd.hpp"
 
 namespace vast::system {
 
-struct options {
-  caf::message params;
-  path dir;
-  std::string label;
-};
-
-expected<caf::actor> spawn_archive(caf::local_actor* self, options& opts);
-
-expected<caf::actor> spawn_exporter(node_actor* self, options& opts);
-
-expected<caf::actor> spawn_importer(node_actor* self, options& opts);
-
-expected<caf::actor> spawn_index(caf::local_actor* self, options& opts);
-
-expected<caf::actor> spawn_metastore(caf::local_actor* self, options& opts);
-
-expected<caf::actor> spawn_profiler(caf::local_actor* self, options& opts);
-
-expected<caf::actor> spawn_source(caf::local_actor* self, options& opts);
-
-expected<caf::actor> spawn_sink(caf::local_actor* self, options& opts);
+/// Tries to spawn a new INDEX.
+/// @param self Points to the parent actor.
+/// @param args Configures the new actor.
+/// @returns a handle to the spawned actor on success, an error otherwise
+maybe_actor spawn_index(caf::local_actor* self, spawn_arguments& args);
 
 } // namespace vast::system
-

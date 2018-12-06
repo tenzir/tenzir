@@ -55,11 +55,22 @@ archive(archive_type::stateful_pointer<archive_state> self,
       self->quit(msg.reason);
     }
   );
+  self->set_down_handler(
+    [=](const down_msg& msg) {
+      VAST_DEBUG(self, "received DOWN from", msg.source);
+      self->state.active_exporters.erase(msg.source);
+    }
+  );
   return {
-    [=](const ids& xs) {
+    [=](const ids& xs) -> caf::result<std::vector<event>> {
       VAST_ASSERT(rank(xs) > 0);
       VAST_DEBUG(self, "got query for", rank(xs), "events in range ["
                  << select(xs, 1) << ',' << (select(xs, -1) + 1) << ')');
+      if (self->state.active_exporters.count(self->current_sender()->address())
+          == 0) {
+        VAST_DEBUG(self, "dismisses query for inactive sender");
+        return make_error(ec::no_error);
+      }
       std::vector<event> result;
       auto slices = self->state.store->get(xs);
       if (!slices)
@@ -93,6 +104,11 @@ archive(archive_type::stateful_pointer<archive_state> self,
           }
         }
       );
+    },
+    [=](exporter_atom, const actor& exporter) {
+      auto sender_addr = self->current_sender()->address();
+      self->state.active_exporters.insert(sender_addr);
+      self->monitor<caf::message_priority::high>(exporter);
     },
     [=](status_atom) {
       caf::dictionary<caf::config_value> result;

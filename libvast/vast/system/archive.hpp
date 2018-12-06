@@ -13,6 +13,8 @@
 
 #pragma once
 
+#include <memory>
+#include <unordered_set>
 #include <vector>
 
 #include <caf/fwd.hpp>
@@ -31,12 +33,14 @@ namespace vast::system {
 /// @relates archive
 struct archive_state {
   std::unique_ptr<vast::store> store;
+  std::unordered_set<caf::actor_addr> active_exporters;
   static inline const char* name = "archive";
 };
 
 /// @relates archive
 using archive_type = caf::typed_actor<
   caf::reacts_to<caf::stream<table_slice_ptr>>,
+  caf::reacts_to<exporter_atom, caf::actor>,
   caf::replies_to<ids>::with<std::vector<event>>,
   caf::replies_to<status_atom>::with<caf::dictionary<caf::config_value>>
 >;
