@@ -287,7 +287,7 @@ endif ()
 if (NOT NO_UNIT_TESTS)
   # Add vast-test executable.
   add_executable(vast-test ${tests})
-  target_link_libraries(vast-test libvast libvast_test ${CMAKE_THREAD_LIBS_INIT})
+  target_link_libraries(vast-test libvast_test libvast ${CMAKE_THREAD_LIBS_INIT})
   # Helper macro to construct a CMake test from a VAST test suite.
   macro(make_test suite)
     string(REPLACE " " "_" test_name ${suite})
