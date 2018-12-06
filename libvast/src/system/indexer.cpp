@@ -23,49 +23,45 @@
 #include "vast/expression.hpp"
 #include "vast/filesystem.hpp"
 #include "vast/logger.hpp"
-
 #include "vast/system/atoms.hpp"
-#include "vast/system/indexer.hpp"
 
 using namespace caf;
 
 namespace vast::system {
 
-indexer_state::indexer_state() : initialized(false) {
+indexer_state::indexer_state() {
   // nop
 }
 
 indexer_state::~indexer_state() {
-  if (initialized)
-    tbl.~table_index();
+  col.~column_index();
 }
 
-void indexer_state::init(table_index&& from) {
-  VAST_ASSERT(!initialized);
-  new (&tbl) table_index(std::move(from));
-  initialized = true;
+caf::error indexer_state::init(event_based_actor* self, path filename,
+                               type column_type, size_t column) {
+  new (&col) column_index(self->system(), std::move(column_type),
+                          std::move(filename), column);
+  return col.init();
 }
 
 behavior indexer(stateful_actor<indexer_state>* self, path dir,
-                 record_type layout) {
-  auto maybe_tbl = make_table_index(self->system(), std::move(dir), layout);
-  if (!maybe_tbl) {
-    VAST_ERROR(self, "unable to generate table layout for", layout);
+                 type column_type, size_t column) {
+  VAST_TRACE(VAST_ARG(dir), VAST_ARG(column_type), VAST_ARG(column));
+  VAST_DEBUG(self, "operates for column", column, "of type", column_type);
+  if (auto err = self->state.init(self,
+                                  std::move(dir) / "fields"
+                                      / std::to_string(column),
+                                  std::move(column_type), column)) {
+    self->quit(std::move(err));
     return {};
   }
-  self->state.init(std::move(*maybe_tbl));
-  VAST_DEBUG(self, "operates for layout", layout);
   return {
     [=](const predicate& pred) {
       VAST_DEBUG(self, "got predicate:", pred);
-      return self->state.tbl.lookup(pred);
-    },
-    [=](const expression& expr) {
-      VAST_DEBUG(self, "got expression:", expr);
-      return self->state.tbl.lookup(expr);
+      return self->state.col.lookup(pred);
     },
     [=](persist_atom) -> result<void> {
-      if (auto err = self->state.tbl.flush_to_disk(); err != caf::none)
+      if (auto err = self->state.col.flush_to_disk(); err != caf::none)
         return err;
       return caf::unit;
     },
@@ -77,16 +73,17 @@ behavior indexer(stateful_actor<indexer_state>* self, path dir,
         },
         [=](unit_t&, const std::vector<table_slice_ptr>& xs) {
           for (auto& x : xs)
-            self->state.tbl.add(x);
+            self->state.col.add(x);
         },
         [=](unit_t&, const error& err) {
-          if (err && err != caf::exit_reason::user_shutdown) {
+          if (err && err != caf::exit_reason::user_shutdown)
             VAST_ERROR(self, "got a stream error:", self->system().render(err));
-          }
         }
       );
     },
-    [=](shutdown_atom) { self->quit(exit_reason::user_shutdown); },
+    [=](shutdown_atom) {
+      self->quit(exit_reason::user_shutdown);
+    },
   };
 }
 

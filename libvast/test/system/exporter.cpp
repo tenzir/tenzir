@@ -139,6 +139,8 @@ struct fixture : fixture_base {
 
 } // namespace <anonymous>
 
+/*
+
 FIXTURE_SCOPE(exporter_tests, fixture)
 
 TEST(historical query without importer) {
@@ -220,3 +222,5 @@ TEST(continuous query with importer) {
 }
 
 FIXTURE_SCOPE_END()
+
+*/

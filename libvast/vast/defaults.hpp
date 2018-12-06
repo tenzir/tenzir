@@ -84,7 +84,7 @@ extern size_t max_in_mem_partitions;
 extern size_t taste_partitions;
 
 /// Maximum number of concurrent INDEX queries.
-extern size_t num_collectors;
+extern size_t num_query_supervisors;
 
 /// Number of cached ARCHIVE segments.
 extern size_t segments;

@@ -11,39 +11,22 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#pragma once
+#include "vast/system/spawn_indexer.hpp"
 
-#include <cstdint>
-#include <string>
+#include <caf/actor.hpp>
+#include <caf/local_actor.hpp>
 
-#include <caf/detail/unordered_flat_map.hpp>
-#include <caf/fwd.hpp>
-
-#include "vast/ids.hpp"
-#include "vast/uuid.hpp"
+#include "vast/filesystem.hpp"
+#include "vast/logger.hpp"
+#include "vast/system/indexer.hpp"
+#include "vast/type.hpp"
 
 namespace vast::system {
 
-/// Maps partition IDs to EVALUATOR actors (1 per layout in the partition).
-using query_map = caf::detail::unordered_flat_map<uuid,
-                                                  std::vector<caf::actor>>;
-
-struct collector_state {
-  // -- constructors, destructors, and assignment operators --------------------
-
-  collector_state(caf::local_actor* self);
-
-  // -- meber variables --------------------------------------------------------
-
-  /// Maps partition IDs to the number of outstanding responses and already
-  /// received event IDs.
-  caf::detail::unordered_flat_map<uuid, std::pair<size_t, ids>> open_requests;
-
-  // Gives the COLLECTOR a unique, human-readable name in log output.
-  std::string name;
-};
-
-caf::behavior collector(caf::stateful_actor<collector_state>* self,
-                        caf::actor master);
+caf::actor spawn_indexer(caf::local_actor* parent, path dir, type column_type,
+                         size_t column) {
+  VAST_TRACE(VAST_ARG(dir), VAST_ARG(column_type), VAST_ARG(column));
+  return parent->spawn<caf::lazy_init>(indexer, dir, column_type, column);
+}
 
 } // namespace vast::system

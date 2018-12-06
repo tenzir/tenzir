@@ -20,9 +20,11 @@
 #include <caf/fwd.hpp>
 
 #include "vast/aliases.hpp"
-#include "vast/filesystem.hpp"
+#include "vast/detail/assert.hpp"
 #include "vast/fwd.hpp"
-#include "vast/system/indexer_manager.hpp"
+#include "vast/system/fwd.hpp"
+#include "vast/system/spawn_indexer.hpp"
+#include "vast/system/table_indexer.hpp"
 #include "vast/type.hpp"
 #include "vast/uuid.hpp"
 
@@ -30,12 +32,8 @@ namespace vast::system {
 
 /// The horizontal data scaling unit of the index. A partition represents a
 /// slice of indexes for a specific ID interval.
-class partition : public caf::ref_counted {
+class partition {
 public:
-  // -- friends ----------------------------------------------------------------
-
-  friend class indexer_manager;
-
   // -- member types -----------------------------------------------------------
 
   /// Persistent meta state for the partition.
@@ -48,72 +46,87 @@ public:
     bool dirty = false;
   };
 
+  /// Factory function for the ::table_indexer to spawn its INDEXER actors.
+  using indexer_factory = decltype(spawn_indexer)*;
+
+  /// Maps table slice layouts their table indexer.
+  using table_indexer_map = caf::detail::unordered_flat_map<record_type,
+                                                            table_indexer>;
+
   // -- constructors, destructors, and assignment operators --------------------
 
+  /// @param self The parent actor.
   /// @param base_dir The base directory for all partition. This partition will
-  ///                 save to and load from `base_dir / id`.
+  ///                 save to and load from `base_dir / to_string(id)`.
   /// @param id Unique identifier for this partition.
-  /// @param factory Factory function for INDEXER actors.
-  partition(caf::actor_system& sys, const path& base_dir, uuid id,
-            indexer_manager::indexer_factory factory);
+  /// @pre `self != nullptr`
+  /// @pre `factory != nullptr`
+  partition(index_state* state, uuid id, size_t max_capacity);
 
-  ~partition() noexcept override;
+  ~partition() noexcept;
 
   // -- persistence ------------------------------------------------------------
 
+  /// Materializes the partition layouts from disk.
+  /// @returns an error if I/O operations fail.
+  caf::error init();
+
+  /// Persists the partition layouts to disk.
+  /// @returns an error if I/O operations fail.
   caf::error flush_to_disk();
 
   // -- properties -------------------------------------------------------------
 
-  /// @returns the INDEXER manager.
-  indexer_manager& manager() noexcept {
-    return mgr_;
-  }
-
-  /// @returns the INDEXER manager.
-  const indexer_manager& manager() const noexcept {
-    return mgr_;
-  }
-
   /// @returns whether the meta data was changed.
-  bool dirty() const noexcept {
+  auto dirty() const noexcept {
     return meta_data_.dirty;
   }
 
-  /// @returns the working directory of the partition.
-  const path& dir() const noexcept {
-    return dir_;
-  }
   /// @returns the unique ID of the partition.
-  const uuid& id() const noexcept {
+  auto& id() const noexcept {
     return id_;
   }
+
+  /// @returns the state of the owning INDEX actor.
+  auto& state() noexcept {
+    return *state_;
+  }
+
+  /// @returns the remaining capacity in this partition.
+  auto capacity() const noexcept {
+    return capacity_;
+  }
+
+  /// Decreases the remaining capacity by `x`.
+  /// @pre `capacity() >= x`
+  auto reduce_capacity(size_t x) noexcept {
+    VAST_ASSERT(capacity_ >= x);
+    capacity_ -= x;
+  }
+
+  /// @returns all INDEXER actors of all matching layouts.
+  std::vector<caf::actor> indexers(const expression& expr);
 
   /// @returns all layouts in this partition.
   std::vector<record_type> layouts() const;
 
+  /// @returns the directory for persistent state.
+  path base_dir() const;
+
   /// @returns the file name for saving or loading the ::meta_data.
   path meta_file() const;
 
+  std::pair<table_indexer&, bool> get_or_add(const record_type& key);
+
   // -- operations -------------------------------------------------------------
 
-  /// Checks what layout could match `expr` and calls
-  /// `self->request(...).then(f)` for each matching INDEXER.
-  /// @returns the number of matched INDEXER actors.
   template <class F>
-  size_t lookup_requests(caf::event_based_actor* self, const expression& expr,
-                         F callback) {
-    return mgr_.for_each_match(expr, [&](caf::actor& indexer) {
-      self->request(indexer, caf::infinite, expr).then(callback);
-    });
+  void for_each_indexer(F f) {
+    for (auto& kvp : table_indexers_) {
+      kvp.second.materialize();
+      kvp.second.for_each_indexer(f);
+    }
   }
-
-  /// @returns all INDEXER actors that match the expression `expr`.
-  size_t get_indexers(std::vector<caf::actor>& indexers,
-                      const expression& expr);
-
-  /// @returns all INDEXER actors that match the expression `expr`.
-  std::vector<caf::actor> get_indexers(const expression& expr);
 
 private:
   /// Called from the INDEXER manager whenever a new layout gets added during
@@ -123,26 +136,26 @@ private:
       meta_data_.dirty = true;
   }
 
-  /// Spawns one INDEXER per type in the partition (lazily).
-  indexer_manager mgr_;
+  /// State of the INDEX actor that owns this partition.
+  index_state* state_;
 
   /// Keeps track of row types in this partition.
   meta_data meta_data_;
 
-  /// Directory for persisting the meta data.
-  path dir_;
-
   /// Uniquely identifies this partition.
   uuid id_;
 
-  /// Hosting actor system.
-  caf::actor_system& sys_;
+  /// Stores one meta indexer per layout that in turn manages INDEXER actors.
+  table_indexer_map table_indexers_;
+
+  /// Remaining capacity in this partition.
+  size_t capacity_;
 };
 
 // -- related types ------------------------------------------------------------
 
 /// @relates partition
-using partition_ptr = caf::intrusive_ptr<partition>;
+using partition_ptr = std::unique_ptr<partition>;
 
 // -- free functions -----------------------------------------------------------
 
@@ -151,17 +164,6 @@ template <class Inspector>
 auto inspect(Inspector& f, partition::meta_data& x) {
   return f(x.types);
 }
-
-/// Creates a partition.
-/// @relates partition
-partition_ptr make_partition(caf::actor_system& sys, const path& base_dir,
-                             uuid id, indexer_manager::indexer_factory f);
-
-/// Creates a partition that spawns regular INDEXER actors as children of
-/// `self`.
-/// @relates partition
-partition_ptr make_partition(caf::actor_system& sys, caf::local_actor* self,
-                             const path& base_dir, uuid id);
 
 } // namespace vast::system
 

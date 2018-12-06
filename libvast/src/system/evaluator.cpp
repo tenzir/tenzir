@@ -77,9 +77,11 @@ evaluator_state::evaluator_state(caf::event_based_actor* self) : self(self) {
   // nop
 }
 
-void evaluator_state::init(caf::actor client, expression expr) {
+void evaluator_state::init(caf::actor client, expression expr,
+                           caf::response_promise promise) {
   this->client = std::move(client);
   this->expr = std::move(expr);
+  this->promise = std::move(promise);
 }
 
 void evaluator_state::handle_result(const predicate& pred, const ids& result) {
@@ -98,8 +100,8 @@ void evaluator_state::handle_result(const predicate& pred, const ids& result) {
 void evaluator_state::handle_missing_result(const predicate& pred,
                                             const caf::error& err) {
   VAST_IGNORE_UNUSED(err);
-  VAST_DEBUG(self, "INDEXER returned", self->system().render(err),
-             "instead of a result for", pred);
+  VAST_WARNING(self, "INDEXER returned", self->system().render(err),
+               "instead of a result for", pred);
   auto ptr = hits_for(pred);
   VAST_ASSERT(ptr != nullptr);
   if (--ptr->first == 0) {
@@ -123,7 +125,7 @@ void evaluator_state::decrement_pending() {
   // We're done evaluating if all INDEXER actors have reported their hits.
   if (--pending_responses == 0) {
     VAST_DEBUG(self, "completed expression evaluation");
-    self->send(client, done_atom::value);
+    promise.deliver(done_atom::value);
   }
 }
 
@@ -136,7 +138,7 @@ evaluator_state::hits_for(const predicate& pred) {
 caf::behavior evaluator(caf::stateful_actor<evaluator_state>* self,
                         std::vector<caf::actor> indexers) {
   return {[=](const expression& expr, caf::actor client) {
-    self->state.init(client, expr);
+    self->state.init(client, expr, self->make_response_promise());
     auto predicates = caf::visit(predicatizer{}, expr);
     VAST_ASSERT(!predicates.empty());
     self->state.pending_responses = predicates.size() * indexers.size();

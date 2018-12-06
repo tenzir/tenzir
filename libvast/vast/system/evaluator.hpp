@@ -22,6 +22,7 @@
 
 #include "vast/expression.hpp"
 #include "vast/ids.hpp"
+#include "vast/uuid.hpp"
 
 namespace vast::system {
 
@@ -32,7 +33,7 @@ struct evaluator_state {
 
   evaluator_state(caf::event_based_actor* self);
 
-  void init(caf::actor client, expression expr);
+  void init(caf::actor client, expression expr, caf::response_promise promise);
 
   /// Updates `predicate_hits` and may trigger re-evaluation of the expression
   /// tree.
@@ -69,6 +70,9 @@ struct evaluator_state {
 
   /// Stores the original query expression.
   expression expr;
+
+  /// Allows us to respond to the COLLECTOR after finishing a lookup.
+  caf::response_promise promise;
 
   /// Gives this actor a recognizable name in logging output.
   static inline const char* name = "evaluator";

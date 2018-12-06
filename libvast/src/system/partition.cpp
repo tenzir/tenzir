@@ -15,6 +15,7 @@
 
 #include <caf/event_based_actor.hpp>
 #include <caf/local_actor.hpp>
+#include <caf/make_counted.hpp>
 #include <caf/stateful_actor.hpp>
 
 #include "vast/concept/printable/to_string.hpp"
@@ -27,50 +28,65 @@
 #include "vast/logger.hpp"
 #include "vast/save.hpp"
 #include "vast/system/atoms.hpp"
-#include "vast/system/indexer.hpp"
+#include "vast/system/index.hpp"
+#include "vast/system/spawn_indexer.hpp"
+#include "vast/system/table_indexer.hpp"
 #include "vast/time.hpp"
 
 using namespace std::chrono;
 using namespace caf;
 
-namespace vast {
-namespace system {
+namespace vast::system {
 
-partition::partition(caf::actor_system& sys, const path& base_dir, uuid id,
-                     indexer_manager::indexer_factory factory)
-  : mgr_(*this, std::move(factory)),
-    dir_(base_dir / to_string(id)),
+partition::partition(index_state* state, uuid id, size_t max_capacity)
+  : state_(state),
     id_(std::move(id)),
-    sys_(sys) {
+    capacity_(max_capacity) {
   // If the directory already exists, we must have some state from the past and
   // are pre-loading all INDEXER types we are aware of.
-  if (exists(dir_)) {
-    if (auto err = load(sys_, meta_file(), meta_data_)) {
-      VAST_ERROR(this, "failed to read meta data:", sys_.render(err));
-    } else {
-      for (auto& kvp : meta_data_.types) {
-        // We spawn all INDEXER actors immediately. However, the factory spawns
-        // those actors with lazy_init, which means they won't load persisted
-        // state from disk until first access.
-        mgr_.get_or_add(kvp.second);
-      }
-    }
-  }
+  VAST_ASSERT(state != nullptr);
 }
 
 partition::~partition() noexcept {
   flush_to_disk();
 }
 
-// -- persistence ------------------------------------------------------------
+// -- persistence --------------------------------------------------------------
+
+caf::error partition::init() {
+  VAST_TRACE("");
+  auto file_path = meta_file();
+  if (!exists(file_path))
+    return ec::no_such_file;
+  if (auto err = load(state_->self->system(), file_path , meta_data_))
+    return err;
+  VAST_DEBUG(state_->self, "loaded partition", id_, "from disk with",
+             meta_data_.types.size(), "layouts");
+  return caf::none;
+}
 
 caf::error partition::flush_to_disk() {
   if (meta_data_.dirty) {
-    if (auto err = save(sys_, meta_file(), meta_data_))
+    if (auto err = save(state_->self->system(), meta_file(), meta_data_))
       return err;
     meta_data_.dirty = false;
   }
   return caf::none;
+}
+
+// -- properties ---------------------------------------------------------------
+
+std::vector<caf::actor> partition::indexers(const expression&) {
+  // TODO: use given expression as layout filter.
+  std::vector<caf::actor> result;
+  for (auto layout : layouts()) {
+    auto& tbl = get_or_add(layout).first;
+    tbl.materialize();
+    tbl.for_each_indexer([&](auto &hdl) {
+      result.emplace_back(hdl);
+    });
+  }
+  return result;
 }
 
 std::vector<record_type> partition::layouts() const {
@@ -82,43 +98,28 @@ std::vector<record_type> partition::layouts() const {
   return result;
 }
 
+path partition::base_dir() const {
+  return state_->dir / to_string(id_);
+}
+
 path partition::meta_file() const {
-  return dir_ / "meta";
+  return base_dir() / "meta";
 }
 
-size_t partition::get_indexers(std::vector<caf::actor>& indexers,
-                               const expression& expr) {
-  return mgr_.for_each_match(expr,
-                             [&](caf::actor& x) { indexers.emplace_back(x); });
+std::pair<table_indexer&, bool> partition::get_or_add(const record_type& key) {
+  VAST_TRACE(VAST_ARG(key));
+  auto i = table_indexers_.find(key);
+  if (i != table_indexers_.end())
+    return {i->second, false};
+  auto digest = to_digest(key);
+  add_layout(digest, key);
+  auto result = table_indexers_.emplace(key, table_indexer{this, key});
+  VAST_ASSERT(result.second == true);
+  return {result.first->second, true};
+
 }
 
-std::vector<caf::actor> partition::get_indexers(const expression& expr) {
-  std::vector<caf::actor> result;
-  get_indexers(result, expr);
-  return result;
-}
-
-// -- free functions -----------------------------------------------------------
-
-partition_ptr make_partition(caf::actor_system& sys, const path& base_dir,
-                             uuid id, indexer_manager::indexer_factory f) {
-  return caf::make_counted<partition>(sys, base_dir, std::move(id),
-                                      std::move(f));
-}
-
-partition_ptr make_partition(caf::actor_system& sys, caf::local_actor* self,
-                             const path& base_dir, uuid id) {
-  auto f = [=](path indexer_path, record_type indexer_type) {
-    VAST_DEBUG(self, "creates INDEXER in partition", id, "for type",
-               indexer_type);
-    return self->spawn<caf::lazy_init>(indexer, std::move(indexer_path),
-                                       std::move(indexer_type));
-  };
-  return make_partition(sys, base_dir, std::move(id), f);
-}
-
-} // namespace system
-} // namespace vast
+} // namespace vast::system
 
 namespace std {
 

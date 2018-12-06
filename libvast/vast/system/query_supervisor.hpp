@@ -11,31 +11,40 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/system/spawn_index.hpp"
+#pragma once
 
-#include <caf/actor.hpp>
-#include <caf/expected.hpp>
+#include <cstdint>
+#include <string>
 
-#include "vast/defaults.hpp"
-#include "vast/detail/unbox_var.hpp"
-#include "vast/system/index.hpp"
-#include "vast/system/node.hpp"
-#include "vast/system/spawn_arguments.hpp"
+#include <caf/detail/unordered_flat_map.hpp>
+#include <caf/fwd.hpp>
+
+#include "vast/ids.hpp"
+#include "vast/uuid.hpp"
 
 namespace vast::system {
 
-maybe_actor spawn_index(caf::local_actor* self, spawn_arguments& args) {
-  if (!args.empty())
-    return unexpected_arguments(args);
-  auto opt = [&](caf::string_view key, auto default_value) {
-    return get_or(args.options, key, default_value);
-  };
-  namespace sd = vast::defaults::system;
-  return self->spawn(index, args.dir / args.label,
-                     opt("global.max-events", sd::max_partition_size),
-                     opt("global.max-parts", sd::max_in_mem_partitions),
-                     opt("global.taste-parts", sd::taste_partitions),
-                     opt("global.max_queries", sd::num_query_supervisors));
-}
+/// Maps partition IDs to EVALUATOR actors.
+using query_map = caf::detail::unordered_flat_map<uuid,
+                                                  std::vector<caf::actor>>;
+
+struct query_supervisor_state {
+  // -- constructors, destructors, and assignment operators --------------------
+
+  query_supervisor_state(caf::local_actor* self);
+
+  // -- meber variables --------------------------------------------------------
+
+  /// Maps partition IDs to the number of outstanding responses and already
+  /// received event IDs.
+  caf::detail::unordered_flat_map<uuid, size_t> open_requests;
+
+  // Gives the query_supervisor a unique, human-readable name in log output.
+  std::string name;
+};
+
+caf::behavior
+query_supervisor(caf::stateful_actor<query_supervisor_state>* self,
+                 caf::actor master);
 
 } // namespace vast::system

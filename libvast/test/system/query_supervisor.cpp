@@ -11,9 +11,9 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#define SUITE collector
+#define SUITE query_supervisor
 
-#include "vast/system/collector.hpp"
+#include "vast/system/query_supervisor.hpp"
 
 #include "vast/test/test.hpp"
 
@@ -39,7 +39,7 @@ caf::behavior dummy_evaluator(caf::event_based_actor*, ids x) {
 
 } // namespace <anonymous>
 
-FIXTURE_SCOPE(collector_tests, fixtures::deterministic_actor_system)
+FIXTURE_SCOPE(query_supervisor_tests, fixtures::deterministic_actor_system)
 
 TEST(lookup) {
   auto e0 = sys.spawn(dummy_evaluator, make_ids({0, 2, 4, 6, 8}));
@@ -47,7 +47,7 @@ TEST(lookup) {
   auto e2 = sys.spawn(dummy_evaluator, make_ids({3, 5}));
   run();
   system::query_map qm{{uuid::random(), {e0, e1}}, {uuid::random(), {e2}}};
-  auto coll = sys.spawn(system::collector, self);
+  auto coll = sys.spawn(system::query_supervisor, self);
   run();
   expect((caf::atom_value, caf::actor),
          from(coll).to(self).with(system::worker_atom::value, coll));

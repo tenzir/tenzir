@@ -26,7 +26,6 @@ class configuration;
 class default_application;
 class export_command;
 class import_command;
-class indexer_manager;
 class indexer_stage_driver;
 class node_command;
 class partition;
@@ -36,9 +35,11 @@ class remote_command;
 class sink_command;
 class source_command;
 class start_command;
+class table_indexer;
 
 // -- structs ------------------------------------------------------------------
 
+struct index_state;
 struct node_state;
 struct query_statistics;
 struct spawn_arguments;
@@ -54,7 +55,8 @@ class writer_command;
 // -- aliases ------------------------------------------------------------------
 
 using node_actor = caf::stateful_actor<node_state>;
-using partition_ptr = caf::intrusive_ptr<partition>;
+using partition_ptr = std::unique_ptr<partition>;
+using table_indexer_ptr = caf::intrusive_ptr<table_indexer>;
 
 
 } // namespace vast::system
