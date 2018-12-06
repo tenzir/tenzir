@@ -132,7 +132,7 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
         return found_matching_synopsis ? result : all_partitions();
       };
       return caf::visit(detail::overload(
-        [&](const attribute_extractor& lhs, const data&) -> result_type {
+        [&](const attribute_extractor& lhs, const data& d) -> result_type {
           if (lhs.attr == system::time_atom::value) {
             auto pred = [](auto& field) {
               // FIXME: we should really just look at the &timestamp attribute
@@ -140,6 +140,14 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
               return caf::holds_alternative<timestamp_type>(field.type);
             };
             return search(pred);
+          } else if (lhs.attr == system::type_atom::value) {
+            result_type result;
+            for (auto& [part_id, part_syn] : partition_synopses_)
+              for (auto& [layout, _] : part_syn)
+                if (evaluate(layout.name(), x.op, d))
+                  if (result.empty() || result.back() != part_id)
+                    result.push_back(part_id);
+            return result;
           }
           VAST_WARNING(this, "cannot process attribute extractor:", lhs.attr);
           return all_partitions();

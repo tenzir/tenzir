@@ -56,7 +56,7 @@ struct generator {
     layout = record_type{
       {"timestamp", timestamp_type{}},
       {"content", string_type{}}
-    };
+    }.name("foo");
   }
 
   table_slice_ptr operator()(size_t num) {
@@ -95,11 +95,39 @@ struct mock_partition {
 };
 
 struct fixture {
-  // Our unit-under-test.
-  meta_index meta_idx;
-
-  // Partition IDs.
-  std::vector<uuid> ids;
+  fixture() {
+    MESSAGE("generate " << num_partitions << " UUIDs for the partitions");
+    for (size_t i = 0; i < num_partitions; ++i)
+      ids.emplace_back(uuid::random());
+    std::sort(ids.begin(), ids.end());
+    // Sanity check random UUID generation.
+    for (size_t i = 0; i < num_partitions; ++i)
+      for (size_t j = 0; j < num_partitions; ++j)
+        if (i != j && ids[i] == ids[j])
+          FAIL("ID " << i << " and " << j << " are equal!");
+    MESSAGE("generate events and add events to the partition index");
+    std::vector<mock_partition> mock_partitions;
+    for (size_t i = 0; i < num_partitions; ++i) {
+      auto& part = mock_partitions.emplace_back(ids[i], i);
+      meta_idx.add(part.id, *part.slice);
+    }
+    MESSAGE("verify generated timestamps");
+    {
+      auto& p0 = mock_partitions[0];
+      CHECK_EQUAL(p0.range.from, epoch);
+      CHECK_EQUAL(p0.range.to, epoch + 24s);
+      auto& p1 = mock_partitions[1];
+      CHECK_EQUAL(p1.range.from, epoch + 25s);
+      CHECK_EQUAL(p1.range.to, epoch + 49s);
+      auto& p2 = mock_partitions[2];
+      CHECK_EQUAL(p2.range.from, epoch + 50s);
+      CHECK_EQUAL(p2.range.to, epoch + 74s);
+      auto& p3 = mock_partitions[3];
+      CHECK_EQUAL(p3.range.from, epoch + 75s);
+      CHECK_EQUAL(p3.range.to, epoch + 99s);
+    }
+    MESSAGE("run test");
+  }
 
   auto slice(size_t first, size_t last) const {
     std::vector<uuid> result;
@@ -114,7 +142,7 @@ struct fixture {
     return slice(index, index + 1);
   }
 
-  auto query(std::string_view hhmmss) {
+  auto attr_time_query(std::string_view hhmmss) {
     std::string q = "&time == 1970-01-01+";
     q += hhmmss;
     q += ".0";
@@ -125,63 +153,57 @@ struct fixture {
     return slice(ids.size());
   }
 
-  auto query(std::string_view hhmmss_from, std::string_view hhmmss_to) {
+  auto lookup(std::string_view expr) {
+    auto result = meta_idx.lookup(unbox(to<expression>(expr)));
+    std::sort(result.begin(), result.end());
+    return result;
+  }
+
+  auto attr_time_query(std::string_view hhmmss_from, std::string_view hhmmss_to) {
     std::string q = "&time >= 1970-01-01+";
     q += hhmmss_from;
     q += ".0";
     q += " && &time <= 1970-01-01+";
     q += hhmmss_to;
     q += ".0";
-    return meta_idx.lookup(unbox(to<expression>(q)));
+    return lookup(q);
   }
+
+  // Our unit-under-test.
+  meta_index meta_idx;
+
+  // Partition IDs.
+  std::vector<uuid> ids;
 };
 
 } // namespace <anonymous>
 
 FIXTURE_SCOPE(meta_index_tests, fixture)
 
-TEST(uuid lookup) {
-  MESSAGE("generate " << num_partitions << " UUIDs for the partitions");
-  for (size_t i = 0; i < num_partitions; ++i)
-    ids.emplace_back(uuid::random());
-  for (size_t i = 0; i < num_partitions; ++i)
-    for (size_t j = 0; j < num_partitions; ++j)
-      if (i != j && ids[i] == ids[j])
-        FAIL("ID " << i << " and " << j << " are equal!");
-  MESSAGE("generate events and add events to the partition index");
-  std::vector<mock_partition> mock_partitions;
-  for (size_t i = 0; i < num_partitions; ++i) {
-    auto& part = mock_partitions.emplace_back(ids[i], i);
-    meta_idx.add(part.id, *part.slice);
-  }
-  MESSAGE("verify generated timestamps");
-  {
-    auto& p0 = mock_partitions[0];
-    CHECK_EQUAL(p0.range.from, epoch);
-    CHECK_EQUAL(p0.range.to, epoch + 24s);
-    auto& p1 = mock_partitions[1];
-    CHECK_EQUAL(p1.range.from, epoch + 25s);
-    CHECK_EQUAL(p1.range.to, epoch + 49s);
-    auto& p2 = mock_partitions[2];
-    CHECK_EQUAL(p2.range.from, epoch + 50s);
-    CHECK_EQUAL(p2.range.to, epoch + 74s);
-    auto& p3 = mock_partitions[3];
-    CHECK_EQUAL(p3.range.from, epoch + 75s);
-    CHECK_EQUAL(p3.range.to, epoch + 99s);
-  }
+TEST(attribute extractor - &time) {
   MESSAGE("check whether point queries return correct slices");
-  CHECK_EQUAL(query("00:00:00"), slice(0));
-  CHECK_EQUAL(query("00:00:24"), slice(0));
-  CHECK_EQUAL(query("00:00:25"), slice(1));
-  CHECK_EQUAL(query("00:00:49"), slice(1));
-  CHECK_EQUAL(query("00:00:50"), slice(2));
-  CHECK_EQUAL(query("00:01:14"), slice(2));
-  CHECK_EQUAL(query("00:01:15"), slice(3));
-  CHECK_EQUAL(query("00:01:39"), slice(3));
-  CHECK_EQUAL(query("00:01:40"), empty());
+  CHECK_EQUAL(attr_time_query("00:00:00"), slice(0));
+  CHECK_EQUAL(attr_time_query("00:00:24"), slice(0));
+  CHECK_EQUAL(attr_time_query("00:00:25"), slice(1));
+  CHECK_EQUAL(attr_time_query("00:00:49"), slice(1));
+  CHECK_EQUAL(attr_time_query("00:00:50"), slice(2));
+  CHECK_EQUAL(attr_time_query("00:01:14"), slice(2));
+  CHECK_EQUAL(attr_time_query("00:01:15"), slice(3));
+  CHECK_EQUAL(attr_time_query("00:01:39"), slice(3));
+  CHECK_EQUAL(attr_time_query("00:01:40"), empty());
   MESSAGE("check whether time-range queries return correct slices");
-  CHECK_EQUAL(query("00:00:01", "00:00:10"), slice(0));
-  CHECK_EQUAL(query("00:00:10", "00:00:30"), slice(0, 2));
+  CHECK_EQUAL(attr_time_query("00:00:01", "00:00:10"), slice(0));
+  CHECK_EQUAL(attr_time_query("00:00:10", "00:00:30"), slice(0, 2));
+}
+
+TEST(attribute extractor - &type) {
+  CHECK_EQUAL(lookup("&type == \"foo\""), ids);
+  CHECK_EQUAL(lookup("&type == \"bar\""), empty());
+  CHECK_EQUAL(lookup("&type != \"foo\""), empty());
+  CHECK_EQUAL(lookup("&type ~ /f.o/"), ids);
+  CHECK_EQUAL(lookup("&type ~ /f.*/"), ids);
+  CHECK_EQUAL(lookup("&type ~ /x/"), empty());
+  CHECK_EQUAL(lookup("&type !~ /x/"), ids);
 }
 
 FIXTURE_SCOPE_END()
@@ -280,7 +302,7 @@ TEST(serialization with custom factory) {
   std::sort(all.begin(), all.end());
   auto expected1 = std::vector<uuid>{id1};
   auto expected2 = std::vector<uuid>{id2};
-  auto lookup = [&](auto& expr) {
+  auto lookup = [&](std::string_view expr) {
     return meta_idx.lookup(unbox(to<expression>(expr)));
   };
   // Check by field name field.
