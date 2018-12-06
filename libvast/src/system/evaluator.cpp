@@ -99,7 +99,7 @@ void evaluator_state::handle_missing_result(const predicate& pred,
                                             const caf::error& err) {
   VAST_IGNORE_UNUSED(err);
   VAST_DEBUG(self, "INDEXER returned", self->system().render(err),
-             "instead of a result for", pred, );
+             "instead of a result for", pred);
   auto ptr = hits_for(pred);
   VAST_ASSERT(ptr != nullptr);
   if (--ptr->first == 0) {
