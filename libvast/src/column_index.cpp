@@ -23,45 +23,26 @@ namespace vast {
 
 // -- free functions -----------------------------------------------------------
 
-namespace {
-
-/// Tries to initialize `res` and returns it on success, otherwise returns the
-/// initialization error.
-caf::expected<column_index_ptr> init_res(column_index_ptr res) {
-  auto err = res->init();
-  if (err)
-    return err;
-  return res;
-}
-
-} // namespace <anonymous>
-
 caf::expected<column_index_ptr> make_column_index(caf::actor_system& sys,
                                                   path filename,
                                                   type column_type,
                                                   size_t column) {
-  struct impl : column_index {
-    impl(caf::actor_system& sys, path&& fname, type&& ctype, size_t col)
-      : column_index(sys, std::move(ctype), std::move(fname)),
-        col_(col) {
-        // nop
-    }
-
-    void add(const table_slice_ptr& x) override {
-      VAST_TRACE(VAST_ARG(x));
-      if (!has_skip_attribute_)
-        x->append_column_to_index(col_, *idx_);
-    }
-
-    size_t col_;
-  };
-  return init_res(std::make_unique<impl>(sys, std::move(filename),
-                                         std::move(column_type), column));
+  auto result = std::make_unique<column_index>(sys, std::move(column_type),
+                                               std::move(filename), column);
+  if (auto err = result->init())
+    return err;
+  return result;
 }
 
 // -- constructors, destructors, and assignment operators ----------------------
 
-column_index::~column_index() {
+column_index::column_index(caf::actor_system& sys, type index_type,
+                           path filename, size_t column)
+  : col_(column),
+    has_skip_attribute_(vast::has_skip_attribute(index_type)),
+    index_type_(std::move(index_type)),
+    filename_(std::move(filename)),
+    sys_(sys) {
   // nop
 }
 
@@ -105,23 +86,21 @@ caf::error column_index::flush_to_disk() {
 
 // -- properties -------------------------------------------------------------
 
+void column_index::add(const table_slice_ptr& x) {
+  VAST_TRACE(VAST_ARG(x));
+  if (has_skip_attribute_)
+    return;
+  auto offset = x->offset();
+  for (table_slice::size_type row = 0; row < x->rows(); ++row)
+    idx_->append(x->at(row, col_), offset + row);
+}
+
 caf::expected<bitmap> column_index::lookup(const predicate& pred) {
   VAST_TRACE(VAST_ARG(pred));
   VAST_ASSERT(idx_ != nullptr);
   auto result = idx_->lookup(pred.op, make_data_view(caf::get<data>(pred.rhs)));
   VAST_DEBUG(this, VAST_ARG(result));
   return result;
-}
-
-// -- constructors, destructors, and assignment operators ----------------------
-
-column_index::column_index(caf::actor_system& sys, type index_type,
-                           path filename)
-  : has_skip_attribute_(vast::has_skip_attribute(index_type)),
-    index_type_(std::move(index_type)),
-    filename_(std::move(filename)),
-    sys_(sys) {
-  // nop
 }
 
 } // namespace vast
