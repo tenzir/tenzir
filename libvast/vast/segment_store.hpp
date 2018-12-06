@@ -48,6 +48,8 @@ public:
 
   error put(table_slice_ptr xs) override;
 
+  std::unique_ptr<store::lookup> extract(const ids& xs) const override;
+
   caf::expected<std::vector<table_slice_ptr>>
   get(const ids& xs) override;
 
@@ -71,11 +73,13 @@ private:
     return dir_ / "segments";
   }
 
+  caf::expected<segment_ptr> load_segment(uuid id) const;
+
   caf::actor_system& sys_;
   path dir_;
   uint64_t max_segment_size_;
   detail::range_map<id, uuid> segments_;
-  detail::cache<uuid, segment_ptr> cache_;
+  mutable detail::cache<uuid, segment_ptr> cache_;
   segment_builder builder_;
   std::vector<segment_ptr> builder_slices_;
 };

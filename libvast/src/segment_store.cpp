@@ -86,6 +86,94 @@ caf::error segment_store::flush() {
   return save(sys_, meta_path(), segments_);
 }
 
+caf::expected<segment_ptr> segment_store::load_segment(uuid id) const {
+  segment_ptr seg_ptr = nullptr;
+  auto fname = segment_path() / to_string(id);
+  if (auto err = load(sys_, fname, seg_ptr)) {
+    VAST_ERROR(this, "unable to load segment:", sys_.render(err));
+    return err;
+  }
+  return seg_ptr;
+}
+
+std::unique_ptr<store::lookup> segment_store::extract(const ids& xs) const {
+
+  class lookup : public store::lookup {
+  public:
+    using uuid_iterator = std::vector<uuid>::iterator;
+
+    lookup(const segment_store& store, ids xs, std::vector<uuid>&& candidates)
+      : store_{store}, xs_{std::move(xs)}, candidates_{candidates} {
+      // nop
+    }
+
+    caf::expected<table_slice_ptr> next() override {
+      // update the slice buffer if ...
+      while (!buffer                // ... the previous lookup failed.
+          || it_ == buffer->end())  // ... the buffer has been consumed.
+      {
+        buffer = handle_segment();
+        if (!buffer)
+          // All segments have been evaluated, return end marker.
+          return buffer.error();
+        it_ = buffer->begin();
+      }
+      return *it_++;
+    }
+
+  private:
+    caf::expected<std::vector<table_slice_ptr>> handle_segment() {
+      if (first_ == candidates_.end())
+        return caf::no_error;
+      auto& cand = *first_++;
+      if (cand == store_.builder_.id()) {
+        VAST_DEBUG(this, "looks into the active segement", cand);
+        return store_.builder_.lookup(xs_);
+      }
+      segment_ptr seg_ptr = nullptr;
+      auto i = store_.cache_.find(cand);
+      if (i != store_.cache_.end()) {
+        VAST_DEBUG(this, "got cache hit for segment", cand);
+        seg_ptr = i->second;
+      } else {
+        VAST_DEBUG(this, "got cache miss for segment", cand);
+        if(auto seg_ptr_ = store_.load_segment(cand))
+          return seg_ptr_.error();
+        else
+          seg_ptr = *seg_ptr_;
+
+        i = store_.cache_.emplace(cand, seg_ptr).first;
+      }
+      VAST_ASSERT(seg_ptr != nullptr);
+      return seg_ptr->lookup(xs_);
+    }
+
+    const segment_store& store_;
+    ids xs_;
+    std::vector<uuid> candidates_;
+    uuid_iterator first_ = candidates_.begin();
+    caf::expected<std::vector<table_slice_ptr>> buffer{caf::no_error};
+    std::vector<table_slice_ptr>::iterator it_;
+  };
+
+  VAST_TRACE(VAST_ARG(xs));
+  // Collect candidate segments by seeking through the ID set and
+  // probing each ID interval.
+  VAST_DEBUG(this, "retrieves table slices with requested ids");
+  std::vector<uuid> candidates;
+  auto f = [](auto x) { return std::pair{x.left, x.right}; };
+  auto g = [&](auto x) {
+    auto id = x.value;
+    if (candidates.empty() || candidates.back() != id)
+      candidates.push_back(id);
+    return caf::none;
+  };
+  auto begin = segments_.begin();
+  auto end = segments_.end();
+  select_with(xs, begin, end, f, g);
+  return std::make_unique<lookup>(*this, std::move(xs), std::move(candidates));
+}
+
 caf::expected<std::vector<table_slice_ptr>>
 segment_store::get(const ids& xs) {
   VAST_TRACE(VAST_ARG(xs));
