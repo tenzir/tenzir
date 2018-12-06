@@ -68,7 +68,7 @@ struct ids_evaluator {
     return i != xs.end() ? i->second.second : ids{};
   }
 
-  const evaluator_state::sub_hits_map& xs;
+  const evaluator_state::predicate_hits_map& xs;
 };
 
 } // namespace
@@ -82,40 +82,37 @@ void evaluator_state::init(caf::actor client, expression expr) {
   this->expr = std::move(expr);
 }
 
-void evaluator_state::handle_indexer_result(const predicate& pred,
-                                            const ids& result) {
+void evaluator_state::handle_result(const predicate& pred, const ids& result) {
   VAST_DEBUG(self, "got new hits", result, " for predicate", pred);
-  if (auto ptr = sub_hits_of(pred); ptr == nullptr) {
-    VAST_ERROR(self, "got a result for an unknown predicate:", pred);
-  } else {
-    auto& [missing, accumulated_hits] = *ptr;
-    accumulated_hits |= result;
-    if (--missing == 0) {
-      VAST_DEBUG(self, "collected all INDEXER results for predicate", pred);
-      update();
-    }
-  }
-  decrement_pending();
-}
-
-void evaluator_state::handle_missing_indexer_result(const predicate& pred,
-                                                    const caf::error& err) {
-  VAST_IGNORE_UNUSED(err);
-  VAST_DEBUG(self, "got no result for predicate", pred, "INDEXER returned",
-             self->system().render(err));
-  if (auto ptr = sub_hits_of(pred); ptr == nullptr) {
-    VAST_ERROR(self, "got an error for an unknown predicate:", pred);
-  } else if (--ptr->first == 0) {
+  auto ptr = hits_for(pred);
+  VAST_ASSERT(ptr != nullptr);
+  auto& [missing, accumulated_hits] = *ptr;
+  accumulated_hits |= result;
+  if (--missing == 0) {
     VAST_DEBUG(self, "collected all INDEXER results for predicate", pred);
-    update();
+    evaluate();
   }
   decrement_pending();
 }
 
-void evaluator_state::update() {
-  VAST_DEBUG(self, "got sub_hits:", sub_hits,
-             "expr_hits:", caf::visit(ids_evaluator{sub_hits}, expr));
-  auto delta = caf::visit(ids_evaluator{sub_hits}, expr) - hits;
+void evaluator_state::handle_missing_result(const predicate& pred,
+                                            const caf::error& err) {
+  VAST_IGNORE_UNUSED(err);
+  VAST_DEBUG(self, "INDEXER returned", self->system().render(err),
+             "instead of a result for", pred, );
+  auto ptr = hits_for(pred);
+  VAST_ASSERT(ptr != nullptr);
+  if (--ptr->first == 0) {
+    VAST_DEBUG(self, "collected all INDEXER results for predicate", pred);
+    evaluate();
+  }
+  decrement_pending();
+}
+
+void evaluator_state::evaluate() {
+  VAST_DEBUG(self, "got predicate_hits:", predicate_hits,
+             "expr_hits:", caf::visit(ids_evaluator{predicate_hits}, expr));
+  auto delta = caf::visit(ids_evaluator{predicate_hits}, expr) - hits;
   if (any<1>(delta)) {
     hits |= delta;
     self->send(client, std::move(delta));
@@ -130,40 +127,28 @@ void evaluator_state::decrement_pending() {
   }
 }
 
-evaluator_state::sub_hits_map::mapped_type*
-evaluator_state::sub_hits_of(const predicate& pred) {
-  auto i = sub_hits.find(pred);
-  return i != sub_hits.end() ? &i->second : nullptr;
+evaluator_state::predicate_hits_map::mapped_type*
+evaluator_state::hits_for(const predicate& pred) {
+  auto i = predicate_hits.find(pred);
+  return i != predicate_hits.end() ? &i->second : nullptr;
 }
 
 caf::behavior evaluator(caf::stateful_actor<evaluator_state>* self,
                         std::vector<caf::actor> indexers) {
-  // Skip incoming queries when already processing one.
   return {[=](const expression& expr, caf::actor client) {
     self->state.init(client, expr);
-    // TODO: we might want to locate the smallest subset of indexers (checking
-    //       whether the predicate could match the type of the indexer) instead
-    //       of always querying all indexers.
     auto predicates = caf::visit(predicatizer{}, expr);
-    if (predicates.empty()) {
-      VAST_DEBUG(self, "could not generate any predicates from expression");
-      self->send(client, done_atom::value);
-      return;
-    }
+    VAST_ASSERT(!predicates.empty());
     self->state.pending_responses = predicates.size() * indexers.size();
     for (auto& pred : predicates) {
-      self->state.sub_hits.emplace(pred, std::pair{indexers.size(), ids{}});
+      self->state.predicate_hits.emplace(pred,
+                                         std::pair{indexers.size(), ids{}});
       for (auto& x : indexers)
         self->request(x, caf::infinite, pred)
-          .then(
-            [=](const ids& hits) {
-              // Forward to state.
-              self->state.handle_indexer_result(pred, hits);
-            },
-            [=](const caf::error& err) {
-              // Forward to state.
-              self->state.handle_missing_indexer_result(pred, err);
-            });
+          .then([=](const ids& hits) { self->state.handle_result(pred, hits); },
+                [=](const caf::error& err) {
+                  self->state.handle_missing_result(pred, err);
+                });
     }
     // We can only deal with exactly one expression/client at the moment.
     self->unbecome();
