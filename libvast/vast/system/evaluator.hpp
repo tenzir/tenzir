@@ -27,34 +27,36 @@ namespace vast::system {
 
 /// @relates evaluator
 struct evaluator_state {
-  using sub_hits_map = std::unordered_map<predicate, std::pair<size_t, ids>>;
+  using predicate_hits_map = std::unordered_map<predicate,
+                                                std::pair<size_t, ids>>;
 
   evaluator_state(caf::event_based_actor* self);
 
   void init(caf::actor client, expression expr);
 
-  /// Updates `sub_hits` and may triggers re-evaluation of the expression tree.
-  void handle_indexer_result(const predicate& pred, const ids& result);
+  /// Updates `predicate_hits` and may trigger re-evaluation of the expression
+  /// tree.
+  void handle_result(const predicate& pred, const ids& result);
 
-  /// Updates `sub_hits` and may triggers re-evaluation of the expression tree.
-  void handle_missing_indexer_result(const predicate& pred,
-                                     const caf::error& err);
+  /// Updates `predicate_hits` and may trigger re-evaluation of the expression
+  /// tree.
+  void handle_missing_result(const predicate& pred, const caf::error& err);
 
   /// Evaluates the predicate-tree and may produces new deltas.
-  void update();
+  void evaluate();
 
   /// Decrements the `pending_responses` and sends 'done' to the client when it
   /// reaches 0.
   void decrement_pending();
 
-  /// Returns the `sub_hits` entry for `pred` or `nullptr`.
-  sub_hits_map::mapped_type* sub_hits_of(const predicate& pred);
+  /// Returns the `predicate_hits` entry for `pred` or `nullptr`.
+  predicate_hits_map::mapped_type* hits_for(const predicate& pred);
 
   /// Stores the number of requests that did not receive a response yet.
   size_t pending_responses = 0;
 
   /// Stores hits per predicate in the expression.
-  sub_hits_map sub_hits;
+  predicate_hits_map predicate_hits;
 
   /// Stores hits for the expression.
   ids hits;
@@ -62,7 +64,7 @@ struct evaluator_state {
   /// Points to the parent actor.
   caf::event_based_actor* self;
 
-  /// Points to the parent actor.
+  /// Stores the actor for sendings results to.
   caf::actor client;
 
   /// Stores the original query expression.
