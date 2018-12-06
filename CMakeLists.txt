@@ -309,12 +309,6 @@ if (LDFLAGS)
   set(CMAKE_STATIC_LINKER_FLAGS ${LDFLAGS})
 endif()
 
-# Pick up 3rd-party packages and ports.
-if (${CMAKE_SYSTEM_NAME} MATCHES "FreeBSD")
-  include_directories(AFTER SYSTEM /usr/local/include)
-  link_directories(/usr/local/lib)
-endif ()
-
 #------------------------------------------------------------------------------
 #                          Dependency Configuration
 #------------------------------------------------------------------------------
@@ -504,6 +498,7 @@ install(FILES
   "${CMAKE_CURRENT_BINARY_DIR}/VASTConfigVersion.cmake"
   DESTINATION "${INSTALL_VAST_CMAKEDIR}"
 )
+
 #------------------------------------------------------------------------------
 #                                Build Summary
 #------------------------------------------------------------------------------

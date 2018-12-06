@@ -69,7 +69,7 @@ target_include_directories(libvast_test PRIVATE
   ${CMAKE_CURRENT_BINARY_DIR}/vast/test
   ${CMAKE_CURRENT_SOURCE_DIR}/vast/test
 )
-target_link_libraries(libvast_test PUBLIC libvast caf::test)
+target_link_libraries(libvast_test PUBLIC caf::test libvast)
 set(isExe $<STREQUAL:$<TARGET_PROPERTY:TYPE>,EXECUTABLE>)
 target_sources(libvast_test INTERFACE
     "$<${isExe}:$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp>>"
