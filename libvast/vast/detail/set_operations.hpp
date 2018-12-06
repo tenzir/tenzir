@@ -41,7 +41,7 @@ void inplace_intersect(T& result, const T& xs) {
     }
   }
   result.erase(i, result.end());
-};
+}
 
 template <class T>
 auto unify(const T& xs, const T& ys) {
