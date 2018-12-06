@@ -20,6 +20,7 @@ namespace {
 const char* descriptions[] = {
   "no_error",
   "unspecified",
+  "no_such_file",
   "filesystem_error",
   "type_clash",
   "unsupported_operator",

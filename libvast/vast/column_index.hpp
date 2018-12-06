@@ -47,6 +47,8 @@ public:
   column_index(caf::actor_system& sys, type index_type, path filename,
                size_t column);
 
+  ~column_index();
+
   // -- persistence ------------------------------------------------------------
 
   /// Materializes the index from disk if `filename()` exists, constructs a new
@@ -94,6 +96,15 @@ public:
   bool has_skip_attribute() const noexcept {
     return has_skip_attribute_;
   }
+
+  /// Returns the position of this column in the layout.
+  size_t position() const noexcept {
+    return col_;
+  }
+
+  /// Returns whether the column index has unpersisted changes.
+  /// @pre `init()` was called and returned no error
+  bool dirty() const noexcept;
 
 protected:
   // -- member variables -------------------------------------------------------

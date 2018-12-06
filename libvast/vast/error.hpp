@@ -26,6 +26,8 @@ enum class ec : uint8_t {
   no_error = 0,
   /// The unspecified default error code.
   unspecified,
+  /// Requested file does not exist.
+  no_such_file,
   /// An error while accessing the filesystem.
   filesystem_error,
   /// Expected a different type.

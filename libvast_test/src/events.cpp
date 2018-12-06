@@ -29,7 +29,8 @@ namespace fixtures {
 
 namespace {
 
-timestamp epoch;
+// 2000-01-01 (GMT), just to not use 0 here.
+constexpr timestamp epoch = timestamp{timespan{946684800}};
 
 std::vector<event> make_ascending_integers(size_t count) {
   std::vector<event> result;
@@ -37,7 +38,7 @@ std::vector<event> make_ascending_integers(size_t count) {
   layout.name("test::int");
   for (size_t i = 0; i < count; ++i) {
     result.emplace_back(event::make(vector{static_cast<integer>(i)}, layout));
-    result.back().timestamp(epoch + std::chrono::seconds(i));
+    result.back().timestamp(epoch + std::chrono::seconds(i + 100));
   }
   return result;
 }
@@ -49,7 +50,7 @@ std::vector<event> make_alternating_integers(size_t count) {
   for (size_t i = 0; i < count; ++i) {
     result.emplace_back(event::make(vector{static_cast<integer>(i % 2)},
                                     layout));
-    result.back().timestamp(epoch + std::chrono::seconds(i));
+    result.back().timestamp(epoch + std::chrono::seconds(i + 100));
   }
   return result;
 }

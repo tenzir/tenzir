@@ -76,7 +76,6 @@ set(libvast_sources
   src/system/accountant.cpp
   src/system/application.cpp
   src/system/archive.cpp
-  src/system/collector.cpp
   src/system/configuration.cpp
   src/system/connect_to_node.cpp
   src/system/consensus.cpp
@@ -86,11 +85,11 @@ set(libvast_sources
   src/system/importer.cpp
   src/system/index.cpp
   src/system/indexer.cpp
-  src/system/indexer_manager.cpp
   src/system/indexer_stage_driver.cpp
   src/system/node.cpp
   src/system/partition.cpp
   src/system/profiler.cpp
+  src/system/query_supervisor.cpp
   src/system/remote_command.cpp
   src/system/signal_monitor.cpp
   src/system/simple_store.cpp
@@ -101,6 +100,7 @@ set(libvast_sources
   src/system/spawn_exporter.cpp
   src/system/spawn_importer.cpp
   src/system/spawn_index.cpp
+  src/system/spawn_indexer.cpp
   src/system/spawn_metastore.cpp
   src/system/spawn_node.cpp
   src/system/spawn_or_connect_to_node.cpp
@@ -108,9 +108,9 @@ set(libvast_sources
   src/system/spawn_sink.cpp
   src/system/spawn_source.cpp
   src/system/start_command.cpp
+  src/system/table_indexer.cpp
   src/system/task.cpp
   src/system/tracker.cpp
-  src/table_index.cpp
   src/table_slice.cpp
   src/table_slice_builder.cpp
   src/time.cpp
@@ -246,7 +246,6 @@ set(tests
   test/subnet.cpp
   test/synopsis.cpp
   test/system/archive.cpp
-  test/system/collector.cpp
   test/system/consensus.cpp
   test/system/datagram_source.cpp
   test/system/evaluator.cpp
@@ -258,12 +257,13 @@ set(tests
   test/system/key_value_store.cpp
   test/system/partition.cpp
   test/system/queries.cpp
+  test/system/query_supervisor.cpp
   test/system/replicated_store.cpp
   test/system/simple_store.cpp
   test/system/sink.cpp
   test/system/source.cpp
+  test/system/table_indexer.cpp
   test/system/task.cpp
-  test/table_index.cpp
   test/table_slice.cpp
   test/time.cpp
   test/type.cpp

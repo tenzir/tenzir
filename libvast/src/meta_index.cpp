@@ -14,16 +14,14 @@
 #include "vast/meta_index.hpp"
 
 #include "vast/data.hpp"
-#include "vast/expression.hpp"
-#include "vast/logger.hpp"
-#include "vast/system/atoms.hpp"
-#include "vast/table_index.hpp"
-#include "vast/table_slice.hpp"
-#include "vast/time.hpp"
-
 #include "vast/detail/overload.hpp"
 #include "vast/detail/set_operations.hpp"
 #include "vast/detail/string.hpp"
+#include "vast/expression.hpp"
+#include "vast/logger.hpp"
+#include "vast/system/atoms.hpp"
+#include "vast/table_slice.hpp"
+#include "vast/time.hpp"
 
 namespace vast {
 

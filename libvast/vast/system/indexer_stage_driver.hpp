@@ -16,9 +16,7 @@
 #include <caf/broadcast_downstream_manager.hpp>
 #include <caf/stream_stage_driver.hpp>
 
-#include "vast/table_slice.hpp"
-#include "vast/type.hpp"
-
+#include "vast/fwd.hpp"
 #include "vast/system/fwd.hpp"
 
 namespace vast::system {
@@ -31,9 +29,7 @@ using indexer_stage_filter = type;
 /// Selects an INDEXER actor based on its filter.
 struct indexer_stage_selector {
   bool operator()(const indexer_stage_filter& f,
-                  const table_slice_ptr& x) const {
-    return f == x->layout();
-  }
+                  const table_slice_ptr& x) const;
 };
 
 /// @relates indexer_stage_driver
@@ -54,8 +50,6 @@ public:
   using super = caf::stream_stage_driver<table_slice_ptr,
                                          indexer_downstream_manager>;
 
-  using partition_factory = std::function<partition_ptr()>;
-
   using batch_type = std::vector<input_type>;
 
   using batch_iterator = batch_type::iterator;
@@ -64,8 +58,8 @@ public:
 
   // -- constructors, destructors, and assignment operators --------------------
 
-  indexer_stage_driver(downstream_manager_type& dm, meta_index& meta_idx,
-                       partition_factory fac, size_t max_partition_size);
+  /// @pre `state != nullptr`
+  indexer_stage_driver(downstream_manager_type& dm, index_state* state);
 
   ~indexer_stage_driver() noexcept override;
 
@@ -76,22 +70,8 @@ public:
 private:
   // -- member variables -------------------------------------------------------
 
-  /// Enables efficient identification of relevant partitions for an expression.
-  meta_index& meta_index_;
-
-  /// Stores how many rows remain in the current partition.
-  size_t remaining_in_partition_;
-
-  /// Our current partition.
-  partition_ptr partition_;
-
-  /// Generates new partitions whenever the current partition becomes full.
-  partition_factory factory_;
-
-  /// Threshold for closing partitions, i.e., the stage driver creates a new
-  /// partition once a slice pushes the size of the current partition to or
-  /// over this value.
-  size_t max_partition_size_;
+  /// State of the INDEX actor that owns this stage.
+  index_state* state_;
 };
 
 } // namespace vast::system

@@ -16,14 +16,15 @@
 #include <unordered_map>
 #include <vector>
 
-#include <caf/actor.hpp>
-#include <caf/stateful_actor.hpp>
+#include <caf/fwd.hpp>
 
 #include "vast/expression.hpp"
-#include "vast/meta_index.hpp"
 #include "vast/fwd.hpp"
+#include "vast/meta_index.hpp"
 #include "vast/system/indexer_stage_driver.hpp"
 #include "vast/system/partition.hpp"
+#include "vast/system/query_supervisor.hpp"
+#include "vast/system/spawn_indexer.hpp"
 #include "vast/uuid.hpp"
 
 #include "vast/detail/flat_lru_cache.hpp"
@@ -34,6 +35,9 @@ namespace vast::system {
 /// State of an INDEX actor.
 struct index_state {
   // -- member types -----------------------------------------------------------
+
+  /// Function for spawning more INDEXER actors.
+  using indexer_factory = decltype(spawn_indexer)*;
 
   /// Pointer to the stage that multiplexing traffic between our sources and
   /// the INDEXER actors of the current partition.
@@ -62,6 +66,7 @@ struct index_state {
     index_state* st_;
   };
 
+  /// Stores partitions sorted by access frequency.
   using partition_cache_type = detail::flat_lru_cache<partition_ptr,
                                                       partition_lookup,
                                                       partition_factory>;
@@ -77,13 +82,13 @@ struct index_state {
 
   // -- constructors, destructors, and assignment operators --------------------
 
-  index_state();
+  index_state(caf::event_based_actor* self);
 
   ~index_state();
 
   /// Initializes the state.
-  caf::error init(caf::event_based_actor* self, const path& dir,
-                  size_t max_events, size_t max_parts, size_t taste_parts);
+  caf::error init(const path& dir, size_t max_events, size_t max_parts,
+                  size_t taste_parts);
 
   // -- persistence ------------------------------------------------------------
 
@@ -108,25 +113,42 @@ struct index_state {
   /// @returns various status metrics.
   caf::dictionary<caf::config_value> status() const;
 
+  /// Creates a new partition owned by the INDEX (stored as `active`).
+  void reset_active_partition();
+
+  /// @returns a new partition with random ID.
+  partition_ptr make_partition();
+
+  /// @returns a new partition with given ID.
+  partition_ptr make_partition(uuid id);
+
+  /// @returns a new INDEXER actor.
+  caf::actor make_indexer(path dir, type column_type, size_t column);
+
+  /// @returns the unpersisted partition matching `id` or `nullptr` if no
+  ///          partition matches.
+  partition* find_unpersisted(const uuid& id);
+
+  /// Locates all INDEXER actors in range [first, last) and spawns one
+  /// evaluator per identified INDEXER set.
+  /// @returns a query map for passing to INDEX workers over the spawned
+  ///          EVALUATOR actors.
+  /// @pre num_partitions > 0
+  query_map launch_evaluators(lookup_state& lookup, size_t num_partitions);
+
   // -- member variables -------------------------------------------------------
+
+  /// Pointer to the parent actor.
+  caf::event_based_actor* self;
 
   /// Allows to select partitions with timestamps.
   meta_index meta_idx;
-
-  /// Our current partition.
-  partition_ptr active;
-
-  /// Recently accessed partitions.
-  partition_cache_type lru_partitions;
 
   /// Base directory for all partitions of the index.
   path dir;
 
   /// Stream manager for ingesting events.
   stage_ptr stage;
-
-  /// Pointer to the parent actor.
-  caf::event_based_actor* self;
 
   /// The maximum number of events per partition.
   size_t max_partition_size;
@@ -141,12 +163,23 @@ struct index_state {
   /// Maps query IDs to pending lookup state.
   std::unordered_map<uuid, lookup_state> pending;
 
+  /// Caches idle workers.
+  std::vector<caf::actor> idle_workers;
+
+  /// Spawns an INDEXER actor. Default-initialized to `spawn_indexer`, but
+  /// allows users to redirect to other implementations (primarily for unit
+  /// testing).
+  indexer_factory factory;
+
+  /// Our current partition.
+  partition_ptr active;
+
+  /// Recently accessed partitions.
+  partition_cache_type lru_partitions;
+
   /// Stores partitions that are no longer active but have not persisted their
   /// state yet.
   std::vector<std::pair<partition_ptr, size_t>> unpersisted;
-
-  /// Caches idle workers.
-  std::vector<caf::actor> idle_workers;
 
   /// Name of the INDEX actor.
   static inline const char* name = "index";

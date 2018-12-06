@@ -13,40 +13,46 @@
 
 #pragma once
 
-#include <unordered_map>
+#include <vector>
 
-#include <caf/actor.hpp>
-#include <caf/event_based_actor.hpp>
-#include <caf/stateful_actor.hpp>
+#include "vast/system/index.hpp"
+#include "vast/table_slice.hpp"
 
-#include "vast/filesystem.hpp"
-#include "vast/column_index.hpp"
-#include "vast/type.hpp"
+#include "vast/test/fixtures/actor_system_and_events.hpp"
 
-namespace vast::system {
+CAF_ALLOW_UNSAFE_MESSAGE_TYPE(std::function<void>)
 
-struct indexer_state {
+namespace fixtures {
+
+/// A fixture with a dummy INDEX actor.
+struct dummy_index : deterministic_actor_system_and_events {
+  // -- member types -----------------------------------------------------------
+
+  struct dummy_indexer_state {
+    std::vector<vast::table_slice_ptr> buf;
+  };
+
   // -- constructors, destructors, and assignment operators --------------------
 
-  indexer_state();
+  dummy_index();
 
-  ~indexer_state();
+  ~dummy_index() override;
 
-  caf::error init(caf::event_based_actor* self, path filename, type column_type,
-                  size_t column);
+  // -- convenience functions --------------------------------------------------
+
+  auto& indexer_buf(caf::actor& hdl) {
+    return deref<caf::stateful_actor<dummy_indexer_state>>(hdl).state.buf;
+  }
+
+  /// Runs `f` inside the dummy INDEX actor.
+  void run_in_index(std::function<void()> f);
 
   // -- member variables -------------------------------------------------------
 
-  union { column_index col; };
+  /// Actor handle to our dummy.
+  caf::actor idx_handle;
 
-  static inline const char* name = "indexer";
+  vast::system::index_state* idx_state;
 };
 
-/// Indexes table slices.
-/// @param self The actor handle.
-/// @param dir The directory where to store the indexes in.
-/// @param layout The type of individual columns in slices.
-caf::behavior indexer(caf::stateful_actor<indexer_state>* self, path dir,
-                      type column_type, size_t column);
-
-} // namespace vast::system
+} // namespace fixtures
