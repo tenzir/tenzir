@@ -32,7 +32,7 @@ constexpr auto timeout = std::chrono::seconds(5);
 
 FIXTURE_SCOPE(consensus_tests, fixtures::consensus)
 
-TEST(single replicated store) {
+TEST_DISABLED(single replicated store) {
   MESSAGE("operating with a replicated store");
   auto store = self->spawn(replicated_store<int, int>, server1);
   self->request(store, timeout, put_atom::value, 42, 4711).receive(
@@ -97,7 +97,7 @@ TEST(single replicated store) {
   self->wait_for(store);
 }
 
-TEST(multiple replicated stores) {
+TEST_DISABLED(multiple replicated stores) {
   auto store1 = self->spawn(replicated_store<int, int>, server1);
   auto store2 = self->spawn(replicated_store<int, int>, server2);
   auto store3 = self->spawn(replicated_store<int, int>, server3);
