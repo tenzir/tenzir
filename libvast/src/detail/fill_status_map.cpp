@@ -28,7 +28,7 @@ void fill_status_map(caf::dictionary<caf::config_value>& xs,
                      caf::stream_manager& mgr) {
   // Manager status.
   put(xs, "idle", mgr.idle());
-  put(xs, "congested", mgr.idle());
+  put(xs, "congested", mgr.congested());
   // Downstream status.
   auto& out = mgr.out();
   auto& downstream = put_dictionary(xs, "downstream");
