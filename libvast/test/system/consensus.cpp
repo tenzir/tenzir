@@ -29,7 +29,7 @@ using namespace vast::system;
 
 FIXTURE_SCOPE(leader_tests, fixtures::actor_system)
 
-TEST(single leader) {
+TEST_DISABLED(single leader) {
   directory /= "server";
   auto server = self->spawn(raft::consensus, directory);
   self->send(server, id_atom::value, raft::server_id{1});
@@ -106,12 +106,12 @@ FIXTURE_SCOPE_END()
 
 FIXTURE_SCOPE(consensus_tests, fixtures::consensus)
 
-TEST(basic operations) {
+TEST_DISABLED(basic operations) {
   replicate(server1, make_message("foo"));
   await(2);
 }
 
-TEST(manual snapshotting) {
+TEST_DISABLED(manual snapshotting) {
   MESSAGE("replicating commands");
   replicate(server1, make_message("foo"));
   await(1 + 1);
