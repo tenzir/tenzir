@@ -61,11 +61,10 @@ struct generator {
 
   table_slice_ptr operator()(size_t num) {
     auto builder = default_table_slice_builder::make(layout);
-    auto str = "foo";
     for (size_t i = 0; i < num; ++i) {
       timestamp ts = epoch + std::chrono::seconds(i + offset);
       builder->add(make_data_view(ts));
-      builder->add(make_data_view(str));
+      builder->add(make_data_view("foo"));
     }
     auto slice = builder->finish();
     slice.unshared().offset(offset);
@@ -141,7 +140,7 @@ struct fixture {
 
 FIXTURE_SCOPE(meta_index_tests, fixture)
 
-TEST_DISABLED(uuid lookup) {
+TEST(uuid lookup) {
   MESSAGE("generate " << num_partitions << " UUIDs for the partitions");
   for (size_t i = 0; i < num_partitions; ++i)
     ids.emplace_back(uuid::random());
@@ -189,7 +188,7 @@ FIXTURE_SCOPE_END()
 
 FIXTURE_SCOPE(metaidx_serialization_tests, fixtures::deterministic_actor_system)
 
-TEST_DISABLED(serialization) {
+TEST(serialization) {
   meta_index meta_idx;
   auto part = mock_partition{uuid::random(), 42};
   meta_idx.add(part.id, *part.slice);
