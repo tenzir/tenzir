@@ -40,4 +40,23 @@ TEST(construction and querying) {
   REQUIRE_EQUAL(slices->size(), 2u);
 }
 
+TEST(sessionized extraction) {
+  // FIXME: use directory from fixture
+  rm("foo");
+  auto store = segment_store::make(sys, path{"foo"}, 512_KiB, 2);
+  REQUIRE(store);
+  for (auto& slice : bro_conn_log_slices)
+    REQUIRE(!store->put(slice));
+  auto session = store->extract(make_ids({0, 6, 19, 21}));
+  auto slice0 = session->next();
+  REQUIRE(slice0);
+  REQUIRE_EQUAL((*slice0)->offset(), 0u);
+  auto slice1 = session->next();
+  REQUIRE(slice1);
+  REQUIRE_EQUAL((*slice1)->offset(), 16u);
+  auto slice2 = session->next();
+  REQUIRE(!slice2);
+  REQUIRE(slice2.error() == caf::no_error);
+}
+
 FIXTURE_SCOPE_END()
