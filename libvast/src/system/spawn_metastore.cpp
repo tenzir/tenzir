@@ -17,12 +17,9 @@
 
 #include <caf/actor.hpp>
 #include <caf/actor_cast.hpp>
-#include <caf/expected.hpp>
 #include <caf/send.hpp>
 
-#include "vast/detail/unbox_var.hpp"
 #include "vast/system/consensus.hpp"
-#include "vast/system/node.hpp"
 #include "vast/system/replicated_store.hpp"
 #include "vast/system/simple_store.hpp"
 #include "vast/system/spawn_arguments.hpp"
