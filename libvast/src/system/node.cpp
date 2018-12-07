@@ -68,6 +68,16 @@ auto make_error_msg(ec code, std::string msg) {
   return caf::make_message(make_error(code, std::move(msg)));
 }
 
+// Stop the node and exit the process
+caf::message stop_command(const command&, caf::actor_system&,
+                          caf::config_value_map&, command::argument_iterator,
+                          command::argument_iterator) {
+  // We cannot use this_node->send() here because it triggers
+  // an illegal instruction interrupt.
+  caf::anon_send_exit(this_node, exit_reason::user_shutdown);
+  return caf::none;
+}
+
 // Tries to establish peering to another node.
 caf::message peer_command(const command&, caf::actor_system& sys,
                           caf::config_value_map& options,
@@ -360,6 +370,7 @@ void node_state::init(std::string init_name, path init_dir) {
   // Add top-level commands.
   cmd.add(status_command, "status", "shows various properties of a topology",
           opts());
+  cmd.add(stop_command, "stop", "stops the node", opts());
   cmd.add(kill_command, "kill", "terminates a component", opts());
   cmd.add(peer_command, "peer", "peers with another node", opts());
   // Add spawn commands.
@@ -370,7 +381,6 @@ void node_state::init(std::string init_name, path init_dir) {
             .add<size_t>("max-segment-size,m", "maximum segment size in MB"));
   sp->add(spawn_command, "exporter", "creates a new exporter",
           opts()
-            .add<bool>("segments,s", "number of cached segments")
             .add<bool>("continuous,c", "marks a query as continuous")
             .add<bool>("historical,h", "marks a query as historical")
             .add<bool>("unified,u", "marks a query as unified")
