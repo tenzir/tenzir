@@ -119,15 +119,21 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
         auto& rhs = caf::get<data>(x.rhs);
         result_type result;
         auto found_matching_synopsis = false;
-        for (auto& [part_id, part_syn] : partition_synopses_)
+        // We factor the nested loop into a lambda so that we can abort the
+        // iteration more easily with a return statement.
+        auto lookup = [&](auto& part_id, auto& part_syn) {
           for (auto& [layout, table_syn] : part_syn)
             for (size_t i = 0; i < table_syn.size(); ++i)
               if (table_syn[i] && match(layout.fields[i])) {
                 found_matching_synopsis = true;
-                if (table_syn[i]->lookup(x.op, make_view(rhs)))
-                  if (result.empty() || result.back() != part_id)
-                    result.push_back(part_id);
+                if (table_syn[i]->lookup(x.op, make_view(rhs))) {
+                  result.push_back(part_id);
+                  return;
+                }
               }
+        };
+        for (auto& [part_id, part_syn] : partition_synopses_)
+          lookup(part_id, part_syn);
         std::sort(result.begin(), result.end());
         return found_matching_synopsis ? result : all_partitions();
       };
@@ -144,9 +150,10 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
             result_type result;
             for (auto& [part_id, part_syn] : partition_synopses_)
               for (auto& pair : part_syn)
-                if (evaluate(pair.first.name(), x.op, d))
-                  if (result.empty() || result.back() != part_id)
-                    result.push_back(part_id);
+                if (evaluate(pair.first.name(), x.op, d)) {
+                  result.push_back(part_id);
+                  break;
+                }
             return result;
           }
           VAST_WARNING(this, "cannot process attribute extractor:", lhs.attr);
