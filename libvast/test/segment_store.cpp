@@ -30,7 +30,6 @@ FIXTURE_SCOPE(segment_store_tests,
 
 TEST(construction and querying) {
   auto path = directory / "segments";
-  rm(path);
   auto store = segment_store::make(sys, path, 512_KiB, 2);
   REQUIRE(store);
   for (auto& slice : bro_conn_log_slices)
@@ -42,7 +41,6 @@ TEST(construction and querying) {
 
 TEST(sessionized extraction) {
   auto path = directory / "segments";
-  rm(path);
   auto store = segment_store::make(sys, path, 512_KiB, 2);
   REQUIRE(store);
   for (auto& slice : bro_conn_log_slices)
