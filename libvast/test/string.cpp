@@ -121,57 +121,61 @@ TEST(double escaping) {
   CHECK(double_unescape("|", "|") == "|");
 }
 
-TEST_DISABLED(string splitting and joining) {
+TEST(string splitting and joining) {
   using namespace std::string_literals;
-
-  auto s = split("Der Geist, der stets verneint.", " ");
+  MESSAGE("split words");
+  auto str = "Der Geist, der stets verneint."s;
+  auto s = split(str, " ");
   REQUIRE(s.size() == 5);
   CHECK(s[0] == "Der");
   CHECK(s[1] == "Geist,");
   CHECK(s[2] == "der");
   CHECK(s[3] == "stets");
   CHECK(s[4] == "verneint.");
-
+  MESSAGE("split with invalid delimiter");
+  str = "foo";
   s = split("foo", "x");
   REQUIRE(s.size() == 1);
   CHECK(s[0] == "foo");
-
+  MESSAGE("split with empty tokens");
   // TODO: it would be more consistent if split considered not only before the
   // first seperator, but also after the last one. But this is not how many
   // split implementations operate.
-  s = split(",,", ",");
+  str = ",,";
+  s = split(str, ",");
   REQUIRE(s.size() == 2);
   CHECK(s[0] == "");
   CHECK(s[1] == "");
-
-  s = split(",a,b,c,"s, ",");
+  MESSAGE("split with partially empty tokens");
+  str = ",a,b,c,";
+  s = split(str, ",");
   REQUIRE(s.size() == 4);
   CHECK(s[0] == "");
   CHECK(s[1] == "a");
   CHECK(s[2] == "b");
   CHECK(s[3] == "c");
-
-  s = split("a*,b,c", ",", "*");
+  MESSAGE("split with escaping");
+  str = "a*,b,c";
+  s = split(str, ",", "*");
   REQUIRE(s.size() == 2);
   CHECK(s[0] == "a*,b");
   CHECK(s[1] == "c");
-
-  s = split("a,b,c,d,e,f", ",", "", 1);
+  MESSAGE("split with max splits");
+  str = "a,b,c,d,e,f";
+  s = split(str, ",", "", 1);
   REQUIRE(s.size() == 2);
   CHECK(s[0] == "a");
   CHECK(s[1] == "b,c,d,e,f");
-
-  s = split("a-b-c*-d", "-", "*", -1, true);
+  str = "a-b-c*-d";
+  MESSAGE("split that includes the delimiter");
+  s = split(str, "-", "*", -1, true);
   REQUIRE(s.size() == 5);
   CHECK(s[0] == "a");
   CHECK(s[1] == "-");
   CHECK(s[2] == "b");
   CHECK(s[3] == "-");
   CHECK(s[4] == "c*-d");
-
-  auto str = join(s, "");
-  CHECK(str == "a-b-c*-d");
-  str = join(s, " ");
-  CHECK(str == "a - b - c*-d");
+  MESSAGE("join");
+  CHECK(join(s, "") == "a-b-c*-d");
+  CHECK(join(s, " ") == "a - b - c*-d");
 }
-
