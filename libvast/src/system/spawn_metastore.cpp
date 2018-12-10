@@ -60,7 +60,7 @@ maybe_actor spawn_metastore(caf::local_actor* self, spawn_arguments& args) {
   else if (backend == "raft")
     return spawn_metastore_raft(self, args);
   return make_error(ec::invalid_configuration,
-                    "Unknown metastore implementation requested", backend);
+                    "unknown metastore implementation requested", backend);
 }
 
 } // namespace vast::system
