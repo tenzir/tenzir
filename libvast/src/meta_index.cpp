@@ -143,8 +143,8 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
           } else if (lhs.attr == system::type_atom::value) {
             result_type result;
             for (auto& [part_id, part_syn] : partition_synopses_)
-              for (auto& [layout, _] : part_syn)
-                if (evaluate(layout.name(), x.op, d))
+              for (auto& pair : part_syn)
+                if (evaluate(pair.first.name(), x.op, d))
                   if (result.empty() || result.back() != part_id)
                     result.push_back(part_id);
             return result;
