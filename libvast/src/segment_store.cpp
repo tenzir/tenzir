@@ -90,7 +90,7 @@ caf::expected<segment_ptr> segment_store::load_segment(uuid id) const {
   segment_ptr seg_ptr = nullptr;
   auto fname = segment_path() / to_string(id);
   if (auto err = load(sys_, fname, seg_ptr)) {
-    VAST_ERROR(this, "unable to load segment:", sys_.render(err));
+    VAST_ERROR(this, "cannot load segment:", sys_.render(err));
     return err;
   }
   return seg_ptr;
@@ -103,20 +103,19 @@ std::unique_ptr<store::lookup> segment_store::extract(const ids& xs) const {
     using uuid_iterator = std::vector<uuid>::iterator;
 
     lookup(const segment_store& store, ids xs, std::vector<uuid>&& candidates)
-      : store_{store}, xs_{std::move(xs)}, candidates_{candidates} {
-      // nop
+      : store_{store}, xs_{std::move(xs)}, candidates_{std::move(candidates)} {
+      VAST_ASSERT(!candidates_.empty());
     }
 
     caf::expected<table_slice_ptr> next() override {
-      // update the slice buffer if ...
-      while (!buffer                // ... the previous lookup failed.
-          || it_ == buffer->end())  // ... the buffer has been consumed.
-      {
-        buffer = handle_segment();
-        if (!buffer)
-          // All segments have been evaluated, return end marker.
-          return buffer.error();
-        it_ = buffer->begin();
+      // Update the buffer if it has been consumed or the previous
+      // refresh return an error.
+      while (!buffer_ || it_ == buffer_->end()) {
+        buffer_ = handle_segment();
+        if (!buffer_)
+          // Either an error occurred, or the list of candidates is exhausted.
+          return buffer_.error();
+        it_ = buffer_->begin();
       }
       return *it_++;
     }
@@ -152,7 +151,7 @@ std::unique_ptr<store::lookup> segment_store::extract(const ids& xs) const {
     ids xs_;
     std::vector<uuid> candidates_;
     uuid_iterator first_ = candidates_.begin();
-    caf::expected<std::vector<table_slice_ptr>> buffer{caf::no_error};
+    caf::expected<std::vector<table_slice_ptr>> buffer_{caf::no_error};
     std::vector<table_slice_ptr>::iterator it_;
   };
 
