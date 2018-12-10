@@ -72,13 +72,16 @@ archive(archive_type::stateful_pointer<archive_state> self,
         return make_error(ec::no_error);
       }
       std::vector<event> result;
-      auto slices = self->state.store->get(xs);
-      if (!slices)
-        VAST_DEBUG(self, "failed to lookup IDs in store:",
-                   self->system().render(slices.error()));
-      else
-        for (auto& slice : *slices)
-          to_events(result, *slice, xs);
+      auto session = self->state.store->extract(xs);
+      while (true) {
+        auto slice = session->next();
+        if (!slice) {
+          if (!slice.error())   // Either we are done ...
+            break;
+          return slice.error(); // ... or an error occured.
+        }
+        to_events(result, **slice, xs);
+      }
       return result;
     },
     [=](stream<table_slice_ptr> in) {

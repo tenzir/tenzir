@@ -19,4 +19,8 @@ store::~store() {
   // nop
 }
 
+store::lookup::~lookup() {
+  // nop
+}
+
 } // namespace vast
