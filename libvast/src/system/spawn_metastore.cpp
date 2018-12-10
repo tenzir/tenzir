@@ -49,7 +49,7 @@ maybe_actor spawn_metastore_raft(caf::local_actor* self, spawn_arguments& args) 
 }
 
 maybe_actor spawn_metastore_simple(caf::local_actor* self, spawn_arguments& args) {
-  auto store = self->spawn(simple_store, args.dir / "simple_store");
+  auto store = self->spawn(simple_store, args.dir / "consensus");
   return caf::actor_cast<caf::actor>(store);
 }
 
