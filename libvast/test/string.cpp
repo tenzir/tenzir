@@ -121,7 +121,7 @@ TEST(double escaping) {
   CHECK(double_unescape("|", "|") == "|");
 }
 
-TEST(string splitting and joining) {
+TEST(splitting) {
   using namespace std::string_literals;
   MESSAGE("split words");
   auto str = "Der Geist, der stets verneint."s;
@@ -175,7 +175,10 @@ TEST(string splitting and joining) {
   CHECK(s[2] == "b");
   CHECK(s[3] == "-");
   CHECK(s[4] == "c*-d");
-  MESSAGE("join");
-  CHECK(join(s, "") == "a-b-c*-d");
-  CHECK(join(s, " ") == "a - b - c*-d");
+}
+
+TEST(join) {
+  std::vector<std::string> xs{"a", "-", "b", "-", "c*-d"};
+  CHECK_EQUAL(join(xs, ""), "a-b-c*-d");
+  CHECK_EQUAL(join(xs, " "), "a - b - c*-d");
 }
