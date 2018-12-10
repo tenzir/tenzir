@@ -52,11 +52,12 @@ timestamp get_timestamp(caf::optional<data_view> element){
 struct generator {
   id offset;
 
-  explicit generator(size_t first_event_id) : offset(first_event_id) {
+  explicit generator(std::string name, size_t first_event_id)
+    : offset(first_event_id) {
     layout = record_type{
       {"timestamp", timestamp_type{}},
       {"content", string_type{}}
-    }.name("foo");
+    }.name(std::move(name));
   }
 
   table_slice_ptr operator()(size_t num) {
@@ -82,8 +83,8 @@ struct interval {
 };
 
 struct mock_partition {
-  mock_partition(uuid uid, size_t num) : id(std::move(uid)) {
-    generator g{num_events_per_parttion * num};
+  mock_partition(std::string name, uuid uid, size_t num) : id(std::move(uid)) {
+    generator g{std::move(name), num_events_per_parttion * num};
     slice = g(num_events_per_parttion);
     range.from = get_timestamp(slice->at(0, 0));
     range.to = get_timestamp(slice->at(slice->rows() - 1, 0));
@@ -108,7 +109,8 @@ struct fixture {
     MESSAGE("generate events and add events to the partition index");
     std::vector<mock_partition> mock_partitions;
     for (size_t i = 0; i < num_partitions; ++i) {
-      auto& part = mock_partitions.emplace_back(ids[i], i);
+      auto name = i % 2 == 0 ? "foo"s : "foobar"s;
+      auto& part = mock_partitions.emplace_back(std::move(name), ids[i], i);
       meta_idx.add(part.id, *part.slice);
     }
     MESSAGE("verify generated timestamps");
@@ -197,10 +199,12 @@ TEST(attribute extractor - &time) {
 }
 
 TEST(attribute extractor - &type) {
-  CHECK_EQUAL(lookup("&type == \"foo\""), ids);
+  auto foo = std::vector<uuid>{ids[0], ids[2]};
+  auto foobar = std::vector<uuid>{ids[1], ids[3]};
+  CHECK_EQUAL(lookup("&type == \"foo\""), foo);
   CHECK_EQUAL(lookup("&type == \"bar\""), empty());
-  CHECK_EQUAL(lookup("&type != \"foo\""), empty());
-  CHECK_EQUAL(lookup("&type ~ /f.o/"), ids);
+  CHECK_EQUAL(lookup("&type != \"foo\""), foobar);
+  CHECK_EQUAL(lookup("&type ~ /f.o/"), foo);
   CHECK_EQUAL(lookup("&type ~ /f.*/"), ids);
   CHECK_EQUAL(lookup("&type ~ /x/"), empty());
   CHECK_EQUAL(lookup("&type !~ /x/"), ids);
@@ -212,7 +216,7 @@ FIXTURE_SCOPE(metaidx_serialization_tests, fixtures::deterministic_actor_system)
 
 TEST(serialization) {
   meta_index meta_idx;
-  auto part = mock_partition{uuid::random(), 42};
+  auto part = mock_partition{"foo", uuid::random(), 42};
   meta_idx.add(part.id, *part.slice);
   CHECK_ROUNDTRIP(meta_idx);
 }
