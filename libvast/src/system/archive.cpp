@@ -76,11 +76,9 @@ archive(archive_type::stateful_pointer<archive_state> self,
       while (true) {
         auto slice = session->next();
         if (!slice) {
-          // Either we are done ...
-          if (!slice.error())
+          if (!slice.error())   // Either we are done ...
             break;
-          // ... or an error occured.
-          return slice.error();
+          return slice.error(); // ... or an error occured.
         }
         to_events(result, **slice, xs);
       }

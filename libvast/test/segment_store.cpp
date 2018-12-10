@@ -29,9 +29,9 @@ FIXTURE_SCOPE(segment_store_tests,
               fixtures::deterministic_actor_system_and_events)
 
 TEST(construction and querying) {
-  // FIXME: use directory from fixture
-  rm("foo");
-  auto store = segment_store::make(sys, path{"foo"}, 512_KiB, 2);
+  auto path = directory / "segments";
+  rm(path);
+  auto store = segment_store::make(sys, path, 512_KiB, 2);
   REQUIRE(store);
   for (auto& slice : bro_conn_log_slices)
     REQUIRE(!store->put(slice));
@@ -41,9 +41,9 @@ TEST(construction and querying) {
 }
 
 TEST(sessionized extraction) {
-  // FIXME: use directory from fixture
-  rm("foo");
-  auto store = segment_store::make(sys, path{"foo"}, 512_KiB, 2);
+  auto path = directory / "segments";
+  rm(path);
+  auto store = segment_store::make(sys, path, 512_KiB, 2);
   REQUIRE(store);
   for (auto& slice : bro_conn_log_slices)
     REQUIRE(!store->put(slice));
