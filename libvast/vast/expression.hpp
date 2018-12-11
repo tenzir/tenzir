@@ -263,6 +263,13 @@ expected<expression> normalize_and_validate(const expression& expr);
 ///          of type *t*.
 expected<expression> tailor(const expression& expr, const type& t);
 
+/// Retrieves an expression node at a given [offset](@ref offset).
+/// @param expr The expression to lookup.
+/// @param o The offset corresponding to a node in *expr*.
+/// @returns The expression node at *o* or `nullptr` if *o* does not describe a
+///          valid offset for *expr*.
+const expression* at(const expression& expr, const offset& o);
+
 } // namespace vast
 
 namespace caf {
