@@ -218,4 +218,58 @@ const expression* at(const expression& expr, const offset& o) {
   return ptr;
 }
 
+namespace {
+
+std::vector<std::pair<offset, predicate>>
+resolve(const expression& expr, const type& t, offset& o) {
+  using result_type = std::vector<std::pair<offset, predicate>>;
+  auto concat = [](auto&& xs, auto&& ys) {
+    auto begin = std::make_move_iterator(ys.begin());
+    auto end = std::make_move_iterator(ys.end());
+    xs.insert(xs.end(), begin, end);
+  };
+  return caf::visit(detail::overload(
+    [&](const auto& xs) { // conjunction or disjunction
+      result_type result;
+      o.emplace_back(0);
+      if (!xs.empty()) {
+        concat(result, resolve(xs[0], t, o));
+        for (size_t i = 1; i < xs.size(); ++i) {
+          o.back() += 1;
+          concat(result, resolve(xs[i], t, o));
+        }
+      }
+      o.pop_back();
+      return result;
+    },
+    [&](const negation& x) {
+      o.emplace_back(0);
+      auto result = resolve(x.expr(), t);
+      o.pop_back();
+      return result;
+    },
+    [&](const predicate& x) {
+      auto resolved = type_resolver{t}(x);
+      // FIXME: discuss error handling strategy.
+      VAST_ASSERT(resolved);
+      result_type result;
+      for (auto& pred : caf::visit(predicatizer{}, *resolved))
+        result.emplace_back(o, std::move(pred));
+      return result;
+    },
+    [&](caf::none_t) {
+      VAST_ASSERT(!"invalid expression node");
+      return result_type{};
+    }
+  ), expr);
+}
+
+} // namespace <anonymous>
+
+std::vector<std::pair<offset, predicate>>
+resolve(const expression& expr, const type& t) {
+  offset o{0};
+  return resolve(expr, t, o);
+}
+
 } // namespace vast
