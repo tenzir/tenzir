@@ -272,4 +272,34 @@ TEST(at) {
   CHECK_EQUAL(at(expr, {0, 1, 1, 0, 1, 0}), nullptr); // offset too long
 }
 
+TEST(resolve) {
+  using result_type = std::vector<std::pair<offset, predicate>>;
+  auto resolve_pred = [](auto&& x, offset o, type t) -> result_type {
+    result_type result;
+    auto pred = to<predicate>(x);
+    auto resolved = type_resolver{t}(unbox(pred));
+    for (auto& pred : caf::visit(predicatizer{}, *resolved))
+      result.emplace_back(o, std::move(pred));
+    return result;
+  };
+  auto expr = to_expr("(x == 5 && y == T) || (x == 5 && y == F)"); // tautology
+  auto t = record_type{
+    {"x", count_type{}},
+    {"y", boolean_type{}}
+  }.name("foo");
+  auto xs = resolve(expr, t);
+  decltype(xs) expected;
+  auto concat = [](auto&& xs, auto&& ys) {
+    auto begin = std::make_move_iterator(ys.begin());
+    auto end = std::make_move_iterator(ys.end());
+    xs.insert(xs.end(), begin, end);
+  };
+  // TODO: How should we handle duplicates? Weed them out? --MV
+  concat(expected, resolve_pred("x == 5", {0,0,0}, t));
+  concat(expected, resolve_pred("y == T", {0,0,1}, t));
+  concat(expected, resolve_pred("x == 5", {0,1,0}, t));
+  concat(expected, resolve_pred("y == F", {0,1,1}, t));
+  CHECK_EQUAL(xs, expected);
+}
+
 FIXTURE_SCOPE_END()
