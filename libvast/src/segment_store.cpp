@@ -170,6 +170,10 @@ std::unique_ptr<store::lookup> segment_store::extract(const ids& xs) const {
   auto begin = segments_.begin();
   auto end = segments_.end();
   select_with(xs, begin, end, f, g);
+  VAST_DEBUG(this, "processes", candidates.size(), "candidates");
+  std::partition(candidates.begin(), candidates.end(), [&](const auto& id) {
+    return id == builder_.id() || cache_.find(id) != cache_.end();
+  });
   return std::make_unique<lookup>(*this, std::move(xs), std::move(candidates));
 }
 
