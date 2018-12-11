@@ -13,7 +13,9 @@
 
 #include "vast/expression.hpp"
 #include "vast/expression_visitors.hpp"
+
 #include "vast/detail/assert.hpp"
+#include "vast/detail/overload.hpp"
 
 namespace vast {
 
@@ -178,4 +180,42 @@ expected<expression> tailor(const expression& expr, const type& t) {
   VAST_ASSERT(!caf::holds_alternative<caf::none_t>(*x));
   return std::move(*x);
 }
+
+namespace {
+
+// Helper function to lookup an expression at a particular offset
+const expression* at(const expression* expr, offset::value_type i) {
+  VAST_ASSERT(expr != nullptr);
+  return caf::visit(detail::overload(
+    [&](const conjunction& xs) -> const expression* {
+      return i < xs.size() ? &xs[i] : nullptr;
+    },
+    [&](const disjunction& xs) -> const expression* {
+      return i < xs.size() ? &xs[i] : nullptr;
+    },
+    [&](const negation& x) -> const expression* {
+      return i == 0 ? &x.expr() : nullptr;
+    },
+    [&](const auto&) -> const expression* {
+      return nullptr;
+    }
+  ), *expr);
+}
+
+} // namespace <anonymous>
+
+const expression* at(const expression& expr, const offset& o) {
+  if (o.empty())
+    return nullptr; // empty offsets are invalid
+  if (o.size() == 1)
+    return o[0] == 0 ? &expr : nullptr; // the root has always offset [0]
+  auto ptr = &expr;
+  for (size_t i = 1; i < o.size(); ++i) {
+    ptr = at(ptr, o[i]);
+    if (ptr == nullptr)
+      break;
+  }
+  return ptr;
+}
+
 } // namespace vast

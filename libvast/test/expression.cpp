@@ -40,6 +40,13 @@ using caf::holds_alternative;
 using namespace std::string_literals;
 using namespace vast;
 
+namespace {
+
+template <class T>
+expression to_expr(T&& x) {
+  return unbox(to<expression>(std::forward<T>(x)));
+};
+
 struct fixture : fixtures::deterministic_actor_system {
   fixture() {
     // expr0 := !(x.y.z <= 42 && &foo == T)
@@ -56,6 +63,8 @@ struct fixture : fixtures::deterministic_actor_system {
   expression expr0;
   expression expr1;
 };
+
+} // namespace <anonymous>
 
 FIXTURE_SCOPE(expr_tests, fixture)
 
@@ -224,7 +233,6 @@ TEST(matcher) {
 }
 
 TEST(labeler) {
-  auto to_expr = [](auto&& x) { return unbox(to<expression>(x)); };
   auto str =
     "(x == 5 && :bool == T) || (foo ~ /foo/ && !(x == 5 || &type ~ /bar/))"s;
   auto expr = to_expr(str);
@@ -249,6 +257,19 @@ TEST(labeler) {
     {to_expr("&type ~ /bar/"), {0, 1, 1, 0, 1}},
   };
   CHECK_EQUAL(offset_map, expected_offset_map);
+}
+
+TEST(at) {
+  auto str =
+    "(x == 5 && :bool == T) || (foo ~ /foo/ && !(x == 5 || &type ~ /bar/))"s;
+  auto expr = to_expr(str);
+  CHECK_EQUAL(at(expr, {}), nullptr); // invalid offset
+  CHECK_EQUAL(at(expr, {0}), &expr); // root node
+  CHECK_EQUAL(at(expr, {1}), nullptr); // invalid root offset
+  CHECK_EQUAL(*at(expr, {0, 0}), to_expr("x == 5 && :bool == T"));
+  CHECK_EQUAL(*at(expr, {0, 1, 0}), to_expr("foo ~ /foo/"));
+  CHECK_EQUAL(*at(expr, {0, 1, 1, 0, 1}), to_expr("&type ~ /bar/"));
+  CHECK_EQUAL(at(expr, {0, 1, 1, 0, 1, 0}), nullptr); // offset too long
 }
 
 FIXTURE_SCOPE_END()
