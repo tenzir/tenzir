@@ -89,6 +89,7 @@ caf::error segment_store::flush() {
 caf::expected<segment_ptr> segment_store::load_segment(uuid id) const {
   segment_ptr seg_ptr = nullptr;
   auto fname = segment_path() / to_string(id);
+  VAST_DEBUG(this, "loads segment from", fname);
   if (auto err = load(sys_, fname, seg_ptr)) {
     VAST_ERROR(this, "cannot load segment:", sys_.render(err));
     return err;
@@ -137,10 +138,9 @@ std::unique_ptr<store::lookup> segment_store::extract(const ids& xs) const {
       } else {
         VAST_DEBUG(this, "got cache miss for segment", cand);
         if(auto seg_ptr_ = store_.load_segment(cand))
-          return seg_ptr_.error();
-        else
           seg_ptr = *seg_ptr_;
-
+        else
+          return seg_ptr_.error();
         i = store_.cache_.emplace(cand, seg_ptr).first;
       }
       VAST_ASSERT(seg_ptr != nullptr);
@@ -170,6 +170,10 @@ std::unique_ptr<store::lookup> segment_store::extract(const ids& xs) const {
   auto begin = segments_.begin();
   auto end = segments_.end();
   select_with(xs, begin, end, f, g);
+  VAST_DEBUG(this, "processes", candidates.size(), "candidates");
+  std::partition(candidates.begin(), candidates.end(), [&](const auto& id) {
+    return id == builder_.id() || cache_.find(id) != cache_.end();
+  });
   return std::make_unique<lookup>(*this, std::move(xs), std::move(candidates));
 }
 
