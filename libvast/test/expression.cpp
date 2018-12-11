@@ -16,6 +16,8 @@
 #include "vast/test/test.hpp"
 #include "vast/test/fixtures/actor_system.hpp"
 
+#include <string>
+
 #include "vast/event.hpp"
 #include "vast/expression.hpp"
 #include "vast/expression_visitors.hpp"
@@ -29,10 +31,13 @@
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/expression.hpp"
 
+#include "vast/detail/steady_map.hpp"
+
 using caf::get;
 using caf::get_if;
 using caf::holds_alternative;
 
+using namespace std::string_literals;
 using namespace vast;
 
 struct fixture : fixtures::deterministic_actor_system {
@@ -216,6 +221,34 @@ TEST(matcher) {
   r = r.name("foo");
   CHECK(match("&type == \"foo\"", r));
   CHECK(match("&type != \"bar\"", r));
+}
+
+TEST(labeler) {
+  auto to_expr = [](auto&& x) { return unbox(to<expression>(x)); };
+  auto str =
+    "(x == 5 && :bool == T) || (foo ~ /foo/ && !(x == 5 || &type ~ /bar/))"s;
+  auto expr = to_expr(str);
+  // Create a visitor that records all offsets in order.
+  detail::steady_map<expression, offset> offset_map;
+  auto visitor = labeler{
+    [&](const auto& x, const offset& o) {
+      offset_map.emplace(x, o);
+    }
+  };
+  caf::visit(visitor, expr);
+  decltype(offset_map) expected_offset_map{
+    {to_expr(str), {0}},
+    {to_expr("x == 5 && :bool == T"), {0, 0}},
+    {to_expr("x == 5"), {0, 0, 0}},
+    {to_expr(":bool == T"), {0, 0, 1}},
+    {to_expr("foo ~ /foo/ && !(x == 5 || &type ~ /bar/)"), {0, 1}},
+    {to_expr("foo ~ /foo/"), {0, 1, 0}},
+    {to_expr("!(x == 5 || &type ~ /bar/)"), {0, 1, 1}},
+    {to_expr("x == 5 || &type ~ /bar/"), {0, 1, 1, 0}},
+    {to_expr("x == 5"), {0, 1, 1, 0, 0}},
+    {to_expr("&type ~ /bar/"), {0, 1, 1, 0, 1}},
+  };
+  CHECK_EQUAL(offset_map, expected_offset_map);
 }
 
 FIXTURE_SCOPE_END()
