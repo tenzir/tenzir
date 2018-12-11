@@ -16,10 +16,13 @@
 #include <vector>
 
 #include "vast/error.hpp"
-#include "vast/expression.hpp"
 #include "vast/expected.hpp"
+#include "vast/expression.hpp"
+#include "vast/offset.hpp"
 #include "vast/operator.hpp"
 #include "vast/time.hpp"
+
+#include "vast/detail/assert.hpp"
 
 namespace vast {
 
@@ -189,6 +192,73 @@ struct matcher {
 
   const type& type_;
   relational_operator op_;
+};
+
+/// A visitor that labels expression nodes with [offsets](@ref offset). The
+/// length of an `offset` is the depth of the corresponding node in the AST.
+/// The value of an offset element corresponds to the orindal number of the
+/// node with respect to its parent. The visitor traverses the expression
+/// depth-first, pre-order.
+template <class Function>
+class labeler {
+  // TODO: we could add a static_assert that the return type of Function must
+  // be void.
+public:
+  labeler(Function f) : f_{f} {
+    push();
+  }
+
+  void operator()(caf::none_t x) {
+    visit(x);
+  }
+
+  template <class T>
+  void operator()(const T& xs) {
+    static_assert(detail::is_any_v<T, conjunction, disjunction>);
+    visit(xs);
+    push();
+    if (!xs.empty()) {
+      caf::visit(*this, xs[0]);
+      for (size_t i = 1; i< xs.size(); ++i) {
+        next();
+        caf::visit(*this, xs[i]);
+      }
+    }
+    pop();
+  }
+
+  void operator()(const negation& x) {
+    visit(x);
+    push();
+    caf::visit(*this, x.expr());
+    pop();
+  }
+
+  void operator()(const predicate& x) {
+    visit(x);
+  }
+
+private:
+  template <class T>
+  void visit(const T& x) {
+    f_(x, offset_);
+  }
+
+  void push() {
+    offset_.emplace_back(0);
+  }
+
+  void pop() {
+    offset_.pop_back();
+  }
+
+  void next() {
+    VAST_ASSERT(!offset_.empty());
+    ++offset_.back();
+  }
+
+  Function f_;
+  offset offset_;
 };
 
 } // namespace vast
