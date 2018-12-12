@@ -263,6 +263,24 @@ expected<expression> normalize_and_validate(const expression& expr);
 ///          of type *t*.
 expected<expression> tailor(const expression& expr, const type& t);
 
+/// Retrieves an expression node at a given [offset](@ref offset).
+/// @param expr The expression to lookup.
+/// @param o The offset corresponding to a node in *expr*.
+/// @returns The expression node at *o* or `nullptr` if *o* does not describe a
+///          valid offset for *expr*.
+const expression* at(const expression& expr, const offset& o);
+
+/// Resolves expression predicates according to given type. The resolution
+/// includes replacement of key and type extractors with data extractors
+/// pertaining to the given type.
+/// @param expr The expression whose predicates to resolve.
+/// @param t The type according to which extractors should be resolved.
+/// @returns A mapping of offsets to replaced predicates. Each offset uniquely
+///          identifies a predicate in *expr* and the mapped values represent
+///          the new predicates.
+std::vector<std::pair<offset, predicate>>
+resolve(const expression& expr, const type& t);
+
 } // namespace vast
 
 namespace caf {

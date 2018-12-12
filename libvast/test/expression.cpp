@@ -16,6 +16,8 @@
 #include "vast/test/test.hpp"
 #include "vast/test/fixtures/actor_system.hpp"
 
+#include <string>
+
 #include "vast/event.hpp"
 #include "vast/expression.hpp"
 #include "vast/expression_visitors.hpp"
@@ -29,11 +31,21 @@
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/expression.hpp"
 
+#include "vast/detail/steady_map.hpp"
+
 using caf::get;
 using caf::get_if;
 using caf::holds_alternative;
 
+using namespace std::string_literals;
 using namespace vast;
+
+namespace {
+
+template <class T>
+expression to_expr(T&& x) {
+  return unbox(to<expression>(std::forward<T>(x)));
+};
 
 struct fixture : fixtures::deterministic_actor_system {
   fixture() {
@@ -51,6 +63,8 @@ struct fixture : fixtures::deterministic_actor_system {
   expression expr0;
   expression expr1;
 };
+
+} // namespace <anonymous>
 
 FIXTURE_SCOPE(expr_tests, fixture)
 
@@ -216,6 +230,76 @@ TEST(matcher) {
   r = r.name("foo");
   CHECK(match("&type == \"foo\"", r));
   CHECK(match("&type != \"bar\"", r));
+}
+
+TEST(labeler) {
+  auto str =
+    "(x == 5 && :bool == T) || (foo ~ /foo/ && !(x == 5 || &type ~ /bar/))"s;
+  auto expr = to_expr(str);
+  // Create a visitor that records all offsets in order.
+  detail::steady_map<expression, offset> offset_map;
+  auto visitor = labeler{
+    [&](const auto& x, const offset& o) {
+      offset_map.emplace(x, o);
+    }
+  };
+  caf::visit(visitor, expr);
+  decltype(offset_map) expected_offset_map{
+    {to_expr(str), {0}},
+    {to_expr("x == 5 && :bool == T"), {0, 0}},
+    {to_expr("x == 5"), {0, 0, 0}},
+    {to_expr(":bool == T"), {0, 0, 1}},
+    {to_expr("foo ~ /foo/ && !(x == 5 || &type ~ /bar/)"), {0, 1}},
+    {to_expr("foo ~ /foo/"), {0, 1, 0}},
+    {to_expr("!(x == 5 || &type ~ /bar/)"), {0, 1, 1}},
+    {to_expr("x == 5 || &type ~ /bar/"), {0, 1, 1, 0}},
+    {to_expr("x == 5"), {0, 1, 1, 0, 0}},
+    {to_expr("&type ~ /bar/"), {0, 1, 1, 0, 1}},
+  };
+  CHECK_EQUAL(offset_map, expected_offset_map);
+}
+
+TEST(at) {
+  auto str =
+    "(x == 5 && :bool == T) || (foo ~ /foo/ && !(x == 5 || &type ~ /bar/))"s;
+  auto expr = to_expr(str);
+  CHECK_EQUAL(at(expr, {}), nullptr); // invalid offset
+  CHECK_EQUAL(at(expr, {0}), &expr); // root node
+  CHECK_EQUAL(at(expr, {1}), nullptr); // invalid root offset
+  CHECK_EQUAL(*at(expr, {0, 0}), to_expr("x == 5 && :bool == T"));
+  CHECK_EQUAL(*at(expr, {0, 1, 0}), to_expr("foo ~ /foo/"));
+  CHECK_EQUAL(*at(expr, {0, 1, 1, 0, 1}), to_expr("&type ~ /bar/"));
+  CHECK_EQUAL(at(expr, {0, 1, 1, 0, 1, 0}), nullptr); // offset too long
+}
+
+TEST(resolve) {
+  using result_type = std::vector<std::pair<offset, predicate>>;
+  auto resolve_pred = [](auto&& x, offset o, type t) -> result_type {
+    result_type result;
+    auto pred = to<predicate>(x);
+    auto resolved = type_resolver{t}(unbox(pred));
+    for (auto& pred : caf::visit(predicatizer{}, *resolved))
+      result.emplace_back(o, std::move(pred));
+    return result;
+  };
+  auto expr = to_expr("(x == 5 && y == T) || (x == 5 && y == F)"); // tautology
+  auto t = record_type{
+    {"x", count_type{}},
+    {"y", boolean_type{}}
+  }.name("foo");
+  auto xs = resolve(expr, t);
+  decltype(xs) expected;
+  auto concat = [](auto&& xs, auto&& ys) {
+    auto begin = std::make_move_iterator(ys.begin());
+    auto end = std::make_move_iterator(ys.end());
+    xs.insert(xs.end(), begin, end);
+  };
+  // TODO: How should we handle duplicates? Weed them out? --MV
+  concat(expected, resolve_pred("x == 5", {0,0,0}, t));
+  concat(expected, resolve_pred("y == T", {0,0,1}, t));
+  concat(expected, resolve_pred("x == 5", {0,1,0}, t));
+  concat(expected, resolve_pred("y == F", {0,1,1}, t));
+  CHECK_EQUAL(xs, expected);
 }
 
 FIXTURE_SCOPE_END()
