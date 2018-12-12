@@ -28,6 +28,7 @@
 #include "vast/error.hpp"
 #include "vast/expected.hpp"
 #include "vast/filesystem.hpp"
+#include "vast/logger.hpp"
 
 namespace vast {
 
