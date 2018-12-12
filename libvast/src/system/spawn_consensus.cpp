@@ -21,7 +21,7 @@
 
 #include "vast/system/raft.hpp"
 #include "vast/system/replicated_store.hpp"
-#include "vast/system/simple_store.hpp"
+#include "vast/system/dummy_consensus.hpp"
 #include "vast/system/spawn_arguments.hpp"
 
 using namespace std::string_literals;
@@ -48,15 +48,15 @@ maybe_actor spawn_consensus_raft(caf::local_actor* self, spawn_arguments& args) 
   return caf::actor_cast<caf::actor>(s);
 }
 
-maybe_actor spawn_consensus_simple(caf::local_actor* self, spawn_arguments& args) {
-  auto store = self->spawn(simple_store, args.dir / "consensus");
+maybe_actor spawn_dummy_consensus(caf::local_actor* self, spawn_arguments& args) {
+  auto store = self->spawn(dummy_consensus, args.dir / "consensus");
   return caf::actor_cast<caf::actor>(store);
 }
 
 maybe_actor spawn_consensus(caf::local_actor* self, spawn_arguments& args) {
-  auto backend = get_or(args.options, "global.store-backend", "simple"s);
-  if (backend == "simple")
-    return spawn_consensus_simple(self, args);
+  auto backend = get_or(args.options, "global.store-backend", "dummy"s);
+  if (backend == "dummy")
+    return spawn_dummy_consensus(self, args);
   else if (backend == "raft")
     return spawn_consensus_raft(self, args);
   return make_error(ec::invalid_configuration,

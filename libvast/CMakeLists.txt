@@ -81,6 +81,7 @@ set(libvast_sources
   src/system/connect_to_node.cpp
   src/system/consensus.cpp
   src/system/default_application.cpp
+  src/system/dummy_consensus.cpp
   src/system/evaluator.cpp
   src/system/exporter.cpp
   src/system/importer.cpp
@@ -93,7 +94,6 @@ set(libvast_sources
   src/system/profiler.cpp
   src/system/remote_command.cpp
   src/system/signal_monitor.cpp
-  src/system/simple_store.cpp
   src/system/sink_command.cpp
   src/system/source_command.cpp
   src/system/spawn_archive.cpp
@@ -249,6 +249,7 @@ set(tests
   test/system/collector.cpp
   test/system/consensus.cpp
   test/system/datagram_source.cpp
+  test/system/dummy_consensus.cpp
   test/system/evaluator.cpp
   test/system/exporter.cpp
   test/system/importer.cpp
@@ -259,7 +260,6 @@ set(tests
   test/system/partition.cpp
   test/system/queries.cpp
   test/system/replicated_store.cpp
-  test/system/simple_store.cpp
   test/system/sink.cpp
   test/system/source.cpp
   test/system/task.cpp
