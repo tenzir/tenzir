@@ -24,12 +24,12 @@
 
 namespace vast::system {
 
-struct simple_store_state {
-  using actor_ptr = consensus_type::stateful_pointer<simple_store_state>;
+struct dummy_consensus_state {
+  using actor_ptr = consensus_type::stateful_pointer<dummy_consensus_state>;
 
-  static inline const char* name = "simple-store";
+  static inline const char* name = "dummy-consensus";
 
-  simple_store_state(actor_ptr self);
+  dummy_consensus_state(actor_ptr self);
 
   /// Initializes the state.
   /// @param dir The directory of the store.
@@ -52,6 +52,6 @@ struct simple_store_state {
 /// @param self The actor handle.
 /// @param dir The directory of the store.
 consensus_type::behavior_type
-simple_store(simple_store_state::actor_ptr self, path dir);
+dummy_consensus(dummy_consensus_state::actor_ptr self, path dir);
 
 } // namespace vast::system

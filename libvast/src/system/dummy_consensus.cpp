@@ -11,7 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/system/simple_store.hpp"
+#include "vast/system/dummy_consensus.hpp"
 
 #include <caf/all.hpp>
 #include <caf/none.hpp>
@@ -23,12 +23,12 @@
 
 namespace vast::system {
 
-simple_store_state::simple_store_state(actor_ptr self)
+dummy_consensus_state::dummy_consensus_state(actor_ptr self)
   : self{self} {
   // nop
 }
 
-caf::error simple_store_state::init(path dir) {
+caf::error dummy_consensus_state::init(path dir) {
   file = std::move(dir) / "store";
   if (exists(file)) {
     if (auto err = vast::load(self->system(), file, store)) {
@@ -39,14 +39,14 @@ caf::error simple_store_state::init(path dir) {
   return caf::none;
 }
 
-caf::error simple_store_state::save() {
+caf::error dummy_consensus_state::save() {
   return vast::save(self->system(), file, store);
 }
 
 /// A key-value store that stores its data in a `std::unordered_map`.
 /// @param self The actor handle.
 consensus_type::behavior_type
-simple_store(simple_store_state::actor_ptr self, path dir) {
+dummy_consensus(dummy_consensus_state::actor_ptr self, path dir) {
   using behavior_type = consensus_type::behavior_type;
   if (auto err = self->state.init(std::move(dir))) {
     self->quit(std::move(err));
