@@ -37,10 +37,10 @@
 #include "vast/system/raft.hpp"
 #include "vast/system/spawn_archive.hpp"
 #include "vast/system/spawn_arguments.hpp"
+#include "vast/system/spawn_consensus.hpp"
 #include "vast/system/spawn_exporter.hpp"
 #include "vast/system/spawn_importer.hpp"
 #include "vast/system/spawn_index.hpp"
-#include "vast/system/spawn_metastore.hpp"
 #include "vast/system/spawn_node.hpp"
 #include "vast/system/spawn_or_connect_to_node.hpp"
 #include "vast/system/spawn_profiler.hpp"
@@ -183,8 +183,8 @@ caf::expected<caf::actor> spawn_component(const command& cmd,
       return spawn_importer(self, args);
     case atom_uint("index"):
       return spawn_index(self, args);
-    case atom_uint("metastore"):
-      return spawn_metastore(self, args);
+    case atom_uint("consensus"):
+      return spawn_consensus(self, args);
     case atom_uint("profiler"):
       return spawn_profiler(self, args);
     default:
@@ -367,7 +367,7 @@ void node_state::init(std::string init_name, path init_dir) {
                          "number of immediately scheduled partitions")
             .add<size_t>("max-queries,q",
                          "maximum number of concurrent queries"));
-  sp->add(spawn_command, "metastore", "creates a new metastore",
+  sp->add(spawn_command, "consensus", "creates a new consensus",
           opts().add<raft::server_id>("id,i",
                                       "the server ID of the consensus module"));
   sp->add(spawn_command, "profiler", "creates a new profiler",

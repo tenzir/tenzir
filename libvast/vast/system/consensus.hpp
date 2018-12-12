@@ -13,17 +13,12 @@
 
 #pragma once
 
-#include <caf/fwd.hpp>
+#include "vast/data.hpp"
 
-#include "vast/aliases.hpp"
-#include "vast/system/fwd.hpp"
+#include "vast/system/key_value_store.hpp"
 
 namespace vast::system {
 
-/// Tries to spawn a new META_STORE.
-/// @param self Points to the parent actor.
-/// @param args Configures the new actor.
-/// @returns a handle to the spawned actor on success, an error otherwise
-maybe_actor spawn_metastore(caf::local_actor* self, spawn_arguments& args);
+using consensus_type = key_value_store_type<std::string, data>;
 
 } // namespace vast::system

@@ -98,10 +98,10 @@ set(libvast_sources
   src/system/source_command.cpp
   src/system/spawn_archive.cpp
   src/system/spawn_arguments.cpp
+  src/system/spawn_consensus.cpp
   src/system/spawn_exporter.cpp
   src/system/spawn_importer.cpp
   src/system/spawn_index.cpp
-  src/system/spawn_metastore.cpp
   src/system/spawn_node.cpp
   src/system/spawn_or_connect_to_node.cpp
   src/system/spawn_profiler.cpp

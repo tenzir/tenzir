@@ -45,9 +45,9 @@ caf::error simple_store_state::save() {
 
 /// A key-value store that stores its data in a `std::unordered_map`.
 /// @param self The actor handle.
-meta_store_type::behavior_type
+consensus_type::behavior_type
 simple_store(simple_store_state::actor_ptr self, path dir) {
-  using behavior_type = meta_store_type::behavior_type;
+  using behavior_type = consensus_type::behavior_type;
   if (auto err = self->state.init(std::move(dir))) {
     self->quit(std::move(err));
     return behavior_type::make_empty_behavior();

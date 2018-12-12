@@ -30,7 +30,7 @@ namespace fixtures {
 node::node() {
   test_node = self->spawn(system::node, "test", directory / "node");
   MESSAGE("spawning components");
-  spawn_component("metastore");
+  spawn_component("consensus");
   spawn_component("archive");
   spawn_component("index");
   spawn_component("importer");
