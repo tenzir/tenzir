@@ -58,20 +58,22 @@ caf::error save(caf::actor_system& sys, Sink&& out, const Ts&... xs) {
     return save<Method>(sys, sink, xs...);
   } else if constexpr (std::is_same_v<sink_type, path>) {
     if (auto dir = out.parent(); !exists(dir)) {
-      VAST_DEBUG_ANON(__func__, "creating directory", dir);
+      VAST_DEBUG_ANON(__func__, "creates directory", dir);
       if (auto res = mkdir(dir); !res) {
         VAST_DEBUG_ANON(__func__, "failed to create directory", dir);
         return res.error();
       }
     }
-    auto tmp = out.str() + ".tmp";
-    std::ofstream fs{tmp};
+    auto tmp = out + ".tmp";
+    if (exists(tmp))
+      VAST_WARNING_ANON(__func__, "discovered temporary file:", tmp);
+    std::ofstream fs{tmp.str()};
     if (!fs)
       return make_error(ec::filesystem_error, "failed to create filestream",
                         out);
     if (auto err = save<Method>(sys, *fs.rdbuf(), xs...))
       return err;
-    if (std::rename(tmp.c_str(), out.str().c_str()) != 0)
+    if (std::rename(tmp.str().c_str(), out.str().c_str()) != 0)
       return make_error(ec::filesystem_error, "failed to rename to", out);
     return caf::none;
   } else {

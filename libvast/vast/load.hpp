@@ -57,6 +57,9 @@ caf::error load(caf::actor_system& sys, Source&& in, Ts&... xs) {
     caf::containerbuf<source_type> sink{const_cast<source_type&>(in)};
     return load<Method>(sys, sink, xs...);
   } else if constexpr (std::is_same_v<source_type, path>) {
+    auto tmp = in + ".tmp";
+    if (exists(tmp))
+      VAST_WARNING_ANON(__func__, "discovered temporary file:", tmp);
     std::ifstream fs{in.str()};
     if (!fs)
       return make_error(ec::filesystem_error, "failed to create filestream",
