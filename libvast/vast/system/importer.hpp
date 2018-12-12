@@ -24,7 +24,7 @@
 #include "vast/filesystem.hpp"
 
 #include "vast/system/archive.hpp"
-#include "vast/system/meta_store.hpp"
+#include "vast/system/consensus.hpp"
 
 namespace vast::system {
 
@@ -84,8 +84,8 @@ struct importer_state {
 
   caf::error write_state();
 
-  /// Handle to the meta store for obtaining more IDs.
-  meta_store_type meta_store;
+  /// Handle to the consensus module for obtaining more IDs.
+  consensus_type consensus;
 
   /// Stores currently available IDs.
   std::vector<id_generator> id_generators;
@@ -117,7 +117,7 @@ struct importer_state {
   /// State directory.
   path dir;
 
-  /// Stores whether we've contacted the meta store to obtain more IDs.
+  /// Stores whether we've contacted the consensus module to obtain more IDs.
   bool awaiting_ids = false;
 
   /// The continous stage that moves data from all sources to all subscribers.
@@ -143,4 +143,3 @@ caf::behavior importer(importer_actor* self, path dir,
                        size_t max_table_slice_size);
 
 } // namespace vast::system
-

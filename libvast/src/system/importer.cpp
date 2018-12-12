@@ -120,11 +120,12 @@ caf::dictionary<caf::config_value> importer_state::status() const {
 
 namespace {
 
-// Asks the metastore for more IDs.
+// Asks the consensus module for more IDs.
 void replenish(stateful_actor<importer_state>* self) {
   VAST_TRACE("");
   auto& st = self->state;
-  // Do nothing if we're already waiting for a response of the meta store.
+  // Do nothing if we're already waiting for a response from the consensus
+  // module.
   if (st.awaiting_ids)
     return;
   // Check whether we obtain new IDs too frequently.
@@ -137,12 +138,12 @@ void replenish(stateful_actor<importer_state>* self) {
   }
   st.last_replenish = now;
   VAST_DEBUG(self, "replenishes", st.blocks_per_replenish, "ID blocks");
-  // If we get an EXIT message while expecting a response from the metastore,
-  // we'll give it a bit of time to come back;
+  // If we get an EXIT message while expecting a response from the consensus
+  // module, we'll give it a bit of time to come back.
   self->set_default_handler(skip);
-  // Trigger meta store and wait for response.
+  // Trigger consensus module and wait for response.
   auto n = st.max_table_slice_size * st.blocks_per_replenish;
-  self->send(st.meta_store, add_atom::value, "id", data{n});
+  self->send(st.consensus, add_atom::value, "id", data{n});
   st.awaiting_ids = true;
   self->become(
     keep_behavior,
@@ -302,11 +303,11 @@ behavior importer(stateful_actor<importer_state>* self, path dir,
   }
   self->state.stg = make_importer_stage(self);
   return {
-    [=](const meta_store_type& ms) {
-      VAST_DEBUG(self, "registers meta store");
-      VAST_ASSERT(ms != self->state.meta_store);
-      self->monitor(ms);
-      self->state.meta_store = ms;
+    [=](const consensus_type& c) {
+      VAST_DEBUG(self, "registers consensus module");
+      VAST_ASSERT(c != self->state.consensus);
+      self->monitor(c);
+      self->state.consensus = c;
     },
     [=](const archive_type& archive) {
       VAST_DEBUG(self, "registers archive", archive);
@@ -322,8 +323,8 @@ behavior importer(stateful_actor<importer_state>* self, path dir,
     },
     [=](stream<importer_state::input_type>& in) {
       auto& st = self->state;
-      if (!st.meta_store) {
-        VAST_ERROR(self, "has no meta store configured");
+      if (!st.consensus) {
+        VAST_ERROR(self, "has no consensus module configured");
         return;
       }
       VAST_INFO(self, "adds a new source");

@@ -187,7 +187,7 @@ Available *arguments*:
 
 Available *component* values with corresponding *parameters*:
 
-*metastore* [*parameters*]
+*consensus* [*parameters*]
 `-i` *id* [*random*]
   Choose an explicit server ID for the consensus module. The default value is
   chosen uniformly at random from the set of valid IDs.

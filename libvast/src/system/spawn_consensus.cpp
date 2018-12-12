@@ -11,7 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/system/spawn_metastore.hpp"
+#include "vast/system/spawn_consensus.hpp"
 
 #include <string>
 
@@ -28,7 +28,7 @@ using namespace std::string_literals;
 
 namespace vast::system {
 
-maybe_actor spawn_metastore_raft(caf::local_actor* self, spawn_arguments& args) {
+maybe_actor spawn_consensus_raft(caf::local_actor* self, spawn_arguments& args) {
   if (!args.empty())
     return unexpected_arguments(args);
   auto id = get_or(args.options, "global.id", raft::server_id{0});
@@ -48,19 +48,19 @@ maybe_actor spawn_metastore_raft(caf::local_actor* self, spawn_arguments& args) 
   return caf::actor_cast<caf::actor>(s);
 }
 
-maybe_actor spawn_metastore_simple(caf::local_actor* self, spawn_arguments& args) {
+maybe_actor spawn_consensus_simple(caf::local_actor* self, spawn_arguments& args) {
   auto store = self->spawn(simple_store, args.dir / "consensus");
   return caf::actor_cast<caf::actor>(store);
 }
 
-maybe_actor spawn_metastore(caf::local_actor* self, spawn_arguments& args) {
-  auto backend = get_or(args.options, "global.consensus-backend", "simple"s);
+maybe_actor spawn_consensus(caf::local_actor* self, spawn_arguments& args) {
+  auto backend = get_or(args.options, "global.store-backend", "simple"s);
   if (backend == "simple")
-    return spawn_metastore_simple(self, args);
+    return spawn_consensus_simple(self, args);
   else if (backend == "raft")
-    return spawn_metastore_raft(self, args);
+    return spawn_consensus_raft(self, args);
   return make_error(ec::invalid_configuration,
-                    "unknown metastore implementation requested", backend);
+                    "unknown consensus implementation requested", backend);
 }
 
 } // namespace vast::system

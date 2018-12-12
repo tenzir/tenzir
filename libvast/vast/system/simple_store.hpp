@@ -20,12 +20,12 @@
 #include "vast/data.hpp"
 #include "vast/filesystem.hpp"
 
-#include "vast/system/meta_store.hpp"
+#include "vast/system/consensus.hpp"
 
 namespace vast::system {
 
 struct simple_store_state {
-  using actor_ptr = meta_store_type::stateful_pointer<simple_store_state>;
+  using actor_ptr = consensus_type::stateful_pointer<simple_store_state>;
 
   static inline const char* name = "simple-store";
 
@@ -51,7 +51,7 @@ struct simple_store_state {
 /// A key-value store that stores its data in a `std::unordered_map`.
 /// @param self The actor handle.
 /// @param dir The directory of the store.
-meta_store_type::behavior_type
+consensus_type::behavior_type
 simple_store(simple_store_state::actor_ptr self, path dir);
 
 } // namespace vast::system
