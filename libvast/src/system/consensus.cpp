@@ -23,7 +23,7 @@
 #include "vast/si_literals.hpp"
 
 #include "vast/system/atoms.hpp"
-#include "vast/system/consensus.hpp"
+#include "vast/system/raft.hpp"
 
 #include "vast/detail/assert.hpp"
 #include "vast/detail/narrow.hpp"

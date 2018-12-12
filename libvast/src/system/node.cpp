@@ -34,6 +34,7 @@
 #include "vast/logger.hpp"
 #include "vast/system/accountant.hpp"
 <<<<<<< HEAD
+<<<<<<< HEAD
 #include "vast/system/consensus.hpp"
 <<<<<<< HEAD
 =======
@@ -41,6 +42,10 @@
 >>>>>>> Remove unused include
 #include "vast/system/spawn.hpp"
 =======
+=======
+#include "vast/system/node.hpp"
+#include "vast/system/raft.hpp"
+>>>>>>> Rename consensus.hpp to raft.hpp
 #include "vast/system/spawn_archive.hpp"
 #include "vast/system/spawn_arguments.hpp"
 #include "vast/system/spawn_exporter.hpp"

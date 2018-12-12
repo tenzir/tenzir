@@ -19,7 +19,7 @@
 #include <caf/actor_cast.hpp>
 #include <caf/send.hpp>
 
-#include "vast/system/consensus.hpp"
+#include "vast/system/raft.hpp"
 #include "vast/system/replicated_store.hpp"
 #include "vast/system/simple_store.hpp"
 #include "vast/system/spawn_arguments.hpp"
