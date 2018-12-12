@@ -54,7 +54,7 @@ maybe_actor spawn_metastore_simple(caf::local_actor* self, spawn_arguments& args
 }
 
 maybe_actor spawn_metastore(caf::local_actor* self, spawn_arguments& args) {
-  auto backend = get_or(args.options, "global.store-backend", "simple"s);
+  auto backend = get_or(args.options, "global.consensus-backend", "simple"s);
   if (backend == "simple")
     return spawn_metastore_simple(self, args);
   else if (backend == "raft")
