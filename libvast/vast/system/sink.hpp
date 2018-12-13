@@ -27,7 +27,7 @@
 #include "vast/event.hpp"
 #include "vast/format/writer.hpp"
 #include "vast/system/atoms.hpp"
-#include "vast/system/query_statistics.hpp"
+#include "vast/system/query_status.hpp"
 
 namespace vast::system {
 
@@ -83,7 +83,7 @@ caf::behavior sink(caf::stateful_actor<sink_state<Writer>>* self,
         }
       }
     },
-    [=](const uuid& id, const query_statistics&) {
+    [=](const uuid& id, const query_status&) {
       VAST_IGNORE_UNUSED(id);
       VAST_DEBUG(self, "got query statistics from", id);
     },
@@ -99,4 +99,3 @@ caf::behavior sink(caf::stateful_actor<sink_state<Writer>>* self,
 }
 
 } // namespace vast::system
-

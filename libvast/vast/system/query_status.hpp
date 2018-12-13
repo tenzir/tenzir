@@ -21,7 +21,7 @@
 namespace vast::system {
 
 /// Statistics about a query.
-struct query_statistics {
+struct query_status {
   timespan runtime;         ///< Current runtime.
   size_t expected = 0;      ///< Expected ID sets from INDEX.
   size_t scheduled = 0;     ///< Scheduled partitions (ID sets) at INDEX.
@@ -32,10 +32,9 @@ struct query_statistics {
 };
 
 template <class Inspector>
-auto inspect(Inspector& f, query_statistics& qs) {
+auto inspect(Inspector& f, query_status& qs) {
   return f(qs.runtime, qs.expected, qs.scheduled, qs.received, qs.processed,
            qs.shipped, qs.requested);
 }
 
 } // namespace vast::system
-

@@ -28,7 +28,7 @@
 #include "vast/type.hpp"
 #include "vast/uuid.hpp"
 
-#include "vast/system/query_statistics.hpp"
+#include "vast/system/query_status.hpp"
 #include "vast/system/replicated_store.hpp"
 #include "vast/system/tracker.hpp"
 
@@ -54,8 +54,8 @@ void add_message_types(caf::actor_system_config& cfg) {
   cfg.add_message_type<system::component_map_entry>(
     "vast::system::component_map_entry");
   cfg.add_message_type<system::registry>("vast::system::registry");
-  cfg.add_message_type<system::query_statistics>(
-    "vast::system::query_statistics");
+  cfg.add_message_type<system::query_status>(
+    "vast::system::query_status");
   cfg.add_message_type<system::actor_identity>("vast::system::actor_identity");
 #ifdef VAST_USE_OPENCL
   cfg.add_message_type<std::vector<uint32_t>>("std::vector<uint32_t>");
