@@ -56,7 +56,7 @@ behavior indexer(stateful_actor<indexer_state>* self, path dir,
     return {};
   }
   return {
-    [=](const predicate& pred) {
+    [=](const curried_predicate& pred) {
       VAST_DEBUG(self, "got predicate:", pred);
       return self->state.col.lookup(pred);
     },

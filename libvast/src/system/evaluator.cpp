@@ -28,47 +28,63 @@ namespace {
 
 /// Concatenates IDs according to given predicates. In paticular, resolves
 /// conjunctions, disjunctions, and negations.
-struct ids_evaluator {
-  ids operator()(caf::none_t) const {
+class ids_evaluator {
+public:
+  ids_evaluator(const evaluator_state::predicate_hits_map& xs) : hits_(xs) {
+    push();
+  }
+
+  ids operator()(caf::none_t) {
     return {};
   }
 
-  ids operator()(const conjunction& c) const {
-    auto result = caf::visit(*this, c[0]);
-    if (result.empty() || all<0>(result))
-      return {};
-    for (size_t i = 1; i < c.size(); ++i) {
-      result &= caf::visit(*this, c[i]);
-      // This short-circuit works if and only if all bitmaps have the same size.
-      // if (result.empty() || all<0>(result)) // short-circuit
-      //   return {};
+  template <class Connective>
+  ids operator()(const Connective& xs) {
+    VAST_ASSERT(xs.size() > 0);
+    push();
+    auto result = caf::visit(*this, xs[0]);
+    for (size_t index = 1; index < xs.size(); ++index) {
+      next();
+      if constexpr (std::is_same_v<Connective, conjunction>) {
+        result &= caf::visit(*this, xs[index]);
+      } else {
+        static_assert(std::is_same_v<Connective, disjunction>);
+        result |= caf::visit(*this, xs[index]);
+      }
     }
+    pop();
     return result;
   }
 
-  ids operator()(const disjunction& d) const {
-    ids result;
-    for (auto& op : d) {
-      result |= caf::visit(*this, op);
-      // This short-circuit works if and only if all bitmaps have the same size.
-      // if (all<1>(result)) // short-circuit
-      //   break;
-    }
-    return result;
-  }
-
-  ids operator()(const negation& n) const {
+  ids operator()(const negation& n) {
+    push();
     auto result = caf::visit(*this, n.expr());
+    pop();
     result.flip();
     return result;
   }
 
-  ids operator()(const predicate& pred) const {
-    auto i = xs.find(pred);
-    return i != xs.end() ? i->second.second : ids{};
+  ids operator()(const predicate&) {
+    auto i = hits_.find(position_);
+    return i != hits_.end() ? i->second.second : ids{};
   }
 
-  const evaluator_state::predicate_hits_map& xs;
+private:
+  void push() {
+    position_.emplace_back(0);
+  }
+
+  void pop() {
+    position_.pop_back();
+  }
+
+  void next() {
+    VAST_ASSERT(!position_.empty());
+    ++position_.back();
+  }
+
+  const evaluator_state::predicate_hits_map& hits_;
+  offset position_;
 };
 
 } // namespace
@@ -84,28 +100,29 @@ void evaluator_state::init(caf::actor client, expression expr,
   this->promise = std::move(promise);
 }
 
-void evaluator_state::handle_result(const predicate& pred, const ids& result) {
-  VAST_DEBUG(self, "got new hits", result, " for predicate", pred);
-  auto ptr = hits_for(pred);
+void evaluator_state::handle_result(const offset& position, const ids& result) {
+  VAST_DEBUG(self, "got new hits", result, " for predicate at position",
+             position);
+  auto ptr = hits_for(position);
   VAST_ASSERT(ptr != nullptr);
   auto& [missing, accumulated_hits] = *ptr;
   accumulated_hits |= result;
   if (--missing == 0) {
-    VAST_DEBUG(self, "collected all INDEXER results for predicate", pred);
+    VAST_DEBUG(self, "collected all INDEXER results at position", position);
     evaluate();
   }
   decrement_pending();
 }
 
-void evaluator_state::handle_missing_result(const predicate& pred,
+void evaluator_state::handle_missing_result(const offset& position,
                                             const caf::error& err) {
   VAST_IGNORE_UNUSED(err);
   VAST_WARNING(self, "INDEXER returned", self->system().render(err),
-               "instead of a result for", pred);
-  auto ptr = hits_for(pred);
+               "instead of a result for predicate at position", position);
+  auto ptr = hits_for(position);
   VAST_ASSERT(ptr != nullptr);
   if (--ptr->first == 0) {
-    VAST_DEBUG(self, "collected all INDEXER results for predicate", pred);
+    VAST_DEBUG(self, "collected all INDEXER results at position", position);
     evaluate();
   }
   decrement_pending();
@@ -130,27 +147,30 @@ void evaluator_state::decrement_pending() {
 }
 
 evaluator_state::predicate_hits_map::mapped_type*
-evaluator_state::hits_for(const predicate& pred) {
-  auto i = predicate_hits.find(pred);
+evaluator_state::hits_for(const offset& position) {
+  auto i = predicate_hits.find(position);
   return i != predicate_hits.end() ? &i->second : nullptr;
 }
 
 caf::behavior evaluator(caf::stateful_actor<evaluator_state>* self,
-                        std::vector<caf::actor> indexers) {
-  return {[=](const expression& expr, caf::actor client) {
-    self->state.init(client, expr, self->make_response_promise());
-    auto predicates = caf::visit(predicatizer{}, expr);
-    VAST_ASSERT(!predicates.empty());
-    self->state.pending_responses = predicates.size() * indexers.size();
-    for (auto& pred : predicates) {
-      self->state.predicate_hits.emplace(pred,
-                                         std::pair{indexers.size(), ids{}});
-      for (auto& x : indexers)
-        self->request(x, caf::infinite, pred)
-          .then([=](const ids& hits) { self->state.handle_result(pred, hits); },
+                        expression expr, evaluation_map eval) {
+  VAST_ASSERT(!eval.empty());
+  using std::get;
+  using std::move;
+  return {[=, expr{move(expr)}, eval{move(eval)}](caf::actor client) {
+    auto& st = self->state;
+    st.init(client, move(expr), self->make_response_promise());
+    for (auto& [layout, triples] : eval) {
+      st.pending_responses += triples.size();
+      for (auto& triple : triples) {
+        auto& pos = get<0>(triple);
+        st.predicate_hits[pos].first += 1;
+        self->request(get<2>(triple), caf::infinite, get<1>(triple))
+          .then([=](const ids& hits) { self->state.handle_result(pos, hits); },
                 [=](const caf::error& err) {
-                  self->state.handle_missing_result(pred, err);
+                  self->state.handle_missing_result(pos, err);
                 });
+      }
     }
     // We can only deal with exactly one expression/client at the moment.
     self->unbecome();

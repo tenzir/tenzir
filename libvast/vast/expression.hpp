@@ -149,6 +149,28 @@ auto inspect(Inspector& f, predicate& x) {
   return f(x.lhs, x.op, x.rhs);
 }
 
+/// A curried predicate, i.e., a predicate with its `lhs` operand fixed by an
+/// outer scope or context.
+struct curried_predicate {
+  using operand = predicate::operand;
+
+  relational_operator op;
+  operand rhs;
+};
+
+/// @relates curried_predicate
+template <class Inspector>
+auto inspect(Inspector& f, curried_predicate& x) {
+  return f(x.op, x.rhs);
+}
+
+/// @returns a curried version of `pred`.
+/// @relates predicate
+/// @relates curried_predicate
+inline curried_predicate curried(const predicate& pred) {
+  return {pred.op, pred.rhs};
+}
+
 /// A sequence of AND expressions.
 struct conjunction : std::vector<expression> {
   using std::vector<expression>::vector;

@@ -15,7 +15,10 @@
 
 #include <cstdint>
 #include <limits>
+#include <map>
 #include <string>
+#include <tuple>
+#include <utility>
 #include <vector>
 
 #include <caf/fwd.hpp>
@@ -78,5 +81,12 @@ using maybe_actor = caf::expected<caf::actor>;
 /// Additional runtime information to pass to the synopsis factory.
 using synopsis_options = caf::dictionary<caf::config_value>;
 
-} // namespace vast
+/// Bundles an offset into an expression under evaluation to the curried
+/// representation of the ::predicate at that position in the expression and
+/// the INDEXER actor responsible for answering the (curried) predicate.
+using evaluation_triple = std::tuple<offset, curried_predicate, caf::actor>;
 
+/// Maps layouts to a list of evaluation triples.
+using evaluation_map = std::map<type, std::vector<evaluation_triple>>;
+
+} // namespace vast

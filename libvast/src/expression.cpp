@@ -220,56 +220,55 @@ const expression* at(const expression& expr, const offset& o) {
 
 namespace {
 
-std::vector<std::pair<offset, predicate>>
-resolve(const expression& expr, const type& t, offset& o) {
-  using result_type = std::vector<std::pair<offset, predicate>>;
-  auto concat = [](auto&& xs, auto&& ys) {
-    auto begin = std::make_move_iterator(ys.begin());
-    auto end = std::make_move_iterator(ys.end());
-    xs.insert(xs.end(), begin, end);
-  };
+bool resolve(std::vector<std::pair<offset, predicate>>& result,
+             const expression& expr, const type& t, offset& o) {
   return caf::visit(detail::overload(
     [&](const auto& xs) { // conjunction or disjunction
-      result_type result;
       o.emplace_back(0);
       if (!xs.empty()) {
-        concat(result, resolve(xs[0], t, o));
+        if (!resolve(result, xs[0], t, o))
+          return false;
         for (size_t i = 1; i < xs.size(); ++i) {
           o.back() += 1;
-          concat(result, resolve(xs[i], t, o));
+          if (!resolve(result, xs[i], t, o))
+            return false;
         }
       }
       o.pop_back();
-      return result;
+      return true;
     },
     [&](const negation& x) {
       o.emplace_back(0);
-      auto result = resolve(x.expr(), t);
+      if (!resolve(result, x.expr(), t, o))
+        return false;
       o.pop_back();
-      return result;
+      return true;
     },
     [&](const predicate& x) {
       auto resolved = type_resolver{t}(x);
-      // FIXME: discuss error handling strategy.
-      VAST_ASSERT(resolved);
-      result_type result;
+      // Abort on first type error and return a default-constructed vector.
+      if (!resolved)
+        return false;
       for (auto& pred : caf::visit(predicatizer{}, *resolved))
         result.emplace_back(o, std::move(pred));
-      return result;
+      return true;
     },
     [&](caf::none_t) {
       VAST_ASSERT(!"invalid expression node");
-      return result_type{};
+      return false;
     }
   ), expr);
 }
 
 } // namespace <anonymous>
 
-std::vector<std::pair<offset, predicate>>
-resolve(const expression& expr, const type& t) {
+std::vector<std::pair<offset, predicate>> resolve(const expression& expr,
+                                                  const type& t) {
+  std::vector<std::pair<offset, predicate>> result;
   offset o{0};
-  return resolve(expr, t, o);
+  if (resolve(result, expr, t, o))
+    return result;
+  return {};
 }
 
 } // namespace vast

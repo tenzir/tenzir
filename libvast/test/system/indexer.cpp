@@ -36,6 +36,8 @@
 using namespace caf;
 using namespace vast;
 
+/*
+
 namespace {
 
 struct fixture : fixtures::deterministic_actor_system_and_events {
@@ -160,3 +162,5 @@ TEST(bro conn logs) {
 }
 
 FIXTURE_SCOPE_END()
+
+*/
