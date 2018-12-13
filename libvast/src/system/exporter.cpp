@@ -42,40 +42,40 @@ namespace {
 
 void ship_results(stateful_actor<exporter_state>* self) {
   VAST_TRACE("");
-  if (self->state.results.empty() || self->state.stats.requested == 0) {
+  if (self->state.results.empty() || self->state.query.requested == 0) {
     return;
   }
   VAST_INFO(self, "relays", self->state.results.size(), "events");
   message msg;
-  if (self->state.results.size() <= self->state.stats.requested) {
-    self->state.stats.requested -= self->state.results.size();
-    self->state.stats.shipped += self->state.results.size();
+  if (self->state.results.size() <= self->state.query.requested) {
+    self->state.query.requested -= self->state.results.size();
+    self->state.query.shipped += self->state.results.size();
     msg = make_message(std::move(self->state.results));
     self->state.results = {};
   } else {
     std::vector<event> remainder;
-    remainder.reserve(self->state.results.size() - self->state.stats.requested);
-    auto begin = self->state.results.begin() + self->state.stats.requested;
+    remainder.reserve(self->state.results.size() - self->state.query.requested);
+    auto begin = self->state.results.begin() + self->state.query.requested;
     auto end = self->state.results.end();
     std::move(begin, end, std::back_inserter(remainder));
-    self->state.results.resize(self->state.stats.requested);
+    self->state.results.resize(self->state.query.requested);
     msg = make_message(std::move(self->state.results));
     self->state.results = std::move(remainder);
-    self->state.stats.shipped += self->state.stats.requested;
-    self->state.stats.requested = 0;
+    self->state.query.shipped += self->state.query.requested;
+    self->state.query.requested = 0;
   }
   self->send(self->state.sink, msg);
 }
 
 void report_statistics(stateful_actor<exporter_state>* self) {
   timespan runtime = steady_clock::now() - self->state.start;
-  self->state.stats.runtime = runtime;
+  self->state.query.runtime = runtime;
   VAST_INFO(self, "completed in", runtime);
-  self->send(self->state.sink, self->state.id, self->state.stats);
+  self->send(self->state.sink, self->state.id, self->state.query);
   if (self->state.accountant) {
     auto hits = rank(self->state.hits);
-    auto processed = self->state.stats.processed;
-    auto shipped = self->state.stats.shipped;
+    auto processed = self->state.query.processed;
+    auto shipped = self->state.query.shipped;
     auto results = shipped + self->state.results.size();
     auto selectivity = double(results) / hits;
     self->send(self->state.accountant, "exporter.hits", hits);
@@ -104,14 +104,14 @@ void request_more_hits(stateful_actor<exporter_state>* self) {
   if (!has_historical_option(self->state.options))
     return;
   auto waiting_for_hits =
-    self->state.stats.received == self->state.stats.scheduled;
-  auto need_more_results = self->state.stats.requested > 0;
+    self->state.query.received == self->state.query.scheduled;
+  auto need_more_results = self->state.query.requested > 0;
   auto have_no_inflight_requests = any<1>(self->state.unprocessed);
   // If we're (1) no longer waiting for index hits, (2) still need more
   // results, and (3) have no inflight requests to the archive, we ask
   // the index for more hits.
   if (!waiting_for_hits && need_more_results && have_no_inflight_requests) {
-    auto remaining = self->state.stats.expected - self->state.stats.received;
+    auto remaining = self->state.query.expected - self->state.query.received;
     VAST_ASSERT(remaining > 0);
     // TODO: Figure out right number of partitions to ask for. For now, we
     // bound the number by an arbitrary constant.
@@ -186,18 +186,18 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
       else
         VAST_DEBUG(self, "ignores false positive:", candidate);
     }
-    self->state.stats.processed += candidates.size();
+    self->state.query.processed += candidates.size();
     if (sender == self->state.archive)
       self->state.unprocessed -= mask;
     ship_results(self);
     request_more_hits(self);
-    if (self->state.stats.received == self->state.stats.expected)
+    if (self->state.query.received == self->state.query.expected)
       shutdown(self);
   };
   return {
     [=](ids& hits) {
       timespan runtime = steady_clock::now() - self->state.start;
-      self->state.stats.runtime = runtime;
+      self->state.query.runtime = runtime;
       auto count = rank(hits);
       if (self->state.accountant) {
         if (self->state.hits.empty())
@@ -216,14 +216,14 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
         self->send(self->state.archive, std::move(hits));
       }
       // Figure out if we're done.
-      ++self->state.stats.received;
-      self->send(self->state.sink, self->state.id, self->state.stats);
-      if (self->state.stats.received < self->state.stats.expected) {
-        VAST_DEBUG(self, "received", self->state.stats.received << '/'
-                                     << self->state.stats.expected, "ID sets");
+      ++self->state.query.received;
+      self->send(self->state.sink, self->state.id, self->state.query);
+      if (self->state.query.received < self->state.query.expected) {
+        VAST_DEBUG(self, "received", self->state.query.received << '/'
+                                     << self->state.query.expected, "ID sets");
         request_more_hits(self);
       } else {
-        VAST_DEBUG(self, "received all", self->state.stats.expected,
+        VAST_DEBUG(self, "received all", self->state.query.expected,
                    "ID set(s) in", runtime);
         if (self->state.accountant)
           self->send(self->state.accountant, "exporter.hits.runtime", runtime);
@@ -234,23 +234,23 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
       handle_batch(candidates);
     },
     [=](extract_atom) {
-      if (self->state.stats.requested == max_events) {
+      if (self->state.query.requested == max_events) {
         VAST_WARNING(self, "ignores extract request, already getting all");
         return;
       }
-      self->state.stats.requested = max_events;
+      self->state.query.requested = max_events;
       ship_results(self);
       request_more_hits(self);
     },
     [=](extract_atom, uint64_t requested) {
-      if (self->state.stats.requested == max_events) {
+      if (self->state.query.requested == max_events) {
         VAST_WARNING(self, "ignores extract request, already getting all");
         return;
       }
       auto n = std::min(max_events - requested, requested);
-      self->state.stats.requested += n;
+      self->state.query.requested += n;
       VAST_DEBUG(self, "got request to extract", n, "new events in addition to",
-                 self->state.stats.requested, "pending results");
+                 self->state.query.requested, "pending results");
       ship_results(self);
       request_more_hits(self);
     },
@@ -291,8 +291,8 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
                      scheduled << '/' << partitions, "partitions");
           self->state.id = lookup;
           if (partitions > 0) {
-            self->state.stats.expected = partitions;
-            self->state.stats.scheduled = scheduled;
+            self->state.query.expected = partitions;
+            self->state.query.scheduled = scheduled;
           } else {
             shutdown(self);
           }
