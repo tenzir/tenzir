@@ -111,7 +111,7 @@ path table_indexer::row_ids_file() const {
 
 void table_indexer::materialize() {
   VAST_TRACE("");
-  for (size_t column = 0; column < num_columns(); ++column) {
+  for (size_t column = 0; column < columns(); ++column) {
     // We ignore the returned reference, since we're only interested in the
     // side effect of lazily spinning up INDEXER actors.
     indexer_at(column);

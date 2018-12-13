@@ -216,15 +216,15 @@ public:
   void operator()(const T& xs) {
     static_assert(detail::is_any_v<T, conjunction, disjunction>);
     visit(xs);
-    push();
     if (!xs.empty()) {
+      push();
       caf::visit(*this, xs[0]);
       for (size_t i = 1; i< xs.size(); ++i) {
         next();
         caf::visit(*this, xs[i]);
       }
+      pop();
     }
-    pop();
   }
 
   void operator()(const negation& x) {

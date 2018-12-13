@@ -67,7 +67,7 @@ public:
 
   /// Queries event IDs that fulfill the given predicate.
   /// @pre `init()` was called previously.
-  caf::expected<bitmap> lookup(const predicate& pred);
+  caf::expected<bitmap> lookup(const curried_predicate& pred);
 
   /// @returns the file name for loading and storing the index.
   const path& filename() const {

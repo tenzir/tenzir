@@ -48,7 +48,7 @@ query_supervisor(caf::stateful_actor<query_supervisor_state>* self,
   // Ask master for initial work.
   self->send(master, worker_atom::value, self);
   return {
-    [=](const expression& expr, const query_map& qm, const caf::actor& client) {
+    [=](const expression&, const query_map& qm, const caf::actor& client) {
       VAST_DEBUG(self, "got a new query for", qm.size(), "partitions:",
                  get_ids(qm));
       VAST_ASSERT(!qm.empty());
@@ -60,7 +60,7 @@ query_supervisor(caf::stateful_actor<query_supervisor_state>* self,
                    "EVALUATOR actor(s) for partition", id);
         self->state.open_requests.emplace(id, evaluators.size());
         for (auto& indexer : evaluators)
-          self->request(indexer, caf::infinite, expr, client)
+          self->request(indexer, caf::infinite, client)
             .then([=](done_atom) {
               auto& num_evaluators = self->state.open_requests[id];
               if (--num_evaluators == 0) {

@@ -120,7 +120,7 @@ void column_index::add(const table_slice_ptr& x) {
     idx_->append(x->at(row, col_), offset + row);
 }
 
-caf::expected<bitmap> column_index::lookup(const predicate& pred) {
+caf::expected<bitmap> column_index::lookup(const curried_predicate& pred) {
   VAST_TRACE(VAST_ARG(pred));
   VAST_ASSERT(idx_ != nullptr);
   auto result = idx_->lookup(pred.op, make_data_view(caf::get<data>(pred.rhs)));

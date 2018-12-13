@@ -61,7 +61,7 @@ public:
   /// -- properties ------------------------------------------------------------
 
   /// @returns the number of columns.
-  auto num_columns() const noexcept {
+  auto columns() const noexcept {
     return indexers_.size();
   }
 
@@ -72,12 +72,17 @@ public:
   caf::event_based_actor* self();
 
   /// @returns the INDEXER actor for given column, spawning it lazily if needed.
-  /// @pre `column_size < num_columns()`
+  /// @pre `column_size < columns()`
   /// @pre `!skip_column(column)`
   caf::actor& indexer_at(size_t column);
 
   /// @returns the path to the file for persisting `row_ids_`.
   path row_ids_file() const;
+
+  /// @reutrns the IDs of all rows in this table.
+  const ids& row_ids() const {
+    return row_ids_;
+  }
 
   /// Materializes all currently unloaded INDEXER actors.
   void materialize();

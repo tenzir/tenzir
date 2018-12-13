@@ -23,6 +23,7 @@
 #include "vast/concept/printable/vast/uuid.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/event.hpp"
+#include "vast/expression_visitors.hpp"
 #include "vast/ids.hpp"
 #include "vast/load.hpp"
 #include "vast/logger.hpp"
@@ -76,15 +77,96 @@ caf::error partition::flush_to_disk() {
 
 // -- properties ---------------------------------------------------------------
 
-std::vector<caf::actor> partition::indexers(const expression&) {
-  // TODO: use given expression as layout filter.
-  std::vector<caf::actor> result;
-  for (auto layout : layouts()) {
-    auto& tbl = get_or_add(layout).first;
-    tbl.materialize();
-    tbl.for_each_indexer([&](auto &hdl) {
-      result.emplace_back(hdl);
+namespace {
+
+using eval_mapping = evaluation_map::mapped_type;
+
+caf::actor fetch_indexer(table_indexer& tbl, const data_extractor& dx,
+                         relational_operator op, const data& x) {
+  VAST_TRACE(VAST_ARG(tbl), VAST_ARG(dx), VAST_ARG(op), VAST_ARG(x));
+  // Sanity check.
+  if (dx.offset.empty())
+    return nullptr;
+  auto& r = caf::get<record_type>(dx.type);
+  auto k = r.resolve(dx.offset);
+  VAST_ASSERT(k);
+  auto index = r.flat_index_at(dx.offset);
+  if (!index) {
+    VAST_DEBUG(tbl.state().self, "got invalid offset for record type", dx.type);
+    return nullptr;
+  }
+  return tbl.indexer_at(*index);
+}
+
+caf::actor fetch_indexer(table_indexer& tbl, const attribute_extractor& ex,
+                         relational_operator op, const data& x) {
+  VAST_TRACE(VAST_ARG(tbl), VAST_ARG(ex), VAST_ARG(op), VAST_ARG(x));
+  auto& layout = tbl.layout();
+  // Predicate of form "&type == ..."
+  if (ex.attr == system::type_atom::value) {
+    VAST_ASSERT(caf::holds_alternative<std::string>(x));
+    // Doesn't apply if the query name doesn't match our type.
+    if (layout.name() != caf::get<std::string>(x))
+      return nullptr;
+    // We know the answer immediately: all IDs that are part of the table.
+    // However, we still have to "lift" this result into an actor for the
+    // EVALUATOR.
+    // TODO: Spawning a one-shot actor is quite expensive. Maybe the
+    //       table_indexer could instead maintain this actor lazily.
+    auto row_ids = tbl.row_ids();
+    return tbl.state().self->spawn([row_ids]() -> caf::behavior {
+      return [=](const curried_predicate&) { return row_ids; };
     });
+  }
+  if (ex.attr == system::time_atom::value) {
+    // TODO: reconsider whether we still want to support "&time ..." queries.
+    VAST_ASSERT(caf::holds_alternative<timestamp>(x));
+    if (layout.fields.empty() || layout.fields[0].type != timestamp_type{})
+      return nullptr;
+    record_type rs_rec{{"timestamp", timestamp_type{}}};
+    type t = rs_rec;
+    data_extractor dx{t, vast::offset{0}};
+    // Redirect to "ordinary data lookup" on column 0.
+    return fetch_indexer(tbl, dx, op, x);
+  }
+  VAST_WARNING(tbl.state().self, "got unsupported attribute:", ex.attr);
+  return nullptr;
+}
+
+} // namespace
+
+evaluation_map partition::eval(const expression& expr) {
+  evaluation_map result;
+  // Step #1: use the expression to select matching layouts.
+  for (auto layout : layouts()) {
+    // Step #2: Split the resolved expression into its predicates and select
+    // all matching INDEXER actors per predicate.
+    auto resolved = resolve(expr, layout);
+    // Skip any layout that we cannot resolve.
+    if (resolved.empty())
+      continue;
+    // Add triples (offset, curried predicate, and INDEXER) to evaluation map.
+    auto& triples = result[layout];
+    for (auto& kvp: resolved) {
+      auto& pred = kvp.second;
+      auto hdl = caf::visit(detail::overload(
+                              [&](const attribute_extractor& ex,
+                                  const data& x) {
+                                return fetch_indexer(get_or_add(layout).first,
+                                                     ex, pred.op, x);
+                              },
+                              [&](const data_extractor& dx, const data& x) {
+                                return fetch_indexer(get_or_add(layout).first,
+                                                     dx, pred.op, x);
+                              },
+                              [](const auto&, const auto&) {
+                                return caf::actor{};
+                              }),
+                            pred.lhs, pred.rhs);
+      if (hdl != nullptr)
+        triples.emplace_back(kvp.first, curried_predicate{pred.op, pred.rhs},
+                             std::move(hdl));
+    }
   }
   return result;
 }

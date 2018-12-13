@@ -17,13 +17,19 @@
 #include <limits>
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
 #include <map>
 =======
 >>>>>>> Switch to caf::config_value_map
 #include <memory>
 >>>>>>> Add synopsis_options to aliases.hpp
+=======
+#include <map>
+>>>>>>> Re-implement lookups with the new EVALUATOR actor
 #include <string>
+#include <tuple>
+#include <utility>
 #include <vector>
 
 <<<<<<< HEAD
@@ -92,5 +98,12 @@ using maybe_actor = caf::expected<caf::actor>;
 
 using synopsis_options = caf::dictionary<caf::config_value>;
 
-} // namespace vast
+/// Bundles an offset into an expression under evaluation to the curried
+/// representation of the ::predicate at that position in the expression and
+/// the INDEXER actor responsible for answering the (curried) predicate.
+using evaluation_triple = std::tuple<offset, curried_predicate, caf::actor>;
 
+/// Maps layouts to a list of evaluation triples.
+using evaluation_map = std::map<type, std::vector<evaluation_triple>>;
+
+} // namespace vast

@@ -39,6 +39,8 @@ using std::make_shared;
 
 namespace {
 
+thread_local std::vector<caf::actor> all_sinks;
+
 struct sink_state {
   std::vector<event> buf;
 };
@@ -58,7 +60,9 @@ behavior dummy_sink(stateful_actor<sink_state>* self) {
 }
 
 caf::actor spawn_sink(caf::local_actor* self, path, type, size_t) {
-  return self->spawn(dummy_sink);
+  auto result = self->spawn(dummy_sink);
+  all_sinks.emplace_back(result);
+  return result;
 }
 
 behavior dummy_index(stateful_actor<index_state>* self, path dir) {
@@ -78,7 +82,7 @@ behavior test_stage(event_based_actor* self, index_state* state) {
 }
 
 struct fixture : fixtures::deterministic_actor_system_and_events {
-  fixture() {
+  fixture() : expected_sink_count(0) {
     // Only needed for computing how many layouts are in our data set.
     std::set<record_type> layouts;
     // Makes sure no persistet state exists.
@@ -96,8 +100,17 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     // pick_from(bgpdump_txt_slices);
     // pick_from(random_slices);
     num_layouts = layouts.size();
+    for (auto& layout : layouts)
+      expected_sink_count += layout.fields.size();
     REQUIRE_EQUAL(test_slices.size(), num_layouts);
     index = sys.spawn(dummy_index, state_dir / "dummy-index");
+  }
+
+  ~fixture() {
+    // Make sure we're not leaving stuff behind.
+    for (auto& snk : all_sinks)
+      anon_send_exit(snk, exit_reason::user_shutdown);
+    all_sinks.clear();
   }
 
   // Directory where the manager is supposed to persist its state.
@@ -111,6 +124,9 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
 
   // Keeps track how many layouts are in `test_slices`.
   size_t num_layouts;
+
+  // Tells us how many INDEXER actors *should* get started.
+  size_t expected_sink_count;
 
   // Convenience getter for accessing the state of our dummy INDEX.
   index_state* state() {
@@ -130,8 +146,8 @@ TEST(spawning sinks automatically) {
                                                   test_slices,
                                                   stg);
   run();
+  CHECK_EQUAL(all_sinks.size(), expected_sink_count);
   /*
-  CHECK_EQUAL(state.sink_count, num_layouts);
   MESSAGE("check content of the shared buffer");
   std::vector<event> rows;
   for (auto& slice : test_slices)

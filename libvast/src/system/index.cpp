@@ -55,7 +55,7 @@ namespace vast::system {
 partition_ptr index_state::partition_factory::operator()(const uuid& id) const {
   // The factory must not get called for the active partition nor for
   // partitions that are currently unpersisted.
-  VAST_ASSERT(id != st_->active->id());
+  VAST_ASSERT(st_->active == nullptr || id != st_->active->id());
   VAST_ASSERT(std::none_of(st_->unpersisted.begin(), st_->unpersisted.end(),
                            [&](auto& kvp) { return kvp.first->id() == id; }));
   // Load partition from disk.
@@ -162,7 +162,8 @@ caf::dictionary<caf::config_value> index_state::status() const {
   result.emplace("meta-index-filename", meta_index_filename().str());
   // Resident partitions.
   auto& partitions = put_dictionary(result, "partitions");
-  partitions.emplace("active", to_string(active->id()));
+  if (active != nullptr)
+    partitions.emplace("active", to_string(active->id()));
   auto& cached = put_list(partitions, "cached");
   for (auto& part : lru_partitions.elements())
     cached.emplace_back(to_string(part->id()));
@@ -236,7 +237,7 @@ query_map index_state::launch_evaluators(lookup_state& lookup,
   // Prefer partitions that are already available in RAM.
   std::partition(lookup.partitions.begin(), lookup.partitions.end(),
                  [&](const uuid& candidate) {
-                   return active->id() == candidate
+                   return (active != nullptr && active->id() == candidate)
                           || find_unpersisted(candidate) != nullptr
                           || lru_partitions.contains(candidate);
                  });
@@ -247,20 +248,21 @@ query_map index_state::launch_evaluators(lookup_state& lookup,
     // We need to first check whether the ID is the active partition or one
     // of our unpersistet ones. Only then can we dispatch to our LRU cache.
     partition* part;
-    if (active->id() == partition_id)
+    if (active != nullptr && active->id() == partition_id)
       part = active.get();
     else if (auto ptr = find_unpersisted(partition_id); ptr != nullptr)
       part = ptr;
     else
       part = lru_partitions.get_or_add(partition_id).get();
-    auto indexers = part->indexers(lookup.expr);
-    if (indexers.empty()) {
+    auto eval = part->eval(lookup.expr);
+    if (eval.empty()) {
       VAST_WARNING(self, "identified partition", partition_id,
-                   "as candidate in the meta index, but it didn't spin up "
-                   "any INDEXER");
+                   "as candidate in the meta index, but it didn't produce an "
+                   "evaluation map");
       return;
     }
-    std::vector<caf::actor> xs{self->spawn(evaluator, std::move(indexers))};
+    std::vector<caf::actor> xs{
+      self->spawn(evaluator, lookup.expr, std::move(eval))};
     result.emplace(partition_id, std::move(xs));
   };
   // Loop over the candidate set until we either successfully scheduled

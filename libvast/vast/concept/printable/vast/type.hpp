@@ -165,7 +165,7 @@ constexpr bool type_printer<Policy>::show_type;
 
 template <>
 struct printer_registry<type> {
-  using type = type_printer<policy::signature>;
+  using type = type_printer<policy::name_only>;
 };
 
 // -- implementation of recursive type printers ------------------------------

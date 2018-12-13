@@ -105,7 +105,7 @@ public:
   }
 
   /// @returns all INDEXER actors of all matching layouts.
-  std::vector<caf::actor> indexers(const expression& expr);
+  evaluation_map eval(const expression& expr);
 
   /// @returns all layouts in this partition.
   std::vector<record_type> layouts() const;
