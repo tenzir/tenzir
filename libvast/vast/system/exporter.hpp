@@ -37,7 +37,6 @@ struct exporter_state {
   caf::actor sink;
   accountant_type accountant;
   ids hits;
-  ids unprocessed;
   std::unordered_map<type, expression> checkers;
   std::deque<event> candidates;
   std::vector<event> results;

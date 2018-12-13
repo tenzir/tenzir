@@ -100,23 +100,25 @@ void shutdown(stateful_actor<exporter_state>* self) {
 }
 
 void request_more_hits(stateful_actor<exporter_state>* self) {
-  if (!has_historical_option(self->state.options))
+  const auto& st = self->state;
+  if (!has_historical_option(st.options))
     return;
   auto waiting_for_hits =
-    self->state.query.received == self->state.query.scheduled;
-  auto need_more_results = self->state.query.requested > 0;
-  auto have_no_inflight_requests = any<1>(self->state.unprocessed);
+    st.query.received == st.query.scheduled;
+  auto need_more_results = st.query.requested > 0;
+  auto have_no_inflight_requests =
+    st.query.lookups_issued == st.query.lookups_complete;
   // If we're (1) no longer waiting for index hits, (2) still need more
   // results, and (3) have no inflight requests to the archive, we ask
   // the index for more hits.
   if (!waiting_for_hits && need_more_results && have_no_inflight_requests) {
-    auto remaining = self->state.query.expected - self->state.query.received;
+    auto remaining = st.query.expected - st.query.received;
     VAST_ASSERT(remaining > 0);
     // TODO: Figure out right number of partitions to ask for. For now, we
     // bound the number by an arbitrary constant.
     auto n = std::min(remaining, size_t{2});
     VAST_DEBUG(self, "asks index to process", n, "more partitions");
-    self->send(self->state.index, self->state.id, n);
+    self->send(st.index, st.id, n);
   }
 }
 
@@ -190,12 +192,7 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
         VAST_DEBUG(self, "ignores false positive:", candidate);
     }
     self->state.query.processed += candidates.size();
-    if (sender == self->state.archive)
-      self->state.unprocessed -= mask;
     ship_results(self);
-    request_more_hits(self);
-    if (finished(self->state.query))
-      shutdown(self);
   };
   return {
     [=](ids& hits) {
@@ -213,7 +210,6 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
                                      + to_string(select(hits, -1) + 1) + ')')));
       if (count > 0) {
         self->state.hits |= hits;
-        self->state.unprocessed |= hits;
         VAST_DEBUG(self, "forwards hits to archive");
         // FIXME: restrict according to configured limit.
         ++self->state.query.lookups_issued;
@@ -237,6 +233,9 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
     },
     [=](table_slice_ptr slice) {
       handle_batch(to_events(*slice, self->state.hits));
+      request_more_hits(self);
+      if (finished(self->state.query))
+        shutdown(self);
     },
     [=](done_atom, const caf::error& err) {
       auto sender = self->current_sender();
