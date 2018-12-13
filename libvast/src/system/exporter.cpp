@@ -93,8 +93,7 @@ void shutdown(stateful_actor<exporter_state>* self, caf::error err) {
 }
 
 void shutdown(stateful_actor<exporter_state>* self) {
-  if (rank(self->state.unprocessed) > 0 || !self->state.results.empty()
-      || has_continuous_option(self->state.options))
+  if (has_continuous_option(self->state.options))
     return;
   VAST_DEBUG(self, "initiates shutdown");
   self->send_exit(self, exit_reason::normal);
@@ -152,7 +151,11 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
         report_statistics(self);
     }
   );
-  auto handle_batch = [=](std::vector<event>& candidates) {
+  auto finished = [&](const query_status& qs) -> bool {
+    return qs.received == qs.expected &&
+    qs.lookups_issued == qs.lookups_complete;
+  };
+  auto handle_batch = [=](std::vector<event> candidates) {
     VAST_DEBUG(self, "got batch of", candidates.size(), "events");
     // Events can arrive in any order: sort them by ID first. Otherwise, we
     // can't compute the bitmap mask as easily.
@@ -191,7 +194,7 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
       self->state.unprocessed -= mask;
     ship_results(self);
     request_more_hits(self);
-    if (self->state.query.received == self->state.query.expected)
+    if (finished(self->state.query))
       shutdown(self);
   };
   return {
@@ -223,7 +226,12 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
         st.unprocessed |= hits;
         VAST_DEBUG(self, "forwards hits to archive");
         // FIXME: restrict according to configured limit.
+<<<<<<< HEAD
         self->send(st.archive, std::move(hits));
+=======
+        ++self->state.query.lookups_issued;
+        self->send(self->state.archive, std::move(hits));
+>>>>>>> Send lookup results to the exporter incrementally
       }
 <<<<<<< HEAD
     },
@@ -251,11 +259,23 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
                    "ID set(s) in", runtime);
         if (self->state.accountant)
           self->send(self->state.accountant, "exporter.hits.runtime", runtime);
-        shutdown(self);
       }
+      if (finished(self->state.query))
+        shutdown(self);
     },
-    [=](std::vector<event>& candidates) {
-      handle_batch(candidates);
+    [=](table_slice_ptr slice) {
+      handle_batch(to_events(*slice, self->state.hits));
+    },
+    [=](done_atom, const caf::error& err) {
+      auto sender = self->current_sender();
+      if (sender == self->state.archive) {
+        if (err)
+          VAST_DEBUG(self, "received error from archive:",
+              self->system().render(err));
+        ++self->state.query.lookups_complete;
+      }
+      if (finished(self->state.query))
+        shutdown(self);
     },
     [=](extract_atom) {
       if (self->state.query.requested == max_events) {
@@ -335,7 +355,7 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
         [=](caf::unit_t&, const table_slice_ptr& slice) {
           // TODO: port to new table slice API
           auto candidates = to_events(*slice);
-          handle_batch(candidates);
+          handle_batch(std::move(candidates));
         },
         [=](caf::unit_t&, const error& err) {
           VAST_IGNORE_UNUSED(err);
