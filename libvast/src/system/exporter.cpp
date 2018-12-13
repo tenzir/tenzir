@@ -159,11 +159,6 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
   };
   auto handle_batch = [=](std::vector<event> candidates) {
     VAST_DEBUG(self, "got batch of", candidates.size(), "events");
-    // Events can arrive in any order: sort them by ID first. Otherwise, we
-    // can't compute the bitmap mask as easily.
-    std::sort(candidates.begin(), candidates.end(),
-              [](auto& x, auto& y) { return x.id() < y.id(); });
-    bitmap mask;
     auto sender = self->current_sender();
     for (auto& candidate : candidates) {
       auto& checker = self->state.checkers[candidate.type()];
@@ -179,11 +174,6 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
         }
         checker = std::move(*x);
         VAST_DEBUG(self, "tailored AST to", candidate.type() << ':', checker);
-      }
-      // Append ID to our bitmap mask.
-      if (sender == self->state.archive) {
-        mask.append_bits(false, candidate.id() - mask.size());
-        mask.append_bit(true);
       }
       // Perform candidate check and keep event as result on success.
       if (caf::visit(event_evaluator{candidate}, checker))
