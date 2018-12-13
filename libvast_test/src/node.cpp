@@ -21,7 +21,7 @@
 #include "vast/uuid.hpp"
 
 #include "vast/system/node.hpp"
-#include "vast/system/query_statistics.hpp"
+#include "vast/system/query_status.hpp"
 
 using namespace vast;
 
@@ -90,7 +90,7 @@ std::vector<event> node::query(std::string expr) {
       result.insert(result.end(), std::make_move_iterator(xs.begin()),
                     std::make_move_iterator(xs.end()));
     },
-    [&](const uuid&, const system::query_statistics&) {
+    [&](const uuid&, const system::query_status&) {
       // ignore
     },
     [&](const caf::down_msg& msg) {
@@ -106,4 +106,3 @@ std::vector<event> node::query(std::string expr) {
 }
 
 } // namespace fixtures
-
