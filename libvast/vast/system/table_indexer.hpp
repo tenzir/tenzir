@@ -116,7 +116,7 @@ public:
   }
 
   /// @returns the base directory for the parent partition.
-  path parent_dir() const;
+  path partition_dir() const;
 
   /// @returns the base directory for persistent state.
   path base_dir() const;
@@ -161,8 +161,8 @@ private:
 
   // -- member variables -------------------------------------------------------
 
-  /// Hosting actor system.
-  partition* parent_;
+  /// Points to the partition managing this table_indexer.
+  partition* partition_;
 
   /// Stores `layout_` in a type-erased handle. We need this type-erased
   /// representation in a few instances such as expression visitors.
