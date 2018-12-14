@@ -42,10 +42,12 @@ struct indexer_state {
   static inline const char* name = "indexer";
 };
 
-/// Indexes table slices.
+/// Indexes a single column of table slices.
 /// @param self The actor handle.
 /// @param dir The directory where to store the indexes in.
-/// @param layout The type of individual columns in slices.
+/// @param column_type The type of the indexed column.
+/// @param column The indexed column.
+/// @returns the initial behavior of the INDEXER.
 caf::behavior indexer(caf::stateful_actor<indexer_state>* self, path dir,
                       type column_type, size_t column);
 

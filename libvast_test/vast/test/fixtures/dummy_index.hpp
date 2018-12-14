@@ -20,8 +20,6 @@
 
 #include "vast/test/fixtures/actor_system_and_events.hpp"
 
-CAF_ALLOW_UNSAFE_MESSAGE_TYPE(std::function<void>)
-
 namespace fixtures {
 
 /// A fixture with a dummy INDEX actor.
