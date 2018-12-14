@@ -129,14 +129,27 @@ caf::error index_state::load_from_disk() {
 
 caf::error index_state::flush_to_disk() {
   VAST_TRACE("");
-  // Flush meta index to disk.
-  if (auto err = save(self->system(), meta_index_filename(), meta_idx)) {
-    VAST_ERROR(self, "failed to save meta index:",
-               self->system().render(err));
+  auto flush_all = [this]() -> caf::error {
+    // Flush meta index to disk.
+    if (auto err = save(self->system(), meta_index_filename(), meta_idx))
+      return err;
+    // Flush active partition.
+    if (active != nullptr)
+      if (auto err = active->flush_to_disk())
+        return err;
+    // Flush all unpersisted partitions. This only writes the meta state of
+    // each table_indexer. For actually writing the contents of each INDEXER we
+    // need to rely on messaging.
+    for (auto& kvp : unpersisted)
+      if (auto err = kvp.first->flush_to_disk())
+        return err;
+    return caf::none;
+  };
+  if (auto err = flush_all()) {
+    VAST_ERROR(self, "failed to save meta index:", self->system().render(err));
     return err;
-  } else {
-    VAST_INFO(self, "saved meta index");
   }
+  VAST_INFO(self, "saved meta index");
   return caf::none;
 }
 
