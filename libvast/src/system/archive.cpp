@@ -62,7 +62,7 @@ archive(archive_type::stateful_pointer<archive_state> self,
     }
   );
   return {
-    [=](const ids& xs) -> caf::result<std::vector<event>> {
+    [=](const ids& xs) -> caf::result<done_atom, caf::error> {
       VAST_ASSERT(rank(xs) > 0);
       VAST_DEBUG(self, "got query for", rank(xs), "events in range ["
                  << select(xs, 1) << ',' << (select(xs, -1) + 1) << ')');
@@ -78,11 +78,14 @@ archive(archive_type::stateful_pointer<archive_state> self,
         if (!slice) {
           if (!slice.error())   // Either we are done ...
             break;
-          return slice.error(); // ... or an error occured.
+          // ... or an error occured.
+          return {done_atom::value, std::move(slice.error())};
         }
-        to_events(result, **slice, xs);
+        using receiver_type = caf::typed_actor<caf::reacts_to<table_slice_ptr>>;
+        self->send(caf::actor_cast<receiver_type>(
+              self->current_sender()), *slice);
       }
-      return result;
+      return {done_atom::value, make_error(ec::no_error)};
     },
     [=](stream<table_slice_ptr> in) {
       self->make_sink(

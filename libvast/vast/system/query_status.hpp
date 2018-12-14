@@ -21,21 +21,22 @@
 namespace vast::system {
 
 /// Statistics about a query.
-struct query_statistics {
-  timespan runtime;         ///< Current runtime.
-  size_t expected = 0;      ///< Expected ID sets from INDEX.
-  size_t scheduled = 0;     ///< Scheduled partitions (ID sets) at INDEX.
-  size_t received = 0;      ///< Received ID sets from INDEX.
-  uint64_t processed = 0;   ///< Processed candidates from ARCHIVE.
-  uint64_t shipped = 0;     ///< Shipped results to sink.
-  uint64_t requested = 0;   ///< User-requested pending results to extract.
+struct query_status {
+  timespan runtime;            ///< Current runtime.
+  size_t expected = 0;         ///< Expected ID sets from INDEX.
+  size_t scheduled = 0;        ///< Scheduled partitions (ID sets) at INDEX.
+  size_t received = 0;         ///< Received ID sets from INDEX.
+  size_t lookups_issued = 0;   ///< Number of lookups sent to the ARCHIVE.
+  size_t lookups_complete = 0; ///< Number of lookups returned by the ARCHIVE.
+  uint64_t processed = 0;      ///< Processed candidates from ARCHIVE.
+  uint64_t shipped = 0;        ///< Shipped results to sink.
+  uint64_t requested = 0;      ///< User-requested pending results to extract.
 };
 
 template <class Inspector>
-auto inspect(Inspector& f, query_statistics& qs) {
+auto inspect(Inspector& f, query_status& qs) {
   return f(qs.runtime, qs.expected, qs.scheduled, qs.received, qs.processed,
            qs.shipped, qs.requested);
 }
 
 } // namespace vast::system
-

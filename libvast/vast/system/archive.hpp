@@ -15,6 +15,7 @@
 
 #include <memory>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 #include <caf/fwd.hpp>
@@ -41,7 +42,7 @@ struct archive_state {
 using archive_type = caf::typed_actor<
   caf::reacts_to<caf::stream<table_slice_ptr>>,
   caf::reacts_to<exporter_atom, caf::actor>,
-  caf::replies_to<ids>::with<std::vector<event>>,
+  caf::replies_to<ids>::with<done_atom, caf::error>,
   caf::replies_to<status_atom>::with<caf::dictionary<caf::config_value>>
 >;
 

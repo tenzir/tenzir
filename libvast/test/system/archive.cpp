@@ -16,6 +16,7 @@
 #include "vast/ids.hpp"
 #include "vast/system/archive.hpp"
 #include "vast/table_slice.hpp"
+#include "vast/to_events.hpp"
 
 #include "vast/detail/spawn_container_source.hpp"
 
@@ -42,9 +43,25 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     run();
   }
 
+  std::vector<event> query(const ids& ids) {
+    bool done = false;
+    std::vector<event> result;
+    self->send(a, ids);
+    run();
+    self->do_receive(
+      [&](vast::system::done_atom, const caf::error& err) {
+        REQUIRE(!err);
+        done = true;
+      },
+      [&](table_slice_ptr slice) {
+        to_events(result, *slice, ids);
+      }
+    ).until(done);
+    return result;
+  }
+
   std::vector<event> query(std::initializer_list<id_range> ranges) {
-    auto ids = make_ids(ranges);
-    return request<std::vector<event>>(a, ids);
+    return query(make_ids(ranges));
   }
 };
 
@@ -69,7 +86,7 @@ TEST(archiving and querying) {
   push_to_archive(bgpdump_txt_slices);
   MESSAGE("query events");
   auto ids = make_ids({{24, 56}, {1076, 1096}});
-  auto result = request<std::vector<event>>(a, ids);
+  auto result = query(ids);
   REQUIRE_EQUAL(result.size(), 52u);
   // We sort because the specific compression algorithm used at the archive
   // determines the order of results.
