@@ -54,7 +54,7 @@ void indexer_stage_driver::process(downstream_type& out, batch_type& slices) {
     auto& layout = slice->layout();
     auto [meta_x, added] = state_->active->get_or_add(layout);
     if (added) {
-      VAST_DEBUG(state_->self, "added a new table_index for layout", layout);
+      VAST_DEBUG(state_->self, "added a new table_indexer for layout", layout);
       // TODO: error handling
       meta_x.eager_init();
       for (auto& x : meta_x.indexers()) {

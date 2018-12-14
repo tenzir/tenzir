@@ -186,6 +186,7 @@ void index_state::reset_active_partition() {
     auto& element = unpersisted.emplace_back(std::move(active), 0);
     auto& id = element.first->id();
     auto& pending = element.second;
+    // Singal each INDEXER in the partition to persist its state.
     element.first->for_each_indexer([&](const actor& indexer) {
       ++pending;
       this->self->request(indexer, infinite, persist_atom::value).then([=] {

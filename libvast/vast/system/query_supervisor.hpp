@@ -35,8 +35,7 @@ struct query_supervisor_state {
 
   // -- meber variables --------------------------------------------------------
 
-  /// Maps partition IDs to the number of outstanding responses and already
-  /// received event IDs.
+  /// Maps partition IDs to the number of outstanding responses.
   caf::detail::unordered_flat_map<uuid, size_t> open_requests;
 
   // Gives the query_supervisor a unique, human-readable name in log output.

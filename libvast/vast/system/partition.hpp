@@ -46,9 +46,6 @@ public:
     bool dirty = false;
   };
 
-  /// Factory function for the ::table_indexer to spawn its INDEXER actors.
-  using indexer_factory = decltype(spawn_indexer)*;
-
   /// Maps table slice layouts their table indexer.
   using table_indexer_map = caf::detail::unordered_flat_map<record_type,
                                                             table_indexer>;
@@ -120,6 +117,7 @@ public:
 
   // -- operations -------------------------------------------------------------
 
+  /// Iterates over all INDEXER actors that are managed by this partition.
   template <class F>
   void for_each_indexer(F f) {
     for (auto& kvp : table_indexers_) {
