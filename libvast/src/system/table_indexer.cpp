@@ -30,11 +30,11 @@ namespace vast::system {
 // -- constructors, destructors, and assignment operators ----------------------
 
 table_indexer::table_indexer(partition* parent, const record_type& layout)
-  : parent_(parent),
+  : partition_(parent),
     type_erased_layout_(layout),
     last_flush_size_(0),
     skip_mask_(0) {
-  VAST_ASSERT(parent_ != nullptr);
+  VAST_ASSERT(partition_ != nullptr);
   VAST_ASSERT(layout.fields.size() > 0);
   VAST_TRACE(VAST_ARG(type_erased_layout_));
   // Compute which fields to skip.
@@ -87,7 +87,7 @@ caf::error table_indexer::flush_to_disk() {
 /// -- properties --------------------------------------------------------------
 
 index_state& table_indexer::state() {
-  return parent_->state();
+  return partition_->state();
 }
 
 caf::event_based_actor* table_indexer::self() {
@@ -106,7 +106,7 @@ caf::actor& table_indexer::indexer_at(size_t column) {
 }
 
 path table_indexer::row_ids_file() const {
-  return parent_dir() / "row_ids";
+  return partition_dir() / "row_ids";
 }
 
 void table_indexer::materialize() {
@@ -118,12 +118,12 @@ void table_indexer::materialize() {
   }
 }
 
-path table_indexer::parent_dir() const {
-  return parent_->base_dir();
+path table_indexer::partition_dir() const {
+  return partition_->base_dir();
 }
 
 path table_indexer::base_dir() const {
-  return parent_dir() / to_digest(layout());
+  return partition_dir() / to_digest(layout());
 }
 
 path table_indexer::data_dir() const {
