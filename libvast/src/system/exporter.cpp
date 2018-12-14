@@ -154,8 +154,8 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
     }
   );
   auto finished = [&](const query_status& qs) -> bool {
-    return qs.received == qs.expected &&
-    qs.lookups_issued == qs.lookups_complete;
+    return qs.received == qs.expected
+      && qs.lookups_issued == qs.lookups_complete;
   };
   auto handle_batch = [=](std::vector<event> candidates) {
     VAST_DEBUG(self, "got batch of", candidates.size(), "events");

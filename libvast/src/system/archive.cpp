@@ -79,7 +79,7 @@ archive(archive_type::stateful_pointer<archive_state> self,
           if (!slice.error())   // Either we are done ...
             break;
           // ... or an error occured.
-          return {done_atom::value, slice.error()};
+          return {done_atom::value, std::move(slice.error())};
         }
         using receiver_type = caf::typed_actor<caf::reacts_to<table_slice_ptr>>;
         self->send(caf::actor_cast<receiver_type>(

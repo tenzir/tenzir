@@ -56,7 +56,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
       [&](table_slice_ptr slice) {
         to_events(result, *slice, ids);
       }
-    ).until([&]{ run(); return done; });
+    ).until(done);
     return result;
   }
 
