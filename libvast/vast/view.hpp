@@ -402,6 +402,12 @@ view<std::string> make_view(const char (&xs)[N]) {
   return std::string_view(xs, N - 1);
 }
 
+/// Creates a view from a `std::string_view`.
+/// @relates view_trait
+constexpr view<std::string> make_view(std::string_view xs) {
+  return xs;
+}
+
 /// @relates view data
 data_view make_view(const data& x);
 
