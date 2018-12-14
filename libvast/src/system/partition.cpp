@@ -68,10 +68,15 @@ caf::error partition::init() {
 
 caf::error partition::flush_to_disk() {
   if (meta_data_.dirty) {
+    // Write all layouts to disk.
     if (auto err = save(state_->self->system(), meta_file(), meta_data_))
       return err;
     meta_data_.dirty = false;
   }
+  // Write state for each layout to disk.
+  for (auto& kvp : table_indexers_)
+    if (auto err = kvp.second.flush_to_disk())
+      return err;
   return caf::none;
 }
 
