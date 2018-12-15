@@ -41,7 +41,7 @@ class table_indexer;
 
 struct index_state;
 struct node_state;
-struct query_statistics;
+struct query_status;
 struct spawn_arguments;
 
 // -- templates ----------------------------------------------------------------

@@ -27,7 +27,7 @@
 
 #include "vast/system/accountant.hpp"
 #include "vast/system/archive.hpp"
-#include "vast/system/query_statistics.hpp"
+#include "vast/system/query_status.hpp"
 
 namespace vast::system {
 
@@ -37,12 +37,11 @@ struct exporter_state {
   caf::actor sink;
   accountant_type accountant;
   ids hits;
-  ids unprocessed;
   std::unordered_map<type, expression> checkers;
   std::deque<event> candidates;
   std::vector<event> results;
   std::chrono::steady_clock::time_point start;
-  query_statistics stats;
+  query_status query;
   query_options options;
   uuid id;
   static inline const char* name = "exporter";
@@ -58,4 +57,3 @@ caf::behavior exporter(caf::stateful_actor<exporter_state>* self,
                        expression expr, query_options opts);
 
 } // namespace vast::system
-

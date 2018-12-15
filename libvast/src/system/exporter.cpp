@@ -42,40 +42,40 @@ namespace {
 
 void ship_results(stateful_actor<exporter_state>* self) {
   VAST_TRACE("");
-  if (self->state.results.empty() || self->state.stats.requested == 0) {
+  if (self->state.results.empty() || self->state.query.requested == 0) {
     return;
   }
   VAST_INFO(self, "relays", self->state.results.size(), "events");
   message msg;
-  if (self->state.results.size() <= self->state.stats.requested) {
-    self->state.stats.requested -= self->state.results.size();
-    self->state.stats.shipped += self->state.results.size();
+  if (self->state.results.size() <= self->state.query.requested) {
+    self->state.query.requested -= self->state.results.size();
+    self->state.query.shipped += self->state.results.size();
     msg = make_message(std::move(self->state.results));
     self->state.results = {};
   } else {
     std::vector<event> remainder;
-    remainder.reserve(self->state.results.size() - self->state.stats.requested);
-    auto begin = self->state.results.begin() + self->state.stats.requested;
+    remainder.reserve(self->state.results.size() - self->state.query.requested);
+    auto begin = self->state.results.begin() + self->state.query.requested;
     auto end = self->state.results.end();
     std::move(begin, end, std::back_inserter(remainder));
-    self->state.results.resize(self->state.stats.requested);
+    self->state.results.resize(self->state.query.requested);
     msg = make_message(std::move(self->state.results));
     self->state.results = std::move(remainder);
-    self->state.stats.shipped += self->state.stats.requested;
-    self->state.stats.requested = 0;
+    self->state.query.shipped += self->state.query.requested;
+    self->state.query.requested = 0;
   }
   self->send(self->state.sink, msg);
 }
 
 void report_statistics(stateful_actor<exporter_state>* self) {
   timespan runtime = steady_clock::now() - self->state.start;
-  self->state.stats.runtime = runtime;
+  self->state.query.runtime = runtime;
   VAST_INFO(self, "completed in", runtime);
-  self->send(self->state.sink, self->state.id, self->state.stats);
+  self->send(self->state.sink, self->state.id, self->state.query);
   if (self->state.accountant) {
     auto hits = rank(self->state.hits);
-    auto processed = self->state.stats.processed;
-    auto shipped = self->state.stats.shipped;
+    auto processed = self->state.query.processed;
+    auto shipped = self->state.query.shipped;
     auto results = shipped + self->state.results.size();
     auto selectivity = double(results) / hits;
     self->send(self->state.accountant, "exporter.hits", hits);
@@ -93,31 +93,32 @@ void shutdown(stateful_actor<exporter_state>* self, caf::error err) {
 }
 
 void shutdown(stateful_actor<exporter_state>* self) {
-  if (rank(self->state.unprocessed) > 0 || !self->state.results.empty()
-      || has_continuous_option(self->state.options))
+  if (has_continuous_option(self->state.options))
     return;
   VAST_DEBUG(self, "initiates shutdown");
   self->send_exit(self, exit_reason::normal);
 }
 
 void request_more_hits(stateful_actor<exporter_state>* self) {
-  if (!has_historical_option(self->state.options))
+  const auto& st = self->state;
+  if (!has_historical_option(st.options))
     return;
   auto waiting_for_hits =
-    self->state.stats.received == self->state.stats.scheduled;
-  auto need_more_results = self->state.stats.requested > 0;
-  auto have_no_inflight_requests = any<1>(self->state.unprocessed);
+    st.query.received == st.query.scheduled;
+  auto need_more_results = st.query.requested > 0;
+  auto have_no_inflight_requests =
+    st.query.lookups_issued == st.query.lookups_complete;
   // If we're (1) no longer waiting for index hits, (2) still need more
   // results, and (3) have no inflight requests to the archive, we ask
   // the index for more hits.
   if (!waiting_for_hits && need_more_results && have_no_inflight_requests) {
-    auto remaining = self->state.stats.expected - self->state.stats.received;
+    auto remaining = st.query.expected - st.query.received;
     VAST_ASSERT(remaining > 0);
     // TODO: Figure out right number of partitions to ask for. For now, we
     // bound the number by an arbitrary constant.
     auto n = std::min(remaining, size_t{2});
     VAST_DEBUG(self, "asks index to process", n, "more partitions");
-    self->send(self->state.index, self->state.id, n);
+    self->send(st.index, st.id, n);
   }
 }
 
@@ -152,13 +153,12 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
         report_statistics(self);
     }
   );
-  auto handle_batch = [=](std::vector<event>& candidates) {
+  auto finished = [&](const query_status& qs) -> bool {
+    return qs.received == qs.expected
+      && qs.lookups_issued == qs.lookups_complete;
+  };
+  auto handle_batch = [=](std::vector<event> candidates) {
     VAST_DEBUG(self, "got batch of", candidates.size(), "events");
-    // Events can arrive in any order: sort them by ID first. Otherwise, we
-    // can't compute the bitmap mask as easily.
-    std::sort(candidates.begin(), candidates.end(),
-              [](auto& x, auto& y) { return x.id() < y.id(); });
-    bitmap mask;
     auto sender = self->current_sender();
     for (auto& candidate : candidates) {
       auto& checker = self->state.checkers[candidate.type()];
@@ -175,24 +175,14 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
         checker = std::move(*x);
         VAST_DEBUG(self, "tailored AST to", candidate.type() << ':', checker);
       }
-      // Append ID to our bitmap mask.
-      if (sender == self->state.archive) {
-        mask.append_bits(false, candidate.id() - mask.size());
-        mask.append_bit(true);
-      }
       // Perform candidate check and keep event as result on success.
       if (caf::visit(event_evaluator{candidate}, checker))
         self->state.results.push_back(std::move(candidate));
       else
         VAST_DEBUG(self, "ignores false positive:", candidate);
     }
-    self->state.stats.processed += candidates.size();
-    if (sender == self->state.archive)
-      self->state.unprocessed -= mask;
+    self->state.query.processed += candidates.size();
     ship_results(self);
-    request_more_hits(self);
-    if (self->state.stats.received == self->state.stats.expected)
-      shutdown(self);
   };
   return {
     // The INDEX (or the EVALUATOR, to be more precise) sends us a series of
@@ -201,7 +191,7 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
       // Add `hits` to the total result set and update all stats.
       auto& st = self->state;
       timespan runtime = steady_clock::now() - st.start;
-      st.stats.runtime = runtime;
+      st.query.runtime = runtime;
       auto count = rank(hits);
       if (st.accountant) {
         if (st.hits.empty())
@@ -215,52 +205,65 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
         VAST_DEBUG(self, "got", count, "index hits in [", (select(hits, 1)),
                    ',', (select(hits, -1) + 1), ')');
         st.hits |= hits;
-        st.unprocessed |= hits;
         VAST_DEBUG(self, "forwards hits to archive");
         // FIXME: restrict according to configured limit.
+        ++st.query.lookups_issued;
         self->send(st.archive, std::move(hits));
       }
+    },
+    [=](table_slice_ptr slice) {
+      handle_batch(to_events(*slice, self->state.hits));
     },
     [=](done_atom) {
       // Figure out if we're done by bumping the counter for `received` and
       // check whether it reaches `expected`.
       auto& st = self->state;
       timespan runtime = steady_clock::now() - st.start;
-      st.stats.runtime = runtime;
-      st.stats.received += st.stats.scheduled;
-      if (st.stats.received < st.stats.expected) {
-        VAST_DEBUG(self, "received", self->state.stats.received, '/',
-                   self->state.stats.expected, "ID sets");
+      st.query.runtime = runtime;
+      st.query.received += st.query.scheduled;
+      if (st.query.received < st.query.expected) {
+        VAST_DEBUG(self, "received", st.query.received, '/',
+                   st.query.expected, "ID sets");
         request_more_hits(self);
       } else {
-        VAST_DEBUG(self, "received all", self->state.stats.expected,
+        VAST_DEBUG(self, "received all", st.query.expected,
                    "ID set(s) in", runtime);
-        if (self->state.accountant)
-          self->send(self->state.accountant, "exporter.hits.runtime", runtime);
-        shutdown(self);
+        if (st.accountant)
+          self->send(st.accountant, "exporter.hits.runtime", runtime);
+        if (finished(st.query))
+          shutdown(self);
       }
     },
-    [=](std::vector<event>& candidates) {
-      handle_batch(candidates);
+    [=](done_atom, const caf::error& err) {
+      auto& st = self->state;
+      auto sender = self->current_sender();
+      if (sender == st.archive) {
+        if (err)
+          VAST_DEBUG(self, "received error from archive:",
+              self->system().render(err));
+        ++st.query.lookups_complete;
+      }
+      if (finished(st.query))
+        shutdown(self);
     },
     [=](extract_atom) {
-      if (self->state.stats.requested == max_events) {
+      if (self->state.query.requested == max_events) {
         VAST_WARNING(self, "ignores extract request, already getting all");
         return;
       }
-      self->state.stats.requested = max_events;
+      self->state.query.requested = max_events;
       ship_results(self);
       request_more_hits(self);
     },
     [=](extract_atom, uint64_t requested) {
-      if (self->state.stats.requested == max_events) {
+      if (self->state.query.requested == max_events) {
         VAST_WARNING(self, "ignores extract request, already getting all");
         return;
       }
       auto n = std::min(max_events - requested, requested);
-      self->state.stats.requested += n;
+      self->state.query.requested += n;
       VAST_DEBUG(self, "got request to extract", n, "new events in addition to",
-                 self->state.stats.requested, "pending results");
+                 self->state.query.requested, "pending results");
       ship_results(self);
       request_more_hits(self);
     },
@@ -301,8 +304,8 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
                      scheduled << '/' << partitions, "partitions");
           self->state.id = lookup;
           if (partitions > 0) {
-            self->state.stats.expected = partitions;
-            self->state.stats.scheduled = scheduled;
+            self->state.query.expected = partitions;
+            self->state.query.scheduled = scheduled;
           } else {
             shutdown(self);
           }
@@ -321,7 +324,7 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
         [=](caf::unit_t&, const table_slice_ptr& slice) {
           // TODO: port to new table slice API
           auto candidates = to_events(*slice);
-          handle_batch(candidates);
+          handle_batch(std::move(candidates));
         },
         [=](caf::unit_t&, const error& err) {
           VAST_IGNORE_UNUSED(err);
