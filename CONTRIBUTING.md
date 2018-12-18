@@ -158,6 +158,10 @@ Classes
 - When providing a move constructor and move-assignment operator, declare them
   as `noexcept`.
 
+- Use brace-initialization for member construction when possible. Only use
+  parenthesis-initialization to avoid calling a `std::initializer_list`
+  overload.
+
 Naming
 ------
 
