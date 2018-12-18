@@ -46,6 +46,10 @@ column_index::column_index(caf::actor_system& sys, type index_type,
   // nop
 }
 
+column_index::~column_index() {
+  flush_to_disk();
+}
+
 // -- persistence --------------------------------------------------------------
 
 caf::error column_index::init() {
@@ -73,10 +77,11 @@ caf::error column_index::init() {
 
 caf::error column_index::flush_to_disk() {
   VAST_TRACE("");
+  // The value index is null if and only if `init()` failed.
+  if (idx_ == nullptr || !dirty())
+    return caf::none;
   // Check whether there's something to write.
   auto offset = idx_->offset();
-  if (offset == last_flush_)
-    return caf::none;
   VAST_DEBUG(this, "flushes index (" << (offset - last_flush_) << '/' << offset,
              "new/total bits)");
   last_flush_ = offset;
@@ -95,12 +100,18 @@ void column_index::add(const table_slice_ptr& x) {
     idx_->append(x->at(row, col_), offset + row);
 }
 
-caf::expected<bitmap> column_index::lookup(const predicate& pred) {
-  VAST_TRACE(VAST_ARG(pred));
+caf::expected<bitmap> column_index::lookup(relational_operator op,
+                                           data_view rhs) {
+  VAST_TRACE(VAST_ARG(op), VAST_ARG(rhs));
   VAST_ASSERT(idx_ != nullptr);
-  auto result = idx_->lookup(pred.op, make_data_view(caf::get<data>(pred.rhs)));
+  auto result = idx_->lookup(op, rhs);
   VAST_DEBUG(this, VAST_ARG(result));
   return result;
+}
+
+bool column_index::dirty() const noexcept {
+  VAST_ASSERT(idx_ != nullptr);
+  return idx_->offset() != last_flush_;
 }
 
 } // namespace vast

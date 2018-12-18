@@ -14,27 +14,27 @@
 #include "vast/system/indexer_stage_driver.hpp"
 
 #include <caf/downstream.hpp>
+#include <caf/event_based_actor.hpp>
 #include <caf/scheduled_actor.hpp>
 #include <caf/stream_manager.hpp>
 
 #include "vast/logger.hpp"
 #include "vast/meta_index.hpp"
+#include "vast/system/index.hpp"
 #include "vast/system/partition.hpp"
 #include "vast/table_slice.hpp"
 
 namespace vast::system {
 
+bool indexer_stage_selector::operator()(const indexer_stage_filter& f,
+                                        const table_slice_ptr& x) const {
+  return f == x->layout();
+}
+
 indexer_stage_driver::indexer_stage_driver(downstream_manager_type& dm,
-                                           meta_index& meta_idx,
-                                           partition_factory fac,
-                                           size_t max_partition_size)
-  : super(dm),
-    meta_index_(meta_idx),
-    remaining_in_partition_(max_partition_size),
-    partition_(fac()),
-    factory_(std::move(fac)),
-    max_partition_size_(max_partition_size) {
-  VAST_ASSERT(max_partition_size_ > 0);
+                                           index_state* state)
+  : super(dm), state_(state) {
+  VAST_ASSERT(state != nullptr);
 }
 
 indexer_stage_driver::~indexer_stage_driver() noexcept {
@@ -44,34 +44,51 @@ indexer_stage_driver::~indexer_stage_driver() noexcept {
 void indexer_stage_driver::process(downstream_type& out, batch_type& slices) {
   VAST_TRACE(CAF_ARG(slices));
   VAST_ASSERT(!slices.empty());
-  VAST_ASSERT(partition_ != nullptr);
   for (auto& slice : slices) {
+    // Spin up an initial partition if needed.
+    if (state_->active == nullptr)
+      state_->reset_active_partition();
     // Update meta index.
-    meta_index_.add(partition_->id(), *slice);
+    state_->meta_idx.add(state_->active->id(), *slice);
     // Start new INDEXER actors when needed and add it to the stream.
     auto& layout = slice->layout();
-    if (auto [hdl, added] = partition_->manager().get_or_add(layout); added) {
-      auto slot = out_.parent()->add_unchecked_outbound_path<output_type>(hdl);
-      VAST_DEBUG(this, "spawned new INDEXER at slot", slot);
-      out_.set_filter(slot, layout);
+    auto [meta_x, added] = state_->active->get_or_add(layout);
+    if (added) {
+      VAST_DEBUG(state_->self, "added a new table_indexer for layout", layout);
+      if (auto err = meta_x.init()) {
+        VAST_ERROR(state_->self,
+                   "failed to initialize table_indexer for layout", layout,
+                   "-> all incoming logs get dropped!");
+      } else {
+        meta_x.spawn_indexers();
+        for (auto& x : meta_x.indexers()) {
+          // We'll have invalid handles at all fields with skip attribute.
+          if (x) {
+            auto slt = out_.parent()->add_unchecked_outbound_path<output_type>(x);
+            VAST_DEBUG(state_->self, "spawned new INDEXER at slot", slt);
+            out_.set_filter(slt, layout);
+          }
+        }
+      }
     }
+    // Add all rows IDs to the meta indexer.
+    meta_x.add(slice);
     // Ship event to the INDEXER actors.
     auto slice_size = slice->rows();
     out.push(std::move(slice));
     // Reset the manager and all outbound paths when finalizing a partition.
-    if (remaining_in_partition_ <= slice_size) {
-      VAST_DEBUG(this, "closes slots on full partition",
+    if (state_->active->capacity() <= slice_size) {
+      VAST_DEBUG(state_->self, "closes slots on full partition",
                  out_.open_path_slots());
       VAST_ASSERT(out_.buf().size() != 0);
       out_.fan_out_flush();
       VAST_ASSERT(out_.buf().size() == 0);
       out_.force_emit_batches();
       out_.close();
-      partition_ = factory_();
-      VAST_ASSERT(partition_->layouts().empty());
-      remaining_in_partition_ = max_partition_size_;
+      state_->reset_active_partition();
+      VAST_ASSERT(state_->active->layouts().empty());
     } else {
-      remaining_in_partition_ -= slice_size;
+      state_->active->reduce_capacity(slice_size);
     }
   }
 }

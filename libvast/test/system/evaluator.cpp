@@ -28,38 +28,50 @@ using namespace vast;
 
 namespace {
 
-auto lookup_table(std::initializer_list<std::pair<std::string_view, ids>> xs) {
-  std::map<predicate, ids> result;
-  for (auto& x : xs)
-    result.emplace(unbox(to<predicate>(x.first)), x.second);
-  return result;
+// Dummy actor representing an INDEXER for field `x`.
+caf::behavior dummy_indexer(ids result) {
+  return {
+    [=](curried_predicate) {
+      return result;
+    }
+  };
 }
 
 struct fixture : fixtures::deterministic_actor_system_and_events {
-  auto new_indexer(std::initializer_list<std::pair<std::string_view, ids>> xs) {
-    auto tbl = lookup_table(xs);
-    return sys.spawn([=](caf::event_based_actor*) -> caf::behavior {
-      return {[=](const predicate& pred) -> caf::result<ids> {
-        auto i = tbl.find(pred);
-        if (i != tbl.end())
-          return i->second;
-        return caf::sec::invalid_argument;
-      }};
-    });
-  }
-
   fixture() {
-    indexers = {new_indexer({{"x == 42", make_ids({1, 2, 4})},
-                             {"y != 10", make_ids({4, 8})}}),
-                new_indexer({{"x == 42", make_ids({0, 3, 4})},
-                             {"y != 10", make_ids({1, 3, 4})}})};
+    layout.fields.emplace_back("x", count_type{});
+    layout.fields.emplace_back("y", count_type{});
+    layout.name("test");
+    // Spin up our dummies.
+    auto& x_indexers= indexers["x"];
+    x_indexers.emplace_back(sys.spawn(dummy_indexer, make_ids({1, 2, 4})));
+    x_indexers.emplace_back(sys.spawn(dummy_indexer, make_ids({0, 3, 4})));
+    auto& y_indexers= indexers["y"];
+    y_indexers.emplace_back(sys.spawn(dummy_indexer, make_ids({4, 8})));
+    y_indexers.emplace_back(sys.spawn(dummy_indexer, make_ids({1, 3, 4})));
   }
 
-  std::vector<caf::actor> indexers;
+  /// Maps predicates to a list of actors.
+  std::map<std::string, std::vector<caf::actor>> indexers;
 
-  ids query(std::string_view expr) {
-    auto eval = sys.spawn(system::evaluator, indexers);
-    self->send(eval, unbox(to<expression>(expr)), self);
+  record_type layout;
+
+  ids query(std::string_view expr_str) {
+    auto expr = unbox(to<expression>(expr_str));
+    evaluation_map qm;
+    auto& triples = qm[layout];
+    auto resolved = resolve(expr, layout);
+    VAST_ASSERT(resolved.size() > 0);
+    for (auto& [expr_position, pred]: resolved) {
+      VAST_ASSERT(caf::holds_alternative<data_extractor>(pred.lhs));
+      auto& dx = caf::get<data_extractor>(pred.lhs);
+      std::string field_name = dx.offset.back() == 0 ? "x" : "y";
+      auto& xs =  indexers[field_name];
+      for (auto& x : xs)
+        triples.emplace_back(expr_position, curried(pred), x);
+    }
+    auto eval = sys.spawn(system::evaluator, expr, std::move(qm));
+    self->send(eval, self);
     run();
     ids result;
     while (!self->mailbox().empty())

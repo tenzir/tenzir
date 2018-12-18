@@ -16,28 +16,39 @@
 #include <unordered_map>
 
 #include <caf/actor.hpp>
+#include <caf/event_based_actor.hpp>
 #include <caf/stateful_actor.hpp>
 
 #include "vast/filesystem.hpp"
-#include "vast/table_index.hpp"
+#include "vast/column_index.hpp"
 #include "vast/type.hpp"
 
 namespace vast::system {
 
 struct indexer_state {
+  // -- constructors, destructors, and assignment operators --------------------
+
   indexer_state();
+
   ~indexer_state();
-  void init(table_index&& from);
-  union { table_index tbl; };
-  bool initialized;
+
+  caf::error init(caf::event_based_actor* self, path filename, type column_type,
+                  size_t column);
+
+  // -- member variables -------------------------------------------------------
+
+  union { column_index col; };
+
   static inline const char* name = "indexer";
 };
 
-/// Indexes table slices.
+/// Indexes a single column of table slices.
 /// @param self The actor handle.
 /// @param dir The directory where to store the indexes in.
-/// @param layout The type of individual columns in slices.
+/// @param column_type The type of the indexed column.
+/// @param column The indexed column.
+/// @returns the initial behavior of the INDEXER.
 caf::behavior indexer(caf::stateful_actor<indexer_state>* self, path dir,
-                      record_type layout);
+                      type column_type, size_t column);
 
 } // namespace vast::system

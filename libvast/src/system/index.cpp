@@ -11,6 +11,8 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
+#include "vast/system/index.hpp"
+
 #include <chrono>
 #include <deque>
 #include <unordered_set>
@@ -33,11 +35,14 @@
 #include "vast/load.hpp"
 #include "vast/logger.hpp"
 #include "vast/save.hpp"
+#include "vast/system/evaluator.hpp"
+#include "vast/table_slice.hpp"
 
 #include "vast/system/accountant.hpp"
-#include "vast/system/collector.hpp"
+#include "vast/system/query_supervisor.hpp"
 #include "vast/system/index.hpp"
 #include "vast/system/partition.hpp"
+#include "vast/system/spawn_indexer.hpp"
 #include "vast/system/task.hpp"
 
 #include "vast/detail/cache.hpp"
@@ -48,22 +53,23 @@ using namespace std::chrono;
 namespace vast::system {
 
 partition_ptr index_state::partition_factory::operator()(const uuid& id) const {
-  // There are three options for loading a partition: 1) it is active, 2) it is
-  // unpersisted, or 3) it needs be loaded from disk.
-  auto& active = st_->active;
-  if (active != nullptr && active->id() == id)
-    return active;
-  auto pred = [&](auto& kvp) { return kvp.first->id() == id; };
-  auto& xs = st_->unpersisted;
-  if (auto i = std::find_if(xs.begin(), xs.end(), pred); i != xs.end())
-    return i->first;
+  // The factory must not get called for the active partition nor for
+  // partitions that are currently unpersisted.
+  VAST_ASSERT(st_->active == nullptr || id != st_->active->id());
+  VAST_ASSERT(std::none_of(st_->unpersisted.begin(), st_->unpersisted.end(),
+                           [&](auto& kvp) { return kvp.first->id() == id; }));
+  // Load partition from disk.
   VAST_DEBUG(st_->self, "loads partition", id);
-  return make_partition(st_->self->system(), st_->self, st_->dir, id);
+  auto result = std::make_unique<partition>(st_, id, st_->max_partition_size);
+  if (auto err = result->init())
+    VAST_ERROR(st_->self, "unable to load partition state from disk:", id);
+  return result;
 }
 
-index_state::index_state()
-  // Arbitrary default value, overridden in ::init.
-  : lru_partitions(10, partition_lookup{}, partition_factory{this}) {
+index_state::index_state(caf::event_based_actor* self)
+  : self(self),
+    factory(spawn_indexer),
+    lru_partitions(10, partition_lookup{}, partition_factory{this}) {
   // nop
 }
 
@@ -72,27 +78,25 @@ index_state::~index_state() {
   flush_to_disk();
 }
 
-caf::error index_state::init(event_based_actor* self, const path& dir,
-                             size_t max_partition_size,
+caf::error index_state::init(const path& dir, size_t max_partition_size,
                              size_t in_mem_partitions,
                              size_t taste_partitions) {
   VAST_TRACE(VAST_ARG(dir), VAST_ARG(max_partition_size),
              VAST_ARG(in_mem_partitions), VAST_ARG(taste_partitions));
   // Set the synopsis factory for the meta index.
-  if (auto factory = get_synopsis_factory(self->system())) {
-    auto [id, fun] = *factory;
-    VAST_DEBUG(name, "uses custom meta index synopsis factory", id);
+  if (auto synopsis_factory = get_synopsis_factory(self->system())) {
+    auto [id, fun] = *synopsis_factory;
+    VAST_DEBUG(self, "uses custom meta index synopsis factory", id);
     meta_idx.factory(id, fun);
-  } else if (factory.error()) {
-    VAST_ERROR(name, "failed to retrieve synopsis factory",
-               self->system().render(factory.error()));
-    return factory.error();
+  } else if (synopsis_factory.error()) {
+    VAST_ERROR(self, "failed to retrieve synopsis factory",
+               self->system().render(synopsis_factory.error()));
+    return std::move(synopsis_factory.error());
   } else {
-    VAST_DEBUG(name, "uses default meta index synopsis factory");
+    VAST_DEBUG(self, "uses default meta index synopsis factory");
   }
   put(meta_idx.factory_options(), "max-partition-size", max_partition_size);
   // Set members.
-  this->self = self;
   this->dir = dir;
   this->max_partition_size = max_partition_size;
   this->lru_partitions.size(in_mem_partitions);
@@ -100,44 +104,8 @@ caf::error index_state::init(event_based_actor* self, const path& dir,
   // Read persistent state.
   if (auto err = load_from_disk())
     return err;
-  // Callback for the stream stage for creating a new partition when the
-  // current one becomes full.
-  auto fac = [this]() -> partition_ptr {
-    // Persist meta data and the state of all INDEXER actors when the active
-    // partition becomes full.
-    if (active != nullptr) {
-      active->flush_to_disk();
-      auto& mgr = active->manager();
-      // Store this partition as unpersisted to make sure we're not attempting
-      // to load it from disk until it is safe to do so.
-      unpersisted.emplace_back(active, mgr.indexer_count());
-      auto& id = active->id();
-      mgr.for_each([&](const actor& indexer) {
-        this->self->request(indexer, infinite, persist_atom::value).then([=] {
-          auto pred = [=](auto& kvp) { return kvp.first->id() == id; };
-          auto& xs = unpersisted;
-          auto i = std::find_if(xs.begin(), xs.end(), pred);
-          if (i == xs.end()) {
-            VAST_ERROR(this->self,
-                       "received an invalid response to a 'persist' message");
-            return;
-          }
-          if (--i->second == 0) {
-            VAST_DEBUG(this->self, "successfully persisted", id);
-            xs.erase(i);
-          }
-        });
-      });
-    }
-    // Create a new active partition.
-    auto id = uuid::random();
-    VAST_DEBUG(this->self, "starts a new partition:", id);
-    active = make_partition(this->self->system(), this->self, this->dir, id);
-    // Register the new active partition at the stream manager.
-    return active;
-  };
-  stage = self->make_continuous_stage<indexer_stage_driver>(meta_idx, fac,
-                                                            max_partition_size);
+  // Spin up the stream manager.
+  stage = self->make_continuous_stage<indexer_stage_driver>(this);
   return caf::none;
 }
 
@@ -161,14 +129,27 @@ caf::error index_state::load_from_disk() {
 
 caf::error index_state::flush_to_disk() {
   VAST_TRACE("");
-  // Flush meta index to disk.
-  if (auto err = save(self->system(), meta_index_filename(), meta_idx)) {
-    VAST_ERROR(self, "failed to save meta index:",
-               self->system().render(err));
+  auto flush_all = [this]() -> caf::error {
+    // Flush meta index to disk.
+    if (auto err = save(self->system(), meta_index_filename(), meta_idx))
+      return err;
+    // Flush active partition.
+    if (active != nullptr)
+      if (auto err = active->flush_to_disk())
+        return err;
+    // Flush all unpersisted partitions. This only writes the meta state of
+    // each table_indexer. For actually writing the contents of each INDEXER we
+    // need to rely on messaging.
+    for (auto& kvp : unpersisted)
+      if (auto err = kvp.first->flush_to_disk())
+        return err;
+    return caf::none;
+  };
+  if (auto err = flush_all()) {
+    VAST_ERROR(self, "failed to save meta index:", self->system().render(err));
     return err;
-  } else {
-    VAST_INFO(self, "saved meta index");
   }
+  VAST_INFO(self, "saved meta index");
   return caf::none;
 }
 
@@ -194,7 +175,8 @@ caf::dictionary<caf::config_value> index_state::status() const {
   result.emplace("meta-index-filename", meta_index_filename().str());
   // Resident partitions.
   auto& partitions = put_dictionary(result, "partitions");
-  partitions.emplace("active", to_string(active->id()));
+  if (active != nullptr)
+    partitions.emplace("active", to_string(active->id()));
   auto& cached = put_list(partitions, "cached");
   for (auto& part : lru_partitions.elements())
     cached.emplace_back(to_string(part->id()));
@@ -206,6 +188,109 @@ caf::dictionary<caf::config_value> index_state::status() const {
   return result;
 }
 
+void index_state::reset_active_partition() {
+  // Persist meta data and the state of all INDEXER actors when the active
+  // partition gets replaced becomes full.
+  if (active != nullptr) {
+    if (auto err = active->flush_to_disk())
+      VAST_ERROR(self, "unable to persist active partition");
+    // Store this partition as unpersisted to make sure we're not attempting
+    // to load it from disk until it is safe to do so.
+    auto& element = unpersisted.emplace_back(std::move(active), 0);
+    auto& id = element.first->id();
+    auto& pending = element.second;
+    // Singal each INDEXER in the partition to persist its state.
+    element.first->for_each_indexer([&](const actor& indexer) {
+      ++pending;
+      this->self->request(indexer, infinite, persist_atom::value).then([=] {
+        auto pred = [=](auto& kvp) { return kvp.first->id() == id; };
+        auto& xs = unpersisted;
+        auto i = std::find_if(xs.begin(), xs.end(), pred);
+        if (i == xs.end()) {
+          VAST_ERROR(self,
+                     "received an invalid response to a 'persist' message");
+          return;
+        }
+        if (--i->second == 0) {
+          VAST_DEBUG(self, "successfully persisted", id);
+          xs.erase(i);
+        }
+      });
+    });
+  }
+  // Create a new active partition.
+  active = make_partition();
+}
+
+partition_ptr index_state::make_partition() {
+  return make_partition(uuid::random());
+}
+
+partition_ptr index_state::make_partition(uuid id) {
+  VAST_DEBUG(self, "starts a new partition:", id);
+  return std::make_unique<partition>(this, std::move(id), max_partition_size);
+}
+
+caf::actor index_state::make_indexer(path dir, type column_type,
+                                     size_t column) {
+  VAST_TRACE(VAST_ARG(dir), VAST_ARG(column_type), VAST_ARG(column));
+  return factory(self, std::move(dir), std::move(column_type), column);
+}
+
+partition* index_state::find_unpersisted(const uuid& id) {
+  auto i = std::find_if(unpersisted.begin(), unpersisted.end(),
+                        [&](auto& kvp) { return kvp.first->id() == id; });
+  return i != unpersisted.end() ? i->first.get() : nullptr;
+}
+
+query_map index_state::launch_evaluators(lookup_state& lookup,
+                                         size_t num_partitions) {
+  VAST_TRACE(VAST_ARG(lookup), VAST_ARG(num_partitions));
+  if (num_partitions == 0 || lookup.partitions.empty())
+    return {};
+  // Prefer partitions that are already available in RAM.
+  std::partition(lookup.partitions.begin(), lookup.partitions.end(),
+                 [&](const uuid& candidate) {
+                   return (active != nullptr && active->id() == candidate)
+                          || find_unpersisted(candidate) != nullptr
+                          || lru_partitions.contains(candidate);
+                 });
+  // Maps partition IDs to the EVALUATOR actors we are going to spawn.
+  query_map result;
+  // Helper function to spin up EVALUATOR actors for a single partition.
+  auto spin_up = [&](const uuid& partition_id) {
+    // We need to first check whether the ID is the active partition or one
+    // of our unpersistet ones. Only then can we dispatch to our LRU cache.
+    partition* part;
+    if (active != nullptr && active->id() == partition_id)
+      part = active.get();
+    else if (auto ptr = find_unpersisted(partition_id); ptr != nullptr)
+      part = ptr;
+    else
+      part = lru_partitions.get_or_add(partition_id).get();
+    auto eval = part->eval(lookup.expr);
+    if (eval.empty()) {
+      VAST_WARNING(self, "identified partition", partition_id,
+                   "as candidate in the meta index, but it didn't produce an "
+                   "evaluation map");
+      return;
+    }
+    std::vector<caf::actor> xs{
+      self->spawn(evaluator, lookup.expr, std::move(eval))};
+    result.emplace(partition_id, std::move(xs));
+  };
+  // Loop over the candidate set until we either successfully scheduled
+  // num_partitions partitions or run out of candidates.
+  {
+    auto i = lookup.partitions.begin();
+    auto last = lookup.partitions.end();
+    for (; i != last && result.size() < num_partitions; ++i)
+      spin_up(*i);
+    lookup.partitions.erase(lookup.partitions.begin(), i);
+  }
+  return result;
+}
+
 behavior index(stateful_actor<index_state>* self, const path& dir,
                size_t max_partition_size, size_t in_mem_partitions,
                size_t taste_partitions, size_t num_workers) {
@@ -213,27 +298,17 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
   VAST_ASSERT(in_mem_partitions > 0);
   VAST_INFO(self, "spawned:", VAST_ARG(max_partition_size),
             VAST_ARG(in_mem_partitions), VAST_ARG(taste_partitions));
-  if (auto err = self->state.init(self, dir, max_partition_size,
-                                  in_mem_partitions, taste_partitions)) {
+  if (auto err = self->state.init(dir, max_partition_size, in_mem_partitions,
+                                  taste_partitions)) {
     self->quit(std::move(err));
     return {};
   }
   auto accountant = accountant_type{};
   if (auto a = self->system().registry().get(accountant_atom::value))
     accountant = actor_cast<accountant_type>(a);
-  auto locate_indexers = [=](const expression& expr, auto begin, auto end) {
-    query_map result;
-    for (; begin != end; ++begin) {
-      auto& part = self->state.lru_partitions.get_or_add(*begin);
-      auto indexers = part->get_indexers(expr);
-      VAST_ASSERT(!indexers.empty());
-      result.emplace(part->id(), std::move(indexers));
-    }
-    return result;
-  };
   // Launch workers for resolving queries.
   for (size_t i = 0; i < num_workers; ++i)
-    self->spawn(collector, self);
+    self->spawn(query_supervisor, self);
   // We switch between has_worker behavior and the default behavior (which
   // simply waits for a worker).
   self->set_default_handler(caf::skip);
@@ -252,45 +327,35 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
         VAST_DEBUG(self, "returns without result: no partitions qualify");
         return {uuid::nil(), 0, 0};
       }
-      // Every return after this points uses up the worker.
-      auto guard = caf::detail::make_scope_guard([&] {
-        if (!st.worker_available())
-          self->unbecome();
-      });
       // Allows the client to query further results after initial taste.
-      auto query_id = uuid::nil();
-      // Store how many partitions hit and how many we scheduled for the
-      // initial taste.
-      size_t hits = candidates.size();
-      size_t scheduled = st.taste_partitions;
-      // Collects all INDEXER actors that we query for the initial taste.
-      query_map qm;
-      // Deliver everything in one shot if the candidate set fits into our
-      // taste partitions threshold.
-      if (hits <= st.taste_partitions) {
-        VAST_DEBUG(self, "can schedule all partitions immediately");
-        scheduled = hits;
-        qm = locate_indexers(expr, candidates.begin(), candidates.end());
-      } else {
-        query_id = uuid::random();
-        VAST_DEBUG(self, "schedules first", st.taste_partitions,
-                   "partition(s) for query", query_id);
-        // Prefer partitions that are currently in our cache.
-        std::partition(candidates.begin(), candidates.end(),
-                       [&](const uuid& candidate) {
-                         return st.lru_partitions.contains(candidate);
-                       });
-        // Get all INDEXER actors for the taste and store remaining candidates
-        // for later.
-        auto first = candidates.begin();
-        auto last_taste = first + st.taste_partitions;
-        qm = locate_indexers(expr, first, last_taste);
-        candidates.erase(first, last_taste);
-        using ls = index_state::lookup_state;
-        st.pending.emplace(query_id, ls{expr, std::move(candidates)});
+      auto query_id = uuid::random();
+      using ls = index_state::lookup_state;
+      auto [iter, added] = st.pending.emplace(query_id,
+                                              ls{expr, std::move(candidates)});
+      VAST_ASSERT(added);
+      VAST_IGNORE_UNUSED(added);
+      auto qm = st.launch_evaluators(iter->second, st.taste_partitions);
+      if (qm.empty()) {
+        VAST_ASSERT(iter->second.partitions.empty());
+        st.pending.erase(iter);
+        VAST_DEBUG(self, "returns without result: no partitions qualify");
+        return {uuid::nil(), 0, 0};
       }
+      // Delegate to query supervisor (uses up this worker) and report
+      // query ID + some stats to the client.
+      VAST_DEBUG(self, "schedules first", qm.size(), "partition(s) for query",
+                 iter->first);
+      auto scheduled = qm.size();
+      size_t hits = iter->second.partitions.size() + scheduled;
       self->send(st.next_worker(), std::move(expr), std::move(qm),
                  actor_cast<actor>(self->current_sender()));
+      if (!st.worker_available())
+        self->unbecome();
+      // Cleanup early if we could exhaust the query with the taste.
+      if (iter->second.partitions.empty()) {
+        query_id = uuid::nil();
+        st.pending.erase(iter);
+      }
       return {std::move(query_id), hits, scheduled};
     },
     [=](const uuid& query_id, size_t num_partitions) {
@@ -306,41 +371,29 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
         VAST_ERROR(self, "got an anonymous query (ignored)");
         return;
       }
-      auto pending_iter = st.pending.find(query_id);
-      if (pending_iter == st.pending.end()) {
+      auto client = actor_cast<actor>(self->current_sender());
+      auto iter = st.pending.find(query_id);
+      if (iter == st.pending.end()) {
         VAST_WARNING(self, "got a request for unknown query ID", query_id);
+        self->send(client, done_atom::value);
         return;
       }
-      VAST_DEBUG(self, "schedules", num_partitions,
-                 "more partition(s) for query ID", query_id);
-      // Every return after this points uses up the worker.
-      auto guard = caf::detail::make_scope_guard([&] {
-        if (!st.worker_available())
-          self->unbecome();
-      });
-      // Prefer partitions that are currently in our cache.
-      auto& candidates = pending_iter->second.partitions;
-      std::partition(candidates.begin(), candidates.end(),
-                     [&](const uuid& candidate) {
-                       return st.lru_partitions.contains(candidate);
-                     });
-      // Collect all INDEXER actors that we need to query.
-      auto& expr = pending_iter->second.expr;
-      auto first = candidates.begin();
-      auto last = first + std::min(num_partitions, candidates.size());
-      auto qm = locate_indexers(expr, first, last);
-      // Forward request to worker.
-      self->send(st.next_worker(), expr, std::move(qm),
-                 actor_cast<actor>(self->current_sender()));
-      // Cleanup.
-      if (last == candidates.end()) {
-        VAST_DEBUG(self, "exhausted all partitions for query ID", query_id);
-        st.pending.erase(pending_iter);
-      } else {
-        candidates.erase(first, last);
-        VAST_DEBUG(self, "has", candidates.size(),
-                   "partitions left for query ID", query_id);
+      auto qm = st.launch_evaluators(iter->second, num_partitions);
+      if (qm.empty()) {
+        VAST_ASSERT(iter->second.partitions.empty());
+        st.pending.erase(iter);
+        VAST_DEBUG(self, "returns without result: no partitions qualify");
+        self->send(client, done_atom::value);
+        return;
       }
+      // Delegate to query supervisor (uses up this worker) and report
+      // query ID + some stats to the client.
+      VAST_DEBUG(self, "schedules first", qm.size(), "partition(s) for query",
+                 iter->first);
+      self->send(st.next_worker(), iter->second.expr, std::move(qm), client);
+      // Cleanup if we exhausted all candidates.
+      if (iter->second.partitions.empty())
+        st.pending.erase(iter);
     },
     [=](worker_atom, caf::actor& worker) {
       self->state.idle_workers.emplace_back(std::move(worker));

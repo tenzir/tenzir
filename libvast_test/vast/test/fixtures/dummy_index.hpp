@@ -13,37 +13,44 @@
 
 #pragma once
 
-#include <cstdint>
-#include <string>
+#include <vector>
 
-#include <caf/detail/unordered_flat_map.hpp>
-#include <caf/fwd.hpp>
+#include "vast/system/index.hpp"
+#include "vast/table_slice.hpp"
 
-#include "vast/ids.hpp"
-#include "vast/uuid.hpp"
+#include "vast/test/fixtures/actor_system_and_events.hpp"
 
-namespace vast::system {
+namespace fixtures {
 
-/// Maps partition IDs to EVALUATOR actors (1 per layout in the partition).
-using query_map = caf::detail::unordered_flat_map<uuid,
-                                                  std::vector<caf::actor>>;
+/// A fixture with a dummy INDEX actor.
+struct dummy_index : deterministic_actor_system_and_events {
+  // -- member types -----------------------------------------------------------
 
-struct collector_state {
+  struct dummy_indexer_state {
+    std::vector<vast::table_slice_ptr> buf;
+  };
+
   // -- constructors, destructors, and assignment operators --------------------
 
-  collector_state(caf::local_actor* self);
+  dummy_index();
 
-  // -- meber variables --------------------------------------------------------
+  ~dummy_index() override;
 
-  /// Maps partition IDs to the number of outstanding responses and already
-  /// received event IDs.
-  caf::detail::unordered_flat_map<uuid, std::pair<size_t, ids>> open_requests;
+  // -- convenience functions --------------------------------------------------
 
-  // Gives the COLLECTOR a unique, human-readable name in log output.
-  std::string name;
+  auto& indexer_buf(caf::actor& hdl) {
+    return deref<caf::stateful_actor<dummy_indexer_state>>(hdl).state.buf;
+  }
+
+  /// Runs `f` inside the dummy INDEX actor.
+  void run_in_index(std::function<void()> f);
+
+  // -- member variables -------------------------------------------------------
+
+  /// Actor handle to our dummy.
+  caf::actor idx_handle;
+
+  vast::system::index_state* idx_state;
 };
 
-caf::behavior collector(caf::stateful_actor<collector_state>* self,
-                        caf::actor master);
-
-} // namespace vast::system
+} // namespace fixtures

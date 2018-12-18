@@ -22,25 +22,26 @@
 
 #include "vast/expression.hpp"
 #include "vast/ids.hpp"
+#include "vast/offset.hpp"
+#include "vast/uuid.hpp"
 
 namespace vast::system {
 
 /// @relates evaluator
 struct evaluator_state {
-  using predicate_hits_map = std::unordered_map<predicate,
-                                                std::pair<size_t, ids>>;
+  using predicate_hits_map = std::map<offset, std::pair<size_t, ids>>;
 
   evaluator_state(caf::event_based_actor* self);
 
-  void init(caf::actor client, expression expr);
+  void init(caf::actor client, expression expr, caf::response_promise promise);
 
   /// Updates `predicate_hits` and may trigger re-evaluation of the expression
   /// tree.
-  void handle_result(const predicate& pred, const ids& result);
+  void handle_result(const offset& position, const ids& result);
 
   /// Updates `predicate_hits` and may trigger re-evaluation of the expression
   /// tree.
-  void handle_missing_result(const predicate& pred, const caf::error& err);
+  void handle_missing_result(const offset& position, const caf::error& err);
 
   /// Evaluates the predicate-tree and may produces new deltas.
   void evaluate();
@@ -50,7 +51,7 @@ struct evaluator_state {
   void decrement_pending();
 
   /// Returns the `predicate_hits` entry for `pred` or `nullptr`.
-  predicate_hits_map::mapped_type* hits_for(const predicate& pred);
+  predicate_hits_map::mapped_type* hits_for(const offset& position);
 
   /// Stores the number of requests that did not receive a response yet.
   size_t pending_responses = 0;
@@ -70,13 +71,17 @@ struct evaluator_state {
   /// Stores the original query expression.
   expression expr;
 
+  /// Allows us to respond to the COLLECTOR after finishing a lookup.
+  caf::response_promise promise;
+
   /// Gives this actor a recognizable name in logging output.
   static inline const char* name = "evaluator";
 };
 
 /// Wraps a query expression in an actor. Upon receiving hits from INDEXER
 /// actors, re-evaluates the expression and relays new hits to its sinks.
+/// @pre `!eval.empty()`
 caf::behavior evaluator(caf::stateful_actor<evaluator_state>* self,
-                        std::vector<caf::actor> indexers);
+                        expression expr, evaluation_map eval);
 
 } // namespace vast::system

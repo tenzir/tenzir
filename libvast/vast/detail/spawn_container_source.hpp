@@ -13,9 +13,15 @@
 
 #pragma once
 
+#include <type_traits>
+
 #include <caf/actor.hpp>
+#include <caf/actor_cast.hpp>
 #include <caf/actor_system.hpp>
 #include <caf/event_based_actor.hpp>
+#include <caf/is_actor_handle.hpp>
+#include <caf/is_typed_actor.hpp>
+#include <caf/typed_actor.hpp>
 
 namespace vast::detail {
 
@@ -38,8 +44,16 @@ caf::actor spawn_container_source(caf::actor_system& system,
       iterator i;
       iterator e;
     };
+    actor first_sink;
+    if constexpr (is_actor_handle<Handle>::value) {
+      first_sink = actor_cast<actor>(std::move(y));
+    } else {
+      // Assume a container of actor handles.
+      first_sink = actor_cast<actor>(std::move(y.front()));
+      y.erase(y.begin());
+    }
     auto mgr = self->make_source(
-      std::move(y),
+      std::move(first_sink),
       [&](state& st) {
         st.xs = std::move(xs);
         st.i = st.xs.begin();
@@ -54,8 +68,16 @@ caf::actor spawn_container_source(caf::actor_system& system,
         return st.i == st.e;
       }
     ).ptr();
-    if constexpr (sizeof...(Handles) > 0)
-      std::make_tuple(mgr->add_outbound_path(ys)...);
+    auto add = [&](auto& x) {
+      if constexpr (is_actor_handle<std::decay_t<decltype(x)>>::value)
+        mgr->add_outbound_path(x);
+      else
+        for (auto& hdl : x)
+          mgr->add_outbound_path(hdl);
+    };
+    if constexpr (!is_actor_handle<Handle>::value)
+      add(y);
+    (add(ys), ...);
   };
   return system.spawn(f, std::move(container), std::move(sink),
                       std::move(sinks)...);

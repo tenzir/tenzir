@@ -185,57 +185,65 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
     ship_results(self);
   };
   return {
+    // The INDEX (or the EVALUATOR, to be more precise) sends us a series of
+    // `ids` in response to an expression (query), terminated by 'done'.
     [=](ids& hits) {
-      timespan runtime = steady_clock::now() - self->state.start;
-      self->state.query.runtime = runtime;
+      // Add `hits` to the total result set and update all stats.
+      auto& st = self->state;
+      timespan runtime = steady_clock::now() - st.start;
+      st.query.runtime = runtime;
       auto count = rank(hits);
-      if (self->state.accountant) {
-        if (self->state.hits.empty())
-          self->send(self->state.accountant, "exporter.hits.first", runtime);
-        self->send(self->state.accountant, "exporter.hits.arrived", runtime);
-        self->send(self->state.accountant, "exporter.hits.count", count);
+      if (st.accountant) {
+        if (st.hits.empty())
+          self->send(st.accountant, "exporter.hits.first", runtime);
+        self->send(st.accountant, "exporter.hits.arrived", runtime);
+        self->send(st.accountant, "exporter.hits.count", count);
       }
-      VAST_DEBUG(self, "got", count, "index hits",
-                 (count == 0 ? "" : ("in ["s + to_string(select(hits, 1)) + ','
-                                     + to_string(select(hits, -1) + 1) + ')')));
-      if (count > 0) {
-        self->state.hits |= hits;
+      if (count == 0) {
+        VAST_WARNING(self, "got empty hits");
+      } else {
+        VAST_DEBUG(self, "got", count, "index hits in [", (select(hits, 1)),
+                   ',', (select(hits, -1) + 1), ')');
+        st.hits |= hits;
         VAST_DEBUG(self, "forwards hits to archive");
         // FIXME: restrict according to configured limit.
-        ++self->state.query.lookups_issued;
-        self->send(self->state.archive, std::move(hits));
+        ++st.query.lookups_issued;
+        self->send(st.archive, std::move(hits));
       }
-      // Figure out if we're done.
-      ++self->state.query.received;
-      self->send(self->state.sink, self->state.id, self->state.query);
-      if (self->state.query.received < self->state.query.expected) {
-        VAST_DEBUG(self, "received", self->state.query.received << '/'
-                                     << self->state.query.expected, "ID sets");
-        request_more_hits(self);
-      } else {
-        VAST_DEBUG(self, "received all", self->state.query.expected,
-                   "ID set(s) in", runtime);
-        if (self->state.accountant)
-          self->send(self->state.accountant, "exporter.hits.runtime", runtime);
-      }
-      if (finished(self->state.query))
-        shutdown(self);
     },
     [=](table_slice_ptr slice) {
       handle_batch(to_events(*slice, self->state.hits));
-      request_more_hits(self);
-      if (finished(self->state.query))
-        shutdown(self);
+    },
+    [=](done_atom) {
+      // Figure out if we're done by bumping the counter for `received` and
+      // check whether it reaches `expected`.
+      auto& st = self->state;
+      timespan runtime = steady_clock::now() - st.start;
+      st.query.runtime = runtime;
+      st.query.received += st.query.scheduled;
+      if (st.query.received < st.query.expected) {
+        VAST_DEBUG(self, "received", st.query.received, '/',
+                   st.query.expected, "ID sets");
+        request_more_hits(self);
+      } else {
+        VAST_DEBUG(self, "received all", st.query.expected,
+                   "ID set(s) in", runtime);
+        if (st.accountant)
+          self->send(st.accountant, "exporter.hits.runtime", runtime);
+        if (finished(st.query))
+          shutdown(self);
+      }
     },
     [=](done_atom, const caf::error& err) {
+      auto& st = self->state;
       auto sender = self->current_sender();
-      if (sender == self->state.archive) {
+      if (sender == st.archive) {
         if (err)
           VAST_DEBUG(self, "received error from archive:",
               self->system().render(err));
-        ++self->state.query.lookups_complete;
+        ++st.query.lookups_complete;
       }
-      if (finished(self->state.query))
+      if (finished(st.query))
         shutdown(self);
     },
     [=](extract_atom) {
