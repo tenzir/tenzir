@@ -55,15 +55,19 @@ void indexer_stage_driver::process(downstream_type& out, batch_type& slices) {
     auto [meta_x, added] = state_->active->get_or_add(layout);
     if (added) {
       VAST_DEBUG(state_->self, "added a new table_indexer for layout", layout);
-      // TODO: error handling
-      meta_x.init();
-      meta_x.spawn_indexers();
-      for (auto& x : meta_x.indexers()) {
-        // We'll have invalid handles at all fields with skip attribute.
-        if (x) {
-          auto slt = out_.parent()->add_unchecked_outbound_path<output_type>(x);
-          VAST_DEBUG(state_->self, "spawned new INDEXER at slot", slt);
-          out_.set_filter(slt, layout);
+      if (auto err = meta_x.init()) {
+        VAST_ERROR(state_->self,
+                   "failed to initialize table_indexer for layout", layout,
+                   "-> all incoming logs get dropped!");
+      } else {
+        meta_x.spawn_indexers();
+        for (auto& x : meta_x.indexers()) {
+          // We'll have invalid handles at all fields with skip attribute.
+          if (x) {
+            auto slt = out_.parent()->add_unchecked_outbound_path<output_type>(x);
+            VAST_DEBUG(state_->self, "spawned new INDEXER at slot", slt);
+            out_.set_filter(slt, layout);
+          }
         }
       }
     }
