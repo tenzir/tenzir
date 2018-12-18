@@ -36,11 +36,6 @@ namespace vast::system {
 /// Wraps multiple INDEXER actors according to a layout and dispatches queries.
 class table_indexer {
 public:
-  // -- member and nested types ------------------------------------------------
-
-  /// Stores one INDEXER actor per column.
-  using indexer_list = std::vector<caf::actor>;
-
   // -- constructors, destructors, and assignment operators --------------------
 
   /// @pre `parent != nullptr`
@@ -170,7 +165,7 @@ private:
   type type_erased_layout_;
 
   /// Columns of our type-dependant layout. Lazily filled with INDEXER actors.
-  indexer_list indexers_;
+  std::vector<caf::actor> indexers_;
 
   /// Stores what IDs are present in this table.
   ids row_ids_;
