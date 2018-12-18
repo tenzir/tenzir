@@ -46,10 +46,10 @@ struct fixture : fixture_base {
   }
 
   ~fixture() {
-    for (auto& hdl : {index, importer, exporter, consensus})
+    for (auto& hdl : {index, importer, exporter, raft_consensus})
       self->send_exit(hdl, exit_reason::user_shutdown);
     self->send_exit(archive, exit_reason::user_shutdown);
-    self->send_exit(meta_store, exit_reason::user_shutdown);
+    self->send_exit(consensus, exit_reason::user_shutdown);
     run();
   }
 
@@ -66,14 +66,14 @@ struct fixture : fixture_base {
                            slice_size);
   }
 
-  void spawn_consensus() {
-    consensus = self->spawn(system::raft::consensus, directory / "consensus");
+  void spawn_raft_consensus() {
+    raft_consensus = self->spawn(system::raft::consensus, directory / "consensus");
   }
 
-  void spawn_meta_store() {
-    if (!consensus)
-      spawn_consensus();
-    meta_store = self->spawn(system::replicated_store<string, data>, consensus);
+  void spawn_consensus() {
+    if (!raft_consensus)
+      spawn_raft_consensus();
+    consensus = self->spawn(system::replicated_store<string, data>, raft_consensus);
   }
 
   void spawn_exporter(query_options opts) {
@@ -87,13 +87,13 @@ struct fixture : fixture_base {
       spawn_archive();
     if (!importer)
       spawn_importer();
-    if (!meta_store)
-      spawn_meta_store();
-    send(consensus, system::run_atom::value);
+    if (!consensus)
+      spawn_consensus();
+    send(raft_consensus, system::run_atom::value);
     run();
     send(importer, archive);
     send(importer, system::index_atom::value, index);
-    send(importer, meta_store);
+    send(importer, consensus);
     run();
   }
 
@@ -133,8 +133,8 @@ struct fixture : fixture_base {
   system::archive_type archive;
   actor importer;
   actor exporter;
-  actor consensus;
-  system::meta_store_type meta_store;
+  actor raft_consensus;
+  system::consensus_type consensus;
   expression expr;
 };
 

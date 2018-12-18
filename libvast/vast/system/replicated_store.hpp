@@ -25,7 +25,7 @@
 #include "vast/logger.hpp"
 #include "vast/si_literals.hpp"
 
-#include "vast/system/consensus.hpp"
+#include "vast/system/raft.hpp"
 #include "vast/system/key_value_store.hpp"
 #include "vast/system/timeouts.hpp"
 

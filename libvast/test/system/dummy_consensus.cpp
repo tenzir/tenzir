@@ -14,9 +14,9 @@
 #include <caf/all.hpp>
 
 #include "vast/system/atoms.hpp"
-#include "vast/system/simple_store.hpp"
+#include "vast/system/dummy_consensus.hpp"
 
-#define SUITE simple_store
+#define SUITE dummy_consensus
 #include "vast/test/test.hpp"
 #include "vast/test/fixtures/actor_system.hpp"
 
@@ -24,12 +24,12 @@ using namespace caf;
 using namespace vast;
 using namespace vast::system;
 
-FIXTURE_SCOPE(simple_store_tests, fixtures::actor_system)
+FIXTURE_SCOPE(dummy_consensus_tests, fixtures::actor_system)
 
-TEST(simple store) {
-  auto store_dir = directory / "simple-store";
+TEST(dummy consensus) {
+  auto store_dir = directory / "dummy-consensus";
   {
-    auto store = self->spawn(simple_store, store_dir);
+    auto store = self->spawn(dummy_consensus, store_dir);
     MESSAGE("put two values");
     self->request(store, infinite, put_atom::value, "foo", data{42}).receive(
       [&](ok_atom) {},
@@ -73,7 +73,7 @@ TEST(simple store) {
     self->send_exit(store, exit_reason::user_shutdown);
   }
   {
-    auto store = self->spawn(simple_store, store_dir);
+    auto store = self->spawn(dummy_consensus, store_dir);
     MESSAGE("get a value from the store's previous lifetime");
     self->request(store, infinite, get_atom::value, "baz").receive(
       [&](optional<data> result) {

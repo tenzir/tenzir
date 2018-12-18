@@ -20,10 +20,10 @@
 
 namespace vast::system {
 
-/// Tries to spawn a new META_STORE.
+/// Tries to spawn a new CONSENSUS.
 /// @param self Points to the parent actor.
 /// @param args Configures the new actor.
 /// @returns a handle to the spawned actor on success, an error otherwise
-maybe_actor spawn_metastore(caf::local_actor* self, spawn_arguments& args);
+maybe_actor spawn_consensus(caf::local_actor* self, spawn_arguments& args);
 
 } // namespace vast::system

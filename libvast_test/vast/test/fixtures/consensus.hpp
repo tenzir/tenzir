@@ -14,7 +14,7 @@
 #pragma once
 
 #include "vast/system/atoms.hpp"
-#include "vast/system/consensus.hpp"
+#include "vast/system/raft.hpp"
 
 #include "vast/test/fixtures/actor_system.hpp"
 
