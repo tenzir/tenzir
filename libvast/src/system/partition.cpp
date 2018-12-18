@@ -169,9 +169,10 @@ evaluation_map partition::eval(const expression& expr) {
                                 return caf::actor{};
                               }),
                             pred.lhs, pred.rhs);
-      if (hdl != nullptr)
-        triples.emplace_back(kvp.first, curried_predicate{pred.op, pred.rhs},
-                             std::move(hdl));
+      if (hdl != nullptr) {
+        VAST_DEBUG_ANON(__func__, "adds INDEXER", hdl, "to the evaluation map");
+        triples.emplace_back(kvp.first, curried(pred), std::move(hdl));
+      }
     }
   }
   return result;
