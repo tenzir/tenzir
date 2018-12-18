@@ -206,7 +206,7 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
       }
 <<<<<<< HEAD
       if (count == 0) {
-        VAST_WARNING(self, "got an empty delta from INDEX lookup");
+        VAST_WARNING(self, "got empty hits");
       } else {
         VAST_DEBUG(self, "got", count, "index hits in [", (select(hits, 1)),
                    ',', (select(hits, -1) + 1), ')');
