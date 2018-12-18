@@ -34,6 +34,10 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   fixture() {
     directory /= "column-index";
   }
+
+  auto lookup(column_index_ptr& idx, const curried_predicate& pred) {
+    return unbox(idx->lookup(pred.op, make_view(pred.rhs)));
+  }
 };
 
 } // namespace <anonymous>
@@ -65,19 +69,19 @@ TEST(integer values) {
   auto is3 = curried(unbox(to<predicate>(":int == +3")));
   auto is4 = curried(unbox(to<predicate>(":int == +4")));
   MESSAGE("verify column index");
-  CHECK_EQUAL(unbox(col->lookup(is1)), make_ids({0, 3, 6}, slice_size));
-  CHECK_EQUAL(unbox(col->lookup(is2)), make_ids({1, 4, 7}, slice_size));
-  CHECK_EQUAL(unbox(col->lookup(is3)), make_ids({2, 5, 8}, slice_size));
-  CHECK_EQUAL(unbox(col->lookup(is4)), make_ids({}, slice_size));
+  CHECK_EQUAL(lookup(col, is1), make_ids({0, 3, 6}, slice_size));
+  CHECK_EQUAL(lookup(col, is2), make_ids({1, 4, 7}, slice_size));
+  CHECK_EQUAL(lookup(col, is3), make_ids({2, 5, 8}, slice_size));
+  CHECK_EQUAL(lookup(col, is4), make_ids({}, slice_size));
   MESSAGE("persist and reload from disk");
   col->flush_to_disk();
   col.reset();
   col = unbox(make_column_index(sys, directory, column_type, 0));
   MESSAGE("verify column index again");
-  CHECK_EQUAL(unbox(col->lookup(is1)), make_ids({0, 3, 6}, slice_size));
-  CHECK_EQUAL(unbox(col->lookup(is2)), make_ids({1, 4, 7}, slice_size));
-  CHECK_EQUAL(unbox(col->lookup(is3)), make_ids({2, 5, 8}, slice_size));
-  CHECK_EQUAL(unbox(col->lookup(is4)), make_ids({}, slice_size));
+  CHECK_EQUAL(lookup(col, is1), make_ids({0, 3, 6}, slice_size));
+  CHECK_EQUAL(lookup(col, is2), make_ids({1, 4, 7}, slice_size));
+  CHECK_EQUAL(lookup(col, is3), make_ids({2, 5, 8}, slice_size));
+  CHECK_EQUAL(lookup(col, is4), make_ids({}, slice_size));
 }
 
 TEST(bro conn log) {
@@ -93,13 +97,13 @@ TEST(bro conn log) {
   MESSAGE("verify column index");
   auto pred = curried(unbox(to<predicate>(":addr == 192.168.1.103")));
   auto expected_result = make_ids({1, 3, 7, 14, 16}, bro_conn_log.size());
-  CHECK_EQUAL(unbox(col->lookup(pred)), expected_result);
+  CHECK_EQUAL(lookup(col, pred), expected_result);
   MESSAGE("persist and reload from disk");
   col->flush_to_disk();
   col.reset();
   MESSAGE("verify column index again");
   col = unbox(make_column_index(sys, directory, *col_type, col_index));
-  CHECK_EQUAL(unbox(col->lookup(pred)), expected_result);
+  CHECK_EQUAL(lookup(col, pred), expected_result);
 }
 
 FIXTURE_SCOPE_END()

@@ -24,6 +24,7 @@
 #include "vast/filesystem.hpp"
 #include "vast/logger.hpp"
 #include "vast/system/atoms.hpp"
+#include "vast/view.hpp"
 
 using namespace caf;
 
@@ -58,7 +59,7 @@ behavior indexer(stateful_actor<indexer_state>* self, path dir,
   return {
     [=](const curried_predicate& pred) {
       VAST_DEBUG(self, "got predicate:", pred);
-      return self->state.col.lookup(pred);
+      return self->state.col.lookup(pred.op, make_view(pred.rhs));
     },
     [=](persist_atom) -> result<void> {
       if (auto err = self->state.col.flush_to_disk(); err != caf::none)

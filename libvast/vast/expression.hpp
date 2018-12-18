@@ -155,7 +155,7 @@ struct curried_predicate {
   using operand = predicate::operand;
 
   relational_operator op;
-  operand rhs;
+  data rhs;
 };
 
 /// @relates curried_predicate
@@ -168,7 +168,8 @@ auto inspect(Inspector& f, curried_predicate& x) {
 /// @relates predicate
 /// @relates curried_predicate
 inline curried_predicate curried(const predicate& pred) {
-  return {pred.op, pred.rhs};
+  VAST_ASSERT(caf::holds_alternative<data>(pred.rhs));
+  return {pred.op, caf::get<data>(pred.rhs)};
 }
 
 /// A sequence of AND expressions.
