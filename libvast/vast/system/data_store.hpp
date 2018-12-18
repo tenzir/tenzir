@@ -15,6 +15,7 @@
 
 #include <unordered_map>
 
+#include <caf/config_value.hpp>
 #include <caf/none.hpp>
 
 #include "vast/data.hpp"
@@ -57,6 +58,11 @@ data_store(
       if (i == self->state.store.end())
         return caf::none;
       return i->second;
+    },
+    [=](status_atom) -> caf::config_value::dictionary {
+      caf::dictionary<caf::config_value> result;
+      result.emplace("store-size", self->state.store.size());
+      return result;
     }
   };
 }
