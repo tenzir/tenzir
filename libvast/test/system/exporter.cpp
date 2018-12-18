@@ -11,22 +11,23 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
+#define SUITE exporter
+
+#include "vast/system/exporter.hpp"
+
+#include "vast/test/test.hpp"
+
+#include "vast/test/fixtures/actor_system_and_events.hpp"
+
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
-
+#include "vast/detail/spawn_container_source.hpp"
 #include "vast/query_options.hpp"
-
 #include "vast/system/archive.hpp"
-#include "vast/system/exporter.hpp"
 #include "vast/system/importer.hpp"
 #include "vast/system/index.hpp"
 #include "vast/system/replicated_store.hpp"
-
-#include "vast/detail/spawn_container_source.hpp"
-
-#define SUITE exporter
-#include "vast/test/test.hpp"
-#include "vast/test/fixtures/actor_system_and_events.hpp"
+#include "vast/table_slice.hpp"
 
 using namespace caf;
 using namespace vast;
@@ -139,8 +140,6 @@ struct fixture : fixture_base {
 
 } // namespace <anonymous>
 
-/*
-
 FIXTURE_SCOPE(exporter_tests, fixture)
 
 TEST(historical query without importer) {
@@ -222,5 +221,3 @@ TEST(continuous query with importer) {
 }
 
 FIXTURE_SCOPE_END()
-
-*/
