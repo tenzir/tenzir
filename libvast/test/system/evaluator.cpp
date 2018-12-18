@@ -68,8 +68,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
       std::string field_name = dx.offset.back() == 0 ? "x" : "y";
       auto& xs =  indexers[field_name];
       for (auto& x : xs)
-        triples.emplace_back(expr_position,
-                             curried_predicate{pred.op, pred.rhs}, x);
+        triples.emplace_back(expr_position, curried(pred), x);
     }
     auto eval = sys.spawn(system::evaluator, expr, std::move(qm));
     self->send(eval, self);
