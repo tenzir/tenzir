@@ -220,17 +220,17 @@ const expression* at(const expression& expr, const offset& o) {
 
 namespace {
 
-bool resolve(std::vector<std::pair<offset, predicate>>& result,
-             const expression& expr, const type& t, offset& o) {
+bool resolve_impl(std::vector<std::pair<offset, predicate>>& result,
+                  const expression& expr, const type& t, offset& o) {
   return caf::visit(detail::overload(
     [&](const auto& xs) { // conjunction or disjunction
       o.emplace_back(0);
       if (!xs.empty()) {
-        if (!resolve(result, xs[0], t, o))
+        if (!resolve_impl(result, xs[0], t, o))
           return false;
         for (size_t i = 1; i < xs.size(); ++i) {
           o.back() += 1;
-          if (!resolve(result, xs[i], t, o))
+          if (!resolve_impl(result, xs[i], t, o))
             return false;
         }
       }
@@ -239,7 +239,7 @@ bool resolve(std::vector<std::pair<offset, predicate>>& result,
     },
     [&](const negation& x) {
       o.emplace_back(0);
-      if (!resolve(result, x.expr(), t, o))
+      if (!resolve_impl(result, x.expr(), t, o))
         return false;
       o.pop_back();
       return true;
@@ -266,7 +266,7 @@ std::vector<std::pair<offset, predicate>> resolve(const expression& expr,
                                                   const type& t) {
   std::vector<std::pair<offset, predicate>> result;
   offset o{0};
-  if (resolve(result, expr, t, o))
+  if (resolve_impl(result, expr, t, o))
     return result;
   return {};
 }
