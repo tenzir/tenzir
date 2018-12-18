@@ -23,6 +23,7 @@
 #include <caf/fwd.hpp>
 #include <caf/ref_counted.hpp>
 
+#include "vast/bitvector.hpp"
 #include "vast/detail/range.hpp"
 #include "vast/filesystem.hpp"
 #include "vast/fwd.hpp"
@@ -156,7 +157,7 @@ private:
 
   /// @returns whether the meta indexer skips given column
   auto skips_column(size_t column) const noexcept {
-    return ((skip_mask_ >> column) & 0x01) == 1;
+    return skip_mask_[column];
   }
 
   // -- member variables -------------------------------------------------------
@@ -178,7 +179,7 @@ private:
   size_t last_flush_size_;
 
   /// Stores IDs of skipped columns.
-  size_t skip_mask_;
+  bitvector<> skip_mask_;
 };
 
 } // namespace vast::system
