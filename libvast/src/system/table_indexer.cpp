@@ -39,9 +39,9 @@ table_indexer::table_indexer(partition* parent, const record_type& layout)
   VAST_TRACE(VAST_ARG(type_erased_layout_));
   // Compute which fields to skip.
   auto& fields = layout.fields;
+  skip_mask_.reserve(fields.size());
   for (size_t column = 0; column < fields.size(); ++column)
-    skip_mask_ = (skip_mask_ << 1)
-                 | (has_skip_attribute(fields[column].type) ? 1 : 0);
+    skip_mask_.emplace_back(has_skip_attribute(fields[column].type));
   // Fill indexers_ with default-constructed handles. We lazily spawn INDEXER
   // actors as we go.
   indexers_.resize(fields.size());
