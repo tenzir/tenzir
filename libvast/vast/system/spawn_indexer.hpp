@@ -24,7 +24,9 @@ namespace vast::system {
 /// Spawns an INDEXER actor.
 /// @param parent The parent actor.
 /// @param dir Base directory for persistent state.
-/// @param
+/// @param column_type The type of the indexed field.
+/// @param column The column ID for the indexed field.
+/// @returns the new INDEXER actor.
 caf::actor spawn_indexer(caf::local_actor* parent, path dir,
                          type column_type, size_t column);
 
