@@ -18,6 +18,7 @@
 
 #include <caf/binary_deserializer.hpp>
 #include <caf/binary_serializer.hpp>
+#include <caf/config_value.hpp>
 #include <caf/none.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
@@ -30,6 +31,7 @@
 #include "vast/system/timeouts.hpp"
 
 #include "vast/detail/assert.hpp"
+#include "vast/detail/fill_status_map.hpp"
 #include "vast/detail/operators.hpp"
 
 namespace vast::system {
@@ -44,7 +46,23 @@ struct replicated_store_state {
   uint64_t request_id = 0;
   std::unordered_map<uint64_t, caf::response_promise> requests;
   std::chrono::steady_clock::time_point last_stats_update;
+  raft::statistics stats{};
   static inline const char* name = "replicated-store";
+
+  caf::dictionary<caf::config_value> status() const {
+    caf::dictionary<caf::config_value> result;
+    // Misc parameters.
+    result.emplace("store-size", store.size());
+    result.emplace("last-applied", last_applied);
+    result.emplace("last-snapshot-size", last_snapshot_size);
+    result.emplace("open-requests", requests.size());
+    auto age = std::chrono::steady_clock::now() - last_stats_update;
+    result.emplace("time-since-last-statistics-update",
+                   std::to_string(age.count()));
+    result.emplace("log-entries", stats.log_entries);
+    result.emplace("log-bytes", stats.log_bytes);
+    return result;
+  }
 };
 
 template <class Inspector, class Key, class Value>
@@ -271,6 +289,7 @@ replicated_store(
       self->request(consensus, consensus_timeout, statistics_atom::value).then(
         [=](const raft::statistics& stats) {
           using namespace vast::binary_byte_literals;
+          self->state.stats = stats;
           auto low = static_cast<uint64_t>(64_MiB);
           auto high = self->state.last_snapshot_size * 4;
           if (stats.log_bytes > std::max(low, high))
@@ -296,9 +315,14 @@ replicated_store(
         }
       );
       return rp;
+    },
+    [=](status_atom) {
+      auto result = self->state.status();
+      // General state such as open streams.
+      detail::fill_status_map(result, self);
+      return result;
     }
   };
 }
 
 } // namespace vast::system
-

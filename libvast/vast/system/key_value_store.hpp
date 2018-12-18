@@ -13,8 +13,8 @@
 
 #pragma once
 
-#include <caf/stateful_actor.hpp>
 #include <caf/replies_to.hpp>
+#include <caf/stateful_actor.hpp>
 #include <caf/typed_actor.hpp>
 
 #include "vast/optional.hpp"
@@ -32,8 +32,9 @@ using key_value_store_type = caf::typed_actor<
   // Deletes a key-value pair.
   typename caf::replies_to<delete_atom, Key>::template with<ok_atom>,
   // Retrieves the value for a given key pair.
-  typename caf::replies_to<get_atom, Key>::template with<optional<Value>>
->;
+  typename caf::replies_to<get_atom, Key>::template with<optional<Value>>,
+  // Returns the runtime status in a dict.
+  typename caf::replies_to<status_atom>::template with<
+    caf::dictionary<caf::config_value>>>;
 
 } // namespace vast::system
-

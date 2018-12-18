@@ -46,6 +46,8 @@ struct dummy_consensus_state {
 
   /// The location of the persistence file.
   path file;
+
+  caf::dictionary<caf::config_value> status() const;
 };
 
 /// A key-value store that stores its data in a `std::unordered_map`.
