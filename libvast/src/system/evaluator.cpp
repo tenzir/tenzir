@@ -101,7 +101,7 @@ void evaluator_state::init(caf::actor client, expression expr,
 }
 
 void evaluator_state::handle_result(const offset& position, const ids& result) {
-  VAST_DEBUG(self, "got new hits", result, " for predicate at position",
+  VAST_DEBUG(self, "got new hits", result, "for predicate at position",
              position);
   auto ptr = hits_for(position);
   VAST_ASSERT(ptr != nullptr);
