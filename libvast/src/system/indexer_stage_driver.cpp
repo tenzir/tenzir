@@ -56,7 +56,8 @@ void indexer_stage_driver::process(downstream_type& out, batch_type& slices) {
     if (added) {
       VAST_DEBUG(state_->self, "added a new table_indexer for layout", layout);
       // TODO: error handling
-      meta_x.eager_init();
+      meta_x.init();
+      meta_x.spawn_indexers();
       for (auto& x : meta_x.indexers()) {
         // We'll have invalid handles at all fields with skip attribute.
         if (x) {

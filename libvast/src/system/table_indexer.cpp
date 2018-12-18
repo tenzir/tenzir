@@ -63,16 +63,6 @@ caf::error table_indexer::init() {
   return caf::none;
 }
 
-caf::error table_indexer::eager_init() {
-  VAST_TRACE("");
-  if (auto err = init())
-    return err;
-  for (size_t column = 0; column < indexers_.size(); ++column)
-    if (!skips_column(column))
-      indexer_at(column);
-  return caf::none;
-}
-
 caf::error table_indexer::flush_to_disk() {
   // Unless `add` was called at least once there's nothing to flush.
   VAST_TRACE("");
@@ -109,13 +99,14 @@ path table_indexer::row_ids_file() const {
   return partition_dir() / "row_ids";
 }
 
-void table_indexer::materialize() {
+void table_indexer::spawn_indexers() {
   VAST_TRACE("");
-  for (size_t column = 0; column < columns(); ++column) {
-    // We ignore the returned reference, since we're only interested in the
-    // side effect of lazily spinning up INDEXER actors.
-    indexer_at(column);
-  }
+  for (size_t column = 0; column < columns(); ++column)
+    if (!skips_column(column)) {
+      // We ignore the returned reference, since we're only interested in the
+      // side effect of lazily spinning up INDEXER actors.
+      indexer_at(column);
+    }
 }
 
 path table_indexer::partition_dir() const {

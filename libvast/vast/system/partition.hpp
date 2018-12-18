@@ -121,7 +121,7 @@ public:
   template <class F>
   void for_each_indexer(F f) {
     for (auto& kvp : table_indexers_) {
-      kvp.second.materialize();
+      kvp.second.spawn_indexers();
       kvp.second.for_each_indexer(f);
     }
   }

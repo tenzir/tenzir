@@ -48,9 +48,6 @@ public:
   /// Loads state from disk.
   caf::error init();
 
-  /// Loads state from disk and spawns all INDEXER actors eagerly.
-  caf::error eager_init();
-
   /// Persists all indexes to disk.
   caf::error flush_to_disk();
 
@@ -80,8 +77,8 @@ public:
     return row_ids_;
   }
 
-  /// Materializes all currently unloaded INDEXER actors.
-  void materialize();
+  /// Spawns all currently unloaded INDEXER actors.
+  void spawn_indexers();
 
   /// @returns the list of all INDEXER actors.
   /// @warning may contain invalid actor handles

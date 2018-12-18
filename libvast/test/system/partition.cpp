@@ -149,8 +149,11 @@ TEST(eager initialization) {
     auto put = make_partition();
     id = put->id();
     MESSAGE("add eagerly initialized table indexers");
-    for (auto& x : layouts)
-      CHECK_EQUAL(put->get_or_add(x).first.eager_init(), caf::none);
+    for (auto& x : layouts) {
+      auto& tbl = put->get_or_add(x).first;
+      CHECK_EQUAL(tbl.init(), caf::none);
+      tbl.spawn_indexers();
+    }
     CHECK_EQUAL(sorted_strings(put->layouts()), sorted_strings(layouts));
     CHECK_EQUAL(running_indexers(), total_noskip_fields);
   });
