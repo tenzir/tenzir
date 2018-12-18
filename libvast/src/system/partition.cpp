@@ -87,7 +87,8 @@ namespace {
 using eval_mapping = evaluation_map::mapped_type;
 
 caf::actor fetch_indexer(table_indexer& tbl, const data_extractor& dx,
-                         relational_operator op, const data& x) {
+                         [[maybe_unused]] relational_operator op,
+                         [[maybe_unused]] const data& x) {
   VAST_TRACE(VAST_ARG(tbl), VAST_ARG(dx), VAST_ARG(op), VAST_ARG(x));
   // Sanity check.
   if (dx.offset.empty())
