@@ -14,17 +14,18 @@
 #include "vast/system/dummy_consensus.hpp"
 
 #include <caf/all.hpp>
+#include <caf/config_value.hpp>
 #include <caf/none.hpp>
 
 #include "vast/filesystem.hpp"
 #include "vast/load.hpp"
 #include "vast/save.hpp"
 
+#include "vast/detail/fill_status_map.hpp"
 
 namespace vast::system {
 
-dummy_consensus_state::dummy_consensus_state(actor_ptr self)
-  : self{self} {
+dummy_consensus_state::dummy_consensus_state(actor_ptr self) : self{self} {
   // nop
 }
 
@@ -43,6 +44,16 @@ caf::error dummy_consensus_state::save() {
   return vast::save(self->system(), file, store);
 }
 
+caf::dictionary<caf::config_value> dummy_consensus_state::status() const {
+  caf::dictionary<caf::config_value> result;
+  // Misc parameters.
+  result.emplace("store-size", store.size());
+  result.emplace("store-file", file.str());
+  // General state such as open streams.
+  detail::fill_status_map(result, self);
+  return result;
+}
+
 /// A key-value store that stores its data in a `std::unordered_map`.
 /// @param self The actor handle.
 consensus_type::behavior_type
@@ -52,34 +63,37 @@ dummy_consensus(dummy_consensus_state::actor_ptr self, path dir) {
     self->quit(std::move(err));
     return behavior_type::make_empty_behavior();
   }
-  return {
-    [=](put_atom, const std::string& key, data& value) -> caf::result<ok_atom> {
-      self->state.store[key] = std::move(value);
-      if (auto err = self->state.save())
-        return err;
-      return ok_atom::value;
-    },
-    [=](add_atom, const std::string& key, const data& value) -> caf::result<data> {
-      auto& v = self->state.store[key];
-      auto old = v;
-      v += value;
-      if (auto err = self->state.save())
-        return err;
-      return old;
-    },
-    [=](delete_atom, const std::string& key) -> caf::result<ok_atom> {
-      self->state.store.erase(key);
-      if (auto err = self->state.save())
-        return err;
-      return ok_atom::value;
-    },
-    [=](get_atom, const std::string& key) -> caf::result<optional<data>> {
-      auto i = self->state.store.find(key);
-      if (i == self->state.store.end())
-        return caf::none;
-      return i->second;
-    }
-  };
+  return {[=](put_atom, const std::string& key,
+              data& value) -> caf::result<ok_atom> {
+            self->state.store[key] = std::move(value);
+            if (auto err = self->state.save())
+              return err;
+            return ok_atom::value;
+          },
+          [=](add_atom, const std::string& key,
+              const data& value) -> caf::result<data> {
+            auto& v = self->state.store[key];
+            auto old = v;
+            v += value;
+            if (auto err = self->state.save())
+              return err;
+            return old;
+          },
+          [=](delete_atom, const std::string& key) -> caf::result<ok_atom> {
+            self->state.store.erase(key);
+            if (auto err = self->state.save())
+              return err;
+            return ok_atom::value;
+          },
+          [=](get_atom, const std::string& key) -> caf::result<optional<data>> {
+            auto i = self->state.store.find(key);
+            if (i == self->state.store.end())
+              return caf::none;
+            return i->second;
+          },
+          [=](status_atom) -> caf::config_value::dictionary {
+            return self->state.status();
+          }};
 }
 
 } // namespace vast::system
