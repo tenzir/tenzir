@@ -55,3 +55,12 @@ TEST(construct from empty array) {
   std::array<int, 42> xs;
   CHECK_EQUAL(span<int>{xs}.size(), 42);
 }
+
+TEST(byte span utility) {
+  std::array<int8_t, 42> xs;
+  auto ys = make_byte_span(xs);
+  ys[0] = byte{0xff};
+  CHECK_EQUAL(ys[0], byte{0xff});
+  auto zs = make_const_byte_span(xs);
+  CHECK_EQUAL(zs[0], byte{0xff});
+}

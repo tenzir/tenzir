@@ -606,4 +606,44 @@ as_writeable_bytes(span<ElementType, Extent> s) noexcept {
   return {reinterpret_cast<byte*>(s.data()), s.size_bytes()};
 }
 
+// -- non-standard utilitiy functions ------------------------------------------
+
+/// Constructs a byte span from an arbitrary pointer type and size.
+/// @tparam T The element type of the span.
+/// @tparam Size The size type casted into the span's `index_type`.
+/// @param data A pointer to data.
+/// @param size The length of the byte sequence at *data*.
+/// @returns A `span<byte>` or `span<const byte>` over *data* of length *size*.
+///          Constness is propagated through `T`.
+template <class T, class Size>
+auto make_byte_span(T* data, Size size) {
+  using byte_type = std::conditional_t<
+    std::is_const_v<std::remove_pointer_t<T>>,
+    const byte,
+    byte
+  >;
+  auto ptr = reinterpret_cast<byte_type*>(data);
+  using span_type = span<byte_type>;
+  using index_type = typename span_type::index_type;
+  return span_type{ptr, narrow_cast<index_type>(size)};
+}
+
+/// @relates make_byte_span
+template <class Container>
+auto make_byte_span(Container&& xs) {
+  return make_byte_span(std::data(xs), std::size(xs));
+}
+
+/// @relates make_byte_span
+template <class T, class Size>
+auto make_const_byte_span(T* data, Size size) {
+  return make_byte_span(const_cast<const T*>(data), size);
+}
+
+/// @relates make_byte_span
+template <class Container>
+auto make_const_byte_span(Container&& xs) {
+  return make_const_byte_span(std::data(xs), std::size(xs));
+}
+
 } // namespace vast::detail
