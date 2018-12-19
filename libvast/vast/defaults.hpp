@@ -100,6 +100,9 @@ extern size_t max_segment_size;
 /// Number of initial IDs to request in the IMPORTER.
 extern size_t initially_requested_ids;
 
+/// Rate at which telemetry data is sent to the ACCOUNTANT.
+extern size_t telemetry_rate_ms;
+
 } // namespace system
 
 } // namespace vast::defaults
