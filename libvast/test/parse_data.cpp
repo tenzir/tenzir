@@ -85,6 +85,12 @@ TEST(data) {
   CHECK(d == port{22, port::tcp});
 
   MESSAGE("vector");
+  str = "[]"s;
+  f = str.begin();
+  l = str.end();
+  CHECK(p(f, l, d));
+  CHECK(f == l);
+  CHECK(d == vector{});
   str = "[42,4.2,nil]"s;
   f = str.begin();
   l = str.end();
@@ -93,6 +99,12 @@ TEST(data) {
   CHECK(d == vector{42u, 4.2, caf::none});
 
   MESSAGE("set");
+  str = "{}"s;
+  f = str.begin();
+  l = str.end();
+  CHECK(p(f, l, d));
+  CHECK(f == l);
+  CHECK(d == set{});
   str = "{-42,+42,-1}"s;
   f = str.begin();
   l = str.end();

@@ -50,9 +50,9 @@ struct access::parser<data> : vast::parser<access::parser<data>> {
       | parsers::tf
       | parsers::qq_str
       | parsers::pattern
-      | '[' >> (x % ',') >> ']' // default: vector<data>
-      | '{' >> as<set>(x % ',') >> '}'
-      | '{' >> as<map>((x >> "->" >> x) % ',') >> '}'
+      | '[' >> ~(x % ',') >> ']'
+      | '{' >> ~as<set>(x % ',') >> '}'
+      | '{' >> ~as<map>((x >> "->" >> x) % ',') >> '}'
       | as<caf::none_t>("nil"_p)
       ;
     return p;
