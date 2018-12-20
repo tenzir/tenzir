@@ -69,44 +69,6 @@ record_type table_slice::layout(size_type first_column,
   return record_type{std::move(sub_records)};
 }
 
-caf::error table_slice::serialize_ptr(caf::serializer& sink,
-                                      const table_slice_ptr& ptr) {
-  if (!ptr) {
-    record_type dummy;
-    return sink(dummy);
-  }
-  return caf::error::eval([&] { return sink(ptr->layout()); },
-                          [&] { return sink(ptr->implementation_id()); },
-                          [&] { return sink(ptr->rows()); },
-                          [&] { return ptr->serialize(sink); });
-}
-
-caf::error table_slice::deserialize_ptr(caf::deserializer& source,
-                                        table_slice_ptr& ptr) {
-  if (source.context() == nullptr)
-    return caf::sec::no_context;
-  record_type layout;
-  if (auto err = source(layout))
-    return err;
-  // Only default-constructed table slice handles have an empty layout.
-  if (layout.fields.empty()) {
-    ptr.reset();
-    return caf::none;
-  }
-  caf::atom_value impl_id;
-  table_slice::size_type impl_rows;
-  auto err = caf::error::eval([&] { return source(impl_id); },
-                              [&] { return source(impl_rows); });
-  if (err)
-    return err;
-  // Construct a table slice of proper type.
-  ptr = make_table_slice(std::move(layout), source.context()->system(),
-                         impl_id, impl_rows);
-  if (!ptr)
-    return ec::invalid_table_slice_type;
-  return ptr.unshared().deserialize(source);
-}
-
 void table_slice::append_column_to_index(size_type col,
                                          value_index& idx) const {
   for (size_type row = 0; row < rows(); ++row)
@@ -181,11 +143,39 @@ bool operator==(const table_slice& x, const table_slice& y) {
 }
 
 caf::error inspect(caf::serializer& sink, table_slice_ptr& ptr) {
-  return table_slice::serialize_ptr(sink, ptr);
+  if (!ptr) {
+    record_type dummy;
+    return sink(dummy);
+  }
+  return caf::error::eval([&] { return sink(ptr->layout()); },
+                          [&] { return sink(ptr->implementation_id()); },
+                          [&] { return sink(ptr->rows()); },
+                          [&] { return ptr->serialize(sink); });
 }
 
 caf::error inspect(caf::deserializer& source, table_slice_ptr& ptr) {
-  return table_slice::deserialize_ptr(source, ptr);
+  if (source.context() == nullptr)
+    return caf::sec::no_context;
+  record_type layout;
+  if (auto err = source(layout))
+    return err;
+  // Only default-constructed table slice handles have an empty layout.
+  if (layout.fields.empty()) {
+    ptr.reset();
+    return caf::none;
+  }
+  caf::atom_value impl_id;
+  table_slice::size_type impl_rows;
+  auto err = caf::error::eval([&] { return source(impl_id); },
+                              [&] { return source(impl_rows); });
+  if (err)
+    return err;
+  // Construct a table slice of proper type.
+  ptr = make_table_slice(std::move(layout), source.context()->system(),
+                         impl_id, impl_rows);
+  if (!ptr)
+    return ec::invalid_table_slice_type;
+  return ptr.unshared().deserialize(source);
 }
 
 } // namespace vast

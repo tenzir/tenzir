@@ -29,7 +29,6 @@ namespace vast {
 
 /// A horizontal partition of a table. A slice defines a tabular interface for
 /// accessing homogenous data independent of the concrete carrier format.
-/// @relates table
 class table_slice : public caf::ref_counted {
 public:
   // -- member types -----------------------------------------------------------
@@ -58,14 +57,6 @@ public:
 
   /// Loads the contents for this slice from `source`.
   virtual caf::error deserialize(caf::deserializer& source) = 0;
-
-  /// Saves the table slice in `ptr` to `sink`.
-  static caf::error serialize_ptr(caf::serializer& sink,
-                                  const table_slice_ptr& ptr);
-
-  /// Loads a table slice from `source` into `ptr`.
-  static caf::error deserialize_ptr(caf::deserializer& source,
-                                    table_slice_ptr& ptr);
 
   // -- visitation -------------------------------------------------------------
 
@@ -168,9 +159,9 @@ table_slice* intrusive_cow_ptr_unshare(table_slice*&);
 using table_slice_ptr = caf::intrusive_cow_ptr<table_slice>;
 
 /// @relates table_slice
-caf::error inspect(caf::serializer& sink, table_slice_ptr& hdl);
+caf::error inspect(caf::serializer& sink, table_slice_ptr& ptr);
 
 /// @relates table_slice
-caf::error inspect(caf::deserializer& source, table_slice_ptr& hdl);
+caf::error inspect(caf::deserializer& source, table_slice_ptr& ptr);
 
 } // namespace vast

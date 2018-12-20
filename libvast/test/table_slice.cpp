@@ -196,15 +196,15 @@ struct fixture : fixtures::deterministic_actor_system {
   }
 
   void test_manual_serialization(table_slice_builder& builder) {
-    MESSAGE(">> test manual serialization via serialize_ptr and deserialize_ptr");
+    MESSAGE(">> test manual serialization via inspect");
     MESSAGE("make slices");
     auto slice1 = make_slice(builder);
     table_slice_ptr slice2;
     MESSAGE("save content of the first slice into the buffer");
-    CHECK_EQUAL(table_slice::serialize_ptr(sink, slice1), caf::none);
+    CHECK_EQUAL(inspect(sink, slice1), caf::none);
     MESSAGE("load content for the second slice from the buffer");
     auto source = make_source();
-    CHECK_EQUAL(table_slice::deserialize_ptr(source, slice2), caf::none);
+    CHECK_EQUAL(inspect(source, slice2), caf::none);
     MESSAGE("check result of serialization roundtrip");
     REQUIRE_NOT_EQUAL(slice2, nullptr);
     CHECK_EQUAL(*slice1, *slice2);
