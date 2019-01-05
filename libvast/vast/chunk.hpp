@@ -17,57 +17,111 @@
 #include <functional>
 #include <string>
 
-#include "caf/fwd.hpp"
-#include "caf/ref_counted.hpp"
-#include "caf/intrusive_ptr.hpp"
+#include <caf/fwd.hpp>
+#include <caf/ref_counted.hpp>
+#include <caf/intrusive_ptr.hpp>
 
 #include "vast/fwd.hpp"
 
+#include "vast/detail/assert.hpp"
 #include "vast/detail/operators.hpp"
+#include "vast/detail/type_traits.hpp"
 
 namespace vast {
 
-/// A contiguous block of memory.
+/// A contiguous block of memory. A chunk must not be empty.
 class chunk : public caf::ref_counted {
   chunk() = delete;
   chunk& operator=(const chunk&) = delete;
 
 public:
-  using deleter_type = std::function<void(char*, size_t)>;
-  using value_type = const char;
+  // -- member types ----------------------------------------------------------
+
+  using value_type = char;
   using size_type = size_t;
   using const_iterator = const char*;
+  using deleter_type = std::function<void()>;
 
-  /// Factory function to construct a chunk.
-  template <class... Ts>
-  static chunk_ptr make(Ts&&... xs) {
-    return chunk_ptr{new chunk(std::forward<Ts>(xs)...), false};
+  // -- factory functions -----------------------------------------------------
+
+  /// Constructs a chunk of a particular size using `::operator new`.
+  /// @param size The number of bytes to allocate.
+  /// @returns A chunk pointer or `nullptr` on failure.
+  /// @pre `size > 0`
+  static chunk_ptr make(size_type size);
+
+  /// Construct a chunk from a container of bytes.
+  /// @param xs The container of bytes.
+  /// @returns A chunk pointer or `nullptr` on failure.
+  /// @pre `std::size(xs) != 0`
+  template <
+    class Container,
+    class = std::enable_if_t<detail::is_container<Container>>
+  >
+  static chunk_ptr make(Container xs) {
+    static_assert(sizeof(typename Container::value_type) == 1,
+                  "chunks only support byte containers");
+    VAST_ASSERT(std::size(xs) != 0);
+    auto ys = std::make_shared<Container>(std::move(xs));
+    auto deleter = [=]() mutable { ys.reset(); };
+    return make(std::size(*ys), std::data(*ys), deleter);
   }
+
+  /// Constructs a chunk of particular size and pointer to data.
+  /// @param size The number of bytes *data* points to.
+  /// @param data The raw byte data.
+  /// @param deleter The function to delete data. If not given, then the chunk
+  ///                will not perform any cleanup, i.e., it is shallow.
+  /// @returns A chunk pointer or `nullptr` on failure.
+  /// @pre `size > 0`
+  static chunk_ptr make(size_type size, void* data,
+                        deleter_type deleter = deleter_type{});
 
   /// Memory-maps a chunk from a read-only file.
   /// @param filename The name of the file to memory-map.
   /// @param size The number of bytes to map. If 0, map the entire file.
   /// @param offset Where to start in terms of number of bytes from the start.
+  /// @returns A chunk pointer or `nullptr` on failure.
   static chunk_ptr mmap(const path& filename,
-                        size_t size = 0, size_t offset = 0);
+                        size_type size = 0, size_type offset = 0);
 
-  /// Destroys the chunk and deallocates any owned memory.
+  /// Destroys the chunk and releases owned memory via the deleter.
   ~chunk();
 
+  // -- container API ---------------------------------------------------------
+  
   /// @returns The pointer to the chunk buffer.
-  char* data();
-
-  /// @returns The pointer to the chunk buffer.
-  const char* data() const;
+  const value_type* data() const;
 
   /// @returns The size of the chunk.
-  size_t size() const;
+  size_type size() const;
 
+  // -- iteration -------------------------------------------------------------
+  
   /// @returns A pointer to the first byte in the chunk.
   const_iterator begin() const;
 
   /// @returns A pointer to one past the last byte in the chunk.
   const_iterator end() const;
+
+  // -- accessors -------------------------------------------------------------
+  
+  /// Retrieves a value at given offset.
+  /// @param i The position of the byte.
+  /// @returns The value at position *i*.
+  /// @pre `i < size()`
+  value_type operator[](size_type i) const;
+
+  /// Casts the chunk data into a immutable pointer of a desired type.
+  /// @tparam T the type to cast to.
+  /// @param offset The offset to start at.
+  /// @returns a pointer of type `const T*` at position *offset*.
+  template <class T>
+  const T* as(size_type offset = 0) const {
+    VAST_ASSERT(offset < size());
+    auto ptr = data() + offset;
+    return reinterpret_cast<const T*>(ptr);
+  }
 
   /// Creates a new chunk that structurally shares the data of this chunk.
   /// @param start The offset from the beginning where to begin the new chunk.
@@ -75,23 +129,13 @@ public:
   ///               slice ranges from *start* to the end of the chunk.
   /// @returns A new chunk over the subset.
   /// @pre `start + length < size()`
-  chunk_ptr slice(size_t start, size_t length = 0) const;
+  chunk_ptr slice(size_type start, size_type length = 0) const;
 
 private:
-  /// Construct a chunk of a particular size using `::operator new`.
-  /// @param size The number of bytes to allocate.
-  /// @pre `size > 0`
-  explicit chunk(size_t size);
+  chunk(void* ptr, size_type size, deleter_type deleter = deleter_type{});
 
-  /// Constructs a chunk with a custom deallocation policy.
-  /// @tparam Deleter The function to invoke when destroying the chunk.
-  /// @param size The number of bytes starting at *ptr*.
-  /// @param ptr A pointer to a contiguous memory region of size *size*.
-  /// @param deleter The function to invoke on when destroying the chunk.
-  chunk(size_t size, void* ptr, deleter_type deleter = deleter_type{});
-
-  char* data_;
-  size_t size_;
+  value_type* data_;
+  size_type size_;
   deleter_type deleter_;
 };
 

@@ -85,18 +85,9 @@ caf::expected<segment_ptr> segment_builder::finish() {
               table_slice_buffer_.data(),
               table_slice_buffer_.size());
   // Move the complete segment buffer into a chunk.
-  auto buffer = std::make_shared<std::vector<char>>(std::move(segment_buffer_));
-  auto deleter = [buf=buffer](char* ptr, size_t size) mutable {
-    VAST_UNUSED(ptr);
-    VAST_UNUSED(size);
-    VAST_ASSERT(ptr == buf->data());
-    VAST_ASSERT(size == buf->size());
-    buf.reset();
-  };
-  auto chk = chunk::make(buffer->size(), buffer->data(), deleter);
-  auto result = caf::make_counted<segment>(actor_system_, std::move(chk));
-  header = reinterpret_cast<segment::header*>(buffer->data());
-  result->header_ = *header;
+  auto chk = chunk::make(std::move(segment_buffer_));
+  auto result = caf::make_counted<segment>(actor_system_, chk);
+  result->header_ = *chk->as<segment::header>();
   result->meta_ = std::move(meta_);
   return result;
 }

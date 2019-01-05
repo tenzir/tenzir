@@ -25,36 +25,50 @@ using namespace vast;
 
 FIXTURE_SCOPE(chunk_tests, fixtures::deterministic_actor_system)
 
-TEST(construction) {
-  auto x = chunk::make(100);
-  CHECK_EQUAL(x->size(), 100u);
+TEST(deleter) {
+  char buf[100];
+  auto i = 42;
+  MESSAGE("owning chunk");
+  auto deleter = [&]() { i = 0; };
+  auto x = chunk::make(sizeof(buf), buf, deleter);
+  CHECK_EQUAL(i, 42);
+  x = nullptr;
+  CHECK_EQUAL(i, 0);
+  i = 42;
+  MESSAGE("shallow chunk");
+  x = chunk::make(sizeof(buf), buf); // no deleter given
+  CHECK_EQUAL(i, 42);
+  x = nullptr;
+  CHECK_EQUAL(i, 42);
+}
+
+TEST(access) {
+  auto xs = std::vector<char>{'f', 'o', 'o'};
+  auto chk = chunk::make(std::move(xs));
+  REQUIRE_NOT_EQUAL(chk, nullptr);
+  auto& x = *chk;
+  CHECK_EQUAL(x.size(), 3u);
+  CHECK_EQUAL(x[0], 'f');
+  CHECK_EQUAL(*x.begin(), 'f');
 }
 
 TEST(slicing) {
   char buf[100];
-  auto i = 42;
-  auto deleter = [&](char*, size_t) { i = 0; };
-  auto x = chunk::make(sizeof(buf), buf, deleter);
+  auto x = chunk::make(sizeof(buf), buf);
   auto y = x->slice(50);
   auto z = y->slice(40, 5);
   CHECK_EQUAL(y->size(), 50u);
   CHECK_EQUAL(z->size(), 5u);
-  x = y = nullptr;
-  CHECK_EQUAL(z->size(), 5u);
-  CHECK_EQUAL(i, 42);
-  z = nullptr;
-  CHECK_EQUAL(i, 0);
 }
 
 TEST(serialization) {
   char str[] = "foobarbaz";
-  auto x = chunk::make(sizeof(str));
-  std::memcpy(x->data(), str, sizeof(str));
+  auto x = chunk::make(sizeof(str), str);
   std::vector<char> buf;
   CHECK_EQUAL(save(sys, buf, x), caf::none);
   chunk_ptr y;
   CHECK_EQUAL(load(sys, buf, y), caf::none);
-  REQUIRE(y);
+  REQUIRE_NOT_EQUAL(y, nullptr);
   CHECK(std::equal(x->begin(), x->end(), y->begin(), y->end()));
 }
 
