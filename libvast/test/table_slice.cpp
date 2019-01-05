@@ -123,11 +123,6 @@ struct fixture : fixtures::deterministic_actor_system {
     return caf::binary_deserializer{sys, buf};
   }
 
-  template <class T>
-  void add_slice_factory() {
-    add_table_slice_factory(T::class_id, make_concrete_table_slice<T>);
-  }
-
   fixture() : sink(sys, buf) {
     if (std::any_of(builders.begin(), builders.end(),
                     [](auto& ptr) { return ptr == nullptr; }))
@@ -143,9 +138,9 @@ struct fixture : fixtures::deterministic_actor_system {
     for (auto& x : test_data)
       test_values.emplace_back(value::make(make_vector(x), layout));
     // Register factories.
-    add_slice_factory<rebranded_table_slice>();
-    add_slice_factory<row_major_matrix_table_slice>();
-    add_slice_factory<column_major_matrix_table_slice>();
+    add_table_slice_factory<rebranded_table_slice>();
+    add_table_slice_factory<row_major_matrix_table_slice>();
+    add_table_slice_factory<column_major_matrix_table_slice>();
   }
 
   auto make_slice(table_slice_builder& builder) {

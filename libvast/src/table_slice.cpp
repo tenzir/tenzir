@@ -20,7 +20,6 @@
 #include <caf/deserializer.hpp>
 #include <caf/error.hpp>
 #include <caf/execution_unit.hpp>
-#include <caf/make_copy_on_write.hpp>
 #include <caf/sec.hpp>
 #include <caf/serializer.hpp>
 #include <caf/streambuf.hpp>

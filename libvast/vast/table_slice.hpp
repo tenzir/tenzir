@@ -19,6 +19,7 @@
 
 #include <caf/allowed_unsafe_message_type.hpp>
 #include <caf/fwd.hpp>
+#include <caf/make_copy_on_write.hpp>
 #include <caf/ref_counted.hpp>
 
 #include "vast/fwd.hpp"
@@ -138,6 +139,14 @@ using table_slice_factory = table_slice_ptr (*)();
 /// @returns `true` iff the *f* was successfully associated with *id*.
 /// @relates table_slice get_table_slice_factory
 bool add_table_slice_factory(caf::atom_value id, table_slice_factory f);
+
+template <class T>
+bool add_table_slice_factory() {
+  static auto factory = []() -> table_slice_ptr {
+    return caf::make_copy_on_write<T>();
+  };
+  return add_table_slice_factory(T::class_id, factory);
+}
 
 /// Retrieves a table slice factory for default construction.
 /// @relates table_slice add_table_slice_factory
