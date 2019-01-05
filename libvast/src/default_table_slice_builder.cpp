@@ -54,7 +54,7 @@ table_slice_ptr default_table_slice_builder::finish() {
   if (col_ != 0)
     slice_->xs_.push_back(std::move(row_));
   // Populate slice.
-  // TODO: this feels messy, but allows for non-virtual parent accessors.
+  slice_->layout_ = layout();
   slice_->rows_ = slice_->xs_.size();
   slice_->columns_ = layout().fields.size();
   return table_slice_ptr{slice_.release(), false};
@@ -76,7 +76,7 @@ default_table_slice_builder::implementation_id() const noexcept {
 
 void default_table_slice_builder::lazy_init() {
   if (slice_ == nullptr) {
-    slice_.reset(new default_table_slice(layout()));
+    slice_.reset(new default_table_slice);
     row_ = vector(layout().fields.size());
     col_ = 0;
   }

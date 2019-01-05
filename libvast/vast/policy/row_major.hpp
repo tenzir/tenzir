@@ -29,16 +29,6 @@ struct row_major {
 
   static constexpr caf::atom_value class_id = caf::atom("TS_RowMaj");
 
-  // -- member types -----------------------------------------------------------
-
-  using row_iterator = T*;
-
-  using const_row_iterator = const T*;
-
-  using column_iterator = detail::column_iterator<T>;
-
-  using const_column_iterator = detail::column_iterator<const T>;
-
   // -- factory functions ------------------------------------------------------
 
   /// @returns a random-access iterator to the first element in given column

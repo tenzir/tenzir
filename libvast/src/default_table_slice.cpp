@@ -21,11 +21,6 @@
 
 namespace vast {
 
-default_table_slice::default_table_slice(record_type layout)
-  : table_slice{std::move(layout)} {
-  // nop
-}
-
 default_table_slice* default_table_slice::copy() const {
   return new default_table_slice(*this);
 }

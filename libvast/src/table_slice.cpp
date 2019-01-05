@@ -13,6 +13,8 @@
 
 #include "vast/table_slice.hpp"
 
+#include <unordered_map>
+
 #include <caf/actor_system.hpp>
 #include <caf/actor_system_config.hpp>
 #include <caf/deserializer.hpp>
@@ -21,12 +23,14 @@
 #include <caf/make_copy_on_write.hpp>
 #include <caf/sec.hpp>
 #include <caf/serializer.hpp>
+#include <caf/streambuf.hpp>
+#include <caf/stream_deserializer.hpp>
 #include <caf/sum_type.hpp>
 
+#include "vast/chunk.hpp"
 #include "vast/default_table_slice.hpp"
 #include "vast/default_table_slice_builder.hpp"
 #include "vast/defaults.hpp"
-#include "vast/detail/overload.hpp"
 #include "vast/error.hpp"
 #include "vast/event.hpp"
 #include "vast/format/test.hpp"
@@ -34,9 +38,14 @@
 #include "vast/value.hpp"
 #include "vast/value_index.hpp"
 
+#include "vast/detail/byte_swap.hpp"
+#include "vast/detail/overload.hpp"
+
 namespace vast {
 
 namespace {
+
+std::unordered_map<caf::atom_value, table_slice_factory> factory_;
 
 using size_type = table_slice::size_type;
 
@@ -46,11 +55,10 @@ auto cap (size_type pos, size_type num, size_type last) {
 
 } // namespace <anonymous>
 
-table_slice::table_slice(record_type layout)
+table_slice::table_slice()
   : offset_(0),
-    layout_(std::move(layout)),
     rows_(0),
-    columns_(flat_size(layout_)) {
+    columns_(0) {
   // nop
 }
 
@@ -69,28 +77,70 @@ record_type table_slice::layout(size_type first_column,
   return record_type{std::move(sub_records)};
 }
 
+caf::error table_slice::load(chunk_ptr chunk) {
+  VAST_ASSERT(chunk);
+  auto data = const_cast<char*>(chunk->data()); // CAF won't touch it.
+  caf::charbuf buf{data, chunk->size()};
+  caf::stream_deserializer<caf::charbuf&> source{buf};
+  return deserialize(source);
+}
+
 void table_slice::append_column_to_index(size_type col,
                                          value_index& idx) const {
   for (size_type row = 0; row < rows(); ++row)
     idx.append(at(row, col), offset() + row);
 }
 
-table_slice_ptr make_table_slice(record_type layout, caf::actor_system& sys,
-                                 caf::atom_value impl,
-                                 table_slice::size_type rows) {
-  if (impl == default_table_slice::class_id) {
-    return caf::make_copy_on_write<default_table_slice>(std::move(layout));
+bool add_table_slice_factory(caf::atom_value id, table_slice_factory f) {
+  if (factory_.count(id) > 0)
+    return false;
+  factory_.emplace(id, f);
+  return true;
+}
+
+table_slice_factory get_table_slice_factory(caf::atom_value id) {
+  auto i = factory_.find(id);
+  return i != factory_.end() ? i->second : nullptr;
+}
+
+table_slice_ptr make_table_slice(caf::atom_value id) {
+  if (id == default_table_slice::class_id)
+    return caf::make_copy_on_write<default_table_slice>();
+  if (auto f = get_table_slice_factory(id))
+    return (*f)();
+  return {};
+}
+
+table_slice_ptr make_table_slice(chunk_ptr chunk) {
+  if (!chunk || chunk->size() < 32)
+    return {};
+  // Setup a CAF deserializer.
+  auto data = const_cast<char*>(chunk->data()); // CAF won't touch it.
+  caf::charbuf buf{data, chunk->size()};
+  caf::stream_deserializer<caf::charbuf&> source{buf};
+  // Deserialize the class ID and default-construct a table slice.
+  caf::atom_value id;
+  if (auto err = source(id)) {
+    VAST_ERROR_ANON(__func__, "failed to deserialize table slice ID");
+    return {};
   }
-  using generic_fun = caf::runtime_settings_map::generic_function_pointer;
-  using factory_fun = table_slice_ptr (*)(record_type, table_slice::size_type);
-  auto val = sys.runtime_settings().get(impl);
-  if (!caf::holds_alternative<generic_fun>(val)) {
-    VAST_ERROR_ANON("table_slice",
-                    "has no factory function for implementation key", impl);
-    return table_slice_ptr{nullptr};
+  auto result = make_table_slice(id);
+  if (!result) {
+    VAST_ERROR_ANON(__func__, "no table slice factory for:", to_string(id));
+    return {};
   }
-  auto fun = reinterpret_cast<factory_fun>(caf::get<generic_fun>(val));
-  return fun(std::move(layout), rows);
+  // Deserialize the table slice base class.
+  auto& x = result.unshared();
+  if (auto err = source(x)) {
+    VAST_ERROR_ANON(__func__,
+                    "failed to deserialize table slice:", to_string(err));
+    return {};
+  }
+  // Skip table slice data already processed.
+  VAST_ASSERT(chunk->size() > buf.in_avail());
+  auto header_size = chunk->size() - buf.in_avail();
+  x.load(chunk->slice(header_size));
+  return result;
 }
 
 expected<std::vector<table_slice_ptr>>
@@ -143,39 +193,26 @@ bool operator==(const table_slice& x, const table_slice& y) {
 }
 
 caf::error inspect(caf::serializer& sink, table_slice_ptr& ptr) {
-  if (!ptr) {
-    record_type dummy;
-    return sink(dummy);
-  }
-  return caf::error::eval([&] { return sink(ptr->layout()); },
-                          [&] { return sink(ptr->implementation_id()); },
-                          [&] { return sink(ptr->rows()); },
+  if (!ptr)
+    return sink(caf::atom("NULL"));
+  return caf::error::eval([&] { return sink(ptr->implementation_id(), *ptr); },
                           [&] { return ptr->serialize(sink); });
 }
 
 caf::error inspect(caf::deserializer& source, table_slice_ptr& ptr) {
-  if (source.context() == nullptr)
-    return caf::sec::no_context;
-  record_type layout;
-  if (auto err = source(layout))
+  caf::atom_value id;
+  if (auto err = source(id))
     return err;
-  // Only default-constructed table slice handles have an empty layout.
-  if (layout.fields.empty()) {
+  if (id == caf::atom("NULL")) {
     ptr.reset();
     return caf::none;
   }
-  caf::atom_value impl_id;
-  table_slice::size_type impl_rows;
-  auto err = caf::error::eval([&] { return source(impl_id); },
-                              [&] { return source(impl_rows); });
-  if (err)
-    return err;
-  // Construct a table slice of proper type.
-  ptr = make_table_slice(std::move(layout), source.context()->system(),
-                         impl_id, impl_rows);
+  ptr = make_table_slice(id);
   if (!ptr)
     return ec::invalid_table_slice_type;
-  return ptr.unshared().deserialize(source);
+  auto& x = ptr.unshared();
+  return caf::error::eval([&] { return source(x); },
+                          [&] { return x.deserialize(source); });
 }
 
 } // namespace vast

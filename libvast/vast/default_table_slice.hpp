@@ -35,12 +35,6 @@ public:
 
   static constexpr caf::atom_value class_id = caf::atom("TS_Default");
 
-  // -- constructors, destructors, and assignment operators --------------------
-
-  default_table_slice(const default_table_slice&) = default;
-
-  explicit default_table_slice(record_type layout);
-
   // -- factory functions ------------------------------------------------------
 
   default_table_slice* copy() const final;

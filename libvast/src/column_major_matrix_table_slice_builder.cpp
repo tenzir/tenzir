@@ -45,12 +45,6 @@ column_major_matrix_table_slice_builder::make(record_type layout) {
   return caf::make_counted<impl>(std::move(layout));
 }
 
-table_slice_ptr column_major_matrix_table_slice_builder::make_slice(
-  record_type layout, table_slice::size_type rows) {
-  using impl = column_major_matrix_table_slice;
-  return table_slice_ptr{impl::make(std::move(layout), rows)};
-}
-
 bool column_major_matrix_table_slice_builder::append(data x) {
   // Check whether input is valid.
   if (!type_check(layout().fields[col_].type, x))
@@ -73,19 +67,16 @@ table_slice_ptr column_major_matrix_table_slice_builder::finish() {
   // Sanity check.
   if (col_ != 0 || rows_ == 0)
     return {};
-  // Get uninitialized memory that keeps the slice object plus the full matrix.
-  using impl = column_major_matrix_table_slice;
-  auto result = impl::make_uninitialized(layout(), rows_);
-  // Construct the data block.
-  auto data_ptr = result->storage();
-  for (auto& col_vec : columns_) {
-    VAST_ASSERT(col_vec.size() == rows_);
-    std::uninitialized_move(col_vec.begin(), col_vec.end(), data_ptr);
-    data_ptr += rows_;
-    col_vec.clear();
+  std::vector<data> xs(columns_.size() * rows_);
+  auto x = xs.data();
+  for (auto& column : columns_) {
+    VAST_ASSERT(column.size() == rows_);
+    for (size_t i = 0; i < rows_; ++i)
+      *x++ = std::move(column[i]);
+    column.clear();
   }
   rows_ = 0;
-  return table_slice_ptr{result, false};
+  return column_major_matrix_table_slice::make(layout(), std::move(xs));
 }
 
 size_t column_major_matrix_table_slice_builder::rows() const noexcept {

@@ -22,8 +22,11 @@
 #include <caf/make_copy_on_write.hpp>
 #include <caf/test/dsl.hpp>
 
+#include "vast/chunk.hpp"
 #include "vast/column_major_matrix_table_slice_builder.hpp"
+#include "vast/default_table_slice.hpp"
 #include "vast/default_table_slice_builder.hpp"
+#include "vast/matrix_table_slice.hpp"
 #include "vast/row_major_matrix_table_slice_builder.hpp"
 #include "vast/value.hpp"
 #include "vast/value_index.hpp"
@@ -33,17 +36,22 @@ using namespace std::string_literals;
 
 namespace {
 
+template <class T>
+table_slice_ptr make_concrete_table_slice() {
+  return caf::make_copy_on_write<T>();
+}
+
 class rebranded_table_slice : public default_table_slice {
 public:
-  static constexpr caf::atom_value class_id = caf::atom("TS_Test");
+  friend class default_table_slice_builder;
 
-  using super = default_table_slice;
+  rebranded_table_slice() = default;
 
-  using super::super;
-
-  rebranded_table_slice(const default_table_slice& other) : super(other) {
-    // nop
+  explicit rebranded_table_slice(record_type layout) {
+    layout_ = std::move(layout);
   }
+
+  static constexpr caf::atom_value class_id = caf::atom("TS_Test");
 
   caf::atom_value implementation_id() const noexcept override {
     return class_id;
@@ -54,6 +62,8 @@ class rebranded_table_slice_builder : public default_table_slice_builder {
 public:
   using super = default_table_slice_builder;
 
+  using table_slice_type = rebranded_table_slice;
+
   rebranded_table_slice_builder(record_type layout) : super(std::move(layout)) {
     // Eagerly initialize to make sure super does not create slices for us.
     eager_init();
@@ -61,11 +71,6 @@ public:
 
   static table_slice_builder_ptr make(record_type layout) {
     return caf::make_counted<rebranded_table_slice_builder>(std::move(layout));
-  }
-
-  static table_slice_ptr make_slice(record_type layout,
-                                    table_slice::size_type) {
-    return caf::make_copy_on_write<rebranded_table_slice>(std::move(layout));
   }
 
   table_slice_ptr finish() override {
@@ -84,7 +89,7 @@ public:
 
 private:
   void eager_init() {
-    slice_.reset(new rebranded_table_slice(this->layout()));
+    slice_.reset(new rebranded_table_slice{this->layout()});
     row_ = vector(layout().fields.size());
     col_ = 0;
   }
@@ -118,11 +123,9 @@ struct fixture : fixtures::deterministic_actor_system {
     return caf::binary_deserializer{sys, buf};
   }
 
-  template <class Builder>
+  template <class T>
   void add_slice_factory() {
-    using fptr = caf::runtime_settings_map::generic_function_pointer;
-    sys.runtime_settings().set(Builder::get_implementation_id(),
-                               reinterpret_cast<fptr>(Builder::make_slice));
+    add_table_slice_factory(T::class_id, make_concrete_table_slice<T>);
   }
 
   fixture() : sink(sys, buf) {
@@ -139,10 +142,10 @@ struct fixture : fixtures::deterministic_actor_system {
     });
     for (auto& x : test_data)
       test_values.emplace_back(value::make(make_vector(x), layout));
-    // Register factory.
-    add_slice_factory<rebranded_table_slice_builder>();
-    add_slice_factory<row_major_matrix_table_slice_builder>();
-    add_slice_factory<column_major_matrix_table_slice_builder>();
+    // Register factories.
+    add_slice_factory<rebranded_table_slice>();
+    add_slice_factory<row_major_matrix_table_slice>();
+    add_slice_factory<column_major_matrix_table_slice>();
   }
 
   auto make_slice(table_slice_builder& builder) {
@@ -246,6 +249,17 @@ struct fixture : fixtures::deterministic_actor_system {
     buf.clear();
   }
 
+  void test_load_from_chunk(table_slice_builder& builder) {
+    MESSAGE(">> test load from chunk");
+    auto slice1 = make_slice(builder);
+    CHECK_EQUAL(sink(slice1), caf::none);
+    auto chk = chunk::make(buf.size(), buf.data());
+    auto slice2 = make_table_slice(chk);
+    REQUIRE_NOT_EQUAL(slice2, nullptr);
+    CHECK_EQUAL(*slice1, *slice2);
+    buf.clear();
+  }
+
   void test_append_column_to_index(table_slice_builder& builder) {
     MESSAGE(">> test append_column_to_index");
     auto idx = value_index::make(integer_type{});
@@ -267,6 +281,7 @@ struct fixture : fixtures::deterministic_actor_system {
       test_manual_serialization(*builder);
       test_smart_pointer_serialization(*builder);
       test_message_serialization(*builder);
+      test_load_from_chunk(*builder);
       test_append_column_to_index(*builder);
     }
   }

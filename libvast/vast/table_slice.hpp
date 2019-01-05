@@ -43,20 +43,33 @@ public:
 
   table_slice(const table_slice&) = default;
 
-  /// Constructs a table slice with a specific layout.
-  /// @param layout The record describing the table columns.
-  explicit table_slice(record_type layout);
+  /// Default-constructs an empty table slice.
+  table_slice();
 
   /// Makes a copy of this slice.
   virtual table_slice* copy() const = 0;
 
   // -- persistence ------------------------------------------------------------
 
+  template <class Inspector>
+  friend auto inspect(Inspector& f, table_slice& x) {
+    return f(x.layout_, x.offset_, x.rows_, x.columns_);
+  }
+
   /// Saves the contents (excluding the layout!) of this slice to `sink`.
   virtual caf::error serialize(caf::serializer& sink) const = 0;
 
   /// Loads the contents for this slice from `source`.
   virtual caf::error deserialize(caf::deserializer& source) = 0;
+
+  /// Loads a table slice from a chunk. Note that the beginning of the chunk
+  /// data must point to the table slice data right after the implementation
+  /// ID. The default implementation dispatches to `deserialize` with a
+  /// `caf::binary_deserializer`.
+  /// @param chunk The chunk to convert into a table slice.
+  /// @returns An error if the operation fails and `none` otherwise.
+  /// @pre `chunk != nullptr`
+  virtual caf::error load(chunk_ptr chunk);
 
   // -- visitation -------------------------------------------------------------
 
@@ -115,16 +128,35 @@ protected:
 
 // -- free functions -----------------------------------------------------------
 
-/// Constructs a table slice.
-/// @param layout The layout of the table slice.
-/// @param sys The actor system.
-/// @param impl The registered type in *sys*.
+/// The factory function for default construction.
+/// @relates table_slice
+using table_slice_factory = table_slice_ptr (*)();
+
+/// Registers a table slice factory for default construction.
+/// @param id The unique implementation ID for the table slice
+/// @param f The factory how to construct the table slice
+/// @returns `true` iff the *f* was successfully associated with *id*.
+/// @relates table_slice get_table_slice_factory
+bool add_table_slice_factory(caf::atom_value id, table_slice_factory f);
+
+/// Retrieves a table slice factory for default construction.
+/// @relates table_slice add_table_slice_factory
+table_slice_factory get_table_slice_factory(caf::atom_value id);
+
+/// Default-constructs a table slice of a given type.
+/// @param id The (registered) implementation ID of the slice.
 /// @returns a handle holding an instance of type *impl* with given layout if
 ///          *impl* is a registered type in *sys*, otherwise `nullptr`.
+/// @relates table_slice add_table_slice_factory get_table_slice_factory
+table_slice_ptr make_table_slice(caf::atom_value id);
+
+/// Constructs a table slice from a chunk. The beginning of the chunk must hold
+/// the implementation ID of the concrete table slice. This function reads the
+/// ID, default-constructs a new table slice with the given ID, and then calls
+/// `table_slice::load` on the chunk.
+/// @returns a table slice loaded from *chunk* or `nullptr` on failure.
 /// @relates table_slice
-table_slice_ptr make_table_slice(record_type layout, caf::actor_system& sys,
-                                 caf::atom_value impl,
-                                 table_slice::size_type rows);
+table_slice_ptr make_table_slice(chunk_ptr chunk);
 
 /// Constructs table slices filled with random content for testing purposes.
 /// @param num_slices The number of table slices to generate.
