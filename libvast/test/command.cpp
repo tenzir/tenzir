@@ -12,134 +12,123 @@
  ******************************************************************************/
 
 #define SUITE command
-#include "test.hpp"
 
-#include <caf/message_builder.hpp>
-#include <caf/string_algorithms.hpp>
+#include "vast/test/test.hpp"
 
 #include "vast/command.hpp"
 
+#include <caf/actor_system_config.hpp>
+#include <caf/make_message.hpp>
+#include <caf/message.hpp>
+
 using namespace vast;
+
+using namespace std::string_literals;
 
 namespace {
 
-class foo : public command {
-public:
-  foo(command* parent, std::string_view name) : command(parent, name) {
-    add_opt<int>("value,v", "Some integer value");
-    add_opt<bool>("flag", "Some flag");
-  }
+caf::message foo(const command& cmd, caf::actor_system&, caf::config_value_map&,
+                 command::argument_iterator, command::argument_iterator) {
+  CHECK_EQUAL(cmd.name, "foo");
+  return caf::make_message("foo");
+}
 
-  proceed_result proceed(caf::actor_system&, const caf::config_value_map&,
-                         argument_iterator begin,
-                         argument_iterator end) override {
-    tested_proceed = true;
-    proceed_begin = begin;
-    proceed_end = end;
-    return proceed_ok;
-  }
-
-  int run_impl(caf::actor_system&, const caf::config_value_map&,
-               argument_iterator begin, argument_iterator end) override {
-    was_executed = true;
-    run_begin = begin;
-    run_end = end;
-    return EXIT_SUCCESS;
-  }
-
-  bool tested_proceed = false;
-  bool was_executed = false;
-  argument_iterator proceed_begin;
-  argument_iterator proceed_end;
-  argument_iterator run_begin;
-  argument_iterator run_end;
-};
-
-class bar : public command {
-public:
-  bar(command* parent, std::string_view name) : command(parent, name) {
-    add_opt<int>("other-value,o", "Some other integer value");
-  }
-
-  proceed_result proceed(caf::actor_system&, const caf::config_value_map&,
-                         argument_iterator begin,
-                         argument_iterator end) override {
-    tested_proceed = true;
-    proceed_begin = begin;
-    proceed_end = end;
-    return proceed_ok;
-  }
-
-  int run_impl(caf::actor_system&, const caf::config_value_map&,
-               argument_iterator begin, argument_iterator end) override {
-    was_executed = true;
-    run_begin = begin;
-    run_end = end;
-    return EXIT_SUCCESS;
-  }
-
-  bool tested_proceed = false;
-  bool was_executed = false;
-  argument_iterator proceed_begin;
-  argument_iterator proceed_end;
-  argument_iterator run_begin;
-  argument_iterator run_end;
-};
+caf::message bar(const command& cmd, caf::actor_system&, caf::config_value_map&,
+                 command::argument_iterator, command::argument_iterator) {
+  CHECK_EQUAL(cmd.name, "bar");
+  return caf::make_message("bar");
+}
 
 struct fixture {
   command root;
   caf::actor_system_config cfg;
   caf::actor_system sys{cfg};
   caf::config_value_map options;
-  std::vector<std::string> xs;
-  int exec(std::string str) {
+
+  fixture() {
+    root.name = "vast";
+  }
+
+  caf::variant<std::string, caf::error> exec(std::string str) {
+    options.clear();
+    std::vector<std::string> xs;
     caf::split(xs, str, ' ', caf::token_compress_on);
-    return root.run(sys, options, xs.begin(), xs.end());
+    auto result = run(root, sys, options, xs.begin(), xs.end());
+    if (result.match_elements<std::string>())
+      return result.get_as<std::string>(0);
+    if (result.match_elements<caf::error>())
+      return result.get_as<caf::error>(0);
+    FAIL("command returned an unexpected result");
   }
 };
+
+template <class T>
+bool is_error(const T& x) {
+  return caf::holds_alternative<caf::error>(x);
+}
 
 } // namespace <anonymous>
 
 FIXTURE_SCOPE(command_tests, fixture)
 
-TEST(full name) {
-  auto cmd1 = root.add<foo>("foo");
-  auto cmd2 = cmd1->add<command>("bar");
-  CHECK_EQUAL(cmd2->full_name(), "foo bar");
+TEST(names) {
+  using svec = std::vector<std::string>;
+  auto aa = root.add(nullptr, "a", "")->add(nullptr, "aa", "");
+  aa->add(nullptr, "aaa", "");
+  aa->add(nullptr, "aab", "");
+  CHECK_EQUAL(aa->name, "aa");
+  root.add(nullptr, "b", "");
+  svec names;
+  for_each(root, [&](auto& cmd) { names.emplace_back(full_name(cmd)); });
+  CHECK_EQUAL(names, svec({"vast", "vast a", "vast a aa", "vast a aa aaa",
+                           "vast a aa aab", "vast b"}));
 }
 
-TEST(parsing args) {
-  root.add<foo>("foo");
-  exec("foo --flag -v 42");
+TEST(flat command invocation) {
+  auto fptr = root.add(foo, "foo", "",
+                       command::opts()
+                         .add<int>("value,v", "some int")
+                         .add<bool>("flag", "some flag"));
+  CHECK_EQUAL(fptr->name, "foo");
+  CHECK_EQUAL(full_name(*fptr), "vast foo");
+  auto bptr = root.add(bar, "bar", "");
+  CHECK_EQUAL(bptr->name, "bar");
+  CHECK_EQUAL(full_name(*bptr), "vast bar");
+  CHECK(is_error(exec("nop")));
+  CHECK(is_error(exec("bar --flag -v 42")));
+  CHECK(is_error(exec("--flag bar")));
+  CHECK_EQUAL(get_or(options, "flag", false), false);
+  CHECK_EQUAL(get_or(options, "value", 0), 0);
+  CHECK_EQUAL(exec("bar"), "bar"s);
+  CHECK_EQUAL(exec("foo --flag -v 42"), "foo"s);
   CHECK_EQUAL(get_or(options, "flag", false), true);
   CHECK_EQUAL(get_or(options, "value", 0), 42);
 }
 
-TEST(nested arg parsing) {
-  auto cmd1 = root.add<foo>("foo");
-  cmd1->add<bar>("bar");
-  exec("foo -v 42 bar -o 123");
-  CHECK_EQUAL(get_or(options, "flag", false), false);
+TEST(nested command invocation) {
+  auto fptr = root.add(foo, "foo", "",
+                       command::opts()
+                         .add<int>("value,v", "some int")
+                         .add<bool>("flag", "some flag"));
+  CHECK_EQUAL(fptr->name, "foo");
+  CHECK_EQUAL(full_name(*fptr), "vast foo");
+  auto bptr = fptr->add(bar, "bar", "");
+  CHECK_EQUAL(bptr->name, "bar");
+  CHECK_EQUAL(full_name(*bptr), "vast foo bar");
+  CHECK(is_error(exec("nop")));
+  CHECK(is_error(exec("bar --flag -v 42")));
+  CHECK(is_error(exec("foo --flag -v 42 --other-flag")));
+  CHECK_EQUAL(exec("foo --flag -v 42"), "foo"s);
+  CHECK_EQUAL(get_or(options, "flag", false), true);
   CHECK_EQUAL(get_or(options, "value", 0), 42);
-  CHECK_EQUAL(get_or(options, "other-value", 0), 123);
-}
-
-TEST(parsing arg remainder) {
-  auto cmd1 = root.add<foo>("foo");
-  auto cmd2 = cmd1->add<bar>("bar");
-  exec("foo -v 42 bar -o 123 '--this should not -be parsed ! x'");
-  CHECK_EQUAL(cmd1->tested_proceed, true);
-  CHECK_EQUAL(cmd1->was_executed, false);
-  CHECK_EQUAL(cmd2->tested_proceed, true);
-  REQUIRE(cmd2->was_executed);
-  CHECK_EQUAL(cmd2->proceed_begin, cmd2->run_begin);
-  CHECK_EQUAL(cmd2->proceed_end, cmd2->run_end);
-  std::string str;
-  if (cmd2->run_begin != cmd2->run_end)
-    str = std::accumulate(
-      std::next(cmd2->run_begin), cmd2->run_end, *cmd2->run_begin,
-      [](std::string a, const std::string& b) { return a += ' ' + b; });
-  CHECK_EQUAL(str, "'--this should not -be parsed ! x'");
+  CHECK_EQUAL(exec("foo --flag -v 42 bar"), "bar"s);
+  CHECK_EQUAL(get_or(options, "flag", false), true);
+  CHECK_EQUAL(get_or(options, "value", 0), 42);
+  // Setting the command function to nullptr prohibits calling it directly.
+  fptr->run = nullptr;
+  CHECK(is_error(exec("foo --flag -v 42")));
+  // Subcommands of course still work.
+  CHECK_EQUAL(exec("foo --flag -v 42 bar"), "bar"s);
 }
 
 FIXTURE_SCOPE_END()

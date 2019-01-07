@@ -16,7 +16,7 @@
 #include "vast/bits.hpp"
 
 #define SUITE bits
-#include "test.hpp"
+#include "vast/test/test.hpp"
 
 using namespace vast;
 

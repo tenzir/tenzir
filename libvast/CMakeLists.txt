@@ -5,9 +5,6 @@
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/vast/config.hpp.in
                ${CMAKE_CURRENT_BINARY_DIR}/vast/config.hpp)
 
-include_directories(${CMAKE_CURRENT_SOURCE_DIR})
-include_directories(${CMAKE_CURRENT_BINARY_DIR})
-
 # Some CMake generators (e.g., XCode) require header files in
 # addition to the sources.
 file(GLOB_RECURSE libvast_headers "${CMAKE_CURRENT_SOURCE_DIR}/vast/*.hpp")
@@ -24,7 +21,6 @@ set(libvast_sources
   src/compression.cpp
   src/concept/hashable/crc.cpp
   src/concept/hashable/xxhash.cpp
-  src/const_table_slice_handle.cpp
   src/data.cpp
   src/default_table_slice.cpp
   src/default_table_slice_builder.cpp
@@ -72,22 +68,21 @@ set(libvast_sources
   src/store.cpp
   src/subnet.cpp
   src/subset.cpp
+  src/synopsis.cpp
   src/system/accountant.cpp
   src/system/application.cpp
   src/system/archive.cpp
   src/system/configuration.cpp
+  src/system/connect_to_node.cpp
   src/system/consensus.cpp
   src/system/default_application.cpp
-  src/system/export_command.cpp
   src/system/exporter.cpp
-  src/system/import_command.cpp
   src/system/importer.cpp
   src/system/index.cpp
   src/system/indexer.cpp
   src/system/indexer_manager.cpp
   src/system/indexer_stage_driver.cpp
   src/system/node.cpp
-  src/system/node_command.cpp
   src/system/partition.cpp
   src/system/profiler.cpp
   src/system/remote_command.cpp
@@ -95,17 +90,18 @@ set(libvast_sources
   src/system/sink_command.cpp
   src/system/source_command.cpp
   src/system/spawn.cpp
+  src/system/spawn_node.cpp
+  src/system/spawn_or_connect_to_node.cpp
   src/system/spawn_sink.cpp
   src/system/spawn_source.cpp
   src/system/start_command.cpp
   src/system/task.cpp
   src/system/tracker.cpp
-  src/table.cpp
   src/table_index.cpp
   src/table_slice.cpp
   src/table_slice_builder.cpp
-  src/table_slice_handle.cpp
   src/time.cpp
+  src/timestamp_synopsis.cpp
   src/to_events.cpp
   src/type.cpp
   src/uuid.cpp
@@ -127,36 +123,6 @@ if (PCAP_FOUND)
   )
 endif ()
 
-set(libvast_libs ${CAF_LIBRARIES})
-
-if (VAST_HAVE_ARROW)
-  set(libvast_libs ${libvast_libs}
-    ${ARROW_CORE_LIBRARIES}
-    ${ARROW_PLASMA_LIBRARIES})
-endif ()
-
-if (VAST_ENABLE_ASSERTIONS)
-  set(libvast_libs ${libvast_libs} ${Backtrace_LIBRARIES})
-endif ()
-
-if (VAST_HAVE_SNAPPY)
-  set(libvast_libs ${libvast_libs} ${SNAPPY_LIBRARIES})
-endif ()
-
-if (PCAP_FOUND)
-  set(libvast_libs ${libvast_libs} ${PCAP_LIBRARIES})
-endif ()
-
-# Always link with -lprofile if we have Gperftools.
-if (VAST_HAVE_GPERFTOOLS)
-  set(libvast_libs ${libvast_libs} ${GPERFTOOLS_PROFILER})
-endif ()
-
-# Only link against tcmalloc if requested.
-if (VAST_HAVE_GPERFTOOLS AND VAST_USE_PERFTOOLS_HEAP_PROFILER)
-  set(libvast_libs ${libvast_libs} ${GPERFTOOLS_TCMALLOC})
-endif ()
-
 add_library(libvast SHARED ${libvast_sources} ${libvast_headers})
 set_target_properties(libvast
   PROPERTIES
@@ -164,10 +130,50 @@ set_target_properties(libvast
   VERSION ${VERSION_MAJOR}.${VERSION_MINOR}
   OUTPUT_NAME vast)
 
-target_link_libraries(libvast ${libvast_libs})
+target_include_directories(libvast PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+  $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/aux/date/include>
+  $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+)
+target_include_directories(libvast PRIVATE "${PROJECT_SOURCE_DIR}/aux")
+target_link_libraries(libvast PUBLIC caf::core caf::io)
+if (VAST_USE_OPENSSL)
+  target_link_libraries(libvast PUBLIC caf::openssl)
+endif ()
+
+if (VAST_HAVE_ARROW)
+  target_link_libraries(libvast PUBLIC ${ARROW_CORE_LIBRARIES} ${ARROW_PLASMA_LIBRARIES})
+endif ()
+
+if (VAST_ENABLE_ASSERTIONS)
+  target_include_directories(libvast PUBLIC ${Backtrace_INCLUDE_DIRECTORIES})
+  target_link_libraries(libvast PUBLIC ${Backtrace_LIBRARIES})
+endif ()
+
+if (SNAPPY_FOUND)
+  target_link_libraries(libvast PRIVATE snappy::snappy)
+endif ()
+
+if (PCAP_FOUND)
+  target_link_libraries(libvast PRIVATE pcap::pcap)
+endif ()
+
+# Always link with -lprofile if we have Gperftools.
+if (GPERFTOOLS_FOUND)
+  target_link_libraries(libvast PUBLIC gperftools::profiler)
+endif ()
+
+# Only link against tcmalloc if requested.
+if (GPERFTOOLS_FOUND AND VAST_USE_PERFTOOLS_HEAP_PROFILER)
+  target_link_libraries(libvast PUBLIC gperftools::tcmalloc)
+endif ()
 
 # Install libvast in PREFIX/lib and headers in PREFIX/include/vast.
-install(TARGETS libvast DESTINATION lib)
+install(TARGETS libvast
+  EXPORT VASTTargets
+  DESTINATION lib
+)
 install(DIRECTORY vast/
         DESTINATION include/vast FILES_MATCHING PATTERN "*.hpp")
 
@@ -178,56 +184,6 @@ install(DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/vast/"
 # ----------------------------------------------------------------------------
 #                                 unit tests
 # ----------------------------------------------------------------------------
-
-# Bro logs.
-set (test_data "#ifndef TEST_DATA\n#define TEST_DATA")
-set(test_data "${test_data}\n\nnamespace bro {\n")
-file(GLOB logs test/logs/bro/*)
-foreach (log ${logs})
-  get_filename_component(log_basename ${log} NAME_WE)
-  set (this "constexpr auto ${log_basename} = \"${log}\";")
-  set (test_data "${test_data}\n${this}")
-endforeach ()
-set(test_data "${test_data}\n\n} // namespace bro")
-
-# Bgpdump logs.
-set(test_data "${test_data}\n\nnamespace bgpdump {\n")
-file(GLOB logs test/logs/bgpdump/*.txt)
-foreach (log ${logs})
-  get_filename_component(log_basename ${log} NAME_WE)
-  set (this "constexpr auto ${log_basename} = \"${log}\";")
-  set (test_data "${test_data}\n${this}")
-endforeach ()
-set(test_data "${test_data}\n\n} // namespace bgpdump")
-
-# MRT logs.
-set(test_data "${test_data}\n\nnamespace mrt {\n")
-file(GLOB logs test/logs/mrt/*)
-foreach (log ${logs})
-  get_filename_component(log_basename ${log} NAME_WE)
-  set (this "constexpr auto ${log_basename} = \"${log}\";")
-  set (test_data "${test_data}\n${this}")
-endforeach ()
-set(test_data "${test_data}\n\n} // namespace mrt")
-
-# PCAP traces.
-set(test_data "${test_data}\n\nnamespace traces {\n")
-file(GLOB traces test/traces/*.pcap)
-foreach (trace ${traces})
-  get_filename_component(trace_basename ${trace} NAME_WE)
-  set(this "constexpr auto ${trace_basename} = \"${trace}\";")
-  set(test_data "${test_data}\n${this}")
-endforeach ()
-set(test_data "${test_data}\n\n} // namespace traces")
-set(test_data "${test_data}\n\n#endif")
-
-configure_file(test/data.hpp.in ${CMAKE_CURRENT_BINARY_DIR}/test/data.hpp)
-
-include_directories(
-  ${CMAKE_SOURCE_DIR}/libvast
-  ${CMAKE_BINARY_DIR}/libvast
-  ${CMAKE_CURRENT_SOURCE_DIR}/test
-  ${CMAKE_CURRENT_BINARY_DIR}/test)
 
 set(tests
   test/address.cpp
@@ -247,15 +203,14 @@ set(tests
   test/default_table_slice.cpp
   test/detail/flat_lru_cache.cpp
   test/detail/operators.cpp
+  test/detail/set_operations.cpp
   test/endpoint.cpp
+  test/error.cpp
   test/event.cpp
   test/expression.cpp
   test/expression_evaluation.cpp
   test/expression_parseable.cpp
   test/filesystem.cpp
-  test/fixtures/actor_system.cpp
-  test/fixtures/events.cpp
-  test/fixtures/node.cpp
   test/format/bro.cpp
   test/format/mrt.cpp
   test/format/writer.cpp
@@ -264,7 +219,6 @@ set(tests
   test/ids.cpp
   test/iterator.cpp
   test/json.cpp
-  test/main.cpp
   test/meta_index.cpp
   test/mmapbuf.cpp
   test/offset.cpp
@@ -276,13 +230,15 @@ set(tests
   test/range_map.cpp
   test/save_load.cpp
   test/schema.cpp
+  test/scope_linked.cpp
+  test/segment.cpp
+  test/segment_store.cpp
   test/serialization.cpp
   test/span.cpp
   test/stack.cpp
   test/string.cpp
-  test/segment.cpp
-  test/segment_store.cpp
   test/subnet.cpp
+  test/synopsis.cpp
   test/system/archive.cpp
   test/system/consensus.cpp
   test/system/datagram_source.cpp
@@ -299,6 +255,7 @@ set(tests
   test/system/source.cpp
   test/system/task.cpp
   test/table_index.cpp
+  test/table_slice.cpp
   test/time.cpp
   test/type.cpp
   test/uuid.cpp
@@ -318,12 +275,8 @@ if (VAST_HAVE_PCAP)
   set(tests ${tests} test/format/pcap.cpp)
 endif ()
 
-if (VAST_USE_OPENCL)
-  set(tests ${tests} test/system/opencl.cpp)
-endif ()
-
 add_executable(vast-test ${tests})
-target_link_libraries(vast-test libvast ${CMAKE_THREAD_LIBS_INIT})
+target_link_libraries(vast-test libvast libvast_test ${CMAKE_THREAD_LIBS_INIT})
 
 #
 # Generate CMake tests

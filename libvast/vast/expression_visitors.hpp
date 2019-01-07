@@ -95,25 +95,6 @@ struct validator {
   relational_operator op_;
 };
 
-/// Checks whether an expression is valid for a given time interval. The
-/// visitor returns `false` if a time extractor restricts all predicates to lay
-/// outside the given interval, and returns `true` if at least one unrestricted
-/// predicate exists in the expression.
-///
-/// @pre Requires prior expression normalization and validation.
-struct time_restrictor {
-  time_restrictor(timestamp first, timestamp second);
-
-  bool operator()(caf::none_t) const;
-  bool operator()(const conjunction& con) const;
-  bool operator()(const disjunction& dis) const;
-  bool operator()(const negation& n) const;
-  bool operator()(const predicate& p) const;
-
-  timestamp first_;
-  timestamp last_;
-};
-
 /// Transforms all ::key_extractor and ::type_extractor predicates into
 /// ::data_extractor instances according to a given type.
 struct type_resolver {

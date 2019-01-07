@@ -11,17 +11,23 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/concept/parseable/to.hpp"
+#define SUITE expression
+
 #include "vast/concept/parseable/vast/expression.hpp"
+
+#include "vast/test/test.hpp"
+
+#include "vast/concept/parseable/to.hpp"
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/expression.hpp"
-
-#define SUITE expression
-#include "test.hpp"
+#include "vast/system/atoms.hpp"
 
 using namespace vast;
 using namespace std::string_literals;
+
+using vast::system::time_atom;
+using vast::system::type_atom;
 
 TEST(parseable/printable - predicate) {
   predicate pred;
@@ -42,7 +48,7 @@ TEST(parseable/printable - predicate) {
   // LHS: type, RHS: data
   str = "&type != \"foo\"";
   CHECK(parsers::predicate(str, pred));
-  CHECK(pred.lhs == attribute_extractor{"type"});
+  CHECK(pred.lhs == attribute_extractor{type_atom::value});
   CHECK(pred.op == not_equal);
   CHECK(pred.rhs == data{"foo"});
   CHECK_EQUAL(to_string(pred), str);
@@ -65,7 +71,7 @@ TEST(parseable/printable - predicate) {
   CHECK(parsers::predicate(str, pred));
   CHECK(caf::holds_alternative<data>(pred.lhs));
   CHECK(pred.op == greater);
-  CHECK(pred.rhs == attribute_extractor{"time"});
+  CHECK(pred.rhs == attribute_extractor{time_atom::value});
   str = "x.a_b == y.c_d";
   CHECK(parsers::predicate(str, pred));
   CHECK(pred.lhs == key_extractor{"x.a_b"});

@@ -11,20 +11,13 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "arrow/api.h"
-#include "arrow/builder.h"
-#include "arrow/io/api.h"
-#include "arrow/ipc/api.h"
-#include "arrow/type.h"
-#include <arrow/io/interfaces.h>
-#include "plasma/common.h"
-#include <plasma/test-util.h>
-#include <plasma/client.h>
-
 #include "vast/error.hpp"
 #include "vast/event.hpp"
 #include "vast/format/arrow.hpp"
 #include "vast/logger.hpp"
+
+#include "arrow/api.h"
+
 #include <caf/detail/type_list.hpp>
 #include <caf/none.hpp>
 #include <caf/variant.hpp>
@@ -56,15 +49,15 @@ namespace vast {
 namespace {
 
 // Helper method to call the convert visitor
-std::shared_ptr<arrow::Field> convert_to_arrow_field(const type& value) {
+std::shared_ptr<::arrow::Field> convert_to_arrow_field(const type& value) {
   format::arrow::convert_visitor f;
   return visit(f, value);
 }
 
 // Transposes a vector of events from a row-wise into the columnar Arrow
 // representation in the form of a record batch.
-expected<std::shared_ptr<arrow::RecordBatch>> transpose(const event& e) {
-  std::vector<std::shared_ptr<arrow::Field>> schema_vector;
+expected<std::shared_ptr<::arrow::RecordBatch>> transpose(const event& e) {
+  std::vector<std::shared_ptr<::arrow::Field>> schema_vector;
   if (auto r = get_if<record_type>(&e.type())) {
     for (auto& e : record_type::each{*r}) {
       schema_vector.push_back(convert_to_arrow_field(e.trace.back()->type));
@@ -72,11 +65,11 @@ expected<std::shared_ptr<arrow::RecordBatch>> transpose(const event& e) {
   } else {
     schema_vector.push_back(convert_to_arrow_field(e.type()));
   }
-  auto schema = std::make_shared<arrow::Schema>(schema_vector);
-  std::unique_ptr<arrow::RecordBatchBuilder> rbuilder;
-  auto status = arrow::RecordBatchBuilder::Make(
-    schema, arrow::default_memory_pool(), &rbuilder);
-  std::shared_ptr<arrow::RecordBatch> batch;
+  auto schema = std::make_shared<::arrow::Schema>(schema_vector);
+  std::unique_ptr<::arrow::RecordBatchBuilder> rbuilder;
+  auto status = ::arrow::RecordBatchBuilder::Make(
+    schema, ::arrow::default_memory_pool(), &rbuilder);
+  std::shared_ptr<::arrow::RecordBatch> batch;
   std::shared_ptr<::arrow::RecordBatchBuilder> srbuilder(
     std::move(rbuilder.release()));
   format::arrow::insert_visitor iv{srbuilder};
@@ -96,7 +89,7 @@ expected<std::shared_ptr<::arrow::Buffer>>
 write_to_buffer(const std::shared_ptr<::arrow::RecordBatch>& batch) {
   std::shared_ptr<::arrow::ResizableBuffer> buffer;
   auto status = ::arrow::AllocateResizableBuffer(
-      arrow::default_memory_pool(), sizeof(*batch), &buffer);
+      ::arrow::default_memory_pool(), sizeof(*batch), &buffer);
   if (!status.ok())
     return make_error(ec::format_error, "failed to open arrow stream writer",
                       status.ToString());

@@ -16,7 +16,7 @@
 #include "vast/word.hpp"
 
 #define SUITE word
-#include "test.hpp"
+#include "vast/test/test.hpp"
 
 using namespace vast;
 

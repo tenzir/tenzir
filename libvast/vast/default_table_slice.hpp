@@ -15,6 +15,7 @@
 
 #include <vector>
 
+#include "vast/aliases.hpp"
 #include "vast/data.hpp"
 #include "vast/fwd.hpp"
 #include "vast/table_slice.hpp"
@@ -36,7 +37,7 @@ public:
 
   // -- factory functions ------------------------------------------------------
 
-  table_slice_handle clone() const final;
+  default_table_slice* copy() const final;
 
   // -- persistence ------------------------------------------------------------
 
@@ -51,22 +52,27 @@ public:
   /// @returns The builder instance.
   static table_slice_builder_ptr make_builder(record_type layout);
 
-  static table_slice_handle make(record_type layout,
-                                 const std::vector<vector>& rows);
+  static table_slice_ptr make(record_type layout,
+                              const std::vector<vector>& rows);
 
   // -- properties -------------------------------------------------------------
 
-  caf::optional<data_view> at(size_type row, size_type col) const final;
+  data_view at(size_type row, size_type col) const final;
 
   caf::atom_value implementation_id() const noexcept;
+
+  /// @returns the container for storing table slice rows.
+  const vector& container() const noexcept {
+    return xs_;
+  }
 
 private:
   // -- member variables -------------------------------------------------------
 
-  std::vector<data> xs_;
+  vector xs_;
 };
 
 /// @relates default_table_slice
-using default_table_slice_ptr = caf::intrusive_ptr<default_table_slice>;
+using default_table_slice_ptr = caf::intrusive_cow_ptr<default_table_slice>;
 
 } // namespace vast

@@ -22,8 +22,10 @@ using caf::error;
 
 /// VAST's error codes.
 enum class ec : uint8_t {
+  /// No error.
+  no_error = 0,
   /// The unspecified default error code.
-  unspecified = 1,
+  unspecified,
   /// An error while accessing the filesystem.
   filesystem_error,
   /// Expected a different type.
@@ -48,6 +50,24 @@ enum class ec : uint8_t {
   syntax_error,
   /// Deserialization failed because an unknown implementation type was found.
   invalid_table_slice_type,
+  /// Deserialization failed because an unknown implementation type was found.
+  invalid_synopsis_type,
+  /// A command failed, because the remote node failed.
+  remote_node_down,
+  /// A command failed because it received an invalid result.
+  invalid_result,
+  /// A command failed because its configuration was invalid.
+  invalid_configuration,
+  /// A command failed, because its arguments contained an unrecognized option.
+  unrecognized_option,
+  /// A command failed, because it couldn't find a requested subcommand.
+  invalid_subcommand,
+  /// A command failed, because the command line failed to select a subcommand.
+  missing_subcommand,
+  /// A command failed because it was unable to connect to an importer.
+  no_importer,
+  /// Encountered a currently unimplemented code path or missing feature.
+  unimplemented,
 };
 
 /// @relates ec

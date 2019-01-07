@@ -12,7 +12,7 @@
  ******************************************************************************/
 
 #define SUITE lru_cache
-#include "test.hpp"
+#include "vast/test/test.hpp"
 
 #include "vast/detail/flat_lru_cache.hpp"
 

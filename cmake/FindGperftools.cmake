@@ -49,3 +49,15 @@ mark_as_advanced(
   GPERFTOOLS_TCMALLOC_AND_PROFILER
   GPERFTOOLS_LIBRARIES
   GPERFTOOLS_INCLUDE_DIR)
+
+# create IMPORTED targets
+if (Gperftools_FOUND AND NOT TARGET gperftools::tcmalloc)
+  add_library(gperftools::tcmalloc UNKNOWN IMPORTED)
+  set_target_properties(gperftools::tcmalloc PROPERTIES
+    IMPORTED_LOCATION ${GPERFTOOLS_TCMALLOC}
+    INTERFACE_INCLUDE_DIRECTORIES "${GPERFTOOLS_INCLUDE_DIR}")
+  add_library(gperftools::profiler UNKNOWN IMPORTED)
+  set_target_properties(gperftools::profiler PROPERTIES
+    IMPORTED_LOCATION ${GPERFTOOLS_PROFILER}
+    INTERFACE_INCLUDE_DIRECTORIES "${GPERFTOOLS_INCLUDE_DIR}")
+endif()

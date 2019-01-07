@@ -13,7 +13,6 @@
 
 #include <algorithm>
 
-#include "vast/const_table_slice_handle.hpp"
 #include "vast/event.hpp"
 #include "vast/expected.hpp"
 #include "vast/logger.hpp"
@@ -68,13 +67,13 @@ archive(archive_type::stateful_pointer<archive_state> self,
           to_events(result, *slice, xs);
       return result;
     },
-    [=](stream<const_table_slice_handle> in) {
+    [=](stream<table_slice_ptr> in) {
       self->make_sink(
         in,
         [](unit_t&) {
           // nop
         },
-        [=](unit_t&, std::vector<const_table_slice_handle>& batch) {
+        [=](unit_t&, std::vector<table_slice_ptr>& batch) {
           VAST_DEBUG(self, "got", batch.size(), "table slices");
           for (auto& slice : batch) {
             if (auto error = self->state.store->put(slice)) {

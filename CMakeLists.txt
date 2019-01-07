@@ -18,6 +18,12 @@ include(CTest)
 include(Helpers)
 include(MacDependencyPaths)
 
+include(GNUInstallDirs)
+set(CMAKE_INSTALL_CMAKEDIR "${CMAKE_INSTALL_LIBDIR}/cmake" CACHE PATH
+  "Base directory for installing cmake specific artifacts"
+)
+set(INSTALL_VAST_CMAKEDIR "${CMAKE_INSTALL_CMAKEDIR}/vast")
+
 # Prohibit in-source builds
 if ("${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_BINARY_DIR}")
   message(FATAL_ERROR "In-source builds are not allowed. Please use "
@@ -37,8 +43,38 @@ list(GET version_numbers 0 VERSION_MAJOR)
 list(GET version_numbers 1 VERSION_MINOR)
 set(VERSION_MAJ_MIN "${VERSION_MAJOR}.${VERSION_MINOR}")
 
-set(VAST_LOG_LEVEL "2" CACHE STRING
-    "maximum log level that can be set during runtime execution")
+#------------------------------------------------------------------------------
+#                                Logging Setup
+#------------------------------------------------------------------------------
+
+# Choose a deafult log level based on build type.
+if (CMAKE_BUILD_TYPE STREQUAL Release)
+  set(VAST_LOG_LEVEL_DEFAULT "INFO")
+elseif (CMAKE_BUILD_TYPE STREQUAL RelWithDebInfo)
+  set(VAST_LOG_LEVEL_DEFAULT "DEBUG")
+else ()
+  set(VAST_LOG_LEVEL_DEFAULT "TRACE")
+endif ()
+
+# Make sure log level is defined and all-uppercase.
+set(VAST_LOG_LEVEL_DOC "maximum log level available at runtime")
+if (NOT VAST_LOG_LEVEL)
+  set(VAST_LOG_LEVEL "${VAST_LOG_LEVEL_DEFAULT}"
+      CACHE STRING "${VAST_LOG_LEVEL_DOC}")
+elseif (NOT VAST_LOG_LEVEL STREQUAL "$CACHE{VAST_LOG_LEVEL}")
+  # Override cached variable when re-running CMake.
+  string(TOUPPER "${VAST_LOG_LEVEL}" VAST_LOG_LEVEL)
+  set(VAST_LOG_LEVEL "${VAST_LOG_LEVEL}"
+      CACHE STRING "${VAST_LOG_LEVEL_DOC}"
+      FORCE)
+endif ()
+
+# Raise an error for invalid log levels.
+set(validLogLevels QUIET ERROR WARNING INFO DEBUG TRACE)
+list(FIND validLogLevels "${VAST_LOG_LEVEL}" logLevelIndex)
+if(logLevelIndex LESS 0)
+  MESSAGE(FATAL_ERROR "Invalid log level: \"${VAST_LOG_LEVEL}\"")
+endif()
 
 #------------------------------------------------------------------------------
 #                               Compiler Setup
@@ -62,7 +98,7 @@ set(LDFLAGS "$ENV{LDFLAGS}")
 
 # Ninja doesn't colorize compiler diagnostics by default.
 if (CMAKE_GENERATOR STREQUAL "Ninja")
-  set(EXTRA_FLAGS "-fdiagnostics-color")
+  set(EXTRA_FLAGS "${EXTRA_FLAGS} -fdiagnostics-color")
 endif ()
 
 # To give the user full control, we don't mess with with CXX_FLAGS if provided.
@@ -275,7 +311,7 @@ endif()
 
 # Pick up 3rd-party packages and ports.
 if (${CMAKE_SYSTEM_NAME} MATCHES "FreeBSD")
-  include_directories(/usr/local/include)
+  include_directories(AFTER SYSTEM /usr/local/include)
   link_directories(/usr/local/lib)
 endif ()
 
@@ -299,7 +335,6 @@ endif ()
 if (VAST_ENABLE_ASSERTIONS)
   find_package(Backtrace)
   if (NOT Backtrace_FOUND)
-    include_directories(${Backtrace_INCLUDE_DIRS})
     message(FATAL_ERROR "Could not find backtrace (execinfo) libraries")
   endif ()
 endif ()
@@ -314,34 +349,25 @@ if (NOT CAF_FOUND)
 endif ()
 message(STATUS "Found CAF")
 set(CAF_FOUND_SAVE ${CAF_FOUND})
-include_directories(${CAF_INCLUDE_DIRS})
 # ...and then optional components.
-find_package(CAF COMPONENTS opencl openssl QUIET)
-if (CAF_LIBRARY_OPENCL)
-  message(STATUS "Found CAF's OpenCL module, enabling OpenCL support")
-  include_directories(${CAF_INCLUDE_DIR_OPENCL})
-  find_package(OpenCL)
-  if (NOT OpenCL_FOUND)
-    message(FATAL_ERROR
-            "Could not find OpenCL despite having found CAF' OpenCL module")
-  endif ()
-  include_directories(${OpenCL_INCLUDE_DIRS})
-  set(VAST_USE_OPENCL true)
-endif ()
+find_package(CAF COMPONENTS openssl QUIET)
 if (CAF_LIBRARY_OPENSSL)
   message(STATUS "Found CAF's OpenSSL module, enabling OpenSSL support")
-  include_directories(${CAF_INCLUDE_DIR_OPENSSL})
   set(VAST_USE_OPENSSL true)
 endif ()
 set(CAF_FOUND ${CAF_FOUND_SAVE})
 
-if (NOT BROKER_ROOT_DIR AND VAST_PREFIX)
-  set(BROKER_ROOT_DIR ${VAST_PREFIX})
-endif ()
-find_package(BROKER QUIET)
-if (BROKER_FOUND)
+if (BROKER_ROOT_DIR)
+  find_package(BROKER REQUIRED)
   set(VAST_HAVE_BROKER true)
-  include_directories(${BROKER_INCLUDE_DIRS})
+else ()
+  if (VAST_PREFIX)
+    set(BROKER_ROOT_DIR "${VAST_PREFIX}")
+  endif ()
+  find_package(BROKER QUIET)
+  if (BROKER_FOUND)
+    set(VAST_HAVE_BROKER true)
+  endif ()
 endif ()
 
 if (NOT SNAPPY_ROOT_DIR AND VAST_PREFIX)
@@ -350,7 +376,6 @@ endif ()
 find_package(SNAPPY QUIET)
 if (SNAPPY_FOUND)
   set(VAST_HAVE_SNAPPY true)
-  include_directories(${SNAPPY_INCLUDE_DIR})
 endif ()
 
 if (NOT ARROW_ROOT_DIR AND VAST_PREFIX)
@@ -374,7 +399,6 @@ endif ()
 find_package(PCAP QUIET)
 if (PCAP_FOUND)
   set(VAST_HAVE_PCAP true)
-  include_directories(${PCAP_INCLUDE_DIR})
 endif ()
 
 if (NOT Gperftools_ROOT_DIR AND VAST_PREFIX)
@@ -383,7 +407,6 @@ endif ()
 find_package(Gperftools QUIET)
 if (GPERFTOOLS_FOUND)
   set(VAST_HAVE_GPERFTOOLS true)
-  include_directories(BEFORE ${GPERFTOOLS_INCLUDE_DIR})
 endif ()
 
 find_package(Doxygen QUIET)
@@ -439,12 +462,9 @@ set(EXECUTABLE_OUTPUT_PATH ${CMAKE_CURRENT_BINARY_DIR}/bin
 set (LIBRARY_OUTPUT_PATH ${CMAKE_CURRENT_BINARY_DIR}/lib CACHE
   PATH "Single directory for all libraries")
 
-include_directories(BEFORE ${CMAKE_CURRENT_BINARY_DIR})
-include_directories(BEFORE ${CMAKE_SOURCE_DIR}/aux)
-include_directories(BEFORE ${CMAKE_SOURCE_DIR}/aux/date/include)
-
 add_subdirectory(doc)
 add_subdirectory(libvast)
+add_subdirectory(libvast_test)
 add_subdirectory(tools)
 add_subdirectory(vast)
 
@@ -452,10 +472,38 @@ add_subdirectory(vast)
 #                           Additional Installations
 #------------------------------------------------------------------------------
 
+export(EXPORT VASTTargets
+  FILE VASTTargets.cmake
+  NAMESPACE vast::
+)
+
 # install date header to PREFIX/include/date
 install(DIRECTORY aux/date/include/date
         DESTINATION include FILES_MATCHING PATTERN "date.h")
 
+install(EXPORT VASTTargets
+  DESTINATION "${INSTALL_VAST_CMAKEDIR}"
+  NAMESPACE vast::
+)
+
+include(CMakePackageConfigHelpers)
+write_basic_package_version_file(
+  "${CMAKE_CURRENT_BINARY_DIR}/VASTConfigVersion.cmake"
+  VERSION ${VAST_VERSION}
+  COMPATIBILITY ExactVersion
+)
+
+configure_package_config_file(
+  "${CMAKE_CURRENT_SOURCE_DIR}/cmake/VASTConfig.cmake.in"
+  "${CMAKE_CURRENT_BINARY_DIR}/VASTConfig.cmake"
+  INSTALL_DESTINATION "${INSTALL_VAST_CMAKEDIR}"
+)
+
+install(FILES
+  "${CMAKE_CURRENT_BINARY_DIR}/VASTConfig.cmake"
+  "${CMAKE_CURRENT_BINARY_DIR}/VASTConfigVersion.cmake"
+  DESTINATION "${INSTALL_VAST_CMAKEDIR}"
+)
 #------------------------------------------------------------------------------
 #                                Build Summary
 #------------------------------------------------------------------------------
@@ -472,27 +520,6 @@ display(SHOW_TIME_REPORT yes time_report_summary)
 display(VAST_ENABLE_ASSERTIONS yes assertions_summary)
 display(ASAN_FOUND yes asan_summary)
 display(ENABLE_GCOV yes gcov_summary)
-
-if (VAST_LOG_LEVEL EQUAL -1)
-  set(log_level_summary quiet)
-elseif (VAST_LOG_LEVEL EQUAL 0)
-  set(log_level_summary error)
-elseif (VAST_LOG_LEVEL EQUAL 1)
-  set(log_level_summary warning)
-elseif (VAST_LOG_LEVEL EQUAL 2)
-  set(log_level_summary info)
-elseif (VAST_LOG_LEVEL EQUAL 3)
-  set(log_level_summary debug)
-elseif (VAST_LOG_LEVEL EQUAL 4)
-  set(log_level_summary trace)
-else ()
-  # Pick default level based on build type.
-  if (CMAKE_BUILD_TYPE STREQUAL "Release")
-    set(log_level_summary info)
-  else ()
-    set(log_level_summary debug)
-  endif ()
-endif ()
 
 # Figure out whether we point to a build directory or a prefix.
 set(caf_dir ${CAF_LIBRARY_CORE})
@@ -523,7 +550,6 @@ display(GPERFTOOLS_FOUND "${GPERFTOOLS_INCLUDE_DIR}" perftools_summary)
 display(DOXYGEN_FOUND yes doxygen_summary)
 display(MD2MAN_FOUND yes md2man_summary)
 display(VAST_USE_TCMALLOC yes tcmalloc_summary)
-display(VAST_USE_OPENCL "${OpenCL_LIBRARIES}" opencl_summary)
 display(VAST_USE_OPENSSL yes openssl_summary)
 
 STRING(TOUPPER "${CMAKE_BUILD_TYPE}" build_type)
@@ -537,7 +563,7 @@ set(summary
     "\nInstall prefix:   ${CMAKE_INSTALL_PREFIX}"
     "\n"
     "\nBuild type:       ${CMAKE_BUILD_TYPE}"
-    "\nLog level:        ${log_level_summary}"
+    "\nLog level:        ${VAST_LOG_LEVEL}"
     "\nShow time report: ${time_report_summary}"
     "\nAssertions:       ${assertions_summary}"
     "\nAddressSanitizer: ${asan_summary}"
@@ -561,7 +587,6 @@ set(summary
     "\nmd2man:           ${md2man_summary}"
     "\n"
     "\ntcmalloc:         ${tcmalloc_summary}"
-    "\nOpenCL:           ${opencl_summary}"
     "\nOpenSSL:          ${openssl_summary}"
     "\n"
     "\n===========================================================")

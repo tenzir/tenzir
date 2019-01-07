@@ -19,7 +19,7 @@
 #include "vast/concept/convertible/to.hpp"
 
 #define SUITE json
-#include "test.hpp"
+#include "vast/test/test.hpp"
 
 using namespace vast;
 using namespace std::string_literals;

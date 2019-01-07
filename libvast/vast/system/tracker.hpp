@@ -13,8 +13,7 @@
 
 #pragma once
 
-#include <unordered_set>
-#include <unordered_map>
+#include <map>
 #include <string>
 
 #include <caf/stateful_actor.hpp>
@@ -40,10 +39,10 @@ auto inspect(Inspector& f, component_state& cs) {
 }
 
 /// Maps a component type ("archive", "index", etc.) to its state.
-using component_state_map = std::unordered_multimap<std::string, component_state>;
+using component_state_map = std::multimap<std::string, component_state>;
 
 /// Maps node names to component state.
-using component_map = std::unordered_map<std::string, component_state_map>;
+using component_map = std::map<std::string, component_state_map>;
 
 /// An entry of the `component_map`.
 using component_map_entry = std::pair<std::string, component_state_map>;

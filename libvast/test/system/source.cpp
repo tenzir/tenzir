@@ -15,10 +15,10 @@
 
 #include "vast/system/source.hpp"
 
-#include "data.hpp"
-#include "test.hpp"
+#include "vast/test/data.hpp"
+#include "vast/test/test.hpp"
 
-#include "fixtures/actor_system_and_events.hpp"
+#include "vast/test/fixtures/actor_system_and_events.hpp"
 
 #include "vast/detail/make_io_stream.hpp"
 #include "vast/format/bro.hpp"
@@ -32,7 +32,7 @@ using namespace vast::system;
 namespace {
 
 struct test_sink_state {
-  std::vector<table_slice_handle> slices;
+  std::vector<table_slice_ptr> slices;
   inline static constexpr const char* name = "test-sink";
 };
 
@@ -41,13 +41,13 @@ using test_sink_type = caf::stateful_actor<test_sink_state>;
 caf::behavior test_sink(test_sink_type* self, caf::actor src) {
   self->send(src, sink_atom::value, self);
   return {
-    [=](caf::stream<table_slice_handle> in) {
+    [=](caf::stream<table_slice_ptr> in) {
       return self->make_sink(
         in,
         [](caf::unit_t&) {
           // nop
         },
-        [=](caf::unit_t&, table_slice_handle ptr) {
+        [=](caf::unit_t&, table_slice_ptr ptr) {
           self->state.slices.emplace_back(std::move(ptr));
         },
         [=](caf::unit_t&, const error&) {

@@ -26,13 +26,14 @@ Usage: $0 [OPTION]... [VAR=VALUE]...
   Build options:
     --generator=GENERATOR   CMake generator to use (see cmake --help)
     --build-type=DIR        CMake build type [RelWithDebInfo]
+    --extra-flags=STRING    additional compiler flags
     --build-dir=DIR         directory where to perform build [build]
     --show-time-report      show where the compiler spends its time
     --no-auto-libc++        do not automatically use libc++ with Clang
     --more-warnings         enables most warnings on GCC and Clang
 
   Debugging:
-    --log-level=LEVEL       maximum compile-time log level [debug]
+    --log-level=LEVEL       maximum compile-time log level
     --disable-assertions    disable assertions
     --disable-exceptions    disable C++ exceptions
     --enable-asan           enable AddressSanitizer
@@ -58,7 +59,7 @@ Usage: $0 [OPTION]... [VAR=VALUE]...
 
   Influential Environment Variables (only on first invocation):
     CXX                     C++ compiler command
-    CXXFLAGS                C++ compiler flags
+    CXXFLAGS                C++ compiler flags (overrides defaults)
     LDFLAGS                 Additional linker flags
     CMAKE_GENERATOR         Selects a custom generator
 "
@@ -72,40 +73,12 @@ append_cache_entry() {
   CMakeCacheEntries="$CMakeCacheEntries -D \"$1:$2=$3\""
 }
 
-levelize() {
-  case "$1" in
-    quiet)
-      echo -1
-      ;;
-    error)
-      echo 0
-      ;;
-    warning)
-      echo 1
-      ;;
-    info)
-      echo 2
-      ;;
-    debug)
-      echo 3
-      ;;
-    trace)
-      echo 4
-      ;;
-    *)
-      echo "invalid log level specification, use:"
-      echo "  quiet|error|warning|info|debug|trace"
-      exit 1;
-  esac
-}
-
 # Set defaults
 builddir=build
 CMakeCacheEntries=""
 append_cache_entry CMAKE_INSTALL_PREFIX   PATH      /usr/local
 append_cache_entry CMAKE_BUILD_TYPE       STRING    RelWithDebInfo
 append_cache_entry VAST_ENABLE_ASSERTIONS BOOL      true
-append_cache_entry VAST_LOG_LEVEL         INTEGER   $(levelize debug)
 append_cache_entry VAST_USE_TCMALLOC      BOOL      false
 
 # Parse custom environment variable to initialize CMakeGenerator.
@@ -141,6 +114,9 @@ while [ $# -ne 0 ]; do
     --build-type=*)
       append_cache_entry CMAKE_BUILD_TYPE STRING "$optarg"
       ;;
+    --extra-flags=*)
+      append_cache_entry EXTRA_FLAGS STRING "$optarg"
+      ;;
     --show-time-report)
       append_cache_entry SHOW_TIME_REPORT BOOL true
       ;;
@@ -151,7 +127,7 @@ while [ $# -ne 0 ]; do
         append_cache_entry MORE_WARNINGS BOOL yes
         ;;
     --log-level=*)
-      append_cache_entry VAST_LOG_LEVEL INTEGER $(levelize $optarg)
+      append_cache_entry VAST_LOG_LEVEL STRING "$optarg"
       ;;
     --disable-assertions)
       append_cache_entry VAST_ENABLE_ASSERTIONS BOOL false
@@ -191,7 +167,7 @@ while [ $# -ne 0 ]; do
       ;;
     --dev-mode)
       append_cache_entry CMAKE_BUILD_TYPE STRING Debug
-      append_cache_entry VAST_LOG_LEVEL INTEGER 4
+      append_cache_entry VAST_LOG_LEVEL STRING TRACE
       append_cache_entry ENABLE_ADDRESS_SANITIZER BOOL true
       # TODO: eventually, we also want to enable --more-warnings
       # append_cache_entry MORE_WARNINGS BOOL yes

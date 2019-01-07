@@ -79,7 +79,7 @@ void peer(node_ptr self, message args) {
   rp.delegate(*peer, peer_atom::value, t, self->state.name);
 }
 
-void show(node_ptr self, message /* args */) {
+void status(node_ptr self, message /* args */) {
   auto rp = self->make_response_promise();
   self->request(self->state.tracker, infinite, get_atom::value).then(
     [=](const registry& reg) mutable {
@@ -90,6 +90,12 @@ void show(node_ptr self, message /* args */) {
           xs.push_back(json{pair.second.label});
         result.emplace(peer.first, std::move(xs));
       }
+      json::object sys_stats;
+      auto& sys = self->system();
+      sys_stats.emplace("running-actors", sys.registry().running());
+      sys_stats.emplace("detached-actors", sys.detached_actors());
+      sys_stats.emplace("worker-threads", sys.scheduler().num_workers());
+      result.emplace("system", std::move(sys_stats));
       rp.deliver(to_string(json{std::move(result)}));
     }
   );
@@ -223,35 +229,6 @@ void kill(node_ptr self, message args) {
   );
 }
 
-void send(node_ptr self, message args) {
-  auto rp = self->make_response_promise();
-  if (args.empty()) {
-    rp.deliver(make_error(ec::syntax_error, "missing component"));
-    return;
-  } else if (args.size() == 1) {
-    rp.deliver(make_error(ec::syntax_error, "missing command"));
-    return;
-  }
-  self->request(self->state.tracker, infinite, get_atom::value).then(
-    [=](registry& reg) mutable {
-      auto& label = args.get_as<std::string>(0);
-      auto& local = reg.components[self->state.name];
-      auto i = std::find_if(local.begin(), local.end(),
-                            [&](auto& p) { return p.second.label == label; });
-      if (i == local.end()) {
-        rp.deliver(make_error(ec::unspecified, "no such component: " + label));
-        return;
-      }
-      auto cmd = atom_from_string(args.get_as<std::string>(1));
-      self->send(i->second.actor, cmd);
-      rp.deliver(ok_atom::value);
-    },
-    [=](error& e) mutable {
-      rp.deliver(std::move(e));
-    }
-  );
-}
-
 } // namespace <anonymous>
 
 node_state::node_state(caf::event_based_actor* selfptr) : self(selfptr) {
@@ -296,14 +273,12 @@ caf::behavior node(node_ptr self, std::string id, path dir) {
         stop(self);
       } else if (cmd == "peer") {
         peer(self, args);
-      } else if (cmd == "show") {
-        show(self, args);
+      } else if (cmd == "status") {
+        status(self, args);
       } else if (cmd == "spawn") {
         spawn(self, args);
       } else if (cmd == "kill") {
         kill(self, args);
-      } else if (cmd == "send") {
-        send(self, args);
       } else {
         auto e = make_error(ec::unspecified, "invalid command", cmd);
         VAST_WARNING(self, "failed to parse command:", self->system().render(e));

@@ -23,7 +23,7 @@
 #include "vast/concept/printable/to_string.hpp"
 
 #define SUITE printable
-#include "test.hpp"
+#include "vast/test/test.hpp"
 
 using namespace std::string_literals;
 using namespace vast;

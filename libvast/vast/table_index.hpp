@@ -21,8 +21,9 @@
 #include <caf/expected.hpp>
 #include <caf/fwd.hpp>
 
-#include "vast/filesystem.hpp"
 #include "vast/column_index.hpp"
+#include "vast/filesystem.hpp"
+#include "vast/ids.hpp"
 #include "vast/type.hpp"
 
 #include "vast/detail/range.hpp"
@@ -54,12 +55,6 @@ public:
   /// Identifies a subset of columns.
   using columns_range = detail::iterator_range<columns_vector::iterator>;
 
-  // -- constants --------------------------------------------------------------
-
-  /// Number of columns holding meta information. Currently, we only store type
-  /// names as meta data.
-  static constexpr std::ptrdiff_t meta_column_count = 1;
-
   // -- constructors, destructors, and assignment operators --------------------
 
   table_index(caf::actor_system& sys);
@@ -70,35 +65,17 @@ public:
 
   // -- persistence ------------------------------------------------------------
 
+  /// Load state from disk.
+  caf::error init();
+
   /// Persists all indexes to disk.
   caf::error flush_to_disk();
 
   /// -- properties ------------------------------------------------------------
 
-  /// @returns the colums for storing meta information.
-  columns_range meta_columns() {
-    auto first = columns_.begin();
-    return {first, first + meta_column_count};
-  }
-
-  /// @returns the columns for storing data.
-  columns_range data_columns() {
-    return {columns_.begin() + meta_column_count, columns_.end()};
-  }
-
   /// @returns the number of columns.
   size_t num_columns() const {
     return columns_.size();
-  }
-
-  /// @returns the number of columns for storing meta information.
-  size_t num_meta_columns() const {
-    return static_cast<size_t>(meta_column_count);
-  }
-
-  /// @returns the number of columns for storing data.
-  size_t num_data_columns() const {
-    return num_columns() - num_meta_columns();
   }
 
   /// @returns the column at given index.
@@ -109,7 +86,7 @@ public:
   ///          in case it doesn't yet exist.
   /// @pre `column_size < num_columns()`
   template <class Factory, class Continuation>
-  auto with_column(size_t column_index, Factory& factory, Continuation& f) {
+  auto with_column(size_t column_index, Factory& factory, Continuation f) {
     VAST_ASSERT(column_index < columns_.size());
     auto& col = columns_[column_index];
     using result_type = decltype(f(*col));
@@ -120,24 +97,6 @@ public:
       col = std::move(*fac_res);
     }
     return f(*col);
-  }
-
-  /// @returns the column for meta information at given index and creates it
-  ///          lazily from the factory in case it doesn't yet exist.
-  /// @pre `column_size < num_columns()`
-  template <class Factory, class Continuation>
-  auto with_meta_column(size_t column_index, Factory factory, Continuation f) {
-    VAST_ASSERT(column_index < meta_column_count);
-    return with_column(column_index, factory, f);
-  }
-
-  /// @returns the column for data at given index and creates it lazily from the
-  ///          factory in case it doesn't yet exist.
-  /// @pre `column_size < num_columns()`
-  template <class Factory, class Continuation>
-  auto with_data_column(size_t column_index, Factory factory, Continuation f) {
-    VAST_ASSERT(column_index < num_data_columns());
-    return with_column(column_index + num_meta_columns(), factory, f);
   }
 
   /// Applies `f` to each column pointer.
@@ -176,7 +135,7 @@ public:
 
   /// Indexes a slice for all columns.
   /// @param x Table slice for ingestion.
-  caf::error add(const const_table_slice_handle& x);
+  caf::error add(const table_slice_ptr& x);
 
   /// Queries event IDs that fulfill the given predicate on any column.
   /// @pre `init()` was called previously.
@@ -219,6 +178,9 @@ private:
 
   /// Allows a shortcut in `add` if all columns are initialized.
   bool dirty_;
+
+  /// Stores what IDs are present in this table.
+  ids row_ids_;
 
   /// Hosting actor system.
   caf::actor_system& sys_;

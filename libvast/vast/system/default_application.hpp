@@ -18,10 +18,7 @@
 #include <string_view>
 
 #include "vast/command.hpp"
-
 #include "vast/system/application.hpp"
-#include "vast/system/export_command.hpp"
-#include "vast/system/import_command.hpp"
 
 namespace vast::system {
 
@@ -29,20 +26,29 @@ class default_application : public application {
 public:
   default_application();
 
-  import_command& import_cmd() {
-    VAST_ASSERT(import_ != nullptr);
-    return *import_;
+  command& import_cmd();
+
+  command& export_cmd();
+
+  /// @returns default options for source commands.
+  static auto src_opts() {
+    return command::opts()
+      .add<std::string>("schema-file,s", "path to alternate schema")
+      .add<std::string>("schema,S", "alternate schema as string")
+      .add<std::string>("read,r", "path to input where to read events from")
+      .add<bool>("uds,d", "treat -r as listening UNIX domain socket");
   }
 
-  export_command& export_cmd() {
-    VAST_ASSERT(export_ != nullptr);
-    return *export_;
+  // @returns defaults options for sink commands.
+  static auto snk_opts() {
+    return command::opts()
+      .add<std::string>("write,w", "path to write events to")
+      .add<bool>("uds,d", "treat -w as UNIX domain socket to connect to");
   }
 
 private:
-  import_command* import_;
-  export_command* export_;
+  command* import_;
+  command* export_;
 };
 
 } // namespace vast::system
-

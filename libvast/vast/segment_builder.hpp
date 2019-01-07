@@ -42,7 +42,7 @@ public:
   /// @pre The table slice offset (`x.offset()`) must be greater than the
   ///      offset of the previously added table slice. This requirement enables
   ///      efficient lookup of table slices from a sequence of IDs.
-  caf::error add(const_table_slice_handle x);
+  caf::error add(table_slice_ptr x);
 
   /// Constructs a segment from previously added table slices.
   /// @post The builder can now be reused to contruct a new segment.
@@ -51,7 +51,7 @@ public:
   /// Locates previously added table slices for a given set of IDs.
   /// @param xs The IDs to lookup.
   /// @returns The table slices according to *xs*.
-  caf::expected<std::vector<const_table_slice_handle>>
+  caf::expected<std::vector<table_slice_ptr>>
   lookup(const ids& xs) const;
 
   /// @returns The UUID for the segment under construction.
@@ -75,7 +75,7 @@ private:
   caf::vectorbuf table_slice_streambuf_;
   caf::stream_serializer<caf::vectorbuf&> table_slice_serializer_;
   // Lookup cache
-  std::vector<const_table_slice_handle> slices_;
+  std::vector<table_slice_ptr> slices_;
 };
 
 } // namespace vast

@@ -4,18 +4,10 @@
 #include "vast/concept/printable/vast/data.hpp"
 #include "vast/format/arrow.hpp"
 
-#include "arrow/api.h"
-#include "arrow/builder.h"
-#include "arrow/io/api.h"
-#include "arrow/ipc/api.h"
-#include "arrow/status.h"
-#include "arrow/type.h"
-#include "plasma/client.h"
-#include "plasma/common.h"
-
 #define SUITE format
-#include "fixtures/events.hpp"
-#include "test.hpp"
+#include "vast/test/test.hpp"
+#include "vast/test/data.hpp"
+#include "vast/test/fixtures/events.hpp"
 
 using namespace vast;
 using namespace std::string_literals;

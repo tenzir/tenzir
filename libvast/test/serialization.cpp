@@ -18,8 +18,8 @@
 #include "vast/detail/coded_deserializer.hpp"
 #include "vast/detail/coded_serializer.hpp"
 
-#include "test.hpp"
-#include "fixtures/events.hpp"
+#include "vast/test/test.hpp"
+#include "vast/test/fixtures/events.hpp"
 
 using namespace vast;
 using namespace vast::detail;

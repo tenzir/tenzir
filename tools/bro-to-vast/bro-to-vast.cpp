@@ -31,12 +31,14 @@
 #include <vast/expression.hpp>
 #include <vast/format/writer.hpp>
 #include <vast/logger.hpp>
+#include <vast/scope_linked.hpp>
 #include <vast/uuid.hpp>
 
 #include <vast/concept/parseable/parse.hpp>
 #include <vast/concept/parseable/vast/expression.hpp>
 #include <vast/concept/parseable/vast/uuid.hpp>
 #include <vast/format/writer.hpp>
+#include <vast/system/connect_to_node.hpp>
 #include <vast/system/sink.hpp>
 #include <vast/system/sink_command.hpp>
 
@@ -225,45 +227,6 @@ private:
   size_t num_results_ = 0;
 };
 
-// A custom command that allows us to re-use VAST command dispatching logic in
-// order to issue a query that writes into a sink with a custom format.
-class bro_command : public vast::system::sink_command {
-public:
-  bro_command(broker::endpoint& endpoint)
-    : sink_command{nullptr, "bro"},
-      endpoint_{endpoint} {
-    // nop
-  }
-
-  // Sets the query ID to the UUID provided by Bro.
-  void query_id(std::string id) {
-    query_id_ = std::move(id);
-  }
-
-  /// Retrieves the current sink actor, which terminates when the exporter
-  /// corresponding to the issued query terminates.
-  caf::actor sink() const {
-    return sink_;
-  }
-
-protected:
-  caf::expected<caf::actor> make_sink(caf::scoped_actor& self,
-                                      const caf::config_value_map& options,
-                                      argument_iterator begin,
-                                      argument_iterator end) override {
-    VAST_UNUSED(options, begin, end);
-    bro_writer writer{endpoint_, query_id_};
-    sink_ = self->spawn(vast::system::sink<bro_writer>, std::move(writer),
-                        vast::defaults::command::max_events);
-    return sink_;
-  }
-
-private:
-  broker::endpoint& endpoint_;
-  std::string query_id_;
-  caf::actor sink_;
-};
-
 // Parses Broker data as Bro event.
 caf::expected<std::pair<std::string, std::string>>
 parse_query_event(const broker::data& x) {
@@ -308,7 +271,6 @@ int main(int argc, char** argv) {
   // Subscribe to the control channel.
   auto subscriber = endpoint.make_subscriber({control_topic});
   // Connect to VAST via a custom command.
-  bro_command cmd{endpoint};
   auto& sys = endpoint.system();
   caf::scoped_actor self{sys};
   std::string vast_address = caf::get_or(sys.config(), "vast-address",
@@ -322,10 +284,12 @@ int main(int argc, char** argv) {
                caf::config_value::dictionary{{
                  "endpoint", caf::config_value{vast_address + ':'
                                                + std::to_string(vast_port)}}});
-  auto node = cmd.connect_to_node(self, opts);
-  if (!node) {
-    VAST_ERROR_ANON("failed to connect to VAST: " << sys.render(node.error()));
+  caf::actor node;
+  if (auto conn = vast::system::connect_to_node(self, opts); !conn) {
+    VAST_ERROR_ANON("failed to connect to VAST: " << sys.render(conn.error()));
     return 1;
+  } else {
+    node = std::move(*conn);
   }
   VAST_INFO_ANON("connected to VAST successfully");
   // Block until Bro peers with us.
@@ -343,6 +307,7 @@ int main(int argc, char** argv) {
         // timeout
       },
       [&](broker::error error) {
+        VAST_UNUSED(error);
         VAST_ERROR_ANON(sys.render(error));
       },
       [&](broker::status status) {
@@ -371,19 +336,24 @@ int main(int argc, char** argv) {
     }
     auto& [query_id, expression] = *result;
     // Relay the query expression to VAST.
-    cmd.query_id(query_id);
-    auto args = std::vector<std::string>{expression};
     VAST_INFO_ANON("dispatching query", query_id, expression);
-    auto rc = cmd.run(sys, opts, args.begin(), args.end());
-    if (rc != 0) {
-      VAST_ERROR_ANON("failed to dispatch query to VAST");
-      self->send_exit(cmd.sink(), caf::exit_reason::user_shutdown);
+    vast::command cmd;
+    auto args = std::vector<std::string>{expression};
+    auto sink = self->spawn(vast::system::sink<bro_writer>,
+                            bro_writer{endpoint, query_id},
+                            vast::defaults::command::max_events);
+    vast::scope_linked<caf::actor> guard{sink};
+    auto res = vast::system::sink_command(cmd, sys, sink, opts,
+                                          args.begin(), args.end());
+    if (res.match_elements<caf::error>()) {
+      VAST_ERROR_ANON("failed to dispatch query to VAST:",
+                      res.get_as<caf::error>(0));
       continue;
     }
     // Our Bro command contains a sink, which terminates automatically when the
     // exporter for the corresponding query has finished. We use this signal to
     // send the final terminator event to Bro.
-    self->monitor(cmd.sink());
+    self->monitor(sink);
     self->receive(
       [&, query_id=query_id](const caf::down_msg&) {
         auto nil = broker::data{}; // Avoid ambiguity between VAST & Broker.

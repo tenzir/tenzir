@@ -18,7 +18,6 @@
 #include <caf/serializer.hpp>
 
 #include "vast/default_table_slice_builder.hpp"
-#include "vast/table_slice_handle.hpp"
 
 namespace vast {
 
@@ -27,8 +26,8 @@ default_table_slice::default_table_slice(record_type layout)
   // nop
 }
 
-table_slice_handle default_table_slice::clone() const {
-  return table_slice_handle{caf::make_counted<default_table_slice>(*this)};
+default_table_slice* default_table_slice::copy() const {
+  return new default_table_slice(*this);
 }
 
 caf::error default_table_slice::serialize(caf::serializer& sink) const {
@@ -41,16 +40,13 @@ caf::error default_table_slice::deserialize(caf::deserializer& source) {
   return err;
 }
 
-caf::optional<data_view>
-default_table_slice::at(size_type row, size_type col) const {
+data_view default_table_slice::at(size_type row, size_type col) const {
   VAST_ASSERT(row < rows_);
   VAST_ASSERT(row < xs_.size());
   VAST_ASSERT(col < columns_);
-  if (auto x = caf::get_if<vector>(&xs_[row])) {
-    VAST_ASSERT(col < x->size());
-    return make_view((*x)[col]);
-  }
-  return {};
+  auto& x = caf::get<vector>(xs_[row]);
+  VAST_ASSERT(col < x.size());
+  return make_view(x[col]);
 }
 
 table_slice_builder_ptr default_table_slice::make_builder(record_type layout) {
@@ -58,7 +54,7 @@ table_slice_builder_ptr default_table_slice::make_builder(record_type layout) {
   return caf::make_counted<default_table_slice_builder>(std::move(layout));
 }
 
-table_slice_handle default_table_slice::make(record_type layout,
+table_slice_ptr default_table_slice::make(record_type layout,
                                              const std::vector<vector>& rows) {
   auto builder = make_builder(std::move(layout));
   for (auto& row : rows)
@@ -70,7 +66,7 @@ table_slice_handle default_table_slice::make(record_type layout,
 }
 
 caf::atom_value default_table_slice::implementation_id() const noexcept {
-  return caf::atom("DEFAULT");
+  return caf::atom("TS_Default");
 }
 
 } // namespace vast

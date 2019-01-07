@@ -18,7 +18,7 @@
 #include "vast/detail/compressedbuf.hpp"
 
 #define SUITE streambuf
-#include "test.hpp"
+#include "vast/test/test.hpp"
 
 using namespace std::string_literals;
 using namespace vast;

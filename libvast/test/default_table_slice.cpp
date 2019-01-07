@@ -15,19 +15,18 @@
 
 #include <caf/binary_deserializer.hpp>
 #include <caf/binary_serializer.hpp>
+#include <caf/make_copy_on_write.hpp>
 
-#include "vast/const_table_slice_handle.hpp"
 #include "vast/default_table_slice.hpp"
 #include "vast/default_table_slice_builder.hpp"
 #include "vast/subset.hpp"
 #include "vast/table_slice_builder.hpp"
-#include "vast/table_slice_handle.hpp"
 #include "vast/value.hpp"
 #include "vast/view.hpp"
 
 #define SUITE default_table_slice
-#include "test.hpp"
-#include "fixtures/actor_system.hpp"
+#include "vast/test/test.hpp"
+#include "vast/test/fixtures/actor_system.hpp"
 
 #include <caf/test/dsl.hpp>
 
@@ -52,7 +51,7 @@ public:
 };
 
 table_slice_ptr rebranded_slice_factory(record_type layout) {
-  return caf::make_counted<rebranded_table_slice>(std::move(layout));
+  return caf::make_copy_on_write<rebranded_table_slice>(std::move(layout));
 }
 
 struct fixture : fixtures::deterministic_actor_system {
@@ -101,15 +100,10 @@ struct fixture : fixtures::deterministic_actor_system {
     return builder->finish();
   }
 
-  const_table_slice_handle make_const_slice() {
-    return make_slice();
-  }
-
-  auto make_rebranded_slice() {
+  table_slice_ptr make_rebranded_slice() {
     auto from = make_slice();
-    auto& dref = static_cast<default_table_slice&>(*from);
-    auto ptr = caf::make_counted<rebranded_table_slice>(dref);
-    return table_slice_handle{std::move(ptr)};
+    auto& dref = static_cast<const default_table_slice&>(*from);
+    return caf::make_copy_on_write<rebranded_table_slice>(dref);
   }
 
   std::vector<value> select(size_t from, size_t num) {
@@ -137,12 +131,8 @@ TEST(add) {
   auto slice = builder->finish();
   CHECK_EQUAL(slice->rows(), 2u);
   CHECK_EQUAL(slice->columns(), 3u);
-  auto x = slice->at(0, 1);
-  REQUIRE(x);
-  CHECK_EQUAL(*x, make_view(foo));
-  x = slice->at(1, 2);
-  REQUIRE(x);
-  CHECK_EQUAL(*x, make_view(4.3));
+  CHECK_EQUAL(slice->at(0, 1), make_view(foo));
+  CHECK_EQUAL(slice->at(1, 2), make_view(4.3));
 }
 
 TEST(rows to values) {
@@ -176,7 +166,7 @@ TEST(object serialization) {
 
 TEST(smart pointer serialization) {
   MESSAGE("make slices");
-  auto slice1 = make_slice().ptr();
+  auto slice1 = make_slice();
   table_slice_ptr slice2;
   MESSAGE("save content of the first slice into the buffer");
   CHECK_EQUAL(table_slice::serialize_ptr(sink, slice1), caf::none);
@@ -190,22 +180,8 @@ TEST(smart pointer serialization) {
 
 TEST(handle serialization) {
   MESSAGE("make slices");
-  auto slice1 = table_slice_handle{make_slice()};
-  table_slice_handle slice2;
-  MESSAGE("save content of the first slice into the buffer");
-  CHECK_EQUAL(sink(slice1), caf::none);
-  MESSAGE("load content for the second slice from the buffer");
-  auto source = make_source();
-  CHECK_EQUAL(source(slice2), caf::none);
-  MESSAGE("check result of serialization roundtrip");
-  REQUIRE_NOT_EQUAL(slice2, nullptr);
-  CHECK_EQUAL(*slice1, *slice2);
-}
-
-TEST(const handle serialization) {
-  MESSAGE("make slices");
-  auto slice1 = make_const_slice();
-  const_table_slice_handle slice2;
+  auto slice1 = make_slice();
+  table_slice_ptr slice2;
   MESSAGE("save content of the first slice into the buffer");
   CHECK_EQUAL(sink(slice1), caf::none);
   MESSAGE("load content for the second slice from the buffer");
@@ -226,11 +202,11 @@ TEST(message serialization) {
   auto source = make_source();
   CHECK_EQUAL(source(slice2), caf::none);
   MESSAGE("check result of serialization roundtrip");
-  REQUIRE(slice2.match_elements<table_slice_handle>());
-  CHECK_EQUAL(*slice1.get_as<table_slice_handle>(0),
-              *slice2.get_as<table_slice_handle>(0));
-  CHECK_EQUAL(slice2.get_as<table_slice_handle>(0)->implementation_id(),
-              caf::atom("DEFAULT"));
+  REQUIRE(slice2.match_elements<table_slice_ptr>());
+  CHECK_EQUAL(*slice1.get_as<table_slice_ptr>(0),
+              *slice2.get_as<table_slice_ptr>(0));
+  CHECK_EQUAL(slice2.get_as<table_slice_ptr>(0)->implementation_id(),
+              caf::atom("TS_Default"));
 }
 
 TEST(rebranded message serialization) {
@@ -247,10 +223,10 @@ TEST(rebranded message serialization) {
   auto source = make_source();
   CHECK_EQUAL(source(slice2), caf::none);
   MESSAGE("check result of serialization roundtrip");
-  REQUIRE(slice2.match_elements<table_slice_handle>());
-  CHECK_EQUAL(*slice1.get_as<table_slice_handle>(0),
-              *slice2.get_as<table_slice_handle>(0));
-  CHECK_EQUAL(slice2.get_as<table_slice_handle>(0)->implementation_id(),
+  REQUIRE(slice2.match_elements<table_slice_ptr>());
+  CHECK_EQUAL(*slice1.get_as<table_slice_ptr>(0),
+              *slice2.get_as<table_slice_ptr>(0));
+  CHECK_EQUAL(slice2.get_as<table_slice_ptr>(0)->implementation_id(),
               caf::atom("test"));
 }
 

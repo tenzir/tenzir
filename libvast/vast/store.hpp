@@ -29,12 +29,12 @@ public:
   /// Adds a table slice to the store.
   /// @param xs The table slice to add.
   /// @returns No error on success.
-  virtual caf::error put(const_table_slice_handle xs) = 0;
+  virtual caf::error put(table_slice_ptr xs) = 0;
 
   /// Retrieves a set of events.
   /// @param xs The IDs for the events to retrieve.
   /// @returns The table slice according to *xs*.
-  virtual caf::expected<std::vector<const_table_slice_handle>>
+  virtual caf::expected<std::vector<table_slice_ptr>>
   get(const ids& xs) = 0;
 
   /// Flushes in-memory state to persistent storage.

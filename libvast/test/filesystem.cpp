@@ -15,7 +15,7 @@
 #include "vast/detail/system.hpp"
 
 #define SUITE filesystem
-#include "test.hpp"
+#include "vast/test/test.hpp"
 
 using namespace vast;
 

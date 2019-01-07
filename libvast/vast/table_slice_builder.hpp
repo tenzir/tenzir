@@ -26,7 +26,7 @@ class table_slice_builder : public caf::ref_counted {
 public:
   // -- constructors, destructors, and assignment operators --------------------
 
-  table_slice_builder() = default;
+  table_slice_builder(record_type layout);
 
   ~table_slice_builder();
 
@@ -46,10 +46,22 @@ public:
   /// such that subsequent calls to add will restart with a new table_slice.
   /// @returns A table slice from the accumulated calls to add or `nullptr` on
   ///          failure.
-  virtual table_slice_handle finish() = 0;
+  virtual table_slice_ptr finish() = 0;
 
   /// @returns the current number of rows in the table slice.
   virtual size_t rows() const noexcept = 0;
+
+  /// Allows the table slice builder to allocate sufficient storage for up to
+  /// `num_rows` rows.
+  virtual void reserve(size_t num_rows);
+
+  /// @returns the table layout.
+  const record_type& layout() const noexcept {
+    return layout_;
+  }
+
+private:
+  record_type layout_;
 };
 
 /// @relates table_slice_builder

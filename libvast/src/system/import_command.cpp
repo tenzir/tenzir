@@ -20,15 +20,15 @@ using namespace caf;
 namespace vast::system {
 using namespace std::chrono_literals;
 
-import_command::import_command(command* parent, std::string_view name)
-  : node_command{parent, name} {
+import_command::import_command(command* parent) : node_command(parent) {
+  add_opt<bool>("node,n", "spawn a node instead of connecting to one");
   add_opt<bool>("blocking,b", "block until the IMPORTER forwarded all data");
 }
 
-int import_command::run_impl(actor_system&, const caf::config_value_map&,
-                             argument_iterator, argument_iterator) {
-  VAST_ERROR(this, "::run_impl called");
-  return EXIT_FAILURE;
+caf::message import_command::run_impl(actor_system&,
+                                      const caf::config_value_map&,
+                                      argument_iterator, argument_iterator) {
+  return wrap_error(ec::syntax_error, "missing subcommand to import");
 }
 
 } // namespace vast::system

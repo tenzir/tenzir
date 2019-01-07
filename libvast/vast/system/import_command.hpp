@@ -25,11 +25,13 @@ namespace vast::system {
 /// @relates application
 class import_command : public node_command {
 public:
-  import_command(command* parent, std::string_view name);
+  explicit import_command(command* parent);
 
 protected:
-  int run_impl(caf::actor_system& sys, const caf::config_value_map& options,
-               argument_iterator begin, argument_iterator end) override;
+  caf::message run_impl(caf::actor_system& sys,
+                        const caf::config_value_map& options,
+                        argument_iterator begin,
+                        argument_iterator end) override;
 };
 
 } // namespace vast::system

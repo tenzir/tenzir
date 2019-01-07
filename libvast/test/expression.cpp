@@ -13,8 +13,8 @@
 
 #define SUITE expression
 
-#include "test.hpp"
-#include "fixtures/actor_system.hpp"
+#include "vast/test/test.hpp"
+#include "vast/test/fixtures/actor_system.hpp"
 
 #include "vast/event.hpp"
 #include "vast/expression.hpp"
@@ -39,7 +39,8 @@ struct fixture : fixtures::deterministic_actor_system {
   fixture() {
     // expr0 := !(x.y.z <= 42 && &foo == T)
     auto p0 = predicate{key_extractor{"x.y.z"}, less_equal, data{42}};
-    auto p1 = predicate{attribute_extractor{{"foo"}}, equal, data{true}};
+    auto p1 = predicate{attribute_extractor{caf::atom("foo")},
+                        equal, data{true}};
     auto conj = conjunction{p0, p1};
     expr0 = negation{conj};
     // expr0 || :real > 4.2

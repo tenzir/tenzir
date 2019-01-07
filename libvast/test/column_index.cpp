@@ -12,18 +12,16 @@
  ******************************************************************************/
 
 #define SUITE column_index
-#include "test.hpp"
+#include "vast/test/test.hpp"
 
-#include "fixtures/actor_system_and_events.hpp"
+#include "vast/test/fixtures/actor_system_and_events.hpp"
 
 #include "vast/column_index.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
-#include "vast/const_table_slice_handle.hpp"
 #include "vast/default_table_slice.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
-#include "vast/table_slice_handle.hpp"
 #include "vast/type.hpp"
 
 #include <caf/test/dsl.hpp>
@@ -90,7 +88,7 @@ TEST(bro conn log) {
   auto col_index = unbox(row_type.flat_index_at(col_offset));
   REQUIRE_EQUAL(col_index, 3u);
   auto col = unbox(make_column_index(sys, directory, *col_type, col_index));
-  for (auto slice : const_bro_conn_log_slices)
+  for (auto slice : bro_conn_log_slices)
     col->add(slice);
   MESSAGE("verify column index");
   auto pred = unbox(to<predicate>(":addr == 192.168.1.103"));

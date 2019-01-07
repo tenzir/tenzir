@@ -15,14 +15,13 @@
 
 #include "vast/system/importer.hpp"
 
-#include "test.hpp"
-#include "fixtures/actor_system_and_events.hpp"
+#include "vast/test/test.hpp"
+#include "vast/test/fixtures/actor_system_and_events.hpp"
 
 #include <caf/test/dsl.hpp>
 
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/vast/event.hpp"
-#include "vast/const_table_slice_handle.hpp"
 #include "vast/detail/make_io_stream.hpp"
 #include "vast/detail/spawn_container_source.hpp"
 #include "vast/event.hpp"
@@ -31,7 +30,6 @@
 #include "vast/system/data_store.hpp"
 #include "vast/system/source.hpp"
 #include "vast/table_slice.hpp"
-#include "vast/table_slice_handle.hpp"
 #include "vast/to_events.hpp"
 
 using namespace caf;
@@ -45,7 +43,7 @@ using event_buffer = std::vector<event>;
 
 behavior dummy_sink(event_based_actor* self, size_t num_events, actor overseer) {
   return {
-    [=](stream<const_table_slice_handle> in) {
+    [=](stream<table_slice_ptr> in) {
       self->unbecome();
       self->send(overseer, ok_atom::value);
       self->make_sink(
@@ -53,7 +51,7 @@ behavior dummy_sink(event_based_actor* self, size_t num_events, actor overseer) 
         [=](event_buffer&) {
           // nop
         },
-        [=](event_buffer& xs, const_table_slice_handle x) {
+        [=](event_buffer& xs, table_slice_ptr x) {
           for (auto& e : to_events(*x)) {
             xs.emplace_back(std::move(e));
             if (xs.size() == num_events) {
@@ -86,9 +84,11 @@ struct importer_fixture : Base {
     return this->self->spawn(dummy_sink, this->bro_conn_log.size(), this->self);
   }
 
-  void add_sink() {
-    anon_send(importer, add_atom::value, make_sink());
+  auto add_sink() {
+    auto snk = make_sink();
+    anon_send(importer, add_atom::value, snk);
     fetch_ok();
+    return snk;
   }
 
   virtual void fetch_ok() = 0;
@@ -135,7 +135,7 @@ using deterministic_fixture_base
 
 struct deterministic_fixture : deterministic_fixture_base {
   deterministic_fixture() : deterministic_fixture_base(100u) {
-    MESSAGE(")run initialization code");
+    MESSAGE("run initialization code");
     run();
   }
 
@@ -217,6 +217,39 @@ TEST(deterministic importer with two sinks and bro source) {
   auto second_result = fetch_result();
   CHECK_EQUAL(result, second_result);
   verify(result, bro_conn_log);
+}
+
+TEST(deterministic importer with one sink and failing bro source) {
+  MESSAGE("connect sink to importer");
+  auto snk = add_sink();
+  MESSAGE("spawn bro source");
+  auto src = make_bro_source();
+  consume_message();
+  self->send(src, system::sink_atom::value, importer);
+  MESSAGE("loop until first ack_batch");
+  if (!allow((upstream_msg::ack_batch), from(importer).to(src)))
+    sched.run_once();
+  MESSAGE("kill the source");
+  self->send_exit(src, exit_reason::kill);
+  expect((exit_msg), from(self).to(src));
+  MESSAGE("loop until we see the forced_close");
+  if (!allow((downstream_msg::forced_close), from(src).to(importer)))
+    sched.run_once();
+  MESSAGE("make sure importer and sink remain unaffected");
+  self->monitor(snk);
+  self->monitor(importer);
+  do {
+    disallow((downstream_msg::forced_close), from(importer).to(snk));
+  } while (sched.try_run_once());
+  using namespace std::chrono_literals;
+  self->receive(
+    [](const down_msg& x) {
+      FAIL("unexpected down message: " << x);
+    },
+    after(0s) >> [] {
+      // nop
+    }
+  );
 }
 
 FIXTURE_SCOPE_END()

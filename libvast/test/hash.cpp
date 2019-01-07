@@ -16,7 +16,7 @@
 #include "vast/concept/hashable/xxhash.hpp"
 
 #define SUITE hash
-#include "test.hpp"
+#include "vast/test/test.hpp"
 
 using namespace vast;
 

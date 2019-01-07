@@ -13,7 +13,6 @@
 
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/vast/event.hpp"
-#include "vast/const_table_slice_handle.hpp"
 #include "vast/ids.hpp"
 #include "vast/system/archive.hpp"
 #include "vast/table_slice.hpp"
@@ -21,8 +20,8 @@
 #include "vast/detail/spawn_container_source.hpp"
 
 #define SUITE archive
-#include "test.hpp"
-#include "fixtures/actor_system_and_events.hpp"
+#include "vast/test/test.hpp"
+#include "vast/test/fixtures/actor_system_and_events.hpp"
 
 using namespace caf;
 using namespace vast;
@@ -53,20 +52,20 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
 FIXTURE_SCOPE(archive_tests, fixture)
 
 TEST(bro conn logs slices) {
-  push_to_archive(const_bro_conn_log_slices);
+  push_to_archive(bro_conn_log_slices);
   auto result = query({{10, 15}});
   CHECK_EQUAL(result.size(), 5u);
 }
 
 TEST(archiving and querying) {
   MESSAGE("import bro conn logs to archive");
-  push_to_archive(const_bro_conn_log_slices);
+  push_to_archive(bro_conn_log_slices);
   MESSAGE("import DNS logs to archive");
-  push_to_archive(const_bro_dns_log_slices);
+  push_to_archive(bro_dns_log_slices);
   MESSAGE("import HTTP logs to archive");
-  push_to_archive(const_bro_http_log_slices);
+  push_to_archive(bro_http_log_slices);
   MESSAGE("import BGP dump logs to archive");
-  push_to_archive(const_bgpdump_txt_slices);
+  push_to_archive(bgpdump_txt_slices);
   MESSAGE("query events");
   auto ids = make_ids({{24, 56}, {1076, 1096}});
   auto result = request<std::vector<event>>(a, ids);

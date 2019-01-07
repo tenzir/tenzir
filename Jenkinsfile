@@ -26,6 +26,11 @@ buildMatrix = [
         tools: ['clang'],
         cmakeArgs: debugBuildFlags,
     ]],
+    ['FreeBSD', [
+        builds: ['debug'],
+        tools: ['clang'],
+        cmakeArgs: debugBuildFlags,
+    ]],
     // Release builds for various OS/tool combinations.
     [ 'Linux', [
         builds: ['release'],
@@ -38,6 +43,8 @@ buildMatrix = [
         cmakeArgs: releaseBuildFlags,
     ]],
     // One Additional build for coverage reports.
+    /* TODO: this build exhausts all storage on the node and is temporarily
+     *       disabled until resolving the issue
     ['Linux', [
         builds: ['debug'],
         tools: ['gcc8 && gcovr'],
@@ -47,6 +54,7 @@ buildMatrix = [
             'NO_EXCEPTIONS:BOOL=yes',
         ],
     ]],
+    */
 ]
 
 // Optional environment variables for combinations of labels.
@@ -174,6 +182,7 @@ pipeline {
                           "$WORKSPACE/caf-install/lib"
         DYLD_LIBRARY_PATH = "$WORKSPACE/vast-sources/build/lib;" +
                             "$WORKSPACE/caf-install/lib"
+        ASAN_OPTIONS = 'detect_leaks=0'
         PrettyJobBaseName = env.JOB_BASE_NAME.replace('%2F', '/')
         PrettyJobName = "VAST build #${env.BUILD_NUMBER} for $PrettyJobBaseName"
     }

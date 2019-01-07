@@ -15,11 +15,13 @@
 
 #include <string>
 
+#include "arrow/api.h"
+#include "arrow/io/api.h"
+#include "arrow/ipc/api.h"
+
 #include "plasma/client.h"
 #include "plasma/common.h"
-
-#include "arrow/api.h"
-#include "arrow/builder.h"
+#include <plasma/test-util.h>
 
 #include "vast/data.hpp"
 #include "vast/expected.hpp"

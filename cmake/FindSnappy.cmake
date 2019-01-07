@@ -36,3 +36,10 @@ mark_as_advanced(
   SNAPPY_ROOT_DIR
   SNAPPY_LIBRARIES
   SNAPPY_INCLUDE_DIR)
+
+# create IMPORTED target
+if (SNAPPY_FOUND AND NOT TARGET snappy::snappy)
+  add_library(snappy::snappy UNKNOWN IMPORTED)
+  set_target_properties(snappy::snappy PROPERTIES
+    IMPORTED_LOCATION ${SNAPPY_LIBRARIES})
+endif()

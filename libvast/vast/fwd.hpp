@@ -13,6 +13,7 @@
 
 #pragma once
 
+#include <caf/intrusive_cow_ptr.hpp>
 #include <caf/intrusive_ptr.hpp>
 
 namespace vast {
@@ -24,7 +25,6 @@ class address;
 class bitmap;
 class chunk;
 class column_index;
-class const_table_slice_handle;
 class data;
 class default_table_slice;
 class default_table_slice_builder;
@@ -41,10 +41,10 @@ class segment_builder;
 class segment_store;
 class store;
 class subnet;
+class synopsis;
 class table_index;
 class table_slice;
 class table_slice_builder;
-class table_slice_handle;
 class type;
 class value;
 
@@ -69,20 +69,25 @@ struct timespan_type;
 struct timestamp_type;
 struct vector_type;
 
+// -- templates ----------------------------------------------------------------
+
+template <class>
+class scope_linked;
+
 // -- free functions -----------------------------------------------------------
 
 void intrusive_ptr_add_ref(const table_slice*);
-
 void intrusive_ptr_release(const table_slice*);
+table_slice* intrusive_cow_ptr_unshare(table_slice*&);
 
 // -- smart pointers -----------------------------------------------------------
 
 using chunk_ptr = caf::intrusive_ptr<chunk>;
 using column_index_ptr = std::unique_ptr<column_index>;
-using const_table_slice_ptr = caf::intrusive_ptr<const table_slice>;
-using default_table_slice_ptr = caf::intrusive_ptr<default_table_slice>;
+using default_table_slice_ptr = caf::intrusive_cow_ptr<default_table_slice>;
+using synopsis_ptr = caf::intrusive_ptr<synopsis>;
 using table_slice_builder_ptr = caf::intrusive_ptr<table_slice_builder>;
-using table_slice_ptr = caf::intrusive_ptr<table_slice>;
+using table_slice_ptr = caf::intrusive_cow_ptr<table_slice>;
 
 // -- miscellaneous ------------------------------------------------------------
 

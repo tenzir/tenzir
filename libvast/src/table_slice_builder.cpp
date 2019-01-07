@@ -20,6 +20,11 @@
 
 namespace vast {
 
+table_slice_builder::table_slice_builder(record_type layout)
+  : layout_(std::move(layout)) {
+  // nop
+}
+
 table_slice_builder::~table_slice_builder() {
   // nop
 }
@@ -37,6 +42,10 @@ bool table_slice_builder::recursive_add(const data& x, const type& t) {
                         return add(make_view(x));
                       }),
                     x, t);
+}
+
+void table_slice_builder::reserve(size_t) {
+  // nop
 }
 
 } // namespace vast

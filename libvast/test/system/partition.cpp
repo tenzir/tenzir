@@ -12,7 +12,7 @@
  ******************************************************************************/
 
 #define SUITE partition
-#include "test.hpp"
+#include "vast/test/test.hpp"
 
 #include "vast/system/partition.hpp"
 
@@ -24,7 +24,6 @@
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/type.hpp"
-#include "vast/const_table_slice_handle.hpp"
 #include "vast/default_table_slice.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/detail/spawn_container_source.hpp"
@@ -32,9 +31,8 @@
 #include "vast/ids.hpp"
 #include "vast/system/indexer.hpp"
 #include "vast/table_slice.hpp"
-#include "vast/table_slice_handle.hpp"
 
-#include "fixtures/actor_system_and_events.hpp"
+#include "vast/test/fixtures/actor_system_and_events.hpp"
 
 using namespace vast;
 using namespace vast::system;
@@ -189,7 +187,7 @@ TEST(integer rows lookup) {
   record_type layout{{"value", col_type}};
   auto rows = make_rows(1, 2, 3, 1, 2, 3, 1, 2, 3);
   auto slice = default_table_slice::make(layout, rows);
-  std::vector<const_table_slice_handle> slices{slice};
+  std::vector<table_slice_ptr> slices{slice};
   detail::spawn_container_source(sys, std::move(slices),
                                  put->manager().get_or_add(layout).first);
   run();
@@ -212,7 +210,7 @@ TEST(single partition bro conn log lookup) {
   MESSAGE("ingest bro conn logs");
   auto layout = bro_conn_log_layout();
   auto indexer = put->manager().get_or_add(layout).first;
-  detail::spawn_container_source(sys, const_bro_conn_log_slices, indexer);
+  detail::spawn_container_source(sys, bro_conn_log_slices, indexer);
   run();
   MESSAGE("verify partition content");
   auto res = [&](auto... args) {
@@ -240,7 +238,7 @@ TEST(multiple partitions bro conn log lookup no messaging) {
   MESSAGE("ingest bro conn logs into partitions of size " << slice_size);
   std::vector<partition_ptr> partitions;
   auto layout = bro_conn_log_layout();
-  for (auto& slice : const_bro_conn_log_slices) {
+  for (auto& slice : bro_conn_log_slices) {
     auto ptr = make_partition(uuid::random());
     CHECK_EQUAL(exists(ptr->dir()), false);
     CHECK_EQUAL(ptr->dirty(), false);
@@ -274,16 +272,10 @@ TEST(multiple partitions bro conn log lookup no messaging) {
         CHECK(path_set.emplace(col->filename()).second);
         auto idx_offset = std::min((i + 1) * slice_size, bro_conn_log.size());
         CHECK_EQUAL(col->idx().offset(), idx_offset);
-        if (col_id == 0) {
-          // First (and only) meta field is the type.
-          CHECK_EQUAL(col->index_type(), string_type{});
-        } else {
-          // Data field.
-          offset off{col_id - 1};
-          auto type_at_offset = layout.at(off);
-          REQUIRE_NOT_EQUAL(type_at_offset, nullptr);
-          CHECK_EQUAL(col->index_type(), *type_at_offset);
-        }
+        offset off{col_id};
+        auto type_at_offset = layout.at(off);
+        REQUIRE_NOT_EQUAL(type_at_offset, nullptr);
+        CHECK_EQUAL(col->index_type(), *type_at_offset);
         ++col_id;
       });
     });

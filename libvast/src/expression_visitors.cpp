@@ -25,6 +25,7 @@
 #include "vast/die.hpp"
 #include "vast/event.hpp"
 #include "vast/expression_visitors.hpp"
+#include "vast/system/atoms.hpp"
 #include "vast/type.hpp"
 
 namespace vast {
@@ -244,11 +245,13 @@ expected<void> validator::operator()(const predicate& p) {
 
 expected<void> validator::operator()(const attribute_extractor& ex,
                                      const data& d) {
-  if (ex.attr == "type" && !caf::holds_alternative<std::string>(d))
+  if (ex.attr == system::type_atom::value
+      && !caf::holds_alternative<std::string>(d))
     return make_error(ec::syntax_error,
                       "type attribute extractor requires string operand",
                       ex.attr, op_, d);
-  else if (ex.attr == "time" && !caf::holds_alternative<timestamp>(d))
+  else if (ex.attr == system::time_atom::value
+           && !caf::holds_alternative<timestamp>(d))
     return make_error(ec::syntax_error,
                       "time attribute extractor requires timestamp operand",
                       ex.attr, op_, d);
@@ -267,53 +270,6 @@ expected<void> validator::operator()(const key_extractor&, const data&) {
   // have in this context.
   return no_error;
 }
-
-time_restrictor::time_restrictor(timestamp first, timestamp last)
-  : first_{first}, last_{last} {
-}
-
-bool time_restrictor::operator()(caf::none_t) const {
-  die("should never happen");
-  return false;
-}
-
-bool time_restrictor::operator()(const conjunction& con) const {
-  for (auto& op : con)
-    if (!caf::visit(*this, op))
-      return false;
-  return true;
-}
-
-bool time_restrictor::operator()(const disjunction& dis) const {
-  for (auto& op : dis)
-    if (caf::visit(*this, op))
-      return true;
-  return false;
-}
-
-bool time_restrictor::operator()(const negation& n) const {
-  // We can only apply a negation if it sits directly on top of a time
-  // extractor, because only then we can negate the meaning of the temporal
-  // constraint.
-  auto r = caf::visit(*this, n.expr());
-  if (auto p = caf::get_if<predicate>(&n.expr()))
-    if (auto a = caf::get_if<attribute_extractor>(&p->lhs))
-      if (a->attr == "time")
-        return !r;
-  return r;
-}
-
-bool time_restrictor::operator()(const predicate& p) const {
-  if (auto a = caf::get_if<attribute_extractor>(&p.lhs)) {
-    if (a->attr == "time") {
-      auto d = caf::get_if<data>(&p.rhs);
-      VAST_ASSERT(d && caf::holds_alternative<timestamp>(*d));
-      return evaluate(first_, p.op, *d) || evaluate(last_, p.op, *d);
-    }
-  }
-  return true; // nothing to retrict.
-}
-
 
 type_resolver::type_resolver(const type& t) : type_{t} {
 }
@@ -546,9 +502,9 @@ bool event_evaluator::operator()(const predicate& p) {
 bool event_evaluator::operator()(const attribute_extractor& e, const data& d) {
   // FIXME: perform a transformation on the AST that replaces the attribute
   // with the corresponding function object.
-  if (e.attr == "type")
+  if (e.attr == system::type_atom::value)
     return evaluate(event_.type().name(), op_, d);
-  if (e.attr == "time")
+  if (e.attr == system::time_atom::value)
     return evaluate(event_.timestamp(), op_, d);
   return false;
 }
@@ -607,10 +563,10 @@ bool matcher::operator()(const predicate& p) {
 }
 
 bool matcher::operator()(const attribute_extractor& e, const data& d) {
-  if (e.attr == "type") {
+  if (e.attr == system::type_atom::value) {
     VAST_ASSERT(caf::holds_alternative<std::string>(d));
     return evaluate(d, op_, type_.name());
-  } else if (e.attr == "time") {
+  } else if (e.attr == system::time_atom::value) {
     return true; // Every event has a timestamp.
   }
   return false;

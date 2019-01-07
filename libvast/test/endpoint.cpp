@@ -15,7 +15,7 @@
 #include "vast/endpoint.hpp"
 
 #define SUITE endpoint
-#include "test.hpp"
+#include "vast/test/test.hpp"
 
 using namespace vast;
 using namespace std::string_literals;

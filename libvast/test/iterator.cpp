@@ -14,7 +14,7 @@
 #include "vast/detail/iterator.hpp"
 
 #define SUITE detail
-#include "test.hpp"
+#include "vast/test/test.hpp"
 
 using namespace vast;
 

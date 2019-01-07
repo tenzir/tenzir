@@ -119,7 +119,7 @@ public:
   /// Locates the table slices for a given set of IDs.
   /// @param xs The IDs to lookup.
   /// @returns The table slices according to *xs*.
-  caf::expected<std::vector<const_table_slice_handle>>
+  caf::expected<std::vector<table_slice_ptr>>
   lookup(const ids& xs) const;
 
   /// @cond PRIVATE
@@ -129,7 +129,7 @@ public:
   /// @endcond
 
 private:
-  caf::expected<const_table_slice_handle>
+  caf::expected<table_slice_ptr>
   make_slice(const table_slice_synopsis& slice) const;
 
   caf::actor_system& actor_system_;

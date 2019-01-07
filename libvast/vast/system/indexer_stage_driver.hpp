@@ -16,7 +16,6 @@
 #include <caf/broadcast_downstream_manager.hpp>
 #include <caf/stream_stage_driver.hpp>
 
-#include "vast/const_table_slice_handle.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/type.hpp"
 
@@ -32,7 +31,7 @@ using indexer_stage_filter = type;
 /// Selects an INDEXER actor based on its filter.
 struct indexer_stage_selector {
   bool operator()(const indexer_stage_filter& f,
-                  const const_table_slice_handle& x) const {
+                  const table_slice_ptr& x) const {
     return f == x->layout();
   }
 };
@@ -40,19 +39,19 @@ struct indexer_stage_selector {
 /// @relates indexer_stage_driver
 /// A downstream manager type for dispatching data to INDEXER actors.
 using indexer_downstream_manager
-  = caf::broadcast_downstream_manager<const_table_slice_handle,
+  = caf::broadcast_downstream_manager<table_slice_ptr,
                                       indexer_stage_filter,
                                       indexer_stage_selector>;
 
 /// A stream stage for dispatching slices to INDEXER actors. One set of INDEXER
 /// actors is used per partition.
 class indexer_stage_driver
-  : public caf::stream_stage_driver<const_table_slice_handle,
+  : public caf::stream_stage_driver<table_slice_ptr,
                                     indexer_downstream_manager> {
 public:
   // -- member types -----------------------------------------------------------
 
-  using super = caf::stream_stage_driver<const_table_slice_handle,
+  using super = caf::stream_stage_driver<table_slice_ptr,
                                          indexer_downstream_manager>;
 
   using partition_factory = std::function<partition_ptr()>;
@@ -65,7 +64,7 @@ public:
 
   // -- constructors, destructors, and assignment operators --------------------
 
-  indexer_stage_driver(downstream_manager_type& dm, meta_index& pindex,
+  indexer_stage_driver(downstream_manager_type& dm, meta_index& meta_idx,
                        partition_factory fac, size_t max_partition_size);
 
   ~indexer_stage_driver() noexcept override;
@@ -77,8 +76,8 @@ public:
 private:
   // -- member variables -------------------------------------------------------
 
-  /// Keeps statistics for all partitions.
-  meta_index& pindex_;
+  /// Enables efficient identification of relevant partitions for an expression.
+  meta_index& meta_index_;
 
   /// Stores how many rows remain in the current partition.
   size_t remaining_in_partition_;

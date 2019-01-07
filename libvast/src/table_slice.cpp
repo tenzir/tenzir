@@ -14,20 +14,23 @@
 #include "vast/table_slice.hpp"
 
 #include <caf/actor_system.hpp>
+#include <caf/actor_system_config.hpp>
 #include <caf/deserializer.hpp>
 #include <caf/error.hpp>
 #include <caf/execution_unit.hpp>
+#include <caf/make_copy_on_write.hpp>
 #include <caf/sec.hpp>
 #include <caf/serializer.hpp>
 #include <caf/sum_type.hpp>
 
-#include "vast/const_table_slice_handle.hpp"
 #include "vast/default_table_slice.hpp"
+#include "vast/default_table_slice_builder.hpp"
+#include "vast/defaults.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/error.hpp"
 #include "vast/event.hpp"
+#include "vast/format/test.hpp"
 #include "vast/logger.hpp"
-#include "vast/table_slice_handle.hpp"
 #include "vast/value.hpp"
 
 namespace vast {
@@ -65,27 +68,8 @@ record_type table_slice::layout(size_type first_column,
   return record_type{std::move(sub_records)};
 }
 
-table_slice_ptr table_slice::make_ptr(record_type layout,
-                                      caf::actor_system& sys,
-                                      caf::atom_value impl) {
-  if (impl == caf::atom("DEFAULT")) {
-    auto ptr = caf::make_counted<default_table_slice>(std::move(layout));
-    return ptr;
-  }
-  using generic_fun = caf::runtime_settings_map::generic_function_pointer;
-  using factory_fun = table_slice_ptr (*)(record_type);
-  auto val = sys.runtime_settings().get(impl);
-  if (!caf::holds_alternative<generic_fun>(val)) {
-    VAST_ERROR_ANON("table_slice", "has no factory function for implementation key",
-                impl);
-    return nullptr;
-  }
-  auto fun = reinterpret_cast<factory_fun>(caf::get<generic_fun>(val));
-  return fun(std::move(layout));
-}
-
 caf::error table_slice::serialize_ptr(caf::serializer& sink,
-                                      const_table_slice_ptr ptr) {
+                                      const table_slice_ptr& ptr) {
   if (!ptr) {
     record_type dummy;
     return sink(dummy);
@@ -110,10 +94,52 @@ caf::error table_slice::deserialize_ptr(caf::deserializer& source,
     ptr.reset();
     return caf::none;
   }
-  ptr = make_ptr(std::move(layout), source.context()->system(), impl_id);
+  ptr = make_table_slice(std::move(layout), source.context()->system(),
+                         impl_id);
   if (!ptr)
     return ec::invalid_table_slice_type;
-  return ptr->deserialize(source);
+  return ptr.unshared().deserialize(source);
+}
+
+table_slice_ptr make_table_slice(record_type layout, caf::actor_system& sys,
+                                 caf::atom_value impl) {
+  if (impl == caf::atom("TS_Default")) {
+    return caf::make_copy_on_write<default_table_slice>(std::move(layout));
+  }
+  using generic_fun = caf::runtime_settings_map::generic_function_pointer;
+  using factory_fun = table_slice_ptr (*)(record_type);
+  auto val = sys.runtime_settings().get(impl);
+  if (!caf::holds_alternative<generic_fun>(val)) {
+    VAST_ERROR_ANON("table_slice",
+                    "has no factory function for implementation key",
+                    impl);
+    return table_slice_ptr{nullptr};
+  }
+  auto fun = reinterpret_cast<factory_fun>(caf::get<generic_fun>(val));
+  return fun(std::move(layout));
+}
+
+expected<std::vector<table_slice_ptr>>
+make_random_table_slices(size_t num_slices, size_t slice_size,
+                         record_type layout, id offset, size_t seed) {
+  schema sc;
+  sc.add(layout);
+  format::test::reader src{seed, std::numeric_limits<uint64_t>::max(),
+                           std::move(sc)};
+  std::vector<table_slice_ptr> result;
+  result.reserve(num_slices);
+  default_table_slice_builder builder{std::move(layout)};
+  for (size_t i = 0; i < num_slices; ++i) {
+    if (auto e = src.read(builder, slice_size))
+      return e;
+    if (auto ptr = builder.finish(); ptr == nullptr) {
+      return make_error(ec::unspecified, "finish failed");
+    } else {
+      result.emplace_back(std::move(ptr)).unshared().offset(offset);
+      offset += slice_size;
+    }
+  }
+  return result;
 }
 
 void intrusive_ptr_add_ref(const table_slice* ptr) {
@@ -122,6 +148,10 @@ void intrusive_ptr_add_ref(const table_slice* ptr) {
 
 void intrusive_ptr_release(const table_slice* ptr) {
   intrusive_ptr_release(static_cast<const caf::ref_counted*>(ptr));
+}
+
+table_slice* intrusive_cow_ptr_unshare(table_slice*& ptr) {
+  return caf::default_intrusive_cow_ptr_unshare(ptr);
 }
 
 bool operator==(const table_slice& x, const table_slice& y) {
@@ -136,6 +166,14 @@ bool operator==(const table_slice& x, const table_slice& y) {
       if (x.at(row, col) != y.at(row, col))
         return false;
   return true;
+}
+
+caf::error inspect(caf::serializer& sink, table_slice_ptr& ptr) {
+  return table_slice::serialize_ptr(sink, ptr);
+}
+
+caf::error inspect(caf::deserializer& source, table_slice_ptr& ptr) {
+  return table_slice::deserialize_ptr(source, ptr);
 }
 
 } // namespace vast

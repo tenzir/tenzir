@@ -19,7 +19,7 @@
 #include "vast/concept/parseable/vast/expression.hpp"
 
 #define SUITE expression
-#include "test.hpp"
+#include "vast/test/test.hpp"
 
 using namespace vast;
 

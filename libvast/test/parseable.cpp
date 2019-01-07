@@ -25,7 +25,7 @@
 #include "vast/concept/parseable/vast/time.hpp"
 
 #define SUITE parseable
-#include "test.hpp"
+#include "vast/test/test.hpp"
 
 using namespace std::string_literals;
 using namespace vast;
@@ -93,7 +93,7 @@ TEST(container attribute folding) {
                 "container attribute folding failed");
 }
 
-TEST(action) {
+TEST_DISABLED(action) {
   using namespace parsers;
   auto make_v4 = [](uint32_t a) { return address::v4(&a); };
   auto ipv4_addr = b32be ->* make_v4;

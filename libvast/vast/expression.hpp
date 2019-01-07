@@ -18,6 +18,7 @@
 #include <type_traits>
 #include <vector>
 
+#include <caf/atom.hpp>
 #include <caf/default_sum_type_access.hpp>
 #include <caf/detail/type_list.hpp>
 #include <caf/none.hpp>
@@ -39,9 +40,9 @@ class expression;
 
 /// Extracts a specific attributes from an event.
 struct attribute_extractor : detail::totally_ordered<attribute_extractor> {
-  attribute_extractor(std::string str = {});
+  attribute_extractor(caf::atom_value str = caf::atom(""));
 
-  std::string attr;
+  caf::atom_value attr;
 };
 
 bool operator==(const attribute_extractor& x, const attribute_extractor& y);

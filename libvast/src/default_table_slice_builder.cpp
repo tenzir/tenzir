@@ -15,30 +15,24 @@
 
 #include <utility>
 
-#include "vast/table_slice_handle.hpp"
-
 namespace vast {
 
 default_table_slice_builder::default_table_slice_builder(record_type layout)
-  : layout_{flatten(layout)},
-    row_(layout_.fields.size()),
+  : super{flatten(layout)},
+    row_(super::layout().fields.size()),
     col_{0} {
   VAST_ASSERT(!row_.empty());
 }
 
 bool default_table_slice_builder::append(data x) {
-  if (!slice_) {
-    slice_ = caf::make_counted<default_table_slice>(layout_);
-    row_ = vector(layout_.fields.size());
-    col_ = 0;
-  }
+  lazy_init();
   // TODO: consider an unchecked version for improved performance.
-  if (!type_check(layout_.fields[col_].type, x))
+  if (!type_check(layout().fields[col_].type, x))
     return false;
   row_[col_++] = std::move(x);
-  if (col_ == layout_.fields.size()) {
+  if (col_ == layout().fields.size()) {
     slice_->xs_.push_back(std::move(row_));
-    row_ = vector(layout_.fields.size());
+    row_ = vector(layout().fields.size());
     col_ = 0;
   }
   return true;
@@ -48,7 +42,7 @@ bool default_table_slice_builder::add(data_view x) {
   return append(materialize(x));
 }
 
-table_slice_handle default_table_slice_builder::finish() {
+table_slice_ptr default_table_slice_builder::finish() {
   // If we have an incomplete row, we take it as-is and keep the remaining null
   // values. Better to have incomplete than no data.
   if (col_ != 0)
@@ -56,15 +50,25 @@ table_slice_handle default_table_slice_builder::finish() {
   // Populate slice.
   // TODO: this feels messy, but allows for non-virtual parent accessors.
   slice_->rows_ = slice_->xs_.size();
-  slice_->columns_ = layout_.fields.size();
-  using std::swap;
-  default_table_slice_ptr result;
-  swap(slice_, result);
-  return table_slice_handle{std::move(result)};
+  slice_->columns_ = layout().fields.size();
+  return table_slice_ptr{slice_.release(), false};
 }
 
 size_t default_table_slice_builder::rows() const noexcept {
   return slice_ == nullptr ? 0u : slice_->xs_.size();
+}
+
+void default_table_slice_builder::reserve(size_t num_rows) {
+  lazy_init();
+  slice_->xs_.reserve(num_rows);
+}
+
+void default_table_slice_builder::lazy_init() {
+  if (slice_ == nullptr) {
+    slice_.reset(new default_table_slice(layout()));
+    row_ = vector(layout().fields.size());
+    col_ = 0;
+  }
 }
 
 } // namespace vast

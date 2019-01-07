@@ -22,6 +22,7 @@ namespace vast::system {
 // -- classes ------------------------------------------------------------------
 
 class application;
+class command;
 class configuration;
 class default_application;
 class export_command;
@@ -32,10 +33,10 @@ class node_command;
 class partition;
 class pcap_reader_command;
 class pcap_writer_command;
-class source_command;
 class remote_command;
-class start_command;
 class sink_command;
+class source_command;
+class start_command;
 
 // -- structs ------------------------------------------------------------------
 

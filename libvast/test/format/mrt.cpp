@@ -7,12 +7,12 @@
 #include "vast/format/mrt.hpp"
 
 #define SUITE format
-#include "test.hpp"
-#include "data.hpp"
+#include "vast/test/test.hpp"
+#include "vast/test/data.hpp"
 
 using namespace vast;
 
-TEST(MRT) {
+TEST_DISABLED(MRT) {
   auto in = detail::make_input_stream(mrt::updates20150505, false);
   format::mrt::reader reader{std::move(*in)};
   auto result = expected<event>{no_error};

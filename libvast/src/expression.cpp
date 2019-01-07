@@ -19,8 +19,8 @@ namespace vast {
 
 // -- attribute_extractor ------------------------------------------------------
 
-attribute_extractor::attribute_extractor(std::string str)
-  : attr{std::move(str)} {
+attribute_extractor::attribute_extractor(caf::atom_value str) : attr{str} {
+  // nop
 }
 
 bool operator==(const attribute_extractor& x, const attribute_extractor& y) {

@@ -25,7 +25,8 @@ find_library(BROKER_LIBRARY
 find_path(BROKER_INCLUDE_DIRS
   NAMES broker/broker.hh
   HINTS ${BROKER_ROOT_DIR}/include
-        ${BROKER_ROOT_DIR}/..)
+        ${BROKER_ROOT_DIR}/..
+        ${BROKER_ROOT_DIR}/../..)
 
 if (BROKER_INCLUDE_DIRS)
   # When we're pointing to a build directory, we must add it to the include path
@@ -40,12 +41,20 @@ endif ()
 
 include(FindPackageHandleStandardArgs)
 find_package_handle_standard_args(
-  Broker
+  BROKER
   DEFAULT_MSG
   BROKER_LIBRARY
-  BROKER_INCLUDE_DIR)
+  BROKER_INCLUDE_DIRS)
 
 mark_as_advanced(
   BROKER_ROOT_DIR
   BROKER_LIBRARY
-  BROKER_INCLUDE_DIR)
+  BROKER_INCLUDE_DIRS)
+
+# create IMPORTED target
+if (BROKER_FOUND AND NOT TARGET broker::broker)
+  add_library(broker::broker UNKNOWN IMPORTED)
+  set_target_properties(broker::broker PROPERTIES
+    IMPORTED_LOCATION ${BROKER_LIBRARY}
+    INTERFACE_INCLUDE_DIRECTORIES "${BROKER_INCLUDE_DIRS}")
+endif()

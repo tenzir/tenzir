@@ -405,6 +405,8 @@ std::string join(const std::vector<T>& v, std::string_view sep) {
   }
 }
 
+// TODO: drop hand-rolled starts_with and ends_with when switching to C++20
+
 /// Determines whether a string occurs at the beginning of another.
 /// @param begin The beginning of the string.
 /// @param end The end of the string.

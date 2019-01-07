@@ -18,6 +18,7 @@ namespace vast {
 namespace {
 
 const char* descriptions[] = {
+  "no_error",
   "unspecified",
   "filesystem_error",
   "type_clash",
@@ -30,12 +31,22 @@ const char* descriptions[] = {
   "end_of_input",
   "version_error",
   "syntax_error",
+  "invalid_table_slice_type",
+  "invalid_synopsis_type",
+  "remote_node_down",
+  "invalid_result",
+  "invalid_configuration",
+  "unrecognized_option",
+  "invalid_subcommand",
+  "missing_subcommand",
+  "no_importer",
+  "unimplemented",
 };
 
 } // namespace <anonymous>
 
 const char* to_string(ec x) {
-  auto index = static_cast<size_t>(x) - 1;
+  auto index = static_cast<size_t>(x);
   VAST_ASSERT(index < sizeof(descriptions));
   return descriptions[index];
 }

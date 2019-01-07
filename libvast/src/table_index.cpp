@@ -13,7 +13,6 @@
 
 #include "vast/table_index.hpp"
 
-#include "vast/const_table_slice_handle.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/expression_visitors.hpp"
 #include "vast/load.hpp"
@@ -23,6 +22,7 @@
 
 #include "vast/detail/overload.hpp"
 #include "vast/detail/string.hpp"
+#include "vast/system/atoms.hpp"
 
 namespace vast {
 namespace {
@@ -36,10 +36,13 @@ auto key_to_dir(std::string key, const path& prefix) {
 
 caf::expected<table_index> make_table_index(caf::actor_system& sys,
                                             path base_dir, record_type layout) {
+  // Layouts need to be flat.
+  VAST_ASSERT(layout.fields.size() == flat_size(layout));
+  VAST_TRACE(VAST_ARG(base_dir), VAST_ARG(layout));
   caf::error err;
   table_index result{sys, std::move(layout), base_dir};
-  result.columns_.resize(table_index::meta_column_count
-                         + flat_size(result.layout()));
+  if (auto err = result.init())
+    return err;
   return result;
 }
 
@@ -56,14 +59,25 @@ table_index::~table_index() noexcept {
 
 // -- persistence --------------------------------------------------------------
 
+caf::error table_index::init() {
+  VAST_TRACE("");
+  columns_.resize(layout().fields.size());
+  auto filename = base_dir_ / "row_ids";
+  if (exists(filename))
+    return load(sys_, filename, row_ids_);
+  return caf::none;
+}
+
 caf::error table_index::flush_to_disk() {
   // Unless `add` was called at least once there's nothing to flush.
+  VAST_TRACE("");
   if (!dirty_)
     return caf::none;
+  if (auto err = save(sys_, base_dir_ / "row_ids", row_ids_))
+    return err;
   for (auto& col : columns_) {
     VAST_ASSERT(col != nullptr);
-    auto err = col->flush_to_disk();
-    if (err)
+    if (auto err = col->flush_to_disk())
       return err;
   }
   dirty_ = false;
@@ -87,10 +101,18 @@ column_index* table_index::by_name(std::string_view column_name) {
   return i != columns_.end() ? i->get() : nullptr;
 }
 
-caf::error table_index::add(const const_table_slice_handle& x) {
+caf::error table_index::add(const table_slice_ptr& x) {
   VAST_ASSERT(x != nullptr);
   VAST_ASSERT(x->layout() == layout());
   VAST_TRACE(VAST_ARG(x));
+  // Store IDs of the new rows.
+  auto first = x->offset();
+  auto last = x->offset() + x->rows();
+  VAST_ASSERT(first < last);
+  VAST_ASSERT(first >= row_ids_.size());
+  row_ids_.append_bits(false, first - row_ids_.size());
+  row_ids_.append_bits(true, last - first);
+  // Iterate columns directly if all columns are present in memory.
   if (dirty_) {
     for (auto& col : columns_) {
       VAST_ASSERT(col != nullptr);
@@ -98,20 +120,13 @@ caf::error table_index::add(const const_table_slice_handle& x) {
     }
     return caf::none;
   }
+  // Create columns on-the-fly.
   auto fun = [&](column_index& col) -> caf::error {
     col.add(x);
     return caf::none;
   };
-  auto mk_type = [&] {
-    return make_type_column_index(sys_, meta_dir() / "type");
-  };
   return caf::error::eval(
-    [&] {
-      // Column 0 is our meta index for the event type.
-      return with_meta_column(0, mk_type, fun);
-    },
     [&]() -> caf::error {
-      // Coluns 1-N are our data fields.
       // Iterate all types of the record.
       size_t i = 0;
       for (auto&& f : record_type::each{layout()}) {
@@ -123,8 +138,7 @@ caf::error table_index::add(const const_table_slice_handle& x) {
             auto dir = key_to_dir(f.key(), data_dir());
             return make_column_index(sys_, dir, value_type, i);
           };
-          auto err = with_data_column(i, fac, fun);
-          if (err)
+          if (auto err = with_column(i, fac, fun))
             return err;
           ++i;
         }
@@ -236,22 +250,15 @@ caf::expected<bitmap> table_index::lookup_impl(const predicate& pred,
                                                const attribute_extractor& ex,
                                                const data& x) {
   VAST_TRACE(VAST_ARG(pred), VAST_ARG(ex), VAST_ARG(x));
-  VAST_IGNORE_UNUSED(x);
-  // We know that the columns vector contains two meta fields: time at index
-  // 0 and type at index 1.
-  static_assert(table_index::meta_column_count == 1);
-  VAST_ASSERT(columns_.size() >= table_index::meta_column_count);
-  if (ex.attr == "type") {
+  if (ex.attr == system::type_atom::value) {
     VAST_ASSERT(caf::holds_alternative<std::string>(x));
-    auto fac = [&] {
-      return make_type_column_index(sys_, meta_dir() / "type");
-    };
-    return with_meta_column(0, fac, [&](column_index& col) {
-      return col.lookup(pred);
-    });
-  } else if (ex.attr == "time") {
+    // No hits if the queries name doesn't match our type.
+    if (layout().name() != caf::get<std::string>(x))
+      return ids{};
+    // Otherwise all rows match.
+    return row_ids_;
+  } else if (ex.attr == system::time_atom::value) {
     // TODO: reconsider whether we still want to support "&time ..." queries.
-    /// We assume column 0 to hold the timestamp.
     VAST_ASSERT(caf::holds_alternative<timestamp>(x));
     if (layout().fields.empty() || layout().fields[0].type != timestamp_type{})
       return ec::invalid_query;
@@ -287,7 +294,7 @@ caf::expected<bitmap> table_index::lookup_impl(const predicate& pred,
     auto dir = key_to_dir(*k, data_dir());
     return make_column_index(sys_, dir, *t, *index);
   };
-  return with_data_column(*index, fac, [&](column_index& col) {
+  return with_column(*index, fac, [&](column_index& col) {
     return col.lookup(pred);
   });
   return bitmap{};

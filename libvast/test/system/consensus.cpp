@@ -19,9 +19,9 @@
 #include "vast/system/timeouts.hpp"
 
 #define SUITE consensus
-#include "test.hpp"
-#include "fixtures/actor_system.hpp"
-#include "fixtures/consensus.hpp"
+#include "vast/test/test.hpp"
+#include "vast/test/fixtures/actor_system.hpp"
+#include "vast/test/fixtures/consensus.hpp"
 
 using namespace caf;
 using namespace vast;

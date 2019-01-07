@@ -25,6 +25,7 @@
 #include "vast/filesystem.hpp"
 #include "vast/logger.hpp"
 #include "vast/schema.hpp"
+#include "vast/scope_linked.hpp"
 
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
@@ -32,14 +33,12 @@
 
 #include "vast/system/signal_monitor.hpp"
 #include "vast/system/source.hpp"
+#include "vast/system/spawn_or_connect_to_node.hpp"
 #include "vast/system/tracker.hpp"
 
 namespace vast::system {
 
-source_command::source_command(command* parent, std::string_view name)
-  : super(parent, name) {
-  // nop
-}
+namespace {
 
 caf::expected<schema> load_schema_file(std::string& path) {
   if (path.empty())
@@ -59,47 +58,46 @@ caf::expected<expression> parse_expression(command::argument_iterator begin,
   return expr;
 }
 
-int source_command::run_impl(caf::actor_system& sys,
-                             const caf::config_value_map& options,
-                             argument_iterator begin,
-                             argument_iterator end) {
+} // namespace <anonymous>
+
+caf::message source_command(const command& cmd, caf::actor_system& sys,
+                            caf::actor src, caf::config_value_map& options,
+                            command::argument_iterator begin,
+                            command::argument_iterator end) {
   using namespace caf;
   using namespace std::chrono_literals;
+  VAST_UNUSED(cmd);
   // Helper for blocking actor communication.
   scoped_actor self{sys};
-  // Spawn the source.
-  auto src_opt = make_source(self, options);
-  if (!src_opt) {
-    VAST_ERROR(self, "was not able to spawn a source",
-               sys.render(src_opt.error()));
-    return EXIT_FAILURE;
-  }
-  auto src = std::move(*src_opt);
   // Supply an alternate schema, if requested.
-  if (auto sf = caf::get_if<std::string>(&options, "schema")) {
-    auto schema = load_schema_file(*sf);
-    if (!schema) {
-      VAST_ERROR(self, "had a schema error:", sys.render(schema.error()));
-      return EXIT_FAILURE;
-    }
-    self->send(src, put_atom::value, std::move(*schema));
+  expected<vast::schema> schema{caf::none};
+  if (auto sf = caf::get_if<std::string>(&options, "schema-file")) {
+    if (caf::get_if<std::string>(&options, "schema"))
+      return make_message(make_error(
+        ec::invalid_configuration, "had both schema and schema-file provided"));
+    schema = load_schema_file(*sf);
+  } else if (auto sc = caf::get_if<std::string>(&options, "schema")) {
+    schema = to<vast::schema>(*sc);
   }
+  if (schema)
+    self->send(src, put_atom::value, std::move(*schema));
+  else if (schema.error())
+    return make_message(std::move(schema.error()));
   // Attempt to parse the remainder as an expression.
   if (begin != end) {
     auto expr = parse_expression(begin, end);
-    if (!expr) {
-      VAST_ERROR(self, "failed to parse the remaining arguments:",
-          sys.render(expr.error()));
-      return EXIT_FAILURE;
-    }
+    if (!expr)
+      return make_message(std::move(expr.error()));
     self->send(src, std::move(*expr));
   }
   // Get VAST node.
   auto node_opt = spawn_or_connect_to_node(self, options);
-  if (!node_opt)
-    return EXIT_FAILURE;
-  auto node = std::move(*node_opt);
-  VAST_DEBUG(this, "got node");
+  if (auto err = caf::get_if<caf::error>(&node_opt))
+    return make_message(std::move(*err));
+  auto& node = caf::holds_alternative<caf::actor>(node_opt)
+               ? caf::get<caf::actor>(node_opt)
+               : caf::get<scope_linked_actor>(node_opt).get();
+  VAST_DEBUG(&cmd, "got node");
   /// Spawn an actor that takes care of CTRL+C and friends.
   auto sig_mon = self->spawn<detached>(system::signal_monitor, 750ms,
                                        actor{self});
@@ -107,48 +105,41 @@ int source_command::run_impl(caf::actor_system& sys,
     self->send_exit(sig_mon, exit_reason::user_shutdown);
   });
   // Set defaults.
-  int rc = EXIT_FAILURE;
-  auto stop = false;
+  caf::error err;
   // Connect source to importers.
   caf::actor importer;
   self->request(node, infinite, get_atom::value).receive(
     [&](const std::string& id, system::registry& reg) {
       auto er = reg.components[id].equal_range("importer");
       if (er.first == er.second) {
-        VAST_ERROR(this, "did not receive any importers from node", id);
-        stop = true;
+        err = make_error(ec::no_importer);
       } else if (reg.components[id].count("importer") > 1) {
-        VAST_ERROR(this, "does not support multiple IMPORTER actors yet");
-        stop = true;
+        err = make_error(ec::unimplemented,
+                         "multiple IMPORTER actors currently not supported");
       } else {
-        VAST_DEBUG(this, "connects to importer");
+        VAST_DEBUG(&cmd, "connects to importer");
         importer = er.first->second.actor;
         self->send(src, system::sink_atom::value, importer);
       }
     },
-    [&](const error& e) {
-      VAST_IGNORE_UNUSED(e);
-      VAST_ERROR(this, self->system().render(e));
-      stop = true;
+    [&](error& e) {
+      err = std::move(e);
     }
   );
-  if (stop) {
-    cleanup(node);
-    return rc;
-  }
+  if (err)
+    return make_message(std::move(err));
   // Start the source.
-  rc = EXIT_SUCCESS;
-  self->send(src, system::run_atom::value);
+  bool stop = false;
   self->monitor(src);
   self->do_receive(
     [&](const down_msg& msg) {
       if (msg.source == node)  {
-        VAST_DEBUG(this, "received DOWN from node");
+        VAST_DEBUG(&cmd, "received DOWN from node");
         self->send_exit(src, exit_reason::user_shutdown);
-        rc = EXIT_FAILURE;
+        err = ec::remote_node_down;
         stop = true;
       } else if (msg.source == src) {
-        VAST_DEBUG(this, "received DOWN from source");
+        VAST_DEBUG(&cmd, "received DOWN from source");
         if (caf::get_or(options, "blocking", false))
           self->send(importer, subscribe_atom::value, flush_atom::value, self);
         else
@@ -156,17 +147,18 @@ int source_command::run_impl(caf::actor_system& sys,
       }
     },
     [&](flush_atom) {
-      VAST_DEBUG(this, "received flush from IMPORTER");
+      VAST_DEBUG(&cmd, "received flush from IMPORTER");
       stop = true;
     },
     [&](system::signal_atom, int signal) {
-      VAST_DEBUG(this, "got " << ::strsignal(signal));
+      VAST_DEBUG(&cmd, "got " << ::strsignal(signal));
       if (signal == SIGINT || signal == SIGTERM)
         self->send_exit(src, exit_reason::user_shutdown);
     }
   ).until(stop);
-  cleanup(node);
-  return rc;
+  if (err)
+    return make_message(std::move(err));
+  return caf::none;
 }
 
 } // namespace vast::system

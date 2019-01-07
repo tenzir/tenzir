@@ -29,7 +29,7 @@ them.
 
 Nodes can enter a peering relationship and build a topology. All peers have
 the same authority: if one fails, others can take over. By default, each
-node includes all core components: **archive**, **index**, **importer**. For
+node includes all core components: **archive**, **index**, and **importer**. For
 more fine-grained control about the components running on a node, one can spawn
 the node in "bare" mode to get an empty container. This allows for more
 flexible arrangement of components to best match the available system hardware.
@@ -59,6 +59,35 @@ The following key components exist:
   Accepts query expressions from users, asks **index** for hits, takes them to
   **archive** to extract candidates, and relays matching events to **sink**s.
 
+### Schematic
+```
+                +--------------------------------------------+
+                | Node                                       |
+                |                                            |
+  +--------+    |             +--------+                     |    +-------+
+  | source |    |         +--->archive <------+           +-------> sink  |
+  +-----bro+-------+      |   +--------<---+  v-----------++ |    +---json+
+                |  |      |                |  | exporter   | |
+                | +v------++           +------>------------+ |
+     ...        | |importer|           |   |     ...         |      ...
+                | +^------++           |   |                 |
+                |  |      |            |   +-->------------+ |
+  +--------+-------+      |            |      | exporter   | |
+  | source |    |         |   +--------v      ^-----------++ |    +-------+
+  +----pcap+    |         +---> index  <------+           +-------> sink  |
+                |             +--------+                     |    +--ascii+
+                |                                            |
+                |                                            |
+                +--------------------------------------------+
+```
+The above diagram illustrates the default configuration of a single node and
+the flow of messages between the components. The **importer**, **index**, and
+**archive** are singleton instances within the **node**. **Source**s are spawned
+on demand for each data import. **Sink**s and **exporter**s form pairs that are
+spawned on demand for each query. **Source**s and **sink**s exist in their own
+processes, and are primarily responsible for parsing the input and formatting
+the search results.
+
 OPTIONS
 -------
 
@@ -66,24 +95,20 @@ The *options* in front of *command* control how to to connect to a node.
 
 The following *options* are available:
 
-`-d` *dir* [*.*]
+`-d` *dir*, `--dir`=*dir* [*.*]
   The VAST directory for logs and state.
 
-`-e` *endpoint* [*127.0.0.1:42000*]
+`-e` *endpoint*, `--endpoint`=*endpoint* [*127.0.0.1:42000*]
   The endpoint of the node to connect to or launch. (See below)
 
-`-i` *id* [*hostname*]
+`-i` *id*, `--id`=*id* [*hostname*]
   Overrides the node *id*, which defaults to the system hostname.
   Each node in a topology must have a unique ID, otherwise peering fails.
 
-`-h`
+`-h`, `-?`, `--help`
   Display a help message and exit.
 
-`-n`
-  Do not attempt to connect to a remote **node** but start a local instance
-  instead.
-
-`-v`
+`-v`, `--version`
   Print VAST version and exit.
 
 When specifying an endpoint via `-e`, `vast` connects to that endpoint to
@@ -105,18 +130,17 @@ commands exist:
     *start*         starts a node
     *stop*          stops a node
     *peer*          peers with another node
-    *show*          shows various properties of a topology
+    *status*        shows various properties of a topology
     *spawn*         creates a new component
-    *kill*          terminates an component
-    *send*          send a message to an component
-    *import*        imports data from standard input
-    *export*        exports query results to standard output
+    *kill*          terminates a component
+    *import*        imports data from STDIN or file
+    *export*        exports query results to STDOUT or file
 
 ### start
 
 Synopsis:
 
-  *start* [*arguments*]
+  *start*
 
 Start a node at the specified endpoint.
 
@@ -137,11 +161,11 @@ Synopsis:
 Joins a topology through a node identified by *endpoint*.
 See **OPTIONS** for a description of the *endpoint* syntax.
 
-### show
+### status
 
 Synopsis:
 
-  *show*
+  *status*
 
 Displays various properties of a topology.
 
@@ -274,51 +298,35 @@ Synopsis:
 
 Terminates a component. The argument *label* refers to a component label.
 
-### send
-
-Synopsis:
-
-  *send* *label* *message*
-
-Sends a message to a component. The argument *label* refers to the component to
-run. The argument *message* represents the data to send to the component.
-
-Available messages:
-
-*run*
-  Tells a component to start operating. Most components do not need to be told
-  to run explicitly. Only components having a multi-stage setup phase (e.g.,
-  sources and exporters) can be run explicitly.
-
-*flush*
-  Tells a component to flush its state to the file system.
-
 ### import
 
 Synopsis:
 
-  *import* *format* [*arguments*]
+  *import* [*parameters*] *format* [*format-parameters*]
+  `-r` *file*
+    Read from *file* instead of STDIN.
+  `-d`
+    Treat `-r` as listening UNIX domain socket.
 
 Imports data in a specific *format* on standard input and send it to a node.
 This command is a shorthand for spawning a source locally and connecting it to
 the given node's importer.
-All *arguments* get passed to *spawn source*.
-
-Note that *import* implicitly specifies *-a*, and *-r file* has no effect
-because it the process always reads from standard input.
+All *format-parameters* get passed to *format*.
 
 ### export
 
 Synopsis:
 
-  *export* [*arguments*] *expression*
+  *export* [*parameters*] *format* [*format-parameters*] *expression*
+  `-w` *file*
+    Write to *file* instead of STDOUT.
+  `-d`
+    Treat `-w` as UNIX domain socket to connect to.
 
 Issues a query and exports results to standard output. This command is a
 shorthand for spawning a exporter and local sink, linking the two, and relaying
 the resulting event stream arriving at the sink to standard output.
-All *arguments* get passed to *spawn sink*.
-
-Because *export* always writes to standard output, *-w file* has no effect.
+All *format-parameters* get passed to *format*.
 
 EXAMPLES
 --------
@@ -351,7 +359,7 @@ Make the node at 10.0.0.1 peer with 10.0.0.2:
 
 Connect to a node running at 1.2.3.4 on port 31337 and display topology details:
 
-    vast -e 1.2.3.4:31337 show
+    vast -e 1.2.3.4:31337 status
 
 FORMATS
 -------
@@ -433,7 +441,7 @@ by libpcap.
 
 ### Test
 
-- **Type**: reader
+- **Type**: generator
 - **Representation**: binary
 - **Dependencies**: none
 
