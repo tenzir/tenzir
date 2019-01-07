@@ -170,11 +170,8 @@ void register_component(scheduled_actor* self, tracker_state& st,
 
 tracker_type::behavior_type
 tracker(tracker_type::stateful_pointer<tracker_state> self, std::string node) {
-<<<<<<< HEAD
-  // Insert ourself into the registry.
-=======
   self->state.node = node;
->>>>>>> Re-implement node actor with new command API
+  // Insert ourself into the registry.
   self->state.registry.components[node].emplace(
     "tracker", component_state{actor_cast<actor>(self), "tracker"});
   // Insert the accountant into the registry so that it is easy for remote

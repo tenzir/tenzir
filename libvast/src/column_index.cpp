@@ -27,31 +27,11 @@ caf::expected<column_index_ptr> make_column_index(caf::actor_system& sys,
                                                   path filename,
                                                   type column_type,
                                                   size_t column) {
-<<<<<<< HEAD
-  struct impl : column_index {
-    impl(caf::actor_system& sys, path&& fname, type&& ctype, size_t col)
-      : column_index(sys, std::move(ctype), std::move(fname)),
-        col_(col) {
-        // nop
-    }
-
-    void add(const table_slice_ptr& x) override {
-      VAST_TRACE(VAST_ARG(x));
-      if (!has_skip_attribute_)
-        x->append_column_to_index(col_, *idx_);
-    }
-
-    size_t col_;
-  };
-  return init_res(std::make_unique<impl>(sys, std::move(filename),
-                                         std::move(column_type), column));
-=======
   auto result = std::make_unique<column_index>(sys, std::move(column_type),
                                                std::move(filename), column);
   if (auto err = result->init())
     return err;
   return result;
->>>>>>> De-virtualize the column index
 }
 
 // -- constructors, destructors, and assignment operators ----------------------

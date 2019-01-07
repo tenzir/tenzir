@@ -33,19 +33,8 @@
 #include "vast/json.hpp"
 #include "vast/logger.hpp"
 #include "vast/system/accountant.hpp"
-<<<<<<< HEAD
-<<<<<<< HEAD
-#include "vast/system/consensus.hpp"
-<<<<<<< HEAD
-=======
-#include "vast/system/node.hpp"
->>>>>>> Remove unused include
-#include "vast/system/spawn.hpp"
-=======
-=======
 #include "vast/system/node.hpp"
 #include "vast/system/raft.hpp"
->>>>>>> Rename consensus.hpp to raft.hpp
 #include "vast/system/spawn_archive.hpp"
 #include "vast/system/spawn_arguments.hpp"
 #include "vast/system/spawn_consensus.hpp"
@@ -57,7 +46,6 @@
 #include "vast/system/spawn_profiler.hpp"
 #include "vast/system/spawn_sink.hpp"
 #include "vast/system/spawn_source.hpp"
->>>>>>> Split enormous spawn.(h|c)pp into multiple files
 
 using namespace caf;
 
@@ -116,33 +104,7 @@ caf::message peer_command(const command&, caf::actor_system& sys,
   return caf::none;
 }
 
-<<<<<<< HEAD
-// Queries registered components for various status information.
-caf::message status_command(const command&, caf::actor_system&,
-                            caf::config_value_map&, command::argument_iterator,
-                            command::argument_iterator) {
-  auto rp = this_node->make_response_promise();
-  this_node->request(this_node->state.tracker, infinite, get_atom::value).then(
-    [=, self = this_node](const registry& reg) mutable {
-      json::object result;
-      for (auto& peer : reg.components) {
-        json::array xs;
-        for (auto& pair : peer.second)
-          xs.push_back(json{pair.second.label});
-        result.emplace(peer.first, std::move(xs));
-      }
-      auto& sys = self->system();
-      json::object sys_stats;
-      sys_stats.emplace("running-actors", sys.registry().running());
-      sys_stats.emplace("detached-actors", sys.detached_actors());
-      sys_stats.emplace("worker-threads", sys.scheduler().num_workers());
-      result.emplace("system", std::move(sys_stats));
-      rp.deliver(to_string(json{std::move(result)}));
-    },
-    [=](caf::error& err) mutable {
-      rp.deliver(std::move(err));
-=======
-void collect_component_status(node_ptr self,
+void collect_component_status(node_actor* self,
                               caf::response_promise status_promise,
                               registry& reg) {
   // Shared state between our response handlers.
@@ -191,12 +153,14 @@ void collect_component_status(node_ptr self,
   }
 }
 
-void status(node_ptr self, message /* args */) {
+caf::message status_command(const command&, caf::actor_system&,
+                            caf::config_value_map&, command::argument_iterator,
+                            command::argument_iterator) {
+  auto self = this_node;
   auto rp = self->make_response_promise();
   self->request(self->state.tracker, infinite, get_atom::value).then(
     [=](registry& reg) mutable {
       collect_component_status(self, std::move(rp), reg);
->>>>>>> Query all components for detailled status
     }
   );
   return caf::none;

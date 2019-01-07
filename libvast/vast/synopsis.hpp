@@ -19,6 +19,7 @@
 #include <caf/intrusive_ptr.hpp>
 #include <caf/ref_counted.hpp>
 
+#include "vast/aliases.hpp"
 #include "vast/fwd.hpp"
 #include "vast/operator.hpp"
 #include "vast/type.hpp"

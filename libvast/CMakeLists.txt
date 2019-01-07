@@ -23,7 +23,6 @@ set(libvast_sources
   src/concept/hashable/crc.cpp
   src/concept/hashable/xxhash.cpp
   src/data.cpp
-  src/default_table_slice.cpp
   src/default_table_slice_builder.cpp
   src/defaults.cpp
   src/detail/add_error_categories.cpp
@@ -101,11 +100,7 @@ set(libvast_sources
   src/system/spawn_exporter.cpp
   src/system/spawn_importer.cpp
   src/system/spawn_index.cpp
-<<<<<<< HEAD
-=======
   src/system/spawn_indexer.cpp
-  src/system/spawn_metastore.cpp
->>>>>>> Parallelize the ingestion of table slices
   src/system/spawn_node.cpp
   src/system/spawn_or_connect_to_node.cpp
   src/system/spawn_profiler.cpp
@@ -217,12 +212,8 @@ set(tests
   test/command.cpp
   test/compressedbuf.cpp
   test/data.cpp
-<<<<<<< HEAD
   test/detail/column_iterator.cpp
-=======
-  test/default_table_slice.cpp
   test/detail/algorithms.cpp
->>>>>>> Generalize fill_status_map
   test/detail/flat_lru_cache.cpp
   test/detail/operators.cpp
   test/detail/set_operations.cpp

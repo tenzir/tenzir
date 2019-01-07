@@ -15,38 +15,20 @@
 
 #include <cstdint>
 #include <limits>
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
 #include <map>
-=======
->>>>>>> Switch to caf::config_value_map
-#include <memory>
->>>>>>> Add synopsis_options to aliases.hpp
-=======
-#include <map>
->>>>>>> Re-implement lookups with the new EVALUATOR actor
 #include <string>
 #include <tuple>
 #include <utility>
 #include <vector>
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-#include "caf/fwd.hpp"
-
-=======
-=======
+#include <caf/fwd.hpp>
 #include <caf/dictionary.hpp>
->>>>>>> Use better type alias for synopsis options
 #include <caf/config_value.hpp>
 
-#include "vast/detail/steady_set.hpp"
->>>>>>> Switch to caf::config_value_map
+#include "vast/fwd.hpp"
+
 #include "vast/detail/steady_map.hpp"
 #include "vast/detail/steady_set.hpp"
-#include "vast/fwd.hpp"
 
 namespace vast {
 
@@ -96,6 +78,7 @@ using cli_argument_iterator = std::vector<std::string>::const_iterator;
 /// an error.
 using maybe_actor = caf::expected<caf::actor>;
 
+/// Additional runtime information to pass to the synopsis factory.
 using synopsis_options = caf::dictionary<caf::config_value>;
 
 /// Bundles an offset into an expression under evaluation to the curried
