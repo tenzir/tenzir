@@ -84,6 +84,8 @@ public:
 
   pattern_view(const pattern& x);
 
+  explicit pattern_view(std::string_view str);
+
   bool match(std::string_view x) const;
   bool search(std::string_view x) const;
   std::string_view string() const;

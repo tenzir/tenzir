@@ -23,6 +23,10 @@ pattern_view::pattern_view(const pattern& x) : pattern_{x.string()} {
   // nop
 }
 
+pattern_view::pattern_view(std::string_view str) : pattern_{str} {
+  // nop
+}
+
 std::string_view pattern_view::string() const {
   return pattern_;
 }
