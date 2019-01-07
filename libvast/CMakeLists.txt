@@ -18,6 +18,7 @@ set(libvast_sources
   src/chunk.cpp
   src/column_index.cpp
   src/column_major_matrix_table_slice_builder.cpp
+  src/default_table_slice.cpp
   src/command.cpp
   src/compression.cpp
   src/concept/hashable/crc.cpp
