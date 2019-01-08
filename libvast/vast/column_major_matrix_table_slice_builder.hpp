@@ -41,7 +41,6 @@ public:
 
   // -- factory functions ------------------------------------------------------
 
-  /// Constructs a column-major table slice builder.
   /// @returns a table slice builder instance.
   static table_slice_builder_ptr make(record_type layout);
 

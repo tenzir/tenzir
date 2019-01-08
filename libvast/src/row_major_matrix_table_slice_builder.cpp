@@ -60,10 +60,17 @@ table_slice_ptr row_major_matrix_table_slice_builder::finish() {
   // Sanity check.
   if (col_ != 0)
     return {};
-  auto result = row_major_matrix_table_slice::make(layout(),
-                                                   std::move(elements_));
-  elements_ = {};
-  return result;
+  table_slice_header header;
+  header.layout = layout();
+  header.rows = rows();
+  // Get uninitialized memory that keeps the slice object plus the full matrix.
+  using impl = row_major_matrix_table_slice;
+  auto ptr = impl::make_uninitialized(std::move(header));
+  // Construct the data block.
+  std::uninitialized_move(elements_.begin(), elements_.end(), ptr->storage());
+  // Clean up the builder state and return.
+  elements_.clear();
+  return table_slice_ptr{ptr, false};
 }
 
 size_t row_major_matrix_table_slice_builder::rows() const noexcept {

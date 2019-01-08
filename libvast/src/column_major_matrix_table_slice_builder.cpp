@@ -67,16 +67,22 @@ table_slice_ptr column_major_matrix_table_slice_builder::finish() {
   // Sanity check.
   if (col_ != 0 || rows_ == 0)
     return {};
-  std::vector<data> xs(columns_.size() * rows_);
-  auto x = xs.data();
-  for (auto& column : columns_) {
-    VAST_ASSERT(column.size() == rows_);
-    for (size_t i = 0; i < rows_; ++i)
-      *x++ = std::move(column[i]);
-    column.clear();
+  // Get uninitialized memory that keeps the slice object plus the full matrix.
+  using impl = column_major_matrix_table_slice;
+  table_slice_header header;
+  header.layout = layout();
+  header.rows = rows_;
+  auto result = impl::make_uninitialized(std::move(header));
+  // Construct the data block.
+  auto data_ptr = result->storage();
+  for (auto& col_vec : columns_) {
+    VAST_ASSERT(col_vec.size() == rows_);
+    std::uninitialized_move(col_vec.begin(), col_vec.end(), data_ptr);
+    data_ptr += rows_;
+    col_vec.clear();
   }
   rows_ = 0;
-  return column_major_matrix_table_slice::make(layout(), std::move(xs));
+  return table_slice_ptr{result, false};
 }
 
 size_t column_major_matrix_table_slice_builder::rows() const noexcept {

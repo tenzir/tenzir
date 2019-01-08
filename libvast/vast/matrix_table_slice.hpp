@@ -21,7 +21,6 @@
 
 #include <caf/deserializer.hpp>
 #include <caf/serializer.hpp>
-#include <caf/make_copy_on_write.hpp>
 
 #include "vast/data.hpp"
 #include "vast/detail/range.hpp"
@@ -52,44 +51,55 @@ public:
   /// Unsigned integer type.
   using size_type = super::size_type;
 
+  /// Iterator over stored elements in unspecified order.
+  using iterator = data*;
+
+  /// Iterator over stored elements in unspecified order.
+  using const_iterator = const data*;
+
+  /// Iterator over stored elements in column-first order.
+  using column_iterator = typename LayoutPolicy::column_iterator;
+
+  /// Iterator over stored elements in column-first order.
+  using const_column_iterator = typename LayoutPolicy::const_column_iterator;
+
   // -- constructors, destructors, and assignment operators --------------------
 
-  /// Constructs a matrix table slice with all elements.
-  static table_slice_ptr make(table_slice_header header) {
-    return table_slice_ptr{new matrix_table_slice{std::move(header)}, false};
+  ~matrix_table_slice() {
+    // The element blocks gets allocated alongside this object. Hence, we need
+    // to destroy our elements manually.
+    std::destroy(begin(), end());
   }
 
-  /// Constructs a matrix table slice with all elements.
-  static table_slice_ptr make(record_type layout, std::vector<data> xs) {
-    table_slice_header header;
-    header.layout = std::move(layout);
-    auto ptr = new matrix_table_slice{std::move(header)};
-    ptr->header_.rows = xs.size() / ptr->columns();
-    ptr->storage_ = std::move(xs);
+  /// @warning leaves all elements uninitialized.
+  static matrix_table_slice* make_uninitialized(table_slice_header header);
+
+  static table_slice_ptr make(table_slice_header header) {
+    auto ptr = make_uninitialized(std::move(header));
+    std::uninitialized_default_construct(ptr->begin(), ptr->end());
     return table_slice_ptr{ptr, false};
   }
 
   // -- properties -------------------------------------------------------------
 
   matrix_table_slice* copy() const override {
-    return new matrix_table_slice{*this};
+    auto ptr = make_uninitialized(this->header());
+    std::uninitialized_copy(begin(), end(), ptr->begin());
+    return ptr;
   }
 
   caf::error serialize(caf::serializer& sink) const override {
-    return sink(storage_);
+    for (auto i = begin(); i != end(); ++i)
+      if (auto err = sink(*i))
+        return err;
+    return caf::none;
   }
 
   caf::error deserialize(caf::deserializer& source) override {
-    return source(storage_);
-  }
-
-  caf::atom_value implementation_id() const noexcept override {
-    return class_id;
-  }
-
-  data_view at(size_type row, size_type col) const override {
-    auto i = LayoutPolicy::index_of(this->rows(), this->columns(), row, col);
-    return make_view(storage_[i]);
+    for (auto i = begin(); i != end(); ++i)
+      if (auto err = source(*i))
+        return err;
+    return caf::none;
   }
 
   void append_column_to_index(size_type col, value_index& idx) const override {
@@ -98,24 +108,96 @@ public:
       idx.append(make_view(x), row++);
   }
 
+  caf::atom_value implementation_id() const noexcept override {
+    return class_id;
+  }
+
+  data_view at(size_type row, size_type col) const override {
+    auto ptr = storage();
+    return make_view(ptr[LayoutPolicy::index_of(rows(), columns(), row, col)]);
+  }
+
+  iterator begin() {
+    return storage();
+  }
+
+  iterator end() {
+    return begin() + rows() * columns();
+  }
+
+  const_iterator begin() const {
+    return storage();
+  }
+
+  const_iterator end() const {
+    return begin() + rows() * columns();
+  }
+
+  /// @returns the range representing the column at position `pos`.
+  detail::iterator_range<column_iterator> column(size_type pos) {
+    auto first = LayoutPolicy::make_column_iterator(storage(), rows(),
+                                                    columns(), pos);
+    return {first, first + rows()};
+  }
+
+  /// @returns the range representing the column at position `pos`.
+  detail::iterator_range<const_column_iterator> column(size_type pos) const {
+    auto first = LayoutPolicy::make_column_iterator(storage(), rows(),
+                                                    columns(), pos);
+    return {first, first + rows()};
+  }
+
+  /// @returns a pointer to the first element.
+  data* storage();
+
+  /// @returns a pointer to the first element.
+  const data* storage() const {
+    // We restore the const when returning from this member function.
+    return const_cast<matrix_table_slice*>(this)->storage();
+  }
+
+  // -- memory management ------------------------------------------------------
+
+  void request_deletion(bool) const noexcept override {
+    // This object was allocated using `malloc`. Hence, we need to call `free`
+    // instead of `delete` here.
+    this->~matrix_table_slice();
+    free(const_cast<matrix_table_slice*>(this));
+  }
+
 private:
   // -- constructors, destructors, and assignment operators --------------------
 
-  matrix_table_slice(table_slice_header header) : super{std::move(header)} {
+  explicit matrix_table_slice(table_slice_header header) : super{std::move(header)} {
     // nop
   }
-
-  auto column(size_type pos) const {
-    VAST_ASSERT(!storage_.empty());
-    auto ptr = storage_.data();
-    auto first = LayoutPolicy::make_column_iterator(ptr, this->rows(),
-                                                    this->columns(), pos);
-    using iterator_type = decltype(first);
-    return detail::iterator_range<iterator_type>{first, first + this->rows()};
-  }
-
-  std::vector<data> storage_;
 };
+
+// Needs to be out-of-line, because it needs to call sizeof(matrix_table_slice).
+template <class LayoutPolicy>
+matrix_table_slice<LayoutPolicy>*
+matrix_table_slice<LayoutPolicy>::make_uninitialized(
+  table_slice_header header) {
+  using impl = matrix_table_slice;
+  using storage = std::aligned_storage_t<sizeof(impl), alignof(impl)>;
+  using element_storage = std::aligned_storage_t<sizeof(data), alignof(data)>;
+  auto columns = header.layout.fields.size();
+  auto vptr = malloc(sizeof(storage)
+                     + sizeof(element_storage) * header.rows * columns);
+  // Construct only the table slice object.
+  auto ptr = new (vptr) impl{std::move(header)};
+  return ptr;
+}
+
+// Needs to be out-of-line, because it needs to call sizeof(matrix_table_slice).
+template <class LayoutPolicy>
+data* matrix_table_slice<LayoutPolicy>::storage() {
+  // We always allocate the first data directly following this object.
+  using storage = std::aligned_storage_t<sizeof(matrix_table_slice),
+                                         alignof(matrix_table_slice)>;
+  auto first = reinterpret_cast<unsigned char*>(this) + sizeof(storage);
+  return reinterpret_cast<data*>(first);
+}
 
 /// A matrix table slice with row-major memory order.
 using row_major_matrix_table_slice
