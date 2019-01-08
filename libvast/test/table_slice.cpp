@@ -36,22 +36,20 @@ using namespace std::string_literals;
 
 namespace {
 
-template <class T>
-table_slice_ptr make_concrete_table_slice() {
-  return caf::make_copy_on_write<T>();
-}
-
 class rebranded_table_slice : public default_table_slice {
 public:
   friend class default_table_slice_builder;
 
-  rebranded_table_slice() = default;
+  static constexpr caf::atom_value class_id = caf::atom("TS_Test");
 
-  explicit rebranded_table_slice(record_type layout) {
-    layout_ = std::move(layout);
+  static table_slice_ptr make(table_slice_header header) {
+    return caf::make_copy_on_write<rebranded_table_slice>(std::move(header));
   }
 
-  static constexpr caf::atom_value class_id = caf::atom("TS_Test");
+  explicit rebranded_table_slice(table_slice_header header)
+    : default_table_slice{std::move(header)} {
+    // nop
+  }
 
   caf::atom_value implementation_id() const noexcept override {
     return class_id;
@@ -89,8 +87,10 @@ public:
 
 private:
   void eager_init() {
-    slice_.reset(new rebranded_table_slice{this->layout()});
-    row_ = vector(layout().fields.size());
+    table_slice_header header;
+    header.layout = this->layout();
+    slice_.reset(new rebranded_table_slice{std::move(header)});
+    row_ = vector(this->columns());
     col_ = 0;
   }
 };

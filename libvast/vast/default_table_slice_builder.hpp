@@ -56,7 +56,7 @@ protected:
 
   // -- member variables -------------------------------------------------------
 
-  vector row_;
+  std::vector<data> row_;
   size_t col_;
   std::unique_ptr<default_table_slice> slice_;
 };

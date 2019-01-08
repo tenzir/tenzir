@@ -55,15 +55,18 @@ public:
   // -- constructors, destructors, and assignment operators --------------------
 
   /// Constructs a matrix table slice with all elements.
+  static table_slice_ptr make(table_slice_header header) {
+    return table_slice_ptr{new matrix_table_slice{std::move(header)}, false};
+  }
+
+  /// Constructs a matrix table slice with all elements.
   static table_slice_ptr make(record_type layout, std::vector<data> xs) {
-    auto result = caf::make_copy_on_write<matrix_table_slice>();
-    auto& x = result.unshared();
-    auto columns = layout.fields.size();
-    x.layout_ = std::move(layout);
-    x.columns_ = columns;
-    x.rows_ = xs.size() / columns;
-    x.storage_ = std::move(xs);
-    return result;
+    table_slice_header header;
+    header.layout = std::move(layout);
+    auto ptr = new matrix_table_slice{std::move(header)};
+    ptr->header_.rows = xs.size() / ptr->columns();
+    ptr->storage_ = std::move(xs);
+    return table_slice_ptr{ptr, false};
   }
 
   // -- properties -------------------------------------------------------------
@@ -85,7 +88,7 @@ public:
   }
 
   data_view at(size_type row, size_type col) const override {
-    auto i = LayoutPolicy::index_of(rows_, columns_, row, col);
+    auto i = LayoutPolicy::index_of(this->rows(), this->columns(), row, col);
     return make_view(storage_[i]);
   }
 
@@ -96,12 +99,19 @@ public:
   }
 
 private:
+  // -- constructors, destructors, and assignment operators --------------------
+
+  matrix_table_slice(table_slice_header header) : super{std::move(header)} {
+    // nop
+  }
+
   auto column(size_type pos) const {
     VAST_ASSERT(!storage_.empty());
     auto ptr = storage_.data();
-    auto first = LayoutPolicy::make_column_iterator(ptr, rows_, columns_, pos);
+    auto first = LayoutPolicy::make_column_iterator(ptr, this->rows(),
+                                                    this->columns(), pos);
     using iterator_type = decltype(first);
-    return detail::iterator_range<iterator_type>{first, first + rows_};
+    return detail::iterator_range<iterator_type>{first, first + this->rows()};
   }
 
   std::vector<data> storage_;

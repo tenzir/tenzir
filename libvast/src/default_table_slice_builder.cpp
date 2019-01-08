@@ -38,7 +38,7 @@ bool default_table_slice_builder::append(data x) {
   row_[col_++] = std::move(x);
   if (col_ == layout().fields.size()) {
     slice_->xs_.push_back(std::move(row_));
-    row_ = vector(layout().fields.size());
+    row_ = vector(slice_->columns());
     col_ = 0;
   }
   return true;
@@ -54,9 +54,7 @@ table_slice_ptr default_table_slice_builder::finish() {
   if (col_ != 0)
     slice_->xs_.push_back(std::move(row_));
   // Populate slice.
-  slice_->layout_ = layout();
-  slice_->rows_ = slice_->xs_.size();
-  slice_->columns_ = layout().fields.size();
+  slice_->header_.rows = slice_->xs_.size();
   return table_slice_ptr{slice_.release(), false};
 }
 
@@ -76,8 +74,10 @@ default_table_slice_builder::implementation_id() const noexcept {
 
 void default_table_slice_builder::lazy_init() {
   if (slice_ == nullptr) {
-    slice_.reset(new default_table_slice);
-    row_ = vector(layout().fields.size());
+    table_slice_header header;
+    header.layout = layout();
+    slice_.reset(new default_table_slice{std::move(header)});
+    row_ = vector(slice_->columns());
     col_ = 0;
   }
 }

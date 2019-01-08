@@ -54,10 +54,8 @@ auto cap (size_type pos, size_type num, size_type last) {
 
 } // namespace <anonymous>
 
-table_slice::table_slice()
-  : offset_(0),
-    rows_(0),
-    columns_(0) {
+table_slice::table_slice(table_slice_header header)
+  : header_{std::move(header)} {
   // nop
 }
 
@@ -67,12 +65,12 @@ table_slice::~table_slice() {
 
 record_type table_slice::layout(size_type first_column,
                                 size_type num_columns) const {
-  if (first_column >= columns_)
+  if (first_column >= columns())
     return {};
   auto col_begin = first_column;
-  auto col_end = cap(first_column, num_columns, columns_);
-  std::vector<record_field> sub_records{layout_.fields.begin() + col_begin,
-                                        layout_.fields.begin() + col_end};
+  auto col_end = cap(first_column, num_columns, columns());
+  std::vector<record_field> sub_records{layout().fields.begin() + col_begin,
+                                        layout().fields.begin() + col_end};
   return record_type{std::move(sub_records)};
 }
 
@@ -102,16 +100,17 @@ table_slice_factory get_table_slice_factory(caf::atom_value id) {
   return i != factory_.end() ? i->second : nullptr;
 }
 
-table_slice_ptr make_table_slice(caf::atom_value id) {
+table_slice_ptr make_table_slice(caf::atom_value id,
+                                 table_slice_header header) {
   if (id == default_table_slice::class_id)
-    return caf::make_copy_on_write<default_table_slice>();
+    return default_table_slice::make(std::move(header));
   if (auto f = get_table_slice_factory(id))
-    return (*f)();
+    return (*f)(std::move(header));
   return {};
 }
 
 table_slice_ptr make_table_slice(chunk_ptr chunk) {
-  if (!chunk || chunk->size() < 32)
+  if (!chunk)
     return {};
   // Setup a CAF deserializer.
   auto data = const_cast<char*>(chunk->data()); // CAF won't touch it.
@@ -119,26 +118,24 @@ table_slice_ptr make_table_slice(chunk_ptr chunk) {
   caf::stream_deserializer<caf::charbuf&> source{buf};
   // Deserialize the class ID and default-construct a table slice.
   caf::atom_value id;
-  if (auto err = source(id)) {
-    VAST_ERROR_ANON(__func__, "failed to deserialize table slice ID");
+  table_slice_header header;
+  if (auto err = source(id, header)) {
+    VAST_ERROR_ANON(__func__, "failed to deserialize table slice meta data");
     return {};
   }
-  auto result = make_table_slice(id);
+  auto result = make_table_slice(id, std::move(header));
   if (!result) {
     VAST_ERROR_ANON(__func__, "no table slice factory for:", to_string(id));
     return {};
   }
-  // Deserialize the table slice base class.
-  auto& x = result.unshared();
-  if (auto err = source(x)) {
-    VAST_ERROR_ANON(__func__,
-                    "failed to deserialize table slice:", to_string(err));
+  // Skip table slice data already processed.
+  auto bytes_read = static_cast<size_t>(buf.in_avail());
+  VAST_ASSERT(chunk->size() > bytes_read);
+  auto header_size = chunk->size() - bytes_read;
+  if (auto err = result.unshared().load(chunk->slice(header_size))) {
+    VAST_ERROR_ANON(__func__, "failed to load table slice from chunk");
     return {};
   }
-  // Skip table slice data already processed.
-  VAST_ASSERT(chunk->size() > buf.in_avail());
-  auto header_size = chunk->size() - buf.in_avail();
-  x.load(chunk->slice(header_size));
   return result;
 }
 
@@ -194,7 +191,8 @@ bool operator==(const table_slice& x, const table_slice& y) {
 caf::error inspect(caf::serializer& sink, table_slice_ptr& ptr) {
   if (!ptr)
     return sink(caf::atom("NULL"));
-  return caf::error::eval([&] { return sink(ptr->implementation_id(), *ptr); },
+  return caf::error::eval([&] { return sink(ptr->implementation_id()); },
+                          [&] { return sink(ptr->header()); },
                           [&] { return ptr->serialize(sink); });
 }
 
@@ -206,12 +204,13 @@ caf::error inspect(caf::deserializer& source, table_slice_ptr& ptr) {
     ptr.reset();
     return caf::none;
   }
-  ptr = make_table_slice(id);
+  table_slice_header header;
+  if (auto err = source(header))
+    return err;
+  ptr = make_table_slice(id, std::move(header));
   if (!ptr)
     return ec::invalid_table_slice_type;
-  auto& x = ptr.unshared();
-  return caf::error::eval([&] { return source(x); },
-                          [&] { return x.deserialize(source); });
+  return ptr.unshared().deserialize(source);
 }
 
 } // namespace vast

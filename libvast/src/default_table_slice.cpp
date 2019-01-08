@@ -26,12 +26,11 @@ default_table_slice* default_table_slice::copy() const {
 }
 
 caf::error default_table_slice::serialize(caf::serializer& sink) const {
-  return sink(offset_, xs_);
+  return sink(xs_);
 }
 
 caf::error default_table_slice::deserialize(caf::deserializer& source) {
-  auto err = source(offset_, xs_);
-  rows_ = xs_.size();
+  auto err = source(xs_);
   return err;
 }
 
@@ -42,12 +41,16 @@ void default_table_slice::append_column_to_index(size_type col,
 }
 
 data_view default_table_slice::at(size_type row, size_type col) const {
-  VAST_ASSERT(row < rows_);
+  VAST_ASSERT(row < rows());
   VAST_ASSERT(row < xs_.size());
-  VAST_ASSERT(col < columns_);
+  VAST_ASSERT(col < columns());
   auto& x = caf::get<vector>(xs_[row]);
   VAST_ASSERT(col < x.size());
   return make_view(x[col]);
+}
+
+table_slice_ptr default_table_slice::make(table_slice_header header) {
+  return table_slice_ptr{new default_table_slice{std::move(header)}, false};
 }
 
 table_slice_ptr default_table_slice::make(record_type layout,
@@ -63,6 +66,11 @@ table_slice_ptr default_table_slice::make(record_type layout,
 
 caf::atom_value default_table_slice::implementation_id() const noexcept {
   return class_id;
+}
+
+default_table_slice::default_table_slice(table_slice_header header)
+  : table_slice{std::move(header)} {
+  // nop
 }
 
 } // namespace vast

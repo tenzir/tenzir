@@ -35,6 +35,13 @@ public:
 
   static constexpr caf::atom_value class_id = caf::atom("TS_Default");
 
+  // -- static factory functions -----------------------------------------------
+
+  static table_slice_ptr make(table_slice_header header);
+
+  static table_slice_ptr make(record_type layout,
+                              const std::vector<vector>& rows);
+
   // -- factory functions ------------------------------------------------------
 
   default_table_slice* copy() const final;
@@ -50,11 +57,6 @@ public:
   /// Applies all values in column `col` to `idx`.
   void append_column_to_index(size_type col, value_index& idx) const final;
 
-  // -- static factory functions -----------------------------------------------
-
-  static table_slice_ptr make(record_type layout,
-                              const std::vector<vector>& rows);
-
   // -- properties -------------------------------------------------------------
 
   data_view at(size_type row, size_type col) const final;
@@ -66,9 +68,10 @@ public:
     return xs_;
   }
 
-private:
-  // -- member variables -------------------------------------------------------
+protected:
+  explicit default_table_slice(table_slice_header header);
 
+private:
   vector xs_;
 };
 
