@@ -608,6 +608,10 @@ as_writeable_bytes(span<ElementType, Extent> s) noexcept {
 
 // -- non-standard utilitiy functions ------------------------------------------
 
+// Type aliases for byte spans.
+using byte_span = span<byte>;
+using const_byte_span = span<const byte>;
+
 /// Constructs a byte span from an arbitrary pointer type and size.
 /// @tparam T The element type of the span.
 /// @tparam Size The size type casted into the span's `index_type`.

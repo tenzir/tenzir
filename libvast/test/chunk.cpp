@@ -21,6 +21,8 @@
 #include "vast/load.hpp"
 #include "vast/save.hpp"
 
+#include "vast/detail/span.hpp"
+
 using namespace vast;
 
 FIXTURE_SCOPE(chunk_tests, fixtures::deterministic_actor_system)
@@ -35,11 +37,6 @@ TEST(deleter) {
   x = nullptr;
   CHECK_EQUAL(i, 0);
   i = 42;
-  MESSAGE("shallow chunk");
-  x = chunk::make(sizeof(buf), buf); // no deleter given
-  CHECK_EQUAL(i, 42);
-  x = nullptr;
-  CHECK_EQUAL(i, 42);
 }
 
 TEST(access) {
@@ -54,7 +51,7 @@ TEST(access) {
 
 TEST(slicing) {
   char buf[100];
-  auto x = chunk::make(sizeof(buf), buf);
+  auto x = chunk::make(detail::make_const_byte_span(buf));
   auto y = x->slice(50);
   auto z = y->slice(40, 5);
   CHECK_EQUAL(y->size(), 50u);
@@ -63,7 +60,7 @@ TEST(slicing) {
 
 TEST(serialization) {
   char str[] = "foobarbaz";
-  auto x = chunk::make(sizeof(str), str);
+  auto x = chunk::make(detail::make_const_byte_span(str));
   std::vector<char> buf;
   CHECK_EQUAL(save(sys, buf, x), caf::none);
   chunk_ptr y;

@@ -31,6 +31,8 @@
 #include "vast/value.hpp"
 #include "vast/value_index.hpp"
 
+#include "vast/detail/span.hpp"
+
 using namespace vast;
 using namespace std::string_literals;
 
@@ -248,7 +250,7 @@ struct fixture : fixtures::deterministic_actor_system {
     MESSAGE(">> test load from chunk");
     auto slice1 = make_slice(builder);
     CHECK_EQUAL(sink(slice1), caf::none);
-    auto chk = chunk::make(buf.size(), buf.data());
+    auto chk = chunk::make(detail::make_const_byte_span(buf));
     auto slice2 = make_table_slice(chk);
     REQUIRE_NOT_EQUAL(slice2, nullptr);
     CHECK_EQUAL(*slice1, *slice2);

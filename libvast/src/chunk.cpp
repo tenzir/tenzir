@@ -25,6 +25,8 @@
 #include "vast/chunk.hpp"
 #include "vast/filesystem.hpp"
 
+#include "vast/detail/narrow.hpp"
+
 namespace vast {
 
 chunk_ptr chunk::make(size_type size) {
@@ -61,11 +63,10 @@ chunk_ptr chunk::mmap(const path& filename, size_type size, size_type offset) {
 }
 
 chunk::~chunk() {
-  if (deleter_)
-    deleter_();
+  deleter_();
 }
 
-const chunk::value_type* chunk::data() const {
+chunk::const_pointer chunk::data() const {
   return data_;
 }
 
@@ -100,32 +101,28 @@ chunk::chunk(void* ptr, size_type size, deleter_type deleter)
   : data_{reinterpret_cast<value_type*>(ptr)},
     size_{size},
     deleter_{deleter} {
+  VAST_ASSERT(deleter_);
 }
 
 caf::error inspect(caf::serializer& sink, const chunk_ptr& x) {
-  VAST_ASSERT(x != nullptr);
-  auto n = x->size();
-  return caf::error::eval(
-    [&] { return sink.begin_sequence(n); },
-    [&] {
-      auto data = const_cast<char*>(x->data()); // CAF won't touch it.
-      return n > 0 ? sink.apply_raw(n, data) : caf::none;
-    },
-    [&] { return sink.end_sequence(); }
-  );
+  using vast::detail::narrow;
+  if (x == nullptr)
+    return sink(uint32_t{0});
+  return caf::error::eval([&] { return sink(narrow<uint32_t>(x->size())); },
+                          [&] { return sink.apply_raw(x->size(), x->data()); });
 }
 
 caf::error inspect(caf::deserializer& source, chunk_ptr& x) {
-  chunk::size_type n;
-  return caf::error::eval(
-    [&] { return source.begin_sequence(n); },
-    [&] {
-      x = chunk::make(n);
-      auto data = const_cast<char*>(x->data()); // CAF won't touch it.
-      return n > 0 ? source.apply_raw(n, data) : caf::none;
-    },
-    [&] { return source.end_sequence(); }
-  );
+  uint32_t n;
+  if (auto err = source(n))
+    return err;
+  if (n == 0) {
+    x = nullptr;
+    return caf::none;
+  }
+  x = chunk::make(n);
+  auto data = const_cast<chunk::pointer>(x->data());
+  return source.apply_raw(n, data);
 }
 
 } // namespace vast

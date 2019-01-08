@@ -38,6 +38,8 @@ public:
   // -- member types ----------------------------------------------------------
 
   using value_type = char;
+  using pointer = value_type*;
+  using const_pointer = const pointer;
   using size_type = size_t;
   using const_iterator = const char*;
   using deleter_type = std::function<void()>;
@@ -49,6 +51,14 @@ public:
   /// @returns A chunk pointer or `nullptr` on failure.
   /// @pre `size > 0`
   static chunk_ptr make(size_type size);
+
+  /// Constructs a chunk of particular size and pointer to data.
+  /// @param size The number of bytes *data* points to.
+  /// @param data The raw byte data.
+  /// @param deleter The function to delete the data.
+  /// @returns A chunk pointer or `nullptr` on failure.
+  /// @pre `size > 0 && static_cast<bool>(deleter)`
+  static chunk_ptr make(size_type size, void* data, deleter_type deleter);
 
   /// Construct a chunk from a container of bytes.
   /// @param xs The container of bytes.
@@ -64,18 +74,11 @@ public:
     VAST_ASSERT(std::size(xs) != 0);
     auto ys = std::make_shared<Container>(std::move(xs));
     auto deleter = [=]() mutable { ys.reset(); };
-    return make(std::size(*ys), std::data(*ys), deleter);
+    auto data = std::data(*ys);
+    // The deleter won't touch the data.
+    using mutable_data = std::decay_t<decltype(*data)>*;
+    return make(std::size(*ys), const_cast<mutable_data>(data), deleter);
   }
-
-  /// Constructs a chunk of particular size and pointer to data.
-  /// @param size The number of bytes *data* points to.
-  /// @param data The raw byte data.
-  /// @param deleter The function to delete data. If not given, then the chunk
-  ///                will not perform any cleanup, i.e., it is shallow.
-  /// @returns A chunk pointer or `nullptr` on failure.
-  /// @pre `size > 0`
-  static chunk_ptr make(size_type size, void* data,
-                        deleter_type deleter = deleter_type{});
 
   /// Memory-maps a chunk from a read-only file.
   /// @param filename The name of the file to memory-map.
@@ -89,15 +92,15 @@ public:
   ~chunk();
 
   // -- container API ---------------------------------------------------------
-  
+
   /// @returns The pointer to the chunk buffer.
-  const value_type* data() const;
+  const_pointer data() const;
 
   /// @returns The size of the chunk.
   size_type size() const;
 
   // -- iteration -------------------------------------------------------------
-  
+
   /// @returns A pointer to the first byte in the chunk.
   const_iterator begin() const;
 
@@ -105,7 +108,7 @@ public:
   const_iterator end() const;
 
   // -- accessors -------------------------------------------------------------
-  
+
   /// Retrieves a value at given offset.
   /// @param i The position of the byte.
   /// @returns The value at position *i*.
@@ -132,9 +135,9 @@ public:
   chunk_ptr slice(size_type start, size_type length = 0) const;
 
 private:
-  chunk(void* ptr, size_type size, deleter_type deleter = deleter_type{});
+  chunk(void* ptr, size_type size, deleter_type deleter);
 
-  value_type* data_;
+  pointer data_;
   size_type size_;
   deleter_type deleter_;
 };
