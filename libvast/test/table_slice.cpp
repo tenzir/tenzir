@@ -26,12 +26,11 @@
 #include "vast/column_major_matrix_table_slice_builder.hpp"
 #include "vast/default_table_slice.hpp"
 #include "vast/default_table_slice_builder.hpp"
+#include "vast/detail/span.hpp"
 #include "vast/matrix_table_slice.hpp"
 #include "vast/row_major_matrix_table_slice_builder.hpp"
 #include "vast/value.hpp"
 #include "vast/value_index.hpp"
-
-#include "vast/detail/span.hpp"
 
 using namespace vast;
 using namespace std::string_literals;
@@ -40,8 +39,6 @@ namespace {
 
 class rebranded_table_slice : public default_table_slice {
 public:
-  friend class default_table_slice_builder;
-
   static constexpr caf::atom_value class_id = caf::atom("TS_Test");
 
   static table_slice_ptr make(table_slice_header header) {
@@ -89,8 +86,7 @@ public:
 
 private:
   void eager_init() {
-    table_slice_header header;
-    header.layout = this->layout();
+    table_slice_header header{this->layout(), this->columns(), 0};
     slice_.reset(new rebranded_table_slice{std::move(header)});
     row_ = vector(this->columns());
     col_ = 0;

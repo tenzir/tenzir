@@ -69,9 +69,7 @@ table_slice_ptr column_major_matrix_table_slice_builder::finish() {
     return {};
   // Get uninitialized memory that keeps the slice object plus the full matrix.
   using impl = column_major_matrix_table_slice;
-  table_slice_header header;
-  header.layout = layout();
-  header.rows = rows_;
+  table_slice_header header{layout(), rows_, 0};
   auto result = impl::make_uninitialized(std::move(header));
   // Construct the data block.
   auto data_ptr = result->storage();

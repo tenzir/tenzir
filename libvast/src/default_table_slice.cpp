@@ -30,8 +30,7 @@ caf::error default_table_slice::serialize(caf::serializer& sink) const {
 }
 
 caf::error default_table_slice::deserialize(caf::deserializer& source) {
-  auto err = source(xs_);
-  return err;
+  return source(xs_);
 }
 
 void default_table_slice::append_column_to_index(size_type col,

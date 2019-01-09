@@ -29,16 +29,14 @@
 #include "vast/chunk.hpp"
 #include "vast/default_table_slice.hpp"
 #include "vast/default_table_slice_builder.hpp"
-#include "vast/defaults.hpp"
+#include "vast/detail/byte_swap.hpp"
+#include "vast/detail/overload.hpp"
 #include "vast/error.hpp"
 #include "vast/event.hpp"
 #include "vast/format/test.hpp"
 #include "vast/logger.hpp"
 #include "vast/value.hpp"
 #include "vast/value_index.hpp"
-
-#include "vast/detail/byte_swap.hpp"
-#include "vast/detail/overload.hpp"
 
 namespace vast {
 
@@ -75,7 +73,7 @@ record_type table_slice::layout(size_type first_column,
 }
 
 caf::error table_slice::load(chunk_ptr chunk) {
-  VAST_ASSERT(chunk);
+  VAST_ASSERT(chunk != nullptr);
   auto data = const_cast<char*>(chunk->data()); // CAF won't touch it.
   caf::charbuf buf{data, chunk->size()};
   caf::stream_deserializer<caf::charbuf&> source{buf};
@@ -110,7 +108,7 @@ table_slice_ptr make_table_slice(caf::atom_value id,
 }
 
 table_slice_ptr make_table_slice(chunk_ptr chunk) {
-  if (!chunk)
+  if (chunk == nullptr)
     return {};
   // Setup a CAF deserializer.
   auto data = const_cast<char*>(chunk->data()); // CAF won't touch it.
