@@ -66,7 +66,7 @@ bool column_major_matrix_table_slice_builder::add(data_view x) {
 table_slice_ptr column_major_matrix_table_slice_builder::finish() {
   // Sanity check.
   if (col_ != 0 || rows_ == 0)
-    return {};
+    return nullptr;
   // Get uninitialized memory that keeps the slice object plus the full matrix.
   using impl = column_major_matrix_table_slice;
   table_slice_header header{layout(), rows_, 0};

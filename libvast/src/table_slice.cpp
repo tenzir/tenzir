@@ -104,12 +104,12 @@ table_slice_ptr make_table_slice(caf::atom_value id,
     return default_table_slice::make(std::move(header));
   if (auto f = get_table_slice_factory(id))
     return (*f)(std::move(header));
-  return {};
+  return nullptr;
 }
 
 table_slice_ptr make_table_slice(chunk_ptr chunk) {
   if (chunk == nullptr)
-    return {};
+    return nullptr;
   // Setup a CAF deserializer.
   auto data = const_cast<char*>(chunk->data()); // CAF won't touch it.
   caf::charbuf buf{data, chunk->size()};
@@ -119,12 +119,12 @@ table_slice_ptr make_table_slice(chunk_ptr chunk) {
   table_slice_header header;
   if (auto err = source(id, header)) {
     VAST_ERROR_ANON(__func__, "failed to deserialize table slice meta data");
-    return {};
+    return nullptr;
   }
   auto result = make_table_slice(id, std::move(header));
   if (!result) {
     VAST_ERROR_ANON(__func__, "no table slice factory for:", to_string(id));
-    return {};
+    return nullptr;
   }
   // Skip table slice data already processed.
   auto bytes_read = static_cast<size_t>(buf.in_avail());
@@ -132,7 +132,7 @@ table_slice_ptr make_table_slice(chunk_ptr chunk) {
   auto header_size = chunk->size() - bytes_read;
   if (auto err = result.unshared().load(chunk->slice(header_size))) {
     VAST_ERROR_ANON(__func__, "failed to load table slice from chunk");
-    return {};
+    return nullptr;
   }
   return result;
 }
