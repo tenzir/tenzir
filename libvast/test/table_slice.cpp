@@ -86,9 +86,9 @@ public:
 
 private:
   void eager_init() {
-    table_slice_header header{this->layout(), this->columns(), 0};
+    table_slice_header header{layout(), rows(), 0};
     slice_.reset(new rebranded_table_slice{std::move(header)});
-    row_ = vector(this->columns());
+    row_ = vector(columns());
     col_ = 0;
   }
 };
