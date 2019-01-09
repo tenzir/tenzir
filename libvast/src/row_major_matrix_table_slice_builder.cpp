@@ -43,13 +43,6 @@ row_major_matrix_table_slice_builder::make(record_type layout) {
   return caf::make_counted<impl>(std::move(layout));
 }
 
-table_slice_ptr
-row_major_matrix_table_slice_builder::make_slice(record_type layout,
-                                                 table_slice::size_type rows) {
-  using impl = row_major_matrix_table_slice;
-  return table_slice_ptr{impl::make(std::move(layout), rows)};
-}
-
 bool row_major_matrix_table_slice_builder::append(data x) {
   // Check whether input is valid.
   if (!type_check(layout().fields[col_].type, x))
@@ -66,16 +59,16 @@ bool row_major_matrix_table_slice_builder::add(data_view x) {
 table_slice_ptr row_major_matrix_table_slice_builder::finish() {
   // Sanity check.
   if (col_ != 0)
-    return {};
+    return nullptr;
+  table_slice_header header{layout(), rows(), 0};
   // Get uninitialized memory that keeps the slice object plus the full matrix.
   using impl = row_major_matrix_table_slice;
-  auto result = impl::make_uninitialized(layout(), rows());
+  auto ptr = impl::make_uninitialized(std::move(header));
   // Construct the data block.
-  std::uninitialized_move(elements_.begin(), elements_.end(),
-                          result->storage());
+  std::uninitialized_move(elements_.begin(), elements_.end(), ptr->storage());
   // Clean up the builder state and return.
   elements_.clear();
-  return table_slice_ptr{result, false};
+  return table_slice_ptr{ptr, false};
 }
 
 size_t row_major_matrix_table_slice_builder::rows() const noexcept {

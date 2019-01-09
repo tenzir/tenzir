@@ -72,19 +72,18 @@ public:
   }
 
   /// @warning leaves all elements uninitialized.
-  static matrix_table_slice* make_uninitialized(record_type layout,
-                                                size_t rows);
+  static matrix_table_slice* make_uninitialized(table_slice_header header);
 
-  static matrix_table_slice* make(record_type layout, size_t rows) {
-    auto ptr = make_uninitialized(std::move(layout), rows);
+  static table_slice_ptr make(table_slice_header header) {
+    auto ptr = make_uninitialized(std::move(header));
     std::uninitialized_default_construct(ptr->begin(), ptr->end());
-    return ptr;
+    return table_slice_ptr{ptr, false};
   }
 
   // -- properties -------------------------------------------------------------
 
   matrix_table_slice* copy() const override {
-    auto ptr = make_uninitialized(this->layout(), rows_);
+    auto ptr = make_uninitialized(this->header());
     std::uninitialized_copy(begin(), end(), ptr->begin());
     return ptr;
   }
@@ -115,7 +114,7 @@ public:
 
   data_view at(size_type row, size_type col) const override {
     auto ptr = storage();
-    return make_view(ptr[LayoutPolicy::index_of(rows_, columns_, row, col)]);
+    return make_view(ptr[LayoutPolicy::index_of(rows(), columns(), row, col)]);
   }
 
   iterator begin() {
@@ -123,7 +122,7 @@ public:
   }
 
   iterator end() {
-    return begin() + rows_ * columns_;
+    return begin() + rows() * columns();
   }
 
   const_iterator begin() const {
@@ -131,21 +130,21 @@ public:
   }
 
   const_iterator end() const {
-    return begin() + rows_ * columns_;
+    return begin() + rows() * columns();
   }
 
   /// @returns the range representing the column at position `pos`.
   detail::iterator_range<column_iterator> column(size_type pos) {
-    auto first = LayoutPolicy::make_column_iterator(storage(), rows_,
-                                                    columns_, pos);
-    return {first, first + rows_};
+    auto first = LayoutPolicy::make_column_iterator(storage(), rows(),
+                                                    columns(), pos);
+    return {first, first + rows()};
   }
 
   /// @returns the range representing the column at position `pos`.
   detail::iterator_range<const_column_iterator> column(size_type pos) const {
-    auto first = LayoutPolicy::make_column_iterator(storage(), rows_,
-                                                    columns_, pos);
-    return {first, first + rows_};
+    auto first = LayoutPolicy::make_column_iterator(storage(), rows(),
+                                                    columns(), pos);
+    return {first, first + rows()};
   }
 
   /// @returns a pointer to the first element.
@@ -169,7 +168,7 @@ public:
 private:
   // -- constructors, destructors, and assignment operators --------------------
 
-  explicit matrix_table_slice(record_type layout) : super(std::move(layout)) {
+  explicit matrix_table_slice(table_slice_header header) : super{std::move(header)} {
     // nop
   }
 };
@@ -177,18 +176,16 @@ private:
 // Needs to be out-of-line, because it needs to call sizeof(matrix_table_slice).
 template <class LayoutPolicy>
 matrix_table_slice<LayoutPolicy>*
-matrix_table_slice<LayoutPolicy>::make_uninitialized(record_type layout,
-                                                     size_t rows) {
-  auto columns = layout.fields.size();
+matrix_table_slice<LayoutPolicy>::make_uninitialized(
+  table_slice_header header) {
   using impl = matrix_table_slice;
   using storage = std::aligned_storage_t<sizeof(impl), alignof(impl)>;
   using element_storage = std::aligned_storage_t<sizeof(data), alignof(data)>;
+  auto columns = header.layout.fields.size();
   auto vptr = malloc(sizeof(storage)
-                     + sizeof(element_storage) * rows * columns);
+                     + sizeof(element_storage) * header.rows * columns);
   // Construct only the table slice object.
-  auto ptr = new (vptr) impl(std::move(layout));
-  ptr->rows_ = rows;
-  ptr->columns_ = columns;
+  auto ptr = new (vptr) impl{std::move(header)};
   return ptr;
 }
 

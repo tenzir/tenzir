@@ -11,23 +11,27 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#define SUITE byte
+#pragma once
 
-#include "vast/test/test.hpp"
+#include <cstdint>
 
-#include "vast/byte.hpp"
+#include "vast/aliases.hpp"
+#include "vast/type.hpp"
 
-using namespace vast;
+namespace vast {
 
-TEST(bitwise operations) {
-  auto x = byte{0b0000'1100};
-  x >>= 2;
-  CHECK_EQUAL(to_integer<int>(x), 0b0000'0011);
-  x ^= byte{0b1010'1010};
-  CHECK_EQUAL(to_integer<int>(x), 0b1010'1001);
+/// The header of a table slice.
+/// @relates table_slice
+struct table_slice_header {
+  record_type layout; // flattened
+  uint64_t rows = 0;
+  id offset = 0;
+};
+
+/// @relates table_slice_header
+template <class Inspector>
+auto inspect(Inspector& f, table_slice_header& x) {
+  return f(x.layout, x.rows, x.offset);
 }
 
-TEST(to_byte) {
-  auto x = to_byte<42>();
-  CHECK_EQUAL(to_integer<int>(x), 42);
-}
+} // namespace vast

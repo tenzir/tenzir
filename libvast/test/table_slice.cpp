@@ -22,9 +22,13 @@
 #include <caf/make_copy_on_write.hpp>
 #include <caf/test/dsl.hpp>
 
+#include "vast/chunk.hpp"
 #include "vast/column_major_matrix_table_slice_builder.hpp"
+#include "vast/default_table_slice.hpp"
 #include "vast/default_table_slice_builder.hpp"
+#include "vast/matrix_table_slice.hpp"
 #include "vast/row_major_matrix_table_slice_builder.hpp"
+#include "vast/span.hpp"
 #include "vast/value.hpp"
 #include "vast/value_index.hpp"
 
@@ -37,11 +41,12 @@ class rebranded_table_slice : public default_table_slice {
 public:
   static constexpr caf::atom_value class_id = caf::atom("TS_Test");
 
-  using super = default_table_slice;
+  static table_slice_ptr make(table_slice_header header) {
+    return caf::make_copy_on_write<rebranded_table_slice>(std::move(header));
+  }
 
-  using super::super;
-
-  rebranded_table_slice(const default_table_slice& other) : super(other) {
+  explicit rebranded_table_slice(table_slice_header header)
+    : default_table_slice{std::move(header)} {
     // nop
   }
 
@@ -54,6 +59,8 @@ class rebranded_table_slice_builder : public default_table_slice_builder {
 public:
   using super = default_table_slice_builder;
 
+  using table_slice_type = rebranded_table_slice;
+
   rebranded_table_slice_builder(record_type layout) : super(std::move(layout)) {
     // Eagerly initialize to make sure super does not create slices for us.
     eager_init();
@@ -61,11 +68,6 @@ public:
 
   static table_slice_builder_ptr make(record_type layout) {
     return caf::make_counted<rebranded_table_slice_builder>(std::move(layout));
-  }
-
-  static table_slice_ptr make_slice(record_type layout,
-                                    table_slice::size_type) {
-    return caf::make_copy_on_write<rebranded_table_slice>(std::move(layout));
   }
 
   table_slice_ptr finish() override {
@@ -84,8 +86,9 @@ public:
 
 private:
   void eager_init() {
-    slice_.reset(new rebranded_table_slice(this->layout()));
-    row_ = vector(layout().fields.size());
+    table_slice_header header{layout(), rows(), 0};
+    slice_.reset(new rebranded_table_slice{std::move(header)});
+    row_ = vector(columns());
     col_ = 0;
   }
 };
@@ -118,13 +121,6 @@ struct fixture : fixtures::deterministic_actor_system {
     return caf::binary_deserializer{sys, buf};
   }
 
-  template <class Builder>
-  void add_slice_factory() {
-    using fptr = caf::runtime_settings_map::generic_function_pointer;
-    sys.runtime_settings().set(Builder::get_implementation_id(),
-                               reinterpret_cast<fptr>(Builder::make_slice));
-  }
-
   fixture() : sink(sys, buf) {
     if (std::any_of(builders.begin(), builders.end(),
                     [](auto& ptr) { return ptr == nullptr; }))
@@ -139,10 +135,10 @@ struct fixture : fixtures::deterministic_actor_system {
     });
     for (auto& x : test_data)
       test_values.emplace_back(value::make(make_vector(x), layout));
-    // Register factory.
-    add_slice_factory<rebranded_table_slice_builder>();
-    add_slice_factory<row_major_matrix_table_slice_builder>();
-    add_slice_factory<column_major_matrix_table_slice_builder>();
+    // Register factories.
+    add_table_slice_factory<rebranded_table_slice>();
+    add_table_slice_factory<row_major_matrix_table_slice>();
+    add_table_slice_factory<column_major_matrix_table_slice>();
   }
 
   auto make_slice(table_slice_builder& builder) {
@@ -196,15 +192,15 @@ struct fixture : fixtures::deterministic_actor_system {
   }
 
   void test_manual_serialization(table_slice_builder& builder) {
-    MESSAGE(">> test manual serialization via serialize_ptr and deserialize_ptr");
+    MESSAGE(">> test manual serialization via inspect");
     MESSAGE("make slices");
     auto slice1 = make_slice(builder);
     table_slice_ptr slice2;
     MESSAGE("save content of the first slice into the buffer");
-    CHECK_EQUAL(table_slice::serialize_ptr(sink, slice1), caf::none);
+    CHECK_EQUAL(inspect(sink, slice1), caf::none);
     MESSAGE("load content for the second slice from the buffer");
     auto source = make_source();
-    CHECK_EQUAL(table_slice::deserialize_ptr(source, slice2), caf::none);
+    CHECK_EQUAL(inspect(source, slice2), caf::none);
     MESSAGE("check result of serialization roundtrip");
     REQUIRE_NOT_EQUAL(slice2, nullptr);
     CHECK_EQUAL(*slice1, *slice2);
@@ -246,6 +242,17 @@ struct fixture : fixtures::deterministic_actor_system {
     buf.clear();
   }
 
+  void test_load_from_chunk(table_slice_builder& builder) {
+    MESSAGE(">> test load from chunk");
+    auto slice1 = make_slice(builder);
+    CHECK_EQUAL(sink(slice1), caf::none);
+    auto chk = chunk::make(make_const_byte_span(buf));
+    auto slice2 = make_table_slice(chk);
+    REQUIRE_NOT_EQUAL(slice2, nullptr);
+    CHECK_EQUAL(*slice1, *slice2);
+    buf.clear();
+  }
+
   void test_append_column_to_index(table_slice_builder& builder) {
     MESSAGE(">> test append_column_to_index");
     auto idx = value_index::make(integer_type{});
@@ -267,6 +274,7 @@ struct fixture : fixtures::deterministic_actor_system {
       test_manual_serialization(*builder);
       test_smart_pointer_serialization(*builder);
       test_message_serialization(*builder);
+      test_load_from_chunk(*builder);
       test_append_column_to_index(*builder);
     }
   }

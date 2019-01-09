@@ -70,8 +70,8 @@ caf::expected<segment_ptr> segment::make(caf::actor_system& sys,
   auto result = caf::make_counted<segment>(sys, chunk);
   result->header_ = hdr;
   // Deserialize meta data.
-  caf::charbuf buf{chunk->data() + sizeof(header),
-                   chunk->size() - sizeof(header)};
+  auto data = const_cast<char*>(chunk->data()); // CAF won't touch it.
+  caf::charbuf buf{data + sizeof(header), chunk->size() - sizeof(header)};
   detail::coded_deserializer<caf::charbuf&> meta_deserializer{buf};
   if (auto error = meta_deserializer(result->meta_))
     return error;
@@ -114,7 +114,8 @@ caf::expected<table_slice_ptr>
 segment::make_slice(const table_slice_synopsis& slice) const {
   auto payload = chunk_->data() + header_.payload_offset;
   auto slice_size = detail::narrow_cast<size_t>(slice.end - slice.start);
-  caf::charbuf buf{payload + slice.start, slice_size};
+  // CAF won't touch the pointer during deserialization.
+  caf::charbuf buf{const_cast<char*>(payload) + slice.start, slice_size};
   caf::stream_deserializer<caf::charbuf&> deserializer{actor_system_, buf};
   table_slice_ptr result;
   if (auto error = deserializer(result))

@@ -155,7 +155,7 @@ bool mmapbuf::resize(size_t new_size) {
 chunk_ptr mmapbuf::release() {
   if (!map_)
     return nullptr;
-  auto deleter = [](char* map, size_t n) { ::munmap(map, n); };
+  auto deleter = [=] { ::munmap(map_, size_); };
   auto chk = chunk::make(size_, map_, deleter);
   map_ = nullptr;
   size_ = 0;

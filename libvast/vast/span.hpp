@@ -1,4 +1,3 @@
-
 /******************************************************************************
  *                    _   _____   __________                                  *
  *                   | | / / _ | / __/_  __/     Visibility                   *
@@ -33,11 +32,11 @@
 #include <type_traits>
 #include <utility>
 
+#include "vast/byte.hpp"
 #include "vast/detail/assert.hpp"
-#include "vast/detail/byte.hpp"
 #include "vast/detail/narrow.hpp"
 
-namespace vast::detail {
+namespace vast {
 
 // [views.constants], constants
 constexpr const std::ptrdiff_t dynamic_extent = -1;
@@ -45,8 +44,8 @@ constexpr const std::ptrdiff_t dynamic_extent = -1;
 template <class ElementType, std::ptrdiff_t Extent = dynamic_extent>
 class span;
 
-// Implementation details (used to be in a separate namespace details, but
-// since we are already in namespace detail, this seems redundant).
+namespace detail {
+
 template <class T>
 struct is_span_oracle : std::false_type {};
 
@@ -285,6 +284,8 @@ struct calculate_subspan_type {
                       (Extent != dynamic_extent ? Extent - Offset : Extent)>;
 };
 
+} // namespace detail
+
 // [span], class template span
 template <class ElementType, std::ptrdiff_t Extent>
 class span {
@@ -296,8 +297,8 @@ public:
   using pointer = element_type*;
   using reference = element_type&;
 
-  using iterator = span_iterator<span<ElementType, Extent>, false>;
-  using const_iterator = span_iterator<span<ElementType, Extent>, true>;
+  using iterator = detail::span_iterator<span<ElementType, Extent>, false>;
+  using const_iterator = detail::span_iterator<span<ElementType, Extent>, true>;
   using reverse_iterator = std::reverse_iterator<iterator>;
   using const_reverse_iterator = std::reverse_iterator<const_iterator>;
 
@@ -311,7 +312,7 @@ public:
             // Extent <= 0>" SFINAE, since "std::enable_if_t<Extent <= 0>" is
             // ill-formed when Extent is greater than 0.
             class = std::enable_if_t<(Dependent || Extent <= 0)>>
-  constexpr span() noexcept : storage_(nullptr, extent_type<0>()) {
+  constexpr span() noexcept : storage_(nullptr, detail::extent_type<0>()) {
   }
 
   constexpr span(pointer ptr, index_type count) : storage_(ptr, count) {
@@ -323,19 +324,19 @@ public:
 
   template <std::size_t N>
   constexpr span(element_type (&arr)[N]) noexcept
-    : storage_(KnownNotNull{&arr[0]}, extent_type<N>()) {
+    : storage_(KnownNotNull{&arr[0]}, detail::extent_type<N>()) {
   }
 
   template <std::size_t N,
             class ArrayElementType = std::remove_const_t<element_type>>
   constexpr span(std::array<ArrayElementType, N>& arr) noexcept
-    : storage_(std::data(arr), extent_type<N>()) {
+    : storage_(std::data(arr), detail::extent_type<N>()) {
   }
 
   template <std::size_t N>
   constexpr span(
     const std::array<std::remove_const_t<element_type>, N>& arr) noexcept
-    : storage_(std::data(arr), extent_type<N>()) {
+    : storage_(std::data(arr), detail::extent_type<N>()) {
   }
 
   // NB: the SFINAE here uses .data() as a incomplete/imperfect proxy for the
@@ -343,37 +344,41 @@ public:
   template <
     class Container,
     class = std::enable_if_t<
-      !is_span_v<Container>
-      && !is_std_array_v<Container>
+      !detail::is_span_v<Container>
+      && !detail::is_std_array_v<Container>
       && std::is_convertible_v<typename Container::pointer, pointer>
       && std::is_convertible_v<
            typename Container::pointer,
            decltype(std::declval<Container>().data())>>>
   constexpr span(Container& cont)
-    : span(cont.data(), narrow<index_type>(cont.size())) {
+    : span(cont.data(), detail::narrow<index_type>(cont.size())) {
   }
 
   template <
     class Container,
     class = std::enable_if_t<
-      std::is_const_v<element_type> && !is_span_v<Container>
+      std::is_const_v<element_type> && !detail::is_span_v<Container>
       && std::is_convertible_v<typename Container::pointer, pointer>
       && std::is_convertible_v<
            typename Container::pointer,
            decltype(std::declval<Container>().data())>>>
   constexpr span(const Container& cont)
-    : span(cont.data(), narrow<index_type>(cont.size())) {
+    : span(cont.data(), detail::narrow<index_type>(cont.size())) {
   }
 
   constexpr span(const span& other) noexcept = default;
 
-  template <class OtherElementType, std::ptrdiff_t OtherExtent,
-            class = std::enable_if_t<
-              is_allowed_extent_conversion_v<OtherExtent, Extent>
-              && is_allowed_element_type_conversion<OtherElementType,
-                                                    element_type>::value>>
+  template <
+    class OtherElementType, std::ptrdiff_t OtherExtent,
+    class = std::enable_if_t<
+      detail::is_allowed_extent_conversion_v<
+        OtherExtent,
+        Extent> 
+      && detail::is_allowed_element_type_conversion<OtherElementType, element_type>::value
+    >
+  >
   constexpr span(const span<OtherElementType, OtherExtent>& other)
-    : storage_(other.data(), extent_type<OtherExtent>(other.size())) {
+    : storage_(other.data(), detail::extent_type<OtherExtent>(other.size())) {
   }
 
   ~span() noexcept = default;
@@ -395,7 +400,7 @@ public:
 
   template <std::ptrdiff_t Offset, std::ptrdiff_t Count = dynamic_extent>
   constexpr auto subspan() const ->
-    typename calculate_subspan_type<ElementType, Extent, Offset, Count>::type {
+    typename detail::calculate_subspan_type<ElementType, Extent, Offset, Count>::type {
     //VAST_ASSERT(
     //(Offset >= 0 && size() - Offset >= 0)
     //&& (Count == dynamic_extent || (Count >= 0 && Offset + Count <= size())));
@@ -423,7 +428,7 @@ public:
     return storage_.size();
   }
   constexpr index_type size_bytes() const noexcept {
-    return size() * narrow_cast<index_type>(sizeof(element_type));
+    return size() * detail::narrow_cast<index_type>(sizeof(element_type));
   }
   constexpr bool empty() const noexcept {
     return size() == 0;
@@ -509,11 +514,12 @@ private:
     pointer data_;
   };
 
-  storage_type<extent_type<Extent>> storage_;
+  storage_type<detail::extent_type<Extent>> storage_;
 
   // The rest is needed to remove unnecessary null check
   // in subspans and constructors from arrays
   constexpr span(KnownNotNull ptr, index_type count) : storage_(ptr, count) {
+    // nop
   }
 
   template <std::ptrdiff_t CallerExtent>
@@ -625,7 +631,7 @@ auto make_byte_span(T* data, Size size) {
   auto ptr = reinterpret_cast<byte_type*>(data);
   using span_type = span<byte_type>;
   using index_type = typename span_type::index_type;
-  return span_type{ptr, narrow_cast<index_type>(size)};
+  return span_type{ptr, detail::narrow_cast<index_type>(size)};
 }
 
 /// @relates make_byte_span
@@ -646,4 +652,4 @@ auto make_const_byte_span(Container&& xs) {
   return make_const_byte_span(std::data(xs), std::size(xs));
 }
 
-} // namespace vast::detail
+} // namespace vast

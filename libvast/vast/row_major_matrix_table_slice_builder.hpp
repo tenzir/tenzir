@@ -42,13 +42,6 @@ public:
   /// @returns a table slice builder instance.
   static table_slice_builder_ptr make(record_type layout);
 
-  /// Generates a table slice with uninitialized elements.
-  /// @param layout Field types for the table slice columns.
-  /// @param rows Number of rows in the table slice.
-  /// @returns a default-constructed table slice instance.
-  static table_slice_ptr make_slice(record_type layout,
-                                    table_slice::size_type rows);
-
   // -- properties -------------------------------------------------------------
 
   bool append(data x);

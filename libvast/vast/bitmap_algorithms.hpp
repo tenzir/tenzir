@@ -265,7 +265,7 @@ typename Bitmap::size_type rank(const Bitmap& bm) {
 /// @param i The position of the *i*-th occurrence of *Bit* in *bm*.
 ///          If `i == -1`, then select the last occurrence of *Bit*.
 /// @pre `i > 0`
-/// @relates select_range span
+/// @relates select_range frame
 template <bool Bit = true, class Bitmap>
 typename Bitmap::size_type
 select(const Bitmap& bm, typename Bitmap::size_type i) {
@@ -457,7 +457,7 @@ auto each(Bitmap&& xs) {
 /// A higher-order range that takes a bit-sequence range and transforms it into
 /// range of 1-bits. In ther words, this range provides an incremental
 /// interface to the one-shot algorithm that ::select computes.
-/// @relates select span
+/// @relates select frame
 template <bool Bit, class BitRange>
 class select_range : public detail::range_facade<select_range<Bit, BitRange>> {
 public:
@@ -490,7 +490,7 @@ private:
 /// Creates a select_range over an ID sequence.
 /// @param ids The IDs.
 /// @returns A select_range for *ids*.
-/// @relates select_range span
+/// @relates select_range frame
 template <bool Bit = true, class IDs>
 auto select(const IDs& ids) {
   using range_type = decltype(bit_range(ids));
@@ -538,14 +538,14 @@ caf::error select_with(const Bitmap& bm, Iterator begin, Iterator end, F f, G g)
   return caf::none;
 }
 
-/// Computes the *span* of a bitmap, i.e., the interval *[a,b]* with *a* being
+/// Computes the *frame* of a bitmap, i.e., the interval *[a,b]* with *a* being
 /// the first and *b* the last position of a particular bit value.
 /// @tparam Bit the bit value to locate.
 /// @param bm The bitmap to select from.
-/// @returns The span of *bm*.
+/// @returns The frame of *bm*.
 /// @relates select
 template <bool Bit = true, class Bitmap>
-auto span(const Bitmap& bm) {
+auto frame(const Bitmap& bm) {
   auto result = std::make_pair(Bitmap::word_type::npos,
                                Bitmap::word_type::npos);
   auto n = typename Bitmap::size_type{0};

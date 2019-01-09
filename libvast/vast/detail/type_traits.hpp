@@ -237,4 +237,16 @@ using name_member_t =
 template <typename T>
 inline constexpr bool has_name_member = is_detected_v<name_member_t, T>;
 
+// -- check for containers that have std::data and std::size ------------------
+
+template <typename T>
+using std_data_t = decltype(std::data(std::declval<T>()));
+
+template <typename T>
+using std_size_t = decltype(std::size(std::declval<T>()));
+
+template <typename T>
+inline constexpr bool is_container
+  = is_detected_v<std_data_t, T> && is_detected_v<std_size_t, T>;
+
 } // namespace vast::detail
