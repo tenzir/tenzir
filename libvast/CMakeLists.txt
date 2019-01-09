@@ -210,7 +210,6 @@ set(tests
   test/detail/flat_lru_cache.cpp
   test/detail/operators.cpp
   test/detail/set_operations.cpp
-  test/detail/span.cpp
   test/endpoint.cpp
   test/error.cpp
   test/event.cpp
@@ -241,6 +240,7 @@ set(tests
   test/segment.cpp
   test/segment_store.cpp
   test/serialization.cpp
+  test/span.cpp
   test/stack.cpp
   test/string.cpp
   test/subnet.cpp

@@ -11,12 +11,13 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/detail/byte.hpp"
-
 #define SUITE byte
+
 #include "vast/test/test.hpp"
 
-using namespace vast::detail;
+#include "vast/byte.hpp"
+
+using namespace vast;
 
 TEST(bitwise operations) {
   auto x = byte{0b0000'1100};

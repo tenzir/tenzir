@@ -25,7 +25,7 @@
 
 #include <type_traits>
 
-namespace vast::detail {
+namespace vast {
 
 // This is a simple definition for now that allows
 // use of byte within span<> to be standards-compliant
@@ -120,4 +120,4 @@ constexpr byte to_byte() noexcept {
   return static_cast<byte>(I);
 }
 
-} // namespace vast::detail
+} // namespace vast

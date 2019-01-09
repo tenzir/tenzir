@@ -15,15 +15,15 @@
 #include <string>
 #include <vector>
 
-#include "vast/detail/byte.hpp"
+#include "vast/byte.hpp"
 #include "vast/detail/narrow.hpp"
-#include "vast/detail/span.hpp"
+#include "vast/span.hpp"
 
 #define SUITE span
 #include "vast/test/test.hpp"
 
 using namespace std::string_literals;
-using namespace vast::detail;
+using namespace vast;
 
 TEST(string) {
   auto foo = "foo"s;
