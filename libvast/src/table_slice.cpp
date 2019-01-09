@@ -42,7 +42,7 @@ namespace vast {
 
 namespace {
 
-std::unordered_map<caf::atom_value, table_slice_factory> factory_;
+std::unordered_map<caf::atom_value, table_slice_factory> factories_;
 
 using size_type = table_slice::size_type;
 
@@ -87,15 +87,15 @@ void table_slice::append_column_to_index(size_type col,
 }
 
 bool add_table_slice_factory(caf::atom_value id, table_slice_factory f) {
-  if (factory_.count(id) > 0)
+  if (factories_.count(id) > 0)
     return false;
-  factory_.emplace(id, f);
+  factories_.emplace(id, f);
   return true;
 }
 
 table_slice_factory get_table_slice_factory(caf::atom_value id) {
-  auto i = factory_.find(id);
-  return i != factory_.end() ? i->second : nullptr;
+  auto i = factories_.find(id);
+  return i != factories_.end() ? i->second : nullptr;
 }
 
 table_slice_ptr make_table_slice(caf::atom_value id,
