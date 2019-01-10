@@ -17,18 +17,10 @@
 #include <type_traits>
 
 #include "vast/concept/support/detail/attr_fold.hpp"
+#include "vast/detail/type_traits.hpp"
 
 namespace vast {
 namespace detail {
-
-template <class T>
-struct is_pair : std::false_type {};
-
-template <class T, class U>
-struct is_pair<std::pair<T, U>> : std::true_type {};
-
-template <class T>
-constexpr bool is_pair_v = is_pair<T>::value;
 
 template <class Elem>
 struct container {

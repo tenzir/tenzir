@@ -24,16 +24,57 @@
 
 namespace vast::detail {
 
-// Computes the sum of its arguments.
-template <size_t ...>
-struct sum;
+// -- C++17 ------------------------------------------------------------------
 
-template <size_t S0, size_t ...SN>
-struct sum<S0, SN...>
-  : std::integral_constant<size_t, S0 + sum<SN...>{}> {};
+template <bool B>
+using bool_constant = std::integral_constant<bool, B>;
 
-template <>
-struct sum<> : std::integral_constant<size_t, 0> {};
+template <class...>
+using void_t = void;
+
+// -- Library Fundamentals v2 ------------------------------------------------
+
+struct nonesuch {
+  nonesuch() = delete;
+  ~nonesuch() = delete;
+  nonesuch(const nonesuch&) = delete;
+  void operator=(const nonesuch&) = delete;
+};
+
+namespace {
+
+template <
+  class Default,
+  class AlwaysVoid,
+  template <class...> class Op,
+  class... Args
+>
+struct detector {
+  using value_t = std::false_type;
+  using type = Default;
+};
+
+template <class Default, template<class...> class Op, class... Args>
+struct detector<Default, void_t<Op<Args...>>, Op, Args...> {
+  using value_t = std::true_type;
+  using type = Op<Args...>;
+};
+
+} // namespace <anonymous>
+
+template <template <class...> class Op, class... Args>
+constexpr bool is_detected_v
+  = detector<nonesuch, void, Op, Args...>::value_t::value;
+
+template <template <class...> class Op, class... Args>
+using detected_t
+  = typename detector<nonesuch, void, Op, Args...>::type;
+
+template <class Default, template<class...> class Op, class... Args>
+using detected_or = detector<Default, void, Op, Args...>;
+
+template <class Default, template<class...> class Op, class... Args>
+using detected_or_t = typename detected_or<Default, Op, Args...>::type;
 
 // -- is_* --------------------------------------------------------------------
 
@@ -80,6 +121,29 @@ struct is_contiguous_byte_container<
 template <class T>
 constexpr bool is_contiguous_byte_container_v
   = is_contiguous_byte_container<T>::value;
+
+// std::pair<T, U>
+
+template <class T>
+struct is_pair : std::false_type {};
+
+template <class T, class U>
+struct is_pair<std::pair<T, U>> : std::true_type {};
+
+template <class T>
+constexpr bool is_pair_v = is_pair<T>::value;
+
+// Types that work with std::data and std::size (= containers)
+
+template <typename T>
+using std_data_t = decltype(std::data(std::declval<T>()));
+
+template <typename T>
+using std_size_t = decltype(std::size(std::declval<T>()));
+
+template <typename T>
+inline constexpr bool is_container
+  = is_detected_v<std_data_t, T> && is_detected_v<std_size_t, T>;
 
 // -- SFINAE helpers ---------------------------------------------------------
 // http://bit.ly/uref-copy.
@@ -151,58 +215,6 @@ template <class T, class... Ts>
 struct contains<T, std::tuple<T, Ts...>> : std::true_type {};
 
 
-// -- C++17 ------------------------------------------------------------------
-
-template <bool B>
-using bool_constant = std::integral_constant<bool, B>;
-
-template <class...>
-using void_t = void;
-
-// -- Library Fundamentals v2 ------------------------------------------------
-
-struct nonesuch {
-  nonesuch() = delete;
-  ~nonesuch() = delete;
-  nonesuch(const nonesuch&) = delete;
-  void operator=(const nonesuch&) = delete;
-};
-
-namespace {
-
-template <
-  class Default,
-  class AlwaysVoid,
-  template <class...> class Op,
-  class... Args
->
-struct detector {
-  using value_t = std::false_type;
-  using type = Default;
-};
-
-template <class Default, template<class...> class Op, class... Args>
-struct detector<Default, void_t<Op<Args...>>, Op, Args...> {
-  using value_t = std::true_type;
-  using type = Op<Args...>;
-};
-
-} // namespace <anonymous>
-
-template <template <class...> class Op, class... Args>
-constexpr bool is_detected_v
-  = detector<nonesuch, void, Op, Args...>::value_t::value;
-
-template <template <class...> class Op, class... Args>
-using detected_t
-  = typename detector<nonesuch, void, Op, Args...>::type;
-
-template <class Default, template<class...> class Op, class... Args>
-using detected_or = detector<Default, void, Op, Args...>;
-
-template <class Default, template<class...> class Op, class... Args>
-using detected_or_t = typename detected_or<Default, Op, Args...>::type;
-
 // -- operator availability --------------------------------------------------
 
 template <typename T>
@@ -237,16 +249,15 @@ using name_member_t =
 template <typename T>
 inline constexpr bool has_name_member = is_detected_v<name_member_t, T>;
 
-// -- check for containers that have std::data and std::size ------------------
+// -- compile time computation of sum -----------------------------------------
+template <size_t ...>
+struct sum;
 
-template <typename T>
-using std_data_t = decltype(std::data(std::declval<T>()));
+template <size_t S0, size_t ...SN>
+struct sum<S0, SN...>
+  : std::integral_constant<size_t, S0 + sum<SN...>{}> {};
 
-template <typename T>
-using std_size_t = decltype(std::size(std::declval<T>()));
-
-template <typename T>
-inline constexpr bool is_container
-  = is_detected_v<std_data_t, T> && is_detected_v<std_size_t, T>;
+template <>
+struct sum<> : std::integral_constant<size_t, 0> {};
 
 } // namespace vast::detail
