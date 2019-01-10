@@ -18,6 +18,7 @@
 #include <caf/fwd.hpp>
 
 #include "vast/fwd.hpp"
+#include "vast/system/fwd.hpp"
 
 namespace vast::system {
 
@@ -28,8 +29,11 @@ namespace vast::system {
 /// @param column The column ID for the indexed field.
 /// @param index A handle to the index actor.
 /// @param partition_id The partition ID that this INDEXER belongs to.
+/// @param m A pointer to the measuring probe used for perfomance data
+///        accumulation.
 /// @returns the new INDEXER actor.
 caf::actor spawn_indexer(caf::local_actor* parent, path dir, type column_type,
-                         size_t column, caf::actor index, uuid partition_id);
+                         size_t column, caf::actor index, uuid partition_id,
+                         atomic_measurement* m);
 
 } // namespace vast::system

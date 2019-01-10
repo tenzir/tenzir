@@ -29,6 +29,7 @@
 #include "vast/detail/spawn_container_source.hpp"
 #include "vast/system/atoms.hpp"
 #include "vast/system/evaluator.hpp"
+#include "vast/system/instrumentation.hpp"
 #include "vast/system/spawn_indexer.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/type.hpp"
@@ -41,7 +42,7 @@ namespace {
 struct fixture : fixtures::deterministic_actor_system_and_events {
   void init(type col_type) {
     indexer = system::spawn_indexer(self.ptr(), directory, col_type, 0, self,
-                                    partition_id);
+                                    partition_id, &m);
     run();
   }
 
@@ -95,6 +96,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   size_t num_ids = 0;
 
   uuid partition_id = uuid::random();
+  vast::system::atomic_measurement m;
 
   /// Our actors-under-test.
   actor indexer;

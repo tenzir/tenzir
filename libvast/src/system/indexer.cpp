@@ -24,6 +24,8 @@
 #include "vast/filesystem.hpp"
 #include "vast/logger.hpp"
 #include "vast/system/atoms.hpp"
+#include "vast/system/instrumentation.hpp"
+#include "vast/table_slice.hpp"
 #include "vast/view.hpp"
 
 using namespace caf;
@@ -40,9 +42,11 @@ indexer_state::~indexer_state() {
 
 caf::error indexer_state::init(event_based_actor* self, path filename,
                                type column_type, size_t column,
-                               caf::actor index, uuid partition_id) {
+                               caf::actor index, uuid partition_id,
+                               atomic_measurement* m) {
   this->index = std::move(index);
   this->partition_id = partition_id;
+  this->measurement = m;
   new (&col) column_index(self->system(), std::move(column_type),
                           std::move(filename), column);
   return col.init();
@@ -50,14 +54,14 @@ caf::error indexer_state::init(event_based_actor* self, path filename,
 
 behavior indexer(stateful_actor<indexer_state>* self, path dir,
                  type column_type, size_t column, caf::actor index,
-                 uuid partition_id) {
+                 uuid partition_id, atomic_measurement* m) {
   VAST_TRACE(VAST_ARG(dir), VAST_ARG(column_type), VAST_ARG(column));
   VAST_DEBUG(self, "operates for column", column, "of type", column_type);
   if (auto err = self->state.init(self,
                                   std::move(dir) / "fields"
                                       / std::to_string(column),
                                   std::move(column_type), column,
-                                  std::move(index), partition_id)) {
+                                  std::move(index), partition_id, m)) {
     self->quit(std::move(err));
     return {};
   }
@@ -78,8 +82,13 @@ behavior indexer(stateful_actor<indexer_state>* self, path dir,
           // nop
         },
         [=](unit_t&, const std::vector<table_slice_ptr>& xs) {
-          for (auto& x : xs)
+          auto t = atomic_timer{*(self->state.measurement)};
+          uint64_t events = 0ull;
+          for (auto& x : xs) {
+            events += x->rows();
             self->state.col.add(x);
+          }
+          t.finish(events);
         },
         [=](unit_t&, const error& err) {
           auto& st = self->state;

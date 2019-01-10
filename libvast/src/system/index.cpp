@@ -26,6 +26,7 @@
 #include "vast/concept/printable/vast/error.hpp"
 #include "vast/concept/printable/vast/expression.hpp"
 #include "vast/concept/printable/vast/uuid.hpp"
+#include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/fill_status_map.hpp"
 #include "vast/event.hpp"
@@ -101,6 +102,13 @@ caf::error index_state::init(const path& dir, size_t max_partition_size,
   this->max_partition_size = max_partition_size;
   this->lru_partitions.size(in_mem_partitions);
   this->taste_partitions = taste_partitions;
+  if (auto a = self->system().registry().get(accountant_atom::value)) {
+    namespace defs = defaults::system;
+    this->accountant = actor_cast<accountant_type>(a);
+    self->send(this->accountant, "announce", "index");
+    self->delayed_send(self, std::chrono::milliseconds(defs::telemetry_rate_ms),
+        telemetry_atom::value);
+  }
   // Read persistent state.
   if (auto err = load_from_disk())
     return err;
@@ -188,6 +196,44 @@ caf::dictionary<caf::config_value> index_state::status() const {
   return result;
 }
 
+void index_state::send_report() {
+  report r;
+  auto part_report = [&](partition& p) {
+#if 0
+    p.for_each_indexer([&](const actor& indexer) {
+    });
+#else
+    for(auto& [layout, ti] : p.table_indexers_) {
+      for(size_t i = 0; i < ti.measurements_.size(); ++i) {
+        auto tmp = std::atomic_exchange(&(ti.measurements_[i]), measurement{});
+        //auto tmp = ti.measurements_[i];
+        if (tmp.events > 0) {
+          r.push_back({layout.name() + "." + layout.fields[i].name, tmp});
+          //ti.measurements_[i] = measurement{};
+        }
+      }
+    }
+#endif
+  };
+  if (active)
+    part_report(*active);
+  for (auto& p : unpersisted)
+    part_report(*p.first);
+  if (!r.empty())
+    self->send(accountant, std::move(r));
+
+  //if (instruments.produced > 0) {
+  //  auto duration = now - instruments.last_read;
+  //  auto unit = duration_cast<microseconds>(duration).count();
+  //  auto rate = instruments.produced * 1e6 / unit;
+  //  instruments.produced = 0;
+  //  instruments.last_read = now;
+  //  self->send(accountant, "source.rate", rate);
+  //  self->send(accountant, "source.duration", duration);
+  //}
+  //instruments.last_read = now;
+}
+
 void index_state::reset_active_partition() {
   // Persist meta data and the state of all INDEXER actors when the active
   // partition gets replaced becomes full.
@@ -214,11 +260,11 @@ partition_ptr index_state::make_partition(uuid id) {
 }
 
 caf::actor index_state::make_indexer(path dir, type column_type, size_t column,
-                                     uuid partition_id) {
+                                     uuid partition_id, atomic_measurement* m) {
   VAST_TRACE(VAST_ARG(dir), VAST_ARG(column_type), VAST_ARG(column),
              VAST_ARG(index), VAST_ARG(partition_id));
   return factory(self, std::move(dir), std::move(column_type), column,
-                 self, partition_id);
+                 self, partition_id, m);
 }
 
 void index_state::decrement_indexer_count(uuid partition_id) {
@@ -305,9 +351,12 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
     self->quit(std::move(err));
     return {};
   }
-  auto accountant = accountant_type{};
-  if (auto a = self->system().registry().get(accountant_atom::value))
-    accountant = actor_cast<accountant_type>(a);
+  self->set_exit_handler([=](const exit_msg& msg) {
+    VAST_DEBUG(self, "received exit from", msg.source,
+               "with reason:", msg.reason);
+    self->state.send_report();
+    self->quit(msg.reason);
+  });
   // Launch workers for resolving queries.
   for (size_t i = 0; i < num_workers; ++i)
     self->spawn(query_supervisor, self);
@@ -409,6 +458,15 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
     },
     [=](status_atom) -> caf::config_value::dictionary {
       return self->state.status();
+    },
+    [=](telemetry_atom) {
+      auto& st = self->state;
+      st.send_report();
+      namespace defs = defaults::system;
+      self->delayed_send(
+        self,
+        milliseconds(defs::telemetry_rate_ms),
+        telemetry_atom::value);
     }
   );
   return {[=](worker_atom, caf::actor& worker) {
@@ -425,7 +483,17 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
           },
           [=](status_atom) -> caf::config_value::dictionary {
             return self->state.status();
-          }};
+          },
+          [=](telemetry_atom) {
+            auto& st = self->state;
+            st.send_report();
+            namespace defs = defaults::system;
+            self->delayed_send(
+              self,
+              milliseconds(defs::telemetry_rate_ms),
+              telemetry_atom::value);
+          }
+  };
 }
 
 } // namespace vast::system
