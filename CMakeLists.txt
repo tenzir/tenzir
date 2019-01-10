@@ -298,6 +298,44 @@ if (SHOW_TIME_REPORT)
   set(EXTRA_FLAGS "${EXTRA_FLAGS} -ftime-report")
 endif ()
 
+include(CheckCXXSourceCompiles)
+include(CheckLibraryExists)
+
+function(check_working_cxx_atomics128 varname)
+set(OLD_CMAKE_REQUIRED_FLAGS ${CMAKE_REQUIRED_FLAGS})
+set(CMAKE_REQUIRED_FLAGS "-std=c++11 ${CMAKE_REQUIRED_FLAGS}")
+CHECK_CXX_SOURCE_COMPILES("
+#include <atomic>
+#include <cstdint>
+struct sixteen {
+  uint64_t x = 1;
+  int64_t  y = -1;
+};
+std::atomic<sixteen> x;
+int main()
+{
+  auto v = x.load(std::memory_order_relaxed);
+  return std::atomic_is_lock_free(&x);
+}
+" ${varname})
+set(CMAKE_REQUIRED_FLAGS ${OLD_CMAKE_REQUIRED_FLAGS})
+endfunction(check_working_cxx_atomics128)
+
+check_working_cxx_atomics128(HAVE_CXX_ATOMICS_WITHOUT_LIB)
+if (NOT HAVE_CXX_ATOMICS_WITHOUT_LIB)
+  check_library_exists(atomic __atomic_fetch_add_16 "" HAVE_LIBATOMIC)
+  if (HAVE_LIBATOMIC)
+    list(APPEND CMAKE_REQUIRED_LIBRARIES "atomic")
+    check_working_cxx_atomics128(HAVE_CXX_ATOMICS_WITH_LIB)
+    if (NOT HAVE_CXX_ATOMICS_WITH_LIB)
+      message(FATAL_ERROR "Host compiler must support std::atomic!")
+    endif()
+    set(LDFLAGS "${LDFLAGS} -latomic")
+  else()
+    message(FATAL_ERROR "Host compiler appears to require libatomic, but cannot find it.")
+  endif()
+endif ()
+
 # Only set our flags if the environment variable CXXFLAGS is not present.
 if (NOT CMAKE_CXX_FLAGS)
   set(CMAKE_CXX_FLAGS ${EXTRA_FLAGS})
