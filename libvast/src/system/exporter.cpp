@@ -128,8 +128,10 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
                   query_options options) {
   auto eu = self->system().dummy_execution_unit();
   self->state.sink = actor_pool::make(eu, actor_pool::broadcast());
-  if (auto a = self->system().registry().get(accountant_atom::value))
+  if (auto a = self->system().registry().get(accountant_atom::value)) {
     self->state.accountant = actor_cast<accountant_type>(a);
+    self->send(self->state.accountant, "announce", self->name());
+  }
   self->state.options = options;
   if (has_continuous_option(options))
     VAST_DEBUG(self, "has continuous query option");
