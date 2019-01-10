@@ -134,6 +134,7 @@ struct importer_state {
   std::vector<caf::actor> flush_listeners;
 
   measurement measurement_;
+  stopwatch::time_point last_report;
 
   accountant_type accountant;
 

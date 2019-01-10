@@ -120,12 +120,19 @@ caf::dictionary<caf::config_value> importer_state::status() const {
 }
 
 void importer_state::send_report() {
+  auto now = stopwatch::now();
   if (measurement_.events > 0) {
     using namespace std::string_literals;
-    report r = {{{"importer"s, measurement_}}};
+    auto elapsed = std::chrono::duration_cast<measurement::timespan>(now - last_report);
+    auto node_throughput = measurement{elapsed, measurement_.events};
+    report r = {{
+      {"importer"s, measurement_},
+      {"node_throughput"s, node_throughput}
+    }};
     measurement_ = measurement{};
     self->send(accountant, r);
   }
+  last_report = now;
 };
 
 namespace {
