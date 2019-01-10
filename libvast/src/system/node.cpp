@@ -311,7 +311,6 @@ node_state::~node_state() {
   if (!err)
     err = exit_reason::user_shutdown;
   self->send_exit(tracker, err);
-  self->send_exit(accountant, std::move(err));
 }
 
 void node_state::init(std::string init_name, path init_dir) {
