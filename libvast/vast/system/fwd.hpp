@@ -40,6 +40,7 @@ class table_indexer;
 // -- structs ------------------------------------------------------------------
 
 struct index_state;
+struct measurement;
 struct node_state;
 struct query_status;
 struct spawn_arguments;
@@ -54,6 +55,7 @@ class writer_command;
 
 // -- aliases ------------------------------------------------------------------
 
+using atomic_measurement = std::atomic<measurement>;
 using node_actor = caf::stateful_actor<node_state>;
 using partition_ptr = std::unique_ptr<partition>;
 using table_indexer_ptr = caf::intrusive_ptr<table_indexer>;
