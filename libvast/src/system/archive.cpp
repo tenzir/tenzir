@@ -11,10 +11,13 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
+#include "vast/system/archive.hpp"
+
 #include <algorithm>
 
 #include <caf/config_value.hpp>
 
+#include "vast/defaults.hpp"
 #include "vast/event.hpp"
 #include "vast/expected.hpp"
 #include "vast/logger.hpp"
@@ -24,8 +27,6 @@
 #include "vast/to_events.hpp"
 
 #include "vast/concept/printable/stream.hpp"
-
-#include "vast/system/archive.hpp"
 
 #include "vast/detail/assert.hpp"
 #include "vast/detail/fill_status_map.hpp"
@@ -37,6 +38,15 @@ using namespace caf;
 
 namespace vast::system {
 
+void archive_state::send_report() {
+  if (measurement_.events > 0) {
+    using namespace std::string_literals;
+    report r = {{{"archive"s, measurement_}}};
+    measurement_ = measurement{};
+    self->send(accountant, r);
+  }
+}
+
 archive_type::behavior_type
 archive(archive_type::stateful_pointer<archive_state> self,
         path dir, size_t capacity, size_t max_segment_size) {
@@ -45,10 +55,12 @@ archive(archive_type::stateful_pointer<archive_state> self,
   // arguments of the actor. This way, users can provide their own store
   // implementation conveniently.
   VAST_INFO(self, "spawned:", VAST_ARG(capacity), VAST_ARG(max_segment_size));
+  self->state.self = self;
   self->state.store = segment_store::make(dir, max_segment_size, capacity);
   VAST_ASSERT(self->state.store != nullptr);
   self->set_exit_handler(
     [=](const exit_msg& msg) {
+      self->state.send_report();
       self->state.store->flush();
       self->state.store.reset();
       self->quit(msg.reason);
@@ -60,6 +72,13 @@ archive(archive_type::stateful_pointer<archive_state> self,
       self->state.active_exporters.erase(msg.source);
     }
   );
+  if (auto a = self->system().registry().get(accountant_atom::value)) {
+    namespace defs = defaults::system;
+    self->state.accountant = actor_cast<accountant_type>(a);
+    self->send(self->state.accountant, "announce", self->name());
+    self->delayed_send(self, std::chrono::milliseconds(defs::telemetry_rate_ms),
+        telemetry_atom::value);
+  }
   return {
     [=](const ids& xs) -> caf::result<done_atom, caf::error> {
       VAST_ASSERT(rank(xs) > 0);
@@ -94,6 +113,8 @@ archive(archive_type::stateful_pointer<archive_state> self,
         },
         [=](unit_t&, std::vector<table_slice_ptr>& batch) {
           VAST_DEBUG(self, "got", batch.size(), "table slices");
+          timer t{self->state.measurement_};
+          uint64_t events = 0;
           for (auto& slice : batch) {
             if (auto error = self->state.store->put(slice)) {
               VAST_ERROR(self, "failed to add table slice to store",
@@ -101,7 +122,9 @@ archive(archive_type::stateful_pointer<archive_state> self,
               self->quit(error);
               break;
             }
+            events += slice->rows();
           }
+          t.finish(events);
         },
         [=](unit_t&, const error& err) {
           if (err) {
@@ -120,6 +143,14 @@ archive(archive_type::stateful_pointer<archive_state> self,
       detail::fill_status_map(result, self);
       self->state.store->inspect_status(put_dictionary(result, "store"));
       return result;
+    },
+    [=](telemetry_atom) {
+      self->state.send_report();
+      namespace defs = defaults::system;
+      self->delayed_send(
+        self,
+        std::chrono::milliseconds(defs::telemetry_rate_ms),
+        telemetry_atom::value);
     }
   };
 }
