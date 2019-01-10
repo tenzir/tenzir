@@ -17,12 +17,14 @@
 #include <fstream>
 #include <string>
 
+#include <caf/dictionary.hpp>
 #include <caf/typed_actor.hpp>
 
 #include "vast/filesystem.hpp"
 #include "vast/time.hpp"
 
 #include "vast/system/atoms.hpp"
+#include "vast/system/instrumentation.hpp"
 
 namespace vast::system {
 
@@ -33,6 +35,18 @@ struct accountant_state {
   static inline const char* name = "accountant";
 };
 
+struct perf_sample {
+  std::string key;
+  measurement value;
+};
+
+template <class Inspector>
+typename Inspector::result_type inspect(Inspector& f, perf_sample& s) {
+  return f(caf::meta::type_name("perf_sample"), s.key, s.value);
+}
+
+using report = std::vector<perf_sample>;
+
 using accountant_type =
   caf::typed_actor<
     caf::reacts_to<std::string, std::string>,
@@ -41,6 +55,7 @@ using accountant_type =
     caf::reacts_to<std::string, int64_t>,
     caf::reacts_to<std::string, uint64_t>,
     caf::reacts_to<std::string, double>,
+    caf::reacts_to<report>,
     caf::reacts_to<flush_atom>
   >;
 
