@@ -24,6 +24,7 @@
 #include "vast/detail/fill_status_map.hpp"
 #include "vast/logger.hpp"
 #include "vast/system/atoms.hpp"
+#include "vast/defaults.hpp"
 #include "vast/table_slice.hpp"
 
 using namespace std::chrono;
@@ -118,6 +119,15 @@ caf::dictionary<caf::config_value> importer_state::status() const {
   return result;
 }
 
+void importer_state::send_report() {
+  if (measurement_.events > 0) {
+    using namespace std::string_literals;
+    report r = {{{"importer"s, measurement_}}};
+    measurement_ = measurement{};
+    self->send(accountant, r);
+  }
+};
+
 namespace {
 
 // Asks the consensus module for more IDs.
@@ -188,16 +198,20 @@ public:
                std::vector<input_type>& xs) override {
     VAST_TRACE(VAST_ARG(xs));
     auto& st = self_->state;
+    auto t = timer{st.measurement_};
     VAST_DEBUG(self_, "has", st.available_ids(), "IDs available");
     VAST_DEBUG(self_, "got", xs.size(), "slices with", st.in_flight_slices,
                "in-flight slices");
     VAST_ASSERT(xs.size() <= static_cast<size_t>(st.available_ids()));
     VAST_ASSERT(xs.size() <= static_cast<size_t>(st.in_flight_slices));
     st.in_flight_slices -= static_cast<int32_t>(xs.size());
+    uint64_t events = 0;
     for (auto& x : xs) {
+      events += x->rows();
       x.unshared().offset(st.next_id_block());
       out.push(std::move(x));
     }
+    t.finish(events);
   }
 
   int32_t acquire_credit(inbound_path* path, int32_t desired) override {
@@ -301,6 +315,18 @@ behavior importer(stateful_actor<importer_state>* self, path dir,
     self->quit(std::move(err));
     return {};
   }
+  namespace defs = defaults::system;
+  if (auto a = self->system().registry().get(accountant_atom::value)) {
+    self->state.accountant = actor_cast<accountant_type>(a);
+    self->send(self->state.accountant, "announce", self->name());
+    self->delayed_send(self, std::chrono::milliseconds(defs::telemetry_rate_ms),
+        telemetry_atom::value);
+  }
+  self->set_exit_handler(
+    [=](const exit_msg& msg) {
+      self->state.send_report();
+      self->quit(msg.reason);
+    });
   self->state.stg = make_importer_stage(self);
   return {
     [=](const consensus_type& c) {
@@ -347,6 +373,13 @@ behavior importer(stateful_actor<importer_state>* self, path dir,
     },
     [=](status_atom) {
       return self->state.status();
+    },
+    [=](telemetry_atom) {
+      self->state.send_report();
+      self->delayed_send(
+        self,
+        std::chrono::milliseconds(defs::telemetry_rate_ms),
+        telemetry_atom::value);
     }
   };
 }

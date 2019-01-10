@@ -23,8 +23,10 @@
 #include "vast/data.hpp"
 #include "vast/filesystem.hpp"
 
+#include "vast/system/accountant.hpp"
 #include "vast/system/archive.hpp"
 #include "vast/system/consensus.hpp"
+#include "vast/system/instrumentation.hpp"
 
 namespace vast::system {
 
@@ -84,6 +86,8 @@ struct importer_state {
 
   caf::error write_state();
 
+  void send_report();
+
   /// Handle to the consensus module for obtaining more IDs.
   consensus_type consensus;
 
@@ -128,6 +132,10 @@ struct importer_state {
 
   /// List of actors that wait for the next flush event.
   std::vector<caf::actor> flush_listeners;
+
+  measurement measurement_;
+
+  accountant_type accountant;
 
   /// Name of this actor in log events.
   static inline const char* name = "importer";
