@@ -93,15 +93,10 @@ private:
 
 FIXTURE_SCOPE(table_slice_tests, fixtures::table_slices)
 
-TEST_TABLE_SLICE(default_table_slice, default_table_slice_builder)
-
-TEST_TABLE_SLICE(row_major_matrix_table_slice,
-                 row_major_matrix_table_slice_builder)
-
-TEST_TABLE_SLICE(column_major_matrix_table_slice,
-                 column_major_matrix_table_slice_builder)
-
-TEST_TABLE_SLICE(rebranded_table_slice, rebranded_table_slice_builder)
+TEST_TABLE_SLICE(default_table_slice)
+TEST_TABLE_SLICE(row_major_matrix_table_slice)
+TEST_TABLE_SLICE(column_major_matrix_table_slice)
+TEST_TABLE_SLICE(rebranded_table_slice)
 
 TEST(random integer slices) {
   record_type layout{

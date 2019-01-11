@@ -32,15 +32,15 @@
 #include "vast/test/test.hpp"
 
 // Helper macro to define a table-slice unit test.
-#define TEST_TABLE_SLICE(type, builder)                                        \
+#define TEST_TABLE_SLICE(type)                                                 \
   TEST(type) {                                                                 \
-    initialize<type, builder>();                                               \
+    initialize<type, type ## _builder>();                                      \
     run();                                                                     \
   }
 
 namespace fixtures {
 
-class table_slices : fixtures::deterministic_actor_system {
+class table_slices : deterministic_actor_system {
 public:
   table_slices();
 
@@ -53,7 +53,7 @@ public:
       FAIL("builder factory could not construct a valid instance");
   }
 
-  // Run all tests in the fixture. Requires previous 
+  // Run all tests in the fixture.
   void run();
 
 private:
