@@ -69,8 +69,6 @@ template <class Reader, class Self = caf::event_based_actor>
 struct source_state {
   // -- member types -----------------------------------------------------------
 
-  using factory_type = table_slice_builder_ptr (*)(record_type);
-
   using downstream_manager
     = caf::broadcast_downstream_manager<table_slice_ptr>;
 
@@ -99,7 +97,7 @@ struct source_state {
   Reader reader;
 
   /// Generates layout-specific table slice builders.
-  factory_type factory;
+  table_slice_builder_factory factory;
 
   /// Maps layout type names to table slice builders.
   std::map<std::string, table_slice_builder_ptr> builders;
@@ -117,11 +115,11 @@ struct source_state {
 
   /// Initializes the state.
   template <class ActorImpl>
-  void init(ActorImpl* self, Reader rd, factory_type f) {
+  void init(ActorImpl* self, Reader rd, table_slice_builder_factory f) {
     // Initialize members from given arguments.
     reader = std::move(rd);
     name = reader.name();
-    factory = std::move(f);
+    factory = f;
     // Fetch accountant from the registry.
     if (auto acc = self->system().registry().get(accountant_atom::value)) {
       VAST_DEBUG(self, "uses registry accountant:", accountant);
@@ -137,6 +135,7 @@ struct source_state {
     return caf::visit(
       detail::overload(
         [&](const record_type& rt) -> table_slice_builder* {
+          // FIXME: This should not longer happen. --MV
           // We always add a timestamp as first column to the layout.
           auto internal = rt;
           record_field tstamp_field{"timestamp", timestamp_type{}};
@@ -252,13 +251,12 @@ struct source_state {
 /// @param reader The reader instance.
 template <class Reader>
 caf::behavior source(caf::stateful_actor<source_state<Reader>>* self,
-                     Reader reader,
-                     typename source_state<Reader>::factory_type factory,
+                     Reader reader, table_slice_builder_factory factory,
                      size_t table_slice_size) {
   using namespace caf;
   using namespace std::chrono;
   // Initialize state.
-  self->state.init(self, std::move(reader), std::move(factory));
+  self->state.init(self, std::move(reader), factory);
   // Spin up the stream manager for the source.
   self->state.mgr = self->make_continuous_source(
     // init
@@ -332,9 +330,8 @@ caf::behavior default_source(caf::stateful_actor<source_state<Reader>>* self,
                              Reader reader) {
   auto slice_size = get_or(self->system().config(), "vast.table-slice-size",
                            defaults::system::table_slice_size);
-  return source(self, std::move(reader), default_table_slice_builder::make,
-                slice_size);
+  auto factory = default_table_slice_builder::make;
+  return source(self, std::move(reader), factory, slice_size);
 }
 
 } // namespace vast::system
-

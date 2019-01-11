@@ -71,6 +71,9 @@ extern const char* node_id;
 
 namespace system {
 
+/// The default table slice type.
+extern const char* table_slice_type;
+
 /// Maximum size for sources that generate table slices.
 extern size_t table_slice_size;
 
