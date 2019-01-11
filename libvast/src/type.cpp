@@ -745,7 +745,6 @@ bool type_check(const type& t, const data& x) {
     },
     [&](const enumeration_type& u) {
       auto e = caf::get_if<enumeration>(&x);
-      printf("got enumeration? %i\n", !!e);
       return e && *e < u.fields.size();
     },
     [&](const vector_type& u) {
