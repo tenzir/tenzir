@@ -35,7 +35,8 @@ behavior dummy_indexer(stateful_actor<dummy_index::dummy_indexer_state>*) {
   }};
 }
 
-actor spawn_dummy_indexer(local_actor* self, path, type, size_t) {
+actor spawn_dummy_indexer(local_actor* self, path, type, size_t, caf::actor,
+                          uuid) {
   return self->spawn(dummy_indexer);
 }
 

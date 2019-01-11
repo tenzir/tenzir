@@ -22,6 +22,7 @@
 #include "vast/filesystem.hpp"
 #include "vast/column_index.hpp"
 #include "vast/type.hpp"
+#include "vast/uuid.hpp"
 
 namespace vast::system {
 
@@ -33,11 +34,15 @@ struct indexer_state {
   ~indexer_state();
 
   caf::error init(caf::event_based_actor* self, path filename, type column_type,
-                  size_t column);
+                  size_t column, caf::actor index, uuid pid);
 
   // -- member variables -------------------------------------------------------
 
   union { column_index col; };
+
+  caf::actor index;
+
+  uuid partition_id;
 
   static inline const char* name = "indexer";
 };
@@ -47,8 +52,11 @@ struct indexer_state {
 /// @param dir The directory where to store the indexes in.
 /// @param column_type The type of the indexed column.
 /// @param column The indexed column.
+/// @param index A handle to the index actor.
+/// @param pid The partition ID that this INDEXER belongs to.
 /// @returns the initial behavior of the INDEXER.
 caf::behavior indexer(caf::stateful_actor<indexer_state>* self, path dir,
-                      type column_type, size_t column);
+                      type column_type, size_t column, caf::actor index,
+                      uuid pid);
 
 } // namespace vast::system

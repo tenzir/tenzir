@@ -123,7 +123,10 @@ struct index_state {
   partition_ptr make_partition(uuid id);
 
   /// @returns a new INDEXER actor.
-  caf::actor make_indexer(path dir, type column_type, size_t column);
+  caf::actor make_indexer(path dir, type column_type, size_t column, uuid pid);
+
+  /// Decrements the indexer count for a partition.
+  caf::error decrement_indexer_count(uuid pid);
 
   /// @returns the unpersisted partition matching `id` or `nullptr` if no
   ///          partition matches.
@@ -174,6 +177,9 @@ struct index_state {
   /// Our current partition.
   partition_ptr active;
 
+  /// Our current partition.
+  size_t active_partition_indexers;
+
   /// Recently accessed partitions.
   partition_cache_type lru_partitions;
 
@@ -197,4 +203,3 @@ caf::behavior index(caf::stateful_actor<index_state>* self, const path& dir,
                     size_t taste_partitions, size_t num_workers);
 
 } // namespace vast::system
-

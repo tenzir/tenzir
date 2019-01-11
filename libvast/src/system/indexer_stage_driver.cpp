@@ -67,6 +67,7 @@ void indexer_stage_driver::process(downstream_type& out, batch_type& slices) {
             auto slt = out_.parent()->add_unchecked_outbound_path<output_type>(x);
             VAST_DEBUG(state_->self, "spawned new INDEXER at slot", slt);
             out_.set_filter(slt, layout);
+            state_->active_partition_indexers++;
           }
         }
       }

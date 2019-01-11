@@ -40,7 +40,8 @@ namespace {
 
 struct fixture : fixtures::deterministic_actor_system_and_events {
   void init(type col_type) {
-    indexer = system::spawn_indexer(self.ptr(), directory, col_type, 0);
+    indexer = system::spawn_indexer(self.ptr(), directory, col_type, 0, self,
+                                    partition_id);
     run();
   }
 
@@ -82,6 +83,8 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
 
   /// Number size of our ID space.
   size_t num_ids = 0;
+
+  uuid partition_id = uuid::random();
 
   /// Our actors-under-test.
   actor indexer;
