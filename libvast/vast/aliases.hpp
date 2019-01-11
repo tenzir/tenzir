@@ -45,7 +45,7 @@ using count = uint64_t;
 using real = double;
 
 /// Enumeration type.
-using enumeration = uint32_t;
+using enumeration = count;
 
 /// A random-access sequence of data.
 using vector = std::vector<data>;
