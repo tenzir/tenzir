@@ -731,48 +731,58 @@ bool compatible(const data& lhs, relational_operator op, const type& rhs) {
   return compatible(rhs, flip(op), lhs);
 }
 
-bool type_check(const type& t, const data& d) {
-  auto checker = detail::overload(
-    [&](const auto& x) {
-      using corresponding_type = data_to_type<std::decay_t<decltype(x)>>;
-      return holds_alternative<corresponding_type>(t);
+// WARNING: making changes to the logic of this function requires adapting the
+// companion overload in view.cpp.
+bool type_check(const type& t, const data& x) {
+  auto f = detail::overload(
+    [&](const auto& u) {
+      using data_type = type_to_data<std::decay_t<decltype(u)>>;
+      return caf::holds_alternative<data_type>(x);
     },
-    [&](const enumeration& x) {
-      auto e = get_if<enumeration_type>(&t);
-      return e && x < e->fields.size();
+    [&](const none_type&) {
+      // Cannot determine data type since data may always be null.
+      return true;
     },
-    [&](const vector& xs) {
-      auto r = get_if<record_type>(&t);
-      if (r) {
-        if (r->fields.size() != xs.size())
-          return false;
-        for (size_t i = 0; i < r->fields.size(); ++i)
-          if (!type_check(r->fields[i].type, xs[i]))
-            return false;
-        return true;
-      }
-      if (xs.empty())
-        return true;
-      auto v = get_if<vector_type>(&t);
-      return v && type_check(v->value_type, xs[0]);
+    [&](const enumeration_type& u) {
+      auto e = caf::get_if<enumeration>(&x);
+      return e && *e < u.fields.size();
     },
-    [&](const set& xs) {
-      if (xs.empty())
-        return true;
-      auto s = get_if<set_type>(&t);
-      return s && type_check(s->value_type, *xs.begin());
+    [&](const vector_type& u) {
+      if (auto xs = caf::get_if<vector>(&x))
+        return xs->empty() || type_check(u.value_type, *xs->begin());
+      return false;
     },
-    [&](const map& xs) {
-      if (xs.empty())
-        return true;
-      auto m = get_if<map_type>(&t);
-      if (!m)
+    [&](const set_type& u) {
+      if (auto xs = caf::get_if<set>(&x))
+        return xs->empty() || type_check(u.value_type, *xs->begin());
+      return false;
+    },
+    [&](const map_type& u) {
+      auto xs = caf::get_if<map>(&x);
+      if (!xs)
         return false;
-      return type_check(m->key_type, xs.begin()->first)
-             && type_check(m->value_type, xs.begin()->second);
+      if (xs->empty())
+        return true;
+      auto& [key, value] = *xs->begin();
+      return type_check(u.key_type, key) && type_check(u.value_type, value);
+    },
+    [&](const record_type& u) {
+      // Until we have a separate data type for records we treat them as vector.
+      auto xs = caf::get_if<vector>(&x);
+      if (!xs)
+        return false;
+      if (xs->size() != u.fields.size())
+        return false;
+      for (size_t i = 0; i < xs->size(); ++i)
+        if (!type_check(u.fields[i].type, (*xs)[i]))
+          return false;
+      return true;
+    },
+    [&](const alias_type& u) {
+      return type_check(u.value_type, x);
     }
   );
-  return holds_alternative<caf::none_t>(d) || visit(checker, d);
+  return caf::holds_alternative<caf::none_t>(x) || caf::visit(f, t);
 }
 
 data construct(const type& x) {
@@ -806,7 +816,7 @@ const char* kind_tbl[] = {
   "int",
   "count",
   "real",
-  "duration",
+  "timespan",
   "timestamp",
   "string",
   "pattern",

@@ -25,6 +25,7 @@
 
 #include "vast/aliases.hpp"
 #include "vast/data.hpp"
+#include "vast/fwd.hpp"
 #include "vast/time.hpp"
 
 #include "vast/detail/assert.hpp"
@@ -69,13 +70,11 @@ struct view_trait<caf::none_t> {
   using type = caf::none_t;
 };
 
-
 /// @relates view_trait
 template <>
 struct view_trait<std::string> {
   using type = std::string_view;
 };
-
 
 /// @relates view_trait
 class pattern_view : detail::totally_ordered<pattern_view> {
@@ -121,7 +120,6 @@ using set_view_handle = container_view_handle<set_view_ptr>;
 
 // @relates view_trait
 using map_view_handle = container_view_handle<map_view_ptr>;
-
 
 /// @relates view_trait
 template <>
@@ -297,6 +295,11 @@ struct container_view
 
   /// @returns The number of elements in the container.
   virtual size_type size() const noexcept = 0;
+
+  /// @returns `true` if the container is empty.
+  bool empty() const noexcept {
+    return size() == 0;
+  }
 };
 
 template <class T>
@@ -382,7 +385,8 @@ template <class T>
 view<T> make_view(const T& x) {
   constexpr auto directly_constructible
     = detail::is_any_v<T, caf::none_t, boolean, integer, count, real, timespan,
-                       timestamp, std::string, pattern, address, subnet, port>;
+                       timestamp, std::string, pattern, address, subnet, port,
+                       enumeration>;
   if constexpr (directly_constructible) {
     return x;
   } else if constexpr (std::is_same_v<T, vector>) {
@@ -437,5 +441,13 @@ set materialize(set_view_handle xs);
 map materialize(map_view_handle xs);
 
 data materialize(data_view xs);
+
+// -- utilities ----------------------------------------------------------------
+
+/// Checks whether data is valid for a given type.
+/// @param t The type that describes *d*.
+/// @param x The data view to be checked against *t*.
+/// @returns `true` if *t* is a valid type for *x*.
+bool type_check(const type& t, const data_view& x);
 
 } // namespace vast

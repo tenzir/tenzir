@@ -90,7 +90,6 @@ struct adder {
           || std::is_same<T, address>{}
           || std::is_same<T, subnet>{}
           || std::is_same<T, port>{}
-          || std::is_same<T, enumeration>{}
           || std::is_same<T, map>{})
   >
   operator()(T&, const U&) const {
@@ -228,7 +227,6 @@ bool evaluate(const data& lhs, relational_operator op, const data& rhs) {
 bool is_basic(const data& x) {
   return caf::visit(detail::overload(
     [](const auto&) { return true; },
-    [](const enumeration&) { return false; },
     [](const vector&) { return false; },
     [](const set&) { return false; },
     [](const map&) { return false; }

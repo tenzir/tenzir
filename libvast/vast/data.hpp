@@ -195,7 +195,6 @@ VAST_DATA_TRAIT(pattern);
 VAST_DATA_TRAIT(address);
 VAST_DATA_TRAIT(subnet);
 VAST_DATA_TRAIT(port);
-VAST_DATA_TRAIT(enumeration);
 VAST_DATA_TRAIT(vector);
 VAST_DATA_TRAIT(set);
 VAST_DATA_TRAIT(map);
