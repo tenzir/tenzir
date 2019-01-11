@@ -779,11 +779,11 @@ bool compatible(const type& lhs, relational_operator op, const data& rhs);
 /// @relates type data
 bool compatible(const data& lhs, relational_operator op, const type& rhs);
 
-/// Checks whether data and type fit together (and can form a ::value).
+/// Checks whether data and type fit together.
 /// @param t The type that describes *d*.
-/// @param d The raw data to be checked against *t*.
-/// @returns `true` if *t* is a valid type for *d*.
-bool type_check(const type& t, const data& d);
+/// @param x The data to be checked against *t*.
+/// @returns `true` if *t* is a valid type for *x*.
+bool type_check(const type& t, const data& x);
 
 // TODO: move to the more idiomatic factory data::make(const type& t).
 /// Default-construct a data instance for a given type.
