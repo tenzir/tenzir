@@ -33,7 +33,7 @@ public:
 
   // -- constants --------------------------------------------------------------
 
-  static constexpr caf::atom_value class_id = caf::atom("TS_Default");
+  static constexpr caf::atom_value class_id = caf::atom("default");
 
   // -- static factory functions -----------------------------------------------
 

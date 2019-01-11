@@ -35,7 +35,7 @@ namespace {
 
 class rebranded_table_slice : public default_table_slice {
 public:
-  static constexpr caf::atom_value class_id = caf::atom("TS_Test");
+  static constexpr caf::atom_value class_id = caf::atom("test");
 
   static table_slice_ptr make(table_slice_header header) {
     return caf::make_copy_on_write<rebranded_table_slice>(std::move(header));

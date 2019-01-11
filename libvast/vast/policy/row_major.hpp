@@ -27,7 +27,7 @@ template <class T>
 struct row_major {
   // -- constants --------------------------------------------------------------
 
-  static constexpr caf::atom_value class_id = caf::atom("TS_RowMaj");
+  static constexpr caf::atom_value class_id = caf::atom("row_major");
 
   // -- member types -----------------------------------------------------------
 
