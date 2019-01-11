@@ -56,6 +56,7 @@ add_library(libvast_test SHARED
   src/events.cpp
   src/node.cpp
   src/symbols.cpp
+  src/table_slices.cpp
 )
 target_compile_definitions(libvast_test PUBLIC
   $<BUILD_INTERFACE:VAST_TEST_PATH=\"${CMAKE_CURRENT_SOURCE_DIR}/\">

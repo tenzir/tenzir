@@ -17,20 +17,16 @@
 
 #include "vast/test/test.hpp"
 
-#include "vast/test/fixtures/actor_system.hpp"
+#include "vast/test/fixtures/table_slices.hpp"
 
 #include <caf/make_copy_on_write.hpp>
 #include <caf/test/dsl.hpp>
 
-#include "vast/chunk.hpp"
 #include "vast/column_major_matrix_table_slice_builder.hpp"
 #include "vast/default_table_slice.hpp"
 #include "vast/default_table_slice_builder.hpp"
 #include "vast/matrix_table_slice.hpp"
 #include "vast/row_major_matrix_table_slice_builder.hpp"
-#include "vast/span.hpp"
-#include "vast/value.hpp"
-#include "vast/value_index.hpp"
 
 using namespace vast;
 using namespace std::string_literals;
@@ -93,200 +89,19 @@ private:
   }
 };
 
-struct fixture : fixtures::deterministic_actor_system {
-  record_type layout = record_type{
-    {"a", integer_type{}},
-    {"b", string_type{}},
-    {"c", real_type{}}
-  };
-
-  std::vector<table_slice_builder_ptr> builders{
-    default_table_slice_builder::make(layout),
-    rebranded_table_slice_builder::make(layout),
-    row_major_matrix_table_slice_builder::make(layout),
-    column_major_matrix_table_slice_builder::make(layout),
-  };
-
-  using tup = std::tuple<integer, std::string, real>;
-
-  std::vector<tup> test_data;
-
-  std::vector<value> test_values;
-
-  std::vector<char> buf;
-
-  caf::binary_serializer sink;
-
-  auto make_source() {
-    return caf::binary_deserializer{sys, buf};
-  }
-
-  fixture() : sink(sys, buf) {
-    if (std::any_of(builders.begin(), builders.end(),
-                    [](auto& ptr) { return ptr == nullptr; }))
-      FAIL("one of the table slice builder factories returned nullptr");
-    // Initialize state.
-    test_data.assign({
-      tup{1, "abc", 1.2},
-      tup{2, "def", 2.1},
-      tup{3, "ghi", 42.},
-      tup{4, "jkl", .42},
-      tup{5, "mno", 123},
-    });
-    for (auto& x : test_data)
-      test_values.emplace_back(value::make(make_vector(x), layout));
-    // Register factories.
-    add_table_slice_factory<rebranded_table_slice>();
-    add_table_slice_factory<row_major_matrix_table_slice>();
-    add_table_slice_factory<column_major_matrix_table_slice>();
-  }
-
-  auto make_slice(table_slice_builder& builder) {
-    for (auto& x : test_data)
-      std::apply(
-        [&](auto... xs) {
-          if ((!builder.add(make_view(xs)) || ...))
-            FAIL("builder failed to add element");
-        },
-        x);
-    return builder.finish();
-  }
-
-  std::vector<value> select(size_t from, size_t num) {
-    return {test_values.begin() + from, test_values.begin() + (from + num)};
-  }
-
-  void test_add(table_slice_builder& builder) {
-    MESSAGE(">> test table_slice_builder::add");
-    MESSAGE("1st row");
-    auto foo = "foo"s;
-    auto bar = "foo"s;
-    CHECK(builder.add(make_view(42)));
-    CHECK(!builder.add(make_view(true))); // wrong type
-    CHECK(builder.add(make_view(foo)));
-    CHECK(builder.add(make_view(4.2)));
-    MESSAGE("2nd row");
-    CHECK(builder.add(make_view(43)));
-    CHECK(builder.add(make_view(bar)));
-    CHECK(builder.add(make_view(4.3)));
-    MESSAGE("finish");
-    auto slice = builder.finish();
-    CHECK_EQUAL(slice->rows(), 2u);
-    CHECK_EQUAL(slice->columns(), 3u);
-    CHECK_EQUAL(slice->at(0, 1), make_view(foo));
-    CHECK_EQUAL(slice->at(1, 2), make_view(4.3));
-  }
-
-  void test_equality(table_slice_builder& builder) {
-    MESSAGE(">> test equality");
-    auto slice1 = make_slice(builder);
-    auto slice2 = make_slice(builder);
-    CHECK_EQUAL(*slice1, *slice2);
-  }
-
-  void test_copy(table_slice_builder& builder) {
-    MESSAGE(">> test copy");
-    auto slice1 = make_slice(builder);
-    table_slice_ptr slice2{slice1->copy(), false};
-    CHECK_EQUAL(*slice1, *slice2);
-  }
-
-  void test_manual_serialization(table_slice_builder& builder) {
-    MESSAGE(">> test manual serialization via inspect");
-    MESSAGE("make slices");
-    auto slice1 = make_slice(builder);
-    table_slice_ptr slice2;
-    MESSAGE("save content of the first slice into the buffer");
-    CHECK_EQUAL(inspect(sink, slice1), caf::none);
-    MESSAGE("load content for the second slice from the buffer");
-    auto source = make_source();
-    CHECK_EQUAL(inspect(source, slice2), caf::none);
-    MESSAGE("check result of serialization roundtrip");
-    REQUIRE_NOT_EQUAL(slice2, nullptr);
-    CHECK_EQUAL(*slice1, *slice2);
-    buf.clear();
-  }
-
-  void test_smart_pointer_serialization(table_slice_builder& builder) {
-    MESSAGE(">> test smart pointer serialization");
-    MESSAGE("make slices");
-    auto slice1 = make_slice(builder);
-    table_slice_ptr slice2;
-    MESSAGE("save content of the first slice into the buffer");
-    CHECK_EQUAL(sink(slice1), caf::none);
-    MESSAGE("load content for the second slice from the buffer");
-    auto source = make_source();
-    CHECK_EQUAL(source(slice2), caf::none);
-    MESSAGE("check result of serialization roundtrip");
-    REQUIRE_NOT_EQUAL(slice2, nullptr);
-    CHECK_EQUAL(*slice1, *slice2);
-    buf.clear();
-  }
-
-  void test_message_serialization(table_slice_builder& builder) {
-    MESSAGE(">> test message serialization");
-    MESSAGE("make slices");
-    auto slice1 = caf::make_message(make_slice(builder));
-    caf::message slice2;
-    MESSAGE("save content of the first slice into the buffer");
-    CHECK_EQUAL(sink(slice1), caf::none);
-    MESSAGE("load content for the second slice from the buffer");
-    auto source = make_source();
-    CHECK_EQUAL(source(slice2), caf::none);
-    MESSAGE("check result of serialization roundtrip");
-    REQUIRE(slice2.match_elements<table_slice_ptr>());
-    CHECK_EQUAL(*slice1.get_as<table_slice_ptr>(0),
-                *slice2.get_as<table_slice_ptr>(0));
-    CHECK_EQUAL(slice2.get_as<table_slice_ptr>(0)->implementation_id(),
-                builder.implementation_id());
-    buf.clear();
-  }
-
-  void test_load_from_chunk(table_slice_builder& builder) {
-    MESSAGE(">> test load from chunk");
-    auto slice1 = make_slice(builder);
-    CHECK_EQUAL(sink(slice1), caf::none);
-    auto chk = chunk::make(make_const_byte_span(buf));
-    auto slice2 = make_table_slice(chk);
-    REQUIRE_NOT_EQUAL(slice2, nullptr);
-    CHECK_EQUAL(*slice1, *slice2);
-    buf.clear();
-  }
-
-  void test_append_column_to_index(table_slice_builder& builder) {
-    MESSAGE(">> test append_column_to_index");
-    auto idx = value_index::make(integer_type{});
-    REQUIRE(idx != nullptr);
-    auto slice = make_slice(builder);
-    slice->append_column_to_index(0, *idx);
-    CHECK_EQUAL(idx->offset(), 5u);
-    constexpr auto less = relational_operator::less;
-    CHECK_EQUAL(unbox(idx->lookup(less, vast::make_view(3))),
-                make_ids({0, 1}, 5));
-  }
-
-  void test_implementations() {
-    for (auto& builder : builders) {
-      MESSAGE("> test implementation " << builder->implementation_id());
-      test_add(*builder);
-      test_equality(*builder);
-      test_copy(*builder);
-      test_manual_serialization(*builder);
-      test_smart_pointer_serialization(*builder);
-      test_message_serialization(*builder);
-      test_load_from_chunk(*builder);
-      test_append_column_to_index(*builder);
-    }
-  }
-};
-
 } // namespace <anonymous>
 
-FIXTURE_SCOPE(table_slice_tests, fixture)
+FIXTURE_SCOPE(table_slice_tests, fixtures::table_slices)
 
-TEST(implementations) {
-  test_implementations();
-}
+TEST_TABLE_SLICE(default_table_slice, default_table_slice_builder)
+
+TEST_TABLE_SLICE(row_major_matrix_table_slice,
+                 row_major_matrix_table_slice_builder)
+
+TEST_TABLE_SLICE(column_major_matrix_table_slice,
+                 column_major_matrix_table_slice_builder)
+
+TEST_TABLE_SLICE(rebranded_table_slice, rebranded_table_slice_builder)
 
 TEST(random integer slices) {
   record_type layout{
