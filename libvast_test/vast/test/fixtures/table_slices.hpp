@@ -21,10 +21,12 @@
 #include <caf/binary_serializer.hpp>
 
 #include "vast/aliases.hpp"
+#include "vast/fwd.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
 #include "vast/type.hpp"
 #include "vast/value.hpp"
+#include "vast/view.hpp"
 
 #include "vast/test/fixtures/actor_system.hpp"
 #include "vast/test/test.hpp"
@@ -61,7 +63,7 @@ private:
 
   vast::table_slice_ptr make_slice();
 
-  std::vector<vast::value> select(size_t from, size_t num);
+  vast::data_view at(size_t row, size_t col) const;
 
   void test_add();
 
@@ -83,9 +85,7 @@ private:
 
   vast::table_slice_builder_ptr builder;
 
-  std::vector<triple> test_data;
-
-  std::vector<vast::value> test_values;
+  std::vector<std::vector<vast::data>> test_data;
 
   std::vector<char> buf;
 

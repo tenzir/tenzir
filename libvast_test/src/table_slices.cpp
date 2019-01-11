@@ -16,6 +16,8 @@
 #include <caf/all.hpp>
 
 #include "vast/chunk.hpp"
+#include <vast/concept/parseable/to.hpp>
+#include <vast/concept/parseable/vast/data.hpp>
 #include "vast/span.hpp"
 #include "vast/value_index.hpp"
 
@@ -28,22 +30,32 @@ namespace {
 } // namespace <anonymous>
 
 table_slices::table_slices() : sink{sys, buf} {
-  // Define our test type.
+  // Define our test layout.
   layout = record_type{
-    {"a", integer_type{}},
-    {"b", string_type{}},
-    {"c", real_type{}}
+    {"a", boolean_type{}},
+    {"b", integer_type{}},
+    {"c", count_type{}},
+    {"d", real_type{}},
+    {"e", timespan_type{}},
+    {"f", timestamp_type{}},
+    {"g", string_type{}},
+    {"h", pattern_type{}},
+    {"i", address_type{}},
+    {"j", subnet_type{}},
+    {"k", port_type{}},
+    {"l", vector_type{count_type{}}},
+    {"m", set_type{boolean_type{}}},
+    {"n", map_type{count_type{}, boolean_type{}}},
   };
   // Initialize test data.
-  test_data.assign({
-    triple{1, "abc", 1.2},
-    triple{2, "def", 2.1},
-    triple{3, "ghi", 42.},
-    triple{4, "jkl", .42},
-    triple{5, "mno", 123},
-  });
-  for (auto& x : test_data)
-    test_values.emplace_back(value::make(make_vector(x), layout));
+  auto rows = std::vector<std::string>{
+    "[T, +7, 42, 4.2, 1337ms, 2018-12-24, \"foo\", /foo.*bar/, 127.0.0.1, 10.0.0.0/8, 80/tcp, [1, 2, 3], {T, F}, {1 -> T, 2 -> F, 3 -> T}]",
+    "[F, -7, 43, 0.42, -1337ms, 2018-12-25, \"bar\", nil, ::1, 64:ff9b::/96, 53/udp, [42], {T}, nil]",
+  };
+  for (auto& row : rows) {
+    auto xs = unbox(to<data>(row));
+    test_data.push_back(caf::get<vector>(xs));
+  }
 }
 
 void table_slices::run() {
@@ -64,39 +76,29 @@ caf::binary_deserializer table_slices::make_source() {
 }
 
 table_slice_ptr table_slices::make_slice() {
-  for (auto& x : test_data)
-    std::apply(
-      [&](auto... xs) {
-        if ((!builder->add(make_view(xs)) || ...))
-          FAIL("builder failed to add element");
-      },
-      x);
+  for (auto& xs : test_data)
+    for (auto& x : xs)
+      if (!builder->add(make_view(x)))
+        FAIL("builder failed to add element");
   return builder->finish();
 }
 
-std::vector<value> table_slices::select(size_t from, size_t num) {
-  return {test_values.begin() + from, test_values.begin() + (from + num)};
+vast::data_view table_slices::at(size_t row, size_t col) const {
+  VAST_ASSERT(row < test_data.size());
+  VAST_ASSERT(col < test_data[row].size());
+  return make_view(test_data[row][col]);
 }
 
 void table_slices::test_add() {
   MESSAGE(">> test table_slice_builder::add");
-  MESSAGE("1st row");
-  auto foo = "foo"s;
-  auto bar = "foo"s;
-  CHECK(builder->add(make_view(42)));
-  CHECK(!builder->add(make_view(true))); // wrong type
-  CHECK(builder->add(make_view(foo)));
-  CHECK(builder->add(make_view(4.2)));
-  MESSAGE("2nd row");
-  CHECK(builder->add(make_view(43)));
-  CHECK(builder->add(make_view(bar)));
-  CHECK(builder->add(make_view(4.3)));
-  MESSAGE("finish");
-  auto slice = builder->finish();
+  auto slice = make_slice();
   CHECK_EQUAL(slice->rows(), 2u);
-  CHECK_EQUAL(slice->columns(), 3u);
-  CHECK_EQUAL(slice->at(0, 1), make_view(foo));
-  CHECK_EQUAL(slice->at(1, 2), make_view(4.3));
+  CHECK_EQUAL(slice->columns(), layout.fields.size());
+  for (size_t row = 0; row < slice->rows(); ++row)
+    for (size_t col = 0; col < slice->columns(); ++col) {
+      MESSAGE("checking value at (" << row << ',' << col << ')');
+      CHECK_EQUAL(slice->at(row, col), at(row, col));
+    }
 }
 
 void table_slices::test_equality() {
@@ -180,11 +182,10 @@ void table_slices::test_append_column_to_index() {
   auto idx = value_index::make(integer_type{});
   REQUIRE(idx != nullptr);
   auto slice = make_slice();
-  slice->append_column_to_index(0, *idx);
-  CHECK_EQUAL(idx->offset(), 5u);
+  slice->append_column_to_index(1, *idx);
+  CHECK_EQUAL(idx->offset(), 2u);
   constexpr auto less = relational_operator::less;
-  CHECK_EQUAL(unbox(idx->lookup(less, vast::make_view(3))),
-              make_ids({0, 1}, 5));
+  CHECK_EQUAL(unbox(idx->lookup(less, make_view(3))), make_ids({1}));
 }
 
 } // namespace fixtures
