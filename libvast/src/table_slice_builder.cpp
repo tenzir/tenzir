@@ -16,9 +16,16 @@
 #include <algorithm>
 
 #include "vast/data.hpp"
+#include "vast/default_table_slice_builder.hpp"
 #include "vast/detail/overload.hpp"
 
 namespace vast {
+
+namespace {
+
+std::unordered_map<caf::atom_value, table_slice_builder_factory> factories_;
+
+} // namespace <anonymous>
 
 table_slice_builder::table_slice_builder(record_type layout)
   : layout_(std::move(layout)) {
@@ -50,6 +57,29 @@ void table_slice_builder::reserve(size_t) {
 
 size_t table_slice_builder::columns() const noexcept {
   return layout_.fields.size();
+}
+
+bool add_table_slice_builder_factory(caf::atom_value id,
+                                     table_slice_builder_factory f) {
+  if (factories_.count(id) > 0)
+    return false;
+  factories_.emplace(id, f);
+  return true;
+}
+
+table_slice_builder_factory
+get_table_slice_builder_factory(caf::atom_value id) {
+  if (id == caf::atom("default"))
+    return default_table_slice_builder::make;
+  auto i = factories_.find(id);
+  return i != factories_.end() ? i->second : nullptr;
+}
+
+table_slice_builder_ptr make_table_slice_builder(caf::atom_value id,
+                                                 record_type layout) {
+  if (auto f = get_table_slice_builder_factory(id))
+    return (*f)(std::move(layout));
+  return nullptr;
 }
 
 } // namespace vast

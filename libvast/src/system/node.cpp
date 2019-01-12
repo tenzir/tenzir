@@ -375,13 +375,14 @@ void node_state::init(std::string init_name, path init_dir) {
             .add<bool>("cpu,c", "start the CPU profiler")
             .add<bool>("heap,h", "start the heap profiler")
             .add<size_t>("resolution,r", "seconds between measurements"));
-  // Add spawn sink commands.
+  // Add spawn source commands.
   auto src
     = sp->add(nullptr, "source", "creates a new source",
               opts()
                 .add<std::string>("read,r", "path to input")
-                .add<bool>("uds,d", "treat -w as UNIX domain socket")
-                .add<std::string>("schema,s", "path to alternate schema"));
+                .add<std::string>("schema,s", "path to alternate schema")
+                .add<caf::atom_value>("table-slice,t", "table slice type")
+                .add<bool>("uds,d", "treat -w as UNIX domain socket"));
   src->add(spawn_command, "pcap", "creates a new PCAP source",
            opts()
              .add<size_t>("cutoff,c", "skip flow packets after this many bytes")

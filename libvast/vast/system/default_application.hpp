@@ -33,9 +33,10 @@ public:
   /// @returns default options for source commands.
   static auto src_opts() {
     return command::opts()
+      .add<std::string>("read,r", "path to input where to read events from")
       .add<std::string>("schema-file,s", "path to alternate schema")
       .add<std::string>("schema,S", "alternate schema as string")
-      .add<std::string>("read,r", "path to input where to read events from")
+      .add<caf::atom_value>("table-slice,t", "table slice type")
       .add<bool>("uds,d", "treat -r as listening UNIX domain socket");
   }
 

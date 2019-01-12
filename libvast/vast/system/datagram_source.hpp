@@ -76,7 +76,7 @@ template <class Reader>
 caf::behavior
 datagram_source(datagram_source_actor<Reader>* self,
                 uint16_t udp_listening_port, Reader reader,
-                typename source_state<Reader>::factory_type factory,
+                table_slice_builder_factory factory,
                 size_t table_slice_size) {
   using namespace caf;
   using namespace std::chrono;
@@ -89,7 +89,7 @@ datagram_source(datagram_source_actor<Reader>* self,
   }
   VAST_DEBUG(self, "starts listening at port", udp_res->second);
   // Initialize state.
-  self->state.init(self, std::move(reader), std::move(factory));
+  self->state.init(self, std::move(reader), factory);
   // Spin up the stream manager for the source.
   self->state.mgr = self->make_continuous_source(
     // init
