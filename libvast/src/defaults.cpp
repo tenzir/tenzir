@@ -45,7 +45,7 @@ const char* node_id = "node";
 
 namespace system {
 
-const char* table_slice_type = "default";
+caf::atom_value table_slice_type = caf::atom("default");
 size_t table_slice_size = 100;
 size_t max_partition_size = 1_Mi;
 size_t max_in_mem_partitions = 10;

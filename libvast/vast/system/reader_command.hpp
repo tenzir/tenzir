@@ -44,8 +44,7 @@ caf::message reader_command(const command& cmd, caf::actor_system& sys,
   auto uds = get_or(options, "uds", false);
   auto table_slice = get_or(options, "table-slice",
                             defaults::system::table_slice_type);
-  auto table_slice_id = caf::atom_from_string(table_slice);
-  auto factory = get_table_slice_builder_factory(table_slice_id);
+  auto factory = get_table_slice_builder_factory(table_slice);
   if (factory == nullptr)
     return caf::make_message(make_error(ec::unspecified,
                                         "unknown table_slice_builder factory"));

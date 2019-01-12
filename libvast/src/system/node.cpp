@@ -381,7 +381,7 @@ void node_state::init(std::string init_name, path init_dir) {
               opts()
                 .add<std::string>("read,r", "path to input")
                 .add<std::string>("schema,s", "path to alternate schema")
-                .add<std::string>("table-slice,t", "table slice type")
+                .add<caf::atom_value>("table-slice,t", "table slice type")
                 .add<bool>("uds,d", "treat -w as UNIX domain socket"));
   src->add(spawn_command, "pcap", "creates a new PCAP source",
            opts()
