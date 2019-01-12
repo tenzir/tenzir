@@ -27,12 +27,13 @@ namespace vast {
 /// @param id The ID to associate with the table slice and builder factories.
 /// @returns `true` if the factory registration succeeded.
 template <class TableSlice, class TableSliceBuilder>
-bool add_table_slice(caf::atom_value id) {
+bool add_table_slice() {
+  constexpr auto id = TableSlice::class_id;
   // Make sure the ID isn't registered in both factories.
   if (get_table_slice_factory(id) != nullptr
       || get_table_slice_builder_factory(id) != nullptr)
     return false;
-  // Add the table slice and builder factories
+  // Add the table slice and builder factories.
   add_table_slice_factory<TableSlice>();
   add_table_slice_builder_factory<TableSliceBuilder>(id);
   return true;
