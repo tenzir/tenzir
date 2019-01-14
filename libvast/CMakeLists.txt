@@ -78,7 +78,6 @@ set(libvast_sources
   src/system/archive.cpp
   src/system/configuration.cpp
   src/system/connect_to_node.cpp
-  src/system/consensus.cpp
   src/system/default_application.cpp
   src/system/dummy_consensus.cpp
   src/system/evaluator.cpp
@@ -91,6 +90,7 @@ set(libvast_sources
   src/system/partition.cpp
   src/system/profiler.cpp
   src/system/query_supervisor.cpp
+  src/system/raft.cpp
   src/system/remote_command.cpp
   src/system/signal_monitor.cpp
   src/system/sink_command.cpp
