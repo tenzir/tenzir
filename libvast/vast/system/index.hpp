@@ -127,7 +127,7 @@ struct index_state {
                           uuid partition_id);
 
   /// Decrements the indexer count for a partition.
-  caf::error decrement_indexer_count(uuid pid);
+  void decrement_indexer_count(uuid pid);
 
   /// @returns the unpersisted partition matching `id` or `nullptr` if no
   ///          partition matches.

@@ -221,20 +221,22 @@ caf::actor index_state::make_indexer(path dir, type column_type, size_t column,
                  self, partition_id);
 }
 
-caf::error index_state::decrement_indexer_count(uuid partition_id) {
+void index_state::decrement_indexer_count(uuid partition_id) {
   if (partition_id == active->id())
     active_partition_indexers--;
   else {
     auto i = std::find_if(unpersisted.begin(), unpersisted.end(),
-                          [&](auto& kvp) { return kvp.first->id() == partition_id; });
+                          [&](auto& kvp) {
+                            return kvp.first->id() == partition_id;
+                          });
     if (i == unpersisted.end())
-      return ec::unspecified;
+      VAST_ERROR(self,
+                 "received done from unknown indexer:", self->current_sender());
     if (--i->second == 0) {
       VAST_DEBUG(self, "successfully persisted", partition_id);
       unpersisted.erase(i);
     }
   }
-  return caf::none;
 }
 
 partition* index_state::find_unpersisted(const uuid& id) {
@@ -399,9 +401,7 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
       self->state.idle_workers.emplace_back(std::move(worker));
     },
     [=](done_atom, uuid partition_id) {
-      if (self->state.decrement_indexer_count(partition_id))
-        VAST_ERROR(self, "received done from unknown indexer:",
-                   self->current_sender());
+      self->state.decrement_indexer_count(partition_id);
     },
     [=](caf::stream<table_slice_ptr> in) {
       VAST_DEBUG(self, "got a new source");
@@ -417,9 +417,7 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
             self->become(keep_behavior, st.has_worker);
           },
           [=](done_atom, uuid partition_id) {
-            if (self->state.decrement_indexer_count(partition_id))
-              VAST_ERROR(self, "received done from unknown indexer:",
-                         self->current_sender());
+            self->state.decrement_indexer_count(partition_id);
           },
           [=](caf::stream<table_slice_ptr> in) {
             VAST_DEBUG(self, "got a new source");
