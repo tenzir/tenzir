@@ -178,7 +178,7 @@ struct index_state {
   /// Our current partition.
   partition_ptr active;
 
-  /// Our current partition.
+  /// Active indexer count for the current partition.
   size_t active_partition_indexers;
 
   /// Recently accessed partitions.
