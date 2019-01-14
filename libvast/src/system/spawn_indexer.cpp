@@ -24,12 +24,12 @@
 namespace vast::system {
 
 caf::actor spawn_indexer(caf::local_actor* parent, path dir, type column_type,
-                         size_t column, caf::actor index, uuid pid) {
+                         size_t column, caf::actor index, uuid partition_id) {
   VAST_TRACE(VAST_ARG(dir), VAST_ARG(column_type), VAST_ARG(column),
-             VAST_ARG(index), VAST_ARG(pid));
+             VAST_ARG(index), VAST_ARG(partition_id));
   return parent->spawn<caf::lazy_init>(indexer, std::move(dir),
                                        std::move(column_type), column,
-                                       std::move(index), pid);
+                                       std::move(index), partition_id);
 }
 
 } // namespace vast::system

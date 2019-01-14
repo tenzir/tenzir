@@ -40,9 +40,9 @@ indexer_state::~indexer_state() {
 
 caf::error indexer_state::init(event_based_actor* self, path filename,
                                type column_type, size_t column,
-                               caf::actor index, uuid pid) {
+                               caf::actor index, uuid partition_id) {
   this->index = std::move(index);
-  this->partition_id = pid;
+  this->partition_id = partition_id;
   new (&col) column_index(self->system(), std::move(column_type),
                           std::move(filename), column);
   return col.init();
@@ -50,14 +50,14 @@ caf::error indexer_state::init(event_based_actor* self, path filename,
 
 behavior indexer(stateful_actor<indexer_state>* self, path dir,
                  type column_type, size_t column, caf::actor index,
-                 uuid pid) {
+                 uuid partition_id) {
   VAST_TRACE(VAST_ARG(dir), VAST_ARG(column_type), VAST_ARG(column));
   VAST_DEBUG(self, "operates for column", column, "of type", column_type);
   if (auto err = self->state.init(self,
                                   std::move(dir) / "fields"
                                       / std::to_string(column),
                                   std::move(column_type), column,
-                                  std::move(index), pid)) {
+                                  std::move(index), partition_id)) {
     self->quit(std::move(err));
     return {};
   }

@@ -213,23 +213,23 @@ partition_ptr index_state::make_partition(uuid id) {
 }
 
 caf::actor index_state::make_indexer(path dir, type column_type, size_t column,
-                                     uuid pid) {
+                                     uuid partition_id) {
   VAST_TRACE(VAST_ARG(dir), VAST_ARG(column_type), VAST_ARG(column),
-             VAST_ARG(index), VAST_ARG(pid));
+             VAST_ARG(index), VAST_ARG(partition_id));
   return factory(self, std::move(dir), std::move(column_type), column,
-                 self, pid);
+                 self, partition_id);
 }
 
-caf::error index_state::decrement_indexer_count(uuid pid) {
-  if (pid == active->id())
+caf::error index_state::decrement_indexer_count(uuid partition_id) {
+  if (partition_id == active->id())
     active_partition_indexers--;
   else {
     auto i = std::find_if(unpersisted.begin(), unpersisted.end(),
-                          [&](auto& kvp) { return kvp.first->id() == pid; });
+                          [&](auto& kvp) { return kvp.first->id() == partition_id; });
     if (i == unpersisted.end())
       return ec::unspecified;
     if (--i->second == 0) {
-      VAST_DEBUG(self, "successfully persisted", pid);
+      VAST_DEBUG(self, "successfully persisted", partition_id);
       unpersisted.erase(i);
     }
   }

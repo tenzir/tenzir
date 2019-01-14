@@ -19,8 +19,8 @@
 #include <caf/event_based_actor.hpp>
 #include <caf/stateful_actor.hpp>
 
-#include "vast/filesystem.hpp"
 #include "vast/column_index.hpp"
+#include "vast/filesystem.hpp"
 #include "vast/type.hpp"
 #include "vast/uuid.hpp"
 
@@ -34,7 +34,7 @@ struct indexer_state {
   ~indexer_state();
 
   caf::error init(caf::event_based_actor* self, path filename, type column_type,
-                  size_t column, caf::actor index, uuid pid);
+                  size_t column, caf::actor index, uuid partition_id);
 
   // -- member variables -------------------------------------------------------
 
@@ -53,10 +53,10 @@ struct indexer_state {
 /// @param column_type The type of the indexed column.
 /// @param column The indexed column.
 /// @param index A handle to the index actor.
-/// @param pid The partition ID that this INDEXER belongs to.
+/// @param partition_id The partition ID that this INDEXER belongs to.
 /// @returns the initial behavior of the INDEXER.
 caf::behavior indexer(caf::stateful_actor<indexer_state>* self, path dir,
                       type column_type, size_t column, caf::actor index,
-                      uuid pid);
+                      uuid partition_id);
 
 } // namespace vast::system
