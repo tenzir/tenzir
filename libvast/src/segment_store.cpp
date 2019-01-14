@@ -87,14 +87,11 @@ caf::error segment_store::flush() {
 }
 
 caf::expected<segment_ptr> segment_store::load_segment(uuid id) const {
-  segment_ptr seg_ptr = nullptr;
-  auto fname = segment_path() / to_string(id);
-  VAST_DEBUG(this, "loads segment from", fname);
-  if (auto err = load(nullptr, fname, seg_ptr)) {
-    VAST_ERROR(this, "cannot load segment from", fname);
-    return err;
-  }
-  return seg_ptr;
+  auto filename = segment_path() / to_string(id);
+  VAST_DEBUG(this, "loads segment from", filename);
+  if (auto chk = chunk::mmap(filename))
+    return segment::make(std::move(chk));
+  return make_error(ec::filesystem_error, "failed to mmap chunk", filename);
 }
 
 std::unique_ptr<store::lookup> segment_store::extract(const ids& xs) const {
@@ -215,12 +212,10 @@ segment_store::get(const ids& xs) {
         seg_ptr = i->second;
       } else {
         VAST_DEBUG(this, "got cache miss for segment", id);
-        auto fname = segment_path() / to_string(id);
-        if (auto err = load(nullptr, fname, seg_ptr)) {
-          VAST_ERROR(this, "unable to load segment from", fname);
-          return err;
-        }
-        i = cache_.emplace(id, seg_ptr).first;
+        auto x = load_segment(id);
+        if (!x)
+          return x.error();
+        i = cache_.emplace(id, std::move(*x)).first;
       }
       VAST_ASSERT(seg_ptr != nullptr);
       VAST_DEBUG(this, "looks into segment", id);
