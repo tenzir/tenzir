@@ -31,20 +31,24 @@
 
 namespace vast {
 
-/// Serializes a sequence of objects into a sink.
+/// Serializes a sequence of objects.
+/// @param sys An (optional) actor system.
+/// @param out The sink to serialize into.
+/// @param xs The instances to serialize.
 /// @see load
 template <compression Method = compression::null, class Sink, class... Ts>
-caf::error save(caf::actor_system& sys, Sink&& out, const Ts&... xs) {
+caf::error save(caf::actor_system* sys, Sink&& out, const Ts&... xs) {
   static_assert(sizeof...(Ts) > 0);
   using sink_type = std::decay_t<Sink>;
   if constexpr (detail::is_streambuf_v<sink_type>) {
-    if (Method == compression::null) {
-      caf::stream_serializer<sink_type&> s{sys, out};
+    auto ctx = sys ? sys->dummy_execution_unit() : nullptr;
+    if constexpr (Method == compression::null) {
+      caf::stream_serializer<sink_type&> s{ctx, out};
       if (auto err = s(xs...))
         return err;
     } else {
       detail::compressedbuf compressed{out, Method};
-      caf::stream_serializer<detail::compressedbuf&> s{sys, compressed};
+      caf::stream_serializer<detail::compressedbuf&> s{ctx, compressed};
       if (auto err = s(xs...))
         return err;
       compressed.pubsync();

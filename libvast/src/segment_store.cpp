@@ -46,7 +46,7 @@ segment_store_ptr segment_store::make(caf::actor_system& sys, path dir,
   // Materialize meta data of existing segments.
   if (exists(x->meta_path())) {
     VAST_DEBUG_ANON(__func__, "loads segment meta data from", x->meta_path());
-    if (auto err = load(sys, x->meta_path(), x->segments_)) {
+    if (auto err = load(nullptr, x->meta_path(), x->segments_)) {
       VAST_ERROR_ANON(__func__, "failed to unarchive meta data:", sys.render(err));
       return nullptr;
     }
@@ -77,20 +77,20 @@ caf::error segment_store::flush() {
     return x.error();
   auto seg_ptr = *x;
   auto filename = segment_path() / to_string(seg_ptr->id());
-  if (auto err = save(sys_, filename, seg_ptr))
+  if (auto err = save(&sys_, filename, seg_ptr))
     return err;
   // Keep new segment in the cache.
   cache_.emplace(seg_ptr->id(), seg_ptr);
   VAST_DEBUG(this, "wrote new segment to", filename.trim(-3));
   VAST_DEBUG(this, "saves segment meta data");
-  return save(sys_, meta_path(), segments_);
+  return save(&sys_, meta_path(), segments_);
 }
 
 caf::expected<segment_ptr> segment_store::load_segment(uuid id) const {
   segment_ptr seg_ptr = nullptr;
   auto fname = segment_path() / to_string(id);
   VAST_DEBUG(this, "loads segment from", fname);
-  if (auto err = load(sys_, fname, seg_ptr)) {
+  if (auto err = load(nullptr, fname, seg_ptr)) {
     VAST_ERROR(this, "cannot load segment:", sys_.render(err));
     return err;
   }
@@ -216,7 +216,7 @@ segment_store::get(const ids& xs) {
       } else {
         VAST_DEBUG(this, "got cache miss for segment", id);
         auto fname = segment_path() / to_string(id);
-        if (auto err = load(sys_, fname, seg_ptr)) {
+        if (auto err = load(nullptr, fname, seg_ptr)) {
           VAST_ERROR(this, "unable to load segment:", sys_.render(err));
           return err;
         }

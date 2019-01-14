@@ -14,7 +14,6 @@
 #define SUITE bitvector
 
 #include "vast/test/test.hpp"
-#include "vast/test/fixtures/actor_system.hpp"
 
 #include "vast/bitvector.hpp"
 #include "vast/concept/printable/to_string.hpp"
@@ -24,8 +23,6 @@
 #include "vast/save.hpp"
 
 using namespace vast;
-
-FIXTURE_SCOPE(bitvector_tests, fixtures::deterministic_actor_system)
 
 TEST(default construction) {
   bitvector<uint8_t> x;
@@ -213,8 +210,8 @@ TEST(serializable) {
   x.resize(1024, false);
   x[1000] = true;
   std::vector<char> buf;
-  CHECK_EQUAL(save(sys, buf, x), caf::none);
-  CHECK_EQUAL(load(sys, buf, y), caf::none);
+  CHECK_EQUAL(save(nullptr, buf, x), caf::none);
+  CHECK_EQUAL(load(nullptr, buf, y), caf::none);
   REQUIRE_EQUAL(x, y);
   CHECK(y[1000]);
 }
@@ -259,5 +256,3 @@ TEST(rank) {
   CHECK_EQUAL(rank<0>(x), 1023u);
   CHECK_EQUAL(rank<1>(x), 1025u + 2048);
 }
-
-FIXTURE_SCOPE_END()

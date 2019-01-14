@@ -16,7 +16,6 @@
 #include "vast/chunk.hpp"
 
 #include "vast/test/test.hpp"
-#include "vast/test/fixtures/actor_system.hpp"
 
 #include "vast/load.hpp"
 #include "vast/save.hpp"
@@ -24,8 +23,6 @@
 #include "vast/span.hpp"
 
 using namespace vast;
-
-FIXTURE_SCOPE(chunk_tests, fixtures::deterministic_actor_system)
 
 TEST(deleter) {
   char buf[100];
@@ -62,11 +59,9 @@ TEST(serialization) {
   char str[] = "foobarbaz";
   auto x = chunk::make(make_const_byte_span(str));
   std::vector<char> buf;
-  CHECK_EQUAL(save(sys, buf, x), caf::none);
+  CHECK_EQUAL(save(nullptr, buf, x), caf::none);
   chunk_ptr y;
-  CHECK_EQUAL(load(sys, buf, y), caf::none);
+  CHECK_EQUAL(load(nullptr, buf, y), caf::none);
   REQUIRE_NOT_EQUAL(y, nullptr);
   CHECK(std::equal(x->begin(), x->end(), y->begin(), y->end()));
 }
-
-FIXTURE_SCOPE_END()

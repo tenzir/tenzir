@@ -334,4 +334,3 @@ struct server_state {
 caf::behavior consensus(caf::stateful_actor<server_state>* self, path dir);
 
 } // namespace vast::system::raft
-

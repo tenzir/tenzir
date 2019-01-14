@@ -15,7 +15,6 @@
 
 #include "vast/test/test.hpp"
 #include "type_test.hpp"
-#include "vast/test/fixtures/actor_system.hpp"
 
 #include "vast/json.hpp"
 #include "vast/load.hpp"
@@ -34,8 +33,6 @@ using namespace vast;
 using caf::get;
 using caf::get_if;
 using caf::holds_alternative;
-
-FIXTURE_SCOPE(schema_tests, fixtures::deterministic_actor_system)
 
 TEST(offset finding) {
   std::string str = R"__(
@@ -98,9 +95,9 @@ TEST(serialization) {
   sch.add(t);
   // Save & load
   std::vector<char> buf;
-  CHECK_EQUAL(save(sys, buf, sch), caf::none);
+  CHECK_EQUAL(save(nullptr, buf, sch), caf::none);
   schema sch2;
-  CHECK_EQUAL(load(sys, buf, sch2), caf::none);
+  CHECK_EQUAL(load(nullptr, buf, sch2), caf::none);
   // Check integrity
   auto u = sch2.find("foo");
   REQUIRE(u);
@@ -285,5 +282,3 @@ TEST(json) {
 })__";
   CHECK_EQUAL(to_string(to_json(s)), expected);
 }
-
-FIXTURE_SCOPE_END()

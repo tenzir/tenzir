@@ -14,7 +14,6 @@
 #define SUITE expression
 
 #include "vast/test/test.hpp"
-#include "vast/test/fixtures/actor_system.hpp"
 
 #include <string>
 
@@ -47,7 +46,7 @@ expression to_expr(T&& x) {
   return unbox(to<expression>(std::forward<T>(x)));
 };
 
-struct fixture : fixtures::deterministic_actor_system {
+struct fixture {
   fixture() {
     // expr0 := !(x.y.z <= 42 && &foo == T)
     auto p0 = predicate{key_extractor{"x.y.z"}, less_equal, data{42}};
@@ -89,8 +88,8 @@ TEST(construction) {
 TEST(serialization) {
   expression ex0, ex1;
   std::vector<char> buf;
-  CHECK_EQUAL(save(sys, buf, expr0, expr1), caf::none);
-  CHECK_EQUAL(load(sys, buf, ex0, ex1), caf::none);
+  CHECK_EQUAL(save(nullptr, buf, expr0, expr1), caf::none);
+  CHECK_EQUAL(load(nullptr, buf, ex0, ex1), caf::none);
   auto d = caf::get_if<disjunction>(&ex1);
   REQUIRE(d);
   REQUIRE(!d->empty());

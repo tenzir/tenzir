@@ -55,8 +55,6 @@ void fill(Coder& c, Ts... xs) {
 
 } // namespace <anonymous>
 
-FIXTURE_SCOPE(coder_tests, fixtures::deterministic_actor_system)
-
 TEST(bitwise total ordering (integral)) {
   using detail::order;
   MESSAGE("unsigned identities");
@@ -480,8 +478,8 @@ TEST(serialization range coder) {
   range_coder<null_bitmap> x{100}, c;
   fill(x, 42, 84, 42, 21, 30);
   std::string buf;
-  CHECK_EQUAL(save(sys, buf, x), caf::none);
-  CHECK_EQUAL(load(sys, buf, c), caf::none);
+  CHECK_EQUAL(save(nullptr, buf, x), caf::none);
+  CHECK_EQUAL(load(nullptr, buf, c), caf::none);
   CHECK_EQUAL(x, c);
   CHECK_DECODE(equal,     21, "00010");
   CHECK_DECODE(equal,     30, "00001");
@@ -505,9 +503,9 @@ TEST(serialization multi-level coder) {
   auto x = coder_type{base{10, 10}};
   fill(x, 42, 84, 42, 21, 30);
   std::string buf;
-  CHECK_EQUAL(save(sys, buf, x), caf::none);
+  CHECK_EQUAL(save(nullptr, buf, x), caf::none);
   auto c = coder_type{};
-  CHECK_EQUAL(load(sys, buf, c), caf::none);
+  CHECK_EQUAL(load(nullptr, buf, c), caf::none);
   CHECK_EQUAL(x, c);
   CHECK_DECODE(equal,     21, "00010");
   CHECK_DECODE(equal,     30, "00001");
@@ -531,5 +529,3 @@ TEST(printable) {
                   "4\t00001";
   CHECK_EQUAL(to_string(c), expected);
 }
-
-FIXTURE_SCOPE_END()

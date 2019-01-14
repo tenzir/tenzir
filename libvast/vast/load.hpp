@@ -33,19 +33,23 @@
 namespace vast {
 
 /// Deserializes a sequence of objects.
+/// @param sys An (optional) actor system.
+/// @param in The source to serialize from.
+/// @param xs The instances to deserialize.
 /// @see save
 template <compression Method = compression::null, class Source, class... Ts>
-caf::error load(caf::actor_system& sys, Source&& in, Ts&... xs) {
+caf::error load(caf::actor_system* sys, Source&& in, Ts&... xs) {
   static_assert(sizeof...(Ts) > 0);
   using source_type = std::decay_t<Source>;
   if constexpr (detail::is_streambuf_v<source_type>) {
+    auto ctx = sys ? sys->dummy_execution_unit() : nullptr;
     if (Method == compression::null) {
-      caf::stream_deserializer<source_type&> s{sys, in};
+      caf::stream_deserializer<source_type&> s{ctx, in};
       if (auto err = s(xs...))
         return err;
     } else {
       detail::compressedbuf compressed{in, Method};
-      caf::stream_deserializer<detail::compressedbuf&> s{sys, compressed};
+      caf::stream_deserializer<detail::compressedbuf&> s{ctx, compressed};
       if (auto err = s(xs...))
         return err;
     }
