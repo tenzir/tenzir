@@ -64,8 +64,8 @@ caf::error segment_builder::add(table_slice_ptr x) {
 caf::expected<segment_ptr> segment_builder::finish() {
   auto guard = caf::detail::make_scope_guard([&] { reset(); });
   // Write header.
-  segment_buffer_.resize(sizeof(segment::header));
-  auto header = reinterpret_cast<segment::header*>(segment_buffer_.data());
+  segment_buffer_.resize(sizeof(segment_header));
+  auto header = reinterpret_cast<segment_header*>(segment_buffer_.data());
   header->magic = to_little_endian(segment::magic);
   header->version = to_little_endian(segment::version);
   header->id = id_;
@@ -75,7 +75,7 @@ caf::expected<segment_ptr> segment_builder::finish() {
   if (auto error = meta_serializer(meta_))
     return error;
   // Add the payload offset to the header.
-  header = reinterpret_cast<segment::header*>(segment_buffer_.data());
+  header = reinterpret_cast<segment_header*>(segment_buffer_.data());
   uint64_t payload_offset = segment_buffer_.size();
   header->payload_offset = to_little_endian(payload_offset);
   // Write the table slices.
@@ -86,7 +86,7 @@ caf::expected<segment_ptr> segment_builder::finish() {
   // Move the complete segment buffer into a chunk.
   auto chk = chunk::make(std::move(segment_buffer_));
   auto result = caf::make_counted<segment>(chk);
-  result->header_ = *chk->as<segment::header>();
+  result->header_ = *chk->as<segment_header>();
   result->meta_ = std::move(meta_);
   return result;
 }

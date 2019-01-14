@@ -41,10 +41,10 @@ T from_little_endian(T x) {
   return detail::swap<detail::little_endian, detail::host_endian>(x);
 }
 
-segment::header make_header(chunk_ptr chunk) {
-  VAST_ASSERT(chunk->size() >= sizeof(segment::header));
-  auto hdr = reinterpret_cast<const segment::header*>(chunk->data());
-  segment::header result;
+segment_header make_header(chunk_ptr chunk) {
+  VAST_ASSERT(chunk->size() >= sizeof(segment_header));
+  auto hdr = reinterpret_cast<const segment_header*>(chunk->data());
+  segment_header result;
   result.magic = from_little_endian(hdr->magic);
   result.version = from_little_endian(hdr->version);
   result.id = hdr->id;
@@ -56,7 +56,7 @@ segment::header make_header(chunk_ptr chunk) {
 
 caf::expected<segment_ptr> segment::make(chunk_ptr chunk) {
   VAST_ASSERT(chunk != nullptr);
-  if (chunk->size() < sizeof(header))
+  if (chunk->size() < sizeof(segment_header))
     return make_error(caf::sec::invalid_argument, "segment too small",
                       chunk->size());
   auto hdr = make_header(chunk);
@@ -70,7 +70,8 @@ caf::expected<segment_ptr> segment::make(chunk_ptr chunk) {
   result->header_ = hdr;
   // Deserialize meta data.
   auto data = const_cast<char*>(chunk->data()); // CAF won't touch it.
-  caf::charbuf buf{data + sizeof(header), chunk->size() - sizeof(header)};
+  caf::charbuf buf{data + sizeof(segment_header),
+                   chunk->size() - sizeof(segment_header)};
   detail::coded_deserializer<caf::charbuf&> meta_deserializer{buf};
   if (auto error = meta_deserializer(result->meta_))
     return error;
