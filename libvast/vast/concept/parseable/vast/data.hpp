@@ -39,6 +39,7 @@ struct access::parser<data> : vast::parser<access::parser<data>> {
     rule<Iterator, data> p;
     auto ws = ignore(*parsers::space);
     auto x = ws >> p >> ws;
+    auto kvp = x >> "->" >> x;
     p = parsers::timespan
       | parsers::timestamp
       | parsers::net
@@ -51,8 +52,8 @@ struct access::parser<data> : vast::parser<access::parser<data>> {
       | parsers::qq_str
       | parsers::pattern
       | '[' >> ~(x % ',') >> ']'
+      | '{' >> ('-' | as<map>(kvp % ',')) >> '}'
       | '{' >> ~as<set>(x % ',') >> '}'
-      | '{' >> ~as<map>((x >> "->" >> x) % ',') >> '}'
       | as<caf::none_t>("nil"_p)
       ;
     return p;

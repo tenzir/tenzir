@@ -100,10 +100,12 @@ struct map_printer : printer<map_printer> {
   using attribute = map;
 
   template <class Iterator>
-  bool print(Iterator& out, const map& t) const {
-    auto pair = (data_printer{} << " -> " << data_printer{});
-    auto p = '{' << ~(pair % ", ") << '}';
-    return p.print(out, t);
+  bool print(Iterator& out, const map& xs) const {
+    if (xs.empty())
+      return printers::str.print(out, "{-}");
+    auto kvp = printers::data << " -> " << printers::data;
+    auto p = '{' << (kvp % ", ") << '}';
+    return p.print(out, xs);
   }
 };
 
