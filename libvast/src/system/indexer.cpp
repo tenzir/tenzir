@@ -39,20 +39,25 @@ indexer_state::~indexer_state() {
 }
 
 caf::error indexer_state::init(event_based_actor* self, path filename,
-                               type column_type, size_t column) {
+                               type column_type, size_t column,
+                               caf::actor index, uuid partition_id) {
+  this->index = std::move(index);
+  this->partition_id = partition_id;
   new (&col) column_index(self->system(), std::move(column_type),
                           std::move(filename), column);
   return col.init();
 }
 
 behavior indexer(stateful_actor<indexer_state>* self, path dir,
-                 type column_type, size_t column) {
+                 type column_type, size_t column, caf::actor index,
+                 uuid partition_id) {
   VAST_TRACE(VAST_ARG(dir), VAST_ARG(column_type), VAST_ARG(column));
   VAST_DEBUG(self, "operates for column", column, "of type", column_type);
   if (auto err = self->state.init(self,
                                   std::move(dir) / "fields"
                                       / std::to_string(column),
-                                  std::move(column_type), column)) {
+                                  std::move(column_type), column,
+                                  std::move(index), partition_id)) {
     self->quit(std::move(err));
     return {};
   }
@@ -77,14 +82,16 @@ behavior indexer(stateful_actor<indexer_state>* self, path dir,
             self->state.col.add(x);
         },
         [=](unit_t&, const error& err) {
+          auto& st = self->state;
           if (err && err != caf::exit_reason::user_shutdown)
             VAST_ERROR(self, "got a stream error:", self->system().render(err));
-        }
-      );
+          if (auto flush_err = st.col.flush_to_disk())
+            VAST_WARNING(self, "failed to persist state:",
+                         self->system().render(flush_err));
+          self->send(st.index, done_atom::value, st.partition_id);
+        });
     },
-    [=](shutdown_atom) {
-      self->quit(exit_reason::user_shutdown);
-    },
+    [=](shutdown_atom) { self->quit(exit_reason::user_shutdown); },
   };
 }
 

@@ -26,8 +26,10 @@ namespace vast::system {
 /// @param dir Base directory for persistent state.
 /// @param column_type The type of the indexed field.
 /// @param column The column ID for the indexed field.
+/// @param index A handle to the index actor.
+/// @param partition_id The partition ID that this INDEXER belongs to.
 /// @returns the new INDEXER actor.
-caf::actor spawn_indexer(caf::local_actor* parent, path dir,
-                         type column_type, size_t column);
+caf::actor spawn_indexer(caf::local_actor* parent, path dir, type column_type,
+                         size_t column, caf::actor index, uuid partition_id);
 
 } // namespace vast::system

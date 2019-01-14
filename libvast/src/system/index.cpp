@@ -196,30 +196,12 @@ void index_state::reset_active_partition() {
       VAST_ERROR(self, "unable to persist active partition");
     // Store this partition as unpersisted to make sure we're not attempting
     // to load it from disk until it is safe to do so.
-    auto& element = unpersisted.emplace_back(std::move(active), 0);
-    auto& id = element.first->id();
-    auto& pending = element.second;
-    // Singal each INDEXER in the partition to persist its state.
-    element.first->for_each_indexer([&](const actor& indexer) {
-      ++pending;
-      this->self->request(indexer, infinite, persist_atom::value).then([=] {
-        auto pred = [=](auto& kvp) { return kvp.first->id() == id; };
-        auto& xs = unpersisted;
-        auto i = std::find_if(xs.begin(), xs.end(), pred);
-        if (i == xs.end()) {
-          VAST_ERROR(self,
-                     "received an invalid response to a 'persist' message");
-          return;
-        }
-        if (--i->second == 0) {
-          VAST_DEBUG(self, "successfully persisted", id);
-          xs.erase(i);
-        }
-      });
-    });
+    if (active_partition_indexers > 0)
+      unpersisted.emplace_back(std::move(active), active_partition_indexers);
   }
   // Create a new active partition.
   active = make_partition();
+  active_partition_indexers = 0;
 }
 
 partition_ptr index_state::make_partition() {
@@ -231,10 +213,30 @@ partition_ptr index_state::make_partition(uuid id) {
   return std::make_unique<partition>(this, std::move(id), max_partition_size);
 }
 
-caf::actor index_state::make_indexer(path dir, type column_type,
-                                     size_t column) {
-  VAST_TRACE(VAST_ARG(dir), VAST_ARG(column_type), VAST_ARG(column));
-  return factory(self, std::move(dir), std::move(column_type), column);
+caf::actor index_state::make_indexer(path dir, type column_type, size_t column,
+                                     uuid partition_id) {
+  VAST_TRACE(VAST_ARG(dir), VAST_ARG(column_type), VAST_ARG(column),
+             VAST_ARG(index), VAST_ARG(partition_id));
+  return factory(self, std::move(dir), std::move(column_type), column,
+                 self, partition_id);
+}
+
+void index_state::decrement_indexer_count(uuid partition_id) {
+  if (partition_id == active->id())
+    active_partition_indexers--;
+  else {
+    auto i = std::find_if(unpersisted.begin(), unpersisted.end(),
+                          [&](auto& kvp) {
+                            return kvp.first->id() == partition_id;
+                          });
+    if (i == unpersisted.end())
+      VAST_ERROR(self,
+                 "received done from unknown indexer:", self->current_sender());
+    if (--i->second == 0) {
+      VAST_DEBUG(self, "successfully persisted", partition_id);
+      unpersisted.erase(i);
+    }
+  }
 }
 
 partition* index_state::find_unpersisted(const uuid& id) {
@@ -398,6 +400,9 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
     [=](worker_atom, caf::actor& worker) {
       self->state.idle_workers.emplace_back(std::move(worker));
     },
+    [=](done_atom, uuid partition_id) {
+      self->state.decrement_indexer_count(partition_id);
+    },
     [=](caf::stream<table_slice_ptr> in) {
       VAST_DEBUG(self, "got a new source");
       return self->state.stage->add_inbound_path(in);
@@ -406,20 +411,21 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
       return self->state.status();
     }
   );
-  return {
-    [=](worker_atom, caf::actor& worker) {
-      auto& st = self->state;
-      st.idle_workers.emplace_back(std::move(worker));
-      self->become(keep_behavior, st.has_worker);
-    },
-    [=](caf::stream<table_slice_ptr> in) {
-      VAST_DEBUG(self, "got a new source");
-      return self->state.stage->add_inbound_path(in);
-    },
-    [=](status_atom) -> caf::config_value::dictionary {
-      return self->state.status();
-    }
-  };
+  return {[=](worker_atom, caf::actor& worker) {
+            auto& st = self->state;
+            st.idle_workers.emplace_back(std::move(worker));
+            self->become(keep_behavior, st.has_worker);
+          },
+          [=](done_atom, uuid partition_id) {
+            self->state.decrement_indexer_count(partition_id);
+          },
+          [=](caf::stream<table_slice_ptr> in) {
+            VAST_DEBUG(self, "got a new source");
+            return self->state.stage->add_inbound_path(in);
+          },
+          [=](status_atom) -> caf::config_value::dictionary {
+            return self->state.status();
+          }};
 }
 
 } // namespace vast::system

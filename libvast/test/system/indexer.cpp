@@ -40,7 +40,8 @@ namespace {
 
 struct fixture : fixtures::deterministic_actor_system_and_events {
   void init(type col_type) {
-    indexer = system::spawn_indexer(self.ptr(), directory, col_type, 0);
+    indexer = system::spawn_indexer(self.ptr(), directory, col_type, 0, self,
+                                    partition_id);
     run();
   }
 
@@ -54,6 +55,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     }));
     vast::detail::spawn_container_source(sys, std::move(slices), indexer);
     run();
+    check_done();
   }
 
   ids query(std::string_view what) {
@@ -80,8 +82,19 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
       x.append_bits(false, y.size() - x.size());
   };
 
+  void check_done() {
+    bool done = false;
+    self->receive([&](system::done_atom, uuid part_id) {
+      if (partition_id == part_id)
+        done = true;
+    });
+    CHECK(done);
+  }
+
   /// Number size of our ID space.
   size_t num_ids = 0;
+
+  uuid partition_id = uuid::random();
 
   /// Our actors-under-test.
   actor indexer;
@@ -98,7 +111,6 @@ TEST(integer rows) {
   auto rows = make_rows(1, 2, 3, 1, 2, 3, 1, 2, 3);
   num_ids = rows.size();
   ingest({default_table_slice::make(layout, rows)});
-  run();
   MESSAGE("verify table index");
   auto verify = [&] {
     CHECK_EQUAL(query(":int == +1"), res(0u, 3u, 6u));
