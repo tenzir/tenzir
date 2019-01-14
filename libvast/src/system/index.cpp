@@ -196,7 +196,8 @@ void index_state::reset_active_partition() {
       VAST_ERROR(self, "unable to persist active partition");
     // Store this partition as unpersisted to make sure we're not attempting
     // to load it from disk until it is safe to do so.
-    unpersisted.emplace_back(std::move(active), active_partition_indexers);
+    if (active_partition_indexers > 0)
+      unpersisted.emplace_back(std::move(active), active_partition_indexers);
   }
   // Create a new active partition.
   active = make_partition();
