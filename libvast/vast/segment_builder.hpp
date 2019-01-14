@@ -16,7 +16,6 @@
 #include <cstddef>
 #include <vector>
 
-#include <caf/actor_system.hpp>
 #include <caf/expected.hpp>
 #include <caf/fwd.hpp>
 #include <caf/stream_serializer.hpp>
@@ -33,9 +32,7 @@ namespace vast {
 class segment_builder {
 public:
   /// Constructs a segment builder.
-  /// @param sys The actor system used to construct segments (and deserialize
-  ///            table slices).
-  segment_builder(caf::actor_system& sys);
+  segment_builder();
 
   /// Adds a table slice to the segment.
   /// @returns An error if adding the table slice failed.
@@ -64,7 +61,6 @@ private:
   // Resets the builder state to start with a new segment.
   void reset();
 
-  caf::actor_system& actor_system_;
   // Segment state
   std::vector<char> segment_buffer_;
   segment::meta_data meta_;

@@ -54,8 +54,7 @@ segment::header make_header(chunk_ptr chunk) {
 
 } // namespace <anonymous>
 
-caf::expected<segment_ptr> segment::make(caf::actor_system& sys,
-                                         chunk_ptr chunk) {
+caf::expected<segment_ptr> segment::make(chunk_ptr chunk) {
   VAST_ASSERT(chunk != nullptr);
   if (chunk->size() < sizeof(header))
     return make_error(caf::sec::invalid_argument, "segment too small",
@@ -67,7 +66,7 @@ caf::expected<segment_ptr> segment::make(caf::actor_system& sys,
     return make_error(ec::version_error, "segment version too big",
                       hdr.version);
   // Create a segment and copy the header.
-  auto result = caf::make_counted<segment>(sys, chunk);
+  auto result = caf::make_counted<segment>(chunk);
   result->header_ = hdr;
   // Deserialize meta data.
   auto data = const_cast<char*>(chunk->data()); // CAF won't touch it.
@@ -116,16 +115,14 @@ segment::make_slice(const table_slice_synopsis& slice) const {
   auto slice_size = detail::narrow_cast<size_t>(slice.end - slice.start);
   // CAF won't touch the pointer during deserialization.
   caf::charbuf buf{const_cast<char*>(payload) + slice.start, slice_size};
-  caf::stream_deserializer<caf::charbuf&> deserializer{actor_system_, buf};
+  caf::stream_deserializer<caf::charbuf&> deserializer{buf};
   table_slice_ptr result;
   if (auto error = deserializer(result))
     return error;
   return result;
 }
 
-segment::segment(caf::actor_system& sys, chunk_ptr chunk)
-  : actor_system_{sys},
-    chunk_{std::move(chunk)} {
+segment::segment(chunk_ptr chunk) : chunk_{std::move(chunk)} {
   // Only the builder and make() call this constructor. In the former case the
   // chunk is properly constructed and in the latter case the factory ensures
   // that it meets the requirements.
@@ -141,9 +138,7 @@ caf::error inspect(caf::deserializer& source, segment_ptr& x) {
   chunk_ptr chunk;
   if (auto error = source(chunk))
     return error;
-  if (source.context() == nullptr)
-    return make_error(caf::sec::no_context);
-  auto result = segment::make(source.context()->system(), std::move(chunk));
+  auto result = segment::make(std::move(chunk));
   if (!result)
     return result.error();
   x = std::move(*result);

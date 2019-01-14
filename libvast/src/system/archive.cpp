@@ -45,8 +45,7 @@ archive(archive_type::stateful_pointer<archive_state> self,
   // arguments of the actor. This way, users can provide their own store
   // implementation conveniently.
   VAST_INFO(self, "spawned:", VAST_ARG(capacity), VAST_ARG(max_segment_size));
-  self->state.store = segment_store::make(
-    self->system(), dir, max_segment_size, capacity);
+  self->state.store = segment_store::make(dir, max_segment_size, capacity);
   VAST_ASSERT(self->state.store != nullptr);
   self->set_exit_handler(
     [=](const exit_msg& msg) {

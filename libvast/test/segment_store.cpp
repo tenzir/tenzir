@@ -16,7 +16,8 @@
 #include "vast/segment_store.hpp"
 
 #include "vast/test/test.hpp"
-#include "vast/test/fixtures/actor_system_and_events.hpp"
+#include "vast/test/fixtures/events.hpp"
+#include "vast/test/fixtures/filesystem.hpp"
 
 #include "vast/ids.hpp"
 #include "vast/si_literals.hpp"
@@ -25,12 +26,13 @@
 using namespace vast;
 using namespace binary_byte_literals;
 
-FIXTURE_SCOPE(segment_store_tests,
-              fixtures::deterministic_actor_system_and_events)
+struct fixture : fixtures::events, fixtures::filesystem {};
+
+FIXTURE_SCOPE(segment_store_tests, fixture)
 
 TEST(construction and querying) {
   auto path = directory / "segments";
-  auto store = segment_store::make(sys, path, 512_KiB, 2);
+  auto store = segment_store::make(path, 512_KiB, 2);
   REQUIRE(store);
   for (auto& slice : bro_conn_log_slices)
     REQUIRE(!store->put(slice));
@@ -41,7 +43,7 @@ TEST(construction and querying) {
 
 TEST(sessionized extraction) {
   auto path = directory / "segments";
-  auto store = segment_store::make(sys, path, 512_KiB, 2);
+  auto store = segment_store::make(path, 512_KiB, 2);
   REQUIRE(store);
   for (auto& slice : bro_conn_log_slices)
     REQUIRE(!store->put(slice));

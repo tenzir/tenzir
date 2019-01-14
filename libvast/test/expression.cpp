@@ -14,6 +14,7 @@
 #define SUITE expression
 
 #include "vast/test/test.hpp"
+#include <caf/test/dsl.hpp>
 
 #include <string>
 

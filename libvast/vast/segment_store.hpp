@@ -34,14 +34,11 @@ using segment_store_ptr = std::unique_ptr<segment_store>;
 class segment_store : public store {
 public:
   /// Constructs a segment store.
-  /// @param sys A reference to an actor system for table slice
-  ///            deserialization.
   /// @param dir The directory where to store state.
   /// @param max_segment_size The maximum segment size in bytes.
   /// @param in_memory_segments The number of semgents to cache in memory.
   /// @pre `max_segment_size > 0`
-  static segment_store_ptr make(caf::actor_system& sys,
-                                path dir, size_t max_segment_size,
+  static segment_store_ptr make(path dir, size_t max_segment_size,
                                 size_t in_memory_segments);
 
   ~segment_store();
@@ -59,8 +56,7 @@ public:
 
   /// @cond PRIVATE
 
-  segment_store(caf::actor_system& sys, path dir, uint64_t max_segment_size,
-                size_t in_memory_segments);
+  segment_store(path dir, uint64_t max_segment_size, size_t in_memory_segments);
 
   /// @endcond
 
@@ -75,7 +71,6 @@ private:
 
   caf::expected<segment_ptr> load_segment(uuid id) const;
 
-  caf::actor_system& sys_;
   path dir_;
   uint64_t max_segment_size_;
   detail::range_map<id, uuid> segments_;

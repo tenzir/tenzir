@@ -35,18 +35,18 @@ namespace vast {
 namespace system {
 namespace raft {
 
-log::log(caf::actor_system& sys, path dir) : dir_{std::move(dir)}, sys_(sys) {
+log::log(path dir) : dir_{std::move(dir)} {
   auto meta_filename = dir_ / "meta";
   auto entries_filename = dir_ / "entries";
   if (exists(dir_)) {
     if (exists(meta_filename))
-      if (load(&sys_, meta_filename, start_))
+      if (load(nullptr, meta_filename, start_))
         die("failed to load raft log meta data");
     if (exists(entries_filename)) {
       std::ifstream entries{entries_filename.str(), std::ios::binary};
       while (entries.peek() != std::ifstream::traits_type::eof()) {
         std::vector<log_entry> xs;
-        if (load(&sys_, entries, xs))
+        if (load(nullptr, entries, xs))
           die("failed to load raft log entries");
         std::move(xs.begin(), xs.end(), std::back_inserter(entries_));
       }
@@ -294,8 +294,7 @@ result<index_type> save_snapshot(Actor* self, index_type index,
   snapshot_header hdr;
   hdr.last_included_index = index;
   hdr.last_included_term = self->state.log->at(index).term;
-  if (auto err = save(nullptr, self->state.dir / "snapshot",
-                      hdr, snapshot))
+  if (auto err = save(nullptr, self->state.dir / "snapshot", hdr, snapshot))
     return err;
   VAST_DEBUG(role(self), "completed snapshotting, last included term =",
              hdr.last_included_term << ", index =", hdr.last_included_index);
@@ -1100,8 +1099,7 @@ behavior consensus(stateful_actor<server_state>* self, path dir) {
         VAST_DEBUG(role(self), "previously voted for server",
                    self->state.voted_for);
       // Load the persistent log into memory.
-      self->state.log = std::make_unique<log>(self->system(),
-                                              self->state.dir / "log");
+      self->state.log = std::make_unique<log>(self->state.dir / "log");
       if (self->state.log->empty())
         VAST_DEBUG(role(self), "initialized new log");
       else
