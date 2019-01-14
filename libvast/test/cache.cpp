@@ -14,7 +14,6 @@
 #define SUITE detail
 
 #include "vast/test/test.hpp"
-#include "vast/test/fixtures/actor_system.hpp"
 
 #include <vast/load.hpp>
 #include <vast/save.hpp>
@@ -25,7 +24,7 @@ using namespace vast;
 namespace {
 
 template <class Policy>
-struct fixture : fixtures::deterministic_actor_system {
+struct fixture {
   fixture() {
     CHECK(xs.emplace("foo", 1).second);
     CHECK(xs.emplace("bar", 2).second);
@@ -80,9 +79,9 @@ TEST(LRU cache insertion) {
 
 TEST(cache serialization) {
   std::vector<char> buf;
-  CHECK_EQUAL(save(sys, buf, xs), caf::none);
+  CHECK_EQUAL(save(nullptr, buf, xs), caf::none);
   decltype(xs) ys;
-  CHECK_EQUAL(load(sys, buf, ys), caf::none);
+  CHECK_EQUAL(load(nullptr, buf, ys), caf::none);
   CHECK(xs == ys);
 }
 

@@ -36,10 +36,9 @@ T to_little_endian(T x) {
 
 } // namespace <anonymous>
 
-segment_builder::segment_builder(caf::actor_system& sys)
-  : actor_system_{sys},
-    table_slice_streambuf_{table_slice_buffer_},
-    table_slice_serializer_{actor_system_, table_slice_streambuf_} {
+segment_builder::segment_builder()
+  : table_slice_streambuf_{table_slice_buffer_},
+    table_slice_serializer_{table_slice_streambuf_} {
   reset();
 }
 
@@ -86,7 +85,7 @@ caf::expected<segment_ptr> segment_builder::finish() {
               table_slice_buffer_.size());
   // Move the complete segment buffer into a chunk.
   auto chk = chunk::make(std::move(segment_buffer_));
-  auto result = caf::make_counted<segment>(actor_system_, chk);
+  auto result = caf::make_counted<segment>(chk);
   result->header_ = *chk->as<segment::header>();
   result->meta_ = std::move(meta_);
   return result;

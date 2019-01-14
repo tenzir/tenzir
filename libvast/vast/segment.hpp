@@ -17,7 +17,6 @@
 #include <memory>
 #include <vector>
 
-#include <caf/actor_system.hpp>
 #include <caf/expected.hpp>
 #include <caf/fwd.hpp>
 #include <caf/intrusive_ptr.hpp>
@@ -102,10 +101,8 @@ public:
   };
 
   /// Constructs a segment.
-  /// @param sys The actor system that stores factory to deserialize table
-  ///            slices.
   /// @param chunk The chunk holding the segment data.
-  static caf::expected<segment_ptr> make(caf::actor_system& sys, chunk_ptr chunk);
+  static caf::expected<segment_ptr> make(chunk_ptr chunk);
 
   /// @returns The unique ID of this segment.
   const uuid& id() const;
@@ -124,7 +121,7 @@ public:
 
   /// @cond PRIVATE
 
-  segment(caf::actor_system& sys, chunk_ptr chunk);
+  explicit segment(chunk_ptr chunk);
 
   /// @endcond
 
@@ -132,7 +129,6 @@ private:
   caf::expected<table_slice_ptr>
   make_slice(const table_slice_synopsis& slice) const;
 
-  caf::actor_system& actor_system_;
   chunk_ptr chunk_;
   header header_;
   meta_data meta_;

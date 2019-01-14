@@ -59,7 +59,7 @@ caf::error partition::init() {
   auto file_path = meta_file();
   if (!exists(file_path))
     return ec::no_such_file;
-  if (auto err = load(state_->self->system(), file_path , meta_data_))
+  if (auto err = load(nullptr, file_path , meta_data_))
     return err;
   VAST_DEBUG(state_->self, "loaded partition", id_, "from disk with",
              meta_data_.types.size(), "layouts");
@@ -69,7 +69,7 @@ caf::error partition::init() {
 caf::error partition::flush_to_disk() {
   if (meta_data_.dirty) {
     // Write all layouts to disk.
-    if (auto err = save(state_->self->system(), meta_file(), meta_data_))
+    if (auto err = save(nullptr, meta_file(), meta_data_))
       return err;
     meta_data_.dirty = false;
   }

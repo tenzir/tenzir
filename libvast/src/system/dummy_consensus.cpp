@@ -32,7 +32,7 @@ dummy_consensus_state::dummy_consensus_state(actor_ptr self) : self{self} {
 caf::error dummy_consensus_state::init(path dir) {
   file = std::move(dir) / "store";
   if (exists(file)) {
-    if (auto err = vast::load(self->system(), file, store)) {
+    if (auto err = vast::load(&self->system(), file, store)) {
       VAST_WARNING_ANON(name, "unable to load state file:", file);
       return err;
     }
@@ -41,7 +41,7 @@ caf::error dummy_consensus_state::init(path dir) {
 }
 
 caf::error dummy_consensus_state::save() {
-  return vast::save(self->system(), file, store);
+  return vast::save(&self->system(), file, store);
 }
 
 caf::dictionary<caf::config_value> dummy_consensus_state::status() const {

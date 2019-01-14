@@ -117,7 +117,7 @@ caf::error index_state::load_from_disk() {
     return caf::none;
   }
   if (auto fname = meta_index_filename(); exists(fname)) {
-    if (auto err = load(self->system(), fname, meta_idx)) {
+    if (auto err = load(&self->system(), fname, meta_idx)) {
       VAST_ERROR(self, "failed to load meta index:",
                  self->system().render(err));
       return err;
@@ -131,7 +131,7 @@ caf::error index_state::flush_to_disk() {
   VAST_TRACE("");
   auto flush_all = [this]() -> caf::error {
     // Flush meta index to disk.
-    if (auto err = save(self->system(), meta_index_filename(), meta_idx))
+    if (auto err = save(&self->system(), meta_index_filename(), meta_idx))
       return err;
     // Flush active partition.
     if (active != nullptr)

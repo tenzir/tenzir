@@ -14,7 +14,6 @@
 #define SUITE event
 
 #include "vast/test/test.hpp"
-#include "vast/test/fixtures/actor_system.hpp"
 
 #include "vast/event.hpp"
 #include "vast/json.hpp"
@@ -29,7 +28,7 @@ using namespace vast;
 
 namespace {
 
-struct fixture : fixtures::deterministic_actor_system {
+struct fixture {
   fixture() {
     // Type
     t = record_type{
@@ -80,9 +79,9 @@ TEST(printable) {
 
 TEST(serialization) {
   std::vector<char> buf;
-  CHECK_EQUAL(save(sys, buf, e), caf::none);
+  CHECK_EQUAL(save(nullptr, buf, e), caf::none);
   event e2;
-  CHECK_EQUAL(load(sys, buf, e2), caf::none);
+  CHECK_EQUAL(load(nullptr, buf, e2), caf::none);
   CHECK_EQUAL(e, e2);
 }
 

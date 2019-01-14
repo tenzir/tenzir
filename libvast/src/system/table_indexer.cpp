@@ -57,7 +57,7 @@ caf::error table_indexer::init() {
   VAST_TRACE("");
   auto filename = row_ids_file();
   if (exists(filename))
-    if (auto err = load(self()->system(), filename, row_ids_))
+    if (auto err = load(nullptr, filename, row_ids_))
       return err;
   set_clean();
   return caf::none;
@@ -68,7 +68,7 @@ caf::error table_indexer::flush_to_disk() {
   VAST_TRACE("");
   if (!dirty())
     return caf::none;
-  if (auto err = save(self()->system(), row_ids_file(), row_ids_))
+  if (auto err = save(nullptr, row_ids_file(), row_ids_))
     return err;
   set_clean();
   return caf::none;

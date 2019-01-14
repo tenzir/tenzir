@@ -17,7 +17,7 @@
 #include "vast/segment_builder.hpp"
 
 #include "vast/test/test.hpp"
-#include "vast/test/fixtures/actor_system_and_events.hpp"
+#include "vast/test/fixtures/events.hpp"
 
 #include <caf/binary_deserializer.hpp>
 #include <caf/binary_serializer.hpp>
@@ -29,10 +29,10 @@
 
 using namespace vast;
 
-FIXTURE_SCOPE(segment_tests, fixtures::deterministic_actor_system_and_events)
+FIXTURE_SCOPE(segment_tests, fixtures::events)
 
 TEST(construction and querying) {
-  segment_builder builder{sys};
+  segment_builder builder;
   for (auto& slice : bro_conn_log_slices)
     REQUIRE(!builder.add(slice));
   auto segment = builder.finish();
@@ -49,22 +49,17 @@ TEST(construction and querying) {
 }
 
 TEST(serialization) {
-  segment_builder builder{sys};
+  segment_builder builder;
   auto slice = bro_conn_log_slices[0];
   REQUIRE(!builder.add(slice));
   auto segment = builder.finish();
   REQUIRE(segment);
   auto x = *segment;
-  std::vector<char> buf;
-  caf::binary_serializer sink{sys, buf};
-  auto error = sink(x);
-  REQUIRE(!error);
-  CHECK(buf.size() > 0);
   segment_ptr y;
-  caf::binary_deserializer source{sys, buf};
-  error = source(y);
-  REQUIRE(!error);
-  REQUIRE(y);
+  std::vector<char> buf;
+  REQUIRE_EQUAL(save(nullptr, buf, x), caf::none);
+  REQUIRE_EQUAL(load(nullptr, buf, y), caf::none);
+  REQUIRE_NOT_EQUAL(y, nullptr);
   CHECK_EQUAL(y->num_slices(), 1u);
   CHECK(std::equal(x->chunk()->begin(), x->chunk()->end(),
                    y->chunk()->begin(), y->chunk()->end()));

@@ -35,18 +35,18 @@ namespace vast {
 namespace system {
 namespace raft {
 
-log::log(caf::actor_system& sys, path dir) : dir_{std::move(dir)}, sys_(sys) {
+log::log(path dir) : dir_{std::move(dir)} {
   auto meta_filename = dir_ / "meta";
   auto entries_filename = dir_ / "entries";
   if (exists(dir_)) {
     if (exists(meta_filename))
-      if (load(sys_, meta_filename, start_))
+      if (load(nullptr, meta_filename, start_))
         die("failed to load raft log meta data");
     if (exists(entries_filename)) {
       std::ifstream entries{entries_filename.str(), std::ios::binary};
       while (entries.peek() != std::ifstream::traits_type::eof()) {
         std::vector<log_entry> xs;
-        if (load(sys_, entries, xs))
+        if (load(nullptr, entries, xs))
           die("failed to load raft log entries");
         std::move(xs.begin(), xs.end(), std::back_inserter(entries_));
       }
@@ -127,7 +127,7 @@ expected<void> log::append(std::vector<log_entry> xs) {
     }
   }
   // Serialize the entries...
-  if (auto err =  save(sys_, entries_file_, xs))
+  if (auto err = save(nullptr, entries_file_, xs))
     return err;
   // ...and make them persistent...
   entries_file_.flush();
@@ -150,14 +150,14 @@ uint64_t bytes(log& l) {
 }
 
 expected<void> log::persist_meta_data() {
-  if (auto err = save(sys_, dir_ / "meta", start_))
+  if (auto err = save(nullptr, dir_ / "meta", start_))
     return err;
   return caf::unit;
 }
 
 expected<void> log::persist_entries() {
   entries_file_.close();
-  if (auto err = save(sys_, dir_ / "entries", entries_))
+  if (auto err = save(nullptr, dir_ / "entries", entries_))
     return err;
   return caf::unit;
 }
@@ -208,7 +208,7 @@ std::string role(Actor* self) {
 
 template <class Actor>
 expected<void> save_state(Actor* self) {
-  if (auto err = save(self->system(), self->state.dir / "state", self->state.id,
+  if (auto err = save(nullptr, self->state.dir / "state", self->state.id,
                       self->state.current_term, self->state.voted_for))
     return err;
   VAST_DEBUG(role(self), "saved persistent state: id =",
@@ -220,7 +220,7 @@ expected<void> save_state(Actor* self) {
 
 template <class Actor>
 expected<void> load_state(Actor* self) {
-  if (auto err = load(self->system(), self->state.dir / "state", self->state.id,
+  if (auto err = load(nullptr, self->state.dir / "state", self->state.id,
                       self->state.current_term, self->state.voted_for))
     return err;
   VAST_DEBUG(role(self), "loaded persistent state: id =",
@@ -294,8 +294,7 @@ result<index_type> save_snapshot(Actor* self, index_type index,
   snapshot_header hdr;
   hdr.last_included_index = index;
   hdr.last_included_term = self->state.log->at(index).term;
-  if (auto err = save(self->system(), self->state.dir / "snapshot",
-                      hdr, snapshot))
+  if (auto err = save(nullptr, self->state.dir / "snapshot", hdr, snapshot))
     return err;
   VAST_DEBUG(role(self), "completed snapshotting, last included term =",
              hdr.last_included_term << ", index =", hdr.last_included_index);
@@ -316,7 +315,7 @@ expected<void> load_snapshot_header(Actor* self) {
   VAST_DEBUG(role(self), "loads snapshot header");
   snapshot_header hdr;
   // Read snapshot header from filesystem.
-  if (auto err = load(self->system(), self->state.dir / "snapshot", hdr))
+  if (auto err = load(nullptr, self->state.dir / "snapshot", hdr))
     return err;
   if (hdr.version != 1)
     return make_error(ec::version_error, "needed version 1, got", hdr.version);
@@ -348,7 +347,7 @@ expected<std::vector<char>> load_snapshot_data(Actor* self) {
   VAST_DEBUG(role(self), "loads snapshot data");
   snapshot_header hdr;
   std::vector<char> data;
-  if (auto err = load(self->system(), self->state.dir / "snapshot", hdr, data))
+  if (auto err = load(nullptr, self->state.dir / "snapshot", hdr, data))
     return err;
   if (hdr.version != 1)
     return make_error(ec::version_error, "needed version 1, got", hdr.version);
@@ -1100,8 +1099,7 @@ behavior consensus(stateful_actor<server_state>* self, path dir) {
         VAST_DEBUG(role(self), "previously voted for server",
                    self->state.voted_for);
       // Load the persistent log into memory.
-      self->state.log = std::make_unique<log>(self->system(),
-                                              self->state.dir / "log");
+      self->state.log = std::make_unique<log>(self->state.dir / "log");
       if (self->state.log->empty())
         VAST_DEBUG(role(self), "initialized new log");
       else

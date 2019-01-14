@@ -35,19 +35,19 @@
 
 namespace vast {
 
-segment_store_ptr segment_store::make(caf::actor_system& sys, path dir,
-                                      size_t max_segment_size,
+segment_store_ptr segment_store::make(path dir, size_t max_segment_size,
                                       size_t in_memory_segments) {
   VAST_TRACE(VAST_ARG(dir), VAST_ARG(max_segment_size),
              VAST_ARG(in_memory_segments));
   VAST_ASSERT(max_segment_size > 0);
-  auto x = std::make_unique<segment_store>(
-    sys, std::move(dir), max_segment_size, in_memory_segments);
+  auto x = std::make_unique<segment_store>(std::move(dir), max_segment_size,
+                                           in_memory_segments);
   // Materialize meta data of existing segments.
   if (exists(x->meta_path())) {
     VAST_DEBUG_ANON(__func__, "loads segment meta data from", x->meta_path());
-    if (auto err = load(sys, x->meta_path(), x->segments_)) {
-      VAST_ERROR_ANON(__func__, "failed to unarchive meta data:", sys.render(err));
+    if (auto err = load(nullptr, x->meta_path(), x->segments_)) {
+      VAST_ERROR_ANON(__func__, "failed to unarchive meta data from",
+                      x->meta_path());
       return nullptr;
     }
   }
@@ -77,21 +77,21 @@ caf::error segment_store::flush() {
     return x.error();
   auto seg_ptr = *x;
   auto filename = segment_path() / to_string(seg_ptr->id());
-  if (auto err = save(sys_, filename, seg_ptr))
+  if (auto err = save(nullptr, filename, seg_ptr))
     return err;
   // Keep new segment in the cache.
   cache_.emplace(seg_ptr->id(), seg_ptr);
   VAST_DEBUG(this, "wrote new segment to", filename.trim(-3));
   VAST_DEBUG(this, "saves segment meta data");
-  return save(sys_, meta_path(), segments_);
+  return save(nullptr, meta_path(), segments_);
 }
 
 caf::expected<segment_ptr> segment_store::load_segment(uuid id) const {
   segment_ptr seg_ptr = nullptr;
   auto fname = segment_path() / to_string(id);
   VAST_DEBUG(this, "loads segment from", fname);
-  if (auto err = load(sys_, fname, seg_ptr)) {
-    VAST_ERROR(this, "cannot load segment:", sys_.render(err));
+  if (auto err = load(nullptr, fname, seg_ptr)) {
+    VAST_ERROR(this, "cannot load segment from", fname);
     return err;
   }
   return seg_ptr;
@@ -216,8 +216,8 @@ segment_store::get(const ids& xs) {
       } else {
         VAST_DEBUG(this, "got cache miss for segment", id);
         auto fname = segment_path() / to_string(id);
-        if (auto err = load(sys_, fname, seg_ptr)) {
-          VAST_ERROR(this, "unable to load segment:", sys_.render(err));
+        if (auto err = load(nullptr, fname, seg_ptr)) {
+          VAST_ERROR(this, "unable to load segment from", fname);
           return err;
         }
         i = cache_.emplace(id, seg_ptr).first;
@@ -257,13 +257,11 @@ void segment_store::inspect_status(caf::dictionary<caf::config_value>& dict) {
   put(current, "size", builder_.table_slice_bytes());
 }
 
-segment_store::segment_store(caf::actor_system& sys, path dir,
-                             uint64_t max_segment_size, size_t in_memory_segments)
-  : sys_{sys},
-    dir_{std::move(dir)},
+segment_store::segment_store(path dir, uint64_t max_segment_size,
+                             size_t in_memory_segments)
+  : dir_{std::move(dir)},
     max_segment_size_{max_segment_size},
-    cache_{in_memory_segments},
-    builder_{sys_} {
+    cache_{in_memory_segments} {
   // nop
 }
 

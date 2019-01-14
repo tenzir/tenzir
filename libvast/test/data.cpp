@@ -14,7 +14,6 @@
 #define SUITE data
 
 #include "vast/test/test.hpp"
-#include "vast/test/fixtures/actor_system.hpp"
 
 #include "vast/data.hpp"
 #include "vast/json.hpp"
@@ -29,8 +28,6 @@
 #include "vast/concept/printable/vast/json.hpp"
 
 using namespace vast;
-
-FIXTURE_SCOPE(data_tests, fixtures::deterministic_actor_system)
 
 TEST(vector) {
   REQUIRE(std::is_same_v<std::vector<data>, vector>);
@@ -192,9 +189,9 @@ TEST(serialization) {
   xs.emplace(port{8, port::icmp});
   auto x0 = data{xs};
   std::vector<char> buf;
-  CHECK_EQUAL(save(sys, buf, x0), caf::none);
+  CHECK_EQUAL(save(nullptr, buf, x0), caf::none);
   data x1;
-  CHECK_EQUAL(load(sys, buf, x1), caf::none);
+  CHECK_EQUAL(load(nullptr, buf, x1), caf::none);
   CHECK(x0 == x1);
 }
 
@@ -322,5 +319,3 @@ TEST(json) {
 })__";
   CHECK_EQUAL(to_string(to_json(x, t)), expected);
 }
-
-FIXTURE_SCOPE_END()
