@@ -29,6 +29,15 @@ namespace fixtures {
 
 node::node() {
   test_node = self->spawn(system::node, "test", directory / "node");
+  run();
+  if (auto a = self->system().registry().get(system::accountant_atom::value)) {
+    MESSAGE("killing accountant");
+    self->system().registry().erase(system::accountant_atom::value);
+    // TODO: the accountant seems to pull the node down with itself. Should not
+    //       happen.
+    // self->send_exit(a, caf::none);
+    // run();
+  }
   MESSAGE("spawning components");
   spawn_component("consensus");
   spawn_component("archive");
