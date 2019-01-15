@@ -46,8 +46,7 @@ struct value_printer : printer<value_printer> {
     }
 
     template <class T, class U>
-    auto operator()(const T&, const U& x)
-    -> std::enable_if_t<!std::is_same_v<U, caf::none_t>, bool> {
+    bool operator()(const T&, const U& x) {
       return make_printer<U>{}.print(out_, x);
     }
 
@@ -56,17 +55,9 @@ struct value_printer : printer<value_printer> {
     }
 
     bool operator()(const string_type&, const std::string& str) {
-      using printers::chr;
-      using printers::eps;
-      auto escape = [&] {
-        auto escaper = detail::make_double_escaper("\"|");
-        auto f = str.begin();
-        auto l = str.end();
-        while (f != l)
-          escaper(f, out_);
-      };
-      auto p = chr<'"'> << (eps ->* escape) << chr<'"'>;
-      return p.print(out_, unused);
+      static auto escaper = detail::make_double_escaper("\"|");
+      auto p = '"' << printers::escape(escaper) << '"';
+      return p.print(out_, str);
     }
 
     bool operator()(const record_type& r, const vector& v) {
@@ -74,9 +65,8 @@ struct value_printer : printer<value_printer> {
       VAST_ASSERT(r.fields.size() == v.size());
       using printers::eps;
       size_t i = 0;
-      auto f = this;
       auto elem = eps.with([&] {
-        auto result = caf::visit(*f, r.fields[i].type, v[i]);
+        auto result = caf::visit(*this, r.fields[i].type, v[i]);
         ++i;
         return result;
       });
@@ -100,11 +90,10 @@ struct value_printer : printer<value_printer> {
     template <class Container, class Sep>
     bool render(Container& c, const type& t, const Sep& sep) {
       using printers::eps;
-      using printers::str;
       if (c.empty())
-        return str.print(out_, empty);
-      auto f = this;
-      auto elem = eps.with([&](const data& x) { return caf::visit(*f, t, x); });
+        return printers::str.print(out_, empty);
+      auto guard = [&](const data& x) { return caf::visit(*this, t, x); };
+      auto elem = eps.with(guard);
       auto p = (elem % sep);
       return p.print(out_, c);
     }
@@ -116,27 +105,27 @@ struct value_printer : printer<value_printer> {
   bool print(Iterator& out, const event& e) const {
     using namespace printers;
     // Print a new header each time we encounter a new event type.
-    auto header = eps.with([&] {
+    auto header_guard = [&] {
       if (e.type() == event_type)
         return true;
       event_type = e.type();
       auto hdr = "type,id,timestamp"s;
-      auto r =  caf::get_if<record_type>(&e.type());
-      if (!r)
-        hdr += ",data";
-      else
+      if (auto r = caf::get_if<record_type>(&e.type()))
         for (auto& i : record_type::each{*r})
           hdr += ',' + i.key();
-      auto p = str << chr<'\n'>;
+      else
+        hdr += ",data";
+      auto p = printers::str << '\n';
       return p.print(out, hdr);
-    });
+    };
+    auto header = eps.with(header_guard);
     // Print event data.
-    auto name = str.with([](const std::string& x) { return !x.empty(); });
-    auto comma = chr<','>;
+    auto name_guard = [](const std::string& x) { return !x.empty(); };
+    auto name = printers::str.with(name_guard);
     auto ts = u64 ->* [](timestamp t) { return t.time_since_epoch().count(); };
     auto f = [&] { caf::visit(renderer<Iterator>{out}, e.type(), e.data()); };
     auto ev = eps ->* f;
-    auto p = header << name << comma << u64 << comma << ts << comma << ev;
+    auto p = header << name << ',' << u64 << ',' << ts << ',' << ev;
     return p(out, e.type().name(), e.id(), e.timestamp());
   }
 
