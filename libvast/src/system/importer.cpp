@@ -205,7 +205,7 @@ public:
                std::vector<input_type>& xs) override {
     VAST_TRACE(VAST_ARG(xs));
     auto& st = self_->state;
-    auto t = timer{st.measurement_};
+    auto t = timer::start(st.measurement_);
     VAST_DEBUG(self_, "has", st.available_ids(), "IDs available");
     VAST_DEBUG(self_, "got", xs.size(), "slices with", st.in_flight_slices,
                "in-flight slices");
@@ -218,7 +218,7 @@ public:
       x.unshared().offset(st.next_id_block());
       out.push(std::move(x));
     }
-    t.finish(events);
+    t.stop(events);
   }
 
   int32_t acquire_credit(inbound_path* path, int32_t desired) override {

@@ -116,7 +116,7 @@ datagram_source(datagram_source_actor<Reader>* self,
       // Check whether we can buffer more slices in the stream.
       VAST_DEBUG(self, "got a new datagram of size", msg.buf.size());
       auto& st = self->state;
-      timer t{st.measurement_};
+      auto t = timer::start(st.measurement_);
       auto capacity = st.mgr->out().capacity();
       if (capacity == 0) {
         VAST_WARNING(self, "has no capacity left in stream, dropping input!");
@@ -132,7 +132,7 @@ datagram_source(datagram_source_actor<Reader>* self,
       };
       auto [produced, eof] = st.extract_events(capacity, table_slice_size,
                                                push_slice);
-      t.finish(produced);
+      t.stop(produced);
       if (!eof)
         VAST_WARNING(self,
                      "has not enough capacity left in stream, dropping input!");

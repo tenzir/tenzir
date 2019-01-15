@@ -111,7 +111,7 @@ archive(archive_type::stateful_pointer<archive_state> self, path dir,
               },
               [=](unit_t&, std::vector<table_slice_ptr>& batch) {
                 VAST_DEBUG(self, "got", batch.size(), "table slices");
-                timer t{self->state.measurement_};
+                auto t = timer::start(self->state.measurement_);
                 uint64_t events = 0;
                 for (auto& slice : batch) {
                   if (auto error = self->state.store->put(slice)) {
@@ -122,7 +122,7 @@ archive(archive_type::stateful_pointer<archive_state> self, path dir,
                   }
                   events += slice->rows();
                 }
-                t.finish(events);
+                t.stop(events);
               },
               [=](unit_t&, const error& err) {
                 if (err) {

@@ -265,7 +265,7 @@ caf::behavior source(caf::stateful_actor<source_state<Reader>>* self,
     // get next element
     [=](bool& done, downstream<table_slice_ptr>& out, size_t num) {
       auto& st = self->state;
-      timer t{st.measurement_};
+      auto t = timer::start(st.measurement_);
       // Extract events until the source has exhausted its input or until
       // we have completed a batch.
       auto push_slice = [&](table_slice_ptr slice) {
@@ -273,7 +273,7 @@ caf::behavior source(caf::stateful_actor<source_state<Reader>>* self,
       };
       auto [produced, eof] = st.extract_events(num * table_slice_size,
                                                table_slice_size, push_slice);
-      t.finish(produced);
+      t.stop(produced);
       if (eof) {
         done = true;
         st.send_report();

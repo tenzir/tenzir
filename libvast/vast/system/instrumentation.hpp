@@ -14,7 +14,9 @@
 #pragma once
 
 #include <caf/meta/type_name.hpp>
-#include <caf/timespan.hpp>
+
+#include "vast/detail/operators.hpp"
+#include "vast/time.hpp"
 
 #include <atomic>
 #include <chrono>
@@ -23,10 +25,16 @@ namespace vast::system {
 
 using stopwatch = std::chrono::steady_clock;
 
-struct measurement {
-  using timespan = caf::timespan;
-  timespan duration{};
+struct measurement : public detail::addable<measurement> {
+  using timespan = vast::timespan;
+  timespan duration = timespan::zero();
   uint64_t events = 0;
+
+  measurement() = default;
+
+  measurement(timespan d, uint64_t e) : duration{d}, events{e} {
+    // nop
+  }
 
   measurement& operator+=(const measurement& next) {
     duration += next.duration;
@@ -36,23 +44,27 @@ struct measurement {
 };
 
 template <class Inspector>
-typename Inspector::result_type inspect(Inspector& f, measurement& x) {
+auto inspect(Inspector& f, measurement& x) {
   return f(caf::meta::type_name("measurement"), x.duration, x.events);
 }
 
 struct timer {
-  timer(measurement& m) : m_{m} {
+  explicit timer(measurement& m) : m_{m} {
     // nop
   }
 
-  void finish(uint64_t events) {
+  static timer start(measurement& m) {
+    return timer{m};
+  }
+
+  void stop(uint64_t events) {
     auto stop = stopwatch::now();
-    auto elapsed = std::chrono::duration_cast<measurement::timespan>(stop - start);
+    auto elapsed = std::chrono::duration_cast<measurement::timespan>(stop - start_);
     m_ += {elapsed, events};
   }
 
 private:
-  stopwatch::time_point start = stopwatch::now();
+  stopwatch::time_point start_ = stopwatch::now();
   measurement& m_;
 };
 
@@ -61,20 +73,24 @@ private:
 using atomic_measurement = std::atomic<measurement>;
 
 struct atomic_timer {
-  atomic_timer(atomic_measurement& m) : m_{m} {
+  explicit atomic_timer(atomic_measurement& m) : m_{m} {
     // nop
   }
 
-  void finish(uint64_t events) {
+  static atomic_timer start(atomic_measurement& m) {
+    return atomic_timer{m};
+  }
+
+  void stop(uint64_t events) {
     auto stop = stopwatch::now();
-    auto elapsed = std::chrono::duration_cast<measurement::timespan>(stop - start);
+    auto elapsed = std::chrono::duration_cast<measurement::timespan>(stop - start_);
     auto tmp = m_.load();
     tmp += measurement{elapsed, events};
     m_.exchange(tmp);
   }
 
 private:
-  stopwatch::time_point start = stopwatch::now();
+  stopwatch::time_point start_ = stopwatch::now();
   atomic_measurement& m_;
 };
 
