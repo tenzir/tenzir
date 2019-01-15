@@ -15,6 +15,7 @@
 
 #include <caf/meta/type_name.hpp>
 
+#include "vast/config.hpp"
 #include "vast/detail/operators.hpp"
 #include "vast/time.hpp"
 
@@ -70,7 +71,7 @@ private:
 
 // Atomic variants
 //
-#ifdef MEASUREMENT_MUTEX_WORKAROUND
+#ifdef VAST_MEASUREMENT_MUTEX_WORKAROUND
 #include <mutex>
 
 struct atomic_measurement : public measurement {
@@ -95,7 +96,7 @@ struct atomic_timer {
   void stop(uint64_t events) {
     auto stop = stopwatch::now();
     auto elapsed = std::chrono::duration_cast<measurement::timespan>(stop - start_);
-#ifdef MEASUREMENT_MUTEX_WORKAROUND
+#ifdef VAST_MEASUREMENT_MUTEX_WORKAROUND
     std::unique_lock<std::mutex> lock{m_.mutex};
     m_ += measurement{elapsed, events};
 #else

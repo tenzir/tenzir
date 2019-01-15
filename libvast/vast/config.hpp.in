@@ -5,6 +5,7 @@
 #cmakedefine VAST_HAVE_PCAP
 #cmakedefine VAST_HAVE_BROCCOLI
 #cmakedefine VAST_HAVE_SNAPPY
+#cmakedefine VAST_MEASUREMENT_MUTEX_WORKAROUND
 #cmakedefine VAST_USE_TCMALLOC
 #cmakedefine VAST_USE_OPENCL
 #cmakedefine VAST_USE_OPENSSL

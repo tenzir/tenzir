@@ -200,7 +200,7 @@ void index_state::send_report() {
   auto append_report = [&](partition& p) {
     for (auto& [layout, ti] : p.table_indexers_) {
       for (size_t i = 0; i < ti.measurements_.size(); ++i) {
-#ifdef MEASUREMENT_MUTEX_WORKAROUND
+#ifdef VAST_MEASUREMENT_MUTEX_WORKAROUND
         ti.measurements_[i].mutex.lock();
         auto tmp = static_cast<measurement>(ti.measurements_[i]);
         ti.measurements_[i].reset();
