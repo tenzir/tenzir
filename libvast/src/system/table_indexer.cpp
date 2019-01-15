@@ -32,6 +32,10 @@ namespace vast::system {
 table_indexer::table_indexer(partition* parent, const record_type& layout)
   : partition_(parent),
     type_erased_layout_(layout),
+    // Fill indexers_ with default-constructed handles. We lazily spawn INDEXER
+    // actors as we go.
+    indexers_(layout.fields.size()),
+    measurements_(layout.fields.size()),
     last_flush_size_(0),
     skip_mask_(0) {
   VAST_ASSERT(partition_ != nullptr);
@@ -42,9 +46,6 @@ table_indexer::table_indexer(partition* parent, const record_type& layout)
   skip_mask_.reserve(fields.size());
   for (size_t column = 0; column < fields.size(); ++column)
     skip_mask_.emplace_back(has_skip_attribute(fields[column].type));
-  // Fill indexers_ with default-constructed handles. We lazily spawn INDEXER
-  // actors as we go.
-  indexers_.resize(fields.size());
 }
 
 table_indexer::~table_indexer() noexcept {
@@ -90,7 +91,7 @@ caf::actor& table_indexer::indexer_at(size_t column) {
   if (!result) {
     result = state().make_indexer(column_file(column),
                                   layout().fields[column].type, column,
-                                  partition_->id());
+                                  partition_->id(), &measurements_[column]);
     VAST_ASSERT(result != nullptr);
   }
   return result;
@@ -123,8 +124,9 @@ path table_indexer::data_dir() const {
 }
 
 path table_indexer::column_file(size_t column) const {
-  return data_dir() / detail::replace_all(layout().fields[column].name, ".",
-                                          path::separator);
+  return data_dir()
+         / detail::replace_all(layout().fields[column].name, ".",
+                               path::separator);
 }
 
 void table_indexer::add(const table_slice_ptr& x) {

@@ -21,6 +21,7 @@
 #include "vast/expression.hpp"
 #include "vast/fwd.hpp"
 #include "vast/meta_index.hpp"
+#include "vast/system/accountant.hpp"
 #include "vast/system/indexer_stage_driver.hpp"
 #include "vast/system/partition.hpp"
 #include "vast/system/query_supervisor.hpp"
@@ -124,7 +125,7 @@ struct index_state {
 
   /// @returns a new INDEXER actor.
   caf::actor make_indexer(path dir, type column_type, size_t column,
-                          uuid partition_id);
+                          uuid partition_id, atomic_measurement* m);
 
   /// Decrements the indexer count for a partition.
   void decrement_indexer_count(uuid pid);
@@ -139,6 +140,8 @@ struct index_state {
   ///          EVALUATOR actors.
   /// @pre num_partitions > 0
   query_map launch_evaluators(lookup_state& lookup, size_t num_partitions);
+
+  void send_report();
 
   // -- member variables -------------------------------------------------------
 
@@ -187,6 +190,8 @@ struct index_state {
   /// Stores partitions that are no longer active but have not persisted their
   /// state yet.
   std::vector<std::pair<partition_ptr, size_t>> unpersisted;
+
+  accountant_type accountant;
 
   /// Name of the INDEX actor.
   static inline const char* name = "index";

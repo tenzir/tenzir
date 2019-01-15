@@ -31,8 +31,8 @@
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/concept/parseable/vast/schema.hpp"
 
+#include "vast/system/accountant.hpp"
 #include "vast/system/signal_monitor.hpp"
-#include "vast/system/source.hpp"
 #include "vast/system/spawn_or_connect_to_node.hpp"
 #include "vast/system/tracker.hpp"
 

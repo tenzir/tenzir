@@ -29,6 +29,7 @@
 #include "vast/fwd.hpp"
 #include "vast/ids.hpp"
 #include "vast/system/fwd.hpp"
+#include "vast/system/instrumentation.hpp"
 #include "vast/type.hpp"
 
 namespace vast::system {
@@ -42,6 +43,12 @@ public:
   table_indexer(partition* parent, const record_type& layout);
 
   ~table_indexer() noexcept;
+
+  table_indexer(const table_indexer&) = delete;
+  table_indexer& operator=(const table_indexer&) = delete;
+
+  table_indexer(table_indexer&&) = default;
+  table_indexer& operator=(table_indexer&&) = default;
 
   // -- persistence ------------------------------------------------------------
 
@@ -164,6 +171,9 @@ private:
   /// Columns of our type-dependant layout. Lazily filled with INDEXER actors.
   std::vector<caf::actor> indexers_;
 
+  /// Instrumentation data store for the layout. One entry for each INDEXER.
+  std::vector<atomic_measurement> measurements_;
+
   /// Stores what IDs are present in this table.
   ids row_ids_;
 
@@ -172,6 +182,8 @@ private:
 
   /// Stores IDs of skipped columns.
   bitvector<> skip_mask_;
+
+  friend struct index_state;
 };
 
 } // namespace vast::system

@@ -25,6 +25,7 @@
 #include "vast/system/accountant.hpp"
 
 #include "vast/detail/coding.hpp"
+#include "vast/detail/overload.hpp"
 
 namespace vast {
 namespace system {
@@ -51,7 +52,7 @@ void init(accountant_actor* self, const path& filename) {
     self->quit(e);
     return;
   }
-  file << "time\thost\tpid\taid\tkey\tvalue\n";
+  file << "host\tpid\taid\tkey\tvalue\n";
   if (!file)
     self->quit(make_error(ec::filesystem_error));
   VAST_DEBUG(self, "kicks off flush loop");
@@ -62,11 +63,7 @@ template <class T>
 void record(accountant_actor* self, const std::string& key, T x) {
   using namespace std::chrono;
   auto node = self->current_sender()->node();
-  auto now = system_clock::now().time_since_epoch();
-  auto ts = duration_cast<double_seconds>(now).count();
   auto& st = self->state;
-  st.file << std::fixed << std::showpoint << std::setprecision(6)
-          << ts << '\t' << std::hex;
   for (auto byte : node.host_id())
     st.file << static_cast<int>(byte);
   st.file << std::dec << '\t'
@@ -95,25 +92,41 @@ accountant_type::behavior_type accountant(accountant_actor* self,
   );
   return {
     [=](const std::string& key, const std::string& value) {
+      VAST_TRACE(self, "received", key, "from", self->current_sender());
       record(self, key, value);
     },
     // Helpers to avoid to_string(..) in sender context.
     [=](const std::string& key, timespan value) {
+      VAST_TRACE(self, "received", key, "from", self->current_sender());
       auto us = duration_cast<microseconds>(value).count();
       record(self, key, us);
     },
     [=](const std::string& key, timestamp value) {
+      VAST_TRACE(self, "received", key, "from", self->current_sender());
       auto us = duration_cast<microseconds>(value.time_since_epoch()).count();
       record(self, key, us);
     },
     [=](const std::string& key, int64_t value) {
+      VAST_TRACE(self, "received", key, "from", self->current_sender());
       record(self, key, value);
     },
     [=](const std::string& key, uint64_t value) {
+      VAST_TRACE(self, "received", key, "from", self->current_sender());
       record(self, key, value);
     },
     [=](const std::string& key, double value) {
+      VAST_TRACE(self, "received", key, "from", self->current_sender());
       record(self, key, value);
+    },
+    [=](const report& r) {
+      VAST_TRACE(self, "received a report from", self->current_sender());
+      for (const auto& [key, value] : r) {
+        auto us = duration_cast<microseconds>(value.duration).count();
+        auto rate = value.events * 1'000'000 / us;
+        record(self, key + ".events", value.events);
+        record(self, key + ".duration", us);
+        record(self, key + ".rate", rate);
+      }
     },
     [=](flush_atom) {
       if (self->state.file)

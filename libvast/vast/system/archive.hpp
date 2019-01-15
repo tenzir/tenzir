@@ -13,6 +13,7 @@
 
 #pragma once
 
+#include <chrono>
 #include <memory>
 #include <unordered_set>
 #include <utility>
@@ -27,24 +28,31 @@
 #include "vast/fwd.hpp"
 #include "vast/ids.hpp"
 #include "vast/store.hpp"
+#include "vast/system/accountant.hpp"
 #include "vast/system/atoms.hpp"
+#include "vast/system/instrumentation.hpp"
 
 namespace vast::system {
-
-/// @relates archive
-struct archive_state {
-  std::unique_ptr<vast::store> store;
-  std::unordered_set<caf::actor_addr> active_exporters;
-  static inline const char* name = "archive";
-};
 
 /// @relates archive
 using archive_type = caf::typed_actor<
   caf::reacts_to<caf::stream<table_slice_ptr>>,
   caf::reacts_to<exporter_atom, caf::actor>,
   caf::replies_to<ids>::with<done_atom, caf::error>,
-  caf::replies_to<status_atom>::with<caf::dictionary<caf::config_value>>
+  caf::replies_to<status_atom>::with<caf::dictionary<caf::config_value>>,
+  caf::reacts_to<telemetry_atom>
 >;
+
+/// @relates archive
+struct archive_state {
+  void send_report();
+  archive_type::stateful_pointer<archive_state> self;
+  std::unique_ptr<vast::store> store;
+  std::unordered_set<caf::actor_addr> active_exporters;
+  vast::system::measurement measurement;
+  accountant_type accountant;
+  static inline const char* name = "archive";
+};
 
 /// Stores event batches and answers queries for ID sets.
 /// @param self The actor handle.
@@ -57,4 +65,3 @@ archive(archive_type::stateful_pointer<archive_state> self, path dir,
         size_t capacity, size_t max_segment_size);
 
 } // namespace vast::system
-

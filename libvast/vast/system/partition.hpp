@@ -148,6 +148,8 @@ private:
 
   /// Remaining capacity in this partition.
   size_t capacity_;
+
+  friend struct index_state;
 };
 
 // -- related types ------------------------------------------------------------

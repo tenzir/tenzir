@@ -80,6 +80,7 @@ using status_atom = caf::atom_constant<caf::atom("status")>;
 using stop_atom = caf::atom_constant<caf::atom("stop")>;
 using store_atom = caf::atom_constant<caf::atom("store")>;
 using submit_atom = caf::atom_constant<caf::atom("submit")>;
+using telemetry_atom = caf::atom_constant<caf::atom("telemetry")>;
 using try_put_atom = caf::atom_constant<caf::atom("tryPut")>;
 using unload_atom = caf::atom_constant<caf::atom("unload")>;
 using value_atom = caf::atom_constant<caf::atom("value")>;

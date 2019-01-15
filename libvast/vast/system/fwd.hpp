@@ -17,6 +17,8 @@
 
 #include <caf/fwd.hpp>
 
+#include "vast/config.hpp"
+
 namespace vast::system {
 
 // -- classes ------------------------------------------------------------------
@@ -39,7 +41,11 @@ class table_indexer;
 
 // -- structs ------------------------------------------------------------------
 
+#ifdef VAST_MEASUREMENT_MUTEX_WORKAROUND
+struct atomic_measurement;
+#endif
 struct index_state;
+struct measurement;
 struct node_state;
 struct query_status;
 struct spawn_arguments;
@@ -54,6 +60,9 @@ class writer_command;
 
 // -- aliases ------------------------------------------------------------------
 
+#ifndef VAST_MEASUREMENT_MUTEX_WORKAROUND
+using atomic_measurement = std::atomic<measurement>;
+#endif
 using node_actor = caf::stateful_actor<node_state>;
 using partition_ptr = std::unique_ptr<partition>;
 using table_indexer_ptr = caf::intrusive_ptr<table_indexer>;

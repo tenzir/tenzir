@@ -13,6 +13,7 @@
 
 #pragma once
 
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -99,6 +100,9 @@ extern size_t max_segment_size;
 
 /// Number of initial IDs to request in the IMPORTER.
 extern size_t initially_requested_ids;
+
+/// Rate at which telemetry data is sent to the ACCOUNTANT.
+extern std::chrono::milliseconds telemetry_rate;
 
 } // namespace system
 

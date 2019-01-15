@@ -80,6 +80,7 @@ datagram_source(datagram_source_actor<Reader>* self,
                 size_t table_slice_size) {
   using namespace caf;
   using namespace std::chrono;
+  namespace defs = defaults::system;
   // Try to open requested UDP port.
   auto udp_res = self->add_udp_datagram_servant(udp_listening_port);
   if (!udp_res) {
@@ -106,11 +107,15 @@ datagram_source(datagram_source_actor<Reader>* self,
       return self->state.done;
     }
   );
+  if (self->state.accountant) {
+    self->delayed_send(self, defs::telemetry_rate, telemetry_atom::value);
+  }
   return {
     [=](caf::io::new_datagram_msg& msg) {
       // Check whether we can buffer more slices in the stream.
       VAST_DEBUG(self, "got a new datagram of size", msg.buf.size());
       auto& st = self->state;
+      auto t = timer::start(st.measurement_);
       auto capacity = st.mgr->out().capacity();
       if (capacity == 0) {
         VAST_WARNING(self, "has no capacity left in stream, dropping input!");
@@ -118,7 +123,6 @@ datagram_source(datagram_source_actor<Reader>* self,
       }
       // Extract events until the source has exhausted its input or until
       // we have completed a batch.
-      auto start = steady_clock::now();
       caf::arraybuf<> buf{msg.buf.data(), msg.buf.size()};
       st.reader.reset(std::make_unique<std::istream>(&buf));
       auto push_slice = [&](table_slice_ptr slice) {
@@ -127,13 +131,14 @@ datagram_source(datagram_source_actor<Reader>* self,
       };
       auto [produced, eof] = st.extract_events(capacity, table_slice_size,
                                                push_slice);
-      auto stop = steady_clock::now();
+      t.stop(produced);
       if (!eof)
         VAST_WARNING(self,
                      "has not enough capacity left in stream, dropping input!");
-      st.report_stats(produced, start, stop);
       if (produced > 0)
         st.mgr->push();
+      if (st.done)
+        st.send_report();
     },
     [=](sink_atom, const actor& sink) {
       // TODO: Currently, we use a broadcast downstream manager. We need to
@@ -160,7 +165,10 @@ datagram_source(datagram_source_actor<Reader>* self,
       VAST_DEBUG(self, "sets filter expression to:", expr);
       self->state.filter = std::move(expr);
     },
-  };
+    [=](telemetry_atom) {
+      self->state.send_report();
+      self->delayed_send(self, defs::telemetry_rate, telemetry_atom::value);
+    }};
 }
 
 } // namespace vast::system

@@ -60,7 +60,7 @@ behavior dummy_sink(stateful_actor<sink_state>* self) {
 }
 
 caf::actor spawn_sink(caf::local_actor* self, path, type, size_t, caf::actor,
-                      uuid) {
+                      uuid, atomic_measurement*) {
   auto result = self->spawn(dummy_sink);
   all_sinks.emplace_back(result);
   return result;

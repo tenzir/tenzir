@@ -21,6 +21,7 @@
 
 #include "vast/column_index.hpp"
 #include "vast/filesystem.hpp"
+#include "vast/system/fwd.hpp"
 #include "vast/type.hpp"
 #include "vast/uuid.hpp"
 
@@ -34,7 +35,8 @@ struct indexer_state {
   ~indexer_state();
 
   caf::error init(caf::event_based_actor* self, path filename, type column_type,
-                  size_t column, caf::actor index, uuid partition_id);
+                  size_t column, caf::actor index, uuid partition_id,
+                  atomic_measurement* m);
 
   // -- member variables -------------------------------------------------------
 
@@ -43,6 +45,8 @@ struct indexer_state {
   caf::actor index;
 
   uuid partition_id;
+
+  atomic_measurement* measurement;
 
   static inline const char* name = "indexer";
 };
@@ -54,9 +58,11 @@ struct indexer_state {
 /// @param column The indexed column.
 /// @param index A handle to the index actor.
 /// @param partition_id The partition ID that this INDEXER belongs to.
+/// @param m A pointer to the measuring probe used for perfomance data
+///        accumulation.
 /// @returns the initial behavior of the INDEXER.
 caf::behavior indexer(caf::stateful_actor<indexer_state>* self, path dir,
                       type column_type, size_t column, caf::actor index,
-                      uuid partition_id);
+                      uuid partition_id, atomic_measurement* m);
 
 } // namespace vast::system

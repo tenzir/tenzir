@@ -43,6 +43,7 @@
 #include "vast/schema.hpp"
 #include "vast/system/accountant.hpp"
 #include "vast/system/atoms.hpp"
+#include "vast/system/instrumentation.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
 
@@ -124,6 +125,7 @@ struct source_state {
     if (auto acc = self->system().registry().get(accountant_atom::value)) {
       VAST_DEBUG(self, "uses registry accountant:", accountant);
       accountant = caf::actor_cast<accountant_type>(acc);
+      self->send(accountant, "announce", name);
     }
   }
 
@@ -227,20 +229,13 @@ struct source_state {
     return {produced, false};
   }
 
-  // Sends stats to the accountant after producing events.
-  template <class Timepoint>
-  void report_stats(size_t produced, Timepoint start, Timepoint stop) {
-    using namespace std::chrono;
-    if (produced > 0) {
-      timespan runtime = stop - start;
-      auto unit = duration_cast<microseconds>(runtime).count();
-      auto rate = (produced * 1e6) / unit;
-      auto events = uint64_t{produced};
-      VAST_INFO(self, "produced", events, "events in", runtime,
-                '(' << size_t(rate), "events/sec)");
-      self->send(accountant, "source.batch.runtime", runtime);
-      self->send(accountant, "source.batch.events", events);
-      self->send(accountant, "source.batch.rate", rate);
+  measurement measurement_;
+
+  void send_report() {
+    if (accountant && measurement_.events > 0) {
+      report r = {{{std::string{name}, measurement_}}};
+      measurement_ = measurement{};
+      self->send(accountant, std::move(r));
     }
   }
 };
@@ -255,6 +250,7 @@ caf::behavior source(caf::stateful_actor<source_state<Reader>>* self,
                      size_t table_slice_size) {
   using namespace caf;
   using namespace std::chrono;
+  namespace defs = defaults::system;
   // Initialize state.
   self->state.init(self, std::move(reader), factory);
   // Spin up the stream manager for the source.
@@ -268,18 +264,22 @@ caf::behavior source(caf::stateful_actor<source_state<Reader>>* self,
     // get next element
     [=](bool& done, downstream<table_slice_ptr>& out, size_t num) {
       auto& st = self->state;
+      auto t = timer::start(st.measurement_);
       // Extract events until the source has exhausted its input or until
       // we have completed a batch.
-      auto start = steady_clock::now();
       auto push_slice = [&](table_slice_ptr slice) {
         out.push(std::move(slice));
       };
       auto [produced, eof] = st.extract_events(num * table_slice_size,
                                                table_slice_size, push_slice);
-      auto stop = steady_clock::now();
-      if (eof)
+      t.stop(produced);
+      if (eof) {
         done = true;
-      st.report_stats(produced, start, stop);
+        st.send_report();
+        VAST_DEBUG(self, "completed slice production");
+        self->state.mgr->continuous(false);
+        self->unbecome();
+      }
       // TODO: if the source is unable to generate new events then we should
       //       trigger CAF to poll the source after a predefined interval of
       //       time again via delayed_send
@@ -309,15 +309,23 @@ caf::behavior source(caf::stateful_actor<source_state<Reader>>* self,
     [=](accountant_type accountant) {
       VAST_DEBUG(self, "sets accountant to", accountant);
       self->state.accountant = std::move(accountant);
+      self->send(self->state.accountant, "announce", self->state.name);
     },
     [=](sink_atom, const actor& sink) {
       // TODO: Currently, we use a broadcast downstream manager. We need to
       //       implement an anycast downstream manager and use it for the
       //       source, because we mustn't duplicate data.
       VAST_ASSERT(sink != nullptr);
-      VAST_DEBUG(self, "registers sink", sink);
       // We currently support only a single sink.
-      self->unbecome();
+      // Switch to streaming and periodic reporting mode.
+      self->become([=](telemetry_atom) {
+        auto& st = self->state;
+        st.send_report();
+        if (!self->state.mgr->done())
+          self->delayed_send(self, defs::telemetry_rate, telemetry_atom::value);
+      });
+      self->delayed_send(self, defs::telemetry_rate, telemetry_atom::value);
+      VAST_DEBUG(self, "registers sink", sink);
       // Start streaming.
       self->state.mgr->add_outbound_path(sink);
     },
