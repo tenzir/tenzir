@@ -52,7 +52,7 @@ table_slices::table_slices() : sink{sys, buf} {
     "[T, +7, 42, 4.2, 1337ms, 2018-12-24, \"foo\", /foo.*bar/, 127.0.0.1,"
     " 10.0.0.0/8, 80/tcp, [1, 2, 3], {T, F}, {1 -> T, 2 -> F, 3 -> T}]",
     "[F, -7, 43, 0.42, -1337ms, 2018-12-25, \"bar\", nil, ::1, 64:ff9b::/96,"
-    " 53/udp, [42], {T}, nil]",
+    " 53/udp, [], {}, {-}]",
   };
   for (auto& row : rows) {
     auto xs = unbox(to<data>(row));
