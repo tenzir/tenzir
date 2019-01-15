@@ -72,6 +72,8 @@ caf::error segment_store::put(table_slice_ptr xs) {
 }
 
 caf::error segment_store::flush() {
+  if (builder_.table_slice_bytes() == 0)
+    return caf::none; // Nothing to flush.
   auto x = builder_.finish();
   if (x == nullptr)
     return make_error(ec::unspecified, "failed to build segment");
