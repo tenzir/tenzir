@@ -35,9 +35,8 @@ TEST(construction and querying) {
   segment_builder builder;
   for (auto& slice : bro_conn_log_slices)
     REQUIRE(!builder.add(slice));
-  auto segment = builder.finish();
-  REQUIRE(segment);
-  auto x = *segment;
+  auto x = builder.finish();
+  REQUIRE_NOT_EQUAL(x, nullptr);
   CHECK_EQUAL(x->num_slices(), bro_conn_log_slices.size());
   MESSAGE("lookup IDs for some segments");
   auto xs = x->lookup(make_ids({0, 6, 19, 21}));
@@ -52,9 +51,8 @@ TEST(serialization) {
   segment_builder builder;
   auto slice = bro_conn_log_slices[0];
   REQUIRE(!builder.add(slice));
-  auto segment = builder.finish();
-  REQUIRE(segment);
-  auto x = *segment;
+  auto x = builder.finish();
+  REQUIRE_NOT_EQUAL(x, nullptr);
   segment_ptr y;
   std::vector<char> buf;
   REQUIRE_EQUAL(save(nullptr, buf, x), caf::none);
@@ -63,6 +61,11 @@ TEST(serialization) {
   CHECK_EQUAL(y->num_slices(), 1u);
   CHECK(std::equal(x->chunk()->begin(), x->chunk()->end(),
                    y->chunk()->begin(), y->chunk()->end()));
+  MESSAGE("load segment from chunk");
+  auto z = segment::make(chunk::make(std::move(buf)));
+  REQUIRE(z);
+  CHECK(std::equal(x->chunk()->begin(), x->chunk()->end(),
+                   z->chunk()->begin(), z->chunk()->end()));
 }
 
 FIXTURE_SCOPE_END()

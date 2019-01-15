@@ -73,14 +73,13 @@ caf::error segment_store::put(table_slice_ptr xs) {
 
 caf::error segment_store::flush() {
   auto x = builder_.finish();
-  if (!x)
-    return x.error();
-  auto seg_ptr = *x;
-  auto filename = segment_path() / to_string(seg_ptr->id());
-  if (auto err = save(nullptr, filename, seg_ptr))
+  if (x == nullptr)
+    make_error(ec::unspecified, "failed to build segment");
+  auto filename = segment_path() / to_string(x->id());
+  if (auto err = save(nullptr, filename, x))
     return err;
   // Keep new segment in the cache.
-  cache_.emplace(seg_ptr->id(), seg_ptr);
+  cache_.emplace(x->id(), x);
   VAST_DEBUG(this, "wrote new segment to", filename.trim(-3));
   VAST_DEBUG(this, "saves segment meta data");
   return save(nullptr, meta_path(), segments_);

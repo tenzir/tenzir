@@ -16,6 +16,7 @@
 #include "vast/bitmap.hpp"
 #include "vast/bitmap_algorithms.hpp"
 #include "vast/ids.hpp"
+#include "vast/logger.hpp"
 #include "vast/segment.hpp"
 #include "vast/si_literals.hpp"
 #include "vast/table_slice.hpp"
@@ -54,17 +55,21 @@ segment_header make_header(chunk_ptr chunk) {
 
 } // namespace <anonymous>
 
-caf::expected<segment_ptr> segment::make(chunk_ptr chunk) {
+segment_ptr segment::make(chunk_ptr chunk) {
   VAST_ASSERT(chunk != nullptr);
-  if (chunk->size() < sizeof(segment_header))
-    return make_error(caf::sec::invalid_argument, "segment too small",
-                      chunk->size());
+  if (chunk->size() < sizeof(segment_header)) {
+    VAST_ERROR_ANON(__func__, "got a chunk smaller than the segment header");
+    return nullptr;
+  }
   auto hdr = make_header(chunk);
-  if (hdr.magic != magic)
-    return make_error(ec::version_error, "invalid segment magic", hdr.magic);
-  if (hdr.version > version)
-    return make_error(ec::version_error, "segment version too big",
-                      hdr.version);
+  if (hdr.magic != magic) {
+    VAST_ERROR_ANON(__func__, "got invalid segment magic", hdr.magic);
+    return nullptr;
+  }
+  if (hdr.version > version) {
+    VAST_ERROR_ANON(__func__, "got newer segment version", hdr.version);
+    return nullptr;
+  }
   // Create a segment and copy the header.
   auto result = caf::make_counted<segment>(chunk);
   result->header_ = hdr;
@@ -73,8 +78,10 @@ caf::expected<segment_ptr> segment::make(chunk_ptr chunk) {
   caf::charbuf buf{data + sizeof(segment_header),
                    chunk->size() - sizeof(segment_header)};
   detail::coded_deserializer<caf::charbuf&> meta_deserializer{buf};
-  if (auto error = meta_deserializer(result->meta_))
-    return error;
+  if (auto error = meta_deserializer(result->meta_)) {
+    VAST_ERROR_ANON(__func__, "failed to deserialize segment meta data");
+    return nullptr;
+  }
   return result;
 }
 
@@ -139,10 +146,9 @@ caf::error inspect(caf::deserializer& source, segment_ptr& x) {
   chunk_ptr chunk;
   if (auto error = source(chunk))
     return error;
-  auto result = segment::make(std::move(chunk));
-  if (!result)
-    return result.error();
-  x = std::move(*result);
+  x = segment::make(std::move(chunk));
+  if (x == nullptr)
+    return make_error(ec::unspecified, "failed to make segment from chunk");
   return caf::none;
 }
 

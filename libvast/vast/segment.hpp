@@ -88,7 +88,7 @@ public:
 
   /// Constructs a segment.
   /// @param chunk The chunk holding the segment data.
-  static caf::expected<segment_ptr> make(chunk_ptr chunk);
+  static segment_ptr make(chunk_ptr chunk);
 
   /// @returns The unique ID of this segment.
   const uuid& id() const;

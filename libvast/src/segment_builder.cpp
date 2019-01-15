@@ -61,7 +61,7 @@ caf::error segment_builder::add(table_slice_ptr x) {
   return caf::none;
 }
 
-caf::expected<segment_ptr> segment_builder::finish() {
+segment_ptr segment_builder::finish() {
   auto guard = caf::detail::make_scope_guard([&] { reset(); });
   // Write header.
   segment_buffer_.resize(sizeof(segment_header));
@@ -73,7 +73,7 @@ caf::expected<segment_ptr> segment_builder::finish() {
   caf::vectorbuf segment_streambuf{segment_buffer_};
   detail::coded_serializer<caf::vectorbuf&> meta_serializer{segment_streambuf};
   if (auto error = meta_serializer(meta_))
-    return error;
+    return nullptr;
   // Add the payload offset to the header.
   header = reinterpret_cast<segment_header*>(segment_buffer_.data());
   uint64_t payload_offset = segment_buffer_.size();
