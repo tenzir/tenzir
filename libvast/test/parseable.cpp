@@ -33,7 +33,7 @@ using namespace vast::parser_literals;
 
 // -- core --------------------------------------------------------------------
 
-TEST(choice) {
+TEST(choice - LHS and RHS) {
   using namespace parsers;
   auto p = chr{'x'} | i32;
   caf::variant<char, int32_t> x;
@@ -45,6 +45,17 @@ TEST(choice) {
   auto c = caf::get_if<char>(&x);
   REQUIRE(c);
   CHECK_EQUAL(*c, 'x');
+}
+
+TEST(choice - unused LHS) {
+  using namespace parsers;
+  auto p = 'x' | i32;
+  int32_t i;
+  CHECK(p("123", i));
+  CHECK_EQUAL(i, 123);
+  i = 0;
+  CHECK(p("x", i));
+  CHECK_EQUAL(i, 0); // didn't mess with i
 }
 
 TEST(choice triple) {
