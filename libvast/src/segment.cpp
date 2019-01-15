@@ -12,6 +12,7 @@
  ******************************************************************************/
 
 #include <caf/stream_deserializer.hpp>
+#include <caf/streambuf.hpp>
 
 #include "vast/bitmap.hpp"
 #include "vast/bitmap_algorithms.hpp"
@@ -23,65 +24,39 @@
 
 #include "vast/detail/assert.hpp"
 #include "vast/detail/byte_swap.hpp"
-#include "vast/detail/coded_deserializer.hpp"
 #include "vast/detail/narrow.hpp"
 
 namespace vast {
 
 using namespace binary_byte_literals;
 
-namespace {
-
-template <class T>
-T to_little_endian(T x) {
-  return detail::swap<detail::host_endian, detail::little_endian>(x);
-}
-
-template <class T>
-T from_little_endian(T x) {
-  return detail::swap<detail::little_endian, detail::host_endian>(x);
-}
-
-segment_header make_header(chunk_ptr chunk) {
-  VAST_ASSERT(chunk->size() >= sizeof(segment_header));
-  auto hdr = reinterpret_cast<const segment_header*>(chunk->data());
-  segment_header result;
-  result.magic = from_little_endian(hdr->magic);
-  result.version = from_little_endian(hdr->version);
-  result.id = hdr->id;
-  result.payload_offset = from_little_endian(hdr->payload_offset);
-  return result;
-}
-
-} // namespace <anonymous>
-
 segment_ptr segment::make(chunk_ptr chunk) {
   VAST_ASSERT(chunk != nullptr);
-  if (chunk->size() < sizeof(segment_header)) {
-    VAST_ERROR_ANON(__func__, "got a chunk smaller than the segment header");
-    return nullptr;
-  }
-  auto hdr = make_header(chunk);
-  if (hdr.magic != magic) {
-    VAST_ERROR_ANON(__func__, "got invalid segment magic", hdr.magic);
-    return nullptr;
-  }
-  if (hdr.version > version) {
-    VAST_ERROR_ANON(__func__, "got newer segment version", hdr.version);
-    return nullptr;
-  }
-  // Create a segment and copy the header.
-  auto result = caf::make_counted<segment>(chunk);
-  result->header_ = hdr;
-  // Deserialize meta data.
+  // Setup a CAF deserializer
   auto data = const_cast<char*>(chunk->data()); // CAF won't touch it.
-  caf::charbuf buf{data + sizeof(segment_header),
-                   chunk->size() - sizeof(segment_header)};
-  detail::coded_deserializer<caf::charbuf&> meta_deserializer{buf};
-  if (auto error = meta_deserializer(result->meta_)) {
+  caf::charbuf buf{data, chunk->size()};
+  caf::stream_deserializer<caf::charbuf&> source{buf};
+  auto result = segment_ptr{new segment, false};
+  if (auto error = source(result->header_, result->meta_)) {
     VAST_ERROR_ANON(__func__, "failed to deserialize segment meta data");
     return nullptr;
   }
+  if (result->magic != magic) {
+    VAST_ERROR_ANON(__func__, "got invalid segment magic", result->magic);
+    return nullptr;
+  }
+  if (result->version > version) {
+    VAST_ERROR_ANON(__func__, "got newer segment version", result->version);
+    return nullptr;
+  }
+  // Skip meta data. Since the buffer following the chunk meta data was
+  // previously serialized as chunk pointer (uint32_t size + data), we have
+  // to add add sizeof(uint32_t) bytes to directly jump to the table slice
+  // data.
+  auto bytes_read = detail::narrow_cast<size_t>(buf.in_avail());
+  VAST_ASSERT(chunk->size() > bytes_read);
+  auto meta_size = chunk->size() - bytes_read;
+  result->chunk_ = chunk->slice(meta_size + sizeof(uint32_t));
   return result;
 }
 
@@ -119,10 +94,9 @@ segment::lookup(const ids& xs) const {
 
 caf::expected<table_slice_ptr>
 segment::make_slice(const table_slice_synopsis& slice) const {
-  auto payload = chunk_->data() + header_.payload_offset;
   auto slice_size = detail::narrow_cast<size_t>(slice.end - slice.start);
   // CAF won't touch the pointer during deserialization.
-  caf::charbuf buf{const_cast<char*>(payload) + slice.start, slice_size};
+  caf::charbuf buf{const_cast<char*>(chunk_->data()) + slice.start, slice_size};
   caf::stream_deserializer<caf::charbuf&> deserializer{buf};
   table_slice_ptr result;
   if (auto error = deserializer(result))
@@ -130,26 +104,14 @@ segment::make_slice(const table_slice_synopsis& slice) const {
   return result;
 }
 
-segment::segment(chunk_ptr chunk) : chunk_{std::move(chunk)} {
-  // Only the builder and make() call this constructor. In the former case the
-  // chunk is properly constructed and in the latter case the factory ensures
-  // that it meets the requirements.
-  VAST_ASSERT(chunk_ != nullptr);
-}
-
 caf::error inspect(caf::serializer& sink, const segment_ptr& x) {
   VAST_ASSERT(x != nullptr);
-  return sink(x->chunk());
+  return sink(x->header_, x->meta_, x->chunk_);
 }
 
 caf::error inspect(caf::deserializer& source, segment_ptr& x) {
-  chunk_ptr chunk;
-  if (auto error = source(chunk))
-    return error;
-  x = segment::make(std::move(chunk));
-  if (x == nullptr)
-    return make_error(ec::unspecified, "failed to make segment from chunk");
-  return caf::none;
+  x.reset(new segment);
+  return source(x->header_, x->meta_, x->chunk_);
 }
 
 } // namespace vast

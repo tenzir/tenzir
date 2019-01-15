@@ -45,16 +45,14 @@ using segment_ptr = caf::intrusive_ptr<segment>;
 ///               +--------------------+--------------------+
 ///               |       magic        |      version       | \
 ///               +--------------------+--------------------+ |
-///               |                 segment                 | | fixed size
+///               |                 segment                 | | segment header
 ///               |                  UUID                   | /
-///               +-----------------------------------------+ |
-///            +--|             table slice offset          | /
-///            |  +-----------------------------------------+
-///            |  .                                         . \
-///            |  .                meta data                . | variable size
-///            |  .                                         . /
-///            |  +-----------------------------------------+
-///            +->.                                         . \
+///               +-----------------------------------------+
+///               .                                         . \
+///               .                meta data                . | variable size
+///               .                                         . /
+///               +-----------------------------------------+
+///               .                                         . \
 ///               .                                         . |
 ///               .               table slices              . | variable size
 ///               .                                         . |
@@ -87,6 +85,7 @@ public:
   };
 
   /// Constructs a segment.
+  /// @param header The header of the segment.
   /// @param chunk The chunk holding the segment data.
   static segment_ptr make(chunk_ptr chunk);
 
@@ -105,19 +104,22 @@ public:
   caf::expected<std::vector<table_slice_ptr>>
   lookup(const ids& xs) const;
 
-  /// @cond PRIVATE
+  // -- concepts --------------------------------------------------------------
 
-  explicit segment(chunk_ptr chunk);
+  /// @pre `x != nullptr`
+  friend caf::error inspect(caf::serializer& sink, const segment_ptr& x);
 
-  /// @endcond
+  friend caf::error inspect(caf::deserializer& source, segment_ptr& x);
 
 private:
+  segment() = default;
+
   caf::expected<table_slice_ptr>
   make_slice(const table_slice_synopsis& slice) const;
 
+  meta_data meta_;
   chunk_ptr chunk_;
   segment_header header_;
-  meta_data meta_;
 };
 
 /// @relates segment::table_slice_synopsis
@@ -131,12 +133,5 @@ template <class Inspector>
 auto inspect(Inspector& f, segment::meta_data& x) {
   return f(x.slices);
 }
-
-/// @relates segment
-/// @pre `x != nullptr`
-caf::error inspect(caf::serializer& sink, const segment_ptr& x);
-
-/// @relates segment
-caf::error inspect(caf::deserializer& source, segment_ptr& x);
 
 } // namespace vast

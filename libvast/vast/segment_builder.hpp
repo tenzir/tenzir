@@ -62,7 +62,6 @@ private:
   void reset();
 
   // Segment state
-  std::vector<char> segment_buffer_;
   segment::meta_data meta_;
   uuid id_;
   // Table slice state

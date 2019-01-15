@@ -74,7 +74,7 @@ caf::error segment_store::put(table_slice_ptr xs) {
 caf::error segment_store::flush() {
   auto x = builder_.finish();
   if (x == nullptr)
-    make_error(ec::unspecified, "failed to build segment");
+    return make_error(ec::unspecified, "failed to build segment");
   auto filename = segment_path() / to_string(x->id());
   if (auto err = save(nullptr, filename, x))
     return err;

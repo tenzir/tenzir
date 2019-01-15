@@ -13,8 +13,7 @@
 
 #include "vast/segment_builder.hpp"
 
-#include <caf/detail/scope_guard.hpp>
-
+#include "vast/error.hpp"
 #include "vast/ids.hpp"
 #include "vast/logger.hpp"
 #include "vast/segment.hpp"
@@ -22,19 +21,9 @@
 
 #include "vast/detail/assert.hpp"
 #include "vast/detail/byte_swap.hpp"
-#include "vast/detail/coded_serializer.hpp"
 #include "vast/detail/narrow.hpp"
 
 namespace vast {
-
-namespace {
-
-template <class T>
-T to_little_endian(T x) {
-  return detail::swap<detail::host_endian, detail::little_endian>(x);
-}
-
-} // namespace <anonymous>
 
 segment_builder::segment_builder()
   : table_slice_streambuf_{table_slice_buffer_},
@@ -44,7 +33,7 @@ segment_builder::segment_builder()
 
 caf::error segment_builder::add(table_slice_ptr x) {
   if (x->offset() < min_table_slice_offset_)
-    return make_error(ec::unspecified, "slice offsets not non-decreasing");
+    return make_error(ec::unspecified, "slice offsets not increasing");
   auto before = table_slice_buffer_.size();
   if (auto error = table_slice_serializer_(x)) {
     table_slice_buffer_.resize(before);
@@ -62,32 +51,15 @@ caf::error segment_builder::add(table_slice_ptr x) {
 }
 
 segment_ptr segment_builder::finish() {
-  auto guard = caf::detail::make_scope_guard([&] { reset(); });
-  // Write header.
-  segment_buffer_.resize(sizeof(segment_header));
-  auto header = reinterpret_cast<segment_header*>(segment_buffer_.data());
-  header->magic = to_little_endian(segment::magic);
-  header->version = to_little_endian(segment::version);
-  header->id = id_;
-  // Serialize meta data into buffer.
-  caf::vectorbuf segment_streambuf{segment_buffer_};
-  detail::coded_serializer<caf::vectorbuf&> meta_serializer{segment_streambuf};
-  if (auto error = meta_serializer(meta_))
+  if (meta_.slices.empty())
     return nullptr;
-  // Add the payload offset to the header.
-  header = reinterpret_cast<segment_header*>(segment_buffer_.data());
-  uint64_t payload_offset = segment_buffer_.size();
-  header->payload_offset = to_little_endian(payload_offset);
-  // Write the table slices.
-  segment_buffer_.resize(segment_buffer_.size() + table_slice_buffer_.size());
-  std::memcpy(segment_buffer_.data() + payload_offset,
-              table_slice_buffer_.data(),
-              table_slice_buffer_.size());
-  // Move the complete segment buffer into a chunk.
-  auto chk = chunk::make(std::move(segment_buffer_));
-  auto result = caf::make_counted<segment>(chk);
-  result->header_ = *chk->as<segment_header>();
+  auto result = segment_ptr{new segment, false};
   result->meta_ = std::move(meta_);
+  result->chunk_ = chunk::make(std::move(table_slice_buffer_));
+  result->header_.magic = segment::magic;
+  result->header_.version = segment::version;
+  result->header_.id = id_;
+  reset();
   return result;
 }
 
@@ -118,8 +90,7 @@ void segment_builder::reset() {
   min_table_slice_offset_ = 0;
   meta_ = {};
   id_ = uuid::random();
-  segment_buffer_ = {};
-  table_slice_buffer_.clear();
+  table_slice_buffer_ = {};
   slices_.clear();
 }
 
