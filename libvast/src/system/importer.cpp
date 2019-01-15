@@ -325,8 +325,7 @@ behavior importer(stateful_actor<importer_state>* self, path dir,
   if (auto a = self->system().registry().get(accountant_atom::value)) {
     self->state.accountant = actor_cast<accountant_type>(a);
     self->send(self->state.accountant, "announce", self->name());
-    self->delayed_send(self, std::chrono::milliseconds(defs::telemetry_rate_ms),
-        telemetry_atom::value);
+    self->delayed_send(self, defs::telemetry_rate, telemetry_atom::value);
   }
   self->set_exit_handler(
     [=](const exit_msg& msg) {
@@ -382,9 +381,7 @@ behavior importer(stateful_actor<importer_state>* self, path dir,
     },
     [=](telemetry_atom) {
       self->state.send_report();
-      self->delayed_send(self,
-                         std::chrono::milliseconds(defs::telemetry_rate_ms),
-                         telemetry_atom::value);
+      self->delayed_send(self, defs::telemetry_rate, telemetry_atom::value);
     }
   };
 }

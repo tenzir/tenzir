@@ -106,8 +106,7 @@ caf::error index_state::init(const path& dir, size_t max_partition_size,
     namespace defs = defaults::system;
     this->accountant = actor_cast<accountant_type>(a);
     self->send(this->accountant, "announce", "index");
-    self->delayed_send(self, std::chrono::milliseconds(defs::telemetry_rate_ms),
-        telemetry_atom::value);
+    self->delayed_send(self, defs::telemetry_rate, telemetry_atom::value);
   }
   // Read persistent state.
   if (auto err = load_from_disk())
@@ -443,8 +442,7 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
     [=](telemetry_atom) {
       self->state.send_report();
       namespace defs = defaults::system;
-      self->delayed_send(self, milliseconds(defs::telemetry_rate_ms),
-                         telemetry_atom::value);
+      self->delayed_send(self, defs::telemetry_rate, telemetry_atom::value);
     }
   );
   return {[=](worker_atom, caf::actor& worker) {
@@ -465,7 +463,7 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
           [=](telemetry_atom) {
             self->state.send_report();
             namespace defs = defaults::system;
-            self->delayed_send(self, milliseconds(defs::telemetry_rate_ms),
+            self->delayed_send(self, defs::telemetry_rate,
                                telemetry_atom::value);
           }};
 }

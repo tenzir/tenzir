@@ -13,6 +13,7 @@
 
 #pragma once
 
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -101,7 +102,7 @@ extern size_t max_segment_size;
 extern size_t initially_requested_ids;
 
 /// Rate at which telemetry data is sent to the ACCOUNTANT.
-extern size_t telemetry_rate_ms;
+extern std::chrono::milliseconds telemetry_rate;
 
 } // namespace system
 

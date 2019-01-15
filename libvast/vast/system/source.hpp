@@ -322,11 +322,9 @@ caf::behavior source(caf::stateful_actor<source_state<Reader>>* self,
         auto& st = self->state;
         st.send_report();
         if (!self->state.mgr->done())
-          self->delayed_send(self, milliseconds(defs::telemetry_rate_ms),
-                             telemetry_atom::value);
+          self->delayed_send(self, defs::telemetry_rate, telemetry_atom::value);
       });
-      self->delayed_send(self, milliseconds(defs::telemetry_rate_ms),
-          telemetry_atom::value);
+      self->delayed_send(self, defs::telemetry_rate, telemetry_atom::value);
       VAST_DEBUG(self, "registers sink", sink);
       // Start streaming.
       self->state.mgr->add_outbound_path(sink);

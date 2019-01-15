@@ -108,8 +108,7 @@ datagram_source(datagram_source_actor<Reader>* self,
     }
   );
   if (self->state.accountant) {
-    self->delayed_send(self, milliseconds(defs::telemetry_rate_ms),
-        telemetry_atom::value);
+    self->delayed_send(self, defs::telemetry_rate, telemetry_atom::value);
   }
   return {
     [=](caf::io::new_datagram_msg& msg) {
@@ -168,9 +167,7 @@ datagram_source(datagram_source_actor<Reader>* self,
     },
     [=](telemetry_atom) {
       self->state.send_report();
-      self->delayed_send(self,
-                         std::chrono::milliseconds(defs::telemetry_rate_ms),
-                         telemetry_atom::value);
+      self->delayed_send(self, defs::telemetry_rate, telemetry_atom::value);
     }};
 }
 

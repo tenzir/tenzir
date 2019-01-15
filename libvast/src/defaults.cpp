@@ -54,7 +54,7 @@ size_t num_query_supervisors = 10;
 size_t segments = 10;
 size_t max_segment_size = 128;
 size_t initially_requested_ids = 128;
-size_t telemetry_rate_ms = 1000;
+std::chrono::milliseconds telemetry_rate = std::chrono::milliseconds{1000};
 
 } // namespace system
 
