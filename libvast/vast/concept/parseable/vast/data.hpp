@@ -59,15 +59,8 @@ struct access::parser<data> : vast::parser<access::parser<data>> {
     return p;
   }
 
-  template <class Iterator>
-  bool parse(Iterator& f, const Iterator& l, unused_type) const {
-    static auto p = make<Iterator>();
-    return p(f, l, unused);
-  }
-
-  template <class Iterator>
-  bool parse(Iterator& f, const Iterator& l, data& a) const {
-    using namespace parsers;
+  template <class Iterator, class Attribute>
+  bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
     static auto p = make<Iterator>();
     return p(f, l, a);
   }
@@ -84,4 +77,3 @@ static auto const data = make_parser<vast::data>();
 
 } // namespace parsers
 } // namespace vast
-
