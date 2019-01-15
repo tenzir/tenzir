@@ -47,6 +47,17 @@ auto print_escaper = [](auto& f, auto l, auto out) {
     hex_escaper(f, l, out);
 };
 
+inline auto make_extra_print_escaper(std::string_view extra) {
+  return [=](auto& f, auto l, auto out) {
+    if (extra.find(*f) != std::string_view::npos) {
+      *out++ = '\\';
+      *out++ = *f++;
+    } else {
+      print_escaper(f, l, out);
+    }
+  };
+}
+
 auto byte_unescaper = [](auto& f, auto l, auto out) {
   if (*f != '\\') {
     *out++ = *f++;

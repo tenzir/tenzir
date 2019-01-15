@@ -26,15 +26,7 @@ std::string byte_escape(const std::string& str) {
 }
 
 std::string byte_escape(const std::string& str, const std::string& extra) {
-  auto print_extra_escaper = [&](auto& f, auto l, auto out) {
-    if (extra.find(*f) != std::string::npos) {
-      *out++ = '\\';
-      *out++ = *f++;
-    } else {
-      print_escaper(f, l, out);
-    }
-  };
-  return escape(str, print_extra_escaper);
+  return escape(str, make_extra_print_escaper(extra));
 }
 
 std::string byte_escape_all(const std::string& str) {
