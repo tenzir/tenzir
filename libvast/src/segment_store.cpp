@@ -72,29 +72,27 @@ caf::error segment_store::put(table_slice_ptr xs) {
 }
 
 caf::error segment_store::flush() {
+  if (builder_.table_slice_bytes() == 0)
+    return caf::none; // Nothing to flush.
   auto x = builder_.finish();
-  if (!x)
-    return x.error();
-  auto seg_ptr = *x;
-  auto filename = segment_path() / to_string(seg_ptr->id());
-  if (auto err = save(nullptr, filename, seg_ptr))
+  if (x == nullptr)
+    return make_error(ec::unspecified, "failed to build segment");
+  auto filename = segment_path() / to_string(x->id());
+  if (auto err = save(nullptr, filename, x))
     return err;
   // Keep new segment in the cache.
-  cache_.emplace(seg_ptr->id(), seg_ptr);
+  cache_.emplace(x->id(), x);
   VAST_DEBUG(this, "wrote new segment to", filename.trim(-3));
   VAST_DEBUG(this, "saves segment meta data");
   return save(nullptr, meta_path(), segments_);
 }
 
 caf::expected<segment_ptr> segment_store::load_segment(uuid id) const {
-  segment_ptr seg_ptr = nullptr;
-  auto fname = segment_path() / to_string(id);
-  VAST_DEBUG(this, "loads segment from", fname);
-  if (auto err = load(nullptr, fname, seg_ptr)) {
-    VAST_ERROR(this, "cannot load segment from", fname);
-    return err;
-  }
-  return seg_ptr;
+  auto filename = segment_path() / to_string(id);
+  VAST_DEBUG(this, "loads segment from", filename);
+  if (auto chk = chunk::mmap(filename))
+    return segment::make(std::move(chk));
+  return make_error(ec::filesystem_error, "failed to mmap chunk", filename);
 }
 
 std::unique_ptr<store::lookup> segment_store::extract(const ids& xs) const {
@@ -215,12 +213,10 @@ segment_store::get(const ids& xs) {
         seg_ptr = i->second;
       } else {
         VAST_DEBUG(this, "got cache miss for segment", id);
-        auto fname = segment_path() / to_string(id);
-        if (auto err = load(nullptr, fname, seg_ptr)) {
-          VAST_ERROR(this, "unable to load segment from", fname);
-          return err;
-        }
-        i = cache_.emplace(id, seg_ptr).first;
+        auto x = load_segment(id);
+        if (!x)
+          return x.error();
+        i = cache_.emplace(id, std::move(*x)).first;
       }
       VAST_ASSERT(seg_ptr != nullptr);
       VAST_DEBUG(this, "looks into segment", id);

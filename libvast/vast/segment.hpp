@@ -27,6 +27,7 @@
 #include "vast/aliases.hpp"
 #include "vast/chunk.hpp"
 #include "vast/fwd.hpp"
+#include "vast/segment_header.hpp"
 #include "vast/uuid.hpp"
 
 namespace vast {
@@ -44,16 +45,14 @@ using segment_ptr = caf::intrusive_ptr<segment>;
 ///               +--------------------+--------------------+
 ///               |       magic        |      version       | \
 ///               +--------------------+--------------------+ |
-///               |                 segment                 | | fixed size
+///               |                 segment                 | | segment header
 ///               |                  UUID                   | /
-///               +-----------------------------------------+ |
-///            +--|             table slice offset          | /
-///            |  +-----------------------------------------+
-///            |  .                                         . \
-///            |  .                meta data                . | variable size
-///            |  .                                         . /
-///            |  +-----------------------------------------+
-///            +->.                                         . \
+///               +-----------------------------------------+
+///               .                                         . \
+///               .                meta data                . | variable size
+///               .                                         . /
+///               +-----------------------------------------+
+///               .                                         . \
 ///               .                                         . |
 ///               .               table slices              . | variable size
 ///               .                                         . |
@@ -64,28 +63,13 @@ class segment : public caf::ref_counted {
   friend segment_builder;
 
 public:
-  using magic_type = uint32_t;
-  using version_type = uint32_t;
-
   /// A magic constant that identifies segment files. The four bytes represent
   /// the multiplication of the vector `(1, 2, 3, 4)` with the value `42`,
   /// converted to hex bytes: `42 * (1, 2, 3, 4) = [2a, 65, 7e, a8]`.
-  static inline constexpr magic_type magic = 0x2a547ea8;
+  static inline constexpr segment_magic_type magic = 0x2a547ea8;
 
   /// The current version of the segment format.
-  static inline constexpr version_type version = 1;
-
-  /// The fixed-size header for every segment.
-  struct header {
-    magic_type magic;        ///< Magic constant to identify segments.
-    version_type version;    ///< Version of the segment format.
-    uuid id;                 ///< The UUID of the segment.
-    uint64_t payload_offset; ///< The offset to the table slices.
-  };
-
-  // Guarantee proper layout of the header, since we're going to rely on its
-  // in-memory representation.
-  static_assert(sizeof(header) == 32);
+  static inline constexpr segment_version_type version = 1;
 
   /// Per-slice meta data.
   struct table_slice_synopsis {
@@ -101,8 +85,9 @@ public:
   };
 
   /// Constructs a segment.
+  /// @param header The header of the segment.
   /// @param chunk The chunk holding the segment data.
-  static caf::expected<segment_ptr> make(chunk_ptr chunk);
+  static segment_ptr make(chunk_ptr chunk);
 
   /// @returns The unique ID of this segment.
   const uuid& id() const;
@@ -119,26 +104,23 @@ public:
   caf::expected<std::vector<table_slice_ptr>>
   lookup(const ids& xs) const;
 
-  /// @cond PRIVATE
+  // -- concepts --------------------------------------------------------------
 
-  explicit segment(chunk_ptr chunk);
+  /// @pre `x != nullptr`
+  friend caf::error inspect(caf::serializer& sink, const segment_ptr& x);
 
-  /// @endcond
+  friend caf::error inspect(caf::deserializer& source, segment_ptr& x);
 
 private:
+  segment() = default;
+
   caf::expected<table_slice_ptr>
   make_slice(const table_slice_synopsis& slice) const;
 
-  chunk_ptr chunk_;
-  header header_;
   meta_data meta_;
+  chunk_ptr chunk_;
+  segment_header header_;
 };
-
-/// @relates segment::header
-template <class Inspector>
-auto inspect(Inspector& f, segment::header& x) {
-  return f(x.magic, x.version, x.id, x.payload_offset);
-}
 
 /// @relates segment::table_slice_synopsis
 template <class Inspector>
@@ -151,12 +133,5 @@ template <class Inspector>
 auto inspect(Inspector& f, segment::meta_data& x) {
   return f(x.slices);
 }
-
-/// @relates segment
-/// @pre `x != nullptr`
-caf::error inspect(caf::serializer& sink, const segment_ptr& x);
-
-/// @relates segment
-caf::error inspect(caf::deserializer& source, segment_ptr& x);
 
 } // namespace vast

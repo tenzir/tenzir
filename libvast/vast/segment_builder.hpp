@@ -43,7 +43,7 @@ public:
 
   /// Constructs a segment from previously added table slices.
   /// @post The builder can now be reused to contruct a new segment.
-  caf::expected<segment_ptr> finish();
+  segment_ptr finish();
 
   /// Locates previously added table slices for a given set of IDs.
   /// @param xs The IDs to lookup.
@@ -62,7 +62,6 @@ private:
   void reset();
 
   // Segment state
-  std::vector<char> segment_buffer_;
   segment::meta_data meta_;
   uuid id_;
   // Table slice state
