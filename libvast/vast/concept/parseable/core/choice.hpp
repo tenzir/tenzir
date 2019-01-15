@@ -73,47 +73,36 @@ public:
   template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
     auto save = f;
-    if (parse_left<Lhs>(f, l, a))
+    if (do_parse(lhs_, f, l, a))
       return true;
     f = save;
-    if (parse_right(f, l, a))
+    if (do_parse(rhs_, f, l, a))
       return true;
     f = save;
     return false;
   }
 
 private:
-  template <class Left, class Iterator, class Attribute>
-  auto parse_left(Iterator& f, const Iterator& l, Attribute& a) const
-  -> std::enable_if_t<is_choice_parser<Left>{}, bool> {
-    return lhs_(f, l, a); // recurse
-  }
-
-  template <class Left, class Iterator>
-  auto parse_left(Iterator& f, const Iterator& l, unused_type) const
-  -> std::enable_if_t<!is_choice_parser_v<Left>, bool> {
-    return lhs_(f, l, unused);
-  }
-
-  template <class Left, class Iterator, class Attribute>
-  auto parse_left(Iterator& f, const Iterator& l, Attribute& a) const
-  -> std::enable_if_t<!is_choice_parser_v<Left>, bool> {
-    lhs_attribute al;
-    if (!lhs_(f, l, al))
-      return false;
-    a = std::move(al);
-    return true;
-  }
-
-  template <class Iterator, class Attribute>
-  bool parse_right(Iterator& f, const Iterator& l, Attribute& a) const {
-    if constexpr (detail::is_any_v<unused_type, Attribute, rhs_attribute>) {
-      return rhs_(f, l, unused);
+  template <class Parser, class Iterator, class Attribute>
+  bool do_parse(const Parser& p, Iterator& f, const Iterator& l,
+                Attribute& a) const {
+    using detail::is_any_v;
+    using parser_attribute = typename Parser::attribute;
+    if constexpr (is_choice_parser_v<Parser>) {
+      // If LHS/RHS is a choice parser, we can recurse because the passed-in
+      // attribute will also be valid for the sub parser.
+      return p(f, l, a);
+    } else if constexpr (is_any_v<unused_type, Attribute, parser_attribute>) {
+      // If LHS/RHS has an unused attribute or the passed-in attribute is
+      // unused, then we won't have to parse into a concrete object.
+      return p(f, l, unused);
     } else {
-      rhs_attribute ar;
-      if (!rhs_(f, l, ar))
+      // Parse one element of the variant and assign it to the passed-in
+      // attribute.
+      parser_attribute attr;
+      if (!p(f, l, attr))
         return false;
-      a = std::move(ar);
+      a = std::move(attr);
       return true;
     }
   }
@@ -123,4 +112,3 @@ private:
 };
 
 } // namespace vast
-

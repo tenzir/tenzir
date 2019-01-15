@@ -113,6 +113,12 @@ TEST(data) {
   CHECK(d == set{-42, 42, -1});
 
   MESSAGE("map");
+  str = "{-}"s;
+  f = str.begin();
+  l = str.end();
+  CHECK(p(f, l, d));
+  CHECK(f == l);
+  CHECK(d == map{});
   str = "{T->1,F->0}"s;
   f = str.begin();
   l = str.end();

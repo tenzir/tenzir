@@ -39,6 +39,7 @@ struct access::parser<data> : vast::parser<access::parser<data>> {
     rule<Iterator, data> p;
     auto ws = ignore(*parsers::space);
     auto x = ws >> p >> ws;
+    auto kvp = x >> "->" >> x;
     p = parsers::timespan
       | parsers::timestamp
       | parsers::net
@@ -51,22 +52,15 @@ struct access::parser<data> : vast::parser<access::parser<data>> {
       | parsers::qq_str
       | parsers::pattern
       | '[' >> ~(x % ',') >> ']'
+      | '{' >> ('-' | as<map>(kvp % ',')) >> '}'
       | '{' >> ~as<set>(x % ',') >> '}'
-      | '{' >> ~as<map>((x >> "->" >> x) % ',') >> '}'
       | as<caf::none_t>("nil"_p)
       ;
     return p;
   }
 
-  template <class Iterator>
-  bool parse(Iterator& f, const Iterator& l, unused_type) const {
-    static auto p = make<Iterator>();
-    return p(f, l, unused);
-  }
-
-  template <class Iterator>
-  bool parse(Iterator& f, const Iterator& l, data& a) const {
-    using namespace parsers;
+  template <class Iterator, class Attribute>
+  bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
     static auto p = make<Iterator>();
     return p(f, l, a);
   }
@@ -83,4 +77,3 @@ static auto const data = make_parser<vast::data>();
 
 } // namespace parsers
 } // namespace vast
-
