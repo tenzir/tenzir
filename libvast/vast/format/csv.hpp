@@ -59,10 +59,11 @@ struct value_printer : printer<value_printer> {
       using printers::chr;
       using printers::eps;
       auto escape = [&] {
+        auto escaper = detail::make_double_escaper("\"|");
         auto f = str.begin();
         auto l = str.end();
         while (f != l)
-          detail::make_double_escaper("\"|")(f, l, out_);
+          escaper(f, out_);
       };
       auto p = chr<'"'> << (eps ->* escape) << chr<'"'>;
       return p.print(out_, unused);

@@ -47,7 +47,7 @@ std::string json_escape(std::string_view str) {
   auto l = str.end();
   auto out = std::back_inserter(result);
   while (f != l)
-    json_escaper(f, l, out);
+    json_escaper(f, out);
   result += '"';
   return result;
 }

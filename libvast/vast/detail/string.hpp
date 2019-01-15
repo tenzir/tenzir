@@ -33,7 +33,7 @@ std::string escape(std::string_view str, Escaper escaper) {
   auto l = str.end();
   auto out = std::back_inserter(result);
   while (f != l)
-    escaper(f, l, out);
+    escaper(f, out);
   return result;
 }
 
