@@ -35,17 +35,17 @@ struct accountant_state {
   static inline const char* name = "accountant";
 };
 
-struct perf_sample {
+struct performance_sample {
   std::string key;
   measurement value;
 };
 
 template <class Inspector>
-typename Inspector::result_type inspect(Inspector& f, perf_sample& s) {
-  return f(caf::meta::type_name("perf_sample"), s.key, s.value);
+typename Inspector::result_type inspect(Inspector& f, performance_sample& s) {
+  return f(caf::meta::type_name("performance_sample"), s.key, s.value);
 }
 
-using report = std::vector<perf_sample>;
+using report = std::vector<performance_sample>;
 
 using accountant_type =
   caf::typed_actor<

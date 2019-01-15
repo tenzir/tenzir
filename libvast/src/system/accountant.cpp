@@ -123,9 +123,9 @@ accountant_type::behavior_type accountant(accountant_actor* self,
       for (const auto& [key, value] : r) {
         auto us = duration_cast<microseconds>(value.duration).count();
         auto rate = value.events * 1'000'000 / us;
-        record(self, key+".events", value.events);
-        record(self, key+".duration", us);
-        record(self, key+".rate", rate);
+        record(self, key + ".events", value.events);
+        record(self, key + ".duration", us);
+        record(self, key + ".rate", rate);
       }
     },
     [=](flush_atom) {

@@ -82,8 +82,8 @@ behavior indexer(stateful_actor<indexer_state>* self, path dir,
           // nop
         },
         [=](unit_t&, const std::vector<table_slice_ptr>& xs) {
-          auto t = atomic_timer::start(*(self->state.measurement));
-          uint64_t events = 0ull;
+          auto t = atomic_timer::start(*self->state.measurement);
+          auto events = uint64_t{0};
           for (auto& x : xs) {
             events += x->rows();
             self->state.col.add(x);

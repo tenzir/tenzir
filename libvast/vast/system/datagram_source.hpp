@@ -167,14 +167,11 @@ datagram_source(datagram_source_actor<Reader>* self,
       self->state.filter = std::move(expr);
     },
     [=](telemetry_atom) {
-      auto& st = self->state;
-      st.send_report();
-      self->delayed_send(
-        self,
-        std::chrono::milliseconds(defs::telemetry_rate_ms),
-        telemetry_atom::value);
-    }
-  };
+      self->state.send_report();
+      self->delayed_send(self,
+                         std::chrono::milliseconds(defs::telemetry_rate_ms),
+                         telemetry_atom::value);
+    }};
 }
 
 } // namespace vast::system

@@ -233,10 +233,9 @@ struct source_state {
 
   void send_report() {
     if (accountant && measurement_.events > 0) {
-      using namespace std::string_literals;
       report r = {{{std::string{name}, measurement_}}};
       measurement_ = measurement{};
-      self->send(accountant, r);
+      self->send(accountant, std::move(r));
     }
   }
 };
@@ -286,7 +285,7 @@ caf::behavior source(caf::stateful_actor<source_state<Reader>>* self,
       //       time again via delayed_send
     },
     // done?
-    [=](const bool& done) {
+    [](const bool& done) {
       return done;
     }
   );
@@ -317,21 +316,18 @@ caf::behavior source(caf::stateful_actor<source_state<Reader>>* self,
       //       implement an anycast downstream manager and use it for the
       //       source, because we mustn't duplicate data.
       VAST_ASSERT(sink != nullptr);
-      // Switch to streaming and period reporting mode.
-      self->become(
-          [=](telemetry_atom) {
-            auto& st = self->state;
-            st.send_report();
-            if (!self->state.mgr->done())
-              self->delayed_send(
-                self,
-                milliseconds(defs::telemetry_rate_ms),
-                telemetry_atom::value);
+      // We currently support only a single sink.
+      // Switch to streaming and periodic reporting mode.
+      self->become([=](telemetry_atom) {
+        auto& st = self->state;
+        st.send_report();
+        if (!self->state.mgr->done())
+          self->delayed_send(self, milliseconds(defs::telemetry_rate_ms),
+                             telemetry_atom::value);
       });
       self->delayed_send(self, milliseconds(defs::telemetry_rate_ms),
           telemetry_atom::value);
       VAST_DEBUG(self, "registers sink", sink);
-      // We currently support only a single sink.
       // Start streaming.
       self->state.mgr->add_outbound_path(sink);
     },

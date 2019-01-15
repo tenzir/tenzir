@@ -49,7 +49,7 @@ struct archive_state {
   archive_type::stateful_pointer<archive_state> self;
   std::unique_ptr<vast::store> store;
   std::unordered_set<caf::actor_addr> active_exporters;
-  measurement measurement_;
+  vast::system::measurement measurement;
   accountant_type accountant;
   static inline const char* name = "archive";
 };

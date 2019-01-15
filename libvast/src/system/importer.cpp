@@ -123,14 +123,13 @@ void importer_state::send_report() {
   auto now = stopwatch::now();
   if (measurement_.events > 0) {
     using namespace std::string_literals;
-    auto elapsed = std::chrono::duration_cast<measurement::timespan>(now - last_report);
+    auto elapsed = std::chrono::duration_cast<measurement::timespan>(
+      now - last_report);
     auto node_throughput = measurement{elapsed, measurement_.events};
-    report r = {{
-      {"importer"s, measurement_},
-      {"node_throughput"s, node_throughput}
-    }};
+    auto r = report{
+      {{"importer"s, measurement_}, {"node_throughput"s, node_throughput}}};
     measurement_ = measurement{};
-    self->send(accountant, r);
+    self->send(accountant, std::move(r));
   }
   last_report = now;
 };
@@ -383,10 +382,9 @@ behavior importer(stateful_actor<importer_state>* self, path dir,
     },
     [=](telemetry_atom) {
       self->state.send_report();
-      self->delayed_send(
-        self,
-        std::chrono::milliseconds(defs::telemetry_rate_ms),
-        telemetry_atom::value);
+      self->delayed_send(self,
+                         std::chrono::milliseconds(defs::telemetry_rate_ms),
+                         telemetry_atom::value);
     }
   };
 }

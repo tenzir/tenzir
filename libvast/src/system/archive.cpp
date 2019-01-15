@@ -39,11 +39,11 @@ using namespace caf;
 namespace vast::system {
 
 void archive_state::send_report() {
-  if (measurement_.events > 0) {
+  if (measurement.events > 0) {
     using namespace std::string_literals;
-    report r = {{{"archive"s, measurement_}}};
-    measurement_ = measurement{};
-    self->send(accountant, r);
+    report r = {{{"archive"s, measurement}}};
+    measurement = vast::system::measurement{};
+    self->send(accountant, std::move(r));
   }
 }
 
@@ -111,7 +111,7 @@ archive(archive_type::stateful_pointer<archive_state> self, path dir,
               },
               [=](unit_t&, std::vector<table_slice_ptr>& batch) {
                 VAST_DEBUG(self, "got", batch.size(), "table slices");
-                auto t = timer::start(self->state.measurement_);
+                auto t = timer::start(self->state.measurement);
                 uint64_t events = 0;
                 for (auto& slice : batch) {
                   if (auto error = self->state.store->put(slice)) {
