@@ -26,7 +26,7 @@ namespace vast::detail {
 /// @param escaper The escaper to use.
 /// @returns The escaped version of *str*.
 template <class Escaper>
-std::string escape(const std::string& str, Escaper escaper) {
+std::string escape(std::string_view str, Escaper escaper) {
   std::string result;
   result.reserve(str.size());
   auto f = str.begin();
@@ -42,7 +42,7 @@ std::string escape(const std::string& str, Escaper escaper) {
 /// @param unescaper The unescaper to use.
 /// @returns The unescaped version of *str*.
 template <class Unescaper>
-std::string unescape(const std::string& str, Unescaper unescaper) {
+std::string unescape(std::string_view str, Unescaper unescaper) {
   std::string result;
   result.reserve(str.size());
   auto f = str.begin();
@@ -59,7 +59,7 @@ std::string unescape(const std::string& str, Unescaper unescaper) {
 /// @param str The string to escape.
 /// @returns The escaped string of *str*.
 /// @relates bytes_escape_all byte_unescape
-std::string byte_escape(const std::string& str);
+std::string byte_escape(std::string_view str);
 
 /// Escapes all non-printable characters in a string with `\xAA` where `AA` is
 /// the byte in hexadecimal representation, plus a given list of extra
@@ -68,33 +68,33 @@ std::string byte_escape(const std::string& str);
 /// @param extra The extra characters to escape.
 /// @returns The escaped string of *str*.
 /// @relates bytes_escape_all byte_unescape
-std::string byte_escape(const std::string& str, const std::string& extra);
+std::string byte_escape(std::string_view str, const std::string& extra);
 
 /// Escapes all characters in a string with `\xAA` where `AA` is
 /// the byte in hexadecimal representation of the character.
 /// @param str The string to escape.
 /// @returns The escaped string of *str*.
 /// @relates byte_unescape
-std::string byte_escape_all(const std::string& str);
+std::string byte_escape_all(std::string_view str);
 
 /// Unescapes a byte-escaped string, i.e., replaces all occurrences of `\xAA`
 /// with the value of the byte `AA`.
 /// @param str The string to unescape.
 /// @returns The unescaped string of *str*.
 /// @relates byte_escape bytes_escape_all
-std::string byte_unescape(const std::string& str);
+std::string byte_unescape(std::string_view str);
 
 /// Escapes a string according to JSON escaping.
 /// @param str The string to escape.
 /// @returns The escaped string.
 /// @relates json_unescape
-std::string json_escape(const std::string& str);
+std::string json_escape(std::string_view str);
 
 /// Unescapes a string escaped with JSON escaping.
 /// @param str The string to unescape.
 /// @returns The unescaped string.
 /// @relates json_escape
-std::string json_unescape(const std::string& str);
+std::string json_unescape(std::string_view str);
 
 /// Escapes a string according to percent-encoding.
 /// @note This function escapes all non-*unreserved* characters as listed in
@@ -104,27 +104,27 @@ std::string json_unescape(const std::string& str);
 /// @param str The string to escape.
 /// @returns The escaped string.
 /// @relates percent_unescape
-std::string percent_escape(const std::string& str);
+std::string percent_escape(std::string_view str);
 
 /// Unescapes a percent-encoded string.
 /// @param str The string to unescape.
 /// @returns The unescaped string.
 /// @relates percent_escape
-std::string percent_unescape(const std::string& str);
+std::string percent_unescape(std::string_view str);
 
 /// Escapes a string by repeating characters from a special set.
 /// @param str The string to escape.
 /// @param esc The set of characters to double-escape.
 /// @returns The escaped string.
 /// @relates double_unescape
-std::string double_escape(const std::string& str, const std::string& esc);
+std::string double_escape(std::string_view str, std::string_view esc);
 
 /// Unescapes a string by removing consecutive character sequences.
 /// @param str The string to unescape.
 /// @param esc The set of repeated characters to unescape.
 /// @returns The unescaped string.
 /// @relates double_escape
-std::string double_unescape(const std::string& str, const std::string& esc);
+std::string double_unescape(std::string_view str, std::string_view esc);
 
 /// Replaces all occurences of a substring.
 /// @param str The string in which to replace a substring.

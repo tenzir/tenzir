@@ -214,16 +214,16 @@ auto percent_unescaper = [](auto& f, auto l, auto out) {
   return hex_unescaper(++f, l, out);
 };
 
-auto double_escaper = [](const std::string& esc) {
-  return [&](auto& f, auto, auto out) {
-    if (esc.find(*f) != std::string::npos)
+inline auto make_double_escaper(std::string_view esc) {
+  return [=](auto& f, auto, auto out) {
+    if (esc.find(*f) != std::string_view::npos)
       *out++ = *f;
     *out++ = *f++;
   };
-};
+}
 
-auto double_unescaper = [](const std::string& esc) {
-  return [&](auto& f, auto l, auto out) -> bool {
+inline auto make_double_unescaper(std::string_view esc) {
+  return [=](auto& f, auto l, auto out) -> bool {
     auto x = *f++;
     if (f == l) {
       *out++ = x;
@@ -231,10 +231,10 @@ auto double_unescaper = [](const std::string& esc) {
     }
     *out++ = x;
     auto y = *f++;
-    if (x == y && esc.find(x) == std::string::npos)
+    if (x == y && esc.find(x) == std::string_view::npos)
       *out++ = y;
     return true;
   };
-};
+}
 
 } // namespace vast::detail
