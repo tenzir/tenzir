@@ -69,8 +69,19 @@ private:
 };
 
 // Atomic variants
+//
+#ifdef MEASUREMENT_MUTEX_WORKAROUND
+#include <mutex>
 
+struct atomic_measurement : public measurement {
+  std::mutex mutex;
+  void reset() {
+    measurement{};
+  }
+};
+#else
 using atomic_measurement = std::atomic<measurement>;
+#endif
 
 struct atomic_timer {
   explicit atomic_timer(atomic_measurement& m) : m_{m} {
@@ -84,9 +95,14 @@ struct atomic_timer {
   void stop(uint64_t events) {
     auto stop = stopwatch::now();
     auto elapsed = std::chrono::duration_cast<measurement::timespan>(stop - start_);
+#ifdef MEASUREMENT_MUTEX_WORKAROUND
+    std::unique_lock<std::mutex> lock{m_.mutex};
+    m_ += measurement{elapsed, events};
+#else
     auto tmp = m_.load();
     tmp += measurement{elapsed, events};
     m_.exchange(tmp);
+#endif
   }
 
 private:

@@ -174,6 +174,10 @@ if (GPERFTOOLS_FOUND AND VAST_USE_PERFTOOLS_HEAP_PROFILER)
   target_link_libraries(libvast PUBLIC gperftools::tcmalloc)
 endif ()
 
+if (MEASUREMENT_MUTEX_WORKAROUND)
+  target_compile_definitions(libvast PUBLIC MEASUREMENT_MUTEX_WORKAROUND)
+endif ()
+
 # Install libvast in PREFIX/lib and headers in PREFIX/include/vast.
 install(TARGETS libvast
   EXPORT VASTTargets

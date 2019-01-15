@@ -39,6 +39,9 @@ class table_indexer;
 
 // -- structs ------------------------------------------------------------------
 
+#ifdef MEASUREMENT_MUTEX_WORKAROUND
+struct atomic_measurement;
+#endif
 struct index_state;
 struct measurement;
 struct node_state;
@@ -55,7 +58,9 @@ class writer_command;
 
 // -- aliases ------------------------------------------------------------------
 
+#ifndef MEASUREMENT_MUTEX_WORKAROUND
 using atomic_measurement = std::atomic<measurement>;
+#endif
 using node_actor = caf::stateful_actor<node_state>;
 using partition_ptr = std::unique_ptr<partition>;
 using table_indexer_ptr = caf::intrusive_ptr<table_indexer>;

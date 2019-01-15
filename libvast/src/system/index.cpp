@@ -200,7 +200,14 @@ void index_state::send_report() {
   auto append_report = [&](partition& p) {
     for (auto& [layout, ti] : p.table_indexers_) {
       for (size_t i = 0; i < ti.measurements_.size(); ++i) {
+#ifdef MEASUREMENT_MUTEX_WORKAROUND
+        ti.measurements_[i].mutex.lock();
+        auto tmp = static_cast<measurement>(ti.measurements_[i]);
+        ti.measurements_[i].reset();
+        ti.measurements_[i].mutex.unlock();
+#else
         auto tmp = std::atomic_exchange(&(ti.measurements_[i]), measurement{});
+#endif
         if (tmp.events > 0)
           r.push_back({layout.name() + "." + layout.fields[i].name, tmp});
       }
