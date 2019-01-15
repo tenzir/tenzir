@@ -13,8 +13,38 @@
 
 #pragma once
 
-#include "vast/concept/printable/string/any.hpp"
-#include "vast/concept/printable/string/char.hpp"
-#include "vast/concept/printable/string/escape.hpp"
-#include "vast/concept/printable/string/string.hpp"
+#include <string>
 
+#include "vast/concept/printable/core/printer.hpp"
+
+namespace vast {
+
+template <class Escaper>
+struct escape_printer : printer<escape_printer<Escaper>> {
+  using attribute = std::string_view;
+
+  explicit escape_printer(Escaper f) : escaper{f} {
+    // nop
+  }
+
+  template <class Iterator>
+  bool print(Iterator& out, std::string_view str) const {
+    auto f = str.begin();
+    auto l = str.end();
+    while (f != l)
+      escaper(f, out);
+    return true;
+  }
+
+  Escaper escaper;
+};
+
+namespace printers {
+
+template <class Escaper>
+auto escape(Escaper escaper) {
+  return escape_printer<Escaper>{escaper};
+}
+
+} // namespace printers
+} // namespace vast
