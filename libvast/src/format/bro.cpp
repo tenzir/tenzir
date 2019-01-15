@@ -21,6 +21,7 @@
 #include "vast/concept/printable/vast/data.hpp"
 #include "vast/concept/printable/vast/type.hpp"
 #include "vast/detail/assert.hpp"
+#include "vast/detail/escapers.hpp"
 #include "vast/detail/fdoutbuf.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/error.hpp"

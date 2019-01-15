@@ -14,6 +14,8 @@
 #include <cstring>
 #include <vector>
 
+#include "vast/detail/assert.hpp"
+#include "vast/detail/escapers.hpp"
 #include "vast/detail/string.hpp"
 
 namespace vast {

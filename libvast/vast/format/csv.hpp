@@ -21,8 +21,8 @@
 #include "vast/concept/printable/numeric.hpp"
 #include "vast/concept/printable/string.hpp"
 #include "vast/concept/printable/vast/data.hpp"
+#include "vast/detail/escapers.hpp"
 #include "vast/detail/string.hpp"
-
 #include "vast/format/printer_writer.hpp"
 
 namespace vast::format::csv {

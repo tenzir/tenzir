@@ -25,10 +25,9 @@
 #include <caf/openssl/manager.hpp>
 #endif
 
-#include "vast/config.hpp"
-
 #include "vast/system/configuration.hpp"
 
+#include "vast/detail/assert.hpp"
 #include "vast/detail/add_message_types.hpp"
 #include "vast/detail/add_error_categories.hpp"
 #include "vast/detail/adjust_resource_consumption.hpp"
