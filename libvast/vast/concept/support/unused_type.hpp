@@ -81,7 +81,7 @@ inline bool operator==(unused_type, unused_type) {
 }
 
 template <class T>
-struct is_unused_type : std::is_same<T, unused_type> {};
+using is_unused_type = std::is_same<T, unused_type>;
 
 template <class T>
 using is_unused_type_t = typename is_unused_type<T>::type;
