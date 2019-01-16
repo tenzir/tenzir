@@ -108,17 +108,17 @@ TEST(percent escaping) {
 }
 
 TEST(double escaping) {
-  CHECK(double_escape("a|b|c", "|") == "a||b||c");
-  CHECK(double_escape("a|b|", "|") == "a||b||");
-  CHECK(double_escape("|b|c", "|") == "||b||c");
-  CHECK(double_escape("a|b|c", "|") == "a||b||c");
-  CHECK(double_escape("abc", "|") == "abc");
-  CHECK(double_escape("|", "|") == "||");
-  CHECK(double_escape("||", "|") == "||||");
-  CHECK(double_unescape("||||", "|") == "||");
-  CHECK(double_unescape("|||", "|") == "||");
-  CHECK(double_unescape("||", "|") == "|");
-  CHECK(double_unescape("|", "|") == "|");
+  CHECK_EQUAL(double_escape("a|b|c", "|"), "a||b||c");
+  CHECK_EQUAL(double_escape("a|b|", "|"), "a||b||");
+  CHECK_EQUAL(double_escape("|b|c", "|"), "||b||c");
+  CHECK_EQUAL(double_escape("a|b|c", "|"), "a||b||c");
+  CHECK_EQUAL(double_escape("abc", "|"), "abc");
+  CHECK_EQUAL(double_escape("|", "|"), "||");
+  CHECK_EQUAL(double_escape("||", "|"), "||||");
+  CHECK_EQUAL(double_unescape("||||", "|"), "||");
+  CHECK_EQUAL(double_unescape("|||", "|"), "||");
+  CHECK_EQUAL(double_unescape("||", "|"), "|");
+  CHECK_EQUAL(double_unescape("|", "|"), "|");
 }
 
 TEST(splitting) {

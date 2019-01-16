@@ -21,6 +21,7 @@
 #include "vast/concept/printable/vast/data.hpp"
 #include "vast/concept/printable/vast/type.hpp"
 #include "vast/detail/assert.hpp"
+#include "vast/detail/escapers.hpp"
 #include "vast/detail/fdoutbuf.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/error.hpp"
@@ -207,7 +208,7 @@ struct streamer {
     auto l = str.end();
     for ( ; f != l; ++f)
       if (!std::isprint(*f) || *f == separator || *f == set_separator)
-        detail::hex_escaper(f, l, out);
+        detail::hex_escaper(f, out);
       else
         out_ << *f;
   }

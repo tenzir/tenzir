@@ -18,6 +18,7 @@
 
 #include "vast/concept/parseable/core/parser.hpp"
 #include "vast/concept/support/detail/attr_fold.hpp"
+#include "vast/concept/support/detail/sequence.hpp"
 #include "vast/detail/type_traits.hpp"
 
 namespace vast {
@@ -79,61 +80,14 @@ public:
   }
 
 private:
-  template <class T>
-  static constexpr auto depth_helper()
-    -> std::enable_if_t<!is_sequence_parser_v<T>, size_t> {
-    return 0;
-  }
-
-  template <class T>
-  static constexpr auto depth_helper()
-    -> std::enable_if_t<
-         is_sequence_parser_v<T>
-          && (std::is_same_v<typename T::lhs_attribute, unused_type>
-              || std::is_same_v<typename T::rhs_attribute, unused_type>),
-         size_t
-       >
-  { return depth_helper<typename T::lhs_type>();
-  }
-
-  template <class T>
-  static constexpr auto depth_helper()
-    -> std::enable_if_t<
-         is_sequence_parser_v<T>
-          && !std::is_same_v<typename T::lhs_attribute, unused_type>
-          && !std::is_same_v<typename T::rhs_attribute, unused_type>,
-         size_t
-       > {
-    return 1 + depth_helper<typename T::lhs_type>();
-  }
-
-  static constexpr size_t depth() {
-    return depth_helper<sequence_parser>();
-  }
-
-  template <class L, class T>
-  static auto get_helper(T& x)
-    -> std::enable_if_t<is_sequence_parser<L>{}, T&> {
-    return x;
-  }
-
-  template <class L, class T>
-  static auto get_helper(T& x)
-    -> std::enable_if_t<
-         !is_sequence_parser_v<L>,
-         decltype(std::get<0>(x))
-       > {
-    return std::get<0>(x);
+  template <class Iterator, class... Ts>
+  bool parse_left(Iterator& f, const Iterator& l, std::tuple<Ts...>& x) const {
+    return lhs_(f, l, detail::access_left<sequence_parser>(x));
   }
 
   template <class Iterator, class... Ts>
-  bool parse_left(Iterator& f, const Iterator& l, std::tuple<Ts...>& t) const {
-    return lhs_(f, l, get_helper<lhs_type>(t));
-  }
-
-  template <class Iterator, class... Ts>
-  bool parse_right(Iterator& f, const Iterator& l, std::tuple<Ts...>& t) const {
-    return rhs_(f, l, std::get<depth()>(t));
+  bool parse_right(Iterator& f, const Iterator& l, std::tuple<Ts...>& x) const {
+    return rhs_(f, l, detail::access_right<sequence_parser>(x));
   }
 
   template <class Iterator>

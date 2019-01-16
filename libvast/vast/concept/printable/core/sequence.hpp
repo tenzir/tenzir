@@ -18,7 +18,7 @@
 
 #include "vast/concept/printable/core/printer.hpp"
 #include "vast/concept/support/detail/attr_fold.hpp"
-
+#include "vast/concept/support/detail/sequence.hpp"
 #include "vast/detail/type_traits.hpp"
 
 namespace vast {
@@ -34,8 +34,6 @@ struct is_sequence_printer<sequence_printer<Ts...>> : std::true_type {};
 
 template <class T>
 constexpr bool is_sequence_printer_v = is_sequence_printer<T>::value;
-
-// TODO: factor helper functions shared among sequence printer and parser.
 
 template <class Lhs, class Rhs>
 class sequence_printer : public printer<sequence_printer<Lhs, Rhs>> {
@@ -78,61 +76,14 @@ public:
   }
 
 private:
-  template <class T>
-  static constexpr auto depth_helper()
-  -> std::enable_if_t<!is_sequence_printer_v<T>, size_t> {
-    return 0;
-  }
-
-  template <class T>
-  static constexpr auto depth_helper()
-  -> std::enable_if_t<
-       is_sequence_printer_v<T>
-        && (std::is_same_v<typename T::lhs_attribute, unused_type>
-            || std::is_same_v<typename T::rhs_attribute, unused_type>),
-       size_t
-     > {
-    return depth_helper<typename T::lhs_type>();
-  }
-
-  template <class T>
-  static constexpr auto depth_helper()
-  -> std::enable_if_t<
-       is_sequence_printer_v<T>
-        && !std::is_same_v<typename T::lhs_attribute, unused_type>
-        && !std::is_same_v<typename T::rhs_attribute, unused_type>,
-       size_t
-     > {
-    return 1 + depth_helper<typename T::lhs_type>();
-  }
-
-  static constexpr size_t depth() {
-    return depth_helper<sequence_printer>();
-  }
-
-  template <class L, class T>
-  static auto get_helper(const T& x)
-  -> std::enable_if_t<is_sequence_printer<L>{}, const T&> {
-    return x;
-  }
-
-  template <class L, class T>
-  static auto get_helper(const T& x)
-  -> std::enable_if_t<
-       !is_sequence_printer_v<L>,
-       decltype(std::get<0>(x))
-     > {
-    return std::get<0>(x);
+  template <class Iterator, class... Ts>
+  bool print_left(Iterator& out, const std::tuple<Ts...>& x) const {
+    return lhs_.print(out, detail::access_left<sequence_printer>(x));
   }
 
   template <class Iterator, class... Ts>
-  bool print_left(Iterator& out, const std::tuple<Ts...>& t) const {
-    return lhs_.print(out, get_helper<lhs_type>(t));
-  }
-
-  template <class Iterator, class... Ts>
-  bool print_right(Iterator& out, const std::tuple<Ts...>& t) const {
-    return rhs_.print(out, std::get<depth()>(t));
+  bool print_right(Iterator& out, const std::tuple<Ts...>& x) const {
+    return rhs_.print(out, detail::access_right<sequence_printer>(x));
   }
 
   template <class Iterator>

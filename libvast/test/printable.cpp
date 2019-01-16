@@ -21,6 +21,7 @@
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/to.hpp"
 #include "vast/concept/printable/to_string.hpp"
+#include "vast/detail/escapers.hpp"
 
 #define SUITE printable
 #include "vast/test/test.hpp"
@@ -127,6 +128,13 @@ TEST(string) {
   str.clear();
   CHECK(printers::str(str, "foo"s));
   CHECK_EQUAL(str, "foo");
+}
+
+TEST(escape) {
+  std::string result;
+  auto p = printers::escape(detail::hex_escaper);
+  CHECK(p(result, "foo"));
+  CHECK_EQUAL(result, R"__(\x66\x6F\x6F)__");
 }
 
 // -- core --------------------------------------------------------------------

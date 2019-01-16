@@ -14,36 +14,30 @@
 #include <cstring>
 #include <vector>
 
+#include "vast/detail/assert.hpp"
+#include "vast/detail/escapers.hpp"
 #include "vast/detail/string.hpp"
 
 namespace vast {
 namespace detail {
 
-std::string byte_escape(const std::string& str) {
+std::string byte_escape(std::string_view str) {
   return escape(str, print_escaper);
 }
 
-std::string byte_escape(const std::string& str, const std::string& extra) {
-  auto print_extra_escaper = [&](auto& f, auto l, auto out) {
-    if (extra.find(*f) != std::string::npos) {
-      *out++ = '\\';
-      *out++ = *f++;
-    } else {
-      print_escaper(f, l, out);
-    }
-  };
-  return escape(str, print_extra_escaper);
+std::string byte_escape(std::string_view str, const std::string& extra) {
+  return escape(str, make_extra_print_escaper(extra));
 }
 
-std::string byte_escape_all(const std::string& str) {
+std::string byte_escape_all(std::string_view str) {
   return escape(str, hex_escaper);
 }
 
-std::string byte_unescape(const std::string& str) {
+std::string byte_unescape(std::string_view str) {
   return unescape(str, byte_unescaper);
 }
 
-std::string json_escape(const std::string& str) {
+std::string json_escape(std::string_view str) {
   if (str.empty())
     return "\"\"";
   std::string result;
@@ -53,12 +47,12 @@ std::string json_escape(const std::string& str) {
   auto l = str.end();
   auto out = std::back_inserter(result);
   while (f != l)
-    json_escaper(f, l, out);
+    json_escaper(f, out);
   result += '"';
   return result;
 }
 
-std::string json_unescape(const std::string& str) {
+std::string json_unescape(std::string_view str) {
   // Unescape everything until the closing double quote.
   auto f = str.begin();
   auto l = str.end();
@@ -77,20 +71,20 @@ std::string json_unescape(const std::string& str) {
   return result;
 }
 
-std::string percent_escape(const std::string& str) {
+std::string percent_escape(std::string_view str) {
   return escape(str, percent_escaper);
 }
 
-std::string percent_unescape(const std::string& str) {
+std::string percent_unescape(std::string_view str) {
   return unescape(str, percent_unescaper);
 }
 
-std::string double_escape(const std::string& str, const std::string& esc) {
-  return escape(str, double_escaper(esc));
+std::string double_escape(std::string_view str, std::string_view esc) {
+  return escape(str, make_double_escaper(esc));
 }
 
-std::string double_unescape(const std::string& str, const std::string& esc) {
-  return unescape(str, double_unescaper(esc));
+std::string double_unescape(std::string_view str, std::string_view esc) {
+  return unescape(str, make_double_unescaper(esc));
 }
 
 std::string replace_all(std::string str, std::string_view search,

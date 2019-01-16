@@ -80,5 +80,13 @@ inline bool operator==(unused_type, unused_type) {
   return true;
 }
 
-} // namespace vast
+template <class T>
+using is_unused_type = std::is_same<T, unused_type>;
 
+template <class T>
+using is_unused_type_t = typename is_unused_type<T>::type;
+
+template <class T>
+constexpr auto is_unused_type_v = is_unused_type<T>::value;
+
+} // namespace vast

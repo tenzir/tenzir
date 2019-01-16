@@ -13,40 +13,38 @@
 
 #pragma once
 
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <sys/socket.h>
+#include <string>
 
-#include <cstring>
-
-#include "vast/address.hpp"
 #include "vast/concept/printable/core/printer.hpp"
-#include "vast/concept/printable/string/string.hpp"
 
 namespace vast {
 
-struct address_printer : vast::printer<address_printer> {
-  using attribute = address;
+template <class Escaper>
+struct escape_printer : printer<escape_printer<Escaper>> {
+  using attribute = std::string_view;
+
+  explicit escape_printer(Escaper f) : escaper{f} {
+    // nop
+  }
 
   template <class Iterator>
-  bool print(Iterator& out, const address& a) const {
-    char buf[INET6_ADDRSTRLEN];
-    std::memset(buf, 0, sizeof(buf));
-    auto result = a.is_v4()
-      ? inet_ntop(AF_INET, &a.data()[12], buf, INET_ADDRSTRLEN)
-      : inet_ntop(AF_INET6, &a.data(), buf, INET6_ADDRSTRLEN);
-    return result != nullptr && printers::str.print(out, result);
+  bool print(Iterator& out, std::string_view str) const {
+    auto f = str.begin();
+    auto l = str.end();
+    while (f != l)
+      escaper(f, out);
+    return true;
   }
-};
 
-template <>
-struct printer_registry<address> {
-  using type = address_printer;
+  Escaper escaper;
 };
 
 namespace printers {
 
-auto const addr = address_printer{};
+template <class Escaper>
+auto escape(Escaper escaper) {
+  return escape_printer<Escaper>{escaper};
+}
 
 } // namespace printers
 } // namespace vast

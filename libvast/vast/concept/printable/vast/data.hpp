@@ -26,7 +26,7 @@
 #include "vast/concept/printable/vast/port.hpp"
 #include "vast/concept/printable/vast/none.hpp"
 #include "vast/concept/printable/vast/type.hpp"
-
+#include "vast/detail/escapers.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/detail/string.hpp"
 
@@ -45,12 +45,8 @@ struct data_printer : printer<data_printer> {
         return printers::integral<integer, policy::force_sign>(out, x);
       },
       [&](const std::string& x) {
-        // TODO: create a printer that escapes the output on the fly, as opposed
-        // to going through an extra copy.
-        auto escaped = printers::str ->* [](const std::string& str) {
-          return detail::byte_escape(str, "\"");
-        };
-        auto p = '"' << escaped << '"';
+        static auto escaper = detail::make_extra_print_escaper("\"");
+        static auto p = '"' << printers::escape(escaper) << '"';
         return p(out, x);
       }
     ), d);
