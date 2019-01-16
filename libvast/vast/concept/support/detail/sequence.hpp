@@ -47,16 +47,17 @@ constexpr size_t compute_right_tuple_index() {
 }
 
 template <class Sequencer, class Tuple>
-constexpr auto&& access_left(Tuple&& x) {
+constexpr decltype(auto) access_left(Tuple&& x) {
   if constexpr (is_sequencer_v<typename Sequencer::lhs_type>)
     return std::forward<Tuple>(x);
   else 
-    return std::get<0>(x);
+    return std::get<0>(std::forward<Tuple>(x));
 }
 
 template <class Sequencer, class Tuple>
-constexpr auto&& access_right(Tuple&& x) {
-  return std::get<compute_right_tuple_index<Sequencer>()>(x);
+constexpr decltype(auto) access_right(Tuple&& x) {
+  constexpr auto i = compute_right_tuple_index<Sequencer>();
+  return std::get<i>(std::forward<Tuple>(x));
 }
 
 } // namespace vast::detail
