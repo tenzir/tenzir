@@ -100,7 +100,10 @@ if [ "$os" = "FreeBSD" ] || [ "$os" = "Darwin" ]; then
     -o "$file.stacks"
   # Remove leading library name as well as trailing addresses.
   cleanup='s;([[:space:]]+).*\`([^+]*)(\+0x[[:xdigit:]]+)?;\2;g'
-  sed -E "$cleanup" "$file.stacks" | stackcollapse.pl > "$file.folded"
+  # Setting the locale to C explicitly fixes an issue where non-GNU sed bails
+  # out with an "illegal byte sequence" error. See
+  # https://stackoverflow.com/a/19770395/1170277 for details
+  LC_ALL=C sed -E "$cleanup" "$file.stacks" | stackcollapse.pl > "$file.folded"
   flamegraph.pl --title "$title" --width $width < "$file.folded"
   if [ -z "$keep" ]; then
     rm -f "$file.stacks" "$file.folded"
