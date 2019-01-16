@@ -56,31 +56,29 @@ struct duration_printer : printer<duration_printer<Rep, Period, Policy>> {
     return "us";
   }
 
-  template <class Iterator, class P = Policy>
-  auto print(Iterator& out, std::chrono::duration<Rep, Period> d) const
-  -> std::enable_if_t<std::is_same_v<P, policy::adaptive>, bool> {
-    using namespace std::chrono;
-    using namespace date;
-    auto num = printers::real2;
-    if (is_at_least<days>(d))
-      return (num << 'd')(out, count<days>(d));
-    if (is_at_least<hours>(d))
-      return (num << 'h')(out, count<hours>(d));
-    if (is_at_least<minutes>(d))
-      return (num << 'm')(out, count<minutes>(d));
-    if (is_at_least<seconds>(d))
-      return (num << 's')(out, count<seconds>(d));
-    if (is_at_least<milliseconds>(d))
-      return (num << "ms")(out, count<milliseconds>(d));
-    if (is_at_least<microseconds>(d))
-      return (num << "us")(out, count<microseconds>(d));
-    return (num << "ns")(out, count<nanoseconds>(d));
-  }
-
-  template <class Iterator, class P = Policy>
-  auto print(Iterator& out, std::chrono::duration<Rep, Period> d) const
-  -> std::enable_if_t<std::is_same_v<P, policy::fixed>, bool> {
-    return (make_printer<Rep>{} << units(d))(out, d.count());
+  template <class Iterator>
+  bool print(Iterator& out, std::chrono::duration<Rep, Period> d) const {
+    if constexpr (std::is_same_v<Policy, policy::fixed>) {
+      auto p = make_printer<Rep>{} << units(d);
+      return p(out, d.count());
+    } else if constexpr (std::is_same_v<Policy, policy::adaptive>) {
+      using namespace std::chrono;
+      using namespace date;
+      auto num = printers::real2;
+      if (is_at_least<days>(d))
+        return (num << 'd')(out, count<days>(d));
+      if (is_at_least<hours>(d))
+        return (num << 'h')(out, count<hours>(d));
+      if (is_at_least<minutes>(d))
+        return (num << 'm')(out, count<minutes>(d));
+      if (is_at_least<seconds>(d))
+        return (num << 's')(out, count<seconds>(d));
+      if (is_at_least<milliseconds>(d))
+        return (num << "ms")(out, count<milliseconds>(d));
+      if (is_at_least<microseconds>(d))
+        return (num << "us")(out, count<microseconds>(d));
+      return (num << "ns")(out, count<nanoseconds>(d));
+    }
   }
 };
 
