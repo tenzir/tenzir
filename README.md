@@ -48,7 +48,7 @@ Required dependencies:
 
 - A C++17 compiler:
   - GCC >= 8
-  - Clang >= 6
+  - Clang >= 5
   - Apple Clang >= 9.1
 - [CMake](http://www.cmake.org)
 - [CAF](https://github.com/actor-framework/actor-framework) (master branch)
