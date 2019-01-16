@@ -25,8 +25,7 @@
 
 namespace vast {
 
-template <>
-struct access::printer<address> : vast::printer<access::printer<address>> {
+struct address_printer : vast::printer<address_printer> {
   using attribute = address;
 
   template <class Iterator>
@@ -34,21 +33,20 @@ struct access::printer<address> : vast::printer<access::printer<address>> {
     char buf[INET6_ADDRSTRLEN];
     std::memset(buf, 0, sizeof(buf));
     auto result = a.is_v4()
-      ? inet_ntop(AF_INET, &a.bytes_[12], buf, INET_ADDRSTRLEN)
-      : inet_ntop(AF_INET6, &a.bytes_, buf, INET6_ADDRSTRLEN);
+      ? inet_ntop(AF_INET, &a.data()[12], buf, INET_ADDRSTRLEN)
+      : inet_ntop(AF_INET6, &a.data(), buf, INET6_ADDRSTRLEN);
     return result != nullptr && printers::str.print(out, result);
   }
 };
 
 template <>
 struct printer_registry<address> {
-  using type = access::printer<address>;
+  using type = address_printer;
 };
 
 namespace printers {
 
-auto const addr = make_printer<address>{};
+auto const addr = address_printer{};
 
 } // namespace printers
 } // namespace vast
-
