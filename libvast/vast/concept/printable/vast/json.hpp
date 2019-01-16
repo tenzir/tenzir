@@ -18,6 +18,8 @@
 #include "vast/concept/printable/print.hpp"
 #include "vast/concept/printable/string.hpp"
 #include "vast/concept/printable/core/printer.hpp"
+#include "vast/concept/printable/core/operators.hpp"
+#include "vast/concept/printable/core/sequence.hpp"
 #include "vast/detail/escapers.hpp"
 
 namespace vast {
@@ -87,7 +89,8 @@ struct json_printer : printer<json_printer<TreePolicy, Indent, Padding>> {
     }
 
     bool operator()(const json::string& str) {
-      return printers::escape(detail::json_escaper).print(out_, str);
+      static auto p = '"' << printers::escape(detail::json_escaper) << '"';
+      return p.print(out_, str);
     }
 
     bool operator()(const json::array& a) {
