@@ -12,8 +12,8 @@
  ******************************************************************************/
 
 #define SUITE column_index
-#include "vast/test/test.hpp"
 
+#include "vast/test/test.hpp"
 #include "vast/test/fixtures/actor_system_and_events.hpp"
 
 #include "vast/column_index.hpp"
@@ -23,8 +23,6 @@
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
 #include "vast/type.hpp"
-
-#include <caf/test/dsl.hpp>
 
 using namespace vast;
 

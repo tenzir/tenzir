@@ -18,8 +18,6 @@
 #include "vast/test/test.hpp"
 #include "vast/test/fixtures/actor_system.hpp"
 
-#include <caf/test/dsl.hpp>
-
 #include "vast/default_table_slice_builder.hpp"
 #include "vast/synopsis.hpp"
 #include "vast/table_slice.hpp"

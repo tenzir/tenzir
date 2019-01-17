@@ -21,6 +21,7 @@
 #include <string>
 
 #include <caf/test/unit_test.hpp>
+#include <caf/test/dsl.hpp>
 
 // -- logging macros -----------------------------------------------------------
 
