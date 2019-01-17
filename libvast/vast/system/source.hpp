@@ -250,11 +250,10 @@ caf::behavior source(caf::stateful_actor<source_state<Reader>>* self,
                                                table_slice_size, push_slice);
       t.stop(produced);
       if (eof) {
+        VAST_DEBUG(self, "completed slice production");
         done = true;
         st.send_report();
-        VAST_DEBUG(self, "completed slice production");
-        self->state.mgr->continuous(false);
-        self->unbecome();
+        self->quit();
       }
       // TODO: if the source is unable to generate new events then we should
       //       trigger CAF to poll the source after a predefined interval of
