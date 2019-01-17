@@ -32,6 +32,7 @@ usage() {
   echo
   echo 'options:'
   echo "    -p            program to profile [$program]"
+  echo "    -P            PID to profile (overrides -p)"
   echo "    -i            keep intermediate files"
   echo "    -k            include time spent in kernel"
   echo "    -s secs       number of seconds to profile [$secs]"
@@ -41,7 +42,7 @@ usage() {
 }
 
 # Parse command line.
-while getopts "?hikp:s:t:w:" opt; do
+while getopts "?hikp:P:s:t:w:" opt; do
   case "$opt" in
     i)
       keep=1
@@ -51,6 +52,9 @@ while getopts "?hikp:s:t:w:" opt; do
       ;;
     p)
       program="$OPTARG"
+      ;;
+    P)
+      pid="$OPTARG"
       ;;
     s)
       secs="$OPTARG"
@@ -89,7 +93,11 @@ os=$(uname)
 if [ "$os" = "FreeBSD" ] || [ "$os" = "Darwin" ]; then
   hertz='profile-97'
   stack="@[ustack()] = count();"
-  filter="execname == \"$program\""
+  if [ -n "$pid" ]; then
+    filter="pid == $pid"
+  else
+    filter="execname == \"$program\""
+  fi
   if [ -z "$kernel" ]; then
     filter="$filter && arg1"
   fi
