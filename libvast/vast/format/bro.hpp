@@ -254,7 +254,7 @@ private:
   int timestamp_field_ = -1;
   vast::schema schema_;
   type type_;
-  record_type record_;
+  record_type layout_;
   std::vector<rule<iterator_type, data>> parsers_;
 };
 

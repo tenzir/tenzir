@@ -13,6 +13,10 @@
 
 #include "vast/to_events.hpp"
 
+#include <algorithm>
+
+#include <caf/optional.hpp>
+
 #include "vast/bitmap_algorithms.hpp"
 #include "vast/event.hpp"
 #include "vast/ids.hpp"
@@ -22,18 +26,30 @@ namespace vast {
 
 namespace {
 
-event to_event(const table_slice& slice, id eid, type event_layout) {
-  vector xs;  // TODO(ch3290): make this a record
+optional<size_t> find_time_column(record_type layout) {
+  auto result = caf::optional<size_t>{caf::none};
+  for (size_t i = 0; i < layout.fields.size(); ++i)
+    if (has_attribute(layout.fields[i].type, "time"))
+      return i;
+  return result;
+}
+
+event to_event(const table_slice& slice, id eid, type event_layout,
+               caf::optional<size_t> timestamp_column) {
   VAST_ASSERT(slice.columns() > 0);
-  xs.resize(slice.columns() - 1); // one less to exclude timestamp
-  for (table_slice::size_type i = 0; i < slice.columns() - 1; ++i)
-    xs[i] = materialize(slice.at(eid - slice.offset(), i + 1));
+  VAST_ASSERT(!timestamp_column || *timestamp_column < slice.columns());
+  vector xs(slice.columns());  // TODO(ch3290): make this a record
+  for (table_slice::size_type i = 0; i < slice.columns(); ++i)
+    xs[i] = materialize(slice.at(eid - slice.offset(), i));
   auto e = event::make(std::move(xs), std::move(event_layout));
-  // Get the timestamp from the first column.
-  auto ts = slice.at(eid - slice.offset(), 0);
   // Assign event meta data.
   e.id(eid);
-  e.timestamp(caf::get<timestamp>(ts));
+  // Assign event timestamp.
+  if (timestamp_column) {
+    auto& xs = caf::get<vector>(e.data());
+    auto ts = caf::get<timestamp>(xs[*timestamp_column]);
+    e.timestamp(ts);
+  }
   return e;
 }
 
@@ -42,11 +58,13 @@ event to_event(const table_slice& slice, id eid, type event_layout) {
 void to_events(std::vector<event>& storage, const table_slice& slice,
                table_slice::size_type first_row,
                table_slice::size_type num_rows) {
-  auto event_layout = slice.layout(1).name(slice.layout().name());
   if (num_rows == table_slice::npos)
     num_rows = slice.rows();
+  // Figure out whether there's a column that could be the event timestamp.
+  auto timestamp_column = find_time_column(slice.layout());
   for (auto i = first_row; i < first_row + num_rows; ++i)
-    storage.emplace_back(to_event(slice, slice.offset() + i, event_layout));
+    storage.emplace_back(to_event(slice, slice.offset() + i, slice.layout(),
+                                  timestamp_column));
 }
 
 std::vector<event> to_events(const table_slice& slice,
@@ -63,11 +81,13 @@ void to_events(std::vector<event>& storage, const table_slice& slice,
   auto end = begin + slice.rows();
   auto rng = select(row_ids);
   VAST_ASSERT(rng);
-  auto event_layout = slice.layout(1).name(slice.layout().name());
   if (rng.get() < begin)
     rng.next_from(begin);
+  // Figure out whether there's a column that could be the event timestamp.
+  auto timestamp_column = find_time_column(slice.layout());
   for ( ; rng && rng.get() < end; rng.next())
-    storage.emplace_back(to_event(slice, rng.get(), event_layout));
+    storage.emplace_back(to_event(slice, rng.get(), slice.layout(),
+                                  timestamp_column));
 }
 
 std::vector<event> to_events(const table_slice& slice, const ids& row_ids) {

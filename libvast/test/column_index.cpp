@@ -90,7 +90,7 @@ TEST(bro conn log) {
   auto col_offset = unbox(row_type.resolve("id.orig_h"));
   auto col_type = row_type.at(col_offset);
   auto col_index = unbox(row_type.flat_index_at(col_offset));
-  REQUIRE_EQUAL(col_index, 3u);
+  REQUIRE_EQUAL(col_index, 2u); // 3rd column
   auto col = unbox(make_column_index(sys, directory, *col_type, col_index));
   for (auto slice : bro_conn_log_slices)
     col->add(slice);

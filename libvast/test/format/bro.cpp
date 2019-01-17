@@ -68,8 +68,8 @@ TEST(bro writer) {
   CHECK_EQUAL(bro_conn_log.front().type().name(), "bro::conn");
   auto record = caf::get_if<vector>(&bro_conn_log.front().data());
   REQUIRE(record);
-  REQUIRE_EQUAL(record->size(), 17u); // 20 columns, but 4 for the conn record
-  CHECK_EQUAL(record->at(3), data{"udp"}); // one after the conn record
+  REQUIRE_EQUAL(record->size(), 20u);
+  CHECK_EQUAL(record->at(6), data{"udp"}); // one after the conn record
   CHECK_EQUAL(record->back(), data{set{}}); // table[T] is actually a set
   // Perform the writing.
   auto dir = path{"vast-unit-test-bro"};

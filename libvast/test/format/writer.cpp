@@ -28,7 +28,7 @@ FIXTURE_SCOPE(ascii_tests, fixtures::events)
 
 namespace {
 
-auto last_bro_http_log_line = R"__(bro::http [2009-11-19+07:17:28.829] [2009-11-19+07:17:28.829, "rydI6puScNa", [192.168.1.104, 1224/?, 87.106.66.233, 80/?], 1, "POST", "87.106.66.233", "/rpc.html?e=bl", nil, "SCSDK-6.0.0", 1064, 96, 200, "OK", 100, "Continue", nil, {}, nil, nil, nil, "application/octet-stream", nil, nil])__";
+auto last_bro_http_log_line = R"__(bro::http [2009-11-19+07:17:28.829] [2009-11-19+07:17:28.829, "rydI6puScNa", 192.168.1.104, 1224/?, 87.106.66.233, 80/?, 1, "POST", "87.106.66.233", "/rpc.html?e=bl", nil, "SCSDK-6.0.0", 1064, 96, 200, "OK", 100, "Continue", nil, {}, nil, nil, nil, "application/octet-stream", nil, nil])__";
 
 auto first_csv_http_log_line = "type,id,timestamp,ts,uid,id.orig_h,id.orig_p,id.resp_h,id.resp_p,trans_depth,method,host,uri,referrer,user_agent,request_body_len,response_body_len,status_code,status_msg,info_code,info_msg,filename,tags,username,password,proxied,mime_type,md5,extraction_file";
 
@@ -36,7 +36,7 @@ auto last_csv_http_log_line = R"__(bro::http,1095,1258615048829955072,2009-11-19
 
 auto first_ascii_bgpdump_txt_line = R"__(bgpdump::state_change [2018-01-24+11:05:17.0] [2018-01-24+11:05:17.0, 27.111.229.79, 17639, "1", "3"])__";
 
-auto first_json_bgpdump_txt_line = R"__({"id": 1096, "timestamp": 1516791917000000000, "value": {"type": {"name": "bgpdump::state_change", "kind": "record", "structure": {"timestamp": {"name": "", "kind": "timestamp", "structure": null, "attributes": {}}, "source_ip": {"name": "", "kind": "address", "structure": null, "attributes": {}}, "source_as": {"name": "", "kind": "count", "structure": null, "attributes": {}}, "old_state": {"name": "", "kind": "string", "structure": null, "attributes": {}}, "new_state": {"name": "", "kind": "string", "structure": null, "attributes": {}}}, "attributes": {}}, "data": {"timestamp": 1516791917000000000, "source_ip": "27.111.229.79", "source_as": 17639, "old_state": "1", "new_state": "3"}}})__";
+auto first_json_bgpdump_txt_line = R"__({"id": 1096, "timestamp": 1516791917000000000, "value": {"type": {"name": "bgpdump::state_change", "kind": "record", "structure": {"timestamp": {"name": "", "kind": "timestamp", "structure": null, "attributes": {"time": null}}, "source_ip": {"name": "", "kind": "address", "structure": null, "attributes": {}}, "source_as": {"name": "", "kind": "count", "structure": null, "attributes": {}}, "old_state": {"name": "", "kind": "string", "structure": null, "attributes": {}}, "new_state": {"name": "", "kind": "string", "structure": null, "attributes": {}}}, "attributes": {}}, "data": {"timestamp": 1516791917000000000, "source_ip": "27.111.229.79", "source_as": 17639, "old_state": "1", "new_state": "3"}}})__";
 
 template <class Writer>
 std::vector<std::string> generate(const std::vector<event>& xs) {

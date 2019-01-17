@@ -273,7 +273,7 @@ void reader::reset(std::unique_ptr<std::istream> in) {
 expected<event> reader::read() {
   if (lines_->done())
     return make_error(ec::end_of_input, "input exhausted");
-  if (caf::holds_alternative<none_type>(type_)) {
+  if (layout_.fields.empty()) {
     auto t = parse_header();
     if (!t)
       return t.error();
@@ -322,22 +322,17 @@ expected<event> reader::read() {
     if (is_unset(i))
       continue;
     if (is_empty(i))
-      xs[i] = construct(record_.fields[i].type);
+      xs[i] = construct(layout_.fields[i].type);
     else {
-      // The parser needs an lvalue reference to the first iterator.
-      auto first = s[i].begin();
-      if (!parsers_[i](first, s[i].end(), xs[i]))
+      if (!parsers_[i](s[i], xs[i]))
         return make_error(ec::parse_error, "field", i, "line",
-                          lines_->line_number(),
-                          std::string{first, s[i].end()});
+                          lines_->line_number(), std::string{s[i]});
     }
     if (i == static_cast<size_t>(timestamp_field_))
       if (auto tp = caf::get_if<timestamp>(&xs[i]))
         ts = *tp;
   }
-  auto ys = unflatten(std::move(xs), type_);
-  VAST_ASSERT(ys);
-  event e{{std::move(*ys), type_}};
+  event e{{std::move(xs), type_}};
   e.timestamp(ts ? *ts : timestamp::clock::now());
   return e;
 }
@@ -348,7 +343,7 @@ expected<void> reader::schema(vast::schema sch) {
 }
 
 expected<schema> reader::schema() const {
-  if (caf::holds_alternative<none_type>(type_))
+  if (layout_.fields.empty())
     return make_error(ec::format_error, "schema not yet inferred");
   vast::schema sch;
   sch.add(type_);
@@ -433,9 +428,8 @@ expected<void> reader::parse_header() {
     record_fields.emplace_back(std::string{fields[i]}, *t);
   }
   // Construct type.
-  record_ = std::move(record_fields);
-  type_ = unflatten(record_);
-  type_.name("bro::" + path);
+  layout_ = std::move(record_fields);
+  layout_.name("bro::" + path);
   VAST_DEBUG(this, "parsed bro header:");
   VAST_DEBUG(this, "    #separator", separator_);
   VAST_DEBUG(this, "    #set_separator", set_separator_);
@@ -443,9 +437,9 @@ expected<void> reader::parse_header() {
   VAST_DEBUG(this, "    #unset_field", unset_field_);
   VAST_DEBUG(this, "    #path", path);
   VAST_DEBUG(this, "    #fields:");
-  for (auto i = 0u; i < record_.fields.size(); ++i)
+  for (auto i = 0u; i < layout_.fields.size(); ++i)
     VAST_DEBUG(this, "     ", i << ')',
-               record_.fields[i].name << ':', record_.fields[i].type);
+               layout_.fields[i].name << ':', layout_.fields[i].type);
   // If a congruent type exists in the schema, we give the schema type
   // precedence.
   if (auto t = schema_.find(path))
@@ -460,22 +454,30 @@ expected<void> reader::parse_header() {
     VAST_DEBUG(this, "uses event timestamp from field", timestamp_field_);
   } else {
     size_t i = 0;
-    for (auto& f : record_.fields) {
-      if (caf::holds_alternative<timestamp_type>(f.type)) {
+    for (auto& f : layout_.fields) {
+      if (f.name == "ts") {
+        if (!caf::holds_alternative<timestamp_type>(f.type)) {
+          VAST_WARNING(this, "encountered ts fields not of type timestamp");
+          continue;
+        }
         VAST_DEBUG(this, "auto-detected field", i, "as event timestamp");
         timestamp_field_ = static_cast<int>(i);
+        f.type.attributes({{"time"}});
         break;
       }
       ++i;
     }
   }
+  // After having modified layout attributes, we no longer make changes to the
+  // type and can now safely copy it.
+  type_ = layout_;
   // Create Bro parsers.
   auto make_parser = [](const auto& type, const auto& set_sep) {
     return make_bro_parser<iterator_type>(type, set_sep);
   };
-  parsers_.resize(record_.fields.size());
-  for (size_t i = 0; i < record_.fields.size(); i++)
-    parsers_[i] = make_parser(record_.fields[i].type, set_separator_);
+  parsers_.resize(layout_.fields.size());
+  for (size_t i = 0; i < layout_.fields.size(); i++)
+    parsers_[i] = make_parser(layout_.fields[i].type, set_separator_);
   return no_error;
 }
 

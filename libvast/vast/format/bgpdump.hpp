@@ -44,8 +44,7 @@ struct bgpdump_parser : parser<bgpdump_parser> {
     std::string update;
     vast::address source_ip;
     count source_as;
-    auto tuple = std::tie(ts, update, source_ip, source_as);
-    if (!head(f, l, tuple))
+    if (!head(f, l, ts, update, source_ip, source_as))
       return false;
     vector v;
     v.emplace_back(ts);
@@ -95,8 +94,7 @@ struct bgpdump_parser : parser<bgpdump_parser> {
       static auto tail = -str >> '|' >> -str;
       optional<std::string> old_state;
       optional<std::string> new_state;
-      auto t = std::tie(old_state, new_state);
-      if (!tail(f, l, t))
+      if (!tail(f, l, old_state, new_state))
         return false;
       v.emplace_back(std::move(old_state));
       v.emplace_back(std::move(new_state));

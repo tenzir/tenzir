@@ -108,8 +108,6 @@ public:
 
   /// Adds an event to the table slice and assigns an id.
   bool add(event& e) {
-    if (!inner_->add(e.timestamp()))
-      FAIL("builder->add() failed");
     if (!inner_->recursive_add(e.data(), e.type()))
       FAIL("builder->recursive_add() failed");
     e.id(id_++);
@@ -153,15 +151,8 @@ public:
     return caf::visit(
       detail::overload(
         [&](const record_type& rt) -> id_assigning_builder* {
-          // We always add a timestamp as first column to the layout.
-          auto internal = rt;
-          record_field tstamp_field{"timestamp", timestamp_type{}};
-          internal.fields.insert(internal.fields.begin(),
-                                 std::move(tstamp_field));
-          id_assigning_builder tmp{
-            default_table_slice_builder::make(std::move(internal))};
-          return &(
-            builders_.emplace(layout.name(), std::move(tmp)).first->second);
+          id_assigning_builder tmp{default_table_slice_builder::make(rt)};
+          return &(builders_.emplace(rt.name(), std::move(tmp)).first->second);
         },
         [&](const auto&) -> id_assigning_builder* {
           FAIL("layout is not a record type");
@@ -256,7 +247,7 @@ events::events() {
     sort_by_id(sorted_event_vec);                                              \
     REQUIRE_EQUAL(sorted_event_vec.size(), flat_log.size());                   \
     for (size_t i = 0; i < sorted_event_vec.size(); ++i) {                     \
-      if (flatten(sorted_event_vec[i]) != flat_log[i]) {                       \
+      if (sorted_event_vec[i] != flat_log[i]) {                                \
         FAIL(#event_vec << " != " << #slice_vec << "\ni: " << i << '\n'        \
                         << to_string(sorted_event_vec[i])                      \
                         << " != " << to_string(flat_log[i]));                  \

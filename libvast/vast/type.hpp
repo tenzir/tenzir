@@ -796,12 +796,21 @@ data construct(const type& t);
 /// @relates type
 std::string to_digest(const type& x);
 
-/// Tests whether a type has a "skip" attribute.
+/// Checks whether a given type has an attribute.
+/// @param t The type to check.
+/// @param key The attribute key.
+/// @returns `true` if *t* has an attribute with key *key*.
 /// @relates type
+template <class Type>
+bool has_attribute(const Type& t, std::string_view key) {
+  auto pred = [&](auto& attr) { return attr.key == key; };
+  return std::any_of(t.attributes().begin(), t.attributes().end(), pred);
+}
+
+/// Tests whether a type has a "skip" attribute.
+/// @relates has_attribute type
 inline bool has_skip_attribute(const type& t) {
-  auto& attrs = t.attributes();
-  auto pred = [](auto& x) { return x.key == "skip"; };
-  return std::any_of(attrs.begin(), attrs.end(), pred);
+  return has_attribute(t, "skip");
 }
 
 /// @relates type
@@ -975,4 +984,3 @@ VAST_DEFINE_HASH_SPECIALIZATION(alias_type);
 #undef VAST_DEFINE_HASH_SPECIALIZATION
 
 } // namespace std
-
