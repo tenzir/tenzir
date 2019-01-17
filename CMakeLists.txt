@@ -5,10 +5,19 @@
 cmake_minimum_required(VERSION 3.0 FATAL_ERROR)
 project(VAST C CXX)
 
+option(VAST_RELOCATEABLE_INSTALL "Make the installation relocateable")
+
 # Silence warning CMP0042
 if (APPLE AND NOT DEFINED CMAKE_MACOSX_RPATH)
-  set(CMAKE_MACOSX_RPATH true)
-endif()
+  set(CMAKE_MACOSX_RPATH TRUE)
+  set(CMAKE_SKIP_BUILD_RPATH  FALSE)
+  set(CMAKE_BUILD_WITH_INSTALL_RPATH FALSE)
+  if (VAST_RELOCATEABLE_INSTALL)
+    list(APPEND CMAKE_INSTALL_RPATH "@executable_path/../lib")
+  else ()
+    set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
+  endif ()
+endif ()
 
 # Support Clang tools such as clang-tidy
 set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
@@ -491,6 +500,12 @@ add_subdirectory(vast)
 #                           Additional Installations
 #------------------------------------------------------------------------------
 
+if (VAST_RELOCATEABLE_INSTALL AND NOT BUILD_SHARED_LIBS)
+  # Copy CAF libraries to installation directory
+  get_filename_component(CAF_LIBDIR ${CAF_LIBRARY_CORE} PATH)
+  install(DIRECTORY "${CAF_LIBDIR}/" DESTINATION "${CMAKE_INSTALL_LIBDIR}/")
+endif ()
+
 export(EXPORT VASTTargets
   FILE VASTTargets.cmake
   NAMESPACE vast::
@@ -571,43 +586,46 @@ display(MD2MAN_FOUND yes md2man_summary)
 display(VAST_USE_TCMALLOC yes tcmalloc_summary)
 display(VAST_USE_OPENSSL yes openssl_summary)
 display(NO_UNIT_TESTS no build_tests_summary)
+display(VAST_RELOCATEABLE_INSTALL yes relocatable_install_summary)
 
 STRING(TOUPPER "${CMAKE_BUILD_TYPE}" build_type)
 set(summary
     "====================|  Build Summary  |===================="
     "\n"
-    "\nVersion:          ${VERSION_MAJ_MIN}"
+    "\nVersion:             ${VERSION_MAJ_MIN}"
     "\n"
-    "\nSource directory: ${CMAKE_SOURCE_DIR}"
-    "\nBuild directory:  ${CMAKE_BINARY_DIR}"
-    "\nInstall prefix:   ${CMAKE_INSTALL_PREFIX}"
+    "\nSource directory:    ${CMAKE_SOURCE_DIR}"
+    "\nBuild directory:     ${CMAKE_BINARY_DIR}"
+    "\nInstall prefix:      ${CMAKE_INSTALL_PREFIX}"
     "\n"
-    "\nBuild type:       ${CMAKE_BUILD_TYPE}"
-    "\nBuild unit tests: ${build_tests_summary}"
-    "\nLog level:        ${VAST_LOG_LEVEL}"
-    "\nShow time report: ${time_report_summary}"
-    "\nAssertions:       ${assertions_summary}"
-    "\nAddressSanitizer: ${asan_summary}"
-    "\ngcov:             ${gcov_summary}"
+    "\nBuild type:          ${CMAKE_BUILD_TYPE}"
+    "\nBuild unit tests:    ${build_tests_summary}"
+    "\nLog level:           ${VAST_LOG_LEVEL}"
+    "\nShow time report:    ${time_report_summary}"
+    "\nAssertions:          ${assertions_summary}"
+    "\nAddressSanitizer:    ${asan_summary}"
+    "\ngcov:                ${gcov_summary}"
     "\n"
-    "\nC compiler:       ${CMAKE_C_COMPILER_ID} ${CMAKE_C_COMPILER_VERSION}"
-    "\nC++ compiler:     ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}"
+    "\nC compiler:          ${CMAKE_C_COMPILER_ID} ${CMAKE_C_COMPILER_VERSION}"
+    "\nC++ compiler:        ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}"
     "\n"
-    "\nCC:               ${CMAKE_C_COMPILER}"
-    "\nCXX:              ${CMAKE_CXX_COMPILER}"
-    "\nCXXFLAGS:         ${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_${build_type}}"
-    "\nLDFLAGS:          ${LDFLAGS}"
+    "\nCC:                  ${CMAKE_C_COMPILER}"
+    "\nCXX:                 ${CMAKE_CXX_COMPILER}"
+    "\nCXXFLAGS:            ${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_${build_type}}"
+    "\nLDFLAGS:             ${LDFLAGS}"
     "\n"
-    "\nCAF:              ${caf_summary}"
-    "\nBroker:           ${broker_summary}"
-    "\nSnappy            ${snappy_summary}"
-    "\nPCAP:             ${pcap_summary}"
-    "\nGperftools:       ${perftools_summary}"
-    "\nDoxygen:          ${doxygen_summary}"
-    "\nmd2man:           ${md2man_summary}"
+    "\nCAF:                 ${caf_summary}"
+    "\nBroker:              ${broker_summary}"
+    "\nSnappy               ${snappy_summary}"
+    "\nPCAP:                ${pcap_summary}"
+    "\nGperftools:          ${perftools_summary}"
+    "\nDoxygen:             ${doxygen_summary}"
+    "\nmd2man:              ${md2man_summary}"
     "\n"
-    "\ntcmalloc:         ${tcmalloc_summary}"
-    "\nOpenSSL:          ${openssl_summary}"
+    "\ntcmalloc:            ${tcmalloc_summary}"
+    "\nOpenSSL:             ${openssl_summary}"
+    "\n"
+    "\nRelocatable install: ${relocatable_install_summary}"
     "\n"
     "\n===========================================================")
 
