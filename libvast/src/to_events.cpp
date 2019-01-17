@@ -27,11 +27,10 @@ namespace vast {
 namespace {
 
 optional<size_t> find_time_column(record_type layout) {
-  auto result = caf::optional<size_t>{caf::none};
   for (size_t i = 0; i < layout.fields.size(); ++i)
     if (has_attribute(layout.fields[i].type, "time"))
       return i;
-  return result;
+  return caf::none;
 }
 
 event to_event(const table_slice& slice, id eid, type event_layout,
