@@ -13,25 +13,24 @@
 
 #define SUITE expression
 
+#include "vast/expression.hpp"
+#include "vast/expression_visitors.hpp"
+
 #include "vast/test/test.hpp"
-#include <caf/test/dsl.hpp>
 
 #include <string>
 
-#include "vast/event.hpp"
-#include "vast/expression.hpp"
-#include "vast/expression_visitors.hpp"
-#include "vast/load.hpp"
-#include "vast/save.hpp"
-#include "vast/schema.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/concept/parseable/vast/schema.hpp"
 #include "vast/concept/parseable/vast/time.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/expression.hpp"
-
 #include "vast/detail/steady_map.hpp"
+#include "vast/event.hpp"
+#include "vast/load.hpp"
+#include "vast/save.hpp"
+#include "vast/schema.hpp"
 
 using caf::get;
 using caf::get_if;

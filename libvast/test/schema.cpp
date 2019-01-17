@@ -14,7 +14,6 @@
 #define SUITE schema
 
 #include "vast/test/test.hpp"
-#include <caf/test/dsl.hpp>
 
 #include "type_test.hpp"
 
