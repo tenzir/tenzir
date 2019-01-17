@@ -20,7 +20,7 @@
 namespace vast {
 
 default_table_slice_builder::default_table_slice_builder(record_type layout)
-  : super{flatten(layout)},
+  : super{std::move(layout)},
     row_(super::layout().fields.size()),
     col_{0} {
   VAST_ASSERT(!row_.empty());
