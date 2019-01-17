@@ -37,7 +37,7 @@ using namespace caf;
 namespace vast::system {
 
 caf::message sink_command(const command& cmd, actor_system& sys, caf::actor snk,
-                          caf::config_value_map& options,
+                          caf::settings& options,
                           command::argument_iterator first,
                           command::argument_iterator last) {
   VAST_UNUSED(cmd);

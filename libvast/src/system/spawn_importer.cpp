@@ -14,7 +14,9 @@
 #include "vast/system/spawn_importer.hpp"
 
 #include <caf/actor.hpp>
+#include <caf/actor_system_config.hpp>
 #include <caf/expected.hpp>
+#include <caf/settings.hpp>
 
 #include "vast/defaults.hpp"
 #include "vast/detail/unbox_var.hpp"

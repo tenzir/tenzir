@@ -28,8 +28,7 @@ public:
   explicit import_command(command* parent);
 
 protected:
-  caf::message run_impl(caf::actor_system& sys,
-                        const caf::config_value_map& options,
+  caf::message run_impl(caf::actor_system& sys, const caf::settings& options,
                         argument_iterator begin,
                         argument_iterator end) override;
 };

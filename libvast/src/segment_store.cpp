@@ -15,6 +15,7 @@
 
 #include <caf/config_value.hpp>
 #include <caf/dictionary.hpp>
+#include <caf/settings.hpp>
 
 #include "vast/bitmap_algorithms.hpp"
 #include "vast/error.hpp"
@@ -230,7 +231,7 @@ segment_store::get(const ids& xs) {
   return result;
 }
 
-void segment_store::inspect_status(caf::dictionary<caf::config_value>& dict) {
+void segment_store::inspect_status(caf::settings& dict) {
   using caf::put;
   put(dict, "meta-path", meta_path().str());
   put(dict, "segment-path", segment_path().str());

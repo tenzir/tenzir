@@ -17,6 +17,7 @@
 #include <caf/error.hpp>
 #include <caf/expected.hpp>
 #include <caf/optional.hpp>
+#include <caf/settings.hpp>
 #include <caf/string_algorithms.hpp>
 
 #include "vast/concept/parseable/to.hpp"

@@ -20,7 +20,7 @@
 namespace vast::system {
 
 /// Spawns a new VAST node.
-caf::expected<scope_linked<caf::actor>>
-spawn_node(caf::scoped_actor& self, const caf::config_value_map& opts);
+caf::expected<scope_linked<caf::actor>> spawn_node(caf::scoped_actor& self,
+                                                   const caf::settings& opts);
 
 } // namespace vast::system

@@ -62,8 +62,8 @@ auto make_error_msg(ec code, std::string msg) {
 }
 
 // Stop the node and exit the process
-caf::message stop_command(const command&, caf::actor_system&,
-                          caf::config_value_map&, command::argument_iterator,
+caf::message stop_command(const command&, caf::actor_system&, caf::settings&,
+                          command::argument_iterator,
                           command::argument_iterator) {
   // We cannot use this_node->send() here because it triggers
   // an illegal instruction interrupt.
@@ -73,7 +73,7 @@ caf::message stop_command(const command&, caf::actor_system&,
 
 // Tries to establish peering to another node.
 caf::message peer_command(const command&, caf::actor_system& sys,
-                          caf::config_value_map& options,
+                          caf::settings& options,
                           command::argument_iterator first,
                           command::argument_iterator last) {
   VAST_ASSERT(this_node != nullptr);
@@ -114,16 +114,16 @@ void collect_component_status(node_actor* self,
     // Promise to the original client request.
     caf::response_promise rp;
     // Maps nodes to a map associating components with status information.
-    caf::config_value_map content;
+    caf::settings content;
   };
   auto req_state = std::make_shared<req_state_t>();
   req_state->rp = std::move(status_promise);
   // Pre-fill our result with system stats.
-  auto& sys_stats = req_state->content["system"];
+  auto& sys_stats = put_dictionary(req_state->content, "system");
   auto& sys = self->system();
-  sys_stats.emplace("running-actors", sys.registry().running());
-  sys_stats.emplace("detached-actors", sys.detached_actors());
-  sys_stats.emplace("worker-threads", sys.scheduler().num_workers());
+  put(sys_stats, "running-actors", sys.registry().running());
+  put(sys_stats, "detached-actors", sys.detached_actors());
+  put(sys_stats, "worker-threads", sys.scheduler().num_workers());
   // Send out requests and collects answers.
   for (auto& [node_name, state_map] : reg.components) {
     req_state->pending += state_map.size();
@@ -138,13 +138,14 @@ void collect_component_status(node_actor* self,
         [=, lbl = comp_state.label, nn = node_name]
         (caf::config_value::dictionary& xs) mutable {
           auto& st = *req_state;
-          st.content[nn].emplace(std::move(lbl), std::move(xs));
+          st.content[nn].as_dictionary().emplace(std::move(lbl), std::move(xs));
           if (--st.pending == 0)
             st.rp.deliver(to_string(to_json(st.content)));
         },
         [=, lbl = comp_state.label, nn = node_name](caf::error& err) mutable {
           auto& st = *req_state;
-          st.content[nn].emplace(std::move(lbl), self->system().render(err));
+          auto& dict = st.content[nn].as_dictionary();
+          dict.emplace(std::move(lbl), self->system().render(err));
           if (--st.pending == 0)
             st.rp.deliver(to_string(to_json(st.content)));
         }
@@ -154,7 +155,7 @@ void collect_component_status(node_actor* self,
 }
 
 caf::message status_command(const command&, caf::actor_system&,
-                            caf::config_value_map&, command::argument_iterator,
+                            caf::settings&, command::argument_iterator,
                             command::argument_iterator) {
   auto self = this_node;
   auto rp = self->make_response_promise();
@@ -226,7 +227,7 @@ caf::expected<caf::actor> spawn_component(const command& cmd,
 }
 
 caf::message spawn_command(const command& cmd, caf::actor_system&,
-                           caf::config_value_map& options,
+                           caf::settings& options,
                            command::argument_iterator first,
                            command::argument_iterator last) {
   using std::end;
@@ -273,8 +274,7 @@ caf::message spawn_command(const command& cmd, caf::actor_system&,
   return caf::none;
 }
 
-caf::message kill_command(const command&, caf::actor_system&,
-                          caf::config_value_map&,
+caf::message kill_command(const command&, caf::actor_system&, caf::settings&,
                           command::argument_iterator first,
                           command::argument_iterator last) {
   if (std::distance(first, last) != 1)
@@ -414,7 +414,7 @@ void node_state::init(std::string init_name, path init_dir) {
 caf::behavior node(node_actor* self, std::string id, path dir) {
   self->state.init(std::move(id), std::move(dir));
   return {
-    [=](const std::vector<std::string>& cli, caf::config_value_map& options) {
+    [=](const std::vector<std::string>& cli, caf::settings& options) {
       VAST_DEBUG(self, "got command", cli, "with options", options);
       // Run the command.
       this_node = self;

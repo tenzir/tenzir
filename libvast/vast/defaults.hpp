@@ -17,6 +17,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <string_view>
 
 #include <caf/atom.hpp>
 
@@ -25,22 +26,22 @@ namespace vast::defaults {
 namespace command {
 
 /// Path to persistent state.
-extern const char* directory;
+extern std::string_view directory;
 
 /// Locator for connecting to a remote node in "host:port" notation.
-extern const char* endpoint;
+extern std::string_view endpoint;
 
 /// Server ID for the consensus module.
-extern const char* id;
+extern std::string_view id;
 
 /// Path for reading input events or `-` for reading from STDIN.
-extern const char* read_path;
+extern std::string_view read_path;
 
 /// Path to alternate schema.
-extern const char* schema_path;
+extern std::string_view schema_path;
 
 /// Path for writing query results or `-` for writing to STDOUT.
-extern const char* write_path;
+extern std::string_view write_path;
 
 /// Inverse factor by which to delay packets. For example, if 5, then for two
 /// packets spaced *t* seconds apart, the source will sleep for *t/5* seconds.
@@ -68,7 +69,7 @@ extern size_t max_flows;
 extern size_t generated_events;
 
 /// The unique ID of this node.
-extern const char* node_id;
+extern std::string_view node_id;
 
 } // namespace command
 

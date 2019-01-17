@@ -18,14 +18,14 @@
 #include <caf/inbound_path.hpp>
 #include <caf/outbound_path.hpp>
 #include <caf/scheduled_actor.hpp>
+#include <caf/settings.hpp>
 #include <caf/stream_manager.hpp>
 
 #include "vast/detail/algorithms.hpp"
 
 namespace vast::detail {
 
-void fill_status_map(caf::dictionary<caf::config_value>& xs,
-                     caf::stream_manager& mgr) {
+void fill_status_map(caf::settings& xs, caf::stream_manager& mgr) {
   // Manager status.
   put(xs, "idle", mgr.idle());
   put(xs, "congested", mgr.congested());

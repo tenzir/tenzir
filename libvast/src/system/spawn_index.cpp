@@ -15,6 +15,7 @@
 
 #include <caf/actor.hpp>
 #include <caf/expected.hpp>
+#include <caf/settings.hpp>
 
 #include "vast/defaults.hpp"
 #include "vast/detail/unbox_var.hpp"

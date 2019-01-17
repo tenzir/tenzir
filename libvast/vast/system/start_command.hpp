@@ -20,7 +20,7 @@ namespace vast::system {
 /// Default implementation for the `start` command.
 /// @relates application
 caf::message start_command(const command& cmd, caf::actor_system& sys,
-                           caf::config_value_map& options,
+                           caf::settings& options,
                            command::argument_iterator begin,
                            command::argument_iterator end);
 

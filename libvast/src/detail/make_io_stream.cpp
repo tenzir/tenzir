@@ -14,6 +14,7 @@
 #include "vast/detail/make_io_stream.hpp"
 
 #include <caf/config_value.hpp>
+#include <caf/settings.hpp>
 
 #include <fstream>
 
@@ -59,10 +60,10 @@ make_input_stream(const std::string& input, bool is_uds) {
 }
 
 expected<std::unique_ptr<std::ostream>>
-make_output_stream(const caf::config_value_map& options) {
-  return make_output_stream(
-    get_or(options, "global.write", defaults::command::write_path),
-    get_or(options, "global.uds", false));
+make_output_stream(const caf::settings& options) {
+  return make_output_stream(get_or(options, "global.write",
+                                   defaults::command::write_path),
+                            get_or(options, "global.uds", false));
 }
 
 expected<std::unique_ptr<std::ostream>>
@@ -83,7 +84,7 @@ make_output_stream(const std::string& output, bool is_uds) {
 }
 
 expected<std::unique_ptr<std::istream>>
-make_input_stream(const caf::config_value_map& options) {
+make_input_stream(const caf::settings& options) {
   return make_input_stream(
     get_or(options, "global.read", defaults::command::read_path),
     get_or(options, "global.uds", false));

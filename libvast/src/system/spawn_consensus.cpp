@@ -18,6 +18,7 @@
 #include <caf/actor.hpp>
 #include <caf/actor_cast.hpp>
 #include <caf/send.hpp>
+#include <caf/settings.hpp>
 
 #include "vast/system/raft.hpp"
 #include "vast/system/replicated_store.hpp"

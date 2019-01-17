@@ -16,6 +16,7 @@
 #include <algorithm>
 
 #include <caf/config_value.hpp>
+#include <caf/settings.hpp>
 
 #include "vast/defaults.hpp"
 #include "vast/event.hpp"

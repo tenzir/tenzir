@@ -23,7 +23,7 @@ namespace vast::system {
 
 /// Connects to a remote VAST server.
 caf::expected<caf::actor> connect_to_node(caf::scoped_actor& self,
-                                          const caf::config_value_map& opts);
+                                          const caf::settings& opts);
 
 } // namespace vast
 

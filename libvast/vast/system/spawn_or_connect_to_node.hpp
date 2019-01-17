@@ -22,8 +22,7 @@ namespace vast::system {
 /// Either spawns a new VAST node or connects to a server, depending on the
 /// configuration.
 caf::variant<caf::error, caf::actor, scope_linked<caf::actor>>
-spawn_or_connect_to_node(caf::scoped_actor& self,
-                         const caf::config_value_map& opts);
+spawn_or_connect_to_node(caf::scoped_actor& self, const caf::settings& opts);
 
 } // namespace vast::system
 

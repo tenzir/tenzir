@@ -13,6 +13,8 @@
 
 #include "vast/system/spawn_or_connect_to_node.hpp"
 
+#include <caf/settings.hpp>
+
 #include "vast/logger.hpp"
 #include "vast/system/connect_to_node.hpp"
 #include "vast/system/spawn_node.hpp"
@@ -26,7 +28,7 @@ using result_t = caf::variant<caf::error, caf::actor, scope_linked_actor>;
 } // namespace <anonymous>
 
 result_t spawn_or_connect_to_node(caf::scoped_actor& self,
-                                  const caf::config_value_map& opts) {
+                                  const caf::settings& opts) {
   VAST_TRACE(VAST_ARG(opts));
   auto convert = [](auto&& result) -> result_t {
     if (result)

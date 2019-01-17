@@ -52,7 +52,7 @@ public:
 
   caf::error flush() override;
 
-  void inspect_status(caf::dictionary<caf::config_value>& dict) override;
+  void inspect_status(caf::settings& dict) override;
 
   /// @cond PRIVATE
 

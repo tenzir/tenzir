@@ -26,11 +26,11 @@ namespace vast::defaults {
 
 namespace command {
 
-const char* directory = "vast";
-const char* endpoint = ":42000";
-const char* id = "";
-const char* read_path = "-";
-const char* write_path = "-";
+std::string_view directory = "vast";
+std::string_view endpoint = ":42000";
+std::string_view id = "";
+std::string_view read_path = "-";
+std::string_view write_path = "-";
 int64_t pseudo_realtime_factor = 0;
 size_t cutoff = std::numeric_limits<size_t>::max();
 size_t flow_expiry = 10;
@@ -39,7 +39,7 @@ size_t max_events = 0;
 size_t max_flow_age = 60;
 size_t max_flows = 1_Mi;
 size_t generated_events = 100;
-const char* node_id = "node";
+std::string_view node_id = "node";
 
 } // namespace command
 

@@ -54,7 +54,7 @@ configuration::configuration() {
                "Maximum size for sources that generate table slices.");
 }
 
-configuration& configuration::parse(int argc, char** argv) {
+caf::error configuration::parse(int argc, char** argv) {
   VAST_ASSERT(argc > 0);
   VAST_ASSERT(argv != nullptr);
   command_line.assign(argv + 1, argv + argc);
@@ -69,8 +69,7 @@ configuration& configuration::parse(int argc, char** argv) {
   // Remove caf# suffix for CAF parser.
   for (auto& arg : caf_args)
     arg.erase(2, 4);
-  actor_system_config::parse(std::move(caf_args));
-  return *this;
+  return actor_system_config::parse(std::move(caf_args));
 }
 
 } // namespace vast::system

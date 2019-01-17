@@ -59,7 +59,7 @@ public:
   virtual caf::error flush() = 0;
 
   /// Fills `dict` with implementation-specific status information.
-  virtual void inspect_status(caf::dictionary<caf::config_value>& dict) = 0;
+  virtual void inspect_status(caf::settings& dict) = 0;
 };
 
 } // namespace vast

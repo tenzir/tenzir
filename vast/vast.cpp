@@ -80,12 +80,12 @@ struct config : configuration {
   // configuration.
   void merge_root_options(application& app) {
     // Delegate to the root command for argument parsing.
-    caf::config_value_map options;
+    caf::settings options;
     app.root.options.parse(options, command_line.begin(), command_line.end());
     // Move everything into the system-wide options, but use "vast" as category
     // instead of the default "global" category.
-    auto& src = options["global"];
-    content["vast"].insert(src.begin(), src.end());
+    auto& src = options["global"].as_dictionary();
+    src["vast"].as_dictionary().insert(src.begin(), src.end());
   }
 };
 

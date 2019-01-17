@@ -277,7 +277,7 @@ int main(int argc, char** argv) {
                                          defaults::vast_address);
   uint16_t vast_port = caf::get_or(sys.config(), "vast-port",
                                    defaults::vast_port);
-  caf::config_value_map opts;
+  caf::settings opts;
   // TODO: simplify this to set("global", "endpoint", value) after we addressed
   // https://github.com/actor-framework/actor-framework/issues/769.
   opts.emplace("global",

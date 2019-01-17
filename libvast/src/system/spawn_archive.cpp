@@ -18,6 +18,7 @@
 #include <caf/config_value.hpp>
 #include <caf/expected.hpp>
 #include <caf/local_actor.hpp>
+#include <caf/settings.hpp>
 
 #include "vast/defaults.hpp"
 #include "vast/filesystem.hpp"
