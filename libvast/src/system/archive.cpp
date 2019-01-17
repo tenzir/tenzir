@@ -72,7 +72,7 @@ archive(archive_type::stateful_pointer<archive_state> self, path dir,
   if (auto a = self->system().registry().get(accountant_atom::value)) {
     namespace defs = defaults::system;
     self->state.accountant = actor_cast<accountant_type>(a);
-    self->send(self->state.accountant, "announce", self->name());
+    self->send(self->state.accountant, announce_atom::value, self->name());
     self->delayed_send(self, defs::telemetry_rate, telemetry_atom::value);
   }
   return {[=](const ids& xs) -> caf::result<done_atom, caf::error> {

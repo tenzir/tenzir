@@ -110,7 +110,7 @@ struct source_state {
     if (auto acc = self->system().registry().get(accountant_atom::value)) {
       VAST_DEBUG(self, "uses registry accountant:", accountant);
       accountant = caf::actor_cast<accountant_type>(acc);
-      self->send(accountant, "announce", name);
+      self->send(accountant, announce_atom::value, name);
     }
   }
 

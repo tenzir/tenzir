@@ -130,7 +130,7 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
   self->state.sink = actor_pool::make(eu, actor_pool::broadcast());
   if (auto a = self->system().registry().get(accountant_atom::value)) {
     self->state.accountant = actor_cast<accountant_type>(a);
-    self->send(self->state.accountant, "announce", self->name());
+    self->send(self->state.accountant, announce_atom::value, self->name());
   }
   self->state.options = options;
   if (has_continuous_option(options))
