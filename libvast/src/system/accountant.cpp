@@ -62,15 +62,14 @@ void init(accountant_actor* self, const path& filename) {
 template <class T>
 void record(accountant_actor* self, const std::string& key, T x) {
   using namespace std::chrono;
+  auto aid = self->current_sender()->id();
   auto node = self->current_sender()->node();
   auto& st = self->state;
   for (auto byte : node.host_id())
     st.file << static_cast<int>(byte);
-  st.file << std::dec << '\t'
-          << node.process_id() << '\t'
-          << self->current_sender()->id() << '\t'
-          << key << '\t'
-          << std::setprecision(6) << x << '\n';
+  st.file << std::dec << '\t' << node.process_id() << '\t' << aid << '\t'
+          << st.actor_map[aid] << '\t' << key << '\t' << std::setprecision(6)
+          << x << '\n';
   // Flush after at most 10 seconds.
   if (!st.flush_pending) {
     st.flush_pending = true;
@@ -102,6 +101,9 @@ accountant_type::behavior_type accountant(accountant_actor* self,
     }
   );
   return {
+    [=](announce_atom, const std::string& name) {
+      self->state.actor_map[self->current_sender()->id()] = name;
+    },
     [=](const std::string& key, const std::string& value) {
       VAST_TRACE(self, "received", key, "from", self->current_sender());
       record(self, key, value);
