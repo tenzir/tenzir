@@ -78,6 +78,17 @@ void record(accountant_actor* self, const std::string& key, T x) {
   }
 }
 
+void record(accountant_actor* self, const std::string& key, timespan x) {
+  using namespace std::chrono;
+  auto us = duration_cast<microseconds>(x).count();
+  record(self, key, us);
+}
+
+void record(accountant_actor* self, const std::string& key, timestamp x) {
+  using namespace std::chrono;
+  record(self, key, x.time_since_epoch());
+}
+
 } // namespace <anonymous>
 
 accountant_type::behavior_type accountant(accountant_actor* self,
@@ -98,13 +109,11 @@ accountant_type::behavior_type accountant(accountant_actor* self,
     // Helpers to avoid to_string(..) in sender context.
     [=](const std::string& key, timespan value) {
       VAST_TRACE(self, "received", key, "from", self->current_sender());
-      auto us = duration_cast<microseconds>(value).count();
-      record(self, key, us);
+      record(self, key, value);
     },
     [=](const std::string& key, timestamp value) {
       VAST_TRACE(self, "received", key, "from", self->current_sender());
-      auto us = duration_cast<microseconds>(value.time_since_epoch()).count();
-      record(self, key, us);
+      record(self, key, value);
     },
     [=](const std::string& key, int64_t value) {
       VAST_TRACE(self, "received", key, "from", self->current_sender());
@@ -118,8 +127,17 @@ accountant_type::behavior_type accountant(accountant_actor* self,
       VAST_TRACE(self, "received", key, "from", self->current_sender());
       record(self, key, value);
     },
-    [=](const performance_report& r) {
+    [=](const report& r) {
       VAST_TRACE(self, "received a report from", self->current_sender());
+      for (const auto& [key, value] : r) {
+        caf::visit([&, key = key](const auto& x) {
+            record(self, key, x);
+            }, value);
+      }
+    },
+    [=](const performance_report& r) {
+      VAST_TRACE(self, "received a performance report from",
+                 self->current_sender());
       for (const auto& [key, value] : r) {
         auto us = duration_cast<microseconds>(value.duration).count();
         auto rate = value.events * 1'000'000 / us;

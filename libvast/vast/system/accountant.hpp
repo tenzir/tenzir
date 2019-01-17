@@ -35,6 +35,19 @@ struct accountant_state {
   static inline const char* name = "accountant";
 };
 
+struct data_point {
+  std::string key;
+  caf::variant<std::string, timespan, timestamp, int64_t, uint64_t, double>
+    value;
+};
+
+template <class Inspector>
+typename Inspector::result_type inspect(Inspector& f, data_point& s) {
+  return f(caf::meta::type_name("data_point"), s.key, s.value);
+}
+
+using report = std::vector<data_point>;
+
 struct performance_sample {
   std::string key;
   measurement value;
@@ -55,6 +68,7 @@ using accountant_type =
     caf::reacts_to<std::string, int64_t>,
     caf::reacts_to<std::string, uint64_t>,
     caf::reacts_to<std::string, double>,
+    caf::reacts_to<report>,
     caf::reacts_to<performance_report>,
     caf::reacts_to<flush_atom>
   >;
