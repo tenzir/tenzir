@@ -25,8 +25,7 @@ import_command::import_command(command* parent) : node_command(parent) {
   add_opt<bool>("blocking,b", "block until the IMPORTER forwarded all data");
 }
 
-caf::message import_command::run_impl(actor_system&,
-                                      const caf::config_value_map&,
+caf::message import_command::run_impl(actor_system&, const caf::settings&,
                                       argument_iterator, argument_iterator) {
   return wrap_error(ec::syntax_error, "missing subcommand to import");
 }

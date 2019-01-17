@@ -32,7 +32,7 @@ namespace vast::system {
 /// @relates application
 template <class Generator>
 caf::message generator_command(const command& cmd, caf::actor_system& sys,
-                               caf::config_value_map& options,
+                               caf::settings& options,
                                command::argument_iterator first,
                                command::argument_iterator last) {
   VAST_TRACE("");

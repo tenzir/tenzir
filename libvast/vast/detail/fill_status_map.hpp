@@ -18,11 +18,9 @@
 namespace vast::detail {
 
 /// Fills `xs` state from the stream manager `mgr`.
-void fill_status_map(caf::dictionary<caf::config_value>& xs,
-                     caf::stream_manager& mgr);
+void fill_status_map(caf::settings& xs, caf::stream_manager& mgr);
 
 /// Fills `xs` state from `self`.
-void fill_status_map(caf::dictionary<caf::config_value>& xs,
-                     caf::scheduled_actor* self);
+void fill_status_map(caf::settings& xs, caf::scheduled_actor* self);
 
 } // namespace vast::detail

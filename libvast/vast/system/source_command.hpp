@@ -19,7 +19,7 @@ namespace vast::system {
 
 /// Format-independent implementation for import sub-commands.
 caf::message source_command(const command& cmd, caf::actor_system& sys,
-                            caf::actor src, caf::config_value_map& options,
+                            caf::actor src, caf::settings& options,
                             command::argument_iterator first,
                             command::argument_iterator last);
 

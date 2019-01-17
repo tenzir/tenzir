@@ -37,7 +37,7 @@ namespace vast::system {
 using namespace std::chrono_literals;
 
 caf::message start_command(const command&, caf::actor_system& sys,
-                           caf::config_value_map& options,
+                           caf::settings& options,
                            command::argument_iterator begin,
                            command::argument_iterator end) {
   VAST_UNUSED(begin, end);

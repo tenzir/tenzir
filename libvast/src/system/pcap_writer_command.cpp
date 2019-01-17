@@ -18,6 +18,7 @@
 
 #include <caf/event_based_actor.hpp>
 #include <caf/scoped_actor.hpp>
+#include <caf/settings.hpp>
 #include <caf/stateful_actor.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
@@ -35,7 +36,7 @@
 namespace vast::system {
 
 caf::message pcap_writer_command(const command& cmd, caf::actor_system& sys,
-                                 caf::config_value_map& options,
+                                 caf::settings& options,
                                  command::argument_iterator first,
                                  command::argument_iterator last) {
   using caf::get_or;

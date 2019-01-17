@@ -17,6 +17,7 @@
 
 #include <caf/config_value.hpp>
 #include <caf/scoped_actor.hpp>
+#include <caf/settings.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
 #include "vast/detail/string.hpp"
@@ -61,7 +62,7 @@ caf::expected<expression> parse_expression(command::argument_iterator begin,
 } // namespace <anonymous>
 
 caf::message source_command(const command& cmd, caf::actor_system& sys,
-                            caf::actor src, caf::config_value_map& options,
+                            caf::actor src, caf::settings& options,
                             command::argument_iterator begin,
                             command::argument_iterator end) {
   using namespace caf;

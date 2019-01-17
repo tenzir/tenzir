@@ -27,13 +27,13 @@ expected<std::unique_ptr<std::ostream>>
 make_output_stream(const std::string& output, bool is_uds = false);
 
 expected<std::unique_ptr<std::ostream>>
-make_output_stream(const caf::config_value_map& options);
+make_output_stream(const caf::settings& options);
 
 expected<std::unique_ptr<std::istream>>
 make_input_stream(const std::string& input, bool is_uds = false);
 
 expected<std::unique_ptr<std::istream>>
-make_input_stream(const caf::config_value_map& options);
+make_input_stream(const caf::settings& options);
 
 } // namespace vast::detail
 

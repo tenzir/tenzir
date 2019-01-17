@@ -16,6 +16,7 @@
 #include <caf/actor.hpp>
 #include <caf/expected.hpp>
 #include <caf/local_actor.hpp>
+#include <caf/settings.hpp>
 
 #include "vast/config.hpp"
 #include "vast/defaults.hpp"
@@ -55,8 +56,8 @@ maybe_actor spawn_pcap_sink([[maybe_unused]] caf::local_actor* self,
   if (!args.empty())
     return unexpected_arguments(args);
   format::pcap::writer writer{
-    get_or(args.options, "global.write", defaults::command::write_path),
-    get_or(args.options, "global.flush", size_t{0})};
+    caf::get_or(args.options, "global.write", defaults::command::write_path),
+    caf::get_or(args.options, "global.flush", size_t{0})};
   return self->spawn(sink<format::pcap::writer>, std::move(writer), 0u);
 #endif // VAST_HAVE_PCAP
 }

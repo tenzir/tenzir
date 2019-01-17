@@ -34,7 +34,7 @@ struct spawn_arguments {
   const std::string& label;
 
   /// User-defined options for spawning the component.
-  const caf::config_value_map& options;
+  const caf::settings& options;
 
   /// Iterator to the first CLI argument.
   cli_argument_iterator first;

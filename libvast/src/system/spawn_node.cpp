@@ -18,6 +18,7 @@
 
 #include <caf/config_value.hpp>
 #include <caf/scoped_actor.hpp>
+#include <caf/settings.hpp>
 
 #include "vast/defaults.hpp"
 #include "vast/logger.hpp"
@@ -27,10 +28,10 @@
 namespace vast::system {
 
 expected<scope_linked_actor> spawn_node(caf::scoped_actor& self,
-                                        const caf::config_value_map& opts) {
+                                        const caf::settings& opts) {
   // Fetch values from config.
-  auto id = caf::get_or(opts, "id", defaults::command::node_id);
-  auto dir = caf::get_or(opts, "dir", defaults::command::directory);
+  auto id = get_or(opts, "id", defaults::command::node_id);
+  auto dir = get_or(opts, "dir", defaults::command::directory);
   auto abs_dir = path{dir}.complete();
   VAST_DEBUG_ANON(__func__, "spawns local node:", id);
   // Pointer to the root command to system::node.

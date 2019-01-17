@@ -27,13 +27,13 @@ using namespace std::string_literals;
 
 namespace {
 
-caf::message foo(const command& cmd, caf::actor_system&, caf::config_value_map&,
+caf::message foo(const command& cmd, caf::actor_system&, caf::settings&,
                  command::argument_iterator, command::argument_iterator) {
   CHECK_EQUAL(cmd.name, "foo");
   return caf::make_message("foo");
 }
 
-caf::message bar(const command& cmd, caf::actor_system&, caf::config_value_map&,
+caf::message bar(const command& cmd, caf::actor_system&, caf::settings&,
                  command::argument_iterator, command::argument_iterator) {
   CHECK_EQUAL(cmd.name, "bar");
   return caf::make_message("bar");
@@ -43,7 +43,7 @@ struct fixture {
   command root;
   caf::actor_system_config cfg;
   caf::actor_system sys{cfg};
-  caf::config_value_map options;
+  caf::settings options;
 
   fixture() {
     root.name = "vast";

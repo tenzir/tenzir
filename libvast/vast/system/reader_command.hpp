@@ -36,7 +36,7 @@ namespace vast::system {
 /// @relates application
 template <class Reader>
 caf::message reader_command(const command& cmd, caf::actor_system& sys,
-                            caf::config_value_map& options,
+                            caf::settings& options,
                             command::argument_iterator first,
                             command::argument_iterator last) {
   VAST_TRACE(VAST_ARG(options), VAST_ARG("args", first, last));

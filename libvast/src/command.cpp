@@ -17,6 +17,7 @@
 
 #include <caf/make_message.hpp>
 #include <caf/message.hpp>
+#include <caf/settings.hpp>
 
 #include "vast/detail/string.hpp"
 #include "vast/error.hpp"
@@ -44,7 +45,7 @@ command* command::add(fun child_run, std::string_view child_name,
 caf::message run(const command& cmd, caf::actor_system& sys,
                  command::argument_iterator first,
                  command::argument_iterator last) {
-  caf::config_value_map options;
+  caf::settings options;
   return run(cmd, sys, options, first, last);
 }
 
@@ -54,7 +55,7 @@ caf::message run(const command& cmd, caf::actor_system& sys,
 }
 
 caf::message run(const command& cmd, caf::actor_system& sys,
-                 caf::config_value_map& options,
+                 caf::settings& options,
                  command::argument_iterator first,
                  command::argument_iterator last) {
   using caf::get_or;
@@ -112,7 +113,7 @@ caf::message run(const command& cmd, caf::actor_system& sys,
 }
 
 caf::message run(const command& cmd, caf::actor_system& sys,
-                 caf::config_value_map& options,
+                 caf::settings& options,
                  const std::vector<std::string>& args) {
   return run(cmd, sys, options, args.begin(), args.end());
 }
@@ -261,7 +262,7 @@ std::string command::full_name() const {
 }
 
 caf::error command::proceed(caf::actor_system&,
-                            const caf::config_value_map& options,
+                            const caf::settings& options,
                             argument_iterator begin, argument_iterator end) {
   VAST_UNUSED(options, begin, end);
   VAST_TRACE(VAST_ARG(std::string{name_}), VAST_ARG("args", begin, end),
@@ -270,7 +271,7 @@ caf::error command::proceed(caf::actor_system&,
 }
 
 caf::message command::run_impl(caf::actor_system&,
-                               const caf::config_value_map& options,
+                               const caf::settings& options,
                                argument_iterator begin, argument_iterator end) {
   VAST_UNUSED(options, begin, end);
   VAST_TRACE(VAST_ARG(std::string{name_}), VAST_ARG("args", begin, end),
