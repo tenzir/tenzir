@@ -45,7 +45,7 @@ typename Inspector::result_type inspect(Inspector& f, performance_sample& s) {
   return f(caf::meta::type_name("performance_sample"), s.key, s.value);
 }
 
-using report = std::vector<performance_sample>;
+using performance_report = std::vector<performance_sample>;
 
 using accountant_type =
   caf::typed_actor<
@@ -55,7 +55,7 @@ using accountant_type =
     caf::reacts_to<std::string, int64_t>,
     caf::reacts_to<std::string, uint64_t>,
     caf::reacts_to<std::string, double>,
-    caf::reacts_to<report>,
+    caf::reacts_to<performance_report>,
     caf::reacts_to<flush_atom>
   >;
 
@@ -68,4 +68,3 @@ accountant(accountant_type::stateful_pointer<accountant_state> self,
            const path& filename);
 
 } // namespace vast::system
-

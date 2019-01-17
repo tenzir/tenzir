@@ -126,7 +126,7 @@ void importer_state::send_report() {
     auto elapsed = std::chrono::duration_cast<measurement::timespan>(
       now - last_report);
     auto node_throughput = measurement{elapsed, measurement_.events};
-    auto r = report{
+    auto r = performance_report{
       {{"importer"s, measurement_}, {"node_throughput"s, node_throughput}}};
     measurement_ = measurement{};
     self->send(accountant, std::move(r));

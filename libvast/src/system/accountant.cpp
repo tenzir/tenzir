@@ -118,7 +118,7 @@ accountant_type::behavior_type accountant(accountant_actor* self,
       VAST_TRACE(self, "received", key, "from", self->current_sender());
       record(self, key, value);
     },
-    [=](const report& r) {
+    [=](const performance_report& r) {
       VAST_TRACE(self, "received a report from", self->current_sender());
       for (const auto& [key, value] : r) {
         auto us = duration_cast<microseconds>(value.duration).count();

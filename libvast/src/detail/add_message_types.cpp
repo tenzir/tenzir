@@ -55,7 +55,7 @@ void add_message_types(caf::actor_system_config& cfg) {
   cfg.add_message_type<system::component_map_entry>(
     "vast::system::component_map_entry");
   cfg.add_message_type<system::registry>("vast::system::registry");
-  cfg.add_message_type<system::report>("vast::system::report");
+  cfg.add_message_type<system::performance_report>("vast::system::report");
   cfg.add_message_type<system::query_status>("vast::system::query_status");
   cfg.add_message_type<system::actor_identity>("vast::system::actor_identity");
 #ifdef VAST_USE_OPENCL

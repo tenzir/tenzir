@@ -196,7 +196,7 @@ caf::dictionary<caf::config_value> index_state::status() const {
 }
 
 void index_state::send_report() {
-  report r;
+  performance_report r;
   auto append_report = [&](partition& p) {
     for (auto& [layout, ti] : p.table_indexers_) {
       for (size_t i = 0; i < ti.measurements_.size(); ++i) {
