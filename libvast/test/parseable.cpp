@@ -11,9 +11,14 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include <sstream>
+#define SUITE parseable
+
+#include "vast/test/test.hpp"
+#include <caf/test/dsl.hpp>
 
 #include "vast/address.hpp"
+
+#include <sstream>
 
 #include "vast/concept/parseable/core.hpp"
 #include "vast/concept/parseable/numeric.hpp"
@@ -23,9 +28,6 @@
 #include "vast/concept/parseable/vast/address.hpp"
 #include "vast/concept/parseable/vast/offset.hpp"
 #include "vast/concept/parseable/vast/time.hpp"
-
-#define SUITE parseable
-#include "vast/test/test.hpp"
 
 using namespace std::string_literals;
 using namespace vast;
@@ -104,13 +106,12 @@ TEST(container attribute folding) {
                 "container attribute folding failed");
 }
 
-TEST_DISABLED(action) {
-  using namespace parsers;
+TEST(action) {
   auto make_v4 = [](uint32_t a) { return address::v4(&a); };
-  auto ipv4_addr = b32be ->* make_v4;
+  auto ipv4_addr = parsers::b32be ->* make_v4;
   address x;
   CHECK(ipv4_addr("\x0A\x00\x00\x01", x));
-  CHECK_EQUAL(x, *to<address>("10.0.0.1"));
+  CHECK_EQUAL(x, unbox(to<address>("10.0.0.1")));
 }
 
 // -- string ------------------------------------------------------------------
