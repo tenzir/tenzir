@@ -14,12 +14,15 @@
 #define SUITE parseable
 
 #include "vast/test/test.hpp"
-#include <caf/test/dsl.hpp>
+
+#include <array>
+#include <map>
+#include <string>
+#include <type_traits>
+#include <utility>
+#include <vector>
 
 #include "vast/address.hpp"
-
-#include <sstream>
-
 #include "vast/concept/parseable/core.hpp"
 #include "vast/concept/parseable/numeric.hpp"
 #include "vast/concept/parseable/string.hpp"
@@ -107,8 +110,9 @@ TEST(container attribute folding) {
 }
 
 TEST(action) {
+  using namespace parsers;
   auto make_v4 = [](uint32_t a) { return address::v4(&a); };
-  auto ipv4_addr = parsers::b32be ->* make_v4;
+  auto ipv4_addr = b32be ->* make_v4;
   address x;
   CHECK(ipv4_addr("\x0A\x00\x00\x01", x));
   CHECK_EQUAL(x, unbox(to<address>("10.0.0.1")));
