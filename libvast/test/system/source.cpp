@@ -51,7 +51,7 @@ caf::behavior test_sink(test_sink_type* self, caf::actor src) {
           self->state.slices.emplace_back(std::move(ptr));
         },
         [=](caf::unit_t&, const error&) {
-          CAF_MESSAGE(self->name() << " is done");
+          MESSAGE(self->name() << " is done");
         }
       );
     }
@@ -64,12 +64,11 @@ FIXTURE_SCOPE(source_tests, fixtures::deterministic_actor_system_and_events)
 
 TEST(bro source) {
   MESSAGE("start reader");
-  namespace bf = format::bro;
   auto stream = detail::make_input_stream(bro::small_conn);
   REQUIRE(stream);
-  bf::reader reader{std::move(*stream)};
+  format::bro::reader reader{std::move(*stream)};
   MESSAGE("start source for producing table slices of size 10");
-  auto src = self->spawn(source<bf::reader>, std::move(reader),
+  auto src = self->spawn(source<format::bro::reader>, std::move(reader),
                          default_table_slice_builder::make,
                          events::slice_size);
   run();
@@ -82,13 +81,12 @@ TEST(bro source) {
   REQUIRE_EQUAL(slices.size(), 3u);
   std::vector<value> row_contents;
   for (size_t row = 0; row < 3u; ++row) {
-    /// The first column is the automagically added timestamp.
-    auto xs = subset(*slices[row], 0, table_slice::npos, 1);
+    auto xs = subset(*slices[row], 0, table_slice::npos);
     std::move(xs.begin(), xs.end(), std::back_inserter(row_contents));
   }
   std::vector<value> bro_conn_log_values;
   for (auto& x : bro_conn_log)
-    bro_conn_log_values.emplace_back(flatten(x));
+    bro_conn_log_values.emplace_back(x);
   REQUIRE_EQUAL(row_contents.size(), bro_conn_log_values.size());
   for (size_t i = 0; i < row_contents.size(); ++i)
     REQUIRE_EQUAL(row_contents[i], bro_conn_log_values[i]);

@@ -55,7 +55,7 @@ struct generator {
   explicit generator(std::string name, size_t first_event_id)
     : offset(first_event_id) {
     layout = record_type{
-      {"timestamp", timestamp_type{}},
+      {"timestamp", timestamp_type{}.attributes({{"time"}})},
       {"content", string_type{}}
     }.name(std::move(name));
   }

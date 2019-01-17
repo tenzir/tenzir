@@ -31,18 +31,17 @@ namespace pcap {
 namespace {
 
 inline type make_packet_type() {
-  auto packet = record_type{
-    {"meta", record_type{
-      {"src", address_type{}},
-      {"dst", address_type{}},
-      {"sport", port_type{}},
-      {"dport", port_type{}}}},
-    {"data", string_type{}.attributes({{"skip"}})}
-  };
-  return packet.name("pcap::packet");
+  return record_type{
+    {"timestamp", timestamp_type{}.attributes({{"time"}})},
+    {"src", address_type{}},
+    {"dst", address_type{}},
+    {"sport", port_type{}},
+    {"dport", port_type{}},
+    {"payload", string_type{}.attributes({{"skip"}})}
+  }.name("pcap::packet");
 }
 
-static auto const pcap_packet_type = make_packet_type();
+auto const pcap_packet_type = make_packet_type();
 
 } // namespace <anonymous>
 
@@ -238,17 +237,7 @@ expected<event> reader::read() {
     std::advance(begin, offset);
     flows_.erase(begin->first);
   }
-  // Assemble packet.
-  vector packet;
-  vector meta;
-  meta.emplace_back(std::move(conn.src));
-  meta.emplace_back(std::move(conn.dst));
-  meta.emplace_back(std::move(conn.sport));
-  meta.emplace_back(std::move(conn.dport));
-  packet.emplace_back(std::move(meta));
-  // We start with the network layer and skip the link layer.
-  auto str = reinterpret_cast<const char*>(data + 14);
-  packet.emplace_back(std::string{str, packet_size});
+  // Extract timestamp.
   using namespace std::chrono;
   auto secs = seconds(header->ts.tv_sec);
   auto ts = timestamp{duration_cast<timespan>(secs)};
@@ -257,6 +246,16 @@ expected<event> reader::read() {
 #else
   ts += microseconds(header->ts.tv_usec);
 #endif
+  // Assemble packet.
+  vector packet;
+  packet.emplace_back(ts);
+  packet.emplace_back(std::move(conn.src));
+  packet.emplace_back(std::move(conn.dst));
+  packet.emplace_back(std::move(conn.sport));
+  packet.emplace_back(std::move(conn.dport));
+  // We start with the network layer and skip the link layer.
+  auto str = reinterpret_cast<const char*>(data + 14);
+  packet.emplace_back(std::string{str, packet_size});
   if (pseudo_realtime_ > 0) {
     if (ts < last_timestamp_) {
       VAST_WARNING(this, "encountered non-monotonic packet timestamps:",
@@ -313,11 +312,8 @@ expected<void> writer::write(const event& e) {
   }
   if (!congruent(e.type(), pcap_packet_type))
     return make_error(ec::format_error, "invalid pcap packet type");
-  auto v = caf::get_if<vector>(&e.data());
-  VAST_ASSERT(v);
-  VAST_ASSERT(v->size() == 2);
-  auto payload = caf::get_if<std::string>(&((*v)[1]));
-  VAST_ASSERT(payload);
+  auto& xs = caf::get<vector>(e.data());
+  auto& payload = caf::get<std::string>(xs[5]);
   // Make PCAP header.
   ::pcap_pkthdr header;
   auto ns = e.timestamp().time_since_epoch().count();
@@ -328,11 +324,11 @@ expected<void> writer::write(const event& e) {
   ns /= 1000;
   header.ts.tv_usec = ns % 1000000;
 #endif
-  header.caplen = payload->size();
-  header.len = payload->size();
+  header.caplen = payload.size();
+  header.len = payload.size();
   // Dump packet.
   ::pcap_dump(reinterpret_cast<uint8_t*>(dumper_), &header,
-              reinterpret_cast<const uint8_t*>(payload->c_str()));
+              reinterpret_cast<const uint8_t*>(payload.c_str()));
   if (++total_packets_ % flush_interval_ == 0) {
     auto r = flush();
     if (!r)

@@ -20,7 +20,7 @@ namespace bgpdump {
 bgpdump_parser::bgpdump_parser() {
   // Announce type.
   auto fields = std::vector<record_field>{
-    {"timestamp", timestamp_type{}},
+    {"timestamp", timestamp_type{}.attributes({{"time"}})},
     {"source_ip", address_type{}},
     {"source_as", count_type{}},
     {"prefix", subnet_type{}},
@@ -38,7 +38,7 @@ bgpdump_parser::bgpdump_parser() {
   // Route & withdraw type.
   route_type = record_type{std::move(fields)}.name("bgpdump::routing");
   auto withdraw_fields = std::vector<record_field>{
-    {"timestamp", timestamp_type{}},
+    {"timestamp", timestamp_type{}.attributes({{"time"}})},
     {"source_ip", address_type{}},
     {"source_as", count_type{}},
     {"prefix", subnet_type{}},
@@ -47,7 +47,7 @@ bgpdump_parser::bgpdump_parser() {
     record_type{std::move(withdraw_fields)}.name("bgpdump::withdrawn");
   // State-change type.
   auto state_change_fields = std::vector<record_field>{
-    {"timestamp", timestamp_type{}},
+    {"timestamp", timestamp_type{}.attributes({{"time"}})},
     {"source_ip", address_type{}},
     {"source_as", count_type{}},
     {"old_state", string_type{}},

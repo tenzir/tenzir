@@ -139,9 +139,7 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
         [&](const attribute_extractor& lhs, const data& d) -> result_type {
           if (lhs.attr == system::time_atom::value) {
             auto pred = [](auto& field) {
-              // FIXME: we should really just look at the &timestamp attribute
-              // and not all fields of type time. [ch3843]
-              return caf::holds_alternative<timestamp_type>(field.type);
+              return has_attribute(field.type, "time");
             };
             return search(pred);
           } else if (lhs.attr == system::type_atom::value) {

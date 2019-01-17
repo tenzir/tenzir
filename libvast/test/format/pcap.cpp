@@ -11,18 +11,17 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/error.hpp"
-#include "vast/event.hpp"
-
-#include "vast/concept/parseable/to.hpp"
-#include "vast/concept/parseable/vast/address.hpp"
-#include "vast/filesystem.hpp"
-
-#include "vast/format/pcap.hpp"
-
 #define SUITE format
 #include "vast/test/test.hpp"
 #include "vast/test/data.hpp"
+
+#include "vast/format/pcap.hpp"
+
+#include "vast/concept/parseable/to.hpp"
+#include "vast/concept/parseable/vast/address.hpp"
+#include "vast/error.hpp"
+#include "vast/event.hpp"
+#include "vast/filesystem.hpp"
 
 using namespace vast;
 
@@ -44,9 +43,7 @@ TEST(PCAP read/write 1) {
   CHECK_EQUAL(events[0].type().name(), "pcap::packet");
   auto pkt = caf::get_if<vector>(&events.back().data());
   REQUIRE(pkt);
-  auto conn_id = caf::get_if<vector>(&pkt->at(0));
-  REQUIRE(conn_id); //[192.168.1.1, 192.168.1.71, 53/udp, 64480/udp]
-  auto src = caf::get_if<address>(&conn_id->at(0));
+  auto src = caf::get_if<address>(&pkt->at(1));
   REQUIRE(src);
   CHECK_EQUAL(*src, *to<address>("192.168.1.1"));
   MESSAGE("write out read packets");

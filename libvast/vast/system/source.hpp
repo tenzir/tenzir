@@ -49,21 +49,6 @@
 
 namespace vast::system {
 
-#if 0
-/// The *Reader* concept.
-struct Reader {
-  Reader();
-
-  expected<result> read();
-
-  expected<void> schema(vast::schema&);
-
-  expected<vast::schema> schema() const;
-
-  const char* name() const;
-};
-#endif
-
 /// The source state.
 /// @tparam Reader The reader type, which must model the *Reader* concept.
 template <class Reader, class Self = caf::event_based_actor>
@@ -136,17 +121,11 @@ struct source_state {
       return i->second.get();
     return caf::visit(
       detail::overload(
-        [&](const record_type& rt) -> table_slice_builder* {
-          // FIXME: This should not longer happen. --MV
-          // We always add a timestamp as first column to the layout.
-          auto internal = rt;
-          record_field tstamp_field{"timestamp", timestamp_type{}};
-          internal.fields.insert(internal.fields.begin(),
-                                 std::move(tstamp_field));
-          auto& ref = builders[layout.name()];
-          ref = factory(internal);
-          ref->reserve(table_slice_size);
-          return ref.get();
+        [&](const record_type& t) {
+          auto& builder = builders[layout.name()];
+          builder = factory(t);
+          builder->reserve(table_slice_size);
+          return builder.get();
         },
         [&](auto&) -> table_slice_builder* {
           VAST_ERROR(layout.name(), "is not a record type");
@@ -216,9 +195,6 @@ struct source_state {
           continue;
         }
       }
-      /// Add meta column(s).
-      if (auto ts = e.timestamp(); !bptr->add(ts))
-        VAST_WARNING(self, "failed to add timestamp", ts);
       /// Add data column(s).
       if (auto data = e.data(); !bptr->recursive_add(data, e.type()))
         VAST_WARNING(self, "failed to add data", data);
