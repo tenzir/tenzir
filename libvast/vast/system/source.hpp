@@ -209,7 +209,7 @@ struct source_state {
 
   void send_report() {
     if (accountant && measurement_.events > 0) {
-      report r = {{{std::string{name}, measurement_}}};
+      performance_report r = {{{std::string{name}, measurement_}}};
       measurement_ = measurement{};
       self->send(accountant, std::move(r));
     }

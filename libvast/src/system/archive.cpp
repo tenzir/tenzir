@@ -42,7 +42,7 @@ namespace vast::system {
 void archive_state::send_report() {
   if (measurement.events > 0) {
     using namespace std::string_literals;
-    report r = {{{"archive"s, measurement}}};
+    performance_report r = {{{"archive"s, measurement}}};
     measurement = vast::system::measurement{};
     self->send(accountant, std::move(r));
   }
