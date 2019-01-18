@@ -19,7 +19,6 @@
 #include <string>
 #include <vector>
 
-#include <caf/atom.hpp>
 #include <caf/fwd.hpp>
 
 #include "vast/fwd.hpp"
@@ -34,12 +33,6 @@ namespace vast {
 /// data. The meta index may return false positives but never false negatives.
 class meta_index {
 public:
-  // -- initialization ---------------------------------------------------------
-
-  meta_index();
-
-  // -- API --------------------------------------------------------------------
-
   /// Adds all data from a table slice belonging to a given partition to the
   /// index.
   /// @param slice The table slice to extract data from.
@@ -50,17 +43,6 @@ public:
   /// @param expr The expression to lookup.
   /// @returns A vector of UUIDs representing candidate partitions.
   std::vector<uuid> lookup(const expression& expr) const;
-
-  /// Replaces the synopsis factory.
-  /// @param factory_id The system-wide ID for `f`.
-  /// @param f The synopsis factory to use.
-  /// @pre `f` is registered in the runtime settings unter the key
-  ///      `factory_id`
-  void factory(caf::atom_value factory_id, synopsis_factory f);
-
-  /// Retrieves the current factory.
-  /// @returns A pair of factory ID and factory function.
-  std::pair<caf::atom_value, synopsis_factory> factory() const;
 
   /// Gets the options for the synopsis factory.
   /// @returns A reference to the synopsis options.
@@ -87,12 +69,6 @@ private:
 
   /// The factory function to construct a synopsis structure for a type.
   synopsis_options synopsis_options_;
-
-  /// The factory function to construct a synopsis structure for a type.
-  synopsis_factory make_synopsis_;
-
-  /// The implementation ID for objects created by `make_synopsis_`.
-  caf::atom_value factory_id_;
 };
 
 } // namespace vast

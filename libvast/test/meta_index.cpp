@@ -219,74 +219,10 @@ TEST(serialization) {
   CHECK_ROUNDTRIP(meta_idx);
 }
 
-// A synopsis for bools.
-class boolean_synopsis : public synopsis {
-public:
-  explicit boolean_synopsis(vast::type x) : synopsis{std::move(x)} {
-    VAST_ASSERT(caf::holds_alternative<boolean_type>(type()));
-  }
-
-  caf::atom_value factory_id() const noexcept override {
-    return caf::atom("Sy_Test");
-  }
-
-  void add(data_view x) override {
-    if (auto b = caf::get_if<view<boolean>>(&x)) {
-      if (*b)
-        true_ = true;
-      else
-        false_ = true;
-    }
-  }
-
-  bool lookup(relational_operator op, data_view rhs) const override {
-    if (auto b = caf::get_if<view<boolean>>(&rhs)) {
-      if (op == equal)
-        return *b ? true_ : false_;
-      if (op == not_equal)
-        return *b ? false_ : true_;
-    }
-    return false;
-  }
-
-  bool equals(const synopsis& other) const noexcept override {
-    if (typeid(other) != typeid(boolean_synopsis))
-      return false;
-    auto& rhs = static_cast<const boolean_synopsis&>(other);
-    return type() == rhs.type() && false_ == rhs.false_ && true_ == rhs.true_;
-  }
-
-  caf::error serialize(caf::serializer& sink) const override {
-    return sink(false_, true_);
-  }
-
-  caf::error deserialize(caf::deserializer& source) override {
-    return source(false_, true_);
-  }
-
-private:
-  bool false_ = false;
-  bool true_ = false;
-};
-
-synopsis_ptr make_custom_synopsis(type x, const synopsis_options&) {
-  return caf::visit(detail::overload(
-    [&](const boolean_type&) -> synopsis_ptr {
-      return caf::make_counted<boolean_synopsis>(std::move(x));
-    },
-    [&](const auto&) -> synopsis_ptr {
-      return make_synopsis(x);
-    }), x);
-}
-
-TEST(serialization with custom factory) {
-  MESSAGE("register custom factory with meta index");
-  meta_index meta_idx;
-  auto factory_id = caf::atom("Sy_Test");
-  meta_idx.factory(factory_id, make_custom_synopsis);
-  MESSAGE("register custom factory for deserialization");
-  set_synopsis_factory(sys, factory_id, make_custom_synopsis);
+TEST(meta index with boolean synopsis) {
+  REQUIRE_NOT_EQUAL(get_synopsis_factory(boolean_type{}), nullptr);
   MESSAGE("generate slice data and add it to the meta index");
+  meta_index meta_idx;
   auto layout = record_type{{"x", boolean_type{}}};
   auto builder = default_table_slice_builder::make(layout);
   CHECK(builder->add(make_data_view(true)));

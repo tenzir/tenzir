@@ -27,7 +27,6 @@
 #include "vast/event.hpp"
 #include "vast/ids.hpp"
 #include "vast/query_options.hpp"
-#include "vast/synopsis.hpp"
 #include "vast/system/atoms.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
@@ -132,22 +131,6 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   caf::actor index;
 };
 
-struct synopsis_fixture : fixtures::deterministic_actor_system_and_events {
-  synopsis_fixture() {
-    // We're adding the default factory under a new name to trigger the code
-    // path under test.
-    set_synopsis_factory(sys, caf::atom("Sy_TEST"), make_synopsis);
-    index = self->spawn(system::index, directory / "index", slice_size,
-                        in_mem_partitions, taste_count, num_query_supervisors);
-  }
-
-  ~synopsis_fixture() {
-    anon_send_exit(index, caf::exit_reason::user_shutdown);
-  }
-
-  caf::actor index;
-};
-
 } // namespace <anonymous>
 
 FIXTURE_SCOPE(index_tests, fixture)
@@ -236,21 +219,6 @@ TEST(iterable bro conn log query result) {
     CHECK_EQUAL(rank(result), 2u);
     CHECK_EQUAL(result, expected_result);
   }
-}
-
-FIXTURE_SCOPE_END()
-
-FIXTURE_SCOPE(meta_index_setup_test, synopsis_fixture)
-
-TEST(meta index factory) {
-  auto factory = unbox(get_synopsis_factory(sys));
-  CHECK_EQUAL(factory.first, caf::atom("Sy_TEST"));
-  CHECK(factory.second == make_synopsis);
-  MESSAGE("run initialization code");
-  run();
-  MESSAGE("verify INDEX state");
-  auto& ref = deref<caf::stateful_actor<system::index_state>>(index);
-  CHECK(ref.state.meta_idx.factory() == factory);
 }
 
 FIXTURE_SCOPE_END()
