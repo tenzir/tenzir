@@ -100,9 +100,16 @@ accountant_type::behavior_type accountant(accountant_actor* self,
       self->quit(msg.reason);
     }
   );
+  self->set_down_handler(
+    [=](const caf::down_msg& msg) {
+      VAST_DEBUG(self, "received DOWN from", msg.source);
+      self->state.actor_map.erase(msg.source.id());
+    }
+  );
   return {
     [=](announce_atom, const std::string& name) {
       self->state.actor_map[self->current_sender()->id()] = name;
+      self->monitor(self->current_sender());
     },
     [=](const std::string& key, const std::string& value) {
       VAST_TRACE(self, "received", key, "from", self->current_sender());
