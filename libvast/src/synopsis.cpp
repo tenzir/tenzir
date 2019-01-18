@@ -13,8 +13,11 @@
 
 #include "vast/synopsis.hpp"
 
-#include <caf/actor_system.hpp>
-#include <caf/runtime_settings_map.hpp>
+#include <typeindex>
+
+#include <caf/deserializer.hpp>
+#include <caf/error.hpp>
+#include <caf/serializer.hpp>
 
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
@@ -36,17 +39,13 @@ const vast::type& synopsis::type() const {
   return type_;
 }
 
-caf::atom_value synopsis::factory_id() const noexcept {
-  return caf::atom("Sy_Default");
-}
-
 caf::error inspect(caf::serializer& sink, synopsis_ptr& ptr) {
   if (!ptr) {
-    type dummy;
+    static type dummy;
     return sink(dummy);
   }
   return caf::error::eval(
-    [&] { return sink(ptr->type(), ptr->factory_id()); },
+    [&] { return sink(ptr->type()); },
     [&] { return ptr->serialize(sink); });
 }
 
@@ -55,19 +54,13 @@ caf::error inspect(caf::deserializer& source, synopsis_ptr& ptr) {
   type t;
   if (auto err = source(t))
     return err;
-  // Only default-constructed synopses have an empty type.
+  // Only nullptr has an none type.
   if (!t) {
     ptr.reset();
     return caf::none;
   }
-  // Select factory based on the implementation ID.
-  synopsis_factory f;
-  if (auto ex = deserialize_synopsis_factory(source))
-    f = ex->second;
-  else
-    return std::move(ex.error());
   // Deserialize into a new instance.
-  auto new_ptr = f(std::move(t), synopsis_options{});
+  auto new_ptr = make_synopsis(std::move(t), synopsis_options{});
   if (!new_ptr)
     return ec::invalid_synopsis_type;
   if (auto err = new_ptr->deserialize(source))
@@ -78,63 +71,42 @@ caf::error inspect(caf::deserializer& source, synopsis_ptr& ptr) {
   return caf::none;
 }
 
-synopsis_ptr make_synopsis(type x, const synopsis_options&) {
-  return caf::visit(detail::overload(
-    [&](const timestamp_type&) -> synopsis_ptr {
-      return caf::make_counted<timestamp_synopsis>(std::move(x));
-    },
-    [](const auto&) -> synopsis_ptr {
-      return nullptr;
-    }), x);
+namespace {
+
+std::unordered_map<std::type_index, synopsis_factory> factories_;
+
+std::type_index make_factory_index(const type& t) {
+  auto f = detail::overload(
+    [](const auto& x) { return std::type_index{typeid(x)}; },
+    [](const alias_type& x) { return make_factory_index(x.value_type); }
+  );
+  return caf::visit(f, t);
 }
 
-expected<std::pair<caf::atom_value, synopsis_factory>>
-deserialize_synopsis_factory(caf::deserializer& source) {
-  // Select factory based on the implementation ID.
-  caf::atom_value impl_id;
-  if (auto err = source(impl_id))
-    return err;
-  synopsis_factory f;
-  if (impl_id == caf::atom("Sy_Default")) {
-    f = make_synopsis;
-  } else if (source.context() == nullptr) {
-    return caf::sec::no_context;
-  } else {
-    using generic_fun = caf::runtime_settings_map::generic_function_pointer;
-    auto& sys = source.context()->system();
-    auto val = sys.runtime_settings().get(impl_id);
-    if (!caf::holds_alternative<generic_fun>(val)) {
-      VAST_ERROR_ANON("synopsis",
-                      "has no factory function for implementation key",
-                      impl_id);
-      return ec::invalid_synopsis_type;
-    }
-    f = reinterpret_cast<synopsis_factory>(caf::get<generic_fun>(val));
+struct factory_initializer {
+  factory_initializer() {
+    add_synopsis_factory<timestamp_synopsis, timestamp_type>();
   }
-  return std::make_pair(impl_id, f);
+};
+
+auto initializer = factory_initializer{};
+
+} // namespace <anonymous>
+
+synopsis_ptr make_synopsis(type x, const synopsis_options& opts) {
+  if (auto f = get_synopsis_factory(x))
+    return f(std::move(x), opts);
+  return nullptr;
 }
 
-void set_synopsis_factory(caf::actor_system& sys, caf::atom_value id,
-                          synopsis_factory factory) {
-  using generic_fun = caf::runtime_settings_map::generic_function_pointer;
-  auto f = reinterpret_cast<generic_fun>(factory);
-  sys.runtime_settings().set(id, f);
-  sys.runtime_settings().set(caf::atom("Sy_FACTORY"), id);
+void add_synopsis_factory(type x, synopsis_factory factory) {
+  VAST_ASSERT(factory != nullptr);
+  factories_.insert_or_assign(make_factory_index(x), factory);
 }
 
-caf::expected<std::pair<caf::atom_value, synopsis_factory>>
-get_synopsis_factory(caf::actor_system& sys) {
-  auto x = sys.runtime_settings().get(caf::atom("Sy_FACTORY"));
-  if (auto factory_id = caf::get_if<caf::atom_value>(&x)) {
-    auto y = sys.runtime_settings().get(*factory_id);
-    using generic_fun = caf::runtime_settings_map::generic_function_pointer;
-    auto fun = caf::get_if<generic_fun>(&y);
-    if (fun == nullptr)
-      return make_error(ec::unspecified, "incomplete synopsis factory setup");
-    auto factory = reinterpret_cast<synopsis_factory>(*fun);
-    return std::make_pair(*factory_id, factory);
-  }
-  return caf::no_error;
+synopsis_factory get_synopsis_factory(const type& x) {
+  auto i = factories_.find(make_factory_index(x));
+  return i != factories_.end() ? i->second : nullptr;
 }
 
 } // namespace vast

@@ -25,12 +25,6 @@
 
 namespace vast {
 
-meta_index::meta_index()
-  : make_synopsis_{make_synopsis},
-    factory_id_{caf::atom("Sy_Default")} {
-  // nop
-}
-
 void meta_index::add(const uuid& partition, const table_slice& slice) {
   auto& part_synopsis = partition_synopses_[partition];
   auto& layout = slice.layout();
@@ -45,7 +39,7 @@ void meta_index::add(const uuid& partition, const table_slice& slice) {
     i = part_synopsis.emplace(layout, table_synopsis{}).first;
     table_syn = &i->second;
     for (auto& field : layout.fields)
-      if (i->second.emplace_back(make_synopsis_(field.type, synopsis_options_))
+      if (i->second.emplace_back(make_synopsis(field.type, synopsis_options_))
           != nullptr)
         VAST_DEBUG(this, "created new synopsis structure for type", field.type);
     // If we couldn't create a single synopsis for the layout, we will no
@@ -179,30 +173,15 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
   ), expr);
 }
 
-void meta_index::factory(caf::atom_value factory_id,
-                         synopsis_factory f) {
-  factory_id_ = factory_id;
-  make_synopsis_ = f;
-  blacklisted_layouts_.clear();
-}
-
-std::pair<caf::atom_value, synopsis_factory> meta_index::factory() const {
-  return {factory_id_, make_synopsis_};
-}
-
 synopsis_options& meta_index::factory_options() {
   return synopsis_options_;
 }
 
 caf::error inspect(caf::serializer& sink, const meta_index& x) {
-  return sink(x.factory_id_, x.synopsis_options_, x.partition_synopses_);
+  return sink(x.synopsis_options_, x.partition_synopses_);
 }
 
 caf::error inspect(caf::deserializer& source, meta_index& x) {
-  if (auto ex = deserialize_synopsis_factory(source))
-    x.factory(ex->first, ex->second);
-  else
-    return std::move(ex.error());
   return source(x.synopsis_options_, x.partition_synopses_);
 }
 

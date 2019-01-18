@@ -34,7 +34,7 @@ const timestamp epoch;
 
 TEST(min-max synopsis) {
   auto x = make_synopsis(timestamp_type{});
-  REQUIRE(x);
+  REQUIRE_NOT_EQUAL(x, nullptr);
   x->add(timestamp{epoch + 4s});
   x->add(timestamp{epoch + 7s});
   MESSAGE("[4,7] op 0");

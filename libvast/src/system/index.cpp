@@ -84,18 +84,6 @@ caf::error index_state::init(const path& dir, size_t max_partition_size,
                              size_t taste_partitions) {
   VAST_TRACE(VAST_ARG(dir), VAST_ARG(max_partition_size),
              VAST_ARG(in_mem_partitions), VAST_ARG(taste_partitions));
-  // Set the synopsis factory for the meta index.
-  if (auto synopsis_factory = get_synopsis_factory(self->system())) {
-    auto [id, fun] = *synopsis_factory;
-    VAST_DEBUG(self, "uses custom meta index synopsis factory", id);
-    meta_idx.factory(id, fun);
-  } else if (synopsis_factory.error()) {
-    VAST_ERROR(self, "failed to retrieve synopsis factory",
-               self->system().render(synopsis_factory.error()));
-    return std::move(synopsis_factory.error());
-  } else {
-    VAST_DEBUG(self, "uses default meta index synopsis factory");
-  }
   put(meta_idx.factory_options(), "max-partition-size", max_partition_size);
   // Set members.
   this->dir = dir;

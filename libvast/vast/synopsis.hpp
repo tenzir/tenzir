@@ -14,9 +14,12 @@
 #pragma once
 
 #include <utility>
+#include <type_traits>
 
+#include <caf/detail/type_list.hpp>
 #include <caf/fwd.hpp>
 #include <caf/intrusive_ptr.hpp>
+#include <caf/make_counted.hpp>
 #include <caf/ref_counted.hpp>
 
 #include "vast/aliases.hpp"
@@ -62,10 +65,6 @@ public:
 
   // -- serialization ----------------------------------------------------------
 
-  /// @returns a unique identifier for the factory required to make instances
-  ///          of this synopsis.
-  virtual caf::atom_value factory_id() const noexcept;
-
   /// Saves the contents (excluding the layout!) of this slice to `sink`.
   virtual caf::error serialize(caf::serializer& sink) const = 0;
 
@@ -94,44 +93,48 @@ caf::error inspect(caf::deserializer& source, synopsis_ptr& ptr);
 
 /// Constructs a synopsis for a given type. This is the default-factory
 /// function. It is possible to provide a custom factory via
-/// [`set_synopsis_factory`](@ref set_synopsis_factory).
+/// [`add_synopsis_factory`](@ref add_synopsis_factory).
 /// @param x The type to construct a synopsis for.
 /// @param opts Auxiliary context for constructing a synopsis.
-/// @relates synopsis synopsis_factory set_synopsis_factory
+/// @relates synopsis synopsis_factory add_synopsis_factory
 /// @note The passed options *opts* may change between invocations for a given
 ///       type. Therefore, the type *x* should be sufficient to fully create a
 ///       valid synopsis instance.
 synopsis_ptr make_synopsis(type x, const synopsis_options& opts = {});
 
 /// The function to create a synopsis.
-/// @relates synopsis get_synopsis_factory_fun set_synopsis_factory
+/// @relates synopsis get_synopsis_factory_fun add_synopsis_factory
 using synopsis_factory = synopsis_ptr (*)(type, const synopsis_options&);
 
-/// Deserializes a factory identifier and returns the corresponding factory
-/// function if has been registered via set_synopsis_factory previously. For
-/// the default identifier, the function returns [`make_synopsis`](@ref
-/// make_synopsis).
-/// @param source The deserializer to read from.
-/// @returns A pair *(id, factory)* where *id* is the atom identifying
-///          *factory*.
-/// @relates synopsis synopsis_factory
-expected<std::pair<caf::atom_value, synopsis_factory>>
-deserialize_synopsis_factory(caf::deserializer& source);
+/// Registers a synopsis factory.
+/// @param x The type to register a factory with.
+/// @param factory The factory function to associate with *x*.
+/// @pre `factory != nullptr`
+/// @relates get_synopsis_factory make_synopsis
+void add_synopsis_factory(type x, synopsis_factory factory);
 
-/// Registers a synopsis factory in an actor system runtime settings map.
-/// @param sys The actor system in which to register the factory.
-/// @param id The factory identifier.
-/// @param factory The factory function to associate with *id*.
-/// @relates deserialize_synopsis_factory get_synopsis_factory
-void set_synopsis_factory(caf::actor_system& sys, caf::atom_value id,
-                          synopsis_factory factory);
+/// Registers a concrete synopsis type.
+/// @tparam Synopsis The synopsis type.
+/// @param x The type to register `Synopsis` with.
+template <class Synopsis, class Type>
+void add_synopsis_factory() {
+  static_assert(caf::detail::tl_contains<concrete_types, Type>::value,
+                "Type must be a concrete vast::type");
+  static auto f = [](type x, const synopsis_options& opts) -> synopsis_ptr {
+    if constexpr (std::is_constructible_v<Synopsis, type,
+                                          const synopsis_options&>)
+      return caf::make_counted<Synopsis>(std::move(x), opts);
+    else
+      return caf::make_counted<Synopsis>(std::move(x));
+  };
+  add_synopsis_factory(type{Type{}}, f);
+}
 
-/// Retrieves a synopsis factory from an actor system runtime settings map.
-/// @param sys The actor system in which to look for a factory.
-/// @returns A pair of factory identifier and factory function or `nullptr` if
-///          there exists no factory in the system.
-/// @relates set_synopsis_factory
-caf::expected<std::pair<caf::atom_value, synopsis_factory>>
-get_synopsis_factory(caf::actor_system& sys);
+/// Retrieves a synopsis factory.
+/// @param x The type to retrieve a factory for.
+/// @returns The factory registered with *x* or `nullptr` if *x* doesn't map to
+///          a factory.
+/// @relates add_synopsis_factory make_synopsis
+synopsis_factory get_synopsis_factory(const type& x);
 
 } // namespace vast

@@ -226,10 +226,6 @@ public:
     VAST_ASSERT(caf::holds_alternative<boolean_type>(type()));
   }
 
-  caf::atom_value factory_id() const noexcept override {
-    return caf::atom("Sy_Test");
-  }
-
   void add(data_view x) override {
     if (auto b = caf::get_if<view<boolean>>(&x)) {
       if (*b)
@@ -269,24 +265,12 @@ private:
   bool true_ = false;
 };
 
-synopsis_ptr make_custom_synopsis(type x, const synopsis_options&) {
-  return caf::visit(detail::overload(
-    [&](const boolean_type&) -> synopsis_ptr {
-      return caf::make_counted<boolean_synopsis>(std::move(x));
-    },
-    [&](const auto&) -> synopsis_ptr {
-      return make_synopsis(x);
-    }), x);
-}
-
 TEST(serialization with custom factory) {
-  MESSAGE("register custom factory with meta index");
-  meta_index meta_idx;
-  auto factory_id = caf::atom("Sy_Test");
-  meta_idx.factory(factory_id, make_custom_synopsis);
-  MESSAGE("register custom factory for deserialization");
-  set_synopsis_factory(sys, factory_id, make_custom_synopsis);
+  MESSAGE("register custom synopsis factory");
+  add_synopsis_factory<boolean_synopsis, boolean_type>();
+  REQUIRE_NOT_EQUAL(get_synopsis_factory(boolean_type{}), nullptr);
   MESSAGE("generate slice data and add it to the meta index");
+  meta_index meta_idx;
   auto layout = record_type{{"x", boolean_type{}}};
   auto builder = default_table_slice_builder::make(layout);
   CHECK(builder->add(make_data_view(true)));
