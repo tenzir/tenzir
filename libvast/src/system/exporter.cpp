@@ -68,22 +68,24 @@ void ship_results(stateful_actor<exporter_state>* self) {
 }
 
 void report_statistics(stateful_actor<exporter_state>* self) {
-  timespan runtime = steady_clock::now() - self->state.start;
-  self->state.query.runtime = runtime;
+  auto& st = self->state;
+  timespan runtime = steady_clock::now() - st.start;
+  st.query.runtime = runtime;
   VAST_INFO(self, "completed in", runtime);
-  self->send(self->state.sink, self->state.id, self->state.query);
-  if (self->state.accountant) {
-    auto hits = rank(self->state.hits);
-    auto processed = self->state.query.processed;
-    auto shipped = self->state.query.shipped;
-    auto results = shipped + self->state.results.size();
+  self->send(st.sink, st.id, st.query);
+  if (st.accountant) {
+    auto hits = rank(st.hits);
+    auto processed = st.query.processed;
+    auto shipped = st.query.shipped;
+    auto results = shipped + st.results.size();
     auto selectivity = double(results) / hits;
-    self->send(self->state.accountant, "exporter.hits", hits);
-    self->send(self->state.accountant, "exporter.processed", processed);
-    self->send(self->state.accountant, "exporter.results", results);
-    self->send(self->state.accountant, "exporter.shipped", shipped);
-    self->send(self->state.accountant, "exporter.selectivity", selectivity);
-    self->send(self->state.accountant, "exporter.runtime", runtime);
+    auto msg = report{{"exporter.hits", hits},
+                      {"exporter.processed", processed},
+                      {"exporter.results", results},
+                      {"exporter.shipped", shipped},
+                      {"exporter.selectivity", selectivity},
+                      {"exporter.runtime", runtime}};
+    self->send(st.accountant, msg);
   }
 }
 
@@ -196,10 +198,12 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
       st.query.runtime = runtime;
       auto count = rank(hits);
       if (st.accountant) {
+        auto r = report{};
         if (st.hits.empty())
-          self->send(st.accountant, "exporter.hits.first", runtime);
-        self->send(st.accountant, "exporter.hits.arrived", runtime);
-        self->send(st.accountant, "exporter.hits.count", count);
+          r.push_back({"exporter.hits.first", runtime});
+        r.push_back({"exporter.hits.arrived", runtime});
+        r.push_back({"exporter.hits.count", count});
+        self->send(st.accountant, r);
       }
       if (count == 0) {
         VAST_WARNING(self, "got empty hits");
