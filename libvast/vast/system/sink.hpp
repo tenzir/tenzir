@@ -49,8 +49,8 @@ struct sink_state {
 
   void send_report() {
     if (accountant && measurement.events > 0) {
-      performance_report r = {{{std::string{name}, measurement}}};
-      measurement = vast::system::measurement{};
+      auto r = performance_report{{{std::string{name}, measurement}}};
+      measurement = {};
       self->send(accountant, std::move(r));
     }
   }
@@ -77,12 +77,6 @@ caf::behavior sink(caf::stateful_actor<sink_state<Writer>>* self,
       self->quit(msg.reason);
     }
   );
-  // Fetch accountant from the registry.
-  if (auto acc = self->system().registry().get(accountant_atom::value)) {
-    VAST_DEBUG(self, "uses registry accountant:", st.accountant);
-    st.accountant = caf::actor_cast<accountant_type>(acc);
-    self->send(st.accountant, announce_atom::value, st.name);
-  }
   return {
     [=](const std::vector<event>& xs) {
       auto& st = self->state;
@@ -98,6 +92,7 @@ caf::behavior sink(caf::stateful_actor<sink_state<Writer>>* self,
         if (++st.processed == st.limit) {
           VAST_INFO(self, "reached limit:", st.limit, "events");
           st.writer.cleanup();
+          st.send_report();
           self->quit();
           return;
         }
