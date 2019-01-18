@@ -25,7 +25,7 @@
 #include "vast/system/accountant.hpp"
 
 #include "vast/detail/coding.hpp"
-#include "vast/detail/overload.hpp"
+#include "vast/detail/fill_status_map.hpp"
 
 namespace vast {
 namespace system {
@@ -153,6 +153,16 @@ accountant_type::behavior_type accountant(accountant_actor* self,
         self->state.file.flush();
       self->state.flush_pending = false;
     },
+    [=](status_atom) {
+      using caf::put_dictionary;
+      caf::dictionary<caf::config_value> result;
+      auto& known = put_dictionary(result, "known-actors");
+      for (const auto& [aid, name] : self->state.actor_map) {
+        known.emplace(name, aid);
+      }
+      detail::fill_status_map(result, self);
+      return result;
+    }
   };
 }
 

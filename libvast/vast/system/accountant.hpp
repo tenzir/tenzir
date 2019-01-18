@@ -71,7 +71,8 @@ using accountant_type =
     caf::reacts_to<std::string, double>,
     caf::reacts_to<report>,
     caf::reacts_to<performance_report>,
-    caf::reacts_to<flush_atom>
+    caf::reacts_to<flush_atom>,
+    caf::replies_to<status_atom>::with<caf::dictionary<caf::config_value>>
   >;
 
 /// Accumulates various performance metrics in a key-value format and writes
