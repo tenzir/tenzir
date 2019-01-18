@@ -110,7 +110,7 @@ struct source_state {
     if (auto acc = self->system().registry().get(accountant_atom::value)) {
       VAST_DEBUG(self, "uses registry accountant:", accountant);
       accountant = caf::actor_cast<accountant_type>(acc);
-      self->send(accountant, "announce", name);
+      self->send(accountant, announce_atom::value, name);
     }
   }
 
@@ -284,7 +284,8 @@ caf::behavior source(caf::stateful_actor<source_state<Reader>>* self,
     [=](accountant_type accountant) {
       VAST_DEBUG(self, "sets accountant to", accountant);
       self->state.accountant = std::move(accountant);
-      self->send(self->state.accountant, "announce", self->state.name);
+      self->send(self->state.accountant, announce_atom::value,
+                 self->state.name);
     },
     [=](sink_atom, const actor& sink) {
       // TODO: Currently, we use a broadcast downstream manager. We need to

@@ -25,7 +25,7 @@
 #include "vast/system/accountant.hpp"
 
 #include "vast/detail/coding.hpp"
-#include "vast/detail/overload.hpp"
+#include "vast/detail/fill_status_map.hpp"
 
 namespace vast {
 namespace system {
@@ -62,15 +62,14 @@ void init(accountant_actor* self, const path& filename) {
 template <class T>
 void record(accountant_actor* self, const std::string& key, T x) {
   using namespace std::chrono;
+  auto aid = self->current_sender()->id();
   auto node = self->current_sender()->node();
   auto& st = self->state;
   for (auto byte : node.host_id())
     st.file << static_cast<int>(byte);
-  st.file << std::dec << '\t'
-          << node.process_id() << '\t'
-          << self->current_sender()->id() << '\t'
-          << key << '\t'
-          << std::setprecision(6) << x << '\n';
+  st.file << std::dec << '\t' << node.process_id() << '\t' << aid << '\t'
+          << st.actor_map[aid] << '\t' << key << '\t' << std::setprecision(6)
+          << x << '\n';
   // Flush after at most 10 seconds.
   if (!st.flush_pending) {
     st.flush_pending = true;
@@ -101,7 +100,17 @@ accountant_type::behavior_type accountant(accountant_actor* self,
       self->quit(msg.reason);
     }
   );
+  self->set_down_handler(
+    [=](const caf::down_msg& msg) {
+      VAST_DEBUG(self, "received DOWN from", msg.source);
+      self->state.actor_map.erase(msg.source.id());
+    }
+  );
   return {
+    [=](announce_atom, const std::string& name) {
+      self->state.actor_map[self->current_sender()->id()] = name;
+      self->monitor(self->current_sender());
+    },
     [=](const std::string& key, const std::string& value) {
       VAST_TRACE(self, "received", key, "from", self->current_sender());
       record(self, key, value);
@@ -151,6 +160,16 @@ accountant_type::behavior_type accountant(accountant_actor* self,
         self->state.file.flush();
       self->state.flush_pending = false;
     },
+    [=](status_atom) {
+      using caf::put_dictionary;
+      caf::dictionary<caf::config_value> result;
+      auto& known = put_dictionary(result, "known-actors");
+      for (const auto& [aid, name] : self->state.actor_map) {
+        known.emplace(name, aid);
+      }
+      detail::fill_status_map(result, self);
+      return result;
+    }
   };
 }
 

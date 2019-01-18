@@ -105,7 +105,7 @@ caf::error index_state::init(const path& dir, size_t max_partition_size,
   if (auto a = self->system().registry().get(accountant_atom::value)) {
     namespace defs = defaults::system;
     this->accountant = actor_cast<accountant_type>(a);
-    self->send(this->accountant, "announce", "index");
+    self->send(this->accountant, announce_atom::value, "index");
     self->delayed_send(self, defs::telemetry_rate, telemetry_atom::value);
   }
   // Read persistent state.

@@ -29,9 +29,9 @@
 namespace vast::system {
 
 struct accountant_state {
-  using stopwatch = std::chrono::steady_clock;
   std::ofstream file;
   bool flush_pending = false;
+  std::unordered_map<caf::actor_id, std::string> actor_map;
   static inline const char* name = "accountant";
 };
 
@@ -62,6 +62,7 @@ using performance_report = std::vector<performance_sample>;
 
 using accountant_type =
   caf::typed_actor<
+    caf::reacts_to<announce_atom, std::string>,
     caf::reacts_to<std::string, std::string>,
     caf::reacts_to<std::string, timespan>,
     caf::reacts_to<std::string, timestamp>,
@@ -70,7 +71,8 @@ using accountant_type =
     caf::reacts_to<std::string, double>,
     caf::reacts_to<report>,
     caf::reacts_to<performance_report>,
-    caf::reacts_to<flush_atom>
+    caf::reacts_to<flush_atom>,
+    caf::replies_to<status_atom>::with<caf::dictionary<caf::config_value>>
   >;
 
 /// Accumulates various performance metrics in a key-value format and writes
