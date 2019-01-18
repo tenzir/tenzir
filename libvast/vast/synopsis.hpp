@@ -109,15 +109,19 @@ using synopsis_factory = synopsis_ptr (*)(type, const synopsis_options&);
 /// Registers a synopsis factory.
 /// @param x The type to register a factory with.
 /// @param factory The factory function to associate with *x*.
+/// @returns `false` if a factory for type *x* exists already, and `true`
+///          otherwise
 /// @pre `factory != nullptr`
 /// @relates get_synopsis_factory make_synopsis
-void add_synopsis_factory(type x, synopsis_factory factory);
+bool add_synopsis_factory(type x, synopsis_factory factory);
 
 /// Registers a concrete synopsis type.
 /// @tparam Synopsis The synopsis type.
-/// @param x The type to register `Synopsis` with.
+/// @tparam Type A concrete VAST type.
+/// @returns `false` if a factory for `Type` exists already, and `true`
+///          otherwise
 template <class Synopsis, class Type>
-void add_synopsis_factory() {
+bool add_synopsis_factory() {
   static_assert(caf::detail::tl_contains<concrete_types, Type>::value,
                 "Type must be a concrete vast::type");
   static auto f = [](type x, const synopsis_options& opts) -> synopsis_ptr {
@@ -127,7 +131,7 @@ void add_synopsis_factory() {
     else
       return caf::make_counted<Synopsis>(std::move(x));
   };
-  add_synopsis_factory(type{Type{}}, f);
+  return add_synopsis_factory(type{Type{}}, f);
 }
 
 /// Retrieves a synopsis factory.

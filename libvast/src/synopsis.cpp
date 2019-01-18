@@ -101,9 +101,9 @@ synopsis_ptr make_synopsis(type x, const synopsis_options& opts) {
   return nullptr;
 }
 
-void add_synopsis_factory(type x, synopsis_factory factory) {
+bool add_synopsis_factory(type x, synopsis_factory factory) {
   VAST_ASSERT(factory != nullptr);
-  factories_.insert_or_assign(make_factory_index(x), factory);
+  return factories_.emplace(make_factory_index(x), factory).second;
 }
 
 synopsis_factory get_synopsis_factory(const type& x) {
