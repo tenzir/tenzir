@@ -19,6 +19,7 @@
 #include <caf/error.hpp>
 #include <caf/serializer.hpp>
 
+#include "vast/boolean_synopsis.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
 #include "vast/timestamp_synopsis.hpp"
@@ -85,6 +86,7 @@ std::type_index make_factory_index(const type& t) {
 
 struct factory_initializer {
   factory_initializer() {
+    add_synopsis_factory<boolean_synopsis, boolean_type>();
     add_synopsis_factory<timestamp_synopsis, timestamp_type>();
   }
 };

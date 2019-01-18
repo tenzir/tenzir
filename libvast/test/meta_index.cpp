@@ -219,55 +219,7 @@ TEST(serialization) {
   CHECK_ROUNDTRIP(meta_idx);
 }
 
-// A synopsis for bools.
-class boolean_synopsis : public synopsis {
-public:
-  explicit boolean_synopsis(vast::type x) : synopsis{std::move(x)} {
-    VAST_ASSERT(caf::holds_alternative<boolean_type>(type()));
-  }
-
-  void add(data_view x) override {
-    if (auto b = caf::get_if<view<boolean>>(&x)) {
-      if (*b)
-        true_ = true;
-      else
-        false_ = true;
-    }
-  }
-
-  bool lookup(relational_operator op, data_view rhs) const override {
-    if (auto b = caf::get_if<view<boolean>>(&rhs)) {
-      if (op == equal)
-        return *b ? true_ : false_;
-      if (op == not_equal)
-        return *b ? false_ : true_;
-    }
-    return false;
-  }
-
-  bool equals(const synopsis& other) const noexcept override {
-    if (typeid(other) != typeid(boolean_synopsis))
-      return false;
-    auto& rhs = static_cast<const boolean_synopsis&>(other);
-    return type() == rhs.type() && false_ == rhs.false_ && true_ == rhs.true_;
-  }
-
-  caf::error serialize(caf::serializer& sink) const override {
-    return sink(false_, true_);
-  }
-
-  caf::error deserialize(caf::deserializer& source) override {
-    return source(false_, true_);
-  }
-
-private:
-  bool false_ = false;
-  bool true_ = false;
-};
-
-TEST(serialization with custom factory) {
-  MESSAGE("register custom synopsis factory");
-  add_synopsis_factory<boolean_synopsis, boolean_type>();
+TEST(meta index with boolean synopsis) {
   REQUIRE_NOT_EQUAL(get_synopsis_factory(boolean_type{}), nullptr);
   MESSAGE("generate slice data and add it to the meta index");
   meta_index meta_idx;
