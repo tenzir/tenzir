@@ -20,13 +20,16 @@
 #include "vast/logger.hpp"
 
 #include <caf/behavior.hpp>
+#include <caf/event_based_actor.hpp>
 #include <caf/stateful_actor.hpp>
 
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/vast/uuid.hpp"
 #include "vast/event.hpp"
 #include "vast/format/writer.hpp"
+#include "vast/system/accountant.hpp"
 #include "vast/system/atoms.hpp"
+#include "vast/system/instrumentation.hpp"
 #include "vast/system/query_status.hpp"
 
 namespace vast::system {
@@ -38,8 +41,19 @@ struct sink_state {
   std::chrono::steady_clock::time_point last_flush;
   uint64_t processed = 0;
   uint64_t limit = 0;
+  caf::event_based_actor* self;
+  accountant_type accountant;
+  vast::system::measurement measurement;
   Writer writer;
   const char* name = "writer";
+
+  void send_report() {
+    if (accountant && measurement.events > 0) {
+      performance_report r = {{{std::string{name}, measurement}}};
+      measurement = vast::system::measurement{};
+      self->send(accountant, std::move(r));
+    }
+  }
 };
 
 template <class Writer>
@@ -47,40 +61,53 @@ caf::behavior sink(caf::stateful_actor<sink_state<Writer>>* self,
                    Writer&& writer, uint64_t limit) {
   static_assert(std::is_base_of_v<format::writer, Writer>);
   using namespace std::chrono;
-  self->state.writer = std::move(writer);
-  self->state.name = self->state.writer.name();
-  self->state.last_flush = steady_clock::now();
+  auto& st = self->state;
+  st.self = self;
+  st.writer = std::move(writer);
+  st.name = st.writer.name();
+  st.last_flush = steady_clock::now();
   if (limit > 0) {
     VAST_DEBUG(self, "caps event export at", limit, "events");
-    self->state.limit = limit;
+    st.limit = limit;
   }
   self->set_exit_handler(
     [=](const caf::exit_msg& msg) {
       self->state.writer.cleanup();
+      self->state.send_report();
       self->quit(msg.reason);
     }
   );
+  // Fetch accountant from the registry.
+  if (auto acc = self->system().registry().get(accountant_atom::value)) {
+    VAST_DEBUG(self, "uses registry accountant:", st.accountant);
+    st.accountant = caf::actor_cast<accountant_type>(acc);
+    self->send(st.accountant, announce_atom::value, st.name);
+  }
   return {
     [=](const std::vector<event>& xs) {
+      auto& st = self->state;
+      auto t = timer::start(st.measurement);
       for (auto& x : xs) {
-        auto r = self->state.writer.write(x);
+        auto r = st.writer.write(x);
         if (!r) {
           VAST_ERROR(self, self->system().render(r.error()));
-          self->state.writer.cleanup();
+          st.writer.cleanup();
           self->quit(r.error());
           return;
         }
-        if (++self->state.processed == self->state.limit) {
-          VAST_INFO(self, "reached limit:", self->state.limit, "events");
-          self->state.writer.cleanup();
+        if (++st.processed == st.limit) {
+          VAST_INFO(self, "reached limit:", st.limit, "events");
+          st.writer.cleanup();
           self->quit();
           return;
         }
-        auto now = steady_clock::now();
-        if (now - self->state.last_flush > self->state.flush_interval) {
-          self->state.writer.flush();
-          self->state.last_flush = now;
-        }
+      }
+      t.stop(xs.size());
+      auto now = steady_clock::now();
+      if (now - st.last_flush > st.flush_interval) {
+        st.writer.flush();
+        st.last_flush = now;
+        st.send_report();
       }
     },
     [=](const uuid& id, const query_status&) {
@@ -94,6 +121,12 @@ caf::behavior sink(caf::stateful_actor<sink_state<Writer>>* self,
       else
         VAST_WARNING(self, "ignores new limit of", max, "(already processed",
                      self->state.processed, " events)");
+    },
+    [=](accountant_type accountant) {
+      VAST_DEBUG(self, "sets accountant to", accountant);
+      auto& st = self->state;
+      st.accountant = std::move(accountant);
+      self->send(st.accountant, announce_atom::value, st.name);
     },
   };
 }
