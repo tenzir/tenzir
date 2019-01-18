@@ -28,8 +28,10 @@
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
 #include "vast/scope_linked.hpp"
+#include "vast/system/accountant.hpp"
 #include "vast/system/signal_monitor.hpp"
 #include "vast/system/spawn_or_connect_to_node.hpp"
+#include "vast/system/tracker.hpp"
 
 using namespace std::chrono_literals;
 using namespace caf;
@@ -72,6 +74,22 @@ caf::message sink_command(const command& cmd, actor_system& sys, caf::actor snk,
       err = std::move(e);
     }
   );
+  if (err) {
+    self->send_exit(snk, exit_reason::user_shutdown);
+    return caf::make_message(std::move(err));
+  }
+  self->request(node, infinite, get_atom::value)
+    .receive(
+      [&](const std::string& id, system::registry& reg) {
+        // Assign accountant to sink.
+        VAST_DEBUG(&cmd, "assigns accountant from node", id, "to new sink");
+        auto er = reg.components[id].find("accountant");
+        if (er != reg.components[id].end()) {
+          auto accountant = er->second.actor;
+          self->send(snk, actor_cast<accountant_type>(accountant));
+        }
+      },
+      [&](error& e) { err = std::move(e); });
   if (err) {
     self->send_exit(snk, exit_reason::user_shutdown);
     return caf::make_message(std::move(err));

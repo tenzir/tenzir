@@ -100,18 +100,11 @@ struct source_state {
   // -- utility functions ------------------------------------------------------
 
   /// Initializes the state.
-  template <class ActorImpl>
-  void init(ActorImpl* self, Reader rd, table_slice_builder_factory f) {
+  void init(Reader rd, table_slice_builder_factory f) {
     // Initialize members from given arguments.
     reader = std::move(rd);
     name = reader.name();
     factory = f;
-    // Fetch accountant from the registry.
-    if (auto acc = self->system().registry().get(accountant_atom::value)) {
-      VAST_DEBUG(self, "uses registry accountant:", accountant);
-      accountant = caf::actor_cast<accountant_type>(acc);
-      self->send(accountant, announce_atom::value, name);
-    }
   }
 
   /// Tries to access the builder for `layout`.
@@ -209,7 +202,7 @@ struct source_state {
 
   void send_report() {
     if (accountant && measurement_.events > 0) {
-      performance_report r = {{{std::string{name}, measurement_}}};
+      auto r = performance_report{{{std::string{name}, measurement_}}};
       measurement_ = measurement{};
       self->send(accountant, std::move(r));
     }
@@ -228,7 +221,7 @@ caf::behavior source(caf::stateful_actor<source_state<Reader>>* self,
   using namespace std::chrono;
   namespace defs = defaults::system;
   // Initialize state.
-  self->state.init(self, std::move(reader), factory);
+  self->state.init(std::move(reader), factory);
   // Spin up the stream manager for the source.
   self->state.mgr = self->make_continuous_source(
     // init

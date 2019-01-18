@@ -90,7 +90,7 @@ datagram_source(datagram_source_actor<Reader>* self,
   }
   VAST_DEBUG(self, "starts listening at port", udp_res->second);
   // Initialize state.
-  self->state.init(self, std::move(reader), factory);
+  self->state.init(std::move(reader), factory);
   // Spin up the stream manager for the source.
   self->state.mgr = self->make_continuous_source(
     // init
