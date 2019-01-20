@@ -45,6 +45,7 @@
 #include "vast/system/source.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
+#include "vast/table_slice_builder_factory.hpp"
 
 namespace vast::system {
 
@@ -76,7 +77,7 @@ template <class Reader>
 caf::behavior
 datagram_source(datagram_source_actor<Reader>* self,
                 uint16_t udp_listening_port, Reader reader,
-                table_slice_builder_factory factory,
+                factory<table_slice_builder>::signature factory,
                 size_t table_slice_size) {
   using namespace caf;
   using namespace std::chrono;

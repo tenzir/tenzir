@@ -18,6 +18,8 @@
 #include "vast/format/bro.hpp"
 #include "vast/format/test.hpp"
 #include "vast/table_slice_builder.hpp"
+#include "vast/table_slice_builder_factory.hpp"
+#include "vast/table_slice_factory.hpp"
 #include "vast/to_events.hpp"
 #include "vast/type.hpp"
 
@@ -173,6 +175,8 @@ events::events() {
   static bool initialized = false;
   if (initialized)
     return;
+  factory<table_slice>::initialize();
+  factory<table_slice_builder>::initialize();
   initialized = true;
   MESSAGE("inhaling unit test suite events");
   bro_conn_log = inhale<format::bro::reader>(bro::small_conn);

@@ -27,6 +27,8 @@
 
 #include "vast/system/configuration.hpp"
 
+#include "vast/table_slice_factory.hpp"
+#include "vast/table_slice_builder_factory.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/add_message_types.hpp"
 #include "vast/detail/add_error_categories.hpp"
@@ -52,6 +54,9 @@ configuration::configuration() {
   opt_group{custom_options_, "vast"}
   .add<size_t>("table-slice-size",
                "Maximum size for sources that generate table slices.");
+  // Initialize factories.
+  factory<table_slice>::initialize();
+  factory<table_slice_builder>::initialize();
 }
 
 caf::error configuration::parse(int argc, char** argv) {

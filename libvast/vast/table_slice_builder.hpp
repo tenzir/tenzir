@@ -74,36 +74,4 @@ private:
 /// @relates table_slice_builder
 using table_slice_builder_ptr = caf::intrusive_ptr<table_slice_builder>;
 
-/// The factory function to construct a table slice builder for a layout.
-/// @relates table_slice_builder
-using table_slice_builder_factory = table_slice_builder_ptr (*)(record_type);
-
-/// Registers a table slice builder factory.
-/// @param id The unique implementation ID for the table slice type.
-/// @param f The factory how to construct the table slice builder.
-/// @returns `true` iff the *f* was successfully associated with *id*.
-/// @relates table_slice get_table_slice_builder_factory
-bool add_table_slice_builder_factory(caf::atom_value id,
-                                     table_slice_builder_factory f);
-
-/// Convenience overload for the two-argument version of this function.
-template <class T>
-bool add_table_slice_builder_factory(caf::atom_value id) {
-  static auto factory = [](record_type layout) {
-    return T::make(std::move(layout));
-  };
-  return add_table_slice_builder_factory(id, factory);
-}
-
-/// Retrieves a table slice builder factory.
-/// @relates table_slice_builder add_table_slice_builder_factory
-table_slice_builder_factory get_table_slice_builder_factory(caf::atom_value id);
-
-/// Constructs a builder for a given table slice type.
-/// @param id The (registered) implementation ID of the slice type.
-/// @returns A table slice builder pointer or `nullptr` on failure.
-/// @relates table_slice_builder add_table_slice_builder_factory
-table_slice_builder_ptr make_table_slice_builder(caf::atom_value id,
-                                                 record_type layout);
-
 } // namespace vast

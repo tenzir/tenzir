@@ -131,45 +131,6 @@ protected:
 
 // -- free functions -----------------------------------------------------------
 
-/// The factory function to construct a table slice from a header..
-/// @relates table_slice
-using table_slice_factory = table_slice_ptr (*)(table_slice_header);
-
-/// Registers a table slice factory for default construction.
-/// @param id The unique implementation ID for the table slice
-/// @param f The factory how to construct the table slice
-/// @returns `true` iff the *f* was successfully associated with *id*.
-/// @relates table_slice get_table_slice_factory
-bool add_table_slice_factory(caf::atom_value id, table_slice_factory f);
-
-/// Convenience overload for the two-argument version of this function.
-template <class T>
-bool add_table_slice_factory() {
-  static auto factory = [](table_slice_header header) {
-    return T::make(std::move(header));
-  };
-  return add_table_slice_factory(T::class_id, factory);
-}
-
-/// Retrieves a table slice factory for default construction.
-/// @relates table_slice add_table_slice_factory
-table_slice_factory get_table_slice_factory(caf::atom_value id);
-
-/// Default-constructs a table slice of a given type.
-/// @param id The (registered) implementation ID of the slice.
-/// @param header The table slice header.
-/// @returns A table slice pointer or `nullptr` on failure.
-/// @relates table_slice add_table_slice_factory
-table_slice_ptr make_table_slice(caf::atom_value id, table_slice_header header);
-
-/// Constructs a table slice from a chunk. The beginning of the chunk must hold
-/// the implementation ID of the concrete table slice. This function reads the
-/// ID, default-constructs a new table slice with the given ID, and then calls
-/// `table_slice::load` on the chunk.
-/// @returns a table slice loaded from *chunk* or `nullptr` on failure.
-/// @relates table_slice
-table_slice_ptr make_table_slice(chunk_ptr chunk);
-
 /// Constructs table slices filled with random content for testing purposes.
 /// @param num_slices The number of table slices to generate.
 /// @param slice_size The number of rows per table slices.

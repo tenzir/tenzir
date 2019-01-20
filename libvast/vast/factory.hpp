@@ -145,6 +145,11 @@ struct factory {
     factories().clear();
   }
 
+  /// Registered pre-defined types of the factory.
+  static void initialize() {
+    traits::initialize();
+  }
+
   // -- construction ----------------------------------------------------------
 
   /// Constructs a concrete type via a registered factory.

@@ -16,9 +16,10 @@
 #include <caf/all.hpp>
 
 #include "vast/chunk.hpp"
-#include <vast/concept/parseable/to.hpp>
-#include <vast/concept/parseable/vast/data.hpp>
+#include "vast/concept/parseable/to.hpp"
+#include "vast/concept/parseable/vast/data.hpp"
 #include "vast/span.hpp"
+#include "vast/table_slice_factory.hpp"
 #include "vast/value_index.hpp"
 
 using namespace vast;
@@ -30,6 +31,8 @@ namespace {
 } // namespace <anonymous>
 
 table_slices::table_slices() : sink{sys, buf} {
+  // Register factories.
+  factory<table_slice>::initialize();
   // Define our test layout.
   layout = record_type{
     {"a", boolean_type{}},
@@ -173,7 +176,7 @@ void table_slices::test_load_from_chunk() {
   auto slice1 = make_slice();
   CHECK_EQUAL(sink(slice1), caf::none);
   auto chk = chunk::make(make_const_byte_span(buf));
-  auto slice2 = make_table_slice(chk);
+  auto slice2 = factory<table_slice>::traits::make(chk);
   REQUIRE_NOT_EQUAL(slice2, nullptr);
   CHECK_EQUAL(*slice1, *slice2);
   buf.clear();

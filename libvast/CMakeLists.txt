@@ -114,7 +114,9 @@ set(libvast_sources
   src/system/task.cpp
   src/system/tracker.cpp
   src/table_slice.cpp
+  src/table_slice_factory.cpp
   src/table_slice_builder.cpp
+  src/table_slice_builder_factory.cpp
   src/time.cpp
   src/timestamp_synopsis.cpp
   src/to_events.cpp
