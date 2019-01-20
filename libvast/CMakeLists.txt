@@ -74,6 +74,7 @@ set(libvast_sources
   src/subnet.cpp
   src/subset.cpp
   src/synopsis.cpp
+  src/synopsis_factory.cpp
   src/system/accountant.cpp
   src/system/application.cpp
   src/system/archive.cpp

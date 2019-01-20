@@ -27,6 +27,7 @@
 
 #include "vast/system/configuration.hpp"
 
+#include "vast/synopsis_factory.hpp"
 #include "vast/table_slice_factory.hpp"
 #include "vast/table_slice_builder_factory.hpp"
 #include "vast/detail/assert.hpp"
@@ -55,6 +56,7 @@ configuration::configuration() {
   .add<size_t>("table-slice-size",
                "Maximum size for sources that generate table slices.");
   // Initialize factories.
+  factory<synopsis>::initialize();
   factory<table_slice>::initialize();
   factory<table_slice_builder>::initialize();
 }

@@ -22,6 +22,7 @@
 #include "vast/boolean_synopsis.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
+#include "vast/synopsis_factory.hpp"
 #include "vast/timestamp_synopsis.hpp"
 
 #include "vast/detail/overload.hpp"
@@ -61,7 +62,7 @@ caf::error inspect(caf::deserializer& source, synopsis_ptr& ptr) {
     return caf::none;
   }
   // Deserialize into a new instance.
-  auto new_ptr = make_synopsis(std::move(t), synopsis_options{});
+  auto new_ptr = factory<synopsis>::make(std::move(t), synopsis_options{});
   if (!new_ptr)
     return ec::invalid_synopsis_type;
   if (auto err = new_ptr->deserialize(source))
@@ -70,45 +71,6 @@ caf::error inspect(caf::deserializer& source, synopsis_ptr& ptr) {
   using std::swap;
   swap(ptr, new_ptr);
   return caf::none;
-}
-
-namespace {
-
-std::unordered_map<std::type_index, synopsis_factory> factories_;
-
-std::type_index make_factory_index(const type& t) {
-  auto f = detail::overload(
-    [](const auto& x) { return std::type_index{typeid(x)}; },
-    [](const alias_type& x) { return make_factory_index(x.value_type); }
-  );
-  return caf::visit(f, t);
-}
-
-struct factory_initializer {
-  factory_initializer() {
-    add_synopsis_factory<boolean_synopsis, boolean_type>();
-    add_synopsis_factory<timestamp_synopsis, timestamp_type>();
-  }
-};
-
-auto initializer = factory_initializer{};
-
-} // namespace <anonymous>
-
-synopsis_ptr make_synopsis(type x, const synopsis_options& opts) {
-  if (auto f = get_synopsis_factory(x))
-    return f(std::move(x), opts);
-  return nullptr;
-}
-
-bool add_synopsis_factory(type x, synopsis_factory factory) {
-  VAST_ASSERT(factory != nullptr);
-  return factories_.emplace(make_factory_index(x), factory).second;
-}
-
-synopsis_factory get_synopsis_factory(const type& x) {
-  auto i = factories_.find(make_factory_index(x));
-  return i != factories_.end() ? i->second : nullptr;
 }
 
 } // namespace vast

@@ -13,13 +13,8 @@
 
 #pragma once
 
-#include <utility>
-#include <type_traits>
-
-#include <caf/detail/type_list.hpp>
 #include <caf/fwd.hpp>
 #include <caf/intrusive_ptr.hpp>
-#include <caf/make_counted.hpp>
 #include <caf/ref_counted.hpp>
 
 #include "vast/aliases.hpp"
@@ -90,55 +85,5 @@ caf::error inspect(caf::serializer& sink, synopsis_ptr& ptr);
 
 /// @relates synopsis
 caf::error inspect(caf::deserializer& source, synopsis_ptr& ptr);
-
-/// Constructs a synopsis for a given type. This is the default-factory
-/// function. It is possible to provide a custom factory via
-/// [`add_synopsis_factory`](@ref add_synopsis_factory).
-/// @param x The type to construct a synopsis for.
-/// @param opts Auxiliary context for constructing a synopsis.
-/// @relates synopsis synopsis_factory add_synopsis_factory
-/// @note The passed options *opts* may change between invocations for a given
-///       type. Therefore, the type *x* should be sufficient to fully create a
-///       valid synopsis instance.
-synopsis_ptr make_synopsis(type x, const synopsis_options& opts = {});
-
-/// The function to create a synopsis.
-/// @relates synopsis get_synopsis_factory_fun add_synopsis_factory
-using synopsis_factory = synopsis_ptr (*)(type, const synopsis_options&);
-
-/// Registers a synopsis factory.
-/// @param x The type to register a factory with.
-/// @param factory The factory function to associate with *x*.
-/// @returns `false` if a factory for type *x* exists already, and `true`
-///          otherwise
-/// @pre `factory != nullptr`
-/// @relates get_synopsis_factory make_synopsis
-bool add_synopsis_factory(type x, synopsis_factory factory);
-
-/// Registers a concrete synopsis type.
-/// @tparam Synopsis The synopsis type.
-/// @tparam Type A concrete VAST type.
-/// @returns `false` if a factory for `Type` exists already, and `true`
-///          otherwise
-template <class Synopsis, class Type>
-bool add_synopsis_factory() {
-  static_assert(caf::detail::tl_contains<concrete_types, Type>::value,
-                "Type must be a concrete vast::type");
-  static auto f = [](type x, const synopsis_options& opts) -> synopsis_ptr {
-    if constexpr (std::is_constructible_v<Synopsis, type,
-                                          const synopsis_options&>)
-      return caf::make_counted<Synopsis>(std::move(x), opts);
-    else
-      return caf::make_counted<Synopsis>(std::move(x));
-  };
-  return add_synopsis_factory(type{Type{}}, f);
-}
-
-/// Retrieves a synopsis factory.
-/// @param x The type to retrieve a factory for.
-/// @returns The factory registered with *x* or `nullptr` if *x* doesn't map to
-///          a factory.
-/// @relates add_synopsis_factory make_synopsis
-synopsis_factory get_synopsis_factory(const type& x);
 
 } // namespace vast

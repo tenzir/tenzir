@@ -20,6 +20,7 @@
 
 #include "vast/default_table_slice_builder.hpp"
 #include "vast/synopsis.hpp"
+#include "vast/synopsis_factory.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
 #include "vast/uuid.hpp"
@@ -95,6 +96,8 @@ struct mock_partition {
 
 struct fixture {
   fixture() {
+    MESSAGE("register synopsis factory");
+    factory<synopsis>::initialize();
     MESSAGE("generate " << num_partitions << " UUIDs for the partitions");
     for (size_t i = 0; i < num_partitions; ++i)
       ids.emplace_back(uuid::random());
@@ -220,7 +223,6 @@ TEST(serialization) {
 }
 
 TEST(meta index with boolean synopsis) {
-  REQUIRE_NOT_EQUAL(get_synopsis_factory(boolean_type{}), nullptr);
   MESSAGE("generate slice data and add it to the meta index");
   meta_index meta_idx;
   auto layout = record_type{{"x", boolean_type{}}};
