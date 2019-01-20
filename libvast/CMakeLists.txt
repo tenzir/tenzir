@@ -218,6 +218,7 @@ set(tests
   test/expression.cpp
   test/expression_evaluation.cpp
   test/expression_parseable.cpp
+  test/factory.cpp
   test/filesystem.cpp
   test/format/bro.cpp
   test/format/mrt.cpp
