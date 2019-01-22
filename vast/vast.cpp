@@ -14,7 +14,6 @@
 #include <chrono>
 
 #include <caf/actor_system.hpp>
-#include <caf/defaults.hpp>
 #include <caf/io/middleman.hpp>
 #include <caf/message_builder.hpp>
 #include <caf/timestamp.hpp>
@@ -107,8 +106,7 @@ int main(int argc, char** argv) {
   cfg.parse(argc, argv);
   cfg.merge_root_options(app);
   // Setup path for CAF logger if not explicitly specified by the user.
-  auto default_fn = caf::defaults::logger::file_name;
-  if (caf::get_or(cfg, "logger.file-name", default_fn) == default_fn) {
+  if (!caf::get_if<std::string>(&cfg, "logger.file-name")) {
     path dir = get_or(cfg, "vast.dir", defaults::command::directory);
     if (auto log_file = setup_log_file(dir.complete()); !log_file) {
       std::cerr << "failed to setup log file: " << to_string(log_file.error())
