@@ -17,6 +17,7 @@
 #include "vast/test/fixtures/events.hpp"
 
 #include "vast/value_index.hpp"
+#include "vast/value_index_factory.hpp"
 #include "vast/load.hpp"
 #include "vast/save.hpp"
 
@@ -31,77 +32,81 @@
 using namespace vast;
 using namespace std::string_literals;
 
-FIXTURE_SCOPE(value_index_tests, fixtures::events)
+namespace {
+
+struct fixture : fixtures::events {
+  fixture() {
+    factory<value_index>::initialize();
+  }
+};
+
+} // namespace <anonymous>
+
+FIXTURE_SCOPE(value_index_tests, fixture)
 
 TEST(boolean) {
-  arithmetic_index<boolean> idx;
+  auto idx = factory<value_index>::make(boolean_type{});
+  REQUIRE_NOT_EQUAL(idx, nullptr);
   MESSAGE("append");
-  REQUIRE(idx.append(make_data_view(true)));
-  REQUIRE(idx.append(make_data_view(true)));
-  REQUIRE(idx.append(make_data_view(false)));
-  REQUIRE(idx.append(make_data_view(true)));
-  REQUIRE(idx.append(make_data_view(false)));
-  REQUIRE(idx.append(make_data_view(false)));
-  REQUIRE(idx.append(make_data_view(false)));
-  REQUIRE(idx.append(make_data_view(true)));
+  REQUIRE(idx->append(make_data_view(true)));
+  REQUIRE(idx->append(make_data_view(true)));
+  REQUIRE(idx->append(make_data_view(false)));
+  REQUIRE(idx->append(make_data_view(true)));
+  REQUIRE(idx->append(make_data_view(false)));
+  REQUIRE(idx->append(make_data_view(false)));
+  REQUIRE(idx->append(make_data_view(false)));
+  REQUIRE(idx->append(make_data_view(true)));
   MESSAGE("lookup");
-  auto f = idx.lookup(equal, make_data_view(false));
-  REQUIRE(f);
-  CHECK_EQUAL(to_string(*f), "00101110");
-  auto t = idx.lookup(not_equal, make_data_view(false));
-  REQUIRE(t);
-  CHECK_EQUAL(to_string(*t), "11010001");
+  auto f = idx->lookup(equal, make_data_view(false));
+  CHECK_EQUAL(to_string(unbox(f)), "00101110");
+  auto t = idx->lookup(not_equal, make_data_view(false));
+  CHECK_EQUAL(to_string(unbox(t)), "11010001");
   auto xs = set{true, false};
-  auto multi = idx.lookup(in, make_data_view(xs));
-  REQUIRE(multi);
-  CHECK_EQUAL(to_string(*multi), "11111111");
+  auto multi = idx->lookup(in, make_data_view(xs));
+  CHECK_EQUAL(to_string(unbox(multi)), "11111111");
   MESSAGE("serialization");
   std::string buf;
   CHECK_EQUAL(save(nullptr, buf, idx), caf::none);
-  arithmetic_index<boolean> idx2;
-  CHECK_EQUAL(load(nullptr, buf, idx2), caf::none);
-  t = idx2.lookup(equal, make_data_view(true));
-  REQUIRE(t);
-  CHECK_EQUAL(to_string(*t), "11010001");
+  value_index_ptr idx2;
+  REQUIRE_EQUAL(load(nullptr, buf, idx2), caf::none);
+  t = idx2->lookup(equal, make_data_view(true));
+  CHECK_EQUAL(to_string(unbox(t)), "11010001");
 }
 
 TEST(integer) {
-  arithmetic_index<integer> idx{base::uniform(10, 20)};
+  auto t = integer_type{}.attributes({{"base", "uniform(10,20)"}});
+  auto idx = factory<value_index>::make(t);
+  REQUIRE_NOT_EQUAL(idx, nullptr);
   MESSAGE("append");
-  REQUIRE(idx.append(make_data_view(-7)));
-  REQUIRE(idx.append(make_data_view(42)));
-  REQUIRE(idx.append(make_data_view(10000)));
-  REQUIRE(idx.append(make_data_view(4711)));
-  REQUIRE(idx.append(make_data_view(31337)));
-  REQUIRE(idx.append(make_data_view(42)));
-  REQUIRE(idx.append(make_data_view(42)));
+  REQUIRE(idx->append(make_data_view(-7)));
+  REQUIRE(idx->append(make_data_view(42)));
+  REQUIRE(idx->append(make_data_view(10000)));
+  REQUIRE(idx->append(make_data_view(4711)));
+  REQUIRE(idx->append(make_data_view(31337)));
+  REQUIRE(idx->append(make_data_view(42)));
+  REQUIRE(idx->append(make_data_view(42)));
   MESSAGE("lookup");
-  auto leet = idx.lookup(equal, make_data_view(31337));
-  REQUIRE(leet);
-  CHECK(to_string(*leet) == "0000100");
-  auto less_than_leet = idx.lookup(less, make_data_view(31337));
-  REQUIRE(less_than_leet);
-  CHECK(to_string(*less_than_leet) == "1111011");
-  auto greater_zero = idx.lookup(greater, make_data_view(0));
-  REQUIRE(greater_zero);
-  CHECK(to_string(*greater_zero) == "0111111");
+  auto leet = idx->lookup(equal, make_data_view(31337));
+  CHECK(to_string(unbox(leet)) == "0000100");
+  auto less_than_leet = idx->lookup(less, make_data_view(31337));
+  CHECK(to_string(unbox(less_than_leet)) == "1111011");
+  auto greater_zero = idx->lookup(greater, make_data_view(0));
+  CHECK(to_string(unbox(greater_zero)) == "0111111");
   auto xs = set{42, 10, 4711};
-  auto multi = idx.lookup(in, make_data_view(xs));
-  REQUIRE(multi);
-  CHECK_EQUAL(to_string(*multi), "0101011");
+  auto multi = idx->lookup(in, make_data_view(xs));
+  CHECK_EQUAL(to_string(unbox(multi)), "0101011");
   MESSAGE("serialization");
   std::vector<char> buf;
   CHECK_EQUAL(save(nullptr, buf, idx), caf::none);
-  auto idx2 = arithmetic_index<integer>{};
-  CHECK_EQUAL(load(nullptr, buf, idx2), caf::none);
-  less_than_leet = idx2.lookup(less, make_data_view(31337));
-  REQUIRE(less_than_leet);
-  CHECK(to_string(*less_than_leet) == "1111011");
+  value_index_ptr idx2;
+  REQUIRE_EQUAL(load(nullptr, buf, idx2), caf::none);
+  less_than_leet = idx2->lookup(less, make_data_view(31337));
+  CHECK(to_string(unbox(less_than_leet)) == "1111011");
 }
 
 TEST(floating-point with custom binner) {
   using index_type = arithmetic_index<real, precision_binner<6, 2>>;
-  auto idx = index_type{base::uniform<64>(10)};
+  auto idx = index_type{real_type{}, base::uniform<64>(10)};
   MESSAGE("append");
   REQUIRE(idx.append(make_data_view(-7.8)));
   REQUIRE(idx.append(make_data_view(42.123)));
@@ -112,26 +117,26 @@ TEST(floating-point with custom binner) {
   REQUIRE(idx.append(make_data_view(42.125799)));
   MESSAGE("lookup");
   auto result = idx.lookup(less, make_data_view(100.0));
-  CHECK_EQUAL(to_string(*result), "1100011");
+  CHECK_EQUAL(to_string(unbox(result)), "1100011");
   result = idx.lookup(less, make_data_view(43.0));
-  CHECK_EQUAL(to_string(*result), "1100011");
+  CHECK_EQUAL(to_string(unbox(result)), "1100011");
   result = idx.lookup(greater_equal, make_data_view(42.0));
-  CHECK_EQUAL(to_string(*result), "0111111");
+  CHECK_EQUAL(to_string(unbox(result)), "0111111");
   result = idx.lookup(not_equal, make_data_view(4711.14));
-  CHECK_EQUAL(to_string(*result), "1110111");
+  CHECK_EQUAL(to_string(unbox(result)), "1110111");
   MESSAGE("serialization");
   std::vector<char> buf;
   CHECK_EQUAL(save(nullptr, buf, idx), caf::none);
-  auto idx2 = index_type{};
-  CHECK_EQUAL(load(nullptr, buf, idx2), caf::none);
+  auto idx2 = index_type{real_type{}, base::uniform<64>(10)};
+  REQUIRE_EQUAL(load(nullptr, buf, idx2), caf::none);
   result = idx2.lookup(not_equal, make_data_view(4711.14));
-  CHECK_EQUAL(to_string(*result), "1110111");
+  CHECK_EQUAL(to_string(unbox(result)), "1110111");
 }
 
 TEST(timespan) {
   using namespace std::chrono;
   // Default binning gives granularity of seconds.
-  auto idx = arithmetic_index<timespan>{base::uniform<64>(10)};
+  auto idx = arithmetic_index<timespan>{timespan_type{}, base::uniform<64>(10)};
   MESSAGE("append");
   REQUIRE(idx.append(make_data_view(milliseconds(1000))));
   REQUIRE(idx.append(make_data_view(milliseconds(2000))));
@@ -141,61 +146,49 @@ TEST(timespan) {
   REQUIRE(idx.append(make_data_view(milliseconds(2322))));
   MESSAGE("lookup");
   auto hun = idx.lookup(equal, make_data_view(milliseconds(1034)));
-  REQUIRE(hun);
-  CHECK(to_string(*hun) == "100100");
+  CHECK_EQUAL(to_string(unbox(hun)), "100100");
   auto twokay = idx.lookup(less_equal, make_data_view(milliseconds(2000)));
-  REQUIRE(twokay);
-  CHECK(to_string(*twokay) == "110111");
+  CHECK_EQUAL(to_string(unbox(twokay)), "110111");
   auto twelve = idx.lookup(greater, make_data_view(milliseconds(1200)));
-  REQUIRE(twelve);
-  CHECK(to_string(*twelve) == "011011");
+  CHECK_EQUAL(to_string(unbox(twelve)), "011011");
 }
 
 TEST(timestamp) {
-  arithmetic_index<timestamp> idx{base::uniform<64>(10)};
-  auto t = to<timestamp>("2014-01-16+05:30:15");
-  REQUIRE(t);
+  arithmetic_index<timestamp> idx{timestamp_type{}, base::uniform<64>(10)};
+  auto ts = to<timestamp>("2014-01-16+05:30:15");
   MESSAGE("append");
-  REQUIRE(idx.append(make_data_view(*t)));
-  t = to<timestamp>("2014-01-16+05:30:12");
-  REQUIRE(t);
-  REQUIRE(idx.append(make_data_view(*t)));
-  t = to<timestamp>("2014-01-16+05:30:15");
-  REQUIRE(t);
-  REQUIRE(idx.append(make_data_view(*t)));
-  t = to<timestamp>("2014-01-16+05:30:18");
-  REQUIRE(t);
-  REQUIRE(idx.append(make_data_view(*t)));
-  t = to<timestamp>("2014-01-16+05:30:15");
-  REQUIRE(t);
-  REQUIRE(idx.append(make_data_view(*t)));
-  t = to<timestamp>("2014-01-16+05:30:19");
-  REQUIRE(t);
-  REQUIRE(idx.append(make_data_view(*t)));
+  REQUIRE(idx.append(make_data_view(unbox(ts))));
+  ts = to<timestamp>("2014-01-16+05:30:12");
+  REQUIRE(idx.append(make_data_view(unbox(ts))));
+  ts = to<timestamp>("2014-01-16+05:30:15");
+  REQUIRE(idx.append(make_data_view(unbox(ts))));
+  ts = to<timestamp>("2014-01-16+05:30:18");
+  REQUIRE(idx.append(make_data_view(unbox(ts))));
+  ts = to<timestamp>("2014-01-16+05:30:15");
+  REQUIRE(idx.append(make_data_view(unbox(ts))));
+  ts = to<timestamp>("2014-01-16+05:30:19");
+  REQUIRE(idx.append(make_data_view(unbox(ts))));
   MESSAGE("lookup");
-  t = to<timestamp>("2014-01-16+05:30:15");
-  REQUIRE(t);
-  auto fifteen = idx.lookup(equal, make_data_view(*t));
-  CHECK(to_string(*fifteen) == "101010");
-  t = to<timestamp>("2014-01-16+05:30:20");
-  REQUIRE(t);
-  auto twenty = idx.lookup(less, make_data_view(*t));
-  CHECK(to_string(*twenty) == "111111");
-  t = to<timestamp>("2014-01-16+05:30:18");
-  REQUIRE(t);
-  auto eighteen = idx.lookup(greater_equal, make_data_view(*t));
-  CHECK(to_string(*eighteen) == "000101");
+  ts = to<timestamp>("2014-01-16+05:30:15");
+  auto fifteen = idx.lookup(equal, make_data_view(unbox(ts)));
+  CHECK(to_string(unbox(fifteen)) == "101010");
+  ts = to<timestamp>("2014-01-16+05:30:20");
+  auto twenty = idx.lookup(less, make_data_view(unbox(ts)));
+  CHECK(to_string(unbox(twenty)) == "111111");
+  ts = to<timestamp>("2014-01-16+05:30:18");
+  auto eighteen = idx.lookup(greater_equal, make_data_view(unbox(ts)));
+  CHECK(to_string(unbox(eighteen)) == "000101");
   MESSAGE("serialization");
   std::vector<char> buf;
   CHECK_EQUAL(save(nullptr, buf, idx), caf::none);
-  auto idx2 = decltype(idx){};
+  arithmetic_index<timestamp> idx2{timestamp_type{}, base::uniform<64>(10)};
   CHECK_EQUAL(load(nullptr, buf, idx2), caf::none);
-  eighteen = idx2.lookup(greater_equal, make_data_view(*t));
+  eighteen = idx2.lookup(greater_equal, make_data_view(unbox(ts)));
   CHECK(to_string(*eighteen) == "000101");
 }
 
 TEST(string) {
-  string_index idx{100};
+  string_index idx{string_type{}, 100};
   MESSAGE("append");
   REQUIRE(idx.append(make_data_view("foo")));
   REQUIRE(idx.append(make_data_view("bar")));
@@ -209,58 +202,57 @@ TEST(string) {
   REQUIRE(idx.append(make_data_view("bazz")));
   MESSAGE("lookup");
   auto result = idx.lookup(equal, make_data_view("foo"));
-  CHECK_EQUAL(to_string(*result), "1001100000");
+  CHECK_EQUAL(to_string(unbox(result)), "1001100000");
   result = idx.lookup(equal, make_data_view("bar"));
-  CHECK_EQUAL(to_string(*result), "0100010000");
+  CHECK_EQUAL(to_string(unbox(result)), "0100010000");
   result = idx.lookup(equal, make_data_view("baz"));
-  CHECK_EQUAL(to_string(*result), "0010000000");
+  CHECK_EQUAL(to_string(unbox(result)), "0010000000");
   result = idx.lookup(equal, make_data_view(""));
-  CHECK_EQUAL(to_string(*result), "0000001000");
+  CHECK_EQUAL(to_string(unbox(result)), "0000001000");
   result = idx.lookup(equal, make_data_view("qux"));
-  CHECK_EQUAL(to_string(*result),   "0000000100");
+  CHECK_EQUAL(to_string(unbox(result)),   "0000000100");
   result = idx.lookup(equal, make_data_view("corge"));
-  CHECK_EQUAL(to_string(*result), "0000000010");
+  CHECK_EQUAL(to_string(unbox(result)), "0000000010");
   result = idx.lookup(equal, make_data_view("bazz"));
-  CHECK_EQUAL(to_string(*result),  "0000000001");
+  CHECK_EQUAL(to_string(unbox(result)),  "0000000001");
   result = idx.lookup(not_equal, make_data_view(""));
-  CHECK_EQUAL(to_string(*result),    "1111110111");
+  CHECK_EQUAL(to_string(unbox(result)),    "1111110111");
   result = idx.lookup(not_equal, make_data_view("foo"));
-  CHECK_EQUAL(to_string(*result), "0110011111");
+  CHECK_EQUAL(to_string(unbox(result)), "0110011111");
   result = idx.lookup(not_ni, make_data_view(""));
-  CHECK_EQUAL(to_string(*result), "0000000000");
+  CHECK_EQUAL(to_string(unbox(result)), "0000000000");
   result = idx.lookup(ni, make_data_view(""));
-  CHECK_EQUAL(to_string(*result),     "1111111111");
+  CHECK_EQUAL(to_string(unbox(result)),     "1111111111");
   result = idx.lookup(ni, make_data_view("o"));
-  CHECK_EQUAL(to_string(*result),    "1001100010");
+  CHECK_EQUAL(to_string(unbox(result)),    "1001100010");
   result = idx.lookup(ni, make_data_view("oo"));
-  CHECK_EQUAL(to_string(*result),   "1001100000");
+  CHECK_EQUAL(to_string(unbox(result)),   "1001100000");
   result = idx.lookup(ni, make_data_view("z"));
-  CHECK_EQUAL(to_string(*result),    "0010000001");
+  CHECK_EQUAL(to_string(unbox(result)),    "0010000001");
   result = idx.lookup(ni, make_data_view("zz"));
-  CHECK_EQUAL(to_string(*result),   "0000000001");
+  CHECK_EQUAL(to_string(unbox(result)),   "0000000001");
   result = idx.lookup(ni, make_data_view("ar"));
-  CHECK_EQUAL(to_string(*result),   "0100010000");
+  CHECK_EQUAL(to_string(unbox(result)),   "0100010000");
   result = idx.lookup(ni, make_data_view("rge"));
-  CHECK_EQUAL(to_string(*result),  "0000000010");
+  CHECK_EQUAL(to_string(unbox(result)),  "0000000010");
   result = idx.lookup(match, make_data_view("foo"));
   CHECK(!result);
   auto xs = set{"foo", "bar", "baz"};
   result = idx.lookup(in, make_data_view(xs));
-  REQUIRE(result);
-  CHECK_EQUAL(to_string(*result), "1111110000");
+  CHECK_EQUAL(to_string(unbox(result)), "1111110000");
   MESSAGE("serialization");
   std::vector<char> buf;
   CHECK_EQUAL(save(nullptr, buf, idx), caf::none);
-  string_index idx2{};
+  auto idx2 = string_index{string_type{}};
   CHECK_EQUAL(load(nullptr, buf, idx2), caf::none);
   result = idx2.lookup(equal, make_data_view("foo"));
-  CHECK_EQUAL(to_string(*result), "1001100000");
+  CHECK_EQUAL(to_string(unbox(result)), "1001100000");
   result = idx2.lookup(equal, make_data_view("bar"));
-  CHECK_EQUAL(to_string(*result), "0100010000");
+  CHECK_EQUAL(to_string(unbox(result)), "0100010000");
 }
 
 TEST(address) {
-  address_index idx;
+  address_index idx{address_type{}};
   MESSAGE("append");
   auto x = *to<address>("192.168.0.1");
   REQUIRE(idx.append(make_data_view(x)));
@@ -277,10 +269,9 @@ TEST(address) {
   MESSAGE("address equality");
   x = *to<address>("192.168.0.1");
   auto bm = idx.lookup(equal, make_data_view(x));
-  REQUIRE(bm);
-  CHECK(to_string(*bm) == "100110");
+  CHECK(to_string(unbox(bm)) == "100110");
   bm = idx.lookup(not_equal, make_data_view(x));
-  CHECK(to_string(*bm) == "011001");
+  CHECK(to_string(unbox(bm)) == "011001");
   x = *to<address>("192.168.0.5");
   CHECK(to_string(*idx.lookup(equal, make_data_view(x))) == "000000");
   MESSAGE("invalid operator");
@@ -298,27 +289,21 @@ TEST(address) {
   CHECK(idx.append(make_data_view(x)));
   auto y = subnet{*to<address>("192.168.0.128"), 25};
   bm = idx.lookup(in, make_data_view(y));
-  REQUIRE(bm);
-  CHECK(to_string(*bm) == "00000011100");
+  CHECK(to_string(unbox(bm)) == "00000011100");
   bm = idx.lookup(not_in, make_data_view(y));
-  REQUIRE(bm);
-  CHECK(to_string(*bm) == "11111100011");
+  CHECK(to_string(unbox(bm)) == "11111100011");
   y = {*to<address>("192.168.0.0"), 24};
   bm = idx.lookup(in, make_data_view(y));
-  REQUIRE(bm);
-  CHECK(to_string(*bm) == "11111111111");
+  CHECK(to_string(unbox(bm)) == "11111111111");
   y = {*to<address>("192.168.0.0"), 20};
   bm = idx.lookup(in, make_data_view(y));
-  REQUIRE(bm);
-  CHECK(to_string(*bm) == "11111111111");
+  CHECK(to_string(unbox(bm)) == "11111111111");
   y = {*to<address>("192.168.0.64"), 26};
   bm = idx.lookup(not_in, make_data_view(y));
-  REQUIRE(bm);
-  CHECK(to_string(*bm) == "11111111101");
+  CHECK(to_string(unbox(bm)) == "11111111101");
   auto xs = vector{*to<address>("192.168.0.1"), *to<address>("192.168.0.2")};
   auto multi = idx.lookup(in, make_data_view(xs));
-  REQUIRE(multi);
-  CHECK_EQUAL(to_string(*multi), "11011100000");
+  CHECK_EQUAL(to_string(unbox(multi)), "11011100000");
   MESSAGE("gaps");
   x = *to<address>("192.168.0.2");
   CHECK(idx.append(make_data_view(x), 42));
@@ -328,13 +313,13 @@ TEST(address) {
   MESSAGE("serialization");
   std::vector<char> buf;
   CHECK_EQUAL(save(nullptr, buf, idx), caf::none);
-  address_index idx2{};
+  address_index idx2{address_type{}};
   CHECK_EQUAL(load(nullptr, buf, idx2), caf::none);
   CHECK_EQUAL(idx2.lookup(equal, make_data_view(x)), str);
 }
 
 TEST(subnet) {
-  subnet_index idx;
+  subnet_index idx{subnet_type{}};
   auto s0 = *to<subnet>("192.168.0.0/24");
   auto s1 = *to<subnet>("192.168.1.0/24");
   auto s2 = *to<subnet>("::/40");
@@ -347,36 +332,28 @@ TEST(subnet) {
   REQUIRE(idx.append(make_data_view(s2)));
   MESSAGE("equality lookup");
   auto bm = idx.lookup(equal, make_data_view(s0));
-  REQUIRE(bm);
-  CHECK_EQUAL(to_string(*bm), "101100");
+  CHECK_EQUAL(to_string(unbox(bm)), "101100");
   bm = idx.lookup(not_equal, make_data_view(s1));
-  REQUIRE(bm);
-  CHECK_EQUAL(to_string(*bm), "101111");
+  CHECK_EQUAL(to_string(unbox(bm)), "101111");
   MESSAGE("subset lookup (in)");
   auto x = *to<subnet>("192.168.0.0/23");
   bm = idx.lookup(in, make_data_view(x));
-  REQUIRE(bm);
-  CHECK_EQUAL(to_string(*bm), "111100");
+  CHECK_EQUAL(to_string(unbox(bm)), "111100");
   x = *to<subnet>("192.168.0.0/25");
   bm = idx.lookup(in, make_data_view(x));
-  REQUIRE(bm);
-  CHECK_EQUAL(to_string(*bm), "000000");
+  CHECK_EQUAL(to_string(unbox(bm)), "000000");
   MESSAGE("subset lookup (ni)");
   bm = idx.lookup(ni, make_data_view(s0));
-  REQUIRE(bm);
-  CHECK_EQUAL(to_string(*bm), "101100");
+  CHECK_EQUAL(to_string(unbox(bm)), "101100");
   x = *to<subnet>("192.168.1.128/25");
   bm = idx.lookup(ni, make_data_view(x));
-  REQUIRE(bm);
-  CHECK_EQUAL(to_string(*bm), "010000");
+  CHECK_EQUAL(to_string(unbox(bm)), "010000");
   x = *to<subnet>("192.168.0.254/32");
   bm = idx.lookup(ni, make_data_view(x));
-  REQUIRE(bm);
-  CHECK_EQUAL(to_string(*bm), "101100");
+  CHECK_EQUAL(to_string(unbox(bm)), "101100");
   x = *to<subnet>("192.0.0.0/8");
   bm = idx.lookup(ni, make_data_view(x));
-  REQUIRE(bm);
-  CHECK_EQUAL(to_string(*bm), "000000");
+  CHECK_EQUAL(to_string(unbox(bm)), "000000");
   auto xs = vector{s0, s1};
   auto multi = idx.lookup(in, make_data_view(xs));
   REQUIRE(multi);
@@ -384,15 +361,14 @@ TEST(subnet) {
   MESSAGE("serialization");
   std::vector<char> buf;
   CHECK_EQUAL(save(nullptr, buf, idx), caf::none);
-  subnet_index idx2;
+  subnet_index idx2{subnet_type{}};
   CHECK_EQUAL(load(nullptr, buf, idx2), caf::none);
   bm = idx2.lookup(not_equal, make_data_view(s1));
-  REQUIRE(bm);
-  CHECK_EQUAL(to_string(*bm), "101111");
+  CHECK_EQUAL(to_string(unbox(bm)), "101111");
 }
 
 TEST(port) {
-  port_index idx;
+  port_index idx{port_type{}};
   MESSAGE("append");
   REQUIRE(idx.append(make_data_view(port(80, port::tcp))));
   REQUIRE(idx.append(make_data_view(port(443, port::tcp))));
@@ -404,15 +380,12 @@ TEST(port) {
   MESSAGE("lookup");
   port http{80, port::tcp};
   auto bm = idx.lookup(equal, make_data_view(http));
-  REQUIRE(bm);
-  CHECK(to_string(*bm) == "1000010");
+  CHECK(to_string(unbox(bm)) == "1000010");
   port priv{1024, port::unknown};
   bm = idx.lookup(less_equal, make_data_view(priv));
-  REQUIRE(bm);
-  CHECK(to_string(*bm) == "1111010");
+  CHECK(to_string(unbox(bm)) == "1111010");
   bm = idx.lookup(greater, make_data_view(port{2, port::unknown}));
-  REQUIRE(bm);
-  CHECK(to_string(*bm) == "1111111");
+  CHECK(to_string(unbox(bm)) == "1111111");
   auto xs = vector{http, port(53, port::udp)};
   auto multi = idx.lookup(in, make_data_view(xs));
   REQUIRE(multi);
@@ -420,15 +393,15 @@ TEST(port) {
   MESSAGE("serialization");
   std::vector<char> buf;
   CHECK_EQUAL(save(nullptr, buf, idx), caf::none);
-  port_index idx2;
+  port_index idx2{port_type{}};
   CHECK_EQUAL(load(nullptr, buf, idx2), caf::none);
   bm = idx2.lookup(less_equal, make_data_view(priv));
-  REQUIRE(bm);
-  CHECK_EQUAL(to_string(*bm), "1111010");
+  CHECK_EQUAL(to_string(unbox(bm)), "1111010");
 }
 
-TEST(container) {
-  sequence_index idx{string_type{}};
+TEST(vector) {
+  auto container_type = vector_type{string_type{}};
+  sequence_index idx{container_type};
   MESSAGE("append");
   vector xs{"foo", "bar"};
   REQUIRE(idx.append(make_data_view(xs)));
@@ -449,16 +422,16 @@ TEST(container) {
   MESSAGE("serialization");
   std::vector<char> buf;
   CHECK_EQUAL(save(nullptr, buf, idx), caf::none);
-  sequence_index idx2;
+  sequence_index idx2{container_type};
   CHECK_EQUAL(load(nullptr, buf, idx2), caf::none);
   x = "foo";
   CHECK_EQUAL(to_string(*idx2.lookup(ni, make_data_view(x))), "11000000");
 }
 
-TEST(polymorphic) {
-  type t = set_type{integer_type{}}.attributes({{"max_size", "2"}});
-  auto idx = value_index::make(t);
-  REQUIRE(idx);
+TEST(set) {
+  auto t = set_type{integer_type{}}.attributes({{"max_size", "2"}});
+  auto idx = factory<value_index>::make(t);
+  REQUIRE_NOT_EQUAL(idx, nullptr);
   auto xs = set{42, 43, 44};
   REQUIRE(idx->append(make_data_view(xs)));
   xs = set{1, 2, 3};
@@ -472,22 +445,11 @@ TEST(polymorphic) {
   CHECK_EQUAL(to_string(*idx->lookup(ni, make_data_view(44))), "0000");
   MESSAGE("serialization");
   std::vector<char> buf;
-  CHECK_EQUAL(save(nullptr, buf, detail::value_index_inspect_helper{t, idx}),
-              caf::none);
-  std::unique_ptr<value_index> idx2;
-  detail::value_index_inspect_helper helper{t, idx2};
-  CHECK_EQUAL(load(nullptr, buf, helper), caf::none);
-  REQUIRE(idx2);
+  CHECK_EQUAL(save(nullptr, buf, idx), caf::none);
+  value_index_ptr idx2;
+  CHECK_EQUAL(load(nullptr, buf, idx2), caf::none);
+  REQUIRE_NOT_EQUAL(idx2, nullptr);
   CHECK_EQUAL(to_string(*idx2->lookup(ni, make_data_view(42))), "1001");
-  MESSAGE("attributes");
-  t = integer_type{}.attributes({{"base", "uniform(2, 4)"}});
-  idx = value_index::make(t);
-  REQUIRE(idx);
-  t = integer_type{}.attributes({{"base", "[2, 3,4]"}});
-  idx = value_index::make(t);
-  REQUIRE(idx);
-  MESSAGE("nil");
-  REQUIRE(idx->append(make_data_view(caf::none)));
 }
 
 // Attention
@@ -497,8 +459,9 @@ TEST(polymorphic) {
 // comes from consistency. For x != 42 it may seem natural to include nil
 // values because they are not 42, but for <, <=, >=, > it becomes less clear:
 // should nil be less or great than any other value in the domain?
-TEST(polymorphic none values) {
-  auto idx = value_index::make(string_type{});
+TEST(none values) {
+  auto idx = factory<value_index>::make(string_type{});
+  REQUIRE_NOT_EQUAL(idx, nullptr);
   REQUIRE(idx->append(make_data_view(caf::none)));
   REQUIRE(idx->append(make_data_view("foo")));
   REQUIRE(idx->append(make_data_view("foo")));
@@ -523,17 +486,17 @@ TEST(polymorphic none values) {
   REQUIRE(idx->append(make_data_view(caf::none)));
   REQUIRE(idx->append(make_data_view(caf::none)));
   auto bm = idx->lookup(equal, make_data_view("foo"));
-  REQUIRE(bm);
-  CHECK_EQUAL(to_string(*bm), "01100010000001110001100");
+  CHECK_EQUAL(to_string(unbox(bm)), "01100010000001110001100");
   // NB: not same as !(x == 42)
   bm = idx->lookup(not_equal, make_data_view("foo"));
-  REQUIRE(bm);
-  CHECK_EQUAL(to_string(*bm), "00000001100000001110000");
+  CHECK_EQUAL(to_string(unbox(bm)), "00000001100000001110000");
   bm = idx->lookup(equal, make_data_view(caf::none));
-  CHECK_EQUAL(to_string(*bm), "10011100011110000000011");
+  CHECK_EQUAL(to_string(unbox(bm)), "10011100011110000000011");
   bm = idx->lookup(not_equal, make_data_view(caf::none));
-  CHECK_EQUAL(to_string(*bm), "01100011100001111111100");
+  CHECK_EQUAL(to_string(unbox(bm)), "01100011100001111111100");
 }
+
+namespace {
 
 auto orig_h(const event& x) {
   auto& log_entry = caf::get<vector>(x.data());
@@ -541,35 +504,37 @@ auto orig_h(const event& x) {
   return make_view(caf::get<address>(conn_id[0]));
 }
 
+} // namespace <anonymous>
+
 // This test uncovered a regression that ocurred when computing the rank of a
 // bitmap representing conn.log events. The culprit was the EWAH bitmap
 // encoding, because swapping out ewah_bitmap for null_bitmap in address_index
 // made the bug disappear.
 TEST_DISABLED(regression - build an address index from bro events) {
   // Populate the index with data up to the critical point.
-  address_index idx;
+  address_index idx{address_type{}};
   for (auto i = 0; i < 6464; ++i) {
     auto& x = bro_conn_log[i];
     CHECK(idx.append(orig_h(x), x.id()));
   }
   // This is where we are in trouble: the last ID should be 720, but the bogus
   // test reports 6452.
-  auto addr = *to<data>("169.254.225.22");
-  auto before = idx.lookup(equal, make_data_view(addr));
-  CHECK_EQUAL(rank(*before), 4u);
-  CHECK_EQUAL(select(*before, -1), id{720});
+  auto addr = unbox(to<data>("169.254.225.22"));
+  auto before = unbox(idx.lookup(equal, make_data_view(addr)));
+  CHECK_EQUAL(rank(before), 4u);
+  CHECK_EQUAL(select(before, -1), id{720});
   auto& x = bro_conn_log[6464];
   // After adding another event, the correct state is restored again and the
   // bug doesn't show up anymore.
   CHECK(idx.append(orig_h(x), x.id()));
-  auto after = idx.lookup(equal, make_data_view(addr));
-  CHECK_EQUAL(rank(*after), 4u);
-  CHECK_EQUAL(select(*after, -1), id{720});
-  CHECK_NOT_EQUAL(select(*after, -1), id{6452});
+  auto after = unbox(idx.lookup(equal, make_data_view(addr)));
+  CHECK_EQUAL(rank(after), 4u);
+  CHECK_EQUAL(select(after, -1), id{720});
+  CHECK_NOT_EQUAL(select(after, -1), id{6452});
 }
 
 // This was the first attempt in figuring out where the bug sat. I didn't fire.
-TEST_DISABLED(regression - checking the result single bitmap) {
+TEST(regression - checking the result single bitmap) {
   ewah_bitmap bm;
   bm.append<0>(680);
   bm.append<1>();     //  681
@@ -663,12 +628,12 @@ TEST_DISABLED(regression - bro conn log service http) {
     39, 2,  0,  9,  8,  0,  13, 4,  2,  13, 2,  36, 33, 17, 48, 50, 27,
     44, 9,  94, 63, 74, 66, 5,  54, 21, 7,  2,  3,  21, 7,  2,  14, 7
   };
-  std::vector<std::pair<std::unique_ptr<value_index>, ids>> slices;
+  std::vector<std::pair<value_index_ptr, ids>> slices;
   slices.reserve(http_per_100_events.size());
   for (size_t i = 0; i < bro_conn_log.size(); ++i) {
-    if (i % 100 == 0) {
-      slices.emplace_back(value_index::make(string_type{}), ids(i, false));
-    }
+    if (i % 100 == 0)
+      slices.emplace_back(factory<value_index>::make(string_type{}),
+                          ids(i, false));
     auto& [idx, expected] = slices.back();
     auto x = service(bro_conn_log[i]);
     idx->append(x, i);
@@ -677,9 +642,8 @@ TEST_DISABLED(regression - bro conn log service http) {
   for (size_t i = 0; i < slices.size(); ++i) {
     MESSAGE("verifying batch [" << (i * 100) << ',' << (i * 100) + 100 << ')');
     auto& [idx, expected] = slices[i];
-    auto result = idx->lookup(equal, make_data_view("http"));
-    REQUIRE(result);
-    CHECK_EQUAL(rank(*result), http_per_100_events[i]);
+    auto result = unbox(idx->lookup(equal, make_data_view("http")));
+    CHECK_EQUAL(rank(result), http_per_100_events[i]);
   }
 }
 

@@ -125,6 +125,7 @@ set(libvast_sources
   src/uuid.cpp
   src/value.cpp
   src/value_index.cpp
+  src/value_index_factory.cpp
   src/view.cpp
   src/wah_bitmap.cpp
 )

@@ -98,6 +98,7 @@ using default_table_slice_ptr = caf::intrusive_cow_ptr<default_table_slice>;
 using synopsis_ptr = caf::intrusive_ptr<synopsis>;
 using table_slice_builder_ptr = caf::intrusive_ptr<table_slice_builder>;
 using table_slice_ptr = caf::intrusive_cow_ptr<table_slice>;
+using value_index_ptr = caf::intrusive_ptr<value_index>;
 
 // -- miscellaneous ------------------------------------------------------------
 
