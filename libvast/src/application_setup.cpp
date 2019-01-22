@@ -37,23 +37,8 @@ path make_log_dirname() {
   return path{"log"} / dir_name;
 }
 
-caf::expected<path> setup_log_file(const path& base_dir) {
-  auto log_dir = base_dir / make_log_dirname();
-  // Create the log directory first, which we need to create the symlink
-  // afterwards.
-  if (!exists(log_dir))
-    if (auto res = mkdir(log_dir); !res)
-      return res.error();
-  // Create user-friendly symlink to current log directory.
-  auto link_dir = log_dir.chop(-1) / "current";
-  if (exists(link_dir))
-    if (!rm(link_dir))
-      return make_error(ec::filesystem_error, "cannot remove log symlink");
-  create_symlink(log_dir.trim(-1), link_dir);
-  return log_dir / "vast.log";
-}
-
-config::config() {
+config::config(std::string application_name)
+  : application_name{std::move(application_name)} {
   // Tweak default logging options.
   set("logger.component-filter", "vast");
   set("logger.console", caf::atom("COLORED"));
@@ -81,6 +66,22 @@ caf::error config::parse(int argc, char** argv) {
     }
   }
   return caf::none;
+}
+
+caf::expected<path> config::setup_log_file(const path& base_dir) {
+  auto log_dir = base_dir / make_log_dirname();
+  // Create the log directory first, which we need to create the symlink
+  // afterwards.
+  if (!exists(log_dir))
+    if (auto res = mkdir(log_dir); !res)
+      return res.error();
+  // Create user-friendly symlink to current log directory.
+  auto link_dir = log_dir.chop(-1) / "current";
+  if (exists(link_dir))
+    if (!rm(link_dir))
+      return make_error(ec::filesystem_error, "cannot remove log symlink");
+  create_symlink(log_dir.trim(-1), link_dir);
+  return log_dir / application_name + ".log";
 }
 
 // Parses the options from the root command and adds them to the global

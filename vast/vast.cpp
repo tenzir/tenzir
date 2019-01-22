@@ -35,7 +35,7 @@ using namespace vast::system;
 
 int main(int argc, char** argv) {
   // CAF scaffold.
-  config cfg;
+  config cfg{"vast"};
   if (auto err = cfg.parse(argc, argv)) {
     std::cerr << "Failed to parse configuration " << to_string(err)
               << std::endl;

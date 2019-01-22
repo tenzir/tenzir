@@ -13,6 +13,8 @@
 
 #pragma once
 
+#include <string>
+
 #include <caf/expected.hpp>
 
 #include "vast/fwd.hpp"
@@ -20,12 +22,13 @@
 
 namespace vast {
 
-caf::expected<path> setup_log_file(const path& base_dir);
-
 struct config : system::configuration {
-  config();
+  config(std::string application_name);
   caf::error parse(int argc, char** argv);
+  caf::expected<path> setup_log_file(const path& base_dir);
   void merge_root_options(system::application& app);
+
+  std::string application_name;
 };
 
 } // namespace vast
