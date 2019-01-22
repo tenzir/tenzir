@@ -20,10 +20,10 @@
 #include "vast/fwd.hpp"
 #include "vast/system/configuration.hpp"
 
-namespace vast {
+namespace vast::system {
 
-struct config : system::configuration {
-  config(std::string application_name);
+struct default_configuration : system::configuration {
+  default_configuration(std::string application_name);
   caf::error parse(int argc, char** argv);
   caf::expected<path> setup_log_file(const path& base_dir);
   void merge_root_options(system::application& app);
@@ -31,5 +31,4 @@ struct config : system::configuration {
   std::string application_name;
 };
 
-} // namespace vast
-
+} // namespace vast::system

@@ -23,10 +23,10 @@
 #include <caf/openssl/manager.hpp>
 #endif
 
-#include "vast/application_setup.hpp"
 #include "vast/filesystem.hpp"
 
 #include "vast/system/default_application.hpp"
+#include "vast/system/default_configuration.hpp"
 
 #include "vast/detail/system.hpp"
 
@@ -35,7 +35,7 @@ using namespace vast::system;
 
 int main(int argc, char** argv) {
   // CAF scaffold.
-  config cfg{"vast"};
+  default_configuration cfg{"vast"};
   if (auto err = cfg.parse(argc, argv)) {
     std::cerr << "Failed to parse configuration " << to_string(err)
               << std::endl;

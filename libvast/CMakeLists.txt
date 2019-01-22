@@ -11,7 +11,6 @@ file(GLOB_RECURSE libvast_headers "${CMAKE_CURRENT_SOURCE_DIR}/vast/*.hpp")
 
 set(libvast_sources
   src/address.cpp
-  src/application_setup.cpp
   src/attribute.cpp
   src/banner.cpp
   src/base.cpp
@@ -81,6 +80,7 @@ set(libvast_sources
   src/system/configuration.cpp
   src/system/connect_to_node.cpp
   src/system/default_application.cpp
+  src/system/default_configuration.cpp
   src/system/dummy_consensus.cpp
   src/system/evaluator.cpp
   src/system/exporter.cpp

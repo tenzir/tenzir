@@ -11,7 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/application_setup.hpp"
+#include "vast/system/default_configuration.hpp"
 
 #include <caf/io/middleman.hpp>
 #include <caf/timestamp.hpp>
@@ -28,7 +28,7 @@
 #include "vast/filesystem.hpp"
 #include "vast/system/application.hpp"
 
-namespace vast {
+namespace vast::system {
 
 path make_log_dirname() {
   auto dir_name = caf::deep_to_string(caf::make_timestamp());
@@ -37,7 +37,7 @@ path make_log_dirname() {
   return path{"log"} / dir_name;
 }
 
-config::config(std::string application_name)
+default_configuration::default_configuration(std::string application_name)
   : application_name{std::move(application_name)} {
   // Tweak default logging options.
   set("logger.component-filter", "vast");
@@ -52,7 +52,7 @@ config::config(std::string application_name)
 #endif
 }
 
-caf::error config::parse(int argc, char** argv) {
+caf::error default_configuration::parse(int argc, char** argv) {
   if (auto err = configuration::parse(argc, argv))
     return err;
   if (!caf::get_if<std::string>(this, "logger.file-name")) {
@@ -68,7 +68,7 @@ caf::error config::parse(int argc, char** argv) {
   return caf::none;
 }
 
-caf::expected<path> config::setup_log_file(const path& base_dir) {
+caf::expected<path> default_configuration::setup_log_file(const path& base_dir) {
   auto log_dir = base_dir / make_log_dirname();
   // Create the log directory first, which we need to create the symlink
   // afterwards.
@@ -86,7 +86,7 @@ caf::expected<path> config::setup_log_file(const path& base_dir) {
 
 // Parses the options from the root command and adds them to the global
 // configuration.
-void config::merge_root_options(system::application& app) {
+void default_configuration::merge_root_options(system::application& app) {
   // Delegate to the root command for argument parsing.
   caf::settings options;
   app.root.options.parse(options, command_line.begin(), command_line.end());
@@ -96,4 +96,4 @@ void config::merge_root_options(system::application& app) {
   src["vast"].as_dictionary().insert(src.begin(), src.end());
 }
 
-} // namespace vast
+} // namespace vast::system
