@@ -11,6 +11,8 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
+#include <cstdlib>
+
 #include <caf/actor_system.hpp>
 #include <caf/io/middleman.hpp>
 #include <caf/timestamp.hpp>
@@ -22,7 +24,6 @@
 #endif
 
 #include "vast/application_setup.hpp"
-#include "vast/defaults.hpp"
 #include "vast/filesystem.hpp"
 
 #include "vast/system/default_application.hpp"
@@ -33,6 +34,13 @@ using namespace vast;
 using namespace vast::system;
 
 int main(int argc, char** argv) {
+  // CAF scaffold.
+  config cfg;
+  if (auto err = cfg.parse(argc, argv)) {
+    std::cerr << "Failed to parse configuration " << to_string(err)
+              << std::endl;
+    return EXIT_FAILURE;
+  }
   // Application setup.
   default_application app;
   app.root.description = "manage a VAST topology";
@@ -43,21 +51,7 @@ int main(int argc, char** argv) {
   auto find_slash = [&] { return app.root.name.find('/'); };
   for (auto p = find_slash(); p != std::string_view::npos; p = find_slash())
     app.root.name.remove_prefix(p + 1);
-  // CAF scaffold.
-  config cfg;
-  cfg.parse(argc, argv);
   cfg.merge_root_options(app);
-  // Setup path for CAF logger if not explicitly specified by the user.
-  if (!caf::get_if<std::string>(&cfg, "logger.file-name")) {
-    path dir = get_or(cfg, "vast.dir", defaults::command::directory);
-    if (auto log_file = setup_log_file(dir.complete()); !log_file) {
-      std::cerr << "failed to setup log file: " << to_string(log_file.error())
-                << std::endl;
-      return EXIT_FAILURE;
-    } else {
-      cfg.set("logger.file-name", log_file->str());
-    }
-  }
   // Initialize actor system (and thereby CAF's logger).
   caf::actor_system sys{cfg};
   // Dispatch to root command.

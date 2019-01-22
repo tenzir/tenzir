@@ -22,6 +22,7 @@
 #include <caf/openssl/manager.hpp>
 #endif
 
+#include "vast/defaults.hpp"
 #include "vast/detail/system.hpp"
 #include "vast/error.hpp"
 #include "vast/filesystem.hpp"
@@ -64,6 +65,22 @@ config::config() {
 #ifdef VAST_USE_OPENSSL
   load<caf::openssl::manager>();
 #endif
+}
+
+caf::error config::parse(int argc, char** argv) {
+  if (auto err = configuration::parse(argc, argv))
+    return err;
+  if (!caf::get_if<std::string>(this, "logger.file-name")) {
+    path dir = get_or(*this, "vast.dir", defaults::command::directory);
+    if (auto log_file = setup_log_file(dir.complete()); !log_file) {
+      std::cerr << "failed to setup log file: " << to_string(log_file.error())
+                << std::endl;
+      return log_file.error();
+    } else {
+      set("logger.file-name", log_file->str());
+    }
+  }
+  return caf::none;
 }
 
 // Parses the options from the root command and adds them to the global

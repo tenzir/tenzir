@@ -24,6 +24,7 @@ caf::expected<path> setup_log_file(const path& base_dir);
 
 struct config : system::configuration {
   config();
+  caf::error parse(int argc, char** argv);
   void merge_root_options(system::application& app);
 };
 
