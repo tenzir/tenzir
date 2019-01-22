@@ -38,11 +38,13 @@ void meta_index::add(const uuid& partition, const table_slice& slice) {
     // Create new synopses for a layout we haven't seen before.
     i = part_synopsis.emplace(layout, table_synopsis{}).first;
     table_syn = &i->second;
-    for (auto& field : layout.fields)
-      if (!has_skip_attribute(field.type))
-        if (i->second.emplace_back(make_synopsis(field.type, synopsis_options_))
-            != nullptr)
+    for (auto& field : layout.fields) {
+      auto synopsis = has_skip_attribute(field.type)
+                        ? nullptr
+                        : make_synopsis(field.type, synopsis_options_);
+      if (table_syn->emplace_back(std::move(synopsis)) != nullptr)
           VAST_DEBUG(this, "created new synopsis structure for type", field.type);
+    }
     // If we couldn't create a single synopsis for the layout, we will no
     // longer attempt to create synopses in the future.
     auto is_nullptr = [](auto& x) { return x == nullptr; };
