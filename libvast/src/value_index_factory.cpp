@@ -15,6 +15,7 @@
 
 #include <caf/optional.hpp>
 
+#include "vast/attribute.hpp"
 #include "vast/base.hpp"
 #include "vast/concept/parseable/numeric/integral.hpp"
 #include "vast/concept/parseable/to.hpp"
@@ -25,15 +26,6 @@
 
 namespace vast {
 namespace {
-
-template <class T>
-caf::optional<std::string_view> extract_attribute(const T& x,
-                                                  std::string_view key) {
-  for (auto& attr : x.attributes())
-    if (attr.key == key && attr.value)
-      return std::string_view{*attr.value};
-  return {};
-}
 
 template <class T>
 size_t extract_max_size(const T& x, size_t default_value = 1024) {
