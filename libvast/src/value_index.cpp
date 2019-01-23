@@ -493,9 +493,7 @@ bool sequence_index::append_impl(data_view x, id pos) {
     using view_type = std::decay_t<decltype(v)>;
     if constexpr (detail::is_any_v<view_type, view<vector>, view<set>>) {
       init();
-      auto seq_size = v->size();
-      if (seq_size > max_size_)
-        seq_size = max_size_;
+      auto seq_size = std::min(v->size(), max_size_);
       if (seq_size > elements_.size()) {
         auto old = elements_.size();
         elements_.resize(seq_size);
