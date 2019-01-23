@@ -43,6 +43,15 @@ using namespace caf;
 
 namespace vast::system {
 
+namespace {
+
+template <class... Ts>
+void initialize_factories() {
+  (factory<Ts>::initialize(), ...);
+}
+
+} // namespace <anonymous>
+
 configuration::configuration() {
   detail::add_message_types(*this);
   detail::add_error_categories(*this);
@@ -57,11 +66,9 @@ configuration::configuration() {
   opt_group{custom_options_, "vast"}
   .add<size_t>("table-slice-size",
                "Maximum size for sources that generate table slices.");
-  // Initialize factories.
-  factory<synopsis>::initialize();
-  factory<table_slice>::initialize();
-  factory<table_slice_builder>::initialize();
-  factory<value_index>::initialize();
+
+  initialize_factories<synopsis, table_slice, table_slice_builder,
+                       value_index>();
 }
 
 caf::error configuration::parse(int argc, char** argv) {
