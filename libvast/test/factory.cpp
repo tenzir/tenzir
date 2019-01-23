@@ -25,7 +25,7 @@ using namespace vast;
 namespace {
 
 // The polymorphic abstract class.
-struct abstract {
+class abstract {
 public:
   abstract(int x, int y) : x_{x}, y_{y} {
     // nop
@@ -43,7 +43,8 @@ protected:
 };
 
 // A concrete class
-struct concrete : abstract {
+class concrete : public abstract {
+public:
   concrete(int x, int y) : abstract{x, y} {
     // nop
   }
