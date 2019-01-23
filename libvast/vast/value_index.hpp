@@ -19,8 +19,6 @@
 
 #include <caf/deserializer.hpp>
 #include <caf/error.hpp>
-#include <caf/intrusive_ptr.hpp>
-#include <caf/ref_counted.hpp>
 #include <caf/serializer.hpp>
 
 #include "vast/ewah_bitmap.hpp"
@@ -39,13 +37,13 @@
 
 namespace vast {
 
-using value_index_ptr = caf::intrusive_ptr<value_index>;
+using value_index_ptr = std::unique_ptr<value_index>;
 
 /// An index for a ::value that supports appending and looking up values.
 /// @warning A lookup result does *not include* `nil` values, regardless of the
 /// relational operator. Include them requires performing an OR of the result
 /// and an explit query for nil, e.g., `x != 42 || x == nil`.
-class value_index : public caf::ref_counted {
+class value_index {
 public:
   value_index(vast::type x);
 

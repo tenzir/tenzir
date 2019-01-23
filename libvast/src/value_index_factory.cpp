@@ -57,7 +57,7 @@ optional<base> parse_base(const T& x) {
 
 template <class T>
 value_index_ptr make(type x) {
-  return caf::make_counted<T>(std::move(x));
+  return std::make_unique<T>(std::move(x));
 }
 
 template <class T>
@@ -67,7 +67,7 @@ value_index_ptr make_arithmetic(type x) {
   using concrete_data = type_to_data<T>;
   using value_index_type = arithmetic_index<concrete_data>;
   if (auto base = parse_base(x))
-    return caf::make_counted<value_index_type>(std::move(x), std::move(*base));
+    return std::make_unique<value_index_type>(std::move(x), std::move(*base));
   return nullptr;
 }
 
@@ -85,7 +85,7 @@ template <class T, class Index>
 auto add_container_index_factory() {
   static auto f = [](type x) -> value_index_ptr {
     auto max_size = extract_max_size(x);
-    return caf::make_counted<Index>(std::move(x), max_size);
+    return std::make_unique<Index>(std::move(x), max_size);
   };
   return factory<value_index>::add(T{}, f);
 }
