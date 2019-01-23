@@ -157,16 +157,14 @@ public:
   using size_type = typename Bitmap::size_type;
   using value_type = size_t;
 
-  vector_coder() : size_{0} {
-    // nop
-  }
+  vector_coder() = default;
 
-  vector_coder(size_t n) : size_{0}, bitmaps_(n) {
+  explicit vector_coder(size_t num_bitmaps) : num_bitmaps_{num_bitmaps} {
     // nop
   }
 
   size_t bitmap_count() const noexcept {
-    return bitmaps_.size();
+    return num_bitmaps_;
   }
 
   auto size() const {
@@ -187,6 +185,11 @@ public:
   }
 
 protected:
+  void lazy_init() {
+    if (bitmaps_.empty())
+      bitmaps_.resize(num_bitmaps_);
+  }
+
   void append(const vector_coder& other, bool bit) {
     VAST_ASSERT(bitmaps_.size() == other.bitmaps_.size());
     for (auto i = 0u; i < bitmaps_.size(); ++i) {
@@ -196,7 +199,8 @@ protected:
     size_ += other.size_;
   }
 
-  size_type size_;
+  size_type size_ = 0;
+  size_t num_bitmaps_;
   mutable std::vector<Bitmap> bitmaps_;
 };
 
@@ -227,6 +231,7 @@ public:
   }
 
   void encode(value_type x, size_type n = 1) {
+    this->lazy_init();
     VAST_ASSERT(Bitmap::max_size - this->size_ >= n);
     VAST_ASSERT(x < this->bitmaps_.size());
     bitmap_at(x).append_bits(true, n);
@@ -236,6 +241,8 @@ public:
   Bitmap decode(relational_operator op, value_type x) const {
     VAST_ASSERT(op == less || op == less_equal || op == equal || op == not_equal
                 || op == greater_equal || op == greater);
+    if (this->bitmaps_.empty())
+      return Bitmap{};
     VAST_ASSERT(x < this->bitmaps_.size());
     switch (op) {
       default:
@@ -315,6 +322,7 @@ public:
   }
 
   void encode(value_type x, size_type n = 1) {
+    this->lazy_init();
     VAST_ASSERT(Bitmap::max_size - this->size_ >= n);
     VAST_ASSERT(x < this->bitmaps_.size() + 1);
     // Lazy append: we only add 0s until we hit index i of value x. The
@@ -328,6 +336,8 @@ public:
   Bitmap decode(relational_operator op, value_type x) const {
     VAST_ASSERT(op == less || op == less_equal || op == equal || op == not_equal
                 || op == greater_equal || op == greater);
+    if (this->bitmaps_.empty())
+      return Bitmap{};
     VAST_ASSERT(x < this->bitmaps_.size() + 1);
     switch (op) {
       default:
@@ -401,6 +411,7 @@ public:
   }
 
   void encode(value_type x, size_type n = 1) {
+    this->lazy_init();
     VAST_ASSERT(Bitmap::max_size - this->size_ >= n);
     for (auto i = 0u; i < this->bitmaps_.size(); ++i)
       bitmap_at(i).append_bits(((x >> i) & 1) == 0, n);
@@ -409,6 +420,8 @@ public:
 
   // RangeEval-Opt for the special case with uniform base 2.
   Bitmap decode(relational_operator op, value_type x) const {
+    if (this->bitmaps_.empty())
+      return Bitmap{};
     switch (op) {
       default:
         break;
@@ -512,12 +525,11 @@ public:
   /// Constructs a multi-level coder from a given base.
   /// @param b The base to initialize this coder with.
   explicit multi_level_coder(base b) : base_{std::move(b)} {
-    init();
+    // nop
   }
 
   void encode(value_type x, size_type n = 1) {
-    if (xs_.empty())
-      init();
+    lazy_init();
     base_.decompose(x, xs_);
     for (auto i = 0u; i < base_.size(); ++i)
       coders_[i].encode(xs_[i], n);
@@ -528,11 +540,13 @@ public:
   }
 
   void skip(size_type n) {
+    lazy_init();
     for (auto& x : coders_)
       x.skip(n);
   }
 
   void append(const multi_level_coder& other) {
+    lazy_init();
     VAST_ASSERT(coders_.size() == other.coders_.size());
     for (auto i = 0u; i < coders_.size(); ++i)
       coders_[i].append(other.coders_[i]);
@@ -557,11 +571,13 @@ public:
   }
 
 private:
-  void init() {
+  void lazy_init() {
+    if (!xs_.empty())
+      return;
     VAST_ASSERT(base_.well_defined());
     xs_.resize(base_.size()),
     coders_.resize(base_.size());
-    init_coders(coders_); // dispatch on coder_type
+    init_coders(coders_); // dispatch on coder_type; TODO: use if constexpr
     VAST_ASSERT(coders_.size() == base_.size());
   }
 
