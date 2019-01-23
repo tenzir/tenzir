@@ -55,7 +55,7 @@ struct factory_traits<synopsis> {
   ///       Therefore, the type *x* should be sufficient to fully create a
   ///       valid synopsis instance.
   template <class T>
-  static result_type make(type x, const synopsis_options& opts = {}) {
+  static result_type make(type x, const synopsis_options& opts) {
     if constexpr (std::is_constructible_v<T, type, const synopsis_options&>)
       return caf::make_counted<T>(std::move(x), opts);
     else
