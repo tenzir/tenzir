@@ -19,8 +19,8 @@
 namespace vast {
 
 void factory_traits<table_slice_builder>::initialize() {
-  using F = factory<table_slice_builder>;
-  F::add<default_table_slice_builder>(default_table_slice::class_id);
+  using f = factory<table_slice_builder>;
+  f::add<default_table_slice_builder>(default_table_slice::class_id);
 }
 
 } // namespace vast
