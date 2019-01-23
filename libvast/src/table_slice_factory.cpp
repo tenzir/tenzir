@@ -43,7 +43,7 @@ table_slice_ptr factory_traits<table_slice>::make(chunk_ptr chunk) {
   }
   auto result = factory<table_slice>::make(id, std::move(header));
   if (!result) {
-    VAST_ERROR_ANON(__func__, "no table slice factory for:", to_string(id));
+    VAST_ERROR_ANON(__func__, "failed to make table slice for:", to_string(id));
     return nullptr;
   }
   // Skip table slice data already processed.

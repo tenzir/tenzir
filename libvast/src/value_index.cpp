@@ -104,7 +104,7 @@ caf::error inspect(caf::deserializer& source, value_index_ptr& x) {
   }
   x = factory<value_index>::make(std::move(t));
   if (x == nullptr)
-    return make_error(ec::unspecified, "failed to construct type");
+    return make_error(ec::unspecified, "failed to construct value index");
   return x->deserialize(source);
 }
 
