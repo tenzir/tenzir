@@ -13,14 +13,7 @@
 
 #include "vast/system/default_configuration.hpp"
 
-#include <caf/io/middleman.hpp>
 #include <caf/timestamp.hpp>
-
-#include "vast/config.hpp"
-
-#ifdef VAST_USE_OPENSSL
-#include <caf/openssl/manager.hpp>
-#endif
 
 #include "vast/defaults.hpp"
 #include "vast/detail/system.hpp"
@@ -45,11 +38,6 @@ default_configuration::default_configuration(std::string application_name)
   set("logger.file-verbosity", caf::atom("DEBUG"));
   // Allow VAST clusters to form a mesh.
   set("middleman.enable-automatic-connections", true);
-  // Load CAF modules.
-  load<caf::io::middleman>();
-#ifdef VAST_USE_OPENSSL
-  load<caf::openssl::manager>();
-#endif
 }
 
 caf::error default_configuration::parse(int argc, char** argv) {
