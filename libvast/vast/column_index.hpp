@@ -76,9 +76,8 @@ public:
 
   /// Serializes or deserializes a column index.
   template <class Inspector>
-  friend typename Inspector::result_type inspect(Inspector& f, column_index& x) {
-    detail::value_index_inspect_helper tmp{x.index_type_, x.idx_};
-    return f(x.index_type_, x.filename_, tmp, f.last_flush_);
+  friend auto inspect(Inspector& f, column_index& x) {
+    return f(x.index_type_, x.filename_, x.idx_, f.last_flush_);
   }
 
   /// @returns the type of this column.
@@ -109,7 +108,7 @@ public:
 protected:
   // -- member variables -------------------------------------------------------
 
-  std::unique_ptr<value_index> idx_;
+  value_index_ptr idx_;
   size_t col_;
   bool has_skip_attribute_;
   type index_type_;

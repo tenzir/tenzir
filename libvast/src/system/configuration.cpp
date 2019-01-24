@@ -11,6 +11,8 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
+#include "vast/system/configuration.hpp"
+
 #include <algorithm>
 #include <iostream>
 
@@ -25,18 +27,30 @@
 #include <caf/openssl/manager.hpp>
 #endif
 
-#include "vast/system/configuration.hpp"
-
 #include "vast/detail/assert.hpp"
 #include "vast/detail/add_message_types.hpp"
 #include "vast/detail/add_error_categories.hpp"
 #include "vast/detail/adjust_resource_consumption.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/detail/system.hpp"
+#include "vast/synopsis_factory.hpp"
+#include "vast/table_slice_factory.hpp"
+#include "vast/table_slice_builder_factory.hpp"
+#include "vast/value_index.hpp"
+#include "vast/value_index_factory.hpp"
 
 using namespace caf;
 
 namespace vast::system {
+
+namespace {
+
+template <class... Ts>
+void initialize_factories() {
+  (factory<Ts>::initialize(), ...);
+}
+
+} // namespace <anonymous>
 
 configuration::configuration() {
   detail::add_message_types(*this);
@@ -52,6 +66,9 @@ configuration::configuration() {
   opt_group{custom_options_, "vast"}
   .add<size_t>("table-slice-size",
                "Maximum size for sources that generate table slices.");
+
+  initialize_factories<synopsis, table_slice, table_slice_builder,
+                       value_index>();
 }
 
 caf::error configuration::parse(int argc, char** argv) {

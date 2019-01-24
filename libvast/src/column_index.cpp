@@ -18,6 +18,7 @@
 #include "vast/logger.hpp"
 #include "vast/save.hpp"
 #include "vast/table_slice.hpp"
+#include "vast/value_index_factory.hpp"
 
 namespace vast {
 
@@ -56,8 +57,7 @@ caf::error column_index::init() {
   VAST_TRACE("");
   // Materialize the index when encountering persistent state.
   if (exists(filename_)) {
-    detail::value_index_inspect_helper tmp{index_type_, idx_};
-    if (auto err = load(nullptr, filename_, last_flush_, tmp)) {
+    if (auto err = load(nullptr, filename_, last_flush_, idx_)) {
       VAST_ERROR(this, "failed to load value index from disk", sys_.render(err));
       return err;
     } else {
@@ -66,7 +66,7 @@ caf::error column_index::init() {
     return caf::none;
   }
   // Otherwise construct a new one.
-  idx_ = value_index::make(index_type_);
+  idx_ = factory<value_index>::make(index_type_);
   if (idx_ == nullptr) {
     VAST_ERROR(this, "failed to construct index");
     return make_error(ec::unspecified, "failed to construct index");
@@ -85,8 +85,7 @@ caf::error column_index::flush_to_disk() {
   VAST_DEBUG(this, "flushes index (" << (offset - last_flush_) << '/' << offset,
              "new/total bits)");
   last_flush_ = offset;
-  detail::value_index_inspect_helper tmp{index_type_, idx_};
-  return save(nullptr, filename_, last_flush_, tmp);
+  return save(nullptr, filename_, last_flush_, idx_);
 }
 
 // -- properties -------------------------------------------------------------

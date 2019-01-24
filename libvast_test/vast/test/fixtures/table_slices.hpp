@@ -24,6 +24,8 @@
 #include "vast/fwd.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
+#include "vast/table_slice_builder_factory.hpp"
+#include "vast/table_slice_factory.hpp"
 #include "vast/type.hpp"
 #include "vast/value.hpp"
 #include "vast/view.hpp"
@@ -47,8 +49,10 @@ public:
   // Registers a table slice implementation.
   template <class T, class Builder>
   void initialize() {
-    vast::add_table_slice_factory<T>();
-    builder = Builder::make(layout);
+    using namespace vast;
+    factory<table_slice>::add<T>();
+    factory<table_slice_builder>::add<Builder>(T::class_id);
+    builder = factory<table_slice_builder>::make(T::class_id, layout);
     if (builder == nullptr)
       FAIL("builder factory could not construct a valid instance");
   }

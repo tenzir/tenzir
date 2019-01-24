@@ -38,5 +38,19 @@ struct attribute : detail::totally_ordered<attribute> {
 };
 
 
-} // namespace vast
+/// Extracts an specific attribute from a type.
+/// @param x The type to extract an attribute from.
+/// @param key The name of the attribute key.
+/// @returns If *key* exists and has a value, the function returns a string
+///          view to the value.
+/// @relates attribute
+template <class T>
+caf::optional<std::string_view> extract_attribute(const T& x,
+                                                  std::string_view key) {
+  for (auto& attr : x.attributes())
+    if (attr.key == key && attr.value)
+      return std::string_view{*attr.value};
+  return {};
+}
 
+} // namespace vast

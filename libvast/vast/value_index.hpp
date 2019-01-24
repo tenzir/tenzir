@@ -17,21 +17,27 @@
 #include <memory>
 #include <type_traits>
 
+#include <caf/deserializer.hpp>
+#include <caf/error.hpp>
+#include <caf/serializer.hpp>
+
 #include "vast/ewah_bitmap.hpp"
 #include "vast/ids.hpp"
 #include "vast/bitmap_index.hpp"
 #include "vast/concept/printable/vast/data.hpp"
 #include "vast/concept/printable/vast/operator.hpp"
+#include "vast/detail/assert.hpp"
+#include "vast/detail/overload.hpp"
 #include "vast/die.hpp"
 #include "vast/error.hpp"
 #include "vast/expected.hpp"
 #include "vast/type.hpp"
+#include "vast/value_index_factory.hpp"
 #include "vast/view.hpp"
 
-#include "vast/detail/assert.hpp"
-#include "vast/detail/overload.hpp"
-
 namespace vast {
+
+using value_index_ptr = std::unique_ptr<value_index>;
 
 /// An index for a ::value that supports appending and looking up values.
 /// @warning A lookup result does *not include* `nil` values, regardless of the
@@ -39,13 +45,11 @@ namespace vast {
 /// and an explit query for nil, e.g., `x != 42 || x == nil`.
 class value_index {
 public:
+  value_index(vast::type x);
+
   virtual ~value_index();
 
   using size_type = typename ids::size_type;
-
-  /// Constructs a value index from a given type.
-  /// @param t The type to construct a value index for.
-  static std::unique_ptr<value_index> make(const type& t);
 
   /// Appends a data value.
   /// @param x The data to append to the index.
@@ -75,13 +79,14 @@ public:
   /// @returns The largest ID in the index.
   size_type offset() const;
 
-  template <class Inspector>
-  friend auto inspect(Inspector& f, value_index& vi) {
-    return f(vi.mask_, vi.none_);
-  }
+  /// @returns the type of the value index.
+  const vast::type& type() const;
 
-protected:
-  value_index() = default;
+  // -- persistence -----------------------------------------------------------
+
+  virtual caf::error serialize(caf::serializer& sink) const;
+
+  virtual caf::error deserialize(caf::deserializer& source);
 
 private:
   virtual bool append_impl(data_view x, id pos) = 0;
@@ -91,7 +96,20 @@ private:
 
   ewah_bitmap mask_;
   ewah_bitmap none_;
+  const vast::type type_;
 };
+
+/// @relates value_index
+caf::error inspect(caf::serializer& sink, const value_index& x);
+
+/// @relates value_index
+caf::error inspect(caf::deserializer& source, value_index& x);
+
+/// @relates value_index
+caf::error inspect(caf::serializer& sink, const value_index_ptr& x);
+
+/// @relates value_index
+caf::error inspect(caf::deserializer& source, value_index_ptr& x);
 
 namespace detail {
 
@@ -149,37 +167,34 @@ class arithmetic_index : public value_index {
 public:
   using value_type =
     std::conditional_t<
-      std::is_same<T, timestamp>{} || std::is_same<T, timespan>{},
+      detail::is_any_v<T, timestamp, timespan>,
       timespan::rep,
       std::conditional_t<
-        std::is_same<T, boolean>{}
-          || std::is_same<T, integer>{}
-          || std::is_same<T, count>{}
-          || std::is_same<T, real>{},
+        detail::is_any_v<T, boolean, integer, count, real>,
         T,
         std::false_type
       >
     >;
 
-  static_assert(!std::is_same<value_type, std::false_type>{},
+  static_assert(!std::is_same_v<value_type, std::false_type>,
                 "invalid type T for arithmetic_index");
 
   using coder_type =
     std::conditional_t<
-      std::is_same<T, boolean>{},
+      std::is_same_v<T, boolean>,
       singleton_coder<ids>,
       multi_level_coder<range_coder<ids>>
     >;
 
   using binner_type =
     std::conditional_t<
-      std::is_void<Binner>{},
+      std::is_void_v<Binner>,
       // Choose a space-efficient binner if none specified.
       std::conditional_t<
-        std::is_same<T, timestamp>{} || std::is_same<T, timespan>{},
-        decimal_binner<9>, // nanoseconds -> seconds
+        detail::is_any_v<T, timestamp, timespan>,
+      decimal_binner<9>, // nanoseconds -> seconds
         std::conditional_t<
-          std::is_same<T, real>{},
+          std::is_same_v<T, real>,
           precision_binner<10>, // no fractional part
           identity_binner
         >
@@ -193,12 +208,20 @@ public:
     class... Ts,
     class = std::enable_if_t<std::is_constructible<bitmap_index_type, Ts...>{}>
   >
-  explicit arithmetic_index(Ts&&... xs) : bmi_{std::forward<Ts>(xs)...} {
+  explicit arithmetic_index(vast::type t, Ts&&... xs)
+    : value_index{std::move(t)},
+      bmi_{std::forward<Ts>(xs)...} {
+    // nop
   }
 
-  template <class Inspector>
-  friend auto inspect(Inspector& f, arithmetic_index& idx) {
-    return f(static_cast<value_index&>(idx), idx.bmi_);
+  caf::error serialize(caf::serializer& sink) const override {
+    return caf::error::eval([&] { return value_index::serialize(sink); },
+                            [&] { return sink(bmi_); });
+  }
+
+  caf::error deserialize(caf::deserializer& source) override {
+    return caf::error::eval([&] { return value_index::deserialize(source); },
+                            [&] { return source(bmi_); });
   }
 
 private:
@@ -247,14 +270,14 @@ private:
 class string_index : public value_index {
 public:
   /// Constructs a string index.
+  /// @param t An instance of `string_type`.
   /// @param max_length The maximum string length to support. Longer strings
   ///                   will be chopped to this size.
-  explicit string_index(size_t max_length = 1024);
+  explicit string_index(vast::type t, size_t max_length = 1024);
 
-  template <class Inspector>
-  friend auto inspect(Inspector& f, string_index& idx) {
-    return f(static_cast<value_index&>(idx), idx.length_, idx.chars_);
-  }
+  caf::error serialize(caf::serializer& sink) const override;
+
+  caf::error deserialize(caf::deserializer& source) override;
 
 private:
   /// The index which holds each character.
@@ -282,12 +305,11 @@ public:
   using byte_index = bitmap_index<uint8_t, bitslice_coder<ewah_bitmap>>;
   using type_index = bitmap_index<bool, singleton_coder<ewah_bitmap>>;
 
-  address_index() = default;
+  using value_index::value_index;
 
-  template <class Inspector>
-  friend auto inspect(Inspector& f, address_index& idx) {
-    return f(static_cast<value_index&>(idx), idx.bytes_, idx.v4_);
-  }
+  caf::error serialize(caf::serializer& sink) const override;
+
+  caf::error deserialize(caf::deserializer& source) override;
 
 private:
   void init();
@@ -306,12 +328,11 @@ class subnet_index : public value_index {
 public:
   using prefix_index = bitmap_index<uint8_t, equality_coder<ewah_bitmap>>;
 
-  subnet_index() = default;
+  explicit subnet_index(vast::type x);
 
-  template <class Inspector>
-  friend auto inspect(Inspector& f, subnet_index& idx) {
-    return f(static_cast<value_index&>(idx), idx.network_, idx.length_);
-  }
+  caf::error serialize(caf::serializer& sink) const override;
+
+  caf::error deserialize(caf::deserializer& source) override;
 
 private:
   void init();
@@ -340,12 +361,11 @@ public:
       equality_coder<ewah_bitmap>
     >;
 
-  port_index() = default;
+  using value_index::value_index;
 
-  template <class Inspector>
-  friend auto inspect(Inspector& f, port_index& idx) {
-    return f(static_cast<value_index&>(idx), idx.num_, idx.proto_);
-  }
+  caf::error serialize(caf::serializer& sink) const override;
+
+  caf::error deserialize(caf::deserializer& source) override;
 
 private:
   void init();
@@ -363,198 +383,31 @@ private:
 class sequence_index : public value_index {
 public:
   /// Constructs a sequence index of a given type.
-  /// @param t The element type of the sequence.
+  /// @param t The sequence type.
   /// @param max_size The maximum number of elements permitted per sequence.
   ///                 Longer sequences will be trimmed at the end.
-  sequence_index(vast::type t = {}, size_t max_size = 128);
+  explicit sequence_index(vast::type t, size_t max_size = 128);
 
   /// The bitmap index holding the sequence size.
   using size_bitmap_index =
     bitmap_index<uint32_t, multi_level_coder<range_coder<ids>>>;
 
-  friend void serialize(caf::serializer& sink, const sequence_index& idx);
-  friend void serialize(caf::deserializer& source, sequence_index& idx);
+  caf::error serialize(caf::serializer& sink) const override;
+
+  caf::error deserialize(caf::deserializer& source) override;
 
 private:
   void init();
-
-  template <class Container>
-  bool container_append(Container& c, id pos) {
-    init();
-    auto seq_size = c.size();
-    if (seq_size > max_size_)
-      seq_size = max_size_;
-    if (seq_size > elements_.size()) {
-      auto old = elements_.size();
-      elements_.resize(seq_size);
-      for (auto i = old; i < elements_.size(); ++i) {
-        elements_[i] = value_index::make(value_type_);
-        VAST_ASSERT(elements_[i]);
-      }
-    }
-    auto x = c.begin();
-    for (auto i = 0u; i < seq_size; ++i)
-      elements_[i]->append(*x++, pos);
-    size_.skip(pos - size_.size());
-    size_.append(seq_size);
-    return true;
-  }
 
   bool append_impl(data_view x, id pos) override;
 
   expected<ids>
   lookup_impl(relational_operator op, data_view x) const override;
 
-  std::vector<std::unique_ptr<value_index>> elements_;
+  std::vector<value_index_ptr> elements_;
   size_bitmap_index size_;
   size_t max_size_;
   vast::type value_type_;
 };
 
-namespace detail {
-
-struct value_index_inspect_helper {
-  const vast::type& type;
-  std::unique_ptr<value_index>& idx;
-
-  template <class Inspector>
-  struct down_cast {
-    using result_type = typename Inspector::result_type;
-
-    down_cast(value_index& idx, Inspector& f) : idx_{idx}, f_{f} {
-      // nop
-    }
-
-    template <class T>
-    result_type operator()(const T&) const {
-      die("invalid type");
-    }
-
-    result_type operator()(const boolean_type&) const {
-      return f_(static_cast<arithmetic_index<boolean>&>(idx_));
-    }
-
-    result_type operator()(const integer_type&) const {
-      return f_(static_cast<arithmetic_index<integer>&>(idx_));
-    }
-
-    result_type operator()(const count_type&) const {
-      return f_(static_cast<arithmetic_index<count>&>(idx_));
-    }
-
-    result_type operator()(const real_type&) const {
-      return f_(static_cast<arithmetic_index<real>&>(idx_));
-    }
-
-    result_type operator()(const timespan_type&) const {
-      return f_(static_cast<arithmetic_index<timespan>&>(idx_));
-    }
-
-    result_type operator()(const timestamp_type&) const {
-      return f_(static_cast<arithmetic_index<timestamp>&>(idx_));
-    }
-
-    result_type operator()(const string_type&) const {
-      return f_(static_cast<string_index&>(idx_));
-    }
-
-    result_type operator()(const address_type&) const {
-      return f_(static_cast<address_index&>(idx_));
-    }
-
-    result_type operator()(const subnet_type&) const {
-      return f_(static_cast<subnet_index&>(idx_));
-    }
-
-    result_type operator()(const port_type&) const {
-      return f_(static_cast<port_index&>(idx_));
-    }
-
-    result_type operator()(const vector_type&) const {
-      return f_(static_cast<sequence_index&>(idx_));
-    }
-
-    result_type operator()(const set_type&) const {
-      return f_(static_cast<sequence_index&>(idx_));
-    }
-
-    result_type operator()(const alias_type& t) const {
-      return caf::visit(*this, t.value_type);
-    }
-
-    value_index& idx_;
-    Inspector& f_;
-  };
-
-  struct default_construct {
-    using result_type = std::unique_ptr<value_index>;
-
-    template <class T>
-    result_type operator()(const T&) const {
-      die("invalid type");
-    }
-
-    result_type operator()(const boolean_type&) const {
-      return std::make_unique<arithmetic_index<boolean>>();
-    }
-
-    result_type operator()(const integer_type&) const {
-      return std::make_unique<arithmetic_index<integer>>();
-    }
-
-    result_type operator()(const count_type&) const {
-      return std::make_unique<arithmetic_index<count>>();
-    }
-
-    result_type operator()(const real_type&) const {
-      return std::make_unique<arithmetic_index<real>>();
-    }
-
-    result_type operator()(const timespan_type&) const {
-      return std::make_unique<arithmetic_index<timespan>>();
-    }
-
-    result_type operator()(const timestamp_type&) const {
-      return std::make_unique<arithmetic_index<timestamp>>();
-    }
-
-    result_type operator()(const string_type&) const {
-      return std::make_unique<string_index>();
-    }
-
-    result_type operator()(const address_type&) const {
-      return std::make_unique<address_index>();
-    }
-
-    result_type operator()(const subnet_type&) const {
-      return std::make_unique<subnet_index>();
-    }
-
-    result_type operator()(const port_type&) const {
-      return std::make_unique<port_index>();
-    }
-
-    result_type operator()(const vector_type&) const {
-      return std::make_unique<sequence_index>();
-    }
-
-    result_type operator()(const set_type&) const {
-      return std::make_unique<sequence_index>();
-    }
-
-    result_type operator()(const alias_type& t) const {
-      return caf::visit(*this, t.value_type);
-    }
-  };
-
-  template <class Inspector>
-  friend auto inspect(Inspector& f, value_index_inspect_helper& helper) {
-    if (Inspector::writes_state)
-      helper.idx = caf::visit(default_construct{}, helper.type);
-    VAST_ASSERT(helper.idx);
-    return caf::visit(down_cast<Inspector>{*helper.idx, f}, helper.type);
-  }
-};
-
-} // namespace detail
 } // namespace vast

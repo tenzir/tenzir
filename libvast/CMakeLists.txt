@@ -74,6 +74,7 @@ set(libvast_sources
   src/subnet.cpp
   src/subset.cpp
   src/synopsis.cpp
+  src/synopsis_factory.cpp
   src/system/accountant.cpp
   src/system/application.cpp
   src/system/archive.cpp
@@ -114,7 +115,9 @@ set(libvast_sources
   src/system/task.cpp
   src/system/tracker.cpp
   src/table_slice.cpp
+  src/table_slice_factory.cpp
   src/table_slice_builder.cpp
+  src/table_slice_builder_factory.cpp
   src/time.cpp
   src/timestamp_synopsis.cpp
   src/to_events.cpp
@@ -122,6 +125,7 @@ set(libvast_sources
   src/uuid.cpp
   src/value.cpp
   src/value_index.cpp
+  src/value_index_factory.cpp
   src/view.cpp
   src/wah_bitmap.cpp
 )
@@ -218,6 +222,7 @@ set(tests
   test/expression.cpp
   test/expression_evaluation.cpp
   test/expression_parseable.cpp
+  test/factory.cpp
   test/filesystem.cpp
   test/format/bro.cpp
   test/format/mrt.cpp

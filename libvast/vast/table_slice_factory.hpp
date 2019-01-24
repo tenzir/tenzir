@@ -15,28 +15,36 @@
 
 #include <caf/atom.hpp>
 
+#include "vast/factory.hpp"
 #include "vast/table_slice.hpp"
-#include "vast/table_slice_builder.hpp"
+#include "vast/table_slice_header.hpp"
 
 namespace vast {
 
-/// Register a table slice along with a builder type.
-/// @tparam TableSlice The table slice type.
-/// @tparam TableSliceBuilder The table slice builder that builds instances of
-///         type `TableSlice`.
-/// @param id The ID to associate with the table slice and builder factories.
-/// @returns `true` if the factory registration succeeded.
-template <class TableSlice, class TableSliceBuilder>
-bool add_table_slice() {
-  constexpr auto id = TableSlice::class_id;
-  // Make sure the ID isn't registered in both factories.
-  if (get_table_slice_factory(id) != nullptr
-      || get_table_slice_builder_factory(id) != nullptr)
-    return false;
-  // Add the table slice and builder factories.
-  add_table_slice_factory<TableSlice>();
-  add_table_slice_builder_factory<TableSliceBuilder>(id);
-  return true;
-}
+template <>
+struct factory_traits<table_slice> {
+  using result_type = table_slice_ptr;
+  using key_type = caf::atom_value;
+  using signature = result_type (*)(table_slice_header);
+
+  static void initialize();
+
+  template <class T>
+  static key_type key() {
+    return T::class_id;
+  }
+
+  template <class T>
+  static result_type make(table_slice_header header) {
+    return T::make(std::move(header));
+  }
+
+  /// Constructs a table slice from a chunk. The beginning of the chunk must
+  /// hold the implementation ID of the concrete table slice. This function
+  /// reads the ID, constructs a new table slice with the given ID, and then
+  /// calls `table_slice::load` on the chunk.
+  /// @returns a table slice loaded from *chunk* or `nullptr` on failure.
+  static result_type make(chunk_ptr chunk);
+};
 
 } // namespace vast

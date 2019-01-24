@@ -23,6 +23,10 @@
 #include <caf/binary_deserializer.hpp>
 #include <caf/binary_serializer.hpp>
 
+#include "vast/boolean_synopsis.hpp"
+#include "vast/synopsis_factory.hpp"
+#include "vast/timestamp_synopsis.hpp"
+
 using namespace std::chrono_literals;
 using namespace vast;
 
@@ -33,7 +37,8 @@ const timestamp epoch;
 } // namespace <anonymous>
 
 TEST(min-max synopsis) {
-  auto x = make_synopsis(timestamp_type{});
+  factory<synopsis>::initialize();
+  auto x = factory<synopsis>::make(timestamp_type{}, synopsis_options{});
   REQUIRE_NOT_EQUAL(x, nullptr);
   x->add(timestamp{epoch + 4s});
   x->add(timestamp{epoch + 7s});
@@ -82,8 +87,11 @@ TEST(min-max synopsis) {
 FIXTURE_SCOPE(synopsis_tests, fixtures::deterministic_actor_system)
 
 TEST(serialization) {
+  factory<synopsis>::initialize();
+  synopsis_options empty;
   CHECK_ROUNDTRIP(synopsis_ptr{});
-  CHECK_ROUNDTRIP_DEREF(make_synopsis(timestamp_type{}));
+  CHECK_ROUNDTRIP_DEREF(factory<synopsis>::make(boolean_type{}, empty));
+  CHECK_ROUNDTRIP_DEREF(factory<synopsis>::make(timestamp_type{}, empty));
 }
 
 FIXTURE_SCOPE_END()

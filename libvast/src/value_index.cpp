@@ -14,135 +14,18 @@
 #include <cmath>
 
 #include "vast/base.hpp"
-#include "vast/concept/parseable/numeric/integral.hpp"
-#include "vast/concept/parseable/to.hpp"
-#include "vast/concept/parseable/vast/base.hpp"
 #include "vast/value_index.hpp"
 
 namespace vast {
-namespace {
-
-optional<std::string> extract_attribute(const type& t, const std::string& key) {
-  for (auto& attr : t.attributes())
-    if (attr.key == key && attr.value)
-      return attr.value;
-  return {};
-}
-
-optional<base> parse_base(const type& t) {
-  if (auto a = extract_attribute(t, "base")) {
-    if (auto b = to<base>(*a))
-      return *b;
-    return {};
-  }
-  // Use base 8 by default, as it yields the best performance on average for
-  // VAST's indexing.
-  return base::uniform<64>(8);
-}
-
-} // namespace <anonymous>
 
 // -- value_index --------------------------------------------------------------
 
-value_index::~value_index() {
+value_index::value_index(vast::type x) : type_{std::move(x)} {
   // nop
 }
 
-std::unique_ptr<value_index> value_index::make(const type& t) {
-  struct factory {
-    using result_type = std::unique_ptr<value_index>;
-    result_type operator()(const none_type&) const {
-      return nullptr;
-    }
-    result_type operator()(const boolean_type&) const {
-      return std::make_unique<arithmetic_index<boolean>>();
-    }
-    result_type operator()(const integer_type& t) const {
-      auto b = parse_base(t);
-      if (!b)
-        return nullptr;
-      return std::make_unique<arithmetic_index<integer>>(std::move(*b));
-    }
-    result_type operator()(const count_type& t) const {
-      auto b = parse_base(t);
-      if (!b)
-        return nullptr;
-      return std::make_unique<arithmetic_index<count>>(std::move(*b));
-    }
-    result_type operator()(const real_type& t) const {
-      auto b = parse_base(t);
-      if (!b)
-        return nullptr;
-      return std::make_unique<arithmetic_index<real>>(std::move(*b));
-    }
-    result_type operator()(const timespan_type& t) const {
-      auto b = parse_base(t);
-      if (!b)
-        return nullptr;
-      return std::make_unique<arithmetic_index<timespan>>(std::move(*b));
-    }
-    result_type operator()(const timestamp_type& t) const {
-      auto b = parse_base(t);
-      if (!b)
-        return nullptr;
-      return std::make_unique<arithmetic_index<timestamp>>(std::move(*b));
-    }
-    result_type operator()(const string_type& t) const {
-      auto max_length = size_t{1024};
-      if (auto a = extract_attribute(t, "max_length")) {
-        if (auto x = to<size_t>(*a))
-          max_length = *x;
-        else
-          return nullptr;
-      }
-      return std::make_unique<string_index>(max_length);
-    }
-    result_type operator()(const pattern_type&) const {
-      return nullptr;
-    }
-    result_type operator()(const address_type&) const {
-      return std::make_unique<address_index>();
-    }
-    result_type operator()(const subnet_type&) const {
-      return std::make_unique<subnet_index>();
-    }
-    result_type operator()(const port_type&) const {
-      return std::make_unique<port_index>();
-    }
-    result_type operator()(const enumeration_type&) const {
-      return nullptr;
-    }
-    result_type operator()(const vector_type& t) const {
-      auto max_size = size_t{1024};
-      if (auto a = extract_attribute(t, "max_size")) {
-        if (auto x = to<size_t>(*a))
-          max_size = *x;
-        else
-          return nullptr;
-      }
-      return std::make_unique<sequence_index>(t.value_type, max_size);
-    }
-    result_type operator()(const set_type& t) const {
-      auto max_size = size_t{1024};
-      if (auto a = extract_attribute(t, "max_size")) {
-        if (auto x = to<size_t>(*a))
-          max_size = *x;
-        else
-          return nullptr;
-      }
-      return std::make_unique<sequence_index>(t.value_type, max_size);
-    }
-    result_type operator()(const map_type&) const {
-      return nullptr;
-    }
-    result_type operator()(const record_type&) const {
-      return nullptr;
-    }
-    result_type operator()(const alias_type& t) const {
-      return caf::visit(*this, t.value_type);
-    }
-  };
-  return caf::visit(factory{}, t);
+value_index::~value_index() {
+  // nop
 }
 
 expected<void> value_index::append(data_view x) {
@@ -183,9 +66,63 @@ value_index::size_type value_index::offset() const {
   return mask_.size();
 }
 
+const type& value_index::type() const {
+  return type_;
+}
+
+caf::error value_index::serialize(caf::serializer& sink) const {
+  return sink(mask_, none_);
+}
+
+caf::error value_index::deserialize(caf::deserializer& source) {
+  return source(mask_, none_);
+}
+
+caf::error inspect(caf::serializer& sink, const value_index& x) {
+  return x.serialize(sink);
+}
+
+caf::error inspect(caf::deserializer& source, value_index& x) {
+  return x.deserialize(source);
+}
+
+caf::error inspect(caf::serializer& sink, const value_index_ptr& x) {
+  static auto nullptr_type = type{};
+  if (x == nullptr)
+    return sink(nullptr_type);
+  return caf::error::eval([&] { return sink(x->type()); },
+                          [&] { return x->serialize(sink); });
+}
+
+caf::error inspect(caf::deserializer& source, value_index_ptr& x) {
+  type t;
+  if (auto err = source(t))
+    return err;
+  if (caf::holds_alternative<none_type>(t)) {
+    x = nullptr;
+    return caf::none;
+  }
+  x = factory<value_index>::make(std::move(t));
+  if (x == nullptr)
+    return make_error(ec::unspecified, "failed to construct value index");
+  return x->deserialize(source);
+}
+
 // -- string_index -------------------------------------------------------------
 
-string_index::string_index(size_t max_length) : max_length_{max_length} {
+string_index::string_index(vast::type t, size_t max_length)
+  : value_index{std::move(t)},
+    max_length_{max_length} {
+}
+
+caf::error string_index::serialize(caf::serializer& sink) const {
+  return caf::error::eval([&] { return value_index::serialize(sink); },
+                          [&] { return sink(max_length_, length_, chars_); });
+}
+
+caf::error string_index::deserialize(caf::deserializer& source) {
+  return caf::error::eval([&] { return value_index::deserialize(source); },
+                          [&] { return source(max_length_, length_, chars_); });
 }
 
 void string_index::init() {
@@ -287,6 +224,16 @@ string_index::lookup_impl(relational_operator op, data_view x) const {
 
 // -- address_index ------------------------------------------------------------
 
+caf::error address_index::serialize(caf::serializer& sink) const {
+  return caf::error::eval([&] { return value_index::serialize(sink); },
+                          [&] { return sink(bytes_, v4_); });
+}
+
+caf::error address_index::deserialize(caf::deserializer& source) {
+  return caf::error::eval([&] { return value_index::deserialize(source); },
+                          [&] { return source(bytes_, v4_); });
+}
+
 void address_index::init() {
   if (bytes_[0].coder().storage().empty())
     // Initialize on first to make deserialization feasible.
@@ -358,6 +305,22 @@ address_index::lookup_impl(relational_operator op, data_view d) const {
 }
 
 // -- subnet_index -------------------------------------------------------------
+
+subnet_index::subnet_index(vast::type x)
+  : value_index{std::move(x)},
+    network_{address_type{}} {
+  // nop
+}
+
+caf::error subnet_index::serialize(caf::serializer& sink) const {
+  return caf::error::eval([&] { return value_index::serialize(sink); },
+                          [&] { return sink(network_, length_); });
+}
+
+caf::error subnet_index::deserialize(caf::deserializer& source) {
+  return caf::error::eval([&] { return value_index::deserialize(source); },
+                          [&] { return source(network_, length_); });
+}
 
 void subnet_index::init() {
   if (length_.coder().storage().empty())
@@ -434,6 +397,16 @@ subnet_index::lookup_impl(relational_operator op, data_view d) const {
 
 // -- port_index ---------------------------------------------------------------
 
+caf::error port_index::serialize(caf::serializer& sink) const {
+  return caf::error::eval([&] { return value_index::serialize(sink); },
+                          [&] { return sink(num_, proto_); });
+}
+
+caf::error port_index::deserialize(caf::deserializer& source) {
+  return caf::error::eval([&] { return value_index::deserialize(source); },
+                          [&] { return source(num_, proto_); });
+}
+
 void port_index::init() {
   if (num_.coder().storage().empty()) {
     num_ = number_index{base::uniform(10, 5)}; // [0, 2^16)
@@ -479,8 +452,31 @@ port_index::lookup_impl(relational_operator op, data_view d) const {
 // -- sequence_index -----------------------------------------------------------
 
 sequence_index::sequence_index(vast::type t, size_t max_size)
-  : max_size_{max_size},
-    value_type_{std::move(t)} {
+  : value_index{std::move(t)},
+    max_size_{max_size} {
+  auto f = [](const auto& x) -> vast::type {
+    using concrete_type = std::decay_t<decltype(x)>;
+    if constexpr (detail::is_any_v<concrete_type, vector_type, set_type>)
+      return x.value_type;
+    else
+      return none_type{};
+  };
+  value_type_ = caf::visit(f, value_index::type());
+  VAST_ASSERT(!caf::holds_alternative<none_type>(value_type_));
+}
+
+caf::error sequence_index::serialize(caf::serializer& sink) const {
+  return caf::error::eval(
+    [&] { return value_index::serialize(sink); },
+    [&] { return sink(elements_, size_, max_size_, value_type_); }
+  );
+}
+
+caf::error sequence_index::deserialize(caf::deserializer& source) {
+  return caf::error::eval(
+    [&] { return value_index::deserialize(source); },
+    [&] { return source(elements_, size_, max_size_, value_type_); }
+  );
 }
 
 void sequence_index::init() {
@@ -493,11 +489,29 @@ void sequence_index::init() {
 }
 
 bool sequence_index::append_impl(data_view x, id pos) {
-  if (auto xs = caf::get_if<view<vector>>(&x))
-    return container_append(**xs, pos);
-  if (auto xs = caf::get_if<view<set>>(&x))
-    return container_append(**xs, pos);
-  return false;
+  auto f = [&](const auto& v) {
+    using view_type = std::decay_t<decltype(v)>;
+    if constexpr (detail::is_any_v<view_type, view<vector>, view<set>>) {
+      init();
+      auto seq_size = std::min(v->size(), max_size_);
+      if (seq_size > elements_.size()) {
+        auto old = elements_.size();
+        elements_.resize(seq_size);
+        for (auto i = old; i < elements_.size(); ++i) {
+          elements_[i] = factory<value_index>::make(value_type_);
+          VAST_ASSERT(elements_[i]);
+        }
+      }
+      auto x = v->begin();
+      for (auto i = 0u; i < seq_size; ++i)
+        elements_[i]->append(*x++, pos);
+      size_.skip(pos - size_.size());
+      size_.append(seq_size);
+      return true;
+    }
+    return false;
+  };
+  return caf::visit(f, x);
 }
 
 expected<ids>
@@ -519,57 +533,6 @@ sequence_index::lookup_impl(relational_operator op, data_view x) const {
   if (op == not_ni)
     result->flip();
   return result;
-}
-
-void serialize(caf::serializer& sink, const sequence_index& idx) {
-  sink & static_cast<const value_index&>(idx);
-  sink & idx.value_type_;
-  sink & idx.max_size_;
-  sink & idx.size_;
-  // Polymorphic indexes.
-  std::vector<detail::value_index_inspect_helper> xs;
-  xs.reserve(idx.elements_.size());
-  std::transform(idx.elements_.begin(),
-                 idx.elements_.end(),
-                 std::back_inserter(xs),
-                 [&](auto& vi) {
-                   auto& t = const_cast<type&>(idx.value_type_);
-                   auto& x = const_cast<std::unique_ptr<value_index>&>(vi);
-                   return detail::value_index_inspect_helper{t, x};
-                 });
-  sink & xs;
-}
-
-void serialize(caf::deserializer& source, sequence_index& idx) {
-  source & static_cast<value_index&>(idx);
-  source & idx.value_type_;
-  source & idx.max_size_;
-  source & idx.size_;
-  // Polymorphic indexes.
-  size_t n;
-  auto construct = [&] {
-    idx.elements_.resize(n);
-    std::vector<detail::value_index_inspect_helper> xs;
-    xs.reserve(n);
-    std::transform(idx.elements_.begin(),
-                   idx.elements_.end(),
-                   std::back_inserter(xs),
-                   [&](auto& vi) {
-                     auto& t = idx.value_type_;
-                     auto& x = vi;
-                     return detail::value_index_inspect_helper{t, x};
-                   });
-    for (auto& x : xs)
-      source & x;
-    return error{};
-  };
-  auto e = error::eval(
-    [&] { return source.begin_sequence(n); },
-    [&] { return construct(); },
-    [&] { return source.end_sequence(); }
-  );
-  if (e)
-    VAST_RAISE_ERROR("cannot serialize sequence index");
 }
 
 } // namespace vast

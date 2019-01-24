@@ -29,20 +29,21 @@
 #include "vast/chunk.hpp"
 #include "vast/default_table_slice.hpp"
 #include "vast/default_table_slice_builder.hpp"
+#include "vast/detail/assert.hpp"
 #include "vast/detail/byte_swap.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/error.hpp"
 #include "vast/event.hpp"
 #include "vast/format/test.hpp"
 #include "vast/logger.hpp"
+#include "vast/table_slice_factory.hpp"
+#include "vast/factory.hpp"
 #include "vast/value.hpp"
 #include "vast/value_index.hpp"
 
 namespace vast {
 
 namespace {
-
-std::unordered_map<caf::atom_value, table_slice_factory> factories_;
 
 using size_type = table_slice::size_type;
 
@@ -84,57 +85,6 @@ void table_slice::append_column_to_index(size_type col,
                                          value_index& idx) const {
   for (size_type row = 0; row < rows(); ++row)
     idx.append(at(row, col), offset() + row);
-}
-
-bool add_table_slice_factory(caf::atom_value id, table_slice_factory f) {
-  if (factories_.count(id) > 0)
-    return false;
-  factories_.emplace(id, f);
-  return true;
-}
-
-table_slice_factory get_table_slice_factory(caf::atom_value id) {
-  auto i = factories_.find(id);
-  return i != factories_.end() ? i->second : nullptr;
-}
-
-table_slice_ptr make_table_slice(caf::atom_value id,
-                                 table_slice_header header) {
-  if (id == default_table_slice::class_id)
-    return default_table_slice::make(std::move(header));
-  if (auto f = get_table_slice_factory(id))
-    return (*f)(std::move(header));
-  return nullptr;
-}
-
-table_slice_ptr make_table_slice(chunk_ptr chunk) {
-  if (chunk == nullptr)
-    return nullptr;
-  // Setup a CAF deserializer.
-  auto data = const_cast<char*>(chunk->data()); // CAF won't touch it.
-  caf::charbuf buf{data, chunk->size()};
-  caf::stream_deserializer<caf::charbuf&> source{buf};
-  // Deserialize the class ID and default-construct a table slice.
-  caf::atom_value id;
-  table_slice_header header;
-  if (auto err = source(id, header)) {
-    VAST_ERROR_ANON(__func__, "failed to deserialize table slice meta data");
-    return nullptr;
-  }
-  auto result = make_table_slice(id, std::move(header));
-  if (!result) {
-    VAST_ERROR_ANON(__func__, "no table slice factory for:", to_string(id));
-    return nullptr;
-  }
-  // Skip table slice data already processed.
-  auto bytes_read = static_cast<size_t>(buf.in_avail());
-  VAST_ASSERT(chunk->size() > bytes_read);
-  auto header_size = chunk->size() - bytes_read;
-  if (auto err = result.unshared().load(chunk->slice(header_size))) {
-    VAST_ERROR_ANON(__func__, "failed to load table slice from chunk");
-    return nullptr;
-  }
-  return result;
 }
 
 expected<std::vector<table_slice_ptr>>
@@ -205,7 +155,7 @@ caf::error inspect(caf::deserializer& source, table_slice_ptr& ptr) {
   table_slice_header header;
   if (auto err = source(header))
     return err;
-  ptr = make_table_slice(id, std::move(header));
+  ptr = factory<table_slice>::make(id, std::move(header));
   if (!ptr)
     return ec::invalid_table_slice_type;
   return ptr.unshared().deserialize(source);

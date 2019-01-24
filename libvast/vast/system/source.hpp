@@ -46,6 +46,7 @@
 #include "vast/system/instrumentation.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
+#include "vast/table_slice_builder_factory.hpp"
 
 namespace vast::system {
 
@@ -83,7 +84,7 @@ struct source_state {
   Reader reader;
 
   /// Generates layout-specific table slice builders.
-  table_slice_builder_factory factory;
+  vast::factory<table_slice_builder>::signature factory;
 
   /// Maps layout type names to table slice builders.
   std::map<std::string, table_slice_builder_ptr> builders;
@@ -100,7 +101,7 @@ struct source_state {
   // -- utility functions ------------------------------------------------------
 
   /// Initializes the state.
-  void init(Reader rd, table_slice_builder_factory f) {
+  void init(Reader rd, vast::factory<table_slice_builder>::signature f) {
     // Initialize members from given arguments.
     reader = std::move(rd);
     name = reader.name();
@@ -215,7 +216,8 @@ struct source_state {
 /// @param reader The reader instance.
 template <class Reader>
 caf::behavior source(caf::stateful_actor<source_state<Reader>>* self,
-                     Reader reader, table_slice_builder_factory factory,
+                     Reader reader,
+                     factory<table_slice_builder>::signature factory,
                      size_t table_slice_size) {
   using namespace caf;
   using namespace std::chrono;
