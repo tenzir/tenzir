@@ -452,20 +452,17 @@ find_package(Md2man QUIET)
 #------------------------------------------------------------------------------
 
 set(docker_image "mavam/vast")
+set(docker_image_ver "${docker_image}:${VAST_VERSION}")
 
 file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/docker-build.cmake
   "execute_process(
-     COMMAND docker build -t ${docker_image} ${CMAKE_SOURCE_DIR}
-     RESULT_VARIABLE docker_build_success)
-   set(docker_build_success true)
-   if (docker_build_success)
-     execute_process(
-       COMMAND docker inspect --format='{{.Id}}' ${docker_image}
-       OUTPUT_VARIABLE docker_image_id)
-     execute_process(
-       COMMAND docker tag \${docker_image_id} ${docker_image}:latest
-       COMMAND docker tag \${docker_image_id} ${docker_image}:${VAST_VERSION})
-   endif ()")
+     COMMAND docker build -t ${docker_image_ver} ${CMAKE_SOURCE_DIR}
+     RESULT_VARIABLE docker_build_retval)
+   if (NOT \"\${docker_build_retval}\" EQUAL 0)
+     message(FATAL_ERROR \"Failed building the docker image.\")
+   endif ()
+   execute_process(
+     COMMAND docker tag ${docker_image_ver} ${docker_image}:latest)")
 
 add_custom_target(docker-build
   ${CMAKE_COMMAND} -P ${CMAKE_BINARY_DIR}/docker-build.cmake
