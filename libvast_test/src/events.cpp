@@ -14,6 +14,7 @@
 #include "fixtures/events.hpp"
 
 #include "vast/default_table_slice_builder.hpp"
+#include "vast/defaults.hpp"
 #include "vast/format/bgpdump.hpp"
 #include "vast/format/bro.hpp"
 #include "vast/format/test.hpp"
@@ -63,6 +64,33 @@ std::vector<event> make_alternating_integers(size_t count) {
 template <typename T, typename Pred>
 auto insert_sorted(std::vector<T>& vec, const T& item, Pred pred) {
   return vec.insert(std::upper_bound(vec.begin(), vec.end(), item, pred), item);
+}
+
+template <class Reader>
+static std::vector<event> extract(Reader&& reader) {
+  std::vector<table_slice_ptr> slices;
+  auto add_slice = [&](table_slice_ptr ptr) {
+    slices.emplace_back(std::move(ptr));
+  };
+  auto [err, produced] = reader.read(std::numeric_limits<size_t>::max(),
+                                     defaults::system::table_slice_size,
+                                     add_slice);
+  if (err != caf::none && err != ec::end_of_input)
+    FAIL("reader returned an error: " << to_string(err));
+  std::vector<event> result;
+  result.reserve(produced);
+  for (auto& slice : slices)
+    to_events(result, *slice);
+  if (result.size() != produced)
+    FAIL("to_events() failed fill the vector");
+  return result;
+}
+
+template <class Reader>
+static std::vector<event> inhale(const char* filename) {
+  auto input = std::make_unique<std::ifstream>(filename);
+  Reader reader{defaults::system::table_slice_type, std::move(input)};
+  return extract(reader);
 }
 
 } // namespace <anonymous>
@@ -187,7 +215,8 @@ events::events() {
   REQUIRE_EQUAL(bro_http_log.size(), 40u);
   bgpdump_txt = inhale<format::bgpdump::reader>(bgpdump::updates20180124);
   REQUIRE_EQUAL(bgpdump_txt.size(), 100u);
-  random = extract(vast::format::test::reader{42, 1000});
+  vast::format::test::reader rd{defaults::system::table_slice_type, 42, 1000};
+  random = extract(rd);
   REQUIRE_EQUAL(random.size(), 1000u);
   ascending_integers = make_ascending_integers(250);
   alternating_integers = make_alternating_integers(250);
@@ -197,45 +226,47 @@ events::events() {
     return first;
   };
   MESSAGE("building slices of " << slice_size << " events each");
-  auto assign_ids_and_slice_up = [&](std::vector<event>& src) {
-    VAST_ASSERT(src.size() > 0);
-    VAST_ASSERT(caf::holds_alternative<record_type>(src[0].type()));
-    std::vector<table_slice_ptr> slices;
-    builders bs;
-    auto finish_slice = [&](auto& builder) {
-      insert_sorted(slices, builder.finish(),
-                    [](const auto& lhs, const auto& rhs) {
-                      return lhs->offset() < rhs->offset();
-                    });
+  auto assign_ids_and_slice_up =
+    [&](std::vector<event>& src) {
+      VAST_ASSERT(src.size() > 0);
+      VAST_ASSERT(caf::holds_alternative<record_type>(src[0].type()));
+      std::vector<table_slice_ptr> slices;
+      builders bs;
+      auto finish_slice = [&](auto& builder) {
+        insert_sorted(slices, builder.finish(),
+                      [](const auto& lhs, const auto& rhs) {
+                        return lhs->offset() < rhs->offset();
+                      });
+      };
+      for (auto& e : src) {
+        auto bptr = bs.get(e.type());
+        if (bptr->rows() == 0)
+          bptr->start_slice(allocate_id_block(slice_size));
+        bptr->add(e);
+        if (bptr->rows() == slice_size)
+          finish_slice(*bptr);
+      }
+      for (auto& i : bs.all()) {
+        auto builder = i.second;
+        if (builder.rows() > 0)
+          finish_slice(builder);
+      }
+      return slices;
     };
-    for (auto& e : src) {
-      auto bptr = bs.get(e.type());
-      if (bptr->rows() == 0)
-        bptr->start_slice(allocate_id_block(slice_size));
-      bptr->add(e);
-      if (bptr->rows() == slice_size)
-        finish_slice(*bptr);
-    }
-    for (auto& i : bs.all()) {
-      auto builder = i.second;
-      if (builder.rows() > 0)
-        finish_slice(builder);
-    }
-    return slices;
-  };
   bro_conn_log_slices = assign_ids_and_slice_up(bro_conn_log);
   bro_dns_log_slices = assign_ids_and_slice_up(bro_dns_log);
   allocate_id_block(1000); // cause an artificial gap in the ID sequence
   bro_http_log_slices = assign_ids_and_slice_up(bro_http_log);
   bgpdump_txt_slices = assign_ids_and_slice_up(bgpdump_txt);
-  //random_slices = slice_up(random);
+  // random_slices = slice_up(random);
   ascending_integers_slices = assign_ids_and_slice_up(ascending_integers);
   alternating_integers_slices = assign_ids_and_slice_up(alternating_integers);
-  auto sort_by_id = [](std::vector<event>& v) {
-    std::sort(
-      v.begin(), v.end(),
-      [](const auto& lhs, const auto& rhs) { return lhs.id() < rhs.id(); });
-  };
+  auto sort_by_id =
+    [](std::vector<event>& v) {
+      std::sort(v.begin(), v.end(), [](const auto& lhs, const auto& rhs) {
+        return lhs.id() < rhs.id();
+      });
+    };
   auto as_events = [&](const auto& slices) {
     std::vector<event> result;
     for (auto& slice : slices) {

@@ -74,11 +74,10 @@ using datagram_source_actor = caf::stateful_actor<datagram_source_state<Reader>,
 /// @param self The actor handle.
 /// @param reader The reader instance.
 template <class Reader>
-caf::behavior
-datagram_source(datagram_source_actor<Reader>* self,
-                uint16_t udp_listening_port, Reader reader,
-                factory<table_slice_builder>::signature factory,
-                size_t table_slice_size) {
+caf::behavior datagram_source(datagram_source_actor<Reader>* self,
+                              uint16_t udp_listening_port, Reader reader,
+                              factory<table_slice_builder>::signature factory,
+                              size_t table_slice_size) {
   using namespace caf;
   using namespace std::chrono;
   namespace defs = defaults::system;
@@ -130,10 +129,10 @@ datagram_source(datagram_source_actor<Reader>* self,
         VAST_DEBUG(self, "produced a slice with", slice->rows(), "rows");
         st.mgr->out().push(std::move(slice));
       };
-      auto [produced, eof] = st.extract_events(capacity, table_slice_size,
-                                               push_slice);
+      auto [err, produced] = st.reader.read(capacity * table_slice_size,
+                                            table_slice_size, push_slice);
       t.stop(produced);
-      if (!eof)
+      if (err != caf::none && err != ec::end_of_input)
         VAST_WARNING(self,
                      "has not enough capacity left in stream, dropping input!");
       if (produced > 0)

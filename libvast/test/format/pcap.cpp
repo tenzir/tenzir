@@ -25,6 +25,7 @@
 
 using namespace vast;
 
+/*
 TEST(PCAP read/write 1) {
   // Initialize a PCAP source with no cutoff (-1), and at most 5 flow table
   // entries.
@@ -78,3 +79,4 @@ TEST(PCAP read/write 2) {
     if (!writer.write(e))
       FAIL("failed to write event");
 }
+*/

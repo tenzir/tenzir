@@ -61,12 +61,14 @@ struct source_state {
 
   // -- constructors, destructors, and assignment operators --------------------
 
-  source_state(Self* selfptr) : self(selfptr) {
+  source_state(Self* selfptr) : self(selfptr), initialized(false) {
     // nop
   }
 
   ~source_state() {
     self->send(accountant, "source.end", caf::make_timestamp());
+    if (initialized)
+      reader.~Reader();
   }
 
   // -- member variables -------------------------------------------------------
@@ -81,7 +83,9 @@ struct source_state {
   accountant_type accountant;
 
   /// Wraps the format-specific parser.
-  Reader reader;
+  union {
+    Reader reader;
+  };
 
   /// Generates layout-specific table slice builders.
   vast::factory<table_slice_builder>::signature factory;
@@ -98,14 +102,18 @@ struct source_state {
   /// Points to the owning actor.
   Self* self;
 
+  /// Stores whether `reader` is constructed.
+  bool initialized;
+
   // -- utility functions ------------------------------------------------------
 
   /// Initializes the state.
   void init(Reader rd, vast::factory<table_slice_builder>::signature f) {
     // Initialize members from given arguments.
-    reader = std::move(rd);
     name = reader.name();
     factory = f;
+    new (&reader) Reader(std::move(rd));
+    initialized = true;
   }
 
   /// Tries to access the builder for `layout`.
@@ -126,77 +134,6 @@ struct source_state {
           return nullptr;
         }),
       layout);
-  }
-
-  // Extracts events from the source until input is exhausted or until the
-  // maximum is reached.
-  // @returns The number of produced events and whether we've reached the end.
-  template <class PushSlice>
-  std::pair<size_t, bool> extract_events(size_t max_events,
-                                         size_t table_slice_size,
-                                         PushSlice& push_slice) {
-    auto finish_slice = [&](table_slice_builder* bptr) {
-      if (!bptr)
-        return;
-      auto slice = bptr->finish();
-      if (slice == nullptr)
-        VAST_ERROR(self, "failed to finish a slice");
-      else
-        push_slice(std::move(slice));
-    };
-    size_t produced = 0;
-    // The streaming operates on slices, while the reader operates on events.
-    // Hence, we can produce up to num * table_slice_size events per run.
-    while (produced < max_events) {
-      auto maybe_e = reader.read();
-      if (!maybe_e) {
-        // Try again when receiving default-generated errors.
-        if (!maybe_e.error())
-          continue;
-        // Skip bogus input that failed to parse.
-        auto& err = maybe_e.error();
-        if (err == ec::parse_error) {
-          VAST_WARNING(self, self->system().render(err));
-          continue;
-        }
-        // Log unexpected errors and when reaching the end of input.
-        if (err == ec::end_of_input) {
-          VAST_DEBUG(self, self->system().render(err));
-        } else {
-          VAST_ERROR(self, self->system().render(err));
-        }
-        /// Produce one final slices if possible.
-        for (auto& kvp : builders) {
-          auto bptr = kvp.second.get();
-          if (kvp.second != nullptr && bptr->rows() > 0)
-            finish_slice(bptr);
-        }
-        return {produced, true};
-      }
-      auto& e = *maybe_e;
-      auto bptr = builder(e.type(), table_slice_size);
-      if (bptr == nullptr)
-        continue;
-      if (!caf::holds_alternative<caf::none_t>(filter)) {
-        auto& checker = checkers[e.type()];
-        if (caf::holds_alternative<caf::none_t>(checker)) {
-          auto x = tailor(filter, e.type());
-          VAST_ASSERT(x);
-          checker = std::move(*x);
-        }
-        if (!caf::visit(event_evaluator{e}, checker)) {
-          // Skip events that don't satisfy our filter.
-          continue;
-        }
-      }
-      /// Add data column(s).
-      if (auto data = e.data(); !bptr->recursive_add(data, e.type()))
-        VAST_WARNING(self, "failed to add data", data);
-      ++produced;
-      if (bptr->rows() == table_slice_size)
-        finish_slice(bptr);
-    }
-    return {produced, false};
   }
 
   measurement measurement_;
@@ -238,21 +175,19 @@ caf::behavior source(caf::stateful_actor<source_state<Reader>>* self,
       auto t = timer::start(st.measurement_);
       // Extract events until the source has exhausted its input or until
       // we have completed a batch.
-      auto push_slice = [&](table_slice_ptr slice) {
-        out.push(std::move(slice));
-      };
-      auto [produced, eof] = st.extract_events(num * table_slice_size,
-                                               table_slice_size, push_slice);
+      auto push_slice = [&](table_slice_ptr x) { out.push(std::move(x)); };
+      // We can produce up to num * table_slice_size events per run.
+      auto [err,produced] = st.reader.read(num * table_slice_size,
+                                         table_slice_size, push_slice);
+      // TODO: if the source is unable to generate new events (returns 0)
+      //       then we should trigger CAF to poll the source after a
+      //       predefined interval of time again, e.g., via delayed_send
       t.stop(produced);
-      if (eof) {
-        VAST_DEBUG(self, "completed slice production");
+      if (err != caf::none) {
         done = true;
         st.send_report();
         self->quit();
       }
-      // TODO: if the source is unable to generate new events then we should
-      //       trigger CAF to poll the source after a predefined interval of
-      //       time again via delayed_send
     },
     // done?
     [](const bool& done) {

@@ -43,7 +43,12 @@ maybe_actor spawn_generic_source(caf::local_actor* self, spawn_arguments& args,
   VAST_UNBOX_VAR(expr, normalized_and_valided(args));
   VAST_UNBOX_VAR(sch, read_schema(args));
   VAST_UNBOX_VAR(out, detail::make_output_stream(args.options));
-  Reader reader{std::forward<Ts>(writer_args)...};
+  auto global_table_slice_type = get_or(self->system().config(),
+                                        "vast.table-slice-type",
+                                        defaults::system::table_slice_type);
+  auto table_slice_type = get_or(args.options, "table-slice",
+                                 global_table_slice_type);
+  Reader reader{table_slice_type, std::forward<Ts>(writer_args)...};
   auto src = self->spawn(default_source<Reader>, std::move(reader));
   caf::anon_send(src, std::move(expr));
   if (sch)
@@ -79,7 +84,13 @@ maybe_actor spawn_test_source(caf::local_actor* self, spawn_arguments& args) {
   // source expression.
   if (!args.empty())
     return unexpected_arguments(args);
-  reader_type reader{get_or(args.options, "global.seed", size_t{0}),
+  auto global_table_slice_type = get_or(self->system().config(),
+                                        "vast.table-slice-type",
+                                        defaults::system::table_slice_type);
+  auto table_slice_type = get_or(args.options, "table-slice",
+                                 global_table_slice_type);
+  reader_type reader{table_slice_type,
+                     get_or(args.options, "global.seed", size_t{0}),
                      get_or(args.options, "global.events", size_t{100})};
   auto src = self->spawn(default_source<reader_type>, std::move(reader));
   if (sch)

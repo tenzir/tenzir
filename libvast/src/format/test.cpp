@@ -20,7 +20,10 @@
 #include "vast/detail/assert.hpp"
 #include "vast/detail/type_traits.hpp"
 #include "vast/error.hpp"
+#include "vast/factory.hpp"
+#include "vast/logger.hpp"
 #include "vast/table_slice_builder.hpp"
+#include "vast/table_slice_builder_factory.hpp"
 
 using caf::holds_alternative;
 using caf::visit;
@@ -238,62 +241,31 @@ using default_randomizer = randomizer<std::mt19937_64>;
 
 } // namespace <anonymous>
 
-reader::reader(size_t seed, uint64_t n, vast::schema sch)
-  : generator_{seed},
-    num_events_{n} {
-  auto result = schema(std::move(sch));
-  VAST_ASSERT(result);
-}
+// reader::reader(size_t seed, uint64_t n, vast::schema sch)
+//   : generator_{seed},
+//     num_events_{n} {
+//   auto result = schema(std::move(sch));
+//   VAST_ASSERT(result);
+// }
 
-reader::reader(size_t seed, uint64_t n) : reader(seed, n, default_schema()) {
+reader::reader(caf::atom_value slice_type, size_t seed, size_t n)
+  : super{slice_type}, generator_{seed}, num_events_{n} {
   // nop
-}
-
-expected<event> reader::read() {
-  VAST_ASSERT(next_ != schema_.end());
-  if (num_events_ == 0)
-    return make_error(ec::end_of_input, "completed generation of events");
-  // Generate random data.
-  auto& t = *next_;
-  auto& bp = blueprints_[t];
-  visit(default_randomizer{bp.distributions, generator_}, t, bp.data);
-  // Fill a new event.
-  event e{value{bp.data, t}};
-  e.timestamp(timestamp::clock::now());
-  // Advance to next type in schema.
-  if (++next_ == schema_.end())
-    next_ = schema_.begin();
-  --num_events_;
-  return e;
-}
-
-caf::error reader::read(table_slice_builder& builder, size_t num) {
-  if (num == 0)
-    return caf::none;
-  auto t = type{builder.layout()};
-  auto i = blueprints_.find(t);
-  if (i == blueprints_.end())
-    return ec::invalid_table_slice_type;
-  builder.reserve(builder.rows() + num);
-  auto& bp = i->second;
-  for (size_t i = 0; i < num; ++i) {
-    visit(default_randomizer{bp.distributions, generator_}, t, bp.data);
-    if (!builder.recursive_add(bp.data, t))
-      return make_error(ec::type_clash,
-                        "type check in builder.recursive_add failed");
-  }
-  return caf::none;
 }
 
 expected<void> reader::schema(vast::schema sch) {
   if (sch.empty())
     return make_error(ec::format_error, "empty schema");
   std::unordered_map<type, blueprint> blueprints;
-  for (auto& t : sch)
+  for (auto& t : sch) {
     if (auto bp = make_blueprint(t))
       blueprints.emplace(t, std::move(*bp));
     else
       return make_error(ec::format_error, "failed to create blueprint", t);
+    if (auto ptr = builder(t); ptr == nullptr)
+      return make_error(ec::format_error,
+                        "failed to create table slize builder", t);
+  }
   schema_ = std::move(sch);
   blueprints_ = std::move(blueprints);
   next_ = schema_.begin();
@@ -306,6 +278,50 @@ expected<schema> reader::schema() const {
 
 const char* reader::name() const {
   return "test-reader";
+}
+
+caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
+                             consumer& f) {
+  // Sanity checks.
+  if (schema_.empty())
+    schema(default_schema());
+  VAST_ASSERT(next_ != schema_.end());
+  if (num_events_ == 0)
+    return make_error(ec::end_of_input, "completed generation of events");
+  // Loop until we reach the `max_events` limit or exhaust the configured
+  // `num_events_` threshold.
+  size_t produced = 0;
+  while (produced < max_events) {
+    // Generate random data.
+    auto& t = *next_;
+    auto& bp = blueprints_[t];
+    auto ptr = builder(t);
+    VAST_ASSERT(ptr != nullptr);
+    auto rows = std::min({num_events_, max_events - produced, max_slice_size});
+    VAST_ASSERT(rows > 0);
+    for (size_t i = 0; i < rows; ++i) {
+      visit(default_randomizer{bp.distributions, generator_}, t, bp.data);
+      if (!ptr->recursive_add(bp.data, t)) {
+        VAST_ERROR(this, "failed to add blueprint data to slice builder");
+        return make_error(ec::format_error,
+                          "failed to add blueprint data to slice builder");
+      }
+    }
+    // Emit table slice.
+    if (auto err = finish(f, ptr))
+      return err;
+    // Check for EOF and prepare for next iteration.
+    if (num_events_ == rows)
+      return make_error(ec::end_of_input, "completed generation of events");
+    num_events_ -= rows;
+    produced += rows;
+    if (schema_.size() > 1) {
+     if (++next_ == schema_.end())
+       next_ = schema_.begin();
+    }
+  }
+  finish(f);
+  return caf::none;
 }
 
 } // namespace test

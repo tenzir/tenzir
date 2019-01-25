@@ -35,7 +35,7 @@ test_configuration::test_configuration() {
 
 /// A fixture with an actor system that uses the default work-stealing
 /// scheduler.
-actor_system::actor_system() : system(config), self(system, true) {
+actor_system::actor_system() : sys(config), self(sys, true) {
   // Clean up state from previous executions.
   if (vast::exists(directory))
     vast::rm(directory);

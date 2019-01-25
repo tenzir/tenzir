@@ -44,11 +44,11 @@ struct actor_system : filesystem {
   void enable_profiler();
 
   auto error_handler() {
-    return [&](const caf::error& e) { FAIL(system.render(e)); };
+    return [&](const caf::error& e) { FAIL(sys.render(e)); };
   }
 
   test_configuration config;
-  caf::actor_system system;
+  caf::actor_system sys;
   caf::scoped_actor self;
   caf::actor profiler;
 };

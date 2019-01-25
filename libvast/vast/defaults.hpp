@@ -20,6 +20,7 @@
 #include <string_view>
 
 #include <caf/atom.hpp>
+#include <caf/fwd.hpp>
 
 namespace vast::defaults {
 
@@ -70,6 +71,12 @@ extern size_t generated_events;
 
 /// The unique ID of this node.
 extern std::string_view node_id;
+
+/// @returns the table slice type from `options` if available, otherwise the
+///          type configured in the actor system, or ::system::table_slice_type
+///          if no user-defined option is available.
+caf::atom_value table_slice_type(caf::actor_system& sys,
+                                 caf::settings& options);
 
 } // namespace command
 

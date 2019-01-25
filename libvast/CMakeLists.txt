@@ -54,7 +54,9 @@ set(libvast_sources
   src/format/bro.cpp
   src/format/csv.cpp
   src/format/mrt.cpp
+  src/format/multi_layout_reader.cpp
   src/format/reader.cpp
+  src/format/single_layout_reader.cpp
   src/format/test.cpp
   src/format/writer.cpp
   src/http.cpp
@@ -115,9 +117,9 @@ set(libvast_sources
   src/system/task.cpp
   src/system/tracker.cpp
   src/table_slice.cpp
-  src/table_slice_factory.cpp
   src/table_slice_builder.cpp
   src/table_slice_builder_factory.cpp
+  src/table_slice_factory.cpp
   src/time.cpp
   src/timestamp_synopsis.cpp
   src/to_events.cpp

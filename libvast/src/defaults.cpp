@@ -15,10 +15,13 @@
 
 #include <limits>
 
-#include "vast/si_literals.hpp"
+#include <caf/actor_system.hpp>
+#include <caf/actor_system_config.hpp>
+#include <caf/settings.hpp>
 
 #include "vast/detail/string.hpp"
 #include "vast/detail/system.hpp"
+#include "vast/si_literals.hpp"
 
 using namespace vast::si_literals;
 
@@ -40,6 +43,14 @@ size_t max_flow_age = 60;
 size_t max_flows = 1_Mi;
 size_t generated_events = 100;
 std::string_view node_id = "node";
+
+caf::atom_value table_slice_type(caf::actor_system& sys,
+                                 caf::settings& options) {
+  if (auto val = caf::get_if<caf::atom_value>(&options, "table-slice"))
+    return *val;
+  return get_or(sys.config(), "vast.table-slice-type",
+                system::table_slice_type);
+}
 
 } // namespace command
 
