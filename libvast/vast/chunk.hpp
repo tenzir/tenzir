@@ -39,7 +39,7 @@ public:
 
   using value_type = char;
   using pointer = value_type*;
-  using const_pointer = const pointer;
+  using const_pointer = const value_type*;
   using size_type = size_t;
   using const_iterator = const char*;
   using deleter_type = std::function<void()>;
