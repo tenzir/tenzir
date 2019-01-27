@@ -1249,7 +1249,7 @@ caf::error reader::factory::produce(const type& t, Ts&&... xs) {
 
 template <class... Ts>
 caf::error reader::factory::produce(table_slice_builder_ptr& bptr, Ts&&... xs) {
-  if (!bptr->add_all(std::forward<Ts>(xs)...))
+  if (!bptr->add(std::forward<Ts>(xs)...))
     return make_error(ec::parse_error, "unable to add data to the builder");
   if (bptr->rows() == parent_.max_slice_size_)
     if (auto err = parent_.finish(*parent_.current_consumer_, bptr))

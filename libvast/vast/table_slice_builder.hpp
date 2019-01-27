@@ -45,9 +45,10 @@ public:
   /// Adds data to the builder.
   /// @param xs The data to add.
   /// @returns `true` on success.
-  template <class... Ts>
-  bool add_all(const Ts&... xs) {
-    return (add(make_view(xs)) && ...);
+  template <class T0, class T1, class... Ts>
+  bool add(const T0& x0, const T1& x1, const Ts&... xs) {
+    return add(make_view(x0)) && add(make_view(x1))
+           && (add(make_view(xs)) && ...);
   }
 
   /// Constructs a table_slice from the currently accumulated state. After
