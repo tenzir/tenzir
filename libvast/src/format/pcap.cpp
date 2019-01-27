@@ -89,18 +89,6 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
       return make_error(ec::parse_error,
                         "unable to create builder for packet type");
   }
-  // Make sure to emit underful slices when returning with an error.
-  auto flush = [&](caf::error result) {
-    VAST_ASSERT(builder_ != nullptr);
-    if (builder_->rows() > 0) {
-      auto ptr = builder_->finish();
-      // Override error in case we encounter an error in the builder.
-      if (ptr == nullptr)
-        return make_error(ec::parse_error, "unable to finish slice");
-      f(std::move(ptr));
-    }
-    return result;
-  };
   // Local buffer for storing error messages.
   char buf[PCAP_ERRBUF_SIZE];
   // Initialize PCAP if needed.
@@ -158,16 +146,16 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
     auto r = ::pcap_next_ex(pcap_, &header, &data);
     if (r == 0) {
       // Attempt to fetch next packet timed out.
-      return flush(caf::none);
+      return finish(f, caf::none);
     }
     if (r == -2)
-      return flush(make_error(ec::end_of_input, "reached end of trace"));
+      return finish(f, make_error(ec::end_of_input, "reached end of trace"));
     if (r == -1) {
       auto err = std::string{::pcap_geterr(pcap_)};
       ::pcap_close(pcap_);
       pcap_ = nullptr;
-      return flush(
-        make_error(ec::format_error, "failed to get next packet: ", err));
+      return finish(f, make_error(ec::format_error,
+                                  "failed to get next packet: ", err));
     }
     // Parse packet.
     connection conn;
@@ -317,10 +305,10 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
       last_timestamp_ = ts;
     }
     if (builder_->rows() == max_slice_size)
-      if (auto err = flush(caf::none))
+      if (auto err = finish(f, caf::none))
         return err;
   }
-  return flush(caf::none);
+  return finish(f, caf::none);
 }
 
 writer::writer(std::string trace, size_t flush_interval)
