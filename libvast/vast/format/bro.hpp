@@ -234,9 +234,9 @@ public:
 
   void reset(std::unique_ptr<std::istream> in);
 
-  caf::expected<void> schema(vast::schema sch) override;
+  caf::error schema(vast::schema sch) override;
 
-  caf::expected<vast::schema> schema() const override;
+  vast::schema schema() const override;
 
   const char* name() const override;
 

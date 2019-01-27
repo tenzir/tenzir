@@ -69,9 +69,9 @@ public:
   explicit reader(caf::atom_value slice_type, size_t seed = 0,
                   size_t  n = 100);
 
-  expected<void> schema(vast::schema sch) override;
+  caf::error schema(vast::schema sch) override;
 
-  expected<vast::schema> schema() const override;
+  vast::schema schema() const override;
 
   const char* name() const override;
 

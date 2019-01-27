@@ -300,7 +300,7 @@ reader::reader(caf::atom_value table_slice_type,
   input_ = std::move(input);
 }
 
-expected<void> reader::schema(vast::schema sch) {
+caf::error reader::schema(vast::schema sch) {
   auto xs = {
     &types_.table_dump_v2_peer_entry_type,
     &types_.table_dump_v2_rib_entry_type,
@@ -314,7 +314,7 @@ expected<void> reader::schema(vast::schema sch) {
   return replace_if_congruent(xs, sch);
 }
 
-expected<vast::schema> reader::schema() const {
+vast::schema reader::schema() const {
   vast::schema sch;
   sch.add(types_.table_dump_v2_peer_entry_type);
   sch.add(types_.table_dump_v2_rib_entry_type);

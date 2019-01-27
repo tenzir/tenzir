@@ -195,17 +195,13 @@ caf::behavior source(caf::stateful_actor<source_state<Reader>>* self,
     }
   );
   return {
-    [=](get_atom, schema_atom) -> result<schema> {
-      auto sch = self->state.reader.schema();
-      if (sch)
-        return *sch;
-      return sch.error();
+    [=](get_atom, schema_atom) {
+      return self->state.reader.schema();
     },
-    [=](put_atom, const schema& sch) -> result<void> {
-      auto r = self->state.reader.schema(sch);
-      if (r)
-        return {};
-      return r.error();
+    [=](put_atom, schema& sch) -> result<void> {
+      if (auto err = self->state.reader.schema(std::move(sch)))
+        return err;
+      return caf::unit;
     },
     [=](expression& expr) {
       VAST_DEBUG(self, "sets filter expression to:", expr);

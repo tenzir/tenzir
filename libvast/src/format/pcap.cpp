@@ -63,14 +63,14 @@ reader::~reader() {
     ::pcap_close(pcap_);
 }
 
-expected<void> reader::schema(vast::schema sch) {
+caf::error reader::schema(vast::schema sch) {
   return replace_if_congruent({&packet_type_}, sch);
 }
 
-expected<schema> reader::schema() const {
-  vast::schema sch;
-  sch.add(packet_type_);
-  return sch;
+schema reader::schema() const {
+  vast::schema result;
+  result.add(packet_type_);
+  return result;
 }
 
 const char* reader::name() const {

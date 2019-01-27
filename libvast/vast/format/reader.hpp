@@ -75,14 +75,14 @@ public:
 
   // -- properties -------------------------------------------------------------
 
-  /// Sets the schema for events to read.
+  /// Tries to set the schema for events to read.
   /// @param x The new schema.
   /// @returns `caf::none` on success.
-  virtual caf::expected<void> schema(vast::schema x) = 0;
+  virtual caf::error schema(vast::schema x) = 0;
 
   /// Retrieves the currently used schema.
   /// @returns The current schema.
-  virtual caf::expected<vast::schema> schema() const = 0;
+  virtual vast::schema schema() const = 0;
 
   /// @returns The name of the reader type.
   virtual const char* name() const = 0;

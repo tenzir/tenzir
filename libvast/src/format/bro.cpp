@@ -345,17 +345,15 @@ void reader::reset(std::unique_ptr<std::istream> in) {
 //   return e;
 // }
 
-expected<void> reader::schema(vast::schema sch) {
+caf::error reader::schema(vast::schema sch) {
   schema_ = std::move(sch);
-  return no_error;
+  return caf::none;
 }
 
-expected<schema> reader::schema() const {
-  if (layout_.fields.empty())
-    return make_error(ec::format_error, "schema not yet inferred");
-  vast::schema sch;
-  sch.add(type_);
-  return sch;
+schema reader::schema() const {
+  vast::schema result;
+  result.add(type_);
+  return result;
 }
 
 const char* reader::name() const {

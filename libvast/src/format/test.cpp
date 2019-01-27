@@ -253,7 +253,7 @@ reader::reader(caf::atom_value slice_type, size_t seed, size_t n)
   // nop
 }
 
-expected<void> reader::schema(vast::schema sch) {
+caf::error reader::schema(vast::schema sch) {
   if (sch.empty())
     return make_error(ec::format_error, "empty schema");
   std::unordered_map<type, blueprint> blueprints;
@@ -269,10 +269,10 @@ expected<void> reader::schema(vast::schema sch) {
   schema_ = std::move(sch);
   blueprints_ = std::move(blueprints);
   next_ = schema_.begin();
-  return no_error;
+  return caf::none;
 }
 
-expected<schema> reader::schema() const {
+schema reader::schema() const {
   return schema_;
 }
 
