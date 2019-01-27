@@ -108,12 +108,9 @@ caf::error inspect(caf::serializer& sink, const chunk_ptr& x) {
   using vast::detail::narrow;
   if (x == nullptr)
     return sink(uint32_t{0});
+  auto data = const_cast<chunk::pointer>(x->data());
   return caf::error::eval([&] { return sink(narrow<uint32_t>(x->size())); },
-                          [&] {
-                            return sink.apply_raw(x->size(),
-                                                  const_cast<chunk::pointer>(
-                                                    x->data()));
-                          });
+                          [&] { return sink.apply_raw(x->size(), data); });
 }
 
 caf::error inspect(caf::deserializer& source, chunk_ptr& x) {
