@@ -39,9 +39,9 @@ caf::error reader::factory::operator()(table_dump_v2::rib_afi_safi& x) {
     std::vector<vast::data> as_path;
     for (auto as : x.entries[i].bgp_attributes.as_path)
       as_path.emplace_back(as);
-    if (as_path.empty())
-      return make_error(ec::parse_error, "origin AS missing");
-    auto origin_as = caf::get<count>(as_path.back());
+    data origin_as;
+    if (!as_path.empty())
+      origin_as = caf::get<count>(as_path.back());
     // Extract communities.
     std::vector<vast::data> communities;
     for (auto community : x.entries[i].bgp_attributes.communities)
@@ -77,9 +77,9 @@ caf::error reader::factory::operator()(bgp4mp::message& x) {
     std::vector<vast::data> as_path;
     for (size_t i = 0; i < update->path_attributes.as_path.size(); ++i)
       as_path.emplace_back(update->path_attributes.as_path[i]);
-    if (as_path.empty())
-      return make_error(ec::parse_error, "origin AS missing");
-    auto origin_as = caf::get<count>(as_path.back());
+    data origin_as;
+    if (!as_path.empty())
+      origin_as = caf::get<count>(as_path.back());
     // Extract communities.
     std::vector<vast::data> communities;
     for (size_t i = 0; i < update->path_attributes.communities.size(); ++i)
@@ -156,9 +156,9 @@ caf::error reader::factory::operator()(bgp4mp::message_as4& x) {
     std::vector<vast::data> as_path;
     for (auto as : update->path_attributes.as_path)
       as_path.emplace_back(as);
-    if (as_path.empty())
-      return make_error(ec::parse_error, "origin AS missing");
-    auto origin_as = caf::get<count>(as_path.back());
+    data origin_as;
+    if (!as_path.empty())
+      origin_as = caf::get<count>(as_path.back());
     // Extract communities.
     std::vector<vast::data> communities;
     for (auto community : update->path_attributes.communities)
