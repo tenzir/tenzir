@@ -26,6 +26,10 @@ public:
 
   using super = table_slice_builder;
 
+  // -- class properties -------------------------------------------------------
+
+  static caf::atom_value get_implementation_id() noexcept;
+
   // -- constructors, destructors, and assignment operators --------------------
 
   default_table_slice_builder(record_type layout);
