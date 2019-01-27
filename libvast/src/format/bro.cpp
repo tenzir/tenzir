@@ -311,7 +311,7 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
       return make_error(ec::end_of_input, "input exhausted");
   }
   // Local buffer for parsing records.
-  vector xs;
+  std::vector<data> xs;
   // Counts successfully parsed records.
   size_t produced = 0;
   // Loop until reaching EOF or the configured limit of records.

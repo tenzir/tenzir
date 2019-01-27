@@ -233,10 +233,10 @@ events::events() {
       std::vector<table_slice_ptr> slices;
       builders bs;
       auto finish_slice = [&](auto& builder) {
-        insert_sorted(slices, builder.finish(),
-                      [](const auto& lhs, const auto& rhs) {
-                        return lhs->offset() < rhs->offset();
-                      });
+        auto pred = [](const auto& lhs, const auto& rhs) {
+          return lhs->offset() < rhs->offset();
+        };
+        insert_sorted(slices, builder.finish(), pred);
       };
       for (auto& e : src) {
         auto bptr = bs.get(e.type());
@@ -261,12 +261,12 @@ events::events() {
   // random_slices = slice_up(random);
   ascending_integers_slices = assign_ids_and_slice_up(ascending_integers);
   alternating_integers_slices = assign_ids_and_slice_up(alternating_integers);
-  auto sort_by_id =
-    [](std::vector<event>& v) {
-      std::sort(v.begin(), v.end(), [](const auto& lhs, const auto& rhs) {
-        return lhs.id() < rhs.id();
-      });
+  auto sort_by_id = [](std::vector<event>& v) {
+    auto pred = [](const auto& lhs, const auto& rhs) {
+      return lhs.id() < rhs.id();
     };
+    std::sort(v.begin(), v.end(), pred);
+  };
   auto as_events = [&](const auto& slices) {
     std::vector<event> result;
     for (auto& slice : slices) {

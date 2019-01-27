@@ -39,7 +39,7 @@ namespace {
 
 template <class Reader, class... Ts>
 maybe_actor spawn_generic_source(caf::local_actor* self, spawn_arguments& args,
-                                 Ts&&... writer_args) {
+                                 Ts&&... ctor_args) {
   VAST_UNBOX_VAR(expr, normalized_and_valided(args));
   VAST_UNBOX_VAR(sch, read_schema(args));
   VAST_UNBOX_VAR(out, detail::make_output_stream(args.options));
@@ -48,7 +48,7 @@ maybe_actor spawn_generic_source(caf::local_actor* self, spawn_arguments& args,
                                         defaults::system::table_slice_type);
   auto table_slice_type = get_or(args.options, "table-slice",
                                  global_table_slice_type);
-  Reader reader{table_slice_type, std::forward<Ts>(writer_args)...};
+  Reader reader{table_slice_type, std::forward<Ts>(ctor_args)...};
   auto src = self->spawn(default_source<Reader>, std::move(reader));
   caf::anon_send(src, std::move(expr));
   if (sch)
