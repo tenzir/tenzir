@@ -10,9 +10,11 @@
 #include "vast/error.hpp"
 #include "vast/event.hpp"
 #include "vast/expected.hpp"
+#include "vast/format/multi_layout_reader.hpp"
 #include "vast/logger.hpp"
 #include "vast/schema.hpp"
 #include "vast/subnet.hpp"
+#include "vast/table_slice_builder.hpp"
 #include "vast/time.hpp"
 #include "vast/type.hpp"
 
@@ -1156,8 +1158,12 @@ struct record_parser : parser<record_parser> {
 };
 
 /// An MRT reader.
-class reader {
+class reader : public multi_layout_reader {
 public:
+  // -- member types -----------------------------------------------------------
+
+  using super = multi_layout_reader;
+
   struct types {
     type table_dump_v2_peer_entry_type;
     type table_dump_v2_rib_entry_type;
@@ -1169,28 +1175,89 @@ public:
     type bgp4mp_keepalive_type;
   };
 
-  reader() = default;
+  class factory {
+  public:
+    factory(reader& parent, uint32_t ts);
 
-  /// Constructs a MRT reader.
-  explicit reader(std::unique_ptr<std::istream> input);
+    caf::error operator()(caf::none_t) const;
 
-  expected<event> read();
+    caf::error operator()(table_dump_v2::peer_index_table& x);
 
-  expected<void> schema(vast::schema const& sch);
+    caf::error operator()(table_dump_v2::rib_afi_safi& x);
 
-  expected<vast::schema> schema() const;
+    caf::error operator()(bgp4mp::state_change& x);
 
-  const char* name() const;
+    caf::error operator()(bgp4mp::message& x);
+
+    caf::error operator()(bgp4mp::message_as4& x);
+
+    caf::error operator()(bgp4mp::state_change_as4& x);
+
+    [[nodiscard]] size_t produced() const noexcept {
+      return produced_;
+    }
+
+    template <class... Ts>
+    caf::error produce(const type& t, Ts&&... xs);
+
+    template <class... Ts>
+    caf::error produce(table_slice_builder_ptr& ptr, Ts&&... xs);
+
+  private:
+    reader& parent_;
+    vast::timestamp timestamp_;
+    size_t produced_;
+  };
+
+  // -- friends ----------------------------------------------------------------
+
+  friend class factory;
+
+  // -- constructors, destructors, and assignment operators --------------------
+
+  explicit reader(caf::atom_value table_slice_type);
+
+  reader(caf::atom_value id, std::unique_ptr<std::istream> input);
+
+  // -- interface functions ----------------------------------------------------
+
+  caf::error schema(vast::schema sch) override;
+
+  vast::schema schema() const override;
+
+  const char* name() const override;
+
+protected:
+  caf::error read_impl(size_t max_events, size_t max_slice_size,
+                       consumer& f) override;
 
 private:
   std::unique_ptr<std::istream> input_;
   std::vector<char> buffer_;
-  std::queue<event> events_;
   record_parser parser_;
   types types_;
+  size_t max_slice_size_;
+  consumer* current_consumer_;
 };
+
+template <class... Ts>
+caf::error reader::factory::produce(const type& t, Ts&&... xs) {
+  auto bptr = parent_.builder(t);
+  VAST_ASSERT(bptr != nullptr);
+  return produce(bptr, std::forward<Ts>(xs)...);
+}
+
+template <class... Ts>
+caf::error reader::factory::produce(table_slice_builder_ptr& bptr, Ts&&... xs) {
+  if (!bptr->add(std::forward<Ts>(xs)...))
+    return make_error(ec::parse_error, "unable to add data to the builder");
+  if (bptr->rows() == parent_.max_slice_size_)
+    if (auto err = parent_.finish(*parent_.current_consumer_, bptr))
+      return err;
+  ++produced_;
+  return caf::none;
+}
 
 } // namespace mrt
 } // namespace format
 } // namespace vast
-

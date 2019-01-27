@@ -758,8 +758,8 @@ bool congruent(const data& x, const type& y);
 /// @param with Schema containing potentially congruent types.
 /// @returns an error if two types with the same name are not congruent.
 /// @relates type
-expected<void> replace_if_congruent(std::initializer_list<type*> xs,
-                                    const schema& with);
+caf::error replace_if_congruent(std::initializer_list<type*> xs,
+                                const schema& with);
 
 /// Checks whether the types of two nodes in a predicate are compatible with
 /// each other, i.e., whether operator evaluation for the given types is

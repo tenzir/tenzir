@@ -15,10 +15,10 @@
 
 #include <caf/all.hpp>
 
+#include "vast/defaults.hpp"
 #include "vast/error.hpp"
 #include "vast/event.hpp"
 #include "vast/fwd.hpp"
-
 #include "vast/test/data.hpp"
 #include "vast/test/test.hpp"
 
@@ -63,29 +63,6 @@ struct events {
   }
 
   std::vector<table_slice_ptr> copy(std::vector<table_slice_ptr> xs);
-
-private:
-  template <class Reader>
-  static std::vector<event> inhale(const char* filename) {
-    auto input = std::make_unique<std::ifstream>(filename);
-    Reader reader{std::move(input)};
-    return extract(reader);
-  }
-
-  template <class Reader>
-  static std::vector<event> extract(Reader&& reader) {
-    auto e = expected<event>{no_error};
-    std::vector<event> events;
-    while (e || !e.error()) {
-      e = reader.read();
-      if (e)
-        events.push_back(std::move(*e));
-    }
-    REQUIRE(!e);
-    CHECK(e.error() == ec::end_of_input);
-    REQUIRE(!events.empty());
-    return events;
-  }
 };
 
 } // namespace fixtures

@@ -29,15 +29,16 @@
 #include "vast/chunk.hpp"
 #include "vast/default_table_slice.hpp"
 #include "vast/default_table_slice_builder.hpp"
+#include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/byte_swap.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/error.hpp"
 #include "vast/event.hpp"
+#include "vast/factory.hpp"
 #include "vast/format/test.hpp"
 #include "vast/logger.hpp"
 #include "vast/table_slice_factory.hpp"
-#include "vast/factory.hpp"
 #include "vast/value.hpp"
 #include "vast/value_index.hpp"
 
@@ -92,21 +93,22 @@ make_random_table_slices(size_t num_slices, size_t slice_size,
                          record_type layout, id offset, size_t seed) {
   schema sc;
   sc.add(layout);
-  format::test::reader src{seed, std::numeric_limits<uint64_t>::max(),
-                           std::move(sc)};
+  // We have no access to the actor system, so we can only pick the default
+  // table slice type here. This ignores any user-defined overrides. However,
+  // this function is only meant for testing anyways.
+  format::test::reader src{defaults::system::table_slice_type, seed,
+                           std::numeric_limits<uint64_t>::max()};
+  src.schema(std::move(sc));
   std::vector<table_slice_ptr> result;
+  auto add_slice = [&](table_slice_ptr ptr) {
+    ptr.unshared().offset(offset);
+    offset += ptr->rows();
+    result.emplace_back(std::move(ptr));
+  };
   result.reserve(num_slices);
-  default_table_slice_builder builder{std::move(layout)};
-  for (size_t i = 0; i < num_slices; ++i) {
-    if (auto e = src.read(builder, slice_size))
-      return e;
-    if (auto ptr = builder.finish(); ptr == nullptr) {
-      return make_error(ec::unspecified, "finish failed");
-    } else {
-      result.emplace_back(std::move(ptr)).unshared().offset(offset);
-      offset += slice_size;
-    }
-  }
+  if (auto err = src.read(num_slices * slice_size, slice_size, add_slice)
+                   .first)
+    return err;
   return result;
 }
 

@@ -19,13 +19,13 @@
 #include <caf/variant.hpp>
 
 #include "vast/data.hpp"
+#include "vast/detail/random.hpp"
 #include "vast/event.hpp"
 #include "vast/expected.hpp"
+#include "vast/format/multi_layout_reader.hpp"
 #include "vast/format/reader.hpp"
 #include "vast/fwd.hpp"
 #include "vast/schema.hpp"
-
-#include "vast/detail/random.hpp"
 
 namespace vast::format::test {
 
@@ -58,35 +58,31 @@ struct blueprint {
 };
 
 /// Produces random events according to a given schema.
-class reader : public format::reader {
+class reader : public multi_layout_reader {
 public:
-  /// Constructs a test reader.
-  /// @param seed A seed for the random number generator.
-  /// @param n The numer of events to generate.
-  /// @param id The base event ID to start at.
-  /// @param sch The event schema.
-  reader(size_t seed, uint64_t n, vast::schema sch);
+  using super = multi_layout_reader;
 
   /// Constructs a test reader.
   /// @param seed A seed for the random number generator.
   /// @param n The numer of events to generate.
   /// @param id The base event ID to start at.
-  explicit reader(size_t seed = 0, uint64_t n = 100);
+  explicit reader(caf::atom_value slice_type, size_t seed = 0,
+                  size_t  n = 100);
 
-  expected<event> read() override;
+  caf::error schema(vast::schema sch) override;
 
-  caf::error read(table_slice_builder& builder, size_t num);
-
-  expected<void> schema(vast::schema sch) override;
-
-  expected<vast::schema> schema() const override;
+  vast::schema schema() const override;
 
   const char* name() const override;
+
+protected:
+  caf::error read_impl(size_t max_events, size_t max_slice_size,
+                       consumer& f) override;
 
 private:
   vast::schema schema_;
   std::mt19937_64 generator_;
-  uint64_t num_events_;
+  size_t num_events_;
   schema::const_iterator next_;
   std::unordered_map<type, blueprint> blueprints_;
 };

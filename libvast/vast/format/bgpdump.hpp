@@ -116,9 +116,9 @@ class reader : public parser_reader<bgpdump_parser> {
 public:
   using parser_reader<bgpdump_parser>::parser_reader;
 
-  caf::expected<void> schema(vast::schema sch) override;
+  caf::error schema(vast::schema sch) override;
 
-  caf::expected<vast::schema> schema() const override;
+  vast::schema schema() const override;
 
   const char* name() const override;
 };

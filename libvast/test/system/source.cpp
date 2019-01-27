@@ -64,9 +64,10 @@ FIXTURE_SCOPE(source_tests, fixtures::deterministic_actor_system_and_events)
 
 TEST(bro source) {
   MESSAGE("start reader");
-  auto stream = detail::make_input_stream(bro::small_conn);
-  REQUIRE(stream);
-  format::bro::reader reader{std::move(*stream)};
+  auto stream = unbox(detail::make_input_stream(bro::small_conn));
+  format::bro::reader reader{get_or(sys.config(), "vast.table-slice-type",
+                                    defaults::system::table_slice_type),
+                             std::move(stream)};
   MESSAGE("start source for producing table slices of size 10");
   auto src = self->spawn(source<format::bro::reader>, std::move(reader),
                          default_table_slice_builder::make,

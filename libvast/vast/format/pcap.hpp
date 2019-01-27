@@ -25,6 +25,7 @@
 #include "vast/detail/operators.hpp"
 #include "vast/expected.hpp"
 #include "vast/format/reader.hpp"
+#include "vast/format/single_layout_reader.hpp"
 #include "vast/format/writer.hpp"
 #include "vast/port.hpp"
 #include "vast/schema.hpp"
@@ -76,9 +77,9 @@ namespace format {
 namespace pcap {
 
 /// A PCAP reader.
-class reader : public format::reader {
+class reader : public single_layout_reader {
 public:
-  reader() = default;
+  using super = single_layout_reader;
 
   /// Constructs a PCAP reader.
   /// @param input The name of the interface or trace file.
@@ -92,19 +93,21 @@ public:
   ///                        example, if 5, then for two packets spaced *t*
   ///                        seconds apart, the source will sleep for *t/5*
   ///                        seconds.
-  explicit reader(std::string input, uint64_t cutoff = -1,
-                  size_t max_flows = 100000, size_t max_age = 60,
-                  size_t expire_interval = 10, int64_t pseudo_realtime = 0);
+  reader(caf::atom_value id, std::string input, uint64_t cutoff = -1,
+         size_t max_flows = 100000, size_t max_age = 60,
+         size_t expire_interval = 10, int64_t pseudo_realtime = 0);
 
   ~reader();
 
-  caf::expected<event> read() override;
+  caf::error schema(vast::schema sch) override;
 
-  caf::expected<void> schema(vast::schema sch) override;
-
-  caf::expected<vast::schema> schema() const override;
+  vast::schema schema() const override;
 
   const char* name() const override;
+
+protected:
+  caf::error read_impl(size_t max_events, size_t max_slice_size,
+                       consumer& f) override;
 
 private:
   struct connection_state {

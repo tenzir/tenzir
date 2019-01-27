@@ -19,6 +19,10 @@
 
 namespace vast {
 
+caf::atom_value default_table_slice_builder::get_implementation_id() noexcept {
+  return caf::atom("default");
+}
+
 default_table_slice_builder::default_table_slice_builder(record_type layout)
   : super{std::move(layout)},
     row_(super::layout().fields.size()),

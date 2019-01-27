@@ -28,6 +28,7 @@
 #include "vast/event.hpp"
 #include "vast/format/bro.hpp"
 #include "vast/logger.hpp"
+#include "vast/table_slice_builder.hpp"
 
 namespace vast::format::bro {
 namespace {
@@ -260,10 +261,12 @@ struct streamer {
 
 } // namespace <anonymous>
 
-reader::reader(std::unique_ptr<std::istream> in) {
-  reset(std::move(in));
+reader::reader(caf::atom_value table_slice_type,
+               std::unique_ptr<std::istream> in)
+  : super(table_slice_type) {
+  if (in != nullptr)
+    reset(std::move(in));
 }
-
 
 void reader::reset(std::unique_ptr<std::istream> in) {
   VAST_ASSERT(in != nullptr);
@@ -271,88 +274,113 @@ void reader::reset(std::unique_ptr<std::istream> in) {
   lines_ = std::make_unique<detail::line_range>(*input_);
 }
 
-expected<event> reader::read() {
-  if (lines_->done())
-    return make_error(ec::end_of_input, "input exhausted");
-  if (layout_.fields.empty()) {
-    auto t = parse_header();
-    if (!t)
-      return t.error();
-  }
-  // Check if we encountered a new log file.
-  lines_->next();
-  if (lines_->done())
-    return make_error(ec::end_of_input, "input exhausted");
-  auto s = detail::split(lines_->get(), separator_);
-  if (s.size() > 0 && !s[0].empty() && s[0].front() == '#') {
-    if (detail::starts_with(s[0], "#separator")) {
-      VAST_DEBUG(this, "restarts with new log");
-      timestamp_field_ = -1;
-      separator_.clear();
-      auto t = parse_header();
-      if (!t)
-        return t.error();
-      lines_->next();
-      if (lines_->done())
-        return make_error(ec::end_of_input, "input exhausted");
-      s = detail::split(lines_->get(), separator_);
-    } else {
-      VAST_DEBUG(this, "ignores comment at line",
-                 lines_->line_number() << ':', lines_->get());
-      return no_error;
-    }
-  }
-  if (s.size() != parsers_.size()) {
-    VAST_WARNING(this, "ignores invalid record at line",
-                 lines_->line_number() << ':', "got", s.size(),
-                 "fields but need", parsers_.size());
-    return no_error;
-  }
-  // Construct the record.
-  vector xs(s.size());
-  optional<timestamp> ts;
-  auto is_unset = [&](auto i) {
-    return std::equal(unset_field_.begin(), unset_field_.end(),
-                   s[i].begin(), s[i].end());
-  };
-  auto is_empty = [&](auto i) {
-    return std::equal(empty_field_.begin(), empty_field_.end(),
-                      s[i].begin(), s[i].end());
-  };
-  for (auto i = 0u; i < s.size(); ++i) {
-    if (is_unset(i))
-      continue;
-    if (is_empty(i))
-      xs[i] = construct(layout_.fields[i].type);
-    else {
-      if (!parsers_[i](s[i], xs[i]))
-        return make_error(ec::parse_error, "field", i, "line",
-                          lines_->line_number(), std::string{s[i]});
-    }
-    if (i == static_cast<size_t>(timestamp_field_))
-      if (auto tp = caf::get_if<timestamp>(&xs[i]))
-        ts = *tp;
-  }
-  event e{{std::move(xs), type_}};
-  e.timestamp(ts ? *ts : timestamp::clock::now());
-  return e;
-}
-
-expected<void> reader::schema(vast::schema sch) {
+caf::error reader::schema(vast::schema sch) {
   schema_ = std::move(sch);
-  return no_error;
+  return caf::none;
 }
 
-expected<schema> reader::schema() const {
-  if (layout_.fields.empty())
-    return make_error(ec::format_error, "schema not yet inferred");
-  vast::schema sch;
-  sch.add(type_);
-  return sch;
+schema reader::schema() const {
+  vast::schema result;
+  result.add(type_);
+  return result;
 }
 
 const char* reader::name() const {
   return "bro-reader";
+}
+
+caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
+                             consumer& f) {
+  // Sanity checks.
+  VAST_ASSERT(max_events > 0);
+  VAST_ASSERT(max_slice_size > 0);
+  // EOF check.
+  if (lines_->done())
+    return make_error(ec::end_of_input, "input exhausted");
+  // Make sure we have a builder.
+  if (builder_ == nullptr) {
+    VAST_ASSERT(layout_.fields.empty());
+    if (auto err = parse_header())
+      return err;
+    if (!reset_builder(layout_))
+      return make_error(ec::parse_error,
+                        "unable to create a bulider for parsed layout at",
+                        lines_->line_number());
+    // EOF check.
+    if (lines_->done())
+      return make_error(ec::end_of_input, "input exhausted");
+  }
+  // Local buffer for parsing records.
+  std::vector<data> xs;
+  // Counts successfully parsed records.
+  size_t produced = 0;
+  // Loop until reaching EOF or the configured limit of records.
+  while (produced < max_events) {
+    // Advance line range and check for EOF.
+    lines_->next();
+    if (lines_->done())
+      return finish(f, make_error(ec::end_of_input, "input exhausted"));
+    // Parse curent line.
+    auto& line = lines_->get();
+    if (line.empty()) {
+      // Ignore empty lines.
+      VAST_DEBUG(this, "ignores empty line at", lines_->line_number());
+    } else if (detail::starts_with(line, "#separator")) {
+      // We encountered a new log file.
+      if (auto err = finish(f))
+        return err;
+      VAST_DEBUG(this, "restarts with new log");
+      separator_.clear();
+      if (auto err = parse_header())
+        return err;
+    if (!reset_builder(layout_))
+      return make_error(ec::parse_error,
+                        "unable to create a bulider for parsed layout at",
+                        lines_->line_number());
+    } else if (detail::starts_with(line, "#")) {
+      // Ignore comments.
+      VAST_DEBUG(this, "ignores comment at line", lines_->line_number());
+    } else {
+      auto fields = detail::split(lines_->get(), separator_);
+      if (fields.size() != parsers_.size()) {
+        VAST_WARNING(this, "ignores invalid record at line",
+                     lines_->line_number(), ':', "got", fields.size(),
+                     "fields but need", parsers_.size());
+        continue;
+      }
+      // Construct the record.
+      auto is_unset = [&](auto i) {
+        return std::equal(unset_field_.begin(), unset_field_.end(),
+                          fields[i].begin(), fields[i].end());
+      };
+      auto is_empty = [&](auto i) {
+        return std::equal(empty_field_.begin(), empty_field_.end(),
+                          fields[i].begin(), fields[i].end());
+      };
+      xs.resize(fields.size());
+      for (size_t i = 0; i < fields.size(); ++i) {
+        if (is_unset(i)) {
+          xs[i] = caf::none;
+        } else if (is_empty(i)) {
+          xs[i] = construct(layout_.fields[i].type);
+        } else {
+          if (!parsers_[i](fields[i], xs[i]))
+            return finish(f, make_error(ec::parse_error, "field", i, "line",
+                                        lines_->line_number(),
+                                        std::string{fields[i]}));
+        }
+        if (!builder_->add(make_data_view(xs[i])))
+          return finish(f, make_error(ec::type_clash, "field", i, "line",
+                                      lines_->line_number(),
+                                      std::string{fields[i]}));
+      }
+      if (builder_->rows() == max_slice_size)
+        if (auto err = finish(f))
+          return err;
+      ++produced;
+    }
+  }
+  return finish(f);
 }
 
 // Parses a single header line a Bro log. (Since parsing headers is not on the
@@ -367,7 +395,7 @@ expected<std::string> parse_header_line(const std::string& line,
   return std::string{s[1]};
 }
 
-expected<void> reader::parse_header() {
+caf::error reader::parse_header() {
   // Parse #separator.
   if (lines_->done())
     return make_error(ec::format_error, "not enough header lines");
@@ -451,23 +479,20 @@ expected<void> reader::parse_header() {
         return make_error(ec::format_error, "incongruent types in schema");
     }
   // Determine the timestamp field.
-  if (timestamp_field_ > -1) {
-    VAST_DEBUG(this, "uses event timestamp from field", timestamp_field_);
-  } else {
-    size_t i = 0;
-    for (auto& f : layout_.fields) {
-      if (f.name == "ts") {
-        if (!caf::holds_alternative<timestamp_type>(f.type)) {
-          VAST_WARNING(this, "encountered ts fields not of type timestamp");
-          continue;
-        }
-        VAST_DEBUG(this, "auto-detected field", i, "as event timestamp");
-        timestamp_field_ = static_cast<int>(i);
-        f.type.attributes({{"time"}});
-        break;
-      }
-      ++i;
+  auto pred = [&](auto& field) {
+    if (field.name != "ts")
+      return false;
+    if (!caf::holds_alternative<timestamp_type>(field.type)) {
+      VAST_WARNING(this, "encountered ts fields not of type timestamp");
+      return false;
     }
+    return true;
+  };
+  auto i = std::find_if(layout_.fields.begin(), layout_.fields.end(), pred);
+  if (i != layout_.fields.end()) {
+    VAST_DEBUG(this, "auto-detected field",
+               std::distance(layout_.fields.begin(), i), "as event timestamp");
+    i->type.attributes({{"time"}});
   }
   // After having modified layout attributes, we no longer make changes to the
   // type and can now safely copy it.
@@ -479,7 +504,7 @@ expected<void> reader::parse_header() {
   parsers_.resize(layout_.fields.size());
   for (size_t i = 0; i < layout_.fields.size(); i++)
     parsers_[i] = make_parser(layout_.fields[i].type, set_separator_);
-  return no_error;
+  return caf::none;
 }
 
 writer::writer(path dir) {

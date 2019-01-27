@@ -25,15 +25,16 @@
 #include "vast/concept/parseable/vast/address.hpp"
 #include "vast/concept/parseable/vast/subnet.hpp"
 #include "vast/data.hpp"
+#include "vast/detail/line_range.hpp"
+#include "vast/detail/string.hpp"
 #include "vast/expected.hpp"
 #include "vast/filesystem.hpp"
 #include "vast/format/reader.hpp"
+#include "vast/format/single_layout_reader.hpp"
 #include "vast/format/writer.hpp"
 #include "vast/fwd.hpp"
 #include "vast/schema.hpp"
-
-#include "vast/detail/line_range.hpp"
-#include "vast/detail/string.hpp"
+#include "vast/table_slice_builder.hpp"
 
 namespace vast::format::bro {
 
@@ -222,36 +223,38 @@ bool bro_basic_parse(const type& t, Iterator& f, const Iterator& l,
 }
 
 /// A Bro reader.
-class reader : format::reader {
+class reader final : public single_layout_reader {
 public:
-  reader() = default;
+  using super = single_layout_reader;
 
   /// Constructs a Bro reader.
   /// @param input The stream of logs to read.
-  explicit reader(std::unique_ptr<std::istream> in);
+  explicit reader(caf::atom_value table_slice_type,
+                  std::unique_ptr<std::istream> in = nullptr);
 
   void reset(std::unique_ptr<std::istream> in);
 
-  caf::expected<event> read() override;
+  caf::error schema(vast::schema sch) override;
 
-  caf::expected<void> schema(vast::schema sch) override;
-
-  caf::expected<vast::schema> schema() const override;
+  vast::schema schema() const override;
 
   const char* name() const override;
+
+protected:
+  caf::error read_impl(size_t max_events, size_t max_slice_size,
+                       consumer& f) override;
 
 private:
   using iterator_type = std::string_view::const_iterator;
 
-  expected<void> parse_header();
+  caf::error parse_header();
 
   std::unique_ptr<std::istream> input_;
   std::unique_ptr<detail::line_range> lines_;
-  std::string separator_ = " ";
+  std::string separator_;
   std::string set_separator_;
   std::string empty_field_;
   std::string unset_field_;
-  int timestamp_field_ = -1;
   vast::schema schema_;
   type type_;
   record_type layout_;

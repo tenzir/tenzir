@@ -43,8 +43,9 @@ caf::message reader_command(const command& cmd, caf::actor_system& sys,
   VAST_TRACE(VAST_ARG(options), VAST_ARG("args", first, last));
   auto input = get_or(options, "read", defaults::command::read_path);
   auto uds = get_or(options, "uds", false);
-  auto table_slice = get_or(options, "table-slice",
-                            defaults::system::table_slice_type);
+  auto global_table_slice = get_or(sys.config(), "vast.table-slice-type",
+                                   defaults::system::table_slice_type);
+  auto table_slice = get_or(options, "table-slice", global_table_slice);
   auto factory = vast::factory<table_slice_builder>::get(table_slice);
   if (factory == nullptr)
     return caf::make_message(make_error(ec::unspecified,
@@ -52,7 +53,7 @@ caf::message reader_command(const command& cmd, caf::actor_system& sys,
   auto in = detail::make_input_stream(input, uds);
   if (!in)
     return caf::make_message(std::move(in.error()));
-  Reader reader{std::move(*in)};
+  Reader reader{table_slice, std::move(*in)};
   auto slice_size = get_or(options, "table-slice-size",
                            defaults::system::table_slice_size);
   auto src = sys.spawn(source<Reader>, std::move(reader), factory, slice_size);

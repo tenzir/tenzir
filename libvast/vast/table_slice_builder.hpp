@@ -42,6 +42,15 @@ public:
   /// @returns `true` on success.
   virtual bool add(data_view x) = 0;
 
+  /// Adds data to the builder.
+  /// @param xs The data to add.
+  /// @returns `true` on success.
+  template <class T0, class T1, class... Ts>
+  bool add(const T0& x0, const T1& x1, const Ts&... xs) {
+    return add(make_view(x0)) && add(make_view(x1))
+           && (add(make_view(xs)) && ...);
+  }
+
   /// Constructs a table_slice from the currently accumulated state. After
   /// calling this function, implementations must reset their internal state
   /// such that subsequent calls to add will restart with a new table_slice.

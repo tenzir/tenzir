@@ -1,306 +1,238 @@
 #include "vast/format/mrt.hpp"
 
-#include "vast/si_literals.hpp"
-
 #include "vast/detail/assert.hpp"
 #include "vast/detail/byte_swap.hpp"
+#include "vast/error.hpp"
+#include "vast/si_literals.hpp"
 
 namespace vast {
 namespace format {
 namespace mrt {
 
-namespace {
+reader::factory::factory(reader& parent, uint32_t ts)
+  : parent_(parent), produced_(0) {
+  using namespace std::chrono;
+  auto since_epoch = duration<uint32_t>{ts};
+  timestamp_ = timestamp{duration_cast<timespan>(since_epoch)};
+}
 
-struct factory {
-  factory(std::queue<event>& events, const reader::types& types, uint32_t ts)
-    : events_{events}, types_{types} {
-    using namespace std::chrono;
-    auto since_epoch = duration<uint32_t>{ts};
-    timestamp_ = timestamp{duration_cast<timespan>(since_epoch)};
+caf::error reader::factory::operator()(caf::none_t) const {
+  return caf::none;
+}
+
+caf::error reader::factory::operator()(table_dump_v2::peer_index_table& x) {
+  auto bptr = parent_.builder(parent_.types_.table_dump_v2_peer_entry_type);
+  VAST_ASSERT(bptr != nullptr);
+  for (auto i = 0u; i < x.peer_count; ++i)
+    if (auto err = produce(bptr, i, x.peer_entries[i].peer_bgp_id,
+                           x.peer_entries[i].peer_ip_address,
+                           x.peer_entries[i].peer_as))
+      return err;
+  return caf::none;
+}
+
+caf::error reader::factory::operator()(table_dump_v2::rib_afi_safi& x) {
+  auto bptr = parent_.builder(parent_.types_.table_dump_v2_rib_entry_type);
+  VAST_ASSERT(bptr != nullptr);
+  for (size_t i = 0; i < x.entries.size(); ++i) {
+    // Extract paths to ASes.
+    std::vector<vast::data> as_path;
+    for (auto as : x.entries[i].bgp_attributes.as_path)
+      as_path.emplace_back(as);
+    data origin_as;
+    if (!as_path.empty())
+      origin_as = caf::get<count>(as_path.back());
+    // Extract communities.
+    std::vector<vast::data> communities;
+    for (auto community : x.entries[i].bgp_attributes.communities)
+      communities.emplace_back(community);
+    // Put it all together.
+    if (auto err = produce(bptr, x.entries[i].peer_index, x.header.prefix[0],
+                           std::move(as_path), origin_as,
+                           x.entries[i].bgp_attributes.origin,
+                           x.entries[i].bgp_attributes.next_hop,
+                           x.entries[i].bgp_attributes.local_pref,
+                           x.entries[i].bgp_attributes.multi_exit_disc,
+                           communities,
+                           x.entries[i].bgp_attributes.atomic_aggregate,
+                           x.entries[i].bgp_attributes.aggregator_as,
+                           x.entries[i].bgp_attributes.aggregator_ip))
+      return err;
   }
+  return caf::none;
+}
 
-  void operator()(caf::none_t) const {
-    // nop
-  }
+caf::error reader::factory::operator()(bgp4mp::state_change& x) {
+  return produce(parent_.types_.bgp4mp_state_change_type, x.peer_ip_address,
+                 x.peer_as_number, x.old_state, x.new_state);
+}
 
-  void operator()(table_dump_v2::peer_index_table& x) {
-    for (auto i = 0u; i < x.peer_count; i++) {
-      event e{{
-        vector{i,
-               x.peer_entries[i].peer_bgp_id,
-               x.peer_entries[i].peer_ip_address,
-               x.peer_entries[i].peer_as},
-        types_.table_dump_v2_peer_entry_type
-      }};
-      e.timestamp(timestamp_);
-      events_.push(e);
+caf::error reader::factory::operator()(bgp4mp::message& x) {
+  if (auto open = caf::get_if<bgp::open>(&x.message.message)) {
+    return produce(parent_.types_.bgp4mp_open_type, open->version,
+                   open->my_autonomous_system, open->hold_time,
+                   open->bgp_identifier);
+  } else if (auto update = caf::get_if<bgp::update>(&x.message.message)) {
+    // Extract paths to ASes.
+    std::vector<vast::data> as_path;
+    for (size_t i = 0; i < update->path_attributes.as_path.size(); ++i)
+      as_path.emplace_back(update->path_attributes.as_path[i]);
+    data origin_as;
+    if (!as_path.empty())
+      origin_as = caf::get<count>(as_path.back());
+    // Extract communities.
+    std::vector<vast::data> communities;
+    for (size_t i = 0; i < update->path_attributes.communities.size(); ++i)
+      communities.emplace_back(update->path_attributes.communities[i]);
+    // Check for update withdraw events.
+    if (update->withdrawn_routes.size() > 0) {
+      auto bptr = parent_.builder(parent_.types_.bgp4mp_update_withdraw_type);
+      VAST_ASSERT(bptr != nullptr);
+      for (size_t i = 0; i < update->withdrawn_routes.size(); ++i)
+        if (auto err = produce(bptr, x.peer_ip_address, x.peer_as_number,
+                               update->withdrawn_routes[i]))
+          return err;
     }
-  }
-
-  void operator()(table_dump_v2::rib_afi_safi& x) {
-    for (auto i = 0u; i < x.entries.size(); i++) {
-      std::vector<vast::data> as_path;
-      count origin_as;
-      for (auto j = 0u; j < x.entries[i].bgp_attributes.as_path.size(); j++) {
-        origin_as = x.entries[i].bgp_attributes.as_path[j];
-        as_path.push_back(origin_as);
-      }
-      std::vector<vast::data> communities;
-      count community;
-      for (auto j = 0u; j < x.entries[i].bgp_attributes.communities.size();
-           j++) {
-        community = x.entries[i].bgp_attributes.communities[j];
-        communities.push_back(community);
-      }
-      event e{{
-        vector{x.entries[i].peer_index,
-               x.header.prefix[0],
-               std::move(as_path),
-               origin_as,
-               x.entries[i].bgp_attributes.origin,
-               x.entries[i].bgp_attributes.next_hop,
-               x.entries[i].bgp_attributes.local_pref,
-               x.entries[i].bgp_attributes.multi_exit_disc,
-               communities,
-               x.entries[i].bgp_attributes.atomic_aggregate,
-               x.entries[i].bgp_attributes.aggregator_as,
-               x.entries[i].bgp_attributes.aggregator_ip},
-        types_.table_dump_v2_rib_entry_type
-      }};
-      e.timestamp(timestamp_);
-      events_.push(e);
+    // Check for announcement updates.
+    if (update->path_attributes.mp_reach_nlri.size() > 0) {
+      auto bptr = parent_.builder(
+        parent_.types_.bgp4mp_update_announcement_type);
+      VAST_ASSERT(bptr != nullptr);
+      for (auto& element : update->path_attributes.mp_reach_nlri)
+        if (auto err = produce(bptr, x.peer_ip_address, x.peer_as_number,
+                               element, as_path, origin_as,
+                               update->path_attributes.origin,
+                               update->path_attributes.next_hop,
+                               update->path_attributes.local_pref,
+                               update->path_attributes.multi_exit_disc,
+                               communities,
+                               update->path_attributes.atomic_aggregate,
+                               update->path_attributes.aggregator_as,
+                               update->path_attributes.aggregator_ip))
+          return err;
     }
-  }
-
-  void operator()(bgp4mp::state_change& x) {
-    event e{{
-      vector{x.peer_ip_address,
-             x.peer_as_number,
-             x.old_state,
-             x.new_state},
-      types_.bgp4mp_state_change_type
-    }};
-    e.timestamp(timestamp_);
-    events_.push(e);
-  }
-
-  void operator()(bgp4mp::message& x) {
-    if (auto open = caf::get_if<bgp::open>(&x.message.message)) {
-      event e{{
-        vector{open->version,
-               open->my_autonomous_system,
-               open->hold_time,
-               open->bgp_identifier},
-        types_.bgp4mp_open_type
-      }};
-      e.timestamp(timestamp_);
-      events_.push(e);
-    } else if (auto update = caf::get_if<bgp::update>(&x.message.message)) {
-      std::vector<vast::data> as_path;
-      count origin_as;
-      for (auto i = 0u; i < update->path_attributes.as_path.size(); i++) {
-        origin_as = update->path_attributes.as_path[i];
-        as_path.push_back(origin_as);
-      }
-      std::vector<vast::data> communities;
-      count community;
-      for (auto i = 0u; i < update->path_attributes.communities.size(); i++) {
-        community = update->path_attributes.communities[i];
-        communities.push_back(community);
-      }
-      for (auto i = 0u; i < update->withdrawn_routes.size(); i++) {
-        event e{{
-          vector{x.peer_ip_address,
-                 x.peer_as_number,
-                 update->withdrawn_routes[i]},
-          types_.bgp4mp_update_withdraw_type
-        }};
-        e.timestamp(timestamp_);
-        events_.push(e);
-      }
-      for (auto i = 0u; i < update->path_attributes.mp_reach_nlri.size(); i++) {
-        event e{{
-          vector{x.peer_ip_address,
-                 x.peer_as_number,
-                 update->path_attributes.mp_reach_nlri[i],
-                 as_path,
-                 origin_as,
-                 update->path_attributes.origin,
-                 update->path_attributes.next_hop,
-                 update->path_attributes.local_pref,
-                 update->path_attributes.multi_exit_disc,
-                 communities,
-                 update->path_attributes.atomic_aggregate,
-                 update->path_attributes.aggregator_as,
-                 update->path_attributes.aggregator_ip},
-          types_.bgp4mp_update_announcement_type
-        }};
-        e.timestamp(timestamp_);
-        events_.push(e);
-      }
-      for (auto i = 0u; i < update->path_attributes.mp_unreach_nlri.size();
-           i++) {
-        event e{{
-          vector{x.peer_ip_address,
-                 x.peer_as_number,
-                 update->path_attributes.mp_unreach_nlri[i]},
-          types_.bgp4mp_update_withdraw_type
-        }};
-        e.timestamp(timestamp_);
-        events_.push(e);
-      }
-      for (auto i = 0u;
-           i < update->network_layer_reachability_information.size(); i++) {
-        event e{{
-          vector{x.peer_ip_address,
-                 x.peer_as_number,
-                 update->network_layer_reachability_information[i],
-                 as_path,
-                 origin_as,
-                 update->path_attributes.origin,
-                 update->path_attributes.next_hop,
-                 update->path_attributes.local_pref,
-                 update->path_attributes.multi_exit_disc,
-                 communities,
-                 update->path_attributes.atomic_aggregate,
-                 update->path_attributes.aggregator_as,
-                 update->path_attributes.aggregator_ip},
-          types_.bgp4mp_update_announcement_type
-        }};
-        e.timestamp(timestamp_);
-        events_.push(e);
-      }
-    } else if (auto notification =
-               caf::get_if<bgp::notification>(&x.message.message)) {
-      event e{{
-        vector{notification->error_code,
-               notification->error_subcode},
-        types_.bgp4mp_notification_type
-      }};
-      e.timestamp(timestamp_);
-      events_.push(e);
+    // Check for withdrawal updates.
+    if (update->path_attributes.mp_unreach_nlri.size() > 0) {
+      auto bptr = parent_.builder(parent_.types_.bgp4mp_update_withdraw_type);
+      VAST_ASSERT(bptr != nullptr);
+      for (auto& element : update->path_attributes.mp_unreach_nlri)
+        if (auto err = produce(bptr, x.peer_ip_address, x.peer_as_number,
+                               element))
+          return err;
     }
-  }
-
-  void operator()(bgp4mp::message_as4& x) {
-    if (auto open = caf::get_if<bgp::open>(&x.message.message)) {
-      event e{{
-        vector{open->version,
-               open->my_autonomous_system,
-               open->hold_time,
-               open->bgp_identifier},
-        types_.bgp4mp_open_type
-      }};
-      e.timestamp(timestamp_);
-      events_.push(e);
-    } else if (auto update = caf::get_if<bgp::update>(&x.message.message)) {
-      std::vector<vast::data> as_path;
-      count origin_as;
-      for (auto i = 0u; i < update->path_attributes.as_path.size(); i++) {
-        origin_as = update->path_attributes.as_path[i];
-        as_path.push_back(origin_as);
-      }
-      std::vector<vast::data> communities;
-      count community;
-      for (auto i = 0u; i < update->path_attributes.communities.size(); i++) {
-        community = update->path_attributes.communities[i];
-        communities.push_back(community);
-      }
-      for (auto i = 0u; i < update->withdrawn_routes.size(); i++) {
-        event e{{
-          vector{x.peer_ip_address,
-                 x.peer_as_number,
-                 update->withdrawn_routes[i]},
-          types_.bgp4mp_update_withdraw_type
-        }};
-        e.timestamp(timestamp_);
-        events_.push(e);
-      }
-      for (auto i = 0u; i < update->path_attributes.mp_reach_nlri.size(); i++) {
-        event e{{
-          vector{x.peer_ip_address,
-                 x.peer_as_number,
-                 update->path_attributes.mp_reach_nlri[i],
-                 as_path,
-                 origin_as,
-                 update->path_attributes.origin,
-                 update->path_attributes.next_hop,
-                 update->path_attributes.local_pref,
-                 update->path_attributes.multi_exit_disc,
-                 communities,
-                 update->path_attributes.atomic_aggregate,
-                 update->path_attributes.aggregator_as,
-                 update->path_attributes.aggregator_ip},
-          types_.bgp4mp_update_announcement_type
-        }};
-        e.timestamp(timestamp_);
-        events_.push(e);
-      }
-      for (auto i = 0u; i < update->path_attributes.mp_unreach_nlri.size();
-           i++) {
-        event e{{
-          vector{x.peer_ip_address,
-                 x.peer_as_number,
-                 update->path_attributes.mp_unreach_nlri[i]},
-          types_.bgp4mp_update_withdraw_type
-        }};
-        e.timestamp(timestamp_);
-        events_.push(e);
-      }
-      for (auto i = 0u;
-           i < update->network_layer_reachability_information.size(); i++) {
-        event e{{
-          vector{x.peer_ip_address,
-                 x.peer_as_number,
-                 update->network_layer_reachability_information[i],
-                 as_path,
-                 origin_as,
-                 update->path_attributes.origin,
-                 update->path_attributes.next_hop,
-                 update->path_attributes.local_pref,
-                 update->path_attributes.multi_exit_disc,
-                 communities,
-                 update->path_attributes.atomic_aggregate,
-                 update->path_attributes.aggregator_as,
-                 update->path_attributes.aggregator_ip},
-          types_.bgp4mp_update_announcement_type
-        }};
-        e.timestamp(timestamp_);
-        events_.push(e);
-      }
-    } else if (auto notification =
-               caf::get_if<bgp::notification>(&x.message.message)) {
-      event e{{
-        vector{notification->error_code,
-               notification->error_subcode},
-        types_.bgp4mp_notification_type
-      }};
-      e.timestamp(timestamp_);
-      events_.push(e);
+    // Check for reachability updates.
+    if (update->network_layer_reachability_information.size() > 0) {
+      auto bptr = parent_.builder(
+        parent_.types_.bgp4mp_update_announcement_type);
+      VAST_ASSERT(bptr != nullptr);
+      for (auto& element : update->network_layer_reachability_information)
+        if (auto err = produce(bptr, x.peer_ip_address, x.peer_as_number,
+                               element, as_path, origin_as,
+                               update->path_attributes.origin,
+                               update->path_attributes.next_hop,
+                               update->path_attributes.local_pref,
+                               update->path_attributes.multi_exit_disc,
+                               communities,
+                               update->path_attributes.atomic_aggregate,
+                               update->path_attributes.aggregator_as,
+                               update->path_attributes.aggregator_ip))
+          return err;
     }
+  } else if (auto nf = caf::get_if<bgp::notification>(&x.message.message)) {
+    return produce(parent_.types_.bgp4mp_notification_type, nf->error_code,
+                   nf->error_subcode);
   }
+  return caf::none;
+}
 
-  void operator()(bgp4mp::state_change_as4& x) {
-    event e{{
-      vector{x.peer_ip_address,
-             x.peer_as_number,
-             x.old_state,
-             x.new_state},
-      types_.bgp4mp_state_change_type
-    }};
-    e.timestamp(timestamp_);
-    events_.push(e);
+caf::error reader::factory::operator()(bgp4mp::message_as4& x) {
+  if (auto open = caf::get_if<bgp::open>(&x.message.message)) {
+    if (auto err = produce(parent_.types_.bgp4mp_open_type, open->version,
+                           open->my_autonomous_system, open->hold_time,
+                           open->bgp_identifier))
+      return err;
+  } else if (auto update = caf::get_if<bgp::update>(&x.message.message)) {
+    // Extract paths to ASes.
+    std::vector<vast::data> as_path;
+    for (auto as : update->path_attributes.as_path)
+      as_path.emplace_back(as);
+    data origin_as;
+    if (!as_path.empty())
+      origin_as = caf::get<count>(as_path.back());
+    // Extract communities.
+    std::vector<vast::data> communities;
+    for (auto community : update->path_attributes.communities)
+      communities.emplace_back(community);
+    // Check for route withdrawals.
+    if (update->withdrawn_routes.size() > 0) {
+      auto bptr = parent_.builder(parent_.types_.bgp4mp_update_withdraw_type);
+      VAST_ASSERT(bptr != nullptr);
+      for (auto& withdrawn_route : update->withdrawn_routes)
+        if (auto err = produce(bptr, x.peer_ip_address, x.peer_as_number,
+                               withdrawn_route))
+          return err;
+    }
+    // Check for announcement updates.
+    if (update->path_attributes.mp_reach_nlri.size() > 0) {
+      auto bptr = parent_.builder(
+        parent_.types_.bgp4mp_update_announcement_type);
+      VAST_ASSERT(bptr != nullptr);
+      for (auto& element : update->path_attributes.mp_reach_nlri)
+        if (auto err = produce(bptr, x.peer_ip_address, x.peer_as_number,
+                               element, as_path, origin_as,
+                               update->path_attributes.origin,
+                               update->path_attributes.next_hop,
+                               update->path_attributes.local_pref,
+                               update->path_attributes.multi_exit_disc,
+                               communities,
+                               update->path_attributes.atomic_aggregate,
+                               update->path_attributes.aggregator_as,
+                               update->path_attributes.aggregator_ip))
+          return err;
+    }
+    // Check for withdrawal updates.
+    if (update->path_attributes.mp_unreach_nlri.size() > 0) {
+      auto bptr = parent_.builder(
+        parent_.types_.bgp4mp_update_withdraw_type);
+      VAST_ASSERT(bptr != nullptr);
+      for (auto& element :update->path_attributes.mp_unreach_nlri)
+        if (auto err = produce(bptr, x.peer_ip_address, x.peer_as_number,
+                               element))
+          return err;
+    }
+    if (update->network_layer_reachability_information.size() > 0) {
+      auto bptr = parent_.builder(
+        parent_.types_.bgp4mp_update_announcement_type);
+      VAST_ASSERT(bptr != nullptr);
+      for (auto& element :  update->network_layer_reachability_information)
+        if (auto err = produce(bptr, x.peer_ip_address, x.peer_as_number,
+                               element, as_path, origin_as,
+                               update->path_attributes.origin,
+                               update->path_attributes.next_hop,
+                               update->path_attributes.local_pref,
+                               update->path_attributes.multi_exit_disc,
+                               communities,
+                               update->path_attributes.atomic_aggregate,
+                               update->path_attributes.aggregator_as,
+                               update->path_attributes.aggregator_ip))
+          return err;
+    }
+  } else if (auto nf = caf::get_if<bgp::notification>(&x.message.message)) {
+    return produce(parent_.types_.bgp4mp_notification_type, nf->error_code,
+                   nf->error_subcode);
   }
+  return caf::none;
+}
 
-  std::queue<event>& events_;
-  vast::timestamp timestamp_;
-  reader::types types_;
-};
+caf::error reader::factory::operator()(bgp4mp::state_change_as4& x) {
+  return produce(parent_.types_.bgp4mp_state_change_type, x.peer_ip_address,
+                 x.peer_as_number, x.old_state, x.new_state);
+}
 
-} // namespace anonymous
-
-reader::reader(std::unique_ptr<std::istream> input) : input_{std::move(input)} {
-  VAST_ASSERT(input_);
+reader::reader(caf::atom_value table_slice_type)
+  : super(table_slice_type),
+    max_slice_size_(0),
+    current_consumer_(nullptr) {
   types_.table_dump_v2_peer_entry_type = record_type{{
     {"index", count_type{}},
     {"bgp_id", count_type{}},
@@ -361,48 +293,14 @@ reader::reader(std::unique_ptr<std::istream> input) : input_{std::move(input)} {
   }}.name("mrt::bgp4mp::state_change");
 }
 
-expected<event> reader::read() {
-  if (!events_.empty()) {
-    auto x = std::move(events_.front());
-    events_.pop();
-    return x;
-  }
-  // We have to read the input block-wise in a manner that respects the
-  // protocol framing.
-  static constexpr size_t common_header_length = 12;
-  if (buffer_.size() < common_header_length)
-    buffer_.resize(common_header_length);
-  input_->read(buffer_.data(), common_header_length);
-  if (input_->eof())
-    return make_error(ec::end_of_input, "reached end of input");
-  if (input_->fail())
-    return make_error(ec::format_error, "failed to read MRT common header");
-  auto ptr = reinterpret_cast<const uint32_t*>(buffer_.data() + 8);
-  auto message_length = vast::detail::to_host_order(*ptr);
-  // TODO: Where does the RFC specify the maximum length?
-  using namespace binary_byte_literals;
-  static constexpr size_t max_message_length = 1_MiB;
-  if (message_length > max_message_length)
-    return make_error(ec::format_error, "MRT message exceeds maximum length",
-                      message_length, max_message_length);
-  buffer_.resize(common_header_length + message_length);
-  if (!input_->read(buffer_.data() + common_header_length, message_length))
-    return make_error(ec::format_error, "failed to read MRT message");
-  mrt::record r;
-  if (!parser_(buffer_, r))
-    return make_error(ec::format_error, "failed to parse MRT message");
-  // Convert
-  // Take the timestamp from the Common Header as event time.
-  visit(factory{events_, types_, r.header.timestamp}, r.message);
-  if (!events_.empty()) {
-    auto x = std::move(events_.front());
-    events_.pop();
-    return x;
-  }
-  return no_error;
+reader::reader(caf::atom_value table_slice_type,
+               std::unique_ptr<std::istream> input)
+  : reader(table_slice_type) {
+  VAST_ASSERT(input != nullptr);
+  input_ = std::move(input);
 }
 
-expected<void> reader::schema(vast::schema const& sch) {
+caf::error reader::schema(vast::schema sch) {
   auto xs = {
     &types_.table_dump_v2_peer_entry_type,
     &types_.table_dump_v2_rib_entry_type,
@@ -416,7 +314,7 @@ expected<void> reader::schema(vast::schema const& sch) {
   return replace_if_congruent(xs, sch);
 }
 
-expected<vast::schema> reader::schema() const {
+vast::schema reader::schema() const {
   vast::schema sch;
   sch.add(types_.table_dump_v2_peer_entry_type);
   sch.add(types_.table_dump_v2_rib_entry_type);
@@ -431,6 +329,49 @@ expected<vast::schema> reader::schema() const {
 
 const char* reader::name() const {
   return "mrt-reader";
+}
+
+caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
+                             consumer& f) {
+  current_consumer_ = &f;
+  max_slice_size_ = max_slice_size;
+  size_t produced = 0;
+  while (produced < max_events) {
+    // We have to read the input block-wise in a manner that respects the
+    // protocol framing.
+    static constexpr size_t common_header_length = 12;
+    if (buffer_.size() < common_header_length)
+      buffer_.resize(common_header_length);
+    input_->read(buffer_.data(), common_header_length);
+    if (input_->eof())
+      return finish(f, make_error(ec::end_of_input, "reached end of input"));
+    if (input_->fail())
+      return finish(f, make_error(ec::format_error,
+                                  "failed to read MRT common header"));
+    auto ptr = reinterpret_cast<const uint32_t*>(buffer_.data() + 8);
+    auto message_length = vast::detail::to_host_order(*ptr);
+    // TODO: Where does the RFC specify the maximum length?
+    using namespace binary_byte_literals;
+    static constexpr size_t max_message_length = 1_MiB;
+    if (message_length > max_message_length)
+      return finish(f, make_error(ec::format_error,
+                                  "MRT message exceeds maximum length",
+                                  message_length, max_message_length));
+    buffer_.resize(common_header_length + message_length);
+    if (!input_->read(buffer_.data() + common_header_length, message_length))
+      return finish(f,
+                    make_error(ec::format_error, "failed to read MRT message"));
+    mrt::record r;
+    if (!parser_(buffer_, r))
+      return finish(f, make_error(ec::format_error,
+                                  "failed to parse MRT message"));
+    // Forward to the factory for parsing.
+    factory fac{*this, r.header.timestamp};
+    if (auto err = visit(fac, r.message))
+      return finish(f, err);
+    produced += fac.produced();
+  }
+  return finish(f);
 }
 
 } // namespace mrt

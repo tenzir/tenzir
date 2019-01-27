@@ -21,6 +21,7 @@
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/vast/event.hpp"
 #include "vast/default_table_slice_builder.hpp"
+#include "vast/defaults.hpp"
 #include "vast/detail/make_io_stream.hpp"
 #include "vast/detail/spawn_container_source.hpp"
 #include "vast/event.hpp"
@@ -100,9 +101,10 @@ struct importer_fixture : Base {
 
   auto make_bro_source() {
     namespace bf = format::bro;
-    auto stream = vast::detail::make_input_stream(bro::small_conn);
-    REQUIRE(stream);
-    bf::reader reader{std::move(*stream)};
+    auto stream = unbox(vast::detail::make_input_stream(bro::small_conn));
+    bf::reader reader{get_or(this->sys.config(), "vast.table-slice-type",
+                             vast::defaults::system::table_slice_type),
+                      std::move(stream)};
     return this->self->spawn(system::source<bf::reader>, std::move(reader),
                              default_table_slice_builder::make, slice_size);
   }

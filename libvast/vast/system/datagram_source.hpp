@@ -74,11 +74,10 @@ using datagram_source_actor = caf::stateful_actor<datagram_source_state<Reader>,
 /// @param self The actor handle.
 /// @param reader The reader instance.
 template <class Reader>
-caf::behavior
-datagram_source(datagram_source_actor<Reader>* self,
-                uint16_t udp_listening_port, Reader reader,
-                factory<table_slice_builder>::signature factory,
-                size_t table_slice_size) {
+caf::behavior datagram_source(datagram_source_actor<Reader>* self,
+                              uint16_t udp_listening_port, Reader reader,
+                              factory<table_slice_builder>::signature factory,
+                              size_t table_slice_size) {
   using namespace caf;
   using namespace std::chrono;
   namespace defs = defaults::system;
@@ -130,10 +129,10 @@ datagram_source(datagram_source_actor<Reader>* self,
         VAST_DEBUG(self, "produced a slice with", slice->rows(), "rows");
         st.mgr->out().push(std::move(slice));
       };
-      auto [produced, eof] = st.extract_events(capacity, table_slice_size,
-                                               push_slice);
+      auto [err, produced] = st.reader.read(capacity * table_slice_size,
+                                            table_slice_size, push_slice);
       t.stop(produced);
-      if (!eof)
+      if (err != caf::none && err != ec::end_of_input)
         VAST_WARNING(self,
                      "has not enough capacity left in stream, dropping input!");
       if (produced > 0)
@@ -151,16 +150,12 @@ datagram_source(datagram_source_actor<Reader>* self,
       self->state.mgr->add_outbound_path(sink);
     },
     [=](get_atom, schema_atom) -> result<schema> {
-      auto sch = self->state.reader.schema();
-      if (sch)
-        return *sch;
-      return sch.error();
+      return self->state.reader.schema();
     },
-    [=](put_atom, const schema& sch) -> result<void> {
-      auto r = self->state.reader.schema(sch);
-      if (r)
-        return {};
-      return r.error();
+    [=](put_atom, schema& sch) -> result<void> {
+      if (auto err = self->state.reader.schema(std::move(sch)))
+        return err;
+      return caf::unit;
     },
     [=](expression& expr) {
       VAST_DEBUG(self, "sets filter expression to:", expr);

@@ -37,16 +37,16 @@ behavior worker(event_based_actor* self, const actor& task) {
 } // namespace <anonymous>
 
 TEST(custom done message) {
-  auto t = system.spawn(task<int>, 42);
+  auto t = sys.spawn(task<int>, 42);
   self->send(t, supervisor_atom::value, self);
   self->send_exit(t, exit_reason::user_shutdown);
   self->receive([&](done_atom, int i) { CHECK(i == 42); } );
 }
 
 TEST(manual task shutdown) {
-  auto t = system.spawn(task<>);
-  auto w0 = system.spawn(worker, t);
-  auto w1 = system.spawn(worker, t);
+  auto t = sys.spawn(task<>);
+  auto w0 = sys.spawn(worker, t);
+  auto w1 = sys.spawn(worker, t);
   self->send(t, supervisor_atom::value, self);
   self->send(t, w0);
   self->send(t, w1);
