@@ -27,16 +27,29 @@ public:
   ~multi_layout_reader() override;
 
 protected:
-  /// Finishes the current slices in `builder_ptr` before returning with
-  /// `result`. Returns a different error `builder_ptr->finish()` fails.
+  /// Convenience function for finishing the current table slice in
+  /// `builder_ptr` before reporting an error. Usually simply returns `result`
+  /// after finishing the slice, however, an error in finishing the slice
+  /// "overrides" `result`.
+  /// @param f Consumer for the finished slice.
+  /// @param builder_ptr Pointer to the table slice builder we want to "flush".
+  /// @param result Current status of the parent context, usually returned
+  ///               unmodified.
+  /// @returns `result`, unless `builder_ptr->finish()` fails.
   caf::error finish(consumer& f, table_slice_builder_ptr& builder_ptr,
                     caf::error result = caf::none);
 
-  /// Finishes all current slices before returning with `result`. Returns a
-  /// different error if any `finish()` on a table slice builder fails.
+  /// Convenience function for finishing all table slices in all table slice
+  /// builders before reporting an error. Usually simply returns `result` after
+  /// finishing the slice, however, an error in finishing the slice "overrides"
+  /// `result`.
+  /// @param f Consumer for the finished slice.
+  /// @param result Current status of the parent context, usually returned
+  ///               unmodified.
+  /// @returns `result`, unless any `finish()` call fails.
   caf::error finish(consumer& f, caf::error result = caf::none);
 
-  /// @returns a table slice builder for given type, creating it on-the-fly is
+  /// @returns a table slice builder for given type, creating it on-the-fly if
   ///          necessary.
   table_slice_builder_ptr builder(const type& t);
 

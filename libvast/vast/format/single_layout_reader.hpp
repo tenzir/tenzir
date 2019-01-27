@@ -25,8 +25,14 @@ public:
   ~single_layout_reader() override;
 
 protected:
-  /// Finishes the current slice before returning with `result`. Returns a
-  /// different error if `builder_->finish()` fails.
+  /// Convenience function for finishing our current table slice in `builder_`
+  /// before reporting an error. Usually simply returns `result` after
+  /// finishing the slice, however, an error in finishing the slice "overrides"
+  /// `result`.
+  /// @param f Consumer for the finished slice.
+  /// @param result Current status of the parent context, usually returned
+  ///               unmodified.
+  /// @returns `result`, unless any `finish()` call fails.
   caf::error finish(consumer& f, caf::error result = caf::none);
 
   /// Tries to create a new table slice builder from given layout.

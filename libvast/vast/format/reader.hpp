@@ -56,6 +56,8 @@ public:
   template <class F>
   std::pair<caf::error, size_t> read(size_t max_events, size_t max_slice_size,
                                      F f) {
+    VAST_ASSERT(max_events > 0);
+    VAST_ASSERT(max_slice_size > 0);
     struct consumer_impl : consumer {
       void operator()(table_slice_ptr x) override {
         produced += x->rows();

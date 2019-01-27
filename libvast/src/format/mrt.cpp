@@ -365,8 +365,7 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
     if (!parser_(buffer_, r))
       return finish(f, make_error(ec::format_error,
                                   "failed to parse MRT message"));
-    // Convert
-    // Take the timestamp from the Common Header as event time.
+    // Forward to the factory for parsing.
     factory fac{*this, r.header.timestamp};
     if (auto err = visit(fac, r.message))
       return finish(f, err);
