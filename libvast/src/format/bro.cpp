@@ -261,10 +261,6 @@ struct streamer {
 
 } // namespace <anonymous>
 
-//reader::reader(caf::atom_value id) : super(id) {
-//  // nop
-//}
-
 reader::reader(caf::atom_value table_slice_type,
                std::unique_ptr<std::istream> in)
   : super(table_slice_type) {
@@ -277,73 +273,6 @@ void reader::reset(std::unique_ptr<std::istream> in) {
   input_ = std::move(in);
   lines_ = std::make_unique<detail::line_range>(*input_);
 }
-
-// caf::error reader::read(size_t max_events, size_t max_slice_size, consumer& f) {
-//   if (lines_->done())
-//     return make_error(ec::end_of_input, "input exhausted");
-//   if (layout_.fields.empty()) {
-//     auto t = parse_header();
-//     if (!t)
-//       return t.error();
-//   }
-//   // Check if we encountered a new log file.
-//   lines_->next();
-//   if (lines_->done())
-//     return make_error(ec::end_of_input, "input exhausted");
-//   auto s = detail::split(lines_->get(), separator_);
-//   if (s.size() > 0 && !s[0].empty() && s[0].front() == '#') {
-//     if (detail::starts_with(s[0], "#separator")) {
-//       VAST_DEBUG(this, "restarts with new log");
-//       timestamp_field_ = -1;
-//       separator_.clear();
-//       auto t = parse_header();
-//       if (!t)
-//         return t.error();
-//       lines_->next();
-//       if (lines_->done())
-//         return make_error(ec::end_of_input, "input exhausted");
-//       s = detail::split(lines_->get(), separator_);
-//     } else {
-//       VAST_DEBUG(this, "ignores comment at line",
-//                  lines_->line_number() << ':', lines_->get());
-//       return no_error;
-//     }
-//   }
-//   if (s.size() != parsers_.size()) {
-//     VAST_WARNING(this, "ignores invalid record at line",
-//                  lines_->line_number() << ':', "got", s.size(),
-//                  "fields but need", parsers_.size());
-//     return no_error;
-//   }
-//   // Construct the record.
-//   vector xs(s.size());
-//   optional<timestamp> ts;
-//   auto is_unset = [&](auto i) {
-//     return std::equal(unset_field_.begin(), unset_field_.end(),
-//                    s[i].begin(), s[i].end());
-//   };
-//   auto is_empty = [&](auto i) {
-//     return std::equal(empty_field_.begin(), empty_field_.end(),
-//                       s[i].begin(), s[i].end());
-//   };
-//   for (auto i = 0u; i < s.size(); ++i) {
-//     if (is_unset(i))
-//       continue;
-//     if (is_empty(i))
-//       xs[i] = construct(layout_.fields[i].type);
-//     else {
-//       if (!parsers_[i](s[i], xs[i]))
-//         return make_error(ec::parse_error, "field", i, "line",
-//                           lines_->line_number(), std::string{s[i]});
-//     }
-//     if (i == static_cast<size_t>(timestamp_field_))
-//       if (auto tp = caf::get_if<timestamp>(&xs[i]))
-//         ts = *tp;
-//   }
-//   event e{{std::move(xs), type_}};
-//   e.timestamp(ts ? *ts : timestamp::clock::now());
-//   return e;
-// }
 
 caf::error reader::schema(vast::schema sch) {
   schema_ = std::move(sch);

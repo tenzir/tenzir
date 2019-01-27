@@ -241,13 +241,6 @@ using default_randomizer = randomizer<std::mt19937_64>;
 
 } // namespace <anonymous>
 
-// reader::reader(size_t seed, uint64_t n, vast::schema sch)
-//   : generator_{seed},
-//     num_events_{n} {
-//   auto result = schema(std::move(sch));
-//   VAST_ASSERT(result);
-// }
-
 reader::reader(caf::atom_value slice_type, size_t seed, size_t n)
   : super{slice_type}, generator_{seed}, num_events_{n} {
   // nop
