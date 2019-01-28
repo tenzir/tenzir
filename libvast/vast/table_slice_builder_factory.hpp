@@ -30,6 +30,11 @@ struct factory_traits<table_slice_builder> {
   static void initialize();
 
   template <class T>
+  static key_type key() {
+    return T::get_implementation_id();
+  }
+
+  template <class T>
   static result_type make(record_type layout) {
     return T::make(std::move(layout));
   }
