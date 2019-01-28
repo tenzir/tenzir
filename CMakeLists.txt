@@ -448,31 +448,6 @@ find_package(Doxygen QUIET)
 find_package(Md2man QUIET)
 
 #------------------------------------------------------------------------------
-#                                   Docker
-#------------------------------------------------------------------------------
-
-set(docker_image "mavam/vast")
-set(docker_image_ver "${docker_image}:${VAST_VERSION}")
-
-file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/docker-build.cmake
-  "execute_process(
-     COMMAND docker build -t ${docker_image_ver} ${CMAKE_SOURCE_DIR}
-     RESULT_VARIABLE docker_build_retval)
-   if (NOT \"\${docker_build_retval}\" EQUAL 0)
-     message(FATAL_ERROR \"Failed building the docker image.\")
-   endif ()
-   execute_process(
-     COMMAND docker tag ${docker_image_ver} ${docker_image}:latest)")
-
-add_custom_target(docker-build
-  ${CMAKE_COMMAND} -P ${CMAKE_BINARY_DIR}/docker-build.cmake
-  COMMENT "Building docker image")
-
-add_custom_target(docker-run
-  COMMAND docker run -ti ${docker_image}
-  COMMENT "Running current Docker image" VERBATIM)
-
-#------------------------------------------------------------------------------
 #                                 Build Setup
 #------------------------------------------------------------------------------
 

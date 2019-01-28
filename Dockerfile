@@ -2,53 +2,61 @@
 #
 # VERSION               0.1
 
-FROM        ubuntu:18.04
-MAINTAINER  Matthias Vallentin <matthias@bro.org>
+#FROM        ubuntu:18.04
+FROM debian:buster-slim as builder
+LABEL maintainer="tobias.mayer@tenzir.com"
+LABEL builder=true
+
 
 ENV PREFIX /usr/local
-ENV CC clang
-ENV CXX clang++
+ENV CC clang-7
+ENV CXX clang++-7
 ENV BUILD_TYPE Release
+ENV BUILD_DIR /tmp/src
 
 # Compiler and dependency setup
 RUN apt-get -qq update && apt-get -qqy install \
-    clang libc++-dev libc++abi-dev cmake git-core
+    clang-7 libc++-dev libc++abi-dev cmake git-core
 RUN apt-get -qq update && apt-get -qqy install \
-    libpcap-dev libedit-dev libgoogle-perftools-dev openssl libssl1.0-dev
+    libpcap-dev libedit-dev libgoogle-perftools-dev openssl libssl-dev
 
 # By placing the ADD directive at this point, we build both CAF and VAST
 # every time. This ensures that the CI integration will always fetch a fresh
 # CAF tree, regardless of the Docker cache. The correct way to handle this
 # would be to provide a CAF docker image and use it in the FROM directive.
-ADD . $PREFIX/src/vast
+ADD . $BUILD_DIR/vast
 
 # CAF
-WORKDIR $PREFIX/src
+WORKDIR $BUILD_DIR
 RUN git clone https://github.com/actor-framework/actor-framework.git caf
 WORKDIR caf
 RUN ./configure --prefix=$PREFIX --build-type=$BUILD_TYPE \
-    --no-examples --no-opencl --no-unit-tests --no-python
-RUN make -C build
-RUN make -C build install
+    --no-examples --no-opencl --no-unit-tests --no-python && \
+    make -C build all install
 
 # Broker
-#WORKDIR $PREFIX/src
+#WORKDIR $BUILD_DIR
 #RUN git clone --recurse-submodules https://github.com/zeek/broker.git
 #WORKDIR broker
 #RUN ./configure --prefix=$PREFIX --with-caf=$PREFIX --build-type=$BUILD_TYPE \
-#    --disable-python --disable-docs --disable-tests
-#RUN make -C build
-#RUN make -C build install
+#    --disable-python --disable-docs --disable-tests && \
+#    make -C build all install
 
 # VAST
-WORKDIR $PREFIX/src/vast
-RUN ./configure --prefix=$PREFIX --build-type=$BUILD_TYPE --log-level=DEBUG
-RUN make -C build
-RUN make -C build test
-RUN make -C build install
+WORKDIR $BUILD_DIR/vast
+RUN ./configure --prefix=$PREFIX --build-type=$BUILD_TYPE --log-level=DEBUG && \
+    make -C build all test install
 
-# Remove build tools
-RUN apt-get purge clang libc++-dev libc++abi-dev cmake git-core
-RUN apt-get autoremove
+# Stage 2: copy application
+FROM debian:buster-slim
+LABEL maintainer="tobias.mayer@tenzir.com"
+LABEL builder=false
 
-CMD ["/bin/bash"]
+ENV PREFIX /usr/local
+ENV LD_LIBRARY_PATH $PREFIX/lib
+
+RUN apt-get install -y libpcap openssl
+
+COPY --from=builder $PREFIX/ $PREFIX/
+ENTRYPOINT ["/usr/local/bin/vast"]
+CMD ["--help"]
