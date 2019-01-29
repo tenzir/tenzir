@@ -24,9 +24,8 @@ namespace vast::system {
 
 struct default_configuration : system::configuration {
   default_configuration(std::string application_name);
-  caf::error parse(int argc, char** argv);
   caf::expected<path> setup_log_file(const path& base_dir);
-  void merge_root_options(system::application& app);
+  caf::error merge_root_options(system::application& app);
 
   std::string application_name;
 };
