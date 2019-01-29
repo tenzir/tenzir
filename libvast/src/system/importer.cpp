@@ -136,7 +136,8 @@ void importer_state::send_report() {
 };
 
 void importer_state::notify_flush_listeners() {
-  VAST_DEBUG(self, "forward flush subscribers to INDEX actors");
+  VAST_DEBUG(self, "forwards 'flush' subscribers to", index_actors.size(),
+             "INDEX actors");
   for (auto& listener : flush_listeners)
     for (auto& next : index_actors)
       self->send(next, subscribe_atom::value, flush_atom::value, listener);
@@ -314,8 +315,8 @@ behavior importer(stateful_actor<importer_state>* self, path dir,
       //       Adding multiple INDEX actors will cause the subscriber to
       //       receive more than one 'flush'  message, but the subscriber only
       //       expects one and will stop waiting after the first one. Once we
-      //       support multiple INDEXER actors at the IMPORTER, we also need
-      //       to revise the signaling of these 'flush' messages.
+      //       support multiple INDEX actors at the IMPORTER, we also need to
+      //       revise the signaling of these 'flush' messages.
       if (self->state.index_actors.size() > 1)
         VAST_WARNING(self, "registered more than one INDEX actor",
                      "(currently unsupported!)");
