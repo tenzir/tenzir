@@ -28,17 +28,17 @@ FIXTURE_SCOPE(ascii_tests, fixtures::events)
 
 namespace {
 
-auto last_bro_http_log_line = R"__(bro::http [2009-11-19+07:17:28.829] [2009-11-19+07:17:28.829, "rydI6puScNa", 192.168.1.104, 1224/?, 87.106.66.233, 80/?, 1, "POST", "87.106.66.233", "/rpc.html?e=bl", nil, "SCSDK-6.0.0", 1064, 96, 200, "OK", 100, "Continue", nil, {}, nil, nil, nil, "application/octet-stream", nil, nil])__";
+auto last_zeek_http_log_line = R"__(zeek::http [2009-11-19+07:17:28.829] [2009-11-19+07:17:28.829, "rydI6puScNa", 192.168.1.104, 1224/?, 87.106.66.233, 80/?, 1, "POST", "87.106.66.233", "/rpc.html?e=bl", nil, "SCSDK-6.0.0", 1064, 96, 200, "OK", 100, "Continue", nil, {}, nil, nil, nil, "application/octet-stream", nil, nil])__";
 
 auto first_csv_http_log_line = "type,id,timestamp,ts,uid,id.orig_h,id.orig_p,id.resp_h,id.resp_p,trans_depth,method,host,uri,referrer,user_agent,request_body_len,response_body_len,status_code,status_msg,info_code,info_msg,filename,tags,username,password,proxied,mime_type,md5,extraction_file";
 
-auto last_csv_http_log_line = R"__(bro::http,1095,1258615048829955072,2009-11-19+07:17:28.829,"rydI6puScNa",192.168.1.104,1224/?,87.106.66.233,80/?,1,"POST","87.106.66.233","/rpc.html?e=bl",,"SCSDK-6.0.0",1064,96,200,"OK",100,"Continue",,"",,,,"application/octet-stream",,)__";
+auto last_csv_http_log_line = R"__(zeek::http,1095,1258615048829955072,2009-11-19+07:17:28.829,"rydI6puScNa",192.168.1.104,1224/?,87.106.66.233,80/?,1,"POST","87.106.66.233","/rpc.html?e=bl",,"SCSDK-6.0.0",1064,96,200,"OK",100,"Continue",,"",,,,"application/octet-stream",,)__";
 
 auto first_ascii_bgpdump_txt_line = R"__(bgpdump::state_change [2018-01-24+11:05:17.0] [2018-01-24+11:05:17.0, 27.111.229.79, 17639, "1", "3"])__";
 
 auto first_json_bgpdump_txt_line = R"__({"timestamp": 1516791917000000000, "source_ip": "27.111.229.79", "source_as": 17639, "old_state": "1", "new_state": "3"})__";
 
-auto first_bro_conn_log_line = R"__({"ts": 1258531221486539008, "uid": "Pii6cUUq1v4", "id.orig_h": "192.168.1.102", "id.orig_p": 68, "id.resp_h": "192.168.1.1", "id.resp_p": 67, "proto": "udp", "service": null, "duration": 163820000, "orig_bytes": 301, "resp_bytes": 300, "conn_state": "SF", "local_orig": null, "missed_bytes": 0, "history": "Dd", "orig_pkts": 1, "orig_ip_bytes": 329, "resp_pkts": 1, "resp_ip_bytes": 328, "tunnel_parents": []})__";
+auto first_zeek_conn_log_line = R"__({"ts": 1258531221486539008, "uid": "Pii6cUUq1v4", "id.orig_h": "192.168.1.102", "id.orig_p": 68, "id.resp_h": "192.168.1.1", "id.resp_p": 67, "proto": "udp", "service": null, "duration": 163820000, "orig_bytes": 301, "resp_bytes": 300, "conn_state": "SF", "local_orig": null, "missed_bytes": 0, "history": "Dd", "orig_pkts": 1, "orig_ip_bytes": 329, "resp_pkts": 1, "resp_ip_bytes": 328, "tunnel_parents": []})__";
 
 template <class Writer>
 std::vector<std::string> generate(const std::vector<event>& xs) {
@@ -58,9 +58,9 @@ std::vector<std::string> generate(const std::vector<event>& xs) {
 
 } // namespace <anonymous>
 
-TEST(Bro writer) {
-  auto lines = generate<format::ascii::writer>(bro_http_log);
-  CHECK_EQUAL(lines.back(), last_bro_http_log_line);
+TEST(Zeek writer) {
+  auto lines = generate<format::ascii::writer>(zeek_http_log);
+  CHECK_EQUAL(lines.back(), last_zeek_http_log_line);
 }
 
 TEST(BGPdump writer) {
@@ -70,7 +70,7 @@ TEST(BGPdump writer) {
 }
 
 TEST(CSV writer) {
-  auto lines = generate<format::csv::writer>(bro_http_log);
+  auto lines = generate<format::csv::writer>(zeek_http_log);
   CHECK_EQUAL(lines.front(), first_csv_http_log_line);
   CHECK_EQUAL(lines.back(), last_csv_http_log_line);
 }
@@ -78,8 +78,8 @@ TEST(CSV writer) {
 TEST(JSON writer) {
   auto lines = generate<format::json::writer>(bgpdump_txt);
   CHECK_EQUAL(lines.front(), first_json_bgpdump_txt_line);
-  lines = generate<format::json::writer>(bro_conn_log);
-  CHECK_EQUAL(lines.front(), first_bro_conn_log_line);
+  lines = generate<format::json::writer>(zeek_conn_log);
+  CHECK_EQUAL(lines.front(), first_zeek_conn_log_line);
 }
 
 FIXTURE_SCOPE_END()

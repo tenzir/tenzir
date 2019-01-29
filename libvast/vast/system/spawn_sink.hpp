@@ -26,11 +26,11 @@ namespace vast::system {
 /// @returns a handle to the spawned actor on success, an error otherwise
 maybe_actor spawn_pcap_sink(caf::local_actor* self, spawn_arguments& args);
 
-/// Tries to spawn a new SINK for the Bro format.
+/// Tries to spawn a new SINK for the Zeek format.
 /// @param self Points to the parent actor.
 /// @param args Configures the new actor.
 /// @returns a handle to the spawned actor on success, an error otherwise
-maybe_actor spawn_bro_sink(caf::local_actor* self, spawn_arguments& args);
+maybe_actor spawn_zeek_sink(caf::local_actor* self, spawn_arguments& args);
 
 /// Tries to spawn a new SINK for the ASCII format.
 /// @param self Points to the parent actor.

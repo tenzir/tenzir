@@ -60,8 +60,8 @@ default_application::default_application() {
                              "spawn a node instead of connecting to one")
                   .add<bool>("blocking,b",
                              "block until the IMPORTER forwarded all data"));
-  import_->add(reader_command<format::bro::reader>, "bro",
-               "imports Bro logs from STDIN or file", src_opts());
+  import_->add(reader_command<format::zeek::reader>, "zeek",
+               "imports Zeek logs from STDIN or file", src_opts());
   import_->add(reader_command<format::mrt::reader>, "mrt",
                "imports MRT logs from STDIN or file", src_opts());
   import_->add(reader_command<format::bgpdump::reader>, "bgpdump",
@@ -81,8 +81,8 @@ default_application::default_application() {
                   .add<bool>("historical,h", "marks a query as historical")
                   .add<bool>("unified,u", "marks a query as unified")
                   .add<size_t>("events,e", "maximum number of results"));
-  export_->add(writer_command<format::bro::writer>, "bro",
-               "exports query results in Bro format", snk_opts());
+  export_->add(writer_command<format::zeek::writer>, "zeek",
+               "exports query results in Zeek format", snk_opts());
   export_->add(writer_command<format::csv::writer>, "csv",
                "exports query results in CSV format", snk_opts());
   export_->add(writer_command<format::ascii::writer>, "ascii",

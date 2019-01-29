@@ -32,11 +32,11 @@ maybe_actor spawn_pcap_source(caf::local_actor* self, spawn_arguments& args);
 /// @returns a handle to the spawned actor on success, an error otherwise
 maybe_actor spawn_test_source(caf::local_actor* self, spawn_arguments& args);
 
-/// Tries to spawn a new SOURCE for the Bro format.
+/// Tries to spawn a new SOURCE for the Zeek format.
 /// @param self Points to the parent actor.
 /// @param args Configures the new actor.
 /// @returns a handle to the spawned actor on success, an error otherwise
-maybe_actor spawn_bro_source(caf::local_actor* self, spawn_arguments& args);
+maybe_actor spawn_zeek_source(caf::local_actor* self, spawn_arguments& args);
 
 /// Tries to spawn a new SOURCE for the BGPdump format.
 /// @param self Points to the parent actor.

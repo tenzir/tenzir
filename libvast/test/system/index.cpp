@@ -175,10 +175,10 @@ TEST(iterable integer query result) {
   CHECK_EQUAL(result, expected_result);
 }
 
-TEST(iterable bro conn log query result) {
-  REQUIRE_EQUAL(bro_conn_log.size(), 20u);
+TEST(iterable zeek conn log query result) {
+  REQUIRE_EQUAL(zeek_conn_log.size(), 20u);
   MESSAGE("ingest conn.log slices");
-  detail::spawn_container_source(sys, bro_conn_log_slices, index);
+  detail::spawn_container_source(sys, zeek_conn_log_slices, index);
   run();
   /// Aligns `x` to the size of `y`.
   auto align = [&](ids& x, const ids& y) {

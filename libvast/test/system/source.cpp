@@ -62,14 +62,14 @@ caf::behavior test_sink(test_sink_type* self, caf::actor src) {
 
 FIXTURE_SCOPE(source_tests, fixtures::deterministic_actor_system_and_events)
 
-TEST(bro source) {
+TEST(zeek source) {
   MESSAGE("start reader");
-  auto stream = unbox(detail::make_input_stream(bro::small_conn));
-  format::bro::reader reader{get_or(sys.config(), "vast.table-slice-type",
+  auto stream = unbox(detail::make_input_stream(zeek::small_conn));
+  format::zeek::reader reader{get_or(sys.config(), "vast.table-slice-type",
                                     defaults::system::table_slice_type),
                              std::move(stream)};
   MESSAGE("start source for producing table slices of size 10");
-  auto src = self->spawn(source<format::bro::reader>, std::move(reader),
+  auto src = self->spawn(source<format::zeek::reader>, std::move(reader),
                          default_table_slice_builder::make,
                          events::slice_size);
   run();
@@ -85,16 +85,16 @@ TEST(bro source) {
     auto xs = subset(*slices[row], 0, table_slice::npos);
     std::move(xs.begin(), xs.end(), std::back_inserter(row_contents));
   }
-  std::vector<value> bro_conn_log_values;
-  for (auto& x : bro_conn_log)
-    bro_conn_log_values.emplace_back(x);
-  REQUIRE_EQUAL(row_contents.size(), bro_conn_log_values.size());
+  std::vector<value> zeek_conn_log_values;
+  for (auto& x : zeek_conn_log)
+    zeek_conn_log_values.emplace_back(x);
+  REQUIRE_EQUAL(row_contents.size(), zeek_conn_log_values.size());
   for (size_t i = 0; i < row_contents.size(); ++i)
-    REQUIRE_EQUAL(row_contents[i], bro_conn_log_values[i]);
+    REQUIRE_EQUAL(row_contents[i], zeek_conn_log_values[i]);
   MESSAGE("compare slices to auto-generates ones");
-  REQUIRE_EQUAL(slices.size(), bro_conn_log_slices.size());
+  REQUIRE_EQUAL(slices.size(), zeek_conn_log_slices.size());
   for (size_t i = 0; i < slices.size(); ++i)
-    CHECK_EQUAL(*slices[i], *bro_conn_log_slices[i]);
+    CHECK_EQUAL(*slices[i], *zeek_conn_log_slices[i]);
   MESSAGE("shutdown");
   self->send_exit(src, caf::exit_reason::user_shutdown);
   run();

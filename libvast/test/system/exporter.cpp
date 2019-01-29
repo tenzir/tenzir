@@ -148,7 +148,7 @@ TEST(historical query without importer) {
   spawn_archive();
   run();
   MESSAGE("ingest conn.log into archive and index");
-  vast::detail::spawn_container_source(sys, bro_conn_log_slices, index,
+  vast::detail::spawn_container_source(sys, zeek_conn_log_slices, index,
                                        archive);
   run();
   MESSAGE("spawn exporter for historical query");
@@ -158,7 +158,7 @@ TEST(historical query without importer) {
   REQUIRE_EQUAL(results.size(), 5u);
   std::sort(results.begin(), results.end());
   CHECK_EQUAL(results.front().id(), 10u);
-  CHECK_EQUAL(results.front().type().name(), "bro::conn");
+  CHECK_EQUAL(results.front().type().name(), "zeek::conn");
   CHECK_EQUAL(results.back().id(), 19u);
 }
 
@@ -166,9 +166,9 @@ TEST(historical query with importer) {
   MESSAGE("prepare importer");
   importer_setup();
   MESSAGE("ingest conn.log via importer");
-  // We need to copy bro_conn_log_slices here, because the importer will assign
+  // We need to copy zeek_conn_log_slices here, because the importer will assign
   // IDs to the slices it received and we mustn't mess our static test data.
-  vast::detail::spawn_container_source(sys, copy(bro_conn_log_slices),
+  vast::detail::spawn_container_source(sys, copy(zeek_conn_log_slices),
                                        importer);
   run();
   MESSAGE("spawn exporter for historical query");
@@ -178,7 +178,7 @@ TEST(historical query with importer) {
   REQUIRE_EQUAL(results.size(), 5u);
   std::sort(results.begin(), results.end());
   CHECK_EQUAL(results.front().id(), 10u);
-  CHECK_EQUAL(results.front().type().name(), "bro::conn");
+  CHECK_EQUAL(results.front().type().name(), "zeek::conn");
   CHECK_EQUAL(results.back().id(), 19u);
 }
 
@@ -189,14 +189,14 @@ TEST(continuous query with exporter only) {
   send(exporter, system::extract_atom::value);
   run();
   MESSAGE("send conn.log directly to exporter");
-  vast::detail::spawn_container_source(sys, bro_conn_log_slices, exporter);
+  vast::detail::spawn_container_source(sys, zeek_conn_log_slices, exporter);
   run();
   MESSAGE("fetch results");
   auto results = fetch_results();
   REQUIRE_EQUAL(results.size(), 5u);
   std::sort(results.begin(), results.end());
   CHECK_EQUAL(results.front().id(), 10u);
-  CHECK_EQUAL(results.front().type().name(), "bro::conn");
+  CHECK_EQUAL(results.front().type().name(), "zeek::conn");
   CHECK_EQUAL(results.back().id(), 19u);
 }
 
@@ -208,7 +208,7 @@ TEST(continuous query with importer) {
   send(importer, system::exporter_atom::value, exporter);
   MESSAGE("ingest conn.log via importer");
   // Again: copy because we musn't mutate static test data.
-  vast::detail::spawn_container_source(sys, copy(bro_conn_log_slices),
+  vast::detail::spawn_container_source(sys, copy(zeek_conn_log_slices),
                                        importer);
   run();
   MESSAGE("fetch results");
@@ -216,7 +216,7 @@ TEST(continuous query with importer) {
   REQUIRE_EQUAL(results.size(), 5u);
   std::sort(results.begin(), results.end());
   CHECK_EQUAL(results.front().id(), 10u);
-  CHECK_EQUAL(results.front().type().name(), "bro::conn");
+  CHECK_EQUAL(results.front().type().name(), "zeek::conn");
   CHECK_EQUAL(results.back().id(), 19u);
 }
 

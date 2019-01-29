@@ -195,22 +195,22 @@ TEST(integer rows lookup) {
   CHECK_EQUAL(query(":int > +1 && :int < +3"), res(1u, 4u, 7u));
 }
 
-TEST(single partition bro conn log lookup) {
-  MESSAGE("generate partiton for bro conn log");
+TEST(single partition zeek conn log lookup) {
+  MESSAGE("generate partiton for zeek conn log");
   put = make_partition();
-  MESSAGE("ingest bro conn logs");
-  auto layout = bro_conn_log_layout();
+  MESSAGE("ingest zeek conn logs");
+  auto layout = zeek_conn_log_layout();
   auto indexer = put->manager().get_or_add(layout).first;
-  detail::spawn_container_source(sys, bro_conn_log_slices, indexer);
+  detail::spawn_container_source(sys, zeek_conn_log_slices, indexer);
   run();
   MESSAGE("verify partition content");
   auto res = [&](auto... args) {
-    return make_ids({args...}, bro_conn_log.size());
+    return make_ids({args...}, zeek_conn_log.size());
   };
   CHECK_EQUAL(rank(query("id.resp_p == 53/?")), 3u);
   CHECK_EQUAL(rank(query("id.resp_p == 137/?")), 5u);
   CHECK_EQUAL(rank(query("id.resp_p == 53/? || id.resp_p == 137/?")), 8u);
-  CHECK_EQUAL(rank(query("&time > 1970-01-01")), bro_conn_log.size());
+  CHECK_EQUAL(rank(query("&time > 1970-01-01")), zeek_conn_log.size());
   CHECK_EQUAL(rank(query("proto == \"udp\"")), 20u);
   CHECK_EQUAL(rank(query("proto == \"tcp\"")), 0u);
   CHECK_EQUAL(rank(query("uid == \"nkCxlvNN8pi\"")), 1u);
@@ -222,14 +222,14 @@ TEST(single partition bro conn log lookup) {
   CHECK_EQUAL(rank(query("service == \"dns\" && :addr == 192.168.1.102")), 4u);
 }
 
-TEST(multiple partitions bro conn log lookup no messaging) {
+TEST(multiple partitions zeek conn log lookup no messaging) {
   // This test bypasses any messaging by reaching directly into the state of
   // each INDEXER actor.
   using indexer_type = caf::stateful_actor<indexer_state>;
-  MESSAGE("ingest bro conn logs into partitions of size " << slice_size);
+  MESSAGE("ingest zeek conn logs into partitions of size " << slice_size);
   std::vector<partition_ptr> partitions;
-  auto layout = bro_conn_log_layout();
-  for (auto& slice : bro_conn_log_slices) {
+  auto layout = zeek_conn_log_layout();
+  for (auto& slice : zeek_conn_log_slices) {
     auto ptr = make_partition(uuid::random());
     CHECK_EQUAL(exists(ptr->dir()), false);
     CHECK_EQUAL(ptr->dirty(), false);
@@ -260,7 +260,7 @@ TEST(multiple partitions bro conn log lookup no messaging) {
   }
   MESSAGE("verify partition content");
   auto res = [&](auto... args) {
-    return make_ids({args...}, bro_conn_log.size());
+    return make_ids({args...}, zeek_conn_log.size());
   };
   auto query_all = [&](std::string_view expr_str) {
     ids result;
@@ -276,7 +276,7 @@ TEST(multiple partitions bro conn log lookup no messaging) {
   CHECK_EQUAL(rank(query_all("id.resp_p == 53/?")), 3u);
   CHECK_EQUAL(rank(query_all("id.resp_p == 137/?")), 5u);
   CHECK_EQUAL(rank(query_all("id.resp_p == 53/? || id.resp_p == 137/?")), 8u);
-  CHECK_EQUAL(rank(query_all("&time > 1970-01-01")), bro_conn_log.size());
+  CHECK_EQUAL(rank(query_all("&time > 1970-01-01")), zeek_conn_log.size());
   CHECK_EQUAL(rank(query_all("proto == \"udp\"")), 20u);
   CHECK_EQUAL(rank(query_all("proto == \"tcp\"")), 0u);
   CHECK_EQUAL(rank(query_all("uid == \"nkCxlvNN8pi\"")), 1u);

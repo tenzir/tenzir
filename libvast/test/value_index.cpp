@@ -510,11 +510,11 @@ auto orig_h(const event& x) {
 // bitmap representing conn.log events. The culprit was the EWAH bitmap
 // encoding, because swapping out ewah_bitmap for null_bitmap in address_index
 // made the bug disappear.
-TEST_DISABLED(regression - build an address index from bro events) {
+TEST_DISABLED(regression - build an address index from zeek events) {
   // Populate the index with data up to the critical point.
   address_index idx{address_type{}};
   for (auto i = 0; i < 6464; ++i) {
-    auto& x = bro_conn_log[i];
+    auto& x = zeek_conn_log[i];
     CHECK(idx.append(orig_h(x), x.id()));
   }
   // This is where we are in trouble: the last ID should be 720, but the bogus
@@ -523,7 +523,7 @@ TEST_DISABLED(regression - build an address index from bro events) {
   auto before = unbox(idx.lookup(equal, make_data_view(addr)));
   CHECK_EQUAL(rank(before), 4u);
   CHECK_EQUAL(select(before, -1), id{720});
-  auto& x = bro_conn_log[6464];
+  auto& x = zeek_conn_log[6464];
   // After adding another event, the correct state is restored again and the
   // bug doesn't show up anymore.
   CHECK(idx.append(orig_h(x), x.id()));
@@ -555,7 +555,7 @@ TEST_DISABLED(regression - manual address bitmap index from bitmaps) {
   MESSAGE("populating index");
   std::array<ewah_bitmap, 32> idx;
   for (auto n = 0; n < 6464; ++n) {
-    auto x = orig_h(bro_conn_log[n]);
+    auto x = orig_h(zeek_conn_log[n]);
     for (auto i = 0u; i < 4; ++i) {
       auto byte = x.data()[i + 12];
       for (auto j = 0u; j < 8; ++j)
@@ -583,7 +583,7 @@ TEST_DISABLED(regression - manual address bitmap index from 4 byte indexes) {
   idx.fill(byte_index{8});
   MESSAGE("populating index");
   for (auto n = 0; n < 6464; ++n) {
-    auto x = orig_h(bro_conn_log[n]);
+    auto x = orig_h(zeek_conn_log[n]);
     for (auto i = 0u; i < 4; ++i) {
       auto byte = x.data()[i + 12];
       idx[i].append(byte);
@@ -614,10 +614,10 @@ bool is_http(view<data> x) {
 
 } // namespace <anonymous>
 
-TEST_DISABLED(regression - bro conn log service http) {
+TEST_DISABLED(regression - zeek conn log service http) {
   // The number of occurrences of the 'service == "http"' in the conn.log,
   // sliced in batches of 100. Pre-computed via:
-  //  bro-cut service < test/logs/bro/conn.log \
+  //  zeek-cut service < test/logs/zeek/conn.log \
   //    | awk '{ if ($1 == "http") ++n; if (NR % 100 == 0) { print n; n = 0 } }\
   //           END { print n }' \
   //    | paste -s -d , -
@@ -630,12 +630,12 @@ TEST_DISABLED(regression - bro conn log service http) {
   };
   std::vector<std::pair<value_index_ptr, ids>> slices;
   slices.reserve(http_per_100_events.size());
-  for (size_t i = 0; i < bro_conn_log.size(); ++i) {
+  for (size_t i = 0; i < zeek_conn_log.size(); ++i) {
     if (i % 100 == 0)
       slices.emplace_back(factory<value_index>::make(string_type{}),
                           ids(i, false));
     auto& [idx, expected] = slices.back();
-    auto x = service(bro_conn_log[i]);
+    auto x = service(zeek_conn_log[i]);
     idx->append(x, i);
     expected.append_bit(is_http(x));
   }
@@ -647,7 +647,7 @@ TEST_DISABLED(regression - bro conn log service http) {
   }
 }
 
-TEST_DISABLED(regression - manual value index for bro conn log service http) {
+TEST_DISABLED(regression - manual value index for zeek conn log service http) {
   // Setup string size bitmap index.
   using length_bitmap_index =
     bitmap_index<uint32_t, multi_level_coder<range_coder<ids>>>;
@@ -682,7 +682,7 @@ TEST_DISABLED(regression - manual value index for bro conn log service http) {
       [&](auto) {
         FAIL("unexpected service type");
       }
-    ), service(bro_conn_log[i]));
+    ), service(zeek_conn_log[i]));
   REQUIRE_EQUAL(rank(mask), 100u);
   // Perform a manual index lookup for "http".
   auto http = "http"s;
@@ -690,7 +690,7 @@ TEST_DISABLED(regression - manual value index for bro conn log service http) {
   for (auto i = 0u; i < http.size(); ++i)
     data &= chars[i].lookup(equal, static_cast<uint8_t>(http[i]));
   // Generated via:
-  // bro-cut service < test/logs/bro/conn.log \
+  // zeek-cut service < test/logs/zeek/conn.log \
   //  | awk 'NR > 8000 && NR <= 8100 && $1 == "http" { print NR-1  }' \
   //  | paste -s -d , -
   auto expected = make_ids(

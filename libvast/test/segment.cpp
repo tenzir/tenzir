@@ -33,23 +33,23 @@ FIXTURE_SCOPE(segment_tests, fixtures::events)
 
 TEST(construction and querying) {
   segment_builder builder;
-  for (auto& slice : bro_conn_log_slices)
+  for (auto& slice : zeek_conn_log_slices)
     REQUIRE(!builder.add(slice));
   auto x = builder.finish();
   REQUIRE_NOT_EQUAL(x, nullptr);
-  CHECK_EQUAL(x->num_slices(), bro_conn_log_slices.size());
+  CHECK_EQUAL(x->num_slices(), zeek_conn_log_slices.size());
   MESSAGE("lookup IDs for some segments");
   auto xs = x->lookup(make_ids({0, 6, 19, 21}));
   REQUIRE(xs);
   auto& slices = *xs;
   REQUIRE_EQUAL(slices.size(), 2u); // [0,8), [16,24)
-  CHECK_EQUAL(*slices[0], *bro_conn_log_slices[0]);
-  CHECK_EQUAL(*slices[1], *bro_conn_log_slices[2]);
+  CHECK_EQUAL(*slices[0], *zeek_conn_log_slices[0]);
+  CHECK_EQUAL(*slices[1], *zeek_conn_log_slices[2]);
 }
 
 TEST(serialization) {
   segment_builder builder;
-  auto slice = bro_conn_log_slices[0];
+  auto slice = zeek_conn_log_slices[0];
   REQUIRE(!builder.add(slice));
   auto x = builder.finish();
   REQUIRE_NOT_EQUAL(x, nullptr);

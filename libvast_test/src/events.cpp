@@ -97,15 +97,15 @@ static std::vector<event> inhale(const char* filename) {
 
 size_t events::slice_size = 8;
 
-std::vector<event> events::bro_conn_log;
-std::vector<event> events::bro_dns_log;
-std::vector<event> events::bro_http_log;
+std::vector<event> events::zeek_conn_log;
+std::vector<event> events::zeek_dns_log;
+std::vector<event> events::zeek_http_log;
 std::vector<event> events::bgpdump_txt;
 std::vector<event> events::random;
 
-std::vector<table_slice_ptr> events::bro_conn_log_slices;
-std::vector<table_slice_ptr> events::bro_dns_log_slices;
-std::vector<table_slice_ptr> events::bro_http_log_slices;
+std::vector<table_slice_ptr> events::zeek_conn_log_slices;
+std::vector<table_slice_ptr> events::zeek_dns_log_slices;
+std::vector<table_slice_ptr> events::zeek_http_log_slices;
 std::vector<table_slice_ptr> events::bgpdump_txt_slices;
 // std::vector<table_slice_ptr> events::random_slices;
 
@@ -115,8 +115,8 @@ std::vector<table_slice_ptr> events::ascending_integers_slices;
 std::vector<event> events::alternating_integers;
 std::vector<table_slice_ptr> events::alternating_integers_slices;
 
-record_type events::bro_conn_log_layout() {
-  return bro_conn_log_slices[0]->layout();
+record_type events::zeek_conn_log_layout() {
+  return zeek_conn_log_slices[0]->layout();
 }
 
 std::vector<table_slice_ptr>
@@ -207,12 +207,12 @@ events::events() {
   factory<table_slice_builder>::initialize();
   initialized = true;
   MESSAGE("inhaling unit test suite events");
-  bro_conn_log = inhale<format::bro::reader>(bro::small_conn);
-  REQUIRE_EQUAL(bro_conn_log.size(), 20u);
-  bro_dns_log = inhale<format::bro::reader>(bro::dns);
-  REQUIRE_EQUAL(bro_dns_log.size(), 32u);
-  bro_http_log = inhale<format::bro::reader>(bro::http);
-  REQUIRE_EQUAL(bro_http_log.size(), 40u);
+  zeek_conn_log = inhale<format::zeek::reader>(zeek::small_conn);
+  REQUIRE_EQUAL(zeek_conn_log.size(), 20u);
+  zeek_dns_log = inhale<format::zeek::reader>(zeek::dns);
+  REQUIRE_EQUAL(zeek_dns_log.size(), 32u);
+  zeek_http_log = inhale<format::zeek::reader>(zeek::http);
+  REQUIRE_EQUAL(zeek_http_log.size(), 40u);
   bgpdump_txt = inhale<format::bgpdump::reader>(bgpdump::updates20180124);
   REQUIRE_EQUAL(bgpdump_txt.size(), 100u);
   vast::format::test::reader rd{defaults::system::table_slice_type, 42, 1000};
@@ -253,10 +253,10 @@ events::events() {
       }
       return slices;
     };
-  bro_conn_log_slices = assign_ids_and_slice_up(bro_conn_log);
-  bro_dns_log_slices = assign_ids_and_slice_up(bro_dns_log);
+  zeek_conn_log_slices = assign_ids_and_slice_up(zeek_conn_log);
+  zeek_dns_log_slices = assign_ids_and_slice_up(zeek_dns_log);
   allocate_id_block(1000); // cause an artificial gap in the ID sequence
-  bro_http_log_slices = assign_ids_and_slice_up(bro_http_log);
+  zeek_http_log_slices = assign_ids_and_slice_up(zeek_http_log);
   bgpdump_txt_slices = assign_ids_and_slice_up(bgpdump_txt);
   // random_slices = slice_up(random);
   ascending_integers_slices = assign_ids_and_slice_up(ascending_integers);
@@ -289,9 +289,9 @@ events::events() {
       }                                                                        \
     }                                                                          \
   }
-  SANITY_CHECK(bro_conn_log, bro_conn_log_slices);
-  SANITY_CHECK(bro_dns_log, bro_dns_log_slices);
-  SANITY_CHECK(bro_http_log, bro_http_log_slices);
+  SANITY_CHECK(zeek_conn_log, zeek_conn_log_slices);
+  SANITY_CHECK(zeek_dns_log, zeek_dns_log_slices);
+  SANITY_CHECK(zeek_http_log, zeek_http_log_slices);
   SANITY_CHECK(bgpdump_txt, bgpdump_txt_slices);
   //SANITY_CHECK(random, const_random_slices);
 }

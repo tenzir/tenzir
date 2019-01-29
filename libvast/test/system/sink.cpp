@@ -25,16 +25,16 @@ using namespace vast::system;
 
 FIXTURE_SCOPE(sink_tests, fixtures::actor_system_and_events)
 
-TEST(Bro sink) {
+TEST(zeek sink) {
   MESSAGE("constructing a sink");
-  format::bro::writer writer{directory};
-  auto snk = self->spawn(sink<format::bro::writer>, std::move(writer), 0u);
+  format::zeek::writer writer{directory};
+  auto snk = self->spawn(sink<format::zeek::writer>, std::move(writer), 0u);
   MESSAGE("sending events");
-  self->send(snk, bro_conn_log);
+  self->send(snk, zeek_conn_log);
   MESSAGE("shutting down");
   self->send_exit(snk, caf::exit_reason::user_shutdown);
   self->wait_for(snk);
-  CHECK(exists(directory / "bro::conn.log"));
+  CHECK(exists(directory / "zeek::conn.log"));
 }
 
 FIXTURE_SCOPE_END()

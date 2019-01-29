@@ -170,7 +170,7 @@ TEST(validation - attribute extractor) {
   expr = to<expression>("&type == 42");
   REQUIRE(expr);
   CHECK(!caf::visit(validator{}, *expr));
-  expr = to<expression>("&type == bro::conn");
+  expr = to<expression>("&type == zeek::conn");
   REQUIRE(expr);
   CHECK(!caf::visit(validator{}, *expr));
   // The "time" attribute extractor requires a timestamp operand.

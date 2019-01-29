@@ -94,10 +94,10 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
       test_slices.emplace_back(slices[0]);
       layouts.emplace(slices[0]->layout());
     };
-    pick_from(bro_conn_log_slices);
+    pick_from(zeek_conn_log_slices);
     pick_from(ascending_integers_slices);
     // TODO: uncomment when resolving [ch3215]
-    // pick_from(bro_http_log_slices);
+    // pick_from(zeek_http_log_slices);
     // pick_from(bgpdump_txt_slices);
     // pick_from(random_slices);
     num_layouts = layouts.size();
@@ -162,23 +162,23 @@ TEST(spawning sinks automatically) {
 }
 
 /*
-TEST(creating bro conn log partitions automatically) {
+TEST(creating zeek conn log partitions automatically) {
   MESSAGE("spawn the stage");
   auto stg = sys.spawn(test_stage, &pindex,
                        partition_factory(sys, state_dir, &partition_count),
                        slice_size);
   MESSAGE("spawn the source and run");
   auto src = vast::detail::spawn_container_source(self->system(),
-                                                  bro_conn_log_slices, stg);
+                                                  zeek_conn_log_slices, stg);
   run();
-  CHECK_EQUAL(bufs->size(), bro_conn_log_slices.size());
+  CHECK_EQUAL(bufs->size(), zeek_conn_log_slices.size());
   MESSAGE("flatten all partitions into one buffer");
   event_buffer xs;
   for (auto& buf : *bufs)
     xs.insert(xs.end(), buf->begin(), buf->end());
-  CHECK_EQUAL(bro_conn_log.size(), xs.size());
+  CHECK_EQUAL(zeek_conn_log.size(), xs.size());
   std::sort(xs.begin(), xs.end());
-  auto ys = bro_conn_log;
+  auto ys = zeek_conn_log;
   std::sort(ys.begin(), ys.end());
   REQUIRE_EQUAL(xs.size(), ys.size());
   for (size_t i = 0; i < xs.size(); ++i)

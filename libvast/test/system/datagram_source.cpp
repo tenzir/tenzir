@@ -66,9 +66,9 @@ caf::behavior test_sink(test_sink_type* self, caf::actor src) {
 
 FIXTURE_SCOPE(source_tests, fixtures::deterministic_actor_system_and_events)
 
-TEST(bro conn source) {
+TEST(zeek conn source) {
   MESSAGE("start source for producing table slices of size 100");
-  namespace bf = format::bro;
+  namespace bf = format::zeek;
   bf::reader reader{get_or(sys.config(), "vast.table-slice-type",
                            defaults::system::table_slice_type)};
   auto hdl = caf::io::datagram_handle::from_int(1);
@@ -81,11 +81,11 @@ TEST(bro conn source) {
   MESSAGE("start sink and initialize stream");
   auto snk = self->spawn(test_sink, src);
   run();
-  MESSAGE("'send' datagram to src with a small Bro conn log");
+  MESSAGE("'send' datagram to src with a small Zeek conn log");
   caf::io::new_datagram_msg msg;
   msg.handle = caf::io::datagram_handle::from_int(2);
   using iter = std::istreambuf_iterator<char>;
-  std::ifstream in{bro::small_conn};
+  std::ifstream in{zeek::small_conn};
   REQUIRE(in.good());
   iter first{in};
   iter last{};

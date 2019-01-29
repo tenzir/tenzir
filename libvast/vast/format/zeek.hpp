@@ -36,12 +36,12 @@
 #include "vast/schema.hpp"
 #include "vast/table_slice_builder.hpp"
 
-namespace vast::format::bro {
+namespace vast::format::zeek {
 
 /// Parses non-container types.
 template <class Iterator, class Attribute>
-struct bro_parser {
-  bro_parser(Iterator& f, const Iterator& l, Attribute& attr)
+struct zeek_parser {
+  zeek_parser(Iterator& f, const Iterator& l, Attribute& attr)
     : f_{f},
       l_{l},
       attr_{attr} {
@@ -119,12 +119,12 @@ struct bro_parser {
   Attribute& attr_;
 };
 
-/// Constructs a polymorphic Bro data parser.
+/// Constructs a polymorphic Zeek data parser.
 template <class Iterator, class Attribute>
-struct bro_parser_factory {
+struct zeek_parser_factory {
   using result_type = rule<Iterator, Attribute>;
 
-  bro_parser_factory(const std::string& set_separator)
+  zeek_parser_factory(const std::string& set_separator)
     : set_separator_{set_separator} {
   }
 
@@ -206,28 +206,28 @@ struct bro_parser_factory {
   const std::string& set_separator_;
 };
 
-/// Constructs a Bro data parser from a type and set separator.
+/// Constructs a Zeek data parser from a type and set separator.
 template <class Iterator, class Attribute = data>
 rule<Iterator, Attribute>
-make_bro_parser(const type& t, const std::string& set_separator = ",") {
+make_zeek_parser(const type& t, const std::string& set_separator = ",") {
   rule<Iterator, Attribute> r;
   auto sep = is_container(t) ? set_separator : "";
-  return caf::visit(bro_parser_factory<Iterator, Attribute>{sep}, t);
+  return caf::visit(zeek_parser_factory<Iterator, Attribute>{sep}, t);
 }
 
-/// Parses non-container Bro data.
+/// Parses non-container Zeek data.
 template <class Iterator, class Attribute = data>
-bool bro_basic_parse(const type& t, Iterator& f, const Iterator& l,
+bool zeek_basic_parse(const type& t, Iterator& f, const Iterator& l,
                      Attribute& attr) {
-  return caf::visit(bro_parser<Iterator, Attribute>{f, l, attr}, t);
+  return caf::visit(zeek_parser<Iterator, Attribute>{f, l, attr}, t);
 }
 
-/// A Bro reader.
+/// A Zeek reader.
 class reader final : public single_layout_reader {
 public:
   using super = single_layout_reader;
 
-  /// Constructs a Bro reader.
+  /// Constructs a Zeek reader.
   /// @param input The stream of logs to read.
   explicit reader(caf::atom_value table_slice_type,
                   std::unique_ptr<std::istream> in = nullptr);
@@ -261,14 +261,14 @@ private:
   std::vector<rule<iterator_type, data>> parsers_;
 };
 
-/// A Bro writer.
+/// A Zeek writer.
 class writer : public format::writer {
 public:
   writer() = default;
   writer(writer&&) = default;
   writer& operator=(writer&&) = default;
 
-  /// Constructs a Bro writer.
+  /// Constructs a Zeek writer.
   /// @param dir The path where to write the log file(s) to.
   writer(path dir);
 
@@ -285,4 +285,4 @@ private:
   std::unordered_map<std::string, std::unique_ptr<std::ostream>> streams_;
 };
 
-} // namespace vast::format::bro
+} // namespace vast::format::zeek
