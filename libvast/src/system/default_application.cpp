@@ -74,6 +74,7 @@ default_application::default_application() {
   // Add "export" command and its children.
   export_ = add(nullptr, "export", "exports query results to STDOUT or file",
                 opts()
+                  .add<std::string>("read,r", "path for reading the query")
                   .add<bool>("node,n",
                              "spawn a node instead of connecting to one")
                   .add<bool>("continuous,c", "marks a query as continuous")

@@ -21,6 +21,7 @@
 
 #include <caf/event_based_actor.hpp>
 #include <caf/scoped_actor.hpp>
+#include <caf/settings.hpp>
 #include <caf/stateful_actor.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
@@ -43,6 +44,44 @@ caf::message sink_command(const command& cmd, actor_system& sys, caf::actor snk,
                           command::argument_iterator first,
                           command::argument_iterator last) {
   VAST_UNUSED(cmd);
+  // Read query from input file, STDIN or CLI arguments.
+  std::string query;
+  auto assign_query = [&](std::istream& in) {
+    query.assign(std::istreambuf_iterator<char>{in},
+                 std::istreambuf_iterator<char>{});
+  };
+  if (auto fname = caf::get_if<std::string>(&options, "read")) {
+    // Sanity check.
+    if (first != last) {
+      auto err = make_error(ec::parse_error, "got a query on the command line "
+                                             "but --read option is defined");
+      return make_message(std::move(err));
+    }
+    // Read query from STDIN if file name is '-'.
+    if (*fname == "-") {
+      assign_query(std::cin);
+    } else {
+      std::ifstream f{*fname};
+      if (!f) {
+        auto err = make_error(ec::no_such_file, "unable to read from " + *fname);
+        return make_message(std::move(err));
+      }
+      assign_query(f);
+    }
+  } else if (first == last) {
+    // Read query from STDIN.
+    assign_query(std::cin);
+  } else {
+    query = *first;
+    for (auto i = std::next(first); i != last; ++i) {
+      query += ' ';
+      query += *i;
+    }
+  }
+  if (query.empty()) {
+    auto err = make_error(ec::invalid_query);
+    return make_message(std::move(err));
+  }
   // Get a convenient and blocking way to interact with actors.
   scoped_actor self{sys};
   // Get VAST node.
@@ -61,7 +100,7 @@ caf::message sink_command(const command& cmd, actor_system& sys, caf::actor snk,
   // Spawn exporter at the node.
   actor exp;
   std::vector<std::string> args{"spawn", "exporter"};
-  args.insert(args.end(), first, last);
+  args.emplace_back(std::move(query));
   VAST_DEBUG(&cmd, "spawns exporter with parameters:", args);
   error err;
   self->request(node, infinite, std::move(args), options).receive(
