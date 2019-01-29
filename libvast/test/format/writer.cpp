@@ -36,7 +36,9 @@ auto last_csv_http_log_line = R"__(bro::http,1095,1258615048829955072,2009-11-19
 
 auto first_ascii_bgpdump_txt_line = R"__(bgpdump::state_change [2018-01-24+11:05:17.0] [2018-01-24+11:05:17.0, 27.111.229.79, 17639, "1", "3"])__";
 
-auto first_json_bgpdump_txt_line = R"__({"id": 1096, "timestamp": 1516791917000000000, "value": {"type": {"name": "bgpdump::state_change", "kind": "record", "structure": {"timestamp": {"name": "", "kind": "timestamp", "structure": null, "attributes": {"time": null}}, "source_ip": {"name": "", "kind": "address", "structure": null, "attributes": {}}, "source_as": {"name": "", "kind": "count", "structure": null, "attributes": {}}, "old_state": {"name": "", "kind": "string", "structure": null, "attributes": {}}, "new_state": {"name": "", "kind": "string", "structure": null, "attributes": {}}}, "attributes": {}}, "data": {"timestamp": 1516791917000000000, "source_ip": "27.111.229.79", "source_as": 17639, "old_state": "1", "new_state": "3"}}})__";
+auto first_json_bgpdump_txt_line = R"__({"timestamp": 1516791917000000000, "source_ip": "27.111.229.79", "source_as": 17639, "old_state": "1", "new_state": "3"})__";
+
+auto first_bro_conn_log_line = R"__({"ts": 1258531221486539008, "uid": "Pii6cUUq1v4", "id.orig_h": "192.168.1.102", "id.orig_p": 68, "id.resp_h": "192.168.1.1", "id.resp_p": 67, "proto": "udp", "service": null, "duration": 163820000, "orig_bytes": 301, "resp_bytes": 300, "conn_state": "SF", "local_orig": null, "missed_bytes": 0, "history": "Dd", "orig_pkts": 1, "orig_ip_bytes": 329, "resp_pkts": 1, "resp_ip_bytes": 328, "tunnel_parents": []})__";
 
 template <class Writer>
 std::vector<std::string> generate(const std::vector<event>& xs) {
@@ -76,6 +78,8 @@ TEST(CSV writer) {
 TEST(JSON writer) {
   auto lines = generate<format::json::writer>(bgpdump_txt);
   CHECK_EQUAL(lines.front(), first_json_bgpdump_txt_line);
+  lines = generate<format::json::writer>(bro_conn_log);
+  CHECK_EQUAL(lines.front(), first_bro_conn_log_line);
 }
 
 FIXTURE_SCOPE_END()

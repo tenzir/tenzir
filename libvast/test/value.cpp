@@ -146,36 +146,9 @@ TEST(json)
   auto j = to<json>(v);
   REQUIRE(j);
   auto str = R"__({
-  "type": {
-    "name": "",
-    "kind": "record",
-    "structure": {
-      "foo": {
-        "name": "",
-        "kind": "port",
-        "structure": null,
-        "attributes": {}
-      },
-      "bar": {
-        "name": "",
-        "kind": "int",
-        "structure": null,
-        "attributes": {}
-      },
-      "baz": {
-        "name": "",
-        "kind": "real",
-        "structure": null,
-        "attributes": {}
-      }
-    },
-    "attributes": {}
-  },
-  "data": {
-    "foo": "53/udp",
-    "bar": -42,
-    "baz": 4.2
-  }
+  "foo": 53,
+  "bar": -42,
+  "baz": 4.2
 })__";
   CHECK_EQUAL(to_string(*j), str);
 }

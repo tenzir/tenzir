@@ -13,10 +13,10 @@
 
 #pragma once
 
-#include "vast/json.hpp"
 #include "vast/concept/printable/vast/json.hpp"
-
+#include "vast/data.hpp"
 #include "vast/format/printer_writer.hpp"
+#include "vast/json.hpp"
 
 namespace vast::format::json {
 
@@ -26,7 +26,9 @@ struct event_printer : printer<event_printer> {
   template <class Iterator>
   bool print(Iterator& out, const event& e) const {
     vast::json j;
-    return convert(e, j) && printers::json<policy::oneline>.print(out, j);
+    if (!convert(e.data(), j, e.type()))
+      return false;
+    return printers::json<policy::oneline>.print(out, j);
   }
 };
 
@@ -40,6 +42,3 @@ public:
 };
 
 } // namespace vast::format::json
-
-
-
