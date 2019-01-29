@@ -55,7 +55,7 @@ maybe_actor spawn_dummy_consensus(caf::local_actor* self, spawn_arguments& args)
 }
 
 maybe_actor spawn_consensus(caf::local_actor* self, spawn_arguments& args) {
-  auto backend = get_or(args.options, ".store-backend", "dummy"s);
+  auto backend = get_or(args.options, "store-backend", "dummy"s);
   if (backend == "dummy")
     return spawn_dummy_consensus(self, args);
   else if (backend == "raft")
