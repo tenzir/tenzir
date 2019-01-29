@@ -2,7 +2,6 @@
 #
 # VERSION               0.1
 
-#FROM        ubuntu:18.04
 FROM debian:buster-slim as builder
 LABEL maintainer="tobias.mayer@tenzir.com"
 LABEL builder=true
@@ -44,8 +43,12 @@ RUN ./configure --prefix=$PREFIX --build-type=$BUILD_TYPE \
 
 # VAST
 WORKDIR $BUILD_DIR/vast
-RUN ./configure --prefix=$PREFIX --build-type=$BUILD_TYPE --log-level=DEBUG && \
-    make -C build all test install
+RUN ./configure \
+       --prefix=$PREFIX \
+       --build-type=$BUILD_TYPE \
+       --log-level=INFO \
+       --no-unit-tests && \
+    make -C build all install
 
 # Stage 2: copy application
 FROM debian:buster-slim
@@ -55,8 +58,13 @@ LABEL builder=false
 ENV PREFIX /usr/local
 ENV LD_LIBRARY_PATH $PREFIX/lib
 
-RUN apt-get install -y libpcap openssl
-
+RUN apt-get install -y libpcap openssl libc++abi
+RUN useradd --system --uid 1337 --user-group --gid 500 tenzir
 COPY --from=builder $PREFIX/ $PREFIX/
+
+VOLUME ["/data"]
+
+USER tenzir:tenzir
+WORKDIR /data
 ENTRYPOINT ["/usr/local/bin/vast"]
 CMD ["--help"]
