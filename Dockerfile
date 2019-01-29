@@ -15,9 +15,8 @@ ENV BUILD_DIR /tmp/src
 
 # Compiler and dependency setup
 RUN apt-get -qq update && apt-get -qqy install \
-    clang-7 libc++-dev libc++abi-dev cmake git-core
-RUN apt-get -qq update && apt-get -qqy install \
-    libpcap-dev libedit-dev libgoogle-perftools-dev openssl libssl-dev
+    clang-7 libc++-dev libc++abi-dev cmake git-core \
+    libpcap-dev libssl-dev
 
 # By placing the ADD directive at this point, we build both CAF and VAST
 # every time. This ensures that the CI integration will always fetch a fresh
@@ -58,11 +57,18 @@ LABEL builder=false
 ENV PREFIX /usr/local
 ENV LD_LIBRARY_PATH $PREFIX/lib
 
-RUN apt-get install -y libpcap openssl libc++abi
-RUN useradd --system --uid 1337 --user-group --gid 500 tenzir
 COPY --from=builder $PREFIX/ $PREFIX/
-
+COPY --from=builder /lib/x86_64-linux-gnu/libatomic.so.1 /lib/x86_64-linux-gnu/libatomic.so.1
 VOLUME ["/data"]
+RUN apt-get -qq update && apt-get -qq install -y \
+      libc++1 \
+      libc++abi1 \
+      libpcap0.8 \
+      openssl && \
+    echo "Adding tenzir user" && \
+    groupadd --gid 20354 tenzir && useradd --system --uid 20354 --gid tenzir tenzir
+
+EXPOSE 42000/tcp
 
 USER tenzir:tenzir
 WORKDIR /data
