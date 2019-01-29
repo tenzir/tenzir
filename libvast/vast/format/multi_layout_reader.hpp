@@ -16,6 +16,7 @@
 #include <unordered_map>
 
 #include "vast/format/reader.hpp"
+#include "vast/table_slice_builder.hpp"
 
 namespace vast::format {
 
