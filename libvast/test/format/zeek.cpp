@@ -11,7 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/format/bro.hpp"
+#include "vast/format/zeek.hpp"
 
 #define SUITE format
 

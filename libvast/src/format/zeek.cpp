@@ -26,7 +26,7 @@
 #include "vast/detail/string.hpp"
 #include "vast/error.hpp"
 #include "vast/event.hpp"
-#include "vast/format/bro.hpp"
+#include "vast/format/zeek.hpp"
 #include "vast/logger.hpp"
 #include "vast/table_slice_builder.hpp"
 

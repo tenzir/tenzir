@@ -25,7 +25,7 @@
 #include "vast/detail/make_io_stream.hpp"
 #include "vast/detail/spawn_container_source.hpp"
 #include "vast/event.hpp"
-#include "vast/format/bro.hpp"
+#include "vast/format/zeek.hpp"
 #include "vast/system/archive.hpp"
 #include "vast/system/data_store.hpp"
 #include "vast/system/source.hpp"

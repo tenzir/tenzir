@@ -28,7 +28,7 @@
 #include <caf/io/middleman.hpp>
 #include <caf/send.hpp>
 
-#include "vast/format/bro.hpp"
+#include "vast/format/zeek.hpp"
 
 using namespace vast;
 using namespace vast::system;

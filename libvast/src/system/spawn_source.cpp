@@ -22,7 +22,7 @@
 #include "vast/detail/make_io_stream.hpp"
 #include "vast/detail/unbox_var.hpp"
 #include "vast/format/bgpdump.hpp"
-#include "vast/format/bro.hpp"
+#include "vast/format/zeek.hpp"
 #include "vast/format/mrt.hpp"
 #include "vast/format/test.hpp"
 #include "vast/system/node.hpp"

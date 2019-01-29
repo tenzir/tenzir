@@ -12,7 +12,7 @@
  ******************************************************************************/
 
 #include "vast/error.hpp"
-#include "vast/format/bro.hpp"
+#include "vast/format/zeek.hpp"
 #include "vast/system/sink.hpp"
 
 #define SUITE system
