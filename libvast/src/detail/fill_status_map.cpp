@@ -51,6 +51,8 @@ void fill_status_map(caf::settings& xs, caf::stream_manager& mgr) {
   // Upstream status.
   auto& upstream = put_dictionary(xs, "upstream");
   auto& ipaths = mgr.inbound_paths();
+  if (!ipaths.empty())
+    put(xs, "inbound-paths-idle", mgr.inbound_paths_idle());
   for (auto ipath : ipaths) {
     auto name = "slot-" + std::to_string(ipath->slots.receiver);
     auto& slot = put_dictionary(upstream, name);
