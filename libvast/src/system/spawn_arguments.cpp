@@ -41,8 +41,7 @@ caf::expected<expression> normalized_and_valided(const spawn_arguments& args) {
 }
 
 caf::expected<caf::optional<schema>> read_schema(const spawn_arguments& args) {
-  auto schema_file_ptr = caf::get_if<std::string>(&args.options,
-                                                  "global.schema");
+  auto schema_file_ptr = caf::get_if<std::string>(&args.options, "schema");
   if (!schema_file_ptr)
     return caf::optional<schema>{caf::none};
   VAST_UNBOX_VAR(str, load_contents(*schema_file_ptr));

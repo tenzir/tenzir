@@ -33,10 +33,10 @@ maybe_actor spawn_index(caf::local_actor* self, spawn_arguments& args) {
   };
   namespace sd = vast::defaults::system;
   return self->spawn(index, args.dir / args.label,
-                     opt("global.max-events", sd::max_partition_size),
-                     opt("global.max-parts", sd::max_in_mem_partitions),
-                     opt("global.taste-parts", sd::taste_partitions),
-                     opt("global.max_queries", sd::num_query_supervisors));
+                     opt("max-events", sd::max_partition_size),
+                     opt("max-parts", sd::max_in_mem_partitions),
+                     opt("taste-parts", sd::taste_partitions),
+                     opt("max_queries", sd::num_query_supervisors));
 }
 
 } // namespace vast::system

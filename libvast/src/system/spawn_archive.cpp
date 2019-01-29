@@ -34,10 +34,9 @@ maybe_actor spawn_archive(caf::local_actor* self, spawn_arguments& args) {
   namespace sd = vast::defaults::system;
   if (!args.empty())
     return unexpected_arguments(args);
-  auto segments = get_or(args.options, "global.segments", sd::segments);
+  auto segments = get_or(args.options, "segments", sd::segments);
   auto mss = 1_MiB
-             * get_or(args.options, "global.max-segment-size",
-                      sd::max_segment_size);
+             * get_or(args.options, "max-segment-size", sd::max_segment_size);
   auto a = self->spawn(archive, args.dir / args.label, segments, mss);
   return caf::actor_cast<caf::actor>(a);
 }

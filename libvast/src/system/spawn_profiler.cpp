@@ -34,12 +34,12 @@ maybe_actor spawn_profiler([[maybe_unused]] caf::local_actor* self,
 #else // VAST_HAVE_GPERFTOOLS
   if (!args.empty())
     return unexpected_arguments(args);
-  auto resolution = get_or(args.options, "global.resolution", size_t{1});
+  auto resolution = get_or(args.options, "resolution", size_t{1});
   auto secs = std::chrono::seconds(resolution);
   auto prof = self->spawn(profiler, args.dir / args.label, secs);
-  if (get_or(args.options, "global.cpu", false))
+  if (get_or(args.options, "cpu", false))
     caf::anon_send(prof, start_atom::value, cpu_atom::value);
-  if (get_or(args.options, "global.heap", false))
+  if (get_or(args.options, "heap", false))
     caf::anon_send(prof, start_atom::value, heap_atom::value);
   return prof;
 #endif // VAST_HAVE_GPERFTOOLS
