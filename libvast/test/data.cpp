@@ -290,7 +290,7 @@ TEST(json) {
     "foo",
     json::make_array(-42, json::make_array(1001)),
     "x",
-    "443/tcp"
+    443
   )};
   CHECK_EQUAL(to_json(x), expected);
   MESSAGE("zipped");
@@ -315,7 +315,7 @@ TEST(json) {
     }
   },
   "str": "x",
-  "port": "443/tcp"
+  "port": 443
 })__";
   CHECK_EQUAL(to_string(to_json(x, t)), expected);
 }

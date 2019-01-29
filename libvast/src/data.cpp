@@ -356,6 +356,7 @@ namespace {
 json jsonize(const data& x) {
   return caf::visit(detail::overload(
     [&](const auto& y) { return to_json(y); },
+    [&](port p) { return json{p.number()}; }, // ignore port type
     [&](caf::none_t) { return json{}; },
     [&](const std::string& str) { return json{str}; }
   ), x);
