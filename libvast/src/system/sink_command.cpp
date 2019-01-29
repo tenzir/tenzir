@@ -46,6 +46,10 @@ caf::message sink_command(const command& cmd, actor_system& sys, caf::actor snk,
   VAST_UNUSED(cmd);
   // Read query from input file, STDIN or CLI arguments.
   std::string query;
+  auto assign_query = [&](std::istream& in) {
+    query.assign(std::istreambuf_iterator<char>{in},
+                 std::istreambuf_iterator<char>{});
+  };
   if (auto fname = caf::get_if<std::string>(&options, "read")) {
     // Sanity check.
     if (first != last) {
@@ -53,17 +57,20 @@ caf::message sink_command(const command& cmd, actor_system& sys, caf::actor snk,
                                              "but --read option is defined");
       return make_message(std::move(err));
     }
-    std::ifstream f{*fname};
-    if (!f) {
-      auto err = make_error(ec::no_such_file, "unable to read from " + *fname);
-      return make_message(std::move(err));
+    // Read query from STDIN if file name is '-'.
+    if (*fname == "-") {
+      assign_query(std::cin);
+    } else {
+      std::ifstream f{*fname};
+      if (!f) {
+        auto err = make_error(ec::no_such_file, "unable to read from " + *fname);
+        return make_message(std::move(err));
+      }
+      assign_query(f);
     }
-    query.assign(std::istreambuf_iterator<char>(f),
-                 std::istreambuf_iterator<char>());
   } else if (first == last) {
     // Read query from STDIN.
-    query.assign(std::istreambuf_iterator<char>(std::cin),
-                 std::istreambuf_iterator<char>());
+    assign_query(std::cin);
   } else {
     query = *first;
     for (auto i = std::next(first); i != last; ++i) {
