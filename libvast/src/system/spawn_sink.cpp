@@ -56,8 +56,8 @@ maybe_actor spawn_pcap_sink([[maybe_unused]] caf::local_actor* self,
   if (!args.empty())
     return unexpected_arguments(args);
   format::pcap::writer writer{
-    caf::get_or(args.options, "global.write", defaults::command::write_path),
-    caf::get_or(args.options, "global.flush", size_t{0})};
+    caf::get_or(args.options, "write", defaults::command::write_path),
+    caf::get_or(args.options, "flush", size_t{0})};
   return self->spawn(sink<format::pcap::writer>, std::move(writer), 0u);
 #endif // VAST_HAVE_PCAP
 }
@@ -65,7 +65,7 @@ maybe_actor spawn_pcap_sink([[maybe_unused]] caf::local_actor* self,
 maybe_actor spawn_bro_sink(caf::local_actor* self, spawn_arguments& args) {
   if (!args.empty())
     return unexpected_arguments(args);
-  format::bro::writer writer{get_or(args.options, "global.write",
+  format::bro::writer writer{get_or(args.options, "write",
                                     defaults::command::write_path)};
   return self->spawn(sink<format::bro::writer>, std::move(writer), 0u);
 }

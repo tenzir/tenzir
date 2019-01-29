@@ -69,11 +69,11 @@ maybe_actor spawn_pcap_source([[maybe_unused]] caf::local_actor* self,
   };
   namespace cd = defaults::command;
   return spawn_generic_source<format::pcap::reader>(
-    self, args, opt("global.read", cd::read_path),
-    opt("global.cutoff", cd::cutoff), opt("global.flow-max", cd::max_flows),
-    opt("global.flow-age", cd::max_flow_age),
-    opt("global.flow-expiry", cd::flow_expiry),
-    opt("global.pseudo-realtime", cd::pseudo_realtime_factor));
+    self, args, opt("read", cd::read_path),
+    opt("cutoff", cd::cutoff), opt("flow-max", cd::max_flows),
+    opt("flow-age", cd::max_flow_age),
+    opt("flow-expiry", cd::flow_expiry),
+    opt("pseudo-realtime", cd::pseudo_realtime_factor));
 #endif // VAST_HAVE_PCAP
 }
 
@@ -90,8 +90,8 @@ maybe_actor spawn_test_source(caf::local_actor* self, spawn_arguments& args) {
   auto table_slice_type = get_or(args.options, "table-slice",
                                  global_table_slice_type);
   reader_type reader{table_slice_type,
-                     get_or(args.options, "global.seed", size_t{0}),
-                     get_or(args.options, "global.events", size_t{100})};
+                     get_or(args.options, "seed", size_t{0}),
+                     get_or(args.options, "events", size_t{100})};
   auto src = self->spawn(default_source<reader_type>, std::move(reader));
   if (sch)
     caf::anon_send(src, put_atom::value, std::move(*sch));

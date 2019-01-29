@@ -253,6 +253,7 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
         shutdown(self);
     },
     [=](extract_atom) {
+      VAST_DEBUG(self, "got request to extract all events");
       if (self->state.query.requested == max_events) {
         VAST_WARNING(self, "ignores extract request, already getting all");
         return;

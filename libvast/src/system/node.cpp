@@ -239,7 +239,7 @@ caf::message spawn_command(const command& cmd, caf::actor_system&,
   std::string comp_name{cmd.name.begin(), cmd.name.end()};
   // Auto-generate label if none given.
   std::string label;
-  if (auto label_ptr = caf::get_if<std::string>(&options, "global.label")) {
+  if (auto label_ptr = caf::get_if<std::string>(&options, "label")) {
     label = *label_ptr;
   } else {
     label = comp_name;

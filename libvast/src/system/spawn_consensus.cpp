@@ -32,7 +32,7 @@ namespace vast::system {
 maybe_actor spawn_consensus_raft(caf::local_actor* self, spawn_arguments& args) {
   if (!args.empty())
     return unexpected_arguments(args);
-  auto id = get_or(args.options, "global.id", raft::server_id{0});
+  auto id = get_or(args.options, "id", raft::server_id{0});
   // Bring up the consensus module.
   auto consensus = self->spawn(raft::consensus, args.dir / "consensus");
   self->monitor(consensus);
@@ -55,7 +55,7 @@ maybe_actor spawn_dummy_consensus(caf::local_actor* self, spawn_arguments& args)
 }
 
 maybe_actor spawn_consensus(caf::local_actor* self, spawn_arguments& args) {
-  auto backend = get_or(args.options, "global.store-backend", "dummy"s);
+  auto backend = get_or(args.options, ".store-backend", "dummy"s);
   if (backend == "dummy")
     return spawn_dummy_consensus(self, args);
   else if (backend == "raft")
