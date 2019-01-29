@@ -21,10 +21,11 @@
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/error.hpp"
 #include "vast/concept/printable/vast/filesystem.hpp"
+#include "vast/defaults.hpp"
 #include "vast/detail/fill_status_map.hpp"
+#include "vast/detail/notifying_stream_manager.hpp"
 #include "vast/logger.hpp"
 #include "vast/system/atoms.hpp"
-#include "vast/defaults.hpp"
 #include "vast/table_slice.hpp"
 
 using namespace std::chrono;
@@ -133,6 +134,13 @@ void importer_state::send_report() {
   }
   last_report = now;
 };
+
+void importer_state::notify_flush_listeners() {
+  VAST_DEBUG(self, "sends 'flush' messages to listeners");
+  for (auto& listener : flush_listeners)
+    self->send(listener, flush_atom::value);
+  flush_listeners.clear();
+}
 
 namespace {
 
@@ -254,55 +262,9 @@ private:
   pointer self_;
 };
 
-class manager : public caf::detail::stream_stage_impl<driver> {
-public:
-  using super = caf::detail::stream_stage_impl<driver>;
-
-  manager(importer_actor* self)
-    : caf::stream_manager(self),
-      super(self, self) {
-    // nop
-  }
-
-  using super::handle;
-
-  void handle(caf::stream_slots slots,
-              caf::upstream_msg::ack_batch& x) override {
-    super::handle(slots, x);
-    notify_listeners_if_clean();
-  }
-
-  void input_closed(error reason) override {
-    super::input_closed(std::move(reason));
-    notify_listeners_if_clean();
-  }
-
-  void finalize(const error& reason) override {
-    super::finalize(reason);
-    notify_listeners();
-  }
-
-private:
-  void notify_listeners() {
-    auto self = driver_.self();
-    auto& st = self->state;
-    VAST_DEBUG(self, "sends 'flush' messages to listeners");
-    for (auto& listener : st.flush_listeners)
-      self->send(listener, flush_atom::value);
-    st.flush_listeners.clear();
-  }
-
-  void notify_listeners_if_clean() {
-    auto& st = driver_.self()->state;
-    if (!st.flush_listeners.empty() && inbound_paths().empty()
-        && out().clean()) {
-      notify_listeners();
-    }
-  }
-};
-
-caf::intrusive_ptr<manager> make_importer_stage(importer_actor* self) {
-  auto result = caf::make_counted<manager>(self);
+auto make_importer_stage(importer_actor* self) {
+  using impl = detail::notifying_stream_manager<driver>;
+  auto result = caf::make_counted<impl>(self);
   result->continuous(true);
   return result;
 }
