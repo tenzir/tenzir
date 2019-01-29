@@ -62,12 +62,7 @@ bool operator>(const value& lhs, const value& rhs) {
 }
 
 bool convert(const value& v, json& j) {
-  json::object o;
-  if (!convert(v.type(), o["type"]))
-    return false;
-  if (!convert(v.data(), o["data"], v.type()))
-    return false;
-  j = std::move(o);
-  return true;
+  return convert(v.data(), j, v.type());
 }
+
 } // namespace vast

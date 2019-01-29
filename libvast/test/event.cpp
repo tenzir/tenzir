@@ -86,42 +86,15 @@ TEST(serialization) {
 }
 
 TEST(json) {
-  auto expected = R"json({
+  auto expected = R"__({
   "id": 123456789,
   "timestamp": 0,
   "value": {
-    "type": {
-      "name": "foo",
-      "kind": "record",
-      "structure": {
-        "x": {
-          "name": "",
-          "kind": "bool",
-          "structure": null,
-          "attributes": {}
-        },
-        "y": {
-          "name": "",
-          "kind": "count",
-          "structure": null,
-          "attributes": {}
-        },
-        "z": {
-          "name": "",
-          "kind": "int",
-          "structure": null,
-          "attributes": {}
-        }
-      },
-      "attributes": {}
-    },
-    "data": {
-      "x": true,
-      "y": 42,
-      "z": -234987
-    }
+    "x": true,
+    "y": 42,
+    "z": -234987
   }
-})json";
+})__";
   CHECK_EQUAL(to_string(to_json(e)), expected);
 }
 
