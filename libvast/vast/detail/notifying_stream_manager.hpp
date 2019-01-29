@@ -17,6 +17,14 @@
 
 namespace vast::detail {
 
+template <class State>
+void notify_listeners_if_clean(State& st, const caf::stream_manager& mgr) {
+  if (!st.flush_listeners.empty() && mgr.inbound_paths_idle()
+      && mgr.out().clean()) {
+    st.notify_flush_listeners();
+  }
+}
+
 template <class Driver>
 class notifying_stream_manager : public caf::detail::stream_stage_impl<Driver> {
 public:
@@ -34,32 +42,26 @@ public:
   void handle(caf::stream_slots slots,
               caf::upstream_msg::ack_batch& x) override {
     super::handle(slots, x);
-    notify_listeners_if_clean();
+    notify_listeners_if_clean(state(), *this);
   }
 
   void input_closed(error reason) override {
     super::input_closed(std::move(reason));
-    notify_listeners_if_clean();
+    notify_listeners_if_clean(state(), *this);
   }
 
   void finalize(const error& reason) override {
     super::finalize(reason);
-    notify_listeners();
+    state().notify_flush_listeners();
   }
 
 private:
-  void notify_listeners() {
-    auto self = this->driver_.self();
-    auto& st = self->state;
-    st.notify_flush_listeners();
+  auto self() {
+    return this->driver_.self();
   }
 
-  void notify_listeners_if_clean() {
-    auto& st = this->driver_.self()->state;
-    if (!st.flush_listeners.empty() && this->inbound_paths().empty()
-        && this->out().clean()) {
-      notify_listeners();
-    }
+  auto& state() {
+    return self()->state;
   }
 };
 

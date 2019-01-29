@@ -74,9 +74,9 @@ behavior dummy_index(stateful_actor<index_state>* self, path dir) {
   }};
 }
 
-behavior test_stage(event_based_actor* self, index_state* state) {
+behavior test_stage(stateful_actor<index_state>* self) {
   return {[=](stream<table_slice_ptr> in) {
-    auto mgr = self->make_continuous_stage<indexer_stage_driver>(state);
+    auto mgr = self->make_continuous_stage<indexer_stage_driver>(self);
     mgr->add_inbound_path(in);
     self->unbecome();
   }};
@@ -141,7 +141,7 @@ FIXTURE_SCOPE(indexer_stage_driver_tests, fixture)
 
 TEST(spawning sinks automatically) {
   MESSAGE("spawn the stage");
-  auto stg = sys.spawn(test_stage, state());
+  auto stg = sys.spawn(test_stage);
   MESSAGE("spawn the source and run");
   auto src = vast::detail::spawn_container_source(self->system(),
                                                   test_slices,

@@ -136,9 +136,10 @@ void importer_state::send_report() {
 };
 
 void importer_state::notify_flush_listeners() {
-  VAST_DEBUG(self, "sends 'flush' messages to listeners");
+  VAST_DEBUG(self, "forward flush subscribers to INDEX actors");
   for (auto& listener : flush_listeners)
-    self->send(listener, flush_atom::value);
+    for (auto& next : index_actors)
+      self->send(next, subscribe_atom::value, flush_atom::value, listener);
   flush_listeners.clear();
 }
 
@@ -308,6 +309,16 @@ behavior importer(stateful_actor<importer_state>* self, path dir,
     },
     [=](index_atom, const actor& index) {
       VAST_DEBUG(self, "registers index", index);
+      self->state.index_actors.emplace_back(index);
+      // TODO: currently, the subscriber expects only a single 'flush' message.
+      //       Adding multiple INDEX actors will cause the subscriber to
+      //       receive more than one 'flush'  message, but the subscriber only
+      //       expects one and will stop waiting after the first one. Once we
+      //       support multiple INDEXER actors at the IMPORTER, we also need
+      //       to revise the signaling of these 'flush' messages.
+      if (self->state.index_actors.size() > 1)
+        VAST_WARNING(self, "registered more than one INDEX actor",
+                     "(currently unsupported!)");
       return self->state.stg->add_outbound_path(index);
     },
     [=](exporter_atom, const actor& exporter) {
@@ -329,14 +340,10 @@ behavior importer(stateful_actor<importer_state>* self, path dir,
       st.stg->add_outbound_path(subscriber);
     },
     [=](subscribe_atom, flush_atom, actor& listener) {
-      VAST_DEBUG(self, "adds a new 'flush' subscriber");
       auto& st = self->state;
-      if (st.stg->inbound_paths().empty() && st.stg->out().clean()) {
-        VAST_DEBUG(self, "sends 'flush' immediately");
-        self->send(listener, flush_atom::value);
-      } else {
-        st.flush_listeners.emplace_back(std::move(listener));
-      }
+      VAST_ASSERT(st.stg != nullptr);
+      st.flush_listeners.emplace_back(std::move(listener));
+      detail::notify_listeners_if_clean(st, *st.stg);
     },
     [=](status_atom) {
       return self->state.status();

@@ -29,6 +29,7 @@
 #include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/fill_status_map.hpp"
+#include "vast/detail/notifying_stream_manager.hpp"
 #include "vast/event.hpp"
 #include "vast/expression_visitors.hpp"
 #include "vast/ids.hpp"
@@ -53,6 +54,17 @@ using namespace std::chrono;
 
 namespace vast::system {
 
+namespace {
+
+auto make_index_stage(index_state* st) {
+  using impl = detail::notifying_stream_manager<indexer_stage_driver>;
+  auto result = caf::make_counted<impl>(st->self);
+  result->continuous(true);
+  return result;
+}
+
+} // namespace
+
 partition_ptr index_state::partition_factory::operator()(const uuid& id) const {
   // The factory must not get called for the active partition nor for
   // partitions that are currently unpersisted.
@@ -67,7 +79,7 @@ partition_ptr index_state::partition_factory::operator()(const uuid& id) const {
   return result;
 }
 
-index_state::index_state(caf::event_based_actor* self)
+index_state::index_state(caf::stateful_actor<index_state>* self)
   : self(self),
     factory(spawn_indexer),
     lru_partitions(10, partition_lookup{}, partition_factory{this}) {
@@ -100,7 +112,7 @@ caf::error index_state::init(const path& dir, size_t max_partition_size,
   if (auto err = load_from_disk())
     return err;
   // Spin up the stream manager.
-  stage = self->make_continuous_stage<indexer_stage_driver>(this);
+  stage = make_index_stage(this);
   return caf::none;
 }
 
@@ -314,6 +326,20 @@ query_map index_state::launch_evaluators(lookup_state& lookup,
   return result;
 }
 
+void index_state::add_flush_listener(caf::actor listener) {
+  VAST_DEBUG(self, "adds a new 'flush' subscriber:", listener);
+  flush_listeners.emplace_back(std::move(listener));
+  detail::notify_listeners_if_clean(*this, *stage);
+}
+
+void index_state::notify_flush_listeners() {
+  VAST_DEBUG(self, "sends 'flush' messages to", flush_listeners.size(),
+             "listeners");
+  for (auto& listener : flush_listeners)
+    self->send(listener, flush_atom::value);
+  flush_listeners.clear();
+}
+
 behavior index(stateful_actor<index_state>* self, const path& dir,
                size_t max_partition_size, size_t in_mem_partitions,
                size_t taste_partitions, size_t num_workers) {
@@ -438,8 +464,10 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
       self->state.send_report();
       namespace defs = defaults::system;
       self->delayed_send(self, defs::telemetry_rate, telemetry_atom::value);
-    }
-  );
+    },
+    [=](subscribe_atom, flush_atom, actor& listener) {
+      self->state.add_flush_listener(std::move(listener));
+    });
   return {[=](worker_atom, caf::actor& worker) {
             auto& st = self->state;
             st.idle_workers.emplace_back(std::move(worker));
@@ -460,6 +488,9 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
             namespace defs = defaults::system;
             self->delayed_send(self, defs::telemetry_rate,
                                telemetry_atom::value);
+          },
+          [=](subscribe_atom, flush_atom, actor& listener) {
+            self->state.add_flush_listener(std::move(listener));
           }};
 }
 
