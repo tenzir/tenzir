@@ -40,23 +40,8 @@ default_configuration::default_configuration(std::string application_name)
   set("middleman.enable-automatic-connections", true);
 }
 
-caf::error default_configuration::parse(int argc, char** argv) {
-  if (auto err = configuration::parse(argc, argv))
-    return err;
-  if (!caf::get_if<std::string>(this, "logger.file-name")) {
-    path dir = get_or(*this, "vast.dir", defaults::command::directory);
-    if (auto log_file = setup_log_file(dir.complete()); !log_file) {
-      std::cerr << "failed to setup log file: " << to_string(log_file.error())
-                << std::endl;
-      return log_file.error();
-    } else {
-      set("logger.file-name", log_file->str());
-    }
-  }
-  return caf::none;
-}
-
-caf::expected<path> default_configuration::setup_log_file(const path& base_dir) {
+caf::expected<path>
+default_configuration::setup_log_file(const path& base_dir) {
   auto log_dir = base_dir / make_log_dirname();
   // Create the log directory first, which we need to create the symlink
   // afterwards.
@@ -74,14 +59,24 @@ caf::expected<path> default_configuration::setup_log_file(const path& base_dir) 
 
 // Parses the options from the root command and adds them to the global
 // configuration.
-void default_configuration::merge_root_options(system::application& app) {
+caf::error default_configuration::merge_root_options(system::application& app) {
   // Delegate to the root command for argument parsing.
   caf::settings options;
   app.root.options.parse(options, command_line.begin(), command_line.end());
   // Move everything into the system-wide options, but use "vast" as category
   // instead of the default "global" category.
-  auto& src = options["global"].as_dictionary();
-  src["vast"].as_dictionary().insert(src.begin(), src.end());
+  content["vast"].as_dictionary().insert(options.begin(), options.end());
+  if (!caf::get_if<std::string>(this, "logger.file-name")) {
+    path dir = get_or(*this, "vast.dir", defaults::command::directory);
+    if (auto log_file = setup_log_file(dir.complete()); !log_file) {
+      std::cerr << "failed to setup log file: " << to_string(log_file.error())
+                << std::endl;
+      return log_file.error();
+    } else {
+      set("logger.file-name", log_file->str());
+    }
+  }
+  return caf::none;
 }
 
 } // namespace vast::system

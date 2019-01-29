@@ -37,12 +37,17 @@ int main(int argc, char** argv) {
   // CAF scaffold.
   default_configuration cfg{"vast"};
   if (auto err = cfg.parse(argc, argv)) {
-    std::cerr << "Failed to parse configuration " << to_string(err)
+    std::cerr << "Failed to parse configuration: " << to_string(err)
               << std::endl;
     return EXIT_FAILURE;
   }
   // Application setup.
   default_application app;
+  if (auto err = cfg.merge_root_options(app)) {
+    std::cerr << "Failed to parse global CLI options: " << to_string(err)
+              << std::endl;
+    return EXIT_FAILURE;
+  }
   app.root.description = "manage a VAST topology";
   app.root.name = argv[0];
   // We're only interested in the application name, not in its path. For
@@ -51,7 +56,6 @@ int main(int argc, char** argv) {
   auto find_slash = [&] { return app.root.name.find('/'); };
   for (auto p = find_slash(); p != std::string_view::npos; p = find_slash())
     app.root.name.remove_prefix(p + 1);
-  cfg.merge_root_options(app);
   // Initialize actor system (and thereby CAF's logger).
   caf::actor_system sys{cfg};
   // Dispatch to root command.
