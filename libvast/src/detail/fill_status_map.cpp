@@ -36,7 +36,7 @@ void fill_status_map(caf::settings& xs, caf::stream_manager& mgr) {
   put(downstream, "max-capacity", out.max_capacity());
   put(downstream, "paths", out.num_paths());
   put(downstream, "stalled", out.stalled());
-  put(downstream, "clean", out.stalled());
+  put(downstream, "clean", out.clean());
   out.for_each_path([&](auto& opath) {
     auto name = "slot-" + std::to_string(opath.slots.sender);
     auto& slot = put_dictionary(downstream, name);
