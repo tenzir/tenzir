@@ -20,7 +20,7 @@ a build directory of a Broker repository.
 
 Second, install the Zeek scripts via:
 
-    zeek-pkg install zeek-vast
+    zkg install zeek-vast
 
 Now you're ready to go.
 
