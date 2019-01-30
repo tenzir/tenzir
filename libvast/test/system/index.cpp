@@ -42,9 +42,9 @@ using namespace std::chrono;
 
 namespace {
 
-static constexpr size_t in_mem_partitions = 8;
+static constexpr uint32_t in_mem_partitions = 8;
 
-static constexpr size_t taste_count = 4;
+static constexpr uint32_t taste_count = 4;
 
 static constexpr size_t num_query_supervisors = 1;
 
@@ -67,22 +67,22 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   auto query(std::string_view expr) {
     self->send(index, unbox(to<expression>(expr)));
     run();
-    std::tuple<uuid, size_t, size_t> result;
+    std::tuple<uuid, uint32_t, uint32_t> result;
     self->receive(
-      [&](uuid& query_id, size_t hits, size_t scheduled) {
+      [&](uuid& query_id, uint32_t hits, uint32_t scheduled) {
         result = std::tie(query_id, hits, scheduled);
       },
       after(0s) >> [&] { FAIL("INDEX did not respond to query"); });
     return result;
   }
 
-  ids receive_result(const uuid& query_id, size_t hits, size_t scheduled) {
+  ids receive_result(const uuid& query_id, uint32_t hits, uint32_t scheduled) {
     if (hits == scheduled)
       CHECK_EQUAL(query_id, uuid::nil());
     else
       CHECK_NOT_EQUAL(query_id, uuid::nil());
     ids result;
-    size_t collected = 0;
+    uint32_t collected = 0;
     auto fetch = [&](size_t chunk) {
       auto done = false;
       while (!done)

@@ -80,8 +80,8 @@ index_state::~index_state() {
 }
 
 caf::error index_state::init(const path& dir, size_t max_partition_size,
-                             size_t in_mem_partitions,
-                             size_t taste_partitions) {
+                             uint32_t in_mem_partitions,
+                             uint32_t taste_partitions) {
   VAST_TRACE(VAST_ARG(dir), VAST_ARG(max_partition_size),
              VAST_ARG(in_mem_partitions), VAST_ARG(taste_partitions));
   put(meta_idx.factory_options(), "max-partition-size", max_partition_size);
@@ -267,7 +267,7 @@ partition* index_state::find_unpersisted(const uuid& id) {
 }
 
 query_map index_state::launch_evaluators(lookup_state& lookup,
-                                         size_t num_partitions) {
+                                         uint32_t num_partitions) {
   VAST_TRACE(VAST_ARG(lookup), VAST_ARG(num_partitions));
   if (num_partitions == 0 || lookup.partitions.empty())
     return {};
@@ -339,7 +339,7 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
   // simply waits for a worker).
   self->set_default_handler(caf::skip);
   self->state.has_worker.assign(
-    [=](expression& expr) -> result<uuid, size_t, size_t> {
+    [=](expression& expr) -> result<uuid, uint32_t, uint32_t> {
       auto& st = self->state;
       // Sanity check.
       if (self->current_sender() == nullptr) {
@@ -384,7 +384,7 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
       }
       return {std::move(query_id), hits, scheduled};
     },
-    [=](const uuid& query_id, size_t num_partitions) {
+    [=](const uuid& query_id, uint32_t num_partitions) {
       auto& st = self->state;
       // A zero as second argument means the client drops further results.
       if (num_partitions == 0) {

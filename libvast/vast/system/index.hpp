@@ -88,8 +88,8 @@ struct index_state {
   ~index_state();
 
   /// Initializes the state.
-  caf::error init(const path& dir, size_t max_events, size_t max_parts,
-                  size_t taste_parts);
+  caf::error init(const path& dir, size_t max_events, uint32_t max_parts,
+                  uint32_t taste_parts);
 
   // -- persistence ------------------------------------------------------------
 
@@ -139,7 +139,7 @@ struct index_state {
   /// @returns a query map for passing to INDEX workers over the spawned
   ///          EVALUATOR actors.
   /// @pre num_partitions > 0
-  query_map launch_evaluators(lookup_state& lookup, size_t num_partitions);
+  query_map launch_evaluators(lookup_state& lookup, uint32_t num_partitions);
 
   void send_report();
 
@@ -161,7 +161,7 @@ struct index_state {
   size_t max_partition_size;
 
   /// The number of partitions to schedule immediately for each query
-  size_t taste_partitions;
+  uint32_t taste_partitions;
 
   /// Allows the index to multiplex between waiting for ready workers and
   /// queries.
