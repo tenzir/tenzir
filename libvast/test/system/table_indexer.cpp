@@ -136,19 +136,19 @@ TEST(record type) {
   verify();
 }
 
-TEST(bro conn logs) {
-  MESSAGE("generate table layout for bro conn logs");
-  auto layout = bro_conn_log_layout();
+TEST(zeek conn logs) {
+  MESSAGE("generate table layout for zeek conn logs");
+  auto layout = zeek_conn_log_layout();
   init(make_table_indexer(sys, directory, layout));
-  MESSAGE("ingest test data (bro conn log)");
-  for (auto slice : bro_conn_log_slices)
+  MESSAGE("ingest test data (zeek conn log)");
+  for (auto slice : zeek_conn_log_slices)
     add(slice);
   MESSAGE("verify table index");
   auto verify = [&] {
     CHECK_EQUAL(rank(query("id.resp_p == 53/?")), 3u);
     CHECK_EQUAL(rank(query("id.resp_p == 137/?")), 5u);
     CHECK_EQUAL(rank(query("id.resp_p == 53/? || id.resp_p == 137/?")), 8u);
-    CHECK_EQUAL(rank(query("&time > 1970-01-01")), bro_conn_log.size());
+    CHECK_EQUAL(rank(query("&time > 1970-01-01")), zeek_conn_log.size());
     CHECK_EQUAL(rank(query("proto == \"udp\"")), 20u);
     CHECK_EQUAL(rank(query("proto == \"tcp\"")), 0u);
     CHECK_EQUAL(rank(query("uid == \"nkCxlvNN8pi\"")), 1u);
@@ -168,10 +168,10 @@ TEST(bro conn logs) {
   verify();
 }
 
-TEST_DISABLED(bro conn log http slices) {
-  MESSAGE("scrutinize each bro conn log slice individually");
+TEST_DISABLED(zeek conn log http slices) {
+  MESSAGE("scrutinize each zeek conn log slice individually");
   // Pre-computed via:
-  //  bro-cut service < test/logs/bro/conn.log \
+  //  zeek-cut service < test/logs/zeek/conn.log \
   //    | awk '{ if ($1 == "http") ++n; if (NR % 100 == 0) { print n; n = 0 } }\
   //           END { print n }' \
   //    | paste -s -d , -
@@ -182,13 +182,13 @@ TEST_DISABLED(bro conn log http slices) {
     39, 2,  0,  9,  8,  0,  13, 4,  2,  13, 2,  36, 33, 17, 48, 50, 27,
     44, 9,  94, 63, 74, 66, 5,  54, 21, 7,  2,  3,  21, 7,  2,  14, 7
   };
-  auto layout = bro_conn_log_layout();
+  auto layout = zeek_conn_log_layout();
   REQUIRE_EQUAL(std::accumulate(hits.begin(), hits.end(), size_t(0)), 2386u);
   for (size_t slice_id = 0; slice_id < hits.size(); ++slice_id) {
     tbl.reset();
     rm(directory);
     init(make_table_indexer(sys, directory, layout));
-    add(bro_conn_log_slices[slice_id]);
+    add(zeek_conn_log_slices[slice_id]);
     CHECK_EQUAL(rank(query("service == \"http\"")), hits[slice_id]);
   }
 }

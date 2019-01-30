@@ -23,9 +23,9 @@
 #include "vast/detail/make_io_stream.hpp"
 #include "vast/detail/unbox_var.hpp"
 #include "vast/format/ascii.hpp"
-#include "vast/format/bro.hpp"
 #include "vast/format/csv.hpp"
 #include "vast/format/json.hpp"
+#include "vast/format/zeek.hpp"
 #include "vast/system/node.hpp"
 #include "vast/system/sink.hpp"
 #include "vast/system/spawn_arguments.hpp"
@@ -62,12 +62,12 @@ maybe_actor spawn_pcap_sink([[maybe_unused]] caf::local_actor* self,
 #endif // VAST_HAVE_PCAP
 }
 
-maybe_actor spawn_bro_sink(caf::local_actor* self, spawn_arguments& args) {
+maybe_actor spawn_zeek_sink(caf::local_actor* self, spawn_arguments& args) {
   if (!args.empty())
     return unexpected_arguments(args);
-  format::bro::writer writer{get_or(args.options, "write",
+  format::zeek::writer writer{get_or(args.options, "write",
                                     defaults::command::write_path)};
-  return self->spawn(sink<format::bro::writer>, std::move(writer), 0u);
+  return self->spawn(sink<format::zeek::writer>, std::move(writer), 0u);
 }
 
 maybe_actor spawn_ascii_sink(caf::local_actor* self, spawn_arguments& args) {

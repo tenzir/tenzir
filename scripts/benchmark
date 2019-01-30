@@ -5,7 +5,7 @@
 
 # Static defaults.
 mode=import
-format=bro
+format=zeek
 
 # Matrix defaults.
 cores=1,2,4
@@ -193,8 +193,8 @@ for core in $(printf $cores | strsplit , 3 ); do
             # Build arguments in $args.
             if [ "$mode" = "import" ]; then
               args="$args --index-active=$part"
-              if [ "$format" = "bro" ]; then
-                args="$args import bro"
+              if [ "$format" = "zeek" ]; then
+                args="$args import zeek"
               elif [ "$format" = "pcap" ]; then
                 args="$args import pcap"
               elif [ "$format" = "test" ]; then
@@ -212,8 +212,8 @@ for core in $(printf $cores | strsplit , 3 ); do
               fi
             elif [ "$mode" = "export" ]; then
               args="$args --index-passive=$part"
-              if [ "$format" = "bro" ]; then
-                args="$args export bro"
+              if [ "$format" = "zeek" ]; then
+                args="$args export zeek"
               elif [ "$format" = "pcap" ]; then
                 args="$args export pcap"
               else

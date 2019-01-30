@@ -32,7 +32,7 @@ In splunk Search, perform queries using vast or vaststats commands.
 Example queries:
 ---------------
 -       | vast ":addr==10.0.0.53" -r
--       | vast "&type == 'bro::intel'" -sr
+-       | vast "&type == 'zeek::intel'" -sr
 -       | vaststats "'Evil' in :string"
 -       | vaststats "&time < now" -e 5000 -n 127.0.0.1:42000
   

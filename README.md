@@ -24,9 +24,9 @@ Start a VAST node in the foreground, listening at 10.0.0.1:
 
     vast -e 10.0.0.1 start
 
-Send [Bro](http://www.bro.org) logs to a remote node:
+Send [Zeek](http://www.zeek.org) logs to a remote node:
 
-    zcat *.log.gz | vast import bro
+    zcat *.log.gz | vast import zeek
 
 ## Resources
 
@@ -55,7 +55,7 @@ Required dependencies:
 
 Optional dependencies:
 
-- [Broker](https://github.com/bro/broker)
+- [Broker](https://github.com/zeek/broker)
 - [libpcap](http://www.tcpdump.org)
 - [gperftools](http://code.google.com/p/google-perftools)
 - [Doxygen](http://www.doxygen.org)

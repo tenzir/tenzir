@@ -34,7 +34,7 @@ TEST(construction and querying) {
   auto path = directory / "segments";
   auto store = segment_store::make(path, 512_KiB, 2);
   REQUIRE(store);
-  for (auto& slice : bro_conn_log_slices)
+  for (auto& slice : zeek_conn_log_slices)
     REQUIRE(!store->put(slice));
   auto slices = store->get(make_ids({0, 6, 19, 21}));
   REQUIRE(slices);
@@ -45,7 +45,7 @@ TEST(sessionized extraction) {
   auto path = directory / "segments";
   auto store = segment_store::make(path, 512_KiB, 2);
   REQUIRE(store);
-  for (auto& slice : bro_conn_log_slices)
+  for (auto& slice : zeek_conn_log_slices)
     REQUIRE(!store->put(slice));
   auto session = store->extract(make_ids({0, 6, 19, 21}));
   auto slice0 = session->next();

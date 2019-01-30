@@ -114,9 +114,9 @@ TEST(parseable - simple sequential) {
   CHECK(sch.find("c"));
 }
 
-TEST(schema: bro-style) {
+TEST(schema: zeek-style) {
   std::string str = R"__(
-    type bro::ssl = record{
+    type zeek::ssl = record{
       ts: time,
       uid: string,
       id: record {orig_h: addr, orig_p: port, resp_h: addr, resp_p: port},
@@ -135,7 +135,7 @@ TEST(schema: bro-style) {
   )__";
   schema sch;
   CHECK(parsers::schema(str, sch));
-  auto ssl = sch.find("bro::ssl");
+  auto ssl = sch.find("zeek::ssl");
   REQUIRE(ssl);
   auto r = get_if<record_type>(ssl);
   REQUIRE(r);

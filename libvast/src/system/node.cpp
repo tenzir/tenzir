@@ -195,8 +195,8 @@ caf::expected<caf::actor> spawn_component(const command& cmd,
           switch (atom_uint(name_atm)) {
             case atom_uint("pcap"):
               return spawn_pcap_source(self, args);
-            case atom_uint("bro"):
-              return spawn_bro_source(self, args);
+            case atom_uint("zeek"):
+              return spawn_zeek_source(self, args);
             case atom_uint("mrt"):
               return spawn_mrt_source(self, args);
             case atom_uint("bgpdump"):
@@ -209,8 +209,8 @@ caf::expected<caf::actor> spawn_component(const command& cmd,
           switch (atom_uint(name_atm)) {
             case atom_uint("pcap"):
               return spawn_pcap_sink(self, args);
-            case atom_uint("bro"):
-              return spawn_bro_sink(self, args);
+            case atom_uint("zeek"):
+              return spawn_zeek_sink(self, args);
             case atom_uint("csv"):
               return spawn_csv_sink(self, args);
             case atom_uint("ascii"):
@@ -394,7 +394,7 @@ void node_state::init(std::string init_name, path init_dir) {
            opts()
              .add<size_t>("seed,s", "the PRNG seed")
              .add<size_t>("events,n", "number of events to generate"));
-  src->add(spawn_command, "bro", "creates a new Bro source", opts());
+  src->add(spawn_command, "zeek", "creates a new Zeek source", opts());
   src->add(spawn_command, "bgpdump", "creates a new BGPdump source", opts());
   src->add(spawn_command, "mrt", "creates a new MRT source", opts());
   // Add spawn sink commands.
@@ -405,7 +405,7 @@ void node_state::init(std::string init_name, path init_dir) {
   snk->add(spawn_command, "pcap", "creates a new PCAP sink",
            opts().add<size_t>("flush,f",
                               "flush to disk after this many packets"));
-  snk->add(spawn_command, "bro", "creates a new Bro sink", opts());
+  snk->add(spawn_command, "zeek", "creates a new Zeek sink", opts());
   snk->add(spawn_command, "ascii", "creates a new ASCII sink", opts());
   snk->add(spawn_command, "csv", "creates a new CSV sink", opts());
   snk->add(spawn_command, "json", "creates a new JSON sink", opts());

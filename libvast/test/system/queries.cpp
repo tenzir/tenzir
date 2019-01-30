@@ -24,7 +24,7 @@ using namespace vast;
 FIXTURE_SCOPE(query_tests, fixtures::node)
 
 TEST(node queries) {
-  ingest("bro");
+  ingest("zeek");
   CHECK_EQUAL(query("proto == \"udp\"").size(), 20u);
   CHECK_EQUAL(query("proto == \"tcp\"").size(), 0u);
 }

@@ -51,7 +51,6 @@ set(libvast_sources
   src/expression_visitors.cpp
   src/filesystem.cpp
   src/format/bgpdump.cpp
-  src/format/bro.cpp
   src/format/csv.cpp
   src/format/mrt.cpp
   src/format/multi_layout_reader.cpp
@@ -59,6 +58,7 @@ set(libvast_sources
   src/format/single_layout_reader.cpp
   src/format/test.cpp
   src/format/writer.cpp
+  src/format/zeek.cpp
   src/http.cpp
   src/ids.cpp
   src/json.cpp
@@ -226,9 +226,9 @@ set(tests
   test/expression_parseable.cpp
   test/factory.cpp
   test/filesystem.cpp
-  test/format/bro.cpp
   test/format/mrt.cpp
   test/format/writer.cpp
+  test/format/zeek.cpp
   test/hash.cpp
   test/http.cpp
   test/ids.cpp

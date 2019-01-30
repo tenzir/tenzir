@@ -67,11 +67,11 @@ void node::ingest(const std::string& type) {
   MESSAGE("sending " << type << " logs");
   // Send previously parsed logs directly to the importer (as opposed to
   // going through a source).
-  if (type == "bro" || type == "all") {
-    detail::spawn_container_source(sys, copy(bro_conn_log_slices), importer);
+  if (type == "zeek" || type == "all") {
+    detail::spawn_container_source(sys, copy(zeek_conn_log_slices), importer);
     // TODO: ship DNS and HTTP log slices when available in the events fixture
-    // self->send(importer, bro_dns_log);
-    // self->send(importer, bro_http_log);
+    // self->send(importer, zeek_dns_log);
+    // self->send(importer, zeek_http_log);
   }
   // TODO: ship slices when available in the events fixture
   // if (type == "bgpdump" || type == "all")

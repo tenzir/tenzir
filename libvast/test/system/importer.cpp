@@ -25,7 +25,7 @@
 #include "vast/detail/make_io_stream.hpp"
 #include "vast/detail/spawn_container_source.hpp"
 #include "vast/event.hpp"
-#include "vast/format/bro.hpp"
+#include "vast/format/zeek.hpp"
 #include "vast/system/archive.hpp"
 #include "vast/system/data_store.hpp"
 #include "vast/system/source.hpp"
@@ -81,7 +81,7 @@ struct importer_fixture : Base {
   }
 
   auto make_sink() {
-    return this->self->spawn(dummy_sink, this->bro_conn_log.size(), this->self);
+    return this->self->spawn(dummy_sink, this->zeek_conn_log.size(), this->self);
   }
 
   auto add_sink() {
@@ -94,14 +94,14 @@ struct importer_fixture : Base {
   virtual void fetch_ok() = 0;
 
   auto make_source() {
-    auto slices = this->copy(this->bro_conn_log_slices);
+    auto slices = this->copy(this->zeek_conn_log_slices);
     return vast::detail::spawn_container_source(this->self->system(),
                                                 std::move(slices), importer);
   }
 
-  auto make_bro_source() {
-    namespace bf = format::bro;
-    auto stream = unbox(vast::detail::make_input_stream(bro::small_conn));
+  auto make_zeek_source() {
+    namespace bf = format::zeek;
+    auto stream = unbox(vast::detail::make_input_stream(zeek::small_conn));
     bf::reader reader{get_or(this->sys.config(), "vast.table-slice-type",
                              vast::defaults::system::table_slice_type),
                       std::move(stream)};
@@ -170,7 +170,7 @@ TEST(deterministic importer with one sink) {
   MESSAGE("loop until importer becomes idle");
   run();
   MESSAGE("verify results");
-  verify(fetch_result(), bro_conn_log);
+  verify(fetch_result(), zeek_conn_log);
 }
 
 TEST(deterministic importer with two sinks) {
@@ -187,28 +187,28 @@ TEST(deterministic importer with two sinks) {
   auto result = fetch_result();
   auto second_result = fetch_result();
   CHECK_EQUAL(result, second_result);
-  verify(result, bro_conn_log);
+  verify(result, zeek_conn_log);
 }
 
-TEST(deterministic importer with one sink and bro source) {
+TEST(deterministic importer with one sink and zeek source) {
   MESSAGE("connect sink to importer");
   add_sink();
-  MESSAGE("spawn bro source");
-  auto src = make_bro_source();
+  MESSAGE("spawn zeek source");
+  auto src = make_zeek_source();
   consume_message();
   self->send(src, system::sink_atom::value, importer);
   MESSAGE("loop until importer becomes idle");
   run();
   MESSAGE("verify results");
-  verify(fetch_result(), bro_conn_log);
+  verify(fetch_result(), zeek_conn_log);
 }
 
-TEST(deterministic importer with two sinks and bro source) {
+TEST(deterministic importer with two sinks and zeek source) {
   MESSAGE("connect sinks to importer");
   add_sink();
   add_sink();
-  MESSAGE("spawn bro source");
-  auto src = make_bro_source();
+  MESSAGE("spawn zeek source");
+  auto src = make_zeek_source();
   consume_message();
   self->send(src, system::sink_atom::value, importer);
   MESSAGE("loop until importer becomes idle");
@@ -217,14 +217,14 @@ TEST(deterministic importer with two sinks and bro source) {
   auto result = fetch_result();
   auto second_result = fetch_result();
   CHECK_EQUAL(result, second_result);
-  verify(result, bro_conn_log);
+  verify(result, zeek_conn_log);
 }
 
-TEST(deterministic importer with one sink and failing bro source) {
+TEST(deterministic importer with one sink and failing zeek source) {
   MESSAGE("connect sink to importer");
   auto snk = add_sink();
-  MESSAGE("spawn bro source");
-  auto src = make_bro_source();
+  MESSAGE("spawn zeek source");
+  auto src = make_zeek_source();
   consume_message();
   self->send(src, system::sink_atom::value, importer);
   MESSAGE("loop until first ack_batch");
@@ -293,7 +293,7 @@ TEST(nondeterministic importer with one sink) {
   MESSAGE("spawn dummy source");
   make_source();
   MESSAGE("verify results");
-  verify(fetch_result(), bro_conn_log);
+  verify(fetch_result(), zeek_conn_log);
 }
 
 TEST(nondeterministic importer with two sinks) {
@@ -308,25 +308,25 @@ TEST(nondeterministic importer with two sinks) {
   auto second_result = fetch_result();
   MESSAGE("got second result");
   CHECK_EQUAL(result, second_result);
-  verify(result, bro_conn_log);
+  verify(result, zeek_conn_log);
 }
 
-TEST(nondeterministic importer with one sink and bro source) {
+TEST(nondeterministic importer with one sink and zeek source) {
   MESSAGE("connect sink to importer");
   add_sink();
-  MESSAGE("spawn bro source");
-  auto src = make_bro_source();
+  MESSAGE("spawn zeek source");
+  auto src = make_zeek_source();
   self->send(src, system::sink_atom::value, importer);
   MESSAGE("verify results");
-  verify(fetch_result(), bro_conn_log);
+  verify(fetch_result(), zeek_conn_log);
 }
 
-TEST(nondeterministic importer with two sinks and bro source) {
+TEST(nondeterministic importer with two sinks and zeek source) {
   MESSAGE("connect sinks to importer");
   add_sink();
   add_sink();
-  MESSAGE("spawn bro source");
-  auto src = make_bro_source();
+  MESSAGE("spawn zeek source");
+  auto src = make_zeek_source();
   self->send(src, system::sink_atom::value, importer);
   MESSAGE("verify results");
   auto result = fetch_result();
@@ -334,7 +334,7 @@ TEST(nondeterministic importer with two sinks and bro source) {
   auto second_result = fetch_result();
   MESSAGE("got second result");
   CHECK_EQUAL(result, second_result);
-  verify(result, bro_conn_log);
+  verify(result, zeek_conn_log);
 }
 
 FIXTURE_SCOPE_END()

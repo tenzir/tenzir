@@ -69,19 +69,19 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
 
 FIXTURE_SCOPE(archive_tests, fixture)
 
-TEST(bro conn logs slices) {
-  push_to_archive(bro_conn_log_slices);
+TEST(zeek conn logs slices) {
+  push_to_archive(zeek_conn_log_slices);
   auto result = query({{10, 15}});
   CHECK_EQUAL(result.size(), 5u);
 }
 
 TEST(archiving and querying) {
-  MESSAGE("import bro conn logs to archive");
-  push_to_archive(bro_conn_log_slices);
+  MESSAGE("import zeek conn logs to archive");
+  push_to_archive(zeek_conn_log_slices);
   MESSAGE("import DNS logs to archive");
-  push_to_archive(bro_dns_log_slices);
+  push_to_archive(zeek_dns_log_slices);
   MESSAGE("import HTTP logs to archive");
-  push_to_archive(bro_http_log_slices);
+  push_to_archive(zeek_http_log_slices);
   MESSAGE("import BGP dump logs to archive");
   push_to_archive(bgpdump_txt_slices);
   MESSAGE("query events");
@@ -95,9 +95,9 @@ TEST(archiving and querying) {
   // rate). Therefore, the result set contains first the events with higher
   // IDs [10150,10200) and then the ones with lower ID [100,150).
   CHECK_EQUAL(result[0].id(), 24u);
-  CHECK_EQUAL(result[0].type().name(), "bro::dns");
+  CHECK_EQUAL(result[0].type().name(), "zeek::dns");
   CHECK_EQUAL(result[32].id(), 1076u);
-  CHECK_EQUAL(result[32].type().name(), "bro::http");
+  CHECK_EQUAL(result[32].type().name(), "zeek::http");
   CHECK_EQUAL(result[result.size() - 1].id(), 1095u);
   self->send_exit(a, exit_reason::user_shutdown);
 }

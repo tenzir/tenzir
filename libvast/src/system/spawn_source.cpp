@@ -22,7 +22,7 @@
 #include "vast/detail/make_io_stream.hpp"
 #include "vast/detail/unbox_var.hpp"
 #include "vast/format/bgpdump.hpp"
-#include "vast/format/bro.hpp"
+#include "vast/format/zeek.hpp"
 #include "vast/format/mrt.hpp"
 #include "vast/format/test.hpp"
 #include "vast/system/node.hpp"
@@ -98,9 +98,9 @@ maybe_actor spawn_test_source(caf::local_actor* self, spawn_arguments& args) {
   return src;
 }
 
-maybe_actor spawn_bro_source(caf::local_actor* self, spawn_arguments& args) {
+maybe_actor spawn_zeek_source(caf::local_actor* self, spawn_arguments& args) {
   VAST_UNBOX_VAR(in, detail::make_input_stream(args.options));
-  return spawn_generic_source<format::bro::reader>(self, args, std::move(in));
+  return spawn_generic_source<format::zeek::reader>(self, args, std::move(in));
 }
 
 maybe_actor spawn_bgpdump_source(caf::local_actor* self,

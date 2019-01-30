@@ -42,7 +42,7 @@ The following key components exist:
 
 **sink**
   Receives events as the result of a query and displays them in specific output
-  format, such as JSON, PCAP (for packets), or Bro logs.
+  format, such as JSON, PCAP (for packets), or Zeek logs.
 
 **archive**
   Compressed bulk storage of the all events.
@@ -66,7 +66,7 @@ The following key components exist:
                 |                                            |
   +--------+    |             +--------+                     |    +-------+
   | source |    |         +--->archive <------+           +-------> sink  |
-  +-----bro+-------+      |   +--------<---+  v-----------++ |    +---json+
+  +----zeek+-------+      |   +--------<---+  v-----------++ |    +---json+
                 |  |      |                |  | exporter   | |
                 | +v------++           +------>------------+ |
      ...        | |importer|           |   |     ...         |      ...
@@ -231,7 +231,7 @@ Available *component* values with corresponding *parameters*:
   `-d`
     Treats `-r` as a listening UNIX domain socket instead of a regular file.
 
-*source* *bro*
+*source* *zeek*
 
 *source* *bgpdump*
 
@@ -270,7 +270,7 @@ Available *component* values with corresponding *parameters*:
 
 *sink* *ascii*
 
-*sink* *bro*
+*sink* *zeek*
 
 *sink* *csv*
 
@@ -335,9 +335,9 @@ Start a node at 10.0.0.1 on port 42000 in the foreground:
 
     vast -e 10.0.0.1:42000 start
 
-Send [Bro](http://www.bro.org) logs to the remote node:
+Send [Zeek](http://www.zeek.org) logs to the remote node:
 
-    zcat *.log.gz | vast import bro
+    zcat *.log.gz | vast import zeek
 
 Import a PCAP trace into a local VAST node in one shot:
 
@@ -386,15 +386,15 @@ is rendered as `42`, a timespan as `42ns`, a `string` as `"foo"`, or a
 
 The BGPdump format is the textual output of the MRT format (see below).
 
-### Bro
+### Zeek
 
 - **Type**: reader, writer
 - **Representation**: ASCII
 - **Dependencies**: none
 
-The Bro format reads and writes ASCII output from the [Bro](https://bro.org)
-network security monitor. A log consists of a sequence of header rows, followed
-by log entries.
+The Zeek format reads and writes ASCII output from the
+[Zeek](https://www.zeek.org) network security monitor. A log consists of a
+sequence of header rows, followed by log entries.
 
 ### CSV
 

@@ -26,68 +26,68 @@
 #include "vast/detail/string.hpp"
 #include "vast/error.hpp"
 #include "vast/event.hpp"
-#include "vast/format/bro.hpp"
+#include "vast/format/zeek.hpp"
 #include "vast/logger.hpp"
 #include "vast/table_slice_builder.hpp"
 
-namespace vast::format::bro {
+namespace vast::format::zeek {
 namespace {
 
-// Creates a VAST type from an ASCII Bro type in a log header.
-expected<type> parse_type(std::string_view bro_type) {
+// Creates a VAST type from an ASCII Zeek type in a log header.
+expected<type> parse_type(std::string_view zeek_type) {
   type t;
-  if (bro_type == "enum" || bro_type == "string" || bro_type == "file")
+  if (zeek_type == "enum" || zeek_type == "string" || zeek_type == "file")
     t = string_type{};
-  else if (bro_type == "bool")
+  else if (zeek_type == "bool")
     t = boolean_type{};
-  else if (bro_type == "int")
+  else if (zeek_type == "int")
     t = integer_type{};
-  else if (bro_type == "count")
+  else if (zeek_type == "count")
     t = count_type{};
-  else if (bro_type == "double")
+  else if (zeek_type == "double")
     t = real_type{};
-  else if (bro_type == "time")
+  else if (zeek_type == "time")
     t = timestamp_type{};
-  else if (bro_type == "interval")
+  else if (zeek_type == "interval")
     t = timespan_type{};
-  else if (bro_type == "pattern")
+  else if (zeek_type == "pattern")
     t = pattern_type{};
-  else if (bro_type == "addr")
+  else if (zeek_type == "addr")
     t = address_type{};
-  else if (bro_type == "subnet")
+  else if (zeek_type == "subnet")
     t = subnet_type{};
-  else if (bro_type == "port")
+  else if (zeek_type == "port")
     t = port_type{};
   if (caf::holds_alternative<none_type>(t)
-      && (detail::starts_with(bro_type, "vector")
-          || detail::starts_with(bro_type, "set")
-          || detail::starts_with(bro_type, "table"))) {
-    // Bro's logging framwork cannot log nested vectors/sets/tables, so we can
+      && (detail::starts_with(zeek_type, "vector")
+          || detail::starts_with(zeek_type, "set")
+          || detail::starts_with(zeek_type, "table"))) {
+    // Zeek's logging framwork cannot log nested vectors/sets/tables, so we can
     // safely assume that we're dealing with a basic type inside the brackets.
     // If this will ever change, we'll have to enhance this simple parser.
-    auto open = bro_type.find("[");
-    auto close = bro_type.rfind("]");
+    auto open = zeek_type.find("[");
+    auto close = zeek_type.rfind("]");
     if (open == std::string::npos || close == std::string::npos)
       return make_error(ec::format_error, "missing container brackets:",
-                        std::string{bro_type});
-    auto elem = parse_type(bro_type.substr(open + 1, close - open - 1));
+                        std::string{zeek_type});
+    auto elem = parse_type(zeek_type.substr(open + 1, close - open - 1));
     if (!elem)
       return elem.error();
-    // Bro sometimes logs sets as tables, e.g., represents set[string] as
+    // Zeek sometimes logs sets as tables, e.g., represents set[string] as
     // table[string]. We iron out this inconsistency by normalizing the type to
     // a set.
-    if (detail::starts_with(bro_type, "vector"))
+    if (detail::starts_with(zeek_type, "vector"))
       t = vector_type{*elem};
     else
       t = set_type{*elem};
   }
   if (caf::holds_alternative<none_type>(t))
     return make_error(ec::format_error, "failed to parse type: ",
-                      std::string{bro_type});
+                      std::string{zeek_type});
   return t;
 }
 
-struct bro_type_printer {
+struct zeek_type_printer {
   template <class T>
   std::string operator()(const T& x) const {
     return to_string(x);
@@ -118,8 +118,8 @@ struct bro_type_printer {
   }
 };
 
-expected<std::string> to_bro_string(const type& t) {
-  return caf::visit(bro_type_printer{}, t);
+expected<std::string> to_zeek_string(const type& t) {
+  return caf::visit(zeek_type_printer{}, t);
 }
 
 constexpr char separator = '\x09';
@@ -140,7 +140,7 @@ Stream& operator<<(Stream& out, const time_factory& t) {
 }
 
 void stream_header(const type& t, std::ostream& out) {
-  auto i = t.name().find("bro::");
+  auto i = t.name().find("zeek::");
   auto path = i == std::string::npos ? t.name() : t.name().substr(5);
   out << "#separator " << separator << '\n'
       << "#set_separator" << separator << set_separator << '\n'
@@ -154,7 +154,7 @@ void stream_header(const type& t, std::ostream& out) {
     out << separator << to_string(e.key());
   out << "\n#types";
   for (auto& e : record_type::each{r})
-    out << separator << to_bro_string(e.trace.back()->type);
+    out << separator << to_zeek_string(e.trace.back()->type);
   out << '\n';
 }
 
@@ -237,7 +237,7 @@ struct streamer {
   }
 
   void operator()(const map_type&, const map&) const {
-    VAST_ASSERT(!"not supported by Bro's log format.");
+    VAST_ASSERT(!"not supported by Zeek's log format.");
   }
 
   template <class Container, class Sep>
@@ -286,7 +286,7 @@ schema reader::schema() const {
 }
 
 const char* reader::name() const {
-  return "bro-reader";
+  return "zeek-reader";
 }
 
 caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
@@ -383,7 +383,7 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
   return finish(f);
 }
 
-// Parses a single header line a Bro log. (Since parsing headers is not on the
+// Parses a single header line a Zeek log. (Since parsing headers is not on the
 // critical path, we are "lazy" and return strings instead of string views.)
 expected<std::string> parse_header_line(const std::string& line,
                                         const std::string& sep,
@@ -458,8 +458,8 @@ caf::error reader::parse_header() {
   }
   // Construct type.
   layout_ = std::move(record_fields);
-  layout_.name("bro::" + path);
-  VAST_DEBUG(this, "parsed bro header:");
+  layout_.name("zeek::" + path);
+  VAST_DEBUG(this, "parsed zeek header:");
   VAST_DEBUG(this, "    #separator", separator_);
   VAST_DEBUG(this, "    #set_separator", set_separator_);
   VAST_DEBUG(this, "    #empty_field", empty_field_);
@@ -497,9 +497,9 @@ caf::error reader::parse_header() {
   // After having modified layout attributes, we no longer make changes to the
   // type and can now safely copy it.
   type_ = layout_;
-  // Create Bro parsers.
+  // Create Zeek parsers.
   auto make_parser = [](const auto& type, const auto& set_sep) {
-    return make_bro_parser<iterator_type>(type, set_sep);
+    return make_zeek_parser<iterator_type>(type, set_sep);
   };
   parsers_.resize(layout_.fields.size());
   for (size_t i = 0; i < layout_.fields.size(); i++)
@@ -573,7 +573,7 @@ void writer::cleanup() {
 }
 
 const char* writer::name() const {
-  return "bro-writer";
+  return "zeek-writer";
 }
 
-} // namespace vast::format::bro
+} // namespace vast::format::zeek

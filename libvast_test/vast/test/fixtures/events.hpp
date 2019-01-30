@@ -32,18 +32,18 @@ struct events {
   /// Maximum size of all generated slices.
   static size_t slice_size;
 
-  static std::vector<event> bro_conn_log;
-  static std::vector<event> bro_dns_log;
-  static std::vector<event> bro_http_log;
+  static std::vector<event> zeek_conn_log;
+  static std::vector<event> zeek_dns_log;
+  static std::vector<event> zeek_http_log;
   static std::vector<event> bgpdump_txt;
   static std::vector<event> random;
 
-  static std::vector<table_slice_ptr> bro_conn_log_slices;
+  static std::vector<table_slice_ptr> zeek_conn_log_slices;
   // TODO: table_slice::recursive_add flattens too much, why the following
   //       slices won't work. However, flatten(value) is also broken
   //       at the moment (cf. #3215), so we can't fix it until then.
-  static std::vector<table_slice_ptr> bro_http_log_slices;
-  static std::vector<table_slice_ptr> bro_dns_log_slices;
+  static std::vector<table_slice_ptr> zeek_http_log_slices;
+  static std::vector<table_slice_ptr> zeek_dns_log_slices;
   static std::vector<table_slice_ptr> bgpdump_txt_slices;
   // static std::vector<table_slice_ptr> random_slices;
 
@@ -55,7 +55,7 @@ struct events {
   static std::vector<event> alternating_integers;
   static std::vector<table_slice_ptr> alternating_integers_slices;
 
-  static record_type bro_conn_log_layout();
+  static record_type zeek_conn_log_layout();
 
   template <class... Ts>
   static std::vector<vector> make_rows(Ts... xs) {

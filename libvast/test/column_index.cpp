@@ -82,19 +82,19 @@ TEST(integer values) {
   CHECK_EQUAL(lookup(col, is4), make_ids({}, slice_size));
 }
 
-TEST(bro conn log) {
-  MESSAGE("ingest originators from bro conn log");
-  auto row_type = bro_conn_log_layout();
+TEST(zeek conn log) {
+  MESSAGE("ingest originators from zeek conn log");
+  auto row_type = zeek_conn_log_layout();
   auto col_offset = unbox(row_type.resolve("id.orig_h"));
   auto col_type = row_type.at(col_offset);
   auto col_index = unbox(row_type.flat_index_at(col_offset));
   REQUIRE_EQUAL(col_index, 2u); // 3rd column
   auto col = unbox(make_column_index(sys, directory, *col_type, col_index));
-  for (auto slice : bro_conn_log_slices)
+  for (auto slice : zeek_conn_log_slices)
     col->add(slice);
   MESSAGE("verify column index");
   auto pred = curried(unbox(to<predicate>(":addr == 192.168.1.103")));
-  auto expected_result = make_ids({1, 3, 7, 14, 16}, bro_conn_log.size());
+  auto expected_result = make_ids({1, 3, 7, 14, 16}, zeek_conn_log.size());
   CHECK_EQUAL(lookup(col, pred), expected_result);
   MESSAGE("persist and reload from disk");
   col->flush_to_disk();

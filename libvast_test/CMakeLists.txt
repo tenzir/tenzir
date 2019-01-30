@@ -1,15 +1,15 @@
 ## Configure data.hpp
 
-# Bro logs.
+# Zeek logs.
 set(test_data "#ifndef TEST_DATA\n#define TEST_DATA")
-set(test_data "${test_data}\n\nnamespace bro {\n")
-file(GLOB logs RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}" artifacts/logs/bro/*)
+set(test_data "${test_data}\n\nnamespace zeek {\n")
+file(GLOB logs RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}" artifacts/logs/zeek/*)
 foreach (log ${logs})
   get_filename_component(log_basename ${log} NAME_WE)
   set (this "constexpr auto ${log_basename} = VAST_TEST_PATH\"${log}\";")
   set (test_data "${test_data}\n${this}")
 endforeach ()
-set(test_data "${test_data}\n\n} // namespace bro")
+set(test_data "${test_data}\n\n} // namespace zeek")
 
 # Bgpdump logs.
 set(test_data "${test_data}\n\nnamespace bgpdump {\n")
