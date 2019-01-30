@@ -173,7 +173,7 @@ broker::data to_broker(const vast::data& data) {
   ), data);
 }
 
-// Constructs a result event for Bro from Broker data.
+// Constructs a result event for Zeek from Broker data.
 broker::bro::Event make_result_event(std::string query_id, broker::data x) {
   broker::vector args(2);
   args[0] = std::move(query_id);
@@ -181,7 +181,7 @@ broker::bro::Event make_result_event(std::string query_id, broker::data x) {
   return {"VAST::result", std::move(args)};
 }
 
-// Constructs a result event for Bro from a VAST event.
+// Constructs a result event for Zeek from a VAST event.
 broker::bro::Event make_result_event(std::string query_id,
                                      const vast::event& x) {
   broker::vector xs(2);
@@ -190,7 +190,7 @@ broker::bro::Event make_result_event(std::string query_id,
   return make_result_event(std::move(query_id), std::move(xs));
 }
 
-// A VAST writer that publishes the event it gets to a Bro endpoint.
+// A VAST writer that publishes the event it gets to a Zeek endpoint.
 class bro_writer : public vast::format::writer {
 public:
   bro_writer() = default;
@@ -217,7 +217,7 @@ public:
   }
 
   const char* name() const override {
-    return "bro-writer";
+    return "zeek-writer";
   }
 
 private:
@@ -227,7 +227,7 @@ private:
   size_t num_results_ = 0;
 };
 
-// Parses Broker data as Bro event.
+// Parses Broker data as Zeek event.
 caf::expected<std::pair<std::string, std::string>>
 parse_query_event(const broker::data& x) {
   std::pair<std::string, std::string> result;
@@ -292,7 +292,7 @@ int main(int argc, char** argv) {
     node = std::move(*conn);
   }
   VAST_INFO_ANON("connected to VAST successfully");
-  // Block until Bro peers with us.
+  // Block until Zeek peers with us.
   auto receive_statuses = true;
   auto status_subscriber = endpoint.make_status_subscriber(receive_statuses);
   auto peered = false;
@@ -318,8 +318,8 @@ int main(int argc, char** argv) {
       }
     ), *msg);
   };
-  VAST_INFO_ANON("peered with Bro successfully, waiting for commands");
-  // Process queries from Bro.
+  VAST_INFO_ANON("peered with Zeek successfully, waiting for commands");
+  // Process queries from Zeek.
   auto done = false;
   while (!done) {
     auto msg = subscriber.get(defaults::get_timeout);
@@ -328,7 +328,7 @@ int main(int argc, char** argv) {
     if (!msg)
       continue; // timeout
     auto& [topic, data] = *msg;
-    // Parse the Bro query event.
+    // Parse the Zeek query event.
     auto result = parse_query_event(data);
     if (!result) {
       VAST_ERROR_ANON(sys.render(result.error()));
@@ -350,9 +350,9 @@ int main(int argc, char** argv) {
                       res.get_as<caf::error>(0));
       continue;
     }
-    // Our Bro command contains a sink, which terminates automatically when the
+    // Our Zeek command contains a sink, which terminates automatically when the
     // exporter for the corresponding query has finished. We use this signal to
-    // send the final terminator event to Bro.
+    // send the final terminator event to Zeek.
     self->monitor(sink);
     self->receive(
       [&, query_id=query_id](const caf::down_msg&) {
