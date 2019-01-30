@@ -33,7 +33,7 @@ public:
 
   /// Constructs a generic writer.
   /// @param out The stream where to write to
-  explicit printer_writer(std::unique_ptr<std::ostream> out) 
+  explicit printer_writer(std::unique_ptr<std::ostream> out)
     : out_{std::move(out)} {
   }
 
