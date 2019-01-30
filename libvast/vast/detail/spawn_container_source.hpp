@@ -68,7 +68,7 @@ caf::actor spawn_container_source(caf::actor_system& system,
         return st.i == st.e;
       }
     ).ptr();
-    auto add = [&](auto& x) {
+    [[maybe_unused]] auto add = [&](auto& x) {
       if constexpr (is_actor_handle<std::decay_t<decltype(x)>>::value)
         mgr->add_outbound_path(x);
       else
@@ -84,4 +84,3 @@ caf::actor spawn_container_source(caf::actor_system& system,
 }
 
 } // namespace vast::detail
-

@@ -132,7 +132,7 @@ void importer_state::send_report() {
     self->send(accountant, std::move(r));
   }
   last_report = now;
-};
+}
 
 namespace {
 

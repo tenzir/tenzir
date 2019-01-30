@@ -43,20 +43,20 @@ using segment_ptr = caf::intrusive_ptr<segment>;
 /// storage. The layout has the following format:
 ///
 ///               +--------------------+--------------------+
-///               |       magic        |      version       | \
+///               |       magic        |      version       | ^
 ///               +--------------------+--------------------+ |
 ///               |                 segment                 | | segment header
-///               |                  UUID                   | /
+///               |                  UUID                   | v
 ///               +-----------------------------------------+
-///               .                                         . \
+///               .                                         . ^
 ///               .                meta data                . | variable size
-///               .                                         . /
+///               .                                         . v
 ///               +-----------------------------------------+
-///               .                                         . \
+///               .                                         . ^
 ///               .                                         . |
 ///               .               table slices              . | variable size
 ///               .                                         . |
-///               .                                         . /
+///               .                                         . v
 ///               +-----------------------------------------+
 ///
 class segment : public caf::ref_counted {

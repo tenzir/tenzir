@@ -617,9 +617,9 @@ bool is_http(view<data> x) {
 TEST_DISABLED(regression - zeek conn log service http) {
   // The number of occurrences of the 'service == "http"' in the conn.log,
   // sliced in batches of 100. Pre-computed via:
-  //  zeek-cut service < test/logs/zeek/conn.log \
-  //    | awk '{ if ($1 == "http") ++n; if (NR % 100 == 0) { print n; n = 0 } }\
-  //           END { print n }' \
+  //  zeek-cut service < test/logs/zeek/conn.log
+  //    | awk '{ if ($1 == "http") ++n; if (NR % 100 == 0) { print n; n = 0 } }
+  //           END { print n }'
   //    | paste -s -d , -
   std::vector<size_t> http_per_100_events{
     13, 16, 20, 22, 31, 11, 14, 28, 13, 42, 45, 52, 59, 54, 59, 59, 51,
@@ -690,8 +690,8 @@ TEST_DISABLED(regression - manual value index for zeek conn log service http) {
   for (auto i = 0u; i < http.size(); ++i)
     data &= chars[i].lookup(equal, static_cast<uint8_t>(http[i]));
   // Generated via:
-  // zeek-cut service < test/logs/zeek/conn.log \
-  //  | awk 'NR > 8000 && NR <= 8100 && $1 == "http" { print NR-1  }' \
+  // zeek-cut service < test/logs/zeek/conn.log
+  //  | awk 'NR > 8000 && NR <= 8100 && $1 == "http" { print NR-1  }'
   //  | paste -s -d , -
   auto expected = make_ids(
     {
