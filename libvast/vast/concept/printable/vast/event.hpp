@@ -13,13 +13,10 @@
 
 #pragma once
 
-#include "vast/event.hpp"
 #include "vast/concept/printable/core/printer.hpp"
-#include "vast/concept/printable/numeric/integral.hpp"
-#include "vast/concept/printable/std/chrono.hpp"
-#include "vast/concept/printable/string/string.hpp"
 #include "vast/concept/printable/string/char.hpp"
-#include "vast/concept/printable/vast/value.hpp"
+#include "vast/concept/printable/vast/data.hpp"
+#include "vast/event.hpp"
 
 namespace vast {
 
@@ -28,12 +25,9 @@ struct event_printer : printer<event_printer> {
 
   template <class Iterator>
   bool print(Iterator& out, const event& e) const {
-    using namespace printers;
-    static auto p = str << str << make_printer<timestamp>{} << str
-                        << make_printer<value>{};
-    if (e.type().name().empty() && !str(out, "<anonymous>"))
-      return false;
-    return p(out, e.type().name(), " [", e.timestamp(), "] ", e);
+    auto p = '<' << (printers::data % ", ") << '>';
+    auto& xs = caf::get<vector>(e.data());
+    return p(out, xs);
   }
 };
 
