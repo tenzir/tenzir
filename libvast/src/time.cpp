@@ -24,7 +24,10 @@ bool convert(timespan dur, double& d) {
 }
 
 bool convert(timespan dur, json& j) {
-  j = dur.count();
+  double time_since_epoch;
+  if (!convert(dur, time_since_epoch))
+    return false;
+  j = json::number{time_since_epoch};
   return true;
 }
 
