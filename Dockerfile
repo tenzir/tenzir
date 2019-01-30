@@ -46,8 +46,7 @@ RUN ./configure \
        --prefix=$PREFIX \
        --build-type=$BUILD_TYPE \
        --log-level=INFO \
-       --no-unit-tests && \
-    make -C build all install
+    make -C build all test install
 
 # Stage 2: copy application
 FROM debian:buster-slim
