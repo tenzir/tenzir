@@ -27,7 +27,6 @@
 #include "vast/detail/operators.hpp"
 #include "vast/detail/steady_map.hpp"
 #include "vast/detail/type_traits.hpp"
-#include "vast/time.hpp"
 
 namespace vast {
 
@@ -164,14 +163,13 @@ inline bool convert(bool b, json& j) {
 
 /// @relates json
 template <class T>
-bool convert(const T& x, json& j) {
-  if constexpr (std::is_arithmetic_v<T>) {
+bool convert(T x, json& j) {
+  if constexpr (std::is_arithmetic_v<T>)
     j = detail::narrow_cast<json::number>(x);
-  } else if constexpr (std::is_convertible_v<T, std::string>) {
-    j = json::string{x};
-  } else {
+  else if constexpr (std::is_convertible_v<T, json::string>)
+    j = json::string{std::move(x)};
+  else
     static_assert(detail::always_false_v<T>);
-  }
   return true;
 }
 

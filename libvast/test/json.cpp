@@ -11,15 +11,20 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
+#define SUITE json
+
+#include "vast/test/test.hpp"
+
 #include "vast/json.hpp"
+
+#include <chrono>
+
 #include "vast/concept/parseable/vast/json.hpp"
 #include "vast/concept/printable/numeric.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/json.hpp"
 #include "vast/concept/convertible/to.hpp"
-
-#define SUITE json
-#include "vast/test/test.hpp"
+#include "vast/time.hpp"
 
 using namespace vast;
 using namespace std::string_literals;
@@ -194,24 +199,19 @@ TEST(printable) {
 }
 
 TEST(conversion) {
-  MESSAGE("bool");
-  auto t = to<json>(true);
-  REQUIRE(t);
-  CHECK(*t == json{true});
-  MESSAGE("number");
-  t = to<json>(4.2);
-  REQUIRE(t);
-  CHECK(*t == json{4.2});
-  MESSAGE("strings");
-  t = to<json>("foo");
-  REQUIRE(t);
-  CHECK(*t == json{"foo"});
+  using namespace std::chrono;
+  auto since_epoch = timespan{1258532203657267968ll};
+  auto ts = timestamp{since_epoch};
+  auto fractional_ts = duration_cast<double_seconds>(since_epoch).count();
+  CHECK_EQUAL(to_json(true), json{true});
+  CHECK_EQUAL(to_json(4.2), json{4.2});
+  CHECK_EQUAL(to_json(since_epoch), json{fractional_ts});
+  CHECK_EQUAL(to_json(ts), json{fractional_ts});
+  CHECK_EQUAL(to_json("foo"), json{"foo"});
   MESSAGE("std::vector");
-  t = to<json>(std::vector<int>{1, 2, 3});
-  REQUIRE(t);
-  CHECK(*t == json::make_array(1, 2, 3));
+  auto xs = to_json(std::vector<int>{1, 2, 3});
+  CHECK_EQUAL(xs, json::make_array(1, 2, 3));
   MESSAGE("std::map");
-  t = to<json>(std::map<unsigned, bool>{{1, true}, {2, false}});
-  REQUIRE(t);
-  CHECK(*t == json::object{{"1", json{true}}, {"2", json{false}}});
+  auto ys = to_json(std::map<unsigned, bool>{{1, true}, {2, false}});
+  CHECK_EQUAL(ys, (json::object{{"1", json{true}}, {"2", json{false}}}));
 }
