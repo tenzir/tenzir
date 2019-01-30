@@ -306,7 +306,7 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
       if (!has_historical_option(self->state.options))
         return;
       self->request(self->state.index, infinite, expr).then(
-        [=](const uuid& lookup, size_t partitions, size_t scheduled) {
+        [=](const uuid& lookup, uint32_t partitions, uint32_t scheduled) {
           VAST_DEBUG(self, "got lookup handle", lookup << ", scheduled",
                      scheduled << '/' << partitions, "partitions");
           self->state.id = lookup;
