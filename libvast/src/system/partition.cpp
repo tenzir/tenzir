@@ -158,7 +158,7 @@ evaluation_map partition::eval(const expression& expr) {
     if (resolved.empty())
       continue;
     // Add triples (offset, curried predicate, and INDEXER) to evaluation map.
-    auto& triples = result[layout];
+    evaluation_map::mapped_type triples;
     for (auto& kvp: resolved) {
       auto& pred = kvp.second;
       auto hdl = caf::visit(detail::overload(
@@ -180,6 +180,8 @@ evaluation_map partition::eval(const expression& expr) {
         triples.emplace_back(kvp.first, curried(pred), std::move(hdl));
       }
     }
+    if (!triples.empty())
+      result.emplace(layout, std::move(triples));
   }
   return result;
 }
