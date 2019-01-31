@@ -343,6 +343,9 @@ void index_state::notify_flush_listeners() {
 behavior index(stateful_actor<index_state>* self, const path& dir,
                size_t max_partition_size, size_t in_mem_partitions,
                size_t taste_partitions, size_t num_workers) {
+  VAST_TRACE(VAST_ARG(dir), VAST_ARG(max_partition_size),
+             VAST_ARG(in_mem_partitions), VAST_ARG(taste_partitions),
+             VAST_ARG(num_workers));
   VAST_ASSERT(max_partition_size > 0);
   VAST_ASSERT(in_mem_partitions > 0);
   VAST_INFO(self, "spawned:", VAST_ARG(max_partition_size),
