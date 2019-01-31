@@ -95,6 +95,7 @@ evaluator_state::evaluator_state(caf::event_based_actor* self) : self(self) {
 
 void evaluator_state::init(caf::actor client, expression expr,
                            caf::response_promise promise) {
+  VAST_TRACE(VAST_ARG(client), VAST_ARG(expr), VAST_ARG(promise));
   this->client = std::move(client);
   this->expr = std::move(expr);
   this->promise = std::move(promise);
@@ -154,6 +155,7 @@ evaluator_state::hits_for(const offset& position) {
 
 caf::behavior evaluator(caf::stateful_actor<evaluator_state>* self,
                         expression expr, evaluation_map eval) {
+  VAST_TRACE(VAST_ARG(expr), VAST_ARG(eval));
   VAST_ASSERT(!eval.empty());
   using std::get;
   using std::move;
@@ -171,6 +173,10 @@ caf::behavior evaluator(caf::stateful_actor<evaluator_state>* self,
                   self->state.handle_missing_result(pos, err);
                 });
       }
+    }
+    if (st.pending_responses == 0) {
+      VAST_DEBUG(self, "has nothing to evaluate for expression");
+      st.promise.deliver(done_atom::value);
     }
     // We can only deal with exactly one expression/client at the moment.
     self->unbecome();

@@ -191,9 +191,13 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
   return {
     // The INDEX (or the EVALUATOR, to be more precise) sends us a series of
     // `ids` in response to an expression (query), terminated by 'done'.
-    [=](ids& hits) {
-      // Add `hits` to the total result set and update all stats.
+    [=](ids& hits) -> caf::result<void> {
       auto& st = self->state;
+      // Skip results that arrive before we got our lookup handle from the
+      // INDEX actor.
+      if (st.query.expected == 0)
+        return caf::skip;
+      // Add `hits` to the total result set and update all stats.
       timespan runtime = steady_clock::now() - st.start;
       st.query.runtime = runtime;
       auto count = rank(hits);
@@ -216,6 +220,7 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
         ++st.query.lookups_issued;
         self->send(st.archive, std::move(hits));
       }
+      return caf::unit;
     },
     [=](table_slice_ptr slice) {
       handle_batch(to_events(*slice, self->state.hits));

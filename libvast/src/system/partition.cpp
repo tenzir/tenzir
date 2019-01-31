@@ -108,7 +108,6 @@ caf::actor fetch_indexer(table_indexer& tbl, const attribute_extractor& ex,
                          relational_operator op, const data& x) {
   VAST_TRACE(VAST_ARG(tbl), VAST_ARG(ex), VAST_ARG(op), VAST_ARG(x));
   auto& layout = tbl.layout();
-  // Predicate of form "&type == ..."
   if (ex.attr == system::type_atom::value) {
     VAST_ASSERT(caf::holds_alternative<std::string>(x));
     // Doesn't apply if the query name doesn't match our type.
@@ -125,14 +124,19 @@ caf::actor fetch_indexer(table_indexer& tbl, const attribute_extractor& ex,
     });
   }
   if (ex.attr == system::time_atom::value) {
-    // TODO: reconsider whether we still want to support "&time ..." queries.
     VAST_ASSERT(caf::holds_alternative<timestamp>(x));
-    if (layout.fields.empty() || layout.fields[0].type != timestamp_type{})
+    // Find the column with attribute 'time'.
+    auto pred = [](auto& x) {
+      return caf::holds_alternative<timestamp_type>(x.type)
+             && has_attribute(x.type, "time");
+    };
+    auto& fs = layout.fields;
+    auto i = std::find_if(fs.begin(), fs.end(), pred);
+    if (i == fs.end())
       return nullptr;
-    record_type rs_rec{{"timestamp", timestamp_type{}}};
-    type t = rs_rec;
-    data_extractor dx{t, vast::offset{0}};
-    // Redirect to "ordinary data lookup" on column 0.
+    // Redirect to "ordinary data lookup".
+    auto pos = static_cast<size_t>(std::distance(fs.begin(), i));
+    data_extractor dx{layout, vast::offset{pos}};
     return fetch_indexer(tbl, dx, op, x);
   }
   VAST_WARNING(tbl.state().self, "got unsupported attribute:", ex.attr);
@@ -152,7 +156,7 @@ evaluation_map partition::eval(const expression& expr) {
     if (resolved.empty())
       continue;
     // Add triples (offset, curried predicate, and INDEXER) to evaluation map.
-    auto& triples = result[layout];
+    evaluation_map::mapped_type triples;
     for (auto& kvp: resolved) {
       auto& pred = kvp.second;
       auto hdl = caf::visit(detail::overload(
@@ -174,6 +178,8 @@ evaluation_map partition::eval(const expression& expr) {
         triples.emplace_back(kvp.first, curried(pred), std::move(hdl));
       }
     }
+    if (!triples.empty())
+      result.emplace(layout, std::move(triples));
   }
   return result;
 }
