@@ -45,7 +45,7 @@ WORKDIR $BUILD_DIR/vast
 RUN ./configure \
        --prefix=$PREFIX \
        --build-type=$BUILD_TYPE \
-       --log-level=INFO \
+       --log-level=INFO && \
     make -C build all test install
 
 # Stage 2: copy application
