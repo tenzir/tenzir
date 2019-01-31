@@ -44,7 +44,7 @@ namespace {
 template <class T>
 expression to_expr(T&& x) {
   return unbox(to<expression>(std::forward<T>(x)));
-};
+}
 
 struct fixture {
   fixture() {

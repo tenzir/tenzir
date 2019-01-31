@@ -28,7 +28,7 @@ const vast::type& at(const vast::record_type& rec, Offsets... xs) {
   if (!ptr)
     FAIL("offset lookup failed at " << std::vector<int>{xs...});
   return *ptr;
-};
+}
 
 /// Returns the record type at `offset{xs...}`.
 template <class... Offsets>
@@ -37,4 +37,4 @@ const vast::record_type& rec_at(const vast::record_type& rec, Offsets... xs) {
   if (!caf::holds_alternative<vast::record_type>(t))
     FAIL("expected a record type at offset " << std::vector<int>{xs...});
   return caf::get<vast::record_type>(t);
-};
+}
