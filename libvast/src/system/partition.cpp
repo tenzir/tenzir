@@ -108,7 +108,6 @@ caf::actor fetch_indexer(table_indexer& tbl, const attribute_extractor& ex,
                          relational_operator op, const data& x) {
   VAST_TRACE(VAST_ARG(tbl), VAST_ARG(ex), VAST_ARG(op), VAST_ARG(x));
   auto& layout = tbl.layout();
-  // Predicate of form "&type == ..."
   if (ex.attr == system::type_atom::value) {
     VAST_ASSERT(caf::holds_alternative<std::string>(x));
     // Doesn't apply if the query name doesn't match our type.
@@ -124,7 +123,6 @@ caf::actor fetch_indexer(table_indexer& tbl, const attribute_extractor& ex,
       return [=](const curried_predicate&) { return row_ids; };
     });
   }
-  // Predicate of form "&time == ..."
   if (ex.attr == system::time_atom::value) {
     VAST_ASSERT(caf::holds_alternative<timestamp>(x));
     // Find the column with attribute 'time'.

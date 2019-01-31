@@ -175,7 +175,7 @@ caf::behavior evaluator(caf::stateful_actor<evaluator_state>* self,
       }
     }
     if (st.pending_responses == 0) {
-      VAST_DEBUG(self, "nothing to evaluate for expression");
+      VAST_DEBUG(self, "has nothing to evaluate for expression");
       st.promise.deliver(done_atom::value);
     }
     // We can only deal with exactly one expression/client at the moment.

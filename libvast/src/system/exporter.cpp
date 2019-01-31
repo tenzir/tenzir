@@ -193,8 +193,8 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
     // `ids` in response to an expression (query), terminated by 'done'.
     [=](ids& hits) -> caf::result<void> {
       auto& st = self->state;
-      // Skip results that arrive before the response of the INDEX to handle
-      // them later.
+      // Skip results that arrive before we got our lookup handle from the
+      // INDEX actor.
       if (st.query.expected == 0)
         return caf::skip;
       // Add `hits` to the total result set and update all stats.
