@@ -56,10 +56,12 @@ public:
 
   using downstream_type = caf::downstream<output_type>;
 
+  using self_pointer = caf::stateful_actor<index_state>*;
+
   // -- constructors, destructors, and assignment operators --------------------
 
   /// @pre `state != nullptr`
-  indexer_stage_driver(downstream_manager_type& dm, index_state* state);
+  indexer_stage_driver(downstream_manager_type& dm, self_pointer self);
 
   ~indexer_stage_driver() noexcept override;
 
@@ -67,11 +69,17 @@ public:
 
   void process(downstream_type& out, batch_type& slices) override;
 
+  // -- properties -------------------------------------------------------------
+
+  self_pointer self() {
+    return self_;
+  }
+
 private:
   // -- member variables -------------------------------------------------------
 
   /// State of the INDEX actor that owns this stage.
-  index_state* state_;
+  self_pointer self_;
 };
 
 } // namespace vast::system

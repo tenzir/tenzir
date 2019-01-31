@@ -83,7 +83,7 @@ struct index_state {
 
   // -- constructors, destructors, and assignment operators --------------------
 
-  index_state(caf::event_based_actor* self);
+  index_state(caf::stateful_actor<index_state>* self);
 
   ~index_state();
 
@@ -143,10 +143,16 @@ struct index_state {
 
   void send_report();
 
+  /// Adds a new flush listener.
+  void add_flush_listener(caf::actor listener);
+
+  /// Sends a notification to all listeners and clears the listeners list.
+  void notify_flush_listeners();
+
   // -- member variables -------------------------------------------------------
 
   /// Pointer to the parent actor.
-  caf::event_based_actor* self;
+  caf::stateful_actor<index_state>* self;
 
   /// Allows to select partitions with timestamps.
   meta_index meta_idx;
@@ -192,6 +198,9 @@ struct index_state {
   std::vector<std::pair<partition_ptr, size_t>> unpersisted;
 
   accountant_type accountant;
+
+  /// List of actors that wait for the next flush event.
+  std::vector<caf::actor> flush_listeners;
 
   /// Name of the INDEX actor.
   static inline const char* name = "index";

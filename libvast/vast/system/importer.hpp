@@ -104,6 +104,9 @@ struct importer_state {
   /// @returns various status metrics.
   caf::dictionary<caf::config_value> status() const;
 
+  /// Forwards listeners to all INDEX actors and clears the listeners vector.
+  void notify_flush_listeners();
+
   /// Stores how many slices inbound paths can still send us.
   int32_t in_flight_slices = 0;
 
@@ -135,6 +138,9 @@ struct importer_state {
 
   measurement measurement_;
   stopwatch::time_point last_report;
+
+  /// Stores all actor handles of connected INDEX actors.
+  std::vector<caf::actor> index_actors;
 
   accountant_type accountant;
 

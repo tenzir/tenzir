@@ -24,6 +24,7 @@
 
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/detail/spawn_container_source.hpp"
+#include "vast/logger.hpp"
 #include "vast/meta_index.hpp"
 #include "vast/system/index.hpp"
 #include "vast/system/partition.hpp"
@@ -39,44 +40,43 @@ using std::make_shared;
 
 namespace {
 
+template <class Container>
+auto sorted(Container xs) {
+  std::sort(xs.begin(), xs.end());
+  return xs;
+}
+
 thread_local std::vector<caf::actor> all_sinks;
 
-struct sink_state {
-  std::vector<event> buf;
-};
+thread_local std::set<table_slice_ptr> all_slices;
 
-behavior dummy_sink(stateful_actor<sink_state>* self) {
+behavior dummy_sink(event_based_actor* self) {
   return {[=](stream<table_slice_ptr> in) {
     self->make_sink(in,
                     [=](unit_t&) {
                       // nop
                     },
                     [=](unit_t&, table_slice_ptr slice) {
-                      for (auto& x : to_events(*slice))
-                        self->state.buf.emplace_back(std::move(x));
+                      all_slices.emplace(std::move(slice));
                     });
     self->unbecome();
   }};
 }
 
-caf::actor spawn_sink(caf::local_actor* self, path, type, size_t, caf::actor,
-                      uuid, atomic_measurement*) {
+caf::actor spawn_sink(caf::local_actor* self, path dir, type t, size_t,
+                      caf::actor, uuid partition_id, atomic_measurement*) {
+  VAST_TRACE(VAST_ARG(dir), VAST_ARG("t", t.name()), VAST_ARG(partition_id));
   auto result = self->spawn(dummy_sink);
   all_sinks.emplace_back(result);
   return result;
 }
 
 behavior dummy_index(stateful_actor<index_state>* self, path dir) {
+  VAST_TRACE(VAST_ARG(dir));
   self->state.init(dir, std::numeric_limits<size_t>::max(), 10, 5);
   self->state.factory = spawn_sink;
-  return {[] {
-    // nop
-  }};
-}
-
-behavior test_stage(event_based_actor* self, index_state* state) {
   return {[=](stream<table_slice_ptr> in) {
-    auto mgr = self->make_continuous_stage<indexer_stage_driver>(state);
+    auto mgr = self->make_continuous_stage<indexer_stage_driver>(self);
     mgr->add_inbound_path(in);
     self->unbecome();
   }};
@@ -86,8 +86,11 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   fixture() : expected_sink_count(0) {
     // Only needed for computing how many layouts are in our data set.
     std::set<record_type> layouts;
-    // Makes sure no persistet state exists.
+    // Make sure no persistet state exists.
     rm(state_dir);
+    // Make sure we have a clean slate.
+    all_sinks.clear();
+    all_slices.clear();
     // Pick slices from various data sets.
     auto pick_from = [&](const auto& slices) {
       VAST_ASSERT(slices.size() > 0);
@@ -140,25 +143,12 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
 FIXTURE_SCOPE(indexer_stage_driver_tests, fixture)
 
 TEST(spawning sinks automatically) {
-  MESSAGE("spawn the stage");
-  auto stg = sys.spawn(test_stage, state());
   MESSAGE("spawn the source and run");
-  auto src = vast::detail::spawn_container_source(self->system(),
-                                                  test_slices,
-                                                  stg);
+  auto src = vast::detail::spawn_container_source(self->system(), test_slices,
+                                                  index);
   run();
   CHECK_EQUAL(all_sinks.size(), expected_sink_count);
-  /*
-  MESSAGE("check content of the shared buffer");
-  std::vector<event> rows;
-  for (auto& slice : test_slices)
-    for (auto& x : to_events(*slice))
-      rows.emplace_back(std::move(x));
-  auto& buf = state.buf;
-  std::sort(buf.begin(), buf.end());
-  CHECK_EQUAL(rows, buf);
-  anon_send_exit(stg, exit_reason::user_shutdown);
-  */
+  CHECK_EQUAL(sorted(test_slices), all_slices);
 }
 
 /*
