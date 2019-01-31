@@ -124,15 +124,21 @@ caf::actor fetch_indexer(table_indexer& tbl, const attribute_extractor& ex,
       return [=](const curried_predicate&) { return row_ids; };
     });
   }
+  // Predicate of form "&time == ..."
   if (ex.attr == system::time_atom::value) {
-    // TODO: reconsider whether we still want to support "&time ..." queries.
     VAST_ASSERT(caf::holds_alternative<timestamp>(x));
-    if (layout.fields.empty() || layout.fields[0].type != timestamp_type{})
+    // Find the column with attribute 'time'.
+    auto pred = [](auto& x) {
+      return caf::holds_alternative<timestamp_type>(x.type)
+             && has_attribute(x.type, "time");
+    };
+    auto& fs = layout.fields;
+    auto i = std::find_if(fs.begin(), fs.end(), pred);
+    if (i == fs.end())
       return nullptr;
-    record_type rs_rec{{"timestamp", timestamp_type{}}};
-    type t = rs_rec;
-    data_extractor dx{t, vast::offset{0}};
-    // Redirect to "ordinary data lookup" on column 0.
+    // Redirect to "ordinary data lookup".
+    auto pos = static_cast<size_t>(std::distance(fs.begin(), i));
+    data_extractor dx{layout, vast::offset{pos}};
     return fetch_indexer(tbl, dx, op, x);
   }
   VAST_WARNING(tbl.state().self, "got unsupported attribute:", ex.attr);
