@@ -237,14 +237,17 @@ TEST(meta index with boolean synopsis) {
   REQUIRE(slice != nullptr);
   auto id2 = uuid::random();
   meta_idx.add(id2, *slice);
+  CHECK(builder->add(make_data_view(caf::none)));
+  slice = builder->finish();
+  REQUIRE(slice != nullptr);
+  auto id3 = uuid::random();
+  meta_idx.add(id3, *slice);
   MESSAGE("test custom synopsis");
-  auto all = std::vector<uuid>{id1, id2};
-  std::sort(all.begin(), all.end());
-  auto expected1 = std::vector<uuid>{id1};
-  auto expected2 = std::vector<uuid>{id2};
   auto lookup = [&](std::string_view expr) {
     return meta_idx.lookup(unbox(to<expression>(expr)));
   };
+  auto expected1 = std::vector<uuid>{id1};
+  auto expected2 = std::vector<uuid>{id2};
   // Check by field name field.
   CHECK_EQUAL(lookup("x == T"), expected1);
   CHECK_EQUAL(lookup("x != F"), expected1);
@@ -255,6 +258,8 @@ TEST(meta index with boolean synopsis) {
   CHECK_EQUAL(lookup(":bool != F"), expected1);
   CHECK_EQUAL(lookup(":bool == F"), expected2);
   CHECK_EQUAL(lookup(":bool != T"), expected2);
+  auto all = std::vector<uuid>{id1, id2, id3};
+  std::sort(all.begin(), all.end());
   // Invalid schema: y does not a valid field
   CHECK_EQUAL(lookup("y == T"), all);
   CHECK_EQUAL(lookup("y != F"), all);
