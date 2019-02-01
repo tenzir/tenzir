@@ -13,6 +13,9 @@
 
 #pragma once
 
+#include <cstdint>
+#include <string>
+
 #include "vast/endpoint.hpp"
 #include "vast/concept/parseable/core.hpp"
 #include "vast/concept/parseable/numeric/integral.hpp"
@@ -25,16 +28,17 @@ struct endpoint_parser : parser<endpoint_parser> {
 
   template <class Iterator>
   bool parse(Iterator& f, const Iterator& l, endpoint& e) const {
-    using namespace std::string_literals;
     using namespace parsers;
     using namespace parser_literals;
     auto hostname = +(alnum | chr{'-'} | chr{'_'} | chr{'.'});
-    auto port = ":"_p >> u16;
+    auto host = hostname ->* [&](std::string x) { e.host = std::move(x); };
+    auto port = (':' >> u16) ->* [&](uint16_t x) { e.port = x; };
     auto p
-      = (hostname >> ~port)
-      | port ->* [](uint16_t x) { return std::make_tuple(""s, x); }
+      = (host >> ~port)
+      | port
       ;
-    return p(f, l, e.host, e.port);
+    return p(f, l, unused);
+    return false;
   }
 };
 
@@ -45,8 +49,7 @@ struct parser_registry<endpoint> {
 
 namespace parsers {
 
-static auto const endpoint = make_parser<vast::endpoint>();
+auto const endpoint = make_parser<vast::endpoint>();
 
 } // namespace parsers
 } // namespace vast
-
