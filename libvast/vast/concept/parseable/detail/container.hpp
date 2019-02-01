@@ -25,7 +25,7 @@ namespace detail {
 template <class Elem>
 struct container {
   using vector_type = std::vector<Elem>;
-  using attribute = typename attr_fold<vector_type>::type;
+  using attribute = attr_fold_t<vector_type>;
 
   template <class T>
   struct lazy_value_type {

@@ -13,40 +13,38 @@
 
 #pragma once
 
+#include <caf/optional.hpp>
+
 #include "vast/concept/parseable/core/parser.hpp"
 #include "vast/concept/support/detail/attr_fold.hpp"
-#include "vast/optional.hpp"
 
 namespace vast {
 
 template <class Parser>
 class optional_parser : public parser<optional_parser<Parser>> {
 public:
-  using inner_attribute =
-    typename detail::attr_fold<typename Parser::attribute>::type;
+  using inner_attribute = detail::attr_fold_t<typename Parser::attribute>;
 
   using attribute =
     std::conditional_t<
-      std::is_same<inner_attribute, unused_type>{},
+      std::is_same_v<inner_attribute, unused_type>,
       unused_type,
-      optional<inner_attribute>
+      caf::optional<inner_attribute>
     >;
 
-  explicit optional_parser(Parser p)
-    : parser_{std::move(p)} {
-  }
-
-  template <class Iterator>
-  bool parse(Iterator& f, const Iterator& l, unused_type) const {
-    parser_(f, l, unused);
-    return true;
+  explicit optional_parser(Parser p) : parser_{std::move(p)} {
+    // nop
   }
 
   template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
-    inner_attribute attr;
-    if (parser_(f, l, attr))
-      a = std::move(attr);
+    if constexpr (std::is_same_v<Attribute, unused_type>) {
+      parser_(f, l, unused);
+    } else {
+      inner_attribute attr;
+      if (parser_(f, l, attr))
+        a = std::move(attr);
+    }
     return true;
   }
 
@@ -55,4 +53,3 @@ private:
 };
 
 } // namespace vast
-
