@@ -71,7 +71,7 @@ void report_statistics(stateful_actor<exporter_state>* self) {
   auto& st = self->state;
   timespan runtime = steady_clock::now() - st.start;
   st.query.runtime = runtime;
-  VAST_INFO(self, "completed in", runtime);
+  VAST_INFO(self, "completed in", vast::to_string(runtime));
   self->send(st.sink, st.id, st.query);
   if (st.accountant) {
     auto hits = rank(st.hits);
@@ -238,7 +238,7 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
         request_more_hits(self);
       } else {
         VAST_DEBUG(self, "received all", st.query.expected,
-                   "ID set(s) in", runtime);
+                   "ID set(s) in", vast::to_string(runtime));
         if (st.accountant)
           self->send(st.accountant, "exporter.hits.runtime", runtime);
         if (finished(st.query))
