@@ -15,6 +15,7 @@
 
 #include <string>
 #include <vector>
+#include <tuple>
 #include <type_traits>
 
 namespace vast {
@@ -44,7 +45,8 @@ struct attr_fold<std::tuple<char, std::string>> : std::decay<std::string> {};
 template <>
 struct attr_fold<std::tuple<std::string, char>> : std::decay<std::string> {};
 
+template <class T>
+using attr_fold_t = typename attr_fold<T>::type;
+
 } // namespace detail
 } // namespace vast
-
-

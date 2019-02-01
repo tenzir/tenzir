@@ -30,7 +30,8 @@ namespace vast::defaults {
 namespace command {
 
 std::string_view directory = "vast";
-std::string_view endpoint = ":42000";
+std::string_view endpoint_host = "";
+uint16_t endpoint_port = 42000;
 std::string_view id = "";
 std::string_view read_path = "-";
 std::string_view write_path = "-";

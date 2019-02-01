@@ -25,10 +25,10 @@ class list_printer : public printer<list_printer<Lhs, Rhs>> {
 public:
   using lhs_attribute = typename Lhs::attribute;
   using rhs_attribute = typename Rhs::attribute;
-  using attribute =
-    typename detail::attr_fold<std::vector<lhs_attribute>>::type;
+  using attribute = detail::attr_fold_t<std::vector<lhs_attribute>>;
 
   list_printer(Lhs lhs, Rhs rhs) : lhs_{std::move(lhs)}, rhs_{std::move(rhs)} {
+    // nop
   }
 
   template <class Iterator, class Attribute>
@@ -51,4 +51,3 @@ private:
 };
 
 } // namespace vast
-

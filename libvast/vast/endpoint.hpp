@@ -23,5 +23,8 @@ struct endpoint {
   uint64_t port = 0;  ///< The transport-layer port.
 };
 
-} // namespace vast
+/// @returns an endpoint with values from the default settings.
+/// @relates endpoint make_endpoint
+endpoint make_default_endpoint();
 
+} // namespace vast

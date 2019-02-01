@@ -17,6 +17,7 @@
 #include <caf/actor_system_config.hpp>
 #include <caf/io/middleman.hpp>
 #include <caf/scoped_actor.hpp>
+#include <caf/settings.hpp>
 
 #include "vast/config.hpp"
 
@@ -26,6 +27,7 @@
 
 #include "vast/concept/parseable/vast/endpoint.hpp"
 #include "vast/defaults.hpp"
+#include "vast/endpoint.hpp"
 #include "vast/error.hpp"
 #include "vast/filesystem.hpp"
 #include "vast/logger.hpp"
@@ -36,17 +38,15 @@ using namespace caf;
 namespace vast::system {
 
 expected<actor> connect_to_node(scoped_actor& self, const caf::settings& opts) {
+  namespace defs = defaults::command;
   // Fetch values from config.
   auto id = get_or(opts, "id", defaults::command::node_id);
   auto dir = get_or(opts, "dir", defaults::command::directory);
   auto abs_dir = path{dir}.complete();
-  auto endpoint_str = get_or(opts, "endpoint", defaults::command::endpoint);
-  endpoint node_endpoint;
-  if (!parsers::endpoint(endpoint_str, node_endpoint)) {
-    std::string err = "invalid endpoint: ";
-    err += endpoint_str;
-    return make_error(sec::invalid_argument, std::move(err));
-  }
+  auto node_endpoint = make_default_endpoint();
+  if (auto str = get_if<std::string>(&opts, "endpoint"))
+    if (!parsers::endpoint(*str, node_endpoint))
+      make_error(ec::parse_error, "invalid endpoint", *str);
   VAST_DEBUG(self, "connects to remote node:", id);
   auto& sys_cfg = self->system().config();
   auto use_encryption = !sys_cfg.openssl_certificate.empty()

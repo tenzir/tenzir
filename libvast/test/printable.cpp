@@ -11,7 +11,13 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
+#define SUITE printable
+
+#include "vast/test/test.hpp"
+
 #include <sstream>
+
+#include <caf/optional.hpp>
 
 #include "vast/concept/printable/core.hpp"
 #include "vast/concept/printable/numeric.hpp"
@@ -22,9 +28,6 @@
 #include "vast/concept/printable/to.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/detail/escapers.hpp"
-
-#define SUITE printable
-#include "vast/test/test.hpp"
 
 using namespace std::string_literals;
 using namespace vast;
@@ -219,7 +222,7 @@ TEST(list) {
 }
 
 TEST(optional) {
-  optional<int> x;
+  caf::optional<int> x;
   auto p = -printers::integral<int>;
   std::string str;
   CHECK(p(str, x));

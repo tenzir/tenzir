@@ -24,8 +24,7 @@ template <class Printer>
 class kleene_printer : public printer<kleene_printer<Printer>> {
 public:
   using inner_attribute = typename Printer::attribute;
-  using attribute =
-    typename detail::attr_fold<std::vector<inner_attribute>>::type;
+  using attribute = detail::attr_fold_t<std::vector<inner_attribute>>;
 
   explicit kleene_printer(Printer p) : printer_{std::move(p)} {
   }
@@ -47,4 +46,3 @@ private:
 };
 
 } // namespace vast
-

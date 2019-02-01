@@ -48,17 +48,17 @@ public:
   // LHS = T && RHS = U            =>  variant<T, U>
   using attribute =
     std::conditional_t<
-      std::is_same<lhs_attribute, unused_type>{}
-        && std::is_same<rhs_attribute, unused_type>{},
+      std::is_same_v<lhs_attribute, unused_type>
+        && std::is_same_v<rhs_attribute, unused_type>,
       unused_type,
       std::conditional_t<
-        std::is_same<lhs_attribute, unused_type>{},
+        std::is_same_v<lhs_attribute, unused_type>,
         rhs_attribute,
         std::conditional_t<
-          std::is_same<rhs_attribute, unused_type>{},
+          std::is_same_v<rhs_attribute, unused_type>,
           lhs_attribute,
           std::conditional_t<
-            std::is_same<lhs_attribute, rhs_attribute>{},
+            std::is_same_v<lhs_attribute, rhs_attribute>,
             lhs_attribute,
             detail::flattened_variant<lhs_attribute, rhs_attribute>
           >

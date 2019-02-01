@@ -11,41 +11,17 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#pragma once
+#include "vast/endpoint.hpp"
 
-#include <vector>
+#include <string>
 
-#include "vast/concept/printable/core/printer.hpp"
-#include "vast/concept/support/detail/attr_fold.hpp"
+#include "vast/defaults.hpp"
 
 namespace vast {
 
-template <class Printer>
-class plus_printer : public printer<plus_printer<Printer>> {
-public:
-  using inner_attribute = typename Printer::attribute;
-  using attribute = detail::attr_fold_t<std::vector<inner_attribute>>;
-
-  explicit plus_printer(Printer p) : printer_{std::move(p)} {
-  }
-
-  template <class Iterator, class Attribute>
-  bool print(Iterator& out, const Attribute& a) const {
-    using std::begin;
-    using std::end;
-    auto f = begin(a);
-    auto l = end(a);
-    if (f == l)
-      return false;
-    do {
-      if (!printer_.print(out, *f++))
-        return false;
-    } while (f != l);
-    return true;
-  }
-
-private:
-  Printer printer_;
-};
+endpoint make_default_endpoint() {
+  namespace defs = defaults::command;
+  return endpoint{std::string{defs::endpoint_host}, defs::endpoint_port};
+}
 
 } // namespace vast

@@ -37,24 +37,24 @@ public:
     // nop
   }
 
-  template <class Iterator, class Attribute, class A = Action>
+  template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
-    if constexpr (detail::action_traits<A>::no_args_returns_void) {
+    if constexpr (detail::action_traits<Action>::no_args_returns_non_void) {
+      if (!parser_(f, l, a))
+        return false;
+      a = action_();
+    } else if constexpr (detail::action_traits<Action>::no_args_returns_void) {
       if (!parser_(f, l, a))
         return false;
       action_();
-    } else if constexpr (detail::action_traits<A>::one_arg_returns_void) {
-      if (!parser_(f, l, a))
-        return false;
-      action_(a);
-    } else if constexpr (detail::action_traits<A>::no_args_returns_non_void) {
+    } else if constexpr (detail::action_traits<Action>::one_arg_returns_void) {
       inner_attribute x;
       if (!parser_(f, l, x))
         return false;
-      a = action_();
+      action_(std::move(x));
     } else {
       // One argument, non-void return type.
-      static_assert(detail::action_traits<A>::one_arg_returns_non_void);
+      static_assert(detail::action_traits<Action>::one_arg_returns_non_void);
       action_arg_type x;
       if (!parser_(f, l, x))
         return false;
@@ -69,4 +69,3 @@ private:
 };
 
 } // namespace vast
-

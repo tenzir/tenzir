@@ -26,6 +26,7 @@
 
 #include "vast/concept/parseable/vast/endpoint.hpp"
 #include "vast/defaults.hpp"
+#include "vast/endpoint.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
 #include "vast/scope_linked.hpp"
@@ -49,12 +50,11 @@ caf::message start_command(const command&, caf::actor_system& sys,
                         || !sys_cfg.openssl_passphrase.empty()
                         || !sys_cfg.openssl_capath.empty()
                         || !sys_cfg.openssl_cafile.empty();
-  // Fetch endpoint from config.
-  auto endpoint_str = get_or(options, "endpoint", defaults::command::endpoint);
-  endpoint node_endpoint;
-  if (!parsers::endpoint(endpoint_str, node_endpoint))
-    return caf::make_message(
-      make_error(ec::parse_error, "invalid endpoint", endpoint_str));
+  // Construct an endpoint.
+  auto node_endpoint = make_default_endpoint();
+  if (auto str = caf::get_if<std::string>(&options, "endpoint"))
+    if (!parsers::endpoint(*str, node_endpoint))
+      make_error(ec::parse_error, "invalid endpoint", *str);
   // Get a convenient and blocking way to interact with actors.
   caf::scoped_actor self{sys};
   // Spawn our node.
