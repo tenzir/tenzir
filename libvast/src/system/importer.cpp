@@ -110,7 +110,8 @@ caf::dictionary<caf::config_value> importer_state::status() const {
   result.emplace("in-flight-slices", in_flight_slices);
   result.emplace("max-table-slice-size", max_table_slice_size);
   result.emplace("blocks-per-replenish", blocks_per_replenish);
-  result.emplace("last-replenish", caf::deep_to_string(last_replenish));
+  if (last_replenish > steady_clock::time_point::min())
+    result.emplace("last-replenish", caf::deep_to_string(last_replenish));
   result.emplace("awaiting-ids", awaiting_ids);
   result.emplace("available-ids", available_ids());
   if (!id_generators.empty())
