@@ -303,6 +303,9 @@ Terminates a component. The argument *label* refers to a component label.
 Synopsis:
 
   *import* [*parameters*] *format* [*format-parameters*]
+  `-t` *type*
+    Produce table slices of given *type* instead of producing the default
+    row-oriented table slices.
   `-r` *file*
     Read from *file* instead of STDIN.
   `-d`

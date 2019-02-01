@@ -56,6 +56,7 @@ default_application::default_application() {
   // Add "import" command and its children.
   import_ = add(nullptr, "import", "imports data from STDIN or file",
                 opts()
+                  .add<caf::atom_value>("table-slice,t", "table slice type")
                   .add<bool>("node,n",
                              "spawn a node instead of connecting to one")
                   .add<bool>("blocking,b",
