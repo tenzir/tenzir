@@ -13,6 +13,7 @@
 
 #include "vast/system/default_configuration.hpp"
 
+#include <caf/defaults.hpp>
 #include <caf/timestamp.hpp>
 
 #include "vast/defaults.hpp"
@@ -66,7 +67,8 @@ caf::error default_configuration::merge_root_options(system::application& app) {
   // Move everything into the system-wide options, but use "vast" as category
   // instead of the default "global" category.
   content["vast"].as_dictionary().insert(options.begin(), options.end());
-  if (!caf::get_if<std::string>(this, "logger.file-name")) {
+  auto default_fn = caf::defaults::logger::file_name;
+  if (caf::get_or(*this, "logger.file-name", default_fn) == default_fn) {
     path dir = get_or(*this, "vast.dir", defaults::command::directory);
     if (auto log_file = setup_log_file(dir.complete()); !log_file) {
       std::cerr << "failed to setup log file: " << to_string(log_file.error())
