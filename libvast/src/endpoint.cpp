@@ -11,22 +11,17 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#pragma once
+#include "vast/endpoint.hpp"
 
 #include <string>
 
-#include <caf/optional.hpp>
+#include "vast/defaults.hpp"
 
 namespace vast {
 
-/// A transport-layer endpoint consisting of host and port.
-struct endpoint {
-  std::string host;   ///< The hostname or IP address.
-  uint64_t port = 0;  ///< The transport-layer port.
-};
-
-/// @returns an endpoint with values from the default settings.
-/// @relates endpoint make_endpoint
-endpoint make_default_endpoint();
+endpoint make_default_endpoint() {
+  namespace defs = defaults::command;
+  return endpoint{std::string{defs::endpoint_host}, defs::endpoint_port};
+}
 
 } // namespace vast

@@ -29,8 +29,11 @@ namespace command {
 /// Path to persistent state.
 extern std::string_view directory;
 
-/// Locator for connecting to a remote node in "host:port" notation.
-extern std::string_view endpoint;
+/// Hostname or IP address of a remote node.
+extern std::string_view endpoint_host;
+
+/// TCP port address of a remote node.
+extern uint16_t endpoint_port;
 
 /// Server ID for the consensus module.
 extern std::string_view id;
