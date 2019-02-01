@@ -34,7 +34,9 @@ path make_log_dirname() {
 default_configuration::default_configuration(std::string application_name)
   : application_name{std::move(application_name)} {
   // Tweak default logging options.
-  set("logger.component-filter", "vast");
+  set("logger.component-blacklist",
+      caf::make_config_value_list(caf::atom("caf"), caf::atom("caf_flow")));
+  set("logger.console-verbosity", caf::atom("INFO"));
   set("logger.console", caf::atom("COLORED"));
   set("logger.file-verbosity", caf::atom("DEBUG"));
   // Allow VAST clusters to form a mesh.
