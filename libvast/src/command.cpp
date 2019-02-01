@@ -15,6 +15,8 @@
 
 #include <numeric>
 
+#include <caf/actor_system.hpp>
+#include <caf/actor_system_config.hpp>
 #include <caf/make_message.hpp>
 #include <caf/message.hpp>
 #include <caf/settings.hpp>
@@ -45,7 +47,7 @@ command* command::add(fun child_run, std::string_view child_name,
 caf::message run(const command& cmd, caf::actor_system& sys,
                  command::argument_iterator first,
                  command::argument_iterator last) {
-  caf::settings options;
+  auto options = get_or(sys.config(), "vast", caf::settings{});
   return run(cmd, sys, options, first, last);
 }
 
