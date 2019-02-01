@@ -41,13 +41,22 @@ void add_message_types(caf::actor_system_config& cfg) {
   cfg.add_message_type<bitmap>("vast::bitmap");
   cfg.add_message_type<data>("vast::data");
   cfg.add_message_type<event>("vast::event");
-  cfg.add_message_type<expression>("vast::expression");
   cfg.add_message_type<query_options>("vast::query_options");
   cfg.add_message_type<relational_operator>("vast::relational_operator");
   cfg.add_message_type<schema>("vast::schema");
   cfg.add_message_type<type>("vast::type");
   cfg.add_message_type<uuid>("vast::uuid");
   cfg.add_message_type<table_slice_ptr>("vast::table_slice_ptr");
+  cfg.add_message_type<attribute_extractor>("vast::attribute_extractor");
+  cfg.add_message_type<key_extractor>("vast::key_extractor");
+  cfg.add_message_type<type_extractor>("vast::type_extractor");
+  cfg.add_message_type<data_extractor>("vast::data_extractor");
+  cfg.add_message_type<predicate>("vast::predicate");
+  cfg.add_message_type<curried_predicate>("vast::curried_predicate");
+  cfg.add_message_type<conjunction>("vast::conjunction");
+  cfg.add_message_type<disjunction>("vast::disjunction");
+  cfg.add_message_type<negation>("vast::negation");
+  cfg.add_message_type<expression>("vast::expression");
   // Containers
   cfg.add_message_type<std::vector<event>>("std::vector<vast::event>");
   // Actor-specific messages
