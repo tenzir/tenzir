@@ -26,6 +26,7 @@
 
 #include "vast/concept/parseable/vast/endpoint.hpp"
 #include "vast/defaults.hpp"
+#include "vast/endpoint.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
 #include "vast/scope_linked.hpp"

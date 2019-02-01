@@ -15,8 +15,6 @@
 
 #include <string>
 
-#include <caf/optional.hpp>
-
 namespace vast {
 
 /// A transport-layer endpoint consisting of host and port.
