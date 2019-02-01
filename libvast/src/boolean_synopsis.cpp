@@ -25,12 +25,12 @@ boolean_synopsis::boolean_synopsis(vast::type x) : synopsis{std::move(x)} {
 }
 
 void boolean_synopsis::add(data_view x) {
-  if (auto b = caf::get_if<view<boolean>>(&x)) {
-    if (*b)
-      true_ = true;
-    else
-      false_ = true;
-  }
+  VAST_ASSERT(caf::holds_alternative<view<boolean>>(x));
+  auto b = caf::get<view<boolean>>(x);
+  if (b)
+    true_ = true;
+  else
+    false_ = true;
 }
 
 bool boolean_synopsis::lookup(relational_operator op, data_view rhs) const {

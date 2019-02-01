@@ -43,6 +43,7 @@ public:
 
   /// Adds data from a table slice.
   /// @param slice The table slice to process.
+  /// @pre `!caf::is(*x, type())`
   virtual void add(data_view x) = 0;
 
   /// Tests whether a predicate matches. The synopsis is implicitly the LHS of
