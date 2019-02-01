@@ -26,8 +26,7 @@ boolean_synopsis::boolean_synopsis(vast::type x) : synopsis{std::move(x)} {
 
 void boolean_synopsis::add(data_view x) {
   VAST_ASSERT(caf::holds_alternative<view<boolean>>(x));
-  auto b = caf::get<view<boolean>>(x);
-  if (b)
+  if (caf::get<view<boolean>>(x))
     true_ = true;
   else
     false_ = true;
