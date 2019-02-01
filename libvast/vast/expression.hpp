@@ -21,6 +21,7 @@
 #include <caf/atom.hpp>
 #include <caf/default_sum_type_access.hpp>
 #include <caf/detail/type_list.hpp>
+#include <caf/meta/type_name.hpp>
 #include <caf/none.hpp>
 #include <caf/variant.hpp>
 
@@ -50,7 +51,7 @@ bool operator<(const attribute_extractor& x, const attribute_extractor& y);
 
 template <class Inspector>
 auto inspect(Inspector& f, attribute_extractor& x) {
-  return f(x.attr);
+  return f(caf::meta::type_name("attribute_extractor"), x.attr);
 }
 
 /// Extracts one or more values according to a given key.
@@ -69,7 +70,7 @@ bool operator<(const key_extractor& x, const key_extractor& y);
 /// @relates key_extractor
 template <class Inspector>
 auto inspect(Inspector& f, key_extractor& x) {
-  return f(x.key);
+  return f(caf::meta::type_name("key_extractor"), x.key);
 }
 
 /// Extracts one or more values according to a given type.
@@ -89,7 +90,7 @@ bool operator<(const type_extractor& x, const type_extractor& y);
 /// @relates type_extractor
 template <class Inspector>
 auto inspect(Inspector& f, type_extractor& x) {
-  return f(x.type);
+  return f(caf::meta::type_name("type_extractor"), x.type);
 }
 
 /// Extracts a specific data value from a type according to an offset. During
@@ -113,7 +114,7 @@ bool operator<(const data_extractor& x, const data_extractor& y);
 /// @relates data_extractor
 template <class Inspector>
 auto inspect(Inspector& f, data_extractor& x) {
-  return f(x.type, x.offset);
+  return f(caf::meta::type_name("data_extractor"), x.type, x.offset);
 }
 
 /// A predicate with two operands evaluated under a relational operator.
@@ -146,7 +147,7 @@ bool operator<(const predicate& x, const predicate& y);
 /// @relates predicate
 template <class Inspector>
 auto inspect(Inspector& f, predicate& x) {
-  return f(x.lhs, x.op, x.rhs);
+  return f(caf::meta::type_name("predicate"), x.lhs, x.op, x.rhs);
 }
 
 /// A curried predicate, i.e., a predicate with its `lhs` operand fixed by an
@@ -161,7 +162,7 @@ struct curried_predicate {
 /// @relates curried_predicate
 template <class Inspector>
 auto inspect(Inspector& f, curried_predicate& x) {
-  return f(x.op, x.rhs);
+  return f(caf::meta::type_name("curried_predicate"), x.op, x.rhs);
 }
 
 /// @returns a curried version of `pred`.
@@ -177,10 +178,24 @@ struct conjunction : std::vector<expression> {
   using std::vector<expression>::vector;
 };
 
+/// @relates conjunction
+template <class Inspector>
+auto inspect(Inspector& f, conjunction& x) {
+  return f(caf::meta::type_name("conjunction"),
+           static_cast<std::vector<expression>&>(x));
+}
+
 /// A sequence of OR expressions.
 struct disjunction : std::vector<expression> {
   using std::vector<expression>::vector;
 };
+
+/// @relates conjunction
+template <class Inspector>
+auto inspect(Inspector& f, disjunction& x) {
+  return f(caf::meta::type_name("disjunction"),
+           static_cast<std::vector<expression>&>(x));
+}
 
 /// A NOT expression.
 struct negation : detail::totally_ordered<negation> {
@@ -210,7 +225,7 @@ bool operator<(const negation& x, const negation& y);
 /// @relates negation
 template <class Inspector>
 auto inspect(Inspector& f, negation& x) {
-  return f(x.expr());
+  return f(caf::meta::type_name("negation"), x.expr());
 }
 
 /// A query expression.
@@ -261,7 +276,7 @@ bool operator<(const expression& x, const expression& y);
 /// @relates expression
 template <class Inspector>
 auto inspect(Inspector&f, expression& x) {
-  return f(x.get_data());
+  return f(caf::meta::type_name("expression"), x.get_data());
 }
 
 /// Normalizes an expression such that:
