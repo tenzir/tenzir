@@ -37,14 +37,14 @@ int main(int argc, char** argv) {
   // CAF scaffold.
   default_configuration cfg{"vast"};
   if (auto err = cfg.parse(argc, argv)) {
-    std::cerr << "Failed to parse configuration: " << to_string(err)
+    std::cerr << "failed to parse configuration: " << to_string(err)
               << std::endl;
     return EXIT_FAILURE;
   }
   // Application setup.
   default_application app;
   if (auto err = cfg.merge_root_options(app)) {
-    std::cerr << "Failed to parse global CLI options: " << to_string(err)
+    std::cerr << "failed to parse global CLI options: " << to_string(err)
               << std::endl;
     return EXIT_FAILURE;
   }
