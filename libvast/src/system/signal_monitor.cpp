@@ -53,7 +53,7 @@ void signal_monitor::run(std::chrono::milliseconds monitoring_interval,
   static constexpr auto class_name = "signal_monitor";
   VAST_DEBUG(class_name, "sends signals to", receiver);
   for (auto s : {SIGHUP, SIGINT, SIGQUIT, SIGTERM, SIGUSR1, SIGUSR2}) {
-    VAST_DEBUG(class_name, "registers signal handler for", ::strsignal(s));
+    VAST_DEBUG(class_name, "registers signal handler for", strsignal(s));
     std::signal(s, &signal_handler);
   }
   while (!stop) {
@@ -66,7 +66,7 @@ void signal_monitor::run(std::chrono::milliseconds monitoring_interval,
       signals[0] = false;
       for (int i = 1; i < 32; ++i) {
         if (signals[i]) {
-          VAST_DEBUG(class_name, "caught signal", ::strsignal(i));
+          VAST_DEBUG(class_name, "caught signal", strsignal(i));
           signals[i] = false;
           caf::anon_send(receiver, signal_atom::value, i);
         }
