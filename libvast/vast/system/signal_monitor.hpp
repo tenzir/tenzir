@@ -13,31 +13,19 @@
 
 #pragma once
 
+#include <atomic>
 #include <chrono>
 
-#include <caf/typed_actor.hpp>
-
-#include "vast/system/atoms.hpp"
+#include <caf/fwd.hpp>
 
 namespace vast::system {
 
-struct signal_monitor_state {
-  static inline const char* name = "signal-monitor";
+class signal_monitor {
+public:
+  static std::atomic<bool> stop;
+
+  static void run(std::chrono::milliseconds monitoring_interval,
+                  caf::actor receiver);
 };
 
-using signal_monitor_type = caf::typed_actor<caf::reacts_to<run_atom>>;
-
-/// Monitors the application for UNIX signals.
-/// @note There must not exist more than one instance of this actor per
-///       process.
-/// @param self The actor handle.
-/// @param monitoring_interval The number of milliseconds to wait between
-///        checking whether a signal occurred.
-/// @param receiver The actor receiving the signals.
-signal_monitor_type::behavior_type
-signal_monitor(signal_monitor_type::stateful_pointer<signal_monitor_state> self,
-               std::chrono::milliseconds monitoring_interval,
-               caf::actor receiver);
-
 } // namespace vast::system
-
