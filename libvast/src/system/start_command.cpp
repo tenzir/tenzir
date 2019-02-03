@@ -15,6 +15,7 @@
 
 #include <csignal>
 #include <iostream>
+#include <thread>
 
 #include "vast/config.hpp"
 
@@ -30,6 +31,7 @@
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
 #include "vast/scope_linked.hpp"
+#include "vast/system/atoms.hpp"
 #include "vast/system/signal_monitor.hpp"
 #include "vast/system/spawn_node.hpp"
 
@@ -80,11 +82,9 @@ caf::message start_command(const command&, caf::actor_system& sys,
     return caf::make_message(std::move(bound_port.error()));
   VAST_INFO_ANON("VAST node is listening on", (host ? host : "")
                  << ':' << *bound_port);
-  // Spawn signal handler.
-  auto smon = self->spawn<caf::detached>(system::signal_monitor, 750ms, self);
-  auto guard = caf::detail::make_scope_guard([&] {
-    self->send_exit(smon, caf::exit_reason::user_shutdown);
-  });
+  // Start signal monitor.
+  std::thread sig_mon_thread;
+  auto guard = signal_monitor::run_guarded(sig_mon_thread, sys, 750ms, self);
   // Run main loop.
   caf::error err;
   auto stop = false;

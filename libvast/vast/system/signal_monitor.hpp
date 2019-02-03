@@ -13,31 +13,45 @@
 
 #pragma once
 
+#include <atomic>
 #include <chrono>
+#include <thread>
 
-#include <caf/typed_actor.hpp>
-
-#include "vast/system/atoms.hpp"
+#include <caf/actor.hpp>
+#include <caf/actor_system.hpp>
+#include <caf/detail/scope_guard.hpp>
+#include <caf/logger.hpp>
 
 namespace vast::system {
 
-struct signal_monitor_state {
-  static inline const char* name = "signal-monitor";
+/// Monitors the application for UNIX signals.
+class signal_monitor {
+public:
+  /// Stops the signal monitor loop when set to `true`.
+  static std::atomic<bool> stop;
+
+  /// Run the signal monitor loop.
+  /// @warning it's not safe to run two or more signal monitor loops.
+  /// @param monitoring_interval The number of milliseconds to wait between
+  ///        checking whether a signal occurred.
+  /// @param receiver The actor receiving the signals.
+  static void run(std::chrono::milliseconds monitoring_interval,
+                  caf::actor receiver);
+
+  /// Run the singal monitor loop in thread `t`, stopping it at scope exit with
+  /// the returned scope guard.
+  static auto run_guarded(std::thread& t, caf::actor_system& sys,
+                          std::chrono::milliseconds monitoring_interval,
+                          caf::actor receiver) {
+    t = std::thread{[&] {
+      CAF_SET_LOGGER_SYS(&sys);
+      run(monitoring_interval, std::move(receiver));
+    }};
+    return caf::detail::make_scope_guard([&] {
+      signal_monitor::stop = true;
+      t.join();
+    });
+  }
 };
 
-using signal_monitor_type = caf::typed_actor<caf::reacts_to<run_atom>>;
-
-/// Monitors the application for UNIX signals.
-/// @note There must not exist more than one instance of this actor per
-///       process.
-/// @param self The actor handle.
-/// @param monitoring_interval The number of milliseconds to wait between
-///        checking whether a signal occurred.
-/// @param receiver The actor receiving the signals.
-signal_monitor_type::behavior_type
-signal_monitor(signal_monitor_type::stateful_pointer<signal_monitor_state> self,
-               std::chrono::milliseconds monitoring_interval,
-               caf::actor receiver);
-
 } // namespace vast::system
-

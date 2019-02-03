@@ -99,12 +99,9 @@ caf::message source_command(const command& cmd, caf::actor_system& sys,
                ? caf::get<caf::actor>(node_opt)
                : caf::get<scope_linked_actor>(node_opt).get();
   VAST_DEBUG(&cmd, "got node");
-  /// Spawn an actor that takes care of CTRL+C and friends.
-  auto sig_mon = self->spawn<detached>(system::signal_monitor, 750ms,
-                                       actor{self});
-  auto guard = caf::detail::make_scope_guard([&] {
-    self->send_exit(sig_mon, exit_reason::user_shutdown);
-  });
+  // Start signal monitor.
+  std::thread sig_mon_thread;
+  auto guard = signal_monitor::run_guarded(sig_mon_thread, sys, 750ms, self);
   // Set defaults.
   caf::error err;
   // Connect source to importers.
