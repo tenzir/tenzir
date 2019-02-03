@@ -99,15 +99,9 @@ caf::message source_command(const command& cmd, caf::actor_system& sys,
                ? caf::get<caf::actor>(node_opt)
                : caf::get<scope_linked_actor>(node_opt).get();
   VAST_DEBUG(&cmd, "got node");
-  // Start signal handler.
-  std::thread smon{[&] {
-    CAF_SET_LOGGER_SYS(&sys);
-    signal_monitor::run(750ms, self);
-  }};
-  auto guard = caf::detail::make_scope_guard([&] {
-    signal_monitor::stop = true;
-    smon.join();
-  });
+  // Start signal monitor.
+  std::thread sig_mon_thread;
+  auto guard = signal_monitor::run_guarded(sig_mon_thread, sys, 750ms, self);
   // Set defaults.
   caf::error err;
   // Connect source to importers.

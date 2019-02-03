@@ -82,15 +82,9 @@ caf::message start_command(const command&, caf::actor_system& sys,
     return caf::make_message(std::move(bound_port.error()));
   VAST_INFO_ANON("VAST node is listening on", (host ? host : "")
                  << ':' << *bound_port);
-  // Start signal handler.
-  std::thread smon{[&] {
-    CAF_SET_LOGGER_SYS(&sys);
-    signal_monitor::run(750ms, self);
-  }};
-  auto guard = caf::detail::make_scope_guard([&] {
-    signal_monitor::stop = true;
-    smon.join();
-  });
+  // Start signal monitor.
+  std::thread sig_mon_thread;
+  auto guard = signal_monitor::run_guarded(sig_mon_thread, sys, 750ms, self);
   // Run main loop.
   caf::error err;
   auto stop = false;

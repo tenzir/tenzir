@@ -15,8 +15,12 @@
 
 #include <atomic>
 #include <chrono>
+#include <thread>
 
-#include <caf/fwd.hpp>
+#include <caf/actor.hpp>
+#include <caf/actor_system.hpp>
+#include <caf/detail/scope_guard.hpp>
+#include <caf/logger.hpp>
 
 namespace vast::system {
 
@@ -33,6 +37,21 @@ public:
   /// @param receiver The actor receiving the signals.
   static void run(std::chrono::milliseconds monitoring_interval,
                   caf::actor receiver);
+
+  /// Run the singal monitor loop in thread `t`, stopping it at scope exit with
+  /// the returned scope guard.
+  static auto run_guarded(std::thread& t, caf::actor_system& sys,
+                          std::chrono::milliseconds monitoring_interval,
+                          caf::actor receiver) {
+    t = std::thread{[&] {
+      CAF_SET_LOGGER_SYS(&sys);
+      run(monitoring_interval, std::move(receiver));
+    }};
+    return caf::detail::make_scope_guard([&] {
+      signal_monitor::stop = true;
+      t.join();
+    });
+  }
 };
 
 } // namespace vast::system

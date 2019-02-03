@@ -92,15 +92,9 @@ caf::message sink_command(const command& cmd, actor_system& sys, caf::actor snk,
                ? caf::get<caf::actor>(node_opt)
                : caf::get<scope_linked_actor>(node_opt).get();
   VAST_ASSERT(node != nullptr);
-  // Start signal handler.
-  std::thread smon{[&] {
-    CAF_SET_LOGGER_SYS(&sys);
-    signal_monitor::run(750ms, self);
-  }};
-  auto guard = caf::detail::make_scope_guard([&] {
-    signal_monitor::stop = true;
-    smon.join();
-  });
+  // Start signal monitor.
+  std::thread sig_mon_thread;
+  auto guard = signal_monitor::run_guarded(sig_mon_thread, sys, 750ms, self);
   // Spawn exporter at the node.
   actor exp;
   std::vector<std::string> args{"spawn", "exporter"};
