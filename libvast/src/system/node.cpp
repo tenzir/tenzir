@@ -170,6 +170,7 @@ caf::message status_command(const command&, caf::actor_system&,
 // Tries to spawn a new VAST component.
 caf::expected<caf::actor> spawn_component(const command& cmd,
                                           spawn_arguments& args) {
+  VAST_TRACE(VAST_ARG(args));
   VAST_ASSERT(cmd.parent != nullptr);
   using caf::atom_uint;
   auto self = this_node;
@@ -226,10 +227,12 @@ caf::expected<caf::actor> spawn_component(const command& cmd,
   }
 }
 
-caf::message spawn_command(const command& cmd, caf::actor_system&,
+caf::message spawn_command(const command& cmd, caf::actor_system& sys,
                            caf::settings& options,
                            command::argument_iterator first,
                            command::argument_iterator last) {
+  VAST_TRACE(VAST_ARG(options), VAST_ARG("args", first, last));
+  VAST_UNUSED(sys);
   using std::end;
   using std::begin;
   // Save some typing.
@@ -257,8 +260,11 @@ caf::message spawn_command(const command& cmd, caf::actor_system&,
   caf::actor new_component;
   if (auto spawn_res = spawn_component(cmd, args))
     new_component = std::move(*spawn_res);
-  else
+  else {
+    VAST_DEBUG(__func__, "got an error from spawn_component:",
+               sys.render(spawn_res.error()));
     return caf::make_message(std::move(spawn_res.error()));
+  }
   // Register component at tracker.
   auto rp = this_node->make_response_promise();
   this_node->request(st.tracker, infinite, try_put_atom::value,

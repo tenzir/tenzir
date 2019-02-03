@@ -16,6 +16,7 @@
 #include <string>
 
 #include "caf/fwd.hpp"
+#include "caf/meta/type_name.hpp"
 
 #include "vast/aliases.hpp"
 #include "vast/fwd.hpp"
@@ -47,6 +48,11 @@ struct spawn_arguments {
     return first == last;
   }
 };
+
+template <class Inspector>
+auto inspect(Inspector& f, spawn_arguments& x) {
+  return f(caf::meta::type_name("spawn_arguments"), x.dir, x.label, x.options);
+}
 
 /// Attempts to parse `[args.first, args.last)` as ::expression and returns a
 /// normalized and validated version of that expression on success.
