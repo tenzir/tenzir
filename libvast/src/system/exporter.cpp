@@ -15,10 +15,12 @@
 
 #include "vast/concept/printable/std/chrono.hpp"
 #include "vast/concept/printable/to_string.hpp"
+#include "vast/concept/printable/vast/bitmap.hpp"
 #include "vast/concept/printable/vast/event.hpp"
 #include "vast/concept/printable/vast/expression.hpp"
 #include "vast/concept/printable/vast/uuid.hpp"
 #include "vast/detail/assert.hpp"
+#include "vast/detail/fill_status_map.hpp"
 #include "vast/event.hpp"
 #include "vast/expression_visitors.hpp"
 #include "vast/logger.hpp"
@@ -126,6 +128,13 @@ void request_more_hits(stateful_actor<exporter_state>* self) {
 
 } // namespace <anonymous>
 
+caf::settings exporter_state::status() {
+  caf::settings result;
+  put(result, "hits", to_string(hits));
+  put(result, "expr", to_string(expr));
+  return result;
+}
+
 behavior exporter(stateful_actor<exporter_state>* self, expression expr,
                   query_options options) {
   auto eu = self->system().dummy_execution_unit();
@@ -135,6 +144,7 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
     self->send(self->state.accountant, announce_atom::value, self->name());
   }
   self->state.options = options;
+  self->state.expr = std::move(expr);
   if (has_continuous_option(options))
     VAST_DEBUG(self, "has continuous query option");
   self->set_exit_handler(
@@ -162,13 +172,14 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
       && qs.lookups_issued == qs.lookups_complete;
   };
   auto handle_batch = [=](std::vector<event> candidates) {
+    auto& st = self->state;
     VAST_DEBUG(self, "got batch of", candidates.size(), "events");
     auto sender = self->current_sender();
     for (auto& candidate : candidates) {
-      auto& checker = self->state.checkers[candidate.type()];
+      auto& checker = st.checkers[candidate.type()];
       // Construct a candidate checker if we don't have one for this type.
       if (caf::holds_alternative<caf::none_t>(checker)) {
-        auto x = tailor(expr, candidate.type());
+        auto x = tailor(st.expr, candidate.type());
         if (!x) {
           VAST_ERROR(self, "failed to tailor expression:",
                      self->system().render(x.error()));
@@ -181,11 +192,11 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
       }
       // Perform candidate check and keep event as result on success.
       if (caf::visit(event_evaluator{candidate}, checker))
-        self->state.results.push_back(std::move(candidate));
+        st.results.push_back(std::move(candidate));
       else
         VAST_DEBUG(self, "ignores false positive:", candidate);
     }
-    self->state.query.processed += candidates.size();
+    st.query.processed += candidates.size();
     ship_results(self);
   };
   return {
@@ -279,6 +290,11 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
       ship_results(self);
       request_more_hits(self);
     },
+    [=](status_atom) {
+      auto result = self->state.status();
+      detail::fill_status_map(result, self);
+      return result;
+    },
     [=](const archive_type& archive) {
       VAST_DEBUG(self, "registers archive", archive);
       self->state.archive = archive;
@@ -306,11 +322,11 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
           self->send(x, exporter_atom::value, self);
     },
     [=](run_atom) {
-      VAST_INFO(self, "executes query", expr);
+      VAST_INFO(self, "executes query", self->state.expr);
       self->state.start = steady_clock::now();
       if (!has_historical_option(self->state.options))
         return;
-      self->request(self->state.index, infinite, expr).then(
+      self->request(self->state.index, infinite, self->state.expr).then(
         [=](const uuid& lookup, uint32_t partitions, uint32_t scheduled) {
           VAST_DEBUG(self, "got lookup handle", lookup << ", scheduled",
                      scheduled << '/' << partitions, "partitions");

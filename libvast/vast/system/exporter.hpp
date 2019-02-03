@@ -32,6 +32,8 @@
 namespace vast::system {
 
 struct exporter_state {
+  caf::settings status();
+
   archive_type archive;
   caf::actor index;
   caf::actor sink;
@@ -44,6 +46,7 @@ struct exporter_state {
   query_status query;
   query_options options;
   uuid id;
+  expression expr;
   static inline const char* name = "exporter";
 };
 
