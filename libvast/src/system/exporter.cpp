@@ -130,8 +130,7 @@ void request_more_hits(stateful_actor<exporter_state>* self) {
 
 caf::settings exporter_state::status() {
   caf::settings result;
-  put(result, "hits-count", rank(hits));
-  put(result, "hits", to_string(hits));
+  put(result, "hits", rank(hits));
   put(result, "start", caf::deep_to_string(start));
   put(result, "id", to_string(id));
   put(result, "expression", to_string(expr));
