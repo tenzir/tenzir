@@ -20,10 +20,17 @@
 
 namespace vast::system {
 
+/// Monitors the application for UNIX signals.
 class signal_monitor {
 public:
+  /// Stops the signal monitor loop when set to `true`.
   static std::atomic<bool> stop;
 
+  /// Run the signal monitor loop.
+  /// @warning it's not safe to run two or more signal monitor loops.
+  /// @param monitoring_interval The number of milliseconds to wait between
+  ///        checking whether a signal occurred.
+  /// @param receiver The actor receiving the signals.
   static void run(std::chrono::milliseconds monitoring_interval,
                   caf::actor receiver);
 };
