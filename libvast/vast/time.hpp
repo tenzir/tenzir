@@ -23,6 +23,26 @@ namespace vast {
 
 class json;
 
+using days = std::chrono::duration<
+  int, std::ratio_multiply<std::ratio<24>, std::chrono::hours::period>>;
+
+using weeks = std::chrono::duration<
+  int, std::ratio_multiply<std::ratio<7>, days::period>>;
+
+using years = std::chrono::duration<
+  int, std::ratio_multiply<std::ratio<146097, 400>, days::period>>;
+
+using months = std::chrono::duration<
+  int, std::ratio_divide<years::period, std::ratio<12>>>;
+
+// time_point
+
+template <class Duration>
+using sys_time = std::chrono::time_point<std::chrono::system_clock, Duration>;
+
+using sys_days = sys_time<days>;
+using sys_seconds = sys_time<std::chrono::seconds>;
+
 /// A duration in time with nanosecond resolution.
 using caf::timespan;
 

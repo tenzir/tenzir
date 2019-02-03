@@ -305,7 +305,6 @@ TEST(not) {
 // -- std::chrono -------------------------------------------------------------
 
 TEST(std::chrono::duration) {
-  using namespace date;
   using namespace std::chrono;
   CHECK_EQUAL(to_string(nanoseconds(15)), "15.0ns");
   CHECK_EQUAL(to_string(nanoseconds(15'450)), "15.45us");
