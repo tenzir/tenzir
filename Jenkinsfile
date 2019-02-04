@@ -86,17 +86,17 @@ def coverageReport() {
 
 // Compiles, installs and tests via CMake.
 def cmakeSteps(buildType, cmakeArgs, buildId) {
-    def cafInstallDir = "$WORKSPACE/caf-install"
-    def cafLibraryDir = "$WORKSPACE/caf-install/lib"
-    def vastInstallDir = "$WORKSPACE/$buildId"
+    def installDir = "$WORKSPACE/$buildId"
     dir('vast-sources') {
         // Configure and build.
         cmakeBuild([
             buildDir: 'build',
             buildType: buildType,
             cmakeArgs: (cmakeArgs + [
-              "CAF_ROOT_DIR=\"$cafInstallDir\"",
-              "CMAKE_INSTALL_PREFIX=\"$vastInstallDir\"",
+              "CAF_ROOT_DIR=\"$installDir\"",
+              "BROKER_ROOT_DIR=\"$installDir\"",
+              "CMAKE_INSTALL_PREFIX=\"$installDir\"",
+              "VAST_RELOCATEABLE_INSTALL=ON",
             ]).collect { x -> '-D' + x }.join(' '),
             installation: 'cmake in search path',
             sourceDir: '.',
