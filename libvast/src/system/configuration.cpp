@@ -27,15 +27,16 @@
 #include <caf/openssl/manager.hpp>
 #endif
 
-#include "vast/detail/assert.hpp"
-#include "vast/detail/add_message_types.hpp"
 #include "vast/detail/add_error_categories.hpp"
+#include "vast/detail/add_message_types.hpp"
 #include "vast/detail/adjust_resource_consumption.hpp"
+#include "vast/detail/assert.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/detail/system.hpp"
+#include "vast/filesystem.hpp"
 #include "vast/synopsis_factory.hpp"
-#include "vast/table_slice_factory.hpp"
 #include "vast/table_slice_builder_factory.hpp"
+#include "vast/table_slice_factory.hpp"
 #include "vast/value_index.hpp"
 #include "vast/value_index_factory.hpp"
 
@@ -55,8 +56,14 @@ void initialize_factories() {
 configuration::configuration() {
   detail::add_message_types(*this);
   detail::add_error_categories(*this);
-  // Use 'vast.ini' instead of generic 'caf-application.ini'.
-  config_file_path = "vast.ini";
+  // Use 'vast.conf' instead of generic 'caf-application.ini' and fall back to
+  // $PREFIX/etc/vast if no local vast.conf exists.
+  if ((path::current() / "vast.conf").is_regular_file()) {
+    config_file_path = "vast.conf";
+  } else {
+    auto global_conf = path{VAST_INSTALL_PREFIX} / "etc/vast";
+    config_file_path = global_conf.str();
+  }
   // Load I/O module.
   load<io::middleman>();
   // GPU acceleration.
