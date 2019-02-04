@@ -61,7 +61,7 @@ configuration::configuration() {
   if ((path::current() / "vast.conf").is_regular_file()) {
     config_file_path = "vast.conf";
   } else {
-    auto global_conf = path{VAST_INSTALL_PREFIX} / "etc/vast";
+    auto global_conf = path{VAST_INSTALL_PREFIX} / "etc" / "vast";
     config_file_path = global_conf.str();
   }
   // Load I/O module.
