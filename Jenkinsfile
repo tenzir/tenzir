@@ -129,16 +129,16 @@ def buildSteps(buildType, cmakeArgs, buildId) {
     dir(buildId) {
       // Create directory.
     }
-    echo "get latest CAF master build for $buildId"
-    dir('caf-import') {
+    echo "get latest Broker/CAF build for $buildId"
+    dir('upstream-import') {
         copyArtifacts([
             filter: "${buildId}.zip",
-            projectName: 'CAF/actor-framework/master/',
+            projectName: 'Broker',
         ])
     }
     unzip([
-        zipFile: "caf-import/${buildId}.zip",
-        dir: 'caf-install',
+        zipFile: "upstream-import/${buildId}.zip",
+        dir: buildId,
         quiet: true,
     ])
     echo 'get sources from previous stage and run CMake'
@@ -156,7 +156,7 @@ def makeBuildStages(matrixIndex, builds, lblExpr, settings) {
                 node(lblExpr) {
                     stage(id) {
                         try {
-                            def buildId = "$lblExpr && $buildType"
+                            def buildId = "${lblExpr}_${buildType}".replace(' && ', '_')
                             withEnv(buildEnvironments[lblExpr] ?: []) {
                               buildSteps(buildType, settings['cmakeArgs'], buildId)
                               (settings['extraSteps'] ?: []).each { fun -> "$fun"() }
