@@ -340,7 +340,7 @@ expected<void> writer::write(const event& e) {
   auto& payload = caf::get<std::string>(xs[5]);
   // Make PCAP header.
   ::pcap_pkthdr header;
-  auto ns = e.timestamp().time_since_epoch().count();
+  auto ns = caf::get<timestamp>(xs[0]).time_since_epoch().count();
   header.ts.tv_sec = ns / 1000000000;
 #ifdef PCAP_TSTAMP_PRECISION_NANO
   header.ts.tv_usec = ns % 1000000000;
