@@ -40,10 +40,11 @@ public:
 
   /// Run the singal monitor loop in thread `t`, stopping it at scope exit with
   /// the returned scope guard.
-  static auto run_guarded(std::thread& t, caf::actor_system& sys,
+  static auto run_guarded(std::thread& t,
+                          [[maybe_unused]] caf::actor_system& sys,
                           std::chrono::milliseconds monitoring_interval,
                           caf::actor receiver) {
-    t = std::thread{[&] {
+    t = std::thread{[&, monitoring_interval, receiver{std::move(receiver)}] {
       CAF_SET_LOGGER_SYS(&sys);
       run(monitoring_interval, std::move(receiver));
     }};

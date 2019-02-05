@@ -50,7 +50,7 @@ std::atomic<bool> signal_monitor::stop;
 
 void signal_monitor::run(std::chrono::milliseconds monitoring_interval,
                          actor receiver) {
-  static constexpr auto class_name = "signal_monitor";
+  [[maybe_unused]] static constexpr auto class_name = "signal_monitor";
   VAST_DEBUG(class_name, "sends signals to", receiver);
   for (auto s : {SIGHUP, SIGINT, SIGQUIT, SIGTERM, SIGUSR1, SIGUSR2}) {
     VAST_DEBUG(class_name, "registers signal handler for", strsignal(s));
