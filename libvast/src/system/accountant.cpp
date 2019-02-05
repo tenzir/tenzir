@@ -148,11 +148,15 @@ accountant_type::behavior_type accountant(accountant_actor* self,
       VAST_TRACE(self, "received a performance report from",
                  self->current_sender());
       for (const auto& [key, value] : r) {
-        auto us = duration_cast<microseconds>(value.duration).count();
-        auto rate = value.events * 1'000'000 / us;
         record(self, key + ".events", value.events);
-        record(self, key + ".duration", us);
-        record(self, key + ".rate", rate);
+        record(self, key + ".duration", value.duration);
+        if (value.duration.count() > 0) {
+          // Calculate rate in seconds resolution from nanosecond duration.
+          auto rate = value.events * 1'000'000'000 / value.duration.count();
+          record(self, key + ".rate", rate);
+        } else {
+          record(self, key + ".rate", "NaN");
+        }
       }
     },
     [=](flush_atom) {
