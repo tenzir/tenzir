@@ -145,8 +145,6 @@ public:
 
   caf::expected<void> flush() override;
 
-  void cleanup() override;
-
   const char* name() const override;
 
 private:

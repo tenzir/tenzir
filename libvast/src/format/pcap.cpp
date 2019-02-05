@@ -317,7 +317,10 @@ writer::writer(std::string trace, size_t flush_interval)
 }
 
 writer::~writer() {
-  cleanup();
+  if (dumper_)
+    ::pcap_dump_close(dumper_);
+  if (pcap_)
+    ::pcap_close(pcap_);
 }
 
 expected<void> writer::write(const event& e) {
@@ -340,7 +343,7 @@ expected<void> writer::write(const event& e) {
   auto& payload = caf::get<std::string>(xs[5]);
   // Make PCAP header.
   ::pcap_pkthdr header;
-  auto ns = e.timestamp().time_since_epoch().count();
+  auto ns = caf::get<timestamp>(xs[0]).time_since_epoch().count();
   header.ts.tv_sec = ns / 1000000000;
 #ifdef PCAP_TSTAMP_PRECISION_NANO
   header.ts.tv_usec = ns % 1000000000;
@@ -368,13 +371,6 @@ expected<void> writer::flush() {
   if (::pcap_dump_flush(dumper_) == -1)
     return make_error(ec::format_error, "failed to flush");
   return no_error;
-}
-
-void writer::cleanup() {
-  if (dumper_)
-    ::pcap_dump_close(dumper_);
-  if (pcap_)
-    ::pcap_close(pcap_);
 }
 
 const char* writer::name() const {
