@@ -51,22 +51,15 @@ struct integral_printer : printer<integral_printer<T, Policy, MinDigits>> {
     }
   }
 
-  template <class Iterator, class U = T>
-  auto print(Iterator& out, U x) const
-  -> std::enable_if_t<std::is_unsigned<U>{}, bool> {
-    pad(out, x);
-    detail::print_numeric(out, x);
-    return true;
-  }
-
-  template <class Iterator, class U = T>
-  auto print(Iterator& out, U x) const
-  -> std::enable_if_t<std::is_signed<U>{}, bool> {
-    if (x < 0) {
-      *out++ = '-';
-      x = -x;
-    } else if (std::is_same_v<Policy, policy::force_sign>) {
-      *out++ = '+';
+  template <class Iterator, class U>
+  bool print(Iterator& out, U x) const {
+    if constexpr (std::is_signed_v<U>) {
+      if (x < 0) {
+        *out++ = '-';
+        x = -x;
+      } else if (std::is_same_v<Policy, policy::force_sign>) {
+        *out++ = '+';
+      }
     }
     pad(out, x);
     detail::print_numeric(out, x);
@@ -106,4 +99,3 @@ auto const u64 = integral_printer<uint64_t>{};
 
 } // namespace printers
 } // namespace vast
-
