@@ -182,7 +182,7 @@ struct streamer {
   }
 
   void operator()(const real_type&, real r) const {
-    auto p = real_printer<real, 6>{};
+    auto p = real_printer<real, 6, 6>{};
     auto out = std::ostreambuf_iterator<char>(out_);
     p.print(out, r);
   }
@@ -190,7 +190,7 @@ struct streamer {
   void operator()(const timestamp_type&, timestamp ts) const {
     double d;
     convert(ts.time_since_epoch(), d);
-    auto p = real_printer<real, 6>{};
+    auto p = real_printer<real, 6, 6>{};
     auto out = std::ostreambuf_iterator<char>(out_);
     p.print(out, d);
   }
@@ -198,7 +198,7 @@ struct streamer {
   void operator()(const timespan_type&, timespan span) const {
     double d;
     convert(span, d);
-    auto p = real_printer<real, 6>{};
+    auto p = real_printer<real, 6, 6>{};
     auto out = std::ostreambuf_iterator<char>(out_);
     p.print(out, d);
   }
