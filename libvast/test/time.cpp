@@ -76,8 +76,12 @@ TEST(fractional durations) {
   check_timespan("-42.001ms", -42001us);
 }
 
-TEST_DISABLED(compound durations) {
+TEST(compound durations) {
   check_timespan("3m42s10ms", 3min + 42s + 10ms);
+  check_timespan("-10m8ms1ns", -10min + 8ms + 1ns);
+  MESSAGE("no intermediate signs");
+  auto p = parsers::timespan >> parsers::eoi;
+  CHECK(!p("-10m-8ms1ns"));
 }
 
 TEST(ymdshms timestamp parser) {
