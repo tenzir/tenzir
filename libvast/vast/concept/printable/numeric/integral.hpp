@@ -55,7 +55,8 @@ struct integral_printer : printer<integral_printer<T, Policy, MinDigits>> {
   auto print(Iterator& out, U x) const
   -> std::enable_if_t<std::is_unsigned<U>{}, bool> {
     pad(out, x);
-    return detail::print_numeric(out, x);
+    detail::print_numeric(out, x);
+    return true;
   }
 
   template <class Iterator, class U = T>
@@ -68,7 +69,8 @@ struct integral_printer : printer<integral_printer<T, Policy, MinDigits>> {
       *out++ = '+';
     }
     pad(out, x);
-    return detail::print_numeric(out, x);
+    detail::print_numeric(out, x);
+    return true;
   }
 };
 

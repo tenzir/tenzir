@@ -120,6 +120,11 @@ TEST(floating point) {
   str.clear();
   CHECK(real_printer<double, 6>{}(str, d));
   CHECK_EQUAL(str, "123456.00123");
+
+  d = 123456.123;
+  str.clear();
+  CHECK(real_printer<double, 6, 6>{}(str, d));
+  CHECK_EQUAL(str, "123456.123000");
 }
 
 // -- string ------------------------------------------------------------------
