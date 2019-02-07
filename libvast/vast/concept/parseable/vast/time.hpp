@@ -32,29 +32,19 @@ namespace vast {
 
 template <class Rep, class Period>
 struct duration_parser : parser<duration_parser<Rep, Period>> {
-  using duration_type = std::chrono::duration<Rep, Period>;
-  using attribute = duration_type;
+  using attribute = std::chrono::duration<Rep, Period>;
 
-  template <class Duration>
-  static auto cast(Duration d) {
-    return std::chrono::duration_cast<duration_type>(d);
+  template <class T>
+  static attribute cast(T x) {
+    return std::chrono::duration_cast<attribute>(x);
   }
 
   template <class Iterator, class Attribute>
-  bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
+  bool parse(Iterator& f, const Iterator& l, Attribute& x) const {
     using namespace parsers;
     using namespace parser_literals;
-    auto save = f;
-    Rep i;
-    if (!make_parser<Rep>{}(f, l, i))
-      return false;
-    static auto whitespace = *space;
-    if (!whitespace(f, l, unused)) {
-      f = save;
-      return false;
-    }
     using namespace std::chrono;
-    static auto unit
+    auto unit
       = "nsecs"_p ->* [] { return cast(nanoseconds(1)); }
       | "nsec"_p  ->* [] { return cast(nanoseconds(1)); }
       | "ns"_p    ->* [] { return cast(nanoseconds(1)); }
@@ -84,12 +74,13 @@ struct duration_parser : parser<duration_parser<Rep, Period>> {
       | "year"_p  ->* [] { return cast(hours(24 * 365)); }
       | "y"_p     ->* [] { return cast(hours(24 * 365)); }
       ;
-    if (!unit(f, l, a)) {
-      f = save;
-      return false;
-    }
-    a *= i;
-    return true;
+    double scale;
+    auto multiply = [&](attribute dur) {
+      auto result = duration_cast<duration<double, Period>>(dur) * scale;
+      return cast(result);
+    };
+    auto p = real_opt_dot >> ignore(*space) >> unit ->* multiply;
+    return p(f, l, scale, x);
   }
 };
 
