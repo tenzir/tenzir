@@ -74,13 +74,18 @@ struct duration_parser : parser<duration_parser<Rep, Period>> {
       | "year"_p  ->* [] { return cast(hours(24 * 365)); }
       | "y"_p     ->* [] { return cast(hours(24 * 365)); }
       ;
-    double scale;
-    auto multiply = [&](attribute dur) {
-      auto result = duration_cast<duration<double, Period>>(dur) * scale;
-      return cast(result);
-    };
-    auto p = real_opt_dot >> ignore(*space) >> unit ->* multiply;
-    return p(f, l, scale, x);
+    if constexpr (std::is_same_v<Attribute, unused_type>) {
+      auto p = ignore(real_opt_dot) >> ignore(*space) >> unit;
+      return p(f, l, unused);
+    } else {
+      double scale;
+      auto multiply = [&](attribute dur) {
+        auto result = duration_cast<duration<double, Period>>(dur) * scale;
+        return cast(result);
+      };
+      auto p = real_opt_dot >> ignore(*space) >> unit ->* multiply;
+      return p(f, l, scale, x);
+    }
   }
 };
 
