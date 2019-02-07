@@ -116,7 +116,7 @@ endif ()
 if (NOT CMAKE_CXX_FLAGS)
   # Our default flags.
   set(EXTRA_FLAGS "${EXTRA_FLAGS} -std=c++17 -Wall -Wextra -pedantic")
-  set(PERFORMANCE_FLAGS "-march=native -mpopcnt")
+  set(PERFORMANCE_FLAGS "-msse3 -mssse3 -msse4.1 -msse4.2")
   # Increase maximum number of template instantiations, for all that
   # template-heavy code.
   set(EXTRA_FLAGS "${EXTRA_FLAGS} -ftemplate-depth=512")
