@@ -33,6 +33,10 @@
 namespace vast::format::zeek {
 namespace {
 
+// The type name prefix to preprend to zeek log names when transleting them
+// into VAST types.
+constexpr std::string_view type_name_prefix = "zeek::";
+
 // Creates a VAST type from an ASCII Zeek type in a log header.
 expected<type> parse_type(std::string_view zeek_type) {
   type t;
@@ -140,8 +144,8 @@ Stream& operator<<(Stream& out, const time_factory& t) {
 }
 
 void stream_header(const type& t, std::ostream& out) {
-  auto i = t.name().find("zeek::");
-  auto path = i == std::string::npos ? t.name() : t.name().substr(5);
+  VAST_ASSERT(detail::starts_with(t.name(), type_name_prefix));
+  auto path = t.name().substr(type_name_prefix.size());
   out << "#separator " << separator << '\n'
       << "#set_separator" << separator << set_separator << '\n'
       << "#empty_field" << separator << empty_field << '\n'
@@ -458,7 +462,7 @@ caf::error reader::parse_header() {
   }
   // Construct type.
   layout_ = std::move(record_fields);
-  layout_.name("zeek::" + path);
+  layout_.name(std::string{type_name_prefix} + path);
   VAST_DEBUG(this, "parsed zeek header:");
   VAST_DEBUG(this, "    #separator", separator_);
   VAST_DEBUG(this, "    #set_separator", set_separator_);
