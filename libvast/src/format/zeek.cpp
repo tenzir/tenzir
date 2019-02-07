@@ -337,10 +337,10 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
       separator_.clear();
       if (auto err = parse_header())
         return err;
-    if (!reset_builder(layout_))
-      return make_error(ec::parse_error,
-                        "unable to create a bulider for parsed layout at",
-                        lines_->line_number());
+      if (!reset_builder(layout_))
+        return make_error(ec::parse_error,
+                          "unable to create a bulider for parsed layout at",
+                          lines_->line_number());
     } else if (detail::starts_with(line, "#")) {
       // Ignore comments.
       VAST_DEBUG(this, "ignores comment at line", lines_->line_number());
