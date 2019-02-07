@@ -118,6 +118,13 @@ TEST(action) {
   CHECK_EQUAL(x, unbox(to<address>("10.0.0.1")));
 }
 
+TEST(end of input) {
+  auto input = "foo"s;
+  CHECK(!parsers::eoi(input));
+  input.clear();
+  CHECK(parsers::eoi(input));
+}
+
 // -- string ------------------------------------------------------------------
 
 TEST(char) {

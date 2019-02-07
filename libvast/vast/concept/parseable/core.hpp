@@ -18,6 +18,7 @@
 #include "vast/concept/parseable/core/as.hpp"
 #include "vast/concept/parseable/core/choice.hpp"
 #include "vast/concept/parseable/core/difference.hpp"
+#include "vast/concept/parseable/core/end_of_input.hpp"
 #include "vast/concept/parseable/core/epsilon.hpp"
 #include "vast/concept/parseable/core/guard.hpp"
 #include "vast/concept/parseable/core/ignore.hpp"
