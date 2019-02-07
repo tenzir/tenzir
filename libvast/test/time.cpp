@@ -36,13 +36,6 @@ void check_timespan(const Input& str, T x) {
   CHECK_EQUAL(t, duration_cast<timespan>(x));
 }
 
-template <class Input, class T>
-void check_timestamp(const Input& str, T x) {
-  timestamp ts;
-  CHECK(parsers::timespan(str, ts));
-  CHECK_EQUAL(ts, duration_cast<timestamp>(x));
-}
-
 } // namespace <anonymous>
 
 TEST(positive durations) {
@@ -87,7 +80,6 @@ TEST(fractional durations) {
 TEST_DISABLED(compound durations) {
   check_timespan("3m42s10ms", 3min + 42s + 10ms);
 }
-
 
 TEST(ymdshms timestamp parser) {
   timestamp ts;
