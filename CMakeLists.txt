@@ -490,6 +490,23 @@ set(EXECUTABLE_OUTPUT_PATH ${CMAKE_CURRENT_BINARY_DIR}/bin
 set (LIBRARY_OUTPUT_PATH ${CMAKE_CURRENT_BINARY_DIR}/lib CACHE
   PATH "Single directory for all libraries")
 
+file(GENERATE
+  OUTPUT
+    "${CMAKE_CURRENT_BINARY_DIR}/integration_$<CONFIG>.sh"
+  CONTENT
+    "#!/bin/sh
+     set -e
+     python3 -m venv --upgrade \"${CMAKE_CURRENT_BINARY_DIR}/integration_env\"
+     source \"${CMAKE_CURRENT_BINARY_DIR}/integration_env/bin/activate\"
+     pip install -r \
+       \"${CMAKE_CURRENT_SOURCE_DIR}/scripts/integration/requirements.txt\"
+     python3 \"${CMAKE_CURRENT_SOURCE_DIR}/scripts/integration/integration.py\" \
+       --app \"${CMAKE_CURRENT_BINARY_DIR}/bin/vast\" -d vast-integration-test")
+
+add_custom_target(integration
+  COMMAND /bin/sh "${CMAKE_CURRENT_BINARY_DIR}/integration_$<CONFIG>.sh")
+
+
 add_subdirectory(doc)
 add_subdirectory(libvast)
 add_subdirectory(libvast_test)
@@ -537,6 +554,11 @@ install(FILES
   "${CMAKE_CURRENT_BINARY_DIR}/VASTConfig.cmake"
   "${CMAKE_CURRENT_BINARY_DIR}/VASTConfigVersion.cmake"
   DESTINATION "${INSTALL_VAST_CMAKEDIR}"
+)
+
+install(DIRECTORY
+  "${CMAKE_CURRENT_SOURCE_DIR}/scripts/integration"
+  DESTINATION "${CMAKE_INSTALL_DATADIR}/vast/"
 )
 
 #------------------------------------------------------------------------------
