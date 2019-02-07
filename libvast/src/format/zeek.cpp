@@ -143,7 +143,7 @@ Stream& operator<<(Stream& out, const time_factory& t) {
   return out;
 }
 
-void stream_header(const type& t, std::ostream& out) {
+void print_header(const type& t, std::ostream& out) {
   VAST_ASSERT(detail::starts_with(t.name(), type_name_prefix));
   auto path = t.name().substr(type_name_prefix.size());
   out << "#separator " << separator << '\n'
@@ -526,7 +526,7 @@ expected<void> writer::write(const event& e) {
       auto sb = std::make_unique<detail::fdoutbuf>(1);
       auto out = std::make_unique<std::ostream>(sb.release());
       auto i = streams_.emplace("", std::move(out));
-      stream_header(e.type(), *i.first->second);
+      print_header(e.type(), *i.first->second);
     }
     os = streams_.begin()->second.get();
   } else {
@@ -546,7 +546,7 @@ expected<void> writer::write(const event& e) {
       }
       auto filename = dir_ / (e.type().name() + ".log");
       auto fos = std::make_unique<std::ofstream>(filename.str());
-      stream_header(e.type(), *fos);
+      print_header(e.type(), *fos);
       auto i = streams_.emplace(e.type().name(), std::move(fos));
       os = i.first->second.get();
     }
