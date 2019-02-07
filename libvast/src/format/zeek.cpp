@@ -525,10 +525,13 @@ expected<void> writer::write(const event& e) {
       VAST_DEBUG(this, "creates a new stream for STDOUT");
       auto sb = std::make_unique<detail::fdoutbuf>(1);
       auto out = std::make_unique<std::ostream>(sb.release());
-      auto i = streams_.emplace("", std::move(out));
-      print_header(e.type(), *i.first->second);
+      streams_.emplace("", std::move(out));
     }
     os = streams_.begin()->second.get();
+    if (e.type() != previous_layout_) {
+      print_header(e.type(), *os);
+      previous_layout_ = e.type();
+    }
   } else {
     auto i = streams_.find(e.type().name());
     if (i != streams_.end()) {
