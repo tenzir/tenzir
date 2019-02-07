@@ -15,6 +15,7 @@
 
 #include <caf/deserializer.hpp>
 #include <caf/serializer.hpp>
+#include <caf/sum_type.hpp>
 
 #include "vast/synopsis.hpp"
 
@@ -40,7 +41,40 @@ public:
       max_ = *y;
   }
 
-  bool lookup(relational_operator op, data_view rhs) const override {
+  std::optional<bool> lookup(relational_operator op,
+                             data_view rhs) const override {
+    if (op == in) {
+      auto s = caf::get_if<view<set>>(&rhs);
+      if (s == nullptr)
+        return std::nullopt;
+      for (auto element : **s)
+        if (lookup_impl(op, element))
+          return true;
+      return false;
+    } else if (op >= equal && op <= greater_equal) {
+      return {lookup_impl(op, rhs)};
+    } else
+      return std::nullopt;
+  }
+
+  caf::error serialize(caf::serializer& sink) const override {
+    return sink(min_, max_);
+  }
+
+  caf::error deserialize(caf::deserializer& source) override {
+    return source(min_, max_);
+  }
+
+  T min() const noexcept {
+    return min_;
+  }
+
+  T max() const noexcept {
+    return max_;
+  }
+
+private:
+  bool lookup_impl(relational_operator op, data_view rhs) const {
     // Let *min* and *max* constitute the LHS of the lookup operation and *rhs*
     // be the value to compare with on the RHS. Then, there are 5 possible
     // scenarios to differentiate for the inputs:
@@ -82,23 +116,6 @@ public:
     }
   }
 
-  caf::error serialize(caf::serializer& sink) const override {
-    return sink(min_, max_);
-  }
-
-  caf::error deserialize(caf::deserializer& source) override {
-    return source(min_, max_);
-  }
-
-  T min() const noexcept {
-    return min_;
-  }
-
-  T max() const noexcept {
-    return max_;
-  }
-
-private:
   T min_;
   T max_;
 };

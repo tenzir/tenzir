@@ -125,7 +125,8 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
             for (size_t i = 0; i < table_syn.size(); ++i)
               if (table_syn[i] && match(layout.fields[i])) {
                 found_matching_synopsis = true;
-                if (table_syn[i]->lookup(x.op, make_view(rhs))) {
+                auto opt = table_syn[i]->lookup(x.op, make_view(rhs));
+                if (!opt || *opt) {
                   result.push_back(part_id);
                   return;
                 }

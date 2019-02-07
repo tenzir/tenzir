@@ -34,6 +34,12 @@ namespace {
 
 const timestamp epoch;
 
+bool is_true(std::optional<bool> opt) {
+  if (!opt)
+    return false;
+  return *opt;
+}
+
 } // namespace <anonymous>
 
 TEST(min-max synopsis) {
@@ -44,44 +50,44 @@ TEST(min-max synopsis) {
   x->add(timestamp{epoch + 7s});
   MESSAGE("[4,7] op 0");
   timestamp zero = epoch + 0s;
-  CHECK(!x->lookup(equal, zero));
-  CHECK(x->lookup(not_equal, zero));
-  CHECK(!x->lookup(less, zero));
-  CHECK(!x->lookup(less_equal, zero));
-  CHECK(x->lookup(greater, zero));
-  CHECK(x->lookup(greater_equal, zero));
+  CHECK(!is_true(x->lookup(equal, zero)));
+  CHECK(is_true(x->lookup(not_equal, zero)));
+  CHECK(!is_true(x->lookup(less, zero)));
+  CHECK(!is_true(x->lookup(less_equal, zero)));
+  CHECK(is_true(x->lookup(greater, zero)));
+  CHECK(is_true(x->lookup(greater_equal, zero)));
   MESSAGE("[4,7] op 4");
   timestamp four = epoch + 4s;
-  CHECK(x->lookup(equal, four));
-  CHECK(!x->lookup(not_equal, four));
-  CHECK(!x->lookup(less, four));
-  CHECK(x->lookup(less_equal, four));
-  CHECK(x->lookup(greater, four));
-  CHECK(x->lookup(greater_equal, four));
+  CHECK(is_true(x->lookup(equal, four)));
+  CHECK(!is_true(x->lookup(not_equal, four)));
+  CHECK(!is_true(x->lookup(less, four)));
+  CHECK(is_true(x->lookup(less_equal, four)));
+  CHECK(is_true(x->lookup(greater, four)));
+  CHECK(is_true(x->lookup(greater_equal, four)));
   MESSAGE("[4,7] op 6");
   timestamp six = epoch + 6s;
-  CHECK(x->lookup(equal, six));
-  CHECK(!x->lookup(not_equal, six));
-  CHECK(x->lookup(less, six));
-  CHECK(x->lookup(less_equal, six));
-  CHECK(x->lookup(greater, six));
-  CHECK(x->lookup(greater_equal, six));
+  CHECK(is_true(x->lookup(equal, six)));
+  CHECK(!is_true(x->lookup(not_equal, six)));
+  CHECK(is_true(x->lookup(less, six)));
+  CHECK(is_true(x->lookup(less_equal, six)));
+  CHECK(is_true(x->lookup(greater, six)));
+  CHECK(is_true(x->lookup(greater_equal, six)));
   MESSAGE("[4,7] op 7");
   timestamp seven = epoch + 7s;
-  CHECK(x->lookup(equal, seven));
-  CHECK(!x->lookup(not_equal, seven));
-  CHECK(x->lookup(less, seven));
-  CHECK(x->lookup(less_equal, seven));
-  CHECK(!x->lookup(greater, seven));
-  CHECK(x->lookup(greater_equal, seven));
+  CHECK(is_true(x->lookup(equal, seven)));
+  CHECK(!is_true(x->lookup(not_equal, seven)));
+  CHECK(is_true(x->lookup(less, seven)));
+  CHECK(is_true(x->lookup(less_equal, seven)));
+  CHECK(!is_true(x->lookup(greater, seven)));
+  CHECK(is_true(x->lookup(greater_equal, seven)));
   MESSAGE("[4,7] op 9");
   timestamp nine = epoch + 9s;
-  CHECK(!x->lookup(equal, nine));
-  CHECK(x->lookup(not_equal, nine));
-  CHECK(x->lookup(less, nine));
-  CHECK(x->lookup(less_equal, nine));
-  CHECK(!x->lookup(greater, nine));
-  CHECK(!x->lookup(greater_equal, nine));
+  CHECK(!is_true(x->lookup(equal, nine)));
+  CHECK(is_true(x->lookup(not_equal, nine)));
+  CHECK(is_true(x->lookup(less, nine)));
+  CHECK(is_true(x->lookup(less_equal, nine)));
+  CHECK(!is_true(x->lookup(greater, nine)));
+  CHECK(!is_true(x->lookup(greater_equal, nine)));
 }
 
 FIXTURE_SCOPE(synopsis_tests, fixtures::deterministic_actor_system)

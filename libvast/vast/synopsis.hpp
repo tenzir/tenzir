@@ -13,6 +13,8 @@
 
 #pragma once
 
+#include <optional>
+
 #include <caf/fwd.hpp>
 #include <caf/intrusive_ptr.hpp>
 #include <caf/ref_counted.hpp>
@@ -51,7 +53,8 @@ public:
   /// @param op The operator of the predicate.
   /// @param rhs The RHS of the predicate.
   /// @returns The evaluation result of `*this op rhs`.
-  virtual bool lookup(relational_operator op, data_view rhs) const = 0;
+  virtual std::optional<bool> lookup(relational_operator op,
+                                     data_view rhs) const = 0;
 
   /// Tests whether two objects are equal.
   virtual bool equals(const synopsis& other) const noexcept = 0;

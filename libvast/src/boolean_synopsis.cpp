@@ -32,14 +32,15 @@ void boolean_synopsis::add(data_view x) {
     false_ = true;
 }
 
-bool boolean_synopsis::lookup(relational_operator op, data_view rhs) const {
+std::optional<bool> boolean_synopsis::lookup(relational_operator op,
+                                             data_view rhs) const {
   if (auto b = caf::get_if<view<boolean>>(&rhs)) {
     if (op == equal)
       return *b ? true_ : false_;
     if (op == not_equal)
       return *b ? false_ : true_;
   }
-  return false;
+  return std::nullopt;
 }
 
 bool boolean_synopsis::equals(const synopsis& other) const noexcept {
