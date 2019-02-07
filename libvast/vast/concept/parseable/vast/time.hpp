@@ -155,7 +155,7 @@ namespace parsers {
 auto const ymdhms = ymdhms_parser{};
 
 /// Parses a fractional seconds-timestamp as UNIX epoch.
-auto const epoch = real_opt_dot
+auto const unix_ts = real_opt_dot
   ->* [](double d) {
     using std::chrono::duration_cast;
     return timestamp{duration_cast<vast::timespan>(double_seconds{d})};
@@ -174,7 +174,7 @@ struct timestamp_parser : parser<timestamp_parser> {
     auto ws = ignore(*parsers::space);
     auto p
       = parsers::ymdhms
-      | '@' >> parsers::epoch
+      | '@' >> parsers::unix_ts
       | "now" >> ws >> ( '+' >> ws >> parsers::timespan ->* plus
                        | '-' >> ws >> parsers::timespan ->* minus )
       | "now"_p ->* []() { return timestamp::clock::now(); }
