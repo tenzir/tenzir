@@ -9,24 +9,28 @@ at scale.
 
 ## Synopsis
 
-Ingest a [PCAP](https://en.wikipedia.org/wiki/Pcap) trace into a local VAST
-node:
+Start a VAST node:
 
-    vast -n import pcap < trace.pcap
+    vast start
 
-Query a local VAST node and get the result back as PCAP trace:
-
-    vast -n export pcap "sport > 60000/tcp && src !in 10.0.0.0/8" \
-      | ipsumdump --collate -w - \
-      | tcpdump -r - -nl
-
-Start a VAST node in the foreground, listening at 10.0.0.1:
-
-    vast -e 10.0.0.1 start
-
-Send [Zeek](http://www.zeek.org) logs to a remote node:
+Ingest a bunch of [Zeek](http://www.zeek.org) logs:
 
     zcat *.log.gz | vast import zeek
+
+Run a query over the last hour, rendered as JSON:
+
+    vast export json '&time > now - 1 hour && :addr == 6.6.6.6'
+
+Ingest a [PCAP](https://en.wikipedia.org/wiki/Pcap) trace with a 1024-byte flow
+cut-off:
+
+    vast import pcap -c 1024 < trace.pcap
+
+Run a query over PCAP data, sort the packets, and feed them into `tcpdump`:
+
+    vast export pcap "sport > 60000/tcp && src !in 10.0.0.0/8" \
+      | ipsumdump --collate -w - \
+      | tcpdump -r - -nl
 
 ## Resources
 
