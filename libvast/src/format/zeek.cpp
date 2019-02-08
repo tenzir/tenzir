@@ -33,6 +33,10 @@
 namespace vast::format::zeek {
 namespace {
 
+// The type name prefix to preprend to zeek log names when transleting them
+// into VAST types.
+constexpr std::string_view type_name_prefix = "zeek::";
+
 // Creates a VAST type from an ASCII Zeek type in a log header.
 expected<type> parse_type(std::string_view zeek_type) {
   type t;
@@ -139,9 +143,9 @@ Stream& operator<<(Stream& out, const time_factory& t) {
   return out;
 }
 
-void stream_header(const type& t, std::ostream& out) {
-  auto i = t.name().find("zeek::");
-  auto path = i == std::string::npos ? t.name() : t.name().substr(5);
+void print_header(const type& t, std::ostream& out) {
+  VAST_ASSERT(detail::starts_with(t.name(), type_name_prefix));
+  auto path = t.name().substr(type_name_prefix.size());
   out << "#separator " << separator << '\n'
       << "#set_separator" << separator << set_separator << '\n'
       << "#empty_field" << separator << empty_field << '\n'
@@ -333,10 +337,10 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
       separator_.clear();
       if (auto err = parse_header())
         return err;
-    if (!reset_builder(layout_))
-      return make_error(ec::parse_error,
-                        "unable to create a bulider for parsed layout at",
-                        lines_->line_number());
+      if (!reset_builder(layout_))
+        return make_error(ec::parse_error,
+                          "unable to create a bulider for parsed layout at",
+                          lines_->line_number());
     } else if (detail::starts_with(line, "#")) {
       // Ignore comments.
       VAST_DEBUG(this, "ignores comment at line", lines_->line_number());
@@ -458,7 +462,7 @@ caf::error reader::parse_header() {
   }
   // Construct type.
   layout_ = std::move(record_fields);
-  layout_.name("zeek::" + path);
+  layout_.name(std::string{type_name_prefix} + path);
   VAST_DEBUG(this, "parsed zeek header:");
   VAST_DEBUG(this, "    #separator", separator_);
   VAST_DEBUG(this, "    #set_separator", set_separator_);
@@ -521,10 +525,13 @@ expected<void> writer::write(const event& e) {
       VAST_DEBUG(this, "creates a new stream for STDOUT");
       auto sb = std::make_unique<detail::fdoutbuf>(1);
       auto out = std::make_unique<std::ostream>(sb.release());
-      auto i = streams_.emplace("", std::move(out));
-      stream_header(e.type(), *i.first->second);
+      streams_.emplace("", std::move(out));
     }
     os = streams_.begin()->second.get();
+    if (e.type() != previous_layout_) {
+      print_header(e.type(), *os);
+      previous_layout_ = e.type();
+    }
   } else {
     auto i = streams_.find(e.type().name());
     if (i != streams_.end()) {
@@ -542,7 +549,7 @@ expected<void> writer::write(const event& e) {
       }
       auto filename = dir_ / (e.type().name() + ".log");
       auto fos = std::make_unique<std::ofstream>(filename.str());
-      stream_header(e.type(), *fos);
+      print_header(e.type(), *fos);
       auto i = streams_.emplace(e.type().name(), std::move(fos));
       os = i.first->second.get();
     }

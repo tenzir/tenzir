@@ -282,6 +282,7 @@ public:
 
 private:
   path dir_;
+  type previous_layout_;
   std::unordered_map<std::string, std::unique_ptr<std::ostream>> streams_;
 };
 
