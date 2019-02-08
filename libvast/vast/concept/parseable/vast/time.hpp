@@ -32,29 +32,19 @@ namespace vast {
 
 template <class Rep, class Period>
 struct duration_parser : parser<duration_parser<Rep, Period>> {
-  using duration_type = std::chrono::duration<Rep, Period>;
-  using attribute = duration_type;
+  using attribute = std::chrono::duration<Rep, Period>;
 
-  template <class Duration>
-  static auto cast(Duration d) {
-    return std::chrono::duration_cast<duration_type>(d);
+  template <class T>
+  static attribute cast(T x) {
+    return std::chrono::duration_cast<attribute>(x);
   }
 
   template <class Iterator, class Attribute>
-  bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
+  bool parse(Iterator& f, const Iterator& l, Attribute& x) const {
     using namespace parsers;
     using namespace parser_literals;
-    auto save = f;
-    Rep i;
-    if (!make_parser<Rep>{}(f, l, i))
-      return false;
-    static auto whitespace = *space;
-    if (!whitespace(f, l, unused)) {
-      f = save;
-      return false;
-    }
     using namespace std::chrono;
-    static auto unit
+    auto unit
       = "nsecs"_p ->* [] { return cast(nanoseconds(1)); }
       | "nsec"_p  ->* [] { return cast(nanoseconds(1)); }
       | "ns"_p    ->* [] { return cast(nanoseconds(1)); }
@@ -84,12 +74,18 @@ struct duration_parser : parser<duration_parser<Rep, Period>> {
       | "year"_p  ->* [] { return cast(hours(24 * 365)); }
       | "y"_p     ->* [] { return cast(hours(24 * 365)); }
       ;
-    if (!unit(f, l, a)) {
-      f = save;
-      return false;
+    if constexpr (std::is_same_v<Attribute, unused_type>) {
+      auto p = ignore(real_opt_dot) >> ignore(*space) >> unit;
+      return p(f, l, unused);
+    } else {
+      double scale;
+      auto multiply = [&](attribute dur) {
+        auto result = duration_cast<duration<double, Period>>(dur) * scale;
+        return cast(result);
+      };
+      auto p = real_opt_dot >> ignore(*space) >> unit ->* multiply;
+      return p(f, l, scale, x);
     }
-    a *= i;
-    return true;
   }
 };
 
@@ -110,9 +106,9 @@ auto const timespan = duration<vast::timespan::rep, vast::timespan::period>;
 struct ymdhms_parser : vast::parser<ymdhms_parser> {
   using attribute = timestamp;
 
-  static auto make() {
+  template <class Iterator, class Attribute>
+  bool parse(Iterator& f, const Iterator& l, Attribute& x) const {
     using namespace std::chrono;
-    using namespace date;
     auto year = integral_parser<int, 4, 4>{}
                   .with([](auto x) { return x >= 1900; });
     auto mon = integral_parser<int, 2, 2>{}
@@ -125,37 +121,28 @@ struct ymdhms_parser : vast::parser<ymdhms_parser> {
                  .with([](auto x) { return x >= 0 && x <= 59; });
     auto sec = parsers::real_opt_dot
                  .with([](auto x) { return x >= 0.0 && x <= 60.0; });
-    return year >> '-' >> mon
+    auto p = year >> '-' >> mon
         >> ~('-' >> day >> ~('+' >> hour >> ~(':' >> min >> ~(':' >> sec))));
-  }
-
-  template <class Iterator>
-  bool parse(Iterator& f, const Iterator& l, unused_type) const {
-    static auto p = make();
-    return p(f, l, unused);
-  }
-
-  template <class Iterator>
-  bool parse(Iterator& f, const Iterator& l, timestamp& tp) const {
-    using namespace std::chrono;
-    using namespace date;
-    auto secs = 0.0;
-    auto mins = 0;
-    auto hrs = 0;
-    auto dys = 1;
-    auto mons = 1;
-    auto yrs = 0;
-    // Compose to match parser attribute.
-    auto ms = std::tie(mins, secs);
-    auto hms = std::tie(hrs, ms);
-    auto dhms = std::tie(dys, hms);
-    static auto p = make();
-    if (!p(f, l, yrs, mons, dhms))
-      return false;
-    sys_days ymd = year{yrs} / mons / dys;
-    auto delta = hours{hrs} + minutes{mins} + double_seconds{secs};
-    tp = timestamp{ymd} + duration_cast<timespan>(delta);
-    return true;
+    if constexpr (std::is_same_v<Attribute, unused_type>) {
+      return p(f, l, unused);
+    } else {
+      auto secs = 0.0;
+      auto mins = 0;
+      auto hrs = 0;
+      auto dys = 1;
+      auto mons = 1;
+      auto yrs = 0;
+      // Compose to match parser attribute.
+      auto ms = std::tie(mins, secs);
+      auto hms = std::tie(hrs, ms);
+      auto dhms = std::tie(dys, hms);
+      if (!p(f, l, yrs, mons, dhms))
+        return false;
+      date::sys_days ymd = date::year{yrs} / mons / dys;
+      auto delta = hours{hrs} + minutes{mins} + double_seconds{secs};
+      x = timestamp{ymd} + duration_cast<timespan>(delta);
+      return true;
+    }
   }
 };
 
@@ -164,9 +151,9 @@ namespace parsers {
 auto const ymdhms = ymdhms_parser{};
 
 /// Parses a fractional seconds-timestamp as UNIX epoch.
-auto const epoch = real_opt_dot
-  ->* [](double d) { 
-    using std::chrono::duration_cast; 
+auto const unix_ts = real_opt_dot
+  ->* [](double d) {
+    using std::chrono::duration_cast;
     return timestamp{duration_cast<vast::timespan>(double_seconds{d})};
   };
 
@@ -178,16 +165,12 @@ struct timestamp_parser : parser<timestamp_parser> {
   template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
     using namespace parser_literals;
-    static auto plus = [](timespan span) {
-      return timestamp::clock::now() + span;
-    };
-    static auto minus = [](timespan span) {
-      return timestamp::clock::now() - span;
-    };
-    static auto ws = ignore(*parsers::space);
-    static auto p
+    auto plus = [](timespan t) { return timestamp::clock::now() + t; };
+    auto minus = [](timespan t) { return timestamp::clock::now() - t; };
+    auto ws = ignore(*parsers::space);
+    auto p
       = parsers::ymdhms
-      | '@' >> parsers::epoch
+      | '@' >> parsers::unix_ts
       | "now" >> ws >> ( '+' >> ws >> parsers::timespan ->* plus
                        | '-' >> ws >> parsers::timespan ->* minus )
       | "now"_p ->* []() { return timestamp::clock::now(); }
@@ -205,8 +188,7 @@ struct parser_registry<timestamp> {
 
 namespace parsers {
 
-static auto const timestamp = timestamp_parser{};
+auto const timestamp = timestamp_parser{};
 
 } // namespace parsers
 } // namespace vast
-

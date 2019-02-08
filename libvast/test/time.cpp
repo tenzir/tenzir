@@ -24,56 +24,63 @@
 
 using namespace vast;
 using namespace std::chrono;
+using namespace std::chrono_literals;
 using namespace date;
 
-TEST(parseable) {
-  timespan sp;
+namespace {
+
+template <class Input, class T>
+void check_timespan(const Input& str, T x) {
+  timespan t;
+  CHECK(parsers::timespan(str, t));
+  CHECK_EQUAL(t, duration_cast<timespan>(x));
+}
+
+} // namespace <anonymous>
+
+TEST(positive durations) {
   MESSAGE("nanoseconds");
-  CHECK(parsers::timespan("42 nsecs", sp));
-  CHECK(sp == nanoseconds(42));
-  CHECK(parsers::timespan("43nsecs", sp));
-  CHECK(sp == nanoseconds(43));
-  CHECK(parsers::timespan("44ns", sp));
-  CHECK(sp == nanoseconds(44));
+  check_timespan("42 nsecs", 42ns);
+  check_timespan("42nsec", 42ns);
+  check_timespan("42ns", 42ns);
+  check_timespan("42ns", 42ns);
   MESSAGE("microseconds");
-  CHECK(parsers::timespan("42 usecs", sp));
-  CHECK(sp == microseconds(42));
-  CHECK(parsers::timespan("43usecs", sp));
-  CHECK(sp == microseconds(43));
-  CHECK(parsers::timespan("44us", sp));
-  CHECK(sp == microseconds(44));
+  check_timespan("42 usecs", 42us);
+  check_timespan("42usec", 42us);
+  check_timespan("42us", 42us);
   MESSAGE("milliseconds");
-  CHECK(parsers::timespan("42 msecs", sp));
-  CHECK(sp == milliseconds(42));
-  CHECK(parsers::timespan("43msecs", sp));
-  CHECK(sp == milliseconds(43));
-  CHECK(parsers::timespan("44ms", sp));
-  CHECK(sp == milliseconds(44));
+  check_timespan("42 msecs", 42ms);
+  check_timespan("42msec", 42ms);
+  check_timespan("42ms", 42ms);
   MESSAGE("seconds");
-  CHECK(parsers::timespan("-42 secs", sp));
-  CHECK(sp == seconds(-42));
-  CHECK(parsers::timespan("-43secs", sp));
-  CHECK(sp == seconds(-43));
-  CHECK(parsers::timespan("-44s", sp));
-  CHECK(sp == seconds(-44));
+  check_timespan("42 secs", 42s);
+  check_timespan("42sec", 42s);
+  check_timespan("42s", 42s);
   MESSAGE("minutes");
-  CHECK(parsers::timespan("-42 mins", sp));
-  CHECK(sp == minutes(-42));
-  CHECK(parsers::timespan("-43min", sp));
-  CHECK(sp == minutes(-43));
-  CHECK(parsers::timespan("44m", sp));
-  CHECK(sp == minutes(44));
+  check_timespan("42 mins", 42min);
+  check_timespan("42min", 42min);
+  check_timespan("42m", 42min);
   MESSAGE("hours");
-  CHECK(parsers::timespan("42 hours", sp));
-  CHECK(sp == hours(42));
-  CHECK(parsers::timespan("-43hrs", sp));
-  CHECK(sp == hours(-43));
-  CHECK(parsers::timespan("44h", sp));
-  CHECK(sp == hours(44));
-// TODO
-// MESSAGE("compound");
-// CHECK(parsers::timespan("5m99s", sp));
-// CHECK(sp.count() == 399000000000ll);
+  check_timespan("42 hours", 42h);
+  check_timespan("42hour", 42h);
+  check_timespan("42h", 42h);
+}
+
+TEST(negative durations) {
+  check_timespan("-42ns", -42ns);
+  check_timespan("-42h", -42h);
+}
+
+TEST(fractional durations) {
+  check_timespan("3.54s", 3540ms);
+  check_timespan("-42.001ms", -42001us);
+}
+
+TEST_DISABLED(compound durations) {
+  check_timespan("3m42s10ms", 3min + 42s + 10ms);
+}
+
+TEST(ymdshms timestamp parser) {
   timestamp ts;
   MESSAGE("YYYY-MM-DD+HH:MM:SS.ssss");
   CHECK(parsers::timestamp("2012-08-12+23:55:04.001234", ts));
@@ -124,12 +131,18 @@ TEST(parseable) {
   CHECK(t.hours() == hours{0});
   CHECK(t.minutes() == minutes{0});
   CHECK(t.seconds() == seconds{0});
-  MESSAGE("UNIX epoch");
+}
+
+TEST(unix epoch timestamp parser) {
+  timestamp ts;
   CHECK(parsers::timestamp("@1444040673", ts));
-  CHECK(ts.time_since_epoch() == seconds{1444040673});
+  CHECK(ts.time_since_epoch() == 1444040673s);
   CHECK(parsers::timestamp("@1398933902.686337", ts));
   CHECK(ts.time_since_epoch() == double_seconds{1398933902.686337});
-  MESSAGE("now");
+}
+
+TEST(now timestamp parser) {
+  timestamp ts;
   CHECK(parsers::timestamp("now", ts));
   CHECK(ts > timestamp::clock::now() - minutes{1});
   CHECK(ts < timestamp::clock::now() + minutes{1});
@@ -137,11 +150,16 @@ TEST(parseable) {
   CHECK(ts < timestamp::clock::now());
   CHECK(parsers::timestamp("now + 1m", ts));
   CHECK(ts > timestamp::clock::now());
-  MESSAGE("ago");
+}
+
+TEST(ago timestamp parser) {
+  timestamp ts;
   CHECK(parsers::timestamp("10 days ago", ts));
   CHECK(ts < timestamp::clock::now());
-  MESSAGE("in");
+}
+
+TEST(in timestamp parser) {
+  timestamp ts;
   CHECK(parsers::timestamp("in 1 year", ts));
   CHECK(ts > timestamp::clock::now());
 }
-
