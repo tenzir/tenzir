@@ -45,7 +45,6 @@ TEST(positive durations) {
   check_timespan("42ns", 42ns);
   check_timespan("42ns", 42ns);
   MESSAGE("microseconds");
-  MESSAGE("nanoseconds");
   check_timespan("42 usecs", 42us);
   check_timespan("42usec", 42us);
   check_timespan("42us", 42us);
