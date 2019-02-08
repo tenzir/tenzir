@@ -20,6 +20,7 @@
 #include <caf/fwd.hpp>
 #include <caf/typed_response_promise.hpp>
 
+#include "vast/aliases.hpp"
 #include "vast/expression.hpp"
 #include "vast/ids.hpp"
 #include "vast/offset.hpp"
