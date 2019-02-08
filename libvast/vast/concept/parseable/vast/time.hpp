@@ -90,14 +90,29 @@ struct duration_parser : parser<duration_parser<Rep, Period>> {
 };
 
 template <class Rep, class Period>
+struct compound_duration_parser : parser<compound_duration_parser<Rep, Period>> {
+  using attribute = std::chrono::duration<Rep, Period>;
+
+  template <class Iterator, class Attribute>
+  bool parse(Iterator& f, const Iterator& l, Attribute& x) const {
+    auto duration = duration_parser<Rep, Period>{};
+    auto guard = [](attribute dur) { return dur.count() > 0; };
+    auto positive_duration = duration.with(guard);
+    auto add = [&](attribute component) { x += component; };
+    auto p = duration >> ignore(*(positive_duration ->* add));
+    return p(f, l, x);
+  }
+};
+
+template <class Rep, class Period>
 struct parser_registry<std::chrono::duration<Rep, Period>> {
-  using type = duration_parser<Rep, Period>;
+  using type = compound_duration_parser<Rep, Period>;
 };
 
 namespace parsers {
 
 template <class Rep, class Period>
-auto const duration = duration_parser<Rep, Period>{};
+auto const duration = compound_duration_parser<Rep, Period>{};
 
 auto const timespan = duration<vast::timespan::rep, vast::timespan::period>;
 
