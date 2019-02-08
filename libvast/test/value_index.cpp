@@ -322,7 +322,7 @@ TEST(subnet) {
   subnet_index idx{subnet_type{}};
   auto s0 = *to<subnet>("192.168.0.0/24");
   auto s1 = *to<subnet>("192.168.1.0/24");
-  auto s2 = *to<subnet>("::/40");
+  auto s2 = *to<subnet>("fe80::/10");
   MESSAGE("append");
   REQUIRE(idx.append(make_data_view(s0)));
   REQUIRE(idx.append(make_data_view(s1)));
@@ -330,13 +330,23 @@ TEST(subnet) {
   REQUIRE(idx.append(make_data_view(s0)));
   REQUIRE(idx.append(make_data_view(s2)));
   REQUIRE(idx.append(make_data_view(s2)));
-  MESSAGE("address lookup");
-  auto a = unbox(to<address>("192.168.0.1"));
-  auto bm = idx.lookup(in, make_data_view(a));
+  MESSAGE("address lookup (ni)");
+  auto a = unbox(to<address>("192.168.0.0")); // network address
+  auto bm = idx.lookup(ni, make_data_view(a));
+  CHECK_EQUAL(to_string(unbox(bm)), "101100");
+  a = unbox(to<address>("192.168.0.1"));
+  bm = idx.lookup(ni, make_data_view(a));
   CHECK_EQUAL(to_string(unbox(bm)), "101100");
   a = unbox(to<address>("192.168.1.42"));
-  bm = idx.lookup(in, make_data_view(a));
-  CHECK_EQUAL(to_string(unbox(bm)), "010011");
+  bm = idx.lookup(ni, make_data_view(a));
+  CHECK_EQUAL(to_string(unbox(bm)), "010000");
+  // IPv6
+  a = unbox(to<address>("feff::")); // too far out
+  bm = idx.lookup(ni, make_data_view(a));
+  CHECK_EQUAL(to_string(unbox(bm)), "000000");
+  a = unbox(to<address>("fe80::aaaa"));
+  bm = idx.lookup(ni, make_data_view(a));
+  CHECK_EQUAL(to_string(unbox(bm)), "000011");
   MESSAGE("equality lookup");
   bm = idx.lookup(equal, make_data_view(s0));
   CHECK_EQUAL(to_string(unbox(bm)), "101100");
