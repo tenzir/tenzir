@@ -330,8 +330,15 @@ TEST(subnet) {
   REQUIRE(idx.append(make_data_view(s0)));
   REQUIRE(idx.append(make_data_view(s2)));
   REQUIRE(idx.append(make_data_view(s2)));
+  MESSAGE("address lookup");
+  auto a = unbox(to<address>("192.168.0.1"));
+  auto bm = idx.lookup(in, make_data_view(a));
+  CHECK_EQUAL(to_string(unbox(bm)), "101100");
+  a = unbox(to<address>("192.168.1.42"));
+  bm = idx.lookup(in, make_data_view(a));
+  CHECK_EQUAL(to_string(unbox(bm)), "010011");
   MESSAGE("equality lookup");
-  auto bm = idx.lookup(equal, make_data_view(s0));
+  bm = idx.lookup(equal, make_data_view(s0));
   CHECK_EQUAL(to_string(unbox(bm)), "101100");
   bm = idx.lookup(not_equal, make_data_view(s1));
   CHECK_EQUAL(to_string(unbox(bm)), "101111");
