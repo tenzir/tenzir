@@ -24,7 +24,7 @@ public:
 
   void add(data_view x) override;
 
-  std::optional<bool> lookup(relational_operator op,
+  caf::optional<bool> lookup(relational_operator op,
                              data_view rhs) const override;
 
   bool equals(const synopsis& other) const noexcept override;

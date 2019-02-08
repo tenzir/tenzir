@@ -34,10 +34,8 @@ namespace {
 
 const timestamp epoch;
 
-bool is_true(std::optional<bool> opt) {
-  if (!opt)
-    return false;
-  return *opt;
+bool is_true(caf::optional<bool> opt) {
+  return opt && *opt;
 }
 
 } // namespace <anonymous>

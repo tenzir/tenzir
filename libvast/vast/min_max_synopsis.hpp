@@ -14,6 +14,7 @@
 #pragma once
 
 #include <caf/deserializer.hpp>
+#include <caf/optional.hpp>
 #include <caf/serializer.hpp>
 #include <caf/sum_type.hpp>
 
@@ -41,20 +42,28 @@ public:
       max_ = *y;
   }
 
-  std::optional<bool> lookup(relational_operator op,
+  caf::optional<bool> lookup(relational_operator op,
                              data_view rhs) const override {
-    if (op == in) {
-      auto s = caf::get_if<view<set>>(&rhs);
-      if (s == nullptr)
-        return std::nullopt;
-      for (auto element : **s)
-        if (lookup_impl(op, element))
-          return true;
-      return false;
-    } else if (op >= equal && op <= greater_equal) {
-      return {lookup_impl(op, rhs)};
-    } else
-      return std::nullopt;
+    switch (op) {
+      case in: {
+        if (auto xs = caf::get_if<view<set>>(&rhs)) {
+          for (auto x : **xs)
+            if (lookup_impl(op, x))
+              return true;
+          return false;
+        }
+        return caf::none;
+      }
+      case equal:
+      case not_equal:
+      case less:
+      case less_equal:
+      case greater:
+      case greater_equal:
+        return {lookup_impl(op, rhs)};
+      default:
+        return caf::none;
+    }
   }
 
   caf::error serialize(caf::serializer& sink) const override {
