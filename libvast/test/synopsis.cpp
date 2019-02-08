@@ -18,8 +18,6 @@
 #include "vast/test/test.hpp"
 #include "vast/test/fixtures/actor_system.hpp"
 
-#include <vector>
-
 #include <caf/binary_deserializer.hpp>
 #include <caf/binary_serializer.hpp>
 
@@ -34,9 +32,27 @@ namespace {
 
 const timestamp epoch;
 
-bool is_true(caf::optional<bool> opt) {
-  return opt && *opt;
-}
+const auto N = caf::none;
+const auto T = caf::optional<bool>{true};
+const auto F = caf::optional<bool>{false};
+
+struct verifier {
+  synopsis_ptr syn;
+  void operator()(data_view rhs, std::array<caf::optional<bool>, 12> ref) {
+    CHECK_EQUAL(syn->lookup(match, rhs), ref[0]);
+    CHECK_EQUAL(syn->lookup(not_match, rhs), ref[1]);
+    CHECK_EQUAL(syn->lookup(in, rhs), ref[2]);
+    CHECK_EQUAL(syn->lookup(not_in, rhs), ref[3]);
+    CHECK_EQUAL(syn->lookup(ni, rhs), ref[4]);
+    CHECK_EQUAL(syn->lookup(not_ni, rhs), ref[5]);
+    CHECK_EQUAL(syn->lookup(equal, rhs), ref[6]);
+    CHECK_EQUAL(syn->lookup(not_equal, rhs), ref[7]);
+    CHECK_EQUAL(syn->lookup(less, rhs), ref[8]);
+    CHECK_EQUAL(syn->lookup(less_equal, rhs), ref[9]);
+    CHECK_EQUAL(syn->lookup(greater, rhs), ref[10]);
+    CHECK_EQUAL(syn->lookup(greater_equal, rhs), ref[11]);
+  }
+};
 
 } // namespace <anonymous>
 
@@ -46,46 +62,41 @@ TEST(min-max synopsis) {
   REQUIRE_NOT_EQUAL(x, nullptr);
   x->add(timestamp{epoch + 4s});
   x->add(timestamp{epoch + 7s});
+  auto verify = verifier{x};
   MESSAGE("[4,7] op 0");
   timestamp zero = epoch + 0s;
-  CHECK(!is_true(x->lookup(equal, zero)));
-  CHECK(is_true(x->lookup(not_equal, zero)));
-  CHECK(!is_true(x->lookup(less, zero)));
-  CHECK(!is_true(x->lookup(less_equal, zero)));
-  CHECK(is_true(x->lookup(greater, zero)));
-  CHECK(is_true(x->lookup(greater_equal, zero)));
+  verify(zero, {N, N, N, N, N, N, F, T, F, F, T, T});
   MESSAGE("[4,7] op 4");
   timestamp four = epoch + 4s;
-  CHECK(is_true(x->lookup(equal, four)));
-  CHECK(!is_true(x->lookup(not_equal, four)));
-  CHECK(!is_true(x->lookup(less, four)));
-  CHECK(is_true(x->lookup(less_equal, four)));
-  CHECK(is_true(x->lookup(greater, four)));
-  CHECK(is_true(x->lookup(greater_equal, four)));
+  verify(four, {N, N, N, N, N, N, T, F, F, T, T, T});
   MESSAGE("[4,7] op 6");
   timestamp six = epoch + 6s;
-  CHECK(is_true(x->lookup(equal, six)));
-  CHECK(!is_true(x->lookup(not_equal, six)));
-  CHECK(is_true(x->lookup(less, six)));
-  CHECK(is_true(x->lookup(less_equal, six)));
-  CHECK(is_true(x->lookup(greater, six)));
-  CHECK(is_true(x->lookup(greater_equal, six)));
+  verify(six, {N, N, N, N, N, N, T, F, T, T, T, T});
   MESSAGE("[4,7] op 7");
   timestamp seven = epoch + 7s;
-  CHECK(is_true(x->lookup(equal, seven)));
-  CHECK(!is_true(x->lookup(not_equal, seven)));
-  CHECK(is_true(x->lookup(less, seven)));
-  CHECK(is_true(x->lookup(less_equal, seven)));
-  CHECK(!is_true(x->lookup(greater, seven)));
-  CHECK(is_true(x->lookup(greater_equal, seven)));
+  verify(seven, {N, N, N, N, N, N, T, F, T, T, F, T});
   MESSAGE("[4,7] op 9");
   timestamp nine = epoch + 9s;
-  CHECK(!is_true(x->lookup(equal, nine)));
-  CHECK(is_true(x->lookup(not_equal, nine)));
-  CHECK(is_true(x->lookup(less, nine)));
-  CHECK(is_true(x->lookup(less_equal, nine)));
-  CHECK(!is_true(x->lookup(greater, nine)));
-  CHECK(!is_true(x->lookup(greater_equal, nine)));
+  verify(nine, {N, N, N, N, N, N, F, T, T, T, F, F});
+  MESSAGE("[4,7] op {0, 4}");
+  auto zero_four = data{set{zero, four}};
+  auto zero_four_view = make_view(zero_four);
+  verify(zero_four_view, {N, N, T, F, N, N, N, N, N, N, N, N});
+  MESSAGE("[4,7] op {7, 9}");
+  auto seven_nine = data{set{seven, nine}};
+  auto seven_nine_view = make_view(seven_nine);
+  verify(seven_nine_view, {N, N, T, F, N, N, N, N, N, N, N, N});
+  MESSAGE("[4,7] op {0, 9}");
+  auto zero_nine = data{set{zero, nine}};
+  auto zero_nine_view = make_view(zero_nine);
+  verify(zero_nine_view, {N, N, F, T, N, N, N, N, N, N, N, N});
+  MESSAGE("[4,7] op count{5}");
+  count c = 5;
+  verify(c, {N, N, N, N, N, N, N, N, N, N, N, N});
+  MESSAGE("[4,7] op {count{5}, 7}");
+  auto heterogeneous = data{set{c, seven}};
+  auto heterogeneous_view = make_view(heterogeneous);
+  verify(heterogeneous_view, {N, N, T, F, N, N, N, N, N, N, N, N});
 }
 
 FIXTURE_SCOPE(synopsis_tests, fixtures::deterministic_actor_system)

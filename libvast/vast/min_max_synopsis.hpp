@@ -44,23 +44,39 @@ public:
 
   caf::optional<bool> lookup(relational_operator op,
                              data_view rhs) const override {
-    switch (op) {
-      case in: {
-        if (auto xs = caf::get_if<view<set>>(&rhs)) {
-          for (auto x : **xs)
-            if (lookup_impl(op, x))
-              return true;
-          return false;
-        }
+    auto do_lookup = [this](relational_operator op,
+                         data_view xv) -> caf::optional<bool> {
+      if (auto x = caf::get_if<view<T>>(&xv))
+        return {lookup_impl(op, *x)};
+      else
         return caf::none;
+    };
+    auto membership = [&]() -> caf::optional<bool> {
+      if (auto xs = caf::get_if<view<set>>(&rhs)) {
+        for (auto x : **xs) {
+          auto result = do_lookup(equal, x);
+          if (result && *result)
+            return true;
+        }
+        return false;
       }
+      return caf::none;
+    };
+    switch (op) {
+      case in:
+        return membership();
+      case not_in:
+        if (auto result = membership())
+          return !*result;
+        else
+          return result;
       case equal:
       case not_equal:
       case less:
       case less_equal:
       case greater:
       case greater_equal:
-        return {lookup_impl(op, rhs)};
+        return do_lookup(op, rhs);
       default:
         return caf::none;
     }
@@ -83,7 +99,7 @@ public:
   }
 
 private:
-  bool lookup_impl(relational_operator op, data_view rhs) const {
+  bool lookup_impl(relational_operator op, const T x) const {
     // Let *min* and *max* constitute the LHS of the lookup operation and *rhs*
     // be the value to compare with on the RHS. Then, there are 5 possible
     // scenarios to differentiate for the inputs:
@@ -104,24 +120,22 @@ private:
     //   (5) [4,8] < 9 is true  (4 < 9 || 8 < 9)
     //
     // Thus, for range comparisons we need to test `min op rhs || max op rhs`.
-    auto x = caf::get_if<view<T>>(&rhs);
-    VAST_ASSERT(x != nullptr);
     switch (op) {
       default:
         VAST_ASSERT(!"unsupported operator");
         return false;
       case equal:
-        return min_ <= *x && *x <= max_;
+        return min_ <= x && x <= max_;
       case not_equal:
-        return !(min_ <= *x && *x <= max_);
+        return !(min_ <= x && x <= max_);
       case less:
-        return min_ < *x;
+        return min_ < x;
       case less_equal:
-        return min_ <= *x;
+        return min_ <= x;
       case greater:
-        return max_ > *x;
+        return max_ > x;
       case greater_equal:
-        return max_ >= *x;
+        return max_ >= x;
     }
   }
 
