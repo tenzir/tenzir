@@ -14,7 +14,6 @@
 #include <caf/all.hpp>
 
 #include "vast/detail/assert.hpp"
-#include "vast/detail/flat_set.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
@@ -166,9 +165,9 @@ void register_component(scheduled_actor* self, tracker_state& st,
 
 // Checks whether a component can be spawned at most once.
 bool is_singleton(const std::string& component) {
-  static detail::flat_set<std::string> singletons = {"archive", "index",
-                                                     "consensus"};
-  return singletons.find(component) != singletons.end();
+  const char* singletons[] = {"archive", "index", "consensus"};
+  auto pred = [&](const char* lhs) { return lhs == component; };
+  return std::any_of(std::begin(singletons), std::end(singletons), pred);
 }
 
 } // namespace <anonymous>
