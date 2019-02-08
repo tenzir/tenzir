@@ -13,20 +13,17 @@
 
 #include <caf/all.hpp>
 
-#include "vast/error.hpp"
-#include "vast/logger.hpp"
-
 #include "vast/detail/assert.hpp"
 #include "vast/detail/string.hpp"
-
+#include "vast/error.hpp"
+#include "vast/logger.hpp"
 #include "vast/system/archive.hpp"
 #include "vast/system/consensus.hpp"
 #include "vast/system/tracker.hpp"
 
 using namespace caf;
 
-namespace vast {
-namespace system {
+namespace vast::system {
 
 namespace {
 
@@ -166,6 +163,13 @@ void register_component(scheduled_actor* self, tracker_state& st,
   }
 }
 
+// Checks whether a component can be spawned at most once.
+bool is_singleton(const std::string& component) {
+  const char* singletons[] = {"archive", "index", "consensus"};
+  auto pred = [&](const char* lhs) { return lhs == component; };
+  return std::any_of(std::begin(singletons), std::end(singletons), pred);
+}
+
 } // namespace <anonymous>
 
 tracker_type::behavior_type
@@ -221,7 +225,7 @@ tracker(tracker_type::stateful_pointer<tracker_state> self, std::string node) {
       VAST_DEBUG(self, "got new", type, '(' << label << ')');
       auto& st = self->state;
       auto& local = st.registry.components[node];
-      if (local.count(type) != 0)
+      if (is_singleton(type) && local.count(type) > 0)
         return make_error(ec::unspecified, "component already exists");
       register_component(self, st, type, component, label);
       return caf::unit;
@@ -278,5 +282,4 @@ tracker(tracker_type::stateful_pointer<tracker_state> self, std::string node) {
   };
 }
 
-} // namespace system
-} // namespace vast
+} // namespace vast::system
