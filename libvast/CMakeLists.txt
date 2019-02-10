@@ -249,7 +249,6 @@ set(tests
   test/scope_linked.cpp
   test/segment.cpp
   test/segment_store.cpp
-  test/serialization.cpp
   test/span.cpp
   test/stack.cpp
   test/string.cpp
