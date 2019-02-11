@@ -16,6 +16,7 @@
 
 #include <caf/none.hpp>
 
+#include "vast/concept/parseable/vast/port.hpp"
 #include "vast/concept/printable/numeric.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/data.hpp"
@@ -293,6 +294,35 @@ const char* reader::name() const {
   return "zeek-reader";
 }
 
+void reader::patch(std::vector<data>& xs) {
+  auto protocol = port::unknown;
+  // Get the protocol from the proto field if available.
+  if (proto_field_ >= 0) {
+    VAST_ASSERT(size_t(proto_field_) < xs.size());
+    if (auto proto_string = caf::get_if<std::string>(&xs[proto_field_])) {
+      auto p = parsers::port_type >> parsers::eoi;
+      if (!p(*proto_string, protocol))
+        VAST_DEBUG(this, "could not parse protocol", *proto_string);
+    }
+  }
+  // Or use a simple heuristic if not.
+  else {
+    if (type_.name() == "zeek::ftp" || type_.name() == "zeek::http"
+        || type_.name() == "zeek::irc" || type_.name() == "zeek::rdp"
+        || type_.name() == "zeek::smtp" || type_.name() == "zeek::ssh"
+        || type_.name() == "zeek::xmpp")
+      protocol = port::tcp;
+    else if (type_.name() == "zeek::dhcp" || type_.name() == "zeek::dns"
+             || type_.name() == "zeek::smnp")
+      protocol = port::udp;
+  }
+  // Assign the deduced proto to all port fields.
+  for (auto& pf : port_fields_) {
+    auto& p = caf::get<port>(xs[pf]);
+    p.type(protocol);
+  }
+}
+
 caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
                              consumer& f) {
   // Sanity checks.
@@ -455,11 +485,17 @@ caf::error reader::parse_header() {
   if (fields.size() != types.size())
     return make_error(ec::format_error, "fields and types have different size");
   std::vector<record_field> record_fields;
+  proto_field_ = -1;
+  port_fields_.clear();
   for (auto i = 0u; i < fields.size(); ++i) {
     auto t = parse_type(types[i]);
     if (!t)
       return t.error();
     record_fields.emplace_back(std::string{fields[i]}, *t);
+    if (fields[i] == "proto" && types[i] == "enum")
+      proto_field_ = i;
+    if (caf::holds_alternative<port_type>(*t))
+      port_fields_.push_back(i);
   }
   // Construct type.
   layout_ = std::move(record_fields);
@@ -484,7 +520,7 @@ caf::error reader::parse_header() {
         return make_error(ec::format_error, "incongruent types in schema");
     }
   // Determine the timestamp field.
-  auto pred = [&](auto& field) {
+  auto ts_pred = [&](auto& field) {
     if (field.name != "ts")
       return false;
     if (!caf::holds_alternative<timestamp_type>(field.type)) {
@@ -493,7 +529,7 @@ caf::error reader::parse_header() {
     }
     return true;
   };
-  auto i = std::find_if(layout_.fields.begin(), layout_.fields.end(), pred);
+  auto i = std::find_if(layout_.fields.begin(), layout_.fields.end(), ts_pred);
   if (i != layout_.fields.end()) {
     VAST_DEBUG(this, "auto-detected field",
                std::distance(layout_.fields.begin(), i), "as event timestamp");
