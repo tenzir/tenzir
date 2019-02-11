@@ -222,13 +222,12 @@ class Server:
 
     def __init__(self,
                  app,
-                 command,
+                 args,
                  work_dir,
                  name='node',
                  port=VAST_PORT,
                  **kwargs):
         self.app = app
-        self.command = command
         self.name = name
         self.cwd = work_dir / self.name
         self.port = port
@@ -240,7 +239,7 @@ class Server:
         out = open(self.cwd / 'out', 'w')
         err = open(self.cwd / 'err', 'w')
         self.process = spawn(
-            self.command,
+            [self.app] + args,
             cwd=self.cwd,
             stdout=out,
             stderr=err,

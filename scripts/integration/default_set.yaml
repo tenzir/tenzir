@@ -1,12 +1,12 @@
 fixtures:
   BiTopologyTester:
     enter: | # python
-      node0 = Server(self.app,
-                     [self.app, '-e', ':{}'.format(VAST_PORT),
+      node0 = Server(self.cmd,
+                     ['-e', ':{}'.format(VAST_PORT),
                       '-i', 'node0', 'start'],
                      work_dir, name='node0', port=VAST_PORT)
-      node1 = Server(self.app,
-                     [self.app, '-e', ':{}'.format(42124),
+      node1 = Server(self.cmd,
+                     ['-e', ':{}'.format(42124),
                       '-i', 'node1', 'start'],
                      work_dir, name='node1', port=42124)
       cmd += ['-e', ':{}'.format(VAST_PORT)]
@@ -17,8 +17,8 @@ fixtures:
 
   ServerTester:
     enter: | # python
-      node = Server(self.app,
-                    [self.app, '-e', ':{}'.format(VAST_PORT),
+      node = Server(self.cmd,
+                    ['-e', ':{}'.format(VAST_PORT),
                      '-i', 'node', 'start'],
                     work_dir, name='node', port=VAST_PORT)
       cmd += ['-e', ':{}'.format(VAST_PORT)]
