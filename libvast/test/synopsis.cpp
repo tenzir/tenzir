@@ -71,6 +71,7 @@ TEST(min-max synopsis) {
   auto zero_nine = data{set{zero, nine}};
   auto zero_nine_view = make_view(zero_nine);
   verify(zero_nine_view, {N, N, F, T, N, N, N, N, N, N, N, N});
+  // Check that we don't do any implicit conversions.
   MESSAGE("[4,7] op count{5}");
   count c = 5;
   verify(c, {N, N, N, N, N, N, N, N, N, N, N, N});

@@ -21,8 +21,6 @@
 
 namespace vast::test {
 
-namespace {
-
 namespace nft {
 
 inline constexpr auto N = caf::none;
@@ -50,7 +48,4 @@ struct verifier {
   }
 };
 
-} // namespace <anonymous>
-
 } // namespace vast::test
-
