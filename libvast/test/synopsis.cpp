@@ -16,6 +16,7 @@
 #include "vast/synopsis.hpp"
 
 #include "vast/test/test.hpp"
+#include "vast/test/synopsis.hpp"
 #include "vast/test/fixtures/actor_system.hpp"
 
 #include <caf/binary_deserializer.hpp>
@@ -27,36 +28,16 @@
 
 using namespace std::chrono_literals;
 using namespace vast;
+using namespace vast::test;
 
 namespace {
 
 const timestamp epoch;
 
-const auto N = caf::none;
-const auto T = caf::optional<bool>{true};
-const auto F = caf::optional<bool>{false};
-
-struct verifier {
-  synopsis_ptr syn;
-  void operator()(data_view rhs, std::array<caf::optional<bool>, 12> ref) {
-    CHECK_EQUAL(syn->lookup(match, rhs), ref[0]);
-    CHECK_EQUAL(syn->lookup(not_match, rhs), ref[1]);
-    CHECK_EQUAL(syn->lookup(in, rhs), ref[2]);
-    CHECK_EQUAL(syn->lookup(not_in, rhs), ref[3]);
-    CHECK_EQUAL(syn->lookup(ni, rhs), ref[4]);
-    CHECK_EQUAL(syn->lookup(not_ni, rhs), ref[5]);
-    CHECK_EQUAL(syn->lookup(equal, rhs), ref[6]);
-    CHECK_EQUAL(syn->lookup(not_equal, rhs), ref[7]);
-    CHECK_EQUAL(syn->lookup(less, rhs), ref[8]);
-    CHECK_EQUAL(syn->lookup(less_equal, rhs), ref[9]);
-    CHECK_EQUAL(syn->lookup(greater, rhs), ref[10]);
-    CHECK_EQUAL(syn->lookup(greater_equal, rhs), ref[11]);
-  }
-};
-
 } // namespace <anonymous>
 
 TEST(min-max synopsis) {
+  using namespace nft;
   factory<synopsis>::initialize();
   auto x = factory<synopsis>::make(timestamp_type{}, synopsis_options{});
   REQUIRE_NOT_EQUAL(x, nullptr);
