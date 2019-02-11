@@ -19,6 +19,43 @@
 
 namespace vast {
 
+struct port_type_parser : parser<port_type_parser> {
+  using attribute = port::port_type;
+
+  template <class Iterator>
+  bool parse(Iterator& f, const Iterator& l, unused_type) const {
+    using namespace parsers;
+    using namespace parser_literals;
+    auto p = ("?"_p | "tcp" | "udp" | "icmp");
+    return p(f, l, unused);
+  }
+
+  template <class Iterator>
+  bool parse(Iterator& f, const Iterator& l, port::port_type& x) const {
+    using namespace parsers;
+    using namespace parser_literals;
+    static auto p
+      = ( "?"_p ->* [] { return port::unknown; }
+         | "tcp"_p ->* [] { return port::tcp; }
+         | "udp"_p ->* [] { return port::udp; }
+         | "icmp"_p ->* [] { return port::icmp; }
+         )
+      ;
+    return p(f, l, x);
+  }
+};
+
+template <>
+struct parser_registry<port::port_type> {
+  using type = port_type_parser;
+};
+
+namespace parsers {
+
+static auto const port_type = port_type_parser{};
+
+} // namespace parsers
+
 struct port_parser : parser<port_parser> {
   using attribute = port;
 
@@ -26,7 +63,7 @@ struct port_parser : parser<port_parser> {
   bool parse(Iterator& f, const Iterator& l, unused_type) const {
     using namespace parsers;
     using namespace parser_literals;
-    auto p = u16 >> '/' >> ("?"_p | "tcp" | "udp" | "icmp");
+    auto p = u16 >> '/' >> parsers::port_type;
     return p(f, l, unused);
   }
 
@@ -34,15 +71,7 @@ struct port_parser : parser<port_parser> {
   bool parse(Iterator& f, const Iterator& l, port& x) const {
     using namespace parsers;
     using namespace parser_literals;
-    static auto p
-      =  u16
-      >> '/'
-      >> ( "?"_p ->* [] { return port::unknown; }
-         | "tcp"_p ->* [] { return port::tcp; }
-         | "udp"_p ->* [] { return port::udp; }
-         | "icmp"_p ->* [] { return port::icmp; }
-         )
-      ;
+    static auto p =  u16 >> '/' >> parsers::port_type;
     port::number_type n;
     port::port_type t;
     if (!p(f, l, n, t))
