@@ -16,9 +16,8 @@
 #include "vast/synopsis.hpp"
 
 #include "vast/test/test.hpp"
+#include "vast/test/synopsis.hpp"
 #include "vast/test/fixtures/actor_system.hpp"
-
-#include <vector>
 
 #include <caf/binary_deserializer.hpp>
 #include <caf/binary_serializer.hpp>
@@ -29,6 +28,7 @@
 
 using namespace std::chrono_literals;
 using namespace vast;
+using namespace vast::test;
 
 namespace {
 
@@ -37,51 +37,48 @@ const timestamp epoch;
 } // namespace <anonymous>
 
 TEST(min-max synopsis) {
+  using namespace nft;
   factory<synopsis>::initialize();
   auto x = factory<synopsis>::make(timestamp_type{}, synopsis_options{});
   REQUIRE_NOT_EQUAL(x, nullptr);
   x->add(timestamp{epoch + 4s});
   x->add(timestamp{epoch + 7s});
+  auto verify = verifier{x};
   MESSAGE("[4,7] op 0");
   timestamp zero = epoch + 0s;
-  CHECK(!x->lookup(equal, zero));
-  CHECK(x->lookup(not_equal, zero));
-  CHECK(!x->lookup(less, zero));
-  CHECK(!x->lookup(less_equal, zero));
-  CHECK(x->lookup(greater, zero));
-  CHECK(x->lookup(greater_equal, zero));
+  verify(zero, {N, N, N, N, N, N, F, T, F, F, T, T});
   MESSAGE("[4,7] op 4");
   timestamp four = epoch + 4s;
-  CHECK(x->lookup(equal, four));
-  CHECK(!x->lookup(not_equal, four));
-  CHECK(!x->lookup(less, four));
-  CHECK(x->lookup(less_equal, four));
-  CHECK(x->lookup(greater, four));
-  CHECK(x->lookup(greater_equal, four));
+  verify(four, {N, N, N, N, N, N, T, F, F, T, T, T});
   MESSAGE("[4,7] op 6");
   timestamp six = epoch + 6s;
-  CHECK(x->lookup(equal, six));
-  CHECK(!x->lookup(not_equal, six));
-  CHECK(x->lookup(less, six));
-  CHECK(x->lookup(less_equal, six));
-  CHECK(x->lookup(greater, six));
-  CHECK(x->lookup(greater_equal, six));
+  verify(six, {N, N, N, N, N, N, T, F, T, T, T, T});
   MESSAGE("[4,7] op 7");
   timestamp seven = epoch + 7s;
-  CHECK(x->lookup(equal, seven));
-  CHECK(!x->lookup(not_equal, seven));
-  CHECK(x->lookup(less, seven));
-  CHECK(x->lookup(less_equal, seven));
-  CHECK(!x->lookup(greater, seven));
-  CHECK(x->lookup(greater_equal, seven));
+  verify(seven, {N, N, N, N, N, N, T, F, T, T, F, T});
   MESSAGE("[4,7] op 9");
   timestamp nine = epoch + 9s;
-  CHECK(!x->lookup(equal, nine));
-  CHECK(x->lookup(not_equal, nine));
-  CHECK(x->lookup(less, nine));
-  CHECK(x->lookup(less_equal, nine));
-  CHECK(!x->lookup(greater, nine));
-  CHECK(!x->lookup(greater_equal, nine));
+  verify(nine, {N, N, N, N, N, N, F, T, T, T, F, F});
+  MESSAGE("[4,7] op {0, 4}");
+  auto zero_four = data{set{zero, four}};
+  auto zero_four_view = make_view(zero_four);
+  verify(zero_four_view, {N, N, T, F, N, N, N, N, N, N, N, N});
+  MESSAGE("[4,7] op {7, 9}");
+  auto seven_nine = data{set{seven, nine}};
+  auto seven_nine_view = make_view(seven_nine);
+  verify(seven_nine_view, {N, N, T, F, N, N, N, N, N, N, N, N});
+  MESSAGE("[4,7] op {0, 9}");
+  auto zero_nine = data{set{zero, nine}};
+  auto zero_nine_view = make_view(zero_nine);
+  verify(zero_nine_view, {N, N, F, T, N, N, N, N, N, N, N, N});
+  // Check that we don't do any implicit conversions.
+  MESSAGE("[4,7] op count{5}");
+  count c = 5;
+  verify(c, {N, N, N, N, N, N, N, N, N, N, N, N});
+  MESSAGE("[4,7] op {count{5}, 7}");
+  auto heterogeneous = data{set{c, seven}};
+  auto heterogeneous_view = make_view(heterogeneous);
+  verify(heterogeneous_view, {N, N, T, F, N, N, N, N, N, N, N, N});
 }
 
 FIXTURE_SCOPE(synopsis_tests, fixtures::deterministic_actor_system)
