@@ -495,13 +495,16 @@ file(GENERATE
     "${CMAKE_CURRENT_BINARY_DIR}/integration_$<CONFIG>.sh"
   CONTENT
     "#!/bin/sh
+     base_dir=\"${CMAKE_CURRENT_SOURCE_DIR}/scripts/integration\"
+     env_dir=\"${CMAKE_CURRENT_BINARY_DIR}/integration_env\"
+     app=\"${CMAKE_CURRENT_BINARY_DIR}/bin/vast\"
      set -e
-     python3 -m venv --upgrade \"${CMAKE_CURRENT_BINARY_DIR}/integration_env\"
-     source \"${CMAKE_CURRENT_BINARY_DIR}/integration_env/bin/activate\"
-     pip install -r \
-       \"${CMAKE_CURRENT_SOURCE_DIR}/scripts/integration/requirements.txt\"
-     python3 \"${CMAKE_CURRENT_SOURCE_DIR}/scripts/integration/integration.py\" \
-       --app \"${CMAKE_CURRENT_BINARY_DIR}/bin/vast\" -d vast-integration-test")
+     if [ ! -d \"$env_dir\" ]; then
+       python3 -m venv \"$env_dir\"
+     fi
+     source \"$env_dir/bin/activate\"
+     pip install -r \"$base_dir/requirements.txt\"
+     python \"$base_dir/integration.py\" --app \"$app\" -d vast-integration-test")
 
 add_custom_target(integration
   COMMAND /bin/sh "${CMAKE_CURRENT_BINARY_DIR}/integration_$<CONFIG>.sh")
