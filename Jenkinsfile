@@ -1,16 +1,31 @@
 #!/usr/bin/env groovy
 
-// Default CMake flags for most builds (except coverage).
-defaultBuildFlags = [
-]
-
-// CMake flags for release builds.
-releaseBuildFlags = defaultBuildFlags + [
+// Default CMake flags for release builds.
+defaultReleaseBuildFlags = [
 ]
 
 // CMake flags for debug builds.
-debugBuildFlags =  defaultBuildFlags + [
+defaultDebugBuildFlags = defaultReleaseBuildFlags + [
     'ENABLE_ADDRESS_SANITIZER:BOOL=yes',
+]
+
+defaultBuildFlags = [
+  debug: defaultDebugBuildFlags,
+  release: defaultReleaseBuildFlags,
+]
+
+// CMake flags by OS and build type.
+buildFlags = [
+    macOS: [
+        debug: defaultDebugBuildFlags + [
+            'OPENSSL_ROOT_DIR=/usr/local/opt/openssl',
+            'OPENSSL_INCLUDE_DIR=/usr/local/opt/openssl/include',
+        ],
+        release: defaultReleaseBuildFlags + [
+            'OPENSSL_ROOT_DIR=/usr/local/opt/openssl',
+            'OPENSSL_INCLUDE_DIR=/usr/local/opt/openssl/include',
+        ],
+    ],
 ]
 
 // Our build matrix. Keys are the operating system labels and values are build configurations.
@@ -19,42 +34,25 @@ buildMatrix = [
     [ 'Linux', [
         builds: ['debug'],
         tools: ['gcc8'],
-        cmakeArgs: debugBuildFlags,
+        extraSteps: ['coverageReport'],
     ]],
     [ 'macOS', [
         builds: ['debug'],
         tools: ['clang'],
-        cmakeArgs: debugBuildFlags,
     ]],
     ['FreeBSD', [
         builds: ['debug'],
         tools: ['clang'],
-        cmakeArgs: debugBuildFlags,
     ]],
     // Release builds for various OS/tool combinations.
     [ 'Linux', [
         builds: ['release'],
         tools: ['gcc8'],
-        cmakeArgs: releaseBuildFlags,
     ]],
     [ 'macOS', [
         builds: ['release'],
         tools: ['clang'],
-        cmakeArgs: releaseBuildFlags,
     ]],
-    // One Additional build for coverage reports.
-    /* TODO: this build exhausts all storage on the node and is temporarily
-     *       disabled until resolving the issue
-    ['Linux', [
-        builds: ['debug'],
-        tools: ['gcc8 && gcovr'],
-        extraSteps: ['coverageReport'],
-        cmakeArgs: defaultBuildFlags + [
-            'ENABLE_GCOV:BOOL=yes',
-            'NO_EXCEPTIONS:BOOL=yes',
-        ],
-    ]],
-    */
 ]
 
 // Optional environment variables for combinations of labels.
@@ -62,25 +60,80 @@ buildEnvironments = [
     nop : [], // Dummy value for getting the proper types.
 ]
 
+// Adds additional context information to commits on GitHub.
+def setBuildStatus(context, state, message) {
+    echo "set ${context} result for commit ${env.GIT_COMMIT} to $state: $message"
+    step([
+        $class: 'GitHubCommitStatusSetter',
+        commitShaSource: [
+            $class: 'ManuallyEnteredShaSource',
+            sha: env.GIT_COMMIT,
+        ],
+        reposSource: [
+            $class: 'ManuallyEnteredRepositorySource',
+            url: env.GIT_URL,
+        ],
+        contextSource: [
+            $class: 'ManuallyEnteredCommitContextSource',
+            context: context,
+        ],
+        errorHandlers: [[
+            $class: 'ChangingBuildStatusErrorHandler',
+            result: 'SUCCESS',
+        ]],
+        statusResultSource: [
+            $class: 'ConditionalStatusResultSource',
+            results: [[
+                $class: 'AnyBuildResult',
+                state: state,
+                message: message,
+            ]]
+        ],
+    ]);
+}
+
 // Creates coverage reports via the Cobertura plugin.
-def coverageReport() {
-    dir("vast-sources") {
-        sh 'gcovr -e vast -e tools -e ".*/test/.*" -x -r . > coverage.xml'
-        archiveArtifacts '**/coverage.xml'
-        cobertura([
-          autoUpdateHealth: false,
-          autoUpdateStability: false,
-          coberturaReportFile: '**/coverage.xml',
-          conditionalCoverageTargets: '70, 0, 0',
-          failUnhealthy: false,
-          failUnstable: false,
-          lineCoverageTargets: '80, 0, 0',
-          maxNumberOfBuilds: 0,
-          methodCoverageTargets: '80, 0, 0',
-          onlyStable: false,
-          sourceEncoding: 'ASCII',
-          zoomCoverageChart: false,
-        ])
+def coverageReport(buildId) {
+    echo "Create coverage report for build ID $buildId"
+    // Paths we wish to ignore in the coverage report.
+    def installDir = "$WORKSPACE/$buildId"
+    def excludePaths = [
+        "/usr/",
+        "$WORKSPACE/vast-sources/vast/",
+        "$WORKSPACE/vast-sources/tools/",
+        "$WORKSPACE/vast-sources/libvast_test/",
+        "$WORKSPACE/vast-sources/libvast/test/",
+    ]
+    def excludePathsStr = excludePaths.join(',')
+    dir('vast-sources') {
+        try {
+            withEnv(['ASAN_OPTIONS=verify_asan_link_order=false:detect_leaks=0']) {
+                sh """
+                    kcov --exclude-path=$excludePathsStr kcov-result ./build/bin/vast-test &> kcov_output.txt
+                    find . -name 'coverage.json' -exec mv {} result.json \\;
+                """
+            }
+            stash includes: 'result.json', name: 'coverage-result'
+            archiveArtifacts '**/cobertura.xml'
+            cobertura([
+                autoUpdateHealth: false,
+                autoUpdateStability: false,
+                coberturaReportFile: '**/cobertura.xml',
+                conditionalCoverageTargets: '70, 0, 0',
+                failUnhealthy: false,
+                failUnstable: false,
+                lineCoverageTargets: '80, 0, 0',
+                maxNumberOfBuilds: 0,
+                methodCoverageTargets: '80, 0, 0',
+                onlyStable: false,
+                sourceEncoding: 'ASCII',
+                zoomCoverageChart: false,
+            ])
+        } catch (Exception e) {
+            echo "exception: $e"
+            sh 'ls -R .'
+            archiveArtifacts 'kcov_output.txt'
+        }
     }
 }
 
@@ -106,11 +159,17 @@ def cmakeSteps(buildType, cmakeArgs, buildId) {
             ]],
         ])
         // Run unit tests.
-        ctest([
-            arguments: '--output-on-failure',
-            installation: 'cmake in search path',
-            workingDir: 'build',
-        ])
+        try {
+            ctest([
+                arguments: '--output-on-failure',
+                installation: 'cmake in search path',
+                workingDir: 'build',
+            ])
+            writeFile file: "${buildId}.success", text: "success\n"
+        } catch (Exception) {
+            writeFile file: "${buildId}.failure", text: "failure\n"
+        }
+        stash includes: "${buildId}.*", name: buildId
     }
     // Only generate artifacts for the master branch.
     if (PrettyJobBaseName == 'master') {
@@ -147,7 +206,7 @@ def buildSteps(buildType, cmakeArgs, buildId) {
 }
 
 // Builds a stage for given builds. Results in a parallel stage if `builds.size() > 1`.
-def makeBuildStages(matrixIndex, builds, lblExpr, settings) {
+def makeBuildStages(matrixIndex, os, builds, lblExpr, settings) {
     builds.collectEntries { buildType ->
         def id = "$matrixIndex $lblExpr: $buildType"
         [
@@ -158,8 +217,8 @@ def makeBuildStages(matrixIndex, builds, lblExpr, settings) {
                         try {
                             def buildId = "${lblExpr}_${buildType}".replace(' && ', '_')
                             withEnv(buildEnvironments[lblExpr] ?: []) {
-                              buildSteps(buildType, settings['cmakeArgs'], buildId)
-                              (settings['extraSteps'] ?: []).each { fun -> "$fun"() }
+                              buildSteps(buildType, (buildFlags[os] ?: defaultBuildFlags)[buildType], buildId)
+                              (settings['extraSteps'] ?: []).each { fun -> "$fun"(buildId) }
                             }
                         } finally {
                           cleanWs()
@@ -174,7 +233,7 @@ def makeBuildStages(matrixIndex, builds, lblExpr, settings) {
 // Declarative pipeline for triggering all stages.
 pipeline {
     options {
-        buildDiscarder(logRotator(numToKeepStr: '50', artifactNumToKeepStr: '10'))
+        buildDiscarder(logRotator(numToKeepStr: '20', artifactNumToKeepStr: '5'))
     }
     agent none
     environment {
@@ -211,10 +270,55 @@ pipeline {
                             def matrixIndex = "[$index:$toolIndex]"
                             def builds = settings['builds']
                             def labelExpr = "$os && $tool"
-                            xs << makeBuildStages(matrixIndex, builds, labelExpr, settings)
+                            xs << makeBuildStages(matrixIndex, os, builds, labelExpr, settings)
                         }
                     }
                     parallel xs
+                }
+            }
+        }
+        stage('Check Test Results') {
+            agent { label 'master' }
+            steps {
+                script {
+                    dir('tmp') {
+                        // Compute the list of all build IDs.
+                        def buildIds = []
+                        buildMatrix.each { entry ->
+                            def (os, settings) = entry
+                            settings['tools'].each { tool ->
+                                settings['builds'].each {
+                                    buildIds << "${os}_${tool}_${it}"
+                                }
+                            }
+                        }
+                        // Compute how many tests have succeeded
+                        def builds = buildIds.size()
+                        def successes = buildIds.inject(0) { result, buildId ->
+                            try { unstash buildId }
+                            catch (Exception) { }
+                            result + (fileExists("${buildId}.success") ? 1 : 0)
+                        }
+                        echo "$successes unit tests tests of $builds were successful"
+                        if (builds == successes) {
+                            setBuildStatus('unit-tests', 'SUCCESS', 'All builds passed the unit tests')
+                        } else {
+                            def failures = builds - successes
+                            setBuildStatus('unit-tests', 'FAILURE', "$failures/$builds builds failed to run the unit tests")
+                        }
+                        // Get the coverage result.
+                        try {
+                            unstash 'coverage-result'
+                            if (fileExists('result.json')) {
+                                def resultJson = readJSON file: 'result.json'
+                                setBuildStatus('coverage', 'SUCCESS', resultJson['percent_covered'] + '% coverage')
+                            } else {
+                              setBuildStatus('coverage', 'FAILURE', 'Unable to get coverage report')
+                            }
+                        } catch (Exception) {
+                            setBuildStatus('coverage', 'FAILURE', 'Unable to generate coverage report')
+                        }
+                    }
                 }
             }
         }
