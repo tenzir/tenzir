@@ -343,6 +343,25 @@ subnet_index::lookup_impl(relational_operator op, data_view d) const {
     [&](auto x) -> expected<ids> {
       return make_error(ec::type_clash, materialize(x));
     },
+    [&](view<address> x) -> expected<ids> {
+      if (!(op == ni || op == not_ni))
+        return make_error(ec::unsupported_operator, op);
+      auto result = ids{offset(), false};
+      uint8_t bits = x.is_v4() ? 32 : 128;
+      for (uint8_t i = 0; i <= bits; ++i) { // not an off-by-one
+        auto masked = x;
+        masked.mask(128 - bits + i);
+        ids len = length_.lookup(equal, i);
+        auto net = network_.lookup(equal, masked);
+        if (!net)
+          return net;
+        len &= *net;
+        result |= len;
+      }
+      if (op == not_ni)
+        result.flip();
+      return result;
+    },
     [&](view<subnet> x) -> expected<ids> {
       switch (op) {
         default:
