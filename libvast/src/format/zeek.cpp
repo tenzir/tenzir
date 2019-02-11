@@ -363,16 +363,17 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
       };
       xs.resize(fields.size());
       for (size_t i = 0; i < fields.size(); ++i) {
-        if (is_unset(i)) {
+        if (is_unset(i))
           xs[i] = caf::none;
-        } else if (is_empty(i)) {
+        else if (is_empty(i))
           xs[i] = construct(layout_.fields[i].type);
-        } else {
-          if (!parsers_[i](fields[i], xs[i]))
+        else if (!parsers_[i](fields[i], xs[i]))
             return finish(f, make_error(ec::parse_error, "field", i, "line",
                                         lines_->line_number(),
                                         std::string{fields[i]}));
-        }
+      }
+      patch(xs);
+      for (size_t i = 0; i < fields.size(); ++i) {
         if (!builder_->add(make_data_view(xs[i])))
           return finish(f, make_error(ec::type_clash, "field", i, "line",
                                       lines_->line_number(),
