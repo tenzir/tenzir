@@ -247,6 +247,8 @@ protected:
 private:
   using iterator_type = std::string_view::const_iterator;
 
+  void patch(std::vector<data>& xs);
+
   caf::error parse_header();
 
   std::unique_ptr<std::istream> input_;
@@ -258,6 +260,8 @@ private:
   vast::schema schema_;
   type type_;
   record_type layout_;
+  caf::optional<size_t> proto_field_;
+  std::vector<size_t> port_fields_;
   std::vector<rule<iterator_type, data>> parsers_;
 };
 
