@@ -34,10 +34,15 @@ struct port_type_parser : parser<port_type_parser> {
   bool parse(Iterator& f, const Iterator& l, port::port_type& x) const {
     using namespace parsers;
     using namespace parser_literals;
-    auto p = (
-      "?"_p->*[] { return port::unknown; } | "tcp"_p->*[] { return port::tcp; }
-      | "udp"_p->*[] { return port::udp; }
-      | "icmp"_p->*[] { return port::icmp; });
+    // clang-format off
+    auto p
+      = ( "?"_p ->* [] { return port::unknown; }
+         | "tcp"_p ->* [] { return port::tcp; }
+         | "udp"_p ->* [] { return port::udp; }
+         | "icmp"_p ->* [] { return port::icmp; }
+         )
+      ;
+    // clang-format on
     return p(f, l, x);
   }
 };
