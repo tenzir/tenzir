@@ -455,10 +455,12 @@ def main():
     parser.add_argument(
         '--timeout', type=int, default=0, help='Test timeout in seconds')
     parser.add_argument(
+        '-l',
         '--list',
         nargs='*',
         help='Return a list of available tests optionally filtered with tags')
     parser.add_argument(
+        '-L',
         '--list-tags',
         action='store_true',
         help='Return a list of all available tags')
