@@ -173,8 +173,9 @@ void ewah_bitmap::flip() {
 }
 
 void ewah_bitmap::integrate_last_block() {
-  VAST_ASSERT(num_bits_ % word_type::width == 0);
-  VAST_ASSERT(last_marker_ != blocks_.size() - 1);
+  VAST_ASSERT(blocks_.size() >= 2); // at least one marker plus dirty block
+  VAST_ASSERT(last_marker_ < blocks_.size() - 1); // no marker as last block
+  VAST_ASSERT(num_bits_ % word_type::width == 0); // must have a full block
   auto& last_block = blocks_.back();
   auto blocks_after_marker = blocks_.size() - last_marker_ - 1;
   // Check whether we can coalesce the current dirty block with the last
@@ -211,10 +212,12 @@ void ewah_bitmap::integrate_last_block() {
     // The current block is dirty.
     bump_dirty_count();
   }
+  VAST_ASSERT(last_marker_ < blocks_.size());
 }
 
 void ewah_bitmap::bump_dirty_count() {
   VAST_ASSERT(num_bits_ % word_type::width == 0);
+  VAST_ASSERT(last_marker_ < blocks_.size());
   auto& marker = blocks_[last_marker_];
   auto num_dirty = word_type::marker_num_dirty(marker);
   if (num_dirty == word_type::marker_dirty_max) {

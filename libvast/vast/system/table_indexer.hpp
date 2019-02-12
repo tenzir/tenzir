@@ -104,11 +104,7 @@ public:
   }
 
   /// @returns the type defining this table's layout.
-  auto& layout() const noexcept {
-    // Always safe, because the only way to construct a table_indexer is with a
-    // record_type.
-    return caf::get<record_type>(type_erased_layout_);
-  }
+  const record_type& layout() const noexcept;
 
   /// @returns whether `add` was called at least once.
   auto dirty() const noexcept {
@@ -130,20 +126,6 @@ public:
   /// Indexes a slice for all columns.
   /// @param x Table slice for ingestion.
   void add(const table_slice_ptr& x);
-
-  /// Queries event IDs that fulfill the given predicate. Eventually fulfills
-  /// the promise after requesting individual results from all managed INDEXER
-  /// actors.
-  /// @pre `init()` was called previously.
-  void async_lookup(caf::event_based_actor* self, caf::response_promise rp,
-                    const predicate& pred);
-
-  /// Queries event IDs that fulfill the given expression. Eventually fulfills
-  /// the promise after requesting individual results from all managed INDEXER
-  /// actors.
-  /// @pre `init()` was called previously.
-  void async_lookup(caf::event_based_actor* self, caf::response_promise rp,
-                    const expression& expr);
 
 private:
   // -- utility functions ------------------------------------------------------
