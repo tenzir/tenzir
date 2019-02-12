@@ -166,7 +166,7 @@ struct index_state {
   /// The maximum number of events per partition.
   size_t max_partition_size;
 
-  /// The number of partitions to schedule immediately for each query
+  /// The number of partitions to schedule immediately for each query.
   uint32_t taste_partitions;
 
   /// Allows the index to multiplex between waiting for ready workers and

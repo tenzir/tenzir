@@ -46,10 +46,6 @@ public:
     bool dirty = false;
   };
 
-  /// Maps table slice layouts their table indexer.
-  using table_indexer_map = caf::detail::unordered_flat_map<record_type,
-                                                            table_indexer>;
-
   // -- constructors, destructors, and assignment operators --------------------
 
   /// @param self The parent actor.
@@ -143,7 +139,10 @@ private:
   /// Uniquely identifies this partition.
   uuid id_;
 
-  /// Stores one meta indexer per layout that in turn manages INDEXER actors.
+  using table_indexer_map = caf::detail::unordered_flat_map<record_type,
+                                                            table_indexer>;
+
+  /// Stores one table indexer per layout that in turn manages INDEXER actors.
   table_indexer_map table_indexers_;
 
   /// Remaining capacity in this partition.
