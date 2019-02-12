@@ -90,7 +90,7 @@ tests:
         input: data/bgpdump/updates.20180530.bgpdump.gz
       - command: export ascii '114.215.46.175 in prefix'
   Query Operators:
-    tags: [server, operator]
+    tags: [server, operator, disabled]
     fixture: ServerTester
     steps:
       - command: import -b zeek
