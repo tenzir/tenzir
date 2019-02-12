@@ -297,9 +297,9 @@ const char* reader::name() const {
 void reader::patch(std::vector<data>& xs) {
   auto protocol = port::unknown;
   // Get the protocol from the proto field if available.
-  if (proto_field_ >= 0) {
-    VAST_ASSERT(size_t(proto_field_) < xs.size());
-    if (auto proto_string = caf::get_if<std::string>(&xs[proto_field_])) {
+  if (proto_field_) {
+    VAST_ASSERT(*proto_field_ < xs.size());
+    if (auto proto_string = caf::get_if<std::string>(&xs[*proto_field_])) {
       auto p = parsers::port_type >> parsers::eoi;
       if (!p(*proto_string, protocol))
         VAST_DEBUG(this, "could not parse protocol", *proto_string);
@@ -485,7 +485,7 @@ caf::error reader::parse_header() {
   if (fields.size() != types.size())
     return make_error(ec::format_error, "fields and types have different size");
   std::vector<record_field> record_fields;
-  proto_field_ = -1;
+  proto_field_ = caf::none;
   port_fields_.clear();
   for (auto i = 0u; i < fields.size(); ++i) {
     auto t = parse_type(types[i]);

@@ -260,7 +260,7 @@ private:
   vast::schema schema_;
   type type_;
   record_type layout_;
-  std::ptrdiff_t proto_field_;
+  caf::optional<size_t> proto_field_;
   std::vector<size_t> port_fields_;
   std::vector<rule<iterator_type, data>> parsers_;
 };
