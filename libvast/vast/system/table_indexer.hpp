@@ -127,20 +127,6 @@ public:
   /// @param x Table slice for ingestion.
   void add(const table_slice_ptr& x);
 
-  /// Queries event IDs that fulfill the given predicate. Eventually fulfills
-  /// the promise after requesting individual results from all managed INDEXER
-  /// actors.
-  /// @pre `init()` was called previously.
-  void async_lookup(caf::event_based_actor* self, caf::response_promise rp,
-                    const predicate& pred);
-
-  /// Queries event IDs that fulfill the given expression. Eventually fulfills
-  /// the promise after requesting individual results from all managed INDEXER
-  /// actors.
-  /// @pre `init()` was called previously.
-  void async_lookup(caf::event_based_actor* self, caf::response_promise rp,
-                    const expression& expr);
-
 private:
   // -- utility functions ------------------------------------------------------
 
