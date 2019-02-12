@@ -104,11 +104,16 @@ path table_indexer::row_ids_file() const {
 void table_indexer::spawn_indexers() {
   VAST_TRACE("");
   for (size_t column = 0; column < columns(); ++column)
-    if (!skips_column(column)) {
+    if (!skips_column(column))
       // We ignore the returned reference, since we're only interested in the
       // side effect of lazily spinning up INDEXER actors.
       indexer_at(column);
-    }
+}
+
+const record_type& table_indexer::layout() const noexcept {
+  // The only way to construct a table_indexer is with a record_type.
+  VAST_ASSERT(caf::holds_alternative<record_type>(type_erased_layout_));
+  return caf::get<record_type>(type_erased_layout_);
 }
 
 path table_indexer::partition_dir() const {

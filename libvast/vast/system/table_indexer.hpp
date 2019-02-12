@@ -104,11 +104,7 @@ public:
   }
 
   /// @returns the type defining this table's layout.
-  auto& layout() const noexcept {
-    // Always safe, because the only way to construct a table_indexer is with a
-    // record_type.
-    return caf::get<record_type>(type_erased_layout_);
-  }
+  const record_type& layout() const noexcept;
 
   /// @returns whether `add` was called at least once.
   auto dirty() const noexcept {
