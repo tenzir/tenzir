@@ -42,7 +42,6 @@ class Fixture(NamedTuple):
 class Step(NamedTuple):
     command: List[str]
     input: Optional[Path]
-    reference: Optional[Path]
 
 
 class Test(NamedTuple):
@@ -162,8 +161,7 @@ def check_output(reference, out):
         with open(reference) as ref:
             return impl(ref.readlines(), sorted(out.readlines()))
 
-
-def run_step(basecmd, step_number, step, work_dir):
+def run_step(basecmd, step_id, step, work_dir, baseline_dir, update_baseline):
     def try_wait(process, timeout):
         """Wait for a specified time or terminate the process"""
         try:
@@ -176,10 +174,7 @@ def run_step(basecmd, step_number, step, work_dir):
             print("Timeout reached")
             process.terminate()
             return Result.ERROR
-
-    result = Result.FAILURE
     try:
-        step_id = 'step_{:02d}'.format(step_number)
         out = open(work_dir / '{}.out'.format(step_id), 'w+')
         err = open(work_dir / '{}.err'.format(step_id), 'w')
         client = spawn(
@@ -200,20 +195,30 @@ def run_step(basecmd, step_number, step, work_dir):
                 input_p, timeout=STEP_TIMEOUT - (now() - start_time))
             client.stdin.close()
         result = try_wait(client, timeout=STEP_TIMEOUT - (now() - start_time))
-
-        if result is not Result.ERROR and step.reference:
-            print('comparing to ref')
-            out.seek(0)
-            if check_output(step.reference, out):
-                print('OK')
-                result = Result.SUCCESS
-            else:
-                print('FAILURE')
-                result = Result.FAILURE
+        if result is Result.ERROR:
+            return result
+        reference = baseline_dir / '{}.ref'.format(step_id)
+        out.seek(0)
+        if update_baseline:
+            print('Updating baseline')
+            if not baseline_dir.exists():
+                baseline_dir.mkdir(parents=True)
+            with open(reference, 'w') as ref:
+                for line in sorted(out.readlines()):
+                    ref.write(line)
+            return Result.SUCCESS
+        if not reference.exists():
+            print('No baseline found')
+            return Result.FAILURE
+        print('Comparing to baseline')
+        if check_output(reference, out):
+            print('OK')
+            return Result.SUCCESS
+        print('FAILURE')
+        return Result.FAILURE
     except subprocess.CalledProcessError as err:
-        result = Result.ERROR
         print('Error: ', err, file=sys.stderr)
-    return result
+        return Result.ERROR
 
 
 class Server:
@@ -278,6 +283,7 @@ class Tester:
         self.cmd = Path(args.app).resolve()
         self.fixtures = fixtures
         self.test_dir = args.directory
+        self.update = args.update
 
     def __enter__(self):
         return self
@@ -298,7 +304,9 @@ class Tester:
 
     def run(self, test_name, test):
         """Runs a single test"""
-        work_dir = self.test_dir / test_name
+        normalized_test_name = test_name.replace(' ', '-').lower()
+        baseline_dir = PARENT / 'reference' / normalized_test_name
+        work_dir = self.test_dir / normalized_test_name
         work_dir.mkdir(parents=True)
         test_summary = TestSummary(len(test.steps))
         step_i = 0
@@ -313,12 +321,14 @@ class Tester:
 
         exec(fenter)
         if self.args.flamegraph:
-            svg_file = work_dir / '{}.svg'.format(test_name)
+            svg_file = work_dir / '{}.svg'.format(normalized_test_name)
             run_flamegraph(self.args, svg_file)
 
         for step in test.steps:
             print('Running step {}'.format(step.command))
-            result = run_step(cmd, step_i, step, work_dir)
+            step_id = 'step_{:02d}'.format(step_i)
+            result = run_step(cmd, step_id, step, work_dir, baseline_dir,
+                              self.update)
             test_summary.count(result)
             if result is Result.ERROR:
                 break
@@ -365,8 +375,6 @@ def validate(data):
             schema.And(
                 schema.Const(schema.And(str, len)), schema.Use(shlex.split)),
             schema.Optional('input', default=None):
-            schema.And(schema.Use(absolute_path), is_file),
-            schema.Optional('reference', default=None):
             schema.And(schema.Use(absolute_path), is_file)
         }, schema.Use(to_step)))
 
@@ -442,6 +450,11 @@ def main():
         nargs='+',
         help='The test(s) to run (runs all tests if unset)')
     parser.add_argument(
+        '-u',
+        '--update',
+        action='store_true',
+        help='Update baseline for tests')
+    parser.add_argument(
         '-d',
         '--directory',
         default='run_<current_ISO_timestamp>',
@@ -455,10 +468,12 @@ def main():
     parser.add_argument(
         '--timeout', type=int, default=0, help='Test timeout in seconds')
     parser.add_argument(
+        '-l',
         '--list',
         nargs='*',
         help='Return a list of available tests optionally filtered with tags')
     parser.add_argument(
+        '-L',
         '--list-tags',
         action='store_true',
         help='Return a list of all available tags')
