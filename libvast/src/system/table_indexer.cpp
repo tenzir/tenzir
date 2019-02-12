@@ -49,7 +49,9 @@ table_indexer::table_indexer(partition* parent, const record_type& layout)
 }
 
 table_indexer::~table_indexer() noexcept {
-  flush_to_disk();
+  // The type-erased layout can only be none in a moved-from object.
+  if (caf::holds_alternative<record_type>(type_erased_layout_))
+    flush_to_disk();
 }
 
 // -- persistence --------------------------------------------------------------
@@ -98,7 +100,7 @@ caf::actor& table_indexer::indexer_at(size_t column) {
 }
 
 path table_indexer::row_ids_file() const {
-  return partition_dir() / "row_ids";
+  return base_dir() / "row_ids";
 }
 
 void table_indexer::spawn_indexers() {
