@@ -304,8 +304,9 @@ class Tester:
 
     def run(self, test_name, test):
         """Runs a single test"""
-        baseline_dir = PARENT / 'reference' / test_name
-        work_dir = self.test_dir / test_name
+        normalized_test_name = test_name.replace(' ', '-').lower()
+        baseline_dir = PARENT / 'reference' / normalized_test_name
+        work_dir = self.test_dir / normalized_test_name
         work_dir.mkdir(parents=True)
         test_summary = TestSummary(len(test.steps))
         step_i = 0
@@ -320,7 +321,7 @@ class Tester:
 
         exec(fenter)
         if self.args.flamegraph:
-            svg_file = work_dir / '{}.svg'.format(test_name)
+            svg_file = work_dir / '{}.svg'.format(normalized_test_name)
             run_flamegraph(self.args, svg_file)
 
         for step in test.steps:
