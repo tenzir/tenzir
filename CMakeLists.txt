@@ -601,7 +601,7 @@ if (BROKER_FOUND)
   endif ()
 endif ()
 
-display(CAF_FOUND ${caf_dir} caf_summary)
+display(CAF_FOUND "${caf_dir}" caf_summary)
 display(BROKER_FOUND "${broker_dir}" broker_summary)
 display(SNAPPY_FOUND "${SNAPPY_INCLUDE_DIR}" snappy_summary)
 display(PCAP_FOUND "${PCAP_INCLUDE_DIR}" pcap_summary)
