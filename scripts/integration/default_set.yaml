@@ -35,7 +35,6 @@ tests:
       - command: import -n -b zeek
         input: data/zeek/conn.log.gz
       - command: export -n ascii 'resp_h == 192.168.1.104'
-        reference: reference/conn_export_1.ascii
   Node Zeek multiple imports:
     tags: [node, import-export, zeek]
     steps:
@@ -44,35 +43,30 @@ tests:
       - command: import -n -b zeek
         input: data/zeek/dns.log.gz
       - command: export -n ascii 'resp_h == 192.168.1.104'
-        reference: reference/zeek_logs.ascii
   Node Zeek dns log:
     tags: [node, import-export, zeek]
     steps:
       - command: import -n -b zeek
         input: data/zeek/dns.log.gz
       - command: export -n ascii 'resp_h == 192.168.1.104'
-        reference: reference/dns_export_1.ascii
   Node Zeek http log:
     tags: [node, import-export, zeek]
     steps:
       - command: import -n -b zeek
         input: data/zeek/http.log.gz
       - command: export -n ascii 'resp_h == 216.240.189.196'
-        reference: reference/http_export_1.ascii
   Node Zeek snmp log:
     tags: [node, import-export, zeek]
     steps:
       - command: import -n zeek
         input: data/zeek/snmp.log.gz
       - command: export -n ascii 'duration >= 3s'
-        reference: reference/zeek_snmp.ascii
   Node Basic mrt:
     tags: [node, import-export, mrt, disabled]
     steps:
       - command: import -n -b mrt
         input: data/mrt/updates.20180530.0000.gz
       - command: export -n ascii '114.215.46.175 in prefix'
-        reference: reference/empty.file
 
   Server Zeek conn log:
     tags: [server, import-export, zeek]
@@ -81,7 +75,6 @@ tests:
       - command: import -b zeek
         input: data/zeek/conn.log.gz
       - command: export ascii 'resp_h == 192.168.1.104'
-        reference: reference/conn_export_1.ascii
   Server Basic mrt:
     tags: [server, import-export, mrt, disabled]
     fixture: ServerTester
@@ -89,7 +82,6 @@ tests:
       - command: import -b mrt
         input: data/mrt/updates.20180530.0000.gz
       - command: export ascii '114.215.46.175 in prefix'
-        reference: reference/empty.file
   Server Basic bgpdump:
     tags: [server, import-export, bgpdump, disabled]
     fixture: ServerTester
@@ -97,7 +89,6 @@ tests:
       - command: import -b bgpdump
         input: data/bgpdump/updates.20180530.bgpdump.gz
       - command: export ascii '114.215.46.175 in prefix'
-        reference: reference/empty.file
   Query Operators:
     tags: [server, operator]
     fixture: ServerTester
@@ -105,21 +96,13 @@ tests:
       - command: import -b zeek
         input: data/zeek/conn.log.gz
       - command: export ascii 'conn.duration <= 1.0s'
-        reference: reference/empty.file
       - command: export ascii 'duration >= 10.0s'
-        reference: reference/empty.file
       - command: export ascii 'duration < 2.0s'
-        reference: reference/empty.file
       - command: export ascii 'service  == "smtp"'
-        reference: reference/zeek_smtp.ascii
       - command: export ascii 'missed_bytes  != 0'
-        reference: reference/zeek_missed.ascii
       - command: export ascii 'id.orig_h !in 192.168.1.0/24'
-        reference: reference/in_subnet.ascii
       - command: export ascii 'id.orig_h in fe80:5074:1b53:7e7::/64'
-        reference: reference/empty.file
       - command: export ascii 'id.orig_h ni fe80:5074:1b53:7e7::/64'
-        reference: reference/empty.file
   Type Query:
     tags: [server, type, disabled, ch4805]
     fixture: ServerTester
@@ -127,7 +110,6 @@ tests:
       - command: import -b zeek
         input: data/zeek/conn.log.gz
       - command: export zeek '&type == "zeek::conn"'
-        reference: data/zeek/conn.log.gz
 
   Manual 1:
     condition: 'import -h 2>&1 | grep -q pcap'
@@ -137,9 +119,7 @@ tests:
       - command: import -b pcap
         input: data/pcap/example.pcap.gz
       - command: export ascii ':addr in 192.168.168.0/24'
-        reference: reference/example_pcap.ascii
       - command: export pcap 'sport > 60000/tcp && src !in 192.168.168.0/8'
-        reference: reference/empty.file
 
   Manual 1 node:
     condition: 'import -h 2>&1 | grep -q pcap'
@@ -148,9 +128,7 @@ tests:
       - command: import -n -b pcap
         input: data/pcap/example.pcap.gz
       - command: export -n ascii ':addr in 192.168.168.0/24'
-        reference: reference/example_pcap.ascii
       - command: export -n pcap 'sport > 60000/tcp && src !in 192.168.168.0/8'
-        reference: reference/empty.file
 
   Manual 2:
     tags: [examples, disabled]
@@ -158,7 +136,6 @@ tests:
     steps:
       - command: peer 'localhost:42124'
       - command: status
-        reference: reference/peer0.ref
 
   Multi addr query:
     tags: [import-export, zeek]
@@ -167,4 +144,3 @@ tests:
         input: data/zeek/conn.log.gz
       - command: export -n ascii
         input: queries/multi_addr.txt
-        reference: reference/multi_addr.ascii

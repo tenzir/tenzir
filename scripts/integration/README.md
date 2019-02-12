@@ -11,21 +11,19 @@ Integration tests are YAML files that follow a specific schema.
 
 Each *test* consists of a *name* (1), an optional list of *tags* (2), an
 optional reference to a *fixture* (3), and a sequence of *steps* (4) that
-consists of an application *command* (5), an optional *input* dataset in `gz`
-format (6) and an optional *reference* file (7) for comparing the output of
-`command`.
+consists of an application *command* (5), and an optional *input* dataset in
+`gz` format (6).
 
 Example:
 
 ``` yaml
 Zeek conn log: (1)
-  tags: [zeek, example]
-  fixture: ExampleTester (2)
-  steps: (3)
-    - command: import -b zeek (4)
-      input: data/zeek/conn.log.gz (5)
-    - command: export ascii 'resp_h == 192.168.1.104' (4)
-      reference: reference/conn_export_1.ascii (6)
+  tags: [zeek, example] (2)
+  fixture: ExampleTester (3)
+  steps: (4)
+    - command: import -b zeek (5)
+      input: data/zeek/conn.log.gz (6)
+    - command: export ascii 'resp_h == 192.168.1.104' (5)
 ```
 
 Fixtures are associative arrays with the mandatory keys `enter` and `exit`.
