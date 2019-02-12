@@ -96,9 +96,9 @@ def setBuildStatus(context, state, message) {
 def coverageReport(buildId) {
     echo "Create coverage report for build ID $buildId"
     // Paths we wish to ignore in the coverage report.
-    def installDir = "$WORKSPACE/$buildId"
     def excludePaths = [
         "/usr/",
+        "$WORKSPACE/$buildId/",
         "$WORKSPACE/vast-sources/vast/",
         "$WORKSPACE/vast-sources/tools/",
         "$WORKSPACE/vast-sources/libvast_test/",
