@@ -134,7 +134,7 @@ private:
   void bump_dirty_count();
 
   block_vector blocks_;
-  block_type last_marker_ = 0;
+  size_type last_marker_ = 0;
   size_type num_bits_ = 0;
 };
 
@@ -161,5 +161,3 @@ private:
 ewah_bitmap_range bit_range(const ewah_bitmap& bm);
 
 } // namespace vast
-
-
