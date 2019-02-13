@@ -34,23 +34,6 @@
 using namespace vast;
 using namespace vast::system;
 
-std::string format_error(caf::error err) {
-  std::ostringstream oss;
-  auto category = err.category();
-  oss << "Error: ";
-  if (category == caf::atom("vast"))
-    oss << to_string(static_cast<vast::ec>(err.code()));
-  else if (category == caf::atom("parser"))
-    oss << to_string(static_cast<caf::pec>(err.code()));
-  else if (category == caf::atom("system"))
-    oss << to_string(static_cast<caf::sec>(err.code()));
-  auto ctx = err.context();
-  if (ctx.size() > 0)
-    oss << " -> " << to_string(ctx);
-  oss << std::endl;
-  return oss.str();
-}
-
 int main(int argc, char** argv) {
   // CAF scaffold.
   default_configuration cfg{"vast"};
@@ -80,7 +63,7 @@ int main(int argc, char** argv) {
   auto result = app.run(sys, cfg.command_line.begin(), cfg.command_line.end());
   if (result.match_elements<caf::error>()) {
     if (auto& err = result.get_as<caf::error>(0))
-      std::cerr << format_error(err);
+      std::cerr << render(err);
     // else: The user most likely killed the process via CTRL+C, print nothing.
     return EXIT_FAILURE;
   }

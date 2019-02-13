@@ -82,5 +82,7 @@ error make_error(ec x, Ts&&... xs) {
                caf::make_message(std::forward<Ts>(xs)...)};
 }
 
+std::string render(caf::error err);
+
 } // namespace vast
 
