@@ -564,6 +564,16 @@ install(DIRECTORY
   DESTINATION "${CMAKE_INSTALL_DATADIR}/vast/"
 )
 
+install(FILES
+  "${CMAKE_CURRENT_SOURCE_DIR}/vast.conf"
+  DESTINATION "${CMAKE_INSTALL_DATADIR}/vast/"
+  RENAME "default.conf"
+)
+install(FILES
+  "${CMAKE_CURRENT_SOURCE_DIR}/vast.conf"
+  DESTINATION "${CMAKE_INSTALL_SYSCONFDIR}/vast/"
+)
+
 #------------------------------------------------------------------------------
 #                                Build Summary
 #------------------------------------------------------------------------------
