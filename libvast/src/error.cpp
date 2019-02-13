@@ -49,13 +49,18 @@ const char* descriptions[] = {
   "unimplemented",
 };
 
-void render_default_ctx(std::ostringstream& oss, const caf::message& ctx) {
+void render_vast_default_ctx(std::ostringstream& oss, const caf::message& ctx) {
   size_t size = ctx.size();
   if (size > 0) {
     oss << ":";
     for (size_t i = 0; i < size; ++i)
       oss << " \"" << ctx.get_as<std::string>(i) << '"';
   }
+}
+
+void render_default_ctx(std::ostringstream& oss, const caf::message& ctx) {
+  if (ctx.size() > 0)
+    oss << ": " << to_string(ctx);
 }
 
 } // namespace
@@ -73,24 +78,26 @@ std::string render(caf::error err) {
   oss << "!! ";
   switch (atom_uint(category)) {
     default:
-      oss << "unknown error category: " << to_string(category);
+      oss << to_string(category);
       render_default_ctx(oss, err.context());
+      break;
     case atom_uint("vast"): {
       auto x = static_cast<vast::ec>(err.code());
       oss << to_string(x);
       switch (x) {
         default:
-          render_default_ctx(oss, err.context());
+          render_vast_default_ctx(oss, err.context());
       }
-    }
+    } break;
     case atom_uint("parser"):
       oss << to_string(static_cast<caf::pec>(err.code()));
       render_default_ctx(oss, err.context());
+      break;
     case atom_uint("system"):
       oss << to_string(static_cast<caf::sec>(err.code()));
       render_default_ctx(oss, err.context());
+      break;
   }
-  oss << '\n';
   return oss.str();
 }
 
