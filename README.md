@@ -1,6 +1,7 @@
 # VAST
 
 [![Build Status][jenkins-badge]][jenkins-url]
+[![Coverage][coverage-badge]][coverage-url]
 [![Chat][chat-badge]][chat-url]
 [![License][license-badge]][license-url]
 
@@ -110,6 +111,8 @@ VAST comes with a [3-clause BSD licence][license-url].
 [chat-url]: https://gitter.im/vast-io/vast
 [jenkins-url]: https://jenkins.inet.haw-hamburg.de/blue/organizations/jenkins/VAST%2Fvast
 [jenkins-badge]: https://jenkins.inet.haw-hamburg.de/buildStatus/icon?job=VAST/vast/master
+[coverage-url]: https://jenkins.inet.haw-hamburg.de/job/VAST/job/vast/job/master/cobertura/
+[coverage-badge]: https://img.shields.io/jenkins/c/https/jenkins.inet.haw-hamburg.de/job/VAST/job/vast/job/master.svg?style=flat
 [license-badge]: https://img.shields.io/badge/license-BSD-blue.svg
 [license-url]: https://raw.github.com/vast-io/vast/master/COPYING
 
