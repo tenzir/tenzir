@@ -52,11 +52,9 @@ TEST(PCAP read/write 1) {
   REQUIRE(!events.empty());
   CHECK_EQUAL(events.size(), 44u);
   CHECK_EQUAL(events[0].type().name(), "pcap::packet");
-  auto pkt = caf::get_if<vector>(&events.back().data());
-  REQUIRE(pkt);
-  auto src = caf::get_if<address>(&pkt->at(1));
-  REQUIRE(src);
-  CHECK_EQUAL(*src, *to<address>("192.168.1.1"));
+  auto pkt = unbox(caf::get_if<vector>(&events.back().data()));
+  auto src = unbox(caf::get_if<address>(&pkt.at(1)));
+  CHECK_EQUAL(src, unbox(to<address>("192.168.1.1")));
   MESSAGE("write out read packets");
   auto file = "vast-unit-test-nmap-vsn.pcap";
   format::pcap::writer writer{file};
