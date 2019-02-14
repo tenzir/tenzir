@@ -99,6 +99,7 @@ def coverageReport(buildId) {
     def excludePaths = [
         "/usr/",
         "$WORKSPACE/$buildId/",
+        "$WORKSPACE/vast-sources/aux/",
         "$WORKSPACE/vast-sources/vast/",
         "$WORKSPACE/vast-sources/tools/",
         "$WORKSPACE/vast-sources/libvast_test/",
