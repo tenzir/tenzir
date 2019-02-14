@@ -96,11 +96,22 @@ caf::message run(const command& cmd, caf::actor_system& sys,
                  caf::settings& options, const std::vector<std::string>& args);
 
 /// Gets a subcommand from its full name.
+/// @param cmd The parent to search for *position.
+/// @param position The next subcommand to resolve.
+/// @param end The position after the last subcommand name.
+/// @returns A pointer to the corresponding command on success, or nullptr
+///          on error.
+/// @relates command
 const command* resolve(const command& cmd,
                        std::vector<std::string_view>::iterator position,
                        std::vector<std::string_view>::iterator end);
 
 /// Gets a subcommand from its full name.
+/// @param cmd The parent to search for *position.
+/// @param name A whitespace separated sequence of subcommands.
+/// @returns A pointer to the corresponding command on success, or nullptr
+///          on error.
+/// @relates command
 const command* resolve(const command& cmd, std::string_view name);
 
 /// Returns the full name of `cmd`, i.e., its own name prepended by all parent
@@ -122,4 +133,3 @@ void for_each(const command& cmd, F fun) {
 }
 
 } // namespace vast
-
