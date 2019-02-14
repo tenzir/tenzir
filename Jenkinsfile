@@ -94,6 +94,12 @@ def setBuildStatus(context, state, message) {
 
 // Creates coverage reports via the Cobertura plugin.
 def coverageReport(buildId) {
+    try { unstash buildId }
+    catch (Exception) { }
+    if (!fileExists("${buildId}.success")) {
+        echo "Skip coverage report for build ID $buildId due to earlier failure"
+        return
+    }
     echo "Create coverage report for build ID $buildId"
     // Paths we wish to ignore in the coverage report.
     def excludePaths = [
@@ -110,16 +116,16 @@ def coverageReport(buildId) {
         try {
             withEnv(['ASAN_OPTIONS=verify_asan_link_order=false:detect_leaks=0']) {
                 sh """
-                    kcov --exclude-path=$excludePathsStr kcov-result ./build/bin/vast-test &> kcov_output.txt
-                    find . -name 'coverage.json' -exec mv {} result.json \\;
+                    kcov --exclude-path=$excludePathsStr kcov-result ./build/bin/vast-test &> kcov_output.txtt
+                    find kcov-result -name 'cobertura.xml' -exec mv {} cobertura.xml \\;
+                    find kcov-result -name 'coverage.json' -exec mv {} result.json \\;
                 """
             }
-            stash includes: 'result.json', name: 'coverage-result'
-            archiveArtifacts '**/cobertura.xml'
+            archiveArtifacts 'cobertura.xml'
             cobertura([
                 autoUpdateHealth: false,
                 autoUpdateStability: false,
-                coberturaReportFile: '**/cobertura.xml',
+                coberturaReportFile: 'cobertura.xml',
                 conditionalCoverageTargets: '70, 0, 0',
                 failUnhealthy: false,
                 failUnstable: false,
@@ -130,6 +136,17 @@ def coverageReport(buildId) {
                 sourceEncoding: 'ASCII',
                 zoomCoverageChart: false,
             ])
+            def query = [
+               "token=${CODECOV_TOKEN}",
+               "commit=${env.GIT_COMMIT}",
+               "branch=${env.GIT_BRANCH}",
+               "build=${env.BUILD_NUMBER}",
+               "build_url=${BUILD_URL}",
+               "service=jenkins",
+            ]
+            def queryStr = query.join('&')
+            sh "curl -X POST --data-binary @cobertura.xml \"https://codecov.io/upload/v2?${queryStr}\""
+            stash includes: 'result.json', name: 'coverage-result'
         } catch (Exception e) {
             echo "exception: $e"
             sh 'ls -R .'
@@ -242,20 +259,23 @@ pipeline {
                           "$WORKSPACE/caf-install/lib"
         DYLD_LIBRARY_PATH = "$WORKSPACE/vast-sources/build/lib;" +
                             "$WORKSPACE/caf-install/lib"
-        ASAN_OPTIONS = 'detect_leaks=0'
         PrettyJobBaseName = env.JOB_BASE_NAME.replace('%2F', '/')
         PrettyJobName = "VAST/$PrettyJobBaseName #${env.BUILD_NUMBER}"
+        ASAN_OPTIONS = 'detect_leaks=0'
+        CODECOV_TOKEN=credentials('codecov-vast')
     }
     stages {
         // Checkout all involved repositories.
         stage('Git Checkout') {
             agent { label 'master' }
             steps {
+                echo "build branch ${env.GIT_BRANCH}"
                 deleteDir()
                 dir('vast-sources') {
                   checkout scm
                 }
                 stash includes: 'vast-sources/**', name: 'vast-sources'
+                setBuildStatus('unit-tests', 'PENDING', 'Pending ...')
             }
         }
         stage('Builds') {
@@ -313,15 +333,13 @@ pipeline {
                         try {
                             unstash 'coverage-result'
                             if (fileExists('result.json')) {
-                                def resultJson = readJSON file: 'result.json'
-                                setBuildStatus('coverage', 'SUCCESS', resultJson['percent_covered'] + '% coverage')
+                                // Set no build status here, because codecov.io takes over from this point.
                                 coverageOk = true
                             } else {
-                              setBuildStatus('coverage', 'FAILURE', 'Unable to get coverage report')
+                                setBuildStatus('coverage', 'FAILURE', 'Unable to get coverage report')
                             }
                         } catch (Exception) {
-                            setBuildStatus('coverage', 'FAILURE', 'Unable to generate coverage report')
-                        }
+                            setBuildStatus('coverage', 'FAILURE', 'Unable to generate coverage report')                        }
                         // Send email notification.
                         def testsIcon = testsOk ? "✅" : "⛔️"
                         def coverageIcon = coverageOk ? "✅" : "⛔️"
@@ -333,7 +351,6 @@ pipeline {
                             compressLog: true,
                             body: "Check console output at ${env.BUILD_URL} or see attached log.\n",
                         )
-
                     }
                 }
             }
