@@ -11,28 +11,15 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/config.hpp"
+#include "vast/system/application.hpp"
 
 #include <iostream>
 
-#include <caf/all.hpp>
-#include <caf/io/all.hpp>
-#ifdef VAST_USE_OPENSSL
-#include <caf/openssl/all.hpp>
-#endif // VAST_USE_OPENSSL
-
-#include "vast/banner.hpp"
-#include "vast/logger.hpp"
-
-#include "vast/concept/printable/stream.hpp"
-#include "vast/concept/printable/vast/data.hpp"
-
-#include "vast/system/application.hpp"
+#include <caf/atom.hpp>
+#include <caf/error.hpp>
 
 #include "vast/detail/adjust_resource_consumption.hpp"
-#include "vast/detail/overload.hpp"
-#include "vast/detail/string.hpp"
-#include "vast/detail/system.hpp"
+#include "vast/error.hpp"
 
 using std::string;
 
@@ -47,6 +34,30 @@ application::application() {
   // it's explicit to the user? Or perhaps make whatever this function does
   // simply a configuration option and use it later?
   detail::adjust_resource_consumption();
+}
+
+void render_error(const application& app, const caf::error& err,
+                  std::ostream& os) {
+  if (err)
+    // The user most likely killed the process via CTRL+C, print nothing.
+    return;
+  os << render(err);
+  if (err.category() == caf::atom("vast")) {
+    auto x = static_cast<vast::ec>(err.code());
+    switch (x) {
+      default:
+        break;
+      case ec::invalid_subcommand:
+      case ec::missing_subcommand:
+      case ec::unrecognized_option:
+        auto ctx = err.context();
+        auto name = ctx.get_as<std::string>(1);
+        auto cmd = resolve(app.root, name);
+        if (cmd)
+          helptext(*cmd, os);
+        break;
+    }
+  }
 }
 
 } // namespace vast::system

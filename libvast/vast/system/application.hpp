@@ -13,19 +13,18 @@
 
 #pragma once
 
-#include <memory>
-#include <string>
 #include <string_view>
 
+#include <caf/fwd.hpp>
+#include <caf/message.hpp>
+
 #include "vast/command.hpp"
-#include "vast/system/configuration.hpp"
 
 namespace vast::system {
 
 class application {
 public:
   /// Constructs an application.
-  /// @param cfg The VAST system configuration.
   application();
 
   /// Adds a new command to the application.
@@ -46,5 +45,8 @@ public:
   command root;
 };
 
-} // namespace vast::system
+/// Format a useful human readable error message on the output stream
+void render_error(const application& app, const caf::error& err,
+                  std::ostream& os);
 
+} // namespace vast::system

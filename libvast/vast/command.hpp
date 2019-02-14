@@ -95,6 +95,14 @@ caf::message run(const command& cmd, caf::actor_system& sys,
 caf::message run(const command& cmd, caf::actor_system& sys,
                  caf::settings& options, const std::vector<std::string>& args);
 
+/// Gets a subcommand from its full name.
+const command* resolve(const command& cmd,
+                       std::vector<std::string_view>::iterator position,
+                       std::vector<std::string_view>::iterator end);
+
+/// Gets a subcommand from its full name.
+const command* resolve(const command& cmd, std::string_view name);
+
 /// Returns the full name of `cmd`, i.e., its own name prepended by all parent
 /// names.
 std::string full_name(const command& cmd);
