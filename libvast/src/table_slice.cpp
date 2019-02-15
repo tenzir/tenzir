@@ -18,7 +18,6 @@
 #include <caf/actor_system.hpp>
 #include <caf/actor_system_config.hpp>
 #include <caf/binary_deserializer.hpp>
-#include <caf/binary_serializer.hpp>
 #include <caf/deserializer.hpp>
 #include <caf/error.hpp>
 #include <caf/execution_unit.hpp>

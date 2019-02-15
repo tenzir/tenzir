@@ -61,13 +61,11 @@ TEST(serialization) {
   CHECK_EQUAL(y->num_slices(), 1u);
   CHECK(std::equal(x->chunk()->begin(), x->chunk()->end(),
                    y->chunk()->begin(), y->chunk()->end()));
-  /*
   MESSAGE("load segment from chunk");
   auto z = segment::make(chunk::make(std::move(buf)));
   REQUIRE(z);
   CHECK(std::equal(x->chunk()->begin(), x->chunk()->end(),
                    z->chunk()->begin(), z->chunk()->end()));
-  */
 }
 
 FIXTURE_SCOPE_END()
