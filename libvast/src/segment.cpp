@@ -11,8 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include <caf/stream_deserializer.hpp>
-#include <caf/streambuf.hpp>
+#include <caf/binary_deserializer.hpp>
 
 #include "vast/bitmap.hpp"
 #include "vast/bitmap_algorithms.hpp"
@@ -33,9 +32,7 @@ using namespace binary_byte_literals;
 segment_ptr segment::make(chunk_ptr chunk) {
   VAST_ASSERT(chunk != nullptr);
   // Setup a CAF deserializer
-  auto data = const_cast<char*>(chunk->data()); // CAF won't touch it.
-  caf::charbuf buf{data, chunk->size()};
-  caf::stream_deserializer<caf::charbuf&> source{buf};
+  caf::binary_deserializer source{nullptr, chunk->data(), chunk->size()};
   auto result = segment_ptr{new segment, false};
   if (auto error = source(result->header_, result->meta_)) {
     VAST_ERROR_ANON(__func__, "failed to deserialize segment meta data");
@@ -53,10 +50,10 @@ segment_ptr segment::make(chunk_ptr chunk) {
   // previously serialized as chunk pointer (uint32_t size + data), we have
   // to add add sizeof(uint32_t) bytes to directly jump to the table slice
   // data.
-  auto bytes_read = detail::narrow_cast<size_t>(buf.in_avail());
-  VAST_ASSERT(chunk->size() > bytes_read);
-  auto meta_size = chunk->size() - bytes_read;
-  result->chunk_ = chunk->slice(meta_size + sizeof(uint32_t));
+  using detail::narrow_cast;
+  auto bytes_read = narrow_cast<size_t>(source.current() - chunk->data());
+  VAST_ASSERT(bytes_read < chunk->size());
+  result->chunk_ = chunk->slice(bytes_read + sizeof(uint32_t));
   return result;
 }
 
@@ -95,11 +92,10 @@ segment::lookup(const ids& xs) const {
 caf::expected<table_slice_ptr>
 segment::make_slice(const table_slice_synopsis& slice) const {
   auto slice_size = detail::narrow_cast<size_t>(slice.end - slice.start);
-  // CAF won't touch the pointer during deserialization.
-  caf::charbuf buf{const_cast<char*>(chunk_->data()) + slice.start, slice_size};
-  caf::stream_deserializer<caf::charbuf&> deserializer{buf};
+  caf::binary_deserializer source{nullptr, chunk_->data() + slice.start,
+                                  slice_size};
   table_slice_ptr result;
-  if (auto error = deserializer(result))
+  if (auto error = source(result))
     return error;
   return result;
 }

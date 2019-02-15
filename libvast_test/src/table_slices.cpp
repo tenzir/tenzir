@@ -30,7 +30,7 @@ namespace {
 
 } // namespace <anonymous>
 
-table_slices::table_slices() : sink{sys, buf} {
+table_slices::table_slices() {
   // Register factories.
   factory<table_slice>::initialize();
   // Define our test layout.
@@ -80,6 +80,11 @@ caf::binary_deserializer table_slices::make_source() {
   return caf::binary_deserializer{sys, buf};
 }
 
+caf::binary_serializer table_slices::make_sink() {
+  buf.clear();
+  return caf::binary_serializer{sys, buf};
+}
+
 table_slice_ptr table_slices::make_slice() {
   for (auto& xs : test_data)
     for (auto& x : xs)
@@ -126,6 +131,7 @@ void table_slices::test_manual_serialization() {
   auto slice1 = make_slice();
   table_slice_ptr slice2;
   MESSAGE("save content of the first slice into the buffer");
+  auto sink = make_sink();
   CHECK_EQUAL(inspect(sink, slice1), caf::none);
   MESSAGE("load content for the second slice from the buffer");
   auto source = make_source();
@@ -133,7 +139,6 @@ void table_slices::test_manual_serialization() {
   MESSAGE("check result of serialization roundtrip");
   REQUIRE_NOT_EQUAL(slice2, nullptr);
   CHECK_EQUAL(*slice1, *slice2);
-  buf.clear();
 }
 
 void table_slices::test_smart_pointer_serialization() {
@@ -142,6 +147,7 @@ void table_slices::test_smart_pointer_serialization() {
   auto slice1 = make_slice();
   table_slice_ptr slice2;
   MESSAGE("save content of the first slice into the buffer");
+  auto sink = make_sink();
   CHECK_EQUAL(sink(slice1), caf::none);
   MESSAGE("load content for the second slice from the buffer");
   auto source = make_source();
@@ -149,7 +155,6 @@ void table_slices::test_smart_pointer_serialization() {
   MESSAGE("check result of serialization roundtrip");
   REQUIRE_NOT_EQUAL(slice2, nullptr);
   CHECK_EQUAL(*slice1, *slice2);
-  buf.clear();
 }
 
 void table_slices::test_message_serialization() {
@@ -158,6 +163,7 @@ void table_slices::test_message_serialization() {
   auto slice1 = caf::make_message(make_slice());
   caf::message slice2;
   MESSAGE("save content of the first slice into the buffer");
+  auto sink = make_sink();
   CHECK_EQUAL(sink(slice1), caf::none);
   MESSAGE("load content for the second slice from the buffer");
   auto source = make_source();
@@ -168,18 +174,17 @@ void table_slices::test_message_serialization() {
               *slice2.get_as<table_slice_ptr>(0));
   CHECK_EQUAL(slice2.get_as<table_slice_ptr>(0)->implementation_id(),
               builder->implementation_id());
-  buf.clear();
 }
 
 void table_slices::test_load_from_chunk() {
   MESSAGE(">> test load from chunk");
   auto slice1 = make_slice();
+  auto sink = make_sink();
   CHECK_EQUAL(sink(slice1), caf::none);
   auto chk = chunk::make(make_const_byte_span(buf));
   auto slice2 = factory<table_slice>::traits::make(chk);
   REQUIRE_NOT_EQUAL(slice2, nullptr);
   CHECK_EQUAL(*slice1, *slice2);
-  buf.clear();
 }
 
 void table_slices::test_append_column_to_index() {

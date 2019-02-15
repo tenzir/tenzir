@@ -18,8 +18,6 @@
 
 #include <caf/expected.hpp>
 #include <caf/fwd.hpp>
-#include <caf/stream_serializer.hpp>
-#include <caf/streambuf.hpp>
 
 #include "vast/aliases.hpp"
 #include "vast/segment.hpp"
@@ -67,8 +65,6 @@ private:
   // Table slice state
   vast::id min_table_slice_offset_;
   std::vector<char> table_slice_buffer_;
-  caf::vectorbuf table_slice_streambuf_;
-  caf::stream_serializer<caf::vectorbuf&> table_slice_serializer_;
   // Lookup cache
   std::vector<table_slice_ptr> slices_;
 };

@@ -65,6 +65,8 @@ private:
 
   caf::binary_deserializer make_source();
 
+  caf::binary_serializer make_sink();
+
   vast::table_slice_ptr make_slice();
 
   vast::data_view at(size_t row, size_t col) const;
@@ -92,8 +94,6 @@ private:
   std::vector<std::vector<vast::data>> test_data;
 
   std::vector<char> buf;
-
-  caf::binary_serializer sink;
 };
 
 } // namespace fixtures

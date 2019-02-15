@@ -17,13 +17,12 @@
 
 #include <caf/actor_system.hpp>
 #include <caf/actor_system_config.hpp>
+#include <caf/binary_deserializer.hpp>
 #include <caf/deserializer.hpp>
 #include <caf/error.hpp>
 #include <caf/execution_unit.hpp>
 #include <caf/sec.hpp>
 #include <caf/serializer.hpp>
-#include <caf/streambuf.hpp>
-#include <caf/stream_deserializer.hpp>
 #include <caf/sum_type.hpp>
 
 #include "vast/chunk.hpp"
@@ -77,8 +76,7 @@ record_type table_slice::layout(size_type first_column,
 caf::error table_slice::load(chunk_ptr chunk) {
   VAST_ASSERT(chunk != nullptr);
   auto data = const_cast<char*>(chunk->data()); // CAF won't touch it.
-  caf::charbuf buf{data, chunk->size()};
-  caf::stream_deserializer<caf::charbuf&> source{buf};
+  caf::binary_deserializer source{nullptr, data, chunk->size()};
   return deserialize(source);
 }
 

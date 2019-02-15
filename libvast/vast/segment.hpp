@@ -21,8 +21,6 @@
 #include <caf/fwd.hpp>
 #include <caf/intrusive_ptr.hpp>
 #include <caf/ref_counted.hpp>
-#include <caf/stream_serializer.hpp>
-#include <caf/streambuf.hpp>
 
 #include "vast/aliases.hpp"
 #include "vast/chunk.hpp"

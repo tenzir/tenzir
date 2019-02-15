@@ -13,6 +13,8 @@
 
 #include "vast/segment_builder.hpp"
 
+#include <caf/binary_serializer.hpp>
+
 #include "vast/error.hpp"
 #include "vast/ids.hpp"
 #include "vast/logger.hpp"
@@ -25,9 +27,7 @@
 
 namespace vast {
 
-segment_builder::segment_builder()
-  : table_slice_streambuf_{table_slice_buffer_},
-    table_slice_serializer_{table_slice_streambuf_} {
+segment_builder::segment_builder() {
   reset();
 }
 
@@ -35,7 +35,8 @@ caf::error segment_builder::add(table_slice_ptr x) {
   if (x->offset() < min_table_slice_offset_)
     return make_error(ec::unspecified, "slice offsets not increasing");
   auto before = table_slice_buffer_.size();
-  if (auto error = table_slice_serializer_(x)) {
+  caf::binary_serializer sink{nullptr, table_slice_buffer_};
+  if (auto error = sink(x)) {
     table_slice_buffer_.resize(before);
     return error;
   }
