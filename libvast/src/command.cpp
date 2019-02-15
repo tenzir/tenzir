@@ -145,9 +145,9 @@ const command* resolve(const command& cmd,
     return &cmd;
   auto i = std::find_if(cmd.children.begin(), cmd.children.end(),
                         [&](auto& x) { return x->name == *position; });
-  if(i == cmd.children.end())
+  if (i == cmd.children.end())
     return nullptr;
-  return resolve(**i, ++position, end);
+  return resolve(**i, position + 1, end);
 }
 
 const command* resolve(const command& cmd, std::string_view name) {

@@ -19,6 +19,7 @@
 #include <caf/error.hpp>
 
 #include "vast/detail/adjust_resource_consumption.hpp"
+#include "vast/detail/assert.hpp"
 #include "vast/error.hpp"
 
 using std::string;
@@ -49,13 +50,18 @@ void render_error(const application& app, const caf::error& err,
         break;
       case ec::invalid_subcommand:
       case ec::missing_subcommand:
-      case ec::unrecognized_option:
+      case ec::unrecognized_option: {
         auto ctx = err.context();
-        auto name = ctx.get_as<std::string>(1);
-        auto cmd = resolve(app.root, name);
-        if (cmd)
-          helptext(*cmd, os);
+        if (ctx.match_element<std::string>(1)) {
+          auto name = ctx.get_as<std::string>(1);
+          if (auto cmd = resolve(app.root, name))
+            helptext(*cmd, os);
+        }
+        else {
+          VAST_ASSERT("User visible error contexts must consist of strings!");
+        }
         break;
+      }
     }
   }
 }

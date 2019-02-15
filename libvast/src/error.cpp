@@ -23,44 +23,39 @@ namespace vast {
 namespace {
 
 const char* descriptions[] = {
-  "no error",
+  "no_error",
   "unspecified",
-  "no such file",
-  "filesystem error",
-  "type clash",
-  "unsupported operator",
-  "parse error",
-  "print error",
-  "convert error",
-  "invalid query",
-  "format error",
-  "end of input",
-  "version error",
-  "syntax error",
-  "invalid table slice type",
-  "invalid synopsis type",
-  "remote node down",
-  "invalid result",
-  "invalid configuration",
-  "unrecognized option",
-  "invalid subcommand",
-  "missing subcommand",
-  "no importer",
+  "no_such_file",
+  "filesystem_error",
+  "type_clash",
+  "unsupported_operator",
+  "parse_error",
+  "print_error",
+  "convert_error",
+  "invalid_query",
+  "format_error",
+  "end_of_input",
+  "version_error",
+  "syntax_error",
+  "invalid_table_slice_type",
+  "invalid_synopsis_type",
+  "remote_node_down",
+  "invalid_result",
+  "invalid_configuration",
+  "unrecognized_option",
+  "invalid_subcommand",
+  "missing_subcommand",
+  "no_importer",
   "unimplemented",
 };
 
-void render_vast_default_ctx(std::ostringstream& oss, const caf::message& ctx) {
+void render_default_ctx(std::ostringstream& oss, const caf::message& ctx) {
   size_t size = ctx.size();
   if (size > 0) {
     oss << ":";
     for (size_t i = 0; i < size; ++i)
-      oss << " \"" << ctx.get_as<std::string>(i) << '"';
+      oss << ' ' << ctx.stringify(i);
   }
-}
-
-void render_default_ctx(std::ostringstream& oss, const caf::message& ctx) {
-  if (ctx.size() > 0)
-    oss << ": " << to_string(ctx);
 }
 
 } // namespace
@@ -86,7 +81,7 @@ std::string render(caf::error err) {
       oss << to_string(x);
       switch (x) {
         default:
-          render_vast_default_ctx(oss, err.context());
+          render_default_ctx(oss, err.context());
       }
     } break;
     case atom_uint("parser"):
