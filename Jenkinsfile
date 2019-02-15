@@ -244,7 +244,7 @@ pipeline {
                             "$WORKSPACE/caf-install/lib"
         ASAN_OPTIONS = 'detect_leaks=0'
         PrettyJobBaseName = env.JOB_BASE_NAME.replace('%2F', '/')
-        PrettyJobName = "VAST build #${env.BUILD_NUMBER} for $PrettyJobBaseName"
+        PrettyJobName = "VAST/$PrettyJobBaseName #${env.BUILD_NUMBER}"
     }
     stages {
         // Checkout all involved repositories.
@@ -301,41 +301,48 @@ pipeline {
                             result + (fileExists("${buildId}.success") ? 1 : 0)
                         }
                         echo "$successes unit tests tests of $builds were successful"
-                        if (builds == successes) {
+                        def testsOk = builds == successes
+                        if (testsOk) {
                             setBuildStatus('unit-tests', 'SUCCESS', 'All builds passed the unit tests')
                         } else {
                             def failures = builds - successes
                             setBuildStatus('unit-tests', 'FAILURE', "$failures/$builds builds failed to run the unit tests")
                         }
                         // Get the coverage result.
+                        def coverageOk = false
                         try {
                             unstash 'coverage-result'
                             if (fileExists('result.json')) {
                                 def resultJson = readJSON file: 'result.json'
                                 setBuildStatus('coverage', 'SUCCESS', resultJson['percent_covered'] + '% coverage')
+                                coverageOk = true
                             } else {
                               setBuildStatus('coverage', 'FAILURE', 'Unable to get coverage report')
                             }
                         } catch (Exception) {
                             setBuildStatus('coverage', 'FAILURE', 'Unable to generate coverage report')
                         }
+                        // Send email notification.
+                        def testsIcon = testsOk ? "✅" : "⛔️"
+                        def coverageIcon = coverageOk ? "✅" : "⛔️"
+                        emailext(
+                            subject: "$PrettyJobName: ✅ build, $testsIcon unit tests, $coverageIcon coverage",
+                            to: 'engineering@tenzir.com',
+                            recipientProviders: [culprits()],
+                            attachLog: true,
+                            compressLog: true,
+                            body: "Check console output at ${env.BUILD_URL} or see attached log.\n",
+                        )
+
                     }
                 }
             }
         }
     }
     post {
-        success {
-            emailext(
-                subject: "✅ $PrettyJobName succeeded",
-                to: 'engineering@tenzir.com',
-                recipientProviders: [culprits()],
-                body: "Check console output at ${env.BUILD_URL}.\n",
-            )
-        }
         failure {
             emailext(
-                subject: "⛔️ $PrettyJobName failed",
+                subject: "$PrettyJobName: ⛔️ build, ⛔️ unit tests, ⛔️ coverage",
                 to: 'engineering@tenzir.com',
                 recipientProviders: [culprits()],
                 attachLog: true,
@@ -345,4 +352,3 @@ pipeline {
         }
     }
 }
-
