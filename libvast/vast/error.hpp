@@ -82,5 +82,9 @@ error make_error(ec x, Ts&&... xs) {
                caf::make_message(std::forward<Ts>(xs)...)};
 }
 
+/// A formatting function that converts an error into a human-readable string.
+/// @relates ec
+std::string render(caf::error err);
+
 } // namespace vast
 

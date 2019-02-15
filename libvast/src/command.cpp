@@ -21,11 +21,20 @@
 #include <caf/message.hpp>
 #include <caf/settings.hpp>
 
+#include "vast/detail/assert.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
 
 namespace vast {
+
+namespace {
+
+caf::message make_error_msg(const command& cmd, ec x, std::string word) {
+  return make_message(make_error(x, std::move(word), full_name(cmd)));
+}
+
+} // namespace
 
 caf::config_option_set command::opts() {
   return caf::config_option_set{}.add<bool>("help,h?", "prints the help text");
@@ -69,7 +78,7 @@ caf::message run(const command& cmd, caf::actor_system& sys,
   bool has_subcommand;
   switch(state) {
     default:
-      return make_message(make_error(ec::unrecognized_option, *position));
+      return make_error_msg(cmd, ec::unrecognized_option, *position);
     case caf::pec::success:
       has_subcommand = false;
       break;
@@ -78,7 +87,7 @@ caf::message run(const command& cmd, caf::actor_system& sys,
       break;
   }
   if (position != last && detail::starts_with(*position, "-"))
-    return make_message(make_error(ec::unrecognized_option, *position));
+    return make_error_msg(cmd, ec::unrecognized_option, *position);
   // Check for help option.
   if (get_or<bool>(options, "help", false)) {
     helptext(cmd, std::cerr);
@@ -93,7 +102,7 @@ caf::message run(const command& cmd, caf::actor_system& sys,
   if (!has_subcommand) {
     // Commands without a run implementation require subcommands.
     if (cmd.run == nullptr)
-      return make_message(make_error(ec::missing_subcommand));
+      return make_error_msg(cmd, ec::missing_subcommand, "");
     return cmd.run(cmd, sys, options, position, last);
   }
   // Consume CLI arguments if we have arguments but don't have subcommands.
@@ -110,7 +119,7 @@ caf::message run(const command& cmd, caf::actor_system& sys,
   auto i = std::find_if(cmd.children.begin(), cmd.children.end(),
                         [p = position](auto& x) { return x->name == *p; });
   if (i == cmd.children.end())
-    return make_message(make_error(ec::invalid_subcommand, *position));
+    return make_error_msg(cmd, ec::invalid_subcommand, *position);
   return run(**i, sys, options, position + 1, last);
 }
 
@@ -127,6 +136,23 @@ std::string full_name(const command& cmd) {
     result.insert(result.begin(), ptr->name.begin(), ptr->name.end());
   }
   return result;
+}
+
+const command* resolve(const command& cmd,
+                       std::vector<std::string_view>::iterator position,
+                       std::vector<std::string_view>::iterator end) {
+  if (position == end)
+    return &cmd;
+  auto i = std::find_if(cmd.children.begin(), cmd.children.end(),
+                        [&](auto& x) { return x->name == *position; });
+  if (i == cmd.children.end())
+    return nullptr;
+  return resolve(**i, position + 1, end);
+}
+
+const command* resolve(const command& cmd, std::string_view name) {
+  auto words = detail::split(name, " ");
+  return resolve(cmd, words.begin(), words.end());
 }
 
 namespace {

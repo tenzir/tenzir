@@ -23,6 +23,7 @@
 #include <caf/openssl/manager.hpp>
 #endif
 
+#include "vast/error.hpp"
 #include "vast/filesystem.hpp"
 
 #include "vast/system/default_application.hpp"
@@ -61,9 +62,7 @@ int main(int argc, char** argv) {
   // Dispatch to root command.
   auto result = app.run(sys, cfg.command_line.begin(), cfg.command_line.end());
   if (result.match_elements<caf::error>()) {
-    if (auto& err = result.get_as<caf::error>(0))
-      std::cerr << sys.render(err) << std::endl;
-    // else: The user most likely killed the process via CTRL+C, print nothing.
+    render_error(app, result.get_as<caf::error>(0), std::cerr);
     return EXIT_FAILURE;
   }
 }
