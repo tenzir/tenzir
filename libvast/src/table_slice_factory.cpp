@@ -13,12 +13,12 @@
 
 #include "vast/table_slice_factory.hpp"
 
-#include <caf/streambuf.hpp>
-#include <caf/stream_deserializer.hpp>
+#include <caf/binary_deserializer.hpp>
 
 #include "vast/chunk.hpp"
 #include "vast/default_table_slice.hpp"
 #include "vast/detail/assert.hpp"
+#include "vast/detail/narrow.hpp"
 #include "vast/logger.hpp"
 
 namespace vast {
@@ -31,9 +31,7 @@ table_slice_ptr factory_traits<table_slice>::make(chunk_ptr chunk) {
   if (chunk == nullptr)
     return nullptr;
   // Setup a CAF deserializer.
-  auto data = const_cast<char*>(chunk->data()); // CAF won't touch it.
-  caf::charbuf buf{data, chunk->size()};
-  caf::stream_deserializer<caf::charbuf&> source{buf};
+  caf::binary_deserializer source{nullptr, chunk->data(), chunk->size()};
   // Deserialize the class ID and default-construct a table slice.
   caf::atom_value id;
   table_slice_header header;
@@ -47,10 +45,9 @@ table_slice_ptr factory_traits<table_slice>::make(chunk_ptr chunk) {
     return nullptr;
   }
   // Skip table slice data already processed.
-  auto bytes_read = static_cast<size_t>(buf.in_avail());
-  VAST_ASSERT(chunk->size() > bytes_read);
-  auto header_size = chunk->size() - bytes_read;
-  if (auto err = result.unshared().load(chunk->slice(header_size))) {
+  using detail::narrow_cast;
+  auto bytes_read = narrow_cast<size_t>(source.current() - chunk->data());
+  if (auto err = result.unshared().load(chunk->slice(bytes_read))) {
     VAST_ERROR_ANON(__func__, "failed to load table slice from chunk");
     return nullptr;
   }
