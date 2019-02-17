@@ -24,9 +24,11 @@
 #include "vast/system/application.hpp"
 #include "vast/system/configuration.hpp"
 #include "vast/system/generator_command.hpp"
+#include "vast/system/help_command.hpp"
 #include "vast/system/reader_command.hpp"
 #include "vast/system/remote_command.hpp"
 #include "vast/system/start_command.hpp"
+#include "vast/system/version_command.hpp"
 #include "vast/system/writer_command.hpp"
 
 #ifdef VAST_HAVE_PCAP
@@ -41,11 +43,12 @@ default_application::default_application() {
   root.options
     .add<std::string>("dir,d", "directory for persistent state")
     .add<std::string>("endpoint,e", "node endpoint")
-    .add<std::string>("id,i", "the unique ID of this node")
-    .add<bool>("version,v", "print version and exit");
+    .add<std::string>("id,i", "the unique ID of this node");
   // Default options for commands.
   auto opts = [] { return command::opts(); };
   // Add standalone commands.
+  add(help_command, "help", "prints the help text", opts());
+  add(version_command, "version", "prints the software version", opts());
   add(start_command, "start", "starts a node", opts());
   add(remote_command, "stop", "stops a node", opts());
   add(remote_command, "spawn", "creates a new component", opts());

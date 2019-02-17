@@ -88,6 +88,7 @@ set(libvast_sources
   src/system/dummy_consensus.cpp
   src/system/evaluator.cpp
   src/system/exporter.cpp
+  src/system/help_command.cpp
   src/system/importer.cpp
   src/system/index.cpp
   src/system/indexer.cpp
@@ -117,6 +118,7 @@ set(libvast_sources
   src/system/table_indexer.cpp
   src/system/task.cpp
   src/system/tracker.cpp
+  src/system/version_command.cpp
   src/table_slice.cpp
   src/table_slice_builder.cpp
   src/table_slice_builder_factory.cpp

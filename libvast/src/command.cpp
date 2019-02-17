@@ -93,11 +93,6 @@ caf::message run(const command& cmd, caf::actor_system& sys,
     helptext(cmd, std::cerr);
     return caf::none;
   }
-  // Check for version option.
-  if (get_or<bool>(options, "version", false)) {
-    std::cerr << VAST_VERSION << std::endl;
-    return caf::none;
-  }
   // Invoke cmd.run if no subcommand was defined.
   if (!has_subcommand) {
     // Commands without a run implementation require subcommands.
@@ -127,6 +122,10 @@ caf::message run(const command& cmd, caf::actor_system& sys,
                  caf::settings& options,
                  const std::vector<std::string>& args) {
   return run(cmd, sys, options, args.begin(), args.end());
+}
+
+const command& root(const command& cmd) {
+  return cmd.parent == nullptr ? cmd : root(*cmd.parent);
 }
 
 std::string full_name(const command& cmd) {
