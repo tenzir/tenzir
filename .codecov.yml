@@ -14,3 +14,12 @@ coverage:
         only_pulls: false
         flags: null
         paths: null
+  notify:
+    slack:
+      default:
+        url: "https://hooks.slack.com/services/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"
+        threshold: 1%
+        only_pulls: false
+        branches: null
+        flags: null
+        paths: null
