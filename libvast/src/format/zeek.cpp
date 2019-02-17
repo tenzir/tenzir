@@ -553,6 +553,17 @@ writer::writer(path dir) {
     dir_ = std::move(dir);
 }
 
+writer::~writer() {
+  if (streams_.empty())
+    return;
+  std::ostringstream ss;
+  ss << "#close" << separator << time_factory{} << '\n';
+  auto footer = ss.str();
+  for (auto& pair : streams_)
+    if (pair.second)
+      *pair.second << footer;
+}
+
 expected<void> writer::write(const event& e) {
   if (!caf::holds_alternative<record_type>(e.type()))
     return make_error(ec::format_error, "cannot process non-record events");
@@ -602,18 +613,6 @@ expected<void> writer::flush() {
     if (pair.second)
       pair.second->flush();
   return no_error;
-}
-
-void writer::cleanup() {
-  if (streams_.empty())
-    return;
-  std::ostringstream ss;
-  ss << "#close" << separator << time_factory{} << '\n';
-  auto footer = ss.str();
-  for (auto& pair : streams_)
-    if (pair.second)
-      *pair.second << footer;
-  streams_.clear();
 }
 
 const char* writer::name() const {

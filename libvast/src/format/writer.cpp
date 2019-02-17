@@ -23,8 +23,4 @@ caf::expected<void> writer::flush() {
   return caf::no_error;
 }
 
-void writer::cleanup() {
-  // nop
-}
-
 } // namespace vast::format

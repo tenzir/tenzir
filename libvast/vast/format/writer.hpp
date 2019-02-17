@@ -34,13 +34,6 @@ public:
   /// The default implementation does nothing.
   virtual caf::expected<void> flush();
 
-  /// Called after last call to write when the writer no longer receives
-  /// events.
-  /// The default implementation does nothing.
-  /// @note This function must be called exactly one. Repeated calls my cause
-  ///       undefined behavior.
-  virtual void cleanup();
-
   /// @returns The name of the writer type.
   virtual const char* name() const = 0;
 };

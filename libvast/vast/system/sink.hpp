@@ -72,7 +72,6 @@ caf::behavior sink(caf::stateful_actor<sink_state<Writer>>* self,
   }
   self->set_exit_handler(
     [=](const caf::exit_msg& msg) {
-      self->state.writer.cleanup();
       self->state.send_report();
       self->quit(msg.reason);
     }
@@ -85,13 +84,11 @@ caf::behavior sink(caf::stateful_actor<sink_state<Writer>>* self,
         auto r = st.writer.write(x);
         if (!r) {
           VAST_ERROR(self, self->system().render(r.error()));
-          st.writer.cleanup();
           self->quit(r.error());
           return;
         }
         if (++st.processed == st.limit) {
           VAST_INFO(self, "reached limit:", st.limit, "events");
-          st.writer.cleanup();
           st.send_report();
           self->quit();
           return;
