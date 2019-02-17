@@ -108,9 +108,6 @@ The following *options* are available:
 `-h`, `-?`, `--help`
   Display a help message and exit.
 
-`-v`, `--version`
-  Print VAST version and exit.
-
 When specifying an endpoint via `-e`, `vast` connects to that endpoint to
 obtain a **node** handle. An exception is the command `vast start`,
 which uses the endpoint specification to spawn a **node**.
@@ -127,6 +124,8 @@ COMMANDS
 
 This section describes each *command* and its *arguments*. The following
 commands exist:
+    *help*          displays a help message
+    *version*       displays the software version
     *start*         starts a node
     *stop*          stops a node
     *peer*          peers with another node
@@ -135,6 +134,22 @@ commands exist:
     *kill*          terminates a component
     *import*        imports data from STDIN or file
     *export*        exports query results to STDOUT or file
+
+### help
+
+Synopsis:
+
+  *help*
+
+Displays a help message and exits.
+
+### version
+
+Synopsis:
+
+  *version*
+
+Displays the software version and exits.
 
 ### start
 
