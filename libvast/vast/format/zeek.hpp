@@ -271,6 +271,7 @@ public:
   writer() = default;
   writer(writer&&) = default;
   writer& operator=(writer&&) = default;
+  ~writer() override;
 
   /// Constructs a Zeek writer.
   /// @param dir The path where to write the log file(s) to.
@@ -279,8 +280,6 @@ public:
   expected<void> write(const event& e) override;
 
   expected<void> flush() override;
-
-  void cleanup() override;
 
   const char* name() const override;
 

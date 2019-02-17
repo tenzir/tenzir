@@ -202,18 +202,18 @@ public:
     show_progress_ = caf::get_or(cfg, "show-progress", false);
   }
 
+  ~bro_writer() override {
+    if (show_progress_ && num_results_ > 0)
+      std::cerr << std::endl;
+    VAST_INFO_ANON("query", query_id_, "had", num_results_, "result(s)");
+  }
+
   caf::expected<void> write(const vast::event& x) override {
     ++num_results_;
     if (show_progress_)
       std::cerr << '.' << std::flush;
     endpoint_->publish(data_topic, make_result_event(query_id_, x));
     return caf::no_error;
-  }
-
-  void cleanup() override {
-    if (show_progress_ && num_results_ > 0)
-      std::cerr << std::endl;
-    VAST_INFO_ANON("query", query_id_, "had", num_results_, "result(s)");
   }
 
   const char* name() const override {
