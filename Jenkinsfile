@@ -61,6 +61,14 @@ buildEnvironments = [
     nop : [], // Dummy value for getting the proper types.
 ]
 
+// Configures what checks we report on at the end.
+checks = [
+    'build',
+    'tests',
+    'integration',
+    'coverage',
+]
+
 def fileLinesOrEmptyList(fileName) {
     // Using a fileExists() + readFile() approach here fails for some mysterious reason.
     sh([
@@ -127,10 +135,10 @@ def coverageReport(buildId) {
                 sh """
                     kcov --exclude-path=$excludePathsStr kcov-result ./build/bin/vast-test &> kcov_output.txtt
                     find kcov-result -name 'cobertura.xml' -exec mv {} cobertura.xml \\;
-                    find kcov-result -name 'coverage.json' -exec mv {} result.json \\;
+                    find kcov-result -name 'coverage.json' -exec mv {} coverage.json \\;
                 """
             }
-            archiveArtifacts 'cobertura.xml'
+            archiveArtifacts 'cobertura.xml,coverage.json'
             cobertura([
                 autoUpdateHealth: false,
                 autoUpdateStability: false,
@@ -155,7 +163,7 @@ def coverageReport(buildId) {
             ]
             def queryStr = query.join('&')
             sh "curl -X POST --data-binary @cobertura.xml \"https://codecov.io/upload/v2?${queryStr}\""
-            stash includes: 'result.json', name: 'coverage-result'
+            stash includes: 'coverage.json', name: 'coverage-result'
         } catch (Exception e) {
             echo "exception: $e"
             sh 'ls -R .'
@@ -295,6 +303,97 @@ def makeBuildStages(matrixIndex, os, builds, lblExpr, settings) {
     }
 }
 
+// Reports the status of the build itself, i.e., compiling via CMake.
+def buildStatus(buildIds) {
+    [
+        // We always report success here, because we won't reach the final stage otherwise.
+        success: true,
+        summary: "All ${buildIds.size()} builds compiled",
+        text: "Successfully compiled all ${buildIds.size()} builds for $PrettyJobName.",
+    ]
+}
+
+// Reports the status of the unit tests check.
+def testsStatus(buildIds) {
+    def failed = buildIds.findAll {
+        try { unstash it }
+        catch (Exception) { }
+        !fileExists("${it}.success")
+    }
+    def numBuilds = buildIds.size()
+    if (failed.isEmpty())
+        return [
+            success: true,
+            summary: "All $numBuilds builds passed the unit tests",
+            text: "The unit tests succeeded on all $numBuilds builds."
+        ]
+    def failRate = "${failed.size()}/$numBuilds"
+    [
+        success: false,
+        summary: "$failRate builds failed to run the unit tests",
+        text: "The unit tests failed on $failRate builds:\n" + failed.collect{"- $it"}.join('\n'),
+    ]
+}
+
+// Reports the status of the integration tests check.
+def integrationStatus(buildIds) {
+    try { unstash 'integration-result' }
+    catch (Exception) { }
+    def all = fileLinesOrEmptyList('all-integration-tests.txt')
+    def failed = fileLinesOrEmptyList('failed-integration-tests.txt')
+    if (all.isEmpty())
+        return [
+            success: false,
+            summary: 'Unable to run integration tests',
+            text: 'Unable to run integration tests!',
+        ]
+    def numTests = all.size()
+    if (failed.isEmpty())
+        return [
+            success: true,
+            summary: "All $numTests integration tests passed",
+            text: "All $numTests integration tests passed.",
+        ]
+    def failRate = "${failed.size()}/$numTests"
+    [
+        success: false,
+        summary: "$failRate integration tests failed",
+        text: "The following integration tests failed ($failRate):\n" + failed.collect{"- $it"}.join('\n')
+    ]
+}
+
+// Reports the status of the coverage check.
+def coverageStatus(buildIds) {
+    try {
+        unstash 'coverage-result'
+        def coverageResult = readJSON('coverage.json')
+        writeFile([
+            file: 'coverage.txt',
+            text: coverageResult['percent_covered'],
+        ])
+        archiveArtifacts('project-coverage.txt')
+    }
+    catch (Exception) { }
+    if (fileExists('coverage.json'))
+        return [
+            success: true,
+            summary: 'Generate coverage report',
+            text: "The coverage report was successfully generated and uploaded to codecov.io.",
+        ]
+    [
+        success: false,
+        summary: 'Unable to generate coverage report',
+        text: 'No coverage report was produced!',
+    ]
+}
+
+def notifyAllChecks(result, message) {
+    checks.each { name, fun ->
+        if (name != 'build')
+            setBuildStatus(name, 'FAILURE', "Failed due to earlier error")
+    }
+}
+
 // Declarative pipeline for triggering all stages.
 pipeline {
     options {
@@ -321,9 +420,7 @@ pipeline {
                   checkout scm
                 }
                 stash includes: 'vast-sources/**', name: 'vast-sources'
-                setBuildStatus('unit-tests', 'PENDING', '')
-                setBuildStatus('integration', 'PENDING', '')
-                setBuildStatus('coverage', 'PENDING', '')
+                notifyAllChecks('PENDING', '')
             }
         }
         stage('Build') {
@@ -350,13 +447,6 @@ pipeline {
                 script {
                     dir('tmp') {
                         deleteDir()
-                        // Collect headlines and summaries for the email notification.
-                        def headlines = [
-                            "✅ build",
-                        ]
-                        def summaries = [
-                            "Successfully compiled $PrettyJobName.",
-                        ]
                         // Compute the list of all build IDs.
                         def buildIds = []
                         buildMatrix.each { entry ->
@@ -367,65 +457,24 @@ pipeline {
                                 }
                             }
                         }
-                        def builds = buildIds.size()
-                        // Compute how many unit tests have failed.
-                        def testSuccesses = buildIds.inject(0) { result, buildId ->
-                            try { unstash buildId }
-                            catch (Exception) { }
-                            result + (fileExists("${buildId}.success") ? 1 : 0)
-                        }
-                        if (builds == testSuccesses) {
-                            headlines << "✅ tests"
-                            summaries << "The unit tests succeeded on all $builds builds."
-                            setBuildStatus('unit-tests', 'SUCCESS', "All $builds builds passed the unit tests")
-                        } else {
-                            def failures = builds - testSuccesses
-                            def failRate = "$failures/$builds"
-                            headlines << "⛔️ tests"
-                            summaries << "The unit tests failed on $failRate builds."
-                            setBuildStatus('unit-tests', 'FAILURE', "$failRate builds failed to run the unit tests")
-                        }
-                        // Compute how many integration tests have failed.
-                        try { unstash 'integration-result' }
-                        catch (Exception) { }
-                        def allIntegrationTests = fileLinesOrEmptyList('all-integration-tests.txt')
-                        def failedIntegrationTests = fileLinesOrEmptyList('failed-integration-tests.txt')
-                        def allIntegrationTestsSize = allIntegrationTests.size()
-                        if (allIntegrationTestsSize > 0 && failedIntegrationTests.isEmpty()) {
-                            headlines << "✅ integration"
-                            summaries << "All $allIntegrationTestsSize integration tests passed."
-                            setBuildStatus('integration', 'SUCCESS', "All $allIntegrationTestsSize integration tests passed")
-                        } else {
-                            def failedIntegrationTestsSize = failedIntegrationTests.size()
-                            def failRate = "$failedIntegrationTestsSize/$allIntegrationTestsSize"
-                            headlines << "⛔️ integration"
-                            if (allIntegrationTestsSize > 0) {
-                                summaries << ("The following integration tests failed ($failRate):\n" + failedIntegrationTests.collect{'- ' + it}.join('\n'))
-                                setBuildStatus('integration', 'FAILURE', "$failRate integration tests failed")
+                        // Collect headlines and summaries for the email notification.
+                        def failedChecks = 0
+                        def headlines = []
+                        def texts = []
+                        checks.each {
+                            def checkResult = "${it}Status"(buildIds)
+                            if (checkResult.success) {
+                                headlines << "✅ ${it}"
+                                texts << checkResult.text
+                                // Don't set commit status for 'build', because Jenkins will do that anyway.
+                                if (it != 'build')
+                                    setBuildStatus(it, 'SUCCESS', checkResult.summary)
                             } else {
-                                summaries << "Unable to run integration tests!"
-                                setBuildStatus('integration', 'FAILURE', "Unable to run integration tests")
+                                failedChecks += 1
+                                headlines << "⛔️ ${it}"
+                                texts << checkResult.text
+                                setBuildStatus(it, 'FAILURE', checkResult.summary)
                             }
-                        }
-                        // Check coverage result.
-                        try {
-                            unstash 'coverage-result'
-                            def coverageResult = readJSON('result.json')
-                            writeFile([
-                                file: 'coverage.txt',
-                                text: coverageResult['percent_covered'],
-                            ])
-                            archiveArtifacts('coverage.txt')
-                        }
-                        catch (Exception) { }
-                        if (fileExists('result.json')) {
-                            headlines << "✅ coverage"
-                            summaries << "The coverage report was successfully uploaded to codecov.io."
-                            setBuildStatus('coverage', 'SUCCESS', 'Generate coverage report')
-                        } else {
-                            headlines << "⛔️ coverage"
-                            summaries << "No coverage report was produced."
-                            setBuildStatus('coverage', 'FAILURE', 'Unable to generate coverage report')
                         }
                         // Send email notification.
                         emailext(
@@ -434,10 +483,10 @@ pipeline {
                             recipientProviders: [culprits()],
                             attachLog: true,
                             compressLog: true,
-                            body: summaries.join('\n\n') + '\n',
+                            body: texts.join('\n\n') + '\n',
                         )
                         // Set the status of this commit to unstable if any check failed to not trigger downstream jobs.
-                        if (headlines.any{ it.contains("⛔️") })
+                        if (failedChecks > 0)
                             currentBuild.result = "UNSTABLE"
                     }
                 }
@@ -447,16 +496,14 @@ pipeline {
     post {
         failure {
             emailext(
-                subject: "$PrettyJobName: ⛔️ build, ⛔️ tests, ⛔️ integration, ⛔️ coverage",
+                subject: "$PrettyJobName: " + checks.collect{ "⛔️ ${it}" }.join(', '),
                 to: 'engineering@tenzir.com',
                 recipientProviders: [culprits()],
                 attachLog: true,
                 compressLog: true,
                 body: "Check console output at ${env.BUILD_URL} or see attached log.\n",
             )
-            setBuildStatus('unit-tests', 'FAILURE', 'Unable to run unit tests')
-            setBuildStatus('integration', 'FAILURE', 'Unable to run integration tests')
-            setBuildStatus('coverage', 'FAILURE', 'Unable to generate coverage report')
+            notifyAllChecks('FAILURE', 'Failed due to earlier error')
         }
     }
 }
