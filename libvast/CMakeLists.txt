@@ -118,6 +118,7 @@ set(libvast_sources
   src/system/table_indexer.cpp
   src/system/task.cpp
   src/system/tracker.cpp
+  src/system/version_command.cpp
   src/table_slice.cpp
   src/table_slice_builder.cpp
   src/table_slice_builder_factory.cpp
