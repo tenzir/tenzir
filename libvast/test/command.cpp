@@ -21,6 +21,9 @@
 #include <caf/make_message.hpp>
 #include <caf/message.hpp>
 
+#include "vast/system/help_command.hpp"
+#include "vast/system/version_command.hpp"
+
 using namespace vast;
 
 using namespace std::string_literals;
@@ -49,11 +52,13 @@ struct fixture {
     root.name = "vast";
   }
 
-  caf::variant<std::string, caf::error> exec(std::string str) {
+  caf::variant<caf::none_t, std::string, caf::error> exec(std::string str) {
     options.clear();
     std::vector<std::string> xs;
     caf::split(xs, str, ' ', caf::token_compress_on);
     auto result = run(root, sys, options, xs.begin(), xs.end());
+    if (result.empty())
+      return caf::none;
     if (result.match_elements<std::string>())
       return result.get_as<std::string>(0);
     if (result.match_elements<caf::error>())
@@ -129,6 +134,16 @@ TEST(nested command invocation) {
   CHECK(is_error(exec("foo --flag -v 42")));
   // Subcommands of course still work.
   CHECK_EQUAL(exec("foo --flag -v 42 bar"), "bar"s);
+}
+
+TEST(help command) {
+  root.add(system::help_command, "help", "", command::opts());
+  CHECK_EQUAL(exec("help"), caf::none);
+}
+
+TEST(version command) {
+  root.add(system::version_command, "version", "", command::opts());
+  CHECK_EQUAL(exec("version"), caf::none);
 }
 
 FIXTURE_SCOPE_END()
