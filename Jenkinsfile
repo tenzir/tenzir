@@ -48,6 +48,7 @@ buildMatrix = [
     [ 'Linux', [
         builds: ['release'],
         tools: ['gcc8'],
+        extraSteps: ['integrationTests'],
     ]],
     [ 'macOS', [
         builds: ['release'],
@@ -59,6 +60,14 @@ buildMatrix = [
 buildEnvironments = [
     nop : [], // Dummy value for getting the proper types.
 ]
+
+def fileLinesOrEmptyList(fileName) {
+    // Using a fileExists() + readFile() approach here fails for some mysterious reason.
+    sh([
+        script: """if [ -f "$fileName" ] ; then cat "$fileName" ; fi""",
+        returnStdout: true,
+    ]).trim().tokenize('\n')
+}
 
 // Adds additional context information to commits on GitHub.
 def setBuildStatus(context, state, message) {
@@ -151,6 +160,44 @@ def coverageReport(buildId) {
             echo "exception: $e"
             sh 'ls -R .'
             archiveArtifacts 'kcov_output.txt'
+        }
+    }
+}
+
+def integrationTests(buildId) {
+    // Any error here must not fail the build itself.
+    dir('integration-tests') {
+        deleteDir()
+        try {
+            def baseDir = "$WORKSPACE/vast-sources/scripts/integration"
+            def envDir = pwd() + "python-environment"
+            def app = "$WORKSPACE/$buildId/bin/vast"
+            writeFile([
+                file: 'all-integration-tests.txt',
+                text: ''
+            ])
+            writeFile([
+                file: 'failed-integration-tests.txt',
+                text: ''
+            ])
+            sh """
+                chmod +x "$app"
+                export LD_LIBRARY_PATH="$WORKSPACE/$buildId/lib"
+                python3 -m venv "$envDir"
+                source "$envDir/bin/activate"
+                pip install -r "$baseDir/requirements.txt"
+                python3 "$baseDir/integration.py" -l | while read test ; do
+                    echo "\$test" >> all-integration-tests.txt
+                    python3 "$baseDir/integration.py" --app "$app" -t "\$test" || echo "\$test" >> failed-integration-tests.txt
+                done
+            """
+            archiveArtifacts '*.txt'
+            stash([
+                includes: '*.txt',
+                name: 'integration-result',
+            ])
+        } catch (Exception e) {
+            echo "exception: $e"
         }
     }
 }
@@ -253,7 +300,7 @@ pipeline {
     options {
         buildDiscarder(logRotator(numToKeepStr: '20', artifactNumToKeepStr: '5'))
     }
-    agent none
+    agent { label 'master' }
     environment {
         LD_LIBRARY_PATH = "$WORKSPACE/vast-sources/build/lib;" +
                           "$WORKSPACE/caf-install/lib"
@@ -266,8 +313,7 @@ pipeline {
     }
     stages {
         // Checkout all involved repositories.
-        stage('Git Checkout') {
-            agent { label 'master' }
+        stage('Checkout') {
             steps {
                 echo "build branch ${env.GIT_BRANCH}"
                 deleteDir()
@@ -275,11 +321,12 @@ pipeline {
                   checkout scm
                 }
                 stash includes: 'vast-sources/**', name: 'vast-sources'
-                setBuildStatus('unit-tests', 'PENDING', 'Pending ...')
+                setBuildStatus('unit-tests', 'PENDING', '')
+                setBuildStatus('integration', 'PENDING', '')
+                setBuildStatus('coverage', 'PENDING', '')
             }
         }
-        stage('Builds') {
-            agent { label 'master' }
+        stage('Build') {
             steps {
                 script {
                     // Create stages for building everything in our build matrix in
@@ -298,11 +345,18 @@ pipeline {
                 }
             }
         }
-        stage('Check Test Results') {
-            agent { label 'master' }
+        stage('Notify') {
             steps {
                 script {
                     dir('tmp') {
+                        deleteDir()
+                        // Collect headlines and summaries for the email notification.
+                        def headlines = [
+                            "✅ build",
+                        ]
+                        def summaries = [
+                            "Successfully compiled $PrettyJobName.",
+                        ]
                         // Compute the list of all build IDs.
                         def buildIds = []
                         buildMatrix.each { entry ->
@@ -313,44 +367,78 @@ pipeline {
                                 }
                             }
                         }
-                        // Compute how many tests have succeeded
                         def builds = buildIds.size()
-                        def successes = buildIds.inject(0) { result, buildId ->
+                        // Compute how many unit tests have failed.
+                        def testSuccesses = buildIds.inject(0) { result, buildId ->
                             try { unstash buildId }
                             catch (Exception) { }
                             result + (fileExists("${buildId}.success") ? 1 : 0)
                         }
-                        echo "$successes unit tests tests of $builds were successful"
-                        def testsOk = builds == successes
-                        if (testsOk) {
-                            setBuildStatus('unit-tests', 'SUCCESS', 'All builds passed the unit tests')
+                        if (builds == testSuccesses) {
+                            headlines << "✅ tests"
+                            summaries << "The unit tests succeeded on all $builds builds."
+                            setBuildStatus('unit-tests', 'SUCCESS', "All $builds builds passed the unit tests")
                         } else {
-                            def failures = builds - successes
-                            setBuildStatus('unit-tests', 'FAILURE', "$failures/$builds builds failed to run the unit tests")
+                            def failures = builds - testSuccesses
+                            def failRate = "$failures/$builds"
+                            headlines << "⛔️ tests"
+                            summaries << "The unit tests failed on $failRate builds."
+                            setBuildStatus('unit-tests', 'FAILURE', "$failRate builds failed to run the unit tests")
                         }
-                        // Get the coverage result.
-                        def coverageOk = false
+                        // Compute how many integration tests have failed.
+                        try { unstash 'integration-result' }
+                        catch (Exception) { }
+                        def allIntegrationTests = fileLinesOrEmptyList('all-integration-tests.txt')
+                        def failedIntegrationTests = fileLinesOrEmptyList('failed-integration-tests.txt')
+                        def allIntegrationTestsSize = allIntegrationTests.size()
+                        if (allIntegrationTestsSize > 0 && failedIntegrationTests.isEmpty()) {
+                            headlines << "✅ integration"
+                            summaries << "All $allIntegrationTestsSize integration tests passed."
+                            setBuildStatus('integration', 'SUCCESS', "All $allIntegrationTestsSize integration tests passed")
+                        } else {
+                            def failedIntegrationTestsSize = failedIntegrationTests.size()
+                            def failRate = "$failedIntegrationTestsSize/$allIntegrationTestsSize"
+                            headlines << "⛔️ integration"
+                            if (allIntegrationTestsSize > 0) {
+                                summaries << ("The following integration tests failed ($failRate):\n" + failedIntegrationTests.collect{'- ' + it}.join('\n'))
+                                setBuildStatus('integration', 'FAILURE', "$failRate integration tests failed")
+                            } else {
+                                summaries << "Unable to run integration tests!"
+                                setBuildStatus('integration', 'FAILURE', "Unable to run integration tests")
+                            }
+                        }
+                        // Check coverage result.
                         try {
                             unstash 'coverage-result'
-                            if (fileExists('result.json')) {
-                                // Set no build status here, because codecov.io takes over from this point.
-                                coverageOk = true
-                            } else {
-                                setBuildStatus('coverage', 'FAILURE', 'Unable to get coverage report')
-                            }
-                        } catch (Exception) {
-                            setBuildStatus('coverage', 'FAILURE', 'Unable to generate coverage report')                        }
+                            def coverageResult = readJSON('result.json')
+                            writeFile([
+                                file: 'coverage.txt',
+                                text: coverageResult['percent_covered'],
+                            ])
+                            archiveArtifacts('coverage.txt')
+                        }
+                        catch (Exception) { }
+                        if (fileExists('result.json')) {
+                            headlines << "✅ coverage"
+                            summaries << "The coverage report was successfully uploaded to codecov.io."
+                            setBuildStatus('coverage', 'SUCCESS', 'Generate coverage report')
+                        } else {
+                            headlines << "⛔️ coverage"
+                            summaries << "No coverage report was produced."
+                            setBuildStatus('coverage', 'FAILURE', 'Unable to generate coverage report')
+                        }
                         // Send email notification.
-                        def testsIcon = testsOk ? "✅" : "⛔️"
-                        def coverageIcon = coverageOk ? "✅" : "⛔️"
                         emailext(
-                            subject: "$PrettyJobName: ✅ build, $testsIcon unit tests, $coverageIcon coverage",
+                            subject: "$PrettyJobName: " + headlines.join(', '),
                             to: 'engineering@tenzir.com',
                             recipientProviders: [culprits()],
                             attachLog: true,
                             compressLog: true,
-                            body: "Check console output at ${env.BUILD_URL} or see attached log.\n",
+                            body: summaries.join('\n\n') + '\n',
                         )
+                        // Set the status of this commit to unstable if any check failed to not trigger downstream jobs.
+                        if (headlines.any{ it.contains("⛔️") })
+                            currentBuild.result = "UNSTABLE"
                     }
                 }
             }
@@ -359,13 +447,16 @@ pipeline {
     post {
         failure {
             emailext(
-                subject: "$PrettyJobName: ⛔️ build, ⛔️ unit tests, ⛔️ coverage",
+                subject: "$PrettyJobName: ⛔️ build, ⛔️ tests, ⛔️ integration, ⛔️ coverage",
                 to: 'engineering@tenzir.com',
                 recipientProviders: [culprits()],
                 attachLog: true,
                 compressLog: true,
                 body: "Check console output at ${env.BUILD_URL} or see attached log.\n",
             )
+            setBuildStatus('unit-tests', 'FAILURE', 'Unable to run unit tests')
+            setBuildStatus('integration', 'FAILURE', 'Unable to run integration tests')
+            setBuildStatus('coverage', 'FAILURE', 'Unable to generate coverage report')
         }
     }
 }
