@@ -95,6 +95,10 @@ caf::message run(const command& cmd, caf::actor_system& sys,
 caf::message run(const command& cmd, caf::actor_system& sys,
                  caf::settings& options, const std::vector<std::string>& args);
 
+/// Traverses the command hierarchy until finding the root.
+/// @returns the root command.
+const command& root(const command& cmd);
+
 /// Gets a subcommand from its full name.
 /// @param cmd The parent to search for *position.
 /// @param position The next subcommand to resolve.

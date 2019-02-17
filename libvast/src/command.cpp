@@ -129,6 +129,10 @@ caf::message run(const command& cmd, caf::actor_system& sys,
   return run(cmd, sys, options, args.begin(), args.end());
 }
 
+const command& root(const command& cmd) {
+  return cmd.parent == nullptr ? cmd : root(*cmd.parent);
+}
+
 std::string full_name(const command& cmd) {
   std::string result{cmd.name};
   for (auto ptr = cmd.parent; ptr != nullptr; ptr = ptr->parent) {

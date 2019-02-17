@@ -24,6 +24,7 @@
 #include "vast/system/application.hpp"
 #include "vast/system/configuration.hpp"
 #include "vast/system/generator_command.hpp"
+#include "vast/system/help_command.hpp"
 #include "vast/system/reader_command.hpp"
 #include "vast/system/remote_command.hpp"
 #include "vast/system/start_command.hpp"
@@ -46,6 +47,7 @@ default_application::default_application() {
   // Default options for commands.
   auto opts = [] { return command::opts(); };
   // Add standalone commands.
+  add(help_command, "help", "prints the help text", opts());
   add(start_command, "start", "starts a node", opts());
   add(remote_command, "stop", "stops a node", opts());
   add(remote_command, "spawn", "creates a new component", opts());
