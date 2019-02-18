@@ -388,9 +388,9 @@ def coverageStatus(buildIds) {
 }
 
 def notifyAllChecks(result, message) {
-    checks.each { name, fun ->
-        if (name != 'build')
-            setBuildStatus(name, 'FAILURE', "Failed due to earlier error")
+    checks.each {
+        if (it != 'build')
+            setBuildStatus(it, result, message)
     }
 }
 
