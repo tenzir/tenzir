@@ -158,7 +158,7 @@ TEST(historical query without importer) {
   REQUIRE_EQUAL(results.size(), 5u);
   std::sort(results.begin(), results.end());
   CHECK_EQUAL(results.front().id(), 10u);
-  CHECK_EQUAL(results.front().type().name(), "zeek::conn");
+  CHECK_EQUAL(results.front().type().name(), "zeek.conn");
   CHECK_EQUAL(results.back().id(), 19u);
 }
 
@@ -178,7 +178,7 @@ TEST(historical query with importer) {
   REQUIRE_EQUAL(results.size(), 5u);
   std::sort(results.begin(), results.end());
   CHECK_EQUAL(results.front().id(), 10u);
-  CHECK_EQUAL(results.front().type().name(), "zeek::conn");
+  CHECK_EQUAL(results.front().type().name(), "zeek.conn");
   CHECK_EQUAL(results.back().id(), 19u);
 }
 
@@ -196,7 +196,7 @@ TEST(continuous query with exporter only) {
   REQUIRE_EQUAL(results.size(), 5u);
   std::sort(results.begin(), results.end());
   CHECK_EQUAL(results.front().id(), 10u);
-  CHECK_EQUAL(results.front().type().name(), "zeek::conn");
+  CHECK_EQUAL(results.front().type().name(), "zeek.conn");
   CHECK_EQUAL(results.back().id(), 19u);
 }
 
@@ -216,7 +216,7 @@ TEST(continuous query with importer) {
   REQUIRE_EQUAL(results.size(), 5u);
   std::sort(results.begin(), results.end());
   CHECK_EQUAL(results.front().id(), 10u);
-  CHECK_EQUAL(results.front().type().name(), "zeek::conn");
+  CHECK_EQUAL(results.front().type().name(), "zeek.conn");
   CHECK_EQUAL(results.back().id(), 19u);
 }
 

@@ -32,7 +32,7 @@ auto last_zeek_http_log_line = R"__(<2009-11-19+07:17:28.829, "rydI6puScNa", 192
 
 auto first_csv_http_log_line = "type,id,timestamp,ts,uid,id.orig_h,id.orig_p,id.resp_h,id.resp_p,trans_depth,method,host,uri,referrer,user_agent,request_body_len,response_body_len,status_code,status_msg,info_code,info_msg,filename,tags,username,password,proxied,mime_type,md5,extraction_file";
 
-auto last_csv_http_log_line = R"__(zeek::http,1095,1258615048829955072,2009-11-19+07:17:28.829,"rydI6puScNa",192.168.1.104,1224/tcp,87.106.66.233,80/tcp,1,"POST","87.106.66.233","/rpc.html?e=bl",,"SCSDK-6.0.0",1064,96,200,"OK",100,"Continue",,"",,,,"application/octet-stream",,)__";
+auto last_csv_http_log_line = R"__(zeek.http,1095,1258615048829955072,2009-11-19+07:17:28.829,"rydI6puScNa",192.168.1.104,1224/tcp,87.106.66.233,80/tcp,1,"POST","87.106.66.233","/rpc.html?e=bl",,"SCSDK-6.0.0",1064,96,200,"OK",100,"Continue",,"",,,,"application/octet-stream",,)__";
 
 auto first_ascii_bgpdump_txt_line = R"__(<2018-01-24+11:05:17.0, 27.111.229.79, 17639, "1", "3">)__";
 
