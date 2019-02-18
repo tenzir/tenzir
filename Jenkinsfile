@@ -379,13 +379,14 @@ def styleStatus(buildIds) {
     if (clangFormatDiff.isEmpty())
         return [
             success: true,
-            summary: 'Code follows style conventions',
-            text: 'Code follows style conventions and clang-format had no complaints.',
+            summary: 'This patch follows our style conventions',
+            text: 'This patch follows our style conventions.',
         ]
     [
         success: false,
-        summary: 'Code violates style conventions',
-        text: "Running the code through clang-format produces this diff:\n$clangFormatDiff",
+        summary: 'This patch violates our style conventions',
+        text: 'This patch violates our style conventions! See attached clang-format-diff.txt.',
+        attachmentsPattern: 'clang-format-diff.txt',
     ]
 }
 
@@ -514,29 +515,35 @@ pipeline {
                         def failedChecks = 0
                         def headlines = []
                         def texts = []
+                        def attachmentsPatterns = []
                         checks.each {
                             def checkResult = "${it}Status"(buildIds)
                             if (checkResult.success) {
-                                headlines << "✅ ${it}"
+                                headlines << "✅ $it"
                                 texts << checkResult.text
                                 // Don't set commit status for 'build', because Jenkins will do that anyway.
                                 if (it != 'build')
                                     setBuildStatus(it, 'SUCCESS', checkResult.summary)
                             } else {
                                 failedChecks += 1
-                                headlines << "⛔️ ${it}"
+                                headlines << "⛔️ $it"
                                 texts << checkResult.text
                                 setBuildStatus(it, 'FAILURE', checkResult.summary)
                             }
+                            if (checkResult.containsKey('attachmentsPattern'))
+                              attachmentsPatterns << checkResult.attachmentsPattern
                         }
+                        // Make sure we have a newline at the end of the email.
+                        texts << ''
                         // Send email notification.
                         emailext(
                             subject: "$PrettyJobName: " + headlines.join(', '),
                             to: 'engineering@tenzir.com',
                             recipientProviders: [culprits()],
-                            attachLog: true,
+                            attachLog: failedChecks > 0,
                             compressLog: true,
-                            body: texts.join('\n\n') + '\n',
+                            attachmentsPattern: attachmentsPatterns.join(','),
+                            body: texts.join('\n\n'),
                         )
                         // Set the status of this commit to unstable if any check failed to not trigger downstream jobs.
                         if (failedChecks > 0)
