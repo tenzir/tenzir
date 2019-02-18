@@ -36,7 +36,7 @@ namespace {
 
 // The type name prefix to preprend to zeek log names when transleting them
 // into VAST types.
-constexpr std::string_view type_name_prefix = "zeek::";
+constexpr std::string_view type_name_prefix = "zeek.";
 
 // Creates a VAST type from an ASCII Zeek type in a log header.
 expected<type> parse_type(std::string_view zeek_type) {
@@ -307,13 +307,13 @@ void reader::patch(std::vector<data>& xs) {
   }
   // Or use a simple heuristic if not.
   else {
-    if (type_.name() == "zeek::ftp" || type_.name() == "zeek::http"
-        || type_.name() == "zeek::irc" || type_.name() == "zeek::rdp"
-        || type_.name() == "zeek::smtp" || type_.name() == "zeek::ssh"
-        || type_.name() == "zeek::xmpp")
+    if (type_.name() == "zeek.ftp" || type_.name() == "zeek.http"
+        || type_.name() == "zeek.irc" || type_.name() == "zeek.rdp"
+        || type_.name() == "zeek.smtp" || type_.name() == "zeek.ssh"
+        || type_.name() == "zeek.xmpp")
       protocol = port::tcp;
-    else if (type_.name() == "zeek::dhcp" || type_.name() == "zeek::dns"
-             || type_.name() == "zeek::smnp")
+    else if (type_.name() == "zeek.dhcp" || type_.name() == "zeek.dns"
+             || type_.name() == "zeek.smnp")
       protocol = port::udp;
   }
   // Assign the deduced proto to all port fields.

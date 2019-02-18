@@ -34,7 +34,7 @@ TEST(zeek sink) {
   MESSAGE("shutting down");
   self->send_exit(snk, caf::exit_reason::user_shutdown);
   self->wait_for(snk);
-  CHECK(exists(directory / "zeek::conn.log"));
+  CHECK(exists(directory / "zeek.conn.log"));
 }
 
 FIXTURE_SCOPE_END()

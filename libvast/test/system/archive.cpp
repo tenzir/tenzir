@@ -95,9 +95,9 @@ TEST(archiving and querying) {
   // rate). Therefore, the result set contains first the events with higher
   // IDs [10150,10200) and then the ones with lower ID [100,150).
   CHECK_EQUAL(result[0].id(), 24u);
-  CHECK_EQUAL(result[0].type().name(), "zeek::dns");
+  CHECK_EQUAL(result[0].type().name(), "zeek.dns");
   CHECK_EQUAL(result[32].id(), 1076u);
-  CHECK_EQUAL(result[32].type().name(), "zeek::http");
+  CHECK_EQUAL(result[32].type().name(), "zeek.http");
   CHECK_EQUAL(result[result.size() - 1].id(), 1095u);
   self->send_exit(a, exit_reason::user_shutdown);
 }

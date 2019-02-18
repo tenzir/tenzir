@@ -197,7 +197,7 @@ FIXTURE_SCOPE(zeek_writer_tests, fixtures::events)
 TEST(zeek writer) {
   // Sanity check some Zeek events.
   CHECK_EQUAL(zeek_conn_log.size(), 20u);
-  CHECK_EQUAL(zeek_conn_log.front().type().name(), "zeek::conn");
+  CHECK_EQUAL(zeek_conn_log.front().type().name(), "zeek.conn");
   auto record = caf::get_if<vector>(&zeek_conn_log.front().data());
   REQUIRE(record);
   REQUIRE_EQUAL(record->size(), 20u);
