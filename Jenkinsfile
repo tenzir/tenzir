@@ -194,9 +194,9 @@ def integrationTests(buildId) {
                 python3 -m venv "$envDir"
                 source "$envDir/bin/activate"
                 pip install -r "$baseDir/requirements.txt"
-                python3 "$baseDir/integration.py" -l | while read test ; do
+                python "$baseDir/integration.py" -l | while read test ; do
                     echo "\$test" >> all-integration-tests.txt
-                    python3 "$baseDir/integration.py" --app "$app" -t "\$test" || echo "\$test" >> failed-integration-tests.txt
+                    python "$baseDir/integration.py" --app "$app" -t "\$test" || echo "\$test" >> failed-integration-tests.txt
                 done
             """
             archiveArtifacts '*.txt'
