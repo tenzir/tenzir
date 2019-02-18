@@ -78,7 +78,7 @@ struct type_parser : parser<type_parser> {
         return vast::attribute{std::move(key), std::move(value)};
       };
     static auto attr
-      = ('&' >> parsers::identifier >> -('=' >> parsers::qq_str)) ->* to_attr
+      = ('#' >> parsers::identifier >> -('=' >> parsers::qq_str)) ->* to_attr
       ;
     static auto attr_list = *(ws >> attr);
     // Basic types

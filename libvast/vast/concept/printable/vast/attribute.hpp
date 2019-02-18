@@ -29,7 +29,7 @@ struct attribute_printer : printer<attribute_printer> {
     using namespace printers;
     using namespace printer_literals;
     auto prepend_eq = [](const std::string& x) { return '=' + x; };
-    auto p = '&'_P << str << -(str ->* prepend_eq);
+    auto p = '#'_P << str << -(str ->* prepend_eq);
     return p(out, attr.key, attr.value);
   }
 };
@@ -40,4 +40,3 @@ struct printer_registry<attribute> {
 };
 
 } // namespace vast
-

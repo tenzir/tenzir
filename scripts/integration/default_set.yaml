@@ -112,7 +112,7 @@ tests:
     steps:
       - command: import -b zeek
         input: data/zeek/conn.log.gz
-      - command: export zeek '&type == "zeek::conn"'
+      - command: export zeek '#type == "zeek::conn"'
 
   Manual 1:
     condition: 'import -h 2>&1 | grep -q pcap'

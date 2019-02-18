@@ -52,7 +52,7 @@ struct predicate_parser : parser<predicate_parser> {
     auto key = !':'_p >> (+(alnum | chr{'_'} | chr{':'}) % '.');
     auto operand
       = parsers::data        ->* [](data d) -> predicate::operand { return d; }
-      | '&' >> id            ->* to_attr_extractor
+      | '#' >> id            ->* to_attr_extractor
       | ':' >> parsers::type ->* to_type_extractor
       | key                  ->* to_key_extractor
       ;
@@ -197,4 +197,3 @@ static auto const expr = make_parser<vast::expression>();
 
 } // namespace parsers
 } // namespace vast
-

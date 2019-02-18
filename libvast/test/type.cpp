@@ -582,23 +582,23 @@ TEST(printable) {
   CHECK_EQUAL(to_string(t), "enum {foo, bar, baz}");
   MESSAGE("attributes");
   auto attr = attribute{"foo", "bar"};
-  CHECK_EQUAL(to_string(attr), "&foo=bar");
+  CHECK_EQUAL(to_string(attr), "#foo=bar");
   attr = {"skip"};
-  CHECK_EQUAL(to_string(attr), "&skip");
+  CHECK_EQUAL(to_string(attr), "#skip");
   // Attributes on types.
   auto s = set_type{port_type{}};
   s = s.attributes({attr, {"tokenize", "/rx/"}});
-  CHECK_EQUAL(to_string(s), "set<port> &skip &tokenize=/rx/");
+  CHECK_EQUAL(to_string(s), "set<port> #skip #tokenize=/rx/");
   // Nested types
   t = s;
   t.attributes({attr});
   t = map_type{count_type{}, t};
-  CHECK_EQUAL(to_string(t), "map<count, set<port> &skip>");
+  CHECK_EQUAL(to_string(t), "map<count, set<port> #skip>");
   MESSAGE("signature");
   t.name("jells");
   std::string sig;
   CHECK(printers::type<policy::signature>(sig, t));
-  CHECK_EQUAL(sig, "jells = map<count, set<port> &skip>");
+  CHECK_EQUAL(sig, "jells = map<count, set<port> #skip>");
 }
 
 TEST(parseable) {
@@ -653,15 +653,15 @@ TEST(parseable) {
   CHECK(t == type{r});
   MESSAGE("attributes");
   // Single attribute.
-  CHECK(p("string &skip", t));
+  CHECK(p("string #skip", t));
   type u = string_type{}.attributes({{"skip"}});
   CHECK_EQUAL(t, u);
   // Two attributes, even though these ones don't make sense together.
-  CHECK(p("real &skip &default=\"x \\\" x\"", t));
+  CHECK(p("real #skip #default=\"x \\\" x\"", t));
   u = real_type{}.attributes({{"skip"}, {"default", "x \" x"}});
   CHECK_EQUAL(t, u);
   // Attributes in types of record fields.
-  CHECK(p("record{x: int &skip, y: string &default=\"Y\", z: foo}", t));
+  CHECK(p("record{x: int #skip, y: string #default=\"Y\", z: foo}", t));
   r = record_type{
     {"x", integer_type{}.attributes({{"skip"}})},
     {"y", string_type{}.attributes({{"default", "Y"}})},

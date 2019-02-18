@@ -67,19 +67,19 @@ struct fixture {
 FIXTURE_SCOPE(evaluation_tests, fixture)
 
 TEST(evaluation - attributes) {
-  auto ast = to<expression>("&time == 2014-01-16+05:30:12");
+  auto ast = to<expression>("#time == 2014-01-16+05:30:12");
   REQUIRE(ast);
   CHECK(caf::visit(event_evaluator{e}, *ast));
-  ast = to<expression>("&time == 2015-01-16+05:30:12"); // slight data change
+  ast = to<expression>("#time == 2015-01-16+05:30:12"); // slight data change
   REQUIRE(ast);
   CHECK(!caf::visit(event_evaluator{e}, *ast));
-  ast = to<expression>("&type == \"foo\"");
+  ast = to<expression>("#type == \"foo\"");
   REQUIRE(ast);
   CHECK(caf::visit(event_evaluator{e}, *ast));
-  ast = to<expression>("! &type == \"bar\"");
+  ast = to<expression>("! #type == \"bar\"");
   REQUIRE(ast);
   CHECK(caf::visit(event_evaluator{e}, *ast));
-  ast = to<expression>("&type != \"foo\"");
+  ast = to<expression>("#type != \"foo\"");
   REQUIRE(ast);
   CHECK(!caf::visit(event_evaluator{e}, *ast));
 }

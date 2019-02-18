@@ -48,7 +48,7 @@ expression to_expr(T&& x) {
 
 struct fixture {
   fixture() {
-    // expr0 := !(x.y.z <= 42 && &foo == T)
+    // expr0 := !(x.y.z <= 42 && #foo == T)
     auto p0 = predicate{key_extractor{"x.y.z"}, less_equal, data{42}};
     auto p1 = predicate{attribute_extractor{caf::atom("foo")},
                         equal, data{true}};
@@ -112,7 +112,7 @@ TEST(normalization) {
   CHECK_EQUAL(normalize(*expr), *normalized);
   // The normalizer must not touch predicates with two extractors, regardless
   // of whether that's actually a valid construct.
-  expr = to<expression>("&foo == &bar");
+  expr = to<expression>("#foo == #bar");
   REQUIRE(expr);
   CHECK_EQUAL(normalize(*expr), *expr);
   MESSAGE("pushing down negations to predicate level");
@@ -164,26 +164,26 @@ TEST(normalization) {
 
 TEST(validation - attribute extractor) {
   // The "type" attribute extractor requires a string operand.
-  auto expr = to<expression>("&type == \"foo\"");
+  auto expr = to<expression>("#type == \"foo\"");
   REQUIRE(expr);
   CHECK(caf::visit(validator{}, *expr));
-  expr = to<expression>("&type == 42");
+  expr = to<expression>("#type == 42");
   REQUIRE(expr);
   CHECK(!caf::visit(validator{}, *expr));
-  expr = to<expression>("&type == zeek.conn");
+  expr = to<expression>("#type == zeek.conn");
   REQUIRE(expr);
   CHECK(!caf::visit(validator{}, *expr));
   // The "time" attribute extractor requires a timestamp operand.
-  expr = to<expression>("&time < now");
+  expr = to<expression>("#time < now");
   REQUIRE(expr);
   CHECK(caf::visit(validator{}, *expr));
-  expr = to<expression>("&time < 2017-06-16");
+  expr = to<expression>("#time < 2017-06-16");
   REQUIRE(expr);
   CHECK(caf::visit(validator{}, *expr));
-  expr = to<expression>("&time > -42");
+  expr = to<expression>("#time > -42");
   REQUIRE(expr);
   CHECK(!caf::visit(validator{}, *expr));
-  expr = to<expression>("&time > -42 secs");
+  expr = to<expression>("#time > -42 secs");
   REQUIRE(expr);
   CHECK(!caf::visit(validator{}, *expr));
 }
@@ -225,15 +225,15 @@ TEST(matcher) {
   CHECK(match("x < 4.2 && (y == 80/tcp || :bool == F)", r));
   CHECK(!match("x < 4.2 && a == T", r));
   MESSAGE("attribute extractors");
-  CHECK(!match("&type == \"foo\"", r));
+  CHECK(!match("#type == \"foo\"", r));
   r = r.name("foo");
-  CHECK(match("&type == \"foo\"", r));
-  CHECK(match("&type != \"bar\"", r));
+  CHECK(match("#type == \"foo\"", r));
+  CHECK(match("#type != \"bar\"", r));
 }
 
 TEST(labeler) {
   auto str =
-    "(x == 5 && :bool == T) || (foo ~ /foo/ && !(x == 5 || &type ~ /bar/))"s;
+    "(x == 5 && :bool == T) || (foo ~ /foo/ && !(x == 5 || #type ~ /bar/))"s;
   auto expr = to_expr(str);
   // Create a visitor that records all offsets in order.
   detail::steady_map<expression, offset> offset_map;
@@ -248,26 +248,26 @@ TEST(labeler) {
     {to_expr("x == 5 && :bool == T"), {0, 0}},
     {to_expr("x == 5"), {0, 0, 0}},
     {to_expr(":bool == T"), {0, 0, 1}},
-    {to_expr("foo ~ /foo/ && !(x == 5 || &type ~ /bar/)"), {0, 1}},
+    {to_expr("foo ~ /foo/ && !(x == 5 || #type ~ /bar/)"), {0, 1}},
     {to_expr("foo ~ /foo/"), {0, 1, 0}},
-    {to_expr("!(x == 5 || &type ~ /bar/)"), {0, 1, 1}},
-    {to_expr("x == 5 || &type ~ /bar/"), {0, 1, 1, 0}},
+    {to_expr("!(x == 5 || #type ~ /bar/)"), {0, 1, 1}},
+    {to_expr("x == 5 || #type ~ /bar/"), {0, 1, 1, 0}},
     {to_expr("x == 5"), {0, 1, 1, 0, 0}},
-    {to_expr("&type ~ /bar/"), {0, 1, 1, 0, 1}},
+    {to_expr("#type ~ /bar/"), {0, 1, 1, 0, 1}},
   };
   CHECK_EQUAL(offset_map, expected_offset_map);
 }
 
 TEST(at) {
   auto str =
-    "(x == 5 && :bool == T) || (foo ~ /foo/ && !(x == 5 || &type ~ /bar/))"s;
+    "(x == 5 && :bool == T) || (foo ~ /foo/ && !(x == 5 || #type ~ /bar/))"s;
   auto expr = to_expr(str);
   CHECK_EQUAL(at(expr, {}), nullptr); // invalid offset
   CHECK_EQUAL(at(expr, {0}), &expr); // root node
   CHECK_EQUAL(at(expr, {1}), nullptr); // invalid root offset
   CHECK_EQUAL(*at(expr, {0, 0}), to_expr("x == 5 && :bool == T"));
   CHECK_EQUAL(*at(expr, {0, 1, 0}), to_expr("foo ~ /foo/"));
-  CHECK_EQUAL(*at(expr, {0, 1, 1, 0, 1}), to_expr("&type ~ /bar/"));
+  CHECK_EQUAL(*at(expr, {0, 1, 1, 0, 1}), to_expr("#type ~ /bar/"));
   CHECK_EQUAL(at(expr, {0, 1, 1, 0, 1, 0}), nullptr); // offset too long
 }
 
