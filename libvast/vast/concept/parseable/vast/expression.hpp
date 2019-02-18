@@ -125,25 +125,24 @@ struct expression_parser : parser<expression_parser> {
       >;
     // Converts a "raw" chain of sub-expressions and transforms it into an
     // expression tree.
-    auto to_expr = [](raw_expr t) -> expression {
-      auto& first = std::get<0>(t);
-      auto& rest = std::get<1>(t);
-      if (rest.empty())
-        return first;
+    auto to_expr = [](raw_expr expr) -> expression {
+      auto& [x, xs] = expr;
+      if (xs.empty())
+        return x;
       // We split the expression chain at each OR node in order to take care of
       // operator precedance: AND binds stronger than OR.
       disjunction dis;
-      auto con = conjunction{first};
-      for (auto& t : rest)
-        if (std::get<0>(t) == logical_and) {
-          con.emplace_back(std::move(std::get<1>(t)));
-        } else if (std::get<0>(t) == logical_or) {
+      auto con = conjunction{x};
+      for (auto& [op, expr] : xs)
+        if (op == logical_and) {
+          con.emplace_back(std::move(expr));
+        } else if (op == logical_or) {
           VAST_ASSERT(!con.empty());
           if (con.size() == 1)
             dis.emplace_back(std::move(con[0]));
           else
             dis.emplace_back(std::move(con));
-          con = conjunction{std::move(std::get<1>(t))};
+          con = conjunction{std::move(expr)};
         } else {
           VAST_ASSERT(!"negations must not exist here");
         }
