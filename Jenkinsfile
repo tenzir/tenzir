@@ -48,6 +48,7 @@ buildMatrix = [
     [ 'Linux', [
         builds: ['release'],
         tools: ['gcc8'],
+        extraSteps: ['integrationTests'],
     ]],
     [ 'macOS', [
         builds: ['release'],
@@ -59,6 +60,22 @@ buildMatrix = [
 buildEnvironments = [
     nop : [], // Dummy value for getting the proper types.
 ]
+
+// Configures what checks we report on at the end.
+checks = [
+    'build',
+    'tests',
+    'integration',
+    'coverage',
+]
+
+def fileLinesOrEmptyList(fileName) {
+    // Using a fileExists() + readFile() approach here fails for some mysterious reason.
+    sh([
+        script: """if [ -f "$fileName" ] ; then cat "$fileName" ; fi""",
+        returnStdout: true,
+    ]).trim().tokenize('\n')
+}
 
 // Adds additional context information to commits on GitHub.
 def setBuildStatus(context, state, message) {
@@ -118,10 +135,10 @@ def coverageReport(buildId) {
                 sh """
                     kcov --exclude-path=$excludePathsStr kcov-result ./build/bin/vast-test &> kcov_output.txtt
                     find kcov-result -name 'cobertura.xml' -exec mv {} cobertura.xml \\;
-                    find kcov-result -name 'coverage.json' -exec mv {} result.json \\;
+                    find kcov-result -name 'coverage.json' -exec mv {} coverage.json \\;
                 """
             }
-            archiveArtifacts 'cobertura.xml'
+            archiveArtifacts 'cobertura.xml,coverage.json'
             cobertura([
                 autoUpdateHealth: false,
                 autoUpdateStability: false,
@@ -146,11 +163,49 @@ def coverageReport(buildId) {
             ]
             def queryStr = query.join('&')
             sh "curl -X POST --data-binary @cobertura.xml \"https://codecov.io/upload/v2?${queryStr}\""
-            stash includes: 'result.json', name: 'coverage-result'
+            stash includes: 'coverage.json', name: 'coverage-result'
         } catch (Exception e) {
             echo "exception: $e"
             sh 'ls -R .'
             archiveArtifacts 'kcov_output.txt'
+        }
+    }
+}
+
+def integrationTests(buildId) {
+    // Any error here must not fail the build itself.
+    dir('integration-tests') {
+        deleteDir()
+        try {
+            def baseDir = "$WORKSPACE/vast-sources/scripts/integration"
+            def envDir = pwd() + "python-environment"
+            def app = "$WORKSPACE/$buildId/bin/vast"
+            writeFile([
+                file: 'all-integration-tests.txt',
+                text: ''
+            ])
+            writeFile([
+                file: 'failed-integration-tests.txt',
+                text: ''
+            ])
+            sh """
+                chmod +x "$app"
+                export LD_LIBRARY_PATH="$WORKSPACE/$buildId/lib"
+                python3 -m venv "$envDir"
+                source "$envDir/bin/activate"
+                pip install -r "$baseDir/requirements.txt"
+                python "$baseDir/integration.py" -l | while read test ; do
+                    echo "\$test" >> all-integration-tests.txt
+                    python "$baseDir/integration.py" --app "$app" -t "\$test" || echo "\$test" >> failed-integration-tests.txt
+                done
+            """
+            archiveArtifacts '*.txt'
+            stash([
+                includes: '*.txt',
+                name: 'integration-result',
+            ])
+        } catch (Exception e) {
+            echo "exception: $e"
         }
     }
 }
@@ -248,12 +303,103 @@ def makeBuildStages(matrixIndex, os, builds, lblExpr, settings) {
     }
 }
 
+// Reports the status of the build itself, i.e., compiling via CMake.
+def buildStatus(buildIds) {
+    [
+        // We always report success here, because we won't reach the final stage otherwise.
+        success: true,
+        summary: "All ${buildIds.size()} builds compiled",
+        text: "Successfully compiled all ${buildIds.size()} builds for $PrettyJobName.",
+    ]
+}
+
+// Reports the status of the unit tests check.
+def testsStatus(buildIds) {
+    def failed = buildIds.findAll {
+        try { unstash it }
+        catch (Exception) { }
+        !fileExists("${it}.success")
+    }
+    def numBuilds = buildIds.size()
+    if (failed.isEmpty())
+        return [
+            success: true,
+            summary: "All $numBuilds builds passed the unit tests",
+            text: "The unit tests succeeded on all $numBuilds builds."
+        ]
+    def failRate = "${failed.size()}/$numBuilds"
+    [
+        success: false,
+        summary: "$failRate builds failed to run the unit tests",
+        text: "The unit tests failed on $failRate builds:\n" + failed.collect{"- $it"}.join('\n'),
+    ]
+}
+
+// Reports the status of the integration tests check.
+def integrationStatus(buildIds) {
+    try { unstash 'integration-result' }
+    catch (Exception) { }
+    def all = fileLinesOrEmptyList('all-integration-tests.txt')
+    def failed = fileLinesOrEmptyList('failed-integration-tests.txt')
+    if (all.isEmpty())
+        return [
+            success: false,
+            summary: 'Unable to run integration tests',
+            text: 'Unable to run integration tests!',
+        ]
+    def numTests = all.size()
+    if (failed.isEmpty())
+        return [
+            success: true,
+            summary: "All $numTests integration tests passed",
+            text: "All $numTests integration tests passed.",
+        ]
+    def failRate = "${failed.size()}/$numTests"
+    [
+        success: false,
+        summary: "$failRate integration tests failed",
+        text: "The following integration tests failed ($failRate):\n" + failed.collect{"- $it"}.join('\n')
+    ]
+}
+
+// Reports the status of the coverage check.
+def coverageStatus(buildIds) {
+    try {
+        unstash 'coverage-result'
+        def coverageResult = readJSON('coverage.json')
+        writeFile([
+            file: 'coverage.txt',
+            text: coverageResult['percent_covered'],
+        ])
+        archiveArtifacts('project-coverage.txt')
+    }
+    catch (Exception) { }
+    if (fileExists('coverage.json'))
+        return [
+            success: true,
+            summary: 'Generate coverage report',
+            text: "The coverage report was successfully generated and uploaded to codecov.io.",
+        ]
+    [
+        success: false,
+        summary: 'Unable to generate coverage report',
+        text: 'No coverage report was produced!',
+    ]
+}
+
+def notifyAllChecks(result, message) {
+    checks.each {
+        if (it != 'build')
+            setBuildStatus(it, result, message)
+    }
+}
+
 // Declarative pipeline for triggering all stages.
 pipeline {
     options {
         buildDiscarder(logRotator(numToKeepStr: '20', artifactNumToKeepStr: '5'))
     }
-    agent none
+    agent { label 'master' }
     environment {
         LD_LIBRARY_PATH = "$WORKSPACE/vast-sources/build/lib;" +
                           "$WORKSPACE/caf-install/lib"
@@ -266,8 +412,7 @@ pipeline {
     }
     stages {
         // Checkout all involved repositories.
-        stage('Git Checkout') {
-            agent { label 'master' }
+        stage('Checkout') {
             steps {
                 echo "build branch ${env.GIT_BRANCH}"
                 deleteDir()
@@ -275,11 +420,10 @@ pipeline {
                   checkout scm
                 }
                 stash includes: 'vast-sources/**', name: 'vast-sources'
-                setBuildStatus('unit-tests', 'PENDING', 'Pending ...')
+                notifyAllChecks('PENDING', '')
             }
         }
-        stage('Builds') {
-            agent { label 'master' }
+        stage('Build') {
             steps {
                 script {
                     // Create stages for building everything in our build matrix in
@@ -298,11 +442,11 @@ pipeline {
                 }
             }
         }
-        stage('Check Test Results') {
-            agent { label 'master' }
+        stage('Notify') {
             steps {
                 script {
                     dir('tmp') {
+                        deleteDir()
                         // Compute the list of all build IDs.
                         def buildIds = []
                         buildMatrix.each { entry ->
@@ -313,44 +457,37 @@ pipeline {
                                 }
                             }
                         }
-                        // Compute how many tests have succeeded
-                        def builds = buildIds.size()
-                        def successes = buildIds.inject(0) { result, buildId ->
-                            try { unstash buildId }
-                            catch (Exception) { }
-                            result + (fileExists("${buildId}.success") ? 1 : 0)
-                        }
-                        echo "$successes unit tests tests of $builds were successful"
-                        def testsOk = builds == successes
-                        if (testsOk) {
-                            setBuildStatus('unit-tests', 'SUCCESS', 'All builds passed the unit tests')
-                        } else {
-                            def failures = builds - successes
-                            setBuildStatus('unit-tests', 'FAILURE', "$failures/$builds builds failed to run the unit tests")
-                        }
-                        // Get the coverage result.
-                        def coverageOk = false
-                        try {
-                            unstash 'coverage-result'
-                            if (fileExists('result.json')) {
-                                // Set no build status here, because codecov.io takes over from this point.
-                                coverageOk = true
+                        // Collect headlines and summaries for the email notification.
+                        def failedChecks = 0
+                        def headlines = []
+                        def texts = []
+                        checks.each {
+                            def checkResult = "${it}Status"(buildIds)
+                            if (checkResult.success) {
+                                headlines << "✅ ${it}"
+                                texts << checkResult.text
+                                // Don't set commit status for 'build', because Jenkins will do that anyway.
+                                if (it != 'build')
+                                    setBuildStatus(it, 'SUCCESS', checkResult.summary)
                             } else {
-                                setBuildStatus('coverage', 'FAILURE', 'Unable to get coverage report')
+                                failedChecks += 1
+                                headlines << "⛔️ ${it}"
+                                texts << checkResult.text
+                                setBuildStatus(it, 'FAILURE', checkResult.summary)
                             }
-                        } catch (Exception) {
-                            setBuildStatus('coverage', 'FAILURE', 'Unable to generate coverage report')                        }
+                        }
                         // Send email notification.
-                        def testsIcon = testsOk ? "✅" : "⛔️"
-                        def coverageIcon = coverageOk ? "✅" : "⛔️"
                         emailext(
-                            subject: "$PrettyJobName: ✅ build, $testsIcon unit tests, $coverageIcon coverage",
+                            subject: "$PrettyJobName: " + headlines.join(', '),
                             to: 'engineering@tenzir.com',
                             recipientProviders: [culprits()],
                             attachLog: true,
                             compressLog: true,
-                            body: "Check console output at ${env.BUILD_URL} or see attached log.\n",
+                            body: texts.join('\n\n') + '\n',
                         )
+                        // Set the status of this commit to unstable if any check failed to not trigger downstream jobs.
+                        if (failedChecks > 0)
+                            currentBuild.result = "UNSTABLE"
                     }
                 }
             }
@@ -359,13 +496,14 @@ pipeline {
     post {
         failure {
             emailext(
-                subject: "$PrettyJobName: ⛔️ build, ⛔️ unit tests, ⛔️ coverage",
+                subject: "$PrettyJobName: " + checks.collect{ "⛔️ ${it}" }.join(', '),
                 to: 'engineering@tenzir.com',
                 recipientProviders: [culprits()],
                 attachLog: true,
                 compressLog: true,
                 body: "Check console output at ${env.BUILD_URL} or see attached log.\n",
             )
+            notifyAllChecks('FAILURE', 'Failed due to earlier error')
         }
     }
 }
