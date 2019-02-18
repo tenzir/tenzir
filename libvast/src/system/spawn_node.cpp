@@ -31,7 +31,7 @@ expected<scope_linked_actor> spawn_node(caf::scoped_actor& self,
                                         const caf::settings& opts) {
   // Fetch values from config.
   auto id = get_or(opts, "id", defaults::command::node_id);
-  auto dir = get_or(opts, "dir", defaults::command::directory);
+  auto dir = get_or(opts, "vast.directory", defaults::command::directory);
   auto abs_dir = path{dir}.complete();
   VAST_DEBUG_ANON(__func__, "spawns local node:", id);
   // Pointer to the root command to system::node.

@@ -41,7 +41,7 @@ expected<actor> connect_to_node(scoped_actor& self, const caf::settings& opts) {
   namespace defs = defaults::command;
   // Fetch values from config.
   auto id = get_or(opts, "id", defaults::command::node_id);
-  auto dir = get_or(opts, "dir", defaults::command::directory);
+  auto dir = get_or(opts, "vast.directory", defaults::command::directory);
   auto abs_dir = path{dir}.complete();
   auto node_endpoint = make_default_endpoint();
   if (auto str = get_if<std::string>(&opts, "endpoint"))
