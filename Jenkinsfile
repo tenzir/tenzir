@@ -64,6 +64,7 @@ buildEnvironments = [
 // Configures what checks we report on at the end.
 checks = [
     'build',
+    'style',
     'tests',
     'integration',
     'coverage',
@@ -362,6 +363,33 @@ def integrationStatus(buildIds) {
     ]
 }
 
+def styleStatus(buildIds) {
+    def clangFormatDiff = ''
+    try {
+        unstash 'clang-format-result'
+        clangFormatDiff = readFile('clang-format-diff.txt')
+    }
+    catch (Exception) {
+        return [
+            success: false,
+            summary: 'Unable to produce clang-format diff',
+            text: 'Unable to produce clang-format diff!',
+        ]
+    }
+    if (clangFormatDiff.isEmpty())
+        return [
+            success: true,
+            summary: 'This patch follows our style conventions',
+            text: 'This patch follows our style conventions.',
+        ]
+    [
+        success: false,
+        summary: 'This patch violates our style conventions',
+        text: 'This patch violates our style conventions! See attached clang-format-diff.txt.',
+        attachmentsPattern: 'clang-format-diff.txt',
+    ]
+}
+
 // Reports the status of the coverage check.
 def coverageStatus(buildIds) {
     try {
@@ -377,7 +405,7 @@ def coverageStatus(buildIds) {
     if (fileExists('coverage.json'))
         return [
             success: true,
-            summary: 'Generate coverage report',
+            summary: 'Generated coverage report',
             text: "The coverage report was successfully generated and uploaded to codecov.io.",
         ]
     [
@@ -417,10 +445,36 @@ pipeline {
                 echo "build branch ${env.GIT_BRANCH}"
                 deleteDir()
                 dir('vast-sources') {
-                  checkout scm
+                    checkout scm
+                    // Prepare the git_diff.txt file needed by the 'Check Style' stage.
+                    sh """
+                        if [ "${env.GIT_BRANCH}" == master ] ; then
+                            # on master, we simply compare to the last commit
+                            git diff -U0 --no-color HEAD^ > git_diff.txt
+                        else
+                            # in branches, we diff to the merge-base, because Jenkins might not see each commit individually
+                            git fetch --no-tags ${env.GIT_URL} +refs/heads/master:refs/remotes/origin/master
+                            git diff -U0 --no-color \$(git merge-base origin/master HEAD) > git_diff.txt
+                        fi
+                    """
                 }
                 stash includes: 'vast-sources/**', name: 'vast-sources'
                 notifyAllChecks('PENDING', '')
+            }
+        }
+        stage('Check Style') {
+            agent { label 'clang-format' }
+            steps {
+                deleteDir()
+                unstash 'vast-sources'
+                dir('vast-sources') {
+                    sh './scripts/clang-format-diff.py -p1 < git_diff.txt > clang-format-diff.txt'
+                    stash([
+                        includes: 'clang-format-diff.txt',
+                        name: 'clang-format-result',
+                    ])
+                    archiveArtifacts('clang-format-diff.txt')
+                }
             }
         }
         stage('Build') {
@@ -461,29 +515,35 @@ pipeline {
                         def failedChecks = 0
                         def headlines = []
                         def texts = []
+                        def attachmentsPatterns = []
                         checks.each {
                             def checkResult = "${it}Status"(buildIds)
                             if (checkResult.success) {
-                                headlines << "✅ ${it}"
+                                headlines << "✅ $it"
                                 texts << checkResult.text
                                 // Don't set commit status for 'build', because Jenkins will do that anyway.
                                 if (it != 'build')
                                     setBuildStatus(it, 'SUCCESS', checkResult.summary)
                             } else {
                                 failedChecks += 1
-                                headlines << "⛔️ ${it}"
+                                headlines << "⛔️ $it"
                                 texts << checkResult.text
                                 setBuildStatus(it, 'FAILURE', checkResult.summary)
                             }
+                            if (checkResult.containsKey('attachmentsPattern'))
+                              attachmentsPatterns << checkResult.attachmentsPattern
                         }
+                        // Make sure we have a newline at the end of the email.
+                        texts << ''
                         // Send email notification.
                         emailext(
                             subject: "$PrettyJobName: " + headlines.join(', '),
                             to: 'engineering@tenzir.com',
                             recipientProviders: [culprits()],
-                            attachLog: true,
+                            attachLog: failedChecks > 0,
                             compressLog: true,
-                            body: texts.join('\n\n') + '\n',
+                            attachmentsPattern: attachmentsPatterns.join(','),
+                            body: texts.join('\n\n'),
                         )
                         // Set the status of this commit to unstable if any check failed to not trigger downstream jobs.
                         if (failedChecks > 0)
