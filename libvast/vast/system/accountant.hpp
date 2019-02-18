@@ -28,13 +28,6 @@
 
 namespace vast::system {
 
-struct accountant_state {
-  std::ofstream file;
-  bool flush_pending = false;
-  std::unordered_map<caf::actor_id, std::string> actor_map;
-  static inline const char* name = "accountant";
-};
-
 struct data_point {
   std::string key;
   caf::variant<std::string, timespan, timestamp, int64_t, uint64_t, double>
@@ -60,6 +53,20 @@ typename Inspector::result_type inspect(Inspector& f, performance_sample& s) {
 
 using performance_report = std::vector<performance_sample>;
 
+struct accountant_state {
+  std::ofstream file;
+  bool flush_pending = false;
+  std::unordered_map<caf::actor_id, std::string> actor_map;
+  struct {
+    measurement archive;
+    measurement index;
+    measurement node;
+  } accumulator;
+  static inline const char* name = "accountant";
+
+  void command_line_heartbeat();
+};
+
 using accountant_type =
   caf::typed_actor<
     caf::reacts_to<announce_atom, std::string>,
@@ -72,7 +79,8 @@ using accountant_type =
     caf::reacts_to<report>,
     caf::reacts_to<performance_report>,
     caf::reacts_to<flush_atom>,
-    caf::replies_to<status_atom>::with<caf::dictionary<caf::config_value>>
+    caf::replies_to<status_atom>::with<caf::dictionary<caf::config_value>>,
+    caf::reacts_to<telemetry_atom>
   >;
 
 /// Accumulates various performance metrics in a key-value format and writes

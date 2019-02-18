@@ -33,6 +33,7 @@ namespace system {
 namespace {
 
 using accountant_actor = accountant_type::stateful_base<accountant_state>;
+constexpr std::chrono::seconds overview_delay(5);
 
 void init(accountant_actor* self, const path& filename) {
   if (!exists(filename.parent())) {
@@ -57,6 +58,9 @@ void init(accountant_actor* self, const path& filename) {
     self->quit(make_error(ec::filesystem_error));
   VAST_DEBUG(self, "kicks off flush loop");
   self->send(self, flush_atom::value);
+#if VAST_LOG_LEVEL >= CAF_LOG_LEVEL_INFO
+  self->delayed_send(self, overview_delay, telemetry_atom::value);
+#endif
 }
 
 template <class T>
@@ -88,7 +92,31 @@ void record(accountant_actor* self, const std::string& key, timestamp x) {
   record(self, key, x.time_since_epoch());
 }
 
+// Calculate rate in seconds resolution from nanosecond duration.
+double calc_rate(const measurement& m) {
+  if (m.duration.count() > 0)
+    return m.events * 1'000'000'000 / m.duration.count();
+  else
+    return std::numeric_limits<double>::quiet_NaN();
+}
+
 } // namespace <anonymous>
+
+void accountant_state::command_line_heartbeat() {
+  if (caf::logger::current_logger()->verbosity() >= CAF_LOG_LEVEL_INFO) {
+    using namespace std::chrono;
+    std::ostringstream oss;
+    auto archive_rate = calc_rate(accumulator.archive);
+    auto index_rate = calc_rate(accumulator.index);
+    oss << "ingested" << std::setw(9) << accumulator.node.events << " events"
+        << " [index.rate = " << std::fixed << std::setw(7)
+        << std::setprecision(2) << index_rate / 1'000
+        << ", archive.rate = " << std::fixed << std::setw(7)
+        << std::setprecision(2) << archive_rate / 1'000 << " e/ms]";
+    VAST_INFO_ANON(oss.str());
+  }
+  accumulator = {};
+}
 
 accountant_type::behavior_type accountant(accountant_actor* self,
                                           const path& filename) {
@@ -150,13 +178,22 @@ accountant_type::behavior_type accountant(accountant_actor* self,
       for (const auto& [key, value] : r) {
         record(self, key + ".events", value.events);
         record(self, key + ".duration", value.duration);
-        if (value.duration.count() > 0) {
-          // Calculate rate in seconds resolution from nanosecond duration.
-          auto rate = value.events * 1'000'000'000 / value.duration.count();
-          record(self, key + ".rate", rate);
-        } else {
+        auto rate = calc_rate(value);
+        if (std::isfinite(rate))
+          record(self, key + ".rate", static_cast<uint64_t>(rate));
+        else
           record(self, key + ".rate", "NaN");
+#if VAST_LOG_LEVEL >= CAF_LOG_LEVEL_INFO
+        if (caf::logger::current_logger()->verbosity() >= CAF_LOG_LEVEL_INFO) {
+          auto& acc = self->state.accumulator;
+          if (key == "archive")
+            acc.archive += value;
+          if (key == "index")
+            acc.index += value;
+          if (key == "node_throughput")
+            acc.node += value;
         }
+#endif
       }
     },
     [=](flush_atom) {
@@ -173,6 +210,10 @@ accountant_type::behavior_type accountant(accountant_actor* self,
       }
       detail::fill_status_map(result, self);
       return result;
+    },
+    [=](telemetry_atom) {
+      self->state.command_line_heartbeat();
+      self->delayed_send(self, overview_delay, telemetry_atom::value);
     }
   };
 }
