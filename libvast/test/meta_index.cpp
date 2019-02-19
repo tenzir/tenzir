@@ -146,7 +146,7 @@ struct fixture {
   }
 
   auto attr_time_query(std::string_view hhmmss) {
-    std::string q = "&time == 1970-01-01+";
+    std::string q = "#time == 1970-01-01+";
     q += hhmmss;
     q += ".0";
     return meta_idx.lookup(unbox(to<expression>(q)));
@@ -163,10 +163,10 @@ struct fixture {
   }
 
   auto attr_time_query(std::string_view hhmmss_from, std::string_view hhmmss_to) {
-    std::string q = "&time >= 1970-01-01+";
+    std::string q = "#time >= 1970-01-01+";
     q += hhmmss_from;
     q += ".0";
-    q += " && &time <= 1970-01-01+";
+    q += " && #time <= 1970-01-01+";
     q += hhmmss_to;
     q += ".0";
     return lookup(q);
@@ -183,7 +183,7 @@ struct fixture {
 
 FIXTURE_SCOPE(meta_index_tests, fixture)
 
-TEST(attribute extractor - &time) {
+TEST(attribute extractor - time) {
   MESSAGE("check whether point queries return correct slices");
   CHECK_EQUAL(attr_time_query("00:00:00"), slice(0));
   CHECK_EQUAL(attr_time_query("00:00:24"), slice(0));
@@ -199,16 +199,16 @@ TEST(attribute extractor - &time) {
   CHECK_EQUAL(attr_time_query("00:00:10", "00:00:30"), slice(0, 2));
 }
 
-TEST(attribute extractor - &type) {
+TEST(attribute extractor - type) {
   auto foo = std::vector<uuid>{ids[0], ids[2]};
   auto foobar = std::vector<uuid>{ids[1], ids[3]};
-  CHECK_EQUAL(lookup("&type == \"foo\""), foo);
-  CHECK_EQUAL(lookup("&type == \"bar\""), empty());
-  CHECK_EQUAL(lookup("&type != \"foo\""), foobar);
-  CHECK_EQUAL(lookup("&type ~ /f.o/"), foo);
-  CHECK_EQUAL(lookup("&type ~ /f.*/"), ids);
-  CHECK_EQUAL(lookup("&type ~ /x/"), empty());
-  CHECK_EQUAL(lookup("&type !~ /x/"), ids);
+  CHECK_EQUAL(lookup("#type == \"foo\""), foo);
+  CHECK_EQUAL(lookup("#type == \"bar\""), empty());
+  CHECK_EQUAL(lookup("#type != \"foo\""), foobar);
+  CHECK_EQUAL(lookup("#type ~ /f.o/"), foo);
+  CHECK_EQUAL(lookup("#type ~ /f.*/"), ids);
+  CHECK_EQUAL(lookup("#type ~ /x/"), empty());
+  CHECK_EQUAL(lookup("#type !~ /x/"), ids);
 }
 
 FIXTURE_SCOPE_END()

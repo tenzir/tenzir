@@ -46,7 +46,7 @@ TEST(parseable/printable - predicate) {
   CHECK(pred.rhs == data{set{21u, 42u, 84u}});
   CHECK_EQUAL(to_string(pred), str);
   // LHS: type, RHS: data
-  str = "&type != \"foo\"";
+  str = "#type != \"foo\"";
   CHECK(parsers::predicate(str, pred));
   CHECK(pred.lhs == attribute_extractor{type_atom::value});
   CHECK(pred.op == not_equal);
@@ -67,7 +67,7 @@ TEST(parseable/printable - predicate) {
   CHECK(pred.rhs == data{-4.8});
   CHECK_EQUAL(to_string(pred), str);
   // LHS: data, RHS: time
-  str = "now > &time";
+  str = "now > #time";
   CHECK(parsers::predicate(str, pred));
   CHECK(caf::holds_alternative<data>(pred.lhs));
   CHECK(pred.op == greater);
@@ -95,8 +95,9 @@ TEST(parseable - expression) {
   CHECK(parsers::expr("x == 42 && ! :port == 53/udp && x == 42", expr));
   CHECK_EQUAL(expr, expression(conjunction{p1, negation{p2}, p1}));
   CHECK(parsers::expr("x > 0 && x < 42 && a.b == x.y", expr));
-  CHECK(parsers::expr("&time > 2018-07-04+12:00:00.0 "
-                      "&& &time < 2018-07-04+23:55:04.0", expr));
+  CHECK(parsers::expr("#time > 2018-07-04+12:00:00.0 "
+                      "&& #time < 2018-07-04+23:55:04.0",
+                      expr));
   auto x = caf::get_if<conjunction>(&expr);
   REQUIRE(x);
   REQUIRE_EQUAL(x->size(), 2u);

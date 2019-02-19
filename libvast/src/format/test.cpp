@@ -28,9 +28,7 @@
 using caf::holds_alternative;
 using caf::visit;
 
-namespace vast {
-namespace format {
-namespace test {
+namespace vast::format::test {
 
 namespace {
 
@@ -217,16 +215,16 @@ struct randomizer {
 std::string_view builtin_schema = R"__(
   type test = record{
     n: set<int>,
-    b: bool &default="uniform(0,1)",
-    i: int &default="uniform(-42000,1337)",
-    c: count &default="pareto(0,1)",
-    r: real &default="normal(0,1)",
-    s: string &default="uniform(0,100)",
-    t: time &default="uniform(0,10)",
-    d: duration &default="uniform(100,200)",
-    a: addr &default="uniform(0,2000000)",
-    s: subnet &default="uniform(1000,2000)",
-    p: port &default="uniform(1,65384)"
+    b: bool #default="uniform(0,1)",
+    i: int #default="uniform(-42000,1337)",
+    c: count #default="pareto(0,1)",
+    r: real #default="normal(0,1)",
+    s: string #default="uniform(0,100)",
+    t: time #default="uniform(0,10)",
+    d: duration #default="uniform(100,200)",
+    a: addr #default="uniform(0,2000000)",
+    s: subnet #default="uniform(1000,2000)",
+    p: port #default="uniform(1,65384)"
   }
 )__";
 
@@ -317,6 +315,4 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
   return caf::none;
 }
 
-} // namespace test
-} // namespace format
-} // namespace vast
+} // namespace vast::format::test

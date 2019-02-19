@@ -20,23 +20,26 @@
 
 namespace vast {
 
-/// A qualifier.
+/// A qualifier in the form of a key and optional value.
 struct attribute : detail::totally_ordered<attribute> {
   attribute(std::string key = {});
   attribute(std::string key, optional<std::string> value);
 
   std::string key;
   optional<std::string> value;
-
-  friend bool operator==(const attribute& x, const attribute& y);
-  friend bool operator<(const attribute& x, const attribute& y);
-
-  template <class Inspector>
-  friend auto inspect(Inspector& f, attribute& a) {
-    return f(a.key, a.value);
-  }
 };
 
+/// @relates attribute
+bool operator==(const attribute& x, const attribute& y);
+
+/// @relates attribute
+bool operator<(const attribute& x, const attribute& y);
+
+/// @relates attribute
+template <class Inspector>
+auto inspect(Inspector& f, attribute& a) {
+  return f(a.key, a.value);
+}
 
 /// Extracts an specific attribute from a type.
 /// @param x The type to extract an attribute from.

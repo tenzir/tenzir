@@ -64,7 +64,7 @@ struct expression_printer : printer<expression_printer> {
     }
 
     bool operator()(const attribute_extractor& e) const {
-      return ('&' << printers::str)(out_, to_string(e.attr));
+      return ('#' << printers::str)(out_, to_string(e.attr));
     }
 
     bool operator()(const type_extractor& e) const {

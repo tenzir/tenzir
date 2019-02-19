@@ -69,16 +69,17 @@ struct type_parser : parser<type_parser> {
 
   template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
+    // clang-format off
     // Whitespace
     static auto ws = ignore(*parsers::space);
     // Attributes: type meta data
     static auto to_attr =
-      [](std::tuple<std::string, optional<std::string>> t) {
-        return vast::attribute{std::get<0>(t), std::get<1>(t)};
+      [](std::tuple<std::string, optional<std::string>> xs) {
+        auto& [key, value] = xs;
+        return vast::attribute{std::move(key), std::move(value)};
       };
     static auto attr
-      = ('&' >> parsers::identifier >> -('=' >> parsers::qq_str)) ->* to_attr
-      ;
+      = ('#' >> parsers::identifier >> -('=' >> parsers::qq_str)) ->* to_attr;
     static auto attr_list = *(ws >> attr);
     // Basic types
     static auto basic_type_parser
@@ -99,8 +100,9 @@ struct type_parser : parser<type_parser> {
       std::vector<std::string>,
       std::vector<vast::attribute>
     >;
-    static auto to_enum = [](enum_tuple t) -> type {
-      return enumeration_type{std::get<0>(t)}.attributes(std::get<1>(t));
+    static auto to_enum = [](enum_tuple xs) -> type {
+      auto& [fields, attrs] = xs;
+      return enumeration_type{std::move(fields)}.attributes(std::move(attrs));
     };
     static auto enum_type_parser
       = ("enum" >> ws >> '{'
@@ -111,24 +113,27 @@ struct type_parser : parser<type_parser> {
     rule<Iterator, type> type_type;
     // Vector
     using sequence_tuple = std::tuple<type, std::vector<vast::attribute>>;
-    static auto to_vector = [](sequence_tuple t) -> type {
-      return vector_type{std::get<0>(t)}.attributes(std::get<1>(t));
+    static auto to_vector = [](sequence_tuple xs) -> type {
+      auto& [value_type, attrs] = xs;
+      return vector_type{std::move(value_type)}.attributes(std::move(attrs));
     };
     auto vector_type_parser
       = ("vector" >> ws >> '<' >> ws >> type_type >> ws >> '>') ->* to_vector
       ;
     // Set
-    static auto to_set = [](sequence_tuple t) -> type {
-      return set_type{std::get<0>(t)}.attributes(std::get<1>(t));
+    static auto to_set = [](sequence_tuple xs) -> type {
+      auto& [value_type, attrs] = xs;
+      return set_type{std::move(value_type)}.attributes(std::move(attrs));
     };
     auto set_type_parser
       = ("set" >> ws >> '<' >> ws >> type_type >> ws >> '>') ->* to_set
       ;
     // Map
     using map_tuple = std::tuple<type, type, std::vector<vast::attribute>>;
-    static auto to_map = [](map_tuple t) -> type {
-      auto m = map_type{std::get<0>(t), std::get<1>(t)};
-      return m.attributes(std::get<2>(t));
+    static auto to_map = [](map_tuple xs) -> type {
+      auto& [key_type, value_type, attrs] = xs;
+      auto m = map_type{std::move(key_type), std::move(value_type)};
+      return m.attributes(std::move(attrs));
     };
     auto map_type_parser
       = ("map" >> ws >> '<' >> ws
@@ -140,11 +145,13 @@ struct type_parser : parser<type_parser> {
       std::vector<record_field>,
       std::vector<vast::attribute>
     >;
-    static auto to_field = [](std::tuple<std::string, type> t) {
-      return record_field{std::get<0>(t), std::get<1>(t)};
+    static auto to_field = [](std::tuple<std::string, type> xs) {
+      auto& [field_name, field_type] = xs;
+      return record_field{std::move(field_name), std::move(field_type)};
     };
-    static auto to_record = [](record_tuple t) -> type {
-      return record_type{std::get<0>(t)}.attributes(std::get<1>(t));
+    static auto to_record = [](record_tuple xs) -> type {
+      auto& [fields, attrs] = xs;
+      return record_type{std::move(fields)}.attributes(std::move(attrs));
     };
     auto field
       = (parsers::identifier >> ws >> ':' >> ws >> type_type) ->* to_field
@@ -175,6 +182,7 @@ struct type_parser : parser<type_parser> {
         | record_type_parser
         ;
     return type_type(f, l, a);
+    // clang-format on
   }
 
   const type_table* symbol_type;
