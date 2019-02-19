@@ -89,7 +89,8 @@ caf::message run(const command& cmd, caf::actor_system& sys,
   if (position != last && detail::starts_with(*position, "-"))
     return make_error_msg(cmd, ec::unrecognized_option, *position);
   // Check for help option.
-  if (get_or<bool>(options, "help", false)) {
+  if (get_or<bool>(options, "help", false)
+      || (has_subcommand && *position == "help")) {
     helptext(cmd, std::cerr);
     return caf::none;
   }
