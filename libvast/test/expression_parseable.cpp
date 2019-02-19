@@ -96,7 +96,8 @@ TEST(parseable - expression) {
   CHECK_EQUAL(expr, expression(conjunction{p1, negation{p2}, p1}));
   CHECK(parsers::expr("x > 0 && x < 42 && a.b == x.y", expr));
   CHECK(parsers::expr("#time > 2018-07-04+12:00:00.0 "
-                      "&& #time < 2018-07-04+23:55:04.0", expr));
+                      "&& #time < 2018-07-04+23:55:04.0",
+                      expr));
   auto x = caf::get_if<conjunction>(&expr);
   REQUIRE(x);
   REQUIRE_EQUAL(x->size(), 2u);

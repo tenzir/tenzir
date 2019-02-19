@@ -69,6 +69,7 @@ struct type_parser : parser<type_parser> {
 
   template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
+    // clang-format off
     // Whitespace
     static auto ws = ignore(*parsers::space);
     // Attributes: type meta data
@@ -78,8 +79,7 @@ struct type_parser : parser<type_parser> {
         return vast::attribute{std::move(key), std::move(value)};
       };
     static auto attr
-      = ('#' >> parsers::identifier >> -('=' >> parsers::qq_str)) ->* to_attr
-      ;
+      = ('#' >> parsers::identifier >> -('=' >> parsers::qq_str)) ->* to_attr;
     static auto attr_list = *(ws >> attr);
     // Basic types
     static auto basic_type_parser
@@ -182,6 +182,7 @@ struct type_parser : parser<type_parser> {
         | record_type_parser
         ;
     return type_type(f, l, a);
+    // clang-format on
   }
 
   const type_table* symbol_type;

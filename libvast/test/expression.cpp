@@ -232,8 +232,8 @@ TEST(matcher) {
 }
 
 TEST(labeler) {
-  auto str =
-    "(x == 5 && :bool == T) || (foo ~ /foo/ && !(x == 5 || #type ~ /bar/))"s;
+  auto str
+    = "(x == 5 && :bool == T) || (foo ~ /foo/ && !(x == 5 || #type ~ /bar/))"s;
   auto expr = to_expr(str);
   // Create a visitor that records all offsets in order.
   detail::steady_map<expression, offset> offset_map;
@@ -259,8 +259,8 @@ TEST(labeler) {
 }
 
 TEST(at) {
-  auto str =
-    "(x == 5 && :bool == T) || (foo ~ /foo/ && !(x == 5 || #type ~ /bar/))"s;
+  auto str
+    = "(x == 5 && :bool == T) || (foo ~ /foo/ && !(x == 5 || #type ~ /bar/))"s;
   auto expr = to_expr(str);
   CHECK_EQUAL(at(expr, {}), nullptr); // invalid offset
   CHECK_EQUAL(at(expr, {0}), &expr); // root node

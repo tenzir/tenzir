@@ -28,6 +28,7 @@ struct predicate_parser : parser<predicate_parser> {
   using attribute = predicate;
 
   static auto make() {
+    // clang-format off
     using parsers::alnum;
     using parsers::chr;
     using namespace parser_literals;
@@ -85,6 +86,7 @@ struct predicate_parser : parser<predicate_parser> {
       = (operand >> ws >> pred_op >> ws >> operand) ->* to_predicate;
       ;
     return pred;
+    // clang-format on
   }
 
   template <class Iterator>
