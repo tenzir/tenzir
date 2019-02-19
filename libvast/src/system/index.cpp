@@ -197,6 +197,8 @@ caf::dictionary<caf::config_value> index_state::status() const {
 
 void index_state::send_report() {
   performance_report r;
+  measurement min;
+  auto min_rate = std::numeric_limits<double>::infinity();
   auto append_report = [&](partition& p) {
     for (auto& [layout, ti] : p.table_indexers_) {
       for (size_t i = 0; i < ti.measurements_.size(); ++i) {
@@ -208,8 +210,14 @@ void index_state::send_report() {
 #else
         auto tmp = std::atomic_exchange(&(ti.measurements_[i]), measurement{});
 #endif
-        if (tmp.events > 0)
+        if (tmp.events > 0) {
           r.push_back({layout.name() + "." + layout.fields[i].name, tmp});
+          double rate = tmp.events * 1'000'000'000.0 / tmp.duration.count();
+          if (rate < min_rate) {
+            min_rate = rate;
+            min = tmp;
+          }
+        }
       }
     }
   };
@@ -217,6 +225,8 @@ void index_state::send_report() {
     append_report(*active);
   for (auto& p : unpersisted)
     append_report(*p.first);
+  if (min.events > 0)
+    r.push_back({"index", min});
   if (!r.empty())
     self->send(accountant, std::move(r));
 }
