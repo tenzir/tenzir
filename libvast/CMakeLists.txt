@@ -88,7 +88,6 @@ set(libvast_sources
   src/system/dummy_consensus.cpp
   src/system/evaluator.cpp
   src/system/exporter.cpp
-  src/system/help_command.cpp
   src/system/importer.cpp
   src/system/index.cpp
   src/system/indexer.cpp

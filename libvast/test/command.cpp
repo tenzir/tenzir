@@ -21,7 +21,6 @@
 #include <caf/make_message.hpp>
 #include <caf/message.hpp>
 
-#include "vast/system/help_command.hpp"
 #include "vast/system/version_command.hpp"
 
 using namespace vast;
@@ -134,11 +133,6 @@ TEST(nested command invocation) {
   CHECK(is_error(exec("foo --flag -v 42")));
   // Subcommands of course still work.
   CHECK_EQUAL(exec("foo --flag -v 42 bar"), "bar"s);
-}
-
-TEST(help command) {
-  root.add(system::help_command, "help", "", command::opts());
-  CHECK_EQUAL(exec("help"), caf::none);
 }
 
 TEST(version command) {
