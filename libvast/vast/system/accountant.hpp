@@ -58,8 +58,6 @@ struct accountant_state {
   bool flush_pending = false;
   std::unordered_map<caf::actor_id, std::string> actor_map;
   struct {
-    measurement archive;
-    measurement index;
     measurement node;
   } accumulator;
   static inline const char* name = "accountant";

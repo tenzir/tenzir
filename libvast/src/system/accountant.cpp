@@ -103,16 +103,13 @@ double calc_rate(const measurement& m) {
 } // namespace <anonymous>
 
 void accountant_state::command_line_heartbeat() {
-  if (caf::logger::current_logger()->verbosity() >= CAF_LOG_LEVEL_INFO) {
-    using namespace std::chrono;
+  if (caf::logger::current_logger()->verbosity() >= CAF_LOG_LEVEL_INFO
+      && accumulator.node.events > 0) {
     std::ostringstream oss;
-    auto archive_rate = calc_rate(accumulator.archive);
-    auto index_rate = calc_rate(accumulator.index);
-    oss << "ingested" << std::setw(9) << accumulator.node.events << " events"
-        << " [index.rate = " << std::fixed << std::setw(7)
-        << std::setprecision(2) << index_rate / 1'000
-        << ", archive.rate = " << std::fixed << std::setw(7)
-        << std::setprecision(2) << archive_rate / 1'000 << " e/ms]";
+    auto node_rate = calc_rate(accumulator.node);
+    oss << "ingested " << accumulator.node.events << " events"
+        << " at a rate of " << std::fixed << std::setprecision(2)
+        << node_rate / 1'000 << " events/ms";
     VAST_INFO_ANON(oss.str());
   }
   accumulator = {};
@@ -186,10 +183,6 @@ accountant_type::behavior_type accountant(accountant_actor* self,
 #if VAST_LOG_LEVEL >= CAF_LOG_LEVEL_INFO
         if (caf::logger::current_logger()->verbosity() >= CAF_LOG_LEVEL_INFO) {
           auto& acc = self->state.accumulator;
-          if (key == "archive")
-            acc.archive += value;
-          if (key == "index")
-            acc.index += value;
           if (key == "node_throughput")
             acc.node += value;
         }
