@@ -307,6 +307,8 @@ class Tester:
         normalized_test_name = test_name.replace(' ', '-').lower()
         baseline_dir = PARENT / 'reference' / normalized_test_name
         work_dir = self.test_dir / normalized_test_name
+        if work_dir.exists():
+            shutil.rmtree(work_dir)
         work_dir.mkdir(parents=True)
         test_summary = TestSummary(len(test.steps))
         step_i = 0
@@ -511,13 +513,9 @@ def main():
     if args.directory.name == 'run_<current_ISO_timestamp>':
         args.directory = Path('run_{}'.format(
             datetime.now().isoformat(timespec='seconds')))
-    if args.directory.is_dir():
-        shutil.rmtree(args.directory)
-    elif args.directory.exists():
-        sys.exit(args.directory +
-                 ' exists, but is not a directory. Aborting...')
 
-    args.directory.mkdir(parents=True)
+    if not args.directory.exists():
+        args.directory.mkdir(parents=True)
 
     signal.alarm(args.timeout)
 
