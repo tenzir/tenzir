@@ -40,20 +40,17 @@ expected<scope_linked_actor> spawn_node(caf::scoped_actor& self,
     return [&] {
       caf::error result;
       std::vector<std::string> args{"spawn", std::move(name)};
-      self->request(node.get(), caf::infinite, std::move(args)).receive(
-        [](const caf::actor&) { /* nop */ },
-        [&](caf::error& e) { result = std::move(e); }
-      );
+      self->request(node.get(), caf::infinite, std::move(args))
+        .receive([](const caf::actor&) { /* nop */ },
+                 [&](caf::error& e) { result = std::move(e); });
       return result;
     };
   };
-  auto err = caf::error::eval(
-    spawn_component("accountant"),
-    spawn_component("consensus"),
-    spawn_component("archive"),
-    spawn_component("index"),
-    spawn_component("importer")
-  );
+  auto err = caf::error::eval(spawn_component("accountant"),
+                              spawn_component("consensus"),
+                              spawn_component("archive"),
+                              spawn_component("index"),
+                              spawn_component("importer"));
   if (err) {
     VAST_ERROR(self, self->system().render(err));
     return err;

@@ -131,84 +131,83 @@ accountant_type::behavior_type accountant(accountant_actor* self,
       self->state.actor_map.erase(msg.source.id());
     }
   );
-  return {
-    [=](announce_atom, const std::string& name) {
-      self->state.actor_map[self->current_sender()->id()] = name;
-      self->monitor(self->current_sender());
-    },
-    [=](const std::string& key, const std::string& value) {
-      VAST_TRACE(self, "received", key, "from", self->current_sender());
-      record(self, key, value);
-    },
-    // Helpers to avoid to_string(..) in sender context.
-    [=](const std::string& key, timespan value) {
-      VAST_TRACE(self, "received", key, "from", self->current_sender());
-      record(self, key, value);
-    },
-    [=](const std::string& key, timestamp value) {
-      VAST_TRACE(self, "received", key, "from", self->current_sender());
-      record(self, key, value);
-    },
-    [=](const std::string& key, int64_t value) {
-      VAST_TRACE(self, "received", key, "from", self->current_sender());
-      record(self, key, value);
-    },
-    [=](const std::string& key, uint64_t value) {
-      VAST_TRACE(self, "received", key, "from", self->current_sender());
-      record(self, key, value);
-    },
-    [=](const std::string& key, double value) {
-      VAST_TRACE(self, "received", key, "from", self->current_sender());
-      record(self, key, value);
-    },
-    [=](const report& r) {
-      VAST_TRACE(self, "received a report from", self->current_sender());
-      for (const auto& [key, value] : r) {
-        caf::visit([&, key = key](const auto& x) {
-            record(self, key, x);
-            }, value);
-      }
-    },
-    [=](const performance_report& r) {
-      VAST_TRACE(self, "received a performance report from",
-                 self->current_sender());
-      for (const auto& [key, value] : r) {
-        record(self, key + ".events", value.events);
-        record(self, key + ".duration", value.duration);
-        auto rate = calc_rate(value);
-        if (std::isfinite(rate))
-          record(self, key + ".rate", static_cast<uint64_t>(rate));
-        else
-          record(self, key + ".rate", "NaN");
+  return {[=](announce_atom, const std::string& name) {
+            self->state.actor_map[self->current_sender()->id()] = name;
+            self->monitor(self->current_sender());
+          },
+          [=](const std::string& key, const std::string& value) {
+            VAST_TRACE(self, "received", key, "from", self->current_sender());
+            record(self, key, value);
+          },
+          // Helpers to avoid to_string(..) in sender context.
+          [=](const std::string& key, timespan value) {
+            VAST_TRACE(self, "received", key, "from", self->current_sender());
+            record(self, key, value);
+          },
+          [=](const std::string& key, timestamp value) {
+            VAST_TRACE(self, "received", key, "from", self->current_sender());
+            record(self, key, value);
+          },
+          [=](const std::string& key, int64_t value) {
+            VAST_TRACE(self, "received", key, "from", self->current_sender());
+            record(self, key, value);
+          },
+          [=](const std::string& key, uint64_t value) {
+            VAST_TRACE(self, "received", key, "from", self->current_sender());
+            record(self, key, value);
+          },
+          [=](const std::string& key, double value) {
+            VAST_TRACE(self, "received", key, "from", self->current_sender());
+            record(self, key, value);
+          },
+          [=](const report& r) {
+            VAST_TRACE(self, "received a report from", self->current_sender());
+            for (const auto& [key, value] : r) {
+              caf::visit([&,
+                          key = key](const auto& x) { record(self, key, x); },
+                         value);
+            }
+          },
+          [=](const performance_report& r) {
+            VAST_TRACE(self, "received a performance report from",
+                       self->current_sender());
+            for (const auto& [key, value] : r) {
+              record(self, key + ".events", value.events);
+              record(self, key + ".duration", value.duration);
+              auto rate = calc_rate(value);
+              if (std::isfinite(rate))
+                record(self, key + ".rate", static_cast<uint64_t>(rate));
+              else
+                record(self, key + ".rate", "NaN");
 #if VAST_LOG_LEVEL >= CAF_LOG_LEVEL_INFO
-        if (caf::logger::current_logger()->verbosity() >= CAF_LOG_LEVEL_INFO) {
-          auto& acc = self->state.accumulator;
-          if (key == "node_throughput")
-            acc.node += value;
-        }
+              if (caf::logger::current_logger()->verbosity()
+                  >= CAF_LOG_LEVEL_INFO) {
+                auto& acc = self->state.accumulator;
+                if (key == "node_throughput")
+                  acc.node += value;
+              }
 #endif
-      }
-    },
-    [=](flush_atom) {
-      if (self->state.file)
-        self->state.file.flush();
-      self->state.flush_pending = false;
-    },
-    [=](status_atom) {
-      using caf::put_dictionary;
-      caf::dictionary<caf::config_value> result;
-      auto& known = put_dictionary(result, "known-actors");
-      for (const auto& [aid, name] : self->state.actor_map) {
-        known.emplace(name, aid);
-      }
-      detail::fill_status_map(result, self);
-      return result;
-    },
-    [=](telemetry_atom) {
-      self->state.command_line_heartbeat();
-      self->delayed_send(self, overview_delay, telemetry_atom::value);
-    }
-  };
+            }
+          },
+          [=](flush_atom) {
+            if (self->state.file)
+              self->state.file.flush();
+            self->state.flush_pending = false;
+          },
+          [=](status_atom) {
+            using caf::put_dictionary;
+            caf::dictionary<caf::config_value> result;
+            auto& known = put_dictionary(result, "known-actors");
+            for (const auto& [aid, name] : self->state.actor_map) {
+              known.emplace(name, aid);
+            }
+            detail::fill_status_map(result, self);
+            return result;
+          },
+          [=](telemetry_atom) {
+            self->state.command_line_heartbeat();
+            self->delayed_send(self, overview_delay, telemetry_atom::value);
+          }};
 }
 
 } // namespace system

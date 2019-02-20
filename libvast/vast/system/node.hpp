@@ -45,9 +45,6 @@ struct node_state {
   /// Points to the instance of the tracker actor.
   tracker_type tracker;
 
-  /// Points to the instance of the accountant actor.
-  ///accountant_type accountant;
-
   /// Stores how many components per label are active.
   std::unordered_map<std::string, size_t> labels;
 
