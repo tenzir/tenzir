@@ -48,6 +48,7 @@ expected<scope_linked_actor> spawn_node(caf::scoped_actor& self,
     };
   };
   auto err = caf::error::eval(
+    spawn_component("accountant"),
     spawn_component("consensus"),
     spawn_component("archive"),
     spawn_component("index"),

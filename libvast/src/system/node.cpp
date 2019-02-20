@@ -177,6 +177,13 @@ caf::expected<caf::actor> spawn_component(const command& cmd,
   auto name_atm = caf::atom_from_string(cmd.name);
   auto parent_name_atm = caf::atom_from_string(cmd.parent->name);
   switch (atom_uint(name_atm)) {
+    case atom_uint("accountant"): {
+      auto accountant_log = args.dir / "log" / "current" / "accounting.log";
+      auto accountant = self->spawn<monitored>(system::accountant,
+                                               accountant_log);
+      self->system().registry().put(accountant_atom::value, accountant);
+      return caf::actor_cast<caf::actor>(accountant);
+    }
     case atom_uint("archive"):
       return spawn_archive(self, args);
     case atom_uint("exporter"):
@@ -323,12 +330,6 @@ void node_state::init(std::string init_name, path init_dir) {
   // Set member variables.
   name = std::move(init_name);
   dir = std::move(init_dir);
-  // Bring up the accountant here where we know the log path. The tracker shuts
-  // it down upon termination.
-  auto accountant_log = dir / "log" / "current" / "accounting.log";
-  accountant = self->spawn<monitored>(system::accountant,
-                                      std::move(accountant_log));
-  self->system().registry().put(accountant_atom::value, accountant);
   // Bring up the tracker.
   tracker = self->spawn<monitored>(system::tracker, name);
   self->set_down_handler(
@@ -349,6 +350,7 @@ void node_state::init(std::string init_name, path init_dir) {
   cmd.add(peer_command, "peer", "peers with another node", opts());
   // Add spawn commands.
   auto sp = cmd.add(nullptr, "spawn", "creates a new component", opts());
+  sp->add(spawn_command, "accountant", "spawns the accountant", opts());
   sp->add(spawn_command, "archive", "creates a new archive",
           opts()
             .add<size_t>("segments,s", "number of cached segments")
