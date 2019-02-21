@@ -103,7 +103,8 @@ double calc_rate(const measurement& m) {
 } // namespace <anonymous>
 
 void accountant_state::command_line_heartbeat() {
-  if (caf::logger::current_logger()->verbosity() >= CAF_LOG_LEVEL_INFO
+  auto logger = caf::logger::current_logger();
+  if (logger && logger->verbosity() >= CAF_LOG_LEVEL_INFO
       && accumulator.node.events > 0) {
     std::ostringstream oss;
     auto node_rate = calc_rate(accumulator.node);
@@ -180,7 +181,8 @@ accountant_type::behavior_type accountant(accountant_actor* self,
               else
                 record(self, key + ".rate", "NaN");
 #if VAST_LOG_LEVEL >= CAF_LOG_LEVEL_INFO
-              if (caf::logger::current_logger()->verbosity()
+              auto logger = caf::logger::current_logger();
+              if (logger && logger->verbosity()
                   >= CAF_LOG_LEVEL_INFO) {
                 auto& acc = self->state.accumulator;
                 if (key == "node_throughput")

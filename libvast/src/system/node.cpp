@@ -181,7 +181,6 @@ caf::expected<caf::actor> spawn_component(const command& cmd,
       auto accountant_log = args.dir / "log" / "current" / "accounting.log";
       auto accountant = self->spawn<monitored>(system::accountant,
                                                accountant_log);
-      self->system().registry().put(accountant_atom::value, accountant);
       return caf::actor_cast<caf::actor>(accountant);
     }
     case atom_uint("archive"):
