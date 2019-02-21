@@ -200,11 +200,13 @@ def integrationTests(buildId) {
                     python "$baseDir/integration.py" --app "$app" -t "\$test" -d "integration" || echo "\$test" >> failed-integration-tests.txt
                 done
             """
-            zip([
-                archive: true,
-                dir: "integration",
-                zipFile: "integration.zip",
-            ])
+            if (fileExists('integration')) {
+                zip([
+                    archive: true,
+                    dir: 'integration',
+                    zipFile: 'integration.zip',
+                ])
+            }
             archiveArtifacts '*.txt'
             stash([
                 includes: '*.txt',
