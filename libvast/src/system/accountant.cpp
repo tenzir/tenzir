@@ -182,8 +182,7 @@ accountant_type::behavior_type accountant(accountant_actor* self,
                 record(self, key + ".rate", "NaN");
 #if VAST_LOG_LEVEL >= CAF_LOG_LEVEL_INFO
               auto logger = caf::logger::current_logger();
-              if (logger && logger->verbosity()
-                  >= CAF_LOG_LEVEL_INFO) {
+              if (logger && logger->verbosity() >= CAF_LOG_LEVEL_INFO) {
                 auto& acc = self->state.accumulator;
                 if (key == "node_throughput")
                   acc.node += value;

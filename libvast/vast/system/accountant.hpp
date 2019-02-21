@@ -65,15 +65,21 @@ struct accountant_state {
   void command_line_heartbeat();
 };
 
+// clang-format off
 using accountant_type = caf::typed_actor<
   caf::reacts_to<announce_atom, std::string>,
   caf::reacts_to<std::string, std::string>,
-  caf::reacts_to<std::string, timespan>, caf::reacts_to<std::string, timestamp>,
-  caf::reacts_to<std::string, int64_t>, caf::reacts_to<std::string, uint64_t>,
-  caf::reacts_to<std::string, double>, caf::reacts_to<report>,
-  caf::reacts_to<performance_report>, caf::reacts_to<flush_atom>,
+  caf::reacts_to<std::string, timespan>,
+  caf::reacts_to<std::string, timestamp>,
+  caf::reacts_to<std::string, int64_t>,
+  caf::reacts_to<std::string, uint64_t>,
+  caf::reacts_to<std::string, double>,
+  caf::reacts_to<report>,
+  caf::reacts_to<performance_report>,
+  caf::reacts_to<flush_atom>,
   caf::replies_to<status_atom>::with<caf::dictionary<caf::config_value>>,
   caf::reacts_to<telemetry_atom>>;
+// clang-format on
 
 /// Accumulates various performance metrics in a key-value format and writes
 /// them to a log file.
