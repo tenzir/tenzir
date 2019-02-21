@@ -81,7 +81,7 @@ void report_statistics(stateful_actor<exporter_state>* self) {
     auto processed = st.query.processed;
     auto shipped = st.query.shipped;
     auto results = shipped + st.results.size();
-    auto selectivity = double(results) / hits;
+    auto selectivity = double(results) / processed;
     auto msg = report{{"exporter.hits", hits},
                       {"exporter.processed", processed},
                       {"exporter.results", results},
