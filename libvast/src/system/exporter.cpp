@@ -47,7 +47,7 @@ void ship_results(stateful_actor<exporter_state>* self) {
   if (self->state.results.empty() || self->state.query.requested == 0) {
     return;
   }
-  VAST_INFO(self, "relays", self->state.results.size(), "events");
+  VAST_DEBUG(self, "relays", self->state.results.size(), "events");
   message msg;
   if (self->state.results.size() <= self->state.query.requested) {
     self->state.query.requested -= self->state.results.size();
@@ -73,7 +73,7 @@ void report_statistics(stateful_actor<exporter_state>* self) {
   auto& st = self->state;
   timespan runtime = steady_clock::now() - st.start;
   st.query.runtime = runtime;
-  VAST_INFO(self, "completed in", vast::to_string(runtime));
+  VAST_INFO(self, "relayed", rank(hits), "hits in", vast::to_string(runtime));
   self->send(st.sink, st.id, st.query);
   if (st.accountant) {
     auto hits = rank(st.hits);
