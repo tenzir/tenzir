@@ -73,8 +73,9 @@ void report_statistics(stateful_actor<exporter_state>* self) {
   auto& st = self->state;
   timespan runtime = steady_clock::now() - st.start;
   st.query.runtime = runtime;
-  VAST_INFO(self, "shipped", st.query.shipped, "results out of",
-            st.query.processed, "candidates in", vast::to_string(runtime));
+  VAST_INFO(self, "processed", st.query.processed, "candidates in",
+            vast::to_string(runtime), "and shipped", st.query.shipped,
+            "results");
   self->send(st.sink, st.id, st.query);
   if (st.accountant) {
     auto hits = rank(st.hits);
@@ -325,7 +326,7 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
           self->send(x, exporter_atom::value, self);
     },
     [=](run_atom) {
-      VAST_INFO(self, "executes query", self->state.expr);
+      VAST_INFO(self, "executes query:", self->state.expr);
       self->state.start = steady_clock::now();
       if (!has_historical_option(self->state.options))
         return;
