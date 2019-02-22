@@ -20,9 +20,7 @@
 #include <caf/stateful_actor.hpp>
 
 #include "vast/command.hpp"
-#include "vast/expression.hpp"
 #include "vast/filesystem.hpp"
-#include "vast/system/accountant.hpp"
 #include "vast/system/tracker.hpp"
 
 namespace vast::system {
