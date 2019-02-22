@@ -197,9 +197,16 @@ def integrationTests(buildId) {
                 pip install -r "$baseDir/requirements.txt"
                 python "$baseDir/integration.py" -l | while read test ; do
                     echo "\$test" >> all-integration-tests.txt
-                    python "$baseDir/integration.py" --app "$app" -t "\$test" || echo "\$test" >> failed-integration-tests.txt
+                    python "$baseDir/integration.py" --app "$app" -t "\$test" -d "integration" || echo "\$test" >> failed-integration-tests.txt
                 done
             """
+            if (fileExists('integration')) {
+                zip([
+                    archive: true,
+                    dir: 'integration',
+                    zipFile: 'integration.zip',
+                ])
+            }
             archiveArtifacts '*.txt'
             stash([
                 includes: '*.txt',

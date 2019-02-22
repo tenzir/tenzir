@@ -33,6 +33,7 @@ namespace system {
 namespace {
 
 using accountant_actor = accountant_type::stateful_base<accountant_state>;
+constexpr std::chrono::seconds overview_delay(5);
 
 void init(accountant_actor* self, const path& filename) {
   if (!exists(filename.parent())) {
@@ -57,6 +58,9 @@ void init(accountant_actor* self, const path& filename) {
     self->quit(make_error(ec::filesystem_error));
   VAST_DEBUG(self, "kicks off flush loop");
   self->send(self, flush_atom::value);
+#if VAST_LOG_LEVEL >= CAF_LOG_LEVEL_INFO
+  self->delayed_send(self, overview_delay, telemetry_atom::value);
+#endif
 }
 
 template <class T>
@@ -88,7 +92,29 @@ void record(accountant_actor* self, const std::string& key, timestamp x) {
   record(self, key, x.time_since_epoch());
 }
 
+// Calculate rate in seconds resolution from nanosecond duration.
+double calc_rate(const measurement& m) {
+  if (m.duration.count() > 0)
+    return m.events * 1'000'000'000 / m.duration.count();
+  else
+    return std::numeric_limits<double>::quiet_NaN();
+}
+
 } // namespace <anonymous>
+
+void accountant_state::command_line_heartbeat() {
+  auto logger = caf::logger::current_logger();
+  if (logger && logger->verbosity() >= CAF_LOG_LEVEL_INFO
+      && accumulator.node.events > 0) {
+    std::ostringstream oss;
+    auto node_rate = calc_rate(accumulator.node);
+    oss << "ingested " << accumulator.node.events << " events"
+        << " at a rate of " << std::fixed << std::setprecision(2)
+        << node_rate / 1'000 << " events/ms";
+    VAST_INFO_ANON(oss.str());
+  }
+  accumulator = {};
+}
 
 accountant_type::behavior_type accountant(accountant_actor* self,
                                           const path& filename) {
@@ -106,75 +132,83 @@ accountant_type::behavior_type accountant(accountant_actor* self,
       self->state.actor_map.erase(msg.source.id());
     }
   );
-  return {
-    [=](announce_atom, const std::string& name) {
-      self->state.actor_map[self->current_sender()->id()] = name;
-      self->monitor(self->current_sender());
-    },
-    [=](const std::string& key, const std::string& value) {
-      VAST_TRACE(self, "received", key, "from", self->current_sender());
-      record(self, key, value);
-    },
-    // Helpers to avoid to_string(..) in sender context.
-    [=](const std::string& key, timespan value) {
-      VAST_TRACE(self, "received", key, "from", self->current_sender());
-      record(self, key, value);
-    },
-    [=](const std::string& key, timestamp value) {
-      VAST_TRACE(self, "received", key, "from", self->current_sender());
-      record(self, key, value);
-    },
-    [=](const std::string& key, int64_t value) {
-      VAST_TRACE(self, "received", key, "from", self->current_sender());
-      record(self, key, value);
-    },
-    [=](const std::string& key, uint64_t value) {
-      VAST_TRACE(self, "received", key, "from", self->current_sender());
-      record(self, key, value);
-    },
-    [=](const std::string& key, double value) {
-      VAST_TRACE(self, "received", key, "from", self->current_sender());
-      record(self, key, value);
-    },
-    [=](const report& r) {
-      VAST_TRACE(self, "received a report from", self->current_sender());
-      for (const auto& [key, value] : r) {
-        caf::visit([&, key = key](const auto& x) {
-            record(self, key, x);
-            }, value);
-      }
-    },
-    [=](const performance_report& r) {
-      VAST_TRACE(self, "received a performance report from",
-                 self->current_sender());
-      for (const auto& [key, value] : r) {
-        record(self, key + ".events", value.events);
-        record(self, key + ".duration", value.duration);
-        if (value.duration.count() > 0) {
-          // Calculate rate in seconds resolution from nanosecond duration.
-          auto rate = value.events * 1'000'000'000 / value.duration.count();
-          record(self, key + ".rate", rate);
-        } else {
-          record(self, key + ".rate", "NaN");
-        }
-      }
-    },
-    [=](flush_atom) {
-      if (self->state.file)
-        self->state.file.flush();
-      self->state.flush_pending = false;
-    },
-    [=](status_atom) {
-      using caf::put_dictionary;
-      caf::dictionary<caf::config_value> result;
-      auto& known = put_dictionary(result, "known-actors");
-      for (const auto& [aid, name] : self->state.actor_map) {
-        known.emplace(name, aid);
-      }
-      detail::fill_status_map(result, self);
-      return result;
-    }
-  };
+  return {[=](announce_atom, const std::string& name) {
+            self->state.actor_map[self->current_sender()->id()] = name;
+            self->monitor(self->current_sender());
+          },
+          [=](const std::string& key, const std::string& value) {
+            VAST_TRACE(self, "received", key, "from", self->current_sender());
+            record(self, key, value);
+          },
+          // Helpers to avoid to_string(..) in sender context.
+          [=](const std::string& key, timespan value) {
+            VAST_TRACE(self, "received", key, "from", self->current_sender());
+            record(self, key, value);
+          },
+          [=](const std::string& key, timestamp value) {
+            VAST_TRACE(self, "received", key, "from", self->current_sender());
+            record(self, key, value);
+          },
+          [=](const std::string& key, int64_t value) {
+            VAST_TRACE(self, "received", key, "from", self->current_sender());
+            record(self, key, value);
+          },
+          [=](const std::string& key, uint64_t value) {
+            VAST_TRACE(self, "received", key, "from", self->current_sender());
+            record(self, key, value);
+          },
+          [=](const std::string& key, double value) {
+            VAST_TRACE(self, "received", key, "from", self->current_sender());
+            record(self, key, value);
+          },
+          [=](const report& r) {
+            VAST_TRACE(self, "received a report from", self->current_sender());
+            for (const auto& [key, value] : r) {
+              caf::visit([&,
+                          key = key](const auto& x) { record(self, key, x); },
+                         value);
+            }
+          },
+          [=](const performance_report& r) {
+            VAST_TRACE(self, "received a performance report from",
+                       self->current_sender());
+            for (const auto& [key, value] : r) {
+              record(self, key + ".events", value.events);
+              record(self, key + ".duration", value.duration);
+              auto rate = calc_rate(value);
+              if (std::isfinite(rate))
+                record(self, key + ".rate", static_cast<uint64_t>(rate));
+              else
+                record(self, key + ".rate", "NaN");
+#if VAST_LOG_LEVEL >= CAF_LOG_LEVEL_INFO
+              auto logger = caf::logger::current_logger();
+              if (logger && logger->verbosity() >= CAF_LOG_LEVEL_INFO) {
+                auto& acc = self->state.accumulator;
+                if (key == "node_throughput")
+                  acc.node += value;
+              }
+#endif
+            }
+          },
+          [=](flush_atom) {
+            if (self->state.file)
+              self->state.file.flush();
+            self->state.flush_pending = false;
+          },
+          [=](status_atom) {
+            using caf::put_dictionary;
+            caf::dictionary<caf::config_value> result;
+            auto& known = put_dictionary(result, "known-actors");
+            for (const auto& [aid, name] : self->state.actor_map) {
+              known.emplace(name, aid);
+            }
+            detail::fill_status_map(result, self);
+            return result;
+          },
+          [=](telemetry_atom) {
+            self->state.command_line_heartbeat();
+            self->delayed_send(self, overview_delay, telemetry_atom::value);
+          }};
 }
 
 } // namespace system

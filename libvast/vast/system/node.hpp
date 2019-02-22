@@ -20,9 +20,7 @@
 #include <caf/stateful_actor.hpp>
 
 #include "vast/command.hpp"
-#include "vast/expression.hpp"
 #include "vast/filesystem.hpp"
-#include "vast/system/accountant.hpp"
 #include "vast/system/tracker.hpp"
 
 namespace vast::system {
@@ -44,9 +42,6 @@ struct node_state {
 
   /// Points to the instance of the tracker actor.
   tracker_type tracker;
-
-  /// Points to the instance of the accountant actor.
-  accountant_type accountant;
 
   /// Stores how many components per label are active.
   std::unordered_map<std::string, size_t> labels;
