@@ -39,7 +39,7 @@ application::application() {
 
 void render_error(const application& app, const caf::error& err,
                   std::ostream& os) {
-  if (err)
+  if (!err)
     // The user most likely killed the process via CTRL+C, print nothing.
     return;
   os << render(err);
