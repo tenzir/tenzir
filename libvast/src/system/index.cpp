@@ -408,10 +408,10 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
       }
       // Delegate to query supervisor (uses up this worker) and report
       // query ID + some stats to the client.
-      VAST_DEBUG(self, "schedules first", qm.size(), "partition(s) for query",
-                 iter->first);
       auto scheduled = qm.size();
       size_t hits = iter->second.partitions.size() + scheduled;
+      VAST_DEBUG(self, "schedules", scheduled, "/", hits,
+                 "partitions for query", iter->first);
       self->send(st.next_worker(), std::move(expr), std::move(qm),
                  actor_cast<actor>(self->current_sender()));
       if (!st.worker_available())
