@@ -106,26 +106,46 @@ void shutdown(stateful_actor<exporter_state>* self) {
 }
 
 void request_more_hits(stateful_actor<exporter_state>* self) {
-  const auto& st = self->state;
+  auto& st = self->state;
+  // Sanity check.
   if (!has_historical_option(st.options))
     return;
-  auto waiting_for_hits =
-    st.query.received == st.query.scheduled;
-  auto need_more_results = st.query.requested > 0;
-  auto have_no_inflight_requests =
-    st.query.lookups_issued == st.query.lookups_complete;
-  // If we're (1) no longer waiting for index hits, (2) still need more
-  // results, and (3) have no inflight requests to the archive, we ask
-  // the index for more hits.
-  if (!waiting_for_hits && need_more_results && have_no_inflight_requests) {
-    auto remaining = st.query.expected - st.query.received;
-    VAST_ASSERT(remaining > 0);
-    // TODO: Figure out right number of partitions to ask for. For now, we
-    // bound the number by an arbitrary constant.
-    auto n = std::min(remaining, size_t{2});
-    VAST_DEBUG(self, "asks index to process", n, "more partitions");
-    self->send(st.index, st.id, n);
+  // Do nothing if we already shipped everything the client asked for.
+  if (st.query.requested == 0) {
+    VAST_DEBUG(self, "shipped", self->state.query.shipped,
+               "results and waits for client to request more");
+    return;
   }
+  // Do nothing if we still have requests pending.
+  if (st.query.lookups_issued > st.query.lookups_complete) {
+    VAST_DEBUG(self, "currently awaits",
+               st.query.lookups_issued - st.query.lookups_complete,
+               "more lookup results");
+    return;
+  }
+  // If the if-statement above isn't true then the two values must be equal.
+  // Otherwise, we would complete more than we issue.
+  VAST_ASSERT(st.query.lookups_issued == st.query.lookups_complete);
+  // Do nothing if we received everything.
+  if (st.query.received == st.query.expected) {
+    VAST_DEBUG(self, "received results for all", st.query.expected,
+               "partitions");
+    return;
+  }
+  // If the if-statement above isn't true then `received < expected` must hold.
+  // Otherwise, we would receive results for more partitions than qualified as
+  // hits by the INDEX.
+  VAST_ASSERT(st.query.received < st.query.expected);
+  auto remaining = st.query.expected - st.query.received;
+  // TODO: Figure out right number of partitions to ask for. For now, we
+  // bound the number by an arbitrary constant.
+  auto n = std::min(remaining, size_t{2});
+  // Store how many partitions we schedule with our request. When receiving
+  // 'done', we add this number to `received`.
+  st.query.scheduled = n;
+  // Request more hits from the INDEX.
+  VAST_DEBUG(self, "asks index to process", n, "more partitions");
+  self->send(st.index, st.id, n);
 }
 
 } // namespace <anonymous>
@@ -273,24 +293,35 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
         shutdown(self);
     },
     [=](extract_atom) {
+      auto& qs = self->state.query;
+      // Sanity check.
       VAST_DEBUG(self, "got request to extract all events");
-      if (self->state.query.requested == max_events) {
+      if (qs.requested == max_events) {
         VAST_WARNING(self, "ignores extract request, already getting all");
         return;
       }
-      self->state.query.requested = max_events;
+      // Configure state to get all remaining partition results.
+      qs.requested = max_events;
       ship_results(self);
       request_more_hits(self);
     },
-    [=](extract_atom, uint64_t requested) {
-      if (self->state.query.requested == max_events) {
+    [=](extract_atom, uint64_t client_demand) {
+      auto& qs = self->state.query;
+      // Sanity checks.
+      if (client_demand == 0) {
+        VAST_WARNING(self, "ignores extract request with 0 demand");
+        return;
+      }
+      if (qs.requested == max_events) {
         VAST_WARNING(self, "ignores extract request, already getting all");
         return;
       }
-      auto n = std::min(max_events - requested, requested);
-      self->state.query.requested += n;
-      VAST_DEBUG(self, "got request to extract", n, "new events in addition to",
-                 self->state.query.requested, "pending results");
+      VAST_ASSERT(qs.requested < max_events);
+      // Configure state to get up to `client_demand` more events.
+      auto n = std::min(max_events - client_demand, client_demand);
+      VAST_DEBUG(self, "got a request to extract", n,
+                 "more events in addition to", qs.requested, "pending events");
+      qs.requested += n;
       ship_results(self);
       request_more_hits(self);
     },
