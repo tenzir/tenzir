@@ -59,8 +59,8 @@ query_supervisor(caf::stateful_actor<query_supervisor_state>* self,
         VAST_DEBUG(self, "asks", evaluators.size(),
                    "EVALUATOR actor(s) for partition", id);
         self->state.open_requests.emplace(id, evaluators.size());
-        for (auto& indexer : evaluators)
-          self->request(indexer, caf::infinite, client)
+        for (auto& evaluator : evaluators)
+          self->request(evaluator, caf::infinite, client)
             .then([=](done_atom) {
               auto& num_evaluators = self->state.open_requests[id];
               if (--num_evaluators == 0) {
