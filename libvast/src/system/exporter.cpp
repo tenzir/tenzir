@@ -305,11 +305,11 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
       ship_results(self);
       request_more_hits(self);
     },
-    [=](extract_atom, uint64_t client_demand) {
+    [=](extract_atom, uint64_t requested_results) {
       auto& qs = self->state.query;
       // Sanity checks.
-      if (client_demand == 0) {
-        VAST_WARNING(self, "ignores extract request with 0 demand");
+      if (requested_results == 0) {
+        VAST_WARNING(self, "ignores extract request for 0 results");
         return;
       }
       if (qs.requested == max_events) {
@@ -317,10 +317,11 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
         return;
       }
       VAST_ASSERT(qs.requested < max_events);
-      // Configure state to get up to `client_demand` more events.
-      auto n = std::min(max_events - client_demand, client_demand);
+      // Configure state to get up to `requested_results` more events.
+      auto n = std::min(max_events - requested_results, requested_results);
       VAST_DEBUG(self, "got a request to extract", n,
-                 "more events in addition to", qs.requested, "pending events");
+                 "more results in addition to", qs.requested,
+                 "pending results");
       qs.requested += n;
       ship_results(self);
       request_more_hits(self);
