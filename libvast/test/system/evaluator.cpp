@@ -36,7 +36,7 @@ template <class F>
 ids select(const counts& xs, vast::count y, F pred) {
   ids result;
   for (auto x : xs)
-    result.append_bits(pred(x, y), 1);
+    result.append_bit(pred(x, y));
   return result;
 }
 
