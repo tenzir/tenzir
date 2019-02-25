@@ -154,16 +154,6 @@ def coverageReport(buildId) {
                 sourceEncoding: 'ASCII',
                 zoomCoverageChart: false,
             ])
-            def query = [
-               "token=${CODECOV_TOKEN}",
-               "commit=${env.GIT_COMMIT}",
-               "branch=${env.GIT_BRANCH}",
-               "build=${env.BUILD_NUMBER}",
-               "build_url=${BUILD_URL}",
-               "service=jenkins",
-            ]
-            def queryStr = query.join('&')
-            sh "curl -X POST --data-binary @cobertura.xml \"https://codecov.io/upload/v2?${queryStr}\""
             stash includes: 'coverage.json', name: 'coverage-result'
         } catch (Exception e) {
             echo "exception: $e"
@@ -413,7 +403,7 @@ def coverageStatus(buildIds) {
         return [
             success: true,
             summary: 'Generated coverage report',
-            text: "The coverage report was successfully generated and uploaded to codecov.io.",
+            text: "The coverage report was successfully generated.",
         ]
     [
         success: false,
@@ -443,7 +433,6 @@ pipeline {
         PrettyJobBaseName = env.JOB_BASE_NAME.replace('%2F', '/')
         PrettyJobName = "VAST/$PrettyJobBaseName #${env.BUILD_NUMBER}"
         ASAN_OPTIONS = 'detect_leaks=0'
-        CODECOV_TOKEN=credentials('codecov-vast')
     }
     stages {
         // Checkout all involved repositories.
