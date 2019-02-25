@@ -68,7 +68,9 @@ caf::error default_configuration::merge_root_options(system::application& app) {
   app.root.options.parse(options, command_line.begin(), command_line.end());
   // Move everything into the system-wide options, but use "vast" as category
   // instead of the default "global" category.
-  content["vast"].as_dictionary().insert(options.begin(), options.end());
+  auto& vast_section = content["vast"].as_dictionary();
+  for (auto& [key, value] : options)
+    vast_section.insert_or_assign(key, value);
   auto default_fn = caf::defaults::logger::file_name;
   if (caf::get_or(*this, "logger.file-name", default_fn) == default_fn) {
     path dir = get_or(*this, "vast.directory", defaults::command::directory);
