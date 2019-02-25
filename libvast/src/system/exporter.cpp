@@ -21,17 +21,15 @@
 #include "vast/concept/printable/vast/uuid.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/fill_status_map.hpp"
+#include "vast/detail/narrow.hpp"
 #include "vast/event.hpp"
 #include "vast/expression_visitors.hpp"
 #include "vast/logger.hpp"
-#include "vast/table_slice.hpp"
-#include "vast/to_events.hpp"
-
 #include "vast/system/archive.hpp"
 #include "vast/system/atoms.hpp"
 #include "vast/system/exporter.hpp"
-
-#include "vast/detail/assert.hpp"
+#include "vast/table_slice.hpp"
+#include "vast/to_events.hpp"
 
 using namespace std::chrono;
 using namespace std::string_literals;
@@ -108,8 +106,10 @@ void shutdown(stateful_actor<exporter_state>* self) {
 void request_more_hits(stateful_actor<exporter_state>* self) {
   auto& st = self->state;
   // Sanity check.
-  if (!has_historical_option(st.options))
+  if (!has_historical_option(st.options)) {
+    VAST_WARNING(self, "requested more hits for continuous query");
     return;
+  }
   // Do nothing if we already shipped everything the client asked for.
   if (st.query.requested == 0) {
     VAST_DEBUG(self, "shipped", self->state.query.shipped,
@@ -145,7 +145,7 @@ void request_more_hits(stateful_actor<exporter_state>* self) {
   st.query.scheduled = n;
   // Request more hits from the INDEX.
   VAST_DEBUG(self, "asks index to process", n, "more partitions");
-  self->send(st.index, st.id, n);
+  self->send(st.index, st.id, detail::narrow<uint32_t>(n));
 }
 
 } // namespace <anonymous>
