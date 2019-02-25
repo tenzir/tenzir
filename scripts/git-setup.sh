@@ -11,8 +11,8 @@ usage() {
 install_format_show() {
   git config --local --get alias.format-show >/dev/null
   if [ $? -ne 0 ] || [ "$force" = TRUE ]; then
-    echo 'adding alias for `git format-show`'
-    git config --local alias.format-show '! R=0; while read line; do R=1; echo "$line"; done < <(git diff -U0 --no-color $(git merge-base origin/master HEAD) | $(git rev-parse --show-toplevel)/scripts/clang-format-diff.py -p1); exit $R'
+    echo 'Adding alias for `git format-show`'
+    git config --local alias.format-show '! git diff -U0 --no-color $(git merge-base origin/master HEAD) | $(git rev-parse --show-toplevel)/scripts/clang-format-diff.py -p1'
   else
     echo 'alias for `git format-show` already exists, skipping'
   fi

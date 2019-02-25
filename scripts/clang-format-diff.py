@@ -35,6 +35,7 @@ else:
 
 
 def main():
+  retcode = 0
   parser = argparse.ArgumentParser(description=
                                    'Reformat changed lines in diff. Without -i '
                                    'option just output the diff that would be '
@@ -122,6 +123,8 @@ def main():
       diff_string = ''.join(diff)
       if len(diff_string) > 0:
         sys.stdout.write(diff_string)
+        retcode = 1
+  sys.exit(retcode)
 
 if __name__ == '__main__':
   main()
