@@ -39,8 +39,7 @@ namespace vast::system {
 
 default_application::default_application() {
   // Set global options.
-  root.options
-    .add<std::string>("directory,d", "directory for persistent state")
+  root.options.add<std::string>("directory,d", "directory for persistent state")
     .add<std::string>("endpoint,e", "node endpoint")
     .add<std::string>("id,i", "the unique ID of this node");
   // Default options for commands.
