@@ -60,21 +60,20 @@ query_supervisor(caf::stateful_actor<query_supervisor_state>* self,
                    "EVALUATOR actor(s) for partition", id);
         self->state.open_requests.emplace(id, evaluators.size());
         for (auto& evaluator : evaluators)
-          self->request(evaluator, caf::infinite, client)
-            .then([=](done_atom) {
-              auto& num_evaluators = self->state.open_requests[id];
-              if (--num_evaluators == 0) {
-                VAST_DEBUG(self, "collected all results for partition", id);
-                self->state.open_requests.erase(id);
-                // Ask master for more work after receiving the last sub
-                // result.
-                if (self->state.open_requests.empty()) {
-                  VAST_DEBUG(self, "collected all results for all partitions");
-                  self->send(client, done_atom::value);
-                  self->send(master, worker_atom::value, self);
-                }
+          self->request(evaluator, caf::infinite, client).then([=](done_atom) {
+            auto& num_evaluators = self->state.open_requests[id];
+            if (--num_evaluators == 0) {
+              VAST_DEBUG(self, "collected all results for partition", id);
+              self->state.open_requests.erase(id);
+              // Ask master for more work after receiving the last sub
+              // result.
+              if (self->state.open_requests.empty()) {
+                VAST_DEBUG(self, "collected all results for all partitions");
+                self->send(client, done_atom::value);
+                self->send(master, worker_atom::value, self);
               }
-            });
+            }
+          });
       }
     }};
 }
