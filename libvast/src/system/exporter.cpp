@@ -282,7 +282,8 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
     },
     [=](done_atom, const caf::error& err) {
       auto& st = self->state;
-      VAST_DEBUG("received done:", VAST_ARG(err), VAST_ARG("query", st.query));
+      VAST_DEBUG(self, "received done:", VAST_ARG(err),
+                 VAST_ARG("query", st.query));
       auto sender = self->current_sender();
       if (sender == st.archive) {
         if (err)
