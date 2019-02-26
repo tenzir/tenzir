@@ -92,11 +92,13 @@ behavior indexer(stateful_actor<indexer_state>* self, path dir,
         },
         [=](unit_t&, const error& err) {
           auto& st = self->state;
-          if (err && err != caf::exit_reason::user_shutdown)
-            VAST_ERROR(self, "got a stream error:", self->system().render(err));
           if (auto flush_err = st.col.flush_to_disk())
             VAST_WARNING(self, "failed to persist state:",
                          self->system().render(flush_err));
+          if (err && err != caf::exit_reason::user_shutdown) {
+            VAST_ERROR(self, "got a stream error:", self->system().render(err));
+            return;
+          }
           self->send(st.index, done_atom::value, st.partition_id);
         });
     },
