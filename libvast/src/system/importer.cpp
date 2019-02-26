@@ -87,9 +87,7 @@ caf::error importer_state::write_state() {
 }
 
 int32_t importer_state::available_ids() const noexcept {
-  auto f = [](uint64_t x, const id_generator& y) {
-    return x + y.remaining();
-  };
+  auto f = [](uint64_t x, const id_generator& y) { return x + y.remaining(); };
   auto res = std::accumulate(id_generators.begin(), id_generators.end(),
                              uint64_t{0}, f);
   auto upper_bound = static_cast<uint64_t>(std::numeric_limits<int32_t>::max());
@@ -257,7 +255,7 @@ public:
     // Restrict by maximum amount of credit we can reach.
     if (max_possible < max_available)
       return max_possible;
-    // Restruct by maximum amount of available IDs (and fetch more).
+    // Restrict by maximum number of available IDs (and fetch more).
     if (max_credit <= desired) {
       // Get more IDs if we're running out.
       VAST_DEBUG(self_, "had to limit acquired credit to", max_credit);
@@ -265,7 +263,7 @@ public:
       st.in_flight_slices += max_credit;
       return max_credit;
     }
-    // No reason to limit credit.
+    // No reason to limit credit, so we can use the desired value.
     st.in_flight_slices += desired;
     return desired;
   }
