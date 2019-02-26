@@ -11,8 +11,10 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
+#include <cmath>
 #include <ios>
 #include <iomanip>
+#include <locale>
 
 #include "vast/logger.hpp"
 
@@ -107,10 +109,10 @@ void accountant_state::command_line_heartbeat() {
   if (logger && logger->verbosity() >= CAF_LOG_LEVEL_INFO
       && accumulator.node.events > 0) {
     std::ostringstream oss;
-    auto node_rate = calc_rate(accumulator.node);
+    oss.imbue(std::locale(""));
+    auto node_rate = std::round(calc_rate(accumulator.node));
     oss << "ingested " << accumulator.node.events << " events"
-        << " at a rate of " << std::fixed << std::setprecision(2)
-        << node_rate / 1'000 << " events/ms";
+        << " at a rate of " << node_rate << " events/sec";
     VAST_INFO_ANON(oss.str());
   }
   accumulator = {};
