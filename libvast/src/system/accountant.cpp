@@ -11,8 +11,10 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include <ios>
+#include <cmath>
 #include <iomanip>
+#include <ios>
+#include <locale>
 
 #include "vast/logger.hpp"
 
@@ -107,10 +109,10 @@ void accountant_state::command_line_heartbeat() {
   if (logger && logger->verbosity() >= CAF_LOG_LEVEL_INFO
       && accumulator.node.events > 0) {
     std::ostringstream oss;
-    auto node_rate = calc_rate(accumulator.node);
-    oss << "ingested " << accumulator.node.events << " events"
-        << " at a rate of " << std::fixed << std::setprecision(2)
-        << node_rate / 1'000 << " events/ms";
+    oss.imbue(std::locale(""));
+    auto node_rate = std::round(calc_rate(accumulator.node));
+    oss << "ingested " << accumulator.node.events << " events at a rate of "
+        << node_rate << " events/sec";
     VAST_INFO_ANON(oss.str());
   }
   accumulator = {};
@@ -182,11 +184,9 @@ accountant_type::behavior_type accountant(accountant_actor* self,
                 record(self, key + ".rate", "NaN");
 #if VAST_LOG_LEVEL >= CAF_LOG_LEVEL_INFO
               auto logger = caf::logger::current_logger();
-              if (logger && logger->verbosity() >= CAF_LOG_LEVEL_INFO) {
-                auto& acc = self->state.accumulator;
+              if (logger && logger->verbosity() >= CAF_LOG_LEVEL_INFO)
                 if (key == "node_throughput")
-                  acc.node += value;
-              }
+                  self->state.accumulator.node += value;
 #endif
             }
           },
