@@ -94,9 +94,7 @@ void column_index::add(const table_slice_ptr& x) {
   VAST_TRACE(VAST_ARG(x));
   if (has_skip_attribute_)
     return;
-  auto offset = x->offset();
-  for (table_slice::size_type row = 0; row < x->rows(); ++row)
-    idx_->append(x->at(row, col_), offset + row);
+  x->append_column_to_index(col_, *idx_);
 }
 
 caf::expected<bitmap> column_index::lookup(relational_operator op,
