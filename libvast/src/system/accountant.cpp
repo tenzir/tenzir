@@ -111,8 +111,8 @@ void accountant_state::command_line_heartbeat() {
     std::ostringstream oss;
     oss.imbue(std::locale(""));
     auto node_rate = std::round(calc_rate(accumulator.node));
-    oss << "ingested " << accumulator.node.events << " events"
-        << " at a rate of " << node_rate << " events/sec";
+    oss << "ingested " << accumulator.node.events << " events at a rate of "
+        << node_rate << " events/sec";
     VAST_INFO_ANON(oss.str());
   }
   accumulator = {};
