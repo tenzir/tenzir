@@ -12,8 +12,8 @@
  ******************************************************************************/
 
 #include <cmath>
-#include <ios>
 #include <iomanip>
+#include <ios>
 #include <locale>
 
 #include "vast/logger.hpp"
