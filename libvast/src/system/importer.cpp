@@ -87,11 +87,11 @@ caf::error importer_state::write_state() {
 }
 
 int32_t importer_state::available_ids() const noexcept {
-  auto f = [](int32_t x, const id_generator& y) {
-    return x + y.remaining();
-  };
-  return std::accumulate(id_generators.begin(), id_generators.end(),
-                         int32_t{0}, f);
+  auto f = [](uint64_t x, const id_generator& y) { return x + y.remaining(); };
+  auto res = std::accumulate(id_generators.begin(), id_generators.end(),
+                             uint64_t{0}, f);
+  auto upper_bound = static_cast<uint64_t>(std::numeric_limits<int32_t>::max());
+  return static_cast<int32_t>(std::min(res, upper_bound));
 }
 
 id importer_state::next_id_block() {
@@ -236,16 +236,26 @@ public:
     CAF_IGNORE_UNUSED(path);
     // This function makes sure that we never hand out more credit than we have
     // IDs available.
-    if (desired == 0) {
+    if (desired <= 0) {
       // Easy decision if the path acquires no new credit.
       return 0;
     }
     // Calculate how much more in-flight events we can allow.
     auto& st = self_->state;
+    VAST_ASSERT(st.in_flight_slices >= 0);
     CAF_ASSERT(st.available_ids() % st.max_table_slice_size == 0);
-    auto max_credit = (st.available_ids() / st.max_table_slice_size)
-                      - st.in_flight_slices;
+    // Calculate how many table slices we can handle with available IDs.
+    auto max_available = st.available_ids() / st.max_table_slice_size;
+    // Calculate what is the numeric limit of legal credit.
+    auto max_possible = std::numeric_limits<int32_t>::max()
+                        - st.in_flight_slices;
+    // Calculate what we can hand out as new credit.
+    auto max_credit = max_available - st.in_flight_slices;
     VAST_ASSERT(max_credit >= 0);
+    // Restrict by maximum amount of credit we can reach.
+    if (max_possible < max_available)
+      return max_possible;
+    // Restrict by maximum number of available IDs (and fetch more).
     if (max_credit <= desired) {
       // Get more IDs if we're running out.
       VAST_DEBUG(self_, "had to limit acquired credit to", max_credit);
@@ -253,6 +263,7 @@ public:
       st.in_flight_slices += max_credit;
       return max_credit;
     }
+    // No reason to limit credit, so we can use the desired value.
     st.in_flight_slices += desired;
     return desired;
   }

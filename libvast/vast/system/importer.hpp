@@ -66,15 +66,15 @@ struct importer_state {
 
     /// @returns the next ID and advances the position in the range.
     id next(size_t num = 1) noexcept {
-      VAST_ASSERT(static_cast<size_t>(remaining()) >= num);
+      VAST_ASSERT(remaining() >= num);
       auto result = i;
       i += num;
       return result;
     }
 
     /// @returns how many more times `next` returns a valid ID.
-    int32_t remaining() const noexcept {
-      return static_cast<int32_t>(last - i);
+    uint64_t remaining() const noexcept {
+      return last - i;
     }
   };
 
