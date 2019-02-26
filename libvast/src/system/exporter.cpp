@@ -191,9 +191,9 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
         report_statistics(self);
     }
   );
-  auto finished = [&](const query_status& qs) -> bool {
+  auto finished = [](const query_status& qs) -> bool {
     return qs.received == qs.expected
-      && qs.lookups_issued == qs.lookups_complete;
+           && qs.lookups_issued == qs.lookups_complete;
   };
   auto handle_batch = [=](std::vector<event> candidates) {
     auto& st = self->state;
@@ -282,6 +282,7 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
     },
     [=](done_atom, const caf::error& err) {
       auto& st = self->state;
+      VAST_DEBUG("received done:", VAST_ARG(err), VAST_ARG("query", st.query));
       auto sender = self->current_sender();
       if (sender == st.archive) {
         if (err)
@@ -291,6 +292,8 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
       }
       if (finished(st.query))
         shutdown(self);
+      else
+        request_more_hits(self);
     },
     [=](extract_atom) {
       auto& qs = self->state.query;
