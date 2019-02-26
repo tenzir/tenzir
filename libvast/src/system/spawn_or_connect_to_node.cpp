@@ -28,7 +28,8 @@ using result_t = caf::variant<caf::error, caf::actor, scope_linked_actor>;
 } // namespace <anonymous>
 
 result_t spawn_or_connect_to_node(caf::scoped_actor& self,
-                                  const caf::settings& opts) {
+                                  const caf::settings& opts,
+                                  const caf::settings& node_opts) {
   VAST_TRACE(VAST_ARG(opts));
   auto convert = [](auto&& result) -> result_t {
     if (result)
@@ -37,8 +38,8 @@ result_t spawn_or_connect_to_node(caf::scoped_actor& self,
       return std::move(result.error());
   };
   if (caf::get_or<bool>(opts, "node", false))
-    return convert(spawn_node(self, opts));
-  return convert(connect_to_node(self, opts));
+    return convert(spawn_node(self, node_opts));
+  return convert(connect_to_node(self, node_opts));
 }
 
 } // namespace vast::system

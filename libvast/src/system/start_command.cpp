@@ -60,7 +60,7 @@ caf::message start_command(const command&, caf::actor_system& sys,
   // Get a convenient and blocking way to interact with actors.
   caf::scoped_actor self{sys};
   // Spawn our node.
-  auto node_opt = spawn_node(self, options);
+  auto node_opt = spawn_node(self, content(sys.config()));
   if (!node_opt)
     return caf::make_message(std::move(node_opt.error()));
   auto& node = node_opt->get();
