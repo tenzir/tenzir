@@ -16,6 +16,8 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "caf/meta/type_name.hpp"
+
 #include "vast/time.hpp"
 
 namespace vast::system {
@@ -35,8 +37,9 @@ struct query_status {
 
 template <class Inspector>
 auto inspect(Inspector& f, query_status& qs) {
-  return f(qs.runtime, qs.expected, qs.scheduled, qs.received, qs.processed,
-           qs.shipped, qs.requested);
+  return f(caf::meta::type_name("query_status"), qs.runtime, qs.expected,
+           qs.scheduled, qs.received, qs.lookups_issued, qs.lookups_complete,
+           qs.processed, qs.shipped, qs.requested);
 }
 
 } // namespace vast::system
