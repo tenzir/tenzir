@@ -291,6 +291,7 @@ behavior importer(stateful_actor<importer_state>* self, path dir,
     self->state.accountant = actor_cast<accountant_type>(a);
     self->send(self->state.accountant, announce_atom::value, self->name());
     self->delayed_send(self, defs::telemetry_rate, telemetry_atom::value);
+    self->state.last_report = stopwatch::now();
   }
   self->set_exit_handler(
     [=](const exit_msg& msg) {
