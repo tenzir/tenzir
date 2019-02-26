@@ -35,7 +35,7 @@ namespace system {
 namespace {
 
 using accountant_actor = accountant_type::stateful_base<accountant_state>;
-constexpr std::chrono::seconds overview_delay(5);
+constexpr std::chrono::seconds overview_delay(3);
 
 void init(accountant_actor* self, const path& filename) {
   if (!exists(filename.parent())) {
