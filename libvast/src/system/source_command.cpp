@@ -92,7 +92,8 @@ caf::message source_command(const command& cmd, caf::actor_system& sys,
     self->send(src, std::move(*expr));
   }
   // Get VAST node.
-  auto node_opt = spawn_or_connect_to_node(self, options, content(sys.config()));
+  auto node_opt = spawn_or_connect_to_node(self, options,
+                                           content(sys.config()));
   if (auto err = caf::get_if<caf::error>(&node_opt))
     return make_message(std::move(*err));
   auto& node = caf::holds_alternative<caf::actor>(node_opt)
