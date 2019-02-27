@@ -531,10 +531,6 @@ export(EXPORT VASTTargets
   NAMESPACE vast::
 )
 
-# install date header to PREFIX/include/date
-install(DIRECTORY aux/date/include/date
-        DESTINATION include FILES_MATCHING PATTERN "date.h")
-
 install(EXPORT VASTTargets
   DESTINATION "${INSTALL_VAST_CMAKEDIR}"
   NAMESPACE vast::
