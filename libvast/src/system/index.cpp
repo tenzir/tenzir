@@ -453,8 +453,9 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
       }
       // Delegate to query supervisor (uses up this worker) and report
       // query ID + some stats to the client.
-      VAST_DEBUG(self, "schedules first", qm.size(), "partition(s) for query",
-                 iter->first);
+      VAST_DEBUG(self, "schedules", qm.size(), "more partition(s) for query",
+                 iter->first, "with", iter->second.partitions.size(),
+                 "remaining");
       self->send(st.next_worker(), iter->second.expr, std::move(qm), client);
       // Cleanup if we exhausted all candidates.
       if (iter->second.partitions.empty())
