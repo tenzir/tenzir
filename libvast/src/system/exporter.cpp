@@ -116,11 +116,11 @@ void request_more_hits(stateful_actor<exporter_state>* self) {
                "results and waits for client to request more");
     return;
   }
-  // Do nothing if we still have requests pending.
+  // Do nothing if we are still waiting for results from the ARCHIVE.
   if (st.query.lookups_issued > st.query.lookups_complete) {
     VAST_DEBUG(self, "currently awaits",
                st.query.lookups_issued - st.query.lookups_complete,
-               "more lookup results");
+               "more lookup results from the archive");
     return;
   }
   // If the if-statement above isn't true then the two values must be equal.
@@ -128,8 +128,7 @@ void request_more_hits(stateful_actor<exporter_state>* self) {
   VAST_ASSERT(st.query.lookups_issued == st.query.lookups_complete);
   // Do nothing if we received everything.
   if (st.query.received == st.query.expected) {
-    VAST_DEBUG(self, "received results for all", st.query.expected,
-               "partitions");
+    VAST_DEBUG(self, "received hits for all", st.query.expected, "partitions");
     return;
   }
   // If the if-statement above isn't true then `received < expected` must hold.
@@ -260,41 +259,45 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
     [=](table_slice_ptr slice) {
       handle_batch(to_events(*slice, self->state.hits));
     },
-    [=](done_atom) {
+    [=](done_atom) -> caf::result<void> {
+      auto& st = self->state;
+      auto& qs = st.query;
+      // Ignore this message until we got all lookup results from the ARCHIVE.
+      // Otherwise, we can end up in weirdly interleaved state.
+      if (qs.lookups_issued != qs.lookups_complete)
+        return caf::skip;
       // Figure out if we're done by bumping the counter for `received` and
       // check whether it reaches `expected`.
-      auto& st = self->state;
       timespan runtime = steady_clock::now() - st.start;
-      st.query.runtime = runtime;
-      st.query.received += st.query.scheduled;
-      if (st.query.received < st.query.expected) {
-        VAST_DEBUG(self, "received", st.query.received, '/',
-                   st.query.expected, "ID sets");
+      qs.runtime = runtime;
+      qs.received += qs.scheduled;
+      if (qs.received < qs.expected) {
+        VAST_DEBUG(self, "received hits from", qs.received, '/', qs.expected,
+                   "partitions");
         request_more_hits(self);
       } else {
-        VAST_DEBUG(self, "received all", st.query.expected,
-                   "ID set(s) in", vast::to_string(runtime));
+        VAST_DEBUG(self, "received all hits from", qs.expected,
+                   "partition(s) in", vast::to_string(runtime));
         if (st.accountant)
           self->send(st.accountant, "exporter.hits.runtime", runtime);
-        if (finished(st.query))
+        if (finished(qs))
           shutdown(self);
       }
+      return caf::unit;
     },
     [=](done_atom, const caf::error& err) {
       auto& st = self->state;
-      VAST_DEBUG(self, "received done:", VAST_ARG(err),
-                 VAST_ARG("query", st.query));
-      auto sender = self->current_sender();
-      if (sender == st.archive) {
-        if (err)
-          VAST_DEBUG(self, "received error from archive:",
-              self->system().render(err));
-        ++st.query.lookups_complete;
+      if (self->current_sender() != st.archive) {
+        VAST_WARNING(self, "received ('done', error) from unexpected actor");
+        return;
       }
-      if (finished(st.query))
-        shutdown(self);
-      else
-        request_more_hits(self);
+      auto& qs = st.query;
+      ++qs.lookups_complete;
+      VAST_DEBUG(self, "received done from archive:", VAST_ARG(err),
+                 VAST_ARG("query", qs));
+      // We skip 'done' messages of the query supervisors until we process all
+      // hits first. Hence, we can never be finished here.
+      VAST_ASSERT(!finished(qs));
     },
     [=](extract_atom) {
       auto& qs = self->state.query;
