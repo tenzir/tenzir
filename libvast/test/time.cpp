@@ -86,12 +86,15 @@ TEST(compound durations) {
 timespan to_hours(timespan ts) {
   return duration_cast<hours>(ts) % 24;
 }
+
 timespan to_minutes(timespan ts) {
   return duration_cast<minutes>(ts) % 60;
 }
+
 timespan to_seconds(timespan ts) {
   return duration_cast<seconds>(ts) % 60;
 }
+
 timespan to_microseconds(timespan ts) {
   return duration_cast<microseconds>(ts) % 1'000'000;
 }

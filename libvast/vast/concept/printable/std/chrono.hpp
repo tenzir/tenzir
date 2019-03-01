@@ -45,16 +45,13 @@ struct duration_printer : printer<duration_printer<Rep, Period, Policy>> {
   }
 
   template <class R, class P>
-  static std::string units(std::chrono::duration<R, P>) {
-    if constexpr (Period::type::den == 1)
-      return "not implemented";
-    else
-      return "not implemented";
+  static auto units(std::chrono::duration<R, P>) {
+    return "not implemented";
   }
 
 #define UNIT_SUFFIX(type, suffix)                                              \
   template <class R>                                                           \
-  static std::string units(std::chrono::duration<R, type>) {                   \
+  static auto units(std::chrono::duration<R, type>) {                          \
     return suffix;                                                             \
   }
 
@@ -113,7 +110,11 @@ struct year_month_day {
   unsigned char day;
 };
 
-inline year_month_day from_days(days dp) noexcept {
+// Logic extracted from
+// https://github.com/HowardHinnant/date/blob/master/include/date/date.h
+// An explanation for this algorithm can be found here:
+// http://howardhinnant.github.io/date_algorithms.html#civil_from_days
+constexpr year_month_day from_days(days dp) noexcept {
   static_assert(std::numeric_limits<unsigned>::digits >= 18,
                 "This algorithm has not been ported to a 16 bit unsigned "
                 "integer");
@@ -122,16 +123,13 @@ inline year_month_day from_days(days dp) noexcept {
                 "integer");
   auto const z = dp.count() + 719468;
   auto const era = (z >= 0 ? z : z - 146096) / 146097;
-  auto const doe = static_cast<unsigned>(z - era * 146097); // [0, 146096]
-  auto const yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096)
-                   / 365; // [0, 399]
+  auto const doe = static_cast<unsigned>(z - era * 146097);
+  auto const yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
   auto const y = static_cast<days::rep>(yoe) + era * 400;
-  auto const doy = doe - (365 * yoe + yoe / 4 - yoe / 100); // [0, 365]
-  auto const mp = (5 * doy + 2) / 153;                      // [0, 11]
-  auto const d = static_cast<unsigned char>(doy - (153 * mp + 2) / 5
-                                            + 1); // [1, 31]
-  auto const m = static_cast<unsigned char>(mp < 10 ? mp + 3
-                                                    : mp - 9); // [1, 12]
+  auto const doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+  auto const mp = (5 * doy + 2) / 153;
+  auto const d = static_cast<unsigned char>(doy - (153 * mp + 2) / 5 + 1);
+  auto const m = static_cast<unsigned char>(mp < 10 ? mp + 3 : mp - 9);
   return year_month_day{static_cast<unsigned short>(y + (m <= 2)), m, d};
 }
 
@@ -188,5 +186,3 @@ const auto time_point = time_point_printer<Clock, Duration>{};
 
 } // namespace printers
 } // namespace vast
-
-

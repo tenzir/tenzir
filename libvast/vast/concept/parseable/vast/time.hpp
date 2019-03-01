@@ -119,8 +119,12 @@ auto const timespan = duration<vast::timespan::rep, vast::timespan::period>;
 struct ymdhms_parser : vast::parser<ymdhms_parser> {
   using attribute = timestamp;
 
-  inline sys_days to_days(unsigned short year, unsigned char month,
-                          unsigned char day) const {
+  // Logic extracted from
+  // https://github.com/HowardHinnant/date/blob/master/include/date/date.h
+  // An explanation for this algorithm can be found here:
+  // http://howardhinnant.github.io/date_algorithms.html#days_from_civil
+  constexpr sys_days to_days(unsigned short year, unsigned char month,
+                             unsigned char day) const {
     static_assert(std::numeric_limits<unsigned>::digits >= 18,
                   "This algorithm has not been ported to a 16 bit unsigned "
                   "integer");
@@ -131,10 +135,9 @@ struct ymdhms_parser : vast::parser<ymdhms_parser> {
     auto const m = static_cast<unsigned>(month);
     auto const d = static_cast<unsigned>(day);
     auto const era = (y >= 0 ? y : y - 399) / 400;
-    auto const yoe = static_cast<unsigned>(y - era * 400); // [0, 399]
-    auto const doy = (153 * (m > 2 ? m - 3 : m + 9) + 2) / 5 + d
-                     - 1;                                   // [0, 365]
-    auto const doe = yoe * 365 + yoe / 4 - yoe / 100 + doy; // [0, 146096]
+    auto const yoe = static_cast<unsigned>(y - era * 400);
+    auto const doy = (153 * (m > 2 ? m - 3 : m + 9) + 2) / 5 + d - 1;
+    auto const doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
     return sys_days{} + days{era * 146097 + static_cast<int>(doe) - 719468};
   }
 
