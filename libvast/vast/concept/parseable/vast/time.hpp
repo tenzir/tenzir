@@ -17,8 +17,6 @@
 #include <ctime>
 #include <cstring>
 
-#include <date/date.h>
-
 #include "vast/access.hpp"
 #include "vast/time.hpp"
 #include "vast/concept/parseable/core.hpp"
@@ -121,6 +119,28 @@ auto const timespan = duration<vast::timespan::rep, vast::timespan::period>;
 struct ymdhms_parser : vast::parser<ymdhms_parser> {
   using attribute = timestamp;
 
+  // Logic extracted from
+  // https://github.com/HowardHinnant/date/blob/master/include/date/date.h
+  // An explanation for this algorithm can be found here:
+  // http://howardhinnant.github.io/date_algorithms.html#days_from_civil
+  constexpr sys_days to_days(unsigned short year, unsigned char month,
+                             unsigned char day) const {
+    static_assert(std::numeric_limits<unsigned>::digits >= 18,
+                  "This algorithm has not been ported to a 16 bit unsigned "
+                  "integer");
+    static_assert(std::numeric_limits<int>::digits >= 20,
+                  "This algorithm has not been ported to a 16 bit signed "
+                  "integer");
+    auto const y = static_cast<int>(year) - (month <= 2);
+    auto const m = static_cast<unsigned>(month);
+    auto const d = static_cast<unsigned>(day);
+    auto const era = (y >= 0 ? y : y - 399) / 400;
+    auto const yoe = static_cast<unsigned>(y - era * 400);
+    auto const doy = (153 * (m > 2 ? m - 3 : m + 9) + 2) / 5 + d - 1;
+    auto const doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    return sys_days{} + days{era * 146097 + static_cast<int>(doe) - 719468};
+  }
+
   template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& x) const {
     using namespace std::chrono;
@@ -153,7 +173,7 @@ struct ymdhms_parser : vast::parser<ymdhms_parser> {
       auto dhms = std::tie(dys, hms);
       if (!p(f, l, yrs, mons, dhms))
         return false;
-      date::sys_days ymd = date::year{yrs} / mons / dys;
+      sys_days ymd = to_days(yrs, mons, dys);
       auto delta = hours{hrs} + minutes{mins} + double_seconds{secs};
       x = timestamp{ymd} + duration_cast<timespan>(delta);
       return true;

@@ -11,8 +11,6 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include <date/date.h>
-
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/time.hpp"
 #include "vast/concept/printable/std/chrono.hpp"
@@ -25,7 +23,6 @@
 using namespace vast;
 using namespace std::chrono;
 using namespace std::chrono_literals;
-using namespace date;
 
 namespace {
 
@@ -86,57 +83,73 @@ TEST(compound durations) {
   CHECK(!p("-10m-8ms1ns"));
 }
 
+timespan to_hours(timespan ts) {
+  return duration_cast<hours>(ts) % 24;
+}
+
+timespan to_minutes(timespan ts) {
+  return duration_cast<minutes>(ts) % 60;
+}
+
+timespan to_seconds(timespan ts) {
+  return duration_cast<seconds>(ts) % 60;
+}
+
+timespan to_microseconds(timespan ts) {
+  return duration_cast<microseconds>(ts) % 1'000'000;
+}
+
 TEST(ymdshms timestamp parser) {
   timestamp ts;
   MESSAGE("YYYY-MM-DD+HH:MM:SS.ssss");
   CHECK(parsers::timestamp("2012-08-12+23:55:04.001234", ts));
   auto sd = floor<days>(ts);
-  auto t = make_time(ts - sd);
-  CHECK(sd == 2012_y/8/12);
-  CHECK(t.hours() == hours{23});
-  CHECK(t.minutes() == minutes{55});
-  CHECK(t.seconds() == seconds{4});
-  CHECK(duration_cast<microseconds>(t.subseconds()) == microseconds{1234});
+  auto t = ts - sd;
+  CHECK(sd == years{2012} / 8 / 12);
+  CHECK(to_hours(t) == hours{23});
+  CHECK(to_minutes(t) == minutes{55});
+  CHECK(to_seconds(t) == seconds{4});
+  CHECK(to_microseconds(t) == microseconds{1234});
   MESSAGE("YYYY-MM-DD+HH:MM:SS");
   CHECK(parsers::timestamp("2012-08-12+23:55:04", ts));
   sd = floor<days>(ts);
-  t = make_time(ts - sd);
-  CHECK(sd == 2012_y/8/12);
-  CHECK(t.hours() == hours{23});
-  CHECK(t.minutes() == minutes{55});
-  CHECK(t.seconds() == seconds{4});
+  t = ts - sd;
+  CHECK(sd == years{2012} / 8 / 12);
+  CHECK(to_hours(t) == hours{23});
+  CHECK(to_minutes(t) == minutes{55});
+  CHECK(to_seconds(t) == seconds{4});
   MESSAGE("YYYY-MM-DD+HH:MM");
   CHECK(parsers::timestamp("2012-08-12+23:55", ts));
   sd = floor<days>(ts);
-  t = make_time(ts - sd);
-  CHECK(sd == 2012_y/8/12);
-  CHECK(t.hours() == hours{23});
-  CHECK(t.minutes() == minutes{55});
-  CHECK(t.seconds() == seconds{0});
+  t = ts - sd;
+  CHECK(sd == years{2012} / 8 / 12);
+  CHECK(to_hours(t) == hours{23});
+  CHECK(to_minutes(t) == minutes{55});
+  CHECK(to_seconds(t) == seconds{0});
   MESSAGE("YYYY-MM-DD+HH");
   CHECK(parsers::timestamp("2012-08-12+23", ts));
   sd = floor<days>(ts);
-  t = make_time(ts - sd);
-  CHECK(sd == 2012_y/8/12);
-  CHECK(t.hours() == hours{23});
-  CHECK(t.minutes() == minutes{0});
-  CHECK(t.seconds() == seconds{0});
+  t = ts - sd;
+  CHECK(sd == years{2012} / 8 / 12);
+  CHECK(to_hours(t) == hours{23});
+  CHECK(to_minutes(t) == minutes{0});
+  CHECK(to_seconds(t) == seconds{0});
   MESSAGE("YYYY-MM-DD");
   CHECK(parsers::timestamp("2012-08-12", ts));
   sd = floor<days>(ts);
-  t = make_time(ts - sd);
-  CHECK(sd == 2012_y/8/12);
-  CHECK(t.hours() == hours{0});
-  CHECK(t.minutes() == minutes{0});
-  CHECK(t.seconds() == seconds{0});
+  t = ts - sd;
+  CHECK(sd == years{2012} / 8 / 12);
+  CHECK(to_hours(t) == hours{0});
+  CHECK(to_minutes(t) == minutes{0});
+  CHECK(to_seconds(t) == seconds{0});
   MESSAGE("YYYY-MM");
   CHECK(parsers::timestamp("2012-08", ts));
   sd = floor<days>(ts);
-  t = make_time(ts - sd);
-  CHECK(sd == 2012_y/8/1);
-  CHECK(t.hours() == hours{0});
-  CHECK(t.minutes() == minutes{0});
-  CHECK(t.seconds() == seconds{0});
+  t = ts - sd;
+  CHECK(sd == years{2012} / 8 / 1);
+  CHECK(to_hours(t) == hours{0});
+  CHECK(to_minutes(t) == minutes{0});
+  CHECK(to_seconds(t) == seconds{0});
 }
 
 TEST(unix epoch timestamp parser) {

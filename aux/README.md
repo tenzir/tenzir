@@ -7,7 +7,6 @@ This directory contains the third-party software VAST uses. We manage it via
 Repositories
 ------------
 
-- [date](https:/github.com/HowardHinnant/date): git@github.com:HowardHinnant/date.git
 - [lz4](https:/github.com/lz4/lz4): git@github.com:lz4/lz4.git
 - [xxHash](https:/github.com/Cyan4973/xxHash): git@github.com:Cyan4973/xxHash.git
 
