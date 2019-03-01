@@ -98,17 +98,27 @@ The default command will print the help message
 docker run -v /tmp/vast:/data vast-io/vast
 ```
 
+Create a Docker network since we'll be running multiple containers which
+connect to each other:
+
+``` sh
+docker network create -d bridge --subnet 172.42.0.0/16 vast_nw
+```
+
 Use detach and publish the default port to start a VAST node
 
 ``` sh
-docker run -d -p 42000:42000 -v /tmp/vast:/data vast-io/vast start
+docker run --network=vast_nw --name=vast_node --ip="172.42.0.2" -d -v /tmp/vast:/data vast-io/vast start
 ```
 
 Import a Zeek conn log to the detached server instance
 
 ``` sh
-cat zeek_conn.log | docker run -i -v /tmp/vast:/data vast-io/vast -e '172.17.0.2' import zeek
+docker run --network=vast_nw -i -v /tmp/vast:/data vast-io/vast -e '172.42.0.2' import zeek < zeek_conn.log
 ```
+
+Other subcommands like `export` and `status` can be used just like the `import`
+command shown above.
 
 ## Scientific Use
 
