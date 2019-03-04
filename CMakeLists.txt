@@ -2,14 +2,22 @@
 #                                Project Setup
 #------------------------------------------------------------------------------
 
-cmake_minimum_required(VERSION 3.0 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.11 FATAL_ERROR)
 project(VAST C CXX)
 
-option(VAST_RELOCATEABLE_INSTALL "Make the installation relocateable")
+option(VAST_STATIC_EXECUTABLE "Link VAST statically")
+option(VAST_RELOCATEABLE_INSTALL "Make the installation relocateable" OFF)
+set(BUILD_SHARED_LIBS_DEFAULT ON)
+if (VAST_STATIC_EXECUTABLE)
+  set(BUILD_SHARED_LIBS_DEFAULT OFF)
+endif ()
+option(BUILD_SHARED_LIBS "" ${BUILD_SHARED_LIBS_DEFAULT})
+if (VAST_STATIC_EXECUTABLE AND BUILD_SHARED_LIBS)
+  MESSAGE(FATAL_ERROR "Cannot create static binary with dynamic libraries")
+endif ()
 
 # Silence warning CMP0042
 if (APPLE AND NOT DEFINED CMAKE_MACOSX_RPATH)
-  set(CMAKE_MACOSX_RPATH TRUE)
   set(CMAKE_SKIP_BUILD_RPATH  FALSE)
   set(CMAKE_BUILD_WITH_INSTALL_RPATH FALSE)
   if (VAST_RELOCATEABLE_INSTALL)
@@ -339,7 +347,6 @@ if (NOT HAVE_CXX_ATOMICS_WITHOUT_LIB)
     if (NOT HAVE_CXX_ATOMICS_WITH_LIB)
       message(FATAL_ERROR "Host compiler must support std::atomic!")
     endif()
-    set(LDFLAGS "${LDFLAGS} -latomic")
   else()
     message(STATUS "Host compiler appears to require libatomic, but cannot find it")
     message(STATUS "Enabling mutex lock workaround")
