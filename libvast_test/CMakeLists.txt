@@ -50,7 +50,7 @@ install(FILES "${CMAKE_CURRENT_BINARY_DIR}/vast/test/data.hpp"
 
 ## test library definition
 
-add_library(libvast_test SHARED
+add_library(libvast_test
   src/actor_system.cpp
   src/dummy_index.cpp
   src/events.cpp
