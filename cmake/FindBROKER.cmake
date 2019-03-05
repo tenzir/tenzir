@@ -56,5 +56,6 @@ if (BROKER_FOUND AND NOT TARGET broker::broker)
   add_library(broker::broker UNKNOWN IMPORTED)
   set_target_properties(broker::broker PROPERTIES
     IMPORTED_LOCATION ${BROKER_LIBRARY}
-    INTERFACE_INCLUDE_DIRECTORIES "${BROKER_INCLUDE_DIRS}")
+    INTERFACE_INCLUDE_DIRECTORIES "${BROKER_INCLUDE_DIRS}"
+    INTERFACE_LINK_LIBRARIES "caf::core;caf::io;caf::openssl")
 endif()

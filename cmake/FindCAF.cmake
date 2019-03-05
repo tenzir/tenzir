@@ -142,6 +142,13 @@ if (CAF_openssl_FOUND AND NOT TARGET caf::openssl)
     IMPORTED_LOCATION "${CAF_LIBRARY_OPENSSL}"
     INTERFACE_INCLUDE_DIRECTORIES "${CAF_INCLUDE_DIR_OPENSSL}"
     INTERFACE_LINK_LIBRARIES "caf::core;caf::io")
+  if (NOT BUILD_SHARED_LIBS)
+    include(CMakeFindDependencyMacro)
+    set(OPENSSL_USE_STATIC_LIBS TRUE)
+    find_dependency(OpenSSL)
+    set_property(TARGET caf::openssl APPEND PROPERTY
+      INTERFACE_LINK_LIBRARIES "OpenSSL::SSL")
+  endif ()
 endif ()
 if (CAF_opencl_FOUND AND NOT TARGET caf::opencl)
   add_library(caf::opencl UNKNOWN IMPORTED)
