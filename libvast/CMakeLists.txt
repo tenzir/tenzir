@@ -86,6 +86,7 @@ set(libvast_sources
   src/system/default_application.cpp
   src/system/default_configuration.cpp
   src/system/dummy_consensus.cpp
+  src/system/eraser.cpp
   src/system/evaluator.cpp
   src/system/exporter.cpp
   src/system/importer.cpp
@@ -259,6 +260,7 @@ set(tests
   test/system/consensus.cpp
   test/system/datagram_source.cpp
   test/system/dummy_consensus.cpp
+  test/system/eraser.cpp
   test/system/evaluator.cpp
   test/system/exporter.cpp
   test/system/importer.cpp

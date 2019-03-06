@@ -43,6 +43,7 @@ using done_atom = caf::atom_constant<caf::atom("done")>;
 using election_atom = caf::atom_constant<caf::atom("election")>;
 using empty_atom = caf::atom_constant<caf::atom("empty")>;
 using enable_atom = caf::atom_constant<caf::atom("enable")>;
+using erase_atom = caf::atom_constant<caf::atom("erase")>;
 using exists_atom = caf::atom_constant<caf::atom("exists")>;
 using extract_atom = caf::atom_constant<caf::atom("extract")>;
 using heap_atom = caf::atom_constant<caf::atom("heap")>;
