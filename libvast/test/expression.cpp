@@ -162,6 +162,18 @@ TEST(normalization) {
   CHECK_EQUAL(normalize(*expr), *normalized);
 }
 
+TEST(type extractor) {
+  MESSAGE("extractor !in data");
+  auto r = record_type{{"orig_h", address_type{}}, {"resp_h", address_type{}}};
+  auto expr = unbox(to<expression>(":addr !in 192.168.0.0/24"));
+  auto resolved = caf::visit(type_resolver(r), expr);
+  auto sn = unbox(to<subnet>("192.168.0.0/24"));
+  auto pred0 = predicate{data_extractor{r, offset{0}}, not_in, data{sn}};
+  auto pred1 = predicate{data_extractor{r, offset{1}}, not_in, data{sn}};
+  auto normalized = conjunction{pred0, pred1};
+  CHECK_EQUAL(resolved, &normalized);
+}
+
 TEST(validation - attribute extractor) {
   // The "type" attribute extractor requires a string operand.
   auto expr = to<expression>("#type == \"foo\"");
