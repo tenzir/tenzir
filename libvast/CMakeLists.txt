@@ -95,6 +95,7 @@ set(libvast_sources
   src/system/node.cpp
   src/system/partition.cpp
   src/system/profiler.cpp
+  src/system/query_processor.cpp
   src/system/query_supervisor.cpp
   src/system/raft.cpp
   src/system/remote_command.cpp
@@ -267,6 +268,7 @@ set(tests
   test/system/key_value_store.cpp
   test/system/partition.cpp
   test/system/queries.cpp
+  test/system/query_processor.cpp
   test/system/query_supervisor.cpp
   test/system/replicated_store.cpp
   test/system/sink.cpp
