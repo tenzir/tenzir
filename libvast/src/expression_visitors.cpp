@@ -332,25 +332,27 @@ expected<expression> type_resolver::operator()(const predicate& p) {
 
 expected<expression> type_resolver::operator()(const type_extractor& ex,
                                                const data& d) {
-  disjunction dis;
+  std::vector<expression> connective;
   if (auto r = caf::get_if<record_type>(&type_)) {
     for (auto& f : record_type::each{*r}) {
       auto& value_type = f.trace.back()->type;
       if (congruent(value_type, ex.type)) {
         auto x = data_extractor{type_, f.offset};
-        dis.emplace_back(predicate{std::move(x), op_, d});
+        connective.emplace_back(predicate{std::move(x), op_, d});
       }
     }
   } else if (congruent(type_, ex.type)) {
     auto x = data_extractor{type_, offset{}};
-    dis.emplace_back(predicate{std::move(x), op_, d});
+    connective.emplace_back(predicate{std::move(x), op_, d});
   }
-  if (dis.empty())
+  if (connective.empty())
     return expression{}; // did not resolve
-  else if (dis.size() == 1)
-    return {std::move(dis[0])};
+  if (connective.size() == 1)
+    return {std::move(connective[0])};
+  if (op_ == not_in || op_ == not_match)
+    return {conjunction{std::move(connective)}};
   else
-    return {std::move(dis)};
+    return {disjunction{std::move(connective)}};
 }
 
 expected<expression> type_resolver::operator()(const data& d,
