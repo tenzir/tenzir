@@ -25,8 +25,10 @@
 
 namespace vast::system {
 
-/// A query processor takes (1) a query, (2) a processing step function,
-/// and (3) a predicate for implementing the following state machine.
+/// A query processor takes a query and collects hits from the INDEX.
+/// Implementation hooks allow subtypes to configure how many hits are
+/// requested and how hits are processed. The query processor implements the
+/// following state machine:
 ///
 /// ```
 ///                    +----------------+
@@ -62,7 +64,6 @@ namespace vast::system {
 ///                no    XX   hits?  XX   yes
 ///                       XXXXXXXXXXXX
 /// ```
-
 class query_processor {
 public:
   // -- member types -----------------------------------------------------------
