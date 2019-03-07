@@ -34,14 +34,17 @@
 
 namespace vast::system {
 
+// clang-format off
 /// @relates archive
 using archive_type = caf::typed_actor<
   caf::reacts_to<caf::stream<table_slice_ptr>>,
   caf::reacts_to<exporter_atom, caf::actor>,
   caf::replies_to<ids>::with<done_atom, caf::error>,
   caf::replies_to<status_atom>::with<caf::dictionary<caf::config_value>>,
-  caf::reacts_to<telemetry_atom>
+  caf::reacts_to<telemetry_atom>,
+  caf::reacts_to<erase_atom, ids>
 >;
+// clang-format on
 
 /// @relates archive
 struct archive_state {
