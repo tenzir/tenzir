@@ -17,15 +17,18 @@
 
 #include "vast/test/test.hpp"
 
-#include "vast/test/fixtures/actor_system.hpp"
+#include "vast/test/fixtures/actor_system_and_events.hpp"
 
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/concept/parseable/vast/uuid.hpp"
+#include "vast/detail/spawn_container_source.hpp"
 #include "vast/error.hpp"
 #include "vast/expression.hpp"
 #include "vast/ids.hpp"
 #include "vast/system/atoms.hpp"
+#include "vast/system/index.hpp"
+#include "vast/table_slice.hpp"
 
 using namespace std::literals::chrono_literals;
 using namespace vast;
@@ -34,6 +37,8 @@ using namespace vast::system;
 namespace {
 
 constexpr std::string_view uuid_str = "423b45a1-c217-4f99-ba43-9e3fc3285cd3";
+
+constexpr size_t taste_count = 3;
 
 template <class T>
 T take_one(std::vector<T>& xs) {
@@ -61,8 +66,8 @@ caf::behavior mock_index(caf::stateful_actor<mock_index_state>* self) {
             };
             auto query_id = unbox(to<uuid>(uuid_str));
             auto hdl = caf::actor_cast<caf::actor>(self->current_sender());
-            self->send(hdl, query_id, uint32_t{3}, uint32_t{7});
-            for (size_t i = 0; i < 3; ++i)
+            self->send(hdl, query_id, uint32_t{7}, uint32_t{3});
+            for (size_t i = 0; i < taste_count; ++i)
               self->send(hdl, take_one(deltas));
             self->send(hdl, done_atom::value);
           },
@@ -75,26 +80,33 @@ caf::behavior mock_index(caf::stateful_actor<mock_index_state>* self) {
 }
 
 struct mock_archive_state {
-  ids deleted_ids;
+  ids hits;
   static inline constexpr const char* name = "mock-archive";
 };
 
-caf::behavior mock_archive(caf::stateful_actor<mock_archive_state>*) {
-  return {[=](erase_atom, ids) {
-    // nop
-  }};
+using mock_archive_actor = caf::stateful_actor<mock_archive_state>;
+
+caf::behavior mock_archive(mock_archive_actor* self) {
+  return {[=](erase_atom, ids hits) { self->state.hits = hits; }};
 }
 
-struct fixture : fixtures::deterministic_actor_system {
+struct fixture : fixtures::deterministic_actor_system_and_events {
   fixture() : query_id(unbox(to<uuid>(uuid_str))) {
-    index = sys.spawn(mock_index);
     archive = sys.spawn(mock_archive);
-    aut = sys.spawn(eraser, 6h, "#time < 1 week ago", index, archive);
     sched.run();
   }
 
   ~fixture() {
     self->send_exit(aut, caf::exit_reason::user_shutdown);
+    self->send_exit(index, caf::exit_reason::user_shutdown);
+  }
+
+  // @pre index != nullptr
+  void spawn_aut(std::string query = "#time < 1 week ago") {
+    if (index == nullptr)
+      FAIL("cannot start AUT without INDEX");
+    aut = sys.spawn(eraser, 6h, std::move(query), index, archive);
+    sched.run();
   }
 
   uuid query_id;
@@ -108,10 +120,12 @@ struct fixture : fixtures::deterministic_actor_system {
 FIXTURE_SCOPE(eraser_tests, fixture)
 
 TEST(eraser on mock INDEX) {
+  index = sys.spawn(mock_index);
+  spawn_aut();
   sched.trigger_timeouts();
   expect((run_atom), from(aut).to(aut));
   expect((expression), from(aut).to(index));
-  expect((uuid, uint32_t, uint32_t), from(index).to(aut).with(query_id, 3, 7));
+  expect((uuid, uint32_t, uint32_t), from(index).to(aut).with(query_id, 7, 3));
   expect((ids), from(index).to(aut));
   expect((ids), from(index).to(aut));
   expect((ids), from(index).to(aut));
@@ -125,6 +139,40 @@ TEST(eraser on mock INDEX) {
   expect((ids), from(index).to(aut));
   expect((done_atom), from(index).to(aut));
   expect((erase_atom, ids), from(aut).to(archive).with(_, make_ids({{1, 22}})));
+}
+
+TEST(eraser on actual INDEX with Zeek conn logs) {
+  auto slices = take_n(zeek_full_conn_log_slices, 4);
+  MESSAGE("spawn INDEX ingest 4 slices with 100 rows (= 1 partition) each");
+  index = self->spawn(system::index, directory / "index",
+                      defaults::system::table_slice_size, 100, taste_count, 1);
+  detail::spawn_container_source(sys, std::move(slices), index);
+  run();
+  // Predicate for running all actors *except* aut.
+  auto not_aut = [&](caf::resumable* ptr) { return ptr != &deref(aut); };
+  MESSAGE("spawn and run ERASER for query ':addr == 192.168.1.104'");
+  spawn_aut(":addr == 192.168.1.104");
+  sched.trigger_timeouts();
+  expect((run_atom), from(aut).to(aut));
+  expect((expression), from(aut).to(index));
+  expect((uuid, uint32_t, uint32_t), from(index).to(aut).with(_, 4, 3));
+  sched.run_jobs_filtered(not_aut);
+  while (allow((ids), from(_).to(aut)))
+    ; // repeat
+  expect((done_atom), from(_).to(aut));
+  expect((uuid, uint32_t), from(aut).to(index).with(_, 1));
+  sched.run_jobs_filtered(not_aut);
+  while (allow((ids), from(_).to(aut)))
+    ; // repeat
+  expect((done_atom), from(_).to(aut));
+  expect((erase_atom, ids), from(aut).to(archive));
+  REQUIRE(!sched.has_job());
+  // The magic number 133 was computed via:
+  // bro-cut < libvast_test/artifacts/logs/zeek/conn.log
+  //   | head -n 400
+  //   | grep 192.168.1.104
+  //   | wc -l
+  CHECK_EQUAL(rank(deref<mock_archive_actor>(archive).state.hits), 133u);
 }
 
 FIXTURE_SCOPE_END()

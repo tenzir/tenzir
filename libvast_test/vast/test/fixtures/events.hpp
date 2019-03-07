@@ -47,6 +47,8 @@ struct events {
   static std::vector<table_slice_ptr> bgpdump_txt_slices;
   // static std::vector<table_slice_ptr> random_slices;
 
+  static std::vector<table_slice_ptr> zeek_full_conn_log_slices;
+
   /// 10000 ascending integer values, starting at 0.
   static std::vector<event> ascending_integers;
   static std::vector<table_slice_ptr> ascending_integers_slices;
@@ -63,7 +65,13 @@ struct events {
   }
 
   std::vector<table_slice_ptr> copy(std::vector<table_slice_ptr> xs);
+
+  auto take_n(const std::vector<table_slice_ptr>& xs, size_t n) {
+    VAST_ASSERT(n <= xs.size());
+    auto first = xs.begin();
+    auto last = first + n;
+    return std::vector<table_slice_ptr>{first, last};
+  }
 };
 
 } // namespace fixtures
-

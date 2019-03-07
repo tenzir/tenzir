@@ -28,6 +28,16 @@
 #include "vast/concept/printable/vast/data.hpp"
 #include "vast/concept/printable/vast/event.hpp"
 
+// Pull in the auto-generated serialized table slices.
+
+namespace artifacts::logs::zeek {
+
+extern char conn_buf[];
+
+extern size_t conn_buf_size;
+
+} // namespace artifacts::logs::zeek
+
 namespace fixtures {
 
 namespace {
@@ -108,6 +118,8 @@ std::vector<table_slice_ptr> events::zeek_dns_log_slices;
 std::vector<table_slice_ptr> events::zeek_http_log_slices;
 std::vector<table_slice_ptr> events::bgpdump_txt_slices;
 // std::vector<table_slice_ptr> events::random_slices;
+
+std::vector<table_slice_ptr> events::zeek_full_conn_log_slices;
 
 std::vector<event> events::ascending_integers;
 std::vector<table_slice_ptr> events::ascending_integers_slices;
@@ -293,7 +305,22 @@ events::events() {
   SANITY_CHECK(zeek_dns_log, zeek_dns_log_slices);
   SANITY_CHECK(zeek_http_log, zeek_http_log_slices);
   SANITY_CHECK(bgpdump_txt, bgpdump_txt_slices);
-  //SANITY_CHECK(random, const_random_slices);
+  // SANITY_CHECK(random, const_random_slices);
+  // Read the full Zeek conn.log.
+  // TODO: port remaining slices to new deserialization API and replace
+  //       this hard-coded starting offset
+  id offset = 100000;
+  caf::binary_deserializer src{nullptr, artifacts::logs::zeek::conn_buf,
+                               artifacts::logs::zeek::conn_buf_size};
+  if (auto err = src(zeek_full_conn_log_slices))
+    FAIL("unable to load full Zeek conn logs from buffer");
+  VAST_ASSERT(std::all_of(zeek_full_conn_log_slices.begin(),
+                          zeek_full_conn_log_slices.end() - 1,
+                          [](auto& slice) { return slice->rows() == 100; }));
+  for (auto& ptr : zeek_full_conn_log_slices) {
+    ptr.unshared().offset(offset);
+    offset += ptr->rows();
+  }
 }
 
 } // namespace fixtures
