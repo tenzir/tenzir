@@ -39,7 +39,7 @@ query_processor::query_processor(caf::event_based_actor* self)
     });
   behaviors_[await_query_id].assign(
     // Received from the INDEX after sending the query when leaving `idle`.
-    [=](const uuid& query_id, uint32_t scheduled, uint32_t total) {
+    [=](const uuid& query_id, uint32_t total, uint32_t scheduled) {
       query_id_ = query_id;
       partitions_.received = 0;
       partitions_.scheduled = scheduled;
