@@ -72,7 +72,11 @@ public:
                         "optional name for generated C++ variables")
       .add<std::string>("namespace-name",
                         "optional namespace for generated C++ code")
-      .add<std::string>("output,o", "output format, defaults to 'c++'")
+      .add<std::string>("output-format", "output format, defaults to 'c++'")
+      .add<std::string>("input,i",
+                        "path to input file or '-' (default) for STDIN")
+      .add<std::string>("output,o",
+                        "path to output file or '-' (default) for STDOUT")
       .add<atom_value>("table-slice-type,t",
                        "implementation type for the generated slices")
       .add<size_t>("table-slice-size,s",
@@ -88,19 +92,27 @@ void print_cpp(actor_system& sys, const slices_vector& slices) {
   sink(slices);
   auto nn = get_or(sys.config(), "namespace-name", "log");
   auto vn = get_or(sys.config(), "variable-name", "buf");
-  std::cout << vast_header << endl
-            << "#include <cstddef>" << endl
-            << endl
-            << "namespace " << nn << " {" << endl
-            << endl
-            << "char " << vn << "[] = {" << endl;
+  auto path = get_or(sys.config(), "output", "-");
+  auto maybe_out = vast::detail::make_output_stream(path, false);
+  if (!maybe_out) {
+    cerr << "unable to open " << path << ": " << sys.render(maybe_out.error())
+         << endl;
+    return;
+  }
+  auto& out = **maybe_out;
+  out << vast_header << endl
+      << "#include <cstddef>" << endl
+      << endl
+      << "namespace " << nn << " {" << endl
+      << endl
+      << "char " << vn << "[] = {" << endl;
   for (auto c : buf)
-    std::cout << static_cast<int>(c) << "," << endl;
-  std::cout << "};" << endl
-            << endl
-            << "size_t " << vn << "_size = sizeof(" << vn << ");" << endl
-            << endl
-            << "} // namespace " << nn << endl;
+    out << static_cast<int>(c) << "," << endl;
+  out << "};" << endl
+      << endl
+      << "size_t " << vn << "_size = sizeof(" << vn << ");" << endl
+      << endl
+      << "} // namespace " << nn << endl;
 }
 
 slices_vector read_zeek(actor_system& sys) {
@@ -110,7 +122,8 @@ slices_vector read_zeek(actor_system& sys) {
                            vast::defaults::system::table_slice_size);
   auto slice_type = get_or(sys.config(), "table-slice-type",
                            vast::defaults::system::table_slice_type);
-  auto in = vast::detail::make_input_stream("-", false);
+  auto in = vast::detail::make_input_stream(get_or(sys.config(), "input", "-"),
+                                            false);
   auto push_slice = [&](table_slice_ptr x) {
     result.emplace_back(std::move(x));
   };
@@ -139,7 +152,7 @@ void caf_main(actor_system& sys, const config& cfg) {
   };
   // Verify printer setup.
   print_function print = nullptr;
-  if (auto i = printers.find(get_or(cfg, "output", "c++"));
+  if (auto i = printers.find(get_or(cfg, "output-format", "c++"));
       i == printers.end()) {
     std::cerr << "invalid printer; supported output formats:" << endl;
     dump_keys(printers);
