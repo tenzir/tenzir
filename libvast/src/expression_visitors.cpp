@@ -349,7 +349,7 @@ expected<expression> type_resolver::operator()(const type_extractor& ex,
     return expression{}; // did not resolve
   if (connective.size() == 1)
     return {std::move(connective[0])};
-  if (op_ == not_in || op_ == not_match)
+  if (op_ == not_equal || op_ == not_match || op_ == not_in || op_ == not_ni)
     return {conjunction{std::move(connective)}};
   else
     return {disjunction{std::move(connective)}};
