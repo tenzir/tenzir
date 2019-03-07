@@ -78,7 +78,7 @@ public:
   // -- constants --------------------------------------------------------------
 
   /// Human-readable actor name for logging output.
-  static inline constexpr const char* name = "query-processor";
+  static constexpr const char* name = "query-processor";
 
   // -- constructors, destructors, and assignment operators --------------------
 
