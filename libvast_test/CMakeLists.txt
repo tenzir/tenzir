@@ -53,12 +53,14 @@ install(FILES "${CMAKE_CURRENT_BINARY_DIR}/vast/test/data.hpp"
 set(generated_sources)
 
 macro(log_to_slices format name)
+  set(target_dir "${CMAKE_CURRENT_BINARY_DIR}/src/artifacts/logs/${format}")
   set(logfile "${CMAKE_CURRENT_SOURCE_DIR}/artifacts/logs/${format}/${name}.log")
-  set(cppfile "${CMAKE_CURRENT_BINARY_DIR}/src/artifacts/logs/${format}/${name}.cpp")
+  set(cppfile "${target_dir}/${name}.cpp")
   list(APPEND generated_sources "${cppfile}")
   set(cmd "${EXECUTABLE_OUTPUT_PATH}/gen-vast-slices")
   set(nn_arg "--namespace-name=artifacts::logs::${format}")
   set(vn_arg "--variable-name=${name}_buf")
+  file(MAKE_DIRECTORY "${target_dir}")
   add_custom_command(
     OUTPUT "${cppfile}"
     COMMAND ${cmd} -i ${logfile} -o ${cppfile} -f ${format} ${nn_arg} ${vn_arg}
