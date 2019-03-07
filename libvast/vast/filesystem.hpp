@@ -306,7 +306,8 @@ bool exists(const path& p);
 /// Creates a symlink (aka. "soft link").
 /// @param target The existing file that should be linked.
 /// @param link The symlink that points to *target*.
-void create_symlink(const path& target, const path& link);
+/// @returns `no_error` on success or `filesystem_error` on failure.
+caf::error create_symlink(const path& target, const path& link);
 
 /// Deletes the path on the filesystem.
 /// @param p The path to a directory to delete.
