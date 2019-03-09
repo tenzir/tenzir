@@ -15,9 +15,9 @@
 
 #include "vast/segment_store.hpp"
 
-#include "vast/test/test.hpp"
 #include "vast/test/fixtures/events.hpp"
 #include "vast/test/fixtures/filesystem.hpp"
+#include "vast/test/test.hpp"
 
 #include "vast/ids.hpp"
 #include "vast/si_literals.hpp"
@@ -51,7 +51,7 @@ struct fixture : fixtures::events, fixtures::filesystem {
 
   auto erase(ids selection) {
     if (auto err = store->erase(selection))
-        FAIL("store->erase failed: " << err);
+      FAIL("store->erase failed: " << err);
   }
 
   segment_store_ptr store;
@@ -117,7 +117,7 @@ TEST(erase on empty segment store) {
   CHECK_EQUAL(slices.size(), 0u);
 }
 
-TEST(erase on non-empty segment store with mismatched IDs) {
+TEST(erase on filled segment store with mismatched IDs) {
   put(zeek_conn_log_slices);
   erase(make_ids({1000}));
   CHECK(deep_compare(zeek_conn_log_slices, get(everything)));
