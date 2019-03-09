@@ -26,37 +26,53 @@
 using namespace vast;
 using namespace binary_byte_literals;
 
-struct fixture : fixtures::events, fixtures::filesystem {};
+namespace {
+
+struct fixture : fixtures::events, fixtures::filesystem {
+  fixture() {
+    store = segment_store::make(directory / "segments", 512_KiB, 2);
+    if (store == nullptr)
+      FAIL("segment_store::make failed to allocate a segment store");
+  }
+
+  void put(const std::vector<table_slice_ptr>& slices) {
+    for (auto& slice : slices)
+      if (auto err = store->put(slice))
+        FAIL("store->put failed: " << err);
+  }
+
+  /// @returns a reference to the value pointed to by `ptr`.
+  template <class T>
+    auto& val(T& ptr) {
+      if (ptr == nullptr)
+        FAIL("unexpected nullptr access");
+      return *ptr;
+    }
+
+  segment_store_ptr store;
+};
+
+} // namespace
 
 FIXTURE_SCOPE(segment_store_tests, fixture)
 
 TEST(construction and querying) {
-  auto path = directory / "segments";
-  auto store = segment_store::make(path, 512_KiB, 2);
-  REQUIRE(store);
-  for (auto& slice : zeek_conn_log_slices)
-    REQUIRE(!store->put(slice));
-  auto slices = store->get(make_ids({0, 6, 19, 21}));
-  REQUIRE(slices);
-  REQUIRE_EQUAL(slices->size(), 2u);
+  put(zeek_conn_log_slices);
+  auto slices = unbox(store->get(make_ids({0, 6, 19, 21})));
+  REQUIRE_EQUAL(slices.size(), 2u);
+  CHECK_EQUAL(val(slices[0]), val(zeek_conn_log_slices[0]));
+  CHECK_EQUAL(val(slices[1]), val(zeek_conn_log_slices[2]));
 }
 
 TEST(sessionized extraction) {
-  auto path = directory / "segments";
-  auto store = segment_store::make(path, 512_KiB, 2);
-  REQUIRE(store);
-  for (auto& slice : zeek_conn_log_slices)
-    REQUIRE(!store->put(slice));
+  put(zeek_conn_log_slices);
   auto session = store->extract(make_ids({0, 6, 19, 21}));
-  auto slice0 = session->next();
-  REQUIRE(slice0);
-  REQUIRE_EQUAL((*slice0)->offset(), 0u);
-  auto slice1 = session->next();
-  REQUIRE(slice1);
-  REQUIRE_EQUAL((*slice1)->offset(), 16u);
-  auto slice2 = session->next();
-  REQUIRE(!slice2);
-  REQUIRE(slice2.error() == caf::no_error);
+  std::vector<table_slice_ptr> slices;
+  for (auto x = session->next(); x.engaged(); x = session->next())
+    slices.emplace_back(unbox(x));
+  REQUIRE_EQUAL(slices.size(), 2u);
+  CHECK_EQUAL(val(slices[0]).offset(), 0u);
+  CHECK_EQUAL(val(slices[1]).offset(), 16u);
 }
 
 FIXTURE_SCOPE_END()
