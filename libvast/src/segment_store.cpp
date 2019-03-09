@@ -104,7 +104,7 @@ std::unique_ptr<store::lookup> segment_store::extract(const ids& xs) const {
 
     lookup(const segment_store& store, ids xs, std::vector<uuid>&& candidates)
       : store_{store}, xs_{std::move(xs)}, candidates_{std::move(candidates)} {
-      VAST_ASSERT(!candidates_.empty());
+      // nop
     }
 
     caf::expected<table_slice_ptr> next() override {

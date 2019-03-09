@@ -64,7 +64,15 @@ TEST(construction and querying) {
   CHECK_EQUAL(val(slices[1]), val(zeek_conn_log_slices[2]));
 }
 
-TEST(sessionized extraction) {
+TEST(sessionized extraction on empty segment store) {
+  auto session = store->extract(make_ids({0, 6, 19, 21}));
+  std::vector<table_slice_ptr> slices;
+  for (auto x = session->next(); x.engaged(); x = session->next())
+    slices.emplace_back(unbox(x));
+  CHECK_EQUAL(slices.size(), 0u);
+}
+
+TEST(sessionized extraction on filled segment store) {
   put(zeek_conn_log_slices);
   auto session = store->extract(make_ids({0, 6, 19, 21}));
   std::vector<table_slice_ptr> slices;
