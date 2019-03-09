@@ -33,6 +33,10 @@ struct fixture : fixtures::events, fixtures::filesystem {
     store = segment_store::make(directory / "segments", 512_KiB, 2);
     if (store == nullptr)
       FAIL("segment_store::make failed to allocate a segment store");
+    // Approximates an ID range for [0, max_id) with
+    // 10M, because the `make_ids({{0, max_id}})`
+    // unfortunately leads to performance degradations.
+    everything = make_ids({{0, 10000000}});
   }
 
   void put(const std::vector<table_slice_ptr>& slices) {
@@ -41,29 +45,48 @@ struct fixture : fixtures::events, fixtures::filesystem {
         FAIL("store->put failed: " << err);
   }
 
-  /// @returns a reference to the value pointed to by `ptr`.
-  template <class T>
-    auto& val(T& ptr) {
-      if (ptr == nullptr)
-        FAIL("unexpected nullptr access");
-      return *ptr;
-    }
+  auto get(ids selection) {
+    return unbox(store->get(selection));
+  }
+
+  auto erase(ids selection) {
+    if (auto err = store->erase(selection))
+        FAIL("store->erase failed: " << err);
+  }
 
   segment_store_ptr store;
+
+  ids everything;
 };
+
+/// @returns a reference to the value pointed to by `ptr`.
+template <class T>
+auto& val(T& ptr) {
+  if (ptr == nullptr)
+    FAIL("unexpected nullptr access");
+  return *ptr;
+}
+
+template <class Container>
+bool deep_compare(const Container& xs, const Container& ys) {
+  auto cmp = [](auto& x, auto& y) { return val(x) == val(y); };
+  return xs.size() == ys.size()
+         && std::equal(xs.begin(), xs.end(), ys.begin(), cmp);
+}
 
 } // namespace
 
 FIXTURE_SCOPE(segment_store_tests, fixture)
 
 TEST(querying empty segment store) {
-  auto slices = unbox(store->get(make_ids({0, 6, 19, 21})));
+  auto slices = get(everything);
   REQUIRE_EQUAL(slices.size(), 0u);
 }
 
 TEST(querying filled segment store) {
   put(zeek_conn_log_slices);
-  auto slices = unbox(store->get(make_ids({0, 6, 19, 21})));
+  CHECK(deep_compare(zeek_conn_log_slices, get(everything)));
+  auto slices = get(make_ids({0, 6, 19, 21}));
   REQUIRE_EQUAL(slices.size(), 2u);
   CHECK_EQUAL(val(slices[0]), val(zeek_conn_log_slices[0]));
   CHECK_EQUAL(val(slices[1]), val(zeek_conn_log_slices[2]));
@@ -86,6 +109,18 @@ TEST(sessionized extraction on filled segment store) {
   REQUIRE_EQUAL(slices.size(), 2u);
   CHECK_EQUAL(val(slices[0]).offset(), 0u);
   CHECK_EQUAL(val(slices[1]).offset(), 16u);
+}
+
+TEST(erase on empty segment store) {
+  erase(make_ids({0, 6, 19, 21}));
+  auto slices = get(everything);
+  CHECK_EQUAL(slices.size(), 0u);
+}
+
+TEST(erase on non-empty segment store with mismatched IDs) {
+  put(zeek_conn_log_slices);
+  erase(make_ids({1000}));
+  CHECK(deep_compare(zeek_conn_log_slices, get(everything)));
 }
 
 FIXTURE_SCOPE_END()
