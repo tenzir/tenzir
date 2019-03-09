@@ -157,18 +157,11 @@ std::unique_ptr<store::lookup> segment_store::extract(const ids& xs) const {
   VAST_TRACE(VAST_ARG(xs));
   // Collect candidate segments by seeking through the ID set and
   // probing each ID interval.
-  VAST_DEBUG(this, "retrieves table slices with requested ids");
   std::vector<uuid> candidates;
-  auto f = [](auto x) { return std::pair{x.left, x.right}; };
-  auto g = [&](auto x) {
-    auto id = x.value;
-    if (candidates.empty() || candidates.back() != id)
-      candidates.push_back(id);
-    return caf::none;
-  };
-  auto begin = segments_.begin();
-  auto end = segments_.end();
-  select_with(xs, begin, end, f, g);
+  if (auto err = get_candidates(xs, candidates)) {
+    VAST_WARNING(this, "failed to get candidates for ids", xs);
+    return nullptr;
+  }
   VAST_DEBUG(this, "processes", candidates.size(), "candidates");
   std::partition(candidates.begin(), candidates.end(), [&](const auto& id) {
     return id == builder_.id() || cache_.find(id) != cache_.end();
@@ -185,19 +178,9 @@ caf::expected<std::vector<table_slice_ptr>> segment_store::get(const ids& xs) {
   VAST_TRACE(VAST_ARG(xs));
   // Collect candidate segments by seeking through the ID set and
   // probing each ID interval.
-  VAST_DEBUG(this, "retrieves table slices with requested ids");
   std::vector<uuid> candidates;
-  auto f = [](auto x) { return std::pair{x.left, x.right}; };
-  auto g = [&](auto x) {
-    auto id = x.value;
-    if (candidates.empty() || candidates.back() != id)
-      candidates.push_back(id);
-    return caf::none;
-  };
-  auto begin = segments_.begin();
-  auto end = segments_.end();
-  if (auto error = select_with(xs, begin, end, f, g))
-    return error;
+  if (auto err = get_candidates(xs, candidates))
+    return err;
   // Process candidates in reverse order for maximum LRU cache hits.
   std::vector<table_slice_ptr> result;
   VAST_DEBUG(this, "processes", candidates.size(), "candidates");
@@ -264,6 +247,21 @@ segment_store::segment_store(path dir, uint64_t max_segment_size,
     max_segment_size_{max_segment_size},
     cache_{in_memory_segments} {
   // nop
+}
+
+caf::error segment_store::get_candidates(const ids& selection,
+                                         std::vector<uuid>& candidates) const {
+  VAST_DEBUG(this, "retrieves table slices with requested ids");
+  auto f = [](auto x) { return std::pair{x.left, x.right}; };
+  auto g = [&](auto x) {
+    auto id = x.value;
+    if (candidates.empty() || candidates.back() != id)
+      candidates.push_back(id);
+    return caf::none;
+  };
+  auto begin = segments_.begin();
+  auto end = segments_.end();
+  return select_with(selection, begin, end, f, g);
 }
 
 } // namespace vast

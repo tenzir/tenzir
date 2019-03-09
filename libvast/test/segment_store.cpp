@@ -33,9 +33,9 @@ struct fixture : fixtures::events, fixtures::filesystem {
     store = segment_store::make(directory / "segments", 512_KiB, 2);
     if (store == nullptr)
       FAIL("segment_store::make failed to allocate a segment store");
-    // Approximates an ID range for [0, max_id) with
-    // 10M, because the `make_ids({{0, max_id}})`
-    // unfortunately leads to performance degradations.
+    // Approximates an ID range for [0, max_id) with 10M, because
+    // `make_ids({{0, max_id}})` unfortunately leads to performance
+    // degradations.
     everything = make_ids({{0, 10000000}});
   }
 

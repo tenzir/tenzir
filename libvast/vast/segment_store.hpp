@@ -33,6 +33,8 @@ using segment_store_ptr = std::unique_ptr<segment_store>;
 /// A store that keeps its data in terms of segments.
 class segment_store : public store {
 public:
+  // -- constructors, destructors, and assignment operators --------------------
+
   /// Constructs a segment store.
   /// @param dir The directory where to store state.
   /// @param max_segment_size The maximum segment size in bytes.
@@ -42,6 +44,26 @@ public:
                                 size_t in_memory_segments);
 
   ~segment_store();
+
+  /// @cond PRIVATE
+
+  segment_store(path dir, uint64_t max_segment_size, size_t in_memory_segments);
+
+  /// @endcond
+
+  // -- properties -------------------------------------------------------------
+
+  /// @returns the path for storing meta information such as segment UUIDs.
+  path meta_path() const {
+    return dir_ / "meta";
+  }
+
+  /// @returns the path for storing the segments.
+  path segment_path() const {
+    return dir_ / "segments";
+  }
+
+  // -- implementation of store ------------------------------------------------
 
   error put(table_slice_ptr xs) override;
 
@@ -55,29 +77,31 @@ public:
 
   void inspect_status(caf::settings& dict) override;
 
-  /// @cond PRIVATE
-
-  segment_store(path dir, uint64_t max_segment_size, size_t in_memory_segments);
-
-  /// @endcond
-
 private:
-  path meta_path() const {
-    return dir_ / "meta";
-  }
-
-  path segment_path() const {
-    return dir_ / "segments";
-  }
+  // -- utility functions ------------------------------------------------------
 
   caf::expected<segment_ptr> load_segment(uuid id) const;
 
+  /// Fills `candidates` with all segments that qualify for `selection`.
+  caf::error get_candidates(const ids& selection,
+                            std::vector<uuid>& candidates) const;
+
+  // -- member variables -------------------------------------------------------
+
+  /// Identifies the base directory for our ::meta_path and ::segment_path.
   path dir_;
+
+  /// Configures the limit each segment until we seal and flush it.
   uint64_t max_segment_size_;
+
+  /// Maps event IDs to candidate segments.
   detail::range_map<id, uuid> segments_;
+
+  /// Optimizes access times into segments by keeping some segments in memory.
   mutable detail::cache<uuid, segment_ptr> cache_;
+
+  /// Serializes table slices into contiguous chunks of memory.
   segment_builder builder_;
-  std::vector<segment_ptr> builder_slices_;
 };
 
 } // namespace vast
