@@ -56,7 +56,12 @@ struct fixture : fixtures::events, fixtures::filesystem {
 
 FIXTURE_SCOPE(segment_store_tests, fixture)
 
-TEST(construction and querying) {
+TEST(querying empty segment store) {
+  auto slices = unbox(store->get(make_ids({0, 6, 19, 21})));
+  REQUIRE_EQUAL(slices.size(), 0u);
+}
+
+TEST(querying filled segment store) {
   put(zeek_conn_log_slices);
   auto slices = unbox(store->get(make_ids({0, 6, 19, 21})));
   REQUIRE_EQUAL(slices.size(), 2u);
