@@ -200,9 +200,7 @@ caf::error segment_store::erase(const ids& xs) {
         sref.reset();
       }
       // Clean up state.
-      auto is_segment_id = [&](auto& kvp) {
-        return segment_id == kvp.second;
-      };
+      auto is_segment_id = [&](auto& kvp) { return segment_id == kvp.second; };
       auto& ranges = segments_.container();
       auto i = std::find_if(ranges.begin(), ranges.end(), is_segment_id);
       if (i != ranges.end())
