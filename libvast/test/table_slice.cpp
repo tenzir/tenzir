@@ -27,6 +27,7 @@
 #include "vast/default_table_slice_builder.hpp"
 #include "vast/matrix_table_slice.hpp"
 #include "vast/row_major_matrix_table_slice_builder.hpp"
+#include "vast/to_events.hpp"
 
 using namespace vast;
 using namespace std::string_literals;
@@ -113,6 +114,68 @@ TEST(random integer slices) {
   auto [lowest, highest] = std::minmax_element(values.begin(), values.end());
   CHECK_GREATER_EQUAL(*lowest, 100);
   CHECK_LESS_EQUAL(*highest, 200);
+}
+
+TEST(select all) {
+  auto sut = zeek_full_conn_log_slices.front();
+  sut.unshared().offset(100);
+  auto select_result = select(sut, make_ids({{100, 200}}));
+  REQUIRE_EQUAL(select_result.size(), 1u);
+  CHECK_EQUAL(select_result[0], sut);
+}
+
+TEST(select none) {
+  auto sut = zeek_full_conn_log_slices.front();
+  sut.unshared().offset(100);
+  auto select_result = select(sut, make_ids({{200, 300}}));
+  CHECK_EQUAL(select_result.size(), 0u);
+}
+
+TEST(select prefix) {
+  auto sut = zeek_full_conn_log_slices.front();
+  sut.unshared().offset(100);
+  auto select_result = select(sut, make_ids({{0, 150}}));
+  REQUIRE_EQUAL(select_result.size(), 1u);
+  CHECK_EQUAL(select_result[0]->rows(), 50u);
+  CHECK_EQUAL(to_events(*select_result[0]), to_events(*sut, 0, 50));
+}
+
+TEST(select off by one prefix) {
+  auto sut = zeek_full_conn_log_slices.front();
+  sut.unshared().offset(100);
+  auto select_result = select(sut, make_ids({{101, 151}}));
+  REQUIRE_EQUAL(select_result.size(), 1u);
+  CHECK_EQUAL(select_result[0]->rows(), 50u);
+  CHECK_EQUAL(to_events(*select_result[0]), to_events(*sut, 1, 50));
+}
+
+TEST(select intermediates) {
+  auto sut = zeek_full_conn_log_slices.front();
+  sut.unshared().offset(100);
+  auto select_result = select(sut, make_ids({{110, 120}, {170, 180}}));
+  REQUIRE_EQUAL(select_result.size(), 2u);
+  CHECK_EQUAL(select_result[0]->rows(), 10u);
+  CHECK_EQUAL(to_events(*select_result[0]), to_events(*sut, 10, 10));
+  CHECK_EQUAL(select_result[1]->rows(), 10u);
+  CHECK_EQUAL(to_events(*select_result[1]), to_events(*sut, 70, 10));
+}
+
+TEST(select off by one suffix) {
+  auto sut = zeek_full_conn_log_slices.front();
+  sut.unshared().offset(100);
+  auto select_result = select(sut, make_ids({{149, 199}}));
+  REQUIRE_EQUAL(select_result.size(), 1u);
+  CHECK_EQUAL(select_result[0]->rows(), 50u);
+  CHECK_EQUAL(to_events(*select_result[0]), to_events(*sut, 49, 50));
+}
+
+TEST(select suffix) {
+  auto sut = zeek_full_conn_log_slices.front();
+  sut.unshared().offset(100);
+  auto select_result = select(sut, make_ids({{150, 300}}));
+  REQUIRE_EQUAL(select_result.size(), 1u);
+  CHECK_EQUAL(select_result[0]->rows(), 50u);
+  CHECK_EQUAL(to_events(*select_result[0]), to_events(*sut, 50, 50));
 }
 
 FIXTURE_SCOPE_END()
