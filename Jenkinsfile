@@ -464,7 +464,9 @@ pipeline {
                 deleteDir()
                 unstash 'vast-sources'
                 dir('vast-sources') {
-                    sh './scripts/clang-format-diff.py -p1 < git_diff.txt > clang-format-diff.txt'
+                    sh '''
+                        ./scripts/clang-format-diff.py -p1 < git_diff.txt > clang-format-diff.txt || true
+                    '''
                     stash([
                         includes: 'clang-format-diff.txt',
                         name: 'clang-format-result',
