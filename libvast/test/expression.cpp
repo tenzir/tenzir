@@ -162,16 +162,38 @@ TEST(normalization) {
   CHECK_EQUAL(normalize(*expr), *normalized);
 }
 
-TEST(type extractor) {
-  MESSAGE("extractor !in data");
-  auto r = record_type{{"orig_h", address_type{}}, {"resp_h", address_type{}}};
-  auto expr = unbox(to<expression>(":addr !in 192.168.0.0/24"));
-  auto resolved = caf::visit(type_resolver(r), expr);
+TEST(extractors) {
+  auto s = record_type{{"real", real_type{}},
+                       {"port", port_type{}},
+                       {"host", address_type{}}};
+  auto r = flatten(record_type{{"orig", s}, {"resp", s}});
   auto sn = unbox(to<subnet>("192.168.0.0/24"));
-  auto pred0 = predicate{data_extractor{r, offset{0}}, not_in, data{sn}};
-  auto pred1 = predicate{data_extractor{r, offset{1}}, not_in, data{sn}};
-  auto normalized = conjunction{pred0, pred1};
-  CHECK_EQUAL(resolved, &normalized);
+  {
+    auto pred0 = predicate{data_extractor{r, offset{2}}, in, data{sn}};
+    auto pred1 = predicate{data_extractor{r, offset{5}}, in, data{sn}};
+    auto normalized = disjunction{pred0, pred1};
+    MESSAGE("type extractor - distribution");
+    auto expr = unbox(to<expression>(":addr in 192.168.0.0/24"));
+    auto resolved = caf::visit(type_resolver(r), expr);
+    CHECK_EQUAL(resolved, &normalized);
+    MESSAGE("key extractor - distribution");
+    expr = unbox(to<expression>("host in 192.168.0.0/24"));
+    resolved = unbox(caf::visit(type_resolver(r), expr));
+    CHECK_EQUAL(resolved, normalized);
+  }
+  {
+    auto pred0 = predicate{data_extractor{r, offset{2}}, not_in, data{sn}};
+    auto pred1 = predicate{data_extractor{r, offset{5}}, not_in, data{sn}};
+    auto normalized = conjunction{pred0, pred1};
+    MESSAGE("type extractor - distribution with negation");
+    auto expr = unbox(to<expression>(":addr !in 192.168.0.0/24"));
+    auto resolved = caf::visit(type_resolver(r), expr);
+    CHECK_EQUAL(resolved, &normalized);
+    MESSAGE("key extractor - distribution with negation");
+    expr = unbox(to<expression>("host !in 192.168.0.0/24"));
+    resolved = unbox(caf::visit(type_resolver(r), expr));
+    CHECK_EQUAL(resolved, normalized);
+  }
 }
 
 TEST(validation - attribute extractor) {
