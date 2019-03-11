@@ -80,6 +80,9 @@ public:
   /// Meta data for a segment.
   struct meta_data {
     std::vector<table_slice_synopsis> slices;
+
+    /// @returns the event IDs of each stored table slice.
+    std::vector<ids> get_slice_ids() const;
   };
 
   /// Constructs a segment.
@@ -101,6 +104,11 @@ public:
   /// @returns The table slices according to *xs*.
   caf::expected<std::vector<table_slice_ptr>>
   lookup(const ids& xs) const;
+
+  /// @returns the event IDs of each stored table slice.
+  std::vector<ids> get_slice_ids() const {
+    return meta_.get_slice_ids();
+  }
 
   // -- concepts --------------------------------------------------------------
 

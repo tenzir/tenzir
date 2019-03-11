@@ -63,6 +63,28 @@ public:
     return dir_ / "segments";
   }
 
+  /// @returns whether the store has no unwritten data pending.
+  bool flushed() const noexcept {
+    return builder_.table_slice_bytes() == 0;
+  }
+
+  /// @return the ID of the active segment.
+  const uuid& active_id() const noexcept {
+    return builder_.id();
+  }
+
+  /// @returns whether `x` is currently a cached segment.
+  bool cached(const uuid& x) const noexcept {
+    return cache_.count(x) != 0;
+  }
+
+  // -- cache management -------------------------------------------------------
+
+  /// Evicts all segments from the cache.
+  void clear_cache() {
+    cache_.clear();
+  }
+
   // -- implementation of store ------------------------------------------------
 
   error put(table_slice_ptr xs) override;

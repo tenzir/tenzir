@@ -75,6 +75,11 @@ public:
     return const_iterator{map_.end()};
   }
 
+  /// @returns the underlying container.
+  map_type& container() {
+    return map_;
+  }
+
   /// Associates a value with a right-open range.
   /// @param l The left endpoint of the interval.
   /// @param r The right endpoint of the interval.

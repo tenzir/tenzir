@@ -15,10 +15,12 @@
 
 #include "vast/segment_store.hpp"
 
-#include "vast/test/fixtures/events.hpp"
-#include "vast/test/fixtures/filesystem.hpp"
 #include "vast/test/test.hpp"
 
+#include "vast/test/fixtures/actor_system_and_events.hpp"
+
+#include "vast/concept/printable/to_string.hpp"
+#include "vast/concept/printable/vast/uuid.hpp"
 #include "vast/ids.hpp"
 #include "vast/si_literals.hpp"
 #include "vast/table_slice.hpp"
@@ -28,11 +30,12 @@ using namespace binary_byte_literals;
 
 namespace {
 
-struct fixture : fixtures::events, fixtures::filesystem {
+struct fixture : fixtures::deterministic_actor_system_and_events {
   fixture() {
     store = segment_store::make(directory / "segments", 512_KiB, 2);
     if (store == nullptr)
       FAIL("segment_store::make failed to allocate a segment store");
+    segment_path = store->segment_path();
     // Approximates an ID range for [0, max_id) with 10M, because
     // `make_ids({{0, max_id}})` unfortunately leads to performance
     // degradations.
@@ -54,9 +57,21 @@ struct fixture : fixtures::events, fixtures::filesystem {
       FAIL("store->erase failed: " << err);
   }
 
+  /// @returns all segment files of the segment stores.
+  auto segment_files() {
+    std::vector<path> result;
+    vast::directory dir{segment_path};
+    for (auto file : dir)
+      if (file.is_regular_file())
+        result.emplace_back(std::move(file));
+    return result;
+  }
+
   segment_store_ptr store;
 
   ids everything;
+
+  path segment_path;
 };
 
 /// @returns a reference to the value pointed to by `ptr`.
@@ -77,6 +92,24 @@ bool deep_compare(const Container& xs, const Container& ys) {
 } // namespace
 
 FIXTURE_SCOPE(segment_store_tests, fixture)
+
+TEST(flushing empty store - no op) {
+  CHECK_EQUAL(store->flushed(), true);
+  store->flush();
+  CHECK_EQUAL(store->flushed(), true);
+  CHECK_EQUAL(segment_files().size(), 0u);
+}
+
+TEST(flushing filled store) {
+  put(zeek_conn_log_slices);
+  CHECK_EQUAL(store->flushed(), false);
+  auto active = store->active_id();
+  auto err = store->flush();
+  CHECK_EQUAL(err, caf::none);
+  CHECK_EQUAL(store->flushed(), true);
+  std::vector expected_files{to_string(active)};
+  CHECK_EQUAL(segment_files(), expected_files);
+}
 
 TEST(querying empty segment store) {
   auto slices = get(everything);
@@ -121,6 +154,48 @@ TEST(erase on filled segment store with mismatched IDs) {
   put(zeek_conn_log_slices);
   erase(make_ids({1000}));
   CHECK(deep_compare(zeek_conn_log_slices, get(everything)));
+}
+
+TEST(erase active segment) {
+  put(zeek_conn_log_slices);
+  CHECK_EQUAL(store->flushed(), false);
+  CHECK_EQUAL(segment_files().size(), 0u);
+  auto segment_id = store->active_id();
+  erase(everything);
+  CHECK_EQUAL(store->flushed(), true);
+  CHECK_EQUAL(get(everything).size(), 0u);
+  CHECK_EQUAL(store->cached(segment_id), false);
+  store = nullptr;
+  CHECK_EQUAL(segment_files().size(), 0u);
+}
+
+TEST(erase cached segment) {
+  put(zeek_conn_log_slices);
+  auto segment_id = store->active_id();
+  store->flush();
+  CHECK_EQUAL(store->flushed(), true);
+  CHECK_GREATER(segment_files().size(), 0u);
+  CHECK_EQUAL(store->cached(segment_id), true);
+  erase(everything);
+  CHECK_EQUAL(get(everything).size(), 0u);
+  CHECK_EQUAL(store->flushed(), true);
+  store = nullptr;
+  CHECK_EQUAL(segment_files().size(), 0u);
+}
+
+TEST(erase persisted segment) {
+  put(zeek_conn_log_slices);
+  auto segment_id = store->active_id();
+  store->flush();
+  store->clear_cache();
+  CHECK_EQUAL(store->flushed(), true);
+  CHECK_GREATER(segment_files().size(), 0u);
+  CHECK_EQUAL(store->cached(segment_id), false);
+  erase(everything);
+  CHECK_EQUAL(get(everything).size(), 0u);
+  CHECK_EQUAL(store->flushed(), true);
+  store = nullptr;
+  CHECK_EQUAL(segment_files().size(), 0u);
 }
 
 FIXTURE_SCOPE_END()

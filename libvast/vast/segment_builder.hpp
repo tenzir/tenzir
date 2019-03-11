@@ -55,10 +55,15 @@ public:
   /// @returns The number of bytes of the current segment.
   size_t table_slice_bytes() const;
 
-private:
-  // Resets the builder state to start with a new segment.
+  /// @returns the event IDs of each stored table slice.
+  std::vector<ids> get_slice_ids() const {
+    return meta_.get_slice_ids();
+  }
+
+  /// Resets the builder state to start with a new segment.
   void reset();
 
+private:
   // Segment state
   segment::meta_data meta_;
   uuid id_;

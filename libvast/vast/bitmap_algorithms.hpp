@@ -22,10 +22,10 @@
 
 #include "vast/aliases.hpp"
 #include "vast/bits.hpp"
-#include "vast/optional.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/range.hpp"
 #include "vast/detail/type_traits.hpp"
+#include "vast/optional.hpp"
 
 namespace vast {
 

@@ -73,8 +73,8 @@ caf::error segment_store::put(table_slice_ptr xs) {
 }
 
 caf::error segment_store::flush() {
-  if (builder_.table_slice_bytes() == 0)
-    return caf::none; // Nothing to flush.
+  if (flushed())
+    return caf::none;
   auto x = builder_.finish();
   if (x == nullptr)
     return make_error(ec::unspecified, "failed to build segment");
@@ -170,7 +170,63 @@ std::unique_ptr<store::lookup> segment_store::extract(const ids& xs) const {
 }
 
 caf::error segment_store::erase(const ids& xs) {
-  // TODO: implement me
+  VAST_TRACE(VAST_ARG(xs));
+  // Get affected segments.
+  std::vector<uuid> candidates;
+  if (auto err = get_candidates(xs, candidates))
+    return err;
+  if (candidates.empty())
+    return caf::none;
+  // Predicate for checking whether `xs` contains all IDs of `ys`.
+  auto is_subset_of_xs = [&](const ids& ys) {
+    // Compare using rank(), because the bitmaps might have different sizes.
+    return rank(ys & xs) == rank(ys);
+  };
+  // Convenience function for updating given segment by pruning all IDs in `xs`
+  // from it.
+  // @returns `true` if the entire segment got erased, `false` otherwise.
+  auto update = [&](auto& sref) {
+    auto slice_ids = sref.get_slice_ids();
+    // Check whether we can drop the entire segment.
+    if (std::all_of(slice_ids.begin(), slice_ids.end(), is_subset_of_xs)) {
+      auto segment_id = sref.id();
+      VAST_INFO(this, "erases entire segment", segment_id);
+      if constexpr (std::is_same_v<decltype(sref), segment&>) {
+        auto filename = segment_path() / to_string(segment_id);
+        // Schedule deletion of the segment file when releasing the chunk.
+        sref.chunk()->add_deletion_step([=] { rm(filename); });
+      } else {
+        static_assert(std::is_same_v<decltype(sref), segment_builder&>);
+        sref.reset();
+      }
+      // Clean up state.
+      auto is_segment_id = [&](auto& kvp) {
+        return segment_id == kvp.second;
+      };
+      auto& ranges = segments_.container();
+      auto i = std::find_if(ranges.begin(), ranges.end(), is_segment_id);
+      if (i != ranges.end())
+        ranges.erase(i);
+      return true;
+    }
+    // TODO: implement partial deletion
+    return false;
+  };
+  // Update all affected segments.
+  for (auto& candidate : candidates) {
+    auto j = cache_.find(candidate);
+    if (j != cache_.end()) {
+      VAST_DEBUG(this, "erases from the cached segement", candidate);
+      if (update(*j->second))
+        cache_.erase(j);
+    } else if (candidate == builder_.id()) {
+      VAST_DEBUG(this, "erases from the active segement", candidate);
+      update(builder_);
+    } else if (auto sptr = load_segment(candidate)) {
+      VAST_DEBUG(this, "erases from the segement", candidate);
+      update(**sptr);
+    }
+  }
   return caf::none;
 }
 

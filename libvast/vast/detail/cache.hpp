@@ -197,6 +197,18 @@ public:
     return 1;
   }
 
+  /// Removes an entry for a given key without invoking the eviction callback.
+  void erase(iterator i) {
+    auto j = tracker_.begin();
+    while (j != tracker_.end()) {
+      if (j->second == i)
+        j = tracker_.erase(j);
+      else
+        ++j;
+    }
+    xs_.erase(i);
+  }
+
   /// Removes all elements from the cache.
   void clear() {
     xs_.clear();
