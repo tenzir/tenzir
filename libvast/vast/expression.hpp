@@ -175,7 +175,12 @@ inline curried_predicate curried(const predicate& pred) {
 
 /// A sequence of AND expressions.
 struct conjunction : std::vector<expression> {
-  using std::vector<expression>::vector;
+  using super = std::vector<expression>;
+  using super::vector;
+  explicit conjunction(const super& other) : super{other} {
+  }
+  explicit conjunction(super&& other) noexcept : super{std::move(other)} {
+  }
 };
 
 /// @relates conjunction
@@ -187,7 +192,12 @@ auto inspect(Inspector& f, conjunction& x) {
 
 /// A sequence of OR expressions.
 struct disjunction : std::vector<expression> {
-  using std::vector<expression>::vector;
+  using super = std::vector<expression>;
+  using super::vector;
+  explicit disjunction(const super& other) : super{other} {
+  }
+  explicit disjunction(super&& other) noexcept : super{std::move(other)} {
+  }
 };
 
 /// @relates conjunction
