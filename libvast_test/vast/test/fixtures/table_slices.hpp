@@ -30,7 +30,7 @@
 #include "vast/value.hpp"
 #include "vast/view.hpp"
 
-#include "vast/test/fixtures/actor_system.hpp"
+#include "vast/test/fixtures/actor_system_and_events.hpp"
 #include "vast/test/test.hpp"
 
 // Helper macro to define a table-slice unit test.
@@ -42,7 +42,7 @@
 
 namespace fixtures {
 
-class table_slices : deterministic_actor_system {
+class table_slices : public deterministic_actor_system_and_events {
 public:
   table_slices();
 
