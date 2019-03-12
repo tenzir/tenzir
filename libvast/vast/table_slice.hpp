@@ -143,6 +143,13 @@ expected<std::vector<table_slice_ptr>>
 make_random_table_slices(size_t num_slices, size_t slice_size,
                          record_type layout, id offset = 0, size_t seed = 0);
 
+/// Selects all rows in `xs` with event IDs in `selection` and appends produced
+/// table slices to `result`. Cuts `xs` into multiple slices if `selection`
+/// produces gaps.
+/// @pre `xs != nullptr`
+void select(std::vector<table_slice_ptr>& result, const table_slice_ptr& xs,
+            const ids& selection);
+
 /// Selects all rows in `xs` with event IDs in `selection`. Cuts `xs` into
 /// multiple slices if `selection` produces gaps.
 /// @returns new table slices of the same implementation type as `xs` from
