@@ -21,9 +21,11 @@
 
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/uuid.hpp"
+#include "vast/detail/narrow.hpp"
 #include "vast/ids.hpp"
 #include "vast/si_literals.hpp"
 #include "vast/table_slice.hpp"
+#include "vast/to_events.hpp"
 
 using namespace vast;
 using namespace binary_byte_literals;
@@ -36,25 +38,17 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     if (store == nullptr)
       FAIL("segment_store::make failed to allocate a segment store");
     segment_path = store->segment_path();
-    // Approximates an ID range for [0, max_id) with 10M, because
+    // Approximates an ID range for [0, max_id) with 100, because
     // `make_ids({{0, max_id}})` unfortunately leads to performance
     // degradations.
-    everything = make_ids({{0, 10000000}});
-  }
-
-  void put(const std::vector<table_slice_ptr>& slices) {
-    for (auto& slice : slices)
-      if (auto err = store->put(slice))
-        FAIL("store->put failed: " << err);
-  }
-
-  auto get(ids selection) {
-    return unbox(store->get(selection));
-  }
-
-  auto erase(ids selection) {
-    if (auto err = store->erase(selection))
-      FAIL("store->erase failed: " << err);
+    everything = make_ids({{0, 100}});
+    // Check that ground truth is as we expect.
+    if (zeek_conn_log_slices.size() != 3u)
+      FAIL("expected 3 slices in test data set");
+    if (zeek_conn_log_slices[0]->rows() != 8
+        || zeek_conn_log_slices[1]->rows() != 8
+        || zeek_conn_log_slices[2]->rows() != 4)
+      FAIL("expected 8, 8 and 4 rows in data set");
   }
 
   /// @returns all segment files of the segment stores.
@@ -65,6 +59,54 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
       if (file.is_regular_file())
         result.emplace_back(std::move(file));
     return result;
+  }
+
+  /// Pushes all slices into the store. The slices will usually remain in the
+  /// segment builder.
+  void put(const std::vector<table_slice_ptr>& slices) {
+    for (auto& slice : slices)
+      if (auto err = store->put(slice))
+        FAIL("store->put failed: " << err);
+  }
+
+  /// Pushes all slices into the store and makes sure the resulting segment
+  /// gets flushed to disk but remains "hot", i.e., stays in the cache.
+  void put_hot(const std::vector<table_slice_ptr>& slices) {
+    put(slices);
+    auto segment_id = store->active_id();
+    auto files_before = segment_files().size();
+    store->flush();
+    if (!store->flushed())
+      FAIL("failed to flush segment store after put()");
+    if (segment_files().size() <= files_before)
+      FAIL("flush did not produce a segment file on disk");
+    if (!store->cached(segment_id))
+      FAIL("store failed to put the segment into the cache");
+  }
+
+  /// Pushes all slices into the store and makes sure the resulting segment
+  /// gets flushed to disk without remaining in the cache.
+  void put_cold(const std::vector<table_slice_ptr>& slices) {
+    put(slices);
+    auto segment_id = store->active_id();
+    auto files_before = segment_files().size();
+    store->flush();
+    store->clear_cache();
+    if (!store->flushed())
+      FAIL("failed to flush segment store after put()");
+    if (segment_files().size() <= files_before)
+      FAIL("flush did not produce a segment file on disk");
+    if (store->cached(segment_id))
+      FAIL("calling clear_cache() had no effect on store");
+  }
+
+  auto get(ids selection) {
+    return unbox(store->get(selection));
+  }
+
+  auto erase(ids selection) {
+    if (auto err = store->erase(selection))
+      FAIL("store->erase failed: " << err);
   }
 
   segment_store_ptr store;
@@ -89,7 +131,18 @@ bool deep_compare(const Container& xs, const Container& ys) {
          && std::equal(xs.begin(), xs.end(), ys.begin(), cmp);
 }
 
+size_t num_rows(const table_slice& xs, size_t starting_row,
+                size_t max_rows = std::numeric_limits<size_t>::max()) {
+  return std::min(detail::narrow<size_t>(xs.rows() - starting_row), max_rows);
+}
+
 } // namespace
+
+#define CHECK_SLICE(xs, zeek_slice, ...)                                       \
+  CHECK_EQUAL(xs->rows(),                                                      \
+              num_rows(*zeek_conn_log_slices[zeek_slice], __VA_ARGS__));       \
+  CHECK_EQUAL(to_events(*xs),                                                  \
+              to_events(*zeek_conn_log_slices[zeek_slice], __VA_ARGS__))
 
 FIXTURE_SCOPE(segment_store_tests, fixture)
 
@@ -170,32 +223,81 @@ TEST(erase active segment) {
 }
 
 TEST(erase cached segment) {
-  put(zeek_conn_log_slices);
-  auto segment_id = store->active_id();
-  store->flush();
-  CHECK_EQUAL(store->flushed(), true);
-  CHECK_GREATER(segment_files().size(), 0u);
-  CHECK_EQUAL(store->cached(segment_id), true);
+  put_hot(zeek_conn_log_slices);
+  CHECK_EQUAL(segment_files().size(), 1u);
   erase(everything);
   CHECK_EQUAL(get(everything).size(), 0u);
-  CHECK_EQUAL(store->flushed(), true);
   store = nullptr;
   CHECK_EQUAL(segment_files().size(), 0u);
 }
 
 TEST(erase persisted segment) {
-  put(zeek_conn_log_slices);
-  auto segment_id = store->active_id();
-  store->flush();
-  store->clear_cache();
-  CHECK_EQUAL(store->flushed(), true);
-  CHECK_GREATER(segment_files().size(), 0u);
-  CHECK_EQUAL(store->cached(segment_id), false);
+  put_cold(zeek_conn_log_slices);
+  CHECK_EQUAL(segment_files().size(), 1u);
   erase(everything);
   CHECK_EQUAL(get(everything).size(), 0u);
-  CHECK_EQUAL(store->flushed(), true);
   store = nullptr;
   CHECK_EQUAL(segment_files().size(), 0u);
+}
+
+TEST(erase single slice from active segment) {
+  put(zeek_conn_log_slices);
+  erase(make_ids({{8, 16}}));
+  auto slices = get(everything);
+  REQUIRE_EQUAL(slices.size(), 2u);
+  CHECK_SLICE(slices[0], 0, 0);
+  CHECK_SLICE(slices[1], 2, 0);
+}
+
+TEST(erase single slice from cached segment) {
+  put_hot(zeek_conn_log_slices);
+  erase(make_ids({{8, 16}}));
+  auto slices = get(everything);
+  REQUIRE_EQUAL(slices.size(), 2u);
+  CHECK_SLICE(slices[0], 0, 0);
+  CHECK_SLICE(slices[1], 2, 0);
+}
+
+TEST(erase single slice from persisted segment) {
+  put_cold(zeek_conn_log_slices);
+  erase(make_ids({{8, 16}}));
+  auto slices = get(everything);
+  REQUIRE_EQUAL(slices.size(), 2u);
+  CHECK_SLICE(slices[0], 0, 0);
+  CHECK_SLICE(slices[1], 2, 0);
+}
+
+TEST(erase slice part from active segment) {
+  put(zeek_conn_log_slices);
+  erase(make_ids({{10, 14}}));
+  auto slices = get(everything);
+  REQUIRE_EQUAL(slices.size(), 4u);
+  CHECK_SLICE(slices[0], 0, 0);
+  CHECK_SLICE(slices[1], 1, 0, 2);
+  CHECK_SLICE(slices[2], 1, 6, 2);
+  CHECK_SLICE(slices[3], 2, 0);
+}
+
+TEST(erase slice part from cached segment) {
+  put_hot(zeek_conn_log_slices);
+  erase(make_ids({{10, 14}}));
+  auto slices = get(everything);
+  REQUIRE_EQUAL(slices.size(), 4u);
+  CHECK_SLICE(slices[0], 0, 0);
+  CHECK_SLICE(slices[1], 1, 0, 2);
+  CHECK_SLICE(slices[2], 1, 6, 2);
+  CHECK_SLICE(slices[3], 2, 0);
+}
+
+TEST(erase slice part from persisted segment) {
+  put_cold(zeek_conn_log_slices);
+  erase(make_ids({{10, 14}}));
+  auto slices = get(everything);
+  REQUIRE_EQUAL(slices.size(), 4u);
+  CHECK_SLICE(slices[0], 0, 0);
+  CHECK_SLICE(slices[1], 1, 0, 2);
+  CHECK_SLICE(slices[2], 1, 6, 2);
+  CHECK_SLICE(slices[3], 2, 0);
 }
 
 FIXTURE_SCOPE_END()

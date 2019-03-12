@@ -29,13 +29,17 @@ namespace vast {
 
 using namespace binary_byte_literals;
 
+ids segment::meta_data::get_flat_slice_ids() const {
+  ids result;
+  auto concat = [&](const ids& x) { result |= x; };
+  visit_ids(concat);
+  return result;
+}
+
 std::vector<ids> segment::meta_data::get_slice_ids() const {
   std::vector<ids> result;
-  for (auto& synopsis : slices) {
-    auto ids_begin = synopsis.offset;
-    auto ids_end = ids_begin + synopsis.size;
-    result.emplace_back(make_ids({{ids_begin, ids_end}}));
-  }
+  auto append = [&](const ids& x) { result.emplace_back(x); };
+  visit_ids(append);
   return result;
 }
 
