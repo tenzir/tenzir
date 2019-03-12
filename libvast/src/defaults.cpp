@@ -24,6 +24,7 @@
 #include "vast/si_literals.hpp"
 
 using namespace vast::si_literals;
+using namespace std::literals::chrono_literals;
 
 namespace vast::defaults {
 
@@ -66,7 +67,8 @@ size_t num_query_supervisors = 10;
 size_t segments = 10;
 size_t max_segment_size = 128;
 size_t initially_requested_ids = 128;
-std::chrono::milliseconds telemetry_rate = std::chrono::milliseconds{1000};
+std::chrono::milliseconds telemetry_rate = 1000ms;
+caf::timespan aging_frequency = 24h;
 
 } // namespace system
 

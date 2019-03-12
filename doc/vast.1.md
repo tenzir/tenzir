@@ -155,9 +155,18 @@ Displays the software version and exits.
 
 Synopsis:
 
-  *start*
+  *start* [*arguments*]
 
-Start a node at the specified endpoint.
+Start a node.
+
+Available *arguments*:
+
+`-a` *query*
+   A query for aging out historical data periodically. Do not set this before
+   careful consideration! Hits for this query are deleted without backup.
+
+`f` *interval*
+   Frequency for running the aging query and deleting all hits.
 
 ### stop
 

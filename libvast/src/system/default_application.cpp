@@ -47,7 +47,12 @@ default_application::default_application() {
   auto opts = [] { return command::opts(); };
   // Add standalone commands.
   add(version_command, "version", "prints the software version", opts());
-  add(start_command, "start", "starts a node", opts());
+  add(start_command, "start", "starts a node",
+      opts()
+        .add<std::string>("aging-query,a",
+                          "query to periodically erase aged data")
+        .add<caf::timespan>("aging-frequency,f",
+                            "frequency for triggering the aging query"));
   add(remote_command, "stop", "stops a node", opts());
   add(remote_command, "spawn", "creates a new component", opts());
   add(remote_command, "kill", "terminates a component", opts());

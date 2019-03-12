@@ -115,6 +115,9 @@ extern size_t initially_requested_ids;
 /// Rate at which telemetry data is sent to the ACCOUNTANT.
 extern std::chrono::milliseconds telemetry_rate;
 
+/// Frequency for triggering the ERASER.
+extern caf::timespan aging_frequency;
+
 } // namespace system
 
 } // namespace vast::defaults
