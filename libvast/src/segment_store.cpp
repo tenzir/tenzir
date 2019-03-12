@@ -182,17 +182,26 @@ caf::error segment_store::erase(const ids& xs) {
     // Compare using rank(), because the bitmaps might have different sizes.
     return rank(ys & xs) == rank(ys);
   };
+  // Counts number of total erased events for user-facing output.
+  uint64_t erased_events = 0;
   // Convenience function for dropping a segment from the range map.
   auto drop_range = [&](const uuid& segment_id) {
-    auto is_segment_id = [&](auto& kvp) { return segment_id == kvp.second; };
+    // Multiple ranges can map to the same segment ID, so we need to iterate
+    // all ranges.
     auto& ranges = segments_.container();
-    auto i = std::find_if(ranges.begin(), ranges.end(), is_segment_id);
-    if (i != ranges.end())
-      ranges.erase(i);
+    auto i = ranges.begin();
+    while (i != ranges.end()) {
+      if (segment_id == i->second)
+        i = ranges.erase(i);
+      else
+        ++i;
+    }
   };
   // Convenience funciton for dropping an enire segment.
   auto drop = [&](auto& sref) {
     auto segment_id = sref.id();
+    for (auto& slices_data : sref.meta().slices)
+      erased_events += slices_data.size;
     VAST_INFO(this, "erases entire segment", segment_id);
     if constexpr (std::is_same_v<decltype(sref), segment&>) {
       auto filename = segment_path() / to_string(segment_id);
@@ -242,7 +251,12 @@ caf::error segment_store::erase(const ids& xs) {
       auto max_id = slice->offset() + slice->rows();
       if (keep_mask.size() < max_id)
         keep_mask.append_bits(true, max_id - keep_mask.size());
+      size_t new_slices_size_before = new_slices.size();
       select(new_slices, slice, keep_mask);
+      size_t remaining_rows = 0;
+      for (size_t i = new_slices_size_before; i < new_slices.size(); ++i)
+        remaining_rows += new_slices[i]->rows();
+      erased_events += slice->rows() - remaining_rows;
     }
     if (new_slices.empty()) {
       VAST_WARNING(this, "was unable to generate any new slice for segment",
@@ -262,9 +276,11 @@ caf::error segment_store::erase(const ids& xs) {
       builder = &sref;
     }
     for (auto& slice : new_slices) {
-      builder->add(slice);
-      if (!segments_.inject(slice->offset(), slice->offset() + slice->rows(),
-                            builder->id()))
+      if (auto err = builder->add(slice)) {
+        VAST_ERROR(this, "failed to add slice to builder:" << err);
+      } else if (!segments_.inject(slice->offset(),
+                                   slice->offset() + slice->rows(),
+                                   builder->id()))
         VAST_ERROR(this, "failed to update range_map");
     }
     // Flush the new segment and remove the previous segment.
@@ -296,6 +312,8 @@ caf::error segment_store::erase(const ids& xs) {
       update(**sptr);
     }
   }
+  if (erased_events > 0)
+    VAST_INFO(this, "erased", erased_events, "events");
   return caf::none;
 }
 
