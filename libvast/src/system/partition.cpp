@@ -109,7 +109,11 @@ caf::actor fetch_indexer(table_indexer& tbl, const attribute_extractor& ex,
   VAST_TRACE(VAST_ARG(tbl), VAST_ARG(ex), VAST_ARG(op), VAST_ARG(x));
   auto& layout = tbl.layout();
   if (ex.attr == system::type_atom::value) {
-    VAST_ASSERT(caf::holds_alternative<std::string>(x));
+    if (!caf::holds_alternative<std::string>(x)) {
+      VAST_WARNING(tbl.state().self,
+                   "expected a string as type extractor attribute, got:", x);
+      return nullptr;
+    }
     // Doesn't apply if the query name doesn't match our type.
     if (layout.name() != caf::get<std::string>(x))
       return nullptr;
@@ -124,7 +128,12 @@ caf::actor fetch_indexer(table_indexer& tbl, const attribute_extractor& ex,
     });
   }
   if (ex.attr == system::time_atom::value) {
-    VAST_ASSERT(caf::holds_alternative<timestamp>(x));
+    if (!caf::holds_alternative<timestamp>(x)) {
+      VAST_WARNING(tbl.state().self,
+                   "expected a timestamp as time extractor attribute , got:",
+                   x);
+      return nullptr;
+    }
     // Find the column with attribute 'time'.
     auto pred = [](auto& x) {
       return caf::holds_alternative<timestamp_type>(x.type)
