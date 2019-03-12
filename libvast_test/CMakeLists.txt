@@ -71,7 +71,7 @@ log_to_slices("zeek" "conn")
 
 ## test library definition
 
-add_library(libvast_test SHARED
+add_library(libvast_test
   "${generated_sources}"
   src/actor_system.cpp
   src/dummy_index.cpp

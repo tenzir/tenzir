@@ -50,7 +50,7 @@ namespace vast {
 /// >         |           |            |            |        |
 /// >      scheme     authority       path        query   fragment
 /// >         |   _____________________|__
-/// >        / \ /                        \
+/// >        / \ /                        ⧵
 /// >        urn:example:animal:ferret:nose
 struct uri {
   std::string scheme;

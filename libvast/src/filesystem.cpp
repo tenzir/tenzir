@@ -412,8 +412,10 @@ bool exists(const path& p) {
 #endif // VAST_POSIX
 }
 
-void create_symlink(const path& target, const path& link) {
-  ::symlink(target.str().c_str(), link.str().c_str());
+caf::error create_symlink(const path& target, const path& link) {
+  if (::symlink(target.str().c_str(), link.str().c_str()))
+    return make_error(ec::filesystem_error, std::strerror(errno));
+  return caf::none;
 }
 
 bool rm(const path& p) {

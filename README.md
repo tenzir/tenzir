@@ -84,6 +84,42 @@ The `doc` target builds the API documentation locally:
 
     make doc
 
+## Docker
+
+The source ships with the convenience script `docker_build.sh`, which will
+create the Docker images and save them as `tar.gz` archives (when invoked
+without arguments).
+
+To run the container, you need to provide a volume to the mountpoint `/data`:
+
+The default command will print the help message
+
+``` sh
+docker run -v /tmp/vast:/data vast-io/vast
+```
+
+Create a Docker network since we'll be running multiple containers which
+connect to each other:
+
+``` sh
+docker network create -d bridge --subnet 172.42.0.0/16 vast_nw
+```
+
+Use detach and publish the default port to start a VAST node
+
+``` sh
+docker run --network=vast_nw --name=vast_node --ip="172.42.0.2" -d -v /tmp/vast:/data vast-io/vast start
+```
+
+Import a Zeek conn log to the detached server instance
+
+``` sh
+docker run --network=vast_nw -i -v /tmp/vast:/data vast-io/vast -e '172.42.0.2' import zeek < zeek_conn.log
+```
+
+Other subcommands like `export` and `status` can be used just like the `import`
+command shown above.
+
 ## Scientific Use
 
 When referring to VAST in a scientific context, please use the following

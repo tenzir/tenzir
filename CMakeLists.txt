@@ -2,14 +2,22 @@
 #                                Project Setup
 #------------------------------------------------------------------------------
 
-cmake_minimum_required(VERSION 3.0 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.11 FATAL_ERROR)
 project(VAST C CXX)
 
-option(VAST_RELOCATEABLE_INSTALL "Make the installation relocateable")
+option(VAST_STATIC_EXECUTABLE "Link VAST statically")
+option(VAST_RELOCATEABLE_INSTALL "Make the installation relocateable" OFF)
+set(BUILD_SHARED_LIBS_DEFAULT ON)
+if (VAST_STATIC_EXECUTABLE)
+  set(BUILD_SHARED_LIBS_DEFAULT OFF)
+endif ()
+option(BUILD_SHARED_LIBS "" ${BUILD_SHARED_LIBS_DEFAULT})
+if (VAST_STATIC_EXECUTABLE AND BUILD_SHARED_LIBS)
+  MESSAGE(FATAL_ERROR "Cannot create static binary with dynamic libraries")
+endif ()
 
 # Silence warning CMP0042
 if (APPLE AND NOT DEFINED CMAKE_MACOSX_RPATH)
-  set(CMAKE_MACOSX_RPATH TRUE)
   set(CMAKE_SKIP_BUILD_RPATH  FALSE)
   set(CMAKE_BUILD_WITH_INSTALL_RPATH FALSE)
   if (VAST_RELOCATEABLE_INSTALL)
@@ -339,7 +347,6 @@ if (NOT HAVE_CXX_ATOMICS_WITHOUT_LIB)
     if (NOT HAVE_CXX_ATOMICS_WITH_LIB)
       message(FATAL_ERROR "Host compiler must support std::atomic!")
     endif()
-    set(LDFLAGS "${LDFLAGS} -latomic")
   else()
     message(STATUS "Host compiler appears to require libatomic, but cannot find it")
     message(STATUS "Enabling mutex lock workaround")
@@ -439,34 +446,6 @@ endif ()
 
 find_package(Doxygen QUIET)
 find_package(Md2man QUIET)
-
-#------------------------------------------------------------------------------
-#                                   Docker
-#------------------------------------------------------------------------------
-
-set(docker_image "mavam/vast")
-
-file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/docker-build.cmake
-  "execute_process(
-     COMMAND docker build -t ${docker_image} ${CMAKE_SOURCE_DIR}
-     RESULT_VARIABLE docker_build_success)
-   set(docker_build_success true)
-   if (docker_build_success)
-     execute_process(
-       COMMAND docker inspect --format='{{.Id}}' ${docker_image}
-       OUTPUT_VARIABLE docker_image_id)
-     execute_process(
-       COMMAND docker tag \${docker_image_id} ${docker_image}:latest
-       COMMAND docker tag \${docker_image_id} ${docker_image}:${VAST_VERSION})
-   endif ()")
-
-add_custom_target(docker-build
-  ${CMAKE_COMMAND} -P ${CMAKE_BINARY_DIR}/docker-build.cmake
-  COMMENT "Building docker image")
-
-add_custom_target(docker-run
-  COMMAND docker run -ti ${docker_image}
-  COMMENT "Running current Docker image" VERBATIM)
 
 #------------------------------------------------------------------------------
 #                                 Build Setup

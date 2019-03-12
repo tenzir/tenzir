@@ -144,7 +144,7 @@ if (PCAP_FOUND)
   )
 endif ()
 
-add_library(libvast SHARED ${libvast_sources} ${libvast_headers})
+add_library(libvast ${libvast_sources} ${libvast_headers})
 set_target_properties(libvast
   PROPERTIES
   SOVERSION ${VERSION_MAJOR}
@@ -183,6 +183,10 @@ endif ()
 # Only link against tcmalloc if requested.
 if (GPERFTOOLS_FOUND AND VAST_USE_PERFTOOLS_HEAP_PROFILER)
   target_link_libraries(libvast PUBLIC gperftools::tcmalloc)
+endif ()
+
+if (HAVE_CXX_ATOMICS_WITH_LIB)
+  target_link_libraries(libvast PUBLIC atomic)
 endif ()
 
 # Install libvast in PREFIX/lib and headers in PREFIX/include/vast.

@@ -57,7 +57,8 @@ default_configuration::setup_log_file(const path& base_dir) {
   if (exists(link_dir))
     if (!rm(link_dir))
       return make_error(ec::filesystem_error, "cannot remove log symlink");
-  create_symlink(log_dir.trim(-1), link_dir);
+  if (auto err = create_symlink(log_dir.trim(-1), link_dir))
+    return err;
   return log_dir / application_name + ".log";
 }
 

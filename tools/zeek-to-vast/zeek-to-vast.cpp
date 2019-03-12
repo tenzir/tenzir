@@ -80,7 +80,7 @@ std::atomic<bool> terminating = false;
 // Double-check the signal handler requirement.
 static_assert(decltype(terminating)::is_always_lock_free);
 
-extern "C" void signal_handler(int sig) {
+extern "C" void proxy_signal_handler(int sig) {
   // Catch termination signals only once to allow forced termination by the OS
   // upon sending the signal a second time.
   if (sig == SIGINT || sig == SIGTERM)
@@ -265,6 +265,9 @@ int main(int argc, char** argv) {
   std::string broker_address = caf::get_or(cfg, "broker-address",
                                            defaults::broker_address);
   uint16_t broker_port = caf::get_or(cfg, "broker-port", defaults::broker_port);
+  // Install signal handler.
+  std::signal(SIGINT, proxy_signal_handler);
+  std::signal(SIGTERM, proxy_signal_handler);
   // Create a Broker endpoint.
   auto endpoint = broker::endpoint{std::move(cfg)};
   endpoint.listen(broker_address, broker_port);

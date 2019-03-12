@@ -68,9 +68,9 @@ auto id_or_name(T&& x) {
       return caf::detail::pretty_type_name(typeid(value_type));
   } else {
     if constexpr (has_ostream_operator<T>)
-      return x;
+      return std::forward<T>(x);
     else if constexpr (has_to_string<T>)
-      return to_string(x);
+      return to_string(std::forward<T>(x));
     else
       return caf::detail::pretty_type_name(typeid(T));
   }
