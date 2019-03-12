@@ -149,7 +149,6 @@ archive(archive_type::stateful_pointer<archive_state> self, path dir,
                                telemetry_atom::value);
           },
           [=](erase_atom, ids erase) {
-            VAST_INFO(self, "erases", rank(erase), "events from its store");
             if (auto err = self->state.store->erase(erase))
               VAST_ERROR(self,
                          "failed to erase events:", self->system().render(err));
