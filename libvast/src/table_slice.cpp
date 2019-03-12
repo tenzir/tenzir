@@ -112,28 +112,26 @@ make_random_table_slices(size_t num_slices, size_t slice_size,
   return result;
 }
 
-std::vector<table_slice_ptr> select(const table_slice_ptr& xs,
-                                    const ids& selection) {
-  std::vector<table_slice_ptr> result;
+void select(std::vector<table_slice_ptr>& result, const table_slice_ptr& xs,
+            const ids& selection) {
   VAST_ASSERT(xs != nullptr);
   auto xs_ids = make_ids({{xs->offset(), xs->offset() + xs->rows()}});
   auto intersection = selection & xs_ids;
   auto intersection_rank = rank(intersection);
   // Do no rows qualify?
-  if (intersection_rank == 0) {
-    return result;
-  }
+  if (intersection_rank == 0)
+    return;
   // Do all rows qualify?
   if (rank(xs_ids) == intersection_rank) {
     result.emplace_back(xs);
-    return result;
+    return;
   }
   // Start slicing and dicing.
   auto impl = xs->implementation_id();
   auto builder = factory<table_slice_builder>::make(impl, xs->layout());
   if (builder == nullptr) {
     VAST_ERROR(__func__, "failed to get a table slice builder for", impl);
-    return result;
+    return;
   }
   id last_offset = xs->offset();
   auto push_slice = [&] {
@@ -164,11 +162,17 @@ std::vector<table_slice_ptr> select(const table_slice_ptr& xs,
       if (!builder->add(xs->at(row, column))) {
         VAST_ERROR(__func__, "failed to add column", column, "in row", row,
                    "to the builder:", builder->add(xs->at(row, column)));
-        return result;
+        return;
       }
     }
   }
   push_slice();
+}
+
+std::vector<table_slice_ptr> select(const table_slice_ptr& xs,
+                                    const ids& selection) {
+  std::vector<table_slice_ptr> result;
+  select(result, xs, selection);
   return result;
 }
 
