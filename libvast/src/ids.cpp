@@ -13,6 +13,8 @@
 
 #include "vast/ids.hpp"
 
+#include "vast/table_slice.hpp"
+
 namespace vast {
 
 ids make_ids(std::initializer_list<id_range> ranges, size_t min_size,
@@ -33,6 +35,10 @@ ids make_ids(std::initializer_list<id_range> ranges, size_t min_size,
   if (result.size() < min_size)
     result.append_bits(default_bit, min_size - result.size());
   return result;
+}
+
+ids make_ids(const table_slice& slice) {
+  return make_ids({{slice.offset(), slice.offset() + slice.rows()}});
 }
 
 } // namespace vast
