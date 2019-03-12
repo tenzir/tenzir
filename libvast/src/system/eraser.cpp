@@ -51,6 +51,8 @@ void eraser_state::init(caf::timespan interval, std::string query,
 }
 
 void eraser_state::transition_to(query_processor::state_name x) {
+  if (state_ == idle && x != idle)
+    VAST_INFO(self_, "triggers new aging cycle");
   super::transition_to(x);
   if (x == idle)
     self_->delayed_send(self_, interval_, run_atom::value);
