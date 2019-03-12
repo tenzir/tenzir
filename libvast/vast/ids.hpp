@@ -13,8 +13,9 @@
 
 #pragma once
 
-#include "vast/bitmap.hpp"
 #include "vast/aliases.hpp"
+#include "vast/bitmap.hpp"
+#include "vast/fwd.hpp"
 
 namespace vast {
 
@@ -41,5 +42,7 @@ struct id_range {
 ids make_ids(std::initializer_list<id_range> ranges, size_t min_size = 0,
              bool default_bit = false);
 
-} // namespace vast
+/// Generates an ID set for the given table slice.
+ids make_ids(const table_slice& slice);
 
+} // namespace vast
