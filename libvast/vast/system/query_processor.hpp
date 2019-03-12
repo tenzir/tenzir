@@ -90,10 +90,10 @@ public:
 
   // -- convenience functions --------------------------------------------------
 
-  /// Sends the query `expr` to `index_hdl` and transitions from `idle` to
+  /// Sends the query `expr` to `index` and transitions from `idle` to
   /// `await_query_id`.
   /// @pre `state() == idle`
-  void start(expression expr, caf::actor index_hdl);
+  void start(expression expr, caf::actor index);
 
   /// @pre `state() == collect_hits`
   /// @pre `n > 0`

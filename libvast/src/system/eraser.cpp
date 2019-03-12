@@ -30,12 +30,12 @@ eraser_state::eraser_state(caf::event_based_actor* self) : super(self) {
 }
 
 void eraser_state::init(caf::timespan interval, std::string query,
-                        caf::actor index_hdl, caf::actor archive_hdl) {
+                        caf::actor index, caf::actor archive) {
   // Set member variables.
   interval_ = interval;
   query_ = std::move(query);
-  index_ = std::move(index_hdl);
-  archive_ = std::move(archive_hdl);
+  index_ = std::move(index);
+  archive_ = std::move(archive);
   // Override the behavior for the idle state.
   behaviors_[idle].assign([=](run_atom) {
     auto expr = to<expression>(query_);
@@ -80,10 +80,9 @@ void eraser_state::process_end_of_hits() {
 
 caf::behavior eraser(caf::stateful_actor<eraser_state>* self,
                      caf::timespan interval, std::string query,
-                     caf::actor index_hdl, caf::actor archive_hdl) {
+                     caf::actor index, caf::actor archive) {
   auto& st = self->state;
-  st.init(interval, std::move(query), std::move(index_hdl),
-          std::move(archive_hdl));
+  st.init(interval, std::move(query), std::move(index), std::move(archive));
   return st.behavior();
 }
 

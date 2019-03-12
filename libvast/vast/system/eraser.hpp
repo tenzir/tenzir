@@ -39,8 +39,8 @@ public:
 
   eraser_state(caf::event_based_actor* self);
 
-  void init(caf::timespan interval, std::string query, caf::actor index_hdl,
-            caf::actor archive_hdl);
+  void init(caf::timespan interval, std::string query, caf::actor index,
+            caf::actor archive);
 
 protected:
   // -- implementation hooks ---------------------------------------------------
@@ -57,9 +57,10 @@ private:
   /// Configures the time between two query executions.
   caf::timespan interval_;
 
-  /// Selects outdated events. Note that we get the query as string on purpose.
-  /// Taking an ::expression here instead would fix any query such as
-  /// `#time < 1 week ago` to the time of its parsing and not update properly.
+  /// The query expression that selects events scheduled for deletion. Note
+  /// that we get the query as string on purpose. Taking an ::expression here
+  /// instead would fix any query such as `#time < 1 week ago` to the time of
+  /// its parsing and not update properly.
   std::string query_;
 
   /// Points to the ARCHIVE that needs periodic pruning.
@@ -69,16 +70,17 @@ private:
   ids hits_;
 };
 
-/// Periodically queries `index_hdl` and erases all hits from `archive_hdl`.
+/// Periodically queries `index` and erases all hits from `archive`.
 /// @param interval The time between two query executions.
-/// @param query The periodic query for selecting outdated events. Note that
-///              we get the query as string on purpose. Taking an ::expression
-///              here instead would fix any query such as `#time < 1 week ago`
-///              to the time of its parsing and not update properly.
-/// @param index_hdl A handle to the INDEX under investigation.
-/// @param archive_hdl A handle to the ARCHIVE that needs periodic pruning.
+/// @param query The periodic query that selects events scheduled for deletion.
+///              Note that we get the query as string on purpose. Taking an
+///              ::expression here instead would fix any query such as `#time <
+///              1 week ago` to the time of its parsing and not update
+///              properly.
+/// @param index A handle to the INDEX under investigation.
+/// @param archive A handle to the ARCHIVE that needs periodic pruning.
 caf::behavior eraser(caf::stateful_actor<eraser_state>* self,
                      caf::timespan interval, std::string query,
-                     caf::actor index_hdl, caf::actor archive_hdl);
+                     caf::actor index, caf::actor archive);
 
 } // namespace vast::system

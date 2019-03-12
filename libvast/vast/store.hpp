@@ -49,6 +49,8 @@ public:
   virtual std::unique_ptr<lookup> extract(const ids& xs) const = 0;
 
   /// Erases events from the store.
+  /// @param xs The IDs for all events to remove from the store.
+  /// @returns No error on success.
   virtual caf::error erase(const ids& xs) = 0;
 
   /// Retrieves a set of events.

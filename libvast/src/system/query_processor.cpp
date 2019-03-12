@@ -34,8 +34,8 @@ query_processor::query_processor(caf::event_based_actor* self)
   self->set_default_handler(caf::skip);
   behaviors_[idle].assign(
     // Our default init state simply waits for a query to execute.
-    [=](expression& expr, const caf::actor& index_hdl) {
-      start(std::move(expr), index_hdl);
+    [=](expression& expr, const caf::actor& index) {
+      start(std::move(expr), index);
     });
   behaviors_[await_query_id].assign(
     // Received from the INDEX after sending the query when leaving `idle`.
@@ -64,8 +64,8 @@ query_processor::~query_processor() {
 
 // -- convenience functions ----------------------------------------------------
 
-void query_processor::start(expression expr, caf::actor index_hdl) {
-  index_ = std::move(index_hdl);
+void query_processor::start(expression expr, caf::actor index) {
+  index_ = std::move(index);
   self_->send(index_, std::move(expr));
   transition_to(await_query_id);
 }

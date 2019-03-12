@@ -148,8 +148,8 @@ archive(archive_type::stateful_pointer<archive_state> self, path dir,
             self->delayed_send(self, defs::telemetry_rate,
                                telemetry_atom::value);
           },
-          [=](erase_atom, ids erase) {
-            if (auto err = self->state.store->erase(erase))
+          [=](erase_atom, const ids& selection) {
+            if (auto err = self->state.store->erase(selection))
               VAST_ERROR(self,
                          "failed to erase events:", self->system().render(err));
           }};
