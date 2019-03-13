@@ -69,13 +69,13 @@ caf::message start_command(const command&, caf::actor_system& sys,
   auto publish = [&]() -> caf::expected<uint16_t> {
     if (use_encryption)
 #ifdef VAST_USE_OPENSSL
-      return caf::openssl::publish(node, node_endpoint.port, host);
+      return caf::openssl::publish(node, node_endpoint.port.number(), host);
 #else
       return make_error(ec::unspecified, "not compiled with OpenSSL support");
 #endif
     auto& mm = sys.middleman();
     auto reuse_address = true;
-    return mm.publish(node, node_endpoint.port, host, reuse_address);
+    return mm.publish(node, node_endpoint.port.number(), host, reuse_address);
   };
   auto bound_port = publish();
   if (!bound_port)

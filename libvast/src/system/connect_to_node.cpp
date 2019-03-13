@@ -61,13 +61,13 @@ expected<actor> connect_to_node(scoped_actor& self, const caf::settings& opts) {
   if (use_encryption) {
 #ifdef VAST_USE_OPENSSL
     return openssl::remote_actor(self->system(), node_endpoint.host,
-                                 node_endpoint.port);
+                                 node_endpoint.port.number());
 #else
     return make_error(ec::unspecified, "not compiled with OpenSSL support");
 #endif
   }
   auto& mm = self->system().middleman();
-  return mm.remote_actor(node_endpoint.host, node_endpoint.port);
+  return mm.remote_actor(node_endpoint.host, node_endpoint.port.number());
 }
 
 } // namespace vast::system

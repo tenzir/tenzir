@@ -16,10 +16,11 @@
 #include <cstdint>
 #include <string>
 
-#include "vast/endpoint.hpp"
 #include "vast/concept/parseable/core.hpp"
 #include "vast/concept/parseable/numeric/integral.hpp"
 #include "vast/concept/parseable/string/char_class.hpp"
+#include "vast/concept/parseable/vast/port.hpp"
+#include "vast/endpoint.hpp"
 
 namespace vast {
 
@@ -32,11 +33,7 @@ struct endpoint_parser : parser<endpoint_parser> {
     using namespace parser_literals;
     auto hostname = +(alnum | chr{'-'} | chr{'_'} | chr{'.'});
     auto host = hostname ->* [&](std::string x) { e.host = std::move(x); };
-    auto port = (':' >> u16) ->* [&](uint16_t x) { e.port = x; };
-    auto p
-      = (host >> ~port)
-      | port
-      ;
+    auto p = (host >> ~(':' >> parsers::port)) | ':' >> parsers::port;
     return p(f, l, unused);
     return false;
   }

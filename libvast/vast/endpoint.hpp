@@ -15,12 +15,14 @@
 
 #include <string>
 
+#include "vast/port.hpp"
+
 namespace vast {
 
 /// A transport-layer endpoint consisting of host and port.
 struct endpoint {
   std::string host;   ///< The hostname or IP address.
-  uint64_t port = 0;  ///< The transport-layer port.
+  class port port;    ///< The transport-layer port.
 };
 
 /// @returns an endpoint with values from the default settings.
