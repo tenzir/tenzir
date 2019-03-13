@@ -183,7 +183,9 @@ caf::behavior source(caf::stateful_actor<source_state<Reader>>* self,
       //       then we should trigger CAF to poll the source after a
       //       predefined interval of time again, e.g., via delayed_send
       t.stop(produced);
+      VAST_INFO(self, "produced", produced, "events");
       if (err != caf::none) {
+        VAST_INFO(self, "completed with message:", render(err));
         done = true;
         st.send_report();
         self->quit();
