@@ -33,16 +33,13 @@ class parser_reader : public single_layout_reader {
 public:
   using super = single_layout_reader;
 
-  explicit parser_reader(caf::atom_value table_slice_type)
-    : super(table_slice_type) {
-    // nop
-  }
-
   /// Constructs a generic reader.
   /// @param in The stream of logs to read.
-  parser_reader(caf::atom_value id, std::unique_ptr<std::istream> in)
-    : parser_reader(id) {
-    reset(std::move(in));
+  explicit parser_reader(caf::atom_value table_slice_type,
+                         std::unique_ptr<std::istream> in = nullptr)
+    : super(table_slice_type) {
+    if (in)
+      reset(std::move(in));
   }
 
   void reset(std::unique_ptr<std::istream> in) {

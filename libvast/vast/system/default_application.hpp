@@ -33,6 +33,7 @@ public:
   /// @returns default options for source commands.
   static auto src_opts() {
     return command::opts()
+      .add<std::string>("listen,l", "the port number to listen on")
       .add<std::string>("read,r", "path to input where to read events from")
       .add<std::string>("schema-file,s", "path to alternate schema")
       .add<std::string>("schema,S", "alternate schema as string")

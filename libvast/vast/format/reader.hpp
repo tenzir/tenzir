@@ -14,11 +14,13 @@
 #pragma once
 
 #include <cstddef>
+#include <string_view>
 
 #include <caf/error.hpp>
 #include <caf/expected.hpp>
 #include <caf/fwd.hpp>
 
+#include "vast/defaults.hpp"
 #include "vast/fwd.hpp"
 #include "vast/table_slice.hpp"
 
@@ -28,6 +30,14 @@ namespace vast::format {
 class reader {
 public:
   // -- member types -----------------------------------------------------------
+
+  enum class inputs { file, inet };
+
+  /// Default input method for the reader
+  struct defaults {
+    constexpr static inputs input = inputs::file;
+    constexpr static auto path = vast::defaults::command::read_path;
+  };
 
   /// A function object for consuming parsed table slices.
   class consumer {
