@@ -112,8 +112,8 @@ void accountant_state::command_line_heartbeat() {
     try {
       oss.imbue(std::locale(""));
     } catch (const std::exception& e) {
-      VAST_DEBUG_ANON("accoutant failed to set locale the statistics output:",
-                      e.what());
+      VAST_DEBUG(self,
+                 "failed to set the locale for statistics output:", e.what());
     }
     auto node_rate = std::round(calc_rate(accumulator.node));
     oss << "ingested " << accumulator.node.events << " events at a rate of "
