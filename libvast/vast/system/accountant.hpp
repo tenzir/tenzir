@@ -53,19 +53,8 @@ typename Inspector::result_type inspect(Inspector& f, performance_sample& s) {
 
 using performance_report = std::vector<performance_sample>;
 
-struct accountant_state {
-  std::ofstream file;
-  bool flush_pending = false;
-  std::unordered_map<caf::actor_id, std::string> actor_map;
-  struct {
-    measurement node;
-  } accumulator;
-  static inline const char* name = "accountant";
-
-  void command_line_heartbeat();
-};
-
 // clang-format off
+/// @relates accountant
 using accountant_type = caf::typed_actor<
   caf::reacts_to<announce_atom, std::string>,
   caf::reacts_to<std::string, std::string>,
@@ -80,6 +69,20 @@ using accountant_type = caf::typed_actor<
   caf::replies_to<status_atom>::with<caf::dictionary<caf::config_value>>,
   caf::reacts_to<telemetry_atom>>;
 // clang-format on
+
+/// @relates accountant
+struct accountant_state {
+  static constexpr const char* name = "accountant";
+  accountant_type::stateful_pointer<accountant_state> self;
+  std::ofstream file;
+  bool flush_pending = false;
+  std::unordered_map<caf::actor_id, std::string> actor_map;
+  struct {
+    measurement node;
+  } accumulator;
+
+  void command_line_heartbeat();
+};
 
 /// Accumulates various performance metrics in a key-value format and writes
 /// them to a log file.
