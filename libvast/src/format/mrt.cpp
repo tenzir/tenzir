@@ -291,7 +291,7 @@ reader::reader(caf::atom_value table_slice_type,
     {"new_state", count_type{}},
   }}.name("mrt::bgp4mp::state_change");
   if (input)
-    input_ = std::move(input);
+    reset(std::move(input));
 }
 
 void reader::reset(std::unique_ptr<std::istream> in) {
