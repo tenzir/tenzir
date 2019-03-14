@@ -66,7 +66,7 @@ struct events {
 
   std::vector<table_slice_ptr> copy(std::vector<table_slice_ptr> xs);
 
-  auto take_n(const std::vector<table_slice_ptr>& xs, size_t n) {
+  auto take(const std::vector<table_slice_ptr>& xs, size_t n) {
     VAST_ASSERT(n <= xs.size());
     auto first = xs.begin();
     auto last = first + n;

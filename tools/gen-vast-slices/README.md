@@ -1,11 +1,12 @@
 # gen-vast-slices
 
 The **gen-vast-slices** tool parses supported log formats from STDIN into table
-slices and prints them in serialized form to STDOUT.
+slices, serializes them with a `caf::binary_serializer`, and prints the
+serialized data to STDOUT.
 
-Our primary use case is to create a `.cpp` with an array that contains the
-serialized form of a table slice vector. Unit tests than can quickly
-deserialize the vector instead of parsing files from the file system.
+Our primary use case is to create a `.cpp` file with an array that contains the
+serialized form of a table slice vector. Unit tests then can quickly
+deserialize the vector instead of performing filesystem I/O.
 
 ## Usage
 

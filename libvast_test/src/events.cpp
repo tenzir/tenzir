@@ -307,9 +307,6 @@ events::events() {
   SANITY_CHECK(bgpdump_txt, bgpdump_txt_slices);
   // SANITY_CHECK(random, const_random_slices);
   // Read the full Zeek conn.log.
-  // TODO: port remaining slices to new deserialization API and replace
-  //       this hard-coded starting offset
-  id offset = 100000;
   caf::binary_deserializer src{nullptr, artifacts::logs::zeek::conn_buf,
                                artifacts::logs::zeek::conn_buf_size};
   if (auto err = src(zeek_full_conn_log_slices))
@@ -317,6 +314,9 @@ events::events() {
   VAST_ASSERT(std::all_of(zeek_full_conn_log_slices.begin(),
                           zeek_full_conn_log_slices.end() - 1,
                           [](auto& slice) { return slice->rows() == 100; }));
+  // TODO: port remaining slices to new deserialization API and replace
+  //       this hard-coded starting offset
+  id offset = 100000;
   for (auto& ptr : zeek_full_conn_log_slices) {
     ptr.unshared().offset(offset);
     offset += ptr->rows();
