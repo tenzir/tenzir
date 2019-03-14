@@ -109,7 +109,12 @@ void accountant_state::command_line_heartbeat() {
   if (logger && logger->verbosity() >= CAF_LOG_LEVEL_INFO
       && accumulator.node.events > 0) {
     std::ostringstream oss;
-    oss.imbue(std::locale(""));
+    try {
+      oss.imbue(std::locale(""));
+    } catch (const std::exception& e) {
+      VAST_DEBUG_ANON("accoutant failed to set locale the statistics output:",
+                      e.what());
+    }
     auto node_rate = std::round(calc_rate(accumulator.node));
     oss << "ingested " << accumulator.node.events << " events at a rate of "
         << node_rate << " events/sec";
