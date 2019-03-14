@@ -48,11 +48,15 @@ public:
   /// @relates lookup
   virtual std::unique_ptr<lookup> extract(const ids& xs) const = 0;
 
+  /// Erases events from the store.
+  /// @param xs The set of IDs to erase.
+  /// @returns No error on success.
+  virtual caf::error erase(const ids& xs) = 0;
+
   /// Retrieves a set of events.
   /// @param xs The IDs for the events to retrieve.
   /// @returns The table slice according to *xs*.
-  virtual caf::expected<std::vector<table_slice_ptr>>
-  get(const ids& xs) = 0;
+  virtual caf::expected<std::vector<table_slice_ptr>> get(const ids& xs) = 0;
 
   /// Flushes in-memory state to persistent storage.
   /// @returns No error on success.

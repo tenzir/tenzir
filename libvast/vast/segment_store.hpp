@@ -47,8 +47,9 @@ public:
 
   std::unique_ptr<store::lookup> extract(const ids& xs) const override;
 
-  caf::expected<std::vector<table_slice_ptr>>
-  get(const ids& xs) override;
+  caf::error erase(const ids& xs) override;
+
+  caf::expected<std::vector<table_slice_ptr>> get(const ids& xs) override;
 
   caf::error flush() override;
 

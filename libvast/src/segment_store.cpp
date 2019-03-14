@@ -176,8 +176,12 @@ std::unique_ptr<store::lookup> segment_store::extract(const ids& xs) const {
   return std::make_unique<lookup>(*this, std::move(xs), std::move(candidates));
 }
 
-caf::expected<std::vector<table_slice_ptr>>
-segment_store::get(const ids& xs) {
+caf::error segment_store::erase(const ids& xs) {
+  // TODO: implement me
+  return caf::none;
+}
+
+caf::expected<std::vector<table_slice_ptr>> segment_store::get(const ids& xs) {
   VAST_TRACE(VAST_ARG(xs));
   // Collect candidate segments by seeking through the ID set and
   // probing each ID interval.
