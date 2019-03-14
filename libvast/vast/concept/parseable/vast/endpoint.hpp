@@ -32,10 +32,12 @@ struct endpoint_parser : parser<endpoint_parser> {
     using namespace parsers;
     using namespace parser_literals;
     auto hostname = +(alnum | chr{'-'} | chr{'_'} | chr{'.'});
-    auto host = hostname ->* [&](std::string x) { e.host = std::move(x); };
-    auto p = (host >> ~(':' >> parsers::port)) | ':' >> parsers::port;
+    auto host = hostname->*[&](std::string x) { e.host = std::move(x); };
+    auto port = (parsers::port->*[&](vast::port x) { e.port = x; })
+                | (u16->*[&](uint16_t x) { e.port = vast::port{x}; });
+    auto port_part = ':' >> port;
+    auto p = (host >> ~port_part) | port_part;
     return p(f, l, unused);
-    return false;
   }
 };
 
