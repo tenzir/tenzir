@@ -39,10 +39,10 @@ namespace vast::system {
 
 default_application::default_application() {
   // Set global options.
-  root.options
-    .add<std::string>("directory,d", "directory for persistent state")
+  root.options.add<std::string>("directory,d", "directory for persistent state")
     .add<std::string>("endpoint,e", "node endpoint")
-    .add<std::string>("id,i", "the unique ID of this node");
+    .add<std::string>("id,i", "the unique ID of this node")
+    .add<bool>("disable-accounting", "don't run the accountant");
   // Default options for commands.
   auto opts = [] { return command::opts(); };
   // Add standalone commands.
