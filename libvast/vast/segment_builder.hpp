@@ -55,10 +55,15 @@ public:
   /// @returns The number of bytes of the current segment.
   size_t table_slice_bytes() const;
 
-private:
-  // Resets the builder state to start with a new segment.
+  /// @returns the meta data for the segment.
+  const auto& meta() const {
+    return meta_;
+  }
+
+  /// Resets the builder state to start with a new segment.
   void reset();
 
+private:
   // Segment state
   segment::meta_data meta_;
   uuid id_;

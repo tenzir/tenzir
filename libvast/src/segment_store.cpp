@@ -73,8 +73,8 @@ caf::error segment_store::put(table_slice_ptr xs) {
 }
 
 caf::error segment_store::flush() {
-  if (builder_.table_slice_bytes() == 0)
-    return caf::none; // Nothing to flush.
+  if (!dirty())
+    return caf::none;
   auto x = builder_.finish();
   if (x == nullptr)
     return make_error(ec::unspecified, "failed to build segment");
@@ -104,7 +104,7 @@ std::unique_ptr<store::lookup> segment_store::extract(const ids& xs) const {
 
     lookup(const segment_store& store, ids xs, std::vector<uuid>&& candidates)
       : store_{store}, xs_{std::move(xs)}, candidates_{std::move(candidates)} {
-      VAST_ASSERT(!candidates_.empty());
+      // nop
     }
 
     caf::expected<table_slice_ptr> next() override {
@@ -157,18 +157,11 @@ std::unique_ptr<store::lookup> segment_store::extract(const ids& xs) const {
   VAST_TRACE(VAST_ARG(xs));
   // Collect candidate segments by seeking through the ID set and
   // probing each ID interval.
-  VAST_DEBUG(this, "retrieves table slices with requested ids");
   std::vector<uuid> candidates;
-  auto f = [](auto x) { return std::pair{x.left, x.right}; };
-  auto g = [&](auto x) {
-    auto id = x.value;
-    if (candidates.empty() || candidates.back() != id)
-      candidates.push_back(id);
-    return caf::none;
-  };
-  auto begin = segments_.begin();
-  auto end = segments_.end();
-  select_with(xs, begin, end, f, g);
+  if (auto err = get_candidates(xs, candidates)) {
+    VAST_WARNING(this, "failed to get candidates for ids", xs);
+    return nullptr;
+  }
   VAST_DEBUG(this, "processes", candidates.size(), "candidates");
   std::partition(candidates.begin(), candidates.end(), [&](const auto& id) {
     return id == builder_.id() || cache_.find(id) != cache_.end();
@@ -177,7 +170,150 @@ std::unique_ptr<store::lookup> segment_store::extract(const ids& xs) const {
 }
 
 caf::error segment_store::erase(const ids& xs) {
-  // TODO: implement me
+  VAST_TRACE(VAST_ARG(xs));
+  // Get affected segments.
+  std::vector<uuid> candidates;
+  if (auto err = get_candidates(xs, candidates))
+    return err;
+  if (candidates.empty())
+    return caf::none;
+  // Predicate for checking whether `xs` contains all IDs of `ys`.
+  auto is_subset_of_xs = [&](const ids& ys) {
+    // Compare using rank(), because the bitmaps might have different sizes.
+    return rank(ys & xs) == rank(ys);
+  };
+  // Counts number of total erased events for user-facing output.
+  uint64_t erased_events = 0;
+  // Convenience function for dropping a segment from the range map.
+  auto drop_range = [&](const uuid& segment_id) {
+    // Multiple ranges can map to the same segment ID, so we need to iterate
+    // all ranges.
+    auto& ranges = segments_.container();
+    auto i = ranges.begin();
+    while (i != ranges.end()) {
+      if (segment_id == i->second)
+        i = ranges.erase(i);
+      else
+        ++i;
+    }
+  };
+  // Convenience funciton for dropping an enire segment.
+  auto drop = [&](auto& sref) {
+    auto segment_id = sref.id();
+    for (auto& slices_data : sref.meta().slices)
+      erased_events += slices_data.size;
+    VAST_INFO(this, "erases entire segment", segment_id);
+    if constexpr (std::is_same_v<decltype(sref), segment&>) {
+      auto filename = segment_path() / to_string(segment_id);
+      // Schedule deletion of the segment file when releasing the chunk.
+      sref.chunk()->add_deletion_step([=] { rm(filename); });
+    } else {
+      static_assert(std::is_same_v<decltype(sref), segment_builder&>);
+      sref.reset();
+    }
+    drop_range(segment_id);
+  };
+  // Convenience function for updating given segment by pruning all IDs in `xs`
+  // from it.
+  // @returns `true` if the entire segment got erased, `false` otherwise.
+  auto update = [&](auto& sref) {
+    auto slice_ids = sref.meta().slice_ids();
+    // Check whether we can drop the entire segment.
+    if (std::all_of(slice_ids.begin(), slice_ids.end(), is_subset_of_xs)) {
+      drop(sref);
+      return;
+    }
+    auto segment_id = sref.id();
+    // Get all slices in the segment and generating a new segment that contains
+    // only what's left after dropping the selection.
+    auto segment_ids = sref.meta().flat_slice_ids();
+    std::vector<table_slice_ptr> slices;
+    if (auto maybe_slices = sref.lookup(segment_ids)) {
+      using std::swap;
+      swap(slices, *maybe_slices);
+      if (slices.empty()) {
+        VAST_WARNING(this, "got no slices after lookup for segment", segment_id,
+                     "=> erases entire segment!");
+        drop(sref);
+        return;
+      }
+    } else {
+      VAST_WARNING(this, "was unable to get table slice for segment",
+                   segment_id, "=> erases entire segment!");
+      drop(sref);
+      return;
+    }
+    VAST_ASSERT(slices.size() > 0);
+    auto keep_mask = ~xs;
+    std::vector<table_slice_ptr> new_slices;
+    for (auto& slice : slices) {
+      // Expand keep_mask on-the-fly if needed.
+      auto max_id = slice->offset() + slice->rows();
+      if (keep_mask.size() < max_id)
+        keep_mask.append_bits(true, max_id - keep_mask.size());
+      size_t new_slices_size_before = new_slices.size();
+      select(new_slices, slice, keep_mask);
+      size_t remaining_rows = 0;
+      for (size_t i = new_slices_size_before; i < new_slices.size(); ++i)
+        remaining_rows += new_slices[i]->rows();
+      erased_events += slice->rows() - remaining_rows;
+    }
+    if (new_slices.empty()) {
+      VAST_WARNING(this, "was unable to generate any new slice for segment",
+                   segment_id, "=> erases entire segment!");
+      drop(sref);
+      return;
+    }
+    VAST_DEBUG(this, "shrinks segment", segment_id, "from", slices.size(), "to",
+               new_slices.size(), "slices");
+    // Remove stale state.
+    drop_range(sref.id());
+    // Create a new segment from the remaining slices.
+    segment_builder tmp_builder;
+    segment_builder* builder = &tmp_builder;
+    if constexpr (std::is_same_v<decltype(sref), segment_builder&>) {
+      sref.reset();
+      builder = &sref;
+    }
+    for (auto& slice : new_slices) {
+      if (auto err = builder->add(slice)) {
+        VAST_ERROR(this, "failed to add slice to builder:" << err);
+      } else if (!segments_.inject(slice->offset(),
+                                   slice->offset() + slice->rows(),
+                                   builder->id()))
+        VAST_ERROR(this, "failed to update range_map");
+    }
+    // Flush the new segment and remove the previous segment.
+    if constexpr (std::is_same_v<decltype(sref), segment&>) {
+      auto new_segment = builder->finish();
+      auto filename = segment_path() / to_string(new_segment->id());
+      if (auto err = save(nullptr, filename, new_segment))
+        VAST_ERROR(this, "failed to persist the new segment");
+      if (auto err = save(nullptr, meta_path(), segments_))
+        VAST_ERROR(this, "failed to persist meta data after adding segment");
+      auto stale_filename = segment_path() / to_string(segment_id);
+      // Schedule deletion of the segment file when releasing the chunk.
+      sref.chunk()->add_deletion_step([=] { rm(stale_filename); });
+    }
+    // else: nothing to do, since we can continue filling the active segment.
+  };
+  // Update all affected segments.
+  for (auto& candidate : candidates) {
+    auto j = cache_.find(candidate);
+    if (j != cache_.end()) {
+      VAST_DEBUG(this, "erases from the cached segement", candidate);
+      update(*j->second);
+      cache_.erase(j);
+    } else if (candidate == builder_.id()) {
+      VAST_DEBUG(this, "erases from the active segement", candidate);
+      update(builder_);
+    } else if (auto sptr = load_segment(candidate)) {
+      VAST_DEBUG(this, "erases from the segement", candidate);
+      update(**sptr);
+    }
+  }
+  if (erased_events > 0)
+    VAST_INFO(this, "erased", erased_events, "events");
   return caf::none;
 }
 
@@ -185,19 +321,9 @@ caf::expected<std::vector<table_slice_ptr>> segment_store::get(const ids& xs) {
   VAST_TRACE(VAST_ARG(xs));
   // Collect candidate segments by seeking through the ID set and
   // probing each ID interval.
-  VAST_DEBUG(this, "retrieves table slices with requested ids");
   std::vector<uuid> candidates;
-  auto f = [](auto x) { return std::pair{x.left, x.right}; };
-  auto g = [&](auto x) {
-    auto id = x.value;
-    if (candidates.empty() || candidates.back() != id)
-      candidates.push_back(id);
-    return caf::none;
-  };
-  auto begin = segments_.begin();
-  auto end = segments_.end();
-  if (auto error = select_with(xs, begin, end, f, g))
-    return error;
+  if (auto err = get_candidates(xs, candidates))
+    return err;
   // Process candidates in reverse order for maximum LRU cache hits.
   std::vector<table_slice_ptr> result;
   VAST_DEBUG(this, "processes", candidates.size(), "candidates");
@@ -215,7 +341,6 @@ caf::expected<std::vector<table_slice_ptr>> segment_store::get(const ids& xs) {
       auto i = cache_.find(id);
       if (i != cache_.end()) {
         VAST_DEBUG(this, "got cache hit for segment", id);
-        seg_ptr = i->second;
       } else {
         VAST_DEBUG(this, "got cache miss for segment", id);
         auto x = load_segment(id);
@@ -223,6 +348,7 @@ caf::expected<std::vector<table_slice_ptr>> segment_store::get(const ids& xs) {
           return x.error();
         i = cache_.emplace(id, std::move(*x)).first;
       }
+      seg_ptr = i->second;
       VAST_ASSERT(seg_ptr != nullptr);
       VAST_DEBUG(this, "looks into segment", id);
       slices = seg_ptr->lookup(xs);
@@ -264,6 +390,21 @@ segment_store::segment_store(path dir, uint64_t max_segment_size,
     max_segment_size_{max_segment_size},
     cache_{in_memory_segments} {
   // nop
+}
+
+caf::error segment_store::get_candidates(const ids& selection,
+                                         std::vector<uuid>& candidates) const {
+  VAST_DEBUG(this, "retrieves table slices with requested ids");
+  auto f = [](auto x) { return std::pair{x.left, x.right}; };
+  auto g = [&](auto x) {
+    auto id = x.value;
+    if (candidates.empty() || candidates.back() != id)
+      candidates.push_back(id);
+    return caf::none;
+  };
+  auto begin = segments_.begin();
+  auto end = segments_.end();
+  return select_with(selection, begin, end, f, g);
 }
 
 } // namespace vast

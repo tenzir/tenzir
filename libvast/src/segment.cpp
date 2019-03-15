@@ -11,23 +11,37 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
+#include "vast/segment.hpp"
+
 #include <caf/binary_deserializer.hpp>
 
 #include "vast/bitmap.hpp"
 #include "vast/bitmap_algorithms.hpp"
-#include "vast/ids.hpp"
-#include "vast/logger.hpp"
-#include "vast/segment.hpp"
-#include "vast/si_literals.hpp"
-#include "vast/table_slice.hpp"
-
 #include "vast/detail/assert.hpp"
 #include "vast/detail/byte_swap.hpp"
 #include "vast/detail/narrow.hpp"
+#include "vast/ids.hpp"
+#include "vast/logger.hpp"
+#include "vast/si_literals.hpp"
+#include "vast/table_slice.hpp"
 
 namespace vast {
 
 using namespace binary_byte_literals;
+
+ids segment::meta_data::flat_slice_ids() const {
+  ids result;
+  auto concat = [&](const ids& x) { result |= x; };
+  visit_ids(concat);
+  return result;
+}
+
+std::vector<ids> segment::meta_data::slice_ids() const {
+  std::vector<ids> result;
+  auto append = [&](const ids& x) { result.emplace_back(x); };
+  visit_ids(append);
+  return result;
+}
 
 segment_ptr segment::make(chunk_ptr chunk) {
   VAST_ASSERT(chunk != nullptr);

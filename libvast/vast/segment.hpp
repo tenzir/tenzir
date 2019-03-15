@@ -25,6 +25,7 @@
 #include "vast/aliases.hpp"
 #include "vast/chunk.hpp"
 #include "vast/fwd.hpp"
+#include "vast/ids.hpp"
 #include "vast/segment_header.hpp"
 #include "vast/uuid.hpp"
 
@@ -80,6 +81,22 @@ public:
   /// Meta data for a segment.
   struct meta_data {
     std::vector<table_slice_synopsis> slices;
+
+    /// Visits all ID ranges of all table slices.
+    template <class F>
+    void visit_ids(F fun) const {
+      for (auto& synopsis : slices) {
+        auto ids_begin = synopsis.offset;
+        auto ids_end = ids_begin + synopsis.size;
+        fun(make_ids({{ids_begin, ids_end}}));
+      }
+    }
+
+    /// @returns the event IDs of each stored table slice in a single bitmap.
+    ids flat_slice_ids() const;
+
+    /// @returns the event IDs of each stored table slice.
+    std::vector<ids> slice_ids() const;
   };
 
   /// Constructs a segment.
@@ -101,6 +118,11 @@ public:
   /// @returns The table slices according to *xs*.
   caf::expected<std::vector<table_slice_ptr>>
   lookup(const ids& xs) const;
+
+  /// @returns the meta data for the segment.
+  const auto& meta() const {
+    return meta_;
+  }
 
   // -- concepts --------------------------------------------------------------
 
