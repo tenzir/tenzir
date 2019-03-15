@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Added
-- Introduced the --disable-accounting option to the vast command.
+- The new `--disable-accounting` option can shut off periodic gathering of system telemetry.
 
 ### Changed
 - Fix evaluation of predicates with negations and type or key extractors.
