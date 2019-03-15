@@ -78,6 +78,8 @@ caf::behavior sink(caf::stateful_actor<sink_state<Writer>>* self,
   );
   return {
     [=](const std::vector<event>& xs) {
+      VAST_DEBUG(self, "got:", xs.size(), "events from",
+                 self->current_sender());
       auto& st = self->state;
       auto t = timer::start(st.measurement);
       for (auto& x : xs) {

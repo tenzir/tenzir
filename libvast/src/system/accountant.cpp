@@ -104,12 +104,21 @@ double calc_rate(const measurement& m) {
 
 } // namespace <anonymous>
 
+accountant_state::accountant_state(accountant_actor* self) : self{self} {
+  // nop
+}
+
 void accountant_state::command_line_heartbeat() {
   auto logger = caf::logger::current_logger();
   if (logger && logger->verbosity() >= CAF_LOG_LEVEL_INFO
       && accumulator.node.events > 0) {
     std::ostringstream oss;
-    oss.imbue(std::locale(""));
+    try {
+      oss.imbue(std::locale(""));
+    } catch (const std::exception& e) {
+      VAST_DEBUG(self,
+                 "failed to set the locale for statistics output:", e.what());
+    }
     auto node_rate = std::round(calc_rate(accumulator.node));
     oss << "ingested " << accumulator.node.events << " events at a rate of "
         << node_rate << " events/sec";
