@@ -69,13 +69,35 @@ caf::message reader_command(const command& cmd, caf::actor_system& sys,
     if (!vast::parsers::endpoint(*uri, ep))
       return caf::make_message(
         make_error(vast::ec::parse_error, "unable to parse endpoint", *uri));
+    if (ep.port.type() == port::unknown) {
+      using inputs = vast::format::reader::inputs;
+      if constexpr (Reader::defaults::input == inputs::inet) {
+        endpoint default_ep;
+        vast::parsers::endpoint(*Reader::defaults::uri, default_ep);
+        ep.port = port{ep.port.number(), default_ep.port.type()};
+      } else {
+        // Fall back to tcp if we don't know anything else.
+        ep.port = port{ep.port.number(), port::tcp};
+      }
+    }
     Reader reader{table_slice};
     auto slice_size = get_or(options, "table-slice-size",
                              defaults::system::table_slice_size);
-    auto& mm = sys.middleman();
-    auto src = mm.spawn_broker(datagram_source<Reader>, ep.port.number(),
-                               std::move(reader), factory, slice_size);
-    return source_command(cmd, sys, std::move(src), options, first, last);
+    auto run = [&](auto&& source) {
+      auto& mm = sys.middleman();
+      auto src = mm.spawn_broker(std::forward<decltype(source)>(source),
+                                 ep.port.number(), std::move(reader), factory,
+                                 slice_size);
+      return source_command(cmd, sys, std::move(src), options, first, last);
+    };
+    switch (ep.port.type()) {
+      default:
+        return caf::make_message(
+          make_error(vast::ec::unimplemented,
+                     "port type not supported:", ep.port.type()));
+      case port::udp:
+        return run(datagram_source<Reader>);
+    }
   } else {
     auto uds = get_or(options, "uds", false);
     auto in = detail::make_input_stream(*file, uds);
