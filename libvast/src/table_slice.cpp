@@ -159,9 +159,10 @@ void select(std::vector<table_slice_ptr>& result, const table_slice_ptr& xs,
     auto row = id - xs->offset();
     VAST_ASSERT(row < xs->rows());
     for (size_t column = 0; column < xs->columns(); ++column) {
-      if (!builder->add(xs->at(row, column))) {
-        VAST_ERROR(__func__, "failed to add column", column, "in row", row,
-                   "to the builder:", builder->add(xs->at(row, column)));
+      auto cell_value = xs->at(row, column);
+      if (!builder->add(cell_value)) {
+        VAST_ERROR(__func__, "failed to add data at column", column, "in row",
+                   row, "to the builder:", cell_value);
         return;
       }
     }
