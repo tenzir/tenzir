@@ -104,6 +104,10 @@ double calc_rate(const measurement& m) {
 
 } // namespace <anonymous>
 
+accountant_state::accountant_state(accountant_actor* self) : self{self} {
+  // nop
+}
+
 void accountant_state::command_line_heartbeat() {
   auto logger = caf::logger::current_logger();
   if (logger && logger->verbosity() >= CAF_LOG_LEVEL_INFO

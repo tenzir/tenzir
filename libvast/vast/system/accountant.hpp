@@ -81,6 +81,7 @@ struct accountant_state {
     measurement node;
   } accumulator;
 
+  accountant_state(accountant_type::stateful_base<accountant_state>* self);
   void command_line_heartbeat();
 };
 
