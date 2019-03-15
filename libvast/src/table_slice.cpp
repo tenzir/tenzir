@@ -37,9 +37,11 @@
 #include "vast/factory.hpp"
 #include "vast/format/test.hpp"
 #include "vast/logger.hpp"
+#include "vast/table_slice_builder.hpp"
 #include "vast/table_slice_factory.hpp"
 #include "vast/value.hpp"
 #include "vast/value_index.hpp"
+#include <vast/table_slice_builder_factory.hpp>
 
 namespace vast {
 
@@ -107,6 +109,71 @@ make_random_table_slices(size_t num_slices, size_t slice_size,
   if (auto err = src.read(num_slices * slice_size, slice_size, add_slice)
                    .first)
     return err;
+  return result;
+}
+
+void select(std::vector<table_slice_ptr>& result, const table_slice_ptr& xs,
+            const ids& selection) {
+  VAST_ASSERT(xs != nullptr);
+  auto xs_ids = make_ids({{xs->offset(), xs->offset() + xs->rows()}});
+  auto intersection = selection & xs_ids;
+  auto intersection_rank = rank(intersection);
+  // Do no rows qualify?
+  if (intersection_rank == 0)
+    return;
+  // Do all rows qualify?
+  if (rank(xs_ids) == intersection_rank) {
+    result.emplace_back(xs);
+    return;
+  }
+  // Start slicing and dicing.
+  auto impl = xs->implementation_id();
+  auto builder = factory<table_slice_builder>::make(impl, xs->layout());
+  if (builder == nullptr) {
+    VAST_ERROR(__func__, "failed to get a table slice builder for", impl);
+    return;
+  }
+  id last_offset = xs->offset();
+  auto push_slice = [&] {
+    if (builder->rows() == 0)
+      return;
+    auto slice = builder->finish();
+    if (slice == nullptr) {
+      VAST_WARNING(__func__, "got an empty slice");
+      return;
+    }
+    slice.unshared().offset(last_offset);
+    result.emplace_back(std::move(slice));
+  };
+  auto last_id = last_offset - 1;
+  for (auto id : select(intersection)) {
+    // Finish last slice when hitting non-consecutive IDs.
+    if (last_id + 1 != id) {
+      push_slice();
+      last_offset = id;
+      last_id = id;
+    } else {
+      ++last_id;
+    }
+    VAST_ASSERT(id >= xs->offset());
+    auto row = id - xs->offset();
+    VAST_ASSERT(row < xs->rows());
+    for (size_t column = 0; column < xs->columns(); ++column) {
+      auto cell_value = xs->at(row, column);
+      if (!builder->add(cell_value)) {
+        VAST_ERROR(__func__, "failed to add data at column", column, "in row",
+                   row, "to the builder:", cell_value);
+        return;
+      }
+    }
+  }
+  push_slice();
+}
+
+std::vector<table_slice_ptr> select(const table_slice_ptr& xs,
+                                    const ids& selection) {
+  std::vector<table_slice_ptr> result;
+  select(result, xs, selection);
   return result;
 }
 
