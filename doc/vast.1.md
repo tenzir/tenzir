@@ -325,6 +325,9 @@ Synopsis:
     Read from *file* instead of STDIN.
   `-d`
     Treat `-r` as listening UNIX domain socket.
+  -l port(/protocol)
+    Listen for input from the network instead of STDIN. Currently only
+    supports UDP connections.
 
 Imports data in a specific *format* on standard input and send it to a node.
 This command is a shorthand for spawning a source locally and connecting it to
