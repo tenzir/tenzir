@@ -229,10 +229,9 @@ caf::error reader::factory::operator()(bgp4mp::state_change_as4& x) {
                  x.peer_as_number, x.old_state, x.new_state);
 }
 
-reader::reader(caf::atom_value table_slice_type)
-  : super(table_slice_type),
-    max_slice_size_(0),
-    current_consumer_(nullptr) {
+reader::reader(caf::atom_value table_slice_type,
+               std::unique_ptr<std::istream> input)
+  : super(table_slice_type), max_slice_size_(0), current_consumer_(nullptr) {
   types_.table_dump_v2_peer_entry_type = record_type{{
     {"index", count_type{}},
     {"bgp_id", count_type{}},
@@ -291,13 +290,13 @@ reader::reader(caf::atom_value table_slice_type)
     {"old_state", count_type{}},
     {"new_state", count_type{}},
   }}.name("mrt::bgp4mp::state_change");
+  if (input)
+    reset(std::move(input));
 }
 
-reader::reader(caf::atom_value table_slice_type,
-               std::unique_ptr<std::istream> input)
-  : reader(table_slice_type) {
-  VAST_ASSERT(input != nullptr);
-  input_ = std::move(input);
+void reader::reset(std::unique_ptr<std::istream> in) {
+  VAST_ASSERT(in != nullptr);
+  input_ = std::move(in);
 }
 
 caf::error reader::schema(vast::schema sch) {

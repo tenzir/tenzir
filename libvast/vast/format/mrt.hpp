@@ -1215,9 +1215,10 @@ public:
 
   // -- constructors, destructors, and assignment operators --------------------
 
-  explicit reader(caf::atom_value table_slice_type);
+  explicit reader(caf::atom_value table_slice_type,
+                  std::unique_ptr<std::istream> input = nullptr);
 
-  reader(caf::atom_value id, std::unique_ptr<std::istream> input);
+  void reset(std::unique_ptr<std::istream> in);
 
   // -- interface functions ----------------------------------------------------
 

@@ -21,7 +21,8 @@ namespace vast {
 
 endpoint make_default_endpoint() {
   namespace defs = defaults::command;
-  return endpoint{std::string{defs::endpoint_host}, defs::endpoint_port};
+  return endpoint{std::string{defs::endpoint_host},
+                  {defs::endpoint_port, port::tcp}};
 }
 
 } // namespace vast

@@ -29,6 +29,7 @@
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/json.hpp"
+#include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/json.hpp"
 #include "vast/logger.hpp"
@@ -86,12 +87,12 @@ caf::message peer_command(const command&, caf::actor_system& sys,
   // Use localhost:42000 by default.
   if (ep->host.empty())
     ep->host = "127.0.0.1";
-  if (ep->port == 0)
-    ep->port = 42000;
+  if (ep->port.number() == 0)
+    ep->port = {defaults::command::endpoint_port, port::tcp};
   VAST_DEBUG(this_node, "connects to", ep->host << ':' << ep->port);
   auto& mm = sys.middleman();
   // TODO: this blocks the node, consider talking to the MM actor instead.
-  auto peer = mm.remote_actor(ep->host.c_str(), ep->port);
+  auto peer = mm.remote_actor(ep->host.c_str(), ep->port.number());
   if (!peer) {
     VAST_ERROR(this_node, "failed to connect to peer:",
                sys.render(peer.error()));
