@@ -53,7 +53,7 @@ caf::message reader_command(const command& cmd, caf::actor_system& sys,
   if (!uri && !file) {
     using inputs = vast::format::reader::inputs;
     if constexpr (Reader::defaults::input == inputs::inet)
-      uri = Reader::defaults::uri;
+      uri = std::string{Reader::defaults::uri};
     else
       file = std::string{Reader::defaults::path};
   }
@@ -73,7 +73,7 @@ caf::message reader_command(const command& cmd, caf::actor_system& sys,
       using inputs = vast::format::reader::inputs;
       if constexpr (Reader::defaults::input == inputs::inet) {
         endpoint default_ep;
-        vast::parsers::endpoint(*Reader::defaults::uri, default_ep);
+        vast::parsers::endpoint(Reader::defaults::uri, default_ep);
         ep.port = port{ep.port.number(), default_ep.port.type()};
       } else {
         // Fall back to tcp if we don't know anything else.
