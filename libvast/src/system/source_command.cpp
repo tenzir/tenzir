@@ -138,10 +138,12 @@ caf::message source_command(const command& cmd, caf::actor_system& sys,
   // Start the source.
   bool stop = false;
   self->monitor(src);
+  self->monitor(importer);
+  // clang-format off
   self->do_receive(
     [&](const down_msg& msg) {
-      if (msg.source == node)  {
-        VAST_DEBUG(&cmd, "received DOWN from node");
+      if (msg.source == importer)  {
+        VAST_DEBUG(&cmd, "received DOWN from node importer");
         self->send_exit(src, exit_reason::user_shutdown);
         err = ec::remote_node_down;
         stop = true;
@@ -151,6 +153,9 @@ caf::message source_command(const command& cmd, caf::actor_system& sys,
           self->send(importer, subscribe_atom::value, flush_atom::value, self);
         else
           stop = true;
+      } else {
+        VAST_DEBUG(&cmd, "received unexpected DOWN from", msg.source);
+        VAST_ASSERT(!"unexpected DOWN message");
       }
     },
     [&](flush_atom) {
@@ -163,6 +168,7 @@ caf::message source_command(const command& cmd, caf::actor_system& sys,
         self->send_exit(src, exit_reason::user_shutdown);
     }
   ).until(stop);
+  // clang-format on
   if (err)
     return make_message(std::move(err));
   return caf::none;

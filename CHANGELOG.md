@@ -11,6 +11,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   from the network. Currently only UDP is supported.
 
 ### Changed
+- Terminate running import processes if the server goes down.
 - Fix evaluation of predicates with negations and type or key extractors.
 
 
