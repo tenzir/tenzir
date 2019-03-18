@@ -13,6 +13,7 @@
 
 
 #include "vast/detail/adjust_resource_consumption.hpp"
+#include "vast/test/data.hpp"
 #include "vast/test/test.hpp"
 
 #include "caf/message_builder.hpp"
@@ -21,6 +22,48 @@
 #include <iostream>
 #include <set>
 #include <string>
+
+namespace artifacts {
+namespace logs {
+namespace zeek {
+
+const char* conn = VAST_TEST_PATH "artifacts/logs/zeek/conn.log";
+const char* dns = VAST_TEST_PATH "artifacts/logs/zeek/dns.log";
+const char* ftp = VAST_TEST_PATH "artifacts/logs/zeek/ftp.log";
+const char* http = VAST_TEST_PATH "artifacts/logs/zeek/http.log";
+const char* out = VAST_TEST_PATH "artifacts/logs/zeek/out.txt";
+const char* small_conn = VAST_TEST_PATH "artifacts/logs/zeek/small_conn.log";
+const char* smtp = VAST_TEST_PATH "artifacts/logs/zeek/smtp.log";
+const char* ssl = VAST_TEST_PATH "artifacts/logs/zeek/ssl.log";
+
+} // namespace zeek
+
+namespace bgpdump {
+
+const char* updates20140821 = VAST_TEST_PATH
+  "artifacts/logs/bgpdump/updates20140821.txt";
+const char* updates20180124 = VAST_TEST_PATH
+  "artifacts/logs/bgpdump/updates20180124.txt";
+
+} // namespace bgpdump
+
+namespace mrt {
+
+const char* bview = VAST_TEST_PATH "artifacts/logs/mrt/bview.20161024.0800";
+const char* updates20150505 = VAST_TEST_PATH
+  "artifacts/logs/mrt/updates20150505.0";
+
+} // namespace mrt
+} // namespace logs
+
+namespace traces {
+
+const char* nmap_vsn = VAST_TEST_PATH "artifacts/traces/nmap_vsn.pcap";
+const char* workshop_2011_browse = VAST_TEST_PATH
+  "artifacts/traces/workshop_2011_browse.pcap";
+
+} // namespace traces
+} // namespace artifacts
 
 namespace caf::test {
 

@@ -64,7 +64,8 @@ FIXTURE_SCOPE(source_tests, fixtures::deterministic_actor_system_and_events)
 
 TEST(zeek source) {
   MESSAGE("start reader");
-  auto stream = unbox(detail::make_input_stream(zeek::small_conn));
+  auto stream = unbox(
+    detail::make_input_stream(artifacts::logs::zeek::small_conn));
   format::zeek::reader reader{get_or(sys.config(), "vast.table-slice-type",
                                     defaults::system::table_slice_type),
                              std::move(stream)};

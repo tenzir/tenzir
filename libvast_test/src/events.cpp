@@ -219,13 +219,15 @@ events::events() {
   factory<table_slice_builder>::initialize();
   initialized = true;
   MESSAGE("inhaling unit test suite events");
-  zeek_conn_log = inhale<format::zeek::reader>(zeek::small_conn);
+  zeek_conn_log = inhale<format::zeek::reader>(
+    artifacts::logs::zeek::small_conn);
   REQUIRE_EQUAL(zeek_conn_log.size(), 20u);
-  zeek_dns_log = inhale<format::zeek::reader>(zeek::dns);
+  zeek_dns_log = inhale<format::zeek::reader>(artifacts::logs::zeek::dns);
   REQUIRE_EQUAL(zeek_dns_log.size(), 32u);
-  zeek_http_log = inhale<format::zeek::reader>(zeek::http);
+  zeek_http_log = inhale<format::zeek::reader>(artifacts::logs::zeek::http);
   REQUIRE_EQUAL(zeek_http_log.size(), 40u);
-  bgpdump_txt = inhale<format::bgpdump::reader>(bgpdump::updates20180124);
+  bgpdump_txt = inhale<format::bgpdump::reader>(
+    artifacts::logs::bgpdump::updates20180124);
   REQUIRE_EQUAL(bgpdump_txt.size(), 100u);
   vast::format::test::reader rd{defaults::system::table_slice_type, 42, 1000};
   random = extract(rd);

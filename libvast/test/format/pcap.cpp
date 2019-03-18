@@ -39,7 +39,7 @@ TEST(PCAP read/write 1) {
   // Initialize a PCAP source with no cutoff (-1), and at most 5 flow table
   // entries.
   format::pcap::reader reader{defaults::system::table_slice_type,
-                              traces::nmap_vsn, uint64_t(-1), 5};
+                              artifacts::traces::nmap_vsn, uint64_t(-1), 5};
   std::vector<event> events;
   auto add_events = [&](const table_slice_ptr& slice) {
     to_events(events, *slice);
@@ -67,7 +67,7 @@ TEST(PCAP read/write 2) {
   // Spawn a PCAP source with a 64-byte cutoff, at most 100 flow table entries,
   // with flows inactive for more than 5 seconds to be evicted every 2 seconds.
   format::pcap::reader reader{defaults::system::table_slice_type,
-                              traces::workshop_2011_browse,
+                              artifacts::traces::workshop_2011_browse,
                               64,
                               100,
                               5,
