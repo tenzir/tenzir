@@ -35,7 +35,8 @@ using namespace vast;
 FIXTURE_SCOPE(mrt_tests, fixtures::deterministic_actor_system)
 
 TEST(MRT) {
-  auto in = detail::make_input_stream(mrt::updates20150505, false);
+  auto in = detail::make_input_stream(artifacts::logs::mrt::updates20150505,
+                                      false);
   format::mrt::reader reader{defaults::system::table_slice_type,
                              std::move(*in)};
   std::unordered_map<std::string, std::vector<event>> events;

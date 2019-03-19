@@ -85,7 +85,7 @@ TEST(zeek conn source) {
   caf::io::new_datagram_msg msg;
   msg.handle = caf::io::datagram_handle::from_int(2);
   using iter = std::istreambuf_iterator<char>;
-  std::ifstream in{zeek::small_conn};
+  std::ifstream in{artifacts::logs::zeek::small_conn};
   REQUIRE(in.good());
   iter first{in};
   iter last{};
