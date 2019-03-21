@@ -108,6 +108,17 @@ private:
   caf::error select_segments(const ids& selection,
                              std::vector<uuid>& candidates) const;
 
+  /// Drops the entire segment `x` by removing it from `segments_` and causing
+  /// `x` to wipe it's file from disk on destruction.
+  /// @param x The segment to drop.
+  /// @returns The total number of erased events.
+  uint64_t drop(segment& x);
+
+  /// Removes the segment ID of `x` from `segments_` and then resets `x´`.
+  /// @param x The segment-under-construction to drop.
+  /// @returns The total number of erased events.
+  uint64_t drop(segment_builder& x);
+
   // -- member variables -------------------------------------------------------
 
   /// Identifies the base directory for our ::meta_path and ::segment_path.

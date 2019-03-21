@@ -180,26 +180,10 @@ caf::error segment_store::erase(const ids& xs) {
   // Predicate for checking whether `xs` contains all IDs of `ys`.
   auto is_subset_of_xs = [&](const ids& ys) {
     // Compare using rank(), because the bitmaps might have different sizes.
-    return rank(ys & xs) == rank(ys);
+    return contains(xs, ys);
   };
   // Counts number of total erased events for user-facing output.
   uint64_t erased_events = 0;
-  // Convenience function for dropping an entire segment.
-  auto drop = [&](auto& sref) {
-    auto segment_id = sref.id();
-    for (auto& slices_data : sref.meta().slices)
-      erased_events += slices_data.size;
-    VAST_INFO(this, "erases entire segment", segment_id);
-    if constexpr (std::is_same_v<decltype(sref), segment&>) {
-      auto filename = segment_path() / to_string(segment_id);
-      // Schedule deletion of the segment file when releasing the chunk.
-      sref.chunk()->add_deletion_step([=] { rm(filename); });
-    } else {
-      static_assert(std::is_same_v<decltype(sref), segment_builder&>);
-      sref.reset();
-    }
-    segments_.erase_value(segment_id);
-  };
   // Convenience function for updating given segment by pruning all IDs in `xs`
   // from it.
   // @returns `true` if the entire segment got erased, `false` otherwise.
@@ -207,7 +191,7 @@ caf::error segment_store::erase(const ids& xs) {
     auto slice_ids = sref.meta().slice_ids();
     // Check whether we can drop the entire segment.
     if (std::all_of(slice_ids.begin(), slice_ids.end(), is_subset_of_xs)) {
-      drop(sref);
+      erased_events += drop(sref);
       return;
     }
     auto segment_id = sref.id();
@@ -216,18 +200,17 @@ caf::error segment_store::erase(const ids& xs) {
     auto segment_ids = sref.meta().flat_slice_ids();
     std::vector<table_slice_ptr> slices;
     if (auto maybe_slices = sref.lookup(segment_ids)) {
-      using std::swap;
-      swap(slices, *maybe_slices);
+      slices = std::move(*maybe_slices);
       if (slices.empty()) {
         VAST_WARNING(this, "got no slices after lookup for segment", segment_id,
                      "=> erases entire segment!");
-        drop(sref);
+        erased_events += drop(sref);
         return;
       }
     } else {
       VAST_WARNING(this, "was unable to get table slice for segment",
                    segment_id, "=> erases entire segment!");
-      drop(sref);
+      erased_events += drop(sref);
       return;
     }
     VAST_ASSERT(slices.size() > 0);
@@ -248,7 +231,7 @@ caf::error segment_store::erase(const ids& xs) {
     if (new_slices.empty()) {
       VAST_WARNING(this, "was unable to generate any new slice for segment",
                    segment_id, "=> erases entire segment!");
-      drop(sref);
+      erased_events += drop(sref);
       return;
     }
     VAST_DEBUG(this, "shrinks segment", segment_id, "from", slices.size(), "to",
@@ -259,6 +242,10 @@ caf::error segment_store::erase(const ids& xs) {
     segment_builder tmp_builder;
     segment_builder* builder = &tmp_builder;
     if constexpr (std::is_same_v<decltype(sref), segment_builder&>) {
+      // If `update` got called with a builder then we simply use that by
+      // resetting it and filling it with new content. Otherwise, we fill
+      // `tmp_builder` instead and replace the the segment `sref` in the next
+      // `if constexpr` block.
       sref.reset();
       builder = &sref;
     }
@@ -276,8 +263,6 @@ caf::error segment_store::erase(const ids& xs) {
       auto filename = segment_path() / to_string(new_segment->id());
       if (auto err = save(nullptr, filename, new_segment))
         VAST_ERROR(this, "failed to persist the new segment");
-      if (auto err = save(nullptr, meta_path(), segments_))
-        VAST_ERROR(this, "failed to persist meta data after adding segment");
       auto stale_filename = segment_path() / to_string(segment_id);
       // Schedule deletion of the segment file when releasing the chunk.
       sref.chunk()->add_deletion_step([=] { rm(stale_filename); });
@@ -299,8 +284,11 @@ caf::error segment_store::erase(const ids& xs) {
       update(**sptr);
     }
   }
-  if (erased_events > 0)
+  if (erased_events > 0) {
     VAST_INFO(this, "erased", erased_events, "events");
+    if (auto err = save(nullptr, meta_path(), segments_))
+      VAST_ERROR(this, "failed to persist meta data after adding segment");
+  }
   return caf::none;
 }
 
@@ -393,5 +381,29 @@ caf::error segment_store::select_segments(const ids& selection,
   auto end = segments_.end();
   return select_with(selection, begin, end, f, g);
 }
+
+uint64_t segment_store::drop(segment& x) {
+  uint64_t erased_events = 0;
+  auto segment_id = x.id();
+  for (auto& slices_data : x.meta().slices)
+    erased_events += slices_data.size;
+  VAST_INFO(this, "erases entire segment", segment_id);
+  // Schedule deletion of the segment file when releasing the chunk.
+  auto filename = segment_path() / to_string(segment_id);
+  x.chunk()->add_deletion_step([=] { rm(filename); });
+  segments_.erase_value(segment_id);
+  return erased_events;
+}
+
+uint64_t segment_store::drop(segment_builder& x) {
+  uint64_t erased_events = 0;
+  auto segment_id = x.id();
+  for (auto& slices_data : x.meta().slices)
+    erased_events += slices_data.size;
+  VAST_INFO(this, "erases entire segment", segment_id);
+  x.reset();
+  segments_.erase_value(segment_id);
+  return erased_events;
+};
 
 } // namespace vast
