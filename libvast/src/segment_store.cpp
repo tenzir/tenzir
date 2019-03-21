@@ -184,7 +184,7 @@ caf::error segment_store::erase(const ids& xs) {
   };
   // Counts number of total erased events for user-facing output.
   uint64_t erased_events = 0;
-  // Convenience funciton for dropping an enire segment.
+  // Convenience function for dropping an entire segment.
   auto drop = [&](auto& sref) {
     auto segment_id = sref.id();
     for (auto& slices_data : sref.meta().slices)
@@ -211,7 +211,7 @@ caf::error segment_store::erase(const ids& xs) {
       return;
     }
     auto segment_id = sref.id();
-    // Get all slices in the segment and generating a new segment that contains
+    // Get all slices in the segment and generate a new segment that contains
     // only what's left after dropping the selection.
     auto segment_ids = sref.meta().flat_slice_ids();
     std::vector<table_slice_ptr> slices;
