@@ -202,6 +202,17 @@ public:
     }
   }
 
+  /// Removes all ranges that map to value `x` with O(n) complexity.
+  void erase_value(const Value& x) {
+    auto i = map_.begin();
+    while (i != map_.end()) {
+      if (i->second == x)
+        i = map_.erase(i);
+      else
+        ++i;
+    }
+  }
+
   /// Retrieves the value for a given point.
   /// @param p The point to lookup.
   /// @returns A pointer to the value associated with the half-open interval

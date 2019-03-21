@@ -184,19 +184,6 @@ caf::error segment_store::erase(const ids& xs) {
   };
   // Counts number of total erased events for user-facing output.
   uint64_t erased_events = 0;
-  // Convenience function for dropping a segment from the range map.
-  auto drop_range = [&](const uuid& segment_id) {
-    // Multiple ranges can map to the same segment ID, so we need to iterate
-    // all ranges.
-    auto& ranges = segments_.container();
-    auto i = ranges.begin();
-    while (i != ranges.end()) {
-      if (segment_id == i->second)
-        i = ranges.erase(i);
-      else
-        ++i;
-    }
-  };
   // Convenience funciton for dropping an enire segment.
   auto drop = [&](auto& sref) {
     auto segment_id = sref.id();
@@ -211,7 +198,7 @@ caf::error segment_store::erase(const ids& xs) {
       static_assert(std::is_same_v<decltype(sref), segment_builder&>);
       sref.reset();
     }
-    drop_range(segment_id);
+    segments_.erase_value(segment_id);
   };
   // Convenience function for updating given segment by pruning all IDs in `xs`
   // from it.
@@ -267,7 +254,7 @@ caf::error segment_store::erase(const ids& xs) {
     VAST_DEBUG(this, "shrinks segment", segment_id, "from", slices.size(), "to",
                new_slices.size(), "slices");
     // Remove stale state.
-    drop_range(sref.id());
+    segments_.erase_value(segment_id);
     // Create a new segment from the remaining slices.
     segment_builder tmp_builder;
     segment_builder* builder = &tmp_builder;
