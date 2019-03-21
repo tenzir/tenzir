@@ -17,7 +17,7 @@
 
 namespace vast {
 
-bool contains(const ids& xs, const ids& ys) {
+bool contains(const bitmap& xs, const bitmap& ys) {
   return all<0>(ys - xs);
 }
 

@@ -604,10 +604,11 @@ auto all(const Bitmap& bm) {
   return !any<!Bit>(bm);
 }
 
-/// Tests whether `xs` contains `ys`.
-/// @param xs
-/// @param ys
-/// @returns `true` iff `ys` is a subset of `xs`.
-bool contains(const ids& xs, const ids& ys);
+/// Tests whether `xs` contains `ys`, i.e., whether `ys` is a subset of or
+/// equal to `xs`.
+/// @param xs Bitmap containing the left-hand side of the subset test.
+/// @param ys Bitmap containing the right-hand side of the subset test.
+/// @returns `true` iff `ys` is a subset of or equal to `xs`.
+bool contains(const bitmap& xs, const bitmap& ys);
 
 } // namespace vast
