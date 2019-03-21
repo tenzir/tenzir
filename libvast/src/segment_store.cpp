@@ -158,7 +158,7 @@ std::unique_ptr<store::lookup> segment_store::extract(const ids& xs) const {
   // Collect candidate segments by seeking through the ID set and
   // probing each ID interval.
   std::vector<uuid> candidates;
-  if (auto err = get_candidates(xs, candidates)) {
+  if (auto err = select_segments(xs, candidates)) {
     VAST_WARNING(this, "failed to get candidates for ids", xs);
     return nullptr;
   }
@@ -173,7 +173,7 @@ caf::error segment_store::erase(const ids& xs) {
   VAST_TRACE(VAST_ARG(xs));
   // Get affected segments.
   std::vector<uuid> candidates;
-  if (auto err = get_candidates(xs, candidates))
+  if (auto err = select_segments(xs, candidates))
     return err;
   if (candidates.empty())
     return caf::none;
@@ -322,7 +322,7 @@ caf::expected<std::vector<table_slice_ptr>> segment_store::get(const ids& xs) {
   // Collect candidate segments by seeking through the ID set and
   // probing each ID interval.
   std::vector<uuid> candidates;
-  if (auto err = get_candidates(xs, candidates))
+  if (auto err = select_segments(xs, candidates))
     return err;
   // Process candidates in reverse order for maximum LRU cache hits.
   std::vector<table_slice_ptr> result;
@@ -392,8 +392,8 @@ segment_store::segment_store(path dir, uint64_t max_segment_size,
   // nop
 }
 
-caf::error segment_store::get_candidates(const ids& selection,
-                                         std::vector<uuid>& candidates) const {
+caf::error segment_store::select_segments(const ids& selection,
+                                          std::vector<uuid>& candidates) const {
   VAST_DEBUG(this, "retrieves table slices with requested ids");
   auto f = [](auto x) { return std::pair{x.left, x.right}; };
   auto g = [&](auto x) {

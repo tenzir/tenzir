@@ -105,8 +105,8 @@ private:
   caf::expected<segment_ptr> load_segment(uuid id) const;
 
   /// Fills `candidates` with all segments that qualify for `selection`.
-  caf::error get_candidates(const ids& selection,
-                            std::vector<uuid>& candidates) const;
+  caf::error select_segments(const ids& selection,
+                             std::vector<uuid>& candidates) const;
 
   // -- member variables -------------------------------------------------------
 
