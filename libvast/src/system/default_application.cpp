@@ -58,10 +58,12 @@ default_application::default_application() {
   import_ = add(nullptr, "import", "imports data from STDIN or file",
                 opts()
                   .add<caf::atom_value>("table-slice,t", "table slice type")
-                  .add<bool>("node,n",
-                             "spawn a node instead of connecting to one")
                   .add<bool>("blocking,b",
-                             "block until the IMPORTER forwarded all data"));
+                             "block until the IMPORTER forwarded all data")
+                  .add<bool>("node,N",
+                             "spawn a node instead of connecting to one")
+                  .add<size_t>("num,n",
+                               "the maximum number of events to import"));
   import_->add(reader_command<format::zeek::reader>, "zeek",
                "imports Zeek logs from STDIN or file", src_opts());
   import_->add(reader_command<format::mrt::reader>, "mrt",
@@ -76,13 +78,13 @@ default_application::default_application() {
   // Add "export" command and its children.
   export_ = add(nullptr, "export", "exports query results to STDOUT or file",
                 opts()
-                  .add<std::string>("read,r", "path for reading the query")
-                  .add<bool>("node,n",
-                             "spawn a node instead of connecting to one")
                   .add<bool>("continuous,c", "marks a query as continuous")
                   .add<bool>("historical,h", "marks a query as historical")
-                  .add<bool>("unified,u", "marks a query as unified")
-                  .add<size_t>("events,e", "maximum number of results"));
+                  .add<bool>("node,N",
+                             "spawn a node instead of connecting to one")
+                  .add<size_t>("num,n", "maximum number of results")
+                  .add<std::string>("read,r", "path for reading the query")
+                  .add<bool>("unified,u", "marks a query as unified"));
   export_->add(writer_command<format::zeek::writer>, "zeek",
                "exports query results in Zeek format", snk_opts());
   export_->add(writer_command<format::csv::writer>, "csv",

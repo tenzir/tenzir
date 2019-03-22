@@ -34,7 +34,6 @@ public:
   static auto src_opts() {
     return command::opts()
       .add<std::string>("listen,l", "the port number to listen on")
-      .add<size_t>("num,n", "the maximum number of events to import")
       .add<std::string>("read,r", "path to input where to read events from")
       .add<std::string>("schema-file,s", "path to alternate schema")
       .add<std::string>("schema,S", "alternate schema as string")
