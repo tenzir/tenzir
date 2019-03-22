@@ -231,8 +231,8 @@ Available *component* values with corresponding *parameters*:
   `-u`
     Marks this exporter as *unified*, which is equivalent to both
     `-c` and `-h`.
-  `-e` *n* [*0*]
-    Limit the number of events to extract; *n = 0* means unlimited.
+  `-n` *events* [*0*]
+    Limit the number of events to extract; *events = 0* means unlimited.
 
 *source* **X** [*parameters*] [*expression*]
   **X** specifies the format of *source*. If *expression* is present, it will
@@ -325,7 +325,9 @@ Synopsis:
     Read from *file* instead of STDIN.
   `-d`
     Treat `-r` as listening UNIX domain socket.
-  -l port(/protocol)
+  `-n` *events*
+    Limit the number of events to import to a maximum of *events*.
+  `-l` *port(/protocol)*
     Listen for input from the network instead of STDIN. Currently only
     supports UDP connections.
 
@@ -343,6 +345,8 @@ Synopsis:
     Write to *file* instead of STDOUT.
   `-d`
     Treat `-w` as UNIX domain socket to connect to.
+  `-n` *events*
+    Limit the number of events to extract to *events*.
 
 Issues a query and exports results to standard output. This command is a
 shorthand for spawning a exporter and local sink, linking the two, and relaying
@@ -366,7 +370,7 @@ Import a PCAP trace into a local VAST node in one shot:
 
 Run a historical query, printed in ASCII, limited to at most 10 results:
 
-    vast export -e 10 ascii :addr in 10.0.0.0/8
+    vast export -n 10 ascii :addr in 10.0.0.0/8
 
 Query a local node and get the result back as PCAP trace:
 
