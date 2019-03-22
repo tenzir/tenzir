@@ -175,12 +175,12 @@ endif ()
 
 # Always link with -lprofile if we have Gperftools.
 if (GPERFTOOLS_FOUND)
-  target_link_libraries(libvast PUBLIC gperftools::profiler)
+  target_link_libraries(libvast PRIVATE gperftools::profiler)
 endif ()
 
 # Only link against tcmalloc if requested.
 if (GPERFTOOLS_FOUND AND VAST_USE_PERFTOOLS_HEAP_PROFILER)
-  target_link_libraries(libvast PUBLIC gperftools::tcmalloc)
+  target_link_libraries(libvast PRIVATE gperftools::tcmalloc)
 endif ()
 
 if (HAVE_CXX_ATOMICS_WITH_LIB)
