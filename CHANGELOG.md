@@ -1,24 +1,45 @@
 # Changelog
-All notable changes to this project will be documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
+This changelog documents all notable user-facing changes of VAST.
+
+Every entry has a category for which we use the following visual abbreviations:
+
+- 🎁 = feature
+- 🔄 = change
+- 🐞 = bugfix
 
 ## [Unreleased]
 
-### Added
-- The new `--disable-accounting` option can shut off periodic gathering of system telemetry.
-- The `import` command gained the `--listen,l` option to receive input
-  from the network. Currently only UDP is supported.
-- The `import` command gained the `--max-events,n` option to limit the number of events
-  that will be imported.
+- 🔄 The (internal) option `--node` for the `import` and `export` commands
+  has been renamed from `-n` to `-N`, to allow usage of `-n` for
+  `--max-events`.
 
-### Changed
-- Terminate running import processes if the server goes down.
-- Fix evaluation of predicates with negations and type or key extractors.
-- The short option for the `--node` option of the import and export commands
-  has been renamed from `-n` to `-N`.
-- The export option to limit the number of events to be exported has been
-  renamed from `--events,e` to `--max-events,n`.
+- 🎁 For symmetry to the `export` command, the `import` command gained the
+  `--max-events,n` option to limit the number of events that will be imported.
+
+- 🔄 To make the export option to limit the number of events to be exported
+  more idiomatic, it has been renamed from `--events,e` to `--max-events,n`.
+  Now `vast export -n 42` generates at most 42 events.
+
+- 🐞 When a node terminates during an import, the client process remained
+  unaffected and kept processing input. Now the client terminates when a
+  remote node terminates.
+
+- 🎁 The `import` command gained the `--listen,l` option to receive input
+  from the network. Currently only UDP is supported. Previously, one had to use
+  a clever netcat pipe with enough receive buffer to achieve the same effect,
+  e.g., `nc -I 1500 -p 4200 | vast import pcap`. Now this pipe degenerates to
+  `vast import pcap -l`.
+
+- 🎁 The new `--disable-accounting` option shuts off periodic gathering of
+  system telemetry in the accountant actor. This also disables output in the
+  `accounting.log`.
+
+- 🐞 Evaluation of predicates with negations return incorrect results. For
+  example, the expression `:addr !in 10.0.0.0/8` created a disjunction of all
+  fields to which `:addr` resolved, without properly applying De-Morgan. The
+  same bug also existed for key extractors. De-Morgan is now applied properly
+  for the operations `!in` and `!~`.
 
 
 ## [0.1] - 2019-02-28
