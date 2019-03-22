@@ -36,7 +36,8 @@ caf::message writer_command(const command& cmd, caf::actor_system& sys,
                             command::argument_iterator last) {
   VAST_TRACE(VAST_ARG(options), VAST_ARG("args", first, last));
   using ostream_ptr = std::unique_ptr<std::ostream>;
-  auto limit = get_or(options, "events", defaults::command::max_events);
+  auto max_events = get_or(options, "max-events",
+                           defaults::command::max_events);
   caf::actor snk;
   if constexpr (std::is_constructible_v<Writer, ostream_ptr>) {
     auto output = get_or(options, "write", defaults::command::write_path);
@@ -45,10 +46,10 @@ caf::message writer_command(const command& cmd, caf::actor_system& sys,
     if (!out)
       return caf::make_message(out.error());
     Writer writer{std::move(*out)};
-    snk = sys.spawn(sink<Writer>, std::move(writer), limit);
+    snk = sys.spawn(sink<Writer>, std::move(writer), max_events);
   } else {
     Writer writer;
-    snk = sys.spawn(sink<Writer>, std::move(writer), limit);
+    snk = sys.spawn(sink<Writer>, std::move(writer), max_events);
   }
   return sink_command(cmd, sys, std::move(snk), options, first, last);
 }

@@ -123,12 +123,12 @@ struct source_state {
 
   /// Initializes the state.
   void init(Reader rd, vast::factory<table_slice_builder>::signature f,
-            caf::optional<size_t> requested) {
+            caf::optional<size_t> max_events) {
     // Initialize members from given arguments.
     name = reader.name();
     factory = f;
     new (&reader) Reader(std::move(rd));
-    remaining = std::move(requested);
+    remaining = std::move(max_events);
     initialized = true;
   }
 
@@ -168,15 +168,15 @@ struct source_state {
 /// @param self The actor handle.
 /// @param reader The reader instance.
 template <class Reader>
-caf::behavior source(caf::stateful_actor<source_state<Reader>>* self,
-                     Reader reader,
-                     factory<table_slice_builder>::signature factory,
-                     size_t table_slice_size, caf::optional<size_t> requested) {
+caf::behavior
+source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
+       factory<table_slice_builder>::signature factory, size_t table_slice_size,
+       caf::optional<size_t> max_events) {
   using namespace caf;
   using namespace std::chrono;
   namespace defs = defaults::system;
   // Initialize state.
-  self->state.init(std::move(reader), factory, std::move(requested));
+  self->state.init(std::move(reader), factory, std::move(max_events));
   // Spin up the stream manager for the source.
   self->state.mgr = self->make_continuous_source(
     // init

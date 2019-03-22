@@ -78,7 +78,7 @@ caf::behavior datagram_source(datagram_source_actor<Reader>* self,
                               uint16_t udp_listening_port, Reader reader,
                               factory<table_slice_builder>::signature factory,
                               size_t table_slice_size,
-                              caf::optional<size_t> requested) {
+                              caf::optional<size_t> max_events) {
   using namespace caf;
   using namespace std::chrono;
   namespace defs = defaults::system;
@@ -91,7 +91,7 @@ caf::behavior datagram_source(datagram_source_actor<Reader>* self,
   }
   VAST_DEBUG(self, "starts listening at port", udp_res->second);
   // Initialize state.
-  self->state.init(std::move(reader), factory, std::move(requested));
+  self->state.init(std::move(reader), factory, std::move(max_events));
   // Spin up the stream manager for the source.
   self->state.mgr = self->make_continuous_source(
     // init

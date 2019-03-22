@@ -62,7 +62,7 @@ default_application::default_application() {
                              "block until the IMPORTER forwarded all data")
                   .add<bool>("node,N",
                              "spawn a node instead of connecting to one")
-                  .add<size_t>("num,n",
+                  .add<size_t>("max-events,n",
                                "the maximum number of events to import"));
   import_->add(reader_command<format::zeek::reader>, "zeek",
                "imports Zeek logs from STDIN or file", src_opts());
@@ -82,7 +82,7 @@ default_application::default_application() {
                   .add<bool>("historical,h", "marks a query as historical")
                   .add<bool>("node,N",
                              "spawn a node instead of connecting to one")
-                  .add<size_t>("num,n", "maximum number of results")
+                  .add<size_t>("max-events,n", "maximum number of results")
                   .add<std::string>("read,r", "path for reading the query")
                   .add<bool>("unified,u", "marks a query as unified"));
   export_->add(writer_command<format::zeek::writer>, "zeek",
