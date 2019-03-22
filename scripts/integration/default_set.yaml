@@ -107,12 +107,12 @@ tests:
       - command: export ascii 'id.orig_h in fe80:5074:1b53:7e7::/64'
       - command: export ascii 'id.orig_h ni fe80:5074:1b53:7e7::/64'
   Type Query:
-    tags: [server, type, disabled, ch4805]
+    tags: [server, type, ch5404]
     fixture: ServerTester
     steps:
-      - command: import -b zeek
+      - command: import -b -n 20 zeek
         input: data/zeek/conn.log.gz
-      - command: export zeek '#type == "zeek::conn"'
+      - command: export ascii '#type == "zeek.conn"'
 
   Manual 1:
     condition: 'import -h 2>&1 | grep -q pcap'
