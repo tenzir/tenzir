@@ -135,6 +135,7 @@ caf::behavior datagram_source(datagram_source_actor<Reader>* self,
                                             push_slice);
       t.stop(produced);
       if (st.remaining) {
+        VAST_ASSERT(*st.remaining >= produced);
         *st.remaining -= produced;
         if (*st.remaining == 0)
           st.done = true;
