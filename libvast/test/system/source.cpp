@@ -71,8 +71,8 @@ TEST(zeek source) {
                              std::move(stream)};
   MESSAGE("start source for producing table slices of size 10");
   auto src = self->spawn(source<format::zeek::reader>, std::move(reader),
-                         default_table_slice_builder::make,
-                         events::slice_size);
+                         default_table_slice_builder::make, events::slice_size,
+                         caf::none);
   run();
   MESSAGE("start sink and run exhaustively");
   auto snk = self->spawn(test_sink, src);

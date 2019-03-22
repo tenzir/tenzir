@@ -40,7 +40,7 @@ struct sink_state {
   std::chrono::steady_clock::duration flush_interval = std::chrono::seconds(1);
   std::chrono::steady_clock::time_point last_flush;
   uint64_t processed = 0;
-  uint64_t limit = 0;
+  uint64_t max_events = 0;
   caf::event_based_actor* self;
   accountant_type accountant;
   vast::system::measurement measurement;
@@ -58,7 +58,7 @@ struct sink_state {
 
 template <class Writer>
 caf::behavior sink(caf::stateful_actor<sink_state<Writer>>* self,
-                   Writer&& writer, uint64_t limit) {
+                   Writer&& writer, uint64_t max_events) {
   static_assert(std::is_base_of_v<format::writer, Writer>);
   using namespace std::chrono;
   auto& st = self->state;
@@ -66,9 +66,9 @@ caf::behavior sink(caf::stateful_actor<sink_state<Writer>>* self,
   st.writer = std::move(writer);
   st.name = st.writer.name();
   st.last_flush = steady_clock::now();
-  if (limit > 0) {
-    VAST_DEBUG(self, "caps event export at", limit, "events");
-    st.limit = limit;
+  if (max_events > 0) {
+    VAST_DEBUG(self, "caps event export at", max_events, "events");
+    st.max_events = max_events;
   }
   self->set_exit_handler(
     [=](const caf::exit_msg& msg) {
@@ -89,8 +89,8 @@ caf::behavior sink(caf::stateful_actor<sink_state<Writer>>* self,
           self->quit(r.error());
           return;
         }
-        if (++st.processed == st.limit) {
-          VAST_INFO(self, "reached limit:", st.limit, "events");
+        if (++st.processed == st.max_events) {
+          VAST_INFO(self, "reached max_events:", st.max_events, "events");
           st.send_report();
           self->quit();
           return;
@@ -111,10 +111,10 @@ caf::behavior sink(caf::stateful_actor<sink_state<Writer>>* self,
     [=](limit_atom, uint64_t max) {
       VAST_DEBUG(self, "caps event export at", max, "events");
       if (self->state.processed < max)
-        self->state.limit = max;
+        self->state.max_events = max;
       else
-        VAST_WARNING(self, "ignores new limit of", max, "(already processed",
-                     self->state.processed, " events)");
+        VAST_WARNING(self, "ignores new max_events of", max,
+                     "(already processed", self->state.processed, " events)");
     },
     [=](accountant_type accountant) {
       VAST_DEBUG(self, "sets accountant to", accountant);
