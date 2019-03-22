@@ -48,6 +48,17 @@
 #include "vast/table_slice_builder.hpp"
 #include "vast/table_slice_builder_factory.hpp"
 
+namespace vast::detail {
+
+template <typename T>
+constexpr const T& opt_min(caf::optional<T>& opt, T&& rhs) {
+  if (!opt)
+    return rhs;
+  return std::min(*opt, std::forward<T>(rhs));
+}
+
+} // namespace vast::detail
+
 namespace vast::system {
 
 /// The source state.
@@ -102,17 +113,22 @@ struct source_state {
   /// Points to the owning actor.
   Self* self;
 
+  /// The maximum number of events to ingest.
+  caf::optional<size_t> remaining;
+
   /// Stores whether `reader` is constructed.
   bool initialized;
 
   // -- utility functions ------------------------------------------------------
 
   /// Initializes the state.
-  void init(Reader rd, vast::factory<table_slice_builder>::signature f) {
+  void init(Reader rd, vast::factory<table_slice_builder>::signature f,
+            caf::optional<size_t> requested) {
     // Initialize members from given arguments.
     name = reader.name();
     factory = f;
     new (&reader) Reader(std::move(rd));
+    remaining = std::move(requested);
     initialized = true;
   }
 
@@ -155,12 +171,12 @@ template <class Reader>
 caf::behavior source(caf::stateful_actor<source_state<Reader>>* self,
                      Reader reader,
                      factory<table_slice_builder>::signature factory,
-                     size_t table_slice_size) {
+                     size_t table_slice_size, caf::optional<size_t> requested) {
   using namespace caf;
   using namespace std::chrono;
   namespace defs = defaults::system;
   // Initialize state.
-  self->state.init(std::move(reader), factory);
+  self->state.init(std::move(reader), factory, std::move(requested));
   // Spin up the stream manager for the source.
   self->state.mgr = self->make_continuous_source(
     // init
@@ -177,18 +193,27 @@ caf::behavior source(caf::stateful_actor<source_state<Reader>>* self,
       // we have completed a batch.
       auto push_slice = [&](table_slice_ptr x) { out.push(std::move(x)); };
       // We can produce up to num * table_slice_size events per run.
-      auto [err,produced] = st.reader.read(num * table_slice_size,
-                                         table_slice_size, push_slice);
+      auto events = detail::opt_min(st.remaining, num * table_slice_size);
+      auto [err, produced] = st.reader.read(events, table_slice_size,
+                                            push_slice);
       // TODO: if the source is unable to generate new events (returns 0)
       //       then we should trigger CAF to poll the source after a
       //       predefined interval of time again, e.g., via delayed_send
       t.stop(produced);
+      if (st.remaining)
+        *st.remaining -= produced;
       VAST_INFO(self, "produced", produced, "events");
-      if (err != caf::none) {
-        VAST_INFO(self, "completed with message:", render(err));
+      auto finish = [&] {
         done = true;
         st.send_report();
         self->quit();
+      };
+      if (st.remaining && *st.remaining == 0)
+        return finish();
+      if (err != caf::none) {
+        if (err != vast::ec::end_of_input)
+          VAST_INFO(self, "completed with message:", render(err));
+        return finish();
       }
     },
     // done?
@@ -243,7 +268,7 @@ caf::behavior default_source(caf::stateful_actor<source_state<Reader>>* self,
   auto slice_size = get_or(self->system().config(), "vast.table-slice-size",
                            defaults::system::table_slice_size);
   auto factory = default_table_slice_builder::make;
-  return source(self, std::move(reader), factory, slice_size);
+  return source(self, std::move(reader), factory, slice_size, caf::none);
 }
 
 } // namespace vast::system

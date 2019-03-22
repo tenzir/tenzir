@@ -77,7 +77,8 @@ template <class Reader>
 caf::behavior datagram_source(datagram_source_actor<Reader>* self,
                               uint16_t udp_listening_port, Reader reader,
                               factory<table_slice_builder>::signature factory,
-                              size_t table_slice_size) {
+                              size_t table_slice_size,
+                              caf::optional<size_t> requested) {
   using namespace caf;
   using namespace std::chrono;
   namespace defs = defaults::system;
@@ -90,7 +91,7 @@ caf::behavior datagram_source(datagram_source_actor<Reader>* self,
   }
   VAST_DEBUG(self, "starts listening at port", udp_res->second);
   // Initialize state.
-  self->state.init(std::move(reader), factory);
+  self->state.init(std::move(reader), factory, std::move(requested));
   // Spin up the stream manager for the source.
   self->state.mgr = self->make_continuous_source(
     // init
@@ -129,9 +130,15 @@ caf::behavior datagram_source(datagram_source_actor<Reader>* self,
         VAST_DEBUG(self, "produced a slice with", slice->rows(), "rows");
         st.mgr->out().push(std::move(slice));
       };
-      auto [err, produced] = st.reader.read(capacity * table_slice_size,
-                                            table_slice_size, push_slice);
+      auto events = detail::opt_min(st.remaining, capacity * table_slice_size);
+      auto [err, produced] = st.reader.read(events, table_slice_size,
+                                            push_slice);
       t.stop(produced);
+      if (st.remaining) {
+        *st.remaining -= produced;
+        if (*st.remaining == 0)
+          st.done = true;
+      }
       if (err != caf::none && err != ec::end_of_input)
         VAST_WARNING(self,
                      "has not enough capacity left in stream, dropping input!");

@@ -47,6 +47,7 @@ caf::message reader_command(const command& cmd, caf::actor_system& sys,
   VAST_TRACE(VAST_ARG(options), VAST_ARG("args", first, last));
   auto uri = caf::get_if<std::string>(&options, "listen");
   auto file = caf::get_if<std::string>(&options, "read");
+  auto num = caf::get_if<size_t>(&options, "num");
   if (uri && file)
     return caf::make_message(make_error(ec::invalid_configuration,
                                         "only one source possible (-r or -l)"));
@@ -87,7 +88,7 @@ caf::message reader_command(const command& cmd, caf::actor_system& sys,
       auto& mm = sys.middleman();
       auto src = mm.spawn_broker(std::forward<decltype(source)>(source),
                                  ep.port.number(), std::move(reader), factory,
-                                 slice_size);
+                                 slice_size, num);
       return source_command(cmd, sys, std::move(src), options, first, last);
     };
     switch (ep.port.type()) {
@@ -106,8 +107,8 @@ caf::message reader_command(const command& cmd, caf::actor_system& sys,
     Reader reader{table_slice, std::move(*in)};
     auto slice_size = get_or(options, "table-slice-size",
                              defaults::system::table_slice_size);
-    auto src = sys.spawn(source<Reader>, std::move(reader), factory,
-                         slice_size);
+    auto src = sys.spawn(source<Reader>, std::move(reader), factory, slice_size,
+                         num);
     return source_command(cmd, sys, std::move(src), options, first, last);
   }
 }
