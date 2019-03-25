@@ -15,7 +15,6 @@ set(libvast_sources
   src/banner.cpp
   src/base.cpp
   src/bitmap.cpp
-  src/bitmap_algorithms.cpp
   src/boolean_synopsis.cpp
   src/chunk.cpp
   src/column_index.cpp

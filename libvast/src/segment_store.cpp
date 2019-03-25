@@ -177,43 +177,42 @@ caf::error segment_store::erase(const ids& xs) {
     return err;
   if (candidates.empty())
     return caf::none;
-  // Predicate for checking whether `xs` contains all IDs of `ys`.
   auto is_subset_of_xs = [&](const ids& ys) {
-    // Compare using rank(), because the bitmaps might have different sizes.
     return contains(xs, ys);
   };
   // Counts number of total erased events for user-facing output.
   uint64_t erased_events = 0;
   // Convenience function for updating given segment by pruning all IDs in `xs`
-  // from it.
-  // @returns `true` if the entire segment got erased, `false` otherwise.
-  auto update = [&](auto& sref) {
-    auto slice_ids = sref.meta().slice_ids();
-    // Check whether we can drop the entire segment.
-    if (std::all_of(slice_ids.begin(), slice_ids.end(), is_subset_of_xs)) {
-      erased_events += drop(sref);
-      return;
-    }
-    auto segment_id = sref.id();
+  // from it. The argument is either a `segment` or a `segment_builder`.
+  auto update = [&](auto& seg) {
+    auto segment_id = seg.id();
     // Get all slices in the segment and generate a new segment that contains
     // only what's left after dropping the selection.
-    auto segment_ids = sref.meta().flat_slice_ids();
+    auto segment_ids = flat_slice_ids(seg.meta());
+    // Check whether we can drop the entire segment.
+    if (is_subset_of_xs(segment_ids)) {
+      erased_events += drop(seg);
+      return;
+    }
     std::vector<table_slice_ptr> slices;
-    if (auto maybe_slices = sref.lookup(segment_ids)) {
+    if (auto maybe_slices = seg.lookup(segment_ids)) {
       slices = std::move(*maybe_slices);
       if (slices.empty()) {
         VAST_WARNING(this, "got no slices after lookup for segment", segment_id,
                      "=> erases entire segment!");
-        erased_events += drop(sref);
+        erased_events += drop(seg);
         return;
       }
     } else {
       VAST_WARNING(this, "was unable to get table slice for segment",
                    segment_id, "=> erases entire segment!");
-      erased_events += drop(sref);
+      erased_events += drop(seg);
       return;
     }
     VAST_ASSERT(slices.size() > 0);
+    // We have IDs we wish to delete in `xs`, but we need a bitmap of what to
+    // keep for `select` in order to fill `new_slices` with the table slices
+    // that remain after dropping all deleted IDs from the segment.
     auto keep_mask = ~xs;
     std::vector<table_slice_ptr> new_slices;
     for (auto& slice : slices) {
@@ -231,7 +230,7 @@ caf::error segment_store::erase(const ids& xs) {
     if (new_slices.empty()) {
       VAST_WARNING(this, "was unable to generate any new slice for segment",
                    segment_id, "=> erases entire segment!");
-      erased_events += drop(sref);
+      erased_events += drop(seg);
       return;
     }
     VAST_DEBUG(this, "shrinks segment", segment_id, "from", slices.size(), "to",
@@ -241,13 +240,13 @@ caf::error segment_store::erase(const ids& xs) {
     // Create a new segment from the remaining slices.
     segment_builder tmp_builder;
     segment_builder* builder = &tmp_builder;
-    if constexpr (std::is_same_v<decltype(sref), segment_builder&>) {
+    if constexpr (std::is_same_v<decltype(seg), segment_builder&>) {
       // If `update` got called with a builder then we simply use that by
       // resetting it and filling it with new content. Otherwise, we fill
-      // `tmp_builder` instead and replace the the segment `sref` in the next
+      // `tmp_builder` instead and replace the the segment `seg` in the next
       // `if constexpr` block.
-      sref.reset();
-      builder = &sref;
+      seg.reset();
+      builder = &seg;
     }
     for (auto& slice : new_slices) {
       if (auto err = builder->add(slice)) {
@@ -258,14 +257,14 @@ caf::error segment_store::erase(const ids& xs) {
         VAST_ERROR(this, "failed to update range_map");
     }
     // Flush the new segment and remove the previous segment.
-    if constexpr (std::is_same_v<decltype(sref), segment&>) {
+    if constexpr (std::is_same_v<decltype(seg), segment&>) {
       auto new_segment = builder->finish();
       auto filename = segment_path() / to_string(new_segment->id());
       if (auto err = save(nullptr, filename, new_segment))
         VAST_ERROR(this, "failed to persist the new segment");
       auto stale_filename = segment_path() / to_string(segment_id);
       // Schedule deletion of the segment file when releasing the chunk.
-      sref.chunk()->add_deletion_step([=] { rm(stale_filename); });
+      seg.chunk()->add_deletion_step([=] { rm(stale_filename); });
     }
     // else: nothing to do, since we can continue filling the active segment.
   };

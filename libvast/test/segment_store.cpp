@@ -42,7 +42,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     // `make_ids({{0, max_id}})` unfortunately leads to performance
     // degradations.
     everything = make_ids({{0, 100}});
-    // Check that ground truth is as we expect.
+    // Check that ground truth is what we expect.
     if (zeek_conn_log_slices.size() != 3u)
       FAIL("expected 3 slices in test data set");
     if (zeek_conn_log_slices[0]->rows() != 8

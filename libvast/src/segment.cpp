@@ -29,20 +29,6 @@ namespace vast {
 
 using namespace binary_byte_literals;
 
-ids segment::meta_data::flat_slice_ids() const {
-  ids result;
-  auto concat = [&](const ids& x) { result |= x; };
-  visit_ids(concat);
-  return result;
-}
-
-std::vector<ids> segment::meta_data::slice_ids() const {
-  std::vector<ids> result;
-  auto append = [&](const ids& x) { result.emplace_back(x); };
-  visit_ids(append);
-  return result;
-}
-
 segment_ptr segment::make(chunk_ptr chunk) {
   VAST_ASSERT(chunk != nullptr);
   // Setup a CAF deserializer
@@ -122,6 +108,15 @@ caf::error inspect(caf::serializer& sink, const segment_ptr& x) {
 caf::error inspect(caf::deserializer& source, segment_ptr& x) {
   x.reset(new segment);
   return source(x->header_, x->meta_, x->chunk_);
+}
+
+ids flat_slice_ids(const segment::meta_data& x) {
+  ids result;
+  for (auto& synopsis : x.slices) {
+    result.append_bits(false, synopsis.offset - result.size());
+    result.append_bits(true, synopsis.size);
+  }
+  return result;
 }
 
 } // namespace vast

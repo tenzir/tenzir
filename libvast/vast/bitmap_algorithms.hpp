@@ -609,6 +609,9 @@ auto all(const Bitmap& bm) {
 /// @param xs Bitmap containing the left-hand side of the subset test.
 /// @param ys Bitmap containing the right-hand side of the subset test.
 /// @returns `true` iff `ys` is a subset of or equal to `xs`.
-bool contains(const bitmap& xs, const bitmap& ys);
+template <class LhsBitmap, class RhsBitmap>
+bool contains(const LhsBitmap& xs, const RhsBitmap& ys) {
+  return all<0>(ys - xs);
+}
 
 } // namespace vast

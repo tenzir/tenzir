@@ -68,7 +68,7 @@ public:
     return builder_.table_slice_bytes() != 0;
   }
 
-  /// @return the ID of the active segment.
+  /// @returns the ID of the active segment.
   const uuid& active_id() const noexcept {
     return builder_.id();
   }
@@ -108,15 +108,15 @@ private:
   caf::error select_segments(const ids& selection,
                              std::vector<uuid>& candidates) const;
 
-  /// Drops the entire segment `x` by removing it from `segments_` and causing
-  /// `x` to wipe it's file from disk on destruction.
+  /// Drops an entire segment and erases its content from disk.
   /// @param x The segment to drop.
-  /// @returns The total number of erased events.
+  /// @returns The number of events in `x`.
   uint64_t drop(segment& x);
 
-  /// Removes the segment ID of `x` from `segments_` and then resets `x´`.
+  /// Drops a segment-under-construction by resetting the builder and forcing
+  /// it to generate a new segment ID.
   /// @param x The segment-under-construction to drop.
-  /// @returns The total number of erased events.
+  /// @returns The number of events in `x`.
   uint64_t drop(segment_builder& x);
 
   // -- member variables -------------------------------------------------------
