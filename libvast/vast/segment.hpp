@@ -25,6 +25,7 @@
 #include "vast/aliases.hpp"
 #include "vast/chunk.hpp"
 #include "vast/fwd.hpp"
+#include "vast/ids.hpp"
 #include "vast/segment_header.hpp"
 #include "vast/uuid.hpp"
 
@@ -102,6 +103,11 @@ public:
   caf::expected<std::vector<table_slice_ptr>>
   lookup(const ids& xs) const;
 
+  /// @returns the meta data for the segment.
+  const auto& meta() const {
+    return meta_;
+  }
+
   // -- concepts --------------------------------------------------------------
 
   /// @pre `x != nullptr`
@@ -131,5 +137,9 @@ template <class Inspector>
 auto inspect(Inspector& f, segment::meta_data& x) {
   return f(x.slices);
 }
+
+/// @relates segment::meta_data
+/// @returns the event IDs of each stored table slice in a single bitmap.
+ids flat_slice_ids(const segment::meta_data& x);
 
 } // namespace vast

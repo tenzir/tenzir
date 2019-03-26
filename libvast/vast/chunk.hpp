@@ -134,6 +134,18 @@ public:
   /// @pre `start + length < size()`
   chunk_ptr slice(size_type start, size_type length = 0) const;
 
+  /// Adds an additional step for deleting this chunk.
+  /// @param f Function object that gets called after all previous deletion
+  ///          steps ran.
+  template <class F>
+  void add_deletion_step(F f) {
+    auto g = [first = std::move(deleter_), second = std::move(f)] {
+      first();
+      second();
+    };
+    deleter_ = std::move(g);
+  }
+
 private:
   chunk(void* ptr, size_type size, deleter_type deleter);
 

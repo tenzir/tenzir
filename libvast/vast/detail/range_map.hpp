@@ -75,6 +75,11 @@ public:
     return const_iterator{map_.end()};
   }
 
+  /// @returns the underlying container.
+  map_type& container() {
+    return map_;
+  }
+
   /// Associates a value with a right-open range.
   /// @param l The left endpoint of the interval.
   /// @param r The right endpoint of the interval.
@@ -194,6 +199,17 @@ public:
                                                   // partially and starts after
         right(i) = l;
       }
+    }
+  }
+
+  /// Removes all ranges that map to value `x` with O(n) complexity.
+  void erase_value(const Value& x) {
+    auto i = map_.begin();
+    while (i != map_.end()) {
+      if (i->second == x)
+        i = map_.erase(i);
+      else
+        ++i;
     }
   }
 

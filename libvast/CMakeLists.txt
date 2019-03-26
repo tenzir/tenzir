@@ -207,6 +207,7 @@ set(tests
   test/address.cpp
   test/binner.cpp
   test/bitmap.cpp
+  test/bitmap_algorithms.cpp
   test/bitmap_index.cpp
   test/bits.cpp
   test/bitvector.cpp

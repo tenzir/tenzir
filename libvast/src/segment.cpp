@@ -11,19 +11,19 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
+#include "vast/segment.hpp"
+
 #include <caf/binary_deserializer.hpp>
 
 #include "vast/bitmap.hpp"
 #include "vast/bitmap_algorithms.hpp"
-#include "vast/ids.hpp"
-#include "vast/logger.hpp"
-#include "vast/segment.hpp"
-#include "vast/si_literals.hpp"
-#include "vast/table_slice.hpp"
-
 #include "vast/detail/assert.hpp"
 #include "vast/detail/byte_swap.hpp"
 #include "vast/detail/narrow.hpp"
+#include "vast/ids.hpp"
+#include "vast/logger.hpp"
+#include "vast/si_literals.hpp"
+#include "vast/table_slice.hpp"
 
 namespace vast {
 
@@ -108,6 +108,15 @@ caf::error inspect(caf::serializer& sink, const segment_ptr& x) {
 caf::error inspect(caf::deserializer& source, segment_ptr& x) {
   x.reset(new segment);
   return source(x->header_, x->meta_, x->chunk_);
+}
+
+ids flat_slice_ids(const segment::meta_data& x) {
+  ids result;
+  for (auto& synopsis : x.slices) {
+    result.append_bits(false, synopsis.offset - result.size());
+    result.append_bits(true, synopsis.size);
+  }
+  return result;
 }
 
 } // namespace vast
