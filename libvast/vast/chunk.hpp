@@ -139,13 +139,11 @@ public:
   ///          steps ran.
   template <class F>
   void add_deletion_step(F f) {
-    using std::swap;
-    deleter_type g;
-    swap(deleter_, g);
-    deleter_ = [g = std::move(g), f = std::move(f)] {
-      g();
-      f();
+    auto g = [first = std::move(deleter_), second = std::move(f)] {
+      first();
+      second();
     };
+    deleter_ = std::move(g);
   }
 
 private:

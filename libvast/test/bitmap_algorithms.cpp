@@ -21,15 +21,15 @@
 
 using namespace vast;
 
-TEST(contains) {
-  CHECK(contains(make_ids({{10, 20}}), make_ids({{10, 20}})));
-  CHECK(contains(make_ids({{10, 20}}), make_ids({{11, 20}})));
-  CHECK(contains(make_ids({{10, 20}}), make_ids({{10, 19}})));
-  CHECK(contains(make_ids({{10, 20}}), make_ids({{10, 19}})));
+TEST(is subset) {
+  CHECK(is_subset(make_ids({{10, 20}}), make_ids({{10, 20}})));
+  CHECK(is_subset(make_ids({{11, 20}}), make_ids({{10, 20}})));
+  CHECK(is_subset(make_ids({{10, 19}}), make_ids({{10, 20}})));
+  CHECK(is_subset(make_ids({{10, 19}}), make_ids({{10, 20}})));
 }
 
-TEST(contains not) {
-  CHECK(!contains(make_ids({{10, 20}}), make_ids({{9, 19}})));
-  CHECK(!contains(make_ids({{10, 20}}), make_ids({{11, 21}})));
-  CHECK(!contains(make_ids({{10, 20}}), make_ids({5, 15, 25})));
+TEST(is not subset) {
+  CHECK(!is_subset(make_ids({{9, 19}}), make_ids({{10, 20}})));
+  CHECK(!is_subset(make_ids({{11, 21}}), make_ids({{10, 20}})));
+  CHECK(!is_subset(make_ids({5, 15, 25}), make_ids({{10, 20}})));
 }

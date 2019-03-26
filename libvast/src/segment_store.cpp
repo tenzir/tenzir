@@ -177,12 +177,17 @@ caf::error segment_store::erase(const ids& xs) {
     return err;
   if (candidates.empty())
     return caf::none;
-  auto is_subset_of_xs = [&](const ids& ys) { return contains(xs, ys); };
+  auto is_subset_of_xs = [&](const ids& ys) { return is_subset(ys, xs); };
   // Counts number of total erased events for user-facing output.
   uint64_t erased_events = 0;
-  // Convenience function for updating given segment by pruning all IDs in `xs`
-  // from it. The argument is either a `segment` or a `segment_builder`.
-  auto update = [&](auto& seg) {
+  // Implements the body of the for-loop below. This lambda must be generic,
+  // because the argument is either a `segment` or a `segment_builder`. This
+  // algorithm removes all events with IDs in `xs` from a segment. For existing
+  // segments, we create a new segment that contains all table slices that
+  // remain after erasing `xs` from the input segment. For builders, we update
+  // the builder directly by replacing the set of table slices. In any case, we
+  // have to update `segments_` to point to the new segment ID.
+  auto impl = [&](auto& seg) {
     auto segment_id = seg.id();
     // Get all slices in the segment and generate a new segment that contains
     // only what's left after dropping the selection.
@@ -266,19 +271,19 @@ caf::error segment_store::erase(const ids& xs) {
     }
     // else: nothing to do, since we can continue filling the active segment.
   };
-  // Update all affected segments.
+  // Iterate affected segments.
   for (auto& candidate : candidates) {
     auto j = cache_.find(candidate);
     if (j != cache_.end()) {
       VAST_DEBUG(this, "erases from the cached segement", candidate);
-      update(*j->second);
+      impl(*j->second);
       cache_.erase(j);
     } else if (candidate == builder_.id()) {
       VAST_DEBUG(this, "erases from the active segement", candidate);
-      update(builder_);
+      impl(builder_);
     } else if (auto sptr = load_segment(candidate)) {
       VAST_DEBUG(this, "erases from the segement", candidate);
-      update(**sptr);
+      impl(**sptr);
     }
   }
   if (erased_events > 0) {

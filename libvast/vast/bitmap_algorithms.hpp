@@ -604,14 +604,13 @@ auto all(const Bitmap& bm) {
   return !any<!Bit>(bm);
 }
 
-/// Tests whether `xs` contains `ys`, i.e., whether `ys` is a subset of or
-/// equal to `xs`.
-/// @param xs Bitmap containing the left-hand side of the subset test.
-/// @param ys Bitmap containing the right-hand side of the subset test.
-/// @returns `true` iff `ys` is a subset of or equal to `xs`.
-template <class LhsBitmap, class RhsBitmap>
-bool contains(const LhsBitmap& xs, const RhsBitmap& ys) {
-  return all<0>(ys - xs);
+/// Tests whether *xs* is a subset of *ys*.
+/// @param xs The set to test whether it is a subset of *ys*.
+/// @param ys The reference set.
+/// @returns `true` if *xs* is a subset of *ys*, `false` otherwise.
+template <class Bitmap0, class Bitmap1>
+bool is_subset(const Bitmap0& xs, const Bitmap1& ys) {
+  return all<0>(xs - ys);
 }
 
 } // namespace vast
