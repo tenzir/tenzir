@@ -177,9 +177,7 @@ caf::error segment_store::erase(const ids& xs) {
     return err;
   if (candidates.empty())
     return caf::none;
-  auto is_subset_of_xs = [&](const ids& ys) {
-    return contains(xs, ys);
-  };
+  auto is_subset_of_xs = [&](const ids& ys) { return contains(xs, ys); };
   // Counts number of total erased events for user-facing output.
   uint64_t erased_events = 0;
   // Convenience function for updating given segment by pruning all IDs in `xs`
