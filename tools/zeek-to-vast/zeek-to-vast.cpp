@@ -330,7 +330,7 @@ int main(int argc, char** argv) {
       return -1;
     if (!msg)
       continue; // timeout
-    auto& [topic, data] = *msg;
+    auto& [topic, data] = msg->data();
     // Parse the Zeek query event.
     auto result = parse_query_event(data);
     if (!result) {
