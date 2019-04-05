@@ -39,11 +39,11 @@ namespace vast::system {
 
 using namespace std::chrono_literals;
 
-caf::message start_command(const command&, caf::actor_system& sys,
-                           caf::settings& options,
-                           command::argument_iterator begin,
-                           command::argument_iterator end) {
-  VAST_UNUSED(begin, end);
+caf::message
+start_command_impl(start_command_extra_steps extra_steps, const command&,
+                   caf::actor_system& sys, caf::settings& options,
+                   [[maybe_unused]] command::argument_iterator begin,
+                   [[maybe_unused]] command::argument_iterator end) {
   VAST_TRACE(VAST_ARG(options), VAST_ARG("args", begin, end));
   // Fetch SSL settings from config.
   auto& sys_cfg = sys.config();
@@ -82,6 +82,10 @@ caf::message start_command(const command&, caf::actor_system& sys,
     return caf::make_message(std::move(bound_port.error()));
   VAST_INFO_ANON("VAST node is listening on", (host ? host : "")
                  << ':' << *bound_port);
+  // Run user-defined extra code.
+  if (extra_steps != nullptr)
+    if (auto err = extra_steps(self, options, node))
+      return caf::make_message(std::move(err));
   // Start signal monitor.
   std::thread sig_mon_thread;
   auto guard = signal_monitor::run_guarded(sig_mon_thread, sys, 750ms, self);
@@ -106,6 +110,14 @@ caf::message start_command(const command&, caf::actor_system& sys,
     }
   ).until([&] { return stop; });
   return caf::make_message(std::move(err));
+}
+
+caf::message start_command(const command& cmd, caf::actor_system& sys,
+                           caf::settings& options,
+                           command::argument_iterator begin,
+                           command::argument_iterator end) {
+  VAST_TRACE(VAST_ARG(options), VAST_ARG("args", begin, end));
+  return start_command_impl(nullptr, cmd, sys, options, begin, end);
 }
 
 } // namespace vast::system
