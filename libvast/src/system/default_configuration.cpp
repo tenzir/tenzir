@@ -62,20 +62,28 @@ default_configuration::setup_log_file(const path& base_dir) {
   return log_dir / application_name + ".log";
 }
 
+void default_configuration::merge_settings(const caf::settings& from,
+                                           caf::settings& to) {
+  for (auto& [key, value] : from)
+    if (caf::holds_alternative<caf::settings>(value)) {
+      merge_settings(caf::get<caf::settings>(value), to[key].as_dictionary());
+    } else {
+      to.insert_or_assign(key, value);
+    }
+}
+
 // Parses the options from the root command and adds them to the global
 // configuration.
 caf::error default_configuration::merge_root_options(system::application& app) {
   // Delegate to the root command for argument parsing.
   caf::settings options;
   app.root.options.parse(options, command_line.begin(), command_line.end());
-  // Move everything into the system-wide options, but use "vast" as category
-  // instead of the default "global" category.
-  auto& vast_section = content["vast"].as_dictionary();
-  for (auto& [key, value] : options)
-    vast_section.insert_or_assign(key, value);
+  // Move everything into the system-wide options.
+  merge_settings(options, content);
+  // Adjust logger file name.
   auto default_fn = caf::defaults::logger::file_name;
   if (caf::get_or(*this, "logger.file-name", default_fn) == default_fn) {
-    path dir = get_or(*this, "vast.directory", defaults::command::directory);
+    path dir = get_or(*this, "system.directory", defaults::system::directory);
     if (auto log_file = setup_log_file(dir.complete()); !log_file) {
       std::cerr << "failed to setup log file: " << to_string(log_file.error())
                 << std::endl;

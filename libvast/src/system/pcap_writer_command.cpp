@@ -39,11 +39,15 @@ caf::message pcap_writer_command(const command& cmd, caf::actor_system& sys,
                                  caf::settings& options,
                                  command::argument_iterator first,
                                  command::argument_iterator last) {
-  using caf::get_or;
   VAST_TRACE(VAST_ARG("args", first, last));
-  auto limit = get_or(options, "events", defaults::command::max_events);
-  auto output = get_or(options, "write", defaults::command::write_path);
-  auto flush = get_or(options, "flush", defaults::command::flush_interval);
+  using caf::get_or;
+  using defaults_t = defaults::export_::pcap;
+  std::string category = defaults_t::category;
+  auto limit = get_or(options, "export.max-events",
+                      defaults::export_::max_events);
+  auto output = get_or(options, category + ".write", defaults_t::write);
+  auto flush = get_or(options, category + ".flush-interval",
+                      defaults_t::flush_interval);
   format::pcap::writer writer{output, flush};
   auto snk = sys.spawn(sink<format::pcap::writer>, std::move(writer), limit);
   return sink_command(cmd, sys, std::move(snk), options, first, last);

@@ -31,8 +31,8 @@ public:
   command& export_cmd();
 
   /// @returns default options for source commands.
-  static auto src_opts() {
-    return command::opts()
+  static auto src_opts(std::string_view category) {
+    return command::opts(category)
       .add<std::string>("listen,l", "the port number to listen on")
       .add<std::string>("read,r", "path to input where to read events from")
       .add<std::string>("schema-file,s", "path to alternate schema")
@@ -41,8 +41,8 @@ public:
   }
 
   // @returns defaults options for sink commands.
-  static auto snk_opts() {
-    return command::opts()
+  static auto snk_opts(std::string_view category) {
+    return command::opts(category)
       .add<std::string>("write,w", "path to write events to")
       .add<bool>("uds,d", "treat -w as UNIX domain socket to connect to");
   }

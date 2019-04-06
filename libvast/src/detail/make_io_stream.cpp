@@ -60,13 +60,6 @@ make_input_stream(const std::string& input, bool is_uds) {
 }
 
 expected<std::unique_ptr<std::ostream>>
-make_output_stream(const caf::settings& options) {
-  return make_output_stream(get_or(options, "write",
-                                   defaults::command::write_path),
-                            get_or(options, "uds", false));
-}
-
-expected<std::unique_ptr<std::ostream>>
 make_output_stream(const std::string& output, bool is_uds) {
   if (is_uds) {
       return make_error(ec::filesystem_error,
@@ -81,13 +74,6 @@ make_output_stream(const std::string& output, bool is_uds) {
   if (output == "-")
     return std::make_unique<fdostream>(1); // stdout
   return std::make_unique<std::ofstream>(output);
-}
-
-expected<std::unique_ptr<std::istream>>
-make_input_stream(const caf::settings& options) {
-  return make_input_stream(
-    get_or(options, "read", defaults::command::read_path),
-    get_or(options, "uds", false));
 }
 
 } // namespace detail

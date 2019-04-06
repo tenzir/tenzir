@@ -74,8 +74,7 @@ caf::message stop_command(const command&, caf::actor_system&, caf::settings&,
 
 // Tries to establish peering to another node.
 caf::message peer_command(const command&, caf::actor_system& sys,
-                          caf::settings& options,
-                          command::argument_iterator first,
+                          caf::settings&, command::argument_iterator first,
                           command::argument_iterator last) {
   VAST_ASSERT(this_node != nullptr);
   if (std::distance(first, last) != 1)
@@ -88,7 +87,7 @@ caf::message peer_command(const command&, caf::actor_system& sys,
   if (ep->host.empty())
     ep->host = "127.0.0.1";
   if (ep->port.number() == 0)
-    ep->port = {defaults::command::endpoint_port, port::tcp};
+    return make_error_msg(ec::parse_error, "cannot connect to port 0");
   VAST_DEBUG(this_node, "connects to", ep->host << ':' << ep->port);
   auto& mm = sys.middleman();
   // TODO: this blocks the node, consider talking to the MM actor instead.
@@ -99,7 +98,6 @@ caf::message peer_command(const command&, caf::actor_system& sys,
     return caf::make_message(std::move(peer.error()));
   }
   VAST_DEBUG(this_node, "sends peering request");
-  auto node_name = get_or(options, "node.name", "node");
   auto& st = this_node->state;
   this_node->delegate(*peer, peer_atom::value, st.tracker, st.name);
   return caf::none;

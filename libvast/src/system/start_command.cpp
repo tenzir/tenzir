@@ -53,10 +53,11 @@ start_command_impl(start_command_extra_steps extra_steps, const command&,
                         || !sys_cfg.openssl_capath.empty()
                         || !sys_cfg.openssl_cafile.empty();
   // Construct an endpoint.
-  auto node_endpoint = make_default_endpoint();
-  if (auto str = caf::get_if<std::string>(&options, "endpoint"))
-    if (!parsers::endpoint(*str, node_endpoint))
-      make_error(ec::parse_error, "invalid endpoint", *str);
+  endpoint node_endpoint;
+  auto str = get_or(options, "system.endpoint", defaults::system::endpoint);
+  if (!parsers::endpoint(str, node_endpoint))
+    return caf::make_message(
+      make_error(ec::parse_error, "invalid endpoint", str));
   // Get a convenient and blocking way to interact with actors.
   caf::scoped_actor self{sys};
   // Spawn our node.

@@ -19,7 +19,9 @@
 
 #include <caf/make_message.hpp>
 #include <caf/scoped_actor.hpp>
+#include <caf/settings.hpp>
 
+#include "vast/defaults.hpp"
 #include "vast/detail/make_io_stream.hpp"
 #include "vast/logger.hpp"
 #include "vast/system/sink.hpp"
@@ -29,19 +31,20 @@ namespace vast::system {
 
 /// Default implementation for export sub-commands. Compatible with Bro and MRT
 /// formats.
-template <class Writer>
+template <class Writer, class Defaults>
 caf::message writer_command(const command& cmd, caf::actor_system& sys,
                             caf::settings& options,
                             command::argument_iterator first,
                             command::argument_iterator last) {
   VAST_TRACE(VAST_ARG(options), VAST_ARG("args", first, last));
+  std::string category = Defaults::category;
   using ostream_ptr = std::unique_ptr<std::ostream>;
-  auto max_events = get_or(options, "max-events",
-                           defaults::command::max_events);
+  auto max_events = get_or(options, "export.max-events",
+                           defaults::export_::max_events);
   caf::actor snk;
   if constexpr (std::is_constructible_v<Writer, ostream_ptr>) {
-    auto output = get_or(options, "write", defaults::command::write_path);
-    auto uds = get_or(options, "uds", false);
+    auto output = get_or(options, category + ".write", Defaults::write);
+    auto uds = get_or(options, category + ".uds", false);
     auto out = detail::make_output_stream(output, uds);
     if (!out)
       return caf::make_message(out.error());

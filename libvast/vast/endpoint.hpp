@@ -25,8 +25,4 @@ struct endpoint {
   class port port;    ///< The transport-layer port.
 };
 
-/// @returns an endpoint with values from the default settings.
-/// @relates endpoint make_endpoint
-endpoint make_default_endpoint();
-
 } // namespace vast

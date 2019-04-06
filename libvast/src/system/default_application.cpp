@@ -35,16 +35,30 @@
 #include "vast/system/pcap_writer_command.hpp"
 #endif
 
+#define READER(name)                                                           \
+  reader_command<format::name ::reader, defaults::import ::name>, #name
+
+#define GENERATOR(name)                                                        \
+  generator_command<format::name ::reader, defaults::import ::name>, #name
+
+#define WRITER(name)                                                           \
+  writer_command<format::name ::writer, defaults::export_ ::name>, #name
+
 namespace vast::system {
 
 default_application::default_application() {
+  // Returns default options for commands.
+  auto opts = [](std::string_view category = "global") {
+    return command::opts(category);
+  };
   // Set global options.
-  root.options.add<std::string>("directory,d", "directory for persistent state")
-    .add<std::string>("endpoint,e", "node endpoint")
-    .add<std::string>("id,i", "the unique ID of this node")
-    .add<bool>("disable-accounting", "don't run the accountant");
-  // Default options for commands.
-  auto opts = [] { return command::opts(); };
+  root.options = opts("?system")
+                   .add<std::string>("directory,d",
+                                     "directory for persistent state")
+                   .add<std::string>("endpoint,e", "node endpoint")
+                   .add<std::string>("node-id,i", "the unique ID of this node")
+                   .add<bool>("disable-accounting", "don't run the accountant")
+                   .finish();
   // Add standalone commands.
   add(version_command, "version", "prints the software version", opts());
   add(start_command, "start", "starts a node", opts());
@@ -56,62 +70,65 @@ default_application::default_application() {
       opts());
   // Add "import" command and its children.
   import_ = add(nullptr, "import", "imports data from STDIN or file",
-                opts()
-                  .add<caf::atom_value>("table-slice,t", "table slice type")
+                opts("?import")
+                  .add<caf::atom_value>("table-slice-type,t",
+                                        "table slice type")
+                  .add<bool>("node,N",
+                             "spawn a node instead of connecting to one")
                   .add<bool>("blocking,b",
                              "block until the IMPORTER forwarded all data")
-                  .add<bool>("node,N",
-                             "spawn a node instead of connecting to one")
                   .add<size_t>("max-events,n",
                                "the maximum number of events to import"));
-  import_->add(reader_command<format::zeek::reader>, "zeek",
-               "imports Zeek logs from STDIN or file", src_opts());
-  import_->add(reader_command<format::mrt::reader>, "mrt",
-               "imports MRT logs from STDIN or file", src_opts());
-  import_->add(reader_command<format::bgpdump::reader>, "bgpdump",
-               "imports BGPdump logs from STDIN or file", src_opts());
-  import_->add(generator_command<format::test::reader>, "test",
+  import_->add(READER(zeek), "imports Zeek logs from STDIN or file",
+               src_opts("?import.zeek"));
+  import_->add(READER(mrt), "imports MRT logs from STDIN or file",
+               src_opts("?import.mrt"));
+  import_->add(READER(bgpdump), "imports BGPdump logs from STDIN or file",
+               src_opts("?import.bgpdump"));
+  import_->add(GENERATOR(test),
                "imports random data for testing or benchmarking",
-               opts()
-                 .add<size_t>("seed", "the random seed")
-                 .add<size_t>("num,N", "events to generate"));
+               opts("?import.test").add<size_t>("seed", "the random seed"));
   // Add "export" command and its children.
   export_ = add(nullptr, "export", "exports query results to STDOUT or file",
-                opts()
-                  .add<bool>("continuous,c", "marks a query as continuous")
-                  .add<bool>("historical,h", "marks a query as historical")
+                opts("?export")
                   .add<bool>("node,N",
                              "spawn a node instead of connecting to one")
+                  .add<bool>("continuous,c", "marks a query as continuous")
+                  .add<bool>("historical,h", "marks a query as historical")
+                  .add<bool>("unified,u", "marks a query as unified")
                   .add<size_t>("max-events,n", "maximum number of results")
-                  .add<std::string>("read,r", "path for reading the query")
-                  .add<bool>("unified,u", "marks a query as unified"));
-  export_->add(writer_command<format::zeek::writer>, "zeek",
-               "exports query results in Zeek format", snk_opts());
-  export_->add(writer_command<format::csv::writer>, "csv",
-               "exports query results in CSV format", snk_opts());
-  export_->add(writer_command<format::ascii::writer>, "ascii",
-               "exports query results in ASCII format", snk_opts());
-  export_->add(writer_command<format::json::writer>, "json",
-               "exports query results in JSON format", snk_opts());
+                  .add<std::string>("read,r", "path for reading the query"));
+  export_->add(WRITER(zeek), "exports query results in Zeek format",
+               snk_opts("?export.zeek"));
+  export_->add(WRITER(csv), "exports query results in CSV format",
+               snk_opts("?export.csv"));
+  export_->add(WRITER(ascii), "exports query results in ASCII format",
+               snk_opts("?export.ascii"));
+  export_->add(WRITER(json), "exports query results in JSON format",
+               snk_opts("?export.json"));
   // Add PCAP import and export commands when compiling with PCAP enabled.
 #ifdef VAST_HAVE_PCAP
-  import_->add(
-    pcap_reader_command, "pcap", "imports PCAP logs from STDIN or file",
-    opts()
-      .add<std::string>("read,r", "path to input where to read events from")
-      .add<std::string>("schema,s", "path to alternate schema")
-      .add<bool>("uds,d", "treat -r as listening UNIX domain socket")
-      .add<size_t>("cutoff,c", "skip flow packets after this many bytes")
-      .add<size_t>("flow-max,m", "number of concurrent flows to track")
-      .add<size_t>("flow-age,a", "max flow lifetime before eviction")
-      .add<size_t>("flow-expiry,e", "flow table expiration interval")
-      .add<size_t>("pseudo-realtime,p", "factor c delaying packets by 1/c"));
-  export_->add(
-    pcap_writer_command, "pcap", "exports query results in PCAP format",
-    opts()
-      .add<std::string>("write,w", "path to write events to")
-      .add<bool>("uds,d", "treat -w as UNIX domain socket to connect to")
-      .add<size_t>("flush,f", "flush to disk after this many packets"));
+  import_
+    ->add(pcap_reader_command, "pcap", "imports PCAP logs from STDIN or file",
+          opts("?import")
+            .add<std::string>("read,r",
+                              "path to input where to read events from")
+            .add<std::string>("schema,s", "path to alternate schema")
+            .add<bool>("uds,d", "treat -r as listening UNIX domain socket")
+            .add<size_t>("cutoff,c", "skip flow packets after this many bytes")
+            .add<size_t>("max-flows,m", "number of concurrent flows to track")
+            .add<size_t>("max-flow-age,a", "max flow lifetime before eviction")
+            .add<size_t>("flow-expiry,e", "flow table expiration interval")
+            .add<size_t>("pseudo-realtime-factor,p",
+                         "factor c delaying packets by 1/c"));
+  export_->add(pcap_writer_command, "pcap",
+               "exports query results in PCAP format",
+               opts("?export")
+                 .add<std::string>("write,w", "path to write events to")
+                 .add<bool>("uds,d",
+                            "treat -w as UNIX domain socket to connect to")
+                 .add<size_t>("flush-interval,f",
+                              "flush to disk after this many packets"));
 #endif
 }
 

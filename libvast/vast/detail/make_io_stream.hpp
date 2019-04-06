@@ -17,7 +17,7 @@
 #include <memory>
 #include <string>
 
-#include "caf/fwd.hpp"
+#include "caf/settings.hpp"
 
 #include "vast/expected.hpp"
 
@@ -26,15 +26,25 @@ namespace vast::detail {
 expected<std::unique_ptr<std::ostream>>
 make_output_stream(const std::string& output, bool is_uds = false);
 
+template <class Defaults>
 expected<std::unique_ptr<std::ostream>>
-make_output_stream(const caf::settings& options);
+make_output_stream(const caf::settings& options) {
+  std::string category = Defaults::category;
+  auto output = get_or(options, category + ".write", Defaults::write);
+  auto uds = get_or(options, category + ".uds", false);
+  return make_output_stream(output, uds);
+}
 
 expected<std::unique_ptr<std::istream>>
 make_input_stream(const std::string& input, bool is_uds = false);
 
+template <class Defaults>
 expected<std::unique_ptr<std::istream>>
-make_input_stream(const caf::settings& options);
+make_input_stream(const caf::settings& options) {
+  std::string category = Defaults::category;
+  auto input = get_or(options, category + ".read", Defaults::read);
+  auto uds = get_or(options, category + ".uds", false);
+  return make_input_stream(input, uds);
+}
 
 } // namespace vast::detail
-
-

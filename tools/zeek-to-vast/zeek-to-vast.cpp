@@ -344,7 +344,7 @@ int main(int argc, char** argv) {
     auto args = std::vector<std::string>{expression};
     auto sink = self->spawn(vast::system::sink<bro_writer>,
                             bro_writer{endpoint, query_id},
-                            vast::defaults::command::max_events);
+                            vast::defaults::export_::max_events);
     vast::scope_linked<caf::actor> guard{sink};
     auto res = vast::system::sink_command(cmd, sys, sink, opts,
                                           args.begin(), args.end());
