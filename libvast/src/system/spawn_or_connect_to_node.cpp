@@ -28,6 +28,7 @@ using result_t = caf::variant<caf::error, caf::actor, scope_linked_actor>;
 } // namespace <anonymous>
 
 result_t spawn_or_connect_to_node(caf::scoped_actor& self,
+                                  std::string_view node_option,
                                   const caf::settings& opts,
                                   const caf::settings& node_opts) {
   VAST_TRACE(VAST_ARG(opts));
@@ -37,7 +38,7 @@ result_t spawn_or_connect_to_node(caf::scoped_actor& self,
     else
       return std::move(result.error());
   };
-  if (caf::get_or<bool>(opts, "node", false))
+  if (caf::get_or<bool>(opts, node_option, false))
     return convert(spawn_node(self, node_opts));
   return convert(connect_to_node(self, node_opts));
 }
