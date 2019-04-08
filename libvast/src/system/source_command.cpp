@@ -149,7 +149,7 @@ caf::message source_command(const command& cmd, caf::actor_system& sys,
         stop = true;
       } else if (msg.source == src) {
         VAST_DEBUG(&cmd, "received DOWN from source");
-        if (caf::get_or(options, "blocking", false))
+        if (caf::get_or(options, "import.blocking", false))
           self->send(importer, subscribe_atom::value, flush_atom::value, self);
         else
           stop = true;
