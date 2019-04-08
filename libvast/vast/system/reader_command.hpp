@@ -48,7 +48,7 @@ caf::message reader_command(const command& cmd, caf::actor_system& sys,
   std::string category = Defaults::category;
   auto uri = caf::get_if<std::string>(&options, category + ".listen");
   auto file = caf::get_if<std::string>(&options, category + ".read");
-  auto max_events = caf::get_if<size_t>(&options, category + ".max-events");
+  auto max_events = caf::get_if<size_t>(&options, "import.max-events");
   if (uri && file)
     return caf::make_message(make_error(ec::invalid_configuration,
                                         "only one source possible (-r or -l)"));
