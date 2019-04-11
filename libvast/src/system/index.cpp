@@ -385,12 +385,21 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
         VAST_ERROR(self, "got an anonymous query (ignored)");
         return sec::invalid_argument;
       }
+      // Convenience function for dropping out without producing hits. Makes
+      // sure that clients always receive a 'done' message.
+      auto no_result = [&] {
+        auto client = caf::actor_cast<caf::actor>(self->current_sender());
+        auto rp = self->make_response_promise<uuid, uint32_t, uint32_t>();
+        rp.deliver(uuid::nil(), uint32_t{0}, uint32_t{0});
+        self->send(caf::actor_cast<caf::actor>(client), done_atom::value);
+        return rp;
+      };
       // Get all potentially matching partitions.
       auto candidates = st.meta_idx.lookup(expr);
       // Report no result if no candidates are found.
       if (candidates.empty()) {
         VAST_DEBUG(self, "returns without result: no partitions qualify");
-        return {uuid::nil(), 0, 0};
+        return no_result();
       }
       // Allows the client to query further results after initial taste.
       auto query_id = uuid::random();
@@ -404,7 +413,7 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
         VAST_ASSERT(iter->second.partitions.empty());
         st.pending.erase(iter);
         VAST_DEBUG(self, "returns without result: no partitions qualify");
-        return {uuid::nil(), 0, 0};
+        return no_result();
       }
       // Delegate to query supervisor (uses up this worker) and report
       // query ID + some stats to the client.
