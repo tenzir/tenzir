@@ -57,6 +57,8 @@ public:
 
   children_list children;
 
+  bool visible = true;
+
   // -- factory functions ------------------------------------------------------
 
   /// Creates a config option set pre-initialized with a help option.

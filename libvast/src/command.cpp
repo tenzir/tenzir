@@ -224,9 +224,11 @@ void subcommand_helptext(const command& cmd, std::ostream& out) {
   out << "subcommands:\n";
   auto fs = field_size(cmd.children);
   for (auto& child : cmd.children) {
-    out << "  ";
-    out.width(fs);
-    out << child->name << "  " << child->description << '\n';
+    if (child->visible) {
+      out << "  ";
+      out.width(fs);
+      out << child->name << "  " << child->description << '\n';
+    }
   }
 }
 
@@ -252,11 +254,12 @@ void nested_helptext(const command& cmd, std::ostream& out) {
 void helptext(const command& cmd, std::ostream& out) {
   // Make sure fields are filled left-to-right.
   out << std::left;
-  // Dispatch based on whether or nood cmd has children.
-  if (cmd.children.empty())
-    flat_helptext(cmd, out);
-  else
+  // Dispatch based on whether or not cmd has visible children.
+  auto visible = [](const auto& cmd) { return cmd->visible; };
+  if (std::any_of(cmd.children.begin(), cmd.children.end(), visible))
     nested_helptext(cmd, out);
+  else
+    flat_helptext(cmd, out);
 }
 
 std::string helptext(const command& cmd) {
