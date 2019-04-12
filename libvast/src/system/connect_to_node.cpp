@@ -38,15 +38,14 @@ using namespace caf;
 namespace vast::system {
 
 expected<actor> connect_to_node(scoped_actor& self, const caf::settings& opts) {
-  namespace defs = defaults::command;
   // Fetch values from config.
-  auto id = get_or(opts, "vast.id", defaults::command::node_id);
-  auto dir = get_or(opts, "vast.directory", defaults::command::directory);
+  auto id = get_or(opts, "system.node-id", defaults::system::node_id);
+  auto dir = get_or(opts, "system.directory", defaults::system::directory);
   auto abs_dir = path{dir}.complete();
-  auto node_endpoint = make_default_endpoint();
-  if (auto str = get_if<std::string>(&opts, "vast.endpoint"))
-    if (!parsers::endpoint(*str, node_endpoint))
-      make_error(ec::parse_error, "invalid endpoint", *str);
+  endpoint node_endpoint;
+  auto str = get_or(opts, "system.endpoint", defaults::system::endpoint);
+  if (!parsers::endpoint(str, node_endpoint))
+    return make_error(ec::parse_error, "invalid endpoint", str);
   VAST_DEBUG(self, "connects to remote node:", id);
   auto& sys_cfg = self->system().config();
   auto use_encryption = !sys_cfg.openssl_certificate.empty()

@@ -267,7 +267,7 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
 template <class Reader>
 caf::behavior default_source(caf::stateful_actor<source_state<Reader>>* self,
                              Reader reader) {
-  auto slice_size = get_or(self->system().config(), "vast.table-slice-size",
+  auto slice_size = get_or(self->system().config(), "system.table-slice-size",
                            defaults::system::table_slice_size);
   auto factory = default_table_slice_builder::make;
   return source(self, std::move(reader), factory, slice_size, caf::none);

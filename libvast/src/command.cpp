@@ -40,6 +40,10 @@ caf::config_option_set command::opts() {
   return caf::config_option_set{}.add<bool>("help,h?", "prints the help text");
 }
 
+command::opts_builder command::opts(std::string_view category) {
+  return {category, opts()};
+}
+
 command* command::add(fun child_run, std::string_view child_name,
                       std::string_view child_description,
                       caf::config_option_set child_options) {

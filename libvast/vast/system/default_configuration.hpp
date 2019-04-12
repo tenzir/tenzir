@@ -26,6 +26,7 @@ struct default_configuration : system::configuration {
   default_configuration(std::string application_name);
   caf::expected<path> setup_log_file(const path& base_dir);
   caf::error merge_root_options(system::application& app);
+  void merge_settings(const caf::settings& from, caf::settings& to);
 
   std::string application_name;
 };

@@ -92,7 +92,7 @@ caf::message source_command(const command& cmd, caf::actor_system& sys,
     self->send(src, std::move(*expr));
   }
   // Get VAST node.
-  auto node_opt = spawn_or_connect_to_node(self, options,
+  auto node_opt = spawn_or_connect_to_node(self, "import.node", options,
                                            content(sys.config()));
   if (auto err = caf::get_if<caf::error>(&node_opt))
     return make_message(std::move(*err));
@@ -149,7 +149,7 @@ caf::message source_command(const command& cmd, caf::actor_system& sys,
         stop = true;
       } else if (msg.source == src) {
         VAST_DEBUG(&cmd, "received DOWN from source");
-        if (caf::get_or(options, "blocking", false))
+        if (caf::get_or(options, "import.blocking", false))
           self->send(importer, subscribe_atom::value, flush_atom::value, self);
         else
           stop = true;

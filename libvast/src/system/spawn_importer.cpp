@@ -32,7 +32,7 @@ maybe_actor spawn_importer(node_actor* self, spawn_arguments& args) {
   // FIXME: Notify exporters with a continuous query.
   return self->spawn(importer, args.dir / args.label,
                      caf::get_or(self->system().config(),
-                                 "vast.table-slice-size",
+                                 "system.table-slice-size",
                                  defaults::system::table_slice_size));
 }
 

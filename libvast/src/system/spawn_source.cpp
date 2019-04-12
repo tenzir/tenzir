@@ -13,6 +13,8 @@
 
 #include "vast/system/spawn_source.hpp"
 
+#include <string>
+
 #include <caf/actor.hpp>
 #include <caf/expected.hpp>
 #include <caf/local_actor.hpp>
@@ -42,12 +44,8 @@ maybe_actor spawn_generic_source(caf::local_actor* self, spawn_arguments& args,
                                  Ts&&... ctor_args) {
   VAST_UNBOX_VAR(expr, normalized_and_valided(args));
   VAST_UNBOX_VAR(sch, read_schema(args));
-  VAST_UNBOX_VAR(out, detail::make_output_stream(args.options));
-  auto global_table_slice_type = get_or(self->system().config(),
-                                        "vast.table-slice-type",
-                                        defaults::system::table_slice_type);
-  auto table_slice_type = get_or(args.options, "table-slice",
-                                 global_table_slice_type);
+  auto table_slice_type = defaults::import::table_slice_type(self->system(),
+                                                             args.options);
   Reader reader{table_slice_type, std::forward<Ts>(ctor_args)...};
   auto src = self->spawn(default_source<Reader>, std::move(reader));
   caf::anon_send(src, std::move(expr));
@@ -65,15 +63,20 @@ maybe_actor spawn_pcap_source([[maybe_unused]] caf::local_actor* self,
   return make_error(ec::unspecified, "not compiled with pcap support");
 #else // VAST_HAVE_PCAP
   auto opt = [&](caf::string_view key, auto default_value) {
-    return get_or(args.options, key, default_value);
+    return caf::get_or(args.options, key, default_value);
   };
-  namespace cd = defaults::command;
-  return spawn_generic_source<format::pcap::reader>(
-    self, args, opt("read", cd::read_path),
-    opt("cutoff", cd::cutoff), opt("flow-max", cd::max_flows),
-    opt("flow-age", cd::max_flow_age),
-    opt("flow-expiry", cd::flow_expiry),
-    opt("pseudo-realtime", cd::pseudo_realtime_factor));
+  using defaults_t = defaults::import::pcap;
+  std::string category = defaults_t::category;
+  return spawn_generic_source<
+    format::pcap::reader>(self, args, opt(category + ".read", defaults_t::read),
+                          opt(category + ".cutoff", defaults_t::cutoff),
+                          opt(category + ".max-flows", defaults_t::max_flows),
+                          opt(category + ".max-flow-age",
+                              defaults_t::max_flow_age),
+                          opt(category + ".flow-expiry",
+                              defaults_t::flow_expiry),
+                          opt(category + ".pseudo-realtime-factor",
+                              defaults_t::pseudo_realtime_factor));
 #endif // VAST_HAVE_PCAP
 }
 
@@ -84,14 +87,13 @@ maybe_actor spawn_test_source(caf::local_actor* self, spawn_arguments& args) {
   // source expression.
   if (!args.empty())
     return unexpected_arguments(args);
-  auto global_table_slice_type = get_or(self->system().config(),
-                                        "vast.table-slice-type",
-                                        defaults::system::table_slice_type);
-  auto table_slice_type = get_or(args.options, "table-slice",
-                                 global_table_slice_type);
-  reader_type reader{table_slice_type,
-                     get_or(args.options, "seed", size_t{0}),
-                     get_or(args.options, "events", size_t{100})};
+  auto table_slice_type = defaults::import::table_slice_type(self->system(),
+                                                             args.options);
+  using defaults_t = defaults::import::test;
+  std::string category = defaults_t::category;
+  reader_type reader{table_slice_type, defaults_t::seed(args.options),
+                     get_or(args.options, "import.max-events",
+                            defaults::import::max_events)};
   auto src = self->spawn(default_source<reader_type>, std::move(reader));
   if (sch)
     caf::anon_send(src, put_atom::value, std::move(*sch));
@@ -99,19 +101,22 @@ maybe_actor spawn_test_source(caf::local_actor* self, spawn_arguments& args) {
 }
 
 maybe_actor spawn_zeek_source(caf::local_actor* self, spawn_arguments& args) {
-  VAST_UNBOX_VAR(in, detail::make_input_stream(args.options));
+  using defaults_t = defaults::import::zeek;
+  VAST_UNBOX_VAR(in, detail::make_input_stream<defaults_t>(args.options));
   return spawn_generic_source<format::zeek::reader>(self, args, std::move(in));
 }
 
 maybe_actor spawn_bgpdump_source(caf::local_actor* self,
                                  spawn_arguments& args) {
-  VAST_UNBOX_VAR(in, detail::make_input_stream(args.options));
+  using defaults_t = defaults::import::bgpdump;
+  VAST_UNBOX_VAR(in, detail::make_input_stream<defaults_t>(args.options));
   return spawn_generic_source<format::bgpdump::reader>(self, args,
                                                        std::move(in));
 }
 
 maybe_actor spawn_mrt_source(caf::local_actor* self, spawn_arguments& args) {
-  VAST_UNBOX_VAR(in, detail::make_input_stream(args.options));
+  using defaults_t = defaults::import::mrt;
+  VAST_UNBOX_VAR(in, detail::make_input_stream<defaults_t>(args.options));
   return spawn_generic_source<format::mrt::reader>(self, args, std::move(in));
 }
 

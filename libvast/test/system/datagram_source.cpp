@@ -69,8 +69,7 @@ FIXTURE_SCOPE(source_tests, fixtures::deterministic_actor_system_and_events)
 TEST(zeek conn source) {
   MESSAGE("start source for producing table slices of size 100");
   namespace bf = format::zeek;
-  bf::reader reader{get_or(sys.config(), "vast.table-slice-type",
-                           defaults::system::table_slice_type)};
+  bf::reader reader{defaults::system::table_slice_type};
   auto hdl = caf::io::datagram_handle::from_int(1);
   auto& mm = sys.middleman();
   mpx.provide_datagram_servant(8080, hdl);

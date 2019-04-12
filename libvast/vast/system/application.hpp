@@ -28,9 +28,10 @@ public:
   application();
 
   /// Adds a new command to the application.
+  template <class Options>
   auto add(command::fun run, std::string_view name,
-           std::string_view description, caf::config_option_set options = {}) {
-    return root.add(run, name, description, std::move(options));
+           std::string_view description, Options&& options) {
+    return root.add(run, name, description, std::forward<Options>(options));
   }
 
   /// Starts the application and blocks until execution completes.

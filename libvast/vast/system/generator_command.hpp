@@ -30,18 +30,16 @@ namespace vast::system {
 /// Default implementation for import sub-commands. Compatible with Bro and MRT
 /// formats.
 /// @relates application
-template <class Generator>
+template <class Generator, class Defaults>
 caf::message generator_command(const command& cmd, caf::actor_system& sys,
                                caf::settings& options,
                                command::argument_iterator first,
                                command::argument_iterator last) {
   VAST_TRACE("");
-  auto global_table_slice = get_or(sys.config(), "vast.table-slice-type",
-                                   defaults::system::table_slice_type);
-  auto table_slice = get_or(options, "table-slice", global_table_slice);
-  auto num = get_or(options, "num", defaults::command::generated_events);
-  auto seed_opt = caf::get_if<size_t>(&options, "seed");
-  auto seed = seed_opt ? *seed_opt : std::random_device{}();
+  std::string category = Defaults::category;
+  auto table_slice = defaults::import::table_slice_type(sys, options);
+  auto num = get_or(options, "import.max-events", defaults::import::max_events);
+  auto seed = Defaults::seed(options);
   Generator generator{table_slice, seed, num};
   auto src = sys.spawn(default_source<Generator>, std::move(generator));
   return source_command(cmd, sys, std::move(src), options, first, last);

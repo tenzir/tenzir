@@ -95,13 +95,13 @@ The *options* in front of *command* control how to to connect to a node.
 
 The following *options* are available:
 
-`-d` *dir*, `--dir`=*dir* [*.*]
+`-d` *dir*, `--directory`=*dir* [*.*]
   The VAST directory for logs and state.
 
 `-e` *endpoint*, `--endpoint`=*endpoint* [*127.0.0.1:42000*]
   The endpoint of the node to connect to or launch. (See below)
 
-`-i` *id*, `--id`=*id* [*hostname*]
+`-i` *id*, `--node-id`=*id* [*hostname*]
   Overrides the node *id*, which defaults to the system hostname.
   Each node in a topology must have a unique ID, otherwise peering fails.
 
