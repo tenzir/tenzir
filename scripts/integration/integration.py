@@ -4,34 +4,31 @@
 """
 
 import argparse
-from contextlib import suppress
-from datetime import datetime
 import difflib
-from enum import Enum
 import filecmp
 import gzip
 import itertools
 import os
-from pathlib import Path
 import shlex
 import shutil
 import signal
-from string import Template
 import subprocess
 import sys
 import time
+from contextlib import suppress
+from datetime import datetime
+from enum import Enum
+from pathlib import Path
+from string import Template
 from typing import Callable, List, NamedTuple, Optional, TypeVar
 
+import packages.wait as wait
 import schema
 import yaml
-
-import packages.wait as wait
 
 VAST_PORT = 42024
 STEP_TIMEOUT = 30
 CURRENT_SUBPROCS: List[subprocess.Popen] = []
-
-PARENT = Path(__file__).resolve().parent
 
 
 class Fixture(NamedTuple):
@@ -160,6 +157,7 @@ def check_output(reference, out):
     else:
         with open(reference) as ref:
             return impl(ref.readlines(), sorted(out.readlines()))
+
 
 def run_step(basecmd, step_id, step, work_dir, baseline_dir, update_baseline):
     def try_wait(process, timeout):
@@ -305,7 +303,7 @@ class Tester:
     def run(self, test_name, test):
         """Runs a single test"""
         normalized_test_name = test_name.replace(' ', '-').lower()
-        baseline_dir = PARENT / 'reference' / normalized_test_name
+        baseline_dir = self.args.set.parent / 'reference' / normalized_test_name
         work_dir = self.test_dir / normalized_test_name
         if work_dir.exists():
             shutil.rmtree(work_dir)
@@ -344,7 +342,7 @@ class Tester:
         return test_summary.successful()
 
 
-def validate(data):
+def validate(data, set_dir):
     def is_file(path):
         return path.is_file()
 
@@ -360,7 +358,7 @@ def validate(data):
     def absolute_path(path):
         absolute = Path(os.path.expanduser(path))
         if not absolute.is_absolute():
-            absolute = (PARENT / path).resolve()
+            absolute = (set_dir / path).resolve()
         return absolute
 
     fixture = schema.Schema(
@@ -491,11 +489,12 @@ def main():
 
     args = parser.parse_args()
     if not args.set:
-        args.set = PARENT / 'default_set.yaml'
+        args.set = Path(__file__).resolve().parent / 'default_set.yaml'
+    args.set = args.set.resolve()
 
     test_file = open(args.set, 'r')
     test_dict = yaml.load(test_file)
-    test_dec = validate(test_dict)
+    test_dec = validate(test_dict, args.set.parent)
 
     if args.list is not None:
         selection = tagselect(args.list, test_dec['tests'])
