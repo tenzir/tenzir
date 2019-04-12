@@ -30,8 +30,6 @@ VAST_PORT = 42024
 STEP_TIMEOUT = 30
 CURRENT_SUBPROCS: List[subprocess.Popen] = []
 
-PARENT = Path(__file__).resolve().parent
-
 
 class Fixture(NamedTuple):
     enter: str
@@ -491,7 +489,7 @@ def main():
 
     args = parser.parse_args()
     if not args.set:
-        args.set = PARENT / 'default_set.yaml'
+        args.set = Path(__file__).resolve().parent / 'default_set.yaml'
     args.set = args.set.resolve()
 
     test_file = open(args.set, 'r')
