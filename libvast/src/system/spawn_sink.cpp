@@ -45,10 +45,7 @@ maybe_actor spawn_generic_sink(caf::local_actor* self, spawn_arguments& args) {
   if (!args.empty())
     return unexpected_arguments(args);
   std::string category = Defaults::category;
-  auto& options = args.options;
-  auto output = get_or(options, category + ".write", Defaults::write);
-  auto uds = get_or(options, category + ".uds", false);
-  VAST_UNBOX_VAR(out, detail::make_output_stream(output, uds));
+  VAST_UNBOX_VAR(out, detail::make_output_stream<Defaults>(args.options));
   return self->spawn(sink<Writer>, Writer{std::move(out)}, 0u);
 }
 
