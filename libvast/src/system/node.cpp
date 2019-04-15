@@ -62,7 +62,7 @@ auto make_error_msg(ec code, std::string msg) {
   return caf::make_message(make_error(code, std::move(msg)));
 }
 
-// Stop the node and exit the process
+// Stop the node and exit the process.
 caf::message stop_command(const command&, caf::actor_system&, caf::settings&,
                           command::argument_iterator,
                           command::argument_iterator) {
@@ -70,6 +70,27 @@ caf::message stop_command(const command&, caf::actor_system&, caf::settings&,
   // an illegal instruction interrupt.
   caf::anon_send_exit(this_node, exit_reason::user_shutdown);
   return caf::none;
+}
+
+// Sends an atom to a registered actor. Blocks until the actor responds.
+caf::message send_command(const command&, caf::actor_system& sys,
+                          caf::settings&, command::argument_iterator first,
+                          command::argument_iterator last) {
+  // Expect exactly two arguments.
+  if (std::distance(first, last) != 2)
+    return make_error_msg(ec::syntax_error,
+                          "expected two arguments: receiver and message atom");
+  // Get destination actor from the registry.
+  auto dst = sys.registry().get(caf::atom_from_string(*first));
+  if (dst == nullptr)
+    return make_error_msg(ec::syntax_error,
+                          "registry contains no actor named " + *first);
+  // Dispatch to destination.
+  auto f = caf::make_function_view(caf::actor_cast<caf::actor>(dst));
+  if (auto res = f(caf::atom_from_string(*(first + 1))))
+    return std::move(*res);
+  else
+    return caf::make_message(std::move(res.error()));
 }
 
 // Tries to establish peering to another node.
@@ -346,6 +367,7 @@ void node_state::init(std::string init_name, path init_dir) {
           opts());
   cmd.add(stop_command, "stop", "stops the node", opts());
   cmd.add(kill_command, "kill", "terminates a component", opts());
+  cmd.add(send_command, "send", "sends atom to a registered actor", opts());
   cmd.add(peer_command, "peer", "peers with another node", opts());
   // Add spawn commands.
   auto sp = cmd.add(nullptr, "spawn", "creates a new component", opts());

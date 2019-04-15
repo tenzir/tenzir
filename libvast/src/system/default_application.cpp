@@ -68,6 +68,9 @@ default_application::default_application() {
   add(remote_command, "peer", "peers with another node", opts());
   add(remote_command, "status", "shows various properties of a topology",
       opts());
+  auto send_cmd = add(remote_command, "send",
+                      "sends a message to a registered actor", opts());
+  send_cmd->visible = false;
   // Add "import" command and its children.
   import_ = add(nullptr, "import", "imports data from STDIN or file",
                 opts("?import")
