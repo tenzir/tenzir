@@ -57,11 +57,11 @@ TEST(MRT) {
   /// - # state changes: grep STATE_CHANGE plain.txt | grep -v "Subtype" | wc
   /// - # withdrawals: grep "Withdrawn Routes: " plain.txt | wc
   /// - # announcements: grep "NLRI: " plain.txt | wc
-  CHECK_EQUAL(events["mrt::bgp4mp::state_change"], 46u);
-  CHECK_EQUAL(events["mrt::bgp4mp::update::withdrawn"], 2105);
-  CHECK_EQUAL(events["mrt::bgp4mp::update::announcement"], 24328u);
+  CHECK_EQUAL(events["mrt.bgp4mp.state_change"], 46u);
+  CHECK_EQUAL(events["mrt.bgp4mp.update.withdrawn"], 2105);
+  CHECK_EQUAL(events["mrt.bgp4mp.update.announcement"], 24328u);
   // Check announcement at index 2.
-  auto& announcements = events["mrt::bgp4mp::update::announcement"];
+  auto& announcements = events["mrt.bgp4mp.update.announcement"];
   auto xs = unbox(caf::get_if<vector>(&announcements[2].data()));
   auto addr = unbox(caf::get_if<address>(&xs.at(0)));
   CHECK_EQUAL(addr, unbox(to<address>("12.0.1.63")));
@@ -69,7 +69,7 @@ TEST(MRT) {
   auto sn = unbox(caf::get_if<subnet>(&xs.at(2)));
   CHECK_EQUAL(sn, unbox(to<subnet>("200.29.24.0/24")));
   // Check withdrawal at index 2.
-  auto& withdrawals = events["mrt::bgp4mp::update::withdrawn"];
+  auto& withdrawals = events["mrt.bgp4mp.update.withdrawn"];
   xs = unbox(caf::get_if<vector>(&withdrawals[4].data()));
   addr = unbox(caf::get_if<address>(&xs.at(0)));
   CHECK_EQUAL(addr, unbox(to<address>("12.0.1.63")));
@@ -77,7 +77,7 @@ TEST(MRT) {
   sn = unbox(caf::get_if<subnet>(&xs.at(2)));
   CHECK_EQUAL(sn, unbox(to<subnet>("200.29.24.0/24")));
   // Check state change at index 0.
-  auto& state_changes = events["mrt::bgp4mp::state_change"];
+  auto& state_changes = events["mrt.bgp4mp.state_change"];
   xs = unbox(caf::get_if<vector>(&state_changes[0].data()));
   addr = unbox(caf::get_if<address>(&xs.at(0)));
   CHECK_EQUAL(addr, unbox(to<address>("111.91.233.1")));

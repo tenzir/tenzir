@@ -78,6 +78,7 @@ tests:
       - command: export -N ascii '103.11.0.42 in prefix'
       # Historical component for query in issue #201. No results.
       - command: export -N ascii '114.215.46.175 in prefix'
+      - command: export -N ascii 'mrt.bgp4mp.update.announcement.prefix == 120.50.4.0/23'
 
   Server Zeek conn log:
     tags: [server, import-export, zeek]

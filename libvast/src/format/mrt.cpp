@@ -232,64 +232,70 @@ caf::error reader::factory::operator()(bgp4mp::state_change_as4& x) {
 reader::reader(caf::atom_value table_slice_type,
                std::unique_ptr<std::istream> input)
   : super(table_slice_type), max_slice_size_(0), current_consumer_(nullptr) {
-  types_.table_dump_v2_peer_entry_type = record_type{{
-    {"index", count_type{}},
-    {"bgp_id", count_type{}},
-    {"ip_address", address_type{}},
-    {"as", count_type{}},
-  }}.name("mrt::table_dump_v2::peer_entry");
-  types_.table_dump_v2_rib_entry_type = record_type{{
-    {"peer_index", count_type{}},
-    {"prefix", subnet_type{}},
-    {"as_path", vector_type{count_type{}}},
-    {"origin_as", count_type{}},
-    {"origin", string_type{}.attributes({{"skip"}})},
-    {"nexthop", address_type{}},
-    {"local_pref", count_type{}},
-    {"med", count_type{}},
-    {"community", vector_type{count_type{}}},
-    {"atomic_aggregate", boolean_type{}},
-    {"aggregator_as", count_type{}},
-    {"aggregator_ip", address_type{}},
-  }}.name("mrt::table_dump_v2::rib_entry");
-  types_.bgp4mp_open_type = record_type{{
-    {"version", count_type{}},
-    {"my_autonomous_system", count_type{}},
-    {"hold_time", count_type{}},
-    {"bgp_identifier", count_type{}},
-  }}.name("mrt::bgp4mp::open");
-  types_.bgp4mp_update_announcement_type = record_type{{
-    {"source_ip", address_type{}},
-    {"source_as", count_type{}},
-    {"prefix", subnet_type{}},
-    {"as_path", vector_type{count_type{}}},
-    {"origin_as", count_type{}},
-    {"origin", string_type{}.attributes({{"skip"}})},
-    {"nexthop", address_type{}},
-    {"local_pref", count_type{}},
-    {"med", count_type{}},
-    {"community", vector_type{count_type{}}},
-    {"atomic_aggregate", boolean_type{}},
-    {"aggregator_as", count_type{}},
-    {"aggregator_ip", address_type{}},
-  }}.name("mrt::bgp4mp::update::announcement");
-  types_.bgp4mp_update_withdraw_type = record_type{{
-    {"source_ip", address_type{}},
-    {"source_as", count_type{}},
-    {"prefix", subnet_type{}},
-  }}.name("mrt::bgp4mp::update::withdrawn");
-  types_.bgp4mp_notification_type = record_type{{
-    {"error_code", count_type{}},
-    {"error_subcode", count_type{}},
-  }}.name("mrt::bgp4mp::notification");
-  types_.bgp4mp_keepalive_type = record_type{
-  }.name("mrt::bgp4mp::keepalive");
-  types_.bgp4mp_state_change_type = record_type{{
-    {"source_ip", address_type{}},
-    {"source_as", count_type{}},
-    {"old_state", count_type{}},
-    {"new_state", count_type{}},
-  }}.name("mrt::bgp4mp::state_change");
+  types_.table_dump_v2_peer_entry_type = record_type{
+    {
+      {"index", count_type{}},
+      {"bgp_id", count_type{}},
+      {"ip_address", address_type{}},
+      {"as", count_type{}},
+    }}.name("mrt.table_dump_v2.peer_entry");
+  types_.table_dump_v2_rib_entry_type = record_type{
+    {
+      {"peer_index", count_type{}},
+      {"prefix", subnet_type{}},
+      {"as_path", vector_type{count_type{}}},
+      {"origin_as", count_type{}},
+      {"origin", string_type{}.attributes({{"skip"}})},
+      {"nexthop", address_type{}},
+      {"local_pref", count_type{}},
+      {"med", count_type{}},
+      {"community", vector_type{count_type{}}},
+      {"atomic_aggregate", boolean_type{}},
+      {"aggregator_as", count_type{}},
+      {"aggregator_ip", address_type{}},
+    }}.name("mrt.table_dump_v2.rib_entry");
+  types_.bgp4mp_open_type = record_type{
+    {
+      {"version", count_type{}},
+      {"my_autonomous_system", count_type{}},
+      {"hold_time", count_type{}},
+      {"bgp_identifier", count_type{}},
+    }}.name("mrt.bgp4mp.open");
+  types_.bgp4mp_update_announcement_type = record_type{
+    {
+      {"source_ip", address_type{}},
+      {"source_as", count_type{}},
+      {"prefix", subnet_type{}},
+      {"as_path", vector_type{count_type{}}},
+      {"origin_as", count_type{}},
+      {"origin", string_type{}.attributes({{"skip"}})},
+      {"nexthop", address_type{}},
+      {"local_pref", count_type{}},
+      {"med", count_type{}},
+      {"community", vector_type{count_type{}}},
+      {"atomic_aggregate", boolean_type{}},
+      {"aggregator_as", count_type{}},
+      {"aggregator_ip", address_type{}},
+    }}.name("mrt.bgp4mp.update.announcement");
+  types_.bgp4mp_update_withdraw_type = record_type{
+    {
+      {"source_ip", address_type{}},
+      {"source_as", count_type{}},
+      {"prefix", subnet_type{}},
+    }}.name("mrt.bgp4mp.update.withdrawn");
+  types_.bgp4mp_notification_type = record_type{
+    {
+      {"error_code", count_type{}},
+      {"error_subcode", count_type{}},
+    }}.name("mrt.bgp4mp.notification");
+  types_.bgp4mp_keepalive_type = record_type{}.name("mrt.bgp4mp.keepalive");
+  types_.bgp4mp_state_change_type = record_type{
+    {
+      {"source_ip", address_type{}},
+      {"source_as", count_type{}},
+      {"old_state", count_type{}},
+      {"new_state", count_type{}},
+    }}.name("mrt.bgp4mp.state_change");
   if (input)
     reset(std::move(input));
 }

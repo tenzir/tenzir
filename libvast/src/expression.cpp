@@ -12,10 +12,13 @@
  ******************************************************************************/
 
 #include "vast/expression.hpp"
+#include "vast/concept/printable/to_string.hpp"
+#include "vast/concept/printable/vast/expression.hpp"
 #include "vast/expression_visitors.hpp"
 
 #include "vast/detail/assert.hpp"
 #include "vast/detail/overload.hpp"
+#include "vast/logger.hpp"
 
 namespace vast {
 
@@ -251,6 +254,7 @@ bool resolve_impl(std::vector<std::pair<offset, predicate>>& result,
         return false;
       for (auto& pred : caf::visit(predicatizer{}, *resolved))
         result.emplace_back(o, std::move(pred));
+      VAST_INFO_ANON(__func__, "test", to_string(*resolved));
       return true;
     },
     [&](caf::none_t) {

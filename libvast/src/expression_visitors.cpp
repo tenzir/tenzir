@@ -25,6 +25,7 @@
 #include "vast/die.hpp"
 #include "vast/event.hpp"
 #include "vast/expression_visitors.hpp"
+#include "vast/logger.hpp"
 #include "vast/system/atoms.hpp"
 #include "vast/type.hpp"
 
@@ -364,6 +365,7 @@ expected<expression> type_resolver::operator()(const key_extractor& ex,
                                                const data& d) {
   std::vector<expression> connective;
   // First, interpret the key as a suffix of a record field name.
+  VAST_INFO_ANON("type_resolver", "type:", type_.name());
   if (auto r = caf::get_if<record_type>(&type_)) {
     auto suffixes = r->find_suffix(ex.key);
     // All suffixes must pass the type check, otherwise the RHS of a

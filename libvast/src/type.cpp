@@ -17,6 +17,7 @@
 
 #include "vast/data.hpp"
 #include "vast/json.hpp"
+#include "vast/logger.hpp"
 #include "vast/pattern.hpp"
 #include "vast/schema.hpp"
 #include "vast/type.hpp"
@@ -277,6 +278,7 @@ struct finder {
 
   result_type match() const {
     result_type result;
+    VAST_INFO(this, VAST_ARG(trace_), VAST_ARG(rx_));
     if (rx_.match(trace_))
       result.emplace_back(off_, trace_);
     return result;
@@ -298,6 +300,9 @@ struct finder {
                     std::make_move_iterator(sub_result.end()));
     }
     off_.push_back(0);
+    if constexpr (Mode == mode::suffix)
+      if (trace_.empty())
+        trace_ = r.name();
     for (auto& f : r.fields) {
       auto prev_trace_size = trace_.size();
       trace_ += trace_.empty() ? f.name : '.' + f.name;

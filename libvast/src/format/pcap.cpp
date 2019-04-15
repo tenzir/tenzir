@@ -30,14 +30,13 @@ namespace pcap {
 namespace {
 
 inline type make_packet_type() {
-  return record_type{
-    {"timestamp", timestamp_type{}.attributes({{"time"}})},
-    {"src", address_type{}},
-    {"dst", address_type{}},
-    {"sport", port_type{}},
-    {"dport", port_type{}},
-    {"payload", string_type{}.attributes({{"skip"}})}
-  }.name("pcap::packet");
+  return record_type{{"timestamp", timestamp_type{}.attributes({{"time"}})},
+                     {"src", address_type{}},
+                     {"dst", address_type{}},
+                     {"sport", port_type{}},
+                     {"dport", port_type{}},
+                     {"payload", string_type{}.attributes({{"skip"}})}}
+    .name("pcap.packet");
 }
 
 auto const pcap_packet_type = make_packet_type();
