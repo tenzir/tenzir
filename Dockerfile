@@ -57,7 +57,7 @@ ENV PREFIX /usr/local
 ENV LD_LIBRARY_PATH $PREFIX/lib
 
 COPY --from=builder $PREFIX/ $PREFIX/
-COPY --from=builder /usr/lib/x86_64-linux-gnu/libatomic.so.1 /lib/x86_64-linux-gnu/libatomic.so.1
+COPY --from=builder /usr/lib/x86_64-linux-gnu/libatomic.so.1 /usr/lib/x86_64-linux-gnu/libatomic.so.1
 VOLUME ["/data"]
 RUN apt-get -qq update && apt-get -qq install -y \
       libc++1 \
