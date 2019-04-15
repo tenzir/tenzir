@@ -180,9 +180,7 @@ caf::expected<caf::actor> spawn_component(const command& cmd,
   VAST_ASSERT(cmd.parent != nullptr);
   using caf::atom_uint;
   auto self = this_node;
-  auto key = std::pair{caf::atom_from_string(cmd.name),
-                       caf::atom_from_string(cmd.parent->name)};
-  auto i = node_state::factories.find(key);
+  auto i = node_state::factories.find(full_name(cmd));
   if (i == node_state::factories.end())
     return make_error(ec::unspecified, "invalid spawn component");
   return i->second(self, args);
@@ -281,28 +279,27 @@ node_state::component_factory lift_component_factory() {
   return Fun;
 }
 
-#define ADD(parent, cmd, fun)                                                  \
-  result.emplace(std::pair{caf::atom(parent), caf::atom(cmd)},                 \
-                 lift_component_factory<fun>())
+#define ADD(cmd_full_name, fun)                                                \
+  result.emplace(cmd_full_name, lift_component_factory<fun>())
 
 auto make_factories() {
   node_state::named_component_factories result;
-  ADD("spawn", "accountant", spawn_accountant);
-  ADD("spawn", "archive", spawn_archive);
-  ADD("spawn", "exporter", spawn_exporter);
-  ADD("spawn", "importer", spawn_importer);
-  ADD("spawn", "index", spawn_index);
-  ADD("spawn", "consensus", spawn_consensus);
-  ADD("spawn", "profiler", spawn_profiler);
-  ADD("source", "pcap", spawn_pcap_source);
-  ADD("source", "zeek", spawn_zeek_source);
-  ADD("source", "mrt", spawn_mrt_source);
-  ADD("source", "bgpdump", spawn_bgpdump_source);
-  ADD("sink", "pcap", spawn_pcap_sink);
-  ADD("sink", "zeek", spawn_zeek_sink);
-  ADD("sink", "csv", spawn_csv_sink);
-  ADD("sink", "ascii", spawn_ascii_sink);
-  ADD("sink", "json", spawn_json_sink);
+  ADD("spawn accountant", spawn_accountant);
+  ADD("spawn archive", spawn_archive);
+  ADD("spawn exporter", spawn_exporter);
+  ADD("spawn importer", spawn_importer);
+  ADD("spawn index", spawn_index);
+  ADD("spawn consensus", spawn_consensus);
+  ADD("spawn profiler", spawn_profiler);
+  ADD("spawn source pcap", spawn_pcap_source);
+  ADD("spawn source zeek", spawn_zeek_source);
+  ADD("spawn source mrt", spawn_mrt_source);
+  ADD("spawn source bgpdump", spawn_bgpdump_source);
+  ADD("spawn sink pcap", spawn_pcap_sink);
+  ADD("spawn sink zeek", spawn_zeek_sink);
+  ADD("spawn sink csv", spawn_csv_sink);
+  ADD("spawn sink ascii", spawn_ascii_sink);
+  ADD("spawn sink json", spawn_json_sink);
   return result;
 }
 

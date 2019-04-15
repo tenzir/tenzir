@@ -39,13 +39,8 @@ struct node_state {
   /// Spawns a component (actor) for the NODE with given spawn arguments.
   using component_factory = maybe_actor (*)(node_actor*, spawn_arguments&);
 
-  /// Identifies a command and its parent by name. The two names in conjunction
-  /// uniquely identify a component, e.g., by disambiguating "import pcap" from
-  /// "export pcap".
-  using atom_pair = std::pair<caf::atom_value, caf::atom_value>;
-
   /// Maps command names to component factories.
-  using named_component_factories = std::map<atom_pair, component_factory>;
+  using named_component_factories = std::map<std::string, component_factory>;
 
   // -- constructors, destructors, and assignment operators --------------------
 
@@ -64,7 +59,7 @@ struct node_state {
   tracker_type tracker;
 
   /// Stores how many components per label are active.
-  std::unordered_map<std::string, size_t> labels;
+  std::map<std::string, size_t> labels;
 
   /// Gives the actor a recognizable name in log files.
   std::string name = "node";
