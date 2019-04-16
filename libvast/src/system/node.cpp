@@ -270,6 +270,7 @@ caf::message kill_command(const command&, caf::actor_system&, caf::settings&,
 template <maybe_actor (*Fun)(local_actor*, spawn_arguments&)>
 node_state::component_factory lift_component_factory() {
   return [](node_actor* self, spawn_arguments& args) {
+    // Delegate to lifted function.
     return Fun(self, args);
   };
 }
