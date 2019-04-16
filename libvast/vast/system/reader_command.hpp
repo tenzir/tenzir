@@ -90,6 +90,7 @@ caf::message reader_command(const command& cmd, caf::actor_system& sys,
                                  slice_size, max_events);
       return source_command(cmd, sys, std::move(src), options, first, last);
     };
+    VAST_INFO(reader, "listening for data on", ep.port);
     switch (ep.port.type()) {
       default:
         return caf::make_message(
@@ -104,6 +105,7 @@ caf::message reader_command(const command& cmd, caf::actor_system& sys,
     if (!in)
       return caf::make_message(std::move(in.error()));
     Reader reader{slice_type, std::move(*in)};
+    VAST_INFO(reader, "reading data from", *file);
     auto src = sys.spawn(source<Reader>, std::move(reader), factory, slice_size,
                          max_events);
     return source_command(cmd, sys, std::move(src), options, first, last);
