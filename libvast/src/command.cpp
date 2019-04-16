@@ -134,12 +134,12 @@ const command& root(const command& cmd) {
 }
 
 std::string full_name(const command& cmd) {
-  if (cmd.parent == nullptr)
-    return "";
   std::string result{cmd.name};
-  for (auto ptr = cmd.parent; ptr->parent != nullptr; ptr = ptr->parent) {
-    result.insert(result.begin(), ' ');
-    result.insert(result.begin(), ptr->name.begin(), ptr->name.end());
+  for (auto ptr = cmd.parent; ptr != nullptr; ptr = ptr->parent) {
+    if (!ptr->name.empty()) {
+      result.insert(result.begin(), ' ');
+      result.insert(result.begin(), ptr->name.begin(), ptr->name.end());
+    }
   }
   return result;
 }
