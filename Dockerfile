@@ -16,7 +16,7 @@ ENV BUILD_DIR /tmp/src
 # Compiler and dependency setup
 RUN apt-get -qq update && apt-get -qqy install \
     clang-7 libc++-dev libc++abi-dev cmake git-core \
-    libpcap-dev libssl-dev
+    libpcap-dev libssl-dev libatomic1
 
 # By placing the ADD directive at this point, we build both CAF and VAST
 # every time. This ensures that the CI integration will always fetch a fresh
@@ -57,7 +57,7 @@ ENV PREFIX /usr/local
 ENV LD_LIBRARY_PATH $PREFIX/lib
 
 COPY --from=builder $PREFIX/ $PREFIX/
-COPY --from=builder /lib/x86_64-linux-gnu/libatomic.so.1 /lib/x86_64-linux-gnu/libatomic.so.1
+COPY --from=builder /usr/lib/x86_64-linux-gnu/libatomic.so.1 /usr/lib/x86_64-linux-gnu/libatomic.so.1
 VOLUME ["/data"]
 RUN apt-get -qq update && apt-get -qq install -y \
       libc++1 \
