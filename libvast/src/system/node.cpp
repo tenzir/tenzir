@@ -187,6 +187,13 @@ caf::message status_command(const command&, caf::actor_system&,
   return caf::none;
 }
 
+maybe_actor spawn_accountant(node_actor* self, spawn_arguments& args) {
+  auto accountant_log = args.dir / "log" / "current" / "accounting.log";
+  auto accountant = self->spawn<monitored>(system::accountant, accountant_log);
+  self->system().registry().put(accountant_atom::value, accountant);
+  return caf::actor_cast<caf::actor>(accountant);
+}
+
 // Tries to spawn a new VAST component.
 caf::expected<caf::actor> spawn_component(const command& cmd,
                                           spawn_arguments& args) {
@@ -194,64 +201,10 @@ caf::expected<caf::actor> spawn_component(const command& cmd,
   VAST_ASSERT(cmd.parent != nullptr);
   using caf::atom_uint;
   auto self = this_node;
-  auto name_atm = caf::atom_from_string(cmd.name);
-  auto parent_name_atm = caf::atom_from_string(cmd.parent->name);
-  switch (atom_uint(name_atm)) {
-    case atom_uint("accountant"): {
-      auto accountant_log = args.dir / "log" / "current" / "accounting.log";
-      auto accountant = self->spawn<monitored>(system::accountant,
-                                               accountant_log);
-      self->system().registry().put(accountant_atom::value, accountant);
-      return caf::actor_cast<caf::actor>(accountant);
-    }
-    case atom_uint("archive"):
-      return spawn_archive(self, args);
-    case atom_uint("exporter"):
-      return spawn_exporter(self, args);
-    case atom_uint("importer"):
-      return spawn_importer(self, args);
-    case atom_uint("index"):
-      return spawn_index(self, args);
-    case atom_uint("consensus"):
-      return spawn_consensus(self, args);
-    case atom_uint("profiler"):
-      return spawn_profiler(self, args);
-    default:
-      // Source and sink commands require dispatching on the parent name first.
-      switch (atom_uint(parent_name_atm)) {
-        case atom_uint("source"):
-          switch (atom_uint(name_atm)) {
-            case atom_uint("pcap"):
-              return spawn_pcap_source(self, args);
-            case atom_uint("zeek"):
-              return spawn_zeek_source(self, args);
-            case atom_uint("mrt"):
-              return spawn_mrt_source(self, args);
-            case atom_uint("bgpdump"):
-              return spawn_bgpdump_source(self, args);
-            default:
-              break;
-          }
-          break;
-        case atom_uint("sink"):
-          switch (atom_uint(name_atm)) {
-            case atom_uint("pcap"):
-              return spawn_pcap_sink(self, args);
-            case atom_uint("zeek"):
-              return spawn_zeek_sink(self, args);
-            case atom_uint("csv"):
-              return spawn_csv_sink(self, args);
-            case atom_uint("ascii"):
-              return spawn_ascii_sink(self, args);
-            case atom_uint("json"):
-              return spawn_json_sink(self, args);
-            default:
-              break;
-          }
-          break;
-      }
-      return make_error(ec::unspecified, "invalid spawn component");
-  }
+  auto i = node_state::factories.find(full_name(cmd));
+  if (i == node_state::factories.end())
+    return make_error(ec::unspecified, "invalid spawn component");
+  return i->second(self, args);
 }
 
 caf::message spawn_command(const command& cmd, caf::actor_system& sys,
@@ -333,7 +286,50 @@ caf::message kill_command(const command&, caf::actor_system&, caf::settings&,
   return caf::none;
 }
 
+/// Lifts a factory function that accepts `local_actor*` as first argument
+/// to a function accpeting `node_actor*` instead.
+template <maybe_actor (*Fun)(local_actor*, spawn_arguments&)>
+node_state::component_factory lift_component_factory() {
+  return [](node_actor* self, spawn_arguments& args) {
+    // Delegate to lifted function.
+    return Fun(self, args);
+  };
+}
+
+template <maybe_actor (*Fun)(node_actor*, spawn_arguments&)>
+node_state::component_factory lift_component_factory() {
+  return Fun;
+}
+
+#define ADD(cmd_full_name, fun)                                                \
+  result.emplace(cmd_full_name, lift_component_factory<fun>())
+
+auto make_factories() {
+  node_state::named_component_factories result;
+  ADD("spawn accountant", spawn_accountant);
+  ADD("spawn archive", spawn_archive);
+  ADD("spawn exporter", spawn_exporter);
+  ADD("spawn importer", spawn_importer);
+  ADD("spawn index", spawn_index);
+  ADD("spawn consensus", spawn_consensus);
+  ADD("spawn profiler", spawn_profiler);
+  ADD("spawn source pcap", spawn_pcap_source);
+  ADD("spawn source zeek", spawn_zeek_source);
+  ADD("spawn source mrt", spawn_mrt_source);
+  ADD("spawn source bgpdump", spawn_bgpdump_source);
+  ADD("spawn sink pcap", spawn_pcap_sink);
+  ADD("spawn sink zeek", spawn_zeek_sink);
+  ADD("spawn sink csv", spawn_csv_sink);
+  ADD("spawn sink ascii", spawn_ascii_sink);
+  ADD("spawn sink json", spawn_json_sink);
+  return result;
+}
+
+#undef ADD
+
 } // namespace <anonymous>
+
+node_state::named_component_factories node_state::factories = make_factories();
 
 node_state::node_state(caf::event_based_actor* selfptr) : self(selfptr) {
   // nop

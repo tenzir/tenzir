@@ -13,20 +13,35 @@
 
 #pragma once
 
+#include <map>
 #include <string>
 
 #include <caf/actor.hpp>
 #include <caf/event_based_actor.hpp>
 #include <caf/stateful_actor.hpp>
 
+#include "vast/aliases.hpp"
 #include "vast/command.hpp"
 #include "vast/filesystem.hpp"
+#include "vast/system/spawn_arguments.hpp"
 #include "vast/system/tracker.hpp"
 
 namespace vast::system {
 
+struct node_state;
+
+using node_actor = caf::stateful_actor<node_state>;
+
 /// State of the node actor.
 struct node_state {
+  // -- member types ----------------------------------------------------------
+
+  /// Spawns a component (actor) for the NODE with given spawn arguments.
+  using component_factory = maybe_actor (*)(node_actor*, spawn_arguments&);
+
+  /// Maps command names to component factories.
+  using named_component_factories = std::map<std::string, component_factory>;
+
   // -- constructors, destructors, and assignment operators --------------------
 
   node_state(caf::event_based_actor* selfptr);
@@ -44,7 +59,7 @@ struct node_state {
   tracker_type tracker;
 
   /// Stores how many components per label are active.
-  std::unordered_map<std::string, size_t> labels;
+  std::map<std::string, size_t> labels;
 
   /// Gives the actor a recognizable name in log files.
   std::string name = "node";
@@ -54,9 +69,10 @@ struct node_state {
 
   /// Points to the node itself.
   caf::event_based_actor* self;
-};
 
-using node_actor = caf::stateful_actor<node_state>;
+  /// Maps command names (including parent command) to spawn functions.
+  static named_component_factories factories;
+};
 
 /// Spawns a node.
 /// @param self The actor handle
