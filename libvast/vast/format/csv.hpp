@@ -109,7 +109,7 @@ struct value_printer : printer<value_printer> {
       if (e.type() == event_type)
         return true;
       event_type = e.type();
-      auto hdr = "type,id,timestamp"s;
+      auto hdr = "type"s;
       if (auto r = caf::get_if<record_type>(&e.type()))
         for (auto& i : record_type::each{*r})
           hdr += ',' + i.key();
@@ -122,11 +122,10 @@ struct value_printer : printer<value_printer> {
     // Print event data.
     auto name_guard = [](const std::string& x) { return !x.empty(); };
     auto name = printers::str.with(name_guard);
-    auto ts = u64 ->* [](timestamp t) { return t.time_since_epoch().count(); };
     auto f = [&] { caf::visit(renderer<Iterator>{out}, e.type(), e.data()); };
     auto ev = eps ->* f;
-    auto p = header << name << ',' << u64 << ',' << ts << ',' << ev;
-    return p(out, e.type().name(), e.id(), e.timestamp());
+    auto p = header << name << ',' << ev;
+    return p(out, e.type().name());
   }
 
   // FIXME: relax print() constness constraint?!

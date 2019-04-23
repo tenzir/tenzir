@@ -10,6 +10,11 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## [Unreleased]
 
+- 🐞 The CSV printer of the `export` command used to insert 2 superfluous
+  fields when formatting an event: The internal event ID and a deprecated
+  internal timestamp value. Both fields have been removed from the output,
+  bringing it into line with the other output formats.
+
 - 🔄 The (internal) option `--node` for the `import` and `export` commands
   has been renamed from `-n` to `-N`, to allow usage of `-n` for
   `--max-events`.
