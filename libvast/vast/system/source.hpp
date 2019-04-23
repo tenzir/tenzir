@@ -224,10 +224,9 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
     }
   );
   return {
-    [=](get_atom, schema_atom) {
-      return self->state.reader.schema();
-    },
-    [=](put_atom, schema& sch) -> result<void> {
+    [=](get_atom, schema_atom) { return self->state.reader.schema(); },
+    [=](put_atom, schema sch) -> result<void> {
+      VAST_INFO(self, "got schema:", sch);
       if (auto err = self->state.reader.schema(std::move(sch)))
         return err;
       return caf::unit;

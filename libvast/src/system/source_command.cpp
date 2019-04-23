@@ -15,22 +15,19 @@
 
 #include <csignal>
 
+#include <caf/actor_cast.hpp>
 #include <caf/config_value.hpp>
 #include <caf/scoped_actor.hpp>
 #include <caf/settings.hpp>
-#include <caf/typed_event_based_actor.hpp>
 
 #include "vast/detail/string.hpp"
 #include "vast/error.hpp"
 #include "vast/expression.hpp"
-#include "vast/filesystem.hpp"
 #include "vast/logger.hpp"
-#include "vast/schema.hpp"
 #include "vast/scope_linked.hpp"
 
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
-#include "vast/concept/parseable/vast/schema.hpp"
 
 #include "vast/system/accountant.hpp"
 #include "vast/system/signal_monitor.hpp"
@@ -40,15 +37,6 @@
 namespace vast::system {
 
 namespace {
-
-caf::expected<schema> load_schema_file(std::string& path) {
-  if (path.empty())
-    return make_error(ec::filesystem_error, "");
-  auto str = load_contents(path);
-  if (!str)
-    return str.error();
-  return to<schema>(*str);
-}
 
 caf::expected<expression> parse_expression(command::argument_iterator begin,
                                            command::argument_iterator end) {
@@ -70,20 +58,6 @@ caf::message source_command(const command& cmd, caf::actor_system& sys,
   VAST_UNUSED(cmd);
   // Helper for blocking actor communication.
   scoped_actor self{sys};
-  // Supply an alternate schema, if requested.
-  expected<vast::schema> schema{caf::none};
-  if (auto sf = caf::get_if<std::string>(&options, "schema-file")) {
-    if (caf::get_if<std::string>(&options, "schema"))
-      return make_message(make_error(
-        ec::invalid_configuration, "had both schema and schema-file provided"));
-    schema = load_schema_file(*sf);
-  } else if (auto sc = caf::get_if<std::string>(&options, "schema")) {
-    schema = to<vast::schema>(*sc);
-  }
-  if (schema)
-    self->send(src, put_atom::value, std::move(*schema));
-  else if (schema.error())
-    return make_message(std::move(schema.error()));
   // Attempt to parse the remainder as an expression.
   if (begin != end) {
     auto expr = parse_expression(begin, end);

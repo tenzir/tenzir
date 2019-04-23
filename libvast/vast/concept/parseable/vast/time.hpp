@@ -18,10 +18,10 @@
 #include <cstring>
 
 #include "vast/access.hpp"
-#include "vast/time.hpp"
 #include "vast/concept/parseable/core.hpp"
 #include "vast/concept/parseable/numeric/real.hpp"
 #include "vast/concept/parseable/string/char_class.hpp"
+#include "vast/time.hpp"
 
 namespace vast {
 
@@ -116,6 +116,7 @@ auto const timespan = duration<vast::timespan::rep, vast::timespan::period>;
 
 } // namespace parsers
 
+// TODO: Support more of ISO8601.
 struct ymdhms_parser : vast::parser<ymdhms_parser> {
   using attribute = timestamp;
 
@@ -143,21 +144,28 @@ struct ymdhms_parser : vast::parser<ymdhms_parser> {
 
   template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& x) const {
+    using namespace parser_literals;
     using namespace std::chrono;
-    auto year = integral_parser<int, 4, 4>{}
-                  .with([](auto x) { return x >= 1900; });
-    auto mon = integral_parser<int, 2, 2>{}
-                 .with([](auto x) { return x >= 1 && x <= 12; });
-    auto day = integral_parser<int, 2, 2>{}
-                 .with([](auto x) { return x >= 1 && x <= 31; });
-    auto hour = integral_parser<int, 2, 2>{}
-                 .with([](auto x) { return x >= 0 && x <= 23; });
-    auto min = integral_parser<int, 2, 2>{}
-                 .with([](auto x) { return x >= 0 && x <= 59; });
-    auto sec = parsers::real_opt_dot
-                 .with([](auto x) { return x >= 0.0 && x <= 60.0; });
+    auto year = integral_parser<int, 4, 4>{}.with(
+      [](auto x) { return x >= 1900; });
+    auto mon = integral_parser<int, 2, 2>{}.with(
+      [](auto x) { return x >= 1 && x <= 12; });
+    auto day = integral_parser<int, 2, 2>{}.with(
+      [](auto x) { return x >= 1 && x <= 31; });
+    auto hour = integral_parser<int, 2, 2>{}.with(
+      [](auto x) { return x >= 0 && x <= 23; });
+    auto min = integral_parser<int, 2, 2>{}.with(
+      [](auto x) { return x >= 0 && x <= 59; });
+    auto sec = parsers::real_opt_dot.with(
+      [](auto x) { return x >= 0.0 && x <= 60.0; });
+    auto time_divider = '+'_p | 'T';
+    // clang-format off
     auto p = year >> '-' >> mon
-        >> ~('-' >> day >> ~('+' >> hour >> ~(':' >> min >> ~(':' >> sec))));
+              >> ~('-' >> day
+                >> ~(time_divider >> hour
+                  >> ~(':' >> min
+                    >> ~(':' >> sec >> ~parsers::chr{'Z'}))));
+    // clang-format on
     if constexpr (std::is_same_v<Attribute, unused_type>) {
       return p(f, l, unused);
     } else {
