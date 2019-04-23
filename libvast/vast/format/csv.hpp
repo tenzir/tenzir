@@ -109,7 +109,7 @@ struct value_printer : printer<value_printer> {
       if (e.type() == event_type)
         return true;
       event_type = e.type();
-      auto hdr = "type,id,timestamp"s;
+      auto hdr = "type"s;
       if (auto r = caf::get_if<record_type>(&e.type()))
         for (auto& i : record_type::each{*r})
           hdr += ',' + i.key();
