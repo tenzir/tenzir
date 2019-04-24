@@ -1,0 +1,20 @@
+type conn = record{
+  ts: time #time,
+  uid: string,
+  id: record {orig_h: addr, orig_p: port, resp_h: addr, resp_p: port},
+  proto: string,
+  duration: duration,
+  orig_bytes: count,
+  resp_bytes: count,
+  conn_state: string,
+  local_orig: bool,
+  local_resp: bool,
+  missed_bytes: count,
+  orig_pkts: count,
+  orig_ip_bytes: count,
+  resp_pkts: count,
+  resp_ip_bytes: count,
+  tunnel_parents: vector<addr>,
+  orig_l2_addr: string,
+  resp_l2_addr: string
+}
