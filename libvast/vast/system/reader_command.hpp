@@ -97,7 +97,7 @@ caf::message reader_command(const command& cmd, caf::actor_system& sys,
       schema = to<vast::schema>(*sc);
     if (sf)
       schema = load_schema_file(*sf);
-    if (!schema)
+    if (!schema && schema.error() != caf::none)
       return make_message(std::move(schema.error()));
   }
   caf::actor src;
