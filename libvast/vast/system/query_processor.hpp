@@ -122,6 +122,12 @@ protected:
 
   virtual void transition_to(state_name x);
 
+  /// Blocks or unblocks the processor from handling the final 'done' message
+  /// from the INDEX.
+  void block_end_of_hits(bool value) {
+    block_end_of_hits_ = value;
+  }
+
   // -- implementation hooks ---------------------------------------------------
 
   /// Processes incoming hits from the INDEX.
@@ -154,6 +160,10 @@ protected:
     uint32_t scheduled;
     uint32_t total;
   } partitions_;
+
+  /// Allows derived classes to block the processor from handling the final
+  /// 'done' message from the INDEX until processing other messages first.
+  bool block_end_of_hits_;
 };
 
 // -- related functions --------------------------------------------------------
