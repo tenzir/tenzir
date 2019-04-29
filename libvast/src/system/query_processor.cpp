@@ -27,7 +27,7 @@ namespace vast::system {
 // -- constructors, destructors, and assignment operators ----------------------
 
 query_processor::query_processor(caf::event_based_actor* self)
-  : state_(idle), self_(self) {
+  : state_(idle), self_(self), block_end_of_hits_(false) {
   // We might receive hits before the query ID arrives. Since we don't want to
   // deal with races manually, we skip messages that arrive out of order until
   // transitioning into the corresponding state.
@@ -52,9 +52,12 @@ query_processor::query_processor(caf::event_based_actor* self)
       process_hits(hits);
       // No transtion. We will receive a 'done' message after getting all hits.
     },
-    [=](done_atom) {
+    [=](done_atom) -> caf::result<void> {
+      if (block_end_of_hits_)
+        return caf::skip;
       partitions_.received += partitions_.scheduled;
       process_end_of_hits();
+      return caf::unit;
     });
 }
 
