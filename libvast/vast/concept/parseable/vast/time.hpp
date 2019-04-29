@@ -164,7 +164,7 @@ struct ymdhms_parser : vast::parser<ymdhms_parser> {
               >> ~('-' >> day
                 >> ~(time_divider >> hour
                   >> ~(':' >> min
-                    >> ~(':' >> sec >> ~parsers::chr{'Z'}))));
+                    >> ~(':' >> sec >> ~'Z'_p))));
     // clang-format on
     if constexpr (std::is_same_v<Attribute, unused_type>) {
       return p(f, l, unused);

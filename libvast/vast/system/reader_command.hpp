@@ -19,7 +19,6 @@
 
 #include <caf/config_value.hpp>
 #include <caf/io/middleman.hpp>
-#include <caf/scoped_actor.hpp>
 
 #include "vast/command.hpp"
 #include "vast/concept/parseable/to.hpp"
@@ -143,10 +142,8 @@ caf::message reader_command(const command& cmd, caf::actor_system& sys,
     src = sys.spawn(source<Reader>, std::move(reader), factory, slice_size,
                     max_events);
   }
-  if (schema) {
-    caf::scoped_actor self{sys};
-    self->send(src, put_atom::value, std::move(*schema));
-  }
+  if (schema)
+    caf::anon_send(src, put_atom::value, std::move(*schema));
   return source_command(cmd, sys, std::move(src), options, first, last);
 }
 

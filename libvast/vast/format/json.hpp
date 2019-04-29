@@ -55,7 +55,7 @@ public:
 
 struct default_selector {
   caf::optional<vast::record_type> operator()(const vast::json::object&) {
-    return t;
+    return layout;
   }
 
   caf::error schema(vast::schema sch) {
@@ -63,14 +63,14 @@ struct default_selector {
     if (!caf::holds_alternative<vast::record_type>(entry))
       return make_error(vast::ec::invalid_configuration,
                         "only record_types supported for json schema");
-    t = flatten(caf::get<vast::record_type>(entry));
+    layout = flatten(caf::get<vast::record_type>(entry));
     return caf::none;
   }
 
   vast::schema schema() const {
     vast::schema result;
-    if (t)
-      result.add(*t);
+    if (layout)
+      result.add(*layout);
     return result;
   }
 
@@ -78,7 +78,7 @@ struct default_selector {
     return "json-reader";
   }
 
-  caf::optional<vast::record_type> t = caf::none;
+  caf::optional<vast::record_type> layout = caf::none;
 };
 
 template <class Selector = default_selector>
@@ -110,7 +110,7 @@ private:
 
   // void patch(std::vector<data>& xs);
 
-  Selector selector;
+  Selector selector_;
   std::unique_ptr<std::istream> input_;
   std::unique_ptr<vast::detail::line_range> lines_;
   caf::optional<size_t> proto_field_;
@@ -134,12 +134,12 @@ void reader<Selector>::reset(std::unique_ptr<std::istream> in) {
 
 template <class Selector>
 caf::error reader<Selector>::schema(vast::schema s) {
-  return selector.schema(std::move(s));
+  return selector_.schema(std::move(s));
 }
 
 template <class Selector>
 vast::schema reader<Selector>::schema() const {
-  return selector.schema();
+  return selector_.schema();
 }
 
 template <class Selector>
@@ -153,47 +153,62 @@ struct convert {
   }
 
   bool operator()(vast::json::number n, const vast::count_type&) const {
-    auto c = vast::count(n);
-    return f_(std::move(c));
+    return f_(vast::count(n));
   }
+
   bool operator()(vast::json::number n, const vast::timespan_type&) const {
     std::chrono::duration<vast::json::number> x{n};
     auto t = std::chrono::duration_cast<vast::timespan>(x);
-    return f_(std::move(t));
+    return f_(t);
   }
-  bool operator()(vast::json::string s, const vast::timestamp_type&) const {
+
+  bool operator()(vast::json::number s, const vast::timestamp_type&) const {
+    std::chrono::seconds tmp{size_t(s)};
+    return f_(vast::timestamp{tmp});
+  }
+
+  bool operator()(const vast::json::string& s,
+                  const vast::timestamp_type&) const {
     vast::timestamp t;
     if (!vast::parsers::timestamp(s, t))
       return false;
-    return f_(std::move(t));
+    return f_(t);
   }
+
   bool operator()(vast::json::boolean b, const vast::boolean_type&) const {
-    return f_(std::move(b));
+    return f_(b);
   }
+
   bool operator()(vast::json::number n, const vast::port_type&) const {
-    auto p = vast::port(n);
-    return f_(std::move(p));
+    return f_(vast::port(n));
   }
-  bool operator()(vast::json::string s, const vast::address_type&) const {
+
+  bool operator()(const vast::json::string& s,
+                  const vast::address_type&) const {
     vast::address a;
     if (!vast::parsers::addr(s, a))
       return false;
     return f_(std::move(a));
   }
-  bool operator()(vast::json::array a, const vast::vector_type& v) const {
-    vast::vector d;
-    auto run = [&](auto value) {
-      d.push_back(std::move(value));
+
+  bool operator()(const vast::json::array& a,
+                  const vast::vector_type& v) const {
+    vast::vector xs;
+    auto push_back = [&](auto value) {
+      xs.push_back(std::move(value));
       return true;
     };
-    auto c = convert<decltype(run)>{std::move(run)};
+    auto c = convert<decltype(push_back)>{std::move(push_back)};
+    xs.reserve(a.size());
     for (auto x : a)
       c(x, v.value_type);
-    return f_(std::move(d));
+    return f_(std::move(xs));
   }
+
   bool operator()(vast::json::string s, const vast::string_type&) const {
     return f_(std::move(s));
   }
+
   template <class T, class U>
   bool operator()(T, U) const {
     VAST_ASSERT(!"this line should never be reached");
@@ -221,7 +236,7 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
     auto xs = caf::get_if<vast::json::object>(&j);
     if (!xs)
       return make_error(vast::ec::parse_error, "not a json object");
-    auto layout = selector(*xs);
+    auto layout = selector_(*xs);
     if (!layout)
       return make_error(vast::ec::parse_error, "unable to get a layout");
     auto bptr = builder(*layout);
@@ -229,6 +244,7 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
       return make_error(vast::ec::parse_error, "unable to get a builder");
     for (auto& field : layout->fields) {
       auto i = xs->find(field.name);
+      // Inexisting fields are treated as empty (unset).
       if (i == xs->end()) {
         bptr->add(vast::make_data_view(caf::none));
         continue;
