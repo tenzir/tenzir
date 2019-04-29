@@ -54,16 +54,16 @@ public:
 };
 
 struct default_selector {
-  caf::optional<vast::record_type> operator()(const vast::json::object&) {
+  caf::optional<record_type> operator()(const vast::json::object&) {
     return layout;
   }
 
   caf::error schema(vast::schema sch) {
     auto entry = *sch.begin();
-    if (!caf::holds_alternative<vast::record_type>(entry))
-      return make_error(vast::ec::invalid_configuration,
+    if (!caf::holds_alternative<record_type>(entry))
+      return make_error(ec::invalid_configuration,
                         "only record_types supported for json schema");
-    layout = flatten(caf::get<vast::record_type>(entry));
+    layout = flatten(caf::get<record_type>(entry));
     return caf::none;
   }
 
@@ -78,7 +78,7 @@ struct default_selector {
     return "json-reader";
   }
 
-  caf::optional<vast::record_type> layout = caf::none;
+  caf::optional<record_type> layout = caf::none;
 };
 
 template <class Selector = default_selector>
@@ -112,7 +112,7 @@ private:
 
   Selector selector_;
   std::unique_ptr<std::istream> input_;
-  std::unique_ptr<vast::detail::line_range> lines_;
+  std::unique_ptr<detail::line_range> lines_;
   caf::optional<size_t> proto_field_;
   std::vector<size_t> port_fields_;
 };
@@ -129,7 +129,7 @@ template <class Selector>
 void reader<Selector>::reset(std::unique_ptr<std::istream> in) {
   VAST_ASSERT(in != nullptr);
   input_ = std::move(in);
-  lines_ = std::make_unique<vast::detail::line_range>(*input_);
+  lines_ = std::make_unique<detail::line_range>(*input_);
 }
 
 template <class Selector>
@@ -149,51 +149,50 @@ const char* reader<Selector>::name() const {
 
 template <class F>
 struct convert {
+  using json = vast::json;
+
   convert(F&& f) : f_{std::forward<F>(f)} {
   }
 
-  bool operator()(vast::json::number n, const vast::count_type&) const {
-    return f_(vast::count(n));
+  bool operator()(json::number n, const count_type&) const {
+    return f_(count(n));
   }
 
-  bool operator()(vast::json::number n, const vast::timespan_type&) const {
-    std::chrono::duration<vast::json::number> x{n};
-    auto t = std::chrono::duration_cast<vast::timespan>(x);
+  bool operator()(json::number n, const timespan_type&) const {
+    std::chrono::duration<json::number> x{n};
+    auto t = std::chrono::duration_cast<timespan>(x);
     return f_(t);
   }
 
-  bool operator()(vast::json::number s, const vast::timestamp_type&) const {
+  bool operator()(json::number s, const timestamp_type&) const {
     std::chrono::seconds tmp{size_t(s)};
-    return f_(vast::timestamp{tmp});
+    return f_(timestamp{tmp});
   }
 
-  bool operator()(const vast::json::string& s,
-                  const vast::timestamp_type&) const {
-    vast::timestamp t;
-    if (!vast::parsers::timestamp(s, t))
+  bool operator()(const json::string& s, const timestamp_type&) const {
+    timestamp t;
+    if (!parsers::timestamp(s, t))
       return false;
     return f_(t);
   }
 
-  bool operator()(vast::json::boolean b, const vast::boolean_type&) const {
+  bool operator()(json::boolean b, const boolean_type&) const {
     return f_(b);
   }
 
-  bool operator()(vast::json::number n, const vast::port_type&) const {
-    return f_(vast::port(n));
+  bool operator()(json::number n, const port_type&) const {
+    return f_(port(n));
   }
 
-  bool operator()(const vast::json::string& s,
-                  const vast::address_type&) const {
-    vast::address a;
-    if (!vast::parsers::addr(s, a))
+  bool operator()(const json::string& s, const address_type&) const {
+    address a;
+    if (!parsers::addr(s, a))
       return false;
     return f_(std::move(a));
   }
 
-  bool operator()(const vast::json::array& a,
-                  const vast::vector_type& v) const {
-    vast::vector xs;
+  bool operator()(const json::array& a, const vector_type& v) const {
+    vector xs;
     auto push_back = [&](auto value) {
       xs.push_back(std::move(value));
       return true;
@@ -205,7 +204,7 @@ struct convert {
     return f_(std::move(xs));
   }
 
-  bool operator()(vast::json::string s, const vast::string_type&) const {
+  bool operator()(json::string s, const string_type&) const {
     return f_(std::move(s));
   }
 
@@ -227,36 +226,35 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
   while (produced < max_events) {
     // EOF check.
     if (lines_->done())
-      return finish(cons,
-                    make_error(vast::ec::end_of_input, "input exhausted"));
+      return finish(cons, make_error(ec::end_of_input, "input exhausted"));
     auto& line = lines_->get();
     vast::json j;
-    if (!vast::parsers::json(line, j))
-      return make_error(vast::ec::parse_error, "unable to parse json");
+    if (!parsers::json(line, j))
+      return make_error(ec::parse_error, "unable to parse json");
     auto xs = caf::get_if<vast::json::object>(&j);
     if (!xs)
-      return make_error(vast::ec::parse_error, "not a json object");
+      return make_error(ec::parse_error, "not a json object");
     auto layout = selector_(*xs);
     if (!layout)
-      return make_error(vast::ec::parse_error, "unable to get a layout");
+      return make_error(ec::parse_error, "unable to get a layout");
     auto bptr = builder(*layout);
     if (bptr == nullptr)
-      return make_error(vast::ec::parse_error, "unable to get a builder");
+      return make_error(ec::parse_error, "unable to get a builder");
     for (auto& field : layout->fields) {
       auto i = xs->find(field.name);
       // Inexisting fields are treated as empty (unset).
       if (i == xs->end()) {
-        bptr->add(vast::make_data_view(caf::none));
+        bptr->add(make_data_view(caf::none));
         continue;
       }
       auto v = i->second;
       auto f = convert{
-        [bptr = bptr](auto x) { return bptr->add(vast::make_data_view(x)); }};
+        [bptr = bptr](auto x) { return bptr->add(make_data_view(x)); }};
       auto res = caf::visit(f, v, field.type);
       if (!res)
-        return finish(cons, make_error(vast::ec::convert_error, field.name, ":",
-                                       vast::to_string(v), "line",
-                                       lines_->line_number()));
+        return finish(cons,
+                      make_error(ec::convert_error, field.name, ":",
+                                 to_string(v), "line", lines_->line_number()));
     }
     produced++;
     if (bptr->rows() == max_slice_size)
