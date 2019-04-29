@@ -232,6 +232,7 @@ set(tests
   test/expression_parseable.cpp
   test/factory.cpp
   test/filesystem.cpp
+  test/format/json.cpp
   test/format/mrt.cpp
   test/format/writer.cpp
   test/format/zeek.cpp
