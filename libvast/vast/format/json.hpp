@@ -44,7 +44,7 @@ struct event_printer : printer<event_printer> {
   }
 };
 
-class writer : public printer_writer<event_printer>{
+class writer : public printer_writer<event_printer> {
 public:
   using printer_writer<event_printer>::printer_writer;
 
@@ -52,6 +52,99 @@ public:
     return "json-writer";
   }
 };
+
+namespace {
+
+template <class F>
+struct convert {
+  using json = vast::json;
+
+  convert(F&& f) : f_{std::forward<F>(f)} {
+  }
+
+  bool operator()(json::number n, const count_type&) const {
+    return f_(count(n));
+  }
+
+  bool operator()(json::number s, const timespan_type&) const {
+    auto secs = std::chrono::duration<json::number>(s);
+    auto since_epoch = std::chrono::duration_cast<timespan>(secs);
+    return f_(timestamp{since_epoch});
+  }
+
+  bool operator()(json::number s, const timestamp_type&) const {
+    std::chrono::seconds tmp{size_t(s)};
+    return f_(timestamp{tmp});
+  }
+
+  bool operator()(const json::string& s, const timestamp_type&) const {
+    timestamp t;
+    if (!parsers::timestamp(s, t))
+      return false;
+    return f_(t);
+  }
+
+  bool operator()(json::boolean b, const boolean_type&) const {
+    return f_(b);
+  }
+
+  bool operator()(json::number n, const port_type&) const {
+    return f_(port(n));
+  }
+
+  bool operator()(const json::string& s, const address_type&) const {
+    address a;
+    if (!parsers::addr(s, a))
+      return false;
+    return f_(std::move(a));
+  }
+
+  bool operator()(const json::array& a, const vector_type& v) const {
+    vector xs;
+    auto push_back = [&](auto value) {
+      xs.push_back(std::move(value));
+      return true;
+    };
+    auto c = convert<decltype(push_back)>{std::move(push_back)};
+    xs.reserve(a.size());
+    for (auto x : a)
+      c(x, v.value_type);
+    return f_(std::move(xs));
+  }
+
+  bool operator()(json::string s, const string_type&) const {
+    return f_(std::move(s));
+  }
+
+  template <class T, class U>
+  bool operator()(T, U) const {
+    VAST_ASSERT(!"this line should never be reached");
+    return false;
+  };
+
+  F f_;
+};
+
+inline caf::error append(table_slice_builder& builder,
+                         const vast::json::object& xs,
+                         const record_type& layout) {
+  for (auto& field : layout.fields) {
+    auto i = xs.find(field.name);
+    // Inexisting fields are treated as empty (unset).
+    if (i == xs.end()) {
+      builder.add(make_data_view(caf::none));
+      continue;
+    }
+    auto v = i->second;
+    auto f = convert{[&](auto x) { return builder.add(make_data_view(x)); }};
+    auto res = caf::visit(f, v, field.type);
+    if (!res)
+      return make_error(ec::convert_error, field.name, ":", to_string(v));
+  }
+  return caf::none;
+}
+
+} // namespace
 
 struct default_selector {
   caf::optional<record_type> operator()(const vast::json::object&) {
@@ -147,76 +240,6 @@ const char* reader<Selector>::name() const {
   return Selector::name();
 }
 
-template <class F>
-struct convert {
-  using json = vast::json;
-
-  convert(F&& f) : f_{std::forward<F>(f)} {
-  }
-
-  bool operator()(json::number n, const count_type&) const {
-    return f_(count(n));
-  }
-
-  bool operator()(json::number n, const timespan_type&) const {
-    std::chrono::duration<json::number> x{n};
-    auto t = std::chrono::duration_cast<timespan>(x);
-    return f_(t);
-  }
-
-  bool operator()(json::number s, const timestamp_type&) const {
-    std::chrono::seconds tmp{size_t(s)};
-    return f_(timestamp{tmp});
-  }
-
-  bool operator()(const json::string& s, const timestamp_type&) const {
-    timestamp t;
-    if (!parsers::timestamp(s, t))
-      return false;
-    return f_(t);
-  }
-
-  bool operator()(json::boolean b, const boolean_type&) const {
-    return f_(b);
-  }
-
-  bool operator()(json::number n, const port_type&) const {
-    return f_(port(n));
-  }
-
-  bool operator()(const json::string& s, const address_type&) const {
-    address a;
-    if (!parsers::addr(s, a))
-      return false;
-    return f_(std::move(a));
-  }
-
-  bool operator()(const json::array& a, const vector_type& v) const {
-    vector xs;
-    auto push_back = [&](auto value) {
-      xs.push_back(std::move(value));
-      return true;
-    };
-    auto c = convert<decltype(push_back)>{std::move(push_back)};
-    xs.reserve(a.size());
-    for (auto x : a)
-      c(x, v.value_type);
-    return f_(std::move(xs));
-  }
-
-  bool operator()(json::string s, const string_type&) const {
-    return f_(std::move(s));
-  }
-
-  template <class T, class U>
-  bool operator()(T, U) const {
-    VAST_ASSERT(!"this line should never be reached");
-    return false;
-  };
-
-  F f_;
-};
-
 template <class Selector>
 caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
                                        consumer& cons) {
@@ -240,21 +263,9 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
     auto bptr = builder(*layout);
     if (bptr == nullptr)
       return make_error(ec::parse_error, "unable to get a builder");
-    for (auto& field : layout->fields) {
-      auto i = xs->find(field.name);
-      // Inexisting fields are treated as empty (unset).
-      if (i == xs->end()) {
-        bptr->add(make_data_view(caf::none));
-        continue;
-      }
-      auto v = i->second;
-      auto f = convert{
-        [bptr = bptr](auto x) { return bptr->add(make_data_view(x)); }};
-      auto res = caf::visit(f, v, field.type);
-      if (!res)
-        return finish(cons,
-                      make_error(ec::convert_error, field.name, ":",
-                                 to_string(v), "line", lines_->line_number()));
+    if (auto err = append(*bptr, *xs, *layout)) {
+      err.context() += caf::make_message("line", lines_->line_number());
+      return finish(cons, err);
     }
     produced++;
     if (bptr->rows() == max_slice_size)
