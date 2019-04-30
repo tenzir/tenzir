@@ -25,12 +25,14 @@
 #include "vast/address.hpp"
 #include "vast/concept/parseable/core.hpp"
 #include "vast/concept/parseable/numeric.hpp"
-#include "vast/concept/parseable/string.hpp"
 #include "vast/concept/parseable/stream.hpp"
+#include "vast/concept/parseable/string.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/address.hpp"
 #include "vast/concept/parseable/vast/offset.hpp"
+#include "vast/concept/parseable/vast/si.hpp"
 #include "vast/concept/parseable/vast/time.hpp"
+#include "vast/si_literals.hpp"
 
 using namespace std::string_literals;
 using namespace vast;
@@ -644,6 +646,58 @@ TEST(timestamp - YMD) {
   CHECK(parsers::timestamp("2017-08-13+21:10:42", ts));
   utc_secs = std::chrono::seconds{1502658642};
   CHECK_EQUAL(ts.time_since_epoch(), utc_secs);
+}
+
+// -- SI literals -------------------------------------------------------------
+
+namespace {
+
+template <class T>
+T to_si(std::string_view str) {
+  auto parse_si = [&](auto input, auto& x) {
+    if constexpr (std::is_same_v<T, count>)
+      return parsers::count(input, x);
+    else if constexpr (std::is_same_v<T, integer>)
+      return parsers::integer(input, x);
+  };
+  T x;
+  if (!parse_si(str, x))
+    FAIL("could not parse " << str << " as SI literal");
+  return x;
+}
+
+} // namespace
+
+TEST(si count) {
+  auto to_count = to_si<count>;
+  using namespace si_literals;
+  CHECK_EQUAL(to_count("42"), 42u);
+  CHECK_EQUAL(to_count("1k"), 1_k);
+  CHECK_EQUAL(to_count("2M"), 2_M);
+  CHECK_EQUAL(to_count("3G"), 3_G);
+  CHECK_EQUAL(to_count("4T"), 4_T);
+  CHECK_EQUAL(to_count("5E"), 5_E);
+  CHECK_EQUAL(to_count("6Ki"), 6_Ki);
+  CHECK_EQUAL(to_count("7Mi"), 7_Mi);
+  CHECK_EQUAL(to_count("8Gi"), 8_Gi);
+  CHECK_EQUAL(to_count("9Ti"), 9_Ti);
+  CHECK_EQUAL(to_count("10Ei"), 10_Ei);
+}
+
+TEST(si int) {
+  auto to_int = to_si<integer>;
+  using namespace si_literals;
+  CHECK_EQUAL(to_int("-42"), -42);
+  CHECK_EQUAL(to_int("-1k"), -1_k);
+  CHECK_EQUAL(to_int("-2M"), -2_M);
+  CHECK_EQUAL(to_int("-3G"), -3_G);
+  CHECK_EQUAL(to_int("-4T"), -4_T);
+  CHECK_EQUAL(to_int("-5E"), -5_E);
+  CHECK_EQUAL(to_int("-6Ki"), -6_Ki);
+  CHECK_EQUAL(to_int("-7Mi"), -7_Mi);
+  CHECK_EQUAL(to_int("-8Gi"), -8_Gi);
+  CHECK_EQUAL(to_int("-9Ti"), -9_Ti);
+  CHECK_EQUAL(to_int("-10Ei"), -10_Ei);
 }
 
 // -- API ---------------------------------------------------------------------
