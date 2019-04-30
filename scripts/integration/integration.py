@@ -535,7 +535,7 @@ def main():
     LOGGER.debug(f'resolved test set path to {args.set}')
 
     test_file = open(args.set, 'r')
-    test_dict = yaml.load(test_file)
+    test_dict = yaml.full_load(test_file)
     test_dec = validate(test_dict, args.set.parent)
 
     if args.list is not None:
