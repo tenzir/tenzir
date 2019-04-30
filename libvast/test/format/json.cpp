@@ -21,31 +21,34 @@
 #include "vast/test/fixtures/events.hpp"
 
 #include "vast/concept/parseable/to.hpp"
-#include "vast/event.hpp"
+#include "vast/concept/parseable/vast/json.hpp"
+#include "vast/concept/parseable/vast/time.hpp"
+#include "vast/default_table_slice_builder.hpp"
 
 using namespace vast;
 using namespace std::string_literals;
 
 namespace {
 
-auto http = record_type{{"ts", vast::timestamp_type{}},
-                        {"uid", vast::string_type{}},
-                        {"id.orig_h", vast::address_type{}},
-                        {"id.orig_p", vast::port_type{}},
-                        {"id.resp_h", vast::address_type{}},
-                        {"id.resp_p", vast::port_type{}},
-                        {"trans_depth", vast::count_type{}},
-                        {"method", vast::string_type{}},
-                        {"host", vast::string_type{}},
-                        {"uri", vast::string_type{}},
-                        {"version", vast::string_type{}},
-                        {"user_agent", vast::string_type{}},
-                        {"request_body_len", vast::count_type{}},
-                        {"response_body_len", vast::count_type{}},
-                        {"status_code", vast::count_type{}},
-                        {"status_msg", vast::string_type{}},
-                        {"tags", vast::vector_type{vast::string_type{}}},
-                        {"resp_fuids", vast::vector_type{vast::string_type{}}}}
+auto http = record_type{{"ts", timestamp_type{}},
+                        {"uid", string_type{}},
+                        {"id.orig_h", address_type{}},
+                        {"id.orig_p", port_type{}},
+                        {"id.resp_h", address_type{}},
+                        {"id.resp_p", port_type{}},
+                        {"trans_depth", count_type{}},
+                        {"method", string_type{}},
+                        {"host", string_type{}},
+                        {"uri", string_type{}},
+                        {"version", string_type{}},
+                        {"user_agent", string_type{}},
+                        {"request_body_len", count_type{}},
+                        {"response_body_len", count_type{}},
+                        {"status_code", count_type{}},
+                        {"status_msg", string_type{}},
+                        {"tags", vector_type{string_type{}}},
+                        {"resp_fuids", vector_type{string_type{}}},
+                        {"resp_mime_types", vector_type{string_type{}}}}
               .name("http");
 
 std::string_view http_log
@@ -61,12 +64,66 @@ std::string_view http_log
 
 } // namespace
 
+FIXTURE_SCOPE(zeek_reader_tests, fixtures::deterministic_actor_system)
+
+TEST(json to data) {
+  auto layout = record_type{{"b", boolean_type{}},
+                            {"c", count_type{}},
+                            {"r", real_type{}},
+                            {"i", integer_type{}},
+                            {"s", string_type{}},
+                            {"a", address_type{}},
+                            {"p", port_type{}},
+                            {"sn", subnet_type{}},
+                            {"t", timestamp_type{}},
+                            {"d", timespan_type{}},
+                            {"e", enumeration_type{{"FOO", "BAR", "BAZ"}}},
+                            {"sc", set_type{count_type{}}},
+                            {"vp", vector_type{port_type{}}},
+                            {"vt", vector_type{timestamp_type{}}},
+                            {"rec", record_type{{"c", count_type{}},
+                                                {"s", string_type{}}}},
+                            {"msa", map_type{string_type{}, address_type{}}},
+                            {"mcs", map_type{count_type{}, string_type{}}}}
+                  .name("layout");
+  auto flat = flatten(layout);
+  auto builder = default_table_slice_builder{flat};
+  std::string_view str = R"json({
+    "b": true,
+    "c": 424242,
+    "r": 4.2,
+    "i": -1337,
+    "a": "147.32.84.165",
+    "p": "42/udp",
+    "sn": "192.168.0.1/24",
+    "t": "2011-08-12+14:59:11.994970",
+    "d": "42s",
+    "e": "BAZ",
+    "sc": [ 44, 42, 43 ],
+    "vp": [ 19, "5555/tcp", 0, "0/icmp" ],
+    "vt": [ 1556624773, "2019-04-30T11:46:13Z" ],
+    "rec": { "c": 421, "s":"test" },
+    "msa": { "foo": "1.2.3.4", "bar": "2001:db8::" },
+    "mcs": { "1": "FOO", "1024": "BAR!" }
+  })json";
+  auto jn = unbox(to<json>(str));
+  auto xs = caf::get<json::object>(jn);
+  format::json::add(builder, xs, flat);
+  auto ptr = builder.finish();
+  REQUIRE(ptr);
+  CHECK(ptr->at(0, 10) == enumeration{2});
+  auto reference = map{};
+  reference[1] = "FOO";
+  reference[1024] = "BAR!";
+  CHECK(ptr->at(0, 16) == reference);
+}
+
 TEST(json reader) {
   using reader_type = format::json::reader<format::json::default_selector>;
   reader_type reader{defaults::system::table_slice_type,
                      std::make_unique<std::istringstream>(
                        std::string{http_log})};
-  vast::schema s;
+  schema s;
   REQUIRE(s.add(http));
   reader.schema(s);
   std::vector<table_slice_ptr> slices;
@@ -76,4 +133,9 @@ TEST(json reader) {
   auto [err, num] = reader.read(9, 5, add_slice);
   CHECK_EQUAL(err, caf::none);
   CHECK_EQUAL(num, 9);
+  CHECK(slices[1]->at(0, 0)
+        == data{unbox(to<timestamp>("2011-08-12T14:59:11.994970Z"))});
+  CHECK(slices[1]->at(0, 18) == vector{data{"text/html"}});
 }
+
+FIXTURE_SCOPE_END()

@@ -13,22 +13,17 @@
 
 #pragma once
 
-#include "vast/concept/parseable/vast/address.hpp"
 #include "vast/concept/parseable/vast/json.hpp"
-#include "vast/concept/parseable/vast/time.hpp"
-#include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/json.hpp"
 #include "vast/detail/line_range.hpp"
-#include "vast/detail/overload.hpp"
 #include "vast/error.hpp"
 #include "vast/event.hpp"
 #include "vast/expected.hpp"
 #include "vast/format/multi_layout_reader.hpp"
 #include "vast/format/printer_writer.hpp"
+#include "vast/fwd.hpp"
 #include "vast/json.hpp"
 #include "vast/schema.hpp"
-#include "vast/table_slice_builder.hpp"
-#include "vast/view.hpp"
 
 namespace vast::format::json {
 
@@ -53,98 +48,8 @@ public:
   }
 };
 
-namespace {
-
-template <class F>
-struct convert {
-  using json = vast::json;
-
-  convert(F&& f) : f_{std::forward<F>(f)} {
-  }
-
-  bool operator()(json::number n, const count_type&) const {
-    return f_(count(n));
-  }
-
-  bool operator()(json::number s, const timespan_type&) const {
-    auto secs = std::chrono::duration<json::number>(s);
-    auto since_epoch = std::chrono::duration_cast<timespan>(secs);
-    return f_(timestamp{since_epoch});
-  }
-
-  bool operator()(json::number s, const timestamp_type&) const {
-    std::chrono::seconds tmp{size_t(s)};
-    return f_(timestamp{tmp});
-  }
-
-  bool operator()(const json::string& s, const timestamp_type&) const {
-    timestamp t;
-    if (!parsers::timestamp(s, t))
-      return false;
-    return f_(t);
-  }
-
-  bool operator()(json::boolean b, const boolean_type&) const {
-    return f_(b);
-  }
-
-  bool operator()(json::number n, const port_type&) const {
-    return f_(port(n));
-  }
-
-  bool operator()(const json::string& s, const address_type&) const {
-    address a;
-    if (!parsers::addr(s, a))
-      return false;
-    return f_(std::move(a));
-  }
-
-  bool operator()(const json::array& a, const vector_type& v) const {
-    vector xs;
-    auto push_back = [&](auto value) {
-      xs.push_back(std::move(value));
-      return true;
-    };
-    auto c = convert<decltype(push_back)>{std::move(push_back)};
-    xs.reserve(a.size());
-    for (auto x : a)
-      c(x, v.value_type);
-    return f_(std::move(xs));
-  }
-
-  bool operator()(json::string s, const string_type&) const {
-    return f_(std::move(s));
-  }
-
-  template <class T, class U>
-  bool operator()(T, U) const {
-    VAST_ASSERT(!"this line should never be reached");
-    return false;
-  };
-
-  F f_;
-};
-
-inline caf::error append(table_slice_builder& builder,
-                         const vast::json::object& xs,
-                         const record_type& layout) {
-  for (auto& field : layout.fields) {
-    auto i = xs.find(field.name);
-    // Inexisting fields are treated as empty (unset).
-    if (i == xs.end()) {
-      builder.add(make_data_view(caf::none));
-      continue;
-    }
-    auto v = i->second;
-    auto f = convert{[&](auto x) { return builder.add(make_data_view(x)); }};
-    auto res = caf::visit(f, v, field.type);
-    if (!res)
-      return make_error(ec::convert_error, field.name, ":", to_string(v));
-  }
-  return caf::none;
-}
-
-} // namespace
+caf::error add(table_slice_builder& builder, const vast::json::object& xs,
+               const record_type& layout);
 
 struct default_selector {
   caf::optional<record_type> operator()(const vast::json::object&) {
@@ -256,14 +161,14 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
       return make_error(ec::parse_error, "unable to parse json");
     auto xs = caf::get_if<vast::json::object>(&j);
     if (!xs)
-      return make_error(ec::parse_error, "not a json object");
+      return make_error(ec::type_clash, "not a json object");
     auto layout = selector_(*xs);
     if (!layout)
       return make_error(ec::parse_error, "unable to get a layout");
     auto bptr = builder(*layout);
     if (bptr == nullptr)
       return make_error(ec::parse_error, "unable to get a builder");
-    if (auto err = append(*bptr, *xs, *layout)) {
+    if (auto err = add(*bptr, *xs, *layout)) {
       err.context() += caf::make_message("line", lines_->line_number());
       return finish(cons, err);
     }
