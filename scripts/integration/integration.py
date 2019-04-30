@@ -4,10 +4,12 @@
 """
 
 import argparse
+import coloredlogs
 import difflib
 import filecmp
 import gzip
 import itertools
+import logging
 import os
 import shlex
 import shutil
@@ -26,6 +28,7 @@ import packages.wait as wait
 import schema
 import yaml
 
+LOGGER = logging.getLogger('VAST')
 VAST_PORT = 42024
 STEP_TIMEOUT = 30
 CURRENT_SUBPROCS: List[subprocess.Popen] = []
@@ -52,13 +55,13 @@ def signal_subprocs(signum):
     """send signal recieved to subprocesses"""
     for proc in reversed(CURRENT_SUBPROCS):
         if proc.poll() is None:
-            print(f'Sending signal {signum} to {proc.args}')
+            LOGGER.debug(f'Sending signal {signum} to {proc.args}')
             proc.send_signal(signum)
 
 
 def handle_exit_signal(signum, _frame):
     """send signal recieved to subprocesses and exit"""
-    print(f'Got signal {signum}, shutting down')
+    LOGGER.info(f'got signal {signum}, shutting down')
     signal_subprocs(signum)
     sys.exit(1)
 
@@ -163,12 +166,11 @@ def run_step(basecmd, step_id, step, work_dir, baseline_dir, update_baseline):
         """Wait for a specified time or terminate the process"""
         try:
             if process.wait(timeout) is not 0:
-                print(f'Error: {process.args} returned '
-                      f'with value {process.returncode}')
+                LOGGER.error(f'{process.args} returned {process.returncode}')
                 return Result.ERROR
             return Result.SUCCESS
         except subprocess.TimeoutExpired:
-            print("Timeout reached")
+            LOGGER.error(f'timeout reached, terminating process')
             process.terminate()
             return Result.ERROR
     try:
@@ -201,7 +203,7 @@ def run_step(basecmd, step_id, step, work_dir, baseline_dir, update_baseline):
         reference = baseline_dir / f'{step_id}.ref'
         out.seek(0)
         if update_baseline:
-            print('Updating baseline')
+            LOGGER.info('updating baseline')
             if not baseline_dir.exists():
                 baseline_dir.mkdir(parents=True)
             with open(reference, 'w') as ref:
@@ -209,16 +211,17 @@ def run_step(basecmd, step_id, step, work_dir, baseline_dir, update_baseline):
                     ref.write(line)
             return Result.SUCCESS
         if not reference.exists():
-            print('No baseline found')
+            LOGGER.error('no baseline found')
             return Result.FAILURE
-        print('Comparing to baseline')
+        LOGGER.info('comparing test output to baseline')
         if check_output(reference, out):
-            print('OK')
+            LOGGER.info('baseline comparison succeeded')
             return Result.SUCCESS
-        print('FAILURE')
+            LOGGER.info('baseline comparison failed')
+        # TODO: print diff of failure
         return Result.FAILURE
     except subprocess.CalledProcessError as err:
-        print('Error: ', err, file=sys.stderr)
+        LOGGER.error(err)
         return Result.ERROR
 
 
@@ -237,7 +240,7 @@ class Server:
         self.name = name
         self.cwd = work_dir / self.name
         self.port = port
-        print(f"Waiting for port {self.port} to be available")
+        LOGGER.info(f'waiting for port {self.port} to be available')
         if not wait.tcp.closed(self.port, timeout=5):
             raise RuntimeError(
                 'Port is blocked by another process.\nAborting tests...')
@@ -250,14 +253,14 @@ class Server:
             stdout=out,
             stderr=err,
             **kwargs)
-        print(f"Waiting for server to listen on port {self.port}")
+        LOGGER.info(f'waiting for server to listen on port {self.port}')
         if not wait.tcp.open(self.port, timeout=5):
             raise RuntimeError(
                 'Server could not aquire port.\nAborting tests')
 
     def stop(self):
         """Stops the server"""
-        print('Stopping server')
+        LOGGER.info('stopping server')
         stop_out = open(self.cwd / 'stop.out', 'w')
         stop_err = open(self.cwd / 'stop.err', 'w')
         stop = 0
@@ -296,22 +299,22 @@ class Tester:
     def check_skip(self, test):
         """Checks if a test should run if a condition is defined"""
         if test.condition:
-            print('checking if test should be skipped: ', end='')
             check = spawn(self.app + ' ' + test.condition, shell=True)
             ret = check.wait(STEP_TIMEOUT)
-            print(("No", "Yes")[ret])
             return ret
         return False
 
     def run(self, test_name, test):
         """Runs a single test"""
+        LOGGER.debug(f'running test: {test_name}')
         normalized_test_name = test_name.replace(' ', '-').lower()
         baseline_dir = self.args.set.parent / 'reference' / normalized_test_name
         work_dir = self.test_dir / normalized_test_name
         if work_dir.exists():
+            LOGGER.debug(f'removing existing work directory {work_dir}')
             shutil.rmtree(work_dir)
         work_dir.mkdir(parents=True)
-        test_summary = TestSummary(len(test.steps))
+        summary = TestSummary(len(test.steps))
         step_i = 0
 
         dummy_fixture = Fixture('pass', 'pass')
@@ -328,20 +331,25 @@ class Tester:
             run_flamegraph(self.args, svg_file)
 
         for step in test.steps:
+            LOGGER.info(f'running step {step.command}')
             step_id = 'step_{:02d}'.format(step_i)
             result = run_step(cmd, step_id, step, work_dir, baseline_dir,
                               self.update)
-            test_summary.count(result)
+            summary.count(result)
             if result is Result.ERROR:
                 break
             step_i += 1
         exec(fexit)
 
-        if not self.args.keep and test_summary.successful():
-            # Clean up after successful run
+        if not self.args.keep and summary.successful():
+            LOGGER.debug(f'removing working directory {work_dir}')
             shutil.rmtree(work_dir)
-        print(test_summary)
-        return test_summary.successful()
+        if summary.successful():
+            LOGGER.info(f'ran all {summary.step_count} steps successfully')
+        else:
+            LOGGER.error(f'ran {summary.succeeded}/{summary.step_count} '
+                         'steps successfully')
+        return summary.successful()
 
 
 def validate(data, set_dir):
@@ -421,11 +429,11 @@ def run(args, test_dec):
         with Tester(args, test_dec['fixtures']) as tester:
             result = True
             for name, definition in tests.items():
-                print('')
-                print(f'Test: {name}')
                 # Skip the test if the condition is not fulfilled
                 if tester.check_skip(definition):
+                    LOGGER.debug(f'skipping test {name}')
                     continue
+                LOGGER.info(f'executing test: {name}')
                 if not tester.run(name, definition):
                     result = False
             return result
@@ -439,9 +447,10 @@ def main():
     parser = argparse.ArgumentParser(
         description='Test runner',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    # TODO: add leveled logging (--verbose n)
     parser.add_argument(
-        '--app', default='./core', help='Path to the executable (vast/core)')
+        '--app',
+        default='./core',
+        help='Path to the executable (vast/core)')
     parser.add_argument(
         '-s',
         '--set',
@@ -471,7 +480,10 @@ def main():
         action='store_true',
         help='Keep artifacts of successful runs')
     parser.add_argument(
-        '--timeout', type=int, default=0, help='Test timeout in seconds')
+        '--timeout',
+        type=int,
+        default=0,
+        help='Test timeout in seconds')
     parser.add_argument(
         '-l',
         '--list',
@@ -491,11 +503,36 @@ def main():
         default='scripts/flamegraph',
         type=Path,
         help='Path to flamegraph script')
+    parser.add_argument(
+        '-v',
+        '--verbosity',
+        default='DEBUG',
+        help='Set the logging verbosity')
 
     args = parser.parse_args()
+
+    # Setup logging.
+    LOGGER.setLevel(logging.DEBUG)
+    fmt = "%(asctime)s %(levelname)-8s [%(name)s] %(message)s"
+    colored_formatter = coloredlogs.ColoredFormatter(fmt)
+    plain_formatter = logging.Formatter(fmt)
+    formatter = colored_formatter if sys.stdout.isatty() else plain_formatter
+    ch = logging.StreamHandler()
+    ch.setLevel(args.verbosity)
+    ch.setFormatter(formatter)
+    LOGGER.addHandler(ch)
+    class ShutdownHandler(logging.Handler):
+        def emit(self, record):
+            logging.shutdown()
+            sys.exit(1)
+    sh = ShutdownHandler(level=50)
+    sh.setFormatter(formatter)
+    LOGGER.addHandler(sh)
+
     if not args.set:
         args.set = Path(__file__).resolve().parent / 'default_set.yaml'
     args.set = args.set.resolve()
+    LOGGER.debug(f'resolved test set path to {args.set}')
 
     test_file = open(args.set, 'r')
     test_dict = yaml.load(test_file)
@@ -517,6 +554,7 @@ def main():
     if args.directory.name == 'run_<current_ISO_timestamp>':
         timestamp = datetime.now().isoformat(timespec='seconds')
         args.directory = Path(f'run_{timestamp}')
+    LOGGER.debug(f'keeping state in {args.directory}')
 
     if not args.directory.exists():
         args.directory.mkdir(parents=True)
