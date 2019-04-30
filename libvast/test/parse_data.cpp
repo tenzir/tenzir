@@ -40,8 +40,11 @@ TEST(data) {
   MESSAGE("int");
   CHECK_EQUAL(to_data("+42"), data{42});
   CHECK_EQUAL(to_data("-42"), data{-42});
+  CHECK_EQUAL(to_data("-42k"), data{-42'000});
   MESSAGE("count");
   CHECK_EQUAL(to_data("42"), data{42u});
+  CHECK_EQUAL(to_data("42M"), data{42'000'000u});
+  CHECK_EQUAL(to_data("42Ki"), data{42 * 1024u});
   MESSAGE("real");
   CHECK_EQUAL(to_data("4.2"), data{4.2});
   CHECK_EQUAL(to_data("-0.1"), data{-0.1});

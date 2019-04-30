@@ -24,6 +24,7 @@
 #include "vast/concept/parseable/vast/address.hpp"
 #include "vast/concept/parseable/vast/pattern.hpp"
 #include "vast/concept/parseable/vast/port.hpp"
+#include "vast/concept/parseable/vast/si.hpp"
 #include "vast/concept/parseable/vast/subnet.hpp"
 #include "vast/concept/parseable/vast/time.hpp"
 
@@ -53,8 +54,8 @@ private:
       | parsers::port
       | parsers::addr
       | parsers::real
-      | parsers::u64
-      | parsers::i64
+      | parsers::count
+      | parsers::integer
       | parsers::tf
       | parsers::qq_str
       | parsers::pattern
