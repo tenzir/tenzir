@@ -10,6 +10,11 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## [Unreleased]
 
+- 🎁 The `import` command learned the `json` format. Since json is a
+  very generic data format, it can only be used in conjunction with
+  a user supplied schema, via either of the `--schema` or `--schema-file`
+  options.
+
 - 🐞 The CSV printer of the `export` command used to insert 2 superfluous
   fields when formatting an event: The internal event ID and a deprecated
   internal timestamp value. Both fields have been removed from the output,
