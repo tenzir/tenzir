@@ -29,10 +29,16 @@
 
 namespace vast {
 
-template <>
-struct access::parser<data> : vast::parser<access::parser<data>> {
+struct data_parser : parser<data_parser> {
   using attribute = data;
 
+  template <class Iterator, class Attribute>
+  bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
+    auto p = make<Iterator>();
+    return p(f, l, a);
+  }
+
+private:
   template <class Iterator>
   static auto make() {
     using namespace parser_literals;
@@ -58,22 +64,16 @@ struct access::parser<data> : vast::parser<access::parser<data>> {
       ;
     return p;
   }
-
-  template <class Iterator, class Attribute>
-  bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
-    static auto p = make<Iterator>();
-    return p(f, l, a);
-  }
 };
 
 template <>
 struct parser_registry<data> {
-  using type = access::parser<data>;
+  using type = data_parser;
 };
 
 namespace parsers {
 
-static auto const data = make_parser<vast::data>();
+static auto const data = data_parser{};
 
 } // namespace parsers
 } // namespace vast
