@@ -52,13 +52,13 @@ def signal_subprocs(signum):
     """send signal recieved to subprocesses"""
     for proc in reversed(CURRENT_SUBPROCS):
         if proc.poll() is None:
-            print('Sending signal {} to {}'.format(signum, proc.args))
+            print(f'Sending signal {signum} to {proc.args}')
             proc.send_signal(signum)
 
 
 def handle_exit_signal(signum, _frame):
     """send signal recieved to subprocesses and exit"""
-    print('Got signal {}, shutting down'.format(signum))
+    print(f'Got signal {signum}, shutting down')
     signal_subprocs(signum)
     sys.exit(1)
 
@@ -117,8 +117,7 @@ class TestSummary:
         self.errors = 0
 
     def __repr__(self):
-        return '({}/{}/{})'.format(self.step_count, self.succeeded,
-                                   self.failed)
+        return f'({self.step_count}/{self.succeeded}/{self.failed})'
 
     def count(self, result):
         """Count step result"""
@@ -164,8 +163,8 @@ def run_step(basecmd, step_id, step, work_dir, baseline_dir, update_baseline):
         """Wait for a specified time or terminate the process"""
         try:
             if process.wait(timeout) is not 0:
-                print('Error: {} returned with value {}'.format(
-                    process.args, process.returncode))
+                print(f'Error: {process.args} returned '
+                      f'with value {process.returncode}')
                 return Result.ERROR
             return Result.SUCCESS
         except subprocess.TimeoutExpired:
@@ -173,8 +172,8 @@ def run_step(basecmd, step_id, step, work_dir, baseline_dir, update_baseline):
             process.terminate()
             return Result.ERROR
     try:
-        out = open(work_dir / '{}.out'.format(step_id), 'w+')
-        err = open(work_dir / '{}.err'.format(step_id), 'w')
+        out = open(work_dir / f'{step_id}.out', 'w+')
+        err = open(work_dir / f'{step_id}.err', 'w')
         cmd = basecmd + step.command
         info_string = ' '.join(map(str, cmd))
         client = spawn(
@@ -199,7 +198,7 @@ def run_step(basecmd, step_id, step, work_dir, baseline_dir, update_baseline):
         result = try_wait(client, timeout=STEP_TIMEOUT - (now() - start_time))
         if result is Result.ERROR:
             return result
-        reference = baseline_dir / '{}.ref'.format(step_id)
+        reference = baseline_dir / f'{step_id}.ref'
         out.seek(0)
         if update_baseline:
             print('Updating baseline')
@@ -238,7 +237,7 @@ class Server:
         self.name = name
         self.cwd = work_dir / self.name
         self.port = port
-        print("Waiting for port {} to be available".format(self.port))
+        print(f"Waiting for port {self.port} to be available")
         if not wait.tcp.closed(self.port, timeout=5):
             raise RuntimeError(
                 'Port is blocked by another process.\nAborting tests...')
@@ -251,7 +250,7 @@ class Server:
             stdout=out,
             stderr=err,
             **kwargs)
-        print("Waiting for server to listen on port {}".format(self.port))
+        print(f"Waiting for server to listen on port {self.port}")
         if not wait.tcp.open(self.port, timeout=5):
             raise RuntimeError(
                 'Server could not aquire port.\nAborting tests')
@@ -263,7 +262,7 @@ class Server:
         stop_err = open(self.cwd / 'stop.err', 'w')
         stop = 0
         try:
-            stop = spawn([self.app, '-e', ':{}'.format(self.port), 'stop'],
+            stop = spawn([self.app, '-e', f':{self.port}', 'stop'],
                          cwd=self.cwd,
                          stdout=stop_out,
                          stderr=stop_err).wait(STEP_TIMEOUT)
@@ -325,7 +324,7 @@ class Tester:
 
         exec(fenter)
         if self.args.flamegraph:
-            svg_file = work_dir / '{}.svg'.format(normalized_test_name)
+            svg_file = work_dir / f'{normalized_test_name}.svg'
             run_flamegraph(self.args, svg_file)
 
         for step in test.steps:
@@ -423,7 +422,7 @@ def run(args, test_dec):
             result = True
             for name, definition in tests.items():
                 print('')
-                print('Test: {}'.format(name))
+                print(f'Test: {name}')
                 # Skip the test if the condition is not fulfilled
                 if tester.check_skip(definition):
                     continue
@@ -516,8 +515,8 @@ def main():
         return
 
     if args.directory.name == 'run_<current_ISO_timestamp>':
-        args.directory = Path('run_{}'.format(
-            datetime.now().isoformat(timespec='seconds')))
+        timestamp = datetime.now().isoformat(timespec='seconds')
+        args.directory = Path(f'run_{timestamp}')
 
     if not args.directory.exists():
         args.directory.mkdir(parents=True)
