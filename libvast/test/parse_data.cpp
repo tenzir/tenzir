@@ -62,4 +62,5 @@ TEST(data) {
   MESSAGE("map");
   CHECK_EQUAL(to_data("{-}"), map{});
   CHECK_EQUAL(to_data("{+1->T,+2->F}"), (map{{1, true}, {2, false}}));
+  CHECK_EQUAL(to_data("{-1 -> T, -2 -> F}"), (map{{-1, true}, {-2, false}}));
 }

@@ -46,6 +46,7 @@ private:
     auto ws = ignore(*parsers::space);
     auto x = ws >> p >> ws;
     auto kvp = x >> "->" >> x;
+    // clang-format off
     p = parsers::timespan
       | parsers::timestamp
       | parsers::net
@@ -58,10 +59,11 @@ private:
       | parsers::qq_str
       | parsers::pattern
       | '[' >> ~(x % ',') >> ']'
-      | '{' >> ('-' | as<map>(kvp % ',')) >> '}'
+      | '{' >> (('-' >> &'}'_p) | as<map>(kvp % ',')) >> '}'
       | '{' >> ~as<set>(x % ',') >> '}'
       | as<caf::none_t>("nil"_p)
       ;
+    // clang-format on
     return p;
   }
 };
