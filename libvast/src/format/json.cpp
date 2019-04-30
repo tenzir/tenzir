@@ -57,19 +57,19 @@ struct convert {
     return port{detail::narrow_cast<port::number_type>(n)};
   }
 
-  expected<data> operator()(json::number s, const timespan_type&) const {
+  expected<data> operator()(json::number s, const timestamp_type&) const {
     auto secs = std::chrono::duration<json::number>(s);
     auto since_epoch = std::chrono::duration_cast<timespan>(secs);
     return timestamp{since_epoch};
   }
 
-  expected<data> operator()(json::string s, const string_type&) const {
-    return s;
+  expected<data> operator()(json::number s, const timespan_type&) const {
+    auto secs = std::chrono::duration<json::number>(s);
+    return std::chrono::duration_cast<timespan>(secs);
   }
 
-  expected<data> operator()(json::number s, const timestamp_type&) const {
-    std::chrono::seconds tmp{size_t(s)};
-    return timestamp{tmp};
+  expected<data> operator()(json::string s, const string_type&) const {
+    return s;
   }
 
   template <class T,
@@ -84,56 +84,11 @@ struct convert {
     return x;
   }
 
-  // expected<data> operator()(const json::string& s, const timespan_type&)
-  // const {
-  //  timespan t;
-  //  if (!parsers::timespan(s, t))
-  //    return make_error(ec::parse_error, "unable to parse timespan:", s);
-  //  ;
-  //  return t;
-  //}
-
-  // expected<data> operator()(const json::string& s,
-  //                          const timestamp_type&) const {
-  //  timestamp t;
-  //  if (!parsers::timestamp(s, t))
-  //    return make_error(ec::parse_error, "unable to parse timestamp:", s);
-  //  ;
-  //  return t;
-  //}
-
-  // expected<data> operator()(const json::string& s, const port_type&) const {
-  //  port p;
-  //  if (!parsers::port(s, p))
-  //    return make_error(ec::parse_error, "unable to parse port:", s);
-  //  ;
-  //  return p;
-  //}
-
-  // expected<data> operator()(const json::string& s, const subnet_type&) const
-  // {
-  //  subnet x;
-  //  if (!parsers::net(s, x))
-  //    return make_error(ec::parse_error, "unable to parse subnet:", s);
-  //  ;
-  //  return x;
-  //}
-
-  // expected<data> operator()(const json::string& s, const address_type&) const
-  // {
-  //  address a;
-  //  if (!parsers::addr(s, a))
-  //    return make_error(ec::parse_error, "unable to parse address:", s);
-  //  ;
-  //  return a;
-  //}
-
   expected<data> operator()(const json::string& s,
                             const enumeration_type& e) const {
     auto i = std::find(e.fields.begin(), e.fields.end(), s);
     if (i == e.fields.end())
       return make_error(ec::parse_error, "invalid:", s);
-    ;
     return std::distance(e.fields.begin(), i);
   }
 
@@ -179,7 +134,7 @@ struct convert {
                     caf::detail::pretty_type_name(typeid(U)));
     VAST_ASSERT(!"this line should never be reached");
     return false;
-  };
+  }
 };
 
 } // namespace
