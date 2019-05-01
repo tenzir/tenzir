@@ -113,6 +113,13 @@ tests:
       - command: import -b -n 20 zeek
         input: data/zeek/conn.log.gz
       - command: export ascii '#type == "zeek.conn"'
+  Node json zeek conn:
+    tags: [node, import-export, zeek, json]
+    steps:
+      - command: import -N -b json -s @./schema/zeek-conn.schema
+        input: data/json/conn.log.json.gz
+      - command: export -N ascii 'duration > 6s'
+      - command: export -N ascii '#time >= 2011-08-15T03:48'
 
   Manual 1:
     condition: 'import -h 2>&1 | grep -q pcap'

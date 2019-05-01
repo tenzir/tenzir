@@ -175,6 +175,8 @@ def run_step(basecmd, step_id, step, work_dir, baseline_dir, update_baseline):
     try:
         out = open(work_dir / '{}.out'.format(step_id), 'w+')
         err = open(work_dir / '{}.err'.format(step_id), 'w')
+        cmd = basecmd + step.command
+        info_string = ' '.join(map(str, cmd))
         client = spawn(
             basecmd + step.command,
             stdin=subprocess.PIPE,
@@ -188,10 +190,12 @@ def run_step(basecmd, step_id, step, work_dir, baseline_dir, update_baseline):
                 incmd += ['gunzip', '-c', str(step.input)]
             else:
                 incmd += ['cat', str(step.input)]
+            info_string = ' '.join(incmd) + ' | ' + info_string
             input_p = spawn(incmd, stdout=client.stdin)
             result = try_wait(
                 input_p, timeout=STEP_TIMEOUT - (now() - start_time))
             client.stdin.close()
+        print('Running {}: `{}`'.format(step_id, info_string));
         result = try_wait(client, timeout=STEP_TIMEOUT - (now() - start_time))
         if result is Result.ERROR:
             return result
@@ -325,7 +329,6 @@ class Tester:
             run_flamegraph(self.args, svg_file)
 
         for step in test.steps:
-            print('Running step {}'.format(step.command))
             step_id = 'step_{:02d}'.format(step_i)
             result = run_step(cmd, step_id, step, work_dir, baseline_dir,
                               self.update)
@@ -361,6 +364,9 @@ def validate(data, set_dir):
             absolute = (set_dir / path).resolve()
         return absolute
 
+    def to_command(raw_command):
+        return shlex.split(raw_command.replace('@.', str(set_dir)))
+
     fixture = schema.Schema(
         schema.And({
             'enter': schema.And(str, len),
@@ -373,7 +379,7 @@ def validate(data, set_dir):
         schema.And({
             'command':
             schema.And(
-                schema.Const(schema.And(str, len)), schema.Use(shlex.split)),
+                schema.Const(schema.And(str, len)), schema.Use(to_command)),
             schema.Optional('input', default=None):
             schema.And(schema.Use(absolute_path), is_file)
         }, schema.Use(to_step)))
@@ -434,7 +440,7 @@ def main():
     parser = argparse.ArgumentParser(
         description='Test runner',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    # TODO: add verbose mode to print pasteable commands
+    # TODO: add leveled logging (--verbose n)
     parser.add_argument(
         '--app', default='./core', help='Path to the executable (vast/core)')
     parser.add_argument(

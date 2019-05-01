@@ -252,6 +252,10 @@ Available *component* values with corresponding *parameters*:
 
 *source* *mrt*
 
+*source* *json*
+  The json format does naturally not specify a default schema, thus the user
+  must supply a schema with this source.
+
 *source* *test* [*parameters*]
   `-e` *events*
     The maximum number of *events* to generate.
@@ -433,14 +437,14 @@ generates a new header.
 
 ### JSON
 
-- **Type**: writer
+- **Type**: reader, writer
 - **Representation**: ASCII
 - **Dependencies**: none
 
 The JSON format writes events as in
 [JSON Streaming](https://en.wikipedia.org/wiki/JSON_streaming) style. In
-particular, VAST uses line-delimited JSON (LDJSON) to render one event per
-line.
+particular, VAST uses line-delimited JSON (LDJSON) to read or render one event
+per line.
 
 ### MRT
 

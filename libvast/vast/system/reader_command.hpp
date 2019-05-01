@@ -21,13 +21,16 @@
 #include <caf/io/middleman.hpp>
 
 #include "vast/command.hpp"
+#include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/endpoint.hpp"
+#include "vast/concept/parseable/vast/schema.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/make_io_stream.hpp"
 #include "vast/endpoint.hpp"
 #include "vast/error.hpp"
 #include "vast/format/reader.hpp"
 #include "vast/logger.hpp"
+#include "vast/schema.hpp"
 #include "vast/system/datagram_source.hpp"
 #include "vast/system/source.hpp"
 #include "vast/system/source_command.hpp"
@@ -35,6 +38,19 @@
 #include "vast/table_slice_builder_factory.hpp"
 
 namespace vast::system {
+
+namespace {
+
+caf::expected<schema> load_schema_file(std::string& path) {
+  if (path.empty())
+    return make_error(ec::filesystem_error, "");
+  auto str = load_contents(path);
+  if (!str)
+    return str.error();
+  return to<schema>(*str);
+}
+
+} // namespace
 
 /// Default implementation for import sub-commands. Compatible with Bro and MRT
 /// formats.
@@ -46,9 +62,17 @@ caf::message reader_command(const command& cmd, caf::actor_system& sys,
                             command::argument_iterator last) {
   VAST_TRACE(VAST_ARG(options), VAST_ARG("args", first, last));
   std::string category = Defaults::category;
+  auto max_events = caf::get_if<size_t>(&options, "import.max-events");
+  auto slice_type = defaults::import::table_slice_type(sys, options);
+  auto factory = vast::factory<vast::table_slice_builder>::get(slice_type);
+  if (factory == nullptr)
+    return caf::make_message(
+      make_error(vast::ec::unspecified, "unknown table_slice_builder factory"));
+  auto slice_size = get_or(options, "system.table-slice-size",
+                           defaults::system::table_slice_size);
+  // Discern the input source (file, stream, or socket).
   auto uri = caf::get_if<std::string>(&options, category + ".listen");
   auto file = caf::get_if<std::string>(&options, category + ".read");
-  auto max_events = caf::get_if<size_t>(&options, "import.max-events");
   if (uri && file)
     return caf::make_message(make_error(ec::invalid_configuration,
                                         "only one source possible (-r or -l)"));
@@ -59,13 +83,23 @@ caf::message reader_command(const command& cmd, caf::actor_system& sys,
     else
       file = std::string{Reader::defaults::path};
   }
-  auto slice_type = defaults::import::table_slice_type(sys, options);
-  auto factory = vast::factory<vast::table_slice_builder>::get(slice_type);
-  if (factory == nullptr)
-    return caf::make_message(
-      make_error(vast::ec::unspecified, "unknown table_slice_builder factory"));
-  auto slice_size = get_or(options, "system.table-slice-size",
-                           defaults::system::table_slice_size);
+  // Supply an alternate schema, if requested.
+  expected<vast::schema> schema{caf::none};
+  {
+    auto sc = caf::get_if<std::string>(&options, category + ".schema");
+    auto sf = caf::get_if<std::string>(&options, category + ".schema-file");
+    if (sc && sf)
+      return make_message(
+        make_error(ec::invalid_configuration,
+                   "had both schema and schema-file provided"));
+    if (sc)
+      schema = to<vast::schema>(*sc);
+    if (sf)
+      schema = load_schema_file(*sf);
+    if (!schema && schema.error() != caf::none)
+      return make_message(std::move(schema.error()));
+  }
+  caf::actor src;
   if (uri) {
     endpoint ep;
     if (!vast::parsers::endpoint(*uri, ep))
@@ -85,10 +119,9 @@ caf::message reader_command(const command& cmd, caf::actor_system& sys,
     Reader reader{slice_type};
     auto run = [&](auto&& source) {
       auto& mm = sys.middleman();
-      auto src = mm.spawn_broker(std::forward<decltype(source)>(source),
-                                 ep.port.number(), std::move(reader), factory,
-                                 slice_size, max_events);
-      return source_command(cmd, sys, std::move(src), options, first, last);
+      return mm.spawn_broker(std::forward<decltype(source)>(source),
+                             ep.port.number(), std::move(reader), factory,
+                             slice_size, max_events);
     };
     VAST_INFO(reader, "listens for data on", ep.host, ", port", ep.port);
     switch (ep.port.type()) {
@@ -97,7 +130,7 @@ caf::message reader_command(const command& cmd, caf::actor_system& sys,
           make_error(vast::ec::unimplemented,
                      "port type not supported:", ep.port.type()));
       case port::udp:
-        return run(datagram_source<Reader>);
+        src = run(datagram_source<Reader>);
     }
   } else {
     auto uds = get_or(options, category + ".uds", false);
@@ -106,10 +139,12 @@ caf::message reader_command(const command& cmd, caf::actor_system& sys,
       return caf::make_message(std::move(in.error()));
     Reader reader{slice_type, std::move(*in)};
     VAST_INFO(reader, "reads data from", *file);
-    auto src = sys.spawn(source<Reader>, std::move(reader), factory, slice_size,
-                         max_events);
-    return source_command(cmd, sys, std::move(src), options, first, last);
+    src = sys.spawn(source<Reader>, std::move(reader), factory, slice_size,
+                    max_events);
   }
+  if (schema)
+    caf::anon_send(src, put_atom::value, std::move(*schema));
+  return source_command(cmd, sys, std::move(src), options, first, last);
 }
 
 } // namespace vast::system

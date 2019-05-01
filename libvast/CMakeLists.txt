@@ -52,6 +52,7 @@ set(libvast_sources
   src/filesystem.cpp
   src/format/bgpdump.cpp
   src/format/csv.cpp
+  src/format/json.cpp
   src/format/mrt.cpp
   src/format/multi_layout_reader.cpp
   src/format/reader.cpp
@@ -232,6 +233,7 @@ set(tests
   test/expression_parseable.cpp
   test/factory.cpp
   test/filesystem.cpp
+  test/format/json.cpp
   test/format/mrt.cpp
   test/format/writer.cpp
   test/format/zeek.cpp
