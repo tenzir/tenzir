@@ -512,7 +512,7 @@ def main():
     args = parser.parse_args()
 
     # Setup logging.
-    LOGGER.setLevel(logging.DEBUG)
+    LOGGER.setLevel(args.verbosity)
     fmt = "%(asctime)s %(levelname)-8s [%(name)s] %(message)s"
     colored_formatter = coloredlogs.ColoredFormatter(fmt)
     plain_formatter = logging.Formatter(fmt)
