@@ -207,59 +207,6 @@ caf::expected<caf::actor> spawn_component(const command& cmd,
   return i->second(self, args);
 }
 
-caf::message spawn_command(const command& cmd, caf::actor_system& sys,
-                           caf::settings& options,
-                           command::argument_iterator first,
-                           command::argument_iterator last) {
-  VAST_TRACE(VAST_ARG(options), VAST_ARG("args", first, last));
-  VAST_UNUSED(sys);
-  using std::end;
-  using std::begin;
-  // Save some typing.
-  auto& st = this_node->state;
-  // We configured the command to have the name of the component.
-  // Note: caf::string_view is not convertible to string.
-  std::string comp_name{cmd.name.begin(), cmd.name.end()};
-  // Auto-generate label if none given.
-  std::string label;
-  if (auto label_ptr = caf::get_if<std::string>(&options, "label")) {
-    label = *label_ptr;
-  } else {
-    label = comp_name;
-    const char* multi_instance[] = {"importer", "exporter", "source", "sink"};
-    if (std::count(begin(multi_instance), end(multi_instance), label) != 0) {
-      // Create a new label and update our counter in the map.
-      auto n = ++this_node->state.labels[label];
-      label += '-';
-      label += std::to_string(n);
-      VAST_DEBUG(this_node, "auto-generated new label:", label);
-    }
-  }
-  // Spawn our new VAST component.
-  spawn_arguments args{cmd, st.dir, label, options, first, last};
-  caf::actor new_component;
-  if (auto spawn_res = spawn_component(cmd, args))
-    new_component = std::move(*spawn_res);
-  else {
-    VAST_DEBUG(__func__, "got an error from spawn_component:",
-               sys.render(spawn_res.error()));
-    return caf::make_message(std::move(spawn_res.error()));
-  }
-  // Register component at tracker.
-  auto rp = this_node->make_response_promise();
-  this_node->request(st.tracker, infinite, try_put_atom::value,
-                     std::move(comp_name), new_component,
-                     std::move(label)).then(
-    [=]() mutable {
-      rp.deliver(std::move(new_component));
-    },
-    [=](error& e) mutable {
-      rp.deliver(std::move(e));
-    }
-  );
-  return caf::none;
-}
-
 caf::message kill_command(const command&, caf::actor_system&, caf::settings&,
                           command::argument_iterator first,
                           command::argument_iterator last) {
@@ -327,35 +274,8 @@ auto make_factories() {
 
 #undef ADD
 
-} // namespace <anonymous>
-
-node_state::named_component_factories node_state::factories = make_factories();
-
-node_state::node_state(caf::event_based_actor* selfptr) : self(selfptr) {
-  // nop
-}
-
-node_state::~node_state() {
-  auto err = self->fail_state();
-  if (!err)
-    err = exit_reason::user_shutdown;
-  self->send_exit(tracker, err);
-}
-
-void node_state::init(std::string init_name, path init_dir) {
-  // Set member variables.
-  name = std::move(init_name);
-  dir = std::move(init_dir);
-  // Bring up the tracker.
-  tracker = self->spawn<monitored>(system::tracker, name);
-  self->set_down_handler(
-    [=](const down_msg& msg) {
-      VAST_IGNORE_UNUSED(msg);
-      VAST_DEBUG(self, "got DOWN from", msg.source);
-      self->quit(msg.reason);
-    }
-  );
-  self->system().registry().put(tracker_atom::value, tracker);
+auto make_command() {
+  command cmd;
   // Default options for commands.
   auto opts = [] { return command::opts(); };
   // Add top-level commands.
@@ -366,6 +286,7 @@ void node_state::init(std::string init_name, path init_dir) {
   cmd.add(send_command, "send", "sends atom to a registered actor", opts());
   cmd.add(peer_command, "peer", "peers with another node", opts());
   // Add spawn commands.
+  auto spawn_command = node_state::spawn_command;
   auto sp = cmd.add(nullptr, "spawn", "creates a new component", opts());
   sp->add(spawn_command, "accountant", "spawns the accountant", opts());
   sp->add(spawn_command, "archive", "creates a new archive",
@@ -434,6 +355,94 @@ void node_state::init(std::string init_name, path init_dir) {
   snk->add(spawn_command, "ascii", "creates a new ASCII sink", opts());
   snk->add(spawn_command, "csv", "creates a new CSV sink", opts());
   snk->add(spawn_command, "json", "creates a new JSON sink", opts());
+  return cmd;
+}
+
+} // namespace <anonymous>
+
+node_state::named_component_factories node_state::factories = make_factories();
+
+command node_state::cmd = make_command();
+
+caf::message node_state::spawn_command(const command& cmd,
+                                       caf::actor_system& sys,
+                                       caf::settings& options,
+                                       command::argument_iterator first,
+                                       command::argument_iterator last) {
+  VAST_TRACE(VAST_ARG(options), VAST_ARG("args", first, last));
+  VAST_UNUSED(sys);
+  using std::begin;
+  using std::end;
+  // Save some typing.
+  auto& st = this_node->state;
+  // We configured the command to have the name of the component.
+  // Note: caf::string_view is not convertible to string.
+  std::string comp_name{cmd.name.begin(), cmd.name.end()};
+  // Auto-generate label if none given.
+  std::string label;
+  if (auto label_ptr = caf::get_if<std::string>(&options, "label")) {
+    label = *label_ptr;
+  } else {
+    label = comp_name;
+    const char* multi_instance[] = {"importer", "exporter", "source", "sink"};
+    if (std::count(begin(multi_instance), end(multi_instance), label) != 0) {
+      // Create a new label and update our counter in the map.
+      auto n = ++this_node->state.labels[label];
+      label += '-';
+      label += std::to_string(n);
+      VAST_DEBUG(this_node, "auto-generated new label:", label);
+    }
+  }
+  // Spawn our new VAST component.
+  spawn_arguments args{cmd, st.dir, label, options, first, last};
+  caf::actor new_component;
+  if (auto spawn_res = spawn_component(cmd, args))
+    new_component = std::move(*spawn_res);
+  else {
+    VAST_DEBUG(__func__, "got an error from spawn_component:",
+               sys.render(spawn_res.error()));
+    return caf::make_message(std::move(spawn_res.error()));
+  }
+  // Register component at tracker.
+  auto rp = this_node->make_response_promise();
+  this_node->request(st.tracker, infinite, try_put_atom::value,
+                     std::move(comp_name), new_component,
+                     std::move(label)).then(
+    [=]() mutable {
+      rp.deliver(std::move(new_component));
+    },
+    [=](error& e) mutable {
+      rp.deliver(std::move(e));
+    }
+  );
+  return caf::none;
+}
+
+node_state::node_state(caf::event_based_actor* selfptr) : self(selfptr) {
+  // nop
+}
+
+node_state::~node_state() {
+  auto err = self->fail_state();
+  if (!err)
+    err = exit_reason::user_shutdown;
+  self->send_exit(tracker, err);
+}
+
+void node_state::init(std::string init_name, path init_dir) {
+  // Set member variables.
+  name = std::move(init_name);
+  dir = std::move(init_dir);
+  // Bring up the tracker.
+  tracker = self->spawn<monitored>(system::tracker, name);
+  self->set_down_handler(
+    [=](const down_msg& msg) {
+      VAST_IGNORE_UNUSED(msg);
+      VAST_DEBUG(self, "got DOWN from", msg.source);
+      self->quit(msg.reason);
+    }
+  );
+  self->system().registry().put(tracker_atom::value, tracker);
 }
 
 caf::behavior node(node_actor* self, std::string id, path dir) {

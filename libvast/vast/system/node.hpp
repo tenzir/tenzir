@@ -42,6 +42,13 @@ struct node_state {
   /// Maps command names to component factories.
   using named_component_factories = std::map<std::string, component_factory>;
 
+  // -- static member functions ------------------------------------------------
+
+  static caf::message spawn_command(const command& cmd, caf::actor_system& sys,
+                                    caf::settings& options,
+                                    command::argument_iterator first,
+                                    command::argument_iterator last);
+
   // -- constructors, destructors, and assignment operators --------------------
 
   node_state(caf::event_based_actor* selfptr);
@@ -64,11 +71,11 @@ struct node_state {
   /// Gives the actor a recognizable name in log files.
   std::string name = "node";
 
-  /// Dispatches remote commands.
-  command cmd;
-
   /// Points to the node itself.
   caf::event_based_actor* self;
+
+  /// Dispatches remote commands.
+  static command cmd;
 
   /// Maps command names (including parent command) to spawn functions.
   static named_component_factories factories;
