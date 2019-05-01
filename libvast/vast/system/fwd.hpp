@@ -50,14 +50,6 @@ struct node_state;
 struct query_status;
 struct spawn_arguments;
 
-// -- templates ----------------------------------------------------------------
-
-template <class Reader, class Defaults>
-class reader_command;
-
-template <class Writer>
-class writer_command;
-
 // -- aliases ------------------------------------------------------------------
 
 #ifndef VAST_MEASUREMENT_MUTEX_WORKAROUND
