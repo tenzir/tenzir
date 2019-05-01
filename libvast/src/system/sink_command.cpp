@@ -50,7 +50,7 @@ caf::message sink_command(const command& cmd, actor_system& sys, caf::actor snk,
     query.assign(std::istreambuf_iterator<char>{in},
                  std::istreambuf_iterator<char>{});
   };
-  if (auto fname = caf::get_if<std::string>(&options, "read")) {
+  if (auto fname = caf::get_if<std::string>(&options, "export.read")) {
     // Sanity check.
     if (first != last) {
       auto err = make_error(ec::parse_error, "got a query on the command line "
