@@ -35,7 +35,7 @@ struct event_printer : printer<event_printer> {
     vast::json j;
     if (!convert(e.data(), j, e.type()))
       return false;
-    return printers::json<policy::oneline>.print(out, j);
+    return printers::json<policy::oneline>(out, j);
   }
 };
 
@@ -48,9 +48,15 @@ public:
   }
 };
 
+/// Adds a JSON object to a table slice builder according to a given layout.
+/// @param builder The builder to add the JSON object to.
+/// @param xs The JSON object to add to *builder.
+/// @param layout The record type describing *xs*.
+/// @returns An error iff the operation failed.
 caf::error add(table_slice_builder& builder, const vast::json::object& xs,
                const record_type& layout);
 
+/// @relates reader
 struct default_selector {
   caf::optional<record_type> operator()(const vast::json::object&) {
     return layout;
@@ -79,13 +85,16 @@ struct default_selector {
   caf::optional<record_type> layout = caf::none;
 };
 
+/// A reader for JSON data. It operates with a *selector* to determine the
+/// mapping of JSON object to the appropriate record type in the schema.
 template <class Selector = default_selector>
 class reader final : public multi_layout_reader {
 public:
   using super = multi_layout_reader;
 
-  /// Constructs a json reader.
-  /// @param input The stream of logs to read.
+  /// Constructs a JSON reader.
+  /// @param table_slice_type The ID for table slice type to build.
+  /// @param in The stream of JSON objects.
   explicit reader(caf::atom_value table_slice_type,
                   std::unique_ptr<std::istream> in = nullptr);
 
@@ -106,14 +115,14 @@ protected:
 private:
   using iterator_type = std::string_view::const_iterator;
 
-  // void patch(std::vector<data>& xs);
-
   Selector selector_;
   std::unique_ptr<std::istream> input_;
   std::unique_ptr<detail::line_range> lines_;
   caf::optional<size_t> proto_field_;
   std::vector<size_t> port_fields_;
 };
+
+// -- implementation ----------------------------------------------------------
 
 template <class Selector>
 reader<Selector>::reader(caf::atom_value table_slice_type,
