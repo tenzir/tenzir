@@ -52,7 +52,7 @@ struct spawn_arguments;
 
 // -- templates ----------------------------------------------------------------
 
-template <class Reader>
+template <class Reader, class Defaults>
 class reader_command;
 
 template <class Writer>
