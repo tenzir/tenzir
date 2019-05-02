@@ -12,6 +12,7 @@
  ******************************************************************************/
 
 #include "vast/format/json.hpp"
+#include "vast/format/json/suricata.hpp"
 
 #define SUITE format
 
@@ -61,6 +62,10 @@ std::string_view http_log
 {"ts":"2011-08-12T14:59:12.448311Z","uid":"CVnbsh4O1Ur04Fzptd","id.orig_h":"147.32.84.165","id.orig_p":1047,"id.resp_h":"74.207.254.18","id.resp_p":80,"trans_depth":1,"method":"GET","host":"nmap.org","uri":"/","user_agent":"Mozilla/4.0 (compatible)","request_body_len":0,"response_body_len":0,"tags":[]}
 {"ts":"2011-08-13T13:04:24.640406Z","uid":"CHwIy2itrn680kzT4","id.orig_h":"147.32.84.165","id.orig_p":1089,"id.resp_h":"95.100.248.24","id.resp_p":80,"trans_depth":1,"method":"GET","host":"crl.microsoft.com","uri":"/pki/crl/products/CodeSignPCA.crl","version":"1.1","user_agent":"Microsoft-CryptoAPI/5.131.2600.2180","request_body_len":0,"response_body_len":558,"status_code":200,"status_msg":"OK","tags":[],"resp_fuids":["Fo3McC1Z0zG90ximd6"]}
 {"ts":"2011-08-14T20:37:05.912842Z","uid":"CyOGV53NZM39U6MpVh","id.orig_h":"147.32.84.165","id.orig_p":1391,"id.resp_h":"137.254.16.78","id.resp_p":80,"trans_depth":1,"method":"GET","host":"dl.javafx.com","uri":"/javafx-cache.jnlp","version":"1.1","user_agent":"JNLP/6.0 javaws/1.6.0_26 (b03) Java/1.6.0_26","request_body_len":0,"response_body_len":0,"status_code":304,"status_msg":"Not Modified","tags":[]})__";
+
+std::string_view eve_log
+  = R"json({"timestamp":"2011-08-12T14:52:57.716360+0200","flow_id":1031464864740687,"pcap_cnt":83,"event_type":"alert","src_ip":"147.32.84.165","src_port":1181,"dest_ip":"78.40.125.4","dest_port":6667,"proto":"TCP","alert":{"action":"allowed","gid":1,"signature_id":2017318,"rev":4,"signature":"ET CURRENT_EVENTS SUSPICIOUS IRC - PRIVMSG *.(exe|tar|tgz|zip)  download command","category":"Potentially Bad Traffic","severity":2},"flow":{"pkts_toserver":27,"pkts_toclient":35,"bytes_toserver":2302,"bytes_toclient":4520,"start":"2011-08-12T14:47:24.357711+0200"},"payload":"UFJJVk1TRyAjemFyYXNhNDggOiBzbXNzLmV4ZSAoMzY4KQ0K","payload_printable":"PRIVMSG #zarasa48 : smss.exe (368)\r\n","stream":0,"packet":"AB5J2xnDCAAntbcZCABFAABMGV5AAIAGLlyTIFSlTih9BASdGgvw0QvAxUWHdVAY+rCL4gAAUFJJVk1TRyAjemFyYXNhNDggOiBzbXNzLmV4ZSAoMzY4KQ0K","packet_info":{"linktype":1}}
+  {"timestamp":"2011-08-12T14:52:57.716360+0200","flow_id":1031464864740687,"pcap_cnt":83,"event_type":"alert","src_ip":"147.32.84.165","src_port":1181,"dest_ip":"78.40.125.4","dest_port":6667,"proto":"TCP","alert":{"action":"allowed","gid":1,"signature_id":2017318,"rev":4,"signature":"ET CURRENT_EVENTS SUSPICIOUS IRC - PRIVMSG *.(exe|tar|tgz|zip)  download command","category":"Potentially Bad Traffic","severity":2},"flow":{"pkts_toserver":27,"pkts_toclient":35,"bytes_toserver":2302,"bytes_toclient":4520,"start":"2011-08-12T14:47:24.357711+0200"},"payload":"UFJJVk1TRyAjemFyYXNhNDggOiBzbXNzLmV4ZSAoMzY4KQ0K","payload_printable":"PRIVMSG #zarasa48 : smss.exe (368)\r\n","stream":0,"packet":"AB5J2xnDCAAntbcZCABFAABMGV5AAIAGLlyTIFSlTih9BASdGgvw0QvAxUWHdVAY+rCL4gAAUFJJVk1TRyAjemFyYXNhNDggOiBzbXNzLmV4ZSAoMzY4KQ0K","packet_info":{"linktype":1}})json";
 
 } // namespace
 
@@ -138,6 +143,23 @@ TEST(json reader) {
   CHECK(slices[1]->at(0, 0)
         == data{unbox(to<timestamp>("2011-08-12T14:59:11.994970Z"))});
   CHECK(slices[1]->at(0, 18) == vector{data{"text/html"}});
+}
+
+TEST(suricata) {
+  using reader_type = format::json::reader<format::json::suricata>;
+  reader_type reader{defaults::system::table_slice_type,
+                     std::make_unique<std::istringstream>(
+                       std::string{eve_log})};
+  std::vector<table_slice_ptr> slices;
+  auto add_slice = [&](table_slice_ptr ptr) {
+    slices.emplace_back(std::move(ptr));
+  };
+  auto [err, num] = reader.read(2, 5, add_slice);
+  CHECK_EQUAL(err, caf::none);
+  CHECK_EQUAL(num, 2);
+  CHECK_EQUAL(slices[0]->rows(), 2);
+  CHECK_EQUAL(slices[0]->columns(), 25);
+  CHECK(slices[0]->at(0, 19) == count{4520});
 }
 
 FIXTURE_SCOPE_END()

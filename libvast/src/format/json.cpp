@@ -132,7 +132,7 @@ struct convert {
     VAST_ERROR_ANON("json-reader cannot convert from",
                     caf::detail::pretty_type_name(typeid(T)), "to",
                     caf::detail::pretty_type_name(typeid(U)));
-    VAST_ASSERT(!"this line should never be reached");
+    // VAST_ASSERT(!"this line should never be reached");
     return false;
   }
 };
@@ -145,15 +145,22 @@ caf::error add(table_slice_builder& builder, const vast::json::object& xs,
     auto i = xs.find(field.name);
     // Inexisting fields are treated as empty (unset).
     if (i == xs.end()) {
+      VAST_WARNING_ANON("json-reader", "did not get", field.name);
       builder.add(make_data_view(caf::none));
       continue;
     }
     auto v = i->second;
     auto x = caf::visit(convert{}, v, field.type);
-    if (!x)
+    if (!x) {
+      VAST_WARNING_ANON("json-reader", "could not convert", field.name, ":",
+                        to_string(v));
       return x.error();
-    if (!builder.add(make_data_view(*x)))
+    }
+    if (!builder.add(make_data_view(*x))) {
+      VAST_WARNING_ANON("json-reader", "could not convert", field.name, ":",
+                        to_string(v));
       return make_error(ec::type_clash, field.name, ":", to_string(v));
+    }
   }
   return caf::none;
 }
