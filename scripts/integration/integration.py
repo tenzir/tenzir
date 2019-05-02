@@ -95,9 +95,9 @@ def now():
     return time.process_time()
 
 class Result(Enum):
-    SUCCESS = 1
-    FAILURE = 2
-    ERROR = 3
+    SUCCESS = 1  # Baseline comparison succeded.
+    FAILURE = 2  # Baseline mismatch.
+    ERROR = 3    # Crashes or returns with non-zero exit code.
 
 class TestSummary:
     """Stats keeper"""
@@ -197,11 +197,11 @@ def run_step(basecmd, step_id, step, work_dir, baseline_dir, update_baseline):
         if not reference.exists():
             LOGGER.error('no baseline found')
             return Result.FAILURE
-        LOGGER.info('comparing test output to baseline')
+        LOGGER.debug('comparing test output to baseline')
         if check_output(reference, out):
-            LOGGER.info('baseline comparison succeeded')
+            LOGGER.debug('baseline comparison succeeded')
             return Result.SUCCESS
-            LOGGER.info('baseline comparison failed')
+        LOGGER.error('baseline comparison failed')
         # TODO: print diff of failure
         return Result.FAILURE
     except subprocess.CalledProcessError as err:
@@ -223,7 +223,8 @@ class Server:
         self.name = name
         self.cwd = work_dir / self.name
         self.port = port
-        LOGGER.info(f'waiting for port {self.port} to be available')
+        LOGGER.debug('starting server fixture')
+        LOGGER.debug(f'waiting for port {self.port} to be available')
         if not wait.tcp.closed(self.port, timeout=5):
             raise RuntimeError(
                 'Port is blocked by another process.\nAborting tests...')
@@ -236,14 +237,14 @@ class Server:
             stdout=out,
             stderr=err,
             **kwargs)
-        LOGGER.info(f'waiting for server to listen on port {self.port}')
+        LOGGER.debug(f'waiting for server to listen on port {self.port}')
         if not wait.tcp.open(self.port, timeout=5):
             raise RuntimeError(
                 'Server could not aquire port.\nAborting tests')
 
     def stop(self):
         """Stops the server"""
-        LOGGER.info('stopping server')
+        LOGGER.debug('stopping server fixture')
         stop_out = open(self.cwd / 'stop.out', 'w')
         stop_err = open(self.cwd / 'stop.err', 'w')
         stop = 0
@@ -288,7 +289,7 @@ class Tester:
 
     def run(self, test_name, test):
         """Runs a single test"""
-        LOGGER.debug(f'running test: {test_name}')
+        LOGGER.info(f'running test: {test_name}')
         normalized_test_name = test_name.replace(' ', '-').lower()
         baseline_dir = self.args.set.parent / 'reference' / normalized_test_name
         work_dir = self.test_dir / normalized_test_name
@@ -325,10 +326,10 @@ class Tester:
             LOGGER.debug(f'removing working directory {work_dir}')
             shutil.rmtree(work_dir)
         if summary.successful():
-            LOGGER.info(f'ran all {summary.step_count} steps successfully')
+            LOGGER.debug(f'ran all {summary.step_count} steps successfully')
         else:
-            LOGGER.error(f'ran {summary.succeeded}/{summary.step_count} '
-                         'steps successfully')
+            LOGGER.warning(f'ran {summary.succeeded}/{summary.step_count} '
+                           'steps successfully')
         return summary.successful()
 
 def validate(data, set_dir):
@@ -396,7 +397,6 @@ def run(args, test_dec):
                 if tester.check_skip(definition):
                     LOGGER.debug(f'skipping test {name}')
                     continue
-                LOGGER.info(f'executing test: {name}')
                 if not tester.run(name, definition):
                     result = False
             return result
