@@ -33,23 +33,19 @@ VAST_PORT = 42024
 STEP_TIMEOUT = 30
 CURRENT_SUBPROCS: List[subprocess.Popen] = []
 
-
 class Fixture(NamedTuple):
     enter: str
     exit: str
 
-
 class Step(NamedTuple):
     command: List[str]
     input: Optional[Path]
-
 
 class Test(NamedTuple):
     tags: Optional[str]
     condition: Optional[str]
     fixture: Optional[str]
     steps: List[Step]
-
 
 def signal_subprocs(signum):
     """send signal recieved to subprocesses"""
@@ -58,24 +54,20 @@ def signal_subprocs(signum):
             LOGGER.debug(f'Sending signal {signum} to {proc.args}')
             proc.send_signal(signum)
 
-
 def handle_exit_signal(signum, _frame):
     """send signal recieved to subprocesses and exit"""
     LOGGER.info(f'got signal {signum}, shutting down')
     signal_subprocs(signum)
     sys.exit(1)
 
-
 def timeout_handler(_signum, frame):
     """Terminate subprocs and raise"""
     signal_subprocs(signal.SIGTERM)
     raise OSError('Timeout reached')
 
-
 signal.signal(signal.SIGINT, handle_exit_signal)
 signal.signal(signal.SIGTERM, handle_exit_signal)
 signal.signal(signal.SIGALRM, timeout_handler)
-
 
 # TODO tobim: check if asyncio would be a better approach
 def spawn(*popenargs, **kwargs):
@@ -85,7 +77,6 @@ def spawn(*popenargs, **kwargs):
     proc = subprocess.Popen(*popenargs, **kwargs)
     CURRENT_SUBPROCS.append(proc)
     return proc
-
 
 def run_flamegraph(args, svg_file):
     """Perform instrumentation and produce an output svg"""
@@ -98,17 +89,14 @@ def run_flamegraph(args, svg_file):
                      stdout=svg,
                      cwd=args.directory)
 
-
 def now():
     # return time.clock_gettime(time.CLOCK_MONOTONIC)
     return time.process_time()
-
 
 class Result(Enum):
     SUCCESS = 1
     FAILURE = 2
     ERROR = 3
-
 
 class TestSummary:
     """Stats keeper"""
@@ -136,7 +124,6 @@ class TestSummary:
     def successful(self):
         return self.step_count == self.succeeded
 
-
 def empty(iterable):
     try:
         first = next(iterable)
@@ -144,22 +131,19 @@ def empty(iterable):
         return True
     return False
 
-
 def check_output(reference, out):
-    def impl(ref_lines, out_lines):
-        diff = difflib.unified_diff(ref_lines, out_lines)
-        if empty(diff):
+    def diff(ref_lines, out_lines):
+        delta = difflib.unified_diff(ref_lines, out_lines)
+        if empty(delta):
             return True
-        sys.stdout.writelines(diff)
+        sys.stdout.writelines(delta)
         return False
-
     if str(reference).endswith('.gz'):
         with gzip.open(reference, mode='rt') as ref:
-            return impl(sorted(ref.readlines()), sorted(out.readlines()))
+            return diff(sorted(ref.readlines()), sorted(out.readlines()))
     else:
         with open(reference) as ref:
-            return impl(ref.readlines(), sorted(out.readlines()))
-
+            return diff(ref.readlines(), sorted(out.readlines()))
 
 def run_step(basecmd, step_id, step, work_dir, baseline_dir, update_baseline):
     def try_wait(process, timeout):
@@ -224,7 +208,6 @@ def run_step(basecmd, step_id, step, work_dir, baseline_dir, update_baseline):
         LOGGER.error(err)
         return Result.ERROR
 
-
 class Server:
     """Server fixture implementation details
     """
@@ -276,7 +259,6 @@ class Server:
         except:
             self.process.kill()
 
-
 class Tester:
     """Test runner
     """
@@ -316,20 +298,18 @@ class Tester:
         work_dir.mkdir(parents=True)
         summary = TestSummary(len(test.steps))
         step_i = 0
-
+        # Locate fixture.
         dummy_fixture = Fixture('pass', 'pass')
         fixture = dummy_fixture if not test.fixture else self.fixtures.get(
             test.fixture)
-
         cmd = [self.cmd]
         fenter = Template(fixture.enter).substitute(locals())
         fexit = Template(fixture.exit).substitute(locals())
-
+        # Invoke test.
         exec(fenter)
         if self.args.flamegraph:
             svg_file = work_dir / f'{normalized_test_name}.svg'
             run_flamegraph(self.args, svg_file)
-
         for step in test.steps:
             LOGGER.info(f'running step {step.command}')
             step_id = 'step_{:02d}'.format(step_i)
@@ -340,7 +320,7 @@ class Tester:
                 break
             step_i += 1
         exec(fexit)
-
+        # Summarize result.
         if not self.args.keep and summary.successful():
             LOGGER.debug(f'removing working directory {work_dir}')
             shutil.rmtree(work_dir)
@@ -351,37 +331,28 @@ class Tester:
                          'steps successfully')
         return summary.successful()
 
-
 def validate(data, set_dir):
     def is_file(path):
         return path.is_file()
-
     def to_fixture(data):
         return Fixture(**data)
-
     def to_step(data):
         return Step(**data)
-
     def to_test(data):
         return Test(**data)
-
     def absolute_path(path):
         absolute = Path(os.path.expanduser(path))
         if not absolute.is_absolute():
             absolute = (set_dir / path).resolve()
         return absolute
-
     def to_command(raw_command):
         return shlex.split(raw_command.replace('@.', str(set_dir)))
-
     fixture = schema.Schema(
         schema.And({
             'enter': schema.And(str, len),
             'exit': schema.And(str, len)
         }, schema.Use(to_fixture)))
-
     fixtures = schema.Schema({schema.And(str, len): fixture})
-
     step = schema.Schema(
         schema.And({
             'command':
@@ -390,7 +361,6 @@ def validate(data, set_dir):
             schema.Optional('input', default=None):
             schema.And(schema.Use(absolute_path), is_file)
         }, schema.Use(to_step)))
-
     test = schema.Schema(
         schema.And({
             schema.Optional('tags', default=None): [str],
@@ -398,13 +368,9 @@ def validate(data, set_dir):
             schema.Optional('fixture', default=None): str,
             'steps': [step]
         }, schema.Use(to_test)))
-
     tests = schema.Schema({schema.And(str, len): test})
-
     sch = schema.Schema({'fixtures': fixtures, 'tests': tests})
-
     return sch.validate(data)
-
 
 def tagselect(tags, tests):
     if not tags:
@@ -412,10 +378,8 @@ def tagselect(tags, tests):
     tagset = set(tags)
     return {k: t for k, t in tests.items() if tagset & set(t.tags)}
 
-
 def run(args, test_dec):
     tests = test_dec['tests']
-
     selected_tests = {}
     explicit_tests = {}
     if args.test:
@@ -424,7 +388,6 @@ def run(args, test_dec):
     if not args.test or args.tag:
         selected_tests = tagselect(args.tag, tests)
     tests = dict(selected_tests, **explicit_tests)
-
     try:
         with Tester(args, test_dec['fixtures']) as tester:
             result = True
@@ -440,7 +403,6 @@ def run(args, test_dec):
     except Exception as err:
         signal_subprocs(signal.SIGTERM)
         raise err
-
 
 def main():
     """The main function"""
@@ -508,9 +470,7 @@ def main():
         '--verbosity',
         default='DEBUG',
         help='Set the logging verbosity')
-
     args = parser.parse_args()
-
     # Setup logging.
     LOGGER.setLevel(args.verbosity)
     fmt = "%(asctime)s %(levelname)-8s [%(name)s] %(message)s"
@@ -528,49 +488,42 @@ def main():
     sh = ShutdownHandler(level=50)
     sh.setFormatter(formatter)
     LOGGER.addHandler(sh)
-
+    # Load test set.
     if not args.set:
         args.set = Path(__file__).resolve().parent / 'default_set.yaml'
     args.set = args.set.resolve()
     LOGGER.debug(f'resolved test set path to {args.set}')
-
     test_file = open(args.set, 'r')
     test_dict = yaml.full_load(test_file)
     test_dec = validate(test_dict, args.set.parent)
-
+    # Print tests.
     if args.list is not None:
         selection = tagselect(args.list, test_dec['tests'])
         for test in selection.keys():
             print(test)
         return
-
+    # Print test tags.
     if args.list_tags:
         tags = set().union(
             *[set(t.tags) for _, t in test_dec['tests'].items()])
         for tag in tags:
             print(tag)
         return
-
+    # Create working directory.
     if args.directory.name == 'run_<current_ISO_timestamp>':
         timestamp = datetime.now().isoformat(timespec='seconds')
         args.directory = Path(f'run_{timestamp}')
     LOGGER.debug(f'keeping state in {args.directory}')
-
     if not args.directory.exists():
         args.directory.mkdir(parents=True)
-
+    # Setup signal handlers and run.
     signal.alarm(args.timeout)
-
     success = run(args, test_dec)
-
     signal.alarm(0)
-
     with suppress(OSError):
         args.directory.rmdir()
-
     retcode = 0 if success else 1
     sys.exit(retcode)
-
 
 if __name__ == '__main__':
     main()
