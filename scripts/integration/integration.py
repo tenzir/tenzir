@@ -170,10 +170,14 @@ def run_step(basecmd, step_id, step, work_dir, baseline_dir, update_baseline):
             client.stdin.close()
         result = try_wait(client, timeout=STEP_TIMEOUT - (now() - start_time))
         if result is Result.ERROR:
-            return result
+            LOGGER.debug('standard error:')
+            for line in open(stderr):
+                LOGGER.debug(f'    {line}')
         # Perform baseline update or comparison.
         baseline = baseline_dir / f'{step_id}.ref'
         if update_baseline:
+            if result is Result.ERROR:
+                LOGGER.critical('cannot update baseline for failed step')
             LOGGER.info('updating baseline')
             if not baseline_dir.exists():
                 baseline_dir.mkdir(parents=True)
@@ -181,7 +185,7 @@ def run_step(basecmd, step_id, step, work_dir, baseline_dir, update_baseline):
                 for line in sorted(open(stdout).readlines()):
                     ref.write(line)
             return Result.SUCCESS
-        LOGGER.debug('comparing test output to baseline')
+        LOGGER.debug('comparing step output to baseline')
         baseline_lines = open(baseline).readlines() if baseline.exists() else []
         diff = difflib.unified_diff(baseline_lines,
                                     sorted(open(stdout).readlines()),
@@ -191,9 +195,9 @@ def run_step(basecmd, step_id, step, work_dir, baseline_dir, update_baseline):
         if delta:
             LOGGER.error('baseline comparison failed')
             sys.stdout.writelines(delta)
-            return Result.FAILURE
+            return result if result is Result.ERROR else Result.FAILURE
         LOGGER.debug('baseline comparison succeeded')
-        return Result.SUCCESS
+        return result if result is Result.ERROR else Result.SUCCESS
     except subprocess.CalledProcessError as err:
         LOGGER.error(err)
         return Result.ERROR
@@ -308,6 +312,7 @@ class Tester:
                               self.update)
             summary.count(result)
             if result is Result.ERROR:
+                LOGGER.error('skipping remaining steps after error')
                 break
             step_i += 1
         exec(fexit)
