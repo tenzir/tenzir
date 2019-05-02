@@ -181,12 +181,9 @@ def run_step(basecmd, step_id, step, work_dir, baseline_dir, update_baseline):
                 for line in sorted(open(stdout).readlines()):
                     ref.write(line)
             return Result.SUCCESS
-        if not baseline.exists():
-            LOGGER.error('no baseline found')
-            # TODO: generate diff to empty set instead of failing
-            return Result.FAILURE
         LOGGER.debug('comparing test output to baseline')
-        diff = difflib.unified_diff(open(baseline).readlines(),
+        baseline_lines = open(baseline).readlines() if baseline.exists() else []
+        diff = difflib.unified_diff(baseline_lines,
                                     sorted(open(stdout).readlines()),
                                     fromfile=str(baseline),
                                     tofile=str(stdout))
