@@ -473,7 +473,7 @@ def main():
     args = parser.parse_args()
     # Setup logging.
     LOGGER.setLevel(args.verbosity)
-    fmt = "%(asctime)s %(levelname)-8s [%(name)s] %(message)s"
+    fmt = "%(asctime)s %(levelname)-8s %(message)s"
     colored_formatter = coloredlogs.ColoredFormatter(fmt)
     plain_formatter = logging.Formatter(fmt)
     formatter = colored_formatter if sys.stdout.isatty() else plain_formatter
