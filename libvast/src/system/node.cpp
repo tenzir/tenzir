@@ -358,7 +358,7 @@ auto make_command() {
   return cmd;
 }
 
-} // namespace <anonymous>
+} // namespace
 
 node_state::named_component_factories node_state::factories = make_factories();
 
@@ -405,16 +405,11 @@ caf::message node_state::spawn_command(const command& cmd,
   }
   // Register component at tracker.
   auto rp = this_node->make_response_promise();
-  this_node->request(st.tracker, infinite, try_put_atom::value,
-                     std::move(comp_name), new_component,
-                     std::move(label)).then(
-    [=]() mutable {
-      rp.deliver(std::move(new_component));
-    },
-    [=](error& e) mutable {
-      rp.deliver(std::move(e));
-    }
-  );
+  this_node
+    ->request(st.tracker, infinite, try_put_atom::value, std::move(comp_name),
+              new_component, std::move(label))
+    .then([=]() mutable { rp.deliver(std::move(new_component)); },
+          [=](error& e) mutable { rp.deliver(std::move(e)); });
   return caf::none;
 }
 
@@ -435,13 +430,11 @@ void node_state::init(std::string init_name, path init_dir) {
   dir = std::move(init_dir);
   // Bring up the tracker.
   tracker = self->spawn<monitored>(system::tracker, name);
-  self->set_down_handler(
-    [=](const down_msg& msg) {
-      VAST_IGNORE_UNUSED(msg);
-      VAST_DEBUG(self, "got DOWN from", msg.source);
-      self->quit(msg.reason);
-    }
-  );
+  self->set_down_handler([=](const down_msg& msg) {
+    VAST_IGNORE_UNUSED(msg);
+    VAST_DEBUG(self, "got DOWN from", msg.source);
+    self->quit(msg.reason);
+  });
   self->system().registry().put(tracker_atom::value, tracker);
 }
 
@@ -480,8 +473,7 @@ caf::behavior node(node_actor* self, std::string id, path dir) {
     [=](signal_atom, int signal) {
       VAST_IGNORE_UNUSED(signal);
       VAST_WARNING(self, "got signal", ::strsignal(signal));
-    }
-  };
+    }};
 }
 
 } // namespace vast::system
