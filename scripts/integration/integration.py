@@ -51,12 +51,12 @@ def signal_subprocs(signum):
     """send signal recieved to subprocesses"""
     for proc in reversed(CURRENT_SUBPROCS):
         if proc.poll() is None:
-            LOGGER.debug(f'Sending signal {signum} to {proc.args}')
+            LOGGER.debug(f'sending signal {signum} to {proc.args}')
             proc.send_signal(signum)
 
 def handle_exit_signal(signum, _frame):
     """send signal recieved to subprocesses and exit"""
-    LOGGER.info(f'got signal {signum}, shutting down')
+    LOGGER.warning(f'got signal {signum}, shutting down')
     signal_subprocs(signum)
     sys.exit(1)
 
@@ -481,10 +481,13 @@ def main():
     ch.setLevel(args.verbosity)
     ch.setFormatter(formatter)
     LOGGER.addHandler(ch)
+    # Create a new handler for log level CRITICAL.
     class ShutdownHandler(logging.Handler):
         def emit(self, record):
             logging.shutdown()
+            signal_subprocs(signal.SIGTERM)
             sys.exit(1)
+    # Register this handler with log level CRITICAL (which equals to 50).
     sh = ShutdownHandler(level=50)
     sh.setFormatter(formatter)
     LOGGER.addHandler(sh)
