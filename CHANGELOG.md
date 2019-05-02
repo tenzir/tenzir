@@ -10,6 +10,14 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## [Unreleased]
 
+- 🎁 The data parser now supports `count` and `integer` values according to the
+  *International System for Units (SI)*. For example, `1k` is equal to `1000`
+  and `1Ki` equal to `1024`.
+
+- 🐞 The `map` data parser did not parse negative values correctly. It was not
+  possible to parse strings of the form `"{-42 -> T}"` because the parser
+  attempted to parse the token for the empty map `"{-}"` instead.
+
 - 🎁 VAST can now ingest JSON data. The `import` command gained the `json`
   format, which allows for parsing line-delimited JSON (LDJSON) according to a
   user-supplied schema with `--schema` or `--schema-file`. The JSON objects in

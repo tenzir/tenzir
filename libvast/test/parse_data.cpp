@@ -20,109 +20,50 @@
 using namespace vast;
 using namespace std::string_literals;
 
+namespace {
+
+data to_data(std::string_view str) {
+  data x;
+  if (!parsers::data(str, x))
+    FAIL("failed to parse data from " << str);
+  return x;
+}
+
+} // namespace
+
 TEST(data) {
-  auto p = make_parser<data>();
-  data d;
-
+  MESSAGE("nil");
+  CHECK_EQUAL(to_data("nil"), caf::none);
   MESSAGE("bool");
-  auto str = "T"s;
-  auto f = str.begin();
-  auto l = str.end();
-  CHECK(p(f, l, d));
-  CHECK(f == l);
-  CHECK(d == true);
-
-  MESSAGE("numbers");
-  str = "+1001"s;
-  f = str.begin();
-  l = str.end();
-  CHECK(p(f, l, d));
-  CHECK(f == l);
-  CHECK(d == 1001);
-  str = "1001"s;
-  f = str.begin();
-  l = str.end();
-  CHECK(p(f, l, d));
-  CHECK(f == l);
-  CHECK(d == 1001u);
-  str = "10.01"s;
-  f = str.begin();
-  l = str.end();
-  CHECK(p(f, l, d));
-  CHECK(f == l);
-  CHECK(d == 10.01);
-
+  CHECK_EQUAL(to_data("T"), data{true});
+  CHECK_EQUAL(to_data("F"), data{false});
+  MESSAGE("int");
+  CHECK_EQUAL(to_data("+42"), data{42});
+  CHECK_EQUAL(to_data("-42"), data{-42});
+  CHECK_EQUAL(to_data("-42k"), data{-42'000});
+  MESSAGE("count");
+  CHECK_EQUAL(to_data("42"), data{42u});
+  CHECK_EQUAL(to_data("42M"), data{42'000'000u});
+  CHECK_EQUAL(to_data("42Ki"), data{42 * 1024u});
+  MESSAGE("real");
+  CHECK_EQUAL(to_data("4.2"), data{4.2});
+  CHECK_EQUAL(to_data("-0.1"), data{-0.1});
   MESSAGE("string");
-  str = "\"bar\""s;
-  f = str.begin();
-  l = str.end();
-  CHECK(p(f, l, d));
-  CHECK(f == l);
-  CHECK(d == "bar");
-
+  CHECK_EQUAL(to_data("\"foo\""), data{"foo"});
   MESSAGE("pattern");
-  str = "/foo/"s;
-  f = str.begin();
-  l = str.end();
-  CHECK(p(f, l, d));
-  CHECK(f == l);
-  CHECK(d == pattern{"foo"});
-
-  MESSAGE("address");
-  str = "10.0.0.1"s;
-  f = str.begin();
-  l = str.end();
-  CHECK(p(f, l, d));
-  CHECK(f == l);
-  CHECK(d == *to<address>("10.0.0.1"));
-
+  CHECK_EQUAL(to_data("/foo/"), pattern{"foo"});
+  MESSAGE("IP address");
+  CHECK_EQUAL(to_data("10.0.0.1"), unbox(to<address>("10.0.0.1")));
   MESSAGE("port");
-  str = "22/tcp"s;
-  f = str.begin();
-  l = str.end();
-  CHECK(p(f, l, d));
-  CHECK(f == l);
-  CHECK(d == port{22, port::tcp});
-
+  CHECK_EQUAL(to_data("22/tcp"), (port{22, port::tcp}));
   MESSAGE("vector");
-  str = "[]"s;
-  f = str.begin();
-  l = str.end();
-  CHECK(p(f, l, d));
-  CHECK(f == l);
-  CHECK(d == vector{});
-  str = "[42,4.2,nil]"s;
-  f = str.begin();
-  l = str.end();
-  CHECK(p(f, l, d));
-  CHECK(f == l);
-  CHECK(d == vector{42u, 4.2, caf::none});
-
+  CHECK_EQUAL(to_data("[]"), vector{});
+  CHECK_EQUAL(to_data("[42, 4.2, nil]"), (vector{42u, 4.2, caf::none}));
   MESSAGE("set");
-  str = "{}"s;
-  f = str.begin();
-  l = str.end();
-  CHECK(p(f, l, d));
-  CHECK(f == l);
-  CHECK(d == set{});
-  str = "{-42,+42,-1}"s;
-  f = str.begin();
-  l = str.end();
-  CHECK(p(f, l, d));
-  CHECK(f == l);
-  CHECK(d == set{-42, 42, -1});
-
+  CHECK_EQUAL(to_data("{}"), set{});
+  CHECK_EQUAL(to_data("{42, 42, nil}"), (set{42u, caf::none}));
   MESSAGE("map");
-  str = "{-}"s;
-  f = str.begin();
-  l = str.end();
-  CHECK(p(f, l, d));
-  CHECK(f == l);
-  CHECK(d == map{});
-  str = "{T->1,F->0}"s;
-  f = str.begin();
-  l = str.end();
-  CHECK(p(f, l, d));
-  CHECK(f == l);
-  CHECK(d == map{{true, 1u}, {false, 0u}});
+  CHECK_EQUAL(to_data("{-}"), map{});
+  CHECK_EQUAL(to_data("{+1->T,+2->F}"), (map{{1, true}, {2, false}}));
+  CHECK_EQUAL(to_data("{-1 -> T, -2 -> F}"), (map{{-1, true}, {-2, false}}));
 }

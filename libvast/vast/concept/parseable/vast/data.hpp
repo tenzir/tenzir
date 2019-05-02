@@ -24,15 +24,22 @@
 #include "vast/concept/parseable/vast/address.hpp"
 #include "vast/concept/parseable/vast/pattern.hpp"
 #include "vast/concept/parseable/vast/port.hpp"
+#include "vast/concept/parseable/vast/si.hpp"
 #include "vast/concept/parseable/vast/subnet.hpp"
 #include "vast/concept/parseable/vast/time.hpp"
 
 namespace vast {
 
-template <>
-struct access::parser<data> : vast::parser<access::parser<data>> {
+struct data_parser : parser<data_parser> {
   using attribute = data;
 
+  template <class Iterator, class Attribute>
+  bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
+    auto p = make<Iterator>();
+    return p(f, l, a);
+  }
+
+private:
   template <class Iterator>
   static auto make() {
     using namespace parser_literals;
@@ -40,40 +47,36 @@ struct access::parser<data> : vast::parser<access::parser<data>> {
     auto ws = ignore(*parsers::space);
     auto x = ws >> p >> ws;
     auto kvp = x >> "->" >> x;
+    // clang-format off
     p = parsers::timespan
       | parsers::timestamp
       | parsers::net
       | parsers::port
       | parsers::addr
       | parsers::real
-      | parsers::u64
-      | parsers::i64
+      | parsers::count
+      | parsers::integer
       | parsers::tf
       | parsers::qq_str
       | parsers::pattern
       | '[' >> ~(x % ',') >> ']'
-      | '{' >> ('-' | as<map>(kvp % ',')) >> '}'
+      | '{' >> (('-' >> &'}'_p) | as<map>(kvp % ',')) >> '}'
       | '{' >> ~as<set>(x % ',') >> '}'
       | as<caf::none_t>("nil"_p)
       ;
+    // clang-format on
     return p;
-  }
-
-  template <class Iterator, class Attribute>
-  bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
-    static auto p = make<Iterator>();
-    return p(f, l, a);
   }
 };
 
 template <>
 struct parser_registry<data> {
-  using type = access::parser<data>;
+  using type = data_parser;
 };
 
 namespace parsers {
 
-static auto const data = make_parser<vast::data>();
+static auto const data = data_parser{};
 
 } // namespace parsers
 } // namespace vast
