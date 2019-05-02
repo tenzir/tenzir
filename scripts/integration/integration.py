@@ -171,7 +171,7 @@ def run_step(basecmd, step_id, step, work_dir, baseline_dir, update_baseline):
         result = try_wait(client, timeout=STEP_TIMEOUT - (now() - start_time))
         if result is Result.ERROR:
             LOGGER.debug('standard error:')
-            for line in open(stderr):
+            for line in open(stderr).readlines()[-100:]:
                 LOGGER.debug(f'    {line}')
         # Perform baseline update or comparison.
         baseline = baseline_dir / f'{step_id}.ref'
