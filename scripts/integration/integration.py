@@ -80,6 +80,7 @@ def spawn(*popenargs, **kwargs):
 
 def run_flamegraph(args, svg_file):
     """Perform instrumentation and produce an output svg"""
+    LOGGER.debug(f'writing flamegraph {args} to {svg_file}')
     flamegraph = Path(args.flamegraph_path).resolve()
     with open(svg_file, 'w') as svg:
         # refresh sudo credential cache in a blocking call to be sure to catch
@@ -180,7 +181,6 @@ def run_step(basecmd, step_id, step, work_dir, baseline_dir, update_baseline):
             result = try_wait(
                 input_p, timeout=STEP_TIMEOUT - (now() - start_time))
             client.stdin.close()
-        print('Running {}: `{}`'.format(step_id, info_string));
         result = try_wait(client, timeout=STEP_TIMEOUT - (now() - start_time))
         if result is Result.ERROR:
             return result
@@ -311,8 +311,8 @@ class Tester:
             svg_file = work_dir / f'{normalized_test_name}.svg'
             run_flamegraph(self.args, svg_file)
         for step in test.steps:
-            LOGGER.info(f'running step {step.command}')
             step_id = 'step_{:02d}'.format(step_i)
+            LOGGER.info(f'running step {step_i}: {step.command}')
             result = run_step(cmd, step_id, step, work_dir, baseline_dir,
                               self.update)
             summary.count(result)
