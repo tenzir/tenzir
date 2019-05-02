@@ -486,7 +486,8 @@ file(GENERATE
      python \"$base_dir/integration.py\" --app \"$app\" -d vast-integration-test")
 
 add_custom_target(integration
-  COMMAND /bin/sh "${CMAKE_CURRENT_BINARY_DIR}/integration_$<CONFIG>.sh")
+  COMMAND /bin/sh "${CMAKE_CURRENT_BINARY_DIR}/integration_$<CONFIG>.sh"
+  USES_TERMINAL)
 
 
 add_subdirectory(doc)
