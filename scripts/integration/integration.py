@@ -132,20 +132,6 @@ def empty(iterable):
         return True
     return False
 
-def check_output(reference, out):
-    def diff(ref_lines, out_lines):
-        delta = difflib.unified_diff(ref_lines, out_lines)
-        if empty(delta):
-            return True
-        sys.stdout.writelines(delta)
-        return False
-    if str(reference).endswith('.gz'):
-        with gzip.open(reference, mode='rt') as ref:
-            return diff(sorted(ref.readlines()), sorted(out.readlines()))
-    else:
-        with open(reference) as ref:
-            return diff(ref.readlines(), sorted(out.readlines()))
-
 def run_step(basecmd, step_id, step, work_dir, baseline_dir, update_baseline):
     def try_wait(process, timeout):
         """Wait for a specified time or terminate the process"""
@@ -159,17 +145,18 @@ def run_step(basecmd, step_id, step, work_dir, baseline_dir, update_baseline):
             process.terminate()
             return Result.ERROR
     try:
-        out = open(work_dir / f'{step_id}.out', 'w+')
-        err = open(work_dir / f'{step_id}.err', 'w')
+        stdout = work_dir / f'{step_id}.out'
+        stderr = work_dir / f'{step_id}.err'
         cmd = basecmd + step.command
         info_string = ' '.join(map(str, cmd))
         client = spawn(
             basecmd + step.command,
             stdin=subprocess.PIPE,
-            stdout=out,
-            stderr=err,
+            stdout=open(stdout, 'w+'),
+            stderr=open(stderr, 'w'),
             cwd=work_dir)
         start_time = now()
+        # Invoking process.
         if step.input:
             incmd = []
             if str(step.input).endswith('gz'):
@@ -184,26 +171,32 @@ def run_step(basecmd, step_id, step, work_dir, baseline_dir, update_baseline):
         result = try_wait(client, timeout=STEP_TIMEOUT - (now() - start_time))
         if result is Result.ERROR:
             return result
-        reference = baseline_dir / f'{step_id}.ref'
-        out.seek(0)
+        # Perform baseline update or comparison.
+        baseline = baseline_dir / f'{step_id}.ref'
         if update_baseline:
             LOGGER.info('updating baseline')
             if not baseline_dir.exists():
                 baseline_dir.mkdir(parents=True)
-            with open(reference, 'w') as ref:
-                for line in sorted(out.readlines()):
+            with open(baseline, 'w') as ref:
+                for line in sorted(open(stdout).readlines()):
                     ref.write(line)
             return Result.SUCCESS
-        if not reference.exists():
+        if not baseline.exists():
             LOGGER.error('no baseline found')
+            # TODO: generate diff to empty set instead of failing
             return Result.FAILURE
         LOGGER.debug('comparing test output to baseline')
-        if check_output(reference, out):
-            LOGGER.debug('baseline comparison succeeded')
-            return Result.SUCCESS
-        LOGGER.error('baseline comparison failed')
-        # TODO: print diff of failure
-        return Result.FAILURE
+        diff = difflib.unified_diff(open(baseline).readlines(),
+                                    sorted(open(stdout).readlines()),
+                                    fromfile=str(baseline),
+                                    tofile=str(stdout))
+        delta = list(diff)
+        if delta:
+            LOGGER.error('baseline comparison failed')
+            sys.stdout.writelines(delta)
+            return Result.FAILURE
+        LOGGER.debug('baseline comparison succeeded')
+        return Result.SUCCESS
     except subprocess.CalledProcessError as err:
         LOGGER.error(err)
         return Result.ERROR
