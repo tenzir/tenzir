@@ -121,6 +121,12 @@ tests:
         input: data/json/conn.log.json.gz
       - command: export -N ascii 'duration > 6s'
       - command: export -N ascii '#time >= 2011-08-15T03:48'
+  Node suricata alert:
+    tags: [node, import-export, suricata, eve]
+    steps:
+      - command: import -N -b suricata
+        input: data/suricata/eve.json.gz
+      - command: export -N ascii 'src_ip == 147.32.84.165'
 
   Manual 1:
     condition: 'import -h 2>&1 | grep -q pcap'
