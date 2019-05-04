@@ -193,7 +193,9 @@ enum class type_flags : uint8_t {
   container = 0b0000'1000,
 };
 
-/// @returns the name of the concrete type.
+/// Retrieves kind of a type, e.g., `string` for `string_type`.
+/// @param x The type to query.
+/// @param the kind of *x*.
 /// @relates type
 std::string kind(const type& x);
 
