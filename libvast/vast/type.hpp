@@ -193,6 +193,10 @@ enum class type_flags : uint8_t {
   container = 0b0000'1000,
 };
 
+/// @returns the name of the concrete type.
+/// @relates type
+std::string kind(const type& x);
+
 /// @relates type_flags
 constexpr type_flags operator|(type_flags x, type_flags y) {
   return type_flags(static_cast<uint8_t>(x) | static_cast<uint8_t>(y));

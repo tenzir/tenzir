@@ -835,10 +835,6 @@ using caf::detail::tl_size;
 
 static_assert(std::size(kind_tbl) == tl_size<concrete_types>::value);
 
-std::string kind(const type& x) {
-  return kind_tbl[x->index()];
-}
-
 json jsonize(const type& x) {
   return visit(detail::overload(
     [](const enumeration_type&t) {
@@ -881,6 +877,10 @@ json jsonize(const type& x) {
 }
 
 } // namespace <anonymous>
+
+std::string kind(const type& x) {
+  return kind_tbl[x->index()];
+}
 
 bool convert(const type& t, json& j) {
   json::object o;
