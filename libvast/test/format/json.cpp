@@ -158,7 +158,7 @@ TEST(suricata) {
   CHECK_EQUAL(err, caf::none);
   CHECK_EQUAL(num, 2);
   CHECK_EQUAL(slices[0]->rows(), 2);
-  CHECK_EQUAL(slices[0]->columns(), 25);
+  CHECK_EQUAL(slices[0]->columns(), 35);
   CHECK(slices[0]->at(0, 19) == count{4520});
 }
 
