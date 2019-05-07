@@ -35,7 +35,7 @@ struct data_parser : parser<data_parser> {
 
   template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
-    auto p = make<Iterator>();
+    static auto p = make<Iterator>();
     return p(f, l, a);
   }
 
