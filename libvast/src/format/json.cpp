@@ -132,7 +132,6 @@ struct convert {
     VAST_ERROR_ANON("json-reader cannot convert from",
                     caf::detail::pretty_type_name(typeid(T)), "to",
                     caf::detail::pretty_type_name(typeid(U)));
-    // VAST_ASSERT(!"this line should never be reached");
     return false;
   }
 };
@@ -144,9 +143,10 @@ caf::error add(table_slice_builder& builder, const vast::json::object& xs,
                [[maybe_unused]] const std::string_view name) {
   for (auto& field : layout.fields) {
     auto i = xs.find(field.name);
-    // Inexisting fields are treated as empty (unset).
+    // Non-existing fields are treated as empty (unset).
     if (i == xs.end()) {
-      VAST_WARNING_ANON(name, "did not get", field.name);
+      VAST_WARNING_ANON(name, "has no field", field.name, "in type",
+                        layout.name());
       builder.add(make_data_view(caf::none));
       continue;
     }

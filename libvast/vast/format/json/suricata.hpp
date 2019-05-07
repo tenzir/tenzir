@@ -22,6 +22,7 @@
 #include "vast/expected.hpp"
 #include "vast/format/multi_layout_reader.hpp"
 #include "vast/json.hpp"
+#include "vast/logger.hpp"
 #include "vast/schema.hpp"
 #include "vast/table_slice_builder.hpp"
 #include "vast/view.hpp"
@@ -30,13 +31,16 @@ namespace vast::format::json {
 
 struct suricata {
   caf::optional<vast::record_type> operator()(const vast::json::object& j) {
-    auto path = j.find("event_type");
-    if (path == j.end())
+    auto i = j.find("event_type");
+    if (i == j.end())
       return caf::none;
-    auto p = caf::get_if<std::string>(&path->second);
-    if (!p)
+    auto event_type = caf::get_if<vast::json::string>(&i->second);
+    if (!event_type) {
+      VAST_WARNING(this,
+                   "got an event_type field with a non-string type value");
       return caf::none;
-    auto it = types.find(*p);
+    }
+    auto it = types.find(*event_type);
     if (it == types.end())
       return caf::none;
     auto type = it->second;
@@ -158,7 +162,7 @@ struct suricata {
     return "suricata-reader";
   }
 
-  std::unordered_map<std::string, vast::record_type> types;
+  std::unordered_map<std::string, record_type> types;
 };
 
 } // namespace vast::format::json
