@@ -10,6 +10,9 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## [Unreleased]
 
+- 🎁 VAST gained support for importing suricata json logs. Specify the
+  `suricata` format to the `import` command and you're in business.
+
 - 🎁 The data parser now supports `count` and `integer` values according to the
   *International System for Units (SI)*. For example, `1k` is equal to `1000`
   and `1Ki` equal to `1024`.
