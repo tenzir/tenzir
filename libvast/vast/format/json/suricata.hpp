@@ -155,7 +155,7 @@ struct suricata {
   }
 
   static const char* name() {
-    return "suricata-json-reader";
+    return "suricata-reader";
   }
 
   std::unordered_map<std::string, vast::record_type> types;

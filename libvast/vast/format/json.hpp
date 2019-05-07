@@ -52,9 +52,10 @@ public:
 /// @param builder The builder to add the JSON object to.
 /// @param xs The JSON object to add to *builder.
 /// @param layout The record type describing *xs*.
+/// @param name The name of the reader used for logging.
 /// @returns An error iff the operation failed.
 caf::error add(table_slice_builder& builder, const vast::json::object& xs,
-               const record_type& layout);
+               const record_type& layout, const std::string_view name);
 
 /// @relates reader
 struct default_selector {
@@ -177,7 +178,7 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
     auto bptr = builder(*layout);
     if (bptr == nullptr)
       return make_error(ec::parse_error, "unable to get a builder");
-    if (auto err = add(*bptr, *xs, *layout)) {
+    if (auto err = add(*bptr, *xs, *layout, selector_.name())) {
       err.context() += caf::make_message("line", lines_->line_number());
       return finish(cons, err);
     }

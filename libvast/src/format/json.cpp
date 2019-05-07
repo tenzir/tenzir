@@ -140,24 +140,25 @@ struct convert {
 } // namespace
 
 caf::error add(table_slice_builder& builder, const vast::json::object& xs,
-               const record_type& layout) {
+               const record_type& layout,
+               [[maybe_unused]] const std::string_view name) {
   for (auto& field : layout.fields) {
     auto i = xs.find(field.name);
     // Inexisting fields are treated as empty (unset).
     if (i == xs.end()) {
-      VAST_WARNING_ANON("json-reader", "did not get", field.name);
+      VAST_WARNING_ANON(name, "did not get", field.name);
       builder.add(make_data_view(caf::none));
       continue;
     }
     auto v = i->second;
     auto x = caf::visit(convert{}, v, field.type);
     if (!x) {
-      VAST_WARNING_ANON("json-reader", "could not convert", field.name, ":",
+      VAST_WARNING_ANON(name, "could not convert", field.name, ":",
                         to_string(v));
       return x.error();
     }
     if (!builder.add(make_data_view(*x))) {
-      VAST_WARNING_ANON("json-reader", "could not convert", field.name, ":",
+      VAST_WARNING_ANON(name, "could not convert", field.name, ":",
                         to_string(v));
       return make_error(ec::type_clash, field.name, ":", to_string(v));
     }
