@@ -136,14 +136,14 @@ TEST(ymdshms timestamp parser) {
   CHECK(to_minutes(t) == minutes{55});
   CHECK(to_seconds(t) == seconds{4});
   // TODO: Fix timezone offset without divider
-  // MESSAGE("YYYY-MM-DD+HH:MM+HHMM");
-  // CHECK(parsers::timestamp("2012-08-12+23:55+0130", ts));
-  // sd = floor<days>(ts);
-  // t = ts - sd;
-  // CHECK(sd == years{2012} / 8 / 13);
-  // CHECK_EQUAL(to_hours(t), hours{1});
-  // CHECK_EQUAL(to_minutes(t), minutes{25});
-  // CHECK(to_seconds(t) == seconds{0});
+  MESSAGE("YYYY-MM-DD+HH:MM+HHMM");
+  CHECK(parsers::timestamp("2012-08-12+23:55+0130", ts));
+  sd = floor<days>(ts);
+  t = ts - sd;
+  CHECK(sd == years{2012} / 8 / 13);
+  CHECK_EQUAL(to_hours(t), hours{1});
+  CHECK_EQUAL(to_minutes(t), minutes{25});
+  CHECK(to_seconds(t) == seconds{0});
   MESSAGE("YYYY-MM-DD+HH:MM");
   CHECK(parsers::timestamp("2012-08-12+23:55", ts));
   sd = floor<days>(ts);
