@@ -397,61 +397,47 @@ TEST(bool) {
   CHECK(p0(str));
 }
 
-TEST(integral) {
-  MESSAGE("signed integers");
-  auto str = "-1024"s;
-  auto p0 = integral_parser<int>{};
-  int n;
-  auto f = str.begin();
-  auto l = str.end();
-  CHECK(p0(f, l, n));
-  CHECK(n == -1024);
-  CHECK(f == l);
-  f = str.begin() + 1;
-  n = 0;
-  CHECK(p0(f, l, n));
-  CHECK(n == 1024);
-  CHECK(f == l);
-  str[0] = '+';
-  f = str.begin();
-  n = 0;
-  CHECK(p0(f, l, n));
-  CHECK(n == 1024);
-  CHECK(f == l);
+TEST(signed integral) {
+  auto p = integral_parser<int>{};
+  int x;
+  CHECK(p("-1024", x));
+  CHECK_EQUAL(x, -1024);
+  CHECK(p("1024", x));
+  CHECK_EQUAL(x, 1024);
+  CHECK(p("12.34", x));
+  CHECK_EQUAL(x, 12);
+}
 
-  MESSAGE("unsigned integers");
-  auto p1 = integral_parser<unsigned>{};
-  unsigned u;
-  f = str.begin() + 1; // no sign
-  CHECK(p1(f, l, u));
-  CHECK(u == 1024);
-  CHECK(f == l);
-  f = str.begin() + 1;
-  u = 0;
-  CHECK(p1(f, l, u));
-  CHECK(n == 1024);
-  CHECK(f == l);
+TEST(unsigned integral) {
+  auto p = integral_parser<unsigned>{};
+  unsigned x;
+  CHECK(!p("-1024"));
+  CHECK(p("1024", x));
+  CHECK_EQUAL(x, 1024u);
+  CHECK(p("12.34", x));
+  CHECK_EQUAL(x, 12u);
+}
 
-  MESSAGE("digit constraints");
-  auto p2 = integral_parser<int, 4, 2>{};
-  n = 0;
-  str[0] = '-';
-  f = str.begin();
-  CHECK(p2(f, l, n));
-  CHECK(n == -1024);
-  CHECK(f == l);
-  // Not enough digits.
-  str = "-1";
-  f = str.begin();
-  l = str.end();
-  CHECK(!p2(f, l, n));
-  CHECK(f == str.begin());
-  // Too many digits.
-  str = "-123456";
-  f = str.begin();
-  l = str.end();
-  CHECK(!p2(f, l, unused));
-  CHECK(f == str.begin());
+TEST(signed integral with digit constraints) {
+  constexpr auto max = 4;
+  constexpr auto min = 2;
+  auto p = integral_parser<int, max, min>{};
+  MESSAGE("not enough digits");
+  CHECK(!p("1"));
+  MESSAGE("too many digits");
+  CHECK(!p("12345"));
+  int x;
+  MESSAGE("within range");
+  CHECK(p("12", x));
+  CHECK_EQUAL(x, 12);
+  CHECK(p("123", x));
+  CHECK_EQUAL(x, 123);
+  CHECK(p("1234", x));
+  CHECK_EQUAL(x, 1234);
+  MESSAGE("sign doesn't count as digit");
+  CHECK(!p("-1"));
+  CHECK(p("-1234", x));
+  CHECK_EQUAL(x, -1234);
 }
 
 TEST(real) {
