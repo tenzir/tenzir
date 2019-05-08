@@ -446,13 +446,13 @@ TEST(signed integral with digit constraints) {
   CHECK_EQUAL(*f, '5');
   CHECK_EQUAL(x, 1234);
   MESSAGE("partial match with non-digits character");
-  str = "6789x"sv;
+  str = "678x"sv;
   f = str.begin();
   l = str.end();
   CHECK(p.parse(f, l, x));
   REQUIRE(f + 1 == l);
   CHECK_EQUAL(*f, 'x');
-  CHECK_EQUAL(x, 6789);
+  CHECK_EQUAL(x, 678);
 }
 
 TEST(real) {
