@@ -136,31 +136,53 @@ struct convert {
   }
 };
 
+const vast::json* lookup(std::string_view field, const vast::json::object& xs) {
+  VAST_ASSERT(!field.empty());
+  auto lookup_flat = [&]() {
+    auto r = xs.find(field);
+    return r == xs.end() ? nullptr : &r->second;
+  };
+  auto i = field.find('.');
+  if (i == std::string_view::npos)
+    return lookup_flat();
+  // We have to deal with a nested field name in a potentially nested JSON
+  // object.
+  auto r = xs.find(field.substr(0, i));
+  if (r == xs.end())
+    // Attempt to access JSON field with flattened name.
+    return lookup_flat();
+  auto obj = caf::get_if<vast::json::object>(&r->second);
+  if (obj == nullptr)
+    return nullptr;
+  field.remove_prefix(i + 1);
+  auto res = lookup(field, *obj);
+  return res;
+}
+
 } // namespace
 
 caf::error add(table_slice_builder& builder, const vast::json::object& xs,
                const record_type& layout,
-               [[maybe_unused]] const std::string_view name) {
+               [[maybe_unused]] std::string_view name) {
   for (auto& field : layout.fields) {
-    auto i = xs.find(field.name);
+    auto i = lookup(field.name, xs);
     // Non-existing fields are treated as empty (unset).
-    if (i == xs.end()) {
-      VAST_WARNING_ANON(name, "has no field", field.name, "in type",
-                        layout.name());
+    if (!i) {
+      VAST_DEBUG_ANON(name, "has no field", field.name, "in type",
+                      layout.name());
       builder.add(make_data_view(caf::none));
       continue;
     }
-    auto v = i->second;
-    auto x = caf::visit(convert{}, v, field.type);
+    auto x = caf::visit(convert{}, *i, field.type);
     if (!x) {
       VAST_WARNING_ANON(name, "could not convert", field.name, ":",
-                        to_string(v));
+                        to_string(*i));
       return x.error();
     }
     if (!builder.add(make_data_view(*x))) {
       VAST_WARNING_ANON(name, "could not convert", field.name, ":",
-                        to_string(v));
-      return make_error(ec::type_clash, field.name, ":", to_string(v));
+                        to_string(*i));
+      return make_error(ec::type_clash, field.name, ":", to_string(*i));
     }
   }
   return caf::none;
