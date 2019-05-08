@@ -23,6 +23,7 @@
 #include "vast/format/printer_writer.hpp"
 #include "vast/fwd.hpp"
 #include "vast/json.hpp"
+#include "vast/logger.hpp"
 #include "vast/schema.hpp"
 
 namespace vast::format::json {
@@ -161,7 +162,7 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
   VAST_ASSERT(max_events > 0);
   VAST_ASSERT(max_slice_size > 0);
   size_t produced = 0;
-  while (produced < max_events) {
+  for (; produced < max_events; lines_->next()) {
     // EOF check.
     if (lines_->done())
       return finish(cons, make_error(ec::end_of_input, "input exhausted"));
@@ -173,8 +174,11 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
     if (!xs)
       return make_error(ec::type_clash, "not a json object");
     auto layout = selector_(*xs);
-    if (!layout)
-      return make_error(ec::parse_error, "unable to get a layout");
+    if (!layout) {
+      VAST_INFO(this, "unable to get a layout");
+      continue;
+    }
+    VAST_INFO(this, "got layout", *layout);
     auto bptr = builder(*layout);
     if (bptr == nullptr)
       return make_error(ec::parse_error, "unable to get a builder");
@@ -186,7 +190,6 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
     if (bptr->rows() == max_slice_size)
       if (auto err = finish(cons, bptr))
         return err;
-    lines_->next();
   }
   return finish(cons);
 }
