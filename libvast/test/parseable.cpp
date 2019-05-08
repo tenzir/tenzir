@@ -35,6 +35,7 @@
 #include "vast/si_literals.hpp"
 
 using namespace std::string_literals;
+using namespace std::string_view_literals;
 using namespace vast;
 using namespace vast::parser_literals;
 
@@ -422,11 +423,9 @@ TEST(signed integral with digit constraints) {
   constexpr auto max = 4;
   constexpr auto min = 2;
   auto p = integral_parser<int, max, min>{};
+  int x;
   MESSAGE("not enough digits");
   CHECK(!p("1"));
-  MESSAGE("too many digits");
-  CHECK(!p("12345"));
-  int x;
   MESSAGE("within range");
   CHECK(p("12", x));
   CHECK_EQUAL(x, 12);
@@ -438,6 +437,14 @@ TEST(signed integral with digit constraints) {
   CHECK(!p("-1"));
   CHECK(p("-1234", x));
   CHECK_EQUAL(x, -1234);
+  MESSAGE("partial match");
+  auto str = "12345"sv;
+  auto f = str.begin();
+  auto l = str.end();
+  CHECK(p.parse(f, l, x));
+  REQUIRE(f + 1 == l);
+  CHECK_EQUAL(*f, '5');
+  CHECK_EQUAL(x, 1234);
 }
 
 TEST(real) {
