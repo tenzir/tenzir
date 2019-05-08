@@ -41,8 +41,10 @@ struct suricata {
       return caf::none;
     }
     auto it = types.find(*event_type);
-    if (it == types.end())
+    if (it == types.end()) {
+      VAST_WARNING(this, "does not have a layout for event_type", *event_type);
       return caf::none;
+    }
     auto type = it->second;
     return type;
   }
@@ -76,16 +78,15 @@ struct suricata {
                           {"source.port", port_type{}},
                           {"target.ip", address_type{}},
                           {"target.port", port_type{}}})}};
-    auto dns = record_type{
-      {"dns", record_type{{"type", enumeration_type{{"answer", "query"}}},
-                          {"id", count_type{}},
-                          {"flags", count_type{}},
-                          {"rrname", string_type{}},
-                          {"rrtype", string_type{}},
-                          {"rcode", string_type{}},
-                          {"rdata", string_type{}},
-                          {"ttl", count_type{}},
-                          {"tx_id", count_type{}}}}};
+    auto dns = record_type{{"dns", record_type{{"type", string_type{}},
+                                               {"id", count_type{}},
+                                               {"flags", count_type{}},
+                                               {"rrname", string_type{}},
+                                               {"rrtype", string_type{}},
+                                               {"rcode", string_type{}},
+                                               {"rdata", string_type{}},
+                                               {"ttl", count_type{}},
+                                               {"tx_id", count_type{}}}}};
     // https://suricata.readthedocs.io/en/suricata-4.1.3/output/eve/eve-json-format.html#event-type-http
     // Corresponds to http extended logging.
     auto http = record_type{
