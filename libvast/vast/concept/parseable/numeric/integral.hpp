@@ -53,16 +53,12 @@ struct integral_parser
 
   template <class Iterator, class Attribute, class F>
   static auto accumulate(Iterator& f, const Iterator& l, Attribute& a, F acc) {
-    int digits = 0;
-    a = 0;
-    while (f != l && isdigit(*f)) {
-      if (++digits > MaxDigits)
-        return false;
-      acc(a, *f++ - '0');
-    }
-    if (digits < MinDigits)
+    if (f == l)
       return false;
-    return true;
+    int digits = 0;
+    for (a = 0; isdigit(*f) && f != l && digits < MaxDigits; ++f, ++digits)
+      acc(a, *f - '0');
+    return digits >= MinDigits;
   }
 
   template <class Iterator>

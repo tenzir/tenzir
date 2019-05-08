@@ -437,7 +437,7 @@ TEST(signed integral with digit constraints) {
   CHECK(!p("-1"));
   CHECK(p("-1234", x));
   CHECK_EQUAL(x, -1234);
-  MESSAGE("partial match");
+  MESSAGE("partial match with additional digit");
   auto str = "12345"sv;
   auto f = str.begin();
   auto l = str.end();
@@ -445,6 +445,14 @@ TEST(signed integral with digit constraints) {
   REQUIRE(f + 1 == l);
   CHECK_EQUAL(*f, '5');
   CHECK_EQUAL(x, 1234);
+  MESSAGE("partial match with non-digits character");
+  str = "6789x"sv;
+  f = str.begin();
+  l = str.end();
+  CHECK(p.parse(f, l, x));
+  REQUIRE(f + 1 == l);
+  CHECK_EQUAL(*f, 'x');
+  CHECK_EQUAL(x, 6789);
 }
 
 TEST(real) {
