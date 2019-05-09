@@ -174,7 +174,8 @@ public:
 
   // -- lookup ---------------------------------------------------------------
 
-  mapped_type& at(const key_type& key) {
+  template <class L>
+  mapped_type& at(const L& key) {
     auto i = find(key);
     if (i == end())
       VAST_RAISE_ERROR(std::out_of_range,
@@ -182,7 +183,8 @@ public:
     return i->second;
   }
 
-  const mapped_type& at(const key_type& key) const {
+  template <class L>
+  const mapped_type& at(const L& key) const {
     auto i = find(key);
     if (i == end())
       VAST_RAISE_ERROR(std::out_of_range,
@@ -190,22 +192,26 @@ public:
     return i->second;
   }
 
-  mapped_type& operator[](const key_type& key) {
+  template <class L>
+  mapped_type& operator[](const L& key) {
     auto i = find(key);
     if (i != end())
       return i->second;
     return xs_.insert(i, value_type{key, mapped_type{}})->second;
   }
 
-  iterator find(const key_type& x) {
+  template <class L>
+  iterator find(const L& x) {
     return Policy::lookup(xs_, x);
   }
 
-  const_iterator find(const key_type& x) const {
+  template <class L>
+  const_iterator find(const L& x) const {
     return Policy::lookup(xs_, x);
   }
 
-  size_type count(const key_type& x) const {
+  template <class L>
+  size_type count(const L& x) const {
     return find(x) == end() ? 0 : 1;
   }
 

@@ -101,15 +101,32 @@ timespan to_microseconds(timespan ts) {
 
 TEST(ymdshms timestamp parser) {
   timestamp ts;
-  MESSAGE("YYYY-MM-DD+HH:MM:SS.ssss");
-  CHECK(parsers::timestamp("2012-08-12+23:55:04.001234", ts));
+  MESSAGE("YYYY-MM-DD+HH:MM:SS.ssss+HH");
+  CHECK(parsers::timestamp("2012-08-12+23:55:04.001234+01", ts));
   auto sd = floor<days>(ts);
   auto t = ts - sd;
+  CHECK(sd == years{2012} / 8 / 13);
+  CHECK(to_hours(t) == hours{0});
+  CHECK(to_minutes(t) == minutes{55});
+  CHECK(to_seconds(t) == seconds{4});
+  CHECK(to_microseconds(t) == microseconds{1234});
+  MESSAGE("YYYY-MM-DD+HH:MM:SS.ssss");
+  CHECK(parsers::timestamp("2012-08-12+23:55:04.001234", ts));
+  sd = floor<days>(ts);
+  t = ts - sd;
   CHECK(sd == years{2012} / 8 / 12);
   CHECK(to_hours(t) == hours{23});
   CHECK(to_minutes(t) == minutes{55});
   CHECK(to_seconds(t) == seconds{4});
   CHECK(to_microseconds(t) == microseconds{1234});
+  MESSAGE("YYYY-MM-DD+HH:MM:SS-HH:MM");
+  CHECK(parsers::timestamp("2012-08-12+23:55:04-00:30", ts));
+  sd = floor<days>(ts);
+  t = ts - sd;
+  CHECK(sd == years{2012} / 8 / 12);
+  CHECK_EQUAL(to_hours(t), hours{23});
+  CHECK_EQUAL(to_minutes(t), minutes{25});
+  CHECK(to_seconds(t) == seconds{4});
   MESSAGE("YYYY-MM-DD+HH:MM:SS");
   CHECK(parsers::timestamp("2012-08-12+23:55:04", ts));
   sd = floor<days>(ts);
@@ -118,6 +135,15 @@ TEST(ymdshms timestamp parser) {
   CHECK(to_hours(t) == hours{23});
   CHECK(to_minutes(t) == minutes{55});
   CHECK(to_seconds(t) == seconds{4});
+  // TODO: Fix timezone offset without divider
+  MESSAGE("YYYY-MM-DD+HH:MM+HHMM");
+  CHECK(parsers::timestamp("2012-08-12+23:55+0130", ts));
+  sd = floor<days>(ts);
+  t = ts - sd;
+  CHECK(sd == years{2012} / 8 / 13);
+  CHECK_EQUAL(to_hours(t), hours{1});
+  CHECK_EQUAL(to_minutes(t), minutes{25});
+  CHECK(to_seconds(t) == seconds{0});
   MESSAGE("YYYY-MM-DD+HH:MM");
   CHECK(parsers::timestamp("2012-08-12+23:55", ts));
   sd = floor<days>(ts);

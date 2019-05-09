@@ -650,8 +650,22 @@ struct alias_type final : nested_type<alias_type> {
 
 // -- free functions ----------------------------------------------------------
 
+/// Creates a new unnamed record_type from an arbitrary number of record_types.
+/// @param rs The source records.
+/// @returns The combined record_type.
+/// @relates record_type
+template <typename... Rs>
+record_type concat(const Rs&... rs) {
+  record_type result;
+  result.fields.reserve((rs.fields.size() + ...));
+  (result.fields.insert(result.fields.end(), rs.fields.begin(),
+                        rs.fields.end()),
+   ...);
+  return result;
+}
+
 /// Recursively flattens the arguments of a record type.
-/// @param rec the record to flatten.
+/// @param rec The record to flatten.
 /// @returns The flattened record type.
 /// @relates record_type
 record_type flatten(const record_type& rec);

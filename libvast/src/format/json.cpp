@@ -132,28 +132,50 @@ struct convert {
     VAST_ERROR_ANON("json-reader cannot convert from",
                     caf::detail::pretty_type_name(typeid(T)), "to",
                     caf::detail::pretty_type_name(typeid(U)));
-    VAST_ASSERT(!"this line should never be reached");
     return false;
   }
 };
+
+const vast::json* lookup(std::string_view field, const vast::json::object& xs) {
+  VAST_ASSERT(!field.empty());
+  auto lookup_flat = [&]() {
+    auto r = xs.find(field);
+    return r == xs.end() ? nullptr : &r->second;
+  };
+  auto i = field.find('.');
+  if (i == std::string_view::npos)
+    return lookup_flat();
+  // We have to deal with a nested field name in a potentially nested JSON
+  // object.
+  auto r = xs.find(field.substr(0, i));
+  if (r == xs.end())
+    // Attempt to access JSON field with flattened name.
+    return lookup_flat();
+  auto obj = caf::get_if<vast::json::object>(&r->second);
+  if (obj == nullptr)
+    return nullptr;
+  field.remove_prefix(i + 1);
+  return lookup(field, *obj);
+}
 
 } // namespace
 
 caf::error add(table_slice_builder& builder, const vast::json::object& xs,
                const record_type& layout) {
   for (auto& field : layout.fields) {
-    auto i = xs.find(field.name);
-    // Inexisting fields are treated as empty (unset).
-    if (i == xs.end()) {
+    auto i = lookup(field.name, xs);
+    // Non-existing fields are treated as empty (unset).
+    if (!i) {
       builder.add(make_data_view(caf::none));
       continue;
     }
-    auto v = i->second;
-    auto x = caf::visit(convert{}, v, field.type);
+    auto x = caf::visit(convert{}, *i, field.type);
     if (!x)
-      return x.error();
+      return make_error(ec::convert_error, x.error().context(),
+                        "could not convert", field.name, ":", to_string(*i));
     if (!builder.add(make_data_view(*x)))
-      return make_error(ec::type_clash, field.name, ":", to_string(v));
+      return make_error(ec::type_clash, "unexpected type", field.name, ":",
+                        to_string(*i));
   }
   return caf::none;
 }
