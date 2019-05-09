@@ -115,7 +115,7 @@ TEST(json to data) {
   })json";
   auto jn = unbox(to<json>(str));
   auto xs = caf::get<json::object>(jn);
-  format::json::add(builder, xs, flat, "json-test");
+  format::json::add(builder, xs, flat);
   auto ptr = builder.finish();
   REQUIRE(ptr);
   CHECK(ptr->at(0, 10) == enumeration{2});
@@ -147,9 +147,8 @@ TEST(json reader) {
 
 TEST(suricata) {
   using reader_type = format::json::reader<format::json::suricata>;
-  reader_type reader{defaults::system::table_slice_type,
-                     std::make_unique<std::istringstream>(
-                       std::string{eve_log})};
+  auto input = std::make_unique<std::istringstream>(std::string{eve_log});
+  reader_type reader{defaults::system::table_slice_type, std::move(input)};
   std::vector<table_slice_ptr> slices;
   auto add_slice = [&](table_slice_ptr ptr) {
     slices.emplace_back(std::move(ptr));

@@ -155,35 +155,27 @@ const vast::json* lookup(std::string_view field, const vast::json::object& xs) {
   if (obj == nullptr)
     return nullptr;
   field.remove_prefix(i + 1);
-  auto res = lookup(field, *obj);
-  return res;
+  return lookup(field, *obj);
 }
 
 } // namespace
 
 caf::error add(table_slice_builder& builder, const vast::json::object& xs,
-               const record_type& layout,
-               [[maybe_unused]] std::string_view name) {
+               const record_type& layout) {
   for (auto& field : layout.fields) {
     auto i = lookup(field.name, xs);
     // Non-existing fields are treated as empty (unset).
     if (!i) {
-      VAST_DEBUG_ANON(name, "has no field", field.name, "in type",
-                      layout.name());
       builder.add(make_data_view(caf::none));
       continue;
     }
     auto x = caf::visit(convert{}, *i, field.type);
-    if (!x) {
-      VAST_WARNING_ANON(name, "could not convert", field.name, ":",
+    if (!x)
+      return make_error(ec::convert_error, x.error().context(),
+                        "could not convert", field.name, ":", to_string(*i));
+    if (!builder.add(make_data_view(*x)))
+      return make_error(ec::type_clash, "unexpected type", field.name, ":",
                         to_string(*i));
-      return x.error();
-    }
-    if (!builder.add(make_data_view(*x))) {
-      VAST_WARNING_ANON(name, "could not convert", field.name, ":",
-                        to_string(*i));
-      return make_error(ec::type_clash, field.name, ":", to_string(*i));
-    }
   }
   return caf::none;
 }

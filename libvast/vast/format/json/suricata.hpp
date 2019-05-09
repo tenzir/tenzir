@@ -36,8 +36,7 @@ struct suricata {
       return caf::none;
     auto event_type = caf::get_if<vast::json::string>(&i->second);
     if (!event_type) {
-      VAST_WARNING(this,
-                   "got an event_type field with a non-string type value");
+      VAST_WARNING(this, "got an event_type field with a non-string value");
       return caf::none;
     }
     auto it = types.find(*event_type);
