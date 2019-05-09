@@ -421,7 +421,7 @@ TEST(record symbol finding - suffix) {
   CHECK_EQUAL(r.find_suffix("c.*"), c);
   CHECK_EQUAL(f.find_suffix("c.*"), c_flat);
   MESSAGE("field that is also a record");
-  CHECK_EQUAL(r.find_suffix("b"), (offset_keys{{{1, 1}, "b.b"}}));
+  CHECK_EQUAL(r.find_suffix("b"), (offset_keys{{{1}, "b"}, {{1, 1}, "b.b"}}));
   CHECK_EQUAL(f.find_suffix("b"), (offset_keys{{{2}, "b.b"}}));
   MESSAGE("record name is part of query");
   CHECK_EQUAL(r.find_suffix("foo.a"), (offset_keys{{{0}, "a"}}));

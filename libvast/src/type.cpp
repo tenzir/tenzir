@@ -322,7 +322,39 @@ struct finder {
   offset off_;
 };
 
-} // namespace <anonymous>
+struct offset_map_builder {
+  using result_type = std::vector<std::pair<offset, std::string>>;
+  offset_map_builder(const record_type& r, result_type& result)
+    : r_{r}, result_{result} {
+    run(r_);
+  }
+  void run(const record_type& r) {
+    off_.push_back(0);
+    auto prev_trace_size = trace_.size();
+    for (auto& f : r.fields) {
+      trace_ += '.' + f.name;
+      result_.emplace_back(off_, trace_);
+      if (auto nested = caf::get_if<record_type>(&f.type))
+        run(*nested);
+      trace_.resize(prev_trace_size);
+      ++off_.back();
+    }
+    off_.pop_back();
+  }
+
+  const record_type& r_;
+  result_type& result_;
+  std::string trace_ = r_.name();
+  offset off_;
+};
+
+std::vector<std::pair<offset, std::string>> offset_map(const record_type& r) {
+  offset_map_builder::result_type result;
+  auto builder = offset_map_builder(r, result);
+  return result;
+}
+
+} // namespace
 
 std::vector<std::pair<offset, std::string>>
 record_type::find(std::string_view key) const {
@@ -336,15 +368,24 @@ record_type::find_prefix(std::string_view key) const {
 
 std::vector<std::pair<offset, std::string>>
 record_type::find_suffix(std::string_view key) const {
-  return finder<mode::suffix>{key}(*this);
+  std::vector<std::pair<offset, std::string>> result;
+  auto om = offset_map(*this);
+  auto rx_ = ".*" + pattern::glob(key) + "$";
+  for (auto& [off, name] : om) {
+    if (rx_.match(name))
+      result.emplace_back(off, name);
+  }
+  return result;
 }
 
 const type* record_type::at(std::string_view key) const {
-  auto xs = finder<mode::exact>{key}(*this);
-  if (xs.empty())
-    return nullptr;
-  VAST_ASSERT(xs.size() == 1u);
-  return at(xs[0].first);
+  auto om = offset_map(*this);
+  auto rx_ = "^" + name() + "." + pattern::glob(key) + "$";
+  for (auto& [off, name] : om) {
+    if (rx_.match(name))
+      return at(off);
+  }
+  return nullptr;
 }
 
 const type* record_type::at(const offset& o) const {
