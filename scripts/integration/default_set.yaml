@@ -32,28 +32,28 @@ tests:
   Node Zeek conn log:
     tags: [node, import-export, zeek]
     steps:
-      - command: import -N -b zeek
+      - command: import -N zeek
         input: data/zeek/conn.log.gz
       - command: export -N ascii 'resp_h == 192.168.1.104'
       - command: export -N ascii 'orig_bytes > 1k && orig_bytes < 1Ki'
   Node Zeek multiple imports:
     tags: [node, import-export, zeek]
     steps:
-      - command: import -N -b zeek
+      - command: import -N zeek
         input: data/zeek/conn.log.gz
-      - command: import -N -b zeek
+      - command: import -N zeek
         input: data/zeek/dns.log.gz
       - command: export -N ascii 'resp_h == 192.168.1.104'
   Node Zeek dns log:
     tags: [node, import-export, zeek]
     steps:
-      - command: import -N -b zeek
+      - command: import -N zeek
         input: data/zeek/dns.log.gz
       - command: export -N ascii 'resp_h == 192.168.1.104'
   Node Zeek http log:
     tags: [node, import-export, zeek]
     steps:
-      - command: import -N -b zeek
+      - command: import -N zeek
         input: data/zeek/http.log.gz
       - command: export -N ascii 'resp_h == 216.240.189.196'
   Node Zeek snmp log:
@@ -69,7 +69,7 @@ tests:
   Node Basic mrt:
     tags: [node, import-export, mrt, disabled]
     steps:
-      - command: import -N -b mrt
+      - command: import -N mrt
         input: data/mrt/updates.20180530.0000.gz
       # This prefix occurs 93 times.
       - command: export -N ascii 'prefix == 120.50.4.0/23'
@@ -117,14 +117,14 @@ tests:
   Node json zeek conn:
     tags: [node, import-export, zeek, json]
     steps:
-      - command: import -N -b json -s @./schema/zeek-conn.schema
+      - command: import -N json -s @./schema/zeek-conn.schema
         input: data/json/conn.log.json.gz
       - command: export -N ascii 'duration > 6s'
       - command: export -N ascii '#time >= 2011-08-15T03:48'
   Node suricata alert:
     tags: [node, import-export, suricata, eve]
     steps:
-      - command: import -N -b suricata
+      - command: import -N suricata
         input: data/suricata/eve.json.gz
       - command: export -N ascii 'src_ip == 147.32.84.165'
 
@@ -142,7 +142,7 @@ tests:
     condition: 'import -h 2>&1 | grep -q pcap'
     tags: [examples, disabled]
     steps:
-      - command: import -N -b pcap
+      - command: import -N pcap
         input: data/pcap/example.pcap.gz
       - command: export -N ascii ':addr in 192.168.168.0/24'
       - command: export -N pcap 'sport > 60000/tcp && src !in 192.168.168.0/8'
@@ -157,7 +157,7 @@ tests:
   Multi addr query:
     tags: [import-export, zeek]
     steps:
-      - command: import -N -b zeek
+      - command: import -N zeek
         input: data/zeek/conn.log.gz
       - command: export -N ascii
         input: queries/multi_addr.txt
