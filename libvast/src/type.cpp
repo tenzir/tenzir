@@ -254,74 +254,6 @@ caf::optional<std::string> record_type::resolve(const offset& o) const {
 
 namespace {
 
-enum class mode {
-  prefix,
-  suffix,
-  exact,
-  any,
-};
-
-template <mode Mode>
-struct finder {
-  using result_type = std::vector<std::pair<offset, std::string>>;
-
-  finder(std::string_view key) : rx_{pattern::glob(key)} {
-    if constexpr (Mode == mode::prefix)
-      rx_ = "^" + rx_ + ".*";
-    else if constexpr (Mode == mode::suffix)
-      rx_ = ".*" + rx_ + "$";
-    else if constexpr (Mode == mode::exact)
-      rx_ = "^" + rx_ + "$";
-    else if constexpr (Mode == mode::any)
-      rx_ = ".*" + rx_ + ".*";
-  }
-
-  result_type match() const {
-    result_type result;
-    VAST_INFO(this, VAST_ARG(trace_), VAST_ARG(rx_));
-    if (rx_.match(trace_))
-      result.emplace_back(off_, trace_);
-    return result;
-  }
-
-  template <class T>
-  result_type operator()(const T&) const {
-    return match();
-  }
-
-  result_type operator()(const record_type& r) {
-    result_type result;
-    if constexpr (Mode != mode::suffix) {
-      // Check whether we want this record first. This does not make sense
-      // for suffixes, because they always start at a leaf.
-      auto sub_result = match();
-      result.insert(result.end(),
-                    std::make_move_iterator(sub_result.begin()),
-                    std::make_move_iterator(sub_result.end()));
-    }
-    off_.push_back(0);
-    if constexpr (Mode == mode::suffix)
-      if (trace_.empty())
-        trace_ = r.name();
-    for (auto& f : r.fields) {
-      auto prev_trace_size = trace_.size();
-      trace_ += trace_.empty() ? f.name : '.' + f.name;
-      auto sub_result = visit(*this, f.type);
-      result.insert(result.end(),
-                    std::make_move_iterator(sub_result.begin()),
-                    std::make_move_iterator(sub_result.end()));
-      trace_.resize(prev_trace_size);
-      ++off_.back();
-    }
-    off_.pop_back();
-    return result;
-  }
-
-  pattern rx_;
-  std::string trace_;
-  offset off_;
-};
-
 struct offset_map_builder {
   using result_type = std::vector<std::pair<offset, std::string>>;
   offset_map_builder(const record_type& r, result_type& result)
@@ -355,16 +287,6 @@ std::vector<std::pair<offset, std::string>> offset_map(const record_type& r) {
 }
 
 } // namespace
-
-std::vector<std::pair<offset, std::string>>
-record_type::find(std::string_view key) const {
-  return finder<mode::any>{key}(*this);
-}
-
-std::vector<std::pair<offset, std::string>>
-record_type::find_prefix(std::string_view key) const {
-  return finder<mode::prefix>{key}(*this);
-}
 
 std::vector<std::pair<offset, std::string>>
 record_type::find_suffix(std::string_view key) const {
