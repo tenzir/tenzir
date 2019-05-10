@@ -107,7 +107,7 @@ struct suricata {
                                {"state", string_type{}},
                                {"md5", string_type{}},
                                {"sha1", string_type{}},
-                               {"sha256", count_type{}},
+                               {"sha256", string_type{}},
                                {"stored", boolean_type{}},
                                {"file_id", count_type{}},
                                {"size", count_type{}},

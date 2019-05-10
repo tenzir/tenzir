@@ -175,7 +175,6 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
     auto layout = selector_(*xs);
     if (!layout)
       continue;
-    VAST_INFO(this, "got layout", *layout);
     auto bptr = builder(*layout);
     if (bptr == nullptr)
       return make_error(ec::parse_error, "unable to get a builder");
