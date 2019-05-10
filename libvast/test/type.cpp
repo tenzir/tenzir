@@ -392,35 +392,6 @@ TEST(record symbol finding - exact) {
 
 using offset_keys = std::vector<std::pair<offset, std::string>>;
 
-TEST(record symbol finding - prefix) {
-  const auto r = make_record();
-  const auto f = flatten(r);
-  // Since the type has a name, the prefix has the form "name.first.second".
-  // E.g., a full key is foo.a for field 0 or foo.b.c.z for a nested field.
-  CHECK_EQUAL(r.find_prefix("a"), (offset_keys{{{0}, "a"}}));
-  CHECK_EQUAL(f.find_prefix("a"), (offset_keys{{{0}, "a"}}));
-  CHECK_EQUAL(r.find_prefix("b.a"), (offset_keys{{{1,0}, "b.a"}}));
-  CHECK_EQUAL(f.find_prefix("b.a"), (offset_keys{{{1}, "b.a"}}));
-  const auto b = offset_keys{
-    // clang-format off
-    {{1}, "b"},
-    {{1, 0}, "b.a"},
-    {{1, 1}, "b.b"},
-    {{1, 2}, "b.c"},
-    {{1, 2, 0}, "b.c.x"},
-    {{1, 2, 1}, "b.c.y"},
-    {{1, 2, 2}, "b.c.z"}
-    // clang-format on
-  };
-  const auto b_flat = offset_keys{{{1}, "b.a"},
-                                  {{2}, "b.b"},
-                                  {{3}, "b.c.x"},
-                                  {{4}, "b.c.y"},
-                                  {{5}, "b.c.z"}};
-  CHECK_EQUAL(r.find_prefix("b"), b);
-  CHECK_EQUAL(f.find_prefix("b"), b_flat);
-}
-
 TEST(record symbol finding - suffix) {
   const auto r = make_record();
   const auto f = flatten(r);
@@ -452,26 +423,6 @@ TEST(record symbol finding - suffix) {
   MESSAGE("field that is also a record");
   CHECK_EQUAL(r.find_suffix("b"), (offset_keys{{{1, 1}, "b.b"}}));
   CHECK_EQUAL(f.find_suffix("b"), (offset_keys{{{2}, "b.b"}}));
-}
-
-TEST(record symbol finding - no anchor) {
-  const auto r = make_record();
-  const auto f = flatten(r);
-  auto any_c = offset_keys{
-    {{1, 2}, "b.c"},
-    {{1, 2, 0}, "b.c.x"},
-    {{1, 2, 1}, "b.c.y"},
-    {{1, 2, 2}, "b.c.z"},
-    {{2}, "c"}
-  };
-  auto any_c_flat = offset_keys{
-    {{3}, "b.c.x"},
-    {{4}, "b.c.y"},
-    {{5}, "b.c.z"},
-    {{6}, "c"}
-  };
-  CHECK_EQUAL(r.find("c"), any_c);
-  CHECK_EQUAL(f.find("c"), any_c_flat);
 }
 
 TEST(congruence) {
