@@ -44,6 +44,7 @@ tests:
       - command: import -N zeek
         input: data/zeek/dns.log.gz
       - command: export -N ascii 'resp_h == 192.168.1.104'
+      - command: export -N ascii 'zeek.conn.id.resp_h == 192.168.1.104'
   Node Zeek dns log:
     tags: [node, import-export, zeek]
     steps:
