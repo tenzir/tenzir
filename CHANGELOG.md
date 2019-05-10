@@ -10,15 +10,16 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## [Unreleased]
 
-- 🎁 Nested types are from now on accessed by the `.`-syntax. This means
-  VAST does now have a unified syntax to select nested types and fields.
+- 🔄 Nested types are from now on accessed by the `.`-syntax. This means
+  VAST now has a unified syntax to select nested types and fields.
   For example, what used to be `zeek::http` is now just `zeek.http`.
 
-- 🎁 Data extractors in the query language can contain a type prefix from now
-  on. This enables an easier way to extract data from a specific type. For
-  example, a query to look for conn log entries with destination ip 1.2.3.4 had
-  to be written with 2 terms a la `#type == zeek.conn && id.resp_h == 1.2.3.4`.
-  This can now be replaced with `zeek.conn.id.resp_h == 1.2.3.4`.
+- 🎁 Data extractors in the query language can now contain a type prefix.
+  This enables an easier way to extract data from a specific type. For example,
+  a query to look for Zeek conn log entries with responder IP address 1.2.3.4
+  had to be written with two terms, `#type == zeek.conn && id.resp_h == 1.2.3.4`,
+  because the nested id record can occur in other types as well. Such queries
+  can now written more tersely as `zeek.conn.id.resp_h == 1.2.3.4`.
 
 - 🎁 VAST gained support for importing Suricata JSON logs. The import command
   has a new suricata format that can ingest EVE JSON output.
