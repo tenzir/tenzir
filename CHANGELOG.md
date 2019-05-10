@@ -10,6 +10,10 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## [Unreleased]
 
+- 🎁 Nested types are from now on accessed by the `.`-syntax. This means
+  VAST does now have a unified syntax to select nested types and fields.
+  For example, what used to be `zeek::http` is now just `zeek.http`.
+
 - 🎁 Data extractors in the query language can contain a type prefix from now
   on. This enables an easier way to extract data from a specific type. For
   example, a query to look for conn log entries with destination ip 1.2.3.4 had
