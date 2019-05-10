@@ -593,9 +593,9 @@ struct record_type final : recursive_type<record_type> {
   /// @returns The key corresponding to *o*.
   caf::optional<std::string> resolve(const offset& o) const;
 
-  /// Finds all offset-key pairs for a *suffix* key in this and nested records.
+  /// Finds all offsets for a *suffix* key in this and nested records.
   /// @param key The key to resolve.
-  /// @returns The offset-keys corresponding to the found *key*.
+  /// @returns The offsets of fields matching *key*.
   std::vector<offset> find_suffix(std::string_view key) const;
 
   /// Retrieves the type at a given key.
