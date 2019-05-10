@@ -147,13 +147,11 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
           } else if (lhs.attr == system::type_atom::value) {
             result_type result;
             for (auto& [part_id, part_syn] : partition_synopses_)
-              for (auto& pair : part_syn) {
-                VAST_INFO(this, "checking", pair.first.name());
+              for (auto& pair : part_syn)
                 if (evaluate(pair.first.name(), x.op, d)) {
                   result.push_back(part_id);
                   break;
                 }
-              }
             return result;
           }
           VAST_WARNING(this, "cannot process attribute extractor:", lhs.attr);

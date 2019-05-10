@@ -160,12 +160,10 @@ evaluation_map partition::eval(const expression& expr) {
   for (auto layout : layouts()) {
     // Step #2: Split the resolved expression into its predicates and select
     // all matching INDEXER actors per predicate.
-    VAST_INFO_ANON("partition", "resolve", layout.name());
     auto resolved = resolve(expr, layout);
     // Skip any layout that we cannot resolve.
     if (resolved.empty())
       continue;
-    VAST_INFO_ANON("partition", "not empty", layout.name());
     // Add triples (offset, curried predicate, and INDEXER) to evaluation map.
     evaluation_map::mapped_type triples;
     for (auto& kvp: resolved) {
@@ -185,7 +183,6 @@ evaluation_map partition::eval(const expression& expr) {
                               }),
                             pred.lhs, pred.rhs);
       if (hdl != nullptr) {
-        VAST_DEBUG_ANON(__func__, "adds INDEXER", hdl, "to the evaluation map");
         triples.emplace_back(kvp.first, curried(pred), std::move(hdl));
       }
     }

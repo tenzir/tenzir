@@ -254,7 +254,6 @@ bool resolve_impl(std::vector<std::pair<offset, predicate>>& result,
         return false;
       for (auto& pred : caf::visit(predicatizer{}, *resolved))
         result.emplace_back(o, std::move(pred));
-      VAST_INFO_ANON(__func__, "test", to_string(*resolved));
       return true;
     },
     [&](caf::none_t) {
