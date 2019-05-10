@@ -370,14 +370,14 @@ expected<expression> type_resolver::operator()(const key_extractor& ex,
     auto suffixes = r->find_suffix(ex.key);
     // All suffixes must pass the type check, otherwise the RHS of a
     // predicate would be ambiguous.
-    for (auto& pair : suffixes) {
-      auto t = r->at(pair.first);
+    for (auto& offset : suffixes) {
+      auto t = r->at(offset);
       VAST_ASSERT(t);
       if (!compatible(*t, op_, d))
         return make_error(ec::type_clash, *t, op_, d);
     }
-    for (auto& pair : suffixes) {
-      auto x = data_extractor{type_, std::move(pair.first)};
+    for (auto& offset : suffixes) {
+      auto x = data_extractor{type_, std::move(offset)};
       connective.emplace_back(predicate{std::move(x), op_, d});
     }
   // Second, try to interpret the key as the name of a single type.

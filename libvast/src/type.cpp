@@ -288,14 +288,13 @@ std::vector<std::pair<offset, std::string>> offset_map(const record_type& r) {
 
 } // namespace
 
-std::vector<std::pair<offset, std::string>>
-record_type::find_suffix(std::string_view key) const {
-  std::vector<std::pair<offset, std::string>> result;
+std::vector<offset> record_type::find_suffix(std::string_view key) const {
+  std::vector<offset> result;
   auto om = offset_map(*this);
   auto rx_ = ".*" + pattern::glob(key) + "$";
   for (auto& [off, name] : om) {
     if (rx_.match(name))
-      result.emplace_back(off, name);
+      result.emplace_back(off);
   }
   return result;
 }
