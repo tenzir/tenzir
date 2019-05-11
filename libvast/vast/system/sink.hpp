@@ -47,6 +47,10 @@ struct sink_state {
   Writer writer;
   const char* name = "writer";
 
+  sink_state(caf::event_based_actor* self_ptr) : self(self_ptr) {
+    // nop
+  }
+
   void send_report() {
     if (accountant && measurement.events > 0) {
       auto r = performance_report{{{std::string{name}, measurement}}};
@@ -62,7 +66,6 @@ caf::behavior sink(caf::stateful_actor<sink_state<Writer>>* self,
   static_assert(std::is_base_of_v<format::writer, Writer>);
   using namespace std::chrono;
   auto& st = self->state;
-  st.self = self;
   st.writer = std::move(writer);
   st.name = st.writer.name();
   st.last_flush = steady_clock::now();
