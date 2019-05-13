@@ -126,8 +126,7 @@ tests:
   Node suricata alert:
     tags: [node, import-export, suricata, eve]
     steps:
-      - command: import -N suricata
-        input: data/suricata/eve.json.gz
+      - command: import -N suricata -r @./data/suricata/eve.json
       - command: export -N ascii 'src_ip == 147.32.84.165'
 
   Manual 1:
