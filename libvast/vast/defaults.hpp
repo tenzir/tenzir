@@ -80,6 +80,15 @@ struct json {
   static constexpr auto read = shared::read;
 };
 
+/// Contains settings for the suricata subcommand.
+struct suricata {
+  /// Nested category in config files for this subcommand.
+  static constexpr const char* category = "import.suricata";
+
+  /// Path for reading input events.
+  static constexpr auto read = shared::read;
+};
+
 /// Contains settings for the test subcommand.
 struct test {
   /// Nested category in config files for this subcommand.

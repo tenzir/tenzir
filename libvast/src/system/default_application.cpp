@@ -92,9 +92,10 @@ default_application::default_application() {
   namespace fj = format::json;
   import_->add(reader_command<fj::reader<>, defaults::import::json>, "json",
                "imports json with schema", src_opts("?import.json"));
-  import_->add(reader_command<fj::reader<fj::suricata>, defaults::import::json>,
-               "suricata", "imports suricata eve json",
-               src_opts("?import.suricata"));
+  import_
+    ->add(reader_command<fj::reader<fj::suricata>, defaults::import::suricata>,
+          "suricata", "imports suricata eve json",
+          src_opts("?import.suricata"));
   import_->add(GENERATOR(test),
                "imports random data for testing or benchmarking",
                opts("?import.test").add<size_t>("seed", "the random seed"));
