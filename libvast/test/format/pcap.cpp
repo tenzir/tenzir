@@ -51,7 +51,7 @@ TEST(PCAP read/write 1) {
   REQUIRE_EQUAL(events.size(), produced);
   REQUIRE(!events.empty());
   CHECK_EQUAL(events.size(), 44u);
-  CHECK_EQUAL(events[0].type().name(), "pcap::packet");
+  CHECK_EQUAL(events[0].type().name(), "pcap.packet");
   auto pkt = unbox(caf::get_if<vector>(&events.back().data()));
   auto src = unbox(caf::get_if<address>(&pkt.at(1)));
   CHECK_EQUAL(src, unbox(to<address>("192.168.1.1")));
@@ -83,7 +83,7 @@ TEST(PCAP read/write 2) {
   REQUIRE_EQUAL(events.size(), produced);
   REQUIRE(!events.empty());
   CHECK_EQUAL(events.size(), 36u);
-  CHECK_EQUAL(events[0].type().name(), "pcap::packet");
+  CHECK_EQUAL(events[0].type().name(), "pcap.packet");
   MESSAGE("write out read packets");
   auto file = "vast-unit-test-workshop-2011-browse.pcap";
   format::pcap::writer writer{file};

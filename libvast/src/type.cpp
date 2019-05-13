@@ -17,6 +17,7 @@
 
 #include "vast/data.hpp"
 #include "vast/json.hpp"
+#include "vast/logger.hpp"
 #include "vast/pattern.hpp"
 #include "vast/schema.hpp"
 #include "vast/type.hpp"
@@ -253,93 +254,60 @@ caf::optional<std::string> record_type::resolve(const offset& o) const {
 
 namespace {
 
-enum class mode {
-  prefix,
-  suffix,
-  exact,
-  any,
-};
-
-template <mode Mode>
-struct finder {
+struct offset_map_builder {
   using result_type = std::vector<std::pair<offset, std::string>>;
 
-  finder(std::string_view key) : rx_{pattern::glob(key)} {
-    if constexpr (Mode == mode::prefix)
-      rx_ = "^" + rx_ + ".*";
-    else if constexpr (Mode == mode::suffix)
-      rx_ = ".*" + rx_ + "$";
-    else if constexpr (Mode == mode::exact)
-      rx_ = "^" + rx_ + "$";
-    else if constexpr (Mode == mode::any)
-      rx_ = ".*" + rx_ + ".*";
+  offset_map_builder(const record_type& r, result_type& result)
+    : r_{r}, result_{result} {
+    run(r_);
   }
 
-  result_type match() const {
-    result_type result;
-    if (rx_.match(trace_))
-      result.emplace_back(off_, trace_);
-    return result;
-  }
-
-  template <class T>
-  result_type operator()(const T&) const {
-    return match();
-  }
-
-  result_type operator()(const record_type& r) {
-    result_type result;
-    if constexpr (Mode != mode::suffix) {
-      // Check whether we want this record first. This does not make sense
-      // for suffixes, because they always start at a leaf.
-      auto sub_result = match();
-      result.insert(result.end(),
-                    std::make_move_iterator(sub_result.begin()),
-                    std::make_move_iterator(sub_result.end()));
-    }
+  void run(const record_type& r) {
     off_.push_back(0);
+    auto prev_trace_size = trace_.size();
     for (auto& f : r.fields) {
-      auto prev_trace_size = trace_.size();
-      trace_ += trace_.empty() ? f.name : '.' + f.name;
-      auto sub_result = visit(*this, f.type);
-      result.insert(result.end(),
-                    std::make_move_iterator(sub_result.begin()),
-                    std::make_move_iterator(sub_result.end()));
+      trace_ += '.' + f.name;
+      result_.emplace_back(off_, trace_);
+      if (auto nested = caf::get_if<record_type>(&f.type))
+        run(*nested);
       trace_.resize(prev_trace_size);
       ++off_.back();
     }
     off_.pop_back();
-    return result;
   }
 
-  pattern rx_;
-  std::string trace_;
+  const record_type& r_;
+  result_type& result_;
+  std::string trace_ = r_.name();
   offset off_;
 };
 
-} // namespace <anonymous>
-
-std::vector<std::pair<offset, std::string>>
-record_type::find(std::string_view key) const {
-  return finder<mode::any>{key}(*this);
+std::vector<std::pair<offset, std::string>> offset_map(const record_type& r) {
+  offset_map_builder::result_type result;
+  auto builder = offset_map_builder(r, result);
+  return result;
 }
 
-std::vector<std::pair<offset, std::string>>
-record_type::find_prefix(std::string_view key) const {
-  return finder<mode::prefix>{key}(*this);
-}
+} // namespace
 
-std::vector<std::pair<offset, std::string>>
-record_type::find_suffix(std::string_view key) const {
-  return finder<mode::suffix>{key}(*this);
+std::vector<offset> record_type::find_suffix(std::string_view key) const {
+  std::vector<offset> result;
+  auto om = offset_map(*this);
+  auto rx_ = ".*" + pattern::glob(key) + "$";
+  for (auto& [off, name] : om)
+    if (rx_.match(name))
+      result.emplace_back(off);
+  return result;
 }
 
 const type* record_type::at(std::string_view key) const {
-  auto xs = finder<mode::exact>{key}(*this);
-  if (xs.empty())
-    return nullptr;
-  VAST_ASSERT(xs.size() == 1u);
-  return at(xs[0].first);
+  auto om = offset_map(*this);
+  auto rx_ = "^" + name() + "." + pattern::glob(key) + "$";
+  for (auto& [off, name] : om) {
+    if (rx_.match(name))
+      return at(off);
+  }
+  return nullptr;
 }
 
 const type* record_type::at(const offset& o) const {

@@ -183,7 +183,6 @@ evaluation_map partition::eval(const expression& expr) {
                               }),
                             pred.lhs, pred.rhs);
       if (hdl != nullptr) {
-        VAST_DEBUG_ANON(__func__, "adds INDEXER", hdl, "to the evaluation map");
         triples.emplace_back(kvp.first, curried(pred), std::move(hdl));
       }
     }

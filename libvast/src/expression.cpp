@@ -12,10 +12,13 @@
  ******************************************************************************/
 
 #include "vast/expression.hpp"
+#include "vast/concept/printable/to_string.hpp"
+#include "vast/concept/printable/vast/expression.hpp"
 #include "vast/expression_visitors.hpp"
 
 #include "vast/detail/assert.hpp"
 #include "vast/detail/overload.hpp"
+#include "vast/logger.hpp"
 
 namespace vast {
 

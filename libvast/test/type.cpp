@@ -343,7 +343,7 @@ TEST(record flat index computation) {
   CHECK_EQUAL(x.flat_index_at(offset({2})), invalid);
 }
 
-TEST(record symbol finding) {
+record_type make_record() {
   auto r = record_type{
     {"a", integer_type{}},
     {"b", record_type{
@@ -358,8 +358,12 @@ TEST(record symbol finding) {
     {"c", count_type{}}
   };
   r = r.name("foo");
-  auto f = flatten(r);
-  MESSAGE("record access by key");
+  return r;
+}
+
+TEST(record symbol finding - exact) {
+  const auto r = make_record();
+  const auto f = flatten(r);
   auto first = r.at("a");
   REQUIRE(first);
   CHECK(holds_alternative<integer_type>(*first));
@@ -384,81 +388,34 @@ TEST(record symbol finding) {
   CHECK(holds_alternative<record_type>(*rec));
   rec = f.at("b.c");
   CHECK(!rec);
-  MESSAGE("prefix finding");
-  // Since the type has a name, the prefix has the form "name.first.second".
-  // E.g., a full key is foo.a for field 0 or foo.b.c.z for a nested field.
-  using offset_keys = std::vector<std::pair<offset, std::string>>;
-  CHECK_EQUAL(r.find_prefix("a"), (offset_keys{{{0}, "a"}}));
-  CHECK_EQUAL(f.find_prefix("a"), (offset_keys{{{0}, "a"}}));
-  CHECK_EQUAL(r.find_prefix("b.a"), (offset_keys{{{1,0}, "b.a"}}));
-  CHECK_EQUAL(f.find_prefix("b.a"), (offset_keys{{{1}, "b.a"}}));
-  auto b = offset_keys{
-    {{1}, "b"},
-    {{1, 0}, "b.a"},
-    {{1, 1}, "b.b"},
-    {{1, 2}, "b.c"},
-    {{1, 2, 0}, "b.c.x"},
-    {{1, 2, 1}, "b.c.y"},
-    {{1, 2, 2}, "b.c.z"}
-  };
-  auto b_flat = offset_keys{
-    {{1}, "b.a"},
-    {{2}, "b.b"},
-    {{3}, "b.c.x"},
-    {{4}, "b.c.y"},
-    {{5}, "b.c.z"}
-  };
-  CHECK_EQUAL(r.find_prefix("b"), b);
-  CHECK_EQUAL(f.find_prefix("b"), b_flat);
-  MESSAGE("suffix finding");
-  // Find a single deep field.
-  CHECK_EQUAL(r.find_suffix("c.y"), (offset_keys{{{1, 2, 1}, "b.c.y"}}));
-  CHECK_EQUAL(f.find_suffix("c.y"), (offset_keys{{{4}, "b.c.y"}}));
-  CHECK_EQUAL(r.find_suffix("z"), (offset_keys{{{1, 2, 2}, "b.c.z"}}));
-  CHECK_EQUAL(f.find_suffix("z"), (offset_keys{{{5}, "b.c.z"}}));
-  // Find multiple record fields.
-  auto a = offset_keys{
-    {{0}, "a"},
-    {{1, 0}, "b.a"},
-  };
-  auto a_flat = offset_keys{
-    {{0}, "a"},
-    {{1}, "b.a"},
-  };
+}
+
+using offset_keys = std::vector<offset>;
+
+TEST(record symbol finding - suffix) {
+  const auto r = make_record();
+  const auto f = flatten(r);
+  MESSAGE("single deep field");
+  CHECK_EQUAL(r.find_suffix("c.y"), (offset_keys{{1, 2, 1}}));
+  CHECK_EQUAL(f.find_suffix("c.y"), (offset_keys{{4}}));
+  CHECK_EQUAL(r.find_suffix("z"), (offset_keys{{1, 2, 2}}));
+  CHECK_EQUAL(f.find_suffix("z"), (offset_keys{{5}}));
+  MESSAGE("multiple record fields");
+  const auto a = offset_keys{{0}, {1, 0}};
+  const auto a_flat = offset_keys{{0}, {1}};
   CHECK_EQUAL(r.find_suffix("a"), a);
   CHECK_EQUAL(f.find_suffix("a"), a_flat);
-  // Use a glob expression.
-  auto c = offset_keys{
-    {{1, 2, 0}, "b.c.x"},
-    {{1, 2, 1}, "b.c.y"},
-    {{1, 2, 2}, "b.c.z"}
-  };
-  auto c_flat = offset_keys{
-    {{3}, "b.c.x"},
-    {{4}, "b.c.y"},
-    {{5}, "b.c.z"}
-  };
+  MESSAGE("glob expression");
+  const auto c = offset_keys{{1, 2, 0}, {1, 2, 1}, {1, 2, 2}};
+  const auto c_flat = offset_keys{{3}, {4}, {5}};
   CHECK_EQUAL(r.find_suffix("c.*"), c);
   CHECK_EQUAL(f.find_suffix("c.*"), c_flat);
-  // Find a field that is also a record.
-  CHECK_EQUAL(r.find_suffix("b"), (offset_keys{{{1, 1}, "b.b"}}));
-  CHECK_EQUAL(f.find_suffix("b"), (offset_keys{{{2}, "b.b"}}));
-  MESSAGE("arbitrary finding");
-  auto any_c = offset_keys{
-    {{1, 2}, "b.c"},
-    {{1, 2, 0}, "b.c.x"},
-    {{1, 2, 1}, "b.c.y"},
-    {{1, 2, 2}, "b.c.z"},
-    {{2}, "c"}
-  };
-  auto any_c_flat = offset_keys{
-    {{3}, "b.c.x"},
-    {{4}, "b.c.y"},
-    {{5}, "b.c.z"},
-    {{6}, "c"}
-  };
-  CHECK_EQUAL(r.find("c"), any_c);
-  CHECK_EQUAL(f.find("c"), any_c_flat);
+  MESSAGE("field that is also a record");
+  CHECK_EQUAL(r.find_suffix("b"), (offset_keys{{1}, {1, 1}}));
+  CHECK_EQUAL(f.find_suffix("b"), (offset_keys{{2}}));
+  MESSAGE("record name is part of query");
+  CHECK_EQUAL(r.find_suffix("foo.a"), (offset_keys{{0}}));
+  CHECK_EQUAL(f.find_suffix("oo.b.c.y"), (offset_keys{{4}}));
 }
 
 TEST(congruence) {

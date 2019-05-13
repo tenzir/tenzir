@@ -34,17 +34,17 @@ bgpdump_parser::bgpdump_parser() {
     {"atomic_aggregate", string_type{}},
     {"aggregator", string_type{}},
   };
-  announce_type = record_type{fields}.name("bgpdump::announcement");
+  announce_type = record_type{fields}.name("bgpdump.announcement");
   // Route & withdraw type.
-  route_type = record_type{std::move(fields)}.name("bgpdump::routing");
+  route_type = record_type{std::move(fields)}.name("bgpdump.routing");
   auto withdraw_fields = std::vector<record_field>{
     {"timestamp", timestamp_type{}.attributes({{"time"}})},
     {"source_ip", address_type{}},
     {"source_as", count_type{}},
     {"prefix", subnet_type{}},
   };
-  withdraw_type =
-    record_type{std::move(withdraw_fields)}.name("bgpdump::withdrawn");
+  withdraw_type = record_type{std::move(withdraw_fields)}.name(
+    "bgpdump.withdrawn");
   // State-change type.
   auto state_change_fields = std::vector<record_field>{
     {"timestamp", timestamp_type{}.attributes({{"time"}})},
@@ -53,8 +53,8 @@ bgpdump_parser::bgpdump_parser() {
     {"old_state", string_type{}},
     {"new_state", string_type{}},
   };
-  state_change_type =
-    record_type{std::move(state_change_fields)}.name("bgpdump::state_change");
+  state_change_type = record_type{std::move(state_change_fields)}.name(
+    "bgpdump.state_change");
 }
 
 caf::error reader::schema(vast::schema x) {
