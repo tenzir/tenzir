@@ -127,7 +127,7 @@ TEST(lazy initialization) {
     CHECK_EQUAL(put->dirty(), false);
     MESSAGE("add lazily initialized table indexers");
     for (auto& x : layouts)
-      CHECK_EQUAL(put->get_or_add(x).first.init(), caf::none);
+      CHECK_EQUAL(unbox(put->get_or_add(x)).first.init(), caf::none);
     CHECK_EQUAL(put->dirty(), true);
     CHECK_EQUAL(sorted_strings(put->layouts()), sorted_strings(layouts));
     CHECK_EQUAL(running_indexers(), 0u);
@@ -150,7 +150,7 @@ TEST(eager initialization) {
     id = put->id();
     MESSAGE("add eagerly initialized table indexers");
     for (auto& x : layouts) {
-      auto& tbl = put->get_or_add(x).first;
+      auto& tbl = unbox(put->get_or_add(x)).first;
       CHECK_EQUAL(tbl.init(), caf::none);
       tbl.spawn_indexers();
     }
@@ -180,7 +180,8 @@ TEST(integer rows lookup) {
   auto slice = default_table_slice::make(layout, rows);
   std::vector<table_slice_ptr> slices{slice};
   detail::spawn_container_source(sys, std::move(slices),
-                                 put->manager().get_or_add(layout).first);
+                                 unbox(put->manager().get_or_add(layout))
+                                   .first);
   run();
   MESSAGE("verify partition content");
   auto res = [&](auto... args) {
@@ -200,7 +201,7 @@ TEST(single partition zeek conn log lookup) {
   put = make_partition();
   MESSAGE("ingest zeek conn logs");
   auto layout = zeek_conn_log_layout();
-  auto indexer = put->manager().get_or_add(layout).first;
+  auto indexer = unbox(put->manager().get_or_add(layout)).first;
   detail::spawn_container_source(sys, zeek_conn_log_slices, indexer);
   run();
   MESSAGE("verify partition content");
@@ -233,7 +234,7 @@ TEST(multiple partitions zeek conn log lookup no messaging) {
     auto ptr = make_partition(uuid::random());
     CHECK_EQUAL(exists(ptr->dir()), false);
     CHECK_EQUAL(ptr->dirty(), false);
-    auto indexers = ptr->manager().get_or_add(layout).first;
+    auto indexers = unbox(ptr->manager().get_or_add(layout)).first;
     run();
     for (auto& idx_hdl : indexers) {
       auto& idx = deref<indexer_type>(idx_hdl);

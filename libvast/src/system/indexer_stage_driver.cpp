@@ -53,28 +53,31 @@ void indexer_stage_driver::process(downstream_type& out, batch_type& slices) {
     st.meta_idx.add(st.active->id(), *slice);
     // Start new INDEXER actors when needed and add it to the stream.
     auto& layout = slice->layout();
-    auto [meta_x, added] = st.active->get_or_add(layout);
-    if (added) {
-      VAST_DEBUG(st.self, "added a new table_indexer for layout", layout);
-      if (auto err = meta_x.init()) {
-        VAST_ERROR(st.self,
-                   "failed to initialize table_indexer for layout", layout,
-                   "-> all incoming logs get dropped!");
-      } else {
-        meta_x.spawn_indexers();
-        for (auto& x : meta_x.indexers()) {
-          // We'll have invalid handles at all fields with skip attribute.
-          if (x) {
-            auto slt = out_.parent()->add_unchecked_outbound_path<output_type>(x);
-            VAST_DEBUG(st.self, "spawned new INDEXER at slot", slt);
-            out_.set_filter(slt, layout);
-            st.active_partition_indexers++;
+    auto ti = st.active->get_or_add(layout);
+    if (ti) {
+      auto [meta_x, added] = *ti;
+      if (added) {
+        VAST_DEBUG(st.self, "added a new table_indexer for layout", layout);
+        if (auto err = meta_x.init()) {
+          VAST_ERROR(st.self, "failed to initialize table_indexer for layout",
+                     layout, "-> all incoming logs get dropped!");
+        } else {
+          meta_x.spawn_indexers();
+          for (auto& x : meta_x.indexers()) {
+            // We'll have invalid handles at all fields with skip attribute.
+            if (x) {
+              auto slt = out_.parent()
+                           ->add_unchecked_outbound_path<output_type>(x);
+              VAST_DEBUG(st.self, "spawned new INDEXER at slot", slt);
+              out_.set_filter(slt, layout);
+              st.active_partition_indexers++;
+            }
           }
         }
       }
+      // Add all rows IDs to the meta indexer.
+      meta_x.add(slice);
     }
-    // Add all rows IDs to the meta indexer.
-    meta_x.add(slice);
     // Ship event to the INDEXER actors.
     auto slice_size = slice->rows();
     out.push(std::move(slice));
