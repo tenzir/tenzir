@@ -168,20 +168,25 @@ evaluation_map partition::eval(const expression& expr) {
     evaluation_map::mapped_type triples;
     for (auto& kvp: resolved) {
       auto& pred = kvp.second;
-      auto hdl = caf::visit(detail::overload(
-                              [&](const attribute_extractor& ex,
-                                  const data& x) {
-                                return fetch_indexer(get_or_add(layout).first,
-                                                     ex, pred.op, x);
-                              },
-                              [&](const data_extractor& dx, const data& x) {
-                                return fetch_indexer(get_or_add(layout).first,
-                                                     dx, pred.op, x);
-                              },
-                              [](const auto&, const auto&) {
-                                return caf::actor{};
-                              }),
-                            pred.lhs, pred.rhs);
+      auto get_indexer_handle = [&](const auto& ext, const data& x) {
+        if (auto i = get_or_add(layout))
+          return fetch_indexer(i->first, ext, pred.op, x);
+        VAST_ERROR(state_->self,
+                   "failed to initialize table_indexer for layout", layout,
+                   "-> query will not execute on the full data set");
+        return caf::actor{};
+      };
+      auto v = detail::overload(
+        [&](const attribute_extractor& ex, const data& x) {
+          return get_indexer_handle(ex, x); // clang-format fix
+        },
+        [&](const data_extractor& dx, const data& x) {
+          return get_indexer_handle(dx, x);
+        },
+        [](const auto&, const auto&) {
+          return caf::actor{}; // clang-format fix
+        });
+      auto hdl = caf::visit(v, pred.lhs, pred.rhs);
       if (hdl != nullptr) {
         triples.emplace_back(kvp.first, curried(pred), std::move(hdl));
       }
@@ -209,17 +214,20 @@ path partition::meta_file() const {
   return base_dir() / "meta";
 }
 
-std::pair<table_indexer&, bool> partition::get_or_add(const record_type& key) {
+caf::expected<std::pair<table_indexer&, bool>>
+partition::get_or_add(const record_type& key) {
   VAST_TRACE(VAST_ARG(key));
   auto i = table_indexers_.find(key);
   if (i != table_indexers_.end())
-    return {i->second, false};
+    return std::pair<table_indexer&, bool>{i->second, false};
   auto digest = to_digest(key);
   add_layout(digest, key);
-  auto result = table_indexers_.emplace(key, table_indexer{this, key});
+  auto ti = table_indexer::make(this, key);
+  if (!ti)
+    return ti.error();
+  auto result = table_indexers_.emplace(key, std::move(*ti));
   VAST_ASSERT(result.second == true);
-  return {result.first->second, true};
-
+  return std::pair<table_indexer&, bool>{result.first->second, true};
 }
 
 } // namespace vast::system

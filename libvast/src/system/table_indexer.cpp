@@ -54,6 +54,14 @@ table_indexer::~table_indexer() noexcept {
     flush_to_disk();
 }
 
+caf::expected<table_indexer> table_indexer::make(partition* parent,
+                                                 const record_type& layout) {
+  auto ret = table_indexer{parent, layout};
+  if (auto err = ret.init())
+    return err;
+  return ret;
+}
+
 // -- persistence --------------------------------------------------------------
 
 caf::error table_indexer::init() {

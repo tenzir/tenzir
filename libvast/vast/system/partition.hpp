@@ -109,7 +109,9 @@ public:
   /// @returns the file name for saving or loading the ::meta_data.
   path meta_file() const;
 
-  std::pair<table_indexer&, bool> get_or_add(const record_type& key);
+  /// @returns The corresponding table indexer for a given type.
+  caf::expected<std::pair<table_indexer&, bool>>
+  get_or_add(const record_type& key);
 
   // -- operations -------------------------------------------------------------
 

@@ -37,10 +37,7 @@ namespace vast::system {
 /// Wraps multiple INDEXER actors according to a layout and dispatches queries.
 class table_indexer {
 public:
-  // -- constructors, destructors, and assignment operators --------------------
-
-  /// @pre `parent != nullptr`
-  table_indexer(partition* parent, const record_type& layout);
+  // -- destructor, constructors, assignment operators, and factory ------------
 
   ~table_indexer() noexcept;
 
@@ -49,6 +46,10 @@ public:
 
   table_indexer(table_indexer&&) = default;
   table_indexer& operator=(table_indexer&&) = default;
+
+  /// @pre `parent != nullptr`
+  static caf::expected<table_indexer> make(partition* parent,
+                                           const record_type& layout);
 
   // -- persistence ------------------------------------------------------------
 
@@ -128,6 +129,11 @@ public:
   void add(const table_slice_ptr& x);
 
 private:
+  // -- constructor ------------------------------------------------------------
+
+  /// @pre `parent != nullptr`
+  table_indexer(partition* parent, const record_type& layout);
+
   // -- utility functions ------------------------------------------------------
 
   /// Marks the state as clean, i.e. persistet.
