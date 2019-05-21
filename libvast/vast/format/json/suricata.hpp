@@ -137,13 +137,17 @@ struct suricata {
                                     {"stream", count_type{}},
                                     {"packet", string_type{}},
                                     {"packet_info.linktype", count_type{}}});
-    types = {{"alert", flatten(alert)},
-             {"dns", flatten(concat(common, dns))},
-             {"fileinfo", flatten(concat(common, fileinfo, http, app_proto))},
+    types = {{"alert", flatten(alert).name("suricata.alert")},
+             {"dns", flatten(concat(common, dns)).name("suricata.dns")},
+             {"fileinfo", flatten(concat(common, fileinfo, http, app_proto))
+                            .name("suricata.fileinfo")},
              {"http", flatten(concat(common, http,
-                                     record_type{{"tx_id", count_type{}}}))},
-             {"flow", flatten(concat(common, flow, app_proto))},
-             {"netflow", flatten(concat(common, netflow, app_proto))}};
+                                     record_type{{"tx_id", count_type{}}}))
+                        .name("suricata.http")},
+             {"flow",
+              flatten(concat(common, flow, app_proto)).name("suricata.flow")},
+             {"netflow", flatten(concat(common, netflow, app_proto))
+                           .name("suricata.netflow")}};
   }
 
   caf::error schema(vast::schema) {
