@@ -57,9 +57,8 @@ table_indexer::~table_indexer() noexcept {
 caf::expected<table_indexer> table_indexer::make(partition* parent,
                                                  const record_type& layout) {
   auto ret = table_indexer{parent, layout};
-  if (auto err = ret.init()) {
+  if (auto err = ret.init())
     return err;
-  }
   return ret;
 }
 

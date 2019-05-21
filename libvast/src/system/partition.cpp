@@ -169,26 +169,24 @@ evaluation_map partition::eval(const expression& expr) {
     for (auto& kvp: resolved) {
       auto& pred = kvp.second;
       auto get_indexer_handle = [&](const auto& ext, const data& x) {
-        auto i = get_or_add(layout);
-        if (!i) {
-          VAST_ERROR(state_->self,
-                     "failed to initialize table_indexer for layout", layout,
-                     "-> query will not execute on the full data set");
-          return caf::actor{};
-        }
-        return fetch_indexer(i->first, ext, pred.op, x);
+        if (auto i = get_or_add(layout))
+          return fetch_indexer(i->first, ext, pred.op, x);
+        VAST_ERROR(state_->self,
+                   "failed to initialize table_indexer for layout", layout,
+                   "-> query will not execute on the full data set");
+        return caf::actor{};
       };
-      auto hdl = caf::
-        visit(detail::overload([&](const attribute_extractor& ex,
-                                   const data&
-                                     x) { return get_indexer_handle(ex, x); },
-                               [&](const data_extractor& dx, const data& x) {
-                                 return get_indexer_handle(dx, x);
-                               },
-                               [](const auto&, const auto&) {
-                                 return caf::actor{};
-                               }),
-              pred.lhs, pred.rhs);
+      auto v = detail::overload(
+        [&](const attribute_extractor& ex, const data& x) {
+          return get_indexer_handle(ex, x); // clang-format fix
+        },
+        [&](const data_extractor& dx, const data& x) {
+          return get_indexer_handle(dx, x);
+        },
+        [](const auto&, const auto&) {
+          return caf::actor{}; // clang-format fix
+        });
+      auto hdl = caf::visit(v, pred.lhs, pred.rhs);
       if (hdl != nullptr) {
         triples.emplace_back(kvp.first, curried(pred), std::move(hdl));
       }

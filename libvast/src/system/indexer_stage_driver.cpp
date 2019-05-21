@@ -53,8 +53,7 @@ void indexer_stage_driver::process(downstream_type& out, batch_type& slices) {
     st.meta_idx.add(st.active->id(), *slice);
     // Start new INDEXER actors when needed and add it to the stream.
     auto& layout = slice->layout();
-    auto ti = st.active->get_or_add(layout);
-    if (ti) {
+    if (auto ti = st.active->get_or_add(layout)) {
       auto [meta_x, added] = *ti;
       if (added) {
         VAST_DEBUG(st.self, "added a new table_indexer for layout", layout);
