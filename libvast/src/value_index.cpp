@@ -20,7 +20,7 @@ namespace vast {
 
 // -- value_index --------------------------------------------------------------
 
-value_index::value_index(vast::type x) : type_{std::move(x)} {
+value_index::value_index(vast::type t) : type_{std::move(t)} {
   // nop
 }
 
@@ -112,7 +112,8 @@ caf::error inspect(caf::deserializer& source, value_index_ptr& x) {
 
 string_index::string_index(vast::type t, size_t max_length)
   : value_index{std::move(t)},
-    max_length_{max_length} {
+    max_length_{max_length},
+    length_{base::uniform(10, std::log10(max_length) + !!(max_length % 10))} {
 }
 
 caf::error string_index::serialize(caf::serializer& sink) const {
@@ -125,20 +126,10 @@ caf::error string_index::deserialize(caf::deserializer& source) {
                           [&] { return source(max_length_, length_, chars_); });
 }
 
-void string_index::init() {
-  if (length_.coder().storage().empty()) {
-    size_t components = std::log10(max_length_);
-    if (max_length_ % 10 != 0)
-      ++components;
-    length_ = length_bitmap_index{base::uniform(10, components)};
-  }
-}
-
 bool string_index::append_impl(data_view x, id pos) {
   auto str = caf::get_if<view<std::string>>(&x);
   if (!str)
     return false;
-  init();
   auto length = str->size();
   if (length > max_length_)
     length = max_length_;
@@ -234,14 +225,11 @@ caf::error address_index::deserialize(caf::deserializer& source) {
                           [&] { return source(bytes_, v4_); });
 }
 
-void address_index::init() {
-  if (bytes_[0].coder().storage().empty())
-    // Initialize on first to make deserialization feasible.
-    bytes_.fill(byte_index{8});
+address_index::address_index(vast::type t) : value_index{std::move(t)} {
+  bytes_.fill(byte_index{8});
 }
 
 bool address_index::append_impl(data_view x, id pos) {
-  init();
   auto addr = caf::get_if<view<address>>(&x);
   if (!addr)
     return false;
@@ -307,8 +295,7 @@ address_index::lookup_impl(relational_operator op, data_view d) const {
 // -- subnet_index -------------------------------------------------------------
 
 subnet_index::subnet_index(vast::type x)
-  : value_index{std::move(x)},
-    network_{address_type{}} {
+  : value_index{std::move(x)}, network_{address_type{}}, length_{128 + 1} {
   // nop
 }
 
@@ -322,14 +309,8 @@ caf::error subnet_index::deserialize(caf::deserializer& source) {
                           [&] { return source(network_, length_); });
 }
 
-void subnet_index::init() {
-  if (length_.coder().storage().empty())
-    length_ = prefix_index{128 + 1}; // Valid prefixes range from /0 to /128.
-}
-
 bool subnet_index::append_impl(data_view x, id pos) {
   if (auto sn = caf::get_if<view<subnet>>(&x)) {
-    init();
     length_.skip(pos - length_.size());
     length_.append(sn->length());
     return static_cast<bool>(network_.append(sn->network(), pos));
@@ -416,6 +397,14 @@ subnet_index::lookup_impl(relational_operator op, data_view d) const {
 
 // -- port_index ---------------------------------------------------------------
 
+port_index::port_index(vast::type t)
+  : value_index{std::move(t)},
+    num_{base::uniform(10, 5)}, // [0, 2^16)
+    proto_{4}                   // unknown, tcp, udp, icmp
+{
+  // nop
+}
+
 caf::error port_index::serialize(caf::serializer& sink) const {
   return caf::error::eval([&] { return value_index::serialize(sink); },
                           [&] { return sink(num_, proto_); });
@@ -426,16 +415,8 @@ caf::error port_index::deserialize(caf::deserializer& source) {
                           [&] { return source(num_, proto_); });
 }
 
-void port_index::init() {
-  if (num_.coder().storage().empty()) {
-    num_ = number_index{base::uniform(10, 5)}; // [0, 2^16)
-    proto_ = protocol_index{4}; // unknown, tcp, udp, icmp
-  }
-}
-
 bool port_index::append_impl(data_view x, id pos) {
   if (auto p = caf::get_if<view<port>>(&x)) {
-    init();
     num_.skip(pos - num_.size());
     num_.append(p->number());
     proto_.skip(pos - proto_.size());
@@ -472,7 +453,8 @@ port_index::lookup_impl(relational_operator op, data_view d) const {
 
 sequence_index::sequence_index(vast::type t, size_t max_size)
   : value_index{std::move(t)},
-    max_size_{max_size} {
+    max_size_{max_size},
+    size_{base::uniform(10, std::log10(max_size) + !!(max_size % 10))} {
   auto f = [](const auto& x) -> vast::type {
     using concrete_type = std::decay_t<decltype(x)>;
     if constexpr (detail::is_any_v<concrete_type, vector_type, set_type>)
@@ -482,13 +464,18 @@ sequence_index::sequence_index(vast::type t, size_t max_size)
   };
   value_type_ = caf::visit(f, value_index::type());
   VAST_ASSERT(!caf::holds_alternative<none_type>(value_type_));
+  size_t components = std::log10(max_size_);
+  if (max_size_ % 10 != 0)
+    ++components;
+  size_ = size_bitmap_index{base::uniform(10, components)};
 }
 
 caf::error sequence_index::serialize(caf::serializer& sink) const {
-  return caf::error::eval(
-    [&] { return value_index::serialize(sink); },
-    [&] { return sink(elements_, size_, max_size_, value_type_); }
-  );
+  return caf::error::eval([&] { return value_index::serialize(sink); },
+                          [&] {
+                            return sink(elements_, size_, max_size_,
+                                        value_type_);
+                          });
 }
 
 caf::error sequence_index::deserialize(caf::deserializer& source) {
@@ -498,20 +485,10 @@ caf::error sequence_index::deserialize(caf::deserializer& source) {
   );
 }
 
-void sequence_index::init() {
-  if (size_.coder().storage().empty()) {
-    size_t components = std::log10(max_size_);
-    if (max_size_ % 10 != 0)
-      ++components;
-    size_ = size_bitmap_index{base::uniform(10, components)};
-  }
-}
-
 bool sequence_index::append_impl(data_view x, id pos) {
   auto f = [&](const auto& v) {
     using view_type = std::decay_t<decltype(v)>;
     if constexpr (detail::is_any_v<view_type, view<vector>, view<set>>) {
-      init();
       auto seq_size = std::min(v->size(), max_size_);
       if (seq_size > elements_.size()) {
         auto old = elements_.size();
