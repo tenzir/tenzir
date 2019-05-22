@@ -89,6 +89,17 @@ caf::error configuration::parse(int argc, char** argv) {
   std::vector<std::string> caf_args;
   std::move(caf_opt, command_line.end(), std::back_inserter(caf_args));
   command_line.erase(caf_opt, command_line.end());
+  auto config_opt = std::find_if(command_line.begin(), command_line.end(),
+                                 [](const std::string& arg) {
+                                   return arg == "-c" || arg == "--config";
+                                 });
+  if (config_opt != command_line.end()) {
+    if (config_opt + 1 == command_line.end())
+      return make_error(ec::unrecognized_option, *config_opt,
+                        "requires a path as paramter");
+    std::string caf_config_param = "--caf#config-file=" + *(config_opt + 1);
+    caf_args.push_back(std::move(caf_config_param));
+  }
   // Remove caf# suffix for CAF parser.
   for (auto& arg : caf_args)
     arg.erase(2, 4);

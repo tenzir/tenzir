@@ -54,6 +54,7 @@ default_application::default_application() {
   };
   // Set global options.
   root.options = opts("?system")
+                   .add<std::string>("config,c", "path to a configuration file")
                    .add<std::string>("directory,d",
                                      "directory for persistent state")
                    .add<std::string>("endpoint,e", "node endpoint")
