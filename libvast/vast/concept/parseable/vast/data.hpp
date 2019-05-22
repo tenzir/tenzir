@@ -48,8 +48,8 @@ private:
     auto x = ws >> p >> ws;
     auto kvp = x >> "->" >> x;
     // clang-format off
-    p = parsers::timespan
-      | parsers::timestamp
+    p = parsers::timestamp
+      | parsers::timespan
       | parsers::net
       | parsers::port
       | parsers::addr
