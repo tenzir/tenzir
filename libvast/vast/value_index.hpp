@@ -287,8 +287,6 @@ private:
   using length_bitmap_index =
     bitmap_index<uint32_t, multi_level_coder<range_coder<ids>>>;
 
-  void init();
-
   bool append_impl(data_view x, id pos) override;
 
   expected<ids>
@@ -305,15 +303,13 @@ public:
   using byte_index = bitmap_index<uint8_t, bitslice_coder<ewah_bitmap>>;
   using type_index = bitmap_index<bool, singleton_coder<ewah_bitmap>>;
 
-  using value_index::value_index;
+  explicit address_index(vast::type t);
 
   caf::error serialize(caf::serializer& sink) const override;
 
   caf::error deserialize(caf::deserializer& source) override;
 
 private:
-  void init();
-
   bool append_impl(data_view x, id pos) override;
 
   expected<ids>
@@ -328,15 +324,13 @@ class subnet_index : public value_index {
 public:
   using prefix_index = bitmap_index<uint8_t, equality_coder<ewah_bitmap>>;
 
-  explicit subnet_index(vast::type x);
+  explicit subnet_index(vast::type t);
 
   caf::error serialize(caf::serializer& sink) const override;
 
   caf::error deserialize(caf::deserializer& source) override;
 
 private:
-  void init();
-
   bool append_impl(data_view x, id pos) override;
 
   expected<ids>
@@ -361,15 +355,13 @@ public:
       equality_coder<ewah_bitmap>
     >;
 
-  using value_index::value_index;
+  explicit port_index(vast::type t);
 
   caf::error serialize(caf::serializer& sink) const override;
 
   caf::error deserialize(caf::deserializer& source) override;
 
 private:
-  void init();
-
   bool append_impl(data_view x, id pos) override;
 
   expected<ids>
@@ -397,16 +389,14 @@ public:
   caf::error deserialize(caf::deserializer& source) override;
 
 private:
-  void init();
-
   bool append_impl(data_view x, id pos) override;
 
   expected<ids>
   lookup_impl(relational_operator op, data_view x) const override;
 
   std::vector<value_index_ptr> elements_;
-  size_bitmap_index size_;
   size_t max_size_;
+  size_bitmap_index size_;
   vast::type value_type_;
 };
 
