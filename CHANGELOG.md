@@ -10,6 +10,10 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## [Unreleased]
 
+- 🔄 The default directory name for persistent state changed from `vast` to
+  `vast.db`. This makes it possible to run `./vast` in the current directory
+  without having to specify a different state directory on the command line.
+
 - 🔄 Nested types are from now on accessed by the `.`-syntax. This means
   VAST now has a unified syntax to select nested types and fields.
   For example, what used to be `zeek::http` is now just `zeek.http`.
