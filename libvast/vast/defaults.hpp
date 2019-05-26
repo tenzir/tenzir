@@ -213,7 +213,7 @@ constexpr std::string_view endpoint = ":42000";
 constexpr std::string_view node_id = "node";
 
 /// Path to persistent state.
-constexpr std::string_view directory = "vast";
+constexpr std::string_view directory = "vast.db";
 
 /// The default table slice type.
 constexpr caf::atom_value table_slice_type = caf::atom("default");
