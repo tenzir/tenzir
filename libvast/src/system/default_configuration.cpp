@@ -44,8 +44,14 @@ default_configuration::default_configuration(std::string application_name)
   set("middleman.enable-automatic-connections", true);
 }
 
-caf::expected<path>
-default_configuration::setup_log_file(const path& base_dir) {
+caf::error default_configuration::setup_log_file() {
+  // Adjust logger file name unless the user overrides the default..
+  auto default_fn = caf::defaults::logger::file_name;
+  if (caf::get_or(*this, "logger.file-name", default_fn) != default_fn)
+    return caf::none;
+  // Get proper directory path.
+  path base_dir = get_or(*this, "system.directory",
+                         defaults::system::directory);
   auto log_dir = base_dir / make_log_dirname();
   // Create the log directory first, which we need to create the symlink
   // afterwards.
@@ -59,7 +65,10 @@ default_configuration::setup_log_file(const path& base_dir) {
       return make_error(ec::filesystem_error, "cannot remove log symlink");
   if (auto err = create_symlink(log_dir.trim(-1), link_dir))
     return err;
-  return log_dir / application_name + ".log";
+  // Store full path to the log file in config.
+  auto log_file = log_dir / application_name + ".log";
+  set("logger.file-name", log_file.str());
+  return caf::none;
 }
 
 void default_configuration::merge_settings(const caf::settings& from,
@@ -80,18 +89,6 @@ caf::error default_configuration::merge_root_options(system::application& app) {
   app.root.options.parse(options, command_line.begin(), command_line.end());
   // Move everything into the system-wide options.
   merge_settings(options, content);
-  // Adjust logger file name.
-  auto default_fn = caf::defaults::logger::file_name;
-  if (caf::get_or(*this, "logger.file-name", default_fn) == default_fn) {
-    path dir = get_or(*this, "system.directory", defaults::system::directory);
-    if (auto log_file = setup_log_file(dir.complete()); !log_file) {
-      std::cerr << "failed to setup log file: " << to_string(log_file.error())
-                << std::endl;
-      return log_file.error();
-    } else {
-      set("logger.file-name", log_file->str());
-    }
-  }
   return caf::none;
 }
 

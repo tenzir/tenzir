@@ -64,7 +64,15 @@ int main(int argc, char** argv) {
     render_error(app, invocation.error(), std::cerr);
     return EXIT_FAILURE;
   }
+  if (get_or(invocation->options, "help", false)) {
+    helptext(*invocation->target, std::cerr);
+    return EXIT_SUCCESS;
+  }
   // Initialize actor system (and thereby CAF's logger).
+  if (auto err = cfg.setup_log_file()) {
+    std::cerr << "failed to setup log file: " << to_string(err) << std::endl;
+    return EXIT_FAILURE;
+  }
   caf::actor_system sys{cfg};
   // Dispatch to root command.
   auto result = run(*invocation, sys);
