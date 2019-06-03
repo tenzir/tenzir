@@ -28,14 +28,6 @@
 
 namespace vast {
 
-namespace {
-
-caf::message make_error_msg(const command& cmd, ec x, std::string word) {
-  return make_message(make_error(x, std::move(word), full_name(cmd)));
-}
-
-} // namespace
-
 caf::config_option_set command::opts() {
   return caf::config_option_set{}.add<bool>("help,h?", "prints the help text");
 }
@@ -57,32 +49,21 @@ command* command::add(fun child_run, std::string_view child_name,
     .get();
 }
 
-caf::message run(const command& cmd, caf::actor_system& sys,
-                 command::argument_iterator first,
-                 command::argument_iterator last) {
-  auto options = get_or(sys.config(), "vast", caf::settings{});
-  return run(cmd, sys, options, first, last);
-}
-
-caf::message run(const command& cmd, caf::actor_system& sys,
-                 const std::vector<std::string>& args) {
-  return run(cmd, sys, args.begin(), args.end());
-}
-
-caf::message run(const command& cmd, caf::actor_system& sys,
-                 caf::settings& options,
+caf::error parse(command::invocation& result, const command& cmd,
                  command::argument_iterator first,
                  command::argument_iterator last) {
   using caf::get_or;
   using caf::make_message;
-  VAST_TRACE(VAST_ARG(std::string(cmd.name)), VAST_ARG("args", first, last),
-             VAST_ARG(options));
+  VAST_TRACE(VAST_ARG(std::string(cmd.name)), VAST_ARG("args", first, last));
   // Parse arguments for this command.
-  auto [state, position] = cmd.options.parse(options, first, last);
+  auto [state, position] = cmd.options.parse(result.options, first, last);
+  result.assign(&cmd, position, last);
+  if (get_or(result.options, "help", false))
+    return caf::none;
   bool has_subcommand;
   switch(state) {
     default:
-      return make_error_msg(cmd, ec::unrecognized_option, *position);
+      return make_error(ec::unrecognized_option, full_name(cmd), *position);
     case caf::pec::success:
       has_subcommand = false;
       break;
@@ -91,23 +72,22 @@ caf::message run(const command& cmd, caf::actor_system& sys,
       break;
   }
   if (position != last && detail::starts_with(*position, "-"))
-    return make_error_msg(cmd, ec::unrecognized_option, *position);
+    return make_error(ec::unrecognized_option, full_name(cmd), *position);
   // Check for help option.
-  if (get_or<bool>(options, "help", false)
-      || (has_subcommand && *position == "help")) {
-    helptext(cmd, std::cerr);
+  if (has_subcommand && *position == "help") {
+    put(result.options, "help", true);
     return caf::none;
   }
   // Invoke cmd.run if no subcommand was defined.
   if (!has_subcommand) {
     // Commands without a run implementation require subcommands.
     if (cmd.run == nullptr)
-      return make_error_msg(cmd, ec::missing_subcommand, "");
-    return cmd.run(cmd, sys, options, position, last);
+      return make_error(ec::missing_subcommand, full_name(cmd), "");
+    return caf::none;
   }
   // Consume CLI arguments if we have arguments but don't have subcommands.
   if (cmd.children.empty())
-    return cmd.run(cmd, sys, options, position, last);
+    return caf::none;
   // Dispatch to subcommand.
   // TODO: We need to copy the iterator here, because structured binding cannot
   //       be captured. Clang reports the error "reference to local binding
@@ -119,14 +99,60 @@ caf::message run(const command& cmd, caf::actor_system& sys,
   auto i = std::find_if(cmd.children.begin(), cmd.children.end(),
                         [p = position](auto& x) { return x->name == *p; });
   if (i == cmd.children.end())
-    return make_error_msg(cmd, ec::invalid_subcommand, *position);
-  return run(**i, sys, options, position + 1, last);
+    return make_error(ec::invalid_subcommand, full_name(cmd), *position);
+  return parse(result, **i, position + 1, last);
+}
+
+caf::expected<command::invocation> parse(const command& root,
+                                        command::argument_iterator first,
+                                        command::argument_iterator last) {
+  command::invocation result;
+  if (auto err = parse(result, root, first, last))
+    return err;
+  return result;
+}
+
+
+caf::message run(command::invocation& invocation, caf::actor_system& sys) {
+  auto& cmd = *invocation.target;
+  if (get_or(invocation.options, "help", false)) {
+    helptext(cmd, std::cerr);
+    return caf::none;
+  }
+  return cmd.run(cmd, sys, invocation.options, invocation.first,
+                 invocation.last);
 }
 
 caf::message run(const command& cmd, caf::actor_system& sys,
-                 caf::settings& options,
+                 command::argument_iterator first,
+                 command::argument_iterator last) {
+  if (auto invocation = parse(cmd, first, last))
+    return run(*invocation, sys);
+  else
+    return caf::make_message(std::move(invocation.error()));
+}
+
+caf::message run(const command& cmd, caf::actor_system& sys,
                  const std::vector<std::string>& args) {
-  return run(cmd, sys, options, args.begin(), args.end());
+  return run(cmd, sys, args.begin(), args.end());
+}
+
+caf::message run(const command& cmd, caf::actor_system& sys,
+                 caf::settings predefined_options,
+                 command::argument_iterator first,
+                 command::argument_iterator last) {
+  command::invocation invocation;
+  invocation.options = std::move(predefined_options);
+  if (auto err = parse(invocation, cmd, first, last))
+    return caf::make_message(std::move(err));
+  return run(invocation, sys);
+}
+
+caf::message run(const command& cmd, caf::actor_system& sys,
+                 caf::settings predefined_options,
+                 const std::vector<std::string>& args) {
+  return run(cmd, sys, std::move(predefined_options), args.begin(),
+             args.end());
 }
 
 const command& root(const command& cmd) {

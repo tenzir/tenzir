@@ -45,9 +45,10 @@ struct fixture {
   command root;
   caf::actor_system_config cfg;
   caf::actor_system sys{cfg};
-  caf::settings options;
+  command::invocation invocation;
+  caf::settings& options;
 
-  fixture() {
+  fixture() : options(invocation.options) {
     root.name = "vast";
   }
 
@@ -55,7 +56,11 @@ struct fixture {
     options.clear();
     std::vector<std::string> xs;
     caf::split(xs, str, ' ', caf::token_compress_on);
-    auto result = run(root, sys, options, xs.begin(), xs.end());
+    if (auto res = parse(root, xs.begin(), xs.end()))
+      invocation = std::move(*res);
+    else
+      return std::move(res.error());
+    auto result = run(invocation, sys);
     if (result.empty())
       return caf::none;
     if (result.match_elements<std::string>())

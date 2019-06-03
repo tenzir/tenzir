@@ -57,10 +57,17 @@ int main(int argc, char** argv) {
   auto find_slash = [&] { return app.root.name.find('/'); };
   for (auto p = find_slash(); p != std::string_view::npos; p = find_slash())
     app.root.name.remove_prefix(p + 1);
+  // Parse CLI.
+  auto invocation = parse(app.root, cfg.command_line.begin(),
+                          cfg.command_line.end());
+  if (!invocation) {
+    render_error(app, invocation.error(), std::cerr);
+    return EXIT_FAILURE;
+  }
   // Initialize actor system (and thereby CAF's logger).
   caf::actor_system sys{cfg};
   // Dispatch to root command.
-  auto result = app.run(sys, cfg.command_line.begin(), cfg.command_line.end());
+  auto result = run(*invocation, sys);
   if (result.match_elements<caf::error>()) {
     render_error(app, result.get_as<caf::error>(0), std::cerr);
     return EXIT_FAILURE;

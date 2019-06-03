@@ -75,6 +75,34 @@ public:
     caf::config_option_set xs_;
   };
 
+  /// Wraps invocation of a single command for separating the parsing of
+  /// program argument from running the command.
+  struct invocation {
+    // -- member variables -----------------------------------------------------
+
+    /// Stores user-defined program options.
+    caf::settings options;
+
+    /// Points to the scheduled command.
+    const command* target = nullptr;
+
+    /// Points to the first CLI argument.
+    argument_iterator first;
+
+    /// Points past-the-end of CLI arguments.
+    argument_iterator last;
+
+    // -- mutators -------------------------------------------------------------
+
+    /// Sets the members `target`, `first`, and `last`.
+    void assign(const command* cmd, argument_iterator first,
+                argument_iterator last) {
+      target = cmd;
+      this->first = first;
+      this->last = last;
+    }
+  };
+
   // -- member variables -------------------------------------------------------
 
   command* parent = nullptr;
@@ -115,6 +143,18 @@ public:
   }
 };
 
+/// Parses all program arguments without running the command.
+/// @returns an error for malformed input, `none` otherwise.
+/// @relates command
+caf::expected<command::invocation> parse(const command& root,
+                                        command::argument_iterator first,
+                                        command::argument_iterator last);
+
+/// Runs the command and blocks until execution completes.
+/// @returns a type-erased result or a wrapped `caf::error`.
+/// @relates command
+caf::message run(command::invocation& invocation, caf::actor_system& sys);
+
 /// Runs the command and blocks until execution completes.
 /// @returns a type-erased result or a wrapped `caf::error`.
 /// @relates command
@@ -132,14 +172,16 @@ caf::message run(const command& cmd, caf::actor_system& sys,
 /// @returns a type-erased result or a wrapped `caf::error`.
 /// @relates command
 caf::message run(const command& cmd, caf::actor_system& sys,
-                 caf::settings& options, command::argument_iterator first,
+                 caf::settings predefined_options,
+                 command::argument_iterator first,
                  command::argument_iterator last);
 
 /// Runs the command and blocks until execution completes.
 /// @returns a type-erased result or a wrapped `caf::error`.
 /// @relates command
 caf::message run(const command& cmd, caf::actor_system& sys,
-                 caf::settings& options, const std::vector<std::string>& args);
+                 caf::settings predefined_options,
+                 const std::vector<std::string>& args);
 
 /// Traverses the command hierarchy until finding the root.
 /// @returns the root command.
