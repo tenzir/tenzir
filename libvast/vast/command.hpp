@@ -147,8 +147,8 @@ public:
 /// @returns an error for malformed input, `none` otherwise.
 /// @relates command
 caf::expected<command::invocation> parse(const command& root,
-                                        command::argument_iterator first,
-                                        command::argument_iterator last);
+                                         command::argument_iterator first,
+                                         command::argument_iterator last);
 
 /// Runs the command and blocks until execution completes.
 /// @returns a type-erased result or a wrapped `caf::error`.

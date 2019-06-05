@@ -104,14 +104,13 @@ caf::error parse(command::invocation& result, const command& cmd,
 }
 
 caf::expected<command::invocation> parse(const command& root,
-                                        command::argument_iterator first,
-                                        command::argument_iterator last) {
+                                         command::argument_iterator first,
+                                         command::argument_iterator last) {
   command::invocation result;
   if (auto err = parse(result, root, first, last))
     return err;
   return result;
 }
-
 
 caf::message run(command::invocation& invocation, caf::actor_system& sys) {
   auto& cmd = *invocation.target;
@@ -151,8 +150,7 @@ caf::message run(const command& cmd, caf::actor_system& sys,
 caf::message run(const command& cmd, caf::actor_system& sys,
                  caf::settings predefined_options,
                  const std::vector<std::string>& args) {
-  return run(cmd, sys, std::move(predefined_options), args.begin(),
-             args.end());
+  return run(cmd, sys, std::move(predefined_options), args.begin(), args.end());
 }
 
 const command& root(const command& cmd) {
