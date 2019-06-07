@@ -92,6 +92,11 @@ public:
     /// Points past-the-end of CLI arguments.
     argument_iterator last;
 
+    /// Stores any error that occurred while parsing the CLI. When this error
+    /// is not default-constructed, `first` points to the CLI position where
+    /// the error occurred.
+    caf::error error;
+
     // -- mutators -------------------------------------------------------------
 
     /// Sets the members `target`, `first`, and `last`.
@@ -100,6 +105,20 @@ public:
       target = cmd;
       this->first = first;
       this->last = last;
+    }
+
+    // -- mutators -------------------------------------------------------------
+
+    /// @returns `true` when it is safe to call `run` on this object, `false`
+    /// otherwise.
+    explicit operator bool() const {
+      return !error;
+    }
+
+    /// @returns `true` when `error` is not default-constructed, `false`
+    /// otherwise.
+    bool operator!() const {
+      return static_cast<bool>(error);
     }
   };
 
@@ -146,9 +165,8 @@ public:
 /// Parses all program arguments without running the command.
 /// @returns an error for malformed input, `none` otherwise.
 /// @relates command
-caf::expected<command::invocation> parse(const command& root,
-                                         command::argument_iterator first,
-                                         command::argument_iterator last);
+command::invocation parse(const command& root, command::argument_iterator first,
+                          command::argument_iterator last);
 
 /// Runs the command and blocks until execution completes.
 /// @returns a type-erased result or a wrapped `caf::error`.

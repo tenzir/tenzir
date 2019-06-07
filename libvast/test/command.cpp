@@ -56,10 +56,9 @@ struct fixture {
     options.clear();
     std::vector<std::string> xs;
     caf::split(xs, str, ' ', caf::token_compress_on);
-    if (auto res = parse(root, xs.begin(), xs.end()))
-      invocation = std::move(*res);
-    else
-      return std::move(res.error());
+    invocation = parse(root, xs.begin(), xs.end());
+    if (invocation.error)
+      return std::move(invocation.error);
     auto result = run(invocation, sys);
     if (result.empty())
       return caf::none;

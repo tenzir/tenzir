@@ -63,7 +63,8 @@ caf::error parse(command::invocation& result, const command& cmd,
   bool has_subcommand;
   switch(state) {
     default:
-      return make_error(ec::unrecognized_option, full_name(cmd), *position);
+      return make_error(ec::unrecognized_option, full_name(cmd), *position,
+                        to_string(state));
     case caf::pec::success:
       has_subcommand = false;
       break;
@@ -103,16 +104,17 @@ caf::error parse(command::invocation& result, const command& cmd,
   return parse(result, **i, position + 1, last);
 }
 
-caf::expected<command::invocation> parse(const command& root,
-                                         command::argument_iterator first,
-                                         command::argument_iterator last) {
+command::invocation parse(const command& root, command::argument_iterator first,
+                          command::argument_iterator last) {
   command::invocation result;
   if (auto err = parse(result, root, first, last))
-    return err;
+    result.error = std::move(err);
   return result;
 }
 
 caf::message run(command::invocation& invocation, caf::actor_system& sys) {
+  if (!invocation)
+    return caf::make_message(invocation.error);
   auto& cmd = *invocation.target;
   if (get_or(invocation.options, "help", false)) {
     helptext(cmd, std::cerr);
@@ -125,10 +127,8 @@ caf::message run(command::invocation& invocation, caf::actor_system& sys) {
 caf::message run(const command& cmd, caf::actor_system& sys,
                  command::argument_iterator first,
                  command::argument_iterator last) {
-  if (auto invocation = parse(cmd, first, last))
-    return run(*invocation, sys);
-  else
-    return caf::make_message(std::move(invocation.error()));
+  auto invocation = parse(cmd, first, last);
+  return run(invocation, sys);
 }
 
 caf::message run(const command& cmd, caf::actor_system& sys,

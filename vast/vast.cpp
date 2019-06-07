@@ -61,11 +61,11 @@ int main(int argc, char** argv) {
   auto invocation = parse(app.root, cfg.command_line.begin(),
                           cfg.command_line.end());
   if (!invocation) {
-    render_error(app, invocation.error(), std::cerr);
+    render_error(app, invocation.error, std::cerr);
     return EXIT_FAILURE;
   }
-  if (get_or(invocation->options, "help", false)) {
-    helptext(*invocation->target, std::cerr);
+  if (get_or(invocation.options, "help", false)) {
+    helptext(*invocation.target, std::cerr);
     return EXIT_SUCCESS;
   }
   // Initialize actor system (and thereby CAF's logger).
@@ -75,7 +75,7 @@ int main(int argc, char** argv) {
   }
   caf::actor_system sys{cfg};
   // Dispatch to root command.
-  auto result = run(*invocation, sys);
+  auto result = run(invocation, sys);
   if (result.match_elements<caf::error>()) {
     render_error(app, result.get_as<caf::error>(0), std::cerr);
     return EXIT_FAILURE;
