@@ -32,7 +32,7 @@ public:
   template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
     auto escaped_quote = Esc >> char_parser{Quote};
-    auto p = Quote >> +(escaped_quote | (parsers::print - Quote)) >> Quote;
+    auto p = Quote >> *(escaped_quote | (parsers::print - Quote)) >> Quote;
     return p(f, l, a);
   }
 };
@@ -50,4 +50,3 @@ struct parser_registry<std::string> {
 };
 
 } // namespace vast
-
