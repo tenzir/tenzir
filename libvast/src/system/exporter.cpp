@@ -285,8 +285,7 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
       }
       return caf::unit;
     },
-    [=](done_atom, const caf::error& err) {
-      VAST_UNUSED(err);
+    [=](done_atom, [[maybe_unused]] const caf::error& err) {
       auto& st = self->state;
       if (self->current_sender() != st.archive) {
         VAST_WARNING(self, "received ('done', error) from unexpected actor");

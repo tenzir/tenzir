@@ -59,7 +59,6 @@ maybe_actor spawn_generic_source(caf::local_actor* self, spawn_arguments& args,
 maybe_actor spawn_pcap_source([[maybe_unused]] caf::local_actor* self,
                               [[maybe_unused]] spawn_arguments& args) {
 #ifndef VAST_HAVE_PCAP
-  VAST_UNUSED(self, args);
   return make_error(ec::unspecified, "not compiled with pcap support");
 #else // VAST_HAVE_PCAP
   auto opt = [&](caf::string_view key, auto default_value) {

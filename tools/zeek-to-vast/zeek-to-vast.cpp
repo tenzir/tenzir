@@ -306,20 +306,19 @@ int main(int argc, char** argv) {
     if (!msg)
       continue; // timeout
     caf::visit(vast::detail::overload(
-      [&](broker::none) {
-        // timeout
-      },
-      [&](broker::error error) {
-        VAST_UNUSED(error);
-        VAST_ERROR_ANON(sys.render(error));
-      },
-      [&](broker::status status) {
-        if (status == broker::sc::peer_added)
-          peered = true;
-        else
-          VAST_ERROR_ANON(to_string(status));
-      }
-    ), *msg);
+                 [&](broker::none) {
+                   // timeout
+                 },
+                 [&]([[maybe_unused]] broker::error error) {
+                   VAST_ERROR_ANON(sys.render(error));
+                 },
+                 [&](broker::status status) {
+                   if (status == broker::sc::peer_added)
+                     peered = true;
+                   else
+                     VAST_ERROR_ANON(to_string(status));
+                 }),
+               *msg);
   };
   VAST_INFO_ANON("peered with Zeek successfully, waiting for commands");
   // Process queries from Zeek.
