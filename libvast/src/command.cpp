@@ -113,9 +113,9 @@ command::invocation parse(const command& root, command::argument_iterator first,
 }
 
 caf::message run(command::invocation& invocation, caf::actor_system& sys) {
-  auto& cmd = *invocation.target;
   if (!invocation)
     return caf::make_message(invocation.error);
+  auto& cmd = *invocation.target;
   if (get_or(invocation.options, "help", false)) {
     helptext(cmd, std::cerr);
     return caf::none;
