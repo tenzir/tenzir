@@ -57,7 +57,8 @@ struct suricata {
                               {"src_port", port_type{}},
                               {"dest_ip", address_type{}},
                               {"dest_port", port_type{}},
-                              {"proto", string_type{}}};
+                              {"proto", string_type{}},
+                              {"community_id", string_type{}}};
     auto app_proto = record_type{{"app_proto", string_type{}}};
     // https://suricata.readthedocs.io/en/suricata-4.1.3/output/eve/eve-json-format.html#event-type-alert
     auto alert_part = record_type{
