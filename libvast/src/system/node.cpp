@@ -447,7 +447,7 @@ caf::behavior node(node_actor* self, std::string id, path dir) {
       this_node = self;
       // Note: several commands make a response promise. In this case, they
       // return an empty message that has no effect when returning it.
-      return run(self->state.cmd, self->system(), options, cli);
+      return run(self->state.cmd, self->system(), std::move(options), cli);
     },
     [=](const std::vector<std::string>& cli) {
       VAST_DEBUG(self, "got command", cli);
