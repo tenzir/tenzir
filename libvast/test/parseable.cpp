@@ -179,10 +179,18 @@ TEST(quoted string) {
   auto p = quoted_string_parser<'\'', '#'>{};
   auto attr = ""s;
 
-  MESSAGE("no escaped chars");
-  auto str = "'foobar'"s;
+  MESSAGE("empty string");
+  auto str = "''"s;
   auto f = str.begin();
   auto l = str.end();
+  CHECK(p(f, l, attr));
+  CHECK(attr == "");
+  CHECK(f == l);
+
+  MESSAGE("no escaped chars");
+  str = "'foobar'"s;
+  f = str.begin();
+  l = str.end();
   CHECK(p(f, l, attr));
   CHECK(attr == "foobar");
   CHECK(f == l);
