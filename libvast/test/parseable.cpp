@@ -184,16 +184,16 @@ TEST(quoted string) {
   auto f = str.begin();
   auto l = str.end();
   CHECK(p(f, l, attr));
-  CHECK(attr == "");
-  CHECK(f == l);
+  CHECK_EQUAL(attr, "");
+  CHECK_EQUAL(f, l);
 
   MESSAGE("no escaped chars");
   str = "'foobar'"s;
   f = str.begin();
   l = str.end();
   CHECK(p(f, l, attr));
-  CHECK(attr == "foobar");
-  CHECK(f == l);
+  CHECK_EQUAL(attr, "foobar");
+  CHECK_EQUAL(f, l);
 
   MESSAGE("escaped char in middle");
   str = "'foo#'bar'"s;
@@ -201,8 +201,8 @@ TEST(quoted string) {
   l = str.end();
   attr.clear();
   CHECK(p(f, l, attr));
-  CHECK(attr == "foo'bar");
-  CHECK(f == l);
+  CHECK_EQUAL(attr, "foo'bar");
+  CHECK_EQUAL(f, l);
 
   MESSAGE("escaped char at beginning");
   str = "'#'foobar'"s;
@@ -210,8 +210,8 @@ TEST(quoted string) {
   l = str.end();
   attr.clear();
   CHECK(p(f, l, attr));
-  CHECK(attr == "'foobar");
-  CHECK(f == l);
+  CHECK_EQUAL(attr, "'foobar");
+  CHECK_EQUAL(f, l);
 
   MESSAGE("escaped char at end");
   str = "'foobar#''"s;
@@ -219,8 +219,8 @@ TEST(quoted string) {
   l = str.end();
   attr.clear();
   CHECK(p(f, l, attr));
-  CHECK(attr == "foobar'");
-  CHECK(f == l);
+  CHECK_EQUAL(attr, "foobar'");
+  CHECK_EQUAL(f, l);
 
   MESSAGE("missing trailing quote");
   str = "'foobar"s;
@@ -228,7 +228,7 @@ TEST(quoted string) {
   l = str.end();
   attr.clear();
   CHECK(!p(f, l, attr));
-  CHECK(attr == "foobar");
+  CHECK_EQUAL(attr, "foobar");
 
   MESSAGE("missing trailing quote after escaped quote");
   str = "'foobar#'"s;
@@ -236,7 +236,7 @@ TEST(quoted string) {
   l = str.end();
   attr.clear();
   CHECK(!p(f, l, attr));
-  CHECK(attr == "foobar'");
+  CHECK_EQUAL(attr, "foobar'");
 }
 
 TEST(symbol table) {
