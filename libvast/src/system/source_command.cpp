@@ -49,13 +49,13 @@ caf::expected<expression> parse_expression(command::argument_iterator begin,
 
 } // namespace <anonymous>
 
-caf::message source_command(const command& cmd, caf::actor_system& sys,
-                            caf::actor src, caf::settings& options,
+caf::message source_command([[maybe_unused]] const command& cmd,
+                            caf::actor_system& sys, caf::actor src,
+                            caf::settings& options,
                             command::argument_iterator begin,
                             command::argument_iterator end) {
   using namespace caf;
   using namespace std::chrono_literals;
-  VAST_UNUSED(cmd);
   // Helper for blocking actor communication.
   scoped_actor self{sys};
   // Attempt to parse the remainder as an expression.

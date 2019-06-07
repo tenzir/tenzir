@@ -39,11 +39,11 @@ using namespace caf;
 
 namespace vast::system {
 
-caf::message sink_command(const command& cmd, actor_system& sys, caf::actor snk,
+caf::message sink_command([[maybe_unused]] const command& cmd,
+                          actor_system& sys, caf::actor snk,
                           caf::settings& options,
                           command::argument_iterator first,
                           command::argument_iterator last) {
-  VAST_UNUSED(cmd);
   // Read query from input file, STDIN or CLI arguments.
   std::string query;
   auto assign_query = [&](std::istream& in) {
