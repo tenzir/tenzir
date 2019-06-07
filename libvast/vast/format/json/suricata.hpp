@@ -77,6 +77,17 @@ struct suricata {
                           {"source.port", port_type{}},
                           {"target.ip", address_type{}},
                           {"target.port", port_type{}}})}};
+    auto dhcp = record_type{
+      {"dhcp", record_type{{"type", string_type{}},
+                           {"id", count_type{}},
+                           {"client_mac", string_type{}},
+                           {"assigned_ip", address_type{}},
+                           {"client_ip", address_type{}},
+                           {"dhcp_type", string_type{}},
+                           {"assigned_ip", address_type{}},
+                           {"client_id", string_type{}},
+                           {"hostname", string_type{}},
+                           {"params", vector_type{string_type{}}}}}};
     auto dns = record_type{{"dns", record_type{{"type", string_type{}},
                                                {"id", count_type{}},
                                                {"flags", count_type{}},
@@ -131,6 +142,19 @@ struct suricata {
                               {"start", timestamp_type{}},
                               {"end", timestamp_type{}},
                               {"age", count_type{}}}}};
+    auto tls = record_type{
+      {"tls", record_type{
+                {"subject", string_type{}},
+                {"issuerdn", string_type{}},
+                {"serial", string_type{}},
+                {"fingerprint", string_type{}},
+                {"ja3", record_type{{"hash", string_type{}},
+                                    {"string", string_type{}}}},
+                {"ja3s", record_type{{"hash", string_type{}},
+                                     {"string", string_type{}}}},
+                {"notbefore", timestamp_type{}},
+                {"notafter", timestamp_type{}},
+              }}};
     auto alert = concat(common, alert_part, flow,
                         record_type{{"payload", string_type{}},
                                     {"payload_printable", string_type{}},
@@ -138,6 +162,7 @@ struct suricata {
                                     {"packet", string_type{}},
                                     {"packet_info.linktype", count_type{}}});
     types = {{"alert", flatten(alert).name("suricata.alert")},
+             {"dhcp", flatten(concat(common, dhcp)).name("suricata.dhcp")},
              {"dns", flatten(concat(common, dns)).name("suricata.dns")},
              {"fileinfo", flatten(concat(common, fileinfo, http, app_proto))
                             .name("suricata.fileinfo")},
@@ -147,7 +172,8 @@ struct suricata {
              {"flow",
               flatten(concat(common, flow, app_proto)).name("suricata.flow")},
              {"netflow", flatten(concat(common, netflow, app_proto))
-                           .name("suricata.netflow")}};
+                           .name("suricata.netflow")},
+             {"tls", flatten(concat(common, tls)).name("suricata.tls")}};
   }
 
   caf::error schema(vast::schema) {
