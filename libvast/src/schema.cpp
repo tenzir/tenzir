@@ -45,6 +45,22 @@ bool schema::add(const type& t) {
   return true;
 }
 
+void schema::update(const schema& new_def) {
+  for (auto& t : new_def) {
+    if (auto x = this->find(t.name()))
+      *x = t;
+    else
+      add(t);
+  }
+}
+
+type* schema::find(const std::string& name) {
+  for (auto& t : types_)
+    if (t.name() == name)
+      return &t;
+  return nullptr;
+}
+
 const type* schema::find(const std::string& name) const {
   for (auto& t : types_)
     if (t.name() == name)

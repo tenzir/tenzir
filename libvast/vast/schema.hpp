@@ -50,9 +50,16 @@ public:
   /// @returns `true` on success.
   bool add(const type& t);
 
+  /// Updates the schema with definitions from another.
+  /// @param new_def The definitions to add or replace.
+  void update(const schema& new_def);
+
   /// Retrieves the type for a given name.
   /// @param name The name of the type to lookup.
   /// @returns The type with name *name* or `nullptr if no such type exists.
+  type* find(const std::string& name);
+
+  //! @copydoc find(const std::string& name)
   const type* find(const std::string& name) const;
 
   // -- container API ----------------------------------------------------------

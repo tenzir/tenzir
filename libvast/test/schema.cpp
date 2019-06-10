@@ -64,6 +64,21 @@ TEST(offset finding) {
   CHECK_EQUAL(at(foo_record, 3, 1, 1).name(), real_type{});
 }
 
+TEST(updating) {
+  auto x = unbox(to<schema>(R"__(
+    type a = int
+    type b = real
+  )__"));
+  auto y = unbox(to<schema>(R"__(
+    type a = count
+    type c = addr
+  )__"));
+  x.update(y);
+  CHECK_EQUAL(x.find("a"), count_type{}.name("a"));
+  CHECK_EQUAL(x.find("b"), real_type{}.name("b"));
+  CHECK_EQUAL(x.find("c"), address_type{}.name("c"));
+}
+
 TEST(merging) {
   std::string str = R"__(
     type a = int
