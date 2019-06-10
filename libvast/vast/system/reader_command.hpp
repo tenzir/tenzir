@@ -117,6 +117,8 @@ caf::message reader_command(const command& cmd, caf::actor_system& sys,
       }
     }
     Reader reader{slice_type};
+    if (schema)
+      reader.schema(*schema);
     auto run = [&](auto&& source) {
       auto& mm = sys.middleman();
       return mm.spawn_broker(std::forward<decltype(source)>(source),
@@ -138,12 +140,12 @@ caf::message reader_command(const command& cmd, caf::actor_system& sys,
     if (!in)
       return caf::make_message(std::move(in.error()));
     Reader reader{slice_type, std::move(*in)};
+    if (schema)
+      reader.schema(*schema);
     VAST_INFO(reader, "reads data from", *file);
     src = sys.spawn(source<Reader>, std::move(reader), factory, slice_size,
                     max_events);
   }
-  if (schema)
-    caf::anon_send(src, put_atom::value, std::move(*schema));
   return source_command(cmd, sys, std::move(src), options, first, last);
 }
 
