@@ -75,6 +75,10 @@ public:
   /// @param str The string representing of a path.
   path(std::string str);
 
+  /// Constructs a path from a string_view.
+  /// @param str The string_view representing of a path.
+  path(std::string_view str);
+
   path& operator/=(const path& p);
   path& operator+=(const path& p);
 
