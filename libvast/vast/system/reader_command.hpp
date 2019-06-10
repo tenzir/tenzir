@@ -28,6 +28,7 @@
 #include "vast/detail/make_io_stream.hpp"
 #include "vast/endpoint.hpp"
 #include "vast/error.hpp"
+#include "vast/event_types.hpp"
 #include "vast/format/reader.hpp"
 #include "vast/logger.hpp"
 #include "vast/schema.hpp"
@@ -70,8 +71,10 @@ caf::message reader_command(const command& cmd, caf::actor_system& sys,
     else
       file = std::string{Reader::defaults::path};
   }
-  // Supply an alternate schema, if requested.
-  expected<vast::schema> schema{caf::none};
+  // Get the default schema from the registry.
+  auto schema = event_types::get();
+  // Update with an alternate schema, if requested.
+  vast::schema reader_schema;
   {
     auto sc = caf::get_if<std::string>(&options, category + ".schema");
     auto sf = caf::get_if<std::string>(&options, category + ".schema-file");
@@ -79,12 +82,24 @@ caf::message reader_command(const command& cmd, caf::actor_system& sys,
       return make_message(
         make_error(ec::invalid_configuration,
                    "had both schema and schema-file provided"));
-    if (sc)
-      schema = to<vast::schema>(*sc);
-    if (sf)
-      schema = load_schema_file(*sf);
-    if (!schema && schema.error() != caf::none)
-      return make_message(std::move(schema.error()));
+    auto update = [&]() -> caf::expected<vast::schema> {
+      if (sc)
+        return to<vast::schema>(*sc);
+      if (sf)
+        return load_schema_file(*sf);
+      return caf::no_error;
+    }();
+    if (update) {
+      if (!schema || schema->empty()) {
+        reader_schema = *update;
+      } else {
+        reader_schema = *schema;
+        reader_schema.update(*update);
+      }
+      schema = &reader_schema;
+    }
+    if (!update && update.error() != caf::no_error)
+      return caf::make_message(ec::invalid_configuration, "");
   }
   caf::actor src;
   if (uri) {
