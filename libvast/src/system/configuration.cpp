@@ -83,15 +83,18 @@ caf::error configuration::parse(int argc, char** argv) {
   command_line.assign(argv + 1, argv + argc);
   // Move CAF options to the end of the command line, parse them, and then
   // remove them.
-  auto is_vast_opt = [](auto& x) { return !starts_with(x, "--caf#"); };
+  auto is_vast_opt = [](auto& x) {
+    return !(starts_with(x, "--caf#") || starts_with(x, "--config-file"));
+  };
   auto caf_opt = std::stable_partition(command_line.begin(),
                                        command_line.end(), is_vast_opt);
   std::vector<std::string> caf_args;
   std::move(caf_opt, command_line.end(), std::back_inserter(caf_args));
   command_line.erase(caf_opt, command_line.end());
-  // Remove caf# suffix for CAF parser.
+  // Remove caf# prefix for CAF parser.
   for (auto& arg : caf_args)
-    arg.erase(2, 4);
+    if (starts_with(arg, "--caf#"))
+      arg.erase(2, 4);
   return actor_system_config::parse(std::move(caf_args));
 }
 
