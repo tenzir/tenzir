@@ -13,6 +13,7 @@
 
 #include "vast/system/default_application.hpp"
 
+#include "vast/config.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/format/ascii.hpp"
 #include "vast/format/bgpdump.hpp"
@@ -53,9 +54,16 @@ default_application::default_application() {
     return command::opts(category);
   };
   // Set global options.
+  // clang-format off
+  const char* schema_paths_help =
+    "list of paths to look for schema files"
+    " ([" VAST_INSTALL_PREFIX "/share/vast/schema])";
+  // clang-format on
   root.options = opts("?system")
                    .add<std::string>("config-file",
                                      "path to a configuration file")
+                   .add<std::vector<std::string>>("schema-paths",
+                                                  schema_paths_help)
                    .add<std::string>("directory,d",
                                      "directory for persistent state")
                    .add<std::string>("endpoint,e", "node endpoint")
