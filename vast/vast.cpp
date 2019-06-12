@@ -14,6 +14,7 @@
 #include <cstdlib>
 
 #include <caf/actor_system.hpp>
+#include <caf/atom.hpp>
 #include <caf/io/middleman.hpp>
 #include <caf/timestamp.hpp>
 
@@ -24,7 +25,8 @@
 #endif
 
 #include "vast/error.hpp"
-#include "vast/filesystem.hpp"
+#include "vast/event_types.hpp"
+#include "vast/schema.hpp"
 
 #include "vast/system/default_application.hpp"
 #include "vast/system/default_configuration.hpp"
@@ -74,6 +76,20 @@ int main(int argc, char** argv) {
     return EXIT_FAILURE;
   }
   caf::actor_system sys{cfg};
+  // Load event types.
+  using string_list = std::vector<std::string>;
+  if (auto schema_paths = caf::get_if<string_list>(&cfg,
+                                                   "system.schema-paths")) {
+    if (auto schema = load_schema_dirs(*schema_paths)) {
+      event_types::init(*std::move(schema));
+    } else {
+      std::cerr << "failed to read schema dirs: " << to_string(schema.error())
+                << std::endl;
+      return EXIT_FAILURE;
+    }
+  } else {
+    event_types::init(vast::schema{});
+  }
   // Dispatch to root command.
   auto result = run(invocation, sys);
   if (result.match_elements<caf::error>()) {
