@@ -39,19 +39,6 @@
 
 namespace vast::system {
 
-namespace {
-
-caf::expected<schema> load_schema_file(std::string& path) {
-  if (path.empty())
-    return make_error(ec::filesystem_error, "");
-  auto str = load_contents(path);
-  if (!str)
-    return str.error();
-  return to<schema>(*str);
-}
-
-} // namespace
-
 /// Default implementation for import sub-commands. Compatible with Bro and MRT
 /// formats.
 /// @relates application

@@ -79,4 +79,6 @@ private:
 
 bool convert(const schema& s, json& j);
 
+caf::expected<schema> load_schema_file(const path& sf);
+
 } // namespace vast

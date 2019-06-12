@@ -11,10 +11,12 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/json.hpp"
 #include "vast/schema.hpp"
+#include "vast/filesystem.hpp"
+#include "vast/json.hpp"
 
 #include "vast/concept/parseable/parse.hpp"
+#include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/schema.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/schema.hpp"
@@ -181,6 +183,15 @@ bool convert(const schema& s, json& j) {
   o["types"] = std::move(a);
   j = std::move(o);
   return true;
+}
+
+caf::expected<schema> load_schema_file(const path& sf) {
+  if (sf.empty())
+    return make_error(ec::filesystem_error, "");
+  auto str = load_contents(sf);
+  if (!str)
+    return str.error();
+  return to<schema>(*str);
 }
 
 } // namespace vast
