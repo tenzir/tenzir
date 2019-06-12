@@ -46,6 +46,7 @@ set(libvast_sources
   src/die.cpp
   src/error.cpp
   src/event.cpp
+  src/event_types.cpp
   src/ewah_bitmap.cpp
   src/expression.cpp
   src/expression_visitors.cpp
