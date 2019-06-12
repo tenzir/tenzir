@@ -194,4 +194,36 @@ caf::expected<schema> load_schema_file(const path& sf) {
   return to<schema>(*str);
 }
 
+caf::expected<schema>
+load_schema_dirs(const std::vector<std::string>& schema_paths) {
+  vast::schema types;
+  for (const auto& d : schema_paths) {
+    auto schema_dir = path{d};
+    if (!exists(schema_dir))
+      break;
+    vast::schema directory_schema;
+    for (auto f : directory(schema_dir)) {
+      if (f.extension() == ".schema" && exists(f)) {
+        auto k = f.kind();
+        switch (k) {
+          default:
+            break;
+          case path::regular_file:
+          case path::symlink: {
+            auto schema = load_schema_file(f);
+            if (!schema)
+              return schema.error();
+            if (auto merged = schema::merge(directory_schema, *schema))
+              directory_schema = *merged;
+            else
+              return make_error(ec::format_error, "type clash in schema");
+          }
+        }
+      }
+    }
+    types.update(directory_schema);
+  }
+  return types;
+}
+
 } // namespace vast

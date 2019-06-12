@@ -81,4 +81,7 @@ bool convert(const schema& s, json& j);
 
 caf::expected<schema> load_schema_file(const path& sf);
 
+caf::expected<vast::schema>
+load_schema_dirs(const std::vector<std::string>& data_paths);
+
 } // namespace vast
