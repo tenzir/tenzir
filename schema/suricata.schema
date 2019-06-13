@@ -1,0 +1,232 @@
+type suricata.common_ = record{
+  timestamp: time #time,
+  flow_id: count,
+  pcap_cnt: count,
+  src_ip: addr,
+  src_port: port,
+  dest_ip: addr,
+  dest_port: port,
+  proto: string,
+  community_id: string
+}
+
+type suricata.flow_ = record{
+  pkts_toserver: count,
+  pkts_toclient: count,
+  bytes_toserver: count,
+  bytes_toclient: count,
+  start: time,
+  end: time,
+  age: count,
+  state: string,
+  reason: string,
+  alerted: bool
+}
+
+type suricata.app_proto_ = record{
+  app_proto: string
+}
+
+type suricata.alert = record{
+  timestamp: time #time,
+  flow_id: count,
+  pcap_cnt: count,
+  src_ip: addr,
+  src_port: port,
+  dest_ip: addr,
+  dest_port: port,
+  proto: string,
+  community_id: string,
+  alert: record{
+    app_proto: string,
+    action: string,
+    gid: count,
+    signature_id: count,
+    rev: count,
+    signature: string,
+    category: string,
+    severity: count,
+    source: record{ ip: addr, port: port},
+    target: record{ ip: addr, port: port}
+  },
+  flow: suricata.flow_,
+  payload: string,
+  payload_printable: string,
+  stream: count,
+  packet: string,
+  packet_info: record{ linktype: count }
+}
+
+type suricata.dhcp = record{
+  timestamp: time #time,
+  flow_id: count,
+  pcap_cnt: count,
+  src_ip: addr,
+  src_port: port,
+  dest_ip: addr,
+  dest_port: port,
+  proto: string,
+  community_id: string,
+  dhcp: record{
+    type: string,
+    id: count,
+    client_mac: string,
+    assigned_ip: addr,
+    client_ip: addr,
+    dhcp_type: string,
+    assigned_ip: addr,
+    client_id: string,
+    hostname: string,
+    params: vector<string>
+  }
+}
+
+type suricata.dns = record{
+  timestamp: time #time,
+  flow_id: count,
+  pcap_cnt: count,
+  src_ip: addr,
+  src_port: port,
+  dest_ip: addr,
+  dest_port: port,
+  proto: string,
+  community_id: string,
+  dns: record{
+    type: string,
+    id: count,
+    flags: count,
+    rrname: string,
+    rrtype: string,
+    rcode: string,
+    rdata: string,
+    ttl: count,
+    tx_id: count
+  }
+}
+
+type suricata.http = record{
+  timestamp: time #time,
+  flow_id: count,
+  pcap_cnt: count,
+  src_ip: addr,
+  src_port: port,
+  dest_ip: addr,
+  dest_port: port,
+  proto: string,
+  community_id: string,
+  http: record{
+    hostname: string,
+    url: string,
+    http_port: count,
+    http_user_agent: string,
+    http_content_type: string,
+    http_method: string,
+    http_refer: string,
+    protocol: string,
+    status: count,
+    redirect: string,
+    length: count
+  },
+  tx_id: count
+}
+
+type suricata.fileinfo = record{
+  timestamp: time #time,
+  flow_id: count,
+  pcap_cnt: count,
+  src_ip: addr,
+  src_port: port,
+  dest_ip: addr,
+  dest_port: port,
+  proto: string,
+  community_id: string,
+  fileinfo: record{
+    filename: string,
+    magic: string,
+    gaps: bool,
+    state: string,
+    md5: string,
+    sha1: string,
+    sha256: string,
+    stored: bool,
+    file_id: count,
+    size: count,
+    tx_id: count
+  },
+  http: record{
+    hostname: string,
+    url: string,
+    http_port: count,
+    http_user_agent: string,
+    http_content_type: string,
+    http_method: string,
+    http_refer: string,
+    protocol: string,
+    status: count,
+    redirect: string,
+    length: count
+  },
+  app_proto: string
+}
+
+type suricata.flow = record{
+  timestamp: time #time,
+  flow_id: count,
+  pcap_cnt: count,
+  src_ip: addr,
+  src_port: port,
+  dest_ip: addr,
+  dest_port: port,
+  proto: string,
+  community_id: string,
+  flow: suricata.flow_,
+  app_proto: string
+}
+
+type suricata.netflow = record{
+  timestamp: time #time,
+  flow_id: count,
+  pcap_cnt: count,
+  src_ip: addr,
+  src_port: port,
+  dest_ip: addr,
+  dest_port: port,
+  proto: string,
+  community_id: string,
+  netflow: record{
+    pkts: count,
+    bytes: count,
+    start: time,
+    end: time,
+    age: count
+  },
+  app_proto: string
+}
+
+type suricata.tls = record{
+  timestamp: time #time,
+  flow_id: count,
+  pcap_cnt: count,
+  src_ip: addr,
+  src_port: port,
+  dest_ip: addr,
+  dest_port: port,
+  proto: string,
+  community_id: string,
+  tls: record{
+    subject: string,
+    issuerdn: string,
+    serial: string,
+    fingerprint: string,
+    ja3: record{
+      hash: string,
+      string: string
+    },
+    ja3s: record{
+      hash: string,
+      string: string
+    },
+    notbefore: time,
+    notafter: time
+  }
+}
