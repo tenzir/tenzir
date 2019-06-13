@@ -103,8 +103,6 @@ public:
 
   caf::error schema(vast::schema sch) override;
 
-  caf::error schema(vast::type, vast::schema);
-
   vast::schema schema() const override;
 
   const char* name() const override;
