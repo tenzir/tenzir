@@ -41,7 +41,7 @@ struct schema_parser : parser<schema_parser> {
     };
     using parsers::alnum;
     using parsers::chr;
-    auto id = +(alnum | chr{'_'} | chr{'-'} | chr{':'});
+    auto id = +(alnum | chr{'_'} | chr{'-'} | chr{'.'});
     auto ws = ignore(*parsers::space);
     auto tp = type_parser{std::addressof(symbols)};
     auto decl = ("type" >> ws >> id >> ws >> '=' >> ws >> tp) ->* to_type;
