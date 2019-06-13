@@ -145,7 +145,7 @@ TEST(json reader) {
   CHECK(slices[1]->at(0, 18) == vector{data{"text/html"}});
 }
 
-TEST(suricata) {
+TEST_DISABLED(suricata) {
   using reader_type = format::json::reader<format::json::suricata>;
   auto input = std::make_unique<std::istringstream>(std::string{eve_log});
   reader_type reader{defaults::system::table_slice_type, std::move(input)};
