@@ -50,6 +50,10 @@ config = [
             tools: ['gcc8'],
             extraSteps: ['integrationTests'],
         ]],
+        ['FreeBSD', [
+            builds: ['debug', 'release'],
+            tools: ['clang'],
+        ]],
     ],
     // Platform-specific environment settings.
     buildEnvironments: [
