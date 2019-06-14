@@ -536,8 +536,19 @@ install(FILES
 )
 
 install(DIRECTORY
+  "${CMAKE_CURRENT_SOURCE_DIR}/schema"
+  DESTINATION "${CMAKE_INSTALL_DATADIR}/vast"
+)
+
+install(DIRECTORY
   "${CMAKE_CURRENT_SOURCE_DIR}/scripts/integration"
-  DESTINATION "${CMAKE_INSTALL_DATADIR}/vast/"
+  DESTINATION "${CMAKE_INSTALL_DATADIR}/vast"
+  REGEX "${CMAKE_CURRENT_SOURCE_DIR}/scripts/integration/schema$" EXCLUDE
+)
+
+install_symlink(
+  "${CMAKE_INSTALL_DATADIR}/vast/schema"
+  "${CMAKE_INSTALL_DATADIR}/vast/integration/schema"
 )
 
 install(FILES
