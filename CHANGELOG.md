@@ -38,10 +38,11 @@ Every entry has a category for which we use the following visual abbreviations:
 
 - 🎁 VAST can now ingest JSON data. The `import` command gained the `json`
   format, which allows for parsing line-delimited JSON (LDJSON) according to a
-  user-supplied schema with `--schema` or `--schema-file`. The JSON objects in
-  the input must match a congruent record type in the schema, that is, the keys
-  of the JSON object must be equal to the record field names and the object
-  values must be convertible to the record field types.
+  user-selected type with `--type`. The `--schema` or `--schema-file` options
+  can be used in conjunction to supply custom types. The JSON objects in
+  the input must match the selected type, that is, the keys of the JSON object
+  must be equal to the record field names and the object values must be
+  convertible to the record field types.
 
 - 🐞 The CSV printer of the `export` command used to insert 2 superfluous
   fields when formatting an event: The internal event ID and a deprecated
