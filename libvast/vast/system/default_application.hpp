@@ -37,6 +37,7 @@ public:
       .add<std::string>("read,r", "path to input where to read events from")
       .add<std::string>("schema-file,s", "path to alternate schema")
       .add<std::string>("schema,S", "alternate schema as string")
+      .add<std::string>("type,t", "type the data should be parsed as")
       .add<bool>("uds,d", "treat -r as listening UNIX domain socket");
   }
 

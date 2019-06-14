@@ -101,6 +101,16 @@ caf::message reader_command(const command& cmd, caf::actor_system& sys,
     if (!update && update.error() != caf::no_error)
       return caf::make_message(ec::invalid_configuration, "");
   }
+  if (auto type = caf::get_if<std::string>(&options, category + ".type")) {
+    auto p = schema->find(*type);
+    if (p == nullptr)
+      return caf::make_message(
+        make_error(ec::unrecognized_option, "type not found", *type));
+    auto selected_type = *p;
+    reader_schema.clear();
+    reader_schema.add(selected_type);
+    schema = &reader_schema;
+  }
   caf::actor src;
   if (uri) {
     endpoint ep;
