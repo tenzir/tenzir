@@ -20,7 +20,9 @@
 
 #include <caf/all.hpp>
 
+#include "vast/concept/printable/std/chrono.hpp"
 #include "vast/concept/printable/stream.hpp"
+#include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/filesystem.hpp"
 #include "vast/error.hpp"
 
@@ -55,7 +57,7 @@ void init(accountant_actor* self, const path& filename) {
     self->quit(e);
     return;
   }
-  file << "host\tpid\taid\tkey\tvalue\n";
+  file << "timestamp\thost\tpid\taid\tkey\tvalue\n";
   if (!file)
     self->quit(make_error(ec::filesystem_error));
   VAST_DEBUG(self, "kicks off flush loop");
@@ -66,11 +68,13 @@ void init(accountant_actor* self, const path& filename) {
 }
 
 template <class T>
-void record(accountant_actor* self, const std::string& key, T x) {
+void record(accountant_actor* self, const std::string& key, T x,
+            timestamp ts = std::chrono::system_clock::now()) {
   using namespace std::chrono;
   auto aid = self->current_sender()->id();
   auto node = self->current_sender()->node();
   auto& st = self->state;
+  st.file << to_string(ts) << '\t';
   for (auto byte : node.host_id())
     st.file << static_cast<int>(byte);
   st.file << std::dec << '\t' << node.process_id() << '\t' << aid << '\t'
@@ -83,15 +87,17 @@ void record(accountant_actor* self, const std::string& key, T x) {
   }
 }
 
-void record(accountant_actor* self, const std::string& key, timespan x) {
+void record(accountant_actor* self, const std::string& key, timespan x,
+            timestamp ts = std::chrono::system_clock::now()) {
   using namespace std::chrono;
   auto us = duration_cast<microseconds>(x).count();
-  record(self, key, us);
+  record(self, key, us, std::move(ts));
 }
 
-void record(accountant_actor* self, const std::string& key, timestamp x) {
+void record(accountant_actor* self, const std::string& key, timestamp x,
+            timestamp ts = std::chrono::system_clock::now()) {
   using namespace std::chrono;
-  record(self, key, x.time_since_epoch());
+  record(self, key, x.time_since_epoch(), std::move(ts));
 }
 
 // Calculate rate in seconds resolution from nanosecond duration.
@@ -174,23 +180,25 @@ accountant_type::behavior_type accountant(accountant_actor* self,
           },
           [=](const report& r) {
             VAST_TRACE(self, "received a report from", self->current_sender());
+            timestamp ts = std::chrono::system_clock::now();
             for (const auto& [key, value] : r) {
-              caf::visit([&,
-                          key = key](const auto& x) { record(self, key, x); },
+              caf::visit([&, key = key](
+                           const auto& x) { record(self, key, x, ts); },
                          value);
             }
           },
           [=](const performance_report& r) {
             VAST_TRACE(self, "received a performance report from",
                        self->current_sender());
+            timestamp ts = std::chrono::system_clock::now();
             for (const auto& [key, value] : r) {
-              record(self, key + ".events", value.events);
-              record(self, key + ".duration", value.duration);
+              record(self, key + ".events", value.events, ts);
+              record(self, key + ".duration", value.duration, ts);
               auto rate = calc_rate(value);
               if (std::isfinite(rate))
-                record(self, key + ".rate", static_cast<uint64_t>(rate));
+                record(self, key + ".rate", static_cast<uint64_t>(rate), ts);
               else
-                record(self, key + ".rate", "NaN");
+                record(self, key + ".rate", "NaN", ts);
 #if VAST_LOG_LEVEL >= CAF_LOG_LEVEL_INFO
               auto logger = caf::logger::current_logger();
               if (logger && logger->verbosity() >= CAF_LOG_LEVEL_INFO)
