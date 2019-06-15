@@ -72,6 +72,9 @@ caf::behavior sink(caf::stateful_actor<sink_state<Writer>>* self,
   if (max_events > 0) {
     VAST_DEBUG(self, "caps event export at", max_events, "events");
     st.max_events = max_events;
+  } else {
+    // Interpret 0 as infinite.
+    st.max_events = std::numeric_limits<uint64_t>::max();
   }
   self->set_exit_handler(
     [=](const caf::exit_msg& msg) {
