@@ -37,6 +37,8 @@ public:
     : out_{std::move(out)} {
   }
 
+  using format::writer::write;
+
   expected<void> write(const event& e) override {
     auto i = std::ostreambuf_iterator<char>(*out_);
     if (!printer_.print(i, e))

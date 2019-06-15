@@ -13,10 +13,19 @@
 
 #include "vast/format/writer.hpp"
 
+#include "vast/event.hpp"
+
 namespace vast::format {
 
 writer::~writer() {
   // nop
+}
+
+caf::error writer::write(const std::vector<event>& xs) {
+  for (auto& x : xs)
+    if (auto res = write(x); !res)
+      return res.error();
+  return caf::none;
 }
 
 caf::expected<void> writer::flush() {

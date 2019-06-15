@@ -277,6 +277,8 @@ public:
   /// @param dir The path where to write the log file(s) to.
   writer(path dir);
 
+  using format::writer::write;
+
   expected<void> write(const event& e) override;
 
   expected<void> flush() override;

@@ -208,6 +208,8 @@ public:
     VAST_INFO_ANON("query", query_id_, "had", num_results_, "result(s)");
   }
 
+  using vast::format::writer::write;
+
   caf::expected<void> write(const vast::event& x) override {
     ++num_results_;
     if (show_progress_)

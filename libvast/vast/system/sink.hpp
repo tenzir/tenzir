@@ -72,6 +72,9 @@ caf::behavior sink(caf::stateful_actor<sink_state<Writer>>* self,
   if (max_events > 0) {
     VAST_DEBUG(self, "caps event export at", max_events, "events");
     st.max_events = max_events;
+  } else {
+    // Interpret 0 as infinite.
+    st.max_events = std::numeric_limits<uint64_t>::max();
   }
   self->set_exit_handler(
     [=](const caf::exit_msg& msg) {
@@ -80,26 +83,35 @@ caf::behavior sink(caf::stateful_actor<sink_state<Writer>>* self,
     }
   );
   return {
-    [=](const std::vector<event>& xs) {
+    [=](std::vector<event>& xs) {
       VAST_DEBUG(self, "got:", xs.size(), "events from",
                  self->current_sender());
       auto& st = self->state;
+      auto reached_max_events = [&] {
+        VAST_INFO(self, "reached max_events:", st.max_events, "events");
+        st.writer.flush();
+        st.send_report();
+        self->quit();
+      };
+      // Drop excess elements.
+      auto remaining = st.max_events - st.processed;
+      if (remaining == 0)
+        return reached_max_events();
+      if (xs.size() > remaining)
+        xs.resize(remaining);
+      // Handle events.
       auto t = timer::start(st.measurement);
-      for (auto& x : xs) {
-        auto r = st.writer.write(x);
-        if (!r) {
-          VAST_ERROR(self, self->system().render(r.error()));
-          self->quit(r.error());
-          return;
-        }
-        if (++st.processed == st.max_events) {
-          VAST_INFO(self, "reached max_events:", st.max_events, "events");
-          st.send_report();
-          self->quit();
-          return;
-        }
+      if (auto err = st.writer.write(xs)) {
+        VAST_ERROR(self, self->system().render(err));
+        self->quit(std::move(err));
+        return;
       }
       t.stop(xs.size());
+      // Stop when reaching configured limit.
+      st.processed += xs.size();
+      if (st.processed >= st.max_events)
+        return reached_max_events();
+      // Force flush if necessary.
       auto now = steady_clock::now();
       if (now - st.last_flush > st.flush_interval) {
         st.writer.flush();

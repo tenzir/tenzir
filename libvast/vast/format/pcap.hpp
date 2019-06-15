@@ -141,6 +141,8 @@ public:
 
   ~writer();
 
+  using format::writer::write;
+
   caf::expected<void> write(const event& e) override;
 
   caf::expected<void> flush() override;
