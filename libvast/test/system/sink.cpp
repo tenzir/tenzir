@@ -28,7 +28,7 @@ FIXTURE_SCOPE(sink_tests, fixtures::actor_system_and_events)
 TEST(zeek sink) {
   MESSAGE("constructing a sink");
   format::zeek::writer writer{directory};
-  auto snk = self->spawn(sink<format::zeek::writer>, std::move(writer), 0u);
+  auto snk = self->spawn(sink<format::zeek::writer>, std::move(writer), 20u);
   MESSAGE("sending events");
   self->send(snk, zeek_conn_log);
   MESSAGE("shutting down");

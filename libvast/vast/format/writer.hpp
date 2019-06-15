@@ -13,6 +13,8 @@
 
 #pragma once
 
+#include <vector>
+
 #include <caf/expected.hpp>
 
 #include "vast/fwd.hpp"
@@ -28,6 +30,11 @@ public:
   /// @param x The event to write.
   /// @returns `caf::none` on success.
   virtual caf::expected<void> write(const event& x)  = 0;
+
+  /// Processes a batch of events.
+  /// @param xs The events to write.
+  /// @returns `caf::none` on success.
+  virtual caf::error write(const std::vector<event>& xs);
 
   /// Called periodically to flush state.
   /// @returns `caf::none` on success.
