@@ -36,6 +36,11 @@ public:
   /// @returns `caf::none` on success.
   virtual caf::error write(const std::vector<event>& xs);
 
+  /// Processes a single batch of events.
+  /// @param x The events to write wrapped in a table slice.
+  /// @returns `caf::none` on success.
+  virtual caf::error write(const table_slice& x);
+
   /// Called periodically to flush state.
   /// @returns `caf::none` on success.
   /// The default implementation does nothing.
