@@ -11,15 +11,18 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
+#include "vast/concept/parseable/to.hpp"
+#include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/event.hpp"
 #include "vast/expression.hpp"
 #include "vast/expression_visitors.hpp"
 #include "vast/schema.hpp"
-#include "vast/concept/parseable/to.hpp"
-#include "vast/concept/parseable/vast/expression.hpp"
+#include "vast/table_slice.hpp"
 
 #define SUITE expression
 #include "vast/test/test.hpp"
+
+#include "vast/test/fixtures/events.hpp"
 
 using namespace vast;
 
@@ -151,6 +154,25 @@ TEST(evaluation - schema) {
   ast_resolved = caf::visit(type_resolver{bar}, *ast);
   REQUIRE(ast_resolved);
   CHECK(caf::holds_alternative<caf::none_t>(*ast_resolved));
+}
+
+TEST(evaluation - table slice rows) {
+  // Calling the fixture ctor makes sure the slices are available.
+  fixtures::events dummy;
+  // Get the first Zeek conn log slice and provide some utility.
+  auto& slice = fixtures::events::zeek_conn_log_slices[0];
+  auto layout = slice->layout();
+  auto tailored = [&](std::string_view expr) {
+    auto ast = unbox(to<expression>(expr));
+    return unbox(caf::visit(type_resolver{layout}, ast));
+  };
+  // Run some checks on various rows.
+  CHECK(evaluate_at(*slice, 0, tailored("orig_h == 192.168.1.102")));
+  CHECK(evaluate_at(*slice, 0, tailored(":addr == 192.168.1.102")));
+  CHECK(evaluate_at(*slice, 1, tailored("orig_h != 192.168.1.102")));
+  CHECK(evaluate_at(*slice, 1, tailored(":addr != 192.168.1.102")));
+  CHECK(evaluate_at(*slice, 1, tailored("orig_h in 192.168.1.0/24")));
+  CHECK(evaluate_at(*slice, 1, tailored("!(orig_h in 192.168.2.0/24)")));
 }
 
 FIXTURE_SCOPE_END()

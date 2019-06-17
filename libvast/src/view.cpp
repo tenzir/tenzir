@@ -192,4 +192,77 @@ bool type_check(const type& t, const data_view& x) {
   return caf::holds_alternative<caf::none_t>(x) || caf::visit(f, t);
 }
 
+bool evaluate_view(const data_view& lhs, relational_operator op,
+                   const data_view& rhs) {
+  auto check_match = [](const auto& x, const auto& y) {
+    return caf::visit(detail::overload([](auto, auto) { return false; },
+                                       [](view<std::string>& lhs,
+                                          view<pattern> rhs) {
+                                         return rhs.match(lhs);
+                                       }),
+                      x, y);
+  };
+  auto check_in = [](const auto& x, const auto& y) {
+    return caf::visit(detail::overload(
+                        [](auto, auto) {
+                          // Default case.
+                          return false;
+                        },
+                        [](view<std::string>& lhs, view<std::string>& rhs) {
+                          return rhs.find(lhs) != std::string::npos;
+                        },
+                        [](view<std::string>& lhs, view<pattern> rhs) {
+                          return rhs.search(lhs);
+                        },
+                        [](view<address> lhs, view<subnet> rhs) {
+                          return rhs.contains(lhs);
+                        },
+                        [](view<subnet> lhs, view<subnet> rhs) {
+                          return rhs.contains(lhs);
+                        },
+                        [](auto lhs, view<vector> rhs) {
+                          // TODO: implement me
+                          // return std::find(rhs->begin(), rhs->end(), lhs)
+                          //        != rhs->end();
+                          return false;
+                        },
+                        [](auto lhs, view<set> rhs) {
+                          // TODO: implement me
+                          // return std::find(rhs->begin(), rhs->end(), lhs)
+                          //        != rhs->end();
+                          return false;
+                        }),
+                      x, y);
+  };
+  switch (op) {
+    default:
+      VAST_ASSERT(!"missing case");
+      return false;
+    case match:
+      return check_match(lhs, rhs);
+    case not_match:
+      return !check_match(lhs, rhs);
+    case in:
+      return check_in(lhs, rhs);
+    case not_in:
+      return !check_in(lhs, rhs);
+    case ni:
+      return check_in(rhs, lhs);
+    case not_ni:
+      return !check_in(rhs, lhs);
+    case equal:
+      return lhs == rhs;
+    case not_equal:
+      return lhs != rhs;
+    case less:
+      return lhs < rhs;
+    case less_equal:
+      return lhs <= rhs;
+    case greater:
+      return lhs > rhs;
+    case greater_equal:
+      return lhs >= rhs;
+  }
+}
+
 } // namespace vast

@@ -27,7 +27,9 @@
 #include "vast/expression_visitors.hpp"
 #include "vast/logger.hpp"
 #include "vast/system/atoms.hpp"
+#include "vast/table_slice.hpp"
 #include "vast/type.hpp"
+#include "vast/view.hpp"
 
 namespace vast {
 
@@ -535,6 +537,73 @@ bool event_evaluator::operator()(const data_extractor& e, const data& d) {
   return false;
 }
 
+table_slice_row_evaluator::table_slice_row_evaluator(const table_slice& slice,
+                                                     size_t row)
+  : slice_(slice), row_(row) {
+  // nop
+}
+
+bool table_slice_row_evaluator::operator()(caf::none_t) {
+  return false;
+}
+
+bool table_slice_row_evaluator::operator()(const conjunction& c) {
+  for (auto& op : c)
+    if (!caf::visit(*this, op))
+      return false;
+  return true;
+}
+
+bool table_slice_row_evaluator::operator()(const disjunction& d) {
+  for (auto& op : d)
+    if (caf::visit(*this, op))
+      return true;
+  return false;
+}
+
+bool table_slice_row_evaluator::operator()(const negation& n) {
+  return !caf::visit(*this, n.expr());
+}
+
+bool table_slice_row_evaluator::operator()(const predicate& p) {
+  op_ = p.op;
+  return caf::visit(*this, p.lhs, p.rhs);
+}
+
+bool table_slice_row_evaluator::operator()(const attribute_extractor& e,
+                                          const data& d) {
+  // FIXME: perform a transformation on the AST that replaces the attribute
+  // with the corresponding function object.
+  if (e.attr == system::type_atom::value)
+    return evaluate(slice_.layout().name(), op_, d);
+  // TODO: implement me
+  // if (e.attr == system::time_atom::value)
+  //   return evaluate(event_.timestamp(), op_, d);
+  return false;
+}
+
+bool table_slice_row_evaluator::operator()(const type_extractor&, const data&) {
+  die("type extractor should have been resolved at this point");
+}
+
+bool table_slice_row_evaluator::operator()(const key_extractor&, const data&) {
+  die("key extractor should have been resolved at this point");
+}
+
+bool table_slice_row_evaluator::operator()(const data_extractor& e,
+                                           const data& d) {
+  // Our layout is always flat. Hence, the offset needs to have a depth of
+  // exactly one since it simply represents the column.
+  if (e.offset.size() != 1 || e.type != slice_.layout())
+    return false;
+  auto x = slice_.at(row_, e.offset[0]);
+  return evaluate_view(x, op_, make_data_view(d));
+  return false;
+}
+
+bool evaluate_at(const table_slice& slice, size_t row, const expression& expr) {
+  return caf::visit(table_slice_row_evaluator{slice, row}, expr);
+}
 
 matcher::matcher(const type& t) : type_{t} {
   // nop

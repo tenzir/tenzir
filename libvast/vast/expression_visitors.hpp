@@ -165,6 +165,41 @@ struct event_evaluator {
   relational_operator op_;
 };
 
+/// Evaluates a single row of a table slice over a [resolved](@ref
+/// type_extractor) expression.
+struct table_slice_row_evaluator {
+  table_slice_row_evaluator(const table_slice& slice, size_t row);
+
+  bool operator()(caf::none_t);
+  bool operator()(const conjunction& c);
+  bool operator()(const disjunction& d);
+  bool operator()(const negation& n);
+  bool operator()(const predicate& p);
+  bool operator()(const attribute_extractor& e, const data& d);
+  bool operator()(const key_extractor&, const data&);
+  bool operator()(const type_extractor&, const data&);
+  bool operator()(const data_extractor& e, const data& d);
+
+  template <class T>
+  bool operator()(const data& d, const T& x) {
+    return (*this)(x, d);
+  }
+
+  template <class T, class U>
+  bool operator()(const T&, const U&) {
+    return false;
+  }
+
+  const table_slice& slice_;
+  size_t row_;
+  relational_operator op_;
+};
+
+/// Evaluates a single row of a table slice over a [resolved](@ref
+/// type_extractor) expression.
+/// @relates table_slice_row_evaluator
+bool evaluate_at(const table_slice& slice, size_t row, const expression& expr);
+
 /// Checks whether a [resolved](@ref type_extractor) expression matches a given
 /// type. That is, this visitor tests whether an expression consists of a
 /// viable set of predicates for a type. For conjunctions, all operands must
