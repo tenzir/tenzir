@@ -187,7 +187,7 @@ bool convert(const schema& s, json& j) {
 
 caf::expected<schema> load_schema_file(const path& sf) {
   if (sf.empty())
-    return make_error(ec::filesystem_error, "");
+    return make_error(ec::filesystem_error, "empty path");
   auto str = load_contents(sf);
   if (!str)
     return str.error();
@@ -197,15 +197,14 @@ caf::expected<schema> load_schema_file(const path& sf) {
 caf::expected<schema>
 load_schema_dirs(const std::vector<std::string>& schema_paths) {
   vast::schema types;
-  for (const auto& d : schema_paths) {
-    auto schema_dir = path{d};
+  for (const auto& dir : schema_paths) {
+    auto schema_dir = path{dir};
     if (!exists(schema_dir))
       break;
     vast::schema directory_schema;
     for (auto f : directory(schema_dir)) {
       if (f.extension() == ".schema" && exists(f)) {
-        auto k = f.kind();
-        switch (k) {
+        switch (f.kind()) {
           default:
             break;
           case path::regular_file:
@@ -214,7 +213,7 @@ load_schema_dirs(const std::vector<std::string>& schema_paths) {
             if (!schema)
               return schema.error();
             if (auto merged = schema::merge(directory_schema, *schema))
-              directory_schema = *merged;
+              directory_schema = std::move(*merged);
             else
               return make_error(ec::format_error, "type clash in schema");
           }

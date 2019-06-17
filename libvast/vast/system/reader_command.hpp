@@ -97,9 +97,10 @@ caf::message reader_command(const command& cmd, caf::actor_system& sys,
         reader_schema.update(*update);
       }
       schema = &reader_schema;
+    } else if (update.error() != caf::no_error) {
+      return caf::make_message(ec::invalid_configuration,
+                               "failed to parse provided schema");
     }
-    if (!update && update.error() != caf::no_error)
-      return caf::make_message(ec::invalid_configuration, "");
   }
   if (auto type = caf::get_if<std::string>(&options, category + ".type")) {
     auto p = schema->find(*type);

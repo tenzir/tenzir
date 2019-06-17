@@ -11,9 +11,9 @@ Every entry has a category for which we use the following visual abbreviations:
 ## [Unreleased]
 
 - 🔄 Default schema definitions for certain `import` formats changed from
-  hard-coded to runtime evaluated. The default location of the schema
+  hard-coded to runtime-evaluated. The default location of the schema
   definition files is $prefix/share/vast/schema. Currently this is used for the
-  suricata json log reader.
+  Suricata JSON log reader.
 
 - 🔄 The default directory name for persistent state changed from `vast` to
   `vast.db`. This makes it possible to run `./vast` in the current directory
