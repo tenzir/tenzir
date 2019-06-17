@@ -200,6 +200,11 @@ struct table_slice_row_evaluator {
 /// @relates table_slice_row_evaluator
 bool evaluate_at(const table_slice& slice, size_t row, const expression& expr);
 
+/// Evaluates an entire table slice over a [resolved](@ref type_extractor)
+/// expression.
+/// @relates table_slice_evaluator
+ids evaluate(const table_slice& slice, const expression& expr);
+
 /// Checks whether a [resolved](@ref type_extractor) expression matches a given
 /// type. That is, this visitor tests whether an expression consists of a
 /// viable set of predicates for a type. For conjunctions, all operands must

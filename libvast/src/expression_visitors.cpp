@@ -25,6 +25,7 @@
 #include "vast/die.hpp"
 #include "vast/event.hpp"
 #include "vast/expression_visitors.hpp"
+#include "vast/ids.hpp"
 #include "vast/logger.hpp"
 #include "vast/system/atoms.hpp"
 #include "vast/table_slice.hpp"
@@ -603,6 +604,14 @@ bool table_slice_row_evaluator::operator()(const data_extractor& e,
 
 bool evaluate_at(const table_slice& slice, size_t row, const expression& expr) {
   return caf::visit(table_slice_row_evaluator{slice, row}, expr);
+}
+
+ids evaluate(const table_slice& slice, const expression& expr) {
+  ids result;
+  result.append(false, slice.offset());
+  for (size_t row = 0; row != slice.rows(); ++row)
+    result.append_bit(evaluate_at(slice, row, expr));
+  return result;
 }
 
 matcher::matcher(const type& t) : type_{t} {

@@ -16,6 +16,7 @@
 #include "vast/event.hpp"
 #include "vast/expression.hpp"
 #include "vast/expression_visitors.hpp"
+#include "vast/ids.hpp"
 #include "vast/schema.hpp"
 #include "vast/table_slice.hpp"
 
@@ -173,6 +174,23 @@ TEST(evaluation - table slice rows) {
   CHECK(evaluate_at(*slice, 1, tailored(":addr != 192.168.1.102")));
   CHECK(evaluate_at(*slice, 1, tailored("orig_h in 192.168.1.0/24")));
   CHECK(evaluate_at(*slice, 1, tailored("!(orig_h in 192.168.2.0/24)")));
+}
+
+TEST(evaluation - table slice) {
+  // Calling the fixture ctor makes sure the slices are available.
+  fixtures::events dummy;
+  // Get the first Zeek conn log slice and provide some utility.
+  auto slice = fixtures::events::zeek_conn_log_slices[0];
+  slice.unshared().offset(0);
+  REQUIRE_EQUAL(slice->rows(), 8u);
+  auto layout = slice->layout();
+  auto tailored = [&](std::string_view expr) {
+    auto ast = unbox(to<expression>(expr));
+    return unbox(caf::visit(type_resolver{layout}, ast));
+  };
+  // Run some checks on various rows.
+  CHECK_EQUAL(evaluate(*slice, tailored("orig_h == 192.168.1.102")),
+              make_ids({0, 2, 4}, 8));
 }
 
 FIXTURE_SCOPE_END()
