@@ -58,14 +58,14 @@ bool schema::add(const type& t) {
   return true;
 }
 
-type* schema::find(const std::string& name) {
+type* schema::find(std::string_view name) {
   for (auto& t : types_)
     if (t.name() == name)
       return &t;
   return nullptr;
 }
 
-const type* schema::find(const std::string& name) const {
+const type* schema::find(std::string_view name) const {
   for (auto& t : types_)
     if (t.name() == name)
       return &t;
