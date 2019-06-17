@@ -14,6 +14,8 @@
 #include "vast/format/writer.hpp"
 
 #include "vast/event.hpp"
+#include "vast/table_slice.hpp"
+#include "vast/to_events.hpp"
 
 namespace vast::format {
 
@@ -26,6 +28,10 @@ caf::error writer::write(const std::vector<event>& xs) {
     if (auto res = write(x); !res)
       return res.error();
   return caf::none;
+}
+
+caf::error writer::write(const table_slice& x) {
+  return write(to_events(x));
 }
 
 caf::expected<void> writer::flush() {

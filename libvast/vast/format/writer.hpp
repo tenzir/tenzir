@@ -28,13 +28,24 @@ public:
 
   /// Processes an event.
   /// @param x The event to write.
-  /// @returns `caf::none` on success.
+  /// @returns `caf::unit` on success.
+  /// @note Legacy API! This exists only for backwards compatibility at the
+  ///       moment and is going to get removed when all implementations of this
+  ///       interface switched to the `table_slice` API.
   virtual caf::expected<void> write(const event& x)  = 0;
 
   /// Processes a batch of events.
   /// @param xs The events to write.
   /// @returns `caf::none` on success.
+  /// @note Legacy API! This exists only for backwards compatibility at the
+  ///       moment and is going to get removed when all implementations of this
+  ///       interface switched to the `table_slice` API.
   virtual caf::error write(const std::vector<event>& xs);
+
+  /// Processes a single batch of events.
+  /// @param x The events to write wrapped in a table slice.
+  /// @returns `caf::none` on success.
+  virtual caf::error write(const table_slice& x);
 
   /// Called periodically to flush state.
   /// @returns `caf::none` on success.
