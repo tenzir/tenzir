@@ -64,7 +64,7 @@ TEST(offset finding) {
   CHECK_EQUAL(at(foo_record, 3, 1, 1).name(), real_type{});
 }
 
-TEST(updating) {
+TEST(combining) {
   auto x = unbox(to<schema>(R"__(
     type a = int
     type b = real
@@ -73,10 +73,10 @@ TEST(updating) {
     type a = count
     type c = addr
   )__"));
-  x.update(y);
-  CHECK_EQUAL(x.find("a"), count_type{}.name("a"));
-  CHECK_EQUAL(x.find("b"), real_type{}.name("b"));
-  CHECK_EQUAL(x.find("c"), address_type{}.name("c"));
+  auto z = schema::combine(x, y);
+  CHECK_EQUAL(z.find("a"), count_type{}.name("a"));
+  CHECK_EQUAL(z.find("b"), real_type{}.name("b"));
+  CHECK_EQUAL(z.find("c"), address_type{}.name("c"));
 }
 
 TEST(merging) {

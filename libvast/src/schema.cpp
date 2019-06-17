@@ -38,6 +38,17 @@ optional<schema> schema::merge(const schema& s1, const schema& s2) {
   return result;
 }
 
+schema schema::combine(const schema& s1, const schema& s2) {
+  auto result = s1;
+  for (auto& t : s2) {
+    if (auto x = result.find(t.name()))
+      *x = t;
+    else
+      result.add(t);
+  }
+  return result;
+}
+
 bool schema::add(const type& t) {
   if (caf::holds_alternative<none_type>(t)
       || t.name().empty()
@@ -45,15 +56,6 @@ bool schema::add(const type& t) {
     return false;
   types_.push_back(std::move(t));
   return true;
-}
-
-void schema::update(const schema& new_def) {
-  for (auto& t : new_def) {
-    if (auto x = this->find(t.name()))
-      *x = t;
-    else
-      add(t);
-  }
 }
 
 type* schema::find(const std::string& name) {
@@ -220,7 +222,7 @@ load_schema_dirs(const std::vector<std::string>& schema_paths) {
         }
       }
     }
-    types.update(directory_schema);
+    types = schema::combine(types, directory_schema);
   }
   return types;
 }

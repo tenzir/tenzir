@@ -42,17 +42,19 @@ public:
   /// Merges two schemata.
   /// @param s1 The first schema.
   /// @param s2 The second schema.
-  /// @returns The union of *s1* and *s2* schema if the .
+  /// @returns The union of *s1* and *s2* if the inputs are disjunct.
   static optional<schema> merge(const schema& s1, const schema& s2);
+
+  /// Combines two schemata, prefering definitions from s2 on conflicts.
+  /// @param s1 The first schema.
+  /// @param s2 The second schema.
+  /// @returns The combination of *s1* and *s2*.
+  static schema combine(const schema& s1, const schema& s2);
 
   /// Adds a new type to the schema.
   /// @param t The type to add.
   /// @returns `true` on success.
   bool add(const type& t);
-
-  /// Updates the schema with definitions from another.
-  /// @param new_def The definitions to add or replace.
-  void update(const schema& new_def);
 
   /// Retrieves the type for a given name.
   /// @param name The name of the type to lookup.

@@ -94,7 +94,7 @@ caf::message reader_command(const command& cmd, caf::actor_system& sys,
         reader_schema = *update;
       } else {
         reader_schema = *schema;
-        reader_schema.update(*update);
+        reader_schema = schema::combine(reader_schema, *update);
       }
       schema = &reader_schema;
     } else if (update.error() != caf::no_error) {
