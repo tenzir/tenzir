@@ -11,10 +11,12 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/json.hpp"
 #include "vast/schema.hpp"
+#include "vast/filesystem.hpp"
+#include "vast/json.hpp"
 
 #include "vast/concept/parseable/parse.hpp"
+#include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/schema.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/schema.hpp"
@@ -36,6 +38,17 @@ optional<schema> schema::merge(const schema& s1, const schema& s2) {
   return result;
 }
 
+schema schema::combine(const schema& s1, const schema& s2) {
+  auto result = s1;
+  for (auto& t : s2) {
+    if (auto x = result.find(t.name()))
+      *x = t;
+    else
+      result.add(t);
+  }
+  return result;
+}
+
 bool schema::add(const type& t) {
   if (caf::holds_alternative<none_type>(t)
       || t.name().empty()
@@ -45,7 +58,14 @@ bool schema::add(const type& t) {
   return true;
 }
 
-const type* schema::find(const std::string& name) const {
+type* schema::find(std::string_view name) {
+  for (auto& t : types_)
+    if (t.name() == name)
+      return &t;
+  return nullptr;
+}
+
+const type* schema::find(std::string_view name) const {
   for (auto& t : types_)
     if (t.name() == name)
       return &t;
@@ -165,6 +185,46 @@ bool convert(const schema& s, json& j) {
   o["types"] = std::move(a);
   j = std::move(o);
   return true;
+}
+
+caf::expected<schema> load_schema(const path& sf) {
+  if (sf.empty())
+    return make_error(ec::filesystem_error, "empty path");
+  auto str = load_contents(sf);
+  if (!str)
+    return str.error();
+  return to<schema>(*str);
+}
+
+caf::expected<schema>
+load_schema(const std::vector<std::string>& schema_paths) {
+  vast::schema types;
+  for (const auto& dir : schema_paths) {
+    auto schema_dir = path{dir};
+    if (!exists(schema_dir))
+      break;
+    vast::schema directory_schema;
+    for (auto f : directory(schema_dir)) {
+      if (f.extension() == ".schema" && exists(f)) {
+        switch (f.kind()) {
+          default:
+            break;
+          case path::regular_file:
+          case path::symlink: {
+            auto schema = load_schema(f);
+            if (!schema)
+              return schema.error();
+            if (auto merged = schema::merge(directory_schema, *schema))
+              directory_schema = std::move(*merged);
+            else
+              return make_error(ec::format_error, "type clash in schema");
+          }
+        }
+      }
+    }
+    types = schema::combine(types, directory_schema);
+  }
+  return types;
 }
 
 } // namespace vast

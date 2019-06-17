@@ -64,6 +64,21 @@ TEST(offset finding) {
   CHECK_EQUAL(at(foo_record, 3, 1, 1).name(), real_type{});
 }
 
+TEST(combining) {
+  auto x = unbox(to<schema>(R"__(
+    type a = int
+    type b = real
+  )__"));
+  auto y = unbox(to<schema>(R"__(
+    type a = count
+    type c = addr
+  )__"));
+  auto z = schema::combine(x, y);
+  CHECK_EQUAL(z.find("a"), count_type{}.name("a"));
+  CHECK_EQUAL(z.find("b"), real_type{}.name("b"));
+  CHECK_EQUAL(z.find("c"), address_type{}.name("c"));
+}
+
 TEST(merging) {
   std::string str = R"__(
     type a = int
@@ -116,7 +131,7 @@ TEST(parseable - simple sequential) {
 
 TEST(schema: zeek-style) {
   std::string str = R"__(
-    type zeek::ssl = record{
+    type zeek.ssl = record{
       ts: time,
       uid: string,
       id: record {orig_h: addr, orig_p: port, resp_h: addr, resp_p: port},
@@ -135,7 +150,7 @@ TEST(schema: zeek-style) {
   )__";
   schema sch;
   CHECK(parsers::schema(str, sch));
-  auto ssl = sch.find("zeek::ssl");
+  auto ssl = sch.find("zeek.ssl");
   REQUIRE(ssl);
   auto r = get_if<record_type>(ssl);
   REQUIRE(r);

@@ -70,6 +70,9 @@ path::path(const char* str) : str_{str} {
 path::path(std::string str) : str_{std::move(str)} {
 }
 
+path::path(std::string_view str) : str_{str} {
+}
+
 path& path::operator/=(const path& p) {
   if (p.empty() || (detail::ends_with(str_, separator) && p == separator))
     return *this;

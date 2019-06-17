@@ -42,8 +42,14 @@ public:
   /// Merges two schemata.
   /// @param s1 The first schema.
   /// @param s2 The second schema.
-  /// @returns The union of *s1* and *s2* schema if the .
+  /// @returns The union of *s1* and *s2* if the inputs are disjunct.
   static optional<schema> merge(const schema& s1, const schema& s2);
+
+  /// Combines two schemata, prefering definitions from s2 on conflicts.
+  /// @param s1 The first schema.
+  /// @param s2 The second schema.
+  /// @returns The combination of *s1* and *s2*.
+  static schema combine(const schema& s1, const schema& s2);
 
   /// Adds a new type to the schema.
   /// @param t The type to add.
@@ -53,7 +59,10 @@ public:
   /// Retrieves the type for a given name.
   /// @param name The name of the type to lookup.
   /// @returns The type with name *name* or `nullptr if no such type exists.
-  const type* find(const std::string& name) const;
+  type* find(std::string_view name);
+
+  //! @copydoc find(const std::string& name)
+  const type* find(std::string_view name) const;
 
   // -- container API ----------------------------------------------------------
 
@@ -71,5 +80,10 @@ private:
 };
 
 bool convert(const schema& s, json& j);
+
+caf::expected<schema> load_schema(const path& sf);
+
+caf::expected<vast::schema>
+load_schema(const std::vector<std::string>& data_paths);
 
 } // namespace vast

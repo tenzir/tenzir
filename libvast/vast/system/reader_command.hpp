@@ -28,6 +28,7 @@
 #include "vast/detail/make_io_stream.hpp"
 #include "vast/endpoint.hpp"
 #include "vast/error.hpp"
+#include "vast/event_types.hpp"
 #include "vast/format/reader.hpp"
 #include "vast/logger.hpp"
 #include "vast/schema.hpp"
@@ -38,19 +39,6 @@
 #include "vast/table_slice_builder_factory.hpp"
 
 namespace vast::system {
-
-namespace {
-
-caf::expected<schema> load_schema_file(std::string& path) {
-  if (path.empty())
-    return make_error(ec::filesystem_error, "");
-  auto str = load_contents(path);
-  if (!str)
-    return str.error();
-  return to<schema>(*str);
-}
-
-} // namespace
 
 /// Default implementation for import sub-commands. Compatible with Bro and MRT
 /// formats.
@@ -83,8 +71,10 @@ caf::message reader_command(const command& cmd, caf::actor_system& sys,
     else
       file = std::string{Reader::defaults::path};
   }
-  // Supply an alternate schema, if requested.
-  expected<vast::schema> schema{caf::none};
+  // Get the default schema from the registry.
+  auto schema = event_types::get();
+  // Update with an alternate schema, if requested.
+  vast::schema reader_schema;
   {
     auto sc = caf::get_if<std::string>(&options, category + ".schema");
     auto sf = caf::get_if<std::string>(&options, category + ".schema-file");
@@ -92,12 +82,35 @@ caf::message reader_command(const command& cmd, caf::actor_system& sys,
       return make_message(
         make_error(ec::invalid_configuration,
                    "had both schema and schema-file provided"));
-    if (sc)
-      schema = to<vast::schema>(*sc);
-    if (sf)
-      schema = load_schema_file(*sf);
-    if (!schema && schema.error() != caf::none)
-      return make_message(std::move(schema.error()));
+    auto update = [&]() -> caf::expected<vast::schema> {
+      if (sc)
+        return to<vast::schema>(*sc);
+      if (sf)
+        return load_schema(*sf);
+      return caf::no_error;
+    }();
+    if (update) {
+      if (!schema || schema->empty()) {
+        reader_schema = *update;
+      } else {
+        reader_schema = *schema;
+        reader_schema = schema::combine(reader_schema, *update);
+      }
+      schema = &reader_schema;
+    } else if (update.error() != caf::no_error) {
+      return caf::make_message(ec::invalid_configuration,
+                               "failed to parse provided schema");
+    }
+  }
+  if (auto type = caf::get_if<std::string>(&options, category + ".type")) {
+    auto p = schema->find(*type);
+    if (p == nullptr)
+      return caf::make_message(
+        make_error(ec::unrecognized_option, "type not found", *type));
+    auto selected_type = *p;
+    reader_schema.clear();
+    reader_schema.add(selected_type);
+    schema = &reader_schema;
   }
   caf::actor src;
   if (uri) {
@@ -117,6 +130,8 @@ caf::message reader_command(const command& cmd, caf::actor_system& sys,
       }
     }
     Reader reader{slice_type};
+    if (schema)
+      reader.schema(*schema);
     auto run = [&](auto&& source) {
       auto& mm = sys.middleman();
       return mm.spawn_broker(std::forward<decltype(source)>(source),
@@ -138,12 +153,12 @@ caf::message reader_command(const command& cmd, caf::actor_system& sys,
     if (!in)
       return caf::make_message(std::move(in.error()));
     Reader reader{slice_type, std::move(*in)};
+    if (schema)
+      reader.schema(*schema);
     VAST_INFO(reader, "reads data from", *file);
     src = sys.spawn(source<Reader>, std::move(reader), factory, slice_size,
                     max_events);
   }
-  if (schema)
-    caf::anon_send(src, put_atom::value, std::move(*schema));
   return source_command(cmd, sys, std::move(src), options, first, last);
 }
 
