@@ -26,6 +26,7 @@
 
 #include "vast/error.hpp"
 #include "vast/event_types.hpp"
+#include "vast/logger.hpp"
 #include "vast/schema.hpp"
 
 #include "vast/system/default_application.hpp"
@@ -78,13 +79,12 @@ int main(int argc, char** argv) {
   caf::actor_system sys{cfg};
   // Load event types.
   using string_list = std::vector<std::string>;
-  if (auto schema_paths = caf::get_if<string_list>(&cfg,
-                                                   "system.schema-paths")) {
-    if (auto schema = load_schema_dirs(*schema_paths)) {
+  auto schema_paths = caf::get_if<string_list>(&cfg, "system.schema-paths");
+  if (schema_paths) {
+    if (auto schema = load_schema(*schema_paths)) {
       event_types::init(*std::move(schema));
     } else {
-      std::cerr << "failed to read schema dirs: " << to_string(schema.error())
-                << std::endl;
+      VAST_ERROR_ANON("failed to read schema dirs:", to_string(schema.error()));
       return EXIT_FAILURE;
     }
   } else {

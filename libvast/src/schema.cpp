@@ -187,7 +187,7 @@ bool convert(const schema& s, json& j) {
   return true;
 }
 
-caf::expected<schema> load_schema_file(const path& sf) {
+caf::expected<schema> load_schema(const path& sf) {
   if (sf.empty())
     return make_error(ec::filesystem_error, "empty path");
   auto str = load_contents(sf);
@@ -197,7 +197,7 @@ caf::expected<schema> load_schema_file(const path& sf) {
 }
 
 caf::expected<schema>
-load_schema_dirs(const std::vector<std::string>& schema_paths) {
+load_schema(const std::vector<std::string>& schema_paths) {
   vast::schema types;
   for (const auto& dir : schema_paths) {
     auto schema_dir = path{dir};
@@ -211,7 +211,7 @@ load_schema_dirs(const std::vector<std::string>& schema_paths) {
             break;
           case path::regular_file:
           case path::symlink: {
-            auto schema = load_schema_file(f);
+            auto schema = load_schema(f);
             if (!schema)
               return schema.error();
             if (auto merged = schema::merge(directory_schema, *schema))

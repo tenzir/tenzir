@@ -1,4 +1,4 @@
-type suricata.common_ = record{
+type suricata.component.common = record{
   timestamp: time #time,
   flow_id: count,
   pcap_cnt: count,
@@ -10,7 +10,7 @@ type suricata.common_ = record{
   community_id: string
 }
 
-type suricata.flow_ = record{
+type suricata.component.flow = record{
   pkts_toserver: count,
   pkts_toclient: count,
   bytes_toserver: count,
@@ -23,7 +23,7 @@ type suricata.flow_ = record{
   alerted: bool
 }
 
-type suricata.app_proto_ = record{
+type suricata.component.app_proto = record{
   app_proto: string
 }
 
@@ -49,7 +49,7 @@ type suricata.alert = record{
     source: record{ ip: addr, port: port},
     target: record{ ip: addr, port: port}
   },
-  flow: suricata.flow_,
+  flow: suricata.component.flow,
   payload: string,
   payload_printable: string,
   stream: count,
@@ -179,7 +179,7 @@ type suricata.flow = record{
   dest_port: port,
   proto: string,
   community_id: string,
-  flow: suricata.flow_,
+  flow: suricata.component.flow,
   app_proto: string
 }
 

@@ -86,7 +86,7 @@ caf::message reader_command(const command& cmd, caf::actor_system& sys,
       if (sc)
         return to<vast::schema>(*sc);
       if (sf)
-        return load_schema_file(*sf);
+        return load_schema(*sf);
       return caf::no_error;
     }();
     if (update) {

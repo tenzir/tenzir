@@ -1,10 +1,19 @@
 #include "vast/event_types.hpp"
 
-namespace vast {
+namespace vast::event_types {
 
-bool event_types::initialized = false;
+namespace {
 
-bool event_types::init(schema s) {
+bool initialized = false;
+
+schema& get_impl() {
+  static schema data;
+  return data;
+}
+
+} // namespace
+
+bool init(schema s) {
   if (initialized)
     return false;
   get_impl() = std::move(s);
@@ -12,15 +21,10 @@ bool event_types::init(schema s) {
   return true;
 }
 
-const schema* event_types::get() {
+const schema* get() {
   if (!initialized)
     return nullptr;
   return &get_impl();
 }
 
-schema& event_types::get_impl() {
-  static schema data;
-  return data;
-}
-
-} // namespace vast
+} // namespace vast::event_types

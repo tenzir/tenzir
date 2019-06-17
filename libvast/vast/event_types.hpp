@@ -17,22 +17,15 @@
 
 #include "vast/schema.hpp"
 
-namespace vast {
+namespace vast::event_types {
 
-class event_types {
-public:
-  /// Initializes the system-wide type registry.
-  /// @param s The schema.
-  /// @returns true on success or false if registry was alread initialized.
-  static bool init(schema s);
+/// Initializes the system-wide type registry.
+/// @param s The schema.
+/// @returns true on success or false if registry was alread initialized.
+bool init(schema s);
 
-  /// Retrieves a pointer to the system-wide type registry.
-  /// @returns nullptr if registry is not initialized.
-  static const schema* get();
+/// Retrieves a pointer to the system-wide type registry.
+/// @returns nullptr if registry is not initialized.
+const schema* get();
 
-private:
-  static schema& get_impl();
-  static bool initialized;
-};
-
-} // namespace vast
+} // namespace vast::event_types
