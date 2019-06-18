@@ -123,13 +123,21 @@ caf::error index_state::load_from_disk() {
     VAST_DEBUG(self, "found no directory to load from");
     return caf::none;
   }
+  if (auto fname = statistics_filename(); exists(fname)) {
+    if (auto err = load(&self->system(), fname, stats)) {
+      VAST_ERROR(self,
+                 "failed to load statistics:", self->system().render(err));
+      return err;
+    }
+    VAST_DEBUG(self, "loaded statistics");
+  }
   if (auto fname = meta_index_filename(); exists(fname)) {
     if (auto err = load(&self->system(), fname, meta_idx)) {
       VAST_ERROR(self, "failed to load meta index:",
                  self->system().render(err));
       return err;
     }
-    VAST_INFO(self, "loaded meta index");
+    VAST_DEBUG(self, "loaded meta index");
   }
   return caf::none;
 }
@@ -137,9 +145,13 @@ caf::error index_state::load_from_disk() {
 caf::error index_state::flush_to_disk() {
   VAST_TRACE("");
   auto flush_all = [this]() -> caf::error {
+    // Flush statistics to disk.
+    if (auto err = save(&self->system(), statistics_filename(), stats))
+      return err;
     // Flush meta index to disk.
     if (auto err = save(&self->system(), meta_index_filename(), meta_idx))
       return err;
+    VAST_DEBUG(self, "saved meta index");
     // Flush active partition.
     if (active != nullptr)
       if (auto err = active->flush_to_disk())
@@ -153,11 +165,14 @@ caf::error index_state::flush_to_disk() {
     return caf::none;
   };
   if (auto err = flush_all()) {
-    VAST_ERROR(self, "failed to save meta index:", self->system().render(err));
+    VAST_ERROR(self, "failed to flush state:", self->system().render(err));
     return err;
   }
-  VAST_INFO(self, "saved meta index");
   return caf::none;
+}
+
+path index_state::statistics_filename() const {
+  return dir / "statistics";
 }
 
 path index_state::meta_index_filename() const {
@@ -180,6 +195,17 @@ caf::dictionary<caf::config_value> index_state::status() const {
   caf::dictionary<caf::config_value> result;
   // Misc parameters.
   result.emplace("meta-index-filename", meta_index_filename().str());
+  // Statistics.
+  auto& stats_object = put_dictionary(result, "statistics");
+  auto& layout_object = put_dictionary(stats_object, "layouts");
+  for (auto& [name, layout_stats] : stats.layouts) {
+    auto xs = caf::dictionary<caf::config_value>{};
+    xs.emplace("count", layout_stats.count);
+    // We cannot use put_dictionary(layout_object, name) here, because this
+    // function splits the key at '.', which occurs in every layout name.
+    // Hence the fallback to low-level primitives.
+    layout_object.insert_or_assign(name, std::move(xs));
+  }
   // Resident partitions.
   auto& partitions = put_dictionary(result, "partitions");
   if (active != nullptr)

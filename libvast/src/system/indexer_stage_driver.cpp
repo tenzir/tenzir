@@ -51,8 +51,10 @@ void indexer_stage_driver::process(downstream_type& out, batch_type& slices) {
       st.reset_active_partition();
     // Update meta index.
     st.meta_idx.add(st.active->id(), *slice);
-    // Start new INDEXER actors when needed and add it to the stream.
+    // Update statistics.
     auto& layout = slice->layout();
+    st.stats.layouts[layout.name()].count += slice->rows();
+    // Start new INDEXER actors when needed and add it to the stream.
     if (auto ti = st.active->get_or_add(layout)) {
       auto [meta_x, added] = *ti;
       if (added) {

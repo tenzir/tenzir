@@ -10,6 +10,11 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## [Unreleased]
 
+- 🎁 The `index` object in the output from `vast status` has a new field
+  `statistics` for a high-level summary of the indexed data. Currently, there
+  exists a nested `layouts` objects with per-layout statistics about the number
+  of events indexed.
+
 - 🎁 The `accountant` object in the output from `vast status` has a new field
   `log-file` that points to the filesystem path of the accountant log file.
 
