@@ -216,9 +216,8 @@ accountant_type::behavior_type accountant(accountant_actor* self,
             using caf::put_dictionary;
             caf::dictionary<caf::config_value> result;
             auto& known = put_dictionary(result, "known-actors");
-            for (const auto& [aid, name] : self->state.actor_map) {
+            for (const auto& [aid, name] : self->state.actor_map)
               known.emplace(name, aid);
-            }
             detail::fill_status_map(result, self);
             return result;
           },
