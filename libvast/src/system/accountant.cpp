@@ -57,7 +57,7 @@ void init(accountant_actor* self, const path& filename) {
     self->quit(e);
     return;
   }
-  file << "timestamp\thost\tpid\taid\tkey\tvalue\n";
+  file << "timestamp\thost\tpid\taid\tactor_name\tkey\tvalue\n";
   if (!file)
     self->quit(make_error(ec::filesystem_error));
   VAST_DEBUG(self, "kicks off flush loop");
