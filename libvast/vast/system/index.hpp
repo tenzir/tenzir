@@ -81,6 +81,17 @@ struct index_state {
     std::vector<uuid> partitions;
   };
 
+  /// Accumulates statistics for a given layout.
+  struct layout_statistics {
+    uint64_t count; ///< Number of events indexed.
+  };
+
+  /// Accumulates statistics about indexed data.
+  struct statistics {
+    /// The number of events for a given layout.
+    std::unordered_map<std::string, layout_statistics> layouts;
+  };
+
   // -- constructors, destructors, and assignment operators --------------------
 
   index_state(caf::stateful_actor<index_state>* self);
@@ -100,6 +111,9 @@ struct index_state {
   caf::error flush_to_disk();
 
   // -- convenience functions --------------------------------------------------
+
+  /// Returns the file name for saving or loading statistics.
+  path statistics_filename() const;
 
   /// Returns the file name for saving or loading the meta index.
   path meta_index_filename() const;
@@ -202,9 +216,24 @@ struct index_state {
   /// List of actors that wait for the next flush event.
   std::vector<caf::actor> flush_listeners;
 
+  /// Statistics about processed data.
+  statistics stats;
+
   /// Name of the INDEX actor.
   static inline const char* name = "index";
 };
+
+/// @relates index_state
+template <class Inspector>
+auto inspect(Inspector& f, index_state::layout_statistics& x) {
+  return f(x.count);
+}
+
+/// @relates index_state
+template <class Inspector>
+auto inspect(Inspector& f, index_state::statistics& x) {
+  return f(x.layouts);
+}
 
 /// Indexes events in horizontal partitions.
 /// @param dir The directory of the index.
