@@ -175,6 +175,8 @@ TEST(evaluation - table slice rows) {
   CHECK(evaluate_at(*slice, 1, tailored(":addr != 192.168.1.102")));
   CHECK(evaluate_at(*slice, 1, tailored("orig_h in 192.168.1.0/24")));
   CHECK(evaluate_at(*slice, 1, tailored("!(orig_h in 192.168.2.0/24)")));
+  CHECK(evaluate_at(*slice, 1,
+                    tailored("orig_h in {192.168.1.102, 192.168.1.103}")));
 }
 
 TEST(evaluation - table slice) {

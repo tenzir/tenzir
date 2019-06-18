@@ -204,9 +204,27 @@ bool evaluate_view(const data_view& lhs, relational_operator op,
   };
   auto check_in = [](const auto& x, const auto& y) {
     return caf::visit(detail::overload(
-                        [](auto, auto) {
-                          // Default case.
-                          return false;
+                        [](auto lhs, auto rhs) {
+                          if constexpr (detail::is_any_v<decltype(rhs),
+                                                         view<vector>,
+                                                         view<set>>) {
+                            auto equals_lhs = [&](auto y) {
+                              if constexpr (std::is_same_v<decltype(lhs),
+                                                           decltype(y)>)
+                                return lhs == y;
+                              else
+                                return false;
+                            };
+                            auto pred = [&](const auto& rhs_element) {
+                              return caf::visit(equals_lhs, rhs_element);
+                            };
+                            return std::find_if(rhs->begin(), rhs->end(), pred)
+                                   != rhs->end();
+                            return false;
+                          } else {
+                            // Default case.
+                            return false;
+                          }
                         },
                         [](view<std::string>& lhs, view<std::string>& rhs) {
                           return rhs.find(lhs) != std::string::npos;
@@ -219,18 +237,6 @@ bool evaluate_view(const data_view& lhs, relational_operator op,
                         },
                         [](view<subnet> lhs, view<subnet> rhs) {
                           return rhs.contains(lhs);
-                        },
-                        [](auto lhs, view<vector> rhs) {
-                          // TODO: implement me
-                          // return std::find(rhs->begin(), rhs->end(), lhs)
-                          //        != rhs->end();
-                          return false;
-                        },
-                        [](auto lhs, view<set> rhs) {
-                          // TODO: implement me
-                          // return std::find(rhs->begin(), rhs->end(), lhs)
-                          //        != rhs->end();
-                          return false;
                         }),
                       x, y);
   };
