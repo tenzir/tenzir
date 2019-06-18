@@ -197,12 +197,19 @@ struct table_slice_row_evaluator {
 
 /// Evaluates a single row of a table slice over a [resolved](@ref
 /// type_extractor) expression.
+/// @param slice The table slice for evaluation.
+/// @param row Selects a single row in `slice`.
+/// @param expr A resolved expression for evaluating the selected row.
+/// @returns `true` if the row matches the expression, `false` otherwise.
 /// @relates table_slice_row_evaluator
+/// @pre `row < slice.rows()`
 bool evaluate_at(const table_slice& slice, size_t row, const expression& expr);
 
 /// Evaluates an entire table slice over a [resolved](@ref type_extractor)
 /// expression.
-/// @relates table_slice_evaluator
+/// @param slice The table slice for evaluation.
+/// @param expr A resolved expression for evaluating all rows in `slice`.
+/// @returns a bitmap containing all IDs of matching rows.
 ids evaluate(const table_slice& slice, const expression& expr);
 
 /// Checks whether a [resolved](@ref type_extractor) expression matches a given
