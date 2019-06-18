@@ -10,6 +10,9 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## [Unreleased]
 
+- 🎁 The `accountant` object in the output from `vast status` has a new field
+  `log-file` that points to the filesystem path of the accountant log file.
+
 - 🔄 Default schema definitions for certain `import` formats changed from
   hard-coded to runtime-evaluated. The default location of the schema
   definition files is $prefix/share/vast/schema. Currently this is used for the
