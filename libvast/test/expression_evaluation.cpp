@@ -168,6 +168,7 @@ TEST(evaluation - table slice rows) {
     return unbox(caf::visit(type_resolver{layout}, ast));
   };
   // Run some checks on various rows.
+  CHECK(evaluate_at(*slice, 0, tailored("#time < 2009-12-18+00:00:00")));
   CHECK(evaluate_at(*slice, 0, tailored("orig_h == 192.168.1.102")));
   CHECK(evaluate_at(*slice, 0, tailored(":addr == 192.168.1.102")));
   CHECK(evaluate_at(*slice, 1, tailored("orig_h != 192.168.1.102")));

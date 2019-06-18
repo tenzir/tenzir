@@ -572,15 +572,23 @@ bool table_slice_row_evaluator::operator()(const predicate& p) {
 }
 
 bool table_slice_row_evaluator::operator()(const attribute_extractor& e,
-                                          const data& d) {
+                                           const data& d) {
   // FIXME: perform a transformation on the AST that replaces the attribute
   // with the corresponding function object.
   if (e.attr == system::type_atom::value)
     return evaluate(slice_.layout().name(), op_, d);
-  // TODO: implement me
-  // if (e.attr == system::time_atom::value)
-  //   return evaluate(event_.timestamp(), op_, d);
-  return false;
+  // Find the column with attribute 'time'.
+  auto pred = [](auto& x) {
+    return caf::holds_alternative<timestamp_type>(x.type)
+           && has_attribute(x.type, "time");
+  };
+  auto& fs = slice_.layout().fields;
+  auto i = std::find_if(fs.begin(), fs.end(), pred);
+  if (i == fs.end())
+    return false;
+  // Compare timestamp at given cell.
+  auto pos = static_cast<size_t>(std::distance(fs.begin(), i));
+  return evaluate_view(slice_.at(row_, pos), op_, make_view(d));
 }
 
 bool table_slice_row_evaluator::operator()(const type_extractor&, const data&) {
