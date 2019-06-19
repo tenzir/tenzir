@@ -578,6 +578,8 @@ bool table_slice_row_evaluator::operator()(const attribute_extractor& e,
   if (e.attr == system::type_atom::value)
     return evaluate(slice_.layout().name(), op_, d);
   // Find the column with attribute 'time'.
+  if (e.attr != system::time_atom::value)
+    return false;
   auto pred = [](auto& x) {
     return caf::holds_alternative<timestamp_type>(x.type)
            && has_attribute(x.type, "time");
