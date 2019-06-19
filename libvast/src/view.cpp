@@ -192,6 +192,49 @@ bool type_check(const type& t, const data_view& x) {
   return caf::holds_alternative<caf::none_t>(x) || caf::visit(f, t);
 }
 
+namespace {
+
+// Checks whether the left-hand side is contained in the right-hand side.
+struct contains_predicate {
+  template <class T, class U>
+  bool operator()(T lhs, U rhs) {
+    if constexpr (detail::is_any_v<U, view<vector>, view<set>>) {
+      auto equals_lhs = [&](auto y) {
+        if constexpr (std::is_same_v<decltype(lhs), decltype(y)>)
+          return lhs == y;
+        else
+          return false;
+      };
+      auto pred = [&](const auto& rhs_element) {
+        return caf::visit(equals_lhs, rhs_element);
+      };
+      return std::find_if(rhs->begin(), rhs->end(), pred) != rhs->end();
+      return false;
+    } else {
+      // Default case.
+      return false;
+    }
+  }
+
+  bool operator()(view<std::string>& lhs, view<std::string>& rhs) {
+    return rhs.find(lhs) != std::string::npos;
+  }
+
+  bool operator()(view<std::string>& lhs, view<pattern> rhs) {
+    return rhs.search(lhs);
+  }
+
+  bool operator()(view<address> lhs, view<subnet> rhs) {
+    return rhs.contains(lhs);
+  }
+
+  bool operator()(view<subnet> lhs, view<subnet> rhs) {
+    return rhs.contains(lhs);
+  }
+};
+
+} // namespace
+
 bool evaluate_view(const data_view& lhs, relational_operator op,
                    const data_view& rhs) {
   auto check_match = [](const auto& x, const auto& y) {
@@ -203,42 +246,7 @@ bool evaluate_view(const data_view& lhs, relational_operator op,
                       x, y);
   };
   auto check_in = [](const auto& x, const auto& y) {
-    return caf::visit(detail::overload(
-                        [](auto lhs, auto rhs) {
-                          if constexpr (detail::is_any_v<decltype(rhs),
-                                                         view<vector>,
-                                                         view<set>>) {
-                            auto equals_lhs = [&](auto y) {
-                              if constexpr (std::is_same_v<decltype(lhs),
-                                                           decltype(y)>)
-                                return lhs == y;
-                              else
-                                return false;
-                            };
-                            auto pred = [&](const auto& rhs_element) {
-                              return caf::visit(equals_lhs, rhs_element);
-                            };
-                            return std::find_if(rhs->begin(), rhs->end(), pred)
-                                   != rhs->end();
-                            return false;
-                          } else {
-                            // Default case.
-                            return false;
-                          }
-                        },
-                        [](view<std::string>& lhs, view<std::string>& rhs) {
-                          return rhs.find(lhs) != std::string::npos;
-                        },
-                        [](view<std::string>& lhs, view<pattern> rhs) {
-                          return rhs.search(lhs);
-                        },
-                        [](view<address> lhs, view<subnet> rhs) {
-                          return rhs.contains(lhs);
-                        },
-                        [](view<subnet> lhs, view<subnet> rhs) {
-                          return rhs.contains(lhs);
-                        }),
-                      x, y);
+    return caf::visit(contains_predicate{}, x, y);
   };
   switch (op) {
     default:
