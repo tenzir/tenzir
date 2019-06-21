@@ -577,20 +577,20 @@ bool table_slice_row_evaluator::operator()(const attribute_extractor& e,
   // with the corresponding function object.
   if (e.attr == system::type_atom::value)
     return evaluate(slice_.layout().name(), op_, d);
-  // Find the column with attribute 'time'.
-  if (e.attr != system::time_atom::value)
-    return false;
-  auto pred = [](auto& x) {
-    return caf::holds_alternative<timestamp_type>(x.type)
-           && has_attribute(x.type, "time");
-  };
-  auto& fs = slice_.layout().fields;
-  auto i = std::find_if(fs.begin(), fs.end(), pred);
-  if (i == fs.end())
-    return false;
-  // Compare timestamp at given cell.
-  auto pos = static_cast<size_t>(std::distance(fs.begin(), i));
-  return evaluate_view(slice_.at(row_, pos), op_, make_view(d));
+  if (e.attr == system::time_atom::value) {
+    auto pred = [](auto& x) {
+      return caf::holds_alternative<timestamp_type>(x.type)
+             && has_attribute(x.type, "time");
+    };
+    auto& fs = slice_.layout().fields;
+    auto i = std::find_if(fs.begin(), fs.end(), pred);
+    if (i == fs.end())
+      return false;
+    // Compare timestamp at given cell.
+    auto pos = static_cast<size_t>(std::distance(fs.begin(), i));
+    return evaluate_view(slice_.at(row_, pos), op_, make_view(d));
+  }
+  return false;
 }
 
 bool table_slice_row_evaluator::operator()(const type_extractor&, const data&) {
@@ -603,13 +603,11 @@ bool table_slice_row_evaluator::operator()(const key_extractor&, const data&) {
 
 bool table_slice_row_evaluator::operator()(const data_extractor& e,
                                            const data& d) {
-  // Our layout is always flat. Hence, the offset needs to have a depth of
-  // exactly one since it simply represents the column.
-  if (e.offset.size() != 1 || e.type != slice_.layout())
+  if (e.type != slice_.layout())
     return false;
+  VAST_ASSERT(e.offset.size() == 1);
   auto x = slice_.at(row_, e.offset[0]);
   return evaluate_view(x, op_, make_data_view(d));
-  return false;
 }
 
 bool evaluate_at(const table_slice& slice, size_t row, const expression& expr) {
