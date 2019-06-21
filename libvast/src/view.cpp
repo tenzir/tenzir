@@ -13,6 +13,8 @@
 
 #include "vast/view.hpp"
 
+#include <regex>
+
 #include "vast/detail/overload.hpp"
 #include "vast/type.hpp"
 
@@ -30,6 +32,16 @@ pattern_view::pattern_view(std::string_view str) : pattern_{str} {
 
 std::string_view pattern_view::string() const {
   return pattern_;
+}
+
+bool pattern_view::match(std::string_view x) const {
+  return std::regex_match(x.begin(), x.end(),
+                          std::regex{pattern_.begin(), pattern_.end()});
+}
+
+bool pattern_view::search(std::string_view x) const {
+  return std::regex_search(x.begin(), x.end(),
+                           std::regex{pattern_.begin(), pattern_.end()});
 }
 
 bool operator==(pattern_view x, pattern_view y) noexcept {
@@ -197,10 +209,10 @@ namespace {
 // Checks whether the left-hand side is contained in the right-hand side.
 struct contains_predicate {
   template <class T, class U>
-  bool operator()(T lhs, U rhs) {
+  bool operator()(const T& lhs, const U& rhs) const {
     if constexpr (detail::is_any_v<U, view<vector>, view<set>>) {
-      auto equals_lhs = [&](auto y) {
-        if constexpr (std::is_same_v<decltype(lhs), decltype(y)>)
+      auto equals_lhs = [&](const auto& y) {
+        if constexpr (std::is_same_v<T, std::decay_t<decltype(y)>>)
           return lhs == y;
         else
           return false;
@@ -216,19 +228,21 @@ struct contains_predicate {
     }
   }
 
-  bool operator()(view<std::string>& lhs, view<std::string>& rhs) {
+  bool operator()(const view<std::string>& lhs,
+                  const view<std::string>& rhs) const {
     return rhs.find(lhs) != std::string::npos;
   }
 
-  bool operator()(view<std::string>& lhs, view<pattern> rhs) {
+  bool operator()(const view<std::string>& lhs,
+                  const view<pattern>& rhs) const {
     return rhs.search(lhs);
   }
 
-  bool operator()(view<address> lhs, view<subnet> rhs) {
+  bool operator()(const view<address>& lhs, const view<subnet>& rhs) const {
     return rhs.contains(lhs);
   }
 
-  bool operator()(view<subnet> lhs, view<subnet> rhs) {
+  bool operator()(const view<subnet>& lhs, const view<subnet>& rhs) const {
     return rhs.contains(lhs);
   }
 };
