@@ -450,4 +450,14 @@ data materialize(data_view xs);
 /// @returns `true` if *t* is a valid type for *x*.
 bool type_check(const type& t, const data_view& x);
 
+/// Evaluates a data predicate.
+/// @param lhs The LHS of the predicate.
+/// @param op The relational operator.
+/// @param rhs The RHS of the predicate.
+/// @note This function unfortunately needs to use the `_view` suffix because
+///       it otherwise produces ambiguous function calls with the `evaluate`
+///       function in `data.hpp`.
+bool evaluate_view(const data_view& lhs, relational_operator op,
+                   const data_view& rhs);
+
 } // namespace vast

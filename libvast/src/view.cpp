@@ -13,6 +13,8 @@
 
 #include "vast/view.hpp"
 
+#include <regex>
+
 #include "vast/detail/overload.hpp"
 #include "vast/type.hpp"
 
@@ -30,6 +32,16 @@ pattern_view::pattern_view(std::string_view str) : pattern_{str} {
 
 std::string_view pattern_view::string() const {
   return pattern_;
+}
+
+bool pattern_view::match(std::string_view x) const {
+  return std::regex_match(x.begin(), x.end(),
+                          std::regex{pattern_.begin(), pattern_.end()});
+}
+
+bool pattern_view::search(std::string_view x) const {
+  return std::regex_search(x.begin(), x.end(),
+                           std::regex{pattern_.begin(), pattern_.end()});
 }
 
 bool operator==(pattern_view x, pattern_view y) noexcept {
@@ -190,6 +202,95 @@ bool type_check(const type& t, const data_view& x) {
     }
   );
   return caf::holds_alternative<caf::none_t>(x) || caf::visit(f, t);
+}
+
+namespace {
+
+// Checks whether the left-hand side is contained in the right-hand side.
+struct contains_predicate {
+  template <class T, class U>
+  bool operator()(const T& lhs, const U& rhs) const {
+    if constexpr (detail::is_any_v<U, view<vector>, view<set>>) {
+      auto equals_lhs = [&](const auto& y) {
+        if constexpr (std::is_same_v<T, std::decay_t<decltype(y)>>)
+          return lhs == y;
+        else
+          return false;
+      };
+      auto pred = [&](const auto& rhs_element) {
+        return caf::visit(equals_lhs, rhs_element);
+      };
+      return std::find_if(rhs->begin(), rhs->end(), pred) != rhs->end();
+      return false;
+    } else {
+      // Default case.
+      return false;
+    }
+  }
+
+  bool operator()(const view<std::string>& lhs,
+                  const view<std::string>& rhs) const {
+    return rhs.find(lhs) != std::string::npos;
+  }
+
+  bool operator()(const view<std::string>& lhs,
+                  const view<pattern>& rhs) const {
+    return rhs.search(lhs);
+  }
+
+  bool operator()(const view<address>& lhs, const view<subnet>& rhs) const {
+    return rhs.contains(lhs);
+  }
+
+  bool operator()(const view<subnet>& lhs, const view<subnet>& rhs) const {
+    return rhs.contains(lhs);
+  }
+};
+
+} // namespace
+
+bool evaluate_view(const data_view& lhs, relational_operator op,
+                   const data_view& rhs) {
+  auto check_match = [](const auto& x, const auto& y) {
+    return caf::visit(detail::overload([](auto, auto) { return false; },
+                                       [](view<std::string>& lhs,
+                                          view<pattern> rhs) {
+                                         return rhs.match(lhs);
+                                       }),
+                      x, y);
+  };
+  auto check_in = [](const auto& x, const auto& y) {
+    return caf::visit(contains_predicate{}, x, y);
+  };
+  switch (op) {
+    default:
+      VAST_ASSERT(!"missing case");
+      return false;
+    case match:
+      return check_match(lhs, rhs);
+    case not_match:
+      return !check_match(lhs, rhs);
+    case in:
+      return check_in(lhs, rhs);
+    case not_in:
+      return !check_in(lhs, rhs);
+    case ni:
+      return check_in(rhs, lhs);
+    case not_ni:
+      return !check_in(rhs, lhs);
+    case equal:
+      return lhs == rhs;
+    case not_equal:
+      return lhs != rhs;
+    case less:
+      return lhs < rhs;
+    case less_equal:
+      return lhs <= rhs;
+    case greater:
+      return lhs > rhs;
+    case greater_equal:
+      return lhs >= rhs;
+  }
 }
 
 } // namespace vast
