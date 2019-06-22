@@ -200,6 +200,25 @@ table_slice_ptr truncate(const table_slice_ptr& slice, size_t num_rows) {
   return std::move(xs.back());
 }
 
+std::pair<table_slice_ptr, table_slice_ptr> split(const table_slice_ptr& slice,
+                                                  size_t partition_point) {
+  VAST_ASSERT(slice != nullptr);
+  if (partition_point == 0)
+    return {nullptr, slice};
+  if (partition_point >= slice->rows())
+    return {slice, nullptr};
+  auto first = slice->offset();
+  auto mid = first + partition_point;
+  auto last = first + slice->rows();
+  // Create first table slice.
+  auto xs = select(slice, make_ids({{first, mid}}));
+  VAST_ASSERT(xs.size() == 1);
+  // Create second table slice.
+  select(xs, slice, make_ids({{mid, last}}));
+  VAST_ASSERT(xs.size() == 2);
+  return {std::move(xs.front()), std::move(xs.back())};
+}
+
 bool operator==(const table_slice& x, const table_slice& y) {
   if (&x == &y)
     return true;

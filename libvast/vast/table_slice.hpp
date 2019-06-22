@@ -172,6 +172,17 @@ std::vector<table_slice_ptr> select(const table_slice_ptr& xs,
 /// @pre `num_rows > 0`
 table_slice_ptr truncate(const table_slice_ptr& slice, size_t num_rows);
 
+/// Splits a table slice into two slices such that the first slice contains the
+/// rows `[0, partition_point)` and the second slice contains the rows
+/// `[partition_point, n)`, where `n = slice->rows()`.
+/// @param slice The input table slice.
+/// @param partition_point The index of the first row for the second slice.
+/// @returns two new table slices if `0 < partition_point < slice->rows()`,
+///          otherwise returns `slice` and a `nullptr`.
+/// @pre `slice != nullptr`
+std::pair<table_slice_ptr, table_slice_ptr> split(const table_slice_ptr& slice,
+                                                  size_t partition_point);
+
 /// @relates table_slice
 bool operator==(const table_slice& x, const table_slice& y);
 

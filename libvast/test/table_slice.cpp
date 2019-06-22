@@ -199,4 +199,32 @@ TEST(truncate) {
   CHECK_EQUAL(truncated_events(1), to_events(*sut, 0, 1));
 }
 
+TEST(split) {
+  auto sut = zeek_conn_log_slices.front();
+  REQUIRE_EQUAL(sut->rows(), 8u);
+  sut.unshared().offset(100);
+  // Splits `sut` using to_events.
+  auto manual_split_sut = [&](size_t parition_point) {
+    return std::pair{to_events(*sut, 0, parition_point),
+                     to_events(*sut, parition_point)};
+  };
+  // Splits `sut` using split() and then converting to events.
+  auto split_sut = [&](size_t parition_point) {
+    auto [first, second] = split(sut, parition_point);
+    if (first->rows() + second->rows() != 8)
+      FAIL("expected 8 rows in total, got "
+           << (first->rows() + second->rows()));
+    return std::pair{to_events(*first), to_events(*second)};
+  };
+  // We compare the results of the two lambdas, meaning that it should make no
+  // difference whether we split via `to_events` or `split`.
+  CHECK_EQUAL(split_sut(1), manual_split_sut(1));
+  CHECK_EQUAL(split_sut(2), manual_split_sut(2));
+  CHECK_EQUAL(split_sut(3), manual_split_sut(3));
+  CHECK_EQUAL(split_sut(4), manual_split_sut(4));
+  CHECK_EQUAL(split_sut(5), manual_split_sut(5));
+  CHECK_EQUAL(split_sut(6), manual_split_sut(6));
+  CHECK_EQUAL(split_sut(7), manual_split_sut(7));
+}
+
 FIXTURE_SCOPE_END()
