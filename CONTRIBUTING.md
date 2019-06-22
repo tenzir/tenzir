@@ -506,3 +506,31 @@ Unit Tests
 
   FIXTURE_SCOPE_END()
   ```
+
+Continuous Integration
+----------------------
+
+We are using Jenkins to build and test each commit. No pull request gets merged
+unless all checks for the most recent commit pass. The checks are displayed
+directly in the GitHub interface for each commit. The list consists of:
+
+- *build* (displayed as `continuous-integration/$BRANCH`): this checks whether
+  the code compiles in all configurations (e.g., `Linux && gcc8`).
+
+- *style*: this checks whether the code follows our coding convention by
+  running `clang-format` on the diff. In case the code violates our guidelines,
+  Jenkins creates the artifact `clang-format-diff.txt` for the build. You
+  should also receive this text file in the email notification.
+
+- *tests*: this checks whether all unit tests pass in all configurations.
+  Jenkins includes the number of failed configurations in the GitHub status as
+  well as in the email notification. For details, please visit the link to our
+  Jenkins instance on GitHub or in the email and review the unit test output of
+  failed configurations.
+
+- *integration*: this checks whether the integration tests pass, similar to the
+  *tests* check.
+
+- *coverage*: this checks whether a coverage report was generated and whether
+  the overall coverage remains stable or improves (the check fails if the
+  coverage drops).
