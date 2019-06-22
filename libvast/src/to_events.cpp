@@ -57,11 +57,11 @@ event to_event(const table_slice& slice, id eid, type event_layout,
 void to_events(std::vector<event>& storage, const table_slice& slice,
                table_slice::size_type first_row,
                table_slice::size_type num_rows) {
-  if (num_rows == table_slice::npos)
-    num_rows = slice.rows();
+  VAST_ASSERT(first_row < slice.rows());
+  auto last_row = first_row + std::min(num_rows, slice.rows() - first_row);
   // Figure out whether there's a column that could be the event timestamp.
   auto timestamp_column = find_time_column(slice.layout());
-  for (auto i = first_row; i < first_row + num_rows; ++i)
+  for (auto i = first_row; i < last_row; ++i)
     storage.emplace_back(to_event(slice, slice.offset() + i, slice.layout(),
                                   timestamp_column));
 }
