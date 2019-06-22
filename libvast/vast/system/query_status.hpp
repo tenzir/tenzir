@@ -31,8 +31,9 @@ struct query_status {
   size_t lookups_issued = 0;   ///< Number of lookups sent to the ARCHIVE.
   size_t lookups_complete = 0; ///< Number of lookups returned by the ARCHIVE.
   uint64_t processed = 0;      ///< Processed candidates from ARCHIVE.
-  uint64_t shipped = 0;        ///< Shipped results to sink.
+  uint64_t shipped = 0;        ///< Shipped results to the SINK.
   uint64_t requested = 0;      ///< User-requested pending results to extract.
+  uint64_t cached = 0;         ///< Currently available results for the SINK.
 };
 
 template <class Inspector>

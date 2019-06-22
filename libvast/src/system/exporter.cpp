@@ -42,29 +42,31 @@ namespace {
 
 void ship_results(stateful_actor<exporter_state>* self) {
   VAST_TRACE("");
-  if (self->state.results.empty() || self->state.query.requested == 0) {
-    return;
+  auto& st = self->state;
+  VAST_DEBUG(self, "relays", st.query.cached, "events");
+  while (st.query.requested > 0 && st.query.cached > 0) {
+    VAST_ASSERT(!st.results.empty());
+    // Fetch the next table slice. Either we grab the entire first slice in
+    // st.results or we need to split it up.
+    table_slice_ptr slice = nullptr;
+    if (st.results[0]->rows() < st.query.requested) {
+      slice = std::move(st.results[0]);
+      st.results.erase(st.results.begin());
+    } else {
+      auto [first, second] = split(st.results[0], st.query.requested);
+      VAST_ASSERT(first != nullptr && second != nullptr);
+      VAST_ASSERT(first->rows() == st.query.requested);
+      slice = std::move(first);
+      st.results[0] = std::move(second);
+    }
+    // Ship the slice and update state.
+    auto rows = slice->rows();
+    VAST_ASSERT(rows <= st.query.cached);
+    st.query.cached -= rows;
+    st.query.requested -= rows;
+    st.query.shipped += rows;
+    self->send(st.sink, std::move(slice));
   }
-  VAST_DEBUG(self, "relays", self->state.results.size(), "events");
-  message msg;
-  if (self->state.results.size() <= self->state.query.requested) {
-    self->state.query.requested -= self->state.results.size();
-    self->state.query.shipped += self->state.results.size();
-    msg = make_message(std::move(self->state.results));
-    self->state.results = {};
-  } else {
-    std::vector<event> remainder;
-    remainder.reserve(self->state.results.size() - self->state.query.requested);
-    auto begin = self->state.results.begin() + self->state.query.requested;
-    auto end = self->state.results.end();
-    std::move(begin, end, std::back_inserter(remainder));
-    self->state.results.resize(self->state.query.requested);
-    msg = make_message(std::move(self->state.results));
-    self->state.results = std::move(remainder);
-    self->state.query.shipped += self->state.query.requested;
-    self->state.query.requested = 0;
-  }
-  self->send(self->state.sink, msg);
 }
 
 void report_statistics(stateful_actor<exporter_state>* self) {
@@ -194,32 +196,37 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
     return qs.received == qs.expected
            && qs.lookups_issued == qs.lookups_complete;
   };
-  auto handle_batch = [=](std::vector<event> candidates) {
+  auto handle_batch = [=](table_slice_ptr slice) {
+    VAST_ASSERT(slice != nullptr);
     auto& st = self->state;
-    VAST_DEBUG(self, "got batch of", candidates.size(), "events");
+    VAST_DEBUG(self, "got batch of", slice->rows(), "events");
     auto sender = self->current_sender();
-    for (auto& candidate : candidates) {
-      auto& checker = st.checkers[candidate.type()];
-      // Construct a candidate checker if we don't have one for this type.
-      if (caf::holds_alternative<caf::none_t>(checker)) {
-        auto x = tailor(st.expr, candidate.type());
-        if (!x) {
-          VAST_ERROR(self, "failed to tailor expression:",
-                     self->system().render(x.error()));
-          ship_results(self);
-          self->send_exit(self, exit_reason::normal);
-          return;
-        }
-        checker = std::move(*x);
-        VAST_DEBUG(self, "tailored AST to", candidate.type() << ':', checker);
+    // Construct a candidate checker if we don't have one for this type.
+    type t = slice->layout();
+    auto& checker = st.checkers[t];
+    if (caf::holds_alternative<caf::none_t>(checker)) {
+      auto x = tailor(st.expr, t);
+      if (!x) {
+        VAST_ERROR(self, "failed to tailor expression:",
+                   self->system().render(x.error()));
+        ship_results(self);
+        self->send_exit(self, exit_reason::normal);
+        return;
       }
-      // Perform candidate check and keep event as result on success.
-      if (caf::visit(event_evaluator{candidate}, checker))
-        st.results.push_back(std::move(candidate));
-      else
-        VAST_DEBUG(self, "ignores false positive:", candidate);
+      checker = std::move(*x);
+      VAST_DEBUG(self, "tailored AST to", t, ':', checker);
     }
-    st.query.processed += candidates.size();
+    // Perform candidate check, splitting the slice into subsets if needed.
+    auto selection = evaluate(*slice, checker);
+    auto selection_size = rank(selection);
+    if (selection_size == 0) {
+      // No rows qualify.
+      return;
+    }
+    st.query.cached += selection_size;
+    select(st.results, slice, selection);
+    // Ship slices to connected SINKs.
+    st.query.processed += slice->rows();
     ship_results(self);
   };
   return {
@@ -257,7 +264,8 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
       return caf::unit;
     },
     [=](table_slice_ptr slice) {
-      handle_batch(to_events(*slice, self->state.hits));
+      // Use the same handler as we use for streamed slices.
+      handle_batch(std::move(slice));
     },
     [=](done_atom) -> caf::result<void> {
       auto& st = self->state;
@@ -393,15 +401,12 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
           // nop
         },
         [=](caf::unit_t&, const table_slice_ptr& slice) {
-          // TODO: port to new table slice API
-          auto candidates = to_events(*slice);
-          handle_batch(std::move(candidates));
+          handle_batch(slice);
         },
         [=](caf::unit_t&, const error& err) {
           VAST_IGNORE_UNUSED(err);
           VAST_ERROR(self, "got error during streaming: ", err);
-        }
-      );
+        });
     },
   };
 }

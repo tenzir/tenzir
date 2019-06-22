@@ -30,7 +30,8 @@ TEST(zeek sink) {
   format::zeek::writer writer{directory};
   auto snk = self->spawn(sink<format::zeek::writer>, std::move(writer), 20u);
   MESSAGE("sending events");
-  self->send(snk, zeek_conn_log);
+  for (auto& slice : zeek_conn_log_slices)
+    self->send(snk, slice);
   MESSAGE("shutting down");
   self->send_exit(snk, caf::exit_reason::user_shutdown);
   self->wait_for(snk);
