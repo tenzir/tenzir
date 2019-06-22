@@ -163,6 +163,15 @@ void select(std::vector<table_slice_ptr>& result, const table_slice_ptr& xs,
 std::vector<table_slice_ptr> select(const table_slice_ptr& xs,
                                     const ids& selection);
 
+/// Selects the first `num_rows` rows of `slice`.
+/// @param slice The input table slice.
+/// @param num_rows The number of rows to keep.
+/// @returns `slice` if `slice->rows() <= num_rows`, otherwise creates a new
+///          table slice of the first `num_rows` rows from `slice`.
+/// @pre `slice != nullptr`
+/// @pre `num_rows > 0`
+table_slice_ptr truncate(const table_slice_ptr& slice, size_t num_rows);
+
 /// @relates table_slice
 bool operator==(const table_slice& x, const table_slice& y);
 

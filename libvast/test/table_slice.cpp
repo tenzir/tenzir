@@ -178,4 +178,25 @@ TEST(select suffix) {
   CHECK_EQUAL(to_events(*xs[0]), to_events(*sut, 50, 50));
 }
 
+TEST(truncate) {
+  auto sut = zeek_conn_log_slices.front();
+  REQUIRE_EQUAL(sut->rows(), 8u);
+  sut.unshared().offset(100);
+  auto truncated_events = [&](size_t num_rows) {
+    auto sub_slice = truncate(sut, num_rows);
+    if (sub_slice->rows() != num_rows)
+      FAIL("expected " << num_rows << " rows, got " << sub_slice->rows());
+    return to_events(*sub_slice);
+  };
+  auto sub_slice = truncate(sut, 8);
+  CHECK_EQUAL(*sub_slice, *sut);
+  CHECK_EQUAL(truncated_events(7), to_events(*sut, 0, 7));
+  CHECK_EQUAL(truncated_events(6), to_events(*sut, 0, 6));
+  CHECK_EQUAL(truncated_events(5), to_events(*sut, 0, 5));
+  CHECK_EQUAL(truncated_events(4), to_events(*sut, 0, 4));
+  CHECK_EQUAL(truncated_events(3), to_events(*sut, 0, 3));
+  CHECK_EQUAL(truncated_events(2), to_events(*sut, 0, 2));
+  CHECK_EQUAL(truncated_events(1), to_events(*sut, 0, 1));
+}
+
 FIXTURE_SCOPE_END()

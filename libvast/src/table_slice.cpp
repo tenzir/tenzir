@@ -189,6 +189,17 @@ table_slice* intrusive_cow_ptr_unshare(table_slice*& ptr) {
   return caf::default_intrusive_cow_ptr_unshare(ptr);
 }
 
+table_slice_ptr truncate(const table_slice_ptr& slice, size_t num_rows) {
+  VAST_ASSERT(slice != nullptr);
+  VAST_ASSERT(num_rows > 0);
+  if (slice->rows() <= num_rows)
+    return slice;
+  auto selection = make_ids({{slice->offset(), slice->offset() + num_rows}});
+  auto xs = select(slice, selection);
+  VAST_ASSERT(xs.size() == 1);
+  return std::move(xs.back());
+}
+
 bool operator==(const table_slice& x, const table_slice& y) {
   if (&x == &y)
     return true;
