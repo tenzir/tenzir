@@ -25,10 +25,16 @@ endif ()
 if (APPLE AND NOT DEFINED CMAKE_MACOSX_RPATH)
   set(CMAKE_SKIP_BUILD_RPATH  FALSE)
   set(CMAKE_BUILD_WITH_INSTALL_RPATH FALSE)
-  if (VAST_RELOCATEABLE_INSTALL)
-    list(APPEND CMAKE_INSTALL_RPATH "@executable_path/../lib")
-  else ()
+  if (NOT VAST_RELOCATEABLE_INSTALL)
     set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
+  endif ()
+endif ()
+
+if (VAST_RELOCATEABLE_INSTALL)
+  if (APPLE)
+    list(APPEND CMAKE_INSTALL_RPATH "@executable_path/../${CMAKE_INSTALL_LIBDIR}")
+  else ()
+    list(APPEND CMAKE_INSTALL_RPATH "$ORIGIN/../${CMAKE_INSTALL_LIBDIR}")
   endif ()
 endif ()
 
@@ -507,7 +513,7 @@ add_subdirectory(vast)
 #                           Additional Installations
 #------------------------------------------------------------------------------
 
-if (VAST_RELOCATEABLE_INSTALL AND NOT BUILD_SHARED_LIBS)
+if (VAST_RELOCATEABLE_INSTALL AND BUILD_SHARED_LIBS)
   # Copy CAF libraries to installation directory
   get_filename_component(CAF_LIBDIR ${CAF_LIBRARY_CORE} PATH)
   install(DIRECTORY "${CAF_LIBDIR}/" DESTINATION "${CMAKE_INSTALL_LIBDIR}/")
