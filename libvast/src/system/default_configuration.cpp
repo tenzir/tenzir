@@ -43,9 +43,6 @@ default_configuration::default_configuration(std::string application_name)
   set("logger.file-verbosity", caf::atom("DEBUG"));
   // Allow VAST clusters to form a mesh.
   set("middleman.enable-automatic-connections", true);
-  put(content, "system.schema-paths",
-      caf::make_config_value_list(
-        (path{VAST_INSTALL_PREFIX} / "share" / "vast" / "schema").str()));
 }
 
 caf::error default_configuration::setup_log_file() {

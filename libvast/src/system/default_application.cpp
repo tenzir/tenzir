@@ -69,6 +69,8 @@ default_application::default_application() {
                    .add<std::string>("endpoint,e", "node endpoint")
                    .add<std::string>("node-id,i", "the unique ID of this node")
                    .add<bool>("disable-accounting", "don't run the accountant")
+                   .add<bool>("no-default-schema",
+                              "don't load the default schema definitions")
                    .finish();
   // Add standalone commands.
   add(version_command, "version", "prints the software version", opts());

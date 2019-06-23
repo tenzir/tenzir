@@ -522,6 +522,13 @@ add_custom_target(integration
   COMMAND /bin/sh "${CMAKE_CURRENT_BINARY_DIR}/integration_$<CONFIG>.sh"
   USES_TERMINAL)
 
+add_custom_target(vast-schema
+  COMMAND ${CMAKE_COMMAND} -E make_directory
+    "${PROJECT_BINARY_DIR}/share/vast"
+  COMMAND ${CMAKE_COMMAND} -E create_symlink
+    "${CMAKE_CURRENT_SOURCE_DIR}/schema"
+    "${PROJECT_BINARY_DIR}/share/vast/schema"
+  COMMENT "Linking schema directory")
 
 add_subdirectory(doc)
 add_subdirectory(libvast)

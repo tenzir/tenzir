@@ -196,15 +196,13 @@ caf::expected<schema> load_schema(const path& sf) {
   return to<schema>(*str);
 }
 
-caf::expected<schema>
-load_schema(const std::vector<std::string>& schema_paths) {
+caf::expected<schema> load_schema(const std::vector<path>& schema_paths) {
   vast::schema types;
   for (const auto& dir : schema_paths) {
-    auto schema_dir = path{dir};
-    if (!exists(schema_dir))
+    if (!exists(dir))
       break;
     vast::schema directory_schema;
-    for (auto f : directory(schema_dir)) {
+    for (auto f : directory(dir)) {
       if (f.extension() == ".schema" && exists(f)) {
         switch (f.kind()) {
           default:
