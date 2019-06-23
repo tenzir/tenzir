@@ -15,6 +15,11 @@ option(BUILD_SHARED_LIBS "" ${BUILD_SHARED_LIBS_DEFAULT})
 if (VAST_STATIC_EXECUTABLE AND BUILD_SHARED_LIBS)
   MESSAGE(FATAL_ERROR "Cannot create static binary with dynamic libraries")
 endif ()
+if (CMAKE_CROSS_COMPILING)
+  option(NO_UNIT_TESTS ON)
+else ()
+  option(NO_UNIT_TESTS OFF)
+endif ()
 
 # Silence warning CMP0042
 if (APPLE AND NOT DEFINED CMAKE_MACOSX_RPATH)
@@ -492,7 +497,9 @@ add_custom_target(integration
 
 add_subdirectory(doc)
 add_subdirectory(libvast)
-add_subdirectory(libvast_test)
+if (NOT CMAKE_CROSS_COMPILING)
+  add_subdirectory(libvast_test)
+endif ()
 add_subdirectory(tools)
 add_subdirectory(vast)
 
