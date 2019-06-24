@@ -25,7 +25,6 @@
 
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/vast/uuid.hpp"
-#include "vast/event.hpp"
 #include "vast/format/writer.hpp"
 #include "vast/system/accountant.hpp"
 #include "vast/system/atoms.hpp"
