@@ -15,14 +15,17 @@ option(BUILD_SHARED_LIBS "" ${BUILD_SHARED_LIBS_DEFAULT})
 if (VAST_STATIC_EXECUTABLE AND BUILD_SHARED_LIBS)
   MESSAGE(FATAL_ERROR "Cannot create static binary with dynamic libraries")
 endif ()
+if (CMAKE_CROSS_COMPILING)
+  option(NO_UNIT_TESTS ON)
+else ()
+  option(NO_UNIT_TESTS OFF)
+endif ()
 
 # Silence warning CMP0042
 if (APPLE AND NOT DEFINED CMAKE_MACOSX_RPATH)
   set(CMAKE_SKIP_BUILD_RPATH  FALSE)
   set(CMAKE_BUILD_WITH_INSTALL_RPATH FALSE)
-  if (VAST_RELOCATEABLE_INSTALL)
-    list(APPEND CMAKE_INSTALL_RPATH "@executable_path/../lib")
-  else ()
+  if (NOT VAST_RELOCATEABLE_INSTALL)
     set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
   endif ()
 endif ()
@@ -40,6 +43,14 @@ set(CMAKE_INSTALL_CMAKEDIR "${CMAKE_INSTALL_LIBDIR}/cmake" CACHE PATH
   "Base directory for installing cmake specific artifacts"
 )
 set(INSTALL_VAST_CMAKEDIR "${CMAKE_INSTALL_CMAKEDIR}/vast")
+
+if (VAST_RELOCATEABLE_INSTALL)
+  if (APPLE)
+    list(APPEND CMAKE_INSTALL_RPATH "@executable_path/../${CMAKE_INSTALL_LIBDIR}")
+  else ()
+    list(APPEND CMAKE_INSTALL_RPATH "$ORIGIN/../${CMAKE_INSTALL_LIBDIR}")
+  endif ()
+endif ()
 
 # Prohibit in-source builds
 if ("${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_BINARY_DIR}")
@@ -369,11 +380,24 @@ endif()
 #                          Dependency Configuration
 #------------------------------------------------------------------------------
 
+# Find modules are needed by the consumer in case of a static build, or if the
+# linkage is PUBLIC or INTERFACE.
+macro(provide_find_module name)
+  configure_file(
+    cmake/Find${name}.cmake
+    ${PROJECT_BINARY_DIR}
+    COPYONLY)
+
+  install(FILES
+    "${PROJECT_BINARY_DIR}/Find${name}.cmake"
+    DESTINATION ${INSTALL_VAST_CMAKEDIR}
+    COMPONENT dev)
+endmacro()
+
 find_package(Threads)
 if (NOT Threads_FOUND)
   message(FATAL_ERROR "Could not find system threading libraries")
 endif ()
-
 
 if (CMAKE_BUILD_TYPE STREQUAL "Release")
   if (VAST_ENABLE_ASSERTIONS)
@@ -393,17 +417,17 @@ if (NOT CAF_ROOT_DIR AND VAST_PREFIX)
   set(CAF_ROOT_DIR ${VAST_PREFIX})
 endif ()
 # Try to find the required CAF components first...
-find_package(CAF COMPONENTS core io test QUIET)
-if (NOT CAF_FOUND)
-  message(FATAL_ERROR "Could not find CAF")
-endif ()
+find_package(CAF COMPONENTS core io test REQUIRED QUIET)
 message(STATUS "Found CAF")
+provide_find_module(CAF)
 set(CAF_FOUND_SAVE ${CAF_FOUND})
 # ...and then optional components.
 find_package(CAF COMPONENTS openssl QUIET)
 if (CAF_LIBRARY_OPENSSL)
   message(STATUS "Found CAF's OpenSSL module, enabling OpenSSL support")
   set(VAST_USE_OPENSSL true)
+  string(APPEND VAST_FIND_DEPENDENCY_LIST
+    "\nfind_package(CAF COMPONENTS openssl REQUIRED QUIET)")
 endif ()
 set(CAF_FOUND ${CAF_FOUND_SAVE})
 
@@ -426,6 +450,9 @@ endif ()
 find_package(SNAPPY QUIET)
 if (SNAPPY_FOUND)
   set(VAST_HAVE_SNAPPY true)
+  provide_find_module(SNAPPY)
+  string(APPEND VAST_FIND_DEPENDENCY_LIST
+    "\nfind_package(SNAPPY REQUIRED QUIET)")
 endif ()
 
 if (NOT PCAP_ROOT_DIR AND VAST_PREFIX)
@@ -434,6 +461,9 @@ endif ()
 find_package(PCAP QUIET)
 if (PCAP_FOUND)
   set(VAST_HAVE_PCAP true)
+  provide_find_module(PCAP)
+  string(APPEND VAST_FIND_DEPENDENCY_LIST
+    "\nfind_package(PCAP REQUIRED QUIET)")
 endif ()
 
 if (NOT Gperftools_ROOT_DIR AND VAST_PREFIX)
@@ -442,6 +472,9 @@ endif ()
 find_package(Gperftools QUIET)
 if (GPERFTOOLS_FOUND)
   set(VAST_HAVE_GPERFTOOLS true)
+  provide_find_module(Gperftools)
+  string(APPEND VAST_FIND_DEPENDENCY_LIST
+    "\nfind_package(Gperftools REQUIRED QUIET)")
 endif ()
 
 find_package(Doxygen QUIET)
@@ -492,7 +525,9 @@ add_custom_target(integration
 
 add_subdirectory(doc)
 add_subdirectory(libvast)
-add_subdirectory(libvast_test)
+if (NOT CMAKE_CROSS_COMPILING)
+  add_subdirectory(libvast_test)
+endif ()
 add_subdirectory(tools)
 add_subdirectory(vast)
 
@@ -500,7 +535,7 @@ add_subdirectory(vast)
 #                           Additional Installations
 #------------------------------------------------------------------------------
 
-if (VAST_RELOCATEABLE_INSTALL AND NOT BUILD_SHARED_LIBS)
+if (VAST_RELOCATEABLE_INSTALL AND BUILD_SHARED_LIBS)
   # Copy CAF libraries to installation directory
   get_filename_component(CAF_LIBDIR ${CAF_LIBRARY_CORE} PATH)
   install(DIRECTORY "${CAF_LIBDIR}/" DESTINATION "${CMAKE_INSTALL_LIBDIR}/")

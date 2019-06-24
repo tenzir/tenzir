@@ -406,6 +406,6 @@ uint64_t segment_store::drop(segment_builder& x) {
   x.reset();
   segments_.erase_value(segment_id);
   return erased_events;
-};
+}
 
 } // namespace vast

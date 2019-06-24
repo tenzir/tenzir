@@ -192,14 +192,16 @@ endif ()
 # Install libvast in PREFIX/lib and headers in PREFIX/include/vast.
 install(TARGETS libvast
   EXPORT VASTTargets
-  DESTINATION lib
+  ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
-install(DIRECTORY vast/
-        DESTINATION include/vast FILES_MATCHING PATTERN "*.hpp")
+install(DIRECTORY vast
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR} FILES_MATCHING PATTERN "*.hpp")
 
 # Install generated config header.
-install(DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/vast/"
-        DESTINATION include/vast FILES_MATCHING PATTERN "*.hpp")
+install(DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/vast"
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR} FILES_MATCHING PATTERN "*.hpp")
 
 # ----------------------------------------------------------------------------
 #                                 unit tests
