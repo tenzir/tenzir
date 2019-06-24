@@ -28,6 +28,7 @@
 #include "vast/system/index.hpp"
 #include "vast/system/replicated_store.hpp"
 #include "vast/table_slice.hpp"
+#include "vast/to_events.hpp"
 
 using namespace caf;
 using namespace vast;
@@ -114,17 +115,15 @@ struct fixture : fixture_base {
 
   auto fetch_results() {
     std::vector<event> result;
-    bool done = false;
-    self->do_receive(
-      [&](std::vector<event>& xs) {
-        MESSAGE("... got " << xs.size() << " events");
-        std::move(xs.begin(), xs.end(), std::back_inserter(result));
+    bool running = true;
+    self->receive_while(running)(
+      [&](table_slice_ptr slice) {
+        MESSAGE("... got " << slice->rows() << " events");
+        to_events(result, *slice);
       },
       error_handler(),
-      after(0ms) >> [&] {
-        done = true;
-      }
-    ).until(done);
+      // Do a one-pass can over the mailbox without waiting for messages.
+      after(0ms) >> [&] { running = false; });
     MESSAGE("got " << result.size() << " events in total");
     return result;
   }

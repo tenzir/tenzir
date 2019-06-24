@@ -18,6 +18,7 @@
 #include "vast/detail/spawn_container_source.hpp"
 #include "vast/query_options.hpp"
 #include "vast/table_slice.hpp"
+#include "vast/to_events.hpp"
 #include "vast/uuid.hpp"
 
 #include "vast/system/node.hpp"
@@ -85,12 +86,11 @@ std::vector<event> node::query(std::string expr) {
   run();
   MESSAGE("fetch results from mailbox");
   std::vector<event> result;
-  auto done = false;
-  self->do_receive(
-    [&](std::vector<event>& xs) {
-      MESSAGE("... got " << xs.size() << " events");
-      result.insert(result.end(), std::make_move_iterator(xs.begin()),
-                    std::make_move_iterator(xs.end()));
+  bool running = true;
+  self->receive_while(running)(
+    [&](table_slice_ptr slice) {
+      MESSAGE("... got " << slice->rows() << " events");
+      to_events(result, *slice);
     },
     [&](const uuid&, const system::query_status&) {
       // ignore
@@ -99,10 +99,8 @@ std::vector<event> node::query(std::string expr) {
       if (msg.reason != caf::exit_reason::normal)
         FAIL("exporter terminated with exit reason: " << to_string(msg.reason));
     },
-    caf::after(std::chrono::seconds(0)) >> [&] {
-      done = true;
-    }
-  ).until(done);
+    // Do a one-pass can over the mailbox without waiting for messages.
+    caf::after(std::chrono::seconds(0)) >> [&] { running = false; });
   MESSAGE("got " << result.size() << " events in total");
   return result;
 }

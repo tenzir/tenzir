@@ -25,12 +25,12 @@
 
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/vast/uuid.hpp"
-#include "vast/event.hpp"
 #include "vast/format/writer.hpp"
 #include "vast/system/accountant.hpp"
 #include "vast/system/atoms.hpp"
 #include "vast/system/instrumentation.hpp"
 #include "vast/system/query_status.hpp"
+#include "vast/table_slice.hpp"
 
 namespace vast::system {
 
@@ -83,8 +83,8 @@ caf::behavior sink(caf::stateful_actor<sink_state<Writer>>* self,
     }
   );
   return {
-    [=](std::vector<event>& xs) {
-      VAST_DEBUG(self, "got:", xs.size(), "events from",
+    [=](table_slice_ptr slice) {
+      VAST_DEBUG(self, "got:", slice->rows(), "events from",
                  self->current_sender());
       auto& st = self->state;
       auto reached_max_events = [&] {
@@ -97,18 +97,18 @@ caf::behavior sink(caf::stateful_actor<sink_state<Writer>>* self,
       auto remaining = st.max_events - st.processed;
       if (remaining == 0)
         return reached_max_events();
-      if (xs.size() > remaining)
-        xs.resize(remaining);
+      if (slice->rows() > remaining)
+        slice = truncate(slice, remaining);
       // Handle events.
       auto t = timer::start(st.measurement);
-      if (auto err = st.writer.write(xs)) {
+      if (auto err = st.writer.write(*slice)) {
         VAST_ERROR(self, self->system().render(err));
         self->quit(std::move(err));
         return;
       }
-      t.stop(xs.size());
+      t.stop(slice->rows());
       // Stop when reaching configured limit.
-      st.processed += xs.size();
+      st.processed += slice->rows();
       if (st.processed >= st.max_events)
         return reached_max_events();
       // Force flush if necessary.

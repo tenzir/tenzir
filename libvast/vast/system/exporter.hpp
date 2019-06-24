@@ -19,7 +19,6 @@
 #include <unordered_map>
 
 #include "vast/aliases.hpp"
-#include "vast/event.hpp"
 #include "vast/expression.hpp"
 #include "vast/ids.hpp"
 #include "vast/query_options.hpp"
@@ -32,22 +31,52 @@
 namespace vast::system {
 
 struct exporter_state {
+  /// -- constants -------------------------------------------------------------
+
+  static inline const char* name = "exporter";
+
+  // -- properties -------------------------------------------------------------
+
   caf::settings status();
 
+  // -- member variables -------------------------------------------------------
+
+  /// Stores a handle to the ARCHIVE for fetching candidates.
   archive_type archive;
+
+  /// Stores a handle to the INDEX for querying results.
   caf::actor index;
+
+  /// Stores a handle to the SINK that processes results.
   caf::actor sink;
+
+  /// Stores a handle to the ACCOUNTANT that collects various statistics.
   accountant_type accountant;
+
+  /// Stores hits from the INDEX.
   ids hits;
+
+  /// Caches tailored candidate checkers.
   std::unordered_map<type, expression> checkers;
-  std::deque<event> candidates;
-  std::vector<event> results;
+
+  /// Caches results for the SINK.
+  std::vector<table_slice_ptr> results;
+
+  /// Stores the time point for when this actor got started via 'run'.
   std::chrono::steady_clock::time_point start;
+
+  /// Stores various meta information about the progress we made on the query.
   query_status query;
+
+  /// Stores flags for the query for distinguishing historic and continuous
+  /// queries.
   query_options options;
+
+  /// Stores the query ID we receive from the INDEX.
   uuid id;
+
+  /// Stores the user-defined export query.
   expression expr;
-  static inline const char* name = "exporter";
 };
 
 /// The EXPORTER receives index hits, looks up the corresponding events in the
