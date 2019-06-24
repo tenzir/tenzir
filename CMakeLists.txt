@@ -30,14 +30,6 @@ if (APPLE AND NOT DEFINED CMAKE_MACOSX_RPATH)
   endif ()
 endif ()
 
-if (VAST_RELOCATEABLE_INSTALL)
-  if (APPLE)
-    list(APPEND CMAKE_INSTALL_RPATH "@executable_path/../${CMAKE_INSTALL_LIBDIR}")
-  else ()
-    list(APPEND CMAKE_INSTALL_RPATH "$ORIGIN/../${CMAKE_INSTALL_LIBDIR}")
-  endif ()
-endif ()
-
 # Support Clang tools such as clang-tidy
 set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
 
@@ -51,6 +43,14 @@ set(CMAKE_INSTALL_CMAKEDIR "${CMAKE_INSTALL_LIBDIR}/cmake" CACHE PATH
   "Base directory for installing cmake specific artifacts"
 )
 set(INSTALL_VAST_CMAKEDIR "${CMAKE_INSTALL_CMAKEDIR}/vast")
+
+if (VAST_RELOCATEABLE_INSTALL)
+  if (APPLE)
+    list(APPEND CMAKE_INSTALL_RPATH "@executable_path/../${CMAKE_INSTALL_LIBDIR}")
+  else ()
+    list(APPEND CMAKE_INSTALL_RPATH "$ORIGIN/../${CMAKE_INSTALL_LIBDIR}")
+  endif ()
+endif ()
 
 # Prohibit in-source builds
 if ("${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_BINARY_DIR}")
