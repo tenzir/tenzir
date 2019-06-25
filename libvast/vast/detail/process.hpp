@@ -14,16 +14,21 @@
 #pragma once
 
 #include "vast/filesystem.hpp"
-#include <caf/optional.hpp>
+#include <caf/expected.hpp>
 
 namespace vast::detail {
 
-/// Get the path of a shared library.
-/// @returns The filesystem path to the library mapped at address addr, or none
-///          if the running process was not created from a dynamic executable.
-caf::optional<path> objectpath(const void* addr);
+/// Locates the path of a shared library or executable.
+/// @param addr The address to use for the lookup, needs to be in an
+///             mmaped region in order to succeed.
+/// @returns The filesystem path to the library or executable mapped at address
+///          addr, or error if the resolution fails.
+caf::expected<path> objectpath(const void* addr);
 
-inline caf::optional<path> objectpath() {
+/// Locates the path of a shared library or executable.
+/// @returns The filesystem path to the library or executable of the caller of
+///          this function, or error if the resolution fails.
+inline caf::expected<path> objectpath() {
   struct dummy {
     static void fn() {
     }

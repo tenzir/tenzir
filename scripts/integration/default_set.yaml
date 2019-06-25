@@ -5,15 +5,14 @@ fixtures:
     enter: | # python
       node0 = Server(self.cmd,
                      [f'--config-file={self.config_file}',
-                      '-e', ':{}'.format(VAST_PORT),
-                      '-i', 'node0', 'start'],
+                      '-e', f':{VAST_PORT}', '-i', 'node0', 'start'],
                      work_dir, name='node0', port=VAST_PORT)
       node1 = Server(self.cmd,
                      [f'--config-file={self.config_file}',
-                      '-e', ':{}'.format(42124),
+                      '-e', ':42124',
                       '-i', 'node1', 'start'],
                      work_dir, name='node1', port=42124)
-      cmd += ['-e', ':{}'.format(VAST_PORT)]
+      cmd += ['-e', f':{VAST_PORT}']
 
     exit: | # python
       node0.stop()
@@ -23,10 +22,9 @@ fixtures:
     enter: | # python
       node = Server(self.cmd,
                     [f'--config-file={self.config_file}',
-                     '-e', ':{}'.format(VAST_PORT),
-                     '-i', 'node', 'start'],
+                     '-e', f':{VAST_PORT}', '-i', 'node', 'start'],
                     work_dir, name='node', port=VAST_PORT)
-      cmd += ['-e', ':{}'.format(VAST_PORT)]
+      cmd += ['-e', f':{VAST_PORT}']
 
 
     exit: | # python

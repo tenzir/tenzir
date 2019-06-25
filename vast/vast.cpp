@@ -87,11 +87,12 @@ int main(int argc, char** argv) {
   }
   auto vast_share = binary->parent().parent() / "share" / "vast";
   // Load event types.
-  auto schema_dirs = std::vector{vast_share / "schema"};
+  auto default_dirs = std::vector{vast_share / "schema"};
   using string_list = std::vector<std::string>;
   if (auto user_dirs = caf::get_if<string_list>(&cfg, "system.schema-paths"))
-    schema_dirs.insert(schema_dirs.end(), user_dirs->begin(), user_dirs->end());
-  if (auto schema = load_schema(schema_dirs)) {
+    default_dirs.insert(default_dirs.end(), user_dirs->begin(),
+                        user_dirs->end());
+  if (auto schema = load_schema(default_dirs)) {
     event_types::init(*std::move(schema));
   } else {
     VAST_ERROR_ANON("failed to read schema dirs:", to_string(schema.error()));
