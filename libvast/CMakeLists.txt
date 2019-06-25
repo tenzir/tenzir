@@ -40,6 +40,7 @@ set(libvast_sources
   src/detail/make_io_stream.cpp
   src/detail/mmapbuf.cpp
   src/detail/posix.cpp
+  src/detail/process.cpp
   src/detail/string.cpp
   src/detail/system.cpp
   src/detail/terminal.cpp
