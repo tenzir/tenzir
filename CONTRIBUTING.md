@@ -510,9 +510,10 @@ Unit Tests
 Continuous Integration
 ----------------------
 
-We are using Jenkins to build and test each commit. No pull request gets merged
-unless all checks for the most recent commit pass. The checks are displayed
-directly in the GitHub interface for each commit. The list consists of:
+We use Jenkins to build and test each commit. Merging a pull request requires
+that all checks pass for the latest commit in the branch. GitHub displays the
+status of the individual checks in the pull request. We currently perform the
+following checks:
 
 - *build* (displayed as `continuous-integration/$BRANCH`): this checks whether
   the code compiles in all configurations (e.g., `Linux && gcc8`).
@@ -528,9 +529,11 @@ directly in the GitHub interface for each commit. The list consists of:
   Jenkins instance on GitHub or in the email and review the unit test output of
   failed configurations.
 
-- *integration*: this checks whether the integration tests pass, similar to the
-  *tests* check.
+- *integration*: this checks whether the [integration tests][integration] pass,
+  similar to the *tests* check.
 
 - *coverage*: this checks whether a coverage report was generated and whether
   the overall coverage remains stable or improves (the check fails if the
   coverage drops).
+
+[integration]: https://github.com/vast-io/vast/tree/master/scripts/integration
