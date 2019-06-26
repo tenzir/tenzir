@@ -1,15 +1,18 @@
+config-file: vast.conf
+
 fixtures:
   BiTopologyTester:
     enter: | # python
       node0 = Server(self.cmd,
-                     ['-e', ':{}'.format(VAST_PORT),
-                      '-i', 'node0', 'start'],
+                     [f'--config-file={self.config_file}',
+                      '-e', f':{VAST_PORT}', '-i', 'node0', 'start'],
                      work_dir, name='node0', port=VAST_PORT)
       node1 = Server(self.cmd,
-                     ['-e', ':{}'.format(42124),
+                     [f'--config-file={self.config_file}',
+                      '-e', ':42124',
                       '-i', 'node1', 'start'],
                      work_dir, name='node1', port=42124)
-      cmd += ['-e', ':{}'.format(VAST_PORT)]
+      cmd += ['-e', f':{VAST_PORT}']
 
     exit: | # python
       node0.stop()
@@ -18,10 +21,10 @@ fixtures:
   ServerTester:
     enter: | # python
       node = Server(self.cmd,
-                    ['-e', ':{}'.format(VAST_PORT),
-                     '-i', 'node', 'start'],
+                    [f'--config-file={self.config_file}',
+                     '-e', f':{VAST_PORT}', '-i', 'node', 'start'],
                     work_dir, name='node', port=VAST_PORT)
-      cmd += ['-e', ':{}'.format(VAST_PORT)]
+      cmd += ['-e', f':{VAST_PORT}']
 
 
     exit: | # python
@@ -132,8 +135,7 @@ tests:
   Node suricata alert:
     tags: [node, import-export, suricata, eve]
     steps:
-      # TODO: This --system.schema-paths option should be the default
-      - command: --system.schema-paths=[\"@./schema\"] import -N suricata -r @./data/suricata/eve.json
+      - command: import -N suricata -r @./data/suricata/eve.json
       - command: export -N ascii 'src_ip == 147.32.84.165'
 
   Manual 1:

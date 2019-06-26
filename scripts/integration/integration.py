@@ -258,10 +258,11 @@ class Tester:
     """Test runner
     """
 
-    def __init__(self, args, fixtures):
+    def __init__(self, args, fixtures, config_file):
         self.args = args
         self.app = args.app
         self.cmd = Path(args.app).resolve()
+        self.config_file = config_file
         self.fixtures = fixtures
         self.test_dir = args.directory
         self.update = args.update
@@ -298,6 +299,8 @@ class Tester:
         fixture = dummy_fixture if not test.fixture else self.fixtures.get(
             test.fixture)
         cmd = [self.cmd]
+        if self.config_file:
+            cmd.append(f'--config-file={self.config_file}')
         fenter = Template(fixture.enter).substitute(locals())
         fexit = Template(fixture.exit).substitute(locals())
         # Invoke test.
@@ -365,7 +368,10 @@ def validate(data, set_dir):
             'steps': [step]
         }, schema.Use(to_test)))
     tests = schema.Schema({schema.And(str, len): test})
-    sch = schema.Schema({'fixtures': fixtures, 'tests': tests})
+    sch = schema.Schema({
+        schema.Optional('config-file', default=None): schema.Use(absolute_path),
+        schema.Optional('fixtures', default=None): fixtures,
+        'tests': tests})
     return sch.validate(data)
 
 def tagselect(tags, tests):
@@ -385,7 +391,7 @@ def run(args, test_dec):
         selected_tests = tagselect(args.tag, tests)
     tests = dict(selected_tests, **explicit_tests)
     try:
-        with Tester(args, test_dec['fixtures']) as tester:
+        with Tester(args, test_dec['fixtures'], test_dec['config-file']) as tester:
             result = True
             for name, definition in tests.items():
                 # Skip the test if the condition is not fulfilled

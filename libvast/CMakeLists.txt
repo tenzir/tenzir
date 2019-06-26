@@ -40,6 +40,7 @@ set(libvast_sources
   src/detail/make_io_stream.cpp
   src/detail/mmapbuf.cpp
   src/detail/posix.cpp
+  src/detail/process.cpp
   src/detail/string.cpp
   src/detail/system.cpp
   src/detail/terminal.cpp
@@ -157,6 +158,7 @@ target_include_directories(libvast PUBLIC
   $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
 target_include_directories(libvast PRIVATE "${PROJECT_SOURCE_DIR}/aux")
+add_dependencies(libvast vast-schema)
 target_link_libraries(libvast PUBLIC caf::core caf::io)
 if (VAST_USE_OPENSSL)
   target_link_libraries(libvast PUBLIC caf::openssl)
