@@ -1,13 +1,13 @@
 #!/usr/bin/env python
 
 # Usage:
-# add_class.py [-o] COMPONENT QUALIFIED-NAME
+# add_type [-o] COMPONENT QUALIFIED-NAME
 # Options:
 # -o   Header-only (do not add .cpp file)
 
 # Usage example:
-# - Header, class, and test: add_class.py libvast vast::system::foo
-# - Header and test: add_class.py -o libvast vast::system::foo
+# - Header, class, and test: add_type libvast vast::system::foo
+# - Header and test: add_type -o libvast vast::system::foo
 
 import argparse
 
