@@ -80,17 +80,29 @@ FIXTURE_SCOPE_END()
 
 
 def parse_set_cmd(f, new_entry):
-    file_names=["  " + new_entry]
-    for line_with_newline in f:
-        line = line_with_newline[:-1]
-        if line == new_entry:
-            raise Exception(new_entry + " already exists in CMakeLists.txt")
-        if line == ')':
+    file_names = [new_entry]
+    stop = False
+    indent = 0
+    for i, line_with_newline in enumerate(f):
+        line = line_with_newline[:-1].rstrip()
+        path = line.lstrip()
+        if i == 0:
+            indent = len(line) - len(path)
+        if path.endswith(')'):
+            path = path[:-1]
+            stop = True
+        if path:
+            if path == new_entry:
+                raise Exception(new_entry + " already exists in CMakeLists.txt")
+            file_names.append(path)
+        if stop:
             file_names.sort()
+            file_names = [(' ' * indent) + fn for fn in file_names]
+            if line.strip() == ')':
+                file_names.append(line)
+            else:
+                file_names[-1] += ')'
             return file_names
-        else:
-            # Append line without the trailing newline characters.
-            file_names.append(line)
     raise Exception("format error in CMakeLists.txt: no closing ')' to set(")
 
 def extend_cmake(component, new_source, new_test):
@@ -104,11 +116,9 @@ def extend_cmake(component, new_source, new_test):
             line = line_with_newline[:-1]
             lines.append(line)
             if new_source != "" and line == sources_marker:
-                lines += parse_set_cmd(f, "  " + new_source)
-                lines.append(')')
+                lines += parse_set_cmd(f, new_source)
             elif new_test != "" and line == test_marker:
-                lines += parse_set_cmd(f, "  " + new_test)
-                lines.append(')')
+                lines += parse_set_cmd(f, new_test)
     # Write new content to file.
     with open(cmake_path, "w") as f:
         for line in lines:
