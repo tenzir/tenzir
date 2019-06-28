@@ -17,7 +17,9 @@
 #include "vast/concept/parseable/string/char_class.hpp"
 #include "vast/concept/parseable/vast/data.hpp"
 #include "vast/concept/parseable/vast/type.hpp"
+#include "vast/data.hpp"
 #include "vast/expression.hpp"
+#include "vast/type.hpp"
 
 #include "vast/detail/assert.hpp"
 #include "vast/detail/string.hpp"
@@ -27,37 +29,52 @@ namespace vast {
 struct predicate_parser : parser<predicate_parser> {
   using attribute = predicate;
 
+  using predicate_tuple = std::tuple<predicate::operand, relational_operator,
+                                     predicate::operand>;
+
+  static predicate to_predicate(predicate_tuple xs) {
+    return {std::move(std::get<0>(xs)), std::get<1>(xs),
+            std::move(std::get<2>(xs))};
+  };
+
+  static predicate::operand to_key_extractor(std::vector<std::string> xs) {
+    // TODO: rather than doing all the work with the attributes, it would be
+    // nice if the parser framework would just give us an iterator range over
+    // the raw input. Then we wouldn't have to use expensive attributes and
+    // could simply wrap a parser P into raw(P) or raw_str(P) to obtain a
+    // range/string_view.
+    auto key = detail::join(xs, ".");
+    return key_extractor{std::move(key)};
+  }
+
+  static predicate::operand to_attr_extractor(std::string x) {
+    return attribute_extractor{caf::atom_from_string(x)};
+  }
+
+  static predicate::operand to_type_extractor(type x) {
+    return type_extractor{std::move(x)};
+  }
+
+  static predicate::operand to_data_operand(data x) {
+    return x;
+  }
+
   static auto make() {
     // clang-format off
     using parsers::alnum;
     using parsers::chr;
     using namespace parser_literals;
-    auto to_attr_extractor = [](std::string str) -> predicate::operand {
-      return attribute_extractor{caf::atom_from_string(str)};
-    };
-    auto to_type_extractor = [](type t) -> predicate::operand {
-      return type_extractor{t};
-    };
-    auto to_key_extractor = [](std::vector<std::string> xs) {
-      // TODO: rather than doing all the work with the attributes, it would be
-      // nice if the parser framework would just give us an iterator range over
-      // the raw input. Then we wouldn't have to use expensive attributes and
-      // could simply wrap a parser P into raw(P) or raw_str(P) to obtain a
-      // range/string_view.
-      auto key = detail::join(xs, ".");
-      return predicate::operand{key_extractor{std::move(key)}};
-    };
     auto id = +(alnum | chr{'_'} | chr{'-'});
     // A key cannot start with ':', othwise it would be interpreted as a type
     // extractor.
     auto key = !':'_p >> (+(alnum | chr{'_'} | chr{':'}) % '.');
     auto operand
-      = parsers::data        ->* [](data d) -> predicate::operand { return d; }
-      | '#' >> id            ->* to_attr_extractor
+      = parsers::data ->* to_data_operand
+      | '#' >> id ->* to_attr_extractor
       | ':' >> parsers::type ->* to_type_extractor
-      | key                  ->* to_key_extractor
+      | key ->* to_key_extractor
       ;
-    auto pred_op
+    auto operation
       = "~"_p   ->* [] { return match; }
       | "!~"_p  ->* [] { return not_match; }
       | "=="_p  ->* [] { return equal; }
@@ -75,15 +92,9 @@ struct predicate_parser : parser<predicate_parser> {
       | "+]"_p  ->* [] { return ni; }
       | "-]"_p  ->* [] { return not_ni; }
       ;
-    using raw_predicate =
-      std::tuple<predicate::operand, relational_operator, predicate::operand>;
-    auto to_predicate = [](raw_predicate t) -> predicate {
-      return {std::move(std::get<0>(t)), std::get<1>(t),
-              std::move(std::get<2>(t))};
-    };
     auto ws = ignore(*parsers::space);
     auto pred
-      = (operand >> ws >> pred_op >> ws >> operand) ->* to_predicate;
+      = (operand >> ws >> operation >> ws >> operand) ->* to_predicate
       ;
     return pred;
     // clang-format on
