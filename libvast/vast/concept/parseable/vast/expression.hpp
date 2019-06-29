@@ -59,6 +59,15 @@ struct predicate_parser : parser<predicate_parser> {
     return x;
   }
 
+  static predicate to_data_predicate(data x) {
+    auto infer_type = [](auto& d) -> type {
+      return data_to_type<std::decay_t<decltype(d)>>{};
+    };
+    auto lhs = type_extractor{caf::visit(infer_type, x)};
+    auto rhs = predicate::operand{std::move(x)};
+    return {std::move(lhs), equal, std::move(rhs)};
+  }
+
   static auto make() {
     // clang-format off
     using parsers::alnum;
@@ -95,6 +104,7 @@ struct predicate_parser : parser<predicate_parser> {
     auto ws = ignore(*parsers::space);
     auto pred
       = (operand >> ws >> operation >> ws >> operand) ->* to_predicate
+      | parsers::data ->* to_data_predicate;
       ;
     return pred;
     // clang-format on
