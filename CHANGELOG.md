@@ -10,6 +10,9 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## [Unreleased]
 
+- 🐞 Fixed false positive results from the `export` command that were caused
+  by the ARCHIVE component returning data unrelated to the issued query.
+
 - 🎁 The `index` object in the output from `vast status` has a new field
   `statistics` for a high-level summary of the indexed data. Currently, there
   exists a nested `layouts` objects with per-layout statistics about the number
