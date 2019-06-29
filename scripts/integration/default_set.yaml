@@ -113,6 +113,14 @@ tests:
       - command: export ascii 'id.orig_h !in 192.168.1.0/24'
       - command: export ascii 'id.orig_h in fe80:5074:1b53:7e7::/64'
       - command: export ascii 'id.orig_h ni fe80:5074:1b53:7e7::/64'
+  Expressions:
+    tags: [server, expression]
+    fixture: ServerTester
+    steps:
+      - command: import -b zeek
+        input: data/zeek/conn.log.gz
+      - command: export ascii 'fe80::5074:1b53:7e7:ad4d || 169.254.225.22'
+      - command: export ascii '"OrfTtuI5G4e" || fe80::5074:1b53:7e7:ad4d'
   Node Type Query:
     tags: [node, type, ch6104]
     steps:
