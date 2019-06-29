@@ -10,6 +10,10 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## [Unreleased]
 
+- 🎁 The query expression language now supports *data predicates*, which are a
+  shorthand for a type extractor in combination with an equality operator. For
+  example, the data predicate `6.6.6.6` is the same as `:addr == 6.6.6.6`.
+
 - 🐞 Some queries returned duplicate events because the archive did not filter
   the result set properly. This no longer occurs after fixing the table slice
   filtering logic.
