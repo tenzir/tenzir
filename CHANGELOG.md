@@ -10,6 +10,10 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## [Unreleased]
 
+- 🐞 Some queries returned duplicate events because the archive did not filter
+  the result set properly. This no longer occurs after fixing the table slice
+  filtering logic.
+
 - 🎁 The `index` object in the output from `vast status` has a new field
   `statistics` for a high-level summary of the indexed data. Currently, there
   exists a nested `layouts` objects with per-layout statistics about the number

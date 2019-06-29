@@ -86,7 +86,10 @@ archive(archive_type::stateful_pointer<archive_state> self, path dir,
               VAST_DEBUG(self, "dismisses query for inactive sender");
               return make_error(ec::no_error);
             }
-            std::vector<event> result;
+            using receiver_type = caf::typed_actor<
+              caf::reacts_to<table_slice_ptr>>;
+            auto requester = caf::actor_cast<receiver_type>(
+              self->current_sender());
             auto session = self->state.store->extract(xs);
             while (true) {
               auto slice = session->next();
@@ -96,10 +99,9 @@ archive(archive_type::stateful_pointer<archive_state> self, path dir,
                 // ... or an error occured.
                 return {done_atom::value, std::move(slice.error())};
               }
-              using receiver_type = caf::typed_actor<
-                caf::reacts_to<table_slice_ptr>>;
-              self->send(caf::actor_cast<receiver_type>(self->current_sender()),
-                         *slice);
+              // The slice may contain entries that are not selected by xs.
+              for (auto& sub_slice : select(*slice, xs))
+                self->send(requester, sub_slice);
             }
             return {done_atom::value, make_error(ec::no_error)};
           },

@@ -253,6 +253,7 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
       if (count == 0) {
         VAST_WARNING(self, "got empty hits");
       } else {
+        VAST_ASSERT(rank(st.hits & hits) == 0);
         VAST_DEBUG(self, "got", count, "index hits in [", (select(hits, 1)),
                    ',', (select(hits, -1) + 1), ')');
         st.hits |= hits;
