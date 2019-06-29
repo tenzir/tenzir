@@ -11,21 +11,27 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#pragma once
-
 #include "vast/format/ostream_writer.hpp"
 
-namespace vast::format::ascii {
+#include "vast/error.hpp"
 
-class writer : public format::ostream_writer {
-public:
-  using super = format::ostream_writer;
+namespace vast::format {
 
-  using super::super;
+ostream_writer::ostream_writer(ostream_ptr out) : out_(std::move(out)) {
+  // nop
+}
 
-  caf::error write(const table_slice& x) override;
+ostream_writer::~ostream_writer() {
+  // nop
+}
 
-  const char* name() const override;
-};
+caf::expected<void> ostream_writer::flush() {
+  if (out_ == nullptr)
+    return make_error(ec::format_error, "no output stream available");
+  out_->flush();
+  if (!*out_)
+    return make_error(ec::format_error, "failed to flush");
+  return caf::unit;
+}
 
-} // namespace vast::format::ascii
+} // namespace vast::format

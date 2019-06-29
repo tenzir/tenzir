@@ -11,21 +11,34 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#pragma once
+#include "vast/format/ascii.hpp"
 
-#include "vast/format/ostream_writer.hpp"
+#include "vast/concept/printable/vast/view.hpp"
+#include "vast/table_slice.hpp"
 
 namespace vast::format::ascii {
 
-class writer : public format::ostream_writer {
-public:
-  using super = format::ostream_writer;
+caf::error writer::write(const table_slice& x) {
+  auto iter = std::back_inserter(buf_);
+  data_view_printer printer;
+  for (size_t row = 0; row < x.rows(); ++row) {
+    buf_.emplace_back('<');
+    printer.print(iter, x.at(row, 0));
+    for (size_t column = 1; column < x.columns(); ++column) {
+      buf_.emplace_back(',');
+      buf_.emplace_back(' ');
+      printer.print(iter, x.at(row, column));
+    }
+    buf_.emplace_back('>');
+    buf_.emplace_back('\n');
+    out_->write(buf_.data(), buf_.size());
+    buf_.clear();
+  }
+  return caf::none;
+}
 
-  using super::super;
-
-  caf::error write(const table_slice& x) override;
-
-  const char* name() const override;
-};
+const char* writer::name() const {
+  return "ascii-writer";
+}
 
 } // namespace vast::format::ascii

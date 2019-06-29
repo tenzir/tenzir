@@ -13,19 +13,42 @@
 
 #pragma once
 
-#include "vast/format/ostream_writer.hpp"
+#include <iosfwd>
+#include <memory>
+#include <vector>
 
-namespace vast::format::ascii {
+#include "vast/format/writer.hpp"
 
-class writer : public format::ostream_writer {
+namespace vast::format {
+
+class ostream_writer : public writer {
 public:
-  using super = format::ostream_writer;
+  // -- member types -----------------------------------------------------------
 
-  using super::super;
+  using ostream_ptr = std::unique_ptr<std::ostream>;
 
-  caf::error write(const table_slice& x) override;
+  // -- constructors, destructors, and assignment operators --------------------
 
-  const char* name() const override;
+  ostream_writer(ostream_ptr out);
+
+  ostream_writer() = default;
+
+  ostream_writer(ostream_writer&&) = default;
+
+  ostream_writer& operator=(ostream_writer&&) = default;
+
+  ~ostream_writer() override;
+
+  // -- overrides --------------------------------------------------------------
+
+  caf::expected<void> flush() override;
+
+protected:
+  // Buffer for building lines before syncing writing to out_.
+  std::vector<char> buf_;
+
+  // Output stream for writing to STDOUT or disk.
+  ostream_ptr out_;
 };
 
-} // namespace vast::format::ascii
+} // namespace vast::format

@@ -43,13 +43,13 @@ auto first_zeek_conn_log_line = R"__({"ts": 1258531221.486539, "uid": "Pii6cUUq1
 // clang-format on
 
 template <class Writer>
-std::vector<std::string> generate(const std::vector<event>& xs) {
+std::vector<std::string> generate(const std::vector<table_slice_ptr>& xs) {
   std::string str;
   auto sb = new caf::containerbuf<std::string>{str};
   auto out = std::make_unique<std::ostream>(sb);
   Writer writer{std::move(out)};
-  for (auto& e : xs)
-    if (!writer.write(e))
+  for (auto& x : xs)
+    if (auto err = writer.write(*x))
       FAIL("failed to write event");
   writer.flush();
   REQUIRE(!str.empty());
@@ -61,26 +61,26 @@ std::vector<std::string> generate(const std::vector<event>& xs) {
 } // namespace <anonymous>
 
 TEST(Zeek writer) {
-  auto lines = generate<format::ascii::writer>(zeek_http_log);
+  auto lines = generate<format::ascii::writer>(zeek_http_log_slices);
   CHECK_EQUAL(lines.back(), last_zeek_http_log_line);
 }
 
 TEST(BGPdump writer) {
-  auto lines = generate<format::ascii::writer>(bgpdump_txt);
+  auto lines = generate<format::ascii::writer>(bgpdump_txt_slices);
   CHECK_EQUAL(lines.size(), 100u);
   CHECK_EQUAL(lines.front(), first_ascii_bgpdump_txt_line);
 }
 
 TEST(CSV writer) {
-  auto lines = generate<format::csv::writer>(zeek_http_log);
+  auto lines = generate<format::csv::writer>(zeek_http_log_slices);
   CHECK_EQUAL(lines.front(), first_csv_http_log_line);
   CHECK_EQUAL(lines.back(), last_csv_http_log_line);
 }
 
 TEST(JSON writer) {
-  auto lines = generate<format::json::writer>(bgpdump_txt);
+  auto lines = generate<format::json::writer>(bgpdump_txt_slices);
   CHECK_EQUAL(lines.front(), first_json_bgpdump_txt_line);
-  lines = generate<format::json::writer>(zeek_conn_log);
+  lines = generate<format::json::writer>(zeek_conn_log_slices);
   CHECK_EQUAL(lines.front(), first_zeek_conn_log_line);
 }
 
