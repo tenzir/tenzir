@@ -15,6 +15,7 @@
 
 #include <iosfwd>
 #include <memory>
+#include <string_view>
 #include <vector>
 
 #include "vast/format/writer.hpp"
@@ -44,6 +45,19 @@ public:
   caf::expected<void> flush() override;
 
 protected:
+  /// Appends `x` to `buf_`.
+  void append(std::string_view x) {
+    buf_.insert(buf_.end(), x.begin(), x.end());
+  }
+
+  /// Appends `x` to `buf_`.
+  void append(char x) {
+    buf_.emplace_back(x);
+  }
+
+  /// Writes the content of `buf_` to `out_` and clears `buf_` afterwards.
+  void write_buf();
+
   // Buffer for building lines before syncing writing to out_.
   std::vector<char> buf_;
 

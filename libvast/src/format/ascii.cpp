@@ -22,17 +22,14 @@ caf::error writer::write(const table_slice& x) {
   auto iter = std::back_inserter(buf_);
   data_view_printer printer;
   for (size_t row = 0; row < x.rows(); ++row) {
-    buf_.emplace_back('<');
+    append('<');
     printer.print(iter, x.at(row, 0));
     for (size_t column = 1; column < x.columns(); ++column) {
-      buf_.emplace_back(',');
-      buf_.emplace_back(' ');
+      append(", ");
       printer.print(iter, x.at(row, column));
     }
-    buf_.emplace_back('>');
-    buf_.emplace_back('\n');
-    out_->write(buf_.data(), buf_.size());
-    buf_.clear();
+    append(">\n");
+    write_buf();
   }
   return caf::none;
 }

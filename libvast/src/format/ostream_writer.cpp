@@ -34,4 +34,9 @@ caf::expected<void> ostream_writer::flush() {
   return caf::unit;
 }
 
+void ostream_writer::write_buf() {
+  out_->write(buf_.data(), buf_.size());
+  buf_.clear();
+}
+
 } // namespace vast::format
