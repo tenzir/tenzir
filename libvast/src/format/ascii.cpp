@@ -19,19 +19,8 @@
 namespace vast::format::ascii {
 
 caf::error writer::write(const table_slice& x) {
-  auto iter = std::back_inserter(buf_);
   data_view_printer printer;
-  for (size_t row = 0; row < x.rows(); ++row) {
-    append('<');
-    printer.print(iter, x.at(row, 0));
-    for (size_t column = 1; column < x.columns(); ++column) {
-      append(", ");
-      printer.print(iter, x.at(row, column));
-    }
-    append(">\n");
-    write_buf();
-  }
-  return caf::none;
+  return print<false>(printer, x, "<", ", ", ">");
 }
 
 const char* writer::name() const {

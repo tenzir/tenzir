@@ -21,10 +21,12 @@
 #include "vast/concept/parseable/vast/subnet.hpp"
 #include "vast/concept/parseable/vast/time.hpp"
 #include "vast/concept/printable/to_string.hpp"
+#include "vast/concept/printable/vast/json.hpp"
 #include "vast/data.hpp"
 #include "vast/detail/unbox_var.hpp"
 #include "vast/format/json.hpp"
 #include "vast/logger.hpp"
+#include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
 #include "vast/type.hpp"
 #include "vast/view.hpp"
@@ -159,6 +161,15 @@ const vast::json* lookup(std::string_view field, const vast::json::object& xs) {
 }
 
 } // namespace
+
+caf::error writer::write(const table_slice& x) {
+  json_printer<policy::oneline> printer;
+  return print<true>(printer, x, "{", ", ", "}");
+}
+
+const char* writer::name() const {
+  return "json-writer";
+}
 
 caf::error add(table_slice_builder& builder, const vast::json::object& xs,
                const record_type& layout) {

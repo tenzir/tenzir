@@ -18,7 +18,11 @@
 #include <string_view>
 #include <vector>
 
+#include <caf/error.hpp>
+
+#include "vast/error.hpp"
 #include "vast/format/writer.hpp"
+#include "vast/table_slice.hpp"
 
 namespace vast::format {
 
@@ -53,6 +57,33 @@ protected:
   /// Appends `x` to `buf_`.
   void append(char x) {
     buf_.emplace_back(x);
+  }
+
+  template <bool IncludeFieldNames, class Printer>
+  caf::error print(Printer& printer, const table_slice& x,
+                   std::string_view begin_of_line, std::string_view separator,
+                   std::string_view end_of_line) {
+    auto at = [&](size_t row, size_t column) {
+      if constexpr (IncludeFieldNames)
+        return std::pair{x.column_name(column), x.at(row, column)};
+      else
+        return x.at(row, column);
+    };
+    auto iter = std::back_inserter(buf_);
+    for (size_t row = 0; row < x.rows(); ++row) {
+      append(begin_of_line);
+      if (!printer.print(iter, at(row, 0)))
+        return ec::print_error;
+      for (size_t column = 1; column < x.columns(); ++column) {
+        append(separator);
+        if (!printer.print(iter, at(row, column)))
+          return ec::print_error;
+      }
+      append(end_of_line);
+      append('\n');
+      write_buf();
+    }
+    return caf::none;
   }
 
   /// Writes the content of `buf_` to `out_` and clears `buf_` afterwards.

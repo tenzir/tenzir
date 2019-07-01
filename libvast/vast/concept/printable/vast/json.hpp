@@ -15,12 +15,14 @@
 
 #include "vast/json.hpp"
 
+#include "vast/concept/printable/core/operators.hpp"
+#include "vast/concept/printable/core/printer.hpp"
+#include "vast/concept/printable/core/sequence.hpp"
 #include "vast/concept/printable/print.hpp"
 #include "vast/concept/printable/string.hpp"
-#include "vast/concept/printable/core/printer.hpp"
-#include "vast/concept/printable/core/operators.hpp"
-#include "vast/concept/printable/core/sequence.hpp"
 #include "vast/detail/escapers.hpp"
+#include "vast/time.hpp"
+#include "vast/view.hpp"
 
 namespace vast {
 
@@ -68,76 +70,125 @@ struct json_printer : printer<json_printer<TreePolicy, Indent, Padding>> {
   struct print_visitor {
     print_visitor(Iterator& out) : out_{out} {}
 
-    bool operator()(json::null) {
+    bool operator()(const json::null&) {
       return printers::str.print(out_, "null");
     }
 
-    bool operator()(json::boolean b) {
+    bool operator()(const view<data>& x) {
+      return caf::visit(*this, x);
+    }
+
+    bool operator()(const view<port>& x) {
+      // TODO: convert() generates a string, while our unit tests expect a
+      //       number. Eventually, we're probably going to drop the protocol
+      //       part but convert() and print() should be consistent regardless.
+      return (*this)(x.number());
+    }
+
+    template <class T>
+    bool operator()(const T& x) {
+      if constexpr (std::is_arithmetic_v<T>) {
+        auto str = std::to_string(x);
+        json::number i;
+        if constexpr (std::is_floating_point_v<T>) {
+          if (std::modf(x, &i) == 0.0)
+            // Do not show 0 as 0.0.
+            str.erase(str.find('.'), std::string::npos);
+          else
+            // Avoid no trailing zeros.
+            str.erase(str.find_last_not_of('0') + 1, std::string::npos);
+        }
+        return printers::str.print(out_, str);
+      } else {
+        json y;
+        return convert(x, y) && caf::visit(*this, y);
+      }
+    }
+
+    bool operator()(const json::boolean& b) {
       return printers::str.print(out_, b ? "true" : "false");
     }
 
-    bool operator()(json::number n) {
-      auto str = std::to_string(n);
-      json::number i;
-      if (std::modf(n, &i) == 0.0)
-        // Do not show 0 as 0.0.
-        str.erase(str.find('.'), std::string::npos);
-      else
-        // Avoid no trailing zeros.
-        str.erase(str.find_last_not_of('0') + 1, std::string::npos);
-      return printers::str.print(out_, str);
-    }
-
-    bool operator()(const json::string& str) {
+    bool operator()(const std::string_view& str) {
       static auto p = '"' << printers::escape(detail::json_escaper) << '"';
       return p.print(out_, str);
     }
 
-    bool operator()(const json::array& a) {
+    bool operator()(const std::string& str) {
+      return (*this)(std::string_view{str});
+    }
+
+    bool operator()(const view<pattern>& x) {
+      return (*this)(x.string());
+    }
+
+    bool operator()(const std::pair<std::string_view, view<data>>& kvp) {
+      using namespace printers;
+      if (!(*this)(kvp.first))
+        return false;
+      if (!str.print(out_, ": "))
+        return false;
+      return caf::visit(*this, kvp.second);
+    }
+
+    template <class ForwardIterator>
+    bool print_array(ForwardIterator begin, ForwardIterator end) {
       using namespace printers;
       if (depth_ == 0 && !pad())
         return false;
+      if (begin == end)
+        return str.print(out_, "[]");
       if (!any.print(out_, '['))
         return false;
-      if (!a.empty() && tree) {
+      if (tree) {
         ++depth_;
         any.print(out_, '\n');
       }
-      auto begin = a.begin();
-      auto end = a.end();
       while (begin != end) {
         if (!indent())
           return false;
         if (!caf::visit(*this, *begin))
           return false;
-        ;
         ++begin;
         if (begin != end)
           if (!str.print(out_, tree ? ",\n" : ", "))
             return false;
       }
-      if (!a.empty() && tree) {
+      if (tree) {
         --depth_;
-        any.print(out_, '\n');
-        if (!indent())
+        if (!any.print(out_, '\n') || !indent())
           return false;
       }
       return any.print(out_, ']');
     }
 
-    bool operator()(const json::object& o) {
+    bool operator()(const json::array& xs) {
+      return print_array(xs.begin(), xs.end());
+    }
+
+    bool operator()(const view<vector>& xs) {
+      return print_array(xs.begin(), xs.end());
+    }
+
+    bool operator()(const view<set>& xs) {
+      // JSON has no data type for sets, so we're printing it as an array.
+      return print_array(xs.begin(), xs.end());
+    }
+
+    template <class ForwardIterator>
+    bool print_map(ForwardIterator begin, ForwardIterator end) {
       using namespace printers;
       if (depth_ == 0 && !pad())
         return false;
+      if (begin == end)
+        return str.print(out_, "{}");
       if (!any.print(out_, '{'))
         return false;
-      if (!o.empty() && tree) {
+      if (tree) {
         ++depth_;
         if (!any.print(out_, '\n'))
           return false;
       }
-      auto begin = o.begin();
-      auto end = o.end();
       while (begin != end) {
         if (!indent())
           return false;
@@ -152,7 +203,7 @@ struct json_printer : printer<json_printer<TreePolicy, Indent, Padding>> {
           if (!str.print(out_, tree ? ",\n" : ", "))
             return false;
       }
-      if (!o.empty() && tree) {
+      if (tree) {
         --depth_;
         if (!any.print(out_, '\n'))
           return false;
@@ -160,6 +211,14 @@ struct json_printer : printer<json_printer<TreePolicy, Indent, Padding>> {
           return false;
       }
       return any.print(out_, '}');
+    }
+
+    bool operator()(const json::object& xs) {
+      return print_map(xs.begin(), xs.end());
+    }
+
+    bool operator()(const view<map>& xs) {
+      return print_map(xs.begin(), xs.end());
     }
 
     bool pad() {

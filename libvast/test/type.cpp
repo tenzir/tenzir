@@ -461,41 +461,45 @@ TEST(congruence) {
   CHECK(congruent(a, r0));
 }
 
+#define TYPE_CHECK(type, value) CHECK(type_check(type, data{value}));
+
+#define TYPE_CHECK_FAIL(type, value) CHECK(!type_check(type, data{value}));
+
 TEST(type_check) {
   MESSAGE("basic types");
-  CHECK(type_check(none_type{}, caf::none));
-  CHECK(type_check(boolean_type{}, false));
-  CHECK(type_check(integer_type{}, 42));
-  CHECK(type_check(count_type{}, 42u));
-  CHECK(type_check(real_type{}, 4.2));
-  CHECK(type_check(timespan_type{}, timespan{0}));
-  CHECK(type_check(timestamp_type{}, timestamp{}));
-  CHECK(type_check(string_type{}, "foo"s));
-  CHECK(type_check(pattern_type{}, pattern{"foo"}));
-  CHECK(type_check(address_type{}, address{}));
-  CHECK(type_check(subnet_type{}, subnet{}));
-  CHECK(type_check(port_type{}, port{}));
+  TYPE_CHECK(none_type{}, caf::none);
+  TYPE_CHECK(boolean_type{}, false);
+  TYPE_CHECK(integer_type{}, 42);
+  TYPE_CHECK(count_type{}, 42u);
+  TYPE_CHECK(real_type{}, 4.2);
+  TYPE_CHECK(timespan_type{}, timespan{0});
+  TYPE_CHECK(timestamp_type{}, timestamp{});
+  TYPE_CHECK(string_type{}, "foo"s);
+  TYPE_CHECK(pattern_type{}, pattern{"foo"});
+  TYPE_CHECK(address_type{}, address{});
+  TYPE_CHECK(subnet_type{}, subnet{});
+  TYPE_CHECK(port_type{}, port{});
   MESSAGE("complex types");
-  CHECK(type_check(enumeration_type{{"foo"}}, enumeration{0}));
-  CHECK(!type_check(enumeration_type{{"foo"}}, enumeration{1}));
+  TYPE_CHECK(enumeration_type{{"foo"}}, enumeration{0});
+  TYPE_CHECK_FAIL(enumeration_type{{"foo"}}, enumeration{1});
   MESSAGE("containers");
-  CHECK(type_check(vector_type{integer_type{}}, vector{1, 2, 3}));
-  CHECK(type_check(vector_type{}, vector{1, 2, 3}));
-  CHECK(type_check(vector_type{}, vector{}));
-  CHECK(type_check(vector_type{string_type{}}, vector{}));
-  CHECK(type_check(set_type{integer_type{}}, set{1, 2, 3}));
-  CHECK(type_check(set_type{}, set{1, 2, 3}));
-  CHECK(type_check(set_type{}, set{}));
-  CHECK(type_check(set_type{string_type{}}, set{}));
+  TYPE_CHECK(vector_type{integer_type{}}, vector({1, 2, 3}));
+  TYPE_CHECK(vector_type{}, vector({1, 2, 3}));
+  TYPE_CHECK(vector_type{}, vector{});
+  TYPE_CHECK(vector_type{string_type{}}, vector{});
+  TYPE_CHECK(set_type{integer_type{}}, set({1, 2, 3}));
+  TYPE_CHECK(set_type{}, set({1, 2, 3}));
+  TYPE_CHECK(set_type{}, set{});
+  TYPE_CHECK(set_type{string_type{}}, set{});
   auto xs = map{{1, true}, {2, false}};
-  CHECK(type_check(map_type{integer_type{}, boolean_type{}}, xs));
-  CHECK(type_check(map_type{}, xs));
-  CHECK(type_check(map_type{}, map{}));
+  TYPE_CHECK(map_type({integer_type{}, boolean_type{}}), xs);
+  TYPE_CHECK(map_type{}, xs);
+  TYPE_CHECK(map_type{}, map{});
   auto t = record_type{{"a", integer_type{}},
                        {"b", boolean_type{}},
                        {"c", string_type{}}};
-  CHECK(type_check(t, vector{42, true, "foo"}));
-  CHECK(!type_check(t, vector{42, 100, "foo"}));
+  TYPE_CHECK(t, vector({42, true, "foo"}));
+  TYPE_CHECK_FAIL(t, vector({42, 100, "foo"}));
 }
 
 TEST(printable) {
