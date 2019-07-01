@@ -22,6 +22,7 @@ set(libvast_sources
   src/command.cpp
   src/compression.cpp
   src/concept/hashable/crc.cpp
+  src/concept/hashable/sha1.cpp
   src/concept/hashable/xxhash.cpp
   src/data.cpp
   src/default_table_slice.cpp

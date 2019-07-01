@@ -11,7 +11,10 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
+#include <iomanip>
+
 #include "vast/concept/hashable/crc.hpp"
+#include "vast/concept/hashable/sha1.hpp"
 #include "vast/concept/hashable/uhash.hpp"
 #include "vast/concept/hashable/xxhash.hpp"
 
@@ -32,7 +35,17 @@ auto inspect(Inspector& f, foo& x) {
   return f(x.a, x.b);
 }
 
-} // namespace <anonymous>
+template <class T, size_t N>
+std::string hexify(const std::array<T, N>& xs) {
+  std::stringstream ss;
+  ss << std::setfill('0') << std::hex;
+  auto ptr = reinterpret_cast<const uint8_t*>(xs.data());
+  for (auto i = 0u; i < N * sizeof(T); ++i)
+    ss << std::setw(2) << static_cast<int>(ptr[i]);
+  return ss.str();
+}
+
+} // namespace
 
 TEST(hashing an inspectable type) {
   using hasher = xxhash32;
@@ -96,4 +109,19 @@ TEST(xxhash zero bytes) {
   xxh32(nullptr, 0);
   xxhash64 xxh64;
   xxh64(nullptr, 0);
+}
+
+TEST(sha1) {
+  // one-shot
+  std::array<char, 2> fortytwo = {'4', '2'};
+  auto digest = uhash<sha1>{}(fortytwo);
+  CHECK_EQUAL(hexify(digest), "92cfceb39d57d914ed8b14d0e37643de0797ae56");
+  // incremental
+  sha1 sha;
+  sha("foo", 3);
+  sha("bar", 3);
+  sha("baz", 3);
+  sha("42", 2);
+  digest = static_cast<sha1::result_type>(sha);
+  CHECK_EQUAL(hexify(digest), "4cbfb91f23be76f0836c3007c1b3c8d8c2eacdd1");
 }
