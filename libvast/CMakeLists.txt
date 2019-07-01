@@ -317,7 +317,6 @@ if (NOT NO_UNIT_TESTS)
   add_executable(vast-test ${tests})
   target_link_libraries(vast-test libvast_test libvast
                         ${CMAKE_THREAD_LIBS_INIT})
-  set_target_properties(vast-test PROPERTIES EXCLUDE_FROM_ALL TRUE)
   # Helper macro to construct a CMake test from a VAST test suite.
   macro (make_test suite)
     string(REPLACE " " "_" test_name ${suite})
