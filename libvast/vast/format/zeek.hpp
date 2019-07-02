@@ -137,6 +137,10 @@ struct zeek_parser_factory {
     return parsers::tf;
   }
 
+  result_type operator()(const real_type&) const {
+    return parsers::real->*[](real x) { return x; };
+  }
+
   result_type operator()(const integer_type&) const {
     return parsers::i64 ->* [](integer x) { return x; };
   }
