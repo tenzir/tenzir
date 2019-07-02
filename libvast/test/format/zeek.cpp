@@ -165,7 +165,8 @@ std::string_view conn_log_100_events = R"__(#separator \x09
 #close	2014-05-23-18-02-35)__";
 
 struct fixture : fixtures::deterministic_actor_system {
-  std::vector<table_slice_ptr> read(std::string_view input, size_t slice_size, size_t num_events) {
+  std::vector<table_slice_ptr> read(std::string_view input, size_t slice_size,
+                                    size_t num_events) {
     using reader_type = format::zeek::reader;
     reader_type reader{defaults::system::table_slice_type,
                        std::make_unique<std::istringstream>(
