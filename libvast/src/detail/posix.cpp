@@ -37,7 +37,7 @@ int uds_listen(const std::string& path) {
   ::sockaddr_un un;
   std::memset(&un, 0, sizeof(un));
   un.sun_family = AF_UNIX;
-  std::strncpy(un.sun_path, path.data(), sizeof(un.sun_path));
+  std::strncpy(un.sun_path, path.data(), sizeof(un.sun_path) - 1);
   ::unlink(path.c_str()); // Always remove previous socket file.
   auto sa = reinterpret_cast<sockaddr*>(&un);
   if (::bind(fd, sa, sizeof(un)) < 0 || ::listen(fd, 10) < 0) {
@@ -65,7 +65,7 @@ int uds_connect(const std::string& path) {
   ::sockaddr_un un;
   std::memset(&un, 0, sizeof(un));
   un.sun_family = AF_UNIX;
-  std::strncpy(un.sun_path, path.data(), sizeof(un.sun_path));
+  std::strncpy(un.sun_path, path.data(), sizeof(un.sun_path) - 1);
   if (::connect(fd, reinterpret_cast<sockaddr*>(&un), sizeof(un)) < 0)
     return -1;
   return fd;
