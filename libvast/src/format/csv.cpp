@@ -35,6 +35,7 @@
 #include "vast/error.hpp"
 #include "vast/schema.hpp"
 #include "vast/table_slice.hpp"
+#include "vast/table_slice_builder.hpp"
 
 namespace vast::format::csv {
 
@@ -172,18 +173,74 @@ const char* reader::name() const {
   return "csv-reader";
 }
 
-caf::optional<record_type> make_layout(const std::vector<std::string>& names,
-                                       const schema& s) {
-  // TODO: implement
-  return record_type{};
+caf::optional<record_type>
+reader::make_layout(const std::vector<std::string>& names) {
+  for (auto& t : schema_) {
+    auto r = caf::get_if<record_type>(&t);
+    if (r) {
+      auto result = [&]() -> caf::optional<record_type> {
+        std::vector<record_field> result_raw;
+        for (auto& name : names) {
+          auto field = r->at(name);
+          if (field)
+            result_raw.emplace_back(name, *field);
+          else
+            return caf::none;
+        }
+        return record_type{result_raw};
+      }();
+      if (result)
+        return result->name(r->name());
+    } else if (names.size() == 1 && names[0] == t.name()) {
+      // Hoist naked type into record.
+      // TODO: Maybe this is actually not a good idea?
+      return record_type{{t.name(), t}}.name(t.name());
+    } // else skip
+  }
+  return caf::none;
 }
 
 template <class Iterator>
-caf::optional<rule<Iterator>>
-make_ordered_parser(const record_type& layout,
-                    table_slice_builder_ptr builder) {
-  // TODO: implement
-  return {};
+struct csv_parser_factory {
+  using result_type = erased_parser<Iterator>;
+
+  csv_parser_factory(const std::string& set_separator,
+                     table_slice_builder_ptr bptr)
+    : set_separator_{set_separator}, bptr_{std::move(bptr)} {
+  }
+
+  // TODO: special case for types that allow separator_ in their parser.
+  template <class T>
+  result_type operator()(const T&) {
+    if constexpr (has_parser_v<type_to_data<T>>) {
+      using value_type = type_to_data<T>;
+      return make_parser<value_type>{}->*[bptr_ = bptr_](const value_type& x) {
+        bptr_->add(make_data_view(x));
+      };
+    } else {
+      return {};
+    }
+  }
+
+  const std::string& set_separator_;
+  table_slice_builder_ptr bptr_;
+};
+
+template <class Iterator>
+caf::optional<erased_parser<Iterator>>
+make_csv_parser(const record_type& layout, table_slice_builder_ptr builder) {
+  erased_parser<Iterator> result;
+  auto v = csv_parser_factory<Iterator>{",", builder};
+  bool first = true;
+  for (auto& field : layout.fields) {
+    if (!first)
+      result = result >> ',';
+    else
+      first = false;
+    auto p = caf::visit(v, field.type);
+    result = result >> -p;
+  }
+  return result;
 }
 
 caf::error reader::read_header(std::string_view line) {
@@ -191,14 +248,12 @@ caf::error reader::read_header(std::string_view line) {
   std::vector<std::string> columns;
   if (!p(line, columns))
     return make_error(ec::parse_error, "unable to parse csv header");
-  auto layout = make_layout(columns, schema_);
+  auto layout = make_layout(columns);
   if (!layout)
-    return make_error(ec::parse_error, "unable to parse csv header");
+    return make_error(ec::parse_error, "unable to derive a layout");
   if (!reset_builder(*layout))
-    return make_error(ec::parse_error,
-                      "unable to create a bulider for parsed layout at",
-                      lines_->line_number());
-  parser_ = make_ordered_parser<iterator_type>(*layout, builder_);
+    return make_error(ec::parse_error, "unable to create a bulider for layout");
+  parser_ = make_csv_parser<iterator_type>(*layout, builder_);
   if (!parser_)
     return make_error(ec::parse_error, "unable generate a parser");
   return caf::none;
@@ -218,8 +273,8 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
     if (lines_->done())
       return finish(cons, make_error(ec::end_of_input, "input exhausted"));
     auto& line = lines_->get();
-    // if (!p(line))
-    //  return make_error(ec::type_clash, "unable to parse csv line");
+    if (!p(line))
+      return make_error(ec::type_clash, "unable to parse CSV line");
     produced++;
     if (builder_->rows() == max_slice_size)
       if (auto err = finish(cons))

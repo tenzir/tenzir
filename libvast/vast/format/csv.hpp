@@ -17,19 +17,7 @@
 
 #include "vast/config.hpp"
 
-#include "vast/concept/parseable/core.hpp"
-#include "vast/concept/parseable/numeric.hpp"
-#include "vast/concept/parseable/stream.hpp"
-#include "vast/concept/parseable/string.hpp"
-#include "vast/concept/parseable/to.hpp"
-#include "vast/concept/parseable/vast/address.hpp"
-#include "vast/concept/parseable/vast/offset.hpp"
-#include "vast/concept/parseable/vast/si.hpp"
-#include "vast/concept/parseable/vast/time.hpp"
-
-#include "vast/concept/parseable/core/operators.hpp"
 #include "vast/concept/parseable/core/rule.hpp"
-#include "vast/concept/parseable/string.hpp"
 #include "vast/concept/printable/core.hpp"
 #include "vast/concept/printable/numeric.hpp"
 #include "vast/concept/printable/string.hpp"
@@ -81,12 +69,20 @@ protected:
 
 private:
   using iterator_type = std::string::const_iterator;
-  using parser_type = rule<iterator_type>;
+  using parser_type = erased_parser<iterator_type>;
+
+  caf::optional<record_type> make_layout(const std::vector<std::string>& names);
+
   caf::error read_header(std::string_view line);
 
   std::unique_ptr<std::istream> input_;
   std::unique_ptr<detail::line_range> lines_;
   vast::schema schema_;
+  struct rec_table {
+    record_type type;
+    std::vector<std::string> sorted;
+  };
+  std::vector<rec_table> records;
   caf::optional<parser_type> parser_;
 };
 
