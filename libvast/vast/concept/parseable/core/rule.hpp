@@ -24,10 +24,37 @@ namespace vast {
 namespace detail {
 
 template <class Iterator, class Attribute>
+struct abstract_rule;
+
+template <class Iterator>
+struct abstract_rule<Iterator, unused_type> {
+  virtual ~abstract_rule() = default;
+  virtual bool parse(Iterator& f, const Iterator& l, unused_type) const = 0;
+};
+
+template <class Iterator, class Attribute>
 struct abstract_rule {
   virtual ~abstract_rule() = default;
   virtual bool parse(Iterator& f, const Iterator& l, unused_type) const = 0;
   virtual bool parse(Iterator& f, const Iterator& l, Attribute& a) const = 0;
+};
+
+template <class Parser, class Iterator, class Attribute>
+class rule_definition;
+
+template <class Parser, class Iterator>
+class rule_definition<Parser, Iterator, unused_type>
+  : public abstract_rule<Iterator, unused_type> {
+public:
+  explicit rule_definition(Parser p) : parser_(std::move(p)) {
+  }
+
+  bool parse(Iterator& f, const Iterator& l, unused_type) const override {
+    return parser_(f, l, unused);
+  }
+
+private:
+  Parser parser_;
 };
 
 template <class Parser, class Iterator, class Attribute>
@@ -71,25 +98,24 @@ public:
   rule() : parser_{std::make_shared<rule_pointer>()} {
   }
 
-  template <
-    class RHS,
-    class = std::enable_if_t<
-      is_parser_v<std::decay_t<RHS>> && !detail::is_same_or_derived_v<rule, RHS>
-    >
-  >
-  rule(RHS&& rhs)
-    : rule{} {
+  template <class RHS, class = std::enable_if_t<
+                         is_parser_v<std::decay_t<
+                           RHS>> && !detail::is_same_or_derived_v<rule, RHS>>>
+  rule(RHS&& rhs) : rule{} {
     make_parser<RHS>(std::forward<RHS>(rhs));
   }
 
   template <class RHS>
   auto operator=(RHS&& rhs)
-    -> std::enable_if_t<is_parser_v<std::decay_t<RHS>>
-                        && !detail::is_same_or_derived_v<rule, RHS>> {
+    -> std::enable_if_t<is_parser_v<std::decay_t<
+                          RHS>> && !detail::is_same_or_derived_v<rule, RHS>> {
     make_parser<RHS>(std::forward<RHS>(rhs));
   }
 
-  bool parse(Iterator& f, const Iterator& l, unused_type) const {
+  // This overload must not be available if Attribute == unused_type.
+  template <class Instantiate_on_use = bool>
+  std::enable_if_t<!std::is_same_v<Attribute, unused_type>, Instantiate_on_use>
+  parse(Iterator& f, const Iterator& l, unused_type) const {
     VAST_ASSERT(*parser_ != nullptr);
     return (*parser_)->parse(f, l, unused);
   }
@@ -104,4 +130,3 @@ private:
 };
 
 } // namespace vast
-
