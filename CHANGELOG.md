@@ -10,6 +10,10 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## [Unreleased]
 
+- 🐞 The Zeek reader failed upon encountering logs with a `double` column, as
+  it occurs in `capture_loss.log`. The Zeek parser generator has been fixed to
+  handle such types correctly.
+
 - 🐞 Some queries returned duplicate events because the archive did not filter
   the result set properly. This no longer occurs after fixing the table slice
   filtering logic.
