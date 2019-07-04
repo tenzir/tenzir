@@ -93,14 +93,14 @@ tests:
         input: data/zeek/conn.log.gz
       - command: export ascii 'resp_h == 192.168.1.104'
   Server Basic bgpdump:
-    tags: [server, import-export, bgpdump, disabled]
+    tags: [server, import-export, bgpdump]
     fixture: ServerTester
     steps:
       - command: import -b bgpdump
         input: data/bgpdump/updates.20180530.bgpdump.gz
       - command: export ascii '114.215.46.175 in prefix'
   Query Operators:
-    tags: [server, operator, disabled]
+    tags: [server, operator]
     fixture: ServerTester
     steps:
       - command: import -b zeek
@@ -149,7 +149,7 @@ tests:
 
   Manual 1:
     condition: 'import -h 2>&1 | grep -q pcap'
-    tags: [examples, disabled]
+    tags: [examples]
     fixture: ServerTester
     steps:
       - command: import -b pcap
@@ -159,7 +159,7 @@ tests:
 
   Manual 1 node:
     condition: 'import -h 2>&1 | grep -q pcap'
-    tags: [examples, disabled]
+    tags: [examples]
     steps:
       - command: import -N pcap
         input: data/pcap/example.pcap.gz
