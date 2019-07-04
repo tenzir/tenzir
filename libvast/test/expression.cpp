@@ -316,10 +316,7 @@ TEST(resolve) {
     return result;
   };
   auto expr = to_expr("(x == 5 && y == T) || (x == 5 && y == F)"); // tautology
-  auto t = record_type{
-    {"x", count_type{}},
-    {"y", boolean_type{}}
-  }.name("foo");
+  auto t = record_type{{"x", count_type{}}, {"y", bool_type{}}}.name("foo");
   auto xs = resolve(expr, t);
   decltype(xs) expected;
   auto concat = [](auto&& xs, auto&& ys) {

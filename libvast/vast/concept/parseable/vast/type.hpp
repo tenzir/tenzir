@@ -83,7 +83,7 @@ struct type_parser : parser<type_parser> {
     static auto attr_list = *(ws >> attr);
     // Basic types
     static auto basic_type_parser
-      = "bool" >> attr_list      ->* to_basic_type<boolean_type>
+      = "bool" >> attr_list      ->* to_basic_type<bool_type>
       | "int" >> attr_list       ->* to_basic_type<integer_type>
       | "count" >> attr_list     ->* to_basic_type<count_type>
       | "real" >> attr_list      ->* to_basic_type<real_type>

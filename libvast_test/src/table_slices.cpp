@@ -35,20 +35,13 @@ table_slices::table_slices() {
   factory<table_slice>::initialize();
   // Define our test layout.
   layout = record_type{
-    {"a", boolean_type{}},
-    {"b", integer_type{}},
-    {"c", count_type{}},
-    {"d", real_type{}},
-    {"e", timespan_type{}},
-    {"f", timestamp_type{}},
-    {"g", string_type{}},
-    {"h", pattern_type{}},
-    {"i", address_type{}},
-    {"j", subnet_type{}},
-    {"k", port_type{}},
-    {"l", vector_type{count_type{}}},
-    {"m", set_type{boolean_type{}}},
-    {"n", map_type{count_type{}, boolean_type{}}},
+    {"a", bool_type{}},           {"b", integer_type{}},
+    {"c", count_type{}},          {"d", real_type{}},
+    {"e", timespan_type{}},       {"f", timestamp_type{}},
+    {"g", string_type{}},         {"h", pattern_type{}},
+    {"i", address_type{}},        {"j", subnet_type{}},
+    {"k", port_type{}},           {"l", vector_type{count_type{}}},
+    {"m", set_type{bool_type{}}}, {"n", map_type{count_type{}, bool_type{}}},
   };
   // Initialize test data.
   auto rows = std::vector<std::string>{

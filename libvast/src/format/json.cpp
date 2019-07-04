@@ -37,7 +37,7 @@ struct convert {
   using expected = caf::expected<T>;
   using json = vast::json;
 
-  expected<data> operator()(json::boolean b, const boolean_type&) const {
+  expected<data> operator()(json::boolean b, const bool_type&) const {
     return b;
   }
 

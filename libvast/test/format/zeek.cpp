@@ -193,7 +193,7 @@ FIXTURE_SCOPE(zeek_reader_tests, fixture)
 TEST(zeek data parsing) {
   using namespace std::chrono;
   data d;
-  CHECK(zeek_parse(boolean_type{}, "T", d));
+  CHECK(zeek_parse(bool_type{}, "T", d));
   CHECK(d == true);
   CHECK(zeek_parse(integer_type{}, "-49329", d));
   CHECK(d == integer{-49329});

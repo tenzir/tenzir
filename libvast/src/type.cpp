@@ -525,7 +525,7 @@ struct data_congruence_checker {
     return true;
   }
 
-  bool operator()(const boolean_type&, boolean) const {
+  bool operator()(const bool_type&, bool) const {
     return true;
   }
 

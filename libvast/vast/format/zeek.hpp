@@ -57,7 +57,7 @@ struct zeek_parser {
     return false;
   }
 
-  bool operator()(const boolean_type&) const {
+  bool operator()(const bool_type&) const {
     return parse(parsers::tf);
   }
 
@@ -133,7 +133,7 @@ struct zeek_parser_factory {
     return {};
   }
 
-  result_type operator()(const boolean_type&) const {
+  result_type operator()(const bool_type&) const {
     return parsers::tf;
   }
 

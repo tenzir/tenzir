@@ -85,7 +85,7 @@ auto add_container_index_factory() {
 } // namespace <anonymous>
 
 void factory_traits<value_index>::initialize() {
-  add_value_index_factory<boolean_type, arithmetic_index<boolean>>();
+  add_value_index_factory<bool_type, arithmetic_index<bool>>();
   add_arithmetic_index_factory<integer_type>();
   add_arithmetic_index_factory<count_type>();
   add_arithmetic_index_factory<real_type>();

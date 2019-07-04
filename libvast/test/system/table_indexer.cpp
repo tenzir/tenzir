@@ -101,7 +101,7 @@ TEST(record type) {
   MESSAGE("generate table layout for record type");
   record_type layout {
     {"x.a", integer_type{}},
-    {"x.b", boolean_type{}},
+    {"x.b", bool_type{}},
     {"y.a", string_type{}},
   };
   init(make_table_indexer(sys, directory, layout));

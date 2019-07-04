@@ -31,10 +31,9 @@ namespace {
 struct fixture {
   fixture() {
     // Type
-    t = record_type{
-      {"x", boolean_type{}},
-      {"y", count_type{}},
-      {"z", integer_type{}}};
+    t = record_type{{"x", bool_type{}},
+                    {"y", count_type{}},
+                    {"z", integer_type{}}};
     t.name("foo");
     // Data
     r.emplace_back(true);

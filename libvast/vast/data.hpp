@@ -45,13 +45,14 @@ class json;
 
 namespace detail {
 
+// clang-format off
 template <class T>
 using to_data_type = std::conditional_t<
   std::is_floating_point_v<T>,
   real,
   std::conditional_t<
-    std::is_same_v<T, boolean>,
-    boolean,
+    std::is_same_v<T, bool>,
+    bool,
     std::conditional_t<
       std::is_unsigned_v<T>,
       count,
@@ -81,6 +82,7 @@ using to_data_type = std::conditional_t<
     >
   >
 >;
+// clang-format on
 
 } // namespace detail
 
@@ -93,9 +95,10 @@ using to_data_type = detail::to_data_type<std::decay_t<T>>;
 class data : detail::totally_ordered<data>,
              detail::addable<data> {
 public:
+  // clang-format off
   using types = caf::detail::type_list<
     caf::none_t,
-    boolean,
+    bool,
     integer,
     count,
     real,
@@ -111,6 +114,7 @@ public:
     set,
     map
   >;
+  // clang-format on
 
   /// The sum type of all possible JSON types.
   using variant = caf::detail::tl_apply_t<types, caf::variant>;
@@ -185,7 +189,7 @@ struct data_traits {
     using type = name##_type;                                                  \
   }
 
-VAST_DATA_TRAIT(boolean);
+VAST_DATA_TRAIT(bool);
 VAST_DATA_TRAIT(integer);
 VAST_DATA_TRAIT(count);
 VAST_DATA_TRAIT(real);

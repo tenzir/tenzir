@@ -44,7 +44,7 @@ expected<type> parse_type(std::string_view zeek_type) {
   if (zeek_type == "enum" || zeek_type == "string" || zeek_type == "file")
     t = string_type{};
   else if (zeek_type == "bool")
-    t = boolean_type{};
+    t = bool_type{};
   else if (zeek_type == "int")
     t = integer_type{};
   else if (zeek_type == "count")
