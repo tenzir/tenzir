@@ -15,6 +15,8 @@
 
 
 #include <ostream>
+#include <string_view>
+#include <type_traits>
 
 #include "vast/concept/parseable/core.hpp"
 #include "vast/concept/parseable/numeric.hpp"
@@ -200,6 +202,47 @@ reader::make_layout(const std::vector<std::string>& names) {
   return caf::none;
 }
 
+namespace {
+
+template <class Iterator, class Attribute>
+struct container_parser_builder {
+  using result_type = rule<Iterator, Attribute>;
+
+  explicit container_parser_builder(const std::string& set_separator)
+    : set_separator_{set_separator} {
+    // nop
+  }
+
+  template <class T>
+  result_type operator()(const T& t) {
+    if constexpr (std::is_same_v<T, string_type>) {
+      return +(parsers::any - set_separator_)->*[](std::string x) {
+        return data{std::move(x)};
+      };
+    } else if constexpr (std::is_same_v<T, pattern_type>) {
+      return +(parsers::any - set_separator_)->*[](std::string x) {
+        return data{std::move(x)};
+      };
+    } else if constexpr (std::is_same_v<T, set_type>) {
+      auto set_insert = [](std::vector<Attribute> v) {
+        return set(std::make_move_iterator(v.begin()),
+                   std::make_move_iterator(v.end()));
+      };
+      return (caf::visit(*this, t.value_type) % set_separator_)->*set_insert;
+    } else if constexpr (std::is_same_v<T, vector_type>) {
+      return (caf::visit(*this, t.value_type) % set_separator_)
+               ->*[](const std::vector<Attribute> v) { return v; };
+    } else if constexpr (has_parser_v<type_to_data<T>>) {
+      using value_type = type_to_data<T>;
+      return make_parser<value_type>{}->*[](value_type x) { return x; };
+    } else {
+      return {};
+    }
+  }
+
+  const std::string& set_separator_;
+};
+
 template <class Iterator>
 struct csv_parser_factory {
   using result_type = erased_parser<Iterator>;
@@ -207,12 +250,26 @@ struct csv_parser_factory {
   csv_parser_factory(const std::string& set_separator,
                      table_slice_builder_ptr bptr)
     : set_separator_{set_separator}, bptr_{std::move(bptr)} {
+    // nop
   }
 
-  // TODO: special case for types that allow separator_ in their parser.
   template <class T>
-  result_type operator()(const T&) {
-    if constexpr (has_parser_v<type_to_data<T>>) {
+  result_type operator()(const T& t) {
+    if constexpr (std::is_same_v<T, string_type>) {
+      return +(parsers::any - set_separator_)->*[bptr_ = bptr_](std::string x) {
+        bptr_->add(make_data_view(x));
+      };
+    } else if constexpr (std::is_same_v<T, pattern_type>) {
+      return +(parsers::any - set_separator_)->*[bptr_ = bptr_](std::string x) {
+        bptr_->add(make_data_view(x));
+      };
+    } else if constexpr (std::is_same_v<T, set_type>) {
+      return container_parser_builder<Iterator, data>{set_separator_}(t)->*
+             [bptr_ = bptr_](const data& s) { bptr_->add(make_data_view(s)); };
+    } else if constexpr (std::is_same_v<T, vector_type>) {
+      return container_parser_builder<Iterator, data>{set_separator_}(t)->*
+             [bptr_ = bptr_](const data& v) { bptr_->add(make_data_view(v)); };
+    } else if constexpr (has_parser_v<type_to_data<T>>) {
       using value_type = type_to_data<T>;
       return make_parser<value_type>{}->*[bptr_ = bptr_](const value_type& x) {
         bptr_->add(make_data_view(x));
@@ -242,6 +299,8 @@ make_csv_parser(const record_type& layout, table_slice_builder_ptr builder) {
   }
   return result;
 }
+
+} // namespace
 
 caf::error reader::read_header(std::string_view line) {
   auto p = schema_parser::id % ',';
