@@ -168,19 +168,14 @@ auto inspect(Inspector& f, curried_predicate& x) {
 /// @returns a curried version of `pred`.
 /// @relates predicate
 /// @relates curried_predicate
-inline curried_predicate curried(const predicate& pred) {
-  VAST_ASSERT(caf::holds_alternative<data>(pred.rhs));
-  return {pred.op, caf::get<data>(pred.rhs)};
-}
+curried_predicate curried(const predicate& pred);
 
 /// A sequence of AND expressions.
 struct conjunction : std::vector<expression> {
   using super = std::vector<expression>;
   using super::vector;
-  explicit conjunction(const super& other) : super{other} {
-  }
-  explicit conjunction(super&& other) noexcept : super{std::move(other)} {
-  }
+  explicit conjunction(const super& other);
+  explicit conjunction(super&& other) noexcept;
 };
 
 /// @relates conjunction
@@ -194,10 +189,8 @@ auto inspect(Inspector& f, conjunction& x) {
 struct disjunction : std::vector<expression> {
   using super = std::vector<expression>;
   using super::vector;
-  explicit disjunction(const super& other) : super{other} {
-  }
-  explicit disjunction(super&& other) noexcept : super{std::move(other)} {
-  }
+  explicit disjunction(const super& other);
+  explicit disjunction(super&& other) noexcept;
 };
 
 /// @relates conjunction
