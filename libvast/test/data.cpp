@@ -67,6 +67,7 @@ TEST(get) {
 
 TEST(flatten) {
   MESSAGE("flatten");
+  // clang-format off
   auto t = record_type{
     {"a", string_type{}},
     {"b", record_type{
@@ -77,8 +78,9 @@ TEST(flatten) {
       {"f", address_type{}},
       {"g", port_type{}}
     }},
-    {"f", boolean_type{}}
+    {"f", bool_type{}}
   };
+  // clang-format on
   auto xs = vector{"foo", vector{-42, vector{1, 2, 3}}, caf::none, true};
   auto ys = vector{"foo", -42, vector{1, 2, 3}, caf::none, caf::none, true};
   auto zs = flatten(xs, t);
@@ -92,8 +94,8 @@ TEST(flatten) {
 
 TEST(construction) {
   CHECK(caf::holds_alternative<caf::none_t>(data{}));
-  CHECK(caf::holds_alternative<boolean>(data{true}));
-  CHECK(caf::holds_alternative<boolean>(data{false}));
+  CHECK(caf::holds_alternative<bool>(data{true}));
+  CHECK(caf::holds_alternative<bool>(data{false}));
   CHECK(caf::holds_alternative<integer>(data{0}));
   CHECK(caf::holds_alternative<integer>(data{42}));
   CHECK(caf::holds_alternative<integer>(data{-42}));
@@ -142,15 +144,15 @@ TEST(relational_operators) {
   CHECK(!(d1 > d2));
 }
 
-TEST(addtion) {
+TEST(addition) {
   auto x = data{42};
   auto y = data{1};
   CHECK_EQUAL(x + y, data{43});
   y = caf::none;
   CHECK_EQUAL(x + y, x);
   y = vector{"foo", 3.14};
-  CHECK_EQUAL(x + y, (vector{42, "foo", 3.14}));
-  CHECK_EQUAL(y + x, (vector{"foo", 3.14, 42}));
+  CHECK_EQUAL(x + y, vector({42, "foo", 3.14}));
+  CHECK_EQUAL(y + x, vector({"foo", 3.14, 42}));
 }
 
 TEST(evaluation) {

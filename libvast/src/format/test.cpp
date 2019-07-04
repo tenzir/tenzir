@@ -49,8 +49,7 @@ expected<distribution> make_distribution(const type& t) {
     if (holds_alternative<integer_type>(t))
       return {std::uniform_int_distribution<integer>{static_cast<integer>(p0),
                                                      static_cast<integer>(p1)}};
-    else if (holds_alternative<boolean_type>(t)
-             || holds_alternative<count_type>(t)
+    else if (holds_alternative<bool_type>(t) || holds_alternative<count_type>(t)
              || holds_alternative<string_type>(t))
       return {std::uniform_int_distribution<count>{static_cast<count>(p0),
                                                    static_cast<count>(p1)}};
@@ -153,7 +152,7 @@ struct randomizer {
     x += std::chrono::duration_cast<timespan>(double_seconds(sample()));
   }
 
-  void operator()(const boolean_type&, boolean& b) {
+  void operator()(const bool_type&, bool& b) {
     lcg gen{static_cast<lcg::result_type>(sample())};
     std::uniform_int_distribution<count> unif{0, 1};
     b = unif(gen);

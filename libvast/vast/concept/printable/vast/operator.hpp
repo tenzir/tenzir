@@ -88,11 +88,11 @@ struct relational_operator_printer : printer<relational_operator_printer> {
   }
 };
 
-struct boolean_operator_printer : printer<boolean_operator_printer> {
-  using attribute = boolean_operator;
+struct bool_operator_printer : printer<bool_operator_printer> {
+  using attribute = bool_operator;
 
   template <class Iterator>
-  bool print(Iterator& out, const boolean_operator& op) const {
+  bool print(Iterator& out, const bool_operator& op) const {
     switch (op) {
       default:
         die("missing case for boolean operator");
@@ -117,8 +117,8 @@ struct printer_registry<relational_operator> {
 };
 
 template <>
-struct printer_registry<boolean_operator> {
-  using type = boolean_operator_printer;
+struct printer_registry<bool_operator> {
+  using type = bool_operator_printer;
 };
 
 } // namespace vast

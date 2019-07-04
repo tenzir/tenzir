@@ -72,7 +72,7 @@ std::string_view eve_log
 FIXTURE_SCOPE(zeek_reader_tests, fixtures::deterministic_actor_system)
 
 TEST(json to data) {
-  auto layout = record_type{{"b", boolean_type{}},
+  auto layout = record_type{{"b", bool_type{}},
                             {"c", count_type{}},
                             {"r", real_type{}},
                             {"i", integer_type{}},

@@ -15,128 +15,144 @@
 #include "vast/json.hpp"
 
 #include "vast/detail/assert.hpp"
+#include "vast/detail/narrow.hpp"
 #include "vast/detail/overload.hpp"
+#include "vast/detail/type_traits.hpp"
 
 namespace vast {
 namespace {
 
 struct adder {
-  template <class T>
-  std::enable_if_t<
-    !(std::is_same<T, caf::none_t>{}
-      || std::is_same<T, vector>{}
-      || std::is_same<T, set>{})
-  >
-  operator()(caf::none_t, const T& x) const {
-    self = x;
-  }
-
-  void operator()(caf::none_t, caf::none_t) const {
-    // nop
-  }
-
-  template <class T>
-  std::enable_if_t<
-    !(std::is_same<T, vector>{} || std::is_same<T, set>{})
-      && (std::is_same<T, boolean>{}
-           || std::is_same<T, integer>{}
-           || std::is_same<T, count>{}
-           || std::is_same<T, real>{}
-           || std::is_same<T, timespan>{}
-           || std::is_same<T, std::string>{})
-  >
-  operator()(T& x, const T& y) const {
-    x += y;
+  template <class T, class U>
+  void lift(T& x, const U& y) {
+    static_assert(!detail::is_any_v<T, vector, set>);
+    static_assert(detail::is_any_v<U, vector, set>);
+    auto new_self = data{U{std::move(x)}};
+    adder f{new_self};
+    f(caf::get<U>(new_self), y);
+    self = std::move(new_self);
   }
 
   template <class T, class U>
-  std::enable_if_t<
-    !(std::is_same<T, U>{} || std::is_same<T, vector>{}
-                           || std::is_same<T, set>{})
-      && (std::is_same<T, boolean>{}
-          || std::is_same<T, integer>{}
-          || std::is_same<T, count>{}
-          || std::is_same<T, real>{}
-          || std::is_same<T, timespan>{}
-          || std::is_same<T, std::string>{})
-  >
-  operator()(T&, const U&) const {
-    // impossible
-  }
-
-  void operator()(timestamp&, timestamp) const {
-    // impossible
-  }
-
-  void operator()(timestamp& ts, timespan x) const {
-    ts += x;
+  void add_numeric(T& x, const U& y) {
+    if constexpr (detail::is_any_v<U, integer, count, real>) {
+      x += detail::narrow_cast<T>(y);
+    } else if constexpr (detail::is_any_v<U, vector, set>) {
+      lift(x, y);
+    }
   }
 
   template <class T>
-  std::enable_if_t<
-    !(std::is_same<T, timestamp>{}
-      || std::is_same<T, timespan>{}
-      || std::is_same<T, vector>{}
-      || std::is_same<T, set>{})
-  >
-  operator()(timestamp&, const T&) const {
-    // impossible
-  }
-
-  template <class T, class U>
-  std::enable_if_t<
-    !(std::is_same<U, vector>{} || std::is_same<U, set>{})
-      && (std::is_same<T, pattern>{}
-          || std::is_same<T, address>{}
-          || std::is_same<T, subnet>{}
-          || std::is_same<T, port>{}
-          || std::is_same<T, map>{})
-  >
-  operator()(T&, const U&) const {
-    // impossible
+  void operator()(caf::none_t&, const T& y) {
+    self = data{y};
   }
 
   template <class T>
-  std::enable_if_t<
-    !(std::is_same<T, vector>{} || std::is_same<T, set>{})
-  >
-  operator()(vector& lhs, const T& rhs) const {
-    lhs.emplace_back(rhs);
-  }
-
-  void operator()(vector& lhs, const vector& rhs) const {
-    std::copy(rhs.begin(), rhs.end(), std::back_inserter(lhs));
+  void operator()(bool& x, const T& y) {
+    if constexpr (detail::is_any_v<T, vector, set>) {
+      lift(x, y);
+    }
   }
 
   template <class T>
-  std::enable_if_t<
-    !(std::is_same<T, vector>{} || std::is_same<T, set>{})
-  >
-  operator()(set& lhs, const T& rhs) const {
-    lhs.emplace(rhs);
+  void operator()(integer& x, const T& y) {
+    add_numeric(x, y);
   }
 
-  void operator()(set& lhs, const set& rhs) const {
-    std::copy(rhs.begin(), rhs.end(), std::inserter(lhs, lhs.end()));
+  // Also handles enumeration, because enumeration is an alias for count.
+  template <class T>
+  void operator()(count& x, const T& y) {
+    add_numeric(x, y);
   }
 
   template <class T>
-  std::enable_if_t<!std::is_same<T, vector>{}>
-  operator()(T&, const vector& rhs) const {
-    vector v;
-    v.reserve(rhs.size() + 1);
-    v.push_back(std::move(self));
-    std::copy(rhs.begin(), rhs.end(), std::back_inserter(v));
-    self = std::move(v);
+  void operator()(real& x, const T& y) {
+    add_numeric(x, y);
   }
 
   template <class T>
-  std::enable_if_t<!std::is_same<T, set>{}>
-  operator()(T&, const set& rhs) const {
-    set s;
-    s.insert(std::move(self));
-    std::copy(rhs.begin(), rhs.end(), std::inserter(s, s.end()));
-    self = std::move(s);
+  void operator()(timespan& x, const T& y) {
+    if constexpr (std::is_same_v<T, timespan>) {
+      x += y;
+    } else if constexpr (detail::is_any_v<T, vector, set>) {
+      lift(x, y);
+    }
+  }
+
+  template <class T>
+  void operator()(timestamp& x, const T& y) {
+    if constexpr (std::is_same_v<T, timespan>) {
+      x += y;
+    } else if constexpr (detail::is_any_v<T, vector, set>) {
+      lift(x, y);
+    }
+  }
+
+  template <class T>
+  void operator()(std::string& x, const T& y) {
+    if constexpr (std::is_same_v<T, std::string>) {
+      x.insert(x.end(), y.begin(), y.end());
+    } else if constexpr (detail::is_any_v<T, vector, set>) {
+      lift(x, y);
+    }
+  }
+
+  template <class T>
+  void operator()(pattern& x, const T& y) {
+    if constexpr (detail::is_any_v<T, vector, set>) {
+      lift(x, y);
+    }
+  }
+
+  template <class T>
+  void operator()(address& x, const T& y) {
+    if constexpr (detail::is_any_v<T, vector, set>) {
+      lift(x, y);
+    }
+  }
+
+  template <class T>
+  void operator()(subnet& x, const T& y) {
+    if constexpr (detail::is_any_v<T, vector, set>) {
+      lift(x, y);
+    }
+  }
+
+  template <class T>
+  void operator()(port& x, const T& y) {
+    if constexpr (detail::is_any_v<T, integer, count>) {
+      auto n = x.number() + y;
+      x.number(detail::narrow_cast<port::number_type>(n));
+    } else if constexpr (detail::is_any_v<T, vector, set>) {
+      lift(x, y);
+    }
+  }
+
+  template <class T>
+  void operator()(vector& x, const T& y) {
+    if constexpr (detail::is_any_v<T, vector, set>) {
+      x.insert(x.end(), y.begin(), y.end());
+    } else {
+      x.emplace_back(y);
+    }
+  }
+
+  template <class T>
+  void operator()(set& x, const T& y) {
+    if constexpr (detail::is_any_v<T, vector, set>) {
+      x.insert(y.begin(), y.end());
+    } else {
+      x.insert(data{y});
+    }
+  }
+
+  template <class T>
+  void operator()(map& x, const T& y) {
+    if constexpr (std::is_same_v<T, map>) {
+      x.insert(y.begin(), y.end());
+    } else if constexpr (detail::is_any_v<T, vector, set>) {
+      lift(x, y);
+    }
   }
 
   data& self;

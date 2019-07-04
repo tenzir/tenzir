@@ -26,7 +26,7 @@
 using namespace vast;
 using namespace std::chrono_literals;
 
-TEST(boolean bitmap index) {
+TEST(bool bitmap index) {
   bitmap_index<bool, singleton_coder<null_bitmap>> bmi;
   bmi.append(true);
   bmi.append(false);

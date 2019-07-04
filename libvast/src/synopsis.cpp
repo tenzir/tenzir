@@ -19,7 +19,7 @@
 #include <caf/error.hpp>
 #include <caf/serializer.hpp>
 
-#include "vast/boolean_synopsis.hpp"
+#include "vast/bool_synopsis.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
 #include "vast/synopsis_factory.hpp"

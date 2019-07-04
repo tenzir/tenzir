@@ -222,10 +222,10 @@ TEST(serialization) {
   CHECK_ROUNDTRIP(meta_idx);
 }
 
-TEST(meta index with boolean synopsis) {
+TEST(meta index with bool synopsis) {
   MESSAGE("generate slice data and add it to the meta index");
   meta_index meta_idx;
-  auto layout = record_type{{"x", boolean_type{}}};
+  auto layout = record_type{{"x", bool_type{}}};
   auto builder = default_table_slice_builder::make(layout);
   CHECK(builder->add(make_data_view(true)));
   auto slice = builder->finish();

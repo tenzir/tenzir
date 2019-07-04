@@ -56,7 +56,7 @@ class value_index;
 struct address_type;
 struct alias_type;
 struct attribute_extractor;
-struct boolean_type;
+struct bool_type;
 struct count_type;
 struct curried_predicate;
 struct data_extractor;

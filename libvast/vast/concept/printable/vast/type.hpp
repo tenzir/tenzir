@@ -67,7 +67,7 @@ struct printer_registry<enumeration_type> {
   };
 
 VAST_DEFINE_BASIC_TYPE_PRINTER(none_type, "none")
-VAST_DEFINE_BASIC_TYPE_PRINTER(boolean_type, "bool")
+VAST_DEFINE_BASIC_TYPE_PRINTER(bool_type, "bool")
 VAST_DEFINE_BASIC_TYPE_PRINTER(integer_type, "int")
 VAST_DEFINE_BASIC_TYPE_PRINTER(count_type, "count")
 VAST_DEFINE_BASIC_TYPE_PRINTER(real_type, "real")
@@ -132,8 +132,9 @@ struct type_printer : printer<type_printer<Policy>> {
         return false;
     }
     if (show_type || t.name().empty()) {
+      // clang-format off
       auto p = none_type_printer{}
-             | boolean_type_printer{}
+             | bool_type_printer{}
              | integer_type_printer{}
              | count_type_printer{}
              | real_type_printer{}
@@ -151,6 +152,7 @@ struct type_printer : printer<type_printer<Policy>> {
              | record_type_printer{}
              | alias_type_printer{}
              ;
+      // clang-format on
       return p(out, t);
     }
     return true;

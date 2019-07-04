@@ -117,11 +117,8 @@ struct expression_parser : parser<expression_parser> {
   template <class Iterator>
   static auto make() {
     using namespace parser_literals;
-    using raw_expr =
-      std::tuple<
-        expression,
-        std::vector<std::tuple<boolean_operator, expression>>
-      >;
+    using chain = std::vector<std::tuple<bool_operator, expression>>;
+    using raw_expr = std::tuple<expression, chain>;
     // Converts a "raw" chain of sub-expressions and transforms it into an
     // expression tree.
     auto to_expr = [](raw_expr expr) -> expression {
@@ -156,6 +153,7 @@ struct expression_parser : parser<expression_parser> {
     auto negate_expr = [](expression expr) { return negation{expr}; };
     rule<Iterator, expression> expr;
     rule<Iterator, expression> group;
+    // clang-format off
     group
       = '(' >> ws >> expr >> ws >> ')'
       | '!' >> ws >> parsers::predicate ->* negate_pred
@@ -169,6 +167,7 @@ struct expression_parser : parser<expression_parser> {
     expr
       = (group >> *(ws >> and_or >> ws >> group)) ->* to_expr
       ;
+    // clang-format on
     return expr;
   }
 

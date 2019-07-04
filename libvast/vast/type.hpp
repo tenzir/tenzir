@@ -49,10 +49,11 @@ namespace vast {
 
 // -- type hierarchy ----------------------------------------------------------
 
+// clang-format off
 /// @relates type
 using concrete_types = caf::detail::type_list<
   none_type,
-  boolean_type,
+  bool_type,
   integer_type,
   count_type,
   real_type,
@@ -70,6 +71,7 @@ using concrete_types = caf::detail::type_list<
   record_type,
   alias_type
 >;
+// clang-format on
 
 using type_id_type = int8_t;
 
@@ -399,7 +401,7 @@ struct none_type final : basic_type<none_type> {};
 
 /// A type for true/false data.
 /// @relates type
-struct boolean_type final : basic_type<boolean_type> {};
+struct bool_type final : basic_type<bool_type> {};
 
 /// A type for positive and negative integers.
 /// @relates type
@@ -699,7 +701,7 @@ struct type_traits {
     using data_type = name;                                                    \
   }
 
-VAST_TYPE_TRAIT(boolean);
+VAST_TYPE_TRAIT(bool);
 VAST_TYPE_TRAIT(integer);
 VAST_TYPE_TRAIT(count);
 VAST_TYPE_TRAIT(real);
@@ -971,7 +973,7 @@ namespace std {
 
 VAST_DEFINE_HASH_SPECIALIZATION(type);
 VAST_DEFINE_HASH_SPECIALIZATION(none_type);
-VAST_DEFINE_HASH_SPECIALIZATION(boolean_type);
+VAST_DEFINE_HASH_SPECIALIZATION(bool_type);
 VAST_DEFINE_HASH_SPECIALIZATION(integer_type);
 VAST_DEFINE_HASH_SPECIALIZATION(count_type);
 VAST_DEFINE_HASH_SPECIALIZATION(real_type);

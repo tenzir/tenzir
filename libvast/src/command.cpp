@@ -204,7 +204,7 @@ auto field_size(const caf::config_option_set& xs) {
     // 5 characters with "-X | ", the long name gets the 2 character prefix
     // "--", and finally we add an extra space plus the type name.
     auto tname = y.type_name();
-    auto tname_size = tname == "boolean" ? 0u : tname.size() + 3;
+    auto tname_size = tname == "bool" ? 0u : tname.size() + 3;
     return std::max(x, 4 + (y.short_names().size() * 5) + y.long_name().size()
                          + tname_size);
   });
@@ -225,7 +225,7 @@ void parameters_helptext(const command& cmd, std::ostream& out) {
     lst.insert(lst.end(), opt.long_name().begin(), opt.long_name().end());
     lst += ']';
     auto tname = opt.type_name();
-    if (tname != "boolean") {
+    if (tname != "bool") {
       lst += " <";
       lst.insert(lst.end(), tname.begin(), tname.end());
       lst += '>';

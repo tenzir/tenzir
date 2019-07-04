@@ -13,13 +13,13 @@
 
 #include "vast/synopsis_factory.hpp"
 
-#include "vast/boolean_synopsis.hpp"
+#include "vast/bool_synopsis.hpp"
 #include "vast/timestamp_synopsis.hpp"
 
 namespace vast {
 
 void factory_traits<synopsis>::initialize() {
-  factory<synopsis>::add<boolean_type, boolean_synopsis>();
+  factory<synopsis>::add<bool_type, bool_synopsis>();
   factory<synopsis>::add<timestamp_type, timestamp_synopsis>();
 }
 
