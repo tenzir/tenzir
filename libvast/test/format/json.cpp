@@ -154,10 +154,10 @@ TEST_DISABLED(suricata) {
     slices.emplace_back(std::move(ptr));
   };
   auto [err, num] = reader.read(2, 5, add_slice);
-  CHECK_EQUAL(err, caf::none);
-  CHECK_EQUAL(num, 2);
-  CHECK_EQUAL(slices[0]->rows(), 2);
+  CHECK_EQUAL(err, ec::end_of_input);
+  REQUIRE_EQUAL(num, 2);
   CHECK_EQUAL(slices[0]->columns(), 36);
+  CHECK_EQUAL(slices[0]->rows(), 2);
   CHECK(slices[0]->at(0, 19) == view<count>{4520});
 }
 
