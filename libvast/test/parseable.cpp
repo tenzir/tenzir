@@ -338,6 +338,32 @@ TEST(attribute compatibility with string sequences) {
   CHECK(str == "xyz");
 }
 
+TEST(type erased parser) {
+  using namespace parsers;
+  auto p = erased_parser<std::string::iterator>{'a'_p};
+  MESSAGE("from construction");
+  auto str = "a"s;
+  auto f = str.begin();
+  auto l = str.end();
+  CHECK(p(f, l, unused));
+  CHECK_EQUAL(f, l);
+  MESSAGE("extended with matching type");
+  p = p >> ',';
+  p = p >> 'b';
+  str += ",b"s;
+  f = str.begin();
+  l = str.end();
+  CHECK(p(f, l, unused));
+  CHECK_EQUAL(f, l);
+  MESSAGE("extended with different type");
+  p = p >> "hello!";
+  str += "hello!";
+  f = str.begin();
+  l = str.end();
+  CHECK(p(f, l, unused));
+  CHECK_EQUAL(f, l);
+}
+
 TEST(recursive rule) {
   using namespace parsers;
   rule<std::string::iterator, char> r;

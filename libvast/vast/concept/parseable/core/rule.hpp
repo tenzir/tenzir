@@ -29,12 +29,14 @@ struct abstract_rule;
 template <class Iterator>
 struct abstract_rule<Iterator, unused_type> {
   virtual ~abstract_rule() = default;
+  virtual abstract_rule* clone() const = 0;
   virtual bool parse(Iterator& f, const Iterator& l, unused_type) const = 0;
 };
 
 template <class Iterator, class Attribute>
 struct abstract_rule {
   virtual ~abstract_rule() = default;
+  virtual abstract_rule* clone() const = 0;
   virtual bool parse(Iterator& f, const Iterator& l, unused_type) const = 0;
   virtual bool parse(Iterator& f, const Iterator& l, Attribute& a) const = 0;
 };
@@ -48,6 +50,14 @@ class rule_definition<Parser, Iterator, unused_type>
 public:
   explicit rule_definition(Parser p) : parser_(std::move(p)) {
   }
+
+  rule_definition(const rule_definition& rhs) : parser_{rhs.parser_} {
+    // nop
+  }
+
+  rule_definition* clone() const override {
+    return new rule_definition(*this);
+  };
 
   bool parse(Iterator& f, const Iterator& l, unused_type) const override {
     return parser_(f, l, unused);
@@ -63,6 +73,14 @@ public:
   explicit rule_definition(Parser p) : parser_(std::move(p)) {
   }
 
+  rule_definition(const rule_definition& rhs) : parser_{rhs.parser_} {
+    // nop
+  }
+
+  rule_definition* clone() const override {
+    return new rule_definition(*this);
+  };
+
   bool parse(Iterator& f, const Iterator& l, unused_type) const override {
     return parser_(f, l, unused);
   }
@@ -76,6 +94,55 @@ private:
 };
 
 } // namespace detail
+
+/// A type-erased parser which can store any other parser. This type exhibits
+/// value semantics and can therefore not be used to construct recursive
+/// parsers.
+template <class Iterator>
+class erased_parser : public parser<erased_parser<Iterator>> {
+public:
+  using abstract_rule_type = detail::abstract_rule<Iterator, unused_type>;
+  using rule_pointer = std::unique_ptr<abstract_rule_type>;
+  using attribute = unused_type;
+
+  template <class RHS>
+  static auto make_parser(RHS&& rhs) {
+    using rule_type = detail::rule_definition<RHS, Iterator, unused_type>;
+    return std::make_unique<rule_type>(std::forward<RHS>(rhs));
+  }
+
+  erased_parser() = default;
+
+  erased_parser(const erased_parser& rhs) : parser_{rhs.parser_->clone()} {
+    // nop
+  }
+
+  template <class RHS, class = std::enable_if_t<
+                         !detail::is_same_or_derived_v<erased_parser, RHS>>>
+  erased_parser(RHS&& rhs) : parser_{make_parser<RHS>(std::forward<RHS>(rhs))} {
+    static_assert(is_parser_v<std::decay_t<RHS>>);
+  }
+
+  erased_parser& operator=(const erased_parser& rhs) {
+    parser_.reset(rhs.parser_->clone());
+    return *this;
+  }
+
+  template <class RHS, class = std::enable_if_t<
+                         !detail::is_same_or_derived_v<erased_parser, RHS>>>
+  erased_parser& operator=(RHS&& rhs) {
+    static_assert(is_parser_v<std::decay_t<RHS>>);
+    parser_ = make_parser<RHS>(std::forward<RHS>(rhs));
+    return *this;
+  }
+
+  bool parse(Iterator& f, const Iterator& l, unused_type) const {
+    return parser_->parse(f, l, unused);
+  }
+
+private:
+  rule_pointer parser_;
+};
 
 /// A type-erased parser which can store any other parser.
 template <class Iterator, class Attribute = unused_type>
