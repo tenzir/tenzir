@@ -17,13 +17,17 @@
 
 #include <caf/actor_system.hpp>
 #include <caf/actor_system_config.hpp>
+#include <caf/defaults.hpp>
 #include <caf/make_message.hpp>
 #include <caf/message.hpp>
 #include <caf/settings.hpp>
 
+#include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/string.hpp"
+#include "vast/detail/system.hpp"
 #include "vast/error.hpp"
+#include "vast/filesystem.hpp"
 #include "vast/logger.hpp"
 
 namespace vast {
@@ -110,6 +114,57 @@ command::invocation parse(const command& root, command::argument_iterator first,
   if (auto err = parse(result, root, first, last))
     result.error = std::move(err);
   return result;
+}
+
+bool init_config(caf::actor_system_config& cfg, const command::invocation& from,
+                 std::ostream& error_output) {
+  // Utility function for merging settings.
+  std::function<void(const caf::settings&, caf::settings&)> merge_settings;
+  merge_settings = [&](const caf::settings& src, caf::settings& dst) {
+    for (auto& [key, value] : src)
+      if (caf::holds_alternative<caf::settings>(value)) {
+        merge_settings(caf::get<caf::settings>(value),
+                       dst[key].as_dictionary());
+      } else {
+        dst.insert_or_assign(key, value);
+      }
+  };
+  // Merge all CLI settings into the actor_system settings.
+  merge_settings(from.options, cfg.content);
+  // Adjust logger file name unless the user overrides the default.
+  auto default_fn = caf::defaults::logger::file_name;
+  if (caf::get_or(cfg, "logger.file-name", default_fn) == default_fn) {
+    // Get proper directory path.
+    path base_dir = get_or(from.options, "system.directory",
+                           defaults::system::directory);
+    auto log_dir = base_dir / "log";
+    log_dir /= caf::deep_to_string(caf::make_timestamp()) + '#'
+               + std::to_string(detail::process_id());
+    // Create the log directory first, which we need to create the symlink
+    // afterwards.
+    if (!exists(log_dir))
+      if (auto res = mkdir(log_dir); !res) {
+        error_output << "Unable to create directory: " << log_dir.str() << "\n";
+        return false;
+      }
+    // Create user-friendly symlink to current log directory.
+    auto link_dir = log_dir.chop(-1) / "current";
+    if (exists(link_dir))
+      if (!rm(link_dir)) {
+        error_output << "Cannot remove log symlink: " << link_dir.str() << "\n";
+        return false;
+      }
+    auto src_dir = log_dir.trim(-1);
+    if (auto err = create_symlink(src_dir, link_dir)) {
+      error_output << "Cannot create symlink: " << src_dir.str() << " -> "
+                   << link_dir.str() << "\n";
+      return false;
+    }
+    // Store full path to the log file in config.
+    auto log_file = log_dir / from.target->name + ".log";
+    cfg.set("logger.file-name", log_file.str());
+  }
+  return true;
 }
 
 caf::message run(command::invocation& invocation, caf::actor_system& sys) {

@@ -23,12 +23,7 @@
 namespace vast::system {
 
 struct default_configuration : system::configuration {
-  default_configuration(std::string application_name);
-  caf::error setup_log_file();
-  caf::error merge_root_options(system::application& app);
-  void merge_settings(const caf::settings& from, caf::settings& to);
-
-  std::string application_name;
+  default_configuration();
 };
 
 } // namespace vast::system
