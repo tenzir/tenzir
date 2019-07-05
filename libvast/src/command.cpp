@@ -131,6 +131,10 @@ bool init_config(caf::actor_system_config& cfg, const command::invocation& from,
   };
   // Merge all CLI settings into the actor_system settings.
   merge_settings(from.options, cfg.content);
+  // Allow users to use `system.verbosity` to configure console verbosity.
+  if (auto value = caf::get_if<caf::atom_value>(&from.options,
+                                                "system.verbosity"))
+    cfg.set("logger.console-verbosity", *value);
   // Adjust logger file name unless the user overrides the default.
   auto default_fn = caf::defaults::logger::file_name;
   if (caf::get_or(cfg, "logger.file-name", default_fn) == default_fn) {
