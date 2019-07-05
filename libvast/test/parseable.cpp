@@ -338,24 +338,67 @@ TEST(attribute compatibility with string sequences) {
   CHECK(str == "xyz");
 }
 
+namespace {
+
+template <class Parser>
+class parser_wrapper : public parser<parser_wrapper<Parser>> {
+public:
+  parser_wrapper(int& counter, Parser x) : counter_(counter), parser_(x) {
+    ++counter_;
+  }
+
+  parser_wrapper(parser_wrapper&& other)
+    : counter_(other.counter_), parser_(std::move(other.parser_)) {
+    ++counter_;
+  }
+
+  parser_wrapper(const parser_wrapper& other)
+    : counter_(other.counter_), parser_(other.parser_) {
+    ++counter_;
+  }
+
+  ~parser_wrapper() {
+    --counter_;
+  }
+
+  template <class Iterator, class Attribute>
+  bool parse(Iterator& f, const Iterator& l, unused_type x) const {
+    return parser_(f, l, x);
+  }
+
+  template <class Iterator, class Attribute>
+  bool parse(Iterator& f, const Iterator& l, Attribute& x) const {
+    return parser_(f, l, x);
+  }
+
+private:
+  int& counter_;
+  Parser parser_;
+};
+
+} // namespace
+
 TEST(recursive rule) {
   using namespace parsers;
-  rule<std::string::iterator, char> r;
-  r = alpha | '[' >> r >> ']';
-  auto str = "[[[x]]]"s;
-  auto f = str.begin();
-  auto l = str.end();
-
-  MESSAGE("unused type");
-  CHECK(r(f, l, unused));
-  CHECK(f == l);
-
-  MESSAGE("attribute");
-  char c;
-  f = str.begin();
-  CHECK(r(f, l, c));
-  CHECK(f == l);
-  CHECK(c == 'x');
+  int num_wrappers = 0;
+  { // lifetime scope of r
+    rule<std::string::iterator, char> r;
+    r = parser_wrapper{num_wrappers, alpha | '[' >> vast::ref(r) >> ']'};
+    auto str = "[[[x]]]"s;
+    auto f = str.begin();
+    auto l = str.end();
+    MESSAGE("unused type");
+    CHECK(r(f, l, unused));
+    CHECK(f == l);
+    MESSAGE("attribute");
+    char c;
+    f = str.begin();
+    CHECK(r(f, l, c));
+    CHECK(f == l);
+    CHECK(c == 'x');
+  }
+  // Make sure no leak occured.
+  CHECK_EQUAL(num_wrappers, 0);
 }
 
 // -- numeric -----------------------------------------------------------------

@@ -99,9 +99,64 @@ public:
     return (*parser_)->parse(f, l, a);
   }
 
+  const std::shared_ptr<rule_pointer>& parser() const {
+    return parser_;
+  }
+
 private:
   std::shared_ptr<rule_pointer> parser_;
 };
+
+/// A type-erased, non-owning reference to a parser.
+template <class Iterator, class Attribute = unused_type>
+class rule_ref : public parser<rule_ref<Iterator, Attribute>> {
+  using abstract_rule_type = detail::abstract_rule<Iterator, Attribute>;
+  using rule_pointer = std::unique_ptr<abstract_rule_type>;
+
+  template <class RHS>
+  void make_parser(RHS&& rhs) {
+    // TODO:
+    // static_assert(is_compatible_attribute<RHS, typename RHS::attribute>{},
+    //              "incompatible parser attributes");
+    using rule_type = detail::rule_definition<RHS, Iterator, Attribute>;
+    *parser_ = std::make_unique<rule_type>(std::forward<RHS>(rhs));
+  }
+
+public:
+  using attribute = Attribute;
+
+  explicit rule_ref(const rule<Iterator, Attribute>& x) : parser_(x.parser()) {
+    // nop
+  }
+
+  rule_ref(rule_ref&&) = default;
+
+  rule_ref(const rule_ref&) = default;
+
+  rule_ref& operator=(rule_ref&&) = default;
+
+  rule_ref& operator=(const rule_ref&) = default;
+
+  bool parse(Iterator& f, const Iterator& l, unused_type x) const {
+    auto ptr = parser_.lock();
+    VAST_ASSERT(ptr != nullptr);
+    return (*ptr)->parse(f, l, x);
+  }
+
+  bool parse(Iterator& f, const Iterator& l, Attribute& x) const {
+    auto ptr = parser_.lock();
+    VAST_ASSERT(ptr != nullptr);
+    return (*ptr)->parse(f, l, x);
+  }
+
+private:
+  std::weak_ptr<rule_pointer> parser_;
+};
+
+template <class Iterator, class Attribute>
+auto ref(const rule<Iterator, Attribute>& x) {
+  return rule_ref<Iterator, Attribute>{x};
+}
 
 } // namespace vast
 
