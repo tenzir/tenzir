@@ -128,19 +128,20 @@ public:
   /// @param x Table slice for ingestion.
   void add(const table_slice_ptr& x);
 
-private:
-  // -- constructor ------------------------------------------------------------
-
-  /// @pre `parent != nullptr`
-  table_indexer(partition* parent, const record_type& layout);
-
-  // -- utility functions ------------------------------------------------------
+  /// @cond PRIVATE
 
   /// Marks the state as clean, i.e. persistet.
   /// @post `dirty() == false`
   void set_clean() noexcept {
     last_flush_size_ = row_ids_.size();
   }
+
+  table_indexer(partition* parent, const record_type& layout);
+
+  /// @endcond
+
+private:
+  // -- utility functions ------------------------------------------------------
 
   /// @returns whether the meta indexer skips given column
   auto skips_column(size_t column) const noexcept {
