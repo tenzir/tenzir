@@ -59,6 +59,19 @@ protected:
     buf_.emplace_back(x);
   }
 
+  /// Prints a table slice using the given VAST printer. This function assumes
+  /// a human-readable output where each row in the slice gets printed to a
+  /// single line.
+  /// @param printer The VAST printer for generating formatted output.
+  /// @param x The table slice for printing.
+  /// @param begin_of_line Prefix for each printed line. For example, a JSON
+  ///        writer would start each line with a '{'.
+  /// @param separator Character sequence for separating columns. For example,
+  ///        most human-readable formats could use ", ".
+  /// @param end_of_line Suffix for each printed line. For example, a JSON
+  ///        writer would end each line with a '}'.
+  /// @returns `ec::print_error` if `printer` fails to generate output,
+  ///          otherwise `caf::none`.
   template <bool IncludeFieldNames, class Printer>
   caf::error print(Printer& printer, const table_slice& x,
                    std::string_view begin_of_line, std::string_view separator,
@@ -89,10 +102,12 @@ protected:
   /// Writes the content of `buf_` to `out_` and clears `buf_` afterwards.
   void write_buf();
 
-  // Buffer for building lines before syncing writing to out_.
+  /// Buffer for building lines before writing to `out_`. Printing into this
+  /// buffer with a `back_inserter` first gives a 4x speedup over printing
+  /// directly to `out_`, even when setting `sync_with_stdio(false)`.
   std::vector<char> buf_;
 
-  // Output stream for writing to STDOUT or disk.
+  /// Output stream for writing to STDOUT or disk.
   ostream_ptr out_;
 };
 
