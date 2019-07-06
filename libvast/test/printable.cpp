@@ -321,7 +321,7 @@ TEST(not) {
 TEST(data) {
   data r{real{12.21}};
   CHECK_TO_STRING(r, "12.21");
-  data b{boolean{true}};
+  data b{true};
   CHECK_TO_STRING(b, "T");
   data c{count{23}};
   CHECK_TO_STRING(c, "23");

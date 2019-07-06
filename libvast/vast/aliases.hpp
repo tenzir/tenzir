@@ -32,9 +32,6 @@
 
 namespace vast {
 
-/// Boolean artithmetic type.
-using boolean = bool;
-
 /// Signed integer type.
 using integer = int64_t;
 

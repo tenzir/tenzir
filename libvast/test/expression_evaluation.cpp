@@ -42,7 +42,7 @@ struct fixture : fixtures::events {
     bar = record_type{
       {"s1", string_type{}},
       {"r", record_type{
-      {"b", boolean_type{}},
+      {"b", bool_type{}},
       {"s", string_type{}}
       }},
     }.name("bar");

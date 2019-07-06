@@ -91,6 +91,33 @@ bool operator<(const predicate& x, const predicate& y) {
          < std::tie(y.lhs, y.op, y.rhs);
 }
 
+// -- curried_predicate --------------------------------------------------------
+
+curried_predicate curried(const predicate& pred) {
+  VAST_ASSERT(caf::holds_alternative<data>(pred.rhs));
+  return {pred.op, caf::get<data>(pred.rhs)};
+}
+
+// -- conjunction --------------------------------------------------------------
+
+conjunction::conjunction(const super& other) : super{other} {
+  // nop
+}
+
+conjunction::conjunction(super&& other) noexcept : super{std::move(other)} {
+  // nop
+}
+
+// -- disjunction --------------------------------------------------------------
+
+disjunction::disjunction(const super& other) : super{other} {
+  // nop
+}
+
+disjunction::disjunction(super&& other) noexcept : super{std::move(other)} {
+  // nop
+}
+
 // -- negation -----------------------------------------------------------------
 
 negation::negation()

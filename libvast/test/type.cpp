@@ -44,7 +44,7 @@ FIXTURE_SCOPE(type_tests, fixtures::deterministic_actor_system)
 TEST(default construction) {
   type t;
   CHECK(!t);
-  CHECK(!holds_alternative<boolean_type>(t));
+  CHECK(!holds_alternative<bool_type>(t));
 }
 
 TEST(construction) {
@@ -95,9 +95,9 @@ TEST(attributes) {
 TEST(equality comparison) {
   MESSAGE("type-erased comparison");
   CHECK(type{} == type{});
-  CHECK(type{boolean_type{}} != type{});
-  CHECK(type{boolean_type{}} == type{boolean_type{}});
-  CHECK(type{boolean_type{}} != type{real_type{}});
+  CHECK(type{bool_type{}} != type{});
+  CHECK(type{bool_type{}} == type{bool_type{}});
+  CHECK(type{bool_type{}} != type{real_type{}});
   auto x = type{string_type{}};
   auto y = type{string_type{}};
   x.name("foo");
@@ -156,7 +156,7 @@ TEST(type/data compatibility) {
 TEST(serialization) {
   CHECK_ROUNDTRIP(type{});
   CHECK_ROUNDTRIP(none_type{});
-  CHECK_ROUNDTRIP(boolean_type{});
+  CHECK_ROUNDTRIP(bool_type{});
   CHECK_ROUNDTRIP(integer_type{});
   CHECK_ROUNDTRIP(count_type{});
   CHECK_ROUNDTRIP(real_type{});
@@ -174,7 +174,7 @@ TEST(serialization) {
   CHECK_ROUNDTRIP(record_type{});
   CHECK_ROUNDTRIP(alias_type{});
   CHECK_ROUNDTRIP(type{none_type{}});
-  CHECK_ROUNDTRIP(type{boolean_type{}});
+  CHECK_ROUNDTRIP(type{bool_type{}});
   CHECK_ROUNDTRIP(type{integer_type{}});
   CHECK_ROUNDTRIP(type{count_type{}});
   CHECK_ROUNDTRIP(type{real_type{}});
@@ -191,51 +191,49 @@ TEST(serialization) {
   CHECK_ROUNDTRIP(type{map_type{}});
   CHECK_ROUNDTRIP(type{record_type{}});
   CHECK_ROUNDTRIP(type{alias_type{}});
-  auto r = record_type{
-    {"x", integer_type{}},
-    {"y", address_type{}},
-    {"z", real_type{}.attributes({{"key", "value"}})}
-  };
+  auto r = record_type{{"x", integer_type{}},
+                       {"y", address_type{}},
+                       {"z", real_type{}.attributes({{"key", "value"}})}};
   // Make it recursive.
-  r = {
-    {"a", map_type{string_type{}, port_type{}}},
-    {"b", vector_type{boolean_type{}}.name("foo")},
-    {"c", r}
-  };
+  r = {{"a", map_type{string_type{}, port_type{}}},
+       {"b", vector_type{bool_type{}}.name("foo")},
+       {"c", r}};
   r.name("foo");
   CHECK_ROUNDTRIP(r);
 }
 
 TEST(record range) {
+  // clang-format off
   auto r = record_type{
     {"x", record_type{
             {"y", record_type{
                     {"z", integer_type{}},
-                    {"k", boolean_type{}}
+                    {"k", bool_type{}}
                   }},
             {"m", record_type{
                     {"y", record_type{
                             {"a", address_type{}}}},
                     {"f", real_type{}}
                   }},
-            {"b", boolean_type{}}
+            {"b", bool_type{}}
           }},
     {"y", record_type{
-            {"b", boolean_type{}}}}
+            {"b", bool_type{}}}}
   };
+  // clang-format on
   MESSAGE("check types of record r");
   auto record_index = r.index();
   CHECK_EQUAL(at(r, 0)->index(), record_index);
   CHECK_EQUAL(at(r, 0, 0)->index(), record_index);
   CHECK_EQUAL(at(r, 0, 0, 0), integer_type{});
-  CHECK_EQUAL(at(r, 0, 0, 1), boolean_type{});
+  CHECK_EQUAL(at(r, 0, 0, 1), bool_type{});
   CHECK_EQUAL(at(r, 0, 1)->index(), record_index);
   CHECK_EQUAL(at(r, 0, 1, 0)->index(), record_index);
   CHECK_EQUAL(at(r, 0, 1, 0, 0), address_type{});
   CHECK_EQUAL(at(r, 0, 1, 1), real_type{});
-  CHECK_EQUAL(at(r, 0, 2), boolean_type{});
+  CHECK_EQUAL(at(r, 0, 2), bool_type{});
   CHECK_EQUAL(at(r, 1)->index(), record_index);
-  CHECK_EQUAL(at(r, 1, 0), boolean_type{});
+  CHECK_EQUAL(at(r, 1, 0), bool_type{});
   MESSAGE("check keys of record r");
   std::vector<std::string> keys;
   for (auto& i : record_type::each{r})
@@ -279,30 +277,32 @@ TEST(record resolving) {
 }
 
 TEST(record flattening/unflattening) {
+  // clang-format off
   auto x = record_type{
     {"x", record_type{
       {"y", record_type{
         {"z", integer_type{}},
-        {"k", boolean_type{}}
+        {"k", bool_type{}}
       }},
       {"m", record_type{
         {"y", record_type{{"a", address_type{}}}},
         {"f", real_type{}}
       }},
-      {"b", boolean_type{}}
+      {"b", bool_type{}}
     }},
     {"y", record_type{
-      {"b", boolean_type{}}
+      {"b", bool_type{}}
     }}
   };
   auto y = record_type{{
     {"x.y.z", integer_type{}},
-    {"x.y.k", boolean_type{}},
+    {"x.y.k", bool_type{}},
     {"x.m.y.a", address_type{}},
     {"x.m.f", real_type{}},
-    {"x.b", boolean_type{}},
-    {"y.b", boolean_type{}}
+    {"x.b", bool_type{}},
+    {"y.b", bool_type{}}
   }};
+  // clang-format on
   auto f = flatten(x);
   CHECK(f == y);
   auto u = unflatten(f);
@@ -310,11 +310,12 @@ TEST(record flattening/unflattening) {
 }
 
 TEST(record flat index computation) {
+  // clang-format off
   auto x = record_type{
     {"x", record_type{
       {"y", record_type{
         {"z", integer_type{}}, // 0: x.y.z [0, 0, 0]
-        {"k", boolean_type{}}  // 1: x.y.k [0, 0, 1]
+        {"k", bool_type{}}  // 1: x.y.k [0, 0, 1]
       }},
       {"m", record_type{
         {"y", record_type{
@@ -322,12 +323,13 @@ TEST(record flat index computation) {
         },
         {"f", real_type{}} // 3: x.m.f [0, 1, 1]
       }},
-      {"b", boolean_type{}} // 4: x.b [0, 2]
+      {"b", bool_type{}} // 4: x.b [0, 2]
     }},
     {"y", record_type{
-      {"b", boolean_type{}} // 5: y.b [1, 0]
+      {"b", bool_type{}} // 5: y.b [1, 0]
     }}
   };
+  // clang-format on
   using os = caf::optional<size_t>;
   static const os invalid;
   CHECK_EQUAL(flat_size(x), 6u);
@@ -440,14 +442,12 @@ TEST(congruence) {
   CHECK(congruent(s0, s1));
   CHECK(!congruent(s1, s2));
   MESSAGE("records");
-  auto r0 = record_type{
-    {"a", address_type{}},
-    {"b", boolean_type{}},
-    {"c", count_type{}}};
-  auto r1 = record_type{
-    {"x", address_type{}},
-    {"y", boolean_type{}},
-    {"z", count_type{}}};
+  auto r0 = record_type{{"a", address_type{}},
+                        {"b", bool_type{}},
+                        {"c", count_type{}}};
+  auto r1 = record_type{{"x", address_type{}},
+                        {"y", bool_type{}},
+                        {"z", count_type{}}};
   CHECK(r0 != r1);
   CHECK(congruent(r0, r1));
   MESSAGE("aliases");
@@ -468,7 +468,7 @@ TEST(congruence) {
 TEST(type_check) {
   MESSAGE("basic types");
   TYPE_CHECK(none_type{}, caf::none);
-  TYPE_CHECK(boolean_type{}, false);
+  TYPE_CHECK(bool_type{}, false);
   TYPE_CHECK(integer_type{}, 42);
   TYPE_CHECK(count_type{}, 42u);
   TYPE_CHECK(real_type{}, 4.2);
@@ -492,11 +492,11 @@ TEST(type_check) {
   TYPE_CHECK(set_type{}, set{});
   TYPE_CHECK(set_type{string_type{}}, set{});
   auto xs = map{{1, true}, {2, false}};
-  TYPE_CHECK(map_type({integer_type{}, boolean_type{}}), xs);
+  TYPE_CHECK(map_type({integer_type{}, bool_type{}}), xs);
   TYPE_CHECK(map_type{}, xs);
   TYPE_CHECK(map_type{}, map{});
   auto t = record_type{{"a", integer_type{}},
-                       {"b", boolean_type{}},
+                       {"b", bool_type{}},
                        {"c", string_type{}}};
   TYPE_CHECK(t, vector({42, true, "foo"}));
   TYPE_CHECK_FAIL(t, vector({42, 100, "foo"}));
@@ -505,7 +505,7 @@ TEST(type_check) {
 TEST(printable) {
   MESSAGE("basic types");
   CHECK_EQUAL(to_string(type{}), "none");
-  CHECK_EQUAL(to_string(boolean_type{}), "bool");
+  CHECK_EQUAL(to_string(bool_type{}), "bool");
   CHECK_EQUAL(to_string(integer_type{}), "int");
   CHECK_EQUAL(to_string(count_type{}), "count");
   CHECK_EQUAL(to_string(real_type{}), "real");
@@ -521,8 +521,8 @@ TEST(printable) {
   CHECK_EQUAL(to_string(e), "enum {foo, bar, baz}");
   MESSAGE("container types");
   CHECK_EQUAL(to_string(vector_type{real_type{}}), "vector<real>");
-  CHECK_EQUAL(to_string(set_type{boolean_type{}}), "set<bool>");
-  auto b = boolean_type{};
+  CHECK_EQUAL(to_string(set_type{bool_type{}}), "set<bool>");
+  auto b = bool_type{};
   CHECK_EQUAL(to_string(map_type{count_type{}, b}), "map<count, bool>");
   auto r = record_type{{
         {"foo", b},
@@ -566,7 +566,7 @@ TEST(parseable) {
   type t;
   MESSAGE("basic");
   CHECK(parsers::type("bool", t));
-  CHECK(t == boolean_type{});
+  CHECK(t == bool_type{});
   CHECK(parsers::type("string", t));
   CHECK(t == string_type{});
   CHECK(parsers::type("addr", t));
@@ -580,19 +580,21 @@ TEST(parseable) {
   CHECK(parsers::type("set<port>", t));
   CHECK(t == type{set_type{port_type{}}});
   CHECK(parsers::type("map<count, bool>", t));
-  CHECK(t == type{map_type{count_type{}, boolean_type{}}});
+  CHECK(t == type{map_type{count_type{}, bool_type{}}});
   MESSAGE("recursive");
   auto str = "record{r: record{a: addr, i: record{b: bool}}}"s;
   CHECK(parsers::type(str, t));
+  // clang-format off
   auto r = record_type{
     {"r", record_type{
       {"a", address_type{}},
-      {"i", record_type{{"b", boolean_type{}}}}
+      {"i", record_type{{"b", bool_type{}}}}
     }}
   };
+  // clang-format on
   CHECK_EQUAL(t, r);
   MESSAGE("symbol table");
-  auto foo = boolean_type{};
+  auto foo = bool_type{};
   foo = foo.name("foo");
   auto symbols = type_table{{"foo", foo}};
   auto p = type_parser{std::addressof(symbols)}; // overloaded operator&
@@ -634,16 +636,14 @@ TEST(parseable) {
 TEST(hashable) {
   auto hash = [&](auto&& x) { return uhash<xxhash64>{}(x); };
   CHECK_EQUAL(hash(type{}), 10764519495013463364ul);
-  CHECK_EQUAL(hash(boolean_type{}), 12612883901365648434ul);
-  CHECK_EQUAL(hash(type{boolean_type{}}), 13047344884484907481ul);
-  CHECK_NOT_EQUAL(hash(type{boolean_type{}}), hash(boolean_type{}));
-  CHECK_EQUAL(hash(boolean_type{}), hash(address_type{}));
-  CHECK_NOT_EQUAL(hash(type{boolean_type{}}), hash(type{address_type{}}));
-  auto x = record_type{
-    {"x", integer_type{}},
-    {"y", string_type{}},
-    {"z", vector_type{real_type{}}}
-  };
+  CHECK_EQUAL(hash(bool_type{}), 12612883901365648434ul);
+  CHECK_EQUAL(hash(type{bool_type{}}), 13047344884484907481ul);
+  CHECK_NOT_EQUAL(hash(type{bool_type{}}), hash(bool_type{}));
+  CHECK_EQUAL(hash(bool_type{}), hash(address_type{}));
+  CHECK_NOT_EQUAL(hash(type{bool_type{}}), hash(type{address_type{}}));
+  auto x = record_type{{"x", integer_type{}},
+                       {"y", string_type{}},
+                       {"z", vector_type{real_type{}}}};
   CHECK_EQUAL(hash(x), 13215642375407153428ul);
   CHECK_EQUAL(to_digest(x), std::to_string(hash(type{x})));
 }
@@ -651,13 +651,11 @@ TEST(hashable) {
 TEST(json) {
   auto e = enumeration_type{{"foo", "bar", "baz"}};
   e = e.name("e");
-  auto t = map_type{boolean_type{}, count_type{}};
+  auto t = map_type{bool_type{}, count_type{}};
   t.name("bit_table");
-  auto r = record_type{
-    {"x", address_type{}.attributes({{"skip"}})},
-    {"y", boolean_type{}.attributes({{"default", "F"}})},
-    {"z", record_type{{"inner", e}}}
-  };
+  auto r = record_type{{"x", address_type{}.attributes({{"skip"}})},
+                       {"y", bool_type{}.attributes({{"default", "F"}})},
+                       {"z", record_type{{"inner", e}}}};
   r = r.name("foo");
   auto expected = R"__({
   "name": "foo",

@@ -17,10 +17,10 @@
 
 namespace vast {
 
-// A synopsis for a [boolean type](@ref boolean_type).
-class boolean_synopsis : public synopsis {
+// A synopsis for a [bool type](@ref bool_type).
+class bool_synopsis : public synopsis {
 public:
-  explicit boolean_synopsis(vast::type x);
+  explicit bool_synopsis(vast::type x);
 
   void add(data_view x) override;
 

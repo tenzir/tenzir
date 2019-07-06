@@ -165,26 +165,25 @@ expected<ids> container_lookup(const Index& idx, relational_operator op,
 template <class T, class Binner = void>
 class arithmetic_index : public value_index {
 public:
+  // clang-format off
   using value_type =
     std::conditional_t<
       detail::is_any_v<T, timestamp, timespan>,
       timespan::rep,
       std::conditional_t<
-        detail::is_any_v<T, boolean, integer, count, real>,
+        detail::is_any_v<T, bool, integer, count, real>,
         T,
         std::false_type
       >
     >;
+  // clang-format on
 
   static_assert(!std::is_same_v<value_type, std::false_type>,
                 "invalid type T for arithmetic_index");
 
-  using coder_type =
-    std::conditional_t<
-      std::is_same_v<T, boolean>,
-      singleton_coder<ids>,
-      multi_level_coder<range_coder<ids>>
-    >;
+  using coder_type = std::conditional_t<std::is_same_v<T, bool>,
+                                        singleton_coder<ids>,
+                                        multi_level_coder<range_coder<ids>>>;
 
   using binner_type =
     std::conditional_t<
@@ -231,24 +230,27 @@ private:
       bmi_.append(x);
       return true;
     };
-    return caf::visit(detail::overload(
-      [&](auto&&) { return false; },
-      [&](view<boolean> x) { return append(x); },
-      [&](view<integer> x) { return append(x); },
-      [&](view<count> x) { return append(x); },
-      [&](view<real> x) { return append(x); },
-      [&](view<timespan> x) { return append(x.count()); },
-      [&](view<timestamp> x) { return append(x.time_since_epoch().count()); }
-    ), d);
+    auto f = detail::overload([&](auto&&) { return false; },
+                              [&](view<bool> x) { return append(x); },
+                              [&](view<integer> x) { return append(x); },
+                              [&](view<count> x) { return append(x); },
+                              [&](view<real> x) { return append(x); },
+                              [&](view<timespan> x) {
+                                return append(x.count());
+                              },
+                              [&](view<timestamp> x) {
+                                return append(x.time_since_epoch().count());
+                              });
+    return caf::visit(f, d);
   }
 
   expected<ids>
   lookup_impl(relational_operator op, data_view d) const override {
-    return caf::visit(detail::overload(
+    auto f = detail::overload(
       [&](auto x) -> expected<ids> {
         return make_error(ec::type_clash, value_type{}, materialize(x));
       },
-      [&](view<boolean> x) -> expected<ids> { return bmi_.lookup(op, x); },
+      [&](view<bool> x) -> expected<ids> { return bmi_.lookup(op, x); },
       [&](view<integer> x) -> expected<ids> { return bmi_.lookup(op, x); },
       [&](view<count> x) -> expected<ids> { return bmi_.lookup(op, x); },
       [&](view<real> x) -> expected<ids> { return bmi_.lookup(op, x); },
@@ -259,8 +261,8 @@ private:
         return bmi_.lookup(op, x.time_since_epoch().count());
       },
       [&](view<vector> xs) { return detail::container_lookup(*this, op, xs); },
-      [&](view<set> xs) { return detail::container_lookup(*this, op, xs); }
-    ), d);
+      [&](view<set> xs) { return detail::container_lookup(*this, op, xs); });
+    return caf::visit(f, d);
   };
 
   bitmap_index_type bmi_;

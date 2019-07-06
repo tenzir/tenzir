@@ -52,19 +52,19 @@ enum relational_operator : uint8_t {
 };
 
 /// A boolean operator taking on the values AND, OR, and NOT.
-enum boolean_operator : uint8_t {
+enum bool_operator : uint8_t {
   logical_not,
   logical_and,
-  logical_or
+  logical_or,
 };
 
-/// Negates a relational operator by creating the complent. 
+/// Negates a relational operator by creating the complent.
 /// For example, `==` becomes `!=`.
 /// @param op The operator to negate.
 /// @returns The complement of *op*.
 relational_operator negate(relational_operator op);
 
-/// Flips the directionality of an asymmetric operator. 
+/// Flips the directionality of an asymmetric operator.
 /// I.e., for a given predicate *P = LHS op RHS*, the function returns the
 /// operator such that the predicate *RHS op LHS* is equivalent to *P*.
 /// @param op The operator to flip.

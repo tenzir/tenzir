@@ -52,7 +52,7 @@ using view = typename view_trait<T>::type;
     using type = type_name;                                                    \
   }
 
-VAST_VIEW_TRAIT(boolean);
+VAST_VIEW_TRAIT(bool);
 VAST_VIEW_TRAIT(integer);
 VAST_VIEW_TRAIT(count);
 VAST_VIEW_TRAIT(real);
@@ -139,11 +139,12 @@ struct view_trait<map> {
   using type = map_view_handle;
 };
 
+// clang-format off
 /// A type-erased view over variout types of data.
 /// @relates view_trait
 using data_view = caf::variant<
   view<caf::none_t>,
-  view<boolean>,
+  view<bool>,
   view<integer>,
   view<count>,
   view<real>,
@@ -158,6 +159,7 @@ using data_view = caf::variant<
   view<set>,
   view<map>
 >;
+// clang-format on
 
 /// @relates view_trait
 template <>
@@ -403,10 +405,9 @@ private:
 /// @relates view_trait
 template <class T>
 view<T> make_view(const T& x) {
-  constexpr auto directly_constructible
-    = detail::is_any_v<T, caf::none_t, boolean, integer, count, real, timespan,
-                       timestamp, std::string, pattern, address, subnet, port,
-                       enumeration>;
+  constexpr auto directly_constructible = detail::is_any_v<
+    T, caf::none_t, bool, integer, count, real, timespan, timestamp,
+    std::string, pattern, address, subnet, port, enumeration>;
   if constexpr (directly_constructible) {
     return x;
   } else if constexpr (std::is_same_v<T, vector>) {

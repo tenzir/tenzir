@@ -44,8 +44,8 @@ struct fixture : fixtures::events {
 
 FIXTURE_SCOPE(value_index_tests, fixture)
 
-TEST(boolean) {
-  auto idx = factory<value_index>::make(boolean_type{});
+TEST(bool) {
+  auto idx = factory<value_index>::make(bool_type{});
   REQUIRE_NOT_EQUAL(idx, nullptr);
   MESSAGE("append");
   REQUIRE(idx->append(make_data_view(true)));

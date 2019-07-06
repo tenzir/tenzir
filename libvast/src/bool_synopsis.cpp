@@ -11,7 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/boolean_synopsis.hpp"
+#include "vast/bool_synopsis.hpp"
 
 #include <caf/deserializer.hpp>
 #include <caf/serializer.hpp>
@@ -20,21 +20,21 @@
 
 namespace vast {
 
-boolean_synopsis::boolean_synopsis(vast::type x) : synopsis{std::move(x)} {
-  VAST_ASSERT(caf::holds_alternative<boolean_type>(type()));
+bool_synopsis::bool_synopsis(vast::type x) : synopsis{std::move(x)} {
+  VAST_ASSERT(caf::holds_alternative<bool_type>(type()));
 }
 
-void boolean_synopsis::add(data_view x) {
-  VAST_ASSERT(caf::holds_alternative<view<boolean>>(x));
-  if (caf::get<view<boolean>>(x))
+void bool_synopsis::add(data_view x) {
+  VAST_ASSERT(caf::holds_alternative<view<bool>>(x));
+  if (caf::get<view<bool>>(x))
     true_ = true;
   else
     false_ = true;
 }
 
-caf::optional<bool> boolean_synopsis::lookup(relational_operator op,
-                                             data_view rhs) const {
-  if (auto b = caf::get_if<view<boolean>>(&rhs)) {
+caf::optional<bool> bool_synopsis::lookup(relational_operator op,
+                                          data_view rhs) const {
+  if (auto b = caf::get_if<view<bool>>(&rhs)) {
     if (op == equal)
       return *b ? true_ : false_;
     if (op == not_equal)
@@ -43,18 +43,18 @@ caf::optional<bool> boolean_synopsis::lookup(relational_operator op,
   return caf::none;
 }
 
-bool boolean_synopsis::equals(const synopsis& other) const noexcept {
-  if (typeid(other) != typeid(boolean_synopsis))
+bool bool_synopsis::equals(const synopsis& other) const noexcept {
+  if (typeid(other) != typeid(bool_synopsis))
     return false;
-  auto& rhs = static_cast<const boolean_synopsis&>(other);
+  auto& rhs = static_cast<const bool_synopsis&>(other);
   return type() == rhs.type() && false_ == rhs.false_ && true_ == rhs.true_;
 }
 
-caf::error boolean_synopsis::serialize(caf::serializer& sink) const {
+caf::error bool_synopsis::serialize(caf::serializer& sink) const {
   return sink(false_, true_);
 }
 
-caf::error boolean_synopsis::deserialize(caf::deserializer& source) {
+caf::error bool_synopsis::deserialize(caf::deserializer& source) {
   return source(false_, true_);
 }
 

@@ -34,6 +34,26 @@ bool zeek_parse(const type& t, const std::string& s, Attribute& attr) {
                                                                         attr);
 }
 
+std::string_view capture_loss_10_events = R"__(#separator \x09
+#set_separator	,
+#empty_field	(empty)
+#unset_field	-
+#path	capture_loss
+#open	2019-06-07-14-30-44
+#fields	ts	ts_delta	peer	gaps	acks	percent_lost
+#types	time	interval	string	count	count	double
+1258532133.914401	930.000003	bro	0	0	0.0
+1258533063.914399	929.999998	bro	0	0	0.0
+1258533977.316663	913.402264	bro	0	0	0.0
+1258534893.914434	916.597771	bro	0	0	0.0
+1258535805.364503	911.450069	bro	0	45	0.0
+1258536723.914407	918.549904	bro	0	9	0.0
+1258537653.914390	929.999983	bro	0	0	0.0
+1258538553.914414	900.000024	bro	0	9	0.0
+1258539453.914415	900.000001	bro	0	0	0.0
+1258540374.060134	920.145719	bro	0	0	0.0
+#close	2019-06-07-14-31-01)__";
+
 std::string_view conn_log_100_events = R"__(#separator \x09
 #set_separator	,
 #empty_field	(empty)
@@ -144,14 +164,36 @@ std::string_view conn_log_100_events = R"__(#separator \x09
 1258535660.158200	WfzxgFx2lWb	192.168.1.104	1196	65.55.184.16	443	tcp	ssl	67.887666	57041	8510	RSTR	-	0	ShADdar	54	59209	26	9558	(empty)
 #close	2014-05-23-18-02-35)__";
 
+struct fixture : fixtures::deterministic_actor_system {
+  std::vector<table_slice_ptr> read(std::string_view input, size_t slice_size,
+                                    size_t num_events) {
+    using reader_type = format::zeek::reader;
+    reader_type reader{defaults::system::table_slice_type,
+                       std::make_unique<std::istringstream>(
+                         std::string{input})};
+    std::vector<table_slice_ptr> slices;
+    auto add_slice = [&](table_slice_ptr ptr) {
+      slices.emplace_back(std::move(ptr));
+    };
+    auto [err, num] = reader.read(std::numeric_limits<size_t>::max(),
+                                  slice_size, add_slice);
+    if (err != ec::end_of_input)
+      FAIL("Zeek reader failed to parse input: " << sys.render(err));
+    if (num != num_events)
+      FAIL("Zeek reader only produced " << num << " events, expected "
+                                        << num_events);
+    return slices;
+  }
+};
+
 } // namspace <anonymous>
 
-FIXTURE_SCOPE(zeek_reader_tests, fixtures::deterministic_actor_system)
+FIXTURE_SCOPE(zeek_reader_tests, fixture)
 
 TEST(zeek data parsing) {
   using namespace std::chrono;
   data d;
-  CHECK(zeek_parse(boolean_type{}, "T", d));
+  CHECK(zeek_parse(bool_type{}, "T", d));
   CHECK(d == true);
   CHECK(zeek_parse(integer_type{}, "-49329", d));
   CHECK(d == integer{-49329});
@@ -176,18 +218,17 @@ TEST(zeek data parsing) {
   CHECK(d == set{"49329", "42"});
 }
 
-TEST(zeek reader) {
-  using reader_type = format::zeek::reader;
-  reader_type reader{defaults::system::table_slice_type,
-                     std::make_unique<std::istringstream>(
-                       std::string{conn_log_100_events})};
-  std::vector<table_slice_ptr> slices;
-  auto add_slice = [&](table_slice_ptr ptr) {
-    slices.emplace_back(std::move(ptr));
-  };
-  auto [err, num] = reader.read(100, 20, add_slice);
-  CHECK_EQUAL(err, caf::none);
-  CHECK_EQUAL(num, 100);
+TEST(zeek reader - capture loss) {
+  auto slices = read(capture_loss_10_events, 10, 10);
+  REQUIRE_EQUAL(slices.size(), 1);
+  CHECK_EQUAL(slices[0]->rows(), 10);
+}
+
+TEST(zeek reader - conn log) {
+  auto slices = read(conn_log_100_events, 20, 100);
+  CHECK_EQUAL(slices.size(), 5);
+  for (auto& slice : slices)
+    CHECK_EQUAL(slice->rows(), 20);
 }
 
 FIXTURE_SCOPE_END()

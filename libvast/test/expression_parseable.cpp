@@ -125,3 +125,15 @@ TEST(parseable - expression) {
   expression expected = disjunction{conjunction{p1, p1}, conjunction{p3, p1}};
   CHECK_EQUAL(expr, expected);
 }
+
+TEST(parseable - data expression) {
+  expression expr;
+  CHECK(parsers::expr("42", expr));
+  auto pred = caf::get_if<predicate>(&expr);
+  REQUIRE(pred != nullptr);
+  auto extractor = caf::get_if<type_extractor>(&pred->lhs);
+  REQUIRE(extractor != nullptr);
+  CHECK(caf::holds_alternative<count_type>(extractor->type));
+  CHECK_EQUAL(pred->op, equal);
+  CHECK(pred->rhs == data{42u});
+}

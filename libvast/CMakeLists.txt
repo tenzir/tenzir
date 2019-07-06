@@ -15,7 +15,7 @@ set(libvast_sources
   src/banner.cpp
   src/base.cpp
   src/bitmap.cpp
-  src/boolean_synopsis.cpp
+  src/bool_synopsis.cpp
   src/chunk.cpp
   src/column_index.cpp
   src/column_major_matrix_table_slice_builder.cpp
@@ -23,6 +23,7 @@ set(libvast_sources
   src/compression.cpp
   src/concept/hashable/crc.cpp
   src/concept/hashable/xxhash.cpp
+  src/concept/parseable/vast/expression.cpp
   src/data.cpp
   src/default_table_slice.cpp
   src/default_table_slice_builder.cpp

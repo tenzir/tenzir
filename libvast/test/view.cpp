@@ -22,7 +22,7 @@ using namespace std::literals;
 TEST(copying views) {
   MESSAGE("calling view directly");
   CHECK_EQUAL(view<caf::none_t>{caf::none}, caf::none);
-  CHECK_EQUAL(view<boolean>{true}, true);
+  CHECK_EQUAL(view<bool>{true}, true);
   CHECK_EQUAL(view<integer>{42}, 42);
   CHECK_EQUAL(view<count>{42}, 42u);
   CHECK_EQUAL(view<real>{4.2}, 4.2);
@@ -117,7 +117,7 @@ TEST(map view) {
 
 TEST(make_data_view) {
   auto x = make_data_view(true);
-  CHECK(caf::holds_alternative<boolean>(x));
+  CHECK(caf::holds_alternative<bool>(x));
   auto str = "foo"s;
   x = make_data_view(str);
   CHECK(caf::holds_alternative<view<std::string>>(x));

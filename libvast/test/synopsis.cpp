@@ -22,7 +22,7 @@
 #include <caf/binary_deserializer.hpp>
 #include <caf/binary_serializer.hpp>
 
-#include "vast/boolean_synopsis.hpp"
+#include "vast/bool_synopsis.hpp"
 #include "vast/synopsis_factory.hpp"
 #include "vast/timestamp_synopsis.hpp"
 
@@ -87,7 +87,7 @@ TEST(serialization) {
   factory<synopsis>::initialize();
   synopsis_options empty;
   CHECK_ROUNDTRIP(synopsis_ptr{});
-  CHECK_ROUNDTRIP_DEREF(factory<synopsis>::make(boolean_type{}, empty));
+  CHECK_ROUNDTRIP_DEREF(factory<synopsis>::make(bool_type{}, empty));
   CHECK_ROUNDTRIP_DEREF(factory<synopsis>::make(timestamp_type{}, empty));
 }
 
