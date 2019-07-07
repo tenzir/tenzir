@@ -16,6 +16,13 @@
 #include <limits>
 #include <type_traits>
 
+namespace vast::policy {
+
+struct uppercase {};
+struct lowercase {};
+
+} // namespace vast::policy
+
 namespace vast::detail {
 
 /// Converts a byte value into an ASCII character.
@@ -30,17 +37,29 @@ char byte_to_char(T b) {
   return b < 10 ? '0' + b : 'a' + b - 10;
 }
 
-/// Converts a byte value into a hex value.
-/// @param b The byte to convert.
-/// @returns b The two hex nibbles as `(high, low)` pair.
+/// Converts a byte value into a hex value with a given alphabet.
+/// @param x The byte to convert.
+/// @param xs The alphabet to use for conversion (including NUL byte).
+/// @returns The two hex nibbles as `(high, low)` pair.
 /// @relates byte_to_char hex_to_byte
-template <
-  class T,
-  class = std::enable_if_t<std::is_integral_v<T>>
->
-std::pair<char, char> byte_to_hex(T b) {
-  static constexpr char hex[] = "0123456789ABCDEF";
-  return {hex[(b >> 4) & 0x0f], hex[b & 0x0f]};
+template <class T>
+constexpr std::pair<char, char> byte_to_hex(T x, const char (&xs)[16 + 1]) {
+  static_assert(std::is_integral_v<T>);
+  return {xs[(x >> 4) & 0x0f], xs[x & 0x0f]};
+}
+
+/// Converts a byte value into a hex value.
+/// @param x The byte to convert.
+/// @returns The two hex nibbles as `(high, low)` pair.
+/// @relates byte_to_char hex_to_byte
+template <class Policy = policy::uppercase, class T>
+constexpr std::pair<char, char> byte_to_hex(T x) {
+  if constexpr (std::is_same_v<Policy, policy::uppercase>)
+    return byte_to_hex(x, "0123456789ABCDEF");
+  else if constexpr (std::is_same_v<Policy, policy::lowercase>)
+    return byte_to_hex(x, "0123456789abcdef");
+  else
+    return {0, 0};
 }
 
 /// Converts a single hex character into its byte value.
