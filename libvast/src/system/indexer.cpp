@@ -65,6 +65,15 @@ behavior indexer(stateful_actor<indexer_state>* self, path dir,
     self->quit(std::move(err));
     return {};
   }
+  auto handle_batch = [=](const std::vector<table_slice_ptr>& xs) {
+    auto t = atomic_timer::start(*self->state.measurement);
+    auto events = uint64_t{0};
+    for (auto& x : xs) {
+      events += x->rows();
+      self->state.col.add(x);
+    }
+    t.stop(events);
+  };
   return {
     [=](const curried_predicate& pred) {
       VAST_DEBUG(self, "got predicate:", pred);
@@ -82,13 +91,7 @@ behavior indexer(stateful_actor<indexer_state>* self, path dir,
           // nop
         },
         [=](unit_t&, const std::vector<table_slice_ptr>& xs) {
-          auto t = atomic_timer::start(*self->state.measurement);
-          auto events = uint64_t{0};
-          for (auto& x : xs) {
-            events += x->rows();
-            self->state.col.add(x);
-          }
-          t.stop(events);
+          handle_batch(xs);
         },
         [=](unit_t&, const error& err) {
           auto& st = self->state;
@@ -102,6 +105,7 @@ behavior indexer(stateful_actor<indexer_state>* self, path dir,
           self->send(st.index, done_atom::value, st.partition_id);
         });
     },
+    [=](const std::vector<table_slice_ptr>& xs) { handle_batch(xs); },
     [=](shutdown_atom) { self->quit(exit_reason::user_shutdown); },
   };
 }
