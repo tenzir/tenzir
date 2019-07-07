@@ -20,21 +20,10 @@
 
 #include "vast/concept/parseable/core.hpp"
 #include "vast/concept/parseable/numeric.hpp"
-#include "vast/concept/parseable/stream.hpp"
 #include "vast/concept/parseable/string.hpp"
-#include "vast/concept/parseable/to.hpp"
-#include "vast/concept/parseable/vast/address.hpp"
-#include "vast/concept/parseable/vast/offset.hpp"
-#include "vast/concept/parseable/vast/schema.hpp"
-#include "vast/concept/parseable/vast/si.hpp"
-#include "vast/concept/parseable/vast/time.hpp"
-
-#include "vast/concept/parseable/core/operators.hpp"
-#include "vast/concept/parseable/core/rule.hpp"
-#include "vast/concept/parseable/string.hpp"
-
-#include "vast/concept/printable/vast/view.hpp"
+#include "vast/concept/parseable/vast.hpp"
 #include "vast/error.hpp"
+#include "vast/logger.hpp"
 #include "vast/schema.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
@@ -254,27 +243,34 @@ struct csv_parser_factory {
   }
 
   template <class T>
+  struct add_t {
+    void operator()(const caf::optional<T>& x) const {
+      if (x)
+        bptr_->add(make_data_view(*x));
+      else
+        bptr_->add(make_data_view(caf::none));
+    }
+    table_slice_builder_ptr bptr_;
+  };
+
+  template <class T>
   result_type operator()(const T& t) {
     if constexpr (std::is_same_v<T, string_type>) {
-      return +(parsers::any - set_separator_)->*[bptr_ = bptr_](std::string x) {
-        bptr_->add(make_data_view(x));
-      };
+      return (-+(parsers::any - set_separator_))->*add_t<std::string>{bptr_};
     } else if constexpr (std::is_same_v<T, pattern_type>) {
-      return +(parsers::any - set_separator_)->*[bptr_ = bptr_](std::string x) {
-        bptr_->add(make_data_view(x));
-      };
+      return (-+(parsers::any - set_separator_))->*add_t<std::string>{bptr_};
     } else if constexpr (std::is_same_v<T, set_type>) {
-      return container_parser_builder<Iterator, data>{set_separator_}(t)->*
-             [bptr_ = bptr_](const data& s) { bptr_->add(make_data_view(s)); };
+      return (-container_parser_builder<Iterator, data>{set_separator_}(t))
+               ->*add_t<data>{bptr_};
     } else if constexpr (std::is_same_v<T, vector_type>) {
-      return container_parser_builder<Iterator, data>{set_separator_}(t)->*
-             [bptr_ = bptr_](const data& v) { bptr_->add(make_data_view(v)); };
+      return (-container_parser_builder<Iterator, data>{set_separator_}(t))
+               ->*add_t<data>{bptr_};
     } else if constexpr (has_parser_v<type_to_data<T>>) {
       using value_type = type_to_data<T>;
-      return make_parser<value_type>{}->*[bptr_ = bptr_](const value_type& x) {
-        bptr_->add(make_data_view(x));
-      };
+      return (-make_parser<value_type>{})->*add_t<value_type>{bptr_};
     } else {
+      VAST_ERROR_ANON("csv parser builder faild to fetch a parser for type",
+                      caf::detail::pretty_type_name(typeid(T)));
       return {};
     }
   }
@@ -286,16 +282,13 @@ struct csv_parser_factory {
 template <class Iterator>
 caf::optional<erased_parser<Iterator>>
 make_csv_parser(const record_type& layout, table_slice_builder_ptr builder) {
-  erased_parser<Iterator> result;
+  auto fs = layout.fields.size();
+  VAST_ASSERT(fs > 0);
   auto v = csv_parser_factory<Iterator>{",", builder};
-  bool first = true;
-  for (auto& field : layout.fields) {
-    if (!first)
-      result = result >> ',';
-    else
-      first = false;
-    auto p = caf::visit(v, field.type);
-    result = result >> -p;
+  auto result = caf::visit(v, layout.fields[0].type);
+  for (size_t i = 1; i < fs; ++i) {
+    auto p = (caf::visit(v, layout.fields[i].type));
+    result = result >> ',' >> std::move(p);
   }
   return result;
 }
@@ -327,13 +320,15 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
       return err;
   auto& p = *parser_;
   size_t produced = 0;
+  lines_->next();
   for (; produced < max_events; lines_->next()) {
     // EOF check.
     if (lines_->done())
       return finish(cons, make_error(ec::end_of_input, "input exhausted"));
     auto& line = lines_->get();
-    if (!p(line))
+    if (!p(line)) {
       return make_error(ec::type_clash, "unable to parse CSV line");
+    }
     produced++;
     if (builder_->rows() == max_slice_size)
       if (auto err = finish(cons))
