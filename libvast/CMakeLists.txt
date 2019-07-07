@@ -31,6 +31,7 @@ set(libvast_sources
   src/detail/add_error_categories.cpp
   src/detail/add_message_types.cpp
   src/detail/adjust_resource_consumption.cpp
+  src/detail/base64.cpp
   src/detail/compressedbuf.cpp
   src/detail/fdinbuf.cpp
   src/detail/fdistream.cpp
@@ -227,6 +228,7 @@ set(tests
   test/compressedbuf.cpp
   test/data.cpp
   test/detail/algorithms.cpp
+  test/detail/base64.cpp
   test/detail/column_iterator.cpp
   test/detail/flat_lru_cache.cpp
   test/detail/operators.cpp
