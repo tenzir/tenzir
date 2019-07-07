@@ -71,6 +71,15 @@ struct bgpdump {
   static constexpr auto read = shared::read;
 };
 
+/// Contains settings for the csv subcommand.
+struct csv {
+  /// Nested category in config files for this subcommand.
+  static constexpr const char* category = "import.csv";
+
+  /// Path for reading input events.
+  static constexpr auto read = shared::read;
+};
+
 /// Contains settings for the json subcommand.
 struct json {
   /// Nested category in config files for this subcommand.
