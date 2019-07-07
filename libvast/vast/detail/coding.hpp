@@ -29,11 +29,9 @@ namespace vast::detail {
 /// @param b The byte to convert.
 /// @returns The ASCII representation of *b*.
 /// @relates byte_to_hex hex_to_byte
-template <
-  class T,
-  class = std::enable_if_t<std::is_integral_v<T>>
->
-char byte_to_char(T b) {
+template <class T>
+constexpr char byte_to_char(T b) {
+  static_assert(std::is_integral_v<T>);
   return b < 10 ? '0' + b : 'a' + b - 10;
 }
 
@@ -66,11 +64,9 @@ constexpr std::pair<char, char> byte_to_hex(T x) {
 /// @param hex The hex character.
 /// @returns The byte value of *hex* or 0 if *hex* is not a valid hex char.
 /// @relates byte_to_hex byte_to_char
-template <
-  class T,
-  class = std::enable_if_t<std::is_integral_v<T>>
->
-char hex_to_byte(T hex) {
+template <class T>
+constexpr char hex_to_byte(T hex) {
+  static_assert(std::is_integral_v<T>);
   if (hex >= '0' && hex <= '9')
     return hex - '0';
   if (hex >= 'A' && hex <= 'F')
@@ -84,11 +80,9 @@ char hex_to_byte(T hex) {
 /// @param hi The high hex nibble.
 /// @param lo The low hex nibble.
 /// @relates byte_to_hex byte_to_char
-template <
-  class T,
-  class = std::enable_if_t<std::is_integral_v<T>>
->
-char hex_to_byte(T hi, T lo) {
+template <class T>
+constexpr char hex_to_byte(T hi, T lo) {
+  static_assert(std::is_integral_v<T>);
   auto byte = hex_to_byte(hi) << 4;
   byte |= hex_to_byte(lo);
   return byte;
