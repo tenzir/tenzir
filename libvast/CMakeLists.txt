@@ -225,6 +225,7 @@ set(tests
   test/coder.cpp
   test/column_index.cpp
   test/command.cpp
+  test/community_id.cpp
   test/compressedbuf.cpp
   test/data.cpp
   test/detail/algorithms.cpp
