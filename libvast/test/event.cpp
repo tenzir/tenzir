@@ -59,10 +59,10 @@ TEST(basics) {
   REQUIRE(caf::holds_alternative<record_type>(e.type()));
   MESSAGE("meta data");
   CHECK_EQUAL(e.id(), 123456789ull);
-  auto now = timestamp::clock::now();
+  auto now = time::clock::now();
   e.timestamp(now);
   CHECK_EQUAL(e.timestamp(), now);
-  e.timestamp(timestamp{});
+  e.timestamp(vast::time{});
 }
 
 TEST(flattening) {

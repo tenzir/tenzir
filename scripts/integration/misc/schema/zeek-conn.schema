@@ -1,5 +1,5 @@
 type zeek.conn = record{
-  ts: time #time,
+  ts: time #timestamp,
   uid: string,
   id: record {orig_h: addr, orig_p: port, resp_h: addr, resp_p: port},
   proto: string,

@@ -541,11 +541,11 @@ struct data_congruence_checker {
     return true;
   }
 
-  bool operator()(const timespan_type&, timespan) const {
+  bool operator()(const duration_type&, duration) const {
     return true;
   }
 
-  bool operator()(const timestamp_type&, timestamp) const {
+  bool operator()(const time_type&, time) const {
     return true;
   }
 
@@ -784,8 +784,8 @@ const char* kind_tbl[] = {
   "int",
   "count",
   "real",
-  "timespan",
-  "timestamp",
+  "duration",
+  "time",
   "string",
   "pattern",
   "address",

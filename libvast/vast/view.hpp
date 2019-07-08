@@ -56,8 +56,8 @@ VAST_VIEW_TRAIT(bool);
 VAST_VIEW_TRAIT(integer);
 VAST_VIEW_TRAIT(count);
 VAST_VIEW_TRAIT(real);
-VAST_VIEW_TRAIT(timespan);
-VAST_VIEW_TRAIT(timestamp);
+VAST_VIEW_TRAIT(duration);
+VAST_VIEW_TRAIT(time);
 VAST_VIEW_TRAIT(port);
 VAST_VIEW_TRAIT(address);
 VAST_VIEW_TRAIT(subnet);
@@ -148,8 +148,8 @@ using data_view = caf::variant<
   view<integer>,
   view<count>,
   view<real>,
-  view<timespan>,
-  view<timestamp>,
+  view<duration>,
+  view<time>,
   view<std::string>,
   view<pattern>,
   view<address>,
@@ -406,8 +406,8 @@ private:
 template <class T>
 view<T> make_view(const T& x) {
   constexpr auto directly_constructible = detail::is_any_v<
-    T, caf::none_t, bool, integer, count, real, timespan, timestamp,
-    std::string, pattern, address, subnet, port, enumeration>;
+    T, caf::none_t, bool, integer, count, real, duration, time, std::string,
+    pattern, address, subnet, port, enumeration>;
   if constexpr (directly_constructible) {
     return x;
   } else if constexpr (std::is_same_v<T, vector>) {

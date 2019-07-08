@@ -30,7 +30,7 @@ namespace pcap {
 namespace {
 
 inline type make_packet_type() {
-  return record_type{{"timestamp", timestamp_type{}.attributes({{"time"}})},
+  return record_type{{"time", time_type{}.attributes({{"timestamp"}})},
                      {"src", address_type{}},
                      {"dst", address_type{}},
                      {"sport", port_type{}},
@@ -276,7 +276,7 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
     // Extract timestamp.
     using namespace std::chrono;
     auto secs = seconds(header->ts.tv_sec);
-    auto ts = timestamp{duration_cast<timespan>(secs)};
+    auto ts = time{duration_cast<duration>(secs)};
 #ifdef PCAP_TSTAMP_PRECISION_NANO
     ts += nanoseconds(header->ts.tv_usec);
 #else
@@ -297,7 +297,7 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
                      ts.time_since_epoch().count(), '<',
                      last_timestamp_.time_since_epoch().count());
       }
-      if (last_timestamp_ != timestamp::min()) {
+      if (last_timestamp_ != time::min()) {
         auto delta = ts - last_timestamp_;
         std::this_thread::sleep_for(delta / pseudo_realtime_);
       }
@@ -342,7 +342,7 @@ expected<void> writer::write(const event& e) {
   auto& payload = caf::get<std::string>(xs[5]);
   // Make PCAP header.
   ::pcap_pkthdr header;
-  auto ns = caf::get<timestamp>(xs[0]).time_since_epoch().count();
+  auto ns = caf::get<time>(xs[0]).time_since_epoch().count();
   header.ts.tv_sec = ns / 1000000000;
 #ifdef PCAP_TSTAMP_PRECISION_NANO
   header.ts.tv_usec = ns % 1000000000;

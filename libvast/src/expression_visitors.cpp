@@ -254,8 +254,8 @@ expected<void> validator::operator()(const attribute_extractor& ex,
     return make_error(ec::syntax_error,
                       "type attribute extractor requires string operand",
                       ex.attr, op_, d);
-  else if (ex.attr == system::time_atom::value
-           && !caf::holds_alternative<timestamp>(d))
+  else if (ex.attr == system::timestamp_atom::value
+           && !caf::holds_alternative<time>(d))
     return make_error(ec::syntax_error,
                       "time attribute extractor requires timestamp operand",
                       ex.attr, op_, d);
@@ -512,7 +512,7 @@ bool event_evaluator::operator()(const attribute_extractor& e, const data& d) {
   // with the corresponding function object.
   if (e.attr == system::type_atom::value)
     return evaluate(event_.type().name(), op_, d);
-  if (e.attr == system::time_atom::value)
+  if (e.attr == system::timestamp_atom::value)
     return evaluate(event_.timestamp(), op_, d);
   return false;
 }
@@ -577,10 +577,10 @@ bool table_slice_row_evaluator::operator()(const attribute_extractor& e,
   // with the corresponding function object.
   if (e.attr == system::type_atom::value)
     return evaluate(slice_.layout().name(), op_, d);
-  if (e.attr == system::time_atom::value) {
+  if (e.attr == system::timestamp_atom::value) {
     auto pred = [](auto& x) {
-      return caf::holds_alternative<timestamp_type>(x.type)
-             && has_attribute(x.type, "time");
+      return caf::holds_alternative<time_type>(x.type)
+             && has_attribute(x.type, "timestamp");
     };
     auto& fs = slice_.layout().fields;
     auto i = std::find_if(fs.begin(), fs.end(), pred);
@@ -657,7 +657,7 @@ bool matcher::operator()(const attribute_extractor& e, const data& d) {
   if (e.attr == system::type_atom::value) {
     VAST_ASSERT(caf::holds_alternative<std::string>(d));
     return evaluate(d, op_, type_.name());
-  } else if (e.attr == system::time_atom::value) {
+  } else if (e.attr == system::timestamp_atom::value) {
     return true; // Every event has a timestamp.
   }
   return false;

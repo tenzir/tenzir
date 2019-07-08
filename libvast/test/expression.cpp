@@ -207,17 +207,17 @@ TEST(validation - attribute extractor) {
   expr = to<expression>("#type == zeek.conn");
   REQUIRE(expr);
   CHECK(!caf::visit(validator{}, *expr));
-  // The "time" attribute extractor requires a timestamp operand.
-  expr = to<expression>("#time < now");
+  // The "timestamp" attribute extractor requires a timestamp operand.
+  expr = to<expression>("#timestamp < now");
   REQUIRE(expr);
   CHECK(caf::visit(validator{}, *expr));
-  expr = to<expression>("#time < 2017-06-16");
+  expr = to<expression>("#timestamp < 2017-06-16");
   REQUIRE(expr);
   CHECK(caf::visit(validator{}, *expr));
-  expr = to<expression>("#time > -42");
+  expr = to<expression>("#timestamp > -42");
   REQUIRE(expr);
   CHECK(!caf::visit(validator{}, *expr));
-  expr = to<expression>("#time > -42 secs");
+  expr = to<expression>("#timestamp > -42 secs");
   REQUIRE(expr);
   CHECK(!caf::visit(validator{}, *expr));
 }

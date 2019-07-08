@@ -149,7 +149,7 @@ struct time_point_printer : printer<time_point_printer<Clock, Duration>> {
                  << '+' << num2 << ':' << num2 << ':' << num2
                  << '.' << num;
     auto sd = floor<days>(tp);
-    auto [Y, M, D] = from_days(duration_cast<days>(sd - timestamp{}));
+    auto [Y, M, D] = from_days(duration_cast<days>(sd - time{}));
     auto t = tp - sd;
     auto h = duration_cast<hours>(t);
     auto m = duration_cast<minutes>(t - h);

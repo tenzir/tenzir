@@ -200,8 +200,8 @@ TEST(printable) {
 
 TEST(conversion) {
   using namespace std::chrono;
-  auto since_epoch = timespan{1258532203657267968ll};
-  auto ts = timestamp{since_epoch};
+  auto since_epoch = vast::duration{1258532203657267968ll};
+  auto ts = vast::time{since_epoch};
   auto fractional_ts = duration_cast<double_seconds>(since_epoch).count();
   CHECK_EQUAL(to_json(true), json{true});
   CHECK_EQUAL(to_json(4.2), json{4.2});

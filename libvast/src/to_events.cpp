@@ -28,7 +28,7 @@ namespace {
 
 optional<size_t> find_time_column(record_type layout) {
   for (size_t i = 0; i < layout.fields.size(); ++i)
-    if (has_attribute(layout.fields[i].type, "time"))
+    if (has_attribute(layout.fields[i].type, "timestamp"))
       return i;
   return caf::none;
 }
@@ -46,7 +46,7 @@ event to_event(const table_slice& slice, id eid, type event_layout,
   // Assign event timestamp.
   if (timestamp_column) {
     auto& xs = caf::get<vector>(e.data());
-    auto ts = caf::get<timestamp>(xs[*timestamp_column]);
+    auto ts = caf::get<time>(xs[*timestamp_column]);
     e.timestamp(ts);
   }
   return e;

@@ -23,7 +23,7 @@
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
 #include "vast/synopsis_factory.hpp"
-#include "vast/timestamp_synopsis.hpp"
+#include "vast/time_synopsis.hpp"
 
 #include "vast/detail/overload.hpp"
 

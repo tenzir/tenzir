@@ -199,10 +199,10 @@ TEST(zeek data parsing) {
   CHECK(d == integer{-49329});
   CHECK(zeek_parse(count_type{}, "49329"s, d));
   CHECK(d == count{49329});
-  CHECK(zeek_parse(timestamp_type{}, "1258594163.566694", d));
-  auto ts = duration_cast<timespan>(double_seconds{1258594163.566694});
-  CHECK(d == timestamp{ts});
-  CHECK(zeek_parse(timespan_type{}, "1258594163.566694", d));
+  CHECK(zeek_parse(time_type{}, "1258594163.566694", d));
+  auto ts = duration_cast<vast::duration>(double_seconds{1258594163.566694});
+  CHECK(d == vast::time{ts});
+  CHECK(zeek_parse(duration_type{}, "1258594163.566694", d));
   CHECK(d == ts);
   CHECK(zeek_parse(string_type{}, "\\x2afoo*"s, d));
   CHECK(d == "*foo*");

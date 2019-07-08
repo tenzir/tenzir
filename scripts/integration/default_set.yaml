@@ -141,7 +141,7 @@ tests:
       - command: import -N json -s @./misc/schema/zeek-conn.schema -t zeek.conn
         input: data/json/conn.log.json.gz
       - command: export -N ascii 'duration > 6s'
-      - command: export -N ascii '#time >= 2011-08-15T03:48'
+      - command: export -N ascii '#timestamp >= 2011-08-15T03:48'
   Node suricata alert:
     tags: [node, import-export, suricata, eve]
     steps:

@@ -76,11 +76,11 @@ public:
 
   /// Sets the event timestamp.
   /// @param ts The event timestamp.
-  void timestamp(vast::timestamp ts);
+  void timestamp(time ts);
 
   /// Retrieves the event timestamp.
   /// @returns The event timestamp.
-  vast::timestamp timestamp() const;
+  time timestamp() const;
 
   friend bool operator==(const event& x, const event& y);
   friend bool operator<(const event& x, const event& y);
@@ -92,7 +92,7 @@ public:
 
 private:
   vast::id id_ = invalid_id;
-  vast::timestamp timestamp_;
+  time timestamp_;
 };
 
 bool convert(const event& e, json& j);
@@ -103,4 +103,3 @@ bool convert(const event& e, json& j);
 event flatten(const event& e);
 
 } // namespace vast
-

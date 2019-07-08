@@ -60,15 +60,15 @@ struct convert {
     return port{detail::narrow_cast<port::number_type>(n)};
   }
 
-  expected<data> operator()(json::number s, const timestamp_type&) const {
+  expected<data> operator()(json::number s, const time_type&) const {
     auto secs = std::chrono::duration<json::number>(s);
-    auto since_epoch = std::chrono::duration_cast<timespan>(secs);
-    return timestamp{since_epoch};
+    auto since_epoch = std::chrono::duration_cast<duration>(secs);
+    return time{since_epoch};
   }
 
-  expected<data> operator()(json::number s, const timespan_type&) const {
+  expected<data> operator()(json::number s, const duration_type&) const {
     auto secs = std::chrono::duration<json::number>(s);
-    return std::chrono::duration_cast<timespan>(secs);
+    return std::chrono::duration_cast<duration>(secs);
   }
 
   expected<data> operator()(json::string s, const string_type&) const {

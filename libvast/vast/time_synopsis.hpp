@@ -11,21 +11,18 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/timestamp_synopsis.hpp"
+#pragma once
+
+#include "vast/min_max_synopsis.hpp"
+#include "vast/synopsis.hpp"
 
 namespace vast {
 
-timestamp_synopsis::timestamp_synopsis(vast::type x)
-  : min_max_synopsis<timestamp>{std::move(x), timestamp::max(),
-                                timestamp::min()} {
-  // nop
-}
+class time_synopsis final : public min_max_synopsis<time> {
+public:
+  time_synopsis(vast::type x);
 
-bool timestamp_synopsis::equals(const synopsis& other) const noexcept {
-  if (typeid(other) != typeid(timestamp_synopsis))
-    return false;
-  auto& dref = static_cast<const timestamp_synopsis&>(other);
-  return type() == dref.type() && min() == dref.min() && max() == dref.max();
-}
+  bool equals(const synopsis& other) const noexcept override;
+};
 
 } // namespace vast

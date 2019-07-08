@@ -329,7 +329,7 @@ TEST(data) {
   CHECK_TO_STRING(i, "+42");
   data s{std::string{"foobar"}};
   CHECK_TO_STRING(s, "\"foobar\"");
-  data d{timespan{512}};
+  data d{duration{512}};
   CHECK_TO_STRING(d, "512.0ns");
   data v{vector{r, b, c, i, s, d}};
   CHECK_TO_STRING(v, "[12.21, T, 23, +42, \"foobar\", 512.0ns]");
@@ -353,8 +353,8 @@ TEST(std::chrono::duration) {
 
 TEST(std::chrono::time_point) {
   using namespace std::chrono_literals;
-  CHECK_TO_STRING(timestamp{0s}, "1970-01-01+00:00:00.0");
-  CHECK_TO_STRING(timestamp{1502658642123456us}, "2017-08-13+21:10:42.123");
+  CHECK_TO_STRING(vast::time{0s}, "1970-01-01+00:00:00.0");
+  CHECK_TO_STRING(vast::time{1502658642123456us}, "2017-08-13+21:10:42.123");
 }
 
 // -- API ---------------------------------------------------------------------

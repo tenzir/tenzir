@@ -38,11 +38,11 @@ id event::id() const {
   return id_;
 }
 
-void event::timestamp(vast::timestamp ts) {
+void event::timestamp(time ts) {
   timestamp_ = ts;
 }
 
-vast::timestamp event::timestamp() const {
+time event::timestamp() const {
   return timestamp_;
 }
 
