@@ -43,7 +43,7 @@ TEST(invalid) {
 // A *data* value contains only data but lacks a type.
 TEST(data value) {
   value v{42};
-  CHECK(type_check(v.type(), caf::none));
+  CHECK(type_check(v.type(), data{caf::none}));
   CHECK(holds_alternative<integer>(v));
   CHECK(!v.type());
 }
@@ -51,7 +51,7 @@ TEST(data value) {
 TEST(typed value(empty)) {
   type t = count_type{};
   value v{caf::none, t};
-  CHECK(type_check(t, caf::none));
+  CHECK(type_check(t, data{caf::none}));
   CHECK(v.type() == t);
   CHECK(holds_alternative<caf::none_t>(v));
   CHECK(holds_alternative<count_type>(v.type()));
@@ -60,7 +60,7 @@ TEST(typed value(empty)) {
 TEST(typed value(data)) {
   type t = real_type{};
   value v{4.2, t};
-  CHECK(type_check(t, 4.2));
+  CHECK(type_check(t, data{4.2}));
   CHECK(v.type() == t);
   CHECK(holds_alternative<real>(v));
   CHECK(holds_alternative<real_type>(v.type()));
@@ -90,7 +90,7 @@ TEST(relational operators) {
   MESSAGE("typed value with equal data");
   v1 = {4.2, t};
   v2 = {4.2, t};
-  CHECK(type_check(t, 4.2));
+  CHECK(type_check(t, data{4.2}));
   CHECK(v1 == v2);
   CHECK(!(v1 != v2));
   CHECK(!(v1 < v2));
@@ -122,7 +122,7 @@ TEST(serialization) {
   s.emplace(port{80, port::tcp});
   s.emplace(port{53, port::udp});
   s.emplace(port{8, port::icmp});
-  CHECK(type_check(t, s));
+  CHECK(type_check(t, data{s}));
   value v{s, t};
   value w;
   std::vector<char> buf;

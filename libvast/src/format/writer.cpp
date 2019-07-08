@@ -13,6 +13,7 @@
 
 #include "vast/format/writer.hpp"
 
+#include "vast/error.hpp"
 #include "vast/event.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/to_events.hpp"
@@ -21,6 +22,10 @@ namespace vast::format {
 
 writer::~writer() {
   // nop
+}
+
+caf::expected<void> writer::write(const event&) {
+  return ec::unimplemented;
 }
 
 caf::error writer::write(const std::vector<event>& xs) {

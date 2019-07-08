@@ -13,19 +13,9 @@
 
 #pragma once
 
-#include "vast/format/ostream_writer.hpp"
+namespace vast::policy {
 
-namespace vast::format::ascii {
+/// Tag type to configure a ::writer.
+struct omit_field_names {};
 
-class writer : public format::ostream_writer {
-public:
-  using super = format::ostream_writer;
-
-  using super::super;
-
-  caf::error write(const table_slice& x) override;
-
-  const char* name() const override;
-};
-
-} // namespace vast::format::ascii
+} // namespace vast::policy

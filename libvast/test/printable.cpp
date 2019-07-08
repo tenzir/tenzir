@@ -23,15 +23,29 @@
 #include "vast/concept/printable/numeric.hpp"
 #include "vast/concept/printable/print.hpp"
 #include "vast/concept/printable/std/chrono.hpp"
-#include "vast/concept/printable/string.hpp"
 #include "vast/concept/printable/stream.hpp"
+#include "vast/concept/printable/string.hpp"
 #include "vast/concept/printable/to.hpp"
 #include "vast/concept/printable/to_string.hpp"
+#include "vast/concept/printable/vast/data.hpp"
+#include "vast/concept/printable/vast/view.hpp"
 #include "vast/detail/escapers.hpp"
 
 using namespace std::string_literals;
 using namespace vast;
 using namespace vast::printer_literals;
+
+#define CHECK_TO_STRING(expr, str)                                             \
+  {                                                                            \
+    auto x = expr;                                                             \
+    if constexpr (!std::is_same_v<decltype(x), data>) {                        \
+      CHECK_EQUAL(to_string(x), str);                                          \
+      CHECK_EQUAL(to_string(make_view(x)), str);                               \
+    }                                                                          \
+    data data_expr{x};                                                         \
+    CHECK_EQUAL(to_string(data_expr), str);                                    \
+    CHECK_EQUAL(to_string(make_view(data_expr)), str);                         \
+  }
 
 // -- numeric -----------------------------------------------------------------
 
@@ -302,30 +316,46 @@ TEST(not) {
   CHECK_EQUAL(str, "chewie");
 }
 
+// -- VAST types ---------------------------------------------------------------
+
+TEST(data) {
+  data r{real{12.21}};
+  CHECK_TO_STRING(r, "12.21");
+  data b{true};
+  CHECK_TO_STRING(b, "T");
+  data c{count{23}};
+  CHECK_TO_STRING(c, "23");
+  data i{integer{42}};
+  CHECK_TO_STRING(i, "+42");
+  data s{std::string{"foobar"}};
+  CHECK_TO_STRING(s, "\"foobar\"");
+  data d{timespan{512}};
+  CHECK_TO_STRING(d, "512.0ns");
+  data v{vector{r, b, c, i, s, d}};
+  CHECK_TO_STRING(v, "[12.21, T, 23, +42, \"foobar\", 512.0ns]");
+}
+
 // -- std::chrono -------------------------------------------------------------
 
 TEST(std::chrono::duration) {
-  using namespace std::chrono;
-  CHECK_EQUAL(to_string(nanoseconds(15)), "15.0ns");
-  CHECK_EQUAL(to_string(nanoseconds(15'450)), "15.45us");
-  CHECK_EQUAL(to_string(microseconds(42)), "42.0us");
-  CHECK_EQUAL(to_string(microseconds(42'123)), "42.12ms");
-  CHECK_EQUAL(to_string(milliseconds(-7)), "-7.0ms");
-  CHECK_EQUAL(to_string(seconds(59)), "59.0s");
-  CHECK_EQUAL(to_string(seconds(60)), "1.0m");
-  CHECK_EQUAL(to_string(seconds(-90)), "-1.5m");
-  CHECK_EQUAL(to_string(seconds(390)), "6.5m");
-  CHECK_EQUAL(to_string(days(-100)), "-100.0d");
+  using namespace std::chrono_literals;
+  CHECK_TO_STRING(15ns, "15.0ns");
+  CHECK_TO_STRING(15'450ns, "15.45us");
+  CHECK_TO_STRING(42us, "42.0us");
+  CHECK_TO_STRING(42'123us, "42.12ms");
+  CHECK_TO_STRING(-7ms, "-7.0ms");
+  CHECK_TO_STRING(59s, "59.0s");
+  CHECK_TO_STRING(60s, "1.0m");
+  CHECK_TO_STRING(-90s, "-1.5m");
+  CHECK_TO_STRING(390s, "6.5m");
+  CHECK_TO_STRING(-2400h, "-100.0d");
 }
 
 TEST(std::chrono::time_point) {
-  using namespace std::chrono;
-  auto ts = system_clock::time_point{seconds{0}};
-  CHECK_EQUAL(to_string(ts), "1970-01-01+00:00:00.0");
-  ts = system_clock::time_point{microseconds{1502658642123456}};
-  CHECK_EQUAL(to_string(ts), "2017-08-13+21:10:42.123");
+  using namespace std::chrono_literals;
+  CHECK_TO_STRING(timestamp{0s}, "1970-01-01+00:00:00.0");
+  CHECK_TO_STRING(timestamp{1502658642123456us}, "2017-08-13+21:10:42.123");
 }
-
 
 // -- API ---------------------------------------------------------------------
 

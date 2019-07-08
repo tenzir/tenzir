@@ -32,7 +32,7 @@ public:
   /// @note Legacy API! This exists only for backwards compatibility at the
   ///       moment and is going to get removed when all implementations of this
   ///       interface switched to the `table_slice` API.
-  virtual caf::expected<void> write(const event& x)  = 0;
+  virtual caf::expected<void> write(const event& x);
 
   /// Processes a batch of events.
   /// @param xs The events to write.

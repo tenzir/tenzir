@@ -11,52 +11,32 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#pragma once
-
-#include <iterator>
-#include <memory>
-#include <ostream>
+#include "vast/format/ostream_writer.hpp"
 
 #include "vast/error.hpp"
-#include "vast/event.hpp"
-#include "vast/expected.hpp"
-
-#include "vast/format/writer.hpp"
 
 namespace vast::format {
 
-/// A writer that operates with a given printer.
-template <class Printer>
-class printer_writer : public writer {
-public:
-  printer_writer() = default;
+ostream_writer::ostream_writer(ostream_ptr out) : out_(std::move(out)) {
+  // nop
+}
 
-  /// Constructs a generic writer.
-  /// @param out The stream where to write to
-  explicit printer_writer(std::unique_ptr<std::ostream> out)
-    : out_{std::move(out)} {
-  }
+ostream_writer::~ostream_writer() {
+  // nop
+}
 
-  using format::writer::write;
+caf::expected<void> ostream_writer::flush() {
+  if (out_ == nullptr)
+    return make_error(ec::format_error, "no output stream available");
+  out_->flush();
+  if (!*out_)
+    return make_error(ec::format_error, "failed to flush");
+  return caf::unit;
+}
 
-  expected<void> write(const event& e) override {
-    auto i = std::ostreambuf_iterator<char>(*out_);
-    if (!printer_.print(i, e))
-      return make_error(ec::print_error, "failed to print event:", e);
-    *out_ << '\n';
-    return {};
-  }
-
-  expected<void> flush() override {
-    out_->flush();
-    if (!*out_)
-      return make_error(ec::format_error, "failed to flush");
-    return {};
-  }
-
-private:
-  std::unique_ptr<std::ostream> out_;
-  Printer printer_;
-};
+void ostream_writer::write_buf() {
+  out_->write(buf_.data(), buf_.size());
+  buf_.clear();
+}
 
 } // namespace vast::format

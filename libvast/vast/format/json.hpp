@@ -14,13 +14,12 @@
 #pragma once
 
 #include "vast/concept/parseable/vast/json.hpp"
-#include "vast/concept/printable/vast/json.hpp"
 #include "vast/detail/line_range.hpp"
 #include "vast/error.hpp"
 #include "vast/event.hpp"
 #include "vast/expected.hpp"
 #include "vast/format/multi_layout_reader.hpp"
-#include "vast/format/printer_writer.hpp"
+#include "vast/format/ostream_writer.hpp"
 #include "vast/fwd.hpp"
 #include "vast/json.hpp"
 #include "vast/logger.hpp"
@@ -28,25 +27,15 @@
 
 namespace vast::format::json {
 
-struct event_printer : printer<event_printer> {
-  using attribute = event;
-
-  template <class Iterator>
-  bool print(Iterator& out, const event& e) const {
-    vast::json j;
-    if (!convert(e.data(), j, e.type()))
-      return false;
-    return printers::json<policy::oneline>(out, j);
-  }
-};
-
-class writer : public printer_writer<event_printer> {
+class writer : public ostream_writer {
 public:
-  using printer_writer<event_printer>::printer_writer;
+  using super = ostream_writer;
 
-  const char* name() const {
-    return "json-writer";
-  }
+  using super::super;
+
+  caf::error write(const table_slice& x) override;
+
+  const char* name() const override;
 };
 
 /// Adds a JSON object to a table slice builder according to a given layout.

@@ -11,21 +11,21 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#pragma once
+#include "vast/format/ascii.hpp"
 
-#include "vast/format/ostream_writer.hpp"
+#include "vast/concept/printable/vast/view.hpp"
+#include "vast/policy/omit_field_names.hpp"
+#include "vast/table_slice.hpp"
 
 namespace vast::format::ascii {
 
-class writer : public format::ostream_writer {
-public:
-  using super = format::ostream_writer;
+caf::error writer::write(const table_slice& x) {
+  data_view_printer printer;
+  return print<policy::omit_field_names>(printer, x, "<", ", ", ">");
+}
 
-  using super::super;
-
-  caf::error write(const table_slice& x) override;
-
-  const char* name() const override;
-};
+const char* writer::name() const {
+  return "ascii-writer";
+}
 
 } // namespace vast::format::ascii

@@ -179,6 +179,10 @@ template <class Pointer>
 class container_view_handle
   : detail::totally_ordered<container_view_handle<Pointer>> {
 public:
+  using view_type = typename Pointer::element_type;
+
+  using iterator = typename view_type::iterator;
+
   container_view_handle() = default;
 
   container_view_handle(Pointer ptr) : ptr_{ptr} {
@@ -195,6 +199,22 @@ public:
 
   const auto& operator*() const {
     return *ptr_;
+  }
+
+  iterator begin() const {
+    return {ptr_.get(), 0};
+  }
+
+  iterator end() const {
+    return {ptr_.get(), size()};
+  }
+
+  size_t size() const {
+    return ptr_ ? ptr_->size() : 0;
+  }
+
+  bool empty() const {
+    return size() == 0;
   }
 
 private:

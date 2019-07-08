@@ -13,6 +13,7 @@
 
 #pragma once
 
+#include <iterator>
 #include <vector>
 
 #include "vast/concept/printable/core/printer.hpp"
