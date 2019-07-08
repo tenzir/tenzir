@@ -26,6 +26,7 @@
 #include "vast/detail/unbox_var.hpp"
 #include "vast/format/json.hpp"
 #include "vast/logger.hpp"
+#include "vast/policy/include_field_names.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
 #include "vast/type.hpp"
@@ -164,7 +165,7 @@ const vast::json* lookup(std::string_view field, const vast::json::object& xs) {
 
 caf::error writer::write(const table_slice& x) {
   json_printer<policy::oneline> printer;
-  return print<true>(printer, x, "{", ", ", "}");
+  return print<policy::include_field_names>(printer, x, "{", ", ", "}");
 }
 
 const char* writer::name() const {

@@ -11,21 +11,11 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/format/ascii.hpp"
+#pragma once
 
-#include "vast/concept/printable/vast/view.hpp"
-#include "vast/policy/omit_field_names.hpp"
-#include "vast/table_slice.hpp"
+namespace vast::policy {
 
-namespace vast::format::ascii {
+/// Tag type to configure a ::writer.
+struct omit_field_names {};
 
-caf::error writer::write(const table_slice& x) {
-  data_view_printer printer;
-  return print<policy::omit_field_names>(printer, x, "<", ", ", ">");
-}
-
-const char* writer::name() const {
-  return "ascii-writer";
-}
-
-} // namespace vast::format::ascii
+} // namespace vast::policy
