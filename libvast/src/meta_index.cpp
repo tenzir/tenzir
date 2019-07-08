@@ -80,7 +80,7 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
     std::sort(result.begin(), result.end());
     return result;
   };
-  return caf::visit(detail::overload(
+  auto f = detail::overload(
     [&](const conjunction& x) -> result_type {
       VAST_ASSERT(!x.empty());
       auto i = x.begin();
@@ -106,20 +106,22 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
     },
     [&](const negation&) -> result_type {
       // We cannot handle negations, because a synopsis may return false
-      // positives, and negating such a result may cause false negatives.
+      // positives, and negating such a result may cause false
+      // negatives.
       return all_partitions();
     },
     [&](const predicate& x) -> result_type {
-      // Performs a lookup on all *matching* synopses with operator and data
-      // from the predicate of the expression. The match function uses a record
-      // field to determine whether the synopsis should be queried.
+      // Performs a lookup on all *matching* synopses with operator and
+      // data from the predicate of the expression. The match function
+      // uses a record field to determine whether the synopsis should be
+      // queried.
       auto search = [&](auto match) {
         VAST_ASSERT(caf::holds_alternative<data>(x.rhs));
         auto& rhs = caf::get<data>(x.rhs);
         result_type result;
         auto found_matching_synopsis = false;
-        // We factor the nested loop into a lambda so that we can abort the
-        // iteration more easily with a return statement.
+        // We factor the nested loop into a lambda so that we can abort
+        // the iteration more easily with a return statement.
         auto lookup = [&](auto& part_id, auto& part_syn) {
           for (auto& [layout, table_syn] : part_syn)
             for (size_t i = 0; i < table_syn.size(); ++i)
@@ -137,11 +139,11 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
         std::sort(result.begin(), result.end());
         return found_matching_synopsis ? result : all_partitions();
       };
-      return caf::visit(detail::overload(
+      auto extract_expr = detail::overload(
         [&](const attribute_extractor& lhs, const data& d) -> result_type {
-          if (lhs.attr == system::time_atom::value) {
+          if (lhs.attr == system::timestamp_atom::value) {
             auto pred = [](auto& field) {
-              return has_attribute(field.type, "time");
+              return has_attribute(field.type, "timestamp");
             };
             return search(pred);
           } else if (lhs.attr == system::type_atom::value) {
@@ -170,15 +172,15 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
         [&](const auto&, const auto&) -> result_type {
           VAST_WARNING(this, "cannot process predicate:", x);
           return all_partitions();
-        }
-      ), x.lhs, x.rhs);
+        });
+      return caf::visit(extract_expr, x.lhs, x.rhs);
     },
     [&](caf::none_t) -> result_type {
       VAST_ERROR(this, "received an empty expression");
       VAST_ASSERT(!"invalid expression");
       return all_partitions();
-    }
-  ), expr);
+    });
+  return caf::visit(f, expr);
 }
 
 synopsis_options& meta_index::factory_options() {

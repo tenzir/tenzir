@@ -69,7 +69,7 @@ void init(accountant_actor* self, const path& filename) {
 
 template <class T>
 void record(accountant_actor* self, const std::string& key, T x,
-            timestamp ts = std::chrono::system_clock::now()) {
+            time ts = std::chrono::system_clock::now()) {
   using namespace std::chrono;
   auto aid = self->current_sender()->id();
   auto node = self->current_sender()->node();
@@ -87,16 +87,15 @@ void record(accountant_actor* self, const std::string& key, T x,
   }
 }
 
-void record(accountant_actor* self, const std::string& key, timespan x,
-            timestamp ts = std::chrono::system_clock::now()) {
+void record(accountant_actor* self, const std::string& key, duration x,
+            time ts = std::chrono::system_clock::now()) {
   using namespace std::chrono;
   auto us = duration_cast<microseconds>(x).count();
   record(self, key, us, std::move(ts));
 }
 
-void record(accountant_actor* self, const std::string& key, timestamp x,
-            timestamp ts = std::chrono::system_clock::now()) {
-  using namespace std::chrono;
+void record(accountant_actor* self, const std::string& key, time x,
+            time ts = std::chrono::system_clock::now()) {
   record(self, key, x.time_since_epoch(), std::move(ts));
 }
 
@@ -158,11 +157,11 @@ accountant_type::behavior_type accountant(accountant_actor* self,
             record(self, key, value);
           },
           // Helpers to avoid to_string(..) in sender context.
-          [=](const std::string& key, timespan value) {
+          [=](const std::string& key, duration value) {
             VAST_TRACE(self, "received", key, "from", self->current_sender());
             record(self, key, value);
           },
-          [=](const std::string& key, timestamp value) {
+          [=](const std::string& key, time value) {
             VAST_TRACE(self, "received", key, "from", self->current_sender());
             record(self, key, value);
           },
@@ -180,17 +179,18 @@ accountant_type::behavior_type accountant(accountant_actor* self,
           },
           [=](const report& r) {
             VAST_TRACE(self, "received a report from", self->current_sender());
-            timestamp ts = std::chrono::system_clock::now();
+            time ts = std::chrono::system_clock::now();
             for (const auto& [key, value] : r) {
-              caf::visit([&, key = key](
-                           const auto& x) { record(self, key, x, ts); },
-                         value);
+              auto f = [&, key = key](const auto& x) {
+                record(self, key, x, ts);
+              };
+              caf::visit(f, value);
             }
           },
           [=](const performance_report& r) {
             VAST_TRACE(self, "received a performance report from",
                        self->current_sender());
-            timestamp ts = std::chrono::system_clock::now();
+            time ts = std::chrono::system_clock::now();
             for (const auto& [key, value] : r) {
               record(self, key + ".events", value.events, ts);
               record(self, key + ".duration", value.duration, ts);

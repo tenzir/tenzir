@@ -71,8 +71,8 @@ struct adder {
   }
 
   template <class T>
-  void operator()(timespan& x, const T& y) {
-    if constexpr (std::is_same_v<T, timespan>) {
+  void operator()(duration& x, const T& y) {
+    if constexpr (std::is_same_v<T, duration>) {
       x += y;
     } else if constexpr (detail::is_any_v<T, vector, set>) {
       lift(x, y);
@@ -80,8 +80,8 @@ struct adder {
   }
 
   template <class T>
-  void operator()(timestamp& x, const T& y) {
-    if constexpr (std::is_same_v<T, timespan>) {
+  void operator()(time& x, const T& y) {
+    if constexpr (std::is_same_v<T, duration>) {
       x += y;
     } else if constexpr (detail::is_any_v<T, vector, set>) {
       lift(x, y);

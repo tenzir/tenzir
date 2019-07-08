@@ -107,7 +107,7 @@ using exporter_atom = caf::atom_constant<caf::atom("exporter")>;
 using importer_atom = caf::atom_constant<caf::atom("importer")>;
 
 // Attributes
-using time_atom = caf::atom_constant<caf::atom("time")>;
+using timestamp_atom = caf::atom_constant<caf::atom("timestamp")>;
 using type_atom = caf::atom_constant<caf::atom("type")>;
 
 } // namespace vast::system

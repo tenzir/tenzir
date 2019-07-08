@@ -129,7 +129,7 @@ set(libvast_sources
   src/table_slice_builder_factory.cpp
   src/table_slice_factory.cpp
   src/time.cpp
-  src/timestamp_synopsis.cpp
+  src/time_synopsis.cpp
   src/to_events.cpp
   src/type.cpp
   src/uuid.cpp

@@ -134,10 +134,11 @@ TEST(floating-point with custom binner) {
   CHECK_EQUAL(to_string(unbox(result)), "1110111");
 }
 
-TEST(timespan) {
+TEST(duration) {
   using namespace std::chrono;
   // Default binning gives granularity of seconds.
-  auto idx = arithmetic_index<timespan>{timespan_type{}, base::uniform<64>(10)};
+  auto idx = arithmetic_index<vast::duration>{duration_type{},
+                                              base::uniform<64>(10)};
   MESSAGE("append");
   REQUIRE(idx.append(make_data_view(milliseconds(1000))));
   REQUIRE(idx.append(make_data_view(milliseconds(2000))));
@@ -154,35 +155,35 @@ TEST(timespan) {
   CHECK_EQUAL(to_string(unbox(twelve)), "011011");
 }
 
-TEST(timestamp) {
-  arithmetic_index<timestamp> idx{timestamp_type{}, base::uniform<64>(10)};
-  auto ts = to<timestamp>("2014-01-16+05:30:15");
+TEST(time) {
+  arithmetic_index<vast::time> idx{time_type{}, base::uniform<64>(10)};
+  auto ts = to<vast::time>("2014-01-16+05:30:15");
   MESSAGE("append");
   REQUIRE(idx.append(make_data_view(unbox(ts))));
-  ts = to<timestamp>("2014-01-16+05:30:12");
+  ts = to<vast::time>("2014-01-16+05:30:12");
   REQUIRE(idx.append(make_data_view(unbox(ts))));
-  ts = to<timestamp>("2014-01-16+05:30:15");
+  ts = to<vast::time>("2014-01-16+05:30:15");
   REQUIRE(idx.append(make_data_view(unbox(ts))));
-  ts = to<timestamp>("2014-01-16+05:30:18");
+  ts = to<vast::time>("2014-01-16+05:30:18");
   REQUIRE(idx.append(make_data_view(unbox(ts))));
-  ts = to<timestamp>("2014-01-16+05:30:15");
+  ts = to<vast::time>("2014-01-16+05:30:15");
   REQUIRE(idx.append(make_data_view(unbox(ts))));
-  ts = to<timestamp>("2014-01-16+05:30:19");
+  ts = to<vast::time>("2014-01-16+05:30:19");
   REQUIRE(idx.append(make_data_view(unbox(ts))));
   MESSAGE("lookup");
-  ts = to<timestamp>("2014-01-16+05:30:15");
+  ts = to<vast::time>("2014-01-16+05:30:15");
   auto fifteen = idx.lookup(equal, make_data_view(unbox(ts)));
   CHECK(to_string(unbox(fifteen)) == "101010");
-  ts = to<timestamp>("2014-01-16+05:30:20");
+  ts = to<vast::time>("2014-01-16+05:30:20");
   auto twenty = idx.lookup(less, make_data_view(unbox(ts)));
   CHECK(to_string(unbox(twenty)) == "111111");
-  ts = to<timestamp>("2014-01-16+05:30:18");
+  ts = to<vast::time>("2014-01-16+05:30:18");
   auto eighteen = idx.lookup(greater_equal, make_data_view(unbox(ts)));
   CHECK(to_string(unbox(eighteen)) == "000101");
   MESSAGE("serialization");
   std::vector<char> buf;
   CHECK_EQUAL(save(nullptr, buf, idx), caf::none);
-  arithmetic_index<timestamp> idx2{timestamp_type{}, base::uniform<64>(10)};
+  arithmetic_index<vast::time> idx2{time_type{}, base::uniform<64>(10)};
   CHECK_EQUAL(load(nullptr, buf, idx2), caf::none);
   eighteen = idx2.lookup(greater_equal, make_data_view(unbox(ts)));
   CHECK(to_string(*eighteen) == "000101");

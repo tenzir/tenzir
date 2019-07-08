@@ -168,8 +168,8 @@ public:
   // clang-format off
   using value_type =
     std::conditional_t<
-      detail::is_any_v<T, timestamp, timespan>,
-      timespan::rep,
+      detail::is_any_v<T, time, duration>,
+      duration::rep,
       std::conditional_t<
         detail::is_any_v<T, bool, integer, count, real>,
         T,
@@ -185,12 +185,13 @@ public:
                                         singleton_coder<ids>,
                                         multi_level_coder<range_coder<ids>>>;
 
+  // clang-format off
   using binner_type =
     std::conditional_t<
       std::is_void_v<Binner>,
       // Choose a space-efficient binner if none specified.
       std::conditional_t<
-        detail::is_any_v<T, timestamp, timespan>,
+        detail::is_any_v<T, time, duration>,
       decimal_binner<9>, // nanoseconds -> seconds
         std::conditional_t<
           std::is_same_v<T, real>,
@@ -200,6 +201,7 @@ public:
       >,
       Binner
     >;
+  // clang-format on
 
   using bitmap_index_type = bitmap_index<value_type, coder_type, binner_type>;
 
@@ -235,10 +237,10 @@ private:
                               [&](view<integer> x) { return append(x); },
                               [&](view<count> x) { return append(x); },
                               [&](view<real> x) { return append(x); },
-                              [&](view<timespan> x) {
+                              [&](view<duration> x) {
                                 return append(x.count());
                               },
-                              [&](view<timestamp> x) {
+                              [&](view<time> x) {
                                 return append(x.time_since_epoch().count());
                               });
     return caf::visit(f, d);
@@ -254,10 +256,10 @@ private:
       [&](view<integer> x) -> expected<ids> { return bmi_.lookup(op, x); },
       [&](view<count> x) -> expected<ids> { return bmi_.lookup(op, x); },
       [&](view<real> x) -> expected<ids> { return bmi_.lookup(op, x); },
-      [&](view<timespan> x) -> expected<ids> {
+      [&](view<duration> x) -> expected<ids> {
         return bmi_.lookup(op, x.count());
       },
-      [&](view<timestamp> x) -> expected<ids> {
+      [&](view<time> x) -> expected<ids> {
         return bmi_.lookup(op, x.time_since_epoch().count());
       },
       [&](view<vector> xs) { return detail::container_lookup(*this, op, xs); },

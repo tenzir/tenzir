@@ -27,13 +27,12 @@ namespace vast::system {
 using stopwatch = std::chrono::steady_clock;
 
 struct measurement : public detail::addable<measurement> {
-  using timespan = vast::timespan;
-  timespan duration = timespan::zero();
+  vast::duration duration = vast::duration::zero();
   uint64_t events = 0;
 
   measurement() = default;
 
-  measurement(timespan d, uint64_t e) : duration{d}, events{e} {
+  measurement(vast::duration d, uint64_t e) : duration{d}, events{e} {
     // nop
   }
 
@@ -60,7 +59,7 @@ struct timer {
 
   void stop(uint64_t events) {
     auto stop = stopwatch::now();
-    auto elapsed = std::chrono::duration_cast<measurement::timespan>(stop - start_);
+    auto elapsed = std::chrono::duration_cast<duration>(stop - start_);
     m_ += {elapsed, events};
   }
 
@@ -95,7 +94,7 @@ struct atomic_timer {
 
   void stop(uint64_t events) {
     auto stop = stopwatch::now();
-    auto elapsed = std::chrono::duration_cast<measurement::timespan>(stop - start_);
+    auto elapsed = std::chrono::duration_cast<duration>(stop - start_);
 #ifdef VAST_MEASUREMENT_MUTEX_WORKAROUND
     std::unique_lock<std::mutex> lock{m_.mutex};
     m_ += measurement{elapsed, events};

@@ -78,7 +78,8 @@ struct duration_parser : parser<duration_parser<Rep, Period>> {
     } else {
       double scale;
       auto multiply = [&](attribute dur) {
-        auto result = duration_cast<duration<double, Period>>(dur) * scale;
+        using double_duration = std::chrono::duration<double, Period>;
+        auto result = duration_cast<double_duration>(dur) * scale;
         return cast(result);
       };
       auto p = real_opt_dot >> ignore(*space) >> unit ->* multiply;
@@ -109,16 +110,18 @@ struct parser_registry<std::chrono::duration<Rep, Period>> {
 
 namespace parsers {
 
+/// A parser template for any duration type from `std::chrono`.
 template <class Rep, class Period>
-auto const duration = compound_duration_parser<Rep, Period>{};
+auto const stl_duration = compound_duration_parser<Rep, Period>{};
 
-auto const timespan = duration<vast::timespan::rep, vast::timespan::period>;
+/// A parser for VASTs duration type.
+auto const duration = stl_duration<vast::duration::rep, vast::duration::period>;
 
 } // namespace parsers
 
 // TODO: Support more of ISO8601.
 struct ymdhms_parser : vast::parser<ymdhms_parser> {
-  using attribute = timestamp;
+  using attribute = time;
 
   // Logic extracted from
   // https://github.com/HowardHinnant/date/blob/master/include/date/date.h
@@ -193,7 +196,7 @@ struct ymdhms_parser : vast::parser<ymdhms_parser> {
       auto zone_offset = (hours{zhrs} + minutes{zmins}) * zsign;
       auto delta = hours{hrs} + minutes{mins} + zone_offset
                    + double_seconds{secs};
-      x = timestamp{ymd} + duration_cast<timespan>(delta);
+      x = time{ymd} + duration_cast<vast::duration>(delta);
       return true;
     }
   }
@@ -207,41 +210,38 @@ auto const ymdhms = ymdhms_parser{};
 auto const unix_ts = real_opt_dot
   ->* [](double d) {
     using std::chrono::duration_cast;
-    return timestamp{duration_cast<vast::timespan>(double_seconds{d})};
+    return time{duration_cast<vast::duration>(double_seconds{d})};
   };
 
 } // namespace parsers
 
-struct timestamp_parser : parser<timestamp_parser> {
-  using attribute = timestamp;
+struct time_parser : parser<time_parser> {
+  using attribute = time;
 
   template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
     using namespace parser_literals;
-    auto plus = [](timespan t) { return timestamp::clock::now() + t; };
-    auto minus = [](timespan t) { return timestamp::clock::now() - t; };
+    auto plus = [](duration t) { return time::clock::now() + t; };
+    auto minus = [](duration t) { return time::clock::now() - t; };
     auto ws = ignore(*parsers::space);
-    auto p
-      = parsers::ymdhms
-      | '@' >> parsers::unix_ts
-      | "now" >> ws >> ( '+' >> ws >> parsers::timespan ->* plus
-                       | '-' >> ws >> parsers::timespan ->* minus )
-      | "now"_p ->* []() { return timestamp::clock::now(); }
-      | "in" >> ws >> parsers::timespan ->* plus
-      | (parsers::timespan ->* minus) >> ws >> "ago"
-      ;
+    auto p = parsers::ymdhms | '@' >> parsers::unix_ts
+             | "now" >> ws >> ('+' >> ws >> parsers::duration->*plus
+                               | '-' >> ws >> parsers::duration->*minus)
+             | "now"_p->*[]() { return time::clock::now(); }
+             | "in" >> ws >> parsers::duration->*plus
+             | (parsers::duration->*minus) >> ws >> "ago";
     return p(f, l, a);
   }
 };
 
 template <>
-struct parser_registry<timestamp> {
-  using type = timestamp_parser;
+struct parser_registry<time> {
+  using type = time_parser;
 };
 
 namespace parsers {
 
-auto const timestamp = timestamp_parser{};
+auto const time = time_parser{};
 
 } // namespace parsers
 } // namespace vast

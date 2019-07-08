@@ -160,8 +160,8 @@ TEST(serialization) {
   CHECK_ROUNDTRIP(integer_type{});
   CHECK_ROUNDTRIP(count_type{});
   CHECK_ROUNDTRIP(real_type{});
-  CHECK_ROUNDTRIP(timespan_type{});
-  CHECK_ROUNDTRIP(timestamp_type{});
+  CHECK_ROUNDTRIP(duration_type{});
+  CHECK_ROUNDTRIP(time_type{});
   CHECK_ROUNDTRIP(string_type{});
   CHECK_ROUNDTRIP(pattern_type{});
   CHECK_ROUNDTRIP(address_type{});
@@ -178,8 +178,8 @@ TEST(serialization) {
   CHECK_ROUNDTRIP(type{integer_type{}});
   CHECK_ROUNDTRIP(type{count_type{}});
   CHECK_ROUNDTRIP(type{real_type{}});
-  CHECK_ROUNDTRIP(type{timespan_type{}});
-  CHECK_ROUNDTRIP(type{timestamp_type{}});
+  CHECK_ROUNDTRIP(type{duration_type{}});
+  CHECK_ROUNDTRIP(type{time_type{}});
   CHECK_ROUNDTRIP(type{string_type{}});
   CHECK_ROUNDTRIP(type{pattern_type{}});
   CHECK_ROUNDTRIP(type{address_type{}});
@@ -472,8 +472,8 @@ TEST(type_check) {
   TYPE_CHECK(integer_type{}, 42);
   TYPE_CHECK(count_type{}, 42u);
   TYPE_CHECK(real_type{}, 4.2);
-  TYPE_CHECK(timespan_type{}, timespan{0});
-  TYPE_CHECK(timestamp_type{}, timestamp{});
+  TYPE_CHECK(duration_type{}, duration{0});
+  TYPE_CHECK(time_type{}, vast::time{});
   TYPE_CHECK(string_type{}, "foo"s);
   TYPE_CHECK(pattern_type{}, pattern{"foo"});
   TYPE_CHECK(address_type{}, address{});
@@ -509,8 +509,8 @@ TEST(printable) {
   CHECK_EQUAL(to_string(integer_type{}), "int");
   CHECK_EQUAL(to_string(count_type{}), "count");
   CHECK_EQUAL(to_string(real_type{}), "real");
-  CHECK_EQUAL(to_string(timespan_type{}), "duration");
-  CHECK_EQUAL(to_string(timestamp_type{}), "time");
+  CHECK_EQUAL(to_string(duration_type{}), "duration");
+  CHECK_EQUAL(to_string(time_type{}), "time");
   CHECK_EQUAL(to_string(string_type{}), "string");
   CHECK_EQUAL(to_string(pattern_type{}), "pattern");
   CHECK_EQUAL(to_string(address_type{}), "addr");

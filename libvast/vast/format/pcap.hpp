@@ -124,7 +124,7 @@ private:
   uint64_t max_age_;
   uint64_t expire_interval_;
   uint64_t last_expire_ = 0;
-  timestamp last_timestamp_ = timestamp::min();
+  time last_timestamp_ = time::min();
   int64_t pseudo_realtime_;
   std::string input_;
 };

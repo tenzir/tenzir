@@ -57,8 +57,8 @@ using concrete_types = caf::detail::type_list<
   integer_type,
   count_type,
   real_type,
-  timespan_type,
-  timestamp_type,
+  duration_type,
+  time_type,
   string_type,
   pattern_type,
   address_type,
@@ -417,11 +417,11 @@ struct real_type final : basic_type<real_type> {};
 
 /// A type for time durations.
 /// @relates type
-struct timespan_type final : basic_type<timespan_type> {};
+struct duration_type final : basic_type<duration_type> {};
 
 /// A type for absolute points in time.
 /// @relates type
-struct timestamp_type final : basic_type<timestamp_type> {};
+struct time_type final : basic_type<time_type> {};
 
 /// A string type for sequence of characters.
 struct string_type final : basic_type<string_type> {};
@@ -705,8 +705,8 @@ VAST_TYPE_TRAIT(bool);
 VAST_TYPE_TRAIT(integer);
 VAST_TYPE_TRAIT(count);
 VAST_TYPE_TRAIT(real);
-VAST_TYPE_TRAIT(timespan);
-VAST_TYPE_TRAIT(timestamp);
+VAST_TYPE_TRAIT(duration);
+VAST_TYPE_TRAIT(time);
 VAST_TYPE_TRAIT(pattern);
 VAST_TYPE_TRAIT(address);
 VAST_TYPE_TRAIT(subnet);
@@ -977,8 +977,8 @@ VAST_DEFINE_HASH_SPECIALIZATION(bool_type);
 VAST_DEFINE_HASH_SPECIALIZATION(integer_type);
 VAST_DEFINE_HASH_SPECIALIZATION(count_type);
 VAST_DEFINE_HASH_SPECIALIZATION(real_type);
-VAST_DEFINE_HASH_SPECIALIZATION(timespan_type);
-VAST_DEFINE_HASH_SPECIALIZATION(timestamp_type);
+VAST_DEFINE_HASH_SPECIALIZATION(duration_type);
+VAST_DEFINE_HASH_SPECIALIZATION(time_type);
 VAST_DEFINE_HASH_SPECIALIZATION(string_type);
 VAST_DEFINE_HASH_SPECIALIZATION(pattern_type);
 VAST_DEFINE_HASH_SPECIALIZATION(address_type);

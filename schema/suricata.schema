@@ -1,5 +1,5 @@
 type suricata.component.common = record{
-  timestamp: time #time,
+  timestamp: time #timestamp,
   flow_id: count,
   pcap_cnt: count,
   src_ip: addr,
@@ -28,7 +28,7 @@ type suricata.component.app_proto = record{
 }
 
 type suricata.alert = record{
-  timestamp: time #time,
+  timestamp: time #timestamp,
   flow_id: count,
   pcap_cnt: count,
   src_ip: addr,
@@ -58,7 +58,7 @@ type suricata.alert = record{
 }
 
 type suricata.dhcp = record{
-  timestamp: time #time,
+  timestamp: time #timestamp,
   flow_id: count,
   pcap_cnt: count,
   src_ip: addr,
@@ -82,7 +82,7 @@ type suricata.dhcp = record{
 }
 
 type suricata.dns = record{
-  timestamp: time #time,
+  timestamp: time #timestamp,
   flow_id: count,
   pcap_cnt: count,
   src_ip: addr,
@@ -105,7 +105,7 @@ type suricata.dns = record{
 }
 
 type suricata.http = record{
-  timestamp: time #time,
+  timestamp: time #timestamp,
   flow_id: count,
   pcap_cnt: count,
   src_ip: addr,
@@ -131,7 +131,7 @@ type suricata.http = record{
 }
 
 type suricata.fileinfo = record{
-  timestamp: time #time,
+  timestamp: time #timestamp,
   flow_id: count,
   pcap_cnt: count,
   src_ip: addr,
@@ -170,7 +170,7 @@ type suricata.fileinfo = record{
 }
 
 type suricata.flow = record{
-  timestamp: time #time,
+  timestamp: time #timestamp,
   flow_id: count,
   pcap_cnt: count,
   src_ip: addr,
@@ -184,7 +184,7 @@ type suricata.flow = record{
 }
 
 type suricata.netflow = record{
-  timestamp: time #time,
+  timestamp: time #timestamp,
   flow_id: count,
   pcap_cnt: count,
   src_ip: addr,
@@ -204,7 +204,7 @@ type suricata.netflow = record{
 }
 
 type suricata.tls = record{
-  timestamp: time #time,
+  timestamp: time #timestamp,
   flow_id: count,
   pcap_cnt: count,
   src_ip: addr,

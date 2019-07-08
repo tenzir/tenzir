@@ -51,7 +51,7 @@ struct fixture : fixtures::events {
     e0 = event::make(vector{"babba", 1.337, 42u, 100, "bar", -4.8}, foo);
     e1 = event::make(vector{"yadda", vector{false, "baz"}}, bar);
     MESSAGE("event meta data queries");
-    auto tp = to<timestamp>("2014-01-16+05:30:12");
+    auto tp = to<vast::time>("2014-01-16+05:30:12");
     REQUIRE(tp);
     e.timestamp(*tp);
     auto t = alias_type{}.name("foo"); // nil type, for meta data only
@@ -71,10 +71,11 @@ struct fixture : fixtures::events {
 FIXTURE_SCOPE(evaluation_tests, fixture)
 
 TEST(evaluation - attributes) {
-  auto ast = to<expression>("#time == 2014-01-16+05:30:12");
+  auto ast = to<expression>("#timestamp == 2014-01-16+05:30:12");
   REQUIRE(ast);
   CHECK(caf::visit(event_evaluator{e}, *ast));
-  ast = to<expression>("#time == 2015-01-16+05:30:12"); // slight data change
+  // slight data change
+  ast = to<expression>("#timestamp == 2015-01-16+05:30:12");
   REQUIRE(ast);
   CHECK(!caf::visit(event_evaluator{e}, *ast));
   ast = to<expression>("#type == \"foo\"");
@@ -166,7 +167,7 @@ TEST(evaluation - table slice rows) {
     return unbox(caf::visit(type_resolver{layout}, ast));
   };
   // Run some checks on various rows.
-  CHECK(evaluate_at(*slice, 0, tailored("#time < 2009-12-18+00:00:00")));
+  CHECK(evaluate_at(*slice, 0, tailored("#timestamp < 2009-12-18+00:00:00")));
   CHECK(evaluate_at(*slice, 0, tailored("orig_h == 192.168.1.102")));
   CHECK(evaluate_at(*slice, 0, tailored(":addr == 192.168.1.102")));
   CHECK(evaluate_at(*slice, 1, tailored("orig_h != 192.168.1.102")));

@@ -292,7 +292,7 @@ TEST(single partition zeek conn log lookup) {
     CHECK_EQUAL(rank(query("id.resp_p == 53/?")), 3u);
     CHECK_EQUAL(rank(query("id.resp_p == 137/?")), 5u);
     CHECK_EQUAL(rank(query("id.resp_p == 53/? || id.resp_p == 137/?")), 8u);
-    CHECK_EQUAL(rank(query("#time > 1970-01-01")), zeek_conn_log.size());
+    CHECK_EQUAL(rank(query("#timestamp > 1970-01-01")), zeek_conn_log.size());
     CHECK_EQUAL(rank(query("proto == \"udp\"")), 20u);
     CHECK_EQUAL(rank(query("proto == \"tcp\"")), 0u);
     CHECK_EQUAL(rank(query("uid == \"nkCxlvNN8pi\"")), 1u);
