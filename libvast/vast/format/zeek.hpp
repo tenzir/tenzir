@@ -72,7 +72,7 @@ struct zeek_parser {
   }
 
   bool operator()(const time_type&) const {
-    static auto p = parsers::real ->* [](real x) {
+    static auto p = parsers::real->*[](real x) {
       auto i = std::chrono::duration_cast<duration>(double_seconds(x));
       return time{i};
     };
@@ -80,7 +80,7 @@ struct zeek_parser {
   }
 
   bool operator()(const duration_type&) const {
-    static auto p = parsers::real ->* [](real x) {
+    static auto p = parsers::real->*[](real x) {
       return std::chrono::duration_cast<duration>(double_seconds(x));
     };
     return parse(p);
@@ -150,14 +150,14 @@ struct zeek_parser_factory {
   }
 
   result_type operator()(const time_type&) const {
-    return parsers::real ->* [](real x) {
+    return parsers::real->*[](real x) {
       auto i = std::chrono::duration_cast<duration>(double_seconds(x));
       return time{i};
     };
   }
 
   result_type operator()(const duration_type&) const {
-    return parsers::real ->* [](real x) {
+    return parsers::real->*[](real x) {
       return std::chrono::duration_cast<duration>(double_seconds(x));
     };
   }

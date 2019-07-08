@@ -779,24 +779,9 @@ std::string to_digest(const type& x) {
 namespace {
 
 const char* kind_tbl[] = {
-  "none",
-  "bool",
-  "int",
-  "count",
-  "real",
-  "duration",
-  "time",
-  "string",
-  "pattern",
-  "address",
-  "subnet",
-  "port",
-  "enumeration",
-  "vector",
-  "set",
-  "map",
-  "record",
-  "alias",
+  "none",        "bool",   "int",     "count",   "real",   "duration",
+  "time",        "string", "pattern", "address", "subnet", "port",
+  "enumeration", "vector", "set",     "map",     "record", "alias",
 };
 
 using caf::detail::tl_size;

@@ -42,7 +42,7 @@ constexpr size_t num_events_per_parttion = 25;
 
 const vast::time epoch;
 
-vast::time get_timestamp(caf::optional<data_view> element){
+vast::time get_timestamp(caf::optional<data_view> element) {
   return materialize(caf::get<view<vast::time>>(*element));
 }
 

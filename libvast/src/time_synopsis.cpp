@@ -16,8 +16,7 @@
 namespace vast {
 
 time_synopsis::time_synopsis(vast::type x)
-  : min_max_synopsis<time>{std::move(x), time::max(),
-                                time::min()} {
+  : min_max_synopsis<time>{std::move(x), time::max(), time::min()} {
   // nop
 }
 
