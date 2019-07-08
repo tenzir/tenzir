@@ -18,6 +18,7 @@
 #include <caf/actor_system.hpp>
 #include <caf/actor_system_config.hpp>
 #include <caf/defaults.hpp>
+#include <caf/detail/log_level.hpp>
 #include <caf/make_message.hpp>
 #include <caf/message.hpp>
 #include <caf/settings.hpp>
@@ -133,8 +134,51 @@ bool init_config(caf::actor_system_config& cfg, const command::invocation& from,
   merge_settings(from.options, cfg.content);
   // Allow users to use `system.verbosity` to configure console verbosity.
   if (auto value = caf::get_if<caf::atom_value>(&from.options,
-                                                "system.verbosity"))
+                                                "system.verbosity")) {
+    // Verify user input.
+    int level;
+    using caf::atom_uint;
+    switch (atom_uint(to_lowercase(*value))) {
+      default:
+        level = -1;
+        break;
+      case atom_uint("quiet"):
+        level = CAF_LOG_LEVEL_QUIET;
+        break;
+      case atom_uint("error"):
+        level = CAF_LOG_LEVEL_ERROR;
+        break;
+      case atom_uint("warn"):
+        level = CAF_LOG_LEVEL_WARNING;
+        break;
+      case atom_uint("info"):
+        level = CAF_LOG_LEVEL_INFO;
+        break;
+      case atom_uint("debug"):
+        level = CAF_LOG_LEVEL_DEBUG;
+        break;
+      case atom_uint("trace"):
+        level = CAF_LOG_LEVEL_TRACE;
+    }
+    if (level == -1) {
+      error_output << "Invalid log level: " << to_string(*value) << ".\n"
+                   << "Expected: quiet, error, warn, info, debug, or trace.\n";
+      return false;
+    }
+    static constexpr std::string_view log_level_name[] = {"quiet", "", "",
+                                                          "error", "", "",
+                                                          "warn",  "", "",
+                                                          "info",  "", "",
+                                                          "debug", "", "",
+                                                          "trace"};
+    if (level > VAST_LOG_LEVEL) {
+      error_output << "Warning: desired log level " << to_string(*value)
+                   << " exceeds the maximum log level for this software"
+                      " version. Falling back to the maximum level ("
+                   << log_level_name[level] << ").\n";
+    }
     cfg.set("logger.console-verbosity", *value);
+  }
   // Adjust logger file name unless the user overrides the default.
   auto default_fn = caf::defaults::logger::file_name;
   if (caf::get_or(cfg, "logger.file-name", default_fn) == default_fn) {
