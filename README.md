@@ -20,7 +20,7 @@ Ingest a bunch of [Zeek](http://www.zeek.org) logs:
 
 Run a query over the last hour, rendered as JSON:
 
-    vast export json '&time > now - 1 hour && :addr == 6.6.6.6'
+    vast export json '#timestamp > 1 hour ago && (6.6.6.6 || 5353/udp)'
 
 Ingest a [PCAP](https://en.wikipedia.org/wiki/Pcap) trace with a 1024-byte flow
 cut-off:
