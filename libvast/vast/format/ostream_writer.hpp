@@ -36,7 +36,7 @@ public:
 
   // -- constructors, destructors, and assignment operators --------------------
 
-  ostream_writer(ostream_ptr out);
+  explicit ostream_writer(ostream_ptr out);
 
   ostream_writer() = default;
 
@@ -49,6 +49,12 @@ public:
   // -- overrides --------------------------------------------------------------
 
   caf::expected<void> flush() override;
+
+  // -- properties -------------------------------------------------------------
+
+  /// @returns the managed output stream.
+  /// @pre `out_ != nullptr`
+  std::ostream& out();
 
 protected:
   /// Appends `x` to `buf_`.
@@ -120,5 +126,8 @@ protected:
   /// Output stream for writing to STDOUT or disk.
   ostream_ptr out_;
 };
+
+/// @relates ostream_writer
+using ostream_writer_ptr = std::unique_ptr<ostream_writer>;
 
 } // namespace vast::format

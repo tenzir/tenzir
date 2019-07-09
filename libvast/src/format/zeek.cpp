@@ -21,6 +21,7 @@
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/data.hpp"
 #include "vast/concept/printable/vast/type.hpp"
+#include "vast/concept/printable/vast/view.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/escapers.hpp"
 #include "vast/detail/fdoutbuf.hpp"
@@ -29,9 +30,11 @@
 #include "vast/event.hpp"
 #include "vast/format/zeek.hpp"
 #include "vast/logger.hpp"
+#include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
 
 namespace vast::format::zeek {
+
 namespace {
 
 // The type name prefix to preprend to zeek log names when transleting them
@@ -123,14 +126,14 @@ struct zeek_type_printer {
   }
 };
 
-expected<std::string> to_zeek_string(const type& t) {
+auto to_zeek_string(const type& t) {
   return caf::visit(zeek_type_printer{}, t);
 }
 
 constexpr char separator = '\x09';
 constexpr char set_separator = ',';
 constexpr auto empty_field = "(empty)";
-constexpr auto unset_field = "-";
+constexpr auto unset_field = '-';
 
 struct time_factory {
   const char* fmt = "%Y-%m-%d-%H-%M-%S";
@@ -163,108 +166,7 @@ void print_header(const type& t, std::ostream& out) {
   out << '\n';
 }
 
-struct streamer {
-  streamer(std::ostream& out) : out_{out} {
-  }
-
-  template <class T>
-  void operator()(const T&, caf::none_t) const {
-    out_ << unset_field;
-  }
-
-  template <class T, class U>
-  auto operator()(const T&, const U& x) const
-  -> std::enable_if_t<!std::is_same_v<U, caf::none_t>> {
-    out_ << to_string(x);
-  }
-
-  void operator()(const integer_type&, integer i) const {
-    out_ << i;
-  }
-
-  void operator()(const count_type&, count c) const {
-    out_ << c;
-  }
-
-  void operator()(const real_type&, real r) const {
-    auto p = real_printer<real, 6, 6>{};
-    auto out = std::ostreambuf_iterator<char>(out_);
-    p.print(out, r);
-  }
-
-  void operator()(const time_type&, time ts) const {
-    double d;
-    convert(ts.time_since_epoch(), d);
-    auto p = real_printer<real, 6, 6>{};
-    auto out = std::ostreambuf_iterator<char>(out_);
-    p.print(out, d);
-  }
-
-  void operator()(const duration_type&, duration span) const {
-    double d;
-    convert(span, d);
-    auto p = real_printer<real, 6, 6>{};
-    auto out = std::ostreambuf_iterator<char>(out_);
-    p.print(out, d);
-  }
-
-  void operator()(const string_type&, const std::string& str) const {
-    auto out = std::ostreambuf_iterator<char>{out_};
-    auto f = str.begin();
-    auto l = str.end();
-    for ( ; f != l; ++f)
-      if (!std::isprint(*f) || *f == separator || *f == set_separator)
-        detail::hex_escaper(f, out);
-      else
-        out_ << *f;
-  }
-
-  void operator()(const port_type&, const port& p) const {
-    out_ << p.number();
-  }
-
-  void operator()(const record_type& r, const vector& v) const {
-    VAST_ASSERT(!v.empty());
-    VAST_ASSERT(r.fields.size() == v.size());
-    caf::visit(*this, r.fields[0].type, v[0]);
-    for (auto i = 1u; i < v.size(); ++i) {
-      out_ << separator;
-      caf::visit(*this, r.fields[i].type, v[i]);
-    }
-  }
-
-  void operator()(const vector_type& t, const vector& v) const {
-    stream(v, t.value_type, set_separator);
-  }
-
-  void operator()(const set_type& t, const set& s) const {
-    stream(s, t.value_type, set_separator);
-  }
-
-  void operator()(const map_type&, const map&) const {
-    VAST_ASSERT(!"not supported by Zeek's log format.");
-  }
-
-  template <class Container, class Sep>
-  void stream(Container& c, const type& value_type, const Sep& sep) const {
-    if (c.empty()) {
-      // Cannot occur if we have a record
-      out_ << empty_field;
-      return;
-    }
-    auto f = c.begin();
-    auto l = c.end();
-    caf::visit(*this, value_type, *f);
-    while (++f != l) {
-      out_ << sep;
-      caf::visit(*this, value_type, *f);
-    }
-  }
-
-  std::ostream& out_;
-};
-
-} // namespace <anonymous>
+} // namespace
 
 reader::reader(caf::atom_value table_slice_type,
                std::unique_ptr<std::istream> in)
@@ -554,64 +456,159 @@ writer::writer(path dir) {
 }
 
 writer::~writer() {
-  if (streams_.empty())
-    return;
-  std::ostringstream ss;
-  ss << "#close" << separator << time_factory{} << '\n';
-  auto footer = ss.str();
-  for (auto& pair : streams_)
-    if (pair.second)
-      *pair.second << footer;
+  // nop
 }
 
-expected<void> writer::write(const event& e) {
-  if (!caf::holds_alternative<record_type>(e.type()))
-    return make_error(ec::format_error, "cannot process non-record events");
-  std::ostream* os = nullptr;
+namespace {
+
+template <class Iterator>
+class zeek_printer : public printer<zeek_printer<Iterator>> {
+public:
+  using attribute = view<data>;
+
+  bool operator()(Iterator& out, view<caf::none_t>) const {
+    *out++ = unset_field;
+    return true;
+  }
+
+  template <class T>
+  bool operator()(Iterator& out, const T& x) const {
+    if constexpr (detail::is_any_v<T, view<vector>, view<set>>) {
+      if (x.empty()) {
+        for (auto c : std::string_view(empty_field))
+          *out++ = c;
+        return true;
+      }
+      auto i = x.begin();
+      if (!print(out, *i))
+        return false;
+      for (++i; i != x.end(); ++i) {
+        *out++ = set_separator;
+        if (!print(out, *i))
+          return false;
+      }
+      return true;
+    } else if constexpr (std::is_same_v<T, view<map>>) {
+      VAST_ERROR(this, "cannot print maps in Zeek format");
+      return false;
+    } else {
+      make_printer<T> p;
+      return p.print(out, x);
+    }
+  }
+
+  bool operator()(Iterator& out, const view<real>& x) const {
+    return real_printer_.print(out, x);
+  }
+
+  bool operator()(Iterator& out, const view<time>& x) const {
+    double d;
+    convert(x.time_since_epoch(), d);
+    return real_printer_.print(out, d);
+  }
+
+  bool operator()(Iterator& out, const view<duration>& x) const {
+    double d;
+    convert(x, d);
+    return real_printer_.print(out, d);
+  }
+
+  bool operator()(Iterator& out, const view<std::string>& str) const {
+    for (auto c : str)
+      if (!std::isprint(c) || c == separator || c == set_separator) {
+        auto hex = detail::byte_to_hex(c);
+        *out++ = '\\';
+        *out++ = 'x';
+        *out++ = hex.first;
+        *out++ = hex.second;
+      } else {
+        *out++ = c;
+      }
+    return true;
+  }
+
+  bool operator()(Iterator& out, const view<port>& p) const {
+    return (*this)(out, count{p.number()});
+  }
+
+  bool print(Iterator& out, const attribute& d) const {
+    auto f = [&](const auto& x) { return (*this)(out, x); };
+    return caf::visit(f, d);
+  }
+
+private:
+  real_printer<real, 6, 6> real_printer_;
+};
+
+/// Owns an `std::ostream` and prints to it for a single layout.
+class writer_child : public ostream_writer {
+public:
+  using super = ostream_writer;
+
+  using super::super;
+
+  ~writer_child() override {
+    if (out_ != nullptr)
+      *out_ << "#close" << separator << time_factory{} << '\n';
+  }
+
+  error write(const table_slice& slice) override {
+    zeek_printer<std::back_insert_iterator<std::vector<char>>> p;
+    return print<policy::omit_field_names>(p, slice, "",
+                                           std::string_view{&separator, 1}, "");
+  }
+
+  const char* name() const override {
+    return "zeek-writer";
+  }
+};
+
+} // namespace
+
+caf::error writer::write(const table_slice& slice) {
+  ostream_writer* child = nullptr;
   if (dir_.empty()) {
-    if (streams_.empty()) {
+    if (writers_.empty()) {
       VAST_DEBUG(this, "creates a new stream for STDOUT");
       auto sb = std::make_unique<detail::fdoutbuf>(1);
       auto out = std::make_unique<std::ostream>(sb.release());
-      streams_.emplace("", std::move(out));
+      writers_.emplace(slice.layout().name(),
+                       std::make_unique<writer_child>(std::move(out)));
     }
-    os = streams_.begin()->second.get();
-    if (e.type() != previous_layout_) {
-      print_header(e.type(), *os);
-      previous_layout_ = e.type();
+    child = writers_.begin()->second.get();
+    if (slice.layout() != previous_layout_) {
+      print_header(slice.layout(), child->out());
+      previous_layout_ = slice.layout();
     }
   } else {
-    auto i = streams_.find(e.type().name());
-    if (i != streams_.end()) {
-      os = i->second.get();
-      VAST_ASSERT(os != nullptr);
+    auto i = writers_.find(slice.layout().name());
+    if (i != writers_.end()) {
+      child = i->second.get();
     } else {
-      VAST_DEBUG(this, "creates new stream for event", e.type().name());
+      VAST_DEBUG(this, "creates new stream for layout", slice.layout().name());
       if (!exists(dir_)) {
-        auto d = mkdir(dir_);
-        if (!d)
+        if (auto d = mkdir(dir_); !d)
           return d.error();
       } else if (!dir_.is_directory()) {
         return make_error(ec::format_error, "got existing non-directory path",
                           dir_);
       }
-      auto filename = dir_ / (e.type().name() + ".log");
+      auto filename = dir_ / (slice.layout().name() + ".log");
       auto fos = std::make_unique<std::ofstream>(filename.str());
-      print_header(e.type(), *fos);
-      auto i = streams_.emplace(e.type().name(), std::move(fos));
-      os = i.first->second.get();
+      print_header(slice.layout(), *fos);
+      auto i = writers_.emplace(slice.layout().name(),
+                                std::make_unique<writer_child>(std::move(fos)));
+      child = i.first->second.get();
     }
   }
-  VAST_ASSERT(os != nullptr);
-  caf::visit(streamer{*os}, e.type(), e.data());
-  *os << '\n';
-  return no_error;
+  VAST_ASSERT(child != nullptr);
+  return child->write(slice);
 }
 
 expected<void> writer::flush() {
-  for (auto& pair : streams_)
-    if (pair.second)
-      pair.second->flush();
+  for (auto& kvp : writers_)
+    if (auto res = kvp.second->flush(); !res)
+      return res.error();
   return no_error;
 }
 

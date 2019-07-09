@@ -34,7 +34,13 @@ caf::expected<void> ostream_writer::flush() {
   return caf::unit;
 }
 
+std::ostream& ostream_writer::out() {
+  VAST_ASSERT(out_ != nullptr);
+  return *out_;
+}
+
 void ostream_writer::write_buf() {
+  VAST_ASSERT(out_ != nullptr);
   out_->write(buf_.data(), buf_.size());
   buf_.clear();
 }

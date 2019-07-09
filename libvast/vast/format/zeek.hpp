@@ -15,6 +15,7 @@
 
 #include <chrono>
 #include <iostream>
+#include <memory>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -29,6 +30,7 @@
 #include "vast/detail/string.hpp"
 #include "vast/expected.hpp"
 #include "vast/filesystem.hpp"
+#include "vast/format/ostream_writer.hpp"
 #include "vast/format/reader.hpp"
 #include "vast/format/single_layout_reader.hpp"
 #include "vast/format/writer.hpp"
@@ -273,17 +275,18 @@ private:
 class writer : public format::writer {
 public:
   writer() = default;
+
   writer(writer&&) = default;
+
   writer& operator=(writer&&) = default;
+
   ~writer() override;
 
   /// Constructs a Zeek writer.
   /// @param dir The path where to write the log file(s) to.
   writer(path dir);
 
-  using format::writer::write;
-
-  expected<void> write(const event& e) override;
+  error write(const table_slice& e) override;
 
   expected<void> flush() override;
 
@@ -292,7 +295,9 @@ public:
 private:
   path dir_;
   type previous_layout_;
-  std::unordered_map<std::string, std::unique_ptr<std::ostream>> streams_;
+
+  /// One writer for each layout.
+  std::unordered_map<std::string, ostream_writer_ptr> writers_;
 };
 
 } // namespace vast::format::zeek
