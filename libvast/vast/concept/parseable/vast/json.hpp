@@ -14,11 +14,13 @@
 #pragma once
 
 #include "vast/json.hpp"
+
 #include "vast/concept/parseable/core.hpp"
-#include "vast/concept/parseable/string/char_class.hpp"
-#include "vast/concept/parseable/string/quoted_string.hpp"
+#include "vast/concept/parseable/core/rule.hpp"
 #include "vast/concept/parseable/numeric/bool.hpp"
 #include "vast/concept/parseable/numeric/real.hpp"
+#include "vast/concept/parseable/string/char_class.hpp"
+#include "vast/concept/parseable/string/quoted_string.hpp"
 
 namespace vast {
 
@@ -36,20 +38,15 @@ struct json_parser : parser<json_parser> {
     auto lbrace = ws >> '{' >> ws;
     auto rbrace = ws >> '}' >> ws;
     auto delim = ws >> ',' >> ws;
-    auto null = ws >> "null"_p ->* [] { return json::null{}; };
+    auto null = ws >> "null"_p->*[] { return json::null{}; };
     auto boolean = ws >> parsers::boolean;
     auto string = ws >> parsers::qq_str;
     auto number = ws >> parsers::real_opt_dot;
-    auto array = as<json::array>(lbracket >> ~(j % delim) >> rbracket);
-    auto key_value = ws >> string >> ws >> ':' >> ws >> j;
+    auto array = as<json::array>(lbracket >> ~(vast::ref(j) % delim)
+                                 >> rbracket);
+    auto key_value = ws >> string >> ws >> ':' >> ws >> vast::ref(j);
     auto object = as<json::object>(lbrace >> ~(key_value % delim) >> rbrace);
-    j = null
-      | boolean
-      | number
-      | string
-      | array
-      | object
-      ;
+    j = null | boolean | number | string | array | object;
     return j(f, l, x);
   }
 };
