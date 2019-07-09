@@ -115,8 +115,20 @@ caf::actor fetch_indexer(table_indexer& tbl, const attribute_extractor& ex,
       return nullptr;
     }
     // Doesn't apply if the query name doesn't match our type.
-    if (layout.name() != caf::get<std::string>(x))
-      return nullptr;
+    switch (op) {
+      case relational_operator::equal:
+        if (layout.name() != caf::get<std::string>(x))
+          return nullptr;
+        break;
+      case relational_operator::not_equal:
+        if (layout.name() == caf::get<std::string>(x))
+          return nullptr;
+        break;
+      default:
+        VAST_WARNING(tbl.state().self,
+                     "type extractors only support operators == and !=");
+        return nullptr;
+    }
     // We know the answer immediately: all IDs that are part of the table.
     // However, we still have to "lift" this result into an actor for the
     // EVALUATOR.
