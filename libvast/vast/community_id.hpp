@@ -14,14 +14,21 @@
 #pragma once
 
 #include <cstddef>
+#include <string>
 #include <type_traits>
+
+#include <caf/optional.hpp>
 
 #include "vast/address.hpp"
 #include "vast/concept/hashable/hash_append.hpp"
 #include "vast/concept/hashable/sha1.hpp"
+#include "vast/concept/parseable/vast/address.hpp"
+#include "vast/detail/assert.hpp"
 #include "vast/detail/base64.hpp"
 #include "vast/detail/byte_swap.hpp"
 #include "vast/detail/coding.hpp"
+#include "vast/detail/narrow.hpp"
+#include "vast/icmp.hpp"
 #include "vast/port.hpp"
 
 namespace vast {
@@ -42,56 +49,99 @@ namespace community_id {
 /// The Community ID version.
 constexpr char version = '1';
 
-/// The byte values for transport-layer protocols.
-/// @relates flow_tuple
-enum class protocol : uint8_t {
-  icmp = 1,
-  tcp = 6,
-  udp = 17,
-  icmp6 = 58,
-  sctp = 132,
-};
-
-/// A connection 5-tuple.
-struct flow_tuple {
-  protocol proto;
+/// A connection 5-tuple, consisting of IP addresses and transport-layer ports
+/// for originator and resopnder. The protocol type is encoded in the ports.
+struct flow {
   address src_addr;
-  port src_port;
   address dst_addr;
+  port src_port;
   port dst_port;
 };
 
-/// Determines whether the flow is ordered, i.e., has a directionality-agnostic
-/// component-wise total ordering.
-/// @param x The tuple to inspect.
-/// @returns `true` if the flow is ordered.
-/// @relates flow_tuple
-inline bool is_ordered(const flow_tuple& x) noexcept {
-  return x.src_addr < x.dst_addr
-         || (x.src_addr == x.dst_addr && x.src_port < x.dst_port);
+/// @returns the protocol of a flow tuple.
+/// @param x The flow to extract the protocol from.
+/// @relates flow
+inline port::port_type protocol(const flow& x) {
+  VAST_ASSERT(x.src_port.type() == x.dst_port.type());
+  return x.src_port.type();
 }
 
-/// @relates flow_tuple
+/// Computes a hash of a flow.
+/// @param hasher The hash algorithm to use.
+/// @param x The flow to hash.
+/// @relates flow
 template <class Hasher>
-void hash_append(Hasher& hasher, const flow_tuple& x) {
-  constexpr auto padding = uint8_t{0};
-  auto src_port = detail::to_network_order(x.src_port.number());
-  auto dst_port = detail::to_network_order(x.dst_port.number());
-  if (is_ordered(x)) {
+void hash_append(Hasher& hasher, const flow& x) {
+  VAST_ASSERT(x.src_port.type() == x.dst_port.type());
+  auto src_port_num = x.src_port.number();
+  auto dst_port_num = x.dst_port.number();
+  auto is_one_way = false;
+  // Normalize ICMP and ICMP6. Source and destination port map to ICMP
+  // message type and message code.
+  if (protocol(x) == port::port_type::icmp) {
+    if (auto p = dual(detail::narrow_cast<icmp_type>(src_port_num)))
+      dst_port_num = static_cast<uint16_t>(*p);
+    else
+      is_one_way = true;
+  } else if (protocol(x) == port::port_type::icmp6) {
+    if (auto p = dual(detail::narrow_cast<icmp6_type>(src_port_num)))
+      dst_port_num = static_cast<uint16_t>(*p);
+    else
+      is_one_way = true;
+  }
+  auto is_ordered = is_one_way || x.src_addr < x.dst_addr
+                    || (x.src_addr == x.dst_addr
+                        && src_port_num < dst_port_num);
+  // Adjust byte order - if needed.
+  src_port_num = detail::to_network_order(src_port_num);
+  dst_port_num = detail::to_network_order(dst_port_num);
+  static constexpr auto padding = uint8_t{0};
+  if (is_ordered) {
     hash_append(hasher, x.src_addr);
     hash_append(hasher, x.dst_addr);
-    hash_append(hasher, x.proto);
+    hash_append(hasher, protocol(x));
     hash_append(hasher, padding);
-    hash_append(hasher, src_port);
-    hash_append(hasher, dst_port);
+    hash_append(hasher, src_port_num);
+    hash_append(hasher, dst_port_num);
   } else {
     hash_append(hasher, x.dst_addr);
     hash_append(hasher, x.src_addr);
-    hash_append(hasher, x.proto);
+    hash_append(hasher, protocol(x));
     hash_append(hasher, padding);
-    hash_append(hasher, dst_port);
-    hash_append(hasher, src_port);
+    hash_append(hasher, dst_port_num);
+    hash_append(hasher, src_port_num);
   }
+}
+
+/// Factory function to construct a flow.
+/// @param orig_h The IP address of the flow source.
+/// @param resp_h The IP address of the flow destination.
+/// @param orig_p The transport-layer port of the flow source.
+/// @param resp_p The transport-layer port of the flow destination.
+/// @return An instance of a flow.
+/// @relates flow
+template <port::port_type Protocol>
+flow make_flow(address orig_h, uint16_t orig_p, address resp_h,
+               uint16_t resp_p) {
+  return flow{orig_h, resp_h, port{orig_p, Protocol}, port{resp_p, Protocol}};
+}
+
+/// Factory function to construct a flow.
+/// @param orig_h The IP address of the flow source.
+/// @param resp_h The IP address of the flow destination.
+/// @param orig_p The transport-layer port of the flow source.
+/// @param resp_p The transport-layer port of the flow destination.
+/// @relates flow
+template <port::port_type Protocol>
+caf::optional<flow> make_flow(std::string_view orig_h, uint16_t orig_p,
+                              std::string_view resp_h, uint16_t resp_p) {
+  using parsers::addr;
+  flow result;
+  if (!addr(orig_h, result.src_addr) || !addr(resp_h, result.dst_addr))
+    return caf::none;
+  result.src_port = port{orig_p, Protocol};
+  result.dst_port = port{resp_p, Protocol};
+  return result;
 }
 
 /// Computes the length of the version prefix.
@@ -118,11 +168,11 @@ constexpr size_t max_length() {
 
 /// Calculates the Community ID for a given flow.
 /// @tparam Policy The rendering policy to select Base64 or ASCII.
-/// @param flow The flow tuple.
+/// @param x The flow tuple.
 /// @param seed An optional seed to the SHA-1 hash.
-/// @returns A string representation of the Community ID for *flow*.
+/// @returns A string representation of the Community ID for *x*.
 template <class Policy>
-std::string compute(const flow_tuple& flow, uint16_t seed = 0) {
+std::string compute(const flow& x, uint16_t seed = 0) {
   std::string result;
   // Perform exactly one allocator round-trip.
   result.reserve(max_length<Policy>());
@@ -132,7 +182,7 @@ std::string compute(const flow_tuple& flow, uint16_t seed = 0) {
   // Compute a SHA-1 hash over the flow tuple.
   sha1 hasher;
   hash_append(hasher, detail::to_network_order(seed));
-  hash_append(hasher, flow);
+  hash_append(hasher, x);
   auto digest = static_cast<sha1::result_type>(hasher);
   // Convert the binary digest to plain hex ASCII or to Base64.
   constexpr auto element_size = sizeof(sha1::result_type::value_type);
