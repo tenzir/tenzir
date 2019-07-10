@@ -26,7 +26,16 @@ struct port_type_parser : parser<port_type_parser> {
   bool parse(Iterator& f, const Iterator& l, unused_type) const {
     using namespace parsers;
     using namespace parser_literals;
-    auto p = ("?"_p | "tcp" | "udp" | "icmp");
+    // clang-format off
+    auto p
+      = ( "?"_p
+        | "icmp6"
+        | "icmp"
+        | "tcp"
+        | "udp"
+        | "sctp"
+        );
+    // clang-format on
     return p(f, l, unused);
   }
 
@@ -37,11 +46,12 @@ struct port_type_parser : parser<port_type_parser> {
     // clang-format off
     auto p
       = ( "?"_p ->* [] { return port::unknown; }
-         | "tcp"_p ->* [] { return port::tcp; }
-         | "udp"_p ->* [] { return port::udp; }
-         | "icmp"_p ->* [] { return port::icmp; }
-         )
-      ;
+        | "icmp6"_p ->* [] { return port::icmp6; }
+        | "icmp"_p ->* [] { return port::icmp; }
+        | "tcp"_p ->* [] { return port::tcp; }
+        | "udp"_p ->* [] { return port::udp; }
+        | "sctp"_p ->* [] { return port::sctp; }
+        );
     // clang-format on
     return p(f, l, x);
   }
@@ -73,7 +83,7 @@ struct port_parser : parser<port_parser> {
       port::port_type t;
       if (!p(f, l, n, t))
         return false;
-      x = {n, t};
+      x = port{n, t};
       return true;
     }
   }

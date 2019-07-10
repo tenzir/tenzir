@@ -400,7 +400,7 @@ subnet_index::lookup_impl(relational_operator op, data_view d) const {
 port_index::port_index(vast::type t)
   : value_index{std::move(t)},
     num_{base::uniform(10, 5)}, // [0, 2^16)
-    proto_{4}                   // unknown, tcp, udp, icmp
+    proto_{256}                 // 8-bit proto/next-header field
 {
   // nop
 }

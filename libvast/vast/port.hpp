@@ -28,14 +28,16 @@ public:
 
   /// The transport layer type.
   enum port_type : uint8_t {
-    unknown = 0,
-    tcp,
-    udp,
-    icmp
+    icmp = 1,
+    tcp = 6,
+    udp = 17,
+    icmp6 = 58,
+    sctp = 132,
+    unknown = 255,
   };
 
   /// Constructs the empty port, i.e., `0/unknown`.
-  port() = default;
+  port();
 
   /// Constructs a port.
   /// @param n The port number.
@@ -73,4 +75,3 @@ private:
 bool convert(const port& p, json& j);
 
 } // namespace vast
-

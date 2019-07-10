@@ -20,6 +20,10 @@
 
 namespace vast {
 
+port::port() {
+  type(unknown);
+}
+
 port::port(number_type n, port_type t) {
   number(n);
   type(t);
@@ -38,6 +42,7 @@ void port::number(number_type n) {
 }
 
 void port::type(port_type t) {
+  data_ &= 0xFFFFFF00;
   data_ |= static_cast<std::underlying_type_t<port_type>>(t);
 }
 
