@@ -10,6 +10,10 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## [Unreleased]
 
+- 🐞 All query expressions in the form `#type != X` were falsely evaluated as
+  `#type == X` and consequently produced wrong results. These expressions now
+  behave as expected.
+
 - 🔄 Log files generally have some notion of timestamp for recorded events. To
   make the query language more intuitive, the syntax for querying time points
   thus changed from `#time` to `#timestamp`. For example,
