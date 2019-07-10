@@ -69,7 +69,7 @@ protected:
 
 private:
   using iterator_type = std::string::const_iterator;
-  using parser_type = erased_parser<iterator_type>;
+  using parser_type = type_erased_parser<iterator_type>;
 
   caf::optional<record_type> make_layout(const std::vector<std::string>& names);
 

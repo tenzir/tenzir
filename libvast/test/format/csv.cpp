@@ -21,19 +21,78 @@
 #include "vast/test/fixtures/events.hpp"
 
 #include "vast/concept/parseable/to.hpp"
-#include "vast/concept/parseable/vast/address.hpp"
-#include "vast/concept/parseable/vast/time.hpp"
+#include "vast/concept/parseable/vast.hpp"
 #include "vast/default_table_slice_builder.hpp"
+
+#include <algorithm>
 
 using namespace vast;
 using namespace std::string_literals;
 
 namespace {
 
-auto l0 = record_type{{"ts", timestamp_type{}},
-                      {"addr", address_type{}},
-                      {"port", count_type{}}}
-            .name("l0");
+struct fixture : fixtures::deterministic_actor_system {
+  const record_type l0 = record_type{{"ts", time_type{}},
+                                     {"addr", address_type{}},
+                                     {"port", count_type{}}}
+                           .name("l0");
+
+  const record_type l1 = record_type{{"s", string_type{}},
+                                     {"ptn", pattern_type{}},
+                                     {"set", set_type{count_type{}}}}
+                           .name("l1");
+
+  const record_type l2 = record_type{{"b", bool_type{}},
+                                     {"c", count_type{}},
+                                     {"r", real_type{}},
+                                     {"i", integer_type{}},
+                                     {"s", string_type{}},
+                                     {"a", address_type{}},
+                                     {"p", port_type{}},
+                                     {"sn", subnet_type{}},
+                                     {"t", time_type{}},
+                                     {"d", duration_type{}},
+                                     {"d2", duration_type{}},
+                                     {"e",
+                                      enumeration_type{{"FOO", "BAR", "BAZ"}}},
+                                     {"sc", set_type{count_type{}}},
+                                     {"vp", vector_type{port_type{}}},
+                                     {"vt", vector_type{time_type{}}},
+                                     {"msa",
+                                      map_type{string_type{}, address_type{}}},
+                                     {"mcs",
+                                      map_type{count_type{}, string_type{}}}}
+                           .name("l2");
+
+  schema s;
+
+  fixture() {
+    s.add(l0);
+    s.add(l1);
+    s.add(l2);
+  }
+
+  std::vector<table_slice_ptr> run(std::string_view data, size_t max_events,
+                                   size_t max_slice_size) {
+    using reader_type = format::csv::reader;
+    auto in = std::make_unique<std::istringstream>(std::string{data});
+    reader_type reader{defaults::system::table_slice_type, std::move(in)};
+    reader.schema(s);
+    std::vector<table_slice_ptr> slices;
+    auto add_slice = [&](table_slice_ptr ptr) {
+      slices.emplace_back(std::move(ptr));
+    };
+    auto [err, num] = reader.read(max_events, max_slice_size, add_slice);
+    REQUIRE_EQUAL(err, caf::none);
+    size_t lines = std::count(data.begin(), data.end(), '\n');
+    REQUIRE_EQUAL(num, std::min(lines, max_events));
+    return slices;
+  }
+};
+
+} // namespace
+
+FIXTURE_SCOPE(csv_reader_tests, fixture)
 
 std::string_view l0_log0 = R"__(ts,addr,port
 2011-08-12T13:00:36.349948Z,147.32.84.165,1027
@@ -45,6 +104,14 @@ std::string_view l0_log0 = R"__(ts,addr,port
 2011-08-12T14:59:12.448311Z,147.32.84.165,1047
 2011-08-13T13:04:24.640406Z,147.32.84.165,1089)__";
 
+TEST(csv reader - simple) {
+  auto slices = run(l0_log0, 8, 5);
+  REQUIRE_EQUAL(slices[0]->layout(), l0);
+  CHECK(slices[1]->at(0, 0)
+        == data{unbox(to<time>("2011-08-12T14:59:11.994970Z"))});
+  CHECK(slices[1]->at(1, 2) == port{1047});
+}
+
 std::string_view l0_log1 = R"__(ts,addr,port
 2011-08-12T13:00:36.349948Z,147.32.84.165,1027
 2011-08-12T13:08:01.360925Z,147.32.84.165,
@@ -55,39 +122,181 @@ std::string_view l0_log1 = R"__(ts,addr,port
 ,147.32.84.165,
 ,,)__";
 
-} // namespace
+TEST(csv reader - empty fields) {
+  auto slices = run(l0_log1, 8, 5);
+  REQUIRE_EQUAL(slices[0]->layout(), l0);
+  CHECK(slices[1]->at(0, 1) == data{unbox(to<address>("147.32.84.165"))});
+  CHECK(slices[1]->at(1, 2) == data{caf::none});
+}
 
-FIXTURE_SCOPE(csv_reader_tests, fixtures::deterministic_actor_system)
+std::string_view l1_log0 = R"__(s,ptn,set
+hello,world,{1,2}
+Tom,appeared,{42,1337}
+on,the,{42,1337}
+sidewalk,with,{42,1337}
+a,bucket,{42,1337}
+of,whitewash,{42,1337}
+and,a,{42,1337}
+long-handled,brush,{42,1337}
+He,surveyed the,{42,1337}
+fence,and,{42,1337}
+all,gladness,{42,1337}
+left,him,{42,1337}
+and ,a,{42,1337}
+deep,melancholy,{42,1337}
+settled,down,{42,1337}
+upon,his,{42,1337}
+spirit,Thirty,{42,1337}
+yards,of,{42,1337}
+board, fence,{42,1337}
+nine,feet,{42,1337}
+high,Life,{42,1337}
+to,him,{42,1337}
+seemed,hollow,{42,1337}
+and,existence,{42,1337}
+but,a,{42,1337}
+burden,Sighing,{42,1337}
+,,)__";
 
-TEST(csv reader) {
-  using reader_type = format::csv::reader;
-  auto in = std::make_unique<std::istringstream>(std::string{l0_log0});
-  reader_type reader{defaults::system::table_slice_type, std::move(in)};
-  schema s;
-  REQUIRE(s.add(l0));
-  reader.schema(s);
-  std::vector<table_slice_ptr> slices;
-  auto add_slice = [&](table_slice_ptr ptr) {
-    slices.emplace_back(std::move(ptr));
-  };
-  {
-    auto [err, num] = reader.read(8, 5, add_slice);
-    CHECK_EQUAL(err, caf::none);
-    CHECK_EQUAL(num, 8);
-    CHECK(slices[1]->at(0, 0)
-          == data{unbox(to<timestamp>("2011-08-12T14:59:11.994970Z"))});
-    CHECK(slices[1]->at(1, 2) == port{1047});
-  }
-  in = std::make_unique<std::istringstream>(std::string{l0_log1});
-  reader.reset(std::move(in));
-  slices.clear();
-  {
-    auto [err, num] = reader.read(8, 5, add_slice);
-    CHECK_EQUAL(err, caf::none);
-    CHECK_EQUAL(num, 8);
-    CHECK(slices[1]->at(0, 1) == data{unbox(to<address>("147.32.84.165"))});
-    CHECK(slices[1]->at(1, 2) == data{caf::none});
-  }
+TEST(csv reader - layout with container) {
+  auto slices = run(l1_log0, 20, 20);
+  REQUIRE_EQUAL(slices[0]->layout(), l1);
+  CHECK(slices[0]->at(10, 1) == data{"and"});
+  CHECK(slices[0]->at(19, 2) == data{set{42, 1337}});
+}
+
+std::string_view l1_log1 = R"__(s,ptn
+hello,world
+Tom,appeared
+on,the
+sidewalk,with
+a,bucket
+of,whitewash
+and,a
+long-handled,brush
+He,surveyed the
+fence,and
+all,gladness
+left,him
+and ,a
+deep,melancholy
+settled,down
+upon,his
+spirit,Thirty
+yards,of
+board, fence
+nine,feet
+high,Life
+to,him
+seemed,hollow
+and,existence
+but,a
+burden,Sighing
+,,)__";
+
+TEST(csv reader - sublayout construction) {
+  auto l1_sub = record_type{{"s", string_type{}}, {"ptn", pattern_type{}}}.name(
+    "l1");
+  auto slices = run(l1_log1, 20, 20);
+  REQUIRE_EQUAL(slices[0]->layout(), l1_sub);
+  CHECK(slices[0]->at(10, 1) == data{"and"});
+}
+
+std::string_view l2_log_msa = R"__(msa
+{ foo=1.2.3.4, bar=2001:db8:: })__";
+
+TEST(csv reader - map string->address) {
+  auto slices = run(l2_log_msa, 1, 1);
+  auto l2_msa = record_type{{"msa", map_type{string_type{}, address_type{}}}}
+                  .name("l2");
+  REQUIRE_EQUAL(slices[0]->layout(), l2_msa);
+  CHECK(slices[0]->at(0, 0)
+        == data{map{{"foo", unbox(to<address>("1.2.3.4"))},
+                    {"bar", unbox(to<address>("2001:db8::"))}}});
+}
+
+std::string_view l2_log_vp = R"__(vp
+[5555/tcp, 0/icmp]
+[])__";
+
+TEST(csv reader - vector of port) {
+  auto slices = run(l2_log_vp, 2, 100);
+  auto l2_vp = record_type{{"vp", vector_type{port_type{}}}}.name("l2");
+  REQUIRE_EQUAL(slices[0]->layout(), l2_vp);
+  CHECK(
+    slices[0]->at(0, 0)
+    == data{vector{unbox(to<port>("5555/tcp")), unbox(to<port>("0/icmp"))}});
+  CHECK(slices[0]->at(1, 0) == data{vector{}});
+}
+
+std::string_view l2_log_subnet = R"__(sn
+1.2.3.4/20
+2001:db8::/125)__";
+
+TEST(csv reader - subnet) {
+  auto slices = run(l2_log_subnet, 2, 2);
+  auto l2_subnet = record_type{{"sn", subnet_type{}}}.name("l2");
+  REQUIRE_EQUAL(slices[0]->layout(), l2_subnet);
+  CHECK(slices[0]->at(0, 0) == data{unbox(to<subnet>("1.2.3.4/20"))});
+  CHECK(slices[0]->at(1, 0) == data{unbox(to<subnet>("2001:db8::/125"))});
+}
+
+std::string_view l2_log_duration = R"__(d,d2
+42s,5days)__";
+
+TEST(csv reader - duration) {
+  auto slices = run(l2_log_duration, 1, 1);
+  auto l2_duration = record_type{{"d", duration_type{}},
+                                 {"d2", duration_type{}}}
+                       .name("l2");
+  REQUIRE_EQUAL(slices[0]->layout(), l2_duration);
+  CHECK(slices[0]->at(0, 0) == data{unbox(to<duration>("42s"))});
+}
+
+std::string_view l2_log_reord
+  = R"__(msa, c,  r,  i, b,  a,  p,  sn,d,  e,  t,  sc, vp, vt, mcs
+{ foo=1.2.3.4, bar=2001:db8:: },424242,4.2,-1337,T,147.32.84.165,42/udp,192.168.0.1/24,42s,BAZ,2011-08-12+14:59:11.994970,{ 44, 42, 43 },[ 5555/tcp, 0/icmp ],[ 2019-04-30T11:46:13Z ],{1= FOO, 1024 = BAR!})__";
+
+TEST(csv reader - reordered layout) {
+  auto slices = run(l2_log_reord, 1, 1);
+  auto l2_sub = record_type{{"msa", map_type{string_type{}, address_type{}}},
+                            {"c", count_type{}},
+                            {"r", real_type{}},
+                            {"i", integer_type{}},
+                            {"b", bool_type{}},
+                            {"a", address_type{}},
+                            {"p", port_type{}},
+                            {"sn", subnet_type{}},
+                            {"d", duration_type{}},
+                            {"e", enumeration_type{{"FOO", "BAR", "BAZ"}}},
+                            {"t", time_type{}},
+                            {"sc", set_type{count_type{}}},
+                            {"vp", vector_type{port_type{}}},
+                            {"vt", vector_type{time_type{}}},
+                            {"mcs", map_type{count_type{}, string_type{}}}}
+                  .name("l2");
+  REQUIRE_EQUAL(slices[0]->layout(), l2_sub);
+  CHECK(slices[0]->at(0, 0)
+        == data{map{{"foo", unbox(to<address>("1.2.3.4"))},
+                    {"bar", unbox(to<address>("2001:db8::"))}}});
+  CHECK(slices[0]->at(0, 1) == data{424242});
+  CHECK(slices[0]->at(0, 2) == data{4.2});
+  CHECK(slices[0]->at(0, 3) == data{-1337});
+  CHECK(slices[0]->at(0, 4) == data{true});
+  CHECK(slices[0]->at(0, 5) == data{unbox(to<address>("147.32.84.165"))});
+  CHECK(slices[0]->at(0, 6) == data{unbox(to<port>("42/udp"))});
+  CHECK(slices[0]->at(0, 7) == data{unbox(to<subnet>("192.168.0.1/24"))});
+  CHECK(slices[0]->at(0, 8) == data{unbox(to<duration>("42s"))});
+  CHECK(slices[0]->at(0, 9) == data{enumeration{2}});
+  CHECK(slices[0]->at(0, 10)
+        == data{unbox(to<time>("2011-08-12+14:59:11.994970"))});
+  CHECK(slices[0]->at(0, 11) == data{vector{44, 42, 43}});
+  CHECK(
+    slices[0]->at(0, 12)
+    == data{vector{unbox(to<port>("5555/tcp")), unbox(to<port>("0/icmp"))}});
+  CHECK(slices[0]->at(0, 13)
+        == data{vector{unbox(to<time>("2019-04-30T11:46:13Z"))}});
+  CHECK(slices[0]->at(0, 14) == data{map{{1, "FOO"}, {1024, "BAR!"}}});
 }
 
 FIXTURE_SCOPE_END()

@@ -22,9 +22,11 @@
 #include "vast/concept/parseable/numeric.hpp"
 #include "vast/concept/parseable/string.hpp"
 #include "vast/concept/parseable/vast.hpp"
-#include "vast/error.hpp"
+#include "vast/concept/printable/to_string.hpp"
+#include "vast/concept/printable/vast/type.hpp"
 #include "vast/logger.hpp"
 #include "vast/schema.hpp"
+#include "vast/error.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
 
@@ -138,6 +140,8 @@ const char* writer::name() const {
   return "csv-writer";
 }
 
+using namespace parser_literals;
+
 reader::reader(caf::atom_value table_slice_type,
                std::unique_ptr<std::istream> in)
   : super(table_slice_type) {
@@ -153,6 +157,12 @@ void reader::reset(std::unique_ptr<std::istream> in) {
 
 caf::error reader::schema(vast::schema s) {
   schema_ = std::move(s);
+  for (auto& t : s) {
+    auto r = caf::get_if<record_type>(&t);
+    if (!r)
+      continue;
+    schema_.add(flatten(*r));
+  }
   return caf::none;
 }
 
@@ -167,20 +177,18 @@ const char* reader::name() const {
 caf::optional<record_type>
 reader::make_layout(const std::vector<std::string>& names) {
   for (auto& t : schema_) {
-    auto r = caf::get_if<record_type>(&t);
-    if (r) {
-      auto result = [&]() -> caf::optional<record_type> {
+    if (auto r = caf::get_if<record_type>(&t)) {
+      auto select_fields = [&]() -> caf::optional<record_type> {
         std::vector<record_field> result_raw;
         for (auto& name : names) {
-          auto field = r->at(name);
-          if (field)
+          if (auto field = r->at(name))
             result_raw.emplace_back(name, *field);
           else
             return caf::none;
         }
         return record_type{result_raw};
-      }();
-      if (result)
+      };
+      if (auto result = select_fields())
         return result->name(r->name());
     } else if (names.size() == 1 && names[0] == t.name()) {
       // Hoist naked type into record.
@@ -202,72 +210,48 @@ struct container_parser_builder {
     // nop
   }
 
+  // TODO: support enumeration_type inside of containers too.
   template <class T>
-  result_type operator()(const T& t) {
+  result_type operator()(const T& t) const {
     if constexpr (std::is_same_v<T, string_type>) {
-      return +(parsers::any - set_separator_)->*[](std::string x) {
+      return +(parsers::any - set_separator_ - '=')->*[](std::string&& x) {
         return data{std::move(x)};
       };
     } else if constexpr (std::is_same_v<T, pattern_type>) {
-      return +(parsers::any - set_separator_)->*[](std::string x) {
-        return data{std::move(x)};
+      return +(parsers::any - set_separator_ - '=')->*[](std::string&& x) {
+        return data{pattern{std::move(x)}};
       };
     } else if constexpr (std::is_same_v<T, set_type>) {
-      auto set_insert = [](std::vector<Attribute> v) {
-        return set(std::make_move_iterator(v.begin()),
-                   std::make_move_iterator(v.end()));
+      auto set_insert = [](std::vector<Attribute>&& xs) {
+        return set(std::make_move_iterator(xs.begin()),
+                   std::make_move_iterator(xs.end()));
       };
-      return (caf::visit(*this, t.value_type) % set_separator_)->*set_insert;
+      return ('{'_p >> (caf::visit(*this, t.value_type) % set_separator_)
+              >> '}'_p)
+               ->*set_insert;
     } else if constexpr (std::is_same_v<T, vector_type>) {
-      return (caf::visit(*this, t.value_type) % set_separator_)
-               ->*[](const std::vector<Attribute> v) { return v; };
+      auto vector_insert = [](std::vector<Attribute>&& xs) { return xs; };
+      return ('[' >> (caf::visit(*this, t.value_type) % set_separator_) >> ']')
+               ->*vector_insert;
+    } else if constexpr (std::is_same_v<T, map_type>) {
+      auto map_insert = [](std::vector<std::tuple<Attribute, Attribute>>&& xs) {
+        auto to_pair = [](auto&& tuple) {
+          return std::make_pair(std::get<0>(tuple), std::get<1>(tuple));
+        };
+        map m;
+        for (auto& x : xs)
+          m.insert(to_pair(std::move(x)));
+        return m;
+      };
+      auto kvp = caf::visit(*this, t.key_type) >> '='
+                 >> caf::visit(*this, t.value_type);
+      return (('{'_p >> (kvp % set_separator_) >> '}')->*map_insert);
     } else if constexpr (has_parser_v<type_to_data<T>>) {
       using value_type = type_to_data<T>;
-      return make_parser<value_type>{}->*[](value_type x) { return x; };
-    } else {
-      return {};
-    }
-  }
-
-  const std::string& set_separator_;
-};
-
-template <class Iterator>
-struct csv_parser_factory {
-  using result_type = erased_parser<Iterator>;
-
-  csv_parser_factory(const std::string& set_separator,
-                     table_slice_builder_ptr bptr)
-    : set_separator_{set_separator}, bptr_{std::move(bptr)} {
-    // nop
-  }
-
-  template <class T>
-  struct add_t {
-    void operator()(const caf::optional<T>& x) const {
-      if (x)
-        bptr_->add(make_data_view(*x));
-      else
-        bptr_->add(make_data_view(caf::none));
-    }
-    table_slice_builder_ptr bptr_;
-  };
-
-  template <class T>
-  result_type operator()(const T& t) {
-    if constexpr (std::is_same_v<T, string_type>) {
-      return (-+(parsers::any - set_separator_))->*add_t<std::string>{bptr_};
-    } else if constexpr (std::is_same_v<T, pattern_type>) {
-      return (-+(parsers::any - set_separator_))->*add_t<std::string>{bptr_};
-    } else if constexpr (std::is_same_v<T, set_type>) {
-      return (-container_parser_builder<Iterator, data>{set_separator_}(t))
-               ->*add_t<data>{bptr_};
-    } else if constexpr (std::is_same_v<T, vector_type>) {
-      return (-container_parser_builder<Iterator, data>{set_separator_}(t))
-               ->*add_t<data>{bptr_};
-    } else if constexpr (has_parser_v<type_to_data<T>>) {
-      using value_type = type_to_data<T>;
-      return (-make_parser<value_type>{})->*add_t<value_type>{bptr_};
+      auto ws = ignore(*parsers::space);
+      return (ws >> make_parser<value_type>{} >> ws)->*[](value_type&& x) {
+        return x;
+      };
     } else {
       VAST_ERROR_ANON("csv parser builder faild to fetch a parser for type",
                       caf::detail::pretty_type_name(typeid(T)));
@@ -275,20 +259,102 @@ struct csv_parser_factory {
     }
   }
 
-  const std::string& set_separator_;
+  std::string set_separator_;
+};
+
+template <class Iterator>
+struct csv_parser_factory {
+  using result_type = type_erased_parser<Iterator>;
+
+  csv_parser_factory(const std::string& set_separator,
+                     table_slice_builder_ptr bptr)
+    : set_separator_{set_separator}, bptr_{std::move(bptr)} {
+    // nop
+  }
+
+  struct identity {
+    template <class T>
+    constexpr T operator()(T&& t) const noexcept {
+      return std::forward<T>(t);
+    }
+  };
+
+  template <class T, class F>
+  struct add_t {
+    void operator()(caf::optional<T>&& x) const {
+      if (x) {
+        const auto tmp = f_(*x);
+        bptr_->add(make_data_view(tmp));
+      } else
+        bptr_->add(make_data_view(caf::none));
+    }
+    table_slice_builder_ptr bptr_;
+    F f_;
+  };
+
+  template <class T>
+  static add_t<T, identity> make_add_t(table_slice_builder_ptr bptr) {
+    return add_t<T, identity>{std::move(bptr), identity{}};
+  }
+
+  template <class T, class F>
+  static add_t<T, F> make_add_t(table_slice_builder_ptr bptr, F f) {
+    return add_t<T, F>{std::move(bptr), std::move(f)};
+  }
+
+  template <class T>
+  result_type operator()(const T& t) const {
+    if constexpr (std::is_same_v<T, string_type>) {
+      return (-+(parsers::any - set_separator_))
+               ->*make_add_t<std::string>(bptr_);
+    } else if constexpr (std::is_same_v<T, pattern_type>) {
+      auto to_pattern = [](const std::string& s) { return pattern{s}; };
+      return (-+(parsers::any - set_separator_))
+               ->*make_add_t<std::string>(bptr_, to_pattern);
+    } else if constexpr (std::is_same_v<T, enumeration_type>) {
+      auto to_enumeration =
+        [t](const std::string& s) -> caf::optional<enumeration> {
+        auto i = std::find(t.fields.begin(), t.fields.end(), s);
+        if (i == t.fields.end()) {
+          VAST_WARNING_ANON("csv reader failed to parse unexpected enum value",
+                            s);
+          return caf::none;
+        }
+        return std::distance(t.fields.begin(), i);
+      };
+      return (-+(parsers::any - set_separator_))
+               ->*make_add_t<std::string>(bptr_, to_enumeration);
+    } else if constexpr (detail::contains_v<
+                           T, std::tuple<set_type, vector_type, map_type>>) {
+      return (-container_parser_builder<Iterator, data>{set_separator_}(t))
+               ->*make_add_t<data>(bptr_);
+    } else if constexpr (has_parser_v<type_to_data<T>>) {
+      using value_type = type_to_data<T>;
+      return (-make_parser<value_type>{})->*make_add_t<value_type>(bptr_);
+    } else {
+      VAST_ERROR_ANON("csv parser builder failed to fetch a parser for type",
+                      caf::detail::pretty_type_name(typeid(T)));
+      return {};
+    }
+  }
+
+  std::string set_separator_;
   table_slice_builder_ptr bptr_;
 };
 
 template <class Iterator>
-caf::optional<erased_parser<Iterator>>
+caf::optional<type_erased_parser<Iterator>>
 make_csv_parser(const record_type& layout, table_slice_builder_ptr builder) {
-  auto fs = layout.fields.size();
-  VAST_ASSERT(fs > 0);
-  auto v = csv_parser_factory<Iterator>{",", builder};
-  auto result = caf::visit(v, layout.fields[0].type);
-  for (size_t i = 1; i < fs; ++i) {
-    auto p = (caf::visit(v, layout.fields[i].type));
-    result = result >> ',' >> std::move(p);
+  auto num_fields = layout.fields.size();
+  VAST_ASSERT(num_fields > 0);
+  auto factory = csv_parser_factory<Iterator>{",", builder};
+  auto result = caf::visit(factory, layout.fields[0].type);
+  for (size_t i = 1; i < num_fields; ++i) {
+    auto p = (caf::visit(factory, layout.fields[i].type));
+    result = (result >> ','
+              >> std::move(p)) /*->* [](std::tuple<bool, bool>&& bb) {
+return std::get<0>(bb) && std::get<1>(bb);
+}*/;
   }
   return result;
 }
@@ -296,15 +362,19 @@ make_csv_parser(const record_type& layout, table_slice_builder_ptr builder) {
 } // namespace
 
 caf::error reader::read_header(std::string_view line) {
-  auto p = schema_parser::id % ',';
+  auto ws = ignore(*parsers::space);
+  auto p = (ws >> schema_parser::id >> ws) % ',';
   std::vector<std::string> columns;
-  if (!p(line, columns))
+  auto b = line.begin();
+  auto f = b;
+  if (!p(f, line.end(), columns))
     return make_error(ec::parse_error, "unable to parse csv header");
   auto layout = make_layout(columns);
   if (!layout)
     return make_error(ec::parse_error, "unable to derive a layout");
+  VAST_DEBUG_ANON("csv_reader derived layout", to_string(*layout));
   if (!reset_builder(*layout))
-    return make_error(ec::parse_error, "unable to create a bulider for layout");
+    return make_error(ec::parse_error, "unable to create a builder for layout");
   parser_ = make_csv_parser<iterator_type>(*layout, builder_);
   if (!parser_)
     return make_error(ec::parse_error, "unable generate a parser");
@@ -329,7 +399,7 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
     if (!p(line)) {
       return make_error(ec::type_clash, "unable to parse CSV line");
     }
-    produced++;
+    ++produced;
     if (builder_->rows() == max_slice_size)
       if (auto err = finish(cons))
         return err;

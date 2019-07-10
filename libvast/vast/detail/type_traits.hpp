@@ -214,6 +214,8 @@ struct contains<T, std::tuple<U, Ts...>> : contains<T, std::tuple<Ts...>> {};
 template <class T, class... Ts>
 struct contains<T, std::tuple<T, Ts...>> : std::true_type {};
 
+template <class T, class TS>
+inline constexpr bool contains_v = contains<T, TS>::value;
 
 // -- operator availability --------------------------------------------------
 
