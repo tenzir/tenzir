@@ -383,7 +383,7 @@ TEST(recursive rule) {
   int num_wrappers = 0;
   { // lifetime scope of r
     rule<std::string::iterator, char> r;
-    r = parser_wrapper{num_wrappers, alpha | '[' >> vast::ref(r) >> ']'};
+    r = parser_wrapper{num_wrappers, alpha | '[' >> ref(r) >> ']'};
     auto str = "[[[x]]]"s;
     auto f = str.begin();
     auto l = str.end();

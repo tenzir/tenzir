@@ -158,5 +158,10 @@ auto ref(const rule<Iterator, Attribute>& x) {
   return rule_ref<Iterator, Attribute>{x};
 }
 
+template <class Iterator, class Attribute>
+auto ref(rule<Iterator, Attribute>& x) {
+  return rule_ref<Iterator, Attribute>{x};
+}
+
 } // namespace vast
 

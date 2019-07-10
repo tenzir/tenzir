@@ -119,7 +119,7 @@ struct type_parser : parser<type_parser> {
       return vector_type{std::move(value_type)}.attributes(std::move(attrs));
     };
     auto vector_type_parser
-      = ("vector" >> ws >> '<' >> ws >> vast::ref(type_type) >> ws >> '>')
+      = ("vector" >> ws >> '<' >> ws >> ref(type_type) >> ws >> '>')
         ->* to_vector
       ;
     // Set
@@ -128,7 +128,7 @@ struct type_parser : parser<type_parser> {
       return set_type{std::move(value_type)}.attributes(std::move(attrs));
     };
     auto set_type_parser
-      = ("set" >> ws >> '<' >> ws >> vast::ref(type_type) >> ws >> '>')
+      = ("set" >> ws >> '<' >> ws >> ref(type_type) >> ws >> '>')
       ->* to_set
       ;
     // Map
@@ -140,7 +140,7 @@ struct type_parser : parser<type_parser> {
     };
     auto map_type_parser
       = ("map" >> ws >> '<' >> ws
-      >> vast::ref(type_type) >> ws >> ',' >> ws >> vast::ref(type_type) >> ws
+      >> vast::ref(type_type) >> ws >> ',' >> ws >> ref(type_type) >> ws
       >> '>' >> attr_list) ->* to_map;
       ;
     // Record
@@ -157,7 +157,7 @@ struct type_parser : parser<type_parser> {
       return record_type{std::move(fields)}.attributes(std::move(attrs));
     };
     auto field
-      = (parsers::identifier >> ws >> ':' >> ws >> vast::ref(type_type))
+      = (parsers::identifier >> ws >> ':' >> ws >> ref(type_type))
       ->* to_field
       ;
     auto record_type_parser
