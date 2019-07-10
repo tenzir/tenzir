@@ -338,9 +338,9 @@ TEST(attribute compatibility with string sequences) {
   CHECK(str == "xyz");
 }
 
-TEST(type erased parser) {
+TEST(polymorphic) {
   using namespace parsers;
-  auto p = erased_parser<std::string::iterator>{'a'_p};
+  auto p = type_erased_parser<std::string::iterator>{'a'_p};
   MESSAGE("from construction");
   auto str = "a"s;
   auto f = str.begin();

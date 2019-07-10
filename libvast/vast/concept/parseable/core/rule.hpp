@@ -99,7 +99,7 @@ private:
 /// value semantics and can therefore not be used to construct recursive
 /// parsers.
 template <class Iterator>
-class erased_parser : public parser<erased_parser<Iterator>> {
+class type_erased_parser : public parser<type_erased_parser<Iterator>> {
 public:
   using abstract_rule_type = detail::abstract_rule<Iterator, unused_type>;
   using rule_pointer = std::unique_ptr<abstract_rule_type>;
@@ -111,26 +111,28 @@ public:
     return std::make_unique<rule_type>(std::forward<RHS>(rhs));
   }
 
-  erased_parser() = default;
+  type_erased_parser() = default;
 
-  erased_parser(const erased_parser& rhs) : parser_{rhs.parser_->clone()} {
+  type_erased_parser(const type_erased_parser& rhs)
+    : parser_{rhs.parser_->clone()} {
     // nop
   }
 
-  template <class RHS, class = std::enable_if_t<
-                         !detail::is_same_or_derived_v<erased_parser, RHS>>>
-  erased_parser(RHS&& rhs) : parser_{make_parser<RHS>(std::forward<RHS>(rhs))} {
+  template <class RHS, class = std::enable_if_t<!detail::is_same_or_derived_v<
+                         type_erased_parser, RHS>>>
+  type_erased_parser(RHS&& rhs)
+    : parser_{make_parser<RHS>(std::forward<RHS>(rhs))} {
     static_assert(is_parser_v<std::decay_t<RHS>>);
   }
 
-  erased_parser& operator=(const erased_parser& rhs) {
+  type_erased_parser& operator=(const type_erased_parser& rhs) {
     parser_.reset(rhs.parser_->clone());
     return *this;
   }
 
-  template <class RHS, class = std::enable_if_t<
-                         !detail::is_same_or_derived_v<erased_parser, RHS>>>
-  erased_parser& operator=(RHS&& rhs) {
+  template <class RHS, class = std::enable_if_t<!detail::is_same_or_derived_v<
+                         type_erased_parser, RHS>>>
+  type_erased_parser& operator=(RHS&& rhs) {
     static_assert(is_parser_v<std::decay_t<RHS>>);
     parser_ = make_parser<RHS>(std::forward<RHS>(rhs));
     return *this;
@@ -179,17 +181,10 @@ public:
     make_parser<RHS>(std::forward<RHS>(rhs));
   }
 
-  // This overload must not be available if Attribute == unused_type.
-  template <class Instantiate_on_use = bool>
-  std::enable_if_t<!std::is_same_v<Attribute, unused_type>, Instantiate_on_use>
-  parse(Iterator& f, const Iterator& l, unused_type) const {
+  template <class T>
+  bool parse(Iterator& f, const Iterator& l, T&& x) const {
     VAST_ASSERT(*parser_ != nullptr);
-    return (*parser_)->parse(f, l, unused);
-  }
-
-  bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
-    VAST_ASSERT(*parser_ != nullptr);
-    return (*parser_)->parse(f, l, a);
+    return (*parser_)->parse(f, l, std::forward<T>(x));
   }
 
 private:

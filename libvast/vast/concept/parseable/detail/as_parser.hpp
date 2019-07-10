@@ -25,7 +25,7 @@ namespace detail {
 
 // -- unary -------------------------------------------------------------------
 
-constexpr inline auto as_parser(char c) {
+constexpr auto as_parser(char c) {
   return ignore(char_parser{c});
 }
 
