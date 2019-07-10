@@ -10,6 +10,10 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## [Unreleased]
 
+- 🎁 The `import` command now supports CSV formatted data. The type for each
+  column is automatically derived by matching the column names from the CSV
+  header in the input with the available types from the schema definitions.
+
 - 🔄 Log files generally have some notion of timestamp for recorded events. To
   make the query language more intuitive, the syntax for querying time points
   thus changed from `#time` to `#timestamp`. For example,
