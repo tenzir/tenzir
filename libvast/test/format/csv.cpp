@@ -72,11 +72,14 @@ struct fixture : fixtures::deterministic_actor_system {
     s.add(l2);
   }
 
+  const caf::settings options = {};
+
   std::vector<table_slice_ptr> run(std::string_view data, size_t max_events,
                                    size_t max_slice_size) {
     using reader_type = format::csv::reader;
     auto in = std::make_unique<std::istringstream>(std::string{data});
-    reader_type reader{defaults::system::table_slice_type, std::move(in)};
+    reader_type reader{defaults::system::table_slice_type, options,
+                       std::move(in)};
     reader.schema(s);
     std::vector<table_slice_ptr> slices;
     auto add_slice = [&](table_slice_ptr ptr) {

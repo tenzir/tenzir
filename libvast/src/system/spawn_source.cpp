@@ -46,7 +46,7 @@ maybe_actor spawn_generic_source(caf::local_actor* self, spawn_arguments& args,
   VAST_UNBOX_VAR(sch, read_schema(args));
   auto table_slice_type = defaults::import::table_slice_type(self->system(),
                                                              args.options);
-  Reader reader{table_slice_type, std::forward<Ts>(ctor_args)...};
+  Reader reader{table_slice_type, args.options, std::forward<Ts>(ctor_args)...};
   auto src = self->spawn(default_source<Reader>, std::move(reader));
   caf::anon_send(src, std::move(expr));
   if (sch)

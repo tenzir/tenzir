@@ -16,6 +16,8 @@
 #include <istream>
 #include <memory>
 
+#include <caf/fwd.hpp>
+
 #include "vast/detail/assert.hpp"
 #include "vast/detail/line_range.hpp"
 #include "vast/error.hpp"
@@ -34,8 +36,11 @@ public:
   using super = single_layout_reader;
 
   /// Constructs a generic reader.
+  /// @param table_slice_type The ID for table slice type to build.
+  /// @param options Additional options.
   /// @param in The stream of logs to read.
   explicit parser_reader(caf::atom_value table_slice_type,
+                         const caf::settings& /*options*/,
                          std::unique_ptr<std::istream> in = nullptr)
     : super(table_slice_type) {
     if (in)

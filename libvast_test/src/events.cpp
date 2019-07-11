@@ -99,7 +99,8 @@ static std::vector<event> extract(Reader&& reader) {
 template <class Reader>
 static std::vector<event> inhale(const char* filename) {
   auto input = std::make_unique<std::ifstream>(filename);
-  Reader reader{defaults::system::table_slice_type, std::move(input)};
+  Reader reader{defaults::system::table_slice_type, caf::settings{},
+                std::move(input)};
   return extract(reader);
 }
 

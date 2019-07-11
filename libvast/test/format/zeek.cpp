@@ -168,7 +168,7 @@ struct fixture : fixtures::deterministic_actor_system {
   std::vector<table_slice_ptr> read(std::string_view input, size_t slice_size,
                                     size_t num_events) {
     using reader_type = format::zeek::reader;
-    reader_type reader{defaults::system::table_slice_type,
+    reader_type reader{defaults::system::table_slice_type, caf::settings{},
                        std::make_unique<std::istringstream>(
                          std::string{input})};
     std::vector<table_slice_ptr> slices;

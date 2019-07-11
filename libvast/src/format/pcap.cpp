@@ -43,9 +43,9 @@ auto const pcap_packet_type = make_packet_type();
 
 } // namespace <anonymous>
 
-reader::reader(caf::atom_value id, std::string input, uint64_t cutoff,
-               size_t max_flows, size_t max_age, size_t expire_interval,
-               int64_t pseudo_realtime)
+reader::reader(caf::atom_value id, const caf::settings& /*options*/,
+               std::string input, uint64_t cutoff, size_t max_flows,
+               size_t max_age, size_t expire_interval, int64_t pseudo_realtime)
   : super(id),
     packet_type_{pcap_packet_type},
     cutoff_{cutoff},

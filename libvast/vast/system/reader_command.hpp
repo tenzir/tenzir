@@ -129,7 +129,7 @@ caf::message reader_command(const command& cmd, caf::actor_system& sys,
         ep.port = port{ep.port.number(), port::tcp};
       }
     }
-    Reader reader{slice_type};
+    Reader reader{slice_type, options};
     if (schema)
       reader.schema(*schema);
     auto run = [&](auto&& source) {
@@ -152,7 +152,7 @@ caf::message reader_command(const command& cmd, caf::actor_system& sys,
     auto in = detail::make_input_stream(*file, uds);
     if (!in)
       return caf::make_message(std::move(in.error()));
-    Reader reader{slice_type, std::move(*in)};
+    Reader reader{slice_type, options, std::move(*in)};
     if (schema)
       reader.schema(*schema);
     VAST_INFO(reader, "reads data from", *file);

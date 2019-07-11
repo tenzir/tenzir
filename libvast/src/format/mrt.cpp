@@ -1,3 +1,16 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #include "vast/format/mrt.hpp"
 
 #include "vast/detail/assert.hpp"
@@ -5,9 +18,7 @@
 #include "vast/error.hpp"
 #include "vast/si_literals.hpp"
 
-namespace vast {
-namespace format {
-namespace mrt {
+namespace vast::format::mrt {
 
 reader::factory::factory(reader& parent, uint32_t ts)
   : parent_(parent), produced_(0) {
@@ -230,6 +241,7 @@ caf::error reader::factory::operator()(bgp4mp::state_change_as4& x) {
 }
 
 reader::reader(caf::atom_value table_slice_type,
+               const caf::settings& /*options*/,
                std::unique_ptr<std::istream> input)
   : super(table_slice_type), max_slice_size_(0), current_consumer_(nullptr) {
   types_.table_dump_v2_peer_entry_type = record_type{
@@ -379,6 +391,4 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
   return finish(f);
 }
 
-} // namespace mrt
-} // namespace format
-} // namespace vast
+} // namespace vast::format::mrt

@@ -17,6 +17,8 @@
 #include <string_view>
 #include <type_traits>
 
+#include <caf/config_value.hpp>
+
 #include "vast/concept/parseable/core.hpp"
 #include "vast/concept/parseable/string.hpp"
 #include "vast/concept/parseable/vast.hpp"
@@ -139,7 +141,7 @@ const char* writer::name() const {
 
 using namespace parser_literals;
 
-reader::reader(caf::atom_value table_slice_type,
+reader::reader(caf::atom_value table_slice_type, const caf::settings& options,
                std::unique_ptr<std::istream> in)
   : super(table_slice_type) {
   if (in != nullptr)

@@ -19,6 +19,8 @@
 #include <unordered_map>
 #include <vector>
 
+#include <caf/fwd.hpp>
+
 #include "vast/concept/parseable/core.hpp"
 #include "vast/concept/parseable/numeric.hpp"
 #include "vast/concept/parseable/string/any.hpp"
@@ -232,8 +234,11 @@ public:
   using super = single_layout_reader;
 
   /// Constructs a Zeek reader.
+  /// @param table_slice_type The ID for table slice type to build.
+  /// @param options Additional options.
   /// @param input The stream of logs to read.
   explicit reader(caf::atom_value table_slice_type,
+                  const caf::settings& options,
                   std::unique_ptr<std::istream> in = nullptr);
 
   void reset(std::unique_ptr<std::istream> in);
