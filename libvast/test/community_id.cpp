@@ -28,9 +28,7 @@ namespace {
   flow make_##protocol##_flow(std::string_view orig_h, uint16_t orig_p,        \
                               std::string_view resp_h, uint16_t resp_p) {      \
     constexpr auto proto = port::port_type::protocol;                          \
-    auto x = make_flow<proto>(orig_h, orig_p, resp_h, resp_p);                 \
-    REQUIRE(x);                                                                \
-    return *x;                                                                 \
+    return unbox(make_flow<proto>(orig_h, orig_p, resp_h, resp_p));            \
   }
 
 FLOW_FACTORY(icmp)
