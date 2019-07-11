@@ -11,14 +11,19 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
+#include <iomanip>
+
 #include "vast/concept/hashable/crc.hpp"
+#include "vast/concept/hashable/sha1.hpp"
 #include "vast/concept/hashable/uhash.hpp"
 #include "vast/concept/hashable/xxhash.hpp"
+#include "vast/detail/coding.hpp"
 
 #define SUITE hash
 #include "vast/test/test.hpp"
 
 using namespace vast;
+using vast::detail::hexify;
 
 namespace {
 
@@ -32,7 +37,7 @@ auto inspect(Inspector& f, foo& x) {
   return f(x.a, x.b);
 }
 
-} // namespace <anonymous>
+} // namespace
 
 TEST(hashing an inspectable type) {
   using hasher = xxhash32;
@@ -96,4 +101,20 @@ TEST(xxhash zero bytes) {
   xxh32(nullptr, 0);
   xxhash64 xxh64;
   xxh64(nullptr, 0);
+}
+
+TEST(sha1) {
+  // one-shot
+  std::array<char, 2> fortytwo = {'4', '2'};
+  auto digest = uhash<sha1>{}(fortytwo);
+  auto bytes = make_const_byte_span(digest);
+  CHECK_EQUAL(hexify(bytes), "92cfceb39d57d914ed8b14d0e37643de0797ae56");
+  // incremental
+  sha1 sha;
+  sha("foo", 3);
+  sha("bar", 3);
+  sha("baz", 3);
+  sha("42", 2);
+  digest = static_cast<sha1::result_type>(sha);
+  CHECK_EQUAL(hexify(bytes), "4cbfb91f23be76f0836c3007c1b3c8d8c2eacdd1");
 }

@@ -629,9 +629,10 @@ auto make_byte_span(T* data, Size size) {
     byte
   >;
   auto ptr = reinterpret_cast<byte_type*>(data);
+  auto size_in_bytes = size * sizeof(T);
   using span_type = span<byte_type>;
   using index_type = typename span_type::index_type;
-  return span_type{ptr, detail::narrow_cast<index_type>(size)};
+  return span_type{ptr, detail::narrow_cast<index_type>(size_in_bytes)};
 }
 
 /// @relates make_byte_span

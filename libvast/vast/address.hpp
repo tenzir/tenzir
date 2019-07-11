@@ -138,5 +138,14 @@ private:
   std::array<uint8_t, 16> bytes_;
 };
 
-} // namespace vast
+/// @relates address
+template <class Hasher>
+void hash_append(Hasher& h, const address& x) {
+  auto bytes = x.data().data();
+  if (x.is_v4())
+    h(bytes + 12, 4);
+  else
+    h(bytes, 16);
+}
 
+} // namespace vast

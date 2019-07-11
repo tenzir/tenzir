@@ -41,39 +41,25 @@ TEST(ports) {
 }
 
 TEST(printable) {
-  auto p = port{53, port::udp};
-  CHECK_EQUAL(to_string(p), "53/udp");
+  CHECK_EQUAL(to_string(port{42, port::unknown}), "42/?");
+  CHECK_EQUAL(to_string(port{53, port::udp}), "53/udp");
+  CHECK_EQUAL(to_string(port{80, port::tcp}), "80/tcp");
+  CHECK_EQUAL(to_string(port{7, port::icmp}), "7/icmp");
+  CHECK_EQUAL(to_string(port{7, port::icmp6}), "7/icmp6");
 }
 
 TEST(parseable) {
-  auto& p = parsers::port;
-  MESSAGE("tcp");
-  auto str = "22/tcp"s;
-  auto f = str.begin();
-  auto l = str.end();
-  port prt;
-  CHECK(p(f, l, prt));
-  CHECK(f == l);
-  CHECK_EQUAL(prt, port(22, port::tcp));
-  MESSAGE("udp");
-  str = "53/udp"s;
-  f = str.begin();
-  l = str.end();
-  CHECK(p(f, l, prt));
-  CHECK(f == l);
-  CHECK_EQUAL(prt, port(53, port::udp));
-  MESSAGE("icmp");
-  str = "7/icmp"s;
-  f = str.begin();
-  l = str.end();
-  CHECK(p(f, l, prt));
-  CHECK(f == l);
-  CHECK_EQUAL(prt, port(7, port::icmp));
-  MESSAGE("unknown");
-  str = "42/?"s;
-  f = str.begin();
-  l = str.end();
-  CHECK(p(f, l, prt));
-  CHECK(f == l);
-  CHECK_EQUAL(prt, port(42, port::unknown));
+  port x;
+  CHECK(parsers::port("42/?"s, x));
+  CHECK(x == port{42, port::unknown});
+  CHECK(parsers::port("7/icmp"s, x));
+  CHECK(x == port{7, port::icmp});
+  CHECK(parsers::port("22/tcp"s, x));
+  CHECK(x == port{22, port::tcp});
+  CHECK(parsers::port("53/udp"s, x));
+  CHECK(x == port{53, port::udp});
+  CHECK(parsers::port("7/icmp6"s, x));
+  CHECK(x == port{7, port::icmp6});
+  CHECK(parsers::port("80/sctp"s, x));
+  CHECK(x == port{80, port::sctp});
 }

@@ -22,6 +22,7 @@ set(libvast_sources
   src/command.cpp
   src/compression.cpp
   src/concept/hashable/crc.cpp
+  src/concept/hashable/sha1.cpp
   src/concept/hashable/xxhash.cpp
   src/concept/parseable/vast/expression.cpp
   src/data.cpp
@@ -31,6 +32,7 @@ set(libvast_sources
   src/detail/add_error_categories.cpp
   src/detail/add_message_types.cpp
   src/detail/adjust_resource_consumption.cpp
+  src/detail/base64.cpp
   src/detail/compressedbuf.cpp
   src/detail/fdinbuf.cpp
   src/detail/fdistream.cpp
@@ -66,6 +68,7 @@ set(libvast_sources
   src/format/writer.cpp
   src/format/zeek.cpp
   src/http.cpp
+  src/icmp.cpp
   src/ids.cpp
   src/json.cpp
   src/meta_index.cpp
@@ -226,9 +229,11 @@ set(tests
   test/coder.cpp
   test/column_index.cpp
   test/command.cpp
+  test/community_id.cpp
   test/compressedbuf.cpp
   test/data.cpp
   test/detail/algorithms.cpp
+  test/detail/base64.cpp
   test/detail/column_iterator.cpp
   test/detail/flat_lru_cache.cpp
   test/detail/operators.cpp
