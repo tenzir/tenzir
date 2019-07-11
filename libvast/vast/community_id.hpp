@@ -31,6 +31,7 @@
 #include "vast/detail/type_traits.hpp"
 #include "vast/icmp.hpp"
 #include "vast/port.hpp"
+#include "vast/span.hpp"
 
 namespace vast {
 namespace policy {
@@ -187,20 +188,17 @@ std::string compute(const flow& x, uint16_t seed = 0) {
   hash_append(hasher, x);
   auto digest = static_cast<sha1::result_type>(hasher);
   // Convert the binary digest to plain hex ASCII or to Base64.
-  constexpr auto element_size = sizeof(sha1::result_type::value_type);
-  constexpr auto num_bytes = element_size * digest.size();
-  auto ptr = reinterpret_cast<const uint8_t*>(digest.data());
   if constexpr (std::is_same_v<Policy, policy::base64>) {
+    constexpr auto element_size = sizeof(sha1::result_type::value_type);
+    constexpr auto num_bytes = element_size * digest.size();
+    auto ptr = reinterpret_cast<const uint8_t*>(digest.data());
     result.resize(max_length<Policy>());
     auto offset = version_prefix_length();
     auto n = detail::base64::encode(result.data() + offset, ptr, num_bytes);
     result.resize(offset + n);
   } else if constexpr (std::is_same_v<Policy, policy::ascii>) {
-    for (size_t i = 0; i < num_bytes; ++i) {
-      auto [hi, lo] = detail::byte_to_hex<policy::lowercase>(ptr[i]);
-      result += hi;
-      result += lo;
-    }
+    auto bytes = make_const_byte_span(digest);
+    detail::hexify<policy::lowercase>(bytes, result);
   } else {
     static_assert(detail::always_false_v<Policy>, "unsupported plicy");
   }

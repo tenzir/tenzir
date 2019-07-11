@@ -13,10 +13,14 @@
 
 #pragma once
 
+#include <cstddef>
 #include <limits>
+#include <string>
 #include <type_traits>
 
+#include "vast/byte.hpp"
 #include "vast/detail/type_traits.hpp"
+#include "vast/span.hpp"
 
 namespace vast::policy {
 
@@ -30,10 +34,10 @@ namespace vast::detail {
 /// Converts a byte value into an ASCII character.
 /// @param b The byte to convert.
 /// @returns The ASCII representation of *b*.
-/// @relates byte_to_hex hex_to_byte
+/// @see byte_to_hex hex_to_byte
 template <class T>
 constexpr char byte_to_char(T b) {
-  static_assert(std::is_integral_v<T>);
+  static_assert(std::is_integral_v<T> || sizeof(T) == 1);
   return b < 10 ? '0' + b : 'a' + b - 10;
 }
 
@@ -41,17 +45,19 @@ constexpr char byte_to_char(T b) {
 /// @param x The byte to convert.
 /// @param xs The alphabet to use for conversion (including NUL byte).
 /// @returns The two hex nibbles as `(high, low)` pair.
-/// @relates byte_to_char hex_to_byte
+/// @see byte_to_char hex_to_byte
 template <class T>
 constexpr std::pair<char, char> byte_to_hex(T x, const char (&xs)[16 + 1]) {
-  static_assert(std::is_integral_v<T>);
-  return {xs[(x >> 4) & 0x0f], xs[x & 0x0f]};
+  static_assert(std::is_integral_v<T> || sizeof(T) == 1);
+  auto hi = static_cast<size_t>((x >> 4) & T{0x0f});
+  auto lo = static_cast<size_t>(x & T{0x0f});
+  return {xs[hi], xs[lo]};
 }
 
 /// Converts a byte value into a hex value.
 /// @param x The byte to convert.
 /// @returns The two hex nibbles as `(high, low)` pair.
-/// @relates byte_to_char hex_to_byte
+/// @see byte_to_char hex_to_byte
 template <class Policy = policy::uppercase, class T>
 constexpr std::pair<char, char> byte_to_hex(T x) {
   if constexpr (std::is_same_v<Policy, policy::uppercase>)
@@ -62,13 +68,37 @@ constexpr std::pair<char, char> byte_to_hex(T x) {
     static_assert(always_false_v<Policy>, "unsupported policy");
 }
 
+/// Converts a byte range into a hex string.
+/// @param xs The byte sequence to convert into a hex string.
+/// @param result The string to append to.
+/// @see byte_to_hex
+template <class Policy = policy::lowercase>
+void hexify(span<const byte> xs, std::string& result) {
+  for (auto x : xs) {
+    auto [hi, lo] = byte_to_hex<Policy>(x);
+    result += hi;
+    result += lo;
+  }
+}
+
+/// Converts a byte range into a hex string.
+/// @param xs The byte sequence to convert into a hex string.
+/// @returns The hex string of *xs*.
+/// @see byte_to_hex
+template <class Policy = policy::lowercase>
+std::string hexify(span<const byte> xs) {
+  std::string result;
+  hexify<Policy>(xs, result);
+  return result;
+}
+
 /// Converts a single hex character into its byte value.
 /// @param hex The hex character.
 /// @returns The byte value of *hex* or 0 if *hex* is not a valid hex char.
 /// @relates byte_to_hex byte_to_char
 template <class T>
 constexpr char hex_to_byte(T hex) {
-  static_assert(std::is_integral_v<T>);
+  static_assert(std::is_integral_v<T> || sizeof(T) == 1);
   if (hex >= '0' && hex <= '9')
     return hex - '0';
   if (hex >= 'A' && hex <= 'F')
@@ -84,9 +114,8 @@ constexpr char hex_to_byte(T hex) {
 /// @relates byte_to_hex byte_to_char
 template <class T>
 constexpr char hex_to_byte(T hi, T lo) {
-  static_assert(std::is_integral_v<T>);
+  static_assert(std::is_integral_v<T> || sizeof(T) == 1);
   return (hex_to_byte(hi) << 4) | hex_to_byte(lo);
 }
 
 } // namespace vast::detail
-
