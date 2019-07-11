@@ -94,9 +94,9 @@ struct importer_fixture : Base {
   virtual void fetch_ok() = 0;
 
   auto make_source() {
-    auto slices = this->copy(this->zeek_conn_log_slices);
     return vast::detail::spawn_container_source(this->self->system(),
-                                                std::move(slices), importer);
+                                                this->zeek_conn_log_slices,
+                                                importer);
   }
 
   auto make_zeek_source() {

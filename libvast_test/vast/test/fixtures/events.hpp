@@ -64,8 +64,6 @@ struct events {
     return {make_vector(xs)...};
   }
 
-  std::vector<table_slice_ptr> copy(std::vector<table_slice_ptr> xs);
-
   auto take(const std::vector<table_slice_ptr>& xs, size_t n) {
     VAST_ASSERT(n <= xs.size());
     auto first = xs.begin();

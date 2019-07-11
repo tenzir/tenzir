@@ -131,15 +131,6 @@ record_type events::zeek_conn_log_layout() {
   return zeek_conn_log_slices[0]->layout();
 }
 
-std::vector<table_slice_ptr>
-events::copy(std::vector<table_slice_ptr> xs) {
-  std::vector<table_slice_ptr> result;
-  result.reserve(xs.size());
-  for (auto& x : xs)
-    result.emplace_back(x->copy());
-  return result;
-}
-
 /// A wrapper around a table_slice_builder_ptr that assigns ids to each
 /// added event.
 class id_assigning_builder {
