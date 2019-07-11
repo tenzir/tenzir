@@ -287,7 +287,6 @@ struct attributes_parser : parser<attributes_parser<TypeCode14Policy>> {
       // can use the combinator style to chain the parser together, as opposed
       // to dispatching manually.
       auto t = f;
-      // clang-format off
       switch (type_code) {
         case 1: {
           auto p = parsers::byte ->* [](uint8_t x) {
