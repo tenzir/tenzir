@@ -82,9 +82,7 @@ struct csv {
   static constexpr char separator = ',';
 
   // TODO: agree on reasonable values
-  static constexpr std::string_view set_separator = ",";
-
-  static constexpr std::string_view empty = "\"\"";
+  static constexpr char set_separator = ',';
 };
 
 /// Contains settings for the json subcommand.
@@ -170,7 +168,7 @@ constexpr size_t max_events = 0;
 /// Contains settings for the zeek subcommand.
 struct zeek {
   /// Nested category in config files for this subcommand.
-  static constexpr const char* category = "import.zeek";
+  static constexpr const char* category = "export.zeek";
 
   /// Path for writing query results.
   static constexpr auto write = shared::write;
@@ -179,16 +177,21 @@ struct zeek {
 /// Contains settings for the csv subcommand.
 struct csv {
   /// Nested category in config files for this subcommand.
-  static constexpr const char* category = "import.csv";
+  static constexpr const char* category = "export.csv";
 
   /// Path for writing query results.
   static constexpr auto write = shared::write;
+
+  static constexpr char separator = ',';
+
+  // TODO: agree on reasonable values
+  static constexpr std::string_view set_separator = " | ";
 };
 
 /// Contains settings for the ascii subcommand.
 struct ascii {
   /// Nested category in config files for this subcommand.
-  static constexpr const char* category = "import.ascii";
+  static constexpr const char* category = "export.ascii";
 
   /// Path for writing query results.
   static constexpr auto write = shared::write;
@@ -197,7 +200,7 @@ struct ascii {
 /// Contains settings for the json subcommand.
 struct json {
   /// Nested category in config files for this subcommand.
-  static constexpr const char* category = "import.json";
+  static constexpr const char* category = "export.json";
 
   /// Path for writing query results.
   static constexpr auto write = shared::write;
@@ -206,7 +209,7 @@ struct json {
 /// Contains settings for the pcap subcommand.
 struct pcap {
   /// Nested category in config files for this subcommand.
-  static constexpr const char* category = "import.pcap";
+  static constexpr const char* category = "export.pcap";
 
   /// Path for writing query results.
   static constexpr auto write = shared::write;
