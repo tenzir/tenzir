@@ -24,21 +24,6 @@ writer::~writer() {
   // nop
 }
 
-caf::expected<void> writer::write(const event&) {
-  return ec::unimplemented;
-}
-
-caf::error writer::write(const std::vector<event>& xs) {
-  for (auto& x : xs)
-    if (auto res = write(x); !res)
-      return res.error();
-  return caf::none;
-}
-
-caf::error writer::write(const table_slice& x) {
-  return write(to_events(x));
-}
-
 caf::expected<void> writer::flush() {
   return caf::no_error;
 }
