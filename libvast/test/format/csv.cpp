@@ -108,7 +108,7 @@ TEST(csv reader - simple) {
   auto slices = run(l0_log0, 8, 5);
   REQUIRE_EQUAL(slices[0]->layout(), l0);
   CHECK(slices[1]->at(0, 0)
-        == data{unbox(to<time>("2011-08-12T14:59:11.994970Z"))});
+        == data{unbox(to<vast::time>("2011-08-12T14:59:11.994970Z"))});
   CHECK(slices[1]->at(1, 2) == port{1047});
 }
 
@@ -289,13 +289,13 @@ TEST(csv reader - reordered layout) {
   CHECK(slices[0]->at(0, 8) == data{unbox(to<duration>("42s"))});
   CHECK(slices[0]->at(0, 9) == data{enumeration{2}});
   CHECK(slices[0]->at(0, 10)
-        == data{unbox(to<time>("2011-08-12+14:59:11.994970"))});
+        == data{unbox(to<vast::time>("2011-08-12+14:59:11.994970"))});
   CHECK(slices[0]->at(0, 11) == data{vector{44, 42, 43}});
   CHECK(
     slices[0]->at(0, 12)
     == data{vector{unbox(to<port>("5555/tcp")), unbox(to<port>("0/icmp"))}});
   CHECK(slices[0]->at(0, 13)
-        == data{vector{unbox(to<time>("2019-04-30T11:46:13Z"))}});
+        == data{vector{unbox(to<vast::time>("2019-04-30T11:46:13Z"))}});
   CHECK(slices[0]->at(0, 14) == data{map{{1, "FOO"}, {1024, "BAR!"}}});
 }
 
