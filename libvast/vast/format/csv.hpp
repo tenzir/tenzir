@@ -30,6 +30,12 @@
 
 namespace vast::format::csv {
 
+struct options {
+  char separator;
+  std::string set_separator;
+  std::string kvp_separator;
+};
+
 class writer : public format::ostream_writer {
 public:
   using super = format::ostream_writer;
@@ -87,6 +93,7 @@ private:
   vast::schema schema_;
   std::vector<rec_table> records;
   caf::optional<parser_type> parser_;
+  options opt_;
 };
 
 } // namespace vast::format::csv

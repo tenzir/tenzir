@@ -82,7 +82,9 @@ struct csv {
   static constexpr char separator = ',';
 
   // TODO: agree on reasonable values
-  static constexpr char set_separator = ',';
+  static constexpr std::string_view set_separator = ",";
+
+  static constexpr std::string_view kvp_separator = "=";
 };
 
 /// Contains settings for the json subcommand.
