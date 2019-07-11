@@ -489,7 +489,7 @@ public:
       }
       return true;
     } else if constexpr (std::is_same_v<T, view<map>>) {
-      VAST_ERROR(this, "cannot print maps in Zeek format");
+      VAST_ERROR(this, "cannot print maps in Zeek TSV format");
       return false;
     } else {
       make_printer<T> p;
@@ -498,19 +498,19 @@ public:
   }
 
   bool operator()(Iterator& out, const view<real>& x) const {
-    return real_printer_.print(out, x);
+    return zeek_real.print(out, x);
   }
 
   bool operator()(Iterator& out, const view<time>& x) const {
     double d;
     convert(x.time_since_epoch(), d);
-    return real_printer_.print(out, d);
+    return zeek_real.print(out, d);
   }
 
   bool operator()(Iterator& out, const view<duration>& x) const {
     double d;
     convert(x, d);
-    return real_printer_.print(out, d);
+    return zeek_real.print(out, d);
   }
 
   bool operator()(Iterator& out, const view<std::string>& str) const {
@@ -537,7 +537,7 @@ public:
   }
 
 private:
-  real_printer<real, 6, 6> real_printer_;
+  static constexpr inline auto zeek_real = real_printer<real, 6, 6>{};
 };
 
 /// Owns an `std::ostream` and prints to it for a single layout.
