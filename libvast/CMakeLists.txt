@@ -65,6 +65,7 @@ set(libvast_sources
   src/format/writer.cpp
   src/format/zeek.cpp
   src/http.cpp
+  src/icmp.cpp
   src/ids.cpp
   src/json.cpp
   src/meta_index.cpp
