@@ -10,6 +10,10 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## [Unreleased]
 
+- 🐞 Parsers for reading log input that relied on recursive rules leaked memory
+  by creating cycling references. All recursive parsers have been updated to
+  break such cycles and thus no longer leak memory.
+
 - 🎁 The query expression language now supports *data predicates*, which are a
   shorthand for a type extractor in combination with an equality operator. For
   example, the data predicate `6.6.6.6` is the same as `:addr == 6.6.6.6`.
