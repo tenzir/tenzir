@@ -68,6 +68,10 @@ protected:
                        consumer& f) override;
 
 private:
+  struct rec_table {
+    record_type type;
+    std::vector<std::string> sorted;
+  };
   using iterator_type = std::string::const_iterator;
   using parser_type = type_erased_parser<iterator_type>;
 
@@ -78,10 +82,6 @@ private:
   std::unique_ptr<std::istream> input_;
   std::unique_ptr<detail::line_range> lines_;
   vast::schema schema_;
-  struct rec_table {
-    record_type type;
-    std::vector<std::string> sorted;
-  };
   std::vector<rec_table> records;
   caf::optional<parser_type> parser_;
 };

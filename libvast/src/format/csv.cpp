@@ -24,9 +24,11 @@
 #include "vast/concept/parseable/vast.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/type.hpp"
+#include "vast/concept/printable/vast/view.hpp"
+#include "vast/detail/type_traits.hpp"
+#include "vast/error.hpp"
 #include "vast/logger.hpp"
 #include "vast/schema.hpp"
-#include "vast/error.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
 
@@ -158,10 +160,8 @@ void reader::reset(std::unique_ptr<std::istream> in) {
 caf::error reader::schema(vast::schema s) {
   schema_ = std::move(s);
   for (auto& t : s) {
-    auto r = caf::get_if<record_type>(&t);
-    if (!r)
-      continue;
-    schema_.add(flatten(*r));
+    if (auto r = caf::get_if<record_type>(&t))
+      schema_.add(flatten(*r));
   }
   return caf::none;
 }
@@ -186,7 +186,7 @@ reader::make_layout(const std::vector<std::string>& names) {
           else
             return caf::none;
         }
-        return record_type{result_raw};
+        return record_type{std::move(result_raw)};
       };
       if (auto result = select_fields())
         return result->name(r->name());
@@ -203,6 +203,10 @@ namespace {
 
 template <class Iterator, class Attribute>
 struct container_parser_builder {
+  // In case we run into performance issue with the parsers
+  // generated here, `rule` could be replaced by `type_erased_parser`
+  // to eliminated one indirection. This requires attribute support
+  // in `type_erased_parser`.
   using result_type = rule<Iterator, Attribute>;
 
   explicit container_parser_builder(const std::string& set_separator)
@@ -214,27 +218,42 @@ struct container_parser_builder {
   template <class T>
   result_type operator()(const T& t) const {
     if constexpr (std::is_same_v<T, string_type>) {
-      return +(parsers::any - set_separator_ - '=')->*[](std::string&& x) {
+      // clang-format off
+      return +(parsers::any - set_separator_ - '=') ->* [](std::string x) {
         return data{std::move(x)};
       };
     } else if constexpr (std::is_same_v<T, pattern_type>) {
-      return +(parsers::any - set_separator_ - '=')->*[](std::string&& x) {
+      return +(parsers::any - set_separator_ - '=') ->* [](std::string x) {
         return data{pattern{std::move(x)}};
       };
+      // clang-format on
+    } else if constexpr (std::is_same_v<T, enumeration_type>) {
+      auto to_enumeration = [t](std::string s) -> caf::optional<Attribute> {
+        auto i = std::find(t.fields.begin(), t.fields.end(), s);
+        if (i == t.fields.end()) {
+          VAST_WARNING_ANON("csv reader failed to parse unexpected enum value",
+                            s);
+          return caf::none;
+        }
+        return enumeration(std::distance(t.fields.begin(), i));
+      };
+      return (+(parsers::any - set_separator_ - '=')).with(to_enumeration);
     } else if constexpr (std::is_same_v<T, set_type>) {
-      auto set_insert = [](std::vector<Attribute>&& xs) {
+      auto set_insert = [](std::vector<Attribute> xs) {
         return set(std::make_move_iterator(xs.begin()),
                    std::make_move_iterator(xs.end()));
       };
-      return ('{'_p >> (caf::visit(*this, t.value_type) % set_separator_)
-              >> '}'_p)
-               ->*set_insert;
+      // clang-format off
+      return
+        ('{'_p >> (caf::visit(*this, t.value_type) % set_separator_) >> '}'_p)
+               ->* set_insert;
     } else if constexpr (std::is_same_v<T, vector_type>) {
-      auto vector_insert = [](std::vector<Attribute>&& xs) { return xs; };
+      auto vector_insert = [](std::vector<Attribute> xs) { return xs; };
       return ('[' >> (caf::visit(*this, t.value_type) % set_separator_) >> ']')
-               ->*vector_insert;
+               ->* vector_insert;
+      // clang-format on
     } else if constexpr (std::is_same_v<T, map_type>) {
-      auto map_insert = [](std::vector<std::tuple<Attribute, Attribute>>&& xs) {
+      auto map_insert = [](std::vector<std::tuple<Attribute, Attribute>> xs) {
         auto to_pair = [](auto&& tuple) {
           return std::make_pair(std::get<0>(tuple), std::get<1>(tuple));
         };
@@ -243,15 +262,17 @@ struct container_parser_builder {
           m.insert(to_pair(std::move(x)));
         return m;
       };
-      auto kvp = caf::visit(*this, t.key_type) >> '='
-                 >> caf::visit(*this, t.value_type);
-      return (('{'_p >> (kvp % set_separator_) >> '}')->*map_insert);
+      // clang-format off
+      auto kvp =
+        caf::visit(*this, t.key_type) >> '=' >> caf::visit(*this, t.value_type);
+      return ('{'_p >> (kvp % set_separator_) >> '}') ->* map_insert;
     } else if constexpr (has_parser_v<type_to_data<T>>) {
       using value_type = type_to_data<T>;
       auto ws = ignore(*parsers::space);
-      return (ws >> make_parser<value_type>{} >> ws)->*[](value_type&& x) {
+      return (ws >> make_parser<value_type>{} >> ws) ->* [](value_type x) {
         return x;
       };
+      // clang-format on
     } else {
       VAST_ERROR_ANON("csv parser builder faild to fetch a parser for type",
                       caf::detail::pretty_type_name(typeid(T)));
@@ -272,48 +293,24 @@ struct csv_parser_factory {
     // nop
   }
 
-  struct identity {
-    template <class T>
-    constexpr T operator()(T&& t) const noexcept {
-      return std::forward<T>(t);
-    }
-  };
-
-  template <class T, class F>
+  template <class T>
   struct add_t {
-    void operator()(caf::optional<T>&& x) const {
-      if (x) {
-        const auto tmp = f_(*x);
-        bptr_->add(make_data_view(tmp));
-      } else
-        bptr_->add(make_data_view(caf::none));
+    bool operator()(const caf::optional<T>& x) const {
+      return bptr_->add(make_data_view(x));
     }
     table_slice_builder_ptr bptr_;
-    F f_;
   };
-
-  template <class T>
-  static add_t<T, identity> make_add_t(table_slice_builder_ptr bptr) {
-    return add_t<T, identity>{std::move(bptr), identity{}};
-  }
-
-  template <class T, class F>
-  static add_t<T, F> make_add_t(table_slice_builder_ptr bptr, F f) {
-    return add_t<T, F>{std::move(bptr), std::move(f)};
-  }
 
   template <class T>
   result_type operator()(const T& t) const {
     if constexpr (std::is_same_v<T, string_type>) {
       return (-+(parsers::any - set_separator_))
-               ->*make_add_t<std::string>(bptr_);
+        .with(add_t<std::string>{bptr_});
     } else if constexpr (std::is_same_v<T, pattern_type>) {
-      auto to_pattern = [](const std::string& s) { return pattern{s}; };
-      return (-+(parsers::any - set_separator_))
-               ->*make_add_t<std::string>(bptr_, to_pattern);
+      return (-as<pattern>(as<std::string>(+(parsers::any - set_separator_))))
+        .with(add_t<pattern>{bptr_});
     } else if constexpr (std::is_same_v<T, enumeration_type>) {
-      auto to_enumeration =
-        [t](const std::string& s) -> caf::optional<enumeration> {
+      auto to_enumeration = [t](std::string s) -> caf::optional<enumeration> {
         auto i = std::find(t.fields.begin(), t.fields.end(), s);
         if (i == t.fields.end()) {
           VAST_WARNING_ANON("csv reader failed to parse unexpected enum value",
@@ -322,15 +319,16 @@ struct csv_parser_factory {
         }
         return std::distance(t.fields.begin(), i);
       };
-      return (-+(parsers::any - set_separator_))
-               ->*make_add_t<std::string>(bptr_, to_enumeration);
-    } else if constexpr (detail::contains_v<
-                           T, std::tuple<set_type, vector_type, map_type>>) {
+      // clang-format off
+      return ((+(parsers::any - set_separator_))
+              ->* to_enumeration).with(add_t<enumeration>{bptr_});
+      // clang-format on
+    } else if constexpr (detail::is_any_v<T, set_type, vector_type, map_type>) {
       return (-container_parser_builder<Iterator, data>{set_separator_}(t))
-               ->*make_add_t<data>(bptr_);
+        .with(add_t<data>{bptr_});
     } else if constexpr (has_parser_v<type_to_data<T>>) {
       using value_type = type_to_data<T>;
-      return (-make_parser<value_type>{})->*make_add_t<value_type>(bptr_);
+      return (-make_parser<value_type>{}).with(add_t<value_type>{bptr_});
     } else {
       VAST_ERROR_ANON("csv parser builder failed to fetch a parser for type",
                       caf::detail::pretty_type_name(typeid(T)));
@@ -351,10 +349,7 @@ make_csv_parser(const record_type& layout, table_slice_builder_ptr builder) {
   auto result = caf::visit(factory, layout.fields[0].type);
   for (size_t i = 1; i < num_fields; ++i) {
     auto p = (caf::visit(factory, layout.fields[i].type));
-    result = (result >> ','
-              >> std::move(p)) /*->* [](std::tuple<bool, bool>&& bb) {
-return std::get<0>(bb) && std::get<1>(bb);
-}*/;
+    result = (result >> ',' >> std::move(p));
   }
   return result;
 }

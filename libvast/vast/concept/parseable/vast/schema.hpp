@@ -27,9 +27,9 @@ struct schema_parser : parser<schema_parser> {
 
   // clang-format off
   static constexpr auto id = +(parsers::alnum
-                        | parsers::chr{'_'}
-                        | parsers::chr{'-'}
-                        | parsers::chr{'.'});
+                           | parsers::chr{'_'}
+                           | parsers::chr{'-'}
+                           | parsers::chr{'.'});
   // clang-format on
 
   template <class Iterator>

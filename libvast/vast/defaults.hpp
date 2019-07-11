@@ -78,6 +78,13 @@ struct csv {
 
   /// Path for reading input events.
   static constexpr auto read = shared::read;
+
+  static constexpr char separator = ',';
+
+  // TODO: agree on reasonable values
+  static constexpr std::string_view set_separator = ",";
+
+  static constexpr std::string_view empty = "\"\"";
 };
 
 /// Contains settings for the json subcommand.

@@ -129,6 +129,28 @@ TEST(csv reader - empty fields) {
   CHECK(slices[1]->at(1, 2) == data{caf::none});
 }
 
+std::string_view l1_log_string = R"__(s
+hello
+)__";
+
+TEST(csv reader - string) {
+  auto slices = run(l1_log_string, 1, 1);
+  auto l1_string = record_type{{"s", string_type{}}}.name("l1");
+  REQUIRE_EQUAL(slices[0]->layout(), l1_string);
+  CHECK(slices[0]->at(0, 0) == data{"hello"});
+}
+
+std::string_view l1_log_pattern = R"__(ptn
+hello
+)__";
+
+TEST(csv reader - pattern) {
+  auto slices = run(l1_log_pattern, 1, 1);
+  auto l1_pattern = record_type{{"ptn", pattern_type{}}}.name("l1");
+  REQUIRE_EQUAL(slices[0]->layout(), l1_pattern);
+  CHECK(slices[0]->at(0, 0) == data{"hello"});
+}
+
 std::string_view l1_log0 = R"__(s,ptn,set
 hello,world,{1,2}
 Tom,appeared,{42,1337}
