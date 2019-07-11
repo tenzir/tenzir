@@ -250,14 +250,9 @@ struct container_parser_builder {
                ->* vector_insert;
       // clang-format on
     } else if constexpr (std::is_same_v<T, map_type>) {
-      auto map_insert = [](std::vector<std::tuple<Attribute, Attribute>> xs) {
-        auto to_pair = [](auto&& tuple) {
-          return std::make_pair(std::get<0>(tuple), std::get<1>(tuple));
-        };
-        map m;
-        for (auto& x : xs)
-          m.insert(to_pair(std::move(x)));
-        return m;
+      auto map_insert = [](std::vector<std::pair<Attribute, Attribute>> xs) {
+        return map(std::make_move_iterator(xs.begin()),
+                   std::make_move_iterator(xs.end()));
       };
       // clang-format off
       auto kvp =
