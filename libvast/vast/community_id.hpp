@@ -146,7 +146,7 @@ caf::optional<flow> make_flow(std::string_view orig_h, uint16_t orig_p,
 
 /// Computes the length of the version prefix.
 /// @see max_length
-inline constexpr size_t version_prefix_length() {
+constexpr size_t version_prefix_length() {
   constexpr size_t version_number = 1;
   constexpr size_t version_separator = 1;
   return version_number + version_separator;
