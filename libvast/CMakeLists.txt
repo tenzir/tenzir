@@ -236,7 +236,7 @@ set(tests
   test/endpoint.cpp
   test/error.cpp
   test/event.cpp
-  #test/expression.cpp
+  test/expression.cpp
   test/expression_evaluation.cpp
   test/expression_parseable.cpp
   test/factory.cpp
