@@ -38,7 +38,9 @@ struct json_parser : parser<json_parser> {
     auto lbrace = ws >> '{' >> ws;
     auto rbrace = ws >> '}' >> ws;
     auto delim = ws >> ',' >> ws;
-    auto null = ws >> "null"_p->*[] { return json::null{}; };
+    // clang-format off
+    auto null = ws >> "null"_p ->* [] { return json::null{}; };
+    // clang-format on
     auto boolean = ws >> parsers::boolean;
     auto string = ws >> parsers::qq_str;
     auto number = ws >> parsers::real_opt_dot;
