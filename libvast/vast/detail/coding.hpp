@@ -85,9 +85,7 @@ constexpr char hex_to_byte(T hex) {
 template <class T>
 constexpr char hex_to_byte(T hi, T lo) {
   static_assert(std::is_integral_v<T>);
-  auto byte = hex_to_byte(hi) << 4;
-  byte |= hex_to_byte(lo);
-  return byte;
+  return (hex_to_byte(hi) << 4) | hex_to_byte(lo);
 }
 
 } // namespace vast::detail
