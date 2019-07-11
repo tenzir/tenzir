@@ -64,7 +64,6 @@ TEST(PCAP read/write 1) {
   REQUIRE_EQUAL(writer.write(*slice), caf::none);
 }
 
-/*
 TEST(PCAP read/write 2) {
   // Spawn a PCAP source with a 64-byte cutoff, at most 100 flow table entries,
   // with flows inactive for more than 5 seconds to be evicted every 2 seconds.
@@ -74,25 +73,24 @@ TEST(PCAP read/write 2) {
                               100,
                               5,
                               2};
-  std::vector<table_slice_ptr> slices;
-  auto add_slice = [&](const table_slice_ptr& slice) {
-    slices.emplace_back(slice);
+  table_slice_ptr slice;
+  auto add_slice = [&](const table_slice_ptr& x) {
+    REQUIRE_EQUAL(slice, nullptr);
+    slice = x;
   };
   auto [err, produced] = reader.read(std::numeric_limits<size_t>::max(),
-                                     defaults::system::table_slice_size,
+                                     100, // we expect only 36 events
                                      add_slice);
+  REQUIRE_NOT_EQUAL(slice, nullptr);
   CHECK_EQUAL(err, ec::end_of_input);
-  REQUIRE_EQUAL(events.size(), produced);
-  REQUIRE(!events.empty());
-  CHECK_EQUAL(events.size(), 36u);
-  CHECK_EQUAL(events[0].type().name(), "pcap.packet");
+  REQUIRE_EQUAL(produced, 36u);
+  CHECK_EQUAL(slice->rows(), 36u);
+  CHECK_EQUAL(slice->layout().name(), "pcap.packet");
   MESSAGE("write out read packets");
   auto file = "vast-unit-test-workshop-2011-browse.pcap";
   format::pcap::writer writer{file};
   auto deleter = caf::detail::make_scope_guard([&] { rm(file); });
-  for (auto& slice : events)
-    REQUIRE_EQUAL(writer.write(slice), caf::none);
+  REQUIRE_EQUAL(writer.write(*slice), caf::none);
 }
-*/
 
 FIXTURE_SCOPE_END()
