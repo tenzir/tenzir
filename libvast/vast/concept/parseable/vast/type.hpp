@@ -18,6 +18,7 @@
 #include "vast/concept/parseable/core/list.hpp"
 #include "vast/concept/parseable/core/operators.hpp"
 #include "vast/concept/parseable/core/parser.hpp"
+#include "vast/concept/parseable/core/rule.hpp"
 #include "vast/concept/parseable/numeric/integral.hpp"
 #include "vast/concept/parseable/string/quoted_string.hpp"
 #include "vast/concept/parseable/string/symbol_table.hpp"
@@ -120,7 +121,8 @@ struct type_parser : parser<type_parser> {
       return vector_type{std::move(value_type)}.attributes(std::move(attrs));
     };
     auto vector_type_parser
-      = ("vector" >> ws >> '<' >> ws >> type_type >> ws >> '>') ->* to_vector
+      = ("vector" >> ws >> '<' >> ws >> ref(type_type) >> ws >> '>')
+        ->* to_vector
       ;
     // Set
     static auto to_set = [](sequence_tuple xs) -> type {
@@ -128,7 +130,8 @@ struct type_parser : parser<type_parser> {
       return set_type{std::move(value_type)}.attributes(std::move(attrs));
     };
     auto set_type_parser
-      = ("set" >> ws >> '<' >> ws >> type_type >> ws >> '>') ->* to_set
+      = ("set" >> ws >> '<' >> ws >> ref(type_type) >> ws >> '>')
+      ->* to_set
       ;
     // Map
     using map_tuple = std::tuple<type, type, std::vector<vast::attribute>>;
@@ -139,7 +142,7 @@ struct type_parser : parser<type_parser> {
     };
     auto map_type_parser
       = ("map" >> ws >> '<' >> ws
-      >> type_type >> ws >> ',' >> ws >> type_type >> ws
+      >> vast::ref(type_type) >> ws >> ',' >> ws >> ref(type_type) >> ws
       >> '>' >> attr_list) ->* to_map;
       ;
     // Record
@@ -156,7 +159,8 @@ struct type_parser : parser<type_parser> {
       return record_type{std::move(fields)}.attributes(std::move(attrs));
     };
     auto field
-      = (parsers::identifier >> ws >> ':' >> ws >> type_type) ->* to_field
+      = (parsers::identifier >> ws >> ':' >> ws >> ref(type_type))
+      ->* to_field
       ;
     auto record_type_parser
       = ("record" >> ws >> '{'

@@ -167,8 +167,7 @@ TEST(historical query with importer) {
   MESSAGE("ingest conn.log via importer");
   // We need to copy zeek_conn_log_slices here, because the importer will assign
   // IDs to the slices it received and we mustn't mess our static test data.
-  vast::detail::spawn_container_source(sys, copy(zeek_conn_log_slices),
-                                       importer);
+  vast::detail::spawn_container_source(sys, zeek_conn_log_slices, importer);
   run();
   MESSAGE("spawn exporter for historical query");
   exporter_setup(historical);
@@ -207,8 +206,7 @@ TEST(continuous query with importer) {
   send(importer, system::exporter_atom::value, exporter);
   MESSAGE("ingest conn.log via importer");
   // Again: copy because we musn't mutate static test data.
-  vast::detail::spawn_container_source(sys, copy(zeek_conn_log_slices),
-                                       importer);
+  vast::detail::spawn_container_source(sys, zeek_conn_log_slices, importer);
   run();
   MESSAGE("fetch results");
   auto results = fetch_results();

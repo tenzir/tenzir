@@ -106,7 +106,7 @@ caf::error inspect(caf::serializer& sink, const segment_ptr& x) {
 }
 
 caf::error inspect(caf::deserializer& source, segment_ptr& x) {
-  x.reset(new segment);
+  x.reset(new segment, false);
   return source(x->header_, x->meta_, x->chunk_);
 }
 
