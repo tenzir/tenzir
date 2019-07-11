@@ -16,6 +16,8 @@
 #include <limits>
 #include <type_traits>
 
+#include "vast/detail/type_traits.hpp"
+
 namespace vast::policy {
 
 struct uppercase {};
@@ -57,7 +59,7 @@ constexpr std::pair<char, char> byte_to_hex(T x) {
   else if constexpr (std::is_same_v<Policy, policy::lowercase>)
     return byte_to_hex(x, "0123456789abcdef");
   else
-    return {0, 0};
+    static_assert(always_false_v<Policy>, "unsupported policy");
 }
 
 /// Converts a single hex character into its byte value.

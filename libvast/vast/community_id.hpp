@@ -28,6 +28,7 @@
 #include "vast/detail/byte_swap.hpp"
 #include "vast/detail/coding.hpp"
 #include "vast/detail/narrow.hpp"
+#include "vast/detail/type_traits.hpp"
 #include "vast/icmp.hpp"
 #include "vast/port.hpp"
 
@@ -163,7 +164,8 @@ constexpr size_t max_length() {
     return prefix + detail::base64::encoded_size(hex_size);
   else if constexpr (std::is_same_v<Policy, policy::ascii>)
     return prefix + hex_size;
-  return 0;
+  else
+    static_assert(detail::always_false_v<Policy>, "unsupported plicy");
 }
 
 /// Calculates the Community ID for a given flow.
@@ -193,12 +195,14 @@ std::string compute(const flow& x, uint16_t seed = 0) {
     auto offset = version_prefix_length();
     auto n = detail::base64::encode(result.data() + offset, ptr, num_bytes);
     result.resize(offset + n);
-  } else {
+  } else if constexpr (std::is_same_v<Policy, policy::ascii>) {
     for (size_t i = 0; i < num_bytes; ++i) {
       auto [hi, lo] = detail::byte_to_hex<policy::lowercase>(ptr[i]);
       result += hi;
       result += lo;
     }
+  } else {
+    static_assert(detail::always_false_v<Policy>, "unsupported plicy");
   }
   return result;
 }
