@@ -31,7 +31,7 @@ namespace {
 
 constexpr std::string_view uuid_str = "423b45a1-c217-4f99-ba43-9e3fc3285cd3";
 
-constexpr std::string_view query_str = "#time < 1 week ago";
+constexpr std::string_view query_str = "#timestamp < 1 week ago";
 
 struct mock_index_state {
   static inline constexpr const char* name = "mock-index";

@@ -541,11 +541,11 @@ struct data_congruence_checker {
     return true;
   }
 
-  bool operator()(const timespan_type&, timespan) const {
+  bool operator()(const duration_type&, duration) const {
     return true;
   }
 
-  bool operator()(const timestamp_type&, timestamp) const {
+  bool operator()(const time_type&, time) const {
     return true;
   }
 
@@ -779,24 +779,9 @@ std::string to_digest(const type& x) {
 namespace {
 
 const char* kind_tbl[] = {
-  "none",
-  "bool",
-  "int",
-  "count",
-  "real",
-  "timespan",
-  "timestamp",
-  "string",
-  "pattern",
-  "address",
-  "subnet",
-  "port",
-  "enumeration",
-  "vector",
-  "set",
-  "map",
-  "record",
-  "alias",
+  "none",        "bool",   "int",     "count",   "real",   "duration",
+  "time",        "string", "pattern", "address", "subnet", "port",
+  "enumeration", "vector", "set",     "map",     "record", "alias",
 };
 
 using caf::detail::tl_size;

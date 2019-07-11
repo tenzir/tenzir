@@ -18,12 +18,12 @@ namespace vast {
 
 using std::chrono::duration_cast;
 
-bool convert(timespan dur, double& d) {
+bool convert(duration dur, double& d) {
   d = duration_cast<double_seconds>(dur).count();
   return true;
 }
 
-bool convert(timespan dur, json& j) {
+bool convert(duration dur, json& j) {
   double time_since_epoch;
   if (!convert(dur, time_since_epoch))
     return false;
@@ -31,11 +31,11 @@ bool convert(timespan dur, json& j) {
   return true;
 }
 
-bool convert(timestamp ts, double& d) {
+bool convert(time ts, double& d) {
   return convert(ts.time_since_epoch(), d);
 }
 
-bool convert(timestamp ts, json& j) {
+bool convert(time ts, json& j) {
   return convert(ts.time_since_epoch(), j);
 }
 

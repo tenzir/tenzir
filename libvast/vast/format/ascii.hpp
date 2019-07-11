@@ -13,28 +13,19 @@
 
 #pragma once
 
-#include "vast/concept/printable/core.hpp"
-#include "vast/concept/printable/vast/event.hpp"
-#include "vast/format/printer_writer.hpp"
+#include "vast/format/ostream_writer.hpp"
 
 namespace vast::format::ascii {
 
-struct ascii_printer : printer<ascii_printer> {
-  using attribute = event;
-
-  template <class Iterator>
-  bool print(Iterator&& out, const event& e) const {
-    return event_printer{}.print(out, e);
-  }
-};
-
-class writer : public printer_writer<ascii_printer>{
+class writer : public format::ostream_writer {
 public:
-  using printer_writer<ascii_printer>::printer_writer;
+  using super = format::ostream_writer;
 
-  const char* name() const override {
-    return "ascii-writer";
-  }
+  using super::super;
+
+  caf::error write(const table_slice& x) override;
+
+  const char* name() const override;
 };
 
 } // namespace vast::format::ascii

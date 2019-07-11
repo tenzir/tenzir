@@ -12,8 +12,8 @@ namespace mrt {
 reader::factory::factory(reader& parent, uint32_t ts)
   : parent_(parent), produced_(0) {
   using namespace std::chrono;
-  auto since_epoch = duration<uint32_t>{ts};
-  timestamp_ = timestamp{duration_cast<timespan>(since_epoch)};
+  auto since_epoch = std::chrono::duration<uint32_t>{ts};
+  timestamp_ = time{duration_cast<duration>(since_epoch)};
 }
 
 caf::error reader::factory::operator()(caf::none_t) const {

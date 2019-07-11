@@ -127,7 +127,7 @@ caf::actor fetch_indexer(table_indexer& tbl, const attribute_extractor& ex,
       return [=](const curried_predicate&) { return row_ids; };
     });
   }
-  if (ex.attr == system::time_atom::value) {
+  if (ex.attr == system::timestamp_atom::value) {
     if (!caf::holds_alternative<timestamp>(x)) {
       VAST_WARNING(tbl.state().self,
                    "expected a timestamp as time extractor attribute , got:",
@@ -136,8 +136,8 @@ caf::actor fetch_indexer(table_indexer& tbl, const attribute_extractor& ex,
     }
     // Find the column with attribute 'time'.
     auto pred = [](auto& x) {
-      return caf::holds_alternative<timestamp_type>(x.type)
-             && has_attribute(x.type, "time");
+      return caf::holds_alternative<time_type>(x.type)
+             && has_attribute(x.type, "timestamp");
     };
     auto& fs = layout.fields;
     auto i = std::find_if(fs.begin(), fs.end(), pred);

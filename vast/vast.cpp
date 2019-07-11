@@ -41,7 +41,7 @@ using namespace vast::system;
 
 int main(int argc, char** argv) {
   // CAF scaffold.
-  default_configuration cfg{"vast"};
+  default_configuration cfg;
   if (auto err = cfg.parse(argc, argv)) {
     std::cerr << "failed to parse configuration: " << to_string(err)
               << std::endl;
@@ -49,11 +49,6 @@ int main(int argc, char** argv) {
   }
   // Application setup.
   default_application app;
-  if (auto err = cfg.merge_root_options(app)) {
-    std::cerr << "failed to parse global CLI options: " << to_string(err)
-              << std::endl;
-    return EXIT_FAILURE;
-  }
   app.root.description = "manage a VAST topology";
   app.root.name = argv[0];
   // We're only interested in the application name, not in its path. For
@@ -74,10 +69,8 @@ int main(int argc, char** argv) {
     return EXIT_SUCCESS;
   }
   // Initialize actor system (and thereby CAF's logger).
-  if (auto err = cfg.setup_log_file()) {
-    std::cerr << "failed to setup log file: " << to_string(err) << std::endl;
+  if (!init_config(cfg, invocation, std::cerr))
     return EXIT_FAILURE;
-  }
   caf::actor_system sys{cfg};
   // Get filesystem path to the executable.
   auto binary = detail::objectpath();

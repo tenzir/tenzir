@@ -24,7 +24,7 @@
 
 #include "vast/bool_synopsis.hpp"
 #include "vast/synopsis_factory.hpp"
-#include "vast/timestamp_synopsis.hpp"
+#include "vast/time_synopsis.hpp"
 
 using namespace std::chrono_literals;
 using namespace vast;
@@ -32,32 +32,33 @@ using namespace vast::test;
 
 namespace {
 
-const timestamp epoch;
+const vast::time epoch;
 
 } // namespace <anonymous>
 
 TEST(min-max synopsis) {
+  using vast::time;
   using namespace nft;
   factory<synopsis>::initialize();
-  auto x = factory<synopsis>::make(timestamp_type{}, synopsis_options{});
+  auto x = factory<synopsis>::make(time_type{}, synopsis_options{});
   REQUIRE_NOT_EQUAL(x, nullptr);
-  x->add(timestamp{epoch + 4s});
-  x->add(timestamp{epoch + 7s});
+  x->add(time{epoch + 4s});
+  x->add(time{epoch + 7s});
   auto verify = verifier{x};
   MESSAGE("[4,7] op 0");
-  timestamp zero = epoch + 0s;
+  time zero = epoch + 0s;
   verify(zero, {N, N, N, N, N, N, F, T, F, F, T, T});
   MESSAGE("[4,7] op 4");
-  timestamp four = epoch + 4s;
+  time four = epoch + 4s;
   verify(four, {N, N, N, N, N, N, T, F, F, T, T, T});
   MESSAGE("[4,7] op 6");
-  timestamp six = epoch + 6s;
+  time six = epoch + 6s;
   verify(six, {N, N, N, N, N, N, T, F, T, T, T, T});
   MESSAGE("[4,7] op 7");
-  timestamp seven = epoch + 7s;
+  time seven = epoch + 7s;
   verify(seven, {N, N, N, N, N, N, T, F, T, T, F, T});
   MESSAGE("[4,7] op 9");
-  timestamp nine = epoch + 9s;
+  time nine = epoch + 9s;
   verify(nine, {N, N, N, N, N, N, F, T, T, T, F, F});
   MESSAGE("[4,7] op {0, 4}");
   auto zero_four = data{set{zero, four}};
@@ -88,7 +89,7 @@ TEST(serialization) {
   synopsis_options empty;
   CHECK_ROUNDTRIP(synopsis_ptr{});
   CHECK_ROUNDTRIP_DEREF(factory<synopsis>::make(bool_type{}, empty));
-  CHECK_ROUNDTRIP_DEREF(factory<synopsis>::make(timestamp_type{}, empty));
+  CHECK_ROUNDTRIP_DEREF(factory<synopsis>::make(time_type{}, empty));
 }
 
 FIXTURE_SCOPE_END()

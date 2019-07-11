@@ -75,8 +75,8 @@ struct segment_header;
 struct set_type;
 struct string_type;
 struct subnet_type;
-struct timespan_type;
-struct timestamp_type;
+struct duration_type;
+struct time_type;
 struct vector_type;
 
 // -- templates ----------------------------------------------------------------

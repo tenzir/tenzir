@@ -1205,7 +1205,7 @@ public:
 
   private:
     reader& parent_;
-    vast::timestamp timestamp_;
+    time timestamp_;
     size_t produced_;
   };
 

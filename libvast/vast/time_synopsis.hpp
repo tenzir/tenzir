@@ -18,9 +18,9 @@
 
 namespace vast {
 
-class timestamp_synopsis final : public min_max_synopsis<timestamp> {
+class time_synopsis final : public min_max_synopsis<time> {
 public:
-  timestamp_synopsis(vast::type x);
+  time_synopsis(vast::type x);
 
   bool equals(const synopsis& other) const noexcept override;
 };

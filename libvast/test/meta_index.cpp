@@ -40,10 +40,10 @@ namespace {
 constexpr size_t num_partitions = 4;
 constexpr size_t num_events_per_parttion = 25;
 
-const timestamp epoch;
+const vast::time epoch;
 
-timestamp get_timestamp(caf::optional<data_view> element){
-  return materialize(caf::get<view<timestamp>>(*element));
+vast::time get_timestamp(caf::optional<data_view> element) {
+  return materialize(caf::get<view<vast::time>>(*element));
 }
 
 // Builds a chain of events that are 1s apart, where consecutive chunks of
@@ -53,16 +53,15 @@ struct generator {
 
   explicit generator(std::string name, size_t first_event_id)
     : offset(first_event_id) {
-    layout = record_type{
-      {"timestamp", timestamp_type{}.attributes({{"time"}})},
-      {"content", string_type{}}
-    }.name(std::move(name));
+    layout = record_type{{"timestamp", time_type{}.attributes({{"timestamp"}})},
+                         {"content", string_type{}}}
+               .name(std::move(name));
   }
 
   table_slice_ptr operator()(size_t num) {
     auto builder = default_table_slice_builder::make(layout);
     for (size_t i = 0; i < num; ++i) {
-      timestamp ts = epoch + std::chrono::seconds(i + offset);
+      vast::time ts = epoch + std::chrono::seconds(i + offset);
       builder->add(make_data_view(ts));
       builder->add(make_data_view("foo"));
     }
@@ -77,8 +76,8 @@ struct generator {
 
 // A closed interval of time.
 struct interval {
-  timestamp from;
-  timestamp to;
+  vast::time from;
+  vast::time to;
 };
 
 struct mock_partition {
@@ -146,7 +145,7 @@ struct fixture {
   }
 
   auto attr_time_query(std::string_view hhmmss) {
-    std::string q = "#time == 1970-01-01+";
+    std::string q = "#timestamp == 1970-01-01+";
     q += hhmmss;
     q += ".0";
     return meta_idx.lookup(unbox(to<expression>(q)));
@@ -163,10 +162,10 @@ struct fixture {
   }
 
   auto attr_time_query(std::string_view hhmmss_from, std::string_view hhmmss_to) {
-    std::string q = "#time >= 1970-01-01+";
+    std::string q = "#timestamp >= 1970-01-01+";
     q += hhmmss_from;
     q += ".0";
-    q += " && #time <= 1970-01-01+";
+    q += " && #timestamp <= 1970-01-01+";
     q += hhmmss_to;
     q += ".0";
     return lookup(q);

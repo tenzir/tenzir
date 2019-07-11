@@ -49,6 +49,7 @@
 namespace vast::system {
 
 default_application::default_application() {
+  using caf::atom_value;
   // Returns default options for commands.
   auto opts = [](std::string_view category = "global") {
     return command::opts(category);
@@ -62,6 +63,8 @@ default_application::default_application() {
   root.options = opts("?system")
                    .add<std::string>("config-file",
                                      "path to a configuration file")
+                   .add<atom_value>("verbosity",
+                                    "output verbosity level on the console")
                    .add<std::vector<std::string>>("schema-paths",
                                                   schema_paths_help)
                    .add<std::string>("directory,d",
@@ -87,8 +90,7 @@ default_application::default_application() {
   // Add "import" command and its children.
   import_ = add(nullptr, "import", "imports data from STDIN or file",
                 opts("?import")
-                  .add<caf::atom_value>("table-slice-type,t",
-                                        "table slice type")
+                  .add<atom_value>("table-slice-type,t", "table slice type")
                   .add<bool>("node,N",
                              "spawn a node instead of connecting to one")
                   .add<bool>("blocking,b",

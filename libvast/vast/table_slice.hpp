@@ -15,6 +15,7 @@
 
 #include <cstddef>
 #include <limits>
+#include <string_view>
 #include <vector>
 
 #include <caf/allowed_unsafe_message_type.hpp>
@@ -115,6 +116,12 @@ public:
   /// Sets the offset in the ID space.
   void offset(id offset) noexcept {
     header_.offset = offset;
+  }
+
+  /// @returns the name of a column.
+  /// @param column The column offset.
+  std::string_view column_name(size_t column) const noexcept {
+    return header_.layout.fields[column].name;
   }
 
   /// Retrieves data by specifying 2D-coordinates via row and column.

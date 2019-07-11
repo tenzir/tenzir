@@ -31,7 +31,7 @@ using namespace std::string_literals;
 
 namespace {
 
-auto http = record_type{{"ts", timestamp_type{}},
+auto http = record_type{{"ts", time_type{}},
                         {"uid", string_type{}},
                         {"id.orig_h", address_type{}},
                         {"id.orig_p", port_type{}},
@@ -80,13 +80,13 @@ TEST(json to data) {
                             {"a", address_type{}},
                             {"p", port_type{}},
                             {"sn", subnet_type{}},
-                            {"t", timestamp_type{}},
-                            {"d", timespan_type{}},
-                            {"d2", timespan_type{}},
+                            {"t", time_type{}},
+                            {"d", duration_type{}},
+                            {"d2", duration_type{}},
                             {"e", enumeration_type{{"FOO", "BAR", "BAZ"}}},
                             {"sc", set_type{count_type{}}},
                             {"vp", vector_type{port_type{}}},
-                            {"vt", vector_type{timestamp_type{}}},
+                            {"vt", vector_type{time_type{}}},
                             {"rec", record_type{{"c", count_type{}},
                                                 {"s", string_type{}}}},
                             {"msa", map_type{string_type{}, address_type{}}},
@@ -141,7 +141,7 @@ TEST(json reader) {
   CHECK_EQUAL(err, caf::none);
   CHECK_EQUAL(num, 9);
   CHECK(slices[1]->at(0, 0)
-        == data{unbox(to<timestamp>("2011-08-12T14:59:11.994970Z"))});
+        == data{unbox(to<vast::time>("2011-08-12T14:59:11.994970Z"))});
   CHECK(slices[1]->at(0, 18) == vector{data{"text/html"}});
 }
 
@@ -154,10 +154,10 @@ TEST_DISABLED(suricata) {
     slices.emplace_back(std::move(ptr));
   };
   auto [err, num] = reader.read(2, 5, add_slice);
-  CHECK_EQUAL(err, caf::none);
-  CHECK_EQUAL(num, 2);
-  CHECK_EQUAL(slices[0]->rows(), 2);
+  CHECK_EQUAL(err, ec::end_of_input);
+  REQUIRE_EQUAL(num, 2);
   CHECK_EQUAL(slices[0]->columns(), 36);
+  CHECK_EQUAL(slices[0]->rows(), 2);
   CHECK(slices[0]->at(0, 19) == view<count>{4520});
 }
 

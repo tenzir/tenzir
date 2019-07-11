@@ -160,8 +160,8 @@ TEST(serialization) {
   CHECK_ROUNDTRIP(integer_type{});
   CHECK_ROUNDTRIP(count_type{});
   CHECK_ROUNDTRIP(real_type{});
-  CHECK_ROUNDTRIP(timespan_type{});
-  CHECK_ROUNDTRIP(timestamp_type{});
+  CHECK_ROUNDTRIP(duration_type{});
+  CHECK_ROUNDTRIP(time_type{});
   CHECK_ROUNDTRIP(string_type{});
   CHECK_ROUNDTRIP(pattern_type{});
   CHECK_ROUNDTRIP(address_type{});
@@ -178,8 +178,8 @@ TEST(serialization) {
   CHECK_ROUNDTRIP(type{integer_type{}});
   CHECK_ROUNDTRIP(type{count_type{}});
   CHECK_ROUNDTRIP(type{real_type{}});
-  CHECK_ROUNDTRIP(type{timespan_type{}});
-  CHECK_ROUNDTRIP(type{timestamp_type{}});
+  CHECK_ROUNDTRIP(type{duration_type{}});
+  CHECK_ROUNDTRIP(type{time_type{}});
   CHECK_ROUNDTRIP(type{string_type{}});
   CHECK_ROUNDTRIP(type{pattern_type{}});
   CHECK_ROUNDTRIP(type{address_type{}});
@@ -461,41 +461,45 @@ TEST(congruence) {
   CHECK(congruent(a, r0));
 }
 
+#define TYPE_CHECK(type, value) CHECK(type_check(type, data{value}));
+
+#define TYPE_CHECK_FAIL(type, value) CHECK(!type_check(type, data{value}));
+
 TEST(type_check) {
   MESSAGE("basic types");
-  CHECK(type_check(none_type{}, caf::none));
-  CHECK(type_check(bool_type{}, false));
-  CHECK(type_check(integer_type{}, 42));
-  CHECK(type_check(count_type{}, 42u));
-  CHECK(type_check(real_type{}, 4.2));
-  CHECK(type_check(timespan_type{}, timespan{0}));
-  CHECK(type_check(timestamp_type{}, timestamp{}));
-  CHECK(type_check(string_type{}, "foo"s));
-  CHECK(type_check(pattern_type{}, pattern{"foo"}));
-  CHECK(type_check(address_type{}, address{}));
-  CHECK(type_check(subnet_type{}, subnet{}));
-  CHECK(type_check(port_type{}, port{}));
+  TYPE_CHECK(none_type{}, caf::none);
+  TYPE_CHECK(bool_type{}, false);
+  TYPE_CHECK(integer_type{}, 42);
+  TYPE_CHECK(count_type{}, 42u);
+  TYPE_CHECK(real_type{}, 4.2);
+  TYPE_CHECK(duration_type{}, duration{0});
+  TYPE_CHECK(time_type{}, vast::time{});
+  TYPE_CHECK(string_type{}, "foo"s);
+  TYPE_CHECK(pattern_type{}, pattern{"foo"});
+  TYPE_CHECK(address_type{}, address{});
+  TYPE_CHECK(subnet_type{}, subnet{});
+  TYPE_CHECK(port_type{}, port{});
   MESSAGE("complex types");
-  CHECK(type_check(enumeration_type{{"foo"}}, enumeration{0}));
-  CHECK(!type_check(enumeration_type{{"foo"}}, enumeration{1}));
+  TYPE_CHECK(enumeration_type{{"foo"}}, enumeration{0});
+  TYPE_CHECK_FAIL(enumeration_type{{"foo"}}, enumeration{1});
   MESSAGE("containers");
-  CHECK(type_check(vector_type{integer_type{}}, vector{1, 2, 3}));
-  CHECK(type_check(vector_type{}, vector{1, 2, 3}));
-  CHECK(type_check(vector_type{}, vector{}));
-  CHECK(type_check(vector_type{string_type{}}, vector{}));
-  CHECK(type_check(set_type{integer_type{}}, set{1, 2, 3}));
-  CHECK(type_check(set_type{}, set{1, 2, 3}));
-  CHECK(type_check(set_type{}, set{}));
-  CHECK(type_check(set_type{string_type{}}, set{}));
+  TYPE_CHECK(vector_type{integer_type{}}, vector({1, 2, 3}));
+  TYPE_CHECK(vector_type{}, vector({1, 2, 3}));
+  TYPE_CHECK(vector_type{}, vector{});
+  TYPE_CHECK(vector_type{string_type{}}, vector{});
+  TYPE_CHECK(set_type{integer_type{}}, set({1, 2, 3}));
+  TYPE_CHECK(set_type{}, set({1, 2, 3}));
+  TYPE_CHECK(set_type{}, set{});
+  TYPE_CHECK(set_type{string_type{}}, set{});
   auto xs = map{{1, true}, {2, false}};
-  CHECK(type_check(map_type{integer_type{}, bool_type{}}, xs));
-  CHECK(type_check(map_type{}, xs));
-  CHECK(type_check(map_type{}, map{}));
+  TYPE_CHECK(map_type({integer_type{}, bool_type{}}), xs);
+  TYPE_CHECK(map_type{}, xs);
+  TYPE_CHECK(map_type{}, map{});
   auto t = record_type{{"a", integer_type{}},
                        {"b", bool_type{}},
                        {"c", string_type{}}};
-  CHECK(type_check(t, vector{42, true, "foo"}));
-  CHECK(!type_check(t, vector{42, 100, "foo"}));
+  TYPE_CHECK(t, vector({42, true, "foo"}));
+  TYPE_CHECK_FAIL(t, vector({42, 100, "foo"}));
 }
 
 TEST(printable) {
@@ -505,8 +509,8 @@ TEST(printable) {
   CHECK_EQUAL(to_string(integer_type{}), "int");
   CHECK_EQUAL(to_string(count_type{}), "count");
   CHECK_EQUAL(to_string(real_type{}), "real");
-  CHECK_EQUAL(to_string(timespan_type{}), "duration");
-  CHECK_EQUAL(to_string(timestamp_type{}), "time");
+  CHECK_EQUAL(to_string(duration_type{}), "duration");
+  CHECK_EQUAL(to_string(time_type{}), "time");
   CHECK_EQUAL(to_string(string_type{}), "string");
   CHECK_EQUAL(to_string(pattern_type{}), "pattern");
   CHECK_EQUAL(to_string(address_type{}), "addr");

@@ -24,7 +24,7 @@ namespace vast::system {
 
 /// Statistics about a query.
 struct query_status {
-  timespan runtime;            ///< Current runtime.
+  duration runtime;            ///< Current runtime.
   size_t expected = 0;         ///< Expected ID sets from INDEX.
   size_t scheduled = 0;        ///< Scheduled partitions (ID sets) at INDEX.
   size_t received = 0;         ///< Received ID sets from INDEX.

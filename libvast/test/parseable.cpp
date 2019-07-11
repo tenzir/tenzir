@@ -683,19 +683,19 @@ TEST(dynamic bytes) {
 
 // -- time --------------------------------------------------------------------
 
-TEST(timestamp - now) {
-  timestamp ts;
-  CHECK(parsers::timestamp("now", ts));
-  CHECK(ts > timestamp::min()); // must be greater than the UNIX epoch
+TEST(time - now) {
+  vast::time ts;
+  CHECK(parsers::time("now", ts));
+  CHECK(ts > time::min()); // must be greater than the UNIX epoch
 }
 
-TEST(timestamp - YMD) {
+TEST(time - YMD) {
   using namespace std::chrono;
-  timestamp ts;
-  CHECK(parsers::timestamp("2017-08-13", ts));
+  vast::time ts;
+  CHECK(parsers::time("2017-08-13", ts));
   auto utc_secs = seconds{1502582400};
   CHECK_EQUAL(ts.time_since_epoch(), utc_secs);
-  CHECK(parsers::timestamp("2017-08-13+21:10:42", ts));
+  CHECK(parsers::time("2017-08-13+21:10:42", ts));
   utc_secs = std::chrono::seconds{1502658642};
   CHECK_EQUAL(ts.time_since_epoch(), utc_secs);
 }

@@ -38,7 +38,6 @@ table_indexer::table_indexer(partition* parent, const record_type& layout)
     measurements_(layout.fields.size()),
     last_flush_size_(0),
     skip_mask_(0) {
-  VAST_ASSERT(partition_ != nullptr);
   VAST_ASSERT(layout.fields.size() > 0);
   VAST_TRACE(VAST_ARG(type_erased_layout_));
   // Compute which fields to skip.
@@ -56,6 +55,7 @@ table_indexer::~table_indexer() noexcept {
 
 caf::expected<table_indexer> table_indexer::make(partition* parent,
                                                  const record_type& layout) {
+  VAST_ASSERT(parent != nullptr);
   auto ret = table_indexer{parent, layout};
   if (auto err = ret.init())
     return err;

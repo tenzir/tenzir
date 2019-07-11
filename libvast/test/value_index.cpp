@@ -16,10 +16,11 @@
 #include "vast/test/test.hpp"
 #include "vast/test/fixtures/events.hpp"
 
-#include "vast/value_index.hpp"
-#include "vast/value_index_factory.hpp"
 #include "vast/load.hpp"
 #include "vast/save.hpp"
+#include "vast/table_slice.hpp"
+#include "vast/value_index.hpp"
+#include "vast/value_index_factory.hpp"
 
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/address.hpp"
@@ -133,10 +134,11 @@ TEST(floating-point with custom binner) {
   CHECK_EQUAL(to_string(unbox(result)), "1110111");
 }
 
-TEST(timespan) {
+TEST(duration) {
   using namespace std::chrono;
   // Default binning gives granularity of seconds.
-  auto idx = arithmetic_index<timespan>{timespan_type{}, base::uniform<64>(10)};
+  auto idx = arithmetic_index<vast::duration>{duration_type{},
+                                              base::uniform<64>(10)};
   MESSAGE("append");
   REQUIRE(idx.append(make_data_view(milliseconds(1000))));
   REQUIRE(idx.append(make_data_view(milliseconds(2000))));
@@ -153,35 +155,35 @@ TEST(timespan) {
   CHECK_EQUAL(to_string(unbox(twelve)), "011011");
 }
 
-TEST(timestamp) {
-  arithmetic_index<timestamp> idx{timestamp_type{}, base::uniform<64>(10)};
-  auto ts = to<timestamp>("2014-01-16+05:30:15");
+TEST(time) {
+  arithmetic_index<vast::time> idx{time_type{}, base::uniform<64>(10)};
+  auto ts = to<vast::time>("2014-01-16+05:30:15");
   MESSAGE("append");
   REQUIRE(idx.append(make_data_view(unbox(ts))));
-  ts = to<timestamp>("2014-01-16+05:30:12");
+  ts = to<vast::time>("2014-01-16+05:30:12");
   REQUIRE(idx.append(make_data_view(unbox(ts))));
-  ts = to<timestamp>("2014-01-16+05:30:15");
+  ts = to<vast::time>("2014-01-16+05:30:15");
   REQUIRE(idx.append(make_data_view(unbox(ts))));
-  ts = to<timestamp>("2014-01-16+05:30:18");
+  ts = to<vast::time>("2014-01-16+05:30:18");
   REQUIRE(idx.append(make_data_view(unbox(ts))));
-  ts = to<timestamp>("2014-01-16+05:30:15");
+  ts = to<vast::time>("2014-01-16+05:30:15");
   REQUIRE(idx.append(make_data_view(unbox(ts))));
-  ts = to<timestamp>("2014-01-16+05:30:19");
+  ts = to<vast::time>("2014-01-16+05:30:19");
   REQUIRE(idx.append(make_data_view(unbox(ts))));
   MESSAGE("lookup");
-  ts = to<timestamp>("2014-01-16+05:30:15");
+  ts = to<vast::time>("2014-01-16+05:30:15");
   auto fifteen = idx.lookup(equal, make_data_view(unbox(ts)));
   CHECK(to_string(unbox(fifteen)) == "101010");
-  ts = to<timestamp>("2014-01-16+05:30:20");
+  ts = to<vast::time>("2014-01-16+05:30:20");
   auto twenty = idx.lookup(less, make_data_view(unbox(ts)));
   CHECK(to_string(unbox(twenty)) == "111111");
-  ts = to<timestamp>("2014-01-16+05:30:18");
+  ts = to<vast::time>("2014-01-16+05:30:18");
   auto eighteen = idx.lookup(greater_equal, make_data_view(unbox(ts)));
   CHECK(to_string(unbox(eighteen)) == "000101");
   MESSAGE("serialization");
   std::vector<char> buf;
   CHECK_EQUAL(save(nullptr, buf, idx), caf::none);
-  arithmetic_index<timestamp> idx2{timestamp_type{}, base::uniform<64>(10)};
+  arithmetic_index<vast::time> idx2{time_type{}, base::uniform<64>(10)};
   CHECK_EQUAL(load(nullptr, buf, idx2), caf::none);
   eighteen = idx2.lookup(greater_equal, make_data_view(unbox(ts)));
   CHECK(to_string(*eighteen) == "000101");
@@ -511,41 +513,33 @@ TEST(none values) {
   CHECK_EQUAL(to_string(unbox(bm)), "01100011100001111111100");
 }
 
-namespace {
-
-auto orig_h(const event& x) {
-  auto& log_entry = caf::get<vector>(x.data());
-  auto& conn_id = caf::get<vector>(log_entry[2]);
-  return make_view(caf::get<address>(conn_id[0]));
-}
-
-} // namespace <anonymous>
-
 // This test uncovered a regression that ocurred when computing the rank of a
 // bitmap representing conn.log events. The culprit was the EWAH bitmap
 // encoding, because swapping out ewah_bitmap for null_bitmap in address_index
 // made the bug disappear.
-TEST_DISABLED(regression - build an address index from zeek events) {
+TEST(regression - build an address index from zeek events) {
   // Populate the index with data up to the critical point.
   address_index idx{address_type{}};
-  for (auto i = 0; i < 6464; ++i) {
-    auto& x = zeek_conn_log[i];
-    CHECK(idx.append(orig_h(x), x.id()));
+  size_t row_id = 0;
+  for (auto& slice : zeek_full_conn_log_slices) {
+    for (size_t row = 0; row < slice->rows(); ++row) {
+      // Column 2 is orig_h.
+      if (!idx.append(slice->at(row, 2), row_id))
+        FAIL("appending to the value_index failed!");
+      if (++row_id == 6464) {
+        // The last ID should be 720 at this point.
+        auto addr = unbox(to<data>("169.254.225.22"));
+        auto before = unbox(idx.lookup(equal, make_data_view(addr)));
+        CHECK_EQUAL(rank(before), 4u);
+        CHECK_EQUAL(select(before, -1), id{720});
+      }
+    }
   }
-  // This is where we are in trouble: the last ID should be 720, but the bogus
-  // test reports 6452.
+  // Checking again after ingesting all events must not change the outcome.
   auto addr = unbox(to<data>("169.254.225.22"));
   auto before = unbox(idx.lookup(equal, make_data_view(addr)));
   CHECK_EQUAL(rank(before), 4u);
   CHECK_EQUAL(select(before, -1), id{720});
-  auto& x = zeek_conn_log[6464];
-  // After adding another event, the correct state is restored again and the
-  // bug doesn't show up anymore.
-  CHECK(idx.append(orig_h(x), x.id()));
-  auto after = unbox(idx.lookup(equal, make_data_view(addr)));
-  CHECK_EQUAL(rank(after), 4u);
-  CHECK_EQUAL(select(after, -1), id{720});
-  CHECK_NOT_EQUAL(select(after, -1), id{6452});
 }
 
 // This was the first attempt in figuring out where the bug sat. I didn't fire.
@@ -566,106 +560,119 @@ TEST(regression - checking the result single bitmap) {
   CHECK_EQUAL(bm.size(), 6465u);
 }
 
-TEST_DISABLED(regression - manual address bitmap index from bitmaps) {
+TEST(regression - manual address bitmap index from bitmaps) {
   MESSAGE("populating index");
   std::array<ewah_bitmap, 32> idx;
-  for (auto n = 0; n < 6464; ++n) {
-    auto x = orig_h(zeek_conn_log[n]);
-    for (auto i = 0u; i < 4; ++i) {
-      auto byte = x.data()[i + 12];
-      for (auto j = 0u; j < 8; ++j)
-        idx[(i * 8) + j].append_bits((byte >> j) & 1, 1);
+  size_t row_id = 0;
+  for (auto& slice : zeek_full_conn_log_slices) {
+    for (size_t row = 0; row < slice->rows(); ++row) {
+      // Column 2 is orig_h.
+      auto x = caf::get<view<address>>(slice->at(row, 2));
+      for (auto i = 0u; i < 4; ++i) {
+        auto byte = x.data()[i + 12];
+        for (auto j = 0u; j < 8; ++j)
+          idx[(i * 8) + j].append_bits((byte >> j) & 1, 1);
+      }
+      if (++row_id == 6464) {
+        auto addr = unbox(to<address>("169.254.225.22"));
+        auto result = ewah_bitmap{idx[0].size(), true};
+        REQUIRE_EQUAL(result.size(), 6464u);
+        for (auto i = 0u; i < 4; ++i) {
+          auto byte = addr.data()[i + 12];
+          for (auto j = 0u; j < 8; ++j) {
+            auto& bm = idx[(i * 8) + j];
+            result &= ((byte >> j) & 1) ? bm : ~bm;
+          }
+        }
+        CHECK_EQUAL(rank(result), 4u);
+        CHECK_EQUAL(select(result, -1), id{720});
+        // Done testing, we're only interested in the first 6464 rows.
+        return;
+      }
     }
   }
-  MESSAGE("querying 169.254.225.22");
-  auto x = *to<address>("169.254.225.22");
-  auto result = ewah_bitmap{idx[0].size(), true};
-  REQUIRE_EQUAL(result.size(), 6464u);
-  for (auto i = 0u; i < 4; ++i) {
-    auto byte = x.data()[i + 12];
-    for (auto j = 0u; j < 8; ++j) {
-      auto& bm = idx[(i * 8) + j];
-      result &= ((byte >> j) & 1) ? bm : ~bm;
-    }
-  }
-  CHECK_EQUAL(rank(result), 4u);
-  CHECK_EQUAL(select(result, -1), id{720});
 }
 
-TEST_DISABLED(regression - manual address bitmap index from 4 byte indexes) {
+TEST(regression - manual address bitmap index from 4 byte indexes) {
   using byte_index = bitmap_index<uint8_t, bitslice_coder<ewah_bitmap>>;
   std::array<byte_index, 4> idx;
   idx.fill(byte_index{8});
+  size_t row_id = 0;
   MESSAGE("populating index");
-  for (auto n = 0; n < 6464; ++n) {
-    auto x = orig_h(zeek_conn_log[n]);
-    for (auto i = 0u; i < 4; ++i) {
-      auto byte = x.data()[i + 12];
-      idx[i].append(byte);
+  for (auto& slice : zeek_full_conn_log_slices) {
+    for (size_t row = 0; row < slice->rows(); ++row) {
+      // Column 2 is orig_h.
+      auto x = caf::get<view<address>>(slice->at(row, 2));
+      for (auto i = 0u; i < 4; ++i) {
+        auto byte = x.data()[i + 12];
+        idx[i].append(byte);
+      }
+      if (++row_id == 6464) {
+        MESSAGE("querying 169.254.225.22");
+        auto x = unbox(to<address>("169.254.225.22"));
+        auto result = ewah_bitmap{idx[0].size(), true};
+        REQUIRE_EQUAL(result.size(), 6464u);
+        for (auto i = 0u; i < 4; ++i) {
+          auto byte = x.data()[i + 12];
+          result &= idx[i].lookup(equal, byte);
+        }
+        CHECK_EQUAL(rank(result), 4u);
+        CHECK_EQUAL(select(result, -1), id{720});
+        // Done testing, we're only interested in the first 6464 rows.
+        return;
+      }
     }
   }
-  MESSAGE("querying 169.254.225.22");
-  auto x = *to<address>("169.254.225.22");
-  auto result = ewah_bitmap{idx[0].size(), true};
-  REQUIRE_EQUAL(result.size(), 6464u);
-  for (auto i = 0u; i < 4; ++i) {
-    auto byte = x.data()[i + 12];
-    result &= idx[i].lookup(equal, byte);
-  }
-  CHECK_EQUAL(rank(result), 4u);
-  CHECK_EQUAL(select(result, -1), id{720});
 }
 
-namespace {
-
-auto service(const event& log) {
-  auto& xs = caf::get<vector>(log.data());
-  return make_view(xs[4]);
-}
-
-bool is_http(view<data> x) {
-  return caf::get<view<std::string>>(x) == "http";
-}
-
-} // namespace <anonymous>
-
-TEST_DISABLED(regression - zeek conn log service http) {
+TEST(regression - zeek conn log service http) {
   // The number of occurrences of the 'service == "http"' in the conn.log,
   // sliced in batches of 100. Pre-computed via:
   //  zeek-cut service < test/logs/zeek/conn.log
   //    | awk '{ if ($1 == "http") ++n; if (NR % 100 == 0) { print n; n = 0 } }
   //           END { print n }'
   //    | paste -s -d , -
+  auto is_http = [](auto x) {
+    return caf::get<view<std::string>>(x) == "http";
+  };
   std::vector<size_t> http_per_100_events{
     13, 16, 20, 22, 31, 11, 14, 28, 13, 42, 45, 52, 59, 54, 59, 59, 51,
     29, 21, 31, 20, 28, 9,  56, 48, 57, 32, 53, 25, 31, 25, 44, 38, 55,
     40, 23, 31, 27, 23, 59, 23, 2,  62, 29, 1,  5,  7,  0,  10, 5,  52,
     39, 2,  0,  9,  8,  0,  13, 4,  2,  13, 2,  36, 33, 17, 48, 50, 27,
-    44, 9,  94, 63, 74, 66, 5,  54, 21, 7,  2,  3,  21, 7,  2,  14, 7
+    44, 9,  94, 63, 74, 66, 5,  54, 21, 7,  2,  3,  21, 7,  2,  14, 7,
   };
-  std::vector<std::pair<value_index_ptr, ids>> slices;
-  slices.reserve(http_per_100_events.size());
-  for (size_t i = 0; i < zeek_conn_log.size(); ++i) {
-    if (i % 100 == 0)
-      slices.emplace_back(factory<value_index>::make(string_type{}),
-                          ids(i, false));
-    auto& [idx, expected] = slices.back();
-    auto x = service(zeek_conn_log[i]);
-    idx->append(x, i);
-    expected.append_bit(is_http(x));
+  auto& slices = zeek_full_conn_log_slices;
+  REQUIRE_EQUAL(slices.size(), http_per_100_events.size());
+  REQUIRE(std::all_of(slices.begin(), prev(slices.end()),
+                      [](auto& slice) { return slice->rows() == 100; }));
+  std::vector<std::pair<value_index_ptr, ids>> slice_stats;
+  slice_stats.reserve(slices.size());
+  size_t row_id = 0;
+  for (auto& slice : slices) {
+    slice_stats.emplace_back(factory<value_index>::make(string_type{}),
+                             ids(row_id, false));
+    auto& [idx, expected] = slice_stats.back();
+    for (size_t row = 0; row < slice->rows(); ++row) {
+      // Column 7 is service.
+      auto x = slice->at(row, 7);
+      idx->append(x, row_id);
+      expected.append_bit(is_http(x));
+      ++row_id;
+    }
   }
-  for (size_t i = 0; i < slices.size(); ++i) {
+  for (size_t i = 0; i < slice_stats.size(); ++i) {
     MESSAGE("verifying batch [" << (i * 100) << ',' << (i * 100) + 100 << ')');
-    auto& [idx, expected] = slices[i];
+    auto& [idx, expected] = slice_stats[i];
     auto result = unbox(idx->lookup(equal, make_data_view("http")));
     CHECK_EQUAL(rank(result), http_per_100_events[i]);
   }
 }
 
-TEST_DISABLED(regression - manual value index for zeek conn log service http) {
+TEST(regression - manual value index for zeek conn log service http) {
   // Setup string size bitmap index.
-  using length_bitmap_index =
-    bitmap_index<uint32_t, multi_level_coder<range_coder<ids>>>;
+  using length_bitmap_index = bitmap_index<uint32_t,
+                                           multi_level_coder<range_coder<ids>>>;
   auto length = length_bitmap_index{base::uniform(10, 3)};
   // Setup one bitmap index per character.
   using char_bitmap_index = bitmap_index<uint8_t, bitslice_coder<ewah_bitmap>>;
@@ -674,8 +681,11 @@ TEST_DISABLED(regression - manual value index for zeek conn log service http) {
   // Manually build a failing slice: [8000,8100).
   ewah_bitmap none;
   ewah_bitmap mask;
-  for (auto i = 8000; i < 8100; ++i)
-    caf::visit(detail::overload(
+  // Get the slice that contains the events for [8000,8100).
+  auto slice = zeek_full_conn_log_slices[80];
+  for (size_t row = 0; row < slice->rows(); ++row) {
+    auto i = 8000 + row;
+    auto f = detail::overload(
       [&](caf::none_t) {
         none.append_bits(false, i - none.size());
         none.append_bit(true);
@@ -694,10 +704,10 @@ TEST_DISABLED(regression - manual value index for zeek conn log service http) {
         mask.append_bits(false, i - mask.size());
         mask.append_bit(true);
       },
-      [&](auto) {
-        FAIL("unexpected service type");
-      }
-    ), service(zeek_conn_log[i]));
+      [&](auto) { FAIL("unexpected service type"); });
+    // Column 7 is service.
+    caf::visit(f, slice->at(row, 7));
+  }
   REQUIRE_EQUAL(rank(mask), 100u);
   // Perform a manual index lookup for "http".
   auto http = "http"s;

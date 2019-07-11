@@ -43,7 +43,7 @@ namespace fixtures {
 namespace {
 
 // 2000-01-01 (GMT), just to not use 0 here.
-constexpr timestamp epoch = timestamp{timespan{946684800}};
+constexpr vast::time epoch = vast::time{duration{946684800}};
 
 std::vector<event> make_ascending_integers(size_t count) {
   std::vector<event> result;

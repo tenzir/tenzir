@@ -37,7 +37,7 @@ table_slices::table_slices() {
   layout = record_type{
     {"a", bool_type{}},           {"b", integer_type{}},
     {"c", count_type{}},          {"d", real_type{}},
-    {"e", timespan_type{}},       {"f", timestamp_type{}},
+    {"e", duration_type{}},       {"f", time_type{}},
     {"g", string_type{}},         {"h", pattern_type{}},
     {"i", address_type{}},        {"j", subnet_type{}},
     {"k", port_type{}},           {"l", vector_type{count_type{}}},

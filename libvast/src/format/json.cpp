@@ -21,10 +21,13 @@
 #include "vast/concept/parseable/vast/subnet.hpp"
 #include "vast/concept/parseable/vast/time.hpp"
 #include "vast/concept/printable/to_string.hpp"
+#include "vast/concept/printable/vast/json.hpp"
 #include "vast/data.hpp"
 #include "vast/detail/unbox_var.hpp"
 #include "vast/format/json.hpp"
 #include "vast/logger.hpp"
+#include "vast/policy/include_field_names.hpp"
+#include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
 #include "vast/type.hpp"
 #include "vast/view.hpp"
@@ -57,15 +60,15 @@ struct convert {
     return port{detail::narrow_cast<port::number_type>(n)};
   }
 
-  expected<data> operator()(json::number s, const timestamp_type&) const {
+  expected<data> operator()(json::number s, const time_type&) const {
     auto secs = std::chrono::duration<json::number>(s);
-    auto since_epoch = std::chrono::duration_cast<timespan>(secs);
-    return timestamp{since_epoch};
+    auto since_epoch = std::chrono::duration_cast<duration>(secs);
+    return time{since_epoch};
   }
 
-  expected<data> operator()(json::number s, const timespan_type&) const {
+  expected<data> operator()(json::number s, const duration_type&) const {
     auto secs = std::chrono::duration<json::number>(s);
-    return std::chrono::duration_cast<timespan>(secs);
+    return std::chrono::duration_cast<duration>(secs);
   }
 
   expected<data> operator()(json::string s, const string_type&) const {
@@ -159,6 +162,15 @@ const vast::json* lookup(std::string_view field, const vast::json::object& xs) {
 }
 
 } // namespace
+
+caf::error writer::write(const table_slice& x) {
+  json_printer<policy::oneline> printer;
+  return print<policy::include_field_names>(printer, x, "{", ", ", "}");
+}
+
+const char* writer::name() const {
+  return "json-writer";
+}
 
 caf::error add(table_slice_builder& builder, const vast::json::object& xs,
                const record_type& layout) {

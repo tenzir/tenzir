@@ -30,8 +30,7 @@ namespace vast::system {
 
 struct data_point {
   std::string key;
-  caf::variant<std::string, timespan, timestamp, int64_t, uint64_t, double>
-    value;
+  caf::variant<std::string, duration, time, int64_t, uint64_t, double> value;
 };
 
 template <class Inspector>
@@ -58,8 +57,8 @@ using performance_report = std::vector<performance_sample>;
 using accountant_type = caf::typed_actor<
   caf::reacts_to<announce_atom, std::string>,
   caf::reacts_to<std::string, std::string>,
-  caf::reacts_to<std::string, timespan>,
-  caf::reacts_to<std::string, timestamp>,
+  caf::reacts_to<std::string, duration>,
+  caf::reacts_to<std::string, time>,
   caf::reacts_to<std::string, int64_t>,
   caf::reacts_to<std::string, uint64_t>,
   caf::reacts_to<std::string, double>,

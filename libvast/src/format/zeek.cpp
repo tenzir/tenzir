@@ -52,9 +52,9 @@ expected<type> parse_type(std::string_view zeek_type) {
   else if (zeek_type == "double")
     t = real_type{};
   else if (zeek_type == "time")
-    t = timestamp_type{};
+    t = time_type{};
   else if (zeek_type == "interval")
-    t = timespan_type{};
+    t = duration_type{};
   else if (zeek_type == "pattern")
     t = pattern_type{};
   else if (zeek_type == "addr")
@@ -102,11 +102,11 @@ struct zeek_type_printer {
     return "double";
   }
 
-  std::string operator()(const timestamp_type&) {
+  std::string operator()(const time_type&) {
     return "time";
   }
 
-  std::string operator()(const timespan_type&) {
+  std::string operator()(const duration_type&) {
     return "interval";
   }
 
@@ -192,7 +192,7 @@ struct streamer {
     p.print(out, r);
   }
 
-  void operator()(const timestamp_type&, timestamp ts) const {
+  void operator()(const time_type&, time ts) const {
     double d;
     convert(ts.time_since_epoch(), d);
     auto p = real_printer<real, 6, 6>{};
@@ -200,7 +200,7 @@ struct streamer {
     p.print(out, d);
   }
 
-  void operator()(const timespan_type&, timespan span) const {
+  void operator()(const duration_type&, duration span) const {
     double d;
     convert(span, d);
     auto p = real_printer<real, 6, 6>{};
@@ -523,7 +523,7 @@ caf::error reader::parse_header() {
   auto ts_pred = [&](auto& field) {
     if (field.name != "ts")
       return false;
-    if (!caf::holds_alternative<timestamp_type>(field.type)) {
+    if (!caf::holds_alternative<time_type>(field.type)) {
       VAST_WARNING(this, "encountered ts fields not of type timestamp");
       return false;
     }
@@ -533,7 +533,7 @@ caf::error reader::parse_header() {
   if (i != layout_.fields.end()) {
     VAST_DEBUG(this, "auto-detected field",
                std::distance(layout_.fields.begin(), i), "as event timestamp");
-    i->type.attributes({{"time"}});
+    i->type.attributes({{"timestamp"}});
   }
   // After having modified layout attributes, we no longer make changes to the
   // type and can now safely copy it.

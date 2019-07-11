@@ -44,19 +44,19 @@ using sys_days = sys_time<days>;
 using sys_seconds = sys_time<std::chrono::seconds>;
 
 /// A duration in time with nanosecond resolution.
-using caf::timespan;
+using duration = caf::timespan;
 
 /// An absolute point in time with nanosecond resolution. It is capable to
 /// represent +/- 292 years around the UNIX epoch.
-using caf::timestamp;
+using time = caf::timestamp;
 
 /// A helper type to represent fractional time stamps in type `double`.
 using double_seconds = std::chrono::duration<double, std::ratio<1>>;
 
-bool convert(timespan dur, double& d);
-bool convert(timespan dur, json& j);
+bool convert(duration dur, double& d);
+bool convert(duration dur, json& j);
 
-bool convert(timestamp tp, double& d);
-bool convert(timestamp tp, json& j);
+bool convert(time tp, double& d);
+bool convert(time tp, json& j);
 
 } // namespace vast

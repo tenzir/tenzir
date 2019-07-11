@@ -83,19 +83,21 @@ struct type_parser : parser<type_parser> {
       = ('#' >> parsers::identifier >> -('=' >> parsers::qq_str)) ->* to_attr;
     static auto attr_list = *(ws >> attr);
     // Basic types
+    // clang-format off
     static auto basic_type_parser
       = "bool" >> attr_list      ->* to_basic_type<bool_type>
       | "int" >> attr_list       ->* to_basic_type<integer_type>
       | "count" >> attr_list     ->* to_basic_type<count_type>
       | "real" >> attr_list      ->* to_basic_type<real_type>
-      | "duration" >> attr_list  ->* to_basic_type<timespan_type>
-      | "time" >> attr_list      ->* to_basic_type<timestamp_type>
+      | "duration" >> attr_list  ->* to_basic_type<duration_type>
+      | "time" >> attr_list      ->* to_basic_type<time_type>
       | "string" >> attr_list    ->* to_basic_type<string_type>
       | "pattern" >> attr_list   ->* to_basic_type<pattern_type>
       | "addr" >> attr_list      ->* to_basic_type<address_type>
       | "subnet" >> attr_list    ->* to_basic_type<subnet_type>
       | "port" >> attr_list      ->* to_basic_type<port_type>
       ;
+    // clang-format on
     // Enumeration
     using enum_tuple = std::tuple<
       std::vector<std::string>,

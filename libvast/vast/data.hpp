@@ -64,8 +64,8 @@ using to_data_type = std::conditional_t<
           std::string,
           std::conditional_t<
                std::is_same_v<T, caf::none_t>
-            || std::is_same_v<T, timespan>
-            || std::is_same_v<T, timestamp>
+            || std::is_same_v<T, duration>
+            || std::is_same_v<T, time>
             || std::is_same_v<T, pattern>
             || std::is_same_v<T, address>
             || std::is_same_v<T, subnet>
@@ -102,8 +102,8 @@ public:
     integer,
     count,
     real,
-    timespan,
-    timestamp,
+    duration,
+    time,
     std::string,
     pattern,
     address,
@@ -132,7 +132,7 @@ public:
   /// Constructs data from a `std::chrono::duration`.
   /// @param x The duration to construct data from.
   template <class Rep, class Period>
-  data(std::chrono::duration<Rep, Period> x) : data_{timespan{x}} {
+  data(std::chrono::duration<Rep, Period> x) : data_{duration{x}} {
     // nop
   }
 
@@ -193,8 +193,8 @@ VAST_DATA_TRAIT(bool);
 VAST_DATA_TRAIT(integer);
 VAST_DATA_TRAIT(count);
 VAST_DATA_TRAIT(real);
-VAST_DATA_TRAIT(timespan);
-VAST_DATA_TRAIT(timestamp);
+VAST_DATA_TRAIT(duration);
+VAST_DATA_TRAIT(time);
 VAST_DATA_TRAIT(pattern);
 VAST_DATA_TRAIT(address);
 VAST_DATA_TRAIT(subnet);

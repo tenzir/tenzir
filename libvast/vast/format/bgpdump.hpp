@@ -37,10 +37,10 @@ struct bgpdump_parser : parser<bgpdump_parser> {
     using parsers::u64;
     using namespace std::chrono;
     static auto str = +(any - '|');
-    static auto time = u64->*[](count x) { return timestamp{seconds(x)}; };
+    static auto time = u64->*[](count x) { return vast::time{seconds(x)}; };
     static auto head
       = "BGP4MP|" >> time >> '|' >> str >> '|' >> addr >> '|' >> u64 >> '|';
-    timestamp ts;
+    vast::time ts;
     std::string update;
     vast::address source_ip;
     count source_as;

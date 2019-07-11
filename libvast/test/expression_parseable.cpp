@@ -26,7 +26,7 @@
 using namespace vast;
 using namespace std::string_literals;
 
-using vast::system::time_atom;
+using vast::system::timestamp_atom;
 using vast::system::type_atom;
 
 TEST(parseable/printable - predicate) {
@@ -67,11 +67,11 @@ TEST(parseable/printable - predicate) {
   CHECK(pred.rhs == data{-4.8});
   CHECK_EQUAL(to_string(pred), str);
   // LHS: data, RHS: time
-  str = "now > #time";
+  str = "now > #timestamp";
   CHECK(parsers::predicate(str, pred));
   CHECK(caf::holds_alternative<data>(pred.lhs));
   CHECK(pred.op == greater);
-  CHECK(pred.rhs == attribute_extractor{time_atom::value});
+  CHECK(pred.rhs == attribute_extractor{timestamp_atom::value});
   str = "x.a_b == y.c_d";
   CHECK(parsers::predicate(str, pred));
   CHECK(pred.lhs == key_extractor{"x.a_b"});
@@ -95,8 +95,8 @@ TEST(parseable - expression) {
   CHECK(parsers::expr("x == 42 && ! :port == 53/udp && x == 42", expr));
   CHECK_EQUAL(expr, expression(conjunction{p1, negation{p2}, p1}));
   CHECK(parsers::expr("x > 0 && x < 42 && a.b == x.y", expr));
-  CHECK(parsers::expr("#time > 2018-07-04+12:00:00.0 "
-                      "&& #time < 2018-07-04+23:55:04.0",
+  CHECK(parsers::expr("#timestamp > 2018-07-04+12:00:00.0 "
+                      "&& #timestamp < 2018-07-04+23:55:04.0",
                       expr));
   auto x = caf::get_if<conjunction>(&expr);
   REQUIRE(x);
