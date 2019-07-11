@@ -10,6 +10,10 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## [Unreleased]
 
+- 🐞 All query expressions in the form `#type != X` were falsely evaluated as
+  `#type == X` and consequently produced wrong results. These expressions now
+  behave as expected.
+
 - 🐞 Parsers for reading log input that relied on recursive rules leaked memory
   by creating cycling references. All recursive parsers have been updated to
   break such cycles and thus no longer leak memory.
