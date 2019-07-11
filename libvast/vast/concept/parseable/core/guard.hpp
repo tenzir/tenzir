@@ -14,6 +14,7 @@
 #pragma once
 
 #include "vast/concept/parseable/core/parser.hpp"
+#include "vast/detail/type_traits.hpp"
 
 namespace vast {
 
@@ -25,23 +26,33 @@ namespace vast {
 template <class Parser, class Guard>
 class guard_parser : public parser<guard_parser<Parser, Guard>> {
 public:
-  using attribute = typename Parser::attribute;
+  using inner_attribute = typename Parser::attribute;
+  using return_type = decltype(
+    std::declval<Guard>()(std::declval<inner_attribute>()));
+  static constexpr bool returns_bool = std::is_same_v<bool, return_type>;
+  using attribute = std::conditional_t<returns_bool, inner_attribute,
+                                       detail::remove_optional_t<return_type>>;
 
   guard_parser(Parser p, Guard fun) : parser_{std::move(p)}, guard_(fun) {
   }
 
-  template <class Iterator>
-  bool parse(Iterator& f, const Iterator& l, unused_type) const {
-    return parser_(f, l, unused);
-  }
-
   template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
-    attribute attr;
-    if (!(parser_(f, l, attr) && guard_(attr)))
-      return false;
-    a = std::move(attr);
-    return true;
+    inner_attribute attr;
+    if constexpr (returns_bool) {
+      if (!(parser_(f, l, attr) && guard_(attr)))
+        return false;
+      a = Attribute(std::move(attr));
+      return true;
+    } else {
+      if (!(parser_(f, l, attr)))
+        return false;
+      auto fin = guard_(std::move(attr));
+      if (!fin)
+        return false;
+      a = Attribute(*std::move(fin));
+      return true;
+    }
   }
 
 private:
@@ -50,4 +61,3 @@ private:
 };
 
 } // namespace vast
-
