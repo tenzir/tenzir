@@ -31,7 +31,7 @@ public:
     attribute x;
     if (!parser_(f, l, x))
       return false;
-    a = std::move(x);
+    a = Attr(std::move(x));
     return true;
   }
 

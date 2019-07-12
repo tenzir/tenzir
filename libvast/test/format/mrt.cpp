@@ -38,7 +38,7 @@ TEST(MRT) {
   auto in = detail::make_input_stream(artifacts::logs::mrt::updates20150505,
                                       false);
   format::mrt::reader reader{defaults::system::table_slice_type,
-                             std::move(*in)};
+                             caf::settings{}, std::move(*in)};
   std::unordered_map<std::string, std::vector<event>> events;
   auto add_events = [&](const table_slice_ptr& slice) {
     auto& xs = events[slice->layout().name()];

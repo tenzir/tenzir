@@ -13,6 +13,8 @@
 
 #pragma once
 
+#include <caf/fwd.hpp>
+
 #include "vast/concept/parseable/vast/json.hpp"
 #include "vast/detail/line_range.hpp"
 #include "vast/error.hpp"
@@ -84,8 +86,10 @@ public:
 
   /// Constructs a JSON reader.
   /// @param table_slice_type The ID for table slice type to build.
+  /// @param options Additional options.
   /// @param in The stream of JSON objects.
   explicit reader(caf::atom_value table_slice_type,
+                  const caf::settings& options,
                   std::unique_ptr<std::istream> in = nullptr);
 
   void reset(std::unique_ptr<std::istream> in);
@@ -114,6 +118,7 @@ private:
 
 template <class Selector>
 reader<Selector>::reader(caf::atom_value table_slice_type,
+                         const caf::settings& /*options*/,
                          std::unique_ptr<std::istream> in)
   : super(table_slice_type) {
   if (in != nullptr)

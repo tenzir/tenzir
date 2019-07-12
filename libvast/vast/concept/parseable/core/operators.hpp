@@ -90,11 +90,9 @@ auto operator*(T&& x)
 }
 
 template <class T>
-auto operator+(T&& x)
-  -> std::enable_if_t<
-       is_parser_v<std::decay_t<T>>,
-       plus_parser<std::decay_t<T>>
-     > {
+constexpr auto operator+(T&& x)
+  -> std::enable_if_t<is_parser_v<std::decay_t<T>>,
+                      plus_parser<std::decay_t<T>>> {
   return plus_parser<std::decay_t<T>>{std::forward<T>(x)};
 }
 
@@ -133,7 +131,7 @@ auto operator>>(LHS&& lhs, RHS&& rhs)
 }
 
 template <class LHS, class RHS>
-auto operator|(LHS&& lhs, RHS&& rhs)
+constexpr auto operator|(LHS&& lhs, RHS&& rhs)
   -> decltype(detail::as_parser<choice_parser>(lhs, rhs)) {
   return {detail::as_parser(std::forward<LHS>(lhs)),
           detail::as_parser(std::forward<RHS>(rhs))};

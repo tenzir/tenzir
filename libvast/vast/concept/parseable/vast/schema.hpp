@@ -25,6 +25,14 @@ namespace vast {
 struct schema_parser : parser<schema_parser> {
   using attribute = schema;
 
+  // clang-format off
+  static constexpr auto id = +( parsers::alnum
+                              | parsers::chr{'_'}
+                              | parsers::chr{'-'}
+                              | parsers::chr{'.'}
+                              );
+  // clang-format on
+
   template <class Iterator>
   bool parse(Iterator& f, const Iterator& l, schema& sch) const {
     type_table symbols;
@@ -39,9 +47,6 @@ struct schema_parser : parser<schema_parser> {
       symbols.add(name, ty);
       return ty;
     };
-    using parsers::alnum;
-    using parsers::chr;
-    auto id = +(alnum | chr{'_'} | chr{'-'} | chr{'.'});
     auto ws = ignore(*parsers::space);
     auto tp = type_parser{std::addressof(symbols)};
     auto decl = ("type" >> ws >> id >> ws >> '=' >> ws >> tp) ->* to_type;
@@ -68,4 +73,3 @@ static auto const schema = make_parser<vast::schema>();
 
 } // namespace parsers
 } // namespace vast
-

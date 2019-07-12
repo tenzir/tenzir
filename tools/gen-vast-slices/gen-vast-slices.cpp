@@ -127,7 +127,7 @@ slices_vector read_zeek(actor_system& sys) {
   auto push_slice = [&](table_slice_ptr x) {
     result.emplace_back(std::move(x));
   };
-  reader_type reader{slice_type, std::move(*in)};
+  reader_type reader{slice_type, content(sys.config()), std::move(*in)};
   auto [err, produced] = reader.read(std::numeric_limits<size_t>::max(),
                                      slice_size, push_slice);
   if (err != vast::ec::end_of_input)

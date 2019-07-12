@@ -10,6 +10,10 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## [Unreleased]
 
+- 🎁 The `import` command now supports CSV formatted data. The type for each
+  column is automatically derived by matching the column names from the CSV
+  header in the input with the available types from the schema definitions.
+
 - 🐞 All query expressions in the form `#type != X` were falsely evaluated as
   `#type == X` and consequently produced wrong results. These expressions now
   behave as expected.

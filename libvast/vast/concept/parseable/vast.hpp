@@ -13,34 +13,21 @@
 
 #pragma once
 
-#include <vector>
-
-#include "vast/concept/parseable/core/parser.hpp"
-#include "vast/concept/parseable/detail/container.hpp"
-
-namespace vast {
-
-template <class Parser>
-class plus_parser : public parser<plus_parser<Parser>> {
-public:
-  using container = detail::container<typename Parser::attribute>;
-  using attribute = typename container::attribute;
-
-  constexpr explicit plus_parser(Parser p) : parser_{std::move(p)} {
-  }
-
-  template <class Iterator, class Attribute>
-  bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
-    if (!container::parse(parser_, f, l, a))
-      return false;
-    while (container::parse(parser_, f, l, a))
-      ;
-    return true;
-  }
-
-private:
-  Parser parser_;
-};
-
-} // namespace vast
-
+#include "vast/concept/parseable/vast/address.hpp"
+#include "vast/concept/parseable/vast/base.hpp"
+#include "vast/concept/parseable/vast/data.hpp"
+#include "vast/concept/parseable/vast/endpoint.hpp"
+#include "vast/concept/parseable/vast/expression.hpp"
+#include "vast/concept/parseable/vast/http.hpp"
+#include "vast/concept/parseable/vast/identifier.hpp"
+#include "vast/concept/parseable/vast/json.hpp"
+#include "vast/concept/parseable/vast/offset.hpp"
+#include "vast/concept/parseable/vast/pattern.hpp"
+#include "vast/concept/parseable/vast/port.hpp"
+#include "vast/concept/parseable/vast/schema.hpp"
+#include "vast/concept/parseable/vast/si.hpp"
+#include "vast/concept/parseable/vast/subnet.hpp"
+#include "vast/concept/parseable/vast/time.hpp"
+#include "vast/concept/parseable/vast/type.hpp"
+#include "vast/concept/parseable/vast/uri.hpp"
+#include "vast/concept/parseable/vast/uuid.hpp"

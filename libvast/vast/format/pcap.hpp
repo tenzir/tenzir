@@ -82,6 +82,8 @@ public:
   using super = single_layout_reader;
 
   /// Constructs a PCAP reader.
+  /// @param id The ID for table slice type to build.
+  /// @param options Additional options.
   /// @param input The name of the interface or trace file.
   /// @param cutoff The number of bytes to keep per flow.
   /// @param max_flows The maximum number of flows to keep state for.
@@ -93,8 +95,8 @@ public:
   ///                        example, if 5, then for two packets spaced *t*
   ///                        seconds apart, the source will sleep for *t/5*
   ///                        seconds.
-  reader(caf::atom_value id, std::string input, uint64_t cutoff = -1,
-         size_t max_flows = 100000, size_t max_age = 60,
+  reader(caf::atom_value id, const caf::settings& options, std::string input,
+         uint64_t cutoff = -1, size_t max_flows = 100000, size_t max_age = 60,
          size_t expire_interval = 10, int64_t pseudo_realtime = 0);
 
   ~reader();

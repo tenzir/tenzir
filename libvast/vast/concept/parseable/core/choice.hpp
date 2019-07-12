@@ -66,7 +66,7 @@ public:
       >
     >;
 
-  choice_parser(Lhs lhs, Rhs rhs)
+  constexpr choice_parser(Lhs lhs, Rhs rhs)
     : lhs_{std::move(lhs)}, rhs_{std::move(rhs)} {
   }
 

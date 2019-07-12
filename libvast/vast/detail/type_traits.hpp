@@ -214,6 +214,23 @@ struct contains<T, std::tuple<U, Ts...>> : contains<T, std::tuple<Ts...>> {};
 template <class T, class... Ts>
 struct contains<T, std::tuple<T, Ts...>> : std::true_type {};
 
+template <class T, class TS>
+inline constexpr bool contains_v = contains<T, TS>::value;
+
+// -- optional ---------------------------------------------------------------
+
+template <class T>
+struct remove_optional {
+  using type = T;
+};
+
+template <class T>
+struct remove_optional<caf::optional<T>> {
+  using type = T;
+};
+
+template <class T>
+using remove_optional_t = typename remove_optional<T>::type;
 
 // -- operator availability --------------------------------------------------
 

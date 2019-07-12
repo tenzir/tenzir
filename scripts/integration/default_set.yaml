@@ -151,6 +151,13 @@ tests:
       - command: import -N suricata -r @./data/suricata/eve.json
       - command: export -N ascii 'src_ip == 147.32.84.165'
 
+  Node argus csv:
+    tags: [node, import-export, argus, csv]
+    steps:
+      - command: import -N csv -s @./misc/schema/argus.schema -t argus.argus
+        input: data/csv/argus_sample.log.gz
+      - command: export -N ascii 'State == "CON"'
+
   Manual 1:
     condition: 'import -h 2>&1 | grep -q pcap'
     tags: [examples]

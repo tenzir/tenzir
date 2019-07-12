@@ -1,0 +1,14 @@
+type argus.argus = record{
+  StartTime: time #timestamp,
+  Flgs: string,
+  Proto: string,
+  SrcAddr: addr,
+  Sport: count,
+  Dir: string,
+  DstAddr: addr,
+  Dport: count,
+  TotPkts: count,
+  TotBytes: count,
+  State: string,
+  TcpRtt: real
+}

@@ -445,6 +445,14 @@ data_view make_data_view(const T& x) {
   return make_view(x);
 }
 
+/// @relates view_trait
+template <class T>
+data_view make_data_view(const optional<T>& x) {
+  if (!x)
+    return make_view(caf::none);
+  return make_view(*x);
+}
+
 // -- materialization ----------------------------------------------------------
 
 constexpr auto materialize(caf::none_t x) {

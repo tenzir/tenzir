@@ -338,6 +338,32 @@ TEST(attribute compatibility with string sequences) {
   CHECK(str == "xyz");
 }
 
+TEST(polymorphic) {
+  using namespace parsers;
+  auto p = type_erased_parser<std::string::iterator>{'a'_p};
+  MESSAGE("from construction");
+  auto str = "a"s;
+  auto f = str.begin();
+  auto l = str.end();
+  CHECK(p(f, l, unused));
+  CHECK_EQUAL(f, l);
+  MESSAGE("extended with matching type");
+  p = p >> ',';
+  p = p >> 'b';
+  str += ",b"s;
+  f = str.begin();
+  l = str.end();
+  CHECK(p(f, l, unused));
+  CHECK_EQUAL(f, l);
+  MESSAGE("extended with different type");
+  p = p >> "hello!";
+  str += "hello!";
+  f = str.begin();
+  l = str.end();
+  CHECK(p(f, l, unused));
+  CHECK_EQUAL(f, l);
+}
+
 namespace {
 
 template <class Parser>

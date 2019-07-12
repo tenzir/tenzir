@@ -103,6 +103,8 @@ default_application::default_application() {
                src_opts("?import.mrt"));
   import_->add(READER(bgpdump), "imports BGPdump logs from STDIN or file",
                src_opts("?import.bgpdump"));
+  import_->add(READER(csv), "imports CSV logs from STDIN or file",
+               src_opts("?import.csv"));
   namespace fj = format::json;
   import_->add(reader_command<fj::reader<>, defaults::import::json>, "json",
                "imports json with schema", src_opts("?import.json"));

@@ -127,7 +127,7 @@ TEST(json to data) {
 
 TEST(json reader) {
   using reader_type = format::json::reader<format::json::default_selector>;
-  reader_type reader{defaults::system::table_slice_type,
+  reader_type reader{defaults::system::table_slice_type, caf::settings{},
                      std::make_unique<std::istringstream>(
                        std::string{http_log})};
   schema s;
@@ -148,7 +148,8 @@ TEST(json reader) {
 TEST_DISABLED(suricata) {
   using reader_type = format::json::reader<format::json::suricata>;
   auto input = std::make_unique<std::istringstream>(std::string{eve_log});
-  reader_type reader{defaults::system::table_slice_type, std::move(input)};
+  reader_type reader{defaults::system::table_slice_type, caf::settings{},
+                     std::move(input)};
   std::vector<table_slice_ptr> slices;
   auto add_slice = [&](table_slice_ptr ptr) {
     slices.emplace_back(std::move(ptr));

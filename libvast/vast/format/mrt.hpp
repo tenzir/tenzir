@@ -3,6 +3,7 @@
 #include <iostream>
 #include <queue>
 
+#include <caf/fwd.hpp>
 #include <caf/none.hpp>
 #include <caf/variant.hpp>
 
@@ -1221,7 +1222,12 @@ public:
 
   // -- constructors, destructors, and assignment operators --------------------
 
+  /// Constructs an MRT reader.
+  /// @param table_slice_type The ID for table slice type to build.
+  /// @param options Additional options.
+  /// @param in The stream of logs to read.
   explicit reader(caf::atom_value table_slice_type,
+                  const caf::settings& options,
                   std::unique_ptr<std::istream> input = nullptr);
 
   void reset(std::unique_ptr<std::istream> in);

@@ -23,7 +23,7 @@ class char_parser : public parser<char_parser> {
 public:
   using attribute = char;
 
-  char_parser(char c) : c_{c} {
+  constexpr char_parser(char c) : c_{c} {
   }
 
   template <class Iterator, class Attribute>

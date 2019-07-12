@@ -169,6 +169,7 @@ void print_header(const type& t, std::ostream& out) {
 } // namespace
 
 reader::reader(caf::atom_value table_slice_type,
+               const caf::settings& /*options*/,
                std::unique_ptr<std::istream> in)
   : super(table_slice_type) {
   if (in != nullptr)

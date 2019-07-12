@@ -25,7 +25,7 @@ namespace detail {
 
 // -- unary -------------------------------------------------------------------
 
-inline auto as_parser(char c) {
+constexpr auto as_parser(char c) {
   return ignore(char_parser{c});
 }
 
@@ -34,16 +34,14 @@ inline auto as_parser(std::string str) {
 }
 
 template <class T>
-auto as_parser(T x)
-  -> std::enable_if_t<
-       std::is_arithmetic_v<T> && !std::is_same_v<T, bool>,
-       decltype(ignore(string_parser{""}))
-     > {
+constexpr auto as_parser(T x)
+  -> std::enable_if_t<std::is_arithmetic_v<T> && !std::is_same_v<T, bool>,
+                      decltype(ignore(string_parser{""}))> {
   return ignore(string_parser{std::to_string(x)});
 }
 
 template <class T>
-auto as_parser(T x) -> std::enable_if_t<is_parser_v<T>, T> {
+constexpr auto as_parser(T x) -> std::enable_if_t<is_parser_v<T>, T> {
   return x; // A good compiler will elide the copy.
 }
 
