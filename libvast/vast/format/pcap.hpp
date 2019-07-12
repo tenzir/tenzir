@@ -143,7 +143,7 @@ public:
 
   using format::writer::write;
 
-  caf::expected<void> write(const event& e) override;
+  caf::error write(const table_slice& slice) override;
 
   caf::expected<void> flush() override;
 
