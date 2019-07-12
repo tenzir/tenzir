@@ -11,38 +11,44 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/format/ostream_writer.hpp"
+#pragma once
 
-#include "vast/error.hpp"
+#include <array>
+#include <cstddef>
+#include <cstdint>
 
-namespace vast::format {
+#include "vast/detail/endian.hpp"
 
-ostream_writer::ostream_writer(ostream_ptr out) : out_(std::move(out)) {
-  // nop
-}
+namespace vast {
 
-ostream_writer::~ostream_writer() {
-  // nop
-}
+/// The [SHA-1](https://en.wikipedia.org/wiki/SHA-1) hash algorithm.
+/// This implementation comes from https://github.com/kerukuro/digestpp.
+class sha1 {
+public:
+  using result_type = std::array<uint32_t, 5>;
 
-caf::expected<void> ostream_writer::flush() {
-  if (out_ == nullptr)
-    return make_error(ec::format_error, "no output stream available");
-  out_->flush();
-  if (!*out_)
-    return make_error(ec::format_error, "failed to flush");
-  return caf::unit;
-}
+  static constexpr detail::endianness endian = detail::host_endian;
 
-std::ostream& ostream_writer::out() {
-  VAST_ASSERT(out_ != nullptr);
-  return *out_;
-}
+  sha1() noexcept;
 
-void ostream_writer::write_buf() {
-  VAST_ASSERT(out_ != nullptr);
-  out_->write(buf_.data(), buf_.size());
-  buf_.clear();
-}
+  void operator()(const void* xs, size_t n) noexcept;
 
-} // namespace vast::format
+  operator result_type() noexcept;
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, sha1& x) {
+    return f(x.H_, x.m_, x.pos_, x.total_);
+  }
+
+private:
+  void finalize();
+
+  void transform(const unsigned char* data, size_t num_blks);
+
+  std::array<uint32_t, 5> H_;
+  std::array<unsigned char, 64> m_;
+  size_t pos_ = 0;
+  uint64_t total_ = 0;
+};
+
+} // namespace vast

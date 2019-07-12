@@ -32,12 +32,16 @@ struct port_printer : vast::printer<port_printer> {
     switch (p.type()) {
       default:
         return chr<'?'>(out);
+      case port::icmp:
+        return str(out, "icmp");
       case port::tcp:
         return str(out, "tcp");
       case port::udp:
         return str(out, "udp");
-      case port::icmp:
-        return str(out, "icmp");
+      case port::icmp6:
+        return str(out, "icmp6");
+      case port::sctp:
+        return str(out, "sctp");
     }
   }
 };
@@ -48,4 +52,3 @@ struct printer_registry<port> {
 };
 
 } // namespace vast
-

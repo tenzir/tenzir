@@ -22,6 +22,7 @@
 #include "vast/filesystem.hpp"
 #include "vast/format/pcap.hpp"
 #include "vast/logger.hpp"
+#include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
 
 namespace vast {
@@ -322,7 +323,7 @@ writer::~writer() {
     ::pcap_close(pcap_);
 }
 
-expected<void> writer::write(const event& e) {
+caf::error writer::write(const table_slice& slice) {
   if (!pcap_) {
 #ifdef PCAP_TSTAMP_PRECISION_NANO
     pcap_ = ::pcap_open_dead_with_tstamp_precision(DLT_RAW, 65535,
@@ -336,31 +337,33 @@ expected<void> writer::write(const event& e) {
     if (!dumper_)
       return make_error(ec::format_error, "failed to open pcap dumper");
   }
-  if (!congruent(e.type(), pcap_packet_type))
+  if (!congruent(slice.layout(), pcap_packet_type))
     return make_error(ec::format_error, "invalid pcap packet type");
-  auto& xs = caf::get<vector>(e.data());
-  auto& payload = caf::get<std::string>(xs[5]);
-  // Make PCAP header.
-  ::pcap_pkthdr header;
-  auto ns = caf::get<time>(xs[0]).time_since_epoch().count();
-  header.ts.tv_sec = ns / 1000000000;
+  // TODO: consider iterating in natural order for the slice.
+  for (size_t row = 0; row < slice.rows(); ++row) {
+    auto payload_field = slice.at(row, 5);
+    auto& payload = caf::get<view<std::string>>(payload_field);
+    // Make PCAP header.
+    ::pcap_pkthdr header;
+    auto ns_field = slice.at(row, 0);
+    auto ns = caf::get<view<time>>(ns_field).time_since_epoch().count();
+    header.ts.tv_sec = ns / 1000000000;
 #ifdef PCAP_TSTAMP_PRECISION_NANO
-  header.ts.tv_usec = ns % 1000000000;
+    header.ts.tv_usec = ns % 1000000000;
 #else
-  ns /= 1000;
-  header.ts.tv_usec = ns % 1000000;
+    ns /= 1000;
+    header.ts.tv_usec = ns % 1000000;
 #endif
-  header.caplen = payload.size();
-  header.len = payload.size();
-  // Dump packet.
-  ::pcap_dump(reinterpret_cast<uint8_t*>(dumper_), &header,
-              reinterpret_cast<const uint8_t*>(payload.c_str()));
-  if (++total_packets_ % flush_interval_ == 0) {
-    auto r = flush();
-    if (!r)
-      return r.error();
+    header.caplen = payload.size();
+    header.len = payload.size();
+    // Dump packet.
+    ::pcap_dump(reinterpret_cast<uint8_t*>(dumper_), &header,
+                reinterpret_cast<const uint8_t*>(payload.data()));
   }
-  return no_error;
+  if (++total_packets_ % flush_interval_ == 0)
+    if (auto r = flush(); !r)
+      return r.error();
+  return caf::none;
 }
 
 expected<void> writer::flush() {

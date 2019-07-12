@@ -32,6 +32,7 @@
 #include <vast/format/writer.hpp>
 #include <vast/logger.hpp>
 #include <vast/scope_linked.hpp>
+#include <vast/to_events.hpp>
 #include <vast/uuid.hpp>
 
 #include <vast/concept/parseable/parse.hpp>
@@ -210,12 +211,14 @@ public:
 
   using vast::format::writer::write;
 
-  caf::expected<void> write(const vast::event& x) override {
-    ++num_results_;
+  caf::error write(const vast::table_slice& slice) override {
+    auto xs = vast::to_events(slice);
+    num_results_ += xs.size();
     if (show_progress_)
       std::cerr << '.' << std::flush;
-    endpoint_->publish(data_topic, make_result_event(query_id_, x));
-    return caf::no_error;
+    for (auto& x : xs)
+      endpoint_->publish(data_topic, make_result_event(query_id_, x));
+    return caf::none;
   }
 
   const char* name() const override {

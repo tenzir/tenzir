@@ -11,38 +11,28 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/format/ostream_writer.hpp"
+#define SUITE base64
 
-#include "vast/error.hpp"
+#include "vast/test/test.hpp"
 
-namespace vast::format {
+#include "vast/detail/base64.hpp"
 
-ostream_writer::ostream_writer(ostream_ptr out) : out_(std::move(out)) {
-  // nop
+using namespace std::string_view_literals;
+using namespace vast::detail;
+
+// Ground truth:
+//
+//   printf "The quick brown fox jumps over the lazy dog" | base64
+//   VGhlIHF1aWNrIGJyb3duIGZveCBqdW1wcyBvdmVyIHRoZSBsYXp5IGRvZw==
+
+TEST(encode) {
+  auto dec = "The quick brown fox jumps over the lazy dog"sv;
+  auto enc = "VGhlIHF1aWNrIGJyb3duIGZveCBqdW1wcyBvdmVyIHRoZSBsYXp5IGRvZw=="sv;
+  CHECK_EQUAL(base64::encode(dec), enc);
 }
 
-ostream_writer::~ostream_writer() {
-  // nop
+TEST(decode) {
+  auto enc = "VGhlIHF1aWNrIGJyb3duIGZveCBqdW1wcyBvdmVyIHRoZSBsYXp5IGRvZw=="sv;
+  auto dec = "The quick brown fox jumps over the lazy dog"sv;
+  CHECK_EQUAL(base64::decode(enc), dec);
 }
-
-caf::expected<void> ostream_writer::flush() {
-  if (out_ == nullptr)
-    return make_error(ec::format_error, "no output stream available");
-  out_->flush();
-  if (!*out_)
-    return make_error(ec::format_error, "failed to flush");
-  return caf::unit;
-}
-
-std::ostream& ostream_writer::out() {
-  VAST_ASSERT(out_ != nullptr);
-  return *out_;
-}
-
-void ostream_writer::write_buf() {
-  VAST_ASSERT(out_ != nullptr);
-  out_->write(buf_.data(), buf_.size());
-  buf_.clear();
-}
-
-} // namespace vast::format

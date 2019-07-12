@@ -62,7 +62,7 @@ void node::ingest(const std::string& type) {
   // Send previously parsed logs directly to the importer (as opposed to
   // going through a source).
   if (type == "zeek" || type == "all") {
-    detail::spawn_container_source(sys, copy(zeek_conn_log_slices), importer);
+    detail::spawn_container_source(sys, zeek_conn_log_slices, importer);
     // TODO: ship DNS and HTTP log slices when available in the events fixture
     // self->send(importer, zeek_dns_log);
     // self->send(importer, zeek_http_log);

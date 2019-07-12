@@ -14,6 +14,14 @@ Every entry has a category for which we use the following visual abbreviations:
   column is automatically derived by matching the column names from the CSV
   header in the input with the available types from the schema definitions.
 
+- 🐞 All query expressions in the form `#type != X` were falsely evaluated as
+  `#type == X` and consequently produced wrong results. These expressions now
+  behave as expected.
+
+- 🐞 Parsers for reading log input that relied on recursive rules leaked memory
+  by creating cycling references. All recursive parsers have been updated to
+  break such cycles and thus no longer leak memory.
+
 - 🔄 Log files generally have some notion of timestamp for recorded events. To
   make the query language more intuitive, the syntax for querying time points
   thus changed from `#time` to `#timestamp`. For example,

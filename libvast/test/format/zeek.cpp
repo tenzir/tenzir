@@ -248,12 +248,12 @@ TEST(zeek writer) {
   auto dir = path{"vast-unit-test-zeek"};
   auto guard = caf::detail::make_scope_guard([&] { rm(dir); });
   format::zeek::writer writer{dir};
-  for (auto& e : zeek_conn_log)
-    if (!writer.write(e))
-      FAIL("failed to write event");
-  for (auto& e : zeek_http_log)
-    if (!writer.write(e))
-      FAIL("failed to write event");
+  for (auto& slice : zeek_conn_log_slices)
+    if (auto err = writer.write(*slice))
+      FAIL("failed to write conn log");
+  for (auto& slice : zeek_http_log_slices)
+    if (auto err = writer.write(*slice))
+      FAIL("failed to write HTTP log");
   CHECK(exists(dir / zeek_conn_log[0].type().name() + ".log"));
   CHECK(exists(dir / zeek_http_log[0].type().name() + ".log"));
 }

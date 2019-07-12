@@ -266,6 +266,7 @@ struct attributes_parser : parser<attributes_parser<TypeCode14Policy>> {
 
   template <class Iterator>
   bool parse(Iterator& f, const Iterator& l, attributes& x) const {
+    // clang-format off
     using namespace parsers;
     for (auto i = 0; i < length; ) {
       // Meta data.
@@ -273,9 +274,9 @@ struct attributes_parser : parser<attributes_parser<TypeCode14Policy>> {
       uint8_t type_code;
       uint16_t attr_length;
       auto is_extended_length = [&] { return (flags & 0b0001'0000) >> 4 == 1; };
-      auto u8to16 = byte ->* [](uint8_t x) { return uint16_t{x}; };
+      auto u8to16 = parsers::byte ->* [](uint8_t x) { return uint16_t{x}; };
       auto len = b16be.when(is_extended_length) | u8to16;
-      auto meta = byte >> byte >> len;
+      auto meta = parsers::byte >> parsers::byte >> len;
       auto before = f;
       if (!meta(f, l, flags, type_code, attr_length))
         return false;
@@ -314,7 +315,7 @@ struct attributes_parser : parser<attributes_parser<TypeCode14Policy>> {
           auto as16 = b16be ->* [](uint16_t x) { return uint32_t{x}; };
           auto as32 = b32be;
           auto as = as32.when([&] { return as4; }) | as16;
-          auto p = byte >> byte >> rep(as, path_segment_length);
+          auto p = parsers::byte >> parsers::byte >> rep(as, path_segment_length);
           if (!p(t, l, path_segment_type, path_segment_length, x.as_path))
             return false;
           break;
@@ -368,7 +369,7 @@ struct attributes_parser : parser<attributes_parser<TypeCode14Policy>> {
             // to reflect only the length of the Next Hop Address Length and
             // Next Hop Address fields.
             uint8_t next_hop_network_address_length = 0;
-            if (!byte(t, l, next_hop_network_address_length))
+            if (!parsers::byte(t, l, next_hop_network_address_length))
               return false;
             auto mp_next_hop
               = detail::make_ip_v4_v6_parser([&] { return afi4; });
@@ -385,7 +386,7 @@ struct attributes_parser : parser<attributes_parser<TypeCode14Policy>> {
               auto offset = addr_family_id == 1 ? 4 : 16;
               t += next_hop_addr_len - offset + 1;
             });
-            auto p = b16be >> byte >> byte >> mp_next_hop;
+            auto p = b16be >> parsers::byte >> parsers::byte >> mp_next_hop;
             if (!p(t, l, addr_family_id, subsequent_addr_family_id,
                    next_hop_addr_len, x.next_hop))
               return false;
@@ -405,7 +406,7 @@ struct attributes_parser : parser<attributes_parser<TypeCode14Policy>> {
         case 15: {
           uint16_t addr_family_id = 0;
           uint8_t subsequent_addr_family_id = 0;
-          auto p = b16be >> byte;
+          auto p = b16be >> parsers::byte;
           if (!p(t, l, addr_family_id, subsequent_addr_family_id))
             return false;
           auto family = addr_family_id == 1 ? address::ipv4 : address::ipv6;
@@ -428,6 +429,7 @@ struct attributes_parser : parser<attributes_parser<TypeCode14Policy>> {
       f += attr_length;
     }
     return true;
+    // clang-format on
   }
 
   const uint16_t& length;
@@ -441,9 +443,11 @@ struct message_header_parser : parser<message_header_parser> {
 
   template <class Iterator>
   bool parse(Iterator& f, const Iterator& l, message_header& x) const {
+    // clang-format off
     using namespace parsers;
-    auto p = bytes<16> >> b16be >> byte;
+    auto p = bytes<16> >> b16be >> parsers::byte;
     return p(f, l, x.marker, x.length, x.type);
+    // clang-format on
   }
 };
 
@@ -458,7 +462,7 @@ struct open_parser : parser<open_parser> {
       f += std::min(static_cast<size_t>(l - f),
                     static_cast<size_t>(x.opt_parm_len));
     };
-    auto p = (byte >> b16be >> b16be >> b32be >> byte) ->* skip;
+    auto p = (parsers::byte >> b16be >> b16be >> b32be >> parsers::byte)->*skip;
     return p(f, l, x.version, x.my_autonomous_system, x.hold_time,
              x.bgp_identifier, x.opt_parm_len);
   }
@@ -504,10 +508,12 @@ struct notification_parser : parser<notification_parser> {
 
   template <class Iterator>
   bool parse(Iterator& f, const Iterator& l, notification& x) const {
+    // clang-format off
     using namespace parsers;
     auto skip = [&] { f += (l - f); };
-    auto p = (byte >> byte) ->* skip;
+    auto p = (parsers::byte >> parsers::byte) ->* skip;
     return p(f, l, x.error_code, x.error_subcode);
+    // clang-format on
   }
 };
 
@@ -941,7 +947,7 @@ struct peer_entry_parser : parser<peer_entry_parser> {
     auto to_u32 = [](uint16_t u) { return uint32_t{u}; };
     auto peer_as
       = (b16be ->* to_u32).when([&] { return (x.peer_type & 2) == 0; }) | b32be;
-    auto p = byte >> b32be >> ip_addr >> peer_as;
+    auto p = parsers::byte >> b32be >> ip_addr >> peer_as;
     return p(f, l, x.peer_type, x.peer_bgp_id, x.peer_ip_address, x.peer_as);
   }
 };
