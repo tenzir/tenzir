@@ -55,6 +55,8 @@ private:
 class reader final : public single_layout_reader {
 public:
   using super = single_layout_reader;
+  using iterator_type = std::string::const_iterator;
+  using parser_type = type_erased_parser<iterator_type>;
 
   /// Constructs a CSV reader.
   /// @param table_slice_type The ID for table slice type to build.
@@ -81,12 +83,9 @@ private:
     record_type type;
     std::vector<std::string> sorted;
   };
-  using iterator_type = std::string::const_iterator;
-  using parser_type = type_erased_parser<iterator_type>;
-
   caf::optional<record_type> make_layout(const std::vector<std::string>& names);
 
-  caf::error read_header(std::string_view line);
+  caf::expected<parser_type> read_header(std::string_view line);
 
   std::unique_ptr<std::istream> input_;
   std::unique_ptr<detail::line_range> lines_;

@@ -281,7 +281,7 @@ struct container_parser_builder {
 
 template <class Iterator>
 struct csv_parser_factory {
-  using result_type = type_erased_parser<Iterator>;
+  using result_type = reader::parser_type;
 
   csv_parser_factory(options opt, table_slice_builder_ptr bptr)
     : opt_{std::move(opt)}, bptr_{std::move(bptr)} {
@@ -336,7 +336,7 @@ struct csv_parser_factory {
 };
 
 template <class Iterator>
-caf::optional<type_erased_parser<Iterator>>
+caf::optional<reader::parser_type>
 make_csv_parser(const record_type& layout, table_slice_builder_ptr builder,
                 const options& opt) {
   auto num_fields = layout.fields.size();
@@ -344,15 +344,15 @@ make_csv_parser(const record_type& layout, table_slice_builder_ptr builder,
   auto factory = csv_parser_factory<Iterator>{opt, builder};
   auto result = caf::visit(factory, layout.fields[0].type);
   for (size_t i = 1; i < num_fields; ++i) {
-    auto p = (caf::visit(factory, layout.fields[i].type));
-    result = (result >> opt.separator >> std::move(p));
+    auto p = caf::visit(factory, layout.fields[i].type);
+    result = result >> opt.separator >> std::move(p);
   }
   return result;
 }
 
 } // namespace
 
-caf::error reader::read_header(std::string_view line) {
+caf::expected<reader::parser_type> reader::read_header(std::string_view line) {
   auto ws = ignore(*parsers::space);
   auto p = (ws >> schema_parser::id >> ws) % opt_.separator;
   std::vector<std::string> columns;
@@ -366,36 +366,38 @@ caf::error reader::read_header(std::string_view line) {
   VAST_DEBUG_ANON("csv_reader derived layout", to_string(*layout));
   if (!reset_builder(*layout))
     return make_error(ec::parse_error, "unable to create a builder for layout");
-  parser_ = make_csv_parser<iterator_type>(*layout, builder_, opt_);
-  if (!parser_)
-    return make_error(ec::parse_error, "unable generate a parser");
-  return caf::none;
+  auto parser = make_csv_parser<iterator_type>(*layout, builder_, opt_);
+  if (!parser)
+    return make_error(ec::parse_error, "unable to generate a parser");
+  return *parser;
 }
 
 caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
-                             consumer& cons) {
+                             consumer& callback) {
   VAST_ASSERT(max_events > 0);
   VAST_ASSERT(max_slice_size > 0);
-  if (!parser_)
-    if (auto err = read_header(lines_->get()))
-      return err;
+  if (!parser_) {
+    auto p = read_header(lines_->get());
+    if (!p)
+      return p.error();
+    parser_ = *std::move(p);
+  }
   auto& p = *parser_;
   size_t produced = 0;
   lines_->next();
   for (; produced < max_events; lines_->next()) {
     // EOF check.
     if (lines_->done())
-      return finish(cons, make_error(ec::end_of_input, "input exhausted"));
+      return finish(callback, make_error(ec::end_of_input, "input exhausted"));
     auto& line = lines_->get();
-    if (!p(line)) {
+    if (!p(line))
       return make_error(ec::type_clash, "unable to parse CSV line");
-    }
     ++produced;
     if (builder_->rows() == max_slice_size)
-      if (auto err = finish(cons))
+      if (auto err = finish(callback))
         return err;
   }
-  return finish(cons);
+  return finish(callback);
 }
 
 } // namespace vast::format::csv

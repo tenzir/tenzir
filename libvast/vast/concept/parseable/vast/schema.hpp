@@ -26,10 +26,11 @@ struct schema_parser : parser<schema_parser> {
   using attribute = schema;
 
   // clang-format off
-  static constexpr auto id = +(parsers::alnum
-                           | parsers::chr{'_'}
-                           | parsers::chr{'-'}
-                           | parsers::chr{'.'});
+  static constexpr auto id = +( parsers::alnum
+                              | parsers::chr{'_'}
+                              | parsers::chr{'-'}
+                              | parsers::chr{'.'}
+                              );
   // clang-format on
 
   template <class Iterator>
