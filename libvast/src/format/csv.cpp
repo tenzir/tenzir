@@ -195,7 +195,6 @@ reader::make_layout(const std::vector<std::string>& names) {
         return result->name(r->name());
     } else if (names.size() == 1 && names[0] == t.name()) {
       // Hoist naked type into record.
-      // TODO: Maybe this is actually not a good idea?
       return record_type{{t.name(), t}}.name(t.name());
     } // else skip
   }
@@ -216,7 +215,6 @@ struct container_parser_builder {
     // nop
   }
 
-  // TODO: support enumeration_type inside of containers too.
   template <class T>
   result_type operator()(const T& t) const {
     if constexpr (std::is_same_v<T, string_type>) {
