@@ -366,7 +366,6 @@ TEST(polymorphic) {
 
 namespace {
 
-
 template <class Parser>
 class parser_wrapper : public parser<parser_wrapper<Parser>> {
 public:
