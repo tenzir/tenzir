@@ -21,8 +21,8 @@
 #include <caf/config_option_adder.hpp>
 #include <caf/config_value.hpp>
 
-#include <broker/bro.hh>
 #include <broker/broker.hh>
+#include <broker/zeek.hh>
 
 #include <vast/data.hpp>
 #include <vast/defaults.hpp>
@@ -175,7 +175,7 @@ broker::data to_broker(const vast::data& data) {
 }
 
 // Constructs a result event for Zeek from Broker data.
-broker::bro::Event make_result_event(std::string query_id, broker::data x) {
+broker::zeek::Event make_result_event(std::string query_id, broker::data x) {
   broker::vector args(2);
   args[0] = std::move(query_id);
   args[1] = std::move(x);
@@ -183,8 +183,8 @@ broker::bro::Event make_result_event(std::string query_id, broker::data x) {
 }
 
 // Constructs a result event for Zeek from a VAST event.
-broker::bro::Event make_result_event(std::string query_id,
-                                     const vast::event& x) {
+broker::zeek::Event make_result_event(std::string query_id,
+                                      const vast::event& x) {
   broker::vector xs(2);
   xs[0] = x.type().name();
   xs[1] = to_broker(x.data());
@@ -236,7 +236,7 @@ private:
 caf::expected<std::pair<std::string, std::string>>
 parse_query_event(const broker::data& x) {
   std::pair<std::string, std::string> result;
-  auto event = broker::bro::Event(x);
+  auto event = broker::zeek::Event(x);
   if (event.name() != "VAST::query")
     return make_error(vast::ec::parse_error, "invalid event name", event.name());
   if (event.args().size() != 2)
