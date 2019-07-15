@@ -142,9 +142,9 @@ struct time_point_printer : printer<time_point_printer<Clock, Duration>> {
   template <class Iterator>
   bool print(Iterator& out, std::chrono::time_point<Clock, Duration> tp) const {
     using namespace std::chrono;
-    auto num = printers::integral<int>;
-    auto num2 = printers::integral<int, policy::plain, 2>;
-    auto unum2 = printers::integral<unsigned, policy::plain, 2>;
+    constexpr auto num = printers::integral<int>;
+    constexpr auto num2 = printers::integral<int, policy::plain, 2>;
+    constexpr auto unum2 = printers::integral<unsigned, policy::plain, 2>;
     auto p = num << '-' << unum2 << '-' << unum2 << 'T' << num2 << ':' << num2
                  << ':' << num2;
     auto sd = floor<days>(tp);
@@ -158,16 +158,14 @@ struct time_point_printer : printer<time_point_printer<Clock, Duration>> {
            static_cast<unsigned>(D), static_cast<int>(h.count()),
            static_cast<int>(m.count()), static_cast<int>(s.count())))
       return false;
-    // For the sub-second part, we print either '.0' if there's none, or print
-    // down to the lowest resolution necessary (all the way down to ns).
-    *out++ = '.';
-    auto num3 = printers::integral<int, policy::plain, 3>;
-    auto num6 = printers::integral<int, policy::plain, 6>;
-    auto num9 = printers::integral<int, policy::plain, 9>;
-    if (sub_secs == 0) {
-      *out++ = '0';
+    if (sub_secs == 0)
       return true;
-    }
+    // For the sub-second part, we print print down to the lowest resolution
+    // necessary (all the way down to ns).
+    constexpr auto num3 = printers::integral<int, policy::plain, 3>;
+    constexpr auto num6 = printers::integral<int, policy::plain, 6>;
+    constexpr auto num9 = printers::integral<int, policy::plain, 9>;
+    *out++ = '.';
     if (sub_secs % 1000000 == 0)
       return num3(out, sub_secs / 1000000);
     if (sub_secs % 1000 == 0)

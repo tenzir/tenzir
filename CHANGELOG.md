@@ -10,10 +10,10 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## [Unreleased]
 
-- 🐞 Previously, timestamps were always printed in millisecond resolution.
-  Hence, it was possible that a query produced no result after copying and
-  pasting a timestamp from a previous query result. Timestamps are now printed
-  in the resolution necessary, down to nanoseconds.
+- 🐞 Timestamps were always printed in millisecond resolution, which lead to
+  loss of precision when the internal representation had a higher resolution.
+  Timestamps are now rendered up to nanosecond resolution - the maximum
+  resolution supported.
 
 - 🎁 The `import` command now supports CSV formatted data. The type for each
   column is automatically derived by matching the column names from the CSV

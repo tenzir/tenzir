@@ -35,7 +35,7 @@ auto first_csv_http_log_line = "type,ts,uid,id.orig_h,id.orig_p,id.resp_h,id.res
 
 auto last_csv_http_log_line = R"__(zeek.http,2009-11-19T07:17:28.829955072,"rydI6puScNa",192.168.1.104,1224/tcp,87.106.66.233,80/tcp,1,"POST","87.106.66.233","/rpc.html?e=bl",,"SCSDK-6.0.0",1064,96,200,"OK",100,"Continue",,"",,,,"application/octet-stream",,)__";
 
-auto first_ascii_bgpdump_txt_line = R"__(<2018-01-24T11:05:17.0, 27.111.229.79, 17639, "1", "3">)__";
+auto first_ascii_bgpdump_txt_line = R"__(<2018-01-24T11:05:17, 27.111.229.79, 17639, "1", "3">)__";
 
 auto first_json_bgpdump_txt_line = R"__({"time": 1516791917, "source_ip": "27.111.229.79", "source_as": 17639, "old_state": "1", "new_state": "3"})__";
 
