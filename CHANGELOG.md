@@ -10,6 +10,11 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## [Unreleased]
 
+- 🐞 Timestamps were always printed in millisecond resolution, which lead to
+  loss of precision when the internal representation had a higher resolution.
+  Timestamps are now rendered up to nanosecond resolution - the maximum
+  resolution supported.
+
 - 🎁 The `import` command now supports CSV formatted data. The type for each
   column is automatically derived by matching the column names from the CSV
   header in the input with the available types from the schema definitions.
