@@ -44,8 +44,8 @@ Commit Messages
 - Optional long descriptions as full sentences begin on the third line,
   indented at 72 characters per line.
 
-Coding Style
-============
+Coding Style | c++
+==================
 
 General
 -------
@@ -537,3 +537,24 @@ following checks:
   coverage drops).
 
 [integration]: https://github.com/vast-io/vast/tree/master/scripts/integration
+
+Coding Style | cmake
+====================
+
+General
+-------
+
+- Prefer targets and properties over variables.
+
+- Don't use global include_directories.
+
+- Export consumable targets to both build and install directories.
+
+- Assign sensible export names for your targets, the `vast::` namespace is
+  implicitly prefixed.
+
+Formatting
+----------
+
+- The cmake files are formatted with
+  [cmake-format](https://github.com/cheshirekow/cmake_format).
