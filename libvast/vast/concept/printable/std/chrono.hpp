@@ -145,20 +145,34 @@ struct time_point_printer : printer<time_point_printer<Clock, Duration>> {
     auto num = printers::integral<int>;
     auto num2 = printers::integral<int, policy::plain, 2>;
     auto unum2 = printers::integral<unsigned, policy::plain, 2>;
-    auto p = num << '-' << unum2 << '-' << unum2
-                 << '+' << num2 << ':' << num2 << ':' << num2
-                 << '.' << num;
+    auto p = num << '-' << unum2 << '-' << unum2 << 'T' << num2 << ':' << num2
+                 << ':' << num2;
     auto sd = floor<days>(tp);
     auto [Y, M, D] = from_days(duration_cast<days>(sd - time{}));
     auto t = tp - sd;
     auto h = duration_cast<hours>(t);
     auto m = duration_cast<minutes>(t - h);
     auto s = duration_cast<seconds>(t - h - m);
-    auto sub_secs = duration_cast<milliseconds>(t - h - m - s);
-    return p(out, static_cast<int>(Y), static_cast<unsigned>(M),
-             static_cast<unsigned>(D), static_cast<int>(h.count()),
-             static_cast<int>(m.count()), static_cast<int>(s.count()),
-             static_cast<int>(sub_secs.count()));
+    auto sub_secs = duration_cast<nanoseconds>(t - h - m - s).count();
+    if (!p(out, static_cast<int>(Y), static_cast<unsigned>(M),
+           static_cast<unsigned>(D), static_cast<int>(h.count()),
+           static_cast<int>(m.count()), static_cast<int>(s.count())))
+      return false;
+    // For the sub-second part, we print either '.0' if there's none, or print
+    // down to the lowest resolution necessary (all the way down to ns).
+    *out++ = '.';
+    auto num3 = printers::integral<int, policy::plain, 3>;
+    auto num6 = printers::integral<int, policy::plain, 6>;
+    auto num9 = printers::integral<int, policy::plain, 9>;
+    if (sub_secs == 0) {
+      *out++ = '0';
+      return true;
+    }
+    if (sub_secs % 1000000 == 0)
+      return num3(out, sub_secs / 1000000);
+    if (sub_secs % 1000 == 0)
+      return num6(out, sub_secs / 1000);
+    return num9(out, sub_secs);
   }
 };
 

@@ -335,9 +335,9 @@ TEST(data) {
   CHECK_TO_STRING(v, "[12.21, T, 23, +42, \"foobar\", 512.0ns]");
 }
 
-// -- std::chrono -------------------------------------------------------------
+// -- std::chrono types -------------------------------------------------------
 
-TEST(std::chrono::duration) {
+TEST(duration) {
   using namespace std::chrono_literals;
   CHECK_TO_STRING(15ns, "15.0ns");
   CHECK_TO_STRING(15'450ns, "15.45us");
@@ -351,10 +351,12 @@ TEST(std::chrono::duration) {
   CHECK_TO_STRING(-2400h, "-100.0d");
 }
 
-TEST(std::chrono::time_point) {
+TEST(time) {
   using namespace std::chrono_literals;
-  CHECK_TO_STRING(vast::time{0s}, "1970-01-01+00:00:00.0");
-  CHECK_TO_STRING(vast::time{1502658642123456us}, "2017-08-13+21:10:42.123");
+  CHECK_TO_STRING(vast::time{0s}, "1970-01-01T00:00:00.0");
+  CHECK_TO_STRING(vast::time{1ms}, "1970-01-01T00:00:00.001");
+  CHECK_TO_STRING(vast::time{1us}, "1970-01-01T00:00:00.000001");
+  CHECK_TO_STRING(vast::time{1502658642123456us}, "2017-08-13T21:10:42.123456");
 }
 
 // -- API ---------------------------------------------------------------------
