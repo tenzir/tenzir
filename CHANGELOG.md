@@ -10,9 +10,10 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## [Unreleased]
 
-- 🔄 Imported PCAP traces (tcpdump) now contain an additional field:
-  `community_id`. This makes it easy to pivot from Zeek or Suricata logs to
-  PCAP, i.e., the ground truth.
+- 🔄 The PCAP packet type gained the additional field `community_id` that
+  contains the [Community ID](https://github.com/corelight/community-id-spec)
+  flow hash. This identifier facilitates pivoting to a specific flow from data
+  sources with connnection-level information, such Zeek or Suricata logs.
 
 - 🐞 Timestamps were always printed in millisecond resolution, which lead to
   loss of precision when the internal representation had a higher resolution.
