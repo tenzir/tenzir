@@ -280,7 +280,7 @@ reader::connection_state& reader::flow(const connection& conn) {
   auto i = flows_.find(conn);
   if (i == flows_.end()) {
     auto cf = community_id::flow{conn.src, conn.dst, conn.sport, conn.dport};
-    auto id = community_id::compute<policy::ascii>(cf);
+    auto id = community_id::compute<policy::base64>(cf);
     i = flows_.emplace(conn, connection_state{0, 0, std::move(id)}).first;
   }
   return i->second;
