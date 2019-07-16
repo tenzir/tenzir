@@ -37,8 +37,8 @@ inline type make_packet_type() {
                      {"dst", address_type{}},
                      {"sport", port_type{}},
                      {"dport", port_type{}},
-                     {"payload", string_type{}.attributes({{"skip"}})},
-                     {"community_id", string_type{}}}
+                     {"community_id", string_type{}},
+                     {"payload", string_type{}.attributes({{"skip"}})}}
     .name("pcap.packet");
 }
 
@@ -252,9 +252,8 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
     auto& cid = flow(conn).community_id;
     if (!(builder_->add(ts) && builder_->add(conn.src)
           && builder_->add(conn.dst) && builder_->add(conn.sport)
-          && builder_->add(conn.dport)
-          && builder_->add(std::string_view{str, packet_size})
-          && builder_->add(std::string_view(cid)))) {
+          && builder_->add(conn.dport) && builder_->add(std::string_view{cid})
+          && builder_->add(std::string_view{str, packet_size}))) {
       return make_error(ec::parse_error, "unable to fill row");
     }
     if (pseudo_realtime_ > 0) {
@@ -288,9 +287,9 @@ reader::connection_state& reader::flow(const connection& conn) {
 
 bool reader::update_flow(const connection& conn, uint64_t packet_time,
                          uint64_t payload_size) {
-  auto& packet_flow = flow(conn);
-  packet_flow.last = packet_time;
-  auto& flow_size = packet_flow.bytes;
+  auto& flow_state = flow(conn);
+  flow_state.last = packet_time;
+  auto& flow_size = flow_state.bytes;
   if (flow_size == cutoff_)
     return false;
   VAST_ASSERT(flow_size < cutoff_);

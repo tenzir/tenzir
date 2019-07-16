@@ -90,7 +90,7 @@ TEST(PCAP read/write 1) {
   auto src = unbox(caf::get_if<view<address>>(&src_field));
   CHECK_EQUAL(src, unbox(to<address>("192.168.1.1")));
   auto community_id_at = [&](size_t row) {
-    auto id_field = slice->at(row, 6);
+    auto id_field = slice->at(row, 5);
     return unbox(caf::get_if<view<std::string>>(&id_field));
   };
   for (size_t row = 0; row < 44; ++row)
