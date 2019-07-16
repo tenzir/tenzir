@@ -503,7 +503,7 @@ file(
   OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/integration_$<CONFIG>.sh"
   CONTENT
     "#!/bin/sh
-     base_dir=\"${CMAKE_CURRENT_SOURCE_DIR}/scripts/integration\"
+     base_dir=\"${CMAKE_CURRENT_SOURCE_DIR}/integration\"
      env_dir=\"${CMAKE_CURRENT_BINARY_DIR}/integration_env\"
      app=\"${CMAKE_CURRENT_BINARY_DIR}/bin/vast\"
      set -e
@@ -570,12 +570,8 @@ install(FILES "${CMAKE_CURRENT_BINARY_DIR}/VASTConfig.cmake"
 install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/schema"
         DESTINATION "${CMAKE_INSTALL_DATADIR}/vast")
 
-install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/scripts/integration"
-        DESTINATION "${CMAKE_INSTALL_DATADIR}/vast"
-        REGEX "${CMAKE_CURRENT_SOURCE_DIR}/scripts/integration/schema$" EXCLUDE)
-
-install_symlink("${CMAKE_INSTALL_DATADIR}/vast/schema"
-                "${CMAKE_INSTALL_DATADIR}/vast/integration/schema")
+install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/integration"
+        DESTINATION "${CMAKE_INSTALL_DATADIR}/vast")
 
 install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/vast.conf"
         DESTINATION "${CMAKE_INSTALL_DATADIR}/vast/"

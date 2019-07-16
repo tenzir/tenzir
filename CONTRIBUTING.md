@@ -536,7 +536,7 @@ following checks:
   the overall coverage remains stable or improves (the check fails if the
   coverage drops).
 
-[integration]: https://github.com/vast-io/vast/tree/master/scripts/integration
+[integration]: https://github.com/vast-io/vast/tree/master/integration
 
 Coding Style | cmake
 ====================
