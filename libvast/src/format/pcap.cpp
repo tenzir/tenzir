@@ -37,7 +37,8 @@ inline type make_packet_type() {
                      {"dst", address_type{}},
                      {"sport", port_type{}},
                      {"dport", port_type{}},
-                     {"payload", string_type{}.attributes({{"skip"}})}}
+                     {"payload", string_type{}.attributes({{"skip"}})},
+                     {"community_id", string_type{}}}
     .name("pcap.packet");
 }
 
@@ -248,10 +249,12 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
     // Assemble packet.
     // We start with the network layer and skip the link layer.
     auto str = reinterpret_cast<const char*>(data + 14);
+    auto& cid = flow(conn).community_id;
     if (!(builder_->add(ts) && builder_->add(conn.src)
           && builder_->add(conn.dst) && builder_->add(conn.sport)
           && builder_->add(conn.dport)
-          && builder_->add(std::string_view{str, packet_size}))) {
+          && builder_->add(std::string_view{str, packet_size})
+          && builder_->add(std::string_view(cid)))) {
       return make_error(ec::parse_error, "unable to fill row");
     }
     if (pseudo_realtime_ > 0) {
