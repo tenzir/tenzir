@@ -15,6 +15,7 @@
 
 #include <thread>
 
+#include "vast/community_id.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/byte_swap.hpp"
 #include "vast/error.hpp"
@@ -36,6 +37,7 @@ inline type make_packet_type() {
                      {"dst", address_type{}},
                      {"sport", port_type{}},
                      {"dport", port_type{}},
+                     {"community_id", string_type{}},
                      {"payload", string_type{}.attributes({{"skip"}})}}
     .name("pcap.packet");
 }
@@ -229,51 +231,12 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
     uint64_t packet_time = header->ts.tv_sec;
     if (last_expire_ == 0)
       last_expire_ = packet_time;
-    auto i = flows_.find(conn);
-    if (i == flows_.end())
-      i = flows_.emplace(conn, connection_state{0, packet_time}).first;
-    else
-      i->second.last = packet_time;
-    auto& flow_size = i->second.bytes;
-    if (flow_size == cutoff_) {
+    if (!update_flow(conn, packet_time, payload_size)) {
       // Skip cut off packets.
       continue;
     }
-    if (flow_size + payload_size <= cutoff_) {
-      flow_size += payload_size;
-    } else {
-      // Trim the last packet so that it fits.
-      packet_size -= flow_size + payload_size - cutoff_;
-      flow_size = cutoff_;
-    }
-    // Evict all elements that have been inactive for a while.
-    if (packet_time - last_expire_ > expire_interval_) {
-      last_expire_ = packet_time;
-      auto i = flows_.begin();
-      while (i != flows_.end())
-        if (packet_time - i->second.last > max_age_)
-          i = flows_.erase(i);
-        else
-          ++i;
-    }
-    // If the flow table gets too large, we evict a random element.
-    if (!flows_.empty() && flows_.size() % max_flows_ == 0) {
-      auto buckets = flows_.bucket_count();
-      auto unif1 = std::uniform_int_distribution<size_t>{0, buckets - 1};
-      auto bucket = unif1(generator_);
-      auto bucket_size = flows_.bucket_size(bucket);
-      while (bucket_size == 0) {
-        ++bucket;
-        bucket %= buckets;
-        bucket_size = flows_.bucket_size(bucket);
-      }
-      auto unif2 = std::uniform_int_distribution<size_t>{0, bucket_size - 1};
-      auto offset = unif2(generator_);
-      VAST_ASSERT(offset < bucket_size);
-      auto begin = flows_.begin(bucket);
-      std::advance(begin, offset);
-      flows_.erase(begin->first);
-    }
+    evict_inactive(packet_time);
+    shrink_to_max_size();
     // Extract timestamp.
     using namespace std::chrono;
     auto secs = seconds(header->ts.tv_sec);
@@ -286,9 +249,10 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
     // Assemble packet.
     // We start with the network layer and skip the link layer.
     auto str = reinterpret_cast<const char*>(data + 14);
+    auto& cid = flow(conn).community_id;
     if (!(builder_->add(ts) && builder_->add(conn.src)
           && builder_->add(conn.dst) && builder_->add(conn.sport)
-          && builder_->add(conn.dport)
+          && builder_->add(conn.dport) && builder_->add(std::string_view{cid})
           && builder_->add(std::string_view{str, packet_size}))) {
       return make_error(ec::parse_error, "unable to fill row");
     }
@@ -309,6 +273,61 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
         return err;
   }
   return finish(f, caf::none);
+}
+
+reader::connection_state& reader::flow(const connection& conn) {
+  auto i = flows_.find(conn);
+  if (i == flows_.end()) {
+    auto cf = community_id::flow{conn.src, conn.dst, conn.sport, conn.dport};
+    auto id = community_id::compute<policy::base64>(cf);
+    i = flows_.emplace(conn, connection_state{0, 0, std::move(id)}).first;
+  }
+  return i->second;
+}
+
+bool reader::update_flow(const connection& conn, uint64_t packet_time,
+                         uint64_t payload_size) {
+  auto& flow_state = flow(conn);
+  flow_state.last = packet_time;
+  auto& flow_size = flow_state.bytes;
+  if (flow_size == cutoff_)
+    return false;
+  VAST_ASSERT(flow_size < cutoff_);
+  // Trim the packet if needed.
+  flow_size += std::min(payload_size, cutoff_ - flow_size);
+  return true;
+}
+
+void reader::evict_inactive(uint64_t packet_time) {
+  if (packet_time - last_expire_ <= expire_interval_)
+    return;
+  last_expire_ = packet_time;
+  auto i = flows_.begin();
+  while (i != flows_.end())
+    if (packet_time - i->second.last > max_age_)
+      i = flows_.erase(i);
+    else
+      ++i;
+}
+
+void reader::shrink_to_max_size() {
+  while (flows_.size() >= max_flows_) {
+    auto buckets = flows_.bucket_count();
+    auto unif1 = std::uniform_int_distribution<size_t>{0, buckets - 1};
+    auto bucket = unif1(generator_);
+    auto bucket_size = flows_.bucket_size(bucket);
+    while (bucket_size == 0) {
+      ++bucket;
+      bucket %= buckets;
+      bucket_size = flows_.bucket_size(bucket);
+    }
+    auto unif2 = std::uniform_int_distribution<size_t>{0, bucket_size - 1};
+    auto offset = unif2(generator_);
+    VAST_ASSERT(offset < bucket_size);
+    auto begin = flows_.begin(bucket);
+    std::advance(begin, offset);
+    flows_.erase(begin->first);
+  }
 }
 
 writer::writer(std::string trace, size_t flush_interval)

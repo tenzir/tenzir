@@ -115,7 +115,23 @@ private:
   struct connection_state {
     uint64_t bytes;
     uint64_t last;
+    std::string community_id;
   };
+
+  /// @returns either an existing flow associated to `conn` or a new flow for
+  ///          the connection.
+  connection_state& flow(const connection& conn);
+
+  /// @returns whether `true` if the flow remains active, `false` if the flow
+  ///          reached the configured cutoff.
+  bool update_flow(const connection& conn, uint64_t packet_time,
+                   uint64_t payload_size);
+
+  /// Evict all flows that have been inactive for the maximum age.
+  void evict_inactive(uint64_t packet_time);
+
+  /// Evicts random flows when exceeding the maximum configured flow count.
+  void shrink_to_max_size();
 
   pcap_t* pcap_ = nullptr;
   type packet_type_;

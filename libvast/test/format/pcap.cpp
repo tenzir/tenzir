@@ -29,6 +29,37 @@
 
 using namespace vast;
 
+namespace {
+
+// Baseline computed via `./community-id.py nmap_vsn.pcap` from the
+// repository https://github.com/corelight/community-id-spec.
+std::string_view communit_ids[] = {
+  "1:S2JPnyxVrN68D+w4ZMxKNeyQoNI=", "1:S2JPnyxVrN68D+w4ZMxKNeyQoNI=",
+  "1:holOOTgd0/2k/ojauB8VsMbd2pI=", "1:holOOTgd0/2k/ojauB8VsMbd2pI=",
+  "1:Vzc86YWBMwkcA1dPNrPN6t5hvj4=", "1:QbjD7ZBgS/i6o4RS0ovLWNhArt0=",
+  "1:gvhz8+T8uMPcj1nTxa7QZCz4RkI=", "1:8iil9/ZM2nGLcSw5H1hLk3AB4OY=",
+  "1:8EW/SvA6t3JXhn5vefyUyYCtPQY=", "1:8EW/SvA6t3JXhn5vefyUyYCtPQY=",
+  "1:8EW/SvA6t3JXhn5vefyUyYCtPQY=", "1:8EW/SvA6t3JXhn5vefyUyYCtPQY=",
+  "1:Vzc86YWBMwkcA1dPNrPN6t5hvj4=", "1:Vzc86YWBMwkcA1dPNrPN6t5hvj4=",
+  "1:Vzc86YWBMwkcA1dPNrPN6t5hvj4=", "1:gvhz8+T8uMPcj1nTxa7QZCz4RkI=",
+  "1:6r39sKcWauHVhKZ+Z92/0UK9lNg=", "1:xIXIGoyl8i+RURiBec05S5X8XEk=",
+  "1:Ry5Au48dLKiT1Sq7N1kqT7n0wn8=", "1:EP0qhzV2s6lNTSAErUFzHBDLXog=",
+  "1:0FtkY5KIWLZIwfKcr7k3dLvAkpo=", "1:HzDIiZWEeOnjh8jBPlvUCnCxemo=",
+  "1:bMRO6UR8tNUnjnO3GuJCXs/ufuo=", "1:4O0NCs9k1xB4iZqlTYsOMaeZPiE=",
+  "1:I7m0KKPgV/VUUmVf2aJkP+iDKNw=", "1:xIXIGoyl8i+RURiBec05S5X8XEk=",
+  "1:0FtkY5KIWLZIwfKcr7k3dLvAkpo=", "1:4O0NCs9k1xB4iZqlTYsOMaeZPiE=",
+  "1:7xMlZ3kChAVsoDvCm6u5nsrqjMY=", "1:7xMlZ3kChAVsoDvCm6u5nsrqjMY=",
+  "1:7xMlZ3kChAVsoDvCm6u5nsrqjMY=", "1:7xMlZ3kChAVsoDvCm6u5nsrqjMY=",
+  "1:zjGM746aZkpYb2mVIlsgLrUG59k=", "1:zjGM746aZkpYb2mVIlsgLrUG59k=",
+  "1:zjGM746aZkpYb2mVIlsgLrUG59k=", "1:zjGM746aZkpYb2mVIlsgLrUG59k=",
+  "1:zjGM746aZkpYb2mVIlsgLrUG59k=", "1:zjGM746aZkpYb2mVIlsgLrUG59k=",
+  "1:zjGM746aZkpYb2mVIlsgLrUG59k=", "1:zjGM746aZkpYb2mVIlsgLrUG59k=",
+  "1:zjGM746aZkpYb2mVIlsgLrUG59k=", "1:zjGM746aZkpYb2mVIlsgLrUG59k=",
+  "1:zjGM746aZkpYb2mVIlsgLrUG59k=", "1:zjGM746aZkpYb2mVIlsgLrUG59k=",
+};
+
+} // namespace
+
 // Technically, we don't need the actor system. However, we do need to
 // initialize the table slice builder factories which happens automatically in
 // the actor system setup. Further, including this fixture gives us access to
@@ -53,11 +84,17 @@ TEST(PCAP read/write 1) {
                                      100, // we expect only 44 events
                                      add_slice);
   CHECK_EQUAL(err, ec::end_of_input);
-  CHECK_EQUAL(events_produces, 44u);
+  REQUIRE_EQUAL(events_produces, 44u);
   CHECK_EQUAL(slice->layout().name(), "pcap.packet");
   auto src_field = slice->at(43, 1);
   auto src = unbox(caf::get_if<view<address>>(&src_field));
   CHECK_EQUAL(src, unbox(to<address>("192.168.1.1")));
+  auto community_id_at = [&](size_t row) {
+    auto id_field = slice->at(row, 5);
+    return unbox(caf::get_if<view<std::string>>(&id_field));
+  };
+  for (size_t row = 0; row < 44; ++row)
+    CHECK_EQUAL(community_id_at(row), communit_ids[row]);
   MESSAGE("write out read packets");
   auto file = "vast-unit-test-nmap-vsn.pcap";
   format::pcap::writer writer{file};
