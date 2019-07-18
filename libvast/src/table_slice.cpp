@@ -13,7 +13,6 @@
 
 #include "vast/table_slice.hpp"
 
-#include <stdexcept>
 #include <unordered_map>
 
 #include <caf/actor_system.hpp>
