@@ -58,9 +58,9 @@ TEST(construct from empty array) {
 
 TEST(byte span utility) {
   std::array<int8_t, 42> xs;
-  auto ys = make_byte_span(xs);
+  auto ys = as_writeable_bytes(span{xs.data(), xs.size()});
   ys[0] = byte{0xff};
   CHECK_EQUAL(ys[0], byte{0xff});
-  auto zs = make_const_byte_span(xs);
+  auto zs = as_bytes(span{xs.data(), xs.size()});
   CHECK_EQUAL(zs[0], byte{0xff});
 }
