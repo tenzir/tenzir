@@ -116,6 +116,30 @@ TEST(random integer slices) {
   CHECK_LESS_EQUAL(*highest, 200);
 }
 
+TEST(column view) {
+  auto sut = zeek_conn_log_slices[0];
+  CHECK_EQUAL(sut->column("ts").column(), 0u);
+  for (size_t column = 0; column < sut->columns(); ++column) {
+    auto cview = sut->column(column);
+    CHECK_EQUAL(cview.column(), column);
+    CHECK_EQUAL(cview.rows(), sut->rows());
+    for (size_t row = 0; row < cview.rows(); ++row)
+      CHECK_EQUAL(cview[row], sut->at(row, column));
+  }
+}
+
+TEST(row view) {
+  auto sut = zeek_conn_log_slices[0];
+  CHECK_EQUAL(sut->column("ts").column(), 0u);
+  for (size_t row = 0; row < sut->rows(); ++row) {
+    auto rview = sut->row(row);
+    CHECK_EQUAL(rview.row(), row);
+    CHECK_EQUAL(rview.columns(), sut->columns());
+    for (size_t column = 0; column < rview.columns(); ++column)
+      CHECK_EQUAL(rview[column], sut->at(row, column));
+  }
+}
+
 TEST(select all) {
   auto sut = zeek_full_conn_log_slices.front();
   sut.unshared().offset(100);
