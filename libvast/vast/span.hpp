@@ -39,9 +39,9 @@
 namespace vast {
 
 // [views.constants], constants
-constexpr const std::ptrdiff_t dynamic_extent = -1;
+inline constexpr size_t dynamic_extent = std::numeric_limits<size_t>::max();
 
-template <class ElementType, std::ptrdiff_t Extent = dynamic_extent>
+template <class ElementType, size_t Extent = dynamic_extent>
 class span;
 
 namespace detail {
@@ -49,7 +49,7 @@ namespace detail {
 template <class T>
 struct is_span_oracle : std::false_type {};
 
-template <class ElementType, std::ptrdiff_t Extent>
+template <class ElementType, size_t Extent>
 struct is_span_oracle<span<ElementType, Extent>> : std::true_type {};
 
 template <class T>
@@ -73,14 +73,14 @@ struct is_std_array : public is_std_array_oracle<std::remove_cv_t<T>> {};
 template <class T>
 constexpr auto is_std_array_v = is_std_array<T>::value;
 
-template <std::ptrdiff_t From, std::ptrdiff_t To>
+template <size_t From, size_t To>
 struct is_allowed_extent_conversion
   : public std::integral_constant<bool, From == To || From == dynamic_extent
                                           || To == dynamic_extent> {};
 
-template <std::ptrdiff_t From, std::ptrdiff_t To>
-constexpr auto is_allowed_extent_conversion_v
-  = is_allowed_extent_conversion<From, To>::value;
+template <size_t From, size_t To>
+constexpr auto is_allowed_extent_conversion_v = is_allowed_extent_conversion<
+  From, To>::value;
 
 template <class From, class To>
 struct is_allowed_element_type_conversion
@@ -97,8 +97,8 @@ public:
   using value_type = std::remove_cv_t<element_type_>;
   using difference_type = typename Span::index_type;
 
-  using reference
-    = std::conditional_t<IsConst, const element_type_, element_type_>&;
+  using reference = std::conditional_t<IsConst, const element_type_,
+                                       element_type_>&;
   using pointer = std::add_pointer_t<reference>;
 
   span_iterator() = default;
@@ -116,17 +116,14 @@ public:
   }
 
   constexpr reference operator*() const {
-    //VAST_ASSERT(index_ != span_->size());
     return *(span_->data() + index_);
   }
 
   constexpr pointer operator->() const {
-    //VAST_ASSERT(index_ != span_->size());
     return span_->data() + index_;
   }
 
   constexpr span_iterator& operator++() {
-    //VAST_ASSERT(0 <= index_ && index_ != span_->size());
     ++index_;
     return *this;
   }
@@ -138,7 +135,6 @@ public:
   }
 
   constexpr span_iterator& operator--() {
-    //VAST_ASSERT(index_ != 0 && index_ <= span_->size());
     --index_;
     return *this;
   }
@@ -155,7 +151,6 @@ public:
   }
 
   constexpr span_iterator& operator+=(difference_type n) {
-    //VAST_ASSERT((index_ + n) >= 0 && (index_ + n) <= span_->size());
     index_ += n;
     return *this;
   }
@@ -170,7 +165,6 @@ public:
   }
 
   constexpr difference_type operator-(span_iterator rhs) const {
-    //VAST_ASSERT(span_ == rhs.span_);
     return index_ - rhs.index_;
   }
 
@@ -210,7 +204,7 @@ public:
 
 protected:
   const Span* span_ = nullptr;
-  std::ptrdiff_t index_ = 0;
+  size_t index_ = 0;
 };
 
 template <class Span, bool IsConst>
@@ -227,10 +221,10 @@ operator-(typename span_iterator<Span, IsConst>::difference_type n,
   return rhs - n;
 }
 
-template <std::ptrdiff_t Ext>
+template <size_t Ext>
 class extent_type {
 public:
-  using index_type = std::ptrdiff_t;
+  using index_type = size_t;
 
   static_assert(Ext >= 0, "A fixed-size span must be >= 0 in size.");
 
@@ -238,15 +232,14 @@ public:
   }
 
   template <index_type Other>
-  constexpr extent_type(extent_type<Other> /* ext */) {
-    static_assert(
-      Other == Ext || Other == dynamic_extent,
-      "Mismatch between fixed-size extent and size of initializing data.");
-    //VAST_ASSERT(ext.size() == Ext);
+  constexpr extent_type(extent_type<Other>) {
+    static_assert(Other == Ext || Other == dynamic_extent,
+                  "Mismatch between fixed-size extent and size of initializing "
+                  "data.");
   }
 
-  constexpr extent_type(index_type /* size */) {
-    //VAST_ASSERT(size == Ext);
+  constexpr extent_type(index_type) {
+    // nop
   }
 
   constexpr index_type size() const noexcept {
@@ -257,14 +250,14 @@ public:
 template <>
 class extent_type<dynamic_extent> {
 public:
-  using index_type = std::ptrdiff_t;
+  using index_type = size_t;
 
   template <index_type Other>
   explicit constexpr extent_type(extent_type<Other> ext) : size_(ext.size()) {
   }
 
   explicit constexpr extent_type(index_type size) : size_(size) {
-    //VAST_ASSERT(size >= 0);
+    // nop
   }
 
   constexpr index_type size() const noexcept {
@@ -275,25 +268,24 @@ private:
   index_type size_;
 };
 
-template <class ElementType, std::ptrdiff_t Extent, std::ptrdiff_t Offset,
-          std::ptrdiff_t Count>
+template <class ElementType, size_t Extent, size_t Offset, size_t Count>
 struct calculate_subspan_type {
   using type = span<ElementType,
-                    Count != dynamic_extent ?
-                      Count :
-                      (Extent != dynamic_extent ? Extent - Offset : Extent)>;
+                    Count != dynamic_extent
+                      ? Count
+                      : (Extent != dynamic_extent ? Extent - Offset : Extent)>;
 };
 
 } // namespace detail
 
 // [span], class template span
-template <class ElementType, std::ptrdiff_t Extent>
+template <class ElementType, size_t Extent>
 class span {
 public:
   // constants and types
   using element_type = ElementType;
   using value_type = std::remove_cv_t<ElementType>;
-  using index_type = std::ptrdiff_t;
+  using index_type = size_t;
   using pointer = element_type*;
   using reference = element_type&;
 
@@ -369,14 +361,11 @@ public:
   constexpr span(const span& other) noexcept = default;
 
   template <
-    class OtherElementType, std::ptrdiff_t OtherExtent,
+    class OtherElementType, size_t OtherExtent,
     class = std::enable_if_t<
       detail::is_allowed_extent_conversion_v<
         OtherExtent,
-        Extent> 
-      && detail::is_allowed_element_type_conversion<OtherElementType, element_type>::value
-    >
-  >
+        Extent> && detail::is_allowed_element_type_conversion<OtherElementType, element_type>::value>>
   constexpr span(const span<OtherElementType, OtherExtent>& other)
     : storage_(other.data(), detail::extent_type<OtherExtent>(other.size())) {
   }
@@ -386,30 +375,24 @@ public:
   constexpr span& operator=(const span& other) noexcept = default;
 
   // [span.sub], span subviews
-  template <std::ptrdiff_t Count>
+  template <size_t Count>
   constexpr span<element_type, Count> first() const {
-    //VAST_ASSERT(Count >= 0 && Count <= size());
     return {data(), Count};
   }
 
-  template <std::ptrdiff_t Count>
+  template <size_t Count>
   constexpr span<element_type, Count> last() const {
-    //VAST_ASSERT(Count >= 0 && size() - Count >= 0);
     return {data() + (size() - Count), Count};
   }
 
-  template <std::ptrdiff_t Offset, std::ptrdiff_t Count = dynamic_extent>
+  template <size_t Offset, size_t Count = dynamic_extent>
   constexpr auto subspan() const ->
-    typename detail::calculate_subspan_type<ElementType, Extent, Offset, Count>::type {
-    //VAST_ASSERT(
-    //(Offset >= 0 && size() - Offset >= 0)
-    //&& (Count == dynamic_extent || (Count >= 0 && Offset + Count <= size())));
-
+    typename detail::calculate_subspan_type<ElementType, Extent, Offset,
+                                            Count>::type {
     return {data() + Offset, Count == dynamic_extent ? size() - Offset : Count};
   }
 
   constexpr span<element_type, dynamic_extent> first(index_type count) const {
-    //VAST_ASSERT(count >= 0 && count <= size());
     return {data(), count};
   }
 
@@ -436,7 +419,6 @@ public:
 
   // [span.elem], span element access
   constexpr reference operator[](index_type idx) const {
-    //VAST_ASSERT(idx >= 0 && idx < storage_.size());
     return data()[idx];
   }
 
@@ -496,14 +478,13 @@ private:
     template <class OtherExtentType>
     constexpr storage_type(KnownNotNull data, OtherExtentType ext)
       : ExtentType(ext), data_(data.p) {
-      //VAST_ASSERT(ExtentType::size() >= 0);
+      // nop
     }
 
     template <class OtherExtentType>
     constexpr storage_type(pointer data, OtherExtentType ext)
       : ExtentType(ext), data_(data) {
-      //VAST_ASSERT(ExtentType::size() >= 0);
-      //VAST_ASSERT(data || ExtentType::size() == 0);
+      // nop
     }
 
     constexpr pointer data() const noexcept {
@@ -522,10 +503,10 @@ private:
     // nop
   }
 
-  template <std::ptrdiff_t CallerExtent>
+  template <size_t CallerExtent>
   class subspan_selector {};
 
-  template <std::ptrdiff_t CallerExtent>
+  template <size_t CallerExtent>
   span<element_type, dynamic_extent>
   make_subspan(index_type offset, index_type count,
                subspan_selector<CallerExtent>) const {
@@ -545,112 +526,62 @@ private:
 };
 
 // [span.comparison], span comparison operators
-template <class ElementType, std::ptrdiff_t FirstExtent,
-          std::ptrdiff_t SecondExtent>
+template <class ElementType, size_t FirstExtent, size_t SecondExtent>
 constexpr bool operator==(span<ElementType, FirstExtent> l,
                           span<ElementType, SecondExtent> r) {
   return std::equal(l.begin(), l.end(), r.begin(), r.end());
 }
 
-template <class ElementType, std::ptrdiff_t Extent>
+template <class ElementType, size_t Extent>
 constexpr bool operator!=(span<ElementType, Extent> l,
                           span<ElementType, Extent> r) {
   return !(l == r);
 }
 
-template <class ElementType, std::ptrdiff_t Extent>
+template <class ElementType, size_t Extent>
 constexpr bool operator<(span<ElementType, Extent> l,
                          span<ElementType, Extent> r) {
   return std::lexicographical_compare(l.begin(), l.end(), r.begin(), r.end());
 }
 
-template <class ElementType, std::ptrdiff_t Extent>
+template <class ElementType, size_t Extent>
 constexpr bool operator<=(span<ElementType, Extent> l,
                           span<ElementType, Extent> r) {
   return !(l > r);
 }
 
-template <class ElementType, std::ptrdiff_t Extent>
+template <class ElementType, size_t Extent>
 constexpr bool operator>(span<ElementType, Extent> l,
                          span<ElementType, Extent> r) {
   return r < l;
 }
 
-template <class ElementType, std::ptrdiff_t Extent>
+template <class ElementType, size_t Extent>
 constexpr bool operator>=(span<ElementType, Extent> l,
                           span<ElementType, Extent> r) {
   return !(l < r);
 }
 
-// if we only supported compilers with good constexpr support then
-// this pair of classes could collapse down to a constexpr function
-
-// we should use a narrow_cast<> to go to std::size_t, but older compilers may
-// not see it as constexpr and so will fail compilation of the template
-template <class ElementType, std::ptrdiff_t Extent>
-struct calculate_byte_size
-  : std::integral_constant<std::ptrdiff_t,
-                           static_cast<std::ptrdiff_t>(
-                             sizeof(ElementType)
-                             * static_cast<std::size_t>(Extent))> {};
-
-template <class ElementType>
-struct calculate_byte_size<ElementType, dynamic_extent>
-  : std::integral_constant<std::ptrdiff_t, dynamic_extent> {};
+template <class ElementType, size_t Extent>
+constexpr size_t calculate_byte_size() {
+  if constexpr (Extent == dynamic_extent)
+    return dynamic_extent;
+  else
+    return sizeof(ElementType) * Extent;
+}
 
 // [span.objectrep], views of object representation
-template <class ElementType, std::ptrdiff_t Extent>
-span<const byte, calculate_byte_size<ElementType, Extent>::value>
+template <class ElementType, size_t Extent>
+span<const byte, calculate_byte_size<ElementType, Extent>()>
 as_bytes(span<ElementType, Extent> s) noexcept {
   return {reinterpret_cast<const byte*>(s.data()), s.size_bytes()};
 }
 
-template <class ElementType, std::ptrdiff_t Extent,
+template <class ElementType, size_t Extent,
           class = std::enable_if_t<!std::is_const_v<ElementType>>>
-span<byte, calculate_byte_size<ElementType, Extent>::value>
+span<byte, calculate_byte_size<ElementType, Extent>()>
 as_writeable_bytes(span<ElementType, Extent> s) noexcept {
   return {reinterpret_cast<byte*>(s.data()), s.size_bytes()};
-}
-
-// -- non-standard utilitiy functions ------------------------------------------
-
-/// Constructs a byte span from an arbitrary pointer type and size.
-/// @tparam T The element type of the span.
-/// @tparam Size The size type casted into the span's `index_type`.
-/// @param data A pointer to data.
-/// @param size The length of the byte sequence at *data*.
-/// @returns A `span<byte>` or `span<const byte>` over *data* of length *size*.
-///          Constness is propagated through `T`.
-template <class T, class Size>
-auto make_byte_span(T* data, Size size) {
-  using byte_type = std::conditional_t<
-    std::is_const_v<std::remove_pointer_t<T>>,
-    const byte,
-    byte
-  >;
-  auto ptr = reinterpret_cast<byte_type*>(data);
-  auto size_in_bytes = size * sizeof(T);
-  using span_type = span<byte_type>;
-  using index_type = typename span_type::index_type;
-  return span_type{ptr, detail::narrow_cast<index_type>(size_in_bytes)};
-}
-
-/// @relates make_byte_span
-template <class Container>
-auto make_byte_span(Container&& xs) {
-  return make_byte_span(std::data(xs), std::size(xs));
-}
-
-/// @relates make_byte_span
-template <class T, class Size>
-auto make_const_byte_span(T* data, Size size) {
-  return make_byte_span(const_cast<const T*>(data), size);
-}
-
-/// @relates make_byte_span
-template <class Container>
-auto make_const_byte_span(Container&& xs) {
-  return make_const_byte_span(std::data(xs), std::size(xs));
 }
 
 } // namespace vast

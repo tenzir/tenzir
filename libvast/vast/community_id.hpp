@@ -197,7 +197,7 @@ std::string compute(const flow& x, uint16_t seed = 0) {
     auto n = detail::base64::encode(result.data() + offset, ptr, num_bytes);
     result.resize(offset + n);
   } else if constexpr (std::is_same_v<Policy, policy::ascii>) {
-    auto bytes = make_const_byte_span(digest);
+    auto bytes = as_bytes(span{digest.data(), digest.size()});
     detail::hexify<policy::lowercase>(bytes, result);
   } else {
     static_assert(detail::always_false_v<Policy>, "unsupported plicy");

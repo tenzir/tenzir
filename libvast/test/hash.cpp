@@ -107,7 +107,7 @@ TEST(sha1) {
   // one-shot
   std::array<char, 2> fortytwo = {'4', '2'};
   auto digest = uhash<sha1>{}(fortytwo);
-  auto bytes = make_const_byte_span(digest);
+  auto bytes = as_bytes(span{digest.data(), digest.size()});
   CHECK_EQUAL(hexify(bytes), "92cfceb39d57d914ed8b14d0e37643de0797ae56");
   // incremental
   sha1 sha;
