@@ -118,7 +118,7 @@ TEST(random integer slices) {
 
 TEST(column view) {
   auto sut = zeek_conn_log_slices[0];
-  CHECK_EQUAL(sut->column("ts").column(), 0u);
+  CHECK_EQUAL(unbox(sut->column("ts")).column(), 0u);
   for (size_t column = 0; column < sut->columns(); ++column) {
     auto cview = sut->column(column);
     CHECK_EQUAL(cview.column(), column);
@@ -130,7 +130,6 @@ TEST(column view) {
 
 TEST(row view) {
   auto sut = zeek_conn_log_slices[0];
-  CHECK_EQUAL(sut->column("ts").column(), 0u);
   for (size_t row = 0; row < sut->rows(); ++row) {
     auto rview = sut->row(row);
     CHECK_EQUAL(rview.row(), row);

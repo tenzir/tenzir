@@ -21,6 +21,7 @@
 #include <caf/allowed_unsafe_message_type.hpp>
 #include <caf/fwd.hpp>
 #include <caf/make_copy_on_write.hpp>
+#include <caf/optional.hpp>
 #include <caf/ref_counted.hpp>
 
 #include "vast/fwd.hpp"
@@ -172,9 +173,9 @@ public:
   /// @pre `column < columns()`
   column_view column(size_t index) const;
 
-  /// @returns a view for the column with given `name`.
-  /// @pre there is a c such that `c == column_name(name)`
-  column_view column(std::string_view name) const;
+  /// @returns a view for the column with given `name` on success, or `none` if
+  ///          no column matches the `name`.
+  caf::optional<column_view> column(std::string_view name) const;
 
   /// @returns the offset in the ID space.
   id offset() const noexcept {

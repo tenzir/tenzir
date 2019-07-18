@@ -106,12 +106,13 @@ table_slice::column_view table_slice::column(size_t index) const {
   return {*this, index};
 }
 
-table_slice::column_view table_slice::column(std::string_view name) const {
+caf::optional<table_slice::column_view>
+table_slice::column(std::string_view name) const {
   auto& fields = header_.layout.fields;
   for (size_t index = 0; index < fields.size(); ++index)
     if (fields[index].name == name)
-      return {*this, index};
-  throw std::logic_error("invalid column name");
+      return column_view{*this, index};
+  return caf::none;
 }
 
 caf::error table_slice::load(chunk_ptr chunk) {
