@@ -21,6 +21,7 @@
 #include <caf/allowed_unsafe_message_type.hpp>
 #include <caf/fwd.hpp>
 #include <caf/make_copy_on_write.hpp>
+#include <caf/optional.hpp>
 #include <caf/ref_counted.hpp>
 
 #include "vast/fwd.hpp"
@@ -39,6 +40,62 @@ public:
   using size_type = uint64_t;
 
   static constexpr size_type npos = std::numeric_limits<size_type>::max();
+
+  /// Convenience helper for traversing a column.
+  class column_view {
+  public:
+    column_view(const table_slice& slice, size_t column);
+
+    /// @returns the data at given row.
+    data_view operator[](size_t row) const;
+
+    /// @returns the number of rows in the slice.
+    size_t rows() const noexcept {
+      return slice_.rows();
+    }
+
+    /// @returns the viewed table slice.
+    const table_slice& slice() const noexcept {
+      return slice_;
+    }
+
+    /// @returns the viewed column.
+    size_t column() const noexcept {
+      return column_;
+    }
+
+  private:
+    const table_slice& slice_;
+    size_t column_;
+  };
+
+  /// Convenience helper for traversing a row.
+  class row_view {
+  public:
+    row_view(const table_slice& slice, size_t row);
+
+    /// @returns the data at given column.
+    data_view operator[](size_t column) const;
+
+    /// @returns the number of columns in the slice.
+    size_t columns() const noexcept {
+      return slice_.columns();
+    }
+
+    /// @returns the viewed table slice.
+    const table_slice& slice() const noexcept {
+      return slice_;
+    }
+
+    /// @returns the viewed row.
+    size_t row() const noexcept {
+      return row_;
+    }
+
+  private:
+    const table_slice& slice_;
+    size_t row_;
+  };
 
   // -- constructors, destructors, and assignment operators --------------------
 
@@ -103,10 +160,22 @@ public:
     return header_.rows;
   }
 
+  /// @returns a row view for the given `index`.
+  /// @pre `row < rows()`
+  row_view row(size_t index) const;
+
   /// @returns the number of rows in the slice.
   size_type columns() const noexcept {
     return header_.layout.fields.size();
   }
+
+  /// @returns a column view for the given `index`.
+  /// @pre `column < columns()`
+  column_view column(size_t index) const;
+
+  /// @returns a view for the column with given `name` on success, or `none` if
+  ///          no column matches the `name`.
+  caf::optional<column_view> column(std::string_view name) const;
 
   /// @returns the offset in the ID space.
   id offset() const noexcept {

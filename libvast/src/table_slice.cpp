@@ -55,6 +55,26 @@ auto cap (size_type pos, size_type num, size_type last) {
 
 } // namespace <anonymous>
 
+table_slice::column_view::column_view(const table_slice& slice, size_t column)
+  : slice_(slice), column_(column) {
+  // nop
+}
+
+data_view table_slice::column_view::operator[](size_t row) const {
+  VAST_ASSERT(row < rows());
+  return slice_.at(row, column_);
+}
+
+table_slice::row_view::row_view(const table_slice& slice, size_t row)
+  : slice_(slice), row_(row) {
+  // nop
+}
+
+data_view table_slice::row_view::operator[](size_t column) const {
+  VAST_ASSERT(column < columns());
+  return slice_.at(row_, column);
+}
+
 table_slice::table_slice(table_slice_header header)
   : header_{std::move(header)} {
   // nop
@@ -73,6 +93,25 @@ record_type table_slice::layout(size_type first_column,
   std::vector<record_field> sub_records{layout().fields.begin() + col_begin,
                                         layout().fields.begin() + col_end};
   return record_type{std::move(sub_records)};
+}
+
+table_slice::row_view table_slice::row(size_t index) const {
+  VAST_ASSERT(index < rows());
+  return {*this, index};
+}
+
+table_slice::column_view table_slice::column(size_t index) const {
+  VAST_ASSERT(index < columns());
+  return {*this, index};
+}
+
+caf::optional<table_slice::column_view>
+table_slice::column(std::string_view name) const {
+  auto& fields = header_.layout.fields;
+  for (size_t index = 0; index < fields.size(); ++index)
+    if (fields[index].name == name)
+      return column_view{*this, index};
+  return caf::none;
 }
 
 caf::error table_slice::load(chunk_ptr chunk) {
