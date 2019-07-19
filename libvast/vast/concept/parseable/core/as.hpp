@@ -23,7 +23,7 @@ class as_parser : public parser<as_parser<Parser, Attribute>> {
 public:
   using attribute = Attribute;
 
-  as_parser(Parser p) : parser_{std::move(p)} {
+  constexpr as_parser(Parser p) : parser_{std::move(p)} {
   }
 
   template <class Iterator, class Attr>
@@ -40,14 +40,10 @@ private:
 };
 
 template <class Attribute, class Parser>
-auto as(Parser&& p)
--> std::enable_if_t<
-     is_parser_v<std::decay_t<Parser>>,
-     as_parser<std::decay_t<Parser>, Attribute>
-   > {
+constexpr auto as(Parser&& p)
+  -> std::enable_if_t<is_parser_v<std::decay_t<Parser>>,
+                      as_parser<std::decay_t<Parser>, Attribute>> {
   return as_parser<std::decay_t<Parser>, Attribute>{std::forward<Parser>(p)};
 }
 
 } // namespace vast
-
-
