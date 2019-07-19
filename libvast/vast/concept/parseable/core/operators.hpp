@@ -15,7 +15,7 @@
 
 #include <type_traits>
 
-#include "vast/concept/parseable/detail/as_parser.hpp"
+#include "vast/concept/parseable/core/to_parser.hpp"
 
 namespace vast {
 
@@ -101,30 +101,26 @@ constexpr auto operator~(T&& x)
 
 template <class LHS, class RHS>
 constexpr auto operator-(LHS&& lhs, RHS&& rhs)
-  -> decltype(detail::as_parser<difference_parser>(lhs, rhs)) {
-  return {detail::as_parser(std::forward<LHS>(lhs)),
-          detail::as_parser(std::forward<RHS>(rhs))};
+  -> decltype(to_parser<difference_parser>(lhs, rhs)) {
+  return {to_parser(std::forward<LHS>(lhs)), to_parser(std::forward<RHS>(rhs))};
 }
 
 template <class LHS, class RHS>
 constexpr auto operator%(LHS&& lhs, RHS&& rhs)
-  -> decltype(detail::as_parser<list_parser>(lhs, rhs)) {
-  return {detail::as_parser(std::forward<LHS>(lhs)),
-          detail::as_parser(std::forward<RHS>(rhs))};
+  -> decltype(to_parser<list_parser>(lhs, rhs)) {
+  return {to_parser(std::forward<LHS>(lhs)), to_parser(std::forward<RHS>(rhs))};
 }
 
 template <class LHS, class RHS>
 constexpr auto operator>>(LHS&& lhs, RHS&& rhs)
-  -> decltype(detail::as_parser<sequence_parser>(lhs, rhs)) {
-  return {detail::as_parser(std::forward<LHS>(lhs)),
-          detail::as_parser(std::forward<RHS>(rhs))};
+  -> decltype(to_parser<sequence_parser>(lhs, rhs)) {
+  return {to_parser(std::forward<LHS>(lhs)), to_parser(std::forward<RHS>(rhs))};
 }
 
 template <class LHS, class RHS>
 constexpr auto operator|(LHS&& lhs, RHS&& rhs)
-  -> decltype(detail::as_parser<choice_parser>(lhs, rhs)) {
-  return {detail::as_parser(std::forward<LHS>(lhs)),
-          detail::as_parser(std::forward<RHS>(rhs))};
+  -> decltype(to_parser<choice_parser>(lhs, rhs)) {
+  return {to_parser(std::forward<LHS>(lhs)), to_parser(std::forward<RHS>(rhs))};
 }
 
 } // namespace vast
