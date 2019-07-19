@@ -14,7 +14,6 @@
 #pragma once
 
 #include "vast/concept/parseable/string/any.hpp"
-#include "vast/concept/parseable/string/c_string.hpp"
 #include "vast/concept/parseable/string/char.hpp"
 #include "vast/concept/parseable/string/char_class.hpp"
 #include "vast/concept/parseable/string/char_range.hpp"

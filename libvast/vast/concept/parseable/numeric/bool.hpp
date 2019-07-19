@@ -15,7 +15,7 @@
 
 #include "vast/concept/parseable/core/parser.hpp"
 #include "vast/concept/parseable/string/char.hpp"
-#include "vast/concept/parseable/string/c_string.hpp"
+#include "vast/concept/parseable/string/literal.hpp"
 
 namespace vast {
 
@@ -48,12 +48,12 @@ struct zero_one_bool_policy {
 struct literal_bool_policy {
   template <class Iterator>
   static bool parse_true(Iterator& f, const Iterator& l) {
-    return c_string_parser{"true"}(f, l, unused);
+    return parsers::lit{"true"}(f, l, unused);
   }
 
   template <class Iterator>
   static bool parse_false(Iterator& f, const Iterator& l) {
-    return c_string_parser{"false"}(f, l, unused);
+    return parsers::lit{"false"}(f, l, unused);
   }
 };
 
