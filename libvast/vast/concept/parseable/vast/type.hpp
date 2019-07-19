@@ -23,6 +23,7 @@
 #include "vast/concept/parseable/string/quoted_string.hpp"
 #include "vast/concept/parseable/string/symbol_table.hpp"
 #include "vast/concept/parseable/vast/identifier.hpp"
+#include "vast/concept/parseable/vast/whitespace.hpp"
 
 namespace vast {
 
@@ -58,7 +59,10 @@ private:
 struct type_parser : parser<type_parser> {
   using attribute = type;
 
-  type_parser(const type_table* symbols = nullptr) : symbol_type{symbols} {
+  static constexpr auto ws = parsers::whitespace;
+
+  explicit type_parser(const type_table* symbols = nullptr)
+    : symbol_type{symbols} {
     // nop
   }
 
@@ -71,8 +75,6 @@ struct type_parser : parser<type_parser> {
   template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
     // clang-format off
-    // Whitespace
-    static auto ws = ignore(*parsers::space);
     // Attributes: type meta data
     static auto to_attr =
       [](std::tuple<std::string, optional<std::string>> xs) {
@@ -201,7 +203,7 @@ struct parser_registry<type> {
 
 namespace parsers {
 
-auto const type = make_parser<vast::type>();
+const auto type = type_parser{};
 
 } // namespace parsers
 } // namespace vast
