@@ -175,6 +175,12 @@ TEST(char class) {
   CHECK(attr == "deadbeef");
 }
 
+TEST(literal) {
+  std::string_view attr;
+  CHECK(parsers::lit{"foo"}("foo", attr));
+  CHECK_EQUAL(attr, "foo"sv);
+}
+
 TEST(quoted string) {
   auto p = quoted_string_parser<'\'', '#'>{};
   auto attr = ""s;
