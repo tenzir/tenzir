@@ -10,6 +10,10 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## [Unreleased]
 
+- 🎁 The schema language now supports comments. A double-slash (`//`) begins a
+  comment. Comments last until the end of the line, i.e., until a newline
+  character (`\n`).
+
 - 🔄 The PCAP packet type gained the additional field `community_id` that
   contains the [Community ID](https://github.com/corelight/community-id-spec)
   flow hash. This identifier facilitates pivoting to a specific flow from data
