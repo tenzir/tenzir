@@ -94,4 +94,3 @@ auto const boolean = bool_parser<policy::literal_bool_policy>{};
 
 } // namespace parsers
 } // namespace vast
-

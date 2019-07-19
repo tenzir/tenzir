@@ -24,8 +24,7 @@ class maybe_parser : public parser<maybe_parser<Parser>> {
 public:
   using attribute = typename Parser::attribute;
 
-  explicit maybe_parser(Parser p)
-    : parser_{std::move(p)} {
+  constexpr explicit maybe_parser(Parser p) : parser_{std::move(p)} {
   }
 
   template <class Iterator, class Attribute>
@@ -39,4 +38,3 @@ private:
 };
 
 } // namespace vast
-

@@ -32,7 +32,7 @@ public:
       caf::optional<inner_attribute>
     >;
 
-  explicit optional_parser(Parser p) : parser_{std::move(p)} {
+  constexpr explicit optional_parser(Parser p) : parser_{std::move(p)} {
     // nop
   }
 

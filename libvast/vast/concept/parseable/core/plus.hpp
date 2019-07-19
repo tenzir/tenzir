@@ -13,7 +13,7 @@
 
 #pragma once
 
-#include <vector>
+#include <utility>
 
 #include "vast/concept/parseable/core/parser.hpp"
 #include "vast/concept/parseable/detail/container.hpp"
@@ -43,4 +43,3 @@ private:
 };
 
 } // namespace vast
-

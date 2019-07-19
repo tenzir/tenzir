@@ -30,14 +30,14 @@ constexpr auto as_parser(char c) {
 }
 
 inline auto as_parser(std::string str) {
-  return ignore(string_parser{std::move(str)});
+  return ignore(parsers::str{std::move(str)});
 }
 
 template <class T>
 constexpr auto as_parser(T x)
   -> std::enable_if_t<std::is_arithmetic_v<T> && !std::is_same_v<T, bool>,
                       decltype(ignore(string_parser{""}))> {
-  return ignore(string_parser{std::to_string(x)});
+  return ignore(parsers::str{std::to_string(x)});
 }
 
 template <class T>
@@ -78,23 +78,14 @@ using make_binary_parser =
     >
   >;
 
-template <
-  template <class, class> class BinaryParser,
-  class T,
-  class U
->
-auto as_parser(T&& x, U&& y)
-  -> std::enable_if_t<
-       is_convertible_to_binary_parser_v<std::decay_t<T>, std::decay_t<U>>,
-       make_binary_parser<
-         BinaryParser,
-         decltype(detail::as_parser(std::forward<T>(x))),
-         decltype(detail::as_parser(std::forward<U>(y)))
-       >
-     > {
+template <template <class, class> class BinaryParser, class T, class U>
+constexpr auto as_parser(T&& x, U&& y) -> std::enable_if_t<
+  is_convertible_to_binary_parser_v<std::decay_t<T>, std::decay_t<U>>,
+  make_binary_parser<BinaryParser,
+                     decltype(detail::as_parser(std::forward<T>(x))),
+                     decltype(detail::as_parser(std::forward<U>(y)))>> {
   return {as_parser(std::forward<T>(x)), as_parser(std::forward<U>(y))};
 }
 
 } // namespace detail
 } // namespace vast
-
