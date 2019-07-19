@@ -42,7 +42,7 @@ struct json_parser : parser<json_parser> {
     auto null = ws >> "null"_p ->* [] { return json::null{}; };
     // clang-format on
     auto boolean = ws >> parsers::boolean;
-    auto string = ws >> parsers::qq_str;
+    auto string = ws >> parsers::qqstr;
     auto number = ws >> parsers::real_opt_dot;
     auto array = as<json::array>(lbracket >> ~(ref(j) % delim) >> rbracket);
     auto key_value = ws >> string >> ws >> ':' >> ws >> ref(j);

@@ -26,7 +26,7 @@ namespace detail {
 // -- unary -------------------------------------------------------------------
 
 constexpr auto as_parser(char c) {
-  return ignore(char_parser{c});
+  return ignore(parsers::chr{c});
 }
 
 inline auto as_parser(std::string str) {

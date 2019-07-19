@@ -24,7 +24,7 @@ public:
   using rhs_attribute = typename Rhs::attribute;
   using attribute = lhs_attribute;
 
-  difference_parser(Lhs lhs, Rhs rhs)
+  constexpr difference_parser(Lhs lhs, Rhs rhs)
     : lhs_{std::move(lhs)}, rhs_{std::move(rhs)} {
   }
 

@@ -18,31 +18,52 @@
 
 namespace vast {
 
-/// Parses a specific character.
-class char_parser : public parser<char_parser> {
+/// Parses a single character.
+/// @see static_char_parser
+class dynamic_char_parser : public parser<dynamic_char_parser> {
 public:
   using attribute = char;
 
-  constexpr char_parser(char c) : c_{c} {
+  template <class Iterator, class Attribute>
+  static bool parse(Iterator& f, const Iterator& l, Attribute& x, char c) {
+    if (f == l || *f != c)
+      return false;
+    detail::absorb(x, c);
+    ++f;
+    return true;
+  }
+
+  constexpr dynamic_char_parser(char c) : c_{c} {
   }
 
   template <class Iterator, class Attribute>
-  bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
-    if (f == l || *f != c_)
-      return false;
-    detail::absorb(a, c_);
-    ++f;
-    return true;
+  bool parse(Iterator& f, const Iterator& l, Attribute& x) const {
+    return parse(f, l, x, c_);
   }
 
 private:
   char c_;
 };
 
+/// Parses a single character.
+/// @see dynamic_char_parser
+template <char Char>
+class static_char_parser : public parser<static_char_parser<Char>> {
+public:
+  using attribute = char;
+
+  template <class Iterator, class Attribute>
+  bool parse(Iterator& f, const Iterator& l, Attribute& x) const {
+    return dynamic_char_parser::parse(f, l, x, Char);
+  }
+};
+
 namespace parsers {
 
-using chr = char_parser;
+template <char Char>
+static const auto ch = static_char_parser<Char>{};
+
+using chr = dynamic_char_parser;
 
 } // namespace parsers
 } // namespace vast
-

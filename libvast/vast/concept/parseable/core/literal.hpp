@@ -24,7 +24,7 @@
 namespace vast::parser_literals {
 
 inline auto operator"" _p(char c) {
-  return ignore(char_parser{c});
+  return ignore(parsers::chr{c});
 }
 
 inline auto operator"" _p(const char* str) {

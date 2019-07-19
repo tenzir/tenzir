@@ -22,31 +22,35 @@
 
 namespace vast {
 
-template <char Quote, char Esc = '\\'>
+template <char Quote, char Esc>
 class quoted_string_parser : public parser<quoted_string_parser<Quote, Esc>> {
 public:
   using attribute = std::string;
 
-  quoted_string_parser() = default;
+  static constexpr auto esc = ignore(parsers::ch<Esc>);
+  static constexpr auto quote = ignore(parsers::ch<Quote>);
+  static constexpr auto esc_quote = esc >> parsers::ch<Quote>;
+  static constexpr auto str_chr = esc_quote | (parsers::print - quote);
+  static constexpr auto quoted_str = quote >> *str_chr >> quote;
 
   template <class Iterator, class Attribute>
-  bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
-    auto escaped_quote = Esc >> char_parser{Quote};
-    auto p = Quote >> *(escaped_quote | (parsers::print - Quote)) >> Quote;
-    return p(f, l, a);
+  bool parse(Iterator& f, const Iterator& l, Attribute& x) const {
+    return quoted_str(f, l, x);
   }
 };
-
-namespace parsers {
-
-auto const q_str = quoted_string_parser<'\'', '\\'>{};
-auto const qq_str = quoted_string_parser<'"', '\\'>{};
-
-} // namespace parsers
 
 template <>
 struct parser_registry<std::string> {
   using type = quoted_string_parser<'"', '\\'>;
 };
 
+namespace parsers {
+
+template <char Quote, char Esc>
+const auto quoted = quoted_string_parser<Quote, Esc>{};
+
+const auto qstr = quoted<'\'', '\\'>;
+const auto qqstr = quoted<'"', '\\'>;
+
+} // namespace parsers
 } // namespace vast
