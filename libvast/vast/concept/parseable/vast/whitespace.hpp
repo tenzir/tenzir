@@ -22,6 +22,6 @@ namespace vast::parsers {
 constexpr auto comment = ignore(lit{"//"} >> *(any - '\n'));
 
 /// The parser for input to be skipped.
-constexpr auto whitespace = ignore(*(+ignore(space) | comment));
+constexpr auto whitespace = ignore(*(space | comment));
 
 } // namespace vast::parsers
