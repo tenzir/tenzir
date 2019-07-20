@@ -48,14 +48,14 @@ constexpr auto to_parser(T x) -> std::enable_if_t<is_parser_v<T>, T> {
 
 template <class T>
 constexpr bool is_convertible_to_unary_parser_v
-  = std::is_convertible_v<T, std::string>
-    || (std::is_arithmetic_v<T> && !std::is_same_v<T, bool>);
+  = std::is_convertible_v<
+      T, std::string> || (std::is_arithmetic_v<T> && !std::is_same_v<T, bool>);
 
 template <class T, class U>
-constexpr bool is_convertible_to_binary_parser_v =
-    (is_parser_v<T> && is_parser_v<U>)
+constexpr bool is_convertible_to_binary_parser_v
+  = (is_parser_v<T> && is_parser_v<U>)
     || (is_parser_v<T> && is_convertible_to_unary_parser_v<U>)
-    || (is_convertible_to_unary_parser_v<T> && is_parser_v<U>) ;
+    || (is_convertible_to_unary_parser_v<T> && is_parser_v<U>);
 
 // clang-format off
 template <
