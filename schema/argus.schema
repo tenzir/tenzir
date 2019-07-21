@@ -1,0 +1,158 @@
+type argus.cause = enum{
+  Start,
+  Status,
+  Stop,
+  Close,
+  Error
+}
+
+type argus.ra = record{
+  // Standard fields that are always present.
+  StartTime: time #timestamp,     // stime
+  Flgs: string,                   // flgs
+  Proto: string #id,              // proto
+  SrcAddr: string,                // saddr (MAC or IP)
+  Sport: port,                    // sport
+  Dir: string #id,                // dir
+  DstAddr: string,                // daddr (MAC or IP)
+  Dport: port,                    // dport
+  TotPkts: count,                 // pkts
+  TotBytes: count,                // bytes
+  State: string #id,              // state
+  // Optional fields that are present when invoking ra(1) with -s +F where F is
+  // the field name from the man page of ra(1).
+  SrcId: string #id,              // srcid
+  Rank: count,                    // rank
+  LastTime: time,                 // ltime
+  Trans: count,                   // trans
+  Seq: count,                     // seq
+  Dur: duration,                  // dur
+  RunTime: duration,              // runtime
+  IdleTime: duration,             // idle
+  Mean: real,                     // mean
+  StdDev: real,                   // stddev
+  Sum: real,                      // sum
+  Min: real,                      // min
+  Max: real,                      // max
+  SrcMac: string #mac,            // smac
+  DstMac: string #mac,            // dmac
+  SrcOui: string,                 // soui
+  DstOui: string,                 // doui
+  sTos: count,                    // stos
+  dTos: count,                    // dtos
+  sDSb: string,                   // sdsb
+  dDSb: string,                   // ddsb
+  sCo: string #id,                // sco
+  dCo: string #id,                // dco
+  sTtl: count #max=255,           // sttl
+  dTtl: count #max=255,           // dttl
+  sHops: count,                   // shops
+  dHops: count,                   // dhops
+  sIpId: string #id #hex,         // sipid
+  dIpId: string #id #hex,         // dipid
+  sMpls: string #id,              // smpls
+  dMpls: string #id,              // dmpls
+  AutoId: string #id,             // autoid
+  sAS: count,                     // sas
+  dAS: count,                     // das
+  iAS: count,                     // ias
+  Cause: argus.cause,             // cause
+  NStrok: count,                  // nstroke
+  sNStrok: count,                 // snstroke
+  dNStrok: count,                 // dnstroke
+  SrcPkts: count,                 // spkts
+  DstPkts: count,                 // dpkts
+  SrcBytes: count,                // sbytes
+  DstBytes: count,                // dbytes
+  TotAppByte: count,              // appbytes
+  SAppBytes: count,               // sappbytes
+  DAppBytes: count,               // dappbytes
+  PCRatio: real,                  // pcr
+  Load: real,                     // load
+  SrcLoad: real,                  // sload
+  DstLoad: real,                  // dload
+  Loss: count,                    // loss
+  SrcLoss: count,                 // sloss
+  DstLoss: count,                 // dloss
+  pLoss: real,                    // ploss
+  pSrcLoss: real,                 // sploss (psloss in man page)
+  pDstLoss: real,                 // dploss (pdloss in man page)
+  Retrans: count,                 // retrans
+  SrcRetra: count,                // sretrans
+  DstRetra: count,                // dretrans
+  pRetran: real,                  // pretrans
+  pSrcRetr: real,                 // spretrans (psretrans in man page)
+  pDstRetr: real,                 // dpretrans (pdretrans in man page)
+  SrcGap: count,                  // sgap
+  DstGap: count,                  // dgap
+  Rate: real,                     // rate
+  SrcRate: real,                  // srate
+  DstRate: real,                  // drate
+  SIntPkt: duration #unit=ms,     // sintpkt
+  SIntDist: string,               // sintdist
+  SIntPktAct: duration #unit=ms,  // sintpktact
+  SIntActDist: string,            // sintdistact (sintackdist in man page)
+  SIntPktIdl: duration #unit=ms,  // sintpktidl
+  SIntIdlDist: string,            // sintdistidl
+  SIntPktMax: count,              // not present in man page
+  SIntPktMin: count,              // not present in man page
+  DIntPkt: duration #unit=ms,     // dintpkt
+  DIntDist: string,               // dintdist
+  DIntPktAct: duration #unit=ms,  // dintpktact
+  DIntActDist: string,            // dintdistact (sintackdist in man page)
+  DIntPktIdl: duration #unit=ms,  // dintpktidl
+  DIntIdlDist: string,            // dintdistidl
+  DIntPktMax: count,              // not present in man page
+  DIntPktMin: count,              // not present in man page
+  SrcJitter: duration #unit=ms,   // sjit
+  SrcJitAct: duration #unit=ms,   // sjitact
+  SrcJitIdl: duration #unit=ms,   // sjitidl (sitidle in man page)
+  DstJitter: duration #unit=ms,   // djit
+  DstJitAct: duration #unit=ms,   // djitact
+  DstJitIdl: duration #unit=ms,   // djitidl (djitidle in man page)
+  Label: string,                  // label
+  srcUdata: string,               // suser
+  dstUdata: string,               // duser
+  SrcWin: count,                  // swin
+  DstWin: count,                  // dwin
+  sVlan: string #id,              // svlan
+  dVlan: string #id,              // dvlan
+  sVid: string #id,               // svid
+  dVid: string #id,               // dvid
+  sVpri: string #id,              // svpri
+  dVpri: string #id,              // dvpri
+  SRange: time,                   // srng
+  ERange: time,                   // srng
+  SrcTCPBase: count,              // stcpb
+  DstTCPBase: count,              // dtcpb
+  TcpRtt: duration,               // tcprtt
+  SynAck: duration,               // synack
+  AckDat: duration,               // ackdat
+  TcpOpt: string,                 // tcpopt
+  Inode: string,                  // inode
+  Offset: count,                  // offset
+  sMeanPktSz: real,               // smeansz
+  dMeanPktSz: real,               // dmeansz
+  sPktSz: real,                   // spktsz
+  sMaxPktSz: real,                // smaxsz
+  dPktSz: real,                   // dpktsz
+  dMaxPktSz: real,                // dmaxsz
+  sminPktSz: real,                // sminsz
+  dminPktSz: real,                // dminsz
+  // Fields that do not exist in the ra(1) man page under -s. These have been
+  // inferred by looking a the source code.
+  STcpMax: real,                  // stcpmax
+  DTcpMax: real,                  // dtcpmax
+  dlDur: duration,                // dldur
+  dlsTime: time,                  // dlstime
+  dllTime: time,                  // dlltime
+  dsPkts: count,                  // dspkts
+  ddPkts: count,                  // ddpkts
+  dsBytes: count,                 // dsbytes
+  ddBytes: count,                 // ddbytes
+  JDelay: duration,               // jdelay
+  LDelay: duration,               // ldelay
+  sEnc: string,                   // senc
+  dEnc: string,                   // denc
+  IcmpId: string #id              // icmpid
+}
