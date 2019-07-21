@@ -73,7 +73,7 @@ struct parser_registry<schema> {
 
 namespace parsers {
 
-static const auto schema = make_parser<vast::schema>();
+constexpr auto schema = schema_parser{};
 
 } // namespace parsers
 } // namespace vast
