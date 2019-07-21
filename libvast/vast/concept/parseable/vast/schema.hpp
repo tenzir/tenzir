@@ -18,7 +18,6 @@
 #include "vast/concept/parseable/string.hpp"
 #include "vast/concept/parseable/vast/identifier.hpp"
 #include "vast/concept/parseable/vast/type.hpp"
-#include "vast/concept/parseable/vast/whitespace.hpp"
 #include "vast/schema.hpp"
 #include "vast/type.hpp"
 
@@ -37,7 +36,7 @@ struct schema_parser : parser<schema_parser> {
        );
   // clang-format on
 
-  static constexpr auto ws = parsers::whitespace;
+  static constexpr auto skp = type_parser::skp;
 
   template <class Iterator>
   bool parse(Iterator& f, const Iterator& l, schema& sch) const {
@@ -53,8 +52,10 @@ struct schema_parser : parser<schema_parser> {
       return ty;
     };
     auto tp = type_parser{std::addressof(symbols)};
-    auto decl = ("type" >> ws >> id >> ws >> '=' >> ws >> tp) ->* to_type;
-    auto declarations = +(ws >> decl) >> ws;
+    // clang-format off
+    auto decl = ("type" >> skp >> id >> skp >> '=' >> skp >> tp) ->* to_type;
+    // clang-format on
+    auto declarations = +(skp >> decl) >> skp;
     std::vector<type> v;
     if (!declarations(f, l, v))
       return false;
