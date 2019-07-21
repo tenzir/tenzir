@@ -203,7 +203,7 @@ struct parser_registry<type> {
 
 namespace parsers {
 
-const auto type = type_parser{};
+inline const auto type = type_parser{};
 
 } // namespace parsers
 } // namespace vast
