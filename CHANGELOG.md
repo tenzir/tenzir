@@ -10,6 +10,9 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## [Unreleased]
 
+- 🎁 A new schema for Argus CSV output has been added. It parses the output of
+  `ra(1)`, which produces CSV output when invoked with `-L 0 -c ,`.
+
 - 🎁 The schema language now supports comments. A double-slash (`//`) begins a
   comment. Comments last until the end of the line, i.e., until a newline
   character (`\n`).
