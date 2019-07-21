@@ -13,32 +13,36 @@
 
 #pragma once
 
-#include "vast/concept/parseable/core/parser.hpp"
 #include "vast/concept/parseable/core/operators.hpp"
+#include "vast/concept/parseable/core/parser.hpp"
+#include "vast/concept/parseable/string.hpp"
 #include "vast/concept/parseable/vast/identifier.hpp"
 #include "vast/concept/parseable/vast/type.hpp"
-#include "vast/type.hpp"
 #include "vast/schema.hpp"
+#include "vast/type.hpp"
 
 namespace vast {
 
 struct schema_parser : parser<schema_parser> {
   using attribute = schema;
 
+  /// The parser for an identifier.
   // clang-format off
-  static constexpr auto id = +( parsers::alnum
-                              | parsers::chr{'_'}
-                              | parsers::chr{'-'}
-                              | parsers::chr{'.'}
-                              );
+  static constexpr auto id
+    = +( parsers::alnum
+       | parsers::ch<'_'>
+       | parsers::ch<'-'>
+       | parsers::ch<'.'>
+       );
   // clang-format on
+
+  static constexpr auto skp = type_parser::skp;
 
   template <class Iterator>
   bool parse(Iterator& f, const Iterator& l, schema& sch) const {
     type_table symbols;
     auto to_type = [&](std::tuple<std::string, type> t) -> type {
-      auto& name = std::get<0>(t);
-      auto& ty = std::get<1>(t);
+      auto& [name, ty] = t;
       // If the type has already a name, we're dealing with a symbol and have
       // to create an alias.
       if (!ty.name().empty())
@@ -47,10 +51,11 @@ struct schema_parser : parser<schema_parser> {
       symbols.add(name, ty);
       return ty;
     };
-    auto ws = ignore(*parsers::space);
     auto tp = type_parser{std::addressof(symbols)};
-    auto decl = ("type" >> ws >> id >> ws >> '=' >> ws >> tp) ->* to_type;
-    auto declarations = +(ws >> decl);
+    // clang-format off
+    auto decl = ("type" >> skp >> id >> skp >> '=' >> skp >> tp) ->* to_type;
+    // clang-format on
+    auto declarations = +(skp >> decl) >> skp;
     std::vector<type> v;
     if (!declarations(f, l, v))
       return false;
@@ -69,7 +74,7 @@ struct parser_registry<schema> {
 
 namespace parsers {
 
-static auto const schema = make_parser<vast::schema>();
+constexpr auto schema = schema_parser{};
 
 } // namespace parsers
 } // namespace vast

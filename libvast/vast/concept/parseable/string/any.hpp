@@ -21,10 +21,10 @@ struct any_parser : public parser<any_parser> {
   using attribute = char;
 
   template <class Iterator, class Attribute>
-  bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
+  bool parse(Iterator& f, const Iterator& l, Attribute& x) const {
     if (f == l)
       return false;
-    detail::absorb(a, *f);
+    detail::absorb(x, *f);
     ++f;
     return true;
   }
@@ -37,8 +37,7 @@ struct parser_registry<char> {
 
 namespace parsers {
 
-static auto const any = any_parser{};
+static const auto any = any_parser{};
 
 } // namespace parsers
 } // namespace vast
-

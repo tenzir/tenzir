@@ -57,7 +57,7 @@ private:
       | parsers::count
       | parsers::integer
       | parsers::tf
-      | parsers::qq_str
+      | parsers::qqstr
       | parsers::pattern
       | '[' >> ~(x % ',') >> ']'
       | '{' >> (('-' >> &'}'_p) | as<map>(kvp % ',')) >> '}'

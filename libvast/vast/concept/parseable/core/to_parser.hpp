@@ -15,33 +15,32 @@
 
 #include <string>
 
-#include "vast/concept/parseable/core/parser.hpp"
 #include "vast/concept/parseable/core/ignore.hpp"
+#include "vast/concept/parseable/core/parser.hpp"
 #include "vast/concept/parseable/string/char.hpp"
 #include "vast/concept/parseable/string/string.hpp"
 
 namespace vast {
-namespace detail {
 
 // -- unary -------------------------------------------------------------------
 
-constexpr auto as_parser(char c) {
-  return ignore(char_parser{c});
+constexpr auto to_parser(char c) {
+  return ignore(parsers::chr{c});
 }
 
-inline auto as_parser(std::string str) {
-  return ignore(string_parser{std::move(str)});
+inline auto to_parser(std::string str) {
+  return ignore(parsers::str{std::move(str)});
 }
 
 template <class T>
-constexpr auto as_parser(T x)
+constexpr auto to_parser(T x)
   -> std::enable_if_t<std::is_arithmetic_v<T> && !std::is_same_v<T, bool>,
                       decltype(ignore(string_parser{""}))> {
-  return ignore(string_parser{std::to_string(x)});
+  return ignore(parsers::str{std::to_string(x)});
 }
 
 template <class T>
-constexpr auto as_parser(T x) -> std::enable_if_t<is_parser_v<T>, T> {
+constexpr auto to_parser(T x) -> std::enable_if_t<is_parser_v<T>, T> {
   return x; // A good compiler will elide the copy.
 }
 
@@ -49,15 +48,16 @@ constexpr auto as_parser(T x) -> std::enable_if_t<is_parser_v<T>, T> {
 
 template <class T>
 constexpr bool is_convertible_to_unary_parser_v
-  = std::is_convertible_v<T, std::string>
-    || (std::is_arithmetic_v<T> && !std::is_same_v<T, bool>);
+  = std::is_convertible_v<
+      T, std::string> || (std::is_arithmetic_v<T> && !std::is_same_v<T, bool>);
 
 template <class T, class U>
-constexpr bool is_convertible_to_binary_parser_v =
-    (is_parser_v<T> && is_parser_v<U>)
+constexpr bool is_convertible_to_binary_parser_v
+  = (is_parser_v<T> && is_parser_v<U>)
     || (is_parser_v<T> && is_convertible_to_unary_parser_v<U>)
-    || (is_convertible_to_unary_parser_v<T> && is_parser_v<U>) ;
+    || (is_convertible_to_unary_parser_v<T> && is_parser_v<U>);
 
+// clang-format off
 template <
   template <class, class> class BinaryParser,
   class T,
@@ -69,32 +69,22 @@ using make_binary_parser =
     BinaryParser<T, U>,
     std::conditional_t<
       is_parser_v<T> && is_convertible_to_unary_parser_v<U>,
-      BinaryParser<T, decltype(as_parser(std::declval<U>()))>,
+      BinaryParser<T, decltype(to_parser(std::declval<U>()))>,
       std::conditional_t<
         is_convertible_to_unary_parser_v<T> && is_parser_v<U>,
-        BinaryParser<decltype(as_parser(std::declval<T>())), U>,
+        BinaryParser<decltype(to_parser(std::declval<T>())), U>,
         std::false_type
       >
     >
   >;
+// clang-format on
 
-template <
-  template <class, class> class BinaryParser,
-  class T,
-  class U
->
-auto as_parser(T&& x, U&& y)
-  -> std::enable_if_t<
-       is_convertible_to_binary_parser_v<std::decay_t<T>, std::decay_t<U>>,
-       make_binary_parser<
-         BinaryParser,
-         decltype(detail::as_parser(std::forward<T>(x))),
-         decltype(detail::as_parser(std::forward<U>(y)))
-       >
-     > {
-  return {as_parser(std::forward<T>(x)), as_parser(std::forward<U>(y))};
+template <template <class, class> class BinaryParser, class T, class U>
+constexpr auto to_parser(T&& x, U&& y) -> std::enable_if_t<
+  is_convertible_to_binary_parser_v<std::decay_t<T>, std::decay_t<U>>,
+  make_binary_parser<BinaryParser, decltype(to_parser(std::forward<T>(x))),
+                     decltype(to_parser(std::forward<U>(y)))>> {
+  return {to_parser(std::forward<T>(x)), to_parser(std::forward<U>(y))};
 }
 
-} // namespace detail
 } // namespace vast
-

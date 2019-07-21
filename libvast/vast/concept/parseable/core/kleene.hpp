@@ -26,7 +26,7 @@ public:
   using container = detail::container<typename Parser::attribute>;
   using attribute = typename container::attribute;
 
-  explicit kleene_parser(Parser p) : parser_{std::move(p)} {
+  constexpr explicit kleene_parser(Parser p) : parser_{std::move(p)} {
   }
 
   template <class Iterator, class Attribute>
@@ -41,4 +41,3 @@ private:
 };
 
 } // namespace vast
-

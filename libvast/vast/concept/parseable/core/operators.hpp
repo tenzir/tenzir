@@ -15,7 +15,7 @@
 
 #include <type_traits>
 
-#include "vast/concept/parseable/detail/as_parser.hpp"
+#include "vast/concept/parseable/core/to_parser.hpp"
 
 namespace vast {
 
@@ -54,38 +54,30 @@ class choice_parser;
 //
 
 template <class T>
-auto operator&(T&& x)
-  -> std::enable_if_t<
-       is_parser_v<std::decay_t<T>>,
-       and_parser<std::decay_t<T>>
-     > {
+constexpr auto operator&(T&& x)
+  -> std::enable_if_t<is_parser_v<std::decay_t<T>>,
+                      and_parser<std::decay_t<T>>> {
   return and_parser<std::decay_t<T>>{std::forward<T>(x)};
 }
 
 template <class T>
-auto operator!(T&& x)
-  -> std::enable_if_t<
-       is_parser_v<std::decay_t<T>>,
-       not_parser<std::decay_t<T>>
-     > {
+constexpr auto operator!(T&& x)
+  -> std::enable_if_t<is_parser_v<std::decay_t<T>>,
+                      not_parser<std::decay_t<T>>> {
   return not_parser<std::decay_t<T>>{std::forward<T>(x)};
 }
 
 template <class T>
-auto operator-(T&& x)
-  -> std::enable_if_t<
-       is_parser_v<std::decay_t<T>>,
-       optional_parser<std::decay_t<T>>
-     > {
+constexpr auto operator-(T&& x)
+  -> std::enable_if_t<is_parser_v<std::decay_t<T>>,
+                      optional_parser<std::decay_t<T>>> {
   return optional_parser<std::decay_t<T>>{std::forward<T>(x)};
 }
 
 template <class T>
-auto operator*(T&& x)
-  -> std::enable_if_t<
-       is_parser_v<std::decay_t<T>>,
-       kleene_parser<std::decay_t<T>>
-     > {
+constexpr auto operator*(T&& x)
+  -> std::enable_if_t<is_parser_v<std::decay_t<T>>,
+                      kleene_parser<std::decay_t<T>>> {
   return kleene_parser<std::decay_t<T>>{std::forward<T>(x)};
 }
 
@@ -97,11 +89,9 @@ constexpr auto operator+(T&& x)
 }
 
 template <class T>
-auto operator~(T&& x)
-  -> std::enable_if_t<
-       is_parser_v<std::decay_t<T>>,
-       maybe_parser<std::decay_t<T>>
-     > {
+constexpr auto operator~(T&& x)
+  -> std::enable_if_t<is_parser_v<std::decay_t<T>>,
+                      maybe_parser<std::decay_t<T>>> {
   return maybe_parser<std::decay_t<T>>{std::forward<T>(x)};
 }
 
@@ -110,32 +100,27 @@ auto operator~(T&& x)
 //
 
 template <class LHS, class RHS>
-auto operator-(LHS&& lhs, RHS&& rhs)
-  -> decltype(detail::as_parser<difference_parser>(lhs, rhs)) {
-  return {detail::as_parser(std::forward<LHS>(lhs)),
-          detail::as_parser(std::forward<RHS>(rhs))};
+constexpr auto operator-(LHS&& lhs, RHS&& rhs)
+  -> decltype(to_parser<difference_parser>(lhs, rhs)) {
+  return {to_parser(std::forward<LHS>(lhs)), to_parser(std::forward<RHS>(rhs))};
 }
 
 template <class LHS, class RHS>
-auto operator%(LHS&& lhs, RHS&& rhs)
-  -> decltype(detail::as_parser<list_parser>(lhs, rhs)) {
-  return {detail::as_parser(std::forward<LHS>(lhs)),
-          detail::as_parser(std::forward<RHS>(rhs))};
+constexpr auto operator%(LHS&& lhs, RHS&& rhs)
+  -> decltype(to_parser<list_parser>(lhs, rhs)) {
+  return {to_parser(std::forward<LHS>(lhs)), to_parser(std::forward<RHS>(rhs))};
 }
 
 template <class LHS, class RHS>
-auto operator>>(LHS&& lhs, RHS&& rhs)
-  -> decltype(detail::as_parser<sequence_parser>(lhs, rhs)) {
-  return {detail::as_parser(std::forward<LHS>(lhs)),
-          detail::as_parser(std::forward<RHS>(rhs))};
+constexpr auto operator>>(LHS&& lhs, RHS&& rhs)
+  -> decltype(to_parser<sequence_parser>(lhs, rhs)) {
+  return {to_parser(std::forward<LHS>(lhs)), to_parser(std::forward<RHS>(rhs))};
 }
 
 template <class LHS, class RHS>
 constexpr auto operator|(LHS&& lhs, RHS&& rhs)
-  -> decltype(detail::as_parser<choice_parser>(lhs, rhs)) {
-  return {detail::as_parser(std::forward<LHS>(lhs)),
-          detail::as_parser(std::forward<RHS>(rhs))};
+  -> decltype(to_parser<choice_parser>(lhs, rhs)) {
+  return {to_parser(std::forward<LHS>(lhs)), to_parser(std::forward<RHS>(rhs))};
 }
 
 } // namespace vast
-

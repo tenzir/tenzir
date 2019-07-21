@@ -23,7 +23,7 @@ class and_parser : public parser<and_parser<Parser>> {
 public:
   using attribute = unused_type;
 
-  explicit and_parser(Parser p) : parser_{std::move(p)} {
+  constexpr explicit and_parser(Parser p) : parser_{std::move(p)} {
   }
 
   template <class Iterator, class Attribute>

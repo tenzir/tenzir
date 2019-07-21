@@ -43,7 +43,7 @@ struct container {
 
   template <class Container, class T>
   static void push_back(Container& c, T&& x) {
-    c.insert(c.end(), std::move(x));
+    c.insert(c.end(), std::forward<T>(x));
   }
 
   template <class Container>

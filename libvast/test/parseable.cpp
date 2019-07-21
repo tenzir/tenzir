@@ -175,67 +175,51 @@ TEST(char class) {
   CHECK(attr == "deadbeef");
 }
 
-TEST(quoted string) {
-  auto p = quoted_string_parser<'\'', '#'>{};
-  auto attr = ""s;
+TEST(literal) {
+  std::string_view attr;
+  CHECK(parsers::lit{"foo"}("foo", attr));
+  CHECK_EQUAL(attr, "foo"sv);
+}
 
-  MESSAGE("empty string");
-  auto str = "''"s;
-  auto f = str.begin();
-  auto l = str.end();
-  CHECK(p(f, l, attr));
+TEST(quoted string - empty) {
+  std::string attr;
+  CHECK(parsers::qstr("''", attr));
   CHECK_EQUAL(attr, "");
-  CHECK_EQUAL(f, l);
+}
 
-  MESSAGE("no escaped chars");
-  str = "'foobar'"s;
-  f = str.begin();
-  l = str.end();
-  CHECK(p(f, l, attr));
+TEST(quoted string - no escaped chars) {
+  std::string attr;
+  CHECK(parsers::qstr("'foobar'", attr));
   CHECK_EQUAL(attr, "foobar");
-  CHECK_EQUAL(f, l);
+}
 
-  MESSAGE("escaped char in middle");
-  str = "'foo#'bar'"s;
-  f = str.begin();
-  l = str.end();
-  attr.clear();
-  CHECK(p(f, l, attr));
-  CHECK_EQUAL(attr, "foo'bar");
-  CHECK_EQUAL(f, l);
-
-  MESSAGE("escaped char at beginning");
-  str = "'#'foobar'"s;
-  f = str.begin();
-  l = str.end();
-  attr.clear();
-  CHECK(p(f, l, attr));
+TEST(quoted string - escaped char at beginning) {
+  std::string attr;
+  CHECK(parsers::qstr("'\\'foobar'", attr));
   CHECK_EQUAL(attr, "'foobar");
-  CHECK_EQUAL(f, l);
+}
 
-  MESSAGE("escaped char at end");
-  str = "'foobar#''"s;
-  f = str.begin();
-  l = str.end();
-  attr.clear();
-  CHECK(p(f, l, attr));
+TEST(quoted string - escaped char in middle) {
+  std::string attr;
+  CHECK(parsers::qstr("'foo\\'bar'", attr));
+  CHECK_EQUAL(attr, "foo'bar");
+}
+
+TEST(quoted string - escaped char at end) {
+  std::string attr;
+  CHECK(parsers::qstr("'foobar\\''", attr));
   CHECK_EQUAL(attr, "foobar'");
-  CHECK_EQUAL(f, l);
+}
 
-  MESSAGE("missing trailing quote");
-  str = "'foobar"s;
-  f = str.begin();
-  l = str.end();
-  attr.clear();
-  CHECK(!p(f, l, attr));
+TEST(quoted string - missing trailing quote) {
+  std::string attr;
+  CHECK(!parsers::qstr("'foobar", attr));
   CHECK_EQUAL(attr, "foobar");
+}
 
-  MESSAGE("missing trailing quote after escaped quote");
-  str = "'foobar#'"s;
-  f = str.begin();
-  l = str.end();
-  attr.clear();
-  CHECK(!p(f, l, attr));
+TEST(quoted string - missing trailing quote after escaped quote) {
+  std::string attr;
+  CHECK(!parsers::qstr("'foobar\\'", attr));
   CHECK_EQUAL(attr, "foobar'");
 }
 
@@ -258,7 +242,7 @@ TEST(attribute compatibility with string) {
   auto attr = ""s;
   auto f = str.begin();
   auto l = str.end();
-  auto p = char_parser{'.'};
+  auto p = parsers::chr{'.'};
 
   MESSAGE("char into string");
   CHECK(p(f, l, attr));

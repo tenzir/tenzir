@@ -22,7 +22,7 @@ class not_parser : public parser<not_parser<Parser>> {
 public:
   using attribute = unused_type;
 
-  explicit not_parser(Parser p) : parser_{std::move(p)} {
+  constexpr explicit not_parser(Parser p) : parser_{std::move(p)} {
   }
 
   template <class Iterator, class Attribute>

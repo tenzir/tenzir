@@ -129,6 +129,31 @@ TEST(parseable - simple sequential) {
   CHECK(sch.find("c"));
 }
 
+TEST(parseable - toplevel comments) {
+  std::string_view str = R"__(
+    // A comment at the beginning.
+    type foo = int
+    // A comment a the end of the schema.
+  )__";
+  schema sch;
+  CHECK(parsers::schema(str, sch));
+  CHECK(sch.find("foo"));
+}
+
+TEST(parseable - inline comments) {
+  std::string_view str = R"__(
+    type foo = record{  // so 
+      ts: time,         // much
+      uid: string       // more
+    }                   // detail,
+    type bar = int      // jeez!
+  )__";
+  schema sch;
+  CHECK(parsers::schema(str, sch));
+  CHECK(sch.find("foo"));
+  CHECK(sch.find("bar"));
+}
+
 TEST(schema: zeek-style) {
   std::string str = R"__(
     type zeek.ssl = record{

@@ -66,7 +66,7 @@ public:
       >
     >;
 
-  sequence_parser(Lhs lhs, Rhs rhs)
+  constexpr sequence_parser(Lhs lhs, Rhs rhs)
     : lhs_{std::move(lhs)}, rhs_{std::move(rhs)} {
   }
 
@@ -125,4 +125,3 @@ private:
 };
 
 } // namespace vast
-

@@ -20,6 +20,7 @@
 #include "vast/concept/parseable/core/parser.hpp"
 #include "vast/concept/parseable/core/rule.hpp"
 #include "vast/concept/parseable/numeric/integral.hpp"
+#include "vast/concept/parseable/string.hpp"
 #include "vast/concept/parseable/string/quoted_string.hpp"
 #include "vast/concept/parseable/string/symbol_table.hpp"
 #include "vast/concept/parseable/vast/identifier.hpp"
@@ -58,7 +59,17 @@ private:
 struct type_parser : parser<type_parser> {
   using attribute = type;
 
-  type_parser(const type_table* symbols = nullptr) : symbol_type{symbols} {
+  // Comments until the end of line.
+  // clang-format off
+  static constexpr auto comment
+    = ignore(parsers::lit{"//"} >> *(parsers::any - '\n'));
+  // clang-format on
+
+  // Skips all irrelevant tokens.
+  static constexpr auto skp = ignore(*(parsers::space | comment));
+
+  explicit type_parser(const type_table* symbols = nullptr)
+    : symbol_type{symbols} {
     // nop
   }
 
@@ -71,8 +82,6 @@ struct type_parser : parser<type_parser> {
   template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
     // clang-format off
-    // Whitespace
-    static auto ws = ignore(*parsers::space);
     // Attributes: type meta data
     static auto to_attr =
       [](std::tuple<std::string, optional<std::string>> xs) {
@@ -80,8 +89,8 @@ struct type_parser : parser<type_parser> {
         return vast::attribute{std::move(key), std::move(value)};
       };
     static auto attr
-      = ('#' >> parsers::identifier >> -('=' >> parsers::qq_str)) ->* to_attr;
-    static auto attr_list = *(ws >> attr);
+      = ('#' >> parsers::identifier >> -('=' >> parsers::qqstr)) ->* to_attr;
+    static auto attr_list = *(skp >> attr);
     // Basic types
     // clang-format off
     static auto basic_type_parser
@@ -97,7 +106,6 @@ struct type_parser : parser<type_parser> {
       | "subnet" >> attr_list    ->* to_basic_type<subnet_type>
       | "port" >> attr_list      ->* to_basic_type<port_type>
       ;
-    // clang-format on
     // Enumeration
     using enum_tuple = std::tuple<
       std::vector<std::string>,
@@ -108,9 +116,9 @@ struct type_parser : parser<type_parser> {
       return enumeration_type{std::move(fields)}.attributes(std::move(attrs));
     };
     static auto enum_type_parser
-      = ("enum" >> ws >> '{'
-      >> (ws >> parsers::identifier) % ','
-      >> ws >> '}' >> attr_list) ->* to_enum
+      = ("enum" >> skp >> '{'
+      >> (skp >> parsers::identifier) % ','
+      >> skp >> '}' >> attr_list) ->* to_enum
       ;
     // Compound types
     rule<Iterator, type> type_type;
@@ -121,7 +129,7 @@ struct type_parser : parser<type_parser> {
       return vector_type{std::move(value_type)}.attributes(std::move(attrs));
     };
     auto vector_type_parser
-      = ("vector" >> ws >> '<' >> ws >> ref(type_type) >> ws >> '>')
+      = ("vector" >> skp >> '<' >> skp >> ref(type_type) >> skp >> '>')
         ->* to_vector
       ;
     // Set
@@ -130,7 +138,7 @@ struct type_parser : parser<type_parser> {
       return set_type{std::move(value_type)}.attributes(std::move(attrs));
     };
     auto set_type_parser
-      = ("set" >> ws >> '<' >> ws >> ref(type_type) >> ws >> '>')
+      = ("set" >> skp >> '<' >> skp >> ref(type_type) >> skp >> '>')
       ->* to_set
       ;
     // Map
@@ -141,8 +149,8 @@ struct type_parser : parser<type_parser> {
       return m.attributes(std::move(attrs));
     };
     auto map_type_parser
-      = ("map" >> ws >> '<' >> ws
-      >> vast::ref(type_type) >> ws >> ',' >> ws >> ref(type_type) >> ws
+      = ("map" >> skp >> '<' >> skp
+      >> vast::ref(type_type) >> skp >> ',' >> skp >> ref(type_type) >> skp
       >> '>' >> attr_list) ->* to_map;
       ;
     // Record
@@ -159,12 +167,12 @@ struct type_parser : parser<type_parser> {
       return record_type{std::move(fields)}.attributes(std::move(attrs));
     };
     auto field
-      = (parsers::identifier >> ws >> ':' >> ws >> ref(type_type))
+      = (parsers::identifier >> skp >> ':' >> skp >> ref(type_type))
       ->* to_field
       ;
     auto record_type_parser
-      = ("record" >> ws >> '{'
-      >> (ws >> field) % ',' >> ws
+      = ("record" >> skp >> '{'
+      >> (skp >> field) % ',' >> skp
       >> '}' >> attr_list) ->* to_record;
       ;
     // Complete type
@@ -201,7 +209,7 @@ struct parser_registry<type> {
 
 namespace parsers {
 
-auto const type = make_parser<vast::type>();
+inline const auto type = type_parser{};
 
 } // namespace parsers
 } // namespace vast

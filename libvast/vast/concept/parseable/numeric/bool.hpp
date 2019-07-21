@@ -15,49 +15,49 @@
 
 #include "vast/concept/parseable/core/parser.hpp"
 #include "vast/concept/parseable/string/char.hpp"
-#include "vast/concept/parseable/string/c_string.hpp"
+#include "vast/concept/parseable/string/literal.hpp"
 
 namespace vast {
 
-namespace detail {
+namespace policy {
 
 struct single_char_bool_policy {
   template <class Iterator>
   static bool parse_true(Iterator& f, const Iterator& l) {
-    return char_parser{'T'}(f, l, unused);
+    return parsers::ch<'T'>(f, l, unused);
   }
 
   template <class Iterator>
   static bool parse_false(Iterator& f, const Iterator& l) {
-    return char_parser{'F'}(f, l, unused);
+    return parsers::ch<'F'>(f, l, unused);
   }
 };
 
 struct zero_one_bool_policy {
   template <class Iterator>
   static bool parse_true(Iterator& f, const Iterator& l) {
-    return char_parser{'1'}(f, l, unused);
+    return parsers::ch<'1'>(f, l, unused);
   }
 
   template <class Iterator>
   static bool parse_false(Iterator& f, const Iterator& l) {
-    return char_parser{'0'}(f, l, unused);
+    return parsers::ch<'0'>(f, l, unused);
   }
 };
 
 struct literal_bool_policy {
   template <class Iterator>
   static bool parse_true(Iterator& f, const Iterator& l) {
-    return c_string_parser{"true"}(f, l, unused);
+    return parsers::lit{"true"}(f, l, unused);
   }
 
   template <class Iterator>
   static bool parse_false(Iterator& f, const Iterator& l) {
-    return c_string_parser{"false"}(f, l, unused);
+    return parsers::lit{"false"}(f, l, unused);
   }
 };
 
-} // namespace detail
+} // namespace policy
 
 template <class Policy>
 struct bool_parser : parser<bool_parser<Policy>> {
@@ -77,9 +77,9 @@ struct bool_parser : parser<bool_parser<Policy>> {
   }
 };
 
-using single_char_bool_parser = bool_parser<detail::single_char_bool_policy>;
-using zero_one_bool_parser = bool_parser<detail::zero_one_bool_policy>;
-using literal_bool_parser = bool_parser<detail::literal_bool_policy>;
+using single_char_bool_parser = bool_parser<policy::single_char_bool_policy>;
+using zero_one_bool_parser = bool_parser<policy::zero_one_bool_policy>;
+using literal_bool_parser = bool_parser<policy::literal_bool_policy>;
 
 template <>
 struct parser_registry<bool> {
@@ -88,10 +88,9 @@ struct parser_registry<bool> {
 
 namespace parsers {
 
-auto const tf = bool_parser<detail::single_char_bool_policy>{};
-auto const zero_one = bool_parser<detail::zero_one_bool_policy>{};
-auto const boolean = bool_parser<detail::literal_bool_policy>{};
+auto const tf = bool_parser<policy::single_char_bool_policy>{};
+auto const zero_one = bool_parser<policy::zero_one_bool_policy>{};
+auto const boolean = bool_parser<policy::literal_bool_policy>{};
 
 } // namespace parsers
 } // namespace vast
-

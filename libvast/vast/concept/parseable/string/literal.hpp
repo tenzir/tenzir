@@ -13,39 +13,46 @@
 
 #pragma once
 
+#include <string>
+
 #include "vast/concept/parseable/core/parser.hpp"
-#include "vast/detail/assert.hpp"
 
 namespace vast {
 
-class c_string_parser : public parser<c_string_parser> {
+class literal_parser : public parser<literal_parser> {
 public:
-  using attribute = const char*;
+  using attribute = std::string_view;
 
-  c_string_parser(const char* str) : str_{str} {
-    VAST_ASSERT(str != nullptr);
+  constexpr literal_parser(std::string_view str) : str_{str} {
   }
 
-  template <class Iterator, class Attribute>
-  bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
+  template <class Iterator>
+  bool parse(Iterator& f, const Iterator& l, unused_type) const {
     auto i = f;
-    auto p = str_;
-    while (*p != '\0')
-      if (i == l || *i++ != *p++)
+    auto begin = str_.begin();
+    auto end = str_.end();
+    while (begin != end)
+      if (i == l || *i++ != *begin++)
         return false;
-    a = str_;
     f = i;
     return true;
   }
 
+  template <class Iterator, class Attribute>
+  bool parse(Iterator& f, const Iterator& l, Attribute& x) const {
+    if (!parse(f, l, unused))
+      return false;
+    x = Attribute{str_.data(), str_.size()};
+    return true;
+  }
+
 private:
-  const char* str_;
+  std::string_view str_;
 };
 
-template <>
-struct parser_registry<const char*> {
-  using type = c_string_parser;
-};
+namespace parsers {
 
+using lit = literal_parser;
+
+} // namespace parsers
 } // namespace vast
-
