@@ -1,10 +1,11 @@
-type argus.cause = enum{
-  Start,
-  Status,
-  Stop,
-  Close,
-  Error
-}
+// TODO: Uncomment and use once enum values are supported by the index.
+//type argus.cause = enum{
+//  Start,
+//  Status,
+//  Stop,
+//  Close,
+//  Error
+//}
 
 type argus.record = record{
   // Standard fields that are always present.
@@ -12,10 +13,10 @@ type argus.record = record{
   Flgs: string,                   // flgs
   Proto: string #id,              // proto
   SrcAddr: string,                // saddr (MAC or IP)
-  Sport: port,                    // sport
+  Sport: count,                   // sport (TODO: switch to port type)
   Dir: string #id,                // dir
   DstAddr: string,                // daddr (MAC or IP)
-  Dport: port,                    // dport
+  Dport: count,                   // dport (TODO: switch to port type)
   TotPkts: count,                 // pkts
   TotBytes: count,                // bytes
   State: string #id,              // state
@@ -26,9 +27,9 @@ type argus.record = record{
   LastTime: time,                 // ltime
   Trans: count,                   // trans
   Seq: count,                     // seq
-  Dur: duration,                  // dur
-  RunTime: duration,              // runtime
-  IdleTime: duration,             // idle
+  Dur: duration #unit=s,          // dur
+  RunTime: duration #unit=s,      // runtime
+  IdleTime: duration #unit=s,     // idle
   Mean: real,                     // mean
   StdDev: real,                   // stddev
   Sum: real,                      // sum
@@ -56,7 +57,7 @@ type argus.record = record{
   sAS: count,                     // sas
   dAS: count,                     // das
   iAS: count,                     // ias
-  Cause: argus.cause,             // cause
+  Cause: string,                  // cause (TODO: use enum type)
   NStrok: count,                  // nstroke
   sNStrok: count,                 // snstroke
   dNStrok: count,                 // dnstroke
@@ -125,9 +126,9 @@ type argus.record = record{
   ERange: time,                   // srng
   SrcTCPBase: count,              // stcpb
   DstTCPBase: count,              // dtcpb
-  TcpRtt: duration,               // tcprtt
-  SynAck: duration,               // synack
-  AckDat: duration,               // ackdat
+  TcpRtt: duration #unit=s,       // tcprtt
+  SynAck: duration #unit=s,       // synack
+  AckDat: duration #unit=s,       // ackdat
   TcpOpt: string,                 // tcpopt
   Inode: string,                  // inode
   Offset: count,                  // offset
@@ -143,15 +144,15 @@ type argus.record = record{
   // inferred by looking a the source code.
   STcpMax: real,                  // stcpmax
   DTcpMax: real,                  // dtcpmax
-  dlDur: duration,                // dldur
+  dlDur: duration #unit=s,        // dldur
   dlsTime: time,                  // dlstime
   dllTime: time,                  // dlltime
   dsPkts: count,                  // dspkts
   ddPkts: count,                  // ddpkts
   dsBytes: count,                 // dsbytes
   ddBytes: count,                 // ddbytes
-  JDelay: duration,               // jdelay
-  LDelay: duration,               // ldelay
+  JDelay: duration #unit=s,       // jdelay
+  LDelay: duration #unit=s,       // ldelay
   sEnc: string,                   // senc
   dEnc: string,                   // denc
   IcmpId: string #id              // icmpid
