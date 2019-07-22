@@ -806,15 +806,28 @@ data construct(const type& t);
 /// @relates type
 std::string to_digest(const type& x);
 
+/// Tries to locate an attribute.
+/// @param t The type to check.
+/// @param key The attribute key.
+/// @returns A pointer to the first found attribute *key*.
+/// @relates type
+/// @see has_attribute
+template <class Type>
+const attribute* find_attribute(const Type& t, std::string_view key) {
+  auto pred = [&](auto& attr) { return attr.key == key; };
+  auto i = std::find_if(t.attributes().begin(), t.attributes().end(), pred);
+  return i != t.attributes().end() ? &*i : nullptr;
+}
+
 /// Checks whether a given type has an attribute.
 /// @param t The type to check.
 /// @param key The attribute key.
 /// @returns `true` if *t* has an attribute with key *key*.
 /// @relates type
+/// @see find_attribute
 template <class Type>
 bool has_attribute(const Type& t, std::string_view key) {
-  auto pred = [&](auto& attr) { return attr.key == key; };
-  return std::any_of(t.attributes().begin(), t.attributes().end(), pred);
+  return find_attribute(t, key) != nullptr;
 }
 
 /// Tests whether a type has a "skip" attribute.
