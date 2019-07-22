@@ -13,6 +13,12 @@ Every entry has a category for which we use the following visual abbreviations:
 - 🎁 A new schema for Argus CSV output has been added. It parses the output of
   `ra(1)`, which produces CSV output when invoked with `-L 0 -c ,`.
 
+- 🔄 When defining schema attributes in key-value pair form, the value no
+  longer requires double-quotes. For example, `#foo=x` is now the same as
+  `#foo="x"`. The form without double-quotes consumes the input until the next
+  space and does not support escaping. In case an attribute value contains
+  whitespace, double-quotes must be provided, e.g., `#foo="x y z"`.
+
 - 🎁 The schema language now supports comments. A double-slash (`//`) begins a
   comment. Comments last until the end of the line, i.e., until a newline
   character (`\n`).

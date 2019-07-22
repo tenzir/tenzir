@@ -623,13 +623,19 @@ TEST(parseable) {
   CHECK(p("real #skip #default=\"x \\\" x\"", t));
   u = real_type{}.attributes({{"skip"}, {"default", "x \" x"}});
   CHECK_EQUAL(t, u);
+  // Key-value Attributes with and without double-quotes.
+  CHECK(p("string #foo=x #bar=\"y\"", t));
+  u = string_type{}.attributes({{"foo", "x"}, {"bar", "y"}});
+  CHECK_EQUAL(t, u);
   // Attributes in types of record fields.
-  CHECK(p("record{x: int #skip, y: string #default=\"Y\", z: foo}", t));
+  CHECK(p("record{x: int #skip, y: string #foo=\",>}\" #bar=&%!, z: foo}", t));
+  // clang-format off
   r = record_type{
     {"x", integer_type{}.attributes({{"skip"}})},
-    {"y", string_type{}.attributes({{"default", "Y"}})},
+    {"y", string_type{}.attributes({{"foo", "x"}, {"bar", "&%!"}})},
     {"z", foo}
   };
+  // clang-format on
   CHECK_EQUAL(t, r);
 }
 

@@ -21,8 +21,6 @@
 #include "vast/concept/parseable/core/rule.hpp"
 #include "vast/concept/parseable/numeric/integral.hpp"
 #include "vast/concept/parseable/string.hpp"
-#include "vast/concept/parseable/string/quoted_string.hpp"
-#include "vast/concept/parseable/string/symbol_table.hpp"
 #include "vast/concept/parseable/vast/identifier.hpp"
 
 namespace vast {
@@ -88,11 +86,13 @@ struct type_parser : parser<type_parser> {
         auto& [key, value] = xs;
         return vast::attribute{std::move(key), std::move(value)};
       };
+    static constexpr auto attr_value
+      = parsers::qqstr
+      | +(parsers::print - (parsers::space | ',' | '>' | '}' ));
     static auto attr
-      = ('#' >> parsers::identifier >> -('=' >> parsers::qqstr)) ->* to_attr;
+      = ('#' >> parsers::identifier >> -('=' >> attr_value)) ->* to_attr;
     static auto attr_list = *(skp >> attr);
     // Basic types
-    // clang-format off
     static auto basic_type_parser
       = "bool" >> attr_list      ->* to_basic_type<bool_type>
       | "int" >> attr_list       ->* to_basic_type<integer_type>
