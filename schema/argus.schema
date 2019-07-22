@@ -34,8 +34,8 @@ type argus.record = record{
   Sum: real,                      // sum
   Min: real,                      // min
   Max: real,                      // max
-  SrcMac: string #mac,            // smac
-  DstMac: string #mac,            // dmac
+  SrcMac: string,                 // smac
+  DstMac: string,                 // dmac
   SrcOui: string,                 // soui
   DstOui: string,                 // doui
   sTos: count,                    // stos
