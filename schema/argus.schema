@@ -6,7 +6,7 @@ type argus.cause = enum{
   Error
 }
 
-type argus.ra = record{
+type argus.record = record{
   // Standard fields that are always present.
   StartTime: time #timestamp,     // stime
   Flgs: string,                   // flgs
