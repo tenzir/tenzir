@@ -632,7 +632,7 @@ TEST(parseable) {
   // clang-format off
   r = record_type{
     {"x", integer_type{}.attributes({{"skip"}})},
-    {"y", string_type{}.attributes({{"foo", "x"}, {"bar", "&%!"}})},
+    {"y", string_type{}.attributes({{"foo", ",>}"}, {"bar", "&%!"}})},
     {"z", foo}
   };
   // clang-format on
