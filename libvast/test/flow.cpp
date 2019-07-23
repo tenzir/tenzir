@@ -37,7 +37,7 @@ struct fixture {
                        unbox(to<port>("123/udp")), unbox(to<port>("321/udp"))};
 };
 
-} // namespace <anonymous>
+} // namespace
 
 FIXTURE_SCOPE(flow_tests, fixture)
 
