@@ -279,8 +279,7 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
 reader::flow_state& reader::state(const flow& x) {
   auto i = flows_.find(x);
   if (i == flows_.end()) {
-    auto cf = community_id::flow{x.src_addr, x.dst_addr, x.src_port,
-                                 x.dst_port};
+    auto cf = flow{x.src_addr, x.dst_addr, x.src_port, x.dst_port};
     auto id = community_id::compute<policy::base64>(cf);
     i = flows_.emplace(x, flow_state{0, 0, std::move(id)}).first;
   }

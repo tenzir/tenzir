@@ -14,6 +14,9 @@
 #pragma once
 
 #include <functional>
+#include <string_view>
+
+#include <caf/optional.hpp>
 
 #include "vast/address.hpp"
 #include "vast/port.hpp"
@@ -28,6 +31,58 @@ struct flow {
   port src_port;
   port dst_port;
 };
+
+/// Factory function to construct a flow.
+/// @param src_addr The IP address of the flow source.
+/// @param dst_addr The IP address of the flow destination.
+/// @param src_port The transport-layer port of the flow source.
+/// @param dst_port The transport-layer port of the flow destination.
+/// @param protocol The transport-layer protocol in use.
+/// @return An instance of a flow.
+/// @relates flow
+inline flow make_flow(address src_addr, address dst_addr, uint16_t src_port,
+                      uint16_t dst_port, port::port_type protocol) {
+  return {src_addr, dst_addr, port{src_port, protocol},
+          port{dst_port, protocol}};
+}
+
+/// Factory function to construct a flow.
+/// @param src_addr The IP address of the flow source.
+/// @param dst_addr The IP address of the flow destination.
+/// @param src_port The transport-layer port of the flow source.
+/// @param dst_port The transport-layer port of the flow destination.
+/// @return An instance of a flow.
+/// @relates flow
+template <port::port_type Protocol>
+flow make_flow(address src_addr, address dst_addr, uint16_t src_port,
+               uint16_t dst_port) {
+  return make_flow(src_addr, dst_addr, src_port, dst_port, Protocol);
+}
+
+/// Factory function to construct a flow.
+/// @param src_addr The IP address of the flow source as string.
+/// @param dst_addr The IP address of the flow destination as string.
+/// @param src_port The transport-layer port of the flow source.
+/// @param dst_port The transport-layer port of the flow destination.
+/// @param protocol The transport-layer protocol in use.
+/// @return An instance of a flow.
+/// @relates flow
+caf::optional<flow> make_flow(std::string_view src_addr,
+                              std::string_view dst_addr, uint16_t src_port,
+                              uint16_t dst_port, port::port_type protocol);
+
+/// Factory function to construct a flow.
+/// @param src_addr The IP address of the flow source as string.
+/// @param dst_addr The IP address of the flow destination as string.
+/// @param src_port The transport-layer port of the flow source.
+/// @param dst_port The transport-layer port of the flow destination.
+/// @return An instance of a flow.
+/// @relates flow
+template <port::port_type Protocol>
+auto make_flow(std::string_view src_addr, std::string_view dst_addr,
+               uint16_t src_port, uint16_t dst_port) {
+  return make_flow(src_addr, dst_addr, src_port, dst_port, Protocol);
+}
 
 /// @returns the protocol of a flow tuple.
 /// @param x The flow to extract the protocol from.

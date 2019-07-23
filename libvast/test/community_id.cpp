@@ -25,10 +25,11 @@ using namespace community_id;
 namespace {
 
 #define FLOW_FACTORY(protocol)                                                 \
-  flow make_##protocol##_flow(std::string_view orig_h, uint16_t orig_p,        \
-                              std::string_view resp_h, uint16_t resp_p) {      \
+  flow make_##protocol##_flow(std::string_view src_addr,                       \
+                              std::string_view dst_addr, uint16_t src_port,    \
+                              uint16_t dst_port) {                             \
     constexpr auto proto = port::port_type::protocol;                          \
-    return unbox(make_flow<proto>(orig_h, orig_p, resp_h, resp_p));            \
+    return unbox(make_flow<proto>(src_addr, dst_addr, src_port, dst_port));    \
   }
 
 FLOW_FACTORY(icmp)
@@ -48,7 +49,7 @@ FLOW_FACTORY(icmp6)
 //     flow = FlowTuple(PROTO_UDP, "192.168.1.102", "192.168.1.1", 68, 67)
 
 TEST(UDP IPv4) {
-  auto x = make_udp_flow("192.168.1.102", 68, "192.168.1.1", 67);
+  auto x = make_udp_flow("192.168.1.102", "192.168.1.1", 68, 67);
   auto hex = compute<policy::ascii>(x);
   auto b64 = compute<policy::base64>(x);
   CHECK_EQUAL(hex, "1:69665f2c8aae6250b1286b89eb67d01a5805cc02");
@@ -56,7 +57,7 @@ TEST(UDP IPv4) {
 }
 
 TEST(UDP IPv6) {
-  auto x = make_udp_flow("fe80::2c23:b96c:78d:e116", 58544, "ff02::c", 3702);
+  auto x = make_udp_flow("fe80::2c23:b96c:78d:e116", "ff02::c", 58544, 3702);
   auto hex = compute<policy::ascii>(x);
   auto b64 = compute<policy::base64>(x);
   CHECK_EQUAL(hex, "1:662f40748c18bd99d8bee39b4cf806582052611b");
@@ -64,7 +65,7 @@ TEST(UDP IPv6) {
 }
 
 TEST(TCP IPv4) {
-  auto x = make_tcp_flow("192.168.1.102", 1180, "68.216.79.113", 37);
+  auto x = make_tcp_flow("192.168.1.102", "68.216.79.113", 1180, 37);
   auto hex = compute<policy::ascii>(x);
   auto b64 = compute<policy::base64>(x);
   CHECK_EQUAL(hex, "1:f4bfed67579b1f395687307fa49c92f405495b2f");
@@ -72,7 +73,7 @@ TEST(TCP IPv4) {
 }
 
 TEST(TCP IPv6) {
-  auto x = make_tcp_flow("fe80::219:e3ff:fee7:5d23", 5353, "ff02::fb", 53);
+  auto x = make_tcp_flow("fe80::219:e3ff:fee7:5d23", "ff02::fb", 5353, 53);
   auto hex = compute<policy::ascii>(x);
   auto b64 = compute<policy::base64>(x);
   CHECK_EQUAL(hex, "1:03aaaffe2842910257a2fdf52f863395cb8a4769");
@@ -80,7 +81,7 @@ TEST(TCP IPv6) {
 }
 
 TEST(ICMPv4) {
-  auto x = make_icmp_flow("1.2.3.4", 0, "5.6.7.8", 8);
+  auto x = make_icmp_flow("1.2.3.4", "5.6.7.8", 0, 8);
   auto hex = compute<policy::ascii>(x);
   auto b64 = compute<policy::base64>(x);
   CHECK_EQUAL(hex, "1:d6f36bf9c570edbcd9fad1ac8761fbbe807069a6");
@@ -88,7 +89,7 @@ TEST(ICMPv4) {
 }
 
 TEST(ICMPv4 oneway) {
-  auto x = make_icmp_flow("192.168.0.89", 128, "192.168.0.1", 129);
+  auto x = make_icmp_flow("192.168.0.89", "192.168.0.1", 128, 129);
   auto hex = compute<policy::ascii>(x);
   auto b64 = compute<policy::base64>(x);
   CHECK_EQUAL(hex, "1:86459c1ce1ea4c65aaffe7f01c48a6e5efa0d5f1");
@@ -96,7 +97,7 @@ TEST(ICMPv4 oneway) {
 }
 
 TEST(ICMPv6) {
-  auto x = make_icmp6_flow("fe80::200:86ff:fe05:80da", 135, "fe80::260", 136);
+  auto x = make_icmp6_flow("fe80::200:86ff:fe05:80da", "fe80::260", 135, 136);
   auto hex = compute<policy::ascii>(x);
   auto b64 = compute<policy::base64>(x);
   CHECK_EQUAL(hex, "1:ffb2d8321708804a883ac02fe6c76655499b3ff5");
@@ -104,7 +105,7 @@ TEST(ICMPv6) {
 }
 
 TEST(ICMPv6 oneway) {
-  auto x = make_icmp6_flow("fe80::dead", 42, "fe80::beef", 84);
+  auto x = make_icmp6_flow("fe80::dead", "fe80::beef", 42, 84);
   auto hex = compute<policy::ascii>(x);
   auto b64 = compute<policy::base64>(x);
   CHECK_EQUAL(hex, "1:118a3bbf175529a3d55dca55c4364ec47f1c4152");

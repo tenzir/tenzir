@@ -22,13 +22,13 @@
 #include "vast/address.hpp"
 #include "vast/concept/hashable/hash_append.hpp"
 #include "vast/concept/hashable/sha1.hpp"
-#include "vast/concept/parseable/vast/address.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/base64.hpp"
 #include "vast/detail/byte_swap.hpp"
 #include "vast/detail/coding.hpp"
 #include "vast/detail/narrow.hpp"
 #include "vast/detail/type_traits.hpp"
+#include "vast/flow.hpp"
 #include "vast/icmp.hpp"
 #include "vast/port.hpp"
 #include "vast/span.hpp"
@@ -51,29 +51,12 @@ namespace community_id {
 /// The Community ID version.
 constexpr char version = '1';
 
-/// A connection 5-tuple, consisting of IP addresses and transport-layer ports
-/// for originator and resopnder. The protocol type is encoded in the ports.
-struct flow {
-  address src_addr;
-  address dst_addr;
-  port src_port;
-  port dst_port;
-};
-
-/// @returns the protocol of a flow tuple.
-/// @param x The flow to extract the protocol from.
-/// @relates flow
-inline port::port_type protocol(const flow& x) {
-  VAST_ASSERT(x.src_port.type() == x.dst_port.type());
-  return x.src_port.type();
-}
-
-/// Computes a hash of a flow.
+/// Computes a hash of a flow according to the community ID specification.
 /// @param hasher The hash algorithm to use.
 /// @param x The flow to hash.
 /// @relates flow
 template <class Hasher>
-void hash_append(Hasher& hasher, const flow& x) {
+void community_hash_append(Hasher& hasher, const flow& x) {
   VAST_ASSERT(x.src_port.type() == x.dst_port.type());
   auto src_port_num = x.src_port.number();
   auto dst_port_num = x.dst_port.number();
@@ -115,37 +98,6 @@ void hash_append(Hasher& hasher, const flow& x) {
   }
 }
 
-/// Factory function to construct a flow.
-/// @param orig_h The IP address of the flow source.
-/// @param resp_h The IP address of the flow destination.
-/// @param orig_p The transport-layer port of the flow source.
-/// @param resp_p The transport-layer port of the flow destination.
-/// @return An instance of a flow.
-/// @relates flow
-template <port::port_type Protocol>
-flow make_flow(address orig_h, uint16_t orig_p, address resp_h,
-               uint16_t resp_p) {
-  return flow{orig_h, resp_h, port{orig_p, Protocol}, port{resp_p, Protocol}};
-}
-
-/// Factory function to construct a flow.
-/// @param orig_h The IP address of the flow source.
-/// @param resp_h The IP address of the flow destination.
-/// @param orig_p The transport-layer port of the flow source.
-/// @param resp_p The transport-layer port of the flow destination.
-/// @relates flow
-template <port::port_type Protocol>
-caf::optional<flow> make_flow(std::string_view orig_h, uint16_t orig_p,
-                              std::string_view resp_h, uint16_t resp_p) {
-  using parsers::addr;
-  flow result;
-  if (!addr(orig_h, result.src_addr) || !addr(resp_h, result.dst_addr))
-    return caf::none;
-  result.src_port = port{orig_p, Protocol};
-  result.dst_port = port{resp_p, Protocol};
-  return result;
-}
-
 /// Computes the length of the version prefix.
 /// @see max_length
 constexpr size_t version_prefix_length() {
@@ -185,7 +137,7 @@ std::string compute(const flow& x, uint16_t seed = 0) {
   // Compute a SHA-1 hash over the flow tuple.
   sha1 hasher;
   hash_append(hasher, detail::to_network_order(seed));
-  hash_append(hasher, x);
+  community_hash_append(hasher, x);
   auto digest = static_cast<sha1::result_type>(hasher);
   // Convert the binary digest to plain hex ASCII or to Base64.
   if constexpr (std::is_same_v<Policy, policy::base64>) {
