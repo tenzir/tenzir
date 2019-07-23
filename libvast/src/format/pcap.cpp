@@ -160,7 +160,7 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
                                   "failed to get next packet: ", err));
     }
     // Parse packet.
-    connection conn;
+    flow conn;
     auto packet_size = header->len - 14;
     auto layer3 = data + 14;
     const uint8_t* layer4 = nullptr;
@@ -180,8 +180,8 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
                             "IPv4 header too short: ", header_size, " bytes");
         auto orig_h = reinterpret_cast<const uint32_t*>(layer3 + 12);
         auto resp_h = reinterpret_cast<const uint32_t*>(layer3 + 16);
-        conn.src = {orig_h, address::ipv4, address::network};
-        conn.dst = {resp_h, address::ipv4, address::network};
+        conn.src_addr = {orig_h, address::ipv4, address::network};
+        conn.dst_addr = {resp_h, address::ipv4, address::network};
         layer4_proto = *(layer3 + 9);
         layer4 = layer3 + header_size;
         payload_size -= header_size;
@@ -192,8 +192,8 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
           return make_error(ec::format_error, "IPv6 header too short");
         auto orig_h = reinterpret_cast<const uint32_t*>(layer3 + 8);
         auto resp_h = reinterpret_cast<const uint32_t*>(layer3 + 24);
-        conn.src = {orig_h, address::ipv4, address::network};
-        conn.dst = {resp_h, address::ipv4, address::network};
+        conn.src_addr = {orig_h, address::ipv4, address::network};
+        conn.dst_addr = {resp_h, address::ipv4, address::network};
         layer4_proto = *(layer3 + 6);
         layer4 = layer3 + 40;
         payload_size -= 40;
@@ -206,8 +206,8 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
       auto resp_p = *reinterpret_cast<const uint16_t*>(layer4 + 2);
       orig_p = detail::to_host_order(orig_p);
       resp_p = detail::to_host_order(resp_p);
-      conn.sport = {orig_p, port::tcp};
-      conn.dport = {resp_p, port::tcp};
+      conn.src_port = {orig_p, port::tcp};
+      conn.dst_port = {resp_p, port::tcp};
       auto data_offset = *reinterpret_cast<const uint8_t*>(layer4 + 12) >> 4;
       payload_size -= data_offset * 4;
     } else if (layer4_proto == IPPROTO_UDP) {
@@ -216,15 +216,15 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
       auto resp_p = *reinterpret_cast<const uint16_t*>(layer4 + 2);
       orig_p = detail::to_host_order(orig_p);
       resp_p = detail::to_host_order(resp_p);
-      conn.sport = {orig_p, port::udp};
-      conn.dport = {resp_p, port::udp};
+      conn.src_port = {orig_p, port::udp};
+      conn.dst_port = {resp_p, port::udp};
       payload_size -= 8;
     } else if (layer4_proto == IPPROTO_ICMP) {
       VAST_ASSERT(layer4);
       auto message_type = *reinterpret_cast<const uint8_t*>(layer4);
       auto message_code = *reinterpret_cast<const uint8_t*>(layer4 + 1);
-      conn.sport = {message_type, port::icmp};
-      conn.dport = {message_code, port::icmp};
+      conn.src_port = {message_type, port::icmp};
+      conn.dst_port = {message_code, port::icmp};
       payload_size -= 8; // TODO: account for variable-size data.
     }
     // Parse packet timestamp
@@ -249,10 +249,11 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
     // Assemble packet.
     // We start with the network layer and skip the link layer.
     auto str = reinterpret_cast<const char*>(data + 14);
-    auto& cid = flow(conn).community_id;
-    if (!(builder_->add(ts) && builder_->add(conn.src)
-          && builder_->add(conn.dst) && builder_->add(conn.sport)
-          && builder_->add(conn.dport) && builder_->add(std::string_view{cid})
+    auto& cid = state(conn).community_id;
+    if (!(builder_->add(ts) && builder_->add(conn.src_addr)
+          && builder_->add(conn.dst_addr) && builder_->add(conn.src_port)
+          && builder_->add(conn.dst_port)
+          && builder_->add(std::string_view{cid})
           && builder_->add(std::string_view{str, packet_size}))) {
       return make_error(ec::parse_error, "unable to fill row");
     }
@@ -275,21 +276,22 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
   return finish(f, caf::none);
 }
 
-reader::connection_state& reader::flow(const connection& conn) {
-  auto i = flows_.find(conn);
+reader::flow_state& reader::state(const flow& x) {
+  auto i = flows_.find(x);
   if (i == flows_.end()) {
-    auto cf = community_id::flow{conn.src, conn.dst, conn.sport, conn.dport};
+    auto cf = community_id::flow{x.src_addr, x.dst_addr, x.src_port,
+                                 x.dst_port};
     auto id = community_id::compute<policy::base64>(cf);
-    i = flows_.emplace(conn, connection_state{0, 0, std::move(id)}).first;
+    i = flows_.emplace(x, flow_state{0, 0, std::move(id)}).first;
   }
   return i->second;
 }
 
-bool reader::update_flow(const connection& conn, uint64_t packet_time,
+bool reader::update_flow(const flow& x, uint64_t packet_time,
                          uint64_t payload_size) {
-  auto& flow_state = flow(conn);
-  flow_state.last = packet_time;
-  auto& flow_size = flow_state.bytes;
+  auto& st = state(x);
+  st.last = packet_time;
+  auto& flow_size = st.bytes;
   if (flow_size == cutoff_)
     return false;
   VAST_ASSERT(flow_size < cutoff_);

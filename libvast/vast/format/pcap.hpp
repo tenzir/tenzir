@@ -24,53 +24,14 @@
 #include "vast/concept/hashable/xxhash.hpp"
 #include "vast/detail/operators.hpp"
 #include "vast/expected.hpp"
+#include "vast/flow.hpp"
 #include "vast/format/reader.hpp"
 #include "vast/format/single_layout_reader.hpp"
 #include "vast/format/writer.hpp"
+#include "vast/fwd.hpp"
 #include "vast/port.hpp"
 #include "vast/schema.hpp"
 #include "vast/time.hpp"
-
-namespace vast {
-
-class event;
-
-namespace format {
-namespace pcap {
-
-struct connection : detail::equality_comparable<connection> {
-  address src;
-  address dst;
-  port sport;
-  port dport;
-
-  friend bool operator==(const connection& lhs, const connection& rhs) {
-    return lhs.src == rhs.src
-      && lhs.dst == rhs.dst
-      && lhs.sport == rhs.sport
-      && lhs.dport == rhs.dport;
-  }
-};
-
-template <class Hasher>
-void hash_append(Hasher& h, const connection& c) {
-  hash_append(h, c.src, c.dst, c.sport.number(), c.dport.number());
-}
-
-} // namespace pcap
-} // namespace format
-} // namespace vast
-
-namespace std {
-
-template <>
-struct hash<vast::format::pcap::connection> {
-  size_t operator()(const vast::format::pcap::connection& c) const {
-    return vast::uhash<vast::xxhash>{}(c);
-  }
-};
-
-} // namespace std
 
 namespace vast {
 namespace format {
@@ -112,20 +73,19 @@ protected:
                        consumer& f) override;
 
 private:
-  struct connection_state {
+  struct flow_state {
     uint64_t bytes;
     uint64_t last;
     std::string community_id;
   };
 
-  /// @returns either an existing flow associated to `conn` or a new flow for
-  ///          the connection.
-  connection_state& flow(const connection& conn);
+  /// @returns either an existing state associated to `x` or a new state for
+  ///          the flow.
+  flow_state& state(const flow& x);
 
   /// @returns whether `true` if the flow remains active, `false` if the flow
   ///          reached the configured cutoff.
-  bool update_flow(const connection& conn, uint64_t packet_time,
-                   uint64_t payload_size);
+  bool update_flow(const flow& x, uint64_t packet_time, uint64_t payload_size);
 
   /// Evict all flows that have been inactive for the maximum age.
   void evict_inactive(uint64_t packet_time);
@@ -135,7 +95,7 @@ private:
 
   pcap_t* pcap_ = nullptr;
   type packet_type_;
-  std::unordered_map<connection, connection_state> flows_;
+  std::unordered_map<flow, flow_state> flows_;
   uint64_t cutoff_;
   size_t max_flows_;
   std::mt19937 generator_;
