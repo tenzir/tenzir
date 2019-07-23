@@ -298,7 +298,37 @@ struct csv_parser_factory {
 
   template <class T>
   result_type operator()(const T& t) const {
-    if constexpr (std::is_same_v<T, string_type>) {
+    if constexpr (std::is_same_v<T, duration_type>) {
+      auto make_duration_parser = [&](auto period) {
+        // clang-format off
+        return (-parsers::real_opt_dot ->* [](double x) {
+          using period_type = decltype(period);
+          using double_duration = std::chrono::duration<double, period_type>;
+          return std::chrono::duration_cast<duration>(double_duration{x});
+        }).with(add_t<duration>{bptr_});
+        // clang-format on
+      };
+      if (auto attr = find_attribute(t, "unit")) {
+        if (auto unit = attr->value) {
+          if (*unit == "ns")
+            return make_duration_parser(std::nano{});
+          if (*unit == "us")
+            return make_duration_parser(std::micro{});
+          if (*unit == "ms")
+            return make_duration_parser(std::milli{});
+          if (*unit == "s")
+            return make_duration_parser(std::ratio<1>{});
+          if (*unit == "min")
+            return make_duration_parser(std::ratio<60>{});
+          if (*unit == "h")
+            return make_duration_parser(std::ratio<3600>{});
+          if (*unit == "d")
+            return make_duration_parser(std::ratio<86400>{});
+        }
+      }
+      // If we do not have an explicit unit given, we require the unit suffix.
+      return (-parsers::duration).with(add_t<duration>{bptr_});
+    } else if constexpr (std::is_same_v<T, string_type>) {
       return (-+(parsers::any - opt_.separator))
         .with(add_t<std::string>{bptr_});
     } else if constexpr (std::is_same_v<T, pattern_type>) {

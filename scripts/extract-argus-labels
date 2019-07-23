@@ -1,0 +1,93 @@
+#!/usr/bin/env python
+#
+# Script that extracts labels from the source code in the argus-clients
+# repository.
+#
+# The libclang code has only been tested on macOS.
+#
+# Prerequisites:
+#
+# - brew install llvm
+# - pip install clang
+
+import argparse
+import logging
+from pathlib import Path
+import sys
+
+LIBCLANG_PATH_OSX = '/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/'
+
+logger = logging.getLogger()
+
+# Extracts labels that can be deduced from statically analyzing the C code of
+# argus_util.c containing the field definitions.
+def extract_labels(argus_dir, libclang_path):
+  from clang.cindex import Config, Index, CursorKind
+  # Setup Clang.
+  Config.set_library_path(libclang_path)
+  index = Index.create()
+  # Extract labels from Argus.
+  argus_util_c = argus_dir / 'common' / 'argus_util.c'
+  translation_unit = index.parse(str(argus_util_c))
+  for node in translation_unit.cursor.walk_preorder():
+    if node.kind != CursorKind.FUNCTION_DECL or not node.is_definition():
+      continue
+    name = node.spelling
+    # Skip functions that have nothing to do with label printing.
+    if not (name.startswith('ArgusPrint') and name.endswith('Label')):
+      continue
+    # Ignore some higher-level functions that do more than just label printing.
+    if name.startswith('ArgusPrintLabel'):
+      continue
+    logger.debug(f'processing label function: {name}')
+    body = [x for x in node.get_children()][-1]
+    assert body.kind == CursorKind.COMPOUND_STMT
+    # TODO: expand analysis beyond single sprintf statements.
+    calls = [x for x in body.walk_preorder() if x.kind == CursorKind.CALL_EXPR]
+    if len(calls) != 1 or calls[0].spelling != 'sprintf':
+      logger.info('ignoring too complex label printing')
+      continue
+    # The last argument is our label
+    last_arg = [x for x in calls[0].walk_preorder()][-1]
+    if last_arg.kind != CursorKind.STRING_LITERAL:
+      logger.info('skipping sprintf that does not end in a string literal')
+      continue
+    yield last_arg.spelling[1:-1] # remove double quotes
+
+def main():
+  parser = argparse.ArgumentParser(
+    description='Utility to extract argus labels from ra(1)',
+    formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+  parser.add_argument(
+    '-L',
+    '--libclang-path',
+    default=LIBCLANG_PATH_OSX,
+    help='path to libclang shared library')
+  parser.add_argument(
+    '-v',
+    '--verbosity',
+    default='warning',
+    help='the logging verbosity')
+  parser.add_argument(
+      'dir',
+      type=Path,
+      help='path to argus-clients source directory')
+  args = parser.parse_args()
+  # Configure logger.
+  verbosity = args.verbosity.upper()
+  logger.setLevel(verbosity)
+  fmt = logging.Formatter("%(asctime)s %(levelname)-8s %(message)s")
+  ch = logging.StreamHandler()
+  ch.setLevel(verbosity)
+  ch.setFormatter(fmt)
+  logger.addHandler(ch)
+  # Extract argus labels.
+  if not args.dir:
+    logger.error('no argus-clients directory provided')
+    return 1
+  for x in extract_labels(args.dir, args.libclang_path):
+    print(x)
+  return 0
+
+if __name__ == '__main__':
+  main()

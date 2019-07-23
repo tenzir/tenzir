@@ -154,9 +154,9 @@ tests:
   Node argus csv:
     tags: [node, import-export, argus, csv]
     steps:
-      - command: import -N csv -s @./misc/schema/argus.schema -t argus.argus
-        input: data/csv/argus_sample.log.gz
-      - command: export -N ascii 'State == "CON"'
+      - command: import -N csv -t argus.record
+        input: data/csv/argus-M57-10k-pkts.csv.gz
+      - command: export -N ascii 'State != "CON" && Dur >= 4900ms'
 
   Manual 1:
     condition: 'import -h 2>&1 | grep -q pcap'
