@@ -300,10 +300,7 @@ public:
 
   // [span.cons], span constructors, copy, assignment, and destructor
   template <bool Dependent = false,
-            // "Dependent" is needed to make "std::enable_if_t<Dependent ||
-            // Extent <= 0>" SFINAE, since "std::enable_if_t<Extent <= 0>" is
-            // ill-formed when Extent is greater than 0.
-            class = std::enable_if_t<(Dependent || Extent <= 0)>>
+            class = std::enable_if_t<(Dependent || Extent == dynamic_extent)>>
   constexpr span() noexcept : storage_(nullptr, detail::extent_type<0>()) {
   }
 
