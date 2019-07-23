@@ -60,7 +60,9 @@ struct bool_type;
 struct count_type;
 struct curried_predicate;
 struct data_extractor;
+struct duration_type;
 struct enumeration_type;
+struct flow;
 struct integer_type;
 struct key_extractor;
 struct map_type;
@@ -75,7 +77,6 @@ struct segment_header;
 struct set_type;
 struct string_type;
 struct subnet_type;
-struct duration_type;
 struct time_type;
 struct vector_type;
 
