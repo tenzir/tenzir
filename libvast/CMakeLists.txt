@@ -55,6 +55,7 @@ set(libvast_sources
     src/expression.cpp
     src/expression_visitors.cpp
     src/filesystem.cpp
+    src/flow.cpp
     src/format/ascii.cpp
     src/format/bgpdump.cpp
     src/format/csv.cpp
@@ -244,6 +245,7 @@ set(tests
     test/expression_parseable.cpp
     test/factory.cpp
     test/filesystem.cpp
+    test/flow.cpp
     test/format/csv.cpp
     test/format/json.cpp
     test/format/mrt.cpp
