@@ -360,7 +360,7 @@ caf::error writer::write(const table_slice& slice) {
     return make_error(ec::format_error, "invalid pcap packet type");
   // TODO: consider iterating in natural order for the slice.
   for (size_t row = 0; row < slice.rows(); ++row) {
-    auto payload_field = slice.at(row, 5);
+    auto payload_field = slice.at(row, 6);
     auto& payload = caf::get<view<std::string>>(payload_field);
     // Make PCAP header.
     ::pcap_pkthdr header;
