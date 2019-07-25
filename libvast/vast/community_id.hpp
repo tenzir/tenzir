@@ -56,7 +56,7 @@ constexpr char version = '1';
 /// @param x The flow to hash.
 /// @relates flow
 template <class Hasher>
-void community_hash_append(Hasher& hasher, const flow& x) {
+void community_id_hash_append(Hasher& hasher, const flow& x) {
   VAST_ASSERT(x.src_port.type() == x.dst_port.type());
   auto src_port_num = x.src_port.number();
   auto dst_port_num = x.dst_port.number();
@@ -137,7 +137,7 @@ std::string compute(const flow& x, uint16_t seed = 0) {
   // Compute a SHA-1 hash over the flow tuple.
   sha1 hasher;
   hash_append(hasher, detail::to_network_order(seed));
-  community_hash_append(hasher, x);
+  community_id_hash_append(hasher, x);
   auto digest = static_cast<sha1::result_type>(hasher);
   // Convert the binary digest to plain hex ASCII or to Base64.
   if constexpr (std::is_same_v<Policy, policy::base64>) {
