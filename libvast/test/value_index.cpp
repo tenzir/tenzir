@@ -143,16 +143,24 @@ TEST(duration) {
   REQUIRE(idx.append(make_data_view(milliseconds(1000))));
   REQUIRE(idx.append(make_data_view(milliseconds(2000))));
   REQUIRE(idx.append(make_data_view(milliseconds(3000))));
+  REQUIRE(idx.append(make_data_view(milliseconds(911))));
   REQUIRE(idx.append(make_data_view(milliseconds(1011))));
+  REQUIRE(idx.append(make_data_view(milliseconds(1411))));
   REQUIRE(idx.append(make_data_view(milliseconds(2222))));
   REQUIRE(idx.append(make_data_view(milliseconds(2322))));
   MESSAGE("lookup");
-  auto hun = idx.lookup(equal, make_data_view(milliseconds(1034)));
-  CHECK_EQUAL(to_string(unbox(hun)), "100100");
-  auto twokay = idx.lookup(less_equal, make_data_view(milliseconds(2000)));
-  CHECK_EQUAL(to_string(unbox(twokay)), "110111");
-  auto twelve = idx.lookup(greater, make_data_view(milliseconds(1200)));
-  CHECK_EQUAL(to_string(unbox(twelve)), "011011");
+  auto lookup = [&](relational_operator op, auto dv) {
+    return to_string(unbox(idx.lookup(op, dv)));
+  };
+  auto hun = make_data_view(milliseconds(1034));
+  auto twelve = make_data_view(milliseconds(1200));
+  auto twokay = make_data_view(milliseconds(2000));
+  CHECK_EQUAL(lookup(equal, hun), "10001100");
+  CHECK_EQUAL(lookup(less_equal, twokay), "11011111");
+  CHECK_EQUAL(lookup(greater, twelve), "11101111");
+  CHECK_EQUAL(lookup(greater_equal, twelve), "11101111");
+  CHECK_EQUAL(lookup(less, twelve), "10011100");
+  CHECK_EQUAL(lookup(less_equal, twelve), "10011100");
 }
 
 TEST(time) {
