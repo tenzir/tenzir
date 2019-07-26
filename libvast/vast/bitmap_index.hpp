@@ -86,7 +86,14 @@ public:
   /// @param x The value to find the bitmap for.
   /// @returns The bitmap for all values *v* where *op(v,x)* is `true`.
   bitmap_type lookup(relational_operator op, value_type x) const {
-    return coder_.decode(op, transform(binner_type::bin(x)));
+    auto binned = binner_type::bin(x);
+    if constexpr (!std::is_same_v<binner_type, identity_binner>) {
+      if (op == greater)
+        --binned;
+      if (op == less)
+        ++binned;
+    }
+    return coder_.decode(op, transform(binned));
   }
 
   /// Retrieves the bitmap index size.

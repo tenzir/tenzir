@@ -249,12 +249,12 @@ TEST(decimal binner with time) {
   bmi.append((10999ns).count());
   bmi.append((11000ns).count());
   bmi.append((100000ns).count());
-  CHECK_EQUAL(to_string(bmi.lookup(greater, (100000ns).count())), "000000");
-  CHECK_EQUAL(to_string(bmi.lookup(greater, (10998ns).count())), "000011");
-  CHECK_EQUAL(to_string(bmi.lookup(greater, (11000ns).count())), "000001");
-  CHECK_EQUAL(to_string(bmi.lookup(greater, (10000ns).count())), "000011");
-  CHECK_EQUAL(to_string(bmi.lookup(less, (10999ns).count())), "000000");
-  CHECK_EQUAL(to_string(bmi.lookup(less, (11000ns).count())), "111100");
+  CHECK_EQUAL(to_string(bmi.lookup(greater, (100000ns).count())), "000001");
+  CHECK_EQUAL(to_string(bmi.lookup(greater, (10998ns).count())), "111111");
+  CHECK_EQUAL(to_string(bmi.lookup(greater, (11000ns).count())), "000011");
+  CHECK_EQUAL(to_string(bmi.lookup(greater, (10000ns).count())), "111111");
+  CHECK_EQUAL(to_string(bmi.lookup(less, (10999ns).count())), "111100");
+  CHECK_EQUAL(to_string(bmi.lookup(less, (11000ns).count())), "111110");
 }
 
 TEST(decimal binner with floating-point) {
