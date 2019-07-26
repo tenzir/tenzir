@@ -147,12 +147,15 @@ TEST(duration) {
   REQUIRE(idx.append(make_data_view(milliseconds(2222))));
   REQUIRE(idx.append(make_data_view(milliseconds(2322))));
   MESSAGE("lookup");
-  auto hun = idx.lookup(equal, make_data_view(milliseconds(1034)));
-  CHECK_EQUAL(to_string(unbox(hun)), "100100");
-  auto twokay = idx.lookup(less_equal, make_data_view(milliseconds(2000)));
-  CHECK_EQUAL(to_string(unbox(twokay)), "110111");
-  auto twelve = idx.lookup(greater, make_data_view(milliseconds(1200)));
-  CHECK_EQUAL(to_string(unbox(twelve)), "011011");
+  auto lookup = [&](relational_operator op, auto dv) {
+    return to_string(unbox(idx.lookup(op, dv)));
+  };
+  auto hun = make_data_view(milliseconds(1034));
+  auto twelve = make_data_view(milliseconds(1200));
+  auto twokay = make_data_view(milliseconds(2000));
+  CHECK_EQUAL(lookup(equal, hun), "100100");
+  CHECK_EQUAL(lookup(less_equal, twokay), "110111");
+  CHECK_EQUAL(lookup(greater, twelve), "011011");
 }
 
 TEST(time) {
