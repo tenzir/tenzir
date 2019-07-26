@@ -10,6 +10,10 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## [Unreleased]
 
+- 🐞 Queries with the less `<` or greater `>` operators produced off-by-one
+  results for the `duration` when the query contained a finer resolution than the
+  index. The operator now works as expected.
+
 - 🎁 A new schema for Argus CSV output has been added. It parses the output of
   `ra(1)`, which produces CSV output when invoked with `-L 0 -c ,`.
 
