@@ -92,7 +92,7 @@ struct convert {
     auto i = std::find(e.fields.begin(), e.fields.end(), s);
     if (i == e.fields.end())
       return make_error(ec::parse_error, "invalid:", s);
-    return std::distance(e.fields.begin(), i);
+    return detail::narrow_cast<enumeration>(std::distance(e.fields.begin(), i));
   }
 
   expected<data> operator()(const json::array& a, const set_type& s) const {
