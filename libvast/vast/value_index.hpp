@@ -301,6 +301,25 @@ private:
   std::vector<char_bitmap_index> chars_;
 };
 
+/// An index for enumerations.
+class enumeration_index : public value_index {
+public:
+  using index = bitmap_index<enumeration, equality_coder<ewah_bitmap>>;
+
+  explicit enumeration_index(vast::type t);
+
+  caf::error serialize(caf::serializer& sink) const override;
+
+  caf::error deserialize(caf::deserializer& source) override;
+
+private:
+  bool append_impl(data_view x, id pos) override;
+
+  expected<ids> lookup_impl(relational_operator op, data_view x) const override;
+
+  index index_;
+};
+
 /// An index for IP addresses.
 class address_index : public value_index {
 public:

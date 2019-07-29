@@ -54,8 +54,8 @@ value_index_ptr make(type x) {
 
 template <class T>
 value_index_ptr make_arithmetic(type x) {
-  static_assert(detail::is_any_v<T, integer_type, count_type, real_type,
-                                 duration_type, time_type>);
+  static_assert(detail::is_any_v<T, integer_type, count_type, enumeration_type,
+                                 real_type, duration_type, time_type>);
   using concrete_data = type_to_data<T>;
   using value_index_type = arithmetic_index<concrete_data>;
   if (auto base = parse_base(x))
@@ -91,6 +91,7 @@ void factory_traits<value_index>::initialize() {
   add_arithmetic_index_factory<real_type>();
   add_arithmetic_index_factory<duration_type>();
   add_arithmetic_index_factory<time_type>();
+  add_value_index_factory<enumeration_type, enumeration_index>();
   add_value_index_factory<address_type, address_index>();
   add_value_index_factory<subnet_type, subnet_index>();
   add_value_index_factory<port_type, port_index>();
