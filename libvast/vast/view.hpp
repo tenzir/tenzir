@@ -58,6 +58,7 @@ VAST_VIEW_TRAIT(count);
 VAST_VIEW_TRAIT(real);
 VAST_VIEW_TRAIT(duration);
 VAST_VIEW_TRAIT(time);
+VAST_VIEW_TRAIT(enumeration);
 VAST_VIEW_TRAIT(port);
 VAST_VIEW_TRAIT(address);
 VAST_VIEW_TRAIT(subnet);
@@ -155,6 +156,7 @@ using data_view = caf::variant<
   view<address>,
   view<subnet>,
   view<port>,
+  view<enumeration>,
   view<vector>,
   view<set>,
   view<map>

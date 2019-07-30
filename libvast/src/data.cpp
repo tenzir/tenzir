@@ -59,9 +59,13 @@ struct adder {
     add_numeric(x, y);
   }
 
-  // Also handles enumeration, because enumeration is an alias for count.
   template <class T>
   void operator()(count& x, const T& y) {
+    add_numeric(x, y);
+  }
+
+  template <class T>
+  void operator()(enumeration& x, const T& y) {
     add_numeric(x, y);
   }
 

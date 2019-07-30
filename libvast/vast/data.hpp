@@ -55,7 +55,11 @@ using to_data_type = std::conditional_t<
     bool,
     std::conditional_t<
       std::is_unsigned_v<T>,
-      count,
+      std::conditional_t<
+        sizeof(T) == 1,
+        enumeration,
+        count
+      >,
       std::conditional_t<
         std::is_signed_v<T>,
         integer,
@@ -70,7 +74,6 @@ using to_data_type = std::conditional_t<
             || std::is_same_v<T, address>
             || std::is_same_v<T, subnet>
             || std::is_same_v<T, port>
-            || std::is_same_v<T, enumeration>
             || std::is_same_v<T, vector>
             || std::is_same_v<T, set>
             || std::is_same_v<T, map>,
@@ -199,6 +202,7 @@ VAST_DATA_TRAIT(pattern);
 VAST_DATA_TRAIT(address);
 VAST_DATA_TRAIT(subnet);
 VAST_DATA_TRAIT(port);
+VAST_DATA_TRAIT(enumeration);
 VAST_DATA_TRAIT(vector);
 VAST_DATA_TRAIT(set);
 VAST_DATA_TRAIT(map);
