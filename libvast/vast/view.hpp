@@ -44,24 +44,24 @@ template <class T>
 using view = typename view_trait<T>::type;
 
 #define VAST_VIEW_TRAIT(type_name)                                             \
-  inline auto materialize(type_name x) {                                       \
-    return x;                                                                  \
-  }                                                                            \
   template <>                                                                  \
   struct view_trait<type_name> {                                               \
     using type = type_name;                                                    \
+  };                                                                           \
+  inline type_name materialize(view<type_name> x) {                            \
+    return x;                                                                  \
   }
 
-VAST_VIEW_TRAIT(bool);
-VAST_VIEW_TRAIT(integer);
-VAST_VIEW_TRAIT(count);
-VAST_VIEW_TRAIT(real);
-VAST_VIEW_TRAIT(duration);
-VAST_VIEW_TRAIT(time);
-VAST_VIEW_TRAIT(enumeration);
-VAST_VIEW_TRAIT(port);
-VAST_VIEW_TRAIT(address);
-VAST_VIEW_TRAIT(subnet);
+VAST_VIEW_TRAIT(bool)
+VAST_VIEW_TRAIT(integer)
+VAST_VIEW_TRAIT(count)
+VAST_VIEW_TRAIT(real)
+VAST_VIEW_TRAIT(duration)
+VAST_VIEW_TRAIT(time)
+VAST_VIEW_TRAIT(enumeration)
+VAST_VIEW_TRAIT(port)
+VAST_VIEW_TRAIT(address)
+VAST_VIEW_TRAIT(subnet)
 
 #undef VAST_VIEW_TRAIT
 
