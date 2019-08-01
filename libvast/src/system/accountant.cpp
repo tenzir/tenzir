@@ -57,7 +57,7 @@ void init(accountant_actor* self, const path& filename) {
     self->quit(e);
     return;
   }
-  file << "timestamp\thost\tpid\taid\tactor_name\tkey\tvalue\n";
+  file << "timestamp\tnode\taid\tactor_name\tkey\tvalue\n";
   if (!file)
     self->quit(make_error(ec::filesystem_error));
   VAST_DEBUG(self, "kicks off flush loop");
@@ -74,12 +74,9 @@ void record(accountant_actor* self, const std::string& key, T x,
   auto aid = self->current_sender()->id();
   auto node = self->current_sender()->node();
   auto& st = self->state;
-  st.file << to_string(ts) << '\t';
-  for (auto byte : node.host_id())
-    st.file << static_cast<int>(byte);
-  st.file << std::dec << '\t' << node.process_id() << '\t' << aid << '\t'
-          << st.actor_map[aid] << '\t' << key << '\t' << std::setprecision(6)
-          << x << '\n';
+  st.file << to_string(ts) << '\t' << to_string(node) << '\t';
+  st.file << std::dec << aid << '\t' << st.actor_map[aid] << '\t' << key << '\t'
+          << std::setprecision(6) << x << '\n';
   // Flush after at most 10 seconds.
   if (!st.flush_pending) {
     st.flush_pending = true;
