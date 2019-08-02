@@ -101,7 +101,8 @@ caf::expected<bitmap> column_index::lookup(relational_operator op,
                                            data_view rhs) {
   VAST_TRACE(VAST_ARG(op), VAST_ARG(rhs));
   VAST_ASSERT(idx_ != nullptr);
-  auto result = idx_->lookup(op, rhs);
+  auto rep = to_internal(index_type_, rhs);
+  auto result = idx_->lookup(op, rep);
   VAST_DEBUG(this, VAST_ARG(result));
   return result;
 }

@@ -588,7 +588,9 @@ bool table_slice_row_evaluator::operator()(const attribute_extractor& e,
       return false;
     // Compare timestamp at given cell.
     auto pos = static_cast<size_t>(std::distance(fs.begin(), i));
-    return evaluate_view(slice_.at(row_, pos), op_, make_view(d));
+    auto x = to_canonical(slice_.layout().fields[pos].type,
+                          slice_.at(row_, pos));
+    return evaluate_view(x, op_, make_view(d));
   }
   return false;
 }
@@ -606,7 +608,8 @@ bool table_slice_row_evaluator::operator()(const data_extractor& e,
   if (e.type != slice_.layout())
     return false;
   VAST_ASSERT(e.offset.size() == 1);
-  auto x = slice_.at(row_, e.offset[0]);
+  auto x = to_canonical(slice_.layout().fields[e.offset[0]].type,
+                        slice_.at(row_, e.offset[0]));
   return evaluate_view(x, op_, make_data_view(d));
 }
 

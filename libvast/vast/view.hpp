@@ -476,7 +476,7 @@ data materialize(data_view xs);
 // -- utilities ----------------------------------------------------------------
 
 /// Checks whether data is valid for a given type.
-/// @param t The type that describes *d*.
+/// @param t The type that describes *x*.
 /// @param x The data view to be checked against *t*.
 /// @returns `true` if *t* is a valid type for *x*.
 bool type_check(const type& t, const data_view& x);
@@ -490,5 +490,21 @@ bool type_check(const type& t, const data_view& x);
 ///       function in `data.hpp`.
 bool evaluate_view(const data_view& lhs, relational_operator op,
                    const data_view& rhs);
+
+/// Converts a view according to the accompanying type. I.e. replaces a view
+/// on an internal representation of a field to the representation as defined
+/// in the type.
+/// @param t The type that describes *x*.
+/// @param x The data view on the internal representation of the value.
+/// @return A data view on the external representation of the value.
+data_view to_canonical(const type& t, const data_view& x);
+
+/// Converts a view according to the accompanying type. I.e. replaces a view
+/// on a value as represented in the type to a view on its corresponding
+/// internal representation.
+/// @param t The type that describes *x*.
+/// @param x The data view on the external representation of the value.
+/// @return A data view on the internal representation of the value.
+data_view to_internal(const type& t, const data_view& x);
 
 } // namespace vast
