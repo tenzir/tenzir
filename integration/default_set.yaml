@@ -157,6 +157,7 @@ tests:
       - command: import -N csv -t argus.record
         input: data/csv/argus-M57-10k-pkts.csv.gz
       - command: export -N ascii 'State != "CON" && Dur > 4900ms'
+      - command: export -N ascii 'Cause == "Status" && Dur > 1s'
 
   Manual 1:
     condition: 'import -h 2>&1 | grep -q pcap'
