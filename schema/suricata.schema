@@ -39,7 +39,7 @@ type suricata.alert = record{
   community_id: string,
   alert: record{
     app_proto: string,
-    action: string,
+    action: enum{allowed, blocked},
     gid: count,
     signature_id: count,
     rev: count,
@@ -92,7 +92,7 @@ type suricata.dns = record{
   proto: string,
   community_id: string,
   dns: record{
-    type: string,
+    type: enum{answer, query},
     id: count,
     flags: count,
     rrname: string,
