@@ -90,15 +90,14 @@ protected:
                    std::string_view end_of_line) {
     auto print_field = [&](auto& iter, size_t row, size_t column) {
       auto rep = [&](data_view x) {
-        if constexpr (std::is_same_v<Policy, policy::include_field_names>) {
+        if constexpr (std::is_same_v<Policy, policy::include_field_names>)
           return std::pair{xs.column_name(column), x};
-        } else {
-          static_assert(std::is_same_v<Policy, policy::omit_field_names>,
-                        "Unsupported policy: Expected either "
-                        "include_field_names "
-                        "or omit_field_names");
+        else if constexpr (std::is_same_v<Policy, policy::omit_field_names>)
           return x;
-        }
+        else
+          static_assert(detail::always_false_v<Policy>,
+                        "Unsupported policy: Expected either "
+                        "include_field_names or omit_field_names");
       };
       auto x = to_canonical(xs.layout().fields[column].type,
                             xs.at(row, column));

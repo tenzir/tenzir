@@ -242,8 +242,6 @@ bool enumeration_index::append_impl(data_view x, id pos) {
 
 expected<ids> enumeration_index::lookup_impl(relational_operator op,
                                              data_view d) const {
-  if (offset() == 0) // FIXME: why do we need this check again?
-    return ids{};
   return caf::visit(detail::overload(
                       [&](auto x) -> expected<ids> {
                         return make_error(ec::type_clash, materialize(x));
@@ -477,8 +475,6 @@ bool port_index::append_impl(data_view x, id pos) {
 
 expected<ids>
 port_index::lookup_impl(relational_operator op, data_view d) const {
-  if (offset() == 0) // FIXME: why do we need this check again?
-    return ids{};
   return caf::visit(detail::overload(
     [&](auto x) -> expected<ids> {
       return make_error(ec::type_clash, materialize(x));

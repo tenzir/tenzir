@@ -56,6 +56,8 @@ using to_data_type = std::conditional_t<
     std::conditional_t<
       std::is_unsigned_v<T>,
       std::conditional_t<
+        // TODO (ch7585): Define enumeration and count as strong typedefs to
+        //                avoid error-prone heuristics like this one.
         sizeof(T) == 1,
         enumeration,
         count
