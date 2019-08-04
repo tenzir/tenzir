@@ -235,7 +235,8 @@ struct container_parser_builder {
                             s);
           return caf::none;
         }
-        return enumeration(std::distance(t.fields.begin(), i));
+        return detail::narrow_cast<enumeration>(
+          std::distance(t.fields.begin(), i));
       };
       return (+(parsers::any - opt_.set_separator - opt_.kvp_separator))
         .with(to_enumeration);
@@ -342,7 +343,8 @@ struct csv_parser_factory {
                             s);
           return caf::none;
         }
-        return std::distance(t.fields.begin(), i);
+        return detail::narrow_cast<enumeration>(
+          std::distance(t.fields.begin(), i));
       };
       // clang-format off
       return ((+(parsers::any - opt_.separator))

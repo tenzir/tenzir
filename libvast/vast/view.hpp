@@ -44,23 +44,24 @@ template <class T>
 using view = typename view_trait<T>::type;
 
 #define VAST_VIEW_TRAIT(type_name)                                             \
-  inline auto materialize(type_name x) {                                       \
-    return x;                                                                  \
-  }                                                                            \
   template <>                                                                  \
   struct view_trait<type_name> {                                               \
     using type = type_name;                                                    \
+  };                                                                           \
+  inline type_name materialize(view<type_name> x) {                            \
+    return x;                                                                  \
   }
 
-VAST_VIEW_TRAIT(bool);
-VAST_VIEW_TRAIT(integer);
-VAST_VIEW_TRAIT(count);
-VAST_VIEW_TRAIT(real);
-VAST_VIEW_TRAIT(duration);
-VAST_VIEW_TRAIT(time);
-VAST_VIEW_TRAIT(port);
-VAST_VIEW_TRAIT(address);
-VAST_VIEW_TRAIT(subnet);
+VAST_VIEW_TRAIT(bool)
+VAST_VIEW_TRAIT(integer)
+VAST_VIEW_TRAIT(count)
+VAST_VIEW_TRAIT(real)
+VAST_VIEW_TRAIT(duration)
+VAST_VIEW_TRAIT(time)
+VAST_VIEW_TRAIT(enumeration)
+VAST_VIEW_TRAIT(port)
+VAST_VIEW_TRAIT(address)
+VAST_VIEW_TRAIT(subnet)
 
 #undef VAST_VIEW_TRAIT
 
@@ -155,6 +156,7 @@ using data_view = caf::variant<
   view<address>,
   view<subnet>,
   view<port>,
+  view<enumeration>,
   view<vector>,
   view<set>,
   view<map>
@@ -474,7 +476,7 @@ data materialize(data_view xs);
 // -- utilities ----------------------------------------------------------------
 
 /// Checks whether data is valid for a given type.
-/// @param t The type that describes *d*.
+/// @param t The type that describes *x*.
 /// @param x The data view to be checked against *t*.
 /// @returns `true` if *t* is a valid type for *x*.
 bool type_check(const type& t, const data_view& x);
@@ -488,5 +490,19 @@ bool type_check(const type& t, const data_view& x);
 ///       function in `data.hpp`.
 bool evaluate_view(const data_view& lhs, relational_operator op,
                    const data_view& rhs);
+
+/// Converts a value from its internal representation to the type used in the
+/// user interface. This is the inverse of to_internal.
+/// @param t The type that describes *x*.
+/// @param x The data view on the internal representation of the value.
+/// @return A data view on the external representation of the value.
+data_view to_canonical(const type& t, const data_view& x);
+
+/// Converts a value from the type defined in the user interface to its
+/// internal representation. This is the inverse of to_canonical.
+/// @param t The type that describes *x*.
+/// @param x The data view on the external representation of the value.
+/// @return A data view on the internal representation of the value.
+data_view to_internal(const type& t, const data_view& x);
 
 } // namespace vast

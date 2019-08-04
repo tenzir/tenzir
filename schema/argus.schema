@@ -1,11 +1,10 @@
-// TODO: Uncomment and use once enum values are supported by the index.
-//type argus.cause = enum{
-//  Start,
-//  Status,
-//  Stop,
-//  Close,
-//  Error
-//}
+type argus.cause = enum{
+  Start,
+  Status,
+  Stop,
+  Close,
+  Error
+}
 
 type argus.record = record{
   // Standard fields that are always present.
@@ -57,7 +56,7 @@ type argus.record = record{
   sAS: count,                     // sas
   dAS: count,                     // das
   iAS: count,                     // ias
-  Cause: string,                  // cause (TODO: use enum type)
+  Cause: argus.cause,             // cause
   NStrok: count,                  // nstroke
   sNStrok: count,                 // snstroke
   dNStrok: count,                 // dnstroke

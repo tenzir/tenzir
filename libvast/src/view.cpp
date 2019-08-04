@@ -15,6 +15,7 @@
 
 #include <regex>
 
+#include "vast/detail/narrow.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/type.hpp"
 
@@ -291,6 +292,30 @@ bool evaluate_view(const data_view& lhs, relational_operator op,
     case greater_equal:
       return lhs >= rhs;
   }
+}
+
+data_view to_canonical(const type& t, const data_view& x) {
+  auto v = detail::overload(
+    [](const view<enumeration>& x, const enumeration_type& t) -> data_view {
+      if (materialize(x) >= t.fields.size())
+        return caf::none;
+      return make_view(t.fields[materialize(x)]);
+    },
+    [&](auto&, auto&) { return x; });
+  return caf::visit(v, x, t);
+}
+
+data_view to_internal(const type& t, const data_view& x) {
+  auto v = detail::overload(
+    [](const view<std::string>& s, const enumeration_type& t) -> data_view {
+      auto i = std::find(t.fields.begin(), t.fields.end(), s);
+      if (i == t.fields.end())
+        return caf::none;
+      return detail::narrow_cast<enumeration>(
+        std::distance(t.fields.begin(), i));
+    },
+    [&](auto&, auto&) { return x; });
+  return caf::visit(v, x, t);
 }
 
 } // namespace vast

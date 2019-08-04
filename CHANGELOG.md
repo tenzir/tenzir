@@ -10,6 +10,10 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## [Unreleased]
 
+- 🐞 When specifying `enum` types in the schema, ingestion failed because there
+  did not exist an implementation for such types. It is now possible to use
+  define enumerations in schema as expected and query them as strings.
+
 - 🐞 Queries with the less `<` or greater `>` operators produced off-by-one
   results for the `duration` when the query contained a finer resolution than the
   index. The operator now works as expected.
