@@ -10,6 +10,10 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## [Unreleased]
 
+- 🐞 Queries of the form `#type ~ /pattern/` used to be rejected erroneously.
+  The validation code has been corrected and such queries are now working
+  as expected.
+
 - 🐞 When specifying `enum` types in the schema, ingestion failed because there
   did not exist an implementation for such types. It is now possible to use
   define enumerations in schema as expected and query them as strings.
