@@ -109,13 +109,8 @@ caf::actor fetch_indexer(table_indexer& tbl, const attribute_extractor& ex,
   VAST_TRACE(VAST_ARG(tbl), VAST_ARG(ex), VAST_ARG(op), VAST_ARG(x));
   auto& layout = tbl.layout();
   if (ex.attr == system::type_atom::value) {
-    if (!caf::holds_alternative<std::string>(x)) {
-      VAST_WARNING(tbl.state().self,
-                   "expected a string as type extractor attribute, got:", x);
-      return nullptr;
-    }
     // Doesn't apply if the query name doesn't match our type.
-    if (!evaluate(layout.name(), op, caf::get<std::string>(x)))
+    if (!evaluate(layout.name(), op, x))
       return nullptr;
     // We know the answer immediately: all IDs that are part of the table.
     // However, we still have to "lift" this result into an actor for the
