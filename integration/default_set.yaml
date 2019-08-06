@@ -150,6 +150,7 @@ tests:
     steps:
       - command: import -N suricata -r @./data/suricata/eve.json
       - command: export -N ascii 'src_ip == 147.32.84.165'
+      - command: export -N csv '#type ~ /suricata.*/'
 
   Node argus csv:
     tags: [node, import-export, argus, csv]

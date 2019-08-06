@@ -250,9 +250,11 @@ expected<void> validator::operator()(const predicate& p) {
 expected<void> validator::operator()(const attribute_extractor& ex,
                                      const data& d) {
   if (ex.attr == system::type_atom::value
-      && !caf::holds_alternative<std::string>(d))
+      && !(caf::holds_alternative<std::string>(d)
+           || caf::holds_alternative<pattern>(d)))
     return make_error(ec::syntax_error,
-                      "type attribute extractor requires string operand",
+                      "type attribute extractor requires string or pattern "
+                      "operand",
                       ex.attr, op_, d);
   else if (ex.attr == system::timestamp_atom::value
            && !caf::holds_alternative<time>(d))
