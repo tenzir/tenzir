@@ -42,7 +42,7 @@ struct expression_printer : printer<expression_printer> {
     }
 
     bool operator()(const conjunction& c) const {
-      auto p = '{' << (expression_printer{} % " && ") << '}';
+      auto p = '(' << (expression_printer{} % " && ") << ')';
       return p(out_, c);
     }
 

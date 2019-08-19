@@ -10,6 +10,11 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## [Unreleased]
 
+- 🔄 When exporting data in `pcap` format, it is no longer necessary to
+  manually restrict the query by adding the predicate `#type == "pcap.packet"`
+  to the expression. This now happens automatically because only this type
+  contains the raw packet data.
+
 - 🐞 Queries of the form `#type ~ /pattern/` used to be rejected erroneously.
   The validation code has been corrected and such queries are now working
   as expected.

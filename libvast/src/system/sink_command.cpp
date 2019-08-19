@@ -25,8 +25,13 @@
 #include <caf/stateful_actor.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
+#include "vast/concept/parseable/to.hpp"
+#include "vast/concept/parseable/vast/expression.hpp"
+#include "vast/concept/printable/to_string.hpp"
+#include "vast/concept/printable/vast/expression.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/error.hpp"
+#include "vast/expression.hpp"
 #include "vast/logger.hpp"
 #include "vast/scope_linked.hpp"
 #include "vast/system/accountant.hpp"
@@ -72,6 +77,7 @@ caf::message sink_command([[maybe_unused]] const command& cmd,
     // Read query from STDIN.
     assign_query(std::cin);
   } else {
+    // Assemble expression from all remaining arguments.
     query = *first;
     for (auto i = std::next(first); i != last; ++i) {
       query += ' ';
@@ -81,6 +87,21 @@ caf::message sink_command([[maybe_unused]] const command& cmd,
   if (query.empty()) {
     auto err = make_error(ec::invalid_query);
     return make_message(std::move(err));
+  }
+  // Transform expression if needed, e.g., for PCAP sink.
+  if (cmd.name == "pcap") {
+    VAST_DEBUG(&cmd, "restricts expression to PCAP packets");
+    // We parse the query expression first, work on the AST, and then render
+    // the expression again to avoid performing brittle string manipulations.
+    auto expr = to<expression>(query);
+    if (!expr)
+      return make_message(expr.error());
+    auto attr = caf::atom_from_string("type");
+    auto extractor = attribute_extractor{attr};
+    auto pred = predicate{extractor, equal, data{"pcap.packet"}};
+    auto ast = conjunction{std::move(pred), std::move(*expr)};
+    query = to_string(ast);
+    VAST_DEBUG(&cmd, "transformed expression to", query);
   }
   // Get a convenient and blocking way to interact with actors.
   scoped_actor self{sys};
