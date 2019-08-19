@@ -51,7 +51,7 @@ segment_ptr segment::make(chunk_ptr chunk) {
   // to add add sizeof(uint32_t) bytes to directly jump to the table slice
   // data.
   using detail::narrow_cast;
-  auto bytes_read = narrow_cast<size_t>(source.current() - chunk->data());
+  auto bytes_read = chunk->size() - source.remaining();
   VAST_ASSERT(bytes_read < chunk->size());
   result->chunk_ = chunk->slice(bytes_read + sizeof(uint32_t));
   return result;
