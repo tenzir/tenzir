@@ -1,0 +1,6 @@
+[submodule "aux/caf"]
+	path = aux/caf
+	url = https://github.com/actor-framework/actor-framework
+[submodule "aux/broker"]
+	path = aux/broker
+	url = https://github.com/zeek/broker
