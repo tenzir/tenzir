@@ -471,7 +471,7 @@ expected<std::string> load_contents(const path& p) {
   std::ostream out{&obuf};
   std::ifstream in{p.str()};
   out << in.rdbuf();
-  return std::move(contents);
+  return contents;
 }
 
 } // namespace vast

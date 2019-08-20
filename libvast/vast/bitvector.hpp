@@ -220,28 +220,31 @@ class bitvector<Block, Allocator>::reference {
   friend class bitvector<Block, Allocator>;
 
 public:
-  operator bool() const noexcept {
+  constexpr operator bool() const noexcept {
     return (*block_ & mask_) != 0;
   }
 
-  bool operator~() const noexcept {
+  constexpr bool operator~() const noexcept {
     return (*block_ & mask_) == 0;
   }
 
-  reference& operator=(bool x) noexcept {
+  constexpr reference& operator=(bool x) noexcept {
     x ? *block_ |= mask_ : *block_ &= ~mask_;
     return *this;
   }
 
-  reference& operator=(const reference& other) noexcept {
+  constexpr reference(const reference& other) noexcept = default;
+
+  constexpr reference& operator=(const reference& other) noexcept {
     other ? *block_ |= mask_ : *block_ &= ~mask_;
+    return *this;
   }
 
-  void flip() noexcept {
+  constexpr void flip() noexcept {
     *block_ ^= mask_;
   }
 
-  friend void swap(reference x, reference y) noexcept {
+  constexpr friend void swap(reference x, reference y) noexcept {
     bool b = x;
     x = y;
     y = b;
@@ -251,7 +254,7 @@ private:
   // The standard defines it, but why do we need it?
   //reference() noexcept;
 
-  reference(block* x, block mask) : block_{x}, mask_{mask} {
+  constexpr reference(block* x, block mask) : block_{x}, mask_{mask} {
   }
 
   typename bitvector<Block, Allocator>::block* block_;
