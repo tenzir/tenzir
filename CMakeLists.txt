@@ -408,28 +408,67 @@ if (VAST_ENABLE_ASSERTIONS)
   endif ()
 endif ()
 
-if (NOT CAF_ROOT_DIR AND VAST_PREFIX)
-  set(CAF_ROOT_DIR ${VAST_PREFIX})
-endif ()
-if (CAF_ROOT_DIR)
-# Try to find the required CAF components first...
-  find_package(CAF COMPONENTS core io test REQUIRED QUIET)
-  message(STATUS "Found CAF")
-  provide_find_module(CAF)
-  set(CAF_FOUND_SAVE ${CAF_FOUND})
-  # ...and then optional components.
-  find_package(CAF COMPONENTS openssl QUIET)
-  if (CAF_LIBRARY_OPENSSL)
-    message(STATUS "Found CAF's OpenSSL module, enabling OpenSSL support")
-    set(VAST_USE_OPENSSL true)
-    string(APPEND VAST_FIND_DEPENDENCY_LIST
-           "\nfind_package(CAF COMPONENTS openssl REQUIRED QUIET)")
+if (NOT CAF_ROOT_DIR AND EXISTS aux/caf/CMakeLists.txt)
+  set(CAF_NO_OPENCL TRUE)
+  set(CAF_NO_EXAMPLES TRUE)
+  set(CAF_NO_UNIT_TESTS TRUE)
+  set(CAF_NO_PYTHON TRUE)
+  set(CAF_NO_TOOLS TRUE)
+  if (BUILD_SHARED_LIBS)
+    set(_linkage_suffix shared)
+  else ()
+    set(_linkage_suffix static)
+    set(CAF_BUILD_STATIC TRUE)
+    set(CAF_BUILD_STATIC_ONLY TRUE)
   endif ()
-  set(CAF_FOUND ${CAF_FOUND_SAVE})
-else ()
   add_subdirectory(aux/caf)
-  add_library(caf::core ALIAS libcaf_core)
-  add_library(caf::io ALIAS libcaf_io)
+  add_library(caf::core ALIAS libcaf_core_${_linkage_suffix})
+  add_library(caf::io ALIAS libcaf_io_${_linkage_suffix})
+  install(TARGETS libcaf_core_${_linkage_suffix} libcaf_io_${_linkage_suffix}
+          EXPORT VASTTargets
+          ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+          LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+          RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+  if (TARGET libcaf_openssl_${_linkage_suffix})
+    target_include_directories(
+      libcaf_openssl_${_linkage_suffix}
+      PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>/aux/caf/libcaf_openssl
+             $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
+    add_library(caf::openssl ALIAS libcaf_openssl_${_linkage_suffix})
+    install(TARGETS libcaf_openssl_${_linkage_suffix}
+            EXPORT VASTTargets
+            ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+            LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+            RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+    set(VAST_USE_OPENSSL true)
+  endif ()
+  add_library(caf::test INTERFACE IMPORTED)
+  set_target_properties(caf::test PROPERTIES
+    INTERFACE_INCLUDE_DIRECTORIES ${CMAKE_CURRENT_SOURCE_DIR}/aux/caf/libcaf_test
+    INTERFACE_LINK_LIBRARIES "caf::core")
+  set(caf_dir ${CMAKE_CURRENT_SOURCE_DIR}/aux/caf)
+else ()
+  if (NOT CAF_ROOT_DIR AND VAST_PREFIX)
+    set(CAF_ROOT_DIR ${VAST_PREFIX})
+  endif ()
+  if (CAF_ROOT_DIR)
+    # Try to find the required CAF components first...
+    find_package(CAF COMPONENTS core io test REQUIRED QUIET)
+    message(STATUS "Found CAF")
+    provide_find_module(CAF)
+    set(CAF_FOUND_SAVE ${CAF_FOUND})
+    # ...and then optional components.
+    find_package(CAF COMPONENTS openssl QUIET)
+    if (CAF_LIBRARY_OPENSSL)
+      message(STATUS "Found CAF's OpenSSL module, enabling OpenSSL support")
+      set(VAST_USE_OPENSSL true)
+      string(APPEND VAST_FIND_DEPENDENCY_LIST
+             "\nfind_package(CAF COMPONENTS openssl REQUIRED QUIET)")
+    endif ()
+    set(CAF_FOUND ${CAF_FOUND_SAVE})
+  else ()
+    message(FATAL_ERROR "CAF not found, use either -DCAF_ROOT_DIR=... or initialize the aux/caf submodule")
+  endif ()
 endif ()
 
 if (ENABLE_ZEEK_TO_VAST)
@@ -485,16 +524,20 @@ find_package(Md2man QUIET)
 # ------------------------------------------------------------------------------
 
 # make uninstall
-if ("${PROJECT_SOURCE_DIR}" STREQUAL "${CMAKE_SOURCE_DIR}")
-  configure_file("${CMAKE_CURRENT_SOURCE_DIR}/cmake/cmake_uninstall.cmake.in"
-                 "${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake" @ONLY)
-  add_custom_target(uninstall
-                    COMMAND ${CMAKE_COMMAND} -P
-                            ${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake)
+configure_file("${CMAKE_CURRENT_SOURCE_DIR}/cmake/cmake_uninstall.cmake.in"
+               "${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake" @ONLY)
+add_custom_target(uninstall_vast
+                  COMMAND ${CMAKE_COMMAND} -P
+                          ${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake)
+if (NOT TARGET uninstall)
+  add_custom_target(uninstall)
 endif ()
+add_dependencies(uninstall uninstall_vast)
 
 # make configure
-add_custom_target(configure COMMAND ${CMAKE_CURRENT_BINARY_DIR}/config.status)
+if (NOT TARGET configure)
+  add_custom_target(configure COMMAND ${CMAKE_CURRENT_BINARY_DIR}/config.status)
+endif ()
 
 set(EXECUTABLE_OUTPUT_PATH
     ${CMAKE_CURRENT_BINARY_DIR}/bin
@@ -603,12 +646,14 @@ display(ASAN_FOUND yes asan_summary)
 display(ENABLE_GCOV yes gcov_summary)
 
 # Figure out whether we point to a build directory or a prefix.
-set(caf_dir ${CAF_LIBRARY_CORE})
-get_filename_component(caf_dir ${caf_dir} PATH)
-if (EXISTS "${caf_dir}/../libcaf_core")
+if (NOT caf_dir)
+  set(caf_dir ${CAF_LIBRARY_CORE})
   get_filename_component(caf_dir ${caf_dir} PATH)
-else ()
-  set(caf_dir ${CAF_INCLUDE_DIR_CORE})
+  if (EXISTS "${caf_dir}/../libcaf_core")
+    get_filename_component(caf_dir ${caf_dir} PATH)
+  else ()
+    set(caf_dir ${CAF_INCLUDE_DIR_CORE})
+  endif ()
 endif ()
 
 # Figure out whether we point to a build directory or a prefix.
