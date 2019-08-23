@@ -28,7 +28,6 @@
 #include "vast/detail/make_io_stream.hpp"
 #include "vast/endpoint.hpp"
 #include "vast/error.hpp"
-#include "vast/event_types.hpp"
 #include "vast/format/reader.hpp"
 #include "vast/logger.hpp"
 #include "vast/schema.hpp"
@@ -71,46 +70,17 @@ caf::message reader_command(const command& cmd, caf::actor_system& sys,
     else
       file = std::string{Reader::defaults::path};
   }
-  // Get the default schema from the registry.
-  auto schema = event_types::get();
-  // Update with an alternate schema, if requested.
-  vast::schema reader_schema;
-  {
-    auto sc = caf::get_if<std::string>(&options, category + ".schema");
-    auto sf = caf::get_if<std::string>(&options, category + ".schema-file");
-    if (sc && sf)
-      return make_message(
-        make_error(ec::invalid_configuration,
-                   "had both schema and schema-file provided"));
-    auto update = [&]() -> caf::expected<vast::schema> {
-      if (sc)
-        return to<vast::schema>(*sc);
-      if (sf)
-        return load_schema(*sf);
-      return caf::no_error;
-    }();
-    if (update) {
-      if (!schema || schema->empty()) {
-        reader_schema = *update;
-      } else {
-        reader_schema = *schema;
-        reader_schema = schema::combine(reader_schema, *update);
-      }
-      schema = &reader_schema;
-    } else if (update.error() != caf::no_error) {
-      return caf::make_message(ec::invalid_configuration,
-                               "failed to parse provided schema");
-    }
-  }
+  auto schema = get_schema(options, category);
+  if (!schema)
+    return caf::make_message(schema.error());
   if (auto type = caf::get_if<std::string>(&options, category + ".type")) {
     auto p = schema->find(*type);
     if (p == nullptr)
       return caf::make_message(
         make_error(ec::unrecognized_option, "type not found", *type));
     auto selected_type = *p;
-    reader_schema.clear();
-    reader_schema.add(selected_type);
-    schema = &reader_schema;
+    schema->clear();
+    schema->add(selected_type);
   }
   caf::actor src;
   if (uri) {

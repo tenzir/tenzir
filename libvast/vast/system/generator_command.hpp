@@ -39,8 +39,13 @@ caf::message generator_command(const command& cmd, caf::actor_system& sys,
   std::string category = Defaults::category;
   auto table_slice = defaults::import::table_slice_type(sys, options);
   auto num = get_or(options, "import.max-events", defaults::import::max_events);
+  auto schema = get_schema(options, category);
+  if (!schema)
+    return caf::make_message(schema.error());
   auto seed = Defaults::seed(options);
   Generator generator{table_slice, seed, num};
+  if (auto err = generator.schema(*schema))
+    return caf::make_message(err);
   auto src = sys.spawn(default_source<Generator>, std::move(generator));
   return source_command(cmd, sys, std::move(src), options, first, last);
 }

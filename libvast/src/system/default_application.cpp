@@ -114,7 +114,10 @@ default_application::default_application() {
           src_opts("?import.suricata"));
   import_->add(GENERATOR(test),
                "imports random data for testing or benchmarking",
-               opts("?import.test").add<size_t>("seed", "the random seed"));
+               opts("?import.test")
+                 .add<size_t>("seed", "the random seed")
+                 .add<std::string>("schema-file,s", "path to alternate schema")
+                 .add<std::string>("schema,S", "alternate schema as string"));
   // Add "export" command and its children.
   export_ = add(nullptr, "export", "exports query results to STDOUT or file",
                 opts("?export")
