@@ -18,6 +18,7 @@
 #include "vast/concept/parseable/string/char_class.hpp"
 #include "vast/concept/parseable/vast/schema.hpp"
 #include "vast/detail/assert.hpp"
+#include "vast/detail/string.hpp"
 #include "vast/detail/type_traits.hpp"
 #include "vast/error.hpp"
 #include "vast/factory.hpp"
@@ -247,7 +248,12 @@ caf::error reader::schema(vast::schema sch) {
   if (sch.empty())
     return make_error(ec::format_error, "empty schema");
   std::unordered_map<type, blueprint> blueprints;
+  auto subset = vast::schema{};
   for (auto& t : sch) {
+    auto sn = detail::split(t.name(), ".");
+    if (sn.size() != 2 || sn[0] != "test")
+      continue;
+    subset.add(t);
     if (auto bp = make_blueprint(t))
       blueprints.emplace(t, std::move(*bp));
     else
@@ -256,7 +262,7 @@ caf::error reader::schema(vast::schema sch) {
       return make_error(ec::format_error,
                         "failed to create table slize builder", t);
   }
-  schema_ = std::move(sch);
+  schema_ = std::move(subset);
   blueprints_ = std::move(blueprints);
   next_ = schema_.begin();
   return caf::none;
