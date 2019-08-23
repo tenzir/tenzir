@@ -85,4 +85,7 @@ caf::expected<schema> load_schema(const path& sf);
 
 caf::expected<vast::schema> load_schema(const std::vector<path>& data_paths);
 
+caf::expected<schema> get_schema(const caf::settings& options,
+                                 const std::string& category);
+
 } // namespace vast

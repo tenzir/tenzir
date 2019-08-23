@@ -12,6 +12,10 @@
  ******************************************************************************/
 
 #include "vast/schema.hpp"
+
+#include <caf/actor_system_config.hpp>
+
+#include "vast/event_types.hpp"
 #include "vast/filesystem.hpp"
 #include "vast/json.hpp"
 
@@ -223,6 +227,34 @@ caf::expected<schema> load_schema(const std::vector<path>& schema_paths) {
     types = schema::combine(types, directory_schema);
   }
   return types;
+}
+
+caf::expected<schema> get_schema(const caf::settings& options,
+                                 const std::string& category) {
+  // Get the default schema from the registry.
+  auto schema_reg_ptr = event_types::get();
+  auto schema = schema_reg_ptr ? *schema_reg_ptr : vast::schema{};
+  // Update with an alternate schema, if requested.
+  auto sc = caf::get_if<std::string>(&options, category + ".schema");
+  auto sf = caf::get_if<std::string>(&options, category + ".schema-file");
+  if (sc && sf)
+    make_error(ec::invalid_configuration,
+               "had both schema and schema-file provided");
+  auto update = [&]() -> caf::expected<vast::schema> {
+    if (sc)
+      return to<vast::schema>(*sc);
+    if (sf)
+      return load_schema(*sf);
+    return caf::no_error;
+  }();
+  if (!update) {
+    if (update.error() != caf::no_error)
+      return make_error(ec::invalid_configuration,
+                        "failed to parse provided schema");
+    else
+      return schema;
+  }
+  return schema::combine(schema, *update);
 }
 
 } // namespace vast
