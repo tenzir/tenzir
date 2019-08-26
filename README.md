@@ -56,7 +56,6 @@ Required dependencies:
   - Clang >= 5
   - Apple Clang >= 9.1
 - [CMake](http://www.cmake.org)
-- [CAF](https://github.com/actor-framework/actor-framework) (master branch)
 
 Optional dependencies:
 
@@ -70,6 +69,7 @@ Optional dependencies:
 
 Building VAST involves the following steps:
 
+    git submodule update --init aux/caf
     ./configure
     make
     make test
