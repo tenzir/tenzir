@@ -10,6 +10,10 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## [Unreleased]
 
+- 🔄 CAF is no longer required to be installed before building VAST. It is
+  instead tracked as a submodule to ensure a compatible version is used.
+  The `CAF_ROOT_DIR` method is still supported.
+
 - 🔄 When exporting data in `pcap` format, it is no longer necessary to
   manually restrict the query by adding the predicate `#type == "pcap.packet"`
   to the expression. This now happens automatically because only this type
