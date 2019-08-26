@@ -408,7 +408,7 @@ if (VAST_ENABLE_ASSERTIONS)
   endif ()
 endif ()
 
-if (NOT CAF_ROOT_DIR AND EXISTS aux/caf/CMakeLists.txt)
+if (NOT CAF_ROOT_DIR AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/aux/caf/CMakeLists.txt)
   set(CAF_NO_OPENCL TRUE)
   set(CAF_NO_EXAMPLES TRUE)
   set(CAF_NO_UNIT_TESTS TRUE)
@@ -589,7 +589,7 @@ add_subdirectory(vast)
 # Additional Installations
 # ------------------------------------------------------------------------------
 
-if (VAST_RELOCATEABLE_INSTALL AND BUILD_SHARED_LIBS)
+if (VAST_RELOCATEABLE_INSTALL AND BUILD_SHARED_LIBS AND CAF_LIBRARY_CORE)
   # Copy CAF libraries to installation directory
   get_filename_component(CAF_LIBDIR ${CAF_LIBRARY_CORE} PATH)
   install(DIRECTORY "${CAF_LIBDIR}/" DESTINATION "${CMAKE_INSTALL_LIBDIR}/")
