@@ -17,8 +17,6 @@
 
 #include "vast/chunk.hpp"
 #include "vast/default_table_slice.hpp"
-#include "vast/detail/assert.hpp"
-#include "vast/detail/narrow.hpp"
 #include "vast/logger.hpp"
 
 namespace vast {
@@ -45,8 +43,7 @@ table_slice_ptr factory_traits<table_slice>::make(chunk_ptr chunk) {
     return nullptr;
   }
   // Skip table slice data already processed.
-  using detail::narrow_cast;
-  auto bytes_read = narrow_cast<size_t>(source.current() - chunk->data());
+  auto bytes_read = chunk->size() - source.remaining();
   if (auto err = result.unshared().load(chunk->slice(bytes_read))) {
     VAST_ERROR_ANON(__func__, "failed to load table slice from chunk");
     return nullptr;
