@@ -102,7 +102,7 @@ TEST_TABLE_SLICE(rebranded_table_slice)
 TEST(random integer slices) {
   record_type layout{
     {"i", integer_type{}.attributes({{"default", "uniform(100,200)"}})}};
-  layout.name("test");
+  layout.name("test.integers");
   auto slices = unbox(make_random_table_slices(10, 10, layout));
   CHECK_EQUAL(slices.size(), 10u);
   CHECK(std::all_of(slices.begin(), slices.end(),

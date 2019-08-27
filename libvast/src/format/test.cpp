@@ -213,7 +213,7 @@ struct randomizer {
 };
 
 std::string_view builtin_schema = R"__(
-  type test = record{
+  type test.full = record{
     n: set<int>,
     b: bool #default="uniform(0,1)",
     i: int #default="uniform(-42000,1337)",
@@ -262,6 +262,8 @@ caf::error reader::schema(vast::schema sch) {
       return make_error(ec::format_error,
                         "failed to create table slize builder", t);
   }
+  if (subset.empty())
+    return make_error(ec::format_error, "no test type in schema");
   schema_ = std::move(subset);
   blueprints_ = std::move(blueprints);
   next_ = schema_.begin();
@@ -280,7 +282,8 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
                              consumer& f) {
   // Sanity checks.
   if (schema_.empty())
-    schema(default_schema());
+    if (auto err = schema(default_schema()))
+      return err;
   VAST_ASSERT(next_ != schema_.end());
   if (num_events_ == 0)
     return make_error(ec::end_of_input, "completed generation of events");
