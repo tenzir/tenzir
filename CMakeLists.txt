@@ -13,7 +13,7 @@ else()
 endif()
 unset(_parent)
 
-option(ENABLE_ZEEK_TO_VAST "Build zeek-to-vast" OFF)
+option(ENABLE_ZEEK_TO_VAST "Build zeek-to-vast" ON)
 option(VAST_STATIC_EXECUTABLE "Link VAST statically")
 option(VAST_RELOCATEABLE_INSTALL "Make the installation relocateable" OFF)
 set(BUILD_SHARED_LIBS_DEFAULT ON)
