@@ -52,9 +52,9 @@ mark_as_advanced(
   BROKER_INCLUDE_DIRS)
 
 # create IMPORTED target
-if (BROKER_FOUND AND NOT TARGET broker::broker)
-  add_library(broker::broker UNKNOWN IMPORTED)
-  set_target_properties(broker::broker PROPERTIES
+if (BROKER_FOUND AND NOT TARGET zeek::broker)
+  add_library(zeek::broker UNKNOWN IMPORTED)
+  set_target_properties(zeek::broker PROPERTIES
     IMPORTED_LOCATION ${BROKER_LIBRARY}
     INTERFACE_INCLUDE_DIRECTORIES "${BROKER_INCLUDE_DIRS}"
     INTERFACE_LINK_LIBRARIES "caf::core;caf::io;caf::openssl")

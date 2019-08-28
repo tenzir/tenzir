@@ -210,6 +210,8 @@ install(DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/vast"
         FILES_MATCHING
         PATTERN "*.hpp")
 
+add_library(vast::libvast ALIAS libvast)
+
 # ----------------------------------------------------------------------------
 # unit tests
 # ----------------------------------------------------------------------------
