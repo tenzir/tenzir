@@ -47,6 +47,7 @@ set_target_properties(libvast_test
                       PROPERTIES SOVERSION "${VERSION_MAJOR}" VERSION
                                  "${VERSION_MAJOR}.${VERSION_MINOR}" OUTPUT_NAME
                                  vast_test EXPORT_NAME test)
+add_library(vast::test ALIAS libvast_test)
 install(TARGETS libvast_test
         EXPORT VASTTargets
         ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}

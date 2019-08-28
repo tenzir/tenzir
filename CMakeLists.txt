@@ -2,8 +2,16 @@
 # Project Setup
 # ------------------------------------------------------------------------------
 
-cmake_minimum_required(VERSION 3.11 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.11...3.15 FATAL_ERROR)
 project(VAST C CXX)
+
+get_directory_property(_parent PARENT_DIRECTORY)
+if(_parent)
+  set(vast_is_subproject ON)
+else()
+  set(vast_is_subproject OFF)
+endif()
+unset(_parent)
 
 option(ENABLE_ZEEK_TO_VAST "Build zeek-to-vast" OFF)
 option(VAST_STATIC_EXECUTABLE "Link VAST statically")
@@ -410,6 +418,7 @@ if (VAST_ENABLE_ASSERTIONS)
 endif ()
 
 if (NOT CAF_ROOT_DIR AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/aux/caf/CMakeLists.txt)
+  set(CAF_NO_AUTO_LIBCPP TRUE)
   set(CAF_NO_OPENCL TRUE)
   set(CAF_NO_EXAMPLES TRUE)
   set(CAF_NO_UNIT_TESTS TRUE)
@@ -540,7 +549,7 @@ endif ()
 add_dependencies(uninstall uninstall_vast)
 
 # make configure
-if (NOT TARGET configure)
+if (NOT vast_is_subproject)
   add_custom_target(configure COMMAND ${CMAKE_CURRENT_BINARY_DIR}/config.status)
 endif ()
 
