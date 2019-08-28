@@ -67,6 +67,7 @@ endif ()
 add_library(broker ${BROKER_SRC})
 target_include_directories(broker PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/broker ${CMAKE_CURRENT_BINARY_DIR})
 target_include_directories(broker PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/broker/3rdparty)
+target_compile_options(broker PRIVATE -Wno-unused-parameter -Wno-unused-variable)
 set_target_properties(broker PROPERTIES
                       CXX_STANDARD 11
                       SOVERSION ${BROKER_SOVERSION}
