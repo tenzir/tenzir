@@ -77,4 +77,4 @@ set_target_properties(broker PROPERTIES
 target_link_libraries(broker PUBLIC caf::core caf::io caf::openssl)
 install(TARGETS broker DESTINATION ${INSTALL_LIB_DIR})
 
-add_library(broker::broker ALIAS broker)
+add_library(zeek::broker ALIAS broker)
