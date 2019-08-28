@@ -1,0 +1,20 @@
+linux_task:
+  container:
+    dockerfile: .ci/Dockerfile
+    cpu: 8
+    memory: 24G
+
+  env:
+    PREFIX: /opt/tenzir
+    BUILD_TYPE: Release
+    CC: gcc-8
+    CXX: g++-8
+  test_script:
+    - git submodule update --init aux/caf
+    - git submodule update --init aux/broker/broker
+    - git -C aux/broker/broker submodule update --init 3rdparty
+    - cmake --version
+    - ./configure --prefix=$PREFIX --build-type=$BUILD_TYPE --log-level=INFO --generator=Ninja
+    - cmake --build build --target all
+    - cmake --build build --target test
+    - cmake --build build --target install
