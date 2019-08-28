@@ -19,7 +19,7 @@ set_source_files_properties(3rdparty/sqlite3.c PROPERTIES COMPILE_FLAGS
 
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/broker/broker/config.hh.in
                ${CMAKE_CURRENT_BINARY_DIR}/broker/config.hh)
-install(FILES ${CMAKE_CURRENT_BINARY_DIR}/broker/config.hh DESTINATION broker)
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/broker/config.hh DESTINATION include/broker)
 
 set(BROKER_SRC
   broker/src/address.cc
