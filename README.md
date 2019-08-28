@@ -59,7 +59,6 @@ Required dependencies:
 
 Optional dependencies:
 
-- [Broker](https://github.com/zeek/broker)
 - [libpcap](http://www.tcpdump.org)
 - [gperftools](http://code.google.com/p/google-perftools)
 - [Doxygen](http://www.doxygen.org)
@@ -69,7 +68,7 @@ Optional dependencies:
 
 Building VAST involves the following steps:
 
-    git submodule update --init aux/caf
+    git submodule update --recursive --init
     ./configure
     make
     make test
