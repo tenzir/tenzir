@@ -549,7 +549,7 @@ endif ()
 add_dependencies(uninstall uninstall_vast)
 
 # make configure
-if (NOT vast_is_subproject)
+if (NOT vast_is_subproject AND NOT TARGET configure)
   add_custom_target(configure COMMAND ${CMAKE_CURRENT_BINARY_DIR}/config.status)
 endif ()
 
