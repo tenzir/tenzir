@@ -581,7 +581,7 @@ file(
      if [ ! -d \"$env_dir\" ]; then
        python3 -m venv \"$env_dir\"
      fi
-     source \"$env_dir/bin/activate\"
+     . \"$env_dir/bin/activate\"
      pip install -r \"$base_dir/requirements.txt\"
      python \"$base_dir/integration.py\" --app \"$app\" -d vast-integration-test"
   )
