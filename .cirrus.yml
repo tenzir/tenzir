@@ -1,34 +1,24 @@
 style_task:
-  name: Stype (clang-format)
+  name: Style (clang-format)
   container:
-    dockerfile: .ci/Dockerfile
+    dockerfile: .ci/debian/Dockerfile
     cpu: 1
     memory: 1G
-
   clang-format_script:
     - git diff -U0 --no-color $(git merge-base origin/master HEAD) | scripts/clang-format-diff.py -p1;
 
 
-debian_task:
-  name: Debian (gcc8)
+.build_template: &build_definition
   depends_on:
     - style
-  container:
-    dockerfile: .ci/Dockerfile
-    cpu: 8
-    memory: 24G
-
   env:
     PREFIX: /opt/tenzir
-    BUILD_TYPE: Release
-    CC: gcc-8
-    CXX: g++-8
   submodule_script:
     - git submodule update --init aux/caf
     - git submodule update --init aux/broker/broker
     - git -C aux/broker/broker submodule update --init 3rdparty
   build_script:
-    - ./configure --prefix=$PREFIX --build-type=$BUILD_TYPE --generator=Ninja
+    - ./configure --prefix=$PREFIX --build-type=$BUILD_TYPE $CONFIGURE_FLAGS --generator=Ninja
     - cmake --build build --target all
   unit_test_script:
     - cmake --build build --target test
@@ -36,3 +26,33 @@ debian_task:
     - cmake --build build --target integration
   install_script:
     - cmake --build build --target install
+
+debian_task:
+  name: Debian
+  container:
+    dockerfile: .ci/debian/Dockerfile
+    cpu: 8
+    memory: 24G
+  env:
+    CC: gcc-8
+    CXX: g++-8
+    matrix:
+     - BUILD_TYPE: Release
+     - BUILD_TYPE: Debug
+       CONFIGURE_FLAGS: --enable-asan
+  <<: *build_definition
+
+freebsd_task:
+  name: FreeBSD
+  freebsd_instance:
+    image: freebsd-12-0-release-amd64
+    cpu: 8
+    memory: 24G
+  env:
+    matrix:
+     - BUILD_TYPE: Release
+     - BUILD_TYPE: Debug
+       CONFIGURE_FLAGS: --enable-asan
+  setup_script:
+    - env ASSUME_ALWAYS_YES=YES pkg install git cmake ninja lang/python3 lang/python py36-pip
+  <<: *build_definition
