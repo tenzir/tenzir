@@ -1,4 +1,18 @@
-linux_task:
+style_task:
+  name: Stype (clang-format)
+  container:
+    dockerfile: .ci/Dockerfile
+    cpu: 1
+    memory: 1G
+
+  clang-format_script:
+    - git diff -U0 --no-color $(git merge-base origin/master HEAD) | scripts/clang-format-diff.py -p1;
+
+
+debian_task:
+  name: Debian (gcc8)
+  depends_on:
+    - style
   container:
     dockerfile: .ci/Dockerfile
     cpu: 8
@@ -9,12 +23,16 @@ linux_task:
     BUILD_TYPE: Release
     CC: gcc-8
     CXX: g++-8
-  test_script:
+  submodule_script:
     - git submodule update --init aux/caf
     - git submodule update --init aux/broker/broker
     - git -C aux/broker/broker submodule update --init 3rdparty
-    - cmake --version
-    - ./configure --prefix=$PREFIX --build-type=$BUILD_TYPE --log-level=INFO --generator=Ninja
+  build_script:
+    - ./configure --prefix=$PREFIX --build-type=$BUILD_TYPE --generator=Ninja
     - cmake --build build --target all
+  unit_test_script:
     - cmake --build build --target test
+  integration_test_script:
+    - cmake --build build --target integration
+  install_script:
     - cmake --build build --target install
