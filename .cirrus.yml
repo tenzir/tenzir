@@ -73,6 +73,7 @@ macos_task:
     CXX: c++
     BUILD_TYPE: Release
     PATH: /usr/local/opt/python/libexec/bin:$PATH
+    DESTDIR: $PWD
   setup_script:
     - HOMEBREW_NO_AUTO_UPDATE=1 brew install openssl cmake git ninja python libpcap
   <<: *build_definition
