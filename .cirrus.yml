@@ -13,6 +13,10 @@ style_task:
     - style
   env:
     PREFIX: /opt/tenzir
+  fingerprint_script:
+    - cmake --version
+    - ${CXX} --version
+    - python --version
   submodule_script:
     - git submodule update --init aux/caf
     - git submodule update --init aux/broker/broker
