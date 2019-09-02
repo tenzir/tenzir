@@ -41,9 +41,9 @@ debian_task:
     CC: gcc-8
     CXX: g++-8
     matrix:
-     - BUILD_TYPE: Release
-     - BUILD_TYPE: Debug
-       CONFIGURE_FLAGS: --enable-asan
+      - BUILD_TYPE: Release
+      - BUILD_TYPE: Debug
+        CONFIGURE_FLAGS: --enable-asan
   <<: *build_definition
 
 freebsd_task:
@@ -53,10 +53,25 @@ freebsd_task:
     cpu: 8
     memory: 24G
   env:
+    CC: cc
+    CXX: c++
     matrix:
-     - BUILD_TYPE: Release
-     - BUILD_TYPE: Debug
-       CONFIGURE_FLAGS: --enable-asan
+      - BUILD_TYPE: Release
+      - BUILD_TYPE: Debug
+        CONFIGURE_FLAGS: --enable-asan
   setup_script:
     - env ASSUME_ALWAYS_YES=YES pkg install git cmake ninja lang/python3 lang/python py36-pip
+  <<: *build_definition
+
+macos_task:
+  name: macOS - Release
+  osx_instance:
+    image: mojave-xcode-10.2
+  env:
+    CC: cc
+    CXX: c++
+    BUILD_TYPE: Release
+    PATH: /usr/local/opt/python/libexec/bin:$PATH
+  setup_script:
+    - HOMEBREW_NO_AUTO_UPDATE=1 brew install openssl cmake git ninja python libpcap
   <<: *build_definition
