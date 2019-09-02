@@ -420,7 +420,7 @@ endif ()
 # On macOS, Homebrew installs OpenSSL into /usr/local/opt. We'll use this when
 # it's present.
 if (APPLE)
-  if (EXISTS /usr/local/opt/openssl)
+  if (NOT OPENSSL_ROOT_DIR AND EXISTS /usr/local/opt/openssl)
     set(OPENSSL_ROOT_DIR /usr/local/opt/openssl)
   endif ()
 endif ()
