@@ -24,9 +24,9 @@
 #include "vast/detail/spawn_container_source.hpp"
 #include "vast/query_options.hpp"
 #include "vast/system/archive.hpp"
+#include "vast/system/dummy_consensus.hpp"
 #include "vast/system/importer.hpp"
 #include "vast/system/index.hpp"
-#include "vast/system/replicated_store.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/to_events.hpp"
 
@@ -47,7 +47,7 @@ struct fixture : fixture_base {
   }
 
   ~fixture() {
-    for (auto& hdl : {index, importer, exporter, raft_consensus})
+    for (auto& hdl : {index, importer, exporter})
       self->send_exit(hdl, exit_reason::user_shutdown);
     self->send_exit(archive, exit_reason::user_shutdown);
     self->send_exit(consensus, exit_reason::user_shutdown);
@@ -67,14 +67,8 @@ struct fixture : fixture_base {
                            slice_size);
   }
 
-  void spawn_raft_consensus() {
-    raft_consensus = self->spawn(system::raft::consensus, directory / "consensus");
-  }
-
   void spawn_consensus() {
-    if (!raft_consensus)
-      spawn_raft_consensus();
-    consensus = self->spawn(system::replicated_store<string, data>, raft_consensus);
+    consensus = self->spawn(system::dummy_consensus, directory / "consensus");
   }
 
   void spawn_exporter(query_options opts) {
@@ -90,7 +84,6 @@ struct fixture : fixture_base {
       spawn_importer();
     if (!consensus)
       spawn_consensus();
-    send(raft_consensus, system::run_atom::value);
     run();
     send(importer, archive);
     send(importer, system::index_atom::value, index);
@@ -132,7 +125,6 @@ struct fixture : fixture_base {
   system::archive_type archive;
   actor importer;
   actor exporter;
-  actor raft_consensus;
   system::consensus_type consensus;
   expression expr;
 };
