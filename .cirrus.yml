@@ -5,7 +5,8 @@ style_task:
     cpu: 1
     memory: 1G
   clang-format_script:
-    - git diff -U0 --no-color $(git merge-base origin/master HEAD) | scripts/clang-format-diff.py -p1;
+    - git fetch origin master
+    - git diff -U0 --no-color $(git merge-base origin/master HEAD) | scripts/clang-format-diff.py -p1
 
 
 .build_template: &build_definition
