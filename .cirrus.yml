@@ -1,0 +1,79 @@
+style_task:
+  name: Style (clang-format)
+  container:
+    dockerfile: .ci/debian/Dockerfile
+    cpu: 1
+    memory: 1G
+  clang-format_script:
+    - git fetch origin master
+    - git diff -U0 --no-color $(git merge-base origin/master HEAD) | scripts/clang-format-diff.py -p1
+
+
+.build_template: &build_definition
+  depends_on:
+    - style
+  env:
+    PREFIX: /opt/tenzir
+  fingerprint_script:
+    - cmake --version
+    - ${CXX} --version
+    - python --version
+  submodule_script:
+    - git submodule update --init aux/caf
+    - git submodule update --init aux/broker/broker
+    - git -C aux/broker/broker submodule update --init 3rdparty
+  build_script:
+    - ./configure --prefix=$PREFIX --build-type=$BUILD_TYPE $CONFIGURE_FLAGS --generator=Ninja
+    - cmake --build build --target all
+  unit_test_script:
+    - cmake --build build --target test
+  integration_test_script:
+    - cmake --build build --target integration
+  install_script:
+    - cmake --build build --target install
+
+debian_task:
+  name: Debian
+  container:
+    dockerfile: .ci/debian/Dockerfile
+    cpu: 8
+    memory: 24G
+  env:
+    CC: gcc-8
+    CXX: g++-8
+    matrix:
+      - BUILD_TYPE: Release
+      - BUILD_TYPE: Debug
+        CONFIGURE_FLAGS: --enable-asan
+  <<: *build_definition
+
+freebsd_task:
+  name: FreeBSD
+  freebsd_instance:
+    image: freebsd-12-0-release-amd64
+    cpu: 8
+    memory: 24G
+  env:
+    CC: cc
+    CXX: c++
+    matrix:
+      - BUILD_TYPE: Release
+      - BUILD_TYPE: Debug
+        CONFIGURE_FLAGS: --enable-asan
+  setup_script:
+    - env ASSUME_ALWAYS_YES=YES pkg install git cmake ninja lang/python3 lang/python py36-pip
+  <<: *build_definition
+
+macos_task:
+  name: macOS - Release
+  osx_instance:
+    image: mojave-xcode-10.2
+  env:
+    CC: cc
+    CXX: c++
+    BUILD_TYPE: Release
+    PATH: /usr/local/opt/python/libexec/bin:$PATH
+    DESTDIR: $PWD
+  setup_script:
+    - HOMEBREW_NO_AUTO_UPDATE=1 brew install openssl cmake git ninja python libpcap
+  <<: *build_definition
