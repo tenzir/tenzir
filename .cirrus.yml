@@ -1,5 +1,4 @@
 style_task:
-  name: Style (clang-format)
   container:
     dockerfile: .ci/debian/Dockerfile
     cpu: 1
