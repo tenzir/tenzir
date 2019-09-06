@@ -391,9 +391,9 @@ endif ()
 # Find modules are needed by the consumer in case of a static build, or if the
 # linkage is PUBLIC or INTERFACE.
 macro (provide_find_module name)
-  configure_file(cmake/Find${name}.cmake ${PROJECT_BINARY_DIR} COPYONLY)
+  configure_file(cmake/Find${name}.cmake ${CMAKE_BINARY_DIR} COPYONLY)
 
-  install(FILES "${PROJECT_BINARY_DIR}/Find${name}.cmake"
+  install(FILES "${CMAKE_BINARY_DIR}/Find${name}.cmake"
           DESTINATION ${INSTALL_VAST_CMAKEDIR}
           COMPONENT dev)
 endmacro ()
@@ -576,7 +576,7 @@ file(
     "#!/bin/sh
      base_dir=\"${CMAKE_CURRENT_SOURCE_DIR}/integration\"
      env_dir=\"${CMAKE_CURRENT_BINARY_DIR}/integration_env\"
-     app=\"${CMAKE_CURRENT_BINARY_DIR}/bin/vast\"
+     app=\"${EXECUTABLE_OUTPUT_PATH}/vast\"
      set -e
      if [ ! -d \"$env_dir\" ]; then
        python3 -m venv \"$env_dir\"
@@ -593,10 +593,10 @@ add_custom_target(integration
 
 add_custom_target(vast-schema
                   COMMAND ${CMAKE_COMMAND} -E make_directory
-                          "${PROJECT_BINARY_DIR}/share/vast"
+                          "${CMAKE_BINARY_DIR}/share/vast"
                   COMMAND ${CMAKE_COMMAND} -E create_symlink
                           "${CMAKE_CURRENT_SOURCE_DIR}/schema"
-                          "${PROJECT_BINARY_DIR}/share/vast/schema"
+                          "${CMAKE_BINARY_DIR}/share/vast/schema"
                   COMMENT "Linking schema directory")
 
 add_subdirectory(doc)
