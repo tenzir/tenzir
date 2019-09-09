@@ -210,6 +210,10 @@ if (HAVE_CXX_ATOMICS_WITH_LIB)
   target_link_libraries(libvast PUBLIC atomic)
 endif ()
 
+if (BUILD_SHARED_LIBS AND "${CMAKE_SYSTEM_NAME}" MATCHES "Linux")
+  target_link_libraries(libvast PUBLIC dl)
+endif ()
+
 # Install libvast in PREFIX/lib and headers in PREFIX/include/vast.
 install(
   TARGETS libvast
