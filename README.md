@@ -43,9 +43,6 @@ Run a query over PCAP data, sort the packets, and feed them into `tcpdump`:
 
 - Chat: [Gitter][chat-url]
 - Twitter: [@vast_io](https://twitter.com/vast_io)
-- Mailing lists:
-    - [vast@icir.org][mailing-list]: general help and discussion
-    - [vast-commits@icir.org][mailing-list-commits]: full diffs of git commits
 
 ## Installation
 
@@ -143,7 +140,7 @@ VAST comes with a [3-clause BSD licence][license-url].
 [mailing-list]: http://mailman.icsi.berkeley.edu/mailman/listinfo/vast
 [mailing-list-commits]: http://mailman.icsi.berkeley.edu/mailman/listinfo/vast-commits
 [chat-badge]: https://img.shields.io/badge/gitter-chat-brightgreen.svg
-[chat-url]: https://gitter.im/vast-io/vast
+[chat-url]: https://gitter.im/tenzir/chat
 [jenkins-url]: https://jenkins.inet.haw-hamburg.de/blue/organizations/jenkins/VAST%2Fvast
 [jenkins-badge]: https://jenkins.inet.haw-hamburg.de/buildStatus/icon?job=VAST/vast/master
 [coverage-url]: https://jenkins.inet.haw-hamburg.de/job/VAST/job/vast/job/master/cobertura/
