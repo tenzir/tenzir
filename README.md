@@ -1,11 +1,15 @@
-# VAST
-
 [![Build Status][ci-badge]][ci-url]
 [![Chat][chat-badge]][chat-url]
 [![License][license-badge]][license-url]
 
-**Visibility Across Space and Time (VAST)** is a platform for network forensics
-at scale.
+<p align="center">
+  <img src="./doc/assets/vast.svg" alt="VAST">
+</p>
+
+**Visibility Across Space and Time (VAST)** is a scalable foundation for
+a security operations center (SOC): high-throughput ingestion of telemetry,
+low-latency and type-rich search, native integration with Python/Pandas, R,
+Spark, and efficient pivoting across many data formats. 
 
 ## Synopsis
 
@@ -21,8 +25,8 @@ Run a query over the last hour, rendered as JSON:
 
     vast export json '#timestamp > 1 hour ago && (6.6.6.6 || 5353/udp)'
 
-Ingest a [PCAP](https://en.wikipedia.org/wiki/Pcap) trace with a 1024-byte flow
-cut-off:
+Ingest a [PCAP](https://en.wikipedia.org/wiki/Pcap) trace with a 1024-byte
+flow cut-off:
 
     vast import pcap -c 1024 < trace.pcap
 
@@ -34,13 +38,9 @@ Run a query over PCAP data, sort the packets, and feed them into `tcpdump`:
 
 ## Resources
 
-- [Project page](http://vast.io)
-- [Documentation](http://docs.vast.io)
+- [Chat][chat-url]
+- [Documentation][docs]
 - [Contribution guidelines](CONTRIBUTING.md)
-
-### Contact
-
-- Chat: [Gitter][chat-url]
 - Twitter: [@vast_io](https://twitter.com/vast_io)
 
 ## Installation
@@ -136,6 +136,13 @@ proceedings][nsdi-proceedings].
 
 VAST comes with a [3-clause BSD licence][license-url].
 
+---
+
+<p align="center">
+  Developed with ❤️ by <strong><a href="https://tenzir.com">Tenzir</a></strong>
+</p>
+
+[docs]: https://docs.tenzir.com
 [mailing-list]: http://mailman.icsi.berkeley.edu/mailman/listinfo/vast
 [mailing-list-commits]: http://mailman.icsi.berkeley.edu/mailman/listinfo/vast-commits
 [chat-badge]: https://img.shields.io/badge/gitter-chat-brightgreen.svg
