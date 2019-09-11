@@ -1,7 +1,6 @@
 # VAST
 
-[![Build Status][jenkins-badge]][jenkins-url]
-[![Coverage][coverage-badge]][coverage-url]
+[![Build Status][ci-badge]][ci-url]
 [![Chat][chat-badge]][chat-url]
 [![License][license-badge]][license-url]
 
@@ -141,13 +140,10 @@ VAST comes with a [3-clause BSD licence][license-url].
 [mailing-list-commits]: http://mailman.icsi.berkeley.edu/mailman/listinfo/vast-commits
 [chat-badge]: https://img.shields.io/badge/gitter-chat-brightgreen.svg
 [chat-url]: https://gitter.im/tenzir/chat
-[jenkins-url]: https://jenkins.inet.haw-hamburg.de/blue/organizations/jenkins/VAST%2Fvast
-[jenkins-badge]: https://jenkins.inet.haw-hamburg.de/buildStatus/icon?job=VAST/vast/master
-[coverage-url]: https://jenkins.inet.haw-hamburg.de/job/VAST/job/vast/job/master/cobertura/
-[coverage-badge]: https://img.shields.io/jenkins/c/https/jenkins.inet.haw-hamburg.de/job/VAST/job/vast/job/master.svg?style=flat
+[ci-url]: https://cirrus-ci.com/github/tenzir/vast
+[ci-badge]: https://img.shields.io/cirrus/github/tenzir/vast
 [license-badge]: https://img.shields.io/badge/license-BSD-blue.svg
 [license-url]: https://raw.github.com/vast-io/vast/master/COPYING
 
-[caf-obs]: https://build.opensuse.org/package/show/devel:libraries:caf/caf
 [vast-paper]: https://www.usenix.org/system/files/conference/nsdi16/nsdi16-paper-vallentin.pdf
 [nsdi-proceedings]: https://www.usenix.org/conference/nsdi16/technical-sessions
