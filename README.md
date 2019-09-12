@@ -7,9 +7,9 @@
 </p>
 
 **Visibility Across Space and Time (VAST)** is a scalable foundation for
-a security operations center (SOC): high-throughput ingestion of telemetry,
-low-latency and type-rich search, native integration with Python/Pandas, R,
-Spark, and efficient pivoting across many data formats. 
+a security operations center (SOC): a rich data model for security data,
+high-throughput ingestion of telemetry, low-latency search, and flexible export
+in various formats.
 
 ## Synopsis
 
