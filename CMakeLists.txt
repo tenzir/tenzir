@@ -593,11 +593,19 @@ add_custom_target(integration
 
 add_custom_target(vast-schema
                   COMMAND ${CMAKE_COMMAND} -E make_directory
-                          "${CMAKE_BINARY_DIR}/share/vast"
-                  COMMAND ${CMAKE_COMMAND} -E create_symlink
-                          "${CMAKE_CURRENT_SOURCE_DIR}/schema"
                           "${CMAKE_BINARY_DIR}/share/vast/schema"
                   COMMENT "Linking schema directory")
+
+file(GLOB schema_files RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}" "schema/*.schema")
+foreach (x ${schema_files})
+  message(STATUS "schema ${x}")
+  add_custom_command(TARGET vast-schema
+                     PRE_BUILD
+                     COMMAND ${CMAKE_COMMAND} -E create_symlink
+                             "${CMAKE_CURRENT_SOURCE_DIR}/${x}"
+                             "${CMAKE_BINARY_DIR}/share/vast/${x}"
+                     COMMENT "Linking schema ${x}")
+endforeach ()
 
 add_subdirectory(doc)
 add_subdirectory(libvast)
