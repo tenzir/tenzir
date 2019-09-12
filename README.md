@@ -120,14 +120,16 @@ command shown above.
 When referring to VAST in a scientific context, please use the following
 citation:
 
-    @InProceedings{nsdi16:vast,
-      author    = {Matthias Vallentin and Vern Paxson and Robin Sommer},
-      title     = {{VAST: A Unified Platform for Interactive Network Forensics}},
-      booktitle = {Proceedings of the USENIX Symposium on Networked Systems
-                   Design and Implementation (NSDI)},
-      month     = {March},
-      year      = {2016}
-    }
+```bibtex
+@InProceedings{nsdi16:vast,
+  author    = {Matthias Vallentin and Vern Paxson and Robin Sommer},
+  title     = {{VAST: A Unified Platform for Interactive Network Forensics}},
+  booktitle = {Proceedings of the USENIX Symposium on Networked Systems
+               Design and Implementation (NSDI)},
+  month     = {March},
+  year      = {2016}
+}
+```
 
 You can [download the paper][vast-paper] from the [NSDI '16
 proceedings][nsdi-proceedings].
