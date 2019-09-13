@@ -124,20 +124,20 @@ mark_as_advanced(CAF_ROOT_DIR
                  CAF_INCLUDE_DIRS)
 
 if (CAF_core_FOUND AND NOT TARGET caf::core)
-  add_library(caf::core UNKNOWN IMPORTED)
+  add_library(caf::core UNKNOWN IMPORTED GLOBAL)
   set_target_properties(caf::core PROPERTIES
     IMPORTED_LOCATION "${CAF_LIBRARY_CORE}"
     INTERFACE_INCLUDE_DIRECTORIES "${CAF_INCLUDE_DIR_CORE}")
 endif ()
 if (CAF_io_FOUND AND NOT TARGET caf::io)
-  add_library(caf::io UNKNOWN IMPORTED)
+  add_library(caf::io UNKNOWN IMPORTED GLOBAL)
   set_target_properties(caf::io PROPERTIES
     IMPORTED_LOCATION "${CAF_LIBRARY_IO}"
     INTERFACE_INCLUDE_DIRECTORIES "${CAF_INCLUDE_DIR_IO}"
     INTERFACE_LINK_LIBRARIES "caf::core")
 endif ()
 if (CAF_openssl_FOUND AND NOT TARGET caf::openssl)
-  add_library(caf::openssl UNKNOWN IMPORTED)
+  add_library(caf::openssl UNKNOWN IMPORTED GLOBAL)
   set_target_properties(caf::openssl PROPERTIES
     IMPORTED_LOCATION "${CAF_LIBRARY_OPENSSL}"
     INTERFACE_INCLUDE_DIRECTORIES "${CAF_INCLUDE_DIR_OPENSSL}"
@@ -151,14 +151,14 @@ if (CAF_openssl_FOUND AND NOT TARGET caf::openssl)
   endif ()
 endif ()
 if (CAF_opencl_FOUND AND NOT TARGET caf::opencl)
-  add_library(caf::opencl UNKNOWN IMPORTED)
+  add_library(caf::opencl UNKNOWN IMPORTED GLOBAL)
   set_target_properties(caf::opencl PROPERTIES
     IMPORTED_LOCATION "${CAF_LIBRARY_OPENCL}"
     INTERFACE_INCLUDE_DIRECTORIES "${CAF_INCLUDE_DIR_OPENCL}"
     INTERFACE_LINK_LIBRARIES "caf::core")
 endif ()
 if (CAF_test_FOUND AND NOT TARGET caf::test)
-  add_library(caf::test INTERFACE IMPORTED)
+  add_library(caf::test INTERFACE IMPORTED GLOBAL)
   set_target_properties(caf::test PROPERTIES
     INTERFACE_INCLUDE_DIRECTORIES "${CAF_INCLUDE_DIR_TEST}"
     INTERFACE_LINK_LIBRARIES "caf::core")
