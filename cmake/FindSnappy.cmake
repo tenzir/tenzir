@@ -39,7 +39,7 @@ mark_as_advanced(
 
 # create IMPORTED target
 if (SNAPPY_FOUND AND NOT TARGET snappy::snappy)
-  add_library(snappy::snappy UNKNOWN IMPORTED)
+  add_library(snappy::snappy UNKNOWN IMPORTED GLOBAL)
   set_target_properties(snappy::snappy PROPERTIES
     IMPORTED_LOCATION ${SNAPPY_LIBRARIES})
 endif()
