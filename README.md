@@ -1,11 +1,15 @@
-# VAST
-
 [![Build Status][ci-badge]][ci-url]
 [![Chat][chat-badge]][chat-url]
 [![License][license-badge]][license-url]
 
-**Visibility Across Space and Time (VAST)** is a platform for network forensics
-at scale.
+<p align="center">
+  <img src="./doc/assets/vast.svg" alt="VAST">
+</p>
+
+**Visibility Across Space and Time (VAST)** is a scalable foundation for
+a security operations center (SOC): a rich data model for security data,
+high-throughput ingestion of telemetry, low-latency search, and flexible export
+in various formats.
 
 ## Synopsis
 
@@ -21,8 +25,8 @@ Run a query over the last hour, rendered as JSON:
 
     vast export json '#timestamp > 1 hour ago && (6.6.6.6 || 5353/udp)'
 
-Ingest a [PCAP](https://en.wikipedia.org/wiki/Pcap) trace with a 1024-byte flow
-cut-off:
+Ingest a [PCAP](https://en.wikipedia.org/wiki/Pcap) trace with a 1024-byte
+flow cut-off:
 
     vast import pcap -c 1024 < trace.pcap
 
@@ -34,13 +38,9 @@ Run a query over PCAP data, sort the packets, and feed them into `tcpdump`:
 
 ## Resources
 
-- [Project page](http://vast.io)
-- [Documentation](http://docs.vast.io)
+- [Chat][chat-url]
+- [Documentation][docs]
 - [Contribution guidelines](CONTRIBUTING.md)
-
-### Contact
-
-- Chat: [Gitter][chat-url]
 - Twitter: [@vast_io](https://twitter.com/vast_io)
 
 ## Installation
@@ -85,9 +85,8 @@ The source ships with the convenience script `docker_build.sh`, which will
 create the Docker images and save them as `tar.gz` archives (when invoked
 without arguments).
 
-To run the container, you need to provide a volume to the mountpoint `/data`:
-
-The default command will print the help message
+To run the container, you need to provide a volume to the mountpoint `/data`.
+The default command will print the help message:
 
 ``` sh
 docker run -v /tmp/vast:/data vast-io/vast
@@ -100,34 +99,36 @@ connect to each other:
 docker network create -d bridge --subnet 172.42.0.0/16 vast_nw
 ```
 
-Use detach and publish the default port to start a VAST node
+Use detach and publish the default port to start a VAST node:
 
 ``` sh
 docker run --network=vast_nw --name=vast_node --ip="172.42.0.2" -d -v /tmp/vast:/data vast-io/vast start
 ```
 
-Import a Zeek conn log to the detached server instance
+Import a Zeek conn log to the detached server instance:
 
 ``` sh
 docker run --network=vast_nw -i -v /tmp/vast:/data vast-io/vast -e '172.42.0.2' import zeek < zeek_conn.log
 ```
 
-Other subcommands like `export` and `status` can be used just like the `import`
-command shown above.
+Other subcommands, like `export` and `status`, can be used just like the
+`import` command shown above.
 
 ## Scientific Use
 
 When referring to VAST in a scientific context, please use the following
 citation:
 
-    @InProceedings{nsdi16:vast,
-      author    = {Matthias Vallentin and Vern Paxson and Robin Sommer},
-      title     = {{VAST: A Unified Platform for Interactive Network Forensics}},
-      booktitle = {Proceedings of the USENIX Symposium on Networked Systems
-                   Design and Implementation (NSDI)},
-      month     = {March},
-      year      = {2016}
-    }
+```bibtex
+@InProceedings{nsdi16:vast,
+  author    = {Matthias Vallentin and Vern Paxson and Robin Sommer},
+  title     = {{VAST: A Unified Platform for Interactive Network Forensics}},
+  booktitle = {Proceedings of the USENIX Symposium on Networked Systems
+               Design and Implementation (NSDI)},
+  month     = {March},
+  year      = {2016}
+}
+```
 
 You can [download the paper][vast-paper] from the [NSDI '16
 proceedings][nsdi-proceedings].
@@ -136,6 +137,13 @@ proceedings][nsdi-proceedings].
 
 VAST comes with a [3-clause BSD licence][license-url].
 
+---
+
+<p align="center">
+  Developed with ❤️ by <strong><a href="https://tenzir.com">Tenzir</a></strong>
+</p>
+
+[docs]: https://docs.tenzir.com
 [mailing-list]: http://mailman.icsi.berkeley.edu/mailman/listinfo/vast
 [mailing-list-commits]: http://mailman.icsi.berkeley.edu/mailman/listinfo/vast-commits
 [chat-badge]: https://img.shields.io/badge/gitter-chat-brightgreen.svg
