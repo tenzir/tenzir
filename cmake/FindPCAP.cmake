@@ -39,7 +39,7 @@ mark_as_advanced(
 
 # create IMPORTED target for libpcap dependency
 if (PCAP_FOUND AND NOT TARGET pcap::pcap)
-  add_library(pcap::pcap UNKNOWN IMPORTED)
+  add_library(pcap::pcap UNKNOWN IMPORTED GLOBAL)
   set_target_properties(pcap::pcap PROPERTIES
     IMPORTED_LOCATION ${PCAP_LIBRARIES})
 endif()

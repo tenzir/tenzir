@@ -53,7 +53,7 @@ mark_as_advanced(
 
 # create IMPORTED target
 if (BROKER_FOUND AND NOT TARGET zeek::broker)
-  add_library(zeek::broker UNKNOWN IMPORTED)
+  add_library(zeek::broker UNKNOWN IMPORTED GLOBAL)
   set_target_properties(zeek::broker PROPERTIES
     IMPORTED_LOCATION ${BROKER_LIBRARY}
     INTERFACE_INCLUDE_DIRECTORIES "${BROKER_INCLUDE_DIRS}"
