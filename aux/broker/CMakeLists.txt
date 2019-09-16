@@ -17,9 +17,9 @@ install(DIRECTORY broker/broker DESTINATION include FILES_MATCHING PATTERN "*.hh
 set_source_files_properties(3rdparty/sqlite3.c PROPERTIES COMPILE_FLAGS
                             -DSQLITE_OMIT_LOAD_EXTENSION)
 
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/broker/broker/config.hh.in
-               ${CMAKE_CURRENT_BINARY_DIR}/broker/config.hh)
-install(FILES ${CMAKE_CURRENT_BINARY_DIR}/broker/config.hh DESTINATION include/broker)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/broker/include/broker/config.hh.in
+               ${CMAKE_CURRENT_BINARY_DIR}/include/broker/config.hh)
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/include/broker/config.hh DESTINATION include/broker)
 
 set(BROKER_SRC
   broker/src/address.cc
@@ -65,7 +65,7 @@ if (NOT INSTALL_LIB_DIR)
 endif ()
 
 add_library(broker ${BROKER_SRC})
-target_include_directories(broker PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/broker ${CMAKE_CURRENT_BINARY_DIR})
+target_include_directories(broker PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/broker/include ${CMAKE_CURRENT_BINARY_DIR}/include)
 target_include_directories(broker PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/broker/3rdparty)
 target_compile_options(broker PRIVATE -Wno-unused-parameter -Wno-unused-variable)
 set_target_properties(broker PROPERTIES
