@@ -18,7 +18,6 @@ set(libvast_sources
     src/bool_synopsis.cpp
     src/chunk.cpp
     src/column_index.cpp
-    src/column_major_matrix_table_slice_builder.cpp
     src/command.cpp
     src/compression.cpp
     src/concept/hashable/crc.cpp
@@ -77,7 +76,6 @@ set(libvast_sources
     src/operator.cpp
     src/pattern.cpp
     src/port.cpp
-    src/row_major_matrix_table_slice_builder.cpp
     src/schema.cpp
     src/segment.cpp
     src/segment_builder.cpp

@@ -15,18 +15,15 @@
 
 #include "vast/table_slice.hpp"
 
-#include "vast/test/test.hpp"
-
 #include "vast/test/fixtures/table_slices.hpp"
+#include "vast/test/test.hpp"
 
 #include <caf/make_copy_on_write.hpp>
 #include <caf/test/dsl.hpp>
 
-#include "vast/column_major_matrix_table_slice_builder.hpp"
 #include "vast/default_table_slice.hpp"
 #include "vast/default_table_slice_builder.hpp"
-#include "vast/matrix_table_slice.hpp"
-#include "vast/row_major_matrix_table_slice_builder.hpp"
+#include "vast/ids.hpp"
 #include "vast/to_events.hpp"
 
 using namespace vast;
@@ -95,8 +92,6 @@ private:
 FIXTURE_SCOPE(table_slice_tests, fixtures::table_slices)
 
 TEST_TABLE_SLICE(default_table_slice)
-TEST_TABLE_SLICE(row_major_matrix_table_slice)
-TEST_TABLE_SLICE(column_major_matrix_table_slice)
 TEST_TABLE_SLICE(rebranded_table_slice)
 
 TEST(random integer slices) {
