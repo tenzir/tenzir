@@ -13,7 +13,12 @@ style_task:
     - style
   env:
     PREFIX: /opt/tenzir
+    UPLOAD_KEY: "ENCRYPTED[b9aebb47f0f45d1af07797a742e7469835cac15ceb40ca1e5a82fe32c27435944990f7918a9ac0e9bbdcb7d9267a1e6d]"
   fingerprint_script:
+    - git fetch origin
+    - export PACKAGE_NAME="$(date +%Y-%m-%d)-VAST-$(git describe)-$(uname -s)-$BUILD_TYPE"
+    - echo "$PACKAGE_NAME" > PACKAGE_NAME
+    - cat PACKAGE_NAME
     - cmake --version
     - ${CXX} --version
     - python --version
@@ -22,7 +27,10 @@ style_task:
     - git submodule update --init aux/broker/broker
     - git -C aux/broker/broker submodule update --init 3rdparty
   build_script:
-    - ./configure --prefix=$PREFIX --build-type=$BUILD_TYPE $CONFIGURE_FLAGS --generator=Ninja
+    - cmake -Bbuild -H. -DCMAKE_INSTALL_PREFIX=$PREFIX
+      -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DCPACK_GENERATOR=TGZ
+      -DCPACK_PACKAGE_FILE_NAME="$(cat PACKAGE_NAME)"
+      -DCPACK_SET_DESTDIR=ON $CONFIGURE_FLAGS -G Ninja
     - cmake --build build --target all
   unit_test_script:
     - cmake --build build --target test
@@ -30,6 +38,14 @@ style_task:
     - cmake --build build --target integration
   install_script:
     - cmake --build build --target install
+  package_script:
+    - cmake --build build --target package
+  upload_script: >
+    if [ "$CIRRUS_BRANCH" = "master" ]; then
+      echo $UPLOAD_KEY | base64 --decode > upload_key
+      chmod 600 upload_key
+      scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i upload_key build/$(cat PACKAGE_NAME).tar.gz mule@tenzir.dfn-cert.de:artifacts/
+    fi
 
 debian_task:
   name: Debian
@@ -43,7 +59,7 @@ debian_task:
     matrix:
       - BUILD_TYPE: Release
       - BUILD_TYPE: Debug
-        CONFIGURE_FLAGS: --enable-asan
+        CONFIGURE_FLAGS: -DENABLE_ADDRESS_SANITIZER:BOOL=ON
   <<: *build_definition
 
 freebsd_task:
@@ -58,9 +74,9 @@ freebsd_task:
     matrix:
       - BUILD_TYPE: Release
       - BUILD_TYPE: Debug
-        CONFIGURE_FLAGS: --enable-asan
+        CONFIGURE_FLAGS: -DENABLE_ADDRESS_SANITIZER:BOOL=ON
   setup_script:
-    - env ASSUME_ALWAYS_YES=YES pkg install git cmake ninja lang/python3 lang/python py36-pip
+    - env ASSUME_ALWAYS_YES=YES pkg install git cmake ninja lang/python3 lang/python py36-pip base64
   <<: *build_definition
 
 macos_task:
