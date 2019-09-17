@@ -110,17 +110,24 @@ Header
   to outsource forward declarations into a separate file per module. The file
   name should be `<MODULE>/fwd.h`.
 
-- Include order is from low-level to high-level headers, e.g.,
+- Include order is from high-level to low-level headers, e.g.,
 
   ```cpp
-  #include <sys/types.h>
+  // iff a matching header exists
+  #include "vast/matching_header.hpp"
 
-  #include <memory>
+  #include "vast/logger.hpp"
 
   #include <3rd/party.hpp>
 
-  #include "vast/logger.h"
+  #include <memory>
+
+  #include <sys/types.h>
   ```
+
+  `clang-format` is configured to automatically change the include order
+  accordingly. Includes separated by preprocessor directives need to be sorted
+  manually.
 
   Within each section the order should be alphabetical. VAST includes should
   always be in doublequotes and relative to the source directory, whereas
