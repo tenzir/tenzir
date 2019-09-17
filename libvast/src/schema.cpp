@@ -13,8 +13,6 @@
 
 #include "vast/schema.hpp"
 
-#include <utility>
-
 #include <caf/actor_system_config.hpp>
 
 #include "vast/event_types.hpp"
@@ -104,6 +102,8 @@ bool operator==(const schema& x, const schema& y) {
 
 // TODO: we should figure out a better way to (de)serialize: use manual pointer
 // tracking to save types exactly once. Something along those lines:
+//
+// #include <utility>
 //
 // namespace {
 //
