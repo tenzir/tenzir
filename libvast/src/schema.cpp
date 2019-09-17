@@ -103,18 +103,20 @@ bool operator==(const schema& x, const schema& y) {
 // TODO: we should figure out a better way to (de)serialize: use manual pointer
 // tracking to save types exactly once. Something along those lines:
 //
-//namespace {
+// #include <utility>
 //
-//struct pointer_hash {
+// namespace {
+//
+// struct pointer_hash {
 //  size_t operator()(const type& t) const noexcept {
-//    return reinterpret_cast<size_t>(t.ptr_.get());
+//    return reinterpret_cast<size_t>(std::launder(t.ptr_.get()));
 //  }
 //};
 //
-//using type_cache = std::unordered_set<type, pointer_hash>;
+// using type_cache = std::unordered_set<type, pointer_hash>;
 //
-//template <class Serializer>
-//struct type_serializer {
+// template <class Serializer>
+// struct type_serializer {
 //
 //  type_serializer(Serializer& sink, type_cache& cache)
 //    : sink_{sink}, cache_{cache} {

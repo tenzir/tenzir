@@ -17,6 +17,7 @@
 #include <cstdint>
 #include <limits>
 #include <type_traits>
+#include <utility>
 
 #include "vast/die.hpp"
 #include "vast/detail/assert.hpp"
@@ -61,7 +62,7 @@ auto order(T x) {
       case FP_NORMAL: {
         static constexpr auto exp_mask = (~0ull << 53) >> 1;
         static constexpr auto sig_mask = ~0ull >> 12;
-        auto p = reinterpret_cast<uint64_t*>(&x);
+        auto p = reinterpret_cast<uint64_t*>(std::launder(&x));
         auto exp = (*p & exp_mask) >> 52;
         auto sig = *p & sig_mask;
         // If the value is positive we add a 1 as MSB left of the exponent and

@@ -17,6 +17,7 @@
 #include <cstdint>
 #include <string>
 #include <type_traits>
+#include <utility>
 
 #include <caf/stream_deserializer.hpp>
 
@@ -53,21 +54,27 @@ protected:
         VAST_ASSERT(type == builtin::i8_v || type == builtin::u8_v);
         return this->apply_raw(sizeof(uint8_t), val);
       case builtin::i16_v:
-        return zig_zag_varbyte_decode(*reinterpret_cast<int16_t*>(val));
+        return zig_zag_varbyte_decode(
+          *reinterpret_cast<int16_t*>(std::launder(val)));
       case builtin::i32_v:
-        return zig_zag_varbyte_decode(*reinterpret_cast<int32_t*>(val));
+        return zig_zag_varbyte_decode(
+          *reinterpret_cast<int32_t*>(std::launder(val)));
       case builtin::i64_v:
-        return zig_zag_varbyte_decode(*reinterpret_cast<int64_t*>(val));
+        return zig_zag_varbyte_decode(
+          *reinterpret_cast<int64_t*>(std::launder(val)));
       case builtin::u16_v:
-        return this->varbyte_decode(*reinterpret_cast<uint16_t*>(val));
+        return this->varbyte_decode(
+          *reinterpret_cast<uint16_t*>(std::launder(val)));
       case builtin::u32_v:
-        return this->varbyte_decode(*reinterpret_cast<uint32_t*>(val));
+        return this->varbyte_decode(
+          *reinterpret_cast<uint32_t*>(std::launder(val)));
       case builtin::u64_v:
-        return this->varbyte_decode(*reinterpret_cast<uint64_t*>(val));
+        return this->varbyte_decode(
+          *reinterpret_cast<uint64_t*>(std::launder(val)));
       case builtin::float_v:
-        return this->apply_float(*reinterpret_cast<float*>(val));
+        return this->apply_float(*reinterpret_cast<float*>(std::launder(val)));
       case builtin::double_v:
-        return this->apply_float(*reinterpret_cast<double*>(val));
+        return this->apply_float(*reinterpret_cast<double*>(std::launder(val)));
       case builtin::ldouble_v: {
         // the IEEE-754 conversion does not work for long double
         // => fall back to string serialization (even though it sucks)
@@ -76,11 +83,11 @@ protected:
         if (e)
           return e;
         std::istringstream iss{std::move(tmp)};
-        iss >> *reinterpret_cast<long double*>(val);
+        iss >> *reinterpret_cast<long double*>(std::launder(val));
         return caf::none;
       }
       case builtin::string8_v: {
-        auto& str = *reinterpret_cast<std::string*>(val);
+        auto& str = *reinterpret_cast<std::string*>(std::launder(val));
         size_t size;
         return error::eval([&] { return this->begin_sequence(size); },
                            [&] { str.resize(size);
@@ -88,7 +95,7 @@ protected:
                            [&] { return this->end_sequence(); });
       }
       case builtin::string16_v: {
-        auto& str = *reinterpret_cast<std::u16string*>(val);
+        auto& str = *reinterpret_cast<std::u16string*>(std::launder(val));
         str.clear();
         size_t ns;
         return error::eval([&] { return this->begin_sequence(ns); },
@@ -97,7 +104,7 @@ protected:
                            [&] { return this->end_sequence(); });
       }
       case builtin::string32_v: {
-        auto& str = *reinterpret_cast<std::u32string*>(val);
+        auto& str = *reinterpret_cast<std::u32string*>(std::launder(val));
         str.clear();
         size_t ns;
         return error::eval([&] { return this->begin_sequence(ns); },
