@@ -32,7 +32,7 @@ IncludeCategories:
     Priority:        1
   - Regex:           '^<caf/'
     Priority:        2
-  - Regex:           '<[[:alnum:].]+>'
+  - Regex:           '<[[:alnum:]_.]+>'
     Priority:        3
 IndentCaseLabels: true
 IndentPPDirectives: AfterHash
