@@ -13,6 +13,7 @@
 
 #include <array>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "vast/byte.hpp"
@@ -36,7 +37,7 @@ TEST(byte) {
   auto x = span<byte>{&b, 1};
   CHECK_EQUAL(x.size(), 1);
   auto foo = "foo"s;
-  x = span<byte>(reinterpret_cast<byte*>(foo.data()), foo.size());
+  x = span<byte>(reinterpret_cast<byte*>(std::launder(foo.data())), foo.size());
   CHECK_EQUAL(x.size(), 3);
   CHECK_EQUAL(x[0], byte{'f'});
 }

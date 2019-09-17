@@ -208,7 +208,7 @@ public:
     int depth = 0;
     while (n) {
       if (n->type == node::tag::leaf) {
-        if (reinterpret_cast<leaf*>(n)->key() == key)
+        if (reinterpret_cast<leaf*>(std::launder(n))->key() == key)
           return {root, n};
         return end();
       }
@@ -234,7 +234,7 @@ public:
    * equal to end() if the container is empty.
    */
   iterator begin() const {
-    return {root, reinterpret_cast<node*>(minimum(root))};
+    return {root, reinterpret_cast<node*>(std::launder(minimum(root)))};
   }
 
   /**
@@ -297,7 +297,8 @@ public:
     std::deque<iterator> rval;
     while (n) {
       if (n->type == node::tag::leaf) {
-        if (prefix_matches(reinterpret_cast<leaf*>(n)->key(), prefix))
+        if (prefix_matches(reinterpret_cast<leaf*>(std::launder(n))->key(),
+                           prefix))
           rval.push_back({root, n});
         return rval;
       }
@@ -338,7 +339,8 @@ public:
     int depth = 0;
     while (n) {
       if (n->type == node::tag::leaf) {
-        if (prefix_matches(data, reinterpret_cast<leaf*>(n)->key()))
+        if (prefix_matches(data,
+                           reinterpret_cast<leaf*>(std::launder(n))->key()))
           rval.push_back({root, n});
         return rval;
       }
@@ -491,7 +493,7 @@ private:
   };
 
   static const unsigned char* as_key_data(const std::string& key) {
-    return reinterpret_cast<const unsigned char*>(key.data());
+    return reinterpret_cast<const unsigned char*>(std::launder(key.data()));
   }
 
   static uint32_t longest_common_prefix(const std::string& k1,
@@ -519,13 +521,13 @@ private:
       return nullptr;
     switch (n->type) {
       case node::tag::leaf:
-        return reinterpret_cast<leaf*>(n);
+        return reinterpret_cast<leaf*>(std::launder(n));
       case node::tag::node4:
-        return minimum(reinterpret_cast<node4*>(n)->children[0]);
+        return minimum(reinterpret_cast<node4*>(std::launder(n))->children[0]);
       case node::tag::node16:
-        return minimum(reinterpret_cast<node16*>(n)->children[0]);
+        return minimum(reinterpret_cast<node16*>(std::launder(n))->children[0]);
       case node::tag::node48: {
-        auto p = reinterpret_cast<node48*>(n);
+        auto p = reinterpret_cast<node48*>(std::launder(n));
         int i = 0;
         while (!p->keys[i])
           ++i;
@@ -533,7 +535,7 @@ private:
         return minimum(p->children[i]);
       }
       case node::tag::node256: {
-        auto p = reinterpret_cast<node256*>(n);
+        auto p = reinterpret_cast<node256*>(std::launder(n));
         int i = 0;
         while (!p->children[i])
           ++i;
@@ -548,13 +550,13 @@ private:
   static std::pair<node**, uint16_t> find_child(node* n, unsigned char c) {
     switch (n->type) {
       case node::tag::node4: {
-        auto p = reinterpret_cast<node4*>(n);
+        auto p = reinterpret_cast<node4*>(std::launder(n));
         for (int i = 0; i < n->num_children; ++i)
           if (p->keys[i] == c)
             return {&p->children[i], i};
       } break;
       case node::tag::node16: {
-        auto p = reinterpret_cast<node16*>(n);
+        auto p = reinterpret_cast<node16*>(std::launder(n));
         // Compare the key to all 16 stored keys
         __m128i cmp = _mm_cmpeq_epi8(_mm_set1_epi8(c),
                                      _mm_loadu_si128((__m128i*)p->keys.data()));
@@ -567,13 +569,13 @@ private:
         }
       } break;
       case node::tag::node48: {
-        auto p = reinterpret_cast<node48*>(n);
+        auto p = reinterpret_cast<node48*>(std::launder(n));
         int i = p->keys[c];
         if (i)
           return {&p->children[i - 1], i};
       } break;
       case node::tag::node256: {
-        auto p = reinterpret_cast<node256*>(n);
+        auto p = reinterpret_cast<node256*>(std::launder(n));
         if (p->children[c])
           return {&p->children[c], c};
       } break;
@@ -622,13 +624,17 @@ private:
   static void add_child(node* n, node** ref, unsigned char c, node* child) {
     switch (n->type) {
       case node::tag::node4:
-        return reinterpret_cast<node4*>(n)->add_child(ref, c, child);
+        return reinterpret_cast<node4*>(std::launder(n))
+          ->add_child(ref, c, child);
       case node::tag::node16:
-        return reinterpret_cast<node16*>(n)->add_child(ref, c, child);
+        return reinterpret_cast<node16*>(std::launder(n))
+          ->add_child(ref, c, child);
       case node::tag::node48:
-        return reinterpret_cast<node48*>(n)->add_child(ref, c, child);
+        return reinterpret_cast<node48*>(std::launder(n))
+          ->add_child(ref, c, child);
       case node::tag::node256:
-        return reinterpret_cast<node256*>(n)->add_child(ref, c, child);
+        return reinterpret_cast<node256*>(std::launder(n))
+          ->add_child(ref, c, child);
       default:
         abort();
     }
@@ -637,13 +643,14 @@ private:
   static void rem_child(node* n, node** ref, unsigned char c, node** child) {
     switch (n->type) {
       case node::tag::node4:
-        return reinterpret_cast<node4*>(n)->rem_child(ref, child);
+        return reinterpret_cast<node4*>(std::launder(n))->rem_child(ref, child);
       case node::tag::node16:
-        return reinterpret_cast<node16*>(n)->rem_child(ref, child);
+        return reinterpret_cast<node16*>(std::launder(n))
+          ->rem_child(ref, child);
       case node::tag::node48:
-        return reinterpret_cast<node48*>(n)->rem_child(ref, c);
+        return reinterpret_cast<node48*>(std::launder(n))->rem_child(ref, c);
       case node::tag::node256:
-        return reinterpret_cast<node256*>(n)->rem_child(ref, c);
+        return reinterpret_cast<node256*>(std::launder(n))->rem_child(ref, c);
       default:
         abort();
     }
@@ -652,14 +659,14 @@ private:
   std::pair<iterator, bool> recursive_insert(node* n, node** self,
                                              value_type kv, size_t depth) {
     if (!n) {
-      *self = reinterpret_cast<node*>(new leaf(std::move(kv)));
+      *self = reinterpret_cast<node*>(std::launder(new leaf(std::move(kv))));
       return {{root, *self}, true};
     }
     if (n->type == node::tag::leaf) {
-      auto l = reinterpret_cast<leaf*>(n);
+      auto l = reinterpret_cast<leaf*>(std::launder(n));
       if (l->key() == kv.first) {
         // Value exists, don't change it.
-        return {{root, reinterpret_cast<node*>(n)}, false};
+        return {{root, reinterpret_cast<node*>(std::launder(n))}, false};
       }
       // New value, need a new internal node.
       auto nn = new node4;
@@ -669,12 +676,12 @@ private:
       nn->n.partial_len = longest_prefix;
       std::copy(l2->key().begin() + depth, l2->key().begin() + depth + m,
                 nn->n.partial.begin());
-      *self = reinterpret_cast<node*>(nn);
+      *self = reinterpret_cast<node*>(std::launder(nn));
       nn->add_child(self, l->key()[depth + longest_prefix],
-                    reinterpret_cast<node*>(l));
+                    reinterpret_cast<node*>(std::launder(l)));
       nn->add_child(self, l2->key()[depth + longest_prefix],
-                    reinterpret_cast<node*>(l2));
-      return {{root, reinterpret_cast<node*>(l2)}, true};
+                    reinterpret_cast<node*>(std::launder(l2)));
+      return {{root, reinterpret_cast<node*>(std::launder(l2))}, true};
     }
     if (n->partial_len) {
       auto prefix_diff = prefix_mismatch(n, kv.first, depth);
@@ -683,7 +690,7 @@ private:
       else {
         // Need to split the node.
         auto nn = new node4;
-        *self = reinterpret_cast<node*>(nn);
+        *self = reinterpret_cast<node*>(std::launder(nn));
         nn->n.partial_len = prefix_diff;
         std::copy(n->partial.begin(),
                   n->partial.begin() + std::min(N, prefix_diff),
@@ -706,7 +713,8 @@ private:
                     n->partial.begin());
         }
         unsigned char c = kv.first[depth + prefix_diff];
-        auto nl = reinterpret_cast<node*>(new leaf(std::move(kv)));
+        auto nl = reinterpret_cast<node*>(
+          std::launder(new leaf(std::move(kv))));
         nn->add_child(self, c, nl);
         return {{root, nl}, true};
       }
@@ -715,7 +723,7 @@ private:
     if (child)
       return recursive_insert(*child, child, std::move(kv), depth + 1);
     unsigned char c = kv.first[depth];
-    auto nl = reinterpret_cast<node*>(new leaf(std::move(kv)));
+    auto nl = reinterpret_cast<node*>(std::launder(new leaf(std::move(kv))));
     add_child(n, self, c, nl);
     return {{root, nl}, true};
   }
@@ -725,7 +733,7 @@ private:
     if (!n)
       return nullptr;
     if (n->type == node::tag::leaf) {
-      auto l = reinterpret_cast<leaf*>(n);
+      auto l = reinterpret_cast<leaf*>(std::launder(n));
       if (key != l->key())
         return nullptr;
       *self = nullptr;
@@ -743,7 +751,7 @@ private:
       return nullptr;
     if ((*child)->type != node::tag::leaf)
       return recursive_erase(*child, child, key, depth + 1);
-    auto l = reinterpret_cast<leaf*>(*child);
+    auto l = reinterpret_cast<leaf*>(std::launder(*child));
     if (key != l->key())
       return nullptr;
     rem_child(n, self, key[depth], child);
@@ -755,31 +763,31 @@ private:
       return;
     switch (n->type) {
       case node::tag::leaf:
-        delete reinterpret_cast<leaf*>(n);
+        delete reinterpret_cast<leaf*>(std::launder(n));
         return;
       case node::tag::node4: {
-        auto p = reinterpret_cast<node4*>(n);
+        auto p = reinterpret_cast<node4*>(std::launder(n));
         for (int i = 0; i < n->num_children; ++i)
           recursive_clear(p->children[i]);
         delete p;
       }
         return;
       case node::tag::node16: {
-        auto p = reinterpret_cast<node16*>(n);
+        auto p = reinterpret_cast<node16*>(std::launder(n));
         for (int i = 0; i < n->num_children; ++i)
           recursive_clear(p->children[i]);
         delete p;
       }
         return;
       case node::tag::node48: {
-        auto p = reinterpret_cast<node48*>(n);
+        auto p = reinterpret_cast<node48*>(std::launder(n));
         for (int i = 0; i < n->num_children; ++i)
           recursive_clear(p->children[i]);
         delete p;
       }
         return;
       case node::tag::node256: {
-        auto p = reinterpret_cast<node256*>(n);
+        auto p = reinterpret_cast<node256*>(std::launder(n));
         for (int i = 0; i < 256; ++i)
           if (p->children[i])
             recursive_clear(p->children[i]);
@@ -797,17 +805,17 @@ private:
         leaves.push_back({root, n});
         break;
       case node::tag::node4: {
-        auto p = reinterpret_cast<node4*>(n);
+        auto p = reinterpret_cast<node4*>(std::launder(n));
         for (int i = 0; i < n->num_children; ++i)
           recursive_add_leaves(p->children[i], leaves);
       } break;
       case node::tag::node16: {
-        auto p = reinterpret_cast<node16*>(n);
+        auto p = reinterpret_cast<node16*>(std::launder(n));
         for (int i = 0; i < n->num_children; ++i)
           recursive_add_leaves(p->children[i], leaves);
       } break;
       case node::tag::node48: {
-        auto p = reinterpret_cast<node48*>(n);
+        auto p = reinterpret_cast<node48*>(std::launder(n));
         for (int i = 0; i < 256; ++i) {
           auto idx = p->keys[i];
           if (!idx)
@@ -816,7 +824,7 @@ private:
         }
       } break;
       case node::tag::node256: {
-        auto p = reinterpret_cast<node256*>(n);
+        auto p = reinterpret_cast<node256*>(std::launder(n));
         for (int i = 0; i < 256; ++i)
           if (p->children[i])
             recursive_add_leaves(p->children[i], leaves);
@@ -831,7 +839,7 @@ private:
       case node::tag::leaf:
         return nullptr;
       case node::tag::node4: {
-        auto p = reinterpret_cast<node4*>(n);
+        auto p = reinterpret_cast<node4*>(std::launder(n));
         if (n->num_children && p->keys[0] == 0
             && p->children[0]->type == node::tag::leaf) {
           leaves.push_back({root, p->children[0]});
@@ -839,7 +847,7 @@ private:
         }
       } break;
       case node::tag::node16: {
-        auto p = reinterpret_cast<node16*>(n);
+        auto p = reinterpret_cast<node16*>(std::launder(n));
         if (n->num_children && p->keys[0] == 0
             && p->children[0]->type == node::tag::leaf) {
           leaves.push_back({root, p->children[0]});
@@ -847,7 +855,7 @@ private:
         }
       } break;
       case node::tag::node48: {
-        auto p = reinterpret_cast<node48*>(n);
+        auto p = reinterpret_cast<node48*>(std::launder(n));
         if (p->keys[0]
             && p->children[p->keys[0] - 1]->type == node::tag::leaf) {
           leaves.push_back({root, p->children[p->keys[0] - 1]});
@@ -855,7 +863,7 @@ private:
         }
       } break;
       case node::tag::node256: {
-        auto p = reinterpret_cast<node256*>(n);
+        auto p = reinterpret_cast<node256*>(std::launder(n));
         if (p->children[0] && p->children[0]->type == node::tag::leaf) {
           leaves.push_back({root, p->children[0]});
           return p->children[0];
@@ -894,7 +902,7 @@ void radix_tree<T, N>::node4::add_child(node** ref, unsigned char c,
   std::copy(children.begin(), children.begin() + n.num_children,
             nn->children.begin());
   std::copy(keys.begin(), keys.begin() + n.num_children, nn->keys.begin());
-  *ref = reinterpret_cast<node*>(nn);
+  *ref = reinterpret_cast<node*>(std::launder(nn));
   delete this;
   nn->add_child(ref, c, child);
 }
@@ -931,7 +939,7 @@ void radix_tree<T, N>::node16::add_child(node** ref, unsigned char c,
             nn->children.begin());
   for (int i = 0; i < n.num_children; ++i)
     nn->keys[keys[i]] = i + 1;
-  *ref = reinterpret_cast<node*>(nn);
+  *ref = reinterpret_cast<node*>(std::launder(nn));
   delete this;
   nn->add_child(ref, c, child);
 }
@@ -952,7 +960,7 @@ void radix_tree<T, N>::node48::add_child(node** ref, unsigned char c,
   for (int i = 0; i < 256; ++i)
     if (keys[i])
       nn->children[i] = children[keys[i] - 1];
-  *ref = reinterpret_cast<node*>(nn);
+  *ref = reinterpret_cast<node*>(std::launder(nn));
   delete this;
   nn->add_child(ref, c, child);
 }
@@ -1009,7 +1017,7 @@ void radix_tree<T, N>::node16::rem_child(node** ref, node** child) {
   if (n.num_children != 3)
     return;
   auto nn = new node4(n);
-  *ref = reinterpret_cast<node*>(nn);
+  *ref = reinterpret_cast<node*>(std::launder(nn));
   std::copy(keys.begin(), keys.begin() + 4, nn->keys.begin());
   std::copy(children.begin(), children.begin() + 4, nn->children.begin());
   delete this;
@@ -1024,7 +1032,7 @@ void radix_tree<T, N>::node48::rem_child(node** ref, unsigned char c) {
   if (n.num_children != 12)
     return;
   auto nn = new node16(n);
-  *ref = reinterpret_cast<node*>(nn);
+  *ref = reinterpret_cast<node*>(std::launder(nn));
   int child = 0;
   for (int i = 0; i < 256; ++i) {
     pos = keys[i];
@@ -1045,7 +1053,7 @@ void radix_tree<T, N>::node256::rem_child(node** ref, unsigned char c) {
   if (n.num_children != 37)
     return;
   auto nn = new node48(n);
-  *ref = reinterpret_cast<node*>(nn);
+  *ref = reinterpret_cast<node*>(std::launder(nn));
   int pos = 0;
   for (int i = 0; i < 256; ++i)
     if (children[i]) {
@@ -1064,13 +1072,13 @@ radix_tree<T, N>::iterator::iterator(node* arg_root, node* starting_point)
 template <class T, std::size_t N>
 typename radix_tree<T, N>::iterator::reference radix_tree<T, N>::iterator::
 operator*() const {
-  return reinterpret_cast<leaf*>(node_ptr)->kv;
+  return reinterpret_cast<leaf*>(std::launder(node_ptr))->kv;
 }
 
 template <class T, std::size_t N>
 typename radix_tree<T, N>::iterator::pointer radix_tree<T, N>::iterator::
 operator->() const {
-  return &reinterpret_cast<leaf*>(node_ptr)->kv;
+  return &reinterpret_cast<leaf*>(std::launder(node_ptr))->kv;
 }
 
 template <class T, std::size_t N>
@@ -1111,7 +1119,7 @@ void radix_tree<T, N>::iterator::increment() {
         visited->pop_front();
         return;
       case node::tag::node4: {
-        auto p = reinterpret_cast<node4*>(n);
+        auto p = reinterpret_cast<node4*>(std::launder(n));
         if (next_idx >= n->num_children)
           visited->pop_front();
         else {
@@ -1120,7 +1128,7 @@ void radix_tree<T, N>::iterator::increment() {
         }
       } break;
       case node::tag::node16: {
-        auto p = reinterpret_cast<node16*>(n);
+        auto p = reinterpret_cast<node16*>(std::launder(n));
         if (next_idx >= n->num_children)
           visited->pop_front();
         else {
@@ -1129,7 +1137,7 @@ void radix_tree<T, N>::iterator::increment() {
         }
       } break;
       case node::tag::node48: {
-        auto p = reinterpret_cast<node48*>(n);
+        auto p = reinterpret_cast<node48*>(std::launder(n));
         auto exhausted = true;
         for (; next_idx < 256; ++next_idx) {
           auto idx = p->keys[next_idx];
@@ -1144,7 +1152,7 @@ void radix_tree<T, N>::iterator::increment() {
           visited->pop_front();
       } break;
       case node::tag::node256: {
-        auto p = reinterpret_cast<node256*>(n);
+        auto p = reinterpret_cast<node256*>(std::launder(n));
         auto exhausted = true;
         for (; next_idx < 256; ++next_idx) {
           if (!p->children[next_idx])
@@ -1174,7 +1182,7 @@ void radix_tree<T, N>::iterator::prepare() {
   // the path within 'visited' and don't need all conditionals).
   node* n = root;
   int depth = 0;
-  const key_type& key = reinterpret_cast<leaf*>(node_ptr)->key();
+  const key_type& key = reinterpret_cast<leaf*>(std::launder(node_ptr))->key();
   while (n) {
     if (n->type == node::tag::leaf)
       return;

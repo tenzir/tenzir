@@ -16,6 +16,7 @@
 #include <cstddef>
 #include <functional>
 #include <string>
+#include <utility>
 
 #include <caf/fwd.hpp>
 #include <caf/ref_counted.hpp>
@@ -123,7 +124,7 @@ public:
   const T* as(size_type offset = 0) const {
     VAST_ASSERT(offset < size());
     auto ptr = data() + offset;
-    return reinterpret_cast<const T*>(ptr);
+    return reinterpret_cast<const T*>(std::launder(ptr));
   }
 
   /// Creates a new chunk that structurally shares the data of this chunk.

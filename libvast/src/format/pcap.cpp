@@ -14,6 +14,7 @@
 #include <netinet/in.h>
 
 #include <thread>
+#include <utility>
 
 #include "vast/community_id.hpp"
 #include "vast/detail/assert.hpp"
@@ -165,7 +166,8 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
     auto layer3 = data + 14;
     const uint8_t* layer4 = nullptr;
     uint8_t layer4_proto = 0;
-    auto layer2_type = *reinterpret_cast<const uint16_t*>(data + 12);
+    auto layer2_type = *reinterpret_cast<const uint16_t*>(
+      std::launder(data + 12));
     uint64_t payload_size = packet_size;
     switch (detail::to_host_order(layer2_type)) {
       default:
@@ -178,8 +180,10 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
         if (header_size < 20)
           return make_error(ec::format_error,
                             "IPv4 header too short: ", header_size, " bytes");
-        auto orig_h = reinterpret_cast<const uint32_t*>(layer3 + 12);
-        auto resp_h = reinterpret_cast<const uint32_t*>(layer3 + 16);
+        auto orig_h = reinterpret_cast<const uint32_t*>(
+          std::launder(layer3 + 12));
+        auto resp_h = reinterpret_cast<const uint32_t*>(
+          std::launder(layer3 + 16));
         conn.src_addr = {orig_h, address::ipv4, address::network};
         conn.dst_addr = {resp_h, address::ipv4, address::network};
         layer4_proto = *(layer3 + 9);
@@ -190,8 +194,10 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
       case 0x86dd: {
         if (header->len < 14 + 40)
           return make_error(ec::format_error, "IPv6 header too short");
-        auto orig_h = reinterpret_cast<const uint32_t*>(layer3 + 8);
-        auto resp_h = reinterpret_cast<const uint32_t*>(layer3 + 24);
+        auto orig_h = reinterpret_cast<const uint32_t*>(
+          std::launder(layer3 + 8));
+        auto resp_h = reinterpret_cast<const uint32_t*>(
+          std::launder(layer3 + 24));
         conn.src_addr = {orig_h, address::ipv4, address::network};
         conn.dst_addr = {resp_h, address::ipv4, address::network};
         layer4_proto = *(layer3 + 6);
@@ -202,18 +208,22 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
     }
     if (layer4_proto == IPPROTO_TCP) {
       VAST_ASSERT(layer4);
-      auto orig_p = *reinterpret_cast<const uint16_t*>(layer4);
-      auto resp_p = *reinterpret_cast<const uint16_t*>(layer4 + 2);
+      auto orig_p = *reinterpret_cast<const uint16_t*>(std::launder(layer4));
+      auto resp_p = *reinterpret_cast<const uint16_t*>(
+        std::launder(layer4 + 2));
       orig_p = detail::to_host_order(orig_p);
       resp_p = detail::to_host_order(resp_p);
       conn.src_port = {orig_p, port::tcp};
       conn.dst_port = {resp_p, port::tcp};
-      auto data_offset = *reinterpret_cast<const uint8_t*>(layer4 + 12) >> 4;
+      auto data_offset = *reinterpret_cast<const uint8_t*>(
+                           std::launder(layer4 + 12))
+                         >> 4;
       payload_size -= data_offset * 4;
     } else if (layer4_proto == IPPROTO_UDP) {
       VAST_ASSERT(layer4);
-      auto orig_p = *reinterpret_cast<const uint16_t*>(layer4);
-      auto resp_p = *reinterpret_cast<const uint16_t*>(layer4 + 2);
+      auto orig_p = *reinterpret_cast<const uint16_t*>(std::launder(layer4));
+      auto resp_p = *reinterpret_cast<const uint16_t*>(
+        std::launder(layer4 + 2));
       orig_p = detail::to_host_order(orig_p);
       resp_p = detail::to_host_order(resp_p);
       conn.src_port = {orig_p, port::udp};
@@ -221,8 +231,10 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
       payload_size -= 8;
     } else if (layer4_proto == IPPROTO_ICMP) {
       VAST_ASSERT(layer4);
-      auto message_type = *reinterpret_cast<const uint8_t*>(layer4);
-      auto message_code = *reinterpret_cast<const uint8_t*>(layer4 + 1);
+      auto message_type = *reinterpret_cast<const uint8_t*>(
+        std::launder(layer4));
+      auto message_code = *reinterpret_cast<const uint8_t*>(
+        std::launder(layer4 + 1));
       conn.src_port = {message_type, port::icmp};
       conn.dst_port = {message_code, port::icmp};
       payload_size -= 8; // TODO: account for variable-size data.
@@ -248,7 +260,7 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
 #endif
     // Assemble packet.
     // We start with the network layer and skip the link layer.
-    auto str = reinterpret_cast<const char*>(data + 14);
+    auto str = reinterpret_cast<const char*>(std::launder(data + 14));
     auto& cid = state(conn).community_id;
     if (!(builder_->add(ts) && builder_->add(conn.src_addr)
           && builder_->add(conn.dst_addr) && builder_->add(conn.src_port)
@@ -378,7 +390,7 @@ caf::error writer::write(const table_slice& slice) {
     header.len = payload.size();
     // Dump packet.
     ::pcap_dump(reinterpret_cast<uint8_t*>(dumper_), &header,
-                reinterpret_cast<const uint8_t*>(payload.data()));
+                reinterpret_cast<const uint8_t*>(std::launder(payload.data())));
   }
   if (++total_packets_ % flush_interval_ == 0)
     if (auto r = flush(); !r)

@@ -15,8 +15,9 @@
 #include <arpa/inet.h>
 #include <sys/socket.h>
 
-#include <cstring>
 #include <cstdlib>
+#include <cstring>
+#include <utility>
 
 #include "vast/address.hpp"
 #include "vast/concept/printable/to_string.hpp"
@@ -105,7 +106,7 @@ bool address::mask(unsigned top_bits_to_keep) {
     m[r.quot] = detail::to_network_order(m[r.quot] & ~bitmask32(32 - r.rem));
   for (size_t i = r.quot + 1; i < 4; ++i)
     m[i] = 0;
-  auto p = reinterpret_cast<uint32_t*>(&bytes_[0]);
+  auto p = reinterpret_cast<uint32_t*>(std::launder(&bytes_[0]));
   for (size_t i = 0; i < 4; ++i)
     p[i] &= m[i];
   return true;

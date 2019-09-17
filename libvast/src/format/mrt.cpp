@@ -13,6 +13,8 @@
 
 #include "vast/format/mrt.hpp"
 
+#include <utility>
+
 #include "vast/detail/assert.hpp"
 #include "vast/detail/byte_swap.hpp"
 #include "vast/error.hpp"
@@ -365,7 +367,8 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
     if (input_->fail())
       return finish(f, make_error(ec::format_error,
                                   "failed to read MRT common header"));
-    auto ptr = reinterpret_cast<const uint32_t*>(buffer_.data() + 8);
+    auto ptr = reinterpret_cast<const uint32_t*>(
+      std::launder(buffer_.data() + 8));
     auto message_length = vast::detail::to_host_order(*ptr);
     // TODO: Where does the RFC specify the maximum length?
     using namespace binary_byte_literals;

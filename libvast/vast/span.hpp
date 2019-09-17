@@ -571,14 +571,15 @@ constexpr size_t calculate_byte_size() {
 template <class ElementType, size_t Extent>
 span<const byte, calculate_byte_size<ElementType, Extent>()>
 as_bytes(span<ElementType, Extent> s) noexcept {
-  return {reinterpret_cast<const byte*>(s.data()), s.size_bytes()};
+  return {reinterpret_cast<const byte*>(std::launder(s.data())),
+          s.size_bytes()};
 }
 
 template <class ElementType, size_t Extent,
           class = std::enable_if_t<!std::is_const_v<ElementType>>>
 span<byte, calculate_byte_size<ElementType, Extent>()>
 as_writeable_bytes(span<ElementType, Extent> s) noexcept {
-  return {reinterpret_cast<byte*>(s.data()), s.size_bytes()};
+  return {reinterpret_cast<byte*>(std::launder(s.data())), s.size_bytes()};
 }
 
 } // namespace vast

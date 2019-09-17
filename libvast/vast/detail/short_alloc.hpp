@@ -37,9 +37,10 @@
 
 #pragma once
 
-#include <cstddef>
 #include <cassert>
+#include <cstddef>
 #include <type_traits>
+#include <utility>
 
 #include "vast/detail/assert.hpp"
 
@@ -145,12 +146,12 @@ public:
   };
 
   T* allocate(size_t n) {
-    return reinterpret_cast<T*>(a_.template
-                                allocate<alignof(T)>(n * sizeof(T)));
+    return reinterpret_cast<T*>(
+      std::launder(a_.template allocate<alignof(T)>(n * sizeof(T))));
   }
 
   void deallocate(T* p, size_t n) noexcept {
-    a_.deallocate(reinterpret_cast<char*>(p), n * sizeof(T));
+    a_.deallocate(reinterpret_cast<char*>(std::launder(p)), n * sizeof(T));
   }
 
   template <class T0, size_t N0, size_t A0, class T1, size_t N1, size_t A1>
