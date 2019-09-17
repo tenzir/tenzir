@@ -25,7 +25,15 @@ ConstructorInitializerIndentWidth: 2
 ContinuationIndentWidth: 2
 Cpp11BracedListStyle: true
 FixNamespaceComments: true
-IncludeBlocks: Preserve
+IncludeBlocks: Regroup
+IncludeCategories:
+IncludeCategories:
+  - Regex:           '^"vast/'
+    Priority:        1
+  - Regex:           '^<caf/'
+    Priority:        2
+  - Regex:           '<[[:alnum:].]+>'
+    Priority:        3
 IndentCaseLabels: true
 IndentPPDirectives: AfterHash
 IndentWidth: 2
@@ -34,8 +42,11 @@ KeepEmptyLinesAtTheStartOfBlocks: false
 Language: Cpp
 MaxEmptyLinesToKeep: 1
 NamespaceIndentation: None
-PenaltyBreakAssignment: 1000
-PenaltyBreakBeforeFirstCallParameter: 1000
+PenaltyBreakAssignment: 10
+PenaltyBreakBeforeFirstCallParameter: 30
+PenaltyBreakString: 50
+PenaltyExcessCharacter: 100
+PenaltyReturnTypeOnItsOwnLine: 5
 PointerAlignment: Left
 ReflowComments: true
 SortIncludes: true
