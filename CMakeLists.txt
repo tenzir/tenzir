@@ -455,7 +455,7 @@ if (NOT CAF_ROOT_DIR AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/aux/caf/CMakeLists.t
   if (TARGET libcaf_openssl_${_linkage_suffix})
     target_include_directories(
       libcaf_openssl_${_linkage_suffix}
-      PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>/aux/caf/libcaf_openssl
+      PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/aux/caf/libcaf_openssl>
              $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
     set_target_properties(libcaf_openssl_${_linkage_suffix}
       PROPERTIES EXPORT_NAME openssl)
