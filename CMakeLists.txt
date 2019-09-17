@@ -47,6 +47,7 @@ include(CTest)
 include(Helpers)
 include(MacDependencyPaths)
 
+include(CPack)
 include(GNUInstallDirs)
 set(CMAKE_INSTALL_CMAKEDIR
     "${CMAKE_INSTALL_LIBDIR}/cmake"
