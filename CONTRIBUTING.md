@@ -13,8 +13,6 @@ style guidelines, see https://github.com/agis-/git-style-guide.)
 - The `master` branch reflects the latest state of development and should
   always compile.
 
-- Simple bugfixes consisting of a single commit can be pushed to `master`.
-
 - For new features and non-trivial fixes, use *topic branches* that branch off
   `master` with a naming convention of `topic/short-description`. After
   completing work in a topic branch, check the following steps to prepare
