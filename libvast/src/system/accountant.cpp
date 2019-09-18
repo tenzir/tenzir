@@ -17,10 +17,13 @@
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/filesystem.hpp"
+#include "vast/defaults.hpp"
 #include "vast/detail/coding.hpp"
 #include "vast/detail/fill_status_map.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
+#include "vast/table_slice.hpp"
+#include "vast/table_slice_builder_factory.hpp"
 
 #include <caf/all.hpp>
 
@@ -39,6 +42,7 @@ using accountant_actor = accountant_type::stateful_base<accountant_state>;
 constexpr std::chrono::seconds overview_delay(3);
 
 void init(accountant_actor* self, const path& filename) {
+  auto& st = self->state;
   if (!exists(filename.parent())) {
     auto t = mkdir(filename.parent());
     if (!t) {
@@ -64,12 +68,26 @@ void init(accountant_actor* self, const path& filename) {
 #if VAST_LOG_LEVEL >= CAF_LOG_LEVEL_INFO
   self->delayed_send(self, overview_delay, telemetry_atom::value);
 #endif
+  st.slice_size = get_or(self->system().config(), "system.table-slice-size",
+                         defaults::system::table_slice_size);
+}
+
+void finish_slice(accountant_actor* self) {
+  auto& st = self->state;
+  // Do nothing if builder has not been created.
+  if (!st.builder)
+    return;
+  auto slice = st.builder->finish();
+  VAST_DEBUG(self, "generated slice with", slice->rows(), "rows");
+  st.slice_buffer.push(std::move(slice));
+  st.mgr->advance();
 }
 
 template <class T>
 void record(accountant_actor* self, const std::string& key, T x,
             time ts = std::chrono::system_clock::now()) {
-  using namespace std::chrono;
+#if 0
+  using namespace std::chrono_literals;
   auto aid = self->current_sender()->id();
   auto node = self->current_sender()->node();
   auto& st = self->state;
@@ -81,6 +99,28 @@ void record(accountant_actor* self, const std::string& key, T x,
     st.flush_pending = true;
     self->delayed_send(self, 10s, flush_atom::value);
   }
+#else
+  auto& st = self->state;
+  auto& sys = self->system();
+  auto actor_id = self->current_sender()->id();
+  auto node = self->current_sender()->node();
+  if (!st.builder) {
+    auto layout
+      = record_type{{"ts", time_type{}},    {"nodeid", string_type{}},
+                    {"aid", count_type{}},  {"actor_name", string_type{}},
+                    {"key", string_type{}}, {"value", string_type{}}}
+          .name("vast.account");
+
+    auto slice_type = get_or(sys.config(), "system.table-slice-type",
+                             defaults::system::table_slice_type);
+    st.builder = factory<table_slice_builder>::make(slice_type, layout);
+    VAST_DEBUG(self, "obtained builder");
+  }
+  VAST_ASSERT(st.builder->add(ts, to_string(node), actor_id,
+                              st.actor_map[actor_id], key, to_string(x)));
+  if (st.builder->rows() == st.slice_size)
+    finish_slice(self);
+#endif
 }
 
 void record(accountant_actor* self, const std::string& key, duration x,
@@ -134,21 +174,40 @@ accountant_type::behavior_type accountant(accountant_actor* self,
                                           const path& filename) {
   using namespace std::chrono;
   init(self, filename);
-  self->set_exit_handler(
-    [=](const caf::exit_msg& msg) {
-      self->state.file.flush();
-      self->quit(msg.reason);
-    }
-  );
+  self->set_exit_handler([=](const caf::exit_msg& msg) {
+    finish_slice(self);
+    self->state.file.flush();
+    self->quit(msg.reason);
+  });
   self->set_down_handler(
     [=](const caf::down_msg& msg) {
       VAST_DEBUG(self, "received DOWN from", msg.source);
       self->state.actor_map.erase(msg.source.id());
     }
   );
+  self->state.mgr = self->make_continuous_source(
+    // init
+    [=](bool&) {},
+    // get next element
+    [=](bool&, caf::downstream<table_slice_ptr>& out, size_t num) {
+      auto& st = self->state;
+      size_t produced = 0;
+      while (num-- > 0 && !st.slice_buffer.empty()) {
+        auto& slice = st.slice_buffer.front();
+        produced += slice->rows();
+        out.push(std::move(slice));
+        st.slice_buffer.pop();
+      }
+      VAST_TRACE(self, "was asked for", num, "slices and produced", produced,
+                 ".", st.slice_buffer.size(), "are remaining in buffer");
+    },
+    // done?
+    [](const bool&) { return false; });
   return {[=](announce_atom, const std::string& name) {
             self->state.actor_map[self->current_sender()->id()] = name;
             self->monitor(self->current_sender());
+            if (name == "importer")
+              self->state.mgr->add_outbound_path(self->current_sender());
           },
           [=](const std::string& key, const std::string& value) {
             VAST_TRACE(self, "received", key, "from", self->current_sender());
@@ -179,9 +238,8 @@ accountant_type::behavior_type accountant(accountant_actor* self,
             VAST_TRACE(self, "received a report from", self->current_sender());
             time ts = std::chrono::system_clock::now();
             for (const auto& [key, value] : r) {
-              auto f = [&, key = key](const auto& x) {
-                record(self, key, x, ts);
-              };
+              auto f
+                = [&, key = key](const auto& x) { record(self, key, x, ts); };
               caf::visit(f, value);
             }
           },
@@ -195,8 +253,10 @@ accountant_type::behavior_type accountant(accountant_actor* self,
               auto rate = calc_rate(value);
               if (std::isfinite(rate))
                 record(self, key + ".rate", static_cast<uint64_t>(rate), ts);
-              else
-                record(self, key + ".rate", "NaN", ts);
+              else {
+                using namespace std::string_view_literals;
+                record(self, key + ".rate", "NaN"sv, ts);
+              }
 #if VAST_LOG_LEVEL >= CAF_LOG_LEVEL_INFO
               auto logger = caf::logger::current_logger();
               if (logger && logger->verbosity() >= CAF_LOG_LEVEL_INFO)

@@ -13,18 +13,20 @@
 
 #pragma once
 
-#include <cstdint>
-#include <fstream>
-#include <string>
+#include "vast/filesystem.hpp"
+#include "vast/system/atoms.hpp"
+#include "vast/system/instrumentation.hpp"
+#include "vast/table_slice_builder.hpp"
+#include "vast/time.hpp"
 
+#include <caf/broadcast_downstream_manager.hpp>
 #include <caf/dictionary.hpp>
 #include <caf/typed_actor.hpp>
 
-#include "vast/filesystem.hpp"
-#include "vast/time.hpp"
-
-#include "vast/system/atoms.hpp"
-#include "vast/system/instrumentation.hpp"
+#include <cstdint>
+#include <fstream>
+#include <queue>
+#include <string>
 
 namespace vast::system {
 
@@ -82,6 +84,12 @@ struct accountant_state {
 
   accountant_state(accountant_type::stateful_base<accountant_state>* self);
   void command_line_heartbeat();
+
+  size_t slice_size;
+  table_slice_builder_ptr builder;
+  using downstream_manager = caf::broadcast_downstream_manager<table_slice_ptr>;
+  std::queue<table_slice_ptr> slice_buffer;
+  caf::stream_source_ptr<downstream_manager> mgr;
 };
 
 /// Accumulates various performance metrics in a key-value format and writes
