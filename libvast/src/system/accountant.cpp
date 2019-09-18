@@ -11,25 +11,24 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include <cmath>
-#include <iomanip>
-#include <ios>
-#include <locale>
-
-#include "vast/logger.hpp"
-
-#include <caf/all.hpp>
+#include "vast/system/accountant.hpp"
 
 #include "vast/concept/printable/std/chrono.hpp"
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/filesystem.hpp"
-#include "vast/error.hpp"
-
-#include "vast/system/accountant.hpp"
-
 #include "vast/detail/coding.hpp"
 #include "vast/detail/fill_status_map.hpp"
+#include "vast/error.hpp"
+#include "vast/logger.hpp"
+
+#include <caf/all.hpp>
+
+#include <chrono>
+#include <cmath>
+#include <iomanip>
+#include <ios>
+#include <locale>
 
 namespace vast {
 namespace system {
@@ -93,7 +92,9 @@ void record(accountant_actor* self, const std::string& key, duration x,
 
 void record(accountant_actor* self, const std::string& key, time x,
             time ts = std::chrono::system_clock::now()) {
-  record(self, key, x.time_since_epoch(), std::move(ts));
+  using namespace std::chrono;
+  auto ms = duration_cast<milliseconds>(x.time_since_epoch()).count();
+  record(self, key, ms, std::move(ts));
 }
 
 // Calculate rate in seconds resolution from nanosecond duration.
