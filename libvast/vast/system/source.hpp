@@ -98,12 +98,6 @@ struct source_state {
     Reader reader;
   };
 
-  /// Generates layout-specific table slice builders.
-  vast::factory<table_slice_builder>::signature factory;
-
-  /// Maps layout type names to table slice builders.
-  std::map<std::string, table_slice_builder_ptr> builders;
-
   /// Pretty name for log files.
   const char* name = "source";
 
@@ -122,34 +116,12 @@ struct source_state {
   // -- utility functions ------------------------------------------------------
 
   /// Initializes the state.
-  void init(Reader rd, vast::factory<table_slice_builder>::signature f,
-            caf::optional<size_t> max_events) {
+  void init(Reader rd, caf::optional<size_t> max_events) {
     // Initialize members from given arguments.
     name = reader.name();
-    factory = f;
     new (&reader) Reader(std::move(rd));
     remaining = std::move(max_events);
     initialized = true;
-  }
-
-  /// Tries to access the builder for `layout`.
-  table_slice_builder* builder(const type& layout, size_t table_slice_size) {
-    auto i = builders.find(layout.name());
-    if (i != builders.end())
-      return i->second.get();
-    return caf::visit(
-      detail::overload(
-        [&](const record_type& t) {
-          auto& builder = builders[layout.name()];
-          builder = factory(t);
-          builder->reserve(table_slice_size);
-          return builder.get();
-        },
-        [&](auto&) -> table_slice_builder* {
-          VAST_ERROR(layout.name(), "is not a record type");
-          return nullptr;
-        }),
-      layout);
   }
 
   measurement measurement_;
@@ -170,13 +142,12 @@ struct source_state {
 template <class Reader>
 caf::behavior
 source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
-       factory<table_slice_builder>::signature factory, size_t table_slice_size,
-       caf::optional<size_t> max_events) {
+       size_t table_slice_size, caf::optional<size_t> max_events) {
   using namespace caf;
   using namespace std::chrono;
   namespace defs = defaults::system;
   // Initialize state.
-  self->state.init(std::move(reader), factory, std::move(max_events));
+  self->state.init(std::move(reader), std::move(max_events));
   // Spin up the stream manager for the source.
   self->state.mgr = self->make_continuous_source(
     // init
@@ -268,8 +239,7 @@ caf::behavior default_source(caf::stateful_actor<source_state<Reader>>* self,
                              Reader reader) {
   auto slice_size = get_or(self->system().config(), "system.table-slice-size",
                            defaults::system::table_slice_size);
-  auto factory = default_table_slice_builder::make;
-  return source(self, std::move(reader), factory, slice_size, caf::none);
+  return source(self, std::move(reader), slice_size, caf::none);
 }
 
 } // namespace vast::system
