@@ -41,7 +41,6 @@ Run a query over PCAP data, sort the packets, and feed them into `tcpdump`:
 - [Chat][chat-url]
 - [Documentation][docs]
 - [Contribution guidelines](CONTRIBUTING.md)
-- Twitter: [@vast_io](https://twitter.com/vast_io)
 
 ## Installation
 
