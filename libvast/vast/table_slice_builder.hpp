@@ -13,11 +13,13 @@
 
 #pragma once
 
+#include "vast/fwd.hpp"
+#include "vast/view.hpp"
+
 #include <caf/make_counted.hpp>
 #include <caf/ref_counted.hpp>
 
-#include "vast/fwd.hpp"
-#include "vast/view.hpp"
+#include <type_traits>
 
 namespace vast {
 
@@ -40,15 +42,21 @@ public:
   /// Adds data to the builder.
   /// @param x The data to add.
   /// @returns `true` on success.
-  virtual bool add(data_view x) = 0;
+  template <class T>
+  [[nodiscard]] bool add(const T& x) {
+    if constexpr (std::is_same_v<std::decay_t<T>, data_view>) {
+      return add_impl(x);
+    } else {
+      return add_impl(make_view(x));
+    }
+  }
 
   /// Adds data to the builder.
   /// @param xs The data to add.
   /// @returns `true` on success.
   template <class T0, class T1, class... Ts>
-  bool add(const T0& x0, const T1& x1, const Ts&... xs) {
-    return add(make_view(x0)) && add(make_view(x1))
-           && (add(make_view(xs)) && ...);
+  [[nodiscard]] bool add(const T0& x0, const T1& x1, const Ts&... xs) {
+    return add(x0) && add(x1) && (add(xs) && ...);
   }
 
   /// Constructs a table_slice from the currently accumulated state. After
@@ -75,6 +83,14 @@ public:
 
   /// @returns the number of columns in the table slice.
   size_t columns() const noexcept;
+
+protected:
+  // -- utilities -------------------------------------------------------------
+
+  /// Adds data to the builder.
+  /// @param x The data to add.
+  /// @returns `true` on success.
+  virtual bool add_impl(data_view x) = 0;
 
 private:
   record_type layout_;

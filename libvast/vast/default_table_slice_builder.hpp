@@ -42,8 +42,6 @@ public:
 
   bool append(data x);
 
-  bool add(data_view x) override;
-
   table_slice_ptr finish() override;
 
   size_t rows() const noexcept override;
@@ -54,6 +52,8 @@ public:
 
 protected:
   // -- utility functions ------------------------------------------------------
+
+  bool add_impl(data_view x) override;
 
   /// Allocates `slice_` and resets related state if necessary.
   void lazy_init();
