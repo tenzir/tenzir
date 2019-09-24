@@ -13,14 +13,13 @@
 
 #pragma once
 
-#include "vast/filesystem.hpp"
+#include "vast/fwd.hpp"
 #include "vast/system/atoms.hpp"
 #include "vast/system/instrumentation.hpp"
-#include "vast/table_slice_builder.hpp"
 #include "vast/time.hpp"
 
 #include <caf/broadcast_downstream_manager.hpp>
-#include <caf/dictionary.hpp>
+#include <caf/fwd.hpp>
 #include <caf/typed_actor.hpp>
 
 #include <cstdint>
@@ -66,7 +65,6 @@ using accountant_type = caf::typed_actor<
   caf::reacts_to<std::string, double>,
   caf::reacts_to<report>,
   caf::reacts_to<performance_report>,
-  caf::reacts_to<flush_atom>,
   caf::replies_to<status_atom>::with<caf::dictionary<caf::config_value>>,
   caf::reacts_to<telemetry_atom>>;
 // clang-format on
@@ -75,8 +73,6 @@ using accountant_type = caf::typed_actor<
 struct accountant_state {
   static constexpr const char* name = "accountant";
   accountant_type::stateful_pointer<accountant_state> self;
-  std::ofstream file;
-  bool flush_pending = false;
   std::unordered_map<caf::actor_id, std::string> actor_map;
   struct {
     measurement node;
@@ -93,11 +89,9 @@ struct accountant_state {
 };
 
 /// Accumulates various performance metrics in a key-value format and writes
-/// them to a log file.
+/// them to VAST table slices.
 /// @param self The actor handle.
-/// @param filename The path of the file containing the accounting details.
 accountant_type::behavior_type
-accountant(accountant_type::stateful_pointer<accountant_state> self,
-           const path& filename);
+accountant(accountant_type::stateful_pointer<accountant_state> self);
 
 } // namespace vast::system

@@ -16,7 +16,6 @@
 #include "vast/concept/printable/std/chrono.hpp"
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/to_string.hpp"
-#include "vast/concept/printable/vast/filesystem.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/coding.hpp"
 #include "vast/detail/fill_status_map.hpp"
@@ -41,31 +40,10 @@ namespace {
 using accountant_actor = accountant_type::stateful_base<accountant_state>;
 constexpr std::chrono::seconds overview_delay(3);
 
-void init(accountant_actor* self, const path& filename) {
+void init(accountant_actor* self) {
   auto& st = self->state;
-  if (!exists(filename.parent())) {
-    auto t = mkdir(filename.parent());
-    if (!t) {
-      VAST_ERROR(self, to_string(t.error()));
-      self->quit(t.error());
-      return;
-    }
-  }
-  VAST_DEBUG(self, "opens log file:", filename.trim(-4));
-  auto& file = self->state.file;
-  file.open(filename.str());
-  if (!file.is_open()) {
-    VAST_ERROR(self, "failed to open file:", filename);
-    auto e = make_error(ec::filesystem_error, "failed to open file:", filename);
-    self->quit(e);
-    return;
-  }
-  file << "timestamp\tnode\taid\tactor_name\tkey\tvalue\n";
-  if (!file)
-    self->quit(make_error(ec::filesystem_error));
-  VAST_DEBUG(self, "kicks off flush loop");
-  self->send(self, flush_atom::value);
 #if VAST_LOG_LEVEL >= CAF_LOG_LEVEL_INFO
+  VAST_DEBUG(self, "animates heartbeat loop");
   self->delayed_send(self, overview_delay, telemetry_atom::value);
 #endif
   st.slice_size = get_or(self->system().config(), "system.table-slice-size",
@@ -86,20 +64,6 @@ void finish_slice(accountant_actor* self) {
 template <class T>
 void record(accountant_actor* self, const std::string& key, T x,
             time ts = std::chrono::system_clock::now()) {
-#if 0
-  using namespace std::chrono_literals;
-  auto aid = self->current_sender()->id();
-  auto node = self->current_sender()->node();
-  auto& st = self->state;
-  st.file << to_string(ts) << '\t' << to_string(node) << '\t';
-  st.file << std::dec << aid << '\t' << st.actor_map[aid] << '\t' << key << '\t'
-          << std::setprecision(6) << x << '\n';
-  // Flush after at most 10 seconds.
-  if (!st.flush_pending) {
-    st.flush_pending = true;
-    self->delayed_send(self, 10s, flush_atom::value);
-  }
-#else
   auto& st = self->state;
   auto& sys = self->system();
   auto actor_id = self->current_sender()->id();
@@ -120,7 +84,6 @@ void record(accountant_actor* self, const std::string& key, T x,
                               st.actor_map[actor_id], key, to_string(x)));
   if (st.builder->rows() == st.slice_size)
     finish_slice(self);
-#endif
 }
 
 void record(accountant_actor* self, const std::string& key, duration x,
@@ -170,13 +133,11 @@ void accountant_state::command_line_heartbeat() {
   accumulator = {};
 }
 
-accountant_type::behavior_type accountant(accountant_actor* self,
-                                          const path& filename) {
+accountant_type::behavior_type accountant(accountant_actor* self) {
   using namespace std::chrono;
-  init(self, filename);
+  init(self);
   self->set_exit_handler([=](const caf::exit_msg& msg) {
     finish_slice(self);
-    self->state.file.flush();
     self->quit(msg.reason);
   });
   self->set_down_handler(
@@ -265,15 +226,9 @@ accountant_type::behavior_type accountant(accountant_actor* self,
 #endif
             }
           },
-          [=](flush_atom) {
-            if (self->state.file)
-              self->state.file.flush();
-            self->state.flush_pending = false;
-          },
           [=](status_atom) {
             using caf::put_dictionary;
             caf::dictionary<caf::config_value> result;
-            result.emplace("log-file", filename.str());
             auto& known = put_dictionary(result, "known-actors");
             for (const auto& [aid, name] : self->state.actor_map)
               known.emplace(name, aid);
