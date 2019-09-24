@@ -51,4 +51,12 @@ size_t table_slice_builder::columns() const noexcept {
   return layout_.fields.size();
 }
 
+void intrusive_ptr_add_ref(const table_slice_builder* ptr) {
+  intrusive_ptr_add_ref(static_cast<const caf::ref_counted*>(ptr));
+}
+
+void intrusive_ptr_release(const table_slice_builder* ptr) {
+  intrusive_ptr_release(static_cast<const caf::ref_counted*>(ptr));
+}
+
 } // namespace vast
