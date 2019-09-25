@@ -40,7 +40,11 @@ if (APPLE AND NOT DEFINED CMAKE_MACOSX_RPATH)
 endif ()
 
 # Support Clang tools such as clang-tidy
-set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+add_custom_target(link_target ALL
+  COMMAND ${CMAKE_COMMAND} -E create_symlink
+    ${CMAKE_BINARY_DIR}/compile_commands.json
+    ${CMAKE_SOURCE_DIR}/compile_commands.json)
 
 set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 include(CTest)
