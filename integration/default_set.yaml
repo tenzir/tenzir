@@ -95,6 +95,17 @@ tests:
       - command: import -b zeek
         input: data/zeek/conn.log.gz
       - command: export ascii 'resp_h == 192.168.1.104'
+      # import some more to make sure accounting data is in the system.
+      - command: import -b zeek
+        input: data/zeek/conn.log.gz
+      - command: import -b zeek
+        input: data/zeek/conn.log.gz
+      - command: import -b zeek
+        input: data/zeek/conn.log.gz
+      - command: import -b zeek
+        input: data/zeek/conn.log.gz
+      - command: status
+        transformation: jq '.node.index.statistics.layouts | del(."vast.account".count)'
   Server Basic bgpdump:
     tags: [server, import-export, bgpdump]
     fixture: ServerTester
