@@ -13,15 +13,6 @@
 
 #pragma once
 
-#include <chrono>
-#include <iostream>
-#include <memory>
-#include <string>
-#include <unordered_map>
-#include <vector>
-
-#include <caf/fwd.hpp>
-
 #include "vast/concept/parseable/core.hpp"
 #include "vast/concept/parseable/numeric.hpp"
 #include "vast/concept/parseable/string/any.hpp"
@@ -30,7 +21,6 @@
 #include "vast/data.hpp"
 #include "vast/detail/line_range.hpp"
 #include "vast/detail/string.hpp"
-#include "vast/expected.hpp"
 #include "vast/filesystem.hpp"
 #include "vast/format/ostream_writer.hpp"
 #include "vast/format/reader.hpp"
@@ -39,6 +29,16 @@
 #include "vast/fwd.hpp"
 #include "vast/schema.hpp"
 #include "vast/table_slice_builder.hpp"
+
+#include <caf/expected.hpp>
+#include <caf/fwd.hpp>
+
+#include <chrono>
+#include <iostream>
+#include <memory>
+#include <string>
+#include <unordered_map>
+#include <vector>
 
 namespace vast::format::zeek {
 
@@ -293,7 +293,7 @@ public:
 
   error write(const table_slice& e) override;
 
-  expected<void> flush() override;
+  caf::expected<void> flush() override;
 
   const char* name() const override;
 

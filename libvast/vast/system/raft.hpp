@@ -13,24 +13,23 @@
 
 #pragma once
 
+#include "vast/detail/mmapbuf.hpp"
+#include "vast/filesystem.hpp"
+#include "vast/optional.hpp"
+
+#include <caf/behavior.hpp>
+#include <caf/event_based_actor.hpp>
+#include <caf/expected.hpp>
+#include <caf/fwd.hpp>
+#include <caf/stateful_actor.hpp>
+
 #include <chrono>
 #include <cstdint>
 #include <deque>
 #include <fstream>
 #include <random>
-#include <vector>
 #include <unordered_map>
-
-#include <caf/behavior.hpp>
-#include <caf/event_based_actor.hpp>
-#include <caf/fwd.hpp>
-#include <caf/stateful_actor.hpp>
-
-#include "vast/expected.hpp"
-#include "vast/filesystem.hpp"
-#include "vast/optional.hpp"
-
-#include "vast/detail/mmapbuf.hpp"
+#include <vector>
 
 /// The Raft consensus algorithm.
 ///
@@ -109,7 +108,7 @@ public:
   log_entry& at(index_type i);
 
   /// Appends entries to the log.
-  expected<void> append(std::vector<log_entry> xs);
+  caf::expected<void> append(std::vector<log_entry> xs);
 
   /// Checks whether the log is empty.
   bool empty() const;
@@ -118,9 +117,9 @@ public:
   friend uint64_t bytes(log& l);
 
 private:
-  expected<void> persist_meta_data();
+  caf::expected<void> persist_meta_data();
 
-  expected<void> persist_entries();
+  caf::expected<void> persist_entries();
 
   std::deque<log_entry> entries_;
   index_type start_ = 1;

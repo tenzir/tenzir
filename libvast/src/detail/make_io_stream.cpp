@@ -27,7 +27,7 @@
 namespace vast {
 namespace detail {
 
-expected<std::unique_ptr<std::istream>>
+caf::expected<std::unique_ptr<std::istream>>
 make_input_stream(const std::string& input, bool is_uds) {
   struct owning_istream : public std::istream {
     owning_istream(std::unique_ptr<std::streambuf>&& ptr)
@@ -59,7 +59,7 @@ make_input_stream(const std::string& input, bool is_uds) {
   return std::make_unique<owning_istream>(std::move(fb));
 }
 
-expected<std::unique_ptr<std::ostream>>
+caf::expected<std::unique_ptr<std::ostream>>
 make_output_stream(const std::string& output, bool is_uds) {
   if (is_uds) {
       return make_error(ec::filesystem_error,

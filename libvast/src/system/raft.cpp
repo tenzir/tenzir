@@ -112,7 +112,7 @@ log_entry& log::at(index_type i) {
   return entries_[i - start_];
 }
 
-expected<void> log::append(std::vector<log_entry> xs) {
+caf::expected<void> log::append(std::vector<log_entry> xs) {
   // Allocate persistent state on first entry.
   if (!entries_file_.is_open()) {
     auto entries_filename = dir_ / "entries";
@@ -149,13 +149,13 @@ uint64_t bytes(log& l) {
   return static_cast<uint64_t>(pos);
 }
 
-expected<void> log::persist_meta_data() {
+caf::expected<void> log::persist_meta_data() {
   if (auto err = save(nullptr, dir_ / "meta", start_))
     return err;
   return caf::unit;
 }
 
-expected<void> log::persist_entries() {
+caf::expected<void> log::persist_entries() {
   entries_file_.close();
   if (auto err = save(nullptr, dir_ / "entries", entries_))
     return err;
@@ -207,7 +207,7 @@ std::string role(Actor* self) {
 }
 
 template <class Actor>
-expected<void> save_state(Actor* self) {
+caf::expected<void> save_state(Actor* self) {
   if (auto err = save(nullptr, self->state.dir / "state", self->state.id,
                       self->state.current_term, self->state.voted_for))
     return err;
@@ -219,7 +219,7 @@ expected<void> save_state(Actor* self) {
 }
 
 template <class Actor>
-expected<void> load_state(Actor* self) {
+caf::expected<void> load_state(Actor* self) {
   if (auto err = load(nullptr, self->state.dir / "state", self->state.id,
                       self->state.current_term, self->state.voted_for))
     return err;
@@ -311,7 +311,7 @@ result<index_type> save_snapshot(Actor* self, index_type index,
 
 // Loads a snapshot header into memory and adapts the server state accordingly.
 template <class Actor>
-expected<void> load_snapshot_header(Actor* self) {
+caf::expected<void> load_snapshot_header(Actor* self) {
   VAST_DEBUG(role(self), "loads snapshot header");
   snapshot_header hdr;
   // Read snapshot header from filesystem.
@@ -343,7 +343,7 @@ expected<void> load_snapshot_header(Actor* self) {
 
 // Loads snapshot contents.
 template <class Actor>
-expected<std::vector<char>> load_snapshot_data(Actor* self) {
+caf::expected<std::vector<char>> load_snapshot_data(Actor* self) {
   VAST_DEBUG(role(self), "loads snapshot data");
   snapshot_header hdr;
   std::vector<char> data;
@@ -432,7 +432,7 @@ void advance_commit_index(Actor* self) {
 }
 
 template <class Actor>
-expected<void> become_follower(Actor* self, term_type term) {
+caf::expected<void> become_follower(Actor* self, term_type term) {
   if (!is_follower(self))
     VAST_DEBUG(role(self), "becomes follower in term", term);
   VAST_ASSERT(term >= self->state.current_term);
@@ -482,7 +482,7 @@ void become_leader(Actor* self) {
 }
 
 template <class Actor>
-expected<void> become_candidate(Actor* self) {
+caf::expected<void> become_candidate(Actor* self) {
   VAST_ASSERT(!is_leader(self));
   if (self->state.leader)
     VAST_DEBUG(role(self), "becomes candidate in term",
@@ -604,7 +604,7 @@ auto handle_request_vote(Actor* self, request_vote::request& req) {
 
 // Constructs an InstallSnapshot message.
 template <class Actor>
-expected<install_snapshot::request>
+caf::expected<install_snapshot::request>
 make_install_snapshot(Actor* self, peer_state& peer) {
   using namespace binary_byte_literals;
   VAST_ASSERT(is_leader(self));

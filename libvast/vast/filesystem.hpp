@@ -19,14 +19,14 @@
 #  include <dirent.h>
 #endif
 
+#include "vast/detail/iterator.hpp"
+#include "vast/detail/operators.hpp"
+
+#include <caf/expected.hpp>
+
 #include <functional>
 #include <string>
 #include <vector>
-
-#include "vast/expected.hpp"
-
-#include "vast/detail/iterator.hpp"
-#include "vast/detail/operators.hpp"
 
 namespace vast {
 
@@ -208,7 +208,7 @@ public:
   ///             function attempts to create non-existing parent directories.
   /// @param append If `false`, the first write truncates the file.
   /// @returns `true` on success.
-  expected<void> open(open_mode mode = read_write, bool append = false);
+  caf::expected<void> open(open_mode mode = read_write, bool append = false);
 
   /// Attempts to close the file.
   /// @returns `true` on success.
@@ -321,12 +321,12 @@ bool rm(const path& p);
 /// If the path does not exist, create it as directory.
 /// @param p The path to a directory to create.
 /// @returns `true` on success or if *p* exists already.
-expected<void> mkdir(const path& p);
+caf::expected<void> mkdir(const path& p);
 
 // Loads file contents into a string.
 // @param p The path of the file to load.
 // @returns The contents of the file *p*.
-expected<std::string> load_contents(const path& p);
+caf::expected<std::string> load_contents(const path& p);
 
 } // namespace vast
 

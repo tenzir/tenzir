@@ -13,13 +13,23 @@
 
 #pragma once
 
-#include <functional>
-#include <string>
-#include <type_traits>
-#include <vector>
+#include "vast/aliases.hpp"
+#include "vast/attribute.hpp"
+#include "vast/concept/hashable/uhash.hpp"
+#include "vast/concept/hashable/xxhash.hpp"
+#include "vast/detail/assert.hpp"
+#include "vast/detail/operators.hpp"
+#include "vast/detail/range.hpp"
+#include "vast/detail/stack_vector.hpp"
+#include "vast/fwd.hpp"
+#include "vast/offset.hpp"
+#include "vast/operator.hpp"
+#include "vast/optional.hpp"
+#include "vast/time.hpp"
 
 #include <caf/detail/type_list.hpp>
 #include <caf/error.hpp>
+#include <caf/expected.hpp>
 #include <caf/fwd.hpp>
 #include <caf/intrusive_cow_ptr.hpp>
 #include <caf/make_counted.hpp>
@@ -28,22 +38,10 @@
 #include <caf/ref_counted.hpp>
 #include <caf/variant.hpp>
 
-#include "vast/aliases.hpp"
-#include "vast/attribute.hpp"
-#include "vast/expected.hpp"
-#include "vast/fwd.hpp"
-#include "vast/offset.hpp"
-#include "vast/operator.hpp"
-#include "vast/optional.hpp"
-#include "vast/time.hpp"
-
-#include "vast/concept/hashable/uhash.hpp"
-#include "vast/concept/hashable/xxhash.hpp"
-
-#include "vast/detail/assert.hpp"
-#include "vast/detail/operators.hpp"
-#include "vast/detail/range.hpp"
-#include "vast/detail/stack_vector.hpp"
+#include <functional>
+#include <string>
+#include <type_traits>
+#include <vector>
 
 namespace vast {
 

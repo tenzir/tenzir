@@ -1,16 +1,13 @@
 #pragma once
 
-#include <iostream>
-#include <queue>
-
-#include <caf/fwd.hpp>
-#include <caf/none.hpp>
-#include <caf/variant.hpp>
-
 #include "vast/address.hpp"
+#include "vast/concept/parseable/core.hpp"
+#include "vast/concept/parseable/numeric.hpp"
+#include "vast/concept/parseable/string.hpp"
+#include "vast/concept/parseable/vast/address.hpp"
+#include "vast/concept/parseable/vast/data.hpp"
 #include "vast/error.hpp"
 #include "vast/event.hpp"
-#include "vast/expected.hpp"
 #include "vast/format/multi_layout_reader.hpp"
 #include "vast/logger.hpp"
 #include "vast/schema.hpp"
@@ -19,11 +16,13 @@
 #include "vast/time.hpp"
 #include "vast/type.hpp"
 
-#include "vast/concept/parseable/core.hpp"
-#include "vast/concept/parseable/numeric.hpp"
-#include "vast/concept/parseable/string.hpp"
-#include "vast/concept/parseable/vast/address.hpp"
-#include "vast/concept/parseable/vast/data.hpp"
+#include <caf/expected.hpp>
+#include <caf/fwd.hpp>
+#include <caf/none.hpp>
+#include <caf/variant.hpp>
+
+#include <iostream>
+#include <queue>
 
 namespace vast {
 

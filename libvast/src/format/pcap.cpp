@@ -398,13 +398,13 @@ caf::error writer::write(const table_slice& slice) {
   return caf::none;
 }
 
-expected<void> writer::flush() {
+caf::expected<void> writer::flush() {
   if (!dumper_)
     return make_error(ec::format_error, "pcap dumper not open");
   VAST_DEBUG(this, "flushes at packet", total_packets_);
   if (::pcap_dump_flush(dumper_) == -1)
     return make_error(ec::format_error, "failed to flush");
-  return no_error;
+  return caf::no_error;
 }
 
 const char* writer::name() const {

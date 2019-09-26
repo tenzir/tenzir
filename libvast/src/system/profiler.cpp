@@ -36,7 +36,7 @@ namespace system {
 #ifdef VAST_HAVE_GPERFTOOLS
 behavior profiler(stateful_actor<profiler_state>* self, path dir,
                   std::chrono::seconds secs) {
-  auto prepare = [=]() -> expected<void> {
+  auto prepare = [=]() -> caf::expected<void> {
     if (!exists(dir)) {
       auto t = mkdir(dir);
       if (!t) {

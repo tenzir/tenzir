@@ -13,16 +13,6 @@
 
 #pragma once
 
-#include <algorithm>
-#include <memory>
-#include <type_traits>
-
-#include <caf/deserializer.hpp>
-#include <caf/error.hpp>
-#include <caf/serializer.hpp>
-
-#include "vast/ewah_bitmap.hpp"
-#include "vast/ids.hpp"
 #include "vast/bitmap_index.hpp"
 #include "vast/concept/printable/vast/data.hpp"
 #include "vast/concept/printable/vast/operator.hpp"
@@ -30,10 +20,20 @@
 #include "vast/detail/overload.hpp"
 #include "vast/die.hpp"
 #include "vast/error.hpp"
-#include "vast/expected.hpp"
+#include "vast/ewah_bitmap.hpp"
+#include "vast/ids.hpp"
 #include "vast/type.hpp"
 #include "vast/value_index_factory.hpp"
 #include "vast/view.hpp"
+
+#include <caf/deserializer.hpp>
+#include <caf/error.hpp>
+#include <caf/expected.hpp>
+#include <caf/serializer.hpp>
+
+#include <algorithm>
+#include <memory>
+#include <type_traits>
 
 namespace vast {
 
@@ -54,13 +54,13 @@ public:
   /// Appends a data value.
   /// @param x The data to append to the index.
   /// @returns `true` if appending succeeded.
-  expected<void> append(data_view x);
+  caf::expected<void> append(data_view x);
 
   /// Appends a data value.
   /// @param x The data to append to the index.
   /// @param pos The positional identifier of *x*.
   /// @returns `true` if appending succeeded.
-  expected<void> append(data_view x, id pos);
+  caf::expected<void> append(data_view x, id pos);
 
   /// Looks up data under a relational operator. If the value to look up is
   /// `nil`, only `==` and `!=` are valid operations. The concrete index
@@ -68,7 +68,7 @@ public:
   /// @param op The relation operator.
   /// @param x The value to lookup.
   /// @returns The result of the lookup or an error upon failure.
-  expected<ids> lookup(relational_operator op, data_view x) const;
+  caf::expected<ids> lookup(relational_operator op, data_view x) const;
 
   /// Merges another value index with this one.
   /// @param other The value index to merge.
@@ -91,7 +91,7 @@ public:
 private:
   virtual bool append_impl(data_view x, id pos) = 0;
 
-  virtual expected<ids>
+  virtual caf::expected<ids>
   lookup_impl(relational_operator op, data_view x) const = 0;
 
   ewah_bitmap mask_;
@@ -114,8 +114,9 @@ caf::error inspect(caf::deserializer& source, value_index_ptr& x);
 namespace detail {
 
 template <class Index, class Sequence>
-expected<ids> container_lookup_impl(const Index& idx, relational_operator op,
-                               const Sequence& xs) {
+caf::expected<ids>
+container_lookup_impl(const Index& idx, relational_operator op,
+                      const Sequence& xs) {
   ids result;
   if (op == in) {
     result = bitmap{idx.offset(), false};
@@ -146,15 +147,15 @@ expected<ids> container_lookup_impl(const Index& idx, relational_operator op,
 }
 
 template <class Index>
-expected<ids> container_lookup(const Index& idx, relational_operator op,
-                               view<vector> xs) {
+caf::expected<ids>
+container_lookup(const Index& idx, relational_operator op, view<vector> xs) {
   VAST_ASSERT(xs);
   return container_lookup_impl(idx, op, *xs);
 }
 
 template <class Index>
-expected<ids> container_lookup(const Index& idx, relational_operator op,
-                               view<set> xs) {
+caf::expected<ids>
+container_lookup(const Index& idx, relational_operator op, view<set> xs) {
   VAST_ASSERT(xs);
   return container_lookup_impl(idx, op, *xs);
 }
@@ -246,20 +247,20 @@ private:
     return caf::visit(f, d);
   }
 
-  expected<ids>
+  caf::expected<ids>
   lookup_impl(relational_operator op, data_view d) const override {
     auto f = detail::overload(
-      [&](auto x) -> expected<ids> {
+      [&](auto x) -> caf::expected<ids> {
         return make_error(ec::type_clash, value_type{}, materialize(x));
       },
-      [&](view<bool> x) -> expected<ids> { return bmi_.lookup(op, x); },
-      [&](view<integer> x) -> expected<ids> { return bmi_.lookup(op, x); },
-      [&](view<count> x) -> expected<ids> { return bmi_.lookup(op, x); },
-      [&](view<real> x) -> expected<ids> { return bmi_.lookup(op, x); },
-      [&](view<duration> x) -> expected<ids> {
+      [&](view<bool> x) -> caf::expected<ids> { return bmi_.lookup(op, x); },
+      [&](view<integer> x) -> caf::expected<ids> { return bmi_.lookup(op, x); },
+      [&](view<count> x) -> caf::expected<ids> { return bmi_.lookup(op, x); },
+      [&](view<real> x) -> caf::expected<ids> { return bmi_.lookup(op, x); },
+      [&](view<duration> x) -> caf::expected<ids> {
         return bmi_.lookup(op, x.count());
       },
-      [&](view<time> x) -> expected<ids> {
+      [&](view<time> x) -> caf::expected<ids> {
         return bmi_.lookup(op, x.time_since_epoch().count());
       },
       [&](view<vector> xs) { return detail::container_lookup(*this, op, xs); },
@@ -293,7 +294,7 @@ private:
 
   bool append_impl(data_view x, id pos) override;
 
-  expected<ids>
+  caf::expected<ids>
   lookup_impl(relational_operator op, data_view x) const override;
 
   size_t max_length_;
@@ -315,7 +316,8 @@ public:
 private:
   bool append_impl(data_view x, id pos) override;
 
-  expected<ids> lookup_impl(relational_operator op, data_view x) const override;
+  caf::expected<ids>
+  lookup_impl(relational_operator op, data_view x) const override;
 
   index index_;
 };
@@ -335,7 +337,7 @@ public:
 private:
   bool append_impl(data_view x, id pos) override;
 
-  expected<ids>
+  caf::expected<ids>
   lookup_impl(relational_operator op, data_view x) const override;
 
   std::array<byte_index, 16> bytes_;
@@ -356,7 +358,7 @@ public:
 private:
   bool append_impl(data_view x, id pos) override;
 
-  expected<ids>
+  caf::expected<ids>
   lookup_impl(relational_operator op, data_view x) const override;
 
   address_index network_;
@@ -387,7 +389,7 @@ public:
 private:
   bool append_impl(data_view x, id pos) override;
 
-  expected<ids>
+  caf::expected<ids>
   lookup_impl(relational_operator op, data_view x) const override;
 
   number_index num_;
@@ -414,7 +416,7 @@ public:
 private:
   bool append_impl(data_view x, id pos) override;
 
-  expected<ids>
+  caf::expected<ids>
   lookup_impl(relational_operator op, data_view x) const override;
 
   std::vector<value_index_ptr> elements_;

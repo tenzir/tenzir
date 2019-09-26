@@ -13,19 +13,19 @@
 
 #pragma once
 
-#include <random>
-#include <unordered_map>
-
-#include <caf/variant.hpp>
-
 #include "vast/data.hpp"
 #include "vast/detail/random.hpp"
 #include "vast/event.hpp"
-#include "vast/expected.hpp"
 #include "vast/format/multi_layout_reader.hpp"
 #include "vast/format/reader.hpp"
 #include "vast/fwd.hpp"
 #include "vast/schema.hpp"
+
+#include <caf/expected.hpp>
+#include <caf/variant.hpp>
+
+#include <random>
+#include <unordered_map>
 
 namespace vast::format::test {
 

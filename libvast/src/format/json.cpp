@@ -40,44 +40,44 @@ struct convert {
   using expected = caf::expected<T>;
   using json = vast::json;
 
-  expected<data> operator()(json::boolean b, const bool_type&) const {
+  caf::expected<data> operator()(json::boolean b, const bool_type&) const {
     return b;
   }
 
-  expected<data> operator()(json::number n, const integer_type&) const {
+  caf::expected<data> operator()(json::number n, const integer_type&) const {
     return detail::narrow_cast<integer>(n);
   }
 
-  expected<data> operator()(json::number n, const count_type&) const {
+  caf::expected<data> operator()(json::number n, const count_type&) const {
     return detail::narrow_cast<count>(n);
   }
 
-  expected<data> operator()(json::number n, const real_type&) const {
+  caf::expected<data> operator()(json::number n, const real_type&) const {
     return detail::narrow_cast<real>(n);
   }
 
-  expected<data> operator()(json::number n, const port_type&) const {
+  caf::expected<data> operator()(json::number n, const port_type&) const {
     return port{detail::narrow_cast<port::number_type>(n)};
   }
 
-  expected<data> operator()(json::number s, const time_type&) const {
+  caf::expected<data> operator()(json::number s, const time_type&) const {
     auto secs = std::chrono::duration<json::number>(s);
     auto since_epoch = std::chrono::duration_cast<duration>(secs);
     return time{since_epoch};
   }
 
-  expected<data> operator()(json::number s, const duration_type&) const {
+  caf::expected<data> operator()(json::number s, const duration_type&) const {
     auto secs = std::chrono::duration<json::number>(s);
     return std::chrono::duration_cast<duration>(secs);
   }
 
-  expected<data> operator()(json::string s, const string_type&) const {
+  caf::expected<data> operator()(json::string s, const string_type&) const {
     return s;
   }
 
   template <class T,
             typename std::enable_if_t<has_parser_v<type_to_data<T>>, int> = 0>
-  expected<data> operator()(const json::string& s, const T&) const {
+  caf::expected<data> operator()(const json::string& s, const T&) const {
     using value_type = type_to_data<T>;
     value_type x;
     if (!make_parser<value_type>{}(s, x))
@@ -87,15 +87,16 @@ struct convert {
     return x;
   }
 
-  expected<data> operator()(const json::string& s,
-                            const enumeration_type& e) const {
+  caf::expected<data>
+  operator()(const json::string& s, const enumeration_type& e) const {
     auto i = std::find(e.fields.begin(), e.fields.end(), s);
     if (i == e.fields.end())
       return make_error(ec::parse_error, "invalid:", s);
     return detail::narrow_cast<enumeration>(std::distance(e.fields.begin(), i));
   }
 
-  expected<data> operator()(const json::array& a, const set_type& s) const {
+  caf::expected<data>
+  operator()(const json::array& a, const set_type& s) const {
     set xs;
     xs.reserve(a.size());
     for (auto& x : a) {
@@ -107,7 +108,8 @@ struct convert {
     return xs;
   }
 
-  expected<data> operator()(const json::array& a, const vector_type& v) const {
+  caf::expected<data>
+  operator()(const json::array& a, const vector_type& v) const {
     vector xs;
     xs.reserve(a.size());
     for (auto& x : a) {
@@ -119,7 +121,8 @@ struct convert {
     return xs;
   }
 
-  expected<data> operator()(const json::object& o, const map_type& m) const {
+  caf::expected<data>
+  operator()(const json::object& o, const map_type& m) const {
     map xs;
     xs.reserve(o.size());
     for (auto& [k, v] : o) {
@@ -131,7 +134,7 @@ struct convert {
   }
 
   template <class T, class U>
-  expected<data> operator()(T, U) const {
+  caf::expected<data> operator()(T, U) const {
     VAST_ERROR_ANON("json-reader cannot convert from",
                     caf::detail::pretty_type_name(typeid(T)), "to",
                     caf::detail::pretty_type_name(typeid(U)));

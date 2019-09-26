@@ -27,8 +27,8 @@
 
 namespace vast::system {
 
-expected<scope_linked_actor> spawn_node(caf::scoped_actor& self,
-                                        const caf::settings& opts) {
+caf::expected<scope_linked_actor>
+spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
   // Fetch values from config.
   auto accounting = !get_or(opts, "system.disable-accounting", false);
   auto id = get_or(opts, "system.node-id", defaults::system::node_id);

@@ -13,24 +13,22 @@
 
 #include "vast/system/archive.hpp"
 
-#include <algorithm>
-
-#include <caf/config_value.hpp>
-#include <caf/settings.hpp>
-
+#include "vast/concept/printable/stream.hpp"
 #include "vast/defaults.hpp"
+#include "vast/detail/assert.hpp"
+#include "vast/detail/fill_status_map.hpp"
 #include "vast/event.hpp"
-#include "vast/expected.hpp"
 #include "vast/logger.hpp"
 #include "vast/segment_store.hpp"
 #include "vast/store.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/to_events.hpp"
 
-#include "vast/concept/printable/stream.hpp"
+#include <caf/config_value.hpp>
+#include <caf/expected.hpp>
+#include <caf/settings.hpp>
 
-#include "vast/detail/assert.hpp"
-#include "vast/detail/fill_status_map.hpp"
+#include <algorithm>
 
 using std::chrono::duration_cast;
 using std::chrono::microseconds;

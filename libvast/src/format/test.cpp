@@ -33,13 +33,13 @@ namespace vast::format::test {
 
 namespace {
 
-expected<distribution> make_distribution(const type& t) {
+caf::expected<distribution> make_distribution(const type& t) {
   using parsers::real_opt_dot;
   using parsers::alpha;
   auto i = std::find_if(t.attributes().begin(), t.attributes().end(),
                         [](auto& attr) { return attr.key == "default"; });
   if (i == t.attributes().end() || !i->value)
-    return no_error;
+    return caf::no_error;
   auto parser = +alpha >> '(' >> real_opt_dot >> ',' >> real_opt_dot >> ')';
   std::string name;
   double p0, p1;
@@ -71,7 +71,7 @@ struct initializer {
   }
 
   template <class T>
-  expected<void> operator()(const T& t) {
+  caf::expected<void> operator()(const T& t) {
     auto dist = make_distribution(t);
     if (dist)
       distributions_.push_back(std::move(*dist));
@@ -79,10 +79,10 @@ struct initializer {
       *data_ = caf::none;
     else
       return dist.error();
-    return no_error;
+    return caf::no_error;
   }
 
-  expected<void> operator()(const record_type& r) {
+  caf::expected<void> operator()(const record_type& r) {
     auto& v = caf::get<vector>(*data_);
     VAST_ASSERT(v.size() == r.fields.size());
     for (auto i = 0u; i < r.fields.size(); ++i) {
@@ -91,14 +91,14 @@ struct initializer {
       if (!result)
         return result;
     }
-    return no_error;
+    return caf::no_error;
   }
 
   std::vector<distribution>& distributions_;
   data* data_ = nullptr;
 };
 
-expected<blueprint> make_blueprint(const type& t) {
+caf::expected<blueprint> make_blueprint(const type& t) {
   blueprint bp;
   bp.data = construct(t);
   auto result = visit(initializer{bp}, t);

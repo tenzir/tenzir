@@ -28,11 +28,11 @@ value_index::~value_index() {
   // nop
 }
 
-expected<void> value_index::append(data_view x) {
+caf::expected<void> value_index::append(data_view x) {
   return append(x, offset());
 }
 
-expected<void> value_index::append(data_view x, id pos) {
+caf::expected<void> value_index::append(data_view x, id pos) {
   auto off = mask_.size();
   if (pos < off)
     // Can only append at the end
@@ -48,7 +48,8 @@ expected<void> value_index::append(data_view x, id pos) {
   return {};
 }
 
-expected<ids> value_index::lookup(relational_operator op, data_view x) const {
+caf::expected<ids>
+value_index::lookup(relational_operator op, data_view x) const {
   if (caf::holds_alternative<caf::none_t>(x)) {
     if (op == equal)
       return none_ & mask_;
@@ -144,73 +145,74 @@ bool string_index::append_impl(data_view x, id pos) {
   return true;
 }
 
-expected<ids>
+caf::expected<ids>
 string_index::lookup_impl(relational_operator op, data_view x) const {
-  return caf::visit(detail::overload(
-    [&](auto x) -> expected<ids> {
-      return make_error(ec::type_clash, materialize(x));
-    },
-    [&](view<std::string> str) -> expected<ids> {
-      auto str_size = str.size();
-      if (str_size > max_length_)
-        str_size = max_length_;
-      switch (op) {
-        default:
-          return make_error(ec::unsupported_operator, op);
-        case equal:
-        case not_equal: {
-          if (str_size == 0) {
-            auto result = length_.lookup(equal, 0);
+  return caf::visit(
+    detail::overload(
+      [&](auto x) -> caf::expected<ids> {
+        return make_error(ec::type_clash, materialize(x));
+      },
+      [&](view<std::string> str) -> caf::expected<ids> {
+        auto str_size = str.size();
+        if (str_size > max_length_)
+          str_size = max_length_;
+        switch (op) {
+          default:
+            return make_error(ec::unsupported_operator, op);
+          case equal:
+          case not_equal: {
+            if (str_size == 0) {
+              auto result = length_.lookup(equal, 0);
+              if (op == not_equal)
+                result.flip();
+              return result;
+            }
+            if (str_size > chars_.size())
+              return ids{offset(), op == not_equal};
+            auto result = length_.lookup(less_equal, str_size);
+            if (all<0>(result))
+              return ids{offset(), op == not_equal};
+            for (auto i = 0u; i < str_size; ++i) {
+              auto b = chars_[i].lookup(equal, static_cast<uint8_t>(str[i]));
+              result &= b;
+              if (all<0>(result))
+                return ids{offset(), op == not_equal};
+            }
             if (op == not_equal)
               result.flip();
             return result;
           }
-          if (str_size > chars_.size())
-            return ids{offset(), op == not_equal};
-          auto result = length_.lookup(less_equal, str_size);
-          if (all<0>(result))
-            return ids{offset(), op == not_equal};
-          for (auto i = 0u; i < str_size; ++i) {
-            auto b = chars_[i].lookup(equal, static_cast<uint8_t>(str[i]));
-            result &= b;
-            if (all<0>(result))
-              return ids{offset(), op == not_equal};
-          }
-          if (op == not_equal)
-            result.flip();
-          return result;
-        }
-        case ni:
-        case not_ni: {
-          if (str_size == 0)
-            return ids{offset(), op == ni};
-          if (str_size > chars_.size())
-            return ids{offset(), op == not_ni};
-          // TODO: Be more clever than iterating over all k-grams (#45).
-          ids result{offset(), false};
-          for (auto i = 0u; i < chars_.size() - str_size + 1; ++i) {
-            ids substr{offset(), true};
-            auto skip = false;
-            for (auto j = 0u; j < str_size; ++j) {
-              auto bm = chars_[i + j].lookup(equal, str[j]);
-              if (all<0>(bm)) {
-                skip = true;
-                break;
+          case ni:
+          case not_ni: {
+            if (str_size == 0)
+              return ids{offset(), op == ni};
+            if (str_size > chars_.size())
+              return ids{offset(), op == not_ni};
+            // TODO: Be more clever than iterating over all k-grams (#45).
+            ids result{offset(), false};
+            for (auto i = 0u; i < chars_.size() - str_size + 1; ++i) {
+              ids substr{offset(), true};
+              auto skip = false;
+              for (auto j = 0u; j < str_size; ++j) {
+                auto bm = chars_[i + j].lookup(equal, str[j]);
+                if (all<0>(bm)) {
+                  skip = true;
+                  break;
+                }
+                substr &= bm;
               }
-              substr &= bm;
+              if (!skip)
+                result |= substr;
             }
-            if (!skip)
-              result |= substr;
+            if (op == not_ni)
+              result.flip();
+            return result;
           }
-          if (op == not_ni)
-            result.flip();
-          return result;
         }
-      }
-    },
-    [&](view<vector> xs) { return detail::container_lookup(*this, op, xs); },
-    [&](view<set> xs) { return detail::container_lookup(*this, op, xs); }
-  ), x);
+      },
+      [&](view<vector> xs) { return detail::container_lookup(*this, op, xs); },
+      [&](view<set> xs) { return detail::container_lookup(*this, op, xs); }),
+    x);
 }
 
 // -- enumeration_index --------------------------------------------------------
@@ -240,24 +242,21 @@ bool enumeration_index::append_impl(data_view x, id pos) {
   return false;
 }
 
-expected<ids> enumeration_index::lookup_impl(relational_operator op,
-                                             data_view d) const {
-  return caf::visit(detail::overload(
-                      [&](auto x) -> expected<ids> {
-                        return make_error(ec::type_clash, materialize(x));
-                      },
-                      [&](view<enumeration> x) -> expected<ids> {
-                        if (op == in || op == not_in)
-                          return make_error(ec::unsupported_operator, op);
-                        return index_.lookup(op, x);
-                      },
-                      [&](view<vector> xs) {
-                        return detail::container_lookup(*this, op, xs);
-                      },
-                      [&](view<set> xs) {
-                        return detail::container_lookup(*this, op, xs);
-                      }),
-                    d);
+caf::expected<ids>
+enumeration_index::lookup_impl(relational_operator op, data_view d) const {
+  return caf::visit(
+    detail::overload(
+      [&](auto x) -> caf::expected<ids> {
+        return make_error(ec::type_clash, materialize(x));
+      },
+      [&](view<enumeration> x) -> caf::expected<ids> {
+        if (op == in || op == not_in)
+          return make_error(ec::unsupported_operator, op);
+        return index_.lookup(op, x);
+      },
+      [&](view<vector> xs) { return detail::container_lookup(*this, op, xs); },
+      [&](view<set> xs) { return detail::container_lookup(*this, op, xs); }),
+    d);
 }
 
 // -- address_index ------------------------------------------------------------
@@ -290,53 +289,56 @@ bool address_index::append_impl(data_view x, id pos) {
   return true;
 }
 
-expected<ids>
+caf::expected<ids>
 address_index::lookup_impl(relational_operator op, data_view d) const {
-  return caf::visit(detail::overload(
-    [&](auto x) -> expected<ids> {
-      return make_error(ec::type_clash, materialize(x));
-    },
-    [&](view<address> x) -> expected<ids> {
-      if (!(op == equal || op == not_equal))
-        return make_error(ec::unsupported_operator, op);
-      auto result = x.is_v4() ? v4_.coder().storage() : ids{offset(), true};
-      for (auto i = x.is_v4() ? 12u : 0u; i < 16; ++i) {
-        auto bm = bytes_[i].lookup(equal, x.data()[i]);
-        result &= bm;
-        if (all<0>(result))
-          return ids{offset(), op == not_equal};
-      }
-      if (op == not_equal)
-        result.flip();
-      return result;
-    },
-    [&](view<subnet> x) -> expected<ids> {
-      if (!(op == in || op == not_in))
-        return make_error(ec::unsupported_operator, op);
-      auto topk = x.length();
-      if (topk == 0)
-        return make_error(ec::unspecified, "invalid IP subnet length: ", topk);
-      auto is_v4 = x.network().is_v4();
-      if ((is_v4 ? topk + 96 : topk) == 128)
-        // Asking for /32 or /128 membership is equivalent to an equality lookup.
-        return lookup_impl(op == in ? equal : not_equal, x.network());
-      auto result = is_v4 ? v4_.coder().storage() : ids{offset(), true};
-      auto& bytes = x.network().data();
-      size_t i = is_v4 ? 12 : 0;
-      for ( ; i < 16 && topk >= 8; ++i, topk -= 8)
-        result &= bytes_[i].lookup(equal, bytes[i]);
-      for (auto j = 0u; j < topk; ++j) {
-        auto bit = 7 - j;
-        auto& bm = bytes_[i].coder().storage()[bit];
-        result &= (bytes[i] >> bit) & 1 ? ~bm : bm;
-      }
-      if (op == not_in)
-        result.flip();
-      return result;
-    },
-    [&](view<vector> xs) { return detail::container_lookup(*this, op, xs); },
-    [&](view<set> xs) { return detail::container_lookup(*this, op, xs); }
-  ), d);
+  return caf::visit(
+    detail::overload(
+      [&](auto x) -> caf::expected<ids> {
+        return make_error(ec::type_clash, materialize(x));
+      },
+      [&](view<address> x) -> caf::expected<ids> {
+        if (!(op == equal || op == not_equal))
+          return make_error(ec::unsupported_operator, op);
+        auto result = x.is_v4() ? v4_.coder().storage() : ids{offset(), true};
+        for (auto i = x.is_v4() ? 12u : 0u; i < 16; ++i) {
+          auto bm = bytes_[i].lookup(equal, x.data()[i]);
+          result &= bm;
+          if (all<0>(result))
+            return ids{offset(), op == not_equal};
+        }
+        if (op == not_equal)
+          result.flip();
+        return result;
+      },
+      [&](view<subnet> x) -> caf::expected<ids> {
+        if (!(op == in || op == not_in))
+          return make_error(ec::unsupported_operator, op);
+        auto topk = x.length();
+        if (topk == 0)
+          return make_error(ec::unspecified,
+                            "invalid IP subnet length: ", topk);
+        auto is_v4 = x.network().is_v4();
+        if ((is_v4 ? topk + 96 : topk) == 128)
+          // Asking for /32 or /128 membership is equivalent to an equality
+          // lookup.
+          return lookup_impl(op == in ? equal : not_equal, x.network());
+        auto result = is_v4 ? v4_.coder().storage() : ids{offset(), true};
+        auto& bytes = x.network().data();
+        size_t i = is_v4 ? 12 : 0;
+        for (; i < 16 && topk >= 8; ++i, topk -= 8)
+          result &= bytes_[i].lookup(equal, bytes[i]);
+        for (auto j = 0u; j < topk; ++j) {
+          auto bit = 7 - j;
+          auto& bm = bytes_[i].coder().storage()[bit];
+          result &= (bytes[i] >> bit) & 1 ? ~bm : bm;
+        }
+        if (op == not_in)
+          result.flip();
+        return result;
+      },
+      [&](view<vector> xs) { return detail::container_lookup(*this, op, xs); },
+      [&](view<set> xs) { return detail::container_lookup(*this, op, xs); }),
+    d);
 }
 
 // -- subnet_index -------------------------------------------------------------
@@ -365,81 +367,82 @@ bool subnet_index::append_impl(data_view x, id pos) {
   return false;
 }
 
-expected<ids>
+caf::expected<ids>
 subnet_index::lookup_impl(relational_operator op, data_view d) const {
-  return caf::visit(detail::overload(
-    [&](auto x) -> expected<ids> {
-      return make_error(ec::type_clash, materialize(x));
-    },
-    [&](view<address> x) -> expected<ids> {
-      if (!(op == ni || op == not_ni))
-        return make_error(ec::unsupported_operator, op);
-      auto result = ids{offset(), false};
-      uint8_t bits = x.is_v4() ? 32 : 128;
-      for (uint8_t i = 0; i <= bits; ++i) { // not an off-by-one
-        auto masked = x;
-        masked.mask(128 - bits + i);
-        ids len = length_.lookup(equal, i);
-        auto net = network_.lookup(equal, masked);
-        if (!net)
-          return net;
-        len &= *net;
-        result |= len;
-      }
-      if (op == not_ni)
-        result.flip();
-      return result;
-    },
-    [&](view<subnet> x) -> expected<ids> {
-      switch (op) {
-        default:
+  return caf::visit(
+    detail::overload(
+      [&](auto x) -> caf::expected<ids> {
+        return make_error(ec::type_clash, materialize(x));
+      },
+      [&](view<address> x) -> caf::expected<ids> {
+        if (!(op == ni || op == not_ni))
           return make_error(ec::unsupported_operator, op);
-        case equal:
-        case not_equal: {
-          auto result = network_.lookup(equal, x.network());
-          if (!result)
-            return result;
-          auto n = length_.lookup(equal, x.length());
-          *result &= n;
-          if (op == not_equal)
-            result->flip();
-          return result;
+        auto result = ids{offset(), false};
+        uint8_t bits = x.is_v4() ? 32 : 128;
+        for (uint8_t i = 0; i <= bits; ++i) { // not an off-by-one
+          auto masked = x;
+          masked.mask(128 - bits + i);
+          ids len = length_.lookup(equal, i);
+          auto net = network_.lookup(equal, masked);
+          if (!net)
+            return net;
+          len &= *net;
+          result |= len;
         }
-        case in:
-        case not_in: {
-          // For a subnet index U and subnet x, the in operator signifies a
-          // subset relationship such that `U in x` translates to U ⊆ x, i.e.,
-          // the lookup returns all subnets in U that are a subset of x.
-          auto result = network_.lookup(in, x);
-          if (!result)
+        if (op == not_ni)
+          result.flip();
+        return result;
+      },
+      [&](view<subnet> x) -> caf::expected<ids> {
+        switch (op) {
+          default:
+            return make_error(ec::unsupported_operator, op);
+          case equal:
+          case not_equal: {
+            auto result = network_.lookup(equal, x.network());
+            if (!result)
+              return result;
+            auto n = length_.lookup(equal, x.length());
+            *result &= n;
+            if (op == not_equal)
+              result->flip();
             return result;
-          *result &= length_.lookup(greater_equal, x.length());
-          if (op == not_in)
-            result->flip();
-          return result;
-        }
-        case ni:
-        case not_ni: {
-          // For a subnet index U and subnet x, the ni operator signifies a
-          // subset relationship such that `U ni x` translates to U ⊇ x, i.e.,
-          // the lookup returns all subnets in U that include x.
-          ids result;
-          for (auto i = uint8_t{1}; i <= x.length(); ++i) {
-            auto xs = network_.lookup(in, subnet{x.network(), i});
-            if (!xs)
-              return xs;
-            *xs &= length_.lookup(equal, i);
-            result |= *xs;
           }
-          if (op == not_ni)
-            result.flip();
-          return result;
+          case in:
+          case not_in: {
+            // For a subnet index U and subnet x, the in operator signifies a
+            // subset relationship such that `U in x` translates to U ⊆ x, i.e.,
+            // the lookup returns all subnets in U that are a subset of x.
+            auto result = network_.lookup(in, x);
+            if (!result)
+              return result;
+            *result &= length_.lookup(greater_equal, x.length());
+            if (op == not_in)
+              result->flip();
+            return result;
+          }
+          case ni:
+          case not_ni: {
+            // For a subnet index U and subnet x, the ni operator signifies a
+            // subset relationship such that `U ni x` translates to U ⊇ x, i.e.,
+            // the lookup returns all subnets in U that include x.
+            ids result;
+            for (auto i = uint8_t{1}; i <= x.length(); ++i) {
+              auto xs = network_.lookup(in, subnet{x.network(), i});
+              if (!xs)
+                return xs;
+              *xs &= length_.lookup(equal, i);
+              result |= *xs;
+            }
+            if (op == not_ni)
+              result.flip();
+            return result;
+          }
         }
-      }
-    },
-    [&](view<vector> xs) { return detail::container_lookup(*this, op, xs); },
-    [&](view<set> xs) { return detail::container_lookup(*this, op, xs); }
-  ), d);
+      },
+      [&](view<vector> xs) { return detail::container_lookup(*this, op, xs); },
+      [&](view<set> xs) { return detail::container_lookup(*this, op, xs); }),
+    d);
 }
 
 // -- port_index ---------------------------------------------------------------
@@ -473,25 +476,26 @@ bool port_index::append_impl(data_view x, id pos) {
   return false;
 }
 
-expected<ids>
+caf::expected<ids>
 port_index::lookup_impl(relational_operator op, data_view d) const {
-  return caf::visit(detail::overload(
-    [&](auto x) -> expected<ids> {
-      return make_error(ec::type_clash, materialize(x));
-    },
-    [&](view<port> x) -> expected<ids> {
-      if (op == in || op == not_in)
-        return make_error(ec::unsupported_operator, op);
-      auto n = num_.lookup(op, x.number());
-      if (all<0>(n))
-        return ids{offset(), false};
-      if (x.type() != port::unknown)
-        n &= proto_.lookup(equal, x.type());
-      return n;
-    },
-    [&](view<vector> xs) { return detail::container_lookup(*this, op, xs); },
-    [&](view<set> xs) { return detail::container_lookup(*this, op, xs); }
-  ), d);
+  return caf::visit(
+    detail::overload(
+      [&](auto x) -> caf::expected<ids> {
+        return make_error(ec::type_clash, materialize(x));
+      },
+      [&](view<port> x) -> caf::expected<ids> {
+        if (op == in || op == not_in)
+          return make_error(ec::unsupported_operator, op);
+        auto n = num_.lookup(op, x.number());
+        if (all<0>(n))
+          return ids{offset(), false};
+        if (x.type() != port::unknown)
+          n &= proto_.lookup(equal, x.type());
+        return n;
+      },
+      [&](view<vector> xs) { return detail::container_lookup(*this, op, xs); },
+      [&](view<set> xs) { return detail::container_lookup(*this, op, xs); }),
+    d);
 }
 
 // -- sequence_index -----------------------------------------------------------
@@ -555,7 +559,7 @@ bool sequence_index::append_impl(data_view x, id pos) {
   return caf::visit(f, x);
 }
 
-expected<ids>
+caf::expected<ids>
 sequence_index::lookup_impl(relational_operator op, data_view x) const {
   if (!(op == ni || op == not_ni))
     return make_error(ec::unsupported_operator, op);

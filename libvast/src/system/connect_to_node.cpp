@@ -37,7 +37,8 @@ using namespace caf;
 
 namespace vast::system {
 
-expected<actor> connect_to_node(scoped_actor& self, const caf::settings& opts) {
+caf::expected<actor>
+connect_to_node(scoped_actor& self, const caf::settings& opts) {
   // Fetch values from config.
   auto id = get_or(opts, "system.node-id", defaults::system::node_id);
   auto dir = get_or(opts, "system.directory", defaults::system::directory);

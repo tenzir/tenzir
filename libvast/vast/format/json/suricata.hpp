@@ -13,20 +13,21 @@
 
 #pragma once
 
-#include <unordered_map>
-
 #include "vast/concept/printable/vast/json.hpp"
 #include "vast/detail/line_range.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/error.hpp"
-#include "vast/expected.hpp"
 #include "vast/format/multi_layout_reader.hpp"
 #include "vast/json.hpp"
 #include "vast/logger.hpp"
 #include "vast/schema.hpp"
 #include "vast/table_slice_builder.hpp"
 #include "vast/view.hpp"
+
+#include <caf/expected.hpp>
+
+#include <unordered_map>
 
 namespace vast::format::json {
 

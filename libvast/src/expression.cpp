@@ -192,7 +192,7 @@ expression normalize(const expression& expr) {
   return r;
 }
 
-expected<expression> normalize_and_validate(const expression& expr) {
+caf::expected<expression> normalize_and_validate(const expression& expr) {
   auto normalized = normalize(expr);
   auto result = caf::visit(validator{}, normalized);
   if (!result)
@@ -200,7 +200,7 @@ expected<expression> normalize_and_validate(const expression& expr) {
   return normalized;
 }
 
-expected<expression> tailor(const expression& expr, const type& t) {
+caf::expected<expression> tailor(const expression& expr, const type& t) {
   if (caf::holds_alternative<caf::none_t>(expr))
     return make_error(ec::unspecified, "invalid expression");
   auto x = caf::visit(type_resolver{t}, expr);
