@@ -13,13 +13,13 @@
 
 #pragma once
 
+#include "vast/expected.hpp"
+
+#include <caf/settings.hpp>
+
 #include <iostream>
 #include <memory>
 #include <string>
-
-#include "caf/settings.hpp"
-
-#include "vast/expected.hpp"
 
 namespace vast::detail {
 

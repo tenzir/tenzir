@@ -11,13 +11,13 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-
-#include "vast/detail/adjust_resource_consumption.hpp"
 #include "vast/test/data.hpp"
 #include "vast/test/test.hpp"
 
-#include "caf/message_builder.hpp"
-#include "caf/test/unit_test.hpp"
+#include "vast/detail/adjust_resource_consumption.hpp"
+
+#include <caf/message_builder.hpp>
+#include <caf/test/unit_test.hpp>
 
 #include <iostream>
 #include <set>

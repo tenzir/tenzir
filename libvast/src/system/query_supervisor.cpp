@@ -13,15 +13,15 @@
 
 #include "vast/system/query_supervisor.hpp"
 
-#include <algorithm>
-
-#include "caf/event_based_actor.hpp"
-#include "caf/local_actor.hpp"
-#include "caf/stateful_actor.hpp"
-
 #include "vast/expression.hpp"
 #include "vast/logger.hpp"
 #include "vast/system/atoms.hpp"
+
+#include <caf/event_based_actor.hpp>
+#include <caf/local_actor.hpp>
+#include <caf/stateful_actor.hpp>
+
+#include <algorithm>
 
 namespace vast::system {
 

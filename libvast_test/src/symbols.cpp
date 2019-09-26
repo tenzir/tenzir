@@ -12,7 +12,7 @@
  ******************************************************************************/
 
 #define CAF_TEST_NO_MAIN
-#include "caf/test/unit_test_impl.hpp"
+#include <caf/test/unit_test_impl.hpp>
 
 namespace vast::test {
 

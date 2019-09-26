@@ -13,13 +13,13 @@
 
 #pragma once
 
-#include <string>
-
-#include "caf/fwd.hpp"
-#include "caf/meta/type_name.hpp"
-
 #include "vast/aliases.hpp"
 #include "vast/fwd.hpp"
+
+#include <caf/fwd.hpp>
+#include <caf/meta/type_name.hpp>
+
+#include <string>
 
 namespace vast::system {
 

@@ -13,7 +13,7 @@
 
 #pragma once
 
-#include "caf/raise_error.hpp"
+#include <caf/raise_error.hpp>
 
 /// Throws an exception with string `msg` or terminates the application when
 /// compiling exceptions disabled.

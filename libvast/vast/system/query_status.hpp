@@ -13,12 +13,12 @@
 
 #pragma once
 
+#include "vast/time.hpp"
+
+#include <caf/meta/type_name.hpp>
+
 #include <cstddef>
 #include <cstdint>
-
-#include "caf/meta/type_name.hpp"
-
-#include "vast/time.hpp"
 
 namespace vast::system {
 
