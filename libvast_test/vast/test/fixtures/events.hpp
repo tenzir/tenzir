@@ -13,14 +13,15 @@
 
 #pragma once
 
-#include <caf/all.hpp>
+#include "vast/test/data.hpp"
+#include "vast/test/test.hpp"
 
 #include "vast/defaults.hpp"
 #include "vast/error.hpp"
 #include "vast/event.hpp"
 #include "vast/fwd.hpp"
-#include "vast/test/data.hpp"
-#include "vast/test/test.hpp"
+
+#include <caf/all.hpp>
 
 namespace fixtures {
 

@@ -13,6 +13,11 @@
 
 #pragma once
 
+#include "vast/test/fixtures/filesystem.hpp"
+#include "vast/test/test.hpp"
+
+#include "vast/system/configuration.hpp"
+
 #include <caf/actor.hpp>
 #include <caf/actor_system.hpp>
 #include <caf/binary_deserializer.hpp>
@@ -20,11 +25,6 @@
 #include <caf/scoped_actor.hpp>
 #include <caf/test/dsl.hpp>
 #include <caf/test/io_dsl.hpp>
-
-#include "vast/system/configuration.hpp"
-
-#include "vast/test/fixtures/filesystem.hpp"
-#include "vast/test/test.hpp"
 
 namespace fixtures {
 
@@ -91,4 +91,3 @@ struct deterministic_actor_system : test_node_fixture<test_node_base_fixture>,
 };
 
 } // namespace fixtures
-

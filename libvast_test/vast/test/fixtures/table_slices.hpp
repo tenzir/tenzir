@@ -13,12 +13,8 @@
 
 #pragma once
 
-#include <tuple>
-#include <string>
-#include <vector>
-
-#include <caf/binary_deserializer.hpp>
-#include <caf/binary_serializer.hpp>
+#include "vast/test/fixtures/actor_system_and_events.hpp"
+#include "vast/test/test.hpp"
 
 #include "vast/aliases.hpp"
 #include "vast/fwd.hpp"
@@ -30,8 +26,12 @@
 #include "vast/value.hpp"
 #include "vast/view.hpp"
 
-#include "vast/test/fixtures/actor_system_and_events.hpp"
-#include "vast/test/test.hpp"
+#include <caf/binary_deserializer.hpp>
+#include <caf/binary_serializer.hpp>
+
+#include <string>
+#include <tuple>
+#include <vector>
 
 // Helper macro to define a table-slice unit test.
 #define TEST_TABLE_SLICE(type)                                                 \
