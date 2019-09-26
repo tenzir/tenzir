@@ -97,7 +97,7 @@ void record(accountant_actor* self, const std::string& key, time x,
             time ts = std::chrono::system_clock::now()) {
   using namespace std::chrono;
   auto ms = duration_cast<milliseconds>(x.time_since_epoch()).count();
-  record(self, key, ms, std::move(ts));
+  record(self, key, ms, ts);
 }
 
 // Calculate rate in seconds resolution from nanosecond duration.
