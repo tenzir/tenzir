@@ -74,9 +74,7 @@ struct accountant_state {
   static constexpr const char* name = "accountant";
   accountant_type::stateful_pointer<accountant_state> self;
   std::unordered_map<caf::actor_id, std::string> actor_map;
-  struct {
-    measurement node;
-  } accumulator;
+  measurement accumulator;
 
   accountant_state(accountant_type::stateful_base<accountant_state>* self);
   void command_line_heartbeat();

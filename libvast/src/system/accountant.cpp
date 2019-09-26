@@ -117,7 +117,7 @@ accountant_state::accountant_state(accountant_actor* self) : self{self} {
 void accountant_state::command_line_heartbeat() {
   auto logger = caf::logger::current_logger();
   if (logger && logger->verbosity() >= CAF_LOG_LEVEL_INFO
-      && accumulator.node.events > 0) {
+      && accumulator.events > 0) {
     std::ostringstream oss;
     try {
       oss.imbue(std::locale(""));
@@ -125,8 +125,8 @@ void accountant_state::command_line_heartbeat() {
       VAST_DEBUG(self,
                  "failed to set the locale for statistics output:", e.what());
     }
-    auto node_rate = std::round(calc_rate(accumulator.node));
-    oss << "ingested " << accumulator.node.events << " events at a rate of "
+    auto node_rate = std::round(calc_rate(accumulator));
+    oss << "ingested " << accumulator.events << " events at a rate of "
         << node_rate << " events/sec";
     VAST_INFO_ANON(oss.str());
   }
@@ -222,7 +222,7 @@ accountant_type::behavior_type accountant(accountant_actor* self) {
               auto logger = caf::logger::current_logger();
               if (logger && logger->verbosity() >= CAF_LOG_LEVEL_INFO)
                 if (key == "node_throughput")
-                  self->state.accumulator.node += value;
+                  self->state.accumulator += value;
 #endif
             }
           },
