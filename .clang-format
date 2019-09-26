@@ -27,13 +27,14 @@ Cpp11BracedListStyle: true
 FixNamespaceComments: true
 IncludeBlocks: Regroup
 IncludeCategories:
-IncludeCategories:
-  - Regex:           '^"vast/'
+  - Regex:           '^"vast/test/'
     Priority:        1
-  - Regex:           '^<caf/'
+  - Regex:           '^"vast/'
     Priority:        2
-  - Regex:           '<[[:alnum:]_.]+>'
+  - Regex:           '^<caf/'
     Priority:        3
+  - Regex:           '<[[:alnum:]_.]+>'
+    Priority:        4
 IndentCaseLabels: true
 IndentPPDirectives: AfterHash
 IndentWidth: 2
