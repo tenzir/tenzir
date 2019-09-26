@@ -160,7 +160,7 @@ accountant_type::behavior_type accountant(accountant_actor* self) {
         st.slice_buffer.pop();
       }
       VAST_TRACE(self, "was asked for", num, "slices and produced", produced,
-                 ".", st.slice_buffer.size(), "are remaining in buffer");
+                 ";", st.slice_buffer.size(), "are remaining in buffer");
     },
     // done?
     [](const bool&) { return false; });
