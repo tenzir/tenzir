@@ -13,22 +13,22 @@
 
 #pragma once
 
-#include <fstream>
-#include <stdexcept>
-#include <streambuf>
-#include <type_traits>
-
-#include <caf/actor_system.hpp>
-#include <caf/stream_deserializer.hpp>
-#include <caf/streambuf.hpp>
-
 #include "vast/compression.hpp"
 #include "vast/detail/compressedbuf.hpp"
 #include "vast/detail/type_traits.hpp"
 #include "vast/error.hpp"
-#include "vast/expected.hpp"
 #include "vast/filesystem.hpp"
 #include "vast/logger.hpp"
+
+#include <caf/actor_system.hpp>
+#include <caf/expected.hpp>
+#include <caf/stream_deserializer.hpp>
+#include <caf/streambuf.hpp>
+
+#include <fstream>
+#include <stdexcept>
+#include <streambuf>
+#include <type_traits>
 
 namespace vast {
 

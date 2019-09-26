@@ -215,40 +215,39 @@ std::vector<predicate> predicatizer::operator()(const predicate& pred) const {
   return {pred};
 }
 
-
-expected<void> validator::operator()(caf::none_t) {
+caf::expected<void> validator::operator()(caf::none_t) {
   return make_error(ec::syntax_error, "nil expression is invalid");
 }
 
-expected<void> validator::operator()(const conjunction& c) {
+caf::expected<void> validator::operator()(const conjunction& c) {
   for (auto& op : c) {
     auto m = caf::visit(*this, op);
     if (!m)
       return m;
   }
-  return no_error;
+  return caf::no_error;
 }
 
-expected<void> validator::operator()(const disjunction& d) {
+caf::expected<void> validator::operator()(const disjunction& d) {
   for (auto& op : d) {
     auto m = caf::visit(*this, op);
     if (!m)
       return m;
   }
-  return no_error;
+  return caf::no_error;
 }
 
-expected<void> validator::operator()(const negation& n) {
+caf::expected<void> validator::operator()(const negation& n) {
   return caf::visit(*this, n.expr());
 }
 
-expected<void> validator::operator()(const predicate& p) {
+caf::expected<void> validator::operator()(const predicate& p) {
   op_ = p.op;
   return caf::visit(*this, p.lhs, p.rhs);
 }
 
-expected<void> validator::operator()(const attribute_extractor& ex,
-                                     const data& d) {
+caf::expected<void> validator::
+operator()(const attribute_extractor& ex, const data& d) {
   if (ex.attr == system::type_atom::value
       && !(caf::holds_alternative<std::string>(d)
            || caf::holds_alternative<pattern>(d)))
@@ -261,30 +260,31 @@ expected<void> validator::operator()(const attribute_extractor& ex,
     return make_error(ec::syntax_error,
                       "time attribute extractor requires timestamp operand",
                       ex.attr, op_, d);
-  return no_error;
+  return caf::no_error;
 }
 
-expected<void> validator::operator()(const type_extractor& ex, const data& d) {
+caf::expected<void> validator::
+operator()(const type_extractor& ex, const data& d) {
   if (!compatible(ex.type, op_, d))
     return make_error(ec::syntax_error, "type extractor type check failure",
                       ex.type, op_, d);
-  return no_error;
+  return caf::no_error;
 }
 
-expected<void> validator::operator()(const key_extractor&, const data&) {
+caf::expected<void> validator::operator()(const key_extractor&, const data&) {
   // Validity of a key extractor requires a specific schema, which we don't
   // have in this context.
-  return no_error;
+  return caf::no_error;
 }
 
 type_resolver::type_resolver(const type& t) : type_{t} {
 }
 
-expected<expression> type_resolver::operator()(caf::none_t) {
+caf::expected<expression> type_resolver::operator()(caf::none_t) {
   return expression{};
 }
 
-expected<expression> type_resolver::operator()(const conjunction& c) {
+caf::expected<expression> type_resolver::operator()(const conjunction& c) {
   conjunction result;
   for (auto& op : c) {
     auto r = caf::visit(*this, op);
@@ -303,7 +303,7 @@ expected<expression> type_resolver::operator()(const conjunction& c) {
     return {std::move(result)};
 }
 
-expected<expression> type_resolver::operator()(const disjunction& d) {
+caf::expected<expression> type_resolver::operator()(const disjunction& d) {
   disjunction result;
   for (auto& op : d) {
     auto r = caf::visit(*this, op);
@@ -320,8 +320,7 @@ expected<expression> type_resolver::operator()(const disjunction& d) {
     return {std::move(result)};
 }
 
-
-expected<expression> type_resolver::operator()(const negation& n) {
+caf::expected<expression> type_resolver::operator()(const negation& n) {
   auto r = caf::visit(*this, n.expr());
   if (!r)
     return r;
@@ -331,13 +330,13 @@ expected<expression> type_resolver::operator()(const negation& n) {
     return expression{};
 }
 
-expected<expression> type_resolver::operator()(const predicate& p) {
+caf::expected<expression> type_resolver::operator()(const predicate& p) {
   op_ = p.op;
   return caf::visit(*this, p.lhs, p.rhs);
 }
 
-expected<expression> type_resolver::operator()(const type_extractor& ex,
-                                               const data& d) {
+caf::expected<expression> type_resolver::
+operator()(const type_extractor& ex, const data& d) {
   std::vector<expression> connective;
   if (auto r = caf::get_if<record_type>(&type_)) {
     for (auto& f : record_type::each{*r}) {
@@ -361,13 +360,13 @@ expected<expression> type_resolver::operator()(const type_extractor& ex,
     return {disjunction{std::move(connective)}};
 }
 
-expected<expression> type_resolver::operator()(const data& d,
-                                               const type_extractor& ex) {
+caf::expected<expression> type_resolver::
+operator()(const data& d, const type_extractor& ex) {
   return (*this)(ex, d);
 }
 
-expected<expression> type_resolver::operator()(const key_extractor& ex,
-                                               const data& d) {
+caf::expected<expression> type_resolver::
+operator()(const key_extractor& ex, const data& d) {
   std::vector<expression> connective;
   // First, interpret the key as a suffix of a record field name.
   if (auto r = caf::get_if<record_type>(&type_)) {
@@ -401,11 +400,10 @@ expected<expression> type_resolver::operator()(const key_extractor& ex,
     return {disjunction{std::move(connective)}};
 }
 
-expected<expression> type_resolver::operator()(const data& d,
-                                               const key_extractor& ex) {
+caf::expected<expression> type_resolver::
+operator()(const data& d, const key_extractor& ex) {
   return (*this)(ex, d);
 }
-
 
 type_pruner::type_pruner(const type& event_type) : type_{event_type} {
 }

@@ -13,17 +13,10 @@
 
 #pragma once
 
-#include <pcap.h>
-
-#include <chrono>
-#include <unordered_map>
-#include <random>
-
 #include "vast/address.hpp"
 #include "vast/concept/hashable/hash_append.hpp"
 #include "vast/concept/hashable/xxhash.hpp"
 #include "vast/detail/operators.hpp"
-#include "vast/expected.hpp"
 #include "vast/flow.hpp"
 #include "vast/format/reader.hpp"
 #include "vast/format/single_layout_reader.hpp"
@@ -32,6 +25,13 @@
 #include "vast/port.hpp"
 #include "vast/schema.hpp"
 #include "vast/time.hpp"
+
+#include <caf/expected.hpp>
+
+#include <chrono>
+#include <pcap.h>
+#include <random>
+#include <unordered_map>
 
 namespace vast {
 namespace format {

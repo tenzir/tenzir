@@ -13,19 +13,19 @@
 
 #pragma once
 
-#include <caf/fwd.hpp>
-
 #include "vast/concept/parseable/vast/json.hpp"
 #include "vast/detail/line_range.hpp"
 #include "vast/error.hpp"
 #include "vast/event.hpp"
-#include "vast/expected.hpp"
 #include "vast/format/multi_layout_reader.hpp"
 #include "vast/format/ostream_writer.hpp"
 #include "vast/fwd.hpp"
 #include "vast/json.hpp"
 #include "vast/logger.hpp"
 #include "vast/schema.hpp"
+
+#include <caf/expected.hpp>
+#include <caf/fwd.hpp>
 
 namespace vast::format::json {
 

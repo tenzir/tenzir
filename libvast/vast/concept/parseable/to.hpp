@@ -13,19 +13,20 @@
 
 #pragma once
 
+#include "vast/concept/parseable/parse.hpp"
+#include "vast/error.hpp"
+
+#include <caf/expected.hpp>
+
 #include <iterator>
 #include <type_traits>
-
-#include "vast/error.hpp"
-#include "vast/expected.hpp"
-#include "vast/concept/parseable/parse.hpp"
 
 namespace vast {
 
 template <class To, class Iterator>
 auto to(Iterator& f, const Iterator& l)
-  -> std::enable_if_t<is_parseable_v<Iterator, To>, expected<To>> {
-  expected<To> t{To{}};
+  -> std::enable_if_t<is_parseable_v<Iterator, To>, caf::expected<To>> {
+  caf::expected<To> t{To{}};
   if (!parse(f, l, *t))
     return make_error(ec::parse_error);
   return t;
@@ -33,9 +34,8 @@ auto to(Iterator& f, const Iterator& l)
 
 template <class To, class Range>
 auto to(Range&& rng)
-  -> std::enable_if_t<
-       is_parseable_v<decltype(std::begin(rng)), To>, expected<To>
-     > {
+  -> std::enable_if_t<is_parseable_v<decltype(std::begin(rng)), To>,
+                      caf::expected<To>> {
   using std::begin;
   using std::end;
   auto f = begin(rng);

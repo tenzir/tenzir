@@ -127,7 +127,7 @@ void table_slice::append_column_to_index(size_type col,
     idx.append(at(row, col), offset() + row);
 }
 
-expected<std::vector<table_slice_ptr>>
+caf::expected<std::vector<table_slice_ptr>>
 make_random_table_slices(size_t num_slices, size_t slice_size,
                          record_type layout, id offset, size_t seed) {
   schema sc;

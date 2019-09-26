@@ -13,19 +13,19 @@
 
 #pragma once
 
-#include <istream>
-#include <memory>
-
-#include <caf/fwd.hpp>
-
 #include "vast/detail/assert.hpp"
 #include "vast/detail/line_range.hpp"
 #include "vast/error.hpp"
 #include "vast/event.hpp"
-#include "vast/expected.hpp"
 #include "vast/format/single_layout_reader.hpp"
 #include "vast/table_slice_builder.hpp"
 #include "vast/table_slice_builder_factory.hpp"
+
+#include <caf/expected.hpp>
+#include <caf/fwd.hpp>
+
+#include <istream>
+#include <memory>
 
 namespace vast::format {
 

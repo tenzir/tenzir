@@ -13,16 +13,16 @@
 
 #pragma once
 
-#include <vector>
-
+#include "vast/detail/assert.hpp"
 #include "vast/error.hpp"
-#include "vast/expected.hpp"
 #include "vast/expression.hpp"
 #include "vast/offset.hpp"
 #include "vast/operator.hpp"
 #include "vast/time.hpp"
 
-#include "vast/detail/assert.hpp"
+#include <caf/expected.hpp>
+
+#include <vector>
 
 namespace vast {
 
@@ -80,17 +80,17 @@ struct predicatizer {
 
 /// Ensures that LHS and RHS of a predicate fit together.
 struct validator {
-  expected<void> operator()(caf::none_t);
-  expected<void> operator()(const conjunction& c);
-  expected<void> operator()(const disjunction& d);
-  expected<void> operator()(const negation& n);
-  expected<void> operator()(const predicate& p);
-  expected<void> operator()(const attribute_extractor& ex, const data& d);
-  expected<void> operator()(const type_extractor& ex, const data& d);
-  expected<void> operator()(const key_extractor& ex, const data& d);
+  caf::expected<void> operator()(caf::none_t);
+  caf::expected<void> operator()(const conjunction& c);
+  caf::expected<void> operator()(const disjunction& d);
+  caf::expected<void> operator()(const negation& n);
+  caf::expected<void> operator()(const predicate& p);
+  caf::expected<void> operator()(const attribute_extractor& ex, const data& d);
+  caf::expected<void> operator()(const type_extractor& ex, const data& d);
+  caf::expected<void> operator()(const key_extractor& ex, const data& d);
 
   template <class T, class U>
-  expected<void> operator()(const T& lhs, const U& rhs) {
+  caf::expected<void> operator()(const T& lhs, const U& rhs) {
     return make_error(ec::syntax_error, "incompatible predicate operands", lhs,
                       rhs);
   }
@@ -103,18 +103,18 @@ struct validator {
 struct type_resolver {
   type_resolver(const type& t);
 
-  expected<expression> operator()(caf::none_t);
-  expected<expression> operator()(const conjunction& c);
-  expected<expression> operator()(const disjunction& d);
-  expected<expression> operator()(const negation& n);
-  expected<expression> operator()(const predicate& p);
-  expected<expression> operator()(const type_extractor& ex, const data& d);
-  expected<expression> operator()(const data& d, const type_extractor& ex);
-  expected<expression> operator()(const key_extractor& ex, const data& d);
-  expected<expression> operator()(const data& d, const key_extractor& e);
+  caf::expected<expression> operator()(caf::none_t);
+  caf::expected<expression> operator()(const conjunction& c);
+  caf::expected<expression> operator()(const disjunction& d);
+  caf::expected<expression> operator()(const negation& n);
+  caf::expected<expression> operator()(const predicate& p);
+  caf::expected<expression> operator()(const type_extractor& ex, const data& d);
+  caf::expected<expression> operator()(const data& d, const type_extractor& ex);
+  caf::expected<expression> operator()(const key_extractor& ex, const data& d);
+  caf::expected<expression> operator()(const data& d, const key_extractor& e);
 
   template <class T, class U>
-  expected<expression> operator()(const T& lhs, const U& rhs) {
+  caf::expected<expression> operator()(const T& lhs, const U& rhs) {
     return {predicate{lhs, op_, rhs}};
   }
 

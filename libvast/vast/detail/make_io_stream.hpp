@@ -13,8 +13,7 @@
 
 #pragma once
 
-#include "vast/expected.hpp"
-
+#include <caf/expected.hpp>
 #include <caf/settings.hpp>
 
 #include <iostream>
@@ -23,11 +22,11 @@
 
 namespace vast::detail {
 
-expected<std::unique_ptr<std::ostream>>
+caf::expected<std::unique_ptr<std::ostream>>
 make_output_stream(const std::string& output, bool is_uds = false);
 
 template <class Defaults>
-expected<std::unique_ptr<std::ostream>>
+caf::expected<std::unique_ptr<std::ostream>>
 make_output_stream(const caf::settings& options) {
   std::string category = Defaults::category;
   auto output = get_or(options, category + ".write", Defaults::write);
@@ -35,11 +34,11 @@ make_output_stream(const caf::settings& options) {
   return make_output_stream(output, uds);
 }
 
-expected<std::unique_ptr<std::istream>>
+caf::expected<std::unique_ptr<std::istream>>
 make_input_stream(const std::string& input, bool is_uds = false);
 
 template <class Defaults>
-expected<std::unique_ptr<std::istream>>
+caf::expected<std::unique_ptr<std::istream>>
 make_input_stream(const caf::settings& options) {
   std::string category = Defaults::category;
   auto input = get_or(options, category + ".read", Defaults::read);

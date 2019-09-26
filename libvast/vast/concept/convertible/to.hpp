@@ -13,11 +13,12 @@
 
 #pragma once
 
-#include <type_traits>
-
 #include "vast/concept/convertible/is_convertible.hpp"
 #include "vast/error.hpp"
-#include "vast/expected.hpp"
+
+#include <caf/expected.hpp>
+
+#include <type_traits>
 
 namespace vast {
 
@@ -28,11 +29,9 @@ namespace vast {
 /// @returns *from* converted to `T`.
 template <class To, class From, class... Opts>
 auto to(From&& from, Opts&&... opts)
-  -> std::enable_if_t<
-       is_convertible<std::decay_t<From>, To>{},
-       expected<To>
-     > {
-  expected<To> x{To()};
+  -> std::enable_if_t<is_convertible<std::decay_t<From>, To>{},
+                      caf::expected<To>> {
+  caf::expected<To> x{To()};
   if (convert(from, *x, std::forward<Opts>(opts)...))
     return x;
   return make_error(ec::convert_error);

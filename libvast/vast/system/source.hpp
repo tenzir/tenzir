@@ -13,19 +13,6 @@
 
 #pragma once
 
-#include <unordered_map>
-
-#include "vast/logger.hpp"
-
-#include <caf/actor_system_config.hpp>
-#include <caf/broadcast_downstream_manager.hpp>
-#include <caf/downstream.hpp>
-#include <caf/event_based_actor.hpp>
-#include <caf/none.hpp>
-#include <caf/send.hpp>
-#include <caf/stateful_actor.hpp>
-#include <caf/stream_source.hpp>
-
 #include "vast/concept/printable/std/chrono.hpp"
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/to_string.hpp"
@@ -37,9 +24,9 @@
 #include "vast/detail/assert.hpp"
 #include "vast/error.hpp"
 #include "vast/event.hpp"
-#include "vast/expected.hpp"
 #include "vast/expression.hpp"
 #include "vast/expression_visitors.hpp"
+#include "vast/logger.hpp"
 #include "vast/schema.hpp"
 #include "vast/system/accountant.hpp"
 #include "vast/system/atoms.hpp"
@@ -47,6 +34,18 @@
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
 #include "vast/table_slice_builder_factory.hpp"
+
+#include <caf/actor_system_config.hpp>
+#include <caf/broadcast_downstream_manager.hpp>
+#include <caf/downstream.hpp>
+#include <caf/event_based_actor.hpp>
+#include <caf/expected.hpp>
+#include <caf/none.hpp>
+#include <caf/send.hpp>
+#include <caf/stateful_actor.hpp>
+#include <caf/stream_source.hpp>
+
+#include <unordered_map>
 
 namespace vast::detail {
 

@@ -42,7 +42,7 @@ namespace {
 constexpr std::string_view type_name_prefix = "zeek.";
 
 // Creates a VAST type from an ASCII Zeek type in a log header.
-expected<type> parse_type(std::string_view zeek_type) {
+caf::expected<type> parse_type(std::string_view zeek_type) {
   type t;
   if (zeek_type == "enum" || zeek_type == "string" || zeek_type == "file")
     t = string_type{};
@@ -323,9 +323,9 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
 
 // Parses a single header line a Zeek log. (Since parsing headers is not on the
 // critical path, we are "lazy" and return strings instead of string views.)
-expected<std::string> parse_header_line(const std::string& line,
-                                        const std::string& sep,
-                                        const std::string& prefix) {
+caf::expected<std::string>
+parse_header_line(const std::string& line, const std::string& sep,
+                  const std::string& prefix) {
   auto s = detail::split(line, sep, "", 1);
   if (!(s.size() == 2
         && std::equal(prefix.begin(), prefix.end(), s[0].begin(), s[0].end())))
@@ -606,11 +606,11 @@ caf::error writer::write(const table_slice& slice) {
   return child->write(slice);
 }
 
-expected<void> writer::flush() {
+caf::expected<void> writer::flush() {
   for (auto& kvp : writers_)
     if (auto res = kvp.second->flush(); !res)
       return res.error();
-  return no_error;
+  return caf::no_error;
 }
 
 const char* writer::name() const {

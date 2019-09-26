@@ -246,7 +246,7 @@ file::~file() {
     close();
 }
 
-expected<void> file::open(open_mode mode, bool append) {
+caf::expected<void> file::open(open_mode mode, bool append) {
   if (is_open_)
     return make_error(ec::filesystem_error, "file already open");
   if (mode == read_only && append)
@@ -436,7 +436,7 @@ bool rm(const path& p) {
   return false;
 }
 
-expected<void> mkdir(const path& p) {
+caf::expected<void> mkdir(const path& p) {
   auto components = split(p);
   if (components.empty())
     return make_error(ec::filesystem_error, "cannot mkdir empty path");
@@ -465,7 +465,7 @@ expected<void> mkdir(const path& p) {
   return {};
 }
 
-expected<std::string> load_contents(const path& p) {
+caf::expected<std::string> load_contents(const path& p) {
   std::string contents;
   caf::containerbuf<std::string> obuf{contents};
   std::ostream out{&obuf};
