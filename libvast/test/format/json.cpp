@@ -139,7 +139,7 @@ TEST(json reader) {
   };
   auto [err, num] = reader.read(9, 5, add_slice);
   CHECK_EQUAL(err, caf::none);
-  CHECK_EQUAL(num, 9);
+  CHECK_EQUAL(num, 9u);
   CHECK(slices[1]->at(0, 0)
         == data{unbox(to<vast::time>("2011-08-12T14:59:11.994970Z"))});
   CHECK(slices[1]->at(0, 18) == vector{data{"text/html"}});
@@ -156,9 +156,9 @@ TEST_DISABLED(suricata) {
   };
   auto [err, num] = reader.read(2, 5, add_slice);
   CHECK_EQUAL(err, ec::end_of_input);
-  REQUIRE_EQUAL(num, 2);
-  CHECK_EQUAL(slices[0]->columns(), 36);
-  CHECK_EQUAL(slices[0]->rows(), 2);
+  REQUIRE_EQUAL(num, 2u);
+  CHECK_EQUAL(slices[0]->columns(), 36u);
+  CHECK_EQUAL(slices[0]->rows(), 2u);
   CHECK(slices[0]->at(0, 19) == view<count>{4520});
 }
 

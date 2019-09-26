@@ -220,15 +220,15 @@ TEST(zeek data parsing) {
 
 TEST(zeek reader - capture loss) {
   auto slices = read(capture_loss_10_events, 10, 10);
-  REQUIRE_EQUAL(slices.size(), 1);
-  CHECK_EQUAL(slices[0]->rows(), 10);
+  REQUIRE_EQUAL(slices.size(), 1u);
+  CHECK_EQUAL(slices[0]->rows(), 10u);
 }
 
 TEST(zeek reader - conn log) {
   auto slices = read(conn_log_100_events, 20, 100);
-  CHECK_EQUAL(slices.size(), 5);
+  CHECK_EQUAL(slices.size(), 5u);
   for (auto& slice : slices)
-    CHECK_EQUAL(slice->rows(), 20);
+    CHECK_EQUAL(slice->rows(), 20u);
 }
 
 FIXTURE_SCOPE_END()
