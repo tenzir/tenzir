@@ -52,8 +52,8 @@ void init(accountant_actor* self) {
 
 void finish_slice(accountant_actor* self) {
   auto& st = self->state;
-  // Do nothing if builder has not been created.
-  if (!st.builder)
+  // Do nothing if builder has not been created or no rows have been added yet.
+  if (!st.builder || st.builder->rows() == 0)
     return;
   auto slice = st.builder->finish();
   VAST_DEBUG(self, "generated slice with", slice->rows(), "rows");
