@@ -71,19 +71,45 @@ using accountant_type = caf::typed_actor<
 
 /// @relates accountant
 struct accountant_state {
-  static constexpr const char* name = "accountant";
-  accountant_type::stateful_pointer<accountant_state> self;
-  std::unordered_map<caf::actor_id, std::string> actor_map;
-  measurement accumulator;
+  // -- member types -----------------------------------------------------------
+
+  using downstream_manager = caf::broadcast_downstream_manager<table_slice_ptr>;
+
+  // -- constructors, destructors, and assignment operators --------------------
 
   accountant_state(accountant_type::stateful_base<accountant_state>* self);
+
+  // -- functions --------------------------------------------------------------
+
+  /// Prints information about the current load to the INFO log.
   void command_line_heartbeat();
 
+  // -- member variables -------------------------------------------------------
+
+  /// Stores the names of known actors to fill into the actor_name column.
+  std::unordered_map<caf::actor_id, std::string> actor_map;
+
+  /// Accumulates the importer throughput until the next heartbeat.
+  measurement accumulator;
+
+  /// The maximum size of generated slices.
   size_t slice_size;
+
+  /// Stores the builder instance.
   table_slice_builder_ptr builder;
-  using downstream_manager = caf::broadcast_downstream_manager<table_slice_ptr>;
+
+  /// Buffers table_slices, acting as a adaptor between the push based
+  /// ACCOUNTANT interface and the pull based stream to the IMPORTER.
   std::queue<table_slice_ptr> slice_buffer;
+
+  /// Takes care of transmitting batches.
   caf::stream_source_ptr<downstream_manager> mgr;
+
+  /// Pointer to the parent actor.
+  accountant_type::stateful_pointer<accountant_state> self;
+
+  /// Name of the ACCOUNTANT actor.
+  static constexpr const char* name = "accountant";
 };
 
 /// Accumulates various performance metrics in a key-value format and writes
