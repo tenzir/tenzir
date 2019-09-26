@@ -187,9 +187,8 @@ caf::message status_command(const command&, caf::actor_system&,
   return caf::none;
 }
 
-maybe_actor spawn_accountant(node_actor* self, spawn_arguments& args) {
-  auto accountant_log = args.dir / "log" / "current" / "accounting.log";
-  auto accountant = self->spawn<monitored>(system::accountant, accountant_log);
+maybe_actor spawn_accountant(node_actor* self, spawn_arguments&) {
+  auto accountant = self->spawn<monitored>(system::accountant);
   self->system().registry().put(accountant_atom::value, accountant);
   return caf::actor_cast<caf::actor>(accountant);
 }

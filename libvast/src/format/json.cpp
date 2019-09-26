@@ -178,7 +178,9 @@ caf::error add(table_slice_builder& builder, const vast::json::object& xs,
     auto i = lookup(field.name, xs);
     // Non-existing fields are treated as empty (unset).
     if (!i) {
-      builder.add(make_data_view(caf::none));
+      if (!builder.add(make_data_view(caf::none)))
+        return make_error(ec::unspecified, "failed to add caf::none to table "
+                                           "slice builder");
       continue;
     }
     auto x = caf::visit(convert{}, *i, field.type);

@@ -48,7 +48,7 @@ bool default_table_slice_builder::append(data x) {
   return true;
 }
 
-bool default_table_slice_builder::add(data_view x) {
+bool default_table_slice_builder::add_impl(data_view x) {
   return append(materialize(x));
 }
 

@@ -62,8 +62,8 @@ struct generator {
     auto builder = default_table_slice_builder::make(layout);
     for (size_t i = 0; i < num; ++i) {
       vast::time ts = epoch + std::chrono::seconds(i + offset);
-      builder->add(make_data_view(ts));
-      builder->add(make_data_view("foo"));
+      CHECK(builder->add(make_data_view(ts)));
+      CHECK(builder->add(make_data_view("foo")));
     }
     auto slice = builder->finish();
     slice.unshared().offset(offset);

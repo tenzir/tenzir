@@ -35,7 +35,6 @@
 #include "vast/system/source.hpp"
 #include "vast/system/source_command.hpp"
 #include "vast/table_slice_builder.hpp"
-#include "vast/table_slice_builder_factory.hpp"
 
 namespace vast::system {
 
@@ -51,10 +50,6 @@ caf::message reader_command(const command& cmd, caf::actor_system& sys,
   std::string category = Defaults::category;
   auto max_events = caf::get_if<size_t>(&options, "import.max-events");
   auto slice_type = defaults::import::table_slice_type(sys, options);
-  auto factory = vast::factory<vast::table_slice_builder>::get(slice_type);
-  if (factory == nullptr)
-    return caf::make_message(
-      make_error(vast::ec::unspecified, "unknown table_slice_builder factory"));
   auto slice_size = get_or(options, "system.table-slice-size",
                            defaults::system::table_slice_size);
   // Discern the input source (file, stream, or socket).
@@ -105,8 +100,8 @@ caf::message reader_command(const command& cmd, caf::actor_system& sys,
     auto run = [&](auto&& source) {
       auto& mm = sys.middleman();
       return mm.spawn_broker(std::forward<decltype(source)>(source),
-                             ep.port.number(), std::move(reader), factory,
-                             slice_size, max_events);
+                             ep.port.number(), std::move(reader), slice_size,
+                             max_events);
     };
     VAST_INFO(reader, "listens for data on", ep.host, ", port", ep.port);
     switch (ep.port.type()) {
@@ -126,8 +121,7 @@ caf::message reader_command(const command& cmd, caf::actor_system& sys,
     if (schema)
       reader.schema(*schema);
     VAST_INFO(reader, "reads data from", *file);
-    src = sys.spawn(source<Reader>, std::move(reader), factory, slice_size,
-                    max_events);
+    src = sys.spawn(source<Reader>, std::move(reader), slice_size, max_events);
   }
   return source_command(cmd, sys, std::move(src), options, first, last);
 }

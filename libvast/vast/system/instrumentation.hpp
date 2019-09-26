@@ -21,6 +21,9 @@
 
 #include <atomic>
 #include <chrono>
+#ifdef VAST_MEASUREMENT_MUTEX_WORKAROUND
+#  include <mutex>
+#endif
 
 namespace vast::system {
 
@@ -71,8 +74,6 @@ private:
 // Atomic variants
 //
 #ifdef VAST_MEASUREMENT_MUTEX_WORKAROUND
-#include <mutex>
-
 struct atomic_measurement : public measurement {
   std::mutex mutex;
   void reset() {

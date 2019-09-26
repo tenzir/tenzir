@@ -9,6 +9,8 @@ import difflib
 import filecmp
 import gzip
 import itertools
+import json
+import jsondiff
 import logging
 import os
 import shlex
@@ -40,6 +42,7 @@ class Fixture(NamedTuple):
 class Step(NamedTuple):
     command: List[str]
     input: Optional[Path]
+    transformation : Optional[str]
 
 class Test(NamedTuple):
     tags: Optional[str]
@@ -77,6 +80,18 @@ def spawn(*popenargs, **kwargs):
     proc = subprocess.Popen(*popenargs, **kwargs)
     CURRENT_SUBPROCS.append(proc)
     return proc
+
+def try_wait(process, timeout):
+    """Wait for a specified time or terminate the process"""
+    try:
+        if process.wait(timeout) is not 0:
+            LOGGER.error(f'{process.args} returned {process.returncode}')
+            return Result.ERROR
+        return Result.SUCCESS
+    except subprocess.TimeoutExpired:
+        LOGGER.error(f'timeout reached, terminating process')
+        process.terminate()
+        return Result.ERROR
 
 def run_flamegraph(args, svg_file):
     """Perform instrumentation and produce an output svg"""
@@ -132,18 +147,16 @@ def empty(iterable):
         return True
     return False
 
+def deduce_format(command):
+    positionals = list(filter(lambda x: x[0] != '-', command))
+    if positionals[0] == 'export':
+        if positionals[1] == 'json':
+            return 'json'
+    if positionals[0] == 'status':
+        return 'json'
+    return 'ascii'
+
 def run_step(basecmd, step_id, step, work_dir, baseline_dir, update_baseline):
-    def try_wait(process, timeout):
-        """Wait for a specified time or terminate the process"""
-        try:
-            if process.wait(timeout) is not 0:
-                LOGGER.error(f'{process.args} returned {process.returncode}')
-                return Result.ERROR
-            return Result.SUCCESS
-        except subprocess.TimeoutExpired:
-            LOGGER.error(f'timeout reached, terminating process')
-            process.terminate()
-            return Result.ERROR
     try:
         stdout = work_dir / f'{step_id}.out'
         stderr = work_dir / f'{step_id}.err'
@@ -173,34 +186,72 @@ def run_step(basecmd, step_id, step, work_dir, baseline_dir, update_baseline):
             LOGGER.debug('standard error:')
             for line in open(stderr).readlines()[-100:]:
                 LOGGER.debug(f'    {line}')
+            return result
         # Perform baseline update or comparison.
         baseline = baseline_dir / f'{step_id}.ref'
+        output_format = deduce_format(step.command)
         if update_baseline:
-            if result is Result.ERROR:
-                LOGGER.critical('cannot update baseline for failed step')
             LOGGER.info('updating baseline')
             if not baseline_dir.exists():
                 baseline_dir.mkdir(parents=True)
-            with open(baseline, 'w') as ref:
-                for line in sorted(open(stdout).readlines()):
-                    ref.write(line)
-            return Result.SUCCESS
-        LOGGER.debug('comparing step output to baseline')
-        baseline_lines = open(baseline).readlines() if baseline.exists() else []
-        diff = difflib.unified_diff(baseline_lines,
-                                    sorted(open(stdout).readlines()),
-                                    fromfile=str(baseline),
-                                    tofile=str(stdout))
-        delta = list(diff)
-        if delta:
-            LOGGER.error('baseline comparison failed')
-            sys.stdout.writelines(delta)
-            return result if result is Result.ERROR else Result.FAILURE
-        LOGGER.debug('baseline comparison succeeded')
-        return result if result is Result.ERROR else Result.SUCCESS
+        else:
+            LOGGER.debug('comparing step output to baseline')
+        with open(stdout) as out_handle:
+            out = None
+            if step.transformation:
+                LOGGER.debug(f'transforming output with `{step.transformation}`')
+                out = subprocess.run(
+                    [step.transformation],
+                    stdin=out_handle,
+                    stdout=subprocess.PIPE,
+                    timeout=STEP_TIMEOUT,
+                    shell=True).stdout
+            else:
+                out = out_handle.read()
+            diff = None
+            if output_format == 'json':
+                output_object = json.loads(out)
+                if update_baseline:
+                    json.dump(output_object, open(baseline, 'w'))
+                    return Result.SUCCESS
+                if not baseline.exists():
+                    diff = jsondiff.diff({}, output_object)
+                else:
+                    with open(baseline) as ref_handle:
+                        baseline_object = json.load(ref_handle)
+                        diff = jsondiff.diff(baseline_object, output_object)
+                if diff == {}:
+                    diff = []
+                else:
+                    diff = str(diff) + '\n'
+            else:
+                # ascii
+                output_lines = out.splitlines(keepends=True)
+                # We sort ascii output for determinism, but only if there is no
+                # explicit transformation.
+                if not step.transformation:
+                    output_lines = sorted(output_lines)
+                if update_baseline:
+                    with open(baseline, 'w') as ref_handle:
+                        for line in output_lines:
+                            ref_handle.write(line)
+                    return Result.SUCCESS
+                baseline_lines = []
+                if baseline.exists():
+                    baseline_lines = open(baseline).readlines()
+                diff = difflib.unified_diff(baseline_lines,
+                                            output_lines,
+                                            fromfile=str(baseline),
+                                            tofile=str(stdout))
+            delta = list(diff)
+            if delta:
+                LOGGER.error('baseline comparison failed')
+                sys.stdout.writelines(delta)
+                return Result.FAILURE
     except subprocess.CalledProcessError as err:
         LOGGER.error(err)
         return Result.ERROR
+    return result
 
 class Server:
     """Server fixture implementation details
@@ -358,7 +409,8 @@ def validate(data, set_dir):
             schema.And(
                 schema.Const(schema.And(str, len)), schema.Use(to_command)),
             schema.Optional('input', default=None):
-            schema.And(schema.Use(absolute_path), is_file)
+            schema.And(schema.Use(absolute_path), is_file),
+            schema.Optional('transformation', default=None): str
         }, schema.Use(to_step)))
     test = schema.Schema(
         schema.And({
