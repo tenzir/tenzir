@@ -13,14 +13,15 @@
 
 #pragma once
 
-#include <iosfwd>
-#include <memory>
-#include <string>
-#include <string_view>
-
 #include <caf/config_option_set.hpp>
 #include <caf/error.hpp>
 #include <caf/fwd.hpp>
+
+#include <iosfwd>
+#include <map>
+#include <memory>
+#include <string>
+#include <string_view>
 
 namespace vast {
 
@@ -105,8 +106,6 @@ public:
   /// A pointer to the parent node (or nullptr iff this is the root node).
   command* parent = nullptr;
 
-  fun callback = nullptr;
-
   /// The name of the command.
   std::string_view name;
 
@@ -124,6 +123,17 @@ public:
 
   /// Flag that indicates whether the command shows up in the help text.
   bool visible = true;
+
+  // -- static member variables ------------------------------------------------
+
+  /// Central store for mapping fully-qualified command name to callback
+  static inline std::map<std::string, fun> factory = {};
+
+  // -- utility functions ------------------------------------------------------
+
+  /// Returns the full name of `cmd`, i.e., its own name prepended by all parent
+  /// names.
+  std::string full_name() const;
 
   // -- factory functions ------------------------------------------------------
 
@@ -169,7 +179,7 @@ public:
   /// Sets the callback for this command.
   /// @returns a pointer to this command.
   inline command* run(fun run) {
-    callback = run;
+    factory.insert_or_assign(full_name(), run);
     return this;
   }
 };
@@ -248,10 +258,6 @@ const command* resolve(const command& cmd,
 ///          on error.
 /// @relates command
 const command* resolve(const command& cmd, std::string_view name);
-
-/// Returns the full name of `cmd`, i.e., its own name prepended by all parent
-/// names.
-std::string full_name(const command& cmd);
 
 /// Prints the helptext for `cmd` to `out`.
 void helptext(const command& cmd, std::ostream& out);

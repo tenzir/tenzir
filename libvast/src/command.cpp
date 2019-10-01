@@ -34,6 +34,18 @@
 
 namespace vast {
 
+std::string command::full_name() const {
+  std::string result{name};
+  for (auto ptr = parent; ptr != nullptr && ptr->parent != nullptr;
+       ptr = ptr->parent) {
+    if (!ptr->name.empty()) {
+      result.insert(result.begin(), ' ');
+      result.insert(result.begin(), ptr->name.begin(), ptr->name.end());
+    }
+  }
+  return result;
+}
+
 caf::config_option_set command::opts() {
   return caf::config_option_set{}.add<bool>("help,h?", "prints the help text").add<bool>("documentation?", "prints the Markdown-formatted documentation");
 }
@@ -46,7 +58,7 @@ command* command::add(std::string_view child_name,
                       caf::config_option_set child_options) {
   return children
     .emplace_back(
-      new command{this, {}, child_name, {}, {}, std::move(child_options), {}})
+      new command{this, child_name, {}, {}, std::move(child_options), {}})
     .get();
 }
 
@@ -66,7 +78,7 @@ caf::error parse_impl(command::invocation& result, const command& cmd,
   bool has_subcommand;
   switch(state) {
     default:
-      return make_error(ec::unrecognized_option, full_name(cmd), *position,
+      return make_error(ec::unrecognized_option, cmd.full_name(), *position,
                         to_string(state));
     case caf::pec::success:
       has_subcommand = false;
@@ -76,7 +88,7 @@ caf::error parse_impl(command::invocation& result, const command& cmd,
       break;
   }
   if (position != last && detail::starts_with(*position, "-"))
-    return make_error(ec::unrecognized_option, full_name(cmd), *position);
+    return make_error(ec::unrecognized_option, cmd.full_name(), *position);
   // Check for help option.
   if (has_subcommand && *position == "help") {
     put(result.options, "help", true);
@@ -90,8 +102,8 @@ caf::error parse_impl(command::invocation& result, const command& cmd,
   // Invoke cmd.run if no subcommand was defined.
   if (!has_subcommand) {
     // Commands without a run implementation require subcommands.
-    if (cmd.callback == nullptr)
-      return make_error(ec::missing_subcommand, full_name(cmd), "");
+    if (command::factory.find(cmd.full_name()) == command::factory.end())
+      return make_error(ec::missing_subcommand, cmd.full_name(), "");
     return caf::none;
   }
   // Consume CLI arguments if we have arguments but don't have subcommands.
@@ -108,7 +120,7 @@ caf::error parse_impl(command::invocation& result, const command& cmd,
   auto i = std::find_if(cmd.children.begin(), cmd.children.end(),
                         [p = position](auto& x) { return x->name == *p; });
   if (i == cmd.children.end())
-    return make_error(ec::invalid_subcommand, full_name(cmd), *position);
+    return make_error(ec::invalid_subcommand, cmd.full_name(), *position);
   return parse_impl(result, **i, position + 1, last);
 }
 
@@ -271,17 +283,6 @@ const command& root(const command& cmd) {
   return cmd.parent == nullptr ? cmd : root(*cmd.parent);
 }
 
-std::string full_name(const command& cmd) {
-  std::string result{cmd.name};
-  for (auto ptr = cmd.parent; ptr != nullptr; ptr = ptr->parent) {
-    if (!ptr->name.empty()) {
-      result.insert(result.begin(), ' ');
-      result.insert(result.begin(), ptr->name.begin(), ptr->name.end());
-    }
-  }
-  return result;
-}
-
 const command* resolve(const command& cmd,
                        std::vector<std::string_view>::iterator position,
                        std::vector<std::string_view>::iterator end) {
@@ -353,13 +354,12 @@ void parameters_helptext(const command& cmd, std::ostream& out) {
 void flat_helptext(const command& cmd, std::ostream& out) {
   // A trivial command without parameters prints its name and description.
   if (cmd.options.empty()) {
-    out << "usage: " << full_name(cmd) << "\n\n"
-        << cmd.description << "\n\n";
+    out << "usage: " << cmd.full_name() << "\n\n" << cmd.description << "\n\n";
     return;
   }
   // A command with parameters prints 1) its name, 2) a description, and 3) a
   // list of available parameters.
-  out << "usage: " << full_name(cmd) << " [<parameters>]\n\n"
+  out << "usage: " << cmd.full_name() << " [<parameters>]\n\n"
       << cmd.description << "\n\n";
   parameters_helptext(cmd, out);
 }
@@ -381,12 +381,14 @@ void nested_helptext(const command& cmd, std::ostream& out) {
   // A trivial command without parameters prints name, description and
   // children.
   if (cmd.options.empty()) {
-    out << "usage: " << full_name(cmd) << " <command>" << "\n\n"
-        << cmd.description  << "\n\n";
+    out << "usage: " << cmd.full_name() << " <command>"
+        << "\n\n"
+        << cmd.description << "\n\n";
     subcommand_helptext(cmd, out);
     return;
   }
-  out << "usage: " << full_name(cmd) << " [<parameters>] <command>" << "\n\n"
+  out << "usage: " << cmd.full_name() << " [<parameters>] <command>"
+      << "\n\n"
       << cmd.description << "\n\n";
   parameters_helptext(cmd, out);
   out << '\n';

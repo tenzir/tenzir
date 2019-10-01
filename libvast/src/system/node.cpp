@@ -200,7 +200,7 @@ caf::expected<caf::actor> spawn_component(const command& cmd,
   VAST_ASSERT(cmd.parent != nullptr);
   using caf::atom_uint;
   auto self = this_node;
-  auto i = node_state::factories.find(full_name(cmd));
+  auto i = node_state::factories.find(cmd.full_name());
   if (i == node_state::factories.end())
     return make_error(ec::unspecified, "invalid spawn component");
   return i->second(self, args);
