@@ -151,7 +151,8 @@ def deduce_format(command):
     positionals = list(filter(lambda x: x[0] != '-', command))
     if positionals[0] == 'export':
         if positionals[1] == 'json':
-            return 'json'
+            # Pythons JSON parser does not handle ldjson, so we fall back to ascii
+            return 'ascii'
     if positionals[0] == 'status':
         return 'json'
     return 'ascii'
