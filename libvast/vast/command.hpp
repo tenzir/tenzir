@@ -105,7 +105,7 @@ public:
   /// A pointer to the parent node (or nullptr iff this is the root node).
   command* parent = nullptr;
 
-  fun run = nullptr;
+  fun callback = nullptr;
 
   /// The name of the command.
   std::string_view name;
@@ -135,14 +135,14 @@ public:
 
   /// Adds a new subcommand.
   /// @returns a pointer to the new subcommand.
-  command* add(fun child_run, std::string_view child_name,
-               caf::config_option_set child_options = {});
+  command*
+  add(std::string_view child_name, caf::config_option_set child_options = {});
 
   /// Adds a new subcommand.
   /// @returns a pointer to the new subcommand.
-  inline command* add(fun child_run, std::string_view child_name,
-                      opts_builder&& child_options) {
-    return add(child_run, child_name, child_options.finish());
+  inline command*
+  add(std::string_view child_name, opts_builder&& child_options) {
+    return add(child_name, child_options.finish());
   }
 
   /// Adds a description to a command.
@@ -163,6 +163,13 @@ public:
   /// @returns a pointer to this command.
   inline command* hide() {
     visible = false;
+    return this;
+  }
+
+  /// Sets the callback for this command.
+  /// @returns a pointer to this command.
+  inline command* run(fun run) {
+    callback = run;
     return this;
   }
 };

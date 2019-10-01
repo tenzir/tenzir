@@ -29,8 +29,8 @@ public:
 
   /// Adds a new command to the application.
   template <class Options>
-  auto add(command::fun run, std::string_view name, Options&& options) {
-    return root.add(run, name, std::forward<Options>(options));
+  auto add(std::string_view name, Options&& options) {
+    return root.add(name, std::forward<Options>(options));
   }
 
   /// Starts the application and blocks until execution completes.

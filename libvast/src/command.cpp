@@ -13,7 +13,13 @@
 
 #include "vast/command.hpp"
 
-#include <numeric>
+#include "vast/defaults.hpp"
+#include "vast/detail/assert.hpp"
+#include "vast/detail/string.hpp"
+#include "vast/detail/system.hpp"
+#include "vast/error.hpp"
+#include "vast/filesystem.hpp"
+#include "vast/logger.hpp"
 
 #include <caf/actor_system.hpp>
 #include <caf/actor_system_config.hpp>
@@ -23,13 +29,8 @@
 #include <caf/message.hpp>
 #include <caf/settings.hpp>
 
-#include "vast/defaults.hpp"
-#include "vast/detail/assert.hpp"
-#include "vast/detail/string.hpp"
-#include "vast/detail/system.hpp"
-#include "vast/error.hpp"
-#include "vast/filesystem.hpp"
-#include "vast/logger.hpp"
+#include <functional>
+#include <numeric>
 
 namespace vast {
 
@@ -41,11 +42,11 @@ command::opts_builder command::opts(std::string_view category) {
   return {category, opts()};
 }
 
-command* command::add(fun child_run, std::string_view child_name,
+command* command::add(std::string_view child_name,
                       caf::config_option_set child_options) {
   return children
-    .emplace_back(new command{
-      this, child_run, child_name, {}, {}, std::move(child_options), {}})
+    .emplace_back(
+      new command{this, {}, child_name, {}, {}, std::move(child_options), {}})
     .get();
 }
 
@@ -89,7 +90,7 @@ caf::error parse_impl(command::invocation& result, const command& cmd,
   // Invoke cmd.run if no subcommand was defined.
   if (!has_subcommand) {
     // Commands without a run implementation require subcommands.
-    if (cmd.run == nullptr)
+    if (cmd.callback == nullptr)
       return make_error(ec::missing_subcommand, full_name(cmd), "");
     return caf::none;
   }
