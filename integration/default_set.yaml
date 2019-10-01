@@ -87,6 +87,12 @@ tests:
       # Historical component for query in issue #201. No results.
       - command: export -N ascii '114.215.46.175 in prefix'
       - command: export -N ascii 'mrt.bgp4mp.update.announcement.prefix == 120.50.4.0/23'
+  Export json:
+    tags: [json, zeek]
+    steps:
+      - command: import -N zeek
+        input: data/zeek/conn.log.gz
+      - command: export -N json 'resp_h == 192.168.1.104'
 
   Server Zeek conn log:
     tags: [server, import-export, zeek]
