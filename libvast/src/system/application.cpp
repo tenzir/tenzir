@@ -18,7 +18,6 @@
 #include <caf/atom.hpp>
 #include <caf/error.hpp>
 
-#include "vast/detail/adjust_resource_consumption.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/error.hpp"
 
@@ -31,10 +30,6 @@ using namespace caf;
 namespace vast::system {
 
 application::application() {
-  // TODO: this function has side effects...should we put it elsewhere where
-  // it's explicit to the user? Or perhaps make whatever this function does
-  // simply a configuration option and use it later?
-  detail::adjust_resource_consumption();
 }
 
 void render_error(const application& app, const caf::error& err,

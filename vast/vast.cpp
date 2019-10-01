@@ -11,30 +11,28 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include <cstdlib>
+#include "vast/config.hpp"
+#include "vast/detail/adjust_resource_consumption.hpp"
+#include "vast/detail/process.hpp"
+#include "vast/detail/system.hpp"
+#include "vast/error.hpp"
+#include "vast/event_types.hpp"
+#include "vast/filesystem.hpp"
+#include "vast/logger.hpp"
+#include "vast/schema.hpp"
+#include "vast/system/default_application.hpp"
+#include "vast/system/default_configuration.hpp"
 
 #include <caf/actor_system.hpp>
 #include <caf/atom.hpp>
 #include <caf/io/middleman.hpp>
 #include <caf/timestamp.hpp>
 
-#include "vast/config.hpp"
+#include <cstdlib>
 
 #ifdef VAST_USE_OPENSSL
-#include <caf/openssl/manager.hpp>
+#  include <caf/openssl/manager.hpp>
 #endif
-
-#include "vast/error.hpp"
-#include "vast/event_types.hpp"
-#include "vast/filesystem.hpp"
-#include "vast/logger.hpp"
-#include "vast/schema.hpp"
-
-#include "vast/system/default_application.hpp"
-#include "vast/system/default_configuration.hpp"
-
-#include "vast/detail/process.hpp"
-#include "vast/detail/system.hpp"
 
 using namespace vast;
 using namespace vast::system;
@@ -47,6 +45,9 @@ int main(int argc, char** argv) {
               << std::endl;
     return EXIT_FAILURE;
   }
+  // Make sure we have enough resources (e.g., file descriptors)
+  if (!detail::adjust_resource_consumption())
+    return EXIT_FAILURE;
   // Application setup.
   default_application app;
   app.root.description = "manage a VAST topology";
