@@ -20,7 +20,7 @@
 #include "vast/filesystem.hpp"
 #include "vast/logger.hpp"
 #include "vast/schema.hpp"
-#include "vast/system/default_application.hpp"
+#include "vast/system/application.hpp"
 #include "vast/system/default_configuration.hpp"
 
 #include <caf/actor_system.hpp>
@@ -49,20 +49,20 @@ int main(int argc, char** argv) {
   if (!detail::adjust_resource_consumption())
     return EXIT_FAILURE;
   // Application setup.
-  default_application app;
-  app.root.description = "manage a VAST topology";
-  app.root.name = argv[0];
+  auto root = make_application();
+  root.description = "manage a VAST topology";
+  root.name = argv[0];
   // We're only interested in the application name, not in its path. For
   // example, argv[0] might contain "./build/release/bin/vast" and we are only
   // interested in "vast".
-  auto find_slash = [&] { return app.root.name.find('/'); };
+  auto find_slash = [&] { return root.name.find('/'); };
   for (auto p = find_slash(); p != std::string_view::npos; p = find_slash())
-    app.root.name.remove_prefix(p + 1);
+    root.name.remove_prefix(p + 1);
   // Parse CLI.
-  auto maybe_invocation = parse(app.root, cfg.command_line.begin(),
-                          cfg.command_line.end());
+  auto maybe_invocation
+    = parse(root, cfg.command_line.begin(), cfg.command_line.end());
   if (!maybe_invocation) {
-    render_error(app, maybe_invocation.error(), std::cerr);
+    render_error(root, maybe_invocation.error(), std::cerr);
     return EXIT_FAILURE;
   }
   if (get_or(maybe_invocation->options, "help", false)) {
@@ -99,7 +99,7 @@ int main(int argc, char** argv) {
   // Dispatch to root command.
   auto maybe_result = run(*maybe_invocation, sys);
   if (!maybe_result) {
-    render_error(app, maybe_result.error(), std::cerr);
+    render_error(root, maybe_result.error(), std::cerr);
     return EXIT_FAILURE;
   }
   return EXIT_SUCCESS;
