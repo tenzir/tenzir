@@ -32,9 +32,6 @@ public:
   /// Iterates over CLI arguments.
   using argument_iterator = std::vector<std::string>::const_iterator;
 
-  /// Manages command objects.
-  using owning_ptr = std::unique_ptr<command>;
-
   /// Stores child commands.
   using children_list = std::vector<std::unique_ptr<command>>;
 
@@ -92,11 +89,6 @@ public:
     /// Points past-the-end of CLI arguments.
     argument_iterator last;
 
-    /// Stores any error that occurred while parsing the CLI. When this error
-    /// is not default-constructed, `first` points to the CLI position where
-    /// the error occurred.
-    caf::error error;
-
     // -- mutators -------------------------------------------------------------
 
     /// Sets the members `target`, `first`, and `last`.
@@ -105,20 +97,6 @@ public:
       target = cmd;
       this->first = first;
       this->last = last;
-    }
-
-    // -- mutators -------------------------------------------------------------
-
-    /// @returns `true` when it is safe to call `run` on this object, `false`
-    /// otherwise.
-    explicit operator bool() const {
-      return !error;
-    }
-
-    /// @returns `true` when `error` is not default-constructed, `false`
-    /// otherwise.
-    bool operator!() const {
-      return static_cast<bool>(error);
     }
   };
 
@@ -165,7 +143,7 @@ public:
 /// Parses all program arguments without running the command.
 /// @returns an error for malformed input, `none` otherwise.
 /// @relates command
-command::invocation parse(const command& root, command::argument_iterator first,
+caf::expected<command::invocation> parse(const command& root, command::argument_iterator first,
                           command::argument_iterator last);
 
 /// Prepares `cfg` before using it to initialize an `actor_system` with it.
@@ -184,25 +162,25 @@ bool init_config(caf::actor_system_config& cfg, const command::invocation& from,
 /// Runs the command and blocks until execution completes.
 /// @returns a type-erased result or a wrapped `caf::error`.
 /// @relates command
-caf::message run(command::invocation& invocation, caf::actor_system& sys);
+caf::expected<caf::message> run(command::invocation& invocation, caf::actor_system& sys);
 
 /// Runs the command and blocks until execution completes.
 /// @returns a type-erased result or a wrapped `caf::error`.
 /// @relates command
-caf::message run(const command& cmd, caf::actor_system& sys,
+caf::expected<caf::message> run(const command& cmd, caf::actor_system& sys,
                  command::argument_iterator first,
                  command::argument_iterator last);
 
 /// Runs the command and blocks until execution completes.
 /// @returns a type-erased result or a wrapped `caf::error`.
 /// @relates command
-caf::message run(const command& cmd, caf::actor_system& sys,
+caf::expected<caf::message> run(const command& cmd, caf::actor_system& sys,
                  const std::vector<std::string>& args);
 
 /// Runs the command and blocks until execution completes.
 /// @returns a type-erased result or a wrapped `caf::error`.
 /// @relates command
-caf::message run(const command& cmd, caf::actor_system& sys,
+caf::expected<caf::message> run(const command& cmd, caf::actor_system& sys,
                  caf::settings predefined_options,
                  command::argument_iterator first,
                  command::argument_iterator last);
@@ -210,7 +188,7 @@ caf::message run(const command& cmd, caf::actor_system& sys,
 /// Runs the command and blocks until execution completes.
 /// @returns a type-erased result or a wrapped `caf::error`.
 /// @relates command
-caf::message run(const command& cmd, caf::actor_system& sys,
+caf::expected<caf::message> run(const command& cmd, caf::actor_system& sys,
                  caf::settings predefined_options,
                  const std::vector<std::string>& args);
 

@@ -54,7 +54,7 @@ command* command::add(fun child_run, std::string_view child_name,
     .get();
 }
 
-caf::error parse(command::invocation& result, const command& cmd,
+caf::error parse_impl(command::invocation& result, const command& cmd,
                  command::argument_iterator first,
                  command::argument_iterator last) {
   using caf::get_or;
@@ -106,14 +106,14 @@ caf::error parse(command::invocation& result, const command& cmd,
                         [p = position](auto& x) { return x->name == *p; });
   if (i == cmd.children.end())
     return make_error(ec::invalid_subcommand, full_name(cmd), *position);
-  return parse(result, **i, position + 1, last);
+  return parse_impl(result, **i, position + 1, last);
 }
 
-command::invocation parse(const command& root, command::argument_iterator first,
+caf::expected<command::invocation> parse(const command& root, command::argument_iterator first,
                           command::argument_iterator last) {
   command::invocation result;
-  if (auto err = parse(result, root, first, last))
-    result.error = std::move(err);
+  if (auto err = parse_impl(result, root, first, last))
+    return err;
   return result;
 }
 
@@ -215,9 +215,7 @@ bool init_config(caf::actor_system_config& cfg, const command::invocation& from,
   return true;
 }
 
-caf::message run(command::invocation& invocation, caf::actor_system& sys) {
-  if (!invocation)
-    return caf::make_message(invocation.error);
+caf::expected<caf::message> run(command::invocation& invocation, caf::actor_system& sys) {
   auto& cmd = *invocation.target;
   if (get_or(invocation.options, "help", false)) {
     helptext(cmd, std::cerr);
@@ -227,30 +225,32 @@ caf::message run(command::invocation& invocation, caf::actor_system& sys) {
                  invocation.last);
 }
 
-caf::message run(const command& cmd, caf::actor_system& sys,
+caf::expected<caf::message> run(const command& cmd, caf::actor_system& sys,
                  command::argument_iterator first,
                  command::argument_iterator last) {
-  auto invocation = parse(cmd, first, last);
-  return run(invocation, sys);
+  auto maybe_invocation = parse(cmd, first, last);
+  if (!maybe_invocation)
+    return maybe_invocation.error();
+  return run(*maybe_invocation, sys);
 }
 
-caf::message run(const command& cmd, caf::actor_system& sys,
+caf::expected<caf::message> run(const command& cmd, caf::actor_system& sys,
                  const std::vector<std::string>& args) {
   return run(cmd, sys, args.begin(), args.end());
 }
 
-caf::message run(const command& cmd, caf::actor_system& sys,
+caf::expected<caf::message> run(const command& cmd, caf::actor_system& sys,
                  caf::settings predefined_options,
                  command::argument_iterator first,
                  command::argument_iterator last) {
   command::invocation invocation;
   invocation.options = std::move(predefined_options);
-  if (auto err = parse(invocation, cmd, first, last))
-    return caf::make_message(std::move(err));
+  if (auto err = parse_impl(invocation, cmd, first, last))
+    return err;
   return run(invocation, sys);
 }
 
-caf::message run(const command& cmd, caf::actor_system& sys,
+caf::expected<caf::message> run(const command& cmd, caf::actor_system& sys,
                  caf::settings predefined_options,
                  const std::vector<std::string>& args) {
   return run(cmd, sys, std::move(predefined_options), args.begin(), args.end());

@@ -58,18 +58,18 @@ int main(int argc, char** argv) {
   for (auto p = find_slash(); p != std::string_view::npos; p = find_slash())
     app.root.name.remove_prefix(p + 1);
   // Parse CLI.
-  auto invocation = parse(app.root, cfg.command_line.begin(),
+  auto maybe_invocation = parse(app.root, cfg.command_line.begin(),
                           cfg.command_line.end());
-  if (!invocation) {
-    render_error(app, invocation.error, std::cerr);
+  if (!maybe_invocation) {
+    render_error(app, maybe_invocation.error(), std::cerr);
     return EXIT_FAILURE;
   }
-  if (get_or(invocation.options, "help", false)) {
-    helptext(*invocation.target, std::cerr);
+  if (get_or(maybe_invocation->options, "help", false)) {
+    helptext(*maybe_invocation->target, std::cerr);
     return EXIT_SUCCESS;
   }
   // Initialize actor system (and thereby CAF's logger).
-  if (!init_config(cfg, invocation, std::cerr))
+  if (!init_config(cfg, *maybe_invocation, std::cerr))
     return EXIT_FAILURE;
   caf::actor_system sys{cfg};
   // Get filesystem path to the executable.
@@ -92,9 +92,10 @@ int main(int argc, char** argv) {
     return EXIT_FAILURE;
   }
   // Dispatch to root command.
-  auto result = run(invocation, sys);
-  if (result.match_elements<caf::error>()) {
-    render_error(app, result.get_as<caf::error>(0), std::cerr);
+  auto maybe_result = run(*maybe_invocation, sys);
+  if (!maybe_result) {
+    render_error(app, maybe_result.error(), std::cerr);
     return EXIT_FAILURE;
   }
+  return EXIT_SUCCESS;
 }
