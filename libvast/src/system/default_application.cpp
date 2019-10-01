@@ -76,89 +76,96 @@ default_application::default_application() {
                               "don't load the default schema definitions")
                    .finish();
   // Add standalone commands.
-  add(version_command, "version", "prints the software version", opts());
-  add(start_command, "start", "starts a node", opts());
-  add(remote_command, "stop", "stops a node", opts());
-  add(remote_command, "spawn", "creates a new component", opts());
-  add(remote_command, "kill", "terminates a component", opts());
-  add(remote_command, "peer", "peers with another node", opts());
-  add(remote_command, "status", "shows various properties of a topology",
-      opts());
-  auto send_cmd = add(remote_command, "send",
-                      "sends a message to a registered actor", opts());
-  send_cmd->visible = false;
+  add(version_command, "version", opts())
+    ->describe("prints the software version");
+  add(start_command, "start", opts())->describe("starts a node");
+  add(remote_command, "stop", opts())->describe("stops a node");
+  add(remote_command, "spawn", opts())->describe("creates a new component");
+  add(remote_command, "kill", opts())->describe("terminates a component");
+  add(remote_command, "peer", opts())->describe("peers with another node");
+  add(remote_command, "status", opts())
+    ->describe("shows various properties of a topology");
+  auto send_cmd = add(remote_command, "send", opts())
+                    ->describe("sends a message to a registered actor")
+                    ->hide();
   // Add "import" command and its children.
-  import_ = add(nullptr, "import", "imports data from STDIN or file",
-                opts("?import")
-                  .add<atom_value>("table-slice-type,t", "table slice type")
-                  .add<bool>("node,N",
-                             "spawn a node instead of connecting to one")
-                  .add<bool>("blocking,b",
-                             "block until the IMPORTER forwarded all data")
-                  .add<size_t>("max-events,n",
-                               "the maximum number of events to import"));
-  import_->add(READER(zeek), "imports Zeek logs from STDIN or file",
-               src_opts("?import.zeek"));
-  import_->add(READER(mrt), "imports MRT logs from STDIN or file",
-               src_opts("?import.mrt"));
-  import_->add(READER(bgpdump), "imports BGPdump logs from STDIN or file",
-               src_opts("?import.bgpdump"));
-  import_->add(READER(csv), "imports CSV logs from STDIN or file",
-               src_opts("?import.csv"));
+  import_
+    = add(nullptr, "import",
+          opts("?import")
+            .add<atom_value>("table-slice-type,t", "table slice type")
+            .add<bool>("node,N", "spawn a node instead of connecting to one")
+            .add<bool>("blocking,b", "block until the IMPORTER forwarded all "
+                                     "data")
+            .add<size_t>("max-events,n", "the maximum number of events to "
+                                         "import"))
+        ->describe("imports data from STDIN or file");
+  import_->add(READER(zeek), src_opts("?import.zeek"))
+    ->describe("imports Zeek logs from STDIN or file");
+  import_->add(READER(mrt), src_opts("?import.mrt"))
+    ->describe("imports MRT logs from STDIN or file");
+  import_->add(READER(bgpdump), src_opts("?import.bgpdump"))
+    ->describe("imports BGPdump logs from STDIN or file");
+  import_->add(READER(csv), src_opts("?import.csv"))
+    ->describe("imports CSV logs from STDIN or file");
   namespace fj = format::json;
-  import_->add(reader_command<fj::reader<>, defaults::import::json>, "json",
-               "imports json with schema", src_opts("?import.json"));
+  import_
+    ->add(reader_command<fj::reader<>, defaults::import::json>, "json",
+          src_opts("?import.json"))
+    ->describe("imports json with schema");
   import_
     ->add(reader_command<fj::reader<fj::suricata>, defaults::import::suricata>,
-          "suricata", "imports suricata eve json",
-          src_opts("?import.suricata"));
-  import_->add(GENERATOR(test),
-               "imports random data for testing or benchmarking",
-               opts("?import.test")
-                 .add<size_t>("seed", "the random seed")
-                 .add<std::string>("schema-file,s", "path to alternate schema")
-                 .add<std::string>("schema,S", "alternate schema as string"));
+          "suricata", src_opts("?import.suricata"))
+    ->describe("imports suricata eve json");
+  import_
+    ->add(GENERATOR(test),
+          opts("?import.test")
+            .add<size_t>("seed", "the random seed")
+            .add<std::string>("schema-file,s", "path to alternate schema")
+            .add<std::string>("schema,S", "alternate schema as string"))
+    ->describe("imports random data for testing or benchmarking");
   // Add "export" command and its children.
-  export_ = add(nullptr, "export", "exports query results to STDOUT or file",
-                opts("?export")
-                  .add<bool>("node,N",
-                             "spawn a node instead of connecting to one")
-                  .add<bool>("continuous,c", "marks a query as continuous")
-                  .add<bool>("historical,h", "marks a query as historical")
-                  .add<bool>("unified,u", "marks a query as unified")
-                  .add<size_t>("max-events,n", "maximum number of results")
-                  .add<std::string>("read,r", "path for reading the query"));
-  export_->add(WRITER(zeek), "exports query results in Zeek format",
-               snk_opts("?export.zeek"));
-  export_->add(WRITER(csv), "exports query results in CSV format",
-               snk_opts("?export.csv"));
-  export_->add(WRITER(ascii), "exports query results in ASCII format",
-               snk_opts("?export.ascii"));
-  export_->add(WRITER(json), "exports query results in JSON format",
-               snk_opts("?export.json"));
+  export_
+    = add(nullptr, "export",
+          opts("?export")
+            .add<bool>("node,N", "spawn a node instead of connecting to one")
+            .add<bool>("continuous,c", "marks a query as continuous")
+            .add<bool>("historical,h", "marks a query as historical")
+            .add<bool>("unified,u", "marks a query as unified")
+            .add<size_t>("max-events,n", "maximum number of results")
+            .add<std::string>("read,r", "path for reading the query"))
+        ->describe("exports query results to STDOUT or file");
+  export_->add(WRITER(zeek), snk_opts("?export.zeek"))
+    ->describe("exports query results in Zeek format");
+  export_->add(WRITER(csv), snk_opts("?export.csv"))
+    ->describe("exports query results in CSV format");
+  export_->add(WRITER(ascii), snk_opts("?export.ascii"))
+    ->describe("exports query results in ASCII format");
+  export_->add(WRITER(json), snk_opts("?export.json"))
+    ->describe("exports query results in JSON format");
   // Add PCAP import and export commands when compiling with PCAP enabled.
 #ifdef VAST_HAVE_PCAP
   import_
-    ->add(pcap_reader_command, "pcap", "imports PCAP logs from STDIN or file",
+    ->add(pcap_reader_command, "pcap",
           opts("?import")
-            .add<std::string>("read,r",
-                              "path to input where to read events from")
+            .add<std::string>("read,r", "path to input where to read events "
+                                        "from")
             .add<std::string>("schema,s", "path to alternate schema")
             .add<bool>("uds,d", "treat -r as listening UNIX domain socket")
             .add<size_t>("cutoff,c", "skip flow packets after this many bytes")
             .add<size_t>("max-flows,m", "number of concurrent flows to track")
             .add<size_t>("max-flow-age,a", "max flow lifetime before eviction")
             .add<size_t>("flow-expiry,e", "flow table expiration interval")
-            .add<size_t>("pseudo-realtime-factor,p",
-                         "factor c delaying packets by 1/c"));
-  export_->add(pcap_writer_command, "pcap",
-               "exports query results in PCAP format",
-               opts("?export")
-                 .add<std::string>("write,w", "path to write events to")
-                 .add<bool>("uds,d",
-                            "treat -w as UNIX domain socket to connect to")
-                 .add<size_t>("flush-interval,f",
-                              "flush to disk after this many packets"));
+            .add<size_t>("pseudo-realtime-factor,p", "factor c delaying "
+                                                     "packets by 1/c"))
+    ->describe("imports PCAP logs from STDIN or file");
+  export_
+    ->add(pcap_writer_command, "pcap",
+          opts("?export")
+            .add<std::string>("write,w", "path to write events to")
+            .add<bool>("uds,d", "treat -w as UNIX domain socket to connect to")
+            .add<size_t>("flush-interval,f", "flush to disk after this many "
+                                             "packets"))
+    ->describe("exports query results in PCAP format");
 #endif
 }
 

@@ -34,7 +34,7 @@
 namespace vast {
 
 caf::config_option_set command::opts() {
-  return caf::config_option_set{}.add<bool>("help,h?", "prints the help text");
+  return caf::config_option_set{}.add<bool>("help,h?", "prints the help text").add<bool>("documentation?", "prints the Markdown-formatted documentation");
 }
 
 command::opts_builder command::opts(std::string_view category) {
@@ -42,15 +42,10 @@ command::opts_builder command::opts(std::string_view category) {
 }
 
 command* command::add(fun child_run, std::string_view child_name,
-                      std::string_view child_description,
                       caf::config_option_set child_options) {
   return children
-    .emplace_back(new command{this,
-                              child_run,
-                              child_name,
-                              child_description,
-                              std::move(child_options),
-                              {}})
+    .emplace_back(new command{
+      this, child_run, child_name, {}, {}, std::move(child_options), {}})
     .get();
 }
 
@@ -64,6 +59,8 @@ caf::error parse_impl(command::invocation& result, const command& cmd,
   auto [state, position] = cmd.options.parse(result.options, first, last);
   result.assign(&cmd, position, last);
   if (get_or(result.options, "help", false))
+    return caf::none;
+  if (get_or(result.options, "documentation", false))
     return caf::none;
   bool has_subcommand;
   switch(state) {
@@ -82,6 +79,11 @@ caf::error parse_impl(command::invocation& result, const command& cmd,
   // Check for help option.
   if (has_subcommand && *position == "help") {
     put(result.options, "help", true);
+    return caf::none;
+  }
+  // Check for docomentation option.
+  if (has_subcommand && *position == "documentation") {
+    put(result.options, "documentation", true);
     return caf::none;
   }
   // Invoke cmd.run if no subcommand was defined.
@@ -221,8 +223,16 @@ caf::expected<caf::message> run(command::invocation& invocation, caf::actor_syst
     helptext(cmd, std::cerr);
     return caf::none;
   }
-  return cmd.run(cmd, sys, invocation.options, invocation.first,
-                 invocation.last);
+  if (get_or(invocation.options, "documentation", false)) {
+    documentationtext(cmd, std::cerr);
+    return caf::none;
+  }
+  if (auto search_result = command::factory.find(cmd.full_name());
+      search_result != command::factory.end())
+    return std::invoke(search_result->second, cmd, sys, invocation.options,
+                       invocation.first, invocation.last);
+  // No callback was registered for this command
+  return make_error(ec::missing_subcommand, cmd.full_name(), "");
 }
 
 caf::expected<caf::message> run(const command& cmd, caf::actor_system& sys,
@@ -401,6 +411,16 @@ std::string helptext(const command& cmd) {
   return oss.str();
 }
 
+void documentationtext(const command& cmd, std::ostream& out) {
+  // TODO render with proper framing.
+  out << std::left << cmd.documentation;
+}
+
+std::string documentationtext(const command& cmd) {
+  std::ostringstream oss;
+  documentationtext(cmd, oss);
+  return oss.str();
+}
 /*
 
 std::string command::usage() const {

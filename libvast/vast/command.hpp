@@ -102,18 +102,27 @@ public:
 
   // -- member variables -------------------------------------------------------
 
+  /// A pointer to the parent node (or nullptr iff this is the root node).
   command* parent = nullptr;
 
   fun run = nullptr;
 
+  /// The name of the command.
   std::string_view name;
 
+  /// A short phrase that describes the command, e.g., "prints the help text".
   std::string_view description;
 
+  /// Detailed usage instructions written in Markdown.
+  std::string_view documentation;
+
+  /// The options of the command.
   caf::config_option_set options = opts();
 
+  /// The list of sub-commands.
   children_list children;
 
+  /// Flag that indicates whether the command shows up in the help text.
   bool visible = true;
 
   // -- factory functions ------------------------------------------------------
@@ -127,16 +136,34 @@ public:
   /// Adds a new subcommand.
   /// @returns a pointer to the new subcommand.
   command* add(fun child_run, std::string_view child_name,
-               std::string_view child_description,
                caf::config_option_set child_options = {});
 
   /// Adds a new subcommand.
   /// @returns a pointer to the new subcommand.
-  command* add(fun child_run, std::string_view child_name,
-               std::string_view child_description,
-               opts_builder&& child_options) {
-    return add(child_run, child_name, child_description,
-               child_options.finish());
+  inline command* add(fun child_run, std::string_view child_name,
+                      opts_builder&& child_options) {
+    return add(child_run, child_name, child_options.finish());
+  }
+
+  /// Adds a description to a command.
+  /// @returns a pointer to this command.
+  inline command* describe(std::string_view desc) {
+    description = desc;
+    return this;
+  }
+  //
+  /// Adds a Markdown-formatted documentation to a command.
+  /// @returns a pointer to this command.
+  inline command* document(std::string_view doc) {
+    documentation = doc;
+    return this;
+  }
+
+  /// Hides the command from the help text.
+  /// @returns a pointer to this command.
+  inline command* hide() {
+    visible = false;
+    return this;
   }
 };
 
@@ -224,6 +251,12 @@ void helptext(const command& cmd, std::ostream& out);
 
 /// Returns the helptext for `cmd`.
 std::string helptext(const command& cmd);
+
+/// Prints the documentationtext for `cmd` to `out`.
+void documentationtext(const command& cmd, std::ostream& out);
+
+/// Returns the documentationtext for `cmd`.
+std::string documentationtext(const command& cmd);
 
 /// Applies `fun` to `cmd` and each of its children, recursively.
 template <class F>

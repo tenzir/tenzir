@@ -278,82 +278,98 @@ auto make_command() {
   // Default options for commands.
   auto opts = [] { return command::opts(); };
   // Add top-level commands.
-  cmd.add(status_command, "status", "shows various properties of a topology",
-          opts());
-  cmd.add(stop_command, "stop", "stops the node", opts());
-  cmd.add(kill_command, "kill", "terminates a component", opts());
-  cmd.add(send_command, "send", "sends atom to a registered actor", opts());
-  cmd.add(peer_command, "peer", "peers with another node", opts());
+  cmd.add(status_command, "status", opts())
+    ->describe("shows various properties of a topology");
+  cmd.add(stop_command, "stop", opts())->describe("stops the node");
+  cmd.add(kill_command, "kill", opts())->describe("terminates a component");
+  cmd.add(send_command, "send", opts())
+    ->describe("sends atom to a registered actor");
+  cmd.add(peer_command, "peer", opts())->describe("peers with another node");
   // Add spawn commands.
   auto spawn_command = node_state::spawn_command;
-  auto sp = cmd.add(nullptr, "spawn", "creates a new component", opts());
-  sp->add(spawn_command, "accountant", "spawns the accountant", opts());
-  sp->add(spawn_command, "archive", "creates a new archive",
+  auto sp
+    = cmd.add(nullptr, "spawn", opts())->describe("creates a new component");
+  sp->add(spawn_command, "accountant", opts())
+    ->describe("spawns the accountant");
+  sp->add(spawn_command, "archive",
           opts()
             .add<size_t>("segments,s", "number of cached segments")
-            .add<size_t>("max-segment-size,m", "maximum segment size in MB"));
-  sp->add(spawn_command, "exporter", "creates a new exporter",
+            .add<size_t>("max-segment-size,m", "maximum segment size in MB"))
+    ->describe("creates a new archive");
+  sp->add(spawn_command, "exporter",
           opts()
             .add<bool>("continuous,c", "marks a query as continuous")
             .add<bool>("historical,h", "marks a query as historical")
             .add<bool>("unified,u", "marks a query as unified")
-            .add<uint64_t>("events,e", "maximum number of results"));
-  sp->add(spawn_command, "importer", "creates a new importer",
-          opts()
-            .add<size_t>("ids,n",
-                         "number of initial IDs to request (deprecated)"));
-  sp->add(spawn_command, "index", "creates a new index",
-          opts()
-            .add<size_t>("max-events,e", "maximum events per partition")
-            .add<size_t>("max-parts,p",
-                         "maximum number of in-memory partitions")
-            .add<size_t>("taste-parts,t",
-                         "number of immediately scheduled partitions")
-            .add<size_t>("max-queries,q",
-                         "maximum number of concurrent queries"));
-  sp->add(spawn_command, "consensus", "creates a new consensus",
-          opts().add<raft::server_id>("id,i",
-                                      "the server ID of the consensus module"));
-  sp->add(spawn_command, "profiler", "creates a new profiler",
+            .add<uint64_t>("events,e", "maximum number of results"))
+    ->describe("creates a new exporter");
+  sp->add(spawn_command, "importer",
+          opts().add<size_t>("ids,n", "number of initial IDs to request "
+                                      "(deprecated)"))
+    ->describe("creates a new importer");
+  sp->add(
+      spawn_command, "index",
+      opts()
+        .add<size_t>("max-events,e", "maximum events per partition")
+        .add<size_t>("max-parts,p", "maximum number of in-memory partitions")
+        .add<size_t>("taste-parts,t", "number of immediately scheduled "
+                                      "partitions")
+        .add<size_t>("max-queries,q", "maximum number of concurrent queries"))
+    ->describe("creates a new index");
+  sp->add(spawn_command, "consensus",
+          opts().add<raft::server_id>("id,i", "the server ID of the consensus "
+                                              "module"))
+    ->describe("creates a new consensus");
+  sp->add(spawn_command, "profiler",
           opts()
             .add<bool>("cpu,c", "start the CPU profiler")
             .add<bool>("heap,h", "start the heap profiler")
-            .add<size_t>("resolution,r", "seconds between measurements"));
+            .add<size_t>("resolution,r", "seconds between measurements"))
+    ->describe("creates a new profiler");
   // Add spawn source commands.
   auto src
-    = sp->add(nullptr, "source", "creates a new source",
+    = sp->add(nullptr, "source",
               opts()
                 .add<std::string>("read,r", "path to input")
                 .add<std::string>("schema,s", "path to alternate schema")
                 .add<caf::atom_value>("table-slice,t", "table slice type")
-                .add<bool>("uds,d", "treat -w as UNIX domain socket"));
-  src->add(spawn_command, "pcap", "creates a new PCAP source",
-           opts()
-             .add<size_t>("cutoff,c", "skip flow packets after this many bytes")
-             .add<size_t>("flow-max,m", "number of concurrent flows to track")
-             .add<size_t>("flow-age,a", "max flow lifetime before eviction")
-             .add<size_t>("flow-expiry,e", "flow table expiration interval")
-             .add<int64_t>("pseudo-realtime,p",
-                           "factor c delaying trace packets by 1/c"));
-  src->add(spawn_command, "test", "creates a new test source",
-           opts()
-             .add<size_t>("seed,s", "the PRNG seed")
-             .add<size_t>("events,n", "number of events to generate"));
-  src->add(spawn_command, "zeek", "creates a new Zeek source", opts());
-  src->add(spawn_command, "bgpdump", "creates a new BGPdump source", opts());
-  src->add(spawn_command, "mrt", "creates a new MRT source", opts());
+                .add<bool>("uds,d", "treat -w as UNIX domain socket"))
+        ->describe("creates a new source");
+  src
+    ->add(spawn_command, "pcap",
+          opts()
+            .add<size_t>("cutoff,c", "skip flow packets after this many bytes")
+            .add<size_t>("flow-max,m", "number of concurrent flows to track")
+            .add<size_t>("flow-age,a", "max flow lifetime before eviction")
+            .add<size_t>("flow-expiry,e", "flow table expiration interval")
+            .add<int64_t>("pseudo-realtime,p", "factor c delaying trace "
+                                               "packets by 1/c"))
+    ->describe("creates a new PCAP source");
+  src
+    ->add(spawn_command, "test",
+          opts()
+            .add<size_t>("seed,s", "the PRNG seed")
+            .add<size_t>("events,n", "number of events to generate"))
+    ->describe("creates a new test source");
+  src->add(spawn_command, "zeek", opts())->describe("creates a new Zeek source");
+  src->add(spawn_command, "bgpdump", opts())
+    ->describe("creates a new BGPdump source");
+  src->add(spawn_command, "mrt", opts())->describe("creates a new MRT source");
   // Add spawn sink commands.
-  auto snk = sp->add(nullptr, "sink", "creates a new sink",
+  auto snk = sp->add(nullptr, "sink",
                      opts()
                        .add<std::string>("write,w", "path to write events to")
-                       .add<bool>("uds,d", "treat -w as UNIX domain socket"));
-  snk->add(spawn_command, "pcap", "creates a new PCAP sink",
-           opts().add<size_t>("flush,f",
-                              "flush to disk after this many packets"));
-  snk->add(spawn_command, "zeek", "creates a new Zeek sink", opts());
-  snk->add(spawn_command, "ascii", "creates a new ASCII sink", opts());
-  snk->add(spawn_command, "csv", "creates a new CSV sink", opts());
-  snk->add(spawn_command, "json", "creates a new JSON sink", opts());
+                       .add<bool>("uds,d", "treat -w as UNIX domain socket"))
+               ->describe("creates a new sink");
+  snk
+    ->add(spawn_command, "pcap",
+          opts().add<size_t>("flush,f", "flush to disk after this many "
+                                        "packets"))
+    ->describe("creates a new PCAP sink");
+  snk->add(spawn_command, "zeek", opts())->describe("creates a new Zeek sink");
+  snk->add(spawn_command, "ascii", opts())->describe("creates a new ASCII sink");
+  snk->add(spawn_command, "csv", opts())->describe("creates a new CSV sink");
+  snk->add(spawn_command, "json", opts())->describe("creates a new JSON sink");
   return cmd;
 }
 
