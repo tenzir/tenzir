@@ -179,7 +179,10 @@ public:
   /// Sets the callback for this command.
   /// @returns a pointer to this command.
   inline command* run(fun run) {
-    factory.insert_or_assign(full_name(), run);
+    if (run != nullptr)
+      factory.insert_or_assign(full_name(), run);
+    else
+      factory.erase(full_name());
     return this;
   }
 };

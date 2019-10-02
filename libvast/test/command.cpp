@@ -56,16 +56,19 @@ struct fixture {
     options.clear();
     std::vector<std::string> xs;
     caf::split(xs, str, ' ', caf::token_compress_on);
-    invocation = parse(root, xs.begin(), xs.end());
-    if (invocation.error)
-      return std::move(invocation.error);
+    auto expected_inv = parse(root, xs.begin(), xs.end());
+    if (!expected_inv)
+      return expected_inv.error();
+    invocation = std::move(*expected_inv);
     auto result = run(invocation, sys);
-    if (result.empty())
+    if (!result)
+      return result.error();
+    if (result->empty())
       return caf::none;
-    if (result.match_elements<std::string>())
-      return result.get_as<std::string>(0);
-    if (result.match_elements<caf::error>())
-      return result.get_as<caf::error>(0);
+    if (result->match_elements<std::string>())
+      return result->get_as<std::string>(0);
+    if (result->match_elements<caf::error>())
+      return result->get_as<caf::error>(0);
     FAIL("command returned an unexpected result");
   }
 };
@@ -81,27 +84,27 @@ FIXTURE_SCOPE(command_tests, fixture)
 
 TEST(names) {
   using svec = std::vector<std::string>;
-  auto aa = root.add(nullptr, "a", "")->add(nullptr, "aa", "");
-  aa->add(nullptr, "aaa", "");
-  aa->add(nullptr, "aab", "");
+  auto aa = root.add("a")->add("aa");
+  aa->add("aaa");
+  aa->add("aab");
   CHECK_EQUAL(aa->name, "aa");
-  root.add(nullptr, "b", "");
+  root.add("b");
   svec names;
-  for_each(root, [&](auto& cmd) { names.emplace_back(full_name(cmd)); });
-  CHECK_EQUAL(names, svec({"vast", "vast a", "vast a aa", "vast a aa aaa",
-                           "vast a aa aab", "vast b"}));
+  for_each(root, [&](auto& cmd) { names.emplace_back(cmd.full_name()); });
+  CHECK_EQUAL(names, svec({"vast", "a", "a aa", "a aa aaa", "a aa aab", "b"}));
 }
 
 TEST(flat command invocation) {
-  auto fptr = root.add(foo, "foo", "",
-                       command::opts()
-                         .add<int>("value,v", "some int")
-                         .add<bool>("flag", "some flag"));
+  auto fptr = root
+                .add("foo", command::opts()
+                              .add<int>("value,v", "some int")
+                              .add<bool>("flag", "some flag"))
+                ->run(foo);
   CHECK_EQUAL(fptr->name, "foo");
-  CHECK_EQUAL(full_name(*fptr), "vast foo");
-  auto bptr = root.add(bar, "bar", "");
+  CHECK_EQUAL(fptr->full_name(), "foo");
+  auto bptr = root.add("bar")->run(bar);
   CHECK_EQUAL(bptr->name, "bar");
-  CHECK_EQUAL(full_name(*bptr), "vast bar");
+  CHECK_EQUAL(bptr->full_name(), "bar");
   CHECK(is_error(exec("nop")));
   CHECK(is_error(exec("bar --flag -v 42")));
   CHECK(is_error(exec("--flag bar")));
@@ -114,15 +117,16 @@ TEST(flat command invocation) {
 }
 
 TEST(nested command invocation) {
-  auto fptr = root.add(foo, "foo", "",
-                       command::opts()
-                         .add<int>("value,v", "some int")
-                         .add<bool>("flag", "some flag"));
+  auto fptr = root
+                .add("foo", command::opts()
+                              .add<int>("value,v", "some int")
+                              .add<bool>("flag", "some flag"))
+                ->run(foo);
   CHECK_EQUAL(fptr->name, "foo");
-  CHECK_EQUAL(full_name(*fptr), "vast foo");
-  auto bptr = fptr->add(bar, "bar", "");
+  CHECK_EQUAL(fptr->full_name(), "foo");
+  auto bptr = fptr->add("bar")->run(bar);
   CHECK_EQUAL(bptr->name, "bar");
-  CHECK_EQUAL(full_name(*bptr), "vast foo bar");
+  CHECK_EQUAL(bptr->full_name(), "foo bar");
   CHECK(is_error(exec("nop")));
   CHECK(is_error(exec("bar --flag -v 42")));
   CHECK(is_error(exec("foo --flag -v 42 --other-flag")));
@@ -133,14 +137,14 @@ TEST(nested command invocation) {
   CHECK_EQUAL(get_or(options, "flag", false), true);
   CHECK_EQUAL(get_or(options, "value", 0), 42);
   // Setting the command function to nullptr prohibits calling it directly.
-  fptr->run = nullptr;
+  fptr->run(nullptr);
   CHECK(is_error(exec("foo --flag -v 42")));
   // Subcommands of course still work.
   CHECK_EQUAL(exec("foo --flag -v 42 bar"), "bar"s);
 }
 
 TEST(version command) {
-  root.add(system::version_command, "version", "", command::opts());
+  root.add("version", command::opts())->run(system::version_command);
   CHECK_EQUAL(exec("version"), caf::none);
 }
 
