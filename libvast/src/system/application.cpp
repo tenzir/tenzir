@@ -42,7 +42,7 @@ void render_error(const application& app, const caf::error& err,
   if (!err)
     // The user most likely killed the process via CTRL+C, print nothing.
     return;
-  os << render(err);
+  os << render(err) << '\n';
   if (err.category() == caf::atom("vast")) {
     auto x = static_cast<vast::ec>(err.code());
     switch (x) {
