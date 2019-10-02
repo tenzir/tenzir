@@ -20,6 +20,7 @@
 #include "vast/error.hpp"
 #include "vast/filesystem.hpp"
 #include "vast/logger.hpp"
+#include "vast/system/start_command.hpp"
 
 #include <caf/actor_system.hpp>
 #include <caf/actor_system_config.hpp>
@@ -47,7 +48,9 @@ std::string command::full_name() const {
 }
 
 caf::config_option_set command::opts() {
-  return caf::config_option_set{}.add<bool>("help,h?", "prints the help text").add<bool>("documentation?", "prints the Markdown-formatted documentation");
+  return caf::config_option_set{}
+    .add<bool>("help,h?", "prints the help text")
+    .add<bool>("documentation?", "prints the Markdown-formatted documentation");
 }
 
 command::opts_builder command::opts(std::string_view category) {
@@ -62,9 +65,9 @@ command* command::add(std::string_view child_name,
     .get();
 }
 
-caf::error parse_impl(command::invocation& result, const command& cmd,
-                 command::argument_iterator first,
-                 command::argument_iterator last) {
+caf::error
+parse_impl(command::invocation& result, const command& cmd,
+           command::argument_iterator first, command::argument_iterator last) {
   using caf::get_or;
   using caf::make_message;
   VAST_TRACE(VAST_ARG(std::string(cmd.name)), VAST_ARG("args", first, last));
@@ -124,8 +127,9 @@ caf::error parse_impl(command::invocation& result, const command& cmd,
   return parse_impl(result, **i, position + 1, last);
 }
 
-caf::expected<command::invocation> parse(const command& root, command::argument_iterator first,
-                          command::argument_iterator last) {
+caf::expected<command::invocation>
+parse(const command& root, command::argument_iterator first,
+      command::argument_iterator last) {
   command::invocation result;
   if (auto err = parse_impl(result, root, first, last))
     return err;
@@ -224,33 +228,33 @@ bool init_config(caf::actor_system_config& cfg, const command::invocation& from,
       return false;
     }
     // Store full path to the log file in config.
-    auto log_file = log_dir / from.target->name + ".log";
+    auto log_file = log_dir / from.full_name + ".log";
     cfg.set("logger.file-name", log_file.str());
   }
   return true;
 }
 
-caf::expected<caf::message> run(command::invocation& invocation, caf::actor_system& sys) {
-  auto& cmd = *invocation.target;
-  if (get_or(invocation.options, "help", false)) {
-    helptext(cmd, std::cerr);
-    return caf::none;
-  }
-  if (get_or(invocation.options, "documentation", false)) {
-    documentationtext(cmd, std::cerr);
-    return caf::none;
-  }
-  if (auto search_result = command::factory.find(cmd.full_name());
+caf::expected<caf::message>
+run(command::invocation& invocation, caf::actor_system& sys) {
+  // FIXME this had to be removed
+  // if (get_or(invocation.options, "help", false)) {
+  //   helptext(invocation, std::cerr);
+  //   return caf::none;
+  // }
+  // if (get_or(invocation.options, "documentation", false)) {
+  //   documentationtext(invocation, std::cerr);
+  //   return caf::none;
+  // }
+  if (auto search_result = command::factory.find(invocation.full_name);
       search_result != command::factory.end())
-    return std::invoke(search_result->second, cmd, sys, invocation.options,
-                       invocation.first, invocation.last);
+    return std::invoke(search_result->second, invocation, sys);
   // No callback was registered for this command
-  return make_error(ec::missing_subcommand, cmd.full_name(), "");
+  return make_error(ec::missing_subcommand, invocation.full_name, "");
 }
 
-caf::expected<caf::message> run(const command& cmd, caf::actor_system& sys,
-                 command::argument_iterator first,
-                 command::argument_iterator last) {
+caf::expected<caf::message>
+run(const command& cmd, caf::actor_system& sys,
+    command::argument_iterator first, command::argument_iterator last) {
   auto maybe_invocation = parse(cmd, first, last);
   if (!maybe_invocation)
     return maybe_invocation.error();
@@ -258,14 +262,14 @@ caf::expected<caf::message> run(const command& cmd, caf::actor_system& sys,
 }
 
 caf::expected<caf::message> run(const command& cmd, caf::actor_system& sys,
-                 const std::vector<std::string>& args) {
+                                const std::vector<std::string>& args) {
   return run(cmd, sys, args.begin(), args.end());
 }
 
-caf::expected<caf::message> run(const command& cmd, caf::actor_system& sys,
-                 caf::settings predefined_options,
-                 command::argument_iterator first,
-                 command::argument_iterator last) {
+caf::expected<caf::message>
+run(const command& cmd, caf::actor_system& sys,
+    caf::settings predefined_options, command::argument_iterator first,
+    command::argument_iterator last) {
   command::invocation invocation;
   invocation.options = std::move(predefined_options);
   if (auto err = parse_impl(invocation, cmd, first, last))
@@ -273,9 +277,9 @@ caf::expected<caf::message> run(const command& cmd, caf::actor_system& sys,
   return run(invocation, sys);
 }
 
-caf::expected<caf::message> run(const command& cmd, caf::actor_system& sys,
-                 caf::settings predefined_options,
-                 const std::vector<std::string>& args) {
+caf::expected<caf::message>
+run(const command& cmd, caf::actor_system& sys,
+    caf::settings predefined_options, const std::vector<std::string>& args) {
   return run(cmd, sys, std::move(predefined_options), args.begin(), args.end());
 }
 

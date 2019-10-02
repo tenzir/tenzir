@@ -20,9 +20,7 @@
 namespace vast::system {
 
 /// Displays the software version to the user.
-caf::message version_command(const command& cmd, caf::actor_system& sys,
-                             caf::settings& options,
-                             command::argument_iterator begin,
-                             command::argument_iterator end);
+caf::message
+version_command(const command::invocation& invocation, caf::actor_system& sys);
 
 } // namespace vast::system

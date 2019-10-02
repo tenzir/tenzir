@@ -13,16 +13,17 @@
 
 #pragma once
 
-#include <caf/all.hpp>
+#include "vast/test/data.hpp"
+#include "vast/test/fixtures/actor_system_and_events.hpp"
 
 #include "vast/detail/spawn_container_source.hpp"
 #include "vast/query_options.hpp"
+#include "vast/system/node.hpp"
 #include "vast/uuid.hpp"
 
-#include "vast/system/node.hpp"
+#include <caf/all.hpp>
 
-#include "vast/test/data.hpp"
-#include "vast/test/fixtures/actor_system_and_events.hpp"
+#include <string>
 
 namespace fixtures {
 
@@ -34,9 +35,13 @@ struct node : deterministic_actor_system_and_events {
   template <class... Ts>
   caf::actor spawn_component(std::string component, Ts&&... args) {
     using namespace caf;
+    using namespace std::string_literals;
     actor result;
-    std::vector<std::string> cli{"spawn", component, std::forward<Ts>(args)...};
-    auto rh = self->request(test_node, infinite, std::move(cli));
+    command::invocation invocation;
+    invocation.full_name = "spawn "s + component;
+    invocation.options = {};
+    invocation.arguments = {std::forward<Ts>(args)...};
+    auto rh = self->request(test_node, infinite, std::move(invocation));
     run();
     rh.receive(
       [&](const actor& a) { result = a; },

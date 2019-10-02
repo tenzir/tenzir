@@ -44,10 +44,8 @@ struct node_state {
 
   // -- static member functions ------------------------------------------------
 
-  static caf::message spawn_command(const command& cmd, caf::actor_system& sys,
-                                    caf::settings& options,
-                                    command::argument_iterator first,
-                                    command::argument_iterator last);
+  static caf::message
+  spawn_command(const command::invocation& invocation, caf::actor_system& sys);
 
   // -- constructors, destructors, and assignment operators --------------------
 
@@ -74,11 +72,11 @@ struct node_state {
   /// Points to the node itself.
   caf::event_based_actor* self;
 
-  /// Dispatches remote commands.
-  static command cmd;
+  /// Dispatches remote invocations.
+  inline static command::invocation invocation = {};
 
   /// Maps command names (including parent command) to spawn functions.
-  static named_component_factories factories;
+  inline static named_component_factories factories = {};
 };
 
 /// Spawns a node.

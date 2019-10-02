@@ -63,9 +63,7 @@ auto make_error_msg(ec code, std::string msg) {
 }
 
 // Stop the node and exit the process.
-caf::message stop_command(const command&, caf::actor_system&, caf::settings&,
-                          command::argument_iterator,
-                          command::argument_iterator) {
+caf::message stop_command(const command::invocation&, caf::actor_system&) {
   // We cannot use this_node->send() here because it triggers
   // an illegal instruction interrupt.
   caf::anon_send_exit(this_node, exit_reason::user_shutdown);
@@ -73,9 +71,10 @@ caf::message stop_command(const command&, caf::actor_system&, caf::settings&,
 }
 
 // Sends an atom to a registered actor. Blocks until the actor responds.
-caf::message send_command(const command&, caf::actor_system& sys,
-                          caf::settings&, command::argument_iterator first,
-                          command::argument_iterator last) {
+caf::message
+send_command(const command::invocation& invocation, caf::actor_system& sys) {
+  auto first = invocation.arguments.begin();
+  auto last = invocation.arguments.end();
   // Expect exactly two arguments.
   if (std::distance(first, last) != 2)
     return make_error_msg(ec::syntax_error,
@@ -94,9 +93,10 @@ caf::message send_command(const command&, caf::actor_system& sys,
 }
 
 // Tries to establish peering to another node.
-caf::message peer_command(const command&, caf::actor_system& sys,
-                          caf::settings&, command::argument_iterator first,
-                          command::argument_iterator last) {
+caf::message
+peer_command(const command::invocation& invocation, caf::actor_system& sys) {
+  auto first = invocation.arguments.begin();
+  auto last = invocation.arguments.end();
   VAST_ASSERT(this_node != nullptr);
   if (std::distance(first, last) != 1)
     return make_error_msg(ec::syntax_error,
@@ -174,9 +174,7 @@ void collect_component_status(node_actor* self,
   }
 }
 
-caf::message status_command(const command&, caf::actor_system&,
-                            caf::settings&, command::argument_iterator,
-                            command::argument_iterator) {
+caf::message status_command(const command::invocation&, caf::actor_system&) {
   auto self = this_node;
   auto rp = self->make_response_promise();
   self->request(self->state.tracker, infinite, get_atom::value).then(
@@ -194,21 +192,21 @@ maybe_actor spawn_accountant(node_actor* self, spawn_arguments&) {
 }
 
 // Tries to spawn a new VAST component.
-caf::expected<caf::actor> spawn_component(const command& cmd,
-                                          spawn_arguments& args) {
+caf::expected<caf::actor>
+spawn_component(const command::invocation& invocation, spawn_arguments& args) {
   VAST_TRACE(VAST_ARG(args));
-  VAST_ASSERT(cmd.parent != nullptr);
   using caf::atom_uint;
   auto self = this_node;
-  auto i = node_state::factories.find(cmd.full_name());
+  auto i = node_state::factories.find(invocation.full_name);
   if (i == node_state::factories.end())
     return make_error(ec::unspecified, "invalid spawn component");
   return i->second(self, args);
 }
 
-caf::message kill_command(const command&, caf::actor_system&, caf::settings&,
-                          command::argument_iterator first,
-                          command::argument_iterator last) {
+caf::message
+kill_command(const command::invocation& invocation, caf::actor_system&) {
+  auto first = invocation.arguments.begin();
+  auto last = invocation.arguments.end();
   if (std::distance(first, last) != 1)
     return make_error_msg(ec::syntax_error,
                           "expected exactly one component argument");
@@ -268,157 +266,69 @@ auto make_factories() {
   ADD("spawn sink csv", spawn_csv_sink);
   ADD("spawn sink ascii", spawn_ascii_sink);
   ADD("spawn sink json", spawn_json_sink);
+  // Set callbacks of top-level commands.
+  // command::factory.insert_or_assign("start", start_command);
+  command::factory.insert_or_assign("stop", stop_command);
+  command::factory.insert_or_assign("status", status_command);
+  command::factory.insert_or_assign("kill", kill_command);
+  command::factory.insert_or_assign("send", send_command);
+  command::factory.insert_or_assign("peer", peer_command);
+  // Set callbacks of "spawn" command and its children.
+  command::factory.insert_or_assign("spawn", node_state::spawn_command);
+  command::factory.insert_or_assign("spawn index", node_state::spawn_command);
+  command::factory.insert_or_assign("spawn accountant",
+                                    node_state::spawn_command);
+  command::factory.insert_or_assign("spawn archive", node_state::spawn_command);
+  command::factory.insert_or_assign("spawn exporter",
+                                    node_state::spawn_command);
+  command::factory.insert_or_assign("spawn importer",
+                                    node_state::spawn_command);
+  command::factory.insert_or_assign("spawn consensus",
+                                    node_state::spawn_command);
+  command::factory.insert_or_assign("spawn source", node_state::spawn_command);
+  command::factory.insert_or_assign("spawn source pcap",
+                                    node_state::spawn_command);
+  command::factory.insert_or_assign("spawn source test",
+                                    node_state::spawn_command);
+  command::factory.insert_or_assign("spawn source zeek",
+                                    node_state::spawn_command);
+  command::factory.insert_or_assign("spawn source bgpdump",
+                                    node_state::spawn_command);
+  command::factory.insert_or_assign("spawn source mrt",
+                                    node_state::spawn_command);
+  command::factory.insert_or_assign("spawn sink", node_state::spawn_command);
+  command::factory.insert_or_assign("spawn sink pcap",
+                                    node_state::spawn_command);
+  command::factory.insert_or_assign("spawn sink zeek",
+                                    node_state::spawn_command);
+  command::factory.insert_or_assign("spawn sink ascii",
+                                    node_state::spawn_command);
+  command::factory.insert_or_assign("spawn sink csv",
+                                    node_state::spawn_command);
+  command::factory.insert_or_assign("spawn sink json",
+                                    node_state::spawn_command);
   return result;
 }
 
 #undef ADD
 
-auto make_command() {
-  command cmd;
-  // Default options for commands.
-  auto opts = [] { return command::opts(); };
-  // Add top-level commands.
-  cmd.add("status", opts())
-    ->describe("shows various properties of a topology")
-    ->run(status_command);
-  cmd.add("stop", opts())->describe("stops the node")->run(stop_command);
-  cmd.add("kill", opts())->describe("terminates a component")->run(kill_command);
-  cmd.add("send", opts())
-    ->describe("sends atom to a registered actor")
-    ->run(send_command);
-  cmd.add("peer", opts())
-    ->describe("peers with another node")
-    ->run(peer_command);
-  // Add spawn commands.
-  auto spawn_command = node_state::spawn_command;
-  auto sp = cmd.add("spawn", opts())->describe("creates a new component");
-  sp->add("accountant", opts())
-    ->describe("spawns the accountant")
-    ->run(spawn_command);
-  sp->add("archive", opts()
-                       .add<size_t>("segments,s", "number of cached segments")
-                       .add<size_t>("max-segment-size,m", "maximum segment "
-                                                          "size in MB"))
-    ->describe("creates a new archive")
-    ->run(spawn_command);
-  sp->add("exporter",
-          opts()
-            .add<bool>("continuous,c", "marks a query as continuous")
-            .add<bool>("historical,h", "marks a query as historical")
-            .add<bool>("unified,u", "marks a query as unified")
-            .add<uint64_t>("events,e", "maximum number of results"))
-    ->describe("creates a new exporter")
-    ->run(spawn_command);
-  sp->add("importer", opts().add<size_t>("ids,n", "number of initial IDs to "
-                                                  "request "
-                                                  "(deprecated)"))
-    ->describe("creates a new importer")
-    ->run(spawn_command);
-  sp->add(
-      "index",
-      opts()
-        .add<size_t>("max-events,e", "maximum events per partition")
-        .add<size_t>("max-parts,p", "maximum number of in-memory partitions")
-        .add<size_t>("taste-parts,t", "number of immediately scheduled "
-                                      "partitions")
-        .add<size_t>("max-queries,q", "maximum number of concurrent queries"))
-    ->describe("creates a new index")
-    ->run(spawn_command);
-  sp->add("consensus", opts().add<raft::server_id>("id,i", "the server ID of "
-                                                           "the consensus "
-                                                           "module"))
-    ->describe("creates a new consensus")
-    ->run(spawn_command);
-  sp->add("profiler", opts()
-                        .add<bool>("cpu,c", "start the CPU profiler")
-                        .add<bool>("heap,h", "start the heap profiler")
-                        .add<size_t>("resolution,r", "seconds between "
-                                                     "measurements"))
-    ->describe("creates a new profiler")
-    ->run(spawn_command);
-  // Add spawn source commands.
-  auto src
-    = sp->add("source",
-              opts()
-                .add<std::string>("read,r", "path to input")
-                .add<std::string>("schema,s", "path to alternate schema")
-                .add<caf::atom_value>("table-slice,t", "table slice type")
-                .add<bool>("uds,d", "treat -w as UNIX domain socket"))
-        ->describe("creates a new source");
-  src
-    ->add("pcap",
-          opts()
-            .add<size_t>("cutoff,c", "skip flow packets after this many bytes")
-            .add<size_t>("flow-max,m", "number of concurrent flows to track")
-            .add<size_t>("flow-age,a", "max flow lifetime before eviction")
-            .add<size_t>("flow-expiry,e", "flow table expiration interval")
-            .add<int64_t>("pseudo-realtime,p", "factor c delaying trace "
-                                               "packets by 1/c"))
-    ->describe("creates a new PCAP source")
-    ->run(spawn_command);
-  src
-    ->add("test", opts()
-                    .add<size_t>("seed,s", "the PRNG seed")
-                    .add<size_t>("events,n", "number of events to generate"))
-    ->describe("creates a new test source")
-    ->run(spawn_command);
-  src->add("zeek", opts())
-    ->describe("creates a new Zeek source")
-    ->run(spawn_command);
-  src->add("bgpdump", opts())
-    ->describe("creates a new BGPdump source")
-    ->run(spawn_command);
-  src->add("mrt", opts())
-    ->describe("creates a new MRT source")
-    ->run(spawn_command);
-  // Add spawn sink commands.
-  auto snk
-    = sp->add("sink", opts()
-                        .add<std::string>("write,w", "path to write events to")
-                        .add<bool>("uds,d", "treat -w as UNIX domain socket"))
-        ->describe("creates a new sink");
-  snk
-    ->add("pcap", opts().add<size_t>("flush,f", "flush to disk after this many "
-                                                "packets"))
-    ->describe("creates a new PCAP sink")
-    ->run(spawn_command);
-  snk->add("zeek", opts())
-    ->describe("creates a new Zeek sink")
-    ->run(spawn_command);
-  snk->add("ascii", opts())
-    ->describe("creates a new ASCII sink")
-    ->run(spawn_command);
-  snk->add("csv", opts())
-    ->describe("creates a new CSV sink")
-    ->run(spawn_command);
-  snk->add("json", opts())
-    ->describe("creates a new JSON sink")
-    ->run(spawn_command);
-  return cmd;
-}
-
 } // namespace
 
-node_state::named_component_factories node_state::factories = make_factories();
-
-command node_state::cmd = make_command();
-
-caf::message node_state::spawn_command(const command& cmd,
-                                       [[maybe_unused]] caf::actor_system& sys,
-                                       caf::settings& options,
-                                       command::argument_iterator first,
-                                       command::argument_iterator last) {
-  VAST_TRACE(VAST_ARG(options), VAST_ARG("args", first, last));
+caf::message
+node_state::spawn_command(const command::invocation& invocation,
+                          [[maybe_unused]] caf::actor_system& sys) {
+  auto first = invocation.arguments.begin();
+  auto last = invocation.arguments.end();
+  VAST_TRACE(VAST_ARG(invocation.options), VAST_ARG("args", first, last));
   using std::begin;
   using std::end;
   // Save some typing.
   auto& st = this_node->state;
   // We configured the command to have the name of the component.
-  // Note: caf::string_view is not convertible to string.
-  std::string comp_name{cmd.name.begin(), cmd.name.end()};
+  std::string comp_name{invocation.name()};
   // Auto-generate label if none given.
   std::string label;
-  if (auto label_ptr = caf::get_if<std::string>(&options, "label")) {
+  if (auto label_ptr = caf::get_if<std::string>(&invocation.options, "label")) {
     label = *label_ptr;
   } else {
     label = comp_name;
@@ -432,9 +342,9 @@ caf::message node_state::spawn_command(const command& cmd,
     }
   }
   // Spawn our new VAST component.
-  spawn_arguments args{cmd, st.dir, label, options, first, last};
+  spawn_arguments args{invocation, st.dir, label};
   caf::actor new_component;
-  if (auto spawn_res = spawn_component(cmd, args))
+  if (auto spawn_res = spawn_component(invocation, args))
     new_component = std::move(*spawn_res);
   else {
     VAST_DEBUG(__func__, "got an error from spawn_component:",
@@ -463,6 +373,7 @@ node_state::~node_state() {
 }
 
 void node_state::init(std::string init_name, path init_dir) {
+  node_state::factories = make_factories();
   // Set member variables.
   name = std::move(init_name);
   dir = std::move(init_dir);
@@ -479,19 +390,12 @@ void node_state::init(std::string init_name, path init_dir) {
 caf::behavior node(node_actor* self, std::string id, path dir) {
   self->state.init(std::move(id), std::move(dir));
   return {
-    [=](const std::vector<std::string>& cli, caf::settings& options) {
-      VAST_DEBUG(self, "got command", cli, "with options", options);
+    [=](command::invocation& invocation) {
+      VAST_DEBUG(self, "got command", invocation.full_name, "with options",
+                 invocation.options, "and arguments", invocation.arguments);
       // Run the command.
       this_node = self;
-      // Note: several commands make a response promise. In this case, they
-      // return an empty message that has no effect when returning it.
-      return run(self->state.cmd, self->system(), std::move(options), cli);
-    },
-    [=](const std::vector<std::string>& cli) {
-      VAST_DEBUG(self, "got command", cli);
-      // Run the command.
-      this_node = self;
-      return run(self->state.cmd, self->system(), cli);
+      return run(invocation, self->system());
     },
     [=](peer_atom, actor& tracker, std::string& peer_name) {
       self->delegate(self->state.tracker, peer_atom::value,

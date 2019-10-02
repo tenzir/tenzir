@@ -26,26 +26,28 @@ using namespace std::chrono_literals;
 
 namespace vast::system {
 
-caf::message remote_command(const command& cmd, caf::actor_system& sys,
-                            caf::settings& options,
-                            command::argument_iterator first,
-                            command::argument_iterator last) {
-  VAST_TRACE(VAST_ARG(options), VAST_ARG("args", first, last));
+caf::message
+remote_command(const command::invocation& invocation, caf::actor_system& sys) {
+  auto first = invocation.arguments.begin();
+  auto last = invocation.arguments.end();
+  VAST_TRACE(VAST_ARG(invocation.options), VAST_ARG("args", first, last));
   // Get a convenient and blocking way to interact with actors.
   caf::scoped_actor self{sys};
   // Get VAST node.
-  auto node_opt = connect_to_node(self, options);
+  auto node_opt = connect_to_node(self, invocation.options);
   if (!node_opt)
     return caf::make_message(std::move(node_opt.error()));
   auto node = std::move(*node_opt);
   self->monitor(node);
   // Delegate command to node.
-  std::vector<std::string> argv;
-  argv.reserve(detail::narrow_cast<size_t>(std::distance(first, last) + 1));
-  argv.emplace_back(cmd.name.begin(), cmd.name.end());
-  argv.insert(argv.end(), first, last);
+  // std::vector<std::string> argv;
+  // argv.reserve(detail::narrow_cast<size_t>(std::distance(first, last) + 1));
+  // const auto name = invocation.name();
+  // argv.emplace_back(name.begin(), name.end());
+  // argv.insert(argv.end(), first, last);
   caf::error err;
-  self->send(node, std::move(argv), options);
+  // self->send(node, std::move(argv), invocation.options);
+  self->send(node, std::move(invocation));
   self->receive(
     [&](const caf::down_msg&) {
       err = ec::remote_node_down;

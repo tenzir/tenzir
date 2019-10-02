@@ -44,18 +44,18 @@ using namespace caf;
 
 namespace vast::system {
 
-caf::message sink_command([[maybe_unused]] const command& cmd,
-                          actor_system& sys, caf::actor snk,
-                          caf::settings& options,
-                          command::argument_iterator first,
-                          command::argument_iterator last) {
+caf::message sink_command(const command::invocation& invocation,
+                          actor_system& sys, caf::actor snk) {
+  auto first = invocation.arguments.begin();
+  auto last = invocation.arguments.end();
   // Read query from input file, STDIN or CLI arguments.
   std::string query;
   auto assign_query = [&](std::istream& in) {
     query.assign(std::istreambuf_iterator<char>{in},
                  std::istreambuf_iterator<char>{});
   };
-  if (auto fname = caf::get_if<std::string>(&options, "export.read")) {
+  if (auto fname = caf::get_if<std::string>(&invocation.options, "export."
+                                                                 "read")) {
     // Sanity check.
     if (first != last) {
       auto err = make_error(ec::parse_error, "got a query on the command line "
@@ -89,8 +89,8 @@ caf::message sink_command([[maybe_unused]] const command& cmd,
     return make_message(std::move(err));
   }
   // Transform expression if needed, e.g., for PCAP sink.
-  if (cmd.name == "pcap") {
-    VAST_DEBUG(&cmd, "restricts expression to PCAP packets");
+  if (invocation.name() == "pcap") {
+    VAST_DEBUG(&invocation, "restricts expression to PCAP packets");
     // We parse the query expression first, work on the AST, and then render
     // the expression again to avoid performing brittle string manipulations.
     auto expr = to<expression>(query);
@@ -101,13 +101,13 @@ caf::message sink_command([[maybe_unused]] const command& cmd,
     auto pred = predicate{extractor, equal, data{"pcap.packet"}};
     auto ast = conjunction{std::move(pred), std::move(*expr)};
     query = to_string(ast);
-    VAST_DEBUG(&cmd, "transformed expression to", query);
+    VAST_DEBUG(&invocation, "transformed expression to", query);
   }
   // Get a convenient and blocking way to interact with actors.
   scoped_actor self{sys};
   // Get VAST node.
-  auto node_opt = spawn_or_connect_to_node(self, "export.node", options,
-                                           content(sys.config()));
+  auto node_opt = spawn_or_connect_to_node(
+    self, "export.node", invocation.options, content(sys.config()));
   if (auto err = caf::get_if<caf::error>(&node_opt))
     return caf::make_message(std::move(*err));
   auto& node = caf::holds_alternative<caf::actor>(node_opt)
@@ -119,20 +119,18 @@ caf::message sink_command([[maybe_unused]] const command& cmd,
   auto guard = signal_monitor::run_guarded(sig_mon_thread, sys, 750ms, self);
   // Spawn exporter at the node.
   actor exp;
-  std::vector<std::string> args{"spawn", "exporter"};
-  args.emplace_back(std::move(query));
-  VAST_DEBUG(&cmd, "spawns exporter with parameters:", args);
+  auto node_invocation
+    = command::invocation{invocation.options, "spawn exporter", {query}};
+  VAST_DEBUG(&invocation, "spawns exporter with parameters:", node_invocation);
   error err;
-  self->request(node, infinite, std::move(args), options).receive(
-    [&](actor& a) {
-      exp = std::move(a);
-      if (!exp)
-        err = make_error(ec::invalid_result, "remote spawn returned nullptr");
-    },
-    [&](error& e) {
-      err = std::move(e);
-    }
-  );
+  self->request(node, infinite, std::move(node_invocation))
+    .receive(
+      [&](actor& a) {
+        exp = std::move(a);
+        if (!exp)
+          err = make_error(ec::invalid_result, "remote spawn returned nullptr");
+      },
+      [&](error& e) { err = std::move(e); });
   if (err) {
     self->send_exit(snk, exit_reason::user_shutdown);
     return caf::make_message(std::move(err));
@@ -141,7 +139,8 @@ caf::message sink_command([[maybe_unused]] const command& cmd,
     .receive(
       [&](const std::string& id, system::registry& reg) {
         // Assign accountant to sink.
-        VAST_DEBUG(&cmd, "assigns accountant from node", id, "to new sink");
+        VAST_DEBUG(&invocation, "assigns accountant from node", id,
+                   "to new sink");
         auto er = reg.components[id].find("accountant");
         if (er != reg.components[id].end()) {
           auto accountant = er->second.actor;
@@ -159,36 +158,37 @@ caf::message sink_command([[maybe_unused]] const command& cmd,
   self->monitor(snk);
   self->monitor(exp);
   auto stop = false;
-  self->do_receive(
-    [&](down_msg& msg) {
-      if (msg.source == node)  {
-        VAST_DEBUG_ANON(__func__, "received DOWN from node");
-        self->send_exit(snk, exit_reason::user_shutdown);
-        self->send_exit(exp, exit_reason::user_shutdown);
-      } else if (msg.source == exp) {
-        VAST_DEBUG(&cmd, "received DOWN from exporter");
-        self->send_exit(snk, exit_reason::user_shutdown);
-      } else if (msg.source == snk) {
-        VAST_DEBUG(&cmd, "received DOWN from sink");
-        self->send_exit(exp, exit_reason::user_shutdown);
-      } else {
-        VAST_ASSERT(!"received DOWN from inexplicable actor");
-      }
-      if (msg.reason) {
-        VAST_WARNING(
-          &cmd, "received error message:", self->system().render(msg.reason));
-        err = std::move(msg.reason);
-      }
-      stop = true;
-    },
-    [&](system::signal_atom, int signal) {
-      VAST_DEBUG(&cmd, "got " << ::strsignal(signal));
-      if (signal == SIGINT || signal == SIGTERM) {
-        self->send_exit(exp, exit_reason::user_shutdown);
-        self->send_exit(snk, exit_reason::user_shutdown);
-      }
-    }
-  ).until([&] { return stop; });
+  self
+    ->do_receive(
+      [&](down_msg& msg) {
+        if (msg.source == node) {
+          VAST_DEBUG_ANON(__func__, "received DOWN from node");
+          self->send_exit(snk, exit_reason::user_shutdown);
+          self->send_exit(exp, exit_reason::user_shutdown);
+        } else if (msg.source == exp) {
+          VAST_DEBUG(&invocation, "received DOWN from exporter");
+          self->send_exit(snk, exit_reason::user_shutdown);
+        } else if (msg.source == snk) {
+          VAST_DEBUG(&invocation, "received DOWN from sink");
+          self->send_exit(exp, exit_reason::user_shutdown);
+        } else {
+          VAST_ASSERT(!"received DOWN from inexplicable actor");
+        }
+        if (msg.reason) {
+          VAST_WARNING(&invocation, "received error message:",
+                       self->system().render(msg.reason));
+          err = std::move(msg.reason);
+        }
+        stop = true;
+      },
+      [&](system::signal_atom, int signal) {
+        VAST_DEBUG(&invocation, "got " << ::strsignal(signal));
+        if (signal == SIGINT || signal == SIGTERM) {
+          self->send_exit(exp, exit_reason::user_shutdown);
+          self->send_exit(snk, exit_reason::user_shutdown);
+        }
+      })
+    .until([&] { return stop; });
   if (err)
     return caf::make_message(std::move(err));
   return caf::none;

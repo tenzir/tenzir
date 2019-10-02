@@ -29,6 +29,7 @@ namespace vast::system {
 
 caf::expected<scope_linked_actor>
 spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
+  using namespace std::string_literals;
   // Fetch values from config.
   auto accounting = !get_or(opts, "system.disable-accounting", false);
   auto id = get_or(opts, "system.node-id", defaults::system::node_id);
@@ -39,8 +40,12 @@ spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
   scope_linked_actor node{self->spawn(system::node, id, abs_dir)};
   auto spawn_component = [&](std::string name) {
     caf::error result;
-    std::vector<std::string> args{"spawn", std::move(name)};
-    self->request(node.get(), caf::infinite, std::move(args))
+    // std::vector<std::string> args{"spawn", std::move(name)};
+    command::invocation invocation;
+    invocation.full_name = "spawn "s + std::move(name);
+    invocation.arguments = {};
+    invocation.options = opts;
+    self->request(node.get(), caf::infinite, std::move(invocation))
       .receive([](const caf::actor&) { /* nop */ },
                [&](caf::error& e) { result = std::move(e); });
     return result;

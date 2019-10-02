@@ -14,6 +14,7 @@
 #pragma once
 
 #include "vast/aliases.hpp"
+#include "vast/command.hpp"
 #include "vast/fwd.hpp"
 
 #include <caf/fwd.hpp>
@@ -26,7 +27,7 @@ namespace vast::system {
 /// Wraps arguments for spawn functions.
 struct spawn_arguments {
   /// Current command executed by the node actor.
-  const command& cmd;
+  const command::invocation& invocation;
 
   /// Path to persistent node state.
   const path& dir;
@@ -34,24 +35,15 @@ struct spawn_arguments {
   /// Label for the new component.
   const std::string& label;
 
-  /// User-defined options for spawning the component.
-  const caf::settings& options;
-
-  /// Iterator to the first CLI argument.
-  cli_argument_iterator first;
-
-  /// Past-the-end iterator for CLI arguments.
-  cli_argument_iterator last;
-
   /// Returns whether CLI arguments are empty.
   bool empty() const noexcept {
-    return first == last;
+    return invocation.arguments.empty();
   }
 };
 
 template <class Inspector>
 auto inspect(Inspector& f, spawn_arguments& x) {
-  return f(caf::meta::type_name("spawn_arguments"), x.dir, x.label, x.options);
+  return f(caf::meta::type_name("spawn_arguments"), x.dir, x.label);
 }
 
 /// Attempts to parse `[args.first, args.last)` as ::expression and returns a

@@ -11,34 +11,34 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include <cstdint>
-#include <vector>
-
-#include <caf/actor_system_config.hpp>
-
-#include "vast/config.hpp"
+#include "vast/detail/add_message_types.hpp"
 
 #include "vast/bitmap.hpp"
+#include "vast/command.hpp"
+#include "vast/config.hpp"
 #include "vast/event.hpp"
 #include "vast/expression.hpp"
 #include "vast/operator.hpp"
 #include "vast/query_options.hpp"
 #include "vast/schema.hpp"
-#include "vast/table_slice.hpp"
-#include "vast/type.hpp"
-#include "vast/uuid.hpp"
-
 #include "vast/system/accountant.hpp"
 #include "vast/system/query_status.hpp"
 #include "vast/system/replicated_store.hpp"
 #include "vast/system/tracker.hpp"
+#include "vast/table_slice.hpp"
+#include "vast/type.hpp"
+#include "vast/uuid.hpp"
 
-#include "vast/detail/add_message_types.hpp"
+#include <caf/actor_system_config.hpp>
+
+#include <cstdint>
+#include <vector>
 
 namespace vast::detail {
 
 void add_message_types(caf::actor_system_config& cfg) {
   cfg.add_message_type<bitmap>("vast::bitmap");
+  cfg.add_message_type<command::invocation>("vast::command::invocation");
   cfg.add_message_type<data>("vast::data");
   cfg.add_message_type<event>("vast::event");
   cfg.add_message_type<query_options>("vast::query_options");

@@ -13,6 +13,8 @@
 
 #pragma once
 
+#include "vast/detail/string.hpp"
+
 #include <caf/config_option_set.hpp>
 #include <caf/error.hpp>
 #include <caf/fwd.hpp>
@@ -33,13 +35,44 @@ public:
   /// Iterates over CLI arguments.
   using argument_iterator = std::vector<std::string>::const_iterator;
 
+  /// Wraps invocation of a single command for separating the parsing of
+  /// program argument from running the command.
+  struct invocation {
+    // -- member variables -----------------------------------------------------
+
+    /// Stores user-defined program options.
+    caf::settings options;
+
+    /// Holds the fully-qualified name of the scheduled command.
+    std::string full_name;
+
+    /// Holds the CLI arguments.
+    std::vector<std::string> arguments;
+
+    // -- utility methods ------------------------------------------------------
+
+    /// Holds the name of the scheduled command.
+    std::string_view name() const {
+      std::string_view result = full_name;
+      result.remove_prefix(
+        std::min(result.find_last_of(' ') + 1, result.size()));
+      return result;
+    }
+
+    // -- mutators -------------------------------------------------------------
+
+    /// Sets the members `full_nane`, and `arguments`.
+    void assign(const command* cmd, argument_iterator first,
+                argument_iterator last) {
+      full_name = cmd->full_name();
+      arguments = {first, last};
+    }
+  };
   /// Stores child commands.
   using children_list = std::vector<std::unique_ptr<command>>;
 
   /// Delegates to the command implementation logic.
-  using fun = caf::message (*)(const command&, caf::actor_system&,
-                               caf::settings&, argument_iterator,
-                               argument_iterator);
+  using fun = caf::message (*)(const command::invocation&, caf::actor_system&);
 
   /// Builds config options for the same category.
   class opts_builder {
@@ -71,34 +104,6 @@ public:
 
     /// Our set-under-construction.
     caf::config_option_set xs_;
-  };
-
-  /// Wraps invocation of a single command for separating the parsing of
-  /// program argument from running the command.
-  struct invocation {
-    // -- member variables -----------------------------------------------------
-
-    /// Stores user-defined program options.
-    caf::settings options;
-
-    /// Points to the scheduled command.
-    const command* target = nullptr;
-
-    /// Points to the first CLI argument.
-    argument_iterator first;
-
-    /// Points past-the-end of CLI arguments.
-    argument_iterator last;
-
-    // -- mutators -------------------------------------------------------------
-
-    /// Sets the members `target`, `first`, and `last`.
-    void assign(const command* cmd, argument_iterator first,
-                argument_iterator last) {
-      target = cmd;
-      this->first = first;
-      this->last = last;
-    }
   };
 
   // -- member variables -------------------------------------------------------
@@ -190,8 +195,9 @@ public:
 /// Parses all program arguments without running the command.
 /// @returns an error for malformed input, `none` otherwise.
 /// @relates command
-caf::expected<command::invocation> parse(const command& root, command::argument_iterator first,
-                          command::argument_iterator last);
+caf::expected<command::invocation>
+parse(const command& root, command::argument_iterator first,
+      command::argument_iterator last);
 
 /// Prepares `cfg` before using it to initialize an `actor_system` with it.
 /// This includes: (1) merging all settings from parsed CLI settings to `cfg`,
@@ -209,35 +215,36 @@ bool init_config(caf::actor_system_config& cfg, const command::invocation& from,
 /// Runs the command and blocks until execution completes.
 /// @returns a type-erased result or a wrapped `caf::error`.
 /// @relates command
-caf::expected<caf::message> run(command::invocation& invocation, caf::actor_system& sys);
+caf::expected<caf::message>
+run(command::invocation& invocation, caf::actor_system& sys);
+
+/// Runs the command and blocks until execution completes.
+/// @returns a type-erased result or a wrapped `caf::error`.
+/// @relates command
+caf::expected<caf::message>
+run(const command& cmd, caf::actor_system& sys,
+    command::argument_iterator first, command::argument_iterator last);
 
 /// Runs the command and blocks until execution completes.
 /// @returns a type-erased result or a wrapped `caf::error`.
 /// @relates command
 caf::expected<caf::message> run(const command& cmd, caf::actor_system& sys,
-                 command::argument_iterator first,
-                 command::argument_iterator last);
+                                const std::vector<std::string>& args);
 
 /// Runs the command and blocks until execution completes.
 /// @returns a type-erased result or a wrapped `caf::error`.
 /// @relates command
-caf::expected<caf::message> run(const command& cmd, caf::actor_system& sys,
-                 const std::vector<std::string>& args);
+caf::expected<caf::message>
+run(const command& cmd, caf::actor_system& sys,
+    caf::settings predefined_options, command::argument_iterator first,
+    command::argument_iterator last);
 
 /// Runs the command and blocks until execution completes.
 /// @returns a type-erased result or a wrapped `caf::error`.
 /// @relates command
-caf::expected<caf::message> run(const command& cmd, caf::actor_system& sys,
-                 caf::settings predefined_options,
-                 command::argument_iterator first,
-                 command::argument_iterator last);
-
-/// Runs the command and blocks until execution completes.
-/// @returns a type-erased result or a wrapped `caf::error`.
-/// @relates command
-caf::expected<caf::message> run(const command& cmd, caf::actor_system& sys,
-                 caf::settings predefined_options,
-                 const std::vector<std::string>& args);
+caf::expected<caf::message>
+run(const command& cmd, caf::actor_system& sys,
+    caf::settings predefined_options, const std::vector<std::string>& args);
 
 /// Traverses the command hierarchy until finding the root.
 /// @returns the root command.
@@ -280,6 +287,12 @@ void for_each(const command& cmd, F fun) {
   fun(cmd);
   for (auto& ptr : cmd.children)
     for_each(*ptr, fun);
+}
+
+template <class Inspector>
+auto inspect(Inspector& f, command::invocation& x) {
+  return f(caf::meta::type_name("command::invocation"), x.full_name,
+           x.arguments, x.options);
 }
 
 } // namespace vast

@@ -66,11 +66,13 @@ int main(int argc, char** argv) {
     return EXIT_FAILURE;
   }
   if (get_or(maybe_invocation->options, "help", false)) {
-    helptext(*maybe_invocation->target, std::cerr);
+    // FIXME re-enable later
+    // helptext(*maybe_invocation->target, std::cerr);
     return EXIT_SUCCESS;
   }
   if (get_or(maybe_invocation->options, "documentation", false)) {
-    documentationtext(*maybe_invocation->target, std::cerr);
+    // FIXME re-enable later
+    // documentationtext(*maybe_invocation->target, std::cerr);
     return EXIT_SUCCESS;
   }
   // Initialize actor system (and thereby CAF's logger).

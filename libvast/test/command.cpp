@@ -29,15 +29,13 @@ using namespace std::string_literals;
 
 namespace {
 
-caf::message foo(const command& cmd, caf::actor_system&, caf::settings&,
-                 command::argument_iterator, command::argument_iterator) {
-  CHECK_EQUAL(cmd.name, "foo");
+caf::message foo(const command::invocation& invocation, caf::actor_system&) {
+  CHECK_EQUAL(invocation.name(), "foo");
   return caf::make_message("foo");
 }
 
-caf::message bar(const command& cmd, caf::actor_system&, caf::settings&,
-                 command::argument_iterator, command::argument_iterator) {
-  CHECK_EQUAL(cmd.name, "bar");
+caf::message bar(const command::invocation& invocation, caf::actor_system&) {
+  CHECK_EQUAL(invocation.name(), "bar");
   return caf::make_message("bar");
 }
 

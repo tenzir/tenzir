@@ -39,12 +39,12 @@ namespace vast::system {
 
 using namespace std::chrono_literals;
 
-caf::message
-start_command_impl(start_command_extra_steps extra_steps, const command&,
-                   caf::actor_system& sys, caf::settings& options,
-                   [[maybe_unused]] command::argument_iterator begin,
-                   [[maybe_unused]] command::argument_iterator end) {
-  VAST_TRACE(VAST_ARG(options), VAST_ARG("args", begin, end));
+caf::message start_command_impl(start_command_extra_steps extra_steps,
+                                const command::invocation& invocation,
+                                caf::actor_system& sys) {
+  VAST_TRACE(VAST_ARG(invocation.options),
+             VAST_ARG("args", invocation.arguments.begin(),
+                      invocation.arguments.end()));
   // Fetch SSL settings from config.
   auto& sys_cfg = sys.config();
   auto use_encryption = !sys_cfg.openssl_certificate.empty()
@@ -54,7 +54,8 @@ start_command_impl(start_command_extra_steps extra_steps, const command&,
                         || !sys_cfg.openssl_cafile.empty();
   // Construct an endpoint.
   endpoint node_endpoint;
-  auto str = get_or(options, "system.endpoint", defaults::system::endpoint);
+  auto str
+    = get_or(invocation.options, "system.endpoint", defaults::system::endpoint);
   if (!parsers::endpoint(str, node_endpoint))
     return caf::make_message(
       make_error(ec::parse_error, "invalid endpoint", str));
@@ -85,7 +86,7 @@ start_command_impl(start_command_extra_steps extra_steps, const command&,
                  << ':' << *bound_port);
   // Run user-defined extra code.
   if (extra_steps != nullptr)
-    if (auto err = extra_steps(self, options, node))
+    if (auto err = extra_steps(self, invocation.options, node))
       return caf::make_message(std::move(err));
   // Start signal monitor.
   std::thread sig_mon_thread;
@@ -113,12 +114,12 @@ start_command_impl(start_command_extra_steps extra_steps, const command&,
   return caf::make_message(std::move(err));
 }
 
-caf::message start_command(const command& cmd, caf::actor_system& sys,
-                           caf::settings& options,
-                           command::argument_iterator begin,
-                           command::argument_iterator end) {
-  VAST_TRACE(VAST_ARG(options), VAST_ARG("args", begin, end));
-  return start_command_impl(nullptr, cmd, sys, options, begin, end);
+caf::message
+start_command(const command::invocation& invocation, caf::actor_system& sys) {
+  VAST_TRACE(VAST_ARG(invocation.options),
+             VAST_ARG("args", invocation.arguments.begin(),
+                      invocation.arguments.end()));
+  return start_command_impl(nullptr, invocation, sys);
 }
 
 } // namespace vast::system
