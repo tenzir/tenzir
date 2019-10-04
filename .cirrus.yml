@@ -18,6 +18,9 @@ style_task:
     - git fetch origin
     - export PACKAGE_NAME="$(date +%Y-%m-%d)-VAST-$(git describe)-$(uname -s)-$BUILD_TYPE"
     - echo "$PACKAGE_NAME" > PACKAGE_NAME
+    - export ARTIFACT_NAME="VAST-$CIRRUS_PR-$(uname -s)-$BUILD_TYPE-$CIRRUS_CHANGE_IN_REPO"
+    - echo "$ARTIFACT_NAME" > ARTIFACT_NAME
+    - echo $UPLOAD_KEY | base64 --decode > upload_key && chmod 600 upload_key
     - cat PACKAGE_NAME
     - cmake --version
     - ${CXX} --version
@@ -34,16 +37,20 @@ style_task:
     - cmake --build build --target all
   unit_test_script:
     - cmake --build build --target test
-  integration_test_script:
-    - cmake --build build --target integration
+  integration_test_script: >
+    if ! cmake --build build --target integration; then
+      tar -czf $(cat ARTIFACT_NAME).tar.gz -C build vast-integration-test
+      scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i upload_key \
+        $(cat ARTIFACT_NAME).tar.gz mule@tenzir.dfn-cert.de:integration/vast/
+      echo "Download with: \`scp tenzir.dfn-cert.de:/home/mule/integration/vast/$(cat ARTIFACT_NAME).tar.gz .\`"
+      false
+    fi
   install_script:
     - cmake --build build --target install
   package_script:
     - cmake --build build --target package
   upload_script: >
     if [ "$CIRRUS_BRANCH" = "master" ]; then
-      echo $UPLOAD_KEY | base64 --decode > upload_key
-      chmod 600 upload_key
       scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i upload_key build/$(cat PACKAGE_NAME).tar.gz mule@tenzir.dfn-cert.de:artifacts/
     fi
 
