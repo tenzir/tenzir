@@ -218,34 +218,6 @@ bool init_config(caf::actor_system_config& cfg, const command::invocation& from,
 caf::expected<caf::message>
 run(command::invocation& invocation, caf::actor_system& sys);
 
-/// Runs the command and blocks until execution completes.
-/// @returns a type-erased result or a wrapped `caf::error`.
-/// @relates command
-caf::expected<caf::message>
-run(const command& cmd, caf::actor_system& sys,
-    command::argument_iterator first, command::argument_iterator last);
-
-/// Runs the command and blocks until execution completes.
-/// @returns a type-erased result or a wrapped `caf::error`.
-/// @relates command
-caf::expected<caf::message> run(const command& cmd, caf::actor_system& sys,
-                                const std::vector<std::string>& args);
-
-/// Runs the command and blocks until execution completes.
-/// @returns a type-erased result or a wrapped `caf::error`.
-/// @relates command
-caf::expected<caf::message>
-run(const command& cmd, caf::actor_system& sys,
-    caf::settings predefined_options, command::argument_iterator first,
-    command::argument_iterator last);
-
-/// Runs the command and blocks until execution completes.
-/// @returns a type-erased result or a wrapped `caf::error`.
-/// @relates command
-caf::expected<caf::message>
-run(const command& cmd, caf::actor_system& sys,
-    caf::settings predefined_options, const std::vector<std::string>& args);
-
 /// Traverses the command hierarchy until finding the root.
 /// @returns the root command.
 const command& root(const command& cmd);

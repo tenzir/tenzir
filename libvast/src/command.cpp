@@ -65,13 +65,14 @@ command* command::add(std::string_view child_name,
     .get();
 }
 
-caf::error
-parse_impl(command::invocation& result, const command& cmd,
-           command::argument_iterator first, command::argument_iterator last) {
+caf::error parse_impl(command::invocation& result, const command& cmd,
+                      command::argument_iterator first,
+                      command::argument_iterator last, const command** target) {
   using caf::get_or;
   using caf::make_message;
   VAST_TRACE(VAST_ARG(std::string(cmd.name)), VAST_ARG("args", first, last));
   // Parse arguments for this command.
+  *target = &cmd;
   auto [state, position] = cmd.options.parse(result.options, first, last);
   result.assign(&cmd, position, last);
   if (get_or(result.options, "help", false))
@@ -79,7 +80,7 @@ parse_impl(command::invocation& result, const command& cmd,
   if (get_or(result.options, "documentation", false))
     return caf::none;
   bool has_subcommand;
-  switch(state) {
+  switch (state) {
     default:
       return make_error(ec::unrecognized_option, cmd.full_name(), *position,
                         to_string(state));
@@ -124,15 +125,24 @@ parse_impl(command::invocation& result, const command& cmd,
                         [p = position](auto& x) { return x->name == *p; });
   if (i == cmd.children.end())
     return make_error(ec::invalid_subcommand, cmd.full_name(), *position);
-  return parse_impl(result, **i, position + 1, last);
+  return parse_impl(result, **i, position + 1, last, target);
 }
 
 caf::expected<command::invocation>
 parse(const command& root, command::argument_iterator first,
       command::argument_iterator last) {
   command::invocation result;
-  if (auto err = parse_impl(result, root, first, last))
+  const command* target;
+  if (auto err = parse_impl(result, root, first, last, &target))
     return err;
+  if (get_or(result.options, "help", false)) {
+    helptext(*target, std::cerr);
+    return caf::no_error;
+  }
+  if (get_or(result.options, "documentation", false)) {
+    documentationtext(*target, std::cerr);
+    return caf::no_error;
+  }
   return result;
 }
 
@@ -236,51 +246,11 @@ bool init_config(caf::actor_system_config& cfg, const command::invocation& from,
 
 caf::expected<caf::message>
 run(command::invocation& invocation, caf::actor_system& sys) {
-  // FIXME this had to be removed
-  // if (get_or(invocation.options, "help", false)) {
-  //   helptext(invocation, std::cerr);
-  //   return caf::none;
-  // }
-  // if (get_or(invocation.options, "documentation", false)) {
-  //   documentationtext(invocation, std::cerr);
-  //   return caf::none;
-  // }
   if (auto search_result = command::factory.find(invocation.full_name);
       search_result != command::factory.end())
     return std::invoke(search_result->second, invocation, sys);
   // No callback was registered for this command
   return make_error(ec::missing_subcommand, invocation.full_name, "");
-}
-
-caf::expected<caf::message>
-run(const command& cmd, caf::actor_system& sys,
-    command::argument_iterator first, command::argument_iterator last) {
-  auto maybe_invocation = parse(cmd, first, last);
-  if (!maybe_invocation)
-    return maybe_invocation.error();
-  return run(*maybe_invocation, sys);
-}
-
-caf::expected<caf::message> run(const command& cmd, caf::actor_system& sys,
-                                const std::vector<std::string>& args) {
-  return run(cmd, sys, args.begin(), args.end());
-}
-
-caf::expected<caf::message>
-run(const command& cmd, caf::actor_system& sys,
-    caf::settings predefined_options, command::argument_iterator first,
-    command::argument_iterator last) {
-  command::invocation invocation;
-  invocation.options = std::move(predefined_options);
-  if (auto err = parse_impl(invocation, cmd, first, last))
-    return err;
-  return run(invocation, sys);
-}
-
-caf::expected<caf::message>
-run(const command& cmd, caf::actor_system& sys,
-    caf::settings predefined_options, const std::vector<std::string>& args) {
-  return run(cmd, sys, std::move(predefined_options), args.begin(), args.end());
 }
 
 const command& root(const command& cmd) {

@@ -65,16 +65,6 @@ int main(int argc, char** argv) {
     render_error(root, maybe_invocation.error(), std::cerr);
     return EXIT_FAILURE;
   }
-  if (get_or(maybe_invocation->options, "help", false)) {
-    // FIXME re-enable later
-    // helptext(*maybe_invocation->target, std::cerr);
-    return EXIT_SUCCESS;
-  }
-  if (get_or(maybe_invocation->options, "documentation", false)) {
-    // FIXME re-enable later
-    // documentationtext(*maybe_invocation->target, std::cerr);
-    return EXIT_SUCCESS;
-  }
   // Initialize actor system (and thereby CAF's logger).
   if (!init_config(cfg, *maybe_invocation, std::cerr))
     return EXIT_FAILURE;
