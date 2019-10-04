@@ -71,7 +71,7 @@ auto sink_opts(std::string_view category) {
 
 namespace vast::system {
 
-vast::command make_application() {
+std::pair<vast::command, vast::command::factory> make_application() {
   using caf::atom_value;
   // Returns default options for commands.
   auto opts = [](std::string_view category = "global") {
@@ -83,6 +83,7 @@ vast::command make_application() {
     "list of paths to look for schema files"
     " ([" VAST_INSTALL_PREFIX "/share/vast/schema])";
   // clang-format on
+  command::factory fact = {};
   command root;
   root.options
     = opts("?system")
@@ -99,36 +100,36 @@ vast::command make_application() {
   // Add standalone commands.
   root.add("version", opts())
     ->describe("prints the software version")
-    ->run(version_command);
-  root.add("start", opts())->describe("starts a node")->run(start_command);
-  root.add("stop", opts())->describe("stops a node")->run(remote_command);
+    ->run(version_command, fact);
+  root.add("start", opts())->describe("starts a node")->run(start_command, fact);
+  root.add("stop", opts())->describe("stops a node")->run(remote_command, fact);
   root.add("kill", opts())
     ->describe("terminates a component")
-    ->run(remote_command);
+    ->run(remote_command, fact);
   root.add("peer", opts())
     ->describe("peers with another node")
-    ->run(remote_command);
+    ->run(remote_command, fact);
   root.add("status", opts())
     ->describe("shows various properties of a topology")
-    ->run(remote_command);
+    ->run(remote_command, fact);
   root.add("send", opts())
     ->describe("sends a message to a registered actor")
-    ->run(remote_command)
+    ->run(remote_command, fact)
     ->hide();
   // Add "spawn" command and its children.
   auto spawn = root.add("spawn", opts())
                  ->describe("creates a new component")
-                 ->run(remote_command);
+                 ->run(remote_command, fact);
   spawn->add("accountant", opts())
     ->describe("spawns the accountant")
-    ->run(remote_command);
+    ->run(remote_command, fact);
   spawn
     ->add("archive", opts()
                        .add<size_t>("segments,s", "number of cached segments")
                        .add<size_t>("max-segment-size,m", "maximum segment "
                                                           "size in MB"))
     ->describe("creates a new archive")
-    ->run(remote_command);
+    ->run(remote_command, fact);
   spawn
     ->add("exporter",
           opts()
@@ -137,13 +138,13 @@ vast::command make_application() {
             .add<bool>("unified,u", "marks a query as unified")
             .add<uint64_t>("events,e", "maximum number of results"))
     ->describe("creates a new exporter")
-    ->run(remote_command);
+    ->run(remote_command, fact);
   spawn
     ->add("importer", opts().add<size_t>("ids,n", "number of initial IDs to "
                                                   "request "
                                                   "(deprecated)"))
     ->describe("creates a new importer")
-    ->run(remote_command);
+    ->run(remote_command, fact);
   spawn
     ->add(
       "index",
@@ -154,13 +155,13 @@ vast::command make_application() {
                                       "partitions")
         .add<size_t>("max-queries,q", "maximum number of concurrent queries"))
     ->describe("creates a new index")
-    ->run(remote_command);
+    ->run(remote_command, fact);
   spawn
     ->add("consensus", opts().add<raft::server_id>("id,i", "the server ID of "
                                                            "the consensus "
                                                            "module"))
     ->describe("creates a new consensus")
-    ->run(remote_command);
+    ->run(remote_command, fact);
   spawn
     ->add("profiler", opts()
                         .add<bool>("cpu,c", "start the CPU profiler")
@@ -168,7 +169,7 @@ vast::command make_application() {
                         .add<size_t>("resolution,r", "seconds between "
                                                      "measurements"))
     ->describe("creates a new profiler")
-    ->run(remote_command);
+    ->run(remote_command, fact);
   // Add "spawn source" command and its children.
   auto source
     = spawn
@@ -189,22 +190,22 @@ vast::command make_application() {
             .add<int64_t>("pseudo-realtime,p", "factor c delaying trace "
                                                "packets by 1/c"))
     ->describe("creates a new PCAP source")
-    ->run(remote_command);
+    ->run(remote_command, fact);
   source
     ->add("test", opts()
                     .add<size_t>("seed,s", "the PRNG seed")
                     .add<size_t>("events,n", "number of events to generate"))
     ->describe("creates a new test source")
-    ->run(remote_command);
+    ->run(remote_command, fact);
   source->add("zeek", opts())
     ->describe("creates a new Zeek source")
-    ->run(remote_command);
+    ->run(remote_command, fact);
   source->add("bgpdump", opts())
     ->describe("creates a new BGPdump source")
-    ->run(remote_command);
+    ->run(remote_command, fact);
   source->add("mrt", opts())
     ->describe("creates a new MRT source")
-    ->run(remote_command);
+    ->run(remote_command, fact);
   // Add "spawn sink" command and its children.
   auto sink
     = spawn
@@ -216,19 +217,19 @@ vast::command make_application() {
     ->add("pcap", opts().add<size_t>("flush,f", "flush to disk after this many "
                                                 "packets"))
     ->describe("creates a new PCAP sink")
-    ->run(remote_command);
+    ->run(remote_command, fact);
   sink->add("zeek", opts())
     ->describe("creates a new Zeek sink")
-    ->run(remote_command);
+    ->run(remote_command, fact);
   sink->add("ascii", opts())
     ->describe("creates a new ASCII sink")
-    ->run(remote_command);
+    ->run(remote_command, fact);
   sink->add("csv", opts())
     ->describe("creates a new CSV sink")
-    ->run(remote_command);
+    ->run(remote_command, fact);
   sink->add("json", opts())
     ->describe("creates a new JSON sink")
-    ->run(remote_command);
+    ->run(remote_command, fact);
   // Add "import" command and its children.
   auto import_
     = root
@@ -244,23 +245,24 @@ vast::command make_application() {
         ->describe("imports data from STDIN or file");
   import_->add("zeek", source_opts("?import.zeek"))
     ->describe("imports Zeek logs from STDIN or file")
-    ->run(READER(zeek));
+    ->run(READER(zeek), fact);
   import_->add("mrt", source_opts("?import.mrt"))
     ->describe("imports MRT logs from STDIN or file")
-    ->run(READER(mrt));
+    ->run(READER(mrt), fact);
   import_->add("bgpdump", source_opts("?import.bgpdump"))
     ->describe("imports BGPdump logs from STDIN or file")
-    ->run(READER(bgpdump));
+    ->run(READER(bgpdump), fact);
   import_->add("csv", source_opts("?import.csv"))
     ->describe("imports CSV logs from STDIN or file")
-    ->run(READER(csv));
+    ->run(READER(csv), fact);
   namespace fj = format::json;
   import_->add("json", source_opts("?import.json"))
     ->describe("imports json with schema")
-    ->run(reader_command<fj::reader<>, defaults::import::json>);
+    ->run(reader_command<fj::reader<>, defaults::import::json>, fact);
   import_->add("suricata", source_opts("?import.suricata"))
     ->describe("imports suricata eve json")
-    ->run(reader_command<fj::reader<fj::suricata>, defaults::import::suricata>);
+    ->run(reader_command<fj::reader<fj::suricata>, defaults::import::suricata>,
+          fact);
   import_
     ->add("test", opts("?import.test")
                     .add<size_t>("seed", "the random seed")
@@ -268,7 +270,7 @@ vast::command make_application() {
                                                        "schema")
                     .add<std::string>("schema,S", "alternate schema as string"))
     ->describe("imports random data for testing or benchmarking")
-    ->run(GENERATOR(test));
+    ->run(GENERATOR(test), fact);
   // Add "export" command and its children.
   auto export_
     = root
@@ -284,16 +286,16 @@ vast::command make_application() {
         ->describe("exports query results to STDOUT or file");
   export_->add("zeek", sink_opts("?export.zeek"))
     ->describe("exports query results in Zeek format")
-    ->run(WRITER(zeek));
+    ->run(WRITER(zeek), fact);
   export_->add("csv", sink_opts("?export.csv"))
     ->describe("exports query results in CSV format")
-    ->run(WRITER(csv));
+    ->run(WRITER(csv), fact);
   export_->add("ascii", sink_opts("?export.ascii"))
     ->describe("exports query results in ASCII format")
-    ->run(WRITER(ascii));
+    ->run(WRITER(ascii), fact);
   export_->add("json", sink_opts("?export.json"))
     ->describe("exports query results in JSON format")
-    ->run(WRITER(json));
+    ->run(WRITER(json), fact);
   // Add PCAP import and export commands when compiling with PCAP enabled.
 #ifdef VAST_HAVE_PCAP
   import_
@@ -310,7 +312,7 @@ vast::command make_application() {
             .add<size_t>("pseudo-realtime-factor,p", "factor c delaying "
                                                      "packets by 1/c"))
     ->describe("imports PCAP logs from STDIN or file")
-    ->run(pcap_reader_command);
+    ->run(pcap_reader_command, fact);
   export_
     ->add("pcap",
           opts("?export")
@@ -319,9 +321,9 @@ vast::command make_application() {
             .add<size_t>("flush-interval,f", "flush to disk after this many "
                                              "packets"))
     ->describe("exports query results in PCAP format")
-    ->run(pcap_writer_command);
+    ->run(pcap_writer_command, fact);
 #endif
-  return root;
+  return {std::move(root), std::move(fact)};
 }
 
 void render_error(const command& root, const caf::error& err,

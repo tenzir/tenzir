@@ -76,7 +76,10 @@ struct node_state {
   inline static command::invocation invocation = {};
 
   /// Maps command names (including parent command) to spawn functions.
-  inline static named_component_factories factories = {};
+  inline static named_component_factories component_factories = {};
+
+  /// Maps command names to functions.
+  inline static command::factory command_factory = {};
 };
 
 /// Spawns a node.

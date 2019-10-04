@@ -200,11 +200,10 @@ caf::error parse_impl(command::invocation& result, const command& cmd,
     put(result.options, "documentation", true);
     return caf::none;
   }
-  // Invoke cmd.run if no subcommand was defined.
   if (!has_subcommand) {
     // Commands without a run implementation require subcommands.
-    if (command::factory.find(cmd.full_name()) == command::factory.end())
-      return make_error(ec::missing_subcommand, cmd.full_name(), "");
+    // if (command::factory.find(cmd.full_name()) == command::factory.end())
+    //   return make_error(ec::missing_subcommand, cmd.full_name(), "");
     return caf::none;
   }
   // Consume CLI arguments if we have arguments but don't have subcommands.
@@ -342,9 +341,10 @@ bool init_config(caf::actor_system_config& cfg, const command::invocation& from,
 }
 
 caf::expected<caf::message>
-run(command::invocation& invocation, caf::actor_system& sys) {
-  if (auto search_result = command::factory.find(invocation.full_name);
-      search_result != command::factory.end())
+run(command::invocation& invocation, caf::actor_system& sys,
+    const command::factory& fact) {
+  if (auto search_result = fact.find(invocation.full_name);
+      search_result != fact.end())
     return std::invoke(search_result->second, invocation, sys);
   // No callback was registered for this command
   return make_error(ec::missing_subcommand, invocation.full_name, "");

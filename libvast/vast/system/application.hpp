@@ -18,12 +18,13 @@
 #include <memory>
 #include <string>
 #include <string_view>
+#include <utility>
 
 namespace vast::system {
 
 /// Creates the applications command tree based on a single root command.
 /// @returns the root command.
-command make_application();
+std::pair<vast::command, vast::command::factory> make_application();
 
 /// Formats a useful human readable error message on the output stream.
 /// @param root The root command of the application.

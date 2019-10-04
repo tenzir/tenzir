@@ -49,15 +49,14 @@ int main(int argc, char** argv) {
   if (!detail::adjust_resource_consumption())
     return EXIT_FAILURE;
   // Application setup.
-  auto root = make_application();
-  root.description = "manage a VAST topology";
+  auto [root, factory] = make_application();
+  root.describe("manage a VAST topology");
   root.name = argv[0];
   // We're only interested in the application name, not in its path. For
   // example, argv[0] might contain "./build/release/bin/vast" and we are only
   // interested in "vast".
-  auto find_slash = [&] { return root.name.find('/'); };
-  for (auto p = find_slash(); p != std::string_view::npos; p = find_slash())
-    root.name.remove_prefix(p + 1);
+  root.name.remove_prefix(
+    std::min(root.name.find_last_of('/') + 1, root.name.size()));
   // Parse CLI.
   auto maybe_invocation
     = parse(root, cfg.command_line.begin(), cfg.command_line.end());
@@ -89,7 +88,7 @@ int main(int argc, char** argv) {
     return EXIT_FAILURE;
   }
   // Dispatch to root command.
-  auto maybe_result = run(*maybe_invocation, sys);
+  auto maybe_result = run(*maybe_invocation, sys, factory);
   if (!maybe_result) {
     render_error(root, maybe_result.error(), std::cerr);
     return EXIT_FAILURE;

@@ -50,7 +50,8 @@ struct fixture {
     root.name = "vast";
   }
 
-  caf::variant<caf::none_t, std::string, caf::error> exec(std::string str) {
+  caf::variant<caf::none_t, std::string, caf::error>
+  exec(std::string str, const command::factory& factory) {
     options.clear();
     std::vector<std::string> xs;
     caf::split(xs, str, ' ', caf::token_compress_on);
@@ -58,7 +59,7 @@ struct fixture {
     if (!expected_inv)
       return expected_inv.error();
     invocation = std::move(*expected_inv);
-    auto result = run(invocation, sys);
+    auto result = run(invocation, sys, factory);
     if (!result)
       return result.error();
     if (result->empty())
@@ -93,57 +94,60 @@ TEST(names) {
 }
 
 TEST(flat command invocation) {
+  command::factory factory{};
   auto fptr = root
                 .add("foo", command::opts()
                               .add<int>("value,v", "some int")
                               .add<bool>("flag", "some flag"))
-                ->run(foo);
+                ->run(foo, factory);
   CHECK_EQUAL(fptr->name, "foo");
   CHECK_EQUAL(fptr->full_name(), "foo");
-  auto bptr = root.add("bar")->run(bar);
+  auto bptr = root.add("bar")->run(bar, factory);
   CHECK_EQUAL(bptr->name, "bar");
   CHECK_EQUAL(bptr->full_name(), "bar");
-  CHECK(is_error(exec("nop")));
-  CHECK(is_error(exec("bar --flag -v 42")));
-  CHECK(is_error(exec("--flag bar")));
+  CHECK(is_error(exec("nop", factory)));
+  CHECK(is_error(exec("bar --flag -v 42", factory)));
+  CHECK(is_error(exec("--flag bar", factory)));
   CHECK_EQUAL(get_or(options, "flag", false), false);
   CHECK_EQUAL(get_or(options, "value", 0), 0);
-  CHECK_EQUAL(exec("bar"), "bar"s);
-  CHECK_EQUAL(exec("foo --flag -v 42"), "foo"s);
+  CHECK_EQUAL(exec("bar", factory), "bar"s);
+  CHECK_EQUAL(exec("foo --flag -v 42", factory), "foo"s);
   CHECK_EQUAL(get_or(options, "flag", false), true);
   CHECK_EQUAL(get_or(options, "value", 0), 42);
 }
 
 TEST(nested command invocation) {
+  command::factory factory{};
   auto fptr = root
                 .add("foo", command::opts()
                               .add<int>("value,v", "some int")
                               .add<bool>("flag", "some flag"))
-                ->run(foo);
+                ->run(foo, factory);
   CHECK_EQUAL(fptr->name, "foo");
   CHECK_EQUAL(fptr->full_name(), "foo");
-  auto bptr = fptr->add("bar")->run(bar);
+  auto bptr = fptr->add("bar")->run(bar, factory);
   CHECK_EQUAL(bptr->name, "bar");
   CHECK_EQUAL(bptr->full_name(), "foo bar");
-  CHECK(is_error(exec("nop")));
-  CHECK(is_error(exec("bar --flag -v 42")));
-  CHECK(is_error(exec("foo --flag -v 42 --other-flag")));
-  CHECK_EQUAL(exec("foo --flag -v 42"), "foo"s);
+  CHECK(is_error(exec("nop", factory)));
+  CHECK(is_error(exec("bar --flag -v 42", factory)));
+  CHECK(is_error(exec("foo --flag -v 42 --other-flag", factory)));
+  CHECK_EQUAL(exec("foo --flag -v 42", factory), "foo"s);
   CHECK_EQUAL(get_or(options, "flag", false), true);
   CHECK_EQUAL(get_or(options, "value", 0), 42);
-  CHECK_EQUAL(exec("foo --flag -v 42 bar"), "bar"s);
+  CHECK_EQUAL(exec("foo --flag -v 42 bar", factory), "bar"s);
   CHECK_EQUAL(get_or(options, "flag", false), true);
   CHECK_EQUAL(get_or(options, "value", 0), 42);
   // Setting the command function to nullptr prohibits calling it directly.
-  fptr->run(nullptr);
-  CHECK(is_error(exec("foo --flag -v 42")));
+  fptr->run(nullptr, factory);
+  CHECK(is_error(exec("foo --flag -v 42", factory)));
   // Subcommands of course still work.
-  CHECK_EQUAL(exec("foo --flag -v 42 bar"), "bar"s);
+  CHECK_EQUAL(exec("foo --flag -v 42 bar", factory), "bar"s);
 }
 
 TEST(version command) {
-  root.add("version", command::opts())->run(system::version_command);
-  CHECK_EQUAL(exec("version"), caf::none);
+  command::factory factory{};
+  root.add("version", command::opts())->run(system::version_command, factory);
+  CHECK_EQUAL(exec("version", factory), caf::none);
 }
 
 FIXTURE_SCOPE_END()

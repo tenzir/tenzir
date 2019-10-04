@@ -197,8 +197,8 @@ spawn_component(const command::invocation& invocation, spawn_arguments& args) {
   VAST_TRACE(VAST_ARG(args));
   using caf::atom_uint;
   auto self = this_node;
-  auto i = node_state::factories.find(invocation.full_name);
-  if (i == node_state::factories.end())
+  auto i = node_state::component_factories.find(invocation.full_name);
+  if (i == node_state::component_factories.end())
     return make_error(ec::unspecified, "invalid spawn component");
   return i->second(self, args);
 }
@@ -245,72 +245,55 @@ node_state::component_factory lift_component_factory() {
   return Fun;
 }
 
-#define ADD(cmd_full_name, fun)                                                \
-  result.emplace(cmd_full_name, lift_component_factory<fun>())
-
-auto make_factories() {
-  node_state::named_component_factories result;
-  ADD("spawn accountant", spawn_accountant);
-  ADD("spawn archive", spawn_archive);
-  ADD("spawn exporter", spawn_exporter);
-  ADD("spawn importer", spawn_importer);
-  ADD("spawn index", spawn_index);
-  ADD("spawn consensus", spawn_consensus);
-  ADD("spawn profiler", spawn_profiler);
-  ADD("spawn source pcap", spawn_pcap_source);
-  ADD("spawn source zeek", spawn_zeek_source);
-  ADD("spawn source mrt", spawn_mrt_source);
-  ADD("spawn source bgpdump", spawn_bgpdump_source);
-  ADD("spawn sink pcap", spawn_pcap_sink);
-  ADD("spawn sink zeek", spawn_zeek_sink);
-  ADD("spawn sink csv", spawn_csv_sink);
-  ADD("spawn sink ascii", spawn_ascii_sink);
-  ADD("spawn sink json", spawn_json_sink);
-  // Set callbacks of top-level commands.
-  // command::factory.insert_or_assign("start", start_command);
-  command::factory.insert_or_assign("stop", stop_command);
-  command::factory.insert_or_assign("status", status_command);
-  command::factory.insert_or_assign("kill", kill_command);
-  command::factory.insert_or_assign("send", send_command);
-  command::factory.insert_or_assign("peer", peer_command);
-  // Set callbacks of "spawn" command and its children.
-  command::factory.insert_or_assign("spawn", node_state::spawn_command);
-  command::factory.insert_or_assign("spawn index", node_state::spawn_command);
-  command::factory.insert_or_assign("spawn accountant",
-                                    node_state::spawn_command);
-  command::factory.insert_or_assign("spawn archive", node_state::spawn_command);
-  command::factory.insert_or_assign("spawn exporter",
-                                    node_state::spawn_command);
-  command::factory.insert_or_assign("spawn importer",
-                                    node_state::spawn_command);
-  command::factory.insert_or_assign("spawn consensus",
-                                    node_state::spawn_command);
-  command::factory.insert_or_assign("spawn source", node_state::spawn_command);
-  command::factory.insert_or_assign("spawn source pcap",
-                                    node_state::spawn_command);
-  command::factory.insert_or_assign("spawn source test",
-                                    node_state::spawn_command);
-  command::factory.insert_or_assign("spawn source zeek",
-                                    node_state::spawn_command);
-  command::factory.insert_or_assign("spawn source bgpdump",
-                                    node_state::spawn_command);
-  command::factory.insert_or_assign("spawn source mrt",
-                                    node_state::spawn_command);
-  command::factory.insert_or_assign("spawn sink", node_state::spawn_command);
-  command::factory.insert_or_assign("spawn sink pcap",
-                                    node_state::spawn_command);
-  command::factory.insert_or_assign("spawn sink zeek",
-                                    node_state::spawn_command);
-  command::factory.insert_or_assign("spawn sink ascii",
-                                    node_state::spawn_command);
-  command::factory.insert_or_assign("spawn sink csv",
-                                    node_state::spawn_command);
-  command::factory.insert_or_assign("spawn sink json",
-                                    node_state::spawn_command);
-  return result;
+auto make_component_factories() {
+  return node_state::named_component_factories{
+    {"spawn accountant", lift_component_factory<spawn_accountant>()},
+    {"spawn archive", lift_component_factory<spawn_archive>()},
+    {"spawn exporter", lift_component_factory<spawn_exporter>()},
+    {"spawn importer", lift_component_factory<spawn_importer>()},
+    {"spawn index", lift_component_factory<spawn_index>()},
+    {"spawn consensus", lift_component_factory<spawn_consensus>()},
+    {"spawn profiler", lift_component_factory<spawn_profiler>()},
+    {"spawn source pcap", lift_component_factory<spawn_pcap_source>()},
+    {"spawn source zeek", lift_component_factory<spawn_zeek_source>()},
+    {"spawn source mrt", lift_component_factory<spawn_mrt_source>()},
+    {"spawn source bgpdump", lift_component_factory<spawn_bgpdump_source>()},
+    {"spawn sink pcap", lift_component_factory<spawn_pcap_sink>()},
+    {"spawn sink zeek", lift_component_factory<spawn_zeek_sink>()},
+    {"spawn sink csv", lift_component_factory<spawn_csv_sink>()},
+    {"spawn sink ascii", lift_component_factory<spawn_ascii_sink>()},
+    {"spawn sink json", lift_component_factory<spawn_json_sink>()},
+  };
 }
 
-#undef ADD
+auto make_command_factory() {
+  return command::factory{
+    {"stop", stop_command},
+    {"status", status_command},
+    {"kill", kill_command},
+    {"send", send_command},
+    {"peer", peer_command},
+    {"spawn", node_state::spawn_command},
+    {"spawn index", node_state::spawn_command},
+    {"spawn accountant", node_state::spawn_command},
+    {"spawn archive", node_state::spawn_command},
+    {"spawn exporter", node_state::spawn_command},
+    {"spawn importer", node_state::spawn_command},
+    {"spawn consensus", node_state::spawn_command},
+    {"spawn source", node_state::spawn_command},
+    {"spawn source pcap", node_state::spawn_command},
+    {"spawn source test", node_state::spawn_command},
+    {"spawn source zeek", node_state::spawn_command},
+    {"spawn source bgpdump", node_state::spawn_command},
+    {"spawn source mrt", node_state::spawn_command},
+    {"spawn sink", node_state::spawn_command},
+    {"spawn sink pcap", node_state::spawn_command},
+    {"spawn sink zeek", node_state::spawn_command},
+    {"spawn sink ascii", node_state::spawn_command},
+    {"spawn sink csv", node_state::spawn_command},
+    {"spawn sink json", node_state::spawn_command},
+  };
+}
 
 } // namespace
 
@@ -373,7 +356,8 @@ node_state::~node_state() {
 }
 
 void node_state::init(std::string init_name, path init_dir) {
-  node_state::factories = make_factories();
+  node_state::component_factories = make_component_factories();
+  node_state::command_factory = make_command_factory();
   // Set member variables.
   name = std::move(init_name);
   dir = std::move(init_dir);
@@ -395,7 +379,7 @@ caf::behavior node(node_actor* self, std::string id, path dir) {
                  invocation.options, "and arguments", invocation.arguments);
       // Run the command.
       this_node = self;
-      return run(invocation, self->system());
+      return run(invocation, self->system(), node_state::command_factory);
     },
     [=](peer_atom, actor& tracker, std::string& peer_name) {
       self->delegate(self->state.tracker, peer_atom::value,

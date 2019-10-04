@@ -34,9 +34,8 @@ namespace vast::system {
 template <class Writer, class Defaults>
 caf::message
 writer_command(const command::invocation& invocation, caf::actor_system& sys) {
-  auto first = invocation.arguments.begin();
-  auto last = invocation.arguments.end();
-  VAST_TRACE(VAST_ARG(invocation.options), VAST_ARG("args", first, last));
+  VAST_TRACE(VAST_ARG(invocation.options),
+             VAST_ARG("args", invocation.arguments));
   std::string category = Defaults::category;
   using ostream_ptr = std::unique_ptr<std::ostream>;
   auto max_events = get_or(invocation.options, "export.max-events",

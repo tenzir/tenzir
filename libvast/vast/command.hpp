@@ -74,6 +74,9 @@ public:
   /// Delegates to the command implementation logic.
   using fun = caf::message (*)(const command::invocation&, caf::actor_system&);
 
+  /// Central store for mapping fully-qualified command name to callback
+  using factory = std::map<std::string, fun>;
+
   /// Builds config options for the same category.
   class opts_builder {
   public:
@@ -129,11 +132,6 @@ public:
   /// Flag that indicates whether the command shows up in the help text.
   bool visible = true;
 
-  // -- static member variables ------------------------------------------------
-
-  /// Central store for mapping fully-qualified command name to callback
-  static inline std::map<std::string, fun> factory = {};
-
   // -- utility functions ------------------------------------------------------
 
   /// Returns the full name of `cmd`, i.e., its own name prepended by all parent
@@ -183,11 +181,11 @@ public:
 
   /// Sets the callback for this command.
   /// @returns a pointer to this command.
-  inline command* run(fun run) {
+  inline command* run(fun run, factory& fact) {
     if (run != nullptr)
-      factory.insert_or_assign(full_name(), run);
+      fact.insert_or_assign(full_name(), run);
     else
-      factory.erase(full_name());
+      fact.erase(full_name());
     return this;
   }
 };
@@ -216,7 +214,8 @@ bool init_config(caf::actor_system_config& cfg, const command::invocation& from,
 /// @returns a type-erased result or a wrapped `caf::error`.
 /// @relates command
 caf::expected<caf::message>
-run(command::invocation& invocation, caf::actor_system& sys);
+run(command::invocation& invocation, caf::actor_system& sys,
+    const command::factory& fact);
 
 /// Traverses the command hierarchy until finding the root.
 /// @returns the root command.
