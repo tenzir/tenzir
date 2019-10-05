@@ -13,9 +13,9 @@
 
 #pragma once
 
-#include <cstddef>
-#include <streambuf>
-#include <vector>
+#include <cstddef>   // for size_t
+#include <streambuf> // for streambuf
+#include <vector>    // for vector
 
 namespace vast::detail {
 
@@ -39,4 +39,3 @@ private:
 };
 
 } // namespace vast::detail
-

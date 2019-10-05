@@ -13,12 +13,14 @@
 
 #pragma once
 
-#include <chrono>
-#include <cstdint>
-#include <string_view>
+#include <caf/atom.hpp> // for atom, atom_value
+#include <caf/fwd.hpp>  // for settings
 
-#include <caf/atom.hpp>
-#include <caf/fwd.hpp>
+#include <chrono>      // for milliseconds
+#include <cstdint>     // for int64_t
+#include <limits>      // for numeric_limits
+#include <stddef.h>    // for size_t
+#include <string_view> // for string_view
 
 namespace vast::defaults {
 

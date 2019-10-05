@@ -13,28 +13,23 @@
 
 #pragma once
 
-#include <memory>
+#include "vast/detail/assert.hpp" // for VAST_ASSERT
+#include "vast/error.hpp"         // for error
+#include "vast/filesystem.hpp"    // for path
+#include "vast/fwd.hpp"           // for bitmap, table_slice_ptr
+#include "vast/operator.hpp"      // for relational_operator
+#include "vast/type.hpp"          // for type
+#include "vast/value_index.hpp"   // for value_index_ptr, value_index, valu...
+#include "vast/view.hpp"          // for data_view
 
-#include <caf/expected.hpp>
-#include <caf/fwd.hpp>
+#include <caf/error.hpp>    // for error
+#include <caf/expected.hpp> // for expected
+#include <caf/fwd.hpp>      // for actor_system
 
-#include "vast/bitmap.hpp"
-#include "vast/event.hpp"
-#include "vast/expression.hpp"
-#include "vast/filesystem.hpp"
-#include "vast/type.hpp"
-#include "vast/value_index.hpp"
+#include <memory>   // for operator!=, unique_ptr
+#include <stddef.h> // for size_t
 
 namespace vast {
-
-// -- free functions -----------------------------------------------------------
-
-/// Creates a single colum for a value at column `col`.
-/// @relates column_index
-caf::expected<column_index_ptr> make_column_index(caf::actor_system& sys,
-                                                  path filename,
-                                                  type column_type,
-                                                  size_t column);
 
 // -- class definition ---------------------------------------------------------
 
@@ -121,6 +116,14 @@ protected:
 
 /// @relates column_index
 using column_index_ptr = std::unique_ptr<column_index>;
+
+// -- free functions -----------------------------------------------------------
+
+/// Creates a single colum for a value at column `col`.
+/// @relates column_index
+caf::expected<column_index_ptr>
+make_column_index(caf::actor_system& sys, path filename, type column_type,
+                  size_t column);
 
 // TODO: should `add_to_index` return a `caf::error` instead?
 

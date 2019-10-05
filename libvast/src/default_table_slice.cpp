@@ -13,11 +13,16 @@
 
 #include "vast/default_table_slice.hpp"
 
-#include <caf/deserializer.hpp>
-#include <caf/serializer.hpp>
+#include "vast/default_table_slice_builder.hpp" // for default_table_slice_...
+#include "vast/detail/assert.hpp"               // for VAST_ASSERT
+#include "vast/table_slice_header.hpp"          // for table_slice_header
+#include "vast/value_index.hpp"                 // for value_index
 
-#include "vast/default_table_slice_builder.hpp"
-#include "vast/value_index.hpp"
+#include <caf/deserializer.hpp> // for deserializer
+#include <caf/error.hpp>        // for error
+#include <caf/serializer.hpp>   // for serializer
+
+#include <utility> // for move
 
 namespace vast {
 

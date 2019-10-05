@@ -13,15 +13,24 @@
 
 #pragma once
 
-#include <vector>
+#include "vast/aliases.hpp"     // for vector
+#include "vast/fwd.hpp"         // for table_slice_header, value_index
+#include "vast/table_slice.hpp" // for table_slice
+#include "vast/type.hpp"        // for record_type
+#include "vast/view.hpp"        // for data_view
 
-#include <caf/atom.hpp>
+#include <caf/atom.hpp>              // for atom, atom_value
+#include <caf/error.hpp>             // for error
+#include <caf/intrusive_cow_ptr.hpp> // for intrusive_cow_ptr
 
-#include "vast/aliases.hpp"
-#include "vast/data.hpp"
-#include "vast/fwd.hpp"
-#include "vast/table_slice.hpp"
+#include <vector> // for vector
 
+namespace caf {
+class deserializer;
+}
+namespace caf {
+class serializer;
+}
 namespace vast {
 
 /// The default implementation of `table_slice`.

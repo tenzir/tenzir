@@ -228,11 +228,16 @@ TEST(split) {
   };
   // Splits `sut` using split() and then converting to events.
   auto split_sut = [&](size_t parition_point) {
-    auto [first, second] = split(sut, parition_point);
-    if (first->rows() + second->rows() != 8)
+    // auto [first, second] = split(sut, parition_point);
+    // if (first->rows() + second->rows() != 8)
+    //  FAIL("expected 8 rows in total, got "
+    //       << (first->rows() + second->rows()));
+    // return std::pair{to_events(*first), to_events(*second)};
+    auto pair = split(sut, parition_point);
+    if (pair.first->rows() + pair.second->rows() != 8)
       FAIL("expected 8 rows in total, got "
-           << (first->rows() + second->rows()));
-    return std::pair{to_events(*first), to_events(*second)};
+           << (pair.first->rows() + pair.second->rows()));
+    return std::pair{to_events(*pair.first), to_events(*pair.second)};
   };
   // We compare the results of the two lambdas, meaning that it should make no
   // difference whether we split via `to_events` or `split`.

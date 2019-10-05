@@ -12,12 +12,19 @@
  ******************************************************************************/
 
 #include "vast/data.hpp"
-#include "vast/json.hpp"
 
-#include "vast/detail/assert.hpp"
-#include "vast/detail/narrow.hpp"
-#include "vast/detail/overload.hpp"
-#include "vast/detail/type_traits.hpp"
+#include "vast/detail/assert.hpp"      // for VAST_ASSERT
+#include "vast/detail/narrow.hpp"      // for narrow_cast
+#include "vast/detail/overload.hpp"    // for lambda, overload
+#include "vast/detail/type_traits.hpp" // for is_any_v
+#include "vast/json.hpp"               // for to_json, json, json::array, jso...
+#include "vast/offset.hpp"             // for offset
+
+#include <caf/none.hpp>     // for none, none_t
+#include <caf/sum_type.hpp> // for get_if, visit, holds_alternative
+
+#include <algorithm> // for all_of
+#include <iterator>  // for move_iterator, make_move_iterator
 
 namespace vast {
 namespace {

@@ -13,12 +13,12 @@
 
 #include "vast/defaults.hpp"
 
-#include <random>
-#include <string>
+#include <caf/actor_system.hpp>        // for actor_system
+#include <caf/actor_system_config.hpp> // for get_or
+#include <caf/settings.hpp>            // for get_if, settings
 
-#include <caf/actor_system.hpp>
-#include <caf/actor_system_config.hpp>
-#include <caf/settings.hpp>
+#include <random> // for random_device
+#include <string> // for string
 
 namespace vast::defaults::import {
 

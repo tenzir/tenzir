@@ -13,12 +13,19 @@
 
 #include "vast/column_index.hpp"
 
-#include "vast/expression_visitors.hpp"
-#include "vast/load.hpp"
-#include "vast/logger.hpp"
-#include "vast/save.hpp"
-#include "vast/table_slice.hpp"
-#include "vast/value_index_factory.hpp"
+#include "vast/bitmap.hpp"              // for bitmap
+#include "vast/detail/operators.hpp"    // for operator+
+#include "vast/load.hpp"                // for load
+#include "vast/logger.hpp"              // for VAST_TRACE
+#include "vast/save.hpp"                // for save
+#include "vast/table_slice.hpp"         // for table_slice_ptr, table_slice
+#include "vast/value_index_factory.hpp" // for factory<value_index>
+
+#include <caf/actor_system.hpp> // for actor_system
+#include <caf/none.hpp>         // for none
+
+#include <string>  // for basic_string
+#include <utility> // for move
 
 namespace vast {
 

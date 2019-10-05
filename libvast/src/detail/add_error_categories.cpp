@@ -11,17 +11,18 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include <cstdint>
-#include <string>
-
-#include <caf/actor_system_config.hpp>
-#include <caf/deep_to_string.hpp>
-#include <caf/meta/omittable_if_empty.hpp>
-#include <caf/meta/type_name.hpp>
-
-#include "vast/error.hpp"
-
 #include "vast/detail/add_error_categories.hpp"
+
+#include "vast/error.hpp" // for to_string, ec
+
+#include <caf/actor_system_config.hpp>     // for actor_system_config
+#include <caf/atom.hpp>                    // for atom, atom_value
+#include <caf/deep_to_string.hpp>          // for deep_to_string
+#include <caf/message.hpp>                 // for message
+#include <caf/meta/omittable_if_empty.hpp> // for omittable_if_empty
+#include <caf/meta/type_name.hpp>          // for type_name
+
+#include <cstdint> // for uint8_t
 
 using namespace caf;
 

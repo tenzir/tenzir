@@ -16,7 +16,11 @@
 #include "vast/factory.hpp"
 #include "vast/fwd.hpp"
 
+#include <memory>
+
 namespace vast {
+
+using value_index_ptr = std::unique_ptr<value_index>;
 
 template <>
 struct factory_traits<value_index> {

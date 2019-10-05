@@ -13,16 +13,26 @@
 
 #pragma once
 
-#include "vast/concept/parseable/core.hpp"
-#include "vast/concept/parseable/string/char_class.hpp"
-#include "vast/concept/parseable/vast/data.hpp"
-#include "vast/concept/parseable/vast/type.hpp"
-#include "vast/data.hpp"
-#include "vast/expression.hpp"
-#include "vast/type.hpp"
+#include "vast/concept/parseable/core.hpp"              // for parsers
+#include "vast/concept/parseable/string/char.hpp"       // for chr
+#include "vast/concept/parseable/string/char_class.hpp" // for char_class_p...
+#include "vast/concept/parseable/vast/data.hpp"         // for data, data_p...
+#include "vast/concept/parseable/vast/type.hpp"         // for type, type_p...
+#include "vast/concept/support/unused_type.hpp"         // for unused, unus...
+#include "vast/detail/assert.hpp"                       // for VAST_ASSERT
+#include "vast/detail/string.hpp"                       // for join
+#include "vast/expression.hpp"                          // for conjunction
+#include "vast/operator.hpp"                            // for in, logical_and
+#include "vast/type.hpp"                                // for type
 
-#include "vast/detail/assert.hpp"
-#include "vast/detail/string.hpp"
+#include <string>  // for string
+#include <tuple>   // for tuple, tuple...
+#include <utility> // for move
+#include <vector>  // for vector
+
+namespace vast {
+class data;
+}
 
 namespace vast {
 

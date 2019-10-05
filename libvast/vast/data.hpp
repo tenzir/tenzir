@@ -13,35 +13,45 @@
 
 #pragma once
 
-#include <chrono>
-#include <string>
-#include <tuple>
-#include <type_traits>
+#include "vast/address.hpp"                 // for hash_append, address (pt...
+#include "vast/aliases.hpp"                 // for vector, map, set, count
+#include "vast/concept/hashable/uhash.hpp"  // for uhash
+#include "vast/concept/hashable/xxhash.hpp" // for xxhash
+#include "vast/detail/operators.hpp"        // for addable, totally_ordered
+#include "vast/detail/type_traits.hpp"      // for disable_if_t
+#include "vast/detail/vector_map.hpp"       // for inspect
+#include "vast/detail/vector_set.hpp"       // for inspect
+#include "vast/operator.hpp"                // for relational_operator
+#include "vast/optional.hpp"                // for optional
+#include "vast/pattern.hpp"                 // for inspect, pattern (ptr only)
+#include "vast/port.hpp"                    // for inspect, port (ptr only)
+#include "vast/subnet.hpp"                  // for inspect, subnet (ptr only)
+#include "vast/time.hpp"                    // for duration, time
+#include "vast/type.hpp"                    // for type, record_type, addre...
 
-#include <caf/default_sum_type_access.hpp>
-#include <caf/detail/type_list.hpp>
-#include <caf/none.hpp>
-#include <caf/optional.hpp>
-#include <caf/variant.hpp>
+#include <caf/detail/type_list.hpp> // for type_list
+#include <caf/fwd.hpp>              // for none_t
+#include <caf/optional.hpp>         // for optional
+#include <caf/variant.hpp>          // for inspect, variant
 
-#include "vast/aliases.hpp"
-#include "vast/address.hpp"
-#include "vast/pattern.hpp"
-#include "vast/subnet.hpp"
-#include "vast/port.hpp"
-#include "vast/offset.hpp"
-#include "vast/time.hpp"
-#include "vast/type.hpp"
+#include <chrono>      // for duration
+#include <functional>  // for hash
+#include <stddef.h>    // for size_t
+#include <string>      // for string
+#include <tuple>       // for apply, tuple
+#include <type_traits> // for conditional_t, false_type
+#include <utility>     // for move, forward
+#include <vector>      // for vector
 
-#include "vast/concept/hashable/uhash.hpp"
-#include "vast/concept/hashable/xxhash.hpp"
-
-#include "vast/detail/operators.hpp"
-
+namespace caf {
+template <class T>
+struct sum_type_access;
+}
 namespace vast {
 
 class data;
 class json;
+struct offset;
 
 namespace detail {
 

@@ -13,9 +13,13 @@
 
 #pragma once
 
-#include "vast/data.hpp"
-#include "vast/default_table_slice.hpp"
-#include "vast/table_slice_builder.hpp"
+#include "vast/data.hpp"                // for data
+#include "vast/fwd.hpp"                 // for default_table_slice
+#include "vast/table_slice_builder.hpp" // for table_slice_builder
+
+#include <memory>   // for unique_ptr
+#include <stddef.h> // for size_t
+#include <vector>   // for vector
 
 namespace vast {
 

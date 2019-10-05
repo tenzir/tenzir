@@ -11,20 +11,22 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <sys/socket.h>
+#include "vast/address.hpp" // for address, address::by...
 
-#include <cstdlib>
-#include <cstring>
-#include <utility>
-
-#include "vast/address.hpp"
-#include "vast/concept/printable/to_string.hpp"
+#include "vast/concept/printable/to_string.hpp" // for to_string
 #include "vast/concept/printable/vast/address.hpp"
-#include "vast/detail/byte_swap.hpp"
-#include "vast/json.hpp"
-#include "vast/word.hpp"
+#include "vast/detail/assert.hpp"    // for VAST_ASSERT
+#include "vast/detail/byte_swap.hpp" // for to_network_order
+#include "vast/json.hpp"             // for json
+#include "vast/word.hpp"             // for word
+
+#include <algorithm> // for copy, copy_n
+#include <array>     // for array, array<>::cons...
+#include <cstdint>   // for uint8_t, uint32_t
+#include <cstdlib>   // for (anonymous), ldiv
+#include <cstring>   // for memcmp
+#include <new>       // for launder
+#include <string>    // for basic_string
 
 std::array<uint8_t, 12> const vast::address::v4_mapped_prefix = {
   {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff}

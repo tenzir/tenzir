@@ -13,17 +13,19 @@
 
 #pragma once
 
-#include <caf/fwd.hpp>
-#include <caf/intrusive_ptr.hpp>
-#include <caf/ref_counted.hpp>
-
-#include "vast/aliases.hpp"
-#include "vast/fwd.hpp"
 #include "vast/operator.hpp"
 #include "vast/type.hpp"
 #include "vast/view.hpp"
 
+#include <caf/error.hpp>
+#include <caf/fwd.hpp>
+#include <caf/intrusive_ptr.hpp>
+#include <caf/optional.hpp>
+#include <caf/ref_counted.hpp>
+
 namespace vast {
+
+class synopsis;
 
 /// @relates synopsis
 using synopsis_ptr = caf::intrusive_ptr<synopsis>;

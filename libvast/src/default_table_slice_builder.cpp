@@ -13,9 +13,14 @@
 
 #include "vast/default_table_slice_builder.hpp"
 
-#include <utility>
+#include "vast/aliases.hpp"             // for vector
+#include "vast/default_table_slice.hpp" // for default_table_slice
+#include "vast/detail/assert.hpp"       // for VAST_ASSERT
+#include "vast/table_slice_header.hpp"  // for table_slice_header
 
-#include <caf/make_counted.hpp>
+#include <caf/make_counted.hpp> // for make_counted
+
+#include <utility> // for move
 
 namespace vast {
 

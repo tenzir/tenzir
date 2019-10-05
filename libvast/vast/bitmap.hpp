@@ -13,15 +13,18 @@
 
 #pragma once
 
-#include <caf/variant.hpp>
-#include <caf/detail/type_list.hpp>
-
 #include "vast/bitmap_base.hpp"
+#include "vast/detail/operators.hpp"
 #include "vast/ewah_bitmap.hpp"
 #include "vast/null_bitmap.hpp"
 #include "vast/wah_bitmap.hpp"
 
-#include "vast/detail/operators.hpp"
+#include <caf/default_sum_type_access.hpp>
+#include <caf/detail/type_list.hpp>
+#include <caf/variant.hpp>
+
+#include <type_traits>
+#include <utility>
 
 namespace vast {
 

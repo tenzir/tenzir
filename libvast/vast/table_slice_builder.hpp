@@ -13,13 +13,14 @@
 
 #pragma once
 
-#include "vast/fwd.hpp"
-#include "vast/view.hpp"
+#include "vast/fwd.hpp"  // for table_slice_ptr
+#include "vast/type.hpp" // for record_type
+#include "vast/view.hpp" // for data_view
 
-#include <caf/make_counted.hpp>
-#include <caf/ref_counted.hpp>
+#include <caf/ref_counted.hpp> // for ref_counted
 
-#include <type_traits>
+#include <stddef.h>    // for size_t
+#include <type_traits> // for decay_t, is_same_v
 
 namespace vast {
 

@@ -13,6 +13,8 @@
 
 #include "vast/bitmap.hpp"
 
+#include <caf/sum_type.hpp>
+
 namespace vast {
 
 bitmap::bitmap() : bitmap_{default_bitmap{}} {

@@ -11,15 +11,15 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/config.hpp"
 #include "vast/detail/adjust_resource_consumption.hpp"
 
+#include "vast/config.hpp" // for VAST_MACOS
+
 #ifdef VAST_MACOS
-#include <sys/resource.h> // setrlimit
+#  include <sys/resource.h> // for setrlimit
 #endif
 
-namespace vast {
-namespace detail {
+namespace vast::detail {
 
 bool adjust_resource_consumption() {
 #ifdef VAST_MACOS
@@ -30,5 +30,4 @@ bool adjust_resource_consumption() {
   return true;
 }
 
-} // namespace detail
-} // namespace vast
+} // namespace vast::detail

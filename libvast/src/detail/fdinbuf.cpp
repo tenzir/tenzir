@@ -11,13 +11,12 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include <unistd.h>
-
-#include <cstdio>
-#include <cstring>
-
-#include "vast/detail/assert.hpp"
 #include "vast/detail/fdinbuf.hpp"
+
+#include "vast/detail/assert.hpp" // for VAST_ASSERT
+
+#include <cstring>  // for memmove
+#include <unistd.h> // for read
 
 namespace vast {
 namespace detail {

@@ -13,20 +13,19 @@
 
 #pragma once
 
+#include "vast/detail/assert.hpp"
+#include "vast/detail/operators.hpp"
+#include "vast/detail/type_traits.hpp"
+#include "vast/fwd.hpp"
+
+#include <caf/fwd.hpp>
+#include <caf/intrusive_ptr.hpp>
+#include <caf/ref_counted.hpp>
+
 #include <cstddef>
 #include <functional>
 #include <string>
 #include <utility>
-
-#include <caf/fwd.hpp>
-#include <caf/ref_counted.hpp>
-#include <caf/intrusive_ptr.hpp>
-
-#include "vast/fwd.hpp"
-
-#include "vast/detail/assert.hpp"
-#include "vast/detail/operators.hpp"
-#include "vast/detail/type_traits.hpp"
 
 namespace vast {
 

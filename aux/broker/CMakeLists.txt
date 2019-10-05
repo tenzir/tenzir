@@ -78,6 +78,8 @@ set_target_properties(broker PROPERTIES
                       VERSION ${BROKER_VERSION_MAJOR}.${BROKER_VERSION_MINOR}
                       MACOSX_RPATH true
                       OUTPUT_NAME broker)
+set_property(TARGET broker PROPERTY CXX_CLANG_TIDY)
+set_property(TARGET broker PROPERTY CXX_INCLUDE_WHAT_YOU_USE)
 target_link_libraries(broker PUBLIC caf::core caf::io caf::openssl)
 install(TARGETS broker DESTINATION ${INSTALL_LIB_DIR})
 

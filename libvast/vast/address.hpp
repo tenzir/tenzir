@@ -14,7 +14,6 @@
 #pragma once
 
 #include <array>
-#include <string>
 
 #include "vast/detail/operators.hpp"
 

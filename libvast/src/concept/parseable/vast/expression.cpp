@@ -13,6 +13,14 @@
 
 #include "vast/concept/parseable/vast/expression.hpp"
 
+#include "vast/data.hpp"          // for data, data_to_type
+#include "vast/detail/string.hpp" // for join
+
+#include <caf/atom.hpp>     // for atom_from_string
+#include <caf/sum_type.hpp> // for visit
+
+#include <type_traits> // for decay_t
+
 namespace vast {
 
 predicate predicate_parser::to_predicate(predicate_tuple xs) {

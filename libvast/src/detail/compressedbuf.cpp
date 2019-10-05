@@ -11,14 +11,18 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include <cstring>
-
-#include "vast/si_literals.hpp"
-
-#include "vast/detail/assert.hpp"
-#include "vast/detail/byte_swap.hpp"
 #include "vast/detail/compressedbuf.hpp"
-#include "vast/detail/varbyte.hpp"
+
+#include "vast/compression.hpp"    // for compression
+#include "vast/detail/assert.hpp"  // for VAST_ASSERT
+#include "vast/detail/varbyte.hpp" // for decode, encode
+#include "vast/si_literals.hpp"    // for operator""_MiB
+
+#include <algorithm> // for min
+#include <cstring>   // for memcpy, size_t
+#include <stdint.h>  // for uint32_t
+#include <streambuf> // for streambuf
+#include <vector>    // for vector
 
 namespace vast {
 

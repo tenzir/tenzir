@@ -11,21 +11,24 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include <fcntl.h>
-#include <unistd.h>
-#include <sys/mman.h>
-#include <sys/stat.h>
-
-#include <tuple>
-
-#include <caf/deserializer.hpp>
-#include <caf/make_counted.hpp>
-#include <caf/serializer.hpp>
-
 #include "vast/chunk.hpp"
-#include "vast/filesystem.hpp"
 
-#include "vast/detail/narrow.hpp"
+#include "vast/detail/assert.hpp" // for VAST_ASSERT
+#include "vast/detail/narrow.hpp" // for narrow
+#include "vast/filesystem.hpp"    // for path
+
+#include <caf/deserializer.hpp> // for deserializer
+#include <caf/error.hpp>        // for error
+#include <caf/none.hpp>         // for none
+#include <caf/serializer.hpp>   // for serializer
+
+#include <fcntl.h>  // for open, O_RDONLY
+#include <stdint.h> // for uint32_t
+#include <string>   // for string
+#include <unistd.h> // for close
+
+#include <sys/mman.h> // for mmap, munmap, MAP_FAILED, MAP_SHARED
+#include <sys/stat.h> // for stat
 
 namespace vast {
 

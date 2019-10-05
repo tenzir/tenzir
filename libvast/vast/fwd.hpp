@@ -13,8 +13,17 @@
 
 #pragma once
 
-#include <caf/intrusive_cow_ptr.hpp>
-#include <caf/intrusive_ptr.hpp>
+#include <iosfwd>
+
+namespace caf {
+
+template <class>
+class intrusive_ptr;
+
+template <class>
+class intrusive_cow_ptr;
+
+} // namespace caf
 
 namespace vast {
 
@@ -97,12 +106,10 @@ void intrusive_ptr_release(const table_slice_builder*);
 // -- smart pointers -----------------------------------------------------------
 
 using chunk_ptr = caf::intrusive_ptr<chunk>;
-using column_index_ptr = std::unique_ptr<column_index>;
 using default_table_slice_ptr = caf::intrusive_cow_ptr<default_table_slice>;
 using synopsis_ptr = caf::intrusive_ptr<synopsis>;
 using table_slice_builder_ptr = caf::intrusive_ptr<table_slice_builder>;
 using table_slice_ptr = caf::intrusive_cow_ptr<table_slice>;
-using value_index_ptr = std::unique_ptr<value_index>;
 
 // -- miscellaneous ------------------------------------------------------------
 

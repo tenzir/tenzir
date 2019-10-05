@@ -1,4 +1,3 @@
-
 /******************************************************************************
  *                    _   _____   __________                                  *
  *                   | | / / _ | / __/_  __/     Visibility                   *
@@ -14,8 +13,10 @@
 
 #pragma once
 
-#include <cstddef>
-#include <string>
+#include <cstddef>     // for size_t
+#include <string>      // for string
+#include <string_view> // for string_view
+#include <utility>     // for pair
 
 /// [Base64](https://en.wikipedia.org/wiki/Base64) coding.
 namespace vast::detail::base64 {

@@ -13,26 +13,27 @@
 
 #include "vast/detail/add_message_types.hpp"
 
-#include "vast/bitmap.hpp"
-#include "vast/command.hpp"
-#include "vast/config.hpp"
-#include "vast/event.hpp"
-#include "vast/expression.hpp"
-#include "vast/operator.hpp"
-#include "vast/query_options.hpp"
-#include "vast/schema.hpp"
-#include "vast/system/accountant.hpp"
-#include "vast/system/query_status.hpp"
-#include "vast/system/replicated_store.hpp"
-#include "vast/system/tracker.hpp"
-#include "vast/table_slice.hpp"
-#include "vast/type.hpp"
-#include "vast/uuid.hpp"
+#include "vast/bitmap.hpp"                  // for bitmap
+#include "vast/command.hpp"                 // for command::invocation
+#include "vast/config.hpp"                  // for VAST_USE_OPENCL
+#include "vast/data.hpp"                    // for data
+#include "vast/event.hpp"                   // for event
+#include "vast/expression.hpp"              // for expression
+#include "vast/operator.hpp"                // for relational_operator
+#include "vast/query_options.hpp"           // for query_options
+#include "vast/schema.hpp"                  // for schema
+#include "vast/system/accountant.hpp"       // for performance_report
+#include "vast/system/query_status.hpp"     // for query_status
+#include "vast/system/replicated_store.hpp" // for actor_identity
+#include "vast/system/tracker.hpp"          // for component_map
+#include "vast/table_slice.hpp"             // for table_slice_ptr
+#include "vast/type.hpp"                    // for type
+#include "vast/uuid.hpp"                    // for uuid
 
-#include <caf/actor_system_config.hpp>
+#include <caf/actor_system_config.hpp> // for actor_system_config
 
-#include <cstdint>
-#include <vector>
+#include <cstdint> // for uint32_t
+#include <vector>  // for vector
 
 namespace vast::detail {
 
