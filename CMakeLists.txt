@@ -79,6 +79,16 @@ set(CMAKE_VERBOSE_MAKEFILE
     false
     CACHE STRING "Show all outputs including compiler lines." FORCE)
 
+# Force colored output for the Ninja generator
+option(VAST_COLOR_NINJA "Enable ANSI-colored output for the Ninja generator." ON)
+if ("${CMAKE_GENERATOR}" STREQUAL "Ninja" AND VAST_COLOR_NINJA)
+  if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+    add_compile_options(-fdiagnostics-color=always)
+  elseif ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
+    add_compile_options(-fcolor-diagnostics)
+  endif ()
+endif ()
+
 # Extract VERSION
 file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" VAST_VERSION LIMIT_COUNT 1)
 string(REPLACE "." " " version_numbers ${VAST_VERSION})
