@@ -42,29 +42,6 @@ namespace vast::system {
 
 namespace {
 
-/// @returns default options for source commands.
-auto source_opts(std::string_view category) {
-  return command::opts(category)
-    .add<std::string>("listen,l", "the port number to listen on")
-    .add<std::string>("read,r", "path to input where to read events from")
-    .add<std::string>("schema-file,s", "path to alternate schema")
-    .add<std::string>("schema,S", "alternate schema as string")
-    .add<std::string>("type,t", "type the data should be parsed as")
-    .add<bool>("uds,d", "treat -r as listening UNIX domain socket");
-}
-
-/// @returns defaults options for sink commands.
-auto sink_opts(std::string_view category) {
-  return command::opts(category)
-    .add<std::string>("write,w", "path to write events to")
-    .add<bool>("uds,d", "treat -w as UNIX domain socket to connect to");
-}
-
-/// @returns default options for commands.
-auto opts(std::string_view category = "global") {
-  return command::opts(category);
-};
-
 auto make_root_command(std::string_view path) {
   // We're only interested in the application name, not in its path. For
   // example, argv[0] might contain "./build/release/bin/vast" and we are only
@@ -383,5 +360,25 @@ void render_error(const command& root, const caf::error& err,
     }
   }
 }
+
+command::opts_builder source_opts(std::string_view category) {
+  return command::opts(category)
+    .add<std::string>("listen,l", "the port number to listen on")
+    .add<std::string>("read,r", "path to input where to read events from")
+    .add<std::string>("schema-file,s", "path to alternate schema")
+    .add<std::string>("schema,S", "alternate schema as string")
+    .add<std::string>("type,t", "type the data should be parsed as")
+    .add<bool>("uds,d", "treat -r as listening UNIX domain socket");
+}
+
+command::opts_builder sink_opts(std::string_view category) {
+  return command::opts(category)
+    .add<std::string>("write,w", "path to write events to")
+    .add<bool>("uds,d", "treat -w as UNIX domain socket to connect to");
+}
+
+command::opts_builder opts(std::string_view category) {
+  return command::opts(category);
+};
 
 } // namespace vast::system

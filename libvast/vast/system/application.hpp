@@ -33,4 +33,13 @@ make_application(std::string_view path);
 /// @param os The output stream to write to.
 void render_error(const command& root, const caf::error& err, std::ostream& os);
 
+/// @returns default options for source commands.
+command::opts_builder source_opts(std::string_view category);
+
+/// @returns defaults options for sink commands.
+command::opts_builder sink_opts(std::string_view category);
+
+/// @returns default options for commands.
+command::opts_builder opts(std::string_view category = "global");
+
 } // namespace vast::system
