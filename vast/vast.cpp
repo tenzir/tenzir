@@ -88,5 +88,12 @@ int main(int argc, char** argv) {
     render_error(*root, result.error(), std::cerr);
     return EXIT_FAILURE;
   }
+  if (result->match_elements<caf::error>()) {
+    auto& err = result->get_as<caf::error>(0);
+    if (err) {
+      vast::system::render_error(*root, err, std::cerr);
+      return EXIT_FAILURE;
+    }
+  }
   return EXIT_SUCCESS;
 }
