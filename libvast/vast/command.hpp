@@ -59,6 +59,12 @@ public:
       return result;
     }
 
+    template <class Inspector>
+    friend auto inspect(Inspector& f, command::invocation& x) {
+      return f(caf::meta::type_name("command::invocation"), x.full_name,
+               x.arguments, x.options);
+    }
+
     // -- mutators -------------------------------------------------------------
 
     /// Sets the members `full_nane`, and `arguments`.
@@ -112,7 +118,7 @@ public:
   // -- member variables -------------------------------------------------------
 
   /// A pointer to the parent node (or nullptr iff this is the root node).
-  command* parent = nullptr;
+  command* parent;
 
   /// The name of the command.
   std::string_view name;
@@ -124,13 +130,30 @@ public:
   std::string_view documentation;
 
   /// The options of the command.
-  caf::config_option_set options = opts();
+  caf::config_option_set options;
 
   /// The list of sub-commands.
   children_list children;
 
   /// Flag that indicates whether the command shows up in the help text.
-  bool visible = true;
+  bool visible;
+
+  // -- constructors -----------------------------------------------------------
+
+  /// Construct a new command
+  command(std::string_view name, std::string_view description,
+          std::string_view documentation, caf::config_option_set opts,
+          bool visible = true);
+
+  /// Construct a new command
+  command(std::string_view name, std::string_view description,
+          std::string_view documentation, opts_builder opts,
+          bool visible = true);
+
+  command(command&&) = delete;
+  command(const command&) = delete;
+  command& operator=(command&&) = delete;
+  command& operator=(const command&) = delete;
 
   // -- utility functions ------------------------------------------------------
 
@@ -148,45 +171,23 @@ public:
 
   /// Adds a new subcommand.
   /// @returns a pointer to the new subcommand.
-  command*
-  add(std::string_view child_name, caf::config_option_set child_options = {});
+  command* add_subcommand(std::unique_ptr<command> cmd) {
+    auto result = children.emplace_back(std::move(cmd)).get();
+    result->parent = this;
+    return result;
+  }
 
   /// Adds a new subcommand.
   /// @returns a pointer to the new subcommand.
-  inline command*
-  add(std::string_view child_name, opts_builder&& child_options) {
-    return add(child_name, child_options.finish());
-  }
-
-  /// Adds a description to a command.
-  /// @returns a pointer to this command.
-  inline command* describe(std::string_view desc) {
-    description = desc;
-    return this;
-  }
-  //
-  /// Adds a Markdown-formatted documentation to a command.
-  /// @returns a pointer to this command.
-  inline command* document(std::string_view doc) {
-    documentation = doc;
-    return this;
-  }
-
-  /// Hides the command from the help text.
-  /// @returns a pointer to this command.
-  inline command* hide() {
-    visible = false;
-    return this;
-  }
-
-  /// Sets the callback for this command.
-  /// @returns a pointer to this command.
-  inline command* run(fun run, factory& fact) {
-    if (run != nullptr)
-      fact.insert_or_assign(full_name(), run);
-    else
-      fact.erase(full_name());
-    return this;
+  template <typename... Ts>
+  command* add_subcommand(std::string_view name, std::string_view description,
+                          Ts&&... args) {
+    auto result = children
+                    .emplace_back(std::make_unique<command>(
+                      name, description, std::forward<Ts>(args)...))
+                    .get();
+    result->parent = this;
+    return result;
   }
 };
 
@@ -214,7 +215,7 @@ bool init_config(caf::actor_system_config& cfg, const command::invocation& from,
 /// @returns a type-erased result or a wrapped `caf::error`.
 /// @relates command
 caf::expected<caf::message>
-run(command::invocation& invocation, caf::actor_system& sys,
+run(const command::invocation& invocation, caf::actor_system& sys,
     const command::factory& fact);
 
 /// Traverses the command hierarchy until finding the root.
@@ -258,12 +259,6 @@ void for_each(const command& cmd, F fun) {
   fun(cmd);
   for (auto& ptr : cmd.children)
     for_each(*ptr, fun);
-}
-
-template <class Inspector>
-auto inspect(Inspector& f, command::invocation& x) {
-  return f(caf::meta::type_name("command::invocation"), x.full_name,
-           x.arguments, x.options);
 }
 
 } // namespace vast

@@ -197,8 +197,8 @@ spawn_component(const command::invocation& invocation, spawn_arguments& args) {
   VAST_TRACE(VAST_ARG(args));
   using caf::atom_uint;
   auto self = this_node;
-  auto i = node_state::component_factories.find(invocation.full_name);
-  if (i == node_state::component_factories.end())
+  auto i = node_state::component_factory.find(invocation.full_name);
+  if (i == node_state::component_factory.end())
     return make_error(ec::unspecified, "invalid spawn component");
   return i->second(self, args);
 }
@@ -233,7 +233,7 @@ kill_command(const command::invocation& invocation, caf::actor_system&) {
 /// Lifts a factory function that accepts `local_actor*` as first argument
 /// to a function accpeting `node_actor*` instead.
 template <maybe_actor (*Fun)(local_actor*, spawn_arguments&)>
-node_state::component_factory lift_component_factory() {
+node_state::component_factory_fun lift_component_factory() {
   return [](node_actor* self, spawn_arguments& args) {
     // Delegate to lifted function.
     return Fun(self, args);
@@ -241,12 +241,12 @@ node_state::component_factory lift_component_factory() {
 }
 
 template <maybe_actor (*Fun)(node_actor*, spawn_arguments&)>
-node_state::component_factory lift_component_factory() {
+node_state::component_factory_fun lift_component_factory() {
   return Fun;
 }
 
-auto make_component_factories() {
-  return node_state::named_component_factories{
+auto make_component_factory() {
+  return node_state::named_component_factory{
     {"spawn accountant", lift_component_factory<spawn_accountant>()},
     {"spawn archive", lift_component_factory<spawn_archive>()},
     {"spawn exporter", lift_component_factory<spawn_exporter>()},
@@ -267,31 +267,30 @@ auto make_component_factories() {
 }
 
 auto make_command_factory() {
+  // When updating this list, remember to update its counterpart in
+  // application.cpp as well iff necessary
   return command::factory{
-    {"stop", stop_command},
-    {"status", status_command},
     {"kill", kill_command},
-    {"send", send_command},
     {"peer", peer_command},
-    {"spawn", node_state::spawn_command},
-    {"spawn index", node_state::spawn_command},
+    {"send", send_command},
     {"spawn accountant", node_state::spawn_command},
     {"spawn archive", node_state::spawn_command},
+    {"spawn consensus", node_state::spawn_command},
     {"spawn exporter", node_state::spawn_command},
     {"spawn importer", node_state::spawn_command},
-    {"spawn consensus", node_state::spawn_command},
-    {"spawn source", node_state::spawn_command},
-    {"spawn source pcap", node_state::spawn_command},
-    {"spawn source test", node_state::spawn_command},
-    {"spawn source zeek", node_state::spawn_command},
-    {"spawn source bgpdump", node_state::spawn_command},
-    {"spawn source mrt", node_state::spawn_command},
-    {"spawn sink", node_state::spawn_command},
-    {"spawn sink pcap", node_state::spawn_command},
-    {"spawn sink zeek", node_state::spawn_command},
+    {"spawn index", node_state::spawn_command},
     {"spawn sink ascii", node_state::spawn_command},
     {"spawn sink csv", node_state::spawn_command},
     {"spawn sink json", node_state::spawn_command},
+    {"spawn sink pcap", node_state::spawn_command},
+    {"spawn sink zeek", node_state::spawn_command},
+    {"spawn source bgpdump", node_state::spawn_command},
+    {"spawn source mrt", node_state::spawn_command},
+    {"spawn source pcap", node_state::spawn_command},
+    {"spawn source test", node_state::spawn_command},
+    {"spawn source zeek", node_state::spawn_command},
+    {"status", status_command},
+    {"stop", stop_command},
   };
 }
 
@@ -300,9 +299,7 @@ auto make_command_factory() {
 caf::message
 node_state::spawn_command(const command::invocation& invocation,
                           [[maybe_unused]] caf::actor_system& sys) {
-  auto first = invocation.arguments.begin();
-  auto last = invocation.arguments.end();
-  VAST_TRACE(VAST_ARG(invocation.options), VAST_ARG("args", first, last));
+  VAST_TRACE(invocation);
   using std::begin;
   using std::end;
   // Save some typing.
@@ -356,7 +353,7 @@ node_state::~node_state() {
 }
 
 void node_state::init(std::string init_name, path init_dir) {
-  node_state::component_factories = make_component_factories();
+  node_state::component_factory = make_component_factory();
   node_state::command_factory = make_command_factory();
   // Set member variables.
   name = std::move(init_name);
@@ -374,7 +371,7 @@ void node_state::init(std::string init_name, path init_dir) {
 caf::behavior node(node_actor* self, std::string id, path dir) {
   self->state.init(std::move(id), std::move(dir));
   return {
-    [=](command::invocation& invocation) {
+    [=](const command::invocation& invocation) {
       VAST_DEBUG(self, "got command", invocation.full_name, "with options",
                  invocation.options, "and arguments", invocation.arguments);
       // Run the command.

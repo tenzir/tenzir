@@ -49,23 +49,18 @@ int main(int argc, char** argv) {
   if (!detail::adjust_resource_consumption())
     return EXIT_FAILURE;
   // Application setup.
-  auto [root, factory] = make_application();
-  root.describe("manage a VAST topology");
-  root.name = argv[0];
-  // We're only interested in the application name, not in its path. For
-  // example, argv[0] might contain "./build/release/bin/vast" and we are only
-  // interested in "vast".
-  root.name.remove_prefix(
-    std::min(root.name.find_last_of('/') + 1, root.name.size()));
+  const auto [root, factory] = make_application(argv[0]);
+  if (!root)
+    return EXIT_FAILURE;
   // Parse CLI.
-  auto maybe_invocation
-    = parse(root, cfg.command_line.begin(), cfg.command_line.end());
-  if (!maybe_invocation) {
-    render_error(root, maybe_invocation.error(), std::cerr);
+  auto invocation
+    = parse(*root, cfg.command_line.begin(), cfg.command_line.end());
+  if (!invocation) {
+    render_error(*root, invocation.error(), std::cerr);
     return EXIT_FAILURE;
   }
   // Initialize actor system (and thereby CAF's logger).
-  if (!init_config(cfg, *maybe_invocation, std::cerr))
+  if (!init_config(cfg, *invocation, std::cerr))
     return EXIT_FAILURE;
   caf::actor_system sys{cfg};
   // Get filesystem path to the executable.
@@ -88,9 +83,9 @@ int main(int argc, char** argv) {
     return EXIT_FAILURE;
   }
   // Dispatch to root command.
-  auto maybe_result = run(*maybe_invocation, sys, factory);
-  if (!maybe_result) {
-    render_error(root, maybe_result.error(), std::cerr);
+  auto result = run(*invocation, sys, factory);
+  if (!result) {
+    render_error(*root, result.error(), std::cerr);
     return EXIT_FAILURE;
   }
   return EXIT_SUCCESS;

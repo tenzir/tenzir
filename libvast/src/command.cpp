@@ -132,6 +132,24 @@ void nested_helptext(const command& cmd, std::ostream& out) {
 
 } // namespace
 
+command::command(std::string_view name, std::string_view description,
+                 std::string_view documentation, caf::config_option_set opts,
+                 bool visible)
+  : parent{nullptr},
+    name{name},
+    description{description},
+    documentation{documentation},
+    options{std::move(opts)},
+    children{},
+    visible{visible} {
+}
+
+command::command(std::string_view name, std::string_view description,
+                 std::string_view documentation, command::opts_builder opts,
+                 bool visible)
+  : command(name, description, documentation, opts.finish(), visible) {
+}
+
 std::string command::full_name() const {
   std::string result{name};
   for (auto ptr = parent; ptr != nullptr && ptr->parent != nullptr;
@@ -152,14 +170,6 @@ caf::config_option_set command::opts() {
 
 command::opts_builder command::opts(std::string_view category) {
   return {category, opts()};
-}
-
-command* command::add(std::string_view child_name,
-                      caf::config_option_set child_options) {
-  return children
-    .emplace_back(
-      new command{this, child_name, {}, {}, std::move(child_options), {}})
-    .get();
 }
 
 caf::error parse_impl(command::invocation& result, const command& cmd,
@@ -200,12 +210,8 @@ caf::error parse_impl(command::invocation& result, const command& cmd,
     put(result.options, "documentation", true);
     return caf::none;
   }
-  if (!has_subcommand) {
-    // Commands without a run implementation require subcommands.
-    // if (command::factory.find(cmd.full_name()) == command::factory.end())
-    //   return make_error(ec::missing_subcommand, cmd.full_name(), "");
+  if (!has_subcommand)
     return caf::none;
-  }
   // Consume CLI arguments if we have arguments but don't have subcommands.
   if (cmd.children.empty())
     return caf::none;
@@ -228,7 +234,7 @@ caf::expected<command::invocation>
 parse(const command& root, command::argument_iterator first,
       command::argument_iterator last) {
   command::invocation result;
-  const command* target;
+  const command* target = nullptr;
   if (auto err = parse_impl(result, root, first, last, &target))
     return err;
   if (get_or(result.options, "help", false)) {
@@ -341,7 +347,7 @@ bool init_config(caf::actor_system_config& cfg, const command::invocation& from,
 }
 
 caf::expected<caf::message>
-run(command::invocation& invocation, caf::actor_system& sys,
+run(const command::invocation& invocation, caf::actor_system& sys,
     const command::factory& fact) {
   if (auto search_result = fact.find(invocation.full_name);
       search_result != fact.end())

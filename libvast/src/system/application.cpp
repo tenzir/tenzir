@@ -38,20 +38,13 @@
 #  include "vast/system/pcap_writer_command.hpp"
 #endif
 
-#define READER(name)                                                           \
-  reader_command<format::name ::reader, defaults::import ::name>
-
-#define GENERATOR(name)                                                        \
-  generator_command<format::name ::reader, defaults::import ::name>
-
-#define WRITER(name)                                                           \
-  writer_command<format::name ::writer, defaults::export_ ::name>
+namespace vast::system {
 
 namespace {
 
 /// @returns default options for source commands.
 auto source_opts(std::string_view category) {
-  return vast::command::opts(category)
+  return command::opts(category)
     .add<std::string>("listen,l", "the port number to listen on")
     .add<std::string>("read,r", "path to input where to read events from")
     .add<std::string>("schema-file,s", "path to alternate schema")
@@ -60,270 +53,306 @@ auto source_opts(std::string_view category) {
     .add<bool>("uds,d", "treat -r as listening UNIX domain socket");
 }
 
-// @returns defaults options for sink commands.
+/// @returns defaults options for sink commands.
 auto sink_opts(std::string_view category) {
-  return vast::command::opts(category)
+  return command::opts(category)
     .add<std::string>("write,w", "path to write events to")
     .add<bool>("uds,d", "treat -w as UNIX domain socket to connect to");
 }
 
+/// @returns default options for commands.
+auto opts(std::string_view category = "global") {
+  return command::opts(category);
+};
+
+auto make_root_command(std::string_view path) {
+  // We're only interested in the application name, not in its path. For
+  // example, argv[0] might contain "./build/release/bin/vast" and we are only
+  // interested in "vast".
+  path.remove_prefix(std::min(path.find_last_of('/') + 1, path.size()));
+  return std::make_unique<command>(
+    path, "manage a VAST topology", "",
+    opts("?system")
+      .add<std::string>("config-file", "path to a configuration file")
+      .add<caf::atom_value>("verbosity", "output verbosity level on the "
+                                         "console")
+      .add<std::vector<std::string>>(
+        "schema-paths", "list of paths to look for schema files "
+                        "([" VAST_INSTALL_PREFIX "/share/vast/schema])")
+      .add<std::string>("directory,d", "directory for persistent state")
+      .add<std::string>("endpoint,e", "node endpoint")
+      .add<std::string>("node-id,i", "the unique ID of this node")
+      .add<bool>("disable-accounting", "don't run the accountant")
+      .add<bool>("no-default-schema", "don't load the default schema "
+                                      "definitions"));
+}
+
+auto make_export_command() {
+  auto export_ = std::make_unique<command>(
+    "export", "exports query results to STDOUT or file", "",
+    opts("?export")
+      .add<bool>("node,N", "spawn a node instead of connecting to one")
+      .add<bool>("continuous,c", "marks a query as continuous")
+      .add<bool>("historical,h", "marks a query as historical")
+      .add<bool>("unified,u", "marks a query as unified")
+      .add<size_t>("max-events,n", "maximum number of results")
+      .add<std::string>("read,r", "path for reading the query"));
+  export_->add_subcommand("zeek", "exports query results in Zeek format", "",
+                          sink_opts("?export->zeek"));
+  export_->add_subcommand("csv", "exports query results in CSV format", "",
+                          sink_opts("?export->csv"));
+  export_->add_subcommand("ascii", "exports query results in ASCII format", "",
+                          sink_opts("?export->ascii"));
+  export_->add_subcommand("json", "exports query results in JSON format", "",
+                          sink_opts("?export->json"));
+#ifdef VAST_HAVE_PCAP
+  export_->add_subcommand(
+    "pcap", "exports query results in PCAP format", "",
+    opts("?export")
+      .add<std::string>("write,w", "path to write events to")
+      .add<bool>("uds,d", "treat -w as UNIX domain socket to connect to")
+      .add<size_t>("flush-interval,f", "flush to disk after this many "
+                                       "packets"));
+#endif
+  return export_;
+}
+
+auto make_import_command() {
+  auto import_ = std::make_unique<command>(
+    "import", "imports data from STDIN or file", "",
+    opts("?import")
+      .add<caf::atom_value>("table-slice-type,t", "table slice type")
+      .add<bool>("node,N", "spawn a node instead of connecting to one")
+      .add<bool>("blocking,b", "block until the IMPORTER forwarded all data")
+      .add<size_t>("max-events,n", "the maximum number of events to "
+                                   "import"));
+  import_->add_subcommand("zeek", "imports Zeek logs from STDIN or file", "",
+                          source_opts("?import.zeek"));
+  import_->add_subcommand("mrt", "import MRT logs from STDIN or file", "",
+                          source_opts("?import.mrt"));
+  import_->add_subcommand("bgpdump", "imports BGPdump logs from STDIN or file",
+                          "", source_opts("?import.bgpdump"));
+  import_->add_subcommand("csv", "imports CSV logs from STDIN or file", "",
+                          source_opts("?import.csv"));
+  import_->add_subcommand("json", "imports JSON with schema", "",
+                          source_opts("?import.json"));
+  import_->add_subcommand("suricata", "imports suricata eve json", "",
+                          source_opts("?import.suricata"));
+  import_->add_subcommand(
+    "test", "imports random data for testing or benchmarking", "",
+    opts("?import.test")
+      .add<size_t>("seed", "the random seed")
+      .add<std::string>("schema-file,s", "path to alternate schema")
+      .add<std::string>("schema,S", "alternate schema as string"));
+#ifdef VAST_HAVE_PCAP
+  import_->add_subcommand(
+    "pcap", "imports PCAP logs from STDIN or file", "",
+    opts("?import")
+      .add<std::string>("read,r", "path to input where to read events from")
+      .add<std::string>("schema,s", "path to alternate schema")
+      .add<bool>("uds,d", "treat -r as listening UNIX domain socket")
+      .add<size_t>("cutoff,c", "skip flow packets after this many bytes")
+      .add<size_t>("max-flows,m", "number of concurrent flows to track")
+      .add<size_t>("max-flow-age,a", "max flow lifetime before eviction")
+      .add<size_t>("flow-expiry,e", "flow table expiration interval")
+      .add<size_t>("pseudo-realtime-factor,p", "factor c delaying packets by "
+                                               "1/c"));
+#endif
+  return import_;
+}
+
+auto make_kill_command() {
+  return std::make_unique<command>("kill", "terminates a component", "",
+                                   opts());
+}
+
+auto make_peer_command() {
+  return std::make_unique<command>("peer", "peers with another node", "",
+                                   opts());
+}
+
+auto make_send_command() {
+  return std::make_unique<command>(
+    "send", "sends a message to a registered actor", "", opts(), false);
+}
+
+auto make_spawn_source_command() {
+  auto spawn_source = std::make_unique<command>(
+    "source", "creates a new source", "",
+    opts()
+      .add<std::string>("read,r", "path to input")
+      .add<std::string>("schema,s", "path to alternate schema")
+      .add<caf::atom_value>("table-slice,t", "table slice type")
+      .add<bool>("uds,d", "treat -w as UNIX domain socket"));
+  spawn_source->add_subcommand(
+    "pcap", "creates a new PCAP source", "",
+    opts()
+      .add<size_t>("cutoff,c", "skip flow packets after this many bytes")
+      .add<size_t>("flow-max,m", "number of concurrent flows to track")
+      .add<size_t>("flow-age,a", "max flow lifetime before eviction")
+      .add<size_t>("flow-expiry,e", "flow table expiration interval")
+      .add<int64_t>("pseudo-realtime,p", "factor c delaying trace packets by "
+                                         "1/c"));
+  spawn_source->add_subcommand("test", "creates a new test source", "",
+                               opts()
+                                 .add<size_t>("seed,s", "the PRNG seed")
+                                 .add<size_t>("events,n", "number of events to "
+                                                          "generate"));
+  spawn_source->add_subcommand("zeek", "creates a new Zeek source", "", opts());
+  spawn_source->add_subcommand("bgpdump", "creates a new BGPdump source", "",
+                               opts());
+  spawn_source->add_subcommand("mrt", "creates a new MRT source", "", opts());
+  return spawn_source;
+}
+
+auto make_spawn_sink_command() {
+  auto spawn_sink = std::make_unique<command>(
+    "sink", "creates a new sink", "",
+    opts()
+      .add<std::string>("write,w", "path to write events to")
+      .add<bool>("uds,d", "treat -w as UNIX domain socket"));
+  spawn_sink->add_subcommand(
+    "pcap", "creates a new PCAP sink", "",
+    opts().add<size_t>("flush,f", "flush to disk after this many packets"));
+  spawn_sink->add_subcommand("zeek", "creates a new Zeek sink", "", opts());
+  spawn_sink->add_subcommand("ascii", "creates a new ASCII sink", "", opts());
+  spawn_sink->add_subcommand("csv", "creates a new CSV sink", "", opts());
+  spawn_sink->add_subcommand("json", "creates a new JSON sink", "", opts());
+  return spawn_sink;
+}
+
+auto make_spawn_command() {
+  auto spawn
+    = std::make_unique<command>("spawn", "creates a new component", "", opts());
+  spawn->add_subcommand("accountant", "spawns the accountant", "", opts());
+  spawn->add_subcommand(
+    "archive", "creates a new archive", "",
+    opts()
+      .add<size_t>("segments,s", "number of cached segments")
+      .add<size_t>("max-segment-size,m", "maximum segment size in MB"));
+  spawn->add_subcommand(
+    "exporter", "creates a new exporter", "",
+    opts()
+      .add<bool>("continuous,c", "marks a query as continuous")
+      .add<bool>("historical,h", "marks a query as historical")
+      .add<bool>("unified,u", "marks a query as unified")
+      .add<uint64_t>("events,e", "maximum number of results"));
+  spawn->add_subcommand("importer", "creates a new importer", "",
+                        opts().add<size_t>("ids,n", "number of initial IDs to "
+                                                    "request (deprecated)"));
+  spawn->add_subcommand(
+    "index", "creates a new index", "",
+    opts()
+      .add<size_t>("max-events,e", "maximum events per partition")
+      .add<size_t>("max-parts,p", "maximum number of in-memory partitions")
+      .add<size_t>("taste-parts,t", "number of immediately scheduled "
+                                    "partitions")
+      .add<size_t>("max-queries,q", "maximum number of concurrent queries"));
+  spawn->add_subcommand("consensus", "creates a new consensus", "",
+                        opts().add<raft::server_id>("id,i", "the server ID of "
+                                                            "the consensus "
+                                                            "module"));
+  spawn->add_subcommand("profiler", "creates a new profiler", "",
+                        opts()
+                          .add<bool>("cpu,c", "start the CPU profiler")
+                          .add<bool>("heap,h", "start the heap profiler")
+                          .add<size_t>("resolution,r", "seconds between "
+                                                       "measurements"));
+  spawn->add_subcommand(make_spawn_source_command());
+  spawn->add_subcommand(make_spawn_sink_command());
+  return spawn;
+}
+
+auto make_status_command() {
+  return std::make_unique<command>(
+    "status", "shows various properties of a topology", "", opts());
+}
+
+auto make_start_command() {
+  return std::make_unique<command>("start", "starts a node", "", opts());
+}
+
+auto make_stop_command() {
+  return std::make_unique<command>("stop", "stops a node", "", opts());
+}
+
+auto make_version_command() {
+  return std::make_unique<command>("version", "prints the software version", "",
+                                   opts());
+}
+
+auto make_command_factory() {
+  // When updating this list, remember to update its counterpart in node.cpp as
+  // well iff necessary
+  return command::factory{
+    {"export ascii",
+     writer_command<format::ascii::writer, defaults::export_::ascii>},
+    {"export csv", writer_command<format::csv::writer, defaults::export_::csv>},
+    {"export json",
+     writer_command<format::json::writer, defaults::export_::json>},
+#ifdef VAST_HAVE_PCAP
+    {"export pcap", pcap_writer_command},
+#endif
+    {"export zeek",
+     writer_command<format::zeek::writer, defaults::export_::zeek>},
+    {"import bgpdump",
+     reader_command<format::bgpdump::reader, defaults::import::bgpdump>},
+    {"import csv", reader_command<format::csv::reader, defaults::import::csv>},
+    {"import json",
+     reader_command<format::json::reader<>, defaults::import::json>},
+    {"import mrt", reader_command<format::mrt::reader, defaults::import::mrt>},
+#ifdef VAST_HAVE_PCAP
+    {"import pcap", pcap_reader_command},
+#endif
+    {"import suricata",
+     reader_command<format::json::reader<format::json::suricata>,
+                    defaults::import::suricata>},
+    {"import test",
+     generator_command<format::test::reader, defaults::import::test>},
+    {"import zeek",
+     reader_command<format::zeek::reader, defaults::import::zeek>},
+    {"kill", remote_command},
+    {"peer", remote_command},
+    {"send", remote_command},
+    {"spawn accountant", remote_command},
+    {"spawn archive", remote_command},
+    {"spawn consensus", remote_command},
+    {"spawn exporter", remote_command},
+    {"spawn importer", remote_command},
+    {"spawn index", remote_command},
+    {"spawn sink ascii", remote_command},
+    {"spawn sink csv", remote_command},
+    {"spawn sink json", remote_command},
+    {"spawn sink pcap", remote_command},
+    {"spawn sink zeek", remote_command},
+    {"spawn source bgpdump", remote_command},
+    {"spawn source mrt", remote_command},
+    {"spawn source pcap", remote_command},
+    {"spawn source test", remote_command},
+    {"spawn source zeek", remote_command},
+    {"start", start_command},
+    {"status", remote_command},
+    {"stop", remote_command},
+    {"version", version_command},
+  };
+}
+
 } // namespace
 
-namespace vast::system {
-
-std::pair<vast::command, vast::command::factory> make_application() {
-  using caf::atom_value;
-  // Returns default options for commands.
-  auto opts = [](std::string_view category = "global") {
-    return command::opts(category);
-  };
-  // Set global options.
-  // clang-format off
-  const char* schema_paths_help =
-    "list of paths to look for schema files"
-    " ([" VAST_INSTALL_PREFIX "/share/vast/schema])";
-  // clang-format on
-  command::factory fact = {};
-  command root;
-  root.options
-    = opts("?system")
-        .add<std::string>("config-file", "path to a configuration file")
-        .add<atom_value>("verbosity", "output verbosity level on the console")
-        .add<std::vector<std::string>>("schema-paths", schema_paths_help)
-        .add<std::string>("directory,d", "directory for persistent state")
-        .add<std::string>("endpoint,e", "node endpoint")
-        .add<std::string>("node-id,i", "the unique ID of this node")
-        .add<bool>("disable-accounting", "don't run the accountant")
-        .add<bool>("no-default-schema", "don't load the default schema "
-                                        "definitions")
-        .finish();
-  // Add standalone commands.
-  root.add("version", opts())
-    ->describe("prints the software version")
-    ->run(version_command, fact);
-  root.add("start", opts())->describe("starts a node")->run(start_command, fact);
-  root.add("stop", opts())->describe("stops a node")->run(remote_command, fact);
-  root.add("kill", opts())
-    ->describe("terminates a component")
-    ->run(remote_command, fact);
-  root.add("peer", opts())
-    ->describe("peers with another node")
-    ->run(remote_command, fact);
-  root.add("status", opts())
-    ->describe("shows various properties of a topology")
-    ->run(remote_command, fact);
-  root.add("send", opts())
-    ->describe("sends a message to a registered actor")
-    ->run(remote_command, fact)
-    ->hide();
-  // Add "spawn" command and its children.
-  auto spawn = root.add("spawn", opts())
-                 ->describe("creates a new component")
-                 ->run(remote_command, fact);
-  spawn->add("accountant", opts())
-    ->describe("spawns the accountant")
-    ->run(remote_command, fact);
-  spawn
-    ->add("archive", opts()
-                       .add<size_t>("segments,s", "number of cached segments")
-                       .add<size_t>("max-segment-size,m", "maximum segment "
-                                                          "size in MB"))
-    ->describe("creates a new archive")
-    ->run(remote_command, fact);
-  spawn
-    ->add("exporter",
-          opts()
-            .add<bool>("continuous,c", "marks a query as continuous")
-            .add<bool>("historical,h", "marks a query as historical")
-            .add<bool>("unified,u", "marks a query as unified")
-            .add<uint64_t>("events,e", "maximum number of results"))
-    ->describe("creates a new exporter")
-    ->run(remote_command, fact);
-  spawn
-    ->add("importer", opts().add<size_t>("ids,n", "number of initial IDs to "
-                                                  "request "
-                                                  "(deprecated)"))
-    ->describe("creates a new importer")
-    ->run(remote_command, fact);
-  spawn
-    ->add(
-      "index",
-      opts()
-        .add<size_t>("max-events,e", "maximum events per partition")
-        .add<size_t>("max-parts,p", "maximum number of in-memory partitions")
-        .add<size_t>("taste-parts,t", "number of immediately scheduled "
-                                      "partitions")
-        .add<size_t>("max-queries,q", "maximum number of concurrent queries"))
-    ->describe("creates a new index")
-    ->run(remote_command, fact);
-  spawn
-    ->add("consensus", opts().add<raft::server_id>("id,i", "the server ID of "
-                                                           "the consensus "
-                                                           "module"))
-    ->describe("creates a new consensus")
-    ->run(remote_command, fact);
-  spawn
-    ->add("profiler", opts()
-                        .add<bool>("cpu,c", "start the CPU profiler")
-                        .add<bool>("heap,h", "start the heap profiler")
-                        .add<size_t>("resolution,r", "seconds between "
-                                                     "measurements"))
-    ->describe("creates a new profiler")
-    ->run(remote_command, fact);
-  // Add "spawn source" command and its children.
-  auto source
-    = spawn
-        ->add("source",
-              opts()
-                .add<std::string>("read,r", "path to input")
-                .add<std::string>("schema,s", "path to alternate schema")
-                .add<caf::atom_value>("table-slice,t", "table slice type")
-                .add<bool>("uds,d", "treat -w as UNIX domain socket"))
-        ->describe("creates a new source");
-  source
-    ->add("pcap",
-          opts()
-            .add<size_t>("cutoff,c", "skip flow packets after this many bytes")
-            .add<size_t>("flow-max,m", "number of concurrent flows to track")
-            .add<size_t>("flow-age,a", "max flow lifetime before eviction")
-            .add<size_t>("flow-expiry,e", "flow table expiration interval")
-            .add<int64_t>("pseudo-realtime,p", "factor c delaying trace "
-                                               "packets by 1/c"))
-    ->describe("creates a new PCAP source")
-    ->run(remote_command, fact);
-  source
-    ->add("test", opts()
-                    .add<size_t>("seed,s", "the PRNG seed")
-                    .add<size_t>("events,n", "number of events to generate"))
-    ->describe("creates a new test source")
-    ->run(remote_command, fact);
-  source->add("zeek", opts())
-    ->describe("creates a new Zeek source")
-    ->run(remote_command, fact);
-  source->add("bgpdump", opts())
-    ->describe("creates a new BGPdump source")
-    ->run(remote_command, fact);
-  source->add("mrt", opts())
-    ->describe("creates a new MRT source")
-    ->run(remote_command, fact);
-  // Add "spawn sink" command and its children.
-  auto sink
-    = spawn
-        ->add("sink", opts()
-                        .add<std::string>("write,w", "path to write events to")
-                        .add<bool>("uds,d", "treat -w as UNIX domain socket"))
-        ->describe("creates a new sink");
-  sink
-    ->add("pcap", opts().add<size_t>("flush,f", "flush to disk after this many "
-                                                "packets"))
-    ->describe("creates a new PCAP sink")
-    ->run(remote_command, fact);
-  sink->add("zeek", opts())
-    ->describe("creates a new Zeek sink")
-    ->run(remote_command, fact);
-  sink->add("ascii", opts())
-    ->describe("creates a new ASCII sink")
-    ->run(remote_command, fact);
-  sink->add("csv", opts())
-    ->describe("creates a new CSV sink")
-    ->run(remote_command, fact);
-  sink->add("json", opts())
-    ->describe("creates a new JSON sink")
-    ->run(remote_command, fact);
-  // Add "import" command and its children.
-  auto import_
-    = root
-        .add("import",
-             opts("?import")
-               .add<atom_value>("table-slice-type,t", "table slice type")
-               .add<bool>("node,N", "spawn a node instead of connecting to one")
-               .add<bool>("blocking,b", "block until the IMPORTER forwarded "
-                                        "all "
-                                        "data")
-               .add<size_t>("max-events,n", "the maximum number of events to "
-                                            "import"))
-        ->describe("imports data from STDIN or file");
-  import_->add("zeek", source_opts("?import.zeek"))
-    ->describe("imports Zeek logs from STDIN or file")
-    ->run(READER(zeek), fact);
-  import_->add("mrt", source_opts("?import.mrt"))
-    ->describe("imports MRT logs from STDIN or file")
-    ->run(READER(mrt), fact);
-  import_->add("bgpdump", source_opts("?import.bgpdump"))
-    ->describe("imports BGPdump logs from STDIN or file")
-    ->run(READER(bgpdump), fact);
-  import_->add("csv", source_opts("?import.csv"))
-    ->describe("imports CSV logs from STDIN or file")
-    ->run(READER(csv), fact);
-  namespace fj = format::json;
-  import_->add("json", source_opts("?import.json"))
-    ->describe("imports json with schema")
-    ->run(reader_command<fj::reader<>, defaults::import::json>, fact);
-  import_->add("suricata", source_opts("?import.suricata"))
-    ->describe("imports suricata eve json")
-    ->run(reader_command<fj::reader<fj::suricata>, defaults::import::suricata>,
-          fact);
-  import_
-    ->add("test", opts("?import.test")
-                    .add<size_t>("seed", "the random seed")
-                    .add<std::string>("schema-file,s", "path to alternate "
-                                                       "schema")
-                    .add<std::string>("schema,S", "alternate schema as string"))
-    ->describe("imports random data for testing or benchmarking")
-    ->run(GENERATOR(test), fact);
-  // Add "export" command and its children.
-  auto export_
-    = root
-        .add("export",
-             opts("?export")
-               .add<bool>("node,N", "spawn a node instead of connecting "
-                                    "to one")
-               .add<bool>("continuous,c", "marks a query as continuous")
-               .add<bool>("historical,h", "marks a query as historical")
-               .add<bool>("unified,u", "marks a query as unified")
-               .add<size_t>("max-events,n", "maximum number of results")
-               .add<std::string>("read,r", "path for reading the query"))
-        ->describe("exports query results to STDOUT or file");
-  export_->add("zeek", sink_opts("?export.zeek"))
-    ->describe("exports query results in Zeek format")
-    ->run(WRITER(zeek), fact);
-  export_->add("csv", sink_opts("?export.csv"))
-    ->describe("exports query results in CSV format")
-    ->run(WRITER(csv), fact);
-  export_->add("ascii", sink_opts("?export.ascii"))
-    ->describe("exports query results in ASCII format")
-    ->run(WRITER(ascii), fact);
-  export_->add("json", sink_opts("?export.json"))
-    ->describe("exports query results in JSON format")
-    ->run(WRITER(json), fact);
-  // Add PCAP import and export commands when compiling with PCAP enabled.
-#ifdef VAST_HAVE_PCAP
-  import_
-    ->add("pcap",
-          opts("?import")
-            .add<std::string>("read,r", "path to input where to read events "
-                                        "from")
-            .add<std::string>("schema,s", "path to alternate schema")
-            .add<bool>("uds,d", "treat -r as listening UNIX domain socket")
-            .add<size_t>("cutoff,c", "skip flow packets after this many bytes")
-            .add<size_t>("max-flows,m", "number of concurrent flows to track")
-            .add<size_t>("max-flow-age,a", "max flow lifetime before eviction")
-            .add<size_t>("flow-expiry,e", "flow table expiration interval")
-            .add<size_t>("pseudo-realtime-factor,p", "factor c delaying "
-                                                     "packets by 1/c"))
-    ->describe("imports PCAP logs from STDIN or file")
-    ->run(pcap_reader_command, fact);
-  export_
-    ->add("pcap",
-          opts("?export")
-            .add<std::string>("write,w", "path to write events to")
-            .add<bool>("uds,d", "treat -w as UNIX domain socket to connect to")
-            .add<size_t>("flush-interval,f", "flush to disk after this many "
-                                             "packets"))
-    ->describe("exports query results in PCAP format")
-    ->run(pcap_writer_command, fact);
-#endif
-  return {std::move(root), std::move(fact)};
+std::pair<std::unique_ptr<command>, command::factory>
+make_application(std::string_view path) {
+  auto root = make_root_command(path);
+  root->add_subcommand(make_export_command());
+  root->add_subcommand(make_import_command());
+  root->add_subcommand(make_kill_command());
+  root->add_subcommand(make_peer_command());
+  root->add_subcommand(make_send_command());
+  root->add_subcommand(make_spawn_command());
+  root->add_subcommand(make_start_command());
+  root->add_subcommand(make_status_command());
+  root->add_subcommand(make_stop_command());
+  root->add_subcommand(make_version_command());
+  return {std::move(root), make_command_factory()};
 }
 
 void render_error(const command& root, const caf::error& err,
