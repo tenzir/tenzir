@@ -354,7 +354,21 @@ node_state::~node_state() {
 
 void node_state::init(std::string init_name, path init_dir) {
   node_state::component_factory = make_component_factory();
+  if (node_state::extra_component_factory != nullptr) {
+    auto extra = node_state::extra_component_factory();
+    // FIXME replace with std::map::merge once CI is updated to a newer libc++
+    extra.insert(node_state::component_factory.begin(),
+                 node_state::component_factory.end());
+    node_state::component_factory = std::move(extra);
+  }
   node_state::command_factory = make_command_factory();
+  if (node_state::extra_command_factory != nullptr) {
+    auto extra = node_state::extra_command_factory();
+    // FIXME replace with std::map::merge once CI is updated to a newer libc++
+    extra.insert(node_state::command_factory.begin(),
+                 node_state::command_factory.end());
+    node_state::command_factory = std::move(extra);
+  }
   // Set member variables.
   name = std::move(init_name);
   dir = std::move(init_dir);
