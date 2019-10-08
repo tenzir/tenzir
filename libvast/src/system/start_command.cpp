@@ -42,9 +42,7 @@ using namespace std::chrono_literals;
 caf::message start_command_impl(start_command_extra_steps extra_steps,
                                 const command::invocation& invocation,
                                 caf::actor_system& sys) {
-  VAST_TRACE(VAST_ARG(invocation.options),
-             VAST_ARG("args", invocation.arguments.begin(),
-                      invocation.arguments.end()));
+  VAST_TRACE(invocation);
   // Fetch SSL settings from config.
   auto& sys_cfg = sys.config();
   auto use_encryption = !sys_cfg.openssl_certificate.empty()

@@ -28,9 +28,7 @@ namespace vast::system {
 
 caf::message
 remote_command(const command::invocation& invocation, caf::actor_system& sys) {
-  auto first = invocation.arguments.begin();
-  auto last = invocation.arguments.end();
-  VAST_TRACE(VAST_ARG(invocation.options), VAST_ARG("args", first, last));
+  VAST_TRACE(invocation);
   // Get a convenient and blocking way to interact with actors.
   caf::scoped_actor self{sys};
   // Get VAST node.
@@ -39,14 +37,8 @@ remote_command(const command::invocation& invocation, caf::actor_system& sys) {
     return caf::make_message(std::move(node_opt.error()));
   auto node = std::move(*node_opt);
   self->monitor(node);
-  // Delegate command to node.
-  // std::vector<std::string> argv;
-  // argv.reserve(detail::narrow_cast<size_t>(std::distance(first, last) + 1));
-  // const auto name = invocation.name();
-  // argv.emplace_back(name.begin(), name.end());
-  // argv.insert(argv.end(), first, last);
+  // Delegate invocation to node.
   caf::error err;
-  // self->send(node, std::move(argv), invocation.options);
   self->send(node, std::move(invocation));
   self->receive(
     [&](const caf::down_msg&) {

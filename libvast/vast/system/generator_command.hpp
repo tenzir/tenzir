@@ -33,16 +33,15 @@ namespace vast::system {
 template <class Generator, class Defaults>
 caf::message generator_command(const command::invocation& invocation,
                                caf::actor_system& sys) {
-  VAST_TRACE("");
+  auto& options = invocation.options;
+  VAST_TRACE(invocation);
   std::string category = Defaults::category;
-  auto table_slice
-    = defaults::import::table_slice_type(sys, invocation.options);
-  auto num = get_or(invocation.options, "import.max-events",
-                    defaults::import::max_events);
-  auto schema = get_schema(invocation.options, category);
+  auto table_slice = defaults::import::table_slice_type(sys, options);
+  auto num = get_or(options, "import.max-events", defaults::import::max_events);
+  auto schema = get_schema(options, category);
   if (!schema)
     return caf::make_message(schema.error());
-  auto seed = Defaults::seed(invocation.options);
+  auto seed = Defaults::seed(options);
   Generator generator{table_slice, seed, num};
   if (auto err = generator.schema(*schema))
     return caf::make_message(err);

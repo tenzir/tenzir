@@ -90,7 +90,7 @@ caf::message sink_command(const command::invocation& invocation,
   }
   // Transform expression if needed, e.g., for PCAP sink.
   if (invocation.name() == "pcap") {
-    VAST_DEBUG(&invocation, "restricts expression to PCAP packets");
+    VAST_DEBUG(invocation.full_name, "restricts expression to PCAP packets");
     // We parse the query expression first, work on the AST, and then render
     // the expression again to avoid performing brittle string manipulations.
     auto expr = to<expression>(query);
@@ -139,7 +139,7 @@ caf::message sink_command(const command::invocation& invocation,
     .receive(
       [&](const std::string& id, system::registry& reg) {
         // Assign accountant to sink.
-        VAST_DEBUG(&invocation, "assigns accountant from node", id,
+        VAST_DEBUG(invocation.full_name, "assigns accountant from node", id,
                    "to new sink");
         auto er = reg.components[id].find("accountant");
         if (er != reg.components[id].end()) {
@@ -166,23 +166,23 @@ caf::message sink_command(const command::invocation& invocation,
           self->send_exit(snk, exit_reason::user_shutdown);
           self->send_exit(exp, exit_reason::user_shutdown);
         } else if (msg.source == exp) {
-          VAST_DEBUG(&invocation, "received DOWN from exporter");
+          VAST_DEBUG(invocation.full_name, "received DOWN from exporter");
           self->send_exit(snk, exit_reason::user_shutdown);
         } else if (msg.source == snk) {
-          VAST_DEBUG(&invocation, "received DOWN from sink");
+          VAST_DEBUG(invocation.full_name, "received DOWN from sink");
           self->send_exit(exp, exit_reason::user_shutdown);
         } else {
           VAST_ASSERT(!"received DOWN from inexplicable actor");
         }
         if (msg.reason) {
-          VAST_WARNING(&invocation, "received error message:",
+          VAST_WARNING(invocation.full_name, "received error message:",
                        self->system().render(msg.reason));
           err = std::move(msg.reason);
         }
         stop = true;
       },
       [&](system::signal_atom, int signal) {
-        VAST_DEBUG(&invocation, "got " << ::strsignal(signal));
+        VAST_DEBUG(invocation.full_name, "got " << ::strsignal(signal));
         if (signal == SIGINT || signal == SIGTERM) {
           self->send_exit(exp, exit_reason::user_shutdown);
           self->send_exit(snk, exit_reason::user_shutdown);

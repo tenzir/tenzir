@@ -24,7 +24,8 @@ namespace vast::system {
 
 /// Creates the applications command tree based on a single root command.
 /// @returns the root command.
-std::pair<vast::command, vast::command::factory> make_application();
+std::pair<std::unique_ptr<vast::command>, vast::command::factory>
+make_application(std::string_view path);
 
 /// Formats a useful human readable error message on the output stream.
 /// @param root The root command of the application.

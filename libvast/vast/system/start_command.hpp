@@ -29,11 +29,8 @@ using start_command_extra_steps = std::function<caf::error(
 /// @param extra_steps Function that adds additional application logic after
 ///                    the node is connected and before the command enters its
 ///                    loop to wait for CTRL+C or system shutdown.
-/// @param cmd Command object that dispatches to this function.
+/// @param invocation Invocation object that dispatches to this function.
 /// @param sys The hosting CAF actor system.
-/// @param options Command-specific parameters.
-/// @param begin Iterator to the first command argument.
-/// @param end Past-the-end iterator for the command arguments.
 /// @returns An non-default error on if the extra steps fail and
 ///          `start_command_impl` needs to stop running, `caf::none` otherwise.
 /// @relates start_command
@@ -42,11 +39,8 @@ caf::message start_command_impl(start_command_extra_steps extra_steps,
                                 caf::actor_system& sys);
 
 /// Default implementation for the *start* command.
-/// @param cmd Command object that dispatches to this function.
+/// @param invocation Invocation object that dispatches to this function.
 /// @param sys The hosting CAF actor system.
-/// @param options Command-specific parameters.
-/// @param begin Iterator to the first command argument.
-/// @param end Past-the-end iterator for the command arguments.
 /// @returns An error on invalid arguments or when unable to connect to the
 ///          remote node, an empty message otherwise.
 /// @relates application

@@ -44,18 +44,16 @@ namespace vast::system {
 template <class Reader, class Defaults>
 caf::message
 reader_command(const command::invocation& invocation, caf::actor_system& sys) {
-  VAST_TRACE(VAST_ARG(invocation.options),
-             VAST_ARG("args", invocation.arguments));
+  VAST_TRACE(invocation);
+  auto& options = invocation.options;
   std::string category = Defaults::category;
-  auto max_events
-    = caf::get_if<size_t>(&invocation.options, "import.max-events");
-  auto slice_type = defaults::import::table_slice_type(sys, invocation.options);
-  auto slice_size = get_or(invocation.options, "system.table-slice-size",
+  auto max_events = caf::get_if<size_t>(&options, "import.max-events");
+  auto slice_type = defaults::import::table_slice_type(sys, options);
+  auto slice_size = get_or(options, "system.table-slice-size",
                            defaults::system::table_slice_size);
   // Discern the input source (file, stream, or socket).
-  auto uri
-    = caf::get_if<std::string>(&invocation.options, category + ".listen");
-  auto file = caf::get_if<std::string>(&invocation.options, category + ".read");
+  auto uri = caf::get_if<std::string>(&options, category + ".listen");
+  auto file = caf::get_if<std::string>(&options, category + ".read");
   if (uri && file)
     return caf::make_message(make_error(ec::invalid_configuration,
                                         "only one source possible (-r or -l)"));
@@ -66,11 +64,10 @@ reader_command(const command::invocation& invocation, caf::actor_system& sys) {
     else
       file = std::string{Reader::defaults::path};
   }
-  auto schema = get_schema(invocation.options, category);
+  auto schema = get_schema(options, category);
   if (!schema)
     return caf::make_message(schema.error());
-  if (auto type
-      = caf::get_if<std::string>(&invocation.options, category + ".type")) {
+  if (auto type = caf::get_if<std::string>(&options, category + ".type")) {
     auto p = schema->find(*type);
     if (p == nullptr)
       return caf::make_message(
@@ -96,7 +93,7 @@ reader_command(const command::invocation& invocation, caf::actor_system& sys) {
         ep.port = port{ep.port.number(), port::tcp};
       }
     }
-    Reader reader{slice_type, invocation.options};
+    Reader reader{slice_type, options};
     if (schema)
       reader.schema(*schema);
     auto run = [&](auto&& source) {
@@ -115,11 +112,11 @@ reader_command(const command::invocation& invocation, caf::actor_system& sys) {
         src = run(datagram_source<Reader>);
     }
   } else {
-    auto uds = get_or(invocation.options, category + ".uds", false);
+    auto uds = get_or(options, category + ".uds", false);
     auto in = detail::make_input_stream(*file, uds);
     if (!in)
       return caf::make_message(std::move(in.error()));
-    Reader reader{slice_type, invocation.options, std::move(*in)};
+    Reader reader{slice_type, options, std::move(*in)};
     if (schema)
       reader.schema(*schema);
     VAST_INFO(reader, "reads data from", *file);

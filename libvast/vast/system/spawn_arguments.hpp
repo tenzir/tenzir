@@ -41,11 +41,6 @@ struct spawn_arguments {
   }
 };
 
-template <class Inspector>
-auto inspect(Inspector& f, spawn_arguments& x) {
-  return f(caf::meta::type_name("spawn_arguments"), x.dir, x.label);
-}
-
 /// Attempts to parse `[args.first, args.last)` as ::expression and returns a
 /// normalized and validated version of that expression on success.
 caf::expected<expression> normalized_and_valided(const spawn_arguments& args);

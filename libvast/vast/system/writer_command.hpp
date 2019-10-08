@@ -34,17 +34,16 @@ namespace vast::system {
 template <class Writer, class Defaults>
 caf::message
 writer_command(const command::invocation& invocation, caf::actor_system& sys) {
-  VAST_TRACE(VAST_ARG(invocation.options),
-             VAST_ARG("args", invocation.arguments));
+  VAST_TRACE(invocation);
+  auto& options = invocation.options;
   std::string category = Defaults::category;
   using ostream_ptr = std::unique_ptr<std::ostream>;
-  auto max_events = get_or(invocation.options, "export.max-events",
-                           defaults::export_::max_events);
+  auto max_events
+    = get_or(options, "export.max-events", defaults::export_::max_events);
   caf::actor snk;
   if constexpr (std::is_constructible_v<Writer, ostream_ptr>) {
-    auto output
-      = get_or(invocation.options, category + ".write", Defaults::write);
-    auto uds = get_or(invocation.options, category + ".uds", false);
+    auto output = get_or(options, category + ".write", Defaults::write);
+    auto uds = get_or(options, category + ".uds", false);
     auto out = detail::make_output_stream(output, uds);
     if (!out)
       return caf::make_message(out.error());

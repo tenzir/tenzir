@@ -37,10 +37,10 @@ struct node_state {
   // -- member types ----------------------------------------------------------
 
   /// Spawns a component (actor) for the NODE with given spawn arguments.
-  using component_factory = maybe_actor (*)(node_actor*, spawn_arguments&);
+  using component_factory_fun = maybe_actor (*)(node_actor*, spawn_arguments&);
 
-  /// Maps command names to component factories.
-  using named_component_factories = std::map<std::string, component_factory>;
+  /// Maps command names to a component factory.
+  using named_component_factory = std::map<std::string, component_factory_fun>;
 
   // -- static member functions ------------------------------------------------
 
@@ -72,11 +72,8 @@ struct node_state {
   /// Points to the node itself.
   caf::event_based_actor* self;
 
-  /// Dispatches remote invocations.
-  inline static command::invocation invocation = {};
-
   /// Maps command names (including parent command) to spawn functions.
-  inline static named_component_factories component_factories = {};
+  inline static named_component_factory component_factory = {};
 
   /// Maps command names to functions.
   inline static command::factory command_factory = {};

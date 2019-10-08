@@ -36,23 +36,20 @@ namespace vast::system {
 
 caf::message pcap_reader_command(const command::invocation& invocation,
                                  caf::actor_system& sys) {
-  auto first = invocation.arguments.begin();
-  auto last = invocation.arguments.end();
-  VAST_TRACE(VAST_ARG(invocation.options), VAST_ARG("args", first, last));
+  VAST_TRACE(invocation);
+  auto& options = invocation.options;
   using reader_t = format::pcap::reader;
   using defaults_t = defaults::import::pcap;
   std::string category = defaults_t::category;
   reader_t reader{
-    defaults::import::table_slice_type(sys, invocation.options),
-    invocation.options,
-    get_or(invocation.options, category + ".read", defaults_t::read),
-    get_or(invocation.options, category + ".cutoff", defaults_t::cutoff),
-    get_or(invocation.options, category + ".max-flows", defaults_t::max_flows),
-    get_or(invocation.options, category + ".max-flow-age",
-           defaults_t::max_flow_age),
-    get_or(invocation.options, category + ".flow-expiry",
-           defaults_t::flow_expiry),
-    get_or(invocation.options, category + ".pseudo-realtime-factor",
+    defaults::import::table_slice_type(sys, options),
+    options,
+    get_or(options, category + ".read", defaults_t::read),
+    get_or(options, category + ".cutoff", defaults_t::cutoff),
+    get_or(options, category + ".max-flows", defaults_t::max_flows),
+    get_or(options, category + ".max-flow-age", defaults_t::max_flow_age),
+    get_or(options, category + ".flow-expiry", defaults_t::flow_expiry),
+    get_or(options, category + ".pseudo-realtime-factor",
            defaults_t::pseudo_realtime_factor)};
   auto src = sys.spawn(default_source<format::pcap::reader>, std::move(reader));
   return source_command(invocation, sys, std::move(src));
