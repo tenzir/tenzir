@@ -42,11 +42,10 @@ namespace vast::system {
 /// formats.
 /// @relates application
 template <class Reader, class Defaults>
-caf::message reader_command(const command& cmd, caf::actor_system& sys,
-                            caf::settings& options,
-                            command::argument_iterator first,
-                            command::argument_iterator last) {
-  VAST_TRACE(VAST_ARG(options), VAST_ARG("args", first, last));
+caf::message
+reader_command(const command::invocation& invocation, caf::actor_system& sys) {
+  VAST_TRACE(invocation);
+  auto& options = invocation.options;
   std::string category = Defaults::category;
   auto max_events = caf::get_if<size_t>(&options, "import.max-events");
   auto slice_type = defaults::import::table_slice_type(sys, options);
@@ -123,7 +122,7 @@ caf::message reader_command(const command& cmd, caf::actor_system& sys,
     VAST_INFO(reader, "reads data from", *file);
     src = sys.spawn(source<Reader>, std::move(reader), slice_size, max_events);
   }
-  return source_command(cmd, sys, std::move(src), options, first, last);
+  return source_command(invocation, sys, std::move(src));
 }
 
 } // namespace vast::system

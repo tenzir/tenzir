@@ -34,28 +34,25 @@
 
 namespace vast::system {
 
-caf::message pcap_reader_command(const command& cmd, caf::actor_system& sys,
-                                 caf::settings& options,
-                                 command::argument_iterator first,
-                                 command::argument_iterator last) {
-  VAST_TRACE(VAST_ARG(options), VAST_ARG("args", first, last));
+caf::message pcap_reader_command(const command::invocation& invocation,
+                                 caf::actor_system& sys) {
+  VAST_TRACE(invocation);
+  auto& options = invocation.options;
   using reader_t = format::pcap::reader;
   using defaults_t = defaults::import::pcap;
   std::string category = defaults_t::category;
-  reader_t reader{defaults::import::table_slice_type(sys, options),
-                  options,
-                  get_or(options, category + ".read", defaults_t::read),
-                  get_or(options, category + ".cutoff", defaults_t::cutoff),
-                  get_or(options, category + ".max-flows",
-                         defaults_t::max_flows),
-                  get_or(options, category + ".max-flow-age",
-                         defaults_t::max_flow_age),
-                  get_or(options, category + ".flow-expiry",
-                         defaults_t::flow_expiry),
-                  get_or(options, category + ".pseudo-realtime-factor",
-                         defaults_t::pseudo_realtime_factor)};
+  reader_t reader{
+    defaults::import::table_slice_type(sys, options),
+    options,
+    get_or(options, category + ".read", defaults_t::read),
+    get_or(options, category + ".cutoff", defaults_t::cutoff),
+    get_or(options, category + ".max-flows", defaults_t::max_flows),
+    get_or(options, category + ".max-flow-age", defaults_t::max_flow_age),
+    get_or(options, category + ".flow-expiry", defaults_t::flow_expiry),
+    get_or(options, category + ".pseudo-realtime-factor",
+           defaults_t::pseudo_realtime_factor)};
   auto src = sys.spawn(default_source<format::pcap::reader>, std::move(reader));
-  return source_command(cmd, sys, std::move(src), options, first, last);
+  return source_command(invocation, sys, std::move(src));
 }
 
 } // namespace vast::system

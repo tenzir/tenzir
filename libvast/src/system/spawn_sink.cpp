@@ -45,7 +45,8 @@ maybe_actor spawn_generic_sink(caf::local_actor* self, spawn_arguments& args) {
   if (!args.empty())
     return unexpected_arguments(args);
   std::string category = Defaults::category;
-  VAST_UNBOX_VAR(out, detail::make_output_stream<Defaults>(args.options));
+  VAST_UNBOX_VAR(out,
+                 detail::make_output_stream<Defaults>(args.invocation.options));
   return self->spawn(sink<Writer>, Writer{std::move(out)}, 0u);
 }
 
@@ -60,11 +61,11 @@ maybe_actor spawn_pcap_sink([[maybe_unused]] caf::local_actor* self,
 #else // VAST_HAVE_PCAP
   if (!args.empty())
     return unexpected_arguments(args);
-  format::pcap::writer writer{caf::get_or(args.options, category + ".write",
-                                          defaults_t::write),
-                              caf::get_or(args.options,
-                                          category + ".flush-interval",
-                                          defaults_t::flush_interval)};
+  format::pcap::writer writer{
+    caf::get_or(args.invocation.options, category + ".write",
+                defaults_t::write),
+    caf::get_or(args.invocation.options, category + ".flush-interval",
+                defaults_t::flush_interval)};
   return self->spawn(sink<format::pcap::writer>, std::move(writer), 0u);
 #endif // VAST_HAVE_PCAP
 }
@@ -75,7 +76,7 @@ maybe_actor spawn_zeek_sink(caf::local_actor* self, spawn_arguments& args) {
   if (!args.empty())
     return unexpected_arguments(args);
   format::zeek::writer writer{
-    get_or(args.options, category + ".write", defaults_t::write)};
+    get_or(args.invocation.options, category + ".write", defaults_t::write)};
   return self->spawn(sink<format::zeek::writer>, std::move(writer), 0u);
 }
 

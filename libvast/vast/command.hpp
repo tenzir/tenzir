@@ -13,14 +13,17 @@
 
 #pragma once
 
-#include <iosfwd>
-#include <memory>
-#include <string>
-#include <string_view>
+#include "vast/detail/string.hpp"
 
 #include <caf/config_option_set.hpp>
 #include <caf/error.hpp>
 #include <caf/fwd.hpp>
+
+#include <iosfwd>
+#include <map>
+#include <memory>
+#include <string>
+#include <string_view>
 
 namespace vast {
 
@@ -32,16 +35,53 @@ public:
   /// Iterates over CLI arguments.
   using argument_iterator = std::vector<std::string>::const_iterator;
 
-  /// Manages command objects.
-  using owning_ptr = std::unique_ptr<command>;
+  /// Wraps invocation of a single command for separating the parsing of
+  /// program argument from running the command.
+  struct invocation {
+    // -- member variables -----------------------------------------------------
 
+    /// Stores user-defined program options.
+    caf::settings options;
+
+    /// Holds the fully-qualified name of the scheduled command.
+    std::string full_name;
+
+    /// Holds the CLI arguments.
+    std::vector<std::string> arguments;
+
+    // -- utility methods ------------------------------------------------------
+
+    /// Holds the name of the scheduled command.
+    std::string_view name() const {
+      std::string_view result = full_name;
+      result.remove_prefix(
+        std::min(result.find_last_of(' ') + 1, result.size()));
+      return result;
+    }
+
+    template <class Inspector>
+    friend auto inspect(Inspector& f, command::invocation& x) {
+      return f(caf::meta::type_name("command::invocation"), x.full_name,
+               x.arguments, x.options);
+    }
+
+    // -- mutators -------------------------------------------------------------
+
+    /// Sets the members `full_nane`, and `arguments`.
+    void assign(const command* cmd, argument_iterator first,
+                argument_iterator last) {
+      full_name = cmd->full_name();
+      arguments = {first, last};
+    }
+  };
   /// Stores child commands.
   using children_list = std::vector<std::unique_ptr<command>>;
 
   /// Delegates to the command implementation logic.
-  using fun = caf::message (*)(const command&, caf::actor_system&,
-                               caf::settings&, argument_iterator,
-                               argument_iterator);
+  using fun = caf::message (*)(const command::invocation&, caf::actor_system&);
+
+  /// Central store for mapping fully-qualified command name to callback
+  using factory = std::map<std::string, fun>;
 
   /// Builds config options for the same category.
   class opts_builder {
@@ -75,68 +115,51 @@ public:
     caf::config_option_set xs_;
   };
 
-  /// Wraps invocation of a single command for separating the parsing of
-  /// program argument from running the command.
-  struct invocation {
-    // -- member variables -----------------------------------------------------
-
-    /// Stores user-defined program options.
-    caf::settings options;
-
-    /// Points to the scheduled command.
-    const command* target = nullptr;
-
-    /// Points to the first CLI argument.
-    argument_iterator first;
-
-    /// Points past-the-end of CLI arguments.
-    argument_iterator last;
-
-    /// Stores any error that occurred while parsing the CLI. When this error
-    /// is not default-constructed, `first` points to the CLI position where
-    /// the error occurred.
-    caf::error error;
-
-    // -- mutators -------------------------------------------------------------
-
-    /// Sets the members `target`, `first`, and `last`.
-    void assign(const command* cmd, argument_iterator first,
-                argument_iterator last) {
-      target = cmd;
-      this->first = first;
-      this->last = last;
-    }
-
-    // -- mutators -------------------------------------------------------------
-
-    /// @returns `true` when it is safe to call `run` on this object, `false`
-    /// otherwise.
-    explicit operator bool() const {
-      return !error;
-    }
-
-    /// @returns `true` when `error` is not default-constructed, `false`
-    /// otherwise.
-    bool operator!() const {
-      return static_cast<bool>(error);
-    }
-  };
-
   // -- member variables -------------------------------------------------------
 
-  command* parent = nullptr;
+  /// A pointer to the parent node (or nullptr iff this is the root node).
+  command* parent;
 
-  fun run = nullptr;
-
+  /// The name of the command.
   std::string_view name;
 
+  /// A short phrase that describes the command, e.g., "prints the help text".
   std::string_view description;
 
-  caf::config_option_set options = opts();
+  /// Detailed usage instructions written in Markdown.
+  std::string_view documentation;
 
+  /// The options of the command.
+  caf::config_option_set options;
+
+  /// The list of sub-commands.
   children_list children;
 
-  bool visible = true;
+  /// Flag that indicates whether the command shows up in the help text.
+  bool visible;
+
+  // -- constructors -----------------------------------------------------------
+
+  /// Construct a new command
+  command(std::string_view name, std::string_view description,
+          std::string_view documentation, caf::config_option_set opts,
+          bool visible = true);
+
+  /// Construct a new command
+  command(std::string_view name, std::string_view description,
+          std::string_view documentation, opts_builder opts,
+          bool visible = true);
+
+  command(command&&) = delete;
+  command(const command&) = delete;
+  command& operator=(command&&) = delete;
+  command& operator=(const command&) = delete;
+
+  // -- utility functions ------------------------------------------------------
+
+  /// Returns the full name of `cmd`, i.e., its own name prepended by all parent
+  /// names.
+  std::string full_name() const;
 
   // -- factory functions ------------------------------------------------------
 
@@ -148,25 +171,32 @@ public:
 
   /// Adds a new subcommand.
   /// @returns a pointer to the new subcommand.
-  command* add(fun child_run, std::string_view child_name,
-               std::string_view child_description,
-               caf::config_option_set child_options = {});
+  command* add_subcommand(std::unique_ptr<command> cmd) {
+    auto result = children.emplace_back(std::move(cmd)).get();
+    result->parent = this;
+    return result;
+  }
 
   /// Adds a new subcommand.
   /// @returns a pointer to the new subcommand.
-  command* add(fun child_run, std::string_view child_name,
-               std::string_view child_description,
-               opts_builder&& child_options) {
-    return add(child_run, child_name, child_description,
-               child_options.finish());
+  template <typename... Ts>
+  command* add_subcommand(std::string_view name, std::string_view description,
+                          Ts&&... args) {
+    auto result = children
+                    .emplace_back(std::make_unique<command>(
+                      name, description, std::forward<Ts>(args)...))
+                    .get();
+    result->parent = this;
+    return result;
   }
 };
 
 /// Parses all program arguments without running the command.
 /// @returns an error for malformed input, `none` otherwise.
 /// @relates command
-command::invocation parse(const command& root, command::argument_iterator first,
-                          command::argument_iterator last);
+caf::expected<command::invocation>
+parse(const command& root, command::argument_iterator first,
+      command::argument_iterator last);
 
 /// Prepares `cfg` before using it to initialize an `actor_system` with it.
 /// This includes: (1) merging all settings from parsed CLI settings to `cfg`,
@@ -184,35 +214,9 @@ bool init_config(caf::actor_system_config& cfg, const command::invocation& from,
 /// Runs the command and blocks until execution completes.
 /// @returns a type-erased result or a wrapped `caf::error`.
 /// @relates command
-caf::message run(command::invocation& invocation, caf::actor_system& sys);
-
-/// Runs the command and blocks until execution completes.
-/// @returns a type-erased result or a wrapped `caf::error`.
-/// @relates command
-caf::message run(const command& cmd, caf::actor_system& sys,
-                 command::argument_iterator first,
-                 command::argument_iterator last);
-
-/// Runs the command and blocks until execution completes.
-/// @returns a type-erased result or a wrapped `caf::error`.
-/// @relates command
-caf::message run(const command& cmd, caf::actor_system& sys,
-                 const std::vector<std::string>& args);
-
-/// Runs the command and blocks until execution completes.
-/// @returns a type-erased result or a wrapped `caf::error`.
-/// @relates command
-caf::message run(const command& cmd, caf::actor_system& sys,
-                 caf::settings predefined_options,
-                 command::argument_iterator first,
-                 command::argument_iterator last);
-
-/// Runs the command and blocks until execution completes.
-/// @returns a type-erased result or a wrapped `caf::error`.
-/// @relates command
-caf::message run(const command& cmd, caf::actor_system& sys,
-                 caf::settings predefined_options,
-                 const std::vector<std::string>& args);
+caf::expected<caf::message>
+run(const command::invocation& invocation, caf::actor_system& sys,
+    const command::factory& fact);
 
 /// Traverses the command hierarchy until finding the root.
 /// @returns the root command.
@@ -237,15 +241,17 @@ const command* resolve(const command& cmd,
 /// @relates command
 const command* resolve(const command& cmd, std::string_view name);
 
-/// Returns the full name of `cmd`, i.e., its own name prepended by all parent
-/// names.
-std::string full_name(const command& cmd);
-
 /// Prints the helptext for `cmd` to `out`.
 void helptext(const command& cmd, std::ostream& out);
 
 /// Returns the helptext for `cmd`.
 std::string helptext(const command& cmd);
+
+/// Prints the documentationtext for `cmd` to `out`.
+void documentationtext(const command& cmd, std::ostream& out);
+
+/// Returns the documentationtext for `cmd`.
+std::string documentationtext(const command& cmd);
 
 /// Applies `fun` to `cmd` and each of its children, recursively.
 template <class F>

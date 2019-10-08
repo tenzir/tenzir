@@ -34,14 +34,17 @@ namespace vast::system {
 caf::expected<expression> normalized_and_valided(const spawn_arguments& args) {
   if (args.empty())
     return make_error(ec::syntax_error, "no query expression given");
-  if (auto e = to<expression>(caf::join(args.first, args.last, " ")); !e)
+  if (auto e = to<expression>(caf::join(args.invocation.arguments.begin(),
+                                        args.invocation.arguments.end(), " "));
+      !e)
     return std::move(e.error());
   else
     return normalize_and_validate(*e);
 }
 
 caf::expected<caf::optional<schema>> read_schema(const spawn_arguments& args) {
-  auto schema_file_ptr = caf::get_if<std::string>(&args.options, "schema");
+  auto schema_file_ptr
+    = caf::get_if<std::string>(&args.invocation.options, "schema");
   if (!schema_file_ptr)
     return caf::optional<schema>{caf::none};
   VAST_UNBOX_VAR(str, load_contents(*schema_file_ptr));
@@ -51,7 +54,8 @@ caf::expected<caf::optional<schema>> read_schema(const spawn_arguments& args) {
 
 caf::error unexpected_arguments(const spawn_arguments& args) {
   return make_error(ec::syntax_error, "unexpected argument(s)",
-                    caf::join(args.first, args.last, " "));
+                    caf::join(args.invocation.arguments.begin(),
+                              args.invocation.arguments.end(), " "));
 }
 
 } // namespace vast::system

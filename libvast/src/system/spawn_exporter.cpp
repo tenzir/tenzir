@@ -34,18 +34,18 @@ maybe_actor spawn_exporter(node_actor* self, spawn_arguments& args) {
   VAST_UNBOX_VAR(expr, normalized_and_valided(args));
   // Parse query options.
   auto query_opts = no_query_options;
-  if (get_or(args.options, "export.continuous", false))
+  if (get_or(args.invocation.options, "export.continuous", false))
     query_opts = query_opts + continuous;
-  if (get_or(args.options, "export.historical", false))
+  if (get_or(args.invocation.options, "export.historical", false))
     query_opts = query_opts + historical;
-  if (get_or(args.options, "export.unified", false))
+  if (get_or(args.invocation.options, "export.unified", false))
     query_opts = unified;
   // Default to historical if no options provided.
   if (query_opts == no_query_options)
     query_opts = historical;
   auto exp = self->spawn(exporter, std::move(expr), query_opts);
   // Setting max-events to 0 means infinite.
-  auto max_events = get_or(args.options, "export.max-events",
+  auto max_events = get_or(args.invocation.options, "export.max-events",
                            defaults::export_::max_events);
   if (max_events > 0)
     caf::anon_send(exp, extract_atom::value, static_cast<uint64_t>(max_events));

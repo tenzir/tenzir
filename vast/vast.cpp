@@ -11,30 +11,28 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include <cstdlib>
+#include "vast/config.hpp"
+#include "vast/detail/adjust_resource_consumption.hpp"
+#include "vast/detail/process.hpp"
+#include "vast/detail/system.hpp"
+#include "vast/error.hpp"
+#include "vast/event_types.hpp"
+#include "vast/filesystem.hpp"
+#include "vast/logger.hpp"
+#include "vast/schema.hpp"
+#include "vast/system/application.hpp"
+#include "vast/system/default_configuration.hpp"
 
 #include <caf/actor_system.hpp>
 #include <caf/atom.hpp>
 #include <caf/io/middleman.hpp>
 #include <caf/timestamp.hpp>
 
-#include "vast/config.hpp"
+#include <cstdlib>
 
 #ifdef VAST_USE_OPENSSL
-#include <caf/openssl/manager.hpp>
+#  include <caf/openssl/manager.hpp>
 #endif
-
-#include "vast/error.hpp"
-#include "vast/event_types.hpp"
-#include "vast/filesystem.hpp"
-#include "vast/logger.hpp"
-#include "vast/schema.hpp"
-
-#include "vast/system/default_application.hpp"
-#include "vast/system/default_configuration.hpp"
-
-#include "vast/detail/process.hpp"
-#include "vast/detail/system.hpp"
 
 using namespace vast;
 using namespace vast::system;
@@ -47,29 +45,22 @@ int main(int argc, char** argv) {
               << std::endl;
     return EXIT_FAILURE;
   }
+  // Make sure we have enough resources (e.g., file descriptors)
+  if (!detail::adjust_resource_consumption())
+    return EXIT_FAILURE;
   // Application setup.
-  default_application app;
-  app.root.description = "manage a VAST topology";
-  app.root.name = argv[0];
-  // We're only interested in the application name, not in its path. For
-  // example, argv[0] might contain "./build/release/bin/vast" and we are only
-  // interested in "vast".
-  auto find_slash = [&] { return app.root.name.find('/'); };
-  for (auto p = find_slash(); p != std::string_view::npos; p = find_slash())
-    app.root.name.remove_prefix(p + 1);
+  const auto [root, factory] = make_application(argv[0]);
+  if (!root)
+    return EXIT_FAILURE;
   // Parse CLI.
-  auto invocation = parse(app.root, cfg.command_line.begin(),
-                          cfg.command_line.end());
+  auto invocation
+    = parse(*root, cfg.command_line.begin(), cfg.command_line.end());
   if (!invocation) {
-    render_error(app, invocation.error, std::cerr);
+    render_error(*root, invocation.error(), std::cerr);
     return EXIT_FAILURE;
   }
-  if (get_or(invocation.options, "help", false)) {
-    helptext(*invocation.target, std::cerr);
-    return EXIT_SUCCESS;
-  }
   // Initialize actor system (and thereby CAF's logger).
-  if (!init_config(cfg, invocation, std::cerr))
+  if (!init_config(cfg, *invocation, std::cerr))
     return EXIT_FAILURE;
   caf::actor_system sys{cfg};
   // Get filesystem path to the executable.
@@ -92,9 +83,17 @@ int main(int argc, char** argv) {
     return EXIT_FAILURE;
   }
   // Dispatch to root command.
-  auto result = run(invocation, sys);
-  if (result.match_elements<caf::error>()) {
-    render_error(app, result.get_as<caf::error>(0), std::cerr);
+  auto result = run(*invocation, sys, factory);
+  if (!result) {
+    render_error(*root, result.error(), std::cerr);
     return EXIT_FAILURE;
   }
+  if (result->match_elements<caf::error>()) {
+    auto& err = result->get_as<caf::error>(0);
+    if (err) {
+      vast::system::render_error(*root, err, std::cerr);
+      return EXIT_FAILURE;
+    }
+  }
+  return EXIT_SUCCESS;
 }

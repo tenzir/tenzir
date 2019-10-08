@@ -10,6 +10,9 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## [Unreleased]
 
+- 🎁 Commands now support a `--documentation` option, which returns
+  Markdown-formatted documentation text.
+
 - 🔄 CAF and Broker are no longer required to be installed prior to building
   VAST. These dependencies are now tracked as git submodules to ensure version
   compatibility. Specifying a custom build is still possible via the CMake

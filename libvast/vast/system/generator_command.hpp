@@ -31,11 +31,10 @@ namespace vast::system {
 /// formats.
 /// @relates application
 template <class Generator, class Defaults>
-caf::message generator_command(const command& cmd, caf::actor_system& sys,
-                               caf::settings& options,
-                               command::argument_iterator first,
-                               command::argument_iterator last) {
-  VAST_TRACE("");
+caf::message generator_command(const command::invocation& invocation,
+                               caf::actor_system& sys) {
+  auto& options = invocation.options;
+  VAST_TRACE(invocation);
   std::string category = Defaults::category;
   auto table_slice = defaults::import::table_slice_type(sys, options);
   auto num = get_or(options, "import.max-events", defaults::import::max_events);
@@ -47,7 +46,7 @@ caf::message generator_command(const command& cmd, caf::actor_system& sys,
   if (auto err = generator.schema(*schema))
     return caf::make_message(err);
   auto src = sys.spawn(default_source<Generator>, std::move(generator));
-  return source_command(cmd, sys, std::move(src), options, first, last);
+  return source_command(invocation, sys, std::move(src));
 }
 
 } // namespace vast::system

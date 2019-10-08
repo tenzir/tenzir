@@ -32,15 +32,14 @@ namespace vast::system {
 /// Default implementation for export sub-commands. Compatible with Bro and MRT
 /// formats.
 template <class Writer, class Defaults>
-caf::message writer_command(const command& cmd, caf::actor_system& sys,
-                            caf::settings& options,
-                            command::argument_iterator first,
-                            command::argument_iterator last) {
-  VAST_TRACE(VAST_ARG(options), VAST_ARG("args", first, last));
+caf::message
+writer_command(const command::invocation& invocation, caf::actor_system& sys) {
+  VAST_TRACE(invocation);
+  auto& options = invocation.options;
   std::string category = Defaults::category;
   using ostream_ptr = std::unique_ptr<std::ostream>;
-  auto max_events = get_or(options, "export.max-events",
-                           defaults::export_::max_events);
+  auto max_events
+    = get_or(options, "export.max-events", defaults::export_::max_events);
   caf::actor snk;
   if constexpr (std::is_constructible_v<Writer, ostream_ptr>) {
     auto output = get_or(options, category + ".write", Defaults::write);
@@ -54,7 +53,7 @@ caf::message writer_command(const command& cmd, caf::actor_system& sys,
     Writer writer;
     snk = sys.spawn(sink<Writer>, std::move(writer), max_events);
   }
-  return sink_command(cmd, sys, std::move(snk), options, first, last);
+  return sink_command(invocation, sys, std::move(snk));
 }
 
 } // namespace vast::system

@@ -90,7 +90,6 @@ set(libvast_sources
     src/system/archive.cpp
     src/system/configuration.cpp
     src/system/connect_to_node.cpp
-    src/system/default_application.cpp
     src/system/default_configuration.cpp
     src/system/dummy_consensus.cpp
     src/system/evaluator.cpp
