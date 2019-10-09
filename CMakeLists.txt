@@ -97,6 +97,9 @@ list(GET version_numbers 0 VERSION_MAJOR)
 list(GET version_numbers 1 VERSION_MINOR)
 set(VERSION_MAJ_MIN "${VERSION_MAJOR}.${VERSION_MINOR}")
 
+# Extract DOCUMENTATION
+file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/doc/vast.1.md" VAST_DOCUMENTATION_VAST NEWLINE_CONSUME)
+
 # ------------------------------------------------------------------------------
 # Logging Setup
 # ------------------------------------------------------------------------------

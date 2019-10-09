@@ -16,6 +16,7 @@
 #include "vast/command.hpp"
 #include "vast/config.hpp"
 #include "vast/detail/assert.hpp"
+#include "vast/documentation.hpp"
 #include "vast/format/ascii.hpp"
 #include "vast/format/bgpdump.hpp"
 #include "vast/format/csv.hpp"
@@ -47,8 +48,9 @@ auto make_root_command(std::string_view path) {
   // example, argv[0] might contain "./build/release/bin/vast" and we are only
   // interested in "vast".
   path.remove_prefix(std::min(path.find_last_of('/') + 1, path.size()));
+  // For documentation, we use the complete man-page formatted as Markdown
   return std::make_unique<command>(
-    path, "manage a VAST topology", "",
+    path, "manage a VAST topology", vast::documentation::vast,
     opts("?system")
       .add<std::string>("config-file", "path to a configuration file")
       .add<caf::atom_value>("verbosity", "output verbosity level on the "
@@ -160,7 +162,8 @@ auto make_spawn_source_command() {
       .add<std::string>("read,r", "path to input")
       .add<std::string>("schema,s", "path to alternate schema")
       .add<caf::atom_value>("table-slice,t", "table slice type")
-      .add<bool>("uds,d", "treat -w as UNIX domain socket"));
+      .add<bool>("uds,d", "treat -w as UNIX domain socket"),
+    false);
   spawn_source->add_subcommand(
     "pcap", "creates a new PCAP source", "",
     opts()
@@ -187,7 +190,8 @@ auto make_spawn_sink_command() {
     "sink", "creates a new sink", "",
     opts()
       .add<std::string>("write,w", "path to write events to")
-      .add<bool>("uds,d", "treat -w as UNIX domain socket"));
+      .add<bool>("uds,d", "treat -w as UNIX domain socket"),
+    false);
   spawn_sink->add_subcommand(
     "pcap", "creates a new PCAP sink", "",
     opts().add<size_t>("flush,f", "flush to disk after this many packets"));
@@ -199,8 +203,8 @@ auto make_spawn_sink_command() {
 }
 
 auto make_spawn_command() {
-  auto spawn
-    = std::make_unique<command>("spawn", "creates a new component", "", opts());
+  auto spawn = std::make_unique<command>("spawn", "creates a new component", "",
+                                         opts(), false);
   spawn->add_subcommand("accountant", "spawns the accountant", "", opts());
   spawn->add_subcommand(
     "archive", "creates a new archive", "",

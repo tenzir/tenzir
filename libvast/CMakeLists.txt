@@ -5,6 +5,9 @@
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/vast/config.hpp.in
                ${CMAKE_CURRENT_BINARY_DIR}/vast/config.hpp)
 
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/vast/documentation.hpp.in
+               ${CMAKE_CURRENT_BINARY_DIR}/vast/documentation.hpp)
+
 # Some CMake generators (e.g., XCode) require header files in addition to the
 # sources.
 file(GLOB_RECURSE libvast_headers "${CMAKE_CURRENT_SOURCE_DIR}/vast/*.hpp")
