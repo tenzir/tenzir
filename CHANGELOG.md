@@ -10,6 +10,9 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## [Unreleased]
 
+- 🎁 The newly added `count` comman allows counting hits for a query without
+  exporting data.
+
 - 🎁 Commands now support a `--documentation` option, which returns
   Markdown-formatted documentation text.
 

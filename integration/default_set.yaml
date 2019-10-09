@@ -32,6 +32,13 @@ fixtures:
 
 
 tests:
+  Conn log counting:
+    tags: [node, counting, zeek]
+    steps:
+      - command: import -N -b zeek
+        input: data/zeek/conn.log.gz
+      - command: count -N ":addr == 192.168.1.104"
+      - command: count -s -N ":addr == 192.168.1.104"
   Node Zeek conn log:
     tags: [node, import-export, zeek]
     steps:

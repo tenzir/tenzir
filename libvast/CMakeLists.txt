@@ -90,6 +90,8 @@ set(libvast_sources
     src/system/archive.cpp
     src/system/configuration.cpp
     src/system/connect_to_node.cpp
+    src/system/count_command.cpp
+    src/system/counter.cpp
     src/system/default_configuration.cpp
     src/system/dummy_consensus.cpp
     src/system/evaluator.cpp
@@ -111,6 +113,7 @@ set(libvast_sources
     src/system/spawn_archive.cpp
     src/system/spawn_arguments.cpp
     src/system/spawn_consensus.cpp
+    src/system/spawn_counter.cpp
     src/system/spawn_exporter.cpp
     src/system/spawn_importer.cpp
     src/system/spawn_index.cpp
@@ -276,6 +279,7 @@ set(tests
     test/synopsis.cpp
     test/system/archive.cpp
     test/system/consensus.cpp
+    test/system/counter.cpp
     test/system/datagram_source.cpp
     test/system/dummy_consensus.cpp
     test/system/evaluator.cpp

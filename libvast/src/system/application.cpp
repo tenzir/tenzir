@@ -25,6 +25,7 @@
 #include "vast/format/test.hpp"
 #include "vast/format/zeek.hpp"
 #include "vast/system/configuration.hpp"
+#include "vast/system/count_command.hpp"
 #include "vast/system/generator_command.hpp"
 #include "vast/system/raft.hpp"
 #include "vast/system/reader_command.hpp"
@@ -62,6 +63,15 @@ auto make_root_command(std::string_view path) {
       .add<bool>("disable-accounting", "don't run the accountant")
       .add<bool>("no-default-schema", "don't load the default schema "
                                       "definitions"));
+}
+
+auto make_count_command() {
+  return std::make_unique<command>(
+    "count", "count hits for a query without exporting data", "",
+    opts("?count")
+      .add<bool>("node,N", "spawn a node instead of connecting to one")
+      .add<bool>("skip-candidate-checks,s", "estimate an upper bound by "
+                                            "skipping candidate checks"));
 }
 
 auto make_export_command() {
@@ -262,6 +272,7 @@ auto make_command_factory() {
   // When updating this list, remember to update its counterpart in node.cpp as
   // well iff necessary
   return command::factory{
+    {"count", count_command},
     {"export ascii",
      writer_command<format::ascii::writer, defaults::export_::ascii>},
     {"export csv", writer_command<format::csv::writer, defaults::export_::csv>},
@@ -319,6 +330,7 @@ auto make_command_factory() {
 std::pair<std::unique_ptr<command>, command::factory>
 make_application(std::string_view path) {
   auto root = make_root_command(path);
+  root->add_subcommand(make_count_command());
   root->add_subcommand(make_export_command());
   root->add_subcommand(make_import_command());
   root->add_subcommand(make_kill_command());
