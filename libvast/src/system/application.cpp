@@ -60,6 +60,7 @@ auto make_root_command(std::string_view path) {
       .add<std::string>("directory,d", "directory for persistent state")
       .add<std::string>("endpoint,e", "node endpoint")
       .add<std::string>("node-id,i", "the unique ID of this node")
+      .add<bool>("node,N", "spawn a node instead of connecting to one")
       .add<bool>("disable-accounting", "don't run the accountant")
       .add<bool>("no-default-schema", "don't load the default schema "
                                       "definitions"));
@@ -68,17 +69,15 @@ auto make_root_command(std::string_view path) {
 auto make_count_command() {
   return std::make_unique<command>(
     "count", "count hits for a query without exporting data", "",
-    opts("?count")
-      .add<bool>("node,N", "spawn a node instead of connecting to one")
-      .add<bool>("skip-candidate-checks,s", "estimate an upper bound by "
-                                            "skipping candidate checks"));
+    opts("?count").add<bool>("skip-candidate-checks,s",
+                             "estimate an upper bound by "
+                             "skipping candidate checks"));
 }
 
 auto make_export_command() {
   auto export_ = std::make_unique<command>(
     "export", "exports query results to STDOUT or file", "",
     opts("?export")
-      .add<bool>("node,N", "spawn a node instead of connecting to one")
       .add<bool>("continuous,c", "marks a query as continuous")
       .add<bool>("historical,h", "marks a query as historical")
       .add<bool>("unified,u", "marks a query as unified")
@@ -109,7 +108,6 @@ auto make_import_command() {
     "import", "imports data from STDIN or file", "",
     opts("?import")
       .add<caf::atom_value>("table-slice-type,t", "table slice type")
-      .add<bool>("node,N", "spawn a node instead of connecting to one")
       .add<bool>("blocking,b", "block until the IMPORTER forwarded all data")
       .add<size_t>("max-events,n", "the maximum number of events to "
                                    "import"));

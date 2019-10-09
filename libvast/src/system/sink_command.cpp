@@ -106,8 +106,8 @@ caf::message sink_command(const command::invocation& invocation,
   // Get a convenient and blocking way to interact with actors.
   scoped_actor self{sys};
   // Get VAST node.
-  auto node_opt = spawn_or_connect_to_node(
-    self, "export.node", invocation.options, content(sys.config()));
+  auto node_opt
+    = spawn_or_connect_to_node(self, invocation.options, content(sys.config()));
   if (auto err = caf::get_if<caf::error>(&node_opt))
     return caf::make_message(std::move(*err));
   auto& node = caf::holds_alternative<caf::actor>(node_opt)
