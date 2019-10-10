@@ -20,13 +20,13 @@
 #include "vast/error.hpp"
 #include "vast/filesystem.hpp"
 #include "vast/logger.hpp"
+#include "vast/system/application.hpp"
 #include "vast/system/start_command.hpp"
 
 #include <caf/actor_system.hpp>
 #include <caf/actor_system_config.hpp>
 #include <caf/defaults.hpp>
 #include <caf/detail/log_level.hpp>
-#include <caf/make_message.hpp>
 #include <caf/message.hpp>
 #include <caf/settings.hpp>
 
@@ -130,6 +130,72 @@ void nested_helptext(const command& cmd, std::ostream& out) {
   subcommand_helptext(cmd, out);
 }
 
+// Two synchronized lines for highlighting text on the CLI.
+using line_pair = std::pair<std::string, std::string>;
+
+void append_plain(line_pair& dst, std::string_view x) {
+  dst.first += x;
+  dst.first += ' ';
+  dst.second.insert(dst.second.end(), x.size() + 1, ' ');
+}
+
+void append_highlighted(line_pair& dst, std::string_view x) {
+  dst.first += x;
+  dst.first += ' ';
+  dst.second += '^';
+  dst.second.insert(dst.second.end(), x.size() - 1, '~');
+  dst.second += ' ';
+}
+
+template <class ForwardIterator>
+void append_plain(line_pair& dst, ForwardIterator first, ForwardIterator last) {
+  for (; first != last; ++first)
+    append_plain(dst, *first);
+}
+
+std::ostream& operator<<(std::ostream& os, const line_pair& x) {
+  return os << '\n' << x.first << '\n' << x.second << '\n';
+}
+
+/// Iterates through the command hiearchy to correlate an error from
+/// `vast::parse` with the actual command for printing a human-readable
+/// description of what went wrong.
+void render_parse_error(const command& cmd,
+                        const command::invocation& invocation,
+                        const caf::error& err, std::ostream& os) {
+  VAST_ASSERT(err != caf::none);
+  auto first = invocation.arguments.begin();
+  auto last = invocation.arguments.end();
+  auto position = first;
+  // Convenience function for making a line pair with the current error
+  // position highlighted in the second row.
+  auto make_line_pair = [&] {
+    line_pair lp;
+    append_plain(lp, first, position);
+    append_highlighted(lp, *position);
+    append_plain(lp, position + 1, last);
+    return lp;
+  };
+  if (err == ec::unrecognized_option) {
+    os << "error: invalid option parameter";
+    auto& context = err.context();
+    if (context.match_elements<std::string, std::string, std::string>())
+      os << " (" << context.get_as<std::string>(2) << ")";
+    if (position != last)
+      os << '\n' << make_line_pair() << '\n';
+    helptext(cmd, os);
+  } else if (err == ec::missing_subcommand) {
+    os << "error: missing subcommand after " << invocation.full_name << '\n';
+    helptext(cmd, os);
+  } else if (err == ec::invalid_subcommand) {
+    os << "error: unrecognized subcommand" << '\n' << make_line_pair() << '\n';
+    helptext(cmd, os);
+  } else {
+    system::render_error(cmd, err, os);
+    os << std::endl;
+  }
+}
+
 } // namespace
 
 command::command(std::string_view name, std::string_view description,
@@ -176,7 +242,6 @@ caf::error parse_impl(command::invocation& result, const command& cmd,
                       command::argument_iterator first,
                       command::argument_iterator last, const command** target) {
   using caf::get_or;
-  using caf::make_message;
   VAST_TRACE(VAST_ARG(std::string(cmd.name)), VAST_ARG("args", first, last));
   // Parse arguments for this command.
   *target = &cmd;
@@ -235,8 +300,10 @@ parse(const command& root, command::argument_iterator first,
       command::argument_iterator last) {
   command::invocation result;
   const command* target = nullptr;
-  if (auto err = parse_impl(result, root, first, last, &target))
-    return err;
+  if (auto err = parse_impl(result, root, first, last, &target)) {
+    render_parse_error(*target, result, err, std::cerr);
+    return caf::no_error;
+  }
   if (get_or(result.options, "help", false)) {
     helptext(*target, std::cerr);
     return caf::no_error;
