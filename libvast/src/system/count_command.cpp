@@ -81,8 +81,8 @@ count_command(const command::invocation& invocation, caf::actor_system& sys) {
   // Get a convenient and blocking way to interact with actors.
   caf::scoped_actor self{sys};
   // Get VAST node.
-  auto node_opt = system::spawn_or_connect_to_node(self, "count.node", options,
-                                                   content(sys.config()));
+  auto node_opt
+    = system::spawn_or_connect_to_node(self, options, content(sys.config()));
   if (auto err = caf::get_if<caf::error>(&node_opt))
     return caf::make_message(std::move(*err));
   auto& node = caf::holds_alternative<caf::actor>(node_opt)
