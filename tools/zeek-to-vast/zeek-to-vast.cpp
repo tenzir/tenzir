@@ -344,14 +344,13 @@ int main(int argc, char** argv) {
     auto& [query_id, expression] = *result;
     // Relay the query expression to VAST.
     VAST_INFO_ANON("dispatching query", query_id, expression);
-    vast::command cmd;
-    auto args = std::vector<std::string>{expression};
+    auto invocation
+      = vast::command::invocation{std::move(opts), "", {expression}};
     auto sink = self->spawn(vast::system::sink<bro_writer>,
                             bro_writer{endpoint, query_id},
                             vast::defaults::export_::max_events);
     vast::scope_linked<caf::actor> guard{sink};
-    auto res = vast::system::sink_command(cmd, sys, sink, opts,
-                                          args.begin(), args.end());
+    auto res = vast::system::sink_command(invocation, sys, sink);
     if (res.match_elements<caf::error>()) {
       VAST_ERROR_ANON("failed to dispatch query to VAST:",
                       res.get_as<caf::error>(0));

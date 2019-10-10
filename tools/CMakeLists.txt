@@ -1,5 +1,5 @@
 add_subdirectory(dscat)
 add_subdirectory(gen-vast-slices)
-if (BROKER_FOUND)
+if (VAST_HAVE_BROKER)
   add_subdirectory(zeek-to-vast)
 endif ()
