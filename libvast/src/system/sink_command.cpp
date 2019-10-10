@@ -13,18 +13,6 @@
 
 #include "vast/system/sink_command.hpp"
 
-#include <csignal>
-#include <iostream>
-#include <memory>
-#include <string>
-#include <string_view>
-
-#include <caf/event_based_actor.hpp>
-#include <caf/scoped_actor.hpp>
-#include <caf/settings.hpp>
-#include <caf/stateful_actor.hpp>
-#include <caf/typed_event_based_actor.hpp>
-
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/concept/printable/to_string.hpp"
@@ -35,9 +23,22 @@
 #include "vast/logger.hpp"
 #include "vast/scope_linked.hpp"
 #include "vast/system/accountant.hpp"
+#include "vast/system/read_query.hpp"
 #include "vast/system/signal_monitor.hpp"
 #include "vast/system/spawn_or_connect_to_node.hpp"
 #include "vast/system/tracker.hpp"
+
+#include <caf/event_based_actor.hpp>
+#include <caf/scoped_actor.hpp>
+#include <caf/settings.hpp>
+#include <caf/stateful_actor.hpp>
+#include <caf/typed_event_based_actor.hpp>
+
+#include <csignal>
+#include <iostream>
+#include <memory>
+#include <string>
+#include <string_view>
 
 using namespace std::chrono_literals;
 using namespace caf;
@@ -49,59 +50,23 @@ caf::message sink_command(const command::invocation& invocation,
   auto first = invocation.arguments.begin();
   auto last = invocation.arguments.end();
   // Read query from input file, STDIN or CLI arguments.
-  std::string query;
-  auto assign_query = [&](std::istream& in) {
-    query.assign(std::istreambuf_iterator<char>{in},
-                 std::istreambuf_iterator<char>{});
-  };
-  if (auto fname = caf::get_if<std::string>(&invocation.options, "export."
-                                                                 "read")) {
-    // Sanity check.
-    if (first != last) {
-      auto err = make_error(ec::parse_error, "got a query on the command line "
-                                             "but --read option is defined");
-      return make_message(std::move(err));
-    }
-    // Read query from STDIN if file name is '-'.
-    if (*fname == "-") {
-      assign_query(std::cin);
-    } else {
-      std::ifstream f{*fname};
-      if (!f) {
-        auto err = make_error(ec::no_such_file, "unable to read from " + *fname);
-        return make_message(std::move(err));
-      }
-      assign_query(f);
-    }
-  } else if (first == last) {
-    // Read query from STDIN.
-    assign_query(std::cin);
-  } else {
-    // Assemble expression from all remaining arguments.
-    query = *first;
-    for (auto i = std::next(first); i != last; ++i) {
-      query += ' ';
-      query += *i;
-    }
-  }
-  if (query.empty()) {
-    auto err = make_error(ec::invalid_query);
-    return make_message(std::move(err));
-  }
+  auto query = read_query(invocation, "export.read");
+  if (!query)
+    return caf::make_message(std::move(query.error()));
   // Transform expression if needed, e.g., for PCAP sink.
   if (invocation.name() == "pcap") {
     VAST_DEBUG(invocation.full_name, "restricts expression to PCAP packets");
     // We parse the query expression first, work on the AST, and then render
     // the expression again to avoid performing brittle string manipulations.
-    auto expr = to<expression>(query);
+    auto expr = to<expression>(*query);
     if (!expr)
       return make_message(expr.error());
     auto attr = caf::atom_from_string("type");
     auto extractor = attribute_extractor{attr};
     auto pred = predicate{extractor, equal, data{"pcap.packet"}};
     auto ast = conjunction{std::move(pred), std::move(*expr)};
-    query = to_string(ast);
-    VAST_DEBUG(&invocation, "transformed expression to", query);
+    *query = to_string(ast);
+    VAST_DEBUG(&invocation, "transformed expression to", *query);
   }
   // Get a convenient and blocking way to interact with actors.
   scoped_actor self{sys};
@@ -120,7 +85,7 @@ caf::message sink_command(const command::invocation& invocation,
   // Spawn exporter at the node.
   actor exp;
   auto node_invocation
-    = command::invocation{invocation.options, "spawn exporter", {query}};
+    = command::invocation{invocation.options, "spawn exporter", {*query}};
   VAST_DEBUG(&invocation, "spawns exporter with parameters:", node_invocation);
   error err;
   self->request(node, infinite, std::move(node_invocation))

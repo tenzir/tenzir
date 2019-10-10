@@ -20,6 +20,7 @@
 #include "vast/logger.hpp"
 #include "vast/scope_linked.hpp"
 #include "vast/system/atoms.hpp"
+#include "vast/system/read_query.hpp"
 #include "vast/system/signal_monitor.hpp"
 #include "vast/system/spawn_or_connect_to_node.hpp"
 #include "vast/system/start_command.hpp"
@@ -33,6 +34,7 @@
 
 #include <chrono>
 
+using namespace caf;
 using namespace std::chrono_literals;
 
 namespace vast::system {
@@ -40,44 +42,11 @@ namespace vast::system {
 caf::message
 count_command(const command::invocation& invocation, caf::actor_system& sys) {
   VAST_TRACE(invocation);
-  auto first = invocation.arguments.begin();
-  auto last = invocation.arguments.end();
   const auto& options = invocation.options;
   // Read query from input file, STDIN or CLI arguments.
-  std::string query;
-  auto assign_query = [&](std::istream& in) {
-    query.assign(std::istreambuf_iterator<char>{in},
-                 std::istreambuf_iterator<char>{});
-  };
-  if (auto fname = caf::get_if<std::string>(&options, "count.read")) {
-    // Sanity check.
-    if (first != last) {
-      auto err = make_error(ec::parse_error, "got a query on the command line "
-                                             "but --read option is defined");
-      return make_message(std::move(err));
-    }
-    // Read query from STDIN if file name is '-'.
-    if (*fname == "-") {
-      assign_query(std::cin);
-    } else {
-      std::ifstream f{*fname};
-      if (!f) {
-        auto err
-          = make_error(ec::no_such_file, "unable to read from " + *fname);
-        return make_message(std::move(err));
-      }
-      assign_query(f);
-    }
-  } else if (first == last) {
-    // Read query from STDIN.
-    assign_query(std::cin);
-  } else {
-    query = detail::join(first, last, " ");
-  }
-  if (query.empty()) {
-    auto err = make_error(ec::invalid_query);
-    return make_message(std::move(err));
-  }
+  auto query = read_query(invocation, "count.read");
+  if (!query)
+    return caf::make_message(std::move(query.error()));
   // Get a convenient and blocking way to interact with actors.
   caf::scoped_actor self{sys};
   // Get VAST node.
@@ -95,7 +64,7 @@ count_command(const command::invocation& invocation, caf::actor_system& sys) {
     = system::signal_monitor::run_guarded(sig_mon_thread, sys, 750ms, self);
   // Spawn COUNTER at the node.
   caf::actor cnt;
-  auto args = command::invocation{options, "spawn counter", {query}};
+  auto args = command::invocation{options, "spawn counter", {*query}};
   VAST_DEBUG(invocation.full_name, "spawns counter with parameters:", query);
   caf::error err;
   self->request(node, caf::infinite, std::move(args))

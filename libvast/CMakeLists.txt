@@ -106,6 +106,7 @@ set(libvast_sources
     src/system/query_processor.cpp
     src/system/query_supervisor.cpp
     src/system/raft.cpp
+    src/system/read_query.cpp
     src/system/remote_command.cpp
     src/system/signal_monitor.cpp
     src/system/sink_command.cpp
