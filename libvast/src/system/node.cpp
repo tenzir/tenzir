@@ -13,22 +13,12 @@
 
 #include "vast/system/node.hpp"
 
-#include <csignal>
-
-#include <chrono>
-#include <fstream>
-#include <sstream>
-
-#include <caf/all.hpp>
-#include <caf/io/all.hpp>
-
-#include "vast/config.hpp"
-
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/endpoint.hpp"
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/json.hpp"
+#include "vast/config.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/json.hpp"
@@ -39,6 +29,7 @@
 #include "vast/system/spawn_archive.hpp"
 #include "vast/system/spawn_arguments.hpp"
 #include "vast/system/spawn_consensus.hpp"
+#include "vast/system/spawn_counter.hpp"
 #include "vast/system/spawn_exporter.hpp"
 #include "vast/system/spawn_importer.hpp"
 #include "vast/system/spawn_index.hpp"
@@ -47,6 +38,14 @@
 #include "vast/system/spawn_profiler.hpp"
 #include "vast/system/spawn_sink.hpp"
 #include "vast/system/spawn_source.hpp"
+
+#include <caf/all.hpp>
+#include <caf/io/all.hpp>
+
+#include <chrono>
+#include <csignal>
+#include <fstream>
+#include <sstream>
 
 using namespace caf;
 
@@ -249,6 +248,7 @@ auto make_component_factory() {
   return node_state::named_component_factory{
     {"spawn accountant", lift_component_factory<spawn_accountant>()},
     {"spawn archive", lift_component_factory<spawn_archive>()},
+    {"spawn counter", lift_component_factory<spawn_counter>()},
     {"spawn exporter", lift_component_factory<spawn_exporter>()},
     {"spawn importer", lift_component_factory<spawn_importer>()},
     {"spawn index", lift_component_factory<spawn_index>()},
@@ -276,6 +276,7 @@ auto make_command_factory() {
     {"spawn accountant", node_state::spawn_command},
     {"spawn archive", node_state::spawn_command},
     {"spawn consensus", node_state::spawn_command},
+    {"spawn counter", node_state::spawn_command},
     {"spawn exporter", node_state::spawn_command},
     {"spawn importer", node_state::spawn_command},
     {"spawn index", node_state::spawn_command},

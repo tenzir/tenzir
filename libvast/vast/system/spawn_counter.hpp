@@ -11,35 +11,19 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/system/spawn_or_connect_to_node.hpp"
+#pragma once
 
-#include <caf/settings.hpp>
+#include "vast/aliases.hpp"
+#include "vast/system/fwd.hpp"
 
-#include "vast/logger.hpp"
-#include "vast/system/connect_to_node.hpp"
-#include "vast/system/spawn_node.hpp"
+#include <caf/fwd.hpp>
 
 namespace vast::system {
 
-namespace {
-
-using result_t = caf::variant<caf::error, caf::actor, scope_linked_actor>;
-
-} // namespace <anonymous>
-
-result_t spawn_or_connect_to_node(caf::scoped_actor& self,
-                                  const caf::settings& opts,
-                                  const caf::settings& node_opts) {
-  VAST_TRACE(VAST_ARG(opts));
-  auto convert = [](auto&& result) -> result_t {
-    if (result)
-      return std::move(*result);
-    else
-      return std::move(result.error());
-  };
-  if (caf::get_or<bool>(opts, "system.node", false))
-    return convert(spawn_node(self, node_opts));
-  return convert(connect_to_node(self, node_opts));
-}
+/// Tries to spawn a new COUNTER.
+/// @param self Points to the parent actor.
+/// @param args Configures the new actor.
+/// @returns a handle to the spawned actor on success, an error otherwise
+maybe_actor spawn_counter(system::node_actor* self, spawn_arguments& args);
 
 } // namespace vast::system

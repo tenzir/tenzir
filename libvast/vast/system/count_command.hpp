@@ -11,35 +11,16 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/system/spawn_or_connect_to_node.hpp"
+#pragma once
 
-#include <caf/settings.hpp>
+#include "vast/command.hpp"
 
-#include "vast/logger.hpp"
-#include "vast/system/connect_to_node.hpp"
-#include "vast/system/spawn_node.hpp"
+#include <caf/fwd.hpp>
 
 namespace vast::system {
 
-namespace {
-
-using result_t = caf::variant<caf::error, caf::actor, scope_linked_actor>;
-
-} // namespace <anonymous>
-
-result_t spawn_or_connect_to_node(caf::scoped_actor& self,
-                                  const caf::settings& opts,
-                                  const caf::settings& node_opts) {
-  VAST_TRACE(VAST_ARG(opts));
-  auto convert = [](auto&& result) -> result_t {
-    if (result)
-      return std::move(*result);
-    else
-      return std::move(result.error());
-  };
-  if (caf::get_or<bool>(opts, "system.node", false))
-    return convert(spawn_node(self, node_opts));
-  return convert(connect_to_node(self, node_opts));
-}
+/// Starts a COUNTER actor and prints its result for a given query.
+caf::message
+count_command(const command::invocation& invocation, caf::actor_system& sys);
 
 } // namespace vast::system

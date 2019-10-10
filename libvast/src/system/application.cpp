@@ -25,6 +25,7 @@
 #include "vast/format/test.hpp"
 #include "vast/format/zeek.hpp"
 #include "vast/system/configuration.hpp"
+#include "vast/system/count_command.hpp"
 #include "vast/system/generator_command.hpp"
 #include "vast/system/raft.hpp"
 #include "vast/system/reader_command.hpp"
@@ -59,16 +60,24 @@ auto make_root_command(std::string_view path) {
       .add<std::string>("directory,d", "directory for persistent state")
       .add<std::string>("endpoint,e", "node endpoint")
       .add<std::string>("node-id,i", "the unique ID of this node")
+      .add<bool>("node,N", "spawn a node instead of connecting to one")
       .add<bool>("disable-accounting", "don't run the accountant")
       .add<bool>("no-default-schema", "don't load the default schema "
                                       "definitions"));
+}
+
+auto make_count_command() {
+  return std::make_unique<command>(
+    "count", "count hits for a query without exporting data", "",
+    opts("?count").add<bool>("skip-candidate-checks,s",
+                             "estimate an upper bound by "
+                             "skipping candidate checks"));
 }
 
 auto make_export_command() {
   auto export_ = std::make_unique<command>(
     "export", "exports query results to STDOUT or file", "",
     opts("?export")
-      .add<bool>("node,N", "spawn a node instead of connecting to one")
       .add<bool>("continuous,c", "marks a query as continuous")
       .add<bool>("historical,h", "marks a query as historical")
       .add<bool>("unified,u", "marks a query as unified")
@@ -99,7 +108,6 @@ auto make_import_command() {
     "import", "imports data from STDIN or file", "",
     opts("?import")
       .add<caf::atom_value>("table-slice-type,t", "table slice type")
-      .add<bool>("node,N", "spawn a node instead of connecting to one")
       .add<bool>("blocking,b", "block until the IMPORTER forwarded all data")
       .add<size_t>("max-events,n", "the maximum number of events to "
                                    "import"));
@@ -262,6 +270,7 @@ auto make_command_factory() {
   // When updating this list, remember to update its counterpart in node.cpp as
   // well iff necessary
   return command::factory{
+    {"count", count_command},
     {"export ascii",
      writer_command<format::ascii::writer, defaults::export_::ascii>},
     {"export csv", writer_command<format::csv::writer, defaults::export_::csv>},
@@ -319,6 +328,7 @@ auto make_command_factory() {
 std::pair<std::unique_ptr<command>, command::factory>
 make_application(std::string_view path) {
   auto root = make_root_command(path);
+  root->add_subcommand(make_count_command());
   root->add_subcommand(make_export_command());
   root->add_subcommand(make_import_command());
   root->add_subcommand(make_kill_command());
