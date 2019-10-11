@@ -45,6 +45,10 @@ struct spawn_arguments {
 /// normalized and validated version of that expression on success.
 caf::expected<expression> normalized_and_valided(const spawn_arguments& args);
 
+caf::expected<expression>
+normalized_and_valided(std::vector<std::string>::const_iterator begin,
+                       std::vector<std::string>::const_iterator end);
+
 /// Attemps to read a schema file and parse its content. Can either 1) return
 /// nothing if the user didn't specifiy a schema file in `args.options`, 2)
 /// produce a valid schema, or 3) run into an error.
