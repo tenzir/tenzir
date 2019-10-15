@@ -50,7 +50,7 @@ auto make_root_command(std::string_view path) {
   path.remove_prefix(std::min(path.find_last_of('/') + 1, path.size()));
   // For documentation, we use the complete man-page formatted as Markdown
   return std::make_unique<command>(
-    path, "manage a VAST topology", documentation::vast,
+    path, "manages a VAST deployment", documentation::vast,
     opts("?system")
       .add<std::string>("config-file", "path to a configuration file")
       .add<caf::atom_value>("verbosity", "output verbosity level on the "
@@ -68,7 +68,8 @@ auto make_root_command(std::string_view path) {
 
 auto make_export_command() {
   auto export_ = std::make_unique<command>(
-    "export", "exports query results to STDOUT or file", "",
+    "export", "exports query results to STDOUT or file",
+    documentation::vast_export,
     opts("?export")
       .add<bool>("node,N", "spawn a node instead of connecting to one")
       .add<bool>("continuous,c", "marks a query as continuous")
@@ -76,17 +77,22 @@ auto make_export_command() {
       .add<bool>("unified,u", "marks a query as unified")
       .add<size_t>("max-events,n", "maximum number of results")
       .add<std::string>("read,r", "path for reading the query"));
-  export_->add_subcommand("zeek", "exports query results in Zeek format", "",
+  export_->add_subcommand("zeek", "exports query results in Zeek format",
+                          documentation::vast_export_zeek,
                           sink_opts("?export->zeek"));
-  export_->add_subcommand("csv", "exports query results in CSV format", "",
+  export_->add_subcommand("csv", "exports query results in CSV format",
+                          documentation::vast_export_csv,
                           sink_opts("?export->csv"));
-  export_->add_subcommand("ascii", "exports query results in ASCII format", "",
+  export_->add_subcommand("ascii", "exports query results in ASCII format",
+                          documentation::vast_export_ascii,
                           sink_opts("?export->ascii"));
-  export_->add_subcommand("json", "exports query results in JSON format", "",
+  export_->add_subcommand("json", "exports query results in JSON format",
+                          documentation::vast_export_json,
                           sink_opts("?export->json"));
 #ifdef VAST_HAVE_PCAP
   export_->add_subcommand(
-    "pcap", "exports query results in PCAP format", "",
+    "pcap", "exports query results in PCAP format",
+    documentation::vast_export_pcap,
     opts("?export")
       .add<std::string>("write,w", "path to write events to")
       .add<bool>("uds,d", "treat -w as UNIX domain socket to connect to")
@@ -98,34 +104,42 @@ auto make_export_command() {
 
 auto make_import_command() {
   auto import_ = std::make_unique<command>(
-    "import", "imports data from STDIN or file", "",
+    "import", "imports data from STDIN or file", documentation::vast_import,
     opts("?import")
       .add<caf::atom_value>("table-slice-type,t", "table slice type")
       .add<bool>("node,N", "spawn a node instead of connecting to one")
       .add<bool>("blocking,b", "block until the IMPORTER forwarded all data")
       .add<size_t>("max-events,n", "the maximum number of events to "
                                    "import"));
-  import_->add_subcommand("zeek", "imports Zeek logs from STDIN or file", "",
+  import_->add_subcommand("zeek", "imports Zeek logs from STDIN or file",
+                          documentation::vast_import_zeek,
                           source_opts("?import.zeek"));
-  import_->add_subcommand("mrt", "import MRT logs from STDIN or file", "",
+  import_->add_subcommand("mrt", "import MRT logs from STDIN or file",
+                          documentation::vast_import_mrt,
                           source_opts("?import.mrt"));
   import_->add_subcommand("bgpdump", "imports BGPdump logs from STDIN or file",
-                          "", source_opts("?import.bgpdump"));
-  import_->add_subcommand("csv", "imports CSV logs from STDIN or file", "",
+                          documentation::vast_import_bgpdump,
+                          source_opts("?import.bgpdump"));
+  import_->add_subcommand("csv", "imports CSV logs from STDIN or file",
+                          documentation::vast_import_csv,
                           source_opts("?import.csv"));
-  import_->add_subcommand("json", "imports JSON with schema", "",
+  import_->add_subcommand("json", "imports JSON with schema",
+                          documentation::vast_import_json,
                           source_opts("?import.json"));
-  import_->add_subcommand("suricata", "imports suricata eve json", "",
+  import_->add_subcommand("suricata", "imports suricata eve json",
+                          documentation::vast_import_suricata,
                           source_opts("?import.suricata"));
   import_->add_subcommand(
-    "test", "imports random data for testing or benchmarking", "",
+    "test", "imports random data for testing or benchmarking",
+    documentation::vast_import_test,
     opts("?import.test")
       .add<size_t>("seed", "the random seed")
       .add<std::string>("schema-file,s", "path to alternate schema")
       .add<std::string>("schema,S", "alternate schema as string"));
 #ifdef VAST_HAVE_PCAP
   import_->add_subcommand(
-    "pcap", "imports PCAP logs from STDIN or file", "",
+    "pcap", "imports PCAP logs from STDIN or file",
+    documentation::vast_import_pcap,
     opts("?import")
       .add<std::string>("read,r", "path to input where to read events from")
       .add<std::string>("schema,s", "path to alternate schema")
@@ -245,8 +259,9 @@ auto make_spawn_command() {
 }
 
 auto make_status_command() {
-  return std::make_unique<command>(
-    "status", "shows various properties of a topology", "", opts());
+  return std::make_unique<command>("status",
+                                   "shows various properties of a topology",
+                                   documentation::vast_status, opts());
 }
 
 auto make_start_command() {
@@ -260,8 +275,8 @@ auto make_stop_command() {
 }
 
 auto make_version_command() {
-  return std::make_unique<command>("version", "prints the software version", "",
-                                   opts());
+  return std::make_unique<command>("version", "prints the software version",
+                                   documentation::vast_version, opts());
 }
 
 auto make_command_factory() {
