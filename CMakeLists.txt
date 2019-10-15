@@ -97,11 +97,11 @@ list(GET version_numbers 0 VERSION_MAJOR)
 list(GET version_numbers 1 VERSION_MINOR)
 set(VERSION_MAJ_MIN "${VERSION_MAJOR}.${VERSION_MINOR}")
 
-# Generate C++ documentation header from Markdown.
+# Generate C++ header from Markdown documentation.
 file(GLOB doc_files RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}" "doc/cli/*.md")
 file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/BANNER" doc_header NEWLINE_CONSUME)
 set(doc_header "${doc_header}\n#pragma once\n")
-set(doc_header "${doc_header}\n#namespace vast::documentation {\n")
+set(doc_header "${doc_header}\nnamespace vast::documentation {\n")
 foreach (x ${doc_files})
   get_filename_component(basename ${x} NAME_WLE)
   string(REGEX REPLACE "-" "_" variable_name ${basename})
@@ -111,7 +111,6 @@ foreach (x ${doc_files})
   set(doc_header "${doc_header}\n${doc_statement}\n")
 endforeach ()
 set(doc_header "${doc_header}\n} // namespace vast::documentation")
-# FIXME: Maybe not hardcode the path here manually? --MV
 file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/libvast/vast/documentation.hpp
      ${doc_header})
 
