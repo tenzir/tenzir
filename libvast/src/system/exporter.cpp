@@ -374,7 +374,7 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
           self->send(x, exporter_atom::value, self);
     },
     [=](run_atom) {
-      VAST_INFO(self, "executes query:", self->state.expr);
+      VAST_INFO(self, "executes query:", to_string(self->state.expr));
       self->state.start = steady_clock::now();
       if (!has_historical_option(self->state.options))
         return;
