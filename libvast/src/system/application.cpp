@@ -50,7 +50,7 @@ auto make_root_command(std::string_view path) {
   path.remove_prefix(std::min(path.find_last_of('/') + 1, path.size()));
   // For documentation, we use the complete man-page formatted as Markdown
   return std::make_unique<command>(
-    path, "manage a VAST topology", vast::documentation::vast,
+    path, "manage a VAST topology", documentation::vast,
     opts("?system")
       .add<std::string>("config-file", "path to a configuration file")
       .add<caf::atom_value>("verbosity", "output verbosity level on the "
@@ -250,11 +250,13 @@ auto make_status_command() {
 }
 
 auto make_start_command() {
-  return std::make_unique<command>("start", "starts a node", "", opts());
+  return std::make_unique<command>("start", "starts a node",
+                                   documentation::vast_start, opts());
 }
 
 auto make_stop_command() {
-  return std::make_unique<command>("stop", "stops a node", "", opts());
+  return std::make_unique<command>("stop", "stops a node",
+                                   documentation::vast_stop, opts());
 }
 
 auto make_version_command() {
