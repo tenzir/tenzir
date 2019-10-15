@@ -344,12 +344,12 @@ behavior importer(stateful_actor<importer_state>* self, path dir,
         VAST_ERROR(self, "has no consensus module configured");
         return;
       }
-      VAST_INFO(self, "adds a new source");
+      VAST_DEBUG(self, "adds a new source:", self->current_sender());
       st.stg->add_inbound_path(in);
     },
     [=](add_atom, const actor& subscriber) {
       auto& st = self->state;
-      VAST_INFO(self, "adds a new sink");
+      VAST_DEBUG(self, "adds a new sink:", self->current_sender());
       st.stg->add_outbound_path(subscriber);
     },
     [=](subscribe_atom, flush_atom, actor& listener) {
