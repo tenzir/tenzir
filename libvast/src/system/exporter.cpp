@@ -49,7 +49,7 @@ void ship_results(stateful_actor<exporter_state>* self) {
     // Fetch the next table slice. Either we grab the entire first slice in
     // st.results or we need to split it up.
     table_slice_ptr slice = nullptr;
-    if (st.results[0]->rows() < st.query.requested) {
+    if (st.results[0]->rows() <= st.query.requested) {
       slice = std::move(st.results[0]);
       st.results.erase(st.results.begin());
     } else {
