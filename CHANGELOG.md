@@ -10,6 +10,9 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## [Unreleased]
 
+- 🐞 Exporting data with `export -n <count>` crashed when `count` was a
+  multiple of the table slice size. The command now works as expected.
+
 - 🎁 The newly added `count` comman allows counting hits for a query without
   exporting data.
 
