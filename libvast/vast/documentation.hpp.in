@@ -1,7 +1,0 @@
-#pragma once
-
-namespace vast::documentation {
-
-constexpr auto vast = R"__(@VAST_DOCUMENTATION_VAST@)__";
-
-} // namespace vast::documentation
