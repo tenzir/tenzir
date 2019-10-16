@@ -222,6 +222,20 @@ struct pcap {
 
 } // namespace export_
 
+// -- constants for the infer command -----------------------------------------
+
+/// Contains settings for the csv subcommand.
+struct infer {
+  /// Nested category in config files for this subcommand.
+  static constexpr const char* category = "infer";
+
+  /// Path for reading input events.
+  static constexpr auto read = defaults::import::shared::read;
+
+  /// Number of bytes to buffer from input.
+  static constexpr size_t buffer_size = 8'192;
+};
+
 // -- constants for the entire system ------------------------------------------
 
 /// Contains system-wide constants.

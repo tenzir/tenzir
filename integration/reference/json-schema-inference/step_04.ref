@@ -1,0 +1,1 @@
+type json = record{a: record{b: record{c: count}, d: bool, e: bool}, f: record{g: string}}
