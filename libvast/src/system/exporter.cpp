@@ -71,12 +71,9 @@ void ship_results(stateful_actor<exporter_state>* self) {
 
 void report_statistics(stateful_actor<exporter_state>* self) {
   auto& st = self->state;
-  timespan runtime = steady_clock::now() - st.start;
-  st.query.runtime = runtime;
   VAST_INFO(self, "processed", st.query.processed, "candidates in",
-            vast::to_string(runtime), "and shipped", st.query.shipped,
+            vast::to_string(st.query.runtime), "and shipped", st.query.shipped,
             "results");
-  self->send(st.sink, st.id, st.query);
   if (st.accountant) {
     auto hits = rank(st.hits);
     auto processed = st.query.processed;
@@ -88,7 +85,7 @@ void report_statistics(stateful_actor<exporter_state>* self) {
                       {"exporter.results", results},
                       {"exporter.shipped", shipped},
                       {"exporter.selectivity", selectivity},
-                      {"exporter.runtime", runtime}};
+                      {"exporter.runtime", st.query.runtime}};
     self->send(st.accountant, msg);
   }
 }
@@ -175,9 +172,10 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
   self->set_exit_handler(
     [=](const exit_msg& msg) {
       VAST_DEBUG(self, "received exit from", msg.source, "with reason:", msg.reason);
-      self->send<message_priority::high>(self->state.index, self->state.id, 0);
-      self->send(self->state.sink, sys_atom::value, delete_atom::value);
-      self->send_exit(self->state.sink, msg.reason);
+      auto& st = self->state;
+      self->send<message_priority::high>(st.index, st.id, 0);
+      self->send(st.sink, st.name, st.query);
+      self->send(st.sink, sys_atom::value, delete_atom::value);
       self->quit(msg.reason);
       if (msg.reason != exit_reason::kill)
         report_statistics(self);
@@ -210,7 +208,7 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
         VAST_ERROR(self, "failed to tailor expression:",
                    self->system().render(x.error()));
         ship_results(self);
-        self->send_exit(self, exit_reason::normal);
+        shutdown(self);
         return;
       }
       checker = std::move(*x);

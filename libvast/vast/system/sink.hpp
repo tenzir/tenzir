@@ -13,24 +13,25 @@
 
 #pragma once
 
-#include <cstdint>
-#include <chrono>
-#include <vector>
-
-#include "vast/logger.hpp"
-
-#include <caf/behavior.hpp>
-#include <caf/event_based_actor.hpp>
-#include <caf/stateful_actor.hpp>
-
+#include "vast/concept/printable/std/chrono.hpp"
 #include "vast/concept/printable/stream.hpp"
+#include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/uuid.hpp"
 #include "vast/format/writer.hpp"
+#include "vast/logger.hpp"
 #include "vast/system/accountant.hpp"
 #include "vast/system/atoms.hpp"
 #include "vast/system/instrumentation.hpp"
 #include "vast/system/query_status.hpp"
 #include "vast/table_slice.hpp"
+
+#include <caf/behavior.hpp>
+#include <caf/event_based_actor.hpp>
+#include <caf/stateful_actor.hpp>
+
+#include <chrono>
+#include <cstdint>
+#include <vector>
 
 namespace vast::system {
 
@@ -91,7 +92,6 @@ caf::behavior sink(caf::stateful_actor<sink_state<Writer>>* self,
         VAST_INFO(self, "reached max_events:", st.max_events, "events");
         st.writer.flush();
         st.send_report();
-        self->quit();
       };
       // Drop excess elements.
       auto remaining = st.max_events - st.processed;
@@ -119,9 +119,10 @@ caf::behavior sink(caf::stateful_actor<sink_state<Writer>>* self,
         st.send_report();
       }
     },
-    [=](const uuid& id, const query_status&) {
-      VAST_IGNORE_UNUSED(id);
-      VAST_DEBUG(self, "got query statistics from", id);
+    [=](std::string name, query_status query) {
+      VAST_INFO(name, "processed", query.processed, "candidates in",
+                to_string(query.runtime), "and shipped", query.shipped,
+                "results");
     },
     [=](limit_atom, uint64_t max) {
       VAST_DEBUG(self, "caps event export at", max, "events");
