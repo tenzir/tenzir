@@ -10,6 +10,9 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## [Unreleased]
 
+- 🐞 The user environments `LDFLAGS` were erroneously passed to `ar`. Instead,
+  the user environments `ARFLAGS` are now used.
+
 - 🐞 Exporting data with `export -n <count>` crashed when `count` was a
   multiple of the table slice size. The command now works as expected.
 
