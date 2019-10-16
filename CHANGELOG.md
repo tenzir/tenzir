@@ -86,9 +86,9 @@ Every entry has a category for which we use the following visual abbreviations:
 
 - 🎁 Configuring how much status information gets printed to STDERR previously
   required obscure config settings. From now on, users can simply use
-  `--verbosity=<level>`, where `<level>` is one of `quiet`, `error`, `warn`,
-  `info`, `debug`, or `trace`. However, `debug` and `trace` are only available
-  on debug builds (otherwise they fall back to `info` output level).
+  `--verbosity=<level>,-v <level>`, where `<level>` is one of `quiet`, `error`,
+  `warn`, `info`, `debug`, or `trace`. However, `debug` and `trace` are only
+  available on debug builds (otherwise they fall back to `info` output level).
 
 - 🎁 The query expression language now supports *data predicates*, which are a
   shorthand for a type extractor in combination with an equality operator. For
