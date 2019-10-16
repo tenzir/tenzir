@@ -664,7 +664,6 @@ add_custom_target(vast-schema
 
 file(GLOB schema_files RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}" "schema/*.schema")
 foreach (x ${schema_files})
-  message(STATUS "schema ${x}")
   add_custom_command(TARGET vast-schema
                      PRE_BUILD
                      COMMAND ${CMAKE_COMMAND} -E create_symlink
