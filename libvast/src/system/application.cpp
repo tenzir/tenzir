@@ -114,7 +114,7 @@ auto make_export_command() {
 
 auto make_infer_command() {
   return std::make_unique<command>(
-    "infer", "infers the schema from data", "",
+    "infer", "infers the schema from data", documentation::vast_infer,
     opts("?infer")
       .add<size_t>("buffer,b", "maximum number of bytes to buffer")
       .add<std::string>("read,r", "path to the input data"));
