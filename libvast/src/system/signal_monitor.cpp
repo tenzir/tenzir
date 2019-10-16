@@ -36,8 +36,11 @@ std::atomic<bool> signals[32];
 extern "C" void signal_handler(int sig) {
   // Catch termination signals only once to allow forced termination by the OS
   // upon sending the signal a second time.
-  if (sig == SIGINT || sig == SIGTERM)
+  if (sig == SIGINT || sig == SIGTERM) {
+    std::cerr << "\rinitiating graceful shutdown... (repeat request to "
+                 "terminate immediately)\n";
     std::signal(sig, SIG_DFL);
+  }
   signals[0] = true;
   signals[sig] = true;
 }

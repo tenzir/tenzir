@@ -384,8 +384,8 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
              VAST_ARG(num_workers));
   VAST_ASSERT(max_partition_size > 0);
   VAST_ASSERT(in_mem_partitions > 0);
-  VAST_INFO(self, "spawned:", VAST_ARG(max_partition_size),
-            VAST_ARG(in_mem_partitions), VAST_ARG(taste_partitions));
+  VAST_DEBUG(self, "spawned:", VAST_ARG(max_partition_size),
+             VAST_ARG(in_mem_partitions), VAST_ARG(taste_partitions));
   if (auto err = self->state.init(dir, max_partition_size, in_mem_partitions,
                                   taste_partitions)) {
     self->quit(std::move(err));

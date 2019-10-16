@@ -55,8 +55,8 @@ auto make_root_command(std::string_view path) {
     path, "manages a VAST deployment", documentation::vast,
     opts("?system")
       .add<std::string>("config-file", "path to a configuration file")
-      .add<caf::atom_value>("verbosity", "output verbosity level on the "
-                                         "console")
+      .add<caf::atom_value>("verbosity,v", "output verbosity level on the "
+                                           "console")
       .add<std::vector<std::string>>(
         "schema-paths", "list of paths to look for schema files "
                         "([" VAST_INSTALL_PREFIX "/share/vast/schema])")

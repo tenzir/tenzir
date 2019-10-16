@@ -47,8 +47,6 @@ namespace vast::system {
 
 caf::message sink_command(const command::invocation& invocation,
                           actor_system& sys, caf::actor snk) {
-  auto first = invocation.arguments.begin();
-  auto last = invocation.arguments.end();
   // Read query from input file, STDIN or CLI arguments.
   auto query = read_query(invocation, "export.read");
   if (!query)

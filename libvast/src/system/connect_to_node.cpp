@@ -26,6 +26,8 @@
 #endif
 
 #include "vast/concept/parseable/vast/endpoint.hpp"
+#include "vast/concept/printable/to_string.hpp"
+#include "vast/concept/printable/vast/port.hpp"
 #include "vast/defaults.hpp"
 #include "vast/endpoint.hpp"
 #include "vast/error.hpp"
@@ -47,6 +49,7 @@ connect_to_node(scoped_actor& self, const caf::settings& opts) {
   auto str = get_or(opts, "system.endpoint", defaults::system::endpoint);
   if (!parsers::endpoint(str, node_endpoint))
     return make_error(ec::parse_error, "invalid endpoint", str);
+  node_endpoint.port.type(port::tcp);
   VAST_DEBUG(self, "connects to remote node:", id);
   auto& sys_cfg = self->system().config();
   auto use_encryption = !sys_cfg.openssl_certificate.empty()
@@ -57,7 +60,8 @@ connect_to_node(scoped_actor& self, const caf::settings& opts) {
   auto host = node_endpoint.host;
   if (node_endpoint.host.empty())
     node_endpoint.host = "127.0.0.1";
-  VAST_INFO(self, "connects to", node_endpoint.host << ':' << node_endpoint.port);
+  VAST_INFO(self, "connects to",
+            node_endpoint.host << ':' << to_string(node_endpoint.port));
   if (use_encryption) {
 #ifdef VAST_USE_OPENSSL
     return openssl::remote_actor(self->system(), node_endpoint.host,
