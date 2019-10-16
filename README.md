@@ -1,6 +1,8 @@
 [![Build Status][ci-badge]][ci-url]
 [![Chat][chat-badge]][chat-url]
 [![License][license-badge]][license-url]
+[![Changelog][changelog-badge]][changelog-url]
+[![Latest Release][latest-release-badge]][latest-release-url]
 
 <p align="center">
   <img src="./doc/assets/vast.svg" alt="VAST">
@@ -41,7 +43,7 @@ Run a query over PCAP data, sort the packets, and feed them into `tcpdump`:
 - [Chat][chat-url]
 - [Documentation][docs]
 - [Contribution guidelines](CONTRIBUTING.md)
-- [Changelog](CHANGELOG.md)
+- [Changelog][changelog-url]
 
 ## Installation
 
@@ -152,6 +154,10 @@ VAST comes with a [3-clause BSD licence][license-url].
 [ci-badge]: https://img.shields.io/cirrus/github/tenzir/vast
 [license-badge]: https://img.shields.io/badge/license-BSD-blue.svg
 [license-url]: https://raw.github.com/vast-io/vast/master/COPYING
+[changelog-badge]: https://img.shields.io/badge/view-changelog-green.svg
+[changelog-url]: CHANGELOG.md
+[latest-release-badge]: https://img.shields.io/github/commits-since/tenzir/vast/latest.svg?color=green
+[latest-release-url]: https://github.com/tenzir/vast/releases
 
 [vast-paper]: https://www.usenix.org/system/files/conference/nsdi16/nsdi16-paper-vallentin.pdf
 [nsdi-proceedings]: https://www.usenix.org/conference/nsdi16/technical-sessions
