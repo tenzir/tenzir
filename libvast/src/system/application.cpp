@@ -28,6 +28,7 @@
 #include "vast/system/configuration.hpp"
 #include "vast/system/count_command.hpp"
 #include "vast/system/generator_command.hpp"
+#include "vast/system/infer_command.hpp"
 #include "vast/system/raft.hpp"
 #include "vast/system/reader_command.hpp"
 #include "vast/system/remote_command.hpp"
@@ -109,6 +110,14 @@ auto make_export_command() {
                                        "packets"));
 #endif
   return export_;
+}
+
+auto make_infer_command() {
+  return std::make_unique<command>(
+    "infer", "infers the schema from data", documentation::vast_infer,
+    opts("?infer")
+      .add<size_t>("buffer,b", "maximum number of bytes to buffer")
+      .add<std::string>("read,r", "path to the input data"));
 }
 
 auto make_import_command() {
@@ -302,6 +311,7 @@ auto make_command_factory() {
 #endif
     {"export zeek",
      writer_command<format::zeek::writer, defaults::export_::zeek>},
+    {"infer", infer_command},
     {"import bgpdump",
      reader_command<format::bgpdump::reader, defaults::import::bgpdump>},
     {"import csv", reader_command<format::csv::reader, defaults::import::csv>},
@@ -351,6 +361,7 @@ make_application(std::string_view path) {
   auto root = make_root_command(path);
   root->add_subcommand(make_count_command());
   root->add_subcommand(make_export_command());
+  root->add_subcommand(make_infer_command());
   root->add_subcommand(make_import_command());
   root->add_subcommand(make_kill_command());
   root->add_subcommand(make_peer_command());

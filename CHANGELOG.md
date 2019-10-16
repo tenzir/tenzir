@@ -10,6 +10,11 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## [Unreleased]
 
+- 🎁 The new `infer` command performs schema inference of input data. The
+  command can deduce the input format and creates a schema definition that is
+  sutable to use with the supplied data. Supported input types include Zeek TSV
+  and JSONLD.
+
 - 🐞 The user environments `LDFLAGS` were erroneously passed to `ar`. Instead,
   the user environments `ARFLAGS` are now used.
 

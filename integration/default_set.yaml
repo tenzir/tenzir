@@ -32,6 +32,19 @@ fixtures:
 
 
 tests:
+  JSON schema inference:
+    tags: [schema, infer, json]
+    steps:
+      - command: infer
+        input: data/json/empty-object.json
+      - command: infer
+        input: data/json/basic-types.json
+      - command: infer
+        input: data/json/string-types.json
+      - command: infer
+        input: data/json/array-types.json
+      - command: infer
+        input: data/json/nested-object.json
   Conn log counting:
     tags: [node, counting, zeek]
     steps:

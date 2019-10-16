@@ -100,6 +100,7 @@ set(libvast_sources
     src/system/index.cpp
     src/system/indexer.cpp
     src/system/indexer_stage_driver.cpp
+    src/system/infer_command.cpp
     src/system/node.cpp
     src/system/partition.cpp
     src/system/profiler.cpp
