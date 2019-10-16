@@ -173,8 +173,9 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
     [=](const exit_msg& msg) {
       VAST_DEBUG(self, "received exit from", msg.source, "with reason:", msg.reason);
       auto& st = self->state;
-      self->send<message_priority::high>(st.index, st.id, 0);
       self->send(st.sink, st.name, st.query);
+      // Sending 0 to the index means dropping further results.
+      self->send<message_priority::high>(st.index, st.id, 0);
       self->send(st.sink, sys_atom::value, delete_atom::value);
       self->quit(msg.reason);
       if (msg.reason != exit_reason::kill)
