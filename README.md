@@ -41,6 +41,7 @@ Run a query over PCAP data, sort the packets, and feed them into `tcpdump`:
 - [Chat][chat-url]
 - [Documentation][docs]
 - [Contribution guidelines](CONTRIBUTING.md)
+- [Changelog](CHANGELOG.md)
 
 ## Installation
 
