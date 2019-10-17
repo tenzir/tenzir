@@ -242,7 +242,7 @@ struct infer {
 namespace system {
 
 /// Hostname or IP address and port of a remote node.
-constexpr std::string_view endpoint = ":42000";
+constexpr std::string_view endpoint = ":42000/tcp";
 
 /// The unique ID of this node.
 constexpr std::string_view node_id = "node";
