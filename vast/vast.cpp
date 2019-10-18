@@ -56,8 +56,13 @@ int main(int argc, char** argv) {
   auto invocation
     = parse(*root, cfg.command_line.begin(), cfg.command_line.end());
   if (!invocation) {
-    render_error(*root, invocation.error(), std::cerr);
-    return EXIT_FAILURE;
+    if (invocation.error()) {
+      render_error(*root, invocation.error(), std::cerr);
+      return EXIT_FAILURE;
+    }
+    // Printing help/documentation returns a no_error, and we want to indicate
+    // success when printing the help/documentation texts.
+    return EXIT_SUCCESS;
   }
   // Initialize actor system (and thereby CAF's logger).
   if (!init_config(cfg, *invocation, std::cerr))
