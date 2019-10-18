@@ -1,17 +1,17 @@
-[![Build Status][ci-badge]][ci-url]
-[![Chat][chat-badge]][chat-url]
-[![License][license-badge]][license-url]
-[![Changelog][changelog-badge]][changelog-url]
-[![Latest Release][latest-release-badge]][latest-release-url]
-
 <p align="center">
-  <img src="./doc/assets/vast.svg" alt="VAST">
+  <img src="./doc/assets/vast.svg" width="75%" alt="VAST">
 </p>
 
 **Visibility Across Space and Time (VAST)** is a scalable foundation for
 a security operations center (SOC): a rich data model for security data,
 high-throughput ingestion of telemetry, low-latency search, and flexible export
 in various formats.
+
+[![Build Status][ci-badge]][ci-url]
+[![Chat][chat-badge]][chat-url]
+[![License][license-badge]][license-url]
+[![Changelog][changelog-badge]][changelog-url]
+[![Latest Release][latest-release-badge]][latest-release-url]
 
 ## Synopsis
 
@@ -42,7 +42,7 @@ Run a query over PCAP data, sort the packets, and feed them into `tcpdump`:
 
 - [Chat][chat-url]
 - [Documentation][docs]
-- [Contribution guidelines](CONTRIBUTING.md)
+- [Contribution guidelines][contributing-url]
 - [Changelog][changelog-url]
 
 ## Installation
@@ -139,8 +139,6 @@ proceedings][nsdi-proceedings].
 
 VAST comes with a [3-clause BSD licence][license-url].
 
----
-
 <p align="center">
   Developed with ❤️ by <strong><a href="https://tenzir.com">Tenzir</a></strong>
 </p>
@@ -156,6 +154,7 @@ VAST comes with a [3-clause BSD licence][license-url].
 [license-url]: https://raw.github.com/vast-io/vast/master/COPYING
 [changelog-badge]: https://img.shields.io/badge/view-changelog-green.svg
 [changelog-url]: CHANGELOG.md
+[contributing-url]: https://github.com/tenzir/.github/blob/master/contributing.md
 [latest-release-badge]: https://img.shields.io/github/commits-since/tenzir/vast/latest.svg?color=green
 [latest-release-url]: https://github.com/tenzir/vast/releases
 
