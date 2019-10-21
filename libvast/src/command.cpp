@@ -32,6 +32,7 @@
 
 #include <functional>
 #include <numeric>
+#include <string>
 
 namespace vast {
 
@@ -196,6 +197,17 @@ void render_parse_error(const command& cmd,
   }
 }
 
+void manualtext(const command& cmd, std::ostream& os, std::string::size_type depth) {
+  auto header_prefix = std::string(depth, '#');
+  os << header_prefix << ' ' << cmd.name << "\n\n";
+  helptext(cmd, os);
+  os << "\n\n";
+  documentationtext(cmd, os);
+  for (const auto& subcmd : cmd.children)
+    manualtext(*subcmd, os, depth + 1);
+  os << "\n\n";
+}
+
 } // namespace
 
 command::command(std::string_view name, std::string_view description,
@@ -231,7 +243,8 @@ std::string command::full_name() const {
 caf::config_option_set command::opts() {
   return caf::config_option_set{}
     .add<bool>("help,h?", "prints the help text")
-    .add<bool>("documentation?", "prints the Markdown-formatted documentation");
+    .add<bool>("documentation", "prints the Markdown-formatted documentation")
+    .add<bool>("manual", "prints the Markdown-formatted manual page for the command and all its subcommands");
 }
 
 command::opts_builder command::opts(std::string_view category) {
@@ -250,6 +263,8 @@ caf::error parse_impl(command::invocation& result, const command& cmd,
   if (get_or(result.options, "help", false))
     return caf::none;
   if (get_or(result.options, "documentation", false))
+    return caf::none;
+  if (get_or(result.options, "manual", false))
     return caf::none;
   bool has_subcommand;
   switch (state) {
@@ -273,6 +288,11 @@ caf::error parse_impl(command::invocation& result, const command& cmd,
   // Check for docomentation option.
   if (has_subcommand && *position == "documentation") {
     put(result.options, "documentation", true);
+    return caf::none;
+  }
+  // Check for manual option.
+  if (has_subcommand && *position == "manual") {
+    put(result.options, "manual", true);
     return caf::none;
   }
   if (!has_subcommand)
@@ -310,6 +330,12 @@ parse(const command& root, command::argument_iterator first,
   }
   if (get_or(result.options, "documentation", false)) {
     documentationtext(*target, std::cerr);
+    return caf::no_error;
+  }
+  // Print the manual -- aka the helptext and documentationtext for every
+  // command available.
+  if (get_or(result.options, "manual", false)) {
+    manualtext(*target, std::cerr, 3);
     return caf::no_error;
   }
   return result;
