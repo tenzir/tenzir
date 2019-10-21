@@ -255,7 +255,7 @@ caf::error parse_impl(command::invocation& result, const command& cmd,
   switch (state) {
     default:
       return make_error(ec::unrecognized_option, cmd.full_name(), *position,
-                        to_string(state));
+                        state);
     case caf::pec::success:
       has_subcommand = false;
       break;
