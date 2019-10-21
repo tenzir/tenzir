@@ -197,15 +197,17 @@ void render_parse_error(const command& cmd,
   }
 }
 
-void manualtext(const command& cmd, std::ostream& os, std::string::size_type depth) {
+void manualtext(const command& cmd, std::ostream& os,
+                std::string::size_type depth) {
   auto header_prefix = std::string(depth, '#');
   os << header_prefix << ' ' << cmd.name << "\n\n";
-  helptext(cmd, os);
-  os << "\n\n";
+  // FIXME the helptext is improperly formatted for md2man-roff
+  // helptext(cmd, os);
+  // os << '\n';
   documentationtext(cmd, os);
   for (const auto& subcmd : cmd.children)
     manualtext(*subcmd, os, depth + 1);
-  os << "\n\n";
+  os << '\n';
 }
 
 } // namespace
@@ -244,7 +246,8 @@ caf::config_option_set command::opts() {
   return caf::config_option_set{}
     .add<bool>("help,h?", "prints the help text")
     .add<bool>("documentation", "prints the Markdown-formatted documentation")
-    .add<bool>("manual", "prints the Markdown-formatted manual page for the command and all its subcommands");
+    .add<bool>("manual", "prints the Markdown-formatted manual page for the "
+                         "command and all its subcommands");
 }
 
 command::opts_builder command::opts(std::string_view category) {

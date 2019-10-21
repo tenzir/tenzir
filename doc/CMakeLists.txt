@@ -31,6 +31,9 @@ if (MD2MAN_FOUND)
       set(man_source ${CMAKE_CURRENT_SOURCE_DIR}/${man_page})
       set(man_generated ${CMAKE_CURRENT_BINARY_DIR}/${man_page})
       month_day_year(MAN_DATE) # bottom-center date in man page
+      execute_process(
+        COMMAND vast manual
+        ERROR_VARIABLE MAN_CONTENT)
       configure_file(${man_source}.md ${man_generated}.md @ONLY)
       file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/make_man_${man_page}.cmake
         "execute_process(
